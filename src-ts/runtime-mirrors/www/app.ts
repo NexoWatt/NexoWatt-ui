@@ -79,6 +79,294 @@
  */
 
 
+
+/**
+ * App Runtime-Migrationshinweis (DE)
+ * App-Vertragsbereich (DE)
+ *
+ * Zweck:
+ * Dieser typisierte Vertragsbereich beschreibt die wichtigsten Datenformen des
+ * Kunden-LIVE-Dashboards (`www/app.js`), ohne die produktive Browser-Runtime bereits
+ * auf TypeScript umzustellen.
+ *
+ * Zusammenhang:
+ * - `main.js` liefert `/api/state`, `/config` und SSE-/Eventdaten.
+ * - `www/app.js` rendert Energiefluss, KPI-Kacheln, Wetter, KI-Berater,
+ *   Feature-Sichtbarkeit und Schnellsteuerungs-Modals.
+ * - `www/ems-apps.js` konfiguriert Mappings, die später hier sichtbar werden.
+ *
+ * Wichtig für die Migration:
+ * - `0`, `0 W`, `0 %` und `false` sind gültige Werte und dürfen nicht als fehlend
+ *   behandelt werden.
+ * - EVCS/Speicherfarm dürfen im Kundencockpit nur bei echten, konfigurierten Features
+ *   sichtbar sein.
+ * - Energieflusswerte müssen dieselbe Semantik nutzen wie Backend, History und
+ *   Heizstab/Core-Limits, damit keine historischen Werte verfälscht werden.
+ */
+
+type AppRuntimeDatapointKey = string;
+type AppFeatureKey = 'evcs' | 'storageFarm' | 'smartHome' | 'weather' | 'aiAdvisor' | 'thresholds' | 'relay' | 'bhkw' | 'generator' | 'tariff' | 'history';
+type AppTone = 'ok' | 'info' | 'warning' | 'critical' | 'offline' | 'neutral' | 'good' | 'warn' | 'bad';
+type AppPowerWatts = number;
+type AppEnergyKwh = number;
+type AppPercent = number;
+type AppTimestampMs = number;
+type AppConfigTab = 'live' | 'history' | 'settings' | 'smarthome' | 'storagefarm';
+type AppEnergyFlowSource = 'js-runtime' | 'ts-candidate' | 'shadow' | 'fallback' | 'backend' | 'unknown';
+type AppEnergyFlowDirection = 'production' | 'consumption' | 'import' | 'export' | 'charge' | 'discharge' | 'idle';
+
+interface AppRuntimeStateEntry<T = unknown> {
+  /** Aktueller State-Wert. 0 und false sind gültig. */
+  value?: T;
+  /** Legacy-/ioBroker-Alias für value. */
+  val?: T;
+  /** Zeitstempel in ms, sofern vom Backend vorhanden. */
+  ts?: AppTimestampMs;
+  /** letzter Änderungszeitpunkt in ms. */
+  lc?: AppTimestampMs;
+  /** ioBroker-ACK-Flag; UI darf ack=false nicht automatisch als Fehler interpretieren. */
+  ack?: boolean;
+  /** Optionale Quelle für Diagnoseanzeigen. */
+  source?: string;
+  /** Freie Zusatzfelder bleiben für Legacy-States erlaubt. */
+  [key: string]: unknown;
+}
+
+interface AppStateEntry<T = unknown> extends AppRuntimeStateEntry<T> {}
+type AppApiStateMap = Record<string, AppRuntimeStateEntry | unknown>;
+type AppRuntimeStateCache = Record<AppRuntimeDatapointKey, AppRuntimeStateEntry | unknown>;
+
+interface AppRuntimeConfigFlags {
+  hasEvcs: boolean;
+  hasStorageFarm: boolean;
+  hasSmartHome: boolean;
+  hasWeather: boolean;
+  hasAiAdvisor: boolean;
+  hasTariff: boolean;
+}
+
+interface AppRuntimeFeatureVisibility {
+  feature: AppFeatureKey | string;
+  visible: boolean;
+  reason?: string;
+  source?: string;
+}
+
+interface AppFeatureVisibilityState {
+  hasEvcs: boolean;
+  hasStorageFarm: boolean;
+  hasSmartHome: boolean;
+  hasWeather: boolean;
+  hasAiAdvisor: boolean;
+  hasTariff?: boolean;
+  hiddenReasons?: Partial<Record<AppFeatureKey, string>>;
+  source?: string;
+}
+
+interface AppConfigResponse {
+  evcsAvailable?: boolean;
+  storageFarmEnabled?: boolean;
+  smartHomeEnabled?: boolean;
+  weatherEnabled?: boolean;
+  aiAdvisorEnabled?: boolean;
+  featureVisibility?: Partial<AppFeatureVisibilityState>;
+  featureVisibilityTsPreview?: Partial<AppFeatureVisibilityState>;
+  tsMigration?: {
+    energyFlowMode?: 'js' | 'shadow' | 'ts';
+    energyFlowProductionAllowed?: boolean;
+    energyFlowRequireStablePlant?: boolean;
+  } & Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface AppEnergyFlowDisplayValue {
+  watt: AppPowerWatts;
+  unit: string;
+  label: string;
+  direction?: AppEnergyFlowDirection;
+  source?: string;
+}
+
+interface AppStorageDisplayState {
+  chargeW: AppPowerWatts;
+  dischargeW: AppPowerWatts;
+  signedW?: AppPowerWatts | null;
+  socPct: AppPercent | null;
+  source?: AppEnergyFlowSource | string;
+}
+
+interface AppGridDisplayState {
+  importW: AppPowerWatts;
+  exportW: AppPowerWatts;
+  source?: string;
+}
+
+interface AppEnergyFlowDisplaySnapshot {
+  pvW?: AppPowerWatts;
+  buildingLoadW?: AppPowerWatts;
+  gridImportW?: AppPowerWatts;
+  gridExportW?: AppPowerWatts;
+  storageChargeW?: AppPowerWatts;
+  storageDischargeW?: AppPowerWatts;
+  storageSocPct?: AppPercent | null;
+  evcsW?: AppPowerWatts;
+  source?: AppEnergyFlowSource | string;
+  pv?: AppEnergyFlowDisplayValue;
+  gridImport?: AppEnergyFlowDisplayValue;
+  gridExport?: AppEnergyFlowDisplayValue;
+  storageCharge?: AppEnergyFlowDisplayValue;
+  storageDischarge?: AppEnergyFlowDisplayValue;
+  storage?: AppStorageDisplayState;
+  buildingLoad?: AppEnergyFlowDisplayValue;
+  diagnostics?: string[];
+}
+
+interface AppEnergyFlowDisplayState extends AppEnergyFlowDisplaySnapshot {
+  grid?: AppGridDisplayState;
+  storage?: AppStorageDisplayState;
+  flowSource?: AppEnergyFlowSource | string;
+}
+
+interface AppLiveKpiSnapshot {
+  autarkyPct: AppPercent | null;
+  selfConsumptionPct: AppPercent | null;
+  storageSocPct: AppPercent | null;
+  gridImportW: AppPowerWatts;
+  gridExportW: AppPowerWatts;
+  co2SavingsKg?: number | null;
+}
+
+type AppKpiDisplayState = AppLiveKpiSnapshot;
+
+interface AppWeatherDisplayState {
+  enabled: boolean;
+  temperatureC?: number | null;
+  text?: string;
+  conditionText?: string;
+  cloudPct?: AppPercent | null;
+  windKmh?: number | null;
+  tomorrowText?: string;
+  tomorrowPrecipPct?: AppPercent | null;
+  updatedAt?: AppTimestampMs | null;
+}
+
+interface AppAiAdvisorDisplaySuggestion {
+  id: string;
+  title: string;
+  text: string;
+  category?: string;
+  severity?: AppTone | string;
+  action?: string;
+}
+
+interface AppAiAdvisorDisplayState {
+  enabled?: boolean;
+  visible: boolean;
+  title?: string;
+  text?: string;
+  statusText?: string;
+  action?: string;
+  severity?: AppTone | string;
+  suggestions?: AppAiAdvisorDisplaySuggestion[];
+  suggestionsJson?: string;
+  dailyPlanText?: string;
+}
+
+
+interface AppSettingsWriteRequest {
+  scope: string;
+  key: string;
+  value: unknown;
+}
+
+type AppRuntimeWriteRequest = AppSettingsWriteRequest;
+
+type AppQuickTileKind = 'tariff' | 'evcs' | 'threshold' | 'relay' | 'bhkw' | 'generator' | 'settings';
+
+interface AppQuickControlContext {
+  id?: string;
+  kind?: AppQuickTileKind;
+  modal?: string;
+  feature?: AppFeatureKey | string;
+  title?: string;
+  subtitle?: string;
+  label?: string;
+  tone?: AppTone;
+  visible?: boolean;
+  powerW?: AppPowerWatts | null;
+  canSwitch?: boolean;
+  canSetpoint?: boolean;
+  sourceState?: string;
+}
+
+type AppQuickTileState = AppQuickControlContext & { id: string; kind: AppQuickTileKind; visible: boolean; label: string };
+
+interface AppModalRefs {
+  root: HTMLElement | null;
+  closeButton?: HTMLElement | null;
+  applyButton?: HTMLElement | null;
+  statusText?: HTMLElement | null;
+}
+
+interface AppDomRefs {
+  liveRoot?: HTMLElement | null;
+  liveDot?: HTMLElement | null;
+  energyWebSvg?: SVGSVGElement | null;
+  liveQuickTiles?: HTMLElement | null;
+  aiAdvisor?: HTMLElement | null;
+  aiAdvisorCard?: HTMLElement | null;
+  weatherTile?: HTMLElement | null;
+  evcsCard?: HTMLElement | null;
+  storageFarmTab?: HTMLElement | null;
+  modals?: Record<string, AppModalRefs>;
+}
+
+interface AppApiStateResponse {
+  states: AppApiStateMap;
+  config?: AppConfigResponse;
+  [key: string]: unknown;
+}
+
+interface AppDashboardRuntimeState {
+  latestState: AppApiStateMap;
+  config: AppConfigResponse;
+  visibility: AppFeatureVisibilityState;
+  energyFlow: AppEnergyFlowDisplaySnapshot;
+  kpi: AppLiveKpiSnapshot;
+  weather: AppWeatherDisplayState;
+  aiAdvisor: AppAiAdvisorDisplayState;
+  quickTiles?: AppQuickTileState[];
+}
+
+type AppCommandRequest = AppSettingsWriteRequest;
+
+interface AppRuntimeStateShape {
+  latestState: AppApiStateMap;
+  config: AppConfigResponse;
+  features: AppFeatureVisibilityState;
+  energyFlow: AppEnergyFlowDisplayState;
+  kpis: AppKpiDisplayState;
+  weather: AppWeatherDisplayState;
+  aiAdvisor: AppAiAdvisorDisplayState;
+  quickTiles?: AppQuickTileState[];
+}
+
+interface AppWindow extends Window {
+  latestState?: Record<AppRuntimeDatapointKey, AppRuntimeStateEntry | unknown>;
+  nwSetActiveTab?: (tab: string, activeButton?: HTMLElement | null) => void;
+  nwOpenModal?: (id: string) => void;
+  nwCloseModal?: (id: string) => void;
+}
+
+/**
+ * App-Browser-Runtime-Abschnitt (Legacy-JS-Spiegel)
+ *
+ * Zweck:
+ * Ab hier folgt die bestehende Browser-Runtime aus `www/app.js`. Diese Runtime bleibt
+ * vorerst JavaScript-Quelle. Der Vertragsbereich oben dient der schrittweisen
+ * TypeScript-Migration; echte DOM-/Event-Handler werden später kontrolliert typisiert.
+ */
+
 // --- Precise donut placement (anchor angles like a reference UI) ---
 /**
  * Code-Teil: arcLenFromDeg

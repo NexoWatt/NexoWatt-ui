@@ -17,7 +17,11 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 36aaad6f4519a9e17b5b065f84838893dafe8bbc79a75cb01822dc9e7ff3af28
+
+ * 0.7.99: /api/state und /api/set TS-Shadow
+ * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
+ * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
+ * Original-Hash: d0f60275414c250543b96121c0fbcbdabec5aedcc440c2e36cee35ec409dfb48
  */
 
 /**
@@ -84,6 +88,326 @@
  * Nicht ändern ohne Migration: Speicher-, Netz-, PV-, Heizstab-, EVCS-, Speicherfarm- und aiAdvisor.* Namen.
  */
 
+
+
+/**
+ * Main Runtime-Migrationshinweis (DE)
+ *
+ * Zweck:
+ * Dieser Bereich typisiert die ersten zentralen Verträge der großen Adapterdatei
+ * `main.js`, ohne die produktive JavaScript-Runtime umzuschalten.
+ *
+ * Zusammenhang:
+ * `main.js` verbindet ioBroker-Lifecycle, Webserver, REST-/SSE-APIs,
+ * StateCache, Lizenzlogik, App-Center, Kundencockpit und EMS-Module. Eine spätere
+ * TypeScript-Migration muss deshalb zuerst die gemeinsamen Datenformen verstehen,
+ * bevor einzelne Routen oder Helfer ausgelagert werden.
+ *
+ * Wichtig:
+ * - `0`, `false` und leere Arrays können gültige Werte sein. Kurzform: 0, false und leere Arrays sind gültig.
+ * - API-Antworten sind Verträge mit LIVE, History, App-Center und SmartHome.
+ * - `info.connection` darf nur den echten Webserver-/Adapterstatus abbilden.
+ * - Lizenzwerte wie `********` dürfen nie als echter Lizenzkey gespeichert werden.
+ */
+type MainRuntimeJsonPrimitive = string | number | boolean | null;
+
+type MainRuntimeJsonValue =
+  | MainRuntimeJsonPrimitive
+  | MainRuntimeJsonValue[]
+  | { [key: string]: MainRuntimeJsonValue };
+
+/**
+ * Code-Teil: MainAdapterStateKey
+ *
+ * Zweck:
+ * Vertrag für interne State-/Datenpunktnamen. Diese Keys verbinden `main.js` mit
+ * LIVE-Dashboard, History, App-Center, KI-Berater und EMS-Modulen.
+ */
+type MainAdapterStateKey = string;
+
+/**
+ * Code-Teil: MainAdapterStateValue
+ *
+ * Zweck:
+ * Beschreibt einen einzelnen ioBroker-/Cache-State. `value: 0` und `value: false`
+ * sind vorhanden und dürfen nie als fehlend behandelt werden.
+ */
+interface MainAdapterStateValue<T = unknown> {
+  value: T;
+  val?: T;
+  ts?: number;
+  lc?: number;
+  ack?: boolean;
+  q?: number;
+  from?: string;
+  unit?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Code-Teil: MainStateCache
+ *
+ * Zweck:
+ * Zentrale Cache-Struktur des Adapters. Aus diesem Cache entstehen `/api/state`,
+ * SSE-Liveevents, Diagnosewerte und Eingaben für EMS-Module.
+ */
+type MainStateCache = Record<MainAdapterStateKey, MainAdapterStateValue | undefined>;
+
+interface MainDatapointBinding {
+  id?: string;
+  key?: string;
+  unit?: string;
+  invert?: boolean;
+  enabled?: boolean;
+  [key: string]: unknown;
+}
+
+type MainDatapointMap = Record<string, MainDatapointBinding | string | undefined>;
+
+/**
+ * Code-Teil: MainTsMigrationConfig
+ *
+ * Zweck:
+ * Vertrag für die kontrollierte TypeScript-Umschaltung. TS darf nie automatisch
+ * produktiv werden; Freigaben und Gates müssen ausdrücklich erfüllt sein.
+ */
+interface MainTsMigrationConfig {
+  energyFlowMode?: 'js' | 'shadow' | 'ts' | string;
+  energyFlowProductionAllowed?: boolean;
+  energyFlowRequireStablePlant?: boolean;
+  energyFlowCandidateWarmupTicks?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Code-Teil: MainAdapterConfig
+ *
+ * Zweck:
+ * Minimalvertrag für `this.config`. Der Adapter enthält viele Legacy-Felder, daher
+ * bleibt die Struktur erweiterbar, aber wichtige Bereiche sind klar benannt.
+ */
+interface MainAdapterConfig extends Record<string, unknown> {
+  port?: number | string;
+  bind?: string;
+  ip?: string;
+  licenseKey?: string;
+  datapoints?: MainDatapointMap;
+  settingsConfig?: Record<string, unknown>;
+  installerConfig?: Record<string, unknown>;
+  emsApps?: Record<string, unknown>;
+  smartHome?: Record<string, unknown>;
+  storageFarm?: Record<string, unknown>;
+  tsMigration?: MainTsMigrationConfig;
+}
+
+/**
+ * Code-Teil: MainAdapterLike
+ *
+ * Zweck:
+ * Minimalvertrag für die ioBroker-Adapterinstanz. Er reicht aus, um spätere
+ * StateCache-, API- und Lizenz-Helfer typisiert aus `main.js` herauszulösen.
+ */
+interface MainAdapterLike {
+  config: MainAdapterConfig;
+  namespace?: string;
+  instance?: number;
+  stateCache?: MainStateCache;
+  log?: {
+    info?: (message: string) => void;
+    warn?: (message: string) => void;
+    error?: (message: string) => void;
+    debug?: (message: string) => void;
+  };
+  setStateAsync?: (id: string, state: unknown, ack?: boolean) => Promise<unknown>;
+  setForeignStateAsync?: (id: string, state: unknown, ack?: boolean) => Promise<unknown>;
+  getStateAsync?: (id: string) => Promise<MainAdapterStateValue | null | undefined>;
+  getForeignStateAsync?: (id: string) => Promise<MainAdapterStateValue | null | undefined>;
+  setObjectNotExistsAsync?: (id: string, obj: unknown) => Promise<unknown>;
+  extendObjectAsync?: (id: string, obj: unknown) => Promise<unknown>;
+  [key: string]: unknown;
+}
+
+/**
+ * Code-Teil: MainApiStateResponse
+ *
+ * Zweck:
+ * Vertrag für `/api/state`. Diese Antwort wird von Kunden-LIVE, History, App-Center,
+ * SmartHome und Diagnosekarten gelesen.
+ */
+interface MainApiStateResponse {
+  states: MainStateCache;
+  ts?: number;
+  config?: Partial<MainAdapterConfig>;
+  featureVisibility?: Partial<MainFeatureVisibilityState>;
+  diagnostics?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/**
+ * Code-Teil: MainConfigResponse
+ *
+ * Zweck:
+ * Vertrag für `/config`. Er steuert Tabs, Menüs, Feature-Sichtbarkeit und TS-
+ * Migrationsdiagnose im Frontend.
+ */
+interface MainConfigResponse extends Record<string, unknown> {
+  ok?: boolean;
+  port?: number;
+  bind?: string;
+  featureVisibility?: Partial<MainFeatureVisibilityState> & Record<string, unknown>;
+  featureVisibilityTsPreview?: Record<string, unknown>;
+  tsMigration?: MainTsMigrationConfig;
+}
+
+/**
+ * Code-Teil: MainApiSetRequest / MainApiSetResult
+ *
+ * Zweck:
+ * Verträge für Schreibbefehle aus dem Frontend. Besonders bei `settings.*` müssen
+ * 0, false und leere Strings als bewusste Werte erhalten bleiben.
+ */
+interface MainApiSetRequest<T = unknown> {
+  scope: string;
+  key: string;
+  value: T;
+  id?: string;
+  ack?: boolean;
+}
+
+interface MainApiSetResult<T = unknown> {
+  ok: boolean;
+  key?: string;
+  stateId?: string;
+  value?: T;
+  writtenValue?: T;
+  error?: string;
+}
+
+/**
+ * Code-Teil: MainFeatureVisibilityState
+ *
+ * Zweck:
+ * Kundenseitige Sichtbarkeit. EVCS und Speicherfarm dürfen nur sichtbar werden,
+ * wenn echte konfigurierte Anlagenbestandteile vorhanden sind.
+ */
+interface MainFeatureVisibilityState {
+  hasEvcs: boolean;
+  hasStorageFarm: boolean;
+  hasSmartHome: boolean;
+  hasWeather: boolean;
+  hasAiAdvisor: boolean;
+  hasTariff?: boolean;
+  source?: 'ts-mirror' | 'js-fallback' | string;
+  reasons?: string[];
+}
+
+/**
+ * Code-Teil: MainSseClient / MainWebServerState
+ *
+ * Zweck:
+ * Verträge für SSE- und Webserver-Laufzeit. Beim Unload müssen diese Ressourcen
+ * sauber geschlossen werden, damit ioBroker/Compact-Mode stabil bleibt.
+ */
+interface MainSseClient {
+  id?: string;
+  startedAt?: number;
+  res: {
+    write(chunk: string): unknown;
+    end?(): unknown;
+  };
+}
+
+interface MainWebServerState {
+  sockets: Set<unknown>;
+  sseClients: Set<MainSseClient>;
+  closing: boolean;
+  port?: number;
+  bind?: string;
+}
+
+/**
+ * Code-Teil: MainConnectionUpdate
+ *
+ * Zweck:
+ * Vertrag für `info.connection`. Dieser State darf nur echte Webserver-/Adapter-
+ * Verfügbarkeit ausdrücken und nicht durch optionale Teilfehler falsch offline gehen.
+ */
+interface MainConnectionUpdate {
+  online: boolean;
+  reason: string;
+  ts: number;
+}
+
+/**
+ * Code-Teil: MainLicenseRuntimeState
+ *
+ * Zweck:
+ * Vertrag für die Lizenzdiagnose. Maskierte Werte wie `********` dürfen nie als
+ * echter Lizenzschlüssel gelten.
+ */
+interface MainLicenseRuntimeState {
+  ok: boolean;
+  status: 'missing' | 'valid' | 'invalid' | 'expired' | 'unknown' | string;
+  keyPresent?: boolean;
+  keyMasked?: boolean;
+  tier?: 'home' | 'pro' | 'farm' | 'business' | string;
+  reason?: string;
+}
+
+/**
+ * Code-Teil: MainEnergyFlowSwitchDecision
+ *
+ * Zweck:
+ * Vertrag für die Energiefluss-TS-Schaltentscheidung. Dieser Vertrag ist wichtig,
+ * damit TS nur nach Shadow-, Kandidaten- und Anlagen-Gate produktiv werden kann.
+ */
+interface MainEnergyFlowSwitchDecision {
+  requestedMode: 'js' | 'shadow' | 'ts' | string;
+  effectiveSource: 'js-runtime' | 'ts-candidate' | string;
+  useTs: boolean;
+  productionAllowed: boolean;
+  shadowOk: boolean;
+  candidateOk: boolean;
+  plantGateOk: boolean;
+  blockers: string[];
+  warnings: string[];
+  reason: string;
+}
+
+interface MainInstallerConfigPatch {
+  tsMigration?: MainTsMigrationConfig;
+  datapoints?: MainDatapointMap;
+  settingsConfig?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/**
+ * Code-Teil: MainRuntimeInternals
+ *
+ * Zweck:
+ * Vertrag für wichtige interne Felder des Adapterkerns. Diese Felder werden später
+ * Stück für Stück in eigene TypeScript-Module ausgelagert.
+ */
+interface MainRuntimeInternals {
+  stateCache: MainStateCache;
+  _nwRawValueCache: Record<string, unknown>;
+  sseClients: Set<MainSseClient>;
+  _serverSockets: Set<unknown>;
+  _serverClosing: boolean;
+  _nwConnectionOnline: boolean;
+  _nwLicenseOk: boolean;
+  _nwSystemUuid: string;
+  emsEngine: unknown;
+  logicEngine: unknown;
+}
+
+/**
+ * Main-Adapter-Runtime-Abschnitt
+ *
+ * Ab hier folgt die ursprüngliche JavaScript-Runtime als TypeScript-Spiegel. Die
+ * obenstehenden Verträge sind der erste gezielte Typisierungsschritt; die folgenden
+ * Funktionen, Routen und Klassen werden später Modul für Modul weiter typisiert.
+ */
 
 const utils = require('@iobroker/adapter-core');
 const express = require('express');

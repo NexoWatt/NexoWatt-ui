@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4c87c19c620148445b0884b78f74a9c056449b9b99ef466770babfa83a00bbe9
+ * Original-Hash: 326afe74a27e29e8b275cbab7705c6225fe658180ac03c6e446b12c031ee73a9
  */
 
 /**
@@ -56,7 +56,7 @@
 
 // Increment cache name on releases so browser updates JS/HTML reliably.
 // NOTE: Keep this monotonic to force SW updates on hotfixes.
-const CACHE_NAME = 'nexowatt-cache-v259';
+const CACHE_NAME = 'nexowatt-cache-v268';
 
 const OFFLINE_URLS = [
   './',

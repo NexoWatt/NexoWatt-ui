@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 70c1d3b55a4f962789c9500f70f5ad9007bf41d320e04b9891f67d47074efc60
+ * Original-Hash: 98d7f47be5ee751b37c89d23693a666f9c249ae236e23498e9a257503a8597dc
  */
 
 /**
@@ -86,15 +86,26 @@ const EXCLUDE_FILES = new Set([
  *
  * Zusammenhang:
  * `src-ts/runtime-mirrors/ems/modules/core-limits.ts`,
- * `src-ts/runtime-mirrors/ems/modules/heating-rod-control.ts` und
- * `src-ts/runtime-mirrors/ems/modules/ai-advisor.ts` sind gezielt
+ * `src-ts/runtime-mirrors/ems/modules/heating-rod-control.ts`,
+ * `src-ts/runtime-mirrors/ems/modules/ai-advisor.ts` und
+ * `src-ts/runtime-mirrors/www/history.ts` und
+ * `src-ts/runtime-mirrors/www/smarthome.ts` und
+ * `src-ts/runtime-mirrors/www/smarthome-config.ts` und
+ * `src-ts/runtime-mirrors/www/ems-apps.ts` und
+ * `src-ts/runtime-mirrors/www/app.ts` sind gezielt
  * typisierte Spiegel. Ein normales `sync:ts-runtime-mirrors` darf diese Arbeit nicht
  * wieder mit einer rohen Kopie überschreiben.
  */
 const MANUALLY_TYPED_MIRROR_SOURCES = new Set([
+  'main.js',
   'ems/modules/core-limits.js',
   'ems/modules/heating-rod-control.js',
   'ems/modules/ai-advisor.js',
+  'www/history.js',
+  'www/smarthome.js',
+  'www/smarthome-config.js',
+  'www/ems-apps.js',
+  'www/app.js',
 ]);
 
 /**
@@ -236,8 +247,14 @@ function isManualTypedMirrorCurrent(rel, targetAbs, jsText) {
   const current = fs.readFileSync(targetAbs, 'utf8');
   const hash = sha256(jsText);
   const hasBase = current.includes(`Original-Hash: ${hash}`)
-    && current.includes('TypeScript-Migrationshinweis (DE)');
+    && (current.includes('TypeScript-Migrationshinweis (DE)') || current.includes('Main Runtime-Migrationshinweis (DE)') || current.includes('History Runtime-Migrationshinweis (DE)') || current.includes('SmartHome Runtime-Migrationshinweis (DE)') || current.includes('SmartHomeConfig Runtime-Migrationshinweis (DE)') || current.includes('EmsApps Runtime-Migrationshinweis (DE)') || current.includes('App Runtime-Migrationshinweis (DE)'));
   if (!hasBase) return false;
+  if (rel === 'main.js') {
+    return current.includes('Main Runtime-Migrationshinweis (DE)')
+      && current.includes('interface MainAdapterConfig')
+      && current.includes('interface MainRuntimeInternals')
+      && current.includes('class NexoWattVis extends utils.Adapter');
+  }
   if (rel === 'ems/modules/core-limits.js') {
     return current.includes('type CoreLimitsAdapterLike')
       && current.includes('type CoreBudgetSnapshotLike');
@@ -252,6 +269,42 @@ function isManualTypedMirrorCurrent(rel, targetAbs, jsText) {
       && current.includes('type AiAdvisorAdapterLike')
       && current.includes('type AiAdvisorSuggestion')
       && current.includes('class AiAdvisorModule extends BaseModule');
+  }
+  if (rel === 'www/history.js') {
+    return current.includes('History Runtime-Migrationshinweis (DE)')
+      && current.includes('interface HistoryApiResponse')
+      && current.includes('interface HistoryReportVisibility')
+      && current.includes('HistoryRuntimeApiResponse');
+  }
+  if (rel === 'www/smarthome.js') {
+    return current.includes('SmartHome Runtime-Migrationshinweis (DE)')
+      && current.includes('type SmartHomeDeviceType')
+      && current.includes('interface SmartHomeDeviceView')
+      && current.includes('interface SmartHomeApiDevicesResponse');
+  }
+  if (rel === 'www/smarthome-config.js') {
+    return current.includes('SmartHomeConfig Runtime-Migrationshinweis (DE)')
+      && current.includes('interface SmartHomeConfigRoot')
+      && current.includes('interface SmartHomeConfigStateShape')
+      && current.includes('SmartHome-Config-Browser-Runtime-Abschnitt');
+  }
+  if (rel === 'www/ems-apps.js') {
+    return current.includes('EmsApps Runtime-Migrationshinweis (DE)')
+      && current.includes('interface EmsAppsConfigRoot')
+      && current.includes('interface EmsAppsDomRefs')
+      && current.includes('EmsApps-Browser-Runtime-Abschnitt');
+  }
+  if (rel === 'www/app.js') {
+    return current.includes('App Runtime-Migrationshinweis (DE)')
+      && current.includes('interface AppEnergyFlowDisplaySnapshot')
+      && current.includes('interface AppDashboardRuntimeState')
+      && current.includes('App-Browser-Runtime-Abschnitt');
+  }
+  if (rel === 'www/app.js') {
+    return current.includes('App Runtime-Migrationshinweis (DE)')
+      && current.includes('interface AppConfigResponse')
+      && current.includes('interface AppEnergyFlowDisplaySnapshot')
+      && current.includes('App-Browser-Runtime-Abschnitt');
   }
   return true;
 }

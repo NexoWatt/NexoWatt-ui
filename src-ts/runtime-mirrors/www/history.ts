@@ -31,48 +31,222 @@
 
 
 /**
- * Datenvertrag: HistorySeries
- * Zweck: Beschreibt Zeitreihen, die für Diagramme und Reports verwendet werden.
- * Zusammenhang: History muss dieselbe Semantik wie LIVE-Dashboard verwenden, damit keine falschen historischen Werte entstehen.
- * TypeScript-Ziel: Zeitstempel, Wert, Einheit und Quelle typisieren.
+ * History Runtime-Migrationshinweis (DE)
+ * History TypeScript-Migrationshinweis (DE)
+ *
+ * Zweck:
+ * Dieser TypeScript-Spiegel bereitet die spätere Migration von `www/history.js` vor.
+ * Die produktive Browser-Runtime bleibt aktuell noch die JavaScript-Datei; diese Datei
+ * beschreibt aber bereits die wichtigsten History-Datenformen, Chart-Modi und DOM-
+ * Abhängigkeiten typisiert.
+ *
+ * Zusammenhang:
+ * History liest Zeitreihen aus `/api/history`, Feature-Flags aus `/config` und nutzt
+ * dieselbe Energiefluss-Semantik wie LIVE-Dashboard und Backend. Falsche Ersatzwerte
+ * würden historische Verläufe verfälschen, deshalb werden 0-Werte und 0-%-Werte als
+ * gültige Messwerte dokumentiert.
+ *
+ * TypeScript-Ziel:
+ * Die großen Zeichen-/Canvas- und Report-Funktionen werden später schrittweise aus
+ * diesem Spiegel heraus typisiert. Dieser Schritt legt zuerst die fachlichen Verträge.
  */
+type HistoryTimestampMs = number;
+type HistoryNumericValue = number;
+type HistoryKwh = number;
+type HistoryPoint = [HistoryTimestampMs, HistoryNumericValue];
+type HistorySeriesKey = string;
+type HistorySeriesMap = Record<HistorySeriesKey, HistorySeries>;
+type HistoryChartMode = 'day' | 'week' | 'month' | 'year';
+type HistoryRange = HistoryChartMode | 'custom';
+type HistoryFeatureKey = 'evcs' | 'storageFarm' | 'smartHome' | 'weather' | 'aiAdvisor';
+
+interface HistorySeries {
+  values: HistoryPoint[];
+  unit?: string;
+  label?: string;
+  color?: string;
+  source?: string;
+  totalKwh?: number;
+  [key: string]: unknown;
+}
+
+interface HistoryApiResponse {
+  from?: number | string;
+  to?: number | string;
+  series?: HistorySeriesMap;
+  extras?: {
+    producers?: Array<Record<string, unknown>>;
+    consumers?: Array<Record<string, unknown>>;
+  };
+  pricing?: {
+    series?: HistorySeriesMap;
+    intervals?: PricingInterval[];
+    [key: string]: unknown;
+  };
+  exact?: Record<string, number | string | null | undefined>;
+  [key: string]: unknown;
+}
+
+interface HistoryRuntimeApiResponse extends HistoryApiResponse {}
+type HistoryRuntimeData = HistoryRuntimeApiResponse | null;
+
+interface HistoryBucket {
+  start: number;
+  end: number;
+  mid?: number;
+  kwh?: number;
+  label?: string;
+}
+
+interface PricingInterval {
+  start?: number;
+  end?: number;
+  startTs?: HistoryTimestampMs;
+  endTs?: HistoryTimestampMs;
+  from?: number;
+  to?: number;
+  base?: number;
+  netFee?: number;
+  total?: number;
+  priceEurPerKwh?: number | null;
+  importKwh?: HistoryKwh | null;
+  costEur?: number | null;
+  avgPrice?: number;
+  [key: string]: unknown;
+}
+
+interface HistoryPricePoint {
+  ts: number;
+  total?: number;
+  base?: number;
+  netFee?: number;
+  importKwh?: number;
+  costEur?: number;
+  [key: string]: unknown;
+}
+
+interface HistoryPricingChartState {
+  points: HistoryPricePoint[];
+  start: number;
+  end: number;
+  L: number;
+  R: number;
+  T: number;
+  B: number;
+  x: (ts: number) => number;
+  [key: string]: unknown;
+}
+
+interface HistoryConfigFlags {
+  hasEvcs: boolean;
+  hasStorageFarm: boolean;
+  hasTariff: boolean;
+  hasWeather: boolean;
+  hasAiAdvisor?: boolean;
+  hasPara14a?: boolean;
+  hasRfid?: boolean;
+  showEvcsPdf?: boolean;
+  [key: string]: unknown;
+}
+
+interface HistoryFeatureVisibility {
+  hasEvcs: boolean;
+  hasStorageFarm: boolean;
+  hasTariff: boolean;
+  hasWeather: boolean;
+}
+
+interface HistoryReportVisibility {
+  evcsPdf: boolean;
+  yearlyReport: boolean;
+  tariffReport: boolean;
+  para14aReport: boolean;
+}
+
+interface HistoryRuntimeReportVisibility extends HistoryReportVisibility {}
+
+interface HistoryToolbarState {
+  range: HistoryRange;
+  from: string;
+  to: string;
+  stacked: boolean;
+  loading: boolean;
+  visibleActions: string[];
+}
+
+interface HistoryChartViewport {
+  width: number;
+  height: number;
+  startTs: HistoryTimestampMs;
+  endTs: HistoryTimestampMs;
+  zoomStartTs?: HistoryTimestampMs | null;
+  zoomEndTs?: HistoryTimestampMs | null;
+}
+
+interface HistoryReportRequest {
+  type: 'year' | 'tariff' | 'evcs' | 'rfid' | 'para14a' | string;
+  start: string;
+  end: string;
+  featureRequired?: HistoryFeatureKey;
+}
+
+interface HistoryDomRefs {
+  chart?: HTMLCanvasElement | null;
+  chartCanvas?: HTMLCanvasElement | null;
+  chartContext?: CanvasRenderingContext2D | null;
+  priceChart?: HTMLCanvasElement | null;
+  priceCanvas?: HTMLCanvasElement | null;
+  priceContext?: CanvasRenderingContext2D | null;
+  modeButtons?: HTMLElement[];
+  fromInput?: HTMLInputElement | null;
+  toInput?: HTMLInputElement | null;
+  [key: string]: unknown;
+}
+
+interface HistoryWindow extends Window {
+  __nxHistoryHideTip?: (force?: boolean) => void;
+  __nxHistoryHidePriceTip?: (force?: boolean) => void;
+  __nxHistoryShowZoomReset?: () => void;
+}
+
+type HistoryWindowExtension = HistoryWindow;
 
 /**
- * Vertragsstelle: Featureabhängige History-Anzeige
- * Zweck: EVCS- und Speicherfarm-Reihen dürfen nur sichtbar sein, wenn diese Features in der Anlage vorhanden sind.
+ * Typ-Brücke: DOM-Elemente im Legacy-Code
+ *
+ * Zweck:
+ * Die historische JS-Datei greift an vielen Stellen direkt auf `document.getElementById`
+ * zu. Für die schrittweise TS-Migration erlauben wir im Spiegel zunächst die wichtigsten
+ * Eigenschaften. Später werden diese Stellen gezielt durch sichere DOM-Helfer ersetzt.
  */
+interface Element {
+  dataset: DOMStringMap;
+  title: string;
+  value: string;
+}
+
+interface HTMLElement {
+  width: number;
+  height: number;
+  value: string;
+  getContext(contextId: '2d'): CanvasRenderingContext2D | null;
+}
+
+const historyWindow = window as HistoryWindow;
 
 /**
- * NexoWatt Detail-Kommentar (DE)
- * Zweck dieser Ergänzung:
- * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
- * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
- * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
- */
-
-/**
- * Datei: www/history.js
- * Rolle im Projekt: Historie-Frontend.
- * Zweck: Lädt und visualisiert historische Messwerte, Reports und Legenden für PC/Tablet/Smartphone.
- * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
- * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
- */
-/**
- * NexoWatt Code-Kommentar (DE)
- * Zweck: Historien-Frontend: lädt Zeitreihen über /api/history, zeichnet Charts und öffnet Reports/Exports.
- * Zusammenhänge:
- * - Nutzen dieselben Flow-/KPI-State-Namen wie LIVE-Dashboard und Backend-History-API.
- * - Feature-Sichtbarkeit für EVCS/Farm muss mit /config übereinstimmen.
- * Wartungshinweise:
- * - Keine abgeleiteten Werte anders interpretieren als app.js oder main.js, sonst entstehen widersprüchliche Verläufe.
+ * Code-Teil: History-Browser-Runtime-IIFE
+ * Zweck: Ab hier beginnt die kopierte Browser-Runtime aus `www/history.js`.
+ * Die Runtime bleibt aktuell JavaScript; dieser TS-Spiegel dokumentiert und typisiert
+ * die kritischen Datenformen für die spätere Migration.
  */
 
 (function(){
   // simple line chart renderer on canvas
-  const canvas = document.getElementById('chart');
-  const ctx = canvas.getContext('2d');
-  const priceCanvas = document.getElementById('priceChart');
-  const priceCtx = priceCanvas ? priceCanvas.getContext('2d') : null;
+  const canvas = document.getElementById('chart') as HTMLCanvasElement;
+  const ctx: HistoryCanvasContext = canvas.getContext('2d');
+  const priceCanvas = document.getElementById('priceChart') as HTMLCanvasElement | null;
+  const priceCtx: HistoryCanvasContext = priceCanvas ? priceCanvas.getContext('2d') : null;
   /**
    * Code-Teil: resize
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -97,8 +271,8 @@
    */
   function fmt(ts){ const d=new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
 
-  let data=null;
-  let chartMode='day'; // 'day' | 'week' | 'month' | 'year'
+  let data: HistoryRuntimeData = null;
+  let chartMode: HistoryChartMode = 'day'; // 'day' | 'week' | 'month' | 'year'
   let historyBooted = false;
   let historyRetryTimer = null;
   let historyRetryCount = 0;
@@ -134,7 +308,7 @@
    * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
-  function countRenderableHistoryPoints(res){
+  function countRenderableHistoryPoints(res: HistoryApiResponse | null | undefined): number{
     let count = 0;
     /**
      * Code-Teil: scan
@@ -744,7 +918,7 @@ function draw(){
      * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    function line(k, color, accessor='val', dash, width){
+    function line(k: string, color: string, accessor = 'val', dash?: number[], width?: number){
       const vals = (series[k] && series[k].values) || [];
       if(!vals.length) return;
       ctx.save(); ctx.beginPath();
@@ -2130,7 +2304,7 @@ async function load(force = false){
   }
 
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document.getElementById('loadBtn'). Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-  document.getElementById('loadBtn').addEventListener('click', load);
+  document.getElementById('loadBtn').addEventListener('click', () => load());
 
   // stacked/line toggle (day view)
   const stackBtn = document.getElementById('stackToggle');

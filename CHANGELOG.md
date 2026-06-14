@@ -1,3 +1,121 @@
+## 0.7.100 - /api/state und /api/set produktiv über TypeScript-Helfer
+
+- `/api/state` nutzt jetzt produktiv den TypeScript-State-Builder mit JS-Fallback. Die externe Antwortform bleibt kompatibel.
+- `/api/set` nutzt für bekannte lokale `settings.*`-Werte produktiv den TypeScript-Schreibplan; komplexe Scopes bleiben in der bisherigen JS-Route.
+- Kritische Werte wie `0`, `false` und leere Strings werden in den TS-Helfern explizit erhalten.
+- `weatherApiKey` bleibt explizit String, damit API-Schlüssel nicht als Zahl/Boolean normalisiert werden.
+- Neue Prüfung `npm run test:main-api-productive` ergänzt.
+- Service-Worker Cache auf `nexowatt-cache-v268` erhöht.
+
+## 0.7.99 - /api/state und /api/set TS-Shadow-Vorbereitung
+
+- `/api/state` bleibt produktiv unverändert, läuft aber zusätzlich durch einen TypeScript-Shadow-Vergleich.
+- `/api/set` bleibt produktiv unverändert, erstellt aber zusätzlich einen TypeScript-Schreibplan ohne State-Schreibzugriff.
+- Neue TS-Helfer in `src-ts/backend/main-runtime/main-runtime-helpers.ts` für API-State-Zusammenfassung und API-Set-Schreibplan ergänzt.
+- Neue Prüfung `npm run test:api-state-set-shadow` ergänzt.
+- Wichtig: 0, false und leere Strings bleiben in der Shadow-Logik gültige Werte.
+
+## 0.7.98 - erste main.js-TypeScript-Helfer produktiv mit Fallback
+
+- Neuer TypeScript-Helfer `src-ts/backend/main-runtime/main-runtime-helpers.ts` ergänzt.
+- Neuer generierter CommonJS-Spiegel `lib/ts-mirrors/backend/main-runtime/main-runtime-helpers.js`.
+- `main.js` nutzt den TS-Helfer erstmals kontrolliert produktiv für Lizenz-Platzhalterprüfung, Lizenz-Eingabe-Normalisierung und `info.connection`-Schreibplan.
+- Alle Nutzungen haben Fallback auf die bisherige JavaScript-Logik, damit der Adapter bei fehlendem/defektem Spiegel lauffähig bleibt.
+- Neue Prüfung `npm run test:main-runtime-helpers` ergänzt.
+- Keine Änderung an Energiefluss, Speicher-DP-Runtime, Core-Limits, Heizstab, KI-Berater, History oder SmartHome.
+
+## 0.7.97 - main.ts Runtime-Typisierung vorbereitet
+
+- Adapter-Haupteinstieg `src-ts/runtime-mirrors/main.ts` gezielt typisiert.
+- Erste TypeScript-Verträge für StateCache, `/api/state`, `/config`, `/api/set`, Lizenz, SSE, Webserver, `info.connection`, TS-Energiefluss-Schaltentscheidung und Runtime-Internals ergänzt.
+- Neuer Check `npm run test:main-runtime-typing` kompiliert den Main-Vertragsbereich ohne `@ts-nocheck`.
+- Runtime-Spiegel-Sync schützt `main.ts` vor versehentlichem Überschreiben.
+- Keine produktive Runtime-Umschaltung; `main.js` bleibt weiterhin führend.
+
+# 0.7.96 - Kunden-LIVE-App gezielt typisiert
+
+- TypeScript-Parallelspiegel `src-ts/runtime-mirrors/www/app.ts` um konkrete Verträge für Kunden-LIVE-Dashboard, Energiefluss-Anzeige, KPI-Karten, Wetter, KI-Berater, Schnellkacheln, Modals, Feature-Sichtbarkeit und API-State erweitert.
+- Neuer Check `npm run test:app-runtime-typing` kompiliert den App-Vertragsbereich temporär ohne `@ts-nocheck`.
+- Runtime-Mirror-Sync schützt `www/app.ts` jetzt vor blindem Überschreiben.
+- Keine produktive Runtime-Logik geändert; `www/app.js` bleibt weiterhin führend.
+- Service-Worker Cache auf `nexowatt-cache-v264` erhöht.
+
+## 0.7.96 - Kunden-LIVE-Frontend Runtime-Typisierung
+
+- `src-ts/runtime-mirrors/www/app.ts` gezielt typisiert.
+- Erste Verträge für API-State, Konfiguration, Feature-Sichtbarkeit, Energiefluss-Anzeige, Dashboard-Wertezeilen, KI-/Wetterkarten, Schreibbefehle, Modals und Runtime-State ergänzt.
+- Neuer Check `npm run test:app-runtime-typing` kompiliert den Vertragsbereich ohne `@ts-nocheck`.
+- Runtime-Spiegel-Sync schützt `app.ts` jetzt vor blindem Überschreiben.
+- Keine produktive LIVE-/Dashboard-Runtime auf TypeScript umgestellt; `www/app.js` bleibt führend.
+- Service-Worker Cache auf `nexowatt-cache-v264` erhöht.
+
+# 0.7.96 - App Runtime-Typisierung vorbereitet
+
+- `src-ts/runtime-mirrors/www/app.ts` gezielt typisiert.
+- Verträge für LIVE-Dashboard, Energiefluss-Anzeige, KPI, Wetter, KI-Berater, Modals, Schnellsteuerungen und `/api/state` ergänzt.
+- Neuer Check `npm run test:app-runtime-typing` prüft den Vertragsbereich ohne `@ts-nocheck`.
+- Runtime bleibt weiterhin `www/app.js`; keine produktive Funktionslogik geändert.
+- Service-Worker Cache auf `nexowatt-cache-v264` erhöht.
+
+## 0.7.96 - LIVE-Dashboard Runtime-Spiegel typisiert
+
+- TypeScript-Parallelspiegel `src-ts/runtime-mirrors/www/app.ts` gezielt typisiert.
+- Erste Verträge für `/api/state`, `/config`, Feature-Sichtbarkeit, Energiefluss-Anzeige, KPI, Wetter, KI-Berater und DOM-Referenzen ergänzt.
+- Neuer Check `npm run test:app-runtime-typing` prüft den Vertragsbereich ohne `@ts-nocheck`.
+- Runtime-Spiegel-Sync schützt `app.ts` jetzt vor blindem Überschreiben.
+- Keine produktive Runtime-Änderung an `www/app.js`.
+
+## 0.7.95 - App-Center Runtime-Typisierung
+
+- `src-ts/runtime-mirrors/www/ems-apps.ts` gezielt typisiert.
+- Erste Verträge für Installer-Konfiguration, Datenpunkt-Mapping, App-Registry, Energiefluss-Konfiguration, Heizstab, EVCS, Speicherfarm, KI-Berater, TS-Schaltmodus und Shadow-Diagnose ergänzt.
+- Neuer Check `npm run test:ems-apps-runtime-typing` kompiliert den Vertragsbereich ohne `@ts-nocheck`.
+- Runtime-Spiegel-Sync schützt `ems-apps.ts` jetzt vor blindem Überschreiben.
+- Keine produktive App-Center-/Installer-Runtime auf TypeScript umgestellt; `www/ems-apps.js` bleibt führend.
+- Service-Worker Cache auf `nexowatt-cache-v263` erhöht.
+
+## 0.7.94 - SmartHome-Config Runtime-Typisierung
+
+- `src-ts/runtime-mirrors/www/smarthome-config.ts` gezielt mit ersten TypeScript-Verträgen für Installer-Konfiguration typisiert.
+- Verträge für Gebäude, Etagen, Räume, Geräte, Funktionen, Pages, Szenen, DP-Zuordnung, Validator und Runtime-State ergänzt.
+- `npm run test:smarthome-config-runtime-typing` als gezielter Check ohne `@ts-nocheck` ergänzt.
+- Runtime-Mirror-Sync schützt jetzt auch `smarthome-config.ts` vor blindem Überschreiben.
+- Keine produktive SmartHome-/Installer-Runtime umgestellt; produktiv bleibt `www/smarthome-config.js`.
+
+# 0.7.94 - SmartHome-Konfiguration Runtime-Typisierung
+
+- `src-ts/runtime-mirrors/www/smarthome-config.ts` gezielt typisiert.
+- Erste Datenverträge für Gebäude, Etagen, Räume, Funktionen, Geräte, Szenen, Seiten, Timer, Logik-Uhren, Auto-Erkennung und Validierung ergänzt.
+- Temporären TypeScript-Check ohne `@ts-nocheck` für den SmartHome-Config-Vertragsbereich ergänzt.
+- Runtime-Spiegel-Sync schützt `smarthome-config.ts` jetzt vor versehentlichem Überschreiben.
+- Keine produktive SmartHome-/Installer-Runtime auf TypeScript umgestellt; `www/smarthome-config.js` bleibt führend.
+- Service-Worker Cache auf `nexowatt-cache-v262` erhöht.
+
+## 0.7.94 - SmartHome-Konfiguration gezielt typisiert
+
+- TypeScript-Parallelspiegel `src-ts/runtime-mirrors/www/smarthome-config.ts` gezielt typisiert.
+- Verträge für SmartHome-Installer-Konfiguration ergänzt: Gebäude, Etagen, Räume, Geräte, Funktionen, Seiten, Szenen, Timer, Logik-Uhren, Auto-Erkennung und API-Antworten.
+- Neuer Check `npm run test:smarthome-config-runtime-typing` prüft den Vertragsbereich ohne `@ts-nocheck`.
+- Runtime-Spiegel-Sync schützt `smarthome-config.ts` nun vor versehentlichem Überschreiben.
+- Keine produktive Runtime-Änderung; `www/smarthome-config.js` bleibt führend.
+
+# 0.7.93 - SmartHome Runtime-Spiegel gezielt typisiert
+
+- TypeScript-Parallelspiegel `src-ts/runtime-mirrors/www/smarthome.ts` um konkrete SmartHome-Verträge ergänzt.
+- Geräte, Zustände, Datenpunktbindungen, Räume, Gebäudestruktur, Kacheln, Popover und API-Antworten typisiert vorbereitet.
+- Neuer Check `test:smarthome-runtime-typing` ergänzt; der Vertragsbereich wird ohne `@ts-nocheck` kompiliert.
+- `sync:ts-runtime-mirrors` schützt `www/smarthome.js` jetzt vor blindem Überschreiben der gezielten Typisierung.
+- Keine produktive Runtime-Änderung.
+
+# 0.7.92 - History Runtime-Typisierung vorbereitet
+
+- Vierte große Runtime-Spiegeldatei gezielt typisiert: `src-ts/runtime-mirrors/www/history.ts`.
+- Neue History-Verträge ergänzt: Zeitreihen, API-Antworten, Toolbar-Zustand, Report-Sichtbarkeit und Feature-Sichtbarkeit.
+- Kritische History-Regeln direkt dokumentiert: 0 W ist gültig, EVCS/Farm nur bei echter Anlage sichtbar, History darf Energieflusswerte nicht anders interpretieren als LIVE/Backend.
+- Neuer Smoke-Test `src-ts/tests/history-runtime-typing-smoke.ts` und Check `npm run test:history-runtime-typing`.
+- Runtime-Spiegel-Sync schützt `history.ts` jetzt vor blindem Überschreiben.
+- Keine produktive Runtime-Änderung.
+
 # 0.7.91 - KI-Berater Runtime-Spiegel gezielt typisiert
 
 - Dritte große Runtime-Spiegeldatei gezielt typisiert: `src-ts/runtime-mirrors/ems/modules/ai-advisor.ts`.

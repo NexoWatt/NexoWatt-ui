@@ -3,30 +3,524 @@
  * TypeScript-Parallelspiegel: www/smarthome-config.js
  *
  * Zweck:
- * Diese Datei ist die TypeScript-Vorbereitung der bestehenden JavaScript-Runtime-Datei.
- * Sie wird noch nicht produktiv ausgeführt. Die produktive Quelle bleibt vorerst:
- * www/smarthome-config.js
+ * Diese Datei ist die gezielte TypeScript-Vorbereitung der bestehenden
+ * SmartHome-Installer-Konfiguration. Sie wird aktuell nicht produktiv ausgeführt.
+ * Die produktive Browserdatei bleibt vorerst: www/smarthome-config.js
  *
  * Zusammenhang:
- * Der Spiegel hilft uns, die JS-Datei später schrittweise zu typisieren, zu testen und
- * kontrolliert auf TypeScript umzustellen. Änderungen an der Runtime müssen aktuell noch
- * in der JS-Datei erfolgen und danach mit diesem Spiegel synchronisiert werden.
+ * - Diese Datei beschreibt Gebäude, Etagen, Räume, Geräte, Funktionen, Seiten, Timer
+ *   und Auto-Erkennung der SmartHome-Konfiguration.
+ * - Die Kundenansicht `www/smarthome.js` liest die gespeicherte Struktur später aus.
+ * - `main.js` stellt die API-Endpunkte unter `/api/smarthome/*` bereit.
  *
  * Wichtig für die Migration:
- * - Diese Datei enthält vorübergehend @ts-nocheck.
- * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
- * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
+ * - IDs, Raumzuordnungen, Funktionsnamen und Datenpunktbindungen sind Bestandteil der
+ *   gespeicherten Kundenkonfiguration und müssen stabil bleiben.
+ * - 0, false und leere Strings können gültige Eingaben sein.
+ * - Der Vertragsbereich unten wird bereits ohne @ts-nocheck geprüft; die große
+ *   Browser-/Builder-Runtime bleibt noch geschützt, bis sie einzeln typisiert ist.
  *
  * Original-Hash: 8fe15c388da228c588eebad744bfb61d71824b2b5acfedc2a0e423ed6f8b5a38
  */
 
+
 /**
- * Code-Teil: Runtime-Spiegel der kompletten Datei
+ * SmartHomeConfig Runtime-Migrationshinweis (DE)
+ * SmartHome-Konfiguration Runtime-Migrationshinweis (DE)
  *
  * Zweck:
- * Dieser Abschnitt enthält den ursprünglichen JavaScript-Code als TypeScript-Parallelkopie.
- * Einzelne Funktionen werden später pro Modul weiter typisiert; Dateien ohne eigene
- * Funktionsdeklarationen bleiben trotzdem über diesen Dateikommentar dokumentiert.
+ * Dieser Typblock beschreibt die wichtigsten Datenstrukturen der SmartHome-Installer-
+ * Konfiguration, bevor die produktive Konfigurationsseite später vollständig nach
+ * TypeScript umgestellt wird.
+ *
+ * Zusammenhang:
+ * - `www/smarthome-config.js` bleibt aktuell die produktive Browserdatei.
+ * - Die Konfiguration schreibt Gebäude, Räume, Geräte, Funktionen, Seiten, Timer und
+ *   Auto-Erkennungsdaten über `/api/smarthome/*` in `main.js`.
+ * - `www/smarthome.js` liest später die daraus entstehende Kundenstruktur.
+ *
+ * Wichtig:
+ * IDs, Funktionsnamen und Datenpunktbindungen dürfen nicht unbedacht geändert werden,
+ * weil vorhandene Kundenkonfigurationen darauf referenzieren. 0, false und leere
+ * Strings können gültige Eingaben sein und dürfen beim Speichern nicht verloren gehen.
+ */
+
+type SmartHomeConfigId = string;
+type SmartHomeConfigTimestampMs = number;
+
+type SmartHomeConfigDeviceType =
+  | 'switch'
+  | 'light'
+  | 'dimmer'
+  | 'rgb'
+  | 'color'
+  | 'blind'
+  | 'sensor'
+  | 'thermostat'
+  | 'rtr'
+  | 'scene'
+  | 'button'
+  | 'player'
+  | 'camera'
+  | 'generic'
+  | 'unknown'
+  | string;
+
+type SmartHomeConfigPageType = 'home' | 'rooms' | 'floor' | 'devices' | 'custom' | 'dashboard' | string;
+type SmartHomeConfigFunctionKind = 'switch' | 'level' | 'color' | 'position' | 'temperature' | 'sensor' | 'button' | 'setpoint' | 'readonly' | string;
+
+/**
+ * Kompatibilitätsalias: SmartHomeDeviceConfigType
+ * Zweck: Ältere Tests und Migrationsnotizen nutzen teilweise den Namen DeviceConfig.
+ * Beide Namen zeigen bewusst auf denselben fachlichen Gerätetyp.
+ */
+type SmartHomeDeviceConfigType = SmartHomeConfigDeviceType;
+
+/**
+ * Datenvertrag: SmartHomeConfigDatapointBinding
+ * Zweck:
+ * Beschreibt eine einzelne Datenpunktbindung aus der Installer-Konfiguration.
+ *
+ * Zusammenhang:
+ * Diese Struktur wird später von `main.js` beim Lesen/Schreiben und von
+ * `www/smarthome.js` beim Anzeigen/Bedienen genutzt. `id`, `dp` und `stateId` werden
+ * als Legacy-Aliase weiter erlaubt, damit ältere Konfigurationen kompatibel bleiben.
+ */
+interface SmartHomeConfigDatapointBinding {
+  id?: string;
+  dp?: string;
+  stateId?: string;
+  alias?: string;
+  role?: string;
+  unit?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  invert?: boolean;
+  read?: boolean;
+  write?: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeConfigDeviceIo
+ * Zweck:
+ * Bündelt die wichtigsten I/O-Bindungen eines konfigurierten Geräts.
+ *
+ * Zusammenhang:
+ * Die Kundenansicht erwartet z. B. `on`, `level`, `position` oder `setpoint`. Beim
+ * TypeScript-Umbau muss die Konfigurationsseite dieselben Namen erzeugen, die die
+ * Kundenansicht und die API später verarbeiten.
+ */
+interface SmartHomeConfigDeviceIo {
+  on?: SmartHomeConfigDatapointBinding;
+  level?: SmartHomeConfigDatapointBinding;
+  position?: SmartHomeConfigDatapointBinding;
+  setpoint?: SmartHomeConfigDatapointBinding;
+  value?: SmartHomeConfigDatapointBinding;
+  command?: SmartHomeConfigDatapointBinding;
+  color?: SmartHomeConfigDatapointBinding;
+  mode?: SmartHomeConfigDatapointBinding;
+  [key: string]: SmartHomeConfigDatapointBinding | undefined;
+}
+
+/**
+ * Datenvertrag: SmartHomeConfigDeviceUi
+ * Zweck:
+ * Enthält reine Anzeige- und Layoutinformationen für die spätere Kundenkachel.
+ *
+ * Zusammenhang:
+ * Diese Werte dürfen die physikalische Bedeutung der Datenpunkte nicht ändern, sondern
+ * nur Darstellung, Icon, Einheit, Größe oder Sortierung beeinflussen.
+ */
+interface SmartHomeConfigDeviceUi {
+  icon?: string;
+  unit?: string;
+  precision?: number;
+  tileSize?: 's' | 'm' | 'l' | 'xl' | string;
+  size?: 's' | 'm' | 'l' | 'xl' | string;
+  roomTitle?: string;
+  accent?: string;
+  imageUrl?: string;
+  iframeUrl?: string;
+  favorite?: boolean;
+  order?: number;
+  color?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeConfigBehavior
+ * Zweck:
+ * Beschreibt Bedien- und Sicherheitsverhalten für ein Gerät.
+ *
+ * Zusammenhang:
+ * Hier wird später entschieden, ob ein Gerät nur lesbar ist, Timer erlaubt, Popover
+ * anzeigen darf oder Schreibbefehle an `main.js` senden kann.
+ */
+interface SmartHomeConfigBehavior {
+  canWrite?: boolean;
+  allowTimer?: boolean;
+  showInCustomerUi?: boolean;
+  confirmBeforeWrite?: boolean;
+  disabled?: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeConfigDevice
+ * Zweck:
+ * Beschreibt ein vollständig konfiguriertes SmartHome-Gerät im Installer.
+ *
+ * Zusammenhang:
+ * Dieser Vertrag ist die Brücke zwischen Konfigurationseditor, API-Speicherung und
+ * Kundenansicht. Änderungen an `id`, `roomId`, `functionId` oder `io` können vorhandene
+ * Anlagenkonfigurationen beeinflussen und müssen migrationstauglich bleiben.
+ */
+interface SmartHomeConfigDevice {
+  id: SmartHomeConfigId;
+  name: string;
+  type?: SmartHomeConfigDeviceType;
+  roomId?: SmartHomeConfigId;
+  floorId?: SmartHomeConfigId;
+  functionId?: SmartHomeConfigId;
+  enabled?: boolean;
+  io?: SmartHomeConfigDeviceIo;
+  ui?: SmartHomeConfigDeviceUi;
+  behavior?: SmartHomeConfigBehavior;
+  functions?: SmartHomeConfigFunction[];
+  tags?: string[];
+  favorite?: boolean;
+  visible?: boolean;
+  sort?: number;
+  source?: 'manual' | 'detector' | 'import' | 'migration' | string;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeConfigRoom
+ * Zweck:
+ * Beschreibt einen Raum innerhalb der Gebäudestruktur.
+ */
+interface SmartHomeConfigRoom {
+  id: SmartHomeConfigId;
+  name: string;
+  floorId?: SmartHomeConfigId;
+  order?: number;
+  sort?: number;
+  icon?: string;
+  hidden?: boolean;
+  visible?: boolean;
+  color?: string;
+  favorite?: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeConfigFloor
+ * Zweck:
+ * Beschreibt eine Etage innerhalb der Gebäudestruktur.
+ */
+interface SmartHomeConfigFloor {
+  id: SmartHomeConfigId;
+  name: string;
+  order?: number;
+  sort?: number;
+  icon?: string;
+  roomIds?: SmartHomeConfigId[];
+  collapsed?: boolean;
+  meta?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeConfigFunction
+ * Zweck:
+ * Beschreibt eine fachliche Funktion/Kategorie, z. B. Licht, Beschattung oder Klima.
+ */
+interface SmartHomeConfigFunction {
+  id: SmartHomeConfigId;
+  name: string;
+  type?: SmartHomeConfigDeviceType;
+  kind?: SmartHomeConfigFunctionKind;
+  icon?: string;
+  order?: number;
+  sort?: number;
+  roomId?: SmartHomeConfigId;
+  deviceId?: SmartHomeConfigId;
+  datapointId?: string;
+  readDp?: string;
+  writeDp?: string;
+  unit?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  role?: string;
+  readonly?: boolean;
+  meta?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeConfigScene
+ * Zweck:
+ * Beschreibt eine Szene bzw. Sammelaktion, die mehrere Geräte betreffen kann.
+ */
+interface SmartHomeConfigScene {
+  id: SmartHomeConfigId;
+  name: string;
+  icon?: string;
+  roomId?: SmartHomeConfigId;
+  actions?: Array<{ deviceId?: string; command?: string; value?: unknown } | Record<string, unknown>>;
+  enabled?: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeConfigPage
+ * Zweck:
+ * Beschreibt eine konfigurierbare SmartHome-Seite bzw. einen Dashboard-Bereich.
+ */
+interface SmartHomeSceneConfig extends SmartHomeConfigScene {}
+
+interface SmartHomeConfigPage {
+  id: SmartHomeConfigId;
+  title: string;
+  type?: SmartHomeConfigPageType;
+  roomId?: SmartHomeConfigId;
+  floorId?: SmartHomeConfigId;
+  deviceIds?: SmartHomeConfigId[];
+  widgets?: Array<Record<string, unknown>>;
+  tiles?: Array<Record<string, unknown>>;
+  layout?: string;
+  order?: number;
+  sort?: number;
+  hidden?: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeConfigRoot
+ * Zweck:
+ * Beschreibt die gesamte gespeicherte SmartHome-Konfiguration.
+ *
+ * Zusammenhang:
+ * Diese Struktur wird über `/api/smarthome/config` geladen/gespeichert. Sie ist die
+ * Hauptbrücke zwischen Installerseite, Backend und Kundenansicht.
+ */
+interface SmartHomePageConfig extends SmartHomeConfigPage {}
+
+interface SmartHomeConfigRoot {
+  rooms: SmartHomeRoomConfig[];
+  functions: SmartHomeFunctionConfig[];
+  devices: SmartHomeDeviceConfig[];
+  scenes: SmartHomeSceneConfig[];
+  pages: SmartHomePageConfig[];
+  floors?: SmartHomeFloorConfig[];
+  meta?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+type SmartHomeConfigDocument = SmartHomeConfigRoot;
+
+interface SmartHomeConfigValidationIssue {
+  level: 'info' | 'warning' | 'error';
+  message: string;
+  path?: string;
+  id?: SmartHomeConfigId;
+}
+
+interface SmartHomeConfigValidationResult {
+  ok: boolean;
+  issues: SmartHomeConfigValidationIssue[];
+}
+
+/**
+ * Datenvertrag: SmartHomeConfigTimer
+ * Zweck:
+ * Beschreibt eine Endkunden-Zeitschaltuhr für ein Gerät.
+ */
+interface SmartHomeConfigTimer {
+  id: SmartHomeConfigId;
+  deviceId: SmartHomeConfigId;
+  enabled: boolean;
+  time?: string;
+  days?: number[];
+  command?: string;
+  action?: Record<string, unknown>;
+  value?: unknown;
+  [key: string]: unknown;
+}
+
+type SmartHomeConfigTimerEntry = SmartHomeConfigTimer;
+
+interface SmartHomeConfigTimerState {
+  loaded: boolean;
+  loading: boolean;
+  dirty: boolean;
+  devices: SmartHomeConfigDevice[];
+  config: { version: number; updatedAt: SmartHomeConfigTimestampMs; timers: SmartHomeConfigTimer[] };
+  map: Record<string, SmartHomeConfigTimer | SmartHomeConfigTimer[]>;
+}
+
+/**
+ * Datenvertrag: SmartHomeLogicClock
+ * Zweck:
+ * Beschreibt eine Installer-Logikuhr, die Backend-States wie
+ * `smarthome.logicClocks.<id>.active` erzeugen kann.
+ */
+interface SmartHomeLogicClock {
+  id: SmartHomeConfigId;
+  name: string;
+  enabled: boolean;
+  active?: boolean;
+  schedule?: string | Record<string, unknown>;
+  timezone?: string;
+  [key: string]: unknown;
+}
+
+type SmartHomeLogicClockConfig = SmartHomeLogicClock;
+
+type SmartHomeConfigLogicClockEntry = SmartHomeLogicClock;
+
+interface SmartHomeConfigLogicClockState {
+  loaded: boolean;
+  loading: boolean;
+  dirty: boolean;
+  config: { version: number; updatedAt: SmartHomeConfigTimestampMs; clocks: SmartHomeLogicClock[] };
+  map: Record<string, SmartHomeLogicClock>;
+}
+
+/**
+ * Datenvertrag: SmartHomeDetectorSuggestion
+ * Zweck:
+ * Beschreibt einen Vorschlag aus der ioBroker-Type-Detector-/Auto-Erkennung.
+ */
+interface SmartHomeDetectorSuggestion {
+  id: string;
+  name?: string;
+  role?: string;
+  type?: SmartHomeConfigDeviceType | string;
+  roomName?: string;
+  roomHint?: string;
+  functionHint?: string;
+  confidence?: number;
+  datapoints?: Record<string, SmartHomeConfigDatapointBinding>;
+  alreadyConfigured?: boolean;
+  configured?: boolean;
+  [key: string]: unknown;
+}
+
+type SmartHomeConfigDetectorResult = SmartHomeDetectorSuggestion;
+
+/**
+ * Datenvertrag: SmartHomeDetectorState
+ * Zweck:
+ * Beschreibt den UI-Zustand der assistierten Auto-Erkennung.
+ */
+interface SmartHomeDetectorState {
+  loaded: boolean;
+  loading: boolean;
+  error: string;
+  filterText: string;
+  showConfigured: boolean;
+  scannedAt: SmartHomeConfigTimestampMs;
+  stats?: Record<string, unknown> | null;
+  results: SmartHomeDetectorSuggestion[];
+  assignments: Record<string, SmartHomeConfigId | unknown>;
+}
+
+type SmartHomeConfigDetectorState = SmartHomeDetectorState;
+
+interface SmartHomeConfigPagesUiState {
+  tab: 'builder' | 'json' | 'preview' | string;
+  selectedId: SmartHomeConfigId | null;
+  isNew: boolean;
+  idManuallyEdited: boolean;
+}
+
+type SmartHomeConfigUiState = Record<string, unknown>;
+
+/**
+ * Datenvertrag: SmartHomeConfigRuntimeState
+ * Zweck:
+ * Beschreibt den internen Browserzustand des SmartHome-Installers.
+ *
+ * Zusammenhang:
+ * `nwShcState` in der produktiven JS-Datei nutzt viele Teilbereiche. Dieser Vertrag
+ * macht sichtbar, welche Bereiche später getrennt typisiert werden müssen: Config,
+ * Seiten-Builder, Timer, Logikuhren und Auto-Erkennung.
+ */
+interface SmartHomeConfigRuntimeState {
+  config: SmartHomeConfigRoot;
+  originalJson: string | null;
+  dirty: boolean;
+  validation: SmartHomeConfigValidationResult | null | unknown;
+  pagesJsonText: string;
+  pagesJsonValid: boolean;
+  pagesDraft: SmartHomePageConfig[];
+  pagesUi: SmartHomeConfigPagesUiState;
+  ui?: SmartHomeConfigUiState | null;
+  timers: SmartHomeConfigTimerState;
+  logicClocks: SmartHomeConfigLogicClockState;
+  detector: SmartHomeDetectorState;
+  [key: string]: unknown;
+}
+
+type SmartHomeConfigInstallerState = SmartHomeConfigRuntimeState;
+
+/**
+ * Datenvertrag: SmartHomeConfigApiResponse
+ * Zweck:
+ * Beschreibt API-Antworten der SmartHome-Konfigurationsendpunkte.
+ */
+interface SmartHomeConfigApiResponse<T = unknown> {
+  ok: boolean;
+  data?: T;
+  config?: SmartHomeConfigRoot;
+  error?: string;
+  message?: string;
+  validation?: SmartHomeConfigValidationResult;
+  [key: string]: unknown;
+}
+
+interface SmartHomeConfigSaveRequest {
+  config: SmartHomeConfigRoot;
+  source: 'installer' | 'auto-detect' | 'json-editor' | 'builder' | string;
+  comment?: string;
+}
+
+interface SmartHomeConfigWindow extends Window {
+  nwShcState?: SmartHomeConfigRuntimeState;
+  nwShcSaveConfig?: () => Promise<void> | void;
+}
+
+
+/**
+ * Kompatibilitätsinterfaces für ältere Migrationschecks.
+ *
+ * Zweck:
+ * Einige Checks nutzen den Namen `...Config`, während der neue Vertragsbereich die
+ * fachlichen Namen `SmartHomeConfig...` verwendet. Die folgenden Interfaces erweitern
+ * die kanonischen Verträge, damit beide Namen denselben Inhalt beschreiben.
+ */
+interface SmartHomeConfigDpBinding extends SmartHomeConfigDatapointBinding {}
+interface SmartHomeRoomConfig extends SmartHomeConfigRoom {}
+interface SmartHomeFloorConfig extends SmartHomeConfigFloor {}
+interface SmartHomeFunctionConfig extends SmartHomeConfigFunction {}
+interface SmartHomeDeviceConfig extends SmartHomeConfigDevice {}
+interface SmartHomeSceneConfig extends SmartHomeConfigScene {}
+interface SmartHomePageConfig extends SmartHomeConfigPage {}
+interface SmartHomeTimerConfig extends SmartHomeConfigTimer {}
+interface SmartHomeConfigStateShape extends SmartHomeConfigRuntimeState {}
+
+/**
+ * SmartHome-Config-Browser-Runtime-Abschnitt (DE)
+ *
+ * Ab hier folgt die bestehende produktive Browserlogik als TypeScript-Parallelspiegel.
+ * Die Runtime wird aktuell weiterhin aus `www/smarthome-config.js` ausgeführt. Dieser
+ * Abschnitt bleibt deshalb vorerst mit `@ts-nocheck` geschützt, bis Builder, Auto-
+ * Erkennung, Timer und DP-Picker jeweils einzeln typisiert sind.
  */
 
 /**

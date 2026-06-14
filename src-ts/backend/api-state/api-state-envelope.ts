@@ -53,9 +53,9 @@ export function buildApiStateEnvelope(input: BuildApiStateEnvelopeInput): ApiSta
     ok: true,
     generatedAt: input.generatedAt ?? Date.now(),
     states,
+    ...(input.features !== undefined ? { features: input.features } : {}),
+    ...(input.license !== undefined ? { license: input.license } : {}),
   };
 
-  if (input.features !== undefined) envelope.features = input.features;
-  if (input.license !== undefined) envelope.license = input.license;
   return envelope;
 }

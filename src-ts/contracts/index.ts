@@ -22,3 +22,11 @@ export * from './ems-budget';
 export * from './heating-rod';
 
 export * as apiStateContracts from './api-state';
+
+/**
+ * Code-Teil: History-Verträge exportieren
+ *
+ * Zweck:
+ * Macht die History-/Report-Datenverträge für spätere Migrationen zentral verfügbar.
+ */
+export * from './history';

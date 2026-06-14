@@ -47,6 +47,60 @@ const mirrorSpecs = [
     mirrorRel: 'lib/ts-mirrors/backend/license/license-key-safety.js',
     publicName: 'license-key-safety',
   },
+  {
+    sourceRel: 'src-ts/backend/main-helpers/state-cache-main.ts',
+    builtRel: 'build-ts/backend-mirrors/backend/main-helpers/state-cache-main.js',
+    mirrorRel: 'lib/ts-mirrors/backend/main-helpers/state-cache-main.js',
+    publicName: 'main-state-cache',
+  },
+  {
+    sourceRel: 'src-ts/backend/main-helpers/api-state-main.ts',
+    builtRel: 'build-ts/backend-mirrors/backend/main-helpers/api-state-main.js',
+    mirrorRel: 'lib/ts-mirrors/backend/main-helpers/api-state-main.js',
+    publicName: 'main-api-state',
+  },
+  {
+    sourceRel: 'src-ts/backend/main-helpers/settings-write-main.ts',
+    builtRel: 'build-ts/backend-mirrors/backend/main-helpers/settings-write-main.js',
+    mirrorRel: 'lib/ts-mirrors/backend/main-helpers/settings-write-main.js',
+    publicName: 'main-settings-write',
+  },
+  {
+    sourceRel: 'src-ts/backend/main-helpers/info-connection-main.ts',
+    builtRel: 'build-ts/backend-mirrors/backend/main-helpers/info-connection-main.js',
+    mirrorRel: 'lib/ts-mirrors/backend/main-helpers/info-connection-main.js',
+    publicName: 'main-info-connection',
+  },
+  {
+    sourceRel: 'src-ts/backend/main-helpers/license-key-main.ts',
+    builtRel: 'build-ts/backend-mirrors/backend/main-helpers/license-key-main.js',
+    mirrorRel: 'lib/ts-mirrors/backend/main-helpers/license-key-main.js',
+    publicName: 'main-license-key',
+  },
+  {
+    sourceRel: 'src-ts/backend/main-runtime/main-runtime-helpers.ts',
+    builtRel: 'build-ts/backend-mirrors/backend/main-runtime/main-runtime-helpers.js',
+    mirrorRel: 'lib/ts-mirrors/backend/main-runtime/main-runtime-helpers.js',
+    publicName: 'main-runtime-helpers',
+  },
+  {
+    sourceRel: 'src-ts/backend/api-state/api-state-envelope.ts',
+    builtRel: 'build-ts/backend-mirrors/backend/api-state/api-state-envelope.js',
+    mirrorRel: 'lib/ts-mirrors/backend/api-state/api-state-envelope.js',
+    publicName: 'api-state-envelope',
+  },
+  {
+    sourceRel: 'src-ts/backend/api-state/api-set-helpers.ts',
+    builtRel: 'build-ts/backend-mirrors/backend/api-state/api-set-helpers.js',
+    mirrorRel: 'lib/ts-mirrors/backend/api-state/api-set-helpers.js',
+    publicName: 'api-set-helpers',
+  },
+  {
+    sourceRel: 'src-ts/backend/connection/connection-state.ts',
+    builtRel: 'build-ts/backend-mirrors/backend/connection/connection-state.js',
+    mirrorRel: 'lib/ts-mirrors/backend/connection/connection-state.js',
+    publicName: 'connection-state',
+  },
 ];
 
 /**

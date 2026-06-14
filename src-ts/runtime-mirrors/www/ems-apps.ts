@@ -54,6 +54,295 @@
  * - UI-Felder müssen exakt zu den Config-Schlüsseln passen; ein falscher Key kann Regelungslogik oder DP-Mapping brechen.
  */
 
+
+/**
+ * EmsApps Runtime-Migrationshinweis (DE)
+ *
+ * Zweck:
+ * Dieser Vertragsbereich beschreibt die wichtigsten Datenformen des Installer-/App-Center-
+ * Frontends. `www/ems-apps.js` bleibt produktiv führend; dieser TypeScript-Spiegel wird
+ * Schritt für Schritt typisiert, damit wir App-Konfigurationen, Datenpunkt-Mapping,
+ * Statusdiagnose und Speichern später sicher aus JavaScript herauslösen können.
+ *
+ * Zusammenhang:
+ * - `main.js` liefert `/api/installer/config` und speichert Config-Patches.
+ * - `ems/modules/*` liest viele der hier gespeicherten Konfigurationen.
+ * - `www/ems-apps.html` enthält die DOM-IDs, die in dieser Datei gemappt werden.
+ * - `lib/ts-mirrors/*` liefert TS-Shadow-/Diagnosewerte, die hier sichtbar gemacht werden.
+ *
+ * Kritische Regeln:
+ * - `0`, `false` und leere Arrays sind gültige Konfigurationswerte.
+ * - HTML-ID, Element-Mapping, Build-UI und Collect-Funktion müssen synchron bleiben.
+ * - Installer-Konfiguration und Kunden-Frontend dürfen nicht vermischt werden.
+ * - Runtime bleibt JavaScript, bis die TS-Variante gezielt geprüft und freigegeben ist.
+ */
+
+type EmsAppsId = string;
+type EmsAppsDatapointId = string;
+type EmsAppsWatt = number;
+type EmsAppsPercent = number;
+type EmsAppsMillis = number;
+type EmsAppsSeconds = number;
+type EmsAppsEnergyFlowTsMode = 'js' | 'shadow' | 'ts';
+type EmsAppsStatusTone = 'idle' | 'ok' | 'warn' | 'error';
+
+type EmsAppsFlexibleValue = string | number | boolean | null | undefined | EmsAppsJsonObject | EmsAppsFlexibleValue[];
+
+interface EmsAppsJsonObject {
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+/**
+ * Code-Teil: EmsAppsDatapointBinding
+ *
+ * Zweck:
+ * Beschreibt eine Datenpunktbindung aus dem App-Center. Die Binding-Struktur ist bewusst
+ * offen, weil verschiedene Module unterschiedliche DP-Rollen speichern.
+ *
+ * Zusammenhang:
+ * Wird später als Basis für Energiefluss-Mapping, Heizstab, EVCS, Speicherfarm und KI-
+ * Einstellungen verwendet. Wichtig ist, dass leere Strings beim Speichern nicht ungewollt
+ * gültige Werte überschreiben.
+ */
+interface EmsAppsDatapointBinding {
+  id: EmsAppsDatapointId;
+  label?: string;
+  role?: string;
+  unit?: string;
+  type?: string;
+  invert?: boolean;
+  optional?: boolean;
+  source?: 'manual' | 'auto' | 'quick-setup' | 'migration';
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+/**
+ * Code-Teil: EmsAppsDatapointMap
+ *
+ * Zweck:
+ * Repräsentiert die `datapoints`-Map der Installer-Konfiguration. Diese Map ist ein
+ * zentraler Vertrag zwischen App-Center, Backend und EMS-Modulen.
+ */
+type EmsAppsDatapointMap = Record<string, string>;
+
+interface EmsAppsInstallerConfig {
+  gridConnectionPower?: EmsAppsWatt;
+  gridPointPowerId?: EmsAppsDatapointId;
+  gridPointConnectedId?: EmsAppsDatapointId;
+  gridPointWatchdogId?: EmsAppsDatapointId;
+  schedulerIntervalMs?: EmsAppsMillis;
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+interface EmsAppsFeatureDefinition {
+  id: EmsAppsId;
+  title?: string;
+  enabled?: boolean;
+  installed?: boolean;
+  visible?: boolean;
+  licenseTier?: string;
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+interface EmsAppsFeatureRegistry {
+  apps?: Record<string, EmsAppsFeatureDefinition>;
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+interface EmsAppsEnergyFlowConfig {
+  subtractEvFromBuilding?: boolean;
+  invertGrid?: boolean;
+  invertBattery?: boolean;
+  invertPv?: boolean;
+  invertEv?: boolean;
+  gridShowNet?: boolean;
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+interface EmsAppsStorageConfig {
+  controlMode?: 'targetPower' | 'selfConsumption' | 'disabled' | string;
+  capacityKWh?: number;
+  feneconAcMode?: boolean;
+  feneconGridControlEnabled?: boolean;
+  datapoints?: Record<string, EmsAppsDatapointId>;
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+interface EmsAppsStorageFarmStorage {
+  id: EmsAppsId;
+  name?: string;
+  enabled?: boolean;
+  groupId?: EmsAppsId;
+  capacityKWh?: number;
+  socId?: EmsAppsDatapointId;
+  chargePowerId?: EmsAppsDatapointId;
+  dischargePowerId?: EmsAppsDatapointId;
+  signedPowerId?: EmsAppsDatapointId;
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+interface EmsAppsStorageFarmConfig {
+  mode?: 'pool' | 'groups' | string;
+  schedulerIntervalMs?: EmsAppsMillis;
+  storages?: EmsAppsStorageFarmStorage[];
+  groups?: Array<{ id: EmsAppsId; name?: string; [key: string]: EmsAppsFlexibleValue }>;
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+interface EmsAppsHeatingRodStageConfig {
+  id?: EmsAppsId;
+  label?: string;
+  powerW?: EmsAppsWatt;
+  writeId?: EmsAppsDatapointId;
+  enabled?: boolean;
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+interface EmsAppsHeatingRodDeviceConfig {
+  id: EmsAppsId;
+  name?: string;
+  enabled?: boolean;
+  reserveW?: EmsAppsWatt;
+  minSocPct?: EmsAppsPercent;
+  allowGrid?: boolean;
+  allowStorageDischarge?: boolean;
+  stages?: EmsAppsHeatingRodStageConfig[];
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+interface EmsAppsHeatingRodConfig {
+  enabled?: boolean;
+  devices?: EmsAppsHeatingRodDeviceConfig[];
+  reserveW?: EmsAppsWatt;
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+interface EmsAppsChargingManagementConfig {
+  enabled?: boolean;
+  wallboxes?: Array<{ id: EmsAppsId; name?: string; enabled?: boolean; [key: string]: EmsAppsFlexibleValue }>;
+  evcsCount?: number;
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+interface EmsAppsAiAdvisorConfig {
+  enabled?: boolean;
+  showOnLive?: boolean;
+  intervalSec?: EmsAppsSeconds;
+  maxSuggestions?: number;
+  minPriority?: 'info' | 'warning' | 'action' | 'critical' | string;
+  peakNearLimitPct?: EmsAppsPercent;
+  weatherRainRiskPct?: EmsAppsPercent;
+  categories?: Record<string, boolean>;
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+interface EmsAppsTsMigrationConfig {
+  energyFlowMode?: EmsAppsEnergyFlowTsMode;
+  energyFlowProductionAllowed?: boolean;
+  energyFlowRequireStablePlant?: boolean;
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+interface EmsAppsShadowDiagnosticCard {
+  status?: 'ok' | 'waiting' | 'mismatch' | 'error' | string;
+  source?: string;
+  ok?: boolean;
+  mismatches?: Array<{ key?: string; js?: number | string; ts?: number | string; diff?: number | string }>;
+  blockers?: string[];
+  warnings?: string[];
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+interface EmsAppsConfigRoot {
+  installerConfig?: EmsAppsInstallerConfig;
+  emsApps?: EmsAppsFeatureRegistry;
+  datapoints?: EmsAppsDatapointMap;
+  energyFlow?: EmsAppsEnergyFlowConfig;
+  storage?: EmsAppsStorageConfig;
+  storageFarm?: EmsAppsStorageFarmConfig;
+  heatingRod?: EmsAppsHeatingRodConfig;
+  chargingManagement?: EmsAppsChargingManagementConfig;
+  aiAdvisor?: EmsAppsAiAdvisorConfig;
+  tsMigration?: EmsAppsTsMigrationConfig;
+  settings?: EmsAppsJsonObject;
+  settingsConfig?: EmsAppsJsonObject;
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+interface EmsAppsInstallerConfigResponse {
+  ok?: boolean;
+  config?: EmsAppsConfigRoot;
+  diagnostics?: EmsAppsJsonObject;
+  message?: string;
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+interface EmsAppsConfigPatch {
+  installerConfig?: Partial<EmsAppsInstallerConfig>;
+  emsApps?: EmsAppsFeatureRegistry;
+  datapoints?: EmsAppsDatapointMap;
+  energyFlow?: Partial<EmsAppsEnergyFlowConfig>;
+  storage?: Partial<EmsAppsStorageConfig>;
+  storageFarm?: Partial<EmsAppsStorageFarmConfig>;
+  heatingRod?: Partial<EmsAppsHeatingRodConfig>;
+  chargingManagement?: Partial<EmsAppsChargingManagementConfig>;
+  aiAdvisor?: Partial<EmsAppsAiAdvisorConfig>;
+  tsMigration?: Partial<EmsAppsTsMigrationConfig>;
+  [key: string]: EmsAppsFlexibleValue;
+}
+
+/**
+ * Code-Teil: EmsAppsDomRefs
+ *
+ * Zweck:
+ * Beschreibt die große `els`-Sammlung der App-Center-Seite. Viele Felder bleiben optional,
+ * weil einzelne UI-Karten abhängig von Lizenz, Feature und HTML-Version fehlen können.
+ *
+ * Wichtig:
+ * Beim TypeScript-Umbau darf ein fehlendes DOM-Element die App-Center-Seite nicht
+ * abbrechen. Die Runtime muss weiterhin mit `null` umgehen können.
+ */
+interface EmsAppsDomRefs {
+  status?: HTMLElement | null;
+  save?: HTMLElement | null;
+  reload?: HTMLElement | null;
+  validate?: HTMLElement | null;
+  appsList?: HTMLElement | null;
+  appsEmpty?: HTMLElement | null;
+  gridConnectionPower?: HTMLInputElement | null;
+  schedulerIntervalMs?: HTMLInputElement | null;
+  rawPatch?: HTMLTextAreaElement | HTMLInputElement | null;
+  [key: string]: HTMLElement | HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null | undefined;
+}
+
+interface EmsAppsRuntimeState {
+  currentConfig: EmsAppsConfigRoot | null;
+  dirty: boolean;
+  statusTone: EmsAppsStatusTone;
+  selectedTab?: string;
+  shadowDiagnostics?: {
+    coreLimits?: EmsAppsShadowDiagnosticCard;
+    heatingRod?: EmsAppsShadowDiagnosticCard;
+    energyFlow?: EmsAppsShadowDiagnosticCard;
+    readiness?: EmsAppsShadowDiagnosticCard;
+  };
+}
+
+interface EmsAppsWindow extends Window {
+  nwEmsAppsConfig?: EmsAppsConfigRoot;
+  nwEmsAppsDebug?: EmsAppsJsonObject;
+}
+
+/**
+ * EmsApps-Browser-Runtime-Abschnitt (DE)
+ *
+ * Ab hier beginnt die bestehende Browser-Runtime aus `www/ems-apps.js`. Sie arbeitet
+ * weiterhin dynamisch mit DOM, Fetch-APIs und großen Konfigurationsobjekten. Die obigen
+ * Verträge bilden die Grundlage, um diese Runtime später in kleinere, echte TS-Module
+ * aufzuteilen: DOM-Erfassung, Config-Build, Config-Collect, Diagnose-Renderer und
+ * Speichern werden dann getrennt typisiert.
+ */
+
 /* NexoWatt EMS Apps (Installer) – Web UI */
 (function () {
   'use strict';

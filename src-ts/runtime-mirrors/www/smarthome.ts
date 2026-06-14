@@ -20,6 +20,406 @@
  * Original-Hash: d1b7586eb84178bbfc6f8013f1cd01fd55ff71244d53b714356fdb11fc95805e
  */
 
+
+/**
+ * SmartHome Runtime-Migrationshinweis (DE)
+ *
+ * Zweck:
+ * Dieser Typblock beschreibt die wichtigsten Datenstrukturen der SmartHome-Kundenansicht,
+ * bevor die produktive Browser-Runtime später vollständig nach TypeScript umgestellt wird.
+ *
+ * Zusammenhang:
+ * - `www/smarthome.js` bleibt aktuell die produktive Browserdatei.
+ * - `www/smarthome-config.js` bzw. die Admin-/Installerseiten erzeugen Gebäude-, Raum-
+ *   und Gerätekonfigurationen.
+ * - `main.js` liefert Geräte und Steuer-APIs über `/api/smarthome/*`.
+ * - Diese Datei ist der TypeScript-Parallelspiegel, der die Verträge sichtbar macht.
+ *
+ * Wichtig:
+ * Die Kundenansicht darf nur Bedienung anzeigen. Installer-/Konfigurationslogik bleibt
+ * getrennt. Beim späteren TS-Umbau müssen Drawer-Navigation, Touch-Bedienung, Popover,
+ * Räume/Gebäude und Feature-Sichtbarkeit gemeinsam getestet werden.
+ */
+
+/**
+ * Datenvertrag: SmartHomeDeviceType
+ * Zweck:
+ * Beschreibt die fachlichen Gerätetypen, die das Kundenfrontend als Kacheln darstellen kann.
+ *
+ * Zusammenhang:
+ * Dieser Typ wird von Gerätekarten, Popover-Steuerungen, Icon-Auswahl und Filterlogik genutzt.
+ * Neue Gerätetypen müssen immer zusammen mit Kachel, Bedienpopover und Schreiblogik geprüft
+ * werden, damit die Kundenansicht nicht nur teilweise funktioniert.
+ */
+type SmartHomeDeviceType =
+  | 'switch'
+  | 'light'
+  | 'dimmer'
+  | 'color'
+  | 'blind'
+  | 'rtr'
+  | 'sensor'
+  | 'player'
+  | 'camera'
+  | 'scene'
+  | 'button'
+  | 'unknown'
+  | string;
+
+/**
+ * Datenvertrag: SmartHomeDeviceState
+ * Zweck:
+ * Vereinheitlicht die dynamischen Gerätewerte aus `/api/smarthome/devices`.
+ *
+ * Zusammenhang:
+ * `smarthome.js` liest diese Werte für Kachelzustand, Icon, große Wertanzeige und
+ * Popover-Steuerungen. 0, false und leere Texte können gültige Werte sein und dürfen
+ * nicht automatisch als fehlend behandelt werden.
+ */
+interface SmartHomeDeviceState {
+  on?: boolean;
+  active?: boolean;
+  value?: number | string | boolean | null;
+  level?: number;
+  position?: number;
+  setpoint?: number;
+  currentTemp?: number;
+  mode?: string;
+  color?: string;
+  title?: string;
+  artist?: string;
+  source?: string;
+  error?: boolean | string;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeDatapointBinding
+ * Zweck:
+ * Beschreibt eine einzelne Datenpunktbindung eines SmartHome-Geräts.
+ *
+ * Zusammenhang:
+ * Diese Struktur kommt aus der Konfiguration und entscheidet später, ob eine Kachel nur
+ * lesend ist oder Schreibzugriff hat. Beim TypeScript-Umbau muss die Schreiblogik gegen
+ * `main.js`-/API-Handler geprüft werden.
+ */
+interface SmartHomeDatapointBinding {
+  id?: string;
+  dp?: string;
+  stateId?: string;
+  role?: string;
+  unit?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  invert?: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeDeviceIo
+ * Zweck:
+ * Gruppiert die wichtigsten I/O-Bindungen eines Geräts.
+ *
+ * Zusammenhang:
+ * Kachel und Popover greifen auf `on`, `level`, `position`, `setpoint` und ähnliche
+ * Bindungen zu. Diese Struktur ist später der Einstiegspunkt für klare TypeScript-
+ * Typisierung der Schreibbefehle.
+ */
+interface SmartHomeDeviceIo {
+  on?: SmartHomeDatapointBinding;
+  level?: SmartHomeDatapointBinding;
+  position?: SmartHomeDatapointBinding;
+  setpoint?: SmartHomeDatapointBinding;
+  value?: SmartHomeDatapointBinding;
+  command?: SmartHomeDatapointBinding;
+  [key: string]: SmartHomeDatapointBinding | undefined;
+}
+
+/**
+ * Datenvertrag: SmartHomeDeviceUi
+ * Zweck:
+ * Enthält UI-spezifische Angaben, die nicht direkt aus dem Datenpunktwert entstehen.
+ *
+ * Zusammenhang:
+ * Wird von Icon-, Größen-, Präzisions- und Einheitendarstellung verwendet. UI-Werte dürfen
+ * die physikalische Datenpunktbedeutung nicht ändern, sondern nur darstellen.
+ */
+interface SmartHomeDeviceUi {
+  unit?: string;
+  precision?: number;
+  tileSize?: 's' | 'm' | 'l' | 'xl' | string;
+  icon?: string;
+  accent?: string;
+  imageUrl?: string;
+  iframeUrl?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeDeviceBehavior
+ * Zweck:
+ * Beschreibt Bedienrechte und Sonderverhalten einer Kachel.
+ *
+ * Zusammenhang:
+ * `smarthome.js` nutzt dieses Objekt, um Schreibzugriff, schnelle Kachelaktionen,
+ * Timerfähigkeit und Popover-Verhalten zu entscheiden.
+ */
+interface SmartHomeDeviceBehavior {
+  readonly?: boolean;
+  canWrite?: boolean;
+  quickAction?: boolean;
+  allowTimer?: boolean;
+  openPopoverOnTap?: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeTimerConfig
+ * Zweck:
+ * Beschreibt Timer, die ein Kunde für ein Gerät setzen kann.
+ *
+ * Zusammenhang:
+ * Timer werden über die SmartHome-API gespeichert und dürfen nicht mit Installerlogik
+ * vermischt werden. Beim TS-Umbau muss geprüft werden, ob `enabled=false` ein gültiger
+ * Zustand ist und nicht als fehlend gilt.
+ */
+interface SmartHomeTimerConfig {
+  enabled?: boolean;
+  time?: string;
+  action?: string;
+  repeat?: string[];
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeDeviceView
+ * Zweck:
+ * Vollständiger Gerätevertrag für die Kundenansicht.
+ *
+ * Zusammenhang:
+ * Diese Struktur wird von Gruppierung, Filterung, Kachelrendering, Popover-Steuerung,
+ * Favoriten und Multiroom-Funktionen genutzt. Änderungen an diesem Vertrag betreffen fast
+ * jede SmartHome-Funktion im Kundenfrontend.
+ */
+interface SmartHomeDeviceView {
+  id: string;
+  name?: string;
+  alias?: string;
+  type?: SmartHomeDeviceType;
+  function?: string;
+  room?: string;
+  roomId?: string;
+  floor?: string;
+  floorId?: string;
+  icon?: string;
+  state?: SmartHomeDeviceState;
+  io?: SmartHomeDeviceIo;
+  ui?: SmartHomeDeviceUi;
+  behavior?: SmartHomeDeviceBehavior;
+  timer?: SmartHomeTimerConfig;
+  favorite?: boolean;
+  hidden?: boolean;
+  sortOrder?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeRoomMeta
+ * Zweck:
+ * Beschreibt Räume aus der Gebäudestruktur.
+ *
+ * Zusammenhang:
+ * Raumdaten werden aus der Konfiguration übernommen und in der Kundenansicht für Drawer,
+ * Gruppierung, Überschriften und Raumfilter verwendet.
+ */
+interface SmartHomeRoomMeta {
+  id: string;
+  name: string;
+  floorId?: string;
+  icon?: string;
+  sortOrder?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeFloorMeta
+ * Zweck:
+ * Beschreibt Etagen/Gebäudebereiche der Kundenansicht.
+ *
+ * Zusammenhang:
+ * Diese Daten sind Grundlage der linken Gebäudestruktur. Aktive Bereiche müssen gut lesbar
+ * bleiben und dürfen auf Mobilgeräten nicht als unsichtbare Fläche im Layout stehen.
+ */
+interface SmartHomeFloorMeta {
+  id: string;
+  name: string;
+  icon?: string;
+  roomIds?: string[];
+  sortOrder?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeStructureMeta
+ * Zweck:
+ * Fasst Gebäude-, Etagen- und Raum-Metadaten für die Kundenansicht zusammen.
+ *
+ * Zusammenhang:
+ * Wird beim Rendern der Navigation, Gruppierung und Raumübersichten verwendet. Dieser
+ * Vertrag ist später wichtig, um `smarthome-config.ts` und `smarthome.ts` sauber zu koppeln.
+ */
+interface SmartHomeStructureMeta {
+  floorsById: Record<string, SmartHomeFloorMeta>;
+  roomsById: Record<string, SmartHomeRoomMeta>;
+  roomIdByName: Record<string, string>;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeViewMode
+ * Zweck:
+ * Beschreibt die möglichen Ansichtsarten im Kundenfrontend.
+ *
+ * Zusammenhang:
+ * Die Filter-/Gruppierungslogik verwendet diesen Wert, um zwischen Raum-, Funktions- und
+ * Favoritenansicht umzuschalten. Beim mobilen Drawer muss der Zustand erhalten bleiben.
+ */
+type SmartHomeViewMode = 'rooms' | 'functions' | 'favorites' | 'all' | string;
+
+/**
+ * Datenvertrag: SmartHomeViewState
+ * Zweck:
+ * Beschreibt den aktuellen UI-Zustand der SmartHome-Seite.
+ *
+ * Zusammenhang:
+ * Dieser Zustand liegt aktuell in Browser-Variablen und localStorage. Später soll daraus
+ * ein klar typisiertes UI-State-Modell entstehen.
+ */
+interface SmartHomeViewState {
+  mode: SmartHomeViewMode;
+  activeRoomId?: string;
+  activeFloorId?: string;
+  activeFunction?: string;
+  searchText?: string;
+  showFavoritesOnly?: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeFilterState
+ * Zweck:
+ * Beschreibt die aktiven Kundenfilter für Geräte.
+ *
+ * Zusammenhang:
+ * Wird genutzt, bevor Gerätekacheln gerendert werden. Filter dürfen keine Geräte aus der
+ * API löschen, sondern nur die sichtbare Darstellung beeinflussen.
+ */
+interface SmartHomeFilterState {
+  search?: string;
+  functionName?: string;
+  roomId?: string;
+  floorId?: string;
+  favoritesOnly?: boolean;
+  type?: SmartHomeDeviceType;
+}
+
+/**
+ * Datenvertrag: SmartHomeGroup
+ * Zweck:
+ * Beschreibt eine gerenderte Gruppe aus Raum, Funktion oder virtuellem Bereich.
+ *
+ * Zusammenhang:
+ * Gruppen sind die Schnittstelle zwischen Datenlogik und DOM-Rendering. Künftige TS-
+ * Migrationen sollten erst Gruppen typisiert aufbauen und danach DOM-Elemente erzeugen.
+ */
+interface SmartHomeGroup {
+  id: string;
+  title: string;
+  subtitle?: string;
+  roomId?: string;
+  floorId?: string;
+  functionName?: string;
+  devices: SmartHomeDeviceView[];
+  [key: string]: unknown;
+}
+
+/**
+ * Datenvertrag: SmartHomeTileOptions
+ * Zweck:
+ * Beschreibt Optionen, mit denen eine einzelne Gerätekachel erzeugt wird.
+ *
+ * Zusammenhang:
+ * Kachelgröße, Raumlabel, Schreibzugriff und Popover-Verhalten hängen an diesen Optionen.
+ * Änderungen müssen immer mit Touch-Bedienung und Responsive-Layout geprüft werden.
+ */
+interface SmartHomeTileOptions {
+  showRoom?: boolean;
+  forceSize?: 's' | 'm' | 'l' | 'xl' | string;
+  readonly?: boolean;
+  source?: 'room' | 'function' | 'favorite' | 'search' | string;
+}
+
+/**
+ * Datenvertrag: SmartHomePopoverContext
+ * Zweck:
+ * Beschreibt den Kontext einer großen Gerätebedienung.
+ *
+ * Zusammenhang:
+ * Popover öffnen aus Kacheln heraus und dürfen die Kachel-Quick-Action nicht doppelt
+ * ausführen. Beim TS-Umbau müssen Pointer-/Click-Ereignisse besonders getestet werden.
+ */
+interface SmartHomePopoverContext {
+  device: SmartHomeDeviceView;
+  anchor?: Element | null;
+  source?: string;
+  openedAtMs: number;
+}
+
+/**
+ * Datenvertrag: SmartHomeApiDevicesResponse
+ * Zweck:
+ * Beschreibt die Antwort von `/api/smarthome/devices`.
+ *
+ * Zusammenhang:
+ * `main.js` liefert diese Daten. `smarthome.js` darf bei leeren oder verzögerten Antworten
+ * nicht mit einer kaputten Seite enden, sondern muss Lade-/Leerzustände anzeigen.
+ */
+interface SmartHomeApiDevicesResponse {
+  ok: boolean;
+  devices?: SmartHomeDeviceView[];
+  config?: unknown;
+  message?: string;
+}
+
+/**
+ * Datenvertrag: SmartHomeCommandRequest
+ * Zweck:
+ * Beschreibt Schreibbefehle aus Kachel oder Popover.
+ *
+ * Zusammenhang:
+ * Wird später für `/api/smarthome/control` bzw. ähnliche Endpunkte wichtig. Werte wie
+ * `false`, `0`, `0 %` oder leere Strings können absichtlich gesendet werden.
+ */
+interface SmartHomeCommandRequest {
+  deviceId: string;
+  command?: string;
+  value?: string | number | boolean | null;
+  source?: 'tile' | 'popover' | 'timer' | 'multiroom' | string;
+}
+
+/**
+ * Vertragsstelle: SmartHome globale Browser-Variablen
+ * Zweck:
+ * Dokumentiert temporäre globale Werte, die später in ein typisiertes State-Modell
+ * ausgelagert werden sollen.
+ */
+interface SmartHomeWindow extends Window {
+  nwAllDevices?: SmartHomeDeviceView[];
+  nwSmartHomeReload?: () => Promise<void> | void;
+}
+
+
 /**
  * Code-Teil: Runtime-Spiegel der kompletten Datei
  *
@@ -65,6 +465,15 @@
  * - Gerätekonfiguration entsteht in www/smarthome-config.js und wird serverseitig gespeichert.
  * Wartungshinweise:
  * - UI-Änderungen müssen Touch-Bedienung, Drawer-Navigation und Rollen/Authentifizierung berücksichtigen.
+ */
+
+/**
+ * SmartHome-Browser-Runtime-Abschnitt (DE)
+ *
+ * Zweck:
+ * Ab hier folgt die bisherige produktive JavaScript-Logik als TypeScript-Parallelspiegel.
+ * Die Runtime bleibt aktuell in `www/smarthome.js`. Dieser Abschnitt wird später Stück
+ * für Stück aus den oben stehenden Verträgen typisiert und in echte TS-Module zerlegt.
  */
 
 /*

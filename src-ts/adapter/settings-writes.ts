@@ -12,8 +12,10 @@ import type { NormalizedSettingsWrite, SettingsWriteRequest } from '../contracts
  */
 
 export const CUSTOMER_SETTING_KEYS = [
+  // KI-Berater: Anzeige, Optimierungsmodus, Komfort-/Ruhezeiten und Prioritäten.
   'aiAdvisorEnabled',
   'aiAdvisorMode',
+  'aiAdvisorOptimizationMode',
   'aiAdvisorEvReadyBy',
   'aiAdvisorEvTargetSocPct',
   'aiAdvisorThermalReadyBy',
@@ -21,12 +23,25 @@ export const CUSTOMER_SETTING_KEYS = [
   'aiAdvisorComfortEnd',
   'aiAdvisorQuietHoursStart',
   'aiAdvisorQuietHoursEnd',
+  'aiAdvisorPriorityStorage',
+  'aiAdvisorPriorityEvcs',
+  'aiAdvisorPriorityThermal',
+  'aiAdvisorPriorityHeatingRod',
+  'aiAdvisorPriorityGeneric',
+  // Wetter-App: Kundenschalter und API-Zugang.
   'weatherEnabled',
   'weatherUsageMode',
   'weatherApiKey',
 ] as const;
 
 export type CustomerSettingKey = (typeof CUSTOMER_SETTING_KEYS)[number];
+
+/**
+ * Migrationshinweis:
+ * Diese Liste muss mit `settingsLocalKeys` in `main.js` konsistent bleiben.
+ * Sobald `/api/set` produktiv auf diesen TS-Helfer umgestellt wird, darf kein
+ * Kundeneinstellungs-Key fehlen, sonst schreibt das Frontend ins Leere.
+ */
 
 /** Code-Teil: isCustomerSettingKey. Zweck: Prüft, ob ein Frontend-Key bewusst erlaubt ist. */
 export function isCustomerSettingKey(key: string): key is CustomerSettingKey {

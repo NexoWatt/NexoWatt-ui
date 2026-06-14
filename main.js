@@ -65,6 +65,43 @@ const crypto = require('crypto');
 const https = require('https');
 const pkg = require('./package.json');
 
+/**
+ * Code-Teil: nwMainRuntimeTsHelpers
+ * Zweck: Lädt den ersten echten TypeScript-Helfer für kleine main.js-Aufgaben.
+ * Zusammenhang: Der Adapter bleibt lauffähig, falls der Spiegel fehlt; main.js fällt dann auf die bestehende JS-Logik zurück.
+ */
+let nwMainRuntimeTsHelpers = null;
+try {
+  nwMainRuntimeTsHelpers = require('./lib/ts-mirrors/backend/main-runtime/main-runtime-helpers');
+} catch (_eMainRuntimeTsHelpers) {
+  nwMainRuntimeTsHelpers = null;
+}
+
+/**
+ * Code-Teil: API-TypeScript-Helfer laden
+ *
+ * Zweck:
+ * Lädt die produktiv genutzten TypeScript-Spiegel für `/api/state` und einfache
+ * `/api/set settings.*`-Schreibpläne. Beide Helfer haben bewusst JS-Fallbacks.
+ *
+ * Zusammenhang:
+ * `/api/state` ist die zentrale Datenquelle für LIVE, History, SmartHome und App-Center.
+ * `/api/set` schreibt Kundeneinstellungen. Komplexe Scopes wie EMS, Flow oder EVCS
+ * bleiben weiterhin in der bestehenden JavaScript-Route.
+ */
+let nwMainApiStateTsHelpers = null;
+let nwMainApiSetTsHelpers = null;
+try {
+  nwMainApiStateTsHelpers = require('./lib/ts-mirrors/main/api-state');
+} catch (_eMainApiStateTsHelpers) {
+  nwMainApiStateTsHelpers = null;
+}
+try {
+  nwMainApiSetTsHelpers = require('./lib/ts-mirrors/main/api-set');
+} catch (_eMainApiSetTsHelpers) {
+  nwMainApiSetTsHelpers = null;
+}
+
 let nwTypeDetectorModule = null;
 try {
   nwTypeDetectorModule = require('@iobroker/type-detector');
@@ -150,6 +187,15 @@ class NexoWattVis extends utils.Adapter {
     this._serverClosing = false;
     this._nwConnectionOnline = false;
     this._nwConnectionHeartbeatTimer = null;
+    // TS-Migration: Diagnose-/Statusdaten für /api/state und /api/set.
+    // Ab 0.7.100 nutzt /api/state produktiv den TS-Builder mit JS-Fallback.
+    // /api/set nutzt TS produktiv nur für bekannte lokale settings.*-Werte.
+    this._nwApiStateTsShadowLast = null;
+    this._nwApiSetTsShadowLast = null;
+    this._nwApiStateTsRuntimeLast = null;
+    this._nwApiSetTsRuntimeLast = null;
+    this._nwApiStateTsShadowLastWarnMs = 0;
+    this._nwApiSetTsShadowLastWarnMs = 0;
     this.smartHomeDevices = [];
 
     // SmartHome: Zeitschaltuhren (Endkunde) – persisted in adapter states (no instance restart)
@@ -370,9 +416,17 @@ class NexoWattVis extends utils.Adapter {
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   async _nwSetInfoConnection(online, reason = '') {
-    const val = !!online;
+    let connectionPlan = null;
+    try {
+      if (nwMainRuntimeTsHelpers && typeof nwMainRuntimeTsHelpers.buildInfoConnectionStateUpdate === 'function') {
+        connectionPlan = nwMainRuntimeTsHelpers.buildInfoConnectionStateUpdate(online, reason, Date.now());
+      }
+    } catch (e) {
+      try { this.log.debug('main-runtime TS helper failed in info.connection planning: ' + (e && e.message ? e.message : e)); } catch (_eLog) {}
+    }
+    const val = connectionPlan ? !!connectionPlan.value : !!online;
     this._nwConnectionOnline = val;
-    const ts = Date.now();
+    const ts = connectionPlan && Number.isFinite(Number(connectionPlan.ts)) ? Number(connectionPlan.ts) : Date.now();
 
     try {
       await this.setStateAsync('info.connection', { val, ack: true });
@@ -384,6 +438,168 @@ class NexoWattVis extends utils.Adapter {
     // customer UI from showing "Offline" until the next unrelated datapoint changes.
     try { this.updateValue('info.connection', val, ts, { raw: false }); } catch (_eUpd) {}
   }
+
+
+  /**
+   * Code-Teil: _nwRunApiStateTsShadowComparison
+   *
+   * Zweck:
+   * Führt einen TypeScript-Shadow-Vergleich für `/api/state` aus, ohne die produktive
+   * Antwort zu verändern. Die JavaScript-Runtime bleibt in 0.7.99 die einzige Quelle,
+   * die an das Frontend ausgeliefert wird.
+   *
+   * Zusammenhang:
+   * Vorbereitung für die spätere Auslagerung von `/api/state` aus main.js. Wichtig ist,
+   * dass 0, false und leere gültige Werte nicht verloren gehen. Abweichungen werden
+   * nur im Speicher gehalten und gedrosselt geloggt.
+   */
+  _nwRunApiStateTsShadowComparison(reason = 'api-state') {
+    if (!nwMainRuntimeTsHelpers || typeof nwMainRuntimeTsHelpers.compareApiStateShadow !== 'function') return null;
+    try {
+      const result = nwMainRuntimeTsHelpers.compareApiStateShadow(this.stateCache || {}, Date.now());
+      this._nwApiStateTsShadowLast = { reason, ...result };
+      if (result && result.ok === false) {
+        const now = Date.now();
+        if (!this._nwApiStateTsShadowLastWarnMs || now - this._nwApiStateTsShadowLastWarnMs > 60000) {
+          this._nwApiStateTsShadowLastWarnMs = now;
+          try { this.log.warn('[api-state-ts-shadow] Abweichung: ' + (Array.isArray(result.mismatches) ? result.mismatches.join('; ') : 'unknown')); } catch (_eLog) {}
+        }
+      }
+      return result;
+    } catch (e) {
+      this._nwApiStateTsShadowLast = { ok: false, reason, error: e && e.message ? e.message : String(e) };
+      try { this.log.debug('[api-state-ts-shadow] Fehler im Shadow-Vergleich: ' + (e && e.message ? e.message : e)); } catch (_eLog) {}
+      return null;
+    }
+  }
+
+  /**
+   * Code-Teil: _nwRunApiSetTsShadowPlan
+   *
+   * Zweck:
+   * Erstellt einen TypeScript-Schreibplan für `/api/set`, führt diesen aber nicht aus.
+   * Die bestehende JavaScript-Route bleibt produktiv führend.
+   *
+   * Zusammenhang:
+   * Vorbereitung für die spätere Migration der Settings-/Installer-Schreiblogik. Der
+   * Shadow-Plan zeigt bereits, wie Werte wie `false`, `0` oder Zeitstrings normalisiert
+   * würden, ohne dass die bestehende Runtime dadurch verändert wird.
+   */
+  _nwRunApiSetTsShadowPlan(scope, key, value) {
+    if (!nwMainRuntimeTsHelpers || typeof nwMainRuntimeTsHelpers.buildApiSetShadowPlan !== 'function') return null;
+    try {
+      const plan = nwMainRuntimeTsHelpers.buildApiSetShadowPlan(scope, key, value);
+      this._nwApiSetTsShadowLast = { ts: Date.now(), plan };
+      if (plan && ((Array.isArray(plan.warnings) && plan.warnings.length) || plan.blocked)) {
+        const now = Date.now();
+        if (!this._nwApiSetTsShadowLastWarnMs || now - this._nwApiSetTsShadowLastWarnMs > 60000) {
+          this._nwApiSetTsShadowLastWarnMs = now;
+          const msg = Array.isArray(plan.warnings) && plan.warnings.length ? plan.warnings.join('; ') : (plan.reason || 'blocked');
+          try { this.log.debug('[api-set-ts-shadow] Hinweis: ' + msg); } catch (_eLog) {}
+        }
+      }
+      return plan;
+    } catch (e) {
+      this._nwApiSetTsShadowLast = { ts: Date.now(), error: e && e.message ? e.message : String(e) };
+      try { this.log.debug('[api-set-ts-shadow] Fehler im Shadow-Plan: ' + (e && e.message ? e.message : e)); } catch (_eLog) {}
+      return null;
+    }
+  }
+
+
+  /**
+   * Code-Teil: _nwBuildApiStateTsRuntimeResponse
+   *
+   * Zweck:
+   * Baut die produktive `/api/state`-Antwort über den TypeScript-Helfer.
+   * Die externe Antwortform bleibt identisch zur alten Runtime: ein Objekt mit
+   * State-Keys und `{ value, ts, ... }`-Einträgen.
+   *
+   * Zusammenhang:
+   * LIVE-Dashboard, History, SmartHome und App-Center lesen diese Route. Darum bleibt
+   * ein JS-Fallback aktiv, falls der TS-Spiegel fehlt oder eine Ausnahme wirft.
+   *
+   * Wichtig:
+   * 0, false und leere Strings sind gültige Werte und müssen in der Antwort bleiben.
+   */
+  _nwBuildApiStateTsRuntimeResponse(reason = 'GET /api/state') {
+    if (!nwMainApiStateTsHelpers || typeof nwMainApiStateTsHelpers.buildMainApiStateResponse !== 'function') {
+      this._nwApiStateTsRuntimeLast = { ts: Date.now(), ok: false, used: false, reason: 'ts-helper-missing' };
+      return null;
+    }
+    try {
+      const response = nwMainApiStateTsHelpers.buildMainApiStateResponse(this.stateCache || {}, { generatedAt: Date.now() });
+      const states = response && response.states && typeof response.states === 'object' ? response.states : null;
+      if (!states) {
+        this._nwApiStateTsRuntimeLast = { ts: Date.now(), ok: false, used: false, reason: 'ts-response-invalid' };
+        return null;
+      }
+      this._nwApiStateTsRuntimeLast = {
+        ts: Date.now(),
+        ok: true,
+        used: true,
+        reason,
+        keyCount: Object.keys(states).length,
+        generatedAt: response.generatedAt || Date.now(),
+      };
+      return states;
+    } catch (e) {
+      this._nwApiStateTsRuntimeLast = { ts: Date.now(), ok: false, used: false, reason: 'ts-exception', error: e && e.message ? e.message : String(e) };
+      try { this.log.warn('[api-state-ts-runtime] fallback to JS response: ' + (e && e.message ? e.message : e)); } catch (_eLog) {}
+      return null;
+    }
+  }
+
+  /**
+   * Code-Teil: _nwTryApplyApiSetTsSettingsPlan
+   *
+   * Zweck:
+   * Wendet einen TypeScript-Schreibplan produktiv für einfache `settings.*`-States an.
+   *
+   * Zusammenhang:
+   * Diese Funktion ist der erste produktive Schritt aus der großen `/api/set`-Route.
+   * Komplexe Scopes wie EMS, EVCS, Relais, Flow oder Installer bleiben in der alten
+   * JavaScript-Route. Unbekannte Settings fallen ebenfalls auf den bestehenden Pfad zurück.
+   *
+   * Wichtig:
+   * Der TS-Helfer kennt die Zieltypen. Dadurch wird z. B. der String "false" korrekt
+   * als Boolean false geschrieben, statt durch `!!value` versehentlich true zu werden.
+   */
+  async _nwTryApplyApiSetTsSettingsPlan(scope, key, value) {
+    if (String(scope || '') !== 'settings') return { handled: false, reason: 'not-settings' };
+    if (!nwMainApiSetTsHelpers || typeof nwMainApiSetTsHelpers.buildMainSettingsWritePlan !== 'function') {
+      return { handled: false, reason: 'ts-helper-missing' };
+    }
+    try {
+      const result = nwMainApiSetTsHelpers.buildMainSettingsWritePlan({ scope: 'settings', key: String(key || ''), value });
+      if (!result || !result.ok || !result.plan) {
+        this._nwApiSetTsRuntimeLast = { ts: Date.now(), used: false, handled: false, scope, key, reason: result && result.message ? result.message : 'unsupported' };
+        return { handled: false, reason: 'unsupported' };
+      }
+      const plan = result.plan;
+
+      // Bestehendes Verhalten erhalten: Wenn der Installer für diesen settings-Key
+      // einen fremden DP gemappt hat, wird weiterhin dieser Fremd-DP geschrieben.
+      // Der TS-Helfer normalisiert nur Wert und Ziel-Logik; die Mapping-Priorität aus
+      // der alten JS-Route bleibt erhalten.
+      const map = (this.config && this.config.settings && typeof this.config.settings === 'object') ? this.config.settings : {};
+      const mapped = map[String(key || '')];
+      const mappedId = (typeof mapped === 'string' && mapped.trim()) ? mapped.trim() : '';
+      if (mappedId) {
+        await this.setForeignStateAsync(mappedId, plan.value);
+      } else {
+        await this.setStateAsync(plan.stateId, { val: plan.value, ack: !!plan.ack });
+      }
+      try { this.updateValue(plan.stateId, plan.value, Date.now()); } catch (_eUpd) {}
+      this._nwApiSetTsRuntimeLast = { ts: Date.now(), used: true, handled: true, scope, key, plan, mappedId: mappedId || '' };
+      return { handled: true, ok: true, plan, mappedId };
+    } catch (e) {
+      this._nwApiSetTsRuntimeLast = { ts: Date.now(), used: false, handled: false, scope, key, reason: 'ts-exception', error: e && e.message ? e.message : String(e) };
+      try { this.log.warn('[api-set-ts-runtime] fallback to JS route: ' + (e && e.message ? e.message : e)); } catch (_eLog) {}
+      return { handled: false, reason: 'ts-exception' };
+    }
+  }
+
   /**
    * Code-Teil: _nwStartConnectionHeartbeat
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -1544,6 +1760,13 @@ class NexoWattVis extends utils.Adapter {
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   _nwLooksLikeMaskedLicenseKey(key) {
+    try {
+      if (nwMainRuntimeTsHelpers && typeof nwMainRuntimeTsHelpers.isMaskedLicenseKeyInput === 'function') {
+        return !!nwMainRuntimeTsHelpers.isMaskedLicenseKeyInput(key);
+      }
+    } catch (e) {
+      try { this.log.debug('main-runtime TS helper failed in license mask check: ' + (e && e.message ? e.message : e)); } catch (_eLog) {}
+    }
     const raw = String(key || '').trim();
     if (!raw) return false;
     const normalized = this._nwNormalizeLicenseKey(raw);
@@ -1566,6 +1789,13 @@ class NexoWattVis extends utils.Adapter {
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   _nwCleanLicenseKeyInput(key) {
+    try {
+      if (nwMainRuntimeTsHelpers && typeof nwMainRuntimeTsHelpers.normalizeLicenseKeyForStorage === 'function') {
+        return nwMainRuntimeTsHelpers.normalizeLicenseKeyForStorage(key);
+      }
+    } catch (e) {
+      try { this.log.debug('main-runtime TS helper failed in license storage normalization: ' + (e && e.message ? e.message : e)); } catch (_eLog) {}
+    }
     const raw = String(key || '').trim();
     if (!raw) return '';
     if (this._nwLooksLikeMaskedLicenseKey(raw)) return '';
@@ -12911,6 +13141,11 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
          * reine Diagnose.
          */
         control.energyFlowTsActiveTest = this._nwSummarizeEnergyFlowTsActiveTestSamples ? this._nwSummarizeEnergyFlowTsActiveTestSamples() : null;
+        // TS-Migration 0.7.99: API-Shadow-Diagnosen sichtbar machen.
+        // Diese Daten zeigen nur, wie die vorbereiteten TS-Helfer /api/state und
+        // /api/set bewerten würden; produktiv bleiben die bestehenden JS-Routen.
+        control.apiStateTsShadow = this._nwApiStateTsShadowLast || null;
+        control.apiSetTsShadowLast = this._nwApiSetTsShadowLast || null;
 
         const summary = {
           totalPowerW: await getOwn('chargingManagement.summary.totalPowerW'),
@@ -15555,6 +15790,14 @@ app.get('/config', (req, res) => {
         datapointFlags,
         // TS-Migration Diagnose: Vergleich zwischen vorheriger JS-Sichtbarkeit und TS-Spiegel.
         featureVisibilityTsPreview,
+        // TS-Migration 0.7.99: Shadow-Diagnose für main.js-API-Helfer. Nur Anzeige/Debug,
+        // keine Umschaltung der produktiven /api/state- oder /api/set-Runtime.
+        mainApiTsShadow: {
+          apiState: this._nwApiStateTsShadowLast || null,
+          apiSet: this._nwApiSetTsShadowLast || null,
+          apiStateRuntime: this._nwApiStateTsRuntimeLast || null,
+          apiSetRuntime: this._nwApiSetTsRuntimeLast || null,
+        },
         // Autoritative Kundensichtbarkeit ab 0.7.74. Fällt bei Mirror-Problemen auf JS-Fallback zurück.
         featureVisibility: {
           source: featureVisibilitySource,
@@ -16631,7 +16874,12 @@ settingsConfig: {
     // Abschnitt: Live-State-Snapshot. Diese Antwort ist die wichtigste Datenquelle für Dashboard, Settings und viele Unterseiten.
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/state', (_req, res) => {
     app.get('/api/state', (_req, res) => {
-      res.json(this.stateCache);
+      // TS-Migration 0.7.100: /api/state nutzt produktiv den TS-Builder.
+      // Die Antwortform bleibt identisch: ein Objekt mit State-Keys und `{ value, ts }`-Einträgen.
+      // Falls der TS-Spiegel fehlt oder fehlschlägt, fällt der Adapter auf `this.stateCache` zurück.
+      this._nwRunApiStateTsShadowComparison('GET /api/state');
+      const tsStates = this._nwBuildApiStateTsRuntimeResponse('GET /api/state');
+      res.json(tsStates || this.stateCache);
     });
 
     // Test email for notification commissioning
@@ -16668,6 +16916,10 @@ settingsConfig: {
         const value = req.body && req.body.value;
         if (!scope || !key) return res.status(400).json({ ok: false, error: 'bad request' });
 
+        // TS-Migration 0.7.100: /api/set erstellt weiterhin eine Diagnose,
+        // kann bekannte lokale settings.*-Werte aber jetzt produktiv über den TS-Schreibplan anwenden.
+        this._nwRunApiSetTsShadowPlan(scope, key, value);
+
         // Netzschutz: Peak‑Shaving darf nicht durch Endkunden (VIS) deaktiviert werden.
         // Konfiguration erfolgt ausschließlich über das Installer‑/App‑Center.
         if (scope === 'settings' && String(key) === 'peakShavingEnabled') {
@@ -16696,6 +16948,13 @@ settingsConfig: {
           }
         }
 
+
+        // TS-Migration 0.7.100: einfache lokale Kundeneinstellungen produktiv über TS schreiben.
+        // Komplexe Scopes und unbekannte Settings fallen weiter auf die alte JS-Route zurück.
+        const tsSettingsWrite = await this._nwTryApplyApiSetTsSettingsPlan(scope, key, value);
+        if (tsSettingsWrite && tsSettingsWrite.handled) {
+          return res.json({ ok: true, source: 'ts-settings-plan' });
+        }
 
         // Customer-facing KI-Energieberater toggle.
         // Store this as local VIS state so the customer can decide without opening installer/admin config.
