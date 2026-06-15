@@ -10979,12 +10979,13 @@ function collectAiAdvisorConfigFromUI(base) {
    *
    * Zusammenhang:
    * Diese UI-Funktion muss exakt zur Backend-Normalisierung in main.js passen.
-   * Falsche Werte werden bewusst auf `shadow` zurückgesetzt, weil Shadow der sichere
-   * Standard ist: JavaScript bleibt produktiv, TypeScript rechnet nur Diagnose.
+   * Falsche Werte werden ab 0.7.101 bewusst auf `ts` zurückgesetzt. TS ist der
+   * Standard-Kandidat, bleibt aber durch Backend-Gates abgesichert und fällt bei
+   * Blockern automatisch auf JavaScript zurück.
    */
   function _normalizeEnergyFlowTsModeUi(value) {
     const v = String(value || '').trim().toLowerCase();
-    return ['js', 'shadow', 'ts'].includes(v) ? v : 'shadow';
+    return ['js', 'shadow', 'ts'].includes(v) ? v : 'ts';
   }
 
   /**
@@ -11000,9 +11001,9 @@ function collectAiAdvisorConfigFromUI(base) {
    */
   function applyEnergyFlowTsModeToUi(cfg) {
     const tm = (cfg && cfg.tsMigration && typeof cfg.tsMigration === 'object') ? cfg.tsMigration : {};
-    const mode = _normalizeEnergyFlowTsModeUi(tm.energyFlowMode || 'shadow');
+    const mode = _normalizeEnergyFlowTsModeUi(tm.energyFlowMode || 'ts');
     if (els.energyFlowTsMode) els.energyFlowTsMode.value = mode;
-    if (els.energyFlowTsProductionAllowed) els.energyFlowTsProductionAllowed.checked = tm.energyFlowProductionAllowed === true;
+    if (els.energyFlowTsProductionAllowed) els.energyFlowTsProductionAllowed.checked = (tm.energyFlowProductionAllowed !== false);
     if (els.energyFlowTsWarmupTicks) els.energyFlowTsWarmupTicks.value = String(Math.max(1, Math.min(30, Math.round(Number(tm.energyFlowCandidateWarmupTicks) || 3))));
     if (els.energyFlowTsAutoFallback) els.energyFlowTsAutoFallback.checked = tm.energyFlowCandidateAutoFallback !== false;
     if (els.energyFlowTsRequireStablePlant) els.energyFlowTsRequireStablePlant.checked = tm.energyFlowRequireStablePlantEvaluation !== false;
@@ -11048,7 +11049,7 @@ function collectAiAdvisorConfigFromUI(base) {
     if (!els.energyFlowTsModeStatus) return;
     const tm = (currentConfig && currentConfig.tsMigration && typeof currentConfig.tsMigration === 'object') ? currentConfig.tsMigration : {};
     const plan = readiness && readiness.energyFlowEffectivePlan ? readiness.energyFlowEffectivePlan : null;
-    const selectedMode = _normalizeEnergyFlowTsModeUi(els.energyFlowTsMode ? els.energyFlowTsMode.value : (tm.energyFlowMode || 'shadow'));
+    const selectedMode = _normalizeEnergyFlowTsModeUi(els.energyFlowTsMode ? els.energyFlowTsMode.value : (tm.energyFlowMode || 'ts'));
     const productionAllowed = !!(els.energyFlowTsProductionAllowed && els.energyFlowTsProductionAllowed.checked);
     const warmupWanted = Math.max(1, Math.min(30, Math.round(Number(els.energyFlowTsWarmupTicks ? els.energyFlowTsWarmupTicks.value : (tm.energyFlowCandidateWarmupTicks || 3)) || 3)));
     const autoFallback = !(els.energyFlowTsAutoFallback && els.energyFlowTsAutoFallback.checked === false);
@@ -11138,6 +11139,63 @@ function collectAiAdvisorConfigFromUI(base) {
   }
 
   /**
+   * Code-Teil: _renderHeatingRodTsRuntimeEvaluationCard
+   *
+   * Zweck:
+   * Zeigt, ob der Heizstab auf echter Anlage stabil über TypeScript läuft oder ob
+   * JavaScript-Fallbacks auftreten.
+   *
+   * Zusammenhang:
+   * Die Daten kommen aus `heatingRod.summary.tsRuntimeEvaluationJson`. Diese Karte ist
+   * reine Diagnose und löst keine Heizstab-Schaltung aus.
+   */
+  function _renderHeatingRodTsRuntimeEvaluationCard(evaluation) {
+    if (!evaluation || typeof evaluation !== 'object') return null;
+    const escape = _shadowEscape;
+    const stable = evaluation.stable === true;
+    const fallbackCount = Number(evaluation.fallbackCount || 0);
+    const normalSource = evaluation.normalSource && typeof evaluation.normalSource === 'object' ? evaluation.normalSource : null;
+    const normalReady = !!(normalSource && normalSource.ready);
+    const kind = normalReady ? 'ok' : (stable ? 'ok' : (fallbackCount > 0 ? 'warn' : 'wait'));
+    const title = normalReady ? 'TS NORMAL' : (stable ? 'TS STABIL' : (fallbackCount > 0 ? 'FALLBACK PRÜFEN' : 'SAMMELT'));
+    const rows = [
+      ['Status', String(evaluation.status || 'waiting')],
+      ['Samples', String(Number(evaluation.sampleCount || 0))],
+      ['OK in Folge', String(Number(evaluation.consecutiveOk || 0))],
+      ['TS aktiv', String(Number(evaluation.activeCount || 0))],
+      ['JS-Fallback', String(fallbackCount)],
+      ['Harte Fallbacks', String(Number(evaluation.hardFallbackCount || 0))],
+      ['Mismatches', String(Number(evaluation.mismatchCount || 0))],
+      ['OK-Quote', `${Number(evaluation.okRatioPct || 0)} %`],
+      ['TS-Normalpfad', normalSource ? (normalReady ? 'aktiv vorbereitet' : String(normalSource.status || 'sammelt')) : 'wartet'],
+      ['TS-Normal Ticks', normalSource ? `${Number(normalSource.consecutiveTsTicks || 0)}/${Number(normalSource.minTsTicks || 8)}` : '--'],
+    ];
+    const reasons = Array.isArray(evaluation.fallbackReasons) ? evaluation.fallbackReasons.filter(Boolean).join(' · ') : '';
+    const card = document.createElement('div');
+    card.className = 'nw-config-card nw-shadow-readiness-card nw-heatingrod-ts-runtime-card';
+    card.innerHTML = `
+      <div class="nw-config-card__header">
+        <div class="nw-config-card__header-top">
+          <div class="nw-config-card__title">Heizstab TS‑Runtime-Auswertung</div>
+          <div class="nw-shadow-badge nw-shadow-badge--${kind}">${escape(title)}</div>
+        </div>
+        <div class="nw-config-card__subtitle">Echte Adapter-Ticks: TS aktiv, TS Normalpfad oder JS-Notfallback?</div>
+      </div>
+      <div class="nw-config-card__body">
+        <div class="nw-shadow-readiness-grid">
+          ${rows.map(([a,b]) => `<div class="nw-config-row nw-shadow-diff-row"><div class="nw-config-row__primary">${escape(a)}</div><div class="nw-config-row__status">${escape(b)}</div></div>`).join('')}
+        </div>
+        ${reasons ? `<div class="nw-config-help" style="margin-top:8px;line-height:1.35;">Fallback-Gründe: ${escape(reasons)}</div>` : ''}
+        <div class="nw-config-help" style="margin-top:8px;opacity:.82;line-height:1.35;">${escape(String(evaluation.nextAction || 'Heizstab-TS beobachten.'))}</div>
+        <button type="button" class="nw-config-btn nw-config-btn--ghost nw-shadow-json-button">JSON dauerhaft öffnen</button>
+      </div>
+    `;
+    const btn = card.querySelector('button.nw-shadow-json-button');
+    if (btn) btn.addEventListener('click', () => _openShadowJsonDialog('Heizstab TS-Runtime-Auswertung', evaluation));
+    return card;
+  }
+
+  /**
    * Code-Teil: _renderShadowReadinessCard
    *
    * Zweck:
@@ -11162,19 +11220,25 @@ function collectAiAdvisorConfigFromUI(base) {
    * Die Daten kommen aus `control.energyFlowTsActiveTest` der Diagnose-API. Diese Karte
    * ist nur Beobachtung und schaltet selbst nichts um.
    */
-  function _renderEnergyFlowTsActiveTestCard(activeTest) {
+  function _renderEnergyFlowTsActiveTestCard(activeTest, fixedSource) {
     if (!activeTest || typeof activeTest !== 'object') return null;
     const escape = _shadowEscape;
     const status = String(activeTest.status || 'collecting');
-    const kind = status === 'ts-active' ? 'ok' : (status === 'fallback-js' ? 'warn' : 'wait');
-    const label = status === 'ts-active' ? 'TS AKTIV' : (status === 'fallback-js' ? 'JS FALLBACK' : 'SAMMELT');
     const latest = activeTest.latest && typeof activeTest.latest === 'object' ? activeTest.latest : null;
+    const lastSource = latest ? String(latest.publishedSource || '') : '';
+    const kind = status === 'ts-active' ? 'ok' : (status === 'fallback-js' ? 'warn' : 'wait');
+    const label = lastSource === 'ts-normal'
+      ? 'TS NORMAL'
+      : (status === 'ts-active' ? 'TS AKTIV' : (status === 'fallback-js' ? 'JS FALLBACK' : 'SAMMELT'));
+    const fixed = fixedSource && typeof fixedSource === 'object' ? fixedSource : (latest && latest.fixedSourceState ? latest.fixedSourceState : null);
     const lines = [
       ['Samples', String(activeTest.sampleCount || 0)],
       ['TS genutzt', `${Number(activeTest.tsCount || 0)}× (${Number(activeTest.tsRatioPct || 0).toFixed(1)} %)`],
       ['JS/Fallback', String(activeTest.jsCount || 0)],
       ['TS in Folge', String(activeTest.consecutiveTs || 0)],
       ['JS in Folge', String(activeTest.consecutiveJs || 0)],
+      ['TS-Normalquelle', fixed ? (fixed.ready ? 'aktiv vorbereitet' : String(fixed.status || 'sammelt')) : 'wartet'],
+      ['TS-Fixed Ticks', fixed ? `${Number(fixed.consecutiveTsTicks || 0)}/${Number(fixed.minTsTicks || 12)}` : '--'],
       ['Letzte Quelle', latest ? String(latest.publishedSource || '--') : '--'],
       ['Letzter Grund', latest ? _decodeShadowDisplayText(String(latest.reason || '--')) : '--'],
     ];
@@ -11193,7 +11257,7 @@ function collectAiAdvisorConfigFromUI(base) {
           <div class="nw-config-card__title">Energiefluss TS‑Aktivtest</div>
           <div class="nw-shadow-badge nw-shadow-badge--${kind}">${label}</div>
         </div>
-        <div class="nw-config-card__subtitle">Beobachtung, ob der TS‑Kandidatenmodus wirklich als Quelle genutzt wurde</div>
+        <div class="nw-config-card__subtitle">Beobachtung, ob TypeScript bereits Normalquelle ist oder JS nur noch als Notfallback greift</div>
       </div>
       <div class="nw-config-card__body">
         <div class="nw-shadow-readiness-grid">
@@ -11201,7 +11265,7 @@ function collectAiAdvisorConfigFromUI(base) {
         </div>
         ${blockers.length ? `<details class="nw-shadow-json-details" open><summary>Letzte Blocker</summary><pre>${escape(blockers.join('\n'))}</pre></details>` : ''}
         ${recentText ? `<details class="nw-shadow-json-details"><summary>Letzte Aktivtest-Samples</summary><pre>${escape(recentText)}</pre></details>` : ''}
-        <div class="nw-config-help" style="margin-top:8px;opacity:.82;line-height:1.35;">${escape(activeTest.nextAction || 'Aktivtest weiter beobachten.')}</div>
+        <div class="nw-config-help" style="margin-top:8px;opacity:.82;line-height:1.35;">${escape((fixed && fixed.nextAction) || activeTest.nextAction || 'Aktivtest weiter beobachten.')}</div>
         <button type="button" class="nw-config-btn nw-config-btn--ghost nw-shadow-json-button" data-shadow-active-test-json>JSON dauerhaft öffnen</button>
       </div>
     `;
@@ -11233,7 +11297,7 @@ function collectAiAdvisorConfigFromUI(base) {
     const candidateSafety = readiness.energyFlowCandidateSafety && typeof readiness.energyFlowCandidateSafety === 'object' ? readiness.energyFlowCandidateSafety : (plan && plan.candidateSafety ? plan.candidateSafety : null);
     const items = [
       ['Energiefluss', readiness.readyForEnergyFlowSwitch ? 'bereit' : 'nicht bereit'],
-      ['Energiefluss-Modus', readiness.energyFlowMode || (plan && plan.mode) || 'shadow'],
+      ['Energiefluss-Modus', readiness.energyFlowMode || (plan && plan.mode) || 'ts'],
       ['Energiefluss-Quelle', plan ? (plan.source || 'js-runtime') : 'js-runtime'],
       ['TS-Kandidat', candidateSafety ? (candidateSafety.ok ? 'OK' : 'blockiert') : '--'],
       ['Core‑Limits', readiness.readyForCoreLimitsSwitch ? 'bereit' : 'nicht bereit'],
@@ -11314,9 +11378,13 @@ function collectAiAdvisorConfigFromUI(base) {
 
     const readinessCard = _renderShadowReadinessCard(readiness);
     if (readinessCard) els.shadowDiagnostics.appendChild(readinessCard);
+    const heatingRuntimeEvaluation = _parseShadowJson(ctrl.heatingRodTsRuntimeEvaluationJson, null);
+    const heatingRuntimeCard = _renderHeatingRodTsRuntimeEvaluationCard(heatingRuntimeEvaluation);
+    if (heatingRuntimeCard) els.shadowDiagnostics.appendChild(heatingRuntimeCard);
     const plantEvaluationCard = _renderShadowPlantEvaluationCard(ctrl.tsShadowPlantEvaluation || ctrl.tsShadowRealPlantEvaluation);
     if (plantEvaluationCard) els.shadowDiagnostics.appendChild(plantEvaluationCard);
-    const activeTestCard = _renderEnergyFlowTsActiveTestCard(ctrl.energyFlowTsActiveTest);
+    const fixedSourceState = _parseShadowJson(ctrl.energyFlowTsFixedSourceJson, ctrl.energyFlowTsFixedSourceState || (flowInputs && flowInputs.tsFixedSource ? flowInputs.tsFixedSource : null));
+    const activeTestCard = _renderEnergyFlowTsActiveTestCard(ctrl.energyFlowTsActiveTest, fixedSourceState);
     if (activeTestCard) els.shadowDiagnostics.appendChild(activeTestCard);
     try { renderEnergyFlowTsModeStatus(ctrl.tsShadowReadiness); } catch (_e) {}
 

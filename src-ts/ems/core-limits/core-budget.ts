@@ -173,3 +173,254 @@ export function buildCoreBudgetSnapshot(input: CoreBudgetInput): CoreBudgetSnaps
     diagnosticText,
   };
 }
+
+
+/**
+ * Datenvertrag: CoreBudgetReservationRequest
+ *
+ * Zweck:
+ * Beschreibt eine Verbraucher-Reservierung gegen das zentrale Core-Limits-Budget.
+ *
+ * Zusammenhang:
+ * `ems/modules/core-limits.js` nutzt `makeBudgetRuntime.reserve(...)`, damit Heizstab,
+ * EVCS, Thermik und weitere Verbraucher Leistung anmelden können. Dieser Vertrag ist die
+ * TypeScript-Vorbereitung dieser Logik.
+ *
+ * Wichtig:
+ * `0 W` ist gültig. Ein Request mit 0 W darf nicht durch Defaultwerte ersetzt werden.
+ */
+export interface CoreBudgetReservationRequest {
+  key?: unknown;
+  consumer?: unknown;
+  app?: unknown;
+  label?: unknown;
+  priority?: unknown;
+  requestedW?: unknown;
+  reserveW?: unknown;
+  pvReserveW?: unknown;
+  actualW?: unknown;
+  pvOnly?: unknown;
+  mode?: unknown;
+}
+
+/**
+ * Datenvertrag: CoreBudgetReservationEntry
+ *
+ * Zweck:
+ * Einheitliche veröffentlichbare Verbraucher-Reservierung.
+ *
+ * Zusammenhang:
+ * Diese Struktur wird später in `ems.budget.consumersJson` und in den einzelnen
+ * `ems.budget.consumers.<key>.*` States sichtbar. Deshalb müssen Namen wie `usedW`,
+ * `pvUsedW`, `reserveW` und `pvReserveW` stabil bleiben.
+ */
+export interface CoreBudgetReservationEntry {
+  key: string;
+  app: string;
+  label: string;
+  priority: number;
+  requestedW: Watt;
+  grantW: Watt;
+  usedW: Watt;
+  pvUsedW: Watt;
+  reserveW: Watt;
+  pvReserveW: Watt;
+  actualW: Watt;
+  pvOnly: boolean;
+  mode: string;
+  ts: TimestampMs;
+  remainingTotalW: Watt | null;
+  remainingPvW: Watt;
+}
+
+/**
+ * Datenvertrag: CoreBudgetReservationRuntimeState
+ *
+ * Zweck:
+ * Minimaler Laufzeitstand des Budgetkoordinators vor einer Reservierung.
+ *
+ * Zusammenhang:
+ * Dieser Zustand entspricht dem alten JS-Objekt aus `makeBudgetRuntime`: verbleibendes
+ * Gesamtbudget, verbleibendes PV-Budget, bereits bekannte Verbraucher und deren Reihenfolge.
+ */
+export interface CoreBudgetReservationRuntimeState {
+  remainingTotalW?: unknown;
+  remainingPvW?: unknown;
+  consumers?: Record<string, CoreBudgetReservationEntry | Record<string, unknown> | null | undefined>;
+  order?: readonly string[];
+}
+
+/** Ergebnis einer TS-Reservierungsberechnung. */
+export interface CoreBudgetReservationResult {
+  ok: boolean;
+  source: 'ts-core-reservation';
+  entry: CoreBudgetReservationEntry;
+  nextRemainingTotalW: Watt | null;
+  nextRemainingPvW: Watt;
+  order: readonly string[];
+  consumers: Record<string, CoreBudgetReservationEntry | Record<string, unknown>>;
+  flexUsedW: Watt;
+}
+
+/**
+ * Code-Teil: reservationString
+ *
+ * Zweck:
+ * Normalisiert dynamische Request-Felder wie key/app/label/mode auf Strings.
+ *
+ * Zusammenhang:
+ * Die alte JS-Logik erlaubt unterschiedliche Aliase (`key`, `consumer`, `app`). Diese
+ * Kompatibilität muss bei der TS-Migration erhalten bleiben.
+ */
+function reservationString(value: unknown, fallback: string): string {
+  const s = String(value ?? '').trim();
+  return s || fallback;
+}
+
+/**
+ * Code-Teil: reservationPositiveWatt
+ *
+ * Zweck:
+ * Normalisiert Verbraucherleistungen auf positive Wattwerte und erhält 0 W als gültig.
+ */
+function reservationPositiveWatt(value: unknown, fallback = 0): Watt {
+  const n = toNumberOrNull(value);
+  return positiveWatt(n === null ? fallback : n);
+}
+
+/**
+ * Code-Teil: reservationPriority
+ *
+ * Zweck:
+ * Normalisiert Verbraucherprioritäten. Fehlende Priorität bleibt wie in JS bei 999.
+ */
+function reservationPriority(value: unknown): number {
+  const n = toNumberOrNull(value);
+  return n === null ? 999 : n;
+}
+
+/**
+ * Code-Teil: calculateCoreBudgetFlexUsedW
+ *
+ * Zweck:
+ * Berechnet die Summe der veröffentlichten flexiblen Verbraucherleistung.
+ *
+ * Zusammenhang:
+ * Entspricht fachlich der alten JS-Summe aus `makeBudgetRuntime.reserve`. Diese Summe
+ * wird als `ems.budget.flexUsedW` veröffentlicht.
+ */
+export function calculateCoreBudgetFlexUsedW(consumers: Record<string, CoreBudgetReservationEntry | Record<string, unknown> | null | undefined>, order?: readonly string[]): Watt {
+  const keys = Array.isArray(order) && order.length ? order : Object.keys(consumers || {});
+  const sum = keys.reduce((acc, key) => {
+    const entry = consumers && consumers[key] ? consumers[key] as Record<string, unknown> : null;
+    if (!entry) return acc;
+    const used = toNumberOrNull(entry.usedW ?? entry.reserveW);
+    return acc + positiveWatt(used);
+  }, 0);
+  return Math.round(sum);
+}
+
+/**
+ * Code-Teil: buildCoreBudgetConsumersList
+ *
+ * Zweck:
+ * Baut die geordnete Liste für `ems.budget.consumersJson`.
+ *
+ * Zusammenhang:
+ * Das App-Center und Diagnosen erwarten ein Array. Die Runtime hält intern ein Objekt
+ * plus Reihenfolge. Diese Funktion macht die Umwandlung typisiert und stabil.
+ */
+export function buildCoreBudgetConsumersList(consumers: Record<string, CoreBudgetReservationEntry | Record<string, unknown> | null | undefined>, order?: readonly string[]): Array<Record<string, unknown>> {
+  const keys = Array.isArray(order) && order.length > 0 ? Array.from(order) : Object.keys(consumers || {});
+  const result: Array<Record<string, unknown>> = [];
+  for (const key of keys) {
+    const entry = consumers && consumers[key] ? consumers[key] as Record<string, unknown> : null;
+    if (entry) result.push({ key, ...entry });
+  }
+  return result;
+}
+
+/**
+ * Code-Teil: computeCoreBudgetReservation
+ *
+ * Zweck:
+ * Berechnet eine Verbraucher-Reservierung gegen das zentrale Budget in TypeScript.
+ *
+ * Zusammenhang:
+ * Dies ist die Vorbereitung für die Migration von `makeBudgetRuntime.reserve` aus
+ * `ems/modules/core-limits.js`. Ab 0.7.107 wird das Ergebnis produktiv für Consumer-Reservierungen genutzt,
+ * während die alte JS-Rechnung als Fallback-/Vergleichspfad erhalten bleibt.
+ *
+ * Sicherheitsregel:
+ * Die Funktion schreibt keine States und kennt keinen Adapter. Sie berechnet nur Entry,
+ * Restbudgets und Verbraucherlisten. Dadurch kann sie gefahrlos gegen die JS-Runtime
+ * verglichen werden.
+ */
+export function computeCoreBudgetReservation(
+  runtime: CoreBudgetReservationRuntimeState,
+  request: CoreBudgetReservationRequest,
+  tsInput?: unknown,
+): CoreBudgetReservationResult {
+  const r = request && typeof request === 'object' ? request : {};
+  const ts = (toNumberOrNull(tsInput) ?? Date.now()) as TimestampMs;
+  const key = reservationString(r.key ?? r.consumer ?? r.app, 'unknown');
+  const app = reservationString(r.app, key);
+  const priority = reservationPriority(r.priority);
+  const requestedW = reservationPositiveWatt(r.requestedW, 0);
+  const reserveW = reservationPositiveWatt(r.reserveW, requestedW);
+  const pvOnly = r.pvOnly === true;
+  const pvReserveW = reservationPositiveWatt(r.pvReserveW, pvOnly ? reserveW : 0);
+  const actualW = reservationPositiveWatt(r.actualW, reserveW);
+
+  const remainingTotalNumber = toNumberOrNull(runtime && runtime.remainingTotalW);
+  const remainingTotalW = remainingTotalNumber === null ? null : Math.max(0, remainingTotalNumber);
+  const remainingPvW = positiveWatt(runtime && runtime.remainingPvW);
+  const totalCap = remainingTotalW === null ? Number.POSITIVE_INFINITY : remainingTotalW;
+  const pvCap = remainingPvW;
+  const cap = pvOnly ? Math.min(totalCap, pvCap) : totalCap;
+  const grantW = Math.max(0, Math.min(requestedW, cap));
+  const nextRemainingTotalW = remainingTotalW === null ? null : Math.max(0, Math.round(remainingTotalW - reserveW));
+  const nextRemainingPvW = Math.max(0, Math.round(remainingPvW - pvReserveW));
+
+  const entry: CoreBudgetReservationEntry = {
+    key,
+    app,
+    label: reservationString(r.label, key),
+    priority,
+    requestedW: Math.round(requestedW),
+    grantW: Math.round(grantW),
+    usedW: Math.round(reserveW),
+    pvUsedW: Math.round(pvReserveW),
+    reserveW: Math.round(reserveW),
+    pvReserveW: Math.round(pvReserveW),
+    actualW: Math.round(actualW),
+    pvOnly,
+    mode: reservationString(r.mode, ''),
+    ts,
+    remainingTotalW: nextRemainingTotalW,
+    remainingPvW: nextRemainingPvW,
+  };
+
+  const consumers: Record<string, CoreBudgetReservationEntry | Record<string, unknown>> = {};
+  const sourceConsumers = runtime && runtime.consumers ? runtime.consumers : {};
+  for (const existingKey of Object.keys(sourceConsumers)) {
+    const existing = sourceConsumers[existingKey];
+    if (existing) consumers[existingKey] = existing as CoreBudgetReservationEntry | Record<string, unknown>;
+  }
+  consumers[key] = entry;
+  const runtimeOrder = runtime && Array.isArray(runtime.order) ? runtime.order : [];
+  const order = Array.from(runtimeOrder);
+  if (!order.includes(key)) order.push(key);
+  const flexUsedW = calculateCoreBudgetFlexUsedW(consumers, order);
+
+  return {
+    ok: true,
+    source: 'ts-core-reservation',
+    entry,
+    nextRemainingTotalW,
+    nextRemainingPvW,
+    order,
+    consumers,
+    flexUsedW,
+  };
+}

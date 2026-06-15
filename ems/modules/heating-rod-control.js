@@ -246,6 +246,21 @@ class HeatingRodControlModule extends BaseModule {
         this._stageCtl = new Map();
         /** @type {{importSinceMs:number, dischargeSinceMs:number}} */
         this._budgetProtect = { importSinceMs: 0, dischargeSinceMs: 0 };
+        /**
+         * Diagnose-Speicher: Heizstab-TS-Produktivpfad auf echter Anlage.
+         *
+         * Zweck:
+         * Sammelt kleine In-Memory-Samples, ob TypeScript den Heizstab wirklich geführt
+         * hat oder ob die Runtime auf JavaScript zurückfallen musste.
+         *
+         * Wichtig:
+         * Diese Samples werden nicht in History geschrieben und nach Adapter-Neustart
+         * bewusst neu gesammelt. Sie sind nur Beobachtung für die Migration.
+         */
+        this._heatingRodTsRuntimeSamples = [];
+        // TS-Migration 0.7.110: merkt, wann der Heizstab nach stabiler Runtime-Auswertung
+        // als normaler TypeScript-Pfad vorbereitet ist. JavaScript bleibt nur Notfallback.
+        this._heatingRodTsNormalSourceState = null;
     }
 
     /**
@@ -623,6 +638,10 @@ class HeatingRodControlModule extends BaseModule {
         await mk('heatingRod.summary.storageDischargeExceeded', 'Storage discharge above heating rod limit', 'boolean', 'indicator');
         await mk('heatingRod.summary.debugJson', 'Debug JSON', 'string', 'json');
         await mk('heatingRod.summary.tsShadowJson', 'TypeScript Heizstab Shadow-Vergleich (JSON)', 'string', 'json');
+        await mk('heatingRod.summary.source', 'Heizstab Entscheidungsquelle', 'string', 'text');
+        await mk('heatingRod.summary.tsProductiveJson', 'TypeScript Heizstab Produktivstatus (JSON)', 'string', 'json');
+        await mk('heatingRod.summary.tsRuntimeEvaluationJson', 'TypeScript Heizstab Runtime-Auswertung (JSON)', 'string', 'json');
+        await mk('heatingRod.summary.tsNormalSourceJson', 'TypeScript Heizstab Normalpfad-Status (JSON)', 'string', 'json');
         await mk('heatingRod.summary.zeroExportActive', 'Zero/minus feed-in logic active', 'boolean', 'indicator');
         await mk('heatingRod.summary.zeroExportCanProbe', 'Zero/minus feed-in probe allowed', 'boolean', 'indicator');
         await mk('heatingRod.summary.zeroExportReason', 'Zero/minus feed-in reason', 'string', 'text');
@@ -2735,6 +2754,205 @@ class HeatingRodControlModule extends BaseModule {
      */
 
     /**
+     * Code-Teil: _buildHeatingRodTsRuntimeSample
+     *
+     * Zweck:
+     * Baut aus dem aktuellen Heizstab-Produktivstatus ein kleines Diagnose-Sample.
+     *
+     * Zusammenhang:
+     * 0.7.109 beobachtet auf echter Anlage, ob der Heizstab wirklich durch TypeScript
+     * geführt wird oder ob JavaScript-Fallbacks auftreten. Die Samples sind die Basis
+     * für `heatingRod.summary.tsRuntimeEvaluationJson`.
+     *
+     * Wichtig:
+     * Das Sample verändert keine Zielstufe und schreibt keine Stufen-DPs. Es beschreibt
+     * nur, was die produktive Runtime ohnehin entschieden hat.
+     */
+    _buildHeatingRodTsRuntimeSample(productive) {
+        const entries = Array.isArray(productive && productive.entries) ? productive.entries : [];
+        const fallbackReasons = Array.isArray(productive && productive.fallbackReasons)
+            ? productive.fallbackReasons.map(r => String(r || '')).filter(Boolean)
+            : [];
+        const activeCount = entries.filter(e => e && e.active).length;
+        const fallbackCount = entries.filter(e => e && e.fallback).length;
+        const mismatchCount = entries.reduce((sum, e) => sum + (Array.isArray(e && e.mismatches) ? e.mismatches.length : 0), 0);
+        const jsReferenceReducedCount = entries.filter(e => e && e.jsReferenceReduced).length;
+        const hardSafetyBlockCount = entries.filter(e => e && e.hardSafetyBlock).length;
+        const hasRuntimeError = fallbackReasons.some(r => /error|exception|runtime/i.test(r));
+        const ok = entries.length > 0 && activeCount > 0 && fallbackCount === 0 && hardSafetyBlockCount === 0 && !hasRuntimeError;
+        return {
+            ts: Date.now(),
+            source: 'heating-rod-ts-runtime-sample-v1',
+            ok,
+            active: !!(productive && productive.active),
+            productive: !!(productive && productive.productive),
+            fallback: !!(productive && productive.fallback),
+            activeCount,
+            fallbackCount,
+            mismatchCount,
+            jsReferenceReducedCount,
+            hardSafetyBlockCount,
+            deviceCount: entries.length,
+            fallbackReasons,
+            hardFallback: hardSafetyBlockCount > 0 || fallbackReasons.some(r => ['missing-ts-mirror', 'ts-runtime-error', 'storage-protect-blocks-ts-normal', 'pv-protect-blocks-ts-normal'].includes(String(r))),
+        };
+    }
+
+    /**
+     * Code-Teil: _summarizeHeatingRodTsRuntimeSamples
+     *
+     * Zweck:
+     * Verdichtet die letzten Heizstab-TS-Samples zu einem lesbaren Status für App-Center
+     * und Diagnose-States.
+     *
+     * Zusammenhang:
+     * Der nächste Migrationsteil soll den alten JS-Heizstabpfad reduzieren. Dafür müssen
+     * wir wissen, ob TypeScript auf echter Anlage stabil aktiv war oder ob Fallbacks
+     * auftreten.
+     */
+    _summarizeHeatingRodTsRuntimeSamples(samples) {
+        const list = Array.isArray(samples) ? samples.slice(-60) : [];
+        const sampleCount = list.length;
+        const okCount = list.filter(s => s && s.ok).length;
+        const activeCount = list.filter(s => s && s.active).length;
+        const fallbackCount = list.filter(s => s && s.fallback).length;
+        const hardFallbackCount = list.filter(s => s && s.hardFallback).length;
+        const mismatchCount = list.reduce((sum, s) => sum + (Number(s && s.mismatchCount) || 0), 0);
+        const blockingMismatchCount = list.reduce((sum, s) => sum + (Number(s && s.blockingMismatchCount) || 0), 0);
+        const jsReferenceMismatchCount = list.reduce((sum, s) => sum + (Number(s && s.jsReferenceMismatchCount) || 0), 0);
+        const normalPathActiveCount = list.reduce((sum, s) => sum + (Number(s && s.normalPathActiveCount) || 0), 0);
+        const jsReferenceReducedCount = list.reduce((sum, s) => sum + (Number(s && s.jsReferenceReducedCount) || 0), 0);
+        const hardSafetyBlockCount = list.reduce((sum, s) => sum + (Number(s && s.hardSafetyBlockCount) || 0), 0);
+        let consecutiveOk = 0;
+        for (let i = list.length - 1; i >= 0; i--) {
+            if (list[i] && list[i].ok) consecutiveOk++;
+            else break;
+        }
+        let consecutiveFallback = 0;
+        for (let i = list.length - 1; i >= 0; i--) {
+            if (list[i] && list[i].fallback) consecutiveFallback++;
+            else break;
+        }
+        const reasons = [];
+        for (const s of list) {
+            for (const r of (Array.isArray(s && s.fallbackReasons) ? s.fallbackReasons : [])) {
+                if (r && !reasons.includes(r)) reasons.push(r);
+            }
+        }
+        const stable = sampleCount >= 5 && consecutiveOk >= 5 && hardFallbackCount === 0 && blockingMismatchCount === 0;
+        const status = stable ? 'ts-stable' : (fallbackCount ? 'fallback-observed' : (sampleCount ? 'collecting' : 'waiting'));
+        return {
+            source: 'heating-rod-ts-runtime-evaluation-v1',
+            ts: Date.now(),
+            sampleCount,
+            okCount,
+            activeCount,
+            fallbackCount,
+            hardFallbackCount,
+            mismatchCount,
+            jsReferenceReducedCount,
+            hardSafetyBlockCount,
+            consecutiveOk,
+            consecutiveFallback,
+            okRatioPct: sampleCount ? Math.round((okCount / sampleCount) * 1000) / 10 : 0,
+            stable,
+            status,
+            fallbackReasons: reasons,
+            last: list.length ? list[list.length - 1] : null,
+            nextAction: stable
+                ? 'Heizstab-TS läuft stabil. JS-Fallback kann im nächsten Schritt weiter reduziert werden.'
+                : (fallbackCount ? 'Fallback-Gründe prüfen, bevor der alte JS-Heizstabpfad weiter reduziert wird.' : 'Weitere Heizstab-TS-Samples sammeln.'),
+        };
+    }
+
+    /**
+     * Code-Teil: _updateHeatingRodTsRuntimeEvaluation
+     *
+     * Zweck:
+     * Hängt das aktuelle Sample in den In-Memory-Puffer und liefert die verdichtete
+     * Auswertung zurück.
+     *
+     * Wichtig:
+     * Diese Funktion ist reine Beobachtung. Keine Heizstabstufe und kein Budgetwert wird
+     * hier verändert.
+     */
+    _updateHeatingRodTsRuntimeEvaluation(productive) {
+        const sample = this._buildHeatingRodTsRuntimeSample(productive || {});
+        const current = Array.isArray(this._heatingRodTsRuntimeSamples) ? this._heatingRodTsRuntimeSamples : [];
+        this._heatingRodTsRuntimeSamples = current.concat(sample).slice(-60);
+        return this._summarizeHeatingRodTsRuntimeSamples(this._heatingRodTsRuntimeSamples);
+    }
+
+    /**
+     * Code-Teil: _updateHeatingRodTsNormalSourceState
+     *
+     * Zweck:
+     * Bereitet den TypeScript-Heizstabpfad als normalen Runtime-Pfad vor, sobald
+     * mehrere echte Adapter-Ticks stabil über TS liefen.
+     *
+     * Zusammenhang:
+     * 0.7.110 reduziert den alten JavaScript-Fallback weiter. Der Fallback bleibt aber
+     * bei harten Fehlern erhalten: fehlender TS-Spiegel, Runtimefehler oder JS/TS-Mismatch.
+     * Diese Funktion ändert keine Zielstufe selbst; sie bewertet nur, ob TS als
+     * Normalpfad markiert werden darf.
+     *
+     * Sicherheitsregel:
+     * Bei jedem Fallback, Mismatch oder Runtimefehler wird der Normalpfad-Status
+     * zurückgesetzt. Erst nach stabilen TS-Ticks wird `ready=true`.
+     */
+    _updateHeatingRodTsNormalSourceState(productive, evaluation) {
+        const now = Date.now();
+        const previous = this._heatingRodTsNormalSourceState && typeof this._heatingRodTsNormalSourceState === 'object'
+            ? this._heatingRodTsNormalSourceState
+            : {};
+        const active = !!(productive && productive.active && productive.productive && !productive.fallback);
+        const mismatchCount = Number(evaluation && evaluation.mismatchCount) || 0;
+        const blockingMismatchCount = Number(evaluation && evaluation.blockingMismatchCount) || 0;
+        const jsReferenceMismatchCount = Number(evaluation && evaluation.jsReferenceMismatchCount) || 0;
+        const hardFallbackCount = Number(evaluation && evaluation.hardFallbackCount) || 0;
+        const fallbackCount = Number(evaluation && evaluation.fallbackCount) || 0;
+        const stable = !!(evaluation && evaluation.stable);
+        const minTsTicks = 8;
+        const hardFallback = !active || fallbackCount > 0 || hardFallbackCount > 0 || blockingMismatchCount > 0;
+        const consecutiveTsTicks = hardFallback ? 0 : (Math.max(0, Number(previous.consecutiveTsTicks) || 0) + 1);
+        const consecutiveJsFallbackTicks = hardFallback ? (Math.max(0, Number(previous.consecutiveJsFallbackTicks) || 0) + 1) : 0;
+        const totalTsTicks = Math.max(0, Number(previous.totalTsTicks) || 0) + (active ? 1 : 0);
+        const totalJsFallbackTicks = Math.max(0, Number(previous.totalJsFallbackTicks) || 0) + (hardFallback ? 1 : 0);
+        const ready = stable && consecutiveTsTicks >= minTsTicks && !hardFallback;
+        const fallbackReasons = Array.isArray(productive && productive.fallbackReasons) ? productive.fallbackReasons : [];
+        const status = ready ? 'ts-normal-ready' : (active ? 'ts-normal-collecting' : 'js-fallback-active');
+        const state = {
+            source: 'heating-rod-ts-normal-source-v1',
+            ts: now,
+            ready,
+            status,
+            active,
+            stable,
+            minTsTicks,
+            consecutiveTsTicks,
+            consecutiveJsFallbackTicks,
+            totalTsTicks,
+            totalJsFallbackTicks,
+            fallbackCount,
+            hardFallbackCount,
+            mismatchCount,
+            blockingMismatchCount,
+            jsReferenceMismatchCount,
+            fallbackReasons,
+            jsReferenceReducedCount: Number(evaluation && evaluation.jsReferenceReducedCount) || 0,
+            hardSafetyBlockCount: Number(evaluation && evaluation.hardSafetyBlockCount) || 0,
+            normalPathTakenOver: ready,
+            jsFallbackMode: ready ? 'hard-blockers-only' : 'normal-safety-fallback',
+            lastSource: ready ? 'ts-heating-rod-normal' : (active ? 'ts-heating-rod' : 'js-runtime'),
+            nextAction: ready
+                ? 'Heizstab-TS ist als Normalpfad vorbereitet. JavaScript bleibt nur Notfallback bei harten Blockern.'
+                : (active ? 'Weitere stabile TS-Heizstab-Ticks sammeln.' : 'Fallback-Gründe prüfen; TS-Normalpfad noch nicht aktiv.'),
+        };
+        this._heatingRodTsNormalSourceState = state;
+        return state;
+    }
+
+    /**
      * Code-Teil: _runHeatingRodTsShadowComparison
      *
      * Zweck:
@@ -2757,7 +2975,13 @@ class HeatingRodControlModule extends BaseModule {
                 const d = entry.device || {};
                 const stages = (Array.isArray(d.stages) ? d.stages : [])
                     .filter(st => st && Number.isFinite(Number(st.powerW)) && Number(st.powerW) > 0)
-                    .map((st, idx) => ({ stage: Number(st.index || st.stage || (idx + 1)), powerW: Math.max(0, Math.round(Number(st.powerW) || 0)) }));
+                    .map((st, idx) => {
+                        const stageNo = Number(st.index || st.stage || (idx + 1));
+                        const cumulativeW = (typeof this._sumStagePower === 'function')
+                            ? this._sumStagePower(d, stageNo)
+                            : Math.max(0, Math.round(Number(st.powerW) || 0));
+                        return { stage: stageNo, powerW: Math.max(0, Math.round(Number(cumulativeW) || 0)) };
+                    });
                 const input = {
                     ts: Date.now(),
                     device: {
@@ -2804,6 +3028,164 @@ class HeatingRodControlModule extends BaseModule {
             }
         }
         return result;
+    }
+
+    /**
+     * Code-Teil: _isHeatingRodTsNormalPathReady
+     *
+     * Zweck:
+     * Prüft, ob der Heizstab-TS-Pfad bereits als Normalpfad vorbereitet wurde.
+     *
+     * Zusammenhang:
+     * 0.7.111 baut den alten JS-Pfad weiter ab. Sobald der TS-Pfad über mehrere
+     * echte Adapter-Ticks stabil war, darf eine reine JS/TS-Referenzabweichung den
+     * TS-Normalpfad nicht mehr automatisch blockieren. Harte Sicherheitsblocker
+     * bleiben aber weiterhin aktiv.
+     *
+     * Wichtig:
+     * Diese Funktion schaltet keine Stufe. Sie liest nur den vorher gesammelten
+     * Normalpfad-Status aus `heatingRod.summary.tsNormalSourceJson` bzw. dem
+     * internen In-Memory-Status.
+     */
+    _isHeatingRodTsNormalPathReady() {
+        const state = this._heatingRodTsNormalSourceState && typeof this._heatingRodTsNormalSourceState === 'object'
+            ? this._heatingRodTsNormalSourceState
+            : null;
+        return !!(state && state.ready === true && String(state.status || '') === 'ts-normal-ready');
+    }
+
+    /**
+     * Code-Teil: _isHeatingRodTsHardSafetyBlock
+     *
+     * Zweck:
+     * Bewertet, ob eine TS-Heizstabentscheidung trotz Normalpfad-Status aus
+     * Sicherheitsgründen blockiert werden muss.
+     *
+     * Zusammenhang:
+     * Der JS-Pfad wird abgebaut, aber nicht als Notbremse entfernt. Wenn Speicher-
+     * oder PV-Schutz die JS-Referenz auf 0 W zwingt und TS trotzdem einschalten will,
+     * bleibt das ein harter Fallback-Grund.
+     */
+    _isHeatingRodTsHardSafetyBlock(entry, tsStage) {
+        const stage = Math.max(0, Math.round(Number(tsStage) || 0));
+        const jsStage = Math.max(0, Math.round(Number(entry && entry.jsTargetStage) || 0));
+        const status = String(entry && entry.jsStatus || '');
+        const storageProtect = !!(entry && entry.storageProtectActive);
+        const pvProtect = /pv_only_protect|storage_protect|zero_export|protect/i.test(status);
+        if (stage <= 0) return null;
+        if (storageProtect && jsStage <= 0) return 'storage-protect-blocks-ts-normal';
+        if (pvProtect && jsStage <= 0) return 'pv-protect-blocks-ts-normal';
+        return null;
+    }
+
+    /**
+     * Code-Teil: _evaluateHeatingRodTsProductiveDecision
+     *
+     * Zweck:
+     * Nutzt den TypeScript-Heizstab-Entscheidungsspiegel als produktive Quelle für
+     * die Zielstufe. Vor dem TS-Normalpfad muss der TS-Vorschlag noch mit der bisherigen
+     * JS-Referenz übereinstimmen. Sobald der Normalpfad stabil bereit ist, wird TS
+     * autoritativ und JS dient nur noch als Referenz-/Notfallback.
+     *
+     * Zusammenhang:
+     * 0.7.111 übernimmt den stabilen TS-Normalpfad weiter: Die bestehende
+     * JavaScript-Runtime bleibt als Referenz und Sicherheitsnetz erhalten, aber nach
+     * stabiler Runtime-Auswertung blockiert ein reiner JS/TS-Referenzunterschied nicht
+     * mehr automatisch die TS-Zielstufe.
+     *
+     * Sicherheitsregel:
+     * Bei fehlendem TS-Spiegel oder Runtimefehler bleibt der JS-Zielwert autoritativ.
+     * JS/TS-Abweichungen bleiben vor dem Normalpfad ein Fallback-Grund; im Normalpfad
+     * werden sie nur noch als Referenzdiagnose gespeichert.
+     */
+    _evaluateHeatingRodTsProductiveDecision(entry) {
+        const mirror = requireHeatingRodTsMirror();
+        const evaluate = mirror && typeof mirror.evaluateHeatingRodDecision === 'function' ? mirror.evaluateHeatingRodDecision : null;
+        const fallback = (reason, extra = {}) => ({
+            source: 'js-runtime',
+            active: false,
+            fallback: true,
+            fallbackReason: reason,
+            targetStage: Math.max(0, Math.round(Number(entry && entry.jsTargetStage) || 0)),
+            targetW: Math.max(0, Math.round(Number(entry && entry.jsTargetW) || 0)),
+            ts: null,
+            reason: '',
+            mismatches: [],
+            input: null,
+            normalPathReady: false,
+            jsReferenceReduced: false,
+            jsReferenceMismatch: false,
+            hardSafetyBlock: false,
+            ...extra,
+        });
+        if (!evaluate) return fallback('missing-ts-mirror');
+        try {
+            const d = entry && entry.device || {};
+            const stages = (Array.isArray(d.stages) ? d.stages : [])
+                .filter(st => st && Number.isFinite(Number(st.powerW)) && Number(st.powerW) > 0)
+                .map((st, idx) => ({ stage: Number(st.index || st.stage || (idx + 1)), powerW: Math.max(0, Math.round(Number(st.powerW) || 0)) }));
+            const input = {
+                ts: Date.now(),
+                device: {
+                    id: d.id || entry.deviceId || 'unknown',
+                    enabled: !!d.enabled,
+                    mode: String(entry.effectiveMode || d.mode || 'pvAuto'),
+                    allowGridImport: !!(entry.allowGridImport),
+                    allowStorageDischarge: !(entry.storageProtectActive),
+                    storageReserveSocPct: Number.isFinite(Number(entry.storageReserveSocPct)) ? Number(entry.storageReserveSocPct) : 0,
+                    storageReserveW: Math.max(0, Math.round(Number(entry.storageReserveW) || 0)),
+                    stages,
+                },
+                availablePvW: Math.max(0, Math.round(Number(entry.availablePvW) || 0)),
+                availableTotalW: Math.max(0, Math.round(Number(entry.availableTotalW) || 0)),
+                storageSocPct: Number.isFinite(Number(entry.storageSocPct)) ? Number(entry.storageSocPct) : null,
+            };
+            const ts = evaluate(input);
+            const tsStage = Math.max(0, Math.round(Number(ts && ts.targetStage) || 0));
+            const tsPowerW = Math.max(0, Math.round(Number(ts && ts.targetPowerW) || 0));
+            const mismatches = [
+                compareHeatingRodShadowField('targetStage', entry.jsTargetStage, ts && ts.targetStage),
+                compareHeatingRodShadowField('targetPowerW', entry.jsTargetW, ts && ts.targetPowerW),
+            ].filter(Boolean);
+            const normalPathReady = !!(entry && entry.normalPathReady) || this._isHeatingRodTsNormalPathReady();
+            const hardSafetyBlock = this._isHeatingRodTsHardSafetyBlock(entry, tsStage);
+            if (hardSafetyBlock) {
+                return fallback(hardSafetyBlock, {
+                    input,
+                    ts: { targetStage: tsStage, targetW: tsPowerW, reason: ts && ts.reason },
+                    mismatches,
+                    normalPathReady,
+                    hardSafetyBlock: true,
+                    jsReferenceReduced: false,
+                });
+            }
+            if (mismatches.length && !normalPathReady) {
+                return fallback('ts-js-mismatch', {
+                    input,
+                    ts: { targetStage: tsStage, targetW: tsPowerW, reason: ts && ts.reason },
+                    mismatches,
+                    normalPathReady,
+                });
+            }
+            return {
+                source: normalPathReady ? 'ts-heating-rod-normal' : 'ts-heating-rod',
+                active: true,
+                fallback: false,
+                fallbackReason: '',
+                targetStage: tsStage,
+                targetW: tsPowerW,
+                reason: ts && ts.reason || '',
+                input,
+                ts,
+                mismatches,
+                normalPathReady,
+                jsReferenceMismatch: !!(mismatches.length),
+                jsReferenceReduced: !!(normalPathReady && mismatches.length),
+                hardSafetyBlock: false,
+            };
+        } catch (e) {
+            return fallback('ts-runtime-error', { error: e && e.message ? e.message : String(e) });
+        }
     }
 
     async tick() {
@@ -2871,6 +3253,10 @@ class HeatingRodControlModule extends BaseModule {
         // Extern/manual KNX heat is ordinary house load and must not be reserved again
         // in ems.budget, otherwise the central PV budget is double-counted.
         let budgetUsedW = 0;
+
+        // TS-Migration 0.7.108: sammelt produktive Heizstab-TS-Entscheidungen pro Gerät.
+        // Die JS-Referenz bleibt Fallback, wenn TS und JS nicht exakt übereinstimmen.
+        const heatingRodTsProductiveEntries = [];
 
         for (const d of this._devices) {
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.slot`, d.slot);
@@ -3136,10 +3522,49 @@ class HeatingRodControlModule extends BaseModule {
             }
 
             const forceStorageProtectOff = !!(pvBase.forceOff && desiredStage <= 0 && !(zeroExportInfo.active && zeroDecision && !zeroDecision.reduceNow));
-            const targetStage = forceStorageProtectOff
+            let targetStage = forceStorageProtectOff
                 ? 0
                 : (forceNonPvDown ? desiredStage : this._applyTiming(d, desiredStage, observedStage));
             if (forceStorageProtectOff || forceNonPvDown) this._setStageCtlTarget(d.id, targetStage, observedStage);
+            const jsTargetStageBeforeTs = Math.max(0, Math.min(targetStage, d.stageCount, d.wiredStages));
+            const jsTargetWBeforeTs = this._sumStagePowerModel(d, jsTargetStageBeforeTs, observedStage, measuredW);
+            const tsProductiveDecision = this._evaluateHeatingRodTsProductiveDecision({
+                normalPathReady: this._isHeatingRodTsNormalPathReady(),
+                device: d,
+                deviceId: d.id,
+                jsTargetStage: jsTargetStageBeforeTs,
+                jsTargetW: jsTargetWBeforeTs,
+                jsStatus: forceStorageProtectOff ? 'storage_protect' : (forceNonPvDown ? 'pv_only_protect' : 'pv_auto'),
+                effectiveMode,
+                availablePvW: Math.max(0, Number(pvBase && pvBase.availableW) || 0),
+                availableTotalW: pvBase && pvBase.budgetGateEffectiveW !== null && pvBase.budgetGateEffectiveW !== undefined ? Math.max(0, Number(pvBase.budgetGateEffectiveW) || 0) : Math.max(0, Number(pvBase && pvBase.availableW) || 0),
+                allowGridImport: !!(pvBase && (pvBase.tariffGridImportPreferred || (pvBase.budgetGateTotalW !== null && pvBase.budgetGateTotalW !== undefined))),
+                storageProtectActive: !!(pvBase && pvBase.forceOff),
+                storageSocPct: pvBase ? pvBase.storageSocPct : null,
+                storageReserveSocPct: Number(this._getCfg().storageReserveSocPct || this._getCfg().storageTargetSocPct || 0) || 0,
+                storageReserveW: pvBase ? Math.max(0, Number(pvBase.storageReserveW) || 0) : 0,
+            });
+            if (tsProductiveDecision && tsProductiveDecision.active) {
+                targetStage = Math.max(0, Math.min(Number(tsProductiveDecision.targetStage) || 0, d.stageCount, d.wiredStages));
+            }
+            heatingRodTsProductiveEntries.push({
+                deviceId: d.id,
+                source: tsProductiveDecision && tsProductiveDecision.source || 'js-runtime',
+                active: !!(tsProductiveDecision && tsProductiveDecision.active),
+                fallback: !!(tsProductiveDecision && tsProductiveDecision.fallback),
+                fallbackReason: tsProductiveDecision && tsProductiveDecision.fallbackReason || '',
+                jsTargetStage: jsTargetStageBeforeTs,
+                tsTargetStage: tsProductiveDecision && tsProductiveDecision.ts ? tsProductiveDecision.ts.targetStage : null,
+                finalTargetStage: targetStage,
+                jsTargetW: Math.round(jsTargetWBeforeTs),
+                tsTargetW: tsProductiveDecision && tsProductiveDecision.ts ? tsProductiveDecision.ts.targetPowerW : null,
+                reason: tsProductiveDecision && (tsProductiveDecision.reason || tsProductiveDecision.fallbackReason) || '',
+                mismatches: tsProductiveDecision && tsProductiveDecision.mismatches || [],
+                jsReferenceMismatch: !!(tsProductiveDecision && (tsProductiveDecision.jsReferenceMismatch || (Array.isArray(tsProductiveDecision.mismatches) && tsProductiveDecision.mismatches.length))),
+                normalPathReady: !!(tsProductiveDecision && tsProductiveDecision.normalPathReady),
+                jsReferenceReduced: !!(tsProductiveDecision && tsProductiveDecision.jsReferenceReduced),
+                hardSafetyBlock: !!(tsProductiveDecision && tsProductiveDecision.hardSafetyBlock),
+            });
             const offWouldTouchLoad = targetStage <= 0 && ((typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 50) || Math.max(0, feedback.appliedPowerW || 0) > 0 || observedStage > 0);
             const mayWriteOff = !!(ownNow.autoOwned || forceStorageProtectOff || forceNonPvDown);
             if (targetStage <= 0 && offWouldTouchLoad && !mayWriteOff) {
@@ -3201,6 +3626,26 @@ class HeatingRodControlModule extends BaseModule {
             });
         }
         const heatingRodTsShadow = this._runHeatingRodTsShadowComparison(heatingRodTsShadowEntries);
+        const heatingRodTsProductive = {
+            source: 'ts-heating-rod-productive',
+            active: heatingRodTsProductiveEntries.some(e => e && e.active),
+            productive: heatingRodTsProductiveEntries.some(e => e && e.active),
+            fallback: heatingRodTsProductiveEntries.some(e => e && e.fallback),
+            activeCount: heatingRodTsProductiveEntries.filter(e => e && e.active).length,
+            fallbackCount: heatingRodTsProductiveEntries.filter(e => e && e.fallback).length,
+            fallbackReasons: Array.from(new Set(heatingRodTsProductiveEntries.filter(e => e && e.fallbackReason).map(e => String(e.fallbackReason)))),
+            jsReferenceReducedCount: heatingRodTsProductiveEntries.filter(e => e && e.jsReferenceReduced).length,
+            hardSafetyBlockCount: heatingRodTsProductiveEntries.filter(e => e && e.hardSafetyBlock).length,
+            entries: heatingRodTsProductiveEntries,
+        };
+        const heatingRodTsRuntimeEvaluation = this._updateHeatingRodTsRuntimeEvaluation(heatingRodTsProductive);
+        const heatingRodTsNormalSource = this._updateHeatingRodTsNormalSourceState(heatingRodTsProductive, heatingRodTsRuntimeEvaluation);
+        heatingRodTsRuntimeEvaluation.normalSource = heatingRodTsNormalSource;
+        heatingRodTsProductive.runtimeEvaluation = heatingRodTsRuntimeEvaluation;
+        heatingRodTsProductive.normalSource = heatingRodTsNormalSource;
+        heatingRodTsProductive.effectiveSource = heatingRodTsProductive && heatingRodTsProductive.active && heatingRodTsNormalSource && heatingRodTsNormalSource.ready
+            ? 'ts-heating-rod-normal'
+            : (heatingRodTsProductive && heatingRodTsProductive.active ? 'ts-heating-rod' : 'js-runtime');
 
         this.adapter._heatingRodBudgetUsedW = Math.round(budgetUsedW);
 
@@ -3259,9 +3704,16 @@ class HeatingRodControlModule extends BaseModule {
         await this._setStateIfChanged('heatingRod.summary.pvAutomationPvNowW', Math.round(num(pvNowForAutomationW, 0)));
         await this._setStateIfChanged('heatingRod.summary.pvAutomationAllowed', !!pvAutomationAllowedByMin);
         await this._setStateIfChanged('heatingRod.summary.tsShadowJson', JSON.stringify(heatingRodTsShadow || {}));
+        await this._setStateIfChanged('heatingRod.summary.source', heatingRodTsProductive && heatingRodTsProductive.effectiveSource ? heatingRodTsProductive.effectiveSource : (heatingRodTsProductive && heatingRodTsProductive.active ? 'ts-heating-rod' : 'js-runtime'));
+        await this._setStateIfChanged('heatingRod.summary.tsProductiveJson', JSON.stringify(heatingRodTsProductive || {}));
+        await this._setStateIfChanged('heatingRod.summary.tsRuntimeEvaluationJson', JSON.stringify(heatingRodTsRuntimeEvaluation || {}));
+        await this._setStateIfChanged('heatingRod.summary.tsNormalSourceJson', JSON.stringify(heatingRodTsNormalSource || {}));
         await this._setStateIfChanged('heatingRod.summary.debugJson', JSON.stringify({
             source: pvBase.source,
             tsShadow: heatingRodTsShadow || null,
+            tsProductive: heatingRodTsProductive || null,
+            tsRuntimeEvaluation: heatingRodTsRuntimeEvaluation || null,
+            tsNormalSource: heatingRodTsNormalSource || null,
             pvAutomationMinW: Math.round(num(minPvAutomationW, 0)),
             pvAutomationPvNowW: Math.round(num(pvNowForAutomationW, 0)),
             pvAutomationAllowed: !!pvAutomationAllowedByMin,

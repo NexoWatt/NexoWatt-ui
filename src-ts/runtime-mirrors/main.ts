@@ -21,7 +21,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: d0f60275414c250543b96121c0fbcbdabec5aedcc440c2e36cee35ec409dfb48
+ * Original-Hash: 160f8cc2b9e877d74755168d0e2178b06cf6e1da29f366f5f807dce63a2f8160
  */
 
 /**
@@ -3126,8 +3126,8 @@ class NexoWattVis extends utils.Adapter {
     ensurePlainObj('installerConfig', {});
     ensurePlainObj('vis', {});
     ensurePlainObj('tsMigration', {
-      energyFlowMode: 'shadow',
-      energyFlowProductionAllowed: false,
+      energyFlowMode: 'ts',
+      energyFlowProductionAllowed: true,
       energyFlowCandidateWarmupTicks: 3,
       energyFlowCandidateAutoFallback: true,
       energyFlowRequireStablePlantEvaluation: true,
@@ -3186,8 +3186,8 @@ class NexoWattVis extends utils.Adapter {
     ensurePlainObj('logicEditor', { version: 1, graphs: [] });
     ensurePlainObj('diagnostics', {});
     ensurePlainObj('tsMigration', {
-      energyFlowMode: 'shadow',
-      energyFlowProductionAllowed: false,
+      energyFlowMode: 'ts',
+      energyFlowProductionAllowed: true,
       energyFlowCandidateWarmupTicks: 3,
       energyFlowCandidateAutoFallback: true,
       energyFlowRequireStablePlantEvaluation: true,
@@ -3196,18 +3196,18 @@ class NexoWattVis extends utils.Adapter {
       // js     = reine alte JS-Runtime ohne TS-Vergleich,
       // shadow = JS bleibt produktiv, TS rechnet nur Diagnose,
       // ts     = technischer Kandidatenmodus; TS darf nur bei sauberem Shadow-Ergebnis als Kandidat markiert werden.
-      // Wichtig: 0.7.80 schaltet noch keine produktiven States automatisch auf TS um.
+      // Wichtig: 0.7.101 aktiviert TS nur über die mehrstufige Sicherheitsfreigabe produktiv.
     });
     try {
       const tm = this._nwIsPlainObject(out.tsMigration) ? out.tsMigration : {};
       const allowed = ['js', 'shadow', 'ts'];
       const mode = String(tm.energyFlowMode || '').trim().toLowerCase();
       if (!allowed.includes(mode)) {
-        tm.energyFlowMode = 'shadow';
+        tm.energyFlowMode = 'ts';
         changed = true;
       }
       if (typeof tm.energyFlowProductionAllowed !== 'boolean') {
-        tm.energyFlowProductionAllowed = false;
+        tm.energyFlowProductionAllowed = true;
         changed = true;
       }
       const warmup = Math.round(Number(tm.energyFlowCandidateWarmupTicks));
@@ -3219,6 +3219,26 @@ class NexoWattVis extends utils.Adapter {
       }
       if (typeof tm.energyFlowCandidateAutoFallback !== 'boolean') {
         tm.energyFlowCandidateAutoFallback = true;
+        changed = true;
+      }
+      /**
+       * Code-Teil: 0.7.101 Energiefluss-TS standardmäßig als Kandidat aktivieren.
+       *
+       * Zweck:
+       * Ab diesem Release soll der Energiefluss nicht mehr nur vorbereitet sein. Der Modus
+       * wird standardmäßig auf `ts` gesetzt, bleibt aber durch Shadow-Vergleich,
+       * Kandidatenprüfung, Warmup und reale Anlagen-Auswertung abgesichert. Bestehende
+       * produktive Werte fallen automatisch auf JS zurück, wenn ein Gate blockiert.
+       *
+       * Wichtig:
+       * Dies ist keine blinde Umschaltung. `effectiveEnergyFlow` entscheidet pro Tick, ob TS
+       * wirklich veröffentlicht werden darf. Über das App-Center kann jederzeit wieder auf
+       * `js` oder `shadow` zurückgeschaltet werden.
+       */
+      if (tm.energyFlowMode === 'shadow' && tm.energyFlowProductionAllowed === false && tm.energyFlowTsDefaultActivated07101 !== true) {
+        tm.energyFlowMode = 'ts';
+        tm.energyFlowProductionAllowed = true;
+        tm.energyFlowTsDefaultActivated07101 = true;
         changed = true;
       }
       if (typeof tm.energyFlowRequireStablePlantEvaluation !== 'boolean') {
@@ -11535,7 +11555,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         // TypeScript-Migration: Energiefluss-Schaltmodus für App-Center-Diagnose.
         // Wichtig: Diese Konfiguration wird nur über die doppelte Sicherheitslogik in main.js ausgewertet.
-        tsMigration: (n.tsMigration && typeof n.tsMigration === 'object') ? n.tsMigration : { energyFlowMode: 'shadow', energyFlowProductionAllowed: false, energyFlowCandidateWarmupTicks: 3, energyFlowCandidateAutoFallback: true, energyFlowRequireStablePlantEvaluation: true, energyFlowPlantMinSamples: 5, energyFlowPlantMinConsecutiveOk: 5 },
+        tsMigration: (n.tsMigration && typeof n.tsMigration === 'object') ? n.tsMigration : { energyFlowMode: 'ts', energyFlowProductionAllowed: true, energyFlowCandidateWarmupTicks: 3, energyFlowCandidateAutoFallback: true, energyFlowRequireStablePlantEvaluation: true, energyFlowPlantMinSamples: 5, energyFlowPlantMinConsecutiveOk: 5 },
 
         // Plant-level
         installerConfig: (n.installerConfig && typeof n.installerConfig === 'object') ? n.installerConfig : {},
@@ -15906,7 +15926,7 @@ app.get('/config', (req, res) => {
       res.json({
         units: cfg.units || { power: 'W', energy: 'kWh' },
         settings: cfg.settings || {},
-        tsMigration: cfg.tsMigration || { energyFlowMode: 'shadow', energyFlowProductionAllowed: false, energyFlowCandidateWarmupTicks: 3, energyFlowCandidateAutoFallback: true, energyFlowRequireStablePlantEvaluation: true, energyFlowPlantMinSamples: 5, energyFlowPlantMinConsecutiveOk: 5 },
+        tsMigration: cfg.tsMigration || { energyFlowMode: 'ts', energyFlowProductionAllowed: true, energyFlowCandidateWarmupTicks: 3, energyFlowCandidateAutoFallback: true, energyFlowRequireStablePlantEvaluation: true, energyFlowPlantMinSamples: 5, energyFlowPlantMinConsecutiveOk: 5 },
         datapointFlags,
         // TS-Migration Diagnose: Vergleich zwischen vorheriger JS-Sichtbarkeit und TS-Spiegel.
         featureVisibilityTsPreview,
@@ -21143,9 +21163,9 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
    * Baut einen sicheren Umschaltplan aus JS-Runtime-Werten und TS-Shadow-Werten.
    *
    * Zusammenhang:
-   * 0.7.82 bereitet die produktive Umschaltung vor, ohne sie automatisch zu aktivieren.
-   * Der Plan beschreibt, welche Quelle verwendet werden dürfte, wenn der Modus auf `ts`
-   * gesetzt ist und der Shadow-Vergleich keine Abweichungen meldet.
+   * 0.7.101 aktiviert die produktive Umschaltung kontrolliert: TS darf nur bei sauberem Gate übernehmen.
+   * Der Plan beschreibt, welche Quelle in diesem Tick verwendet wird. TS kann nur dann
+   * produktiv werden, wenn alle Sicherheitsgates erfüllt sind; sonst bleibt JS aktiv.
    *
    * Wichtig:
    * Diese Funktion schreibt keine States und verändert keine Runtime-Werte. Sie liefert nur
@@ -21188,7 +21208,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       plantEvaluation: plantGate,
       blockedReasons,
       safetyText: useTsCandidate
-        ? 'TS-Werte werden nur genutzt, weil Modus ts, energyFlowProductionAllowed und Kandidaten-Warmup aktiv/sauber sind.'
+        ? 'TS-Werte werden produktiv genutzt, weil Modus ts, energyFlowProductionAllowed, Shadow-Vergleich, Kandidatenprüfung, Warmup und Anlagen-Gate sauber sind.'
         : 'Produktiv bleibt die JavaScript-Runtime.',
     };
   }
@@ -21493,15 +21513,16 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
    * zusätzliche Sicherheitsfreigabe.
    *
    * Wichtig:
-   * Standard ist immer `js`. `shadow` bedeutet nur Vergleich/Diagnose. `ts` wird
-   * nur wirksam, wenn zusätzlich `energyFlowProductionAllowed` explizit true ist.
+   * Standard ist ab 0.7.101 der kontrollierte `ts`-Kandidatenmodus. `ts` wird
+   * aber nur produktiv, wenn zusätzlich Sicherheitsfreigabe, Shadow-Vergleich,
+   * Kandidatenprüfung, Warmup und reale Anlagen-Auswertung sauber sind.
    */
   _nwGetEnergyFlowTsSwitchConfig() {
     const cfg = (this.config && this.config.tsMigration && typeof this.config.tsMigration === 'object') ? this.config.tsMigration : {};
     let rawMode = '';
     try { rawMode = process && process.env ? String(process.env.NEXOWATT_ENERGYFLOW_TS_MODE || '') : ''; } catch (_eEnv) {}
-    if (!rawMode) rawMode = String(cfg.energyFlowMode || cfg.energyFlowTsMode || cfg.flowMode || 'shadow');
-    const mode = ['js', 'shadow', 'ts'].includes(String(rawMode).trim().toLowerCase()) ? String(rawMode).trim().toLowerCase() : 'shadow';
+    if (!rawMode) rawMode = String(cfg.energyFlowMode || cfg.energyFlowTsMode || cfg.flowMode || 'ts');
+    const mode = ['js', 'shadow', 'ts'].includes(String(rawMode).trim().toLowerCase()) ? String(rawMode).trim().toLowerCase() : 'ts';
     const productionAllowed = cfg.energyFlowProductionAllowed === true || cfg.allowEnergyFlowTsProduction === true;
     const warmupRaw = Math.round(Number(cfg.energyFlowCandidateWarmupTicks));
     const warmupTicks = Number.isFinite(warmupRaw) ? Math.max(1, Math.min(30, warmupRaw)) : 3;

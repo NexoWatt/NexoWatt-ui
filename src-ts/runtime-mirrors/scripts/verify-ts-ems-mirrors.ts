@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: f68db59b51164d84c9f3d0eb28fafd44ae249452d93cb06546e5b606b2b61671
+ * Original-Hash: 0927e78808cad6dde44893ae6ab46ddf1289ee2cfd910c25ee41f187931d7ba8
  */
 
 /**
@@ -55,7 +55,7 @@ const mirrorSpecs = [
   {
     sourceRel: 'src-ts/ems/core-limits/core-budget.ts',
     mirrorRel: 'lib/ts-mirrors/ems/core-limits/core-budget.js',
-    exports: ['isStorageReserveActive', 'calculatePvBudgetGate', 'calculateGridBudgetGate', 'buildCoreBudgetSnapshot'],
+    exports: ['isStorageReserveActive', 'calculatePvBudgetGate', 'calculateGridBudgetGate', 'buildCoreBudgetSnapshot', 'computeCoreBudgetReservation', 'buildCoreBudgetConsumersList', 'calculateCoreBudgetFlexUsedW'],
   },
   {
     sourceRel: 'src-ts/ems/heating-rod/heating-rod-decision.ts',
@@ -140,6 +140,10 @@ function verifyRuntimeExports(spec) {
     if (snap.grid.effectiveW !== 25000) fail(`core-budget Spiegel erwartet Grid effektiv 25000 W, ist ${snap.grid.effectiveW}.`);
     const zero = mod.calculatePvBudgetGate({ pvSurplusW: 0, storageReserveW: 0, alreadyReservedW: 0, allowStorageDischarge: true });
     if (zero.effectiveW !== 0 || zero.reason !== 'pv-surplus') fail('core-budget Spiegel muss 0 W PV-Budget als gültig behandeln.');
+    const reservation = mod.computeCoreBudgetReservation({ remainingTotalW: 3000, remainingPvW: 2000, consumers: {}, order: [] }, { key: 'heatingRod', requestedW: 2500, reserveW: 2500, pvReserveW: 1500, pvOnly: true, mode: 'pvAuto' }, 10);
+    if (!reservation || !reservation.entry || reservation.entry.grantW !== 2000) fail('core-reservation Spiegel muss PV-only Grant auf PV-Restbudget begrenzen.');
+    if (reservation.nextRemainingTotalW !== 500 || reservation.nextRemainingPvW !== 500) fail('core-reservation Spiegel muss Restbudgets korrekt reduzieren.');
+    if (reservation.flexUsedW !== 2500) fail('core-reservation Spiegel muss flexUsedW aus usedW berechnen.');
   }
 
   if (spec.mirrorRel.includes('heating-rod')) {

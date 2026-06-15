@@ -1606,7 +1606,7 @@
         <div class="nw-config-card__header">
           <div>
             <div class="nw-config-card__title">Energiefluss TypeScript‑Schaltmodus</div>
-            <div class="nw-config-card__subtitle">Steuert, ob der Energiefluss nur per JS läuft, im Shadow‑Vergleich geprüft wird oder kontrolliert als TS‑Kandidat freigegeben werden darf.</div>
+            <div class="nw-config-card__subtitle">Steuert den Energiefluss-Quellmodus. Ab 0.7.101 ist TS der Standard-Kandidat, bleibt aber durch Shadow, Warmup, Kandidatenprüfung und Anlagen-Gate abgesichert.</div>
           </div>
         </div>
         <div class="nw-config-card__body nw-ts-energyflow-mode-grid">
@@ -1616,7 +1616,7 @@
               <select id="energyFlowTsMode" class="nw-config-input">
                 <option value="js">JS – nur alte Runtime</option>
                 <option value="shadow">Shadow – JS produktiv, TS Diagnose</option>
-                <option value="ts">TS – Kandidatenmodus</option>
+                <option value="ts">TS – produktiver Kandidat mit Sicherheitsgates</option>
               </select>
             </span>
           </label>
@@ -1658,7 +1658,7 @@
           </label>
 
           <div class="nw-config-empty nw-ts-energyflow-safety-note">
-            Sicherheitsregel: TS wird nur produktiv genutzt, wenn Modus <b>TS</b>, diese Freigabe aktiv, der Shadow‑Vergleich ohne Blocker ist und der Kandidaten‑Warmup sauber durchlaufen wurde. Standard bleibt <b>Shadow</b>.
+            Sicherheitsregel: TS ist der Standard-Kandidat, wird aber nur produktiv genutzt, wenn diese Freigabe aktiv ist, Shadow/Kandidat/Warmup und reale Anlagen-Auswertung sauber sind. Rückfall auf <b>JS</b> oder <b>Shadow</b> bleibt jederzeit möglich.
           </div>
 
           <div id="energyFlowTsModeStatus" class="nw-config-empty nw-ts-energyflow-mode-status">

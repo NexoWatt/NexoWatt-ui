@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 534d34cf15be67e9d03fd21736cd1c6bd9185965f323010b4c1b0d05911b0d2a
+ * Original-Hash: f0114bf7a1c6f3ac933bdfd22154eabac7b4a10ef6e2e6d2b253a5f83d5d70c9
  */
 
 /**
@@ -11353,9 +11353,9 @@ function collectAiAdvisorConfigFromUI(base) {
    */
   function applyEnergyFlowTsModeToUi(cfg) {
     const tm = (cfg && cfg.tsMigration && typeof cfg.tsMigration === 'object') ? cfg.tsMigration : {};
-    const mode = _normalizeEnergyFlowTsModeUi(tm.energyFlowMode || 'shadow');
+    const mode = _normalizeEnergyFlowTsModeUi(tm.energyFlowMode || 'ts');
     if (els.energyFlowTsMode) els.energyFlowTsMode.value = mode;
-    if (els.energyFlowTsProductionAllowed) els.energyFlowTsProductionAllowed.checked = tm.energyFlowProductionAllowed === true;
+    if (els.energyFlowTsProductionAllowed) els.energyFlowTsProductionAllowed.checked = (tm.energyFlowProductionAllowed !== false);
     if (els.energyFlowTsWarmupTicks) els.energyFlowTsWarmupTicks.value = String(Math.max(1, Math.min(30, Math.round(Number(tm.energyFlowCandidateWarmupTicks) || 3))));
     if (els.energyFlowTsAutoFallback) els.energyFlowTsAutoFallback.checked = tm.energyFlowCandidateAutoFallback !== false;
     if (els.energyFlowTsRequireStablePlant) els.energyFlowTsRequireStablePlant.checked = tm.energyFlowRequireStablePlantEvaluation !== false;
@@ -11401,7 +11401,7 @@ function collectAiAdvisorConfigFromUI(base) {
     if (!els.energyFlowTsModeStatus) return;
     const tm = (currentConfig && currentConfig.tsMigration && typeof currentConfig.tsMigration === 'object') ? currentConfig.tsMigration : {};
     const plan = readiness && readiness.energyFlowEffectivePlan ? readiness.energyFlowEffectivePlan : null;
-    const selectedMode = _normalizeEnergyFlowTsModeUi(els.energyFlowTsMode ? els.energyFlowTsMode.value : (tm.energyFlowMode || 'shadow'));
+    const selectedMode = _normalizeEnergyFlowTsModeUi(els.energyFlowTsMode ? els.energyFlowTsMode.value : (tm.energyFlowMode || 'ts'));
     const productionAllowed = !!(els.energyFlowTsProductionAllowed && els.energyFlowTsProductionAllowed.checked);
     const warmupWanted = Math.max(1, Math.min(30, Math.round(Number(els.energyFlowTsWarmupTicks ? els.energyFlowTsWarmupTicks.value : (tm.energyFlowCandidateWarmupTicks || 3)) || 3)));
     const autoFallback = !(els.energyFlowTsAutoFallback && els.energyFlowTsAutoFallback.checked === false);
@@ -11597,7 +11597,7 @@ function collectAiAdvisorConfigFromUI(base) {
     const candidateSafety = readiness.energyFlowCandidateSafety && typeof readiness.energyFlowCandidateSafety === 'object' ? readiness.energyFlowCandidateSafety : (plan && plan.candidateSafety ? plan.candidateSafety : null);
     const items = [
       ['Energiefluss', readiness.readyForEnergyFlowSwitch ? 'bereit' : 'nicht bereit'],
-      ['Energiefluss-Modus', readiness.energyFlowMode || (plan && plan.mode) || 'shadow'],
+      ['Energiefluss-Modus', readiness.energyFlowMode || (plan && plan.mode) || 'ts'],
       ['Energiefluss-Quelle', plan ? (plan.source || 'js-runtime') : 'js-runtime'],
       ['TS-Kandidat', candidateSafety ? (candidateSafety.ok ? 'OK' : 'blockiert') : '--'],
       ['Core‑Limits', readiness.readyForCoreLimitsSwitch ? 'bereit' : 'nicht bereit'],

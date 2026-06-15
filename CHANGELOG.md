@@ -1,3 +1,99 @@
+## 0.7.111 - Heizstab TS-Normalpfad übernimmt JS-Referenz
+
+- Heizstab-TS kann nach stabilem Normalpfad-Status die alte JS-Referenz als Normalquelle übernehmen.
+- JS-Fallback bleibt bei harten Sicherheitsblockern aktiv: fehlender TS-Spiegel, Runtimefehler, Speicher-/PV-Schutzblocker.
+- JS/TS-Referenzabweichungen werden im stabilen Normalpfad weiter diagnostiziert, blockieren aber nicht mehr automatisch den TS-Pfad.
+- Neue Diagnosefelder: `jsReferenceReducedCount`, `hardSafetyBlockCount`, `normalPathTakenOver`, `jsFallbackMode`.
+- Doppelte `label: Heizstab`-Zeile in der Budgetreservierung bereinigt.
+- Keine neue Heizstab-Stufenlogik; nur Normalpfad-Übernahme und Notfallback-Reduktion.
+
+## 0.7.110 - Heizstab TS-Normalpfad vorbereiten
+
+- Heizstab-TS erhält jetzt einen Normalpfad-Status (`ts-heating-rod-normal`), wenn mehrere echte Runtime-Ticks stabil über TS liefen.
+- Neuer Diagnose-State `heatingRod.summary.tsNormalSourceJson` ergänzt.
+- `heatingRod.summary.source` kann jetzt `js-runtime`, `ts-heating-rod` oder `ts-heating-rod-normal` zeigen.
+- App-Center zeigt jetzt `TS NORMAL`, `TS-Normalpfad` und `TS-Normal Ticks` in der Heizstab-Runtime-Auswertung.
+- JavaScript bleibt Notfallback bei harten Blockern wie fehlendem TS-Spiegel, Runtimefehler oder JS/TS-Mismatch.
+- Keine Änderungen an Core-Limits, Energiefluss, KI, History oder SmartHome.
+
+## 0.7.109 - Heizstab TS Runtime-Auswertung und Fallback-Diagnose
+
+- Heizstab-TS-Produktivpfad sammelt jetzt In-Memory-Samples aus echten Adapter-Ticks.
+- Neuer State `heatingRod.summary.tsRuntimeEvaluationJson` mit SampleCount, OK-Quote, Fallbacks, Mismatches und nächster Handlung.
+- Diagnose-API liest `heatingRodTsRuntimeEvaluationJson`.
+- App-Center zeigt neue Karte „Heizstab TS-Runtime-Auswertung“.
+- Keine neue produktive Schaltlogik; die Version beobachtet TS-Nutzung und Fallbacks, damit der alte JS-Pfad später kontrolliert reduziert werden kann.
+
+## 0.7.108 - Heizstab TypeScript produktiv aktiviert
+
+- Heizstab-PV-Auto-Zielstufen können jetzt produktiv aus dem TypeScript-Entscheidungsspiegel übernommen werden.
+- TS wird nur aktiv, wenn die TS-Entscheidung mit der bestehenden JS-Referenz übereinstimmt. Bei Abweichung bleibt JavaScript Fallback.
+- Neue Diagnose-States: `heatingRod.summary.source` und `heatingRod.summary.tsProductiveJson`.
+- Diagnose-API liest `heatingRodTsProductiveJson` und `heatingRodSource`.
+- Neuer Check `npm run test:heating-rod-productive` ergänzt.
+- Keine Änderung an EVCS, Core-Limits, History, SmartHome, Lizenz oder Frontend-Design.
+
+## 0.7.107 - Core-Limits Consumer-Reservierungen produktiv über TS
+
+- `makeBudgetRuntime.reserve` nutzt den TypeScript-Helfer `computeCoreBudgetReservation` jetzt produktiv.
+- Die alte JavaScript-Rechnung bleibt als Referenz-/Fallbackpfad erhalten und wird bei TS-Fehlern oder JS/TS-Abweichungen genutzt.
+- `remainingTotalW`, `remainingPvW`, `consumers`, `order`, `consumersJson` und `flexUsedW` werden bei sauberem TS-Vergleich aus dem TS-Ergebnis übernommen.
+- `ems.budget.tsReservationJson` zeigt jetzt produktive TS-Nutzung, Fallback und Fallback-Grund.
+- Neuer Check `npm run test:core-limits-reservations-productive` ergänzt.
+- Service-Worker Cache auf `nexowatt-cache-v275` erhöht.
+
+## 0.7.106 - Core-Limits Consumer-Reservierungen als TS-Shadow vorbereitet
+
+- TypeScript-Helfer `computeCoreBudgetReservation`, `buildCoreBudgetConsumersList` und `calculateCoreBudgetFlexUsedW` ergänzt.
+- `makeBudgetRuntime.reserve` berechnet die bestehende JS-Reservierung weiter produktiv, vergleicht sie aber parallel mit dem TS-Helfer.
+- Neuer Diagnose-State `ems.budget.tsReservationJson` für Grant, usedW, pvUsedW, remainingTotalW und remainingPvW.
+- App-Center-Diagnose liest `emsBudgetTsReservationJson`.
+- Neue Doku: `docs/TYPESCRIPT_STEP_07106_DE.md`.
+- Keine produktive Übernahme der Consumer-Reservierung; dieser Schritt bereitet die nächste TS-Übernahme kontrolliert vor.
+
+## 0.7.105 - Core-Limits TypeScript produktiv aktiviert
+
+- Core-Limits nutzt den TypeScript-Core-Budget-Spiegel produktiv für zentrale Budget-Gates: PV-Budget, Grid-Headroom und Gesamtbudget.
+- JavaScript bleibt Fallback, wenn TS-Spiegel fehlt, Shadow-Abgleich abweicht oder TS-Gates unvollständig sind.
+- Neue Diagnose-States: `ems.budget.source` und `ems.budget.tsProductiveJson`.
+- `makeBudgetRuntime` arbeitet nach erfolgreichem Shadow-OK mit dem TS-geprägten BudgetSnapshot.
+- Forecast-, Tarif-, Consumer- und Raw-Felder bleiben weiterhin aus der bestehenden JS-Runtime.
+- Neuer Check `npm run test:core-limits-productive`.
+
+## 0.7.104 - Energiefluss TS als Normalquelle vorbereitet
+
+- Energiefluss veröffentlicht nach stabiler Fixed-Source-Phase jetzt `energyFlowSource = ts-normal`.
+- `tsProductiveActive` erkennt jetzt sowohl `ts-candidate` als auch `ts-normal`.
+- JS-Fallback bleibt als Notfallback bei harten Blockern erhalten, wird aber nicht mehr als normaler Betriebsmodus behandelt, sobald TS stabil ist.
+- App-Center zeigt `TS NORMAL` und `TS-Normalquelle` im Energiefluss-Aktivtest.
+- Neuer tiefer Code-Scan `verify-energy-flow-deep-debug-scan.js` prüft bekannte Fallback-/Source-Regressionsstellen.
+- Keine Änderungen an Core-Limits, Heizstab, KI, History oder SmartHome.
+
+## 0.7.103 - Energiefluss TS als feste Quelle vorbereiten
+
+- Energiefluss-TS sammelt jetzt einen Fixed-Source-Status über echte produktive TS-Ticks.
+- Neuer State `derived.core.building.tsFixedSourceJson` ergänzt.
+- App-Center zeigt „Feste TS-Quelle“ und TS-Fixed-Ticks im Energiefluss-TS-Aktivtest.
+- Weiche Warmup-Fallbacks werden reduziert, sobald TS stabil genug lief.
+- Harte Blocker wie Shadow-Mismatch, fehlender Spiegel oder ungültige Kandidatenwerte behalten den JS-Fallback aktiv.
+- Keine Änderungen an Core-Limits, Heizstab, KI, History oder SmartHome.
+
+## 0.7.102 - Energiefluss TS-Fallback reduziert
+
+- Energiefluss-TS bleibt jetzt aktiv, wenn die reale Anlagen-Auswertung nur wegen fehlender Sample-Anzahl oder OK-Folge noch im Warmup ist.
+- Harte Blocker wie Shadow-Mismatches, Kandidatenfehler oder echte Anlagen-Blocker erzwingen weiterhin JS-Fallback.
+- Neues Diagnoseflag `plantEvaluationSoftReleased` zeigt, wenn die Anlagen-Auswertung nur weich freigegeben wurde.
+- Neuer Check `npm run test:energy-flow-fallback-reduction` ergänzt.
+- Keine Änderungen an Core-Limits, Heizstab, KI, History oder SmartHome.
+
+## 0.7.101 - Energiefluss TypeScript produktiv aktivieren
+
+- Energiefluss-TS-Kandidat ist jetzt standardmäßig aktiviert und produktiv freigegeben, bleibt aber durch Shadow-Vergleich, Kandidatenprüfung, Warmup und reale Anlagen-Auswertung abgesichert.
+- Wenn ein Gate blockiert, bleibt automatisch die bisherige JavaScript-Runtime produktiv.
+- App-Center zeigt TS als neuen Energiefluss-Standardmodus und erlaubt weiterhin Rückschaltung auf JS oder Shadow.
+- Neuer Check `test:energy-flow-ts-productive` verhindert, dass die produktive TS-Aktivierung ohne Sicherheitsgates ausgeliefert wird.
+- Service-Worker Cache auf `nexowatt-cache-v269` erhöht.
+
 ## 0.7.100 - /api/state und /api/set produktiv über TypeScript-Helfer
 
 - `/api/state` nutzt jetzt produktiv den TypeScript-State-Builder mit JS-Fallback. Die externe Antwortform bleibt kompatibel.

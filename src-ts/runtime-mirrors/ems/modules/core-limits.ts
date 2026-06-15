@@ -28,7 +28,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: ba12a9c8f8410d0aaba65e17289c7141e5241e63f138e68ea98b20f2878fc9fe
+ * Original-Hash: 5a09b67a8979ae1d0cde7c15b07c2980a73e14daa92c7b96cacca42053b5450a
  */
 
 /**
@@ -315,55 +315,182 @@ function makeBudgetRuntime(adapter, snapshot) {
             const requestedW = Math.max(0, Number.isFinite(Number(r.requestedW)) ? Number(r.requestedW) : 0);
             const reserveW = Math.max(0, Number.isFinite(Number(r.reserveW)) ? Number(r.reserveW) : requestedW);
             const pvReserveW = Math.max(0, Number.isFinite(Number(r.pvReserveW)) ? Number(r.pvReserveW) : (r.pvOnly ? reserveW : 0));
-            const totalCap = Number.isFinite(this.remainingTotalW) ? this.remainingTotalW : Number.POSITIVE_INFINITY;
-            const pvCap = Math.max(0, this.remainingPvW);
-            const cap = r.pvOnly ? Math.min(totalCap, pvCap) : totalCap;
-            const grantW = Math.max(0, Math.min(requestedW, cap));
-
-            if (Number.isFinite(this.remainingTotalW)) this.remainingTotalW = Math.max(0, this.remainingTotalW - reserveW);
-            this.remainingPvW = Math.max(0, this.remainingPvW - pvReserveW);
-
-            const reserveRoundedW = roundW(reserveW);
-            const pvReserveRoundedW = roundW(pvReserveW);
             const actualW = Math.max(0, Number.isFinite(Number(r.actualW)) ? Number(r.actualW) : reserveW);
-            const actualRoundedW = roundW(actualW);
-            const entry = {
+
+            /**
+             * Code-Teil: jsReferenceBeforeTsCommit
+             *
+             * Zweck:
+             * Berechnet die alte JavaScript-Reservierung lokal als Referenz, bevor die
+             * produktive Runtime auf den TypeScript-Helfer umschaltet.
+             *
+             * Zusammenhang:
+             * 0.7.107 stellt Consumer-Reservierungen produktiv auf TypeScript um. Damit
+             * Heizstab, EVCS, Peak-Shaving und Speicherreserve nicht durch eine verdeckte
+             * Abweichung beeinflusst werden, wird die alte JS-Rechnung weiterhin parallel
+             * als Notfallback berechnet.
+             *
+             * Wichtig:
+             * 0 W ist gültig. Keine Defaultleistung darf hier künstlich entstehen.
+             */
+            const jsRemainingTotalBefore = Number.isFinite(this.remainingTotalW) ? this.remainingTotalW : Number.POSITIVE_INFINITY;
+            const jsRemainingPvBefore = Math.max(0, this.remainingPvW);
+            const jsTotalCap = Number.isFinite(jsRemainingTotalBefore) ? jsRemainingTotalBefore : Number.POSITIVE_INFINITY;
+            const jsPvCap = Math.max(0, jsRemainingPvBefore);
+            const jsCap = r.pvOnly ? Math.min(jsTotalCap, jsPvCap) : jsTotalCap;
+            const jsGrantW = Math.max(0, Math.min(requestedW, jsCap));
+            const jsNextRemainingTotalW = Number.isFinite(jsRemainingTotalBefore) ? Math.max(0, jsRemainingTotalBefore - reserveW) : Number.POSITIVE_INFINITY;
+            const jsNextRemainingPvW = Math.max(0, jsRemainingPvBefore - pvReserveW);
+            const jsEntry = {
                 key,
                 app,
                 label: String(r.label || key),
                 priority,
                 requestedW: roundW(requestedW),
-                grantW: roundW(grantW),
+                grantW: roundW(jsGrantW),
                 // Public display/API aliases: diagnostics and UIs expect usedW/pvUsedW.
                 // Runtime reservations also keep reserveW/pvReserveW for internal clarity.
-                usedW: reserveRoundedW,
-                pvUsedW: pvReserveRoundedW,
-                reserveW: reserveRoundedW,
-                pvReserveW: pvReserveRoundedW,
-                actualW: actualRoundedW,
+                usedW: roundW(reserveW),
+                pvUsedW: roundW(pvReserveW),
+                reserveW: roundW(reserveW),
+                pvReserveW: roundW(pvReserveW),
+                actualW: roundW(actualW),
                 pvOnly: !!r.pvOnly,
                 mode: String(r.mode || ''),
                 ts: Date.now(),
-                remainingTotalW: Number.isFinite(this.remainingTotalW) ? roundW(this.remainingTotalW) : null,
-                remainingPvW: roundW(this.remainingPvW),
+                remainingTotalW: Number.isFinite(jsNextRemainingTotalW) ? roundW(jsNextRemainingTotalW) : null,
+                remainingPvW: roundW(jsNextRemainingPvW),
             };
-            this.consumers[key] = entry;
-            if (!this.order.includes(key)) this.order.push(key);
+
+            /**
+             * Code-Teil: tsReservationProductiveCandidate
+             *
+             * Zweck:
+             * Berechnet dieselbe Reservierung über den TypeScript-Helfer. Wenn Ergebnis
+             * und JS-Referenz übereinstimmen, wird TS produktiv übernommen. Bei Fehlern
+             * oder Abweichungen bleibt JS als Sicherheitsfallback aktiv.
+             */
+            let tsReservationResult = null;
+            let tsReservationError = '';
+            try {
+                const mirror = requireCoreBudgetTsMirror();
+                const compute = mirror && typeof mirror.computeCoreBudgetReservation === 'function' ? mirror.computeCoreBudgetReservation : null;
+                if (compute) {
+                    tsReservationResult = compute({
+                        remainingTotalW: this.remainingTotalW,
+                        remainingPvW: this.remainingPvW,
+                        consumers: this.consumers,
+                        order: this.order,
+                    }, r, Date.now());
+                }
+            } catch (e) {
+                tsReservationError = e && e.message ? e.message : String(e);
+            }
+
+            const tsEntry = tsReservationResult && tsReservationResult.entry ? tsReservationResult.entry : null;
+            const mismatches = tsEntry ? [
+                compareShadowWatt('entry.requestedW', jsEntry.requestedW, tsEntry.requestedW),
+                compareShadowWatt('entry.grantW', jsEntry.grantW, tsEntry.grantW),
+                compareShadowWatt('entry.usedW', jsEntry.usedW, tsEntry.usedW),
+                compareShadowWatt('entry.pvUsedW', jsEntry.pvUsedW, tsEntry.pvUsedW),
+                compareShadowWatt('entry.actualW', jsEntry.actualW, tsEntry.actualW),
+                compareShadowWatt('entry.remainingTotalW', jsEntry.remainingTotalW, tsEntry.remainingTotalW),
+                compareShadowWatt('entry.remainingPvW', jsEntry.remainingPvW, tsEntry.remainingPvW),
+            ].filter(Boolean) : [];
+            const tsOk = !!(tsReservationResult && tsReservationResult.ok && tsEntry && !tsReservationError && mismatches.length === 0);
+            const fallbackReason = tsOk
+                ? ''
+                : (tsReservationError || (!tsEntry ? 'missing-ts-entry' : (mismatches.length ? 'ts-js-mismatch' : 'ts-result-not-ok')));
+
+            /**
+             * Code-Teil: productiveTsReservationCommit
+             *
+             * Zweck:
+             * Übernimmt ab 0.7.107 die TS-Reservierung produktiv, wenn der Vergleich sauber
+             * war. Dadurch werden `remainingTotalW`, `remainingPvW`, `consumers`, `order`
+             * und `flexUsedW` schrittweise aus der TypeScript-Quelle geführt.
+             *
+             * Notfallback:
+             * Bei Abweichung oder Fehler wird exakt die lokal berechnete JS-Referenz
+             * geschrieben. So bleibt der Adapter auch bei Fehlern im TS-Spiegel betriebsfähig.
+             */
+            let entry = jsEntry;
+            let flexUsedW = 0;
+            if (tsOk) {
+                entry = {
+                    ...tsEntry,
+                    label: String(tsEntry.label || r.label || key),
+                    mode: String(tsEntry.mode || r.mode || ''),
+                    ts: Number(tsEntry.ts) || Date.now(),
+                };
+                this.remainingTotalW = tsReservationResult.nextRemainingTotalW === null
+                    ? Number.POSITIVE_INFINITY
+                    : Math.max(0, Number(tsReservationResult.nextRemainingTotalW) || 0);
+                this.remainingPvW = Math.max(0, Number(tsReservationResult.nextRemainingPvW) || 0);
+                this.consumers = (tsReservationResult.consumers && typeof tsReservationResult.consumers === 'object')
+                    ? tsReservationResult.consumers
+                    : { ...this.consumers, [key]: entry };
+                this.order = Array.isArray(tsReservationResult.order) ? Array.from(tsReservationResult.order) : this.order.slice();
+                if (!this.order.includes(key)) this.order.push(key);
+                this.consumers[key] = entry;
+                flexUsedW = Math.max(0, Number(tsReservationResult.flexUsedW) || 0);
+            } else {
+                this.remainingTotalW = jsNextRemainingTotalW;
+                this.remainingPvW = jsNextRemainingPvW;
+                this.consumers[key] = entry;
+                if (!this.order.includes(key)) this.order.push(key);
+                const liveConsumersForFlex = this.order.map(k => this.consumers[k] || null).filter(Boolean);
+                flexUsedW = liveConsumersForFlex.reduce((sum, c) => sum + Math.max(0, Number(c.usedW ?? c.reserveW) || 0), 0);
+            }
+
+            this.tsReservationLast = {
+                ts: Date.now(),
+                source: 'ts-core-reservation-productive',
+                available: !!tsEntry,
+                ok: tsOk,
+                productive: tsOk,
+                fallback: !tsOk,
+                fallbackReason,
+                key,
+                js: {
+                    requestedW: jsEntry.requestedW,
+                    grantW: jsEntry.grantW,
+                    usedW: jsEntry.usedW,
+                    pvUsedW: jsEntry.pvUsedW,
+                    actualW: jsEntry.actualW,
+                    remainingTotalW: jsEntry.remainingTotalW,
+                    remainingPvW: jsEntry.remainingPvW,
+                },
+                tsValues: tsEntry ? {
+                    requestedW: tsEntry.requestedW,
+                    grantW: tsEntry.grantW,
+                    usedW: tsEntry.usedW,
+                    pvUsedW: tsEntry.pvUsedW,
+                    actualW: tsEntry.actualW,
+                    remainingTotalW: tsEntry.remainingTotalW,
+                    remainingPvW: tsEntry.remainingPvW,
+                } : null,
+                mismatches,
+                error: tsReservationError,
+            };
 
             try {
                 const pfx = `ems.budget.consumers.${key}`;
                 const liveConsumers = this.order.map(k => this.consumers[k] || null).filter(Boolean);
-                const flexUsedW = liveConsumers.reduce((sum, c) => sum + Math.max(0, Number(c.usedW ?? c.reserveW) || 0), 0);
+                const reserveRoundedW = roundW(entry.reserveW ?? entry.usedW);
+                const pvReserveRoundedW = roundW(entry.pvReserveW ?? entry.pvUsedW);
+                const actualRoundedW = roundW(entry.actualW);
                 if (adapter && typeof adapter.setStateAsync === 'function') {
                     adapter.setStateAsync(`${pfx}.usedW`, reserveRoundedW, true).catch(() => {});
                     adapter.setStateAsync(`${pfx}.pvUsedW`, pvReserveRoundedW, true).catch(() => {});
                     adapter.setStateAsync(`${pfx}.actualW`, actualRoundedW, true).catch(() => {});
-                    adapter.setStateAsync(`${pfx}.priority`, roundW(priority), true).catch(() => {});
-                    adapter.setStateAsync(`${pfx}.mode`, String(r.mode || ''), true).catch(() => {});
+                    adapter.setStateAsync(`${pfx}.priority`, roundW(entry.priority ?? priority), true).catch(() => {});
+                    adapter.setStateAsync(`${pfx}.mode`, String(entry.mode || ''), true).catch(() => {});
                     adapter.setStateAsync('ems.budget.flexUsedW', roundW(flexUsedW), true).catch(() => {});
                     adapter.setStateAsync('ems.budget.remainingTotalW', Number.isFinite(this.remainingTotalW) ? roundW(this.remainingTotalW) : 0, true).catch(() => {});
                     adapter.setStateAsync('ems.budget.remainingPvW', roundW(this.remainingPvW), true).catch(() => {});
                     adapter.setStateAsync('ems.budget.consumersJson', JSON.stringify(liveConsumers), true).catch(() => {});
+                    adapter.setStateAsync('ems.budget.tsReservationJson', JSON.stringify(this.tsReservationLast || {}), true).catch(() => {});
                 }
                 if (adapter && typeof adapter.updateValue === 'function') {
                     const now = Date.now();
@@ -374,9 +501,10 @@ function makeBudgetRuntime(adapter, snapshot) {
                     adapter.updateValue('ems.budget.remainingTotalW', Number.isFinite(this.remainingTotalW) ? roundW(this.remainingTotalW) : 0, now);
                     adapter.updateValue('ems.budget.remainingPvW', roundW(this.remainingPvW), now);
                     adapter.updateValue('ems.budget.consumersJson', JSON.stringify(liveConsumers), now);
+                    adapter.updateValue('ems.budget.tsReservationJson', JSON.stringify(this.tsReservationLast || {}), now);
                 }
             } catch (_e) {
-                // Diagnostics only.
+                // Diagnose-/State-Schreibfehler dürfen Budgetreservierungen nicht abbrechen.
             }
 
             return entry;
@@ -549,6 +677,7 @@ class CoreLimitsModule extends BaseModule {
         await mk('ems.budget.lastUpdate', 'Budget last update (ts)', 'number', 'value.time');
         await mk('ems.budget.active', 'Budget coordinator active', 'boolean', 'indicator');
         await mk('ems.budget.mode', 'Budget coordinator mode', 'string', 'text');
+        await mk('ems.budget.source', 'Budget source (js-runtime / ts-core-budget)', 'string', 'text');
         await mk('ems.budget.totalBudgetW', 'Total controlled-load budget (W)', 'number', 'value.power', 'W');
         await mk('ems.budget.remainingTotalW', 'Remaining controlled-load budget (W)', 'number', 'value.power', 'W');
         await mk('ems.budget.pvBudgetRawW', 'PV budget raw before reserve (W)', 'number', 'value.power', 'W');
@@ -565,6 +694,7 @@ class CoreLimitsModule extends BaseModule {
         await mk('ems.budget.consumersJson', 'Budget consumers (JSON)', 'string', 'text');
         await mk('ems.budget.snapshot', 'Budget snapshot (JSON)', 'string', 'text');
         await mk('ems.budget.tsShadowJson', 'TypeScript Core-Budget Shadow-Vergleich (JSON)', 'string', 'json');
+        await mk('ems.budget.tsProductiveJson', 'TypeScript Core-Budget Produktivstatus (JSON)', 'string', 'json');
 
         // Gate D - PV Forecast. Advisory background gate for forecast-aware app decisions.
         // It does not write setpoints and does not change the instantaneous PV budget by itself.
@@ -1218,6 +1348,8 @@ class CoreLimitsModule extends BaseModule {
                     gridEffectiveW: ts && ts.grid ? roundW(ts.grid.effectiveW) : null,
                     totalEffectiveW: ts && ts.total ? roundW(ts.total.effectiveW) : null,
                 },
+                // 0.7.105: Der vollständige TS-Snapshot bleibt für die produktive Gate-Übernahme verfügbar.
+                tsSnapshot: ts || null,
             };
             if (!result.ok) {
                 const now = Date.now();
@@ -1232,6 +1364,91 @@ class CoreLimitsModule extends BaseModule {
         } catch (e) {
             return { available: true, ok: false, source: 'ts-mirror-shadow', error: e && e.message ? e.message : String(e), mismatches: [] };
         }
+    }
+
+    /**
+     * Code-Teil: _applyCoreBudgetTsProductiveSnapshot
+     *
+     * Zweck:
+     * Übernimmt die von TypeScript berechneten Core-Budget-Gates produktiv, aber nur
+     * wenn der vorherige JS/TS-Shadow-Vergleich ohne Abweichungen war.
+     *
+     * Zusammenhang:
+     * Core-Limits sind kritisch für Heizstab, EVCS, Peak-Shaving, KI und Speicherreserve.
+     * Darum wird in 0.7.105 nicht die ganze `core-limits.js`-Datei ersetzt, sondern zuerst
+     * der bereits geprüfte Gate-Teil: PV-Budget, Grid-Headroom und Gesamtbudget.
+     *
+     * Sicherheitsregel:
+     * - Wenn der TS-Spiegel fehlt, Abweichungen meldet oder unvollständige Daten liefert,
+     *   bleibt die bestehende JS-Budgetlogik produktiv.
+     * - JS bleibt Fallback/Notbremse.
+     * - Forecast-, Tarif-, Consumer- und Raw-Felder bleiben aus der bestehenden JS-Runtime.
+     */
+    _applyCoreBudgetTsProductiveSnapshot(jsSnapshot, coreTsShadow) {
+        const fallback = jsSnapshot && typeof jsSnapshot === 'object' ? jsSnapshot : {};
+        const fallbackStatus = (reason, extra = {}) => {
+            const status = {
+                ts: Date.now(),
+                active: false,
+                source: 'js-runtime',
+                fallback: true,
+                reason,
+                ...extra,
+            };
+            try { fallback.tsProductive = status; } catch (_e) {}
+            return fallback;
+        };
+
+        if (!fallback || !fallback.gates || typeof fallback.gates !== 'object') return fallbackStatus('missing-js-snapshot');
+        if (!coreTsShadow || typeof coreTsShadow !== 'object') return fallbackStatus('missing-ts-shadow');
+        if (coreTsShadow.available !== true) return fallbackStatus('ts-mirror-unavailable', { shadow: coreTsShadow });
+        if (coreTsShadow.ok !== true) return fallbackStatus('shadow-mismatch', { mismatches: coreTsShadow.mismatches || [] });
+
+        const ts = coreTsShadow.tsSnapshot || {};
+        const tsPv = ts && ts.pv ? ts.pv : null;
+        const tsGrid = ts && ts.grid ? ts.grid : null;
+        const tsTotal = ts && ts.total ? ts.total : null;
+        if (!tsPv || !tsGrid || !tsTotal) return fallbackStatus('missing-ts-gates', { shadow: coreTsShadow });
+
+        const next = {
+            ...fallback,
+            mode: 'central-background-ts-core',
+            gates: {
+                ...(fallback.gates || {}),
+                pv: {
+                    ...((fallback.gates && fallback.gates.pv) || {}),
+                    rawW: roundW(tsPv.rawW),
+                    effectiveW: roundW(tsPv.effectiveW),
+                    reason: tsPv.reason || ((fallback.gates && fallback.gates.pv && fallback.gates.pv.reason) || ''),
+                    source: 'ts-core-budget',
+                },
+                grid: {
+                    ...((fallback.gates && fallback.gates.grid) || {}),
+                    headroomW: roundW(tsGrid.effectiveW),
+                    reason: tsGrid.reason || ((fallback.gates && fallback.gates.grid && fallback.gates.grid.reason) || ''),
+                    source: 'ts-core-budget',
+                },
+                total: {
+                    ...((fallback.gates && fallback.gates.total) || {}),
+                    effectiveW: roundW(tsTotal.effectiveW),
+                    reason: tsTotal.reason || ((fallback.gates && fallback.gates.total && fallback.gates.total.reason) || ''),
+                    source: 'ts-core-budget',
+                },
+            },
+            tsShadow: coreTsShadow,
+        };
+        const status = {
+            ts: Date.now(),
+            active: true,
+            source: 'ts-core-budget',
+            fallback: false,
+            reason: 'shadow-ok',
+            fields: ['gates.pv.rawW', 'gates.pv.effectiveW', 'gates.grid.headroomW', 'gates.total.effectiveW'],
+            js: coreTsShadow.js || null,
+            tsValues: coreTsShadow.ts || null,
+        };
+        next.tsProductive = status;
+        return next;
     }
 
     async tick() {
@@ -1404,9 +1621,12 @@ class CoreLimitsModule extends BaseModule {
             },
         };
 
-        const budgetSnapshot: CoreBudgetSnapshotLike = this._makeBudgetSnapshot(now, snapshot);
+        let budgetSnapshot: CoreBudgetSnapshotLike = this._makeBudgetSnapshot(now, snapshot);
         const coreTsShadow = this._runCoreBudgetTsShadowComparison(budgetSnapshot);
         if (budgetSnapshot && typeof budgetSnapshot === 'object') budgetSnapshot.tsShadow = coreTsShadow;
+        // 0.7.105: Der geprüfte TS-Core-Budget-Spiegel darf die zentralen Budget-Gates
+        // produktiv setzen. Bei jeder Abweichung bleibt die alte JS-Runtime Fallback.
+        budgetSnapshot = this._applyCoreBudgetTsProductiveSnapshot(budgetSnapshot, coreTsShadow);
         const budgetRuntime = makeBudgetRuntime(this.adapter, budgetSnapshot);
 
         try {
@@ -1448,6 +1668,7 @@ class CoreLimitsModule extends BaseModule {
             await this.adapter.setStateAsync('ems.budget.lastUpdate', now, true);
             await this.adapter.setStateAsync('ems.budget.active', true, true);
             await this.adapter.setStateAsync('ems.budget.mode', b.mode || 'central-background', true);
+            await this.adapter.setStateAsync('ems.budget.source', (b.tsProductive && b.tsProductive.active) ? 'ts-core-budget' : 'js-runtime', true);
             await this.adapter.setStateAsync('ems.budget.totalBudgetW', b.gates.total.effectiveW === null ? 0 : roundW(b.gates.total.effectiveW), true);
             await this.adapter.setStateAsync('ems.budget.remainingTotalW', b.gates.total.effectiveW === null ? 0 : roundW(b.gates.total.effectiveW), true);
             await this.adapter.setStateAsync('ems.budget.pvBudgetRawW', roundW(b.gates.pv.rawW), true);
@@ -1465,6 +1686,7 @@ class CoreLimitsModule extends BaseModule {
             await this.adapter.setStateAsync('ems.budget.consumersJson', JSON.stringify(consumersInit), true);
             await this.adapter.setStateAsync('ems.budget.snapshot', JSON.stringify(b), true);
             await this.adapter.setStateAsync('ems.budget.tsShadowJson', JSON.stringify(b.tsShadow || coreTsShadow || {}), true);
+            await this.adapter.setStateAsync('ems.budget.tsProductiveJson', JSON.stringify(b.tsProductive || {}), true);
 
             const fg: CoreLimitsUnknownRecord = (b.gates && b.gates.forecast) ? b.gates.forecast : {};
             await this.adapter.setStateAsync('ems.budget.forecast.valid', !!fg.valid, true);
