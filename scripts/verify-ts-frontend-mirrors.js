@@ -23,6 +23,11 @@ const mirrorSpecs = [
     exports: ['formatPowerValue', 'formatEnergyValue', 'formatPercentValue', 'formatPowerW'],
   },
   {
+    sourceRel: 'src-ts/frontend/live-dashboard-format.ts',
+    mirrorRel: 'www/static/ts-mirrors/frontend/live-dashboard-format.mjs',
+    exports: ['formatDashboardPower', 'formatDashboardPowerSigned', 'formatDashboardEnergyKwh', 'formatDashboardFlowPower', 'runLiveDashboardFormatSmoke'],
+  },
+  {
     sourceRel: 'src-ts/frontend/display-format-canary.ts',
     mirrorRel: 'www/static/ts-mirrors/frontend/display-format-canary.mjs',
     exports: ['runDisplayFormatterCanary', 'normalizeDisplayTextForCanary'],
@@ -124,6 +129,12 @@ async function verifyModuleExports(spec) {
   if (spec.mirrorRel.endsWith('display-format.mjs')) {
     const formatted = mod.formatPowerValue(0);
     if (!formatted || formatted.text !== '0 W') fail('display-format.mjs muss 0 W als gültigen Wert formatieren.');
+  }
+  if (spec.mirrorRel.endsWith('live-dashboard-format.mjs')) {
+    if (mod.formatDashboardPower(0, 'W') !== '0 W') fail('live-dashboard-format.mjs muss 0 W als gültige Leistung formatieren.');
+    if (mod.formatDashboardPower(1500, 'kW') !== '1.50 kW') fail('live-dashboard-format.mjs muss kW-Einstellung kompatibel abbilden.');
+    if (mod.formatDashboardPowerSigned(-120, 'W') !== '-120 W') fail('live-dashboard-format.mjs muss negative Werte signiert formatieren.');
+    if (mod.runLiveDashboardFormatSmoke() !== true) fail('live-dashboard-format.mjs Smoke-Test fehlgeschlagen.');
   }
   if (spec.mirrorRel.includes('customer-feature-visibility')) {
     const state = mod.buildCustomerFeatureVisibility({ evcsProofs: [], storageFarmEnabled: false, storageFarmProofs: [] });

@@ -11155,6 +11155,14 @@ function collectAiAdvisorConfigFromUI(base) {
     const stable = evaluation.stable === true;
     const fallbackCount = Number(evaluation.fallbackCount || 0);
     const normalSource = evaluation.normalSource && typeof evaluation.normalSource === 'object' ? evaluation.normalSource : null;
+    const legacyRef = evaluation.legacyReference && typeof evaluation.legacyReference === 'object' ? evaluation.legacyReference : null;
+    const legacyCleanup = evaluation.legacyCleanup && typeof evaluation.legacyCleanup === 'object' ? evaluation.legacyCleanup : (normalSource && normalSource.legacyCleanup && typeof normalSource.legacyCleanup === 'object' ? normalSource.legacyCleanup : null);
+    const legacyRemoval = evaluation.legacyRemovalPlan && typeof evaluation.legacyRemovalPlan === 'object' ? evaluation.legacyRemovalPlan : (normalSource && normalSource.legacyRemovalPlan && typeof normalSource.legacyRemovalPlan === 'object' ? normalSource.legacyRemovalPlan : null);
+    const legacyDebugBridge = evaluation.legacyDebugBridge && typeof evaluation.legacyDebugBridge === 'object' ? evaluation.legacyDebugBridge : (legacyRemoval && legacyRemoval.legacyDebugBridge && typeof legacyRemoval.legacyDebugBridge === 'object' ? legacyRemoval.legacyDebugBridge : (normalSource && normalSource.legacyDebugBridge && typeof normalSource.legacyDebugBridge === 'object' ? normalSource.legacyDebugBridge : null));
+    const legacyPruned = evaluation.legacyPruned && typeof evaluation.legacyPruned === 'object' ? evaluation.legacyPruned : (legacyDebugBridge && legacyDebugBridge.legacyPruned && typeof legacyDebugBridge.legacyPruned === 'object' ? legacyDebugBridge.legacyPruned : (normalSource && normalSource.legacyPruned && typeof normalSource.legacyPruned === 'object' ? normalSource.legacyPruned : null));
+    const legacyRemovalCandidate = evaluation.legacyRemovalCandidate && typeof evaluation.legacyRemovalCandidate === 'object' ? evaluation.legacyRemovalCandidate : (legacyPruned && legacyPruned.legacyRemovalCandidate && typeof legacyPruned.legacyRemovalCandidate === 'object' ? legacyPruned.legacyRemovalCandidate : (normalSource && normalSource.legacyRemovalCandidate && typeof normalSource.legacyRemovalCandidate === 'object' ? normalSource.legacyRemovalCandidate : null));
+    const legacyFinalCleanup = evaluation.legacyFinalCleanup && typeof evaluation.legacyFinalCleanup === 'object' ? evaluation.legacyFinalCleanup : (legacyRemovalCandidate && legacyRemovalCandidate.legacyFinalCleanup && typeof legacyRemovalCandidate.legacyFinalCleanup === 'object' ? legacyRemovalCandidate.legacyFinalCleanup : (normalSource && normalSource.legacyFinalCleanup && typeof normalSource.legacyFinalCleanup === 'object' ? normalSource.legacyFinalCleanup : null));
+    const legacyNormalDiagnostics = evaluation.legacyNormalDiagnostics && typeof evaluation.legacyNormalDiagnostics === 'object' ? evaluation.legacyNormalDiagnostics : (legacyRemovalCandidate && legacyRemovalCandidate.legacyNormalDiagnostics && typeof legacyRemovalCandidate.legacyNormalDiagnostics === 'object' ? legacyRemovalCandidate.legacyNormalDiagnostics : (normalSource && normalSource.legacyNormalDiagnostics && typeof normalSource.legacyNormalDiagnostics === 'object' ? normalSource.legacyNormalDiagnostics : null));
     const normalReady = !!(normalSource && normalSource.ready);
     const kind = normalReady ? 'ok' : (stable ? 'ok' : (fallbackCount > 0 ? 'warn' : 'wait'));
     const title = normalReady ? 'TS NORMAL' : (stable ? 'TS STABIL' : (fallbackCount > 0 ? 'FALLBACK PRÜFEN' : 'SAMMELT'));
@@ -11164,6 +11172,26 @@ function collectAiAdvisorConfigFromUI(base) {
       ['OK in Folge', String(Number(evaluation.consecutiveOk || 0))],
       ['TS aktiv', String(Number(evaluation.activeCount || 0))],
       ['JS-Fallback', String(fallbackCount)],
+      ['JS-Fallback-Modus', normalSource ? String(normalSource.jsFallbackMode || (normalReady ? 'hard-blockers-only' : 'normal-safety-fallback')) : String(evaluation.jsFallbackMode || 'wartet')],
+      ['JS-Pfad Rolle', normalSource ? String(normalSource.legacyJsPathRole || (normalReady ? 'emergency-fallback-only' : 'safety-reference')) : String(evaluation.legacyJsPathRole || 'wartet')],
+      ['JS-Referenz', legacyRef ? String(legacyRef.jsReferenceDecisionMode || legacyRef.legacyJsDecisionMode || 'diagnose') : (normalSource ? String(normalSource.jsReferenceDecisionMode || normalSource.jsReferenceMode || (normalReady ? 'diagnostic-only' : 'blocking-reference')) : String(evaluation.jsReferenceDecisionMode || 'wartet'))],
+      ['JS-Referenz Cleanup', legacyCleanup ? String(legacyCleanup.legacyJsReferenceCleanupStage || legacyCleanup.cleanupStage || 'wartet') : 'wartet'],
+      ['JS-Entfernung', legacyRemoval ? String(legacyRemoval.removalStage || legacyRemoval.status || 'wartet') : 'wartet'],
+      ['JS-Debug-Brücke', legacyDebugBridge ? String(legacyDebugBridge.status || legacyDebugBridge.cleanupStage || 'wartet') : 'wartet'],
+      ['JS-Debug Rolle', legacyDebugBridge ? String(legacyDebugBridge.legacyJsPathRole || 'wartet') : 'wartet'],
+      ['JS-Entscheidungseinfluss', legacyDebugBridge ? String(legacyDebugBridge.decisionImpact || 'wartet') : (legacyRef ? String(legacyRef.decisionImpact || 'wartet') : 'wartet')],
+      ['JS-Debug-Nutzlast', legacyDebugBridge ? String(legacyDebugBridge.bridgePayloadMode || legacyDebugBridge.diagnosticPayloadMode || 'wartet') : 'wartet'],
+      // Kompatibilitätsmarker für Migrationstests: JS-Pruning / JS-Details entfernt.
+      ['JS-Referenzdetails', legacyPruned ? String(legacyPruned.status || legacyPruned.cleanupStage || 'wartet') : 'wartet'],
+      ['JS-Details reduziert', legacyPruned ? ((legacyPruned.fullReferencePayloadRemoved || legacyPruned.duplicateReferenceDetailsRemoved) ? 'ja' : 'nein') : 'wartet'],
+      ['JS-Diagnosedaten', legacyPruned ? String(legacyPruned.diagnosticPayloadMode || 'wartet') : (legacyRef ? String(legacyRef.diagnosticPayloadMode || 'voll') : 'wartet')],
+      ['JS-Cleanup-Kandidat', legacyPruned ? (legacyPruned.ready ? 'pruned' : 'noch nicht') : (legacyDebugBridge ? (legacyDebugBridge.ready ? 'debug-only' : 'noch nicht') : (legacyCleanup ? (legacyCleanup.cleanupRemovalCandidate ? 'ja' : 'nein') : 'wartet'))],
+      ['JS-Entfernungskandidat', legacyRemovalCandidate ? (legacyRemovalCandidate.ready ? 'bereit' : String(legacyRemovalCandidate.status || 'wartet')) : 'wartet'],
+      ['JS-Entfernungsphase', legacyRemovalCandidate ? String(legacyRemovalCandidate.cleanupStage || legacyRemovalCandidate.status || 'wartet') : 'wartet'],
+      ['JS-Final-Cleanup', legacyFinalCleanup ? String(legacyFinalCleanup.status || 'wartet') : 'wartet'],
+      ['JS-Normaldiagnose', legacyFinalCleanup ? String(legacyFinalCleanup.normalDiagnosticsPayload || 'wartet') : 'wartet'],
+      ['JS-Normaldiagnose Status', legacyNormalDiagnostics ? String(legacyNormalDiagnostics.status || legacyNormalDiagnostics.cleanupStage || 'wartet') : 'wartet'],
+      ['JS-Normaldiagnose entfernt', legacyNormalDiagnostics ? (legacyNormalDiagnostics.normalDiagnosticsRemoved ? 'ja' : 'nein') : 'wartet'],
       ['Harte Fallbacks', String(Number(evaluation.hardFallbackCount || 0))],
       ['Mismatches', String(Number(evaluation.mismatchCount || 0))],
       ['OK-Quote', `${Number(evaluation.okRatioPct || 0)} %`],

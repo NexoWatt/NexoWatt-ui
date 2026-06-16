@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0927e78808cad6dde44893ae6ab46ddf1289ee2cfd910c25ee41f187931d7ba8
+ * Original-Hash: cc4026630df834cb41c3edffda956bde9cf7de28661df662914ce4bfa19dc0a3
  */
 
 /**
@@ -60,7 +60,7 @@ const mirrorSpecs = [
   {
     sourceRel: 'src-ts/ems/heating-rod/heating-rod-decision.ts',
     mirrorRel: 'lib/ts-mirrors/ems/heating-rod/heating-rod-decision.js',
-    exports: ['chooseLargestStageWithinBudget', 'isHeatingRodStorageReserveActive', 'evaluateHeatingRodDecision'],
+    exports: ['chooseLargestStageWithinBudget', 'isHeatingRodStorageReserveActive', 'evaluateHeatingRodDecision', 'buildHeatingRodLegacyRemovalPlan'],
   },
 ];
 

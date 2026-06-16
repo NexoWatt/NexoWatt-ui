@@ -7,8 +7,8 @@
  *
  * Zweck:
  * Diese Datei ist ein browsernaher JavaScript-Modulspiegel der TypeScript-Quelle.
- * Sie wird in 0.7.67 noch nicht produktiv importiert, legt aber die spätere
- * sichere TS->JS-Migrationsstruktur für Frontend-Helfer fest.
+ * Diese Datei kann produktiv importiert werden, wenn der zugehörige Browsercode
+ * bereits auf den jeweiligen TS-Helfer umgestellt wurde.
  *
  * Pflege-Regel:
  * 1. Änderung zuerst in src-ts/frontend/*.ts vornehmen.

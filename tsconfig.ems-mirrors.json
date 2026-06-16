@@ -15,7 +15,8 @@
   "include": [
     "src-ts/utils/number.ts",
     "src-ts/ems/core-limits/core-budget.ts",
-    "src-ts/ems/heating-rod/heating-rod-decision.ts"
+    "src-ts/ems/heating-rod/heating-rod-decision.ts",
+    "src-ts/ems/ai-advisor/ai-advisor-payload.ts"
   ],
   "exclude": [
     "node_modules",

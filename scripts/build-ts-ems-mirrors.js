@@ -46,6 +46,12 @@ const mirrorSpecs = [
     mirrorRel: 'lib/ts-mirrors/ems/heating-rod/heating-rod-decision.js',
     purpose: 'Heizstab-Entscheidungsspiegel für spätere Shadow-Vergleiche',
   },
+  {
+    sourceRel: 'src-ts/ems/ai-advisor/ai-advisor-payload.ts',
+    builtRel: 'build-ts/ems-mirrors/ems/ai-advisor/ai-advisor-payload.js',
+    mirrorRel: 'lib/ts-mirrors/ems/ai-advisor/ai-advisor-payload.js',
+    purpose: 'KI-Berater-Publish-Payload für produktive, sichere Vorschlagsnormalisierung',
+  },
 ];
 
 /**

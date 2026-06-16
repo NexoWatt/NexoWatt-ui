@@ -47,6 +47,53 @@
  * - DP-Fallbacks nur sehr vorsichtig ändern, weil sonst Live-Anzeige und Historie auseinanderlaufen.
  */
 
+/**
+ * Code-Teil: nxLiveDashboardTsFormat
+ *
+ * Zweck:
+ * Lädt produktiv den TypeScript-Spiegel für die reine Anzeigeformatierung des
+ * LIVE-Dashboards.
+ *
+ * Zusammenhang:
+ * Die alte `formatPower`-/`formatEnergyKwh`-Logik bleibt als Fallback im selben File.
+ * Sobald der MJS-Spiegel geladen ist, werden Leistungs-/Energiefluss-/Energiewerte über
+ * `src-ts/frontend/live-dashboard-format.ts` formatiert.
+ *
+ * Sicherheitsregel:
+ * Wenn der Browser den MJS-Spiegel nicht laden kann, bleibt die alte JS-Formatierung
+ * unverändert aktiv. Keine EMS-Werte und keine States werden dadurch geändert.
+ */
+let nxLiveDashboardTsFormat = null;
+let nxLiveDashboardTsFormatLoadState = 'pending';
+(function loadLiveDashboardTsFormat(){
+  try {
+    import('./static/ts-mirrors/frontend/live-dashboard-format.mjs')
+      .then((mod) => {
+        nxLiveDashboardTsFormat = mod || null;
+        nxLiveDashboardTsFormatLoadState = nxLiveDashboardTsFormat ? 'ready' : 'missing';
+        try { if (typeof scheduleRender === 'function') scheduleRender(true); } catch(_e) {}
+      })
+      .catch(() => { nxLiveDashboardTsFormatLoadState = 'fallback'; });
+  } catch(_e) {
+    nxLiveDashboardTsFormatLoadState = 'fallback';
+  }
+})();
+
+/**
+ * Code-Teil: nxTryTsDashboardFormat
+ * Zweck: Ruft einen TS-Formatter auf und liefert bei Fehlern `null`, damit die alte
+ * JS-Fallbacklogik unverändert weiterlaufen kann.
+ */
+function nxTryTsDashboardFormat(name, ...args){
+  try {
+    const mod = nxLiveDashboardTsFormat;
+    const fn = mod && mod[name];
+    if (typeof fn !== 'function') return null;
+    const text = fn(...args);
+    return (typeof text === 'string' && text.length) ? text : null;
+  } catch(_e) { return null; }
+}
+
 
 // --- Precise donut placement (anchor angles like a reference UI) ---
 /**
@@ -376,6 +423,8 @@ function scheduleRender(force = false){
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 function formatPower(v) {
+  const ts = nxTryTsDashboardFormat('formatDashboardPower', v, units.power);
+  if (ts !== null) return ts;
   if (v === undefined || v === null || isNaN(v)) return '--';
   const n = Number(v);
   // If configured for kW, convert automatically from W
@@ -393,6 +442,8 @@ function formatPower(v) {
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 function formatEnergyKwh(v){
+  const ts = nxTryTsDashboardFormat('formatDashboardEnergyKwh', v);
+  if (ts !== null) return ts;
   if (v === undefined || v === null || isNaN(v)) return '--';
   const n = Number(v);
   if (!isFinite(n)) return '--';
@@ -408,6 +459,8 @@ function formatEnergyKwh(v){
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 function formatPowerSigned(v){
+  const ts = nxTryTsDashboardFormat('formatDashboardPowerSigned', v, units.power);
+  if (ts !== null) return ts;
   if (v === undefined || v === null || isNaN(v)) return '--';
   const n = Number(v);
   const sign = n>0?'+':(n<0?'-':'');
@@ -422,10 +475,12 @@ function formatPowerSigned(v){
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 function formatFlowPower(v, decimals){
+  const d = (decimals === undefined || decimals === null || isNaN(decimals)) ? FLOW_UI_STABILITY.decimals : Number(decimals);
+  const ts = nxTryTsDashboardFormat('formatDashboardFlowPower', v, d);
+  if (ts !== null) return ts;
   // Energy-flow monitor: always show power values in kW (input is expected in W)
   if (v === undefined || v === null || isNaN(v)) return '--';
   const n = Number(v);
-  const d = (decimals === undefined || decimals === null || isNaN(decimals)) ? FLOW_UI_STABILITY.decimals : Number(decimals);
   return (n / 1000).toFixed(d) + ' kW';
 }
 /**

@@ -159,3 +159,130 @@ export function evaluateHeatingRodDecision(input: HeatingRodDecisionInput): Heat
     diagnosticText: `Stufe ${stage.stage} mit ${Math.round(stage.powerW)} W passt in das verfügbare Budget ${Math.round(allowedW)} W.`,
   };
 }
+
+
+/**
+ * Datenvertrag: HeatingRodLegacyRemovalPlanInput
+ *
+ * Zweck:
+ * Beschreibt die minimalen Diagnosewerte, die nötig sind, um den alten
+ * JavaScript-Heizstab-Referenzpfad als Cleanup-Kandidat zu bewerten.
+ *
+ * Zusammenhang:
+ * Diese Bewertung wird von `ems/modules/heating-rod-control.js` genutzt, um zu
+ * entscheiden, ob die alte JS-Referenz nur noch Diagnose/Notfallback ist oder ob sie
+ * vorübergehend weiterhin als Sicherheitsreferenz benötigt wird.
+ */
+export interface HeatingRodLegacyRemovalPlanInput {
+  readonly normalPathReady?: boolean;
+  readonly legacyCleanupReady?: boolean;
+  readonly hardSafetyBlockCount?: number;
+  readonly hardFallbackCount?: number;
+  readonly referenceMismatchCount?: number;
+  readonly blockingReferenceMismatchCount?: number;
+  readonly fallbackCount?: number;
+  readonly activeCount?: number;
+  readonly jsFallbackMode?: string;
+  readonly legacyJsPathRole?: string;
+}
+
+/** Ergebnis: alter JS-Heizstabpfad als Entfernungskandidat oder weiter als Notreferenz. */
+export interface HeatingRodLegacyRemovalPlan {
+  readonly source: 'heating-rod-legacy-js-removal-plan-v1';
+  readonly ready: boolean;
+  readonly status: 'ready-for-legacy-js-reference-removal' | 'cleanup-waiting-for-normal-path' | 'cleanup-blocked-by-hard-fallbacks' | 'cleanup-blocked-by-reference-mismatch';
+  readonly normalPathReady: boolean;
+  readonly legacyCleanupReady: boolean;
+  readonly decisionImpact: 'none' | 'diagnostic-only' | 'blocks-until-normal-ready';
+  readonly jsFallbackMode: 'hard-blockers-only' | 'normal-safety-fallback';
+  readonly legacyJsPathRole: 'emergency-fallback-and-diagnostics' | 'diagnostic-and-emergency-fallback' | 'safety-reference';
+  readonly canRemoveReferenceGate: boolean;
+  readonly canRemoveLegacyDecisionBranch: boolean;
+  readonly keepJsFor: readonly string[];
+  readonly removeCandidates: readonly string[];
+  readonly blockers: readonly string[];
+  readonly warnings: readonly string[];
+  readonly referenceMismatchCount: number;
+  readonly blockingReferenceMismatchCount: number;
+  readonly hardSafetyBlockCount: number;
+  readonly hardFallbackCount: number;
+  readonly nextAction: string;
+}
+
+/**
+ * Code-Teil: buildHeatingRodLegacyRemovalPlan
+ *
+ * Zweck:
+ * Bewertet typisiert, ob der alte JS-Heizstab-Referenzpfad aus dem normalen
+ * Entscheidungsweg herausgenommen werden darf.
+ *
+ * Zusammenhang:
+ * 0.7.115 nutzt diese Funktion produktiv als Diagnose-/Cleanup-Helfer. Sie schaltet
+ * keine Heizstabstufe selbst, sondern liefert nur die klare Entscheidungsvorlage:
+ * „TS ist Normalpfad, JS bleibt nur Notfallback/Diagnose“ oder „JS muss noch warten“.
+ *
+ * Sicherheitsregel:
+ * Der alte JS-Pfad wird nicht entfernt, solange harte Fallbacks, harte Schutzblocker
+ * oder blockierende Referenzmismatches vorhanden sind.
+ */
+export function buildHeatingRodLegacyRemovalPlan(input: HeatingRodLegacyRemovalPlanInput): HeatingRodLegacyRemovalPlan {
+  const toCount = (value: unknown): number => {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+  };
+  const normalPathReady = input.normalPathReady === true;
+  const legacyCleanupReady = input.legacyCleanupReady === true;
+  const hardSafetyBlockCount = toCount(input.hardSafetyBlockCount);
+  const hardFallbackCount = toCount(input.hardFallbackCount);
+  const referenceMismatchCount = toCount(input.referenceMismatchCount);
+  const blockingReferenceMismatchCount = toCount(input.blockingReferenceMismatchCount);
+  const blockers: string[] = [];
+  const warnings: string[] = [];
+  if (!normalPathReady) blockers.push('TS-Normalpfad ist noch nicht bereit.');
+  if (!legacyCleanupReady) blockers.push('Legacy-JS-Cleanup ist noch nicht bereit.');
+  if (hardSafetyBlockCount > 0) blockers.push(`${hardSafetyBlockCount} harte Sicherheitsblocker vorhanden.`);
+  if (hardFallbackCount > 0) blockers.push(`${hardFallbackCount} harte JS-Fallbacks vorhanden.`);
+  if (blockingReferenceMismatchCount > 0) blockers.push(`${blockingReferenceMismatchCount} blockierende JS/TS-Referenzabweichung(en) vorhanden.`);
+  if (referenceMismatchCount > 0 && blockingReferenceMismatchCount <= 0) {
+    warnings.push(`${referenceMismatchCount} JS/TS-Referenzabweichung(en) bleiben als Diagnose sichtbar.`);
+  }
+  const ready = blockers.length === 0;
+  const status: HeatingRodLegacyRemovalPlan['status'] = ready
+    ? 'ready-for-legacy-js-reference-removal'
+    : (!normalPathReady || !legacyCleanupReady
+      ? 'cleanup-waiting-for-normal-path'
+      : (hardFallbackCount > 0 || hardSafetyBlockCount > 0
+        ? 'cleanup-blocked-by-hard-fallbacks'
+        : 'cleanup-blocked-by-reference-mismatch'));
+  const jsFallbackMode: HeatingRodLegacyRemovalPlan['jsFallbackMode'] = ready ? 'hard-blockers-only' : 'normal-safety-fallback';
+  const legacyJsPathRole: HeatingRodLegacyRemovalPlan['legacyJsPathRole'] = ready
+    ? 'emergency-fallback-and-diagnostics'
+    : (legacyCleanupReady ? 'diagnostic-and-emergency-fallback' : 'safety-reference');
+  return {
+    source: 'heating-rod-legacy-js-removal-plan-v1',
+    ready,
+    status,
+    normalPathReady,
+    legacyCleanupReady,
+    decisionImpact: ready ? 'none' : (normalPathReady ? 'diagnostic-only' : 'blocks-until-normal-ready'),
+    jsFallbackMode,
+    legacyJsPathRole,
+    canRemoveReferenceGate: ready,
+    canRemoveLegacyDecisionBranch: ready,
+    keepJsFor: ready
+      ? ['hard-safety-fallback', 'emergency-stop', 'diagnostic-snapshot']
+      : ['reference-gate', 'hard-safety-fallback', 'emergency-stop', 'diagnostic-snapshot'],
+    removeCandidates: ready
+      ? ['legacy-reference-decision-gate', 'legacy-js-reference-blocking', 'normal-safety-fallback-branch']
+      : [],
+    blockers,
+    warnings,
+    referenceMismatchCount,
+    blockingReferenceMismatchCount,
+    hardSafetyBlockCount,
+    hardFallbackCount,
+    nextAction: ready
+      ? 'Alten JS-Referenzpfad im nächsten Schritt aus dem normalen Entscheidungsweg entfernen; JS bleibt Notfallback/Diagnose.'
+      : 'Heizstab-TS weiter beobachten, bis keine Blocker mehr vorhanden sind.',
+  };
+}

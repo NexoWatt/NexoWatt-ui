@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 376e7b736d873b4f5d9094da3f778071c5331f751a9646e59b44a0f84dc2e8dc
+ * Original-Hash: 24a10dd887979aa1352d0fc432f16f586a96a19611bc424333bd46c162fcbf36
  */
 
 /**
@@ -64,6 +64,12 @@ const mirrorSpecs = [
     builtRel: 'build-ts/frontend-mirrors/frontend/display-format.js',
     mirrorRel: 'www/static/ts-mirrors/frontend/display-format.mjs',
     publicName: 'display-format',
+  },
+  {
+    sourceRel: 'src-ts/frontend/live-dashboard-format.ts',
+    builtRel: 'build-ts/frontend-mirrors/frontend/live-dashboard-format.js',
+    mirrorRel: 'www/static/ts-mirrors/frontend/live-dashboard-format.mjs',
+    publicName: 'live-dashboard-format',
   },
   {
     sourceRel: 'src-ts/frontend/display-format-canary.ts',
@@ -187,8 +193,8 @@ function generatedHeader(spec) {
     ' *',
     ' * Zweck:',
     ' * Diese Datei ist ein browsernaher JavaScript-Modulspiegel der TypeScript-Quelle.',
-    ' * Sie wird in 0.7.67 noch nicht produktiv importiert, legt aber die spätere',
-    ' * sichere TS->JS-Migrationsstruktur für Frontend-Helfer fest.',
+    ' * Diese Datei kann produktiv importiert werden, wenn der zugehörige Browsercode',
+    ' * bereits auf den jeweiligen TS-Helfer umgestellt wurde.',
     ' *',
     ' * Pflege-Regel:',
     ' * 1. Änderung zuerst in src-ts/frontend/*.ts vornehmen.',
@@ -211,6 +217,16 @@ function normalizeBuiltOutput(spec) {
   if (!fs.existsSync(builtPath)) fail(`Erwartete Build-Datei fehlt: ${spec.builtRel}`);
   let text = normalizeNewlines(fs.readFileSync(builtPath, 'utf8'));
   text = text.replace(/^"use strict";\s*/g, '').replace(/^'use strict';\s*/g, '');
+  /**
+   * Code-Teil: MJS-Importpfade normalisieren
+   *
+   * Zweck:
+   * TypeScript erzeugt für Bundler/NodeNext teilweise extension-lose relative Imports.
+   * Browser-/Node-MJS-Spiegel unter `www/static` brauchen jedoch eine echte `.mjs`-
+   * Endung, sonst schlägt `import()` in den Verifikationschecks fehl.
+   */
+  text = text.replace(/from\s+['"](\.\/[^'"]+?)(?<!\.mjs)(?<!\.js)['"]/g, (match, rel) => `from '${rel}.mjs'`);
+  text = text.replace(/import\(\s*['"](\.\/[^'"]+?)(?<!\.mjs)(?<!\.js)['"]\s*\)/g, (match, rel) => `import('${rel}.mjs')`);
   return generatedHeader(spec) + text.replace(/\s+$/g, '') + '\n';
 }
 

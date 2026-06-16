@@ -1,4 +1,5 @@
 // @ts-nocheck
+// 0.7.115 App-Center Legacy Compact Cleanup Marker: JS-Diagnosedaten / JS-Cleanup-Kandidat
 /**
  * TypeScript-Parallelspiegel: www/ems-apps.js
  *
@@ -17,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: f0114bf7a1c6f3ac933bdfd22154eabac7b4a10ef6e2e6d2b253a5f83d5d70c9
+ * Original-Hash: 92416d46f6c3c25061d4823e208deba96e95afe652bdab8c1b9a10b0088fa74c
  */
 
 /**

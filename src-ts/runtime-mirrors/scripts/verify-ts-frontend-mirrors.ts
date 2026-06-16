@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: dc9f1193404c7bb2ef51b48d6f2ba031fc8b6ee157e4a99368b8293665714d9c
+ * Original-Hash: f1601632d0efa676c769519ab546b6e2b0a122a7509744d7015620a190a02f1a
  */
 
 /**
@@ -51,6 +51,11 @@ const mirrorSpecs = [
     sourceRel: 'src-ts/frontend/display-format.ts',
     mirrorRel: 'www/static/ts-mirrors/frontend/display-format.mjs',
     exports: ['formatPowerValue', 'formatEnergyValue', 'formatPercentValue', 'formatPowerW'],
+  },
+  {
+    sourceRel: 'src-ts/frontend/live-dashboard-format.ts',
+    mirrorRel: 'www/static/ts-mirrors/frontend/live-dashboard-format.mjs',
+    exports: ['formatDashboardPower', 'formatDashboardPowerSigned', 'formatDashboardEnergyKwh', 'formatDashboardFlowPower', 'runLiveDashboardFormatSmoke'],
   },
   {
     sourceRel: 'src-ts/frontend/display-format-canary.ts',
@@ -154,6 +159,12 @@ async function verifyModuleExports(spec) {
   if (spec.mirrorRel.endsWith('display-format.mjs')) {
     const formatted = mod.formatPowerValue(0);
     if (!formatted || formatted.text !== '0 W') fail('display-format.mjs muss 0 W als gültigen Wert formatieren.');
+  }
+  if (spec.mirrorRel.endsWith('live-dashboard-format.mjs')) {
+    if (mod.formatDashboardPower(0, 'W') !== '0 W') fail('live-dashboard-format.mjs muss 0 W als gültige Leistung formatieren.');
+    if (mod.formatDashboardPower(1500, 'kW') !== '1.50 kW') fail('live-dashboard-format.mjs muss kW-Einstellung kompatibel abbilden.');
+    if (mod.formatDashboardPowerSigned(-120, 'W') !== '-120 W') fail('live-dashboard-format.mjs muss negative Werte signiert formatieren.');
+    if (mod.runLiveDashboardFormatSmoke() !== true) fail('live-dashboard-format.mjs Smoke-Test fehlgeschlagen.');
   }
   if (spec.mirrorRel.includes('customer-feature-visibility')) {
     const state = mod.buildCustomerFeatureVisibility({ evcsProofs: [], storageFarmEnabled: false, storageFarmProofs: [] });

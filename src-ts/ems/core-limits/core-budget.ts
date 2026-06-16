@@ -176,6 +176,206 @@ export function buildCoreBudgetSnapshot(input: CoreBudgetInput): CoreBudgetSnaps
 
 
 /**
+ * Datenvertrag: CoreRestGatesShadowInput
+ *
+ * Zweck:
+ * Übergibt die bereits vorhandenen JavaScript-Gate-Objekte aus `core-limits.js` an
+ * TypeScript. Damit können Forecast-, Tarif-, Peak-/Netz- und §14a-Gates zunächst
+ * sicher im Shadow-Modus verglichen werden.
+ *
+ * Zusammenhang:
+ * Diese Rest-Gates beeinflussen später EVCS, Heizstab, Speicherreserve, Peak-Shaving
+ * und KI-Hinweise. Deshalb werden sie in 0.7.120 bewusst nur vorbereitet und nicht
+ * produktiv übernommen.
+ */
+export interface CoreRestGatesShadowInput {
+  forecast?: Record<string, unknown> | null;
+  tariff?: Record<string, unknown> | null;
+  peak?: Record<string, unknown> | null;
+  para14a?: Record<string, unknown> | null;
+  evcsHighLevel?: Record<string, unknown> | null;
+  grid?: Record<string, unknown> | null;
+  ts?: unknown;
+}
+
+/** Ergebnis der TypeScript-Vorbereitung für Core-Limits-Restgates. */
+export interface CoreRestGatesShadowResult {
+  ok: boolean;
+  source: 'ts-core-rest-gates-shadow';
+  ts: TimestampMs;
+  gates: {
+    forecast: Record<string, unknown>;
+    tariff: Record<string, unknown>;
+    peak: Record<string, unknown>;
+    para14a: Record<string, unknown>;
+    evcsHighLevel: Record<string, unknown>;
+    grid: Record<string, unknown>;
+  };
+}
+
+/**
+ * Code-Teil: restBool
+ * Zweck: Normalisiert boolesche Restgate-Felder; `false` ist ein gültiger Wert.
+ */
+function restBool(value: unknown, fallback = false): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const text = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'ja', 'on', 'active'].includes(text)) return true;
+    if (['false', '0', 'no', 'nein', 'off', 'inactive'].includes(text)) return false;
+  }
+  return fallback;
+}
+
+/** Code-Teil: restString. Zweck: Normalisiert Status-/Quellenfelder. */
+function restString(value: unknown, fallback = ''): string {
+  const text = String(value ?? '').trim();
+  return text || fallback;
+}
+
+/** Code-Teil: restNumberOrNull. Zweck: Fehlende Zahlen bleiben `null`, echte 0 bleiben erhalten. */
+function restNumberOrNull(value: unknown): number | null {
+  return toNumberOrNull(value);
+}
+
+/** Code-Teil: restWatt. Zweck: Normalisiert Wattwerte; 0 W ist gültig. */
+function restWatt(value: unknown): Watt {
+  return positiveWatt(restNumberOrNull(value));
+}
+
+/**
+ * Code-Teil: buildCoreForecastGate
+ *
+ * Zweck:
+ * Baut das PV-Forecast-Gate in TypeScript nach. In 0.7.120 wird dieser Wert nur als
+ * Shadow-Vergleich genutzt und nicht produktiv übernommen.
+ */
+export function buildCoreForecastGate(input: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  const src: Record<string, unknown> = input && typeof input === 'object' ? input : {};
+  const usable = restBool(src.usable, false);
+  return {
+    valid: restBool(src.valid, false),
+    usable,
+    ageMs: restNumberOrNull(src.ageMs) === null ? null : Math.max(0, Math.round(restNumberOrNull(src.ageMs) || 0)),
+    points: Math.max(0, Math.round(restNumberOrNull(src.points) || 0)),
+    confidencePct: clampNumber(restNumberOrNull(src.confidencePct) || 0, 0, 100),
+    nowW: restWatt(src.nowW),
+    avgNext1hW: restWatt(src.avgNext1hW),
+    avgNext3hW: restWatt(src.avgNext3hW),
+    peakNext6hW: restWatt(src.peakNext6hW),
+    peakNext24hW: restWatt(src.peakNext24hW),
+    kwhNext1h: Math.max(0, restNumberOrNull(src.kwhNext1h) || 0),
+    kwhNext3h: Math.max(0, restNumberOrNull(src.kwhNext3h) || 0),
+    kwhNext6h: Math.max(0, restNumberOrNull(src.kwhNext6h) || 0),
+    kwhNext12h: Math.max(0, restNumberOrNull(src.kwhNext12h) || 0),
+    kwhNext24h: Math.max(0, restNumberOrNull(src.kwhNext24h) || 0),
+    status: restString(src.status, usable ? 'ok' : 'missing'),
+    source: restString(src.source, ''),
+  };
+}
+
+/**
+ * Code-Teil: buildCoreTariffGate
+ *
+ * Zweck:
+ * Baut das Tarif-/Negativpreis-Gate in TypeScript nach. In 0.7.120 bleibt dieses Gate
+ * Shadow-/Diagnosewert und ersetzt noch keine produktive JS-Logik.
+ */
+export function buildCoreTariffGate(input: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  const src: Record<string, unknown> = input && typeof input === 'object' ? input : {};
+  const negativeActive = restBool(src.negativeActive, false);
+  const gridImportPreferred = restBool(src.gridImportPreferred, negativeActive);
+  const gridChargeAllowed = restBool(src.gridChargeAllowed, true);
+  return {
+    budgetW: restNumberOrNull(src.budgetW) === null ? null : restWatt(src.budgetW),
+    gridChargeAllowed,
+    dischargeAllowed: restBool(src.dischargeAllowed, true),
+    active: restBool(src.active, false),
+    state: restString(src.state, ''),
+    currentPriceEurKwh: restNumberOrNull(src.currentPriceEurKwh),
+    negativeActive,
+    gridImportPreferred,
+    storageGridChargeAllowed: restBool(src.storageGridChargeAllowed, gridImportPreferred && gridChargeAllowed),
+    evcsGridChargeAllowed: restBool(src.evcsGridChargeAllowed, gridImportPreferred && gridChargeAllowed),
+    pvCurtailRecommended: restBool(src.pvCurtailRecommended, gridImportPreferred),
+    negativeMinPriceEurKwh: restNumberOrNull(src.negativeMinPriceEurKwh),
+    nextNegativeFrom: restString(src.nextNegativeFrom, ''),
+    nextNegativeTo: restString(src.nextNegativeTo, ''),
+    status: restString(src.status, gridImportPreferred ? 'active_grid_import_preferred' : (negativeActive ? 'negative_detected' : 'inactive')),
+  };
+}
+
+/**
+ * Code-Teil: buildCorePeakTariffGridGates
+ *
+ * Zweck:
+ * Bereitet Peak-/Netz-/§14a- und EVCS-High-Level-Gates in TypeScript auf.
+ */
+export function buildCorePeakTariffGridGates(input: CoreRestGatesShadowInput): Record<string, Record<string, unknown>> {
+  const peak: Record<string, unknown> = input && input.peak && typeof input.peak === 'object' ? input.peak : {};
+  const para14a: Record<string, unknown> = input && input.para14a && typeof input.para14a === 'object' ? input.para14a : {};
+  const evcsHighLevel: Record<string, unknown> = input && input.evcsHighLevel && typeof input.evcsHighLevel === 'object' ? input.evcsHighLevel : {};
+  const grid: Record<string, unknown> = input && input.grid && typeof input.grid === 'object' ? input.grid : {};
+  const tariff = buildCoreTariffGate(input && input.tariff ? input.tariff : null);
+  return {
+    peak: {
+      active: restBool(peak.active, false),
+      budgetW: restNumberOrNull(peak.budgetW) === null ? null : restWatt(peak.budgetW),
+    },
+    tariff,
+    para14a: {
+      active: restBool(para14a.active, false),
+      mode: restString(para14a.mode, ''),
+      evcsCapW: restNumberOrNull(para14a.evcsCapW) === null ? null : restWatt(para14a.evcsCapW),
+    },
+    evcsHighLevel: {
+      capW: restNumberOrNull(evcsHighLevel.capW) === null ? null : restWatt(evcsHighLevel.capW),
+      binding: restString(evcsHighLevel.binding, ''),
+    },
+    grid: {
+      gridConnectionLimitW_cfg: restWatt(grid.gridConnectionLimitW_cfg),
+      gridSafetyMarginW: restWatt(grid.gridSafetyMarginW),
+      gridConstraintsCapW: restNumberOrNull(grid.gridConstraintsCapW),
+      gridImportLimitW_physical: restWatt(grid.gridImportLimitW_physical),
+      gridImportLimitW_peakShaving: restWatt(grid.gridImportLimitW_peakShaving),
+      gridImportLimitW_effective: restWatt(grid.gridImportLimitW_effective),
+      gridImportLimitW_source: restString(grid.gridImportLimitW_source, ''),
+      gridMaxPhaseA_cfg: restWatt(grid.gridMaxPhaseA_cfg),
+    },
+  };
+}
+
+/**
+ * Code-Teil: buildCoreRestGatesShadow
+ *
+ * Zweck:
+ * Erstellt den kompletten TS-Shadow für Forecast-, Tarif-, Peak-/Netz- und §14a-Gates.
+ *
+ * Sicherheitsregel:
+ * Diese Funktion schreibt keine States und verändert keine produktiven Budgets. Sie dient
+ * nur dazu, die Restlogik kontrolliert gegen die bestehende JS-Runtime zu vergleichen.
+ */
+export function buildCoreRestGatesShadow(input: CoreRestGatesShadowInput): CoreRestGatesShadowResult {
+  const ts = (toNumberOrNull(input && input.ts) ?? Date.now()) as TimestampMs;
+  const peakGrid = buildCorePeakTariffGridGates(input || {});
+  return {
+    ok: true,
+    source: 'ts-core-rest-gates-shadow',
+    ts,
+    gates: {
+      forecast: buildCoreForecastGate(input && input.forecast ? input.forecast : null),
+      tariff: (peakGrid.tariff || {}) as Record<string, unknown>,
+      peak: (peakGrid.peak || {}) as Record<string, unknown>,
+      para14a: (peakGrid.para14a || {}) as Record<string, unknown>,
+      evcsHighLevel: (peakGrid.evcsHighLevel || {}) as Record<string, unknown>,
+      grid: (peakGrid.grid || {}) as Record<string, unknown>,
+    },
+  };
+}
+
+
+/**
  * Datenvertrag: CoreBudgetReservationRequest
  *
  * Zweck:
@@ -423,4 +623,298 @@ export function computeCoreBudgetReservation(
     consumers,
     flexUsedW,
   };
+}
+
+
+/**
+ * Datenvertrag: CoreBudgetForecastGateSnapshot
+ *
+ * Zweck:
+ * Beschreibt Gate D – PV-Forecast als typisierte Teilstruktur.
+ *
+ * Zusammenhang:
+ * Das Forecast-Gate beeinflusst später Heizstab-Startfreigaben, EVCS-Planung und
+ * KI-Berater. In 0.7.120 bleibt die JavaScript-Runtime produktiv; TypeScript baut
+ * nur denselben Snapshot für den Shadow-/Vorbereitungsvergleich.
+ */
+export interface CoreBudgetForecastGateSnapshot {
+  valid: boolean;
+  usable: boolean;
+  ageMs: number | null;
+  points: number;
+  confidencePct: number;
+  nowW: Watt;
+  avgNext1hW: Watt;
+  avgNext3hW: Watt;
+  peakNext6hW: Watt;
+  peakNext24hW: Watt;
+  kwhNext1h: number;
+  kwhNext3h: number;
+  kwhNext6h: number;
+  kwhNext12h: number;
+  kwhNext24h: number;
+  status: string;
+  source: string;
+}
+
+/**
+ * Datenvertrag: CoreBudgetTariffGateSnapshot
+ *
+ * Zweck:
+ * Beschreibt Gate E – Tarif/Negativpreis/Netzentgelt als typisierte Teilstruktur.
+ *
+ * Zusammenhang:
+ * Tarifwerte beeinflussen Speicher-Netzladen, EVCS-Planung und KI-Hinweise. Diese
+ * Struktur darf `false` nicht als fehlend behandeln, weil `dischargeAllowed=false`
+ * eine echte Sperre ist.
+ */
+export interface CoreBudgetTariffGateSnapshot {
+  active: boolean;
+  state: string;
+  currentPriceEurKwh: number | null;
+  negativeActive: boolean;
+  gridImportPreferred: boolean;
+  storageGridChargeAllowed: boolean;
+  evcsGridChargeAllowed: boolean;
+  dischargeAllowed: boolean;
+  pvCurtailRecommended: boolean;
+  negativeMinPriceEurKwh: number | null;
+  nextNegativeFrom: string;
+  nextNegativeTo: string;
+  status: string;
+}
+
+/**
+ * Datenvertrag: CoreBudgetPeakGridGateSnapshot
+ *
+ * Zweck:
+ * Fasst Peak-Shaving, Netzgrenzen, §14a und EVCS-High-Level-Cap zusammen.
+ *
+ * Zusammenhang:
+ * Diese Werte begrenzen Verbraucherbudgets. Eine spätere produktive TS-Übernahme darf
+ * Netzanschluss, Peak-Shaving oder §14a niemals durch PV-/Tariflogik überstimmen.
+ */
+export interface CoreBudgetPeakGridGateSnapshot {
+  peakActive: boolean;
+  peakBudgetW: Watt | null;
+  gridImportLimitW_effective: Watt;
+  gridImportLimitW_source: string;
+  para14aActive: boolean;
+  para14aMode: string;
+  para14aEvcsCapW: Watt | null;
+  evcsHighLevelCapW: Watt | null;
+  evcsHighLevelBinding: string;
+}
+
+/** Eingabe für den Restgate-Shadow-Vergleich. */
+export interface CoreBudgetRestGatesSnapshotInput {
+  ts?: unknown;
+  forecast?: Record<string, unknown> | null;
+  tariff?: Record<string, unknown> | null;
+  peak?: Record<string, unknown> | null;
+  grid?: Record<string, unknown> | null;
+  para14a?: Record<string, unknown> | null;
+  evcsHighLevel?: Record<string, unknown> | null;
+}
+
+/** Gesamter TS-Shadow-Snapshot für Forecast-/Tarif-/Peak-Restgates. */
+export interface CoreBudgetRestGatesSnapshot {
+  source: 'ts-core-rest-gates';
+  ts: TimestampMs;
+  forecast: CoreBudgetForecastGateSnapshot;
+  tariff: CoreBudgetTariffGateSnapshot;
+  peakGrid: CoreBudgetPeakGridGateSnapshot;
+  productive: false;
+  preparedOnly: true;
+}
+
+/** Einzelne Abweichung im Restgate-Vergleich. */
+export interface CoreBudgetRestGateMismatch {
+  field: string;
+  js: unknown;
+  ts: unknown;
+  diff?: number | null;
+  tolerance?: number;
+}
+
+/**
+ * Code-Teil: restGateNumber
+ *
+ * Zweck:
+ * Normalisiert unbekannte Gate-Werte auf Zahlen oder `null`.
+ *
+ * Wichtig:
+ * `0` bleibt gültig. Nur fehlende/nicht-numerische Werte werden zu `null`.
+ */
+function restGateNumber(value: unknown): number | null {
+  const n = toNumberOrNull(value);
+  return n === null ? null : n;
+}
+
+/** Code-Teil: restGateWatt. Zweck: Normalisiert positive Wattwerte, erhält 0 W als gültig. */
+function restGateWatt(value: unknown): Watt {
+  const n = restGateNumber(value);
+  return positiveWatt(n === null ? 0 : n);
+}
+
+/** Code-Teil: restGateNullableWatt. Zweck: Gibt positive Watt oder `null` für fehlende Caps zurück. */
+function restGateNullableWatt(value: unknown): Watt | null {
+  const n = restGateNumber(value);
+  return n === null ? null : positiveWatt(n);
+}
+
+/** Code-Teil: restGateBool. Zweck: Normalisiert boolesche Gate-Werte, ohne false zu verlieren. */
+function restGateBool(value: unknown, fallback = false): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'on', 'ja', 'active'].includes(v)) return true;
+    if (['false', '0', 'no', 'off', 'nein', 'inactive'].includes(v)) return false;
+  }
+  return fallback;
+}
+
+/** Code-Teil: restGateText. Zweck: Normalisiert Gate-Status-/Quellentexte. */
+function restGateText(value: unknown, fallback = ''): string {
+  if (value === null || value === undefined) return fallback;
+  return String(value);
+}
+
+/**
+ * Code-Teil: buildCoreBudgetRestGatesSnapshot
+ *
+ * Zweck:
+ * Baut aus den bestehenden JS-Gate-Strukturen einen typisierten TS-Restgate-Snapshot.
+ *
+ * Zusammenhang:
+ * 0.7.120 bereitet Forecast-, Tarif- und Peak-/Grid-Constraints-Gates vor. Produktiv
+ * bleibt vorerst die JS-Runtime; dieser Snapshot wird nur gegen JS verglichen und in
+ * `ems.budget.tsRestGatesJson` sichtbar gemacht.
+ */
+export function buildCoreBudgetRestGatesSnapshot(input: CoreBudgetRestGatesSnapshotInput = {}): CoreBudgetRestGatesSnapshot {
+  const forecast = (input.forecast && typeof input.forecast === 'object') ? input.forecast : {};
+  const tariff = (input.tariff && typeof input.tariff === 'object') ? input.tariff : {};
+  const peak = (input.peak && typeof input.peak === 'object') ? input.peak : {};
+  const grid = (input.grid && typeof input.grid === 'object') ? input.grid : {};
+  const para14a = (input.para14a && typeof input.para14a === 'object') ? input.para14a : {};
+  const evcsHighLevel = (input.evcsHighLevel && typeof input.evcsHighLevel === 'object') ? input.evcsHighLevel : {};
+  const ts = (toNumberOrNull(input.ts) ?? Date.now()) as TimestampMs;
+
+  return {
+    source: 'ts-core-rest-gates',
+    ts,
+    forecast: {
+      valid: restGateBool(forecast.valid, false),
+      usable: restGateBool(forecast.usable, false),
+      ageMs: restGateNumber(forecast.ageMs),
+      points: Math.max(0, Math.round(restGateNumber(forecast.points) ?? 0)),
+      confidencePct: Math.max(0, Math.min(100, Math.round(restGateNumber(forecast.confidencePct) ?? 0))),
+      nowW: restGateWatt(forecast.nowW),
+      avgNext1hW: restGateWatt(forecast.avgNext1hW),
+      avgNext3hW: restGateWatt(forecast.avgNext3hW),
+      peakNext6hW: restGateWatt(forecast.peakNext6hW),
+      peakNext24hW: restGateWatt(forecast.peakNext24hW),
+      kwhNext1h: restGateNumber(forecast.kwhNext1h) ?? 0,
+      kwhNext3h: restGateNumber(forecast.kwhNext3h) ?? 0,
+      kwhNext6h: restGateNumber(forecast.kwhNext6h) ?? 0,
+      kwhNext12h: restGateNumber(forecast.kwhNext12h) ?? 0,
+      kwhNext24h: restGateNumber(forecast.kwhNext24h) ?? 0,
+      status: restGateText(forecast.status),
+      source: restGateText(forecast.source),
+    },
+    tariff: {
+      active: restGateBool(tariff.active, false),
+      state: restGateText(tariff.state),
+      currentPriceEurKwh: restGateNumber(tariff.currentPriceEurKwh),
+      negativeActive: restGateBool(tariff.negativeActive, false),
+      gridImportPreferred: restGateBool(tariff.gridImportPreferred, false),
+      storageGridChargeAllowed: restGateBool(tariff.storageGridChargeAllowed, false),
+      evcsGridChargeAllowed: restGateBool(tariff.evcsGridChargeAllowed, false),
+      dischargeAllowed: restGateBool(tariff.dischargeAllowed, true),
+      pvCurtailRecommended: restGateBool(tariff.pvCurtailRecommended, false),
+      negativeMinPriceEurKwh: restGateNumber(tariff.negativeMinPriceEurKwh),
+      nextNegativeFrom: restGateText(tariff.nextNegativeFrom),
+      nextNegativeTo: restGateText(tariff.nextNegativeTo),
+      status: restGateText(tariff.status, restGateBool(tariff.gridImportPreferred, false) ? 'grid_import_preferred' : (restGateBool(tariff.active, false) ? 'active' : 'inactive')),
+    },
+    peakGrid: {
+      peakActive: restGateBool(peak.active, false),
+      peakBudgetW: restGateNullableWatt(peak.budgetW),
+      gridImportLimitW_effective: restGateWatt(grid.gridImportLimitW_effective),
+      gridImportLimitW_source: restGateText(grid.gridImportLimitW_source),
+      para14aActive: restGateBool(para14a.active, false),
+      para14aMode: restGateText(para14a.mode),
+      para14aEvcsCapW: restGateNullableWatt(para14a.evcsCapW),
+      evcsHighLevelCapW: restGateNullableWatt(evcsHighLevel.capW),
+      evcsHighLevelBinding: restGateText(evcsHighLevel.binding),
+    },
+    productive: false,
+    preparedOnly: true,
+  };
+}
+
+/**
+ * Code-Teil: compareCoreBudgetRestGates
+ *
+ * Zweck:
+ * Vergleicht JS-Restgates mit dem TS-Restgate-Snapshot. In 0.7.120 ist das reine
+ * Diagnose und keine produktive Umschaltung.
+ */
+export function compareCoreBudgetRestGates(js: CoreBudgetRestGatesSnapshotInput, ts: CoreBudgetRestGatesSnapshot): CoreBudgetRestGateMismatch[] {
+  const mismatches: CoreBudgetRestGateMismatch[] = [];
+  const f = js.forecast || {};
+  const t = js.tariff || {};
+  const p = js.peak || {};
+  const g = js.grid || {};
+  const a = js.para14a || {};
+  const e = js.evcsHighLevel || {};
+
+  const cmpNum = (field: string, jsValue: unknown, tsValue: unknown, tolerance = 0): void => {
+    const j = restGateNumber(jsValue);
+    const tv = restGateNumber(tsValue);
+    if (j === null && tv === null) return;
+    if (j === null || tv === null || Math.abs(j - tv) > tolerance) {
+      mismatches.push({ field, js: j, ts: tv, diff: j !== null && tv !== null ? Math.round((tv - j) * 1000) / 1000 : null, tolerance });
+    }
+  };
+  const cmpBool = (field: string, jsValue: unknown, tsValue: unknown): void => {
+    const j = restGateBool(jsValue, false);
+    const tv = restGateBool(tsValue, false);
+    if (j !== tv) mismatches.push({ field, js: j, ts: tv });
+  };
+  const cmpText = (field: string, jsValue: unknown, tsValue: unknown): void => {
+    const j = restGateText(jsValue);
+    const tv = restGateText(tsValue);
+    if (j !== tv) mismatches.push({ field, js: j, ts: tv });
+  };
+
+  cmpBool('forecast.valid', f.valid, ts.forecast.valid);
+  cmpBool('forecast.usable', f.usable, ts.forecast.usable);
+  cmpNum('forecast.confidencePct', f.confidencePct, ts.forecast.confidencePct, 1);
+  cmpNum('forecast.nowW', f.nowW, ts.forecast.nowW, 5);
+  cmpNum('forecast.avgNext1hW', f.avgNext1hW, ts.forecast.avgNext1hW, 5);
+  cmpNum('forecast.avgNext3hW', f.avgNext3hW, ts.forecast.avgNext3hW, 5);
+  cmpText('forecast.status', f.status, ts.forecast.status);
+
+  cmpBool('tariff.active', t.active, ts.tariff.active);
+  cmpBool('tariff.negativeActive', t.negativeActive, ts.tariff.negativeActive);
+  cmpBool('tariff.gridImportPreferred', t.gridImportPreferred, ts.tariff.gridImportPreferred);
+  cmpBool('tariff.storageGridChargeAllowed', t.storageGridChargeAllowed, ts.tariff.storageGridChargeAllowed);
+  cmpBool('tariff.evcsGridChargeAllowed', t.evcsGridChargeAllowed, ts.tariff.evcsGridChargeAllowed);
+  cmpBool('tariff.dischargeAllowed', t.dischargeAllowed !== false, ts.tariff.dischargeAllowed);
+  cmpNum('tariff.currentPriceEurKwh', t.currentPriceEurKwh, ts.tariff.currentPriceEurKwh, 0.0001);
+  cmpText('tariff.status', t.status, ts.tariff.status);
+
+  cmpBool('peak.active', p.active, ts.peakGrid.peakActive);
+  cmpNum('peak.budgetW', p.budgetW, ts.peakGrid.peakBudgetW, 5);
+  cmpNum('grid.gridImportLimitW_effective', g.gridImportLimitW_effective, ts.peakGrid.gridImportLimitW_effective, 5);
+  cmpText('grid.gridImportLimitW_source', g.gridImportLimitW_source, ts.peakGrid.gridImportLimitW_source);
+  cmpBool('para14a.active', a.active, ts.peakGrid.para14aActive);
+  cmpText('para14a.mode', a.mode, ts.peakGrid.para14aMode);
+  cmpNum('para14a.evcsCapW', a.evcsCapW, ts.peakGrid.para14aEvcsCapW, 5);
+  cmpNum('evcsHighLevel.capW', e.capW, ts.peakGrid.evcsHighLevelCapW, 5);
+  cmpText('evcsHighLevel.binding', e.binding, ts.peakGrid.evcsHighLevelBinding);
+
+  return mismatches;
 }

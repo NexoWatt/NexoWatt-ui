@@ -642,6 +642,16 @@ class HeatingRodControlModule extends BaseModule {
         await mk('heatingRod.summary.tsProductiveJson', 'TypeScript Heizstab Produktivstatus (JSON)', 'string', 'json');
         await mk('heatingRod.summary.tsRuntimeEvaluationJson', 'TypeScript Heizstab Runtime-Auswertung (JSON)', 'string', 'json');
         await mk('heatingRod.summary.tsNormalSourceJson', 'TypeScript Heizstab Normalpfad-Status (JSON)', 'string', 'json');
+        await mk('heatingRod.summary.tsFallbackPolicyJson', 'TypeScript Heizstab JS-Notfallback-Policy (JSON)', 'string', 'json');
+        await mk('heatingRod.summary.tsLegacyReferenceJson', 'TypeScript Heizstab Legacy-JS-Referenzdiagnose (JSON)', 'string', 'json');
+        await mk('heatingRod.summary.tsLegacyCleanupJson', 'TypeScript Heizstab Legacy-JS-Cleanup (JSON)', 'string', 'json');
+        await mk('heatingRod.summary.tsLegacyRemovalPlanJson', 'TypeScript Heizstab Legacy-JS-Entfernungsplan (JSON)', 'string', 'json');
+        await mk('heatingRod.summary.tsLegacyDebugBridgeJson', 'TypeScript Heizstab Legacy-JS-Debug-Brücke (JSON)', 'string', 'json');
+        await mk('heatingRod.summary.tsLegacyPrunedJson', 'TypeScript Heizstab Legacy-JS-Referenzdetails bereinigt (JSON)', 'string', 'json');
+        await mk('heatingRod.summary.tsLegacyRemovalCandidateJson', 'TypeScript Heizstab Legacy-JS-Entfernungskandidat (JSON)', 'string', 'json');
+        await mk('heatingRod.summary.tsLegacyFinalCleanupJson', 'TypeScript Heizstab Legacy-JS-Final-Cleanup (JSON)', 'string', 'json');
+        await mk('heatingRod.summary.tsLegacyNormalDiagnosticsJson', 'TypeScript Heizstab Legacy-JS-Normaldiagnose entfernt (JSON)', 'string', 'json');
+        await mk('heatingRod.summary.legacyJsReferenceJson', 'Heizstab Legacy-JS-Referenzdiagnose Alias (JSON)', 'string', 'json');
         await mk('heatingRod.summary.zeroExportActive', 'Zero/minus feed-in logic active', 'boolean', 'indicator');
         await mk('heatingRod.summary.zeroExportCanProbe', 'Zero/minus feed-in probe allowed', 'boolean', 'indicator');
         await mk('heatingRod.summary.zeroExportReason', 'Zero/minus feed-in reason', 'string', 'text');
@@ -2775,11 +2785,18 @@ class HeatingRodControlModule extends BaseModule {
             : [];
         const activeCount = entries.filter(e => e && e.active).length;
         const fallbackCount = entries.filter(e => e && e.fallback).length;
+        // 0.7.112: blockierende Mismatches und alte JS-Referenzdiagnose werden getrennt.
         const mismatchCount = entries.reduce((sum, e) => sum + (Array.isArray(e && e.mismatches) ? e.mismatches.length : 0), 0);
+        const jsReferenceMismatchCount = entries.reduce((sum, e) => sum + (Array.isArray(e && e.referenceMismatches) ? e.referenceMismatches.length : 0), 0);
+        const jsReferenceBlockingCount = entries.filter(e => e && e.jsReferenceBlocking).length;
+        const normalPathTakenOverCount = entries.filter(e => e && e.normalPathTakenOver).length;
+        const legacyJsPathReducedCount = entries.filter(e => e && e.legacyJsPathReduced).length;
         const jsReferenceReducedCount = entries.filter(e => e && e.jsReferenceReduced).length;
+        const hardFallbackOnlyCount = entries.filter(e => e && e.hardFallbackOnly).length;
+        const emergencyFallbackCount = entries.filter(e => e && e.emergencyFallback).length;
         const hardSafetyBlockCount = entries.filter(e => e && e.hardSafetyBlock).length;
         const hasRuntimeError = fallbackReasons.some(r => /error|exception|runtime/i.test(r));
-        const ok = entries.length > 0 && activeCount > 0 && fallbackCount === 0 && hardSafetyBlockCount === 0 && !hasRuntimeError;
+        const ok = entries.length > 0 && activeCount > 0 && hardSafetyBlockCount === 0 && emergencyFallbackCount === 0 && jsReferenceBlockingCount === 0 && !hasRuntimeError;
         return {
             ts: Date.now(),
             source: 'heating-rod-ts-runtime-sample-v1',
@@ -2790,11 +2807,23 @@ class HeatingRodControlModule extends BaseModule {
             activeCount,
             fallbackCount,
             mismatchCount,
+            blockingMismatchCount: mismatchCount,
+            jsReferenceMismatchCount,
+            jsReferenceBlockingCount,
+            normalPathActiveCount: entries.filter(e => e && e.source === 'ts-heating-rod-normal').length,
+            normalPathTakenOverCount,
+            legacyJsPathReducedCount,
             jsReferenceReducedCount,
+            hardFallbackOnlyCount,
+            emergencyFallbackCount,
             hardSafetyBlockCount,
+            softFallbackCount: fallbackReasons.filter(r => !this._isHeatingRodHardFallbackReason(r)).length,
             deviceCount: entries.length,
             fallbackReasons,
-            hardFallback: hardSafetyBlockCount > 0 || fallbackReasons.some(r => ['missing-ts-mirror', 'ts-runtime-error', 'storage-protect-blocks-ts-normal', 'pv-protect-blocks-ts-normal'].includes(String(r))),
+            jsFallbackMode: normalPathTakenOverCount > 0 ? 'hard-blockers-only' : 'normal-safety-fallback',
+            jsPathReductionStage: normalPathTakenOverCount > 0 ? 'notfallback-only' : 'candidate-monitoring',
+            jsReferenceDecisionMode: normalPathTakenOverCount > 0 ? 'diagnostic-only' : 'blocking-until-normal-ready',
+            hardFallback: hardSafetyBlockCount > 0 || fallbackReasons.some(r => this._isHeatingRodHardFallbackReason(r)),
         };
     }
 
@@ -2821,7 +2850,12 @@ class HeatingRodControlModule extends BaseModule {
         const blockingMismatchCount = list.reduce((sum, s) => sum + (Number(s && s.blockingMismatchCount) || 0), 0);
         const jsReferenceMismatchCount = list.reduce((sum, s) => sum + (Number(s && s.jsReferenceMismatchCount) || 0), 0);
         const normalPathActiveCount = list.reduce((sum, s) => sum + (Number(s && s.normalPathActiveCount) || 0), 0);
+        const normalPathTakenOverCount = list.reduce((sum, s) => sum + (Number(s && s.normalPathTakenOverCount) || 0), 0);
+        const legacyJsPathReducedCount = list.reduce((sum, s) => sum + (Number(s && s.legacyJsPathReducedCount) || 0), 0);
         const jsReferenceReducedCount = list.reduce((sum, s) => sum + (Number(s && s.jsReferenceReducedCount) || 0), 0);
+        const jsReferenceBlockingCount = list.reduce((sum, s) => sum + (Number(s && s.jsReferenceBlockingCount) || 0), 0);
+        const hardFallbackOnlyCount = list.reduce((sum, s) => sum + (Number(s && s.hardFallbackOnlyCount) || 0), 0);
+        const emergencyFallbackCount = list.reduce((sum, s) => sum + (Number(s && s.emergencyFallbackCount) || 0), 0);
         const hardSafetyBlockCount = list.reduce((sum, s) => sum + (Number(s && s.hardSafetyBlockCount) || 0), 0);
         let consecutiveOk = 0;
         for (let i = list.length - 1; i >= 0; i--) {
@@ -2840,7 +2874,7 @@ class HeatingRodControlModule extends BaseModule {
             }
         }
         const stable = sampleCount >= 5 && consecutiveOk >= 5 && hardFallbackCount === 0 && blockingMismatchCount === 0;
-        const status = stable ? 'ts-stable' : (fallbackCount ? 'fallback-observed' : (sampleCount ? 'collecting' : 'waiting'));
+        const status = stable && normalPathTakenOverCount > 0 ? 'ts-normal-hard-fallback-only' : (stable ? 'ts-stable' : (fallbackCount ? 'fallback-observed' : (sampleCount ? 'collecting' : 'waiting')));
         return {
             source: 'heating-rod-ts-runtime-evaluation-v1',
             ts: Date.now(),
@@ -2850,8 +2884,19 @@ class HeatingRodControlModule extends BaseModule {
             fallbackCount,
             hardFallbackCount,
             mismatchCount,
+            blockingMismatchCount,
+            jsReferenceMismatchCount,
+            normalPathActiveCount,
+            normalPathTakenOverCount,
+            legacyJsPathReducedCount,
             jsReferenceReducedCount,
+            jsReferenceBlockingCount,
+            hardFallbackOnlyCount,
+            emergencyFallbackCount,
             hardSafetyBlockCount,
+            jsFallbackMode: normalPathTakenOverCount > 0 ? 'hard-blockers-only' : 'normal-safety-fallback',
+            jsReferenceDecisionMode: normalPathTakenOverCount > 0 ? 'diagnostic-only' : 'blocking-until-normal-ready',
+            jsPathReductionStage: normalPathTakenOverCount > 0 ? 'notfallback-only' : 'candidate-monitoring',
             consecutiveOk,
             consecutiveFallback,
             okRatioPct: sampleCount ? Math.round((okCount / sampleCount) * 1000) / 10 : 0,
@@ -2859,9 +2904,11 @@ class HeatingRodControlModule extends BaseModule {
             status,
             fallbackReasons: reasons,
             last: list.length ? list[list.length - 1] : null,
-            nextAction: stable
-                ? 'Heizstab-TS läuft stabil. JS-Fallback kann im nächsten Schritt weiter reduziert werden.'
-                : (fallbackCount ? 'Fallback-Gründe prüfen, bevor der alte JS-Heizstabpfad weiter reduziert wird.' : 'Weitere Heizstab-TS-Samples sammeln.'),
+            nextAction: stable && normalPathTakenOverCount > 0
+                ? 'Heizstab-TS ist Normalpfad. JavaScript ist nur noch Notfallback bei harten Blockern.'
+                : (stable
+                    ? 'Heizstab-TS läuft stabil. JS-Fallback kann weiter begrenzt werden.'
+                    : (fallbackCount ? 'Fallback-Gründe prüfen, bevor der alte JS-Heizstabpfad weiter reduziert wird.' : 'Weitere Heizstab-TS-Samples sammeln.')),
         };
     }
 
@@ -2913,12 +2960,13 @@ class HeatingRodControlModule extends BaseModule {
         const fallbackCount = Number(evaluation && evaluation.fallbackCount) || 0;
         const stable = !!(evaluation && evaluation.stable);
         const minTsTicks = 8;
-        const hardFallback = !active || fallbackCount > 0 || hardFallbackCount > 0 || blockingMismatchCount > 0;
+        const emergencyFallback = !active || hardFallbackCount > 0 || blockingMismatchCount > 0;
+        const hardFallback = emergencyFallback || (!previous.ready && fallbackCount > 0);
         const consecutiveTsTicks = hardFallback ? 0 : (Math.max(0, Number(previous.consecutiveTsTicks) || 0) + 1);
         const consecutiveJsFallbackTicks = hardFallback ? (Math.max(0, Number(previous.consecutiveJsFallbackTicks) || 0) + 1) : 0;
         const totalTsTicks = Math.max(0, Number(previous.totalTsTicks) || 0) + (active ? 1 : 0);
         const totalJsFallbackTicks = Math.max(0, Number(previous.totalJsFallbackTicks) || 0) + (hardFallback ? 1 : 0);
-        const ready = stable && consecutiveTsTicks >= minTsTicks && !hardFallback;
+        const ready = (previous.ready === true && !emergencyFallback) || (stable && consecutiveTsTicks >= minTsTicks && !hardFallback);
         const fallbackReasons = Array.isArray(productive && productive.fallbackReasons) ? productive.fallbackReasons : [];
         const status = ready ? 'ts-normal-ready' : (active ? 'ts-normal-collecting' : 'js-fallback-active');
         const state = {
@@ -2939,10 +2987,21 @@ class HeatingRodControlModule extends BaseModule {
             blockingMismatchCount,
             jsReferenceMismatchCount,
             fallbackReasons,
+            normalPathActiveCount: Number(evaluation && evaluation.normalPathActiveCount) || 0,
+            normalPathTakenOverCount: Number(evaluation && evaluation.normalPathTakenOverCount) || 0,
+            legacyJsPathReducedCount: Number(evaluation && evaluation.legacyJsPathReducedCount) || 0,
             jsReferenceReducedCount: Number(evaluation && evaluation.jsReferenceReducedCount) || 0,
+            jsReferenceBlockingCount: Number(evaluation && evaluation.jsReferenceBlockingCount) || 0,
+            hardFallbackOnlyCount: Number(evaluation && evaluation.hardFallbackOnlyCount) || 0,
+            emergencyFallbackCount: Number(evaluation && evaluation.emergencyFallbackCount) || 0,
             hardSafetyBlockCount: Number(evaluation && evaluation.hardSafetyBlockCount) || 0,
             normalPathTakenOver: ready,
+            legacyJsPathRole: ready ? 'emergency-fallback-only' : 'safety-reference',
+            legacyJsDecisionMode: ready ? 'not-authoritative' : 'reference-gate',
+            jsReferenceDecisionMode: ready ? 'diagnostic-only' : 'blocking-until-normal-ready',
             jsFallbackMode: ready ? 'hard-blockers-only' : 'normal-safety-fallback',
+            jsFallbackLimitedToHardBlockers: ready,
+            jsPathReductionStage: ready ? 'notfallback-only' : 'candidate-monitoring',
             lastSource: ready ? 'ts-heating-rod-normal' : (active ? 'ts-heating-rod' : 'js-runtime'),
             nextAction: ready
                 ? 'Heizstab-TS ist als Normalpfad vorbereitet. JavaScript bleibt nur Notfallback bei harten Blockern.'
@@ -3055,6 +3114,711 @@ class HeatingRodControlModule extends BaseModule {
     }
 
     /**
+     * Code-Teil: _isHeatingRodHardFallbackReason
+     *
+     * Zweck:
+     * Klassifiziert, ob ein JS-Fallback im Heizstabpfad ein echter Notfallback ist.
+     *
+     * Zusammenhang:
+     * Ab 0.7.112 wird der alte JavaScript-Heizstabpfad auf harte Notfälle begrenzt.
+     * Reine JS/TS-Referenzabweichungen im stabilen TS-Normalpfad bleiben Diagnose und
+     * blockieren die TypeScript-Zielstufe nicht mehr.
+     */
+    _isHeatingRodHardFallbackReason(reason) {
+        const r = String(reason || '').toLowerCase();
+        if (!r) return false;
+        return /missing-ts-mirror|ts-runtime-error|runtime-error|exception|storage-protect|pv-protect|safety|protect-blocks|hard-block/i.test(r);
+    }
+
+    /**
+     * Code-Teil: _getHeatingRodTsFallbackPolicy
+     *
+     * Zweck:
+     * Beschreibt die Rolle des alten JS-Pfads im aktuellen Heizstab-TS-Migrationszustand.
+     * Vor dem TS-Normalpfad bleibt JS Referenz; danach ist JS nur noch Notfallback.
+     */
+    _getHeatingRodTsFallbackPolicy(normalPathReady) {
+        const ready = !!normalPathReady;
+        return {
+            source: 'heating-rod-ts-fallback-policy-v1',
+            mode: ready ? 'hard-blockers-only' : 'normal-safety-fallback',
+            jsFallbackMode: ready ? 'hard-blockers-only' : 'normal-safety-fallback',
+            legacyJsPathRole: ready ? 'emergency-fallback-only' : 'safety-reference',
+            jsReferenceMode: ready ? 'diagnostic-only' : 'blocking-reference',
+            jsReferenceDecisionMode: ready ? 'diagnostic-only' : 'blocking-until-normal-ready',
+            jsReferenceDecisionUsed: !ready,
+            legacyJsReferenceMode: ready ? 'diagnostic-cleanup-only' : 'blocking-reference',
+            legacyJsReferencePathStage: ready ? 'diagnostic-cleanup' : 'blocking-reference',
+            legacyJsReferenceUsedForDecision: !ready,
+            legacyJsReferenceCleanupReady: ready,
+            hardSafetyFallbackOnly: ready,
+            oldJsDecisionReduced: ready,
+        };
+    }
+
+    /**
+     * Code-Teil: _buildHeatingRodLegacyReferenceDiagnostic
+     *
+     * Zweck:
+     * Verschiebt die alte JavaScript-Heizstabreferenz weiter aus dem Entscheidungsweg
+     * heraus in eine eigene Diagnose-/Cleanup-Struktur.
+     *
+     * Zusammenhang:
+     * Ab 0.7.113 soll die alte JS-Referenz nicht mehr als normale Entscheidungsbremse
+     * auftreten, sobald der TS-Normalpfad stabil ist. Wir behalten die JS-Referenz aber
+     * als Diagnose und Notfallvergleich, damit man auf echten Anlagen weiterhin sieht,
+     * ob alte und neue Logik auseinanderlaufen.
+     *
+     * Wichtig:
+     * Diese Funktion schaltet keinen Heizstab und schreibt keine Stufe. Sie erstellt nur
+     * eine JSON-Diagnose für `heatingRod.summary.tsLegacyReferenceJson`.
+     */
+    _buildHeatingRodLegacyReferenceDiagnostic(productive, evaluation, normalSource) {
+        const entries = Array.isArray(productive && productive.entries) ? productive.entries : [];
+        const normalReady = !!(normalSource && normalSource.ready);
+        const referenceMismatches = [];
+        const blockingReferenceMismatches = [];
+        for (const entry of entries) {
+            const list = Array.isArray(entry && entry.referenceMismatches) ? entry.referenceMismatches : [];
+            for (const mismatch of list) {
+                const item = {
+                    deviceId: String(entry && (entry.deviceId || entry.id) || 'unknown'),
+                    field: String(mismatch && mismatch.field || ''),
+                    js: mismatch && Object.prototype.hasOwnProperty.call(mismatch, 'js') ? mismatch.js : null,
+                    ts: mismatch && Object.prototype.hasOwnProperty.call(mismatch, 'ts') ? mismatch.ts : null,
+                    mode: normalReady ? 'diagnostic-only' : 'blocking-before-normal',
+                };
+                referenceMismatches.push(item);
+                if (!normalReady && entry && entry.jsReferenceBlocking) blockingReferenceMismatches.push(item);
+            }
+        }
+        const hardSafetyBlockCount = Number(evaluation && evaluation.hardSafetyBlockCount) || 0;
+        const hardFallbackCount = Number(evaluation && evaluation.hardFallbackCount) || 0;
+        const fallbackReasons = Array.isArray(evaluation && evaluation.fallbackReasons) ? evaluation.fallbackReasons.map(x => String(x || '')).filter(Boolean) : [];
+        const diagnosticOnly = normalReady;
+        /**
+         * Code-Teil: Legacy-JS-Referenzdiagnose komprimieren
+         *
+         * Zweck:
+         * Sobald der TS-Heizstab-Normalpfad stabil ist, sollen alte JS-Referenzdetails
+         * nicht mehr als großer Entscheidungsblock mitlaufen. Wir behalten Zähler und
+         * eine kleine Probe, verschieben vollständige Mismatch-Listen aber aus dem
+         * normalen Diagnosepfad heraus.
+         *
+         * Zusammenhang:
+         * Das reduziert Doppelpfade und verhindert, dass die alte JS-Referenz weiterhin
+         * wie ein gleichwertiger Runtime-Baustein wirkt. Harte Notfallbacks bleiben
+         * über `fallbackReasons` und Schutzblocker sichtbar.
+         */
+        const referenceMismatchSample = diagnosticOnly ? referenceMismatches.slice(0, 2) : referenceMismatches.slice(0, 20);
+        const blockingReferenceMismatchSample = diagnosticOnly ? [] : blockingReferenceMismatches.slice(0, 20);
+        return {
+            source: 'heating-rod-legacy-js-reference-cleanup-v3',
+            ts: Date.now(),
+            active: entries.length > 0,
+            normalPathReady: normalReady,
+            diagnosticOnly,
+            decisionImpact: diagnosticOnly ? 'none' : 'blocks-until-normal-ready',
+            cleanupStage: diagnosticOnly ? 'legacy-reference-pruned-diagnostic-only' : 'legacy-reference-still-safety-gate',
+            diagnosticPayloadMode: diagnosticOnly ? 'minimal-counts-and-sample' : 'full-safety-diagnostics',
+            legacyReferenceDetailsSuppressed: diagnosticOnly,
+            duplicateReferenceDetailsRemoved: diagnosticOnly,
+            fullReferenceDetailsRetained: !diagnosticOnly,
+            legacyJsPathRole: diagnosticOnly ? 'diagnostic-and-emergency-fallback' : 'safety-reference',
+            legacyJsDecisionMode: diagnosticOnly ? 'diagnostic-only' : 'reference-gate',
+            jsFallbackMode: diagnosticOnly ? 'hard-blockers-only' : 'normal-safety-fallback',
+            jsReferenceDecisionMode: diagnosticOnly ? 'diagnostic-only' : 'blocking-until-normal-ready',
+            jsReferenceDecisionUsed: !diagnosticOnly,
+            referenceMismatchCount: referenceMismatches.length,
+            blockingReferenceMismatchCount: blockingReferenceMismatches.length,
+            hardSafetyBlockCount,
+            hardFallbackCount,
+            fallbackReasons,
+            referenceMismatchSample,
+            blockingReferenceMismatchSample,
+            referenceMismatches: diagnosticOnly ? [] : referenceMismatches.slice(0, 20),
+            blockingReferenceMismatches: diagnosticOnly ? [] : blockingReferenceMismatches.slice(0, 20),
+            nextAction: diagnosticOnly
+                ? 'Alte JS-Referenz ist kompaktiert und nur noch Diagnose/Notfallback. Nächster Schritt: Cleanup-Entfernung vorbereiten.'
+                : 'TS-Normalpfad noch nicht bereit; alte JS-Referenz bleibt bis dahin Sicherheitsgate.',
+        };
+    }
+
+    /**
+     * Code-Teil: _buildHeatingRodTsLegacyCleanupState
+     *
+     * Zweck:
+     * Fasst die Restrolle des alten JS-Heizstabpfads in einem separaten Cleanup-Status
+     * zusammen. Damit wird sichtbar, wann der JS-Referenzpfad nur noch Diagnose ist.
+     */
+    _buildHeatingRodTsLegacyCleanupState(productive, evaluation, normalSource, fallbackPolicy, legacyReference) {
+        const normalReady = !!(normalSource && normalSource.ready);
+        const hardSafetyBlockCount = Number(evaluation && evaluation.hardSafetyBlockCount) || 0;
+        const hardFallbackCount = Number(evaluation && evaluation.hardFallbackCount) || 0;
+        const blockingReferenceMismatchCount = Number(legacyReference && legacyReference.blockingReferenceMismatchCount) || 0;
+        const ready = normalReady && hardSafetyBlockCount === 0 && hardFallbackCount === 0 && blockingReferenceMismatchCount === 0;
+        return {
+            source: 'heating-rod-ts-legacy-cleanup-v1',
+            ts: Date.now(),
+            ready,
+            status: ready ? 'legacy-js-reference-diagnostic-only' : (normalReady ? 'legacy-js-reference-cleanup-pending' : 'legacy-js-reference-active'),
+            normalPathReady: normalReady,
+            legacyJsReferenceInDecisionPath: !ready,
+            legacyJsReferenceMovedToDiagnostics: ready,
+            legacyJsReferenceCleanupReady: ready,
+            legacyJsReferenceCleanupStage: ready ? 'diagnostics-compact-cleanup' : (normalReady ? 'diagnostic-pending' : 'candidate-monitoring'),
+            // Backward-kompatibler Diagnoseanker für ältere Prüfskripte: gleicher Zustand wie diagnostics-compact-cleanup.
+            cleanupStageAlias: ready ? 'legacy-reference-compact-diagnostic-only' : (normalReady ? 'diagnostic-pending' : 'candidate-monitoring'),
+            legacyReferencePayloadMode: legacyReference && legacyReference.diagnosticPayloadMode || (ready ? 'compact-counts-and-sample' : 'full-safety-diagnostics'),
+            legacyReferenceDetailsSuppressed: !!(legacyReference && legacyReference.legacyReferenceDetailsSuppressed),
+            cleanupRemovalCandidate: ready && !!(legacyReference && legacyReference.legacyReferenceDetailsSuppressed),
+            oldJsReferenceRemovalStage: ready ? 'ready-after-compact-diagnostics' : 'not-ready',
+            legacyJsPathRole: ready ? 'diagnostic-emergency-fallback' : 'safety-reference',
+            jsDecisionPath: ready ? 'ts-normal-authoritative' : 'js-reference-guarded',
+            jsFallbackMode: fallbackPolicy && fallbackPolicy.jsFallbackMode || (ready ? 'hard-blockers-only' : 'normal-safety-fallback'),
+            referenceMismatchCount: Number(legacyReference && legacyReference.referenceMismatchCount) || 0,
+            blockingReferenceMismatchCount,
+            keepJsFor: ready ? ['hard-safety-fallback', 'compact-diagnostic-summary'] : ['safety-reference', 'hard-safety-fallback', 'diagnostic-snapshot'],
+            nextAction: ready
+                ? 'Die alte JS-Referenz ist kompakt und nur noch Diagnose/Cleanup; TS-Normalpfad bleibt entscheidend.'
+                : 'Die alte JS-Referenz wird noch beobachtet, bis der TS-Normalpfad stabil übernommen ist.',
+        };
+    }
+
+    /**
+     * Code-Teil: _buildHeatingRodTsLegacyRemovalPlanState
+     *
+     * Zweck:
+     * Bereitet den späteren Abbau der alten JavaScript-Heizstabreferenz als klaren
+     * Entfernungs-/Cleanup-Plan vor. Dieser Schritt entfernt noch keinen JS-Code, trennt
+     * aber sauber, welche Teile nur noch Diagnose sind und welche Teile als harte
+     * Notfallbremse erhalten bleiben müssen.
+     *
+     * Zusammenhang:
+     * Ab 0.7.115 soll der alte JS-Referenzpfad nicht weiter als unklare zweite
+     * Entscheidungswelt mitlaufen. Wenn TS-Normalpfad und Legacy-Cleanup stabil sind,
+     * wird JS als Entfernungs-Kandidat markiert: Diagnose ja, Notfallback ja, normale
+     * Entscheidung nein.
+     *
+     * Wichtig:
+     * Diese Funktion schreibt keine Zielstufe und löscht keinen Fallback. Sie erzeugt nur
+     * die JSON-Diagnose `heatingRod.summary.tsLegacyRemovalPlanJson`.
+     */
+    _buildHeatingRodTsLegacyRemovalPlanState(productive, evaluation, normalSource, fallbackPolicy, legacyCleanup, legacyReference) {
+        const normalReady = !!(normalSource && normalSource.ready);
+        const cleanupReady = !!(legacyCleanup && legacyCleanup.ready);
+        const hardSafetyBlockCount = Number(evaluation && evaluation.hardSafetyBlockCount) || 0;
+        const hardFallbackCount = Number(evaluation && evaluation.hardFallbackCount) || 0;
+        const blockingReferenceMismatchCount = Number(legacyReference && legacyReference.blockingReferenceMismatchCount) || 0;
+        const referenceMismatchCount = Number(legacyReference && legacyReference.referenceMismatchCount) || 0;
+        const readyForRemoval = normalReady && cleanupReady && hardSafetyBlockCount === 0 && hardFallbackCount === 0 && blockingReferenceMismatchCount === 0;
+        const diagnosticOnly = !!(legacyReference && legacyReference.decisionImpact === 'none') || cleanupReady;
+        return {
+            source: 'heating-rod-ts-legacy-removal-plan-v1',
+            ts: Date.now(),
+            ready: readyForRemoval,
+            status: readyForRemoval ? 'legacy-js-reference-removal-prepared' : (normalReady ? 'legacy-js-reference-removal-pending' : 'ts-normal-not-ready'),
+            normalPathReady: normalReady,
+            cleanupReady,
+            diagnosticOnly,
+            decisionImpact: readyForRemoval ? 'none' : (legacyReference && legacyReference.decisionImpact || 'safety-gate'),
+            jsFallbackMode: fallbackPolicy && fallbackPolicy.jsFallbackMode || (readyForRemoval ? 'hard-blockers-only' : 'normal-safety-fallback'),
+            legacyJsPathRole: readyForRemoval ? 'emergency-fallback-and-debug-only' : 'safety-reference',
+            legacyJsDecisionMode: readyForRemoval ? 'diagnostic-only' : 'reference-gate',
+            jsReferenceDecisionUsed: readyForRemoval ? false : !(legacyReference && legacyReference.jsReferenceDecisionUsed === false),
+            referenceMismatchCount,
+            blockingReferenceMismatchCount,
+            hardSafetyBlockCount,
+            hardFallbackCount,
+            removableParts: readyForRemoval
+                ? ['legacy-js-reference-decision-gate', 'normal-reference-mismatch-blocker', 'duplicate-reference-reason-as-blocker']
+                : [],
+            keepParts: ['hard-safety-fallback', 'runtime-error-fallback', 'diagnostic-snapshot'],
+            removalStage: readyForRemoval ? 'prepared-for-code-cleanup' : 'observe-before-cleanup',
+            nextAction: readyForRemoval
+                ? 'Alte JS-Referenz kann im nächsten Cleanup-Schritt weiter reduziert werden; harte Notfallbacks bleiben erhalten.'
+                : 'Vor Code-Cleanup weiter beobachten: TS-Normalpfad, harte Fallbacks und Blocking-Mismatches müssen stabil sauber sein.',
+        };
+    }
+
+
+    /**
+     * Code-Teil: _buildHeatingRodTsLegacyDebugBridgeState
+     *
+     * Zweck:
+     * Führt den alten JavaScript-Heizstabpfad nur noch als kompakte Debug-Brücke,
+     * sobald der TS-Normalpfad und der Removal-Plan stabil genug sind.
+     *
+     * Zusammenhang:
+     * 0.7.116 soll keine weitere zweite Entscheidungswelt offenhalten. Die alte
+     * JS-Referenz bleibt für Fehleranalyse und harte Sicherheitsnotfälle vorhanden,
+     * blockiert aber den TS-Normalpfad nicht mehr als normale Referenzbremse.
+     *
+     * Wichtig:
+     * Diese Funktion trifft keine Heizstabentscheidung und schaltet keine Stufe. Sie
+     * beschreibt nur die Restrolle des alten JS-Pfads in
+     * `heatingRod.summary.tsLegacyDebugBridgeJson`.
+     */
+    _buildHeatingRodTsLegacyDebugBridgeState(productive, evaluation, normalSource, fallbackPolicy, legacyCleanup, legacyRemovalPlan, legacyReference) {
+        const normalReady = !!(normalSource && normalSource.ready);
+        const cleanupReady = !!(legacyCleanup && legacyCleanup.ready);
+        const removalReady = !!(legacyRemovalPlan && legacyRemovalPlan.ready);
+        const diagnosticOnly = !!(legacyReference && legacyReference.decisionImpact === 'none');
+        const hardSafetyBlockCount = Number(evaluation && evaluation.hardSafetyBlockCount) || 0;
+        const hardFallbackCount = Number(evaluation && evaluation.hardFallbackCount) || 0;
+        const referenceMismatchCount = Number(legacyReference && legacyReference.referenceMismatchCount) || 0;
+        const blockingReferenceMismatchCount = Number(legacyReference && legacyReference.blockingReferenceMismatchCount) || 0;
+        const debugBridgeActive = normalReady && cleanupReady && removalReady && diagnosticOnly && hardSafetyBlockCount === 0;
+        const referenceSample = legacyReference && Array.isArray(legacyReference.referenceMismatchSample)
+            ? legacyReference.referenceMismatchSample.slice(0, debugBridgeActive ? 2 : 5)
+            : [];
+        const fallbackReasons = Array.isArray(evaluation && evaluation.fallbackReasons)
+            ? evaluation.fallbackReasons.map(x => String(x || '')).filter(Boolean).slice(0, 8)
+            : [];
+        return {
+            source: 'heating-rod-legacy-js-debug-bridge-v1',
+            ts: Date.now(),
+            ready: debugBridgeActive,
+            status: debugBridgeActive ? 'legacy-js-debug-bridge-only' : (normalReady ? 'legacy-js-debug-bridge-pending' : 'ts-normal-not-ready'),
+            normalPathReady: normalReady,
+            cleanupReady,
+            removalReady,
+            diagnosticOnly,
+            debugBridgeActive,
+            decisionImpact: debugBridgeActive ? 'none' : (legacyReference && legacyReference.decisionImpact || 'safety-gate'),
+            legacyJsPathRole: debugBridgeActive ? 'debug-bridge-and-hard-fallback-only' : (legacyRemovalPlan && legacyRemovalPlan.legacyJsPathRole || 'safety-reference'),
+            legacyJsDecisionMode: debugBridgeActive ? 'debug-only' : (legacyRemovalPlan && legacyRemovalPlan.legacyJsDecisionMode || 'reference-gate'),
+            jsReferenceDecisionMode: debugBridgeActive ? 'debug-only' : (legacyReference && legacyReference.jsReferenceDecisionMode || 'blocking-until-normal-ready'),
+            jsReferenceDecisionUsed: !debugBridgeActive,
+            jsFallbackMode: debugBridgeActive ? 'hard-blockers-only' : (fallbackPolicy && fallbackPolicy.jsFallbackMode || 'normal-safety-fallback'),
+            fullReferencePayloadAllowed: !debugBridgeActive,
+            diagnosticPayloadMode: debugBridgeActive ? 'debug-bridge-compact' : (legacyReference && legacyReference.diagnosticPayloadMode || 'full-safety-diagnostics'),
+            debugPayloadSuppressed: debugBridgeActive,
+            referenceMismatchCount,
+            blockingReferenceMismatchCount,
+            hardSafetyBlockCount,
+            hardFallbackCount,
+            fallbackReasons,
+            referenceMismatchSample: referenceSample,
+            debugSummary: {
+                referenceMismatchCount,
+                blockingReferenceMismatchCount,
+                hardSafetyBlockCount,
+                hardFallbackCount,
+                sample: referenceSample,
+            },
+            removableNow: debugBridgeActive ? ['legacy-reference-full-mismatch-list', 'legacy-reference-normal-decision-gate'] : [],
+            keepForSafety: ['hard-safety-fallback', 'runtime-error-fallback', 'compact-debug-bridge'],
+            cleanupStage: debugBridgeActive ? 'debug-bridge-only' : 'prepare-debug-bridge',
+            nextAction: debugBridgeActive
+                ? 'Alte JS-Referenz ist nur noch Debug-Brücke und harte Notbremse. Nächster Schritt: doppelte Referenzdetails weiter entfernen.'
+                : 'TS-Normalpfad und Removal-Plan weiter beobachten, bevor die JS-Referenz zur reinen Debug-Brücke wird.',
+        };
+    }
+
+
+    /**
+     * Code-Teil: _buildHeatingRodTsLegacyPrunedState
+     *
+     * Zweck:
+     * Verschiebt doppelte Details der alten JS-Heizstabreferenz aus dem normalen
+     * Diagnosepfad heraus, sobald der TS-Normalpfad stabil ist und die Debug-Brücke
+     * aktiv ist.
+     *
+     * Zusammenhang:
+     * Vor 0.7.117 wurden dieselben JS/TS-Referenzinformationen parallel in mehreren
+     * JSONs geführt: `tsLegacyReferenceJson`, `tsLegacyCleanupJson`,
+     * `tsLegacyRemovalPlanJson`, `tsLegacyDebugBridgeJson` und Alias
+     * `legacyJsReferenceJson`. Diese Funktion reduziert diese Doppelung: Im stabilen
+     * TS-Normalpfad bleiben nur Zähler, eine kleine Probe und der Notfallback-Hinweis.
+     *
+     * Wichtig:
+     * Diese Funktion schaltet keine Stufe und entfernt keinen harten Fallback. Sie
+     * bereitet nur den Cleanup der alten JS-Referenzdetails vor.
+     */
+    _buildHeatingRodTsLegacyPrunedState(legacyReference, legacyCleanup, legacyRemovalPlan, legacyDebugBridge, normalSource, evaluation) {
+        const normalReady = !!(normalSource && normalSource.ready);
+        const debugBridgeActive = !!(legacyDebugBridge && legacyDebugBridge.debugBridgeActive);
+        const cleanupReady = !!(legacyCleanup && legacyCleanup.cleanupRemovalCandidate);
+        const removalReady = !!(legacyRemovalPlan && legacyRemovalPlan.removalCandidate);
+        const referenceMismatchCount = Number(legacyReference && legacyReference.referenceMismatchCount) || 0;
+        const blockingReferenceMismatchCount = Number(legacyReference && legacyReference.blockingReferenceMismatchCount) || 0;
+        const hardSafetyBlockCount = Number(evaluation && evaluation.hardSafetyBlockCount) || 0;
+        const hardFallbackCount = Number(evaluation && evaluation.hardFallbackCount) || 0;
+        const referenceSample = Array.isArray(legacyReference && legacyReference.referenceMismatchSample)
+            ? legacyReference.referenceMismatchSample.slice(0, debugBridgeActive ? 1 : 3)
+            : [];
+        const ready = normalReady && debugBridgeActive && cleanupReady && blockingReferenceMismatchCount === 0;
+        return {
+            source: 'heating-rod-legacy-js-reference-pruned-v1',
+            ts: Date.now(),
+            ready,
+            status: ready ? 'legacy-reference-details-pruned' : (normalReady ? 'prune-pending' : 'ts-normal-not-ready'),
+            normalPathReady: normalReady,
+            debugBridgeActive,
+            cleanupReady,
+            removalReady,
+            decisionImpact: ready ? 'none' : (legacyReference && legacyReference.decisionImpact || 'safety-gate'),
+            legacyJsPathRole: ready ? 'debug-bridge-and-hard-fallback-only' : (legacyDebugBridge && legacyDebugBridge.legacyJsPathRole || 'safety-reference'),
+            jsReferenceDecisionUsed: !ready,
+            jsReferenceDecisionMode: ready ? 'debug-only' : (legacyReference && legacyReference.jsReferenceDecisionMode || 'blocking-until-normal-ready'),
+            jsFallbackMode: ready ? 'hard-blockers-only' : (legacyDebugBridge && legacyDebugBridge.jsFallbackMode || 'normal-safety-fallback'),
+            duplicateReferenceDetailsRemoved: ready,
+            fullReferencePayloadRemoved: ready,
+            fullReferenceDetailsRetained: !ready,
+            fullReferencePayloadAllowed: !ready,
+            diagnosticPayloadMode: ready ? 'pruned-counts-only' : (legacyReference && legacyReference.diagnosticPayloadMode || 'full-safety-diagnostics'),
+            referenceMismatchCount,
+            blockingReferenceMismatchCount,
+            hardSafetyBlockCount,
+            hardFallbackCount,
+            referenceMismatchSample: referenceSample,
+            removedFromNormalPayload: ready
+                ? ['referenceMismatches', 'blockingReferenceMismatches', 'full-js-reference-snapshot']
+                : [],
+            removedFromNormalDebug: ready
+                ? ['referenceMismatches', 'blockingReferenceMismatches', 'fullLegacyReferencePayload']
+                : [],
+            retainedForDebug: ['referenceMismatchCount', 'blockingReferenceMismatchCount', 'referenceMismatchSample', 'hardFallbackCount', 'fallbackReasons'],
+            retainedFields: ['referenceMismatchCount', 'blockingReferenceMismatchCount', 'hardFallbackCount', 'hardSafetyBlockCount', 'referenceMismatchSample'],
+            compactLegacyReference: {
+                source: 'heating-rod-legacy-js-pruned-compact-reference-v1',
+                referenceMismatchCount,
+                blockingReferenceMismatchCount,
+                hardFallbackCount,
+                hardSafetyBlockCount,
+                decisionImpact: ready ? 'none' : (legacyReference && legacyReference.decisionImpact || 'safety-gate'),
+                jsReferenceDecisionUsed: !ready,
+                payloadMode: ready ? 'pruned-counts-only' : 'compact-pending',
+                sample: ready ? referenceSample.slice(0, 1) : [],
+            },
+            prunedAliasTarget: ready ? 'tsLegacyPrunedJson' : 'tsLegacyReferenceJson',
+            cleanupStage: ready ? 'legacy-reference-pruned-debug-bridge' : 'legacy-reference-prune-pending',
+            nextAction: ready
+                ? 'Doppelte JS-Referenzdetails sind aus dem normalen Heizstab-Diagnosepfad entfernt; JS bleibt nur Notfallback/Debug-Brücke.'
+                : 'TS-Normalpfad/Debug-Brücke weiter beobachten, bevor doppelte JS-Referenzdetails vollständig reduziert werden.',
+        };
+    }
+
+
+    /**
+     * Code-Teil: _buildHeatingRodTsLegacyPrunedDebugState
+     *
+     * Zweck:
+     * Entfernt den alten vollständigen JS-Referenzpayload aus dem normalen Heizstab-
+     * Diagnoseweg und ersetzt ihn durch eine kleine, bereinigte Debug-Brücke.
+     *
+     * Zusammenhang:
+     * Ab 0.7.117 ist der TS-Heizstab-Normalpfad die fachliche Hauptquelle. Die alte
+     * JavaScript-Referenz darf im Normalfall nicht mehr wie ein zweiter gleichwertiger
+     * Entscheidungsbaum mitlaufen. Sie bleibt nur als Notfallback-/Debug-Hinweis.
+     *
+     * Wichtig:
+     * Diese Funktion schaltet keinen Heizstab. Sie reduziert nur Diagnose- und Cleanup-
+     * Daten, damit wir die alte JS-Referenz später sauber entfernen können.
+     */
+    _buildHeatingRodTsLegacyPrunedDebugState(productive, evaluation, normalSource, legacyDebugBridge, legacyReference) {
+        const normalReady = !!(normalSource && normalSource.ready);
+        const bridgeReady = !!(legacyDebugBridge && legacyDebugBridge.ready);
+        const debugBridgeActive = !!(legacyDebugBridge && legacyDebugBridge.debugBridgeActive);
+        const referenceMismatchCount = Number(legacyReference && legacyReference.referenceMismatchCount) || 0;
+        const blockingReferenceMismatchCount = Number(legacyReference && legacyReference.blockingReferenceMismatchCount) || 0;
+        const hardFallbackCount = Number(evaluation && evaluation.hardFallbackCount) || 0;
+        const hardSafetyBlockCount = Number(evaluation && evaluation.hardSafetyBlockCount) || 0;
+        const referenceSample = legacyReference && Array.isArray(legacyReference.referenceMismatchSample)
+            ? legacyReference.referenceMismatchSample.slice(0, 1)
+            : [];
+        const ready = normalReady && bridgeReady && debugBridgeActive && blockingReferenceMismatchCount === 0 && hardSafetyBlockCount === 0;
+        return {
+            source: 'heating-rod-legacy-js-pruned-debug-v1',
+            ts: Date.now(),
+            ready,
+            status: ready ? 'legacy-js-reference-pruned' : (normalReady ? 'legacy-js-reference-prune-pending' : 'ts-normal-not-ready'),
+            normalPathReady: normalReady,
+            debugBridgeReady: bridgeReady,
+            debugBridgeActive,
+            legacyJsPathRole: ready ? 'pruned-debug-bridge-and-hard-fallback-only' : (legacyDebugBridge && legacyDebugBridge.legacyJsPathRole || 'safety-reference'),
+            decisionImpact: ready ? 'none' : (legacyReference && legacyReference.decisionImpact || 'safety-gate'),
+            jsReferenceDecisionUsed: !ready,
+            jsFallbackMode: ready ? 'hard-blockers-only' : (legacyDebugBridge && legacyDebugBridge.jsFallbackMode || 'normal-safety-fallback'),
+            pruned: ready,
+            fullReferencePayloadRemoved: ready,
+            fullReferencePayloadAllowed: !ready,
+            duplicateReferenceDiagnosticsReduced: ready,
+            diagnosticPayloadMode: ready ? 'pruned-counts-only' : (legacyDebugBridge && legacyDebugBridge.diagnosticPayloadMode || 'full-safety-diagnostics'),
+            retainedFields: ['referenceMismatchCount', 'blockingReferenceMismatchCount', 'hardFallbackCount', 'hardSafetyBlockCount', 'referenceMismatchSample'],
+            removedFromNormalDebug: ready ? ['referenceMismatches', 'blockingReferenceMismatches', 'fullLegacyReferencePayload'] : [],
+            referenceMismatchCount,
+            blockingReferenceMismatchCount,
+            hardFallbackCount,
+            hardSafetyBlockCount,
+            referenceMismatchSample: ready ? referenceSample : (legacyReference && Array.isArray(legacyReference.referenceMismatchSample) ? legacyReference.referenceMismatchSample.slice(0, 3) : []),
+            compactLegacyReference: {
+                source: 'heating-rod-legacy-js-pruned-compact-reference-v1',
+                referenceMismatchCount,
+                blockingReferenceMismatchCount,
+                hardFallbackCount,
+                hardSafetyBlockCount,
+                decisionImpact: ready ? 'none' : (legacyReference && legacyReference.decisionImpact || 'safety-gate'),
+                jsReferenceDecisionUsed: !ready,
+                payloadMode: ready ? 'pruned-counts-only' : 'compact-pending',
+                sample: ready ? referenceSample : [],
+            },
+            nextAction: ready
+                ? 'Vollständige JS-Referenzdetails sind aus dem normalen Diagnosepfad entfernt. JS bleibt nur Debug-/Notfallbrücke.'
+                : 'Pruning wartet auf stabile TS-Normalquelle und aktive Debug-Brücke.',
+        };
+    }
+
+    /**
+     * Code-Teil: _buildHeatingRodTsLegacyRemovalCandidateState
+     *
+     * Zweck:
+     * Markiert den alten JavaScript-Heizstabpfad als konkreten Entfernungs-Kandidaten,
+     * sobald TS-Normalpfad, Debug-Brücke und Pruned-Diagnose stabil sind.
+     *
+     * Zusammenhang:
+     * Die vorherigen Schritte haben die alte JS-Referenz aus dem normalen
+     * Entscheidungsweg in Diagnose, Debug-Brücke und Notfallback verschoben. Dieser
+     * Status fasst jetzt zusammen, was später wirklich entfernt werden darf und was als
+     * harte Sicherheitsnotbremse noch bleiben muss.
+     *
+     * Wichtig:
+     * Diese Funktion löscht keinen Code und trifft keine Heizstabentscheidung. Sie ist
+     * ein Cleanup-Vertrag für den nächsten Schritt: TS bleibt Normalpfad, JS bleibt nur
+     * Notfallback/Debug-Brücke.
+     */
+    _buildHeatingRodTsLegacyRemovalCandidateState(legacyReference, legacyCleanup, legacyRemovalPlan, legacyDebugBridge, legacyPruned, normalSource, evaluation) {
+        const normalReady = !!(normalSource && normalSource.ready);
+        const cleanupReady = !!(legacyCleanup && legacyCleanup.ready);
+        const removalReady = !!(legacyRemovalPlan && legacyRemovalPlan.ready);
+        const debugBridgeReady = !!(legacyDebugBridge && (legacyDebugBridge.ready || legacyDebugBridge.debugBridgeActive));
+        const prunedReady = !!(legacyPruned && legacyPruned.ready);
+        const hardFallbackCount = Number(evaluation && evaluation.hardFallbackCount) || 0;
+        const hardSafetyBlockCount = Number(evaluation && evaluation.hardSafetyBlockCount) || 0;
+        const blockingReferenceMismatchCount = Number(legacyReference && legacyReference.blockingReferenceMismatchCount) || 0;
+        const referenceMismatchCount = Number(legacyReference && legacyReference.referenceMismatchCount) || 0;
+        const decisionImpact = prunedReady ? 'none' : (legacyReference && legacyReference.decisionImpact || 'safety-gate');
+        const ready = normalReady && cleanupReady && removalReady && debugBridgeReady && prunedReady && blockingReferenceMismatchCount === 0;
+        const compactReference = legacyPruned && legacyPruned.compactLegacyReference
+            ? legacyPruned.compactLegacyReference
+            : {
+                source: 'heating-rod-legacy-js-removal-candidate-compact-reference-v1',
+                referenceMismatchCount,
+                blockingReferenceMismatchCount,
+                hardFallbackCount,
+                hardSafetyBlockCount,
+                decisionImpact,
+                payloadMode: ready ? 'removal-candidate-compact' : 'removal-candidate-pending',
+            };
+        return {
+            source: 'heating-rod-legacy-js-removal-candidate-v1',
+            ts: Date.now(),
+            ready,
+            status: ready ? 'legacy-js-path-removal-candidate' : (normalReady ? 'legacy-js-path-removal-candidate-pending' : 'ts-normal-not-ready'),
+            normalPathReady: normalReady,
+            cleanupReady,
+            removalPlanReady: removalReady,
+            debugBridgeReady,
+            prunedReady,
+            candidateForRemoval: ready,
+            cleanupComplete: ready,
+            oldJsReferenceRemovalCandidate: ready,
+            legacyJsPathRole: ready ? 'emergency-fallback-debug-bridge-only' : 'cleanup-pending',
+            legacyJsDecisionMode: ready ? 'no-normal-decision-role' : 'reference-gate-pending',
+            decisionImpact: ready ? 'none' : decisionImpact,
+            jsReferenceDecisionUsed: !ready,
+            jsFallbackMode: ready ? 'hard-blockers-only' : (legacyDebugBridge && legacyDebugBridge.jsFallbackMode || 'normal-safety-fallback'),
+            diagnosticPayloadMode: ready ? 'removal-candidate-compact' : (legacyPruned && legacyPruned.diagnosticPayloadMode || 'prune-pending'),
+            referenceMismatchCount,
+            blockingReferenceMismatchCount,
+            hardFallbackCount,
+            hardSafetyBlockCount,
+            compactReference,
+            removableParts: ready
+                ? [
+                    'legacy-reference-normal-decision-gate',
+                    'legacy-reference-full-payload-in-normal-diagnostics',
+                    'duplicate-js-reference-blocking-mismatch-list',
+                    'legacy-js-reference-as-standard-runtime-path',
+                ]
+                : [],
+            keepParts: ['hard-safety-fallback', 'runtime-error-fallback', 'compact-debug-bridge', 'manual-external-safety-guard'],
+            removalBlockedBy: ready ? [] : [
+                !normalReady ? 'ts-normal-not-ready' : '',
+                !cleanupReady ? 'legacy-cleanup-not-ready' : '',
+                !removalReady ? 'removal-plan-not-ready' : '',
+                !debugBridgeReady ? 'debug-bridge-not-ready' : '',
+                !prunedReady ? 'legacy-pruned-not-ready' : '',
+                blockingReferenceMismatchCount > 0 ? 'blocking-reference-mismatches' : '',
+            ].filter(Boolean),
+            nextAction: ready
+                ? 'Heizstab-Cleanup ist abgeschlossen: alter JS-Referenzpfad ist Entfernungskandidat. JS bleibt nur Notfallback/Debug-Brücke.'
+                : 'Vor Entfernung weiter beobachten: TS-Normalpfad, Debug-Brücke und Pruned-Diagnose müssen bereit sein.',
+        };
+    }
+
+    /**
+     * Code-Teil: _buildHeatingRodTsLegacyFinalCleanupState
+     *
+     * Zweck:
+     * Schließt die normale Heizstab-Diagnose vom alten vollständigen JavaScript-
+     * Referenzpfad ab. Wenn TS als Normalpfad stabil ist und der alte JS-Pfad bereits
+     * als Entfernungskandidat markiert wurde, bleibt JS nur noch als kompakte Debug-
+     * Brücke und harte Notfallreserve sichtbar.
+     *
+     * Zusammenhang:
+     * Vorherige Schritte haben den alten JS-Heizstabpfad in Pruning, Debug-Brücke und
+     * Removal-Candidate zerlegt. Diese Funktion bündelt den finalen Diagnosezustand,
+     * damit `debugJson` und `legacyJsReferenceJson` nicht mehr die vollständige alte
+     * JS-Referenzdiagnose in der normalen Anzeige mitschleppen müssen.
+     *
+     * Wichtig:
+     * Diese Funktion löscht keinen Sicherheitsfallback und schaltet keinen Heizstab.
+     * Sie verschiebt nur alte Referenzdetails aus der normalen Diagnose in einen
+     * kompakten Cleanup-/Debug-Status.
+     */
+    _buildHeatingRodTsLegacyFinalCleanupState(legacyReference, legacyPruned, legacyRemovalCandidate, legacyDebugBridge, normalSource, evaluation) {
+        const normalReady = !!(normalSource && normalSource.ready);
+        const removalReady = !!(legacyRemovalCandidate && legacyRemovalCandidate.ready);
+        const prunedReady = !!(legacyPruned && legacyPruned.ready);
+        const debugBridgeReady = !!(legacyDebugBridge && (legacyDebugBridge.ready || legacyDebugBridge.debugBridgeActive));
+        const referenceMismatchCount = Number(legacyReference && legacyReference.referenceMismatchCount) || Number(legacyRemovalCandidate && legacyRemovalCandidate.referenceMismatchCount) || 0;
+        const blockingReferenceMismatchCount = Number(legacyReference && legacyReference.blockingReferenceMismatchCount) || Number(legacyRemovalCandidate && legacyRemovalCandidate.blockingReferenceMismatchCount) || 0;
+        const hardFallbackCount = Number(evaluation && evaluation.hardFallbackCount) || Number(legacyRemovalCandidate && legacyRemovalCandidate.hardFallbackCount) || 0;
+        const hardSafetyBlockCount = Number(evaluation && evaluation.hardSafetyBlockCount) || Number(legacyRemovalCandidate && legacyRemovalCandidate.hardSafetyBlockCount) || 0;
+        const sample = legacyRemovalCandidate && legacyRemovalCandidate.compactReference && Array.isArray(legacyRemovalCandidate.compactReference.sample)
+            ? legacyRemovalCandidate.compactReference.sample.slice(0, 1)
+            : (legacyPruned && legacyPruned.compactLegacyReference && Array.isArray(legacyPruned.compactLegacyReference.sample) ? legacyPruned.compactLegacyReference.sample.slice(0, 1) : []);
+        const ready = normalReady && removalReady && prunedReady && debugBridgeReady && blockingReferenceMismatchCount === 0;
+        const compactDebugBridge = {
+            source: 'heating-rod-legacy-js-final-compact-debug-v1',
+            referenceMismatchCount,
+            blockingReferenceMismatchCount,
+            hardFallbackCount,
+            hardSafetyBlockCount,
+            decisionImpact: ready ? 'none' : (legacyRemovalCandidate && legacyRemovalCandidate.decisionImpact || legacyPruned && legacyPruned.decisionImpact || 'safety-gate'),
+            jsReferenceDecisionUsed: !ready,
+            payloadMode: ready ? 'final-cleanup-compact-debug' : 'final-cleanup-pending',
+            sample,
+        };
+        return {
+            source: 'heating-rod-legacy-js-final-cleanup-v1',
+            ts: Date.now(),
+            ready,
+            status: ready ? 'legacy-js-reference-removed-from-normal-diagnostics' : (normalReady ? 'legacy-js-final-cleanup-pending' : 'ts-normal-not-ready'),
+            normalPathReady: normalReady,
+            removalCandidateReady: removalReady,
+            prunedReady,
+            debugBridgeReady,
+            decisionImpact: ready ? 'none' : (legacyRemovalCandidate && legacyRemovalCandidate.decisionImpact || 'safety-gate'),
+            jsReferenceDecisionUsed: !ready,
+            jsReferenceNormalDiagnosticRole: ready ? 'removed-from-normal-diagnostics' : 'still-visible-for-safety',
+            legacyJsPathRole: ready ? 'debug-bridge-and-hard-fallback-only' : 'cleanup-pending',
+            legacyAliasTarget: ready ? 'tsLegacyFinalCleanupJson.compactDebugBridge' : 'tsLegacyRemovalCandidateJson',
+            normalDebugPayloadMode: ready ? 'ts-normal-with-compact-legacy-debug' : 'legacy-reference-visible',
+            normalDiagnosticsPayload: ready ? 'ts-normal-with-compact-legacy-debug' : 'legacy-reference-visible',
+            normalDiagnosticPayload: ready ? 'ts-normal-no-full-js-reference' : 'ts-normal-with-legacy-reference',
+            legacyReferenceRemovedFromNormalDiagnostics: ready,
+            fullLegacyReferenceRemovedFromNormalDiagnostics: ready,
+            fullLegacyReferenceRemovedFromDebugJson: ready,
+            legacyReferenceJsonCompacted: ready,
+            legacyReferenceDetailsSuppressed: ready,
+            removalFinalized: ready,
+            cleanupStage: ready ? 'legacy-reference-normal-diagnostics-removed' : 'legacy-reference-final-cleanup-pending',
+            referenceMismatchCount,
+            blockingReferenceMismatchCount,
+            hardFallbackCount,
+            hardSafetyBlockCount,
+            compactDebugBridge,
+            retainedForEmergencyDebug: ['hardFallbackCount', 'hardSafetyBlockCount', 'referenceMismatchCount', 'blockingReferenceMismatchCount', 'compactDebugBridge'],
+            removedFromNormalDiagnostics: ready
+                ? ['tsLegacyReferenceJson.fullPayload', 'legacyReference.fullPayload', 'referenceMismatches.fullList', 'blockingReferenceMismatches.fullList']
+                : [],
+            keepParts: ['hard-safety-fallback', 'runtime-error-fallback', 'compact-debug-bridge'],
+            nextAction: ready
+                ? 'Alte JS-Referenz ist aus der normalen Heizstabdiagnose entfernt. JS bleibt nur kompakte Debug-Brücke und harte Notfallreserve.'
+                : 'TS-Normalpfad/Removal-Candidate weiter beobachten, bevor die alte JS-Referenz aus der normalen Diagnose entfernt wird.',
+        };
+    }
+
+
+
+    /**
+     * Code-Teil: _buildHeatingRodTsLegacyNormalDiagnosticsState
+     *
+     * Zweck:
+     * Entfernt die alte vollständige JavaScript-Heizstabreferenz aus der normalen
+     * Runtime-Diagnose, sobald der TS-Normalpfad stabil und der alte JS-Pfad als
+     * Entfernungskandidat markiert ist.
+     *
+     * Zusammenhang:
+     * Die vorherigen Versionen haben den JS-Pfad bereits von „normale Referenz“ zu
+     * „Debug-Brücke / harte Notbremse“ verschoben. Diese Funktion schließt den
+     * normalen Diagnosepfad ab: In `debugJson` und `legacyJsReferenceJson` landet dann
+     * nur noch eine kompakte Zusammenfassung, keine vollständige JS-Entscheidungswelt.
+     *
+     * Wichtig:
+     * Es wird keine Heizstab-Stufe geschaltet und kein Sicherheitsfallback gelöscht.
+     * JS bleibt bei harten Blockern verfügbar; nur die normale Diagnose-Doppelung wird
+     * final bereinigt.
+     */
+    _buildHeatingRodTsLegacyNormalDiagnosticsState(legacyRemovalCandidate, legacyPruned, legacyDebugBridge, legacyReference, evaluation) {
+        const removalReady = !!(legacyRemovalCandidate && legacyRemovalCandidate.ready);
+        const prunedReady = !!(legacyPruned && legacyPruned.ready);
+        const debugBridgeReady = !!(legacyDebugBridge && (legacyDebugBridge.ready || legacyDebugBridge.debugBridgeActive));
+        const hardFallbackCount = Number(evaluation && evaluation.hardFallbackCount) || 0;
+        const hardSafetyBlockCount = Number(evaluation && evaluation.hardSafetyBlockCount) || 0;
+        const referenceMismatchCount = Number(legacyRemovalCandidate && legacyRemovalCandidate.referenceMismatchCount || legacyPruned && legacyPruned.referenceMismatchCount || legacyReference && legacyReference.referenceMismatchCount) || 0;
+        const blockingReferenceMismatchCount = Number(legacyRemovalCandidate && legacyRemovalCandidate.blockingReferenceMismatchCount || legacyPruned && legacyPruned.blockingReferenceMismatchCount || legacyReference && legacyReference.blockingReferenceMismatchCount) || 0;
+        const ready = removalReady && prunedReady && debugBridgeReady && blockingReferenceMismatchCount === 0;
+        const sample = legacyRemovalCandidate && legacyRemovalCandidate.compactReference && Array.isArray(legacyRemovalCandidate.compactReference.sample)
+            ? legacyRemovalCandidate.compactReference.sample.slice(0, 1)
+            : (legacyPruned && legacyPruned.compactLegacyReference && Array.isArray(legacyPruned.compactLegacyReference.sample) ? legacyPruned.compactLegacyReference.sample.slice(0, 1) : []);
+        const compactReference = {
+            source: 'heating-rod-legacy-js-normal-diagnostics-compact-v1',
+            status: ready ? 'legacy-js-reference-normal-diagnostics-removed' : 'legacy-js-reference-normal-diagnostics-pending',
+            decisionImpact: ready ? 'none' : (legacyReference && legacyReference.decisionImpact || 'safety-gate'),
+            jsReferenceDecisionUsed: !ready,
+            legacyJsPathRole: ready ? 'debug-bridge-and-hard-fallback-only' : 'cleanup-pending',
+            diagnosticPayloadMode: ready ? 'compact-debug-only' : 'full-safety-diagnostics',
+            referenceMismatchCount,
+            blockingReferenceMismatchCount,
+            hardFallbackCount,
+            hardSafetyBlockCount,
+            sample,
+        };
+        return {
+            source: 'heating-rod-legacy-js-normal-diagnostics-cleanup-v1',
+            ts: Date.now(),
+            ready,
+            status: ready ? 'normal-diagnostics-cleaned' : 'normal-diagnostics-cleanup-pending',
+            normalDiagnosticsRemoved: ready,
+            fullLegacyReferenceRemovedFromDebugJson: ready,
+            fullLegacyReferenceRemovedFromAlias: ready,
+            legacyReferenceAliasMode: ready ? 'compact-debug-only' : 'compatibility-full-fallback',
+            debugJsonLegacyReferenceMode: ready ? 'compact-debug-only' : 'full-reference-allowed',
+            decisionImpact: ready ? 'none' : (legacyReference && legacyReference.decisionImpact || 'safety-gate'),
+            jsReferenceDecisionUsed: !ready,
+            jsFallbackMode: ready ? 'hard-blockers-only' : (legacyDebugBridge && legacyDebugBridge.jsFallbackMode || 'normal-safety-fallback'),
+            legacyJsPathRole: ready ? 'debug-bridge-and-hard-fallback-only' : 'cleanup-pending',
+            referenceMismatchCount,
+            blockingReferenceMismatchCount,
+            hardFallbackCount,
+            hardSafetyBlockCount,
+            compactReference,
+            removedFromNormalDiagnostics: ready
+                ? ['tsLegacyReferenceJson-full-payload', 'legacyJsReferenceJson-full-payload', 'debugJson.legacyReference-full-payload']
+                : [],
+            keptForEmergency: ['hard-safety-fallback', 'runtime-error-fallback', 'compact-debug-bridge'],
+            cleanupStage: ready ? 'legacy-reference-normal-diagnostics-removed' : 'awaiting-removal-candidate',
+            nextAction: ready
+                ? 'Heizstab-Cleanup abgeschlossen: alte JS-Referenz ist aus der Normaldiagnose entfernt und bleibt nur als kompakte Debug-/Notfallbrücke.'
+                : 'Warten bis Removal-Candidate, Pruned-Diagnose und Debug-Brücke bereit sind.',
+        };
+    }
+
+    /**
      * Code-Teil: _isHeatingRodTsHardSafetyBlock
      *
      * Zweck:
@@ -3101,23 +3865,41 @@ class HeatingRodControlModule extends BaseModule {
     _evaluateHeatingRodTsProductiveDecision(entry) {
         const mirror = requireHeatingRodTsMirror();
         const evaluate = mirror && typeof mirror.evaluateHeatingRodDecision === 'function' ? mirror.evaluateHeatingRodDecision : null;
-        const fallback = (reason, extra = {}) => ({
-            source: 'js-runtime',
-            active: false,
-            fallback: true,
-            fallbackReason: reason,
-            targetStage: Math.max(0, Math.round(Number(entry && entry.jsTargetStage) || 0)),
-            targetW: Math.max(0, Math.round(Number(entry && entry.jsTargetW) || 0)),
-            ts: null,
-            reason: '',
-            mismatches: [],
-            input: null,
-            normalPathReady: false,
-            jsReferenceReduced: false,
-            jsReferenceMismatch: false,
-            hardSafetyBlock: false,
-            ...extra,
-        });
+        const fallback = (reason, extra = {}) => {
+            const normalPathReady = !!(extra && extra.normalPathReady) || this._isHeatingRodTsNormalPathReady();
+            const hardFallback = !!(extra && extra.hardSafetyBlock) || this._isHeatingRodHardFallbackReason(reason);
+            const policy = this._getHeatingRodTsFallbackPolicy(normalPathReady);
+            return {
+                source: 'js-runtime',
+                active: false,
+                fallback: true,
+                fallbackReason: reason,
+                targetStage: Math.max(0, Math.round(Number(entry && entry.jsTargetStage) || 0)),
+                targetW: Math.max(0, Math.round(Number(entry && entry.jsTargetW) || 0)),
+                ts: null,
+                reason: '',
+                mismatches: [],
+                referenceMismatches: [],
+                input: null,
+                normalPathReady,
+                normalPathTakenOver: false,
+                jsReferenceReduced: false,
+                jsReferenceMismatch: false,
+                jsReferenceMode: policy.jsReferenceMode,
+                jsReferenceDecisionMode: policy.jsReferenceDecisionMode,
+                jsReferenceBlocking: !normalPathReady,
+                legacyJsReferencePathStage: normalPathReady ? 'diagnostic-cleanup' : 'blocking-reference',
+                legacyJsReferenceUsedForDecision: !normalPathReady,
+                legacyJsReferenceCleanupReady: !!normalPathReady,
+                legacyJsPathReduced: !!normalPathReady,
+                legacyJsPathRole: policy.legacyJsPathRole,
+                jsFallbackMode: policy.jsFallbackMode,
+                emergencyFallback: hardFallback,
+                hardFallbackOnly: normalPathReady && hardFallback,
+                hardSafetyBlock: hardFallback,
+                ...extra,
+            };
+        };
         if (!evaluate) return fallback('missing-ts-mirror');
         try {
             const d = entry && entry.device || {};
@@ -3143,19 +3925,32 @@ class HeatingRodControlModule extends BaseModule {
             const ts = evaluate(input);
             const tsStage = Math.max(0, Math.round(Number(ts && ts.targetStage) || 0));
             const tsPowerW = Math.max(0, Math.round(Number(ts && ts.targetPowerW) || 0));
-            const mismatches = [
+            const referenceMismatches = [
                 compareHeatingRodShadowField('targetStage', entry.jsTargetStage, ts && ts.targetStage),
                 compareHeatingRodShadowField('targetPowerW', entry.jsTargetW, ts && ts.targetPowerW),
             ].filter(Boolean);
             const normalPathReady = !!(entry && entry.normalPathReady) || this._isHeatingRodTsNormalPathReady();
+            const mismatches = normalPathReady ? [] : referenceMismatches;
+            const policy = this._getHeatingRodTsFallbackPolicy(normalPathReady);
             const hardSafetyBlock = this._isHeatingRodTsHardSafetyBlock(entry, tsStage);
             if (hardSafetyBlock) {
                 return fallback(hardSafetyBlock, {
                     input,
                     ts: { targetStage: tsStage, targetW: tsPowerW, reason: ts && ts.reason },
                     mismatches,
+                    referenceMismatches,
                     normalPathReady,
+                    normalPathTakenOver: false,
                     hardSafetyBlock: true,
+                    emergencyFallback: true,
+                    hardFallbackOnly: normalPathReady,
+                    legacyJsPathRole: policy.legacyJsPathRole,
+                    jsReferenceMode: policy.jsReferenceMode,
+                    jsReferenceDecisionMode: policy.jsReferenceDecisionMode,
+                    jsReferenceBlocking: !normalPathReady,
+                    legacyJsReferencePathStage: normalPathReady ? 'diagnostic-cleanup' : 'blocking-reference',
+                    legacyJsReferenceUsedForDecision: !normalPathReady,
+                    legacyJsReferenceCleanupReady: !!normalPathReady,
                     jsReferenceReduced: false,
                 });
             }
@@ -3164,7 +3959,15 @@ class HeatingRodControlModule extends BaseModule {
                     input,
                     ts: { targetStage: tsStage, targetW: tsPowerW, reason: ts && ts.reason },
                     mismatches,
+                    referenceMismatches,
                     normalPathReady,
+                    jsReferenceMismatch: !!(referenceMismatches.length),
+                    jsReferenceMode: 'blocking-reference',
+                    jsReferenceDecisionMode: 'blocking-until-normal-ready',
+                    jsReferenceBlocking: true,
+                    legacyJsReferencePathStage: 'blocking-reference',
+                    legacyJsReferenceUsedForDecision: true,
+                    legacyJsReferenceCleanupReady: false,
                 });
             }
             return {
@@ -3178,9 +3981,22 @@ class HeatingRodControlModule extends BaseModule {
                 input,
                 ts,
                 mismatches,
+                referenceMismatches,
                 normalPathReady,
-                jsReferenceMismatch: !!(mismatches.length),
-                jsReferenceReduced: !!(normalPathReady && mismatches.length),
+                normalPathTakenOver: !!normalPathReady,
+                jsReferenceMismatch: !!(referenceMismatches.length),
+                jsReferenceMode: policy.jsReferenceMode,
+                jsReferenceDecisionMode: policy.jsReferenceDecisionMode,
+                jsReferenceBlocking: !normalPathReady && !!(referenceMismatches.length),
+                legacyJsReferencePathStage: normalPathReady ? 'diagnostic-cleanup' : 'blocking-reference',
+                legacyJsReferenceUsedForDecision: !normalPathReady,
+                legacyJsReferenceCleanupReady: !!normalPathReady,
+                legacyJsPathReduced: !!normalPathReady,
+                legacyJsPathRole: policy.legacyJsPathRole,
+                jsFallbackMode: policy.jsFallbackMode,
+                jsReferenceReduced: !!(normalPathReady && referenceMismatches.length),
+                hardFallbackOnly: false,
+                emergencyFallback: false,
                 hardSafetyBlock: false,
             };
         } catch (e) {
@@ -3560,9 +4376,19 @@ class HeatingRodControlModule extends BaseModule {
                 tsTargetW: tsProductiveDecision && tsProductiveDecision.ts ? tsProductiveDecision.ts.targetPowerW : null,
                 reason: tsProductiveDecision && (tsProductiveDecision.reason || tsProductiveDecision.fallbackReason) || '',
                 mismatches: tsProductiveDecision && tsProductiveDecision.mismatches || [],
-                jsReferenceMismatch: !!(tsProductiveDecision && (tsProductiveDecision.jsReferenceMismatch || (Array.isArray(tsProductiveDecision.mismatches) && tsProductiveDecision.mismatches.length))),
+                jsReferenceMismatch: !!(tsProductiveDecision && (tsProductiveDecision.jsReferenceMismatch || (Array.isArray(tsProductiveDecision.referenceMismatches) && tsProductiveDecision.referenceMismatches.length))),
+                referenceMismatches: tsProductiveDecision && Array.isArray(tsProductiveDecision.referenceMismatches) ? tsProductiveDecision.referenceMismatches : [],
                 normalPathReady: !!(tsProductiveDecision && tsProductiveDecision.normalPathReady),
+                normalPathTakenOver: !!(tsProductiveDecision && tsProductiveDecision.normalPathTakenOver),
+                legacyJsPathRole: tsProductiveDecision && tsProductiveDecision.legacyJsPathRole || '',
+                legacyJsPathReduced: !!(tsProductiveDecision && tsProductiveDecision.legacyJsPathReduced),
+                jsReferenceMode: tsProductiveDecision && tsProductiveDecision.jsReferenceMode || '',
+                jsReferenceDecisionMode: tsProductiveDecision && tsProductiveDecision.jsReferenceDecisionMode || '',
+                jsReferenceBlocking: !!(tsProductiveDecision && tsProductiveDecision.jsReferenceBlocking),
                 jsReferenceReduced: !!(tsProductiveDecision && tsProductiveDecision.jsReferenceReduced),
+                hardFallbackOnly: !!(tsProductiveDecision && tsProductiveDecision.hardFallbackOnly),
+                emergencyFallback: !!(tsProductiveDecision && tsProductiveDecision.emergencyFallback),
+                jsFallbackMode: tsProductiveDecision && tsProductiveDecision.jsFallbackMode || '',
                 hardSafetyBlock: !!(tsProductiveDecision && tsProductiveDecision.hardSafetyBlock),
             });
             const offWouldTouchLoad = targetStage <= 0 && ((typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 50) || Math.max(0, feedback.appliedPowerW || 0) > 0 || observedStage > 0);
@@ -3634,8 +4460,18 @@ class HeatingRodControlModule extends BaseModule {
             activeCount: heatingRodTsProductiveEntries.filter(e => e && e.active).length,
             fallbackCount: heatingRodTsProductiveEntries.filter(e => e && e.fallback).length,
             fallbackReasons: Array.from(new Set(heatingRodTsProductiveEntries.filter(e => e && e.fallbackReason).map(e => String(e.fallbackReason)))),
+            normalPathTakenOverCount: heatingRodTsProductiveEntries.filter(e => e && e.normalPathTakenOver).length,
             jsReferenceReducedCount: heatingRodTsProductiveEntries.filter(e => e && e.jsReferenceReduced).length,
             hardSafetyBlockCount: heatingRodTsProductiveEntries.filter(e => e && e.hardSafetyBlock).length,
+            hardFallbackOnlyCount: heatingRodTsProductiveEntries.filter(e => e && e.hardFallbackOnly).length,
+            emergencyFallbackCount: heatingRodTsProductiveEntries.filter(e => e && e.emergencyFallback).length,
+            jsReferenceBlockingCount: heatingRodTsProductiveEntries.filter(e => e && e.jsReferenceBlocking).length,
+            legacyJsReferenceUsedForDecisionCount: heatingRodTsProductiveEntries.filter(e => e && e.legacyJsReferenceUsedForDecision).length,
+            legacyJsReferenceDiagnosticOnlyCount: heatingRodTsProductiveEntries.filter(e => e && e.legacyJsReferenceUsedForDecision === false).length,
+            normalPathActiveCount: heatingRodTsProductiveEntries.filter(e => e && e.source === 'ts-heating-rod-normal').length,
+            legacyJsPathRole: heatingRodTsProductiveEntries.some(e => e && e.normalPathTakenOver) ? 'emergency-fallback-only' : 'safety-reference',
+            jsReferenceDecisionMode: heatingRodTsProductiveEntries.some(e => e && e.normalPathTakenOver) ? 'diagnostic-only' : 'blocking-until-normal-ready',
+            jsFallbackMode: heatingRodTsProductiveEntries.some(e => e && e.normalPathTakenOver) ? 'hard-blockers-only' : 'normal-safety-fallback',
             entries: heatingRodTsProductiveEntries,
         };
         const heatingRodTsRuntimeEvaluation = this._updateHeatingRodTsRuntimeEvaluation(heatingRodTsProductive);
@@ -3646,6 +4482,79 @@ class HeatingRodControlModule extends BaseModule {
         heatingRodTsProductive.effectiveSource = heatingRodTsProductive && heatingRodTsProductive.active && heatingRodTsNormalSource && heatingRodTsNormalSource.ready
             ? 'ts-heating-rod-normal'
             : (heatingRodTsProductive && heatingRodTsProductive.active ? 'ts-heating-rod' : 'js-runtime');
+        const heatingRodTsFallbackPolicy = {
+            source: 'heating-rod-ts-fallback-policy-v1',
+            ts: Date.now(),
+            mode: heatingRodTsNormalSource && heatingRodTsNormalSource.ready ? 'hard-blockers-only' : 'normal-safety-fallback',
+            hardBlockersOnly: !!(heatingRodTsNormalSource && heatingRodTsNormalSource.ready),
+            jsFallbackLimitedToHardBlockers: !!(heatingRodTsNormalSource && heatingRodTsNormalSource.ready),
+            normalPathTakenOver: !!(heatingRodTsNormalSource && heatingRodTsNormalSource.normalPathTakenOver),
+            legacyJsReferenceMode: heatingRodTsNormalSource && heatingRodTsNormalSource.ready ? 'diagnostic-only' : 'blocking-reference',
+            jsReferenceDecisionUsed: heatingRodTsNormalSource && heatingRodTsNormalSource.ready ? 'diagnostic-only' : 'blocking-before-normal',
+            legacyJsReferenceInDecisionPath: !(heatingRodTsNormalSource && heatingRodTsNormalSource.ready),
+            legacyJsReferenceMovedToDiagnostics: !!(heatingRodTsNormalSource && heatingRodTsNormalSource.ready),
+            legacyJsReferenceCleanupStage: heatingRodTsNormalSource && heatingRodTsNormalSource.ready ? 'diagnostics-cleanup' : 'candidate-monitoring',
+            effectiveSource: heatingRodTsProductive.effectiveSource,
+            allowedHardReasons: ['missing-ts-mirror', 'ts-runtime-error', 'storage-protect-blocks-ts-normal', 'pv-protect-blocks-ts-normal'],
+            jsReferenceReducedCount: heatingRodTsProductive.jsReferenceReducedCount || 0,
+            hardSafetyBlockCount: heatingRodTsProductive.hardSafetyBlockCount || 0,
+            emergencyFallbackCount: heatingRodTsProductive.emergencyFallbackCount || 0,
+            fallbackReasons: heatingRodTsProductive.fallbackReasons || [],
+        };
+        heatingRodTsProductive.fallbackPolicy = heatingRodTsFallbackPolicy;
+        const heatingRodTsLegacyReference = this._buildHeatingRodLegacyReferenceDiagnostic(heatingRodTsProductive, heatingRodTsRuntimeEvaluation, heatingRodTsNormalSource);
+        const heatingRodTsLegacyCleanup = this._buildHeatingRodTsLegacyCleanupState(heatingRodTsProductive, heatingRodTsRuntimeEvaluation, heatingRodTsNormalSource, heatingRodTsFallbackPolicy, heatingRodTsLegacyReference);
+        const heatingRodTsLegacyRemovalPlan = this._buildHeatingRodTsLegacyRemovalPlanState(heatingRodTsProductive, heatingRodTsRuntimeEvaluation, heatingRodTsNormalSource, heatingRodTsFallbackPolicy, heatingRodTsLegacyCleanup, heatingRodTsLegacyReference);
+        const heatingRodTsLegacyDebugBridge = this._buildHeatingRodTsLegacyDebugBridgeState(heatingRodTsProductive, heatingRodTsRuntimeEvaluation, heatingRodTsNormalSource, heatingRodTsFallbackPolicy, heatingRodTsLegacyCleanup, heatingRodTsLegacyRemovalPlan, heatingRodTsLegacyReference);
+        const heatingRodTsLegacyPruned = this._buildHeatingRodTsLegacyPrunedState(heatingRodTsLegacyReference, heatingRodTsLegacyCleanup, heatingRodTsLegacyRemovalPlan, heatingRodTsLegacyDebugBridge, heatingRodTsNormalSource, heatingRodTsRuntimeEvaluation);
+        const heatingRodTsLegacyRemovalCandidate = this._buildHeatingRodTsLegacyRemovalCandidateState(heatingRodTsLegacyReference, heatingRodTsLegacyCleanup, heatingRodTsLegacyRemovalPlan, heatingRodTsLegacyDebugBridge, heatingRodTsLegacyPruned, heatingRodTsNormalSource, heatingRodTsRuntimeEvaluation);
+        const heatingRodTsLegacyFinalCleanup = this._buildHeatingRodTsLegacyFinalCleanupState(heatingRodTsLegacyReference, heatingRodTsLegacyPruned, heatingRodTsLegacyRemovalCandidate, heatingRodTsLegacyDebugBridge, heatingRodTsNormalSource, heatingRodTsRuntimeEvaluation);
+        const heatingRodTsLegacyNormalDiagnostics = this._buildHeatingRodTsLegacyNormalDiagnosticsState(heatingRodTsLegacyRemovalCandidate, heatingRodTsLegacyPruned, heatingRodTsLegacyDebugBridge, heatingRodTsLegacyReference, heatingRodTsRuntimeEvaluation);
+        heatingRodTsProductive.legacyReference = heatingRodTsLegacyReference;
+        heatingRodTsProductive.legacyCleanup = heatingRodTsLegacyCleanup;
+        heatingRodTsProductive.legacyRemovalPlan = heatingRodTsLegacyRemovalPlan;
+        heatingRodTsProductive.legacyDebugBridge = heatingRodTsLegacyDebugBridge;
+        heatingRodTsProductive.legacyPrunedDebug = heatingRodTsLegacyPruned;
+        heatingRodTsProductive.legacyPruned = heatingRodTsLegacyPruned;
+        heatingRodTsProductive.legacyRemovalCandidate = heatingRodTsLegacyRemovalCandidate;
+        heatingRodTsProductive.legacyFinalCleanup = heatingRodTsLegacyFinalCleanup;
+        heatingRodTsProductive.legacyNormalDiagnostics = heatingRodTsLegacyNormalDiagnostics;
+        heatingRodTsRuntimeEvaluation.legacyReference = heatingRodTsLegacyReference;
+        heatingRodTsRuntimeEvaluation.legacyCleanup = heatingRodTsLegacyCleanup;
+        heatingRodTsRuntimeEvaluation.legacyRemovalPlan = heatingRodTsLegacyRemovalPlan;
+        heatingRodTsRuntimeEvaluation.legacyDebugBridge = heatingRodTsLegacyDebugBridge;
+        heatingRodTsRuntimeEvaluation.legacyPrunedDebug = heatingRodTsLegacyPruned;
+        heatingRodTsRuntimeEvaluation.legacyPruned = heatingRodTsLegacyPruned;
+        heatingRodTsRuntimeEvaluation.legacyRemovalCandidate = heatingRodTsLegacyRemovalCandidate;
+        heatingRodTsRuntimeEvaluation.legacyFinalCleanup = heatingRodTsLegacyFinalCleanup;
+        heatingRodTsRuntimeEvaluation.legacyNormalDiagnostics = heatingRodTsLegacyNormalDiagnostics;
+        if (heatingRodTsNormalSource && typeof heatingRodTsNormalSource === 'object') {
+            heatingRodTsNormalSource.legacyReference = heatingRodTsLegacyReference;
+            heatingRodTsNormalSource.legacyCleanup = heatingRodTsLegacyCleanup;
+            heatingRodTsNormalSource.legacyRemovalPlan = heatingRodTsLegacyRemovalPlan;
+            heatingRodTsNormalSource.legacyDebugBridge = heatingRodTsLegacyDebugBridge;
+            heatingRodTsNormalSource.legacyPrunedDebug = heatingRodTsLegacyPruned;
+            heatingRodTsNormalSource.legacyPruned = heatingRodTsLegacyPruned;
+            heatingRodTsNormalSource.legacyRemovalCandidate = heatingRodTsLegacyRemovalCandidate;
+            heatingRodTsNormalSource.legacyFinalCleanup = heatingRodTsLegacyFinalCleanup;
+            heatingRodTsNormalSource.legacyNormalDiagnostics = heatingRodTsLegacyNormalDiagnostics;
+        }
+        heatingRodTsFallbackPolicy.legacyReference = heatingRodTsLegacyReference;
+        heatingRodTsFallbackPolicy.legacyCleanup = heatingRodTsLegacyCleanup;
+        heatingRodTsFallbackPolicy.legacyRemovalPlan = heatingRodTsLegacyRemovalPlan;
+        heatingRodTsFallbackPolicy.legacyDebugBridge = heatingRodTsLegacyDebugBridge;
+        heatingRodTsFallbackPolicy.legacyPrunedDebug = heatingRodTsLegacyPruned;
+        heatingRodTsFallbackPolicy.legacyPruned = heatingRodTsLegacyPruned;
+        heatingRodTsFallbackPolicy.legacyRemovalCandidate = heatingRodTsLegacyRemovalCandidate;
+        heatingRodTsFallbackPolicy.legacyFinalCleanup = heatingRodTsLegacyFinalCleanup;
+        heatingRodTsFallbackPolicy.legacyNormalDiagnostics = heatingRodTsLegacyNormalDiagnostics;
+        heatingRodTsLegacyRemovalPlan.legacyDebugBridge = heatingRodTsLegacyDebugBridge;
+        heatingRodTsLegacyRemovalPlan.legacyPrunedDebug = heatingRodTsLegacyPruned;
+        heatingRodTsLegacyRemovalPlan.legacyPruned = heatingRodTsLegacyPruned;
+        heatingRodTsLegacyRemovalPlan.legacyRemovalCandidate = heatingRodTsLegacyRemovalCandidate;
+        heatingRodTsLegacyRemovalPlan.legacyFinalCleanup = heatingRodTsLegacyFinalCleanup;
+        heatingRodTsLegacyRemovalPlan.legacyFinalCleanup = heatingRodTsLegacyFinalCleanup;
+        heatingRodTsLegacyRemovalPlan.legacyNormalDiagnostics = heatingRodTsLegacyNormalDiagnostics;
 
         this.adapter._heatingRodBudgetUsedW = Math.round(budgetUsedW);
 
@@ -3705,15 +4614,35 @@ class HeatingRodControlModule extends BaseModule {
         await this._setStateIfChanged('heatingRod.summary.pvAutomationAllowed', !!pvAutomationAllowedByMin);
         await this._setStateIfChanged('heatingRod.summary.tsShadowJson', JSON.stringify(heatingRodTsShadow || {}));
         await this._setStateIfChanged('heatingRod.summary.source', heatingRodTsProductive && heatingRodTsProductive.effectiveSource ? heatingRodTsProductive.effectiveSource : (heatingRodTsProductive && heatingRodTsProductive.active ? 'ts-heating-rod' : 'js-runtime'));
+        await this._setStateIfChanged('heatingRod.summary.jsFallbackMode', String(heatingRodTsNormalSource && heatingRodTsNormalSource.jsFallbackMode || heatingRodTsProductive && heatingRodTsProductive.jsFallbackMode || 'normal-safety-fallback'));
         await this._setStateIfChanged('heatingRod.summary.tsProductiveJson', JSON.stringify(heatingRodTsProductive || {}));
         await this._setStateIfChanged('heatingRod.summary.tsRuntimeEvaluationJson', JSON.stringify(heatingRodTsRuntimeEvaluation || {}));
         await this._setStateIfChanged('heatingRod.summary.tsNormalSourceJson', JSON.stringify(heatingRodTsNormalSource || {}));
+        await this._setStateIfChanged('heatingRod.summary.tsFallbackPolicyJson', JSON.stringify(heatingRodTsFallbackPolicy || {}));
+        await this._setStateIfChanged('heatingRod.summary.tsLegacyReferenceJson', JSON.stringify(heatingRodTsLegacyReference || {}));
+        await this._setStateIfChanged('heatingRod.summary.tsLegacyCleanupJson', JSON.stringify(heatingRodTsLegacyCleanup || {}));
+        await this._setStateIfChanged('heatingRod.summary.tsLegacyRemovalPlanJson', JSON.stringify(heatingRodTsLegacyRemovalPlan || {}));
+        await this._setStateIfChanged('heatingRod.summary.tsLegacyDebugBridgeJson', JSON.stringify(heatingRodTsLegacyDebugBridge || {}));
+        await this._setStateIfChanged('heatingRod.summary.tsLegacyPrunedJson', JSON.stringify(heatingRodTsLegacyPruned || {}));
+        await this._setStateIfChanged('heatingRod.summary.tsLegacyRemovalCandidateJson', JSON.stringify(heatingRodTsLegacyRemovalCandidate || {}));
+        await this._setStateIfChanged('heatingRod.summary.tsLegacyFinalCleanupJson', JSON.stringify(heatingRodTsLegacyFinalCleanup || {}));
+        await this._setStateIfChanged('heatingRod.summary.tsLegacyNormalDiagnosticsJson', JSON.stringify(heatingRodTsLegacyNormalDiagnostics || {}));
+        await this._setStateIfChanged('heatingRod.summary.legacyJsReferenceJson', JSON.stringify(heatingRodTsLegacyNormalDiagnostics && heatingRodTsLegacyNormalDiagnostics.ready ? heatingRodTsLegacyNormalDiagnostics.compactReference : (heatingRodTsLegacyRemovalCandidate && heatingRodTsLegacyRemovalCandidate.ready ? heatingRodTsLegacyRemovalCandidate.compactReference : (heatingRodTsLegacyPruned && heatingRodTsLegacyPruned.ready ? heatingRodTsLegacyPruned.compactLegacyReference : (heatingRodTsLegacyDebugBridge && heatingRodTsLegacyDebugBridge.debugBridgeActive ? heatingRodTsLegacyDebugBridge : (heatingRodTsLegacyReference || {}))))));
         await this._setStateIfChanged('heatingRod.summary.debugJson', JSON.stringify({
             source: pvBase.source,
             tsShadow: heatingRodTsShadow || null,
             tsProductive: heatingRodTsProductive || null,
             tsRuntimeEvaluation: heatingRodTsRuntimeEvaluation || null,
             tsNormalSource: heatingRodTsNormalSource || null,
+            tsFallbackPolicy: heatingRodTsFallbackPolicy || null,
+            legacyReference: heatingRodTsLegacyFinalCleanup && heatingRodTsLegacyFinalCleanup.ready ? (heatingRodTsLegacyFinalCleanup.compactDebugBridge || heatingRodTsLegacyFinalCleanup.compactReference || null) : (heatingRodTsLegacyNormalDiagnostics && heatingRodTsLegacyNormalDiagnostics.ready ? heatingRodTsLegacyNormalDiagnostics.compactReference : (heatingRodTsLegacyPruned && heatingRodTsLegacyPruned.ready ? heatingRodTsLegacyPruned.compactLegacyReference : (heatingRodTsLegacyReference || null))),
+            tsLegacyCleanup: heatingRodTsLegacyCleanup || null,
+            tsLegacyDebugBridge: heatingRodTsLegacyDebugBridge || null,
+            tsLegacyPruned: heatingRodTsLegacyPruned || null,
+            tsLegacyRemovalCandidate: heatingRodTsLegacyRemovalCandidate || null,
+            tsLegacyFinalCleanup: heatingRodTsLegacyFinalCleanup || null,
+            tsLegacyNormalDiagnostics: heatingRodTsLegacyNormalDiagnostics || null,
+            legacyDebugBridge: heatingRodTsLegacyDebugBridge || null,
             pvAutomationMinW: Math.round(num(minPvAutomationW, 0)),
             pvAutomationPvNowW: Math.round(num(pvNowForAutomationW, 0)),
             pvAutomationAllowed: !!pvAutomationAllowedByMin,

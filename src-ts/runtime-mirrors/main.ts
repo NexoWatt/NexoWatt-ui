@@ -21,7 +21,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: 160f8cc2b9e877d74755168d0e2178b06cf6e1da29f366f5f807dce63a2f8160
+ * Original-Hash: d301a0b880bbb643a5c9ad753127e15fbf00554a4181324f075f6b2d94765b71
  */
 
 /**

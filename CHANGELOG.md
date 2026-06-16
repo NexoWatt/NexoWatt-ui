@@ -1,3 +1,83 @@
+## 0.7.120 - Core-Limits Restgates als TypeScript-Shadow vorbereitet
+
+- Forecast-, Tarif-/Negativpreis-, Peak-/Netz- und §14a-Gates als TypeScript-Helfer in `src-ts/ems/core-limits/core-budget.ts` vorbereitet.
+- `ems/modules/core-limits.js` schreibt jetzt `ems.budget.tsRestGatesJson` als Shadow-Vergleich.
+- Die Restgates bleiben in 0.7.120 produktiv weiterhin JavaScript; TypeScript rechnet nur parallel.
+- Diagnose-API liefert `emsBudgetTsRestGatesJson` für App-Center/Debug.
+- Neuer Check `npm run test:core-limits-rest-gates`.
+- Service-Worker Cache auf `nexowatt-cache-v288` erhöht.
+
+## 0.7.119 - Heizstab alte JS-Referenz aus Normaldiagnose entfernen
+
+- Alte Heizstab-JS-Referenz wird bei stabilem TS-Normalpfad aus der normalen Diagnose entfernt.
+- Neuer State `heatingRod.summary.tsLegacyNormalDiagnosticsJson` zeigt den finalen Normaldiagnose-Cleanup.
+- `legacyJsReferenceJson` und `debugJson.legacyReference` bevorzugen jetzt die kompakte Debug-/Notfallbrücke statt des vollständigen JS-Referenzpayloads.
+- App-Center zeigt `JS-Normaldiagnose` und `JS-Normaldiagnose entfernt`.
+- Keine neue Heizstab-Schaltlogik; TS bleibt Normalpfad, JS bleibt harte Notfallbrücke.
+- Service-Worker Cache auf `nexowatt-cache-v287` erhöht.
+
+## 0.7.118 - Heizstab Cleanup abgeschlossen / JS-Referenz als Entfernungs-Kandidat markiert
+
+- Neuer Diagnose-State `heatingRod.summary.tsLegacyRemovalCandidateJson`.
+- Alter JS-Heizstabpfad wird bei stabilem TS-Normalpfad als konkreter Entfernungs-Kandidat markiert.
+- Entfernbar markiert: normale JS-Referenz-Entscheidungsbremse, volle JS-Referenzpayloads im Normalpfad und doppelte Blocking-Mismatch-Listen.
+- Erhalten bleibt: harte Sicherheitsnotbremse, Runtime-Error-Fallback, kompakte Debug-Brücke und manuelle/externe Sicherheitswächter.
+- App-Center zeigt jetzt `JS-Entfernungskandidat` und `JS-Entfernungsphase`.
+- Keine neue Heizstab-Schaltlogik; TS bleibt Normalpfad, JS bleibt Notfallback/Debug-Brücke.
+
+## 0.7.117 - Heizstab Legacy-JS-Referenzdetails weiter bereinigt
+
+- Neuer Diagnose-State `heatingRod.summary.tsLegacyPrunedJson` ergänzt.
+- Doppelte JS-Referenzdetails werden bei stabilem TS-Normalpfad weiter aus dem normalen Diagnosepfad entfernt.
+- `legacyJsReferenceJson` zeigt bei bereinigtem Zustand jetzt den kompakten Pruned-Status statt großer JS-Referenzlisten.
+- App-Center zeigt neue Zeilen für JS-Referenzdetails und reduzierte JS-Diagnosedaten.
+- Keine neue Heizstab-Schaltlogik; TS bleibt Normalpfad, JS bleibt Notfallback/Debug-Brücke.
+- Service-Worker Cache auf `nexowatt-cache-v285` erhöht.
+
+## 0.7.116 - Heizstab Legacy-JS nur noch als Debug-Brücke
+
+- Neuer Diagnose-State `heatingRod.summary.tsLegacyDebugBridgeJson` ergänzt.
+- Alter JS-Heizstab-Referenzpfad wird nach stabilem TS-Normalpfad als kompakte Debug-Brücke markiert.
+- Vollständige JS-Referenzlisten werden im Normalpfad weiter reduziert; kompakte Samples/Zähler bleiben erhalten.
+- App-Center zeigt jetzt `JS-Debug-Brücke` und `JS-Debugdaten`.
+- Keine neue Heizstab-Stufenlogik; TS bleibt Normalpfad, JS bleibt Notfallback/Debug-Brücke.
+
+## 0.7.115 - Heizstab JS-Referenzpfad als Removal-Plan vorbereitet
+- Service-Worker Cache auf `nexowatt-cache-v283` erhöht.
+
+- Alter Heizstab-JS-Referenzpfad erhält neuen Diagnose-State `heatingRod.summary.tsLegacyRemovalPlanJson`.
+- Kompakte JS-Referenzdiagnose ergänzt: bei stabilem TS-Normalpfad werden vollständige Mismatch-Listen aus dem normalen Diagnosepfad genommen und nur noch Zähler + kleine Probe gespeichert.
+- TS-Normalpfad bleibt führend; JS wird weiter in Richtung Notfallback/Debug-Brücke verschoben.
+- Removal-Plan trennt `removableParts` und `keepParts`, damit später klar ist, was entfernt werden darf und welche Notfallbacks bleiben müssen.
+- App-Center zeigt zusätzliche Zeilen `JS-Entfernung`, `JS-Diagnosedaten` und `JS-Cleanup-Kandidat`.
+- Alte JS-Referenzdiagnose wird im stabilen TS-Normalpfad auf Zähler und kleine Samples kompaktiert.
+- Keine neue Heizstab-Stufenlogik; keine EMS-/Frontend-/API-Fachlogik geändert.
+
+## 0.7.114 - Installations-Hotfix: Runtime-Paket verschlankt
+
+- Installierbares npm/GitHub-Paket verschlankt, damit ioBroker-Installationen auf kleinen Hosts weniger Speicher benötigen.
+- `devDependencies` aus der Runtime-Installation entfernt und als `xDevDependenciesForDevelopmentOnly` dokumentiert.
+- `files` in `package.json` auf echte Runtime-Dateien reduziert: `admin`, `www`, `main.js`, `io-package.json`, `ems`, `lib`, README und Lizenz.
+- Keine produktive EMS-/Heizstab-/Energiefluss-/Frontend-Logik geändert.
+- Service-Worker Cache auf `nexowatt-cache-v282` erhöht.
+
+## 0.7.113 - Heizstab JS-Referenzpfad in Diagnose/Cleanup verschoben
+
+- Neuen Diagnose-State `heatingRod.summary.tsLegacyReferenceJson` ergänzt.
+- Neuen Cleanup-State `heatingRod.summary.tsLegacyCleanupJson` ergänzt.
+- Alter JavaScript-Heizstab-Referenzpfad wird bei stabilem TS-Normalpfad klar als Diagnose-/Cleanup-Pfad geführt.
+- App-Center zeigt jetzt `JS-Referenz Cleanup` und `JS-Entscheidungseinfluss`.
+- JS bleibt als harte Notbremse für Safety-Fälle erhalten, aber die alte Referenzentscheidung wird weiter aus dem normalen Entscheidungsweg genommen.
+- Keine neue Heizstab-Stufenlogik; Fokus liegt auf Diagnose/Cleanup des alten JS-Referenzpfads.
+
+## 0.7.112 - Heizstab JS-Pfad auf Notfallback begrenzt
+
+- Der alte Heizstab-JS-Pfad wird im stabilen TS-Normalpfad nur noch als Notfallback bei harten Sicherheitsblockern genutzt.
+- JS/TS-Referenzabweichungen im TS-Normalpfad werden als `referenceMismatches` dokumentiert und blockieren die TS-Zielstufe nicht mehr.
+- Neue Diagnosefelder: `legacyJsPathRole`, `jsReferenceDecisionMode`, `jsFallbackMode`, `jsFallbackLimitedToHardBlockers`, `jsPathReductionStage`.
+- App-Center zeigt JS-Fallback-Modus, JS-Pfad-Rolle und JS-Referenzmodus in der Heizstab-TS-Runtime-Auswertung.
+- JavaScript bleibt Notfallback bei fehlendem TS-Spiegel, Runtimefehlern und Speicher-/PV-Schutzblockern.
+
 ## 0.7.111 - Heizstab TS-Normalpfad übernimmt JS-Referenz
 
 - Heizstab-TS kann nach stabilem Normalpfad-Status die alte JS-Referenz als Normalquelle übernehmen.

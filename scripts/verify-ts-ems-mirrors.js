@@ -30,7 +30,7 @@ const mirrorSpecs = [
   {
     sourceRel: 'src-ts/ems/heating-rod/heating-rod-decision.ts',
     mirrorRel: 'lib/ts-mirrors/ems/heating-rod/heating-rod-decision.js',
-    exports: ['chooseLargestStageWithinBudget', 'isHeatingRodStorageReserveActive', 'evaluateHeatingRodDecision'],
+    exports: ['chooseLargestStageWithinBudget', 'isHeatingRodStorageReserveActive', 'evaluateHeatingRodDecision', 'buildHeatingRodLegacyRemovalPlan'],
   },
 ];
 

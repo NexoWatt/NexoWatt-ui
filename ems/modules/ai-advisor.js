@@ -43,6 +43,26 @@
 
 const { BaseModule } = require('./base');
 /**
+ * Code-Teil: aiAdvisorPayloadTsMirror
+ *
+ * Zweck:
+ * Lädt den aus TypeScript erzeugten KI-Payload-Helfer. Dieser Helfer übernimmt ab
+ * 0.7.115 produktiv die sichere Ausgabe-Normalisierung für `aiAdvisor.*` States.
+ *
+ * Zusammenhang:
+ * Die fachlichen Vorschläge entstehen weiterhin in dieser JS-Datei. TypeScript formt
+ * daraus stabile JSON-/Top-/Count-/Severity-Werte für Dashboard und History.
+ *
+ * Fallback:
+ * Wenn der Spiegel fehlt oder Fehler wirft, bleibt die alte JS-Normalisierung aktiv.
+ */
+let aiAdvisorPayloadTsMirror = null;
+try {
+    aiAdvisorPayloadTsMirror = require('../../lib/ts-mirrors/ems/ai-advisor/ai-advisor-payload.js');
+} catch (_eAiAdvisorPayloadTsMirror) {
+    aiAdvisorPayloadTsMirror = null;
+}
+/**
  * Code-Teil: num
  * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
  * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -1817,12 +1837,34 @@ class AiAdvisorModule extends BaseModule {
      */
     async _publish(snapshot, suggestions, cfg) {
         const now = Date.now();
-        const top = suggestions && suggestions.length ? suggestions[0] : null;
-        const score = this._score(snapshot, suggestions);
-        const severity = top ? String(top.severity || 'info') : 'neutral';
-        const headline = top ? `${top.icon || '💡'} ${top.title}` : 'KI-Energieberater bereit';
-        const summary = top ? String(top.text || '') : 'Keine aktuellen Hinweise.';
-        const jsonSuggestions = safeJson(suggestions || [], '[]');
+        const jsScore = this._score(snapshot, suggestions);
+        let normalizedSuggestions = Array.isArray(suggestions) ? suggestions : [];
+        let aiPayload = null;
+        try {
+            if (aiAdvisorPayloadTsMirror && typeof aiAdvisorPayloadTsMirror.buildAiAdvisorPublishPayload === 'function') {
+                aiPayload = aiAdvisorPayloadTsMirror.buildAiAdvisorPublishPayload({
+                    suggestions: normalizedSuggestions,
+                    score: jsScore,
+                    showInLive: cfg.showInLive,
+                    dailyPlanText: snapshot.dayPlan && snapshot.dayPlan.text || '',
+                    learning: this._lastLearning || {},
+                    maxSuggestions: 8,
+                });
+                if (aiPayload && aiPayload.ok && Array.isArray(aiPayload.suggestions)) {
+                    normalizedSuggestions = aiPayload.suggestions;
+                }
+            }
+        } catch (e) {
+            aiPayload = { ok: false, source: 'js-fallback', error: e && e.message ? e.message : String(e) };
+            try { this.adapter && this.adapter.log && this.adapter.log.warn && this.adapter.log.warn('[ai-advisor-ts-payload] Fallback auf JS-Payload: ' + aiPayload.error); } catch (_eLog) {}
+        }
+        suggestions = normalizedSuggestions;
+        const top = aiPayload && aiPayload.top ? aiPayload.top : (suggestions && suggestions.length ? suggestions[0] : null);
+        const score = aiPayload && Number.isFinite(Number(aiPayload.score)) ? Number(aiPayload.score) : jsScore;
+        const severity = aiPayload && aiPayload.severity ? String(aiPayload.severity) : (top ? String(top.severity || 'info') : 'neutral');
+        const headline = aiPayload && aiPayload.headline ? String(aiPayload.headline) : (top ? `${top.icon || '💡'} ${top.title}` : 'KI-Energieberater bereit');
+        const summary = aiPayload && aiPayload.summary ? String(aiPayload.summary) : (top ? String(top.text || '') : 'Keine aktuellen Hinweise.');
+        const jsonSuggestions = aiPayload && aiPayload.suggestionsJson ? String(aiPayload.suggestionsJson) : safeJson(suggestions || [], '[]');
         const peakReferenceLimitW = (finiteNumber(snapshot.gridConnectionLimitW) && snapshot.gridConnectionLimitW > 0)
             ? snapshot.gridConnectionLimitW
             : ((finiteNumber(snapshot.peakLimitW) && snapshot.peakLimitW > 0) ? snapshot.peakLimitW : ((finiteNumber(snapshot.gridImportLimitEffectiveW) && snapshot.gridImportLimitEffectiveW > 0) ? snapshot.gridImportLimitEffectiveW : null));
@@ -1856,8 +1898,9 @@ class AiAdvisorModule extends BaseModule {
             top,
             suggestions,
             raw: snapshot,
+            tsPayload: aiPayload ? { source: aiPayload.source || 'unknown', ok: aiPayload.ok !== false, count: aiPayload.count || 0, fallback: aiPayload.ok === false } : { source: 'js-fallback', ok: false },
         };
-        const hash = makeHash({ suggestions, score, severity, show: cfg.showInLive, plan: dailyPlan.text || '', anomaly: learning.anomalyText || '', forecastQuality: learning.forecastQualityPct });
+        const hash = makeHash(aiPayload && aiPayload.hashPayload ? aiPayload.hashPayload : { suggestions, score, severity, show: cfg.showInLive, plan: dailyPlan.text || '', anomaly: learning.anomalyText || '', forecastQuality: learning.forecastQualityPct });
         const contentChanged = hash !== this._lastHash;
         this._lastHash = hash;
 
@@ -1869,7 +1912,7 @@ class AiAdvisorModule extends BaseModule {
         await this._set('aiAdvisor.severity', severity);
         await this._set('aiAdvisor.headline', headline);
         await this._set('aiAdvisor.summary', summary);
-        await this._set('aiAdvisor.count', Array.isArray(suggestions) ? suggestions.length : 0);
+        await this._set('aiAdvisor.count', aiPayload && Number.isFinite(Number(aiPayload.count)) ? Number(aiPayload.count) : (Array.isArray(suggestions) ? suggestions.length : 0));
         await this._set('aiAdvisor.score', score);
         await this._set('aiAdvisor.peakUsagePct', round(peakUsagePct, 1) || 0);
         await this._set('aiAdvisor.peakStateText', peakStateText);

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 45464fc7f284318bc4ce28b575aca404c5921834f9a2ac02aa7909ef9a9e1abd
+ * Original-Hash: 7143ba6451663487e286de56256c66e2ba9b958efd7935a6eaa5497811a70226
  */
 
 /**
@@ -75,6 +75,12 @@ const mirrorSpecs = [
     builtRel: 'build-ts/ems-mirrors/ems/heating-rod/heating-rod-decision.js',
     mirrorRel: 'lib/ts-mirrors/ems/heating-rod/heating-rod-decision.js',
     purpose: 'Heizstab-Entscheidungsspiegel für spätere Shadow-Vergleiche',
+  },
+  {
+    sourceRel: 'src-ts/ems/ai-advisor/ai-advisor-payload.ts',
+    builtRel: 'build-ts/ems-mirrors/ems/ai-advisor/ai-advisor-payload.js',
+    mirrorRel: 'lib/ts-mirrors/ems/ai-advisor/ai-advisor-payload.js',
+    purpose: 'KI-Berater-Publish-Payload für produktive, sichere Vorschlagsnormalisierung',
   },
 ];
 
