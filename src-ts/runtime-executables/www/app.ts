@@ -114,6 +114,30 @@ function nxTryTsDashboardFormat(name, ...args){
 }
 
 
+/**
+ * Code-Teil: nwNormalizeBrandHeader
+ * Zweck: Entfernt den alten sichtbaren EMS-Zusatz aus der Topbar-Marke.
+ * Zusammenhang: Die UI zeigt als Produktmarke oben nur noch „NexoWatt“. Fachliche
+ * EMS-Bezeichnungen in Modulen, Statuskarten und App-Center bleiben unverändert.
+ */
+function nwNormalizeBrandHeader(){
+  try {
+    const topbarTitles = Array.prototype.slice.call(document.querySelectorAll('.topbar h1, header.topbar h1'));
+    topbarTitles.forEach((el) => {
+      const text = String(el && el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (text === 'NexoWatt EMS') el.textContent = 'NexoWatt';
+    });
+    const pwaTitles = Array.prototype.slice.call(document.querySelectorAll('meta[name="apple-mobile-web-app-title"]'));
+    pwaTitles.forEach((el) => {
+      if (el && el.getAttribute('content') === 'NexoWatt EMS') el.setAttribute('content', 'NexoWatt');
+    });
+    if (typeof document.title === 'string' && /^NexoWatt EMS\b/.test(document.title)) {
+      document.title = document.title.replace(/^NexoWatt EMS\b/, 'NexoWatt');
+    }
+  } catch(_e) {}
+}
+
+
 // --- Precise donut placement (anchor angles like a reference UI) ---
 /**
  * Code-Teil: arcLenFromDeg
@@ -4367,6 +4391,7 @@ function bindToggleButtonGroups(){
 
 // Ereignis-Kommentar: Bindet das UI-Ereignis 'DOMContentLoaded' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
 window.addEventListener('DOMContentLoaded', ()=> {
+  nwNormalizeBrandHeader();
   bootstrap();
   initMenu();
   initSettingsPanel();

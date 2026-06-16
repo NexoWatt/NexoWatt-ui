@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.132",
+    "version": "0.8.0",
     "news": {
+      "0.8.0": {
+        "de": "Version 0.8.0: TypeScript bleibt kanonische Runtime-Quelle; sichtbares Branding in der Topbar zeigt jetzt nur noch NexoWatt ohne EMS-Zusatz. Service-Worker-/PWA-Version und Brand-Cleanup-Gate ergänzt.",
+        "en": "Version 0.8.0: TypeScript remains the canonical runtime source; visible topbar branding now shows NexoWatt without the EMS suffix. Service worker/PWA version and brand cleanup gate added."
+      },
       "0.7.132": {
         "de": "TypeScript-Runtime-Cleanup: nicht mehr genutzter .nwcore-JS-Doppelbaum und stale build-ts-Artefakte entfernt; EMS/main/www bleiben generierte Runtime-JS-Artefakte aus src-ts/runtime-executables, EVCS bleibt TS-Normalquelle mit JS nur als Executor/Hard-Fallback.",
         "en": "TypeScript runtime cleanup: removed the unused .nwcore JS duplicate tree and stale build-ts artifacts; EMS/main/www remain generated runtime JS artifacts from src-ts/runtime-executables, EVCS remains the TS normal source with JS only as executor/hard fallback."
@@ -26,10 +30,6 @@
       "0.7.95": {
         "de": "App-Center Runtime-Spiegel gezielt typisiert: Verträge für Installer-Konfiguration, DP-Mapping, Heizstab, KI, Speicherfarm, TS-Schaltmodus und Diagnose ergänzt. Keine produktive Runtime-Umstellung.",
         "en": "App-Center runtime mirror typed: added contracts for installer configuration, datapoint mapping, heating rod, AI advisor, storage farm, TS switch mode and diagnostics. No productive runtime switch."
-      },
-      "0.7.94": {
-        "de": "TypeScript-Migration: SmartHome-Konfigurationsspiegel gezielt typisiert. Gebäude, Räume, Geräte, Funktionen, Timer, Szenen, Seiten und Auto-Erkennung sind als Verträge vorbereitet; produktive Runtime bleibt unverändert.",
-        "en": "TypeScript migration: SmartHome configuration mirror received targeted typing. Buildings, rooms, devices, functions, timers, scenes, pages and auto-detection are prepared as contracts; production runtime remains unchanged."
       }
     },
     "title": "NexoWatt UI",

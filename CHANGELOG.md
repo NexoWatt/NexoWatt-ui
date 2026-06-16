@@ -1,3 +1,9 @@
+## 0.8.0 - Cockpit-Branding bereinigt und TS-Runtime beibehalten
+
+- Sichtbare Cockpit-Kopfzeilen von `NexoWatt EMS` auf `NexoWatt` umgestellt; der markierte EMS-Zusatz oben links ist aus Live, History, Speicherfarm, Einstellungen und Report-Shells entfernt.
+- PWA-/Browser-Branding aktualisiert: Manifest-Version auf `0.8.0`, App-Name auf `NexoWatt` und Startseitentitel auf `NexoWatt UI`.
+- Runtime-Regel bleibt unverändert: produktive JavaScript-Dateien sind weiterhin generierte Artefakte aus `src-ts/runtime-executables/**`; der Service Worker wurde in der TypeScript-Quelle auf `nexowatt-cache-v301` erhöht und daraus neu erzeugt.
+
 ## 0.7.132 - Legacy-JS-Artefakte nach TypeScript-Handover entfernt
 
 - Entfernt den alten `.nwcore/**`-Doppelbaum samt zugehöriger kanonischer Runtime-Executable-Quelle und TS-Runtime-Spiegeln; die produktive Adapter-Runtime nutzt weiter `ems/**` als generiertes TS-Artefakt.

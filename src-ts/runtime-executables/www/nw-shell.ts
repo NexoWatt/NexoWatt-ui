@@ -54,6 +54,29 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
     else fn();
   }
+
+  /**
+   * Code-Teil: nwNormalizeBrandHeader
+   * Zweck: Entfernt den alten sichtbaren EMS-Zusatz aus der Topbar-Marke.
+   * Zusammenhang: Shell-Seiten bleiben konsistent zur neuen NexoWatt-Brand ohne
+   * die fachlichen EMS-Status-/Modulbezeichnungen umzubenennen.
+   */
+  function nwNormalizeBrandHeader() {
+    try {
+      var titles = Array.prototype.slice.call(document.querySelectorAll('.topbar h1, header.topbar h1'));
+      titles.forEach(function (el) {
+        var text = String(el && el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (text === 'NexoWatt EMS') el.textContent = 'NexoWatt';
+      });
+      var pwaTitles = Array.prototype.slice.call(document.querySelectorAll('meta[name="apple-mobile-web-app-title"]'));
+      pwaTitles.forEach(function (el) {
+        if (el && el.getAttribute('content') === 'NexoWatt EMS') el.setAttribute('content', 'NexoWatt');
+      });
+      if (typeof document.title === 'string' && /^NexoWatt EMS\b/.test(document.title)) {
+        document.title = document.title.replace(/^NexoWatt EMS\b/, 'NexoWatt');
+      }
+    } catch (_e) {}
+  }
   /**
    * Code-Teil: ready
    * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
@@ -61,6 +84,7 @@
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   ready(function () {
+    nwNormalizeBrandHeader();
     var btn = document.getElementById('menuBtn');
     var menu = document.getElementById('menuDropdown');
     if (btn && menu && !btn.dataset.nwMenuFallback && !btn.dataset.nwShellBound) {

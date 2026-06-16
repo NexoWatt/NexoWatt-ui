@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 39f2249bfd6d8ff460c59f6883fcf15787a83c8777f4331cb79592229f0ca4f6
+ * Original-Hash: e86fb14c3050298240a470cd0e7b3d121c38db29cf570007d8ed96b842105f5f
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/nw-shell.ts
- * Quell-Hash: sha256:78de6e83776b61073b6b94ff4e30be69fdf569e460ff2466fe9e43d0cb83dc25
+ * Quell-Hash: sha256:ed77fa3228e80a6c9c0eceb98c626c3a2b932e760a9c8ffcd5ad182571b8d56b
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -83,6 +83,29 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
     else fn();
   }
+
+  /**
+   * Code-Teil: nwNormalizeBrandHeader
+   * Zweck: Entfernt den alten sichtbaren EMS-Zusatz aus der Topbar-Marke.
+   * Zusammenhang: Shell-Seiten bleiben konsistent zur neuen NexoWatt-Brand ohne
+   * die fachlichen EMS-Status-/Modulbezeichnungen umzubenennen.
+   */
+  function nwNormalizeBrandHeader() {
+    try {
+      var titles = Array.prototype.slice.call(document.querySelectorAll('.topbar h1, header.topbar h1'));
+      titles.forEach(function (el) {
+        var text = String(el && el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (text === 'NexoWatt EMS') el.textContent = 'NexoWatt';
+      });
+      var pwaTitles = Array.prototype.slice.call(document.querySelectorAll('meta[name="apple-mobile-web-app-title"]'));
+      pwaTitles.forEach(function (el) {
+        if (el && el.getAttribute('content') === 'NexoWatt EMS') el.setAttribute('content', 'NexoWatt');
+      });
+      if (typeof document.title === 'string' && /^NexoWatt EMS\b/.test(document.title)) {
+        document.title = document.title.replace(/^NexoWatt EMS\b/, 'NexoWatt');
+      }
+    } catch (_e) {}
+  }
   /**
    * Code-Teil: ready
    * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
@@ -90,6 +113,7 @@
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   ready(function () {
+    nwNormalizeBrandHeader();
     var btn = document.getElementById('menuBtn');
     var menu = document.getElementById('menuDropdown');
     if (btn && menu && !btn.dataset.nwMenuFallback && !btn.dataset.nwShellBound) {

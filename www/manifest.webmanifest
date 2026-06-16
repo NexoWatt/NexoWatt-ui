@@ -1,5 +1,5 @@
 {
-  "name": "NexoWatt EMS",
+  "name": "NexoWatt",
   "short_name": "NexoWatt",
   "start_url": ".",
   "scope": "./",
@@ -44,5 +44,5 @@
       "purpose": "maskable"
     }
   ],
-  "version": "0.7.132"
+  "version": "0.8.0"
 }

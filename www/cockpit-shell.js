@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/cockpit-shell.ts
- * Quell-Hash: sha256:9282d098ce5417b6d71e7237c8f1b9befe1d8a692d8cd477f20c94af2a884c8f
+ * Quell-Hash: sha256:f3f9bf6a879f1ca252128b35ecb6769d68612783ce79e9281ed03407e15e1bf0
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -42,7 +42,30 @@
 
 (function(){
   'use strict';
+  /**
+   * Code-Teil: nwNormalizeBrandHeader
+   * Zweck: Entfernt den alten sichtbaren EMS-Zusatz aus der Topbar-Marke.
+   * Zusammenhang: Gemeinsame Cockpit-Shell normalisiert Bestandsseiten zusätzlich
+   * zur statischen HTML-Anpassung; fachliche EMS-Begriffe bleiben erhalten.
+   */
+  function nwNormalizeBrandHeader(){
+    try {
+      var titles = Array.prototype.slice.call(document.querySelectorAll('.topbar h1, header.topbar h1'));
+      titles.forEach(function(el){
+        var text = String(el && el.textContent || '').replace(/\s+/g, ' ').trim();
+        if(text === 'NexoWatt EMS') el.textContent = 'NexoWatt';
+      });
+      var pwaTitles = Array.prototype.slice.call(document.querySelectorAll('meta[name="apple-mobile-web-app-title"]'));
+      pwaTitles.forEach(function(el){
+        if(el && el.getAttribute('content') === 'NexoWatt EMS') el.setAttribute('content','NexoWatt');
+      });
+      if(typeof document.title === 'string' && /^NexoWatt EMS\b/.test(document.title)){
+        document.title = document.title.replace(/^NexoWatt EMS\b/, 'NexoWatt');
+      }
+    } catch(_e) {}
+  }
   try{
+    nwNormalizeBrandHeader();
     document.documentElement.classList.add('nw-cockpit-html');
     document.body && document.body.classList.add('nw-cockpit-skin');
     var topbar = document.querySelector('.topbar');
