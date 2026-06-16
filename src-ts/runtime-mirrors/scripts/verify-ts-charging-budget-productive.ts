@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 604a13b50947da9e646613b894cce029bd7a3edb7139205464c5667efef93b47
+ * Original-Hash: 099f56ff0aeb744cab094a965265ddfdedf28f6c261ce8f27d451d2108d4f0b0
  */
 
 /**
@@ -87,6 +87,20 @@ const ok = budget.buildChargingBudgetSafetyCapsProductive(
 );
 if (!ok.productive || ok.fallback || !ok.apply || ok.apply.budgetW !== 6000) {
   console.error('[ts-charging-budget-productive] Produktivfall liefert falsches Ergebnis.');
+  process.exit(1);
+}
+
+const pvGridModeParity = budget.buildChargingBudgetSafetyCapsProductive(
+  { budgetAfterW: 0, effectiveBudgetMode: 'engine:pvSurplus+gridImport', gridCapApplied: false, phaseCapApplied: false, para14aApplied: false },
+  { budgetW: 0, budgetMode: 'engine:pvSurplus', gridCapEvcsW: 29888, gridCapBinding: true, phaseCapEvcsW: null, phaseCapBinding: false, para14aActive: false, para14aTotalCapW: null }
+);
+if (!pvGridModeParity.productive || pvGridModeParity.fallback || !pvGridModeParity.apply || pvGridModeParity.apply.effectiveBudgetMode !== 'engine:pvSurplus+gridImport') {
+  console.error('[ts-charging-budget-productive] PV/Grid-Import-BudgetMode-Parität ist nicht erfüllt.');
+  process.exit(1);
+}
+const cmJs = read('ems/modules/charging-management.js');
+if (!cmJs.includes('let gridImportW = 0;') || cmJs.includes('const gridImportW = (typeof gridW')) {
+  console.error('[ts-charging-budget-productive] gridImportW ist nicht tick-weit gültig deklariert.');
   process.exit(1);
 }
 const bad = budget.buildChargingBudgetSafetyCapsProductive(

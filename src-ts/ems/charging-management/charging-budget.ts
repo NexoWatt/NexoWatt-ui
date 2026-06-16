@@ -55,6 +55,7 @@ export interface ChargingBudgetSafetyCapResult {
  * Zweck: Wandelt unbekannte Werte in finite Zahlen oder null um. 0 bleibt gültig.
  */
 function finiteOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
@@ -109,19 +110,23 @@ export function computeChargingBudgetSafetyCaps(input: ChargingBudgetSafetyCapIn
     const r = applyMinCap(budget, gridCap);
     budget = r.value;
     gridApplied = r.applied;
-    if (r.applied) mode = appendBudgetModeSuffix(mode, 'gridImport');
+    // JS marks an active grid-import safety cap in effectiveBudgetMode even when it does not
+    // further reduce an already lower PV/engine budget. Keep that diagnostic parity.
+    mode = appendBudgetModeSuffix(mode, 'gridImport');
   }
   if (phaseCap !== null && input.phaseCapBinding === true) {
     const r = applyMinCap(budget, phaseCap);
     budget = r.value;
     phaseApplied = r.applied;
-    if (r.applied) mode = appendBudgetModeSuffix(mode, 'phaseCap');
+    // Same convention as JS: mode suffix means the cap participated, not only that it bound.
+    mode = appendBudgetModeSuffix(mode, 'phaseCap');
   }
   if (input.para14aActive === true && p14aCap !== null && p14aCap > 0) {
     const r = applyMinCap(budget, p14aCap);
     budget = r.value;
     p14aApplied = r.applied;
-    if (r.applied) mode = appendBudgetModeSuffix(mode, '14a');
+    // §14a is visible in budgetMode whenever the active cap participates.
+    mode = appendBudgetModeSuffix(mode, '14a');
   }
 
   let finalStatus = 'ok';

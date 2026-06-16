@@ -37,6 +37,20 @@ if (!ok.productive || ok.fallback || !ok.apply || ok.apply.budgetW !== 6000) {
   console.error('[ts-charging-budget-productive] Produktivfall liefert falsches Ergebnis.');
   process.exit(1);
 }
+
+const pvGridModeParity = budget.buildChargingBudgetSafetyCapsProductive(
+  { budgetAfterW: 0, effectiveBudgetMode: 'engine:pvSurplus+gridImport', gridCapApplied: false, phaseCapApplied: false, para14aApplied: false },
+  { budgetW: 0, budgetMode: 'engine:pvSurplus', gridCapEvcsW: 29888, gridCapBinding: true, phaseCapEvcsW: null, phaseCapBinding: false, para14aActive: false, para14aTotalCapW: null }
+);
+if (!pvGridModeParity.productive || pvGridModeParity.fallback || !pvGridModeParity.apply || pvGridModeParity.apply.effectiveBudgetMode !== 'engine:pvSurplus+gridImport') {
+  console.error('[ts-charging-budget-productive] PV/Grid-Import-BudgetMode-Parität ist nicht erfüllt.');
+  process.exit(1);
+}
+const cmJs = read('ems/modules/charging-management.js');
+if (!cmJs.includes('let gridImportW = 0;') || cmJs.includes('const gridImportW = (typeof gridW')) {
+  console.error('[ts-charging-budget-productive] gridImportW ist nicht tick-weit gültig deklariert.');
+  process.exit(1);
+}
 const bad = budget.buildChargingBudgetSafetyCapsProductive(
   { budgetAfterW: 7000, effectiveBudgetMode: 'engine:pv', gridCapApplied: false, phaseCapApplied: false, para14aApplied: false },
   { budgetW: 10000, budgetMode: 'engine:pv', gridCapEvcsW: 6000, gridCapBinding: true }

@@ -1,9 +1,9 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.128",
+    "version": "0.7.129",
     "news": {
-      "0.7.128": {
+      "0.7.129": {
         "en": "EVCS TypeScript handover hardened: safety stop/ramp-down paths can now use the productive TS Allocation + Write-Plan zero-setpoint contract; JavaScript remains executor and hard fallback only.",
         "de": "EVCS-TypeScript-Handover gehärtet: Safety-Stop/Rampdown-Zweige können jetzt den produktiven TS-Allocation- und Write-Plan-0-Setpoint-Vertrag nutzen; JavaScript bleibt nur Executor und harter Fallback."
       },

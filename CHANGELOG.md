@@ -1,3 +1,9 @@
+## 0.7.129 - EVCS TS Runtime-Hotfix für Budget-Handover
+
+- EVCS Charging-Management: `gridImportW` tick-weit deklariert, damit Safety-/Control-TS-Handover keine Runtime-ReferenceError mehr auslösen.
+- EVCS Budget-Caps: produktiver TS-Handover startet aus dem bereits aufgelösten `effectiveBudgetMode`, damit `engine:pvSurplus+gridImport` nicht auf `engine` zurückfällt.
+- Test erweitert: Runtime-Regression für den gemeldeten `effectiveBudgetMode`-Mismatch und den `gridImportW`-Scope-Fehler.
+
 ## 0.7.128 - EVCS Safety-Handover über TypeScript gehärtet
 
 - Stale-Meter-Failsafe und Peak-Shaving-Rampdown können den produktiven TS-Allocation- und TS-Write-Plan-Vertrag jetzt als sicheren 0-Setpoint-Handover nutzen.

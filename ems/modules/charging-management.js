@@ -4006,6 +4006,7 @@ class ChargingManagementModule extends BaseModule {
         let pvCapW = null;
         let pvSurplusW = null;
         let gridW = null;
+        let gridImportW = 0;
         let gridImportNoEvW = null;
         let pvStartReadyBudgetW = null;
 
@@ -4271,7 +4272,7 @@ class ChargingManagementModule extends BaseModule {
                     && Number.isFinite(Number(w.pvStartupHoldUntilMs))
                     && Number(w.pvStartupHoldUntilMs) > now);
 
-            const gridImportW = (typeof gridW === 'number' && Number.isFinite(gridW)) ? Math.max(0, gridW) : 0;
+            gridImportW = (typeof gridW === 'number' && Number.isFinite(gridW)) ? Math.max(0, gridW) : 0;
             // Wichtig: Den Stop-Gate nicht auf EV-eigenen Start-/Hochlauf-Import triggern.
             // Während der Start-Einschwingzeit tolerieren wir kurze Übergänge, damit die Wallbox
             // sauber am Fahrzeug ankommt und nicht sofort wieder auf 0 fällt.
@@ -4537,6 +4538,7 @@ if (components.length) {
         let gridCapEvcsW = null;
         let gridCapBinding = false;
         const budgetBeforeGridCaps = budgetW;
+        const budgetModeBeforeGridCaps = String(effectiveBudgetMode || budgetMode || 'unlimited');
 
         if (gridImportLimitEffW > 0 && typeof gridW === 'number' && Number.isFinite(gridW)) {
             // baseLoad includes everything except EV charging (approx.)
@@ -4624,11 +4626,13 @@ if (components.length) {
          */
         const chargingBudgetTsProductive = await this._runChargingBudgetTsProductive({
             budgetW: Number.isFinite(budgetBeforeGridCaps) ? budgetBeforeGridCaps : null,
-            budgetMode: String(budgetMode || effectiveBudgetMode || 'unlimited'),
+            budgetMode: budgetModeBeforeGridCaps,
             gridCapEvcsW: (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : null,
-            gridCapBinding: !!gridCapBinding,
+            // For TS parity this flag means 'cap is active/available'; the returned apply.gridCapBinding still means 'actually binding'.
+            gridCapBinding: (gridImportLimitEffW > 0 && typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)),
             phaseCapEvcsW: (typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)) ? phaseCapEvcsW : null,
-            phaseCapBinding: !!phaseCapBinding,
+            // For TS parity this flag means 'cap is active/available'; the returned apply.phaseCapBinding still means 'actually binding'.
+            phaseCapBinding: (gridMaxPhaseA > 0 && typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)),
             para14aActive: !!para14aActive,
             para14aTotalCapW: (typeof para14aTotalCapW === 'number' && Number.isFinite(para14aTotalCapW)) ? para14aTotalCapW : null,
             para14aMode: para14aMode || '',
