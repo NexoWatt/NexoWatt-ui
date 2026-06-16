@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 7071b38408ec9aa410c1b91059cdd361b43fcf7d9be47ebde835ba2be436c29a
+ * Original-Hash: de0973fd3e49744305678bcfcdcb5cdca9e77e0ce93fe030ec0ac982096336de
  */
 
 /**
@@ -77,7 +77,7 @@ need('ems/modules/charging-management.js', "safetyReason: 'stale-meter-safety-st
 need('ems/modules/charging-management.js', "safetyReason: 'peak-shaving-safety-stop'", 'Peak-Rampdown setzt Safety-Stop-Reason');
 need('ems/modules/charging-management.js', 'safetyStopHandoverViaTsWritePlan', 'Legacy-Diagnose zeigt TS-Safety-Handover');
 need('ems/modules/charging-management.js', 'js-only-safety-stop-write-plan', 'alter JS-only-Safety-Stop als entfernt markiert');
-need('ems/modules/charging-management.js', "source: 'ts-charging-legacy-js-decision-tree-reduction-v3'", 'Legacy-Reduktionsdiagnose v3');
+need('ems/modules/charging-management.js', "source: 'ts-charging-legacy-js-decision-tree-reduction-v4'", 'Legacy-Reduktionsdiagnose v4');
 need('www/ems-apps.js', 'TS‑Härtung: EVCS Safety‑Handover', 'App-Center zeigt Safety-Handover-Härtung');
 
 const allocation = require(path.join(root, 'lib/ts-mirrors/ems/charging-management/charging-allocation.js'));

@@ -78,7 +78,17 @@ function requirePackageScripts(pkg, scriptNames = defaultRequiredPackageScripts)
 /** Code-Teil: requirePublishCheckIndependentFromTypeScript – verhindert tsc in publish:check. */
 function requirePublishCheckIndependentFromTypeScript(pkg) {
   const publishCheck = String(pkg && pkg.scripts && pkg.scripts['publish:check'] || '');
-  if (publishCheck.includes('typecheck') || publishCheck.includes('tsc')) return error('publish:check must stay independent from TypeScript. CI should run test:all.');
+  const commands = publishCheck
+    .split(/&&|\|\||;|\n/g)
+    .map((command) => command.trim().replace(/\s+/g, ' '))
+    .filter(Boolean);
+  const runsTypeScriptCompiler = commands.some((command) => {
+    if (/^(?:npx\s+)?tsc(?:\s|$)/.test(command)) return true;
+    if (/^(?:npm|pnpm)\s+exec\s+tsc(?:\s|$)/.test(command)) return true;
+    const npmRun = command.match(/^(?:npm|pnpm|yarn)\s+run\s+([^\s]+)/);
+    return Boolean(npmRun && npmRun[1].startsWith('typecheck'));
+  });
+  if (runsTypeScriptCompiler) return error('publish:check must stay independent from TypeScript. CI should run test:all.');
   return ok();
 }
 

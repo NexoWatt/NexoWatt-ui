@@ -95,6 +95,20 @@ function requireChargingWritePlanTsMirror() {
     }
 }
 
+/**
+ * Code-Teil: requireChargingNormalSourceTsMirror
+ * Zweck: Lädt den TS-Lockdown für den EVCS-Normalpfad. Dieser Vertrag bündelt
+ * Control, Budget-Caps, Allocation, Write-Plan und Executor als Freigabe-Gate
+ * für den späteren JS-Abbau.
+ */
+function requireChargingNormalSourceTsMirror() {
+    try {
+        return require('../../lib/ts-mirrors/ems/charging-management/charging-normal-source');
+    } catch (_e) {
+        return null;
+    }
+}
+
 let chargingBudgetTsMirror = null;
 try {
     chargingBudgetTsMirror = require('../../lib/ts-mirrors/ems/charging-management/charging-budget');
@@ -600,9 +614,14 @@ class ChargingManagementModule extends BaseModule {
         this._chargingAllocationTsShadowLast = null;
         this._chargingAllocationTsProductivePrepLast = null;
         this._chargingAllocationTsProductiveLast = null;
+        this._chargingAllocationTsNormalSourceLast = null;
         this._chargingWritePlanTsShadowLast = null;
         this._chargingWritePlanTsProductivePrepLast = null;
         this._chargingWritePlanTsProductiveLast = null;
+        this._chargingWritePlanExecutorLast = null;
+        this._chargingBudgetTsProductiveLast = null;
+        this._chargingNormalSourceTsLockdownLast = null;
+        this._chargingTsNormalSourceLast = null;
         this._chargingLegacyDecisionTreeLast = null;
     }
 
@@ -805,6 +824,7 @@ class ChargingManagementModule extends BaseModule {
         let shadow = null;
         let productivePrep = null;
         let productiveDecision = null;
+        let normalSourceDecision = null;
         let writePlan = null;
         let writePlanProductivePrep = null;
         let writePlanProductive = null;
@@ -835,6 +855,18 @@ class ChargingManagementModule extends BaseModule {
                     available: false,
                     ok: false,
                     productive: false,
+                    prepared: false,
+                    fallback: true,
+                    fallbackReason: 'missing-ts-allocation-mirror',
+                    apply: null,
+                    ts: Date.now(),
+                };
+                normalSourceDecision = {
+                    source: 'ts-charging-allocation-normal-source-v1',
+                    available: false,
+                    ok: false,
+                    productive: false,
+                    normalSource: false,
                     prepared: false,
                     fallback: true,
                     fallbackReason: 'missing-ts-allocation-mirror',
@@ -874,17 +906,35 @@ class ChargingManagementModule extends BaseModule {
                         plan,
                         apply: null,
                     };
+                normalSourceDecision = (typeof allocationMirror.buildChargingAllocationNormalSource === 'function')
+                    ? allocationMirror.buildChargingAllocationNormalSource(input || {}, plan, comparison)
+                    : {
+                        source: 'ts-charging-allocation-normal-source-v1',
+                        available: false,
+                        ok: false,
+                        productive: false,
+                        normalSource: false,
+                        prepared: false,
+                        fallback: true,
+                        fallbackReason: 'missing-ts-allocation-normal-source-helper',
+                        diagnosticComparison: comparison,
+                        diagnosticMismatchCount: comparison && Number.isFinite(Number(comparison.mismatchCount)) ? Number(comparison.mismatchCount) : 0,
+                        plan,
+                        apply: null,
+                    };
                 shadow = {
                     ...plan,
                     comparison,
                     productivePrep,
                     productiveDecision,
-                    ok: !!(plan && plan.ok && comparison && comparison.ok),
+                    normalSourceDecision,
+                    ok: !!(plan && plan.ok && (normalSourceDecision && normalSourceDecision.normalSource ? true : (comparison && comparison.ok))),
                     mismatchCount: comparison && Number.isFinite(Number(comparison.mismatchCount)) ? Number(comparison.mismatchCount) : 0,
-                    productive: !!(productiveDecision && productiveDecision.productive),
+                    productive: !!((normalSourceDecision && normalSourceDecision.normalSource) || (productiveDecision && productiveDecision.productive)),
+                    normalSource: !!(normalSourceDecision && normalSourceDecision.normalSource),
                     productivePrepared: !!(productivePrep && productivePrep.prepared),
-                    fallback: !(productiveDecision && productiveDecision.productive),
-                    fallbackReason: productiveDecision && productiveDecision.fallbackReason ? productiveDecision.fallbackReason : '',
+                    fallback: !((normalSourceDecision && normalSourceDecision.normalSource) || (productiveDecision && productiveDecision.productive)),
+                    fallbackReason: normalSourceDecision && normalSourceDecision.fallbackReason ? normalSourceDecision.fallbackReason : (productiveDecision && productiveDecision.fallbackReason ? productiveDecision.fallbackReason : ''),
                     ts: Date.now(),
                 };
             }
@@ -916,6 +966,19 @@ class ChargingManagementModule extends BaseModule {
                 available: false,
                 ok: false,
                 productive: false,
+                prepared: false,
+                fallback: true,
+                fallbackReason: 'ts-runtime-error',
+                error: e && e.message ? e.message : String(e),
+                apply: null,
+                ts: Date.now(),
+            };
+            normalSourceDecision = {
+                source: 'ts-charging-allocation-normal-source-v1',
+                available: false,
+                ok: false,
+                productive: false,
+                normalSource: false,
                 prepared: false,
                 fallback: true,
                 fallbackReason: 'ts-runtime-error',
@@ -962,8 +1025,9 @@ class ChargingManagementModule extends BaseModule {
                     ts: Date.now(),
                 };
             } else {
-                const productiveAllocationPlan = productiveDecision && productiveDecision.apply
-                    ? { wallboxes: productiveDecision.apply.wallboxes || [] }
+                const allocationDecisionForWritePlan = normalSourceDecision && normalSourceDecision.normalSource ? normalSourceDecision : productiveDecision;
+                const productiveAllocationPlan = allocationDecisionForWritePlan && allocationDecisionForWritePlan.apply
+                    ? { wallboxes: allocationDecisionForWritePlan.apply.wallboxes || [] }
                     : (productivePrep && productivePrep.plan ? productivePrep.plan : shadow);
                 writePlan = writePlanMirror.buildChargingSetpointWritePlan({
                     ...(input || {}),
@@ -992,7 +1056,7 @@ class ChargingManagementModule extends BaseModule {
                     ? writePlanMirror.buildChargingSetpointWritePlanProductive({
                         ...(input || {}),
                         allocationPlan: productiveAllocationPlan,
-                        allowWrites: !!(productiveDecision && productiveDecision.productive),
+                        allowWrites: !!(allocationDecisionForWritePlan && (allocationDecisionForWritePlan.normalSource || allocationDecisionForWritePlan.productive)),
                     }, writePlan)
                     : {
                         source: 'ts-charging-setpoint-write-plan-productive-v1',
@@ -1050,6 +1114,7 @@ class ChargingManagementModule extends BaseModule {
         this._chargingAllocationTsShadowLast = shadow;
         this._chargingAllocationTsProductivePrepLast = productivePrep;
         this._chargingAllocationTsProductiveLast = productiveDecision;
+        this._chargingAllocationTsNormalSourceLast = normalSourceDecision;
         this._chargingWritePlanTsShadowLast = writePlan;
         this._chargingWritePlanTsProductivePrepLast = writePlanProductivePrep;
         this._chargingWritePlanTsProductiveLast = writePlanProductive;
@@ -1057,13 +1122,14 @@ class ChargingManagementModule extends BaseModule {
             await this._queueState('chargingManagement.control.tsAllocationShadowJson', JSON.stringify(shadow || {}), true);
             await this._queueState('chargingManagement.control.tsAllocationProductivePrepJson', JSON.stringify(productivePrep || {}), true);
             await this._queueState('chargingManagement.control.tsAllocationProductiveJson', JSON.stringify(productiveDecision || {}), true);
-            await this._queueState('chargingManagement.control.tsAllocationSource', productiveDecision && productiveDecision.productive ? 'ts-allocation' : (productivePrep && productivePrep.prepared ? 'ts-allocation-prepared' : 'js-runtime'), true);
+            await this._queueState('chargingManagement.control.tsAllocationNormalSourceJson', JSON.stringify(normalSourceDecision || {}), true);
+            await this._queueState('chargingManagement.control.tsAllocationSource', normalSourceDecision && normalSourceDecision.normalSource ? 'ts-normal-source' : (productiveDecision && productiveDecision.productive ? 'ts-allocation' : (productivePrep && productivePrep.prepared ? 'ts-allocation-prepared' : 'js-runtime')), true);
             await this._queueState('chargingManagement.control.tsWritePlanShadowJson', JSON.stringify(writePlan || {}), true);
             await this._queueState('chargingManagement.control.tsWritePlanProductivePrepJson', JSON.stringify(writePlanProductivePrep || {}), true);
             await this._queueState('chargingManagement.control.tsWritePlanProductiveJson', JSON.stringify(writePlanProductive || {}), true);
             await this._queueState('chargingManagement.control.tsWritePlanSource', writePlanProductive && writePlanProductive.productive ? 'ts-write-plan' : (writePlanProductivePrep && writePlanProductivePrep.prepared ? 'ts-write-plan-prepared' : (writePlan && writePlan.available !== false ? 'ts-write-plan-shadow' : 'js-runtime')), true);
         } catch (_eWrite) {}
-        return { shadow, productivePrep, productiveDecision, writePlan, writePlanProductivePrep, writePlanProductive };
+        return { shadow, productivePrep, productiveDecision, normalSourceDecision, writePlan, writePlanProductivePrep, writePlanProductive };
     }
 
     /**
@@ -1107,35 +1173,152 @@ class ChargingManagementModule extends BaseModule {
     }
 
     /**
+     * Code-Teil: _publishChargingNormalSourceState
+     * Zweck: Veröffentlicht den EVCS-TypeScript-Normalquellen-Lockdown. Dieser Status
+     * fasst zusammen, ob Control, Budget-Caps, Allocation und Write-Plan gleichzeitig
+     * produktiv sind und JavaScript nur noch ioBroker-Executor bzw. harter Notfallback ist.
+     */
+    async _publishChargingNormalSourceState(inputOrTsAllocationState, tsWritePlanProductive = null, tsWritePlanUsed = false, debugAlloc = [], context = 'normal', legacyFallbackReason = '', legacyDecisionTree = null) {
+        const mirror = requireChargingNormalSourceTsMirror();
+        let payload = null;
+        const first = inputOrTsAllocationState && typeof inputOrTsAllocationState === 'object' ? inputOrTsAllocationState : null;
+        const objectInput = !!(first && (
+            Object.prototype.hasOwnProperty.call(first, 'allocation')
+            || Object.prototype.hasOwnProperty.call(first, 'writePlan')
+            || Object.prototype.hasOwnProperty.call(first, 'executor')
+            || Object.prototype.hasOwnProperty.call(first, 'budget')
+            || Object.prototype.hasOwnProperty.call(first, 'control')
+        ));
+        const tsAllocationState = objectInput ? null : first;
+        const candidateCount = Array.isArray(debugAlloc) ? debugAlloc.filter(a => a && typeof a === 'object' && a.type !== 'budget').length : 0;
+        const allocationDecision = objectInput
+            ? (first.allocation || null)
+            : (tsAllocationState && (tsAllocationState.normalSourceDecision || tsAllocationState.productiveDecision) ? (tsAllocationState.normalSourceDecision || tsAllocationState.productiveDecision) : null);
+        const executorFallback = {
+            used: !!tsWritePlanUsed,
+            ok: !!tsWritePlanUsed,
+            source: tsWritePlanUsed ? 'ts-write-plan' : 'js-hard-fallback',
+            role: tsWritePlanUsed ? 'executor-only' : 'hard-fallback-only',
+            appliedCount: 0,
+            failedCount: tsWritePlanUsed ? 0 : 1,
+            skippedCount: 0,
+        };
+        const input = objectInput ? {
+            context: first.context || context,
+            mode: first.mode || '',
+            status: first.status || '',
+            safetyStop: !!first.safetyStop,
+            safetyReason: first.safetyReason || '',
+            control: first.control || this._chargingControlTsProductiveLast || null,
+            budget: first.budget || this._chargingBudgetTsProductiveLast || null,
+            allocation: allocationDecision,
+            writePlan: first.writePlan || tsWritePlanProductive || this._chargingWritePlanTsProductiveLast || null,
+            executor: first.executor || this._chargingWritePlanExecutorLast || executorFallback,
+            legacy: first.legacy || legacyDecisionTree || this._chargingLegacyDecisionTreeLast || null,
+            ts: Date.now(),
+        } : {
+            context,
+            mode: '',
+            status: '',
+            safetyStop: String(context || '').includes('safety') || String(context || '').includes('failsafe') || String(context || '').includes('rampdown'),
+            safetyReason: '',
+            control: this._chargingControlTsProductiveLast || null,
+            budget: this._chargingBudgetTsProductiveLast || null,
+            allocation: allocationDecision,
+            writePlan: tsWritePlanProductive || this._chargingWritePlanTsProductiveLast || null,
+            executor: this._chargingWritePlanExecutorLast || executorFallback,
+            legacy: legacyDecisionTree || this._chargingLegacyDecisionTreeLast || null,
+            ts: Date.now(),
+        };
+        try {
+            const buildNormalSource = mirror && (
+                mirror.buildChargingNormalSourceDecision
+                || mirror.buildChargingNormalSourceLockdown
+                || mirror.buildChargingTsNormalSourceLockdown
+            );
+            if (!buildNormalSource) {
+                payload = {
+                    source: 'ts-charging-normal-source-lockdown-v1',
+                    available: false,
+                    ok: false,
+                    productive: false,
+                    tsNormalSource: false,
+                    runtimeSource: 'javascript-hard-fallback',
+                    normalSource: 'javascript-hard-fallback',
+                    jsRole: 'executor-and-hard-fallback',
+                    context: String(input.context || 'normal'),
+                    fallback: true,
+                    fallbackReason: 'missing-ts-normal-source-mirror',
+                    blockers: ['missing-ts-normal-source-mirror'],
+                    candidateCount,
+                    ts: Date.now(),
+                };
+            } else {
+                payload = buildNormalSource(input);
+                if (payload && typeof payload === 'object' && candidateCount && payload.candidateCount === undefined) payload.candidateCount = candidateCount;
+            }
+        } catch (e) {
+            payload = {
+                source: 'ts-charging-normal-source-lockdown-v1',
+                available: false,
+                ok: false,
+                productive: false,
+                tsNormalSource: false,
+                runtimeSource: 'javascript-hard-fallback',
+                normalSource: 'javascript-hard-fallback',
+                jsRole: 'executor-and-hard-fallback',
+                context: String(input.context || 'normal'),
+                fallback: true,
+                fallbackReason: 'ts-normal-source-runtime-error',
+                error: e && e.message ? e.message : String(e),
+                candidateCount,
+                ts: Date.now(),
+            };
+        }
+        this._chargingNormalSourceTsLast = payload;
+        this._chargingNormalSourceTsLockdownLast = payload;
+        try {
+            const runtimeSource = payload && payload.runtimeSource ? String(payload.runtimeSource) : 'javascript-hard-fallback';
+            const normalSourceValue = runtimeSource === 'typescript' ? 'ts-normal-source' : 'javascript-hard-fallback';
+            await this._queueState('chargingManagement.control.tsNormalSourceJson', JSON.stringify(payload || {}), true);
+            await this._queueState('chargingManagement.control.tsNormalSourceLockdownJson', JSON.stringify(payload || {}), true);
+            await this._queueState('chargingManagement.control.tsNormalSource', normalSourceValue, true);
+            await this._queueState('chargingManagement.control.tsRuntimeSource', runtimeSource, true);
+            await this._queueState('chargingManagement.control.tsMigrationReady', runtimeSource === 'typescript', true);
+        } catch (_eNormalSource) {}
+        return payload;
+    }
+
+    /**
      * Code-Teil: _publishChargingLegacyDecisionTreeState
      * Zweck: Schreibt die kompakte EVCS-Handover-Diagnose für TS-Write-Plan, JS-Executor und JS-Fallback.
      */
     async _publishChargingLegacyDecisionTreeState(tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, debugAlloc, context = 'normal', legacyFallbackReason = '') {
         const fallbackReason = tsWritePlanUsed ? '' : (legacyFallbackReason || (tsWritePlanProductive && tsWritePlanProductive.fallbackReason) || 'ts-write-plan-not-productive');
-        const legacyDecisionTree = {
-            source: 'ts-charging-legacy-js-decision-tree-reduction-v3',
+        const normalSourceDecision = tsAllocationState && tsAllocationState.normalSourceDecision ? tsAllocationState.normalSourceDecision : null;
+        const tsAllocationNormalSource = !!(normalSourceDecision && normalSourceDecision.normalSource);
+        const tsAllocationProductive = !!(tsAllocationState && tsAllocationState.productiveDecision && tsAllocationState.productiveDecision.productive);
+        const tsNormalSourceActive = !!(tsAllocationNormalSource && tsWritePlanUsed);
+        const diagnosticMismatchCount = normalSourceDecision && Number.isFinite(Number(normalSourceDecision.diagnosticMismatchCount)) ? Number(normalSourceDecision.diagnosticMismatchCount) : 0;
+        const normalSourceLockdown = {
+            source: 'ts-charging-normal-source-lockdown-v1',
             context: String(context || 'normal'),
-            jsRole: tsWritePlanUsed ? 'executor-only' : 'executor-and-hard-fallback',
-            normalWritePath: tsWritePlanUsed ? 'ts-write-plan-with-js-executor' : 'js-hard-fallback',
-            tsAllocationProductive: !!(tsAllocationState && tsAllocationState.productiveDecision && tsAllocationState.productiveDecision.productive),
+            ok: tsNormalSourceActive,
+            normalSourceActive: tsNormalSourceActive,
+            tsAllocationNormalSource,
+            tsAllocationProductive,
             tsWritePlanProductive: !!(tsWritePlanProductive && tsWritePlanProductive.productive),
-            tsAllocationSource: tsAllocationState && tsAllocationState.productiveDecision && tsAllocationState.productiveDecision.productive ? 'ts-allocation' : 'js-runtime-hard-fallback',
-            tsWritePlanSource: tsWritePlanUsed ? 'ts-write-plan' : 'js-runtime-hard-fallback',
+            tsWritePlanUsed: !!tsWritePlanUsed,
+            jsRole: tsWritePlanUsed ? 'executor-only' : 'hard-fallback-only',
+            normalWritePath: tsNormalSourceActive ? 'ts-normal-source-write-plan-with-js-executor' : (tsWritePlanUsed ? 'ts-write-plan-with-js-executor' : 'js-hard-fallback'),
+            jsComparisonMode: tsAllocationNormalSource ? 'diagnostic-only' : 'blocking-until-normal-source',
+            diagnosticMismatchCount,
             fallbackReason,
-            directSetpointLoopsRemoved: true,
-            safetyStopHandoverViaTsWritePlan: true,
-            staleMeterSafeStopCanUseTsPlan: true,
-            peakRampdownSafeStopCanUseTsPlan: true,
-            executorOnlySetpointWriter: '_executeChargingSetpointEntries',
-            removedFromNormalPath: [
-                'direct-js-setpoint-write-loop',
-                'direct-js-failsafe-write-loop',
-                'direct-js-peak-rampdown-write-loop',
-                'js-only-safety-stop-write-plan',
-            ],
-            retainedAsHardFallback: [
+            hardFallbackOnly: !tsWritePlanUsed,
+            hardFallbackReasons: [
                 'missing-ts-mirror',
-                'ts-js-allocation-mismatch',
+                'missing-ts-allocation-mirror',
+                'missing-ts-write-plan-mirror',
                 'stale-meter',
                 'stale-budget',
                 'ts-runtime-error',
@@ -1143,14 +1326,140 @@ class ChargingManagementModule extends BaseModule {
                 'invalid-apply-plan',
                 'executor-error',
             ],
+            removedFromNormalPath: [
+                'direct-js-setpoint-write-loop',
+                'direct-js-failsafe-write-loop',
+                'direct-js-peak-rampdown-write-loop',
+                'js-only-safety-stop-write-plan',
+                'ts-js-allocation-mismatch-as-normal-path-blocker',
+            ],
+            ts: Date.now(),
+        };
+        const legacyDecisionTree = {
+            source: 'ts-charging-legacy-js-decision-tree-reduction-v4',
+            context: String(context || 'normal'),
+            jsRole: tsWritePlanUsed ? 'executor-only' : 'executor-and-hard-fallback',
+            normalWritePath: normalSourceLockdown.normalWritePath,
+            tsAllocationProductive,
+            tsAllocationNormalSource,
+            tsNormalSourceActive,
+            tsWritePlanProductive: !!(tsWritePlanProductive && tsWritePlanProductive.productive),
+            tsAllocationSource: tsAllocationNormalSource ? 'ts-normal-source' : (tsAllocationProductive ? 'ts-allocation' : 'js-runtime-hard-fallback'),
+            tsWritePlanSource: tsWritePlanUsed ? 'ts-write-plan' : 'js-runtime-hard-fallback',
+            fallbackReason,
+            directSetpointLoopsRemoved: true,
+            normalSourceLockdownViaTs: true,
+            jsComparisonDiagnosticOnly: tsAllocationNormalSource,
+            safetyStopHandoverViaTsWritePlan: true,
+            staleMeterSafeStopCanUseTsPlan: true,
+            peakRampdownSafeStopCanUseTsPlan: true,
+            executorOnlySetpointWriter: '_executeChargingSetpointEntries',
+            removedFromNormalPath: normalSourceLockdown.removedFromNormalPath,
+            retainedAsHardFallback: normalSourceLockdown.hardFallbackReasons,
+            diagnosticMismatchCount,
+            normalSourceLockdown,
             candidateCount: Array.isArray(debugAlloc) ? debugAlloc.filter(a => a && typeof a === 'object' && a.type !== 'budget').length : 0,
             ts: Date.now(),
         };
         this._chargingLegacyDecisionTreeLast = legacyDecisionTree;
+        this._chargingNormalSourceLockdownLast = normalSourceLockdown;
         try {
             await this._queueState('chargingManagement.control.tsLegacyDecisionTreeJson', JSON.stringify(legacyDecisionTree), true);
+            await this._queueState('chargingManagement.control.tsNormalSourceLockdownJson', JSON.stringify(normalSourceLockdown), true);
+            await this._queueState('chargingManagement.control.tsNormalSourceJson', JSON.stringify(normalSourceLockdown), true);
+            await this._queueState('chargingManagement.control.tsNormalSource', normalSourceLockdown.normalSourceActive ? 'ts-normal-source' : (normalSourceLockdown.hardFallbackOnly ? 'hard-fallback-only' : 'ts-write-plan'), true);
         } catch (_eLegacyDecision) {}
+        try {
+            const safetyStopContext = String(context || '').includes('safety') || String(context || '').includes('rampdown');
+            const tsNormalSource = await this._publishChargingTsNormalSourceState(context, tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, legacyFallbackReason, safetyStopContext);
+            if (tsNormalSource && typeof tsNormalSource === 'object') {
+                legacyDecisionTree.normalSourceLockdown = tsNormalSource;
+                legacyDecisionTree.tsNormalSourceActive = tsNormalSource.runtimeSource === 'typescript';
+                legacyDecisionTree.tsNormalSourceReadyForJsRemoval = tsNormalSource.runtimeSource === 'typescript';
+                await this._queueState('chargingManagement.control.tsLegacyDecisionTreeJson', JSON.stringify(legacyDecisionTree), true);
+            }
+        } catch (_eNormalSourceLockdown) {}
         return legacyDecisionTree;
+    }
+
+    /**
+     * Code-Teil: _publishChargingTsNormalSourceState
+     * Zweck: Verdichtet den EVCS-Handover zu einem TS-Normalquellen-Status.
+     * Dadurch ist pro Tick sichtbar, ob Control/Budget/Allocation/Write-Plan
+     * produktiv aus TypeScript laufen und JavaScript nur noch Executor ist.
+     */
+    async _publishChargingTsNormalSourceState(context, tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, legacyFallbackReason = '', safetyStop = false) {
+        const mirror = requireChargingNormalSourceTsMirror();
+        let payload = null;
+        try {
+            const allocationProductive = tsAllocationState && tsAllocationState.productiveDecision
+                ? tsAllocationState.productiveDecision
+                : (this._chargingAllocationTsProductiveLast || null);
+            const buildNormalSource = mirror && (
+                mirror.buildChargingNormalSourceDecision
+                || mirror.buildChargingNormalSourceLockdown
+                || mirror.buildChargingTsNormalSourceLockdown
+            );
+            if (!buildNormalSource) {
+                payload = {
+                    source: 'ts-charging-normal-source-lockdown-v1',
+                    available: false,
+                    ok: false,
+                    productive: false,
+                    tsNormalSource: false,
+                    runtimeSource: 'javascript-hard-fallback',
+                    normalSource: 'javascript-hard-fallback',
+                    fallback: true,
+                    fallbackReason: 'missing-ts-normal-source-mirror',
+                    context: String(context || 'normal'),
+                    ts: Date.now(),
+                };
+            } else {
+                const allocationNormalSource = tsAllocationState && tsAllocationState.normalSourceDecision
+                    ? tsAllocationState.normalSourceDecision
+                    : null;
+                payload = buildNormalSource({
+                    context,
+                    control: this._chargingControlTsProductiveLast || null,
+                    budget: this._chargingBudgetTsProductiveLast || null,
+                    allocation: allocationNormalSource || allocationProductive || null,
+                    writePlan: tsWritePlanProductive || this._chargingWritePlanTsProductiveLast || null,
+                    executor: this._chargingWritePlanExecutorLast || null,
+                    legacy: this._chargingLegacyDecisionTreeLast || null,
+                    tsWritePlanUsed: !!tsWritePlanUsed,
+                    fallbackReason: legacyFallbackReason || '',
+                    safetyStop: !!safetyStop,
+                    ts: Date.now(),
+                });
+            }
+        } catch (e) {
+            payload = {
+                source: 'ts-charging-normal-source-lockdown-v1',
+                available: false,
+                ok: false,
+                productive: false,
+                tsNormalSource: false,
+                runtimeSource: 'javascript-hard-fallback',
+                normalSource: 'javascript-hard-fallback',
+                fallback: true,
+                fallbackReason: 'ts-runtime-error',
+                error: e && e.message ? e.message : String(e),
+                context: String(context || 'normal'),
+                ts: Date.now(),
+            };
+        }
+        this._chargingTsNormalSourceLast = payload;
+        this._chargingNormalSourceTsLockdownLast = payload;
+        try {
+            const runtimeSource = payload && payload.runtimeSource ? String(payload.runtimeSource) : 'javascript-hard-fallback';
+            const normalSourceValue = runtimeSource === 'typescript' ? 'ts-normal-source' : 'js-hard-fallback';
+            await this._queueState('chargingManagement.control.tsNormalSourceJson', JSON.stringify(payload || {}), true);
+            await this._queueState('chargingManagement.control.tsNormalSourceLockdownJson', JSON.stringify(payload || {}), true);
+            await this._queueState('chargingManagement.control.tsNormalSource', normalSourceValue, true);
+            await this._queueState('chargingManagement.control.tsRuntimeSource', runtimeSource, true);
+            await this._queueState('chargingManagement.control.tsMigrationReady', runtimeSource === 'typescript', true);
+        } catch (_eNormalSource) {}
+        return payload;
     }
 
     /**
@@ -1272,6 +1581,7 @@ class ChargingManagementModule extends BaseModule {
             }
             result.entries.push({ safe, targetW, targetA, basis: plannedBasis, setpointKey: plannedSetpointKey || '', applied, status: applyStatus, source: executorSource || '' });
         }
+        this._chargingWritePlanExecutorLast = result;
         try {
             await this._queueState('chargingManagement.control.tsWritePlanExecutorJson', JSON.stringify(result), true);
         } catch {
@@ -1841,11 +2151,17 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.tsAllocationShadowJson', 'TypeScript EVCS-Allocation Shadow (JSON)', 'string', 'json');
         await mk('chargingManagement.control.tsAllocationProductivePrepJson', 'TypeScript EVCS-Allocation Produktiv-Vorbereitung (JSON)', 'string', 'json');
         await mk('chargingManagement.control.tsAllocationProductiveJson', 'TypeScript EVCS-Allocation produktiv (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.tsAllocationNormalSourceJson', 'TypeScript EVCS-Allocation Normalquelle (JSON)', 'string', 'json');
         await mk('chargingManagement.control.tsAllocationSource', 'TypeScript EVCS-Allocation source/prep state', 'string', 'text');
         await mk('chargingManagement.control.tsWritePlanShadowJson', 'TypeScript EVCS-Setpoint Write-Plan Shadow (JSON)', 'string', 'json');
         await mk('chargingManagement.control.tsWritePlanProductivePrepJson', 'TypeScript EVCS-Setpoint Write-Plan Produktiv-Vorbereitung (JSON)', 'string', 'json');
         await mk('chargingManagement.control.tsWritePlanProductiveJson', 'TypeScript EVCS-Setpoint Write-Plan produktiv (JSON)', 'string', 'json');
         await mk('chargingManagement.control.tsWritePlanExecutorJson', 'TypeScript EVCS-Setpoint Write-Plan Executor-Diagnose (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.tsNormalSourceLockdownJson', 'TypeScript EVCS-Normalquelle Lockdown / JS-Abbau-Freigabe (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.tsNormalSourceJson', 'TypeScript EVCS-Normalquelle Lockdown / JS-Abbau-Freigabe (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.tsNormalSource', 'TypeScript EVCS-Normalquelle source/lockdown state', 'string', 'text');
+        await mk('chargingManagement.control.tsRuntimeSource', 'TypeScript EVCS runtime source', 'string', 'text');
+        await mk('chargingManagement.control.tsMigrationReady', 'TypeScript EVCS migration ready', 'boolean', 'indicator');
         await mk('chargingManagement.control.tsLegacyDecisionTreeJson', 'TypeScript EVCS Legacy-JS Executor/Fallback-Reduktion (JSON)', 'string', 'json');
         await mk('chargingManagement.control.tsWritePlanSource', 'TypeScript EVCS-Write-Plan source/prep state', 'string', 'text');
         await mk('chargingManagement.control.pausedByPeakShaving', 'Paused by peak shaving', 'boolean', 'indicator');
@@ -2288,6 +2604,7 @@ class ChargingManagementModule extends BaseModule {
                 shadow: { source: 'ts-charging-budget-shadow-v1', available: false, ok: false, mismatchCount: 0, mismatches: [], ts: null },
             };
         }
+        this._chargingBudgetTsProductiveLast = payload;
         try {
             await this._queueState('chargingManagement.control.tsBudgetJson', JSON.stringify(payload || {}), true);
             await this._queueState('chargingManagement.control.tsBudgetSource', payload && payload.productive ? 'ts-budget-caps' : 'js-runtime', true);
@@ -5093,6 +5410,9 @@ if (components.length) {
                 safetyReason: 'stale-meter-safety-stop',
                 staleMeter,
                 staleBudget,
+                preferTsNativeAllocation: true,
+                tsNormalSourceLock: true,
+                allowJsComparisonFallback: false,
                 wallboxes: this._mapChargingWallboxesForTsAllocation(wbList),
                 allocations: debugAlloc,
             });
@@ -5105,6 +5425,19 @@ if (components.length) {
                 await this._executeChargingLegacySetpointFallback(wbList, debugAlloc, legacyFallbackReason);
             }
             await this._publishChargingLegacyDecisionTreeState(tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, debugAlloc, 'stale-meter-safety-fallback', legacyFallbackReason);
+            await this._publishChargingTsNormalSourceState('stale-meter-safety-fallback', tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, legacyFallbackReason, true);
+            await this._publishChargingNormalSourceState({
+                context: 'stale-meter-safety-fallback',
+                mode,
+                status: 'failsafe_stale_meter',
+                safetyStop: true,
+                safetyReason: 'stale-meter-safety-stop',
+                budget: chargingBudgetTsProductive,
+                allocation: tsAllocationState && (tsAllocationState.normalSourceDecision || tsAllocationState.productiveDecision),
+                writePlan: tsWritePlanProductive,
+                executor: this._chargingWritePlanExecutorLast,
+                legacy: this._chargingLegacyDecisionTreeLast,
+            });
 
     
         publishEvPriorityCaps({
@@ -5216,7 +5549,15 @@ if (components.length) {
 
             await this._publishChargingControlTsShadow({ mode, budgetMode: effectiveBudgetMode, status: 'failsafe_stale_meter', active: true, budgetW: 0, usedW: 0, remainingW: 0, totalPowerW, totalTargetPowerW: 0, totalTargetCurrentA: 0, wallboxCount: wbList.length, onlineWallboxes: onlineCount, connectedCount: wbList.filter(w => w && w.vehiclePlugged !== false).length, pausedByPeakShaving: false, staleMeter, staleBudget, gridImportLimitW, gridImportLimitEffW, gridImportW, gridCapEvcsW, gridCapBinding, phaseCapEvcsW, phaseCapBinding, para14aActive, para14aCapEvcsW: para14aTotalCapW, para14aBinding, storageAssistActive: false, storageAssistW: 0 });
 
-            await this._publishChargingControlTsShadow({ mode, budgetMode: effectiveBudgetMode, status: 'off', active: false, budgetW: Number.isFinite(budgetW) ? budgetW : 0, usedW: 0, remainingW: Number.isFinite(budgetW) ? budgetW : 0, totalPowerW, totalTargetPowerW: 0, totalTargetCurrentA: 0, wallboxCount: wbList.length, onlineWallboxes: onlineCount, connectedCount: wbList.filter(w => w && w.vehiclePlugged !== false).length, pausedByPeakShaving, staleMeter, staleBudget, gridImportLimitW, gridImportLimitEffW, gridImportW, gridCapEvcsW, gridCapBinding, phaseCapEvcsW, phaseCapBinding, para14aActive, para14aCapEvcsW: para14aTotalCapW, para14aBinding, storageAssistActive, storageAssistW });
+            const tsControlOffState = await this._publishChargingControlTsShadow({ mode, budgetMode: effectiveBudgetMode, status: 'off', active: false, budgetW: Number.isFinite(budgetW) ? budgetW : 0, usedW: 0, remainingW: Number.isFinite(budgetW) ? budgetW : 0, totalPowerW, totalTargetPowerW: 0, totalTargetCurrentA: 0, wallboxCount: wbList.length, onlineWallboxes: onlineCount, connectedCount: wbList.filter(w => w && w.vehiclePlugged !== false).length, pausedByPeakShaving, staleMeter, staleBudget, gridImportLimitW, gridImportLimitEffW, gridImportW, gridCapEvcsW, gridCapBinding, phaseCapEvcsW, phaseCapBinding, para14aActive, para14aCapEvcsW: para14aTotalCapW, para14aBinding, storageAssistActive, storageAssistW });
+            await this._publishChargingNormalSourceState({
+                context: 'mode-off',
+                mode,
+                status: 'off',
+                budget: chargingBudgetTsProductive,
+                control: tsControlOffState && tsControlOffState.productiveDecision,
+                legacy: this._chargingLegacyDecisionTreeLast,
+            });
 
             await this._queueState('chargingManagement.summary.totalTargetPowerW', 0, true);
             await this._queueState('chargingManagement.summary.totalTargetCurrentA', 0, true);
@@ -5370,6 +5711,9 @@ if (components.length) {
                     safetyReason: 'peak-shaving-safety-stop',
                     staleMeter,
                     staleBudget,
+                    preferTsNativeAllocation: true,
+                    tsNormalSourceLock: true,
+                    allowJsComparisonFallback: false,
                     wallboxes: this._mapChargingWallboxesForTsAllocation(wbList),
                     allocations: debugAlloc,
                 });
@@ -5382,6 +5726,19 @@ if (components.length) {
                     await this._executeChargingLegacySetpointFallback(wbList, debugAlloc, legacyFallbackReason);
                 }
                 await this._publishChargingLegacyDecisionTreeState(tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, debugAlloc, 'peak-shaving-safety-fallback', legacyFallbackReason);
+                await this._publishChargingTsNormalSourceState('peak-shaving-safety-fallback', tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, legacyFallbackReason, true);
+                await this._publishChargingNormalSourceState({
+                    context: 'peak-shaving-safety-fallback',
+                    mode,
+                    status: 'paused_by_peak_shaving_ramp_down',
+                    safetyStop: true,
+                    safetyReason: 'peak-shaving-safety-stop',
+                    budget: chargingBudgetTsProductive,
+                    allocation: tsAllocationState && (tsAllocationState.normalSourceDecision || tsAllocationState.productiveDecision),
+                    writePlan: tsWritePlanProductive,
+                    executor: this._chargingWritePlanExecutorLast,
+                    legacy: this._chargingLegacyDecisionTreeLast,
+                });
 
                 try {
                     const s = JSON.stringify(debugAlloc);
@@ -6382,6 +6739,9 @@ if (components.length) {
             pausedByPeakShaving,
             staleMeter,
             staleBudget,
+            preferTsNativeAllocation: true,
+            tsNormalSourceLock: true,
+            allowJsComparisonFallback: false,
             wallboxes: this._mapChargingWallboxesForTsAllocation(wbList),
             allocations: debugAlloc,
         });
@@ -6399,6 +6759,7 @@ if (components.length) {
             await this._executeChargingLegacySetpointFallback(wbList, debugAlloc, legacyFallbackReason);
         }
         await this._publishChargingLegacyDecisionTreeState(tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, debugAlloc, 'normal-allocation-write-plan', legacyFallbackReason);
+        await this._publishChargingTsNormalSourceState('normal-allocation-write-plan', tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, legacyFallbackReason, false);
 
 
         publishEvPriorityCaps({
@@ -6504,6 +6865,19 @@ if (components.length) {
         await this._queueState('chargingManagement.control.budgetW', tsControlApply ? tsControlApply.budgetW : (Number.isFinite(budgetW) ? budgetW : 0), true);
         await this._queueState('chargingManagement.control.usedW', tsControlApply ? tsControlApply.usedW : (Number.isFinite(budgetW) ? usedW : totalTargetPowerW), true);
         await this._queueState('chargingManagement.control.remainingW', tsControlApply ? tsControlApply.remainingW : (Number.isFinite(budgetW) ? remainingW : 0), true);
+
+        await this._publishChargingNormalSourceState({
+            context: 'normal-allocation-write-plan',
+            mode,
+            status: finalStatus,
+            safetyStop: false,
+            budget: chargingBudgetTsProductive,
+            control: tsControlState && tsControlState.productiveDecision,
+            allocation: tsAllocationState && (tsAllocationState.normalSourceDecision || tsAllocationState.productiveDecision),
+            writePlan: tsWritePlanProductive,
+            executor: this._chargingWritePlanExecutorLast,
+            legacy: this._chargingLegacyDecisionTreeLast,
+        });
 
         // Central EMS Budget & Gates: EVCS is the first flexible consumer group.
         // This does not change EVCS allocation; it only reserves the already decided target/usage

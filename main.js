@@ -6977,6 +6977,12 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       await prime('chargingManagement.control.tsAllocationShadowJson');
       await prime('chargingManagement.control.tsAllocationProductivePrepJson');
       await prime('chargingManagement.control.tsAllocationProductiveJson');
+      await prime('chargingManagement.control.tsAllocationNormalSourceJson');
+      await prime('chargingManagement.control.tsNormalSourceJson');
+      await prime('chargingManagement.control.tsNormalSourceLockdownJson');
+      await prime('chargingManagement.control.tsNormalSource');
+      await prime('chargingManagement.control.tsRuntimeSource');
+      await prime('chargingManagement.control.tsMigrationReady');
       await prime('chargingManagement.control.tsWritePlanShadowJson');
       await prime('chargingManagement.control.tsWritePlanProductivePrepJson');
       await prime('chargingManagement.control.tsWritePlanProductiveJson');
@@ -8978,6 +8984,12 @@ async onReady() {
     await primeKey('chargingManagement.control.tsAllocationShadowJson');
     await primeKey('chargingManagement.control.tsAllocationProductivePrepJson');
     await primeKey('chargingManagement.control.tsAllocationProductiveJson');
+    await primeKey('chargingManagement.control.tsAllocationNormalSourceJson');
+    await primeKey('chargingManagement.control.tsNormalSourceJson');
+    await primeKey('chargingManagement.control.tsNormalSourceLockdownJson');
+    await primeKey('chargingManagement.control.tsNormalSource');
+    await primeKey('chargingManagement.control.tsRuntimeSource');
+    await primeKey('chargingManagement.control.tsMigrationReady');
     await primeKey('chargingManagement.control.tsWritePlanShadowJson');
     await primeKey('chargingManagement.control.tsWritePlanProductivePrepJson');
     await primeKey('chargingManagement.control.tsWritePlanProductiveJson');
@@ -13097,7 +13109,13 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           tsAllocationShadowJson: await getOwn('chargingManagement.control.tsAllocationShadowJson'),
           tsAllocationProductivePrepJson: await getOwn('chargingManagement.control.tsAllocationProductivePrepJson'),
           tsAllocationProductiveJson: await getOwn('chargingManagement.control.tsAllocationProductiveJson'),
+          tsAllocationNormalSourceJson: await getOwn('chargingManagement.control.tsAllocationNormalSourceJson'),
           tsAllocationSource: await getOwn('chargingManagement.control.tsAllocationSource'),
+          tsNormalSourceJson: await getOwn('chargingManagement.control.tsNormalSourceJson'),
+          tsNormalSourceLockdownJson: await getOwn('chargingManagement.control.tsNormalSourceLockdownJson'),
+          tsNormalSource: await getOwn('chargingManagement.control.tsNormalSource'),
+          tsRuntimeSource: await getOwn('chargingManagement.control.tsRuntimeSource'),
+          tsMigrationReady: await getOwn('chargingManagement.control.tsMigrationReady'),
           tsWritePlanShadowJson: await getOwn('chargingManagement.control.tsWritePlanShadowJson'),
           tsWritePlanProductivePrepJson: await getOwn('chargingManagement.control.tsWritePlanProductivePrepJson'),
           tsWritePlanProductiveJson: await getOwn('chargingManagement.control.tsWritePlanProductiveJson'),

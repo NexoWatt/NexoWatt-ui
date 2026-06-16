@@ -7,3 +7,4 @@ export * from './charging-control';
 export * from './charging-budget';
 export * from './charging-allocation';
 export * from './charging-write-plan';
+export * from './charging-normal-source';

@@ -29,6 +29,7 @@ need('ems/modules/charging-management.js', 'peak-shaving-safety-fallback', 'Peak
 need('ems/modules/charging-management.js', "_publishChargingLegacyDecisionTreeState(tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, debugAlloc, 'stale-meter-safety-fallback'", 'Stale-Failsafe publiziert TS-Allocation/Write-Plan-Diagnose');
 need('ems/modules/charging-management.js', "_publishChargingLegacyDecisionTreeState(tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, debugAlloc, 'peak-shaving-safety-fallback'", 'Peak-Rampdown publiziert TS-Allocation/Write-Plan-Diagnose');
 need('ems/modules/charging-management.js', 'executor-and-hard-fallback', 'Fallback-Rollenmarker');
+need('ems/modules/charging-management.js', 'hard-fallback-only', 'Normalquellen-Lockdown hält JS nur als harten Fallback');
 need('ems/modules/charging-management.js', 'usesTsEntryBasis', 'Executor nutzt TS-geplante Basis');
 need('ems/modules/charging-management.js', 'plannedSetpointKey', 'Executor nutzt TS-geplanten Setpoint-DP');
 need('ems/modules/charging-management.js', 'basis: plannedBasis', 'applySetpoint erhält die TS-Basis');
@@ -42,8 +43,8 @@ if (directWriteMarkers < 1) {
   console.error('[ts-charging-js-executor-fallback] Der normale Allocation-Loop deferiert keine Setpoints an den TS-Write-Plan.');
   process.exit(1);
 }
-if (!cm.includes("normalWritePath: tsWritePlanUsed ? 'ts-write-plan-with-js-executor' : 'js-hard-fallback'")) {
-  console.error('[ts-charging-js-executor-fallback] JS-Rolle wird nicht sauber als Executor/Fallback diagnostiziert.');
+if (!cm.includes("normalWritePath: normalSourceLockdown.normalWritePath")) {
+  console.error('[ts-charging-js-executor-fallback] JS-Rolle wird nicht sauber als Executor/Fallback/Normalquelle diagnostiziert.');
   process.exit(1);
 }
 if (!cm.includes("const result = await this._executeChargingSetpointEntries(entries, wbList, debugAlloc, 'ts-write-plan', '');") || !cm.includes('return !!(result && result.ok === true);')) {

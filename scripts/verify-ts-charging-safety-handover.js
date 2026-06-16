@@ -25,7 +25,7 @@ need('ems/modules/charging-management.js', "safetyReason: 'stale-meter-safety-st
 need('ems/modules/charging-management.js', "safetyReason: 'peak-shaving-safety-stop'", 'Peak-Rampdown setzt Safety-Stop-Reason');
 need('ems/modules/charging-management.js', 'safetyStopHandoverViaTsWritePlan', 'Legacy-Diagnose zeigt TS-Safety-Handover');
 need('ems/modules/charging-management.js', 'js-only-safety-stop-write-plan', 'alter JS-only-Safety-Stop als entfernt markiert');
-need('ems/modules/charging-management.js', "source: 'ts-charging-legacy-js-decision-tree-reduction-v3'", 'Legacy-Reduktionsdiagnose v3');
+need('ems/modules/charging-management.js', "source: 'ts-charging-legacy-js-decision-tree-reduction-v4'", 'Legacy-Reduktionsdiagnose v4');
 need('www/ems-apps.js', 'TS‑Härtung: EVCS Safety‑Handover', 'App-Center zeigt Safety-Handover-Härtung');
 
 const allocation = require(path.join(root, 'lib/ts-mirrors/ems/charging-management/charging-allocation.js'));

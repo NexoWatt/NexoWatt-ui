@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.129",
+    "version": "0.7.130",
     "news": {
+      "0.7.130": {
+        "de": "EVCS-TypeScript-Normalquelle aktiviert: Allocation und kompletter EVCS-Handover laufen im grünen Gate als TS-Normalpfad; JS bleibt nur ioBroker-Executor und harter Fallback. App-Center/API zeigen Normalquellen-Lockdown und Migrationsbereitschaft.",
+        "en": "EVCS TypeScript normal source enabled: allocation and the complete EVCS handover run through the green TS normal-path gate; JS remains only the ioBroker executor and hard fallback. App Center/API expose normal-source lockdown and migration readiness."
+      },
       "0.7.129": {
         "en": "EVCS TypeScript handover hardened: safety stop/ramp-down paths can now use the productive TS Allocation + Write-Plan zero-setpoint contract; JavaScript remains executor and hard fallback only.",
         "de": "EVCS-TypeScript-Handover gehärtet: Safety-Stop/Rampdown-Zweige können jetzt den produktiven TS-Allocation- und Write-Plan-0-Setpoint-Vertrag nutzen; JavaScript bleibt nur Executor und harter Fallback."
@@ -26,10 +30,6 @@
       "0.7.91": {
         "de": "TypeScript-Migration: KI-Berater-Runtime-Spiegel gezielt typisiert. Adapter-, Snapshot-, Konfigurations-, Vorschlags-, Tagesplan- und Lernzustandsverträge ergänzt; produktive KI-Runtime bleibt JavaScript.",
         "en": "TypeScript migration: AI advisor runtime mirror received targeted typing. Added adapter, snapshot, config, suggestion, daily plan and learning state contracts; productive AI runtime remains JavaScript."
-      },
-      "0.7.79": {
-        "de": "TypeScript-Shadow-Diagnose wird ausgewertet und zeigt eine Umschaltbereitschaft für Energiefluss, Core-Limits und Heizstab im App-Center. Keine produktive Runtime-Umschaltung.",
-        "en": "TypeScript shadow diagnostics now evaluate switch-readiness for energy flow, core limits and heating rod in the App Center. No productive runtime switch."
       }
     },
     "title": "NexoWatt UI",

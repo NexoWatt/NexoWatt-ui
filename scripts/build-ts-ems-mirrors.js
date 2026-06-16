@@ -71,6 +71,12 @@ const mirrorSpecs = [
     purpose: 'EVCS-Setpoint-Write-Plan-Shadow ohne produktive ioBroker-Schreiboperationen',
   },
   {
+    sourceRel: 'src-ts/ems/charging-management/charging-normal-source.ts',
+    builtRel: 'build-ts/ems-mirrors/ems/charging-management/charging-normal-source.js',
+    mirrorRel: 'lib/ts-mirrors/ems/charging-management/charging-normal-source.js',
+    purpose: 'EVCS-TypeScript-Normalquelle-Lockdown mit JavaScript nur als Executor und hartem Fallback',
+  },
+  {
     sourceRel: 'src-ts/ems/charging-management/charging-management-runtime.ts',
     builtRel: 'build-ts/ems-mirrors/ems/charging-management/charging-management-runtime.js',
     mirrorRel: 'lib/ts-mirrors/ems/charging-management/charging-management-runtime.js',

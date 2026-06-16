@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 1481e014bfa9ceb25eae4d63609f75e7f5852925759e6a674a852d9c415291c8
+ * Original-Hash: 8f0e76b396e658191c6343b723534f68b0b840130a34813dd9c2809e7c70a8c7
  */
 
 /**
@@ -99,6 +99,12 @@ const mirrorSpecs = [
     builtRel: 'build-ts/ems-mirrors/ems/charging-management/charging-write-plan.js',
     mirrorRel: 'lib/ts-mirrors/ems/charging-management/charging-write-plan.js',
     purpose: 'EVCS-Setpoint-Write-Plan-Shadow ohne produktive ioBroker-Schreiboperationen',
+  },
+  {
+    sourceRel: 'src-ts/ems/charging-management/charging-normal-source.ts',
+    builtRel: 'build-ts/ems-mirrors/ems/charging-management/charging-normal-source.js',
+    mirrorRel: 'lib/ts-mirrors/ems/charging-management/charging-normal-source.js',
+    purpose: 'EVCS-TypeScript-Normalquelle-Lockdown mit JavaScript nur als Executor und hartem Fallback',
   },
   {
     sourceRel: 'src-ts/ems/charging-management/charging-management-runtime.ts',

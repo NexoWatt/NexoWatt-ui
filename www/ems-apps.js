@@ -11390,8 +11390,10 @@ function collectAiAdvisorConfigFromUI(base) {
     const flowShadow = flowInputs && flowInputs.tsShadow ? flowInputs.tsShadow : null;
     const chargingControlPrep = _parseShadowJson(ctrl.tsControlProductiveJson, _parseShadowJson(ctrl.tsControlProductivePrepJson, _parseShadowJson(ctrl.tsControlShadowJson, null)));
     const chargingAllocationProductive = _parseShadowJson(ctrl.tsAllocationProductiveJson, _parseShadowJson(ctrl.tsAllocationProductivePrepJson, _parseShadowJson(ctrl.tsAllocationShadowJson, null)));
+    const chargingAllocationNormalSource = _parseShadowJson(ctrl.tsAllocationNormalSourceJson, chargingAllocationProductive);
     const chargingWritePlanProductive = _parseShadowJson(ctrl.tsWritePlanProductiveJson, _parseShadowJson(ctrl.tsWritePlanProductivePrepJson, _parseShadowJson(ctrl.tsWritePlanShadowJson, null)));
     const chargingLegacyDecision = _parseShadowJson(ctrl.tsLegacyDecisionTreeJson, null);
+    const chargingNormalSourceLockdown = _parseShadowJson(ctrl.tsNormalSourceLockdownJson, _parseShadowJson(ctrl.tsNormalSourceJson, chargingLegacyDecision && chargingLegacyDecision.normalSourceLockdown ? chargingLegacyDecision.normalSourceLockdown : null));
     const chargingBudgetPrep = _parseShadowJson(ctrl.tsBudgetJson, null);
 
     /**
@@ -11425,7 +11427,7 @@ function collectAiAdvisorConfigFromUI(base) {
 
     const hint = document.createElement('div');
     hint.className = 'nw-config-help nw-shadow-diagnostics-hint';
-    hint.textContent = 'Hinweis: Shadow-Abweichung bedeutet nicht automatisch Adapterfehler. Die JavaScript-Runtime bleibt produktiv; TypeScript dient hier nur zur Migrationsprüfung.';
+    hint.textContent = 'Hinweis: Shadow-Abweichung bedeutet nicht automatisch Adapterfehler. Bei produktiv übernommenen Bereichen ist TypeScript die Entscheidungsquelle; JavaScript bleibt dort Executor/Fallback. Für noch nicht vollständig umgestellte Bereiche dient TypeScript weiter zur Migrationsprüfung.';
     els.shadowDiagnostics.appendChild(hint);
 
     const cards = [
@@ -11435,9 +11437,11 @@ function collectAiAdvisorConfigFromUI(base) {
       { title: 'TS‑Produktiv: EVCS Control', subtitle: 'Control‑Status, Budget, Sichtbarkeit, Gates – ohne Setpoint‑Schreiben', shadow: chargingControlPrep },
       // Kompatibilitätsmarker für ältere Checks: TS‑Prep: EVCS Allocation / TS‑Shadow: EVCS Write‑Plan
       { title: 'TS‑Produktiv: EVCS Allocation', subtitle: 'Wallbox‑Zielverteilung produktiv über TS; JS bleibt Fallback/Executor', shadow: chargingAllocationProductive },
+      { title: 'TS‑Normalquelle: EVCS Allocation', subtitle: 'TS ist Normalquelle; JS‑Vergleich nur Diagnose, JS nur harter Fallback/Executor', shadow: chargingAllocationNormalSource },
       { title: 'TS‑Produktiv: EVCS Write‑Plan', subtitle: 'Setpoint‑Schreibplan produktiv; ioBroker‑Executor bleibt JS', shadow: chargingWritePlanProductive },
       { title: 'TS‑Cleanup: EVCS JS Executor/Fallback', subtitle: 'Alter JS‑Entscheidungsbaum ist nur noch Executor/Fallback statt Normalquelle', shadow: chargingLegacyDecision },
       { title: 'TS‑Härtung: EVCS Safety‑Handover', subtitle: 'Stale‑Meter‑Stopps und Peak‑Rampdown laufen als TS‑0‑Setpoint‑Vertrag', shadow: chargingLegacyDecision },
+      { title: 'TS‑Lockdown: EVCS Normalquelle', subtitle: 'JS‑Allocation ist aus dem Normalpfad entfernt; nur Executor und harte Fallbacks bleiben', shadow: chargingNormalSourceLockdown },
       { title: 'TS‑Produktiv: EVCS Budget‑Caps', subtitle: 'Grid‑/Phasen‑/§14a‑Caps mit JS‑Fallback', shadow: chargingBudgetPrep },
     ];
 

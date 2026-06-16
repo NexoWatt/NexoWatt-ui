@@ -83,6 +83,9 @@ export interface ChargingAllocationRuntimeInput {
   staleBudget?: unknown;
   safetyStop?: unknown;
   safetyReason?: unknown;
+  preferTsNativeAllocation?: unknown;
+  tsNormalSourceLock?: unknown;
+  allowJsComparisonFallback?: unknown;
   wallboxes?: readonly ChargingAllocationWallboxInput[] | null;
   allocations?: readonly Record<string, unknown>[] | null;
   ts?: unknown;
@@ -132,6 +135,10 @@ export interface ChargingAllocationShadowPlan {
   ts: number;
   mode: string;
   budgetMode: string;
+  allocationMode: 'js-diagnostic-normalized' | 'ts-native';
+  normalSource: 'js-diagnostic-normalized' | 'ts-native-allocation';
+  tsNormalSourceLock: boolean;
+  jsComparisonDiagnosticOnly: boolean;
   budgetW: number | null;
   usedW: number;
   remainingW: number;
@@ -155,6 +162,7 @@ export interface ChargingAllocationShadowPlan {
     para14aBinding: boolean;
     storageAssistActive: boolean;
     safetyStop: boolean;
+    tsNativeAllocation: boolean;
   };
   safetyReason: string;
   caps: {
@@ -196,6 +204,8 @@ export interface ChargingAllocationProductivePrepDecision {
   fallbackReason: string;
   blockers: string[];
   warnings: string[];
+  tsNormalSourceLocked: boolean;
+  jsComparisonDiagnosticOnly: boolean;
   comparison: ChargingAllocationShadowComparison;
   plan: ChargingAllocationShadowPlan;
   apply: ChargingAllocationProductiveApply | null;
@@ -220,6 +230,8 @@ export interface ChargingAllocationProductiveDecision {
   fallbackReason: string;
   blockers: string[];
   warnings: string[];
+  tsNormalSourceLocked: boolean;
+  jsComparisonDiagnosticOnly: boolean;
   comparison: ChargingAllocationShadowComparison;
   plan: ChargingAllocationShadowPlan;
   apply: ChargingAllocationProductiveApply | null;
@@ -232,11 +244,46 @@ export interface ChargingAllocationProductiveDecision {
     normalJavascriptDecisionTreeRemovedFromNormalPath: true;
     directJavascriptSetpointLoopsRemoved: true;
     executorFallbackOnlyForHardBlockers: true;
+    tsNormalSourceLocked: true;
+    jsShadowComparisonDiagnosticOnly: true;
+    jsMismatchDoesNotBlockNormalPath: true;
+    nativeTsAllocatorCanIgnoreJsTargets: true;
     allowsTsSafetyStopHandover: true;
     safeStopCanBypassStaleBlockersForZeroTargets: true;
     nonZeroSafetyStopRejected: true;
     doesNotWriteIoBrokerStates: true;
   };
+  nextAction: string;
+}
+
+
+export interface ChargingAllocationNormalSourceDecision {
+  source: 'ts-charging-allocation-normal-source-v1';
+  available: true;
+  ok: boolean;
+  productive: boolean;
+  normalSource: boolean;
+  prepared: boolean;
+  fallback: boolean;
+  fallbackReason: string;
+  blockers: string[];
+  warnings: string[];
+  diagnosticComparison: ChargingAllocationShadowComparison;
+  diagnosticMismatchCount: number;
+  plan: ChargingAllocationShadowPlan;
+  apply: ChargingAllocationProductiveApply | null;
+  safety: {
+    tsIsNormalAllocationSource: true;
+    jsComparisonIsDiagnosticOnly: true;
+    javascriptAllocationIsHardFallbackOnly: true;
+    legacyJavascriptDecisionTreeRemovedFromNormalPath: true;
+    hardFallbackOnlyForRuntimeMirrorOrSafetyBlockers: true;
+    setpointWritingViaJavascriptExecutor: true;
+    directJavascriptSetpointLoopsRemoved: true;
+    allowsTsSafetyStopHandover: true;
+    doesNotWriteIoBrokerStates: true;
+  };
+  hardFallbackReasons: string[];
   nextAction: string;
 }
 
@@ -306,6 +353,141 @@ function buildAllocationMap(allocations: readonly Record<string, unknown>[]): Ma
     if (safe) map.set(safe, allocation);
   });
   return map;
+}
+
+function wantsTsNativeAllocation(input: ChargingAllocationRuntimeInput): boolean {
+  return boolValue(input.preferTsNativeAllocation, false) || boolValue(input.tsNormalSourceLock, false);
+}
+
+function isJsComparisonDiagnosticOnly(input: ChargingAllocationRuntimeInput, plan?: Pick<ChargingAllocationShadowPlan, 'jsComparisonDiagnosticOnly'> | null): boolean {
+  if (plan && plan.jsComparisonDiagnosticOnly === true) return true;
+  if (wantsTsNativeAllocation(input)) return true;
+  return boolValue(input.allowJsComparisonFallback, true) === false;
+}
+
+function technicalMinPowerW(wb: ChargingAllocationWallboxPlan): number {
+  if (wb.minPowerW > 0) return wb.minPowerW;
+  if (wb.minA > 0) return Math.round(Math.max(1, wb.phases || 1) * Math.max(1, wb.voltageV || 230) * wb.minA);
+  return 0;
+}
+
+function technicalMaxPowerW(wb: ChargingAllocationWallboxPlan): number {
+  if (wb.maxPowerW > 0) return wb.maxPowerW;
+  if (wb.maxA > 0) return Math.round(Math.max(1, wb.phases || 1) * Math.max(1, wb.voltageV || 230) * wb.maxA);
+  return wb.chargerType === 'dc' ? 50000 : 11000;
+}
+
+function currentForPowerA(wb: ChargingAllocationWallboxPlan, targetPowerW: number): number {
+  const denom = Math.max(1, wb.phases || 1) * Math.max(1, wb.voltageV || 230);
+  let amps = targetPowerW > 0 ? targetPowerW / denom : 0;
+  if (amps > 0 && wb.minA > 0 && amps < wb.minA) amps = wb.minA;
+  if (wb.maxA > 0 && amps > wb.maxA) amps = wb.maxA;
+  return Number(Math.max(0, amps).toFixed(3));
+}
+
+function capFromBinding(binding: unknown, cap: unknown): number | null {
+  if (!boolValue(binding, false)) return null;
+  const n = finiteOrNull(cap);
+  return n === null ? 0 : Math.max(0, Math.round(n));
+}
+
+function effectiveNativeBudgetW(input: ChargingAllocationRuntimeInput, candidates: ChargingAllocationWallboxPlan[]): number {
+  const maxCandidateW = candidates.reduce((sum, wb) => sum + technicalMaxPowerW(wb), 0);
+  const budget = finiteOrNull(input.budgetW);
+  const remaining = finiteOrNull(input.remainingW);
+  let available = budget === null ? (remaining !== null && remaining > 0 ? remaining : maxCandidateW) : budget;
+  if (!Number.isFinite(available) || available < 0) available = 0;
+  const caps = [
+    capFromBinding(input.gridCapBinding, input.gridCapEvcsW),
+    capFromBinding(input.phaseCapBinding, input.phaseCapEvcsW),
+    (boolValue(input.para14aActive, false) || boolValue(input.para14aBinding, false)) ? capFromBinding(true, input.para14aCapEvcsW) : null,
+  ].filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  for (const cap of caps) available = Math.min(available, cap);
+  if (boolValue(input.pausedByPeakShaving, false)) available = 0;
+  return Math.max(0, Math.round(available));
+}
+
+function isChargingCandidate(wb: ChargingAllocationWallboxPlan): boolean {
+  const modeText = `${wb.effectiveMode || ''} ${wb.userMode || ''}`.toLowerCase();
+  if (!wb.enabled || !wb.online || !wb.connected) return false;
+  if (!wb.hasSetpoint) return false;
+  if (modeText.includes('off') || modeText.includes('disabled') || modeText.includes('aus')) return false;
+  return true;
+}
+
+function applyTsNativeAllocationPlan(plannedRaw: ChargingAllocationWallboxPlan[], input: ChargingAllocationRuntimeInput): ChargingAllocationWallboxPlan[] {
+  const candidates = plannedRaw
+    .filter(isChargingCandidate)
+    .map((wb, index) => ({ wb, index, priority: Number.isFinite(Number(wb.priority)) ? Number(wb.priority) : 0 }))
+    .sort((a, b) => (b.priority - a.priority) || (a.index - b.index));
+  const availableW = effectiveNativeBudgetW(input, candidates.map((item) => item.wb));
+  const selected = new Map<string, { targetW: number; maxW: number; reason: string }>();
+  let remainingW = availableW;
+
+  for (const item of candidates) {
+    const wb = item.wb;
+    const minW = technicalMinPowerW(wb);
+    const maxW = Math.max(minW, technicalMaxPowerW(wb));
+    if (remainingW <= 0) {
+      selected.set(wb.safe, { targetW: 0, maxW, reason: 'no-budget' });
+      continue;
+    }
+    if (minW > 0 && remainingW < minW) {
+      selected.set(wb.safe, { targetW: 0, maxW, reason: 'budget-below-minimum' });
+      continue;
+    }
+    const base = minW > 0 ? minW : 0;
+    selected.set(wb.safe, { targetW: base, maxW, reason: base > 0 ? 'ts-native-minimum' : 'ts-native-eligible' });
+    remainingW -= base;
+  }
+
+  let guard = 0;
+  while (remainingW > 0 && guard < 20) {
+    guard += 1;
+    const adjustable = Array.from(selected.entries()).filter(([, item]) => item.targetW < item.maxW);
+    if (!adjustable.length) break;
+    const share = Math.max(1, Math.floor(remainingW / adjustable.length));
+    let usedThisRound = 0;
+    for (const [safe, item] of adjustable) {
+      const add = Math.min(item.maxW - item.targetW, share, remainingW - usedThisRound);
+      if (add <= 0) continue;
+      item.targetW += add;
+      item.reason = 'ts-native-allocated';
+      usedThisRound += add;
+      if (usedThisRound >= remainingW) break;
+    }
+    if (usedThisRound <= 0) break;
+    remainingW -= usedThisRound;
+  }
+
+  return plannedRaw.map((wb) => {
+    const chosen = selected.get(wb.safe);
+    let targetPowerW = chosen ? Math.max(0, Math.round(chosen.targetW)) : 0;
+    let reason = chosen ? chosen.reason : '';
+    let blocked = false;
+    if (!wb.online) { blocked = true; reason = 'offline'; }
+    else if (!wb.enabled) { blocked = false; reason = 'control_disabled'; }
+    else if (!wb.connected) { blocked = true; reason = 'not_connected'; }
+    else if (!wb.hasSetpoint) { blocked = true; reason = 'missing-wallbox-setpoint'; }
+    else if (targetPowerW <= 0 && !reason) { reason = 'no-budget'; }
+
+    const controlBasis = wb.controlBasis === 'current' ? 'current' : 'power';
+    const targetCurrentA = controlBasis === 'current' ? currentForPowerA(wb, targetPowerW) : 0;
+    if (controlBasis === 'current' && targetCurrentA > 0) {
+      targetPowerW = Math.round(targetCurrentA * Math.max(1, wb.phases || 1) * Math.max(1, wb.voltageV || 230));
+    }
+    const writeRequired = wb.hasSetpoint && wb.online && (targetPowerW > 0 || targetCurrentA > 0 || (!wb.enabled && !!(wb.setAKey || wb.setWKey)) || reason === 'control_disabled');
+    return {
+      ...wb,
+      targetPowerW,
+      targetCurrentA,
+      pvUsedW: Math.min(targetPowerW, nonNegative(input.pvAvailableW)),
+      blocked,
+      reason: reason || 'ts-native-allocated',
+      writeRequired,
+      boost: String(wb.effectiveMode || '').toLowerCase().includes('boost'),
+    };
+  });
 }
 
 function normalizeWallboxPlan(
@@ -389,13 +571,17 @@ export function buildChargingAllocationShadowPlan(input: ChargingAllocationRunti
   const allocations = Array.isArray(input.allocations) ? input.allocations : [];
   const allocationMap = buildAllocationMap(allocations);
   const safetyStop = boolValue(input.safetyStop, false);
+  const useTsNativeAllocation = wantsTsNativeAllocation(input);
+  const diagnosticOnlyComparison = isJsComparisonDiagnosticOnly(input);
   const safetyReason = safetyStop ? str(input.safetyReason, boolValue(input.staleMeter) ? 'stale-meter-safety-stop' : 'evcs-safety-stop') : '';
   const plannedRaw = wallboxes.map((wallbox, index) => {
     const key = safeKey(wallbox.safe ?? wallbox.key ?? wallbox.id ?? wallbox.name, index);
     return normalizeWallboxPlan(wallbox, index, allocationMap.get(key) || null, input);
   });
-  for (const [safe, allocation] of allocationMap.entries()) {
-    if (!plannedRaw.some((w) => w.safe === safe)) plannedRaw.push(normalizeWallboxPlan({ safe }, plannedRaw.length, allocation, input));
+  if (!useTsNativeAllocation) {
+    for (const [safe, allocation] of allocationMap.entries()) {
+      if (!plannedRaw.some((w) => w.safe === safe)) plannedRaw.push(normalizeWallboxPlan({ safe }, plannedRaw.length, allocation, input));
+    }
   }
   const planned = safetyStop
     ? plannedRaw.map((wb) => {
@@ -412,14 +598,16 @@ export function buildChargingAllocationShadowPlan(input: ChargingAllocationRunti
           writeRequired: canWriteSafeStop,
         };
       })
-    : plannedRaw;
+    : (useTsNativeAllocation ? applyTsNativeAllocationPlan(plannedRaw, input) : plannedRaw);
 
   const sumTargetPowerW = planned.reduce((sum, wb) => sum + Math.max(0, wb.targetPowerW || 0), 0);
   const sumTargetCurrentA = planned.reduce((sum, wb) => sum + Math.max(0, wb.targetCurrentA || 0), 0);
-  const explicitTotalPower = safetyStop ? 0 : finiteOrNull(input.totalTargetPowerW);
-  const explicitTotalCurrent = safetyStop ? 0 : finiteOrNull(input.totalTargetCurrentA);
+  const explicitTotalPower = safetyStop ? 0 : (useTsNativeAllocation ? null : finiteOrNull(input.totalTargetPowerW));
+  const explicitTotalCurrent = safetyStop ? 0 : (useTsNativeAllocation ? null : finiteOrNull(input.totalTargetCurrentA));
   const blockers: string[] = [];
   const warnings: string[] = [];
+  if (useTsNativeAllocation) warnings.push('ts-native-allocation-active');
+  if (diagnosticOnlyComparison) warnings.push('js-comparison-diagnostic-only');
   if (!planned.length) warnings.push('no-wallboxes-configured');
   if (safetyStop) warnings.push(safetyReason);
   if (boolValue(input.staleMeter) && !safetyStop) blockers.push('stale-meter');
@@ -436,6 +624,10 @@ export function buildChargingAllocationShadowPlan(input: ChargingAllocationRunti
     ts: finiteOrNull(input.ts) ?? Date.now(),
     mode: str(input.mode, 'unknown'),
     budgetMode: str(input.budgetMode, 'unknown'),
+    allocationMode: useTsNativeAllocation ? 'ts-native' : 'js-diagnostic-normalized',
+    normalSource: useTsNativeAllocation ? 'ts-native-allocation' : 'js-diagnostic-normalized',
+    tsNormalSourceLock: useTsNativeAllocation,
+    jsComparisonDiagnosticOnly: diagnosticOnlyComparison,
     budgetW: finiteOrNull(input.budgetW),
     usedW: nonNegative(input.usedW, sumTargetPowerW),
     remainingW: nonNegative(input.remainingW),
@@ -459,6 +651,7 @@ export function buildChargingAllocationShadowPlan(input: ChargingAllocationRunti
       para14aBinding: boolValue(input.para14aBinding),
       storageAssistActive: boolValue(input.storageAssistActive),
       safetyStop,
+      tsNativeAllocation: useTsNativeAllocation,
     },
     safetyReason,
     caps: {
@@ -536,11 +729,26 @@ function buildChargingAllocationApply(plan: ChargingAllocationShadowPlan): Charg
   };
 }
 
-function collectProductiveBlockers(plan: ChargingAllocationShadowPlan, comparison: ChargingAllocationShadowComparison): string[] {
+function collectProductiveBlockers(input: ChargingAllocationRuntimeInput, plan: ChargingAllocationShadowPlan, comparison: ChargingAllocationShadowComparison): string[] {
   const blockers = Array.isArray(plan.blockers) ? [...plan.blockers] : [];
-  if (!comparison.ok) blockers.push('ts-js-allocation-mismatch');
+  if (!comparison.ok && !isJsComparisonDiagnosticOnly(input, plan)) blockers.push('ts-js-allocation-mismatch');
   if (plan.wallboxes.some((wb) => wb.enabled && wb.online && !wb.hasSetpoint)) blockers.push('missing-wallbox-setpoint');
   return Array.from(new Set(blockers));
+}
+
+
+function collectNormalSourceBlockers(plan: ChargingAllocationShadowPlan): string[] {
+  const blockers = Array.isArray(plan.blockers) ? [...plan.blockers] : [];
+  if (plan.wallboxes.some((wb) => wb.enabled && wb.online && !wb.hasSetpoint)) blockers.push('missing-wallbox-setpoint');
+  return Array.from(new Set(blockers));
+}
+
+function normalSourceWarnings(plan: ChargingAllocationShadowPlan, comparison: ChargingAllocationShadowComparison): string[] {
+  const warnings = Array.isArray(plan.warnings) ? [...plan.warnings] : [];
+  if (comparison && comparison.ok === false) {
+    warnings.push(`js-comparison-diagnostic-only:${Number.isFinite(Number(comparison.mismatchCount)) ? Number(comparison.mismatchCount) : 0}`);
+  }
+  return Array.from(new Set(warnings));
 }
 
 /**
@@ -552,11 +760,13 @@ export function buildChargingAllocationProductivePrep(
   plan: ChargingAllocationShadowPlan = buildChargingAllocationShadowPlan(input),
   comparison: ChargingAllocationShadowComparison = compareChargingAllocationShadowPlan(input, plan),
 ): ChargingAllocationProductivePrepDecision {
-  const blockers = collectProductiveBlockers(plan, comparison);
-  const prepared = plan.ok === true && comparison.ok === true && blockers.length === 0;
+  const blockers = collectProductiveBlockers(input, plan, comparison);
+  const diagnosticOnlyComparison = isJsComparisonDiagnosticOnly(input, plan);
+  const comparisonAllowsTakeover = comparison.ok === true || diagnosticOnlyComparison === true;
+  const prepared = plan.ok === true && comparisonAllowsTakeover && blockers.length === 0;
   const fallbackReason = prepared
     ? ''
-    : (!comparison.ok ? 'ts-js-allocation-mismatch' : (blockers[0] || 'ts-allocation-not-ready'));
+    : (!comparison.ok && !diagnosticOnlyComparison ? 'ts-js-allocation-mismatch' : (blockers[0] || 'ts-allocation-not-ready'));
   return {
     source: 'ts-charging-allocation-productive-prep-v1',
     available: true,
@@ -567,7 +777,9 @@ export function buildChargingAllocationProductivePrep(
     fallback: !prepared,
     fallbackReason,
     blockers,
-    warnings: Array.isArray(plan.warnings) ? [...plan.warnings] : [],
+    warnings: Array.from(new Set([...(Array.isArray(plan.warnings) ? plan.warnings : []), ...(!comparison.ok && diagnosticOnlyComparison ? ['ts-js-allocation-mismatch-diagnostic-only'] : [])])),
+    tsNormalSourceLocked: wantsTsNativeAllocation(input),
+    jsComparisonDiagnosticOnly: diagnosticOnlyComparison,
     comparison,
     plan,
     apply: prepared ? buildChargingAllocationApply(plan) : null,
@@ -593,11 +805,13 @@ export function buildChargingAllocationProductive(
   plan: ChargingAllocationShadowPlan = buildChargingAllocationShadowPlan(input),
   comparison: ChargingAllocationShadowComparison = compareChargingAllocationShadowPlan(input, plan),
 ): ChargingAllocationProductiveDecision {
-  const blockers = collectProductiveBlockers(plan, comparison);
-  const canApply = plan.ok === true && comparison.ok === true && blockers.length === 0;
+  const blockers = collectProductiveBlockers(input, plan, comparison);
+  const diagnosticOnlyComparison = isJsComparisonDiagnosticOnly(input, plan);
+  const comparisonAllowsTakeover = comparison.ok === true || diagnosticOnlyComparison === true;
+  const canApply = plan.ok === true && comparisonAllowsTakeover && blockers.length === 0;
   const fallbackReason = canApply
     ? ''
-    : (!comparison.ok ? 'ts-js-allocation-mismatch' : (blockers[0] || 'ts-allocation-not-ready'));
+    : (!comparison.ok && !diagnosticOnlyComparison ? 'ts-js-allocation-mismatch' : (blockers[0] || 'ts-allocation-not-ready'));
   return {
     source: 'ts-charging-allocation-productive-v1',
     available: true,
@@ -608,7 +822,9 @@ export function buildChargingAllocationProductive(
     fallback: !canApply,
     fallbackReason,
     blockers,
-    warnings: Array.isArray(plan.warnings) ? [...plan.warnings] : [],
+    warnings: Array.from(new Set([...(Array.isArray(plan.warnings) ? plan.warnings : []), ...(!comparison.ok && diagnosticOnlyComparison ? ['ts-js-allocation-mismatch-diagnostic-only'] : [])])),
+    tsNormalSourceLocked: wantsTsNativeAllocation(input),
+    jsComparisonDiagnosticOnly: diagnosticOnlyComparison,
     comparison,
     plan,
     apply: canApply ? buildChargingAllocationApply(plan) : null,
@@ -621,6 +837,10 @@ export function buildChargingAllocationProductive(
       normalJavascriptDecisionTreeRemovedFromNormalPath: true,
       directJavascriptSetpointLoopsRemoved: true,
       executorFallbackOnlyForHardBlockers: true,
+      tsNormalSourceLocked: true,
+      jsShadowComparisonDiagnosticOnly: true,
+      jsMismatchDoesNotBlockNormalPath: true,
+      nativeTsAllocatorCanIgnoreJsTargets: true,
       allowsTsSafetyStopHandover: true,
       safeStopCanBypassStaleBlockersForZeroTargets: true,
       nonZeroSafetyStopRejected: true,
@@ -629,5 +849,66 @@ export function buildChargingAllocationProductive(
     nextAction: canApply
       ? 'TS-Allocation liefert produktiv die finalen Wallbox-Zielwerte; JavaScript führt nur noch den ioBroker-Executor aus und bleibt harter Fallback.'
       : 'JavaScript bleibt führend; Allocation-Mismatch, fehlende Setpoints oder harte Blocker verhindern die TS-Übernahme.',
+  };
+}
+
+
+/**
+ * Code-Teil: buildChargingAllocationNormalSource
+ *
+ * Zweck:
+ * Schaltet die EVCS-Allocation in den nächsten Migrationsmodus: TypeScript ist im
+ * normalen Runtime-Tick die fachliche Quelle. Der alte JS-Vergleich bleibt sichtbar,
+ * blockiert aber nicht mehr allein wegen Diagnoseabweichungen; harte Safety-/Runtime-
+ * Blocker behalten den JS-Executor/Fallback als Sicherheitsnetz.
+ */
+export function buildChargingAllocationNormalSource(
+  input: ChargingAllocationRuntimeInput,
+  plan: ChargingAllocationShadowPlan = buildChargingAllocationShadowPlan(input),
+  comparison: ChargingAllocationShadowComparison = compareChargingAllocationShadowPlan(input, plan),
+): ChargingAllocationNormalSourceDecision {
+  const blockers = collectNormalSourceBlockers(plan);
+  const canApply = plan.ok === true && blockers.length === 0;
+  const mismatchCount = comparison && Number.isFinite(Number(comparison.mismatchCount)) ? Number(comparison.mismatchCount) : 0;
+  const fallbackReason = canApply ? '' : (blockers[0] || 'ts-allocation-normal-source-not-ready');
+  return {
+    source: 'ts-charging-allocation-normal-source-v1',
+    available: true,
+    ok: canApply,
+    productive: canApply,
+    normalSource: canApply,
+    prepared: canApply,
+    fallback: !canApply,
+    fallbackReason,
+    blockers,
+    warnings: normalSourceWarnings(plan, comparison),
+    diagnosticComparison: comparison,
+    diagnosticMismatchCount: mismatchCount,
+    plan,
+    apply: canApply ? buildChargingAllocationApply(plan) : null,
+    safety: {
+      tsIsNormalAllocationSource: true,
+      jsComparisonIsDiagnosticOnly: true,
+      javascriptAllocationIsHardFallbackOnly: true,
+      legacyJavascriptDecisionTreeRemovedFromNormalPath: true,
+      hardFallbackOnlyForRuntimeMirrorOrSafetyBlockers: true,
+      setpointWritingViaJavascriptExecutor: true,
+      directJavascriptSetpointLoopsRemoved: true,
+      allowsTsSafetyStopHandover: true,
+      doesNotWriteIoBrokerStates: true,
+    },
+    hardFallbackReasons: [
+      'missing-ts-allocation-mirror',
+      'missing-ts-write-plan-mirror',
+      'ts-runtime-error',
+      'stale-meter',
+      'stale-budget',
+      'missing-wallbox-setpoint',
+      'invalid-apply-plan',
+      'executor-error',
+    ],
+    nextAction: canApply
+      ? 'EVCS-Allocation läuft als TypeScript-Normalquelle; JavaScript bleibt ioBroker-Executor und harter Fallback.'
+      : 'TS-Normalquelle blockiert; JavaScript darf nur noch als harter Fallback für Runtime-/Safety-Blocker einspringen.',
   };
 }

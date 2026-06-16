@@ -1,3 +1,13 @@
+## 0.7.130 - EVCS TS-Normalquelle und JS-Hard-Fallback-Lockdown
+
+- EVCS Allocation: neuer Vertrag `buildChargingAllocationNormalSource(...)`; TypeScript ist im normalen Runtime-Tick die fachliche Allocation-Quelle.
+- Der bisherige JS/TS-Allocation-Vergleich bleibt als Diagnose sichtbar, blockiert die TS-Normalquelle aber nicht mehr allein wegen `ts-js-allocation-mismatch`.
+- Runtime-Handover: Write-Plan nutzt bevorzugt die TS-Normalquelle; JavaScript bleibt ioBroker-Executor und nur noch harter Fallback für Runtime-/Safety-Blocker.
+- Neue Diagnose-States: `tsAllocationNormalSourceJson`, `tsNormalSourceLockdownJson`, `tsNormalSourceJson` und `tsNormalSource`.
+- App-Center und `/api/state` zeigen EVCS-Allocation-Normalquelle und Normalquellen-Lockdown.
+- Neuer Check `npm run test:charging-normal-source-lockdown`; `test:charging-productive-hardening` und `publish:check` prüfen den neuen Gate mit.
+- Service-Worker Cache auf `nexowatt-cache-v298` erhöht.
+
 ## 0.7.129 - EVCS TS Runtime-Hotfix für Budget-Handover
 
 - EVCS Charging-Management: `gridImportW` tick-weit deklariert, damit Safety-/Control-TS-Handover keine Runtime-ReferenceError mehr auslösen.

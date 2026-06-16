@@ -22,6 +22,7 @@
     "src-ts/ems/charging-management/charging-management-runtime.ts",
     "src-ts/ems/charging-management/charging-control.ts",
     "src-ts/ems/charging-management/charging-write-plan.ts",
+    "src-ts/ems/charging-management/charging-normal-source.ts",
     "src-ts/ems/charging-management/charging-allocation.ts"
   ],
   "exclude": [
