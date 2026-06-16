@@ -1,4 +1,20 @@
 /**
+ * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
+ *
+ * Quelle: src-ts/runtime-executables/nwcore/modules/pv-forecast.ts
+ * Quell-Hash: sha256:fbfc0ba3b6efa2647d74bbf0f30e97c52f942e133ef574d1d9e99a96bcc77c15
+ * Erzeugung: npm run sync:ts-runtime-executables
+ *
+ * Zweck:
+ * Diese JavaScript-Datei ist das ausführbare Build-Artefakt für .nwcore/modules/pv-forecast.js.
+ * Die fachliche Bearbeitung erfolgt ab 0.7.131 in der TypeScript-Quelle.
+ *
+ * Pflege-Regel:
+ * 1. Änderung zuerst in src-ts/runtime-executables/ vornehmen.
+ * 2. npm run sync:ts-runtime-executables ausführen.
+ * 3. npm run test:runtime-executables prüfen.
+ */
+/**
  * Datei: .nwcore/modules/pv-forecast.js
  * Rolle im Projekt: EMS-Modul pv forecast.
  * Zweck: Führt eine fachliche EMS-Funktion zyklisch aus und veröffentlicht States für Frontend/Regelung.

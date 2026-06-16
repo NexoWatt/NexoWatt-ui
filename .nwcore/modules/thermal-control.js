@@ -1,4 +1,20 @@
 /**
+ * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
+ *
+ * Quelle: src-ts/runtime-executables/nwcore/modules/thermal-control.ts
+ * Quell-Hash: sha256:1c5165ab050c5711d9cf68cf6769a961e05c922ac38894e1cef984ec1dfaed4d
+ * Erzeugung: npm run sync:ts-runtime-executables
+ *
+ * Zweck:
+ * Diese JavaScript-Datei ist das ausführbare Build-Artefakt für .nwcore/modules/thermal-control.js.
+ * Die fachliche Bearbeitung erfolgt ab 0.7.131 in der TypeScript-Quelle.
+ *
+ * Pflege-Regel:
+ * 1. Änderung zuerst in src-ts/runtime-executables/ vornehmen.
+ * 2. npm run sync:ts-runtime-executables ausführen.
+ * 3. npm run test:runtime-executables prüfen.
+ */
+/**
  * NexoWatt Detail-Kommentar (DE)
  * Zweck dieser Ergänzung:
  * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.

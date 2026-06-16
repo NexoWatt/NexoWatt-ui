@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 8ea20c085250bc344617eb9e091d6801186cf72842b3614f2be46def7697aed7
+ * Original-Hash: 82f6e2ca111459af2dd6f583aba4788a069cea22c248912430f7c5afdd775d8d
  */
 
 /**
@@ -29,6 +29,22 @@
  * Funktionsdeklarationen bleiben trotzdem über diesen Dateikommentar dokumentiert.
  */
 
+/**
+ * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
+ *
+ * Quelle: src-ts/runtime-executables/nwcore/consumers/sg-ready.ts
+ * Quell-Hash: sha256:e6078d159af97470874ebddd6c809471376d51169e3526f0557f2bc389744869
+ * Erzeugung: npm run sync:ts-runtime-executables
+ *
+ * Zweck:
+ * Diese JavaScript-Datei ist das ausführbare Build-Artefakt für .nwcore/consumers/sg-ready.js.
+ * Die fachliche Bearbeitung erfolgt ab 0.7.131 in der TypeScript-Quelle.
+ *
+ * Pflege-Regel:
+ * 1. Änderung zuerst in src-ts/runtime-executables/ vornehmen.
+ * 2. npm run sync:ts-runtime-executables ausführen.
+ * 3. npm run test:runtime-executables prüfen.
+ */
 /**
  * Datei: .nwcore/consumers/sg-ready.js
  * Rolle im Projekt: EMS-Verbraucheradapter.

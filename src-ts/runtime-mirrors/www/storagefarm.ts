@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 8bfff052f83ae767719c97af82a086e7518a541208aeb2cedfa33c4329af2914
+ * Original-Hash: f75324cb41582fc6ecd25c14ee8fda945903525d64251c695381ef40ed6abca3
  */
 
 /**
@@ -29,6 +29,22 @@
  * Funktionsdeklarationen bleiben trotzdem über diesen Dateikommentar dokumentiert.
  */
 
+/**
+ * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
+ *
+ * Quelle: src-ts/runtime-executables/www/storagefarm.ts
+ * Quell-Hash: sha256:6c6304da9653cf1506b4494a785154c24156515a243345a5377439e665968344
+ * Erzeugung: npm run sync:ts-runtime-executables
+ *
+ * Zweck:
+ * Diese JavaScript-Datei ist das ausführbare Build-Artefakt für www/storagefarm.js.
+ * Die fachliche Bearbeitung erfolgt ab 0.7.131 in der TypeScript-Quelle.
+ *
+ * Pflege-Regel:
+ * 1. Änderung zuerst in src-ts/runtime-executables/ vornehmen.
+ * 2. npm run sync:ts-runtime-executables ausführen.
+ * 3. npm run test:runtime-executables prüfen.
+ */
 /**
  * NexoWatt Detail-Kommentar (DE)
  * Zweck dieser Ergänzung:

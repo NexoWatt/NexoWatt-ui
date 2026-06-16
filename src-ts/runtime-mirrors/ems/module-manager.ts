@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 6a5a0dad67902722d4eeac774263ba7b7c8ac60aa33edc70cc5e0f9efd950270
+ * Original-Hash: 2bd4b1f309e2ef3213f9a6eb22be295b18cde1809f0ed223d03c6e01ddcf875e
  */
 
 /**
@@ -29,6 +29,22 @@
  * Funktionsdeklarationen bleiben trotzdem über diesen Dateikommentar dokumentiert.
  */
 
+/**
+ * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
+ *
+ * Quelle: src-ts/runtime-executables/ems/module-manager.ts
+ * Quell-Hash: sha256:d72c7e27d67f3cd0d1b9b7118ed95cb1031a1466077b200dd4ce34c63ff65295
+ * Erzeugung: npm run sync:ts-runtime-executables
+ *
+ * Zweck:
+ * Diese JavaScript-Datei ist das ausführbare Build-Artefakt für ems/module-manager.js.
+ * Die fachliche Bearbeitung erfolgt ab 0.7.131 in der TypeScript-Quelle.
+ *
+ * Pflege-Regel:
+ * 1. Änderung zuerst in src-ts/runtime-executables/ vornehmen.
+ * 2. npm run sync:ts-runtime-executables ausführen.
+ * 3. npm run test:runtime-executables prüfen.
+ */
 /**
  * NexoWatt Detail-Kommentar (DE)
  * Zweck dieser Ergänzung:

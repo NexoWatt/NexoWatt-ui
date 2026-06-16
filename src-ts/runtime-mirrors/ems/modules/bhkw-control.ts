@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 767d3f45ca89587a3ada5628c9c1f062e0b4750a0280f3a2f803b4065ee20755
+ * Original-Hash: 5813abcc6c7b87185a8b5746e18f45ab17ec5dcf0a34f6caf57af10971409ef9
  */
 
 /**
@@ -29,6 +29,22 @@
  * Funktionsdeklarationen bleiben trotzdem über diesen Dateikommentar dokumentiert.
  */
 
+/**
+ * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
+ *
+ * Quelle: src-ts/runtime-executables/ems/modules/bhkw-control.ts
+ * Quell-Hash: sha256:3c0bff1f8150baf04ac89904fc724d91f78d6087340b8569d411f8c7cdf6e1c2
+ * Erzeugung: npm run sync:ts-runtime-executables
+ *
+ * Zweck:
+ * Diese JavaScript-Datei ist das ausführbare Build-Artefakt für ems/modules/bhkw-control.js.
+ * Die fachliche Bearbeitung erfolgt ab 0.7.131 in der TypeScript-Quelle.
+ *
+ * Pflege-Regel:
+ * 1. Änderung zuerst in src-ts/runtime-executables/ vornehmen.
+ * 2. npm run sync:ts-runtime-executables ausführen.
+ * 3. npm run test:runtime-executables prüfen.
+ */
 /**
  * NexoWatt Detail-Kommentar (DE)
  * Zweck dieser Ergänzung:

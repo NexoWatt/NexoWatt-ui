@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 659465a8b8c658c0859c4272c9c11fcaed70e4df5d5b84ded97080b5b56141f1
+ * Original-Hash: b5174ea9677f8c8c45a54dab0fa186841804b521868ba0bac95110af95242962
  */
 
 /**
@@ -29,6 +29,22 @@
  * Funktionsdeklarationen bleiben trotzdem über diesen Dateikommentar dokumentiert.
  */
 
+/**
+ * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
+ *
+ * Quelle: src-ts/runtime-executables/www/nw-shell.ts
+ * Quell-Hash: sha256:78de6e83776b61073b6b94ff4e30be69fdf569e460ff2466fe9e43d0cb83dc25
+ * Erzeugung: npm run sync:ts-runtime-executables
+ *
+ * Zweck:
+ * Diese JavaScript-Datei ist das ausführbare Build-Artefakt für www/nw-shell.js.
+ * Die fachliche Bearbeitung erfolgt ab 0.7.131 in der TypeScript-Quelle.
+ *
+ * Pflege-Regel:
+ * 1. Änderung zuerst in src-ts/runtime-executables/ vornehmen.
+ * 2. npm run sync:ts-runtime-executables ausführen.
+ * 3. npm run test:runtime-executables prüfen.
+ */
 /**
  * NexoWatt Detail-Kommentar (DE)
  * Zweck dieser Ergänzung:

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: ea9ae6b37079dd0403feb0ba0636273e46ae6b674c97ad9b7a3161a78678ae62
+ * Original-Hash: a6a3714e8ec9d7abf4be40d986a9df9836d4a99c1a454b41e1cc63cf75092a7a
  */
 
 /**
@@ -29,6 +29,22 @@
  * Funktionsdeklarationen bleiben trotzdem über diesen Dateikommentar dokumentiert.
  */
 
+/**
+ * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
+ *
+ * Quelle: src-ts/runtime-executables/ems/modules/multi-use.ts
+ * Quell-Hash: sha256:421c4cb52fe42560825afca99b087159200e0f252dd96cc0c5d20ba5ae0a068e
+ * Erzeugung: npm run sync:ts-runtime-executables
+ *
+ * Zweck:
+ * Diese JavaScript-Datei ist das ausführbare Build-Artefakt für ems/modules/multi-use.js.
+ * Die fachliche Bearbeitung erfolgt ab 0.7.131 in der TypeScript-Quelle.
+ *
+ * Pflege-Regel:
+ * 1. Änderung zuerst in src-ts/runtime-executables/ vornehmen.
+ * 2. npm run sync:ts-runtime-executables ausführen.
+ * 3. npm run test:runtime-executables prüfen.
+ */
 /**
  * NexoWatt Detail-Kommentar (DE)
  * Zweck dieser Ergänzung:

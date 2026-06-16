@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.130",
+    "version": "0.7.131",
     "news": {
+      "0.7.131": {
+        "de": "Adapterweite TypeScript-Runtime-Quelle aktiviert: main.js, EMS-/NwCore-Module und www-Runtime-Dateien sind jetzt generierte JavaScript-Artefakte aus src-ts/runtime-executables; EVCS bleibt TS-Normalquelle mit JS nur als ioBroker-Executor/Hard-Fallback.",
+        "en": "Adapter-wide TypeScript runtime source enabled: main.js, EMS/NwCore modules and www runtime files are now generated JavaScript artifacts from src-ts/runtime-executables; EVCS remains the TS normal source with JS only as ioBroker executor/hard fallback."
+      },
       "0.7.130": {
         "de": "EVCS-TypeScript-Normalquelle aktiviert: Allocation und kompletter EVCS-Handover laufen im grünen Gate als TS-Normalpfad; JS bleibt nur ioBroker-Executor und harter Fallback. App-Center/API zeigen Normalquellen-Lockdown und Migrationsbereitschaft.",
         "en": "EVCS TypeScript normal source enabled: allocation and the complete EVCS handover run through the green TS normal-path gate; JS remains only the ioBroker executor and hard fallback. App Center/API expose normal-source lockdown and migration readiness."
@@ -26,10 +30,6 @@
       "0.7.92": {
         "de": "History-Frontend als vierte große Runtime-Spiegeldatei gezielt typisiert: History-/Report-Verträge, Feature-Sichtbarkeit und Smoke-Test ergänzt. Keine produktive Runtime-Änderung.",
         "en": "History frontend typed as fourth large runtime mirror: added history/report contracts, feature visibility contracts and smoke test. No productive runtime change."
-      },
-      "0.7.91": {
-        "de": "TypeScript-Migration: KI-Berater-Runtime-Spiegel gezielt typisiert. Adapter-, Snapshot-, Konfigurations-, Vorschlags-, Tagesplan- und Lernzustandsverträge ergänzt; produktive KI-Runtime bleibt JavaScript.",
-        "en": "TypeScript migration: AI advisor runtime mirror received targeted typing. Added adapter, snapshot, config, suggestion, daily plan and learning state contracts; productive AI runtime remains JavaScript."
       }
     },
     "title": "NexoWatt UI",

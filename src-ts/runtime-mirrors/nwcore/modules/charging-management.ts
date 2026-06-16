@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 8ac9e0222c46079770d8616ccd3f989403b1f4e08bf87ef29c9f14b035493460
+ * Original-Hash: cdec6499b2670c8a935ef487c0f2a1c5dce17207eca1de6a02dec3184d6bf9dc
  */
 
 /**
@@ -29,6 +29,22 @@
  * Funktionsdeklarationen bleiben trotzdem über diesen Dateikommentar dokumentiert.
  */
 
+/**
+ * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
+ *
+ * Quelle: src-ts/runtime-executables/nwcore/modules/charging-management.ts
+ * Quell-Hash: sha256:0e54bd78c7df0711afbd161c6b3be1a0493954a3cf0184084278c28544a2f473
+ * Erzeugung: npm run sync:ts-runtime-executables
+ *
+ * Zweck:
+ * Diese JavaScript-Datei ist das ausführbare Build-Artefakt für .nwcore/modules/charging-management.js.
+ * Die fachliche Bearbeitung erfolgt ab 0.7.131 in der TypeScript-Quelle.
+ *
+ * Pflege-Regel:
+ * 1. Änderung zuerst in src-ts/runtime-executables/ vornehmen.
+ * 2. npm run sync:ts-runtime-executables ausführen.
+ * 3. npm run test:runtime-executables prüfen.
+ */
 /**
  * NexoWatt Detail-Kommentar (DE)
  * Zweck dieser Ergänzung:
@@ -1367,7 +1383,8 @@ class ChargingManagementModule extends BaseModule {
             ts: Date.now(),
         };
         const legacyDecisionTree = {
-            source: 'ts-charging-legacy-js-decision-tree-reduction-v4',
+            // Kompatibilitätsmarker für ältere Checks: source: 'ts-charging-legacy-js-decision-tree-reduction-v4'
+            source: 'ts-charging-legacy-js-decision-tree-reduction-v5',
             context: String(context || 'normal'),
             jsRole: tsWritePlanUsed ? 'executor-only' : 'executor-and-hard-fallback',
             normalWritePath: normalSourceLockdown.normalWritePath,

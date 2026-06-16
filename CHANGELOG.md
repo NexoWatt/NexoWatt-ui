@@ -1,3 +1,11 @@
+## 0.7.131 - Adapter-Runtime auf kanonische TypeScript-Quelle umgestellt
+
+- Neue kanonische Runtime-Quelle: `src-ts/runtime-executables/**` erzeugt die produktiven JavaScript-Artefakte für `main.js`, `ems/**`, `.nwcore/**` und `www/**`.
+- Die ausgelieferten Runtime-JS-Dateien sind als generierte Dateien markiert; fachliche Änderungen erfolgen ab diesem Schritt in TypeScript und werden per `npm run sync:ts-runtime-executables` nach JavaScript gebaut.
+- EVCS bleibt im Normalpfad TypeScript-geführt: Control, Budget-Caps, Allocation und Write-Plan kommen aus den TS-Helfern; JS ist weiterhin nur die Node/ioBroker-Ausführungsgrenze, Executor und Hard-Fallback.
+- Neue Checks: `npm run check:ts-runtime-executables`, `npm run test:runtime-executables` und `npm run test:ts-runtime-executables`; `publish:check` prüft den neuen Runtime-Quellen-Lock.
+- Service-Worker Cache auf `nexowatt-cache-v299` erhöht.
+
 ## 0.7.130 - EVCS TS-Normalquelle und JS-Hard-Fallback-Lockdown
 
 - EVCS Allocation: neuer Vertrag `buildChargingAllocationNormalSource(...)`; TypeScript ist im normalen Runtime-Tick die fachliche Allocation-Quelle.

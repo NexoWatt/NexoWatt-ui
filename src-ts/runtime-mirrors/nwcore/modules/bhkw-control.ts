@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: dab2f4c1185042f316c62c13ac29100611cdf27b2bfe2bdabb029dd69abe996c
+ * Original-Hash: 2b29b821da9d54e81ddcd09376a67cf0c5e5a4f5b88c5fae32350a1525544ce3
  */
 
 /**
@@ -29,6 +29,22 @@
  * Funktionsdeklarationen bleiben trotzdem über diesen Dateikommentar dokumentiert.
  */
 
+/**
+ * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
+ *
+ * Quelle: src-ts/runtime-executables/nwcore/modules/bhkw-control.ts
+ * Quell-Hash: sha256:daf8c014da9bcc0632d2b830ed0b218d74f8a3ce73f18ee5e8b7d540e0fabe01
+ * Erzeugung: npm run sync:ts-runtime-executables
+ *
+ * Zweck:
+ * Diese JavaScript-Datei ist das ausführbare Build-Artefakt für .nwcore/modules/bhkw-control.js.
+ * Die fachliche Bearbeitung erfolgt ab 0.7.131 in der TypeScript-Quelle.
+ *
+ * Pflege-Regel:
+ * 1. Änderung zuerst in src-ts/runtime-executables/ vornehmen.
+ * 2. npm run sync:ts-runtime-executables ausführen.
+ * 3. npm run test:runtime-executables prüfen.
+ */
 /**
  * Datei: .nwcore/modules/bhkw-control.js
  * Rolle im Projekt: EMS-Modul bhkw control.

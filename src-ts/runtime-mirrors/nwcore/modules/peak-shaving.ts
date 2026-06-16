@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e1c96b653811f9e15dede2bac0515121dd24e38ea3cf75123296339e6055ec00
+ * Original-Hash: d1ae1648027478d433797e2a43e9627cd1e5a887e5acd044aa8f4c9c272b9501
  */
 
 /**
@@ -29,6 +29,22 @@
  * Funktionsdeklarationen bleiben trotzdem über diesen Dateikommentar dokumentiert.
  */
 
+/**
+ * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
+ *
+ * Quelle: src-ts/runtime-executables/nwcore/modules/peak-shaving.ts
+ * Quell-Hash: sha256:d18ad20eb4faad1d45ba0aa257816e4e8f4d5e0bd9622277ddfa11480a8e3a99
+ * Erzeugung: npm run sync:ts-runtime-executables
+ *
+ * Zweck:
+ * Diese JavaScript-Datei ist das ausführbare Build-Artefakt für .nwcore/modules/peak-shaving.js.
+ * Die fachliche Bearbeitung erfolgt ab 0.7.131 in der TypeScript-Quelle.
+ *
+ * Pflege-Regel:
+ * 1. Änderung zuerst in src-ts/runtime-executables/ vornehmen.
+ * 2. npm run sync:ts-runtime-executables ausführen.
+ * 3. npm run test:runtime-executables prüfen.
+ */
 /**
  * Datei: .nwcore/modules/peak-shaving.js
  * Rolle im Projekt: EMS-Modul peak shaving.

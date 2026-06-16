@@ -1,4 +1,20 @@
 /**
+ * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
+ *
+ * Quelle: src-ts/runtime-executables/nwcore/module-manager.ts
+ * Quell-Hash: sha256:66c788e035cb0a3ed6421d443482ab4ac32cf4c94b7b8e176d644bf29427c1cb
+ * Erzeugung: npm run sync:ts-runtime-executables
+ *
+ * Zweck:
+ * Diese JavaScript-Datei ist das ausführbare Build-Artefakt für .nwcore/module-manager.js.
+ * Die fachliche Bearbeitung erfolgt ab 0.7.131 in der TypeScript-Quelle.
+ *
+ * Pflege-Regel:
+ * 1. Änderung zuerst in src-ts/runtime-executables/ vornehmen.
+ * 2. npm run sync:ts-runtime-executables ausführen.
+ * 3. npm run test:runtime-executables prüfen.
+ */
+/**
  * Datei: .nwcore/module-manager.js
  * Rolle im Projekt: NWCore-Referenzcode.
  * Zweck: Kern-/Referenzimplementierung für EMS-Bausteine; dient als technische Grundlage für gleiche Logik im Adapter.

@@ -249,3 +249,191 @@ export function buildChargingNormalSourceDecision(input: ChargingNormalSourceInp
 /** Kompatibilitätsalias für Runtime-Brücken aus der beschleunigten EVCS-Migration. */
 export const buildChargingNormalSourceLockdown = buildChargingNormalSourceDecision;
 export const buildChargingTsNormalSourceLockdown = buildChargingNormalSourceDecision;
+
+export interface ChargingEvcsJavascriptRemovalInput {
+  context?: unknown;
+  normalSource?: Record<string, unknown> | null;
+  legacy?: Record<string, unknown> | null;
+  executor?: Record<string, unknown> | null;
+  allocation?: Record<string, unknown> | null;
+  writePlan?: Record<string, unknown> | null;
+  budget?: Record<string, unknown> | null;
+  control?: Record<string, unknown> | null;
+  ts?: unknown;
+}
+
+export interface ChargingEvcsJavascriptRemovalDecision {
+  source: 'ts-charging-evcs-js-removal-ready-v1';
+  available: true;
+  ok: boolean;
+  productive: boolean;
+  readyForJavascriptRemoval: boolean;
+  readyForEvcsJsDecisionTreeRemoval: boolean;
+  readyForAdapterTsRuntime: boolean;
+  fallback: boolean;
+  fallbackReason: string;
+  runtimeSource: ChargingNormalSourceRuntimeSource;
+  jsRole: 'generated-js-runtime-boundary-only' | 'executor-and-hard-fallback';
+  remainingJavascriptRole: string;
+  context: string;
+  blockers: string[];
+  warnings: string[];
+  components: {
+    normalSourceProductive: boolean;
+    normalSourceRuntime: string;
+    normalSourceJsRole: string;
+    allocationNormalSource: boolean;
+    writePlanProductive: boolean;
+    executorOk: boolean;
+    executorSource: string;
+    legacyExecutorOnly: boolean;
+  };
+  removal: {
+    evcsDecisionTreeCanBeRemoved: boolean;
+    directSetpointLoopsRemoved: true;
+    normalJavascriptAllocationRemoved: true;
+    legacyJavascriptFallbackHardOnly: boolean;
+    javascriptSetStateExecutorBoundaryKept: true;
+    generatedJavascriptRuntimeArtifactsKept: true;
+  };
+  keepJavascriptFor: string[];
+  removeJavascriptNormalPath: string[];
+  safety: {
+    typescriptOwnsEvcsDecisionContracts: true;
+    javascriptIsRuntimeBoundaryOnlyWhenOk: true;
+    nodeIobrokerStillExecutesGeneratedJavascript: true;
+    setStateExecutorRemainsJavascriptUntilAdapterBuildIsTsBootstrap: true;
+    noJavascriptEvcsNormalDecisionWhenOk: true;
+  };
+  nextAction: string;
+  ts: number;
+}
+
+/**
+ * Code-Teil: buildChargingEvcsJavascriptRemovalDecision
+ *
+ * Zweck:
+ * Letztes Freigabe-Gate vor dem Entfernen des alten EVCS-JavaScript-
+ * Entscheidungsbaums. Dieses Gate unterscheidet sauber zwischen fachlicher
+ * Logik (TypeScript) und der technisch weiterhin nötigen Node/ioBroker-
+ * JavaScript-Laufzeitgrenze.
+ */
+export function buildChargingEvcsJavascriptRemovalDecision(input: ChargingEvcsJavascriptRemovalInput): ChargingEvcsJavascriptRemovalDecision {
+  const normalSource = asRecord(input.normalSource);
+  const legacy = asRecord(input.legacy);
+  const executor = asRecord(input.executor);
+  const allocation = asRecord(input.allocation);
+  const writePlan = asRecord(input.writePlan);
+
+  const normalSourceRuntime = normalSource ? str(normalSource.runtimeSource, 'javascript-hard-fallback') : 'missing-normal-source';
+  const normalSourceJsRole = normalSource ? str(normalSource.jsRole, '') : '';
+  const normalSourceProductive = !!normalSource
+    && boolValue(normalSource.productive, false) === true
+    && boolValue(normalSource.fallback, false) !== true
+    && normalSourceRuntime === 'typescript'
+    && normalSourceJsRole === 'executor-only';
+
+  const allocationNormalSource = !!(
+    (allocation && (boolValue(allocation.normalSource, false) || boolValue(allocation.productive, false)))
+    || (normalSource && boolValue((asRecord(normalSource.components) || {}).allocationProductive, false))
+  );
+  const writePlanProductive = !!(
+    (writePlan && boolValue(writePlan.productive, false) && boolValue(writePlan.fallback, false) !== true)
+    || (normalSource && boolValue((asRecord(normalSource.components) || {}).writePlanProductive, false))
+  );
+  const executorSource = executor ? str(executor.source, 'missing-executor') : str((asRecord(normalSource && normalSource.components) || {}).executorSource, 'missing-executor');
+  const executorFailedCount = executor ? finiteNumber(executor.failedCount, 0) : finiteNumber((asRecord(normalSource && normalSource.components) || {}).executorFailedCount, 0);
+  const executorOk = !!(
+    (executor && boolValue(executor.ok, false) && executorSource === 'ts-write-plan' && executorFailedCount <= 0)
+    || (normalSource && boolValue((asRecord(normalSource.components) || {}).executorOk, false) && executorSource === 'ts-write-plan')
+  );
+  const legacyRole = legacy ? str(legacy.jsRole, '') : str((asRecord(normalSource && normalSource.components) || {}).legacySource, '');
+  const legacyFallbackActive = !!(
+    (legacy && (boolValue(legacy.fallbackActive, false) || str(legacy.jsRole, '') === 'executor-and-hard-fallback' || str(legacy.jsRole, '') === 'hard-fallback-only'))
+    || (normalSource && boolValue((asRecord(normalSource.components) || {}).legacyFallbackActive, false))
+  );
+  const legacyExecutorOnly = !!legacy && str(legacy.jsRole, '') === 'executor-only' && !legacyFallbackActive;
+
+  const blockers: string[] = [];
+  if (!normalSource) blockers.push('normal-source:missing');
+  else if (!normalSourceProductive) blockers.push(`normal-source:${str(normalSource.fallbackReason, normalSourceRuntime === 'typescript' ? 'not-executor-only' : normalSourceRuntime)}`);
+  if (!allocationNormalSource) blockers.push('allocation:not-normal-source');
+  if (!writePlanProductive) blockers.push('write-plan:not-productive');
+  if (!executorOk) blockers.push(executor ? `executor:${executorSource === 'ts-write-plan' ? 'not-ok' : `unexpected-source-${executorSource}`}` : 'executor:missing');
+  if (!legacy) blockers.push('legacy-diagnostic:missing');
+  else if (!legacyExecutorOnly) blockers.push(`legacy:${legacyFallbackActive ? str(legacy.fallbackReason, 'hard-fallback-active') : `role-${str(legacy.jsRole, 'unknown')}`}`);
+
+  const normalizedBlockers = unique(blockers);
+  const ok = normalizedBlockers.length === 0;
+  const fallbackReason = ok ? '' : (normalizedBlockers[0] || 'evcs-js-removal-not-ready');
+  const warnings = unique([
+    'runtime-javascript-artifacts-remain-required-for-node-iobroker',
+    'setState-executor-remains-javascript-boundary',
+    ...(normalSource && Array.isArray(normalSource.warnings) ? normalSource.warnings.map((entry) => String(entry || '')) : []),
+  ]);
+
+  return {
+    source: 'ts-charging-evcs-js-removal-ready-v1',
+    available: true,
+    ok,
+    productive: ok,
+    readyForJavascriptRemoval: ok,
+    readyForEvcsJsDecisionTreeRemoval: ok,
+    readyForAdapterTsRuntime: ok,
+    fallback: !ok,
+    fallbackReason,
+    runtimeSource: ok ? 'typescript' : 'javascript-hard-fallback',
+    jsRole: ok ? 'generated-js-runtime-boundary-only' : 'executor-and-hard-fallback',
+    remainingJavascriptRole: ok
+      ? 'generated CommonJS runtime + ioBroker setState executor only; keine EVCS-Fachentscheidung im JS-Normalpfad'
+      : 'hard fallback remains active until blockers are cleared',
+    context: str(input.context, str(normalSource && normalSource.context, 'normal')),
+    blockers: normalizedBlockers,
+    warnings,
+    components: {
+      normalSourceProductive,
+      normalSourceRuntime,
+      normalSourceJsRole,
+      allocationNormalSource,
+      writePlanProductive,
+      executorOk,
+      executorSource,
+      legacyExecutorOnly,
+    },
+    removal: {
+      evcsDecisionTreeCanBeRemoved: ok,
+      directSetpointLoopsRemoved: true,
+      normalJavascriptAllocationRemoved: true,
+      legacyJavascriptFallbackHardOnly: !legacyFallbackActive,
+      javascriptSetStateExecutorBoundaryKept: true,
+      generatedJavascriptRuntimeArtifactsKept: true,
+    },
+    keepJavascriptFor: [
+      'ioBroker adapter bootstrap / module loading',
+      'generated CommonJS artifacts produced from TypeScript',
+      'central setStateAsync/applySetpoint runtime executor',
+      'hard fallback while live plant validation is still being watched',
+    ],
+    removeJavascriptNormalPath: ok ? [
+      'old EVCS allocation decision tree',
+      'old JS/TS mismatch blocker for normal allocation',
+      'legacy direct setpoint write loops',
+      'duplicated control/budget summary decisions',
+    ] : [],
+    safety: {
+      typescriptOwnsEvcsDecisionContracts: true,
+      javascriptIsRuntimeBoundaryOnlyWhenOk: true,
+      nodeIobrokerStillExecutesGeneratedJavascript: true,
+      setStateExecutorRemainsJavascriptUntilAdapterBuildIsTsBootstrap: true,
+      noJavascriptEvcsNormalDecisionWhenOk: true,
+    },
+    nextAction: ok
+      ? 'EVCS-Alt-JS kann aus dem Normalpfad entfernt werden; übrig bleibt nur Runtime-Bootstrap, generiertes JS und der ioBroker-Executor.'
+      : 'EVCS-Alt-JS bleibt Hard-Fallback, bis Normalquelle, Write-Plan, Executor und Legacy-Diagnose im selben Tick grün sind.',
+    ts: finiteNumber(input.ts, Date.now()),
+  };
+}
+
+/** Kompatibilitätsalias für finale Umbauprüfungen. */
+export const buildChargingJavascriptRemovalDecision = buildChargingEvcsJavascriptRemovalDecision;
+export const buildChargingTsFinalHandoverDecision = buildChargingEvcsJavascriptRemovalDecision;

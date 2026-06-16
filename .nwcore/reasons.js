@@ -1,4 +1,20 @@
 /**
+ * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
+ *
+ * Quelle: src-ts/runtime-executables/nwcore/reasons.ts
+ * Quell-Hash: sha256:910895c323afaa4490d75439ab5d182be238c691c928de088d2062efe606df07
+ * Erzeugung: npm run sync:ts-runtime-executables
+ *
+ * Zweck:
+ * Diese JavaScript-Datei ist das ausführbare Build-Artefakt für .nwcore/reasons.js.
+ * Die fachliche Bearbeitung erfolgt ab 0.7.131 in der TypeScript-Quelle.
+ *
+ * Pflege-Regel:
+ * 1. Änderung zuerst in src-ts/runtime-executables/ vornehmen.
+ * 2. npm run sync:ts-runtime-executables ausführen.
+ * 3. npm run test:runtime-executables prüfen.
+ */
+/**
  * Datei: .nwcore/reasons.js
  * Rolle im Projekt: NWCore-Referenzcode.
  * Zweck: Kern-/Referenzimplementierung für EMS-Bausteine; dient als technische Grundlage für gleiche Logik im Adapter.

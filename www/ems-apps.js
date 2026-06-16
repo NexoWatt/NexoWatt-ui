@@ -1,4 +1,20 @@
 /**
+ * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
+ *
+ * Quelle: src-ts/runtime-executables/www/ems-apps.ts
+ * Quell-Hash: sha256:6cf24d76e96b00dc386d794e0b710e599b8fa7950cc4031e8f1bc8702905fa5b
+ * Erzeugung: npm run sync:ts-runtime-executables
+ *
+ * Zweck:
+ * Diese JavaScript-Datei ist das ausführbare Build-Artefakt für www/ems-apps.js.
+ * Die fachliche Bearbeitung erfolgt ab 0.7.131 in der TypeScript-Quelle.
+ *
+ * Pflege-Regel:
+ * 1. Änderung zuerst in src-ts/runtime-executables/ vornehmen.
+ * 2. npm run sync:ts-runtime-executables ausführen.
+ * 3. npm run test:runtime-executables prüfen.
+ */
+/**
  * NexoWatt Detail-Kommentar (DE)
  * Zweck dieser Ergänzung:
  * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
@@ -11394,6 +11410,8 @@ function collectAiAdvisorConfigFromUI(base) {
     const chargingWritePlanProductive = _parseShadowJson(ctrl.tsWritePlanProductiveJson, _parseShadowJson(ctrl.tsWritePlanProductivePrepJson, _parseShadowJson(ctrl.tsWritePlanShadowJson, null)));
     const chargingLegacyDecision = _parseShadowJson(ctrl.tsLegacyDecisionTreeJson, null);
     const chargingNormalSourceLockdown = _parseShadowJson(ctrl.tsNormalSourceLockdownJson, _parseShadowJson(ctrl.tsNormalSourceJson, chargingLegacyDecision && chargingLegacyDecision.normalSourceLockdown ? chargingLegacyDecision.normalSourceLockdown : null));
+    const chargingEvcsJsRemoval = _parseShadowJson(ctrl.tsEvcsJsRemovalJson, null);
+    const chargingAdapterRuntimeHandover = _parseShadowJson(ctrl.tsAdapterRuntimeHandoverJson, chargingEvcsJsRemoval);
     const chargingBudgetPrep = _parseShadowJson(ctrl.tsBudgetJson, null);
 
     /**
@@ -11427,7 +11445,7 @@ function collectAiAdvisorConfigFromUI(base) {
 
     const hint = document.createElement('div');
     hint.className = 'nw-config-help nw-shadow-diagnostics-hint';
-    hint.textContent = 'Hinweis: Shadow-Abweichung bedeutet nicht automatisch Adapterfehler. Bei produktiv übernommenen Bereichen ist TypeScript die Entscheidungsquelle; JavaScript bleibt dort Executor/Fallback. Für noch nicht vollständig umgestellte Bereiche dient TypeScript weiter zur Migrationsprüfung.';
+    hint.textContent = 'Hinweis: Shadow-Abweichung bedeutet nicht automatisch Adapterfehler. Bei produktiv übernommenen Bereichen ist TypeScript die Entscheidungsquelle; JavaScript bleibt dort Executor/Fallback. Node/ioBroker führt technisch weiter JavaScript-Artefakte aus; fachliche Normalpfade werden über die TS-Freigaben abgebaut.';
     els.shadowDiagnostics.appendChild(hint);
 
     const cards = [
@@ -11442,6 +11460,8 @@ function collectAiAdvisorConfigFromUI(base) {
       { title: 'TS‑Cleanup: EVCS JS Executor/Fallback', subtitle: 'Alter JS‑Entscheidungsbaum ist nur noch Executor/Fallback statt Normalquelle', shadow: chargingLegacyDecision },
       { title: 'TS‑Härtung: EVCS Safety‑Handover', subtitle: 'Stale‑Meter‑Stopps und Peak‑Rampdown laufen als TS‑0‑Setpoint‑Vertrag', shadow: chargingLegacyDecision },
       { title: 'TS‑Lockdown: EVCS Normalquelle', subtitle: 'JS‑Allocation ist aus dem Normalpfad entfernt; nur Executor und harte Fallbacks bleiben', shadow: chargingNormalSourceLockdown },
+      { title: 'TS‑Finale: EVCS JS‑Abbau bereit', subtitle: 'TypeScript besitzt Control, Budget, Allocation und Write‑Plan; JS bleibt Runtime‑Grenze/Executor', shadow: chargingEvcsJsRemoval },
+      { title: 'TS‑Runtime: Adapter Handover', subtitle: 'Adapter ist auf TS‑Quelle vorbereitet; Node/ioBroker führt weiter generierte JS‑Artefakte aus', shadow: chargingAdapterRuntimeHandover },
       { title: 'TS‑Produktiv: EVCS Budget‑Caps', subtitle: 'Grid‑/Phasen‑/§14a‑Caps mit JS‑Fallback', shadow: chargingBudgetPrep },
     ];
 

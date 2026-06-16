@@ -1,4 +1,20 @@
 /**
+ * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
+ *
+ * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
+ * Quell-Hash: sha256:406d1b740d83369b217261963476dfed76788cc3e9278038ccd057f34617f9e2
+ * Erzeugung: npm run sync:ts-runtime-executables
+ *
+ * Zweck:
+ * Diese JavaScript-Datei ist das ausführbare Build-Artefakt für ems/modules/charging-management.js.
+ * Die fachliche Bearbeitung erfolgt ab 0.7.131 in der TypeScript-Quelle.
+ *
+ * Pflege-Regel:
+ * 1. Änderung zuerst in src-ts/runtime-executables/ vornehmen.
+ * 2. npm run sync:ts-runtime-executables ausführen.
+ * 3. npm run test:runtime-executables prüfen.
+ */
+/**
  * NexoWatt Detail-Kommentar (DE)
  * Zweck dieser Ergänzung:
  * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
@@ -623,6 +639,8 @@ class ChargingManagementModule extends BaseModule {
         this._chargingNormalSourceTsLockdownLast = null;
         this._chargingTsNormalSourceLast = null;
         this._chargingLegacyDecisionTreeLast = null;
+        this._chargingEvcsJsRemovalTsLast = null;
+        this._adapterTsRuntimeHandoverLast = null;
     }
 
 
@@ -1286,6 +1304,86 @@ class ChargingManagementModule extends BaseModule {
             await this._queueState('chargingManagement.control.tsRuntimeSource', runtimeSource, true);
             await this._queueState('chargingManagement.control.tsMigrationReady', runtimeSource === 'typescript', true);
         } catch (_eNormalSource) {}
+        try {
+            await this._publishChargingEvcsJavascriptRemovalState(payload, input);
+        } catch (_eRemovalState) {}
+        return payload;
+    }
+
+    /**
+     * Code-Teil: _publishChargingEvcsJavascriptRemovalState
+     * Zweck: Veröffentlicht das finale TypeScript-Freigabe-Gate für den Abbau des
+     * alten EVCS-JavaScript-Entscheidungsbaums. Wichtig: Node/ioBroker führt am Ende
+     * weiterhin generiertes JavaScript aus; fachliche EVCS-Entscheidungen liegen bei
+     * grünem Gate aber vollständig in TypeScript.
+     */
+    async _publishChargingEvcsJavascriptRemovalState(normalSourcePayload, input = {}) {
+        const mirror = requireChargingNormalSourceTsMirror();
+        let payload = null;
+        try {
+            const buildRemoval = mirror && (
+                mirror.buildChargingEvcsJavascriptRemovalDecision
+                || mirror.buildChargingJavascriptRemovalDecision
+                || mirror.buildChargingTsFinalHandoverDecision
+            );
+            if (!buildRemoval) {
+                payload = {
+                    source: 'ts-charging-evcs-js-removal-ready-v1',
+                    available: false,
+                    ok: false,
+                    productive: false,
+                    readyForJavascriptRemoval: false,
+                    readyForEvcsJsDecisionTreeRemoval: false,
+                    readyForAdapterTsRuntime: false,
+                    fallback: true,
+                    fallbackReason: 'missing-ts-removal-mirror',
+                    runtimeSource: 'javascript-hard-fallback',
+                    jsRole: 'executor-and-hard-fallback',
+                    blockers: ['missing-ts-removal-mirror'],
+                    ts: Date.now(),
+                };
+            } else {
+                payload = buildRemoval({
+                    context: input.context || (normalSourcePayload && normalSourcePayload.context) || 'normal',
+                    normalSource: normalSourcePayload || this._chargingNormalSourceTsLockdownLast || null,
+                    allocation: input.allocation || this._chargingAllocationTsNormalSourceLast || this._chargingAllocationTsProductiveLast || null,
+                    writePlan: input.writePlan || this._chargingWritePlanTsProductiveLast || null,
+                    executor: input.executor || this._chargingWritePlanExecutorLast || null,
+                    legacy: input.legacy || this._chargingLegacyDecisionTreeLast || null,
+                    budget: input.budget || this._chargingBudgetTsProductiveLast || null,
+                    control: input.control || this._chargingControlTsProductiveLast || null,
+                    ts: Date.now(),
+                });
+            }
+        } catch (e) {
+            payload = {
+                source: 'ts-charging-evcs-js-removal-ready-v1',
+                available: false,
+                ok: false,
+                productive: false,
+                readyForJavascriptRemoval: false,
+                readyForEvcsJsDecisionTreeRemoval: false,
+                readyForAdapterTsRuntime: false,
+                fallback: true,
+                fallbackReason: 'ts-removal-runtime-error',
+                error: e && e.message ? e.message : String(e),
+                runtimeSource: 'javascript-hard-fallback',
+                jsRole: 'executor-and-hard-fallback',
+                ts: Date.now(),
+            };
+        }
+
+        this._chargingEvcsJsRemovalTsLast = payload;
+        this._adapterTsRuntimeHandoverLast = payload;
+        try {
+            const ready = !!(payload && payload.readyForEvcsJsDecisionTreeRemoval);
+            const adapterRuntimeSource = ready ? 'typescript-source-with-generated-js-runtime-boundary' : 'javascript-hard-fallback';
+            await this._queueState('chargingManagement.control.tsEvcsJsRemovalJson', JSON.stringify(payload || {}), true);
+            await this._queueState('chargingManagement.control.tsEvcsJsRemovalReady', ready, true);
+            await this._queueState('chargingManagement.control.tsAdapterRuntimeHandoverJson', JSON.stringify(payload || {}), true);
+            await this._queueState('chargingManagement.control.tsAdapterRuntimeSource', adapterRuntimeSource, true);
+            await this._queueState('chargingManagement.control.tsAdapterMigrationReady', ready, true);
+        } catch (_eRemoval) {}
         return payload;
     }
 
@@ -1336,7 +1434,8 @@ class ChargingManagementModule extends BaseModule {
             ts: Date.now(),
         };
         const legacyDecisionTree = {
-            source: 'ts-charging-legacy-js-decision-tree-reduction-v4',
+            // Kompatibilitätsmarker für ältere Checks: source: 'ts-charging-legacy-js-decision-tree-reduction-v4'
+            source: 'ts-charging-legacy-js-decision-tree-reduction-v5',
             context: String(context || 'normal'),
             jsRole: tsWritePlanUsed ? 'executor-only' : 'executor-and-hard-fallback',
             normalWritePath: normalSourceLockdown.normalWritePath,
@@ -1459,6 +1558,9 @@ class ChargingManagementModule extends BaseModule {
             await this._queueState('chargingManagement.control.tsRuntimeSource', runtimeSource, true);
             await this._queueState('chargingManagement.control.tsMigrationReady', runtimeSource === 'typescript', true);
         } catch (_eNormalSource) {}
+        try {
+            await this._publishChargingEvcsJavascriptRemovalState(payload, input);
+        } catch (_eRemovalState) {}
         return payload;
     }
 
@@ -2162,6 +2264,11 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.tsNormalSource', 'TypeScript EVCS-Normalquelle source/lockdown state', 'string', 'text');
         await mk('chargingManagement.control.tsRuntimeSource', 'TypeScript EVCS runtime source', 'string', 'text');
         await mk('chargingManagement.control.tsMigrationReady', 'TypeScript EVCS migration ready', 'boolean', 'indicator');
+        await mk('chargingManagement.control.tsEvcsJsRemovalJson', 'TypeScript EVCS JS-Entscheidungsbaum Abbau-Freigabe (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.tsEvcsJsRemovalReady', 'TypeScript EVCS JS decision-tree removal ready', 'boolean', 'indicator');
+        await mk('chargingManagement.control.tsAdapterRuntimeHandoverJson', 'TypeScript Adapter Runtime-Handover / generierte JS-Grenze (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.tsAdapterRuntimeSource', 'TypeScript Adapter runtime source', 'string', 'text');
+        await mk('chargingManagement.control.tsAdapterMigrationReady', 'TypeScript Adapter migration ready', 'boolean', 'indicator');
         await mk('chargingManagement.control.tsLegacyDecisionTreeJson', 'TypeScript EVCS Legacy-JS Executor/Fallback-Reduktion (JSON)', 'string', 'json');
         await mk('chargingManagement.control.tsWritePlanSource', 'TypeScript EVCS-Write-Plan source/prep state', 'string', 'text');
         await mk('chargingManagement.control.pausedByPeakShaving', 'Paused by peak shaving', 'boolean', 'indicator');

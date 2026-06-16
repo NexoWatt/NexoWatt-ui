@@ -1,4 +1,20 @@
 /**
+ * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
+ *
+ * Quelle: src-ts/runtime-executables/main.ts
+ * Quell-Hash: sha256:34d0a5a1992d3c4d5680d94611faf3d4c449949e59a84c6b7b4c1284626b2dc9
+ * Erzeugung: npm run sync:ts-runtime-executables
+ *
+ * Zweck:
+ * Diese JavaScript-Datei ist das ausführbare Build-Artefakt für main.js.
+ * Die fachliche Bearbeitung erfolgt ab 0.7.131 in der TypeScript-Quelle.
+ *
+ * Pflege-Regel:
+ * 1. Änderung zuerst in src-ts/runtime-executables/ vornehmen.
+ * 2. npm run sync:ts-runtime-executables ausführen.
+ * 3. npm run test:runtime-executables prüfen.
+ */
+/**
  * NexoWatt Detail-Kommentar (DE)
  * Zweck dieser Ergänzung:
  * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
@@ -6983,6 +6999,11 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       await prime('chargingManagement.control.tsNormalSource');
       await prime('chargingManagement.control.tsRuntimeSource');
       await prime('chargingManagement.control.tsMigrationReady');
+      await prime('chargingManagement.control.tsEvcsJsRemovalJson');
+      await prime('chargingManagement.control.tsEvcsJsRemovalReady');
+      await prime('chargingManagement.control.tsAdapterRuntimeHandoverJson');
+      await prime('chargingManagement.control.tsAdapterRuntimeSource');
+      await prime('chargingManagement.control.tsAdapterMigrationReady');
       await prime('chargingManagement.control.tsWritePlanShadowJson');
       await prime('chargingManagement.control.tsWritePlanProductivePrepJson');
       await prime('chargingManagement.control.tsWritePlanProductiveJson');
@@ -8990,6 +9011,11 @@ async onReady() {
     await primeKey('chargingManagement.control.tsNormalSource');
     await primeKey('chargingManagement.control.tsRuntimeSource');
     await primeKey('chargingManagement.control.tsMigrationReady');
+    await primeKey('chargingManagement.control.tsEvcsJsRemovalJson');
+    await primeKey('chargingManagement.control.tsEvcsJsRemovalReady');
+    await primeKey('chargingManagement.control.tsAdapterRuntimeHandoverJson');
+    await primeKey('chargingManagement.control.tsAdapterRuntimeSource');
+    await primeKey('chargingManagement.control.tsAdapterMigrationReady');
     await primeKey('chargingManagement.control.tsWritePlanShadowJson');
     await primeKey('chargingManagement.control.tsWritePlanProductivePrepJson');
     await primeKey('chargingManagement.control.tsWritePlanProductiveJson');
@@ -13116,6 +13142,11 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           tsNormalSource: await getOwn('chargingManagement.control.tsNormalSource'),
           tsRuntimeSource: await getOwn('chargingManagement.control.tsRuntimeSource'),
           tsMigrationReady: await getOwn('chargingManagement.control.tsMigrationReady'),
+          tsEvcsJsRemovalJson: await getOwn('chargingManagement.control.tsEvcsJsRemovalJson'),
+          tsEvcsJsRemovalReady: await getOwn('chargingManagement.control.tsEvcsJsRemovalReady'),
+          tsAdapterRuntimeHandoverJson: await getOwn('chargingManagement.control.tsAdapterRuntimeHandoverJson'),
+          tsAdapterRuntimeSource: await getOwn('chargingManagement.control.tsAdapterRuntimeSource'),
+          tsAdapterMigrationReady: await getOwn('chargingManagement.control.tsAdapterMigrationReady'),
           tsWritePlanShadowJson: await getOwn('chargingManagement.control.tsWritePlanShadowJson'),
           tsWritePlanProductivePrepJson: await getOwn('chargingManagement.control.tsWritePlanProductivePrepJson'),
           tsWritePlanProductiveJson: await getOwn('chargingManagement.control.tsWritePlanProductiveJson'),
