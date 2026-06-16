@@ -11,3 +11,6 @@
  */
 export * as coreLimits from './core-limits';
 export * as heatingRod from './heating-rod';
+
+/** Export: Charging-Management / EVCS TypeScript-Helfer. */
+export * as chargingManagement from './charging-management';

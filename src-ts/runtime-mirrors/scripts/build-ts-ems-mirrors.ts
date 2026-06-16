@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 7143ba6451663487e286de56256c66e2ba9b958efd7935a6eaa5497811a70226
+ * Original-Hash: 1481e014bfa9ceb25eae4d63609f75e7f5852925759e6a674a852d9c415291c8
  */
 
 /**
@@ -81,6 +81,42 @@ const mirrorSpecs = [
     builtRel: 'build-ts/ems-mirrors/ems/ai-advisor/ai-advisor-payload.js',
     mirrorRel: 'lib/ts-mirrors/ems/ai-advisor/ai-advisor-payload.js',
     purpose: 'KI-Berater-Publish-Payload für produktive, sichere Vorschlagsnormalisierung',
+  },
+  {
+    sourceRel: 'src-ts/ems/charging-management/charging-control.ts',
+    builtRel: 'build-ts/ems-mirrors/ems/charging-management/charging-control.js',
+    mirrorRel: 'lib/ts-mirrors/ems/charging-management/charging-control.js',
+    purpose: 'EVCS-/Charging-Management-Control-Shadow für die spätere TypeScript-Übernahme',
+  },
+  {
+    sourceRel: 'src-ts/ems/charging-management/charging-allocation.ts',
+    builtRel: 'build-ts/ems-mirrors/ems/charging-management/charging-allocation.js',
+    mirrorRel: 'lib/ts-mirrors/ems/charging-management/charging-allocation.js',
+    purpose: 'EVCS-/Wallbox-Allocation-Shadow und Produktiv-Vorbereitung',
+  },
+  {
+    sourceRel: 'src-ts/ems/charging-management/charging-write-plan.ts',
+    builtRel: 'build-ts/ems-mirrors/ems/charging-management/charging-write-plan.js',
+    mirrorRel: 'lib/ts-mirrors/ems/charging-management/charging-write-plan.js',
+    purpose: 'EVCS-Setpoint-Write-Plan-Shadow ohne produktive ioBroker-Schreiboperationen',
+  },
+  {
+    sourceRel: 'src-ts/ems/charging-management/charging-management-runtime.ts',
+    builtRel: 'build-ts/ems-mirrors/ems/charging-management/charging-management-runtime.js',
+    mirrorRel: 'lib/ts-mirrors/ems/charging-management/charging-management-runtime.js',
+    purpose: 'EVCS-/Charging-Management-TS-Vorbereitung für Sichtbarkeit, Budgetreservierung und Shadow-Vergleich',
+  },
+  {
+    sourceRel: 'src-ts/ems/charging-management/charging-management.ts',
+    builtRel: 'build-ts/ems-mirrors/ems/charging-management/charging-management.js',
+    mirrorRel: 'lib/ts-mirrors/ems/charging-management/charging-management.js',
+    purpose: 'EVCS-/Charging-Management-TS-Vorbereitung für Ladepunkte, Sichtbarkeit und Budgetreservierung',
+  },
+  {
+    sourceRel: 'src-ts/ems/charging-management/charging-budget.ts',
+    builtRel: 'build-ts/ems-mirrors/ems/charging-management/charging-budget.js',
+    mirrorRel: 'lib/ts-mirrors/ems/charging-management/charging-budget.js',
+    purpose: 'Charging-Management-/EVCS-Budget-Caps für Shadow-Vergleich und spätere produktive TS-Übernahme',
   },
 ];
 

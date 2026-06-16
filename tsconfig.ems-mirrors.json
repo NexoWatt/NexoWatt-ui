@@ -16,7 +16,13 @@
     "src-ts/utils/number.ts",
     "src-ts/ems/core-limits/core-budget.ts",
     "src-ts/ems/heating-rod/heating-rod-decision.ts",
-    "src-ts/ems/ai-advisor/ai-advisor-payload.ts"
+    "src-ts/ems/ai-advisor/ai-advisor-payload.ts",
+    "src-ts/ems/charging-management/charging-management.ts",
+    "src-ts/ems/charging-management/charging-budget.ts",
+    "src-ts/ems/charging-management/charging-management-runtime.ts",
+    "src-ts/ems/charging-management/charging-control.ts",
+    "src-ts/ems/charging-management/charging-write-plan.ts",
+    "src-ts/ems/charging-management/charging-allocation.ts"
   ],
   "exclude": [
     "node_modules",

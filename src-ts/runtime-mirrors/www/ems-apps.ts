@@ -18,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 92416d46f6c3c25061d4823e208deba96e95afe652bdab8c1b9a10b0088fa74c
+ * Original-Hash: 35780ab2346bd9ede84b8d1219184a4716b9ab1eda453a44d64ff14c52849bc3
  */
 
 /**
@@ -11135,6 +11135,8 @@ function collectAiAdvisorConfigFromUI(base) {
     readList(shadow.mismatches, 'Abweichung');
     readList(shadow.diffs, 'Diff');
     if (shadow.comparison && typeof shadow.comparison === 'object') {
+      readList(shadow.comparison.mismatches, 'Abweichung');
+      readList(shadow.comparison.diffs, 'Diff');
       Object.keys(shadow.comparison).forEach((key) => {
         const v = shadow.comparison[key];
         if (v && typeof v === 'object' && (v.match === false || v.ok === false || v.diff || v.delta)) {
@@ -11659,6 +11661,10 @@ function collectAiAdvisorConfigFromUI(base) {
     const heatingShadow = heatingShadowRaw || (heatingDebug && heatingDebug.tsShadow ? heatingDebug.tsShadow : null);
     const flowInputs = _parseShadowJson(ctrl.energyFlowInputsJson, null);
     const flowShadow = flowInputs && flowInputs.tsShadow ? flowInputs.tsShadow : null;
+    const chargingControlPrep = _parseShadowJson(ctrl.tsControlProductiveJson, _parseShadowJson(ctrl.tsControlProductivePrepJson, _parseShadowJson(ctrl.tsControlShadowJson, null)));
+    const chargingAllocationPrep = _parseShadowJson(ctrl.tsAllocationProductivePrepJson, _parseShadowJson(ctrl.tsAllocationShadowJson, null));
+    const chargingWritePlanShadow = _parseShadowJson(ctrl.tsWritePlanShadowJson, null);
+    const chargingBudgetPrep = _parseShadowJson(ctrl.tsBudgetJson, null);
 
     /**
      * Code-Teil: Energiefluss-TS-Livetestdaten in die Readiness übernehmen
@@ -11694,6 +11700,10 @@ function collectAiAdvisorConfigFromUI(base) {
       { title: 'TS‑Shadow: Core‑Limits', subtitle: 'PV‑Budget, Netzbudget, Speicherreserve, Restbudget', shadow: coreShadow },
       { title: 'TS‑Shadow: Heizstab', subtitle: 'Zielstufe, Zielleistung, Budgetgrund, Speicherreserve', shadow: heatingShadow },
       { title: 'TS‑Shadow: Energiefluss', subtitle: 'Speicher, Netz, PV, Gebäude-Verbrauch', shadow: flowShadow },
+      { title: 'TS‑Produktiv: EVCS Control', subtitle: 'Control‑Status, Budget, Sichtbarkeit, Summary – JS‑Fallback aktiv', shadow: chargingControlPrep },
+      { title: 'TS‑Prep: EVCS Allocation', subtitle: 'Wallbox‑Zielverteilung als produktiver Kandidat; JS schreibt noch', shadow: chargingAllocationPrep },
+      { title: 'TS‑Shadow: EVCS Write‑Plan', subtitle: 'Setpoint‑Schreibplan ohne ioBroker‑I/O', shadow: chargingWritePlanShadow },
+      { title: 'TS‑Produktiv: EVCS Budget‑Caps', subtitle: 'Grid‑/Phasen‑/§14a‑Caps mit JS‑Fallback', shadow: chargingBudgetPrep },
     ];
 
     const escape = _shadowEscape;

@@ -1,3 +1,82 @@
+## 0.7.128 - EVCS Safety-Handover über TypeScript gehärtet
+
+- Stale-Meter-Failsafe und Peak-Shaving-Rampdown können den produktiven TS-Allocation- und TS-Write-Plan-Vertrag jetzt als sicheren 0-Setpoint-Handover nutzen.
+- `safetyStop`/`safetyReason` ergänzt: TypeScript erzwingt bei Safety-Stop 0 W / 0 A und erlaubt diesen sicheren Stop auch bei stale meter/budget, ohne normale Stale-Blocker zu entschärfen.
+- JS bleibt im EVCS-Pfad weiterhin ioBroker-Executor und harter Fallback; der alte JS-only-Safety-Stop-Write-Plan ist als entfernt markiert.
+- Legacy-Diagnose auf `ts-charging-legacy-js-decision-tree-reduction-v3` erweitert und App-Center-Karte `TS‑Härtung: EVCS Safety‑Handover` ergänzt.
+- Neuer Check `npm run test:charging-safety-handover`; `test:charging-productive-hardening` und `publish:check` prüfen diesen Gate jetzt mit.
+- Service-Worker Cache auf `nexowatt-cache-v296` erhöht.
+
+## 0.7.127 - EVCS TS-Produktivpfad gehärtet
+
+- EVCS JS-Executor nutzt im TS-Normalpfad jetzt explizit die vom TypeScript-Write-Plan geplante Basis und den geplanten Setpoint-Datenpunkt.
+- Executor-Fehler führen wieder in den Legacy-Fallback statt den Fallbackpfad als erledigt zu markieren.
+- Write-Plan-Sicherheitsvertrag um TS-Basis-/Setpoint-Key- und Executor-Fallback-Garantien erweitert.
+- EVCS-Tests für produktive Allocation, produktiven Write-Plan und JS-Executor/Fallback entsprechend verschärft.
+- Direkte JS-Setpoint-Schreibstellen in Stale-Meter-Failsafe und Peak-Shaving-Rampdown laufen jetzt ebenfalls über den zentralen Executor/Fallback-Pfad.
+- Stale-Meter-Failsafe und Peak-Shaving-Rampdown publizieren jetzt ebenfalls TS-Allocation-/Write-Plan-Diagnose statt leerer Legacy-Diagnose.
+
+## 0.7.126 - EVCS Allocation produktiv, Write-Plan produktiv, JS nur Executor/Fallback
+
+- EVCS-/Wallbox-Allocation erhält `buildChargingAllocationProductive` und liefert den produktiven TS-Apply-Vertrag.
+- Neuer Diagnose-State `chargingManagement.control.tsAllocationProductiveJson`; `tsAllocationSource` zeigt `ts-allocation` bei sauberer Übernahme.
+- EVCS-Setpoint-Write-Plan erhält `buildChargingSetpointWritePlanProductive` als produktiven Vertrag für den JavaScript/ioBroker-Executor.
+- Neue Diagnose-States `tsWritePlanProductivePrepJson`, `tsWritePlanProductiveJson`, `tsWritePlanExecutorJson` und `tsLegacyDecisionTreeJson`; `tsWritePlanSource` zeigt `ts-write-plan` bei produktiver Ausführung.
+- Der normale Setpoint-Schreibpfad ist deferiert: JS berechnet weiterhin eine Fallback-Referenz, schreibt aber im Normalfall erst nach Freigabe des TS-Write-Plans.
+- JS-Allocation/Setpoint-Schreiben bleibt als harter Fallback bei TS-Mismatch, stale meter/budget, fehlendem Mirror oder Runtimefehler aktiv.
+- App-Center und `/api/state` zeigen die produktiven EVCS-Allocation- und Write-Plan-Diagnosen.
+- Neue Checks `test:charging-allocation-productive`, `test:charging-write-plan-productive` und `test:charging-js-executor-fallback`.
+- Service-Worker Cache auf `nexowatt-cache-v294` erhöht.
+
+## 0.7.125 - EVCS TypeScript-Beschleunigung: Control produktiv, Allocation/Write-Plan vorbereitet
+
+- EVCS-/Charging-Control übernimmt Control-/Summary-Werte produktiv über `buildChargingControlProductive` mit JS-Fallback.
+- Neuer Diagnose-State `chargingManagement.control.tsControlProductiveJson`; `tsControlSource` zeigt jetzt `ts-control` bei sauberer Übernahme.
+- Neue TypeScript-Quelle `charging-allocation.ts` für Wallbox-Zielverteilung als Shadow und Produktiv-Vorbereitung.
+- Neue Diagnose-States `tsAllocationShadowJson`, `tsAllocationProductivePrepJson` und `tsAllocationSource`.
+- Neue TypeScript-Quelle `charging-write-plan.ts` für Setpoint-Write-Plan-Shadow ohne ioBroker-I/O.
+- Neue Diagnose-States `tsWritePlanShadowJson` und `tsWritePlanSource`.
+- App-Center zeigt EVCS Control produktiv, EVCS Allocation-Prep und EVCS Write-Plan-Shadow als eigene Karten.
+- Ladepunktverteilung und Setpoint-Schreiben bleiben produktiv JavaScript, aber die nächsten Abbau-Gates sind jetzt in einem Schritt vorbereitet.
+- Neue Checks `test:charging-control-productive`, `test:charging-allocation-shadow`, `test:charging-allocation-productive-prep` und `test:charging-write-plan-shadow`.
+- Service-Worker Cache auf `nexowatt-cache-v293` erhöht.
+
+## 0.7.124 - EVCS / Charging-Management Control-Shadow produktiv vorbereiten
+
+- EVCS-/Charging-Control-Shadow erhält mit `buildChargingControlProductivePrep` einen geprüften Produktiv-Kandidaten für Control-/Summary-Werte.
+- Neue Diagnose-States `chargingManagement.control.tsControlProductivePrepJson` und `chargingManagement.control.tsControlSource`.
+- Diagnose-API und App-Center zeigen EVCS-Control-Prep sowie EVCS-Budget-Caps als eigene TS-Karten.
+- Ladepunktverteilung, Failsafe, Boost, PV-/Min+PV-Logik und Setpoint-Schreiben bleiben weiterhin JavaScript.
+- JS-Fallback bleibt bei Mismatch, fehlendem TS-Spiegel, Runtimefehlern oder harten Control-Blockern aktiv.
+- Neuer Check `npm run test:charging-control-productive-prep`.
+- Service-Worker Cache auf `nexowatt-cache-v292` erhöht.
+
+## 0.7.123 - EVCS Budget-Caps produktiv auf TypeScript
+
+- EVCS-/Charging-Management Budget-Caps werden jetzt produktiv über `buildChargingBudgetSafetyCapsProductive` übernommen, wenn JS/TS-Vergleich sauber ist.
+- Übernommen werden Grid-Cap, Phasen-Cap, §14a-Cap und effektiver Budgetmodus.
+- Ladepunktverteilung, PV-/Min+PV-Logik und Setpoint-Schreiben bleiben weiterhin JavaScript.
+- JS-Fallback bleibt bei Mismatch, fehlendem TS-Spiegel oder Runtimefehler aktiv.
+- Neuer Check `npm run test:charging-budget-productive`.
+- Service-Worker Cache auf `nexowatt-cache-v291` erhöht.
+
+## 0.7.122 - EVCS / Charging-Management TS produktiv vorbereiten
+
+- TypeScript-Helfer `src-ts/ems/charging-management/charging-budget.ts` für EVCS-Sicherheitscaps vorbereitet.
+- Shadow-Vergleich für Grid-Cap, Phasen-Cap, §14a-Cap und Budgetmodus in `charging-management.js` ergänzt.
+- Neue Diagnose-States `chargingManagement.control.tsBudgetJson` und `chargingManagement.control.tsBudgetSource`.
+- Ladepunktverteilung bleibt produktiv JavaScript; TypeScript rechnet nur parallel als Vorbereitung.
+- Service-Worker Cache auf `nexowatt-cache-v290` erhöht.
+
+## 0.7.121 - Core-Limits Restgates produktiv auf TypeScript übernommen
+
+- Forecast-, Tarif-/Negativpreis-, Peak-/Grid- und §14a-/EVCS-High-Level-Gates werden bei sauberem JS/TS-Vergleich produktiv aus dem TypeScript-Helfer übernommen.
+- `buildCoreRestGatesProductive` ergänzt und nach `lib/ts-mirrors/ems/core-limits/core-budget.js` gespiegelt.
+- `core-limits.js` baut den Budget-Snapshot nach erfolgreicher Restgate-TS-Übernahme neu auf, damit Grid-/EVCS-High-Level-Caps in remainingTotalW und Consumer-Reservierungen wirken.
+- `ems.budget.tsRestGatesJson` zeigt jetzt produktiv/Fallback-Status statt nur Shadow-Status.
+- JS bleibt Fallback bei TS-Fehlern oder Restgate-Mismatches.
+- Service-Worker Cache auf `nexowatt-cache-v289` erhöht.
+
 ## 0.7.120 - Core-Limits Restgates als TypeScript-Shadow vorbereitet
 
 - Forecast-, Tarif-/Negativpreis-, Peak-/Netz- und §14a-Gates als TypeScript-Helfer in `src-ts/ems/core-limits/core-budget.ts` vorbereitet.

@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.120",
+    "version": "0.7.128",
     "news": {
+      "0.7.128": {
+        "en": "EVCS TypeScript handover hardened: safety stop/ramp-down paths can now use the productive TS Allocation + Write-Plan zero-setpoint contract; JavaScript remains executor and hard fallback only.",
+        "de": "EVCS-TypeScript-Handover gehärtet: Safety-Stop/Rampdown-Zweige können jetzt den produktiven TS-Allocation- und Write-Plan-0-Setpoint-Vertrag nutzen; JavaScript bleibt nur Executor und harter Fallback."
+      },
+      "0.7.127": {
+        "de": "EVCS-TS-Produktivpfad gehärtet: Allocation und Write-Plan bleiben fachlich TS-geführt, JS-Executor nutzt die TS-geplante Basis und den geplanten Setpoint-DP; Executor-Fehler fallen sauber auf den Legacy-Fallback zurück.",
+        "en": "EVCS TS productive path hardened: allocation and write plan remain TS-led, the JS executor uses the TS-planned basis and setpoint datapoint, and executor failures cleanly fall back to legacy fallback."
+      },
       "0.7.95": {
         "de": "App-Center Runtime-Spiegel gezielt typisiert: Verträge für Installer-Konfiguration, DP-Mapping, Heizstab, KI, Speicherfarm, TS-Schaltmodus und Diagnose ergänzt. Keine produktive Runtime-Umstellung.",
         "en": "App-Center runtime mirror typed: added contracts for installer configuration, datapoint mapping, heating rod, AI advisor, storage farm, TS switch mode and diagnostics. No productive runtime switch."
@@ -22,14 +30,6 @@
       "0.7.79": {
         "de": "TypeScript-Shadow-Diagnose wird ausgewertet und zeigt eine Umschaltbereitschaft für Energiefluss, Core-Limits und Heizstab im App-Center. Keine produktive Runtime-Umschaltung.",
         "en": "TypeScript shadow diagnostics now evaluate switch-readiness for energy flow, core limits and heating rod in the App Center. No productive runtime switch."
-      },
-      "0.7.64": {
-        "de": "Git-/TypeScript-Migrationsstabilisierung: Konfliktprüfung ergänzt, publish:check git-sicher gemacht und keine Runtime-Logik geändert.",
-        "en": "Git/TypeScript migration stabilization: added conflict check, made publish:check Git-safe and did not change runtime logic."
-      },
-      "0.7.63": {
-        "de": "TypeScript-Migrationsschritt: Backend-/API-State-Helfer für /api/state, Feature-Sichtbarkeit, info.connection und Lizenzsicherheit vorbereitet. Keine Runtime-Logik geändert.",
-        "en": "TypeScript migration step: prepared backend/API-state helpers for /api/state, feature visibility, info.connection and license safety. No runtime logic changed."
       }
     },
     "title": "NexoWatt UI",

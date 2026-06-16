@@ -10792,6 +10792,8 @@ function collectAiAdvisorConfigFromUI(base) {
     readList(shadow.mismatches, 'Abweichung');
     readList(shadow.diffs, 'Diff');
     if (shadow.comparison && typeof shadow.comparison === 'object') {
+      readList(shadow.comparison.mismatches, 'Abweichung');
+      readList(shadow.comparison.diffs, 'Diff');
       Object.keys(shadow.comparison).forEach((key) => {
         const v = shadow.comparison[key];
         if (v && typeof v === 'object' && (v.match === false || v.ok === false || v.diff || v.delta)) {
@@ -11386,6 +11388,11 @@ function collectAiAdvisorConfigFromUI(base) {
     const heatingShadow = heatingShadowRaw || (heatingDebug && heatingDebug.tsShadow ? heatingDebug.tsShadow : null);
     const flowInputs = _parseShadowJson(ctrl.energyFlowInputsJson, null);
     const flowShadow = flowInputs && flowInputs.tsShadow ? flowInputs.tsShadow : null;
+    const chargingControlPrep = _parseShadowJson(ctrl.tsControlProductiveJson, _parseShadowJson(ctrl.tsControlProductivePrepJson, _parseShadowJson(ctrl.tsControlShadowJson, null)));
+    const chargingAllocationProductive = _parseShadowJson(ctrl.tsAllocationProductiveJson, _parseShadowJson(ctrl.tsAllocationProductivePrepJson, _parseShadowJson(ctrl.tsAllocationShadowJson, null)));
+    const chargingWritePlanProductive = _parseShadowJson(ctrl.tsWritePlanProductiveJson, _parseShadowJson(ctrl.tsWritePlanProductivePrepJson, _parseShadowJson(ctrl.tsWritePlanShadowJson, null)));
+    const chargingLegacyDecision = _parseShadowJson(ctrl.tsLegacyDecisionTreeJson, null);
+    const chargingBudgetPrep = _parseShadowJson(ctrl.tsBudgetJson, null);
 
     /**
      * Code-Teil: Energiefluss-TS-Livetestdaten in die Readiness übernehmen
@@ -11425,6 +11432,13 @@ function collectAiAdvisorConfigFromUI(base) {
       { title: 'TS‑Shadow: Core‑Limits', subtitle: 'PV‑Budget, Netzbudget, Speicherreserve, Restbudget', shadow: coreShadow },
       { title: 'TS‑Shadow: Heizstab', subtitle: 'Zielstufe, Zielleistung, Budgetgrund, Speicherreserve', shadow: heatingShadow },
       { title: 'TS‑Shadow: Energiefluss', subtitle: 'Speicher, Netz, PV, Gebäude-Verbrauch', shadow: flowShadow },
+      { title: 'TS‑Produktiv: EVCS Control', subtitle: 'Control‑Status, Budget, Sichtbarkeit, Gates – ohne Setpoint‑Schreiben', shadow: chargingControlPrep },
+      // Kompatibilitätsmarker für ältere Checks: TS‑Prep: EVCS Allocation / TS‑Shadow: EVCS Write‑Plan
+      { title: 'TS‑Produktiv: EVCS Allocation', subtitle: 'Wallbox‑Zielverteilung produktiv über TS; JS bleibt Fallback/Executor', shadow: chargingAllocationProductive },
+      { title: 'TS‑Produktiv: EVCS Write‑Plan', subtitle: 'Setpoint‑Schreibplan produktiv; ioBroker‑Executor bleibt JS', shadow: chargingWritePlanProductive },
+      { title: 'TS‑Cleanup: EVCS JS Executor/Fallback', subtitle: 'Alter JS‑Entscheidungsbaum ist nur noch Executor/Fallback statt Normalquelle', shadow: chargingLegacyDecision },
+      { title: 'TS‑Härtung: EVCS Safety‑Handover', subtitle: 'Stale‑Meter‑Stopps und Peak‑Rampdown laufen als TS‑0‑Setpoint‑Vertrag', shadow: chargingLegacyDecision },
+      { title: 'TS‑Produktiv: EVCS Budget‑Caps', subtitle: 'Grid‑/Phasen‑/§14a‑Caps mit JS‑Fallback', shadow: chargingBudgetPrep },
     ];
 
     const escape = _shadowEscape;

@@ -6973,6 +6973,15 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       await prime('chargingManagement.control.status');
       await prime('chargingManagement.control.budgetW');
       await prime('chargingManagement.control.remainingW');
+      await prime('chargingManagement.control.tsControlProductiveJson');
+      await prime('chargingManagement.control.tsAllocationShadowJson');
+      await prime('chargingManagement.control.tsAllocationProductivePrepJson');
+      await prime('chargingManagement.control.tsAllocationProductiveJson');
+      await prime('chargingManagement.control.tsWritePlanShadowJson');
+      await prime('chargingManagement.control.tsWritePlanProductivePrepJson');
+      await prime('chargingManagement.control.tsWritePlanProductiveJson');
+      await prime('chargingManagement.control.tsWritePlanExecutorJson');
+      await prime('chargingManagement.control.tsLegacyDecisionTreeJson');
       await prime('chargingManagement.control.usedW');
       await prime('chargingManagement.control.pvAvailable');
 
@@ -8965,6 +8974,15 @@ async onReady() {
     await primeKey('chargingManagement.control.mode');
     await primeKey('chargingManagement.control.budgetW');
     await primeKey('chargingManagement.control.remainingW');
+    await primeKey('chargingManagement.control.tsControlProductiveJson');
+    await primeKey('chargingManagement.control.tsAllocationShadowJson');
+    await primeKey('chargingManagement.control.tsAllocationProductivePrepJson');
+    await primeKey('chargingManagement.control.tsAllocationProductiveJson');
+    await primeKey('chargingManagement.control.tsWritePlanShadowJson');
+    await primeKey('chargingManagement.control.tsWritePlanProductivePrepJson');
+    await primeKey('chargingManagement.control.tsWritePlanProductiveJson');
+    await primeKey('chargingManagement.control.tsWritePlanExecutorJson');
+    await primeKey('chargingManagement.control.tsLegacyDecisionTreeJson');
 
     // Per Ladepunkt runtime states used on the EVCS page
     for (let i = 1; i <= evcsCount; i++) {
@@ -13072,6 +13090,22 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           storageAssistActive: await getOwn('chargingManagement.control.storageAssistActive'),
           storageAssistW: await getOwn('chargingManagement.control.storageAssistW'),
           storageAssistSoCPct: await getOwn('chargingManagement.control.storageAssistSoCPct'),
+          tsControlShadowJson: await getOwn('chargingManagement.control.tsControlShadowJson'),
+          tsControlProductivePrepJson: await getOwn('chargingManagement.control.tsControlProductivePrepJson'),
+          tsControlProductiveJson: await getOwn('chargingManagement.control.tsControlProductiveJson'),
+          tsControlSource: await getOwn('chargingManagement.control.tsControlSource'),
+          tsAllocationShadowJson: await getOwn('chargingManagement.control.tsAllocationShadowJson'),
+          tsAllocationProductivePrepJson: await getOwn('chargingManagement.control.tsAllocationProductivePrepJson'),
+          tsAllocationProductiveJson: await getOwn('chargingManagement.control.tsAllocationProductiveJson'),
+          tsAllocationSource: await getOwn('chargingManagement.control.tsAllocationSource'),
+          tsWritePlanShadowJson: await getOwn('chargingManagement.control.tsWritePlanShadowJson'),
+          tsWritePlanProductivePrepJson: await getOwn('chargingManagement.control.tsWritePlanProductivePrepJson'),
+          tsWritePlanProductiveJson: await getOwn('chargingManagement.control.tsWritePlanProductiveJson'),
+          tsWritePlanExecutorJson: await getOwn('chargingManagement.control.tsWritePlanExecutorJson'),
+          tsLegacyDecisionTreeJson: await getOwn('chargingManagement.control.tsLegacyDecisionTreeJson'),
+          tsWritePlanSource: await getOwn('chargingManagement.control.tsWritePlanSource'),
+          tsBudgetJson: await getOwn('chargingManagement.control.tsBudgetJson'),
+          tsBudgetSource: await getOwn('chargingManagement.control.tsBudgetSource'),
 
           // Central EMS Budget & Gates (app-independent background coordinator).
           emsBudgetActive: await getOwn('ems.budget.active'),

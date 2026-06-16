@@ -213,6 +213,14 @@ export interface CoreRestGatesShadowResult {
   };
 }
 
+
+/** Ergebnis der produktiven TypeScript-Restgate-Übernahme. */
+export interface CoreRestGatesProductiveResult extends Omit<CoreRestGatesShadowResult, 'source'> {
+  source: 'ts-core-rest-gates-productive';
+  productive: true;
+  preparedOnly: false;
+}
+
 /**
  * Code-Teil: restBool
  * Zweck: Normalisiert boolesche Restgate-Felder; `false` ist ein gültiger Wert.
@@ -371,6 +379,29 @@ export function buildCoreRestGatesShadow(input: CoreRestGatesShadowInput): CoreR
       evcsHighLevel: (peakGrid.evcsHighLevel || {}) as Record<string, unknown>,
       grid: (peakGrid.grid || {}) as Record<string, unknown>,
     },
+  };
+}
+
+
+/**
+ * Code-Teil: buildCoreRestGatesProductive
+ *
+ * Zweck:
+ * Baut denselben Forecast-/Tarif-/Peak-/§14a-Snapshot wie der Shadow-Helfer,
+ * markiert ihn aber ausdrücklich als produktiv übernehmbaren TypeScript-Restgate-
+ * Snapshot.
+ *
+ * Zusammenhang:
+ * Ab 0.7.121 darf `core-limits.js` diese Werte übernehmen, wenn der zuvor berechnete
+ * JS/TS-Vergleich ohne Mismatches war. JS bleibt Fallback bei Fehlern oder Abweichungen.
+ */
+export function buildCoreRestGatesProductive(input: CoreRestGatesShadowInput): CoreRestGatesProductiveResult {
+  const base = buildCoreRestGatesShadow(input);
+  return {
+    ...base,
+    source: 'ts-core-rest-gates-productive',
+    productive: true,
+    preparedOnly: false,
   };
 }
 

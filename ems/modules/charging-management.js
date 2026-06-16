@@ -28,6 +28,79 @@
 const { BaseModule } = require('./base');
 const { applySetpoint } = require('../consumers');
 const { ReasonCodes } = require('../reasons');
+
+/**
+ * Code-Teil: chargingManagementTsRuntimeMirror
+ *
+ * Zweck:
+ * Lädt den neuen TypeScript-Spiegel für EVCS-/Charging-Management-Vorbereitung.
+ * Ab 0.7.123 übernimmt TypeScript produktiv die sicherheitsrelevanten Budget-Caps,
+ * während Ladepunktverteilung und Setpoint-Schreiben weiterhin JavaScript bleiben.
+ *
+ * Zusammenhang:
+ * Diese Brücke ist die Vorbereitung, um das sehr große charging-management.js später
+ * in kleinere TypeScript-Helfer zu zerlegen.
+ */
+let chargingManagementTsRuntimeMirror = null;
+try {
+    chargingManagementTsRuntimeMirror = require('../../lib/ts-mirrors/ems/charging-management/charging-management-runtime');
+} catch (_eChargingTsMirror) {
+    chargingManagementTsRuntimeMirror = null;
+}
+
+/**
+ * Code-Teil: requireChargingControlTsMirror
+ *
+ * Zweck:
+ * Lädt den TypeScript-Spiegel für den EVCS-/Charging-Management-Control-Shadow.
+ *
+ * Zusammenhang:
+ * In 0.7.124 bleibt die produktive Ladelogik JavaScript. TypeScript bereitet den
+ * Control-Shadow als rückfallfähigen Produktiv-Kandidaten vor und schreibt Diagnose
+ * nach `tsControlShadowJson` sowie `tsControlProductivePrepJson`.
+ */
+function requireChargingControlTsMirror() {
+    try {
+        return require('../../lib/ts-mirrors/ems/charging-management/charging-control');
+    } catch (_e) {
+        return null;
+    }
+}
+
+
+/**
+ * Code-Teil: requireChargingAllocationTsMirror
+ * Zweck: Lädt den TS-Shadow für Wallbox-Allocation. Der Spiegel berechnet in diesem
+ * Kombi-Schritt noch keine ioBroker-Schreiboperationen, sondern baut den geprüften
+ * Produktiv-Kandidaten für die spätere Verteilung.
+ */
+function requireChargingAllocationTsMirror() {
+    try {
+        return require('../../lib/ts-mirrors/ems/charging-management/charging-allocation');
+    } catch (_e) {
+        return null;
+    }
+}
+
+/**
+ * Code-Teil: requireChargingWritePlanTsMirror
+ * Zweck: Lädt den TS-Shadow für den späteren Setpoint-Write-Plan. JavaScript bleibt
+ * Executor; TypeScript validiert in diesem Schritt nur die Schreibabsicht.
+ */
+function requireChargingWritePlanTsMirror() {
+    try {
+        return require('../../lib/ts-mirrors/ems/charging-management/charging-write-plan');
+    } catch (_e) {
+        return null;
+    }
+}
+
+let chargingBudgetTsMirror = null;
+try {
+    chargingBudgetTsMirror = require('../../lib/ts-mirrors/ems/charging-management/charging-budget');
+} catch (_eChargingBudgetTsMirror) {
+    chargingBudgetTsMirror = null;
+}
 /**
  * Code-Teil: toSafeIdPart
  * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -492,6 +565,8 @@ class ChargingManagementModule extends BaseModule {
         this._lastCmdTargetW = new Map(); // safeKey -> last commanded target power (for ramp limiting)
         this._lastCmdTargetA = new Map(); // safeKey -> last commanded target current (for ramp limiting)
         this._lastDiagLogMs = 0; // MU6.2: rate limit diagnostics log
+        // TS-Migration 0.7.122: letzte EVCS-/Charging-Management-TS-Vorbereitungsdiagnose.
+        this._chargingManagementTsRuntimePrepLast = null;
 
         // Fast local state publisher (performance):
         // With many EVCS (e.g. 50+), awaiting hundreds of setStateAsync calls per tick can
@@ -518,7 +593,742 @@ class ChargingManagementModule extends BaseModule {
         this._pvBelowMinSinceMs = new Map(); // safeKey -> ms since a running PV-only session is continuously below the technical minimum
         this._pvMinRunUntilMs = new Map(); // safeKey -> ms until a freshly started PV-only session should be kept stable
         this._pvStartCooldownUntilMs = new Map(); // safeKey -> ms until a failed PV-only start may be retried
+        // TS-Migration 0.7.124: letzter EVCS-/Charging-Control-Shadow und Produktiv-Kandidat.
+        this._chargingControlTsShadowLast = null;
+        this._chargingControlTsProductivePrepLast = null;
+        this._chargingControlTsProductiveLast = null;
+        this._chargingAllocationTsShadowLast = null;
+        this._chargingAllocationTsProductivePrepLast = null;
+        this._chargingAllocationTsProductiveLast = null;
+        this._chargingWritePlanTsShadowLast = null;
+        this._chargingWritePlanTsProductivePrepLast = null;
+        this._chargingWritePlanTsProductiveLast = null;
+        this._chargingLegacyDecisionTreeLast = null;
     }
+
+
+    /**
+     * Code-Teil: _publishChargingControlTsShadow
+     *
+     * Zweck:
+     * Berechnet und veröffentlicht den TypeScript-Shadow-Plan für EVCS/Charging-Management.
+     *
+     * Zusammenhang:
+     * Die produktive EVCS-Ladelogik bleibt in 0.7.124 JavaScript. Diese Methode baut den
+     * typisierten Vergleichsstatus plus einen Produktiv-Kandidaten für Control-/Summary-
+     * Werte, damit die spätere Übernahme kontrolliert und rückfallfähig bleibt.
+     *
+     * Wichtig:
+     * Fehler im TS-Spiegel dürfen die Ladefunktion nicht abbrechen. Deshalb wird jeder
+     * Fehler in JSON-Diagnose geschrieben und der JS-Pfad bleibt führend.
+     */
+    async _publishChargingControlTsShadow(input) {
+        const mirror = requireChargingControlTsMirror();
+        let status;
+        let productivePrep = null;
+        let productiveDecision = null;
+        try {
+            if (!mirror || typeof mirror.buildChargingControlShadowPlan !== 'function') {
+                productivePrep = {
+                    source: 'ts-charging-control-productive-prep-v1',
+                    available: false,
+                    ok: false,
+                    productive: false,
+                    prepared: false,
+                    fallback: true,
+                    fallbackReason: 'missing-ts-mirror',
+                    apply: null,
+                    ts: Date.now(),
+                };
+                productiveDecision = {
+                    source: 'ts-charging-control-productive-v1',
+                    available: false,
+                    ok: false,
+                    productive: false,
+                    prepared: false,
+                    fallback: true,
+                    fallbackReason: 'missing-ts-mirror',
+                    apply: null,
+                    ts: Date.now(),
+                };
+                status = {
+                    source: 'ts-charging-control-shadow-v1',
+                    available: false,
+                    ok: false,
+                    productive: false,
+                    productivePrep,
+                    productiveDecision,
+                    productivePrepared: false,
+                    fallback: true,
+                    fallbackReason: 'missing-ts-mirror',
+                    ts: Date.now(),
+                };
+            } else {
+                const plan = mirror.buildChargingControlShadowPlan(input || {});
+                const comparison = (typeof mirror.compareChargingControlShadowPlan === 'function')
+                    ? mirror.compareChargingControlShadowPlan(input || {}, plan)
+                    : { ok: true, mismatchCount: 0, mismatches: [] };
+                productivePrep = (typeof mirror.buildChargingControlProductivePrep === 'function')
+                    ? mirror.buildChargingControlProductivePrep(input || {}, plan, comparison)
+                    : {
+                        source: 'ts-charging-control-productive-prep-v1',
+                        available: false,
+                        ok: false,
+                        productive: false,
+                        prepared: false,
+                        fallback: true,
+                        fallbackReason: 'missing-ts-productive-prep-helper',
+                        comparison,
+                        plan,
+                        apply: null,
+                    };
+                productiveDecision = (typeof mirror.buildChargingControlProductive === 'function')
+                    ? mirror.buildChargingControlProductive(input || {}, plan, comparison)
+                    : {
+                        source: 'ts-charging-control-productive-v1',
+                        available: false,
+                        ok: false,
+                        productive: false,
+                        prepared: false,
+                        fallback: true,
+                        fallbackReason: 'missing-ts-productive-helper',
+                        comparison,
+                        plan,
+                        apply: null,
+                    };
+                status = {
+                    ...plan,
+                    comparison,
+                    productivePrep,
+                    productiveDecision,
+                    ok: !!(plan && plan.ok && comparison && comparison.ok),
+                    mismatchCount: comparison && Number.isFinite(Number(comparison.mismatchCount)) ? Number(comparison.mismatchCount) : 0,
+                    productive: !!(productiveDecision && productiveDecision.productive),
+                    productivePrepared: !!(productivePrep && productivePrep.prepared),
+                    fallback: !(productiveDecision && productiveDecision.productive),
+                    fallbackReason: productiveDecision && productiveDecision.fallbackReason ? productiveDecision.fallbackReason : '',
+                    nextAction: productiveDecision && productiveDecision.nextAction
+                        ? productiveDecision.nextAction
+                        : 'EVCS/Charging-Management TS-Control ist aktivierbar; Ladepunktverteilung und Setpoint-Schreiben bleiben getrennt abgesichert.',
+                    ts: Date.now(),
+                };
+            }
+        } catch (e) {
+            productivePrep = {
+                source: 'ts-charging-control-productive-prep-v1',
+                available: false,
+                ok: false,
+                productive: false,
+                prepared: false,
+                fallback: true,
+                fallbackReason: 'ts-runtime-error',
+                error: e && e.message ? e.message : String(e),
+                apply: null,
+                ts: Date.now(),
+            };
+            productiveDecision = {
+                source: 'ts-charging-control-productive-v1',
+                available: false,
+                ok: false,
+                productive: false,
+                prepared: false,
+                fallback: true,
+                fallbackReason: 'ts-runtime-error',
+                error: e && e.message ? e.message : String(e),
+                apply: null,
+                ts: Date.now(),
+            };
+            status = {
+                source: 'ts-charging-control-shadow-v1',
+                available: false,
+                ok: false,
+                productive: false,
+                productivePrep,
+                productiveDecision,
+                productivePrepared: false,
+                fallback: true,
+                fallbackReason: 'ts-runtime-error',
+                error: e && e.message ? e.message : String(e),
+                ts: Date.now(),
+            };
+        }
+        this._chargingControlTsShadowLast = status;
+        this._chargingControlTsProductivePrepLast = productivePrep;
+        this._chargingControlTsProductiveLast = productiveDecision;
+        try {
+            await this._queueState('chargingManagement.control.tsControlShadowJson', JSON.stringify(status), true);
+            await this._queueState('chargingManagement.control.tsControlProductivePrepJson', JSON.stringify(productivePrep || {}), true);
+            await this._queueState('chargingManagement.control.tsControlProductiveJson', JSON.stringify(productiveDecision || {}), true);
+            await this._queueState('chargingManagement.control.tsControlSource', productiveDecision && productiveDecision.productive ? 'ts-control' : (productivePrep && productivePrep.prepared ? 'ts-control-prepared' : 'js-runtime'), true);
+
+            // TS-Migration 0.7.125: Control-/Summary-Werte werden bei sauberem
+            // Shadow-Vergleich produktiv aus dem TS-Vertrag übernommen. Das ist
+            // bewusst nur die Control-Ebene; Ladepunktverteilung, Boost/PV/Min+PV,
+            // Failsafe-Stopps und Setpoint-Schreiben bleiben weiterhin JavaScript.
+            const apply = productiveDecision && productiveDecision.productive ? productiveDecision.apply : null;
+            if (apply && typeof apply === 'object') {
+                await this._queueState('chargingManagement.control.active', !!apply.active, true);
+                await this._queueState('chargingManagement.control.mode', String(apply.mode || ''), true);
+                await this._queueState('chargingManagement.control.status', String(apply.status || ''), true);
+                await this._queueState('chargingManagement.control.budgetMode', String(apply.budgetMode || ''), true);
+                await this._queueState('chargingManagement.control.budgetW', Number.isFinite(Number(apply.budgetW)) ? Number(apply.budgetW) : 0, true);
+                await this._queueState('chargingManagement.control.usedW', Number.isFinite(Number(apply.usedW)) ? Number(apply.usedW) : 0, true);
+                await this._queueState('chargingManagement.control.remainingW', Number.isFinite(Number(apply.remainingW)) ? Number(apply.remainingW) : 0, true);
+                await this._queueState('chargingManagement.wallboxCount', Number.isFinite(Number(apply.wallboxCount)) ? Number(apply.wallboxCount) : 0, true);
+                await this._queueState('chargingManagement.summary.onlineWallboxes', Number.isFinite(Number(apply.onlineWallboxes)) ? Number(apply.onlineWallboxes) : 0, true);
+                await this._queueState('chargingManagement.summary.totalPowerW', Number.isFinite(Number(apply.totalPowerW)) ? Number(apply.totalPowerW) : 0, true);
+                await this._queueState('chargingManagement.summary.totalTargetPowerW', Number.isFinite(Number(apply.totalTargetPowerW)) ? Number(apply.totalTargetPowerW) : 0, true);
+                await this._queueState('chargingManagement.summary.totalTargetCurrentA', Number.isFinite(Number(apply.totalTargetCurrentA)) ? Number(apply.totalTargetCurrentA) : 0, true);
+                await this._queueState('chargingManagement.control.pausedByPeakShaving', !!apply.pausedByPeakShaving, true);
+                await this._queueState('chargingManagement.control.pvAvailable', !!apply.pvAvailable, true);
+                await this._queueState('chargingManagement.control.gridCapBinding', !!apply.gridCapBinding, true);
+                await this._queueState('chargingManagement.control.phaseCapBinding', !!apply.phaseCapBinding, true);
+                await this._queueState('chargingManagement.control.para14aBinding', !!apply.para14aBinding, true);
+                await this._queueState('chargingManagement.control.storageAssistActive', !!apply.storageAssistActive, true);
+                await this._queueState('chargingManagement.control.storageAssistW', Number.isFinite(Number(apply.storageAssistW)) ? Number(apply.storageAssistW) : 0, true);
+            }
+        } catch (_eWrite) {}
+        return status;
+    }
+
+    /**
+     * Code-Teil: _publishChargingAllocationTsShadow
+     *
+     * Zweck:
+     * Veröffentlicht den TypeScript-Shadow für Wallbox-Allocation plus Setpoint-Write-Plan.
+     * Das ist der beschleunigte Kombi-Schritt: Zielverteilung wird typisiert gespiegelt
+     * und produktiv vorbereitet, während JavaScript weiterhin die realen Setpoints schreibt.
+     */
+    async _publishChargingAllocationTsShadow(input) {
+        const allocationMirror = requireChargingAllocationTsMirror();
+        const writePlanMirror = requireChargingWritePlanTsMirror();
+        let shadow = null;
+        let productivePrep = null;
+        let productiveDecision = null;
+        let writePlan = null;
+        let writePlanProductivePrep = null;
+        let writePlanProductive = null;
+        try {
+            if (!allocationMirror || typeof allocationMirror.buildChargingAllocationShadowPlan !== 'function') {
+                shadow = {
+                    source: 'ts-charging-allocation-shadow-v1',
+                    available: false,
+                    ok: false,
+                    productive: false,
+                    fallback: true,
+                    fallbackReason: 'missing-ts-allocation-mirror',
+                    ts: Date.now(),
+                };
+                productivePrep = {
+                    source: 'ts-charging-allocation-productive-prep-v1',
+                    available: false,
+                    ok: false,
+                    productive: false,
+                    prepared: false,
+                    fallback: true,
+                    fallbackReason: 'missing-ts-allocation-mirror',
+                    apply: null,
+                    ts: Date.now(),
+                };
+                productiveDecision = {
+                    source: 'ts-charging-allocation-productive-v1',
+                    available: false,
+                    ok: false,
+                    productive: false,
+                    prepared: false,
+                    fallback: true,
+                    fallbackReason: 'missing-ts-allocation-mirror',
+                    apply: null,
+                    ts: Date.now(),
+                };
+            } else {
+                const plan = allocationMirror.buildChargingAllocationShadowPlan(input || {});
+                const comparison = (typeof allocationMirror.compareChargingAllocationShadowPlan === 'function')
+                    ? allocationMirror.compareChargingAllocationShadowPlan(input || {}, plan)
+                    : { ok: true, mismatchCount: 0, mismatches: [] };
+                productivePrep = (typeof allocationMirror.buildChargingAllocationProductivePrep === 'function')
+                    ? allocationMirror.buildChargingAllocationProductivePrep(input || {}, plan, comparison)
+                    : {
+                        source: 'ts-charging-allocation-productive-prep-v1',
+                        available: false,
+                        ok: false,
+                        productive: false,
+                        prepared: false,
+                        fallback: true,
+                        fallbackReason: 'missing-ts-allocation-prep-helper',
+                        comparison,
+                        plan,
+                        apply: null,
+                    };
+                productiveDecision = (typeof allocationMirror.buildChargingAllocationProductive === 'function')
+                    ? allocationMirror.buildChargingAllocationProductive(input || {}, plan, comparison)
+                    : {
+                        source: 'ts-charging-allocation-productive-v1',
+                        available: false,
+                        ok: false,
+                        productive: false,
+                        prepared: false,
+                        fallback: true,
+                        fallbackReason: 'missing-ts-allocation-productive-helper',
+                        comparison,
+                        plan,
+                        apply: null,
+                    };
+                shadow = {
+                    ...plan,
+                    comparison,
+                    productivePrep,
+                    productiveDecision,
+                    ok: !!(plan && plan.ok && comparison && comparison.ok),
+                    mismatchCount: comparison && Number.isFinite(Number(comparison.mismatchCount)) ? Number(comparison.mismatchCount) : 0,
+                    productive: !!(productiveDecision && productiveDecision.productive),
+                    productivePrepared: !!(productivePrep && productivePrep.prepared),
+                    fallback: !(productiveDecision && productiveDecision.productive),
+                    fallbackReason: productiveDecision && productiveDecision.fallbackReason ? productiveDecision.fallbackReason : '',
+                    ts: Date.now(),
+                };
+            }
+        } catch (e) {
+            shadow = {
+                source: 'ts-charging-allocation-shadow-v1',
+                available: false,
+                ok: false,
+                productive: false,
+                fallback: true,
+                fallbackReason: 'ts-runtime-error',
+                error: e && e.message ? e.message : String(e),
+                ts: Date.now(),
+            };
+            productivePrep = {
+                source: 'ts-charging-allocation-productive-prep-v1',
+                available: false,
+                ok: false,
+                productive: false,
+                prepared: false,
+                fallback: true,
+                fallbackReason: 'ts-runtime-error',
+                error: e && e.message ? e.message : String(e),
+                apply: null,
+                ts: Date.now(),
+            };
+            productiveDecision = {
+                source: 'ts-charging-allocation-productive-v1',
+                available: false,
+                ok: false,
+                productive: false,
+                prepared: false,
+                fallback: true,
+                fallbackReason: 'ts-runtime-error',
+                error: e && e.message ? e.message : String(e),
+                apply: null,
+                ts: Date.now(),
+            };
+        }
+
+        try {
+            if (!writePlanMirror || typeof writePlanMirror.buildChargingSetpointWritePlan !== 'function') {
+                writePlan = {
+                    source: 'ts-charging-setpoint-write-plan-shadow-v1',
+                    available: false,
+                    ok: false,
+                    productive: false,
+                    fallback: true,
+                    fallbackReason: 'missing-ts-write-plan-mirror',
+                    entries: [],
+                    ts: Date.now(),
+                };
+                writePlanProductivePrep = {
+                    source: 'ts-charging-setpoint-write-plan-productive-prep-v1',
+                    available: false,
+                    ok: false,
+                    productive: false,
+                    prepared: false,
+                    fallback: true,
+                    fallbackReason: 'missing-ts-write-plan-mirror',
+                    entries: [],
+                    apply: null,
+                    ts: Date.now(),
+                };
+                writePlanProductive = {
+                    source: 'ts-charging-setpoint-write-plan-productive-v1',
+                    available: false,
+                    ok: false,
+                    productive: false,
+                    prepared: false,
+                    fallback: true,
+                    fallbackReason: 'missing-ts-write-plan-mirror',
+                    entries: [],
+                    apply: null,
+                    ts: Date.now(),
+                };
+            } else {
+                const productiveAllocationPlan = productiveDecision && productiveDecision.apply
+                    ? { wallboxes: productiveDecision.apply.wallboxes || [] }
+                    : (productivePrep && productivePrep.plan ? productivePrep.plan : shadow);
+                writePlan = writePlanMirror.buildChargingSetpointWritePlan({
+                    ...(input || {}),
+                    allocationPlan: productiveAllocationPlan,
+                    allowWrites: false,
+                });
+                writePlanProductivePrep = (typeof writePlanMirror.buildChargingSetpointWritePlanProductivePrep === 'function')
+                    ? writePlanMirror.buildChargingSetpointWritePlanProductivePrep({
+                        ...(input || {}),
+                        allocationPlan: productiveAllocationPlan,
+                        allowWrites: false,
+                    }, writePlan)
+                    : {
+                        source: 'ts-charging-setpoint-write-plan-productive-prep-v1',
+                        available: false,
+                        ok: false,
+                        productive: false,
+                        prepared: false,
+                        fallback: true,
+                        fallbackReason: 'missing-ts-write-plan-productive-prep-helper',
+                        entries: writePlan && Array.isArray(writePlan.entries) ? writePlan.entries : [],
+                        apply: null,
+                        ts: Date.now(),
+                    };
+                writePlanProductive = (typeof writePlanMirror.buildChargingSetpointWritePlanProductive === 'function')
+                    ? writePlanMirror.buildChargingSetpointWritePlanProductive({
+                        ...(input || {}),
+                        allocationPlan: productiveAllocationPlan,
+                        allowWrites: !!(productiveDecision && productiveDecision.productive),
+                    }, writePlan)
+                    : {
+                        source: 'ts-charging-setpoint-write-plan-productive-v1',
+                        available: false,
+                        ok: false,
+                        productive: false,
+                        prepared: false,
+                        fallback: true,
+                        fallbackReason: 'missing-ts-write-plan-productive-helper',
+                        entries: writePlan && Array.isArray(writePlan.entries) ? writePlan.entries : [],
+                        apply: null,
+                        ts: Date.now(),
+                    };
+            }
+        } catch (e) {
+            writePlan = {
+                source: 'ts-charging-setpoint-write-plan-shadow-v1',
+                available: false,
+                ok: false,
+                productive: false,
+                fallback: true,
+                fallbackReason: 'ts-runtime-error',
+                error: e && e.message ? e.message : String(e),
+                entries: [],
+                ts: Date.now(),
+            };
+            writePlanProductivePrep = {
+                source: 'ts-charging-setpoint-write-plan-productive-prep-v1',
+                available: false,
+                ok: false,
+                productive: false,
+                prepared: false,
+                fallback: true,
+                fallbackReason: 'ts-runtime-error',
+                error: e && e.message ? e.message : String(e),
+                entries: [],
+                apply: null,
+                ts: Date.now(),
+            };
+            writePlanProductive = {
+                source: 'ts-charging-setpoint-write-plan-productive-v1',
+                available: false,
+                ok: false,
+                productive: false,
+                prepared: false,
+                fallback: true,
+                fallbackReason: 'ts-runtime-error',
+                error: e && e.message ? e.message : String(e),
+                entries: [],
+                apply: null,
+                ts: Date.now(),
+            };
+        }
+
+        this._chargingAllocationTsShadowLast = shadow;
+        this._chargingAllocationTsProductivePrepLast = productivePrep;
+        this._chargingAllocationTsProductiveLast = productiveDecision;
+        this._chargingWritePlanTsShadowLast = writePlan;
+        this._chargingWritePlanTsProductivePrepLast = writePlanProductivePrep;
+        this._chargingWritePlanTsProductiveLast = writePlanProductive;
+        try {
+            await this._queueState('chargingManagement.control.tsAllocationShadowJson', JSON.stringify(shadow || {}), true);
+            await this._queueState('chargingManagement.control.tsAllocationProductivePrepJson', JSON.stringify(productivePrep || {}), true);
+            await this._queueState('chargingManagement.control.tsAllocationProductiveJson', JSON.stringify(productiveDecision || {}), true);
+            await this._queueState('chargingManagement.control.tsAllocationSource', productiveDecision && productiveDecision.productive ? 'ts-allocation' : (productivePrep && productivePrep.prepared ? 'ts-allocation-prepared' : 'js-runtime'), true);
+            await this._queueState('chargingManagement.control.tsWritePlanShadowJson', JSON.stringify(writePlan || {}), true);
+            await this._queueState('chargingManagement.control.tsWritePlanProductivePrepJson', JSON.stringify(writePlanProductivePrep || {}), true);
+            await this._queueState('chargingManagement.control.tsWritePlanProductiveJson', JSON.stringify(writePlanProductive || {}), true);
+            await this._queueState('chargingManagement.control.tsWritePlanSource', writePlanProductive && writePlanProductive.productive ? 'ts-write-plan' : (writePlanProductivePrep && writePlanProductivePrep.prepared ? 'ts-write-plan-prepared' : (writePlan && writePlan.available !== false ? 'ts-write-plan-shadow' : 'js-runtime')), true);
+        } catch (_eWrite) {}
+        return { shadow, productivePrep, productiveDecision, writePlan, writePlanProductivePrep, writePlanProductive };
+    }
+
+    /**
+     * Code-Teil: _mapChargingWallboxesForTsAllocation
+     * Zweck: Normalisiert die aktuelle Runtime-Wallboxliste für den TypeScript-Allocation-/Write-Plan.
+     * Dadurch verwenden Normalpfad, Peak-Rampdown und Failsafe denselben TS-Vertrag.
+     */
+    _mapChargingWallboxesForTsAllocation(wbList) {
+        return (Array.isArray(wbList) ? wbList : []).map(w => ({
+            safe: w && w.safe,
+            key: w && w.key,
+            name: w && w.name,
+            enabled: !!(w && w.enabled),
+            online: !!(w && w.online),
+            cfgEnabled: !!(w && w.cfgEnabled),
+            userEnabled: !!(w && w.userEnabled),
+            vehiclePlugged: w ? w.vehiclePlugged : undefined,
+            charging: !!(w && w.charging),
+            effectiveMode: w && w.effectiveMode,
+            userMode: w && w.userMode,
+            chargerType: w && w.chargerType,
+            controlBasis: w && w.controlBasis,
+            phases: w && w.phases,
+            voltageV: w && w.voltageV,
+            minPowerW: w && w.minPW,
+            maxPowerW: w && w.maxPW,
+            minA: w && w.minA,
+            maxA: w && w.maxA,
+            actualPowerW: w && w.actualPowerW,
+            priority: w && w.priority,
+            stationKey: w && w.stationKey,
+            connectorNo: w && w.connectorNo,
+            setAKey: w && w.setAKey,
+            setWKey: w && w.setWKey,
+            enableKey: w && w.enableKey,
+            hasSetpoint: !!(w && (w.hasSetpoint || w.setAKey || w.setWKey)),
+            hasSetPower: !!(w && w.setWKey),
+            hasSetCurrent: !!(w && w.setAKey),
+            staleAny: !!(w && w.staleAny),
+        }));
+    }
+
+    /**
+     * Code-Teil: _publishChargingLegacyDecisionTreeState
+     * Zweck: Schreibt die kompakte EVCS-Handover-Diagnose für TS-Write-Plan, JS-Executor und JS-Fallback.
+     */
+    async _publishChargingLegacyDecisionTreeState(tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, debugAlloc, context = 'normal', legacyFallbackReason = '') {
+        const fallbackReason = tsWritePlanUsed ? '' : (legacyFallbackReason || (tsWritePlanProductive && tsWritePlanProductive.fallbackReason) || 'ts-write-plan-not-productive');
+        const legacyDecisionTree = {
+            source: 'ts-charging-legacy-js-decision-tree-reduction-v3',
+            context: String(context || 'normal'),
+            jsRole: tsWritePlanUsed ? 'executor-only' : 'executor-and-hard-fallback',
+            normalWritePath: tsWritePlanUsed ? 'ts-write-plan-with-js-executor' : 'js-hard-fallback',
+            tsAllocationProductive: !!(tsAllocationState && tsAllocationState.productiveDecision && tsAllocationState.productiveDecision.productive),
+            tsWritePlanProductive: !!(tsWritePlanProductive && tsWritePlanProductive.productive),
+            tsAllocationSource: tsAllocationState && tsAllocationState.productiveDecision && tsAllocationState.productiveDecision.productive ? 'ts-allocation' : 'js-runtime-hard-fallback',
+            tsWritePlanSource: tsWritePlanUsed ? 'ts-write-plan' : 'js-runtime-hard-fallback',
+            fallbackReason,
+            directSetpointLoopsRemoved: true,
+            safetyStopHandoverViaTsWritePlan: true,
+            staleMeterSafeStopCanUseTsPlan: true,
+            peakRampdownSafeStopCanUseTsPlan: true,
+            executorOnlySetpointWriter: '_executeChargingSetpointEntries',
+            removedFromNormalPath: [
+                'direct-js-setpoint-write-loop',
+                'direct-js-failsafe-write-loop',
+                'direct-js-peak-rampdown-write-loop',
+                'js-only-safety-stop-write-plan',
+            ],
+            retainedAsHardFallback: [
+                'missing-ts-mirror',
+                'ts-js-allocation-mismatch',
+                'stale-meter',
+                'stale-budget',
+                'ts-runtime-error',
+                'write-plan-not-productive',
+                'invalid-apply-plan',
+                'executor-error',
+            ],
+            candidateCount: Array.isArray(debugAlloc) ? debugAlloc.filter(a => a && typeof a === 'object' && a.type !== 'budget').length : 0,
+            ts: Date.now(),
+        };
+        this._chargingLegacyDecisionTreeLast = legacyDecisionTree;
+        try {
+            await this._queueState('chargingManagement.control.tsLegacyDecisionTreeJson', JSON.stringify(legacyDecisionTree), true);
+        } catch (_eLegacyDecision) {}
+        return legacyDecisionTree;
+    }
+
+    /**
+     * Code-Teil: _executeChargingSetpointEntries
+     * Zweck: Führt einen bereits berechneten Setpoint-Plan aus. Die fachliche Zielentscheidung
+     * kommt im Normalfall aus TypeScript; diese Methode bleibt bewusst nur ioBroker-Executor.
+     */
+    async _executeChargingSetpointEntries(entries, wbList, debugAlloc, executorSource, fallbackReason = '') {
+        const result = {
+            source: executorSource || 'unknown',
+            fallbackReason: fallbackReason || '',
+            ok: true,
+            executorRole: executorSource === 'ts-write-plan' ? 'javascript-executor-for-ts-plan' : 'javascript-hard-fallback',
+            usesTsEntryBasis: executorSource === 'ts-write-plan',
+            fallbackOnExecutorError: true,
+            appliedCount: 0,
+            skippedCount: 0,
+            failedCount: 0,
+            entries: [],
+            ts: Date.now(),
+        };
+        const bySafe = new Map();
+        for (const w of Array.isArray(wbList) ? wbList : []) {
+            if (w && w.safe) bySafe.set(String(w.safe), w);
+        }
+        const debugBySafe = new Map();
+        for (const item of Array.isArray(debugAlloc) ? debugAlloc : []) {
+            if (item && typeof item === 'object' && item.safe) debugBySafe.set(String(item.safe), item);
+        }
+        const plannedEntries = Array.isArray(entries) ? entries : [];
+        for (const entry of plannedEntries) {
+            const safe = String(entry && entry.safe ? entry.safe : '').trim();
+            if (!safe) continue;
+            const w = bySafe.get(safe);
+            if (!w) {
+                result.skippedCount += 1;
+                result.entries.push({ safe, status: 'missing-wallbox', applied: false });
+                continue;
+            }
+            const targetWNum = Number(entry.targetPowerW ?? entry.targetW ?? 0);
+            const targetANum = Number(entry.targetCurrentA ?? entry.targetA ?? 0);
+            const targetW = Number.isFinite(targetWNum) && targetWNum > 0 ? Math.round(targetWNum) : 0;
+            const targetA = Number.isFinite(targetANum) && targetANum > 0 ? Number(targetANum) : 0;
+            const rawEntryBasis = String(entry.basis || entry.controlBasis || w.controlBasis || '').trim().toLowerCase();
+            const plannedBasis = (rawEntryBasis === 'current' || rawEntryBasis === 'currenta' || rawEntryBasis === 'current_a' || rawEntryBasis === 'a' || rawEntryBasis === 'amp' || rawEntryBasis === 'amps')
+                ? 'currentA'
+                : ((rawEntryBasis === 'power' || rawEntryBasis === 'powerw' || rawEntryBasis === 'w' || rawEntryBasis === 'watt' || rawEntryBasis === 'watts') ? 'powerW' : (w.controlBasis || 'auto'));
+            const plannedSetpointKey = String(entry.setpointKey || '').trim();
+            const shouldWrite = !!(entry.writeRequired !== false && !entry.blocked);
+            let applied = false;
+            let applyStatus = shouldWrite ? 'planned' : (entry && entry.reason ? String(entry.reason) : 'skipped');
+            let applyWrites = null;
+            if (!shouldWrite) {
+                result.skippedCount += 1;
+            } else if (!this.dp) {
+                applyStatus = 'no_dp_registry';
+                result.failedCount += 1;
+                result.ok = false;
+            } else {
+                try {
+                    const consumerBase = w.consumer || {
+                        type: 'evcs',
+                        key: w.safe,
+                        name: w.name,
+                        controlBasis: w.controlBasis,
+                        setAKey: w.setAKey || '',
+                        setWKey: w.setWKey || '',
+                        enableKey: w.enableKey || '',
+                    };
+                    const consumer = {
+                        ...consumerBase,
+                        controlBasis: plannedBasis,
+                        setAKey: plannedBasis === 'currentA' && plannedSetpointKey ? plannedSetpointKey : (consumerBase.setAKey || w.setAKey || ''),
+                        setWKey: plannedBasis === 'powerW' && plannedSetpointKey ? plannedSetpointKey : (consumerBase.setWKey || w.setWKey || ''),
+                    };
+                    const res = await applySetpoint(
+                        { adapter: this.adapter, dp: this.dp },
+                        consumer,
+                        { targetW, targetA, basis: plannedBasis },
+                    );
+                    applied = !!res?.applied;
+                    applyStatus = String(res?.status || (applied ? 'applied' : 'write_failed'));
+                    applyWrites = res?.writes || null;
+                    if (applied) result.appliedCount += 1;
+                    else {
+                        result.failedCount += 1;
+                        result.ok = false;
+                    }
+                } catch (e) {
+                    applyStatus = e && e.message ? `executor_error:${e.message}` : 'executor_error';
+                    result.failedCount += 1;
+                    result.ok = false;
+                }
+            }
+            try { await this._queueState(`${w.ch}.targetCurrentA`, targetA, true); } catch { /* ignore */ }
+            try { await this._queueState(`${w.ch}.targetPowerW`, targetW, true); } catch { /* ignore */ }
+            try { await this._queueState(`${w.ch}.applied`, applied, true); } catch { /* ignore */ }
+            try { await this._queueState(`${w.ch}.applyStatus`, applyStatus, true); } catch { /* ignore */ }
+            try {
+                await this._queueState(`${w.ch}.applyWrites`, applyWrites ? JSON.stringify(applyWrites) : '', true);
+            } catch {
+                try { await this._queueState(`${w.ch}.applyWrites`, '', true); } catch { /* ignore */ }
+            }
+            try {
+                if (this._lastCmdTargetW && typeof this._lastCmdTargetW.set === 'function') this._lastCmdTargetW.set(w.safe, targetW);
+                if (this._lastCmdTargetA && typeof this._lastCmdTargetA.set === 'function') this._lastCmdTargetA.set(w.safe, targetA);
+            } catch {
+                // ignore runtime cache errors
+            }
+            const dbg = debugBySafe.get(safe);
+            if (dbg && typeof dbg === 'object') {
+                dbg.applied = applied;
+                dbg.applyStatus = applyStatus;
+                dbg.applyWrites = applyWrites;
+                dbg.executorSource = executorSource || '';
+                dbg.writePlanFallbackReason = fallbackReason || '';
+                dbg.executorBasis = plannedBasis;
+                dbg.executorSetpointKey = plannedSetpointKey || '';
+            }
+            result.entries.push({ safe, targetW, targetA, basis: plannedBasis, setpointKey: plannedSetpointKey || '', applied, status: applyStatus, source: executorSource || '' });
+        }
+        try {
+            await this._queueState('chargingManagement.control.tsWritePlanExecutorJson', JSON.stringify(result), true);
+        } catch {
+            // diagnostics only
+        }
+        return result;
+    }
+
+    /**
+     * Code-Teil: _executeChargingTsSetpointPlan
+     * Zweck: Führt den produktiven TypeScript-Write-Plan über den JS/ioBroker-Executor aus.
+     */
+    async _executeChargingTsSetpointPlan(writePlanProductive, wbList, debugAlloc) {
+        const entries = writePlanProductive && writePlanProductive.productive && writePlanProductive.apply && Array.isArray(writePlanProductive.apply.entries)
+            ? writePlanProductive.apply.entries
+            : null;
+        if (!entries) return false;
+        const result = await this._executeChargingSetpointEntries(entries, wbList, debugAlloc, 'ts-write-plan', '');
+        return !!(result && result.ok === true);
+    }
+
+    /**
+     * Code-Teil: _executeChargingLegacySetpointFallback
+     * Zweck: Nutzt die bisherigen JS-Zielwerte nur noch als Fallback, wenn der TS-Write-Plan
+     * nicht produktiv freigegeben werden konnte.
+     */
+    async _executeChargingLegacySetpointFallback(wbList, debugAlloc, fallbackReason = 'ts-write-plan-fallback') {
+        const bySafe = new Map();
+        for (const w of Array.isArray(wbList) ? wbList : []) {
+            if (w && w.safe) bySafe.set(String(w.safe), w);
+        }
+        const entries = [];
+        for (const item of Array.isArray(debugAlloc) ? debugAlloc : []) {
+            if (!item || typeof item !== 'object' || item.type === 'budget' || !item.safe) continue;
+            const safe = String(item.safe);
+            const w = bySafe.get(safe);
+            if (!w) continue;
+            const targetW = Number(item.targetPowerW ?? item.targetW ?? 0);
+            const targetA = Number(item.targetCurrentA ?? item.targetA ?? 0);
+            const hasSetpoint = !!(w.setAKey || w.setWKey);
+            const shouldWrite = hasSetpoint && !!w.online && (!!w.enabled || (!!w.cfgEnabled && !w.userEnabled) || targetW > 0 || targetA > 0);
+            entries.push({
+                safe,
+                targetPowerW: Number.isFinite(targetW) && targetW > 0 ? targetW : 0,
+                targetCurrentA: Number.isFinite(targetA) && targetA > 0 ? targetA : 0,
+                basis: w.controlBasis === 'currentA' ? 'current' : 'power',
+                setpointKey: w.controlBasis === 'currentA' ? (w.setAKey || '') : (w.setWKey || ''),
+                writeRequired: shouldWrite,
+                blocked: !shouldWrite,
+                reason: item.reason || fallbackReason,
+            });
+        }
+        await this._executeChargingSetpointEntries(entries, wbList, debugAlloc, 'js-fallback', fallbackReason);
+        return true;
+    }
+
+
 
     /**
      * Default publishing options for certain "noisy" diagnostic counters.
@@ -1024,7 +1834,24 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.budgetW', 'Budget (W)', 'number', 'value.power');
         await mk('chargingManagement.control.usedW', 'Used (W)', 'number', 'value.power');
         await mk('chargingManagement.control.remainingW', 'Remaining (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.tsControlShadowJson', 'TypeScript EVCS-Control Shadow / Vorbereitung (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.tsControlProductivePrepJson', 'TypeScript EVCS-Control Produktiv-Vorbereitung (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.tsControlProductiveJson', 'TypeScript EVCS-Control produktiv (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.tsControlSource', 'TypeScript EVCS-Control source/prep state', 'string', 'text');
+        await mk('chargingManagement.control.tsAllocationShadowJson', 'TypeScript EVCS-Allocation Shadow (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.tsAllocationProductivePrepJson', 'TypeScript EVCS-Allocation Produktiv-Vorbereitung (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.tsAllocationProductiveJson', 'TypeScript EVCS-Allocation produktiv (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.tsAllocationSource', 'TypeScript EVCS-Allocation source/prep state', 'string', 'text');
+        await mk('chargingManagement.control.tsWritePlanShadowJson', 'TypeScript EVCS-Setpoint Write-Plan Shadow (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.tsWritePlanProductivePrepJson', 'TypeScript EVCS-Setpoint Write-Plan Produktiv-Vorbereitung (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.tsWritePlanProductiveJson', 'TypeScript EVCS-Setpoint Write-Plan produktiv (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.tsWritePlanExecutorJson', 'TypeScript EVCS-Setpoint Write-Plan Executor-Diagnose (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.tsLegacyDecisionTreeJson', 'TypeScript EVCS Legacy-JS Executor/Fallback-Reduktion (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.tsWritePlanSource', 'TypeScript EVCS-Write-Plan source/prep state', 'string', 'text');
         await mk('chargingManagement.control.pausedByPeakShaving', 'Paused by peak shaving', 'boolean', 'indicator');
+        await mk('chargingManagement.control.tsBudgetJson', 'TypeScript charging budget shadow JSON', 'string', 'json');
+        await mk('chargingManagement.control.tsBudgetSource', 'TypeScript charging budget source', 'string', 'text');
+
 
         // MU6.8: Failsafe diagnostics (Stale Meter/Budget)
         await mk('chargingManagement.control.staleMeter', 'Meter stale (failsafe)', 'boolean', 'indicator');
@@ -1083,6 +1910,7 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.debug.lastRun', 'Last run', 'number', 'value.time');
         await mk('chargingManagement.debug.sortedOrder', 'Sorted order (safe keys)', 'string', 'text');
         await mk('chargingManagement.debug.allocations', 'Allocations (JSON)', 'string', 'text');
+        await mk('chargingManagement.debug.tsRuntimePrepJson', 'Charging Management TS runtime preparation/shadow (JSON)', 'string', 'json');
     }
 
     /**
@@ -1413,6 +2241,69 @@ class ChargingManagementModule extends BaseModule {
         } catch {
             return null;
         }
+    }
+
+    /**
+     * Code-Teil: _runChargingBudgetTsProductive
+     *
+     * Zweck:
+     * Berechnet die sicherheitsrelevanten EVCS-/Charging-Budget-Caps über TypeScript
+     * und übernimmt sie produktiv, wenn der JS/TS-Vergleich sauber ist.
+     *
+     * Zusammenhang:
+     * Dieser Schritt übernimmt nur Grid-Cap, Phasen-Cap, §14a-Cap und den effektiven
+     * Budgetmodus. Ladepunktverteilung, PV-/Min+PV-Logik und Setpoint-Schreiben bleiben
+     * weiterhin JavaScript.
+     *
+     * Sicherheitsregel:
+     * Wenn TypeScript fehlt, Fehler wirft oder vom JavaScript-Referenzwert abweicht,
+     * bleibt der bestehende JavaScript-Wert produktiv. `tsBudgetJson` speichert den
+     * Fallback-Grund für Debug und App-Center.
+     */
+    async _runChargingBudgetTsProductive(input, jsRuntime) {
+        let payload = null;
+        try {
+            if (!chargingBudgetTsMirror || typeof chargingBudgetTsMirror.buildChargingBudgetProductiveDecision !== 'function') {
+                payload = {
+                    source: 'ts-charging-budget-productive-v1',
+                    available: false,
+                    ok: false,
+                    productive: false,
+                    fallback: true,
+                    fallbackReason: 'missing-ts-mirror',
+                    shadow: { source: 'ts-charging-budget-shadow-v1', available: false, ok: false, mismatchCount: 0, mismatches: [], ts: null },
+                };
+            } else {
+                payload = chargingBudgetTsMirror.buildChargingBudgetProductiveDecision(jsRuntime || {}, input || {});
+            }
+        } catch (e) {
+            payload = {
+                source: 'ts-charging-budget-productive-v1',
+                available: false,
+                ok: false,
+                productive: false,
+                fallback: true,
+                fallbackReason: 'ts-runtime-error',
+                error: e && e.message ? e.message : String(e),
+                shadow: { source: 'ts-charging-budget-shadow-v1', available: false, ok: false, mismatchCount: 0, mismatches: [], ts: null },
+            };
+        }
+        try {
+            await this._queueState('chargingManagement.control.tsBudgetJson', JSON.stringify(payload || {}), true);
+            await this._queueState('chargingManagement.control.tsBudgetSource', payload && payload.productive ? 'ts-budget-caps' : 'js-runtime', true);
+        } catch (_e) {
+            // Diagnose darf die produktive Ladepunktregelung nicht stören.
+        }
+        return payload;
+    }
+
+    /**
+     * Code-Teil: _runChargingBudgetTsShadow
+     * Zweck: Kompatibilitäts-Wrapper für ältere interne Aufrufe. Neue Runtime nutzt
+     * `_runChargingBudgetTsProductive`, der bei sauberem Vergleich TS produktiv macht.
+     */
+    async _runChargingBudgetTsShadow(input, jsRuntime) {
+        return this._runChargingBudgetTsProductive(input, jsRuntime);
     }
 
     /**
@@ -3720,6 +4611,56 @@ if (components.length) {
             }
         }
 
+        /**
+         * TS-Migration 0.7.123: Budget-Caps produktiv über TypeScript übernehmen.
+         *
+         * Wichtig:
+         * - Der TS-Helfer darf nur Grid-/Phasen-/§14a-Caps übernehmen.
+         * - Ladepunktverteilung, Failsafe, Boost und Setpoint-Schreiben bleiben weiterhin JavaScript.
+         * - Merksatz für die Migration: Ladepunktverteilung und Setpoint-Schreiben bleiben weiterhin JavaScript.
+         * - Ladepunktverteilung, Failsafe, Boost und Setpoint-Schreiben bleiben JS.
+         * - PV-/Min+PV-Logik und Wallbox-Verteilung bleiben ebenfalls JS.
+         * - Bei Mismatch/Fehler bleibt JS führend.
+         */
+        const chargingBudgetTsProductive = await this._runChargingBudgetTsProductive({
+            budgetW: Number.isFinite(budgetBeforeGridCaps) ? budgetBeforeGridCaps : null,
+            budgetMode: String(budgetMode || effectiveBudgetMode || 'unlimited'),
+            gridCapEvcsW: (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : null,
+            gridCapBinding: !!gridCapBinding,
+            phaseCapEvcsW: (typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)) ? phaseCapEvcsW : null,
+            phaseCapBinding: !!phaseCapBinding,
+            para14aActive: !!para14aActive,
+            para14aTotalCapW: (typeof para14aTotalCapW === 'number' && Number.isFinite(para14aTotalCapW)) ? para14aTotalCapW : null,
+            para14aMode: para14aMode || '',
+        }, {
+            budgetAfterW: Number.isFinite(budgetW) ? Math.round(budgetW) : null,
+            effectiveBudgetMode: String(effectiveBudgetMode || ''),
+            gridCapApplied: !!gridCapBinding,
+            phaseCapApplied: !!phaseCapBinding,
+            para14aApplied: !!para14aBinding,
+        });
+        if (chargingBudgetTsProductive && chargingBudgetTsProductive.productive && chargingBudgetTsProductive.apply) {
+            const tsApply = chargingBudgetTsProductive.apply;
+            budgetW = (typeof tsApply.budgetW === 'number' && Number.isFinite(tsApply.budgetW)) ? tsApply.budgetW : Number.POSITIVE_INFINITY;
+            effectiveBudgetMode = String(tsApply.effectiveBudgetMode || effectiveBudgetMode || 'unlimited');
+            gridCapBinding = !!tsApply.gridCapBinding;
+            phaseCapBinding = !!tsApply.phaseCapBinding;
+            para14aBinding = !!tsApply.para14aBinding;
+            if (typeof tsApply.gridCapEvcsW === 'number' && Number.isFinite(tsApply.gridCapEvcsW)) gridCapEvcsW = tsApply.gridCapEvcsW;
+            if (typeof tsApply.phaseCapEvcsW === 'number' && Number.isFinite(tsApply.phaseCapEvcsW)) phaseCapEvcsW = tsApply.phaseCapEvcsW;
+            if (budgetDebug && typeof budgetDebug === 'object') {
+                budgetDebug.tsBudgetProductive = true;
+                budgetDebug.tsBudgetSource = 'ts-budget-productive';
+                budgetDebug.tsBudgetFallback = false;
+                budgetDebug.budgetAfterSafetyCapsW = Number.isFinite(budgetW) ? budgetW : null;
+            }
+        } else if (budgetDebug && typeof budgetDebug === 'object') {
+            budgetDebug.tsBudgetProductive = false;
+            budgetDebug.tsBudgetSource = 'js-runtime';
+            budgetDebug.tsBudgetFallback = true;
+            budgetDebug.tsBudgetFallbackReason = chargingBudgetTsProductive && chargingBudgetTsProductive.fallbackReason ? chargingBudgetTsProductive.fallbackReason : 'unknown';
+        }
+
         // Publish cap diagnostics (even when caps are not configured)
         try {
             await this._queueState('chargingManagement.control.gridImportLimitW', gridImportLimitW || 0, true);
@@ -4076,25 +5017,10 @@ if (components.length) {
                 let applyWrites = null;
 
                 if (w.online && (w.enabled || (!!w.cfgEnabled && !w.userEnabled))) {
-                    if (this.dp) {
-                        const consumer = w.consumer || {
-                            type: 'evcs',
-                            key: w.safe,
-                            name: w.name,
-                            controlBasis: w.controlBasis,
-                            setAKey: w.setAKey || '',
-                            setWKey: w.setWKey || '',
-                            enableKey: w.enableKey || '',
-                        };
-
-                        const res = await applySetpoint({ adapter: this.adapter, dp: this.dp }, consumer, { targetW, targetA, basis: w.controlBasis });
-                        applied = !!res?.applied;
-                        applyStatus = String(res?.status || (applied ? 'applied' : 'write_failed'));
-                        applyWrites = res?.writes || null;
-                    } else {
-                        applyStatus = 'no_dp_registry';
-                    }
-
+                    // 0.7.127: Failsafe setzt den sicheren Zielwert nur noch als
+                    // Executor-/Fallback-Plan. Der einzige EVCS-Setpoint-Schreiber bleibt
+                    // _executeChargingSetpointEntries.
+                    applyStatus = 'planned_by_js_safety_executor';
                     const reasonToSet = (!!w.cfgEnabled && !w.userEnabled) ? ReasonCodes.CONTROL_DISABLED : reason;
                     await this._queueState(`${w.ch}.reason`, reasonToSet, true);
                 } else {
@@ -4137,6 +5063,44 @@ if (components.length) {
                     reason: (w.online && (w.enabled || (!!w.cfgEnabled && !w.userEnabled))) ? ((!!w.cfgEnabled && !w.userEnabled) ? ReasonCodes.CONTROL_DISABLED : reason) : (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online)),
                 });
             }
+
+            const tsAllocationState = await this._publishChargingAllocationTsShadow({
+                mode,
+                budgetMode: effectiveBudgetMode,
+                budgetW: 0,
+                usedW: 0,
+                remainingW: 0,
+                totalPowerW,
+                totalTargetPowerW: 0,
+                totalTargetCurrentA: 0,
+                pvAvailableW: 0,
+                pvAvailable: false,
+                gridCapEvcsW,
+                gridCapBinding: false,
+                phaseCapEvcsW,
+                phaseCapBinding: false,
+                para14aActive,
+                para14aCapEvcsW: para14aTotalCapW,
+                para14aBinding,
+                storageAssistActive: false,
+                storageAssistW: 0,
+                pausedByPeakShaving: false,
+                safetyStop: true,
+                safetyReason: 'stale-meter-safety-stop',
+                staleMeter,
+                staleBudget,
+                wallboxes: this._mapChargingWallboxesForTsAllocation(wbList),
+                allocations: debugAlloc,
+            });
+            const tsWritePlanProductive = tsAllocationState && tsAllocationState.writePlanProductive ? tsAllocationState.writePlanProductive : null;
+            const tsWritePlanUsed = await this._executeChargingTsSetpointPlan(tsWritePlanProductive, wbList, debugAlloc);
+            const legacyFallbackReason = tsWritePlanProductive && tsWritePlanProductive.fallbackReason
+                ? tsWritePlanProductive.fallbackReason
+                : 'stale-meter-safety-fallback';
+            if (!tsWritePlanUsed) {
+                await this._executeChargingLegacySetpointFallback(wbList, debugAlloc, legacyFallbackReason);
+            }
+            await this._publishChargingLegacyDecisionTreeState(tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, debugAlloc, 'stale-meter-safety-fallback', legacyFallbackReason);
 
     
         publishEvPriorityCaps({
@@ -4246,6 +5210,10 @@ if (components.length) {
                 }
             }
 
+            await this._publishChargingControlTsShadow({ mode, budgetMode: effectiveBudgetMode, status: 'failsafe_stale_meter', active: true, budgetW: 0, usedW: 0, remainingW: 0, totalPowerW, totalTargetPowerW: 0, totalTargetCurrentA: 0, wallboxCount: wbList.length, onlineWallboxes: onlineCount, connectedCount: wbList.filter(w => w && w.vehiclePlugged !== false).length, pausedByPeakShaving: false, staleMeter, staleBudget, gridImportLimitW, gridImportLimitEffW, gridImportW, gridCapEvcsW, gridCapBinding, phaseCapEvcsW, phaseCapBinding, para14aActive, para14aCapEvcsW: para14aTotalCapW, para14aBinding, storageAssistActive: false, storageAssistW: 0 });
+
+            await this._publishChargingControlTsShadow({ mode, budgetMode: effectiveBudgetMode, status: 'off', active: false, budgetW: Number.isFinite(budgetW) ? budgetW : 0, usedW: 0, remainingW: Number.isFinite(budgetW) ? budgetW : 0, totalPowerW, totalTargetPowerW: 0, totalTargetCurrentA: 0, wallboxCount: wbList.length, onlineWallboxes: onlineCount, connectedCount: wbList.filter(w => w && w.vehiclePlugged !== false).length, pausedByPeakShaving, staleMeter, staleBudget, gridImportLimitW, gridImportLimitEffW, gridImportW, gridCapEvcsW, gridCapBinding, phaseCapEvcsW, phaseCapBinding, para14aActive, para14aCapEvcsW: para14aTotalCapW, para14aBinding, storageAssistActive, storageAssistW });
+
             await this._queueState('chargingManagement.summary.totalTargetPowerW', 0, true);
             await this._queueState('chargingManagement.summary.totalTargetCurrentA', 0, true);
             await this._queueState('chargingManagement.summary.lastUpdate', Date.now(), true);
@@ -4331,25 +5299,10 @@ if (components.length) {
                     let applyWrites = null;
 
                     if (w.enabled && w.online) {
-                        if (this.dp) {
-                            const consumer = w.consumer || {
-                                type: 'evcs',
-                                key: w.safe,
-                                name: w.name,
-                                controlBasis: w.controlBasis,
-                                setAKey: w.setAKey || '',
-                                setWKey: w.setWKey || '',
-                                enableKey: w.enableKey || '',
-                            };
-
-                            const res = await applySetpoint({ adapter: this.adapter, dp: this.dp }, consumer, { targetW, targetA, basis: w.controlBasis });
-                            applied = !!res?.applied;
-                            applyStatus = String(res?.status || (applied ? 'applied' : 'write_failed'));
-                            applyWrites = res?.writes || null;
-                        } else {
-                            applyStatus = 'no_dp_registry';
-                        }
-
+                        // 0.7.127: Peak-Shaving-Rampdown läuft nicht mehr als eigener
+                        // JS-Schreibblock, sondern als Safety-Fallback-Plan über den
+                        // zentralen Executor.
+                        applyStatus = 'planned_by_js_safety_executor';
                         await this._queueState(`${w.ch}.reason`, reason, true);
                     } else {
                         await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online), true);
@@ -4388,6 +5341,44 @@ if (components.length) {
                     if (Number.isFinite(targetA) && targetA > 0) totalTargetCurrentA += targetA;
                 }
 
+                const tsAllocationState = await this._publishChargingAllocationTsShadow({
+                    mode,
+                    budgetMode: effectiveBudgetMode,
+                    budgetW: 0,
+                    usedW: 0,
+                    remainingW: 0,
+                    totalPowerW,
+                    totalTargetPowerW: 0,
+                    totalTargetCurrentA: 0,
+                    pvAvailableW: 0,
+                    pvAvailable: false,
+                    gridCapEvcsW,
+                    gridCapBinding: false,
+                    phaseCapEvcsW,
+                    phaseCapBinding: false,
+                    para14aActive,
+                    para14aCapEvcsW: para14aTotalCapW,
+                    para14aBinding,
+                    storageAssistActive: false,
+                    storageAssistW: 0,
+                    pausedByPeakShaving: true,
+                    safetyStop: true,
+                    safetyReason: 'peak-shaving-safety-stop',
+                    staleMeter,
+                    staleBudget,
+                    wallboxes: this._mapChargingWallboxesForTsAllocation(wbList),
+                    allocations: debugAlloc,
+                });
+                const tsWritePlanProductive = tsAllocationState && tsAllocationState.writePlanProductive ? tsAllocationState.writePlanProductive : null;
+                const tsWritePlanUsed = await this._executeChargingTsSetpointPlan(tsWritePlanProductive, wbList, debugAlloc);
+                const legacyFallbackReason = tsWritePlanProductive && tsWritePlanProductive.fallbackReason
+                    ? tsWritePlanProductive.fallbackReason
+                    : 'peak-shaving-safety-fallback';
+                if (!tsWritePlanUsed) {
+                    await this._executeChargingLegacySetpointFallback(wbList, debugAlloc, legacyFallbackReason);
+                }
+                await this._publishChargingLegacyDecisionTreeState(tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, debugAlloc, 'peak-shaving-safety-fallback', legacyFallbackReason);
+
                 try {
                     const s = JSON.stringify(debugAlloc);
                     await this._queueState('chargingManagement.debug.allocations', diagMaxJsonLen ? (s.slice(0, diagMaxJsonLen) + '...') : s, true);
@@ -4404,6 +5395,8 @@ if (components.length) {
                         this._chargingSinceMs.delete(safeKey);
                     }
                 }
+
+                await this._publishChargingControlTsShadow({ mode, budgetMode: effectiveBudgetMode, status: 'paused_by_peak_shaving_ramp_down', active: true, budgetW: 0, usedW: 0, remainingW: 0, totalPowerW, totalTargetPowerW: 0, totalTargetCurrentA: 0, wallboxCount: wbList.length, onlineWallboxes: onlineCount, connectedCount: wbList.filter(w => w && w.vehiclePlugged !== false).length, pausedByPeakShaving: true, staleMeter, staleBudget, gridImportLimitW, gridImportLimitEffW, gridImportW, gridCapEvcsW, gridCapBinding, phaseCapEvcsW, phaseCapBinding, para14aActive, para14aCapEvcsW: para14aTotalCapW, para14aBinding, storageAssistActive: false, storageAssistW: 0 });
 
                 await this._queueState('chargingManagement.summary.totalTargetPowerW', 0, true);
                 await this._queueState('chargingManagement.summary.totalTargetCurrentA', 0, true);
@@ -5119,28 +6112,12 @@ if (components.length) {
             /** @type {any|null} */
             let applyWrites = null;
 
-            if (this.dp) {
-                const consumer = w.consumer || {
-                    type: 'evcs',
-                    key: w.safe,
-                    name: w.name,
-                    controlBasis: w.controlBasis,
-                    setAKey: w.setAKey || '',
-                    setWKey: w.setWKey || '',
-                    enableKey: w.enableKey || '',
-                };
-
-                const res = await applySetpoint(
-                    { adapter: this.adapter, dp: this.dp },
-                    consumer,
-                    { targetW: cmdW, targetA: cmdA, basis: w.controlBasis },
-                );
-                applied = !!res?.applied;
-                applyStatus = String(res?.status || (applied ? 'applied' : 'write_failed'));
-                applyWrites = res?.writes || null;
-            } else {
-                applyStatus = 'no_dp_registry';
-            }
+            // TS-Migration 0.7.126:
+            // Die Zielwerte wurden oben weiterhin als Fallback-Referenz berechnet, werden
+            // aber nicht mehr direkt hier geschrieben. Nach dem vollständigen Allocation-
+            // Snapshot übernimmt der produktive TS-Write-Plan den normalen Schreibpfad;
+            // diese JS-Werte dienen nur noch als Executor-Fallback.
+            applyStatus = 'planned_by_ts_write_plan';
 
             // MU6.11: Remember last commanded setpoints for ramp limiting
             this._lastCmdTargetW.set(w.safe, cmdW);
@@ -5274,9 +6251,15 @@ if (components.length) {
                 chargingSinceMs: w.chargingSinceMs || 0,
                 online: !!w.online,
                 enabled: !!w.enabled,
+                connected: w.vehiclePlugged !== false,
                 priority: w.priority,
                 controlBasis: w.controlBasis,
                 chargerType: w.chargerType,
+                minPowerW: w.minPW,
+                maxPowerW: w.maxPW,
+                phaseCount: w.phases,
+                stationKey: w.stationKey || '',
+                connectorNo: w.connectorNo || 0,
                 rawTargetW: targetW,
                 rawTargetA: targetA,
                 targetW: cmdW,
@@ -5288,6 +6271,12 @@ if (components.length) {
                 applyWrites,
                 reason,
                 boost: isBoost,
+                pvLimited: isPvOnly || isMinPv,
+                hasSetpoint: !!(w.setAKey || w.setWKey),
+                setAKey: w.setAKey || '',
+                setWKey: w.setWKey || '',
+                enableKey: w.enableKey || '',
+                writeRequired: !!((w.setAKey || w.setWKey) && !!w.online),
             });
         }
 
@@ -5306,27 +6295,10 @@ if (components.length) {
 
             // Regelung AUS (user): force a safe stop while staying online
             if (!!w.cfgEnabled && !!w.online && !w.userEnabled) {
-                if (this.dp) {
-                    const consumer = w.consumer || {
-                        type: 'evcs',
-                        key: w.safe,
-                        name: w.name,
-                        controlBasis: w.controlBasis,
-                        setAKey: w.setAKey || '',
-                        setWKey: w.setWKey || '',
-                        enableKey: w.enableKey || '',
-                    };
-                    const res = await applySetpoint(
-                        { adapter: this.adapter, dp: this.dp },
-                        consumer,
-                        { targetW: 0, targetA: 0, basis: w.controlBasis },
-                    );
-                    applied = !!res?.applied;
-                    applyStatus = String(res?.status || (applied ? 'applied' : 'write_failed'));
-                    applyWrites = res?.writes || null;
-                } else {
-                    applyStatus = 'no_dp_registry';
-                }
+                // TS-Migration 0.7.126: Auch der sichere 0-Wert bei kundenseitig
+                // deaktivierter Regelung wird im Normalpfad vom produktiven TS-Write-Plan
+                // ausgeführt. JS bleibt Executor/Fallback, schreibt hier aber nicht doppelt.
+                applyStatus = 'planned_by_ts_write_plan';
             }
 
             await this._queueState(`${w.ch}.targetCurrentA`, 0, true);
@@ -5342,8 +6314,87 @@ if (components.length) {
             } else {
                 await this._queueState(`${w.ch}.applyWrites`, '', true);
             }
-            await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online), true);
+            const offReason = availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online);
+            await this._queueState(`${w.ch}.reason`, offReason, true);
+            debugAlloc.push({
+                safe: w.safe,
+                name: w.name,
+                effectiveMode: String(w.effectiveMode || 'normal'),
+                userMode: w.userMode || '',
+                charging: !!w.charging,
+                chargingSinceMs: w.chargingSinceMs || 0,
+                online: !!w.online,
+                enabled: !!w.enabled,
+                connected: w.vehiclePlugged !== false,
+                priority: w.priority,
+                controlBasis: w.controlBasis,
+                chargerType: w.chargerType,
+                minPowerW: w.minPW,
+                maxPowerW: w.maxPW,
+                phaseCount: w.phases,
+                stationKey: w.stationKey || '',
+                connectorNo: w.connectorNo || 0,
+                rawTargetW: 0,
+                rawTargetA: 0,
+                targetW: 0,
+                targetA: 0,
+                pvUsedW: 0,
+                pvRemainingW: Number.isFinite(pvRemainingW) ? pvRemainingW : null,
+                applied,
+                applyStatus,
+                applyWrites,
+                reason: offReason,
+                boost: false,
+                pvLimited: false,
+                hasSetpoint: !!(w.setAKey || w.setWKey),
+                setAKey: w.setAKey || '',
+                setWKey: w.setWKey || '',
+                enableKey: w.enableKey || '',
+                writeRequired: !!((w.setAKey || w.setWKey) && !!w.online && (!!w.cfgEnabled && !w.userEnabled)),
+            });
         }
+
+
+        const tsAllocationState = await this._publishChargingAllocationTsShadow({
+            mode,
+            budgetMode: effectiveBudgetMode,
+            budgetW,
+            usedW: Number.isFinite(budgetW) ? usedW : totalTargetPowerW,
+            remainingW: Number.isFinite(budgetW) ? remainingW : 0,
+            totalPowerW,
+            totalTargetPowerW,
+            totalTargetCurrentA,
+            pvAvailableW: pvCapW,
+            pvAvailable: pvAvailableState,
+            gridCapEvcsW,
+            gridCapBinding,
+            phaseCapEvcsW,
+            phaseCapBinding,
+            para14aActive,
+            para14aCapEvcsW: para14aTotalCapW,
+            para14aBinding,
+            storageAssistActive,
+            storageAssistW,
+            pausedByPeakShaving,
+            staleMeter,
+            staleBudget,
+            wallboxes: this._mapChargingWallboxesForTsAllocation(wbList),
+            allocations: debugAlloc,
+        });
+
+        const tsWritePlanProductive = tsAllocationState && tsAllocationState.writePlanProductive ? tsAllocationState.writePlanProductive : null;
+        const tsWritePlanUsed = await this._executeChargingTsSetpointPlan(
+            tsWritePlanProductive,
+            wbList,
+            debugAlloc,
+        );
+        const legacyFallbackReason = tsWritePlanProductive && tsWritePlanProductive.fallbackReason
+            ? tsWritePlanProductive.fallbackReason
+            : 'ts-write-plan-not-productive';
+        if (!tsWritePlanUsed) {
+            await this._executeChargingLegacySetpointFallback(wbList, debugAlloc, legacyFallbackReason);
+        }
+        await this._publishChargingLegacyDecisionTreeState(tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, debugAlloc, 'normal-allocation-write-plan', legacyFallbackReason);
 
 
         publishEvPriorityCaps({
@@ -5408,10 +6459,47 @@ if (components.length) {
         } else if (phaseCapBinding) {
             finalStatus = 'limited_phase_cap';
         }
-        await this._queueState('chargingManagement.control.status', finalStatus, true);
-        await this._queueState('chargingManagement.control.budgetW', Number.isFinite(budgetW) ? budgetW : 0, true);
-        await this._queueState('chargingManagement.control.usedW', Number.isFinite(budgetW) ? usedW : totalTargetPowerW, true);
-        await this._queueState('chargingManagement.control.remainingW', Number.isFinite(budgetW) ? remainingW : 0, true);
+        const tsControlState = await this._publishChargingControlTsShadow({
+            mode,
+            budgetMode: effectiveBudgetMode,
+            status: finalStatus,
+            active: controlActive,
+            budgetW,
+            usedW: Number.isFinite(budgetW) ? usedW : totalTargetPowerW,
+            remainingW: Number.isFinite(budgetW) ? remainingW : 0,
+            totalPowerW,
+            totalTargetPowerW,
+            totalTargetCurrentA,
+            wallboxCount: wbList.length,
+            onlineWallboxes: onlineCount,
+            connectedCount: wbList.filter(w => w && w.vehiclePlugged !== false && (w.charging || w.enabled || w.online)).length,
+            pausedByPeakShaving,
+            staleMeter,
+            staleBudget,
+            pvAvailable: pvAvailableState,
+            gridImportLimitW,
+            gridImportLimitEffW,
+            gridImportW,
+            gridCapEvcsW,
+            gridCapBinding,
+            phaseCapEvcsW,
+            phaseCapBinding,
+            para14aActive,
+            para14aCapEvcsW: para14aTotalCapW,
+            para14aBinding,
+            storageAssistActive,
+            storageAssistW,
+        });
+        const tsControlApply = tsControlState && tsControlState.productiveDecision && tsControlState.productiveDecision.productive && tsControlState.productiveDecision.apply
+            ? tsControlState.productiveDecision.apply
+            : null;
+        await this._queueState('chargingManagement.control.active', tsControlApply ? tsControlApply.active : controlActive, true);
+        await this._queueState('chargingManagement.control.mode', tsControlApply ? tsControlApply.mode : mode, true);
+        await this._queueState('chargingManagement.control.budgetMode', tsControlApply ? tsControlApply.budgetMode : effectiveBudgetMode, true);
+        await this._queueState('chargingManagement.control.status', tsControlApply ? tsControlApply.status : finalStatus, true);
+        await this._queueState('chargingManagement.control.budgetW', tsControlApply ? tsControlApply.budgetW : (Number.isFinite(budgetW) ? budgetW : 0), true);
+        await this._queueState('chargingManagement.control.usedW', tsControlApply ? tsControlApply.usedW : (Number.isFinite(budgetW) ? usedW : totalTargetPowerW), true);
+        await this._queueState('chargingManagement.control.remainingW', tsControlApply ? tsControlApply.remainingW : (Number.isFinite(budgetW) ? remainingW : 0), true);
 
         // Central EMS Budget & Gates: EVCS is the first flexible consumer group.
         // This does not change EVCS allocation; it only reserves the already decided target/usage

@@ -616,7 +616,7 @@ class CoreLimitsModule extends BaseModule {
         await mk('ems.budget.tsShadowJson', 'TypeScript Core-Budget Shadow-Vergleich (JSON)', 'string', 'json');
         await mk('ems.budget.tsProductiveJson', 'TypeScript Core-Budget Produktivstatus (JSON)', 'string', 'json');
         await mk('ems.budget.tsReservationJson', 'TypeScript Consumer-Reservierung Shadow-Vergleich (JSON)', 'string', 'json');
-        await mk('ems.budget.tsRestGatesJson', 'TypeScript Forecast-/Tarif-/Peak-Gates Shadow-Vergleich (JSON)', 'string', 'json');
+        await mk('ems.budget.tsRestGatesJson', 'TypeScript Forecast-/Tarif-/Peak-Gates produktiv/Fallback (JSON)', 'string', 'json');
 
         // Gate D - PV Forecast. Advisory background gate for forecast-aware app decisions.
         // It does not write setpoints and does not change the instantaneous PV budget by itself.
@@ -1357,10 +1357,96 @@ class CoreLimitsModule extends BaseModule {
                 ['grid.gridImportLimitW_effective', js.grid.gridImportLimitW_effective, ts.grid && ts.grid.gridImportLimitW_effective, 1],
                 ['grid.gridImportLimitW_source', js.grid.gridImportLimitW_source, ts.grid && ts.grid.gridImportLimitW_source, 0],
             ].forEach(([field, jsValue, tsValue, tolerance]) => compareValue(mismatches, field, jsValue, tsValue, tolerance));
-            return { source: 'ts-core-rest-gates-shadow', available: true, ok: mismatches.length === 0, productive: false, reason: mismatches.length ? 'ts-rest-gates-mismatch' : 'shadow-ok', comparedFields: 18, mismatchCount: mismatches.length, mismatches: mismatches.slice(0, 12), js, ts, tsResult, ts: now };
+            return { source: 'ts-core-rest-gates-shadow', available: true, ok: mismatches.length === 0, productive: false, reason: mismatches.length ? 'ts-rest-gates-mismatch' : 'shadow-ok', comparedFields: 18, mismatchCount: mismatches.length, mismatches: mismatches.slice(0, 12), js, tsGates: ts, tsResult, ts: now };
         } catch (e) {
             return { source: 'ts-core-rest-gates-shadow', available: true, ok: false, productive: false, reason: 'ts-runtime-error', error: e && e.message ? e.message : String(e), mismatches: [], ts: now };
         }
+    }
+
+    /**
+     * Code-Teil: _applyCoreRestGatesTsProductiveSnapshot
+     *
+     * Zweck:
+     * Übernimmt Forecast-, Tarif-, Peak-/Netz- und §14a-Restgates produktiv aus dem
+     * TypeScript-Spiegel, wenn der Shadow-Vergleich ohne Abweichungen war.
+     *
+     * Zusammenhang:
+     * Diese Restgates beeinflussen EVCS-High-Level-Caps, Heizstabfreigaben,
+     * Speicherreserve, Peak-Shaving und KI-Hinweise. Deshalb bleibt bei jedem Fehler
+     * oder Mismatch die bisherige JavaScript-Runtime als Fallback aktiv.
+     *
+     * Sicherheitsregel:
+     * Produktive TS-Übernahme nur bei `restShadow.ok === true`. Ansonsten werden die
+     * bisherigen JS-Snapshots unverändert zurückgegeben und `tsRestGatesProductive`
+     * dokumentiert den Fallback-Grund.
+     */
+    _applyCoreRestGatesTsProductiveSnapshot(jsBudgetSnapshot, coreSnapshot, restShadow) {
+        const now = Date.now();
+        const fallbackBudget = jsBudgetSnapshot && typeof jsBudgetSnapshot === 'object' ? jsBudgetSnapshot : {};
+        const fallbackCore = coreSnapshot && typeof coreSnapshot === 'object' ? coreSnapshot : {};
+        const fallback = (reason, extra = {}) => {
+            const status = {
+                ts: now,
+                active: false,
+                productive: false,
+                source: 'js-runtime',
+                fallback: true,
+                reason,
+                ...extra,
+            };
+            try { fallbackBudget.tsRestGatesProductive = status; } catch (_e) {}
+            return { budgetSnapshot: fallbackBudget, coreSnapshot: fallbackCore, status };
+        };
+
+        if (!fallbackBudget || !fallbackBudget.gates || typeof fallbackBudget.gates !== 'object') return fallback('missing-js-budget-snapshot');
+        if (!restShadow || typeof restShadow !== 'object') return fallback('missing-ts-rest-shadow');
+        if (restShadow.available !== true) return fallback('ts-rest-helper-unavailable', { shadow: restShadow });
+        if (restShadow.ok !== true) return fallback('ts-rest-gates-mismatch', { mismatches: restShadow.mismatches || [] });
+
+        const tsGates = restShadow.tsGates || (restShadow.tsResult && restShadow.tsResult.gates) || null;
+        if (!tsGates || typeof tsGates !== 'object') return fallback('missing-ts-rest-gates', { shadow: restShadow });
+        const required = ['forecast', 'tariff', 'peak', 'para14a', 'evcsHighLevel', 'grid'];
+        for (const key of required) {
+            if (!tsGates[key] || typeof tsGates[key] !== 'object') return fallback('missing-ts-rest-gate-' + key, { shadow: restShadow });
+        }
+
+        const nextCore = {
+            ...fallbackCore,
+            grid: { ...((fallbackCore && fallbackCore.grid) || {}), ...(tsGates.grid || {}), source: 'ts-core-rest-gates' },
+            peak: { ...((fallbackCore && fallbackCore.peak) || {}), ...(tsGates.peak || {}), source: 'ts-core-rest-gates' },
+            tariff: { ...((fallbackCore && fallbackCore.tariff) || {}), ...(tsGates.tariff || {}), source: 'ts-core-rest-gates' },
+            para14a: { ...((fallbackCore && fallbackCore.para14a) || {}), ...(tsGates.para14a || {}), source: 'ts-core-rest-gates' },
+            evcsHighLevel: { ...((fallbackCore && fallbackCore.evcsHighLevel) || {}), ...(tsGates.evcsHighLevel || {}), source: 'ts-core-rest-gates' },
+        };
+        const nextBudget = {
+            ...fallbackBudget,
+            gates: {
+                ...(fallbackBudget.gates || {}),
+                forecast: { ...(((fallbackBudget.gates || {}).forecast) || {}), ...(tsGates.forecast || {}), source: 'ts-core-rest-gates' },
+                tariff: { ...(((fallbackBudget.gates || {}).tariff) || {}), ...(tsGates.tariff || {}), source: 'ts-core-rest-gates' },
+            },
+            tsRestGatesShadow: restShadow,
+        };
+        const status = {
+            ts: now,
+            active: true,
+            productive: true,
+            source: 'ts-core-rest-gates',
+            fallback: false,
+            reason: 'shadow-ok',
+            fields: [
+                'forecast',
+                'tariff',
+                'peak',
+                'grid',
+                'para14a',
+                'evcsHighLevel',
+            ],
+            tsGates,
+            shadow: restShadow,
+        };
+        nextBudget.tsRestGatesProductive = status;
+        return { budgetSnapshot: nextBudget, coreSnapshot: nextCore, status };
     }
 
     /**
@@ -1574,7 +1660,7 @@ class CoreLimitsModule extends BaseModule {
                 .join('+');
         }
 
-        const snapshot = {
+        let snapshot = {
             ts: now,
             grid: {
                 gridConnectionLimitW_cfg,
@@ -1619,16 +1705,44 @@ class CoreLimitsModule extends BaseModule {
         };
 
         let budgetSnapshot = this._makeBudgetSnapshot(now, snapshot);
-        const coreTsShadow = this._runCoreBudgetTsShadowComparison(budgetSnapshot);
-        if (budgetSnapshot && typeof budgetSnapshot === 'object') budgetSnapshot.tsShadow = coreTsShadow;
         const coreRestGatesTsShadow = this._runCoreRestGatesTsShadowComparison(budgetSnapshot, snapshot);
         if (budgetSnapshot && typeof budgetSnapshot === 'object') budgetSnapshot.tsRestGatesShadow = coreRestGatesTsShadow;
         try { this._coreRestGatesTsShadowLast = coreRestGatesTsShadow; } catch (_eRestShadow) {}
+
+        // 0.7.121: Forecast-/Tarif-/Peak-/§14a-Restgates dürfen produktiv aus TS
+        // übernommen werden, wenn der Shadow-Vergleich sauber ist. Danach wird der
+        // Budget-Snapshot neu aufgebaut, damit Grid-/EVCS-High-Level-Caps auch in
+        // remainingTotalW und Verbraucherreservierungen wirken.
+        let coreRestGatesProductive = this._applyCoreRestGatesTsProductiveSnapshot(budgetSnapshot, snapshot, coreRestGatesTsShadow);
+        if (coreRestGatesProductive && coreRestGatesProductive.status && coreRestGatesProductive.status.active) {
+            snapshot = coreRestGatesProductive.coreSnapshot || snapshot;
+            budgetSnapshot = this._makeBudgetSnapshot(now, snapshot);
+            coreRestGatesProductive = this._applyCoreRestGatesTsProductiveSnapshot(budgetSnapshot, snapshot, coreRestGatesTsShadow);
+            budgetSnapshot = (coreRestGatesProductive && coreRestGatesProductive.budgetSnapshot) || budgetSnapshot;
+            snapshot = (coreRestGatesProductive && coreRestGatesProductive.coreSnapshot) || snapshot;
+        } else if (coreRestGatesProductive && coreRestGatesProductive.budgetSnapshot) {
+            budgetSnapshot = coreRestGatesProductive.budgetSnapshot;
+        }
+        if (budgetSnapshot && typeof budgetSnapshot === 'object') {
+            budgetSnapshot.tsRestGatesShadow = coreRestGatesTsShadow;
+            budgetSnapshot.tsRestGatesProductive = (coreRestGatesProductive && coreRestGatesProductive.status) || budgetSnapshot.tsRestGatesProductive || null;
+        }
+        try { this._coreRestGatesTsProductiveLast = (coreRestGatesProductive && coreRestGatesProductive.status) || null; } catch (_eRestProd) {}
+
+        let coreTsShadow = this._runCoreBudgetTsShadowComparison(budgetSnapshot);
+        if (budgetSnapshot && typeof budgetSnapshot === 'object') budgetSnapshot.tsShadow = coreTsShadow;
         // 0.7.105: Der geprüfte TS-Core-Budget-Spiegel darf die zentralen Budget-Gates
         // produktiv setzen. Bei jeder Abweichung bleibt die alte JS-Runtime Fallback.
         budgetSnapshot = this._applyCoreBudgetTsProductiveSnapshot(budgetSnapshot, coreTsShadow);
         const budgetRuntime = makeBudgetRuntime(this.adapter, budgetSnapshot);
         try { if (budgetRuntime) budgetRuntime.tsRestGatesLast = coreRestGatesTsShadow; } catch (_eRestAssign) {}
+        try { if (budgetRuntime) budgetRuntime.tsRestGatesProductiveLast = (budgetSnapshot && budgetSnapshot.tsRestGatesProductive) || null; } catch (_eRestProdAssign) {}
+
+        const effectiveCoreGrid = (snapshot && snapshot.grid && typeof snapshot.grid === 'object') ? snapshot.grid : {};
+        const effectiveCorePeak = (snapshot && snapshot.peak && typeof snapshot.peak === 'object') ? snapshot.peak : {};
+        const effectiveCoreTariff = (snapshot && snapshot.tariff && typeof snapshot.tariff === 'object') ? snapshot.tariff : {};
+        const effectiveCorePara14a = (snapshot && snapshot.para14a && typeof snapshot.para14a === 'object') ? snapshot.para14a : {};
+        const effectiveCoreEvcsHighLevel = (snapshot && snapshot.evcsHighLevel && typeof snapshot.evcsHighLevel === 'object') ? snapshot.evcsHighLevel : {};
 
         try {
             this.adapter._emsCaps = snapshot;
@@ -1641,35 +1755,35 @@ class CoreLimitsModule extends BaseModule {
 
         try {
             await this.adapter.setStateAsync('ems.core.lastUpdate', now, true);
-            await this.adapter.setStateAsync('ems.core.gridConnectionLimitW_cfg', Math.round(gridConnectionLimitW_cfg || 0), true);
-            await this.adapter.setStateAsync('ems.core.gridSafetyMarginW', Math.round(gridSafetyMarginW || 0), true);
-            await this.adapter.setStateAsync('ems.core.gridConstraintsCapW', Math.round((typeof gridConstraintsCapW === 'number') ? gridConstraintsCapW : 0), true);
-            await this.adapter.setStateAsync('ems.core.gridImportLimitW_physical', Math.round(gridImportLimitW_physical || 0), true);
-            await this.adapter.setStateAsync('ems.core.gridImportLimitW_peakShaving', Math.round(gridImportLimitW_peakShaving || 0), true);
-            await this.adapter.setStateAsync('ems.core.gridImportLimitW_source', gridImportLimitW_source || '', true);
-            await this.adapter.setStateAsync('ems.core.gridImportLimitW_effective', Math.round(gridImportLimitW_effective || 0), true);
-            await this.adapter.setStateAsync('ems.core.gridMaxPhaseA_cfg', Math.round(gridMaxPhaseA_cfg || 0), true);
+            await this.adapter.setStateAsync('ems.core.gridConnectionLimitW_cfg', Math.round(Number(effectiveCoreGrid.gridConnectionLimitW_cfg || 0)), true);
+            await this.adapter.setStateAsync('ems.core.gridSafetyMarginW', Math.round(Number(effectiveCoreGrid.gridSafetyMarginW || 0)), true);
+            await this.adapter.setStateAsync('ems.core.gridConstraintsCapW', Math.round(Number(effectiveCoreGrid.gridConstraintsCapW || 0)), true);
+            await this.adapter.setStateAsync('ems.core.gridImportLimitW_physical', Math.round(Number(effectiveCoreGrid.gridImportLimitW_physical || 0)), true);
+            await this.adapter.setStateAsync('ems.core.gridImportLimitW_peakShaving', Math.round(Number(effectiveCoreGrid.gridImportLimitW_peakShaving || 0)), true);
+            await this.adapter.setStateAsync('ems.core.gridImportLimitW_source', String(effectiveCoreGrid.gridImportLimitW_source || ''), true);
+            await this.adapter.setStateAsync('ems.core.gridImportLimitW_effective', Math.round(Number(effectiveCoreGrid.gridImportLimitW_effective || 0)), true);
+            await this.adapter.setStateAsync('ems.core.gridMaxPhaseA_cfg', Math.round(Number(effectiveCoreGrid.gridMaxPhaseA_cfg || 0)), true);
 
-            await this.adapter.setStateAsync('ems.core.peakActive', !!peakActive, true);
-            await this.adapter.setStateAsync('ems.core.peakBudgetW', Math.round((typeof peakBudgetW === 'number') ? peakBudgetW : 0), true);
+            await this.adapter.setStateAsync('ems.core.peakActive', !!effectiveCorePeak.active, true);
+            await this.adapter.setStateAsync('ems.core.peakBudgetW', Math.round(Number(effectiveCorePeak.budgetW || 0)), true);
 
-            await this.adapter.setStateAsync('ems.core.tariffBudgetW', Math.round((typeof tariffBudgetW === 'number') ? tariffBudgetW : 0), true);
-            await this.adapter.setStateAsync('ems.core.gridChargeAllowed', !!gridChargeAllowed, true);
-            await this.adapter.setStateAsync('ems.core.dischargeAllowed', !!dischargeAllowed, true);
+            await this.adapter.setStateAsync('ems.core.tariffBudgetW', Math.round(Number(effectiveCoreTariff.budgetW || 0)), true);
+            await this.adapter.setStateAsync('ems.core.gridChargeAllowed', effectiveCoreTariff.gridChargeAllowed !== false, true);
+            await this.adapter.setStateAsync('ems.core.dischargeAllowed', effectiveCoreTariff.dischargeAllowed !== false, true);
 
-            await this.adapter.setStateAsync('ems.core.para14aActive', !!para14aActive, true);
-            await this.adapter.setStateAsync('ems.core.para14aMode', para14aMode || '', true);
-            await this.adapter.setStateAsync('ems.core.para14aEvcsCapW', Math.round((typeof para14aEvcsCapW === 'number') ? para14aEvcsCapW : 0), true);
+            await this.adapter.setStateAsync('ems.core.para14aActive', !!effectiveCorePara14a.active, true);
+            await this.adapter.setStateAsync('ems.core.para14aMode', String(effectiveCorePara14a.mode || ''), true);
+            await this.adapter.setStateAsync('ems.core.para14aEvcsCapW', Math.round(Number(effectiveCorePara14a.evcsCapW || 0)), true);
 
-            await this.adapter.setStateAsync('ems.core.evcsHighLevelCapW', Math.round((typeof evcsHighLevelCapW === 'number') ? evcsHighLevelCapW : 0), true);
-            await this.adapter.setStateAsync('ems.core.evcsHighLevelBinding', binding || '', true);
+            await this.adapter.setStateAsync('ems.core.evcsHighLevelCapW', Math.round(Number(effectiveCoreEvcsHighLevel.capW || 0)), true);
+            await this.adapter.setStateAsync('ems.core.evcsHighLevelBinding', String(effectiveCoreEvcsHighLevel.binding || ''), true);
             await this.adapter.setStateAsync('ems.core.snapshot', JSON.stringify(snapshot), true);
 
             const b = budgetSnapshot;
             await this.adapter.setStateAsync('ems.budget.lastUpdate', now, true);
             await this.adapter.setStateAsync('ems.budget.active', true, true);
             await this.adapter.setStateAsync('ems.budget.mode', b.mode || 'central-background', true);
-            await this.adapter.setStateAsync('ems.budget.source', (b.tsProductive && b.tsProductive.active) ? 'ts-core-budget' : 'js-runtime', true);
+            await this.adapter.setStateAsync('ems.budget.source', (b.tsRestGatesProductive && b.tsRestGatesProductive.active) ? 'ts-core-budget+rest-gates' : ((b.tsProductive && b.tsProductive.active) ? 'ts-core-budget' : 'js-runtime'), true);
             await this.adapter.setStateAsync('ems.budget.totalBudgetW', b.gates.total.effectiveW === null ? 0 : roundW(b.gates.total.effectiveW), true);
             await this.adapter.setStateAsync('ems.budget.remainingTotalW', b.gates.total.effectiveW === null ? 0 : roundW(b.gates.total.effectiveW), true);
             await this.adapter.setStateAsync('ems.budget.pvBudgetRawW', roundW(b.gates.pv.rawW), true);
@@ -1689,7 +1803,7 @@ class CoreLimitsModule extends BaseModule {
             await this.adapter.setStateAsync('ems.budget.tsShadowJson', JSON.stringify(b.tsShadow || coreTsShadow || {}), true);
             await this.adapter.setStateAsync('ems.budget.tsProductiveJson', JSON.stringify(b.tsProductive || {}), true);
             await this.adapter.setStateAsync('ems.budget.tsReservationJson', JSON.stringify((budgetRuntime && budgetRuntime.tsReservationLast) || {}), true);
-            await this.adapter.setStateAsync('ems.budget.tsRestGatesJson', JSON.stringify(b.tsRestGatesShadow || coreRestGatesTsShadow || {}), true);
+            await this.adapter.setStateAsync('ems.budget.tsRestGatesJson', JSON.stringify(b.tsRestGatesProductive || b.tsRestGatesShadow || coreRestGatesTsShadow || {}), true);
 
             const fg = (b.gates && b.gates.forecast) ? b.gates.forecast : {};
             await this.adapter.setStateAsync('ems.budget.forecast.valid', !!fg.valid, true);
@@ -1743,7 +1857,7 @@ class CoreLimitsModule extends BaseModule {
                 this.adapter.updateValue('ems.budget.flexUsedW', roundW(b.raw.flexUsedW), now);
                 this.adapter.updateValue('ems.budget.consumersJson', JSON.stringify(consumersInit), now);
                 this.adapter.updateValue('ems.budget.tsReservationJson', JSON.stringify((budgetRuntime && budgetRuntime.tsReservationLast) || {}), now);
-                this.adapter.updateValue('ems.budget.tsRestGatesJson', JSON.stringify(b.tsRestGatesShadow || coreRestGatesTsShadow || {}), now);
+                this.adapter.updateValue('ems.budget.tsRestGatesJson', JSON.stringify(b.tsRestGatesProductive || b.tsRestGatesShadow || coreRestGatesTsShadow || {}), now);
                 if (b.gates && b.gates.forecast) {
                     this.adapter.updateValue('ems.budget.forecast.nowW', roundW(b.gates.forecast.nowW), now);
                     this.adapter.updateValue('ems.budget.forecast.avgNext1hW', roundW(b.gates.forecast.avgNext1hW), now);
