@@ -1,0 +1,292 @@
+{
+  "common": {
+    "name": "nexowatt-ui",
+    "version": "0.7.132",
+    "news": {
+      "0.7.132": {
+        "de": "TypeScript-Runtime-Cleanup: nicht mehr genutzter .nwcore-JS-Doppelbaum und stale build-ts-Artefakte entfernt; EMS/main/www bleiben generierte Runtime-JS-Artefakte aus src-ts/runtime-executables, EVCS bleibt TS-Normalquelle mit JS nur als Executor/Hard-Fallback.",
+        "en": "TypeScript runtime cleanup: removed the unused .nwcore JS duplicate tree and stale build-ts artifacts; EMS/main/www remain generated runtime JS artifacts from src-ts/runtime-executables, EVCS remains the TS normal source with JS only as executor/hard fallback."
+      },
+      "0.7.131": {
+        "de": "Adapterweite TypeScript-Runtime-Quelle aktiviert: main.js, EMS-/NwCore-Module und www-Runtime-Dateien sind jetzt generierte JavaScript-Artefakte aus src-ts/runtime-executables; EVCS bleibt TS-Normalquelle mit JS nur als ioBroker-Executor/Hard-Fallback.",
+        "en": "Adapter-wide TypeScript runtime source enabled: main.js, EMS/NwCore modules and www runtime files are now generated JavaScript artifacts from src-ts/runtime-executables; EVCS remains the TS normal source with JS only as ioBroker executor/hard fallback."
+      },
+      "0.7.130": {
+        "de": "EVCS-TypeScript-Normalquelle aktiviert: Allocation und kompletter EVCS-Handover laufen im grünen Gate als TS-Normalpfad; JS bleibt nur ioBroker-Executor und harter Fallback. App-Center/API zeigen Normalquellen-Lockdown und Migrationsbereitschaft.",
+        "en": "EVCS TypeScript normal source enabled: allocation and the complete EVCS handover run through the green TS normal-path gate; JS remains only the ioBroker executor and hard fallback. App Center/API expose normal-source lockdown and migration readiness."
+      },
+      "0.7.129": {
+        "en": "EVCS TypeScript handover hardened: safety stop/ramp-down paths can now use the productive TS Allocation + Write-Plan zero-setpoint contract; JavaScript remains executor and hard fallback only.",
+        "de": "EVCS-TypeScript-Handover gehärtet: Safety-Stop/Rampdown-Zweige können jetzt den produktiven TS-Allocation- und Write-Plan-0-Setpoint-Vertrag nutzen; JavaScript bleibt nur Executor und harter Fallback."
+      },
+      "0.7.127": {
+        "de": "EVCS-TS-Produktivpfad gehärtet: Allocation und Write-Plan bleiben fachlich TS-geführt, JS-Executor nutzt die TS-geplante Basis und den geplanten Setpoint-DP; Executor-Fehler fallen sauber auf den Legacy-Fallback zurück.",
+        "en": "EVCS TS productive path hardened: allocation and write plan remain TS-led, the JS executor uses the TS-planned basis and setpoint datapoint, and executor failures cleanly fall back to legacy fallback."
+      },
+      "0.7.95": {
+        "de": "App-Center Runtime-Spiegel gezielt typisiert: Verträge für Installer-Konfiguration, DP-Mapping, Heizstab, KI, Speicherfarm, TS-Schaltmodus und Diagnose ergänzt. Keine produktive Runtime-Umstellung.",
+        "en": "App-Center runtime mirror typed: added contracts for installer configuration, datapoint mapping, heating rod, AI advisor, storage farm, TS switch mode and diagnostics. No productive runtime switch."
+      },
+      "0.7.94": {
+        "de": "TypeScript-Migration: SmartHome-Konfigurationsspiegel gezielt typisiert. Gebäude, Räume, Geräte, Funktionen, Timer, Szenen, Seiten und Auto-Erkennung sind als Verträge vorbereitet; produktive Runtime bleibt unverändert.",
+        "en": "TypeScript migration: SmartHome configuration mirror received targeted typing. Buildings, rooms, devices, functions, timers, scenes, pages and auto-detection are prepared as contracts; production runtime remains unchanged."
+      }
+    },
+    "title": "NexoWatt UI",
+    "titleLang": {
+      "en": "NexoWatt UI",
+      "de": "NexoWatt UI"
+    },
+    "desc": {
+      "en": "responsive dashboard with NexoWatt colors (green/black). All datapoints can be linked in adapter settings.",
+      "de": "responsives Dashboard in NexoWatt-Farben (grün/schwarz). Alle Datenpunkte sind in den Adaptereinstellungen verknüpfbar."
+    },
+    "authors": [
+      "NexoWatt"
+    ],
+    "platform": "Javascript/Node.js",
+    "mode": "daemon",
+    "compact": true,
+    "enabled": true,
+    "loglevel": "info",
+    "type": "visualization",
+    "adminUI": {
+      "config": "json",
+      "tab": "html"
+    },
+    "keywords": [
+      "visualization",
+      "ems",
+      "nexowatt",
+      "dashboard"
+    ],
+    "connectionType": "local",
+    "dataSource": "poll",
+    "icon": "admin.png",
+    "logo": "admin_logo_.ico",
+    "adminTab": {
+      "name": {
+        "de": "NexoWatt EMS",
+        "en": "NexoWatt EMS"
+      },
+      "fa-icon": "bolt",
+      "order": 50
+    },
+    "welcomeScreenPro": [
+      {
+        "link": "/adapter/nexowatt-ui/tab.html",
+        "name": "Energiefluss",
+        "desc": {
+          "de": "Direkt zur NexoWatt UI (aktuelle ioBroker-IP + VIS-Port).",
+          "en": "Go to NexoWatt UI (current ioBroker IP + VIS port)."
+        },
+        "img": "admin.png",
+        "color": "#00c853",
+        "order": 10,
+        "localLinks": {
+          "_default": "/adapter/nexowatt-ui/tab.html"
+        }
+      }
+    ],
+    "welcomeScreen": "adapter/nexowatt-ui/tab.html",
+    "license": "UNLICENSED",
+    "stopBeforeUpdate": true,
+    "stopTimeout": 2500,
+    "wwwDontUpload": true,
+    "extIcon": "https://raw.githubusercontent.com/NexoWatt/NexoWatt-ui/main/admin/admin.png",
+    "readme": "https://github.com/NexoWatt/NexoWatt-ui/blob/main/README.md",
+    "licenseInformation": {
+      "type": "limited",
+      "license": "NexoWatt Proprietary License (NPL) v1.0",
+      "link": "https://github.com/NexoWatt/NexoWatt-ui/blob/main/LICENSE"
+    },
+    "tier": 3,
+    "dependencies": [
+      {
+        "js-controller": ">=6.0.11"
+      }
+    ],
+    "globalDependencies": [
+      {
+        "admin": ">=7.0.0"
+      }
+    ]
+  },
+  "native": {
+    "port": 8188,
+    "bind": "0.0.0.0",
+    "publicPath": "/",
+    "licenseKey": "",
+    "units": {
+      "power": "W",
+      "energy": "kWh"
+    },
+    "datapoints": {
+      "autarky": "fenecon.0._sum.Autarchy",
+      "selfConsumption": "fenecon.0._sum.SelfConsumption",
+      "pvPower": "fenecon.0._sum.ProductionAcActivePower",
+      "productionTotal": "0_userdata.0.nexowatt.pv.energy_total",
+      "consumptionTotal": "fenecon.0._sum.ConsumptionAcActivePower",
+      "gridBuyPower": "0_userdata.0.nexowatt.grid.buy.power",
+      "gridSellPower": "0_userdata.0.nexowatt.grid.sell.power",
+      "gridPointPower": "",
+      "storageChargePower": "0_userdata.0.nexowatt.battery.charge.power",
+      "storageDischargePower": "0_userdata.0.nexowatt.battery.discharge.power",
+      "storageSoc": "fenecon.0._sum.EssSoc",
+      "consumptionEvcs": "0_userdata.0.nexowatt.evcs.power",
+      "consumptionOther": "0_userdata.0.nexowatt.house.other.power",
+      "evcsStatus": "",
+      "evcsLastChargeKwh": "",
+      "gridFrequency": "fenecon.0._sum.GridFrequency",
+      "gridVoltage": "0_userdata.0.nexowatt.grid.voltage",
+      "gridBuyEnergy": "0_userdata.0.nexowatt.grid.buy.energy_total",
+      "gridSellEnergy": "0_userdata.0.nexowatt.grid.sell.energy_total",
+      "batteryPower": "0_userdata.0.nexowatt.battery.power",
+      "batterySOC": "0_userdata.0.nexowatt.battery.soc",
+      "batteryEnergyTotal": "0_userdata.0.nexowatt.battery.energy_total",
+      "housePower": "0_userdata.0.nexowatt.house.power",
+      "houseTemp": "0_userdata.0.nexowatt.house.temperature",
+      "inverterTemp": "0_userdata.0.nexowatt.inverter.temperature",
+      "storageCapacityKwh": "",
+      "consumer1Power": "",
+      "consumer2Power": "",
+      "priceCurrent": "",
+      "priceAverage": ""
+    },
+    "sections": {
+      "tabs": [
+        "live",
+        "history",
+        "settings",
+        "smarthome"
+      ]
+    },
+    "smartHome": {
+      "enabled": false,
+      "datapoints": {
+        "heatPumpOn": "",
+        "roomTemp": "",
+        "wallboxLock": "",
+        "gridLimit": "",
+        "pvCurtailment": "",
+        "blindPosition": "",
+        "blindUp": "",
+        "blindDown": "",
+        "blindStop": "",
+        "rtrSetpoint": "",
+        "rtrMode": "",
+        "rtrHumidity": "",
+        "scene1": "",
+        "scene2": "",
+        "scene3": "",
+        "scene4": ""
+      }
+    },
+    "futureOptions": {
+      "theme": "nexowatt-dark",
+      "enableAnimations": true,
+      "showGridVoltage": false
+    },
+    "auth": {
+      "enabled": true,
+      "protectWrites": true,
+      "sessionTtlMin": 120,
+      "installerUsers": "admin,installer",
+      "installerGroups": "system.group.administrator"
+    },
+    "installerConfig": {},
+    "history": {
+      "instance": "influxdb.0",
+      "datapoints": {
+        "pvPower": "fenecon.0._sum.ProductionAcActivePower",
+        "consumptionTotal": "fenecon.0._sum.ConsumptionAcActivePower",
+        "gridBuyPower": "0_userdata.0.nexowatt.grid.buy.power",
+        "gridSellPower": "0_userdata.0.nexowatt.grid.sell.power",
+        "storageChargePower": "0_userdata.0.nexowatt.battery.charge.power",
+        "storageDischargePower": "0_userdata.0.nexowatt.battery.discharge.power",
+        "storageSoc": "fenecon.0._sum.EssSoc"
+      }
+    },
+    "settings": {
+      "evcsActive": "",
+      "evcsMode": "",
+      "flowSubtractEvFromBuilding": true,
+      "flowInvertBattery": false,
+      "flowInvertGrid": false,
+      "flowInvertPv": false,
+      "flowInvertEv": false,
+      "flowGridShowNet": false,
+      "dynamicTariff": false
+    },
+    "logic": {
+      "enabled": true,
+      "tags": [
+        "demo"
+      ],
+      "meta": {
+        "version": 1
+      }
+    },
+    "smartHomeConfig": {
+      "version": 2,
+      "floors": [],
+      "rooms": [],
+      "functions": [],
+      "devices": [],
+      "pages": [],
+      "meta": {}
+    },
+    "peakShaving": {
+      "atypical": {
+        "enabled": false,
+        "mode": "hybrid",
+        "voltageLevel": "MS",
+        "thresholdPercent": 20,
+        "minShiftW": 100000,
+        "annualPeakReferenceW": 0,
+        "targetLimitW": 0,
+        "safetyMarginW": 0,
+        "includeWeekends": false,
+        "excludeChristmasNewYear": true,
+        "highLoadWindows": [],
+        "holidays": [],
+        "bridgeDays": [],
+        "calendarExceptions": []
+      },
+      "strategyMode": "standard",
+      "mode": "static",
+      "reserveW": 0,
+      "safetyMarginW": 0,
+      "hysteresisW": 500,
+      "smoothingSeconds": 10,
+      "activateDelaySeconds": 2,
+      "releaseDelaySeconds": 5,
+      "staleTimeoutSec": 300,
+      "fastTripEnabled": true
+    },
+    "ip": "0.0.0.0"
+  },
+  "instanceObjects": [
+    {
+      "_id": "info",
+      "type": "channel",
+      "common": {
+        "name": "Adapter information"
+      },
+      "native": {}
+    },
+    {
+      "_id": "info.connection",
+      "type": "state",
+      "common": {
+        "name": "Adapter connection",
+        "type": "boolean",
+        "role": "indicator.connected",
+        "read": true,
+        "write": false,
+        "def": false
+      },
+      "native": {}
+    }
+  ]
+}
