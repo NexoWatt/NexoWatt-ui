@@ -1464,9 +1464,10 @@ function collectAiAdvisorConfigFromUI(base) {
        * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
        * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
        */
-      const mkToggle = (id, label, checked, disabled, onLabel = 'An', offLabel = 'Aus') => {
+      const mkToggle = (id, label, checked, disabled, onLabel = 'An', offLabel = 'Aus', toggleKind = '') => {
         const wrap = document.createElement('div');
         wrap.className = 'nw-app-toggle-row';
+        if (toggleKind) wrap.setAttribute('data-toggle-kind', toggleKind);
         wrap.style.display = 'inline-flex';
         wrap.style.alignItems = 'center';
         wrap.style.gap = '8px';
@@ -1480,6 +1481,10 @@ function collectAiAdvisorConfigFromUI(base) {
         const grp = document.createElement('div');
         grp.className = 'nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle';
         grp.setAttribute('data-toggle-for', id);
+        if (toggleKind) {
+          grp.setAttribute('data-toggle-kind', toggleKind);
+          grp.classList.add(`nw-app-toggle--${toggleKind}`);
+        }
 
         const bOff = document.createElement('button');
         bOff.type = 'button';
@@ -1515,8 +1520,8 @@ function collectAiAdvisorConfigFromUI(base) {
       const idInstalled = `app_${app.id}_installed`;
       const idEnabled = `app_${app.id}_enabled`;
 
-      const tInstalled = mkToggle(idInstalled, 'Installiert', st.installed, app.mandatory, 'Ja', 'Nein');
-      const tEnabled = mkToggle(idEnabled, 'Aktiv', st.enabled, app.mandatory || !st.installed, 'An', 'Aus');
+      const tInstalled = mkToggle(idInstalled, 'Installiert', st.installed, app.mandatory, 'Ja', 'Nein', 'installed');
+      const tEnabled = mkToggle(idEnabled, 'Aktiv', st.enabled, app.mandatory || !st.installed, 'An', 'Aus', 'enabled');
 
       // Behaviour: if app is uninstalled, force enabled=false
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an tInstalled.inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.

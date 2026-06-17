@@ -11485,3 +11485,21 @@ body.nw-cockpit-page.nw-page-history .history-toolbar input[type="date"]{
 .nw-shadow-json-dialog__text {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
+
+
+/* 0.8.1 – App-Center: nicht installierte Apps sofort sichtbar machen.
+   Nur der Installiert-Nein-Status wird rot; normale Aus/An-Toggles bleiben unverändert. */
+.nw-config-card[data-app] .nw-toggle[data-toggle-kind="installed"] button[data-value="false"].active,
+.nw-config-card[data-app] .nw-app-toggle--installed button[data-value="false"].active{
+  color:#fff4f3 !important;
+  border-color:rgba(255,75,66,.78) !important;
+  background:linear-gradient(180deg, #ff6b62, #d8261f) !important;
+  box-shadow:0 0 22px rgba(255,75,66,.24), inset 0 1px 0 rgba(255,255,255,.18) !important;
+  font-weight:900;
+}
+.nw-config-card[data-app] .nw-toggle[data-toggle-kind="installed"] button[data-value="false"].active:hover,
+.nw-config-card[data-app] .nw-app-toggle--installed button[data-value="false"].active:hover{
+  border-color:rgba(255,120,112,.92) !important;
+  background:linear-gradient(180deg, #ff8178, #e03128) !important;
+}
+

@@ -9,7 +9,7 @@ const path = require('path');
  * Datei: src-ts/tests/brand-header-cleanup-runtime.ts
  *
  * Zweck:
- * Prüft den 0.8.0-Branding-Schritt vollständig aus TypeScript: Die sichtbare
+ * Prüft den 0.8.1-Branding-Schritt vollständig aus TypeScript: Die sichtbare
  * Topbar-Marke darf nur noch „NexoWatt“ heißen. Der fachliche Begriff EMS bleibt
  * in Modulnamen/Statuskarten erlaubt, aber nicht mehr als Produktzusatz in der
  * oberen Marke.
@@ -41,13 +41,13 @@ function runBrandHeaderCleanupTest(): void {
   const io = readJson<{ common?: { version?: string; news?: Record<string, unknown> } }>('io-package.json');
   const manifest = readJson<{ name?: string; short_name?: string; version?: string }>('www/manifest.webmanifest');
 
-  assert(pkg.version === '0.8.0', 'package.json muss Version 0.8.0 haben.');
-  assert(lock.version === '0.8.0', 'package-lock.json muss Version 0.8.0 haben.');
-  assert(lock.packages?.['']?.version === '0.8.0', 'package-lock root package muss Version 0.8.0 haben.');
-  assert(io.common?.version === '0.8.0', 'io-package.json common.version muss 0.8.0 sein.');
-  assert(Boolean(io.common?.news?.['0.8.0']), 'io-package.json common.news braucht einen 0.8.0-Eintrag.');
+  assert(pkg.version === '0.8.1', 'package.json muss Version 0.8.1 haben.');
+  assert(lock.version === '0.8.1', 'package-lock.json muss Version 0.8.1 haben.');
+  assert(lock.packages?.['']?.version === '0.8.1', 'package-lock root package muss Version 0.8.1 haben.');
+  assert(io.common?.version === '0.8.1', 'io-package.json common.version muss 0.8.1 sein.');
+  assert(Boolean(io.common?.news?.['0.8.1']), 'io-package.json common.news braucht einen 0.8.1-Eintrag.');
   assert(Object.keys(io.common?.news ?? {}).length <= 7, 'io-package.json common.news darf maximal 7 Einträge haben.');
-  assert(manifest.version === '0.8.0', 'manifest.webmanifest muss Version 0.8.0 haben.');
+  assert(manifest.version === '0.8.1', 'manifest.webmanifest muss Version 0.8.1 haben.');
   assert(manifest.name === 'NexoWatt', 'manifest.webmanifest name muss NexoWatt sein.');
   assert(manifest.short_name === 'NexoWatt', 'manifest.webmanifest short_name muss NexoWatt sein.');
 
@@ -65,9 +65,9 @@ function runBrandHeaderCleanupTest(): void {
   assert(read('src-ts/runtime-executables/www/app.ts').includes('function nwNormalizeBrandHeader'), 'app.ts muss den TS-Branding-Normalizer enthalten.');
   assert(read('src-ts/runtime-executables/www/nw-shell.ts').includes('function nwNormalizeBrandHeader'), 'nw-shell.ts muss den TS-Branding-Normalizer enthalten.');
   assert(read('src-ts/runtime-executables/www/cockpit-shell.ts').includes('function nwNormalizeBrandHeader'), 'cockpit-shell.ts muss den TS-Branding-Normalizer enthalten.');
-  assert(read('src-ts/runtime-executables/www/sw.ts').includes("nexowatt-cache-v301"), 'Service-Worker-TS-Quelle muss Cache v301 nutzen.');
-  assert(read('www/sw.js').includes("nexowatt-cache-v301"), 'Generierter Service Worker muss Cache v301 nutzen.');
+  assert(read('src-ts/runtime-executables/www/sw.ts').includes("nexowatt-cache-v302"), 'Service-Worker-TS-Quelle muss Cache v302 nutzen.');
+  assert(read('www/sw.js').includes("nexowatt-cache-v302"), 'Generierter Service Worker muss Cache v302 nutzen.');
 }
 
 runBrandHeaderCleanupTest();
-console.log('[ts-brand-header-cleanup] OK: 0.8.0-Topbar zeigt NexoWatt ohne EMS-Zusatz, Version/Manifest/Cache sind konsistent.');
+console.log('[ts-brand-header-cleanup] OK: 0.8.1-Topbar zeigt NexoWatt ohne EMS-Zusatz, Version/Manifest/Cache sind konsistent.');

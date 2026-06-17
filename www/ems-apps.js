@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:6cf24d76e96b00dc386d794e0b710e599b8fa7950cc4031e8f1bc8702905fa5b
+ * Quell-Hash: sha256:981f77b76a75ceddd88a7b8e46034282187d9754b45421897945f7d90e7c780e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1462,9 +1462,10 @@ function collectAiAdvisorConfigFromUI(base) {
        * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
        * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
        */
-      const mkToggle = (id, label, checked, disabled, onLabel = 'An', offLabel = 'Aus') => {
+      const mkToggle = (id, label, checked, disabled, onLabel = 'An', offLabel = 'Aus', toggleKind = '') => {
         const wrap = document.createElement('div');
         wrap.className = 'nw-app-toggle-row';
+        if (toggleKind) wrap.setAttribute('data-toggle-kind', toggleKind);
         wrap.style.display = 'inline-flex';
         wrap.style.alignItems = 'center';
         wrap.style.gap = '8px';
@@ -1478,6 +1479,10 @@ function collectAiAdvisorConfigFromUI(base) {
         const grp = document.createElement('div');
         grp.className = 'nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle';
         grp.setAttribute('data-toggle-for', id);
+        if (toggleKind) {
+          grp.setAttribute('data-toggle-kind', toggleKind);
+          grp.classList.add(`nw-app-toggle--${toggleKind}`);
+        }
 
         const bOff = document.createElement('button');
         bOff.type = 'button';
@@ -1513,8 +1518,8 @@ function collectAiAdvisorConfigFromUI(base) {
       const idInstalled = `app_${app.id}_installed`;
       const idEnabled = `app_${app.id}_enabled`;
 
-      const tInstalled = mkToggle(idInstalled, 'Installiert', st.installed, app.mandatory, 'Ja', 'Nein');
-      const tEnabled = mkToggle(idEnabled, 'Aktiv', st.enabled, app.mandatory || !st.installed, 'An', 'Aus');
+      const tInstalled = mkToggle(idInstalled, 'Installiert', st.installed, app.mandatory, 'Ja', 'Nein', 'installed');
+      const tEnabled = mkToggle(idEnabled, 'Aktiv', st.enabled, app.mandatory || !st.installed, 'An', 'Aus', 'enabled');
 
       // Behaviour: if app is uninstalled, force enabled=false
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an tInstalled.inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
