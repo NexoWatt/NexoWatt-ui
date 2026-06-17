@@ -1,3 +1,9 @@
+## 0.8.5
+
+- Windows-Publish-Fix: `scripts/ensure-publish-dev-deps.js` startet npm nicht mehr über `npm.cmd`, sondern über den npm-CLI-Einstieg des laufenden Node-Prozesses. Dadurch wird `spawnSync npm.cmd EINVAL` beim `npm publish` vermieden.
+- Service-Worker Cache auf `nexowatt-cache-v306` erhöht.
+- EOS/HEMS-Lizenzmodell und App-Center-Cleanup bleiben unverändert; der Lizenzgenerator bleibt separat vom Adapter-Repository.
+
 # Changelog
 
 ## 0.8.4

@@ -43,7 +43,11 @@ function resolveTypeScriptInvocation(repoRoot) {
 
 function spawnTypeScript(repoRoot, args, options) {
   const invocation = resolveTypeScriptInvocation(repoRoot);
-  const result = childProcess.spawnSync(invocation.command, [...invocation.argsPrefix, ...args], options || {});
+  const spawnOptions = Object.assign({}, options || {});
+  if (process.platform === 'win32' && /\.cmd$/i.test(String(invocation.command || '')) && spawnOptions.shell === undefined) {
+    spawnOptions.shell = true;
+  }
+  const result = childProcess.spawnSync(invocation.command, [...invocation.argsPrefix, ...args], spawnOptions);
   result.typescriptInvocation = invocation;
   return result;
 }

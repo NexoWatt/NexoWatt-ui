@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: ce19d55ff9b95a63248ac58704280dce08f9161b72476c6066dcd4814dc9e9a5
+ * Original-Hash: 2995a282b5768e4a7005b52707afba2e854167bf86f820268acfedea001324ad
  */
 
 /**
@@ -95,7 +95,11 @@ function resolveTypeScriptInvocation(repoRoot) {
  */
 function spawnTypeScript(repoRoot, args, options) {
   const invocation = resolveTypeScriptInvocation(repoRoot);
-  const result = childProcess.spawnSync(invocation.command, [...invocation.argsPrefix, ...args], options || {});
+  const spawnOptions = Object.assign({}, options || {});
+  if (process.platform === 'win32' && /\.cmd$/i.test(String(invocation.command || '')) && spawnOptions.shell === undefined) {
+    spawnOptions.shell = true;
+  }
+  const result = childProcess.spawnSync(invocation.command, [...invocation.argsPrefix, ...args], spawnOptions);
   result.typescriptInvocation = invocation;
   return result;
 }

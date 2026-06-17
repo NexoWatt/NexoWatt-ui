@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.4",
+    "version": "0.8.5",
     "news": {
+      "0.8.5": {
+        "de": "Version 0.8.5: Windows-Publish-Hotfix. Die automatische DevDependency-Installation nutzt nun npm-cli.js/cmd.exe-Fallback statt direktem npm.cmd-Spawn und verhindert EINVAL-Abbrüche beim npm publish.",
+        "en": "Version 0.8.5: Windows publish hotfix. Automatic devDependency installation now uses npm-cli.js/cmd.exe fallback instead of direct npm.cmd spawning and prevents EINVAL aborts during npm publish."
+      },
       "0.8.4": {
         "de": "Version 0.8.4: Release-Cleanup gegen Merge-Konfliktmarker und npm-Publish-Abbrueche. Service-Worker-Cache aktualisiert; EOS/HEMS-Lizenzmodell und App-Center-Cleanup bleiben unveraendert.",
         "en": "Version 0.8.4: Release cleanup against merge conflict markers and npm publish aborts. Service worker cache updated; EOS/HEMS license model and App Center cleanup remain unchanged."
@@ -26,10 +30,6 @@
       "0.7.132": {
         "de": "TypeScript-Runtime-Cleanup: nicht mehr genutzter .nwcore-JS-Doppelbaum und stale build-ts-Artefakte entfernt; EMS/main/www bleiben generierte Runtime-JS-Artefakte aus src-ts/runtime-executables, EVCS bleibt TS-Normalquelle mit JS nur als Executor/Hard-Fallback.",
         "en": "TypeScript runtime cleanup: removed the unused .nwcore JS duplicate tree and stale build-ts artifacts; EMS/main/www remain generated runtime JS artifacts from src-ts/runtime-executables, EVCS remains the TS normal source with JS only as executor/hard fallback."
-      },
-      "0.7.131": {
-        "de": "Adapterweite TypeScript-Runtime-Quelle aktiviert: main.js, EMS-/NwCore-Module und www-Runtime-Dateien sind jetzt generierte JavaScript-Artefakte aus src-ts/runtime-executables; EVCS bleibt TS-Normalquelle mit JS nur als ioBroker-Executor/Hard-Fallback.",
-        "en": "Adapter-wide TypeScript runtime source enabled: main.js, EMS/NwCore modules and www runtime files are now generated JavaScript artifacts from src-ts/runtime-executables; EVCS remains the TS normal source with JS only as ioBroker executor/hard fallback."
       }
     },
     "title": "NexoWatt UI",
