@@ -1,3 +1,10 @@
+## 0.8.6
+
+- Lizenz-Aktivierung-Hotfix: App-Center, Lizenz-API und VIS-Gate aktualisieren den Lizenzstatus jetzt direkt aus der gespeicherten Adapter-Konfiguration. Dadurch werden EOS/HEMS-Schlüssel auch dann wirksam, wenn sie über die Admin-Konfiguration gespeichert wurden und der Runtime-Status noch nicht synchron war.
+- App-Center zeigt bei gültiger EOS-Lizenz wieder alle Apps statt „Keine Apps verfügbar“.
+- Service-Worker Cache auf `nexowatt-cache-v307` erhöht.
+- npm-Publish-Härtung aus 0.8.5 bleibt erhalten; der Lizenzgenerator bleibt separat vom Adapter-Repository.
+
 ## 0.8.5
 
 - Windows-Publish-Fix: `scripts/ensure-publish-dev-deps.js` startet npm nicht mehr über `npm.cmd`, sondern über den npm-CLI-Einstieg des laufenden Node-Prozesses. Dadurch wird `spawnSync npm.cmd EINVAL` beim `npm publish` vermieden.

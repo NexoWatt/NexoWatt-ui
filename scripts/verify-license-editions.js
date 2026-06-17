@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Prüft das Lizenzmodell ab 0.8.5:
+ * Prüft das Lizenzmodell ab 0.8.6:
  * - EOS = Vollversion
  * - HEMS = kleiner freigegebener Funktionsumfang
  * - alte NW1/NW1T-Schlüssel bleiben EOS-kompatibel
@@ -21,7 +21,7 @@ const app = read('www/ems-apps.js');
 const html = read('www/ems-apps.html');
 const ioPackage = JSON.parse(read('io-package.json'));
 
-need(ioPackage.common && ioPackage.common.version === '0.8.5', 'io-package.json: Version muss 0.8.5 sein.');
+need(ioPackage.common && ioPackage.common.version === '0.8.6', 'io-package.json: Version muss 0.8.6 sein.');
 need(main.includes('_nwExpectedEditionLicenseKey'), 'main.js: Edition-Vollschlüssel-Prüfung fehlt.');
 need(main.includes("'NW1H'") && main.includes("'NW1E'"), 'main.js: NW1H/NW1E Präfixe fehlen.');
 need(main.includes('_nwExpectedEditionTrialKey') && main.includes('NW1TH') && main.includes('NW1TE'), 'main.js: Edition-Testlizenzformate fehlen.');
@@ -34,6 +34,9 @@ need(main.includes('_nwLicenseMaxWallboxes') && main.includes('if (edition === \
 need(main.includes('license.edition') && main.includes('license.featuresJson') && main.includes('license.maxWallboxes'), 'main.js: Lizenz-States für Edition/Features/Wallboxlimit fehlen.');
 need(main.includes('_nwApplyLicenseLimitsToInstallerPatch'), 'main.js: Backend-Gate für Installer-Patches fehlt.');
 need(main.includes('cfgOut.license = this._nwBuildLicenseFeatureInfo()'), 'main.js: Installer-API liefert Lizenzinfo nicht aus.');
+need(main.includes('sendNoStore(res)') && main.includes('Refresh the runtime license cache here'), 'main.js: Installer-API muss Lizenzcache refreshen und no-store liefern.');
+need(main.includes('_nwRefreshLicenseFromConfiguredKey'), 'main.js: Lizenzstatus-Refresh aus gespeicherter Adapter-Konfiguration fehlt.');
+need(main.includes("await this._nwRefreshLicenseFromConfiguredKey(false)") && main.includes("app.use(async (req, res, next)"), 'main.js: Lizenz-API/App-Center/VIS-Gate müssen die Freischaltung ohne manuellen Neustart synchronisieren.');
 need(moduleManager.includes('_licenseAllowsApp'), 'ems/module-manager.js: Modulmanager-Lizenzgate fehlt.');
 need(moduleManager.includes("const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a'])"), 'ems/module-manager.js: HEMS-App-Liste fehlt oder falsch.');
 need(moduleManager.includes("key: 'peakShaving'") && moduleManager.includes("this._licenseAllowsApp('peak')"), 'ems/module-manager.js: Peak-Shaving muss EOS-gated sein.');
@@ -42,6 +45,7 @@ need(app.includes('HEMS_APP_IDS'), 'www/ems-apps.js: HEMS-App-Whitelist fehlt.')
 need(app.includes('Lizenz: ${_licenseLabel()}'), 'www/ems-apps.js: Lizenzkarte im App-Center fehlt.');
 need(app.includes('licenseBlocked') && app.includes('requiredLicense'), 'www/ems-apps.js: UI-Patch muss nicht lizenzierte Apps blockieren.');
 need(app.includes('function _maxEvcsCount') && app.includes('els.evcsCount.max = String(_maxEvcsCount())'), 'www/ems-apps.js: HEMS-Wallboxlimit in UI fehlt.');
+need(app.includes('fetchLicenseInfoFallback') && app.includes('/api/license/info?t=') && app.includes('normalizeLicenseInfo(currentConfig.license)'), 'www/ems-apps.js: App-Center muss Live-Lizenzinfo als Fallback nachladen.');
 need(!html.includes('TypeScript Shadow'), 'www/ems-apps.html: sichtbare TypeScript-Shadow-Diagnose muss entfernt bleiben.');
 need(!html.includes('energyFlowTsMode'), 'www/ems-apps.html: sichtbarer TS-Schaltmodus muss entfernt bleiben.');
 need(!html.includes('shadowDiagnostics'), 'www/ems-apps.html: sichtbarer Shadow-Container muss entfernt bleiben.');

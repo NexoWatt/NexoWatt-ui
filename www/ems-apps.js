@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:e4b01067d18ee01030088980b68d7ba576ef8815c3605cc75ecac50a840c7381
+ * Quell-Hash: sha256:03486e6ba417367e3b8e8cb2f7ae1facd349d8cead226cbed58601cff2e679a0
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -874,6 +874,10 @@
     const e = String(info.edition || '').trim().toLowerCase();
     if (e === 'eos') return 'eos';
     if (e === 'hems') return 'hems';
+    const label = String(info.editionLabel || info.message || info.msg || '').trim().toLowerCase();
+    if (info.eosFullAccess === true || /\beos\b/.test(label)) return 'eos';
+    if (/\bhems\b/.test(label)) return 'hems';
+    if ((info.valid === true || info.ok === true) && e !== 'none') return 'eos';
     return 'none';
   }
 
@@ -908,6 +912,88 @@
     if (ed === 'eos') return 'EOS';
     if (ed === 'hems') return 'HEMS';
     return 'Keine Lizenz';
+  }
+
+  /**
+   * Code-Teil: normalizeLicenseInfo
+   * Zweck: Vereinheitlicht Lizenzdaten aus /api/installer/config und /api/license/info.
+   * Zusammenhang: Das App-Center darf nach einer aktivierten EOS-/HEMS-Lizenz nicht auf
+   * "Keine Lizenz" hängen bleiben, nur weil eine alte Konfigurationsantwort oder ein
+   * Browser-/Service-Worker-Cache noch keine Lizenzdaten enthielt.
+   */
+  function normalizeLicenseInfo(raw) {
+    const src = raw && typeof raw === 'object' ? raw : {};
+    const unwrap = (value) => {
+      if (value && typeof value === 'object') {
+        if (Object.prototype.hasOwnProperty.call(value, 'value')) return value.value;
+        if (Object.prototype.hasOwnProperty.call(value, 'val')) return value.val;
+      }
+      return value;
+    };
+    const asBool = (value) => {
+      const v = unwrap(value);
+      if (v === true) return true;
+      if (v === false || v === null || v === undefined) return false;
+      const t = String(v).trim().toLowerCase();
+      return t === 'true' || t === '1' || t === 'yes' || t === 'ja' || t === 'valid' || t === 'gültig';
+    };
+    const rawEdition = String(unwrap(src.edition) || '').trim().toLowerCase();
+    const labelHint = String(unwrap(src.editionLabel) || unwrap(src.message) || unwrap(src.msg) || '').trim().toLowerCase();
+    const keyHint = String(unwrap(src.licenseKey) || unwrap(src.licenseKeyMasked) || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    let edition = rawEdition === 'eos' ? 'eos' : (rawEdition === 'hems' ? 'hems' : 'none');
+    if (edition === 'none' && (src.eosFullAccess === true || asBool(src.eosFullAccess) || /eos/.test(labelHint))) edition = 'eos';
+    if (edition === 'none' && /hems/.test(labelHint)) edition = 'hems';
+    if (edition === 'none' && /^NW1TH/.test(keyHint)) edition = 'hems';
+    if (edition === 'none' && /^(NW1E|NW1TE|NW1T|NW1)/.test(keyHint)) edition = 'eos';
+    // /api/license/info uses ok=true for transport success; the license itself is valid=true.
+    const valid = asBool(src.valid) || edition === 'eos' || edition === 'hems';
+    if (!valid) edition = 'none';
+    const label = edition === 'eos' ? 'EOS' : (edition === 'hems' ? 'HEMS' : 'Keine Lizenz');
+    let features = src.features && typeof src.features === 'object' ? src.features : {};
+    const featuresJsonRaw = unwrap(src.featuresJson);
+    if ((!features || !Object.keys(features).length) && typeof featuresJsonRaw === 'string' && featuresJsonRaw.trim()) {
+      try {
+        const parsed = JSON.parse(featuresJsonRaw);
+        if (parsed && typeof parsed === 'object') features = parsed.features && typeof parsed.features === 'object' ? parsed.features : parsed;
+      } catch (_e) {}
+    }
+    const maxWallboxesRaw = Number(unwrap(src.maxWallboxes));
+    return {
+      valid,
+      edition,
+      editionLabel: String(unwrap(src.editionLabel) || label),
+      type: String(unwrap(src.type) || (valid ? 'full' : 'none')),
+      message: String(unwrap(src.message) || unwrap(src.msg) || ''),
+      expiresAt: Number(unwrap(src.expiresAt) || 0),
+      daysRemaining: Number(unwrap(src.daysRemaining) || 0),
+      maxWallboxes: Number.isFinite(maxWallboxesRaw) ? Math.max(0, Math.round(maxWallboxesRaw)) : 0,
+      features: features || {},
+      eosFullAccess: edition === 'eos' || src.eosFullAccess === true || asBool(src.eosFullAccess)
+    };
+  }
+
+  function _licenseIsUsable(info) {
+    return !!(info && typeof info === 'object' && info.valid && (info.edition === 'eos' || info.edition === 'hems'));
+  }
+
+  function _inferLicenseFromSuccessfulInstallerGate(data, cfg) {
+    // /api/installer/config is registered behind the backend license gate. If this request
+    // succeeds but an older/stale config payload still lacks license metadata, keep the
+    // App-Center usable by treating the already-open gate as EOS. Backend module gates remain
+    // authoritative and still block if the license is actually invalid.
+    if (data && data.ok === true && cfg && typeof cfg === 'object') {
+      return normalizeLicenseInfo({ valid: true, edition: 'eos', editionLabel: 'EOS', message: 'Lizenz über Backend-Gate erkannt' });
+    }
+    return normalizeLicenseInfo(null);
+  }
+
+  async function fetchLicenseInfoFallback() {
+    try {
+      const data = await fetchJson('/api/license/info?t=' + Date.now(), { cache: 'no-store' });
+      return normalizeLicenseInfo(data);
+    } catch (_e) {
+      return null;
+    }
   }
 
   /**
@@ -9046,9 +9132,7 @@ function collectAiAdvisorConfigFromUI(base) {
    */
   function applyConfigToUI(cfg) {
     currentConfig = cfg || {};
-    currentLicenseInfo = (currentConfig.license && typeof currentConfig.license === 'object')
-      ? currentConfig.license
-      : { valid: false, edition: 'none', editionLabel: 'Keine Lizenz', maxWallboxes: 0, features: {} };
+    currentLicenseInfo = normalizeLicenseInfo(currentConfig.license);
 
     // Apps
     setAppsFromConfig(currentConfig);
@@ -10195,8 +10279,23 @@ function collectAiAdvisorConfigFromUI(base) {
    */
   async function loadConfig() {
     setStatus('Lade Konfiguration…');
-    const data = await fetchJson('/api/installer/config');
-    applyConfigToUI(data.config || {});
+    const data = await fetchJson('/api/installer/config?t=' + Date.now(), { cache: 'no-store' });
+    const cfg = (data && data.config && typeof data.config === 'object') ? data.config : {};
+
+    // Runtime-Fallback: Die Lizenzseite nutzt /api/license/info und kann eine Lizenz sofort
+    // aktivieren. Das App-Center zieht denselben Endpoint zusätzlich, damit EOS/HEMS sofort
+    // sichtbar wird und nicht auf einer alten "Keine Lizenz"-Konfiguration hängen bleibt.
+    const configLicense = normalizeLicenseInfo(cfg.license || (data && data.license));
+    const liveLicense = await fetchLicenseInfoFallback();
+    if (_licenseIsUsable(liveLicense)) {
+      cfg.license = liveLicense;
+    } else if (_licenseIsUsable(configLicense)) {
+      cfg.license = configLicense;
+    } else {
+      cfg.license = _inferLicenseFromSuccessfulInstallerGate(data, cfg);
+    }
+
+    applyConfigToUI(cfg);
     scheduleValidation(300);
     setStatus('Konfiguration geladen.', 'ok');
   }

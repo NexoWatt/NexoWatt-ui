@@ -2037,7 +2037,16 @@ class NexoWattVis extends utils.Adapter {
 
   _nwCurrentLicenseEdition() {
     const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
-    if (info.ok === true) return this._nwNormalizeLicenseEdition(info.edition || (info.type === 'full' || info.type === 'trial' ? 'eos' : 'none'));
+    const rawEdition = this._nwNormalizeLicenseEdition(info.edition || '');
+
+    if (info.ok === true || this._nwLicenseOk === true) {
+      if (rawEdition === 'eos' || rawEdition === 'hems') return rawEdition;
+      // Kompatibilitäts-/Fallback-Regel: Wenn die Lizenz-Gate-Flag bereits gültig ist,
+      // aber ein älterer Runtime-Zustand noch keine Edition publiziert hat, darf die UI
+      // nicht leer werden. Alte gültige Schlüssel und edition-lose Full/Trial-Infos gelten als EOS.
+      const t = String(info.type || '').trim().toLowerCase();
+      if (t === 'full' || t === 'trial' || this._nwLicenseOk === true) return 'eos';
+    }
     return 'none';
   }
 
@@ -2118,14 +2127,16 @@ class NexoWattVis extends utils.Adapter {
 
   _nwBuildLicenseFeatureInfo() {
     const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
-    const edition = this._nwCurrentLicenseEdition();
+    const valid = !!this._nwLicenseOk || info.ok === true;
+    let edition = this._nwCurrentLicenseEdition();
+    if (valid && edition === 'none') edition = 'eos';
     const features = this._nwLicenseFeaturesForEdition(edition);
     return {
-      valid: !!this._nwLicenseOk,
-      type: String(info.type || 'none'),
+      valid,
+      type: String(info.type || (valid ? 'full' : 'none')),
       edition,
       editionLabel: edition === 'eos' ? 'EOS' : (edition === 'hems' ? 'HEMS' : 'Keine Lizenz'),
-      message: String(info.msg || ''),
+      message: String(info.msg || (valid ? `${edition.toUpperCase()} Lizenz gültig` : '')),
       expiresAt: Number(info.expiresAt || 0),
       daysRemaining: Number(info.daysRemaining || 0),
       maxWallboxes: this._nwLicenseMaxWallboxes(),
@@ -2356,12 +2367,12 @@ class NexoWattVis extends utils.Adapter {
     return { ok: false, type: 'invalid', edition: 'none', msg: 'Lizenz ungültig' };
   }
   /**
-   * Code-Teil: _nwInitLicense
-   * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   * Code-Teil: _nwRefreshLicenseFromConfiguredKey
+   * Zweck: Aktualisiert den Laufzeit-Lizenzstatus aus der gespeicherten Adapter-Konfiguration.
+   * Zusammenhang: Wird beim Adapterstart, nach Lizenz-Speichern und beim App-Center-/VIS-Gate genutzt,
+   * damit eine gerade aktivierte EOS-/HEMS-Lizenz ohne manuellen Neustart sofort sichtbar wird.
    */
-  async _nwInitLicense() {
+  async _nwRefreshLicenseFromConfiguredKey(logResult = true) {
     this._nwSystemUuid = await this._nwGetSystemUuid();
     const licenseSource = await this._nwGetConfiguredLicenseKey();
     const entered = licenseSource.key;
@@ -2378,7 +2389,7 @@ class NexoWattVis extends utils.Adapter {
     this._nwLicenseInfo = info;
     this._nwLicenseOk = !!info.ok;
 
-    // Publish license status (useful for Admin UI)
+    // Publish license status (useful for Admin UI and App-Center fallback)
     try { await this.setStateAsync('license.uuid', { val: this._nwSystemUuid, ack: true }); } catch (_e) {}
     try { await this.setStateAsync('license.valid', { val: this._nwLicenseOk, ack: true }); } catch (_e) {}
     const licenseFeatures = this._nwBuildLicenseFeatureInfo();
@@ -2390,17 +2401,31 @@ class NexoWattVis extends utils.Adapter {
     try { await this.setStateAsync('license.expiresAt', { val: info.expiresAt || 0, ack: true }); } catch (_e) {}
     try { await this.setStateAsync('license.daysRemaining', { val: info.daysRemaining || 0, ack: true }); } catch (_e) {}
 
-    if (this._nwLicenseOk) {
-      if (info.type === 'trial') {
-        this.log.info(`License valid (test license, ${info.daysRemaining} days remaining).`);
+    if (logResult) {
+      if (this._nwLicenseOk) {
+        if (info.type === 'trial') {
+          this.log.info(`License valid (test license, ${info.daysRemaining} days remaining).`);
+        } else {
+          this.log.info(`License valid (${String(licenseFeatures.editionLabel || licenseFeatures.edition || 'Lizenz')}).`);
+        }
       } else {
-        this.log.info(`License valid (${String(licenseFeatures.editionLabel || licenseFeatures.edition || 'Lizenz')}).`);
+        // Keep message short; details are in Admin license tab.
+        this.log.warn(`License check failed: ${info.msg || 'missing or invalid'}; VIS/API is locked. Please enter a license in admin.`);
       }
-    } else {
-      // Keep message short; details are in Admin license tab.
-      this.log.warn(`License check failed: ${info.msg || 'missing or invalid'}; VIS/API is locked. Please enter a license in admin.`);
     }
+    return info;
   }
+
+  /**
+   * Code-Teil: _nwInitLicense
+   * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  async _nwInitLicense() {
+    return await this._nwRefreshLicenseFromConfiguredKey(true);
+  }
+
 
 
   // Abschnitt: Anlage der kunden- und installerbezogenen Settings-States. Neue data-scope="settings"-Felder aus der UI müssen hier als State bekannt sein.
@@ -9308,6 +9333,16 @@ async onReady() {
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      } catch (_e) {}
+    };
+    const sendNoStore = (res) => {
+      try {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
       } catch (_e) {}
     };
     app.options('/api/license/info', (_req, res) => {
@@ -9321,6 +9356,9 @@ async onReady() {
       if (!this._nwSystemUuid) {
         try { this._nwSystemUuid = await this._nwGetSystemUuid(); } catch (_e) {}
       }
+      // 0.8.6: Lizenzstatus vor jeder öffentlichen Lizenzabfrage frisch aus dem gespeicherten Key aufbauen.
+      // Dadurch sehen Admin-Seite, App-Center und Backend denselben EOS/HEMS-Status, auch direkt nach dem Speichern.
+      try { await this._nwRefreshLicenseFromConfiguredKey(false); } catch (e) { try { this.log.warn('License refresh before /api/license/info failed: ' + (e && e.message ? e.message : e)); } catch (_eLog) {} }
       const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
       const keyInfo = await this._nwGetConfiguredLicenseKey();
       const currentLicenseKey = keyInfo.key;
@@ -9418,7 +9456,10 @@ async onReady() {
     // configured in the ioBroker Admin (Lizenz-Seite).
     // -------------------------------------------------------------------
     // API-Kommentar: USE-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: (req, res, next) => {
-    app.use((req, res, next) => {
+    app.use(async (req, res, next) => {
+      if (!this._nwLicenseOk) {
+        try { await this._nwRefreshLicenseFromConfiguredKey(false); } catch (_eLicGate) {}
+      }
       if (this._nwLicenseOk) return next();
 
       // Provide a helpful hint (especially for time‑limited trial keys)
@@ -11816,13 +11857,22 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/installer/config', requireInstaller, async (_req, res) => {
     app.get('/api/installer/config', requireInstaller, async (_req, res) => {
       try {
+        sendNoStore(res);
+        // A license can be saved through the Admin tab while the App-Center is already open.
+        // Refresh the runtime license cache here before filtering apps. This also covers the
+        // startup edge case where the HTTP gate is open but _nwLicenseInfo has not yet been
+        // populated, which otherwise made the App-Center show "Keine Lizenz" and no apps.
+        const hasFreshLicenseInfo = !!(this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object' && this._nwLicenseInfo.ok === true && this._nwLicenseOk === true);
+        if (!hasFreshLicenseInfo) {
+          try { await this._nwRefreshLicenseFromConfiguredKey(false); } catch (_eLicRefresh) {}
+        }
         // IMPORTANT: App‑Center config is persisted in adapter states (installer.configJson), not in
         // system.adapter.<instance>.native. Persisting to native triggers an ioBroker instance restart
         // and breaks the UI with "Failed to fetch" + SSE disconnects.
         const nativeObj = (this.config && typeof this.config === 'object') ? this.config : {};
         const cfgOut = _nwPickInstallerConfig(nativeObj);
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
-        res.json({ ok: true, config: cfgOut });
+        res.json({ ok: true, license: cfgOut.license, config: cfgOut });
       } catch (e) {
         this.log.warn('Installer config API error: ' + e.message);
         res.status(500).json({ ok: false, error: 'internal error' });
@@ -11832,9 +11882,15 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/installer/config', requireInstaller, async (req, res) => {
     app.post('/api/installer/config', requireInstaller, async (req, res) => {
       try {
+        sendNoStore(res);
         const body = req.body || {};
         const patch = body.patch && typeof body.patch === 'object' ? body.patch : {};
         const restartEms = body.restartEms !== false; // default true
+
+        const hasFreshLicenseInfo = !!(this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object' && this._nwLicenseInfo.ok === true && this._nwLicenseOk === true);
+        if (!hasFreshLicenseInfo) {
+          try { await this._nwRefreshLicenseFromConfiguredKey(false); } catch (_eLicRefresh) {}
+        }
 
         const allowedRoot = new Set([
           // Legacy enable flags (kept for backwards compatibility)
@@ -11948,9 +12004,10 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           await _nwRestartEms();
         }
 
+        try { await this._nwInitLicense(); } catch (e) { try { this.log.warn('License refresh after installer config save failed: ' + (e && e.message ? e.message : e)); } catch (_eLog) {} }
         const cfgOut = _nwPickInstallerConfig(this.config || {});
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
-        res.json({ ok: true, config: cfgOut, restarted: !!restartEms });
+        res.json({ ok: true, license: cfgOut.license, config: cfgOut, restarted: !!restartEms });
       } catch (e) {
         this.log.warn('Installer config save API error: ' + e.message);
         // Send a concise message to the frontend to avoid "Speichern fehlgeschlagen" without context.
