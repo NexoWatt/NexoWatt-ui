@@ -1,3 +1,10 @@
+## 0.8.2 - Windows-Publish-Check stabilisiert
+
+- `publish:check` startet jetzt mit einer DevDependency-/TypeScript-Compiler-Vorprüfung.
+- Runtime-Typisierungschecks nutzen lokal installiertes TypeScript direkt über `node_modules/typescript/lib/tsc.js`, statt auf `tsc.cmd` im Windows-PATH angewiesen zu sein.
+- Fehlende Compiler-Aufrufe zeigen jetzt echte Spawn-/Compilerdiagnosen statt nur einer generischen Meldung.
+- App-Center-Farbpolish aus 0.8.1 bleibt erhalten: nicht installierte Apps werden rot markiert.
+
 ## 0.8.1 - App-Center Statusfarben und npm-Publish-Fix
 
 - App-Center: Der Status `Installiert = Nein` wird in App-Karten jetzt rot hervorgehoben, damit nicht installierte Module sofort auffallen; `Ja` bleibt grün.

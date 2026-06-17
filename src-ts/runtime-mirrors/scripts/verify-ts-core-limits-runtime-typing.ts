@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0bb3160e70cbffb918aae42beecafd25521906357e664d751e75dc14ef2afa7d
+ * Original-Hash: e71ee3ca54708fa631bb485ea8f858126ee6a77d5349e0a988283e09aa220303
  */
 
 /**
@@ -54,6 +54,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const childProcess = require('child_process');
+const { spawnTypeScript, writeTypeScriptSpawnDiagnostics } = require('./typescript-invocation');
 
 const repoRoot = path.resolve(__dirname, '..');
 const sourcePath = path.join(repoRoot, 'src-ts', 'runtime-mirrors', 'ems', 'modules', 'core-limits.ts');
@@ -79,11 +80,6 @@ function requireContains(source, marker, label) {
  * Findet den TypeScript-Compiler. In CI ist `typescript` als devDependency installiert.
  * Lokal kann als Fallback ein vorhandenes `tsc` im PATH genutzt werden.
  */
-function resolveTypeScriptBinary() {
-  const localBin = path.join(repoRoot, 'node_modules', '.bin', process.platform === 'win32' ? 'tsc.cmd' : 'tsc');
-  if (fs.existsSync(localBin)) return localBin;
-  return process.platform === 'win32' ? 'tsc.cmd' : 'tsc';
-}
 
 /**
  * Code-Teil: buildTemporaryCheckFiles
@@ -145,8 +141,7 @@ function main() {
   requireContains(source, 'TypeScript-Migrationshinweis (DE)', 'deutscher Migrationskommentar');
 
   const { tempDir, tempConfig } = buildTemporaryCheckFiles(source);
-  const tsc = resolveTypeScriptBinary();
-  const result = childProcess.spawnSync(tsc, ['-p', tempConfig, '--pretty', 'false'], {
+  const result = spawnTypeScript(repoRoot, ['-p', tempConfig, '--pretty', 'false'], {
     cwd: repoRoot,
     encoding: 'utf8'
   });
@@ -158,8 +153,7 @@ function main() {
   }
 
   if (result.status !== 0) {
-    process.stderr.write(result.stdout || '');
-    process.stderr.write(result.stderr || '');
+    writeTypeScriptSpawnDiagnostics(result);
     throw new Error('[ts-core-limits-runtime-typing] Core-Limits TS mirror is not compilable without @ts-nocheck in relaxed migration mode.');
   }
 

@@ -18,17 +18,13 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const childProcess = require('child_process');
+const { spawnTypeScript, writeTypeScriptSpawnDiagnostics } = require('./typescript-invocation');
 
 const repoRoot = path.resolve(__dirname, '..');
 const sourcePath = path.join(repoRoot, 'src-ts', 'runtime-mirrors', 'main.ts');
 
 function requireContains(source, marker, label) {
   if (!source.includes(marker)) throw new Error(`[ts-main-runtime-typing] Missing ${label}: ${marker}`);
-}
-function resolveTypeScriptBinary() {
-  const localBin = path.join(repoRoot, 'node_modules', '.bin', process.platform === 'win32' ? 'tsc.cmd' : 'tsc');
-  if (fs.existsSync(localBin)) return localBin;
-  return process.platform === 'win32' ? 'tsc.cmd' : 'tsc';
 }
 function extractMainTypeBlock(source) {
   const start = source.indexOf('type MainRuntimeJsonPrimitive');
@@ -90,12 +86,10 @@ function main() {
   requireContains(source, 'API-Antworten sind Verträge', 'API-Vertragskommentar');
   requireContains(source, 'class NexoWattVis extends utils.Adapter', 'Adapter-Klasse');
   const { tempDir, tempConfig } = buildTemporaryCheckFiles(source);
-  const tsc = resolveTypeScriptBinary();
-  const result = childProcess.spawnSync(tsc, ['-p', tempConfig, '--pretty', 'false'], { cwd: repoRoot, encoding: 'utf8' });
+  const result = spawnTypeScript(repoRoot, ['-p', tempConfig, '--pretty', 'false'], { cwd: repoRoot, encoding: 'utf8' });
   try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_e) {}
   if (result.status !== 0) {
-    process.stderr.write(result.stdout || '');
-    process.stderr.write(result.stderr || '');
+    writeTypeScriptSpawnDiagnostics(result);
     throw new Error('[ts-main-runtime-typing] Vertragsbereich ist ohne @ts-nocheck noch nicht kompilierbar.');
   }
   console.log('[ts-main-runtime-typing] OK: Main-Spiegel ist gezielt typisiert und der Vertragsbereich ist kompilierbar.');

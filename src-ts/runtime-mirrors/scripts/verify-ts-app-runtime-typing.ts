@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 22dd69df515c077f98fa657a400fa540b02dd6fd5d966931232255b009005589
+ * Original-Hash: 36eaa51a23de9e2c93159880daf475007a87178b90ad3da0ebabb62c89eba7eb
  */
 
 /**
@@ -50,6 +50,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const childProcess = require('child_process');
+const { spawnTypeScript, writeTypeScriptSpawnDiagnostics } = require('./typescript-invocation');
 
 const repoRoot = path.resolve(__dirname, '..');
 const sourcePath = path.join(repoRoot, 'src-ts', 'runtime-mirrors', 'www', 'app.ts');
@@ -69,22 +70,6 @@ function requireContains(source, marker, label) {
   if (!source.includes(marker)) throw new Error(`[ts-app-runtime-typing] Missing ${label}: ${marker}`);
 }
 
-/**
- * Code-Teil: resolveTypeScriptBinary
- *
- * Zweck:
- * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-function resolveTypeScriptBinary() {
-  const localBin = path.join(repoRoot, 'node_modules', '.bin', process.platform === 'win32' ? 'tsc.cmd' : 'tsc');
-  if (fs.existsSync(localBin)) return localBin;
-  return process.platform === 'win32' ? 'tsc.cmd' : 'tsc';
-}
 
 /**
  * Code-Teil: extractAppTypeBlock
@@ -185,12 +170,10 @@ function main() {
   requireContains(source, '0 W', 'kritische 0-W-Regel');
   requireContains(source, 'App-Browser-Runtime-Abschnitt', 'Runtime-Marker');
   const { tempDir, tempConfig } = buildTemporaryCheckFiles(source);
-  const tsc = resolveTypeScriptBinary();
-  const result = childProcess.spawnSync(tsc, ['-p', tempConfig, '--pretty', 'false'], { cwd: repoRoot, encoding: 'utf8' });
+  const result = spawnTypeScript(repoRoot, ['-p', tempConfig, '--pretty', 'false'], { cwd: repoRoot, encoding: 'utf8' });
   try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_e) {}
   if (result.status !== 0) {
-    process.stderr.write(result.stdout || '');
-    process.stderr.write(result.stderr || '');
+    writeTypeScriptSpawnDiagnostics(result);
     throw new Error('[ts-app-runtime-typing] Vertragsbereich ist ohne @ts-nocheck noch nicht kompilierbar.');
   }
   console.log('[ts-app-runtime-typing] OK: LIVE-App-Spiegel ist gezielt typisiert und der Vertragsbereich ist kompilierbar.');

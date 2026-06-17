@@ -19,6 +19,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const childProcess = require('child_process');
+const { spawnTypeScript, writeTypeScriptSpawnDiagnostics } = require('./typescript-invocation');
 
 const repoRoot = path.resolve(__dirname, '..');
 const sourcePath = path.join(repoRoot, 'src-ts', 'runtime-mirrors', 'ems', 'modules', 'heating-rod-control.ts');
@@ -29,11 +30,6 @@ function requireContains(source, marker, label) {
   }
 }
 
-function resolveTypeScriptBinary() {
-  const localBin = path.join(repoRoot, 'node_modules', '.bin', process.platform === 'win32' ? 'tsc.cmd' : 'tsc');
-  if (fs.existsSync(localBin)) return localBin;
-  return process.platform === 'win32' ? 'tsc.cmd' : 'tsc';
-}
 
 function buildTemporaryCheckFiles(source) {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexowatt-heating-rod-ts-'));
@@ -75,12 +71,10 @@ function main() {
   requireContains(source, '_budgetProtect: HeatingRodBudgetProtectState;', 'typisierter Budgetschutz');
   requireContains(source, 'async _applyStageState(d, targetStage, feedback, options: HeatingRodApplyStageOptions = {})', 'typisierte Apply-Stage-Optionen');
   const { tempDir, tempConfig } = buildTemporaryCheckFiles(source);
-  const tsc = resolveTypeScriptBinary();
-  const result = childProcess.spawnSync(tsc, ['-p', tempConfig, '--pretty', 'false'], { cwd: repoRoot, encoding: 'utf8' });
+  const result = spawnTypeScript(repoRoot, ['-p', tempConfig, '--pretty', 'false'], { cwd: repoRoot, encoding: 'utf8' });
   try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_e) {}
   if (result.status !== 0) {
-    process.stderr.write(result.stdout || '');
-    process.stderr.write(result.stderr || '');
+    writeTypeScriptSpawnDiagnostics(result);
     throw new Error('[ts-heating-rod-runtime-typing] Heizstab-TS-Spiegel ist ohne @ts-nocheck noch nicht kompilierbar.');
   }
   console.log('[ts-heating-rod-runtime-typing] OK: Heizstab-Spiegel ist gezielt typisiert und in gelockertem Migrationsmodus kompilierbar.');

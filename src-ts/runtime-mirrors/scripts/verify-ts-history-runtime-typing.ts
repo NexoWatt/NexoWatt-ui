@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 6608d59c426b0163fd32781a923a52822c934b346f016d991708fd16cda4aaee
+ * Original-Hash: ab27886da230d92fe15627ca8472bb0abd5ca14b0c816aa420a122738e5c0867
  */
 
 /**
@@ -49,6 +49,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const childProcess = require('child_process');
+const { spawnTypeScript, writeTypeScriptSpawnDiagnostics } = require('./typescript-invocation');
 
 const repoRoot = path.resolve(__dirname, '..');
 const sourcePath = path.join(repoRoot, 'src-ts', 'runtime-mirrors', 'www', 'history.ts');
@@ -73,11 +74,6 @@ function requireContains(source, marker, label) {
  * Nutzt bevorzugt den lokalen TypeScript-Compiler. Der Check gehört nur zur Migration;
  * die produktive Adapter-Runtime hängt nicht davon ab.
  */
-function resolveTypeScriptBinary() {
-  const localBin = path.join(repoRoot, 'node_modules', '.bin', process.platform === 'win32' ? 'tsc.cmd' : 'tsc');
-  if (fs.existsSync(localBin)) return localBin;
-  return process.platform === 'win32' ? 'tsc.cmd' : 'tsc';
-}
 
 /**
  * Code-Teil: buildTemporaryCheckFiles
@@ -171,12 +167,10 @@ function main() {
   requireContains(source, 'History-Browser-Runtime-IIFE', 'IIFE-Migrationskommentar');
 
   const { tempDir, tempConfig } = buildTemporaryCheckFiles(source);
-  const tsc = resolveTypeScriptBinary();
-  const result = childProcess.spawnSync(tsc, ['-p', tempConfig, '--pretty', 'false'], { cwd: repoRoot, encoding: 'utf8' });
+  const result = spawnTypeScript(repoRoot, ['-p', tempConfig, '--pretty', 'false'], { cwd: repoRoot, encoding: 'utf8' });
   try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_e) {}
   if (result.status !== 0) {
-    process.stderr.write(result.stdout || '');
-    process.stderr.write(result.stderr || '');
+    writeTypeScriptSpawnDiagnostics(result);
     throw new Error('[ts-history-runtime-typing] History-Vertragsbereich ist ohne @ts-nocheck noch nicht kompilierbar.');
   }
   console.log('[ts-history-runtime-typing] OK: History-Spiegel ist gezielt typisiert und in gelockertem Migrationsmodus kompilierbar.');

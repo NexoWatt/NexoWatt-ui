@@ -9,7 +9,7 @@ const path = require('path');
  * Datei: src-ts/tests/app-center-install-colors-runtime.ts
  *
  * Zweck:
- * Sichert den 0.8.1-App-Center-Polish ab: In den App-Karten darf `Installiert = Nein`
+ * Sichert den 0.8.2-App-Center-Polish ab: In den App-Karten darf `Installiert = Nein`
  * nicht mehr wie ein positiver grüner Status wirken. Nur der Installiert-Nein-Button
  * bekommt die rote Statusfarbe; normale Aktiv-Aus-Toggles bleiben davon getrennt.
  *
@@ -43,9 +43,9 @@ function runAppCenterInstallColorTest(): void {
     packages?: Record<string, { version?: string; devDependencies?: Record<string, string>; resolved?: string }>;
   }>('package-lock.json');
 
-  assert(pkg.version === '0.8.1', 'package.json muss Version 0.8.1 haben.');
-  assert(lock.version === '0.8.1', 'package-lock.json muss Version 0.8.1 haben.');
-  assert(lock.packages?.['']?.version === '0.8.1', 'package-lock root package muss Version 0.8.1 haben.');
+  assert(pkg.version === '0.8.2', 'package.json muss Version 0.8.2 haben.');
+  assert(lock.version === '0.8.2', 'package-lock.json muss Version 0.8.2 haben.');
+  assert(lock.packages?.['']?.version === '0.8.2', 'package-lock root package muss Version 0.8.2 haben.');
 
   assert(Boolean(pkg.devDependencies?.typescript), 'package.json braucht typescript als echte devDependency.');
   assert(Boolean(pkg.devDependencies?.['@types/node']), 'package.json braucht @types/node als echte devDependency.');
@@ -63,7 +63,7 @@ function runAppCenterInstallColorTest(): void {
   assert(js.includes('nw-app-toggle--${toggleKind}'), 'Generiertes www/ems-apps.js muss die Toggle-Art-Klasse enthalten.');
   assert(js.includes("mkToggle(idInstalled, 'Installiert', st.installed, app.mandatory, 'Ja', 'Nein', 'installed')"), 'Generiertes www/ems-apps.js muss Installiert als installed markieren.');
 
-  assert(css.includes('0.8.1 – App-Center: nicht installierte Apps'), 'styles.css muss den 0.8.1-App-Center-Farbblock enthalten.');
+  assert(css.includes('0.8.2 – App-Center: nicht installierte Apps'), 'styles.css muss den 0.8.2-App-Center-Farbblock enthalten.');
   assert(css.includes('.nw-toggle[data-toggle-kind="installed"] button[data-value="false"].active'), 'styles.css muss nur Installiert-Nein gezielt rot färben.');
   assert(css.includes('255,75,66'), 'styles.css muss für Installiert-Nein rote Statusfarben nutzen.');
   assert(!css.includes('.nw-toggle[data-toggle-kind="enabled"] button[data-value="false"].active'), 'Aktiv-Aus darf nicht versehentlich als roter Installiert-Nein-Status definiert sein.');

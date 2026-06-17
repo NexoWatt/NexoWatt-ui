@@ -11487,7 +11487,7 @@ body.nw-cockpit-page.nw-page-history .history-toolbar input[type="date"]{
 }
 
 
-/* 0.8.1 – App-Center: nicht installierte Apps sofort sichtbar machen.
+/* 0.8.2 – App-Center: nicht installierte Apps sofort sichtbar machen.
    Nur der Installiert-Nein-Status wird rot; normale Aus/An-Toggles bleiben unverändert. */
 .nw-config-card[data-app] .nw-toggle[data-toggle-kind="installed"] button[data-value="false"].active,
 .nw-config-card[data-app] .nw-app-toggle--installed button[data-value="false"].active{

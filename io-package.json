@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.1",
+    "version": "0.8.2",
     "news": {
+      "0.8.2": {
+        "de": "Version 0.8.2: Windows-sicherer npm-Publish-Check. Der TypeScript-Compiler wird vor Publish-Checks robust aufgelöst oder DevDependencies werden automatisch nachinstalliert; App-Center-Statusfarben aus 0.8.1 bleiben erhalten.",
+        "en": "Version 0.8.2: Windows-safe npm publish check. The TypeScript compiler is resolved robustly before publish checks or devDependencies are installed automatically; App Center status colors from 0.8.1 remain in place."
+      },
       "0.8.1": {
         "de": "Version 0.8.1: App-Center zeigt nicht installierte Apps jetzt mit rotem Nein-Status; TypeScript ist weiterhin kanonische Runtime-Quelle. Publish-Fix: TypeScript ist wieder echte devDependency und package-lock nutzt öffentliche npm-Registry-URLs.",
         "en": "Version 0.8.1: The App Center now shows uninstalled apps with a red No state; TypeScript remains the canonical runtime source. Publish fix: TypeScript is restored as a real devDependency and package-lock uses public npm registry URLs."
@@ -26,10 +30,6 @@
       "0.7.129": {
         "en": "EVCS TypeScript handover hardened: safety stop/ramp-down paths can now use the productive TS Allocation + Write-Plan zero-setpoint contract; JavaScript remains executor and hard fallback only.",
         "de": "EVCS-TypeScript-Handover gehärtet: Safety-Stop/Rampdown-Zweige können jetzt den produktiven TS-Allocation- und Write-Plan-0-Setpoint-Vertrag nutzen; JavaScript bleibt nur Executor und harter Fallback."
-      },
-      "0.7.127": {
-        "de": "EVCS-TS-Produktivpfad gehärtet: Allocation und Write-Plan bleiben fachlich TS-geführt, JS-Executor nutzt die TS-geplante Basis und den geplanten Setpoint-DP; Executor-Fehler fallen sauber auf den Legacy-Fallback zurück.",
-        "en": "EVCS TS productive path hardened: allocation and write plan remain TS-led, the JS executor uses the TS-planned basis and setpoint datapoint, and executor failures cleanly fall back to legacy fallback."
       }
     },
     "title": "NexoWatt UI",
