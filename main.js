@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:34d0a5a1992d3c4d5680d94611faf3d4c449949e59a84c6b7b4c1284626b2dc9
+ * Quell-Hash: sha256:af66e1112fcefe3ed68f3321f130b88ef485a297e5a5c46142ea6bd4408f2460
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1736,6 +1736,9 @@ class NexoWattVis extends utils.Adapter {
       uuid: { type: 'string', role: 'text', def: '' },
       valid: { type: 'boolean', role: 'state', def: false },
       type: { type: 'string', role: 'text', def: 'none' },
+      edition: { type: 'string', role: 'text', def: 'none' },
+      featuresJson: { type: 'string', role: 'json', def: '{}' },
+      maxWallboxes: { type: 'number', role: 'value', def: 0 },
       message: { type: 'string', role: 'text', def: '' },
       expiresAt: { type: 'number', role: 'value.time', def: 0 },
       daysRemaining: { type: 'number', role: 'value', def: 0 },
@@ -1960,6 +1963,216 @@ class NexoWattVis extends utils.Adapter {
     const groups = core.match(/.{1,4}/g) || [core];
     return `NW1-${groups.join('-')}`;
   }
+
+  /**
+   * Lizenz-Editionen ab 0.8.3:
+   * - EOS ist das große Vollprodukt und erhält alle aktuellen und künftigen Features.
+   * - HEMS ist die kleinere Edition mit explizit freigegebenen Basis-/Steuerfunktionen.
+   * Alte gültige NW1-/NW1T-Schlüssel ohne Edition werden aus Kompatibilitätsgründen als EOS behandelt.
+   */
+  _nwNormalizeLicenseEdition(edition) {
+    const e = String(edition || '').trim().toLowerCase();
+    if (e === 'eos') return 'eos';
+    if (e === 'hems') return 'hems';
+    return 'none';
+  }
+
+  _nwLicenseSecret() {
+    return 'nw_lis_salt_v1 change me';
+  }
+
+  _nwExpectedEditionLicenseKey(uuid, edition) {
+    const u = String(uuid || '').trim();
+    const ed = this._nwNormalizeLicenseEdition(edition);
+    if (!u || !['eos', 'hems'].includes(ed)) return '';
+    const prefix = ed === 'hems' ? 'NW1H' : 'NW1E';
+    const msg = `${u}|${ed.toUpperCase()}|FULL`;
+    const hex = crypto.createHmac('sha256', this._nwLicenseSecret()).update(msg).digest('hex').toUpperCase();
+    const groups = hex.slice(0, 32).match(/.{1,4}/g) || [hex.slice(0, 32)];
+    return `${prefix}-${groups.join('-')}`;
+  }
+
+  _nwResolveFullLicense(uuid, enteredKey) {
+    const n = this._nwNormalizeLicenseKey(enteredKey);
+    if (!n) return null;
+
+    // Legacy full key: keep all existing customers on the large EOS edition.
+    const legacy = this._nwExpectedLicenseKey(uuid);
+    if (legacy && this._nwNormalizeLicenseKey(legacy) === n) {
+      return { ok: true, type: 'full', edition: 'eos', legacy: true };
+    }
+
+    const candidates = [
+      { edition: 'eos', expected: this._nwExpectedEditionLicenseKey(uuid, 'eos') },
+      { edition: 'hems', expected: this._nwExpectedEditionLicenseKey(uuid, 'hems') },
+    ];
+    for (const c of candidates) {
+      if (c.expected && this._nwNormalizeLicenseKey(c.expected) === n) {
+        return { ok: true, type: 'full', edition: c.edition, legacy: false };
+      }
+    }
+    return null;
+  }
+
+  _nwExpectedEditionTrialSig(uuid, daysStr, edition) {
+    const u = String(uuid || '').trim();
+    const ds = String(daysStr || '').trim();
+    const ed = this._nwNormalizeLicenseEdition(edition);
+    if (!u || !/^\d{3}$/.test(ds) || !['eos', 'hems'].includes(ed)) return '';
+    const msg = `${u}|${ed.toUpperCase()}|TRIAL|${ds}`;
+    const hex = crypto.createHmac('sha256', this._nwLicenseSecret()).update(msg).digest('hex').toUpperCase();
+    return hex.slice(0, 32);
+  }
+
+  _nwExpectedEditionTrialKey(uuid, daysStr, edition) {
+    const ed = this._nwNormalizeLicenseEdition(edition);
+    const sig = this._nwExpectedEditionTrialSig(uuid, daysStr, ed);
+    if (!sig) return '';
+    const prefix = ed === 'hems' ? 'NW1TH' : 'NW1TE';
+    const groups = sig.match(/.{1,4}/g) || [sig];
+    return `${prefix}-${String(daysStr || '').trim()}-${groups.join('-')}`;
+  }
+
+  _nwCurrentLicenseEdition() {
+    const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
+    if (info.ok === true) return this._nwNormalizeLicenseEdition(info.edition || (info.type === 'full' || info.type === 'trial' ? 'eos' : 'none'));
+    return 'none';
+  }
+
+  _nwLicenseFeaturesForEdition(edition) {
+    const ed = this._nwNormalizeLicenseEdition(edition);
+    const hemsFeatures = new Set([
+      'dashboard',
+      'history',
+      'aiAdvisor',
+      'smartHome',
+      'dynamicTariffs',
+      'tariff',
+      'chargingManagement',
+      'storageControl',
+      'thermalControl',
+      'heatingRodControl',
+      'relayControl',
+      'para14a',
+      'thresholdControl',
+      'energyFlow',
+      'pvForecast'
+    ]);
+    const eosOnlyFeatures = [
+      'peakShaving',
+      'storageFarm',
+      'multiUse',
+      'gridLimits',
+      'gridConstraints',
+      'generatorControl',
+      'bhkwControl',
+      'advancedChargingPark',
+      'advancedDiagnostics'
+    ];
+    const all = new Set([...hemsFeatures, ...eosOnlyFeatures]);
+    const out = {};
+    for (const f of all) out[f] = ed === 'eos' ? true : (ed === 'hems' ? hemsFeatures.has(f) : false);
+    return out;
+  }
+
+  _nwLicenseAppFeature(appId) {
+    const map = {
+      charging: 'chargingManagement',
+      peak: 'peakShaving',
+      storage: 'storageControl',
+      storagefarm: 'storageFarm',
+      thermal: 'thermalControl',
+      heatingrod: 'heatingRodControl',
+      bhkw: 'bhkwControl',
+      generator: 'generatorControl',
+      threshold: 'thresholdControl',
+      relay: 'relayControl',
+      grid: 'gridConstraints',
+      aiAdvisor: 'aiAdvisor',
+      tariff: 'dynamicTariffs',
+      para14a: 'para14a',
+      multiuse: 'multiUse'
+    };
+    return map[String(appId || '')] || String(appId || '');
+  }
+
+  _nwIsFeatureLicensed(feature) {
+    const edition = this._nwCurrentLicenseEdition();
+    if (edition === 'eos') return true;
+    const features = this._nwLicenseFeaturesForEdition(edition);
+    return !!features[String(feature || '')];
+  }
+
+  _nwLicenseAllowsAppId(appId) {
+    return this._nwIsFeatureLicensed(this._nwLicenseAppFeature(appId));
+  }
+
+  _nwLicenseMaxWallboxes() {
+    const edition = this._nwCurrentLicenseEdition();
+    if (edition === 'hems') return 3;
+    if (edition === 'eos') return 0; // 0 = unbegrenzt / Systemlimit
+    return 0;
+  }
+
+  _nwBuildLicenseFeatureInfo() {
+    const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
+    const edition = this._nwCurrentLicenseEdition();
+    const features = this._nwLicenseFeaturesForEdition(edition);
+    return {
+      valid: !!this._nwLicenseOk,
+      type: String(info.type || 'none'),
+      edition,
+      editionLabel: edition === 'eos' ? 'EOS' : (edition === 'hems' ? 'HEMS' : 'Keine Lizenz'),
+      message: String(info.msg || ''),
+      expiresAt: Number(info.expiresAt || 0),
+      daysRemaining: Number(info.daysRemaining || 0),
+      maxWallboxes: this._nwLicenseMaxWallboxes(),
+      features,
+      hemsIncludedApps: ['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a'],
+      eosFullAccess: edition === 'eos'
+    };
+  }
+
+  _nwApplyLicenseLimitsToEmsApps(emsApps) {
+    const out = (emsApps && typeof emsApps === 'object') ? this.nwDeepMerge ? this.nwDeepMerge({}, emsApps) : JSON.parse(JSON.stringify(emsApps)) : { schemaVersion: 1, apps: {} };
+    out.schemaVersion = out.schemaVersion || 1;
+    out.apps = (out.apps && typeof out.apps === 'object') ? out.apps : {};
+    for (const appId of Object.keys(out.apps)) {
+      if (!this._nwLicenseAllowsAppId(appId)) {
+        out.apps[appId] = Object.assign({}, out.apps[appId] || {}, { installed: false, enabled: false, licenseBlocked: true, requiredLicense: 'EOS' });
+      } else {
+        out.apps[appId] = Object.assign({}, out.apps[appId] || {}, { licenseBlocked: false, requiredLicense: this._nwCurrentLicenseEdition() === 'hems' ? 'HEMS' : 'EOS' });
+      }
+    }
+    return out;
+  }
+
+  _nwApplyLicenseLimitsToInstallerPatch(patch) {
+    const p = (patch && typeof patch === 'object') ? patch : {};
+    try {
+      if (p.emsApps && typeof p.emsApps === 'object') {
+        p.emsApps = this._nwApplyLicenseLimitsToEmsApps(p.emsApps);
+      }
+    } catch (_e) {}
+    try {
+      const maxWb = this._nwLicenseMaxWallboxes();
+      if (maxWb > 0 && p.settingsConfig && typeof p.settingsConfig === 'object') {
+        const rawCount = Number(p.settingsConfig.evcsCount);
+        const count = Number.isFinite(rawCount) ? Math.max(0, Math.min(maxWb, Math.round(rawCount))) : 0;
+        p.settingsConfig.evcsCount = count;
+        if (Array.isArray(p.settingsConfig.evcsList)) p.settingsConfig.evcsList = p.settingsConfig.evcsList.slice(0, count);
+        if (Array.isArray(p.settingsConfig.stationGroups)) {
+          p.settingsConfig.stationGroups = p.settingsConfig.stationGroups.map((g) => {
+            const row = (g && typeof g === 'object') ? Object.assign({}, g) : {};
+            if (Array.isArray(row.members)) row.members = row.members.filter((x) => Number(x) >= 1 && Number(x) <= count);
+            if (Array.isArray(row.connectors)) row.connectors = row.connectors.filter((x) => Number(x) >= 1 && Number(x) <= count);
+            return row;
+          });
+        }
+      }
+    } catch (_e) {}
+    return p;
+  }
   /**
    * Code-Teil: _nwExpectedTrialSig
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -2001,13 +2214,16 @@ class NexoWattVis extends utils.Adapter {
    */
   _nwParseTrialKey(enteredKey) {
     const n = this._nwNormalizeLicenseKey(enteredKey);
-    const m = n.match(/^NW1T(\d{3})([0-9A-F]{32})$/);
+    const m = n.match(/^NW1T(E|H)?(\d{3})([0-9A-F]{32})$/);
     if (!m) return null;
-    const daysStr = m[1];
-    const sig = m[2];
+    const editionToken = m[1] || '';
+    const daysStr = m[2];
+    const sig = m[3];
     const days = parseInt(daysStr, 10);
     if (!days || days < 1) return null;
-    return { daysStr, days, sig };
+    const edition = editionToken === 'H' ? 'hems' : 'eos';
+    const legacy = !editionToken;
+    return { daysStr, days, sig, edition, legacy };
   }
   /**
    * Code-Teil: _nwIsLicenseValid
@@ -2016,10 +2232,7 @@ class NexoWattVis extends utils.Adapter {
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   _nwIsLicenseValid(uuid, enteredKey) {
-    // Voll-Lizenz
-    const expected = this._nwExpectedLicenseKey(uuid);
-    if (!expected) return false;
-    return this._nwNormalizeLicenseKey(expected) === this._nwNormalizeLicenseKey(enteredKey);
+    return !!this._nwResolveFullLicense(uuid, enteredKey);
   }
   /**
    * Code-Teil: _nwClearTrialState
@@ -2041,14 +2254,16 @@ class NexoWattVis extends utils.Adapter {
    */
   async _nwCheckTrialLicense(uuid, enteredKey) {
     const u = String(uuid || '').trim();
-    if (!u) return { ok: false, type: 'invalid', msg: 'UUID nicht verfügbar' };
+    if (!u) return { ok: false, type: 'invalid', edition: 'none', msg: 'UUID nicht verfügbar' };
 
     const parsed = this._nwParseTrialKey(enteredKey);
     if (!parsed) return { ok: false, type: 'invalid', msg: 'Kein Testschlüssel erkannt' };
 
-    const expectedSig = this._nwExpectedTrialSig(u, parsed.daysStr);
+    const expectedSig = parsed.legacy
+      ? this._nwExpectedTrialSig(u, parsed.daysStr)
+      : this._nwExpectedEditionTrialSig(u, parsed.daysStr, parsed.edition);
     if (!expectedSig || expectedSig !== parsed.sig) {
-      return { ok: false, type: 'invalid', msg: 'Testschlüssel ungültig' };
+      return { ok: false, type: 'invalid', edition: 'none', msg: 'Testschlüssel ungültig' };
     }
 
     const dayMs = 24 * 60 * 60 * 1000;
@@ -2094,7 +2309,8 @@ class NexoWattVis extends utils.Adapter {
       return {
         ok: true,
         type: 'trial',
-        msg: `Testlizenz aktiv – noch ${daysRemaining} Tag${daysRemaining === 1 ? '' : 'e'}`,
+        edition: parsed.edition || 'eos',
+        msg: `${(parsed.edition || 'eos').toUpperCase()} Testlizenz aktiv – noch ${daysRemaining} Tag${daysRemaining === 1 ? '' : 'e'}`,
         expiresAt,
         daysRemaining,
       };
@@ -2103,7 +2319,8 @@ class NexoWattVis extends utils.Adapter {
     return {
       ok: false,
       type: 'trial',
-      msg: 'Testlizenz abgelaufen',
+      edition: parsed.edition || 'eos',
+      msg: `${(parsed.edition || 'eos').toUpperCase()} Testlizenz abgelaufen`,
       expiresAt,
       daysRemaining: 0,
     };
@@ -2119,12 +2336,13 @@ class NexoWattVis extends utils.Adapter {
     if (!u) return { ok: false, type: 'invalid', msg: 'UUID nicht verfügbar' };
 
     const k = String(enteredKey || '').trim();
-    if (!k) return { ok: false, type: 'none', msg: 'Kein Lizenzschlüssel eingetragen' };
+    if (!k) return { ok: false, type: 'none', edition: 'none', msg: 'Kein Lizenzschlüssel eingetragen' };
 
-    // 1) Voll-Lizenz
-    if (this._nwIsLicenseValid(u, k)) {
+    // 1) Voll-Lizenz (Legacy NW1 = EOS; neue NW1E/NW1H enthalten die Edition)
+    const full = this._nwResolveFullLicense(u, k);
+    if (full && full.ok) {
       await this._nwClearTrialState();
-      return { ok: true, type: 'full', msg: 'Lizenz gültig' };
+      return { ok: true, type: 'full', edition: full.edition || 'eos', legacy: !!full.legacy, msg: `${String(full.edition || 'eos').toUpperCase()} Lizenz gültig` };
     }
 
     // 2) Test-Lizenz
@@ -2133,7 +2351,7 @@ class NexoWattVis extends utils.Adapter {
     }
 
     // 3) Ungültig
-    return { ok: false, type: 'invalid', msg: 'Lizenz ungültig' };
+    return { ok: false, type: 'invalid', edition: 'none', msg: 'Lizenz ungültig' };
   }
   /**
    * Code-Teil: _nwInitLicense
@@ -2151,6 +2369,7 @@ class NexoWattVis extends utils.Adapter {
       info = {
         ok: false,
         type: 'invalid',
+        edition: 'none',
         msg: 'Lizenzschlüssel ist nur als geschützter Platzhalter gespeichert. Bitte echten Lizenzschlüssel neu eintragen.',
       };
     }
@@ -2160,7 +2379,11 @@ class NexoWattVis extends utils.Adapter {
     // Publish license status (useful for Admin UI)
     try { await this.setStateAsync('license.uuid', { val: this._nwSystemUuid, ack: true }); } catch (_e) {}
     try { await this.setStateAsync('license.valid', { val: this._nwLicenseOk, ack: true }); } catch (_e) {}
+    const licenseFeatures = this._nwBuildLicenseFeatureInfo();
     try { await this.setStateAsync('license.type', { val: info.type || 'none', ack: true }); } catch (_e) {}
+    try { await this.setStateAsync('license.edition', { val: licenseFeatures.edition || 'none', ack: true }); } catch (_e) {}
+    try { await this.setStateAsync('license.featuresJson', { val: JSON.stringify(licenseFeatures), ack: true }); } catch (_e) {}
+    try { await this.setStateAsync('license.maxWallboxes', { val: Number(licenseFeatures.maxWallboxes || 0), ack: true }); } catch (_e) {}
     try { await this.setStateAsync('license.message', { val: info.msg || '', ack: true }); } catch (_e) {}
     try { await this.setStateAsync('license.expiresAt', { val: info.expiresAt || 0, ack: true }); } catch (_e) {}
     try { await this.setStateAsync('license.daysRemaining', { val: info.daysRemaining || 0, ack: true }); } catch (_e) {}
@@ -2169,7 +2392,7 @@ class NexoWattVis extends utils.Adapter {
       if (info.type === 'trial') {
         this.log.info(`License valid (test license, ${info.daysRemaining} days remaining).`);
       } else {
-        this.log.info('License valid.');
+        this.log.info(`License valid (${String(licenseFeatures.editionLabel || licenseFeatures.edition || 'Lizenz')}).`);
       }
     } else {
       // Keep message short; details are in Admin license tab.
@@ -3437,7 +3660,7 @@ class NexoWattVis extends utils.Adapter {
     if (base.groups && typeof base.groups === 'object') out.groups = base.groups;
     if (base.meta && typeof base.meta === 'object') out.meta = base.meta;
 
-    return out;
+    try { return this._nwApplyLicenseLimitsToEmsApps(out); } catch (_e) { return out; }
   }
 
 
@@ -3478,14 +3701,14 @@ class NexoWattVis extends utils.Adapter {
 
     for (const a of CATALOG) {
       const st = (apps.apps && apps.apps[a.id]) ? apps.apps[a.id] : null;
-      n[a.enableFlag] = !!(st && st.installed && st.enabled);
+      n[a.enableFlag] = this._nwLicenseAllowsAppId(a.id) && !!(st && st.installed && st.enabled);
     }
 
     // §14a is controlled via installerConfig.para14a
     try {
       const p = (apps.apps && apps.apps.para14a) ? apps.apps.para14a : null;
       n.installerConfig = (n.installerConfig && typeof n.installerConfig === 'object') ? n.installerConfig : {};
-      n.installerConfig.para14a = !!(p && p.installed && p.enabled);
+      n.installerConfig.para14a = this._nwLicenseAllowsAppId('para14a') && !!(p && p.installed && p.enabled);
     } catch (_e) {
       // ignore
     }
@@ -3496,6 +3719,8 @@ class NexoWattVis extends utils.Adapter {
     } catch (_e) {
       // ignore
     }
+
+    try { n.emsApps = this._nwApplyLicenseLimitsToEmsApps(apps); } catch (_e) {}
 
     return n;
   }
@@ -6262,7 +6487,9 @@ try {
     const rawCount = (cfg.evcsCount !== undefined && cfg.evcsCount !== null && String(cfg.evcsCount).trim() !== '')
       ? Number(cfg.evcsCount)
       : rawList.length;
-    const evcsCount = Math.max(0, Math.min(50, Math.round(Number.isFinite(rawCount) ? rawCount : 0)));
+    const licenseMaxWallboxes = (typeof this._nwLicenseMaxWallboxes === 'function') ? Number(this._nwLicenseMaxWallboxes()) : 0;
+    const evcsLimit = licenseMaxWallboxes > 0 ? Math.min(50, Math.max(0, Math.round(licenseMaxWallboxes))) : 50;
+    const evcsCount = Math.max(0, Math.min(evcsLimit, Math.round(Number.isFinite(rawCount) ? rawCount : 0)));
     this.evcsCount = evcsCount;
     this.log.info(`[NexoWatt UI] Ladepunkte konfiguriert: ${evcsCount}`);
 
@@ -9104,6 +9331,10 @@ async onReady() {
         uuid: String(this._nwSystemUuid || ''),
         valid: !!this._nwLicenseOk,
         type: String(info.type || 'none'),
+        edition: String(this._nwBuildLicenseFeatureInfo().edition || 'none'),
+        editionLabel: String(this._nwBuildLicenseFeatureInfo().editionLabel || ''),
+        maxWallboxes: Number(this._nwBuildLicenseFeatureInfo().maxWallboxes || 0),
+        features: this._nwBuildLicenseFeatureInfo().features || {},
         message: String(info.msg || ''),
         expiresAt: Number(info.expiresAt || 0),
         daysRemaining: Number(info.daysRemaining || 0),
@@ -9159,6 +9390,10 @@ async onReady() {
           uuid: String(this._nwSystemUuid || ''),
           valid: !!this._nwLicenseOk,
           type: String(info.type || 'none'),
+          edition: String(this._nwBuildLicenseFeatureInfo().edition || 'none'),
+          editionLabel: String(this._nwBuildLicenseFeatureInfo().editionLabel || ''),
+          maxWallboxes: Number(this._nwBuildLicenseFeatureInfo().maxWallboxes || 0),
+          features: this._nwBuildLicenseFeatureInfo().features || {},
           message: this._nwLicenseOk
             ? 'Lizenz gespeichert und aktiviert ✅'
             : `Lizenz gespeichert, aber noch ungültig: ${String(info.msg || 'unbekannter Fehler')}`,
@@ -11458,7 +11693,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       if (stored.groups && typeof stored.groups === 'object') out.groups = stored.groups;
       if (stored.meta && typeof stored.meta === 'object') out.meta = stored.meta;
 
-      return out;
+      try { return this._nwApplyLicenseLimitsToEmsApps(out); } catch (_e) { return out; }
     };
     /**
      * Code-Teil: _nwApplyEmsAppsToLegacyFlags
@@ -11474,14 +11709,14 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       for (const a of _nwAppCatalog) {
         if (!a.enableFlag) continue;
         const st = emsApps.apps && emsApps.apps[a.id] ? emsApps.apps[a.id] : null;
-        const enabled = !!(st && st.installed && st.enabled);
+        const enabled = this._nwLicenseAllowsAppId(a.id) && !!(st && st.installed && st.enabled);
         n[a.enableFlag] = enabled;
       }
 
       // §14a is controlled via installerConfig.para14a
       try {
         const p = emsApps.apps && emsApps.apps.para14a ? emsApps.apps.para14a : null;
-        const active = !!(p && p.installed && p.enabled);
+        const active = this._nwLicenseAllowsAppId('para14a') && !!(p && p.installed && p.enabled);
         n.installerConfig = (n.installerConfig && typeof n.installerConfig === 'object') ? n.installerConfig : {};
         n.installerConfig.para14a = active;
       } catch (_e) {
@@ -11521,6 +11756,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         // Phase 2: App-Center state (install/enable)
         emsApps: _nwNormalizeEmsApps(n),
+        license: this._nwBuildLicenseFeatureInfo(),
 
         // KI‑Energieberater
         aiAdvisor: (n.aiAdvisor && typeof n.aiAdvisor === 'object') ? n.aiAdvisor : undefined,
@@ -11582,7 +11818,9 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         // system.adapter.<instance>.native. Persisting to native triggers an ioBroker instance restart
         // and breaks the UI with "Failed to fetch" + SSE disconnects.
         const nativeObj = (this.config && typeof this.config === 'object') ? this.config : {};
-        res.json({ ok: true, config: _nwPickInstallerConfig(nativeObj) });
+        const cfgOut = _nwPickInstallerConfig(nativeObj);
+        cfgOut.license = this._nwBuildLicenseFeatureInfo();
+        res.json({ ok: true, config: cfgOut });
       } catch (e) {
         this.log.warn('Installer config API error: ' + e.message);
         res.status(500).json({ ok: false, error: 'internal error' });
@@ -11626,11 +11864,13 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           if (!allowedRoot.has(k)) continue;
           safePatch[k] = v;
         }
+        this._nwApplyLicenseLimitsToInstallerPatch(safePatch);
 
         // Persist (state-based) + apply to runtime config.
         // We merge into the already persisted patch (loaded on startup) to keep full configuration.
         const basePatch = (this._nwInstallerConfigPatch && typeof this._nwInstallerConfigPatch === 'object') ? this._nwInstallerConfigPatch : {};
         let mergedPatch = this.nwDeepMerge(this.nwDeepMerge({}, basePatch), safePatch);
+        this._nwApplyLicenseLimitsToInstallerPatch(mergedPatch);
 
         // Map App toggles to legacy enable* flags and ensure forward-compatible shape
         mergedPatch = this.nwApplyEmsAppsToLegacyFlags(mergedPatch);
@@ -11706,7 +11946,9 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           await _nwRestartEms();
         }
 
-        res.json({ ok: true, config: _nwPickInstallerConfig(this.config || {}), restarted: !!restartEms });
+        const cfgOut = _nwPickInstallerConfig(this.config || {});
+        cfgOut.license = this._nwBuildLicenseFeatureInfo();
+        res.json({ ok: true, config: cfgOut, restarted: !!restartEms });
       } catch (e) {
         this.log.warn('Installer config save API error: ' + e.message);
         // Send a concise message to the frontend to avoid "Speichern fehlgeschlagen" without context.

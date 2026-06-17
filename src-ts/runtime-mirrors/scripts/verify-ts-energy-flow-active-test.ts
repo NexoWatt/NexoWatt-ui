@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 220b3122d0c99b098a239cd0a8ae462a1b3b58e929dc80fd7ef7e0ab868fa234
+ * Original-Hash: cea62ce44067ba38055b4e027142c2eacb39fd62859048c0477686af43c30048
  */
 
 /**
@@ -32,12 +32,9 @@
 'use strict';
 
 /**
- * Code-Teil: verify-ts-energy-flow-active-test.js
- *
- * Zweck:
- * Prüft die 0.7.86-Erweiterung für den kontrollierten Energiefluss-TS-Aktivtest.
- * Der Test stellt sicher, dass Backend und App-Center die Aktivtest-Diagnose führen,
- * ohne die Sicherheitsgates zu umgehen.
+ * Prüft den kontrollierten Energiefluss-TS-Aktivtest. Seit 0.8.3 bleibt die
+ * Diagnose intern/API-seitig vorhanden, wird aber nicht mehr als eigene
+ * sichtbare App-Center-Kachel gerendert.
  */
 const fs = require('fs');
 const path = require('path');
@@ -71,16 +68,31 @@ function must(file, needle, label) {
   const text = read(file);
   if (!text.includes(needle)) errors.push(`${file}: fehlt ${label}`);
 }
+/**
+ * Code-Teil: mustNot
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function mustNot(file, needle, label) {
+  const text = read(file);
+  if (text.includes(needle)) errors.push(`${file}: sichtbar geblieben ${label}`);
+}
 
 must('main.js', '_nwRecordEnergyFlowTsActiveTestSample', 'Backend-Aufzeichnung des Aktivtests');
 must('main.js', '_nwSummarizeEnergyFlowTsActiveTestSamples', 'Backend-Zusammenfassung des Aktivtests');
 must('main.js', 'control.energyFlowTsActiveTest', 'Diagnose-API-Feld energyFlowTsActiveTest');
 must('main.js', 'tsActiveTest: effectiveEnergyFlow.activeTest', 'Energiefluss-Debugfeld tsActiveTest');
-must('www/ems-apps.js', '_renderEnergyFlowTsActiveTestCard', 'App-Center Aktivtest-Karte');
-must('www/ems-apps.js', 'Energiefluss TS‑Aktivtest', 'sichtbarer App-Center Titel');
+must('www/ems-apps.js', '_renderEnergyFlowTsActiveTestCard', 'interner Aktivtest-Renderer');
+mustNot('www/ems-apps.html', 'Energiefluss TS‑Aktivtest', 'eigener sichtbarer App-Center Titel');
 
 if (errors.length) {
   console.error('[energy-flow-active-test] Fehler:\n' + errors.map((x) => ' - ' + x).join('\n'));
   process.exit(1);
 }
-console.log('[energy-flow-active-test] OK: kontrollierter Energiefluss-TS-Aktivtest ist verdrahtet.');
+console.log('[energy-flow-active-test] OK: Energiefluss-TS-Aktivtest bleibt intern verdrahtet, UI-Kachel ist entfernt.');

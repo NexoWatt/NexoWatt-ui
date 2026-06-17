@@ -26,10 +26,10 @@ need(main, /looksLikeOldDefault[\s\S]*currentMode === 'shadow'[\s\S]*tm\.energyF
 need(main, /plantEvaluationOk[\s\S]*candidateStable[\s\S]*useTs/, 'main.js TS-Gates fehlen oder wurden beschädigt');
 need(ui, /tm\.energyFlowProductionAllowed !== false/, 'ems-apps.js UI-Freigabe defaultet nicht auf true');
 need(ui, /\? v : 'ts'/, 'ems-apps.js normalisiert unbekannte Modi nicht auf ts');
-need(html, /TS – produktiver Kandidat mit Sicherheitsgates/, 'ems-apps.html TS-Option wurde nicht aktualisiert');
+if (/TS – produktiver Kandidat mit Sicherheitsgates/.test(html) || /energyFlowTsMode/.test(html)) errors.push('ems-apps.html sichtbare TS-Migrationsoption muss entfernt bleiben');
 if (errors.length) {
   console.error('[ts-energy-flow-productive-default] Fehler:');
   for (const err of errors) console.error(' - ' + err);
   process.exit(1);
 }
-console.log('[ts-energy-flow-productive-default] OK');
+console.log('[ts-energy-flow-productive-default] OK: Energiefluss-TS ist intern produktiv voreingestellt, sichtbare Migrationsoption ist entfernt.');

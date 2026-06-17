@@ -1,8 +1,20 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.0",
+    "version": "0.8.3",
     "news": {
+      "0.8.3": {
+        "de": "Version 0.8.3: App-Center bereinigt die sichtbaren TypeScript-Migrationsdiagnosen. Neues Lizenzmodell mit EOS als Vollprodukt und HEMS als kleiner Edition; HEMS erhält die freigegebenen Basis-/Steuerfunktionen inklusive Lademanagement bis 3 Wallboxen, EOS erhält Vollzugriff.",
+        "en": "Version 0.8.3: The App Center hides the visible TypeScript migration diagnostics. New license model with EOS as the full product and HEMS as the smaller edition; HEMS receives the approved base/control features including charging management up to 3 wallboxes, EOS receives full access."
+      },
+      "0.8.2": {
+        "de": "Version 0.8.2: Windows-sicherer npm-Publish-Check. Der TypeScript-Compiler wird vor Publish-Checks robust aufgelöst oder DevDependencies werden automatisch nachinstalliert; App-Center-Statusfarben aus 0.8.1 bleiben erhalten.",
+        "en": "Version 0.8.2: Windows-safe npm publish check. The TypeScript compiler is resolved robustly before publish checks or devDependencies are installed automatically; App Center status colors from 0.8.1 remain in place."
+      },
+      "0.8.1": {
+        "de": "Version 0.8.1: App-Center zeigt nicht installierte Apps jetzt mit rotem Nein-Status; TypeScript ist weiterhin kanonische Runtime-Quelle. Publish-Fix: TypeScript ist wieder echte devDependency und package-lock nutzt öffentliche npm-Registry-URLs.",
+        "en": "Version 0.8.1: The App Center now shows uninstalled apps with a red No state; TypeScript remains the canonical runtime source. Publish fix: TypeScript is restored as a real devDependency and package-lock uses public npm registry URLs."
+      },
       "0.8.0": {
         "de": "Version 0.8.0: TypeScript bleibt kanonische Runtime-Quelle; sichtbares Branding in der Topbar zeigt jetzt nur noch NexoWatt ohne EMS-Zusatz. Service-Worker-/PWA-Version und Brand-Cleanup-Gate ergänzt.",
         "en": "Version 0.8.0: TypeScript remains the canonical runtime source; visible topbar branding now shows NexoWatt without the EMS suffix. Service worker/PWA version and brand cleanup gate added."
@@ -18,18 +30,6 @@
       "0.7.130": {
         "de": "EVCS-TypeScript-Normalquelle aktiviert: Allocation und kompletter EVCS-Handover laufen im grünen Gate als TS-Normalpfad; JS bleibt nur ioBroker-Executor und harter Fallback. App-Center/API zeigen Normalquellen-Lockdown und Migrationsbereitschaft.",
         "en": "EVCS TypeScript normal source enabled: allocation and the complete EVCS handover run through the green TS normal-path gate; JS remains only the ioBroker executor and hard fallback. App Center/API expose normal-source lockdown and migration readiness."
-      },
-      "0.7.129": {
-        "en": "EVCS TypeScript handover hardened: safety stop/ramp-down paths can now use the productive TS Allocation + Write-Plan zero-setpoint contract; JavaScript remains executor and hard fallback only.",
-        "de": "EVCS-TypeScript-Handover gehärtet: Safety-Stop/Rampdown-Zweige können jetzt den produktiven TS-Allocation- und Write-Plan-0-Setpoint-Vertrag nutzen; JavaScript bleibt nur Executor und harter Fallback."
-      },
-      "0.7.127": {
-        "de": "EVCS-TS-Produktivpfad gehärtet: Allocation und Write-Plan bleiben fachlich TS-geführt, JS-Executor nutzt die TS-geplante Basis und den geplanten Setpoint-DP; Executor-Fehler fallen sauber auf den Legacy-Fallback zurück.",
-        "en": "EVCS TS productive path hardened: allocation and write plan remain TS-led, the JS executor uses the TS-planned basis and setpoint datapoint, and executor failures cleanly fall back to legacy fallback."
-      },
-      "0.7.95": {
-        "de": "App-Center Runtime-Spiegel gezielt typisiert: Verträge für Installer-Konfiguration, DP-Mapping, Heizstab, KI, Speicherfarm, TS-Schaltmodus und Diagnose ergänzt. Keine produktive Runtime-Umstellung.",
-        "en": "App-Center runtime mirror typed: added contracts for installer configuration, datapoint mapping, heating rod, AI advisor, storage farm, TS switch mode and diagnostics. No productive runtime switch."
       }
     },
     "title": "NexoWatt UI",

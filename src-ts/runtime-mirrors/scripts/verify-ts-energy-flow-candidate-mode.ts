@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 9def0783ba16847039b785ae138233c7fb3b683a27ce5f170f2acd36a92a88eb
+ * Original-Hash: a180889f0987ee69f2464a75dc605d6a9d04c0274033b95a62d40ddcb9c8fbff
  */
 
 /**
@@ -65,7 +65,22 @@ const mustContain = (rel, needle) => {
   const text = read(rel);
   if (!text.includes(needle)) throw new Error(`${rel} enthält erwarteten Text nicht: ${needle}`);
 };
+/**
+ * Code-Teil: mustNotContain
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+const mustNotContain = (rel, needle) => {
+  const text = read(rel);
+  if (text.includes(needle)) throw new Error(`${rel} enthält entfernten sichtbaren Text noch: ${needle}`);
+};
 for (const needle of ['energyFlowCandidateWarmupTicks','energyFlowCandidateAutoFallback','ts-candidate-warmup','ts-candidate-active','_energyFlowTsCandidateState']) mustContain('main.js', needle);
-for (const needle of ['energyFlowTsWarmupTicks','energyFlowTsAutoFallback']) mustContain('www/ems-apps.html', needle);
+for (const needle of ['energyFlowTsWarmupTicks','energyFlowTsAutoFallback']) mustNotContain('www/ems-apps.html', needle);
 for (const needle of ['energyFlowCandidateWarmupTicks','energyFlowCandidateAutoFallback']) mustContain('www/ems-apps.js', needle);
-console.log('[ts-energy-flow-candidate-mode] OK: Kandidatenmodus mit Warmup/Fallback ist vorhanden.');
+console.log('[ts-energy-flow-candidate-mode] OK: Kandidatenmodus mit Warmup/Fallback bleibt intern vorhanden, sichtbare Migrationsfelder sind entfernt.');

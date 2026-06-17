@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 48b33da51231a7a8ef24bc7c9429e3916e41513438966ec4c3cfb7434ead157d
+ * Original-Hash: 1fbba8daf34db7147afd92fdc0298d49c8f69e45f5368008cc268add961ff12e
  */
 
 /**
@@ -50,6 +50,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const childProcess = require('child_process');
+const { spawnTypeScript, writeTypeScriptSpawnDiagnostics } = require('./typescript-invocation');
 
 const repoRoot = path.resolve(__dirname, '..');
 const sourcePath = path.join(repoRoot, 'src-ts', 'runtime-mirrors', 'ems', 'modules', 'ai-advisor.ts');
@@ -75,11 +76,6 @@ function requireContains(source, marker, label) {
  * kein `npm install` gelaufen ist, kann ein vorhandener PATH-Compiler als Fallback
  * genutzt werden. Das betrifft nur diesen Migrationscheck, nicht die Adapter-Runtime.
  */
-function resolveTypeScriptBinary() {
-  const localBin = path.join(repoRoot, 'node_modules', '.bin', process.platform === 'win32' ? 'tsc.cmd' : 'tsc');
-  if (fs.existsSync(localBin)) return localBin;
-  return process.platform === 'win32' ? 'tsc.cmd' : 'tsc';
-}
 
 /**
  * Code-Teil: buildTemporaryCheckFiles
@@ -143,12 +139,10 @@ function main() {
   requireContains(source, 'constructor(adapter: AiAdvisorAdapterLike, dpRegistry: AiAdvisorDpRegistryLike)', 'typisierter Konstruktor');
 
   const { tempDir, tempConfig } = buildTemporaryCheckFiles(source);
-  const tsc = resolveTypeScriptBinary();
-  const result = childProcess.spawnSync(tsc, ['-p', tempConfig, '--pretty', 'false'], { cwd: repoRoot, encoding: 'utf8' });
+  const result = spawnTypeScript(repoRoot, ['-p', tempConfig, '--pretty', 'false'], { cwd: repoRoot, encoding: 'utf8' });
   try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_e) {}
   if (result.status !== 0) {
-    process.stderr.write(result.stdout || '');
-    process.stderr.write(result.stderr || '');
+    writeTypeScriptSpawnDiagnostics(result);
     throw new Error('[ts-ai-advisor-runtime-typing] AI-Advisor-TS-Spiegel ist ohne @ts-nocheck noch nicht kompilierbar.');
   }
   console.log('[ts-ai-advisor-runtime-typing] OK: AI-Advisor-Spiegel ist gezielt typisiert und in gelockertem Migrationsmodus kompilierbar.');

@@ -13,7 +13,11 @@ const mustContain = (rel, needle) => {
   const text = read(rel);
   if (!text.includes(needle)) throw new Error(`${rel} enthält erwarteten Text nicht: ${needle}`);
 };
+const mustNotContain = (rel, needle) => {
+  const text = read(rel);
+  if (text.includes(needle)) throw new Error(`${rel} enthält entfernten sichtbaren Text noch: ${needle}`);
+};
 for (const needle of ['energyFlowCandidateWarmupTicks','energyFlowCandidateAutoFallback','ts-candidate-warmup','ts-candidate-active','_energyFlowTsCandidateState']) mustContain('main.js', needle);
-for (const needle of ['energyFlowTsWarmupTicks','energyFlowTsAutoFallback']) mustContain('www/ems-apps.html', needle);
+for (const needle of ['energyFlowTsWarmupTicks','energyFlowTsAutoFallback']) mustNotContain('www/ems-apps.html', needle);
 for (const needle of ['energyFlowCandidateWarmupTicks','energyFlowCandidateAutoFallback']) mustContain('www/ems-apps.js', needle);
-console.log('[ts-energy-flow-candidate-mode] OK: Kandidatenmodus mit Warmup/Fallback ist vorhanden.');
+console.log('[ts-energy-flow-candidate-mode] OK: Kandidatenmodus mit Warmup/Fallback bleibt intern vorhanden, sichtbare Migrationsfelder sind entfernt.');

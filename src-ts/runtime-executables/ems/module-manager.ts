@@ -114,6 +114,23 @@ class ModuleManager {
      * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
+    _licenseEdition() {
+        const info = this.adapter && this.adapter._nwLicenseInfo && typeof this.adapter._nwLicenseInfo === 'object' ? this.adapter._nwLicenseInfo : {};
+        if (info && info.ok === true) {
+            const e = String(info.edition || 'eos').toLowerCase();
+            return e === 'hems' ? 'hems' : 'eos';
+        }
+        return 'none';
+    }
+
+    _licenseAllowsApp(appId) {
+        const edition = this._licenseEdition();
+        if (edition === 'eos') return true;
+        if (edition !== 'hems') return false;
+        const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a']);
+        return hemsApps.has(String(appId || ''));
+    }
+
     _getDiagCfg() {
         const cfg = (this.adapter && this.adapter.config && this.adapter.config.diagnostics) ? this.adapter.config.diagnostics : null;
         const enabled = !!(cfg && cfg.enabled);
@@ -208,14 +225,14 @@ class ModuleManager {
         this.modules.push({
             key: 'gridConstraints',
             instance: new GridConstraintsModule(this.adapter, this.dp),
-            enabledFn: () => !!this.adapter.config.enableGridConstraints,
+            enabledFn: () => this._licenseAllowsApp('grid') && !!this.adapter.config.enableGridConstraints,
         });
 
         // Peak shaving
         this.modules.push({
             key: 'peakShaving',
             instance: new PeakShavingModule(this.adapter, this.dp),
-            enabledFn: () => !!this.adapter.config.enablePeakShaving || !!(this.adapter.config.peakShaving && this.adapter.config.peakShaving.atypical && this.adapter.config.peakShaving.atypical.enabled),
+            enabledFn: () => this._licenseAllowsApp('peak') && (!!this.adapter.config.enablePeakShaving || !!(this.adapter.config.peakShaving && this.adapter.config.peakShaving.atypical && this.adapter.config.peakShaving.atypical.enabled)),
         });
 
         // §14a EnWG (steuerbare Verbrauchseinrichtungen)
@@ -223,7 +240,7 @@ class ModuleManager {
         this.modules.push({
             key: 'para14a',
             instance: new Para14aModule(this.adapter, this.dp),
-            enabledFn: () => !!(this.adapter?.config?.installerConfig?.para14a),
+            enabledFn: () => this._licenseAllowsApp('para14a') && !!(this.adapter?.config?.installerConfig?.para14a),
         });
 
         // Tarif (VIS) – stellt Ladepark-Deckel bereit
@@ -253,6 +270,7 @@ class ModuleManager {
             key: 'chargingManagement',
             instance: new ChargingManagementModule(this.adapter, this.dp),
             enabledFn: () => {
+                if (!this._licenseAllowsApp('charging')) return false;
                 // Backwards compatible default:
                 // Older installations may not have the new EMS config persisted yet.
                 // If the flag is missing (undefined/null), we enable the module so the
@@ -285,7 +303,7 @@ class ModuleManager {
             // das Modul nicht explizit aktiviert hat, der Endkunde aber den dynamischen Tarif
             // (VIS) nutzt. Die eigentliche Schreiblogik entscheidet im Modul selbst, ob
             // tatsächlich Setpoints geschrieben werden (Failsafe).
-            enabledFn: () => true,
+            enabledFn: () => this._licenseAllowsApp('storage'),
         });
 
         // Thermische Steuerung (Wärmepumpe/Klima)
@@ -294,7 +312,7 @@ class ModuleManager {
         this.modules.push({
             key: 'thermalControl',
             instance: new ThermalControlModule(this.adapter, this.dp),
-            enabledFn: () => !!this.adapter.config.enableThermalControl,
+            enabledFn: () => this._licenseAllowsApp('thermal') && !!this.adapter.config.enableThermalControl,
         });
 
         // Gestufte Heizstäbe (native 1..12 Stufen)
@@ -303,20 +321,20 @@ class ModuleManager {
         this.modules.push({
             key: 'heatingRodControl',
             instance: new HeatingRodControlModule(this.adapter, this.dp),
-            enabledFn: () => !!this.adapter.config.enableHeatingRodControl,
+            enabledFn: () => this._licenseAllowsApp('heatingrod') && !!this.adapter.config.enableHeatingRodControl,
         });
 
         // BHKW Steuerung (Start/Stop, SoC-geführt)
         this.modules.push({
             key: 'bhkwControl',
             instance: new BhkwControlModule(this.adapter, this.dp),
-            enabledFn: () => !!this.adapter.config.enableBhkwControl,
+            enabledFn: () => this._licenseAllowsApp('bhkw') && !!this.adapter.config.enableBhkwControl,
         });
 
         this.modules.push({
             key: 'generatorControl',
             instance: new GeneratorControlModule(this.adapter, this.dp),
-            enabledFn: () => !!this.adapter.config.enableGeneratorControl,
+            enabledFn: () => this._licenseAllowsApp('generator') && !!this.adapter.config.enableGeneratorControl,
         });
 
         // Schwellwertsteuerung (generische Regeln)
@@ -324,7 +342,7 @@ class ModuleManager {
         this.modules.push({
             key: 'thresholdControl',
             instance: new ThresholdControlModule(this.adapter, this.dp),
-            enabledFn: () => !!this.adapter.config.enableThresholdControl,
+            enabledFn: () => this._licenseAllowsApp('threshold') && !!this.adapter.config.enableThresholdControl,
         });
 
         // KI‑Energieberater / KI‑Optimierung (advisory only)
@@ -332,14 +350,14 @@ class ModuleManager {
         this.modules.push({
             key: 'aiAdvisor',
             instance: new AiAdvisorModule(this.adapter, this.dp),
-            enabledFn: () => !!(this.adapter.config.enableAiAdvisor || this.adapter.config.enableAiOptimization),
+            enabledFn: () => this._licenseAllowsApp('aiAdvisor') && !!(this.adapter.config.enableAiAdvisor || this.adapter.config.enableAiOptimization),
         });
 
         // Multi use (future)
         this.modules.push({
             key: 'multiUse',
             instance: new MultiUseModule(this.adapter, this.dp),
-            enabledFn: () => !!this.adapter.config.enableMultiUse,
+            enabledFn: () => this._licenseAllowsApp('multiuse') && !!this.adapter.config.enableMultiUse,
         });
 
         // Init modules

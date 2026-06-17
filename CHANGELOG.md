@@ -1,3 +1,18 @@
+## 0.8.2 - Windows-Publish-Check stabilisiert
+
+- `publish:check` startet jetzt mit einer DevDependency-/TypeScript-Compiler-Vorprüfung.
+- Runtime-Typisierungschecks nutzen lokal installiertes TypeScript direkt über `node_modules/typescript/lib/tsc.js`, statt auf `tsc.cmd` im Windows-PATH angewiesen zu sein.
+- Fehlende Compiler-Aufrufe zeigen jetzt echte Spawn-/Compilerdiagnosen statt nur einer generischen Meldung.
+- App-Center-Farbpolish aus 0.8.1 bleibt erhalten: nicht installierte Apps werden rot markiert.
+
+## 0.8.1 - App-Center Statusfarben und npm-Publish-Fix
+
+- App-Center: Der Status `Installiert = Nein` wird in App-Karten jetzt rot hervorgehoben, damit nicht installierte Module sofort auffallen; `Ja` bleibt grün.
+- Die Änderung liegt in der kanonischen TypeScript-Runtime-Quelle `src-ts/runtime-executables/www/ems-apps.ts`; `www/ems-apps.js` bleibt generiertes Runtime-Artefakt.
+- `typescript` und die Entwicklungswerkzeuge stehen wieder als echte `devDependencies` in `package.json`, damit `npm install`/`npm ci` auf Windows den lokalen `tsc` für `npm run publish:check` bereitstellen.
+- `package-lock.json` wurde auf öffentliche npm-Registry-URLs normalisiert und Version/Manifest/io-package auf `0.8.1` angehoben.
+- Service-Worker Cache auf `nexowatt-cache-v302` erhöht und neues Gate `npm run test:app-center-install-colors` ergänzt.
+
 ## 0.8.0 - Cockpit-Branding bereinigt und TS-Runtime beibehalten
 
 - Sichtbare Cockpit-Kopfzeilen von `NexoWatt EMS` auf `NexoWatt` umgestellt; der markierte EMS-Zusatz oben links ist aus Live, History, Speicherfarm, Einstellungen und Report-Shells entfernt.

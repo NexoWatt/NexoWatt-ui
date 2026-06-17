@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 758ad457664aa8d2bc20ed206205d6bcaa583d47a69f9b18b5673a37048a65ae
+ * Original-Hash: beddd1f62683b105c25d2cd826b02d233f30092172f0b786fba78fe7e54893d1
  */
 
 /**
@@ -50,6 +50,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const childProcess = require('child_process');
+const { spawnTypeScript, writeTypeScriptSpawnDiagnostics } = require('./typescript-invocation');
 
 const repoRoot = path.resolve(__dirname, '..');
 const sourcePath = path.join(repoRoot, 'src-ts', 'runtime-mirrors', 'www', 'ems-apps.ts');
@@ -66,11 +67,6 @@ function requireContains(source, marker, label) {
  * Code-Teil: resolveTypeScriptBinary
  * Zweck: Nutzt bevorzugt den lokalen TypeScript-Compiler, fällt aber auf `tsc` aus PATH zurück.
  */
-function resolveTypeScriptBinary() {
-  const localBin = path.join(repoRoot, 'node_modules', '.bin', process.platform === 'win32' ? 'tsc.cmd' : 'tsc');
-  if (fs.existsSync(localBin)) return localBin;
-  return process.platform === 'win32' ? 'tsc.cmd' : 'tsc';
-}
 
 /**
  * Code-Teil: extractEmsAppsTypeBlock
@@ -142,12 +138,10 @@ function main() {
   requireContains(source, 'interface EmsAppsRuntimeState', 'Runtime-State-Vertrag');
   requireContains(source, 'EmsApps-Browser-Runtime-Abschnitt', 'Runtime-Marker');
   const { tempDir, tempConfig } = buildTemporaryCheckFiles(source);
-  const tsc = resolveTypeScriptBinary();
-  const result = childProcess.spawnSync(tsc, ['-p', tempConfig, '--pretty', 'false'], { cwd: repoRoot, encoding: 'utf8' });
+  const result = spawnTypeScript(repoRoot, ['-p', tempConfig, '--pretty', 'false'], { cwd: repoRoot, encoding: 'utf8' });
   try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_e) {}
   if (result.status !== 0) {
-    process.stderr.write(result.stdout || '');
-    process.stderr.write(result.stderr || '');
+    writeTypeScriptSpawnDiagnostics(result);
     throw new Error('[ts-ems-apps-runtime-typing] Vertragsbereich ist ohne @ts-nocheck noch nicht kompilierbar.');
   }
   console.log('[ts-ems-apps-runtime-typing] OK: App-Center-Spiegel ist gezielt typisiert und der Vertragsbereich ist kompilierbar.');

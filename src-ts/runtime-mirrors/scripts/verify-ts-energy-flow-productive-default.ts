@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 26682223c3b149a443cb9b393cc609504a95c2f8885403e6e4916a11f9933a16
+ * Original-Hash: a84af3aaf3a2edf31f033aec38f97e7c49032108b6780e15d4c64be9a4700e0c
  */
 
 /**
@@ -67,10 +67,10 @@ need(main, /looksLikeOldDefault[\s\S]*currentMode === 'shadow'[\s\S]*tm\.energyF
 need(main, /plantEvaluationOk[\s\S]*candidateStable[\s\S]*useTs/, 'main.js TS-Gates fehlen oder wurden beschädigt');
 need(ui, /tm\.energyFlowProductionAllowed !== false/, 'ems-apps.js UI-Freigabe defaultet nicht auf true');
 need(ui, /\? v : 'ts'/, 'ems-apps.js normalisiert unbekannte Modi nicht auf ts');
-need(html, /TS – produktiver Kandidat mit Sicherheitsgates/, 'ems-apps.html TS-Option wurde nicht aktualisiert');
+if (/TS – produktiver Kandidat mit Sicherheitsgates/.test(html) || /energyFlowTsMode/.test(html)) errors.push('ems-apps.html sichtbare TS-Migrationsoption muss entfernt bleiben');
 if (errors.length) {
   console.error('[ts-energy-flow-productive-default] Fehler:');
   for (const err of errors) console.error(' - ' + err);
   process.exit(1);
 }
-console.log('[ts-energy-flow-productive-default] OK');
+console.log('[ts-energy-flow-productive-default] OK: Energiefluss-TS ist intern produktiv voreingestellt, sichtbare Migrationsoption ist entfernt.');

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2366d5a010625f8f1739c3ae89d1554c37f6726c8ecb68754cac1ccdc6dfcc88
+ * Original-Hash: e8d6d2a83d5bfcc72a15bfbf691093210f5aac5a334a80ec7e45206f92eedf6a
  */
 
 /**
@@ -63,8 +63,8 @@ const html = read('www/ems-apps.html');
 need(main.includes('_nwEvaluateEnergyFlowPlantGate'), 'main.js: Anlagen-Gate-Funktion fehlt.');
 need(main.includes('ts-real-plant-evaluation-not-stable'), 'main.js: TS-Switch blockiert stabile Anlagen-Auswertung nicht.');
 need(main.includes('plantEvaluationRequired'), 'main.js: SwitchState enthält keine Anlagen-Auswertung.');
-need(html.includes('energyFlowTsRequireStablePlant'), 'ems-apps.html: Schalter für stabile Anlagen-Auswertung fehlt.');
+need(!html.includes('energyFlowTsRequireStablePlant'), 'ems-apps.html: sichtbarer Schalter für stabile Anlagen-Auswertung muss entfernt bleiben.');
 need(ui.includes('energyFlowRequireStablePlantEvaluation'), 'ems-apps.js: UI speichert Anlagen-Auswertung-Gate nicht.');
 need(ui.includes('Anlagen-Auswertung'), 'ems-apps.js: Statusanzeige zeigt Anlagen-Auswertung nicht.');
 if (process.exitCode) process.exit(process.exitCode);
-console.log('[energy-flow-plant-gate] OK: TS-Energiefluss wird durch stabile Anlagen-Auswertung abgesichert.');
+console.log('[energy-flow-plant-gate] OK: TS-Energiefluss bleibt intern durch stabile Anlagen-Auswertung abgesichert, UI-Schalter ist entfernt.');

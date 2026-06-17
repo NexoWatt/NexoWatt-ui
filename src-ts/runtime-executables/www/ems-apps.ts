@@ -347,21 +347,21 @@
 
   // Phase 2: App-Center (install + enable per capability)
   const APP_CATALOG = [
-    { id: 'charging', label: 'Lademanagement', desc: 'PV-Überschussladen, Budget-Verteilung, Ladepunkte/Ports (AC/DC) + Stationsgruppen', mandatory: false },
-    { id: 'peak', label: 'Peak-Shaving', desc: 'Lastspitzenkappung / Import-Limit / Atypische HLZF', mandatory: false },
-    { id: 'storage', label: 'Speicherregelung', desc: 'Eigenverbrauch / Speicher-Setpoints (herstellerunabhängig)', mandatory: false },
-    { id: 'storagefarm', label: 'Speicherfarm', desc: 'Mehrere Speichersysteme als Pool/Gruppen', mandatory: false },
-    { id: 'thermal', label: 'Wärmepumpe & Klima', desc: 'PV-Überschuss-Steuerung für Wärmepumpe/Klima (Setpoint, On/Off oder SG-Ready) inkl. Schnellsteuerung', mandatory: false },
-    { id: 'heatingrod', label: 'Heizstab', desc: 'Native 1..12 Stufen Heizstab-Regelung über Relais / KNX-Aktoren', mandatory: false },
-    { id: 'bhkw', label: 'BHKW', desc: 'BHKW-Steuerung (Start/Stop, SoC-geführt) mit Schnellsteuerung', mandatory: false },
-    { id: 'generator', label: 'Generator', desc: 'Generator-Steuerung (Notstrom/Netzparallelbetrieb, SoC-geführt) mit Schnellsteuerung', mandatory: false },
-    { id: 'threshold', label: 'Schwellwertsteuerung', desc: 'Regeln (Wenn X > Y dann Schalten/Setzen) – optional mit Endkunden-Anpassung', mandatory: false },
-    { id: 'relay', label: 'Relaissteuerung', desc: 'Manuelle Relais / generische Ausgänge (optional endkundentauglich)', mandatory: false },
-    { id: 'grid', label: 'Netzlimits', desc: 'Netzrestriktionen (RLM/0‑Einspeisung/Import‑Limits)', mandatory: false },
-    { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung: PV, Wetter, Tarif, Speicher, Wallboxen und Lastspitzen als Vorschläge auf der LIVE‑Seite', mandatory: false },
-    { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', mandatory: true },
-    { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls genutzt)', mandatory: false },
-    { id: 'multiuse', label: 'MultiUse', desc: 'Speicher Multi‑Use (SoC‑Zonen: Notstrom/LSK/Eigenverbrauch)', mandatory: false }
+    { id: 'charging', label: 'Lademanagement', desc: 'PV-Überschussladen, Budget-Verteilung, Ladepunkte/Ports (AC/DC) + Stationsgruppen', mandatory: false, hems: true },
+    { id: 'peak', label: 'Peak-Shaving', desc: 'Lastspitzenkappung / Import-Limit / Atypische HLZF', mandatory: false, hems: false },
+    { id: 'storage', label: 'Speicherregelung', desc: 'Eigenverbrauch / Speicher-Setpoints (herstellerunabhängig)', mandatory: false, hems: true },
+    { id: 'storagefarm', label: 'Speicherfarm', desc: 'Mehrere Speichersysteme als Pool/Gruppen', mandatory: false, hems: false },
+    { id: 'thermal', label: 'Wärmepumpe & Klima', desc: 'PV-Überschuss-Steuerung für Wärmepumpe/Klima (Setpoint, On/Off oder SG-Ready) inkl. Schnellsteuerung', mandatory: false, hems: true },
+    { id: 'heatingrod', label: 'Heizstab', desc: 'Native 1..12 Stufen Heizstab-Regelung über Relais / KNX-Aktoren', mandatory: false, hems: true },
+    { id: 'bhkw', label: 'BHKW', desc: 'BHKW-Steuerung (Start/Stop, SoC-geführt) mit Schnellsteuerung', mandatory: false, hems: false },
+    { id: 'generator', label: 'Generator', desc: 'Generator-Steuerung (Notstrom/Netzparallelbetrieb, SoC-geführt) mit Schnellsteuerung', mandatory: false, hems: false },
+    { id: 'threshold', label: 'Schwellwertsteuerung', desc: 'Regeln (Wenn X > Y dann Schalten/Setzen) – optional mit Endkunden-Anpassung', mandatory: false, hems: true },
+    { id: 'relay', label: 'Relaissteuerung', desc: 'Manuelle Relais / generische Ausgänge (optional endkundentauglich)', mandatory: false, hems: true },
+    { id: 'grid', label: 'Netzlimits', desc: 'Netzrestriktionen (RLM/0‑Einspeisung/Import‑Limits)', mandatory: false, hems: false },
+    { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung: PV, Wetter, Tarif, Speicher, Wallboxen und Lastspitzen als Vorschläge auf der LIVE‑Seite', mandatory: false, hems: true },
+    { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', mandatory: true, hems: true },
+    { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls genutzt)', mandatory: false, hems: true },
+    { id: 'multiuse', label: 'MultiUse', desc: 'Speicher Multi‑Use (SoC‑Zonen: Notstrom/LSK/Eigenverbrauch)', mandatory: false, hems: false }
   ];
 
 
@@ -833,6 +833,7 @@
   ];
 
   let currentConfig = null;
+  let currentLicenseInfo = { valid: false, edition: 'none', editionLabel: 'Keine Lizenz', maxWallboxes: 0, features: {} };
   let dpTargetInputId = null;
   let treePrefix = '';
 
@@ -849,6 +850,67 @@
    * und schließt beim nächsten Poll wieder.
    */
   const shadowJsonDetailsOpen = new Set();
+
+
+  const HEMS_APP_IDS = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a']);
+  const APP_LICENSE_FEATURES = Object.freeze({
+    charging: 'chargingManagement',
+    peak: 'peakShaving',
+    storage: 'storageControl',
+    storagefarm: 'storageFarm',
+    thermal: 'thermalControl',
+    heatingrod: 'heatingRodControl',
+    bhkw: 'bhkwControl',
+    generator: 'generatorControl',
+    threshold: 'thresholdControl',
+    relay: 'relayControl',
+    grid: 'gridConstraints',
+    aiAdvisor: 'aiAdvisor',
+    tariff: 'dynamicTariffs',
+    para14a: 'para14a',
+    multiuse: 'multiUse'
+  });
+
+  function _licenseEdition() {
+    const info = currentLicenseInfo && typeof currentLicenseInfo === 'object' ? currentLicenseInfo : {};
+    const e = String(info.edition || '').trim().toLowerCase();
+    if (e === 'eos') return 'eos';
+    if (e === 'hems') return 'hems';
+    return 'none';
+  }
+
+  function _appLicenseFeature(appId) {
+    return APP_LICENSE_FEATURES[String(appId || '')] || String(appId || '');
+  }
+
+  function _isFeatureLicensed(feature) {
+    const ed = _licenseEdition();
+    if (ed === 'eos') return true;
+    if (ed !== 'hems') return false;
+    const features = currentLicenseInfo && currentLicenseInfo.features && typeof currentLicenseInfo.features === 'object' ? currentLicenseInfo.features : {};
+    const f = String(feature || '');
+    if (Object.prototype.hasOwnProperty.call(features, f)) return !!features[f];
+    return HEMS_APP_IDS.has(String(feature || ''));
+  }
+
+  function _isAppLicensed(appId) {
+    const ed = _licenseEdition();
+    if (ed === 'eos') return true;
+    if (ed === 'hems') return HEMS_APP_IDS.has(String(appId || '')) || _isFeatureLicensed(_appLicenseFeature(appId));
+    return false;
+  }
+
+  function _maxEvcsCount() {
+    const max = Number(currentLicenseInfo && currentLicenseInfo.maxWallboxes);
+    return Number.isFinite(max) && max > 0 ? Math.max(0, Math.min(50, Math.round(max))) : 50;
+  }
+
+  function _licenseLabel() {
+    const ed = _licenseEdition();
+    if (ed === 'eos') return 'EOS';
+    if (ed === 'hems') return 'HEMS';
+    return 'Keine Lizenz';
+  }
 
   /**
    * Code-Teil: _decodeShadowDisplayText
@@ -1437,7 +1499,14 @@ function collectAiAdvisorConfigFromUI(base) {
       return a && typeof a === 'object' ? a : { installed: false, enabled: false };
     };
 
-    for (const app of APP_CATALOG) {
+    const licenseCard = document.createElement('div');
+    licenseCard.className = 'nw-config-card nw-license-edition-card';
+    const licenseLimit = _maxEvcsCount() < 50 ? ` · Lademanagement bis ${_maxEvcsCount()} Wallboxen` : ' · Vollzugriff';
+    licenseCard.innerHTML = `<div class="nw-config-card__header"><div><div class="nw-config-card__title">Lizenz: ${_licenseLabel()}</div><div class="nw-config-card__subtitle">${_licenseEdition() === 'eos' ? 'EOS ist die Vollversion mit allen Apps und künftigen Erweiterungen.' : 'HEMS zeigt nur die freigegebenen Apps.'}${licenseLimit}</div></div></div>`;
+    els.appsList.appendChild(licenseCard);
+
+    const visibleApps = APP_CATALOG.filter((app) => _isAppLicensed(app.id));
+    for (const app of visibleApps) {
       const st = getSt(app.id);
 
       const card = document.createElement('div');
@@ -1464,9 +1533,10 @@ function collectAiAdvisorConfigFromUI(base) {
        * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
        * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
        */
-      const mkToggle = (id, label, checked, disabled, onLabel = 'An', offLabel = 'Aus') => {
+      const mkToggle = (id, label, checked, disabled, onLabel = 'An', offLabel = 'Aus', toggleKind = '') => {
         const wrap = document.createElement('div');
         wrap.className = 'nw-app-toggle-row';
+        if (toggleKind) wrap.setAttribute('data-toggle-kind', toggleKind);
         wrap.style.display = 'inline-flex';
         wrap.style.alignItems = 'center';
         wrap.style.gap = '8px';
@@ -1480,6 +1550,10 @@ function collectAiAdvisorConfigFromUI(base) {
         const grp = document.createElement('div');
         grp.className = 'nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle';
         grp.setAttribute('data-toggle-for', id);
+        if (toggleKind) {
+          grp.setAttribute('data-toggle-kind', toggleKind);
+          grp.classList.add(`nw-app-toggle--${toggleKind}`);
+        }
 
         const bOff = document.createElement('button');
         bOff.type = 'button';
@@ -1515,8 +1589,8 @@ function collectAiAdvisorConfigFromUI(base) {
       const idInstalled = `app_${app.id}_installed`;
       const idEnabled = `app_${app.id}_enabled`;
 
-      const tInstalled = mkToggle(idInstalled, 'Installiert', st.installed, app.mandatory, 'Ja', 'Nein');
-      const tEnabled = mkToggle(idEnabled, 'Aktiv', st.enabled, app.mandatory || !st.installed, 'An', 'Aus');
+      const tInstalled = mkToggle(idInstalled, 'Installiert', st.installed, app.mandatory, 'Ja', 'Nein', 'installed');
+      const tEnabled = mkToggle(idEnabled, 'Aktiv', st.enabled, app.mandatory || !st.installed, 'An', 'Aus', 'enabled');
 
       // Behaviour: if app is uninstalled, force enabled=false
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an tInstalled.inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
@@ -1554,7 +1628,9 @@ function collectAiAdvisorConfigFromUI(base) {
       if (app.id === 'charging') {
         const row = document.createElement('div');
         row.className = 'nw-config-card__row';
-        row.textContent = 'Konfiguration: Reiter „Ladepunkte“. Datenpunkte: pro Ladepunkt.';
+        row.textContent = _licenseEdition() === 'hems'
+          ? 'Konfiguration: Reiter „Ladepunkte“. HEMS erlaubt bis zu 3 Wallboxen.'
+          : 'Konfiguration: Reiter „Ladepunkte“. Datenpunkte: pro Ladepunkt.';
         body.appendChild(row);
       }
       if (app.id === 'peak') {
@@ -1576,7 +1652,7 @@ function collectAiAdvisorConfigFromUI(base) {
       els.appsList.appendChild(card);
     }
 
-    els.appsEmpty.style.display = APP_CATALOG.length ? 'none' : 'block';
+    els.appsEmpty.style.display = visibleApps.length ? 'none' : 'block';
   }
   /**
    * Code-Teil: setAppsFromConfig
@@ -8000,6 +8076,7 @@ function collectAiAdvisorConfigFromUI(base) {
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   function _ensureEvcsList(count) {
+    count = _clampInt(count, 0, _maxEvcsCount(), 0);
     const sc = _ensureSettingsConfig();
     const list = Array.isArray(sc.evcsList) ? sc.evcsList : [];
     while (list.length < count) list.push({});
@@ -8015,7 +8092,7 @@ function collectAiAdvisorConfigFromUI(base) {
    */
   function _updateEvcsField(idx, field, value) {
     const sc = _ensureSettingsConfig();
-    const count = _clampInt(sc.evcsCount, 0, 50, 0);
+    const count = _clampInt(sc.evcsCount, 0, _maxEvcsCount(), 0);
     const list = _ensureEvcsList(count);
     const row = (list[idx - 1] && typeof list[idx - 1] === 'object') ? list[idx - 1] : {};
     row[field] = value;
@@ -8031,10 +8108,11 @@ function collectAiAdvisorConfigFromUI(base) {
   function buildEvcsUI() {
     if (!els.evcsList || !els.evcsCount) return;
     const sc = _ensureSettingsConfig();
-    const count = _clampInt(sc.evcsCount, 0, 50, 0);
+    const count = _clampInt(sc.evcsCount, 0, _maxEvcsCount(), 0);
     sc.evcsCount = count;
 
     els.evcsCount.value = String(count);
+    try { els.evcsCount.max = String(_maxEvcsCount()); } catch (_e) {}
     if (els.evcsMaxPowerKw) {
       const kw = (sc.evcsMaxPowerKw !== undefined && sc.evcsMaxPowerKw !== null) ? Number(sc.evcsMaxPowerKw) : 11;
       els.evcsMaxPowerKw.value = Number.isFinite(kw) ? String(kw) : '11';
@@ -8273,8 +8351,8 @@ function collectAiAdvisorConfigFromUI(base) {
     const addPortToStation = (stationKey) => {
       const sk = normKey(stationKey);
       const sc2 = _ensureSettingsConfig();
-      const cur = _clampInt(sc2.evcsCount, 0, 50, 0);
-      if (cur >= 20) return;
+      const cur = _clampInt(sc2.evcsCount, 0, _maxEvcsCount(), 0);
+      if (cur >= Math.min(20, _maxEvcsCount())) return;
 
       const next = cur + 1;
       sc2.evcsCount = next;
@@ -8947,7 +9025,7 @@ function collectAiAdvisorConfigFromUI(base) {
    */
   function collectSettingsConfigFromUI() {
     const out = deepMerge({}, (currentConfig && currentConfig.settingsConfig) ? currentConfig.settingsConfig : {});
-    const count = _clampInt(els.evcsCount ? els.evcsCount.value : out.evcsCount, 0, 50, 0);
+    const count = _clampInt(els.evcsCount ? els.evcsCount.value : out.evcsCount, 0, _maxEvcsCount(), 0);
     out.evcsCount = count;
 
     if (els.evcsMaxPowerKw) {
@@ -8970,6 +9048,9 @@ function collectAiAdvisorConfigFromUI(base) {
    */
   function applyConfigToUI(cfg) {
     currentConfig = cfg || {};
+    currentLicenseInfo = (currentConfig.license && typeof currentConfig.license === 'object')
+      ? currentConfig.license
+      : { valid: false, edition: 'none', editionLabel: 'Keine Lizenz', maxWallboxes: 0, features: {} };
 
     // Apps
     setAppsFromConfig(currentConfig);
@@ -10136,6 +10217,17 @@ function collectAiAdvisorConfigFromUI(base) {
     for (const app of APP_CATALOG) {
       const i1 = document.getElementById(`app_${app.id}_installed`);
       const i2 = document.getElementById(`app_${app.id}_enabled`);
+      if (!_isAppLicensed(app.id)) {
+        patch.emsApps.apps[app.id] = { installed: false, enabled: false, licenseBlocked: true, requiredLicense: 'EOS' };
+        continue;
+      }
+      if (!i1 && !i2) {
+        const existing = currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps && currentConfig.emsApps.apps[app.id]
+          ? currentConfig.emsApps.apps[app.id]
+          : { installed: false, enabled: false };
+        patch.emsApps.apps[app.id] = deepMerge({}, existing);
+        continue;
+      }
       const installed = app.mandatory ? true : !!(i1 && i1.checked);
       const enabled = app.mandatory ? true : !!(i2 && i2.checked);
       patch.emsApps.apps[app.id] = { installed, enabled };
@@ -11045,12 +11137,16 @@ function collectAiAdvisorConfigFromUI(base) {
    */
   function collectEnergyFlowTsMigrationFromUi(base) {
     const out = deepMerge({}, (base && typeof base === 'object') ? base : {});
-    out.energyFlowMode = _normalizeEnergyFlowTsModeUi(els.energyFlowTsMode ? els.energyFlowTsMode.value : out.energyFlowMode);
-    out.energyFlowProductionAllowed = !!(els.energyFlowTsProductionAllowed && els.energyFlowTsProductionAllowed.checked);
+    if (els.energyFlowTsMode) out.energyFlowMode = _normalizeEnergyFlowTsModeUi(els.energyFlowTsMode.value || out.energyFlowMode);
+    else out.energyFlowMode = _normalizeEnergyFlowTsModeUi(out.energyFlowMode || 'ts');
+    if (els.energyFlowTsProductionAllowed) out.energyFlowProductionAllowed = !!els.energyFlowTsProductionAllowed.checked;
+    else out.energyFlowProductionAllowed = out.energyFlowProductionAllowed !== false;
     const warmup = Math.round(Number(els.energyFlowTsWarmupTicks ? els.energyFlowTsWarmupTicks.value : out.energyFlowCandidateWarmupTicks));
     out.energyFlowCandidateWarmupTicks = Number.isFinite(warmup) ? Math.max(1, Math.min(30, warmup)) : 3;
-    out.energyFlowCandidateAutoFallback = !(els.energyFlowTsAutoFallback && els.energyFlowTsAutoFallback.checked === false);
-    out.energyFlowRequireStablePlantEvaluation = !(els.energyFlowTsRequireStablePlant && els.energyFlowTsRequireStablePlant.checked === false);
+    if (els.energyFlowTsAutoFallback) out.energyFlowCandidateAutoFallback = !(els.energyFlowTsAutoFallback.checked === false);
+    else out.energyFlowCandidateAutoFallback = out.energyFlowCandidateAutoFallback !== false;
+    if (els.energyFlowTsRequireStablePlant) out.energyFlowRequireStablePlantEvaluation = !(els.energyFlowTsRequireStablePlant.checked === false);
+    else out.energyFlowRequireStablePlantEvaluation = out.energyFlowRequireStablePlantEvaluation !== false;
     const plantSamples = Math.round(Number(els.energyFlowTsPlantMinSamples ? els.energyFlowTsPlantMinSamples.value : out.energyFlowPlantMinSamples));
     out.energyFlowPlantMinSamples = Number.isFinite(plantSamples) ? Math.max(1, Math.min(120, plantSamples)) : 5;
     const plantOk = Math.round(Number(els.energyFlowTsPlantMinOk ? els.energyFlowTsPlantMinOk.value : out.energyFlowPlantMinConsecutiveOk));
@@ -11848,7 +11944,7 @@ function collectAiAdvisorConfigFromUI(base) {
     if (_activeTab !== 'status') return;
     const data = await fetchJson('/api/ems/charging/diagnostics');
     renderChargingBudget(data || {});
-    renderShadowDiagnostics(data || {});
+    // TS-Migrationsdiagnosen bleiben intern über die API verfügbar, werden ab 0.8.3 aber nicht mehr sichtbar im App-Center gerendert.
     renderChargingDiag(data || {});
     renderStationsDiag(data || {});
   }
@@ -12423,7 +12519,7 @@ function collectAiAdvisorConfigFromUI(base) {
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.evcsCount. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.evcsCount.addEventListener('change', () => {
       const sc = _ensureSettingsConfig();
-      sc.evcsCount = _clampInt(els.evcsCount.value, 0, 50, 0);
+      sc.evcsCount = _clampInt(els.evcsCount.value, 0, _maxEvcsCount(), 0);
       buildEvcsUI();
     });
   }

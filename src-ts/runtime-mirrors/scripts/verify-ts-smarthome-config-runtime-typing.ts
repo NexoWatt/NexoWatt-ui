@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 5c4fa30dab9f9bb250ac3de4b18279ed3e6cc5224015defd45a813e9326d122f
+ * Original-Hash: 04e315c905f8e7a075aad537c94287132c5ae6532b482e0349cc7a0ce071da65
  */
 
 /**
@@ -49,6 +49,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const childProcess = require('child_process');
+const { spawnTypeScript, writeTypeScriptSpawnDiagnostics } = require('./typescript-invocation');
 
 const repoRoot = path.resolve(__dirname, '..');
 const sourcePath = path.join(repoRoot, 'src-ts', 'runtime-mirrors', 'www', 'smarthome-config.ts');
@@ -65,11 +66,6 @@ function requireContains(source, marker, label) {
  * Code-Teil: resolveTypeScriptBinary
  * Zweck: Nutzt bevorzugt den lokalen TypeScript-Compiler aus `node_modules`.
  */
-function resolveTypeScriptBinary() {
-  const localBin = path.join(repoRoot, 'node_modules', '.bin', process.platform === 'win32' ? 'tsc.cmd' : 'tsc');
-  if (fs.existsSync(localBin)) return localBin;
-  return process.platform === 'win32' ? 'tsc.cmd' : 'tsc';
-}
 
 /**
  * Code-Teil: extractSmartHomeConfigTypeBlock
@@ -144,12 +140,10 @@ function main() {
   requireContains(source, 'interface SmartHomeConfigStateShape', 'Runtime-State-Vertrag');
   requireContains(source, 'SmartHome-Config-Browser-Runtime-Abschnitt', 'Runtime-Marker');
   const { tempDir, tempConfig } = buildTemporaryCheckFiles(source);
-  const tsc = resolveTypeScriptBinary();
-  const result = childProcess.spawnSync(tsc, ['-p', tempConfig, '--pretty', 'false'], { cwd: repoRoot, encoding: 'utf8' });
+  const result = spawnTypeScript(repoRoot, ['-p', tempConfig, '--pretty', 'false'], { cwd: repoRoot, encoding: 'utf8' });
   try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_e) {}
   if (result.status !== 0) {
-    process.stderr.write(result.stdout || '');
-    process.stderr.write(result.stderr || '');
+    writeTypeScriptSpawnDiagnostics(result);
     throw new Error('[ts-smarthome-config-runtime-typing] Vertragsbereich ist ohne @ts-nocheck noch nicht kompilierbar.');
   }
   console.log('[ts-smarthome-config-runtime-typing] OK: SmartHome-Config-Spiegel ist gezielt typisiert und der Vertragsbereich ist kompilierbar.');
