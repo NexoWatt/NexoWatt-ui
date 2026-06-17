@@ -1,0 +1,54 @@
+#!/usr/bin/env node
+'use strict';
+
+/**
+ * Prüft das Lizenzmodell ab 0.8.4:
+ * - EOS = Vollversion
+ * - HEMS = kleiner freigegebener Funktionsumfang
+ * - alte NW1/NW1T-Schlüssel bleiben EOS-kompatibel
+ * - TypeScript-Migrationsdiagnosen sind aus der sichtbaren App-Center-UI entfernt
+ */
+const fs = require('fs');
+const path = require('path');
+const root = path.resolve(__dirname, '..');
+const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+const errors = [];
+const need = (ok, msg) => { if (!ok) errors.push(msg); };
+
+const main = read('main.js');
+const moduleManager = read('ems/module-manager.js');
+const app = read('www/ems-apps.js');
+const html = read('www/ems-apps.html');
+const ioPackage = JSON.parse(read('io-package.json'));
+
+need(ioPackage.common && ioPackage.common.version === '0.8.4', 'io-package.json: Version muss 0.8.4 sein.');
+need(main.includes('_nwExpectedEditionLicenseKey'), 'main.js: Edition-Vollschlüssel-Prüfung fehlt.');
+need(main.includes("'NW1H'") && main.includes("'NW1E'"), 'main.js: NW1H/NW1E Präfixe fehlen.');
+need(main.includes('_nwExpectedEditionTrialKey') && main.includes('NW1TH') && main.includes('NW1TE'), 'main.js: Edition-Testlizenzformate fehlen.');
+need(main.includes('Legacy full key: keep all existing customers on the large EOS edition.'), 'main.js: Legacy-Vollschlüssel müssen als EOS behandelt werden.');
+need(main.includes('legacy NW1 = EOS') || main.includes('Legacy NW1 = EOS'), 'main.js: Legacy-Hinweis für NW1=EOS fehlt.');
+need(main.includes('_nwLicenseFeaturesForEdition'), 'main.js: zentraler Feature-Katalog fehlt.');
+need(main.includes('peakShaving') && main.includes('storageFarm') && main.includes('multiUse'), 'main.js: EOS-only Features fehlen.');
+need(main.includes('chargingManagement') && main.includes('heatingRodControl') && main.includes('thresholdControl'), 'main.js: HEMS Feature-Whitelist unvollständig.');
+need(main.includes('_nwLicenseMaxWallboxes') && main.includes('if (edition === \'hems\') return 3'), 'main.js: HEMS-Wallboxlimit 3 fehlt.');
+need(main.includes('license.edition') && main.includes('license.featuresJson') && main.includes('license.maxWallboxes'), 'main.js: Lizenz-States für Edition/Features/Wallboxlimit fehlen.');
+need(main.includes('_nwApplyLicenseLimitsToInstallerPatch'), 'main.js: Backend-Gate für Installer-Patches fehlt.');
+need(main.includes('cfgOut.license = this._nwBuildLicenseFeatureInfo()'), 'main.js: Installer-API liefert Lizenzinfo nicht aus.');
+need(moduleManager.includes('_licenseAllowsApp'), 'ems/module-manager.js: Modulmanager-Lizenzgate fehlt.');
+need(moduleManager.includes("const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a'])"), 'ems/module-manager.js: HEMS-App-Liste fehlt oder falsch.');
+need(moduleManager.includes("key: 'peakShaving'") && moduleManager.includes("this._licenseAllowsApp('peak')"), 'ems/module-manager.js: Peak-Shaving muss EOS-gated sein.');
+need(moduleManager.includes("key: 'chargingManagement'") && moduleManager.includes("this._licenseAllowsApp('charging')"), 'ems/module-manager.js: Lademanagement-Gate fehlt.');
+need(app.includes('HEMS_APP_IDS'), 'www/ems-apps.js: HEMS-App-Whitelist fehlt.');
+need(app.includes('Lizenz: ${_licenseLabel()}'), 'www/ems-apps.js: Lizenzkarte im App-Center fehlt.');
+need(app.includes('licenseBlocked') && app.includes('requiredLicense'), 'www/ems-apps.js: UI-Patch muss nicht lizenzierte Apps blockieren.');
+need(app.includes('function _maxEvcsCount') && app.includes('els.evcsCount.max = String(_maxEvcsCount())'), 'www/ems-apps.js: HEMS-Wallboxlimit in UI fehlt.');
+need(!html.includes('TypeScript Shadow'), 'www/ems-apps.html: sichtbare TypeScript-Shadow-Diagnose muss entfernt bleiben.');
+need(!html.includes('energyFlowTsMode'), 'www/ems-apps.html: sichtbarer TS-Schaltmodus muss entfernt bleiben.');
+need(!html.includes('shadowDiagnostics'), 'www/ems-apps.html: sichtbarer Shadow-Container muss entfernt bleiben.');
+
+if (errors.length) {
+  console.error('[license-editions] Fehler:');
+  errors.forEach((e) => console.error(' - ' + e));
+  process.exit(1);
+}
+console.log('[license-editions] OK: EOS/HEMS-Lizenzmodell und UI-Cleanup sind verdrahtet.');
