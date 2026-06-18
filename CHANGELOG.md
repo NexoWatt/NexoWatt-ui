@@ -1,3 +1,9 @@
+## 0.8.12
+
+- EVCS: Speicher-Mitnutzung pro Ladepunkt mit Installer-Freigabe und Kundenbedienung ergänzt.
+- LIVE/EVCS: "Speicher schützen / Mitnutzen" ist nur sichtbar, wenn der Installateur die Funktion je Ladepunkt freigibt.
+- Backend/TS: userStorageAssistEnabled, storagePolicyJson und Storage-Control-Schutzleistung verdrahtet.
+
 ## 0.8.11
 
 - EVCS-AC-Phasenbedienung im LIVE-Ladestation-Modal und auf der EVCS-Seite nutzt jetzt direkt die Installer-Konfiguration: Sobald `phaseSwitchId` zugeordnet ist, erscheinen die drei Buttons `1p`, `3p` und `Auto PV`.

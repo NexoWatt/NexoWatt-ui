@@ -867,6 +867,18 @@ class SpeicherRegelungModule extends BaseModule {
         const evPriorityCaps = (coreCaps && coreCaps.evPriority && typeof coreCaps.evPriority === 'object') ? coreCaps.evPriority : null;
         const evPriorityBlockStorageChargeRaw = !!(evPriorityCaps && evPriorityCaps.blockStorageCharge === true);
         const evPriorityStarvedWRaw = (evPriorityCaps && Number.isFinite(Number(evPriorityCaps.starvedW))) ? Math.max(0, Number(evPriorityCaps.starvedW)) : 0;
+        const storagePolicyCaps = (coreCaps && coreCaps.storagePolicy && typeof coreCaps.storagePolicy === 'object') ? coreCaps.storagePolicy : null;
+        let evcsStorageProtectedW = (storagePolicyCaps && Number.isFinite(Number(storagePolicyCaps.protectedEvPowerW)))
+            ? Math.max(0, Number(storagePolicyCaps.protectedEvPowerW))
+            : 0;
+        if (!(evcsStorageProtectedW > 0)) {
+            try {
+                const stProtectedW = await this._readOwnNumber('chargingManagement.control.storageProtectedEvPowerW');
+                if (Number.isFinite(Number(stProtectedW)) && Number(stProtectedW) > 0) evcsStorageProtectedW = Math.max(0, Number(stProtectedW));
+            } catch {
+                // ignore
+            }
+        }
         let importLimitW = null;
         let importLimitQuelle = '';
 
@@ -1608,7 +1620,7 @@ if (typeof soc === 'number') {
 						const commandedDischargeNowW = curSetW > 0 ? curSetW : 0;
 						const dischargeNowW = Math.max(measuredDischargeNowW, commandedDischargeNowW);
 						const safetyMarginW = 200;
-						const maxByDemandW = importRawNowW + dischargeNowW + safetyMarginW;
+						const maxByDemandW = Math.max(0, importRawNowW + dischargeNowW + safetyMarginW - evcsStorageProtectedW);
 						if (Number.isFinite(maxByDemandW) && maxByDemandW > 0) {
 							nextSetW = Math.min(nextSetW, maxByDemandW);
 						}
@@ -1785,7 +1797,7 @@ if (targetW === 0 && selfDischargeEnabled) {
     const commandedDischargeNowW = curSetW > 0 ? curSetW : 0;
     const dischargeNowW = Math.max(measuredDischargeNowW, commandedDischargeNowW);
     const safetyMarginW = 200; // bewusst konservativ; Feintuning über selfTargetGridW/Deadband/Rampe
-    const maxByDemandW = importRawNowW + dischargeNowW + safetyMarginW;
+    const maxByDemandW = Math.max(0, importRawNowW + dischargeNowW + safetyMarginW - evcsStorageProtectedW);
     if (Number.isFinite(maxByDemandW) && maxByDemandW > 0) {
         nextSetW = Math.min(nextSetW, maxByDemandW);
     }

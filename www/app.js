@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/app.ts
- * Quell-Hash: sha256:8f47174e4976c813bfadb4890a6318e027084d4873cae9d089644d43917abdf8
+ * Quell-Hash: sha256:b4192fbac5dc2304425a61f839f81f1a3e4366f13e9a781685abd2d629ca6859
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -8917,6 +8917,10 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
   const phaseButtons = qs('evcsPhaseButtons');
   const phaseStatus = qs('evcsPhaseStatus');
   const phaseHint = qs('evcsPhaseHint');
+  const storageAssistRow = qs('evcsStorageAssistRow');
+  const storageAssistButtons = qs('evcsStorageAssistButtons');
+  const storageAssistStatus = qs('evcsStorageAssistStatus');
+  const storageAssistHint = qs('evcsStorageAssistHint');
 
   // Unified /api/set helper for the EVCS modal (single wallbox)
   /**
@@ -8966,6 +8970,8 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
   let pendingRegUntil = 0;
   let pendingPhaseMode = null;
   let pendingPhaseModeUntil = 0;
+  let pendingStorageAssist = null;
+  let pendingStorageAssistUntil = 0;
   let pendingGoalEnabled = null;
   let pendingGoalEnabledUntil = 0;
   let pendingGoalSoc = null;
@@ -9091,6 +9097,22 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
   function evcsPhaseSwitchDpAssigned(index){
     const row = evcsConfigRow(index);
     return !!String((row && (row.phaseSwitchId || row.phaseSwitchKey || row.phaseModeWriteId)) || '').trim();
+  }
+
+  function evcsStorageAssistCustomerAllowed(index){
+    const row = evcsConfigRow(index);
+    return !!(row && (row.storageAssistCustomerAllowed === true || row.customerStorageAssistAllowed === true || row.allowCustomerStorageAssist === true));
+  }
+
+  function applyStorageAssistUi(value){
+    if (!storageAssistButtons) return;
+    const v = !!value;
+    const btns = storageAssistButtons.querySelectorAll('button[data-storage-assist]');
+    btns.forEach(b => {
+      const raw = String(b.getAttribute('data-storage-assist') || 'false').toLowerCase();
+      const bv = raw === 'true' || raw === '1' || raw === 'yes' || raw === 'ja';
+      b.classList.toggle('active', bv === v);
+    });
   }
 
   function evcsConfiguredPhaseMode(index, fallbackPhases){
@@ -9397,6 +9419,26 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
     });
   }
 
+  if (storageAssistButtons){
+    storageAssistButtons.addEventListener('click', async (e)=>{
+      const b = e.target && e.target.closest ? e.target.closest('button[data-storage-assist]') : null;
+      if (!b || b.disabled) return;
+      const raw = String(b.getAttribute('data-storage-assist') || 'false').toLowerCase();
+      const desired = raw === 'true' || raw === '1' || raw === 'yes' || raw === 'ja';
+      pendingStorageAssist = desired;
+      pendingStorageAssistUntil = Date.now() + 3000;
+      applyStorageAssistUi(desired);
+      try { scheduleRender(); } catch(_e) {}
+      try{
+        await apiSet('ems', 'evcs.1.storageAssistEnabled', desired);
+      }catch(_e){
+        pendingStorageAssist = null;
+        pendingStorageAssistUntil = 0;
+        try { scheduleRender(); } catch(_e2) {}
+      }
+    });
+  }
+
   // Update values from state inside global render()
   window.__evcsApply = function(d, s){
     const p = d('evcs.totalPowerW') ?? d('consumptionEvcs') ?? 0;
@@ -9571,6 +9613,38 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
           else if (cooldownMs > 0) txt = `Cooldown aktiv: ${Math.ceil(cooldownMs / 1000)} s`;
           else txt = effectivePhaseMode === 'auto-pv' ? 'Auto PV schaltet 1p/3p nach Überschuss, Hysterese und Cooldown.' : 'Fester AC-Phasenmodus aktiv.';
           phaseHint.textContent = txt;
+        }
+      }
+    }
+
+    // Speicher-Mitnutzung für diesen Ladepunkt – nur sichtbar, wenn der Installer sie freigegeben hat.
+    if (storageAssistRow != null){
+      const installerAllowed = evcsStorageAssistCustomerAllowed(1) || d('chargingManagement.wallboxes.lp1.storageAssistCustomerAllowed') === true;
+      storageAssistRow.style.display = (!!hasEms && installerAllowed) ? '' : 'none';
+      if (!!hasEms && installerAllowed){
+        const stateVal = !!d('chargingManagement.wallboxes.lp1.userStorageAssistEnabled');
+        const effectiveVal = !!d('chargingManagement.wallboxes.lp1.effectiveStorageAssist');
+        const reason = String(d('chargingManagement.wallboxes.lp1.storageAssistBlockedReason') || '').trim();
+        const batteryW = Number(d('chargingManagement.wallboxes.lp1.batteryContributionW') || 0);
+        const requested = (pendingStorageAssist !== null && now < pendingStorageAssistUntil) ? !!pendingStorageAssist : stateVal;
+        if (pendingStorageAssist !== null){
+          if (stateVal === pendingStorageAssist){
+            pendingStorageAssist = null;
+            pendingStorageAssistUntil = 0;
+          } else if (now >= pendingStorageAssistUntil){
+            pendingStorageAssist = null;
+            pendingStorageAssistUntil = 0;
+          }
+        }
+        applyStorageAssistUi(requested);
+        if (storageAssistStatus != null){
+          storageAssistStatus.textContent = requested ? 'Speicher mitnutzen' : 'Speicher schützen';
+        }
+        if (storageAssistHint != null){
+          if (!requested) storageAssistHint.textContent = 'Speicher bleibt für Hausverbrauch/Reserve geschützt.';
+          else if (effectiveVal && batteryW > 0) storageAssistHint.textContent = `Speicher unterstützt diesen Ladepunkt aktuell mit ca. ${Math.round(batteryW)} W.`;
+          else if (effectiveVal) storageAssistHint.textContent = 'Speicher darf diesen Ladepunkt unterstützen, sobald Budget/SoC es erlauben.';
+          else storageAssistHint.textContent = reason ? `Angefordert, aktuell blockiert: ${reason}` : 'Angefordert – wartet auf Speicher-/SoC-Freigabe.';
         }
       }
     }

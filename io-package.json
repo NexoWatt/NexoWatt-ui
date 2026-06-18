@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.11",
+    "version": "0.8.12",
     "news": {
+      "0.8.12": {
+        "de": "Version 0.8.12: EVCS-Speicher-Mitnutzung je Ladepunkt ergänzt. Der Installateur kann die Kundenbedienung freigeben; Kunden wählen danach Speicher schützen oder mitnutzen. Backend, TS-Allocation, Storage-Control und LIVE/EVCS-UI setzen die Policy durch.",
+        "en": "Version 0.8.12: Adds per-chargepoint EVCS storage assist policy. Installers can unlock the customer control; customers then choose protect storage or use storage. Backend, TS allocation, storage control and LIVE/EVCS UI enforce the policy."
+      },
       "0.8.11": {
         "de": "Version 0.8.11: EVCS-AC-Phasenbedienung zeigt die drei Buttons 1p, 3p und Auto-PV jetzt zuverlässig in LIVE und EVCS an, sobald der Phasenumschalt-Hauptdatenpunkt im App-Center zugeordnet ist. Die Sichtbarkeit nutzt zusätzlich die Installer-Konfiguration und die relevanten Phasenstates werden für /api/state geprimt.",
         "en": "Version 0.8.11: EVCS AC phase controls now reliably show the three buttons 1p, 3p and Auto-PV in LIVE and EVCS as soon as the phase-switch main datapoint is assigned in the App Center. Visibility also uses the installer configuration and relevant phase states are primed for /api/state."
@@ -26,10 +30,6 @@
       "0.8.6": {
         "de": "Version 0.8.6: Hotfix für EOS/HEMS-Freischaltung im App-Center. Die Installer-API liefert Lizenzdaten zusätzlich top-level aus und das App-Center nutzt /api/license/info als No-Cache-Fallback, damit gültige EOS-Lizenzen sofort alle Apps anzeigen.",
         "en": "Version 0.8.6: Hotfix for EOS/HEMS activation in the App Center. The installer API exposes license data additionally at top level and the App Center uses /api/license/info as a no-cache fallback so valid EOS licenses immediately show all apps."
-      },
-      "0.8.5": {
-        "de": "Version 0.8.5: Windows-Publish-Hotfix. Die automatische DevDependency-Installation nutzt nun npm-cli.js/cmd.exe-Fallback statt direktem npm.cmd-Spawn und verhindert EINVAL-Abbrüche beim npm publish.",
-        "en": "Version 0.8.5: Windows publish hotfix. Automatic devDependency installation now uses npm-cli.js/cmd.exe fallback instead of direct npm.cmd spawning and prevents EINVAL aborts during npm publish."
       }
     },
     "title": "NexoWatt UI",

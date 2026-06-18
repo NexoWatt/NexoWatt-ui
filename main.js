@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:1903072011e7e924c1d529425caf69ab7cd22e62c03da46db660e4524e033958
+ * Quell-Hash: sha256:5031da898d36e818ae3b76c244ae911f6ab137349984abc0e39bfba5bad8ab9f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -6594,7 +6594,8 @@ try {
       const phaseSwitchDownStableSec = (row && row.phaseSwitchDownStableSec !== undefined && row.phaseSwitchDownStableSec !== null && String(row.phaseSwitchDownStableSec).trim() !== '' && Number.isFinite(Number(row.phaseSwitchDownStableSec))) ? Number(row.phaseSwitchDownStableSec) : 120;
       const phaseSwitchCooldownSec = (row && row.phaseSwitchCooldownSec !== undefined && row.phaseSwitchCooldownSec !== null && String(row.phaseSwitchCooldownSec).trim() !== '' && Number.isFinite(Number(row.phaseSwitchCooldownSec))) ? Number(row.phaseSwitchCooldownSec) : 900;
       const phaseSwitchSettleSec = (row && row.phaseSwitchSettleSec !== undefined && row.phaseSwitchSettleSec !== null && String(row.phaseSwitchSettleSec).trim() !== '' && Number.isFinite(Number(row.phaseSwitchSettleSec))) ? Number(row.phaseSwitchSettleSec) : 30;
-evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec });
+      const storageAssistCustomerAllowed = !!(row && (row.storageAssistCustomerAllowed === true || row.customerStorageAssistAllowed === true || row.allowCustomerStorageAssist === true));
+evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec, storageAssistCustomerAllowed });
     }
     this.evcsList = evcsList;
     // Stationsgruppen (für DC-Stationen mit mehreren Ladepunkten)
@@ -7283,12 +7284,21 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       await prime('chargingManagement.control.tsLegacyDecisionTreeJson');
       await prime('chargingManagement.control.usedW');
       await prime('chargingManagement.control.pvAvailable');
+      await prime('chargingManagement.control.storagePolicyJson');
+      await prime('chargingManagement.control.storageProtectedEvPowerW');
+      await prime('chargingManagement.control.storageAssistEligibleEvPowerW');
 
       // Prime per-Ladepunkt runtime states (mode + boost info + station meta)
       for (let i = 1; i <= evcsCount; i++) {
         const base = `chargingManagement.wallboxes.lp${i}`;
         await prime(`${base}.userMode`);
         await prime(`${base}.userPhaseMode`);
+        await prime(`${base}.userStorageAssistEnabled`);
+        await prime(`${base}.storageAssistCustomerAllowed`);
+        await prime(`${base}.storageAssistRequested`);
+        await prime(`${base}.effectiveStorageAssist`);
+        await prime(`${base}.storageAssistBlockedReason`);
+        await prime(`${base}.batteryContributionW`);
         await prime(`${base}.effectiveMode`);
         await prime(`${base}.phaseMode`);
         await prime(`${base}.phaseSwitchSupported`);
@@ -9308,6 +9318,12 @@ async onReady() {
       const base = `chargingManagement.wallboxes.lp${i}`;
       await primeKey(`${base}.userMode`);
       await primeKey(`${base}.userPhaseMode`);
+      await primeKey(`${base}.userStorageAssistEnabled`);
+      await primeKey(`${base}.storageAssistCustomerAllowed`);
+      await primeKey(`${base}.storageAssistRequested`);
+      await primeKey(`${base}.effectiveStorageAssist`);
+      await primeKey(`${base}.storageAssistBlockedReason`);
+      await primeKey(`${base}.batteryContributionW`);
       await primeKey(`${base}.phaseMode`);
       await primeKey(`${base}.phaseSwitchSupported`);
       await primeKey(`${base}.currentPhaseCount`);
@@ -17490,19 +17506,19 @@ settingsConfig: {
           // - lp1.regEnabled
           // - chargingManagement.wallboxes.lp1.userMode
           // - chargingManagement.wallboxes.lp1.userEnabled
-          const mIdx = k.match(/^(?:evcs\.)?(\d+)\.(userMode|emsMode|regEnabled|phaseMode|userPhaseMode|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
+          const mIdx = k.match(/^(?:evcs\.)?(\d+)\.(userMode|emsMode|regEnabled|phaseMode|userPhaseMode|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
           if (mIdx) {
             const idx = Math.max(1, Math.round(Number(mIdx[1] || 0)));
             safe = `lp${idx}`;
             prop = String(mIdx[2] || '').toLowerCase();
           } else {
-            const mLp = k.match(/^lp(\d+)\.(userMode|emsMode|regEnabled|phaseMode|userPhaseMode|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
+            const mLp = k.match(/^lp(\d+)\.(userMode|emsMode|regEnabled|phaseMode|userPhaseMode|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
             if (mLp) {
               const idx = Math.max(1, Math.round(Number(mLp[1] || 0)));
               safe = `lp${idx}`;
               prop = String(mLp[2] || '').toLowerCase();
             } else {
-              const m2 = k.match(/^chargingManagement\.(?:wallboxes\.)?([a-z0-9_]+)\.(userMode|userEnabled|regEnabled|phaseMode|userPhaseMode|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
+              const m2 = k.match(/^chargingManagement\.(?:wallboxes\.)?([a-z0-9_]+)\.(userMode|userEnabled|regEnabled|phaseMode|userPhaseMode|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
               if (m2) {
                 safe = String(m2[1] || '').trim();
                 prop = String(m2[2] || '').toLowerCase();
@@ -17535,6 +17551,37 @@ settingsConfig: {
             }
           }
 
+
+          // Speicher-Mitnutzung pro Ladepunkt: Installer-Freigabe ist zwingend.
+          if (prop === 'storageassistenabled' || prop === 'userstorageassistenabled') {
+            const b = !!value;
+            let installerAllowed = false;
+            try {
+              const idxMatch = String(safe || '').match(/^lp(\d+)$/i);
+              const idx = idxMatch ? Math.max(1, Math.round(Number(idxMatch[1] || 0))) : 0;
+              const row = Array.isArray(this.evcsList) ? this.evcsList.find(r => {
+                if (!r) return false;
+                const ri = Number(r.index || 0);
+                if (idx && ri === idx) return true;
+                const rsafe = `lp${Math.max(1, Math.round(ri || 0))}`;
+                return rsafe === safe;
+              }) : null;
+              installerAllowed = !!(row && row.storageAssistCustomerAllowed === true);
+            } catch (_e) {
+              installerAllowed = false;
+            }
+            if (b && !installerAllowed) {
+              return res.status(403).json({ ok: false, error: 'storage_assist_locked' });
+            }
+            const id = `chargingManagement.wallboxes.${safe}.userStorageAssistEnabled`;
+            try {
+              await this.setStateAsync(id, b, false);
+              try { this.updateValue(id, b, Date.now()); } catch (_e) {}
+              return res.json({ ok: true });
+            } catch (_e) {
+              return res.status(409).json({ ok: false, error: 'not_ready' });
+            }
+          }
 
           // AC-Phasenmodus: fixed-1p | fixed-3p | auto-pv
           // Dieser Wert ist bewusst ein User-Override und wird von der TS-EVCS-Allocation/Write-Plan-Kette ausgewertet.

@@ -8703,6 +8703,21 @@ function collectAiAdvisorConfigFromUI(base) {
       modeSel.addEventListener('change', () => _updateEvcsField(i, 'userMode', String(modeSel.value)));
       body.appendChild(mkRow('Standard-Modus', modeSel));
 
+      // Speicher-Mitnutzung: Installer gibt die Kundenbedienung je Ladepunkt frei.
+      const storageAssistAllowedInp = document.createElement('input');
+      storageAssistAllowedInp.type = 'checkbox';
+      storageAssistAllowedInp.checked = !!(rowCfg && rowCfg.storageAssistCustomerAllowed === true);
+      storageAssistAllowedInp.addEventListener('change', () => _updateEvcsField(i, 'storageAssistCustomerAllowed', !!storageAssistAllowedInp.checked));
+      const storageAssistWrap = document.createElement('div');
+      storageAssistWrap.style.display = 'grid';
+      storageAssistWrap.style.gap = '4px';
+      storageAssistWrap.appendChild(storageAssistAllowedInp);
+      const storageAssistHint = document.createElement('small');
+      storageAssistHint.textContent = 'Aktiviert im Kunden-Frontend die Wahl „Speicher schützen / Speicher mitnutzen“. Ohne Freigabe bleibt die Bedienung unsichtbar und der Speicher wird für diesen Ladepunkt geschützt.';
+      storageAssistHint.style.opacity = '0.82';
+      storageAssistWrap.appendChild(storageAssistHint);
+      body.appendChild(mkRow('Kunde darf Speicher-Mitnutzung bedienen', storageAssistWrap));
+
       // Datenpunkte
       const dpDetails = document.createElement('details');
       dpDetails.style.marginTop = '8px';

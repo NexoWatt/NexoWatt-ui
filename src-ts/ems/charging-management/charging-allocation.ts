@@ -69,6 +69,12 @@ export interface ChargingAllocationWallboxInput {
   hasSetCurrent?: unknown;
   allowBoost?: unknown;
   staleAny?: unknown;
+  storageAssistCustomerAllowed?: unknown;
+  userStorageAssistEnabled?: unknown;
+  storageAssistRequested?: unknown;
+  effectiveStorageAssist?: unknown;
+  storageAssistBlockedReason?: unknown;
+  batteryContributionW?: unknown;
   reason?: unknown;
 }
 
@@ -147,6 +153,12 @@ export interface ChargingAllocationWallboxPlan {
   targetCurrentA: number;
   actualPowerW: number;
   pvUsedW: number;
+  storageAssistCustomerAllowed: boolean;
+  userStorageAssistEnabled: boolean;
+  storageAssistRequested: boolean;
+  effectiveStorageAssist: boolean;
+  storageAssistBlockedReason: string;
+  batteryContributionW: number;
   blocked: boolean;
   reason: string;
   writeRequired: boolean;
@@ -464,23 +476,25 @@ function applyTsNativeAllocationPlan(plannedRaw: ChargingAllocationWallboxPlan[]
     .map((wb, index) => ({ wb, index, priority: Number.isFinite(Number(wb.priority)) ? Number(wb.priority) : 0 }))
     .sort((a, b) => (b.priority - a.priority) || (a.index - b.index));
   const availableW = effectiveNativeBudgetW(input, candidates.map((item) => item.wb));
-  const selected = new Map<string, { targetW: number; maxW: number; reason: string }>();
-  let remainingW = availableW;
+  const storageAssistW = boolValue(input.storageAssistActive, false) ? nonNegative(input.storageAssistW) : 0;
+  const baseAvailableW = Math.max(0, availableW - storageAssistW);
+  const selected = new Map<string, { targetW: number; maxW: number; reason: string; batteryContributionW: number }>();
+  let remainingW = baseAvailableW;
 
   for (const item of candidates) {
     const wb = item.wb;
     const minW = technicalMinPowerW(wb);
     const maxW = Math.max(minW, technicalMaxPowerW(wb));
     if (remainingW <= 0) {
-      selected.set(wb.safe, { targetW: 0, maxW, reason: 'no-budget' });
+      selected.set(wb.safe, { targetW: 0, maxW, reason: 'no-budget', batteryContributionW: 0 });
       continue;
     }
     if (minW > 0 && remainingW < minW) {
-      selected.set(wb.safe, { targetW: 0, maxW, reason: 'budget-below-minimum' });
+      selected.set(wb.safe, { targetW: 0, maxW, reason: 'budget-below-minimum', batteryContributionW: 0 });
       continue;
     }
     const base = minW > 0 ? minW : 0;
-    selected.set(wb.safe, { targetW: base, maxW, reason: base > 0 ? 'ts-native-minimum' : 'ts-native-eligible' });
+    selected.set(wb.safe, { targetW: base, maxW, reason: base > 0 ? 'ts-native-minimum' : 'ts-native-eligible', batteryContributionW: 0 });
     remainingW -= base;
   }
 
@@ -503,6 +517,36 @@ function applyTsNativeAllocationPlan(plannedRaw: ChargingAllocationWallboxPlan[]
     remainingW -= usedThisRound;
   }
 
+  let storageRemainingW = storageAssistW;
+  if (storageRemainingW > 0) {
+    const storageEligible = candidates
+      .filter((item) => {
+        const chosen = selected.get(item.wb.safe);
+        return !!chosen && (item.wb.storageAssistRequested || item.wb.effectiveStorageAssist);
+      })
+      .map((item) => ({ wb: item.wb, chosen: selected.get(item.wb.safe)! }))
+      .filter((item) => item.chosen.targetW < item.chosen.maxW);
+    let guardStorage = 0;
+    while (storageRemainingW > 0 && guardStorage < 20) {
+      guardStorage += 1;
+      const adjustable = storageEligible.filter((item) => item.chosen.targetW < item.chosen.maxW);
+      if (!adjustable.length) break;
+      const share = Math.max(1, Math.floor(storageRemainingW / adjustable.length));
+      let usedThisRound = 0;
+      for (const item of adjustable) {
+        const add = Math.min(item.chosen.maxW - item.chosen.targetW, share, storageRemainingW - usedThisRound);
+        if (add <= 0) continue;
+        item.chosen.targetW += add;
+        item.chosen.batteryContributionW += add;
+        item.chosen.reason = item.wb.effectiveStorageAssist ? 'ts-native-storage-assist' : 'ts-native-storage-requested';
+        usedThisRound += add;
+        if (usedThisRound >= storageRemainingW) break;
+      }
+      if (usedThisRound <= 0) break;
+      storageRemainingW -= usedThisRound;
+    }
+  }
+
   return plannedRaw.map((wb) => {
     if (wb.phaseSwitchRequired || wb.phaseSwitchSafetyStopRequired) {
       const canWriteSafeStop = wb.online && wb.hasSetpoint;
@@ -514,6 +558,7 @@ function applyTsNativeAllocationPlan(plannedRaw: ChargingAllocationWallboxPlan[]
         targetPowerW: 0,
         targetCurrentA: 0,
         pvUsedW: 0,
+        batteryContributionW: 0,
         blocked: !canWriteSafeStop,
         reason: canWriteSafeStop ? reason : (wb.online ? 'missing-wallbox-setpoint' : 'offline'),
         writeRequired: canWriteSafeStop,
@@ -541,6 +586,7 @@ function applyTsNativeAllocationPlan(plannedRaw: ChargingAllocationWallboxPlan[]
       targetPowerW,
       targetCurrentA,
       pvUsedW: Math.min(targetPowerW, nonNegative(input.pvAvailableW)),
+      batteryContributionW: chosen ? Math.max(0, Math.round(chosen.batteryContributionW || 0)) : 0,
       blocked,
       reason: reason || 'ts-native-allocated',
       writeRequired,
@@ -586,6 +632,12 @@ function normalizeWallboxPlan(
   const hasPowerSetpoint = boolValue(wallbox.hasSetPower, typeof wallbox.setWKey === 'string' && wallbox.setWKey.trim().length > 0);
   const hasCurrentSetpoint = boolValue(wallbox.hasSetCurrent, typeof wallbox.setAKey === 'string' && wallbox.setAKey.trim().length > 0);
   const hasSetpoint = boolValue(wallbox.hasSetpoint, hasPowerSetpoint || hasCurrentSetpoint || !!wallbox.setWKey || !!wallbox.setAKey);
+  const storageAssistCustomerAllowed = boolValue(wallbox.storageAssistCustomerAllowed ?? (allocation ? allocation.storageAssistCustomerAllowed : undefined), false);
+  const userStorageAssistEnabled = boolValue(wallbox.userStorageAssistEnabled ?? (allocation ? allocation.userStorageAssistEnabled : undefined), false);
+  const storageAssistRequested = boolValue(wallbox.storageAssistRequested ?? (allocation ? allocation.storageAssistRequested : undefined), storageAssistCustomerAllowed && userStorageAssistEnabled);
+  const effectiveStorageAssist = boolValue(wallbox.effectiveStorageAssist ?? (allocation ? allocation.effectiveStorageAssist : undefined), storageAssistRequested && boolValue(input.storageAssistActive, false));
+  const storageAssistBlockedReason = str(wallbox.storageAssistBlockedReason ?? (allocation ? allocation.storageAssistBlockedReason : undefined), storageAssistCustomerAllowed ? (userStorageAssistEnabled ? (effectiveStorageAssist ? 'allowed' : 'storage-gate-blocked') : 'user-disabled') : 'installer-locked');
+  const batteryContributionW = nonNegative(wallbox.batteryContributionW ?? (allocation ? allocation.batteryContributionW : undefined));
   const reason = str((allocation ? allocation.reason : undefined) ?? wallbox.reason, enabled && online ? '' : 'not_available');
   const blocked = !enabled || !online || reason === 'blocked' || reason === 'stale_meter' || reason === 'control_disabled';
   const writeRequired = hasSetpoint && online && (targetPowerW > 0 || targetCurrentA > 0 || enabled === false || reason === 'control_disabled');
@@ -630,6 +682,12 @@ function normalizeWallboxPlan(
     targetCurrentA,
     actualPowerW,
     pvUsedW,
+    storageAssistCustomerAllowed,
+    userStorageAssistEnabled,
+    storageAssistRequested,
+    effectiveStorageAssist,
+    storageAssistBlockedReason,
+    batteryContributionW,
     blocked,
     reason,
     writeRequired,
@@ -671,6 +729,7 @@ export function buildChargingAllocationShadowPlan(input: ChargingAllocationRunti
           targetPowerW: 0,
           targetCurrentA: 0,
           pvUsedW: 0,
+          batteryContributionW: 0,
           boost: false,
           blocked: !canWriteSafeStop,
           reason: canWriteSafeStop ? safetyReason : (wb.online ? 'missing-wallbox-setpoint' : 'offline'),
