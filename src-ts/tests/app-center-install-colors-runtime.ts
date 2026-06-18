@@ -43,7 +43,7 @@ function runAppCenterInstallColorTest(): void {
     packages?: Record<string, { version?: string; devDependencies?: Record<string, string>; resolved?: string }>;
   }>('package-lock.json');
 
-  const expectedVersion = '0.8.6';
+  const expectedVersion = '0.8.7';
   assert(pkg.version === expectedVersion, `package.json muss Version ${expectedVersion} haben.`);
   assert(lock.version === expectedVersion, `package-lock.json muss Version ${expectedVersion} haben.`);
   assert(lock.packages?.['']?.version === expectedVersion, `package-lock root package muss Version ${expectedVersion} haben.`);

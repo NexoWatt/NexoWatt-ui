@@ -1,3 +1,9 @@
+
+## 0.8.7
+
+- Hotfix: App-Center baut die lizenzabhängige App-Liste nach dem Laden der EOS/HEMS-Lizenz sofort neu auf.
+- Fix: Gültige EOS-Lizenz zeigt wieder alle Apps statt "Keine Apps verfügbar".
+
 ## 0.8.6
 
 - Lizenz-Aktivierung-Hotfix: App-Center, Lizenz-API und VIS-Gate aktualisieren den Lizenzstatus jetzt direkt aus der gespeicherten Adapter-Konfiguration. Dadurch werden EOS/HEMS-Schlüssel auch dann wirksam, wenn sie über die Admin-Konfiguration gespeichert wurden und der Runtime-Status noch nicht synchron war.

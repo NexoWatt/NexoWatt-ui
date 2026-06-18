@@ -943,8 +943,8 @@
     const labelHint = String(unwrap(src.editionLabel) || unwrap(src.message) || unwrap(src.msg) || '').trim().toLowerCase();
     const keyHint = String(unwrap(src.licenseKey) || unwrap(src.licenseKeyMasked) || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     let edition = rawEdition === 'eos' ? 'eos' : (rawEdition === 'hems' ? 'hems' : 'none');
-    if (edition === 'none' && (src.eosFullAccess === true || asBool(src.eosFullAccess) || /eos/.test(labelHint))) edition = 'eos';
-    if (edition === 'none' && /hems/.test(labelHint)) edition = 'hems';
+    if (edition === 'none' && (src.eosFullAccess === true || asBool(src.eosFullAccess) || /\beos\b/.test(labelHint))) edition = 'eos';
+    if (edition === 'none' && /\bhems\b/.test(labelHint)) edition = 'hems';
     if (edition === 'none' && /^NW1TH/.test(keyHint)) edition = 'hems';
     if (edition === 'none' && /^(NW1E|NW1TE|NW1T|NW1)/.test(keyHint)) edition = 'eos';
     // /api/license/info uses ok=true for transport success; the license itself is valid=true.
@@ -995,6 +995,56 @@
       return normalizeLicenseInfo(data);
     } catch (_e) {
       return null;
+    }
+  }
+
+  async function fetchLicenseInfoFromStateFallback() {
+    try {
+      const data = await fetchJson('/api/state?t=' + Date.now(), { cache: 'no-store' });
+      const readVal = (key) => {
+        const rec = data && data[key];
+        return rec && Object.prototype.hasOwnProperty.call(rec, 'value') ? rec.value : undefined;
+      };
+      return normalizeLicenseInfo({
+        valid: readVal('license.valid'),
+        type: readVal('license.type') || 'none',
+        edition: readVal('license.edition') || 'none',
+        editionLabel: readVal('license.edition') || readVal('license.message') || '',
+        featuresJson: readVal('license.featuresJson') || '{}',
+        maxWallboxes: readVal('license.maxWallboxes'),
+        message: readVal('license.message') || '',
+        expiresAt: readVal('license.expiresAt') || 0,
+        daysRemaining: readVal('license.daysRemaining') || 0,
+      });
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  let _licenseLiveRefreshInFlight = false;
+  async function refreshLicenseForAppCenter(reason) {
+    if (_licenseLiveRefreshInFlight) return;
+    _licenseLiveRefreshInFlight = true;
+    try {
+      const before = JSON.stringify(currentLicenseInfo || {});
+      const liveLicense = await fetchLicenseInfoFallback();
+      const stateLicense = _licenseIsUsable(liveLicense) ? null : await fetchLicenseInfoFromStateFallback();
+      const nextLicense = _licenseIsUsable(liveLicense) ? liveLicense : (_licenseIsUsable(stateLicense) ? stateLicense : liveLicense || stateLicense);
+      if (!nextLicense) return;
+      currentConfig = currentConfig && typeof currentConfig === 'object' ? currentConfig : {};
+      currentConfig.license = nextLicense;
+      currentLicenseInfo = normalizeLicenseInfo(nextLicense);
+      const after = JSON.stringify(currentLicenseInfo || {});
+      if (before !== after) {
+        try { buildAppsUI(); } catch (_eBuildApps) {}
+        try { buildEvcsUI(); } catch (_eBuildEvcs) {}
+        try { scheduleValidation(200); } catch (_eValidation) {}
+        if (_licenseEdition() !== 'none') {
+          try { setStatus('Lizenz aktualisiert: ' + _licenseLabel() + '.', 'ok'); } catch (_eStatus) {}
+        }
+      }
+    } finally {
+      _licenseLiveRefreshInFlight = false;
     }
   }
 
@@ -9137,6 +9187,12 @@ function collectAiAdvisorConfigFromUI(base) {
     currentLicenseInfo = normalizeLicenseInfo(currentConfig.license);
 
     // Apps
+    // 0.8.7 Hotfix: Die App-Liste hängt von der Lizenzedition ab. Beim Seitenstart
+    // wurde buildAppsUI() noch mit "Keine Lizenz" gerendert; applyConfigToUI() setzte
+    // danach zwar currentLicenseInfo=EOS/HEMS, baute die Liste aber nicht neu. Dadurch
+    // blieb trotz gültiger EOS-Lizenz "Keine Apps verfügbar" stehen. Deshalb zuerst
+    // die lizenzabhängige App-Struktur neu erzeugen, danach die gespeicherten Toggles setzen.
+    try { buildAppsUI(); } catch (_eBuildApps) {}
     setAppsFromConfig(currentConfig);
 
     // Plant params
@@ -10289,8 +10345,11 @@ function collectAiAdvisorConfigFromUI(base) {
     // sichtbar wird und nicht auf einer alten "Keine Lizenz"-Konfiguration hängen bleibt.
     const configLicense = normalizeLicenseInfo(cfg.license || (data && data.license));
     const liveLicense = await fetchLicenseInfoFallback();
+    const stateLicense = _licenseIsUsable(liveLicense) ? null : await fetchLicenseInfoFromStateFallback();
     if (_licenseIsUsable(liveLicense)) {
       cfg.license = liveLicense;
+    } else if (_licenseIsUsable(stateLicense)) {
+      cfg.license = stateLicense;
     } else if (_licenseIsUsable(configLicense)) {
       cfg.license = configLicense;
     } else {
@@ -12941,5 +13000,15 @@ if (els.ocppAutoDetect) {
   // Initial load
   loadConfig().catch(e => setStatus('Laden fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
   backupRefreshInfo().catch(() => {});
+
+  // 0.8.7: Wenn die Lizenz in einem anderen Admin-Tab aktiviert wird, soll das bereits offene
+  // App-Center automatisch von "Keine Lizenz" auf EOS/HEMS umschalten und die Apps wieder anzeigen.
+  window.addEventListener('focus', () => { refreshLicenseForAppCenter('focus').catch(() => {}); });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) refreshLicenseForAppCenter('visible').catch(() => {});
+  });
+  window.setInterval(() => {
+    if (_licenseEdition() === 'none') refreshLicenseForAppCenter('poll').catch(() => {});
+  }, 5000);
 
 })();

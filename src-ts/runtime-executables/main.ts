@@ -1846,11 +1846,14 @@ class NexoWattVis extends utils.Adapter {
    */
   async _nwGetConfiguredLicenseKey() {
     const candidates = [];
-    try { candidates.push(String((this.config && this.config.licenseKey) || '').trim()); } catch (_e) {}
+    // Prefer the live adapter object over this.config. The Admin tab can update
+    // system.adapter.<instance>.native.licenseKey while the adapter process is still
+    // running; this.config may then still contain the old value until restart.
     try {
       const objKey = await this._nwReadNativeLicenseKeyFromObject();
       if (objKey) candidates.push(objKey);
     } catch (_e) {}
+    try { candidates.push(String((this.config && this.config.licenseKey) || '').trim()); } catch (_e) {}
 
     let sawMasked = false;
     for (const candidate of candidates) {
@@ -2376,6 +2379,10 @@ class NexoWattVis extends utils.Adapter {
     this._nwSystemUuid = await this._nwGetSystemUuid();
     const licenseSource = await this._nwGetConfiguredLicenseKey();
     const entered = licenseSource.key;
+    try {
+      this.config = this.config || {};
+      if (entered && !this._nwLooksLikeMaskedLicenseKey(entered)) this.config.licenseKey = entered;
+    } catch (_e) {}
 
     let info = await this._nwEvaluateLicense(this._nwSystemUuid, entered);
     if (!info.ok && licenseSource.sawMasked && !entered) {
@@ -9356,10 +9363,11 @@ async onReady() {
       if (!this._nwSystemUuid) {
         try { this._nwSystemUuid = await this._nwGetSystemUuid(); } catch (_e) {}
       }
-      // 0.8.6: Lizenzstatus vor jeder öffentlichen Lizenzabfrage frisch aus dem gespeicherten Key aufbauen.
+      // 0.8.7: Lizenzstatus vor jeder öffentlichen Lizenzabfrage frisch aus dem gespeicherten Key aufbauen.
       // Dadurch sehen Admin-Seite, App-Center und Backend denselben EOS/HEMS-Status, auch direkt nach dem Speichern.
       try { await this._nwRefreshLicenseFromConfiguredKey(false); } catch (e) { try { this.log.warn('License refresh before /api/license/info failed: ' + (e && e.message ? e.message : e)); } catch (_eLog) {} }
       const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
+      const featureInfo = this._nwBuildLicenseFeatureInfo();
       const keyInfo = await this._nwGetConfiguredLicenseKey();
       const currentLicenseKey = keyInfo.key;
       const maskedLicenseKey = currentLicenseKey
@@ -9371,10 +9379,11 @@ async onReady() {
         uuid: String(this._nwSystemUuid || ''),
         valid: !!this._nwLicenseOk,
         type: String(info.type || 'none'),
-        edition: String(this._nwBuildLicenseFeatureInfo().edition || 'none'),
-        editionLabel: String(this._nwBuildLicenseFeatureInfo().editionLabel || ''),
-        maxWallboxes: Number(this._nwBuildLicenseFeatureInfo().maxWallboxes || 0),
-        features: this._nwBuildLicenseFeatureInfo().features || {},
+        edition: String(featureInfo.edition || 'none'),
+        editionLabel: String(featureInfo.editionLabel || ''),
+        maxWallboxes: Number(featureInfo.maxWallboxes || 0),
+        features: featureInfo.features || {},
+        eosFullAccess: !!featureInfo.eosFullAccess,
         message: String(info.msg || ''),
         expiresAt: Number(info.expiresAt || 0),
         daysRemaining: Number(info.daysRemaining || 0),
