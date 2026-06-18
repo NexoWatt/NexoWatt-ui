@@ -41,7 +41,7 @@ function runBrandHeaderCleanupTest(): void {
   const io = readJson<{ common?: { version?: string; news?: Record<string, unknown> } }>('io-package.json');
   const manifest = readJson<{ name?: string; short_name?: string; version?: string }>('www/manifest.webmanifest');
 
-  const expectedVersion = '0.8.7';
+  const expectedVersion = '0.8.8';
   assert(pkg.version === expectedVersion, `package.json muss Version ${expectedVersion} haben.`);
   assert(lock.version === expectedVersion, `package-lock.json muss Version ${expectedVersion} haben.`);
   assert(lock.packages?.['']?.version === expectedVersion, `package-lock root package muss Version ${expectedVersion} haben.`);
@@ -66,9 +66,9 @@ function runBrandHeaderCleanupTest(): void {
   assert(read('src-ts/runtime-executables/www/app.ts').includes('function nwNormalizeBrandHeader'), 'app.ts muss den TS-Branding-Normalizer enthalten.');
   assert(read('src-ts/runtime-executables/www/nw-shell.ts').includes('function nwNormalizeBrandHeader'), 'nw-shell.ts muss den TS-Branding-Normalizer enthalten.');
   assert(read('src-ts/runtime-executables/www/cockpit-shell.ts').includes('function nwNormalizeBrandHeader'), 'cockpit-shell.ts muss den TS-Branding-Normalizer enthalten.');
-  assert(read('src-ts/runtime-executables/www/sw.ts').includes("nexowatt-cache-v308"), 'Service-Worker-TS-Quelle muss Cache v308 nutzen.');
-  assert(read('www/sw.js').includes("nexowatt-cache-v308"), 'Generierter Service Worker muss Cache v308 nutzen.');
+  assert(read('src-ts/runtime-executables/www/sw.ts').includes("nexowatt-cache-v309"), 'Service-Worker-TS-Quelle muss Cache v309 nutzen.');
+  assert(read('www/sw.js').includes("nexowatt-cache-v309"), 'Generierter Service Worker muss Cache v309 nutzen.');
 }
 
 runBrandHeaderCleanupTest();
-console.log('[ts-brand-header-cleanup] OK: 0.8.7-Topbar zeigt NexoWatt ohne EMS-Zusatz, Version/Manifest/Cache sind konsistent.');
+console.log('[ts-brand-header-cleanup] OK: 0.8.8-Topbar zeigt NexoWatt ohne EMS-Zusatz, Version/Manifest/Cache sind konsistent.');

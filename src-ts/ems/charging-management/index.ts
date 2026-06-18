@@ -8,3 +8,4 @@ export * from './charging-budget';
 export * from './charging-allocation';
 export * from './charging-write-plan';
 export * from './charging-normal-source';
+export * from './charging-phase-selection';

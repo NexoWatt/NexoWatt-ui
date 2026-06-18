@@ -6584,7 +6584,19 @@ try {
         ((row && typeof row.rfid === 'string' && row.rfid.trim()) ? row.rfid.trim() : ''));
             // Optional: Fahrzeug-SoC (in %) – falls die Wallbox/Backend es liefert
       const vehicleSocId = (row && typeof row.vehicleSocId === 'string' && row.vehicleSocId.trim()) ? row.vehicleSocId.trim() : '';
-evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId });
+      const phaseMode = (row && typeof row.phaseMode === 'string' && row.phaseMode.trim()) ? row.phaseMode.trim() : (phases === 1 ? 'fixed-1p' : 'fixed-3p');
+      const phaseSwitchId = (row && typeof row.phaseSwitchId === 'string' && row.phaseSwitchId.trim()) ? row.phaseSwitchId.trim() : '';
+      const phaseFeedbackId = (row && typeof row.phaseFeedbackId === 'string' && row.phaseFeedbackId.trim()) ? row.phaseFeedbackId.trim() : '';
+      const phaseSwitchValue1p = (row && row.phaseSwitchValue1p !== undefined && row.phaseSwitchValue1p !== null && String(row.phaseSwitchValue1p).trim() !== '') ? row.phaseSwitchValue1p : 1;
+      const phaseSwitchValue3p = (row && row.phaseSwitchValue3p !== undefined && row.phaseSwitchValue3p !== null && String(row.phaseSwitchValue3p).trim() !== '') ? row.phaseSwitchValue3p : 3;
+      const stopBeforePhaseSwitch = (row && row.stopBeforePhaseSwitch !== undefined && row.stopBeforePhaseSwitch !== null) ? !!row.stopBeforePhaseSwitch : true;
+      const phaseSwitchUpThresholdW = (row && row.phaseSwitchUpThresholdW !== undefined && row.phaseSwitchUpThresholdW !== null && String(row.phaseSwitchUpThresholdW).trim() !== '' && Number.isFinite(Number(row.phaseSwitchUpThresholdW))) ? Number(row.phaseSwitchUpThresholdW) : 4800;
+      const phaseSwitchDownThresholdW = (row && row.phaseSwitchDownThresholdW !== undefined && row.phaseSwitchDownThresholdW !== null && String(row.phaseSwitchDownThresholdW).trim() !== '' && Number.isFinite(Number(row.phaseSwitchDownThresholdW))) ? Number(row.phaseSwitchDownThresholdW) : 3700;
+      const phaseSwitchUpStableSec = (row && row.phaseSwitchUpStableSec !== undefined && row.phaseSwitchUpStableSec !== null && String(row.phaseSwitchUpStableSec).trim() !== '' && Number.isFinite(Number(row.phaseSwitchUpStableSec))) ? Number(row.phaseSwitchUpStableSec) : 300;
+      const phaseSwitchDownStableSec = (row && row.phaseSwitchDownStableSec !== undefined && row.phaseSwitchDownStableSec !== null && String(row.phaseSwitchDownStableSec).trim() !== '' && Number.isFinite(Number(row.phaseSwitchDownStableSec))) ? Number(row.phaseSwitchDownStableSec) : 120;
+      const phaseSwitchCooldownSec = (row && row.phaseSwitchCooldownSec !== undefined && row.phaseSwitchCooldownSec !== null && String(row.phaseSwitchCooldownSec).trim() !== '' && Number.isFinite(Number(row.phaseSwitchCooldownSec))) ? Number(row.phaseSwitchCooldownSec) : 900;
+      const phaseSwitchSettleSec = (row && row.phaseSwitchSettleSec !== undefined && row.phaseSwitchSettleSec !== null && String(row.phaseSwitchSettleSec).trim() !== '' && Number.isFinite(Number(row.phaseSwitchSettleSec))) ? Number(row.phaseSwitchSettleSec) : 30;
+evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec });
     }
     this.evcsList = evcsList;
     // Stationsgruppen (für DC-Stationen mit mehreren Ladepunkten)

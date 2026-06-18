@@ -21,7 +21,17 @@ export interface ChargingSetpointWritePlanWallboxInput {
   targetW?: unknown;
   targetA?: unknown;
   reason?: unknown;
+  phaseSwitchRequired?: unknown;
+  phaseSwitchAllowed?: unknown;
+  phaseSwitchCommandAllowed?: unknown;
+  phaseSwitchKey?: unknown;
+  phaseSwitchValue?: unknown;
+  phaseSwitchReason?: unknown;
+  phaseSwitchSafetyStopRequired?: unknown;
+  targetPhaseCount?: unknown;
+  currentPhaseCount?: unknown;
 }
+
 
 export interface ChargingSetpointWritePlanInput {
   wallboxes?: readonly ChargingSetpointWritePlanWallboxInput[] | null;
@@ -38,11 +48,13 @@ export interface ChargingSetpointWritePlanInput {
 export interface ChargingSetpointWritePlanEntry {
   safe: string;
   name: string;
-  basis: 'power' | 'current';
+  type: 'setpoint' | 'phaseSwitch';
+  basis: 'power' | 'current' | 'phase';
   setpointKey: string;
   targetPowerW: number;
   targetCurrentA: number;
-  targetValue: number;
+  targetValue: number | string | boolean;
+  targetPhaseCount: number;
   ack: false;
   deadband: number;
   writeRequired: boolean;
@@ -244,17 +256,64 @@ export function buildChargingSetpointWritePlan(input: ChargingSetpointWritePlanI
     entries.push({
       safe,
       name: str(wb.name ?? alloc.name, safe),
+      type: 'setpoint',
       basis,
       setpointKey,
       targetPowerW,
       targetCurrentA,
       targetValue,
+      targetPhaseCount: nonNegative(alloc.targetPhaseCount ?? wb.targetPhaseCount),
       ack: false,
       deadband: basis === 'current' ? 0.1 : 5,
       writeRequired,
       blocked,
       reason: reason || (writeRequired ? 'write-planned' : 'no-write'),
     });
+
+    const phaseSwitchRequired = boolValue(alloc.phaseSwitchRequired ?? wb.phaseSwitchRequired, false);
+    const phaseSwitchSafetyStopRequired = boolValue(alloc.phaseSwitchSafetyStopRequired ?? wb.phaseSwitchSafetyStopRequired, false);
+    const phaseSwitchCommandAllowed = boolValue(alloc.phaseSwitchCommandAllowed ?? wb.phaseSwitchCommandAllowed, false);
+    const phaseSwitchKey = str(alloc.phaseSwitchKey ?? wb.phaseSwitchKey);
+    const phaseSwitchValueRaw = (alloc.phaseSwitchValue ?? wb.phaseSwitchValue);
+    const phaseSwitchValue = typeof phaseSwitchValueRaw === 'boolean'
+      ? phaseSwitchValueRaw
+      : (typeof phaseSwitchValueRaw === 'number' && Number.isFinite(phaseSwitchValueRaw)
+          ? phaseSwitchValueRaw
+          : (() => {
+              const raw = str(phaseSwitchValueRaw);
+              if (!raw) return nonNegative(alloc.targetPhaseCount ?? wb.targetPhaseCount);
+              const low = raw.toLowerCase();
+              if (low === 'true' || low === 'false') return low === 'true';
+              const n = Number(raw.replace(',', '.'));
+              return Number.isFinite(n) ? n : raw;
+            })());
+    if (phaseSwitchRequired || phaseSwitchSafetyStopRequired || phaseSwitchCommandAllowed) {
+      const phaseReason = str(alloc.phaseSwitchReason ?? wb.phaseSwitchReason, phaseSwitchCommandAllowed ? 'phase-switch-command-ready' : 'phase-switch-waiting-for-safe-stop');
+      let phaseBlocked = false;
+      let phaseBlockedReason = phaseReason;
+      if (!online) { phaseBlocked = true; phaseBlockedReason = 'offline'; }
+      if (!phaseSwitchKey) { phaseBlocked = true; phaseBlockedReason = 'missing-phase-switch-setpoint'; }
+      if (!phaseSwitchCommandAllowed) { phaseBlocked = true; phaseBlockedReason = phaseReason || 'phase-switch-command-not-ready'; }
+      if (blockers.length && !phaseSwitchSafetyStopRequired) { phaseBlocked = true; phaseBlockedReason = phaseBlockedReason || String(blockers[0] || 'blocked'); }
+      const phaseWriteRequired = !phaseBlocked && phaseSwitchKey.length > 0;
+      entries.push({
+        safe,
+        name: str(wb.name ?? alloc.name, safe),
+        type: 'phaseSwitch',
+        basis: 'phase',
+        setpointKey: phaseSwitchKey,
+        targetPowerW: 0,
+        targetCurrentA: 0,
+        targetValue: phaseSwitchValue,
+        targetPhaseCount: nonNegative(alloc.targetPhaseCount ?? wb.targetPhaseCount),
+        ack: false,
+        deadband: 0,
+        writeRequired: phaseWriteRequired,
+        blocked: phaseBlocked,
+        reason: phaseBlockedReason || (phaseWriteRequired ? 'phase-switch-write-planned' : 'phase-switch-no-write'),
+      });
+      warnings.push('phase-switch-write-plan-present');
+    }
     index++;
   }
 

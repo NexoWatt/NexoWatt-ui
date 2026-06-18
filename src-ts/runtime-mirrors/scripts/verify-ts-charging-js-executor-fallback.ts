@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 3145dcab61c3ca1770c6bfe070af5785acca0c989820e88704651e756569c1b1
+ * Original-Hash: 731c51faa1200ff069ba19cf87a4c0437d25a7f1492ea9518efee8745a09085b
  */
 
 /**
@@ -112,7 +112,10 @@ if (applySetpointCalls !== 1) {
   console.error(`[ts-charging-js-executor-fallback] Erwartet genau einen applySetpoint-Aufruf im zentralen Executor, gefunden: ${applySetpointCalls}`);
   process.exit(1);
 }
-const mapInputUsages = (cm.match(/wallboxes: this\._mapChargingWallboxesForTsAllocation\(wbList\)/g) || []).length;
+const inlineMapInputUsages = (cm.match(/wallboxes: this\._mapChargingWallboxesForTsAllocation\(wbList\)/g) || []).length;
+const normalMapInputAssigned = cm.includes('const tsWallboxesForAllocation = this._mapChargingWallboxesForTsAllocation(wbList);');
+const normalMapInputUsages = (cm.match(/wallboxes: tsWallboxesForAllocation/g) || []).length;
+const mapInputUsages = inlineMapInputUsages + (normalMapInputAssigned && normalMapInputUsages > 0 ? 1 : 0);
 if (mapInputUsages < 3) {
   console.error(`[ts-charging-js-executor-fallback] Erwartet TS-Allocation-Input im Normalpfad, Stale-Failsafe und Peak-Rampdown, gefunden: ${mapInputUsages}`);
   process.exit(1);

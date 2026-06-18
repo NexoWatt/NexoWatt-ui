@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 8f0e76b396e658191c6343b723534f68b0b840130a34813dd9c2809e7c70a8c7
+ * Original-Hash: eac872a795770d159a19c1fdfb32557a7ab82e35cef8e69062dc81470c7fca83
  */
 
 /**
@@ -93,6 +93,12 @@ const mirrorSpecs = [
     builtRel: 'build-ts/ems-mirrors/ems/charging-management/charging-allocation.js',
     mirrorRel: 'lib/ts-mirrors/ems/charging-management/charging-allocation.js',
     purpose: 'EVCS-/Wallbox-Allocation-Shadow und Produktiv-Vorbereitung',
+  },
+  {
+    sourceRel: 'src-ts/ems/charging-management/charging-phase-selection.ts',
+    builtRel: 'build-ts/ems-mirrors/ems/charging-management/charging-phase-selection.js',
+    mirrorRel: 'lib/ts-mirrors/ems/charging-management/charging-phase-selection.js',
+    purpose: 'EVCS-AC-Phasenwahl 1p/3p für PV-Überschussladen mit Hysterese und Cooldown',
   },
   {
     sourceRel: 'src-ts/ems/charging-management/charging-write-plan.ts',

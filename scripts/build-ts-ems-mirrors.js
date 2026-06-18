@@ -65,6 +65,12 @@ const mirrorSpecs = [
     purpose: 'EVCS-/Wallbox-Allocation-Shadow und Produktiv-Vorbereitung',
   },
   {
+    sourceRel: 'src-ts/ems/charging-management/charging-phase-selection.ts',
+    builtRel: 'build-ts/ems-mirrors/ems/charging-management/charging-phase-selection.js',
+    mirrorRel: 'lib/ts-mirrors/ems/charging-management/charging-phase-selection.js',
+    purpose: 'EVCS-AC-Phasenwahl 1p/3p für PV-Überschussladen mit Hysterese und Cooldown',
+  },
+  {
     sourceRel: 'src-ts/ems/charging-management/charging-write-plan.ts',
     builtRel: 'build-ts/ems-mirrors/ems/charging-management/charging-write-plan.js',
     mirrorRel: 'lib/ts-mirrors/ems/charging-management/charging-write-plan.js',

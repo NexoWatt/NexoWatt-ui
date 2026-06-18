@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:406d1b740d83369b217261963476dfed76788cc3e9278038ccd057f34617f9e2
+ * Quell-Hash: sha256:5b0aab67fe8fbba739701e9ebeec3482db17acb740fb6d494592d999dcf27f6b
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -94,6 +94,19 @@ function requireChargingControlTsMirror() {
 function requireChargingAllocationTsMirror() {
     try {
         return require('../../lib/ts-mirrors/ems/charging-management/charging-allocation');
+    } catch (_e) {
+        return null;
+    }
+}
+
+
+/**
+ * Code-Teil: requireChargingPhaseSelectionTsMirror
+ * Zweck: Lädt die TS-Entscheidungsschicht für AC-1p/3p-Auto-Phasenwahl im PV-Überschussladen.
+ */
+function requireChargingPhaseSelectionTsMirror() {
+    try {
+        return require('../../lib/ts-mirrors/ems/charging-management/charging-phase-selection');
     } catch (_e) {
         return null;
     }
@@ -642,6 +655,13 @@ class ChargingManagementModule extends BaseModule {
         this._chargingLegacyDecisionTreeLast = null;
         this._chargingEvcsJsRemovalTsLast = null;
         this._adapterTsRuntimeHandoverLast = null;
+        // EVCS AC-Phasenautomatik (1p/3p PV-Überschuss): Zustandsmarker für Hysterese, Cooldown und Settle-Zeit.
+        this._chargingPhaseHighSinceMs = new Map();
+        this._chargingPhaseLowSinceMs = new Map();
+        this._chargingPhaseCooldownUntilMs = new Map();
+        this._chargingPhaseSettleUntilMs = new Map();
+        this._chargingPhaseAssumedBySafe = new Map();
+        this._chargingPhaseSelectionTsLast = null;
     }
 
 
@@ -840,6 +860,9 @@ class ChargingManagementModule extends BaseModule {
     async _publishChargingAllocationTsShadow(input) {
         const allocationMirror = requireChargingAllocationTsMirror();
         const writePlanMirror = requireChargingWritePlanTsMirror();
+        const phaseMirror = requireChargingPhaseSelectionTsMirror();
+        let phasePlan = null;
+        let allocationInput = input || {};
         let shadow = null;
         let productivePrep = null;
         let productiveDecision = null;
@@ -847,6 +870,39 @@ class ChargingManagementModule extends BaseModule {
         let writePlan = null;
         let writePlanProductivePrep = null;
         let writePlanProductive = null;
+        try {
+            if (phaseMirror && typeof phaseMirror.buildChargingPhaseSelectionPlan === 'function') {
+                phasePlan = phaseMirror.buildChargingPhaseSelectionPlan((input && input.phaseSelection) ? input.phaseSelection : (input || {}));
+            } else {
+                phasePlan = {
+                    source: 'ts-charging-phase-selection-v1',
+                    available: false,
+                    ok: false,
+                    productive: false,
+                    fallback: true,
+                    fallbackReason: 'missing-ts-phase-selection-mirror',
+                    wallboxes: [],
+                    blockers: ['missing-ts-phase-selection-mirror'],
+                    warnings: [],
+                    ts: Date.now(),
+                };
+            }
+        } catch (e) {
+            phasePlan = {
+                source: 'ts-charging-phase-selection-v1',
+                available: false,
+                ok: false,
+                productive: false,
+                fallback: true,
+                fallbackReason: 'ts-phase-selection-runtime-error',
+                error: e && e.message ? e.message : String(e),
+                wallboxes: [],
+                blockers: ['ts-phase-selection-runtime-error'],
+                warnings: [],
+                ts: Date.now(),
+            };
+        }
+        allocationInput = { ...(input || {}), phasePlan };
         try {
             if (!allocationMirror || typeof allocationMirror.buildChargingAllocationShadowPlan !== 'function') {
                 shadow = {
@@ -893,12 +949,12 @@ class ChargingManagementModule extends BaseModule {
                     ts: Date.now(),
                 };
             } else {
-                const plan = allocationMirror.buildChargingAllocationShadowPlan(input || {});
+                const plan = allocationMirror.buildChargingAllocationShadowPlan(allocationInput || {});
                 const comparison = (typeof allocationMirror.compareChargingAllocationShadowPlan === 'function')
-                    ? allocationMirror.compareChargingAllocationShadowPlan(input || {}, plan)
+                    ? allocationMirror.compareChargingAllocationShadowPlan(allocationInput || {}, plan)
                     : { ok: true, mismatchCount: 0, mismatches: [] };
                 productivePrep = (typeof allocationMirror.buildChargingAllocationProductivePrep === 'function')
-                    ? allocationMirror.buildChargingAllocationProductivePrep(input || {}, plan, comparison)
+                    ? allocationMirror.buildChargingAllocationProductivePrep(allocationInput || {}, plan, comparison)
                     : {
                         source: 'ts-charging-allocation-productive-prep-v1',
                         available: false,
@@ -912,7 +968,7 @@ class ChargingManagementModule extends BaseModule {
                         apply: null,
                     };
                 productiveDecision = (typeof allocationMirror.buildChargingAllocationProductive === 'function')
-                    ? allocationMirror.buildChargingAllocationProductive(input || {}, plan, comparison)
+                    ? allocationMirror.buildChargingAllocationProductive(allocationInput || {}, plan, comparison)
                     : {
                         source: 'ts-charging-allocation-productive-v1',
                         available: false,
@@ -926,7 +982,7 @@ class ChargingManagementModule extends BaseModule {
                         apply: null,
                     };
                 normalSourceDecision = (typeof allocationMirror.buildChargingAllocationNormalSource === 'function')
-                    ? allocationMirror.buildChargingAllocationNormalSource(input || {}, plan, comparison)
+                    ? allocationMirror.buildChargingAllocationNormalSource(allocationInput || {}, plan, comparison)
                     : {
                         source: 'ts-charging-allocation-normal-source-v1',
                         available: false,
@@ -943,6 +999,7 @@ class ChargingManagementModule extends BaseModule {
                     };
                 shadow = {
                     ...plan,
+                    phasePlan,
                     comparison,
                     productivePrep,
                     productiveDecision,
@@ -1049,13 +1106,13 @@ class ChargingManagementModule extends BaseModule {
                     ? { wallboxes: allocationDecisionForWritePlan.apply.wallboxes || [] }
                     : (productivePrep && productivePrep.plan ? productivePrep.plan : shadow);
                 writePlan = writePlanMirror.buildChargingSetpointWritePlan({
-                    ...(input || {}),
+                    ...(allocationInput || {}),
                     allocationPlan: productiveAllocationPlan,
                     allowWrites: false,
                 });
                 writePlanProductivePrep = (typeof writePlanMirror.buildChargingSetpointWritePlanProductivePrep === 'function')
                     ? writePlanMirror.buildChargingSetpointWritePlanProductivePrep({
-                        ...(input || {}),
+                        ...(allocationInput || {}),
                         allocationPlan: productiveAllocationPlan,
                         allowWrites: false,
                     }, writePlan)
@@ -1073,7 +1130,7 @@ class ChargingManagementModule extends BaseModule {
                     };
                 writePlanProductive = (typeof writePlanMirror.buildChargingSetpointWritePlanProductive === 'function')
                     ? writePlanMirror.buildChargingSetpointWritePlanProductive({
-                        ...(input || {}),
+                        ...(allocationInput || {}),
                         allocationPlan: productiveAllocationPlan,
                         allowWrites: !!(allocationDecisionForWritePlan && (allocationDecisionForWritePlan.normalSource || allocationDecisionForWritePlan.productive)),
                     }, writePlan)
@@ -1130,6 +1187,7 @@ class ChargingManagementModule extends BaseModule {
             };
         }
 
+        this._chargingPhaseSelectionTsLast = phasePlan;
         this._chargingAllocationTsShadowLast = shadow;
         this._chargingAllocationTsProductivePrepLast = productivePrep;
         this._chargingAllocationTsProductiveLast = productiveDecision;
@@ -1138,6 +1196,8 @@ class ChargingManagementModule extends BaseModule {
         this._chargingWritePlanTsProductivePrepLast = writePlanProductivePrep;
         this._chargingWritePlanTsProductiveLast = writePlanProductive;
         try {
+            await this._queueState('chargingManagement.control.phaseSelectionJson', JSON.stringify(phasePlan || {}), true);
+            await this._queueState('chargingManagement.control.phaseSelectionSource', phasePlan && phasePlan.available !== false ? 'ts-phase-selection' : 'unavailable', true);
             await this._queueState('chargingManagement.control.tsAllocationShadowJson', JSON.stringify(shadow || {}), true);
             await this._queueState('chargingManagement.control.tsAllocationProductivePrepJson', JSON.stringify(productivePrep || {}), true);
             await this._queueState('chargingManagement.control.tsAllocationProductiveJson', JSON.stringify(productiveDecision || {}), true);
@@ -1148,7 +1208,7 @@ class ChargingManagementModule extends BaseModule {
             await this._queueState('chargingManagement.control.tsWritePlanProductiveJson', JSON.stringify(writePlanProductive || {}), true);
             await this._queueState('chargingManagement.control.tsWritePlanSource', writePlanProductive && writePlanProductive.productive ? 'ts-write-plan' : (writePlanProductivePrep && writePlanProductivePrep.prepared ? 'ts-write-plan-prepared' : (writePlan && writePlan.available !== false ? 'ts-write-plan-shadow' : 'js-runtime')), true);
         } catch (_eWrite) {}
-        return { shadow, productivePrep, productiveDecision, normalSourceDecision, writePlan, writePlanProductivePrep, writePlanProductive };
+        return { phasePlan, shadow, productivePrep, productiveDecision, normalSourceDecision, writePlan, writePlanProductivePrep, writePlanProductive };
     }
 
     /**
@@ -1172,6 +1232,20 @@ class ChargingManagementModule extends BaseModule {
             chargerType: w && w.chargerType,
             controlBasis: w && w.controlBasis,
             phases: w && w.phases,
+            phaseMode: w && w.phaseMode,
+            configuredPhaseCount: w && w.configuredPhaseCount,
+            currentPhaseCount: w && w.currentPhaseCount,
+            targetPhaseCount: w && w.targetPhaseCount,
+            allocationPhaseCount: w && w.allocationPhaseCount,
+            phaseSwitchRequired: w && w.phaseSwitchRequired,
+            phaseSwitchAllowed: w && w.phaseSwitchAllowed,
+            phaseSwitchCommandAllowed: w && w.phaseSwitchCommandAllowed,
+            phaseSwitchKey: w && w.phaseSwitchKey,
+            phaseSwitchValue: w && w.phaseSwitchValue,
+            phaseSwitchReason: w && w.phaseSwitchReason,
+            phaseSwitchSafetyStopRequired: w && w.phaseSwitchSafetyStopRequired,
+            phaseSwitchCooldownRemainingMs: w && w.phaseSwitchCooldownRemainingMs,
+            stopBeforePhaseSwitch: w && w.stopBeforePhaseSwitch,
             voltageV: w && w.voltageV,
             minPowerW: w && w.minPW,
             maxPowerW: w && w.maxPW,
@@ -1189,6 +1263,39 @@ class ChargingManagementModule extends BaseModule {
             hasSetCurrent: !!(w && w.setAKey),
             staleAny: !!(w && w.staleAny),
         }));
+    }
+
+
+    /**
+     * Code-Teil: _publishChargingPhaseSelectionRuntimeStates
+     * Zweck: Übernimmt Hysterese-/Cooldown-Zustände aus der TS-Phasenwahl und veröffentlicht lesbare Diagnose pro Ladepunkt.
+     */
+    async _publishChargingPhaseSelectionRuntimeStates(phasePlan, wbList) {
+        const decisions = phasePlan && Array.isArray(phasePlan.wallboxes) ? phasePlan.wallboxes : [];
+        const bySafe = new Map((Array.isArray(wbList) ? wbList : []).filter(w => w && w.safe).map(w => [String(w.safe), w]));
+        for (const d of decisions) {
+            if (!d || typeof d !== 'object') continue;
+            const safe = String(d.safe || '').trim();
+            if (!safe) continue;
+            const w = bySafe.get(safe);
+            const high = Number(d.nextHighSinceMs || 0);
+            const low = Number(d.nextLowSinceMs || 0);
+            if (this._chargingPhaseHighSinceMs) {
+                if (Number.isFinite(high) && high > 0) this._chargingPhaseHighSinceMs.set(safe, high);
+                else this._chargingPhaseHighSinceMs.delete(safe);
+            }
+            if (this._chargingPhaseLowSinceMs) {
+                if (Number.isFinite(low) && low > 0) this._chargingPhaseLowSinceMs.set(safe, low);
+                else this._chargingPhaseLowSinceMs.delete(safe);
+            }
+            if (!w || !w.ch) continue;
+            try { await this._queueState(`${w.ch}.phaseMode`, String(d.mode || w.phaseMode || ''), true); } catch { /* ignore */ }
+            try { await this._queueState(`${w.ch}.currentPhaseCount`, Number(d.currentPhaseCount || w.currentPhaseCount || 0), true); } catch { /* ignore */ }
+            try { await this._queueState(`${w.ch}.targetPhaseCount`, Number(d.targetPhaseCount || w.targetPhaseCount || 0), true); } catch { /* ignore */ }
+            try { await this._queueState(`${w.ch}.phaseSwitchState`, d.switchRequired ? (d.switchCommandAllowed ? 'command-ready' : (d.safetyStopRequired ? 'safe-stop-before-switch' : 'pending')) : 'idle', true); } catch { /* ignore */ }
+            try { await this._queueState(`${w.ch}.phaseSwitchReason`, String(d.reason || d.blocker || d.warning || ''), true); } catch { /* ignore */ }
+            try { await this._queueState(`${w.ch}.phaseCooldownRemainingMs`, Number(d.cooldownRemainingMs || 0), true); } catch { /* ignore */ }
+        }
     }
 
     /**
@@ -1612,10 +1719,60 @@ class ChargingManagementModule extends BaseModule {
                 : ((rawEntryBasis === 'power' || rawEntryBasis === 'powerw' || rawEntryBasis === 'w' || rawEntryBasis === 'watt' || rawEntryBasis === 'watts') ? 'powerW' : (w.controlBasis || 'auto'));
             const plannedSetpointKey = String(entry.setpointKey || '').trim();
             const shouldWrite = !!(entry.writeRequired !== false && !entry.blocked);
+            const isPhaseSwitchEntry = String(entry.type || '').trim() === 'phaseSwitch' || rawEntryBasis === 'phase' || rawEntryBasis === 'phasemode';
             let applied = false;
             let applyStatus = shouldWrite ? 'planned' : (entry && entry.reason ? String(entry.reason) : 'skipped');
             let applyWrites = null;
-            if (!shouldWrite) {
+            if (isPhaseSwitchEntry) {
+                const phaseValue = entry ? entry.targetValue : undefined;
+                if (!shouldWrite) {
+                    result.skippedCount += 1;
+                } else if (!this.dp || !plannedSetpointKey || !(this.dp.getEntry && this.dp.getEntry(plannedSetpointKey))) {
+                    applyStatus = 'missing-phase-switch-setpoint';
+                    result.failedCount += 1;
+                    result.ok = false;
+                } else {
+                    try {
+                        let writeResult = false;
+                        if (typeof phaseValue === 'boolean' && this.dp.writeBoolean) {
+                            writeResult = await this.dp.writeBoolean(plannedSetpointKey, phaseValue, false);
+                        } else {
+                            const n = Number(phaseValue);
+                            if (Number.isFinite(n) && this.dp.writeNumber) {
+                                writeResult = await this.dp.writeNumber(plannedSetpointKey, n, false);
+                            } else {
+                                const dpEntry = this.dp.getEntry(plannedSetpointKey);
+                                await this.adapter.setForeignStateAsync(dpEntry.objectId, phaseValue, false);
+                                if (this.dp.lastWriteByObjectId && typeof this.dp.lastWriteByObjectId.set === 'function') {
+                                    this.dp.lastWriteByObjectId.set(dpEntry.objectId, { val: phaseValue, ts: Date.now() });
+                                }
+                                writeResult = true;
+                            }
+                        }
+                        applied = writeResult !== false;
+                        applyStatus = applied ? 'phase-switch-applied' : 'phase-switch-write-skipped';
+                        applyWrites = [{ key: plannedSetpointKey, value: phaseValue, basis: 'phase' }];
+                        if (applied) {
+                            result.appliedCount += 1;
+                            const targetPhase = Number(entry.targetPhaseCount || 0);
+                            if (targetPhase === 1 || targetPhase === 3) {
+                                if (this._chargingPhaseAssumedBySafe && typeof this._chargingPhaseAssumedBySafe.set === 'function') this._chargingPhaseAssumedBySafe.set(w.safe, targetPhase);
+                                const cooldownMs = Number(w.phaseSwitchCooldownMs || 15 * 60 * 1000);
+                                const settleMs = Number(w.phaseSwitchSettleMs || 30 * 1000);
+                                const nowMs = Date.now();
+                                if (this._chargingPhaseCooldownUntilMs && typeof this._chargingPhaseCooldownUntilMs.set === 'function') this._chargingPhaseCooldownUntilMs.set(w.safe, nowMs + (Number.isFinite(cooldownMs) && cooldownMs > 0 ? cooldownMs : 15 * 60 * 1000));
+                                if (this._chargingPhaseSettleUntilMs && typeof this._chargingPhaseSettleUntilMs.set === 'function') this._chargingPhaseSettleUntilMs.set(w.safe, nowMs + (Number.isFinite(settleMs) && settleMs > 0 ? settleMs : 30 * 1000));
+                            }
+                        } else {
+                            result.skippedCount += 1;
+                        }
+                    } catch (e) {
+                        applyStatus = e && e.message ? `phase_switch_executor_error:${e.message}` : 'phase_switch_executor_error';
+                        result.failedCount += 1;
+                        result.ok = false;
+                    }
+                }
+            } else if (!shouldWrite) {
                 result.skippedCount += 1;
             } else if (!this.dp) {
                 applyStatus = 'no_dp_registry';
@@ -1659,6 +1816,10 @@ class ChargingManagementModule extends BaseModule {
             }
             try { await this._queueState(`${w.ch}.targetCurrentA`, targetA, true); } catch { /* ignore */ }
             try { await this._queueState(`${w.ch}.targetPowerW`, targetW, true); } catch { /* ignore */ }
+            if (isPhaseSwitchEntry) {
+                try { await this._queueState(`${w.ch}.phaseSwitchState`, applyStatus, true); } catch { /* ignore */ }
+                try { await this._queueState(`${w.ch}.targetPhaseCount`, Number(entry.targetPhaseCount || 0), true); } catch { /* ignore */ }
+            }
             try { await this._queueState(`${w.ch}.applied`, applied, true); } catch { /* ignore */ }
             try { await this._queueState(`${w.ch}.applyStatus`, applyStatus, true); } catch { /* ignore */ }
             try {
@@ -1681,8 +1842,12 @@ class ChargingManagementModule extends BaseModule {
                 dbg.writePlanFallbackReason = fallbackReason || '';
                 dbg.executorBasis = plannedBasis;
                 dbg.executorSetpointKey = plannedSetpointKey || '';
+                if (isPhaseSwitchEntry) {
+                    dbg.phaseSwitchApplied = applied;
+                    dbg.phaseSwitchValue = entry.targetValue;
+                }
             }
-            result.entries.push({ safe, targetW, targetA, basis: plannedBasis, setpointKey: plannedSetpointKey || '', applied, status: applyStatus, source: executorSource || '' });
+            result.entries.push({ safe, targetW, targetA, basis: isPhaseSwitchEntry ? 'phase' : plannedBasis, setpointKey: plannedSetpointKey || '', applied, status: applyStatus, source: executorSource || '', targetPhaseCount: Number(entry.targetPhaseCount || 0), targetValue: entry.targetValue });
         }
         this._chargingWritePlanExecutorLast = result;
         try {
@@ -2256,6 +2421,8 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.tsAllocationProductiveJson', 'TypeScript EVCS-Allocation produktiv (JSON)', 'string', 'json');
         await mk('chargingManagement.control.tsAllocationNormalSourceJson', 'TypeScript EVCS-Allocation Normalquelle (JSON)', 'string', 'json');
         await mk('chargingManagement.control.tsAllocationSource', 'TypeScript EVCS-Allocation source/prep state', 'string', 'text');
+        await mk('chargingManagement.control.phaseSelectionJson', 'EVCS AC-Phasenwahl 1p/3p Auto-PV (JSON)', 'string', 'json');
+        await mk('chargingManagement.control.phaseSelectionSource', 'EVCS AC-Phasenwahl source', 'string', 'text');
         await mk('chargingManagement.control.tsWritePlanShadowJson', 'TypeScript EVCS-Setpoint Write-Plan Shadow (JSON)', 'string', 'json');
         await mk('chargingManagement.control.tsWritePlanProductivePrepJson', 'TypeScript EVCS-Setpoint Write-Plan Produktiv-Vorbereitung (JSON)', 'string', 'json');
         await mk('chargingManagement.control.tsWritePlanProductiveJson', 'TypeScript EVCS-Setpoint Write-Plan produktiv (JSON)', 'string', 'json');
@@ -2505,6 +2672,12 @@ class ChargingManagementModule extends BaseModule {
         await mk('boostRemainingMin', 'Boost remaining (min)', 'number', 'value');
         await mk('boostTimeoutMin', 'Boost timeout (min) (effective)', 'number', 'value');
         await mk('phases', 'Phases', 'number', 'value');
+        await mk('phaseMode', 'AC Phasenmodus (fixed-1p|fixed-3p|auto-pv)', 'string', 'text');
+        await mk('currentPhaseCount', 'Aktuelle AC-Phasen', 'number', 'value');
+        await mk('targetPhaseCount', 'Ziel AC-Phasen', 'number', 'value');
+        await mk('phaseSwitchState', 'Phasenumschaltung Status', 'string', 'text');
+        await mk('phaseSwitchReason', 'Phasenumschaltung Grund', 'string', 'text');
+        await mk('phaseCooldownRemainingMs', 'Phasenumschaltung Cooldown Rest (ms)', 'number', 'value.time');
         await mk('minPowerW', 'Min power (W)', 'number', 'value.power');
         await mk('maxPowerW', 'Max power (W)', 'number', 'value.power');
         await mk('para14aCapW', '§14a cap (W)', 'number', 'value.power');
@@ -2875,6 +3048,14 @@ class ChargingManagementModule extends BaseModule {
         const defaultMaxA = clamp(num(cfg.maxCurrentA, 16), 0, 2000);
 
         const acMinPower3pW = clamp(num(cfg.acMinPower3pW, 4200), 0, 1e12);
+        const phaseAutoEnabled = cfg.phaseAutoEnabled !== false;
+        const phaseSwitchUpThresholdW = clamp(num(cfg.phaseSwitchUpThresholdW, 4800), 0, 1e12);
+        const phaseSwitchDownThresholdW = clamp(num(cfg.phaseSwitchDownThresholdW, 3700), 0, 1e12);
+        const phaseSwitchUpStableMs = clamp(num(cfg.phaseSwitchUpStableSec, 300), 0, 86400) * 1000;
+        const phaseSwitchDownStableMs = clamp(num(cfg.phaseSwitchDownStableSec, 120), 0, 86400) * 1000;
+        const phaseSwitchCooldownMs = clamp(num(cfg.phaseSwitchCooldownSec, 900), 0, 86400) * 1000;
+        const phaseSwitchSettleMs = clamp(num(cfg.phaseSwitchSettleSec, 30), 0, 3600) * 1000;
+        const phaseSwitchSafePowerW = clamp(num(cfg.phaseSwitchSafePowerW, 150), 0, 10000);
         const activityThresholdW = clamp(num(cfg.activityThresholdW, 200), 0, 1e12);
         const stopGraceSec = clamp(num(cfg.stopGraceSec, 30), 0, 3600);
         const sessionKeepSec = clamp(num(cfg.sessionKeepSec, 300), 0, 86400);
@@ -3104,6 +3285,25 @@ class ChargingManagementModule extends BaseModule {
 
             // For AC: phases/current bounds apply. For DC: phases are informational; distribution is watt-based.
             const phases = Number(wb.phases || defaultPhases) === 1 ? 1 : 3;
+            const normalizePhaseModeRuntime = (value, fallbackPhases) => {
+                const raw = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+                if (raw === 'autopv' || raw === 'pvauto' || raw === 'auto13' || raw === 'auto1p3p' || raw === 'auto') return 'auto-pv';
+                if (raw === 'fixed1p' || raw === '1p' || raw === 'onephase' || raw === 'fixed1') return 'fixed-1p';
+                if (raw === 'fixed3p' || raw === '3p' || raw === 'threephase' || raw === 'fixed3') return 'fixed-3p';
+                return Number(fallbackPhases) === 1 ? 'fixed-1p' : 'fixed-3p';
+            };
+            const phaseMode = chargerType === 'AC' ? normalizePhaseModeRuntime(wb.phaseMode, phases) : 'fixed-1p';
+            const phaseSwitchId = String(wb.phaseSwitchId || wb.phaseSwitchKey || wb.phaseModeWriteId || '').trim();
+            const phaseFeedbackId = String(wb.phaseFeedbackId || wb.phaseFeedbackKey || wb.phaseModeReadId || '').trim();
+            const phaseSwitchValue1p = (wb.phaseSwitchValue1p !== undefined && wb.phaseSwitchValue1p !== null && String(wb.phaseSwitchValue1p).trim() !== '') ? wb.phaseSwitchValue1p : 1;
+            const phaseSwitchValue3p = (wb.phaseSwitchValue3p !== undefined && wb.phaseSwitchValue3p !== null && String(wb.phaseSwitchValue3p).trim() !== '') ? wb.phaseSwitchValue3p : 3;
+            const stopBeforePhaseSwitch = wb.stopBeforePhaseSwitch !== false;
+            const wbPhaseSwitchUpThresholdW = clamp(num(wb.phaseSwitchUpThresholdW, phaseSwitchUpThresholdW), 0, 1e12);
+            const wbPhaseSwitchDownThresholdW = clamp(num(wb.phaseSwitchDownThresholdW, phaseSwitchDownThresholdW), 0, 1e12);
+            const wbPhaseSwitchUpStableMs = clamp(num(wb.phaseSwitchUpStableSec, phaseSwitchUpStableMs / 1000), 0, 86400) * 1000;
+            const wbPhaseSwitchDownStableMs = clamp(num(wb.phaseSwitchDownStableSec, phaseSwitchDownStableMs / 1000), 0, 86400) * 1000;
+            const wbPhaseSwitchCooldownMs = clamp(num(wb.phaseSwitchCooldownSec, phaseSwitchCooldownMs / 1000), 0, 86400) * 1000;
+            const wbPhaseSwitchSettleMs = clamp(num(wb.phaseSwitchSettleSec, phaseSwitchSettleMs / 1000), 0, 3600) * 1000;
             let minA = clamp(num(wb.minA, defaultMinA), 0, 2000);
             const maxA = clamp(num(wb.maxA, defaultMaxA), 0, 2000);
 
@@ -3140,6 +3340,8 @@ class ChargingManagementModule extends BaseModule {
                 if (setPowerWId) await this.dp.upsert({ key: `cm.wb.${safe}.setW`, objectId: setPowerWId, dataType: 'number', direction: 'out', unit: 'W', deadband: 25, maxWriteIntervalMs: 45000 });
                 if (enableId) await this.dp.upsert({ key: `cm.wb.${safe}.en`, objectId: enableId, dataType: 'boolean', direction: 'out' });
                 if (statusId) await this.dp.upsert({ key: `cm.wb.${safe}.st`, objectId: statusId, dataType: 'mixed', direction: 'in' });
+                if (phaseSwitchId) await this.dp.upsert({ key: `cm.wb.${safe}.phaseSet`, objectId: phaseSwitchId, dataType: 'mixed', direction: 'out' });
+                if (phaseFeedbackId) await this.dp.upsert({ key: `cm.wb.${safe}.phaseFb`, objectId: phaseFeedbackId, dataType: 'mixed', direction: 'in' });
 
                 if (l1Id) await this.dp.upsert({ key: `cm.wb.${safe}.l1A`, objectId: l1Id, dataType: 'number', direction: 'in', unit: 'A' });
                 if (l2Id) await this.dp.upsert({ key: `cm.wb.${safe}.l2A`, objectId: l2Id, dataType: 'number', direction: 'in', unit: 'A' });
@@ -3165,6 +3367,22 @@ class ChargingManagementModule extends BaseModule {
                 }
             }
 
+            const normalizePhaseFeedbackRuntime = (value) => {
+                const raw = String(value ?? '').trim().toLowerCase();
+                if (!raw) return null;
+                if (raw === '1' || raw === '1p' || raw === 'one' || raw.includes('1-phase') || raw.includes('single')) return 1;
+                if (raw === '3' || raw === '3p' || raw === 'three' || raw.includes('3-phase')) return 3;
+                const n = Number(raw.replace(',', '.'));
+                if (Number.isFinite(n)) return Math.round(n) === 1 ? 1 : (Math.round(n) === 3 ? 3 : null);
+                return null;
+            };
+            const phaseFeedbackRaw = (phaseFeedbackId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.phaseFb`) : null;
+            const feedbackPhaseCount = normalizePhaseFeedbackRuntime(phaseFeedbackRaw);
+            const assumedPhaseCount = this._chargingPhaseAssumedBySafe && this._chargingPhaseAssumedBySafe.has(safe) ? this._chargingPhaseAssumedBySafe.get(safe) : null;
+            const currentPhaseCount = chargerType === 'AC'
+                ? (feedbackPhaseCount === 1 || feedbackPhaseCount === 3 ? feedbackPhaseCount : ((assumedPhaseCount === 1 || assumedPhaseCount === 3) ? assumedPhaseCount : phases))
+                : 1;
+            const effectiveRuntimePhaseCount = chargerType === 'AC' ? currentPhaseCount : 1;
 
             // Diagnostics: freshness + mapping completeness
             const hasSetpoint = !!(setCurrentAId || setPowerWId);
@@ -3261,6 +3479,16 @@ class ChargingManagementModule extends BaseModule {
             const inGrace = !!(chargingSince && lastActive && (now - lastActive) <= stopGraceMs);
             const isCharging = !!(online && enabled && (isChargingRaw || inGrace));
             const chargingSinceForState = isCharging ? chargingSince : 0;
+            try {
+                await this._queueState(`${ch}.phaseMode`, phaseMode, true);
+                await this._queueState(`${ch}.currentPhaseCount`, currentPhaseCount, true);
+                await this._queueState(`${ch}.targetPhaseCount`, currentPhaseCount, true);
+                await this._queueState(`${ch}.phaseSwitchReason`, '', true);
+                const cdUntil = this._chargingPhaseCooldownUntilMs && this._chargingPhaseCooldownUntilMs.has(safe) ? Number(this._chargingPhaseCooldownUntilMs.get(safe)) : 0;
+                await this._queueState(`${ch}.phaseCooldownRemainingMs`, Math.max(0, cdUntil - now), true);
+            } catch {
+                // ignore phase diagnostics
+            }
             // Determine effective control basis for this device
             const hasSetA = !!setCurrentAId;
             const hasSetW = !!setPowerWId;
@@ -3281,7 +3509,7 @@ class ChargingManagementModule extends BaseModule {
             }
 
             // Compute min/max power caps for distribution (W)
-            const vFactor = voltageV * phases;
+            const vFactor = voltageV * effectiveRuntimePhaseCount;
 
             let minPW = 0;
             let maxPW = 0;
@@ -3318,7 +3546,7 @@ class ChargingManagementModule extends BaseModule {
                 // When controlling by current (A), the wallbox already has a physical minimum current (typically 6 A).
                 // Enforcing a power minimum here would lead to fractional currents (e.g. 6.1 A) which some chargers
                 // or adapters do not accept and can cause start/stop behaviour.
-                if (controlBasis === 'powerW' && phases === 3 && acMinPower3pW > 0) {
+                if (controlBasis === 'powerW' && effectiveRuntimePhaseCount === 3 && acMinPower3pW > 0) {
                     minPW = Math.max(minPW, acMinPower3pW);
                 }
 
@@ -3806,7 +4034,27 @@ class ChargingManagementModule extends BaseModule {
                 priority,
                 chargerType,
                 controlBasis,
-                phases,
+                phases: effectiveRuntimePhaseCount,
+                configuredPhaseCount: phases,
+                currentPhaseCount,
+                targetPhaseCount: currentPhaseCount,
+                allocationPhaseCount: effectiveRuntimePhaseCount,
+                phaseMode,
+                phaseSwitchKey: phaseSwitchId ? `cm.wb.${safe}.phaseSet` : '',
+                phaseSwitchValue1p,
+                phaseSwitchValue3p,
+                stopBeforePhaseSwitch,
+                phaseSwitchUpThresholdW: wbPhaseSwitchUpThresholdW,
+                phaseSwitchDownThresholdW: wbPhaseSwitchDownThresholdW,
+                phaseSwitchUpStableMs: wbPhaseSwitchUpStableMs,
+                phaseSwitchDownStableMs: wbPhaseSwitchDownStableMs,
+                phaseSwitchCooldownMs: wbPhaseSwitchCooldownMs,
+                phaseSwitchSettleMs: wbPhaseSwitchSettleMs,
+                phaseSwitchSafePowerW,
+                highSinceMs: this._chargingPhaseHighSinceMs && this._chargingPhaseHighSinceMs.has(safe) ? this._chargingPhaseHighSinceMs.get(safe) : 0,
+                lowSinceMs: this._chargingPhaseLowSinceMs && this._chargingPhaseLowSinceMs.has(safe) ? this._chargingPhaseLowSinceMs.get(safe) : 0,
+                cooldownUntilMs: this._chargingPhaseCooldownUntilMs && this._chargingPhaseCooldownUntilMs.has(safe) ? this._chargingPhaseCooldownUntilMs.get(safe) : 0,
+                settleUntilMs: this._chargingPhaseSettleUntilMs && this._chargingPhaseSettleUntilMs.has(safe) ? this._chargingPhaseSettleUntilMs.get(safe) : 0,
                 voltageV,
                 minA,
                 maxA,
@@ -6824,6 +7072,7 @@ if (components.length) {
         }
 
 
+        const tsWallboxesForAllocation = this._mapChargingWallboxesForTsAllocation(wbList);
         const tsAllocationState = await this._publishChargingAllocationTsShadow({
             mode,
             budgetMode: effectiveBudgetMode,
@@ -6850,9 +7099,31 @@ if (components.length) {
             preferTsNativeAllocation: true,
             tsNormalSourceLock: true,
             allowJsComparisonFallback: false,
-            wallboxes: this._mapChargingWallboxesForTsAllocation(wbList),
+            wallboxes: tsWallboxesForAllocation,
             allocations: debugAlloc,
+            phaseSelection: {
+                now,
+                mode,
+                budgetMode: effectiveBudgetMode,
+                pvAvailableW: pvCapW,
+                stablePvAvailableW: (typeof pvSurplusNoEvAvg5mWState === 'number' && Number.isFinite(pvSurplusNoEvAvg5mWState)) ? pvSurplusNoEvAvg5mWState : pvCapW,
+                budgetW,
+                remainingW: Number.isFinite(budgetW) ? remainingW : pvCapW,
+                staleMeter,
+                staleBudget,
+                phaseAutoEnabled,
+                switchUpThresholdW: phaseSwitchUpThresholdW,
+                switchDownThresholdW: phaseSwitchDownThresholdW,
+                switchUpStableMs: phaseSwitchUpStableMs,
+                switchDownStableMs: phaseSwitchDownStableMs,
+                switchCooldownMs: phaseSwitchCooldownMs,
+                switchSettleMs: phaseSwitchSettleMs,
+                switchSafePowerW: phaseSwitchSafePowerW,
+                wallboxes: tsWallboxesForAllocation,
+                ts: now,
+            },
         });
+        await this._publishChargingPhaseSelectionRuntimeStates(tsAllocationState && tsAllocationState.phasePlan ? tsAllocationState.phasePlan : null, wbList);
 
         const tsWritePlanProductive = tsAllocationState && tsAllocationState.writePlanProductive ? tsAllocationState.writePlanProductive : null;
         const tsWritePlanUsed = await this._executeChargingTsSetpointPlan(

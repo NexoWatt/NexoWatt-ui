@@ -32,6 +32,20 @@ export interface ChargingAllocationWallboxInput {
   chargerType?: unknown;
   controlBasis?: unknown;
   phases?: unknown;
+  phaseMode?: unknown;
+  configuredPhaseCount?: unknown;
+  currentPhaseCount?: unknown;
+  targetPhaseCount?: unknown;
+  allocationPhaseCount?: unknown;
+  phaseSwitchRequired?: unknown;
+  phaseSwitchAllowed?: unknown;
+  phaseSwitchCommandAllowed?: unknown;
+  phaseSwitchKey?: unknown;
+  phaseSwitchValue?: unknown;
+  phaseSwitchReason?: unknown;
+  phaseSwitchSafetyStopRequired?: unknown;
+  phaseSwitchCooldownRemainingMs?: unknown;
+  stopBeforePhaseSwitch?: unknown;
   voltageV?: unknown;
   minPowerW?: unknown;
   minPW?: unknown;
@@ -88,6 +102,7 @@ export interface ChargingAllocationRuntimeInput {
   allowJsComparisonFallback?: unknown;
   wallboxes?: readonly ChargingAllocationWallboxInput[] | null;
   allocations?: readonly Record<string, unknown>[] | null;
+  phasePlan?: { wallboxes?: readonly Record<string, unknown>[] } | null;
   ts?: unknown;
 }
 
@@ -103,6 +118,20 @@ export interface ChargingAllocationWallboxPlan {
   chargerType: string;
   controlBasis: string;
   phases: number;
+  phaseMode: string;
+  configuredPhaseCount: number;
+  currentPhaseCount: number;
+  targetPhaseCount: number;
+  allocationPhaseCount: number;
+  phaseSwitchRequired: boolean;
+  phaseSwitchAllowed: boolean;
+  phaseSwitchCommandAllowed: boolean;
+  phaseSwitchKey: string;
+  phaseSwitchValue: unknown;
+  phaseSwitchReason: string;
+  phaseSwitchSafetyStopRequired: boolean;
+  phaseSwitchCooldownRemainingMs: number;
+  stopBeforePhaseSwitch: boolean;
   voltageV: number;
   minPowerW: number;
   maxPowerW: number;
@@ -162,6 +191,8 @@ export interface ChargingAllocationShadowPlan {
     para14aBinding: boolean;
     storageAssistActive: boolean;
     safetyStop: boolean;
+    phaseSwitchActive: boolean;
+    phaseSwitchCommandReady: boolean;
     tsNativeAllocation: boolean;
   };
   safetyReason: string;
@@ -355,6 +386,17 @@ function buildAllocationMap(allocations: readonly Record<string, unknown>[]): Ma
   return map;
 }
 
+function buildPhaseDecisionMap(input: ChargingAllocationRuntimeInput): Map<string, Record<string, unknown>> {
+  const map = new Map<string, Record<string, unknown>>();
+  const wallboxes = input.phasePlan && Array.isArray(input.phasePlan.wallboxes) ? input.phasePlan.wallboxes : [];
+  wallboxes.forEach((decision, index) => {
+    if (!decision || typeof decision !== 'object') return;
+    const safe = safeKey(decision.safe ?? decision.key ?? decision.id ?? decision.name, index);
+    if (safe) map.set(safe, decision);
+  });
+  return map;
+}
+
 function wantsTsNativeAllocation(input: ChargingAllocationRuntimeInput): boolean {
   return boolValue(input.preferTsNativeAllocation, false) || boolValue(input.tsNormalSourceLock, false);
 }
@@ -412,6 +454,7 @@ function isChargingCandidate(wb: ChargingAllocationWallboxPlan): boolean {
   if (!wb.enabled || !wb.online || !wb.connected) return false;
   if (!wb.hasSetpoint) return false;
   if (modeText.includes('off') || modeText.includes('disabled') || modeText.includes('aus')) return false;
+  if (wb.phaseSwitchRequired || wb.phaseSwitchSafetyStopRequired) return false;
   return true;
 }
 
@@ -461,6 +504,22 @@ function applyTsNativeAllocationPlan(plannedRaw: ChargingAllocationWallboxPlan[]
   }
 
   return plannedRaw.map((wb) => {
+    if (wb.phaseSwitchRequired || wb.phaseSwitchSafetyStopRequired) {
+      const canWriteSafeStop = wb.online && wb.hasSetpoint;
+      const reason = wb.phaseSwitchCommandAllowed
+        ? (wb.phaseSwitchReason || 'phase-switch-command-ready')
+        : (wb.phaseSwitchReason || 'phase-switch-stop-before-switch');
+      return {
+        ...wb,
+        targetPowerW: 0,
+        targetCurrentA: 0,
+        pvUsedW: 0,
+        blocked: !canWriteSafeStop,
+        reason: canWriteSafeStop ? reason : (wb.online ? 'missing-wallbox-setpoint' : 'offline'),
+        writeRequired: canWriteSafeStop,
+        boost: false,
+      };
+    }
     const chosen = selected.get(wb.safe);
     let targetPowerW = chosen ? Math.max(0, Math.round(chosen.targetW)) : 0;
     let reason = chosen ? chosen.reason : '';
@@ -495,6 +554,7 @@ function normalizeWallboxPlan(
   index: number,
   allocation: Record<string, unknown> | null,
   input: ChargingAllocationRuntimeInput,
+  phaseDecision: Record<string, unknown> | null = null,
 ): ChargingAllocationWallboxPlan {
   const safe = safeKey(wallbox.safe ?? wallbox.key ?? wallbox.id ?? wallbox.name ?? (allocation ? allocation.safe : null), index);
   const name = str(wallbox.name ?? (allocation ? allocation.name : null), safe);
@@ -507,7 +567,11 @@ function normalizeWallboxPlan(
   const chargerType = str(wallbox.chargerType ?? (allocation ? allocation.chargerType : null), 'ac').toLowerCase();
   const controlBasisRaw = str(wallbox.controlBasis ?? (allocation ? allocation.controlBasis : null), 'power').toLowerCase();
   const controlBasis = ['current', 'currenta', 'current_a', 'a', 'amp', 'amps'].includes(controlBasisRaw) ? 'current' : 'power';
-  const phases = Math.max(1, Math.min(3, nonNegative(wallbox.phases, chargerType === 'dc' ? 1 : 3) || 1));
+  const configuredPhaseCount = Math.max(1, Math.min(3, nonNegative(phaseDecision ? phaseDecision.configuredPhaseCount : undefined, nonNegative(wallbox.configuredPhaseCount ?? wallbox.phases, chargerType === 'dc' ? 1 : 3)) || 1));
+  const currentPhaseCount = Math.max(1, Math.min(3, nonNegative(phaseDecision ? phaseDecision.currentPhaseCount : undefined, nonNegative(wallbox.currentPhaseCount ?? wallbox.phases, configuredPhaseCount)) || configuredPhaseCount));
+  const targetPhaseCount = Math.max(1, Math.min(3, nonNegative(phaseDecision ? phaseDecision.targetPhaseCount : undefined, nonNegative(wallbox.targetPhaseCount ?? wallbox.phases, configuredPhaseCount)) || configuredPhaseCount));
+  const allocationPhaseCount = Math.max(1, Math.min(3, nonNegative(phaseDecision ? phaseDecision.allocationPhaseCount : undefined, nonNegative(wallbox.allocationPhaseCount ?? wallbox.phases, currentPhaseCount)) || currentPhaseCount));
+  const phases = chargerType === 'dc' ? 1 : (allocationPhaseCount === 1 ? 1 : 3);
   const voltageV = Math.max(1, nonNegative(wallbox.voltageV, 230) || 230);
   const minA = nonNegativeFloat(wallbox.minA, 0);
   const maxA = nonNegativeFloat(wallbox.maxA, 0);
@@ -537,6 +601,20 @@ function normalizeWallboxPlan(
     chargerType,
     controlBasis,
     phases,
+    phaseMode: str((phaseDecision ? phaseDecision.mode : undefined) ?? wallbox.phaseMode, phases === 1 ? 'fixed-1p' : 'fixed-3p'),
+    configuredPhaseCount,
+    currentPhaseCount,
+    targetPhaseCount,
+    allocationPhaseCount,
+    phaseSwitchRequired: boolValue((phaseDecision ? phaseDecision.switchRequired : undefined) ?? wallbox.phaseSwitchRequired, false),
+    phaseSwitchAllowed: boolValue((phaseDecision ? phaseDecision.switchAllowed : undefined) ?? wallbox.phaseSwitchAllowed, true),
+    phaseSwitchCommandAllowed: boolValue((phaseDecision ? phaseDecision.switchCommandAllowed : undefined) ?? wallbox.phaseSwitchCommandAllowed, false),
+    phaseSwitchKey: str((phaseDecision ? phaseDecision.phaseSwitchKey : undefined) ?? wallbox.phaseSwitchKey),
+    phaseSwitchValue: (phaseDecision ? phaseDecision.phaseSwitchValue : undefined) ?? wallbox.phaseSwitchValue ?? targetPhaseCount,
+    phaseSwitchReason: str((phaseDecision ? phaseDecision.reason : undefined) ?? wallbox.phaseSwitchReason),
+    phaseSwitchSafetyStopRequired: boolValue((phaseDecision ? phaseDecision.safetyStopRequired : undefined) ?? wallbox.phaseSwitchSafetyStopRequired, false),
+    phaseSwitchCooldownRemainingMs: nonNegative((phaseDecision ? phaseDecision.cooldownRemainingMs : undefined) ?? wallbox.phaseSwitchCooldownRemainingMs),
+    stopBeforePhaseSwitch: boolValue((phaseDecision ? phaseDecision.stopBeforePhaseSwitch : undefined) ?? wallbox.stopBeforePhaseSwitch, true),
     voltageV,
     minPowerW,
     maxPowerW,
@@ -570,17 +648,18 @@ export function buildChargingAllocationShadowPlan(input: ChargingAllocationRunti
   const wallboxes = Array.isArray(input.wallboxes) ? input.wallboxes : [];
   const allocations = Array.isArray(input.allocations) ? input.allocations : [];
   const allocationMap = buildAllocationMap(allocations);
+  const phaseDecisionMap = buildPhaseDecisionMap(input);
   const safetyStop = boolValue(input.safetyStop, false);
   const useTsNativeAllocation = wantsTsNativeAllocation(input);
   const diagnosticOnlyComparison = isJsComparisonDiagnosticOnly(input);
   const safetyReason = safetyStop ? str(input.safetyReason, boolValue(input.staleMeter) ? 'stale-meter-safety-stop' : 'evcs-safety-stop') : '';
   const plannedRaw = wallboxes.map((wallbox, index) => {
     const key = safeKey(wallbox.safe ?? wallbox.key ?? wallbox.id ?? wallbox.name, index);
-    return normalizeWallboxPlan(wallbox, index, allocationMap.get(key) || null, input);
+    return normalizeWallboxPlan(wallbox, index, allocationMap.get(key) || null, input, phaseDecisionMap.get(key) || null);
   });
   if (!useTsNativeAllocation) {
     for (const [safe, allocation] of allocationMap.entries()) {
-      if (!plannedRaw.some((w) => w.safe === safe)) plannedRaw.push(normalizeWallboxPlan({ safe }, plannedRaw.length, allocation, input));
+      if (!plannedRaw.some((w) => w.safe === safe)) plannedRaw.push(normalizeWallboxPlan({ safe }, plannedRaw.length, allocation, input, phaseDecisionMap.get(safe) || null));
     }
   }
   const planned = safetyStop
@@ -615,6 +694,9 @@ export function buildChargingAllocationShadowPlan(input: ChargingAllocationRunti
   if (safetyStop && planned.some((wb) => wb.targetPowerW > 0 || wb.targetCurrentA > 0)) blockers.push('non-zero-safety-stop-target');
   if (planned.length && !planned.some((wb) => wb.hasSetpoint)) warnings.push('no-wallbox-setpoints');
   if (planned.some((wb) => wb.enabled && wb.online && !wb.hasSetpoint)) warnings.push('enabled-online-wallbox-without-setpoint');
+  if (planned.some((wb) => wb.phaseSwitchRequired)) warnings.push('phase-switch-pending');
+  if (planned.some((wb) => wb.phaseSwitchCommandAllowed)) warnings.push('phase-switch-command-ready');
+  if (planned.some((wb) => wb.phaseSwitchRequired && !wb.phaseSwitchAllowed)) blockers.push('phase-switch-blocked');
 
   return {
     source: 'ts-charging-allocation-shadow-v1',
@@ -651,6 +733,8 @@ export function buildChargingAllocationShadowPlan(input: ChargingAllocationRunti
       para14aBinding: boolValue(input.para14aBinding),
       storageAssistActive: boolValue(input.storageAssistActive),
       safetyStop,
+      phaseSwitchActive: planned.some((wb) => wb.phaseSwitchRequired),
+      phaseSwitchCommandReady: planned.some((wb) => wb.phaseSwitchCommandAllowed),
       tsNativeAllocation: useTsNativeAllocation,
     },
     safetyReason,

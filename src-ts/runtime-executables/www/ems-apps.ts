@@ -8728,6 +8728,8 @@ function collectAiAdvisorConfigFromUI(base) {
       dpWrap.appendChild(mkRow('Sollleistung (W)', mkIo(`evcs_${i}_setPowerWId`, rowCfg.setPowerWId, v => _updateEvcsField(i, 'setPowerWId', v))));
       dpWrap.appendChild(mkRow('Enable (write)', mkIo(`evcs_${i}_enableWriteId`, rowCfg.enableWriteId, v => _updateEvcsField(i, 'enableWriteId', v))));
       dpWrap.appendChild(mkRow('Online (read)', mkIo(`evcs_${i}_onlineId`, rowCfg.onlineId, v => _updateEvcsField(i, 'onlineId', v))));
+      dpWrap.appendChild(mkRow('AC Phasenumschaltung (write)', mkIo(`evcs_${i}_phaseSwitchId`, rowCfg.phaseSwitchId, v => _updateEvcsField(i, 'phaseSwitchId', v))));
+      dpWrap.appendChild(mkRow('AC Phasenrückmeldung (read, optional)', mkIo(`evcs_${i}_phaseFeedbackId`, rowCfg.phaseFeedbackId, v => _updateEvcsField(i, 'phaseFeedbackId', v))));
 
       dpWrap.appendChild(mkRow('Lock (write)', mkIo(`evcs_${i}_lockWriteId`, rowCfg.lockWriteId, v => _updateEvcsField(i, 'lockWriteId', v))));
       dpWrap.appendChild(mkRow('RFID Reader', mkIo(`evcs_${i}_rfidReadId`, rowCfg.rfidReadId, v => _updateEvcsField(i, 'rfidReadId', v))));
@@ -8774,7 +8776,57 @@ function collectAiAdvisorConfigFromUI(base) {
       }
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an phasesSel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       phasesSel.addEventListener('change', () => _updateEvcsField(i, 'phases', _clampInt(phasesSel.value, 1, 3, 3)));
-      adv.appendChild(mkRow('Phasen', phasesSel));
+      adv.appendChild(mkRow('Installierte AC-Phasen', phasesSel));
+
+      // AC 1p/3p PV-Automatik
+      const phaseModeSel = document.createElement('select');
+      phaseModeSel.className = 'nw-config-input';
+      phaseModeSel.innerHTML = '<option value="fixed-1p">Fest 1-phasig</option><option value="fixed-3p">Fest 3-phasig</option><option value="auto-pv">Auto PV 1p/3p</option>';
+      {
+        const pm = String((rowCfg && rowCfg.phaseMode) ? rowCfg.phaseMode : (Number(rowCfg.phases) === 1 ? 'fixed-1p' : 'fixed-3p')).trim().toLowerCase();
+        phaseModeSel.value = (pm === 'auto-pv' || pm === 'autopv' || pm === 'auto') ? 'auto-pv' : ((pm === 'fixed-1p' || pm === '1p') ? 'fixed-1p' : 'fixed-3p');
+      }
+      phaseModeSel.addEventListener('change', () => _updateEvcsField(i, 'phaseMode', String(phaseModeSel.value)));
+      adv.appendChild(mkRow('AC-Phasenmodus', phaseModeSel));
+
+      const stopBeforePhaseInp = document.createElement('input');
+      stopBeforePhaseInp.type = 'checkbox';
+      stopBeforePhaseInp.checked = !(rowCfg && rowCfg.stopBeforePhaseSwitch === false);
+      stopBeforePhaseInp.addEventListener('change', () => _updateEvcsField(i, 'stopBeforePhaseSwitch', !!stopBeforePhaseInp.checked));
+      adv.appendChild(mkRow('Vor Phasenwechsel stoppen', stopBeforePhaseInp));
+
+      const mkSmallText = (field, placeholder) => {
+        const input = document.createElement('input');
+        input.className = 'nw-config-input';
+        input.type = 'text';
+        input.placeholder = placeholder || '';
+        input.value = rowCfg && rowCfg[field] !== undefined && rowCfg[field] !== null ? String(rowCfg[field]) : '';
+        input.addEventListener('change', () => _updateEvcsField(i, field, String(input.value || '').trim()));
+        return input;
+      };
+      adv.appendChild(mkRow('Wert für 1p', mkSmallText('phaseSwitchValue1p', '1')));
+      adv.appendChild(mkRow('Wert für 3p', mkSmallText('phaseSwitchValue3p', '3')));
+
+      const mkNumPhase = (field, placeholder, min, step, fallback) => {
+        const input = document.createElement('input');
+        input.className = 'nw-config-input';
+        input.type = 'number';
+        input.min = String(min || 0);
+        input.step = String(step || 1);
+        input.placeholder = String(placeholder || '');
+        input.value = (rowCfg && Number.isFinite(Number(rowCfg[field])) && Number(rowCfg[field]) > 0) ? String(Number(rowCfg[field])) : '';
+        input.addEventListener('change', () => {
+          const v = Number(input.value);
+          _updateEvcsField(i, field, (Number.isFinite(v) && v > 0) ? v : fallback);
+        });
+        return input;
+      };
+      adv.appendChild(mkRow('1p → 3p ab stabil W', mkNumPhase('phaseSwitchUpThresholdW', '4800', 0, 1, 4800)));
+      adv.appendChild(mkRow('3p → 1p unter W', mkNumPhase('phaseSwitchDownThresholdW', '3700', 0, 1, 3700)));
+      adv.appendChild(mkRow('Hoch-Stabilität (s)', mkNumPhase('phaseSwitchUpStableSec', '300', 0, 1, 300)));
+      adv.appendChild(mkRow('Runter-Stabilität (s)', mkNumPhase('phaseSwitchDownStableSec', '120', 0, 1, 120)));
+      adv.appendChild(mkRow('Cooldown (s)', mkNumPhase('phaseSwitchCooldownSec', '900', 0, 1, 900)));
+      adv.appendChild(mkRow('Wartezeit nach Wechsel (s)', mkNumPhase('phaseSwitchSettleSec', '30', 0, 1, 30)));
 
       // Spannung
       const vInput = document.createElement('input');

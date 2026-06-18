@@ -60,7 +60,10 @@ if (applySetpointCalls !== 1) {
   console.error(`[ts-charging-js-executor-fallback] Erwartet genau einen applySetpoint-Aufruf im zentralen Executor, gefunden: ${applySetpointCalls}`);
   process.exit(1);
 }
-const mapInputUsages = (cm.match(/wallboxes: this\._mapChargingWallboxesForTsAllocation\(wbList\)/g) || []).length;
+const inlineMapInputUsages = (cm.match(/wallboxes: this\._mapChargingWallboxesForTsAllocation\(wbList\)/g) || []).length;
+const normalMapInputAssigned = cm.includes('const tsWallboxesForAllocation = this._mapChargingWallboxesForTsAllocation(wbList);');
+const normalMapInputUsages = (cm.match(/wallboxes: tsWallboxesForAllocation/g) || []).length;
+const mapInputUsages = inlineMapInputUsages + (normalMapInputAssigned && normalMapInputUsages > 0 ? 1 : 0);
 if (mapInputUsages < 3) {
   console.error(`[ts-charging-js-executor-fallback] Erwartet TS-Allocation-Input im Normalpfad, Stale-Failsafe und Peak-Rampdown, gefunden: ${mapInputUsages}`);
   process.exit(1);

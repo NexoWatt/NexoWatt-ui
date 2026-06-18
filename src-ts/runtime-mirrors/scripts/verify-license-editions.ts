@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 3c4eea65d2ea4dafc0cc3ef6da794d0929c646125d7e9e951d3ce2e700a03732
+ * Original-Hash: 1a30f1d77fdc61b6a4a43726f79f920fdb03c882864aa710d2b2b906f1ebf7fb
  */
 
 /**
@@ -32,7 +32,7 @@
 'use strict';
 
 /**
- * Prüft das Lizenzmodell ab 0.8.7:
+ * Prüft das Lizenzmodell ab 0.8.8:
  * - EOS = Vollversion
  * - HEMS = kleiner freigegebener Funktionsumfang
  * - alte NW1/NW1T-Schlüssel bleiben EOS-kompatibel
@@ -73,7 +73,7 @@ const app = read('www/ems-apps.js');
 const html = read('www/ems-apps.html');
 const ioPackage = JSON.parse(read('io-package.json'));
 
-need(ioPackage.common && ioPackage.common.version === '0.8.7', 'io-package.json: Version muss 0.8.7 sein.');
+need(ioPackage.common && ioPackage.common.version === '0.8.8', 'io-package.json: Version muss 0.8.8 sein.');
 need(main.includes('_nwExpectedEditionLicenseKey'), 'main.js: Edition-Vollschlüssel-Prüfung fehlt.');
 need(main.includes("'NW1H'") && main.includes("'NW1E'"), 'main.js: NW1H/NW1E Präfixe fehlen.');
 need(main.includes('_nwExpectedEditionTrialKey') && main.includes('NW1TH') && main.includes('NW1TE'), 'main.js: Edition-Testlizenzformate fehlen.');
