@@ -2585,6 +2585,35 @@ class ChargingManagementModule extends BaseModule {
             // ignore
         }
 
+        // Runtime, per-wallbox AC phase mode override (writable for VIS/LIVE UI)
+        // Values: fixed-1p | fixed-3p | auto-pv
+        await mk(
+            'userPhaseMode',
+            'User AC phase mode (fixed-1p|fixed-3p|auto-pv)',
+            'string',
+            'text',
+            true,
+            {
+                states: {
+                    'fixed-1p': 'fest 1-phasig',
+                    'fixed-3p': 'fest 3-phasig',
+                    'auto-pv': 'auto PV 1p/3p',
+                },
+            },
+        );
+
+        // Default value for writable phase-mode state (do not overwrite user choice).
+        // Keep it empty here because the config default is known only inside the runtime tick;
+        // the tick initializes it once from the configured Ladepunkt-Phasenmodus.
+        try {
+            const st = await this.adapter.getStateAsync(`${ch}.userPhaseMode`);
+            if (!st || st.val === null || st.val === undefined) {
+                await this.adapter.setStateAsync(`${ch}.userPhaseMode`, '', true);
+            }
+        } catch {
+            // ignore
+        }
+
         // Default value for userEnabled (writable)
         try {
             const st = await this.adapter.getStateAsync(`${ch}.userEnabled`);
@@ -2674,7 +2703,8 @@ class ChargingManagementModule extends BaseModule {
         await mk('boostRemainingMin', 'Boost remaining (min)', 'number', 'value');
         await mk('boostTimeoutMin', 'Boost timeout (min) (effective)', 'number', 'value');
         await mk('phases', 'Phases', 'number', 'value');
-        await mk('phaseMode', 'AC Phasenmodus (fixed-1p|fixed-3p|auto-pv)', 'string', 'text');
+        await mk('phaseMode', 'AC Phasenmodus effektiv (fixed-1p|fixed-3p|auto-pv)', 'string', 'text');
+        await mk('phaseSwitchSupported', 'AC Phasenumschaltung unterstützt/zugeordnet', 'boolean', 'indicator');
         await mk('currentPhaseCount', 'Aktuelle AC-Phasen', 'number', 'value');
         await mk('targetPhaseCount', 'Ziel AC-Phasen', 'number', 'value');
         await mk('phaseSwitchState', 'Phasenumschaltung Status', 'string', 'text');
@@ -3294,7 +3324,21 @@ class ChargingManagementModule extends BaseModule {
                 if (raw === 'fixed3p' || raw === '3p' || raw === 'threephase' || raw === 'fixed3') return 'fixed-3p';
                 return Number(fallbackPhases) === 1 ? 'fixed-1p' : 'fixed-3p';
             };
-            const phaseMode = chargerType === 'AC' ? normalizePhaseModeRuntime(wb.phaseMode, phases) : 'fixed-1p';
+            let userPhaseMode = normalizePhaseModeRuntime(wb.userPhaseMode || wb.phaseMode, phases);
+            try {
+                const stPhase = await this._getStateCached(`${ch}.userPhaseMode`);
+                const curPhase = stPhase ? stPhase.val : null;
+                const defPhase = normalizePhaseModeRuntime(wb.phaseMode, phases);
+                if (curPhase === null || curPhase === undefined || String(curPhase).trim() === '') {
+                    try { await this._queueState(`${ch}.userPhaseMode`, defPhase, true); } catch { /* ignore */ }
+                    userPhaseMode = defPhase;
+                } else {
+                    userPhaseMode = normalizePhaseModeRuntime(curPhase, phases);
+                }
+            } catch {
+                userPhaseMode = normalizePhaseModeRuntime(wb.userPhaseMode || wb.phaseMode, phases);
+            }
+            const phaseMode = chargerType === 'AC' ? userPhaseMode : 'fixed-1p';
             const phaseSwitchId = String(wb.phaseSwitchId || wb.phaseSwitchKey || wb.phaseModeWriteId || '').trim();
             const phaseFeedbackId = String(wb.phaseFeedbackId || wb.phaseFeedbackKey || wb.phaseModeReadId || '').trim();
             const phaseSwitchValue1p = (wb.phaseSwitchValue1p !== undefined && wb.phaseSwitchValue1p !== null && String(wb.phaseSwitchValue1p).trim() !== '') ? wb.phaseSwitchValue1p : 1;
@@ -3595,6 +3639,9 @@ class ChargingManagementModule extends BaseModule {
             await this._queueState(`${ch}.stationMaxPowerW`, (typeof stationMaxPowerW === 'number' && Number.isFinite(stationMaxPowerW)) ? stationMaxPowerW : 0, true);
             await this._queueState(`${ch}.allowBoost`, !!allowBoost, true);
             await this._queueState(`${ch}.phases`, phases, true);
+            await this._queueState(`${ch}.phaseSwitchSupported`, !!phaseSwitchId && chargerType === 'AC', true);
+            await this._queueState(`${ch}.phaseMode`, phaseMode, true);
+            // userPhaseMode is writable; do NOT overwrite here. phaseMode above is the effective mode.
             await this._queueState(`${ch}.minPowerW`, minPW, true);
             await this._queueState(`${ch}.maxPowerW`, maxPW, true);
             await this._queueState(`${ch}.para14aCapW`, para14aCapW || 0, true);

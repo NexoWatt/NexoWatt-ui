@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.8",
+    "version": "0.8.10",
     "news": {
+      "0.8.10": {
+        "de": "Version 0.8.10: EVCS-AC-Phasenbedienung wird jetzt nur angezeigt, wenn ein Phasenumschalt-Hauptdatenpunkt zugeordnet ist. Ohne DP bleibt die 1p/3p/Auto-PV-Bedienung in LIVE und EVCS unsichtbar statt gesperrt sichtbar.",
+        "en": "Version 0.8.10: EVCS AC phase controls are now shown only when a phase-switch main datapoint is assigned. Without that DP, the 1p/3p/Auto-PV controls stay hidden in LIVE and EVCS instead of being shown disabled."
+      },
+      "0.8.9": {
+        "de": "Version 0.8.9: EVCS AC-Phasenmodus jetzt auch in der LIVE-/EVCS-Bedienoberfläche sichtbar und steuerbar. 1p, 3p und Auto-PV schreiben einen sicheren User-Override; Backend und TS-Ladelogik werten diesen für die 1p/3p-Umschaltung aus.",
+        "en": "Version 0.8.9: EVCS AC phase mode is now visible and controllable in the LIVE/EVCS UI. 1p, 3p and Auto-PV write a safe user override; backend and TypeScript charging logic use it for 1p/3p switching."
+      },
       "0.8.8": {
         "de": "Version 0.8.8: EVCS AC-Phasenautomatik für PV-Überschussladen ergänzt. TypeScript plant sichere 1p/3p-Umschaltungen mit Hysterese, Cooldown, Stop-vor-Umschaltung, Write-Plan und Diagnosestates.",
         "en": "Version 0.8.8: Adds EVCS AC phase automation for PV surplus charging. TypeScript now plans safe 1p/3p switching with hysteresis, cooldown, stop-before-switch, write plan and diagnostics."
@@ -22,14 +30,6 @@
       "0.8.4": {
         "de": "Version 0.8.4: Release-Cleanup gegen Merge-Konfliktmarker und npm-Publish-Abbrueche. Service-Worker-Cache aktualisiert; EOS/HEMS-Lizenzmodell und App-Center-Cleanup bleiben unveraendert.",
         "en": "Version 0.8.4: Release cleanup against merge conflict markers and npm publish aborts. Service worker cache updated; EOS/HEMS license model and App Center cleanup remain unchanged."
-      },
-      "0.8.3": {
-        "de": "Version 0.8.3: App-Center bereinigt die sichtbaren TypeScript-Migrationsdiagnosen. Neues Lizenzmodell mit EOS als Vollprodukt und HEMS als kleiner Edition; HEMS erhält die freigegebenen Basis-/Steuerfunktionen inklusive Lademanagement bis 3 Wallboxen, EOS erhält Vollzugriff.",
-        "en": "Version 0.8.3: The App Center hides the visible TypeScript migration diagnostics. New license model with EOS as the full product and HEMS as the smaller edition; HEMS receives the approved base/control features including charging management up to 3 wallboxes, EOS receives full access."
-      },
-      "0.8.2": {
-        "de": "Version 0.8.2: Windows-sicherer npm-Publish-Check. Der TypeScript-Compiler wird vor Publish-Checks robust aufgelöst oder DevDependencies werden automatisch nachinstalliert; App-Center-Statusfarben aus 0.8.1 bleiben erhalten.",
-        "en": "Version 0.8.2: Windows-safe npm publish check. The TypeScript compiler is resolved robustly before publish checks or devDependencies are installed automatically; App Center status colors from 0.8.1 remain in place."
       }
     },
     "title": "NexoWatt UI",

@@ -20,8 +20,9 @@ const moduleManager = read('ems/module-manager.js');
 const app = read('www/ems-apps.js');
 const html = read('www/ems-apps.html');
 const ioPackage = JSON.parse(read('io-package.json'));
+const pkg = JSON.parse(read('package.json'));
 
-need(ioPackage.common && ioPackage.common.version === '0.8.8', 'io-package.json: Version muss 0.8.8 sein.');
+need(ioPackage.common && ioPackage.common.version === pkg.version, `io-package.json: Version muss ${pkg.version} sein.`);
 need(main.includes('_nwExpectedEditionLicenseKey'), 'main.js: Edition-Vollschlüssel-Prüfung fehlt.');
 need(main.includes("'NW1H'") && main.includes("'NW1E'"), 'main.js: NW1H/NW1E Präfixe fehlen.');
 need(main.includes('_nwExpectedEditionTrialKey') && main.includes('NW1TH') && main.includes('NW1TE'), 'main.js: Edition-Testlizenzformate fehlen.');

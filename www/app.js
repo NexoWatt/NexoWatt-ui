@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/app.ts
- * Quell-Hash: sha256:11540668548e34171fafb495d39293de2840ee1d6cf0405611480aaa8257f17d
+ * Quell-Hash: sha256:a175c7fbedf569031b8d795bfb01c4733500b5bc139c99e80b7ecc2ae579718c
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -8913,6 +8913,10 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
   const goalKwh = qs('evcsGoalKwh');
   const goalStatus = qs('evcsGoalStatus');
   const goalHint = qs('evcsGoalHint');
+  const phaseRow = qs('evcsPhaseRow');
+  const phaseButtons = qs('evcsPhaseButtons');
+  const phaseStatus = qs('evcsPhaseStatus');
+  const phaseHint = qs('evcsPhaseHint');
 
   // Unified /api/set helper for the EVCS modal (single wallbox)
   /**
@@ -8960,6 +8964,8 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
 
   let pendingReg = null;
   let pendingRegUntil = 0;
+  let pendingPhaseMode = null;
+  let pendingPhaseModeUntil = 0;
   let pendingGoalEnabled = null;
   let pendingGoalEnabledUntil = 0;
   let pendingGoalSoc = null;
@@ -9041,6 +9047,33 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
     if (s === 'min+pv') return 'minpv';
     if (s === 'auto' || s === 'boost' || s === 'minpv' || s === 'pv') return s;
     return 'auto';
+  }
+  /**
+   * Code-Teil: normalizeEvcsPhaseMode
+   * Zweck: normalisiert den AC-Phasenmodus für die LIVE-Schnellsteuerung.
+   * Zusammenhang: Teil der EVCS-TS-Phasenumschaltung; schreibt nur den User-Override, die Safety-Sequenz bleibt im Backend.
+   */
+  function normalizeEvcsPhaseMode(raw){
+    const s = String(raw ?? '').trim().toLowerCase().replace(/_/g, '-');
+    const compact = s.replace(/[^a-z0-9]+/g, '');
+    if (compact === 'autopv' || compact === 'pvauto' || compact === 'auto13' || compact === 'auto1p3p' || compact === 'auto') return 'auto-pv';
+    if (compact === 'fixed1p' || compact === '1p' || compact === 'onephase' || compact === 'fixed1') return 'fixed-1p';
+    if (compact === 'fixed3p' || compact === '3p' || compact === 'threephase' || compact === 'fixed3') return 'fixed-3p';
+    return 'auto-pv';
+  }
+
+  function phaseModeLabel(mode){
+    const m = normalizeEvcsPhaseMode(mode);
+    if (m === 'fixed-1p') return 'Fest 1p';
+    if (m === 'fixed-3p') return 'Fest 3p';
+    return 'Auto PV';
+  }
+
+  function applyPhaseModeUi(mode){
+    if (!phaseButtons) return;
+    const m = normalizeEvcsPhaseMode(mode);
+    const btns = phaseButtons.querySelectorAll('button[data-phase-mode]');
+    btns.forEach(b => b.classList.toggle('active', normalizeEvcsPhaseMode(b.getAttribute('data-phase-mode') || 'auto-pv') === m));
   }
   /**
    * Code-Teil: legacyNumToMode
@@ -9312,6 +9345,27 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
     });
   }
 
+
+  if (phaseButtons){
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an phaseButtons. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
+    phaseButtons.addEventListener('click', async (e)=>{
+      const b = e.target && e.target.closest ? e.target.closest('button[data-phase-mode]') : null;
+      if (!b || b.disabled) return;
+      const desired = normalizeEvcsPhaseMode(b.getAttribute('data-phase-mode') || 'auto-pv');
+      pendingPhaseMode = desired;
+      pendingPhaseModeUntil = Date.now() + 3000;
+      applyPhaseModeUi(desired);
+      try { scheduleRender(); } catch(_e) {}
+      try{
+        await apiSet('ems', 'evcs.1.phaseMode', desired);
+      }catch(_e){
+        pendingPhaseMode = null;
+        pendingPhaseModeUntil = 0;
+        try { scheduleRender(); } catch(_e2) {}
+      }
+    });
+  }
+
   // Update values from state inside global render()
   window.__evcsApply = function(d, s){
     const p = d('evcs.totalPowerW') ?? d('consumptionEvcs') ?? 0;
@@ -9426,6 +9480,65 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
     } else {
       if (regStatus) regStatus.textContent = '—';
       if (regHint) regHint.textContent = '—';
+    }
+
+    // AC-Phasenmodus (1p/3p/Auto PV) – LIVE-Schnellsteuerung
+    if (phaseRow != null){
+      const chargerType = String(d('chargingManagement.wallboxes.lp1.chargerType') ?? '').trim().toUpperCase();
+      const configuredPhases = Number(d('chargingManagement.wallboxes.lp1.phases') ?? 0);
+      const supported = d('chargingManagement.wallboxes.lp1.phaseSwitchSupported');
+      const hasPhaseSwitchDp = supported === true;
+      const phaseStateExists = d('chargingManagement.wallboxes.lp1.phaseMode') != null || d('chargingManagement.wallboxes.lp1.userPhaseMode') != null;
+      const isAc = chargerType === 'AC' || (!!hasEms && configuredPhases > 1) || (!!hasEms && phaseStateExists);
+      // Bedienregel: Keine Haupt-DP-Zuordnung = keine Bedienung. Nicht deaktiviert anzeigen,
+      // sondern komplett ausblenden, damit die Nutzer-UI nur konfigurierte Funktionen zeigt.
+      phaseRow.style.display = (!!hasEms && isAc && hasPhaseSwitchDp) ? '' : 'none';
+
+      if (!!hasEms && isAc && hasPhaseSwitchDp){
+        const stMode = d('chargingManagement.wallboxes.lp1.userPhaseMode') ?? d('chargingManagement.wallboxes.lp1.phaseMode') ?? 'auto-pv';
+        const phaseMode = (pendingPhaseMode !== null && now < pendingPhaseModeUntil) ? pendingPhaseMode : normalizeEvcsPhaseMode(stMode);
+        const effectivePhaseMode = normalizeEvcsPhaseMode(d('chargingManagement.wallboxes.lp1.phaseMode') ?? phaseMode);
+        const currentPhase = Number(d('chargingManagement.wallboxes.lp1.currentPhaseCount') ?? 0);
+        const targetPhase = Number(d('chargingManagement.wallboxes.lp1.targetPhaseCount') ?? 0);
+        const switchState = String(d('chargingManagement.wallboxes.lp1.phaseSwitchState') ?? '').trim();
+        const reason = String(d('chargingManagement.wallboxes.lp1.phaseSwitchReason') ?? '').trim();
+        const cooldownMs = Number(d('chargingManagement.wallboxes.lp1.phaseCooldownRemainingMs') ?? 0);
+
+        if (phaseButtons != null){
+          const btns = phaseButtons.querySelectorAll('button[data-phase-mode]');
+          btns.forEach(b => {
+            b.disabled = false;
+            b.style.opacity = 1;
+          });
+          if (pendingPhaseMode !== null){
+            if (normalizeEvcsPhaseMode(stMode) === pendingPhaseMode){
+              pendingPhaseMode = null;
+              pendingPhaseModeUntil = 0;
+            } else if (now < pendingPhaseModeUntil){
+              applyPhaseModeUi(pendingPhaseMode);
+            } else {
+              pendingPhaseMode = null;
+              pendingPhaseModeUntil = 0;
+              applyPhaseModeUi(phaseMode);
+            }
+          } else {
+            applyPhaseModeUi(phaseMode);
+          }
+        }
+
+        if (phaseStatus != null){
+          const curTxt = (currentPhase === 1 || currentPhase === 3) ? `${currentPhase}p` : '—';
+          const targetTxt = (targetPhase === 1 || targetPhase === 3) ? `${targetPhase}p` : '—';
+          phaseStatus.textContent = `${phaseModeLabel(phaseMode)} · aktuell ${curTxt} → Ziel ${targetTxt}`;
+        }
+        if (phaseHint != null){
+          let txt = '';
+          if (switchState && switchState !== 'idle') txt = `Umschaltung: ${switchState}${reason ? ' · ' + reason : ''}`;
+          else if (cooldownMs > 0) txt = `Cooldown aktiv: ${Math.ceil(cooldownMs / 1000)} s`;
+          else txt = effectivePhaseMode === 'auto-pv' ? 'Auto PV schaltet 1p/3p nach Überschuss, Hysterese und Cooldown.' : 'Fester AC-Phasenmodus aktiv.';
+          phaseHint.textContent = txt;
+        }
+      }
     }
 
     // EMS: Ziel-Laden (Depot-/Deadline-Laden)

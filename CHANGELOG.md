@@ -1,3 +1,17 @@
+## 0.8.10
+
+- EVCS-AC-Phasenbedienung folgt jetzt der allgemeinen UI-Regel: Ohne zugeordneten Haupt-DP wird die Bedienung nicht gesperrt angezeigt, sondern vollständig ausgeblendet.
+- LIVE-Ladestation-Modal und EVCS-Seite zeigen `1p`, `3p` und `Auto PV` nur noch, wenn `phaseSwitchSupported` vom Backend wirklich `true` ist.
+- Test `charging-phase-ui` prüft jetzt explizit, dass keine sichtbaren Gesperrt-Hinweise für fehlende Phasenumschalt-DPs zurückkommen.
+- Service-Worker Cache auf `nexowatt-cache-v311` erhöht.
+
+## 0.8.9
+
+- EVCS LIVE-Modal und EVCS-Seite zeigen jetzt den AC-Phasenmodus an, wenn die Wallbox per EMS/AC konfiguriert ist.
+- Nutzer können direkt zwischen `1p`, `3p` und `Auto PV` wählen; der Wert wird als `userPhaseMode` gespeichert und von der TypeScript-Allocation/Write-Plan-Kette ausgewertet.
+- Backend `/api/set` akzeptiert nun `evcs.<n>.phaseMode`/`userPhaseMode`; Diagnose zeigt Phase, Zielphase, Cooldown und Umschaltgrund.
+- Service-Worker Cache auf `nexowatt-cache-v310` erhöht.
+
 
 ## 0.8.7
 

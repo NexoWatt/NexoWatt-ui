@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/evcs.ts
- * Quell-Hash: sha256:af9a35a7d8bf1022b0a6643f845b7bdc97893de753d7fd80952c9c071f708a82
+ * Quell-Hash: sha256:590cbcb5aaaa6cb480b5c69a4241f7bab776070ff27f93ea74e4b529bcfe6bec
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -401,6 +401,21 @@ function clampEmsUi(v) {
   return Math.max(1, Math.min(4, Math.round(n)));
 }
 
+function normalizeEvcsPhaseMode(raw) {
+  const compact = String(raw ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+  if (compact === 'autopv' || compact === 'pvauto' || compact === 'auto13' || compact === 'auto1p3p' || compact === 'auto') return 'auto-pv';
+  if (compact === 'fixed1p' || compact === '1p' || compact === 'onephase' || compact === 'fixed1') return 'fixed-1p';
+  if (compact === 'fixed3p' || compact === '3p' || compact === 'threephase' || compact === 'fixed3') return 'fixed-3p';
+  return 'auto-pv';
+}
+
+function phaseModeLabel(mode) {
+  const m = normalizeEvcsPhaseMode(mode);
+  if (m === 'fixed-1p') return 'Fest 1p';
+  if (m === 'fixed-3p') return 'Fest 3p';
+  return 'Auto PV';
+}
+
 // Legacy (direct DP) mode mapping
 /**
  * Code-Teil: clampUiMode
@@ -685,6 +700,14 @@ function buildEvcsModalBodyHtml(i) {
   const emsApplyStatus = d(`${cm}.applyStatus`);
   const emsAllowBoost = d(`${cm}.allowBoost`);
   const emsRegEnabled = d(`${cm}.userEnabled`);
+  const emsPhaseUserMode = d(`${cm}.userPhaseMode`);
+  const emsPhaseMode = d(`${cm}.phaseMode`);
+  const emsPhaseSupported = d(`${cm}.phaseSwitchSupported`);
+  const emsCurrentPhaseCount = Number(d(`${cm}.currentPhaseCount`) ?? 0);
+  const emsTargetPhaseCount = Number(d(`${cm}.targetPhaseCount`) ?? 0);
+  const emsPhaseSwitchState = String(d(`${cm}.phaseSwitchState`) || '');
+  const emsPhaseSwitchReason = String(d(`${cm}.phaseSwitchReason`) || '');
+  const emsPhaseCooldownMs = Number(d(`${cm}.phaseCooldownRemainingMs`) ?? 0);
 
   const regAvail = hasEms && (emsRegEnabled !== null && emsRegEnabled !== undefined);
   const regOn = regAvail ? !!emsRegEnabled : true;
@@ -766,6 +789,17 @@ function buildEvcsModalBodyHtml(i) {
 
   const ct = String(emsChargerType ?? m.chargerType ?? '').toUpperCase();
   const ctBadge = (ct === 'DC' || ct === 'AC') ? ct : '';
+  // Bedienregel: Keine Haupt-DP-Zuordnung = keine Bedienung. Die Phasenwahl wird
+  // auf der EVCS-Seite nur angezeigt, wenn das Backend einen zugeordneten Phasen-Schalt-DP bestätigt.
+  const phaseSupported = emsPhaseSupported === true;
+  const showPhaseUi = hasEms && phaseSupported && (ct === 'AC' || emsPhaseMode != null || emsPhaseUserMode != null);
+  const phaseModeValue = normalizeEvcsPhaseMode(emsPhaseUserMode ?? emsPhaseMode ?? 'auto-pv');
+  const phaseCurTxt = (emsCurrentPhaseCount === 1 || emsCurrentPhaseCount === 3) ? `${emsCurrentPhaseCount}p` : '—';
+  const phaseTargetTxt = (emsTargetPhaseCount === 1 || emsTargetPhaseCount === 3) ? `${emsTargetPhaseCount}p` : '—';
+  let phaseHintTxt = '';
+  if (emsPhaseSwitchState && emsPhaseSwitchState !== 'idle') phaseHintTxt = `Umschaltung: ${emsPhaseSwitchState}${emsPhaseSwitchReason ? ' · ' + emsPhaseSwitchReason : ''}`;
+  else if (emsPhaseCooldownMs > 0) phaseHintTxt = `Cooldown aktiv: ${Math.ceil(emsPhaseCooldownMs / 1000)} s`;
+  else phaseHintTxt = phaseModeValue === 'auto-pv' ? 'Auto PV schaltet 1p/3p nach Überschuss, Hysterese und Cooldown.' : 'Fester AC-Phasenmodus aktiv.';
 
   const emsUiVal = clampEmsUi(emsModeToUi(emsUserMode ?? 'auto'));
   const effTxt = String(emsEffectiveMode ?? '').trim();
@@ -849,6 +883,23 @@ function buildEvcsModalBodyHtml(i) {
             ${hint ? `<div class="nw-hint nw-hint-${hint.level}">${esc(hint.text)}</div>` : ''}
           </div>
         </div>
+
+        ${showPhaseUi ? `
+          <div style="margin-top:4px; padding-top:10px; border-top:1px solid rgba(255,255,255,.06);">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+              <span>AC‑Phasenmodus</span>
+              <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+                <strong>${esc(phaseModeLabel(phaseModeValue))} · ${esc(phaseCurTxt)} → ${esc(phaseTargetTxt)}</strong>
+                <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-3" role="group" aria-label="AC-Phasenmodus">
+                  <button type="button" class="${phaseModeValue === 'fixed-1p' ? 'active' : ''}" data-ems-phase-mode-btn="${i}" data-phase-mode="fixed-1p">1p</button>
+                  <button type="button" class="${phaseModeValue === 'fixed-3p' ? 'active' : ''}" data-ems-phase-mode-btn="${i}" data-phase-mode="fixed-3p">3p</button>
+                  <button type="button" class="${phaseModeValue === 'auto-pv' ? 'active' : ''}" data-ems-phase-mode-btn="${i}" data-phase-mode="auto-pv">Auto PV</button>
+                </div>
+                <div class="muted" style="font-size:12px; opacity:.85; text-align:right; max-width:320px;">${esc(phaseHintTxt)}</div>
+              </div>
+            </div>
+          </div>
+        ` : ''}
 
         <!-- Ziel-Laden (Depot-/Zeit-Ziel) -->
         <div style="margin-top:4px; padding-top:10px; border-top:1px solid rgba(255,255,255,.06);">
@@ -1477,13 +1528,36 @@ function bindControls() {
 
       return;
     }
+
+    if (btn.matches('button[data-ems-phase-mode-btn]')) {
+      const idx = Number(btn.getAttribute('data-ems-phase-mode-btn'));
+      if (!Number.isFinite(idx) || idx <= 0) return;
+      const mode = normalizeEvcsPhaseMode(btn.getAttribute('data-phase-mode') || 'auto-pv');
+      const k = `chargingManagement.wallboxes.lp${idx}.userPhaseMode`;
+
+      try {
+        _setPendingWrite(k, mode, 2500);
+        state[k] = { value: mode, ts: Date.now() };
+        scheduleRender();
+      } catch (_e) {}
+
+      try {
+        await fetch('/api/set', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope: 'ems', key: `evcs.${idx}.phaseMode`, value: mode })
+        });
+      } catch (_e) {}
+
+      return;
+    }
   }
 
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointerdown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('pointerdown', (e) => {
     const target = e.target;
     if (!target || !target.closest) return;
-    const btn = target.closest('button[data-ems-mode-btn]');
+    const btn = target.closest('button[data-ems-mode-btn],button[data-ems-phase-mode-btn]');
     if (!btn) return;
     _ignoreClickUntil = Date.now() + 450;
     try { e.preventDefault(); } catch (_e) {}
@@ -1496,7 +1570,7 @@ function bindControls() {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     const target = e.target;
     if (!target || !target.closest) return;
-    const btn = target.closest('button[data-ems-mode-btn]');
+    const btn = target.closest('button[data-ems-mode-btn],button[data-ems-phase-mode-btn]');
     if (!btn) return;
     try { e.preventDefault(); } catch (_e) {}
     _touchModalInteraction(600);
@@ -1508,7 +1582,7 @@ function bindControls() {
     if (Date.now() < _ignoreClickUntil) return;
     const target = e.target;
     if (!target || !target.closest) return;
-    const btn = target.closest('button[data-ems-mode-btn]');
+    const btn = target.closest('button[data-ems-mode-btn],button[data-ems-phase-mode-btn]');
     if (!btn) return;
     _touchModalInteraction(600);
     handleModeButton(btn);

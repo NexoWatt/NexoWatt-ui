@@ -17474,19 +17474,19 @@ settingsConfig: {
           // - lp1.regEnabled
           // - chargingManagement.wallboxes.lp1.userMode
           // - chargingManagement.wallboxes.lp1.userEnabled
-          const mIdx = k.match(/^(?:evcs\.)?(\d+)\.(userMode|emsMode|regEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
+          const mIdx = k.match(/^(?:evcs\.)?(\d+)\.(userMode|emsMode|regEnabled|phaseMode|userPhaseMode|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
           if (mIdx) {
             const idx = Math.max(1, Math.round(Number(mIdx[1] || 0)));
             safe = `lp${idx}`;
             prop = String(mIdx[2] || '').toLowerCase();
           } else {
-            const mLp = k.match(/^lp(\d+)\.(userMode|emsMode|regEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
+            const mLp = k.match(/^lp(\d+)\.(userMode|emsMode|regEnabled|phaseMode|userPhaseMode|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
             if (mLp) {
               const idx = Math.max(1, Math.round(Number(mLp[1] || 0)));
               safe = `lp${idx}`;
               prop = String(mLp[2] || '').toLowerCase();
             } else {
-              const m2 = k.match(/^chargingManagement\.(?:wallboxes\.)?([a-z0-9_]+)\.(userMode|userEnabled|regEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
+              const m2 = k.match(/^chargingManagement\.(?:wallboxes\.)?([a-z0-9_]+)\.(userMode|userEnabled|regEnabled|phaseMode|userPhaseMode|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
               if (m2) {
                 safe = String(m2[1] || '').trim();
                 prop = String(m2[2] || '').toLowerCase();
@@ -17519,6 +17519,25 @@ settingsConfig: {
             }
           }
 
+
+          // AC-Phasenmodus: fixed-1p | fixed-3p | auto-pv
+          // Dieser Wert ist bewusst ein User-Override und wird von der TS-EVCS-Allocation/Write-Plan-Kette ausgewertet.
+          if (prop === 'phasemode' || prop === 'userphasemode') {
+            let v = String(value === null || value === undefined ? 'auto-pv' : value).trim().toLowerCase();
+            v = v.replace(/_/g, '-');
+            if (v === 'auto' || v === 'autopv' || v === 'pvauto' || v === 'auto-1p-3p' || v === 'auto13') v = 'auto-pv';
+            if (v === '1' || v === '1p' || v === 'fixed1p' || v === 'fixed-1') v = 'fixed-1p';
+            if (v === '3' || v === '3p' || v === 'fixed3p' || v === 'fixed-3') v = 'fixed-3p';
+            if (!['fixed-1p', 'fixed-3p', 'auto-pv'].includes(v)) v = 'auto-pv';
+            const id = `chargingManagement.wallboxes.${safe}.userPhaseMode`;
+            try {
+              await this.setStateAsync(id, v, false);
+              try { this.updateValue(id, v, Date.now()); } catch (_e) {}
+              return res.json({ ok: true });
+            } catch (_e) {
+              return res.status(409).json({ ok: false, error: 'not_ready' });
+            }
+          }
 
           // Zeit-Ziel Laden (Depot-/Deadline-Laden)
           // - goalEnabled: Aktiv/aus
