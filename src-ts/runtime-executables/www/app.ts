@@ -9071,6 +9071,37 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
     return 'Auto PV';
   }
 
+  /**
+   * Code-Teil: evcsConfigRow
+   * Zweck: liest die Ladepunkt-Konfiguration aus /config, damit die LIVE-UI
+   *        Phasenbedienung sofort nach einer DP-Zuordnung anzeigen kann.
+   * Zusammenhang: Backend-States wie phaseSwitchSupported können erst nach dem nächsten
+   *        EMS-Tick im /api/state-Snapshot auftauchen. Die Sichtbarkeitsregel soll aber
+   *        direkt an der Haupt-DP-Zuordnung hängen: DP vorhanden => Bedienung sichtbar.
+   */
+  function evcsConfigRow(index){
+    try{
+      const cfg = window.__nwCfg || {};
+      const sc = cfg && cfg.settingsConfig ? cfg.settingsConfig : {};
+      const list = Array.isArray(sc.evcsList) ? sc.evcsList : [];
+      return (list[Math.max(0, Math.round(Number(index) || 1) - 1)] || {});
+    }catch(_e){
+      return {};
+    }
+  }
+
+  function evcsPhaseSwitchDpAssigned(index){
+    const row = evcsConfigRow(index);
+    return !!String((row && (row.phaseSwitchId || row.phaseSwitchKey || row.phaseModeWriteId)) || '').trim();
+  }
+
+  function evcsConfiguredPhaseMode(index, fallbackPhases){
+    const row = evcsConfigRow(index);
+    const raw = row && row.phaseMode;
+    if (raw !== undefined && raw !== null && String(raw).trim() !== '') return normalizeEvcsPhaseMode(raw);
+    return Number(fallbackPhases) === 1 ? 'fixed-1p' : 'fixed-3p';
+  }
+
   function applyPhaseModeUi(mode){
     if (!phaseButtons) return;
     const m = normalizeEvcsPhaseMode(mode);
@@ -9489,19 +9520,22 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
       const chargerType = String(d('chargingManagement.wallboxes.lp1.chargerType') ?? '').trim().toUpperCase();
       const configuredPhases = Number(d('chargingManagement.wallboxes.lp1.phases') ?? 0);
       const supported = d('chargingManagement.wallboxes.lp1.phaseSwitchSupported');
-      const hasPhaseSwitchDp = supported === true;
+      const hasPhaseSwitchDp = evcsPhaseSwitchDpAssigned(1) || supported === true;
       const phaseStateExists = d('chargingManagement.wallboxes.lp1.phaseMode') != null || d('chargingManagement.wallboxes.lp1.userPhaseMode') != null;
-      const isAc = chargerType === 'AC' || (!!hasEms && configuredPhases > 1) || (!!hasEms && phaseStateExists);
+      const isAc = hasPhaseSwitchDp || chargerType === 'AC' || (!!hasEms && configuredPhases > 1) || (!!hasEms && phaseStateExists);
       // Bedienregel: Keine Haupt-DP-Zuordnung = keine Bedienung. Nicht deaktiviert anzeigen,
       // sondern komplett ausblenden, damit die Nutzer-UI nur konfigurierte Funktionen zeigt.
+      // Wichtig: Sichtbarkeit hängt an der Installer-DP-Zuordnung aus /config, nicht nur
+      // an phaseSwitchSupported aus /api/state. Dadurch erscheinen die drei Buttons direkt
+      // nach DP-Zuordnung/Neustart und nicht erst nach einem späteren EMS-Diagnose-Tick.
       phaseRow.style.display = (!!hasEms && isAc && hasPhaseSwitchDp) ? '' : 'none';
 
       if (!!hasEms && isAc && hasPhaseSwitchDp){
-        const stMode = d('chargingManagement.wallboxes.lp1.userPhaseMode') ?? d('chargingManagement.wallboxes.lp1.phaseMode') ?? 'auto-pv';
+        const stMode = d('chargingManagement.wallboxes.lp1.userPhaseMode') ?? d('chargingManagement.wallboxes.lp1.phaseMode') ?? evcsConfiguredPhaseMode(1, configuredPhases);
         const phaseMode = (pendingPhaseMode !== null && now < pendingPhaseModeUntil) ? pendingPhaseMode : normalizeEvcsPhaseMode(stMode);
         const effectivePhaseMode = normalizeEvcsPhaseMode(d('chargingManagement.wallboxes.lp1.phaseMode') ?? phaseMode);
-        const currentPhase = Number(d('chargingManagement.wallboxes.lp1.currentPhaseCount') ?? 0);
-        const targetPhase = Number(d('chargingManagement.wallboxes.lp1.targetPhaseCount') ?? 0);
+        const currentPhase = Number(d('chargingManagement.wallboxes.lp1.currentPhaseCount') ?? configuredPhases ?? 0);
+        const targetPhase = Number(d('chargingManagement.wallboxes.lp1.targetPhaseCount') ?? d('chargingManagement.wallboxes.lp1.currentPhaseCount') ?? configuredPhases ?? 0);
         const switchState = String(d('chargingManagement.wallboxes.lp1.phaseSwitchState') ?? '').trim();
         const reason = String(d('chargingManagement.wallboxes.lp1.phaseSwitchReason') ?? '').trim();
         const cooldownMs = Number(d('chargingManagement.wallboxes.lp1.phaseCooldownRemainingMs') ?? 0);

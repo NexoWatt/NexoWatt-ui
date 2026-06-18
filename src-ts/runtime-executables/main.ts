@@ -7290,8 +7290,17 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       for (let i = 1; i <= evcsCount; i++) {
         const base = `chargingManagement.wallboxes.lp${i}`;
         await prime(`${base}.userMode`);
+        await prime(`${base}.userPhaseMode`);
         await prime(`${base}.effectiveMode`);
+        await prime(`${base}.phaseMode`);
+        await prime(`${base}.phaseSwitchSupported`);
+        await prime(`${base}.currentPhaseCount`);
+        await prime(`${base}.targetPhaseCount`);
+        await prime(`${base}.phaseSwitchState`);
+        await prime(`${base}.phaseSwitchReason`);
+        await prime(`${base}.phaseCooldownRemainingMs`);
         await prime(`${base}.chargerType`);
+        await prime(`${base}.phases`);
         await prime(`${base}.online`);
         await prime(`${base}.charging`);
         await prime(`${base}.chargingSince`);
@@ -9300,6 +9309,15 @@ async onReady() {
     for (let i = 1; i <= evcsCount; i++) {
       const base = `chargingManagement.wallboxes.lp${i}`;
       await primeKey(`${base}.userMode`);
+      await primeKey(`${base}.userPhaseMode`);
+      await primeKey(`${base}.phaseMode`);
+      await primeKey(`${base}.phaseSwitchSupported`);
+      await primeKey(`${base}.currentPhaseCount`);
+      await primeKey(`${base}.targetPhaseCount`);
+      await primeKey(`${base}.phaseSwitchState`);
+      await primeKey(`${base}.phaseSwitchReason`);
+      await primeKey(`${base}.phaseCooldownRemainingMs`);
+      await primeKey(`${base}.phases`);
       await primeKey(`${base}.goalEnabled`);
       await primeKey(`${base}.goalTargetSocPct`);
       await primeKey(`${base}.goalFinishTs`);
@@ -16076,7 +16094,7 @@ app.get('/config', (req, res) => {
 
       const evcsMappedFields = [
         'powerId', 'energyTotalId', 'energySessionId', 'statusId', 'activeId', 'onlineId',
-        'setCurrentAId', 'setPowerWId', 'enableWriteId', 'lockWriteId', 'rfidReadId',
+        'setCurrentAId', 'setPowerWId', 'enableWriteId', 'lockWriteId', 'phaseSwitchId', 'rfidReadId',
         'vehicleSocId'
       ];
       const rawEvcsRows = Array.isArray(cfg.settingsConfig && cfg.settingsConfig.evcsList) ? cfg.settingsConfig.evcsList : [];
@@ -16144,7 +16162,7 @@ app.get('/config', (req, res) => {
             return {
               hasAnyRealDatapoint,
               measuredPowerDp: String(r.powerId || r.actualPowerWId || '').trim(),
-              controlDp: String(r.setPowerWId || r.setCurrentAId || r.enableWriteId || r.lockWriteId || '').trim(),
+              controlDp: String(r.setPowerWId || r.setCurrentAId || r.enableWriteId || r.lockWriteId || r.phaseSwitchId || '').trim(),
             };
           });
 

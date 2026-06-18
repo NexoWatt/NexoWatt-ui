@@ -436,6 +436,23 @@ let _boostQueueRank = {};
 let _evcsCount = 1;
 let _evcsMeta = [];
 
+function evcsMetaRow(index) {
+  const meta = Array.isArray(_evcsMeta) ? _evcsMeta : [];
+  return meta[Math.max(0, Math.round(Number(index) || 1) - 1)] || {};
+}
+
+function evcsPhaseSwitchDpAssigned(index) {
+  const row = evcsMetaRow(index);
+  return !!String((row && (row.phaseSwitchId || row.phaseSwitchKey || row.phaseModeWriteId)) || '').trim();
+}
+
+function evcsConfiguredPhaseMode(index, fallbackPhases) {
+  const row = evcsMetaRow(index);
+  const raw = row && row.phaseMode;
+  if (raw !== undefined && raw !== null && String(raw).trim() !== '') return normalizeEvcsPhaseMode(raw);
+  return Number(fallbackPhases) === 1 ? 'fixed-1p' : 'fixed-3p';
+}
+
 // Modal state
 let _modalOpenIdx = 0;
 let _modalLocked = false;
@@ -792,12 +809,18 @@ function buildEvcsModalBodyHtml(i) {
   const ct = String(emsChargerType ?? m.chargerType ?? '').toUpperCase();
   const ctBadge = (ct === 'DC' || ct === 'AC') ? ct : '';
   // Bedienregel: Keine Haupt-DP-Zuordnung = keine Bedienung. Die Phasenwahl wird
-  // auf der EVCS-Seite nur angezeigt, wenn das Backend einen zugeordneten Phasen-Schalt-DP bestätigt.
-  const phaseSupported = emsPhaseSupported === true;
-  const showPhaseUi = hasEms && phaseSupported && (ct === 'AC' || emsPhaseMode != null || emsPhaseUserMode != null);
-  const phaseModeValue = normalizeEvcsPhaseMode(emsPhaseUserMode ?? emsPhaseMode ?? 'auto-pv');
-  const phaseCurTxt = (emsCurrentPhaseCount === 1 || emsCurrentPhaseCount === 3) ? `${emsCurrentPhaseCount}p` : '—';
-  const phaseTargetTxt = (emsTargetPhaseCount === 1 || emsTargetPhaseCount === 3) ? `${emsTargetPhaseCount}p` : '—';
+  // auf der EVCS-Seite angezeigt, sobald der Installer den Phasen-Schalt-Haupt-DP
+  // zugeordnet hat. Runtime-State phaseSwitchSupported ist nur zusätzlicher Fallback,
+  // weil er erst nach dem nächsten EMS-Tick im /api/state-Snapshot stehen kann.
+  const phaseSwitchMapped = evcsPhaseSwitchDpAssigned(i);
+  const phaseSupported = phaseSwitchMapped || emsPhaseSupported === true;
+  const showPhaseUi = hasEms && phaseSupported;
+  const configuredPhases = Number(m.phases || d(`${cm}.phases`) || 0);
+  const phaseModeValue = normalizeEvcsPhaseMode(emsPhaseUserMode ?? emsPhaseMode ?? evcsConfiguredPhaseMode(i, configuredPhases));
+  const phaseCur = (emsCurrentPhaseCount === 1 || emsCurrentPhaseCount === 3) ? emsCurrentPhaseCount : (configuredPhases === 1 || configuredPhases === 3 ? configuredPhases : 0);
+  const phaseTarget = (emsTargetPhaseCount === 1 || emsTargetPhaseCount === 3) ? emsTargetPhaseCount : phaseCur;
+  const phaseCurTxt = (phaseCur === 1 || phaseCur === 3) ? `${phaseCur}p` : '—';
+  const phaseTargetTxt = (phaseTarget === 1 || phaseTarget === 3) ? `${phaseTarget}p` : '—';
   let phaseHintTxt = '';
   if (emsPhaseSwitchState && emsPhaseSwitchState !== 'idle') phaseHintTxt = `Umschaltung: ${emsPhaseSwitchState}${emsPhaseSwitchReason ? ' · ' + emsPhaseSwitchReason : ''}`;
   else if (emsPhaseCooldownMs > 0) phaseHintTxt = `Cooldown aktiv: ${Math.ceil(emsPhaseCooldownMs / 1000)} s`;
@@ -976,7 +999,7 @@ function render() {
   if (!list) return;
 
   const sc = (cfg && cfg.settingsConfig) || {};
-  const evcsAvailable = ((Number(sc.evcsConfiguredCount || 0) || (Array.isArray(sc.evcsList) ? sc.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
+  const evcsAvailable = ((Number(sc.evcsConfiguredCount || 0) || (Array.isArray(sc.evcsList) ? sc.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','phaseSwitchId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
   const count = evcsAvailable ? Math.max(0, Math.round(Number(sc.evcsCount) || 0)) : 0;
   const meta = evcsAvailable && Array.isArray(sc.evcsList) ? sc.evcsList : [];
 
@@ -1605,7 +1628,7 @@ async function bootstrap() {
   try {
     cfg = await fetch('/config', { cache: 'no-store' }).then(r => r.json());
     const sc = (cfg && cfg.settingsConfig) || {};
-    const evcsAvailable = ((Number(sc.evcsConfiguredCount || 0) || (Array.isArray(sc.evcsList) ? sc.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
+    const evcsAvailable = ((Number(sc.evcsConfiguredCount || 0) || (Array.isArray(sc.evcsList) ? sc.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','phaseSwitchId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
     const c = evcsAvailable ? Math.max(0, Math.round(Number(sc.evcsCount) || 0)) : 0;
     const showEvcsPage = evcsAvailable && c >= 2;
     if (!showEvcsPage) {

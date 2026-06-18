@@ -1,3 +1,10 @@
+## 0.8.11
+
+- EVCS-AC-Phasenbedienung im LIVE-Ladestation-Modal und auf der EVCS-Seite nutzt jetzt direkt die Installer-Konfiguration: Sobald `phaseSwitchId` zugeordnet ist, erscheinen die drei Buttons `1p`, `3p` und `Auto PV`.
+- Die Sichtbarkeit hängt nicht mehr nur an `phaseSwitchSupported` aus dem Runtime-State, weil dieser erst nach einem EMS-Tick verfügbar sein kann. Ohne Phasen-Haupt-DP bleibt die Bedienung weiterhin unsichtbar.
+- `/api/state` primt die EVCS-Phasenstates (`userPhaseMode`, `phaseMode`, `phaseSwitchSupported`, aktuelle/Zielphase, Umschaltstatus, Cooldown) für LIVE/EVCS zuverlässiger.
+- Service-Worker Cache auf `nexowatt-cache-v312` erhöht.
+
 ## 0.8.10
 
 - EVCS-AC-Phasenbedienung folgt jetzt der allgemeinen UI-Regel: Ohne zugeordneten Haupt-DP wird die Bedienung nicht gesperrt angezeigt, sondern vollständig ausgeblendet.

@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.10",
+    "version": "0.8.11",
     "news": {
+      "0.8.11": {
+        "de": "Version 0.8.11: EVCS-AC-Phasenbedienung zeigt die drei Buttons 1p, 3p und Auto-PV jetzt zuverlässig in LIVE und EVCS an, sobald der Phasenumschalt-Hauptdatenpunkt im App-Center zugeordnet ist. Die Sichtbarkeit nutzt zusätzlich die Installer-Konfiguration und die relevanten Phasenstates werden für /api/state geprimt.",
+        "en": "Version 0.8.11: EVCS AC phase controls now reliably show the three buttons 1p, 3p and Auto-PV in LIVE and EVCS as soon as the phase-switch main datapoint is assigned in the App Center. Visibility also uses the installer configuration and relevant phase states are primed for /api/state."
+      },
       "0.8.10": {
         "de": "Version 0.8.10: EVCS-AC-Phasenbedienung wird jetzt nur angezeigt, wenn ein Phasenumschalt-Hauptdatenpunkt zugeordnet ist. Ohne DP bleibt die 1p/3p/Auto-PV-Bedienung in LIVE und EVCS unsichtbar statt gesperrt sichtbar.",
         "en": "Version 0.8.10: EVCS AC phase controls are now shown only when a phase-switch main datapoint is assigned. Without that DP, the 1p/3p/Auto-PV controls stay hidden in LIVE and EVCS instead of being shown disabled."
@@ -26,10 +30,6 @@
       "0.8.5": {
         "de": "Version 0.8.5: Windows-Publish-Hotfix. Die automatische DevDependency-Installation nutzt nun npm-cli.js/cmd.exe-Fallback statt direktem npm.cmd-Spawn und verhindert EINVAL-Abbrüche beim npm publish.",
         "en": "Version 0.8.5: Windows publish hotfix. Automatic devDependency installation now uses npm-cli.js/cmd.exe fallback instead of direct npm.cmd spawning and prevents EINVAL aborts during npm publish."
-      },
-      "0.8.4": {
-        "de": "Version 0.8.4: Release-Cleanup gegen Merge-Konfliktmarker und npm-Publish-Abbrueche. Service-Worker-Cache aktualisiert; EOS/HEMS-Lizenzmodell und App-Center-Cleanup bleiben unveraendert.",
-        "en": "Version 0.8.4: Release cleanup against merge conflict markers and npm publish aborts. Service worker cache updated; EOS/HEMS license model and App Center cleanup remain unchanged."
       }
     },
     "title": "NexoWatt UI",
