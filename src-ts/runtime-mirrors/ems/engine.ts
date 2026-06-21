@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: ade51a85fd583cc0f9d7f50a16d50c876c64c26296c79d6c78aef5ac33cd5327
+ * Original-Hash: 4be2e1fc044abaa80f5b6305e20057d68dbe72133e9991c339ff1c74711c09dd
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:014052ee674d87a81e6e45baf0ca2e0794912e725375a3b654c723ef10669c9c
+ * Quell-Hash: sha256:9bcac4af2626bab08165908e92567a1a6f94d71bbaae7d6a8d738d5f33452402
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -888,6 +888,8 @@ class EmsEngine {
     try { adapter.subscribeStates('threshold.*'); } catch (_e) {}
     try { adapter.subscribeStates('gridConstraints.*'); } catch (_e) {}
     try { adapter.subscribeStates('aiAdvisor.*'); } catch (_e) {}
+    try { adapter.subscribeStates('energyWallet.*'); } catch (_e) {}
+    try { adapter.subscribeStates('chargeKiosk.*'); } catch (_e) {}
 
     // Start scheduler
     if (this._timer) this._clearInterval(this._timer);

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/app.ts
- * Quell-Hash: sha256:1cfa82618d98e251736c47c3ccd0345771c280cff89ed55d99e8ced5a2610fd6
+ * Quell-Hash: sha256:e52741828d42b66856c784c225c740a7605acf475dd607ffee1c6d61e7da2445
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -492,6 +492,13 @@ function formatEnergyKwh(v){
   if (abs >= 1000000) return (n/1000000).toFixed(2) + ' GWh';
   if (abs >= 1000) return (n/1000).toFixed(2) + ' MWh';
   return n.toFixed(2) + ' kWh';
+}
+
+function formatCurrencyEur(v){
+  if (v === undefined || v === null || isNaN(v)) return '--';
+  const n = Number(v);
+  if (!isFinite(n)) return '--';
+  return n.toFixed(2).replace('.', ',') + ' €';
 }
 /**
  * Code-Teil: formatPowerSigned
@@ -3268,6 +3275,9 @@ function render() {
   setText('productionTotal', formatPower(d('productionTotal') ?? pv ?? 0));
   const gfN = coerceNumber(d('gridFrequency'));
   setText('gridFrequency', gfN != null ? gfN.toFixed(2) + ' Hz' : '--');
+
+  // Energie-Wertkonto wird über updateEnergyWalletLiveUi() als Nutzerkarte gerendert.
+
 
   const evcsAvailableNow = nwEvcsFeatureFromConfig();
   setText('consumptionEvcs', evcsAvailableNow ? formatPower(d('consumptionEvcs') ?? 0) : '');
@@ -8726,6 +8736,86 @@ function _nwAiAdvisorCategoryLabel(c) {
  * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
+
+function _nwEnergyWalletStateValue(key, fallback) {
+  try {
+    const entry = state && Object.prototype.hasOwnProperty.call(state, key) ? state[key] : null;
+    if (entry && typeof entry === 'object' && Object.prototype.hasOwnProperty.call(entry, 'value')) return entry.value;
+    if (entry !== undefined && entry !== null) return entry;
+  } catch (_e) {}
+  return fallback;
+}
+
+function _nwEnergyWalletNum(key, fallback = 0) {
+  const n = Number(_nwEnergyWalletStateValue(key, fallback));
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function _nwEnergyWalletMoney(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '0,00 €';
+  try { return n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; } catch (_e) { return n.toFixed(2).replace('.', ',') + ' €'; }
+}
+
+function _nwEnergyWalletEnsureExtendedUi(card) {
+  try {
+    if (!card || document.getElementById('energyWalletPeriodGrid')) return;
+    const period = document.createElement('div');
+    period.className = 'nw-energy-wallet-periods';
+    period.id = 'energyWalletPeriodGrid';
+    period.innerHTML = `
+      <div><strong id="energyWalletMonthValue">0,00 €</strong><span>Monat</span></div>
+      <div><strong id="energyWalletYearValue">0,00 €</strong><span>Jahr</span></div>
+      <div><strong id="energyWalletQualityValue">0 %</strong><span>Datenqualität</span></div>
+    `;
+    card.appendChild(period);
+
+    const warn = document.createElement('div');
+    warn.className = 'nw-energy-wallet-warning hidden';
+    warn.id = 'energyWalletWarningText';
+    warn.textContent = '';
+    card.appendChild(warn);
+  } catch (_e) {}
+}
+
+function updateEnergyWalletLiveUi() {
+  const card = document.getElementById('energyWalletLiveCard');
+  if (!card) return;
+  _nwEnergyWalletEnsureExtendedUi(card);
+  const walletCfg = window.__nwCfg && window.__nwCfg.energyWallet && typeof window.__nwCfg.energyWallet === 'object' ? window.__nwCfg.energyWallet : {};
+  const enabled = walletCfg.showOnLive !== false && (_nwEnergyWalletStateValue('energyWallet.enabled', false) === true || String(_nwEnergyWalletStateValue('energyWallet.enabled', '')).toLowerCase() === 'true');
+  const value = _nwEnergyWalletNum('energyWallet.today.valueEur', 0);
+  const monthValue = _nwEnergyWalletNum('energyWallet.month.valueEur', 0);
+  const yearValue = _nwEnergyWalletNum('energyWallet.year.valueEur', 0);
+  const pvKwh = _nwEnergyWalletNum('energyWallet.today.pvKwh', 0);
+  const status = String(_nwEnergyWalletStateValue('energyWallet.diagnostics.status', _nwEnergyWalletStateValue('energyWallet.status', '')) || '').toLowerCase();
+  const hasData = enabled && (pvKwh > 0.001 || value > 0.001 || monthValue > 0.001 || yearValue > 0.001 || status === 'warn');
+  card.classList.toggle('hidden', !hasData);
+  if (!hasData) return;
+
+  const setText = (id, text) => { try { const el = document.getElementById(id); if (el) el.textContent = text; } catch (_e) {} };
+  const pct = _nwEnergyWalletNum('energyWallet.today.localUsePercent', 0);
+  const quality = _nwEnergyWalletNum('energyWallet.diagnostics.dataQualityPercent', 0);
+  const warning = String(_nwEnergyWalletStateValue('energyWallet.diagnostics.warning', '') || '');
+  setText('energyWalletTodayValue', _nwEnergyWalletMoney(value));
+  setText('energyWalletLocalUseBadge', `${Math.round(pct)} % lokal`);
+  setText('energyWalletExplanation', String(_nwEnergyWalletStateValue('energyWallet.explanation', '') || 'Deine Anlage erzeugt heute messbaren Energiewert.'));
+  setText('energyWalletAvoidedGrid', _nwEnergyWalletMoney(_nwEnergyWalletNum('energyWallet.today.avoidedGridCostEur', 0)));
+  setText('energyWalletFeedIn', _nwEnergyWalletMoney(_nwEnergyWalletNum('energyWallet.today.feedInValueEur', 0)));
+  setText('energyWalletStorage', _nwEnergyWalletMoney(_nwEnergyWalletNum('energyWallet.today.storageValueEur', 0)));
+  setText('energyWalletEvcs', _nwEnergyWalletMoney(_nwEnergyWalletNum('energyWallet.today.evcsValueEur', 0)));
+  setText('energyWalletMonthValue', _nwEnergyWalletMoney(monthValue));
+  setText('energyWalletYearValue', _nwEnergyWalletMoney(yearValue));
+  setText('energyWalletQualityValue', `${Math.round(quality)} %`);
+  try {
+    const warnEl = document.getElementById('energyWalletWarningText');
+    if (warnEl) {
+      warnEl.textContent = warning;
+      warnEl.classList.toggle('hidden', !(warning && status === 'warn'));
+    }
+  } catch (_e) {}
+}
+
 function _nwAiAdvisorParseSuggestions() {
   const raw = _nwAiAdvisorStateValue('aiAdvisor.suggestionsJson', '[]');
   try {
@@ -8837,7 +8927,7 @@ function updateAiAdvisorLiveUi() {
 
 // Patch render to also update energy web
 const _renderOld = render;
-render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } try{ updateEnergyWeb(); }catch(e){ console.warn('energy web', e); } try{ updateAiAdvisorLiveUi(); }catch(e){ console.warn('ai advisor', e); } }
+render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } try{ updateEnergyWeb(); }catch(e){ console.warn('energy web', e); } try{ updateAiAdvisorLiveUi(); }catch(e){ console.warn('ai advisor', e); } try{ updateEnergyWalletLiveUi(); }catch(e){ console.warn('energy wallet', e); } }
 
   // open history page via header tab
   const hbtn = document.getElementById('historyTabBtn');

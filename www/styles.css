@@ -11533,3 +11533,67 @@ input.nw-config-checkbox,
   align-items:center;
   min-height:22px;
 }
+
+
+/* Energie-Wertkonto: reine Nutzeranzeige, Konfiguration bleibt im Installer/App-Center. */
+.nw-energy-wallet-card{
+  border:1px solid rgba(0,200,83,.22);
+  background:linear-gradient(180deg, rgba(0,200,83,.08), rgba(5,11,14,.82));
+}
+.nw-energy-wallet-header{ justify-content:space-between; }
+.nw-energy-wallet-badge{
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(0,200,83,.35);
+  background:rgba(0,200,83,.12);
+  color:#bfffd0;
+  font-weight:800;
+  font-size:12px;
+  white-space:nowrap;
+}
+.nw-energy-wallet-main{ display:grid; gap:6px; margin-top:8px; }
+.nw-energy-wallet-value{ font-size:34px; line-height:1; font-weight:950; color:var(--text); letter-spacing:-.04em; }
+.nw-energy-wallet-text{ color:#cdd8df; line-height:1.35; font-size:13px; }
+.nw-energy-wallet-grid{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-top:12px; }
+.nw-energy-wallet-grid>div{ padding:9px; border-radius:14px; background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.08); min-width:0; }
+.nw-energy-wallet-grid strong{ display:block; color:#8de6aa; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.nw-energy-wallet-grid span{ display:block; color:var(--muted); font-size:11px; margin-top:3px; }
+@media (max-width:720px){ .nw-energy-wallet-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); } .nw-energy-wallet-value{ font-size:30px; } }
+.nw-energy-wallet-periods{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+  margin-top:10px;
+}
+.nw-energy-wallet-periods>div{
+  padding:8px 9px;
+  border-radius:14px;
+  background:rgba(0,200,83,.06);
+  border:1px solid rgba(0,200,83,.14);
+  min-width:0;
+}
+.nw-energy-wallet-periods strong{
+  display:block;
+  color:#dfffe8;
+  font-size:13px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.nw-energy-wallet-periods span{
+  display:block;
+  color:var(--muted);
+  font-size:11px;
+  margin-top:3px;
+}
+.nw-energy-wallet-warning{
+  margin-top:10px;
+  padding:8px 10px;
+  border-radius:14px;
+  border:1px solid rgba(255,193,7,.28);
+  background:rgba(255,193,7,.08);
+  color:#ffe5a1;
+  font-size:12px;
+  line-height:1.35;
+}
+@media (max-width:720px){ .nw-energy-wallet-periods{ grid-template-columns:1fr; } }

@@ -61,6 +61,9 @@ const { GeneratorControlModule } = require('./modules/generator-control');
 const { ThresholdControlModule } = require('./modules/threshold-control');
 const { AiAdvisorModule } = require('./modules/ai-advisor');
 const { CountryProfileModule } = require('./modules/country-profile');
+const { EnergyWalletModule } = require('./modules/energy-wallet');
+const { ChargeKioskModule } = require('./modules/charge-kiosk');
+const featureFlags = require('./services/feature-flags');
 
 /**
  * Code-Teil: Klasse `ModuleManager`
@@ -118,17 +121,23 @@ class ModuleManager {
     _licenseEdition() {
         const info = this.adapter && this.adapter._nwLicenseInfo && typeof this.adapter._nwLicenseInfo === 'object' ? this.adapter._nwLicenseInfo : {};
         if (info && info.ok === true) {
+            try { return featureFlags.normalizeEdition(info.edition || 'eos'); } catch (_e) {}
             const e = String(info.edition || 'eos').toLowerCase();
-            return e === 'hems' ? 'hems' : 'eos';
+            return (e === 'hems' || e === 'home') ? 'hems' : 'eos';
         }
         return 'none';
     }
 
     _licenseAllowsApp(appId) {
         const edition = this._licenseEdition();
+        try {
+            if (featureFlags && typeof featureFlags.allowsApp === 'function') {
+                return !!featureFlags.allowsApp(edition, String(appId || ''));
+            }
+        } catch (_e) {}
         if (edition === 'eos') return true;
         if (edition !== 'hems') return false;
-        const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a']);
+        const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet']);
         return hemsApps.has(String(appId || ''));
     }
 
@@ -302,6 +311,27 @@ class ModuleManager {
             },
         });
 
+        // Energie-Wertkonto (read-only): Home + EOS. Bewertet PV-Nutzung in Euro, schaltet aber nichts.
+        this.modules.push({
+            key: 'energyWallet',
+            instance: new EnergyWalletModule(this.adapter, this.dp),
+            enabledFn: () => this._licenseAllowsApp('energyWallet') && !(
+                this.adapter && this.adapter.config && this.adapter.config.energyWallet && this.adapter.config.energyWallet.enabled === false
+            ),
+        });
+
+        // EOS DC Station Display / Charge Kiosk: tokenisierte Display-Seiten pro DC-Ladestation.
+        this.modules.push({
+            key: 'chargeKiosk',
+            instance: new ChargeKioskModule(this.adapter, this.dp),
+            enabledFn: () => this._licenseAllowsApp('chargeKiosk') && !!(
+                this.adapter && this.adapter.config && (
+                    this.adapter.config.enableChargeKiosk === true ||
+                    (this.adapter.config.chargeKiosk && this.adapter.config.chargeKiosk.enabled === true)
+                )
+            ),
+        });
+
         // Speicher-Regelung (Sollleistung/Reserve/PV/Lastspitze)
         // Läuft NACH dem Lademanagement, damit EVCS-StorageAssist im gleichen Tick berücksichtigt wird.
         this.modules.push({
@@ -353,6 +383,8 @@ class ModuleManager {
             enabledFn: () => this._licenseAllowsApp('threshold') && !!this.adapter.config.enableThresholdControl,
         });
 
+
+
         // KI‑Energieberater / KI‑Optimierung (advisory only)
         // Runs late in the tick so it can read the fresh budget/tariff/peak/storage snapshots.
         this.modules.push({
@@ -371,7 +403,7 @@ class ModuleManager {
         // Init modules
         // Hinweis: Einige Module stellen UI-States bereit (z. B. EVCS), die auch dann
         // vorhanden sein sollen, wenn die Logik aktuell deaktiviert ist.
-        const alwaysInit = new Set(['chargingManagement', 'aiAdvisor']);
+        const alwaysInit = new Set(['chargingManagement', 'aiAdvisor', 'energyWallet']);
         for (const m of this.modules) {
             const enabled = !!(m && typeof m.enabledFn === 'function' ? m.enabledFn() : false);
             m.enabled = enabled;

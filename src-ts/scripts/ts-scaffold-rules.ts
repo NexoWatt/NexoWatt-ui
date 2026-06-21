@@ -187,7 +187,7 @@ export function requirePublishCheckIndependentFromTypeScript(pkg: PackageJsonScr
     if (/^(?:npx\s+)?tsc(?:\s|$)/.test(command)) return true;
     if (/^(?:npm|pnpm)\s+exec\s+tsc(?:\s|$)/.test(command)) return true;
     const npmRun = command.match(/^(?:npm|pnpm|yarn)\s+run\s+([^\s]+)/);
-    return Boolean(npmRun && npmRun[1].startsWith('typecheck'));
+    return Boolean(npmRun && npmRun[1] && npmRun[1].startsWith('typecheck'));
   });
   if (runsTypeScriptCompiler) {
     return error('publish:check must stay independent from TypeScript. CI should run test:all.');

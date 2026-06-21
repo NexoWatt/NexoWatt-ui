@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: d8d72f8e59cc37ae2bd455934d104eadd4cee31f234f3d2de41bf46b28f5891e
+ * Original-Hash: d8f353254660ab61060a8e6501d2d157ed393364696d53c3d0f6a6c919c321b8
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/sw.ts
- * Quell-Hash: sha256:3feb96b02331aa73ca700b87c49854faddd38da1a1b1c706ef2fcb5c6c3b2668
+ * Quell-Hash: sha256:529d9c897843676a43e024518fddc83afeb2bb4eaf3a39a9d65b5e7afb7ad42e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -73,13 +73,16 @@
 
 // Increment cache name on releases so browser updates JS/HTML reliably.
 // NOTE: Keep this monotonic to force SW updates on hotfixes.
-const CACHE_NAME = 'nexowatt-cache-v315';
+const CACHE_NAME = 'nexowatt-cache-v320';
 
 const OFFLINE_URLS = [
   './',
   'index.html',
   'storagefarm.html',
   'storagefarm.js',
+  'dc-station-display.html',
+  'dc-station-display.js',
+  'dc-station-display.css',
   'admin-guard.js',
   'assets/icons/nexowatt-192.png',
   'assets/icons/nexowatt-512.png'

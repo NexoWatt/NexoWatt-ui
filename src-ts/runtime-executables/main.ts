@@ -2065,8 +2065,8 @@ class NexoWattVis extends utils.Adapter {
         return nwFeatureFlagsService.buildFeatureMap(ed);
       }
     } catch (_eFeatureFlags) {}
-    const hemsFeatures = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWalletBasic']);
-    const eosOnlyFeatures = ['peakShaving','storageFarm','multiUse','gridLimits','gridConstraints','generatorControl','bhkwControl','advancedChargingPark','advancedDiagnostics','energyWalletPro','energyLedger','chargeKiosk','solarChargeMode','mesh','microgrid','neighborSharing','nlSaldering','nlEnergyHub','aiAutopilot'];
+    const hemsFeatures = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations']);
+    const eosOnlyFeatures = ['peakShaving','storageFarm','multiUse','gridLimits','gridConstraints','generatorControl','bhkwControl','advancedChargingPark','advancedDiagnostics','energyWalletOperator','energyLedger','billingExport','chargeKiosk','solarChargeMode','solarChargeBilling','mesh','microgrid','neighborSharing','multiSiteWallet','nlSaldering','nlEnergyHub','aiAutopilot'];
     const all = new Set([...hemsFeatures, ...eosOnlyFeatures]);
     const out = {};
     for (const f of all) out[f] = ed === 'eos' ? true : (ed === 'hems' ? hemsFeatures.has(f) : false);
@@ -2074,6 +2074,11 @@ class NexoWattVis extends utils.Adapter {
   }
 
   _nwLicenseAppFeature(appId) {
+    try {
+      if (nwFeatureFlagsService && typeof nwFeatureFlagsService.appFeature === 'function') {
+        return nwFeatureFlagsService.appFeature(appId);
+      }
+    } catch (_eFeatureApp) {}
     const map = {
       charging: 'chargingManagement',
       peak: 'peakShaving',
@@ -2091,7 +2096,7 @@ class NexoWattVis extends utils.Adapter {
       para14a: 'para14a',
       multiuse: 'multiUse',
       countryProfile: 'countryProfile',
-      energyWallet: 'energyWalletPro',
+      energyWallet: 'energyWallet',
       energyLedger: 'energyLedger',
       chargeKiosk: 'chargeKiosk',
       mesh: 'mesh',
@@ -2111,6 +2116,11 @@ class NexoWattVis extends utils.Adapter {
   }
 
   _nwLicenseAllowsAppId(appId) {
+    try {
+      if (nwFeatureFlagsService && typeof nwFeatureFlagsService.allowsApp === 'function') {
+        return nwFeatureFlagsService.allowsApp(this._nwCurrentLicenseEdition(), appId);
+      }
+    } catch (_eAllowsApp) {}
     return this._nwIsFeatureLicensed(this._nwLicenseAppFeature(appId));
   }
 
@@ -2127,17 +2137,19 @@ class NexoWattVis extends utils.Adapter {
     let edition = this._nwCurrentLicenseEdition();
     if (valid && edition === 'none') edition = 'eos';
     const features = this._nwLicenseFeaturesForEdition(edition);
+    const editionLabel = (nwFeatureFlagsService && typeof nwFeatureFlagsService.editionLabel === 'function') ? nwFeatureFlagsService.editionLabel(edition) : (edition === 'eos' ? 'EOS' : (edition === 'hems' ? 'Home' : 'Keine Lizenz'));
     return {
       valid,
       type: String(info.type || (valid ? 'full' : 'none')),
       edition,
-      editionLabel: edition === 'eos' ? 'EOS' : (edition === 'hems' ? 'Home' : 'Keine Lizenz'),
-      message: String(info.msg || (valid ? `${edition.toUpperCase()} Lizenz gültig` : '')),
+      editionLabel,
+      message: String(info.msg || (valid ? `${editionLabel} Lizenz gültig` : '')),
       expiresAt: Number(info.expiresAt || 0),
       daysRemaining: Number(info.daysRemaining || 0),
       maxWallboxes: this._nwLicenseMaxWallboxes(),
       features,
-      hemsIncludedApps: ['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a'],
+      hemsIncludedApps: (nwFeatureFlagsService && typeof nwFeatureFlagsService.homeIncludedApps === 'function') ? nwFeatureFlagsService.homeIncludedApps() : ['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet'],
+      homeIncludedApps: (nwFeatureFlagsService && typeof nwFeatureFlagsService.homeIncludedApps === 'function') ? nwFeatureFlagsService.homeIncludedApps() : ['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet'],
       eosFullAccess: edition === 'eos'
     };
   }
@@ -3177,6 +3189,8 @@ class NexoWattVis extends utils.Adapter {
       'threshold',
       'relay',
       'aiAdvisor',
+      'energyWallet',
+      'chargeKiosk',
       'smartHome',
       'smartHomeConfig',
 
@@ -3304,6 +3318,26 @@ class NexoWattVis extends utils.Adapter {
     ensurePlainObj('datapoints', {});
     ensurePlainObj('installerConfig', {});
     ensurePlainObj('countryProfile', { country: 'DE', languageMode: 'system' });
+    ensurePlainObj('energyWallet', {
+      enabled: true,
+      showOnLive: true,
+      gridImportEurPerKwh: 0.35,
+      feedInEurPerKwh: 0.08,
+      importPriceEurPerKwh: 0.35,
+      feedInPriceEurPerKwh: 0.08,
+      evcsValueEurPerKwh: 0,
+      storageValueEurPerKwh: 0,
+      // Legacy aliases for existing 0.8.14 installations.
+      importPriceEurKwh: 0.35,
+      feedInPriceEurKwh: 0.08,
+      evcsValueEurKwh: 0.35,
+      recommendationsEnabled: true,
+    });
+    ensurePlainObj('chargeKiosk', {
+      enabled: false,
+      displayBasePath: '/display/station/',
+      stations: [],
+    });
     ensurePlainObj('vis', {});
     ensurePlainObj('tsMigration', {
       energyFlowMode: 'ts',
@@ -3649,6 +3683,8 @@ class NexoWattVis extends utils.Adapter {
       { id: 'relay',       enableFlag: 'enableRelayControl' },
       { id: 'grid',        enableFlag: 'enableGridConstraints' },
       { id: 'aiAdvisor',   enableFlag: 'enableAiAdvisor' },
+      { id: 'energyWallet', enableFlag: 'enableEnergyWallet', mandatory: true, defaultInstalled: true },
+      { id: 'chargeKiosk', enableFlag: 'enableChargeKiosk' },
 
       // Shared helper module (always present for UI/runtime convenience)
       { id: 'tariff',      enableFlag: null, mandatory: true, defaultInstalled: true },
@@ -3761,6 +3797,8 @@ class NexoWattVis extends utils.Adapter {
       { id: 'relay',       enableFlag: 'enableRelayControl' },
       { id: 'grid',        enableFlag: 'enableGridConstraints' },
       { id: 'aiAdvisor',   enableFlag: 'enableAiAdvisor' },
+      { id: 'energyWallet', enableFlag: 'enableEnergyWallet' },
+      { id: 'chargeKiosk', enableFlag: 'enableChargeKiosk' },
       { id: 'multiuse',    enableFlag: 'enableMultiUse' },
     ];
 
@@ -11737,6 +11775,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       { id: 'relay', label: 'Relaissteuerung', desc: 'Manuelle Relais / generische Ausgänge (optional endkundentauglich)', enableFlag: 'enableRelayControl', mandatory: false },
       { id: 'grid', label: 'Netzlimits', desc: 'Netzrestriktionen (z.B. RLM/0‑Einspeisung/Import‑Limits)', enableFlag: 'enableGridConstraints', mandatory: false },
       { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung / Energie‑Tipps ohne automatische Schaltbefehle', enableFlag: 'enableAiAdvisor', mandatory: false },
+      { id: 'energyWallet', label: 'Energie-Wertkonto', desc: 'PV-Wert, Eigenverbrauchswert und Einspeisewert für das Kundenfrontend (Home + EOS)', enableFlag: 'enableEnergyWallet', mandatory: true },
       // tariff is a shared helper module (provider + budget). Keep it always present.
       { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', enableFlag: null, mandatory: true },
       { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls aktiviert)', enableFlag: null, mandatory: false },
@@ -11868,6 +11907,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         enableRelayControl: (typeof n.enableRelayControl === 'boolean') ? n.enableRelayControl : undefined,
         enableGridConstraints: (typeof n.enableGridConstraints === 'boolean') ? n.enableGridConstraints : undefined,
         enableAiAdvisor: (typeof n.enableAiAdvisor === 'boolean') ? n.enableAiAdvisor : undefined,
+        enableEnergyWallet: (typeof n.enableEnergyWallet === 'boolean') ? n.enableEnergyWallet : undefined,
+        enableChargeKiosk: (typeof n.enableChargeKiosk === 'boolean') ? n.enableChargeKiosk : undefined,
         enableMultiUse: (typeof n.enableMultiUse === 'boolean') ? n.enableMultiUse : undefined,
 
         // Phase 2: App-Center state (install/enable)
@@ -11876,6 +11917,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         // KI‑Energieberater
         aiAdvisor: (n.aiAdvisor && typeof n.aiAdvisor === 'object') ? n.aiAdvisor : undefined,
+        energyWallet: (n.energyWallet && typeof n.energyWallet === 'object') ? n.energyWallet : {},
+        chargeKiosk: (n.chargeKiosk && typeof n.chargeKiosk === 'object') ? n.chargeKiosk : { enabled: false, displayBasePath: '/display/station/', stations: [] },
 
         // Scheduler
         schedulerIntervalMs: (typeof n.schedulerIntervalMs === 'number') ? n.schedulerIntervalMs : undefined,
@@ -11970,16 +12013,16 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         const allowedRoot = new Set([
           // Legacy enable flags (kept for backwards compatibility)
-          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableMultiUse',
+          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableChargeKiosk','enableMultiUse',
 
           // Phase 2: App Center state
           'emsApps',
 
           // Scheduler + base mapping
-          'schedulerIntervalMs','installerConfig','countryProfile','datapoints','vis','settings',
+          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','chargeKiosk','datapoints','vis','settings',
 
           // App/module configs
-          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','chargingManagement',
+          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','chargingManagement',
 
           // VIS configuration that is required to configure chargepoints/stations in the installer page
           'settingsConfig',
@@ -12177,16 +12220,16 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         const allowedRoot = new Set([
           // Legacy enable flags (kept for backwards compatibility)
-          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableMultiUse',
+          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableChargeKiosk','enableMultiUse',
 
           // Phase 2: App Center state
           'emsApps',
 
           // Scheduler + base mapping
-          'schedulerIntervalMs','installerConfig','countryProfile','datapoints','vis','settings',
+          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','chargeKiosk','datapoints','vis','settings',
 
           // App/module configs
-          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','chargingManagement',
+          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','chargingManagement',
 
           // VIS configuration that is required to configure chargepoints/stations in the installer page
           'settingsConfig',
@@ -16111,6 +16154,701 @@ app.get('/api/evcs/rfid/report.csv', async (req, res) => {
     res.status(200).send(csv);
   } catch (e) {
     res.status(500).type('text/plain').send('RFID CSV Fehler: ' + String(e));
+  }
+});
+
+
+// EOS DC Station Display / Charge Kiosk
+// Zweck: Eine tokenisierte, isolierte Vollbildseite pro physischer DC-Ladestation.
+// Die Seite darf nur die zugeordneten LPs/Connectoren dieser Station anzeigen und steuern.
+// Konfiguration bleibt ausschließlich im Installer-/App-Center.
+const _nwDisplaySafeId = (input) => String(input || '').trim().toLowerCase().replace(/[^a-z0-9_\-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64) || 'station';
+const _nwDisplayNormalizeLpKey = (input) => {
+  const s = String(input || '').trim().toLowerCase();
+  const m = s.match(/^(?:lp|ladepunkt|connector|evcs)?\s*([0-9]+)$/i) || s.match(/^lp([0-9]+)$/i);
+  if (m) return `lp${Math.max(1, Math.round(Number(m[1]) || 1))}`;
+  return _nwDisplaySafeId(s);
+};
+const _nwDisplayNormalizeModes = (raw) => {
+  const arr = Array.isArray(raw) ? raw : String(raw || 'solar,fast').split(/[;,\s]+/g);
+  const out = [];
+  for (const item of arr) {
+    let mode = String(item || '').trim().toLowerCase();
+    if (!mode) continue;
+    if (mode === 'pv' || mode === 'solaronly' || mode === 'solar-only') mode = 'solar';
+    if (mode === 'boost' || mode === 'speed' || mode === 'schnell') mode = 'fast';
+    if (!['solar', 'fast', 'auto'].includes(mode)) continue;
+    if (!out.includes(mode)) out.push(mode);
+  }
+  return out.length ? out : ['solar', 'fast'];
+};
+const _nwDisplayClamp = (value, min, max, fallback) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+};
+const _nwDisplayLayoutMode = (raw, connectorCount) => {
+  const s = String(raw || '').trim().toLowerCase();
+  if (['single', 'dual', 'quad', 'compact', 'auto'].includes(s)) return s;
+  const n = Math.max(0, Math.round(Number(connectorCount) || 0));
+  if (n <= 1) return 'single';
+  if (n <= 2) return 'dual';
+  return 'quad';
+};
+const _nwDisplayStationConfig = () => {
+  const cfg = this.config && this.config.chargeKiosk && typeof this.config.chargeKiosk === 'object' ? this.config.chargeKiosk : {};
+  const rows = Array.isArray(cfg.stations) ? cfg.stations : [];
+  return rows.map((row, idx) => {
+    const r = row && typeof row === 'object' ? row : {};
+    const assignedRaw = Array.isArray(r.assignedChargepoints) ? r.assignedChargepoints : (Array.isArray(r.chargepoints) ? r.chargepoints : (Array.isArray(r.lps) ? r.lps : []));
+    const assigned = assignedRaw.map(_nwDisplayNormalizeLpKey).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+    const id = _nwDisplaySafeId(r.id || r.key || r.stationId || `dc_station_${idx + 1}`);
+    const typeRaw = String(r.type || r.stationType || 'dc').trim().toLowerCase();
+    return {
+      id,
+      name: String(r.name || r.label || `DC Ladestation ${idx + 1}`).trim(),
+      type: typeRaw === 'ac' ? 'ac' : 'dc',
+      token: String(r.token || r.displayToken || '').trim(),
+      enabled: r.enabled !== false,
+      assignedChargepoints: assigned,
+      allowedModes: _nwDisplayNormalizeModes(r.allowedModes || r.modes || ['solar', 'fast']),
+      showPrice: r.showPrice !== false,
+      showSolarShare: r.showSolarShare !== false,
+      allowStartStop: r.allowStartStop !== false,
+      maintenanceMode: _nwDisplayBool(r.maintenanceMode ?? r.maintenance ?? r.serviceMode, false),
+      // Kompatibilitaet: 0.8.18 speicherte teils heartbeatTimeoutSec/displayLayout.
+      // 0.8.19 liest beide Varianten, damit bestehende Stationen nicht umkonfiguriert werden muessen.
+      watchdogTimeoutSec: _nwDisplayClamp(r.watchdogTimeoutSec ?? r.heartbeatTimeoutSec ?? r.displayTimeoutSec, 15, 600, 45),
+      displayRefreshSec: _nwDisplayClamp(r.displayRefreshSec, 1, 30, 3),
+      layoutMode: _nwDisplayLayoutMode(r.layoutMode ?? r.displayLayout, assigned.length),
+      showLanguageSwitch: _nwDisplayBool(r.showLanguageSwitch, false),
+      languageMode: String(r.languageMode || r.defaultLanguage || 'system'),
+      theme: String(r.theme || 'nexowatt-dark-touch'),
+      // Herstellerneutrale Steuerbrücke:
+      // Das Display ist bewusst NICHT auf OCPP verdrahtet. Es schreibt nur einen
+      // kanonischen Lade-Intent in die NexoWatt/EMS-Schicht. Ob dahinter OCPP,
+      // Modbus, MQTT, Hersteller-API oder ein eigener Geräteadapter arbeitet,
+      // entscheidet das vorhandene Lade-/Gerätemapping des Installateurs.
+      controlBridge: ['charging-management','ems-intent','ems','generic','readonly'].includes(String(r.controlBridge || r.commandBridge || 'charging-management').trim().toLowerCase()) ? String(r.controlBridge || r.commandBridge || 'charging-management').trim().toLowerCase() : 'charging-management',
+      protocolHint: String(r.protocolHint || r.vendor || r.manufacturer || 'manufacturer-open').trim().slice(0, 80) || 'manufacturer-open',
+      priceEurPerKwh: Number.isFinite(Number(r.priceEurPerKwh)) ? Number(r.priceEurPerKwh) : null,
+      solarPriceEurPerKwh: Number.isFinite(Number(r.solarPriceEurPerKwh)) ? Number(r.solarPriceEurPerKwh) : null,
+      fastPriceEurPerKwh: Number.isFinite(Number(r.fastPriceEurPerKwh)) ? Number(r.fastPriceEurPerKwh) : null,
+
+      // 0.8.19: Herstellerneutrales Steuerprofil fuer DC-Displays.
+      // Standard bleibt bewusst das NexoWatt-Charging-Management, weil dort die
+      // herstellerunabhaengige Write-Plan-/Safety-Schicht sitzt. Optional kann ein
+      // frei mappbarer JSON-Command-State genutzt werden, den ein OCPP-, Modbus-,
+      // MQTT-, REST- oder Herstelleradapter auswertet. Damit bleibt die Displaylogik
+      // nicht an OCPP oder einen konkreten Ladestationshersteller gekoppelt.
+      controlProfile: String(r.controlProfile || r.controlBackend || (String(r.controlBridge || r.commandBridge || '').trim().toLowerCase() === 'generic' ? 'commandState' : 'chargingManagement')).trim(),
+      // Optionaler herstelleroffener JSON-Command-State. Platzhalter {stationId} und {lp}
+      // erlauben pro Station/Connector unterschiedliche Ziel-DPs ohne OCPP-Festverdrahtung.
+      commandStateId: String(r.commandStateId || r.commandObjectId || '').trim(),
+      commandStateAck: _nwDisplayBool(r.commandStateAck, false),
+      writeChargingManagementMirror: r.writeChargingManagementMirror !== false,
+    };
+  });
+};
+const _nwDisplayFindStation = (token) => {
+  const t = String(token || '').trim();
+  if (!t) return null;
+  return _nwDisplayStationConfig().find((s) => s && s.enabled !== false && s.token && s.token === t) || null;
+};
+const _nwDisplayIsLicensed = () => {
+  try { return !!this._nwLicenseAllowsAppId('chargeKiosk'); } catch (_e) { return false; }
+};
+const _nwDisplayStateVal = (id, fallback = null) => {
+  try {
+    const entry = this.stateCache && this.stateCache[id];
+    if (entry && Object.prototype.hasOwnProperty.call(entry, 'value')) return entry.value;
+  } catch (_e) {}
+  return fallback;
+};
+const _nwDisplayStationStateVal = (stationId, suffix, fallback = null) => {
+  try {
+    const id = `chargeKiosk.stations.${_nwDisplaySafeId(stationId)}.${suffix}`;
+    const entry = this.stateCache && this.stateCache[id];
+    if (entry && Object.prototype.hasOwnProperty.call(entry, 'value')) return entry.value;
+  } catch (_e) {}
+  return fallback;
+};
+const _nwDisplayNum = (v, fallback = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+};
+const _nwDisplayBool = (v, fallback = false) => {
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v !== 0;
+  const s = String(v === null || v === undefined ? '' : v).trim().toLowerCase();
+  if (['true','1','yes','ja','on','active','plugged','connected','charging','laden'].includes(s)) return true;
+  if (['false','0','no','nein','off','inactive','unplugged','disconnected'].includes(s)) return false;
+  return !!fallback;
+};
+const _nwDisplayRound = (value, digits = 3) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  const f = Math.pow(10, Math.max(0, Math.min(6, Math.round(Number(digits) || 0))));
+  return Math.round(n * f) / f;
+};
+const _nwDisplayParseJson = (raw, fallback = {}) => {
+  try {
+    if (raw && typeof raw === 'object') return raw;
+    if (raw === undefined || raw === null || raw === '') return fallback;
+    const parsed = JSON.parse(String(raw));
+    return parsed && typeof parsed === 'object' ? parsed : fallback;
+  } catch (_e) {
+    return fallback;
+  }
+};
+const _nwDisplayNormalizeControlProfile = (raw) => {
+  const s = String(raw || 'chargingManagement').trim().toLowerCase();
+  if (['readonly', 'read-only', 'viewonly', 'view-only'].includes(s)) return 'readonly';
+  // Hersteller-/Protokollhinweise wie OCPP, Modbus oder MQTT sind keine direkte
+  // Hardwarebindung in dieser Display-API. Sie werden über einen generischen
+  // Command-State an den passenden Adapter übergeben, damit NexoWatt offen bleibt.
+  if (['json', 'commandstate', 'command-state', 'external', 'bridge', 'generic', 'ocpp', 'modbus', 'mqtt', 'vendor', 'manufacturer', 'hersteller', 'nexowatt-devices'].includes(s)) return 'commandState';
+  if (['dual', 'both', 'mirror', 'hybrid'].includes(s)) return 'dual';
+  return 'chargingManagement';
+};
+const _nwDisplayResolveCommandStateId = (station, lp) => {
+  const raw = String((station && (station.commandStateId || station.commandObjectId)) || '').trim();
+  if (!raw) return '';
+  return raw
+    .replace(/\{lp\}/g, String(lp || ''))
+    .replace(/\{stationId\}/g, String((station && station.id) || ''))
+    .replace(/\{station\}/g, String((station && station.id) || ''));
+};
+
+const _nwDisplayReadStationRuntime = (station, now = Date.now()) => {
+  const timeoutSec = _nwDisplayClamp(station && station.watchdogTimeoutSec, 15, 600, 45);
+  const lastHeartbeat = _nwDisplayNum(_nwDisplayStationStateVal(station && station.id, 'lastHeartbeat', 0), 0);
+  const lastTouch = _nwDisplayNum(_nwDisplayStationStateVal(station && station.id, 'lastTouch', 0), 0);
+  const ageSec = lastHeartbeat > 0 ? Math.max(0, Math.round((now - lastHeartbeat) / 1000)) : 0;
+  const displayOnline = lastHeartbeat > 0 && ageSec <= timeoutSec;
+  let status = 'offline';
+  let warning = '';
+  if (!station || station.enabled === false) {
+    status = 'disabled';
+    warning = 'Station ist deaktiviert.';
+  } else if (!station.token) {
+    status = 'missing-token';
+    warning = 'Display-Token fehlt.';
+  } else if (!Array.isArray(station.assignedChargepoints) || station.assignedChargepoints.length === 0) {
+    status = 'missing-lp';
+    warning = 'Keine LPs zugeordnet.';
+  } else if (station.maintenanceMode === true) {
+    status = 'maintenance';
+    warning = 'Station ist im Wartungsmodus.';
+  } else if (displayOnline) {
+    status = 'online';
+  } else {
+    warning = lastHeartbeat > 0 ? `Display seit ${ageSec}s ohne Heartbeat.` : 'Noch kein Display-Heartbeat empfangen.';
+  }
+  return { lastHeartbeat, lastTouch, timeoutSec, ageSec, displayOnline, status, warning };
+};
+const _nwDisplayActiveSession = (idx) => {
+  try {
+    const sess = this._evcsActiveSessions && this._evcsActiveSessions[idx];
+    if (!sess) return null;
+    let kwh = null;
+    const eStart = Number(sess.energyStartKwh);
+    const eEnd = Number(sess.energyEndKwh);
+    if (Number.isFinite(eStart) && Number.isFinite(eEnd) && eEnd >= eStart) kwh = eEnd - eStart;
+    if (!Number.isFinite(kwh)) kwh = (Number(sess.accWh) || 0) / 1000;
+    const startTs = Number(sess.startTs) || 0;
+    return {
+      active: true,
+      startTs,
+      durationSec: startTs > 0 ? Math.max(0, Math.round((Date.now() - startTs) / 1000)) : 0,
+      energyKwh: Math.max(0, Math.round((Number(kwh) || 0) * 1000) / 1000),
+      maxKw: Math.max(0, Math.round(((Number(sess.maxW) || 0) / 1000) * 100) / 100),
+      rfid: String(sess.rfid || ''),
+      user: String(sess.user || ''),
+      authorized: !!sess.authorized,
+    };
+  } catch (_e) { return null; }
+};
+
+/**
+ * Herstellerneutrale Session-ID für Display und Betreiberansicht.
+ *
+ * Die ID nutzt Station, LP und Startzeit aus der kanonischen NexoWatt/EVCS-Session.
+ * Sie hängt absichtlich nicht an einer OCPP-Transaction-ID, damit auch Modbus-,
+ * MQTT-, REST- oder Herstelleradapter ohne OCPP dieselbe Displaylogik nutzen können.
+ */
+const _nwDisplaySessionId = (stationId, lpKey, session) => {
+  const startTs = Number(session && session.startTs) || 0;
+  const suffix = startTs > 0 ? String(startTs) : 'no-start';
+  return `${_nwDisplaySafeId(stationId)}:${_nwDisplayNormalizeLpKey(lpKey)}:${suffix}`;
+};
+
+const _nwDisplayLastCompletedSession = (idx) => {
+  try {
+    const list = Array.isArray(this._evcsSessionsBuf) ? this._evcsSessionsBuf : [];
+    const want = Math.max(1, Math.round(Number(idx) || 1));
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const row = list[i];
+      if (!row || Math.round(Number(row.wallboxIndex) || 0) !== want) continue;
+      return {
+        id: String(row.id || ''),
+        startTs: Number(row.startTs) || 0,
+        endTs: Number(row.endTs) || 0,
+        durationSec: Math.max(0, Math.round(Number(row.durationSec) || 0)),
+        energyKwh: Math.max(0, Math.round((Number(row.energyKwh) || 0) * 1000) / 1000),
+        maxKw: Math.max(0, Math.round((Number(row.maxKw) || 0) * 100) / 100),
+        rfid: String(row.rfid || ''),
+        user: String(row.user || ''),
+        method: String(row.method || ''),
+      };
+    }
+  } catch (_e) {}
+  return null;
+};
+
+const _nwDisplayStartOfLocalDay = (ms) => {
+  const d = new Date(Number(ms) || Date.now());
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+};
+
+const _nwDisplayBuildOperatorSummary = (station, connectors, now = Date.now()) => {
+  // Betreiberbasis: Diese Zusammenfassung ist absichtlich protokolloffen.
+  // Sie nutzt die kanonischen EVCS-Sessiondaten des Adapters und keine
+  // OCPP-spezifischen Transaktions-IDs. Hersteller-/Protokollinformationen
+  // werden nur als Hinweis geführt, nicht als technische Abhängigkeit.
+  const assigned = new Set((Array.isArray(station && station.assignedChargepoints) ? station.assignedChargepoints : []).map(_nwDisplayNormalizeLpKey));
+  const since = _nwDisplayStartOfLocalDay(now);
+  const list = Array.isArray(this._evcsSessionsBuf) ? this._evcsSessionsBuf : [];
+  let completedToday = 0;
+  let energyTodayKwh = 0;
+  let maxKwToday = 0;
+  const lastByLp = {};
+  for (const row of list) {
+    const idx = Math.max(1, Math.round(Number(row && row.wallboxIndex) || 0));
+    const lp = `lp${idx}`;
+    if (!assigned.has(lp)) continue;
+    const endTs = Number(row && row.endTs) || Number(row && row.startTs) || 0;
+    if (!lastByLp[lp] || endTs > (Number(lastByLp[lp].endTs) || 0)) lastByLp[lp] = row;
+    if (endTs >= since) {
+      completedToday += 1;
+      energyTodayKwh += Number(row && row.energyKwh) || 0;
+      maxKwToday = Math.max(maxKwToday, Number(row && row.maxKw) || 0);
+    }
+  }
+  const activeConnectors = (Array.isArray(connectors) ? connectors : []).filter((c) => c && (c.status === 'charging' || c.charging));
+  const currentPowerW = (Array.isArray(connectors) ? connectors : []).reduce((sum, c) => sum + (Number(c && c.powerW) || 0), 0);
+  const currentRevenueEur = (Array.isArray(connectors) ? connectors : []).reduce((sum, c) => sum + (Number(c && c.sessionCostEur) || 0), 0);
+  return {
+    generatedAt: now,
+    bridge: String((station && station.controlBridge) || 'charging-management'),
+    protocolHint: String((station && station.protocolHint) || 'manufacturer-open'),
+    completedSessionsToday: completedToday,
+    activeSessions: activeConnectors.length,
+    energyTodayKwh: Math.round(energyTodayKwh * 1000) / 1000,
+    maxKwToday: Math.round(maxKwToday * 100) / 100,
+    currentPowerW: Math.round(currentPowerW),
+    currentRevenueEur: Math.round(currentRevenueEur * 100) / 100,
+    lastSessionsByLp: Object.fromEntries(Object.entries(lastByLp).map(([lp, row]) => [lp, {
+      startTs: Number(row && row.startTs) || 0,
+      endTs: Number(row && row.endTs) || 0,
+      energyKwh: Math.max(0, Math.round((Number(row && row.energyKwh) || 0) * 1000) / 1000),
+      durationSec: Math.max(0, Math.round(Number(row && row.durationSec) || 0)),
+      maxKw: Math.max(0, Math.round((Number(row && row.maxKw) || 0) * 100) / 100),
+    }])),
+  };
+};
+const _nwDisplayWriteStationState = async (stationId, suffix, value, ack = true) => {
+  try {
+    const id = `chargeKiosk.stations.${_nwDisplaySafeId(stationId)}.${suffix}`;
+    await this.setStateAsync(id, { val: value, ack: !!ack });
+    try { this.updateValue(id, value, Date.now()); } catch (_e) {}
+  } catch (_e) {}
+};
+const _nwDisplayBuildPayload = (station) => {
+  const now = Date.now();
+  const runtime = _nwDisplayReadStationRuntime(station, now);
+  const cfg = this.config && this.config.energyWallet && typeof this.config.energyWallet === 'object' ? this.config.energyWallet : {};
+  const locale = (typeof this._nwBuildLocaleInfo === 'function') ? this._nwBuildLocaleInfo() : { language: 'de', htmlLang: 'de' };
+  const defaultImportPrice = Number.isFinite(Number(cfg.evcsValueEurPerKwh)) ? Number(cfg.evcsValueEurPerKwh) : (Number.isFinite(Number(cfg.importPriceEurPerKwh)) ? Number(cfg.importPriceEurPerKwh) : 0.35);
+  const defaultSolarPrice = Number.isFinite(Number(cfg.evcsValueEurPerKwh)) ? Number(cfg.evcsValueEurPerKwh) : defaultImportPrice;
+  const defaultFastPrice = Number.isFinite(Number(cfg.importPriceEurPerKwh)) ? Number(cfg.importPriceEurPerKwh) : defaultImportPrice;
+  const pvAvailable = _nwDisplayBool(_nwDisplayStateVal('chargingManagement.control.pvAvailable', false), false);
+  const pvSurplusW = Math.max(0, _nwDisplayNum(_nwDisplayStateVal('chargingManagement.control.pvSurplusNoEvRawW', _nwDisplayStateVal('chargingManagement.control.pvCapRawW', 0)), 0));
+  const stationAssigned = Array.isArray(station.assignedChargepoints) ? station.assignedChargepoints : [];
+  const list = Array.isArray(this.evcsList) ? this.evcsList : [];
+  const assignedSet = new Set(stationAssigned);
+  const connectors = list
+    .filter((wb) => wb && assignedSet.has(`lp${Number(wb.index) || 0}`))
+    .map((wb) => {
+      const idx = Math.max(1, Math.round(Number(wb.index) || 1));
+      const safe = `lp${idx}`;
+      const powerW = Math.max(0, Math.abs(_nwDisplayNum(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.actualPowerW`, _nwDisplayStateVal(`evcs.${idx}.powerW`, 0)), 0)));
+      const targetW = Math.max(0, Math.abs(_nwDisplayNum(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.targetPowerW`, 0), 0)));
+      const plugged = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.vehiclePlugged`, _nwDisplayStateVal(`evcs.${idx}.active`, false)), false);
+      const charging = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.charging`, powerW > 100), powerW > 100);
+      const online = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.online`, true), true);
+      const meterStale = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.meterStale`, false), false);
+      const rawStatus = String(_nwDisplayStateVal(`evcs.${idx}.status`, '') || _nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.applyStatus`, '') || '').trim();
+      const rawLower = rawStatus.toLowerCase();
+      let status = 'available';
+      let statusDetail = rawStatus;
+      if (!online || meterStale) { status = 'unavailable'; statusDetail = meterStale ? 'Messwert stale' : 'LP offline'; }
+      else if (rawLower.includes('fault') || rawLower.includes('error') || rawLower.includes('störung')) { status = 'error'; statusDetail = rawStatus || 'Störung'; }
+      else if (charging || powerW > 100) status = 'charging';
+      else if (plugged) status = 'plugged';
+      const mode = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.effectiveMode`, _nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.userMode`, 'auto')) || 'auto');
+      const session = _nwDisplayActiveSession(idx);
+      const lastSession = _nwDisplayLastCompletedSession(idx);
+      const energyDayKwh = Math.max(0, _nwDisplayNum(_nwDisplayStateVal(`evcs.${idx}.energyDayKwh`, 0), 0));
+      const solarSharePct = powerW > 0 && pvAvailable ? Math.max(0, Math.min(100, Math.round(Math.min(powerW, pvSurplusW) / Math.max(powerW, 1) * 100))) : 0;
+      const solarPrice = Number.isFinite(Number(station.solarPriceEurPerKwh)) ? Number(station.solarPriceEurPerKwh) : defaultSolarPrice;
+      const fastPrice = Number.isFinite(Number(station.fastPriceEurPerKwh)) ? Number(station.fastPriceEurPerKwh) : defaultFastPrice;
+      const price = Number.isFinite(Number(station.priceEurPerKwh)) ? Number(station.priceEurPerKwh) : (mode === 'pv' ? solarPrice : fastPrice);
+      const sessionKwh = session && Number.isFinite(Number(session.energyKwh)) ? Number(session.energyKwh) : 0;
+      const sessionState = session && session.active ? 'active' : (charging ? 'active-no-meter' : 'idle');
+      const sessionId = sessionState.startsWith('active') ? _nwDisplaySessionId(station.id, safe, session || { startTs: 0 }) : '';
+      const sessionSolarKwh = station.showSolarShare && sessionKwh > 0 ? Math.round(sessionKwh * (solarSharePct / 100) * 1000) / 1000 : 0;
+      const sessionGridKwh = Math.max(0, Math.round((sessionKwh - sessionSolarKwh) * 1000) / 1000);
+      const sessionSolarSharePercent = station.showSolarShare ? (sessionKwh > 0 ? Math.round((sessionSolarKwh / Math.max(sessionKwh, 0.0001)) * 100) : solarSharePct) : null;
+      return {
+        id: safe,
+        index: idx,
+        name: String(wb.name || _nwDisplayStateVal(`evcs.${idx}.name`, '') || `LP ${idx}`),
+        note: String(wb.note || _nwDisplayStateVal(`evcs.${idx}.note`, '') || ''),
+        connectorNo: Number(wb.connectorNo || idx) || idx,
+        chargerType: String(wb.chargerType || station.type || 'dc').toUpperCase(),
+        status,
+        statusDetail,
+        rawStatus,
+        online,
+        plugged,
+        charging,
+        powerW: Math.round(powerW),
+        targetW: Math.round(targetW),
+        powerKw: Math.round((powerW / 1000) * 10) / 10,
+        targetKw: Math.round((targetW / 1000) * 10) / 10,
+        mode,
+        pvAvailable,
+        solarSharePercent: station.showSolarShare ? solarSharePct : null,
+        energyDayKwh: Math.round(energyDayKwh * 1000) / 1000,
+        sessionId,
+        sessionState,
+        sessionEnergyKwh: Math.round(sessionKwh * 1000) / 1000,
+        sessionSolarKwh,
+        sessionGridKwh,
+        sessionSolarSharePercent,
+        sessionDurationSec: session && Number.isFinite(Number(session.durationSec)) ? Math.max(0, Math.round(Number(session.durationSec))) : 0,
+        sessionStartedAt: session && Number(session.startTs) > 0 ? Number(session.startTs) : 0,
+        sessionCostEur: Math.round(sessionKwh * price * 100) / 100,
+        priceEurPerKwh: station.showPrice ? Math.round(price * 10000) / 10000 : null,
+        solarPriceEurPerKwh: station.showPrice ? Math.round(solarPrice * 10000) / 10000 : null,
+        fastPriceEurPerKwh: station.showPrice ? Math.round(fastPrice * 10000) / 10000 : null,
+        allowedModes: station.allowedModes,
+        allowStartStop: station.allowStartStop !== false && !station.maintenanceMode && _nwDisplayNormalizeControlProfile(station.controlProfile || station.controlBridge) !== 'readonly',
+        controlBridge: String(station.controlBridge || 'charging-management'),
+        protocolHint: String(station.protocolHint || 'manufacturer-open'),
+        reason: String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.reason`, '') || ''),
+        session,
+        lastSession,
+      };
+    });
+  const operator = _nwDisplayBuildOperatorSummary(station, connectors, now);
+  return {
+    ok: true,
+    generatedAt: now,
+    station: {
+      id: station.id,
+      name: station.name,
+      type: station.type,
+      theme: station.theme,
+      showPrice: !!station.showPrice,
+      showSolarShare: !!station.showSolarShare,
+      allowStartStop: station.allowStartStop !== false && !station.maintenanceMode && _nwDisplayNormalizeControlProfile(station.controlProfile || station.controlBridge) !== 'readonly',
+      allowedModes: station.allowedModes,
+      maintenanceMode: !!station.maintenanceMode,
+      layoutMode: station.layoutMode || _nwDisplayLayoutMode('auto', connectors.length),
+      showLanguageSwitch: !!station.showLanguageSwitch,
+      displayRefreshSec: _nwDisplayClamp(station.displayRefreshSec, 1, 30, 3),
+      controlBridge: String(station.controlBridge || 'charging-management'),
+      protocolHint: String(station.protocolHint || 'manufacturer-open'),
+      displayOnline: !!runtime.displayOnline,
+      displayStatus: runtime.status,
+      displayWarning: runtime.warning,
+      lastHeartbeat: runtime.lastHeartbeat,
+      lastTouch: runtime.lastTouch,
+      lastSeenAgeSec: runtime.ageSec,
+      watchdogTimeoutSec: runtime.timeoutSec,
+    },
+    locale,
+    site: {
+      pvAvailable,
+      pvSurplusW: Math.round(pvSurplusW),
+      totalAssignedPowerW: connectors.reduce((sum, c) => sum + (Number(c.powerW) || 0), 0),
+      connectorCount: connectors.length,
+      layoutMode: station.layoutMode || _nwDisplayLayoutMode('auto', connectors.length),
+    },
+    display: {
+      apiVersion: '0.8.19',
+      manufacturerOpen: true,
+      controlBridge: station.controlBridge || 'charging-management',
+      controlProfile: station.controlProfile || 'chargingManagement',
+      protocolHint: station.protocolHint || 'manufacturer-neutral',
+      refreshIntervalMs: Math.round(_nwDisplayClamp(station.displayRefreshSec, 1, 30, 3) * 1000),
+      heartbeatIntervalMs: 10000,
+      watchdogTimeoutSec: runtime.timeoutSec,
+      showLanguageSwitch: !!station.showLanguageSwitch,
+      connectionState: runtime.displayOnline ? 'online' : 'offline',
+    },
+    operator,
+    connectors,
+  };
+};
+const _nwDisplaySetWallboxMode = async (lpKey, mode, enabled) => {
+  // Herstelleroffene Steuerung: Kein direkter OCPP-/Herstellerbefehl an dieser Stelle.
+  // Das Display schreibt ausschließlich in die generische Charging-Management-Abstraktion.
+  // Diese Abstraktion kann später OCPP, Modbus, MQTT, NexoWatt-Devices oder Herstelleradapter bedienen.
+  const key = _nwDisplayNormalizeLpKey(lpKey);
+  const idx = Math.max(1, Math.round(Number(String(key).replace(/^lp/, '')) || 1));
+  const userMode = mode === 'solar' ? 'pv' : (mode === 'fast' ? 'boost' : 'auto');
+  const base = `chargingManagement.wallboxes.${key}`;
+  if (typeof enabled === 'boolean') {
+    await this.setStateAsync(`${base}.userEnabled`, { val: enabled, ack: false });
+    try { this.updateValue(`${base}.userEnabled`, enabled, Date.now()); } catch (_e) {}
+  }
+  if (enabled !== false) {
+    await this.setStateAsync(`${base}.userMode`, { val: userMode, ack: false });
+    try { this.updateValue(`${base}.userMode`, userMode, Date.now()); } catch (_e) {}
+    const modeNum = userMode === 'boost' ? 1 : (userMode === 'minpv' ? 2 : (userMode === 'pv' ? 3 : 0));
+    try { await this.setStateAsync(`evcs.${idx}.mode`, { val: modeNum, ack: true }); } catch (_e) {}
+  }
+  return { bridge: 'charging-management', commandTarget: `${base}.userMode`, manufacturerOpen: true };
+};
+
+const _nwDisplayBuildCommandIntent = (station, lpKey, action, mode, userMode) => ({
+  schema: 'nexowatt.dc-station-display.command.v1',
+  ts: Date.now(),
+  stationId: String((station && station.id) || ''),
+  stationName: String((station && station.name) || ''),
+  lp: _nwDisplayNormalizeLpKey(lpKey),
+  action,
+  mode,
+  userMode,
+  source: 'dc-station-display',
+  manufacturerOpen: true,
+  protocolHint: String((station && station.protocolHint) || 'manufacturer-open'),
+  note: 'Adapter-agnostic command intent. A downstream ioBroker adapter may translate this to OCPP, Modbus, MQTT, REST, NexoWatt-Devices or a vendor API.',
+});
+
+const _nwDisplayWriteCommandState = async (station, lpKey, intent) => {
+  const id = _nwDisplayResolveCommandStateId(station, lpKey);
+  if (!id) return { written: false, reason: 'no-command-state' };
+  const payload = JSON.stringify(intent);
+  const ack = _nwDisplayBool(station && station.commandStateAck, false);
+
+  // Herstellerneutrale Bruecke: Der Installer kann hier einen beliebigen ioBroker-State
+  // hinterlegen. Ein separater OCPP-, Modbus-, MQTT-, REST- oder Herstelleradapter kann
+  // diesen JSON-Intent auswerten. Wir nutzen bewusst setForeignStateAsync, damit der
+  // Ziel-State nicht im Namespace des UI-Adapters liegen muss.
+  if (typeof this.setForeignStateAsync === 'function') {
+    await this.setForeignStateAsync(id, { val: payload, ack });
+  } else {
+    await this.setStateAsync(id, { val: payload, ack });
+  }
+  try { this.updateValue(id, payload, Date.now()); } catch (_e) {}
+  return { written: true, stateId: id, ack };
+};
+
+const _nwDisplayPersistSessionOperatorStates = async (station, payload) => {
+  try {
+    if (!station || !payload) return;
+    const sessionSummary = {
+      ts: Date.now(),
+      operator: payload.operator || {},
+      connectors: (payload.connectors || []).map((c) => ({
+        id: c.id,
+        status: c.status,
+        energyKwh: c.sessionEnergyKwh,
+        solarKwh: c.sessionSolarKwh,
+        gridKwh: c.sessionGridKwh,
+        solarSharePercent: c.sessionSolarSharePercent,
+        costEur: c.sessionCostEur,
+        sessionId: c.sessionId || '',
+        sessionState: c.sessionState || '',
+        lastSession: c.lastSession || null,
+        bridge: c.controlBridge || 'charging-management',
+        protocolHint: c.protocolHint || payload?.station?.protocolHint || 'manufacturer-open',
+      })),
+    };
+    const base = station.id;
+    await _nwDisplayWriteStationState(base, 'sessionSummaryJson', JSON.stringify(sessionSummary), true);
+    await _nwDisplayWriteStationState(base, 'sessionSnapshotsJson', JSON.stringify(sessionSummary.connectors.filter((c) => c && (Number(c.energyKwh) > 0 || c.status === 'charging'))), true);
+    const last = sessionSummary.connectors.slice().reverse().find((c) => c && c.lastSession) || null;
+    await _nwDisplayWriteStationState(base, 'lastSessionJson', JSON.stringify(last ? last.lastSession : {}), true);
+    await _nwDisplayWriteStationState(base, 'operatorSummaryJson', JSON.stringify(sessionSummary.operator || {}), true);
+    await _nwDisplayWriteStationState(base, 'operatorKwhToday', Number(sessionSummary.operator && sessionSummary.operator.energyTodayKwh) || 0, true);
+    await _nwDisplayWriteStationState(base, 'operatorRevenueToday', Number(sessionSummary.operator && (sessionSummary.operator.currentRevenueEur || sessionSummary.operator.revenueEur)) || 0, true);
+  } catch (_e) {}
+};
+
+const _nwDisplayExecuteStationCommand = async (station, lpKey, action, mode) => {
+  const profile = _nwDisplayNormalizeControlProfile((station && (station.controlProfile || station.controlBridge || station.commandBridge)) || 'chargingManagement');
+  if (profile === 'readonly') {
+    const err = new Error('Station ist als Nur-Anzeige-Steuerbrücke konfiguriert.');
+    err.code = 'bridge_readonly';
+    throw err;
+  }
+
+  const lp = _nwDisplayNormalizeLpKey(lpKey);
+  const commandPayload = _nwDisplayBuildCommandIntent(
+    station,
+    lp,
+    action,
+    mode,
+    mode === 'solar' ? 'pv' : (mode === 'fast' ? 'boost' : 'auto')
+  );
+  commandPayload.version = '0.8.19';
+  commandPayload.directHardwareWrite = false;
+  const writes = [];
+
+  // 1) Standardpfad: herstellerneutral über NexoWatt Charging-Management.
+  // Dieser Weg ist bewusst nicht OCPP-spezifisch. Das Charging-Management schreibt
+  // später auf die im Installer gemappten Setpoints, egal ob diese aus OCPP, Modbus,
+  // MQTT, Hersteller-API oder NexoWatt-Devices stammen.
+  const mirrorToCharging = profile === 'chargingManagement' || profile === 'dual' || (profile === 'commandState' && station && station.writeChargingManagementMirror === true);
+  if (mirrorToCharging) {
+    const cmResult = action === 'stop'
+      ? await _nwDisplaySetWallboxMode(lp, 'auto', false)
+      : await _nwDisplaySetWallboxMode(lp, mode, true);
+    writes.push({ type: 'chargingManagement', result: cmResult });
+  }
+
+  // 2) Optionaler Expertenpfad: ein generischer JSON-Command-State.
+  // Damit können künftige oder externe Adapter den Display-Befehl auswerten,
+  // ohne dass diese API an deren Protokoll gekoppelt wird.
+  if (profile === 'commandState' || profile === 'dual') {
+    const commandStateId = _nwDisplayResolveCommandStateId(station, lp);
+    if (!commandStateId) {
+      if (!writes.length) {
+        const err = new Error('Für diese Steuerbrücke fehlt der generische Command-State im Installerbereich.');
+        err.code = 'command_state_missing';
+        throw err;
+      }
+      writes.push({ type: 'commandState', skipped: true, reason: 'missing-command-state-id' });
+    } else {
+      await this.setForeignStateAsync(commandStateId, { val: JSON.stringify(commandPayload), ack: !!(station && station.commandStateAck) });
+      writes.push({ type: 'commandState', id: commandStateId, ack: !!(station && station.commandStateAck) });
+    }
+  }
+
+  if (!writes.length) {
+    const err = new Error('Keine produktive Steuerbrücke aktiv.');
+    err.code = 'bridge_no_write';
+    throw err;
+  }
+
+  return {
+    bridge: profile,
+    protocolHint: commandPayload.protocolHint,
+    target: writes.map((w) => w.type).join('+'),
+    writes,
+    directHardwareWrite: false,
+    manufacturerOpen: true,
+  };
+};
+
+
+app.get(['/display/station/:token', '/display/station/:token/'], (_req, res) => {
+  res.sendFile(path.join(__dirname, 'www', 'dc-station-display.html'));
+});
+
+app.get('/api/display/station/:token', async (req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwDisplayIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'DC Station Display ist nur in EOS verfügbar.' });
+    const station = _nwDisplayFindStation(req.params && req.params.token);
+    if (!station) return res.status(404).json({ ok: false, error: 'station_not_found' });
+    const payload = _nwDisplayBuildPayload(station);
+    await _nwDisplayWriteStationState(station.id, 'lastPayloadAt', Date.now(), true);
+    await _nwDisplayPersistSessionOperatorStates(station, payload);
+    return res.json(payload);
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
+  }
+});
+
+app.post('/api/display/station/:token/heartbeat', async (req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwDisplayIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required' });
+    const station = _nwDisplayFindStation(req.params && req.params.token);
+    if (!station) return res.status(404).json({ ok: false, error: 'station_not_found' });
+    const now = Date.now();
+    await _nwDisplayWriteStationState(station.id, 'lastHeartbeat', now, true);
+    await _nwDisplayWriteStationState(station.id, 'displayOnline', true, true);
+    await _nwDisplayWriteStationState(station.id, 'displayStatus', station.maintenanceMode ? 'maintenance' : 'online', true);
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const displayInfo = {
+      ts: now,
+      width: Number(body.width) || 0,
+      height: Number(body.height) || 0,
+      userAgent: String((req.headers && req.headers['user-agent']) || '').slice(0, 180),
+      language: String(body.language || '').slice(0, 16),
+      appVersion: String(body.appVersion || '0.8.19').slice(0, 32),
+    };
+    await _nwDisplayWriteStationState(station.id, 'lastDisplayInfoJson', JSON.stringify(displayInfo), true);
+    return res.json({ ok: true, stationId: station.id, ts: now, watchdog: _nwDisplayReadStationRuntime(station, now) });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
+  }
+});
+
+app.post('/api/display/station/:token/command', async (req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwDisplayIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'DC Station Display ist nur in EOS verfügbar.' });
+    const station = _nwDisplayFindStation(req.params && req.params.token);
+    if (!station) return res.status(404).json({ ok: false, error: 'station_not_found' });
+    if (station.maintenanceMode) return res.status(423).json({ ok: false, error: 'station_maintenance', message: 'Diese Ladestation ist im Wartungsmodus.' });
+    if (station.allowStartStop === false) return res.status(403).json({ ok: false, error: 'station_readonly' });
+    const body = req.body || {};
+    const lp = _nwDisplayNormalizeLpKey(body.lp || body.connector || body.chargepoint || '');
+    if (!lp || !station.assignedChargepoints.includes(lp)) return res.status(403).json({ ok: false, error: 'lp_not_assigned' });
+    let action = String(body.action || '').trim().toLowerCase();
+    let mode = String(body.mode || '').trim().toLowerCase();
+    if (action === 'solar') { action = 'start'; mode = 'solar'; }
+    if (action === 'fast' || action === 'boost') { action = 'start'; mode = 'fast'; }
+    if (mode === 'pv') mode = 'solar';
+    if (mode === 'boost') mode = 'fast';
+    if (!mode) mode = station.allowedModes.includes('solar') ? 'solar' : (station.allowedModes[0] || 'fast');
+    if (action !== 'start' && action !== 'stop') return res.status(400).json({ ok: false, error: 'bad_action' });
+    if (action === 'start' && !station.allowedModes.includes(mode)) return res.status(403).json({ ok: false, error: 'mode_not_allowed' });
+
+    const commandTs = Date.now();
+    await _nwDisplayWriteStationState(station.id, 'lastTouch', commandTs, true);
+    await _nwDisplayWriteStationState(station.id, 'lastCommand', `${action}:${lp}:${mode}`, true);
+    const commandMeta = { ts: commandTs, action, lp, mode, source: 'dc-station-display', bridge: station.controlBridge || 'charging-management', protocolHint: station.protocolHint || 'manufacturer-open' };
+    await _nwDisplayWriteStationState(station.id, 'lastCommandJson', JSON.stringify(commandMeta), true);
+    await _nwDisplayWriteStationState(station.id, 'displayStatus', 'command', true);
+    const bridgeResult = await _nwDisplayExecuteStationCommand(station, lp, action, mode);
+    await _nwDisplayWriteStationState(station.id, 'lastCommandResult', `accepted:${bridgeResult.bridge}`, true);
+    await _nwDisplayWriteStationState(station.id, 'lastCommandPlanJson', JSON.stringify(bridgeResult), true);
+    await _nwDisplayWriteStationState(station.id, 'lastCommandJson', JSON.stringify({ ...commandMeta, result: 'accepted', bridgeResult }), true);
+    const payload = _nwDisplayBuildPayload(station);
+    await _nwDisplayWriteStationState(station.id, 'lastPayloadAt', Date.now(), true);
+    await _nwDisplayPersistSessionOperatorStates(station, payload);
+    return res.json({ ok: true, accepted: true, action, lp, mode, bridge: bridgeResult.bridge, controlProfile: bridgeResult.controlProfile, manufacturerOpen: true, payload });
+  } catch (e) {
+    try {
+      const station = _nwDisplayFindStation(req.params && req.params.token);
+      if (station) {
+        const errMsg = String(e && e.message ? e.message : e);
+        await _nwDisplayWriteStationState(station.id, 'lastCommandResult', `error: ${errMsg}`, true);
+        await _nwDisplayWriteStationState(station.id, 'lastCommandPlanJson', JSON.stringify({ ts: Date.now(), error: errMsg, source: 'dc-station-display' }), true);
+        await _nwDisplayWriteStationState(station.id, 'lastCommandJson', JSON.stringify({ ts: Date.now(), error: errMsg, source: 'dc-station-display' }), true);
+      }
+    } catch (_e) {}
+    return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
   }
 });
 

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:61c529542dc3f9edb7dc74b7c12fdba3ecca9ae6eb582e91c995a55573c14b78
+ * Quell-Hash: sha256:657589484bb98d5cafa7fb01b05b5a02a4eeb9b82ac4d980ea1d12715e808582
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -357,6 +357,8 @@
     { id: 'relay', label: 'Relaissteuerung', desc: 'Manuelle Relais / generische Ausgänge (optional endkundentauglich)', mandatory: false, hems: true },
     { id: 'grid', label: 'Netzlimits', desc: 'Netzrestriktionen (RLM/0‑Einspeisung/Import‑Limits)', mandatory: false, hems: false },
     { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung: PV, Wetter, Tarif, Speicher, Wallboxen und Lastspitzen als Vorschläge auf der LIVE‑Seite', mandatory: false, hems: true },
+    { id: 'energyWallet', label: 'Energie-Wertkonto', desc: 'PV-Wert, Eigenverbrauchswert, Solar-Laden und Einspeisewert im Nutzerfrontend (Home + EOS)', mandatory: true, hems: true },
+    { id: 'chargeKiosk', label: 'DC Station Display', desc: 'EOS: isolierte Vollbild-Bedienseiten pro DC-Ladestation mit zugeordneten LPs/Connectoren', mandatory: false, hems: false },
     { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', mandatory: true, hems: true },
     { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls genutzt)', mandatory: false, hems: true },
     { id: 'multiuse', label: 'MultiUse', desc: 'Speicher Multi‑Use (SoC‑Zonen: Notstrom/LSK/Eigenverbrauch)', mandatory: false, hems: false }
@@ -850,7 +852,8 @@
   const shadowJsonDetailsOpen = new Set();
 
 
-  const HEMS_APP_IDS = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a']);
+  const HEMS_APP_IDS = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet']);
+  const HOME_LICENSE_FEATURES = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations']);
   const APP_LICENSE_FEATURES = Object.freeze({
     charging: 'chargingManagement',
     peak: 'peakShaving',
@@ -866,14 +869,22 @@
     aiAdvisor: 'aiAdvisor',
     tariff: 'dynamicTariffs',
     para14a: 'para14a',
-    multiuse: 'multiUse'
+    multiuse: 'multiUse',
+    energyWallet: 'energyWallet',
+    energyLedger: 'energyLedger',
+    chargeKiosk: 'chargeKiosk',
+    mesh: 'mesh',
+    microgrid: 'microgrid',
+    nlSaldering: 'nlSaldering',
+    nlEnergyHub: 'nlEnergyHub',
+    aiAutopilot: 'aiAutopilot'
   });
 
   function _licenseEdition() {
     const info = currentLicenseInfo && typeof currentLicenseInfo === 'object' ? currentLicenseInfo : {};
     const e = String(info.edition || '').trim().toLowerCase();
     if (e === 'eos') return 'eos';
-    if (e === 'hems') return 'hems';
+    if (e === 'hems' || e === 'home') return 'hems';
     const label = String(info.editionLabel || info.message || info.msg || '').trim().toLowerCase();
     if (info.eosFullAccess === true || /\beos\b/.test(label)) return 'eos';
     if (/\bhems\b/.test(label)) return 'hems';
@@ -892,7 +903,7 @@
     const features = currentLicenseInfo && currentLicenseInfo.features && typeof currentLicenseInfo.features === 'object' ? currentLicenseInfo.features : {};
     const f = String(feature || '');
     if (Object.prototype.hasOwnProperty.call(features, f)) return !!features[f];
-    return HEMS_APP_IDS.has(String(feature || ''));
+    return HOME_LICENSE_FEATURES.has(f);
   }
 
   function _isAppLicensed(appId) {
@@ -1625,10 +1636,17 @@ function collectAiAdvisorConfigFromUI(base) {
     card.setAttribute('data-card', 'system-profile');
 
     const cp = currentConfig && currentConfig.countryProfile && typeof currentConfig.countryProfile === 'object' ? currentConfig.countryProfile : {};
+    const ew = currentConfig && currentConfig.energyWallet && typeof currentConfig.energyWallet === 'object' ? currentConfig.energyWallet : {};
     const locale = currentConfig && currentConfig.locale && typeof currentConfig.locale === 'object' ? currentConfig.locale : {};
     const country = _nwSystemProfileCountry();
     const lang = String((locale && (locale.language || locale.htmlLang)) || cp.effectiveLanguage || 'de').trim().toLowerCase() || 'de';
     const source = String((locale && locale.source) || cp.languageSource || 'system.config.common.language');
+    const importPriceRaw = ew.importPriceEurPerKwh !== undefined ? ew.importPriceEurPerKwh : ew.importPriceEurKwh;
+    const importPrice = Number.isFinite(Number(importPriceRaw)) ? Number(importPriceRaw) : 0.35;
+    const feedInPriceRaw = ew.feedInPriceEurPerKwh !== undefined ? ew.feedInPriceEurPerKwh : ew.feedInPriceEurKwh;
+    const feedInPrice = Number.isFinite(Number(feedInPriceRaw)) ? Number(feedInPriceRaw) : 0.08;
+    const evcsValueRaw = ew.evcsValueEurPerKwh !== undefined ? ew.evcsValueEurPerKwh : ew.evcsValueEurKwh;
+    const evcsValue = Number.isFinite(Number(evcsValueRaw)) ? Number(evcsValueRaw) : importPrice;
 
     card.innerHTML = `
       <div class="nw-config-card__header">
@@ -1653,6 +1671,25 @@ function collectAiAdvisorConfigFromUI(base) {
             <small>Quelle: ioBroker <code>system.config.common.language</code>. Keine Kundeneinstellung im Frontend.</small>
           </label>
         </div>
+        <div class="nw-config-separator" style="margin:14px 0 10px;"></div>
+        <div class="nw-config-card__subtitle" style="margin-bottom:8px;">Energie-Wertkonto: Preisannahmen nur im Installerbereich. Das Nutzerfrontend zeigt nur Werte und Hinweise.</div>
+        <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;">
+          <label class="nw-config-field">
+            <span class="nw-config-label">Netzstrompreis €/kWh</span>
+            <input class="nw-config-input" id="energyWalletImportPrice" type="number" min="-1" max="5" step="0.0001" />
+            <small>Basis für vermiedenen Netzbezug und lokale PV-Nutzung.</small>
+          </label>
+          <label class="nw-config-field">
+            <span class="nw-config-label">Einspeisewert €/kWh</span>
+            <input class="nw-config-input" id="energyWalletFeedInPrice" type="number" min="-1" max="5" step="0.0001" />
+            <small>Vergütung oder angenommener Wert für Einspeisung/Teruglevering.</small>
+          </label>
+          <label class="nw-config-field">
+            <span class="nw-config-label">Solar-Laden €/kWh</span>
+            <input class="nw-config-input" id="energyWalletEvcsValue" type="number" min="-1" max="5" step="0.0001" />
+            <small>Wert einer lokal geladenen Solar-kWh an der Wallbox.</small>
+          </label>
+        </div>
         <div id="countryProfileHint" class="nw-config-empty" style="margin-top:10px;text-align:left;"></div>
       </div>`;
 
@@ -1669,6 +1706,12 @@ function collectAiAdvisorConfigFromUI(base) {
           : 'DE aktiv: Begriffe wie Einspeisung/Netzbezug und §14a-Module bleiben Standard.';
       });
     }
+    const importEl = card.querySelector('#energyWalletImportPrice');
+    const feedEl = card.querySelector('#energyWalletFeedInPrice');
+    const evcsEl = card.querySelector('#energyWalletEvcsValue');
+    if (importEl) importEl.value = String(importPrice);
+    if (feedEl) feedEl.value = String(feedInPrice);
+    if (evcsEl) evcsEl.value = String(evcsValue);
     if (display) display.value = `${lang.toUpperCase()} (${source})`;
     if (hint) hint.textContent = country === 'NL'
       ? 'NL aktiv: Begriffe wie Teruglevering/Netafname und spätere P1-/Saldering-Module werden vorbereitet.'
@@ -1676,6 +1719,143 @@ function collectAiAdvisorConfigFromUI(base) {
     return card;
   }
 
+
+
+  function _chargeKioskHtmlEscape(input) {
+    return String(input == null ? '' : input)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function _chargeKioskStations() {
+    const ck = currentConfig && currentConfig.chargeKiosk && typeof currentConfig.chargeKiosk === 'object' ? currentConfig.chargeKiosk : {};
+    return Array.isArray(ck.stations) ? ck.stations : [];
+  }
+
+  function _chargeKioskToken() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let out = 'ST-';
+    try {
+      const bytes = new Uint8Array(8);
+      crypto.getRandomValues(bytes);
+      for (const b of bytes) out += alphabet[b % alphabet.length];
+    } catch (_e) {
+      out += Math.random().toString(36).slice(2, 10).toUpperCase();
+    }
+    return out.replace(/(.{3})(.{4})(.{4})/, '$1-$2-$3');
+  }
+
+  function _chargeKioskAssignedToText(v) {
+    const arr = Array.isArray(v) ? v : [];
+    return arr.map((x) => String(x || '').trim()).filter(Boolean).join(', ');
+  }
+
+  function buildChargeKioskCard() {
+    const card = document.createElement('div');
+    card.className = 'nw-config-card nw-charge-kiosk-card';
+    card.setAttribute('data-card', 'charge-kiosk');
+    const isEos = _licenseEdition() === 'eos';
+    const ck = currentConfig && currentConfig.chargeKiosk && typeof currentConfig.chargeKiosk === 'object' ? currentConfig.chargeKiosk : {};
+    const stations = _chargeKioskStations();
+    const rows = stations.map((row, idx) => {
+      const r = row && typeof row === 'object' ? row : {};
+      const id = String(r.id || `dc_station_${idx + 1}`).trim();
+      const name = String(r.name || `DC Ladestation ${idx + 1}`).trim();
+      const token = String(r.token || '').trim();
+      const type = String(r.type || 'dc').trim().toLowerCase() === 'ac' ? 'ac' : 'dc';
+      const assigned = _chargeKioskAssignedToText(r.assignedChargepoints || r.chargepoints || r.lps);
+      const modes = Array.isArray(r.allowedModes) ? r.allowedModes : ['solar', 'fast'];
+      const solar = modes.includes('solar');
+      const fast = modes.includes('fast');
+      const maintenance = r.maintenanceMode === true;
+      const watchdogTimeoutSec = Number.isFinite(Number(r.watchdogTimeoutSec)) ? Math.max(15, Math.min(600, Math.round(Number(r.watchdogTimeoutSec)))) : 45;
+      const layoutMode = ['single','dual','quad','auto'].includes(String(r.layoutMode || '').toLowerCase()) ? String(r.layoutMode || 'auto').toLowerCase() : 'auto';
+      const controlBridgeRaw = String(r.controlBridge || r.commandBridge || 'charging-management').trim().toLowerCase();
+      const controlBridge = ['charging-management','ems-intent','generic','readonly'].includes(controlBridgeRaw) ? controlBridgeRaw : 'charging-management';
+      const commandStateId = String(r.commandStateId || r.commandObjectId || '').trim();
+      const protocolHint = String(r.protocolHint || r.vendor || r.manufacturer || 'manufacturer-open').trim();
+      const url = token ? `/display/station/${encodeURIComponent(token)}` : '';
+      return `
+        <div class="nw-config-card__row nw-charge-kiosk-row" data-charge-kiosk-station-row="${idx}">
+          <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;align-items:end;">
+            <label class="nw-config-field"><span class="nw-config-label">Aktiv</span><select class="nw-config-input" data-ck-field="enabled"><option value="true" ${r.enabled !== false ? 'selected' : ''}>Ja</option><option value="false" ${r.enabled === false ? 'selected' : ''}>Nein</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Stations-ID</span><input class="nw-config-input" data-ck-field="id" value="${_chargeKioskHtmlEscape(id)}" placeholder="dc_station_01" /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Name am Display</span><input class="nw-config-input" data-ck-field="name" value="${_chargeKioskHtmlEscape(name)}" placeholder="DC Ladestation 01" /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Typ</span><select class="nw-config-input" data-ck-field="type"><option value="dc" ${type === 'dc' ? 'selected' : ''}>DC</option><option value="ac" ${type === 'ac' ? 'selected' : ''}>AC</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Steuerbrücke</span><select class="nw-config-input" data-ck-field="controlBridge"><option value="charging-management" ${controlBridge === 'charging-management' || controlBridge === 'ems-intent' ? 'selected' : ''}>Herstelleroffen über NexoWatt EMS</option><option value="generic" ${controlBridge === 'generic' ? 'selected' : ''}>Generischer JSON-Command-State</option><option value="readonly" ${controlBridge === 'readonly' ? 'selected' : ''}>Nur Anzeige</option></select><small>Kein OCPP-Zwang: OCPP, Modbus, MQTT, REST und Herstelleradapter laufen über LP-Mapping oder den optionalen Command-State.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Command-State optional</span><input class="nw-config-input" data-ck-field="commandStateId" value="${_chargeKioskHtmlEscape(commandStateId)}" placeholder="0_userdata.0.nexowatt.dc.command" /><small>Nur für generische Brücken. Platzhalter möglich: {stationId}, {lp}.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Protokoll-/Hersteller-Hinweis</span><input class="nw-config-input" data-ck-field="protocolHint" value="${_chargeKioskHtmlEscape(protocolHint)}" placeholder="OCPP / Modbus / MQTT / Herstelleradapter" /><small>Nur Hinweis/Diagnose. Die Display-Logik bleibt herstelleroffen.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Display-Token</span><input class="nw-config-input" data-ck-field="token" value="${_chargeKioskHtmlEscape(token)}" placeholder="ST-XXXX-XXXX" /></label>
+            <div class="nw-config-field"><span class="nw-config-label">Token</span><button type="button" class="nw-btn nw-btn-secondary" data-ck-generate-token="1">Neu erzeugen</button></div>
+          </div>
+          <div class="nw-config-grid" style="grid-template-columns:2fr 1fr 1fr;gap:10px;margin-top:10px;align-items:end;">
+            <label class="nw-config-field"><span class="nw-config-label">Zugeordnete LPs/Connectoren</span><input class="nw-config-input" data-ck-field="assignedChargepoints" value="${_chargeKioskHtmlEscape(assigned)}" placeholder="lp1, lp2" /><small>Nur diese LPs erscheinen auf dieser Stationsdisplay-Seite.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Solar laden</span><select class="nw-config-input" data-ck-field="solar"><option value="true" ${solar ? 'selected' : ''}>Erlaubt</option><option value="false" ${!solar ? 'selected' : ''}>Aus</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Schnell laden</span><select class="nw-config-input" data-ck-field="fast"><option value="true" ${fast ? 'selected' : ''}>Erlaubt</option><option value="false" ${!fast ? 'selected' : ''}>Aus</option></select></label>
+          </div>
+          <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:10px;align-items:end;">
+            <label class="nw-config-field"><span class="nw-config-label">Solarpreis €/kWh optional</span><input class="nw-config-input" type="number" step="0.0001" min="-1" max="5" data-ck-field="solarPriceEurPerKwh" value="${Number.isFinite(Number(r.solarPriceEurPerKwh)) ? Number(r.solarPriceEurPerKwh) : ''}" /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Schnellladepreis €/kWh optional</span><input class="nw-config-input" type="number" step="0.0001" min="-1" max="5" data-ck-field="fastPriceEurPerKwh" value="${Number.isFinite(Number(r.fastPriceEurPerKwh)) ? Number(r.fastPriceEurPerKwh) : ''}" /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Start/Stop am Display</span><select class="nw-config-input" data-ck-field="allowStartStop"><option value="true" ${r.allowStartStop !== false ? 'selected' : ''}>Erlaubt</option><option value="false" ${r.allowStartStop === false ? 'selected' : ''}>Nur Anzeige</option></select></label>
+          </div>
+          <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:10px;align-items:end;">
+            <label class="nw-config-field"><span class="nw-config-label">Wartungsmodus</span><select class="nw-config-input" data-ck-field="maintenanceMode"><option value="false" ${r.maintenanceMode === true ? '' : 'selected'}>Aus</option><option value="true" ${r.maintenanceMode === true ? 'selected' : ''}>An</option></select><small>Display zeigt Wartung und blockiert Start/Stop.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Watchdog Timeout s</span><input class="nw-config-input" type="number" step="1" min="15" max="600" data-ck-field="watchdogTimeoutSec" value="${Number.isFinite(Number(r.watchdogTimeoutSec)) ? Number(r.watchdogTimeoutSec) : 45}" /><small>Offline, wenn kein Heartbeat innerhalb dieser Zeit kommt.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Display Refresh s</span><input class="nw-config-input" type="number" step="1" min="1" max="30" data-ck-field="displayRefreshSec" value="${Number.isFinite(Number(r.displayRefreshSec)) ? Number(r.displayRefreshSec) : 3}" /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Layout</span><select class="nw-config-input" data-ck-field="layoutMode"><option value="auto" ${String(r.layoutMode || 'auto') === 'auto' ? 'selected' : ''}>Auto</option><option value="single" ${String(r.layoutMode || '') === 'single' ? 'selected' : ''}>1 Connector groß</option><option value="dual" ${String(r.layoutMode || '') === 'dual' ? 'selected' : ''}>2 Connectoren</option><option value="quad" ${String(r.layoutMode || '') === 'quad' ? 'selected' : ''}>4 Connectoren</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Sprachwahl am Display</span><select class="nw-config-input" data-ck-field="showLanguageSwitch"><option value="false" ${r.showLanguageSwitch === true ? '' : 'selected'}>Aus</option><option value="true" ${r.showLanguageSwitch === true ? 'selected' : ''}>DE/NL/EN anzeigen</option></select></label>
+          </div>
+          <div class="nw-config-card__subtitle" style="margin-top:10px;">Display-URL: <code>${_chargeKioskHtmlEscape(url || 'Token erzeugen und speichern')}</code></div>
+          <div style="display:flex;justify-content:flex-end;margin-top:8px;"><button type="button" class="nw-btn nw-btn-danger" data-ck-delete="1">Station entfernen</button></div>
+        </div>`;
+    }).join('');
+
+    card.innerHTML = `
+      <div class="nw-config-card__header">
+        <div>
+          <div class="nw-config-card__title">EOS DC Station Display</div>
+          <div class="nw-config-card__subtitle">Separate Vollbildseite pro DC-Ladestation. Das Nutzerdisplay sieht nur die hier zugeordneten LPs.</div>
+        </div>
+      </div>
+      <div class="nw-config-card__body">
+        ${isEos ? '' : '<div class="nw-config-empty" style="text-align:left;margin-bottom:10px;">Diese Funktion ist EOS-only. In Home bleibt die normale EVCS-Seite unverändert.</div>'}
+        <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:10px;">
+          <label class="nw-config-field"><span class="nw-config-label">DC Station Display aktiv</span><select class="nw-config-input" id="chargeKioskEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select><small>Route: <code>/display/station/&lt;token&gt;</code></small></label>
+        </div>
+        <div id="chargeKioskStations">${rows || '<div class="nw-config-empty" style="text-align:left;">Noch keine Display-Station angelegt.</div>'}</div>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px;"><button type="button" class="nw-btn" id="chargeKioskAddStation" ${isEos ? '' : 'disabled'}>DC-Station anlegen</button></div>
+      </div>`;
+
+    const enabledEl = card.querySelector('#chargeKioskEnabled');
+    if (enabledEl) enabledEl.value = ck.enabled === true ? 'true' : 'false';
+
+    card.querySelectorAll('[data-ck-generate-token]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const row = btn.closest('[data-charge-kiosk-station-row]');
+        const inp = row && row.querySelector('[data-ck-field="token"]');
+        if (inp) inp.value = _chargeKioskToken();
+      });
+    });
+    card.querySelectorAll('[data-ck-delete]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const row = btn.closest('[data-charge-kiosk-station-row]');
+        if (row) row.remove();
+      });
+    });
+    const add = card.querySelector('#chargeKioskAddStation');
+    if (add) add.addEventListener('click', () => {
+      currentConfig.chargeKiosk = currentConfig.chargeKiosk || {};
+      const list = Array.isArray(currentConfig.chargeKiosk.stations) ? currentConfig.chargeKiosk.stations.slice() : [];
+      const next = list.length + 1;
+      list.push({ id: `dc_station_${next}`, name: `DC Ladestation ${next}`, type: 'dc', token: _chargeKioskToken(), enabled: true, assignedChargepoints: [`lp${next}`], allowedModes: ['solar','fast'], showPrice: true, showSolarShare: true, allowStartStop: true, maintenanceMode: false, watchdogTimeoutSec: 45, displayRefreshSec: 3, layoutMode: 'auto', showLanguageSwitch: false, controlBridge: 'charging-management', protocolHint: 'manufacturer-open' });
+      currentConfig.chargeKiosk.stations = list;
+      buildAppsUI();
+    });
+    return card;
+  }
   /**
    * Code-Teil: buildAppsUI
    * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
@@ -1702,6 +1882,7 @@ function collectAiAdvisorConfigFromUI(base) {
     licenseCard.innerHTML = `<div class="nw-config-card__header"><div><div class="nw-config-card__title">Lizenz: ${_licenseLabel()}</div><div class="nw-config-card__subtitle">${_licenseEdition() === 'eos' ? 'EOS ist die Vollversion mit allen Apps und künftigen Erweiterungen.' : 'Home zeigt nur die freigegebenen Basis-Apps.'}${licenseLimit}</div></div></div>`;
     els.appsList.appendChild(licenseCard);
     els.appsList.appendChild(buildSystemProfileCard());
+    els.appsList.appendChild(buildChargeKioskCard());
 
     const visibleApps = APP_CATALOG.filter((app) => _isAppLicensed(app.id));
     for (const app of visibleApps) {
@@ -1841,6 +2022,18 @@ function collectAiAdvisorConfigFromUI(base) {
         const row = document.createElement('div');
         row.className = 'nw-config-card__row';
         row.textContent = 'Konfiguration: Reiter „KI‑Optimierung“. Im UI‑Adapter nur beratend, keine automatischen Schaltbefehle.';
+        body.appendChild(row);
+      }
+      if (app.id === 'energyWallet') {
+        const row = document.createElement('div');
+        row.className = 'nw-config-card__row';
+        row.textContent = 'Home + EOS: Das Energie-Wertkonto rechnet nur und schaltet keine Geräte. Preisannahmen stehen oben im System- & Marktprofil.';
+        body.appendChild(row);
+      }
+      if (app.id === 'chargeKiosk') {
+        const row = document.createElement('div');
+        row.className = 'nw-config-card__row';
+        row.textContent = 'EOS: Konfiguration oben in der Karte „EOS DC Station Display“. Die Displayseite ist isoliert und tokenisiert.';
         body.appendChild(row);
       }
 
@@ -10533,6 +10726,90 @@ function collectAiAdvisorConfigFromUI(base) {
     patch.countryProfile = deepMerge({}, (currentConfig && currentConfig.countryProfile) ? currentConfig.countryProfile : {});
     patch.countryProfile.country = countryRaw === 'NL' ? 'NL' : 'DE';
     patch.countryProfile.languageMode = 'system';
+
+    const readWalletPrice = (id, fallback) => {
+      const el = document.getElementById(id);
+      const n = Number(el && el.value !== undefined ? el.value : fallback);
+      if (!Number.isFinite(n)) return fallback;
+      return Math.max(-1, Math.min(5, Math.round(n * 10000) / 10000));
+    };
+    patch.energyWallet = deepMerge({}, (currentConfig && currentConfig.energyWallet) ? currentConfig.energyWallet : {});
+    const ewImportPrice = readWalletPrice('energyWalletImportPrice', 0.35);
+    const ewFeedInPrice = readWalletPrice('energyWalletFeedInPrice', 0.08);
+    const ewEvcsValue = readWalletPrice('energyWalletEvcsValue', ewImportPrice);
+    patch.energyWallet.enabled = true;
+    patch.energyWallet.showOnLive = true;
+    patch.energyWallet.importPriceEurPerKwh = ewImportPrice;
+    patch.energyWallet.feedInPriceEurPerKwh = ewFeedInPrice;
+    patch.energyWallet.evcsValueEurPerKwh = ewEvcsValue;
+    // Legacy aliases für bestehende gespeicherte Installationen.
+    patch.energyWallet.importPriceEurKwh = ewImportPrice;
+    patch.energyWallet.feedInPriceEurKwh = ewFeedInPrice;
+    patch.energyWallet.evcsValueEurKwh = ewEvcsValue;
+
+    // EOS DC Station Display / Charge Kiosk (Installer only).
+    // Das normale Nutzerfrontend bekommt keine Konfiguration; die Displayseite nutzt nur Token + zugeordnete LPs.
+    const ckEnabledEl = document.getElementById('chargeKioskEnabled');
+    const ckRows = Array.from(document.querySelectorAll('[data-charge-kiosk-station-row]'));
+    const splitLpList = (raw) => String(raw || '').split(/[;,\s]+/g).map((x) => x.trim()).filter(Boolean).map((x) => {
+      const m = x.toLowerCase().match(/^(?:lp|ladepunkt|connector|evcs)?\s*([0-9]+)$/i) || x.toLowerCase().match(/^lp([0-9]+)$/i);
+      return m ? `lp${Math.max(1, Math.round(Number(m[1]) || 1))}` : x.toLowerCase().replace(/[^a-z0-9_\-]+/g, '_');
+    }).filter((v, i, a) => v && a.indexOf(v) === i);
+    const readCk = (row, field) => {
+      const el = row && row.querySelector(`[data-ck-field="${field}"]`);
+      return el ? String(el.value || '').trim() : '';
+    };
+    const readCkPrice = (row, field) => {
+      const raw = readCk(row, field);
+      const n = Number(raw);
+      return Number.isFinite(n) ? Math.max(-1, Math.min(5, Math.round(n * 10000) / 10000)) : undefined;
+    };
+    const readCkInt = (row, field, fallback, min, max) => {
+      const n = Number(readCk(row, field));
+      if (!Number.isFinite(n)) return fallback;
+      return Math.max(min, Math.min(max, Math.round(n)));
+    };
+    patch.chargeKiosk = deepMerge({}, (currentConfig && currentConfig.chargeKiosk) ? currentConfig.chargeKiosk : {});
+    patch.chargeKiosk.enabled = ckEnabledEl ? ckEnabledEl.value === 'true' : !!patch.chargeKiosk.enabled;
+    patch.chargeKiosk.displayBasePath = '/display/station/';
+    patch.chargeKiosk.stations = ckRows.map((row, idx) => {
+      const modes = [];
+      if (readCk(row, 'solar') !== 'false') modes.push('solar');
+      if (readCk(row, 'fast') !== 'false') modes.push('fast');
+      const out = {
+        id: readCk(row, 'id') || `dc_station_${idx + 1}`,
+        name: readCk(row, 'name') || `DC Ladestation ${idx + 1}`,
+        type: readCk(row, 'type') === 'ac' ? 'ac' : 'dc',
+        token: readCk(row, 'token'),
+        enabled: readCk(row, 'enabled') !== 'false',
+        displayMode: 'station',
+        assignedChargepoints: splitLpList(readCk(row, 'assignedChargepoints')),
+        allowedModes: modes.length ? modes : ['solar', 'fast'],
+        showPrice: true,
+        showSolarShare: true,
+        allowStartStop: readCk(row, 'allowStartStop') !== 'false',
+        maintenanceMode: readCk(row, 'maintenanceMode') === 'true',
+        watchdogTimeoutSec: readCkInt(row, 'watchdogTimeoutSec', 45, 15, 600),
+        displayRefreshSec: readCkInt(row, 'displayRefreshSec', 3, 1, 30),
+        layoutMode: ['single','dual','quad','auto'].includes(readCk(row, 'layoutMode')) ? readCk(row, 'layoutMode') : 'auto',
+        showLanguageSwitch: readCk(row, 'showLanguageSwitch') === 'true',
+        controlBridge: ['charging-management','ems-intent','generic','readonly'].includes(readCk(row, 'controlBridge')) ? readCk(row, 'controlBridge') : 'charging-management',
+        commandStateId: readCk(row, 'commandStateId'),
+        // Steuerprofil bleibt herstelleroffen:
+        // - chargingManagement schreibt nur in die NexoWatt-/EMS-Abstraktion.
+        // - generic erzeugt zusätzlich ein JSON-Kommando für beliebige OCPP-/Modbus-/MQTT-/Herstelleradapter.
+        controlProfile: readCk(row, 'controlBridge') === 'generic' ? 'dual' : 'chargingManagement',
+        writeChargingManagementMirror: true,
+        protocolHint: readCk(row, 'protocolHint') || 'manufacturer-open',
+        languageMode: 'system',
+        theme: 'nexowatt-dark-touch',
+      };
+      const solarPrice = readCkPrice(row, 'solarPriceEurPerKwh');
+      const fastPrice = readCkPrice(row, 'fastPriceEurPerKwh');
+      if (solarPrice !== undefined) out.solarPriceEurPerKwh = solarPrice;
+      if (fastPrice !== undefined) out.fastPriceEurPerKwh = fastPrice;
+      return out;
+    });
 
     // Plant
     const gcp = Number(els.gridConnectionPower.value);

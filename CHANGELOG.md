@@ -1,3 +1,41 @@
+## 0.8.19
+
+- DC Station Display: Session-/Betreiberbasis ergänzt. Aktive/letzte Sessions werden im Display-Payload klarer gekennzeichnet, Session-Kosten nach Solar-/Netzanteil vorbereitet und Diagnosezustände erweitert.
+- DC Station Display: Herstellerneutrale Steuerbrücke vorbereitet. Befehle laufen weiterhin über das NexoWatt-Charging-Management oder optional über einen frei mappbaren JSON-Command-State; damit bleibt die Anzeige nicht OCPP-fest verdrahtet.
+- App-Center: Steuerungsprofil und optionaler Command-State pro Display-Station ergänzt.
+- Service-Worker Cache auf `nexowatt-cache-v320` erhöht.
+
+## 0.8.18
+
+- EOS DC Station Display: Display-Watchdog je Station mit `displayStatus`, `displayWarning`, `lastSeenAgeSec`, `offlineSince` und Online-/Offline-Zählern ergänzt.
+- Display-Frontend: Wartungs-/Offline-Hinweis, Touch-Layouts für 1/2/4 Connectoren und zusätzliche Session-Daten für Dauer, Solar-kWh und Netz-kWh ergänzt.
+- Display-API: Wartungsmodus blockiert Start/Stop sicher serverseitig; letzte Display-Kommandos werden zusätzlich als JSON diagnostiziert.
+- App-Center: Wartungsmodus, Watchdog-Timeout und Touch-Layout pro DC-Station konfigurierbar.
+- Home bleibt unverändert; DC Station Display bleibt EOS-only.
+
+## 0.8.17
+
+- EOS DC Station Display Basis ergänzt: pro angelegter DC-Ladestation gibt es eine tokenisierte Vollbildseite unter `/display/station/<token>`.
+- Installer/App-Center: Stationen mit Name, Token, zugeordneten LPs/Connectoren, Solar-/Schnellladen und optionalen Preisen konfigurierbar.
+- Backend: tokengefilterte Display-API, Heartbeat und Start/Stop-/Modus-Kommandos mit EOS-Gate und LP-Zuordnungsprüfung.
+- Frontend: neue touch-optimierte Display-Seite ohne Navigation, ohne Admin-Funktionen und ohne Rohdatenpunkt-Anzeige.
+
+## 0.8.16
+
+- Energie-Wertkonto: Monats- und Jahreswerte ergänzt (`energyWallet.month.*`, `energyWallet.year.*`).
+- Energie-Wertkonto: Persistenz über Adapter-Neustart, Tageswechsel, Monatswechsel und Jahreswechsel gehärtet.
+- Energie-Wertkonto: Plausibilitäts-/Datenqualitätsdiagnosen ergänzt (`energyWallet.diagnostics.*`), damit fehlende oder stale PV-/Netzquellen nicht blind integriert werden.
+- LIVE: Nutzerkarte zeigt zusätzlich Monatswert, Jahreswert und Datenqualität; Konfiguration bleibt weiterhin ausschließlich im Installer/App-Center.
+- Service-Worker Cache auf `nexowatt-cache-v317` erhöht.
+
+## 0.8.15
+
+- Energie-Wertkonto für Home und EOS ergänzt: PV-Wert, lokale Nutzungsquote, vermiedener Netzbezug, Einspeisewert, Speicherwert und Solar-Ladepunktwert werden als `energyWallet.*` States berechnet.
+- Home enthält das volle Energie-Wertkonto für Einzelanlagen; EOS behält Betreiber-/Abrechnungsfunktionen wie Ledger, Kiosk, Mesh und Microgrid als spätere Erweiterungen.
+- Installer/App-Center erweitert: Preisannahmen für Netzstrom, Einspeisung und Solar-Laden bleiben im Installerbereich; das normale Frontend zeigt nur die Nutzerkarte.
+- Feature-Flags auf Home/EOS-Abgrenzung angepasst: `energyWallet` ist Home-Basis, `energyLedger`, `chargeKiosk`, `mesh`, `microgrid` und Betreiberexporte bleiben EOS.
+- Service-Worker Cache bleibt mit dem 0.8.14/0.8.15-Build konsistent.
+
 ## 0.8.14
 
 - Fundament für Home/EOS-Trennung ergänzt: Home/HEMS bleibt Basislizenz, EOS erhält vorbereitete Zukunfts-Feature-Flags.
@@ -5,7 +43,7 @@
 - ioBroker-Systemsprache wird aus `system.config.common.language` übernommen und in `/config`, `system.language` und den Frontend-Shells genutzt.
 - Neues Runtime-Modul `country-profile` veröffentlicht Länder-/Marktbegriffe und spätere NL-Fähigkeiten als States.
 - Dokumentation ergänzt: Roadmap Home/EOS/NL und Anleitung zum System-/Länderprofil.
-- Service-Worker Cache auf `nexowatt-cache-v315` erhöht.
+- Service-Worker Cache auf `nexowatt-cache-v316` erhöht.
 
 ## 0.8.13
 

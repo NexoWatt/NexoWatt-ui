@@ -859,6 +859,8 @@ class EmsEngine {
     try { adapter.subscribeStates('threshold.*'); } catch (_e) {}
     try { adapter.subscribeStates('gridConstraints.*'); } catch (_e) {}
     try { adapter.subscribeStates('aiAdvisor.*'); } catch (_e) {}
+    try { adapter.subscribeStates('energyWallet.*'); } catch (_e) {}
+    try { adapter.subscribeStates('chargeKiosk.*'); } catch (_e) {}
 
     // Start scheduler
     if (this._timer) this._clearInterval(this._timer);

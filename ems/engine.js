@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:014052ee674d87a81e6e45baf0ca2e0794912e725375a3b654c723ef10669c9c
+ * Quell-Hash: sha256:9bcac4af2626bab08165908e92567a1a6f94d71bbaae7d6a8d738d5f33452402
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -857,6 +857,8 @@ class EmsEngine {
     try { adapter.subscribeStates('threshold.*'); } catch (_e) {}
     try { adapter.subscribeStates('gridConstraints.*'); } catch (_e) {}
     try { adapter.subscribeStates('aiAdvisor.*'); } catch (_e) {}
+    try { adapter.subscribeStates('energyWallet.*'); } catch (_e) {}
+    try { adapter.subscribeStates('chargeKiosk.*'); } catch (_e) {}
 
     // Start scheduler
     if (this._timer) this._clearInterval(this._timer);

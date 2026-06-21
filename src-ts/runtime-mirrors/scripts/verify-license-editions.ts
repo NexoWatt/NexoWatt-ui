@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e5d7f155f8b94ca1126f78be2c0901d1aaac2eafe85d7bc2295bffc5c53edf50
+ * Original-Hash: 357a0a046de74aa21717b65e40ceeaedf4e67194a33617d9f6d216fbb1d0a2ca
  */
 
 /**
@@ -83,6 +83,7 @@ need(main.includes('legacy NW1 = EOS') || main.includes('Legacy NW1 = EOS'), 'ma
 need(main.includes('_nwLicenseFeaturesForEdition'), 'main.js: zentraler Feature-Katalog fehlt.');
 need(main.includes('peakShaving') && main.includes('storageFarm') && main.includes('multiUse'), 'main.js: EOS-only Features fehlen.');
 need(main.includes('chargingManagement') && main.includes('heatingRodControl') && main.includes('thresholdControl'), 'main.js: HEMS Feature-Whitelist unvollständig.');
+need(main.includes('energyWallet') && main.includes('energyWalletPro'), 'main.js: Energie-Wertkonto muss Home/EOS-Feature sein.');
 need(main.includes('_nwLicenseMaxWallboxes') && main.includes('if (edition === \'hems\') return 3'), 'main.js: HEMS-Wallboxlimit 3 fehlt.');
 need(main.includes('license.edition') && main.includes('license.featuresJson') && main.includes('license.maxWallboxes'), 'main.js: Lizenz-States für Edition/Features/Wallboxlimit fehlen.');
 need(main.includes('_nwApplyLicenseLimitsToInstallerPatch'), 'main.js: Backend-Gate für Installer-Patches fehlt.');
@@ -91,7 +92,7 @@ need(main.includes('sendNoStore(res)') && main.includes('Refresh the runtime lic
 need(main.includes('_nwRefreshLicenseFromConfiguredKey'), 'main.js: Lizenzstatus-Refresh aus gespeicherter Adapter-Konfiguration fehlt.');
 need(main.includes("await this._nwRefreshLicenseFromConfiguredKey(false)") && main.includes("app.use(async (req, res, next)"), 'main.js: Lizenz-API/App-Center/VIS-Gate müssen die Freischaltung ohne manuellen Neustart synchronisieren.');
 need(moduleManager.includes('_licenseAllowsApp'), 'ems/module-manager.js: Modulmanager-Lizenzgate fehlt.');
-need(moduleManager.includes("const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a'])"), 'ems/module-manager.js: HEMS-App-Liste fehlt oder falsch.');
+need(moduleManager.includes("const hemsApps = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet'])"), 'ems/module-manager.js: HEMS-App-Liste fehlt oder falsch.');
 need(moduleManager.includes("key: 'peakShaving'") && moduleManager.includes("this._licenseAllowsApp('peak')"), 'ems/module-manager.js: Peak-Shaving muss EOS-gated sein.');
 need(moduleManager.includes("key: 'chargingManagement'") && moduleManager.includes("this._licenseAllowsApp('charging')"), 'ems/module-manager.js: Lademanagement-Gate fehlt.');
 need(app.includes('HEMS_APP_IDS'), 'www/ems-apps.js: HEMS-App-Whitelist fehlt.');
