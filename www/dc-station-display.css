@@ -79,3 +79,21 @@ button,input{font:inherit;}
 .nw-connectors--layout-single{ }
 .nw-connectors--layout-dual{ }
 .nw-connectors--layout-quad{ }
+
+/* 0.8.20 LP-Bedienung pro Stationsdisplay
+   Jede LP-Kachel bekommt eine kompakte Touch-Bedienung. Die AC-Phasenzeile wird
+   ausschließlich vom Frontend gerendert, wenn der Backend-Payload `isAc` und
+   `controls.phaseSwitchSupported` meldet. DC-Ladepunkte behalten damit eine
+   fachlich saubere Bedienung ohne 1p/3p-Schalter. */
+.nw-lp-controls{border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.14);border-radius:20px;padding:12px;display:flex;flex-direction:column;gap:10px;}
+.nw-control-row{display:grid;grid-template-columns:minmax(86px,.85fr) minmax(0,2.2fr);gap:10px;align-items:center;}
+.nw-control-row>span{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--nw-muted);font-weight:900;}
+.nw-control-row>small{grid-column:2;color:var(--nw-muted);font-size:12px;margin-top:-4px;}
+.nw-control-buttons{display:grid;gap:8px;}
+.nw-control-buttons--2{grid-template-columns:repeat(2,1fr);}
+.nw-control-buttons--3{grid-template-columns:repeat(3,1fr);}
+.nw-control-buttons--4{grid-template-columns:repeat(4,1fr);}
+.nw-control-btn{border:1px solid var(--nw-border);background:rgba(255,255,255,.07);color:var(--nw-text);border-radius:14px;min-height:44px;padding:8px 10px;font-weight:950;cursor:pointer;}
+.nw-control-btn.active{background:var(--nw-green);border-color:rgba(0,230,118,.55);color:#06110b;box-shadow:0 10px 24px rgba(0,230,118,.16);}
+.nw-control-btn:disabled{opacity:.42;cursor:not-allowed;filter:grayscale(.25);}
+@media (max-width:760px){.nw-control-row{grid-template-columns:1fr}.nw-control-row>small{grid-column:1}.nw-control-buttons--4{grid-template-columns:repeat(2,1fr)}}

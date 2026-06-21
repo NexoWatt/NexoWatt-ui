@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/dc-station-display.ts
- * Quell-Hash: sha256:800f7dc01949e3804e630fb2a8d5a27a615427a3cc4eefe4876333861e17a5bc
+ * Quell-Hash: sha256:19817d433f7f3f37715ad929a3d8840b60171ff080edbf08eb3b83380663ad3d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -27,6 +27,12 @@
  * - Session-/Betreiberbasis für DC-Stationsdisplays.
  * - Herstellerneutrale Steuerbrücke sichtbar: Display sendet EMS-Intent statt OCPP-direkt.
  * - Kosten-, PV-Anteil- und letzte Session-Informationen für Betreiber vorbereitet.
+ *
+ * 0.8.20:
+ * - Jede zugeordnete LP-Kachel bekommt eine eigene Bedienleiste für Regelung, Modus,
+ *   Speicher-Mitnutzung und Ziel-Laden.
+ * - AC-Phasenumschaltung wird nur angezeigt, wenn der LP ein AC-Lader ist und
+ *   phaseSwitchSupported/phaseSwitchId vorhanden ist. DC-Ladepunkte bleiben ohne Phasenblock.
  */
 (function () {
   'use strict';
@@ -80,6 +86,22 @@
       bridge: 'Steuerung',
       directHardwareWrite: 'keine direkte Hardware-Schreibung',
       manufacturerOpen: 'Hersteller offen',
+      regulation: 'Regelung',
+      on: 'An',
+      off: 'Aus',
+      mode: 'Modus',
+      auto: 'Auto',
+      minpv: 'Min+PV',
+      pv: 'PV',
+      phase: 'AC-Phasenmodus',
+      phase1p: '1p',
+      phase3p: '3p',
+      autoPv: 'Auto PV',
+      storage: 'Speicher',
+      protect: 'Schützen',
+      useStorage: 'Mitnutzen',
+      goal: 'Ziel-Laden',
+      goalOn: 'Ziel aktiv',
     },
     nl: {
       loading: 'Verbinding met laadstation wordt opgebouwd …',
@@ -118,6 +140,22 @@
       bridge: 'Besturing',
       directHardwareWrite: 'geen directe hardware-aansturing',
       manufacturerOpen: 'Fabrikant-open',
+      regulation: 'Regeling',
+      on: 'Aan',
+      off: 'Uit',
+      mode: 'Modus',
+      auto: 'Auto',
+      minpv: 'Min+PV',
+      pv: 'PV',
+      phase: 'AC-fasemodus',
+      phase1p: '1p',
+      phase3p: '3p',
+      autoPv: 'Auto PV',
+      storage: 'Accu',
+      protect: 'Beschermen',
+      useStorage: 'Meenemen',
+      goal: 'Doelladen',
+      goalOn: 'Doel actief',
     },
     en: {
       loading: 'Connecting to charging station …',
@@ -156,6 +194,22 @@
       bridge: 'Control',
       directHardwareWrite: 'no direct hardware write',
       manufacturerOpen: 'Manufacturer-open',
+      regulation: 'Control',
+      on: 'On',
+      off: 'Off',
+      mode: 'Mode',
+      auto: 'Auto',
+      minpv: 'Min+PV',
+      pv: 'PV',
+      phase: 'AC phase mode',
+      phase1p: '1p',
+      phase3p: '3p',
+      autoPv: 'Auto PV',
+      storage: 'Storage',
+      protect: 'Protect',
+      useStorage: 'Use',
+      goal: 'Target charge',
+      goalOn: 'Target active',
     },
   };
 
@@ -333,14 +387,14 @@
           height: window.innerHeight || 0,
           visibility: document.visibilityState || 'visible',
           language: lang(),
-          appVersion: '0.8.19',
+          appVersion: '0.8.21',
         }),
         headers: { 'Content-Type': 'application/json' },
       });
     } catch (_e) {}
   }
 
-  async function sendCommand(lp, action, mode) {
+  async function sendCommand(lp, action, mode, extra) {
     if (!token || busyKey || !lastPayload) return;
     const station = lastPayload.station || {};
     if (station.maintenanceMode) { toast(t('blockedMaintenance')); return; }
@@ -351,7 +405,7 @@
       const data = await fetchJson('/api/display/station/' + encodeURIComponent(token) + '/command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lp, action, mode }),
+        body: JSON.stringify(Object.assign({ lp, action, mode }, (extra && typeof extra === 'object') ? extra : {})),
       });
       toast(t('commandAccepted'));
       if (data && data.payload) {
@@ -419,13 +473,16 @@
       <footer class="nw-display-footer">
         <span>${escapeHtml(t('lastUpdate'))}: ${escapeHtml(fmtTime(payload.generatedAt || lastOkTs))}</span>
         <span>${escapeHtml(t('reconnecting'))}</span>
-        <span>${escapeHtml(display.apiVersion || '0.8.19')}</span>
+        <span>${escapeHtml(display.apiVersion || '0.8.21')}</span>
         <span>${escapeHtml(t('directHardwareWrite'))}</span>
       </footer>`;
 
     app.querySelectorAll('[data-command]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        sendCommand(btn.getAttribute('data-lp'), btn.getAttribute('data-action'), btn.getAttribute('data-mode'));
+        const extra = {};
+        if (btn.hasAttribute('data-value')) extra.value = btn.getAttribute('data-value') === 'true';
+        if (btn.hasAttribute('data-enabled')) extra.enabled = btn.getAttribute('data-enabled') === 'true';
+        sendCommand(btn.getAttribute('data-lp'), btn.getAttribute('data-action'), btn.getAttribute('data-mode'), extra);
       });
     });
     app.querySelectorAll('[data-lang]').forEach((btn) => {
@@ -435,6 +492,73 @@
         render(lastPayload || payload, opts);
       });
     });
+  }
+
+  function isActiveValue(current, expected) {
+    return String(current || '').toLowerCase() === String(expected || '').toLowerCase();
+  }
+
+  function controlButton(lp, action, mode, label, active, disabled, extraAttrs) {
+    const cls = active ? 'nw-control-btn active' : 'nw-control-btn';
+    return `<button type="button" class="${cls}" data-command="1" data-lp="${escapeHtml(lp)}" data-action="${escapeHtml(action)}" data-mode="${escapeHtml(mode || '')}" ${extraAttrs || ''} ${disabled ? 'disabled' : ''}>${escapeHtml(label)}</button>`;
+  }
+
+  function renderLpControls(c, station, disabled) {
+    const lp = String(c && c.id || 'lp');
+    const ctl = c && c.controls && typeof c.controls === 'object' ? c.controls : {};
+    const userMode = String(ctl.userMode || c.userMode || c.mode || 'auto').toLowerCase();
+    const userEnabled = ctl.userEnabled !== false;
+    const storageAllowed = ctl.storageAssistCustomerAllowed !== false;
+    const storageOn = ctl.userStorageAssistEnabled === true;
+    const goalOn = ctl.goalEnabled === true;
+    const phaseSupported = !!(c && c.isAc && ctl.phaseSwitchSupported);
+    const phaseMode = String(ctl.userPhaseMode || 'auto-pv').toLowerCase();
+
+    // Pro LP wird dieselbe Bedienlogik angezeigt. Nur die AC-Phasenumschaltung bleibt
+    // strikt auf AC-Ladepunkte begrenzt, damit DC-Stationen keine fachlich falschen
+    // 1p/3p-Schalter bekommen.
+    return `<div class="nw-lp-controls">
+      <div class="nw-control-row">
+        <span>${escapeHtml(t('regulation'))}</span>
+        <div class="nw-control-buttons nw-control-buttons--2">
+          ${controlButton(lp, 'set-enabled', '', t('off'), !userEnabled, disabled, 'data-value="false"')}
+          ${controlButton(lp, 'set-enabled', '', t('on'), userEnabled, disabled, 'data-value="true"')}
+        </div>
+      </div>
+      <div class="nw-control-row">
+        <span>${escapeHtml(t('mode'))}</span>
+        <div class="nw-control-buttons nw-control-buttons--4">
+          ${controlButton(lp, 'set-mode', 'auto', t('auto'), isActiveValue(userMode, 'auto'), disabled, '')}
+          ${controlButton(lp, 'set-mode', 'boost', 'Boost', isActiveValue(userMode, 'boost'), disabled, '')}
+          ${controlButton(lp, 'set-mode', 'minpv', t('minpv'), isActiveValue(userMode, 'minpv'), disabled, '')}
+          ${controlButton(lp, 'set-mode', 'pv', t('pv'), isActiveValue(userMode, 'pv'), disabled, '')}
+        </div>
+      </div>
+      ${phaseSupported ? `<div class="nw-control-row">
+        <span>${escapeHtml(t('phase'))}</span>
+        <div class="nw-control-buttons nw-control-buttons--3">
+          ${controlButton(lp, 'set-phase', 'fixed-1p', t('phase1p'), isActiveValue(phaseMode, 'fixed-1p'), disabled, '')}
+          ${controlButton(lp, 'set-phase', 'fixed-3p', t('phase3p'), isActiveValue(phaseMode, 'fixed-3p'), disabled, '')}
+          ${controlButton(lp, 'set-phase', 'auto-pv', t('autoPv'), isActiveValue(phaseMode, 'auto-pv'), disabled, '')}
+        </div>
+        <small>${escapeHtml((ctl.currentPhase ? `aktuell ${ctl.currentPhase}p` : '') + (ctl.targetPhase ? ` → Ziel ${ctl.targetPhase}p` : ''))}</small>
+      </div>` : ''}
+      <div class="nw-control-row">
+        <span>${escapeHtml(t('storage'))}</span>
+        <div class="nw-control-buttons nw-control-buttons--2">
+          ${controlButton(lp, 'set-storage', '', t('protect'), !storageOn, disabled || !storageAllowed, 'data-value="false"')}
+          ${controlButton(lp, 'set-storage', '', t('useStorage'), storageOn, disabled || !storageAllowed, 'data-value="true"')}
+        </div>
+      </div>
+      <div class="nw-control-row">
+        <span>${escapeHtml(t('goal'))}</span>
+        <div class="nw-control-buttons nw-control-buttons--2">
+          ${controlButton(lp, 'set-goal', '', t('off'), !goalOn, disabled, 'data-enabled="false"')}
+          ${controlButton(lp, 'set-goal', '', t('on'), goalOn, disabled, 'data-enabled="true"')}
+        </div>
+        <small>${escapeHtml(t('target'))}: ${escapeHtml(String(Math.round(Number(ctl.goalTargetSocPct || 100))))} %</small>
+      </div>
+    </div>`;
   }
 
   function renderConnector(c, station) {
@@ -481,6 +605,7 @@
         </div>
         <div class="nw-connector-reason">${escapeHtml((c.sessionState || 'idle') + (c.sessionId ? ' · ' + c.sessionId : ''))}</div>
         ${reason ? `<div class="nw-connector-reason">${escapeHtml(reason)}</div>` : ''}
+        ${renderLpControls(c, station, stationBlocked || busy)}
         <div class="nw-connector-actions">
           ${solarAllowed ? `<button class="nw-btn" data-command="1" data-lp="${escapeHtml(lp)}" data-action="start" data-mode="solar" ${(!canStart || busy) ? 'disabled' : ''}>${escapeHtml(t('solar'))}</button>` : ''}
           ${fastAllowed ? `<button class="nw-btn nw-btn--secondary" data-command="1" data-lp="${escapeHtml(lp)}" data-action="start" data-mode="fast" ${(!canStart || busy) ? 'disabled' : ''}>${escapeHtml(t('fast'))}</button>` : ''}

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/evcs-report.ts
- * Quell-Hash: sha256:399a4f27cdbf8820643e649d7a413a87b448988eaf1f4db907ae4598c554ea4d
+ * Quell-Hash: sha256:4805e38e15cb0c2e582ce834c679e986a95ba9737d9440eb9b72fa5d61142fe3
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -351,16 +351,22 @@ function toISODate(ms){
   // Menu toggle
   const menuBtn = document.getElementById('menuBtn');
   const menuDropdown = document.getElementById('menuDropdown');
-  if (menuBtn && menuDropdown){
+  if (menuBtn && menuDropdown && !menuBtn.dataset.nwMenuBound){
+    // 0.8.21: EVCS-Report nutzt denselben Guard wie die Kundenseiten. Ein Klick
+    // auf den Burger öffnet genau einmal; Shell-/Fallback-Handler bleiben aus.
+    menuBtn.dataset.nwMenuBound = 'evcs-report';
+    menuBtn.dataset.nwAppMenu = '1';
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menuBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     menuBtn.addEventListener('click', (e) => {
+      e.preventDefault();
       e.stopPropagation();
       menuDropdown.classList.toggle('hidden');
     });
 
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    document.addEventListener('click', () => {
-      menuDropdown.classList.add('hidden');
+    document.addEventListener('click', (e) => {
+      const target = e && e.target;
+      if (!menuBtn.contains(target) && !menuDropdown.contains(target)) menuDropdown.classList.add('hidden');
     });
 
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menuDropdown. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.

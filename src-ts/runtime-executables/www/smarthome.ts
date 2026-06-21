@@ -10160,6 +10160,11 @@ function nwInitMenu() {
   const menuBtn = document.getElementById('menuBtn');
   const menu = document.getElementById('menuDropdown');
   if (menuBtn && menu) {
+    if (menuBtn.dataset.nwMenuBound) return;
+    // 0.8.21: SmartHome bindet das Burger-Menü nur einmal. Der gemeinsame Guard
+    // verhindert einen zweiten Shell-Handler und schützt die mobile Navigation.
+    menuBtn.dataset.nwMenuBound = 'smarthome';
+    menuBtn.dataset.nwAppMenu = '1';
     /**
      * Code-Teil: Arrow-Funktion `close`
      * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
@@ -10187,7 +10192,7 @@ function nwInitMenu() {
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    document.addEventListener('click', () => close());
+    document.addEventListener('click', (e) => { const target = e && e.target; if (!menuBtn.contains(target) && !menu.contains(target)) close(); });
   }
 }
 /**

@@ -353,16 +353,22 @@ function toISODate(ms){
   // Menu toggle
   const menuBtn = document.getElementById('menuBtn');
   const menuDropdown = document.getElementById('menuDropdown');
-  if (menuBtn && menuDropdown){
+  if (menuBtn && menuDropdown && !menuBtn.dataset.nwMenuBound){
+    // 0.8.21: EVCS-Report nutzt denselben Guard wie die Kundenseiten. Ein Klick
+    // auf den Burger öffnet genau einmal; Shell-/Fallback-Handler bleiben aus.
+    menuBtn.dataset.nwMenuBound = 'evcs-report';
+    menuBtn.dataset.nwAppMenu = '1';
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menuBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     menuBtn.addEventListener('click', (e) => {
+      e.preventDefault();
       e.stopPropagation();
       menuDropdown.classList.toggle('hidden');
     });
 
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    document.addEventListener('click', () => {
-      menuDropdown.classList.add('hidden');
+    document.addEventListener('click', (e) => {
+      const target = e && e.target;
+      if (!menuBtn.contains(target) && !menuDropdown.contains(target)) menuDropdown.classList.add('hidden');
     });
 
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menuDropdown. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.

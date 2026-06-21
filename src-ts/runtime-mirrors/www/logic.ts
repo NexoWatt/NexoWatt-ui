@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: aaad42703eb97883bbbfcc3a26ffd46ae859cb3fdf9fd9591ca0645eb994d22a
+ * Original-Hash: f8a7d2c4cb1376c2c9287e2ca4c555ffde19588c452c22e4a6d692ed2dcb87e3
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/logic.ts
- * Quell-Hash: sha256:e9551c617d031dbfb769ccf2203d8e5abce650f11901742d2edfe5e5686ea1d4
+ * Quell-Hash: sha256:088ffb0d44cb1a38c6d70cca985ae998a98d97c43a8c12865e190238d54b0904
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -3710,10 +3710,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const btn=document.getElementById('menuBtn');
   const dd=document.getElementById('menuDropdown');
   if(btn && dd){
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    btn.addEventListener('click', (e)=>{ e.preventDefault(); dd.classList.toggle('hidden'); });
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    document.addEventListener('click', (e)=>{ if(!dd.contains(e.target) && e.target!==btn) dd.classList.add('hidden'); });
+    if (!btn.dataset.nwMenuBound) {
+      // 0.8.21: Logic-Seite nutzt denselben Burger-Menü-Guard wie Live/EVCS.
+      // Das verhindert doppelte Handler durch die später geladene Shell und hält
+      // das Menü auch bei Klicks auf Button-Kindelemente offen.
+      btn.dataset.nwMenuBound = 'logic';
+      btn.dataset.nwAppMenu = '1';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
+      btn.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); dd.classList.toggle('hidden'); });
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
+      document.addEventListener('click', (e)=>{ const target = e && e.target; if(!dd.contains(target) && !btn.contains(target)) dd.classList.add('hidden'); });
+      dd.addEventListener('click', (e)=> e.stopPropagation());
+    }
   }
   fetch('/config', { cache: 'no-store' }).then(r=>r.json()).then(cfg=>{
     const sc = (cfg && cfg.settingsConfig) || {};

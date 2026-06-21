@@ -3694,6 +3694,17 @@ function initMenu(){
   const btn = document.getElementById('menuBtn');
   const menu = document.getElementById('menuDropdown');
   if (!btn || !menu) return;
+
+  // Burger-Menü-Härtung 0.8.21:
+  // LIVE/Settings bindet das Menü fachlich selbst. Die globale `nw-shell.ts` ist
+  // auf vielen Seiten zusätzlich geladen und nutzt einen Capture-Fallback. Diese
+  // Markierung verhindert, dass app.js denselben Button mehrfach bindet oder mit
+  // der Shell doppelt toggelt.
+  if (btn.dataset.nwAppMenu === '1') return;
+  if (btn.dataset.nwShellBound === '1' && btn.dataset.nwMenuBound !== 'app') return;
+  btn.dataset.nwAppMenu = '1';
+  btn.dataset.nwMenuBound = 'app';
+  btn.dataset.nwShellBound = '1';
   /**
    * Code-Teil: open
    * Zweck: Öffnet Dialoge/Seiten/Popovers.
@@ -3709,7 +3720,7 @@ function initMenu(){
    */
   const close = ()=> menu.classList.add('hidden');
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-  btn.addEventListener('click', (e)=>{ e.stopPropagation(); open(); });
+  btn.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); open(); });
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menu. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   menu.addEventListener('click', (e)=> e.stopPropagation());
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.

@@ -2923,6 +2923,11 @@ async function load(force = false){
     const menuBtn = document.getElementById('menuBtn');
     const menu = document.getElementById('menuDropdown');
     if (menuBtn && menu) {
+      if (menuBtn.dataset.nwMenuBound) return;
+      // 0.8.21: History-Seite markiert das Burger-Menü als gebunden, damit die
+      // nachgeladene Shell keinen zweiten Toggle-Handler setzt.
+      menuBtn.dataset.nwMenuBound = 'history';
+      menuBtn.dataset.nwAppMenu = '1';
       /**
        * Code-Teil: Arrow-Funktion `close`
        * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
@@ -2950,7 +2955,7 @@ async function load(force = false){
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') close(); });
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-      document.addEventListener('click', ()=> close());
+      document.addEventListener('click', (e)=>{ const target = e && e.target; if (!menuBtn.contains(target) && !menu.contains(target)) close(); });
     }
     const liveBtn = document.getElementById('liveTabBtn');
     if (liveBtn) liveBtn.addEventListener('click', (e)=>{ /* fallback */ if(!liveBtn.getAttribute('onclick')) { e.preventDefault(); window.location.href = './'; } });

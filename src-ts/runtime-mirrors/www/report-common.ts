@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 9a814b36dacbb8026628a60267e8a1225344b971c72420827fc72f7744f77149
+ * Original-Hash: 76bad2fe4d4ba6192ec9a4d26e87f85cef20549a64772efcdebf30326b1ab420
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/report-common.ts
- * Quell-Hash: sha256:b9da06c507ddf251212dd93bbf1db2b188f6dd33fe642831ed5cd6de119ac58a
+ * Quell-Hash: sha256:0e864fe4a142127ef0bf474a0372ed5c33337e5e93e560aa4473309a8fca9235
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -284,14 +284,20 @@
   function setupTopbar(activeTab = 'history'){
     const menuBtn = el('menuBtn');
     const menuDropdown = el('menuDropdown');
-    if (menuBtn && menuDropdown){
+    if (menuBtn && menuDropdown && !menuBtn.dataset.nwMenuBound){
+      // 0.8.21: Reports binden das Burger-Menü mit demselben Guard wie die App-Seiten,
+      // damit nw-shell.js nicht zusätzlich toggelt. Das Dropdown schließt nur bei echten
+      // Außenklicks, nicht bei Klicks auf Button-Kindelemente oder Menüeinträge.
+      menuBtn.dataset.nwMenuBound = 'report-common';
+      menuBtn.dataset.nwAppMenu = '1';
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menuBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       menuBtn.addEventListener('click', (e) => {
+        e.preventDefault();
         e.stopPropagation();
         menuDropdown.classList.toggle('hidden');
       });
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-      document.addEventListener('click', () => menuDropdown.classList.add('hidden'));
+      document.addEventListener('click', (e) => { const target = e && e.target; if (!menuBtn.contains(target) && !menuDropdown.contains(target)) menuDropdown.classList.add('hidden'); });
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menuDropdown. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       menuDropdown.addEventListener('click', (e) => e.stopPropagation());
     }

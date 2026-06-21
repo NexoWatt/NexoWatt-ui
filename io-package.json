@@ -1,11 +1,23 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.19",
+    "version": "0.8.21",
     "news": {
+      "0.8.21": {
+        "de": "Version 0.8.21: Burger-Menü im Frontend gehärtet. Gemeinsame Guards verhindern doppelte Toggle-Handler zwischen App-Seiten, Reports und Shell. DC Station Display bleibt pro LP bedienbar; AC-Phasenumschaltung bleibt AC-only. Energie-Wertkonto nutzt weiter dynamische Tarife mit festen Preisen aus den Nutzer-Einstellungen.",
+        "en": "Version 0.8.21: Hardens the frontend hamburger menu. Shared guards prevent duplicate toggle handlers between app pages, reports and shell. DC Station Display keeps per-connector controls; AC phase switching remains AC-only. Energy Wallet continues to use dynamic tariffs with fixed prices from user settings."
+      },
+      "0.8.20": {
+        "de": "Version 0.8.20: DC Station Display erweitert jede LP-Kachel um Bedienung für Regelung, Modus, Speicher und Ziel-Laden; AC-Phasenumschaltung erscheint nur bei AC. Energie-Wertkonto nutzt bei dynamischem Tarif den aktuellen Preis, feste Preise liegen im Frontend unter Einstellungen. Zusätzlich ist das Burger-Menü gegen doppelte Handler gehärtet.",
+        "en": "Version 0.8.20: DC Station Display adds per-connector controls for regulation, mode, storage and target charging; AC phase switching is shown only for AC. Energy Wallet uses the current dynamic tariff price and fixed prices are managed in frontend settings. The hamburger menu is hardened against duplicate handlers."
+      },
       "0.8.19": {
         "de": "Version 0.8.19: DC Station Display um Betreiber-/Sessionbasis und herstelleroffene Steuerbrücke erweitert. Display-Befehle sind neutrale NexoWatt-Intents und können über Charging-Management oder generische ioBroker-Command-States an OCPP, Modbus, MQTT, Herstelleradapter oder NexoWatt-Devices weitergereicht werden.",
         "en": "Version 0.8.19: Extends DC Station Display with operator/session foundation and manufacturer-open control bridge. Display commands are neutral NexoWatt intents and can be forwarded through charging management or generic ioBroker command states to OCPP, Modbus, MQTT, vendor adapters or NexoWatt devices."
+      },
+      "0.8.18": {
+        "de": "Version 0.8.18: DC Station Display gehärtet. Watchdog, Offline-/Wartungsanzeige, Touch-Layouts für 1/2/4 Connectoren und Session-/PV-Anteil-Vorbereitung ergänzt.",
+        "en": "Version 0.8.18: DC Station Display hardened. Adds watchdog, offline/maintenance display, touch layouts for 1/2/4 connectors and session/PV-share preparation."
       },
       "0.8.17": {
         "de": "Version 0.8.17: EOS DC Station Display Basis ergänzt. Pro angelegter DC-Ladestation kann im Installerbereich eine separate, tokenisierte Display-Seite mit zugeordneten LPs/Connectoren konfiguriert werden. Die Seite ist isoliert, touch-optimiert und steuert nur erlaubte LPs über sichere EMS-States.",
@@ -18,18 +30,6 @@
       "0.8.15": {
         "de": "Version 0.8.15: Energie-Wertkonto für Home und EOS ergänzt. Das Modul berechnet PV-Wert, lokale Nutzung, vermiedenen Netzbezug, Einspeisewert, Speicherwert und Solar-Ladepunktwert; Einstellungen bleiben im Installer/App-Center.",
         "en": "Version 0.8.15: Adds the Energy Value Account for Home and EOS. The module calculates PV value, local use, avoided grid import, feed-in value, storage value and solar charging value; settings remain in the installer App Center."
-      },
-      "0.8.14": {
-        "de": "Version 0.8.14: Grundlagen für Home/EOS-Trennung, Länderprofil DE/NL und ioBroker-Systemsprache ergänzt. Das Kundenfrontend bleibt unverändert nutzerorientiert; Markt-/Sprachkonfiguration liegt im Installer/App-Center.",
-        "en": "Version 0.8.14: Adds foundations for Home/EOS separation, DE/NL country profile and ioBroker system language adoption. The customer frontend remains user-focused; market/language configuration lives in the installer App Center."
-      },
-      "0.8.13": {
-        "de": "Version 0.8.13: App-Center Checkbox-Darstellung korrigiert. Der Installer-Haken für die EVCS-Speicher-Mitnutzung wird jetzt kompakt angezeigt und nicht mehr durch globale Input-Styles vergrößert.",
-        "en": "Version 0.8.13: App-Center checkbox rendering fixed. The installer checkbox for EVCS storage assist is now displayed compactly and is no longer enlarged by global input styles."
-      },
-      "0.8.12": {
-        "de": "Version 0.8.12: EVCS-Speicher-Mitnutzung pro Ladepunkt ergänzt. Installateure können die Kundenbedienung freigeben oder sperren; Kunden können dann im LIVE-/EVCS-Frontend zwischen Speicher schützen und Speicher mitnutzen wählen. Die Regelung schützt gesperrte Ladepunkte backendseitig und plant Speicherleistung nur für freigegebene und aktivierte Ladepunkte ein.",
-        "en": "Version 0.8.12: EVCS storage assist per charge point added. Installers can allow or lock the customer control; customers can then choose storage protection or storage assist in LIVE/EVCS. The backend enforces locked charge points and only plans battery contribution for allowed and enabled charge points."
       }
     },
     "title": "NexoWatt UI",

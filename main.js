@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:6ee6ec468feedc4267428ec9e01209b6bae5edb36c6ee438839641c22b6d8b8f
+ * Quell-Hash: sha256:c3aca59d128d99e62ce0c06be411d4133f943117463b0374954bcc867ee33760
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2484,6 +2484,14 @@ class NexoWattVis extends utils.Adapter {
       price: { type: 'number', role: 'value', def: 0.25 },
       priority: { type: 'number', role: 'value', def: 2 },
       tariffMode: { type: 'number', role: 'value', def: 1 },
+
+      // Energie-Wertkonto: kundennahe Preisannahmen.
+      // Diese Werte gehören bewusst in die Frontend-Einstellungen, nicht in den Installerbereich.
+      // Bei aktivem dynamischem Tarif nutzt das Modul den aktuellen Tarifpreis; diese Werte
+      // bleiben dann Fallback bzw. Einspeise-/Solar-Ladebewertung.
+      energyWalletFixedImportEurPerKwh: { type: 'number', role: 'value.price', def: 0.35 },
+      energyWalletFeedInEurPerKwh: { type: 'number', role: 'value.price', def: 0.08 },
+      energyWalletEvcsValueEurPerKwh: { type: 'number', role: 'value.price', def: 0.35 },
 
       // PV Saisonprofil (Quartale) – beeinflusst die PV‑Reserve im Tarifmodus
       tariffPvSeasonEnabled: { type: 'boolean', role: 'state', def: false },
@@ -16275,6 +16283,16 @@ const _nwDisplayNum = (v, fallback = 0) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 };
+const _nwDisplayFindWallbox = (lpKey) => {
+  // Zuordnung LP -> EVCS-Konfigurationszeile. Diese Hilfsfunktion ist bewusst
+  // herstellerneutral: Sie nutzt die normale NexoWatt-EVCS-Liste und nicht OCPP-
+  // spezifische Transaktions-/Connectorobjekte. Dadurch können DC, AC, Modbus,
+  // MQTT, OCPP und Herstelleradapter dieselbe Displaybedienung nutzen.
+  const key = _nwDisplayNormalizeLpKey(lpKey);
+  const idx = Math.max(1, Math.round(Number(String(key).replace(/^lp/, '')) || 1));
+  const list = Array.isArray(this.evcsList) ? this.evcsList : [];
+  return list.find((wb) => Math.max(1, Math.round(Number(wb && wb.index) || 0)) === idx) || null;
+};
 const _nwDisplayBool = (v, fallback = false) => {
   if (typeof v === 'boolean') return v;
   if (typeof v === 'number') return v !== 0;
@@ -16495,7 +16513,23 @@ const _nwDisplayBuildPayload = (station) => {
       else if (rawLower.includes('fault') || rawLower.includes('error') || rawLower.includes('störung')) { status = 'error'; statusDetail = rawStatus || 'Störung'; }
       else if (charging || powerW > 100) status = 'charging';
       else if (plugged) status = 'plugged';
-      const mode = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.effectiveMode`, _nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.userMode`, 'auto')) || 'auto');
+      const userMode = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.userMode`, 'auto') || 'auto').toLowerCase();
+      const mode = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.effectiveMode`, userMode) || 'auto').toLowerCase();
+      const userEnabled = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.userEnabled`, true), true);
+      const chargerType = String(wb.chargerType || station.type || 'dc').toUpperCase() === 'AC' ? 'AC' : 'DC';
+      const isAc = chargerType === 'AC';
+      const phaseSwitchSupported = !!(isAc && (
+        String(wb.phaseSwitchId || '').trim()
+        || _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.phaseSwitchSupported`, false), false)
+      ));
+      const userPhaseMode = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.userPhaseMode`, _nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.phaseMode`, isAc ? 'auto-pv' : 'fixed-1p')) || '').trim();
+      const currentPhase = Number(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.currentPhases`, _nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.currentPhaseCount`, 0)) || 0);
+      const targetPhase = Number(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.targetPhases`, _nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.targetPhaseCount`, 0)) || 0);
+      const storageAssistCustomerAllowed = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.storageAssistCustomerAllowed`, wb.storageAssistCustomerAllowed !== false), wb.storageAssistCustomerAllowed !== false);
+      const userStorageAssistEnabled = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.userStorageAssistEnabled`, false), false);
+      const goalEnabled = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.goalEnabled`, false), false);
+      const goalTargetSocPct = _nwDisplayClamp(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.goalTargetSocPct`, 100), 0, 100, 100);
+      const goalFinishTs = Math.max(0, _nwDisplayNum(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.goalFinishTs`, 0), 0));
       const session = _nwDisplayActiveSession(idx);
       const lastSession = _nwDisplayLastCompletedSession(idx);
       const energyDayKwh = Math.max(0, _nwDisplayNum(_nwDisplayStateVal(`evcs.${idx}.energyDayKwh`, 0), 0));
@@ -16515,7 +16549,8 @@ const _nwDisplayBuildPayload = (station) => {
         name: String(wb.name || _nwDisplayStateVal(`evcs.${idx}.name`, '') || `LP ${idx}`),
         note: String(wb.note || _nwDisplayStateVal(`evcs.${idx}.note`, '') || ''),
         connectorNo: Number(wb.connectorNo || idx) || idx,
-        chargerType: String(wb.chargerType || station.type || 'dc').toUpperCase(),
+        chargerType,
+        isAc,
         status,
         statusDetail,
         rawStatus,
@@ -16527,6 +16562,8 @@ const _nwDisplayBuildPayload = (station) => {
         powerKw: Math.round((powerW / 1000) * 10) / 10,
         targetKw: Math.round((targetW / 1000) * 10) / 10,
         mode,
+        userMode,
+        userEnabled,
         pvAvailable,
         solarSharePercent: station.showSolarShare ? solarSharePct : null,
         energyDayKwh: Math.round(energyDayKwh * 1000) / 1000,
@@ -16543,6 +16580,20 @@ const _nwDisplayBuildPayload = (station) => {
         solarPriceEurPerKwh: station.showPrice ? Math.round(solarPrice * 10000) / 10000 : null,
         fastPriceEurPerKwh: station.showPrice ? Math.round(fastPrice * 10000) / 10000 : null,
         allowedModes: station.allowedModes,
+        controls: {
+          userEnabled,
+          userMode,
+          effectiveMode: mode,
+          phaseSwitchSupported,
+          userPhaseMode,
+          currentPhase: Number.isFinite(currentPhase) ? currentPhase : 0,
+          targetPhase: Number.isFinite(targetPhase) ? targetPhase : 0,
+          storageAssistCustomerAllowed,
+          userStorageAssistEnabled,
+          goalEnabled,
+          goalTargetSocPct,
+          goalFinishTs,
+        },
         allowStartStop: station.allowStartStop !== false && !station.maintenanceMode && _nwDisplayNormalizeControlProfile(station.controlProfile || station.controlBridge) !== 'readonly',
         controlBridge: String(station.controlBridge || 'charging-management'),
         protocolHint: String(station.protocolHint || 'manufacturer-open'),
@@ -16587,7 +16638,7 @@ const _nwDisplayBuildPayload = (station) => {
       layoutMode: station.layoutMode || _nwDisplayLayoutMode('auto', connectors.length),
     },
     display: {
-      apiVersion: '0.8.19',
+      apiVersion: '0.8.20',
       manufacturerOpen: true,
       controlBridge: station.controlBridge || 'charging-management',
       controlProfile: station.controlProfile || 'chargingManagement',
@@ -16602,6 +16653,20 @@ const _nwDisplayBuildPayload = (station) => {
     connectors,
   };
 };
+const _nwDisplaySetWallboxControl = async (lpKey, prop, value) => {
+  // Einheitlicher Schreibpfad für Bedienfunktionen auf der Stationsseite.
+  // Wichtig: Auch diese Komfortbedienung schreibt nur in die NexoWatt-EMS-
+  // Abstraktion. Die spätere Umsetzung auf OCPP, Modbus, MQTT oder Hersteller-
+  // APIs passiert in der bereits vorhandenen Geräteschicht bzw. über den optionalen
+  // generischen Command-State.
+  const key = _nwDisplayNormalizeLpKey(lpKey);
+  const base = `chargingManagement.wallboxes.${key}`;
+  const p = String(prop || '').trim();
+  await this.setStateAsync(`${base}.${p}`, { val: value, ack: false });
+  try { this.updateValue(`${base}.${p}`, value, Date.now()); } catch (_e) {}
+  return { bridge: 'charging-management', commandTarget: `${base}.${p}`, manufacturerOpen: true };
+};
+
 const _nwDisplaySetWallboxMode = async (lpKey, mode, enabled) => {
   // Herstelleroffene Steuerung: Kein direkter OCPP-/Herstellerbefehl an dieser Stelle.
   // Das Display schreibt ausschließlich in die generische Charging-Management-Abstraktion.
@@ -16689,7 +16754,7 @@ const _nwDisplayPersistSessionOperatorStates = async (station, payload) => {
   } catch (_e) {}
 };
 
-const _nwDisplayExecuteStationCommand = async (station, lpKey, action, mode) => {
+const _nwDisplayExecuteStationCommand = async (station, lpKey, action, mode, extra = {}) => {
   const profile = _nwDisplayNormalizeControlProfile((station && (station.controlProfile || station.controlBridge || station.commandBridge)) || 'chargingManagement');
   if (profile === 'readonly') {
     const err = new Error('Station ist als Nur-Anzeige-Steuerbrücke konfiguriert.');
@@ -16705,9 +16770,53 @@ const _nwDisplayExecuteStationCommand = async (station, lpKey, action, mode) => 
     mode,
     mode === 'solar' ? 'pv' : (mode === 'fast' ? 'boost' : 'auto')
   );
-  commandPayload.version = '0.8.19';
+  commandPayload.version = '0.8.20';
   commandPayload.directHardwareWrite = false;
+  commandPayload.extra = extra && typeof extra === 'object' ? extra : {};
   const writes = [];
+
+  // Bedienfunktionen, die eher einer LP-Detailbedienung entsprechen: Jeder LP auf
+  // der Stationsseite darf die gleichen generischen Steuerwünsche bekommen. AC-
+  // Phasenumschaltung ist ausdrücklich nur für AC-Ladepunkte erlaubt; DC-LP bleiben
+  // hier ohne Phasenblock. Alle Schreibziele bleiben Charging-Management-States.
+  if (action === 'set-mode') {
+    const userMode = ['auto', 'boost', 'minpv', 'pv'].includes(String(mode || '').toLowerCase()) ? String(mode).toLowerCase() : 'auto';
+    writes.push({ type: 'chargingManagement', result: await _nwDisplaySetWallboxControl(lp, 'userMode', userMode) });
+    return { bridge: profile, protocolHint: commandPayload.protocolHint, target: 'chargingManagement', writes, directHardwareWrite: false, manufacturerOpen: true };
+  }
+  if (action === 'set-enabled') {
+    const enabled = _nwDisplayBool(extra && extra.value, true);
+    writes.push({ type: 'chargingManagement', result: await _nwDisplaySetWallboxControl(lp, 'userEnabled', enabled) });
+    return { bridge: profile, protocolHint: commandPayload.protocolHint, target: 'chargingManagement', writes, directHardwareWrite: false, manufacturerOpen: true };
+  }
+  if (action === 'set-storage') {
+    const useStorage = _nwDisplayBool(extra && extra.value, false);
+    writes.push({ type: 'chargingManagement', result: await _nwDisplaySetWallboxControl(lp, 'userStorageAssistEnabled', useStorage) });
+    return { bridge: profile, protocolHint: commandPayload.protocolHint, target: 'chargingManagement', writes, directHardwareWrite: false, manufacturerOpen: true };
+  }
+  if (action === 'set-phase') {
+    const wb = _nwDisplayFindWallbox(lp);
+    const chargerType = String((wb && wb.chargerType) || (station && station.type) || 'dc').trim().toUpperCase();
+    const phaseSwitchSupported = chargerType === 'AC' && !!(String(wb && wb.phaseSwitchId || '').trim() || _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${lp}.phaseSwitchSupported`, false), false));
+    if (!phaseSwitchSupported) {
+      const err = new Error('Phasenumschaltung ist nur für AC-Ladepunkte mit zugeordnetem Phasenumschalt-DP erlaubt.');
+      err.code = 'phase_not_supported';
+      throw err;
+    }
+    const phaseMode = ['fixed-1p', 'fixed-3p', 'auto-pv'].includes(String(mode || '').toLowerCase()) ? String(mode).toLowerCase() : 'auto-pv';
+    writes.push({ type: 'chargingManagement', result: await _nwDisplaySetWallboxControl(lp, 'userPhaseMode', phaseMode) });
+    return { bridge: profile, protocolHint: commandPayload.protocolHint, target: 'chargingManagement', writes, directHardwareWrite: false, manufacturerOpen: true };
+  }
+  if (action === 'set-goal') {
+    if (extra && Object.prototype.hasOwnProperty.call(extra, 'enabled')) {
+      writes.push({ type: 'chargingManagement', result: await _nwDisplaySetWallboxControl(lp, 'goalEnabled', _nwDisplayBool(extra.enabled, false)) });
+    }
+    if (extra && Object.prototype.hasOwnProperty.call(extra, 'targetSocPct')) {
+      writes.push({ type: 'chargingManagement', result: await _nwDisplaySetWallboxControl(lp, 'goalTargetSocPct', _nwDisplayClamp(extra.targetSocPct, 0, 100, 100)) });
+    }
+    if (!writes.length) writes.push({ type: 'chargingManagement', skipped: true, reason: 'no-goal-field' });
+    return { bridge: profile, protocolHint: commandPayload.protocolHint, target: 'chargingManagement', writes, directHardwareWrite: false, manufacturerOpen: true };
+  }
 
   // 1) Standardpfad: herstellerneutral über NexoWatt Charging-Management.
   // Dieser Weg ist bewusst nicht OCPP-spezifisch. Das Charging-Management schreibt
@@ -16816,10 +16925,16 @@ app.post('/api/display/station/:token/command', async (req, res) => {
     let mode = String(body.mode || '').trim().toLowerCase();
     if (action === 'solar') { action = 'start'; mode = 'solar'; }
     if (action === 'fast' || action === 'boost') { action = 'start'; mode = 'fast'; }
-    if (mode === 'pv') mode = 'solar';
-    if (mode === 'boost') mode = 'fast';
-    if (!mode) mode = station.allowedModes.includes('solar') ? 'solar' : (station.allowedModes[0] || 'fast');
-    if (action !== 'start' && action !== 'stop') return res.status(400).json({ ok: false, error: 'bad_action' });
+    if (action === 'mode') action = 'set-mode';
+    if (action === 'enabled' || action === 'regenabled' || action === 'set-regulation') action = 'set-enabled';
+    if (action === 'phase') action = 'set-phase';
+    if (action === 'storage' || action === 'storageassist') action = 'set-storage';
+    if (action === 'goal') action = 'set-goal';
+    if (mode === 'pv' && action === 'start') mode = 'solar';
+    if (mode === 'boost' && action === 'start') mode = 'fast';
+    if (!mode && (action === 'start' || action === 'stop')) mode = station.allowedModes.includes('solar') ? 'solar' : (station.allowedModes[0] || 'fast');
+    const allowedActions = ['start', 'stop', 'set-mode', 'set-enabled', 'set-phase', 'set-storage', 'set-goal'];
+    if (!allowedActions.includes(action)) return res.status(400).json({ ok: false, error: 'bad_action' });
     if (action === 'start' && !station.allowedModes.includes(mode)) return res.status(403).json({ ok: false, error: 'mode_not_allowed' });
 
     const commandTs = Date.now();
@@ -16828,7 +16943,7 @@ app.post('/api/display/station/:token/command', async (req, res) => {
     const commandMeta = { ts: commandTs, action, lp, mode, source: 'dc-station-display', bridge: station.controlBridge || 'charging-management', protocolHint: station.protocolHint || 'manufacturer-open' };
     await _nwDisplayWriteStationState(station.id, 'lastCommandJson', JSON.stringify(commandMeta), true);
     await _nwDisplayWriteStationState(station.id, 'displayStatus', 'command', true);
-    const bridgeResult = await _nwDisplayExecuteStationCommand(station, lp, action, mode);
+    const bridgeResult = await _nwDisplayExecuteStationCommand(station, lp, action, mode, body);
     await _nwDisplayWriteStationState(station.id, 'lastCommandResult', `accepted:${bridgeResult.bridge}`, true);
     await _nwDisplayWriteStationState(station.id, 'lastCommandPlanJson', JSON.stringify(bridgeResult), true);
     await _nwDisplayWriteStationState(station.id, 'lastCommandJson', JSON.stringify({ ...commandMeta, result: 'accepted', bridgeResult }), true);
@@ -20609,6 +20724,8 @@ return res.json(out);
       'aiAdvisorPriorityStorage','aiAdvisorPriorityEvcs','aiAdvisorPriorityThermal','aiAdvisorPriorityHeatingRod','aiAdvisorPriorityGeneric',
       // Tariff/charging settings
       'dynamicTariff','storagePower','price','priority','tariffMode',
+      // Energie-Wertkonto Preise: Kunden-/Betreiberwerte aus settings.html.
+      'energyWalletFixedImportEurPerKwh','energyWalletFeedInEurPerKwh','energyWalletEvcsValueEurPerKwh',
       // PV Saisonprofil (Quartale)
       'tariffPvSeasonEnabled','tariffPvSeasonAiEnabled','tariffPvSeasonQ1Factor','tariffPvSeasonQ2Factor','tariffPvSeasonQ3Factor','tariffPvSeasonQ4Factor',
       // Zeitvariables Netzentgelt (HT/NT)
@@ -22623,6 +22740,8 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
           available: false,
           source: 'js-mode',
           mode,
+        userMode,
+        userEnabled,
           ok: true,
           mismatches: [],
           runtime: runtimeValues,
@@ -22667,6 +22786,8 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         available: true,
         source: mode === 'ts' ? 'ts-mirror-switch-candidate' : 'ts-mirror-shadow',
         mode,
+        userMode,
+        userEnabled,
         ok: mismatches.length === 0,
         mismatches,
         runtime: runtimeValues,

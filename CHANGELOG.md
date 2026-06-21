@@ -1,3 +1,21 @@
+## 0.8.21
+
+- Burger-Menü-Härtung: `nw-shell.js` übernimmt den Menübutton im Capture-Flow, damit Seiten-spezifische Menühandler und Shell-Fallback nicht doppelt toggeln.
+- LIVE/App-Menü markiert den eigenen Handler, sodass die Shell nicht zusätzlich denselben Button bindet.
+- 0.8.20-Funktionsstand bleibt enthalten: LP-Bedienung auf DC-Station-Displays, AC-Phasenblock nur bei AC-Ladepunkten und dynamischer Tarif im Energie-Wertkonto.
+- Service-Worker Cache auf `nexowatt-cache-v321` erhöht.
+
+## 0.8.20
+
+- DC Station Display: Jede LP-/Connector-Kachel bekommt eine eigene Bedienung für Regelung An/Aus, Modus Auto/Boost/Min+PV/PV, Speicher-Mitnutzung und Ziel-Laden.
+- DC Station Display: AC-Phasenumschaltung 1p/3p/Auto PV wird nur bei AC-Ladepunkten mit konfigurierter Phasenumschaltung angezeigt; DC-Ladepunkte bleiben ohne fachlich falschen Phasenblock.
+- Display-API: Neue tokenisierte Aktionen `set-enabled`, `set-mode`, `set-storage`, `set-goal` und `set-phase` laufen weiter über die herstellerneutrale NexoWatt-Steuerbrücke und schreiben keine direkten OCPP-/Herstellerbefehle.
+- Energie-Wertkonto: Dynamische Zeittarife werden berücksichtigt. Ist der dynamische Tarif aktiv und ein aktueller Preis verfügbar, wird dieser Preis für vermiedenen Netzbezug verwendet.
+- Einstellungen: Feste Preisannahmen für das Energie-Wertkonto liegen jetzt im Nutzerfrontend unter Einstellungen/Dynamische Zeittarife; das App-Center bleibt für Verknüpfungen und Installer-Konfiguration zuständig.
+- App-Center: Preisfelder aus dem Installerbereich entfernt und durch Hinweis auf die Nutzer-Einstellungen ersetzt.
+- Frontend: Burger-Menü zentral gehärtet; doppelte Menü-Handler von App-/Shell-Skripten schließen das Dropdown nicht mehr sofort wieder.
+- Service-Worker Cache auf `nexowatt-cache-v320` erhöht.
+
 ## 0.8.19
 
 - DC Station Display: Session-/Betreiberbasis ergänzt. Aktive/letzte Sessions werden im Display-Payload klarer gekennzeichnet, Session-Kosten nach Solar-/Netzanteil vorbereitet und Diagnosezustände erweitert.

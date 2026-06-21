@@ -72,6 +72,15 @@ export const DEFAULT_MAIN_SETTING_DEFINITIONS: readonly MainSettingDefinition[] 
   { key: 'price', stateId: 'settings.price', kind: 'number', min: -100, max: 1000 },
   { key: 'priority', stateId: 'settings.priority', kind: 'number', min: 0, max: 100 },
   { key: 'tariffMode', stateId: 'settings.tariffMode', kind: 'number', min: 0, max: 10 },
+
+  // Energie-Wertkonto: Preise sind Betreiber-/Kundeneinstellungen im Frontend.
+  // Der Installer verknüpft Datenpunkte, aber der Nutzer darf seine Kostenannahmen
+  // selbst pflegen. Die eigentliche Modul-Logik nutzt bei aktivem dynamischem Tarif
+  // trotzdem den aktuellen Tarifpreis und diese Werte nur als Fallback/Bewertung.
+  { key: 'energyWalletFixedImportEurPerKwh', stateId: 'settings.energyWalletFixedImportEurPerKwh', kind: 'number', min: -2, max: 5 },
+  { key: 'energyWalletFeedInEurPerKwh', stateId: 'settings.energyWalletFeedInEurPerKwh', kind: 'number', min: -2, max: 5 },
+  { key: 'energyWalletEvcsValueEurPerKwh', stateId: 'settings.energyWalletEvcsValueEurPerKwh', kind: 'number', min: -2, max: 5 },
+
   { key: 'tariffPvSeasonEnabled', stateId: 'settings.tariffPvSeasonEnabled', kind: 'boolean' },
   { key: 'tariffPvSeasonQ1Factor', stateId: 'settings.tariffPvSeasonQ1Factor', kind: 'number', min: 0, max: 10 },
   { key: 'tariffPvSeasonQ2Factor', stateId: 'settings.tariffPvSeasonQ2Factor', kind: 'number', min: 0, max: 10 },

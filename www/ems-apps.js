@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:657589484bb98d5cafa7fb01b05b5a02a4eeb9b82ac4d980ea1d12715e808582
+ * Quell-Hash: sha256:be95cb4192a1d09c158036fb18c09eedabadff786c87d5d8c9e0325264f237b2
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1636,17 +1636,10 @@ function collectAiAdvisorConfigFromUI(base) {
     card.setAttribute('data-card', 'system-profile');
 
     const cp = currentConfig && currentConfig.countryProfile && typeof currentConfig.countryProfile === 'object' ? currentConfig.countryProfile : {};
-    const ew = currentConfig && currentConfig.energyWallet && typeof currentConfig.energyWallet === 'object' ? currentConfig.energyWallet : {};
     const locale = currentConfig && currentConfig.locale && typeof currentConfig.locale === 'object' ? currentConfig.locale : {};
     const country = _nwSystemProfileCountry();
     const lang = String((locale && (locale.language || locale.htmlLang)) || cp.effectiveLanguage || 'de').trim().toLowerCase() || 'de';
     const source = String((locale && locale.source) || cp.languageSource || 'system.config.common.language');
-    const importPriceRaw = ew.importPriceEurPerKwh !== undefined ? ew.importPriceEurPerKwh : ew.importPriceEurKwh;
-    const importPrice = Number.isFinite(Number(importPriceRaw)) ? Number(importPriceRaw) : 0.35;
-    const feedInPriceRaw = ew.feedInPriceEurPerKwh !== undefined ? ew.feedInPriceEurPerKwh : ew.feedInPriceEurKwh;
-    const feedInPrice = Number.isFinite(Number(feedInPriceRaw)) ? Number(feedInPriceRaw) : 0.08;
-    const evcsValueRaw = ew.evcsValueEurPerKwh !== undefined ? ew.evcsValueEurPerKwh : ew.evcsValueEurKwh;
-    const evcsValue = Number.isFinite(Number(evcsValueRaw)) ? Number(evcsValueRaw) : importPrice;
 
     card.innerHTML = `
       <div class="nw-config-card__header">
@@ -1672,23 +1665,9 @@ function collectAiAdvisorConfigFromUI(base) {
           </label>
         </div>
         <div class="nw-config-separator" style="margin:14px 0 10px;"></div>
-        <div class="nw-config-card__subtitle" style="margin-bottom:8px;">Energie-Wertkonto: Preisannahmen nur im Installerbereich. Das Nutzerfrontend zeigt nur Werte und Hinweise.</div>
-        <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;">
-          <label class="nw-config-field">
-            <span class="nw-config-label">Netzstrompreis €/kWh</span>
-            <input class="nw-config-input" id="energyWalletImportPrice" type="number" min="-1" max="5" step="0.0001" />
-            <small>Basis für vermiedenen Netzbezug und lokale PV-Nutzung.</small>
-          </label>
-          <label class="nw-config-field">
-            <span class="nw-config-label">Einspeisewert €/kWh</span>
-            <input class="nw-config-input" id="energyWalletFeedInPrice" type="number" min="-1" max="5" step="0.0001" />
-            <small>Vergütung oder angenommener Wert für Einspeisung/Teruglevering.</small>
-          </label>
-          <label class="nw-config-field">
-            <span class="nw-config-label">Solar-Laden €/kWh</span>
-            <input class="nw-config-input" id="energyWalletEvcsValue" type="number" min="-1" max="5" step="0.0001" />
-            <small>Wert einer lokal geladenen Solar-kWh an der Wallbox.</small>
-          </label>
+        <div class="nw-config-card__subtitle" style="margin-bottom:8px;">Energie-Wertkonto: Datenpunkt- und Länderbasis im Installerbereich; Kostenannahmen liegen im Nutzerfrontend unter Einstellungen → Dynamische Zeittarife.</div>
+        <div class="nw-config-empty" style="text-align:left;margin-bottom:10px;">
+          Der Betreiber kann dort festen Netzstrompreis, Einspeise-/Rücklieferwert und Solar-Ladepunktwert pflegen. Ist ein dynamischer Zeittarif aktiv, nutzt das Wertkonto automatisch den aktuellen Tarifpreis.
         </div>
         <div id="countryProfileHint" class="nw-config-empty" style="margin-top:10px;text-align:left;"></div>
       </div>`;
@@ -1706,12 +1685,6 @@ function collectAiAdvisorConfigFromUI(base) {
           : 'DE aktiv: Begriffe wie Einspeisung/Netzbezug und §14a-Module bleiben Standard.';
       });
     }
-    const importEl = card.querySelector('#energyWalletImportPrice');
-    const feedEl = card.querySelector('#energyWalletFeedInPrice');
-    const evcsEl = card.querySelector('#energyWalletEvcsValue');
-    if (importEl) importEl.value = String(importPrice);
-    if (feedEl) feedEl.value = String(feedInPrice);
-    if (evcsEl) evcsEl.value = String(evcsValue);
     if (display) display.value = `${lang.toUpperCase()} (${source})`;
     if (hint) hint.textContent = country === 'NL'
       ? 'NL aktiv: Begriffe wie Teruglevering/Netafname und spätere P1-/Saldering-Module werden vorbereitet.'
@@ -2027,7 +2000,7 @@ function collectAiAdvisorConfigFromUI(base) {
       if (app.id === 'energyWallet') {
         const row = document.createElement('div');
         row.className = 'nw-config-card__row';
-        row.textContent = 'Home + EOS: Das Energie-Wertkonto rechnet nur und schaltet keine Geräte. Preisannahmen stehen oben im System- & Marktprofil.';
+        row.textContent = 'Home + EOS: Das Energie-Wertkonto rechnet nur und schaltet keine Geräte. Kostenannahmen pflegt der Betreiber im Nutzerfrontend unter Einstellungen.';
         body.appendChild(row);
       }
       if (app.id === 'chargeKiosk') {
@@ -10727,25 +10700,12 @@ function collectAiAdvisorConfigFromUI(base) {
     patch.countryProfile.country = countryRaw === 'NL' ? 'NL' : 'DE';
     patch.countryProfile.languageMode = 'system';
 
-    const readWalletPrice = (id, fallback) => {
-      const el = document.getElementById(id);
-      const n = Number(el && el.value !== undefined ? el.value : fallback);
-      if (!Number.isFinite(n)) return fallback;
-      return Math.max(-1, Math.min(5, Math.round(n * 10000) / 10000));
-    };
     patch.energyWallet = deepMerge({}, (currentConfig && currentConfig.energyWallet) ? currentConfig.energyWallet : {});
-    const ewImportPrice = readWalletPrice('energyWalletImportPrice', 0.35);
-    const ewFeedInPrice = readWalletPrice('energyWalletFeedInPrice', 0.08);
-    const ewEvcsValue = readWalletPrice('energyWalletEvcsValue', ewImportPrice);
     patch.energyWallet.enabled = true;
     patch.energyWallet.showOnLive = true;
-    patch.energyWallet.importPriceEurPerKwh = ewImportPrice;
-    patch.energyWallet.feedInPriceEurPerKwh = ewFeedInPrice;
-    patch.energyWallet.evcsValueEurPerKwh = ewEvcsValue;
-    // Legacy aliases für bestehende gespeicherte Installationen.
-    patch.energyWallet.importPriceEurKwh = ewImportPrice;
-    patch.energyWallet.feedInPriceEurKwh = ewFeedInPrice;
-    patch.energyWallet.evcsValueEurKwh = ewEvcsValue;
+    // Kosten-/Preisannahmen werden ab 0.8.20 nicht mehr im App-Center gespeichert.
+    // Sie sind kundennahe Betreiberwerte unter settings.energyWallet* im Frontend.
+    // Alte Config-Werte bleiben nur als Legacy-Fallback im EMS-Modul erhalten.
 
     // EOS DC Station Display / Charge Kiosk (Installer only).
     // Das normale Nutzerfrontend bekommt keine Konfiguration; die Displayseite nutzt nur Token + zugeordnete LPs.

@@ -11,6 +11,13 @@
  * - Tages-, Monats- und Jahreswerte werden getrennt persistiert.
  * - Neustarts übernehmen vorhandene ioBroker-State-Werte, wenn die Periodenschlüssel passen.
  * - Plausibilitätsdiagnosen verhindern blindes Integrieren bei fehlenden/stalen Quellen.
+ *
+ * 0.8.20:
+ * - Das Wertkonto nutzt bei aktivem dynamischem Zeittarif den aktuellen Tarifpreis.
+ * - Feste Preisannahmen sind Kunden-/Betreibereinstellungen aus dem Frontend
+ *   (`settings.energyWallet*`) und keine Installer-/Admin-Konfiguration mehr.
+ * - Installer-Config bleibt nur als Legacy-Fallback erhalten, damit Bestandsanlagen
+ *   nach Updates keinen Wertverlust in der Berechnung bekommen.
  */
 'use strict';
 
@@ -183,8 +190,14 @@ class EnergyWalletModule extends BaseModule {
     await mk('energyWallet.diagnostics.activeSourcesJson', 'Aktive Quellen JSON', 'string', 'json', '', '{}');
     await mk('energyWallet.diagnostics.plausibilityJson', 'Plausibilitätsdiagnose JSON', 'string', 'json', '', '{}');
 
-    await mk('energyWallet.configuredPrices.gridImportEurPerKwh', 'Netzbezugspreis', 'number', 'value.price', '€/kWh', 0.35);
+    await mk('energyWallet.configuredPrices.gridImportEurPerKwh', 'wirksamer Netzbezugspreis', 'number', 'value.price', '€/kWh', 0.35);
     await mk('energyWallet.configuredPrices.feedInEurPerKwh', 'Einspeisewert', 'number', 'value.price', '€/kWh', 0.08);
+    await mk('energyWallet.configuredPrices.evcsValueEurPerKwh', 'Solar-Ladepunktwert', 'number', 'value.price', '€/kWh', 0.35);
+    await mk('energyWallet.configuredPrices.fixedGridImportEurPerKwh', 'fester Preis aus Frontend-Einstellungen', 'number', 'value.price', '€/kWh', 0.35);
+    await mk('energyWallet.configuredPrices.dynamicTariffActive', 'dynamischer Zeittarif aktiv', 'boolean', 'indicator', '', false);
+    await mk('energyWallet.configuredPrices.dynamicTariffAvailable', 'dynamischer Tarifpreis verfügbar', 'boolean', 'indicator', '', false);
+    await mk('energyWallet.configuredPrices.currentDynamicPriceEurPerKwh', 'aktueller dynamischer Tarifpreis', 'number', 'value.price', '€/kWh', 0);
+    await mk('energyWallet.configuredPrices.priceSource', 'Preisquelle', 'string', 'text', '', 'fixed');
   }
 
   async _ensurePeriodStates(prefix, keyLabel, defKey, mk) {
@@ -292,6 +305,36 @@ class EnergyWalletModule extends BaseModule {
     return c && c.found && Number.isFinite(Number(c.value)) ? Number(c.value) : fallback;
   }
 
+  _readStateNumber(keys, fallback = null) {
+    // Kunden-/Betreiberpreise liegen bewusst als lokale `settings.*`-States vor.
+    // Diese Hilfsfunktion liest sie aus dem Adapter-StateCache, damit die Berechnung
+    // ohne Admin/App-Center-Config und ohne Hardwarezugriff arbeiten kann.
+    const list = Array.isArray(keys) ? keys : [keys];
+    for (const key of list) {
+      const rec = this._cacheEntry(key);
+      if (!rec) continue;
+      const raw = rec && typeof rec === 'object' && Object.prototype.hasOwnProperty.call(rec, 'value') ? rec.value : rec;
+      const n = Number(raw);
+      if (Number.isFinite(n)) return n;
+    }
+    return fallback;
+  }
+
+  _readStateBool(keys, fallback = false) {
+    const list = Array.isArray(keys) ? keys : [keys];
+    for (const key of list) {
+      const rec = this._cacheEntry(key);
+      if (!rec) continue;
+      const raw = rec && typeof rec === 'object' && Object.prototype.hasOwnProperty.call(rec, 'value') ? rec.value : rec;
+      if (typeof raw === 'boolean') return raw;
+      if (typeof raw === 'number') return raw !== 0;
+      const txt = String(raw === null || raw === undefined ? '' : raw).trim().toLowerCase();
+      if (['true', '1', 'yes', 'ja', 'on', 'an', 'aktiv', 'active'].includes(txt)) return true;
+      if (['false', '0', 'no', 'nein', 'off', 'aus', 'inaktiv', 'inactive'].includes(txt)) return false;
+    }
+    return !!fallback;
+  }
+
   _cfg() {
     return (this.adapter && this.adapter.config && this.adapter.config.energyWallet && typeof this.adapter.config.energyWallet === 'object')
       ? this.adapter.config.energyWallet
@@ -312,23 +355,64 @@ class EnergyWalletModule extends BaseModule {
 
   _prices() {
     const cfg = this._cfg();
-    const tariffNow = this._readCacheNumber(['priceCurrent', 'tarif.priceCurrent', 'tariff.priceCurrent'], null);
-    const gridImport = normalizePriceEurPerKwh(
-      cfg.gridImportEurPerKwh !== undefined ? cfg.gridImportEurPerKwh : (cfg.importPriceEurPerKwh !== undefined ? cfg.importPriceEurPerKwh : (cfg.importPriceEurKwh !== undefined ? cfg.importPriceEurKwh : (cfg.gridImportCtKwh !== undefined ? cfg.gridImportCtKwh : tariffNow))),
-      0.35
-    );
+
+    // 0.8.20 Preislogik:
+    // - Ist der dynamische Zeittarif im Kundenfrontend aktiv und liefert einen aktuellen Preis,
+    //   wird genau dieser aktuelle Preis für vermiedenen Netzbezug verwendet.
+    // - Ist kein dynamischer Tarif aktiv oder ist der aktuelle Tarifpreis nicht verfügbar,
+    //   verwendet das Wertkonto den festen Preis aus den Frontend-Einstellungen.
+    // - Ältere Installer-Config-Werte bleiben nur Legacy-Fallback, damit bestehende Systeme
+    //   nach dem Update weiterhin plausibel rechnen.
+    const dynamicTariffActive = this._readStateBool(['settings.dynamicTariff', 'dynamicTariff'], false);
+    const tariffNowRaw = this._readStateNumber([
+      'ems.budget.tariff.currentPriceEurKwh',
+      'tarif.preisAktuellEurProKwh',
+      'historie.tariff.providerCurrentEurPerKwh',
+      'priceCurrent',
+      'tarif.priceCurrent',
+      'tariff.priceCurrent',
+    ], null);
+    const tariffNow = normalizePriceEurPerKwh(tariffNowRaw, null);
+    const dynamicTariffAvailable = dynamicTariffActive && Number.isFinite(Number(tariffNow));
+
+    const fixedInput = this._readStateNumber([
+      'settings.energyWalletFixedImportEurPerKwh',
+      'settings.energyWalletGridImportEurPerKwh',
+      // settings.price ist der bereits vorhandene kundennahe Festpreis aus der Tarifseite.
+      // Er bleibt Fallback, damit der Nutzer nicht denselben Preis doppelt pflegen muss.
+      'settings.price',
+    ], null);
+    const legacyFixedInput = cfg.gridImportEurPerKwh !== undefined ? cfg.gridImportEurPerKwh
+      : (cfg.importPriceEurPerKwh !== undefined ? cfg.importPriceEurPerKwh
+        : (cfg.importPriceEurKwh !== undefined ? cfg.importPriceEurKwh
+          : (cfg.gridImportCtKwh !== undefined ? cfg.gridImportCtKwh : undefined)));
+    const fixedGridImport = normalizePriceEurPerKwh(fixedInput !== null ? fixedInput : legacyFixedInput, 0.35);
+    const gridImport = dynamicTariffAvailable ? tariffNow : fixedGridImport;
+
+    const feedInInput = this._readStateNumber(['settings.energyWalletFeedInEurPerKwh'], null);
     const feedIn = normalizePriceEurPerKwh(
-      cfg.feedInEurPerKwh !== undefined ? cfg.feedInEurPerKwh : (cfg.feedInPriceEurPerKwh !== undefined ? cfg.feedInPriceEurPerKwh : (cfg.feedInPriceEurKwh !== undefined ? cfg.feedInPriceEurKwh : (cfg.feedInCtKwh !== undefined ? cfg.feedInCtKwh : undefined))),
+      feedInInput !== null ? feedInInput
+        : (cfg.feedInEurPerKwh !== undefined ? cfg.feedInEurPerKwh
+          : (cfg.feedInPriceEurPerKwh !== undefined ? cfg.feedInPriceEurPerKwh
+            : (cfg.feedInPriceEurKwh !== undefined ? cfg.feedInPriceEurKwh
+              : (cfg.feedInCtKwh !== undefined ? cfg.feedInCtKwh : undefined)))),
       0.08
     );
+    const evcsInput = this._readStateNumber(['settings.energyWalletEvcsValueEurPerKwh'], null);
     const evcsValue = normalizePriceEurPerKwh(
-      cfg.evcsValueEurPerKwh !== undefined ? cfg.evcsValueEurPerKwh : (cfg.evcsValueEurKwh !== undefined ? cfg.evcsValueEurKwh : gridImport),
+      evcsInput !== null ? evcsInput
+        : (cfg.evcsValueEurPerKwh !== undefined ? cfg.evcsValueEurPerKwh : (cfg.evcsValueEurKwh !== undefined ? cfg.evcsValueEurKwh : gridImport)),
       gridImport
     );
     return {
       gridImportEurPerKwh: gridImport,
       feedInEurPerKwh: feedIn,
       evcsValueEurPerKwh: evcsValue,
+      fixedGridImportEurPerKwh: fixedGridImport,
+      dynamicTariffActive: !!dynamicTariffActive,
+      dynamicTariffAvailable: !!dynamicTariffAvailable,
+      currentDynamicPriceEurPerKwh: Number.isFinite(Number(tariffNow)) ? tariffNow : null,
+      priceSource: dynamicTariffAvailable ? 'dynamicTariff' : (fixedInput !== null ? 'frontendFixed' : (legacyFixedInput !== undefined ? 'legacyConfig' : 'fallback')),
     };
   }
 
@@ -637,6 +721,12 @@ class EnergyWalletModule extends BaseModule {
 
     await set('energyWallet.configuredPrices.gridImportEurPerKwh', round(s.prices.gridImportEurPerKwh, 4));
     await set('energyWallet.configuredPrices.feedInEurPerKwh', round(s.prices.feedInEurPerKwh, 4));
+    await set('energyWallet.configuredPrices.evcsValueEurPerKwh', round(s.prices.evcsValueEurPerKwh, 4));
+    await set('energyWallet.configuredPrices.fixedGridImportEurPerKwh', round(s.prices.fixedGridImportEurPerKwh, 4));
+    await set('energyWallet.configuredPrices.dynamicTariffActive', !!s.prices.dynamicTariffActive);
+    await set('energyWallet.configuredPrices.dynamicTariffAvailable', !!s.prices.dynamicTariffAvailable);
+    await set('energyWallet.configuredPrices.currentDynamicPriceEurPerKwh', s.prices.currentDynamicPriceEurPerKwh === null ? 0 : round(s.prices.currentDynamicPriceEurPerKwh, 4));
+    await set('energyWallet.configuredPrices.priceSource', String(s.prices.priceSource || 'fixed'));
   }
 
   async _publishPeriod(prefix, keyName, periodKey, summary, set) {

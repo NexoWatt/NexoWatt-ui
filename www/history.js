@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/history.ts
- * Quell-Hash: sha256:08d2114bf5f07646edebbedfbb9f7310b56c363bfe6045cca00ee962ff5936af
+ * Quell-Hash: sha256:e5c940bef3c8579d005a0bfdc66f0f5bc97fab46eceb11e1a72cfb65e2481fdb
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2921,6 +2921,11 @@ async function load(force = false){
     const menuBtn = document.getElementById('menuBtn');
     const menu = document.getElementById('menuDropdown');
     if (menuBtn && menu) {
+      if (menuBtn.dataset.nwMenuBound) return;
+      // 0.8.21: History-Seite markiert das Burger-Menü als gebunden, damit die
+      // nachgeladene Shell keinen zweiten Toggle-Handler setzt.
+      menuBtn.dataset.nwMenuBound = 'history';
+      menuBtn.dataset.nwAppMenu = '1';
       /**
        * Code-Teil: Arrow-Funktion `close`
        * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
@@ -2948,7 +2953,7 @@ async function load(force = false){
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') close(); });
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-      document.addEventListener('click', ()=> close());
+      document.addEventListener('click', (e)=>{ const target = e && e.target; if (!menuBtn.contains(target) && !menu.contains(target)) close(); });
     }
     const liveBtn = document.getElementById('liveTabBtn');
     if (liveBtn) liveBtn.addEventListener('click', (e)=>{ /* fallback */ if(!liveBtn.getAttribute('onclick')) { e.preventDefault(); window.location.href = './'; } });

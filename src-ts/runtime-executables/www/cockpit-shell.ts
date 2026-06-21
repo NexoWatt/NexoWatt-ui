@@ -101,8 +101,12 @@
       // Menu fallback only on pages without an existing app-specific binding.
       var btn = topbar.querySelector('#menuBtn');
       var dropdown = topbar.querySelector('#menuDropdown');
-      if(btn && dropdown && btn.dataset.nwMenuFallback === '1' && !btn.dataset.nwFallbackMenu && !btn.dataset.nwShellBound){
+      if(btn && dropdown && btn.dataset.nwMenuFallback === '1' && !btn.dataset.nwMenuBound && !btn.dataset.nwFallbackMenu && !btn.dataset.nwShellBound){
+        // 0.8.21: gemeinsamer Burger-Menü-Guard. Fallback nur binden, wenn keine
+        // App-Seite den Button schon übernommen hat. Dadurch bleibt das Menü auf
+        // App-Center-/Einstellungsseiten stabil und toggelt nicht doppelt.
         btn.dataset.nwFallbackMenu = '1';
+        btn.dataset.nwMenuBound = 'cockpit-fallback';
         // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         btn.addEventListener('click', function(e){
           if(btn.dataset.nwAppMenu === '1') return;
@@ -113,7 +117,9 @@
         // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         document.addEventListener('click', function(e){
           if(dropdown.classList.contains('hidden')) return;
-          if(!topbar.contains(e.target)) dropdown.classList.add('hidden');
+          var target = e && e.target;
+          if(btn.contains(target) || dropdown.contains(target)) return;
+          dropdown.classList.add('hidden');
         });
       }
       // Global customer-feature visibility (EVCS/Speicherfarm) for subpages that do not load app.js.

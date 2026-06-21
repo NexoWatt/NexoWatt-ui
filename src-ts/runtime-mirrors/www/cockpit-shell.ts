@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: de0bd7ca82dda56265dfe9d71f34fea5f96b30823656bb653bae969d0913bf74
+ * Original-Hash: 4b30151edd76f8e635054f7aa097be74de755db3161a77bf67351471e71103d0
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/cockpit-shell.ts
- * Quell-Hash: sha256:f3f9bf6a879f1ca252128b35ecb6769d68612783ce79e9281ed03407e15e1bf0
+ * Quell-Hash: sha256:0f8e1e7d6e4100390d1a06f9118a4f42698a6dc4ac038f02b21ff933ef588e98
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -130,8 +130,12 @@
       // Menu fallback only on pages without an existing app-specific binding.
       var btn = topbar.querySelector('#menuBtn');
       var dropdown = topbar.querySelector('#menuDropdown');
-      if(btn && dropdown && btn.dataset.nwMenuFallback === '1' && !btn.dataset.nwFallbackMenu && !btn.dataset.nwShellBound){
+      if(btn && dropdown && btn.dataset.nwMenuFallback === '1' && !btn.dataset.nwMenuBound && !btn.dataset.nwFallbackMenu && !btn.dataset.nwShellBound){
+        // 0.8.21: gemeinsamer Burger-Menü-Guard. Fallback nur binden, wenn keine
+        // App-Seite den Button schon übernommen hat. Dadurch bleibt das Menü auf
+        // App-Center-/Einstellungsseiten stabil und toggelt nicht doppelt.
         btn.dataset.nwFallbackMenu = '1';
+        btn.dataset.nwMenuBound = 'cockpit-fallback';
         // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         btn.addEventListener('click', function(e){
           if(btn.dataset.nwAppMenu === '1') return;
@@ -142,7 +146,9 @@
         // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         document.addEventListener('click', function(e){
           if(dropdown.classList.contains('hidden')) return;
-          if(!topbar.contains(e.target)) dropdown.classList.add('hidden');
+          var target = e && e.target;
+          if(btn.contains(target) || dropdown.contains(target)) return;
+          dropdown.classList.add('hidden');
         });
       }
       // Global customer-feature visibility (EVCS/Speicherfarm) for subpages that do not load app.js.

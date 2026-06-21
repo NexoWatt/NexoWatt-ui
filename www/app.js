@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/app.ts
- * Quell-Hash: sha256:e52741828d42b66856c784c225c740a7605acf475dd607ffee1c6d61e7da2445
+ * Quell-Hash: sha256:e6b027bc21d255301b42d820c7a86904129c0478df4b59ed6f1d32b7cd7fea00
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -3692,6 +3692,17 @@ function initMenu(){
   const btn = document.getElementById('menuBtn');
   const menu = document.getElementById('menuDropdown');
   if (!btn || !menu) return;
+
+  // Burger-Menü-Härtung 0.8.21:
+  // LIVE/Settings bindet das Menü fachlich selbst. Die globale `nw-shell.ts` ist
+  // auf vielen Seiten zusätzlich geladen und nutzt einen Capture-Fallback. Diese
+  // Markierung verhindert, dass app.js denselben Button mehrfach bindet oder mit
+  // der Shell doppelt toggelt.
+  if (btn.dataset.nwAppMenu === '1') return;
+  if (btn.dataset.nwShellBound === '1' && btn.dataset.nwMenuBound !== 'app') return;
+  btn.dataset.nwAppMenu = '1';
+  btn.dataset.nwMenuBound = 'app';
+  btn.dataset.nwShellBound = '1';
   /**
    * Code-Teil: open
    * Zweck: Öffnet Dialoge/Seiten/Popovers.
@@ -3707,7 +3718,7 @@ function initMenu(){
    */
   const close = ()=> menu.classList.add('hidden');
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-  btn.addEventListener('click', (e)=>{ e.stopPropagation(); open(); });
+  btn.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); open(); });
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menu. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   menu.addEventListener('click', (e)=> e.stopPropagation());
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.

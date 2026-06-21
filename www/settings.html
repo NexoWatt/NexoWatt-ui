@@ -290,6 +290,25 @@
           <label class="row"><span>Strompreis (€)</span>
             <input type="number" id="s_price" step="0.01" data-scope="settings" data-key="price">
           </label>
+
+          <div style="margin-top:14px;padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.02)">
+            <div style="font-weight:600;margin-bottom:6px">Energie-Wertkonto Preise 💶</div>
+            <small style="opacity:.75;display:block;margin-bottom:8px">
+              Diese Werte darf der Betreiber im Frontend pflegen. Ist der dynamische Zeittarif aktiv und liefert einen aktuellen Preis, nutzt das Energie-Wertkonto diesen aktuellen Tarifpreis für vermiedenen Netzbezug. Der feste Preis bleibt dann Fallback.
+            </small>
+            <label class="row"><span>Fester Netzstrompreis (€/kWh)</span>
+              <input type="number" id="s_energyWalletFixedImportEurPerKwh" step="0.0001" min="-2" max="5" data-scope="settings" data-key="energyWalletFixedImportEurPerKwh" value="0.35">
+            </label>
+            <label class="row"><span>Einspeise-/Rücklieferwert (€/kWh)</span>
+              <input type="number" id="s_energyWalletFeedInEurPerKwh" step="0.0001" min="-2" max="5" data-scope="settings" data-key="energyWalletFeedInEurPerKwh" value="0.08">
+            </label>
+            <label class="row"><span>Solar-Ladepunktwert (€/kWh)</span>
+              <input type="number" id="s_energyWalletEvcsValueEurPerKwh" step="0.0001" min="-2" max="5" data-scope="settings" data-key="energyWalletEvcsValueEurPerKwh" value="0.35">
+            </label>
+            <small style="opacity:.75;display:block;margin-top:6px">
+              Datenpunkt-Verknüpfungen und Modulfreigaben bleiben im Installer/App-Center. Hier werden nur kundenverständliche Kostenannahmen gepflegt.
+            </small>
+          </div>
           <div class="row"><span>Priorität (Tarif): <b id="s_priority_label">Auto</b></span>
             <input type="range" id="s_priority" min="1" max="3" step="1" data-scope="settings" data-key="priority">
             <small>1 = Speicher, 2 = Auto, 3 = Ladestation</small>

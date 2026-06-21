@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: be6788579c8404b92c8af7501b14862846e3116790fe54c425d556edc21c5da3
+ * Original-Hash: b5e91296d46adfac4b9dfd7a3edc3ded09dbcc535e9a0cabbabdfb6163047406
  */
 
 /**
@@ -128,6 +128,24 @@ mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'station.mai
 mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'sessionSolarKwh', 'Frontend Session-Solar-kWh');
 mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'sessionGridKwh', 'Frontend Session-Netz-kWh');
 mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'operatorToday', 'Frontend Betreiber-Tageswert');
+
+// 0.8.21: Burger-Menü darf nicht durch doppelte Seiten-/Shell-Handler sofort wieder schließen.
+mustContain('src-ts/runtime-executables/www/nw-shell.ts', 'Burger-Menü-Härtung 0.8.21', 'Burger-Menü-Härtung in Shell');
+mustContain('src-ts/runtime-executables/www/nw-shell.ts', "addEventListener('click', nwToggleMenu, true)", 'Capture-Handler für Burger-Menü');
+mustContain('src-ts/runtime-executables/www/nw-shell.ts', 'stopImmediatePropagation', 'Doppel-Toggle-Blocker im Burger-Menü');
+mustContain('src-ts/runtime-executables/www/app.ts', "btn.dataset.nwMenuBound = 'app'", 'LIVE-Menü markiert eigenen Handler');
+
+
+// 0.8.20: Jede LP-Kachel bekommt Bedienung; Phasenumschaltung bleibt AC-only.
+mustContain('src-ts/runtime-executables/main.ts', 'set-enabled', 'Display-Aktion Regelung An/Aus');
+mustContain('src-ts/runtime-executables/main.ts', 'set-mode', 'Display-Aktion Moduswahl');
+mustContain('src-ts/runtime-executables/main.ts', 'set-storage', 'Display-Aktion Speicher-Mitnutzung');
+mustContain('src-ts/runtime-executables/main.ts', 'set-goal', 'Display-Aktion Ziel-Laden');
+mustContain('src-ts/runtime-executables/main.ts', 'set-phase', 'Display-Aktion AC-Phasenumschaltung');
+mustContain('src-ts/runtime-executables/main.ts', 'phaseSwitchSupported', 'AC-only Phasengate im Backend');
+mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'renderLpControls', 'LP-Bedienung im Stationsdisplay');
+mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'c.isAc && ctl.phaseSwitchSupported', 'AC-only Phasengate im Frontend');
+mustContain('www/dc-station-display.css', 'nw-lp-controls', 'LP-Bedienung CSS');
 mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'directHardwareWrite', 'Frontend-Hinweis keine direkte Hardwaresteuerung');
 mustContain('www/dc-station-display.css', 'nw-connectors--layout-single', 'Single-Connector-Layout CSS');
 mustContain('www/dc-station-display.css', 'nw-connectors--layout-dual', 'Dual-Connector-Layout CSS');
@@ -142,6 +160,6 @@ mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'data-ck-field="contro
 mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'Kein OCPP-Zwang', 'Installer-Hinweis zur Herstelleroffenheit');
 mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'data-ck-field="controlBridge"', 'Steuerbrücke im Installer');
 mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'data-ck-field="protocolHint"', 'Protokoll-Hinweis im Installer');
-mustMatch('package.json', /"version"\s*:\s*"0\.8\.19"/, 'Paketversion 0.8.19');
+mustMatch('package.json', /"version"\s*:\s*"0\.8\.21"/, 'Paketversion 0.8.21');
 
 console.log('[dc-station-display] OK: Display-API, Watchdog, Layout, Wartungsmodus und Session-/Betreiberbasis und herstelleroffene Steuerbrücke sind abgesichert.');

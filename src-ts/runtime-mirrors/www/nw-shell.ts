@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: efdd1250e3f0b55b8438bdf58581b41f9cd16ef314cca16123491f9860bff724
+ * Original-Hash: 9da62295f7de7a8aae84c3d00565413c359960257c137ca99eab50ebbe905d05
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/nw-shell.ts
- * Quell-Hash: sha256:1140931b130125f48d1693a6bc014f0c423bf9f9a809d51c24c1e7433349aaf7
+ * Quell-Hash: sha256:73aa0cda8c081e2d2545850bc9090fe4ee9e7ef1fc9fd91f98ff418d059d3df1
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -144,17 +144,63 @@
     nwApplySystemLanguageFromConfig();
     var btn = document.getElementById('menuBtn');
     var menu = document.getElementById('menuDropdown');
-    if (btn && menu && !btn.dataset.nwMenuFallback && !btn.dataset.nwShellBound) {
+    if (btn && menu && !btn.dataset.nwMenuBound && !btn.dataset.nwShellBound) {
       btn.dataset.nwShellBound = '1';
-      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-      btn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        menu.classList.toggle('hidden');
+      btn.dataset.nwMenuBound = btn.dataset.nwMenuBound || 'shell-capture';
+
+      /**
+       * Burger-Menü-Härtung 0.8.21:
+       * Viele Seiten bringen eigene Menü-Handler mit und laden zusätzlich `nw-shell.js`.
+       * Zwei normale Bubble-Handler toggeln das Dropdown nacheinander: geöffnet -> wieder
+       * geschlossen. Die Shell übernimmt den Menübutton deshalb im Capture-Flow und stoppt
+       * ausschließlich diesen Button-Klick. Menüeinträge, Einstellungslinks und Seitenlogik
+       * bleiben davon unberührt.
+       */
+      function nwSetMenuOpen(open) {
+        try {
+          if (open) menu.classList.remove('hidden');
+          else menu.classList.add('hidden');
+          btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        } catch (_eSetMenu) {}
+      }
+/**
+ * Code-Teil: nwToggleMenu
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+      function nwToggleMenu(e) {
+        try { if (e) e.preventDefault(); } catch (_ePrevent) {}
+        try { if (e) e.stopPropagation(); } catch (_eStop) {}
+        try { if (e && typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation(); } catch (_eStopImmediate) {}
+        try { nwSetMenuOpen(menu.classList.contains('hidden')); } catch (_eToggle) {}
+      }
+
+      // Ereignis-Kommentar: Bindet den zentralen Burger-Menühandler an btn. Capture=true verhindert doppelte Toggle-Handler aus Seitenskripten.
+      btn.addEventListener('click', nwToggleMenu, true);
+
+      // Ereignis-Kommentar: Klicks außerhalb von Menü und Button schließen das Dropdown.
+      document.addEventListener('click', function (e) {
+        try {
+          if (menu.classList.contains('hidden')) return;
+          var target = e && e.target ? e.target : null;
+          if (target && (menu.contains(target) || btn.contains(target))) return;
+        } catch (_eDoc) {}
+        nwSetMenuOpen(false);
       });
-      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-      document.addEventListener('click', function () { menu.classList.add('hidden'); });
-      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menu. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-      menu.addEventListener('click', function (e) { e.stopPropagation(); });
+
+      // Ereignis-Kommentar: Escape schließt das Burger-Menü; wichtig für Desktop/Servicezugriff.
+      document.addEventListener('keydown', function (e) {
+        try { if (e && e.key === 'Escape') nwSetMenuOpen(false); } catch (_eKey) {}
+      });
+
+      // Ereignis-Kommentar: Klicks innerhalb des Menüs dürfen nicht als Außenklick gewertet werden.
+      menu.addEventListener('click', function (e) { try { e.stopPropagation(); } catch (_eMenu) {} });
     }
 
     // Allow links like ems-apps.html#storagefarm to open the corresponding App-Center tab.

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/year-report.ts
- * Quell-Hash: sha256:63d42ce32e7cd0fe6813ce0a025febb4356d778287dca1c517eaa09cfd4530e7
+ * Quell-Hash: sha256:57f2b12348edd101582760258f19dd206cfe56d69c7796e1b0bb82fff8fcbc25
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -937,6 +937,11 @@
       const menuBtn = document.getElementById('menuBtn');
       const menuDropdown = document.getElementById('menuDropdown');
       if (menuBtn && menuDropdown){
+        if (menuBtn.dataset.nwMenuBound) return;
+        // 0.8.21: Jahresreport setzt den gemeinsamen Menü-Guard, damit die Shell
+        // nicht zusätzlich bindet und das Dropdown unmittelbar wieder schließt.
+        menuBtn.dataset.nwMenuBound = 'year-report';
+        menuBtn.dataset.nwAppMenu = '1';
         /**
          * Code-Teil: Arrow-Funktion `close`
          * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
@@ -964,7 +969,7 @@
         // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
         // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-        document.addEventListener('click', () => close());
+        document.addEventListener('click', (e) => { const target = e && e.target; if (!menuBtn.contains(target) && !menuDropdown.contains(target)) close(); });
       }
     })();
 

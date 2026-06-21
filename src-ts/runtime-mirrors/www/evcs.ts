@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 64c74586f1b284bb57d37c5d9b5862506ae7d5eac88af4dac448a9f2a3afb346
+ * Original-Hash: 75d9df30681327b65dca75143d714234935045a12d38a023aeb929af0e9b6f0e
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/evcs.ts
- * Quell-Hash: sha256:1cf0cb041d6620a96354afe755d1add03ec7e11404e777e78eac1c31fc667011
+ * Quell-Hash: sha256:2d6ba1d38d00dead8b7ea4e56442b25805694ffcee53371c3e035809459e68b8
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1292,10 +1292,17 @@ function initMenu() {
   const btn = document.getElementById('menuBtn');
   const dd = document.getElementById('menuDropdown');
   if (btn && dd) {
+    if (btn.dataset.nwMenuBound) return;
+    // 0.8.21: EVCS bindet das Burger-Menü exakt einmal und markiert den Button,
+    // damit `nw-shell.js` keinen zweiten Toggle-Handler ergänzt. Klicks auf ein
+    // Icon/Kind im Button bleiben über btn.contains(...) offen.
+    btn.dataset.nwMenuBound = 'evcs';
+    btn.dataset.nwAppMenu = '1';
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    btn.addEventListener('click', (e) => { e.preventDefault(); dd.classList.toggle('hidden'); });
+    btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); dd.classList.toggle('hidden'); });
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    document.addEventListener('click', (e) => { if (!dd.contains(e.target) && e.target !== btn) dd.classList.add('hidden'); });
+    document.addEventListener('click', (e) => { const target = e && e.target; if (!dd.contains(target) && !btn.contains(target)) dd.classList.add('hidden'); });
+    dd.addEventListener('click', (e) => e.stopPropagation());
   }
 }
 

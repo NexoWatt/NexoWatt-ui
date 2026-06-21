@@ -939,6 +939,11 @@
       const menuBtn = document.getElementById('menuBtn');
       const menuDropdown = document.getElementById('menuDropdown');
       if (menuBtn && menuDropdown){
+        if (menuBtn.dataset.nwMenuBound) return;
+        // 0.8.21: Jahresreport setzt den gemeinsamen Menü-Guard, damit die Shell
+        // nicht zusätzlich bindet und das Dropdown unmittelbar wieder schließt.
+        menuBtn.dataset.nwMenuBound = 'year-report';
+        menuBtn.dataset.nwAppMenu = '1';
         /**
          * Code-Teil: Arrow-Funktion `close`
          * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
@@ -966,7 +971,7 @@
         // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
         // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-        document.addEventListener('click', () => close());
+        document.addEventListener('click', (e) => { const target = e && e.target; if (!menuBtn.contains(target) && !menuDropdown.contains(target)) close(); });
       }
     })();
 
