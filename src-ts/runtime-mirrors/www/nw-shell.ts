@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e86fb14c3050298240a470cd0e7b3d121c38db29cf570007d8ed96b842105f5f
+ * Original-Hash: efdd1250e3f0b55b8438bdf58581b41f9cd16ef314cca16123491f9860bff724
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/nw-shell.ts
- * Quell-Hash: sha256:ed77fa3228e80a6c9c0eceb98c626c3a2b932e760a9c8ffcd5ad182571b8d56b
+ * Quell-Hash: sha256:1140931b130125f48d1693a6bc014f0c423bf9f9a809d51c24c1e7433349aaf7
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -90,6 +90,33 @@
    * Zusammenhang: Shell-Seiten bleiben konsistent zur neuen NexoWatt-Brand ohne
    * die fachlichen EMS-Status-/Modulbezeichnungen umzubenennen.
    */
+  function nwApplySystemLanguageFromConfig() {
+    try {
+      fetch('/config', { cache: 'no-store', credentials: 'same-origin' })
+        .then(function (res) { return res && res.ok ? res.json() : null; })
+        .then(function (cfg) {
+          try {
+            var loc = cfg && cfg.locale && typeof cfg.locale === 'object' ? cfg.locale : {};
+            var lang = String(loc.htmlLang || loc.language || '').trim().toLowerCase();
+            if (lang) document.documentElement.setAttribute('lang', lang);
+            window.__nwLocale = loc || {};
+          } catch (_e2) {}
+        })
+        .catch(function () {});
+    } catch (_e) {}
+  }
+
+/**
+ * Code-Teil: nwNormalizeBrandHeader
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
   function nwNormalizeBrandHeader() {
     try {
       var titles = Array.prototype.slice.call(document.querySelectorAll('.topbar h1, header.topbar h1'));
@@ -114,6 +141,7 @@
    */
   ready(function () {
     nwNormalizeBrandHeader();
+    nwApplySystemLanguageFromConfig();
     var btn = document.getElementById('menuBtn');
     var menu = document.getElementById('menuDropdown');
     if (btn && menu && !btn.dataset.nwMenuFallback && !btn.dataset.nwShellBound) {

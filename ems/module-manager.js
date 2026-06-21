@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:138e498ef2823e48e9bd755091453e05f6f30b5fc63aa8c8c7e9af3683d97126
+ * Quell-Hash: sha256:827680085f9bd5aa8aa1d7f1daf3fae295793cdf86795d636c96d5c572828f77
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -58,6 +58,7 @@ const { BhkwControlModule } = require('./modules/bhkw-control');
 const { GeneratorControlModule } = require('./modules/generator-control');
 const { ThresholdControlModule } = require('./modules/threshold-control');
 const { AiAdvisorModule } = require('./modules/ai-advisor');
+const { CountryProfileModule } = require('./modules/country-profile');
 
 /**
  * Code-Teil: Klasse `ModuleManager`
@@ -212,6 +213,13 @@ class ModuleManager {
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     async init() {
+        // Länderprofil / Systemsprache – immer aktiv, damit DE/NL und UI-Sprache zentral bereitstehen.
+        this.modules.push({
+            key: 'countryProfile',
+            instance: new CountryProfileModule(this.adapter, this.dp),
+            enabledFn: () => true,
+        });
+
         // Speicher-Zuordnung (Installateur) – registriert st.* Datenpunkte
         this.modules.push({
             key: 'speicherMapping',

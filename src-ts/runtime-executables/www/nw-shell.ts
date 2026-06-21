@@ -61,6 +61,22 @@
    * Zusammenhang: Shell-Seiten bleiben konsistent zur neuen NexoWatt-Brand ohne
    * die fachlichen EMS-Status-/Modulbezeichnungen umzubenennen.
    */
+  function nwApplySystemLanguageFromConfig() {
+    try {
+      fetch('/config', { cache: 'no-store', credentials: 'same-origin' })
+        .then(function (res) { return res && res.ok ? res.json() : null; })
+        .then(function (cfg) {
+          try {
+            var loc = cfg && cfg.locale && typeof cfg.locale === 'object' ? cfg.locale : {};
+            var lang = String(loc.htmlLang || loc.language || '').trim().toLowerCase();
+            if (lang) document.documentElement.setAttribute('lang', lang);
+            window.__nwLocale = loc || {};
+          } catch (_e2) {}
+        })
+        .catch(function () {});
+    } catch (_e) {}
+  }
+
   function nwNormalizeBrandHeader() {
     try {
       var titles = Array.prototype.slice.call(document.querySelectorAll('.topbar h1, header.topbar h1'));
@@ -85,6 +101,7 @@
    */
   ready(function () {
     nwNormalizeBrandHeader();
+    nwApplySystemLanguageFromConfig();
     var btn = document.getElementById('menuBtn');
     var menu = document.getElementById('menuDropdown');
     if (btn && menu && !btn.dataset.nwMenuFallback && !btn.dataset.nwShellBound) {

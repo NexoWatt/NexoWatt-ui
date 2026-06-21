@@ -1,8 +1,26 @@
+## 0.8.14
+
+- Fundament für Home/EOS-Trennung ergänzt: Home/HEMS bleibt Basislizenz, EOS erhält vorbereitete Zukunfts-Feature-Flags.
+- Länderprofil DE/NL vorbereitet und als Installer-Konfiguration im App-Center sichtbar gemacht.
+- ioBroker-Systemsprache wird aus `system.config.common.language` übernommen und in `/config`, `system.language` und den Frontend-Shells genutzt.
+- Neues Runtime-Modul `country-profile` veröffentlicht Länder-/Marktbegriffe und spätere NL-Fähigkeiten als States.
+- Dokumentation ergänzt: Roadmap Home/EOS/NL und Anleitung zum System-/Länderprofil.
+- Service-Worker Cache auf `nexowatt-cache-v315` erhöht.
+
+## 0.8.13
+
+- App-Center Ladepunkt-Checkboxen optisch korrigiert.
+- Der neue Haken „Kunde darf Speicher-Mitnutzung bedienen“ nutzt jetzt die kompakte `nw-config-checkbox`-Darstellung statt der Browser-Standardgröße.
+- Weitere dynamische EVCS-Installer-Checkboxen im Ladepunktbereich auf dieselbe kompakte Darstellung vereinheitlicht.
+- Service-Worker Cache auf `nexowatt-cache-v314` erhöht.
+
 ## 0.8.12
 
-- EVCS: Speicher-Mitnutzung pro Ladepunkt mit Installer-Freigabe und Kundenbedienung ergänzt.
-- LIVE/EVCS: "Speicher schützen / Mitnutzen" ist nur sichtbar, wenn der Installateur die Funktion je Ladepunkt freigibt.
-- Backend/TS: userStorageAssistEnabled, storagePolicyJson und Storage-Control-Schutzleistung verdrahtet.
+- EVCS-Speicher-Mitnutzung pro Ladepunkt eingeführt: Installer-Freigabe im App-Center und Kundenwahl im LIVE-/EVCS-Frontend.
+- Backend-Gate ergänzt: Ohne Installer-Freigabe bleibt die Speicher-Mitnutzung gesperrt und unsichtbar.
+- EVCS-Allocation berücksichtigt Speicherleistung nur für freigegebene und aktivierte Ladepunkte; geschützte Ladepunkte ziehen den Speicher nicht leer.
+- Diagnose-States für `storageAssistCustomerAllowed`, `userStorageAssistEnabled`, `effectiveStorageAssist`, `storageAssistBlockedReason` und `batteryContributionW` ergänzt.
+- Service-Worker Cache auf `nexowatt-cache-v314` erhöht.
 
 ## 0.8.11
 

@@ -2281,9 +2281,15 @@ body {
 }
 
 .nw-config-checkbox {
-  width: 14px;
-  height: 14px;
+  width: 14px !important;
+  height: 14px !important;
+  min-width: 14px !important;
+  max-width: 14px !important;
+  min-height: 14px !important;
+  max-height: 14px !important;
   cursor: pointer;
+  flex: 0 0 auto;
+  transform: none !important;
 }
 
 /* Checkbox label wrapper (used for compact option toggles in App-Center) */
@@ -11503,3 +11509,27 @@ body.nw-cockpit-page.nw-page-history .history-toolbar input[type="date"]{
   background:linear-gradient(180deg, #ff8178, #e03128) !important;
 }
 
+
+
+/* App-Center: kompakte Checkboxen in Konfigurationszeilen.
+   Muss nach den globalen Input-Styles stehen, damit Checkboxen nicht wie Textfelder skaliert werden. */
+input.nw-config-checkbox,
+.nw-config-field-control input.nw-config-checkbox{
+  width:18px !important;
+  height:18px !important;
+  min-width:18px !important;
+  max-width:18px !important;
+  min-height:18px !important;
+  max-height:18px !important;
+  padding:0 !important;
+  margin:0 !important;
+  border-radius:5px !important;
+  flex:0 0 18px !important;
+  cursor:pointer;
+  accent-color:var(--nx-green);
+}
+.nw-config-field-control--checkbox{
+  display:flex;
+  align-items:center;
+  min-height:22px;
+}

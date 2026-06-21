@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/evcs.ts
- * Quell-Hash: sha256:e2073506b18ee25596172b1aaa88b8a2a3c3c2180c096dd897275f31eca1a7b4
+ * Quell-Hash: sha256:1cf0cb041d6620a96354afe755d1add03ec7e11404e777e78eac1c31fc667011
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -446,7 +446,11 @@ function evcsPhaseSwitchDpAssigned(index) {
 
 function evcsStorageAssistCustomerAllowed(index) {
   const row = evcsMetaRow(index);
-  return !!(row && (row.storageAssistCustomerAllowed === true || row.customerStorageAssistAllowed === true || row.allowCustomerStorageAssist === true));
+  return !!(row && row.storageAssistCustomerAllowed === true);
+}
+
+function storageAssistLabel(enabled) {
+  return enabled ? 'Speicher mitnutzen' : 'Speicher schützen';
 }
 
 function evcsConfiguredPhaseMode(index, fallbackPhases) {
@@ -730,10 +734,10 @@ function buildEvcsModalBodyHtml(i) {
   const emsPhaseSwitchState = String(d(`${cm}.phaseSwitchState`) || '');
   const emsPhaseSwitchReason = String(d(`${cm}.phaseSwitchReason`) || '');
   const emsPhaseCooldownMs = Number(d(`${cm}.phaseCooldownRemainingMs`) ?? 0);
-  const emsStorageAllowed = d(`${cm}.storageAssistCustomerAllowed`);
-  const emsStorageUserEnabled = d(`${cm}.userStorageAssistEnabled`);
-  const emsStorageEffective = d(`${cm}.effectiveStorageAssist`);
-  const emsStorageReason = String(d(`${cm}.storageAssistBlockedReason`) || '');
+  const emsStorageAssistCustomerAllowed = d(`${cm}.storageAssistCustomerAllowed`);
+  const emsUserStorageAssistEnabled = d(`${cm}.userStorageAssistEnabled`);
+  const emsEffectiveStorageAssist = d(`${cm}.effectiveStorageAssist`);
+  const emsStorageAssistReason = String(d(`${cm}.storageAssistBlockedReason`) || '');
   const emsBatteryContributionW = Number(d(`${cm}.batteryContributionW`) ?? 0);
 
   const regAvail = hasEms && (emsRegEnabled !== null && emsRegEnabled !== undefined);
@@ -834,17 +838,13 @@ function buildEvcsModalBodyHtml(i) {
   else if (emsPhaseCooldownMs > 0) phaseHintTxt = `Cooldown aktiv: ${Math.ceil(emsPhaseCooldownMs / 1000)} s`;
   else phaseHintTxt = phaseModeValue === 'auto-pv' ? 'Auto PV schaltet 1p/3p nach Überschuss, Hysterese und Cooldown.' : 'Fester AC-Phasenmodus aktiv.';
 
-  const storageAssistMapped = evcsStorageAssistCustomerAllowed(i);
-  const showStorageAssistUi = !!hasEms && (storageAssistMapped || emsStorageAllowed === true);
-  const storageAssistValue = !!emsStorageUserEnabled;
-  const storageAssistEffective = !!emsStorageEffective;
-  const storageAssistHint = !storageAssistValue
-    ? 'Speicher bleibt für Hausverbrauch/Reserve geschützt.'
-    : (storageAssistEffective && emsBatteryContributionW > 0)
-      ? `Speicher unterstützt aktuell mit ca. ${fmtW(emsBatteryContributionW)}.`
-      : (storageAssistEffective
-        ? 'Speicher darf diesen Ladepunkt unterstützen, sobald Budget/SoC es erlauben.'
-        : (emsStorageReason ? `Angefordert, aktuell blockiert: ${emsStorageReason}` : 'Angefordert – wartet auf Speicher-/SoC-Freigabe.'));
+  const storageAssistAllowed = hasEms && (evcsStorageAssistCustomerAllowed(i) || emsStorageAssistCustomerAllowed === true);
+  const storageAssistEnabled = !!emsUserStorageAssistEnabled;
+  const storageAssistEffective = !!emsEffectiveStorageAssist;
+  let storageAssistHint = '';
+  if (!storageAssistEnabled) storageAssistHint = 'Speicher wird für diesen Ladepunkt geschützt.';
+  else if (storageAssistEffective) storageAssistHint = `Speicher darf unterstützen${Number.isFinite(emsBatteryContributionW) && emsBatteryContributionW > 0 ? ' · Anteil ' + Math.round(emsBatteryContributionW) + ' W' : ''}.`;
+  else storageAssistHint = emsStorageAssistReason ? `Freigegeben, aktuell nicht aktiv: ${emsStorageAssistReason}` : 'Freigegeben, aktuell nicht aktiv.';
 
   const emsUiVal = clampEmsUi(emsModeToUi(emsUserMode ?? 'auto'));
   const effTxt = String(emsEffectiveMode ?? '').trim();
@@ -946,15 +946,15 @@ function buildEvcsModalBodyHtml(i) {
           </div>
         ` : ''}
 
-        ${showStorageAssistUi ? `
+        ${storageAssistAllowed ? `
           <div style="margin-top:4px; padding-top:10px; border-top:1px solid rgba(255,255,255,.06);">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
-              <span>Speicher fürs Laden</span>
+              <span>Speicher</span>
               <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
-                <strong>${storageAssistValue ? 'Mitnutzen' : 'Schützen'}</strong>
-                <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2" role="group" aria-label="Speicher fürs Laden">
-                  <button type="button" class="${!storageAssistValue ? 'active' : ''}" data-ems-storage-assist-btn="${i}" data-storage-assist="false">Schützen</button>
-                  <button type="button" class="${storageAssistValue ? 'active' : ''}" data-ems-storage-assist-btn="${i}" data-storage-assist="true">Mitnutzen</button>
+                <strong>${esc(storageAssistLabel(storageAssistEnabled))}</strong>
+                <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2" role="group" aria-label="Speicher-Mitnutzung">
+                  <button type="button" class="${!storageAssistEnabled ? 'active' : ''}" data-ems-storage-assist-btn="${i}" data-storage-assist="false">Schützen</button>
+                  <button type="button" class="${storageAssistEnabled ? 'active' : ''}" data-ems-storage-assist-btn="${i}" data-storage-assist="true">Mitnutzen</button>
                 </div>
                 <div class="muted" style="font-size:12px; opacity:.85; text-align:right; max-width:320px;">${esc(storageAssistHint)}</div>
               </div>
@@ -1590,30 +1590,6 @@ function bindControls() {
       return;
     }
 
-    if (btn.matches('button[data-ems-storage-assist-btn]')) {
-      const idx = Number(btn.getAttribute('data-ems-storage-assist-btn'));
-      if (!Number.isFinite(idx) || idx <= 0) return;
-      const raw = String(btn.getAttribute('data-storage-assist') || 'false').trim().toLowerCase();
-      const desired = raw === 'true' || raw === '1' || raw === 'yes' || raw === 'ja';
-      const k = `chargingManagement.wallboxes.lp${idx}.userStorageAssistEnabled`;
-
-      try {
-        _setPendingWrite(k, desired, 2500);
-        state[k] = { value: desired, ts: Date.now() };
-        scheduleRender();
-      } catch (_e) {}
-
-      try {
-        await fetch('/api/set', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scope: 'ems', key: `evcs.${idx}.storageAssistEnabled`, value: desired })
-        });
-      } catch (_e) {}
-
-      return;
-    }
-
     if (btn.matches('button[data-ems-phase-mode-btn]')) {
       const idx = Number(btn.getAttribute('data-ems-phase-mode-btn'));
       if (!Number.isFinite(idx) || idx <= 0) return;
@@ -1631,6 +1607,30 @@ function bindControls() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ scope: 'ems', key: `evcs.${idx}.phaseMode`, value: mode })
+        });
+      } catch (_e) {}
+
+      return;
+    }
+
+    if (btn.matches('button[data-ems-storage-assist-btn]')) {
+      const idx = Number(btn.getAttribute('data-ems-storage-assist-btn'));
+      if (!Number.isFinite(idx) || idx <= 0) return;
+      const raw = String(btn.getAttribute('data-storage-assist') || 'false').trim().toLowerCase();
+      const enabled = raw === 'true' || raw === '1' || raw === 'yes';
+      const k = `chargingManagement.wallboxes.lp${idx}.userStorageAssistEnabled`;
+
+      try {
+        _setPendingWrite(k, enabled, 2500);
+        state[k] = { value: enabled, ts: Date.now() };
+        scheduleRender();
+      } catch (_e) {}
+
+      try {
+        await fetch('/api/set', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope: 'ems', key: `evcs.${idx}.storageAssistEnabled`, value: enabled })
         });
       } catch (_e) {}
 

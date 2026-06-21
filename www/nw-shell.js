@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/nw-shell.ts
- * Quell-Hash: sha256:ed77fa3228e80a6c9c0eceb98c626c3a2b932e760a9c8ffcd5ad182571b8d56b
+ * Quell-Hash: sha256:1140931b130125f48d1693a6bc014f0c423bf9f9a809d51c24c1e7433349aaf7
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -59,6 +59,22 @@
    * Zusammenhang: Shell-Seiten bleiben konsistent zur neuen NexoWatt-Brand ohne
    * die fachlichen EMS-Status-/Modulbezeichnungen umzubenennen.
    */
+  function nwApplySystemLanguageFromConfig() {
+    try {
+      fetch('/config', { cache: 'no-store', credentials: 'same-origin' })
+        .then(function (res) { return res && res.ok ? res.json() : null; })
+        .then(function (cfg) {
+          try {
+            var loc = cfg && cfg.locale && typeof cfg.locale === 'object' ? cfg.locale : {};
+            var lang = String(loc.htmlLang || loc.language || '').trim().toLowerCase();
+            if (lang) document.documentElement.setAttribute('lang', lang);
+            window.__nwLocale = loc || {};
+          } catch (_e2) {}
+        })
+        .catch(function () {});
+    } catch (_e) {}
+  }
+
   function nwNormalizeBrandHeader() {
     try {
       var titles = Array.prototype.slice.call(document.querySelectorAll('.topbar h1, header.topbar h1'));
@@ -83,6 +99,7 @@
    */
   ready(function () {
     nwNormalizeBrandHeader();
+    nwApplySystemLanguageFromConfig();
     var btn = document.getElementById('menuBtn');
     var menu = document.getElementById('menuDropdown');
     if (btn && menu && !btn.dataset.nwMenuFallback && !btn.dataset.nwShellBound) {

@@ -135,6 +135,8 @@ const NwChannelDetector =
 
 // Embedded EMS engine (Charging Management from nexowatt-multiuse)
 const { EmsEngine } = require('./ems/engine');
+const nwCountryProfileService = require('./ems/services/country-profile-service');
+const nwFeatureFlagsService = require('./ems/services/feature-flags');
 
 // NexoLogic (node/graph) runtime engine
 const { NexoLogicEngine } = require('./ems/nexologic-engine');
@@ -215,6 +217,9 @@ class NexoWattVis extends utils.Adapter {
     this._nwApiSetTsRuntimeLast = null;
     this._nwApiStateTsShadowLastWarnMs = 0;
     this._nwApiSetTsShadowLastWarnMs = 0;
+    this._nwSystemLanguage = 'de';
+    this._nwSystemLanguageSource = 'default';
+    this._nwCountryProfileRuntime = null;
     this.smartHomeDevices = [];
 
     // SmartHome: Zeitschaltuhren (Endkunde) – persisted in adapter states (no instance restart)
@@ -1978,7 +1983,7 @@ class NexoWattVis extends utils.Adapter {
   _nwNormalizeLicenseEdition(edition) {
     const e = String(edition || '').trim().toLowerCase();
     if (e === 'eos') return 'eos';
-    if (e === 'hems') return 'hems';
+    if (e === 'hems' || e === 'home') return 'hems';
     return 'none';
   }
 
@@ -2055,34 +2060,13 @@ class NexoWattVis extends utils.Adapter {
 
   _nwLicenseFeaturesForEdition(edition) {
     const ed = this._nwNormalizeLicenseEdition(edition);
-    const hemsFeatures = new Set([
-      'dashboard',
-      'history',
-      'aiAdvisor',
-      'smartHome',
-      'dynamicTariffs',
-      'tariff',
-      'chargingManagement',
-      'storageControl',
-      'thermalControl',
-      'heatingRodControl',
-      'relayControl',
-      'para14a',
-      'thresholdControl',
-      'energyFlow',
-      'pvForecast'
-    ]);
-    const eosOnlyFeatures = [
-      'peakShaving',
-      'storageFarm',
-      'multiUse',
-      'gridLimits',
-      'gridConstraints',
-      'generatorControl',
-      'bhkwControl',
-      'advancedChargingPark',
-      'advancedDiagnostics'
-    ];
+    try {
+      if (nwFeatureFlagsService && typeof nwFeatureFlagsService.buildFeatureMap === 'function') {
+        return nwFeatureFlagsService.buildFeatureMap(ed);
+      }
+    } catch (_eFeatureFlags) {}
+    const hemsFeatures = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWalletBasic']);
+    const eosOnlyFeatures = ['peakShaving','storageFarm','multiUse','gridLimits','gridConstraints','generatorControl','bhkwControl','advancedChargingPark','advancedDiagnostics','energyWalletPro','energyLedger','chargeKiosk','solarChargeMode','mesh','microgrid','neighborSharing','nlSaldering','nlEnergyHub','aiAutopilot'];
     const all = new Set([...hemsFeatures, ...eosOnlyFeatures]);
     const out = {};
     for (const f of all) out[f] = ed === 'eos' ? true : (ed === 'hems' ? hemsFeatures.has(f) : false);
@@ -2105,7 +2089,16 @@ class NexoWattVis extends utils.Adapter {
       aiAdvisor: 'aiAdvisor',
       tariff: 'dynamicTariffs',
       para14a: 'para14a',
-      multiuse: 'multiUse'
+      multiuse: 'multiUse',
+      countryProfile: 'countryProfile',
+      energyWallet: 'energyWalletPro',
+      energyLedger: 'energyLedger',
+      chargeKiosk: 'chargeKiosk',
+      mesh: 'mesh',
+      microgrid: 'microgrid',
+      nlSaldering: 'nlSaldering',
+      nlEnergyHub: 'nlEnergyHub',
+      aiAutopilot: 'aiAutopilot'
     };
     return map[String(appId || '')] || String(appId || '');
   }
@@ -2138,7 +2131,7 @@ class NexoWattVis extends utils.Adapter {
       valid,
       type: String(info.type || (valid ? 'full' : 'none')),
       edition,
-      editionLabel: edition === 'eos' ? 'EOS' : (edition === 'hems' ? 'HEMS' : 'Keine Lizenz'),
+      editionLabel: edition === 'eos' ? 'EOS' : (edition === 'hems' ? 'Home' : 'Keine Lizenz'),
       message: String(info.msg || (valid ? `${edition.toUpperCase()} Lizenz gültig` : '')),
       expiresAt: Number(info.expiresAt || 0),
       daysRemaining: Number(info.daysRemaining || 0),
@@ -2157,7 +2150,7 @@ class NexoWattVis extends utils.Adapter {
       if (!this._nwLicenseAllowsAppId(appId)) {
         out.apps[appId] = Object.assign({}, out.apps[appId] || {}, { installed: false, enabled: false, licenseBlocked: true, requiredLicense: 'EOS' });
       } else {
-        out.apps[appId] = Object.assign({}, out.apps[appId] || {}, { licenseBlocked: false, requiredLicense: this._nwCurrentLicenseEdition() === 'hems' ? 'HEMS' : 'EOS' });
+        out.apps[appId] = Object.assign({}, out.apps[appId] || {}, { licenseBlocked: false, requiredLicense: this._nwCurrentLicenseEdition() === 'hems' ? 'Home' : 'EOS' });
       }
     }
     return out;
@@ -2796,6 +2789,42 @@ class NexoWattVis extends utils.Adapter {
       return { lat: null, lon: null, locName: '' };
     }
   }
+
+  async _nwRefreshSystemLanguage(reason = 'runtime') {
+    try {
+      const lang = await nwCountryProfileService.readIoBrokerSystemLanguage(this);
+      this._nwSystemLanguage = nwCountryProfileService.normalizeLanguage(lang || 'de', 'de');
+      this._nwSystemLanguageSource = lang ? 'system.config.common.language' : 'default';
+      this._nwCountryProfileRuntime = Object.assign(
+        {},
+        nwCountryProfileService.getConfiguredCountryProfile(this.config || {}),
+        { effectiveLanguage: this._nwSystemLanguage, languageSource: this._nwSystemLanguageSource, reason: String(reason || '') }
+      );
+      return this._nwSystemLanguage;
+    } catch (_e) {
+      this._nwSystemLanguage = this._nwSystemLanguage || 'de';
+      this._nwSystemLanguageSource = this._nwSystemLanguageSource || 'default';
+      return this._nwSystemLanguage;
+    }
+  }
+
+  _nwBuildLocaleInfo() {
+    try {
+      return nwCountryProfileService.buildLocaleInfo(this.config || {}, this._nwSystemLanguage || 'de', this._nwSystemLanguageSource || 'system.config.common.language');
+    } catch (_e) {
+      return { language: 'de', htmlLang: 'de', source: 'fallback', country: 'DE', countryLabel: 'Deutschland', currency: 'EUR' };
+    }
+  }
+
+  _nwBuildCountryProfileInfo() {
+    try {
+      const profile = nwCountryProfileService.getConfiguredCountryProfile(this.config || {});
+      const locale = this._nwBuildLocaleInfo();
+      return Object.assign({}, profile, { effectiveLanguage: locale.language, languageSource: locale.source });
+    } catch (_e) {
+      return { country: 'DE', label: 'Deutschland', effectiveLanguage: 'de', languageSource: 'fallback', currency: 'EUR' };
+    }
+  }
   /**
    * Code-Teil: _nwWeatherTextDe
    * Zweck: Verarbeitet Wetter-/Prognosedaten für Anzeige oder KI-Beratung.
@@ -3128,6 +3157,7 @@ class NexoWattVis extends utils.Adapter {
       'settingsConfig',
       'datapoints',
       'installerConfig',
+      'countryProfile',
       'emsApps',
       'schedulerIntervalMs',
 
@@ -3273,6 +3303,7 @@ class NexoWattVis extends utils.Adapter {
     ensurePlainObj('settingsConfig', {});
     ensurePlainObj('datapoints', {});
     ensurePlainObj('installerConfig', {});
+    ensurePlainObj('countryProfile', { country: 'DE', languageMode: 'system' });
     ensurePlainObj('vis', {});
     ensurePlainObj('tsMigration', {
       energyFlowMode: 'ts',
@@ -6596,7 +6627,8 @@ try {
       const phaseSwitchDownStableSec = (row && row.phaseSwitchDownStableSec !== undefined && row.phaseSwitchDownStableSec !== null && String(row.phaseSwitchDownStableSec).trim() !== '' && Number.isFinite(Number(row.phaseSwitchDownStableSec))) ? Number(row.phaseSwitchDownStableSec) : 120;
       const phaseSwitchCooldownSec = (row && row.phaseSwitchCooldownSec !== undefined && row.phaseSwitchCooldownSec !== null && String(row.phaseSwitchCooldownSec).trim() !== '' && Number.isFinite(Number(row.phaseSwitchCooldownSec))) ? Number(row.phaseSwitchCooldownSec) : 900;
       const phaseSwitchSettleSec = (row && row.phaseSwitchSettleSec !== undefined && row.phaseSwitchSettleSec !== null && String(row.phaseSwitchSettleSec).trim() !== '' && Number.isFinite(Number(row.phaseSwitchSettleSec))) ? Number(row.phaseSwitchSettleSec) : 30;
-      const storageAssistCustomerAllowed = !!(row && (row.storageAssistCustomerAllowed === true || row.customerStorageAssistAllowed === true || row.allowCustomerStorageAssist === true));
+      // Installer-Freigabe: Nur wenn aktiv, darf der Kunde im Frontend Speicher-Mitnutzung für diesen Ladepunkt wählen.
+      const storageAssistCustomerAllowed = (row && row.storageAssistCustomerAllowed !== undefined && row.storageAssistCustomerAllowed !== null) ? !!row.storageAssistCustomerAllowed : false;
 evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec, storageAssistCustomerAllowed });
     }
     this.evcsList = evcsList;
@@ -7286,21 +7318,12 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       await prime('chargingManagement.control.tsLegacyDecisionTreeJson');
       await prime('chargingManagement.control.usedW');
       await prime('chargingManagement.control.pvAvailable');
-      await prime('chargingManagement.control.storagePolicyJson');
-      await prime('chargingManagement.control.storageProtectedEvPowerW');
-      await prime('chargingManagement.control.storageAssistEligibleEvPowerW');
 
       // Prime per-Ladepunkt runtime states (mode + boost info + station meta)
       for (let i = 1; i <= evcsCount; i++) {
         const base = `chargingManagement.wallboxes.lp${i}`;
         await prime(`${base}.userMode`);
         await prime(`${base}.userPhaseMode`);
-        await prime(`${base}.userStorageAssistEnabled`);
-        await prime(`${base}.storageAssistCustomerAllowed`);
-        await prime(`${base}.storageAssistRequested`);
-        await prime(`${base}.effectiveStorageAssist`);
-        await prime(`${base}.storageAssistBlockedReason`);
-        await prime(`${base}.batteryContributionW`);
         await prime(`${base}.effectiveMode`);
         await prime(`${base}.phaseMode`);
         await prime(`${base}.phaseSwitchSupported`);
@@ -9011,6 +9034,7 @@ async onReady() {
       // Load persisted App‑Center configuration (stored in adapter states).
       // This must happen before we sync defaults and start the EMS engine.
       await this.loadInstallerConfigFromState();
+      await this._nwRefreshSystemLanguage('startup');
 
       // Auto-backup installer config to 0_userdata.0 (survives uninstall/reinstall)
       try {
@@ -9320,12 +9344,6 @@ async onReady() {
       const base = `chargingManagement.wallboxes.lp${i}`;
       await primeKey(`${base}.userMode`);
       await primeKey(`${base}.userPhaseMode`);
-      await primeKey(`${base}.userStorageAssistEnabled`);
-      await primeKey(`${base}.storageAssistCustomerAllowed`);
-      await primeKey(`${base}.storageAssistRequested`);
-      await primeKey(`${base}.effectiveStorageAssist`);
-      await primeKey(`${base}.storageAssistBlockedReason`);
-      await primeKey(`${base}.batteryContributionW`);
       await primeKey(`${base}.phaseMode`);
       await primeKey(`${base}.phaseSwitchSupported`);
       await primeKey(`${base}.currentPhaseCount`);
@@ -11868,6 +11886,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         // Plant-level
         installerConfig: (n.installerConfig && typeof n.installerConfig === 'object') ? n.installerConfig : {},
+        countryProfile: (n.countryProfile && typeof n.countryProfile === 'object') ? n.countryProfile : { country: 'DE', languageMode: 'system' },
 
         // Mapping
         datapoints: (n.datapoints && typeof n.datapoints === 'object') ? n.datapoints : {},
@@ -11927,6 +11946,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         const nativeObj = (this.config && typeof this.config === 'object') ? this.config : {};
         const cfgOut = _nwPickInstallerConfig(nativeObj);
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
+        cfgOut.locale = this._nwBuildLocaleInfo();
+        cfgOut.countryProfile = Object.assign({}, cfgOut.countryProfile || {}, this._nwBuildCountryProfileInfo());
         res.json({ ok: true, license: cfgOut.license, config: cfgOut });
       } catch (e) {
         this.log.warn('Installer config API error: ' + e.message);
@@ -11955,7 +11976,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           'emsApps',
 
           // Scheduler + base mapping
-          'schedulerIntervalMs','installerConfig','datapoints','vis','settings',
+          'schedulerIntervalMs','installerConfig','countryProfile','datapoints','vis','settings',
 
           // App/module configs
           'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','chargingManagement',
@@ -12062,6 +12083,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         try { await this._nwInitLicense(); } catch (e) { try { this.log.warn('License refresh after installer config save failed: ' + (e && e.message ? e.message : e)); } catch (_eLog) {} }
         const cfgOut = _nwPickInstallerConfig(this.config || {});
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
+        cfgOut.locale = this._nwBuildLocaleInfo();
+        cfgOut.countryProfile = Object.assign({}, cfgOut.countryProfile || {}, this._nwBuildCountryProfileInfo());
         res.json({ ok: true, license: cfgOut.license, config: cfgOut, restarted: !!restartEms });
       } catch (e) {
         this.log.warn('Installer config save API error: ' + e.message);
@@ -12160,7 +12183,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           'emsApps',
 
           // Scheduler + base mapping
-          'schedulerIntervalMs','installerConfig','datapoints','vis','settings',
+          'schedulerIntervalMs','installerConfig','countryProfile','datapoints','vis','settings',
 
           // App/module configs
           'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','chargingManagement',
@@ -16302,6 +16325,8 @@ app.get('/config', (req, res) => {
       const sess = getSession(req);
 
       res.json({
+        locale: this._nwBuildLocaleInfo(),
+        countryProfile: this._nwBuildCountryProfileInfo(),
         units: cfg.units || { power: 'W', energy: 'kWh' },
         settings: cfg.settings || {},
         tsMigration: cfg.tsMigration || { energyFlowMode: 'ts', energyFlowProductionAllowed: true, energyFlowCandidateWarmupTicks: 3, energyFlowCandidateAutoFallback: true, energyFlowRequireStablePlantEvaluation: true, energyFlowPlantMinSamples: 5, energyFlowPlantMinConsecutiveOk: 5 },
@@ -17508,19 +17533,19 @@ settingsConfig: {
           // - lp1.regEnabled
           // - chargingManagement.wallboxes.lp1.userMode
           // - chargingManagement.wallboxes.lp1.userEnabled
-          const mIdx = k.match(/^(?:evcs\.)?(\d+)\.(userMode|emsMode|regEnabled|phaseMode|userPhaseMode|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
+          const mIdx = k.match(/^(?:evcs\.)?(\d+)\.(userMode|emsMode|regEnabled|phaseMode|userPhaseMode|storageAssist|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
           if (mIdx) {
             const idx = Math.max(1, Math.round(Number(mIdx[1] || 0)));
             safe = `lp${idx}`;
             prop = String(mIdx[2] || '').toLowerCase();
           } else {
-            const mLp = k.match(/^lp(\d+)\.(userMode|emsMode|regEnabled|phaseMode|userPhaseMode|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
+            const mLp = k.match(/^lp(\d+)\.(userMode|emsMode|regEnabled|phaseMode|userPhaseMode|storageAssist|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
             if (mLp) {
               const idx = Math.max(1, Math.round(Number(mLp[1] || 0)));
               safe = `lp${idx}`;
               prop = String(mLp[2] || '').toLowerCase();
             } else {
-              const m2 = k.match(/^chargingManagement\.(?:wallboxes\.)?([a-z0-9_]+)\.(userMode|userEnabled|regEnabled|phaseMode|userPhaseMode|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
+              const m2 = k.match(/^chargingManagement\.(?:wallboxes\.)?([a-z0-9_]+)\.(userMode|userEnabled|regEnabled|phaseMode|userPhaseMode|storageAssist|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
               if (m2) {
                 safe = String(m2[1] || '').trim();
                 prop = String(m2[2] || '').toLowerCase();
@@ -17554,37 +17579,6 @@ settingsConfig: {
           }
 
 
-          // Speicher-Mitnutzung pro Ladepunkt: Installer-Freigabe ist zwingend.
-          if (prop === 'storageassistenabled' || prop === 'userstorageassistenabled') {
-            const b = !!value;
-            let installerAllowed = false;
-            try {
-              const idxMatch = String(safe || '').match(/^lp(\d+)$/i);
-              const idx = idxMatch ? Math.max(1, Math.round(Number(idxMatch[1] || 0))) : 0;
-              const row = Array.isArray(this.evcsList) ? this.evcsList.find(r => {
-                if (!r) return false;
-                const ri = Number(r.index || 0);
-                if (idx && ri === idx) return true;
-                const rsafe = `lp${Math.max(1, Math.round(ri || 0))}`;
-                return rsafe === safe;
-              }) : null;
-              installerAllowed = !!(row && row.storageAssistCustomerAllowed === true);
-            } catch (_e) {
-              installerAllowed = false;
-            }
-            if (b && !installerAllowed) {
-              return res.status(403).json({ ok: false, error: 'storage_assist_locked' });
-            }
-            const id = `chargingManagement.wallboxes.${safe}.userStorageAssistEnabled`;
-            try {
-              await this.setStateAsync(id, b, false);
-              try { this.updateValue(id, b, Date.now()); } catch (_e) {}
-              return res.json({ ok: true });
-            } catch (_e) {
-              return res.status(409).json({ ok: false, error: 'not_ready' });
-            }
-          }
-
           // AC-Phasenmodus: fixed-1p | fixed-3p | auto-pv
           // Dieser Wert ist bewusst ein User-Override und wird von der TS-EVCS-Allocation/Write-Plan-Kette ausgewertet.
           if (prop === 'phasemode' || prop === 'userphasemode') {
@@ -17598,6 +17592,33 @@ settingsConfig: {
             try {
               await this.setStateAsync(id, v, false);
               try { this.updateValue(id, v, Date.now()); } catch (_e) {}
+              return res.json({ ok: true });
+            } catch (_e) {
+              return res.status(409).json({ ok: false, error: 'not_ready' });
+            }
+          }
+
+          // Speicher-Mitnutzung pro Ladepunkt: Der Kunde darf nur setzen, wenn der Installateur
+          // die Bedienung im App-Center pro Ladepunkt freigegeben hat.
+          if (prop === 'storageassist' || prop === 'storageassistenabled' || prop === 'userstorageassistenabled') {
+            const idxMatch = String(safe || '').match(/lp(\d+)/i);
+            const idx = idxMatch ? Math.max(1, Math.round(Number(idxMatch[1] || 0))) : 0;
+            const rawList = this.config && this.config.settingsConfig && Array.isArray(this.config.settingsConfig.evcsList)
+              ? this.config.settingsConfig.evcsList
+              : [];
+            const cfgRow = idx > 0 ? (rawList[idx - 1] || null) : null;
+            const runtimeRow = idx > 0 && Array.isArray(this.evcsList) ? (this.evcsList[idx - 1] || null) : null;
+            const installerAllowed = !!((cfgRow && cfgRow.storageAssistCustomerAllowed === true)
+              || (runtimeRow && runtimeRow.storageAssistCustomerAllowed === true));
+            if (!installerAllowed) {
+              return res.status(403).json({ ok: false, error: 'storage_assist_locked' });
+            }
+
+            const b = !!value;
+            const id = `chargingManagement.wallboxes.${safe}.userStorageAssistEnabled`;
+            try {
+              await this.setStateAsync(id, b, false);
+              try { this.updateValue(id, b, Date.now()); } catch (_e) {}
               return res.json({ ok: true });
             } catch (_e) {
               return res.status(409).json({ ok: false, error: 'not_ready' });

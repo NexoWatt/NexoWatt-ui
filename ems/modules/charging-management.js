@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:662a7840252cb359ab43bfb7f908715c74881138b3840b32a199f354e7288c1a
+ * Quell-Hash: sha256:b5a0e8152bc967cef60481e4e3602f6af0afddc10daf82cb20a8117bdfd23b0b
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1246,10 +1246,9 @@ class ChargingManagementModule extends BaseModule {
             phaseSwitchSafetyStopRequired: w && w.phaseSwitchSafetyStopRequired,
             phaseSwitchCooldownRemainingMs: w && w.phaseSwitchCooldownRemainingMs,
             stopBeforePhaseSwitch: w && w.stopBeforePhaseSwitch,
-            storageAssistCustomerAllowed: w && w.storageAssistCustomerAllowed,
-            userStorageAssistEnabled: w && w.userStorageAssistEnabled,
-            storageAssistRequested: w && w.storageAssistRequested,
-            effectiveStorageAssist: w && w.effectiveStorageAssist,
+            storageAssistCustomerAllowed: !!(w && w.storageAssistCustomerAllowed),
+            userStorageAssistEnabled: !!(w && w.userStorageAssistEnabled),
+            effectiveStorageAssist: !!(w && w.effectiveStorageAssist),
             storageAssistBlockedReason: w && w.storageAssistBlockedReason,
             batteryContributionW: w && w.batteryContributionW,
             voltageV: w && w.voltageV,
@@ -2498,9 +2497,6 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.storageAssistActive', 'Storage assist active', 'boolean', 'indicator');
         await mk('chargingManagement.control.storageAssistW', 'Storage assist (W)', 'number', 'value.power');
         await mk('chargingManagement.control.storageAssistSoCPct', 'Storage SoC (%)', 'number', 'value.percent');
-        await mk('chargingManagement.control.storagePolicyJson', 'EVCS storage policy (JSON)', 'string', 'json');
-        await mk('chargingManagement.control.storageProtectedEvPowerW', 'EVCS storage protected power (W)', 'number', 'value.power');
-        await mk('chargingManagement.control.storageAssistEligibleEvPowerW', 'EVCS storage-assist eligible power (W)', 'number', 'value.power');
         await this.adapter.setObjectNotExistsAsync('chargingManagement.debug', {
             type: 'channel',
             common: { name: 'Debug' },
@@ -2621,27 +2617,6 @@ class ChargingManagementModule extends BaseModule {
             // ignore
         }
 
-        // Runtime, per-wallbox storage assist preference (writable for customer UI).
-        // Installer must explicitly allow this per charge point in the App-Center configuration.
-        await mk('userStorageAssistEnabled', 'Speicher für diesen Ladepunkt mitnutzen (User)', 'boolean', 'switch.enable', true, { def: false, states: { true: 'Mitnutzen', false: 'Schützen' } });
-
-        try {
-            const st = await this.adapter.getStateAsync(`${ch}.userStorageAssistEnabled`);
-            const cur = st ? st.val : null;
-            if (cur === null || cur === undefined || String(cur).trim() === '') {
-                await this.adapter.setStateAsync(`${ch}.userStorageAssistEnabled`, false, true);
-            }
-        } catch {
-            // ignore
-        }
-
-        // Storage-assist policy diagnostics.
-        await mk('storageAssistCustomerAllowed', 'Speicher-Mitnutzung durch Kunde freigegeben', 'boolean', 'indicator');
-        await mk('storageAssistRequested', 'Speicher-Mitnutzung vom Kunden angefordert', 'boolean', 'indicator');
-        await mk('effectiveStorageAssist', 'Speicher-Mitnutzung effektiv aktiv', 'boolean', 'indicator');
-        await mk('storageAssistBlockedReason', 'Speicher-Mitnutzung Blocker/Grund', 'string', 'text');
-        await mk('batteryContributionW', 'Geplante Speicherleistung für diesen Ladepunkt (W)', 'number', 'value.power');
-
         // Default value for userEnabled (writable)
         try {
             const st = await this.adapter.getStateAsync(`${ch}.userEnabled`);
@@ -2738,6 +2713,23 @@ class ChargingManagementModule extends BaseModule {
         await mk('phaseSwitchState', 'Phasenumschaltung Status', 'string', 'text');
         await mk('phaseSwitchReason', 'Phasenumschaltung Grund', 'string', 'text');
         await mk('phaseCooldownRemainingMs', 'Phasenumschaltung Cooldown Rest (ms)', 'number', 'value.time');
+
+        // Speicher-Mitnutzung pro Ladepunkt: Installer-Freigabe + Kundenwahl + effektive Regelentscheidung
+        await mk('storageAssistCustomerAllowed', 'Speicher-Mitnutzung im Kunden-UI freigegeben', 'boolean', 'indicator');
+        await mk('userStorageAssistEnabled', 'Speicher für Laden mitnutzen (User)', 'boolean', 'switch.enable', true, { def: false, states: { true: 'Mitnutzen', false: 'Schützen' } });
+        await mk('effectiveStorageAssist', 'Speicher-Mitnutzung effektiv', 'boolean', 'indicator');
+        await mk('storageAssistBlockedReason', 'Speicher-Mitnutzung Grund', 'string', 'text');
+        await mk('batteryContributionW', 'Speicheranteil EVCS (W)', 'number', 'value.power');
+        try {
+            const st = await this.adapter.getStateAsync(`${ch}.userStorageAssistEnabled`);
+            const cur = st ? st.val : null;
+            if (cur === null || cur === undefined || String(cur).trim() === '') {
+                await this.adapter.setStateAsync(`${ch}.userStorageAssistEnabled`, false, true);
+            }
+        } catch {
+            // ignore
+        }
+
         await mk('minPowerW', 'Min power (W)', 'number', 'value.power');
         await mk('maxPowerW', 'Max power (W)', 'number', 'value.power');
         await mk('para14aCapW', '§14a cap (W)', 'number', 'value.power');
@@ -3258,32 +3250,6 @@ class ChargingManagementModule extends BaseModule {
             storageYieldW: 0,
             storageSource: '',
         });
-
-        /**
-         * Shared EVCS storage-policy snapshot for Storage-Control.
-         * Purpose: allow the battery to keep covering the house while excluding EV load
-         * from storage discharge when the customer/installer policy protects a charge point.
-         */
-        const publishStoragePolicyCaps = (patch) => {
-            try {
-                const caps = (this.adapter && this.adapter._emsCaps && typeof this.adapter._emsCaps === 'object') ? this.adapter._emsCaps : {};
-                const prev = (caps && caps.storagePolicy && typeof caps.storagePolicy === 'object') ? caps.storagePolicy : {};
-                this.adapter._emsCaps = Object.assign({}, caps, {
-                    storagePolicy: Object.assign({}, prev, patch || {}, { ts: now }),
-                });
-            } catch {
-                // ignore
-            }
-        };
-
-        publishStoragePolicyCaps({
-            active: false,
-            protectedEvPowerW: 0,
-            assistEligibleEvPowerW: 0,
-            assistRequestedCount: 0,
-            protectedCount: 0,
-            source: 'evcs-storage-policy-v1',
-        });
         for (let wbIndex = 0; wbIndex < wallboxes.length; wbIndex++) {
             const wb = wallboxes[wbIndex];
             const key = String(wb.key || '').trim();
@@ -3398,16 +3364,14 @@ class ChargingManagementModule extends BaseModule {
             const phaseSwitchValue1p = (wb.phaseSwitchValue1p !== undefined && wb.phaseSwitchValue1p !== null && String(wb.phaseSwitchValue1p).trim() !== '') ? wb.phaseSwitchValue1p : 1;
             const phaseSwitchValue3p = (wb.phaseSwitchValue3p !== undefined && wb.phaseSwitchValue3p !== null && String(wb.phaseSwitchValue3p).trim() !== '') ? wb.phaseSwitchValue3p : 3;
             const stopBeforePhaseSwitch = wb.stopBeforePhaseSwitch !== false;
+            const wbPhaseSwitchUpThresholdW = clamp(num(wb.phaseSwitchUpThresholdW, phaseSwitchUpThresholdW), 0, 1e12);
+            const wbPhaseSwitchDownThresholdW = clamp(num(wb.phaseSwitchDownThresholdW, phaseSwitchDownThresholdW), 0, 1e12);
+            const wbPhaseSwitchUpStableMs = clamp(num(wb.phaseSwitchUpStableSec, phaseSwitchUpStableMs / 1000), 0, 86400) * 1000;
+            const wbPhaseSwitchDownStableMs = clamp(num(wb.phaseSwitchDownStableSec, phaseSwitchDownStableMs / 1000), 0, 86400) * 1000;
+            const wbPhaseSwitchCooldownMs = clamp(num(wb.phaseSwitchCooldownSec, phaseSwitchCooldownMs / 1000), 0, 86400) * 1000;
+            const wbPhaseSwitchSettleMs = clamp(num(wb.phaseSwitchSettleSec, phaseSwitchSettleMs / 1000), 0, 3600) * 1000;
 
-            // Installer gate + customer runtime switch for battery/storage support per charge point.
-            // Without installer approval the customer control remains hidden in the UI and the backend
-            // always protects the storage for this charge point.
-            const storageAssistCustomerAllowed = !!(
-                wb.storageAssistCustomerAllowed === true
-                || wb.customerStorageAssistAllowed === true
-                || wb.allowCustomerStorageAssist === true
-                || wb.storageAssistCustomerCanToggle === true
-            );
+            const storageAssistCustomerAllowed = wb.storageAssistCustomerAllowed === true;
             let userStorageAssistEnabled = false;
             try {
                 const stStorage = await this._getStateCached(`${ch}.userStorageAssistEnabled`);
@@ -3416,23 +3380,22 @@ class ChargingManagementModule extends BaseModule {
                     try { await this._queueState(`${ch}.userStorageAssistEnabled`, false, true); } catch { /* ignore */ }
                     userStorageAssistEnabled = false;
                 } else {
-                    userStorageAssistEnabled = !!curStorage;
+                    userStorageAssistEnabled = curStorage === true || String(curStorage).trim().toLowerCase() === 'true' || String(curStorage).trim() === '1';
                 }
             } catch {
                 userStorageAssistEnabled = false;
             }
             const storageAssistRequested = !!(storageAssistCustomerAllowed && userStorageAssistEnabled);
-            let effectiveStorageAssist = false;
-            let storageAssistBlockedReason = storageAssistCustomerAllowed
-                ? (userStorageAssistEnabled ? 'pending-storage-gate' : 'user-disabled')
-                : 'installer-locked';
+            try {
+                await this._queueState(`${ch}.storageAssistCustomerAllowed`, !!storageAssistCustomerAllowed, true);
+                if (!storageAssistCustomerAllowed && userStorageAssistEnabled) {
+                    await this._queueState(`${ch}.userStorageAssistEnabled`, false, true);
+                    userStorageAssistEnabled = false;
+                }
+            } catch {
+                // ignore
+            }
 
-            const wbPhaseSwitchUpThresholdW = clamp(num(wb.phaseSwitchUpThresholdW, phaseSwitchUpThresholdW), 0, 1e12);
-            const wbPhaseSwitchDownThresholdW = clamp(num(wb.phaseSwitchDownThresholdW, phaseSwitchDownThresholdW), 0, 1e12);
-            const wbPhaseSwitchUpStableMs = clamp(num(wb.phaseSwitchUpStableSec, phaseSwitchUpStableMs / 1000), 0, 86400) * 1000;
-            const wbPhaseSwitchDownStableMs = clamp(num(wb.phaseSwitchDownStableSec, phaseSwitchDownStableMs / 1000), 0, 86400) * 1000;
-            const wbPhaseSwitchCooldownMs = clamp(num(wb.phaseSwitchCooldownSec, phaseSwitchCooldownMs / 1000), 0, 86400) * 1000;
-            const wbPhaseSwitchSettleMs = clamp(num(wb.phaseSwitchSettleSec, phaseSwitchSettleMs / 1000), 0, 3600) * 1000;
             let minA = clamp(num(wb.minA, defaultMinA), 0, 2000);
             const maxA = clamp(num(wb.maxA, defaultMaxA), 0, 2000);
 
@@ -3725,11 +3688,6 @@ class ChargingManagementModule extends BaseModule {
             await this._queueState(`${ch}.phaseSwitchSupported`, !!phaseSwitchId && chargerType === 'AC', true);
             await this._queueState(`${ch}.phaseMode`, phaseMode, true);
             // userPhaseMode is writable; do NOT overwrite here. phaseMode above is the effective mode.
-            await this._queueState(`${ch}.storageAssistCustomerAllowed`, !!storageAssistCustomerAllowed, true);
-            await this._queueState(`${ch}.storageAssistRequested`, !!storageAssistRequested, true);
-            await this._queueState(`${ch}.effectiveStorageAssist`, false, true);
-            await this._queueState(`${ch}.storageAssistBlockedReason`, storageAssistBlockedReason, true);
-            await this._queueState(`${ch}.batteryContributionW`, 0, true);
             await this._queueState(`${ch}.minPowerW`, minPW, true);
             await this._queueState(`${ch}.maxPowerW`, maxPW, true);
             await this._queueState(`${ch}.para14aCapW`, para14aCapW || 0, true);
@@ -4190,8 +4148,8 @@ class ChargingManagementModule extends BaseModule {
                 storageAssistCustomerAllowed,
                 userStorageAssistEnabled,
                 storageAssistRequested,
-                effectiveStorageAssist,
-                storageAssistBlockedReason,
+                effectiveStorageAssist: false,
+                storageAssistBlockedReason: storageAssistCustomerAllowed ? (userStorageAssistEnabled ? 'pending' : 'user-disabled') : 'installer-locked',
                 batteryContributionW: 0,
                 phaseSwitchSafePowerW,
                 highSinceMs: this._chargingPhaseHighSinceMs && this._chargingPhaseHighSinceMs.has(safe) ? this._chargingPhaseHighSinceMs.get(safe) : 0,
@@ -5529,17 +5487,17 @@ if (components.length) {
         let pauseFollowPeakBudget = false;
         let pauseFollowGridCaps = false;
 
-        const storageAssistRequestedCount = wbList.filter(w => w && w.storageAssistRequested === true && w.enabled && w.online).length;
-
         // Gate C: Speicher-Unterstützung (optional)
         // Ziel: Bei hohem Speicher-SoC kann zusätzliche Ladeleistung durch Batterie-Entladung bereitgestellt werden,
         // ohne den Netzanschluss (Import-Limit) zu überlasten. Die Entladung wird über das Storage-Control-Modul umgesetzt.
         let storageSoC = getFirstDpNumber(['st.socPct']);
         let storageAssistW = 0;
         let storageAssistActive = false;
+        let storagePolicyGlobalBlocker = '';
+        const budgetBeforeStorageAssistW = Number.isFinite(budgetW) ? Math.max(0, budgetW) : budgetW;
 
         try {
-            const saEnabled = cfg.storageAssistEnabled === true || storageAssistRequestedCount > 0;
+            const saEnabled = cfg.storageAssistEnabled === true;
             const saApply = (typeof cfg.storageAssistApply === 'string') ? cfg.storageAssistApply : 'boostOnly';
             const startSoc = clamp(num(cfg.storageAssistStartSocPct, 60), 0, 100);
             const stopSoc = clamp(num(cfg.storageAssistStopSocPct, 40), 0, 100);
@@ -5548,9 +5506,23 @@ if (components.length) {
             const maxW_storage = num(this.adapter && this.adapter.config && this.adapter.config.storage && this.adapter.config.storage.maxDischargeW, 0);
             const maxW = (Number.isFinite(maxW_cfg) && maxW_cfg > 0) ? maxW_cfg : (Number.isFinite(maxW_storage) ? maxW_storage : 0);
 
-            const allowByMode = storageAssistRequestedCount > 0 || ((saApply === 'boostAndAuto') ? true : !!anyBoostActive);
+            const storageAssistWallboxes = wbList.filter(w => w && w.enabled && w.online && w.storageAssistRequested === true);
+            const anyStorageAssistRequested = storageAssistWallboxes.length > 0;
+            const anyStorageBoostActive = storageAssistWallboxes.some(w => String(w.effectiveMode || '').toLowerCase() === 'boost');
+            const anyGridAllowedStorageActive = storageAssistWallboxes.some(w => ['normal', 'boost', 'minpv'].includes(String(w.effectiveMode || '').toLowerCase()));
+            const allowByMode = (saApply === 'boostAndAuto') ? anyStorageAssistRequested : anyStorageBoostActive;
 
-            if (saEnabled && allowByMode && (anyGridAllowedActive || storageAssistRequestedCount > 0) && dischargeAllowed && !pausedByPeakShaving && maxW > 0 && Number.isFinite(storageSoC)) {
+            if (!anyStorageAssistRequested) storagePolicyGlobalBlocker = 'no-wallbox-request';
+            else if (!saEnabled) storagePolicyGlobalBlocker = 'storage-assist-disabled';
+            else if (!allowByMode) storagePolicyGlobalBlocker = 'mode-not-allowed';
+            else if (!anyGridAllowedStorageActive) storagePolicyGlobalBlocker = 'mode-pv-only';
+            else if (!dischargeAllowed) storagePolicyGlobalBlocker = 'discharge-not-allowed';
+            else if (pausedByPeakShaving) storagePolicyGlobalBlocker = 'paused-by-peak-shaving';
+            else if (!(maxW > 0)) storagePolicyGlobalBlocker = 'no-storage-discharge-limit';
+            else if (!Number.isFinite(storageSoC)) storagePolicyGlobalBlocker = 'storage-soc-unavailable';
+            else storagePolicyGlobalBlocker = '';
+
+            if (!storagePolicyGlobalBlocker) {
                 // Hysterese: Start/Stop-Schwellen vermeiden Flattern
                 if (this._storageAssistActive) {
                     if (storageSoC <= stopSoc) this._storageAssistActive = false;
@@ -5562,6 +5534,9 @@ if (components.length) {
             }
 
             storageAssistActive = !!this._storageAssistActive;
+            if (!storageAssistActive && !storagePolicyGlobalBlocker && Number.isFinite(storageSoC)) {
+                storagePolicyGlobalBlocker = storageSoC < startSoc ? 'storage-soc-low' : 'storage-assist-idle';
+            }
 
             // Nur sinnvoll, wenn das Budget aktuell durch Netz/Phase gedeckelt ist
             if (storageAssistActive && (gridCapBinding || phaseCapBinding) && maxW > 0) {
@@ -5574,7 +5549,11 @@ if (components.length) {
                     if (!String(effectiveBudgetMode || '').includes('storageAssist')) {
                         effectiveBudgetMode = `${effectiveBudgetMode}+storageAssist`;
                     }
+                } else if (!storagePolicyGlobalBlocker) {
+                    storagePolicyGlobalBlocker = 'no-storage-budget-needed';
                 }
+            } else if (storageAssistActive && !(gridCapBinding || phaseCapBinding) && !storagePolicyGlobalBlocker) {
+                storagePolicyGlobalBlocker = 'no-grid-or-phase-cap';
             }
 
         } catch (_e) {
@@ -5582,31 +5561,26 @@ if (components.length) {
             this._storageAssistActive = false;
             storageAssistW = 0;
             storageAssistActive = false;
+            storagePolicyGlobalBlocker = 'runtime-error';
         }
 
-        const storageAssistSystemReady = !!(storageAssistActive && storageAssistW > 0);
-        for (const w of wbList) {
-            if (!w) continue;
-            if (!w.storageAssistCustomerAllowed) {
-                w.effectiveStorageAssist = false;
-                w.storageAssistBlockedReason = 'installer-locked';
-            } else if (!w.userStorageAssistEnabled) {
-                w.effectiveStorageAssist = false;
-                w.storageAssistBlockedReason = 'user-disabled';
-            } else if (!w.enabled || !w.online) {
-                w.effectiveStorageAssist = false;
-                w.storageAssistBlockedReason = !w.enabled ? 'control-disabled' : 'offline';
-            } else if (!storageAssistSystemReady) {
-                w.effectiveStorageAssist = false;
-                if (!Number.isFinite(storageSoC)) w.storageAssistBlockedReason = 'storage-soc-unavailable';
-                else if (!(dischargeAllowed === true)) w.storageAssistBlockedReason = 'storage-discharge-blocked';
-                else if (pausedByPeakShaving) w.storageAssistBlockedReason = 'peak-shaving-active';
-                else if (storageAssistW <= 0) w.storageAssistBlockedReason = 'no-storage-assist-budget';
-                else w.storageAssistBlockedReason = 'storage-gate-blocked';
-            } else {
-                w.effectiveStorageAssist = true;
-                w.storageAssistBlockedReason = 'allowed';
+        try {
+            for (const w of wbList) {
+                const effectiveStorageAssist = !!(storageAssistActive && storageAssistW > 0 && w.storageAssistRequested === true);
+                let storageReason = '';
+                if (!w.storageAssistCustomerAllowed) storageReason = 'installer-locked';
+                else if (!w.userStorageAssistEnabled) storageReason = 'user-disabled';
+                else if (effectiveStorageAssist) storageReason = 'allowed';
+                else storageReason = storagePolicyGlobalBlocker || 'not-active';
+                w.effectiveStorageAssist = effectiveStorageAssist;
+                w.storageAssistBlockedReason = storageReason;
+                w.batteryContributionW = 0;
+                await this._queueState(`${w.ch}.effectiveStorageAssist`, effectiveStorageAssist, true);
+                await this._queueState(`${w.ch}.storageAssistBlockedReason`, storageReason, true);
+                await this._queueState(`${w.ch}.batteryContributionW`, 0, true);
             }
+        } catch {
+            // ignore
         }
 
         // Publish diagnostics for UI
@@ -5614,16 +5588,6 @@ if (components.length) {
             await this._queueState('chargingManagement.control.storageAssistSoCPct', Number.isFinite(storageSoC) ? storageSoC : 0, true);
             await this._queueState('chargingManagement.control.storageAssistActive', !!storageAssistActive, true);
             await this._queueState('chargingManagement.control.storageAssistW', Number.isFinite(storageAssistW) ? storageAssistW : 0, true);
-            await this._queueState('chargingManagement.control.storageAssistEligibleEvPowerW', 0, true);
-            await this._queueState('chargingManagement.control.storageProtectedEvPowerW', 0, true);
-            await this._queueState('chargingManagement.control.storagePolicyJson', JSON.stringify({
-                source: 'evcs-storage-policy-v1',
-                active: false,
-                storageAssistActive: !!storageAssistActive,
-                storageAssistW: Number.isFinite(storageAssistW) ? Math.round(storageAssistW) : 0,
-                storageAssistRequestedCount,
-                protectedCount: wbList.filter(w => w && w.storageAssistCustomerAllowed && !w.userStorageAssistEnabled).length,
-            }), true);
         } catch {
             // ignore
         }
@@ -6470,6 +6434,8 @@ if (components.length) {
         }
 
         let remainingW = budgetW;
+        let nonStorageRemainingW = Number.isFinite(budgetBeforeStorageAssistW) ? Math.max(0, budgetBeforeStorageAssistW) : remainingW;
+        let storageAssistRemainingW = Number.isFinite(storageAssistW) ? Math.max(0, storageAssistW) : 0;
         let usedW = 0;
 
         // Shared PV budget (only relevant if at least one wallbox is PV-limited)
@@ -6478,9 +6444,6 @@ if (components.length) {
 
         let totalTargetPowerW = 0;
         let totalTargetCurrentA = 0;
-        let storageProtectedEvPowerW = 0;
-        let storageAssistEligibleEvPowerW = 0;
-        let storageAssistContributionRemainingW = (storageAssistActive && Number.isFinite(storageAssistW)) ? Math.max(0, storageAssistW) : 0;
 
         // More specific budget limitation reason based on the active caps in this tick.
         // Used for per-connector diagnostics (without changing the underlying allocation math).
@@ -6550,7 +6513,12 @@ if (components.length) {
             let reason = pickBudgetReason();
 
             // Budget view for this wallbox
-            const totalAvailW = Number.isFinite(remainingW) ? Math.max(0, remainingW) : Number.POSITIVE_INFINITY;
+            const storageEligible = !!(storageAssistActive && w.effectiveStorageAssist === true && storageAssistRemainingW > 0);
+            const baseAvailW = Number.isFinite(nonStorageRemainingW) ? Math.max(0, nonStorageRemainingW) : (Number.isFinite(remainingW) ? Math.max(0, remainingW) : Number.POSITIVE_INFINITY);
+            const storageExtraAvailW = storageEligible ? Math.max(0, storageAssistRemainingW) : 0;
+            const totalAvailW = Number.isFinite(remainingW)
+                ? Math.max(0, Math.min(remainingW, baseAvailW + storageExtraAvailW))
+                : Number.POSITIVE_INFINITY;
             const pvAvailW = Number.isFinite(pvRemainingW) ? Math.max(0, pvRemainingW) : Number.POSITIVE_INFINITY;
 
             // Stationsgruppe (gemeinsame Leistungsgrenze pro Station)
@@ -6973,10 +6941,34 @@ if (components.length) {
                 stationTargetSumW.set(_sk, (stationTargetSumW.get(_sk) || 0) + cmdW);
             }
 
-            // Apply total budget accounting (use commanded power)
+            let batteryContributionThisW = 0;
+
+            // Apply total budget accounting (use commanded power). The base pool is available
+            // to all wallboxes; the storage-assist pool is only available to wallboxes where
+            // installer freigegeben + customer enabled + storage policy is currently allowed.
             if (Number.isFinite(remainingW)) {
-                remainingW = Math.max(0, remainingW - cmdW);
-                usedW += cmdW;
+                const consumedW = Math.max(0, cmdW);
+                let baseConsumedW = 0;
+                if (Number.isFinite(nonStorageRemainingW)) {
+                    baseConsumedW = Math.min(Math.max(0, nonStorageRemainingW), consumedW);
+                    nonStorageRemainingW = Math.max(0, nonStorageRemainingW - baseConsumedW);
+                } else {
+                    baseConsumedW = consumedW;
+                }
+                if (storageEligible && storageAssistRemainingW > 0) {
+                    const restW = Math.max(0, consumedW - baseConsumedW);
+                    batteryContributionThisW = Math.min(storageAssistRemainingW, restW);
+                    storageAssistRemainingW = Math.max(0, storageAssistRemainingW - batteryContributionThisW);
+                }
+                remainingW = Math.max(0, remainingW - consumedW);
+                usedW += consumedW;
+            }
+
+            try {
+                w.batteryContributionW = batteryContributionThisW;
+                await this._queueState(`${w.ch}.batteryContributionW`, Math.round(batteryContributionThisW), true);
+            } catch {
+                // ignore
             }
 
             // Apply station cap accounting (shared between connectors of same station)
@@ -7003,20 +6995,6 @@ if (components.length) {
                 pvUsedW += pvUsedThisW;
             }
 
-            let batteryContributionW = 0;
-            if (cmdW > 0) {
-                if (w.storageAssistRequested === true) {
-                    storageAssistEligibleEvPowerW += cmdW;
-                    if (w.effectiveStorageAssist === true && storageAssistContributionRemainingW > 0) {
-                        batteryContributionW = Math.min(cmdW, storageAssistContributionRemainingW);
-                        storageAssistContributionRemainingW = Math.max(0, storageAssistContributionRemainingW - batteryContributionW);
-                    }
-                } else {
-                    storageProtectedEvPowerW += cmdW;
-                }
-            }
-            w.batteryContributionW = batteryContributionW;
-
             totalTargetPowerW += cmdW;
             if (Number.isFinite(cmdA) && cmdA > 0) totalTargetCurrentA += cmdA;
 
@@ -7034,8 +7012,6 @@ if (components.length) {
             applyStatus = 'planned_by_ts_write_plan';
 
             // MU6.11: Remember last commanded setpoints for ramp limiting
-            w.targetPowerW = cmdW;
-            w.targetCurrentA = cmdA;
             this._lastCmdTargetW.set(w.safe, cmdW);
             this._lastCmdTargetA.set(w.safe, cmdA);
 
@@ -7136,11 +7112,6 @@ if (components.length) {
 
             await this._queueState(`${w.ch}.targetCurrentA`, cmdA, true);
             await this._queueState(`${w.ch}.targetPowerW`, cmdW, true);
-            await this._queueState(`${w.ch}.storageAssistCustomerAllowed`, !!w.storageAssistCustomerAllowed, true);
-            await this._queueState(`${w.ch}.storageAssistRequested`, !!w.storageAssistRequested, true);
-            await this._queueState(`${w.ch}.effectiveStorageAssist`, !!w.effectiveStorageAssist, true);
-            await this._queueState(`${w.ch}.storageAssistBlockedReason`, String(w.storageAssistBlockedReason || ''), true);
-            await this._queueState(`${w.ch}.batteryContributionW`, Math.round(batteryContributionW || 0), true);
             // Stationsgruppe: verbleibendes Stationsbudget (nach Abzug dieses Connectors)
             try {
                 const rem = (w.stationKey && stationRemainingW && stationRemainingW.has(w.stationKey))
@@ -7186,13 +7157,12 @@ if (components.length) {
                 targetW: cmdW,
                 targetA: cmdA,
                 pvUsedW: pvUsedThisW,
-                pvRemainingW: Number.isFinite(pvRemainingW) ? pvRemainingW : null,
+                batteryContributionW: batteryContributionThisW,
                 storageAssistCustomerAllowed: !!w.storageAssistCustomerAllowed,
                 userStorageAssistEnabled: !!w.userStorageAssistEnabled,
-                storageAssistRequested: !!w.storageAssistRequested,
                 effectiveStorageAssist: !!w.effectiveStorageAssist,
                 storageAssistBlockedReason: String(w.storageAssistBlockedReason || ''),
-                batteryContributionW: Math.round(batteryContributionW || 0),
+                pvRemainingW: Number.isFinite(pvRemainingW) ? pvRemainingW : null,
                 applied,
                 applyStatus,
                 applyWrites,
@@ -7230,11 +7200,6 @@ if (components.length) {
 
             await this._queueState(`${w.ch}.targetCurrentA`, 0, true);
             await this._queueState(`${w.ch}.targetPowerW`, 0, true);
-            await this._queueState(`${w.ch}.storageAssistCustomerAllowed`, !!w.storageAssistCustomerAllowed, true);
-            await this._queueState(`${w.ch}.storageAssistRequested`, !!w.storageAssistRequested, true);
-            await this._queueState(`${w.ch}.effectiveStorageAssist`, false, true);
-            await this._queueState(`${w.ch}.storageAssistBlockedReason`, w.storageAssistCustomerAllowed ? (w.userStorageAssistEnabled ? 'not-active' : 'user-disabled') : 'installer-locked', true);
-            await this._queueState(`${w.ch}.batteryContributionW`, 0, true);
             await this._queueState(`${w.ch}.applied`, applied, true);
             await this._queueState(`${w.ch}.applyStatus`, applyStatus, true);
             if (applyWrites) {
@@ -7272,12 +7237,6 @@ if (components.length) {
                 targetA: 0,
                 pvUsedW: 0,
                 pvRemainingW: Number.isFinite(pvRemainingW) ? pvRemainingW : null,
-                storageAssistCustomerAllowed: !!w.storageAssistCustomerAllowed,
-                userStorageAssistEnabled: !!w.userStorageAssistEnabled,
-                storageAssistRequested: !!w.storageAssistRequested,
-                effectiveStorageAssist: false,
-                storageAssistBlockedReason: w.storageAssistCustomerAllowed ? (w.userStorageAssistEnabled ? offReason : 'user-disabled') : 'installer-locked',
-                batteryContributionW: 0,
                 applied,
                 applyStatus,
                 applyWrites,
@@ -7292,44 +7251,6 @@ if (components.length) {
             });
         }
 
-
-        const storagePolicySnapshot = {
-            source: 'evcs-storage-policy-v1',
-            active: true,
-            storageAssistActive: !!storageAssistActive,
-            storageAssistW: Number.isFinite(storageAssistW) ? Math.round(storageAssistW) : 0,
-            storageAssistRequestedCount,
-            storageProtectedEvPowerW: Math.round(Math.max(0, storageProtectedEvPowerW || 0)),
-            storageAssistEligibleEvPowerW: Math.round(Math.max(0, storageAssistEligibleEvPowerW || 0)),
-            protectedCount: wbList.filter(w => w && !w.storageAssistRequested).length,
-            allowedCount: wbList.filter(w => w && w.storageAssistCustomerAllowed).length,
-            userEnabledCount: wbList.filter(w => w && w.userStorageAssistEnabled).length,
-            wallboxes: wbList.map(w => ({
-                safe: w.safe,
-                storageAssistCustomerAllowed: !!w.storageAssistCustomerAllowed,
-                userStorageAssistEnabled: !!w.userStorageAssistEnabled,
-                storageAssistRequested: !!w.storageAssistRequested,
-                effectiveStorageAssist: !!w.effectiveStorageAssist,
-                storageAssistBlockedReason: String(w.storageAssistBlockedReason || ''),
-                targetPowerW: Math.round(Math.max(0, w.targetPowerW || this._lastCmdTargetW.get(w.safe) || 0)),
-                batteryContributionW: Math.round(Math.max(0, w.batteryContributionW || 0)),
-            })),
-        };
-        try {
-            await this._queueState('chargingManagement.control.storageProtectedEvPowerW', storagePolicySnapshot.storageProtectedEvPowerW, true);
-            await this._queueState('chargingManagement.control.storageAssistEligibleEvPowerW', storagePolicySnapshot.storageAssistEligibleEvPowerW, true);
-            await this._queueState('chargingManagement.control.storagePolicyJson', JSON.stringify(storagePolicySnapshot), true);
-        } catch {
-            // ignore
-        }
-        publishStoragePolicyCaps({
-            active: true,
-            protectedEvPowerW: storagePolicySnapshot.storageProtectedEvPowerW,
-            assistEligibleEvPowerW: storagePolicySnapshot.storageAssistEligibleEvPowerW,
-            assistRequestedCount: storageAssistRequestedCount,
-            protectedCount: storagePolicySnapshot.protectedCount,
-            source: 'evcs-storage-policy-v1',
-        });
 
         const tsWallboxesForAllocation = this._mapChargingWallboxesForTsAllocation(wbList);
         const tsAllocationState = await this._publishChargingAllocationTsShadow({

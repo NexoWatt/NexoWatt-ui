@@ -912,14 +912,14 @@
   function _licenseLabel() {
     const ed = _licenseEdition();
     if (ed === 'eos') return 'EOS';
-    if (ed === 'hems') return 'HEMS';
+    if (ed === 'hems') return 'Home';
     return 'Keine Lizenz';
   }
 
   /**
    * Code-Teil: normalizeLicenseInfo
    * Zweck: Vereinheitlicht Lizenzdaten aus /api/installer/config und /api/license/info.
-   * Zusammenhang: Das App-Center darf nach einer aktivierten EOS-/HEMS-Lizenz nicht auf
+   * Zusammenhang: Das App-Center darf nach einer aktivierten EOS-/Home-Lizenz nicht auf
    * "Keine Lizenz" hängen bleiben, nur weil eine alte Konfigurationsantwort oder ein
    * Browser-/Service-Worker-Cache noch keine Lizenzdaten enthielt.
    */
@@ -950,7 +950,7 @@
     // /api/license/info uses ok=true for transport success; the license itself is valid=true.
     const valid = asBool(src.valid) || edition === 'eos' || edition === 'hems';
     if (!valid) edition = 'none';
-    const label = edition === 'eos' ? 'EOS' : (edition === 'hems' ? 'HEMS' : 'Keine Lizenz');
+    const label = edition === 'eos' ? 'EOS' : (edition === 'hems' ? 'Home' : 'Keine Lizenz');
     let features = src.features && typeof src.features === 'object' ? src.features : {};
     const featuresJsonRaw = unwrap(src.featuresJson);
     if ((!features || !Object.keys(features).length) && typeof featuresJsonRaw === 'string' && featuresJsonRaw.trim()) {
@@ -1615,6 +1615,69 @@ function collectAiAdvisorConfigFromUI(base) {
     };
     return out;
   }
+  function _nwSystemProfileCountry() {
+    const cp = currentConfig && currentConfig.countryProfile && typeof currentConfig.countryProfile === 'object' ? currentConfig.countryProfile : {};
+    const raw = String(cp.country || cp.profile || 'DE').trim().toUpperCase();
+    return raw === 'NL' ? 'NL' : 'DE';
+  }
+
+  function buildSystemProfileCard() {
+    const card = document.createElement('div');
+    card.className = 'nw-config-card nw-system-profile-card';
+    card.setAttribute('data-card', 'system-profile');
+
+    const cp = currentConfig && currentConfig.countryProfile && typeof currentConfig.countryProfile === 'object' ? currentConfig.countryProfile : {};
+    const locale = currentConfig && currentConfig.locale && typeof currentConfig.locale === 'object' ? currentConfig.locale : {};
+    const country = _nwSystemProfileCountry();
+    const lang = String((locale && (locale.language || locale.htmlLang)) || cp.effectiveLanguage || 'de').trim().toLowerCase() || 'de';
+    const source = String((locale && locale.source) || cp.languageSource || 'system.config.common.language');
+
+    card.innerHTML = `
+      <div class="nw-config-card__header">
+        <div>
+          <div class="nw-config-card__title">System &amp; Marktprofil</div>
+          <div class="nw-config-card__subtitle">Installer-Einstellung. Die UI-Sprache wird automatisch aus der ioBroker-Systemsprache übernommen.</div>
+        </div>
+      </div>
+      <div class="nw-config-card__body">
+        <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+          <label class="nw-config-field">
+            <span class="nw-config-label">Länderprofil</span>
+            <select class="nw-config-input" id="countryProfileCountry">
+              <option value="DE">Deutschland</option>
+              <option value="NL">Niederlande</option>
+            </select>
+            <small>Basis für Begriffe, NL/P1/Saldering und spätere Energy-Hub-Funktionen.</small>
+          </label>
+          <label class="nw-config-field">
+            <span class="nw-config-label">Sprache</span>
+            <input class="nw-config-input" id="countryProfileLanguageDisplay" type="text" readonly />
+            <small>Quelle: ioBroker <code>system.config.common.language</code>. Keine Kundeneinstellung im Frontend.</small>
+          </label>
+        </div>
+        <div id="countryProfileHint" class="nw-config-empty" style="margin-top:10px;text-align:left;"></div>
+      </div>`;
+
+    const sel = card.querySelector('#countryProfileCountry');
+    const display = card.querySelector('#countryProfileLanguageDisplay');
+    const hint = card.querySelector('#countryProfileHint');
+    if (sel) {
+      sel.value = country;
+      sel.addEventListener('change', () => {
+        currentConfig.countryProfile = currentConfig.countryProfile || {};
+        currentConfig.countryProfile.country = String(sel.value || 'DE').toUpperCase() === 'NL' ? 'NL' : 'DE';
+        if (hint) hint.textContent = currentConfig.countryProfile.country === 'NL'
+          ? 'NL aktiv: Begriffe wie Teruglevering/Netafname und spätere P1-/Saldering-Module werden vorbereitet.'
+          : 'DE aktiv: Begriffe wie Einspeisung/Netzbezug und §14a-Module bleiben Standard.';
+      });
+    }
+    if (display) display.value = `${lang.toUpperCase()} (${source})`;
+    if (hint) hint.textContent = country === 'NL'
+      ? 'NL aktiv: Begriffe wie Teruglevering/Netafname und spätere P1-/Saldering-Module werden vorbereitet.'
+      : 'DE aktiv: Begriffe wie Einspeisung/Netzbezug und §14a-Module bleiben Standard.';
+    return card;
+  }
+
   /**
    * Code-Teil: buildAppsUI
    * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
@@ -1638,8 +1701,9 @@ function collectAiAdvisorConfigFromUI(base) {
     const licenseCard = document.createElement('div');
     licenseCard.className = 'nw-config-card nw-license-edition-card';
     const licenseLimit = _maxEvcsCount() < 50 ? ` · Lademanagement bis ${_maxEvcsCount()} Wallboxen` : ' · Vollzugriff';
-    licenseCard.innerHTML = `<div class="nw-config-card__header"><div><div class="nw-config-card__title">Lizenz: ${_licenseLabel()}</div><div class="nw-config-card__subtitle">${_licenseEdition() === 'eos' ? 'EOS ist die Vollversion mit allen Apps und künftigen Erweiterungen.' : 'HEMS zeigt nur die freigegebenen Apps.'}${licenseLimit}</div></div></div>`;
+    licenseCard.innerHTML = `<div class="nw-config-card__header"><div><div class="nw-config-card__title">Lizenz: ${_licenseLabel()}</div><div class="nw-config-card__subtitle">${_licenseEdition() === 'eos' ? 'EOS ist die Vollversion mit allen Apps und künftigen Erweiterungen.' : 'Home zeigt nur die freigegebenen Basis-Apps.'}${licenseLimit}</div></div></div>`;
     els.appsList.appendChild(licenseCard);
+    els.appsList.appendChild(buildSystemProfileCard());
 
     const visibleApps = APP_CATALOG.filter((app) => _isAppLicensed(app.id));
     for (const app of visibleApps) {
@@ -1765,7 +1829,7 @@ function collectAiAdvisorConfigFromUI(base) {
         const row = document.createElement('div');
         row.className = 'nw-config-card__row';
         row.textContent = _licenseEdition() === 'hems'
-          ? 'Konfiguration: Reiter „Ladepunkte“. HEMS erlaubt bis zu 3 Wallboxen.'
+          ? 'Konfiguration: Reiter „Ladepunkte“. Home erlaubt bis zu 3 Wallboxen.'
           : 'Konfiguration: Reiter „Ladepunkte“. Datenpunkte: pro Ladepunkt.';
         body.appendChild(row);
       }
@@ -8288,6 +8352,12 @@ function collectAiAdvisorConfigFromUI(base) {
       lab.textContent = label;
       const ctl = document.createElement('div');
       ctl.className = 'nw-config-field-control';
+      try {
+        if (controlEl && typeof controlEl.matches === 'function' && controlEl.matches('input[type="checkbox"]')) {
+          controlEl.classList.add('nw-config-checkbox');
+          ctl.classList.add('nw-config-field-control--checkbox');
+        }
+      } catch (_e) {}
       ctl.appendChild(controlEl);
       row.appendChild(lab);
       row.appendChild(ctl);
@@ -8625,6 +8695,7 @@ function collectAiAdvisorConfigFromUI(base) {
       // Aktivierung/Regelung (Installateur)
       const enabledInp = document.createElement('input');
       enabledInp.type = 'checkbox';
+      enabledInp.className = 'nw-config-checkbox';
       enabledInp.checked = (rowCfg && rowCfg.enabled !== false);
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an enabledInp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       enabledInp.addEventListener('change', () => _updateEvcsField(i, 'enabled', !!enabledInp.checked));
@@ -8703,21 +8774,6 @@ function collectAiAdvisorConfigFromUI(base) {
       modeSel.addEventListener('change', () => _updateEvcsField(i, 'userMode', String(modeSel.value)));
       body.appendChild(mkRow('Standard-Modus', modeSel));
 
-      // Speicher-Mitnutzung: Installer gibt die Kundenbedienung je Ladepunkt frei.
-      const storageAssistAllowedInp = document.createElement('input');
-      storageAssistAllowedInp.type = 'checkbox';
-      storageAssistAllowedInp.checked = !!(rowCfg && rowCfg.storageAssistCustomerAllowed === true);
-      storageAssistAllowedInp.addEventListener('change', () => _updateEvcsField(i, 'storageAssistCustomerAllowed', !!storageAssistAllowedInp.checked));
-      const storageAssistWrap = document.createElement('div');
-      storageAssistWrap.style.display = 'grid';
-      storageAssistWrap.style.gap = '4px';
-      storageAssistWrap.appendChild(storageAssistAllowedInp);
-      const storageAssistHint = document.createElement('small');
-      storageAssistHint.textContent = 'Aktiviert im Kunden-Frontend die Wahl „Speicher schützen / Speicher mitnutzen“. Ohne Freigabe bleibt die Bedienung unsichtbar und der Speicher wird für diesen Ladepunkt geschützt.';
-      storageAssistHint.style.opacity = '0.82';
-      storageAssistWrap.appendChild(storageAssistHint);
-      body.appendChild(mkRow('Kunde darf Speicher-Mitnutzung bedienen', storageAssistWrap));
-
       // Datenpunkte
       const dpDetails = document.createElement('details');
       dpDetails.style.marginTop = '8px';
@@ -8781,6 +8837,15 @@ function collectAiAdvisorConfigFromUI(base) {
       ctrlSel.addEventListener('change', () => _updateEvcsField(i, 'controlPreference', String(ctrlSel.value)));
       adv.appendChild(mkRow('Steuerung', ctrlSel));
 
+      // Speicher/Batterie: Installer gibt nur die Kundenbedienung frei.
+      // Die eigentliche Kundenwahl passiert später im LIVE-/EVCS-Frontend pro Ladepunkt.
+      const storageAssistAllowedInp = document.createElement('input');
+      storageAssistAllowedInp.type = 'checkbox';
+      storageAssistAllowedInp.className = 'nw-config-checkbox';
+      storageAssistAllowedInp.checked = !!(rowCfg && rowCfg.storageAssistCustomerAllowed === true);
+      storageAssistAllowedInp.addEventListener('change', () => _updateEvcsField(i, 'storageAssistCustomerAllowed', !!storageAssistAllowedInp.checked));
+      adv.appendChild(mkRow('Kunde darf Speicher-Mitnutzung bedienen', storageAssistAllowedInp));
+
       // Phasen
       const phasesSel = document.createElement('select');
       phasesSel.className = 'nw-config-input';
@@ -8806,6 +8871,7 @@ function collectAiAdvisorConfigFromUI(base) {
 
       const stopBeforePhaseInp = document.createElement('input');
       stopBeforePhaseInp.type = 'checkbox';
+      stopBeforePhaseInp.className = 'nw-config-checkbox';
       stopBeforePhaseInp.checked = !(rowCfg && rowCfg.stopBeforePhaseSwitch === false);
       stopBeforePhaseInp.addEventListener('change', () => _updateEvcsField(i, 'stopBeforePhaseSwitch', !!stopBeforePhaseInp.checked));
       adv.appendChild(mkRow('Vor Phasenwechsel stoppen', stopBeforePhaseInp));
@@ -8932,6 +8998,7 @@ function collectAiAdvisorConfigFromUI(base) {
       // Boost
       const allowBoostInp = document.createElement('input');
       allowBoostInp.type = 'checkbox';
+      allowBoostInp.className = 'nw-config-checkbox';
       allowBoostInp.checked = (rowCfg && rowCfg.allowBoost !== false);
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an allowBoostInp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       allowBoostInp.addEventListener('change', () => _updateEvcsField(i, 'allowBoost', !!allowBoostInp.checked));
@@ -10461,6 +10528,13 @@ function collectAiAdvisorConfigFromUI(base) {
     // Scheduler
     const sched = Number(els.schedulerIntervalMs.value);
     if (Number.isFinite(sched) && sched >= 250) patch.schedulerIntervalMs = Math.round(sched);
+
+    // System-/Marktprofil (Installer only): Sprache bleibt systemgeführt, Land wird hier verwaltet.
+    const countrySelect = document.getElementById('countryProfileCountry');
+    const countryRaw = countrySelect ? String(countrySelect.value || '').trim().toUpperCase() : _nwSystemProfileCountry();
+    patch.countryProfile = deepMerge({}, (currentConfig && currentConfig.countryProfile) ? currentConfig.countryProfile : {});
+    patch.countryProfile.country = countryRaw === 'NL' ? 'NL' : 'DE';
+    patch.countryProfile.languageMode = 'system';
 
     // Plant
     const gcp = Number(els.gridConnectionPower.value);
@@ -13069,7 +13143,7 @@ if (els.ocppAutoDetect) {
   backupRefreshInfo().catch(() => {});
 
   // 0.8.7: Wenn die Lizenz in einem anderen Admin-Tab aktiviert wird, soll das bereits offene
-  // App-Center automatisch von "Keine Lizenz" auf EOS/HEMS umschalten und die Apps wieder anzeigen.
+  // App-Center automatisch von "Keine Lizenz" auf EOS/Home umschalten und die Apps wieder anzeigen.
   window.addEventListener('focus', () => { refreshLicenseForAppCenter('focus').catch(() => {}); });
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) refreshLicenseForAppCenter('visible').catch(() => {});

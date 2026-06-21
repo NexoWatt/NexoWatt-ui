@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: effa1230edeb8ef6ca364557d79790230f66a6fbdc6c0d0d838914857372d3c7
+ * Original-Hash: c48f02d53c95222076ebff73d58800ad17536a1e0386f221a51f0a963981b8e1
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:484a7255c47c15c8e3d5807ec8da980f18a97bd0b609e533829ba92ad7abacba
+ * Quell-Hash: sha256:fd29838acfb0cab6c65c59100a1315e59759d133fd5be6fe06cae3b5270399cb
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -896,18 +896,6 @@ class SpeicherRegelungModule extends BaseModule {
         const evPriorityCaps = (coreCaps && coreCaps.evPriority && typeof coreCaps.evPriority === 'object') ? coreCaps.evPriority : null;
         const evPriorityBlockStorageChargeRaw = !!(evPriorityCaps && evPriorityCaps.blockStorageCharge === true);
         const evPriorityStarvedWRaw = (evPriorityCaps && Number.isFinite(Number(evPriorityCaps.starvedW))) ? Math.max(0, Number(evPriorityCaps.starvedW)) : 0;
-        const storagePolicyCaps = (coreCaps && coreCaps.storagePolicy && typeof coreCaps.storagePolicy === 'object') ? coreCaps.storagePolicy : null;
-        let evcsStorageProtectedW = (storagePolicyCaps && Number.isFinite(Number(storagePolicyCaps.protectedEvPowerW)))
-            ? Math.max(0, Number(storagePolicyCaps.protectedEvPowerW))
-            : 0;
-        if (!(evcsStorageProtectedW > 0)) {
-            try {
-                const stProtectedW = await this._readOwnNumber('chargingManagement.control.storageProtectedEvPowerW');
-                if (Number.isFinite(Number(stProtectedW)) && Number(stProtectedW) > 0) evcsStorageProtectedW = Math.max(0, Number(stProtectedW));
-            } catch {
-                // ignore
-            }
-        }
         let importLimitW = null;
         let importLimitQuelle = '';
 
@@ -1649,7 +1637,7 @@ if (typeof soc === 'number') {
 						const commandedDischargeNowW = curSetW > 0 ? curSetW : 0;
 						const dischargeNowW = Math.max(measuredDischargeNowW, commandedDischargeNowW);
 						const safetyMarginW = 200;
-						const maxByDemandW = Math.max(0, importRawNowW + dischargeNowW + safetyMarginW - evcsStorageProtectedW);
+						const maxByDemandW = importRawNowW + dischargeNowW + safetyMarginW;
 						if (Number.isFinite(maxByDemandW) && maxByDemandW > 0) {
 							nextSetW = Math.min(nextSetW, maxByDemandW);
 						}
@@ -1826,7 +1814,7 @@ if (targetW === 0 && selfDischargeEnabled) {
     const commandedDischargeNowW = curSetW > 0 ? curSetW : 0;
     const dischargeNowW = Math.max(measuredDischargeNowW, commandedDischargeNowW);
     const safetyMarginW = 200; // bewusst konservativ; Feintuning über selfTargetGridW/Deadband/Rampe
-    const maxByDemandW = Math.max(0, importRawNowW + dischargeNowW + safetyMarginW - evcsStorageProtectedW);
+    const maxByDemandW = importRawNowW + dischargeNowW + safetyMarginW;
     if (Number.isFinite(maxByDemandW) && maxByDemandW > 0) {
         nextSetW = Math.min(nextSetW, maxByDemandW);
     }

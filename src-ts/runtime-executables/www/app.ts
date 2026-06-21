@@ -3435,6 +3435,14 @@ async function bootstrap() {
     cfg = await cfgRes.json();
     units = cfg.units || units;
 
+    // ioBroker-Systemsprache übernehmen: Backend liefert /config.locale aus system.config.common.language.
+    try {
+      const loc = cfg && cfg.locale && typeof cfg.locale === 'object' ? cfg.locale : {};
+      const lang = String(loc.htmlLang || loc.language || '').trim().toLowerCase();
+      if (lang) document.documentElement.setAttribute('lang', lang);
+      window.__nwLocale = loc || {};
+    } catch (_e) {}
+
     // Global config snapshot for UI helpers
     try { window.__nwCfg = cfg || {}; } catch(_e) { window.__nwCfg = {}; }
     // EMS-App Installations-/Aktiv-Status (nur Flags) – steuert dynamische Sichtbarkeit in der VIS
@@ -9103,17 +9111,17 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
 
   function evcsStorageAssistCustomerAllowed(index){
     const row = evcsConfigRow(index);
-    return !!(row && (row.storageAssistCustomerAllowed === true || row.customerStorageAssistAllowed === true || row.allowCustomerStorageAssist === true));
+    return !!(row && row.storageAssistCustomerAllowed === true);
   }
 
-  function applyStorageAssistUi(value){
+  function applyStorageAssistUi(enabled){
     if (!storageAssistButtons) return;
-    const v = !!value;
+    const want = !!enabled;
     const btns = storageAssistButtons.querySelectorAll('button[data-storage-assist]');
     btns.forEach(b => {
-      const raw = String(b.getAttribute('data-storage-assist') || 'false').toLowerCase();
-      const bv = raw === 'true' || raw === '1' || raw === 'yes' || raw === 'ja';
-      b.classList.toggle('active', bv === v);
+      const raw = String(b.getAttribute('data-storage-assist') || 'false').trim().toLowerCase();
+      const val = raw === 'true' || raw === '1' || raw === 'yes';
+      b.classList.toggle('active', val === want);
     });
   }
 
@@ -9425,8 +9433,8 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
     storageAssistButtons.addEventListener('click', async (e)=>{
       const b = e.target && e.target.closest ? e.target.closest('button[data-storage-assist]') : null;
       if (!b || b.disabled) return;
-      const raw = String(b.getAttribute('data-storage-assist') || 'false').toLowerCase();
-      const desired = raw === 'true' || raw === '1' || raw === 'yes' || raw === 'ja';
+      const raw = String(b.getAttribute('data-storage-assist') || 'false').trim().toLowerCase();
+      const desired = raw === 'true' || raw === '1' || raw === 'yes';
       pendingStorageAssist = desired;
       pendingStorageAssistUntil = Date.now() + 3000;
       applyStorageAssistUi(desired);
@@ -9619,18 +9627,18 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
       }
     }
 
-    // Speicher-Mitnutzung für diesen Ladepunkt – nur sichtbar, wenn der Installer sie freigegeben hat.
+    // Speicher-Mitnutzung: Installer-Freigabe pro Ladepunkt steuert Sichtbarkeit.
     if (storageAssistRow != null){
-      const installerAllowed = evcsStorageAssistCustomerAllowed(1) || d('chargingManagement.wallboxes.lp1.storageAssistCustomerAllowed') === true;
-      storageAssistRow.style.display = (!!hasEms && installerAllowed) ? '' : 'none';
-      if (!!hasEms && installerAllowed){
-        const stateVal = !!d('chargingManagement.wallboxes.lp1.userStorageAssistEnabled');
-        const effectiveVal = !!d('chargingManagement.wallboxes.lp1.effectiveStorageAssist');
+      const allowed = evcsStorageAssistCustomerAllowed(1) || d('chargingManagement.wallboxes.lp1.storageAssistCustomerAllowed') === true;
+      storageAssistRow.style.display = (!!hasEms && allowed) ? '' : 'none';
+      if (!!hasEms && allowed){
+        const userEnabledState = !!d('chargingManagement.wallboxes.lp1.userStorageAssistEnabled');
+        const effective = !!d('chargingManagement.wallboxes.lp1.effectiveStorageAssist');
         const reason = String(d('chargingManagement.wallboxes.lp1.storageAssistBlockedReason') || '').trim();
-        const batteryW = Number(d('chargingManagement.wallboxes.lp1.batteryContributionW') || 0);
-        const requested = (pendingStorageAssist !== null && now < pendingStorageAssistUntil) ? !!pendingStorageAssist : stateVal;
+        const batteryW = Number(d('chargingManagement.wallboxes.lp1.batteryContributionW') ?? 0);
+        const val = (pendingStorageAssist !== null && now < pendingStorageAssistUntil) ? !!pendingStorageAssist : userEnabledState;
         if (pendingStorageAssist !== null){
-          if (stateVal === pendingStorageAssist){
+          if (!!userEnabledState === !!pendingStorageAssist){
             pendingStorageAssist = null;
             pendingStorageAssistUntil = 0;
           } else if (now >= pendingStorageAssistUntil){
@@ -9638,15 +9646,14 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
             pendingStorageAssistUntil = 0;
           }
         }
-        applyStorageAssistUi(requested);
+        applyStorageAssistUi(val);
         if (storageAssistStatus != null){
-          storageAssistStatus.textContent = requested ? 'Speicher mitnutzen' : 'Speicher schützen';
+          storageAssistStatus.textContent = val ? 'Speicher mitnutzen' : 'Speicher schützen';
         }
         if (storageAssistHint != null){
-          if (!requested) storageAssistHint.textContent = 'Speicher bleibt für Hausverbrauch/Reserve geschützt.';
-          else if (effectiveVal && batteryW > 0) storageAssistHint.textContent = `Speicher unterstützt diesen Ladepunkt aktuell mit ca. ${Math.round(batteryW)} W.`;
-          else if (effectiveVal) storageAssistHint.textContent = 'Speicher darf diesen Ladepunkt unterstützen, sobald Budget/SoC es erlauben.';
-          else storageAssistHint.textContent = reason ? `Angefordert, aktuell blockiert: ${reason}` : 'Angefordert – wartet auf Speicher-/SoC-Freigabe.';
+          if (!val) storageAssistHint.textContent = 'Der Speicher wird für diesen Ladepunkt geschützt.';
+          else if (effective) storageAssistHint.textContent = `Speicher darf unterstützen${batteryW > 0 ? ' · Anteil ' + Math.round(batteryW) + ' W' : ''}.`;
+          else storageAssistHint.textContent = reason ? `Freigegeben, aktuell nicht aktiv: ${reason}` : 'Freigegeben, aktuell nicht aktiv.';
         }
       }
     }

@@ -60,6 +60,7 @@ const { BhkwControlModule } = require('./modules/bhkw-control');
 const { GeneratorControlModule } = require('./modules/generator-control');
 const { ThresholdControlModule } = require('./modules/threshold-control');
 const { AiAdvisorModule } = require('./modules/ai-advisor');
+const { CountryProfileModule } = require('./modules/country-profile');
 
 /**
  * Code-Teil: Klasse `ModuleManager`
@@ -214,6 +215,13 @@ class ModuleManager {
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     async init() {
+        // Länderprofil / Systemsprache – immer aktiv, damit DE/NL und UI-Sprache zentral bereitstehen.
+        this.modules.push({
+            key: 'countryProfile',
+            instance: new CountryProfileModule(this.adapter, this.dp),
+            enabledFn: () => true,
+        });
+
         // Speicher-Zuordnung (Installateur) – registriert st.* Datenpunkte
         this.modules.push({
             key: 'speicherMapping',
