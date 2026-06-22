@@ -16,6 +16,13 @@
  * - Das Wertkonto nutzt bei aktivem dynamischem Zeittarif den aktuellen Tarifpreis.
  * - Feste Preisannahmen sind Kunden-/Betreibereinstellungen aus dem Frontend
  *   (`settings.energyWallet*`) und keine Installer-/Admin-Konfiguration mehr.
+ *
+ * 0.8.23:
+ * - Das Kundenfrontend kann das Energie-Wertkonto über `settings.energyWalletEnabled`
+ *   vollständig ein-/ausschalten.
+ * - Stale-Fallback-Kandidaten erzeugen keinen gelben Nutzerhinweis mehr, wenn ein
+ *   frischer gültiger Ersatzwert verwendet wurde. Die Diagnostik bleibt intern erhalten,
+ *   aber die Nutzerkarte warnt nur noch bei echten kritischen Problemen.
  * - Installer-Config bleibt nur als Legacy-Fallback erhalten, damit Bestandsanlagen
  *   nach Updates keinen Wertverlust in der Berechnung bekommen.
  */
@@ -426,7 +433,15 @@ class EnergyWalletModule extends BaseModule {
 
     const read = (label, keys, opts = {}) => {
       const c = this._readCacheCandidate(keys, { staleMs, maxAbsW, positive: opts.positive === true });
-      if (c.staleSeen && c.staleSeen.length) staleSources.push(...c.staleSeen.map(k => `${label}:${k}`));
+
+      // Wichtiger Nutzerhinweis-Fix:
+      // Ein alter Kandidat in der Fallback-Liste darf die LIVE-Karte nicht gelb machen,
+      // wenn anschließend ein frischer gültiger Ersatzwert gefunden wurde. Beispiel:
+      // `ems.budget.pvPowerW` ist stale, aber `pvPower` ist frisch. Dann hat das
+      // Wertkonto alle benötigten Werte und der Kunde soll keinen Warnbalken sehen.
+      // Stale-Quellen werden deshalb nur als kritisch gemeldet, wenn für diese
+      // Messgröße gar kein verwendbarer Wert gefunden wurde.
+      if (!c.found && c.staleSeen && c.staleSeen.length) staleSources.push(...c.staleSeen.map(k => `${label}:${k}`));
       if (c.found) {
         activeSources[label] = c.key;
         if (c.clipped) clippedSources.push(`${label}:${c.key}`);
@@ -472,7 +487,10 @@ class EnergyWalletModule extends BaseModule {
     let dataQualityPercent = 100;
     if (!hasPvSource) dataQualityPercent -= 45;
     if (!hasGridSource) dataQualityPercent -= 45;
-    if (staleSources.length) dataQualityPercent -= Math.min(25, staleSources.length * 8);
+    // Stale-Quellen in der Fallback-Liste sind Diagnoseinformation, aber kein
+    // Nutzerfehler, solange PV und Netz aus frischen Ersatzwerten vorliegen. Deshalb
+    // reduzieren sie die sichtbare Datenqualität nicht mehr. Echte Probleme bleiben:
+    // fehlende Pflichtquellen, begrenzte Ausreißer oder unplausible Bilanz.
     if (clippedSources.length) dataQualityPercent -= Math.min(25, clippedSources.length * 12);
     if (plausibleBalanceWarn) dataQualityPercent -= 15;
     dataQualityPercent = clamp(dataQualityPercent, 0, 100);
@@ -482,9 +500,9 @@ class EnergyWalletModule extends BaseModule {
     if (!hasPvSource || !hasGridSource) {
       status = 'waiting-data';
       warning = `Energie-Wertkonto wartet auf ${missingSources.join(' und ')}.`;
-    } else if (staleSources.length || clippedSources.length || plausibleBalanceWarn) {
+    } else if (clippedSources.length || plausibleBalanceWarn) {
       status = 'warn';
-      warning = plausibleBalanceWarn || 'Einige Eingangswerte sind veraltet oder wurden plausibilisiert.';
+      warning = plausibleBalanceWarn || 'Einige Eingangswerte wurden auf plausible Grenzen begrenzt.';
     }
 
     const integratable = hasPvSource && hasGridSource && dataQualityPercent >= 40;
@@ -506,6 +524,14 @@ class EnergyWalletModule extends BaseModule {
 
   _isEnabled() {
     const cfg = this._cfg();
+
+    // Kundenfreiheit: Der Betreiber/Kunde darf das Energie-Wertkonto im normalen
+    // Frontend unter Einstellungen abschalten. Diese lokale Einstellung hat Vorrang
+    // vor der technischen Installer-/Legacy-Config. Damit bleiben Datenpunkt-Mapping
+    // und Lizenz unverändert, aber die Nutzerkarte und Berechnung pausieren sauber.
+    const customerEnabled = this._readStateBool(['settings.energyWalletEnabled'], true);
+    if (customerEnabled === false) return false;
+
     return cfg.enabled !== false;
   }
 

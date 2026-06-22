@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 845507c60fee61077bb1f61fd8ce8f5ad71fa1b28cc5b30f31d8f1dbff61fa7c
+ * Original-Hash: 0b78668322e055dd6a125e3249793b16d0b52a6dde8585a30cfc160a434f5564
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/dc-station-display.ts
- * Quell-Hash: sha256:19817d433f7f3f37715ad929a3d8840b60171ff080edbf08eb3b83380663ad3d
+ * Quell-Hash: sha256:f295c38a42a58f9ea28808aacff84f809899c3bbb08ec2f53eb9551c48525951
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -627,7 +627,7 @@
           height: window.innerHeight || 0,
           visibility: document.visibilityState || 'visible',
           language: lang(),
-          appVersion: '0.8.21',
+          appVersion: '0.8.23',
         }),
         headers: { 'Content-Type': 'application/json' },
       });
@@ -757,7 +757,7 @@
       <footer class="nw-display-footer">
         <span>${escapeHtml(t('lastUpdate'))}: ${escapeHtml(fmtTime(payload.generatedAt || lastOkTs))}</span>
         <span>${escapeHtml(t('reconnecting'))}</span>
-        <span>${escapeHtml(display.apiVersion || '0.8.21')}</span>
+        <span>${escapeHtml(display.apiVersion || '0.8.23')}</span>
         <span>${escapeHtml(t('directHardwareWrite'))}</span>
       </footer>`;
 

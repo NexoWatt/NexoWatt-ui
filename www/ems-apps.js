@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:be95cb4192a1d09c158036fb18c09eedabadff786c87d5d8c9e0325264f237b2
+ * Quell-Hash: sha256:0c2c13eb72c842914c8f5b6193bebbaa17bafdda8acac2dc470d2a28baf8cac6
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1665,7 +1665,7 @@ function collectAiAdvisorConfigFromUI(base) {
           </label>
         </div>
         <div class="nw-config-separator" style="margin:14px 0 10px;"></div>
-        <div class="nw-config-card__subtitle" style="margin-bottom:8px;">Energie-Wertkonto: Datenpunkt- und Länderbasis im Installerbereich; Kostenannahmen liegen im Nutzerfrontend unter Einstellungen → Dynamische Zeittarife.</div>
+        <div class="nw-config-card__subtitle" style="margin-bottom:8px;">Energie-Wertkonto: Datenpunkt- und Länderbasis im Installerbereich; Kostenannahmen und der Ein-/Aus-Schalter liegen im Nutzerfrontend unter Einstellungen → Energie-Wertkonto.</div>
         <div class="nw-config-empty" style="text-align:left;margin-bottom:10px;">
           Der Betreiber kann dort festen Netzstrompreis, Einspeise-/Rücklieferwert und Solar-Ladepunktwert pflegen. Ist ein dynamischer Zeittarif aktiv, nutzt das Wertkonto automatisch den aktuellen Tarifpreis.
         </div>

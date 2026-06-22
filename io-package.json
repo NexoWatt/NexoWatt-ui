@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.21",
+    "version": "0.8.23",
     "news": {
+      "0.8.23": {
+        "de": "Version 0.8.23: Energie-Wertkonto kann im Kundenfrontend ein-/ausgeschaltet werden, Preise stehen unter einem eigenen Abschnitt unterhalb der dynamischen Tarife und Warnhinweise bei frischen Ersatzwerten wurden entschärft.",
+        "en": "Version 0.8.23: Energy wallet can be enabled/disabled in the customer frontend, prices move into a dedicated section below dynamic tariffs, and warnings are relaxed when fresh fallback values are available."
+      },
+      "0.8.22": {
+        "de": "Version 0.8.22: DC Station Display speichert Betreiber-/Sessionwerte robuster, ergänzt Last-Session-je-LP, CSV-Exportbasis und npm-Release-Prüfung gegen ETARGET durch fehlende Registry-Versionen.",
+        "en": "Version 0.8.22: DC Station Display hardens operator/session persistence, adds last-session-per-connector, CSV export foundation and npm release verification to avoid ETARGET from missing registry versions."
+      },
       "0.8.21": {
         "de": "Version 0.8.21: Burger-Menü im Frontend gehärtet. Gemeinsame Guards verhindern doppelte Toggle-Handler zwischen App-Seiten, Reports und Shell. DC Station Display bleibt pro LP bedienbar; AC-Phasenumschaltung bleibt AC-only. Energie-Wertkonto nutzt weiter dynamische Tarife mit festen Preisen aus den Nutzer-Einstellungen.",
         "en": "Version 0.8.21: Hardens the frontend hamburger menu. Shared guards prevent duplicate toggle handlers between app pages, reports and shell. DC Station Display keeps per-connector controls; AC phase switching remains AC-only. Energy Wallet continues to use dynamic tariffs with fixed prices from user settings."
@@ -22,14 +30,6 @@
       "0.8.17": {
         "de": "Version 0.8.17: EOS DC Station Display Basis ergänzt. Pro angelegter DC-Ladestation kann im Installerbereich eine separate, tokenisierte Display-Seite mit zugeordneten LPs/Connectoren konfiguriert werden. Die Seite ist isoliert, touch-optimiert und steuert nur erlaubte LPs über sichere EMS-States.",
         "en": "Version 0.8.17: Adds the EOS DC Station Display foundation. Installers can configure a separate tokenized display page per DC charging station with assigned charge points/connectors. The page is isolated, touch-optimized and controls only assigned charge points through safe EMS states."
-      },
-      "0.8.16": {
-        "de": "Version 0.8.16: Energie-Wertkonto erweitert um Monats-/Jahreswerte, Persistenz über Neustart/Tageswechsel, Datenqualitäts-/Plausibilitätsdiagnosen und eine verbesserte Nutzerkarte. Home bleibt Nutzeransicht; Einstellungen bleiben im Installer/App-Center.",
-        "en": "Version 0.8.16: Extends the Energy Value Account with month/year values, restart/day-change persistence, data quality/plausibility diagnostics and an improved user card. Home remains a user view; settings remain in the installer App Center."
-      },
-      "0.8.15": {
-        "de": "Version 0.8.15: Energie-Wertkonto für Home und EOS ergänzt. Das Modul berechnet PV-Wert, lokale Nutzung, vermiedenen Netzbezug, Einspeisewert, Speicherwert und Solar-Ladepunktwert; Einstellungen bleiben im Installer/App-Center.",
-        "en": "Version 0.8.15: Adds the Energy Value Account for Home and EOS. The module calculates PV value, local use, avoided grid import, feed-in value, storage value and solar charging value; settings remain in the installer App Center."
       }
     },
     "title": "NexoWatt UI",
@@ -216,7 +216,11 @@
       "flowInvertPv": false,
       "flowInvertEv": false,
       "flowGridShowNet": false,
-      "dynamicTariff": false
+      "dynamicTariff": false,
+      "energyWalletEnabled": true,
+      "energyWalletFixedImportEurPerKwh": 0.35,
+      "energyWalletFeedInEurPerKwh": 0.08,
+      "energyWalletEvcsValueEurPerKwh": 0.35
     },
     "logic": {
       "enabled": true,

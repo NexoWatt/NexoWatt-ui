@@ -1,3 +1,18 @@
+## 0.8.23
+
+- Energie-Wertkonto: Nutzer-/Betreiberschalter im Frontend ergänzt, damit der Kunde die Anzeige freiwillig ein- oder ausschalten kann.
+- Einstellungen: Energie-Wertkonto-Preise aus dem dynamischen Tarif-Unterblock herausgelöst und als eigener Abschnitt unterhalb der Tarif-/Netzentgelt-Einstellungen platziert.
+- Diagnose: Gelber LIVE-Warnhinweis erscheint nicht mehr nur wegen veralteter Fallback-Kandidaten, wenn frische gültige PV-/Netzwerte verwendet werden.
+- Kommentare: Logik für Kundenfreiheit, Preisposition und Stale-Fallbacks im TS-Code dokumentiert.
+
+## 0.8.22
+
+- DC Station Display: Betreiber-/Sessionwerte pro Station robuster persistiert.
+- Last-Session-je-LP und Tageskennzeichen für Betreiberwerte ergänzt.
+- CSV-Exportbasis für Stations-/Sessiondaten unter `/api/display/station/<token>/operator.csv` vorbereitet.
+- npm-Release-Prüfung ergänzt: `npm run release:verify-npm` prüft nach dem Publish, ob die Paketversion wirklich in der Registry sichtbar ist. Dadurch wird vermieden, dass das EOS/ioBroker-Repository eine Version freigibt, die beim Upgrade mit `ETARGET` nicht gefunden wird.
+- Service-Worker Cache auf `nexowatt-cache-v322` erhöht.
+
 ## 0.8.21
 
 - Burger-Menü-Härtung: `nw-shell.js` übernimmt den Menübutton im Capture-Flow, damit Seiten-spezifische Menühandler und Shell-Fallback nicht doppelt toggeln.

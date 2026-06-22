@@ -371,7 +371,7 @@
           height: window.innerHeight || 0,
           visibility: document.visibilityState || 'visible',
           language: lang(),
-          appVersion: '0.8.21',
+          appVersion: '0.8.23',
         }),
         headers: { 'Content-Type': 'application/json' },
       });
@@ -457,7 +457,7 @@
       <footer class="nw-display-footer">
         <span>${escapeHtml(t('lastUpdate'))}: ${escapeHtml(fmtTime(payload.generatedAt || lastOkTs))}</span>
         <span>${escapeHtml(t('reconnecting'))}</span>
-        <span>${escapeHtml(display.apiVersion || '0.8.21')}</span>
+        <span>${escapeHtml(display.apiVersion || '0.8.23')}</span>
         <span>${escapeHtml(t('directHardwareWrite'))}</span>
       </footer>`;
 

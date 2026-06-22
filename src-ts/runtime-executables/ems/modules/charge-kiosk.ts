@@ -13,6 +13,11 @@
  * - Hersteller-offene Steuerbasis: Das Display erzeugt neutrale NexoWatt-Ladepunktkommandos.
  *   Die spätere Hardwareausführung darf über OCPP, Modbus, MQTT, REST, Herstelleradapter
  *   oder normale ioBroker-Datenpunkte erfolgen. Dieses Modul kennt bewusst kein OCPP-only Ziel.
+ *
+ * 0.8.22:
+ * - Persistente Betreiber-/Sessionzustände pro Station: Tageskennzeichen,
+ *   letzte Session je LP und CSV-Export-URL. Diese States sind bewusst kompakt,
+ *   damit ioBroker nicht mit einzelnen Ledger-Einträgen geflutet wird.
  */
 'use strict';
 
@@ -260,12 +265,18 @@ class ChargeKioskModule extends BaseModule {
       await mk('lastCommandJson', 'Letzter Display-Befehl JSON', 'string', 'json', '', '{}');
       await mk('lastCommandPlanJson', 'Letzter herstellerneutraler Befehlsplan JSON', 'string', 'json', '', '{}');
       await mk('lastCommandResult', 'Letztes Display-Befehlsergebnis', 'string', 'text', '', '');
+      await mk('operatorDayKey', 'Betreiber Tageskennung', 'string', 'text', '', '');
       await mk('sessionSummaryJson', 'Session-Zusammenfassung JSON', 'string', 'json', '', '{}');
       await mk('sessionSnapshotsJson', 'Aktuelle Session-Snapshots JSON', 'string', 'json', '', '[]');
       await mk('lastSessionJson', 'Letzte abgeschlossene/gestoppte Session JSON', 'string', 'json', '', '{}');
+      await mk('lastSessionsByLpJson', 'Letzte Session je LP JSON', 'string', 'json', '', '{}');
+      await mk('sessionExportJson', 'Session-/CSV-Exportbasis JSON', 'string', 'json', '', '{}');
+      await mk('csvExportUrl', 'CSV-Export URL', 'string', 'text', '', '');
       await mk('operatorSummaryJson', 'Betreiber-Zusammenfassung JSON', 'string', 'json', '', '{}');
+      await mk('operatorSessionsToday', 'Betreiber Sessions heute', 'number', 'value', '', 0);
       await mk('operatorKwhToday', 'Betreiber Energie heute', 'number', 'value.energy', 'kWh', 0);
       await mk('operatorRevenueToday', 'Betreiber Umsatz heute', 'number', 'value.currency', '€', 0);
+      await mk('operatorMaxKwToday', 'Betreiber Tagesmaximum', 'number', 'value.power', 'kW', 0);
       this._known.add(base);
     }
     const now = Date.now();
@@ -318,17 +329,31 @@ class ChargeKioskModule extends BaseModule {
       const snapshots = connectors.filter((c) => c && (Number(c.energyKwh) > 0 || c.status === 'charging'));
       const last = connectors.slice().reverse().find((c) => c && c.lastSession) || null;
       const operator = parsed.operator && typeof parsed.operator === 'object' ? parsed.operator : {};
+      const dayKey = String(parsed.dayKey || operator.dayKey || '').trim();
+      const lastByLp = operator.lastSessionsByLp && typeof operator.lastSessionsByLp === 'object'
+        ? operator.lastSessionsByLp
+        : {};
+      await a.setStateAsync(`${base}.operatorDayKey`, { val: dayKey, ack: true });
       await a.setStateAsync(`${base}.sessionSnapshotsJson`, { val: JSON.stringify(snapshots), ack: true });
       await a.setStateAsync(`${base}.lastSessionJson`, { val: JSON.stringify(last ? last.lastSession : {}), ack: true });
+      await a.setStateAsync(`${base}.lastSessionsByLpJson`, { val: JSON.stringify(lastByLp), ack: true });
+      await a.setStateAsync(`${base}.sessionExportJson`, { val: JSON.stringify({ ts: Date.now(), dayKey, stationId: id, operator, snapshots, lastSessionsByLp: lastByLp }), ack: true });
+      await a.setStateAsync(`${base}.csvExportUrl`, { val: station.token ? `/api/display/station/${encodeURIComponent(station.token)}/operator.csv` : '', ack: true });
       await a.setStateAsync(`${base}.operatorSummaryJson`, { val: JSON.stringify(operator), ack: true });
+      await a.setStateAsync(`${base}.operatorSessionsToday`, { val: Number(operator.completedSessionsToday) || 0, ack: true });
       await a.setStateAsync(`${base}.operatorKwhToday`, { val: Number(operator.energyTodayKwh) || 0, ack: true });
       await a.setStateAsync(`${base}.operatorRevenueToday`, { val: Number(operator.currentRevenueEur || operator.revenueEur) || 0, ack: true });
+      await a.setStateAsync(`${base}.operatorMaxKwToday`, { val: Number(operator.maxKwToday) || 0, ack: true });
     } catch (_e) {
       await a.setStateAsync(`${base}.sessionSnapshotsJson`, { val: '[]', ack: true });
       await a.setStateAsync(`${base}.lastSessionJson`, { val: '{}', ack: true });
+      await a.setStateAsync(`${base}.lastSessionsByLpJson`, { val: '{}', ack: true });
+      await a.setStateAsync(`${base}.sessionExportJson`, { val: '{}', ack: true });
       await a.setStateAsync(`${base}.operatorSummaryJson`, { val: '{}', ack: true });
+      await a.setStateAsync(`${base}.operatorSessionsToday`, { val: 0, ack: true });
       await a.setStateAsync(`${base}.operatorKwhToday`, { val: 0, ack: true });
       await a.setStateAsync(`${base}.operatorRevenueToday`, { val: 0, ack: true });
+      await a.setStateAsync(`${base}.operatorMaxKwToday`, { val: 0, ack: true });
     }
     return { id, base, hb, timeoutSec, ageSec, online, displayStatus, displayWarning };
   }

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:c3aca59d128d99e62ce0c06be411d4133f943117463b0374954bcc867ee33760
+ * Quell-Hash: sha256:e9c8f509de28236ec3a35037a78bf35d7509c7066da2c3c3431ca03ae776f47d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2489,6 +2489,7 @@ class NexoWattVis extends utils.Adapter {
       // Diese Werte gehören bewusst in die Frontend-Einstellungen, nicht in den Installerbereich.
       // Bei aktivem dynamischem Tarif nutzt das Modul den aktuellen Tarifpreis; diese Werte
       // bleiben dann Fallback bzw. Einspeise-/Solar-Ladebewertung.
+      energyWalletEnabled: { type: 'boolean', role: 'state', def: true },
       energyWalletFixedImportEurPerKwh: { type: 'number', role: 'value.price', def: 0.35 },
       energyWalletFeedInEurPerKwh: { type: 'number', role: 'value.price', def: 0.08 },
       energyWalletEvcsValueEurPerKwh: { type: 'number', role: 'value.price', def: 0.35 },
@@ -16428,6 +16429,81 @@ const _nwDisplayStartOfLocalDay = (ms) => {
   return d.getTime();
 };
 
+const _nwDisplayLocalDayKey = (ms = Date.now()) => {
+  const d = new Date(Number(ms) || Date.now());
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const _nwDisplayReadStationJsonState = (stationId, suffix, fallback) => {
+  try {
+    const raw = _nwDisplayStationStateVal(stationId, suffix, '');
+    if (raw === undefined || raw === null || raw === '') return fallback;
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return parsed === undefined || parsed === null ? fallback : parsed;
+  } catch (_e) {
+    return fallback;
+  }
+};
+
+const _nwDisplayCsvEscape = (value) => {
+  const s = String(value === null || value === undefined ? '' : value);
+  return /[;\"\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+const _nwDisplayStationOperatorCsv = (payload) => {
+  const station = payload && payload.station ? payload.station : {};
+  const operator = payload && payload.operator ? payload.operator : {};
+  const connectors = Array.isArray(payload && payload.connectors) ? payload.connectors : [];
+  const lines = [];
+  lines.push(['Typ','Station','LP','Status','Session_ID','Session_Status','Energie_kWh','Solar_kWh','Netz_kWh','Solar_Prozent','Kosten_EUR','Preis_EUR_kWh','Leistung_W','Start_ms','Dauer_s','Protokoll'].map(_nwDisplayCsvEscape).join(';'));
+  for (const c of connectors) {
+    if (!c) continue;
+    lines.push([
+      'Aktuell',
+      station.name || station.id || '',
+      c.id || '',
+      c.status || '',
+      c.sessionId || '',
+      c.sessionState || '',
+      Number(c.sessionEnergyKwh || 0).toFixed(3),
+      Number(c.sessionSolarKwh || 0).toFixed(3),
+      Number(c.sessionGridKwh || 0).toFixed(3),
+      c.sessionSolarSharePercent === null || c.sessionSolarSharePercent === undefined ? '' : String(c.sessionSolarSharePercent),
+      Number(c.sessionCostEur || 0).toFixed(2),
+      c.priceEurPerKwh === null || c.priceEurPerKwh === undefined ? '' : Number(c.priceEurPerKwh || 0).toFixed(4),
+      String(Math.round(Number(c.powerW || 0))),
+      String(Math.round(Number(c.sessionStartedAt || 0))),
+      String(Math.round(Number(c.sessionDurationSec || 0))),
+      c.protocolHint || station.protocolHint || 'manufacturer-open',
+    ].map(_nwDisplayCsvEscape).join(';'));
+    if (c.lastSession) {
+      lines.push([
+        'LetzteSession',
+        station.name || station.id || '',
+        c.id || '',
+        'completed',
+        c.lastSession.id || '',
+        'completed',
+        Number(c.lastSession.energyKwh || 0).toFixed(3),
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        String(Math.round(Number(c.lastSession.startTs || 0))),
+        String(Math.round(Number(c.lastSession.durationSec || 0))),
+        c.protocolHint || station.protocolHint || 'manufacturer-open',
+      ].map(_nwDisplayCsvEscape).join(';'));
+    }
+  }
+  lines.push(['SummeHeute', station.name || station.id || '', '', '', '', '', Number(operator.energyTodayKwh || 0).toFixed(3), '', '', '', Number(operator.currentRevenueEur || operator.revenueEur || 0).toFixed(2), '', String(Math.round(Number(operator.currentPowerW || 0))), '', '', operator.protocolHint || station.protocolHint || 'manufacturer-open'].map(_nwDisplayCsvEscape).join(';'));
+  return '\ufeff' + lines.join('\r\n');
+};
+
 const _nwDisplayBuildOperatorSummary = (station, connectors, now = Date.now()) => {
   // Betreiberbasis: Diese Zusammenfassung ist absichtlich protokolloffen.
   // Sie nutzt die kanonischen EVCS-Sessiondaten des Adapters und keine
@@ -16455,23 +16531,58 @@ const _nwDisplayBuildOperatorSummary = (station, connectors, now = Date.now()) =
   const activeConnectors = (Array.isArray(connectors) ? connectors : []).filter((c) => c && (c.status === 'charging' || c.charging));
   const currentPowerW = (Array.isArray(connectors) ? connectors : []).reduce((sum, c) => sum + (Number(c && c.powerW) || 0), 0);
   const currentRevenueEur = (Array.isArray(connectors) ? connectors : []).reduce((sum, c) => sum + (Number(c && c.sessionCostEur) || 0), 0);
+
+  const dayKey = _nwDisplayLocalDayKey(now);
+  const persistedDayKey = String(_nwDisplayStationStateVal(station && station.id, 'operatorDayKey', '') || '');
+  const persistedSameDay = persistedDayKey === dayKey;
+  const persistedLastByLp = _nwDisplayReadStationJsonState(station && station.id, 'lastSessionsByLpJson', {});
+  if (persistedLastByLp && typeof persistedLastByLp === 'object') {
+    for (const [lp, saved] of Object.entries(persistedLastByLp)) {
+      if (!saved || !assigned.has(_nwDisplayNormalizeLpKey(lp))) continue;
+      const key = _nwDisplayNormalizeLpKey(lp);
+      const savedEnd = Number(saved.endTs) || 0;
+      const curEnd = Number(lastByLp[key] && lastByLp[key].endTs) || 0;
+      if (!lastByLp[key] || savedEnd > curEnd) lastByLp[key] = saved;
+    }
+  }
+
+  const persistedSessionsToday = persistedSameDay ? _nwDisplayNum(_nwDisplayStationStateVal(station && station.id, 'operatorSessionsToday', 0), 0) : 0;
+  const persistedEnergyToday = persistedSameDay ? _nwDisplayNum(_nwDisplayStationStateVal(station && station.id, 'operatorKwhToday', 0), 0) : 0;
+  const persistedMaxKwToday = persistedSameDay ? _nwDisplayNum(_nwDisplayStationStateVal(station && station.id, 'operatorMaxKwToday', 0), 0) : 0;
+
+  // Nach Adapter-Neustart kann der flüchtige EVCS-Session-Puffer leer sein.
+  // Dann bleiben die zuletzt persistierten Betreiberwerte für den laufenden Tag erhalten,
+  // anstatt im Display auf 0 zurückzuspringen. Sobald wieder neue Sessions im Puffer
+  // vorhanden sind, werden die Werte aus der Live-Auswertung übernommen.
+  const hasBufferedSessionsForToday = completedToday > 0 || energyTodayKwh > 0;
+  if (!hasBufferedSessionsForToday && persistedSameDay) {
+    completedToday = Math.max(completedToday, persistedSessionsToday);
+    energyTodayKwh = Math.max(energyTodayKwh, persistedEnergyToday);
+    maxKwToday = Math.max(maxKwToday, persistedMaxKwToday);
+  }
+
+  const lastSessionsByLp = Object.fromEntries(Object.entries(lastByLp).map(([lp, row]) => [lp, {
+    id: String(row && row.id || ''),
+    startTs: Number(row && row.startTs) || 0,
+    endTs: Number(row && row.endTs) || 0,
+    energyKwh: Math.max(0, Math.round((Number(row && row.energyKwh) || 0) * 1000) / 1000),
+    durationSec: Math.max(0, Math.round(Number(row && row.durationSec) || 0)),
+    maxKw: Math.max(0, Math.round((Number(row && row.maxKw) || 0) * 100) / 100),
+    protocolHint: String((station && station.protocolHint) || 'manufacturer-open'),
+  }]));
+
   return {
     generatedAt: now,
+    dayKey,
     bridge: String((station && station.controlBridge) || 'charging-management'),
     protocolHint: String((station && station.protocolHint) || 'manufacturer-open'),
-    completedSessionsToday: completedToday,
+    completedSessionsToday: Math.round(completedToday),
     activeSessions: activeConnectors.length,
     energyTodayKwh: Math.round(energyTodayKwh * 1000) / 1000,
     maxKwToday: Math.round(maxKwToday * 100) / 100,
     currentPowerW: Math.round(currentPowerW),
     currentRevenueEur: Math.round(currentRevenueEur * 100) / 100,
-    lastSessionsByLp: Object.fromEntries(Object.entries(lastByLp).map(([lp, row]) => [lp, {
-      startTs: Number(row && row.startTs) || 0,
-      endTs: Number(row && row.endTs) || 0,
-      energyKwh: Math.max(0, Math.round((Number(row && row.energyKwh) || 0) * 1000) / 1000),
-      durationSec: Math.max(0, Math.round(Number(row && row.durationSec) || 0)),
-      maxKw: Math.max(0, Math.round((Number(row && row.maxKw) || 0) * 100) / 100),
-    }])),
+    lastSessionsByLp,
   };
 };
 const _nwDisplayWriteStationState = async (stationId, suffix, value, ack = true) => {
@@ -16638,7 +16749,7 @@ const _nwDisplayBuildPayload = (station) => {
       layoutMode: station.layoutMode || _nwDisplayLayoutMode('auto', connectors.length),
     },
     display: {
-      apiVersion: '0.8.20',
+      apiVersion: '0.8.23',
       manufacturerOpen: true,
       controlBridge: station.controlBridge || 'charging-management',
       controlProfile: station.controlProfile || 'chargingManagement',
@@ -16725,10 +16836,36 @@ const _nwDisplayWriteCommandState = async (station, lpKey, intent) => {
 const _nwDisplayPersistSessionOperatorStates = async (station, payload) => {
   try {
     if (!station || !payload) return;
-    const sessionSummary = {
-      ts: Date.now(),
-      operator: payload.operator || {},
-      connectors: (payload.connectors || []).map((c) => ({
+    const now = Date.now();
+    const operator = payload.operator || {};
+    const dayKey = String(operator.dayKey || _nwDisplayLocalDayKey(now));
+    const previousDayKey = String(_nwDisplayStationStateVal(station.id, 'operatorDayKey', '') || '');
+    const dayChanged = previousDayKey && previousDayKey !== dayKey;
+
+    // 0.8.22 Persistenz: Last-Session-je-LP und Betreiberwerte werden als kompakte
+    // JSON-/Summenstates gespiegelt. Dadurch bleiben DC-Display und Betreiberansicht
+    // nach Adapter-Neustart stabil, ohne dass das Modul OCPP-Transaktionen kennen muss.
+    const previousLastByLp = dayChanged ? {} : _nwDisplayReadStationJsonState(station.id, 'lastSessionsByLpJson', {});
+    const lastSessionsByLp = previousLastByLp && typeof previousLastByLp === 'object' ? { ...previousLastByLp } : {};
+    const connectors = (payload.connectors || []).map((c) => {
+      const lp = _nwDisplayNormalizeLpKey(c && c.id);
+      const last = c && c.lastSession ? c.lastSession : (operator.lastSessionsByLp && operator.lastSessionsByLp[lp] ? operator.lastSessionsByLp[lp] : null);
+      if (lp && last) {
+        const savedEnd = Number(lastSessionsByLp[lp] && lastSessionsByLp[lp].endTs) || 0;
+        const newEnd = Number(last.endTs) || Number(last.startTs) || 0;
+        if (!lastSessionsByLp[lp] || newEnd >= savedEnd) {
+          lastSessionsByLp[lp] = {
+            id: String(last.id || ''),
+            startTs: Number(last.startTs) || 0,
+            endTs: Number(last.endTs) || 0,
+            durationSec: Math.max(0, Math.round(Number(last.durationSec) || 0)),
+            energyKwh: Math.max(0, Math.round((Number(last.energyKwh) || 0) * 1000) / 1000),
+            maxKw: Math.max(0, Math.round((Number(last.maxKw) || 0) * 100) / 100),
+            protocolHint: c.protocolHint || payload?.station?.protocolHint || 'manufacturer-open',
+          };
+        }
+      }
+      return {
         id: c.id,
         status: c.status,
         energyKwh: c.sessionEnergyKwh,
@@ -16738,19 +16875,36 @@ const _nwDisplayPersistSessionOperatorStates = async (station, payload) => {
         costEur: c.sessionCostEur,
         sessionId: c.sessionId || '',
         sessionState: c.sessionState || '',
-        lastSession: c.lastSession || null,
+        lastSession: last || null,
         bridge: c.controlBridge || 'charging-management',
         protocolHint: c.protocolHint || payload?.station?.protocolHint || 'manufacturer-open',
-      })),
+      };
+    });
+    const sessionSummary = { ts: now, dayKey, operator, connectors };
+    const activeSnapshots = connectors.filter((c) => c && (Number(c.energyKwh) > 0 || c.status === 'charging'));
+    const last = connectors.slice().reverse().find((c) => c && c.lastSession) || null;
+    const exportPayload = {
+      ts: now,
+      dayKey,
+      station: payload.station || {},
+      operator,
+      activeSnapshots,
+      lastSessionsByLp,
+      csvUrl: `/api/display/station/${encodeURIComponent(String(station.token || ''))}/operator.csv`,
     };
     const base = station.id;
+    await _nwDisplayWriteStationState(base, 'operatorDayKey', dayKey, true);
     await _nwDisplayWriteStationState(base, 'sessionSummaryJson', JSON.stringify(sessionSummary), true);
-    await _nwDisplayWriteStationState(base, 'sessionSnapshotsJson', JSON.stringify(sessionSummary.connectors.filter((c) => c && (Number(c.energyKwh) > 0 || c.status === 'charging'))), true);
-    const last = sessionSummary.connectors.slice().reverse().find((c) => c && c.lastSession) || null;
+    await _nwDisplayWriteStationState(base, 'sessionSnapshotsJson', JSON.stringify(activeSnapshots), true);
     await _nwDisplayWriteStationState(base, 'lastSessionJson', JSON.stringify(last ? last.lastSession : {}), true);
-    await _nwDisplayWriteStationState(base, 'operatorSummaryJson', JSON.stringify(sessionSummary.operator || {}), true);
-    await _nwDisplayWriteStationState(base, 'operatorKwhToday', Number(sessionSummary.operator && sessionSummary.operator.energyTodayKwh) || 0, true);
-    await _nwDisplayWriteStationState(base, 'operatorRevenueToday', Number(sessionSummary.operator && (sessionSummary.operator.currentRevenueEur || sessionSummary.operator.revenueEur)) || 0, true);
+    await _nwDisplayWriteStationState(base, 'lastSessionsByLpJson', JSON.stringify(lastSessionsByLp), true);
+    await _nwDisplayWriteStationState(base, 'sessionExportJson', JSON.stringify(exportPayload), true);
+    await _nwDisplayWriteStationState(base, 'csvExportUrl', exportPayload.csvUrl, true);
+    await _nwDisplayWriteStationState(base, 'operatorSummaryJson', JSON.stringify(operator || {}), true);
+    await _nwDisplayWriteStationState(base, 'operatorSessionsToday', Number(operator.completedSessionsToday) || 0, true);
+    await _nwDisplayWriteStationState(base, 'operatorKwhToday', Number(operator.energyTodayKwh) || 0, true);
+    await _nwDisplayWriteStationState(base, 'operatorRevenueToday', Number(operator.currentRevenueEur || operator.revenueEur) || 0, true);
+    await _nwDisplayWriteStationState(base, 'operatorMaxKwToday', Number(operator.maxKwToday) || 0, true);
   } catch (_e) {}
 };
 
@@ -16770,7 +16924,7 @@ const _nwDisplayExecuteStationCommand = async (station, lpKey, action, mode, ext
     mode,
     mode === 'solar' ? 'pv' : (mode === 'fast' ? 'boost' : 'auto')
   );
-  commandPayload.version = '0.8.20';
+  commandPayload.version = '0.8.23';
   commandPayload.directHardwareWrite = false;
   commandPayload.extra = extra && typeof extra === 'object' ? extra : {};
   const writes = [];
@@ -16884,6 +17038,24 @@ app.get('/api/display/station/:token', async (req, res) => {
   }
 });
 
+app.get('/api/display/station/:token/operator.csv', async (req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwDisplayIsLicensed()) return res.status(403).type('text/plain').send('EOS-Lizenz erforderlich.');
+    const station = _nwDisplayFindStation(req.params && req.params.token);
+    if (!station) return res.status(404).type('text/plain').send('Station nicht gefunden.');
+    const payload = _nwDisplayBuildPayload(station);
+    await _nwDisplayPersistSessionOperatorStates(station, payload);
+    const dayKey = _nwDisplayLocalDayKey(Date.now());
+    const fileStation = _nwDisplaySafeId(station.id || 'station');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="NexoWatt_DC_${fileStation}_${dayKey}.csv"`);
+    return res.status(200).send(_nwDisplayStationOperatorCsv(payload));
+  } catch (e) {
+    return res.status(500).type('text/plain').send('CSV Export Fehler: ' + String(e && e.message ? e.message : e));
+  }
+});
+
 app.post('/api/display/station/:token/heartbeat', async (req, res) => {
   try {
     sendNoStore(res);
@@ -16901,7 +17073,7 @@ app.post('/api/display/station/:token/heartbeat', async (req, res) => {
       height: Number(body.height) || 0,
       userAgent: String((req.headers && req.headers['user-agent']) || '').slice(0, 180),
       language: String(body.language || '').slice(0, 16),
-      appVersion: String(body.appVersion || '0.8.19').slice(0, 32),
+      appVersion: String(body.appVersion || '0.8.23').slice(0, 32),
     };
     await _nwDisplayWriteStationState(station.id, 'lastDisplayInfoJson', JSON.stringify(displayInfo), true);
     return res.json({ ok: true, stationId: station.id, ts: now, watchdog: _nwDisplayReadStationRuntime(station, now) });
@@ -20725,7 +20897,7 @@ return res.json(out);
       // Tariff/charging settings
       'dynamicTariff','storagePower','price','priority','tariffMode',
       // Energie-Wertkonto Preise: Kunden-/Betreiberwerte aus settings.html.
-      'energyWalletFixedImportEurPerKwh','energyWalletFeedInEurPerKwh','energyWalletEvcsValueEurPerKwh',
+      'energyWalletEnabled','energyWalletFixedImportEurPerKwh','energyWalletFeedInEurPerKwh','energyWalletEvcsValueEurPerKwh',
       // PV Saisonprofil (Quartale)
       'tariffPvSeasonEnabled','tariffPvSeasonAiEnabled','tariffPvSeasonQ1Factor','tariffPvSeasonQ2Factor','tariffPvSeasonQ3Factor','tariffPvSeasonQ4Factor',
       // Zeitvariables Netzentgelt (HT/NT)

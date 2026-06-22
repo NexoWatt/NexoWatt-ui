@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/app.ts
- * Quell-Hash: sha256:e6b027bc21d255301b42d820c7a86904129c0478df4b59ed6f1d32b7cd7fea00
+ * Quell-Hash: sha256:3f1912b2820a57b5a71f575e0de3d4947175ce3bc46f94f7e53acec3bbfc4387
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -3819,6 +3819,18 @@ function initSettingsPanel(){
     try { if (dynToggle) syncToggleButtonsForInputId('s_dyn_toggle'); } catch (_e) {}
   };
 
+
+  const energyWalletToggle = document.getElementById('s_energyWalletEnabled');
+  const energyWalletPriceBlock = document.getElementById('energyWalletPriceBlock');
+  const updateEnergyWalletSettingsVisibility = ()=>{
+    // Nutzerfreiheit: Die Wertkonto-Karte kann im Frontend komplett deaktiviert werden.
+    // Die Preisfelder bleiben technisch vorhanden, werden aber ausgeblendet, wenn der
+    // Kunde das Energie-Wertkonto nicht sehen möchte. Datenpunkt-/Modulkonfiguration
+    // bleibt weiterhin ausschließlich im Installer/App-Center.
+    if (energyWalletPriceBlock) energyWalletPriceBlock.style.display = (!energyWalletToggle || energyWalletToggle.checked) ? '' : 'none';
+    try { if (energyWalletToggle) syncToggleButtonsForInputId('s_energyWalletEnabled'); } catch (_e) {}
+  };
+
   /**
    * Code-Teil: Arrow-Funktion `normalizePriorityValue`
    * Zweck: normalisiert Eingaben/Anzeigeformate und schützt gegen ungültige Werte.
@@ -3892,6 +3904,7 @@ function initSettingsPanel(){
   updatePriorityLabel();
   updateTariffModeLabel();
   updateDynVisibility();
+  updateEnergyWalletSettingsVisibility();
 
   // Zeitvariables Netzentgelt (HT/NT) – UI
   const netFeeToggle = document.getElementById('s_netFeeEnabled');
@@ -4143,6 +4156,13 @@ function initSettingsPanel(){
   if (dynToggle) {
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an dynToggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     dynToggle.addEventListener('change', updateDynVisibility);
+  }
+  if (energyWalletToggle && !energyWalletToggle.dataset.boundEnergyWalletSettings) {
+    energyWalletToggle.dataset.boundEnergyWalletSettings = '1';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an energyWalletToggle.
+    // Beim Abschalten verschwindet die Wertkonto-Karte im LIVE-Bereich nach dem nächsten
+    // EMS-Tick; die Preisfelder werden sofort ausgeblendet.
+    energyWalletToggle.addEventListener('change', updateEnergyWalletSettingsVisibility);
   }
 
   // PV Saisonprofil
@@ -8794,7 +8814,8 @@ function updateEnergyWalletLiveUi() {
   if (!card) return;
   _nwEnergyWalletEnsureExtendedUi(card);
   const walletCfg = window.__nwCfg && window.__nwCfg.energyWallet && typeof window.__nwCfg.energyWallet === 'object' ? window.__nwCfg.energyWallet : {};
-  const enabled = walletCfg.showOnLive !== false && (_nwEnergyWalletStateValue('energyWallet.enabled', false) === true || String(_nwEnergyWalletStateValue('energyWallet.enabled', '')).toLowerCase() === 'true');
+  const customerEnabled = _nwEnergyWalletStateValue('settings.energyWalletEnabled', true) !== false && String(_nwEnergyWalletStateValue('settings.energyWalletEnabled', 'true')).toLowerCase() !== 'false';
+  const enabled = walletCfg.showOnLive !== false && customerEnabled && (_nwEnergyWalletStateValue('energyWallet.enabled', false) === true || String(_nwEnergyWalletStateValue('energyWallet.enabled', '')).toLowerCase() === 'true');
   const value = _nwEnergyWalletNum('energyWallet.today.valueEur', 0);
   const monthValue = _nwEnergyWalletNum('energyWallet.month.valueEur', 0);
   const yearValue = _nwEnergyWalletNum('energyWallet.year.valueEur', 0);

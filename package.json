@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.8.21",
+  "version": "0.8.23",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -225,12 +225,15 @@
     "test:app-center-install-colors": "npm run clean:ts && tsc -p tsconfig.app-center-install-colors.json && node build-ts/app-center-install-colors/tests/app-center-install-colors-runtime.js",
     "publish:deps": "node scripts/ensure-publish-dev-deps.js",
     "test:license-editions": "node scripts/verify-license-editions.js",
-    "publish:strict": "npm run publish:check && npm publish",
+    "publish:strict": "npm run publish:check && npm publish && npm run release:verify-npm",
     "test:charging-phase-selection": "node scripts/verify-ts-charging-phase-selection.js",
     "test:charging-phase-ui": "node scripts/verify-ts-charging-phase-ui.js",
     "test:charging-storage-assist-policy": "node scripts/verify-ts-charging-storage-assist-policy.js",
     "test:dc-station-display": "node scripts/verify-dc-station-display.js",
-    "test:burger-menu-guard": "node scripts/verify-burger-menu-guard.js"
+    "test:burger-menu-guard": "node scripts/verify-burger-menu-guard.js",
+    "release:verify-npm": "node scripts/verify-npm-registry-version.js",
+    "test:npm-release-guard": "node scripts/verify-npm-release-guard-static.js",
+    "test:energy-wallet-customer-settings": "node scripts/verify-energy-wallet-customer-settings.js"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",

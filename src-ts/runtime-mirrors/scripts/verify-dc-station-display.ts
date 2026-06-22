@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b5e91296d46adfac4b9dfd7a3edc3ded09dbcc535e9a0cabbabdfb6163047406
+ * Original-Hash: c155a9701eae9891f76758f28c57e71290a5625f9b13cbb58e6139b162eb1055
  */
 
 /**
@@ -109,6 +109,11 @@ mustContain('src-ts/runtime-executables/main.ts', 'manufacturerOpen', 'herstelle
 mustContain('src-ts/runtime-executables/main.ts', '_nwDisplayWriteCommandState', 'frei mappbarer Command-State');
 mustContain('src-ts/runtime-executables/main.ts', 'directHardwareWrite: false', 'kein direkter Hardware-/OCPP-Zwang');
 mustContain('src-ts/runtime-executables/main.ts', '_nwDisplayBuildOperatorSummary', 'Betreiber-/Session-Zusammenfassung');
+mustContain('src-ts/runtime-executables/main.ts', '_nwDisplayLocalDayKey', 'Betreiber-Tageskennung fuer Session-Persistenz');
+mustContain('src-ts/runtime-executables/main.ts', '_nwDisplayStationOperatorCsv', 'CSV-Exportbasis fuer DC-Station');
+mustContain('src-ts/runtime-executables/main.ts', "app.get('/api/display/station/:token/operator.csv'", 'CSV-Exportroute fuer Station');
+mustContain('src-ts/runtime-executables/main.ts', 'lastSessionsByLpJson', 'persistente letzte Session je LP');
+mustContain('src-ts/runtime-executables/main.ts', 'operatorDayKey', 'persistente Tageskennung fuer Betreiberwerte');
 
 mustContain('src-ts/runtime-executables/ems/modules/charge-kiosk.ts', 'chargeKiosk.watchdog.status', 'globaler Watchdog-Status');
 mustContain('src-ts/runtime-executables/ems/modules/charge-kiosk.ts', 'displayStatus', 'Stations-Displaystatus');
@@ -121,6 +126,9 @@ mustContain('src-ts/runtime-executables/ems/modules/charge-kiosk.ts', 'controlBr
 mustContain('src-ts/runtime-executables/ems/modules/charge-kiosk.ts', 'OCPP, Modbus, MQTT', 'Herstelleroffenheit dokumentiert');
 mustContain('src-ts/runtime-executables/ems/modules/charge-kiosk.ts', 'controlBridge', 'herstellerneutrale Steuerbrücke State');
 mustContain('src-ts/runtime-executables/ems/modules/charge-kiosk.ts', 'operatorSummaryJson', 'Betreiber-Summary State');
+mustContain('src-ts/runtime-executables/ems/modules/charge-kiosk.ts', 'operatorDayKey', 'Betreiber-Tageskennung State');
+mustContain('src-ts/runtime-executables/ems/modules/charge-kiosk.ts', 'lastSessionsByLpJson', 'Letzte Session je LP State');
+mustContain('src-ts/runtime-executables/ems/modules/charge-kiosk.ts', 'csvExportUrl', 'CSV-Export URL State');
 
 mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'layoutClass', 'Frontend-Layoutklasse');
 mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'nw-display-banner', 'Display-Warnbanner');
@@ -160,6 +168,6 @@ mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'data-ck-field="contro
 mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'Kein OCPP-Zwang', 'Installer-Hinweis zur Herstelleroffenheit');
 mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'data-ck-field="controlBridge"', 'Steuerbrücke im Installer');
 mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'data-ck-field="protocolHint"', 'Protokoll-Hinweis im Installer');
-mustMatch('package.json', /"version"\s*:\s*"0\.8\.21"/, 'Paketversion 0.8.21');
+mustMatch('package.json', /"version"\s*:\s*"0\.8\.2[2-9]"/, 'Paketversion 0.8.22 oder neuer');
 
 console.log('[dc-station-display] OK: Display-API, Watchdog, Layout, Wartungsmodus und Session-/Betreiberbasis und herstelleroffene Steuerbrücke sind abgesichert.');
