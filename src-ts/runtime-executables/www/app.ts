@@ -8787,6 +8787,12 @@ function _nwEnergyWalletMoney(value) {
 }
 
 
+function _nwEnergyWalletKwh(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '0,000 kWh';
+  try { return n.toLocaleString('de-DE', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' kWh'; } catch (_e) { return n.toFixed(3).replace('.', ',') + ' kWh'; }
+}
+
 function _nwEnergyWalletPricePerKwh(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '';
@@ -8814,6 +8820,16 @@ function _nwEnergyWalletEnsureExtendedUi(card) {
       <div><strong id="energyWalletQualityValue">0 %</strong><span>Datenqualität</span></div>
     `;
     card.appendChild(period);
+
+    const exportGuard = document.createElement('div');
+    exportGuard.className = 'nw-energy-wallet-periods nw-energy-wallet-exportguard hidden';
+    exportGuard.id = 'energyWalletExportGuardGrid';
+    exportGuard.innerHTML = `
+      <div><strong id="energyWalletCurtailedValue">0,00 €</strong><span>Abregelung</span></div>
+      <div><strong id="energyWalletUnusedPvValue">0,00 €</strong><span>nicht lokal genutzt</span></div>
+      <div><strong id="energyWalletCurtailedKwh">0,000 kWh</strong><span>abgeregelt</span></div>
+    `;
+    card.appendChild(exportGuard);
 
     const price = document.createElement('div');
     price.className = 'nw-energy-wallet-price-source hidden';
@@ -8865,6 +8881,16 @@ function updateEnergyWalletLiveUi() {
   setText('energyWalletMonthValue', _nwEnergyWalletMoney(monthValue));
   setText('energyWalletYearValue', _nwEnergyWalletMoney(yearValue));
   setText('energyWalletQualityValue', `${Math.round(quality)} %`);
+  const curtailedKwh = _nwEnergyWalletNum('energyWallet.today.curtailedKwh', 0);
+  const curtailedValue = _nwEnergyWalletNum('energyWallet.today.curtailedValueEur', 0);
+  const unusedValue = _nwEnergyWalletNum('energyWallet.today.unusedPvValueEur', 0);
+  setText('energyWalletCurtailedValue', _nwEnergyWalletMoney(curtailedValue));
+  setText('energyWalletUnusedPvValue', _nwEnergyWalletMoney(unusedValue));
+  setText('energyWalletCurtailedKwh', _nwEnergyWalletKwh(curtailedKwh));
+  try {
+    const eg = document.getElementById('energyWalletExportGuardGrid');
+    if (eg) eg.classList.toggle('hidden', !(curtailedKwh > 0.0001 || curtailedValue > 0.001 || unusedValue > 0.001));
+  } catch (_e) {}
   try {
     const priceEl = document.getElementById('energyWalletPriceSourceText');
     if (priceEl) {

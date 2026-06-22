@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 58102515e9d999fafa8cbaadc2d77df4c36fd2445feb6f4a4b9b16d7186a827a
+ * Original-Hash: 0e19e779018ea805036f1288e4c1ff7bddc1a4eddfcf88e89fd4adf176e087df
  */
 
 /**

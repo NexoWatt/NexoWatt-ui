@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: a5fa2d665218b6cb0b1e985ca28a938902ea8be1beb35da0a46b948a7d03191a
+ * Original-Hash: e63eda1cdbac6cd4d6c84fd513b27a0b7605e50d936930313f2fcadb1f17bf39
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/energy-wallet.ts
- * Quell-Hash: sha256:e8939c4cd313c1ddb54e8edd17a0d2db8c1f008d78b7f92e02b2f9fd98eab343
+ * Quell-Hash: sha256:8adfa4b82d5d231d5c04b6aab3aa6dc2c6910ca4d5029bd6e8ee62743f7077c9
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -77,6 +77,11 @@
  *   dynamischer Tarif, Legacy-Config oder Fallback.
  * - Dynamische Tarifpreise bekommen Quelle, Alter und Stale-Prüfung, damit ein
  *   veralteter Zeittarif nicht unbemerkt als aktueller Arbeitspreis verwendet wird.
+ *
+ * 0.8.27:
+ * - Vorbereitende Verbindung zum Local kWh Ledger. Die Wallet liest nur den
+ *   Bridge-Payload `energyLedger.walletBridge.summaryJson` und zählt ihn bewusst nicht
+ *   noch einmal in die Wallet-Werte hinein. So entstehen keine doppelten kWh.
  */
 'use strict';
 
@@ -230,6 +235,9 @@ function emptyAcc() {
     evcsValueEur: 0,
     storageValueEur: 0,
     potentialAdditionalValueEur: 0,
+    curtailedKwh: 0,
+    curtailedValueEur: 0,
+    unusedPvValueEur: 0,
   };
 }
 
@@ -319,6 +327,16 @@ class EnergyWalletModule extends BaseModule {
       common: { name: 'Energie-Wertkonto konfigurierte Preise' },
       native: {},
     });
+    await a.setObjectNotExistsAsync('energyWallet.ledgerBridge', {
+      type: 'channel',
+      common: { name: 'Local kWh Ledger Brücke' },
+      native: {},
+    });
+    await a.setObjectNotExistsAsync('energyWallet.exportGuardBridge', {
+      type: 'channel',
+      common: { name: 'Export Guard Brücke' },
+      native: {},
+    });
 
 /**
  * Code-Teil: mk
@@ -376,6 +394,23 @@ class EnergyWalletModule extends BaseModule {
     await mk('energyWallet.configuredPrices.currentDynamicPriceAgeSec', 'Alter dynamischer Tarifpreis', 'number', 'value.interval', 's', 0);
     await mk('energyWallet.configuredPrices.currentDynamicPriceLastUpdate', 'Zeitstempel dynamischer Tarifpreis', 'number', 'value.time', '', 0);
     await mk('energyWallet.configuredPrices.dynamicTariffWarning', 'Hinweis dynamischer Tarif', 'string', 'text', '', '');
+
+    await mk('energyWallet.ledgerBridge.available', 'Local kWh Ledger verfügbar', 'boolean', 'indicator', '', false);
+    await mk('energyWallet.ledgerBridge.countingMode', 'Ledger-Zählmodus', 'string', 'text', '', 'reference-only');
+    await mk('energyWallet.ledgerBridge.todayEvcsKwh', 'Ledger EVCS heute', 'number', 'value.energy', 'kWh', 0);
+    await mk('energyWallet.ledgerBridge.todayLocalKwh', 'Ledger lokal heute', 'number', 'value.energy', 'kWh', 0);
+    await mk('energyWallet.ledgerBridge.todayValueEur', 'Ledger Wert heute', 'number', 'value.currency', '€', 0);
+    await mk('energyWallet.ledgerBridge.monthEvcsKwh', 'Ledger EVCS Monat', 'number', 'value.energy', 'kWh', 0);
+    await mk('energyWallet.ledgerBridge.yearEvcsKwh', 'Ledger EVCS Jahr', 'number', 'value.energy', 'kWh', 0);
+    await mk('energyWallet.ledgerBridge.summaryJson', 'Ledger-Brücke JSON', 'string', 'json', '', '{}');
+
+    await mk('energyWallet.exportGuardBridge.available', 'Export Guard Diagnose verfügbar', 'boolean', 'indicator', '', false);
+    await mk('energyWallet.exportGuardBridge.curtailmentPowerW', 'aktuelle geschätzte Abregelungsleistung', 'number', 'value.power', 'W', 0);
+    await mk('energyWallet.exportGuardBridge.exportOverLimitW', 'Einspeisung über Limit', 'number', 'value.power', 'W', 0);
+    await mk('energyWallet.exportGuardBridge.allowedExportW', 'erlaubte Einspeiseleistung', 'number', 'value.power', 'W', 0);
+    await mk('energyWallet.exportGuardBridge.currentExportW', 'aktuelle Einspeisung', 'number', 'value.power', 'W', 0);
+    await mk('energyWallet.exportGuardBridge.negativePriceActive', 'negative Preisstrategie aktiv', 'boolean', 'indicator', '', false);
+    await mk('energyWallet.exportGuardBridge.summaryJson', 'Export Guard Brücke JSON', 'string', 'json', '', '{}');
   }
 
   async _ensurePeriodStates(prefix, keyLabel, defKey, mk) {
@@ -395,6 +430,9 @@ class EnergyWalletModule extends BaseModule {
     await mk(`${prefix}.evcsValueEur`, `Solar-Ladepunktwert ${keyLabel.toLowerCase()}`, 'number', 'value.money', '€', 0);
     await mk(`${prefix}.storageValueEur`, `Speicherwert ${keyLabel.toLowerCase()}`, 'number', 'value.money', '€', 0);
     await mk(`${prefix}.potentialAdditionalValueEur`, `Zusätzliches lokales Nutzungspotenzial ${keyLabel.toLowerCase()}`, 'number', 'value.money', '€', 0);
+    await mk(`${prefix}.curtailedKwh`, `abgeregelte PV-Energie ${keyLabel.toLowerCase()}`, 'number', 'value.energy', 'kWh', 0);
+    await mk(`${prefix}.curtailedValueEur`, `Wert abgeregelter PV-Energie ${keyLabel.toLowerCase()}`, 'number', 'value.money', '€', 0);
+    await mk(`${prefix}.unusedPvValueEur`, `nicht genutzter PV-Wert ${keyLabel.toLowerCase()}`, 'number', 'value.money', '€', 0);
   }
 
   async _primeFromStates() {
@@ -540,6 +578,46 @@ class EnergyWalletModule extends BaseModule {
     return !!fallback;
   }
 
+
+  _readJsonState(keys, fallback = {}) {
+    // Liest JSON-States aus dem lokalen StateCache. Wird für die 0.8.27-
+    // Ledger-Bridge verwendet, damit Energy Wallet und Local kWh Ledger verbunden
+    // werden können, ohne Ledger-kWh doppelt in die Wallet-Perioden zu integrieren.
+    const list = Array.isArray(keys) ? keys : [keys];
+    for (const key of list) {
+      const rec = this._cacheEntry(key);
+      if (!rec) continue;
+      const raw = rec && typeof rec === 'object' && Object.prototype.hasOwnProperty.call(rec, 'value') ? rec.value : rec;
+      try {
+        if (raw && typeof raw === 'object') return raw;
+        if (typeof raw === 'string' && raw.trim()) return JSON.parse(raw);
+      } catch (_e) {}
+    }
+    return fallback;
+  }
+
+  _ledgerBridge() {
+    const bridge = this._readJsonState(['energyLedger.walletBridge.summaryJson', 'energyLedger.walletBridgeJson'], {});
+    const todayRaw = bridge && bridge.today && typeof bridge.today === 'object' ? bridge.today : {};
+    const monthRaw = bridge && bridge.month && typeof bridge.month === 'object' ? bridge.month : {};
+    const yearRaw = bridge && bridge.year && typeof bridge.year === 'object' ? bridge.year : {};
+    const available = !!(bridge && typeof bridge === 'object' && (bridge.available === true || bridge.status === 'ready' || Number(todayRaw.totalKwh ?? todayRaw.evcsKwh ?? todayRaw.ledgerEvcsKwh ?? 0) > 0));
+    const today = available ? todayRaw : {};
+    const month = available ? monthRaw : {};
+    const year = available ? yearRaw : {};
+    return {
+      available,
+      countingMode: String((bridge && bridge.countingMode) || 'reference-only'),
+      note: String((bridge && bridge.reason) || 'Ledgerwerte sind Referenzwerte und werden nicht doppelt in das Wertkonto integriert.'),
+      todayEvcsKwh: round(today.evcsKwh ?? today.ledgerEvcsKwh ?? 0, 3),
+      todayLocalKwh: round(today.localKwh ?? today.ledgerLocalKwh ?? 0, 3),
+      todayValueEur: round(today.valueEur ?? today.ledgerValueEur ?? 0, 2),
+      monthEvcsKwh: round(month.evcsKwh ?? month.ledgerEvcsKwh ?? 0, 3),
+      yearEvcsKwh: round(year.evcsKwh ?? year.ledgerEvcsKwh ?? 0, 3),
+      raw: bridge && typeof bridge === 'object' ? bridge : {},
+    };
+  }
+
   _cfg() {
     return (this.adapter && this.adapter.config && this.adapter.config.energyWallet && typeof this.adapter.config.energyWallet === 'object')
       ? this.adapter.config.energyWallet
@@ -556,6 +634,59 @@ class EnergyWalletModule extends BaseModule {
     const cfg = this._cfg();
     const raw = cfg.plausibilityMaxPowerW !== undefined ? cfg.plausibilityMaxPowerW : (cfg.maxPlausiblePowerW !== undefined ? cfg.maxPlausiblePowerW : 2_000_000);
     return Math.round(clamp(raw, 1000, 50_000_000));
+  }
+
+  /**
+   * Code-Teil: _exportGuardBridge
+   * Zweck: Liest die Export-Guard-Diagnose als Referenz für das Energie-Wertkonto.
+   * Zusammenhang: Diese Brücke zählt keine kWh doppelt und schaltet keine Hardware. Sie übernimmt nur die
+   * bereits vom Grid-Constraints-Modul berechnete Abregelungsleistung in die normale Wallet-Integration.
+   */
+  _exportGuardBridge() {
+    const a = this.adapter;
+/**
+ * Code-Teil: val
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+    const val = (id, fallback = null) => {
+      try {
+        const v = (a && a.stateCache && a.stateCache[id] && Object.prototype.hasOwnProperty.call(a.stateCache[id], 'val')) ? a.stateCache[id].val : undefined;
+        return v === undefined || v === null ? fallback : v;
+      } catch (_e) { return fallback; }
+    };
+    let raw = null;
+    try {
+      const txt = String(val('gridConstraints.exportLimit.summaryJson', val('gridConstraints.exportLimit.displayJson', '')) || '').trim();
+      if (txt) raw = JSON.parse(txt);
+    } catch (_e) { raw = null; }
+/**
+ * Code-Teil: num
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+    const num = (v, fallback = 0) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : fallback;
+    };
+    const curtailmentPowerW = Math.max(0, num(raw?.estimatedCurtailmentW, num(raw?.unusedPvPowerW, num(val('gridConstraints.exportLimit.estimatedCurtailmentW', val('gridConstraints.pvCurtail.estimatedCurtailmentW', 0)), 0))));
+    const exportOverLimitW = Math.max(0, num(raw?.exportOverLimitW, num(val('gridConstraints.exportLimit.exportOverLimitW', 0), 0)));
+    const allowedExportW = Math.max(0, num(raw?.effectiveMaxFeedInW, num(val('gridConstraints.exportLimit.effectiveMaxFeedInW', 0), 0)));
+    const currentExportW = Math.max(0, num(raw?.currentExportW, num(val('gridConstraints.exportLimit.currentExportW', 0), 0)));
+    const negativePriceActive = !!(raw?.negativePriceActive || val('gridConstraints.exportLimit.negativePriceActive', false) === true || String(val('gridConstraints.exportLimit.negativePriceActive', '')).toLowerCase() === 'true');
+    return { available: !!raw || curtailmentPowerW > 0 || exportOverLimitW > 0, curtailmentPowerW, exportOverLimitW, allowedExportW, currentExportW, negativePriceActive, raw: raw || {} };
   }
 
   _prices() {
@@ -774,7 +905,10 @@ class EnergyWalletModule extends BaseModule {
       updatedAt: Date.now(),
     };
 
-    return { pvW, gridImportW, gridExportW, evcsW, storageChargeW, storageDischargeW, diagnostics, integratable };
+    const exportGuardBridge = this._exportGuardBridge();
+    const curtailmentW = Math.max(0, Number(exportGuardBridge.curtailmentPowerW) || 0);
+
+    return { pvW, gridImportW, gridExportW, evcsW, storageChargeW, storageDischargeW, curtailmentW, exportGuardBridge, diagnostics, integratable };
   }
 
   _isEnabled() {
@@ -865,6 +999,9 @@ class EnergyWalletModule extends BaseModule {
     const evcsValue = evcsSolarKwh * prices.evcsValueEurPerKwh;
     const storageValue = Math.min(chargeKwh, localUseKwh) * Math.max(0, prices.gridImportEurPerKwh - prices.feedInEurPerKwh);
     const potential = exportKwh * Math.max(0, prices.gridImportEurPerKwh - prices.feedInEurPerKwh);
+    const curtailedKwh = Math.max(0, Number(p.curtailmentW) || 0) / 1000 * hours;
+    const curtailedValueEur = curtailedKwh * Math.max(0, prices.feedInEurPerKwh);
+    const unusedPvValueEur = curtailedKwh * Math.max(0, prices.gridImportEurPerKwh);
 
     const delta = {
       pvKwh,
@@ -880,6 +1017,9 @@ class EnergyWalletModule extends BaseModule {
       evcsValueEur: evcsValue,
       storageValueEur: storageValue,
       potentialAdditionalValueEur: potential,
+      curtailedKwh,
+      curtailedValueEur,
+      unusedPvValueEur,
     };
 
     this._addDelta(this._acc, delta);
@@ -916,11 +1056,17 @@ class EnergyWalletModule extends BaseModule {
       evcsValueEur: round(acc.evcsValueEur, 2),
       storageValueEur: round(acc.storageValueEur, 2),
       potentialAdditionalValueEur: round(acc.potentialAdditionalValueEur, 2),
+      curtailedKwh: round(acc.curtailedKwh, 3),
+      curtailedValueEur: round(acc.curtailedValueEur, 2),
+      unusedPvValueEur: round(acc.unusedPvValueEur, 2),
     };
   }
 
+
   _summary(status) {
     const prices = this._prices();
+    const ledgerBridge = this._ledgerBridge();
+    const exportGuardBridge = this._exportGuardBridge();
     const today = this._periodSummary(this._acc, this._dayKey);
     const month = this._periodSummary(this._monthAcc, this._monthKey);
     const year = this._periodSummary(this._yearAcc, this._yearKey);
@@ -947,6 +1093,8 @@ class EnergyWalletModule extends BaseModule {
       month,
       year,
       diagnostics,
+      ledgerBridge,
+      exportGuardBridge,
       updatedAt: Date.now(),
     };
   }
@@ -1031,6 +1179,25 @@ class EnergyWalletModule extends BaseModule {
     await set('energyWallet.configuredPrices.currentDynamicPriceAgeSec', Math.max(0, Math.round(Number(s.prices.currentDynamicPriceAgeSec || 0))));
     await set('energyWallet.configuredPrices.currentDynamicPriceLastUpdate', Math.max(0, Math.round(Number(s.prices.currentDynamicPriceLastUpdate || 0))));
     await set('energyWallet.configuredPrices.dynamicTariffWarning', String(s.prices.dynamicTariffWarning || ''));
+
+    const lb = s.ledgerBridge || {};
+    await set('energyWallet.ledgerBridge.available', !!lb.available);
+    await set('energyWallet.ledgerBridge.countingMode', String(lb.countingMode || 'reference-only'));
+    await set('energyWallet.ledgerBridge.todayEvcsKwh', round(lb.todayEvcsKwh, 3));
+    await set('energyWallet.ledgerBridge.todayLocalKwh', round(lb.todayLocalKwh, 3));
+    await set('energyWallet.ledgerBridge.todayValueEur', round(lb.todayValueEur, 2));
+    await set('energyWallet.ledgerBridge.monthEvcsKwh', round(lb.monthEvcsKwh, 3));
+    await set('energyWallet.ledgerBridge.yearEvcsKwh', round(lb.yearEvcsKwh, 3));
+    await set('energyWallet.ledgerBridge.summaryJson', JSON.stringify(lb));
+
+    const eb = s.exportGuardBridge || {};
+    await set('energyWallet.exportGuardBridge.available', !!eb.available);
+    await set('energyWallet.exportGuardBridge.curtailmentPowerW', round(eb.curtailmentPowerW, 0));
+    await set('energyWallet.exportGuardBridge.exportOverLimitW', round(eb.exportOverLimitW, 0));
+    await set('energyWallet.exportGuardBridge.allowedExportW', round(eb.allowedExportW, 0));
+    await set('energyWallet.exportGuardBridge.currentExportW', round(eb.currentExportW, 0));
+    await set('energyWallet.exportGuardBridge.negativePriceActive', !!eb.negativePriceActive);
+    await set('energyWallet.exportGuardBridge.summaryJson', JSON.stringify(eb));
   }
 
   async _publishPeriod(prefix, keyName, periodKey, summary, set) {
@@ -1050,6 +1217,9 @@ class EnergyWalletModule extends BaseModule {
     await set(`${prefix}.evcsValueEur`, summary.evcsValueEur);
     await set(`${prefix}.storageValueEur`, summary.storageValueEur);
     await set(`${prefix}.potentialAdditionalValueEur`, summary.potentialAdditionalValueEur);
+    await set(`${prefix}.curtailedKwh`, summary.curtailedKwh);
+    await set(`${prefix}.curtailedValueEur`, summary.curtailedValueEur);
+    await set(`${prefix}.unusedPvValueEur`, summary.unusedPvValueEur);
   }
 }
 

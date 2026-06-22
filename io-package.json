@@ -1,8 +1,28 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.25",
+    "version": "0.8.30",
     "news": {
+      "0.8.30": {
+        "de": "Version 0.8.30: Export Guard Stabilisierung mit Diagnose/Testmodus ohne WR-Schreibzugriff, geplanter Write-Plan, Runtime-Diagnose im Installer und Archiv-Schutz gegen eingebettete ZIP/TGZ-Dateien.",
+        "en": "Version 0.8.30: Export Guard stabilization with diagnostic/test mode without inverter writes, planned write plan, installer runtime diagnostics and archive guard against embedded ZIP/TGZ files."
+      },
+      "0.8.29": {
+        "de": "Version 0.8.29: Export Guard Diagnose erweitert. Aktuelle Einspeisung vs. erlaubtes Limit, Abregelungsleistung, fehlende WR-Write-Datenpunkte und negative-Preis-Strategie werden sichtbar. Energie-Wertkonto bereitet abgeregelte kWh und nicht genutzten PV-Wert vor.",
+        "en": "Version 0.8.29: Extends Export Guard diagnostics. Current export versus allowed limit, curtailment power, missing inverter write datapoints and negative-price strategy are visible. Energy Wallet prepares curtailed kWh and unused PV value."
+      },
+      "0.8.28": {
+        "de": "Version 0.8.28: Export Guard erweitert die bisherige 0-Einspeisung um Installateurfreigabe und frei einstellbare maximale Einspeiseleistung für DE/NL. Die bestehende Grid-Constraints-Logik wird wiederverwendet, damit keine zweite Regelstrecke entsteht.",
+        "en": "Version 0.8.28: Export Guard extends the existing zero-export logic with installer approval and configurable maximum feed-in power for DE/NL. The existing grid-constraints control path is reused to avoid duplicate control logic."
+      },
+      "0.8.27": {
+        "de": "Version 0.8.27: Local kWh Ledger um CSV-API, Betreiberansicht, Monats-/Jahres-Exportbasis, Quelle je kWh und Energy-Wallet-Bridge erweitert. Alle Sichten nutzen denselben Ledger-Puffer, damit keine Sessions doppelt gezählt werden.",
+        "en": "Version 0.8.27: Extends Local kWh Ledger with CSV API, operator view, month/year export foundation, per-kWh source display and Energy Wallet bridge. All views use the same ledger buffer to avoid duplicate session counting."
+      },
+      "0.8.26": {
+        "de": "Version 0.8.26: Local kWh Ledger Grundlage ergänzt. EOS kann DC-Station-Display-Sessions herstellerneutral als kompakte kWh-Einträge mit Solar-/Netzanteil, Wert, Deduplikation und Exportbasis führen.",
+        "en": "Version 0.8.26: Adds Local kWh Ledger foundation. EOS can keep DC station display sessions as compact manufacturer-neutral kWh entries with solar/grid split, value, deduplication and export basis."
+      },
       "0.8.25": {
         "de": "Version 0.8.25: DC Station Display Betreiberwerte erweitert. Letzte Session je LP wird persistent geführt, Tageswerte enthalten Solar-/Netzanteil, CSV-Export v2 und Betreiberdiagnose bleiben hersteller- und protokolloffen.",
         "en": "Version 0.8.25: Extends DC Station Display operator values. Last session per chargepoint is persisted, daily values include solar/grid split, CSV export v2 and operator diagnostics stay manufacturer/protocol agnostic."
@@ -10,26 +30,6 @@
       "0.8.24": {
         "de": "Version 0.8.24: Energie-Wertkonto Diagnose verfeinert. Kundenhinweise und Installateurdiagnose sind getrennt, dynamische Tarifpreise zeigen Quelle/Alter und die LIVE-Karte kann optional die Preisquelle anzeigen.",
         "en": "Version 0.8.24: Refines Energy Wallet diagnostics. Customer hints and installer diagnostics are separated, dynamic tariff prices expose source/age, and the LIVE card can optionally show the price source."
-      },
-      "0.8.22": {
-        "de": "Version 0.8.22: DC Station Display speichert Betreiber-/Sessionwerte robuster, ergänzt Last-Session-je-LP, CSV-Exportbasis und npm-Release-Prüfung gegen ETARGET durch fehlende Registry-Versionen.",
-        "en": "Version 0.8.22: DC Station Display hardens operator/session persistence, adds last-session-per-connector, CSV export foundation and npm release verification to avoid ETARGET from missing registry versions."
-      },
-      "0.8.21": {
-        "de": "Version 0.8.21: Burger-Menü im Frontend gehärtet. Gemeinsame Guards verhindern doppelte Toggle-Handler zwischen App-Seiten, Reports und Shell. DC Station Display bleibt pro LP bedienbar; AC-Phasenumschaltung bleibt AC-only. Energie-Wertkonto nutzt weiter dynamische Tarife mit festen Preisen aus den Nutzer-Einstellungen.",
-        "en": "Version 0.8.21: Hardens the frontend hamburger menu. Shared guards prevent duplicate toggle handlers between app pages, reports and shell. DC Station Display keeps per-connector controls; AC phase switching remains AC-only. Energy Wallet continues to use dynamic tariffs with fixed prices from user settings."
-      },
-      "0.8.20": {
-        "de": "Version 0.8.20: DC Station Display erweitert jede LP-Kachel um Bedienung für Regelung, Modus, Speicher und Ziel-Laden; AC-Phasenumschaltung erscheint nur bei AC. Energie-Wertkonto nutzt bei dynamischem Tarif den aktuellen Preis, feste Preise liegen im Frontend unter Einstellungen. Zusätzlich ist das Burger-Menü gegen doppelte Handler gehärtet.",
-        "en": "Version 0.8.20: DC Station Display adds per-connector controls for regulation, mode, storage and target charging; AC phase switching is shown only for AC. Energy Wallet uses the current dynamic tariff price and fixed prices are managed in frontend settings. The hamburger menu is hardened against duplicate handlers."
-      },
-      "0.8.19": {
-        "de": "Version 0.8.19: DC Station Display um Betreiber-/Sessionbasis und herstelleroffene Steuerbrücke erweitert. Display-Befehle sind neutrale NexoWatt-Intents und können über Charging-Management oder generische ioBroker-Command-States an OCPP, Modbus, MQTT, Herstelleradapter oder NexoWatt-Devices weitergereicht werden.",
-        "en": "Version 0.8.19: Extends DC Station Display with operator/session foundation and manufacturer-open control bridge. Display commands are neutral NexoWatt intents and can be forwarded through charging management or generic ioBroker command states to OCPP, Modbus, MQTT, vendor adapters or NexoWatt devices."
-      },
-      "0.8.18": {
-        "de": "Version 0.8.18: DC Station Display gehärtet. Watchdog, Offline-/Wartungsanzeige, Touch-Layouts für 1/2/4 Connectoren und Session-/PV-Anteil-Vorbereitung ergänzt.",
-        "en": "Version 0.8.18: DC Station Display hardened. Adds watchdog, offline/maintenance display, touch layouts for 1/2/4 connectors and session/PV-share preparation."
       }
     },
     "title": "NexoWatt UI",
@@ -292,6 +292,12 @@
       "enabled": false,
       "displayBasePath": "/display/station/",
       "stations": []
+    },
+    "energyLedger": {
+      "enabled": false,
+      "source": "chargeKiosk.lastSessionsByLpJson",
+      "recentEntryLimit": 200,
+      "processedSessionLimit": 2000
     }
   },
   "instanceObjects": [

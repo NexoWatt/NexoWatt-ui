@@ -1,3 +1,25 @@
+## 0.8.30
+
+- Export Guard: Diagnose-/Testmodus ergänzt. In diesem Modus berechnet NexoWatt Einspeiselimit, Überschreitung, Abregelungsbedarf und geplante WR-Setpoints, schreibt aber keine WR-/PV-Datenpunkte.
+- Installer/App-Center: Runtime-Diagnosekarte für Einspeisebegrenzung mit aktueller Einspeisung, erlaubtem Limit, Überschreitung, Abregelungsleistung, WR-Write-Status, negativer Preisstrategie und geplantem Write-Plan.
+- Export Guard: zentrale Run-Mode-Guards verhindern schreibende Failsafe-/Setpoint-Pfade im Diagnosemodus.
+- Release-Härtung: neuer Check verhindert, dass ZIP-/TGZ-Releasepakete versehentlich in den Repository-/Paketbaum gelangen.
+
+## 0.8.29
+
+- Export Guard Diagnose erweitert: aktuelle Einspeisung gegen erlaubtes Limit, verbleibende Einspeiseleistung und Überschreitung werden sichtbar.
+- Abregelungsleistung, fehlende WR-/PV-Write-Datenpunkte und negative-Preis-Strategie werden als Diagnose-States veröffentlicht.
+- Energie-Wertkonto übernimmt die Export-Guard-Diagnose als Referenz und bereitet abgeregelte kWh, Abregelungswert und nicht genutzten PV-Wert vor, ohne Ledger-/Wallet-Werte doppelt zu zählen.
+- LIVE-Karte zeigt den Export-Guard-Wert nur bei tatsächlicher Abregelung an.
+
+## 0.8.26
+
+- EOS: Local kWh Ledger Grundlage ergänzt. DC-Station-Display-Sessions werden herstellerneutral aus `chargeKiosk.stations.*.lastSessionsByLpJson` als kompakte Ledger-Einträge übernommen.
+- Ledger-Summen für Tag, Monat und Jahr mit Solar-/Netzanteil, Wert, Stationen/LPs und Deduplikation über `processedSessionKeysJson` ergänzt.
+- Exportbasis `energyLedger.export.todayCsvJson` und Recent-Entries vorbereitet; bewusst keine eichrechtsverbindliche Abrechnung.
+- App-Center zeigt das EOS-only Modul `Local kWh Ledger`; die Funktion bleibt read-only und schaltet keine Hardware.
+- Service-Worker Cache auf `nexowatt-cache-v326` erhöht.
+
 ## 0.8.25
 
 - DC Station Display: Betreiberwerte erweitert. Letzte Session je LP wird persistiert und im Display angezeigt.

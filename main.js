@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:89218625d00415279538282bfce5330a253ed83b1a7888edcd2b790c47b5b31d
+ * Quell-Hash: sha256:6b3f8e0915130ff7823a283535207a24db93a62f95b684f2cfb87729de6d48f0
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -3199,6 +3199,7 @@ class NexoWattVis extends utils.Adapter {
       'relay',
       'aiAdvisor',
       'energyWallet',
+      'energyLedger',
       'chargeKiosk',
       'smartHome',
       'smartHomeConfig',
@@ -3341,6 +3342,12 @@ class NexoWattVis extends utils.Adapter {
       feedInPriceEurKwh: 0.08,
       evcsValueEurKwh: 0.35,
       recommendationsEnabled: true,
+    });
+    ensurePlainObj('energyLedger', {
+      enabled: false,
+      source: 'chargeKiosk.lastSessionsByLpJson',
+      recentEntryLimit: 200,
+      processedSessionLimit: 2000,
     });
     ensurePlainObj('chargeKiosk', {
       enabled: false,
@@ -16880,7 +16887,7 @@ const _nwDisplayBuildPayload = (station) => {
       layoutMode: station.layoutMode || _nwDisplayLayoutMode('auto', connectors.length),
     },
     display: {
-      apiVersion: '0.8.25',
+      apiVersion: '0.8.28',
       manufacturerOpen: true,
       controlBridge: station.controlBridge || 'charging-management',
       controlProfile: station.controlProfile || 'chargingManagement',
@@ -17069,7 +17076,7 @@ const _nwDisplayExecuteStationCommand = async (station, lpKey, action, mode, ext
     mode,
     mode === 'solar' ? 'pv' : (mode === 'fast' ? 'boost' : 'auto')
   );
-  commandPayload.version = '0.8.25';
+  commandPayload.version = '0.8.28';
   commandPayload.directHardwareWrite = false;
   commandPayload.extra = extra && typeof extra === 'object' ? extra : {};
   const writes = [];
@@ -17201,6 +17208,139 @@ app.get('/api/display/station/:token/operator.csv', async (req, res) => {
   }
 });
 
+
+// -----------------------------------------------------------------------------
+// EOS Local kWh Ledger API / Betreiberansicht
+// -----------------------------------------------------------------------------
+// 0.8.27: Die folgenden Routen erzeugen keine zweite Ledger-Logik. JSON, CSV und
+// Betreiberansicht lesen ausschließlich `energyLedger.summaryJson` und
+// `energyLedger.entriesRecentJson`. Dadurch werden Sessions nicht doppelt gezählt;
+// die Darstellung ist nur eine andere Sicht auf denselben bestehenden Ledger.
+const _nwEnergyLedgerIsLicensed = () => {
+  try { return !!this._nwLicenseAllowsAppId('energyLedger'); } catch (_e) { return false; }
+};
+const _nwEnergyLedgerJson = (id, fallback) => {
+  try {
+    const raw = _nwDisplayStateVal(id, '');
+    if (raw === undefined || raw === null || raw === '') return fallback;
+    if (typeof raw === 'object') return raw;
+    const parsed = JSON.parse(String(raw));
+    return parsed === undefined || parsed === null ? fallback : parsed;
+  } catch (_e) {
+    return fallback;
+  }
+};
+const _nwEnergyLedgerPeriod = (input) => {
+  const p = String(input || 'recent').trim().toLowerCase();
+  return ['today', 'day', 'month', 'year', 'recent', 'all'].includes(p) ? (p === 'day' ? 'today' : p) : 'recent';
+};
+const _nwEnergyLedgerFilterEntries = (entries, period, summary) => {
+  const list = Array.isArray(entries) ? entries : [];
+  const p = _nwEnergyLedgerPeriod(period);
+  const todayKey = summary && summary.today && summary.today.key;
+  const monthKey = summary && summary.month && summary.month.key;
+  const yearKey = summary && summary.year && summary.year.key;
+  if (p === 'today') return list.filter(e => e && e.dayKey === todayKey);
+  if (p === 'month') return list.filter(e => e && e.monthKey === monthKey);
+  if (p === 'year') return list.filter(e => e && e.yearKey === yearKey);
+  if (p === 'all') return list.slice();
+  return list.slice(0, 200);
+};
+const _nwEnergyLedgerSourceLabel = (entry) => {
+  try {
+    if (entry && entry.sourceLabel) return String(entry.sourceLabel);
+    const mix = entry && entry.kwhSourceMix && typeof entry.kwhSourceMix === 'object' ? entry.kwhSourceMix : null;
+    if (mix && mix.label) return String(mix.label);
+    const parts = entry && Array.isArray(entry.kwhSources) ? entry.kwhSources : [];
+    const labels = parts.filter(p => Number(p && p.kwh) > 0).map(p => `${p.label || p.source}: ${Number(p.kwh || 0).toFixed(3)} kWh`);
+    return labels.join(' · ') || 'Quelle nicht eindeutig';
+  } catch (_e) {
+    return 'Quelle nicht eindeutig';
+  }
+};
+const _nwEnergyLedgerBuildPayload = (period) => {
+  const summary = _nwEnergyLedgerJson('energyLedger.summaryJson', {});
+  const entries = _nwEnergyLedgerJson('energyLedger.entriesRecentJson', []);
+  const operatorView = _nwEnergyLedgerJson('energyLedger.operator.viewJson', {});
+  const walletBridge = _nwEnergyLedgerJson('energyLedger.walletBridge.summaryJson', {});
+  const sourceBreakdown = _nwEnergyLedgerJson('energyLedger.operator.sourceBreakdownJson', summary && summary.sourceSummary ? summary.sourceSummary : {});
+  const p = _nwEnergyLedgerPeriod(period);
+  const filteredEntries = _nwEnergyLedgerFilterEntries(entries, p, summary).map(e => ({ ...e, sourceLabel: _nwEnergyLedgerSourceLabel(e) }));
+  return {
+    ok: true,
+    schema: 'nexowatt.local-kwh-ledger-api.v2',
+    generatedAt: Date.now(),
+    period: p,
+    summary,
+    operatorView,
+    walletBridge,
+    sourceBreakdown,
+    entries: filteredEntries,
+    allEntryCount: Array.isArray(entries) ? entries.length : 0,
+    exportUrls: {
+      todayCsv: '/api/ledger/local-kwh.csv?period=today',
+      monthCsv: '/api/ledger/local-kwh.csv?period=month',
+      yearCsv: '/api/ledger/local-kwh.csv?period=year',
+      recentCsv: '/api/ledger/local-kwh.csv?period=recent',
+      allCsv: '/api/ledger/local-kwh.csv?period=all',
+    },
+    note: 'Betreiberansicht/CSV nutzen denselben Ledger-Puffer; keine doppelte Zählung.',
+  };
+};
+const _nwEnergyLedgerCsv = (payload) => {
+  const rows = [];
+  rows.push(['schema', 'nexowatt.local-kwh-ledger-export.v2'].map(_nwDisplayCsvEscape).join(';'));
+  rows.push(['generatedAt', String(payload && payload.generatedAt || Date.now()), 'period', payload && payload.period || 'recent'].map(_nwDisplayCsvEscape).join(';'));
+  rows.push('');
+  rows.push(['Typ','Periode','Tag','Monat','Jahr','Station','Station_Name','LP','Session_ID','Quelle_je_kWh','Start_ms','Ende_ms','Dauer_s','Energie_kWh','Lokal_kWh','Solar_kWh','Netz_kWh','Solar_Prozent','Wert_EUR','Preis_EUR_kWh','Protokoll'].map(_nwDisplayCsvEscape).join(';'));
+  const entries = payload && Array.isArray(payload.entries) ? payload.entries : [];
+  for (const e of entries) {
+    rows.push([
+      'LedgerEntry', payload.period || 'recent', e.dayKey || '', e.monthKey || '', e.yearKey || '', e.stationId || '', e.stationName || '', e.lp || '', e.sessionId || '', e.sourceLabel || _nwEnergyLedgerSourceLabel(e),
+      String(Math.round(Number(e.startTs || 0))), String(Math.round(Number(e.endTs || 0))), String(Math.round(Number(e.durationSec || 0))),
+      Number(e.totalKwh || 0).toFixed(3), Number(e.localKwh || 0).toFixed(3), Number(e.solarKwh || 0).toFixed(3), Number(e.gridKwh || 0).toFixed(3),
+      String(Math.round(Number(e.solarSharePercent || 0))), Number(e.valueEur || 0).toFixed(2), Number(e.priceEurPerKwh || 0).toFixed(4), e.protocolHint || 'manufacturer-open',
+    ].map(_nwDisplayCsvEscape).join(';'));
+  }
+  const summary = payload && payload.summary ? payload.summary : {};
+  const periodSummary = payload && payload.period === 'month' ? summary.month : (payload && payload.period === 'year' ? summary.year : (payload && payload.period === 'today' ? summary.today : null));
+  if (periodSummary) {
+    rows.push('');
+    rows.push(['Summe', payload.period || '', '', '', '', '', '', '', '', '', '', '', '', Number(periodSummary.totalKwh || 0).toFixed(3), Number(periodSummary.localKwh || 0).toFixed(3), Number(periodSummary.solarKwh || 0).toFixed(3), Number(periodSummary.gridKwh || 0).toFixed(3), String(Math.round(Number(periodSummary.solarSharePercent || 0))), Number(periodSummary.valueEur || 0).toFixed(2), '', 'manufacturer-open'].map(_nwDisplayCsvEscape).join(';'));
+  }
+  return '\ufeff' + rows.join('\r\n');
+};
+app.get(['/ledger/local-kwh', '/ledger/local-kwh/'], (_req, res) => {
+  res.sendFile(path.join(__dirname, 'www', 'energy-ledger.html'));
+});
+
+app.get('/api/ledger/local-kwh', (req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwEnergyLedgerIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Local kWh Ledger ist nur in EOS verfügbar.' });
+    return res.json(_nwEnergyLedgerBuildPayload(req.query && req.query.period));
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
+  }
+});
+
+app.get('/api/ledger/local-kwh.csv', (req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwEnergyLedgerIsLicensed()) return res.status(403).type('text/plain').send('EOS-Lizenz erforderlich.');
+    const payload = _nwEnergyLedgerBuildPayload(req.query && req.query.period);
+    const period = _nwEnergyLedgerPeriod(payload.period);
+    const key = period === 'month' ? (payload.summary && payload.summary.month && payload.summary.month.key) : (period === 'year' ? (payload.summary && payload.summary.year && payload.summary.year.key) : (payload.summary && payload.summary.today && payload.summary.today.key));
+    const filenameKey = String(key || period || 'recent').replace(/[^0-9A-Za-z_-]+/g, '_');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="NexoWatt_Local_kWh_Ledger_${period}_${filenameKey}.csv"`);
+    return res.status(200).send(_nwEnergyLedgerCsv(payload));
+  } catch (e) {
+    return res.status(500).type('text/plain').send('Local kWh Ledger CSV Export Fehler: ' + String(e && e.message ? e.message : e));
+  }
+});
+
+
 app.post('/api/display/station/:token/heartbeat', async (req, res) => {
   try {
     sendNoStore(res);
@@ -17218,7 +17358,7 @@ app.post('/api/display/station/:token/heartbeat', async (req, res) => {
       height: Number(body.height) || 0,
       userAgent: String((req.headers && req.headers['user-agent']) || '').slice(0, 180),
       language: String(body.language || '').slice(0, 16),
-      appVersion: String(body.appVersion || '0.8.24').slice(0, 32),
+      appVersion: String(body.appVersion || '0.8.28').slice(0, 32),
     };
     await _nwDisplayWriteStationState(station.id, 'lastDisplayInfoJson', JSON.stringify(displayInfo), true);
     return res.json({ ok: true, stationId: station.id, ts: now, watchdog: _nwDisplayReadStationRuntime(station, now) });

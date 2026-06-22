@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: fd84eb6a59bed07ad378e5f500b5829c05f797348f782696c0159b31a9db198d
+ * Original-Hash: ad23e4bd086977b7f99868dcb176ba41208d2d5342691c7d50d60982ab347118
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:a6944e042c8cc69e8504da865e9b3cb4ffabf71702737b8be3e158dcd97f9420
+ * Quell-Hash: sha256:09ccfc3623c790fb501e3fc49377163db8ff757bdf16688b310e916696a373bf
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -92,6 +92,7 @@ const { AiAdvisorModule } = require('./modules/ai-advisor');
 const { CountryProfileModule } = require('./modules/country-profile');
 const { EnergyWalletModule } = require('./modules/energy-wallet');
 const { ChargeKioskModule } = require('./modules/charge-kiosk');
+const { EnergyLedgerModule } = require('./modules/energy-ledger');
 const featureFlags = require('./services/feature-flags');
 
 /**
@@ -356,6 +357,21 @@ class ModuleManager {
             enabledFn: () => this._licenseAllowsApp('chargeKiosk') && !!(
                 this.adapter && this.adapter.config && (
                     this.adapter.config.enableChargeKiosk === true ||
+                    (this.adapter.config.chargeKiosk && this.adapter.config.chargeKiosk.enabled === true)
+                )
+            ),
+        });
+
+        // EOS Local kWh Ledger: read-only Grundlage für Betreiberwerte, spätere Abrechnung,
+        // Nachbarschaftsversorgung und Microgrid/Energy-Hub-Logik. Das Modul nutzt neutrale
+        // NexoWatt-Sessiondaten und ist bewusst nicht auf OCPP oder einen Hersteller begrenzt.
+        this.modules.push({
+            key: 'energyLedger',
+            instance: new EnergyLedgerModule(this.adapter, this.dp),
+            enabledFn: () => this._licenseAllowsApp('energyLedger') && !!(
+                this.adapter && this.adapter.config && (
+                    this.adapter.config.enableEnergyLedger === true ||
+                    (this.adapter.config.energyLedger && this.adapter.config.energyLedger.enabled === true) ||
                     (this.adapter.config.chargeKiosk && this.adapter.config.chargeKiosk.enabled === true)
                 )
             ),
