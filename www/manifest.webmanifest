@@ -44,5 +44,6 @@
       "purpose": "maskable"
     }
   ],
-  "version": "0.8.23"
+  "version": "0.8.25",
+  "appVersion": "0.8.25"
 }

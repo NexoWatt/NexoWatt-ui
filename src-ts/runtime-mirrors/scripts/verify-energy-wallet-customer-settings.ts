@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4cb32203b9b67c252ae1e6ba8adbc03071ad4cfe0d9d2fdfcd646ab6948d5acf
+ * Original-Hash: 79b38de8196c5faaccc128eb83914180d14ce6baca44dab7e26fe97191df1774
  */
 
 /**
@@ -88,7 +88,7 @@ need(settingsHtml.indexOf('id="energyWalletCustomerBlock"') > settingsHtml.index
 need(!settingsHtml.includes('Energie-Wertkonto Preise 💶'), 'settings.html: alter Preisblock im dynamischen Tarif-Unterblock ist noch vorhanden.');
 
 need(mainJs.includes("energyWalletEnabled: { type: 'boolean'"), 'main.js: settings.energyWalletEnabled State-Definition fehlt.');
-need(mainJs.includes("'energyWalletEnabled','energyWalletFixedImportEurPerKwh'"), 'main.js: settings.energyWalletEnabled wird nicht als lokaler Settings-State gespiegelt.');
+need(mainJs.includes("'energyWalletEnabled'") && mainJs.includes("'energyWalletFixedImportEurPerKwh'"), 'main.js: settings.energyWalletEnabled wird nicht als lokaler Settings-State gespiegelt.');
 need(appJs.includes('updateEnergyWalletSettingsVisibility'), 'www/app.js: Settings-UI-Sichtbarkeit für Energie-Wertkonto fehlt.');
 need(appJs.includes('settings.energyWalletEnabled'), 'www/app.js: LIVE-Karte beachtet Kunden-Schalter nicht.');
 need(walletJs.includes("this._readStateBool(['settings.energyWalletEnabled'], true)"), 'energy-wallet.js: EMS-Modul beachtet Kunden-Schalter nicht.');

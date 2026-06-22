@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c155a9701eae9891f76758f28c57e71290a5625f9b13cbb58e6139b162eb1055
+ * Original-Hash: 287696521e03b8601f2ddb01ff3a5d5df8e94aa468351014fdde0153aa51890f
  */
 
 /**
@@ -168,6 +168,16 @@ mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'data-ck-field="contro
 mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'Kein OCPP-Zwang', 'Installer-Hinweis zur Herstelleroffenheit');
 mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'data-ck-field="controlBridge"', 'Steuerbrücke im Installer');
 mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'data-ck-field="protocolHint"', 'Protokoll-Hinweis im Installer');
-mustMatch('package.json', /"version"\s*:\s*"0\.8\.2[2-9]"/, 'Paketversion 0.8.22 oder neuer');
+mustMatch('package.json', /"version"\s*:\s*"0\.8\.2[5-9]"/, 'Paketversion 0.8.25+');
 
 console.log('[dc-station-display] OK: Display-API, Watchdog, Layout, Wartungsmodus und Session-/Betreiberbasis und herstelleroffene Steuerbrücke sind abgesichert.');
+
+
+// 0.8.25 Betreiberwerte/CSV v2 Guards
+mustContain('src-ts/runtime-executables/ems/modules/charge-kiosk.ts', 'operatorSolarKwhToday', 'Solar-Tageswert State');
+mustContain('src-ts/runtime-executables/ems/modules/charge-kiosk.ts', 'operatorGridKwhToday', 'Netz-Tageswert State');
+mustContain('src-ts/runtime-executables/ems/modules/charge-kiosk.ts', 'operatorCompletedRevenueToday', 'abgeschlossene Umsatzwerte');
+mustContain('src-ts/runtime-executables/ems/modules/charge-kiosk.ts', 'operatorExportReady', 'Exportbereitschaft');
+mustContain('src-ts/runtime-executables/main.ts', 'nexowatt.dc.operator-export.v2', 'CSV v2 Schema');
+mustContain('src-ts/runtime-executables/main.ts', 'LetzteSessionPersistiert', 'persistierte Last-Session im CSV');
+mustContain('src-ts/runtime-executables/www/dc-station-display.ts', 'nw-connector-last-session', 'Last-Session Anzeige im Display');

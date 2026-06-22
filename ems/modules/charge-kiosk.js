@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charge-kiosk.ts
- * Quell-Hash: sha256:2aa90cc8dfaf72d9072fb51cd6b5a0a17d44cf7655764a6e47447916da7c8161
+ * Quell-Hash: sha256:5136831608b09faa22220d9647954d2474178a2d894f71ab8e514e59f57be0a8
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -291,8 +291,17 @@ class ChargeKioskModule extends BaseModule {
       await mk('operatorSummaryJson', 'Betreiber-Zusammenfassung JSON', 'string', 'json', '', '{}');
       await mk('operatorSessionsToday', 'Betreiber Sessions heute', 'number', 'value', '', 0);
       await mk('operatorKwhToday', 'Betreiber Energie heute', 'number', 'value.energy', 'kWh', 0);
+      await mk('operatorSolarKwhToday', 'Betreiber Solarenergie heute', 'number', 'value.energy', 'kWh', 0);
+      await mk('operatorGridKwhToday', 'Betreiber Netzenergie heute', 'number', 'value.energy', 'kWh', 0);
+      await mk('operatorSolarShareTodayPercent', 'Betreiber Solaranteil heute', 'number', 'value', '%', 0);
+      await mk('operatorCompletedRevenueToday', 'Betreiber Umsatz abgeschlossene Sessions heute', 'number', 'value.currency', '€', 0);
       await mk('operatorRevenueToday', 'Betreiber Umsatz heute', 'number', 'value.currency', '€', 0);
       await mk('operatorMaxKwToday', 'Betreiber Tagesmaximum', 'number', 'value.power', 'kW', 0);
+      await mk('operatorExportReady', 'Betreiber CSV-Export bereit', 'boolean', 'indicator', '', false);
+      await mk('operatorLastSessionCount', 'Letzte Sessions je LP Anzahl', 'number', 'value', '', 0);
+      await mk('operatorLastSessionUpdatedAt', 'Letzte Session-Aktualisierung', 'number', 'value.time', '', 0);
+      await mk('csvExportReady', 'CSV-Export bereit', 'boolean', 'indicator', '', false);
+      await mk('sessionDiagnosticsJson', 'Session-Diagnose JSON', 'string', 'json', '', '{}');
       this._known.add(base);
     }
     const now = Date.now();
@@ -358,8 +367,17 @@ class ChargeKioskModule extends BaseModule {
       await a.setStateAsync(`${base}.operatorSummaryJson`, { val: JSON.stringify(operator), ack: true });
       await a.setStateAsync(`${base}.operatorSessionsToday`, { val: Number(operator.completedSessionsToday) || 0, ack: true });
       await a.setStateAsync(`${base}.operatorKwhToday`, { val: Number(operator.energyTodayKwh) || 0, ack: true });
+      await a.setStateAsync(`${base}.operatorSolarKwhToday`, { val: Number(operator.solarEnergyTodayKwh) || 0, ack: true });
+      await a.setStateAsync(`${base}.operatorGridKwhToday`, { val: Number(operator.gridEnergyTodayKwh) || 0, ack: true });
+      await a.setStateAsync(`${base}.operatorSolarShareTodayPercent`, { val: Number(operator.solarShareTodayPercent) || 0, ack: true });
+      await a.setStateAsync(`${base}.operatorCompletedRevenueToday`, { val: Number(operator.completedRevenueTodayEur) || 0, ack: true });
       await a.setStateAsync(`${base}.operatorRevenueToday`, { val: Number(operator.currentRevenueEur || operator.revenueEur) || 0, ack: true });
       await a.setStateAsync(`${base}.operatorMaxKwToday`, { val: Number(operator.maxKwToday) || 0, ack: true });
+      await a.setStateAsync(`${base}.operatorExportReady`, { val: !!station.token, ack: true });
+      await a.setStateAsync(`${base}.operatorLastSessionCount`, { val: Object.keys(lastByLp || {}).length, ack: true });
+      await a.setStateAsync(`${base}.operatorLastSessionUpdatedAt`, { val: Date.now(), ack: true });
+      await a.setStateAsync(`${base}.csvExportReady`, { val: !!station.token, ack: true });
+      await a.setStateAsync(`${base}.sessionDiagnosticsJson`, { val: JSON.stringify({ ts: Date.now(), dayKey, lastSessionCount: Object.keys(lastByLp || {}).length, exportReady: !!station.token, schema: 'nexowatt.dc.operator-export.v2' }), ack: true });
     } catch (_e) {
       await a.setStateAsync(`${base}.sessionSnapshotsJson`, { val: '[]', ack: true });
       await a.setStateAsync(`${base}.lastSessionJson`, { val: '{}', ack: true });
@@ -368,8 +386,17 @@ class ChargeKioskModule extends BaseModule {
       await a.setStateAsync(`${base}.operatorSummaryJson`, { val: '{}', ack: true });
       await a.setStateAsync(`${base}.operatorSessionsToday`, { val: 0, ack: true });
       await a.setStateAsync(`${base}.operatorKwhToday`, { val: 0, ack: true });
+      await a.setStateAsync(`${base}.operatorSolarKwhToday`, { val: 0, ack: true });
+      await a.setStateAsync(`${base}.operatorGridKwhToday`, { val: 0, ack: true });
+      await a.setStateAsync(`${base}.operatorSolarShareTodayPercent`, { val: 0, ack: true });
+      await a.setStateAsync(`${base}.operatorCompletedRevenueToday`, { val: 0, ack: true });
       await a.setStateAsync(`${base}.operatorRevenueToday`, { val: 0, ack: true });
       await a.setStateAsync(`${base}.operatorMaxKwToday`, { val: 0, ack: true });
+      await a.setStateAsync(`${base}.operatorExportReady`, { val: false, ack: true });
+      await a.setStateAsync(`${base}.operatorLastSessionCount`, { val: 0, ack: true });
+      await a.setStateAsync(`${base}.operatorLastSessionUpdatedAt`, { val: 0, ack: true });
+      await a.setStateAsync(`${base}.csvExportReady`, { val: false, ack: true });
+      await a.setStateAsync(`${base}.sessionDiagnosticsJson`, { val: '{}', ack: true });
     }
     return { id, base, hb, timeoutSec, ageSec, online, displayStatus, displayWarning };
   }

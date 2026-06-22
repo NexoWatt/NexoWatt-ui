@@ -1667,7 +1667,7 @@ function collectAiAdvisorConfigFromUI(base) {
           </label>
         </div>
         <div class="nw-config-separator" style="margin:14px 0 10px;"></div>
-        <div class="nw-config-card__subtitle" style="margin-bottom:8px;">Energie-Wertkonto: Datenpunkt- und Länderbasis im Installerbereich; Kostenannahmen und der Ein-/Aus-Schalter liegen im Nutzerfrontend unter Einstellungen → Energie-Wertkonto.</div>
+        <div class="nw-config-card__subtitle" style="margin-bottom:8px;">Energie-Wertkonto: Datenpunkt- und Länderbasis im Installerbereich; Kostenannahmen und An/Aus-Schalter liegen im Nutzerfrontend unten in den Einstellungen der Tarifseite.</div>
         <div class="nw-config-empty" style="text-align:left;margin-bottom:10px;">
           Der Betreiber kann dort festen Netzstrompreis, Einspeise-/Rücklieferwert und Solar-Ladepunktwert pflegen. Ist ein dynamischer Zeittarif aktiv, nutzt das Wertkonto automatisch den aktuellen Tarifpreis.
         </div>
@@ -2002,7 +2002,7 @@ function collectAiAdvisorConfigFromUI(base) {
       if (app.id === 'energyWallet') {
         const row = document.createElement('div');
         row.className = 'nw-config-card__row';
-        row.textContent = 'Home + EOS: Das Energie-Wertkonto rechnet nur und schaltet keine Geräte. Kostenannahmen pflegt der Betreiber im Nutzerfrontend unter Einstellungen.';
+        row.textContent = 'Home + EOS: Das Energie-Wertkonto rechnet nur und schaltet keine Geräte. Kostenannahmen und An/Aus-Schalter pflegt der Betreiber im Nutzerfrontend unter Einstellungen.';
         body.appendChild(row);
       }
       if (app.id === 'chargeKiosk') {

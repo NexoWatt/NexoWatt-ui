@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:0c2c13eb72c842914c8f5b6193bebbaa17bafdda8acac2dc470d2a28baf8cac6
+ * Quell-Hash: sha256:a8949fc9f871fb9d978db55aaa272e8dbf6acaf8f829c6f2800ad80c40b1a98a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1665,7 +1665,7 @@ function collectAiAdvisorConfigFromUI(base) {
           </label>
         </div>
         <div class="nw-config-separator" style="margin:14px 0 10px;"></div>
-        <div class="nw-config-card__subtitle" style="margin-bottom:8px;">Energie-Wertkonto: Datenpunkt- und Länderbasis im Installerbereich; Kostenannahmen und der Ein-/Aus-Schalter liegen im Nutzerfrontend unter Einstellungen → Energie-Wertkonto.</div>
+        <div class="nw-config-card__subtitle" style="margin-bottom:8px;">Energie-Wertkonto: Datenpunkt- und Länderbasis im Installerbereich; Kostenannahmen und An/Aus-Schalter liegen im Nutzerfrontend unten in den Einstellungen der Tarifseite.</div>
         <div class="nw-config-empty" style="text-align:left;margin-bottom:10px;">
           Der Betreiber kann dort festen Netzstrompreis, Einspeise-/Rücklieferwert und Solar-Ladepunktwert pflegen. Ist ein dynamischer Zeittarif aktiv, nutzt das Wertkonto automatisch den aktuellen Tarifpreis.
         </div>
@@ -2000,7 +2000,7 @@ function collectAiAdvisorConfigFromUI(base) {
       if (app.id === 'energyWallet') {
         const row = document.createElement('div');
         row.className = 'nw-config-card__row';
-        row.textContent = 'Home + EOS: Das Energie-Wertkonto rechnet nur und schaltet keine Geräte. Kostenannahmen pflegt der Betreiber im Nutzerfrontend unter Einstellungen.';
+        row.textContent = 'Home + EOS: Das Energie-Wertkonto rechnet nur und schaltet keine Geräte. Kostenannahmen und An/Aus-Schalter pflegt der Betreiber im Nutzerfrontend unter Einstellungen.';
         body.appendChild(row);
       }
       if (app.id === 'chargeKiosk') {

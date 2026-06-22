@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: acbe44b3bd007bbd8bfcf052b72131809d1dd03083ed1476196a5eef3b6fd102
+ * Original-Hash: 58102515e9d999fafa8cbaadc2d77df4c36fd2445feb6f4a4b9b16d7186a827a
  */
 
 /**
@@ -3964,6 +3964,8 @@ function initSettingsPanel(){
 
   const dynToggle = document.getElementById('s_dyn_toggle');
   const dynBlock = document.getElementById('dyn_settings_block');
+  const energyWalletToggle = document.getElementById('s_energyWalletEnabled');
+  const energyWalletPriceBlock = document.getElementById('energyWalletCustomerPriceBlock');
 
   /**
    * Code-Teil: Arrow-Funktion `updatePriorityLabel`
@@ -4011,6 +4013,15 @@ function initSettingsPanel(){
     // Therefore we keep the shared settings block visible and only sync the custom toggle buttons.
     dynBlock.hidden = false;
     try { if (dynToggle) syncToggleButtonsForInputId('s_dyn_toggle'); } catch (_e) {}
+  };
+
+  const updateEnergyWalletSettingsVisibility = ()=>{
+    // Kundenfreiheit: Das Energie-Wertkonto ist eine freiwillige Anzeige.
+    // Wenn der Nutzer es ausschaltet, bleiben die Preisfelder technisch erhalten, werden
+    // aber ausgeblendet; das EMS-Modul wertet denselben State `settings.energyWalletEnabled` aus.
+    const enabled = !energyWalletToggle || !!energyWalletToggle.checked;
+    if (energyWalletPriceBlock) energyWalletPriceBlock.style.display = enabled ? '' : 'none';
+    try { if (energyWalletToggle) syncToggleButtonsForInputId('s_energyWalletEnabled'); } catch (_e) {}
   };
 
   /**
@@ -4086,6 +4097,7 @@ function initSettingsPanel(){
   updatePriorityLabel();
   updateTariffModeLabel();
   updateDynVisibility();
+  updateEnergyWalletSettingsVisibility();
 
   // Zeitvariables Netzentgelt (HT/NT) – UI
   const netFeeToggle = document.getElementById('s_netFeeEnabled');
@@ -4337,6 +4349,10 @@ function initSettingsPanel(){
   if (dynToggle) {
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an dynToggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     dynToggle.addEventListener('change', updateDynVisibility);
+  }
+  if (energyWalletToggle) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an energyWalletToggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
+    energyWalletToggle.addEventListener('change', updateEnergyWalletSettingsVisibility);
   }
 
   // PV Saisonprofil

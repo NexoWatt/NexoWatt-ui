@@ -67,6 +67,10 @@
       blockedReadonly: 'Start/Stop ist für dieses Display gesperrt.',
       watchdog: 'Display-Watchdog',
       operatorToday: 'Heute Betreiber',
+      operatorSolar: 'Solar heute',
+      operatorGrid: 'Netz heute',
+      lastSession: 'Letzte Session',
+      csvExport: 'CSV Export',
       bridge: 'Steuerung',
       directHardwareWrite: 'keine direkte Hardware-Schreibung',
       manufacturerOpen: 'Hersteller offen',
@@ -121,6 +125,10 @@
       blockedReadonly: 'Start/stop is voor dit display geblokkeerd.',
       watchdog: 'Display-watchdog',
       operatorToday: 'Vandaag exploitant',
+      operatorSolar: 'Solar vandaag',
+      operatorGrid: 'Net vandaag',
+      lastSession: 'Laatste sessie',
+      csvExport: 'CSV export',
       bridge: 'Besturing',
       directHardwareWrite: 'geen directe hardware-aansturing',
       manufacturerOpen: 'Fabrikant-open',
@@ -175,6 +183,10 @@
       blockedReadonly: 'Start/stop is locked for this display.',
       watchdog: 'Display watchdog',
       operatorToday: 'Operator today',
+      operatorSolar: 'Solar today',
+      operatorGrid: 'Grid today',
+      lastSession: 'Last session',
+      csvExport: 'CSV export',
       bridge: 'Control',
       directHardwareWrite: 'no direct hardware write',
       manufacturerOpen: 'Manufacturer-open',
@@ -371,7 +383,7 @@
           height: window.innerHeight || 0,
           visibility: document.visibilityState || 'visible',
           language: lang(),
-          appVersion: '0.8.23',
+          appVersion: '0.8.25',
         }),
         headers: { 'Content-Type': 'application/json' },
       });
@@ -444,6 +456,9 @@
             <div class="nw-display-pill">☀️ ${escapeHtml(t('pvAvailable'))}: <strong>${site.pvAvailable ? 'Ja' : 'Nein'}</strong></div>
             <div class="nw-display-pill">⚡ ${escapeHtml(t('stationPower'))}: <strong>${escapeHtml(fmtKw(site.totalAssignedPowerW || 0))}</strong></div>
             <div class="nw-display-pill">💶 ${escapeHtml(t('operatorToday'))}: <strong>${escapeHtml(fmtKwh((payload.operator && payload.operator.energyTodayKwh) || 0))} · ${escapeHtml(fmtEur((payload.operator && (payload.operator.currentRevenueEur || payload.operator.revenueEur)) || 0))}</strong></div>
+            <div class="nw-display-pill">☀️ ${escapeHtml(t('operatorSolar'))}: <strong>${escapeHtml(fmtKwh((payload.operator && payload.operator.solarEnergyTodayKwh) || 0))} · ${escapeHtml(String((payload.operator && payload.operator.solarShareTodayPercent) || 0))}%</strong></div>
+            <div class="nw-display-pill">🌐 ${escapeHtml(t('operatorGrid'))}: <strong>${escapeHtml(fmtKwh((payload.operator && payload.operator.gridEnergyTodayKwh) || 0))}</strong></div>
+            ${payload.operator && payload.operator.csvUrl ? `<a class="nw-display-pill nw-display-pill--link" href="${escapeHtml(payload.operator.csvUrl)}" download>${escapeHtml(t('csvExport'))}</a>` : ''}
             <div class="nw-display-pill">🔌 ${escapeHtml(t('bridge'))}: <strong>${escapeHtml(station.controlBridge || (payload.control && payload.control.bridge) || 'EMS')}</strong></div>
             <div class="nw-display-pill ${connectionLost ? 'nw-pill--error' : ''}">🛜 ${escapeHtml(t('watchdog'))}: <strong>${escapeHtml(connectionLost ? t('offline') : (station.displayOnline ? 'Online' : statusLabel(station.displayStatus)))}</strong></div>
             <div class="nw-display-pill">🔓 ${escapeHtml(t('manufacturerOpen'))}: <strong>${escapeHtml(station.controlBridge || 'ems-intent')}</strong></div>
@@ -457,7 +472,7 @@
       <footer class="nw-display-footer">
         <span>${escapeHtml(t('lastUpdate'))}: ${escapeHtml(fmtTime(payload.generatedAt || lastOkTs))}</span>
         <span>${escapeHtml(t('reconnecting'))}</span>
-        <span>${escapeHtml(display.apiVersion || '0.8.23')}</span>
+        <span>${escapeHtml(display.apiVersion || '0.8.25')}</span>
         <span>${escapeHtml(t('directHardwareWrite'))}</span>
       </footer>`;
 
@@ -589,6 +604,7 @@
         </div>
         <div class="nw-connector-reason">${escapeHtml((c.sessionState || 'idle') + (c.sessionId ? ' · ' + c.sessionId : ''))}</div>
         ${reason ? `<div class="nw-connector-reason">${escapeHtml(reason)}</div>` : ''}
+        ${last && Number(last.energyKwh) > 0 ? `<div class="nw-connector-last-session"><span>${escapeHtml(t('lastSession'))}</span><strong>${escapeHtml(lastText)} · ${escapeHtml(fmtEur(last.costEur || 0))}</strong><em>${escapeHtml(String(last.solarSharePercent || 0))}% Solar · ${escapeHtml(fmtKwh(last.solarKwh || 0))} / ${escapeHtml(fmtKwh(last.gridKwh || 0))}</em></div>` : ''}
         ${renderLpControls(c, station, stationBlocked || busy)}
         <div class="nw-connector-actions">
           ${solarAllowed ? `<button class="nw-btn" data-command="1" data-lp="${escapeHtml(lp)}" data-action="start" data-mode="solar" ${(!canStart || busy) ? 'disabled' : ''}>${escapeHtml(t('solar'))}</button>` : ''}

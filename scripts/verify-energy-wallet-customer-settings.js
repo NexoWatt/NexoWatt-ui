@@ -36,7 +36,7 @@ need(settingsHtml.indexOf('id="energyWalletCustomerBlock"') > settingsHtml.index
 need(!settingsHtml.includes('Energie-Wertkonto Preise 💶'), 'settings.html: alter Preisblock im dynamischen Tarif-Unterblock ist noch vorhanden.');
 
 need(mainJs.includes("energyWalletEnabled: { type: 'boolean'"), 'main.js: settings.energyWalletEnabled State-Definition fehlt.');
-need(mainJs.includes("'energyWalletEnabled','energyWalletFixedImportEurPerKwh'"), 'main.js: settings.energyWalletEnabled wird nicht als lokaler Settings-State gespiegelt.');
+need(mainJs.includes("'energyWalletEnabled'") && mainJs.includes("'energyWalletFixedImportEurPerKwh'"), 'main.js: settings.energyWalletEnabled wird nicht als lokaler Settings-State gespiegelt.');
 need(appJs.includes('updateEnergyWalletSettingsVisibility'), 'www/app.js: Settings-UI-Sichtbarkeit für Energie-Wertkonto fehlt.');
 need(appJs.includes('settings.energyWalletEnabled'), 'www/app.js: LIVE-Karte beachtet Kunden-Schalter nicht.');
 need(walletJs.includes("this._readStateBool(['settings.energyWalletEnabled'], true)"), 'energy-wallet.js: EMS-Modul beachtet Kunden-Schalter nicht.');

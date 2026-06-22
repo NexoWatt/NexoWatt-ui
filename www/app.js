@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/app.ts
- * Quell-Hash: sha256:3f1912b2820a57b5a71f575e0de3d4947175ce3bc46f94f7e53acec3bbfc4387
+ * Quell-Hash: sha256:0abc0414830ef02863528a0565c7ae5e2a43c5429defc1ce62c5a97cf8541a8b
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -3770,6 +3770,8 @@ function initSettingsPanel(){
 
   const dynToggle = document.getElementById('s_dyn_toggle');
   const dynBlock = document.getElementById('dyn_settings_block');
+  const energyWalletToggle = document.getElementById('s_energyWalletEnabled');
+  const energyWalletPriceBlock = document.getElementById('energyWalletCustomerPriceBlock');
 
   /**
    * Code-Teil: Arrow-Funktion `updatePriorityLabel`
@@ -3819,15 +3821,12 @@ function initSettingsPanel(){
     try { if (dynToggle) syncToggleButtonsForInputId('s_dyn_toggle'); } catch (_e) {}
   };
 
-
-  const energyWalletToggle = document.getElementById('s_energyWalletEnabled');
-  const energyWalletPriceBlock = document.getElementById('energyWalletPriceBlock');
   const updateEnergyWalletSettingsVisibility = ()=>{
-    // Nutzerfreiheit: Die Wertkonto-Karte kann im Frontend komplett deaktiviert werden.
-    // Die Preisfelder bleiben technisch vorhanden, werden aber ausgeblendet, wenn der
-    // Kunde das Energie-Wertkonto nicht sehen möchte. Datenpunkt-/Modulkonfiguration
-    // bleibt weiterhin ausschließlich im Installer/App-Center.
-    if (energyWalletPriceBlock) energyWalletPriceBlock.style.display = (!energyWalletToggle || energyWalletToggle.checked) ? '' : 'none';
+    // Kundenfreiheit: Das Energie-Wertkonto ist eine freiwillige Anzeige.
+    // Wenn der Nutzer es ausschaltet, bleiben die Preisfelder technisch erhalten, werden
+    // aber ausgeblendet; das EMS-Modul wertet denselben State `settings.energyWalletEnabled` aus.
+    const enabled = !energyWalletToggle || !!energyWalletToggle.checked;
+    if (energyWalletPriceBlock) energyWalletPriceBlock.style.display = enabled ? '' : 'none';
     try { if (energyWalletToggle) syncToggleButtonsForInputId('s_energyWalletEnabled'); } catch (_e) {}
   };
 
@@ -4157,11 +4156,8 @@ function initSettingsPanel(){
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an dynToggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     dynToggle.addEventListener('change', updateDynVisibility);
   }
-  if (energyWalletToggle && !energyWalletToggle.dataset.boundEnergyWalletSettings) {
-    energyWalletToggle.dataset.boundEnergyWalletSettings = '1';
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an energyWalletToggle.
-    // Beim Abschalten verschwindet die Wertkonto-Karte im LIVE-Bereich nach dem nächsten
-    // EMS-Tick; die Preisfelder werden sofort ausgeblendet.
+  if (energyWalletToggle) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an energyWalletToggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     energyWalletToggle.addEventListener('change', updateEnergyWalletSettingsVisibility);
   }
 
@@ -8788,6 +8784,22 @@ function _nwEnergyWalletMoney(value) {
   try { return n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; } catch (_e) { return n.toFixed(2).replace('.', ',') + ' €'; }
 }
 
+
+function _nwEnergyWalletPricePerKwh(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '';
+  try { return n.toLocaleString('de-DE', { minimumFractionDigits: 3, maximumFractionDigits: 4 }) + ' €/kWh'; } catch (_e) { return n.toFixed(3).replace('.', ',') + ' €/kWh'; }
+}
+
+function _nwEnergyWalletAgeLabel(seconds) {
+  const sec = Math.max(0, Math.round(Number(seconds) || 0));
+  if (sec < 60) return `${sec}s alt`;
+  const min = Math.round(sec / 60);
+  if (min < 120) return `${min}min alt`;
+  const h = Math.round(min / 60);
+  return `${h}h alt`;
+}
+
 function _nwEnergyWalletEnsureExtendedUi(card) {
   try {
     if (!card || document.getElementById('energyWalletPeriodGrid')) return;
@@ -8800,6 +8812,12 @@ function _nwEnergyWalletEnsureExtendedUi(card) {
       <div><strong id="energyWalletQualityValue">0 %</strong><span>Datenqualität</span></div>
     `;
     card.appendChild(period);
+
+    const price = document.createElement('div');
+    price.className = 'nw-energy-wallet-price-source hidden';
+    price.id = 'energyWalletPriceSourceText';
+    price.textContent = '';
+    card.appendChild(price);
 
     const warn = document.createElement('div');
     warn.className = 'nw-energy-wallet-warning hidden';
@@ -8814,8 +8832,7 @@ function updateEnergyWalletLiveUi() {
   if (!card) return;
   _nwEnergyWalletEnsureExtendedUi(card);
   const walletCfg = window.__nwCfg && window.__nwCfg.energyWallet && typeof window.__nwCfg.energyWallet === 'object' ? window.__nwCfg.energyWallet : {};
-  const customerEnabled = _nwEnergyWalletStateValue('settings.energyWalletEnabled', true) !== false && String(_nwEnergyWalletStateValue('settings.energyWalletEnabled', 'true')).toLowerCase() !== 'false';
-  const enabled = walletCfg.showOnLive !== false && customerEnabled && (_nwEnergyWalletStateValue('energyWallet.enabled', false) === true || String(_nwEnergyWalletStateValue('energyWallet.enabled', '')).toLowerCase() === 'true');
+  const enabled = walletCfg.showOnLive !== false && (_nwEnergyWalletStateValue('energyWallet.enabled', false) === true || String(_nwEnergyWalletStateValue('energyWallet.enabled', '')).toLowerCase() === 'true');
   const value = _nwEnergyWalletNum('energyWallet.today.valueEur', 0);
   const monthValue = _nwEnergyWalletNum('energyWallet.month.valueEur', 0);
   const yearValue = _nwEnergyWalletNum('energyWallet.year.valueEur', 0);
@@ -8828,7 +8845,14 @@ function updateEnergyWalletLiveUi() {
   const setText = (id, text) => { try { const el = document.getElementById(id); if (el) el.textContent = text; } catch (_e) {} };
   const pct = _nwEnergyWalletNum('energyWallet.today.localUsePercent', 0);
   const quality = _nwEnergyWalletNum('energyWallet.diagnostics.dataQualityPercent', 0);
-  const warning = String(_nwEnergyWalletStateValue('energyWallet.diagnostics.warning', '') || '');
+  const warning = String(_nwEnergyWalletStateValue('energyWallet.diagnostics.customerWarning', _nwEnergyWalletStateValue('energyWallet.diagnostics.warning', '')) || '');
+  const showPriceSource = String(_nwEnergyWalletStateValue('settings.energyWalletShowPriceSource', 'false')).toLowerCase() === 'true'
+    || _nwEnergyWalletStateValue('settings.energyWalletShowPriceSource', false) === true;
+  const priceSource = String(_nwEnergyWalletStateValue('energyWallet.configuredPrices.priceSource', '') || '');
+  const priceSourceLabel = String(_nwEnergyWalletStateValue('energyWallet.configuredPrices.priceSourceLabel', '') || priceSource || 'Preisquelle');
+  const activePrice = _nwEnergyWalletNum('energyWallet.configuredPrices.gridImportEurPerKwh', 0);
+  const dynAge = _nwEnergyWalletNum('energyWallet.configuredPrices.currentDynamicPriceAgeSec', 0);
+  const dynSource = String(_nwEnergyWalletStateValue('energyWallet.configuredPrices.currentDynamicPriceSource', '') || '');
   setText('energyWalletTodayValue', _nwEnergyWalletMoney(value));
   setText('energyWalletLocalUseBadge', `${Math.round(pct)} % lokal`);
   setText('energyWalletExplanation', String(_nwEnergyWalletStateValue('energyWallet.explanation', '') || 'Deine Anlage erzeugt heute messbaren Energiewert.'));
@@ -8840,10 +8864,21 @@ function updateEnergyWalletLiveUi() {
   setText('energyWalletYearValue', _nwEnergyWalletMoney(yearValue));
   setText('energyWalletQualityValue', `${Math.round(quality)} %`);
   try {
+    const priceEl = document.getElementById('energyWalletPriceSourceText');
+    if (priceEl) {
+      let txt = `Preisquelle: ${priceSourceLabel}`;
+      if (activePrice) txt += ` · ${_nwEnergyWalletPricePerKwh(activePrice)}`;
+      if (priceSource === 'dynamicTariff' && dynAge >= 0) txt += ` · ${_nwEnergyWalletAgeLabel(dynAge)}`;
+      if (priceSource === 'dynamicTariff' && dynSource) txt += ` · ${dynSource}`;
+      priceEl.textContent = txt;
+      priceEl.classList.toggle('hidden', !showPriceSource);
+    }
+  } catch (_e) {}
+  try {
     const warnEl = document.getElementById('energyWalletWarningText');
     if (warnEl) {
       warnEl.textContent = warning;
-      warnEl.classList.toggle('hidden', !(warning && status === 'warn'));
+      warnEl.classList.toggle('hidden', !(warning && (status === 'warn' || status === 'waiting-data')));
     }
   } catch (_e) {}
 }

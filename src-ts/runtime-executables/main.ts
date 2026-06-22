@@ -2487,11 +2487,13 @@ class NexoWattVis extends utils.Adapter {
       priority: { type: 'number', role: 'value', def: 2 },
       tariffMode: { type: 'number', role: 'value', def: 1 },
 
-      // Energie-Wertkonto: kundennahe Preisannahmen.
+      // Energie-Wertkonto: kundennahe Freigabe + Preisannahmen.
       // Diese Werte gehören bewusst in die Frontend-Einstellungen, nicht in den Installerbereich.
-      // Bei aktivem dynamischem Tarif nutzt das Modul den aktuellen Tarifpreis; diese Werte
-      // bleiben dann Fallback bzw. Einspeise-/Solar-Ladebewertung.
+      // Der Betreiber/Endkunde kann das Wertkonto komplett ausblenden/deaktivieren, ohne
+      // technische EMS-/Installer-Konfigurationen anfassen zu müssen. Bei aktivem dynamischem
+      // Tarif nutzt das Modul den aktuellen Tarifpreis; der feste Preis bleibt Fallback.
       energyWalletEnabled: { type: 'boolean', role: 'state', def: true },
+      energyWalletShowPriceSource: { type: 'boolean', role: 'state', def: false },
       energyWalletFixedImportEurPerKwh: { type: 'number', role: 'value.price', def: 0.35 },
       energyWalletFeedInEurPerKwh: { type: 'number', role: 'value.price', def: 0.08 },
       energyWalletEvcsValueEurPerKwh: { type: 'number', role: 'value.price', def: 0.35 },
@@ -16425,6 +16427,84 @@ const _nwDisplayLastCompletedSession = (idx) => {
   return null;
 };
 
+
+/**
+ * Normalisiert eine Session für Betreiberansicht, Display und CSV.
+ *
+ * Wichtig: Diese Struktur ist absichtlich NexoWatt-intern und nicht OCPP-spezifisch.
+ * OCPP-Transaction-IDs können von nachgelagerten Adaptern ergänzt werden, sind aber
+ * keine Voraussetzung. Dadurch bleiben DC-Station-Display, Modbus-/MQTT-/REST-
+ * Integrationen und NexoWatt-Devices gleich behandelbar.
+ */
+const _nwDisplayNormalizeSessionRecord = (station, lpKey, row, fallbackPrice = 0) => {
+  if (!row || typeof row !== 'object') return null;
+  const price = Math.max(0, _nwDisplayNum(row.priceEurPerKwh, fallbackPrice));
+  const energyKwh = Math.max(0, _nwDisplayRound(_nwDisplayNum(row.energyKwh, 0), 3));
+  const rawSolarKwh = Number(row.solarKwh);
+  const rawGridKwh = Number(row.gridKwh);
+  const solarShareRaw = Number(row.solarSharePercent);
+  let solarKwh = Number.isFinite(rawSolarKwh) ? Math.max(0, _nwDisplayRound(rawSolarKwh, 3)) : 0;
+  let gridKwh = Number.isFinite(rawGridKwh) ? Math.max(0, _nwDisplayRound(rawGridKwh, 3)) : Math.max(0, _nwDisplayRound(energyKwh - solarKwh, 3));
+  if (energyKwh > 0 && !Number.isFinite(rawSolarKwh) && Number.isFinite(solarShareRaw)) {
+    solarKwh = Math.max(0, _nwDisplayRound(energyKwh * Math.max(0, Math.min(100, solarShareRaw)) / 100, 3));
+    gridKwh = Math.max(0, _nwDisplayRound(energyKwh - solarKwh, 3));
+  }
+  const solarSharePercent = energyKwh > 0 ? Math.max(0, Math.min(100, Math.round((solarKwh / energyKwh) * 100))) : (Number.isFinite(solarShareRaw) ? Math.max(0, Math.min(100, Math.round(solarShareRaw))) : 0);
+  const costEur = Number.isFinite(Number(row.costEur)) ? Math.max(0, _nwDisplayRound(Number(row.costEur), 2)) : _nwDisplayRound(energyKwh * price, 2);
+  const startTs = Number(row.startTs) || 0;
+  const endTs = Number(row.endTs) || 0;
+  const durationSec = Math.max(0, Math.round(Number(row.durationSec) || (startTs > 0 && endTs > startTs ? (endTs - startTs) / 1000 : 0)));
+  return {
+    id: String(row.id || row.sessionId || ''),
+    lp: _nwDisplayNormalizeLpKey(lpKey || row.lp || row.chargepointId || ''),
+    startTs,
+    endTs,
+    durationSec,
+    energyKwh,
+    solarKwh,
+    gridKwh,
+    solarSharePercent,
+    costEur,
+    priceEurPerKwh: _nwDisplayRound(price, 4),
+    maxKw: Math.max(0, _nwDisplayRound(_nwDisplayNum(row.maxKw, 0), 2)),
+    rfid: String(row.rfid || ''),
+    user: String(row.user || ''),
+    method: String(row.method || ''),
+    protocolHint: String(row.protocolHint || (station && station.protocolHint) || 'manufacturer-open'),
+  };
+};
+
+/** Wählt die neuere von flüchtiger Session-Pufferung und persistierter Last-Session. */
+const _nwDisplayNewestSession = (buffered, persisted) => {
+  if (!buffered && !persisted) return null;
+  if (!buffered) return persisted;
+  if (!persisted) return buffered;
+  const bEnd = Number(buffered.endTs || buffered.startTs) || 0;
+  const pEnd = Number(persisted.endTs || persisted.startTs) || 0;
+  return pEnd >= bEnd ? persisted : buffered;
+};
+
+/**
+ * Berechnet eine herstellerneutrale Kosten-/Anteil-Schätzung für aktive Sessions.
+ * Das ist bewusst eine Betreiberanzeige und keine eichrechtsverbindliche Abrechnung.
+ */
+const _nwDisplaySessionCostBreakdown = (energyKwh, solarSharePct, solarPrice, gridPrice, fallbackPrice, showSolarShare) => {
+  const kwh = Math.max(0, _nwDisplayRound(energyKwh, 3));
+  const share = showSolarShare ? Math.max(0, Math.min(100, Math.round(Number(solarSharePct) || 0))) : 0;
+  const solarKwh = showSolarShare ? Math.max(0, _nwDisplayRound(kwh * share / 100, 3)) : 0;
+  const gridKwh = Math.max(0, _nwDisplayRound(kwh - solarKwh, 3));
+  const sPrice = Math.max(0, _nwDisplayNum(solarPrice, fallbackPrice));
+  const gPrice = Math.max(0, _nwDisplayNum(gridPrice, fallbackPrice));
+  const costEur = _nwDisplayRound((solarKwh * sPrice) + (gridKwh * gPrice), 2);
+  return {
+    solarKwh,
+    gridKwh,
+    solarSharePercent: showSolarShare ? (kwh > 0 ? Math.round((solarKwh / Math.max(kwh, 0.0001)) * 100) : share) : null,
+    costEur,
+    priceEurPerKwh: kwh > 0 ? _nwDisplayRound(costEur / kwh, 4) : _nwDisplayRound(gPrice, 4),
+  };
+};
+
 const _nwDisplayStartOfLocalDay = (ms) => {
   const d = new Date(Number(ms) || Date.now());
   d.setHours(0, 0, 0, 0);
@@ -16460,7 +16540,14 @@ const _nwDisplayStationOperatorCsv = (payload) => {
   const operator = payload && payload.operator ? payload.operator : {};
   const connectors = Array.isArray(payload && payload.connectors) ? payload.connectors : [];
   const lines = [];
-  lines.push(['Typ','Station','LP','Status','Session_ID','Session_Status','Energie_kWh','Solar_kWh','Netz_kWh','Solar_Prozent','Kosten_EUR','Preis_EUR_kWh','Leistung_W','Start_ms','Dauer_s','Protokoll'].map(_nwDisplayCsvEscape).join(';'));
+  // CSV v2: Betreiberexport bleibt tokenisiert und herstellerneutral. Er enthält
+  // aktive Sessions, persistierte letzte Sessions je LP und Tageswerte mit
+  // Solar-/Netzanteil. Es werden keine OCPP-spezifischen Felder vorausgesetzt.
+  lines.push(['schema','nexowatt.dc.operator-export.v2'].map(_nwDisplayCsvEscape).join(';'));
+  lines.push(['generatedAt', String(payload && payload.generatedAt || Date.now())].map(_nwDisplayCsvEscape).join(';'));
+  lines.push(['stationId', station.id || '', 'stationName', station.name || '', 'protocol', operator.protocolHint || station.protocolHint || 'manufacturer-open'].map(_nwDisplayCsvEscape).join(';'));
+  lines.push('');
+  lines.push(['Typ','Station','LP','Status','Session_ID','Session_Status','Energie_kWh','Solar_kWh','Netz_kWh','Solar_Prozent','Kosten_EUR','Preis_EUR_kWh','Leistung_W','Start_ms','Ende_ms','Dauer_s','Protokoll'].map(_nwDisplayCsvEscape).join(';'));
   for (const c of connectors) {
     if (!c) continue;
     lines.push([
@@ -16478,100 +16565,118 @@ const _nwDisplayStationOperatorCsv = (payload) => {
       c.priceEurPerKwh === null || c.priceEurPerKwh === undefined ? '' : Number(c.priceEurPerKwh || 0).toFixed(4),
       String(Math.round(Number(c.powerW || 0))),
       String(Math.round(Number(c.sessionStartedAt || 0))),
+      '',
       String(Math.round(Number(c.sessionDurationSec || 0))),
       c.protocolHint || station.protocolHint || 'manufacturer-open',
     ].map(_nwDisplayCsvEscape).join(';'));
-    if (c.lastSession) {
+    const last = c.lastSession ? _nwDisplayNormalizeSessionRecord(station, c.id, c.lastSession, c.priceEurPerKwh || 0) : null;
+    if (last) {
       lines.push([
-        'LetzteSession',
+        'LetzteSessionPersistiert',
         station.name || station.id || '',
-        c.id || '',
+        c.id || last.lp || '',
         'completed',
-        c.lastSession.id || '',
+        last.id || '',
         'completed',
-        Number(c.lastSession.energyKwh || 0).toFixed(3),
+        Number(last.energyKwh || 0).toFixed(3),
+        Number(last.solarKwh || 0).toFixed(3),
+        Number(last.gridKwh || 0).toFixed(3),
+        String(last.solarSharePercent || 0),
+        Number(last.costEur || 0).toFixed(2),
+        Number(last.priceEurPerKwh || 0).toFixed(4),
         '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        String(Math.round(Number(c.lastSession.startTs || 0))),
-        String(Math.round(Number(c.lastSession.durationSec || 0))),
-        c.protocolHint || station.protocolHint || 'manufacturer-open',
+        String(Math.round(Number(last.startTs || 0))),
+        String(Math.round(Number(last.endTs || 0))),
+        String(Math.round(Number(last.durationSec || 0))),
+        last.protocolHint || c.protocolHint || station.protocolHint || 'manufacturer-open',
       ].map(_nwDisplayCsvEscape).join(';'));
     }
   }
-  lines.push(['SummeHeute', station.name || station.id || '', '', '', '', '', Number(operator.energyTodayKwh || 0).toFixed(3), '', '', '', Number(operator.currentRevenueEur || operator.revenueEur || 0).toFixed(2), '', String(Math.round(Number(operator.currentPowerW || 0))), '', '', operator.protocolHint || station.protocolHint || 'manufacturer-open'].map(_nwDisplayCsvEscape).join(';'));
+  lines.push('');
+  lines.push(['SummeHeute', station.name || station.id || '', '', '', '', '', Number(operator.energyTodayKwh || 0).toFixed(3), Number(operator.solarEnergyTodayKwh || 0).toFixed(3), Number(operator.gridEnergyTodayKwh || 0).toFixed(3), String(operator.solarShareTodayPercent || 0), Number(operator.currentRevenueEur || operator.completedRevenueTodayEur || operator.revenueEur || 0).toFixed(2), '', String(Math.round(Number(operator.currentPowerW || 0))), '', '', '', operator.protocolHint || station.protocolHint || 'manufacturer-open'].map(_nwDisplayCsvEscape).join(';'));
   return '\ufeff' + lines.join('\r\n');
 };
 
 const _nwDisplayBuildOperatorSummary = (station, connectors, now = Date.now()) => {
-  // Betreiberbasis: Diese Zusammenfassung ist absichtlich protokolloffen.
-  // Sie nutzt die kanonischen EVCS-Sessiondaten des Adapters und keine
-  // OCPP-spezifischen Transaktions-IDs. Hersteller-/Protokollinformationen
-  // werden nur als Hinweis geführt, nicht als technische Abhängigkeit.
+  // 0.8.25 Betreiberwerte: Tageswerte, letzte Session je LP und Solar-/Netzanteile
+  // werden aus den NexoWatt-internen Sessiondaten berechnet. Das bleibt bewusst
+  // hersteller- und protokolloffen: OCPP ist nur ein möglicher nachgelagerter
+  // Ausführungs-/Messadapter, aber keine Voraussetzung für den Displaybetrieb.
   const assigned = new Set((Array.isArray(station && station.assignedChargepoints) ? station.assignedChargepoints : []).map(_nwDisplayNormalizeLpKey));
   const since = _nwDisplayStartOfLocalDay(now);
   const list = Array.isArray(this._evcsSessionsBuf) ? this._evcsSessionsBuf : [];
-  let completedToday = 0;
-  let energyTodayKwh = 0;
-  let maxKwToday = 0;
-  const lastByLp = {};
-  for (const row of list) {
-    const idx = Math.max(1, Math.round(Number(row && row.wallboxIndex) || 0));
-    const lp = `lp${idx}`;
-    if (!assigned.has(lp)) continue;
-    const endTs = Number(row && row.endTs) || Number(row && row.startTs) || 0;
-    if (!lastByLp[lp] || endTs > (Number(lastByLp[lp].endTs) || 0)) lastByLp[lp] = row;
-    if (endTs >= since) {
-      completedToday += 1;
-      energyTodayKwh += Number(row && row.energyKwh) || 0;
-      maxKwToday = Math.max(maxKwToday, Number(row && row.maxKw) || 0);
-    }
-  }
-  const activeConnectors = (Array.isArray(connectors) ? connectors : []).filter((c) => c && (c.status === 'charging' || c.charging));
-  const currentPowerW = (Array.isArray(connectors) ? connectors : []).reduce((sum, c) => sum + (Number(c && c.powerW) || 0), 0);
-  const currentRevenueEur = (Array.isArray(connectors) ? connectors : []).reduce((sum, c) => sum + (Number(c && c.sessionCostEur) || 0), 0);
-
   const dayKey = _nwDisplayLocalDayKey(now);
   const persistedDayKey = String(_nwDisplayStationStateVal(station && station.id, 'operatorDayKey', '') || '');
   const persistedSameDay = persistedDayKey === dayKey;
   const persistedLastByLp = _nwDisplayReadStationJsonState(station && station.id, 'lastSessionsByLpJson', {});
-  if (persistedLastByLp && typeof persistedLastByLp === 'object') {
-    for (const [lp, saved] of Object.entries(persistedLastByLp)) {
-      if (!saved || !assigned.has(_nwDisplayNormalizeLpKey(lp))) continue;
-      const key = _nwDisplayNormalizeLpKey(lp);
-      const savedEnd = Number(saved.endTs) || 0;
-      const curEnd = Number(lastByLp[key] && lastByLp[key].endTs) || 0;
-      if (!lastByLp[key] || savedEnd > curEnd) lastByLp[key] = saved;
+  const defaultPrice = Math.max(0, _nwDisplayNum(station && station.priceEurPerKwh, 0));
+  let completedToday = 0;
+  let energyTodayKwh = 0;
+  let solarEnergyTodayKwh = 0;
+  let gridEnergyTodayKwh = 0;
+  let completedRevenueTodayEur = 0;
+  let maxKwToday = 0;
+  const lastByLp = {};
+
+  for (const row of list) {
+    const idx = Math.max(1, Math.round(Number(row && row.wallboxIndex) || 0));
+    const lp = `lp${idx}`;
+    if (!assigned.has(lp)) continue;
+    const normalized = _nwDisplayNormalizeSessionRecord(station, lp, row, defaultPrice);
+    if (!normalized) continue;
+    const endTs = Number(normalized.endTs) || Number(normalized.startTs) || 0;
+    if (!lastByLp[lp] || endTs > (Number(lastByLp[lp].endTs) || 0)) lastByLp[lp] = normalized;
+    if (endTs >= since) {
+      completedToday += 1;
+      energyTodayKwh += Number(normalized.energyKwh) || 0;
+      solarEnergyTodayKwh += Number(normalized.solarKwh) || 0;
+      gridEnergyTodayKwh += Number(normalized.gridKwh) || 0;
+      completedRevenueTodayEur += Number(normalized.costEur) || 0;
+      maxKwToday = Math.max(maxKwToday, Number(normalized.maxKw) || 0);
     }
   }
 
+  if (persistedLastByLp && typeof persistedLastByLp === 'object') {
+    for (const [lpRaw, savedRaw] of Object.entries(persistedLastByLp)) {
+      const lp = _nwDisplayNormalizeLpKey(lpRaw);
+      if (!savedRaw || !assigned.has(lp)) continue;
+      const saved = _nwDisplayNormalizeSessionRecord(station, lp, savedRaw, defaultPrice);
+      if (!saved) continue;
+      const savedEnd = Number(saved.endTs || saved.startTs) || 0;
+      const curEnd = Number(lastByLp[lp] && (lastByLp[lp].endTs || lastByLp[lp].startTs)) || 0;
+      if (!lastByLp[lp] || savedEnd >= curEnd) lastByLp[lp] = saved;
+    }
+  }
+
+  const activeConnectors = (Array.isArray(connectors) ? connectors : []).filter((c) => c && (c.status === 'charging' || c.charging));
+  const currentPowerW = (Array.isArray(connectors) ? connectors : []).reduce((sum, c) => sum + (Number(c && c.powerW) || 0), 0);
+  const currentRevenueEur = (Array.isArray(connectors) ? connectors : []).reduce((sum, c) => sum + (Number(c && c.sessionCostEur) || 0), 0);
+  const activeEnergyKwh = (Array.isArray(connectors) ? connectors : []).reduce((sum, c) => sum + (Number(c && c.sessionEnergyKwh) || 0), 0);
+  const activeSolarKwh = (Array.isArray(connectors) ? connectors : []).reduce((sum, c) => sum + (Number(c && c.sessionSolarKwh) || 0), 0);
+  const activeGridKwh = (Array.isArray(connectors) ? connectors : []).reduce((sum, c) => sum + (Number(c && c.sessionGridKwh) || 0), 0);
+
   const persistedSessionsToday = persistedSameDay ? _nwDisplayNum(_nwDisplayStationStateVal(station && station.id, 'operatorSessionsToday', 0), 0) : 0;
   const persistedEnergyToday = persistedSameDay ? _nwDisplayNum(_nwDisplayStationStateVal(station && station.id, 'operatorKwhToday', 0), 0) : 0;
+  const persistedSolarToday = persistedSameDay ? _nwDisplayNum(_nwDisplayStationStateVal(station && station.id, 'operatorSolarKwhToday', 0), 0) : 0;
+  const persistedGridToday = persistedSameDay ? _nwDisplayNum(_nwDisplayStationStateVal(station && station.id, 'operatorGridKwhToday', 0), 0) : 0;
+  const persistedRevenueToday = persistedSameDay ? _nwDisplayNum(_nwDisplayStationStateVal(station && station.id, 'operatorCompletedRevenueToday', 0), 0) : 0;
   const persistedMaxKwToday = persistedSameDay ? _nwDisplayNum(_nwDisplayStationStateVal(station && station.id, 'operatorMaxKwToday', 0), 0) : 0;
 
-  // Nach Adapter-Neustart kann der flüchtige EVCS-Session-Puffer leer sein.
-  // Dann bleiben die zuletzt persistierten Betreiberwerte für den laufenden Tag erhalten,
-  // anstatt im Display auf 0 zurückzuspringen. Sobald wieder neue Sessions im Puffer
-  // vorhanden sind, werden die Werte aus der Live-Auswertung übernommen.
   const hasBufferedSessionsForToday = completedToday > 0 || energyTodayKwh > 0;
   if (!hasBufferedSessionsForToday && persistedSameDay) {
     completedToday = Math.max(completedToday, persistedSessionsToday);
     energyTodayKwh = Math.max(energyTodayKwh, persistedEnergyToday);
+    solarEnergyTodayKwh = Math.max(solarEnergyTodayKwh, persistedSolarToday);
+    gridEnergyTodayKwh = Math.max(gridEnergyTodayKwh, persistedGridToday);
+    completedRevenueTodayEur = Math.max(completedRevenueTodayEur, persistedRevenueToday);
     maxKwToday = Math.max(maxKwToday, persistedMaxKwToday);
   }
 
-  const lastSessionsByLp = Object.fromEntries(Object.entries(lastByLp).map(([lp, row]) => [lp, {
-    id: String(row && row.id || ''),
-    startTs: Number(row && row.startTs) || 0,
-    endTs: Number(row && row.endTs) || 0,
-    energyKwh: Math.max(0, Math.round((Number(row && row.energyKwh) || 0) * 1000) / 1000),
-    durationSec: Math.max(0, Math.round(Number(row && row.durationSec) || 0)),
-    maxKw: Math.max(0, Math.round((Number(row && row.maxKw) || 0) * 100) / 100),
-    protocolHint: String((station && station.protocolHint) || 'manufacturer-open'),
-  }]));
+  const totalEnergyWithActive = energyTodayKwh + activeEnergyKwh;
+  const totalSolarWithActive = solarEnergyTodayKwh + activeSolarKwh;
+  const totalGridWithActive = gridEnergyTodayKwh + activeGridKwh;
+  const solarShareTodayPercent = totalEnergyWithActive > 0 ? Math.round((totalSolarWithActive / Math.max(totalEnergyWithActive, 0.0001)) * 100) : 0;
+  const lastSessionsByLp = Object.fromEntries(Object.entries(lastByLp).map(([lp, row]) => [lp, row]));
 
   return {
     generatedAt: now,
@@ -16580,10 +16685,19 @@ const _nwDisplayBuildOperatorSummary = (station, connectors, now = Date.now()) =
     protocolHint: String((station && station.protocolHint) || 'manufacturer-open'),
     completedSessionsToday: Math.round(completedToday),
     activeSessions: activeConnectors.length,
-    energyTodayKwh: Math.round(energyTodayKwh * 1000) / 1000,
-    maxKwToday: Math.round(maxKwToday * 100) / 100,
+    energyTodayKwh: _nwDisplayRound(totalEnergyWithActive, 3),
+    completedEnergyTodayKwh: _nwDisplayRound(energyTodayKwh, 3),
+    activeEnergyKwh: _nwDisplayRound(activeEnergyKwh, 3),
+    solarEnergyTodayKwh: _nwDisplayRound(totalSolarWithActive, 3),
+    gridEnergyTodayKwh: _nwDisplayRound(totalGridWithActive, 3),
+    solarShareTodayPercent,
+    maxKwToday: _nwDisplayRound(maxKwToday, 2),
     currentPowerW: Math.round(currentPowerW),
-    currentRevenueEur: Math.round(currentRevenueEur * 100) / 100,
+    currentRevenueEur: _nwDisplayRound(currentRevenueEur + completedRevenueTodayEur, 2),
+    completedRevenueTodayEur: _nwDisplayRound(completedRevenueTodayEur, 2),
+    lastSessionCount: Object.keys(lastSessionsByLp).length,
+    exportReady: !!(station && station.token),
+    csvUrl: station && station.token ? `/api/display/station/${encodeURIComponent(String(station.token || ''))}/operator.csv` : '',
     lastSessionsByLp,
   };
 };
@@ -16607,6 +16721,7 @@ const _nwDisplayBuildPayload = (station) => {
   const stationAssigned = Array.isArray(station.assignedChargepoints) ? station.assignedChargepoints : [];
   const list = Array.isArray(this.evcsList) ? this.evcsList : [];
   const assignedSet = new Set(stationAssigned);
+  const persistedLastByLpForPayload = _nwDisplayReadStationJsonState(station && station.id, 'lastSessionsByLpJson', {});
   const connectors = list
     .filter((wb) => wb && assignedSet.has(`lp${Number(wb.index) || 0}`))
     .map((wb) => {
@@ -16644,7 +16759,8 @@ const _nwDisplayBuildPayload = (station) => {
       const goalTargetSocPct = _nwDisplayClamp(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.goalTargetSocPct`, 100), 0, 100, 100);
       const goalFinishTs = Math.max(0, _nwDisplayNum(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.goalFinishTs`, 0), 0));
       const session = _nwDisplayActiveSession(idx);
-      const lastSession = _nwDisplayLastCompletedSession(idx);
+      const persistedLastSession = persistedLastByLpForPayload && typeof persistedLastByLpForPayload === 'object' ? persistedLastByLpForPayload[safe] : null;
+      const rawLastSession = _nwDisplayNewestSession(_nwDisplayLastCompletedSession(idx), persistedLastSession);
       const energyDayKwh = Math.max(0, _nwDisplayNum(_nwDisplayStateVal(`evcs.${idx}.energyDayKwh`, 0), 0));
       const solarSharePct = powerW > 0 && pvAvailable ? Math.max(0, Math.min(100, Math.round(Math.min(powerW, pvSurplusW) / Math.max(powerW, 1) * 100))) : 0;
       const solarPrice = Number.isFinite(Number(station.solarPriceEurPerKwh)) ? Number(station.solarPriceEurPerKwh) : defaultSolarPrice;
@@ -16653,9 +16769,15 @@ const _nwDisplayBuildPayload = (station) => {
       const sessionKwh = session && Number.isFinite(Number(session.energyKwh)) ? Number(session.energyKwh) : 0;
       const sessionState = session && session.active ? 'active' : (charging ? 'active-no-meter' : 'idle');
       const sessionId = sessionState.startsWith('active') ? _nwDisplaySessionId(station.id, safe, session || { startTs: 0 }) : '';
-      const sessionSolarKwh = station.showSolarShare && sessionKwh > 0 ? Math.round(sessionKwh * (solarSharePct / 100) * 1000) / 1000 : 0;
-      const sessionGridKwh = Math.max(0, Math.round((sessionKwh - sessionSolarKwh) * 1000) / 1000);
-      const sessionSolarSharePercent = station.showSolarShare ? (sessionKwh > 0 ? Math.round((sessionSolarKwh / Math.max(sessionKwh, 0.0001)) * 100) : solarSharePct) : null;
+      const costParts = _nwDisplaySessionCostBreakdown(sessionKwh, solarSharePct, solarPrice, fastPrice, price, station.showSolarShare);
+      const lastSession = rawLastSession ? _nwDisplayNormalizeSessionRecord(station, safe, {
+        ...rawLastSession,
+        priceEurPerKwh: rawLastSession.priceEurPerKwh || price,
+        costEur: rawLastSession.costEur ?? _nwDisplayRound((Number(rawLastSession.energyKwh) || 0) * price, 2),
+      }, price) : null;
+      const sessionSolarKwh = costParts.solarKwh;
+      const sessionGridKwh = costParts.gridKwh;
+      const sessionSolarSharePercent = costParts.solarSharePercent;
       return {
         id: safe,
         index: idx,
@@ -16688,8 +16810,8 @@ const _nwDisplayBuildPayload = (station) => {
         sessionSolarSharePercent,
         sessionDurationSec: session && Number.isFinite(Number(session.durationSec)) ? Math.max(0, Math.round(Number(session.durationSec))) : 0,
         sessionStartedAt: session && Number(session.startTs) > 0 ? Number(session.startTs) : 0,
-        sessionCostEur: Math.round(sessionKwh * price * 100) / 100,
-        priceEurPerKwh: station.showPrice ? Math.round(price * 10000) / 10000 : null,
+        sessionCostEur: costParts.costEur,
+        priceEurPerKwh: station.showPrice ? costParts.priceEurPerKwh : null,
         solarPriceEurPerKwh: station.showPrice ? Math.round(solarPrice * 10000) / 10000 : null,
         fastPriceEurPerKwh: station.showPrice ? Math.round(fastPrice * 10000) / 10000 : null,
         allowedModes: station.allowedModes,
@@ -16716,6 +16838,15 @@ const _nwDisplayBuildPayload = (station) => {
       };
     });
   const operator = _nwDisplayBuildOperatorSummary(station, connectors, now);
+  operator.csvUrl = station && station.token ? `/api/display/station/${encodeURIComponent(String(station.token || ''))}/operator.csv` : '';
+  for (const c of connectors) {
+    const lp = _nwDisplayNormalizeLpKey(c && c.id);
+    const persisted = operator && operator.lastSessionsByLp ? operator.lastSessionsByLp[lp] : null;
+    if (!persisted) continue;
+    const liveEnd = Number(c && c.lastSession && (c.lastSession.endTs || c.lastSession.startTs)) || 0;
+    const savedEnd = Number(persisted.endTs || persisted.startTs) || 0;
+    if (!c.lastSession || savedEnd >= liveEnd) c.lastSession = persisted;
+  }
   return {
     ok: true,
     generatedAt: now,
@@ -16751,7 +16882,7 @@ const _nwDisplayBuildPayload = (station) => {
       layoutMode: station.layoutMode || _nwDisplayLayoutMode('auto', connectors.length),
     },
     display: {
-      apiVersion: '0.8.23',
+      apiVersion: '0.8.25',
       manufacturerOpen: true,
       controlBridge: station.controlBridge || 'charging-management',
       controlProfile: station.controlProfile || 'chargingManagement',
@@ -16844,9 +16975,9 @@ const _nwDisplayPersistSessionOperatorStates = async (station, payload) => {
     const previousDayKey = String(_nwDisplayStationStateVal(station.id, 'operatorDayKey', '') || '');
     const dayChanged = previousDayKey && previousDayKey !== dayKey;
 
-    // 0.8.22 Persistenz: Last-Session-je-LP und Betreiberwerte werden als kompakte
-    // JSON-/Summenstates gespiegelt. Dadurch bleiben DC-Display und Betreiberansicht
-    // nach Adapter-Neustart stabil, ohne dass das Modul OCPP-Transaktionen kennen muss.
+    // 0.8.25 Persistenz: Last-Session-je-LP, Solar-/Netzanteile und Betreiberwerte
+    // werden als kompakte JSON-/Summenstates gespiegelt. Dadurch bleiben DC-Display
+    // und Betreiberansicht nach Adapter-Neustart stabil, ohne an OCPP gebunden zu sein.
     const previousLastByLp = dayChanged ? {} : _nwDisplayReadStationJsonState(station.id, 'lastSessionsByLpJson', {});
     const lastSessionsByLp = previousLastByLp && typeof previousLastByLp === 'object' ? { ...previousLastByLp } : {};
     const connectors = (payload.connectors || []).map((c) => {
@@ -16862,6 +16993,11 @@ const _nwDisplayPersistSessionOperatorStates = async (station, payload) => {
             endTs: Number(last.endTs) || 0,
             durationSec: Math.max(0, Math.round(Number(last.durationSec) || 0)),
             energyKwh: Math.max(0, Math.round((Number(last.energyKwh) || 0) * 1000) / 1000),
+            solarKwh: Math.max(0, Math.round((Number(last.solarKwh) || 0) * 1000) / 1000),
+            gridKwh: Math.max(0, Math.round((Number(last.gridKwh) || 0) * 1000) / 1000),
+            solarSharePercent: Math.max(0, Math.min(100, Math.round(Number(last.solarSharePercent) || 0))),
+            costEur: Math.max(0, Math.round((Number(last.costEur) || 0) * 100) / 100),
+            priceEurPerKwh: Math.max(0, Math.round((Number(last.priceEurPerKwh) || 0) * 10000) / 10000),
             maxKw: Math.max(0, Math.round((Number(last.maxKw) || 0) * 100) / 100),
             protocolHint: c.protocolHint || payload?.station?.protocolHint || 'manufacturer-open',
           };
@@ -16905,8 +17041,17 @@ const _nwDisplayPersistSessionOperatorStates = async (station, payload) => {
     await _nwDisplayWriteStationState(base, 'operatorSummaryJson', JSON.stringify(operator || {}), true);
     await _nwDisplayWriteStationState(base, 'operatorSessionsToday', Number(operator.completedSessionsToday) || 0, true);
     await _nwDisplayWriteStationState(base, 'operatorKwhToday', Number(operator.energyTodayKwh) || 0, true);
+    await _nwDisplayWriteStationState(base, 'operatorSolarKwhToday', Number(operator.solarEnergyTodayKwh) || 0, true);
+    await _nwDisplayWriteStationState(base, 'operatorGridKwhToday', Number(operator.gridEnergyTodayKwh) || 0, true);
+    await _nwDisplayWriteStationState(base, 'operatorSolarShareTodayPercent', Number(operator.solarShareTodayPercent) || 0, true);
+    await _nwDisplayWriteStationState(base, 'operatorCompletedRevenueToday', Number(operator.completedRevenueTodayEur) || 0, true);
     await _nwDisplayWriteStationState(base, 'operatorRevenueToday', Number(operator.currentRevenueEur || operator.revenueEur) || 0, true);
     await _nwDisplayWriteStationState(base, 'operatorMaxKwToday', Number(operator.maxKwToday) || 0, true);
+    await _nwDisplayWriteStationState(base, 'operatorLastSessionCount', Object.keys(lastSessionsByLp || {}).length, true);
+    await _nwDisplayWriteStationState(base, 'operatorLastSessionUpdatedAt', now, true);
+    await _nwDisplayWriteStationState(base, 'operatorExportReady', !!(station && station.token), true);
+    await _nwDisplayWriteStationState(base, 'csvExportReady', !!(station && station.token), true);
+    await _nwDisplayWriteStationState(base, 'sessionDiagnosticsJson', JSON.stringify({ ts: now, dayKey, dayChanged: !!dayChanged, lastSessionCount: Object.keys(lastSessionsByLp || {}).length, exportReady: !!(station && station.token), schema: 'nexowatt.dc.operator-export.v2' }), true);
   } catch (_e) {}
 };
 
@@ -16926,7 +17071,7 @@ const _nwDisplayExecuteStationCommand = async (station, lpKey, action, mode, ext
     mode,
     mode === 'solar' ? 'pv' : (mode === 'fast' ? 'boost' : 'auto')
   );
-  commandPayload.version = '0.8.23';
+  commandPayload.version = '0.8.25';
   commandPayload.directHardwareWrite = false;
   commandPayload.extra = extra && typeof extra === 'object' ? extra : {};
   const writes = [];
@@ -17075,7 +17220,7 @@ app.post('/api/display/station/:token/heartbeat', async (req, res) => {
       height: Number(body.height) || 0,
       userAgent: String((req.headers && req.headers['user-agent']) || '').slice(0, 180),
       language: String(body.language || '').slice(0, 16),
-      appVersion: String(body.appVersion || '0.8.23').slice(0, 32),
+      appVersion: String(body.appVersion || '0.8.24').slice(0, 32),
     };
     await _nwDisplayWriteStationState(station.id, 'lastDisplayInfoJson', JSON.stringify(displayInfo), true);
     return res.json({ ok: true, stationId: station.id, ts: now, watchdog: _nwDisplayReadStationRuntime(station, now) });
@@ -20898,8 +21043,8 @@ return res.json(out);
       'aiAdvisorPriorityStorage','aiAdvisorPriorityEvcs','aiAdvisorPriorityThermal','aiAdvisorPriorityHeatingRod','aiAdvisorPriorityGeneric',
       // Tariff/charging settings
       'dynamicTariff','storagePower','price','priority','tariffMode',
-      // Energie-Wertkonto Preise: Kunden-/Betreiberwerte aus settings.html.
-      'energyWalletEnabled','energyWalletFixedImportEurPerKwh','energyWalletFeedInEurPerKwh','energyWalletEvcsValueEurPerKwh',
+      // Energie-Wertkonto: kundenseitiger Schalter + Preise aus settings.html.
+      'energyWalletEnabled','energyWalletShowPriceSource','energyWalletFixedImportEurPerKwh','energyWalletFeedInEurPerKwh','energyWalletEvcsValueEurPerKwh',
       // PV Saisonprofil (Quartale)
       'tariffPvSeasonEnabled','tariffPvSeasonAiEnabled','tariffPvSeasonQ1Factor','tariffPvSeasonQ2Factor','tariffPvSeasonQ3Factor','tariffPvSeasonQ4Factor',
       // Zeitvariables Netzentgelt (HT/NT)

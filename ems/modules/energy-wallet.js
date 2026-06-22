@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/energy-wallet.ts
- * Quell-Hash: sha256:8ce1b3a51b3624cfc1fc4f2e8bbdb3bdf934fb452d97cea302496920d40ad203
+ * Quell-Hash: sha256:e8939c4cd313c1ddb54e8edd17a0d2db8c1f008d78b7f92e02b2f9fd98eab343
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -32,15 +32,20 @@
  * - Das Wertkonto nutzt bei aktivem dynamischem Zeittarif den aktuellen Tarifpreis.
  * - Feste Preisannahmen sind Kunden-/Betreibereinstellungen aus dem Frontend
  *   (`settings.energyWallet*`) und keine Installer-/Admin-Konfiguration mehr.
- *
- * 0.8.23:
- * - Das Kundenfrontend kann das Energie-Wertkonto über `settings.energyWalletEnabled`
- *   vollständig ein-/ausschalten.
- * - Stale-Fallback-Kandidaten erzeugen keinen gelben Nutzerhinweis mehr, wenn ein
- *   frischer gültiger Ersatzwert verwendet wurde. Die Diagnostik bleibt intern erhalten,
- *   aber die Nutzerkarte warnt nur noch bei echten kritischen Problemen.
  * - Installer-Config bleibt nur als Legacy-Fallback erhalten, damit Bestandsanlagen
  *   nach Updates keinen Wertverlust in der Berechnung bekommen.
+ *
+ * 0.8.23:
+ * - `settings.energyWalletEnabled` ist der kundenseitige An/Aus-Schalter.
+ * - Optionale veraltete Zusatzquellen wie EVCS/Speicher bleiben in der Diagnose,
+ *   erzeugen aber keine gelbe Kundenwarnung mehr, solange PV und Netz frisch sind.
+ *
+ * 0.8.24:
+ * - Kundenhinweise und Installateurdiagnosen werden getrennt veröffentlicht.
+ * - Die Preisquelle des Wertkontos wird nachvollziehbar gemacht: fester Preis,
+ *   dynamischer Tarif, Legacy-Config oder Fallback.
+ * - Dynamische Tarifpreise bekommen Quelle, Alter und Stale-Prüfung, damit ein
+ *   veralteter Zeittarif nicht unbemerkt als aktueller Arbeitspreis verwendet wird.
  */
 'use strict';
 
@@ -138,6 +143,8 @@ class EnergyWalletModule extends BaseModule {
       staleSources: [],
       clippedSources: [],
       activeSources: {},
+      customerWarning: '',
+      installerWarning: '',
       updatedAt: Date.now(),
     };
   }
@@ -205,6 +212,8 @@ class EnergyWalletModule extends BaseModule {
 
     await mk('energyWallet.diagnostics.status', 'Diagnosestatus', 'string', 'text', '', 'init');
     await mk('energyWallet.diagnostics.warning', 'Diagnosehinweis', 'string', 'text', '', '');
+    await mk('energyWallet.diagnostics.customerWarning', 'Kundenhinweis', 'string', 'text', '', '');
+    await mk('energyWallet.diagnostics.installerWarning', 'Installateurdiagnose', 'string', 'text', '', '');
     await mk('energyWallet.diagnostics.lastSkippedReason', 'Letzter übersprungener Grund', 'string', 'text', '', '');
     await mk('energyWallet.diagnostics.dataQualityPercent', 'Datenqualität', 'number', 'value.percent', '%', 0);
     await mk('energyWallet.diagnostics.missingSourcesJson', 'Fehlende Quellen JSON', 'string', 'json', '', '[]');
@@ -221,6 +230,11 @@ class EnergyWalletModule extends BaseModule {
     await mk('energyWallet.configuredPrices.dynamicTariffAvailable', 'dynamischer Tarifpreis verfügbar', 'boolean', 'indicator', '', false);
     await mk('energyWallet.configuredPrices.currentDynamicPriceEurPerKwh', 'aktueller dynamischer Tarifpreis', 'number', 'value.price', '€/kWh', 0);
     await mk('energyWallet.configuredPrices.priceSource', 'Preisquelle', 'string', 'text', '', 'fixed');
+    await mk('energyWallet.configuredPrices.priceSourceLabel', 'Preisquelle Anzeige', 'string', 'text', '', 'Festpreis');
+    await mk('energyWallet.configuredPrices.currentDynamicPriceSource', 'Quelle dynamischer Tarifpreis', 'string', 'text', '', '');
+    await mk('energyWallet.configuredPrices.currentDynamicPriceAgeSec', 'Alter dynamischer Tarifpreis', 'number', 'value.interval', 's', 0);
+    await mk('energyWallet.configuredPrices.currentDynamicPriceLastUpdate', 'Zeitstempel dynamischer Tarifpreis', 'number', 'value.time', '', 0);
+    await mk('energyWallet.configuredPrices.dynamicTariffWarning', 'Hinweis dynamischer Tarif', 'string', 'text', '', '');
   }
 
   async _ensurePeriodStates(prefix, keyLabel, defKey, mk) {
@@ -343,6 +357,33 @@ class EnergyWalletModule extends BaseModule {
     return fallback;
   }
 
+
+  _readStateCandidate(keys) {
+    // 0.8.24: Für dynamische Tarifpreise reicht der Zahlenwert allein nicht mehr.
+    // Das Wertkonto muss auch wissen, welcher State verwendet wurde und wie alt der
+    // Preis ist. Nur so kann die LIVE-Karte eine nachvollziehbare Preisquelle zeigen
+    // und ein alter Zeittarif sauber auf den festen Preis zurückfallen.
+    const list = Array.isArray(keys) ? keys : [keys];
+    const now = Date.now();
+    for (const key of list) {
+      const rec = this._cacheEntry(key);
+      if (!rec) continue;
+      const raw = rec && typeof rec === 'object' && Object.prototype.hasOwnProperty.call(rec, 'value') ? rec.value : rec;
+      const n = Number(raw);
+      if (!Number.isFinite(n)) continue;
+      const tsRaw = rec && typeof rec === 'object' ? Number(rec.ts || rec.lc || 0) : 0;
+      const ts = Number.isFinite(tsRaw) && tsRaw > 0 ? tsRaw : now;
+      return {
+        found: true,
+        key: String(key),
+        value: n,
+        ts,
+        ageSec: Math.max(0, Math.round((now - ts) / 1000)),
+      };
+    }
+    return { found: false, key: '', value: null, ts: 0, ageSec: 0 };
+  }
+
   _readStateBool(keys, fallback = false) {
     const list = Array.isArray(keys) ? keys : [keys];
     for (const key of list) {
@@ -379,24 +420,28 @@ class EnergyWalletModule extends BaseModule {
   _prices() {
     const cfg = this._cfg();
 
-    // 0.8.20 Preislogik:
-    // - Ist der dynamische Zeittarif im Kundenfrontend aktiv und liefert einen aktuellen Preis,
-    //   wird genau dieser aktuelle Preis für vermiedenen Netzbezug verwendet.
-    // - Ist kein dynamischer Tarif aktiv oder ist der aktuelle Tarifpreis nicht verfügbar,
-    //   verwendet das Wertkonto den festen Preis aus den Frontend-Einstellungen.
-    // - Ältere Installer-Config-Werte bleiben nur Legacy-Fallback, damit bestehende Systeme
-    //   nach dem Update weiterhin plausibel rechnen.
+    // 0.8.24 Preislogik:
+    // - Der feste Netzstrompreis bleibt die sichere Basis und wird vom Kunden/Betreiber
+    //   im normalen Frontend gepflegt.
+    // - Ist der dynamische Zeittarif aktiv, wird der aktuelle Tarifpreis nur verwendet,
+    //   wenn er vorhanden und nicht älter als die erlaubte Maximalzeit ist.
+    // - Quelle, Alter und Fallback-Grund werden veröffentlicht, damit Nutzerkarte und
+    //   Installateurdiagnose nicht dieselbe Warnsprache verwenden müssen.
     const dynamicTariffActive = this._readStateBool(['settings.dynamicTariff', 'dynamicTariff'], false);
-    const tariffNowRaw = this._readStateNumber([
+    const tariffCandidate = this._readStateCandidate([
       'ems.budget.tariff.currentPriceEurKwh',
       'tarif.preisAktuellEurProKwh',
       'historie.tariff.providerCurrentEurPerKwh',
       'priceCurrent',
       'tarif.priceCurrent',
       'tariff.priceCurrent',
-    ], null);
-    const tariffNow = normalizePriceEurPerKwh(tariffNowRaw, null);
-    const dynamicTariffAvailable = dynamicTariffActive && Number.isFinite(Number(tariffNow));
+    ]);
+    const tariffNow = tariffCandidate.found ? normalizePriceEurPerKwh(tariffCandidate.value, null) : null;
+    const maxAgeSecRaw = cfg.dynamicTariffMaxAgeSec !== undefined ? Number(cfg.dynamicTariffMaxAgeSec) : 7200;
+    const maxAgeSec = Math.round(clamp(Number.isFinite(maxAgeSecRaw) ? maxAgeSecRaw : 7200, 60, 86400));
+    const tariffFinite = Number.isFinite(Number(tariffNow));
+    const tariffFresh = tariffFinite && (!tariffCandidate.found || tariffCandidate.ageSec <= maxAgeSec);
+    const dynamicTariffAvailable = dynamicTariffActive && tariffFinite && tariffFresh;
 
     const fixedInput = this._readStateNumber([
       'settings.energyWalletFixedImportEurPerKwh',
@@ -427,6 +472,22 @@ class EnergyWalletModule extends BaseModule {
         : (cfg.evcsValueEurPerKwh !== undefined ? cfg.evcsValueEurPerKwh : (cfg.evcsValueEurKwh !== undefined ? cfg.evcsValueEurKwh : gridImport)),
       gridImport
     );
+
+    let dynamicTariffWarning = '';
+    if (dynamicTariffActive && !tariffCandidate.found) {
+      dynamicTariffWarning = 'Dynamischer Zeittarif ist aktiv, aber es wurde kein aktueller Tarifpreis gefunden. Das Wertkonto nutzt den festen Netzstrompreis.';
+    } else if (dynamicTariffActive && tariffCandidate.found && !tariffFinite) {
+      dynamicTariffWarning = `Dynamischer Tarifpreis aus ${tariffCandidate.key} ist nicht plausibel. Das Wertkonto nutzt den festen Netzstrompreis.`;
+    } else if (dynamicTariffActive && tariffCandidate.found && !tariffFresh) {
+      dynamicTariffWarning = `Dynamischer Tarifpreis aus ${tariffCandidate.key} ist ${tariffCandidate.ageSec}s alt. Das Wertkonto nutzt den festen Netzstrompreis.`;
+    }
+
+    const priceSource = dynamicTariffAvailable ? 'dynamicTariff' : (fixedInput !== null ? 'frontendFixed' : (legacyFixedInput !== undefined ? 'legacyConfig' : 'fallback'));
+    const priceSourceLabel = dynamicTariffAvailable
+      ? 'Dynamischer Zeittarif'
+      : (priceSource === 'frontendFixed' ? 'Fester Preis aus Einstellungen'
+        : (priceSource === 'legacyConfig' ? 'Legacy-Installerwert' : 'Fallback-Preis'));
+
     return {
       gridImportEurPerKwh: gridImport,
       feedInEurPerKwh: feedIn,
@@ -434,8 +495,14 @@ class EnergyWalletModule extends BaseModule {
       fixedGridImportEurPerKwh: fixedGridImport,
       dynamicTariffActive: !!dynamicTariffActive,
       dynamicTariffAvailable: !!dynamicTariffAvailable,
-      currentDynamicPriceEurPerKwh: Number.isFinite(Number(tariffNow)) ? tariffNow : null,
-      priceSource: dynamicTariffAvailable ? 'dynamicTariff' : (fixedInput !== null ? 'frontendFixed' : (legacyFixedInput !== undefined ? 'legacyConfig' : 'fallback')),
+      currentDynamicPriceEurPerKwh: tariffFinite ? tariffNow : null,
+      currentDynamicPriceSource: tariffCandidate.found ? tariffCandidate.key : '',
+      currentDynamicPriceAgeSec: tariffCandidate.found ? tariffCandidate.ageSec : 0,
+      currentDynamicPriceLastUpdate: tariffCandidate.found ? tariffCandidate.ts : 0,
+      dynamicTariffMaxAgeSec: maxAgeSec,
+      dynamicTariffWarning,
+      priceSource,
+      priceSourceLabel,
     };
   }
 
@@ -446,21 +513,24 @@ class EnergyWalletModule extends BaseModule {
     const staleSources = [];
     const clippedSources = [];
     const activeSources = {};
+    const requiredLabels = new Set(['pv', 'gridSigned', 'gridImport', 'gridExport']);
+    const staleRequiredSources = [];
+    const clippedRequiredSources = [];
 
     const read = (label, keys, opts = {}) => {
       const c = this._readCacheCandidate(keys, { staleMs, maxAbsW, positive: opts.positive === true });
-
-      // Wichtiger Nutzerhinweis-Fix:
-      // Ein alter Kandidat in der Fallback-Liste darf die LIVE-Karte nicht gelb machen,
-      // wenn anschließend ein frischer gültiger Ersatzwert gefunden wurde. Beispiel:
-      // `ems.budget.pvPowerW` ist stale, aber `pvPower` ist frisch. Dann hat das
-      // Wertkonto alle benötigten Werte und der Kunde soll keinen Warnbalken sehen.
-      // Stale-Quellen werden deshalb nur als kritisch gemeldet, wenn für diese
-      // Messgröße gar kein verwendbarer Wert gefunden wurde.
-      if (!c.found && c.staleSeen && c.staleSeen.length) staleSources.push(...c.staleSeen.map(k => `${label}:${k}`));
+      if (c.staleSeen && c.staleSeen.length) {
+        const rows = c.staleSeen.map(k => `${label}:${k}`);
+        staleSources.push(...rows);
+        if (requiredLabels.has(label) && !c.found) staleRequiredSources.push(...rows);
+      }
       if (c.found) {
         activeSources[label] = c.key;
-        if (c.clipped) clippedSources.push(`${label}:${c.key}`);
+        if (c.clipped) {
+          const row = `${label}:${c.key}`;
+          clippedSources.push(row);
+          if (requiredLabels.has(label)) clippedRequiredSources.push(row);
+        }
         return c;
       }
       return c;
@@ -503,34 +573,51 @@ class EnergyWalletModule extends BaseModule {
     let dataQualityPercent = 100;
     if (!hasPvSource) dataQualityPercent -= 45;
     if (!hasGridSource) dataQualityPercent -= 45;
-    // Stale-Quellen in der Fallback-Liste sind Diagnoseinformation, aber kein
-    // Nutzerfehler, solange PV und Netz aus frischen Ersatzwerten vorliegen. Deshalb
-    // reduzieren sie die sichtbare Datenqualität nicht mehr. Echte Probleme bleiben:
-    // fehlende Pflichtquellen, begrenzte Ausreißer oder unplausible Bilanz.
-    if (clippedSources.length) dataQualityPercent -= Math.min(25, clippedSources.length * 12);
+    // Die sichtbare Datenqualität bewertet nur die Kernquellen PV/Netz hart.
+    // Optionale Zusatzquellen (EVCS, Speicher) können bei vielen Anlagen selten schreiben
+    // oder gar nicht vorhanden sein. Sie bleiben in den Diagnose-JSONs, sollen aber den
+    // Endkunden nicht unnötig mit einer Warnung verunsichern, wenn die Hauptberechnung stimmt.
+    if (staleRequiredSources.length) dataQualityPercent -= Math.min(25, staleRequiredSources.length * 8);
+    if (clippedRequiredSources.length) dataQualityPercent -= Math.min(25, clippedRequiredSources.length * 12);
     if (plausibleBalanceWarn) dataQualityPercent -= 15;
     dataQualityPercent = clamp(dataQualityPercent, 0, 100);
 
     let status = 'ok';
-    let warning = '';
+    let customerWarning = '';
     if (!hasPvSource || !hasGridSource) {
       status = 'waiting-data';
-      warning = `Energie-Wertkonto wartet auf ${missingSources.join(' und ')}.`;
-    } else if (clippedSources.length || plausibleBalanceWarn) {
+      customerWarning = `Energie-Wertkonto wartet auf ${missingSources.join(' und ')}.`;
+    } else if (plausibleBalanceWarn) {
       status = 'warn';
-      warning = plausibleBalanceWarn || 'Einige Eingangswerte wurden auf plausible Grenzen begrenzt.';
+      customerWarning = plausibleBalanceWarn;
+    } else if (staleRequiredSources.length || clippedRequiredSources.length) {
+      // 0.8.24: Technische Qualitätsdetails bleiben für Service/Installer sichtbar,
+      // werden aber nicht mehr als gelber Kundenhinweis angezeigt, solange die
+      // Berechnung mit gültigen Kernquellen läuft.
+      status = 'warn';
     }
 
     const integratable = hasPvSource && hasGridSource && dataQualityPercent >= 40;
 
+    const installerWarningParts = [];
+    if (customerWarning) installerWarningParts.push(customerWarning);
+    if (staleSources.length) installerWarningParts.push(`Veraltete Kandidaten: ${staleSources.join(', ')}`);
+    if (clippedSources.length) installerWarningParts.push(`Begrenzte Kandidaten: ${clippedSources.join(', ')}`);
+
     const diagnostics = {
       status,
-      warning,
+      // `warning` bleibt für alte UI-Pfade vorhanden, enthält aber nur noch den
+      // kundenrelevanten Hinweis. Technische Details stehen in installerWarning.
+      warning: customerWarning,
+      customerWarning,
+      installerWarning: installerWarningParts.join(' | '),
       lastSkippedReason: integratable ? '' : (missingSources.length ? `missing:${missingSources.join(',')}` : 'low-quality'),
       dataQualityPercent: round(dataQualityPercent, 0),
       missingSources,
       staleSources,
+      staleRequiredSources,
       clippedSources,
+      clippedRequiredSources,
       activeSources,
       updatedAt: Date.now(),
     };
@@ -540,15 +627,11 @@ class EnergyWalletModule extends BaseModule {
 
   _isEnabled() {
     const cfg = this._cfg();
-
-    // Kundenfreiheit: Der Betreiber/Kunde darf das Energie-Wertkonto im normalen
-    // Frontend unter Einstellungen abschalten. Diese lokale Einstellung hat Vorrang
-    // vor der technischen Installer-/Legacy-Config. Damit bleiben Datenpunkt-Mapping
-    // und Lizenz unverändert, aber die Nutzerkarte und Berechnung pausieren sauber.
+    // Kundenfreiheit: Der Nutzer/Betreiber darf das Energie-Wertkonto im Frontend
+    // ausschalten. Der Installer-Schalter bleibt technischer Fallback, aber der
+    // kundennahe `settings.energyWalletEnabled` hat Vorrang für Anzeige und Berechnung.
     const customerEnabled = this._readStateBool(['settings.energyWalletEnabled'], true);
-    if (customerEnabled === false) return false;
-
-    return cfg.enabled !== false;
+    return cfg.enabled !== false && customerEnabled !== false;
   }
 
   async tick() {
@@ -598,6 +681,8 @@ class EnergyWalletModule extends BaseModule {
         ...this._emptyDiagnostics('skip-interval'),
         lastSkippedReason: 'interval-out-of-range',
         warning: 'Das Energie-Wertkonto hat eine unplausible Zeitlücke übersprungen.',
+        customerWarning: 'Das Energie-Wertkonto hat eine unplausible Zeitlücke übersprungen.',
+        installerWarning: 'Integrationsintervall außerhalb des erlaubten Bereichs; keine kWh-/Euro-Fortschreibung.',
         dataQualityPercent: 0,
       };
       await this._publish('skip-interval');
@@ -688,7 +773,13 @@ class EnergyWalletModule extends BaseModule {
     const month = this._periodSummary(this._monthAcc, this._monthKey);
     const year = this._periodSummary(this._yearAcc, this._yearKey);
     const editionMode = this._isEos() ? 'eos' : 'home';
-    const diagnostics = this._lastDiagnostics || this._emptyDiagnostics(status);
+    const diagnostics = { ...(this._lastDiagnostics || this._emptyDiagnostics(status)) };
+    if (prices.dynamicTariffWarning) {
+      diagnostics.installerWarning = [diagnostics.installerWarning, prices.dynamicTariffWarning].filter(Boolean).join(' | ');
+      // Kein Kunden-Banner für Tarif-Fallback: Die LIVE-Karte kann die Preisquelle
+      // optional anzeigen; der technische Grund bleibt in installerWarning.
+    }
+    if (!diagnostics.warning && diagnostics.customerWarning) diagnostics.warning = diagnostics.customerWarning;
     const explanation = this._buildExplanation(today.valueEur, today.localUsePercent, diagnostics, month, year);
     return {
       status,
@@ -716,8 +807,9 @@ class EnergyWalletModule extends BaseModule {
   _buildExplanation(valueEur, localUsePercent, diagnostics, month, year) {
     const v = Number(valueEur) || 0;
     const pct = Number(localUsePercent) || 0;
-    if (diagnostics && diagnostics.status === 'waiting-data') return diagnostics.warning || 'Das Energie-Wertkonto wartet auf vollständige PV- und Netzdaten.';
-    if (diagnostics && diagnostics.status === 'warn' && diagnostics.warning) return diagnostics.warning;
+    const customerWarning = diagnostics && (diagnostics.customerWarning || diagnostics.warning) ? String(diagnostics.customerWarning || diagnostics.warning) : '';
+    if (diagnostics && diagnostics.status === 'waiting-data') return customerWarning || 'Das Energie-Wertkonto wartet auf vollständige PV- und Netzdaten.';
+    if (diagnostics && diagnostics.status === 'warn' && customerWarning) return customerWarning;
     if (this._acc.pvKwh <= 0.001 && (month.valueEur || 0) > 0) return `Heute wartet das Energie-Wertkonto auf PV-Erzeugung. Im aktuellen Monat sind bereits ${round(month.valueEur, 2)} € Energiewert entstanden.`;
     if (this._acc.pvKwh <= 0.001 && (year.valueEur || 0) > 0) return `Heute wartet das Energie-Wertkonto auf PV-Erzeugung. Dieses Jahr sind bereits ${round(year.valueEur, 2)} € Energiewert entstanden.`;
     if (this._acc.pvKwh <= 0.001) return 'Das Energie-Wertkonto wartet auf PV-Erzeugung.';
@@ -753,6 +845,8 @@ class EnergyWalletModule extends BaseModule {
     const d = s.diagnostics || this._emptyDiagnostics(s.status);
     await set('energyWallet.diagnostics.status', d.status || s.status);
     await set('energyWallet.diagnostics.warning', d.warning || '');
+    await set('energyWallet.diagnostics.customerWarning', d.customerWarning || d.warning || '');
+    await set('energyWallet.diagnostics.installerWarning', d.installerWarning || '');
     await set('energyWallet.diagnostics.lastSkippedReason', d.lastSkippedReason || '');
     await set('energyWallet.diagnostics.dataQualityPercent', round(d.dataQualityPercent, 0));
     await set('energyWallet.diagnostics.missingSourcesJson', JSON.stringify(d.missingSources || []));
@@ -769,6 +863,11 @@ class EnergyWalletModule extends BaseModule {
     await set('energyWallet.configuredPrices.dynamicTariffAvailable', !!s.prices.dynamicTariffAvailable);
     await set('energyWallet.configuredPrices.currentDynamicPriceEurPerKwh', s.prices.currentDynamicPriceEurPerKwh === null ? 0 : round(s.prices.currentDynamicPriceEurPerKwh, 4));
     await set('energyWallet.configuredPrices.priceSource', String(s.prices.priceSource || 'fixed'));
+    await set('energyWallet.configuredPrices.priceSourceLabel', String(s.prices.priceSourceLabel || s.prices.priceSource || 'Festpreis'));
+    await set('energyWallet.configuredPrices.currentDynamicPriceSource', String(s.prices.currentDynamicPriceSource || ''));
+    await set('energyWallet.configuredPrices.currentDynamicPriceAgeSec', Math.max(0, Math.round(Number(s.prices.currentDynamicPriceAgeSec || 0))));
+    await set('energyWallet.configuredPrices.currentDynamicPriceLastUpdate', Math.max(0, Math.round(Number(s.prices.currentDynamicPriceLastUpdate || 0))));
+    await set('energyWallet.configuredPrices.dynamicTariffWarning', String(s.prices.dynamicTariffWarning || ''));
   }
 
   async _publishPeriod(prefix, keyName, periodKey, summary, set) {

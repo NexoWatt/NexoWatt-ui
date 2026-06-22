@@ -495,18 +495,20 @@
         </div>
       </div>
 
-        <div id="energyWalletCustomerBlock" style="margin-top:14px;padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(255,255,255,.02)">
-          <div style="font-weight:700;margin-bottom:6px">Energie-Wertkonto 💶</div>
-          <small style="opacity:.75;display:block;margin-bottom:10px">
-            Diese Anzeige ist freiwillig. Der Kunde/Betreiber kann das Energie-Wertkonto hier komplett ausblenden. Preise werden als kundenverständliche Kostenannahmen gepflegt; technische Datenpunkt-Verknüpfungen bleiben im Installer/App-Center.
+        <div id="energyWalletCustomerSettings" style="margin-top:14px;padding:10px;border:1px solid rgba(0,200,83,.18);border-radius:10px;background:rgba(0,200,83,.035)">
+          <div style="font-weight:600;margin-bottom:6px">Energie-Wertkonto 💶</div>
+          <small style="opacity:.75;display:block;margin-bottom:8px">
+            Diese Anzeige ist freiwillig. Der Betreiber/Endkunde kann das Energie-Wertkonto hier ein- oder ausschalten und die verständlichen Kostenannahmen pflegen.
           </small>
-
           <label class="row"><span>Energie-Wertkonto anzeigen</span>
             <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_energyWalletEnabled"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
             <input type="checkbox" class="nw-toggle-hidden" id="s_energyWalletEnabled" data-scope="settings" data-key="energyWalletEnabled" checked>
           </label>
-
-          <div id="energyWalletPriceBlock">
+          <div id="energyWalletCustomerPriceBlock">
+            <label class="row"><span>Preisquelle in LIVE-Karte anzeigen</span>
+              <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_energyWalletShowPriceSource"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+              <input type="checkbox" class="nw-toggle-hidden" id="s_energyWalletShowPriceSource" data-scope="settings" data-key="energyWalletShowPriceSource">
+            </label>
             <label class="row"><span>Fester Netzstrompreis (€/kWh)</span>
               <input type="number" id="s_energyWalletFixedImportEurPerKwh" step="0.0001" min="-2" max="5" data-scope="settings" data-key="energyWalletFixedImportEurPerKwh" value="0.35">
             </label>
@@ -517,7 +519,7 @@
               <input type="number" id="s_energyWalletEvcsValueEurPerKwh" step="0.0001" min="-2" max="5" data-scope="settings" data-key="energyWalletEvcsValueEurPerKwh" value="0.35">
             </label>
             <small style="opacity:.75;display:block;margin-top:6px">
-              Ist der dynamische Zeittarif aktiv und liefert einen aktuellen Preis, nutzt das Energie-Wertkonto diesen aktuellen Tarifpreis für vermiedenen Netzbezug. Der feste Netzstrompreis bleibt dann nur Fallback.
+              Ist der dynamische Zeittarif aktiv und liefert einen aktuellen, nicht veralteten Preis, nutzt das Energie-Wertkonto diesen Tarifpreis für vermiedenen Netzbezug. Der feste Preis bleibt Fallback. Datenpunkt-Verknüpfungen und Modulfreigaben bleiben im Installer/App-Center.
             </small>
           </div>
         </div>

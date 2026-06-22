@@ -97,3 +97,36 @@ button,input{font:inherit;}
 .nw-control-btn.active{background:var(--nw-green);border-color:rgba(0,230,118,.55);color:#06110b;box-shadow:0 10px 24px rgba(0,230,118,.16);}
 .nw-control-btn:disabled{opacity:.42;cursor:not-allowed;filter:grayscale(.25);}
 @media (max-width:760px){.nw-control-row{grid-template-columns:1fr}.nw-control-row>small{grid-column:1}.nw-control-buttons--4{grid-template-columns:repeat(2,1fr)}}
+
+
+.nw-connector-last-session {
+  border: 1px solid rgba(0, 230, 118, 0.18);
+  background: rgba(0, 230, 118, 0.08);
+  border-radius: 18px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 4px;
+}
+
+.nw-connector-last-session span {
+  color: var(--nw-muted);
+  font-weight: 800;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.nw-connector-last-session strong {
+  font-size: 18px;
+}
+
+.nw-connector-last-session em {
+  font-style: normal;
+  color: var(--nw-muted);
+  font-weight: 800;
+}
+
+.nw-display-pill--link {
+  text-decoration: none;
+  color: var(--nw-text);
+}

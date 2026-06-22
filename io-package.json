@@ -1,11 +1,15 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.23",
+    "version": "0.8.25",
     "news": {
-      "0.8.23": {
-        "de": "Version 0.8.23: Energie-Wertkonto kann im Kundenfrontend ein-/ausgeschaltet werden, Preise stehen unter einem eigenen Abschnitt unterhalb der dynamischen Tarife und Warnhinweise bei frischen Ersatzwerten wurden entschärft.",
-        "en": "Version 0.8.23: Energy wallet can be enabled/disabled in the customer frontend, prices move into a dedicated section below dynamic tariffs, and warnings are relaxed when fresh fallback values are available."
+      "0.8.25": {
+        "de": "Version 0.8.25: DC Station Display Betreiberwerte erweitert. Letzte Session je LP wird persistent geführt, Tageswerte enthalten Solar-/Netzanteil, CSV-Export v2 und Betreiberdiagnose bleiben hersteller- und protokolloffen.",
+        "en": "Version 0.8.25: Extends DC Station Display operator values. Last session per chargepoint is persisted, daily values include solar/grid split, CSV export v2 and operator diagnostics stay manufacturer/protocol agnostic."
+      },
+      "0.8.24": {
+        "de": "Version 0.8.24: Energie-Wertkonto Diagnose verfeinert. Kundenhinweise und Installateurdiagnose sind getrennt, dynamische Tarifpreise zeigen Quelle/Alter und die LIVE-Karte kann optional die Preisquelle anzeigen.",
+        "en": "Version 0.8.24: Refines Energy Wallet diagnostics. Customer hints and installer diagnostics are separated, dynamic tariff prices expose source/age, and the LIVE card can optionally show the price source."
       },
       "0.8.22": {
         "de": "Version 0.8.22: DC Station Display speichert Betreiber-/Sessionwerte robuster, ergänzt Last-Session-je-LP, CSV-Exportbasis und npm-Release-Prüfung gegen ETARGET durch fehlende Registry-Versionen.",
@@ -26,10 +30,6 @@
       "0.8.18": {
         "de": "Version 0.8.18: DC Station Display gehärtet. Watchdog, Offline-/Wartungsanzeige, Touch-Layouts für 1/2/4 Connectoren und Session-/PV-Anteil-Vorbereitung ergänzt.",
         "en": "Version 0.8.18: DC Station Display hardened. Adds watchdog, offline/maintenance display, touch layouts for 1/2/4 connectors and session/PV-share preparation."
-      },
-      "0.8.17": {
-        "de": "Version 0.8.17: EOS DC Station Display Basis ergänzt. Pro angelegter DC-Ladestation kann im Installerbereich eine separate, tokenisierte Display-Seite mit zugeordneten LPs/Connectoren konfiguriert werden. Die Seite ist isoliert, touch-optimiert und steuert nur erlaubte LPs über sichere EMS-States.",
-        "en": "Version 0.8.17: Adds the EOS DC Station Display foundation. Installers can configure a separate tokenized display page per DC charging station with assigned charge points/connectors. The page is isolated, touch-optimized and controls only assigned charge points through safe EMS states."
       }
     },
     "title": "NexoWatt UI",
@@ -218,6 +218,7 @@
       "flowGridShowNet": false,
       "dynamicTariff": false,
       "energyWalletEnabled": true,
+      "energyWalletShowPriceSource": false,
       "energyWalletFixedImportEurPerKwh": 0.35,
       "energyWalletFeedInEurPerKwh": 0.08,
       "energyWalletEvcsValueEurPerKwh": 0.35

@@ -1,9 +1,24 @@
+## 0.8.25
+
+- DC Station Display: Betreiberwerte erweitert. Letzte Session je LP wird persistiert und im Display angezeigt.
+- DC Station Display: Betreiber-Tageswerte enthalten Solar-/Netzanteil, abgeschlossenen Umsatz, Exportbereitschaft und Sessiondiagnose.
+- CSV-Export: Operator-Export v2 mit aktiven Sessions, persistierten letzten Sessions und Tages-Summen ergänzt.
+- Architektur: Session-/Betreiberlogik bleibt hersteller- und protokolloffen, ohne OCPP-only-Kopplung.
+
+## 0.8.24
+
+- Energie-Wertkonto: Kundenhinweis und Installateurdiagnose getrennt; die LIVE-Karte zeigt nur kundenrelevante Warnungen, technische Details bleiben in `energyWallet.diagnostics.*`.
+- Energie-Wertkonto: Dynamische Zeittarife bekommen Quelle, Alter und Max-Alter-Prüfung. Veraltete Tarifpreise fallen sauber auf den festen Netzstrompreis zurück.
+- Kunden-Einstellungen: optionaler Schalter `Preisquelle in LIVE-Karte anzeigen` ergänzt.
+- LIVE: optionale Preisquellen-Zeile mit wirksamem Preis, dynamischer Tarifquelle und Alter vorbereitet.
+- Service-Worker Cache auf `nexowatt-cache-v324` erhöht.
+
 ## 0.8.23
 
-- Energie-Wertkonto: Nutzer-/Betreiberschalter im Frontend ergänzt, damit der Kunde die Anzeige freiwillig ein- oder ausschalten kann.
-- Einstellungen: Energie-Wertkonto-Preise aus dem dynamischen Tarif-Unterblock herausgelöst und als eigener Abschnitt unterhalb der Tarif-/Netzentgelt-Einstellungen platziert.
-- Diagnose: Gelber LIVE-Warnhinweis erscheint nicht mehr nur wegen veralteter Fallback-Kandidaten, wenn frische gültige PV-/Netzwerte verwendet werden.
-- Kommentare: Logik für Kundenfreiheit, Preisposition und Stale-Fallbacks im TS-Code dokumentiert.
+- Energie-Wertkonto: Warnhinweis im LIVE-Dashboard entschärft; optionale veraltete Zusatzquellen wie EVCS/Speicher erzeugen nur noch Diagnosedaten, aber keine Kundenwarnung.
+- Kunden-Einstellungen: Energie-Wertkonto bekommt einen eigenen An/Aus-Schalter und der Preisblock wurde unterhalb der dynamischen Tarif-/Netzentgelt-Sektion positioniert.
+- Backend/EMS: `settings.energyWalletEnabled` als kundenseitiger Schalter ergänzt; bei Aus wird das Wertkonto deaktiviert und die LIVE-Karte ausgeblendet.
+- Service-Worker Cache auf `nexowatt-cache-v323` erhöht.
 
 ## 0.8.22
 
