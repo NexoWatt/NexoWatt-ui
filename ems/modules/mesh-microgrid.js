@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/mesh-microgrid.ts
- * Quell-Hash: sha256:f9261e3bb2a619af8128791da07a70486ae060298f3fbfa42d678d9550733622
+ * Quell-Hash: sha256:9ee1ae7925842cad9c72aa3f3c7ed9654f4567eee97cf754bcf19d47acfed720
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -40,7 +40,7 @@
 
 const { BaseModule } = require('./base');
 
-const MODULE_VERSION = 'nexowatt.mesh-microgrid-model.v1';
+const MODULE_VERSION = 'nexowatt.mesh-microgrid-planning.v1';
 
 function safeId(input, fallback = 'node') {
   const s = String(input || '').trim().toLowerCase();
@@ -115,6 +115,237 @@ function normalizeNodes(raw) {
       note: String(n.note || '').trim(),
     };
   });
+}
+
+
+/**
+ * Sortiert Knoten nach Betreiberpriorität. Niedrige Zahlen bedeuten hohe
+ * Priorität. Diese Hilfsfunktion ist bewusst rein diagnostisch: Sie plant nur
+ * Empfehlungen für spätere Local-First-/Grid-Last-Regeln und erzeugt keine
+ * Hardware-Schreibbefehle.
+ */
+function prioritySort(a, b) {
+  const pa = Number.isFinite(Number(a && a.priority)) ? Number(a.priority) : 999;
+  const pb = Number.isFinite(Number(b && b.priority)) ? Number(b.priority) : 999;
+  if (pa !== pb) return pa - pb;
+  return String((a && (a.name || a.id)) || '').localeCompare(String((b && (b.name || b.id)) || ''));
+}
+
+/**
+ * Für Abwurfs-/Reduktionsdiagnosen werden niedriger priorisierte Senken zuerst
+ * vorgeschlagen. Auch das ist nur Planung/Diagnose; keine Steuerung.
+ */
+function reversePrioritySort(a, b) {
+  return prioritySort(b, a);
+}
+
+function priorityOrder(nodes) {
+  return (Array.isArray(nodes) ? nodes : [])
+    .filter(n => n && n.enabled !== false)
+    .slice()
+    .sort(prioritySort)
+    .map((n, idx) => ({ rank: idx + 1, id: n.id, name: n.name, type: n.type, role: n.role, priority: n.priority }));
+}
+
+function buildGridLimitDiagnostics(totals, gridLimitW) {
+  const limit = Math.max(0, Math.round(num(gridLimitW, 0)));
+  const importW = Math.max(0, Math.round(num(totals && totals.gridImportW, 0)));
+  const exportW = Math.max(0, Math.round(num(totals && totals.gridExportW, 0)));
+  const activePowerW = Math.max(importW, exportW);
+  const direction = importW >= exportW ? (importW > 0 ? 'import' : 'balanced') : 'export';
+  const usagePercent = limit > 0 ? round((activePowerW / limit) * 100, 0) : 0;
+  const remainingW = limit > 0 ? Math.max(0, limit - activePowerW) : 0;
+  const overLimitW = limit > 0 ? Math.max(0, activePowerW - limit) : 0;
+  const severity = limit <= 0 ? 'off' : (overLimitW > 0 ? 'critical' : (usagePercent >= 90 ? 'warn' : 'ok'));
+  const message = limit <= 0
+    ? 'Kein Cluster-/Netzlimit konfiguriert.'
+    : (overLimitW > 0
+      ? `Netzlimit überschritten (${direction}, ${overLimitW} W über Limit).`
+      : `Netzlimit eingehalten (${direction}, ${remainingW} W Reserve).`);
+  return { schema: 'nexowatt.mesh-grid-limit-diagnostics.v1', limitW: limit, importW, exportW, activePowerW, direction, usagePercent, remainingW, overLimitW, severity, message };
+}
+
+function makePlannedAction(input) {
+  return {
+    schema: 'nexowatt.mesh-planned-action.v1',
+    actionId: input.actionId,
+    rank: input.rank,
+    category: input.category,
+    trigger: input.trigger,
+    nodeId: input.nodeId || '',
+    nodeName: input.nodeName || '',
+    targetNodeId: input.targetNodeId || '',
+    targetNodeName: input.targetNodeName || '',
+    priority: input.priority || 999,
+    plannedPowerW: Math.max(0, Math.round(num(input.plannedPowerW, 0))),
+    direction: input.direction || 'observe',
+    severity: input.severity || 'info',
+    reason: input.reason || '',
+    readOnly: true,
+    hardwareWrite: false,
+    status: 'planned-diagnostic',
+  };
+}
+
+/**
+ * Erstellt einen reinen Diagnose-Plan für spätere Local-First-/Grid-Last-Logik.
+ * Architekturregel:
+ * - Die Planung nutzt nur den bestehenden Mesh-Snapshot.
+ * - Es wird kein zweiter Regler, kein Write-Plan-Executor und kein Hardwarepfad
+ *   aufgebaut.
+ * - Aktionen sind absichtlich als `hardwareWrite:false` und `readOnly:true`
+ *   gekennzeichnet, damit Installer und Betreiber sicher sehen, was NexoWatt
+ *   später entscheiden könnte, ohne dass 0.8.36 bereits Geräte schaltet.
+ */
+function buildPlanning(nodes, totals, gridLimitW, mode) {
+  const active = (Array.isArray(nodes) ? nodes : []).filter(n => n && n.enabled !== false && n.status !== 'disabled');
+  const demands = active.filter(n => num(n.demandW, 0) > 0).sort(prioritySort);
+  const surpluses = active.filter(n => num(n.surplusW, 0) > 0).sort(prioritySort);
+  const lowerPriorityDemands = demands.slice().sort(reversePrioritySort);
+  const lowerPrioritySurpluses = surpluses.slice().sort(reversePrioritySort);
+  const gridDiag = buildGridLimitDiagnostics(totals, gridLimitW);
+  const localFirstActions = [];
+  const gridLastActions = [];
+  const gridLimitActions = [];
+  let rank = 1;
+
+  let availableLocalW = Math.max(0, Math.round(num(totals && totals.surplusW, 0)));
+  if (availableLocalW > 0 && demands.length) {
+    for (const demand of demands) {
+      if (availableLocalW <= 0) break;
+      const planned = Math.min(availableLocalW, Math.max(0, Math.round(num(demand.demandW, 0))));
+      if (planned <= 0) continue;
+      localFirstActions.push(makePlannedAction({
+        actionId: `local_first_${rank}`,
+        rank: rank++,
+        category: 'local_first',
+        trigger: 'cluster_surplus',
+        nodeId: demand.id,
+        nodeName: demand.name,
+        priority: demand.priority,
+        plannedPowerW: planned,
+        direction: 'increase_local_use',
+        severity: 'info',
+        reason: `Lokalen Überschuss bevorzugt für ${demand.name || demand.id} nutzen.`,
+      }));
+      availableLocalW -= planned;
+    }
+  }
+
+  if (Math.max(0, Math.round(num(totals && totals.demandW, 0))) > 0 && surpluses.length && demands.length) {
+    let remainingDemandW = Math.max(0, Math.round(num(totals && totals.demandW, 0)));
+    for (const source of surpluses) {
+      if (remainingDemandW <= 0) break;
+      const planned = Math.min(remainingDemandW, Math.max(0, Math.round(num(source.surplusW, 0))));
+      if (planned <= 0) continue;
+      const target = demands[0] || null;
+      gridLastActions.push(makePlannedAction({
+        actionId: `grid_last_${rank}`,
+        rank: rank++,
+        category: 'grid_last',
+        trigger: 'cluster_demand',
+        nodeId: source.id,
+        nodeName: source.name,
+        targetNodeId: target && target.id,
+        targetNodeName: target && target.name,
+        priority: source.priority,
+        plannedPowerW: planned,
+        direction: 'reduce_grid_import',
+        severity: 'info',
+        reason: `Lokale Quelle ${source.name || source.id} vor Netzbezug verwenden.`,
+      }));
+      remainingDemandW -= planned;
+    }
+  }
+
+  if (gridDiag.overLimitW > 0 && gridDiag.direction === 'import') {
+    let remaining = gridDiag.overLimitW;
+    for (const demand of lowerPriorityDemands) {
+      if (remaining <= 0) break;
+      const planned = Math.min(remaining, Math.max(0, Math.round(num(demand.demandW, 0))));
+      if (planned <= 0) continue;
+      gridLimitActions.push(makePlannedAction({
+        actionId: `grid_import_limit_${rank}`,
+        rank: rank++,
+        category: 'grid_limit',
+        trigger: 'import_limit_exceeded',
+        nodeId: demand.id,
+        nodeName: demand.name,
+        priority: demand.priority,
+        plannedPowerW: planned,
+        direction: 'defer_or_reduce_low_priority_load',
+        severity: 'critical',
+        reason: `Netzlimit überschritten: niedriger priorisierte Last ${demand.name || demand.id} später reduzieren/verschieben.`,
+      }));
+      remaining -= planned;
+    }
+  }
+
+  if (gridDiag.overLimitW > 0 && gridDiag.direction === 'export') {
+    let remaining = gridDiag.overLimitW;
+    for (const source of lowerPrioritySurpluses) {
+      if (remaining <= 0) break;
+      const planned = Math.min(remaining, Math.max(0, Math.round(num(source.surplusW, 0))));
+      if (planned <= 0) continue;
+      gridLimitActions.push(makePlannedAction({
+        actionId: `grid_export_limit_${rank}`,
+        rank: rank++,
+        category: 'grid_limit',
+        trigger: 'export_limit_exceeded',
+        nodeId: source.id,
+        nodeName: source.name,
+        priority: source.priority,
+        plannedPowerW: planned,
+        direction: 'limit_low_priority_export_or_charge_local_sink',
+        severity: 'critical',
+        reason: `Einspeise-/Clusterlimit überschritten: Quelle ${source.name || source.id} später begrenzen oder lokale Senke priorisieren.`,
+      }));
+      remaining -= planned;
+    }
+  }
+
+  if (!localFirstActions.length && !gridLastActions.length && !gridLimitActions.length) {
+    localFirstActions.push(makePlannedAction({
+      actionId: `observe_${rank}`,
+      rank: rank++,
+      category: 'observe',
+      trigger: 'balanced_or_no_action',
+      plannedPowerW: 0,
+      direction: 'observe',
+      severity: gridDiag.severity === 'warn' ? 'warn' : 'info',
+      reason: 'Kein aktiver Eingriff geplant; Cluster beobachten und Prioritäten beibehalten.',
+    }));
+  }
+
+  const actions = [...gridLimitActions, ...localFirstActions, ...gridLastActions]
+    .map((a, idx) => ({ ...a, rank: idx + 1 }))
+    .sort((a, b) => {
+      const severityWeight = { critical: 0, warn: 1, info: 2 };
+      const aw = severityWeight[a.severity] ?? 2;
+      const bw = severityWeight[b.severity] ?? 2;
+      if (aw !== bw) return aw - bw;
+      return (a.rank || 999) - (b.rank || 999);
+    })
+    .map((a, idx) => ({ ...a, rank: idx + 1 }));
+
+  const criticalActionCount = actions.filter(a => a.severity === 'critical').length;
+  const readinessScorePercent = Math.max(0, Math.min(100, 100 - (criticalActionCount * 25) - (gridDiag.severity === 'warn' ? 10 : 0)));
+  return {
+    schema: 'nexowatt.mesh-planning-diagnostics.v1',
+    mode,
+    readOnly: true,
+    hardwareWrite: false,
+    gridLimit: gridDiag,
+    priorityOrder: priorityOrder(active),
+    localFirstActions,
+    gridLastActions,
+    gridLimitActions,
+    actions,
+    actionCount: actions.length,
+    criticalActionCount,
+    readinessScorePercent,
+    summary: actions.map(a => `${a.category}: ${a.reason}`).join(' | '),
+  };
 }
 
 class MeshMicrogridModule extends BaseModule {
@@ -195,6 +426,7 @@ class MeshMicrogridModule extends BaseModule {
     await ch('meshMicrogrid.diagnostics', 'Mesh/Microgrid Diagnose');
     await ch('meshMicrogrid.export', 'Mesh/Microgrid Export');
     await ch('meshMicrogrid.operator', 'Mesh/Microgrid Betreiberansicht');
+    await ch('meshMicrogrid.planning', 'Mesh/Microgrid geplante Entscheidungen');
 
     await mk('meshMicrogrid.enabled', 'Mesh/Microgrid App aktiv', 'boolean', 'indicator', '', false);
     await mk('meshMicrogrid.version', 'Mesh/Microgrid Schema', 'string', 'text', '', MODULE_VERSION);
@@ -241,6 +473,22 @@ class MeshMicrogridModule extends BaseModule {
     await mk('meshMicrogrid.export.csvUrl', 'Mesh/Microgrid CSV Export URL', 'string', 'text', '', '/api/mesh/microgrid.csv');
     await mk('meshMicrogrid.export.snapshotJson', 'Mesh/Microgrid Snapshot JSON', 'string', 'json', '', '{}');
     await mk('meshMicrogrid.operator.viewUrl', 'Mesh/Microgrid Betreiberansicht URL', 'string', 'text', '', '/mesh/microgrid');
+
+    // 0.8.36 Regelbasis im Diagnosemodus: Die folgenden States zeigen geplante
+    // Local-First-/Grid-Last-Entscheidungen an. Sie sind absichtlich read-only
+    // und dürfen nicht als Hardware-Write-Plan missverstanden werden.
+    await mk('meshMicrogrid.planning.actionsJson', 'Geplante Entscheidungen JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.planning.localFirstActionsJson', 'Local-First Aktionen JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.planning.gridLastActionsJson', 'Grid-Last Aktionen JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.planning.gridLimitActionsJson', 'Netzlimit Aktionen JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.planning.priorityOrderJson', 'Prioritätsreihenfolge JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.planning.gridLimitDiagnosticsJson', 'Netzlimit-Diagnose JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.planning.actionCount', 'Anzahl geplanter Entscheidungen', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.planning.criticalActionCount', 'Kritische geplante Entscheidungen', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.planning.readinessScorePercent', 'Regelbasis Bereitschaft', 'number', 'value.percent', '%', 100);
+    await mk('meshMicrogrid.planning.readOnly', 'Planung ist read-only', 'boolean', 'indicator', '', true);
+    await mk('meshMicrogrid.planning.summaryJson', 'Planungszusammenfassung JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.planning.lastReason', 'Letzte Planungsbegründung', 'string', 'text', '', '');
   }
 
   _getNumber(key, fallback = null) {
@@ -373,8 +621,10 @@ class MeshMicrogridModule extends BaseModule {
       gridLimitUsagePercent: gridUsagePercent,
       localFirstDiagnosis: surplusW > 0 ? 'Lokaler Überschuss vorhanden; spätere Strategie kann lokale Senken priorisieren.' : 'Kein lokaler Überschuss vorhanden.',
       gridLastDiagnosis: demandW > 0 ? 'Restbedarf vorhanden; spätere Strategie kann Netzbezug nach lokalen Quellen nachrangig behandeln.' : 'Kein Restbedarf vorhanden.',
-      note: '0.8.35 Betreiberansicht: keine automatische Steuerung, nur transparente Vorbereitung.',
+      note: '0.8.36 Regelbasis: geplante Entscheidungen werden angezeigt, bleiben aber ohne Hardware-Schreiben.',
     };
+
+    const planning = buildPlanning(snapshots, { generationW, loadW, storageChargeW, storageDischargeW, gridImportW, gridExportW, surplusW, demandW, localUsePotentialW, gridLimitUsagePercent: gridUsagePercent }, gridLimitW, mode);
 
     const decision = {
       schema: 'nexowatt.mesh-readonly-decision.v1',
@@ -383,6 +633,11 @@ class MeshMicrogridModule extends BaseModule {
       action: 'observe-only',
       reason: enabled ? 'Mesh/Microgrid Datenmodell aktiv; Steuerstrategien werden später separat freigegeben.' : 'Mesh/Microgrid App deaktiviert.',
       nextStep: surplusW > 0 ? 'Lokalen Überschuss für Speicher/Ladepunkte/Nachbarn priorisieren (spätere Strategie).' : (demandW > 0 ? 'Lokalen Bedarf mit PV/Speicher/Clusterquellen decken (spätere Strategie).' : 'Cluster aktuell ausgeglichen.'),
+      plannedActionCount: planning.actionCount,
+      criticalActionCount: planning.criticalActionCount,
+      plannedActions: planning.actions,
+      priorityOrder: planning.priorityOrder,
+      gridLimitDiagnostics: planning.gridLimit,
       readOnly: true,
     };
 
@@ -398,6 +653,7 @@ class MeshMicrogridModule extends BaseModule {
       snapshots,
       missing,
       clusterIntent,
+      planning,
       decision,
       totals: {
         generationW: round(generationW, 0),
@@ -493,6 +749,7 @@ class MeshMicrogridModule extends BaseModule {
       separateEosApp: true,
       operatorViewUrl: '/mesh/microgrid',
       exportUrls: { json: '/api/mesh/microgrid', csv: '/api/mesh/microgrid.csv' },
+      planning: snap.planning || {},
     };
 
     await set('meshMicrogrid.nodesJson', nodesJson);
@@ -516,6 +773,7 @@ class MeshMicrogridModule extends BaseModule {
       nodes: snap.snapshots || [],
       intents: (snap.snapshots || []).map(n => n.intent),
       clusterIntent: snap.clusterIntent || {},
+      planning: snap.planning || {},
       decision: snap.decision || {},
       missingMappings: snap.missing || [],
       readOnly: true,
@@ -526,6 +784,20 @@ class MeshMicrogridModule extends BaseModule {
     await set('meshMicrogrid.export.csvUrl', '/api/mesh/microgrid.csv');
     await set('meshMicrogrid.export.snapshotJson', JSON.stringify(exportSnapshot));
     await set('meshMicrogrid.operator.viewUrl', '/mesh/microgrid');
+
+    const planning = snap.planning || {};
+    await set('meshMicrogrid.planning.actionsJson', JSON.stringify(planning.actions || []));
+    await set('meshMicrogrid.planning.localFirstActionsJson', JSON.stringify(planning.localFirstActions || []));
+    await set('meshMicrogrid.planning.gridLastActionsJson', JSON.stringify(planning.gridLastActions || []));
+    await set('meshMicrogrid.planning.gridLimitActionsJson', JSON.stringify(planning.gridLimitActions || []));
+    await set('meshMicrogrid.planning.priorityOrderJson', JSON.stringify(planning.priorityOrder || []));
+    await set('meshMicrogrid.planning.gridLimitDiagnosticsJson', JSON.stringify(planning.gridLimit || {}));
+    await set('meshMicrogrid.planning.actionCount', Number(planning.actionCount || 0));
+    await set('meshMicrogrid.planning.criticalActionCount', Number(planning.criticalActionCount || 0));
+    await set('meshMicrogrid.planning.readinessScorePercent', Number(planning.readinessScorePercent || 0));
+    await set('meshMicrogrid.planning.readOnly', true);
+    await set('meshMicrogrid.planning.summaryJson', JSON.stringify({ schema: 'nexowatt.mesh-planning-summary.v1', ts: now, readOnly: true, actionCount: planning.actionCount || 0, criticalActionCount: planning.criticalActionCount || 0, readinessScorePercent: planning.readinessScorePercent || 0, summary: planning.summary || '', gridLimit: planning.gridLimit || {} }));
+    await set('meshMicrogrid.planning.lastReason', String(planning.summary || 'Keine geplante Aktion.'));
     this._lastPublishTs = now;
   }
 }

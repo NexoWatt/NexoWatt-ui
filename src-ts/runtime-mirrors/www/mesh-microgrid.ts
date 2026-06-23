@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e159c5d147071fa2b6564494272c4c11a26d80a46bbe5f3ed52142455940a74e
+ * Original-Hash: c796131bff5416d012d258ecc1023a866ad24241028cc05e6815ad89a6f85788
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/mesh-microgrid.ts
- * Quell-Hash: sha256:f6bb9707e4ad4cb440e67892a0129cec406138836104779700ba786618e0a8be
+ * Quell-Hash: sha256:d5ab93300c5500bb05284dc5c3b3e1c92eb64f305ada16966f2732bc8333e0fb
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -173,6 +173,69 @@
       `</tr>`;
     }).join('');
   }
+
+/**
+ * Code-Teil: severityClass
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+  function severityClass(severity) {
+    const s = String(severity || '').toLowerCase();
+    if (s === 'critical') return 'severity-critical';
+    if (s === 'warn') return 'severity-warn';
+    return 'severity-info';
+  }
+/**
+ * Code-Teil: renderPlanning
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+  function renderPlanning(payload) {
+    const planning = payload && payload.planning ? payload.planning : {};
+    const actions = Array.isArray(planning.actions) ? planning.actions : [];
+    const grid = planning.gridLimit || {};
+    setText('meshReadiness', planning.readinessScorePercent == null ? '--' : fmtPct(planning.readinessScorePercent));
+    setText('meshGridLimitDiag', grid.message || 'Keine Netzlimit-Diagnose vorhanden.');
+    setText('meshPlanSummary', actions.length
+      ? `${actions.length} geplante Diagnose-Entscheidung(en), davon ${planning.criticalActionCount || 0} kritisch. Read-only: keine Hardware-Schreibbefehle.`
+      : 'Keine geplanten Aktionen. Read-only: keine Hardware-Schreibbefehle.');
+
+    const rows = $('meshPlanRows');
+    if (rows) {
+      if (!actions.length) {
+        rows.innerHTML = '<tr><td colspan="9" class="muted">Keine geplanten Entscheidungen vorhanden.</td></tr>';
+      } else {
+        rows.innerHTML = actions.map(a => `<tr>` +
+          `<td>${esc(a.rank || '')}</td>` +
+          `<td class="${severityClass(a.severity)}">${esc(a.category || '')}</td>` +
+          `<td>${esc(a.trigger || '')}</td>` +
+          `<td>${esc(a.nodeName || a.nodeId || '')}<br><span class="muted">${esc(a.nodeId || '')}</span></td>` +
+          `<td>${esc(a.targetNodeName || a.targetNodeId || '--')}</td>` +
+          `<td>${esc(a.priority || '')}</td>` +
+          `<td>${fmtW(a.plannedPowerW || 0)}</td>` +
+          `<td>${esc(a.direction || '')}</td>` +
+          `<td>${esc(a.reason || '')}<br><span class="muted">read-only · kein Hardware-Write</span></td>` +
+        `</tr>`).join('');
+      }
+    }
+    const order = Array.isArray(planning.priorityOrder) ? planning.priorityOrder : [];
+    setText('meshPriorityOrder', order.length
+      ? order.map(o => `${o.rank}. ${o.name || o.id} (${o.type}/${o.role}, Priorität ${o.priority})`).join(' · ')
+      : 'Keine Prioritätsreihenfolge vorhanden.');
+  }
+
 /**
  * Code-Teil: renderDiagnosis
  *
@@ -233,6 +296,7 @@
       setText('localUseW', fmtW(totals.localUsePotentialW || 0));
       setText('gridUsage', fmtPct(totals.gridLimitUsagePercent || 0));
       renderDiagnosis(payload);
+      renderPlanning(payload);
       renderNodes(payload.nodes || []);
     } catch (e) {
       setText('meshStatus', 'Fehler');

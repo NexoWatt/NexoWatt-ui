@@ -1,3 +1,10 @@
+## 0.8.36
+
+- EOS Mesh/Microgrid: Regelbasis im Diagnosemodus ergänzt. Die Betreiberansicht zeigt geplante Local-First-/Grid-Last-Aktionen, Prioritätsreihenfolge und Netzlimit-Diagnose.
+- Wichtig: Alle geplanten Entscheidungen sind read-only (`hardwareWrite=false`) und schreiben keine Hardware-, WR- oder Ladepunkt-Setpoints.
+- Mesh/Microgrid CSV-/JSON-Snapshot enthält jetzt Planungsdiagnose und geplante Aktionen.
+- Service-Worker Cache auf `nexowatt-cache-v336` erhöht.
+
 ## 0.8.35
 
 - EOS Mesh/Microgrid: Betreiberansicht `/mesh/microgrid` ergänzt.

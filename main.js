@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:a0aca77cb1f5ede4e75c7fdc9f95823cf912b3f6aeca434745424e804efbd268
+ * Quell-Hash: sha256:1dcc3b61839eea2b58c0bc34588f010e97a6a5b703d41350199ea10c4333204a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -17372,6 +17372,19 @@ const _nwMeshMicrogridBuildPayload = () => {
   const nodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : _nwEnergyLedgerJson('meshMicrogrid.nodesJson', []);
   const intents = Array.isArray(snapshot.intents) ? snapshot.intents : _nwEnergyLedgerJson('meshMicrogrid.intent.nodesJson', []);
   const clusterIntent = snapshot.clusterIntent && typeof snapshot.clusterIntent === 'object' ? snapshot.clusterIntent : _nwEnergyLedgerJson('meshMicrogrid.intent.clusterJson', {});
+  const planning = snapshot.planning && typeof snapshot.planning === 'object' ? snapshot.planning : {
+    actions: _nwEnergyLedgerJson('meshMicrogrid.planning.actionsJson', []),
+    localFirstActions: _nwEnergyLedgerJson('meshMicrogrid.planning.localFirstActionsJson', []),
+    gridLastActions: _nwEnergyLedgerJson('meshMicrogrid.planning.gridLastActionsJson', []),
+    gridLimitActions: _nwEnergyLedgerJson('meshMicrogrid.planning.gridLimitActionsJson', []),
+    priorityOrder: _nwEnergyLedgerJson('meshMicrogrid.planning.priorityOrderJson', []),
+    gridLimit: _nwEnergyLedgerJson('meshMicrogrid.planning.gridLimitDiagnosticsJson', {}),
+    actionCount: Number(_nwDisplayStateVal('meshMicrogrid.planning.actionCount', 0)) || 0,
+    criticalActionCount: Number(_nwDisplayStateVal('meshMicrogrid.planning.criticalActionCount', 0)) || 0,
+    readinessScorePercent: Number(_nwDisplayStateVal('meshMicrogrid.planning.readinessScorePercent', 0)) || 0,
+    readOnly: true,
+    hardwareWrite: false,
+  };
   const decision = snapshot.decision && typeof snapshot.decision === 'object' ? snapshot.decision : _nwEnergyLedgerJson('meshMicrogrid.lastDecisionJson', {});
   const missingMappings = Array.isArray(snapshot.missingMappings) ? snapshot.missingMappings : _nwEnergyLedgerJson('meshMicrogrid.diagnostics.missingMappingsJson', []);
   const totals = (snapshot.totals && typeof snapshot.totals === 'object') ? snapshot.totals : (summary && summary.totals ? summary.totals : {});
@@ -17398,11 +17411,12 @@ const _nwMeshMicrogridBuildPayload = () => {
     nodes: Array.isArray(nodes) ? nodes : [],
     intents: Array.isArray(intents) ? intents : [],
     clusterIntent,
+    planning,
     decision,
     missingMappings: Array.isArray(missingMappings) ? missingMappings : [],
     exportUrls,
     readOnly: true,
-    note: 'Betreiberansicht liest denselben Mesh/Microgrid-Statebaum. Keine Hardwaresteuerung.',
+    note: 'Betreiberansicht liest denselben Mesh/Microgrid-Statebaum. Geplante Entscheidungen sind read-only und ohne Hardwaresteuerung.',
   };
 };
 const _nwMeshMicrogridCsv = (payload) => {
@@ -17420,6 +17434,17 @@ const _nwMeshMicrogridCsv = (payload) => {
   for (const n of nodes) {
     rows.push(['Node', n.id || '', n.name || '', n.type || '', n.role || '', n.status || '', String(n.priority || ''), String(n.powerW ?? ''), String(n.generationW || 0), String(n.loadW || 0), String(n.storageChargeW || 0), String(n.storageDischargeW || 0), String(n.gridImportW || 0), String(n.gridExportW || 0), String(n.surplusW || 0), String(n.demandW || 0), String(n.socPercent ?? ''), n.intent ? JSON.stringify(n.intent) : ''].map(_nwDisplayCsvEscape).join(';'));
   }
+  rows.push('');
+  rows.push(['Typ','Rang','Kategorie','Auslöser','Knoten','Ziel','Priorität','GeplanteLeistung_W','Richtung','Schwere','Begründung','ReadOnly'].map(_nwDisplayCsvEscape).join(';'));
+  const planning = payload && payload.planning ? payload.planning : {};
+  const actions = Array.isArray(planning.actions) ? planning.actions : [];
+  for (const a of actions) {
+    rows.push(['PlannedAction', String(a.rank || ''), a.category || '', a.trigger || '', a.nodeName || a.nodeId || '', a.targetNodeName || a.targetNodeId || '', String(a.priority || ''), String(a.plannedPowerW || 0), a.direction || '', a.severity || '', a.reason || '', a.readOnly === false ? 'false' : 'true'].map(_nwDisplayCsvEscape).join(';'));
+  }
+  rows.push('');
+  rows.push(['Typ','GridLimit_W','AktiveLeistung_W','Richtung','Auslastung_%','Reserve_W','Überlimit_W','Status','Meldung'].map(_nwDisplayCsvEscape).join(';'));
+  const g = planning.gridLimit || {};
+  rows.push(['GridLimitDiagnostic', String(g.limitW || 0), String(g.activePowerW || 0), g.direction || '', String(g.usagePercent || 0), String(g.remainingW || 0), String(g.overLimitW || 0), g.severity || '', g.message || ''].map(_nwDisplayCsvEscape).join(';'));
   rows.push('');
   rows.push(['Hinweis', payload && payload.note || 'read-only'].map(_nwDisplayCsvEscape).join(';'));
   return '\ufeff' + rows.join('\r\n');

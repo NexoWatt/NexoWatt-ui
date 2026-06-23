@@ -49,6 +49,47 @@
       `</tr>`;
     }).join('');
   }
+
+  function severityClass(severity) {
+    const s = String(severity || '').toLowerCase();
+    if (s === 'critical') return 'severity-critical';
+    if (s === 'warn') return 'severity-warn';
+    return 'severity-info';
+  }
+  function renderPlanning(payload) {
+    const planning = payload && payload.planning ? payload.planning : {};
+    const actions = Array.isArray(planning.actions) ? planning.actions : [];
+    const grid = planning.gridLimit || {};
+    setText('meshReadiness', planning.readinessScorePercent == null ? '--' : fmtPct(planning.readinessScorePercent));
+    setText('meshGridLimitDiag', grid.message || 'Keine Netzlimit-Diagnose vorhanden.');
+    setText('meshPlanSummary', actions.length
+      ? `${actions.length} geplante Diagnose-Entscheidung(en), davon ${planning.criticalActionCount || 0} kritisch. Read-only: keine Hardware-Schreibbefehle.`
+      : 'Keine geplanten Aktionen. Read-only: keine Hardware-Schreibbefehle.');
+
+    const rows = $('meshPlanRows');
+    if (rows) {
+      if (!actions.length) {
+        rows.innerHTML = '<tr><td colspan="9" class="muted">Keine geplanten Entscheidungen vorhanden.</td></tr>';
+      } else {
+        rows.innerHTML = actions.map(a => `<tr>` +
+          `<td>${esc(a.rank || '')}</td>` +
+          `<td class="${severityClass(a.severity)}">${esc(a.category || '')}</td>` +
+          `<td>${esc(a.trigger || '')}</td>` +
+          `<td>${esc(a.nodeName || a.nodeId || '')}<br><span class="muted">${esc(a.nodeId || '')}</span></td>` +
+          `<td>${esc(a.targetNodeName || a.targetNodeId || '--')}</td>` +
+          `<td>${esc(a.priority || '')}</td>` +
+          `<td>${fmtW(a.plannedPowerW || 0)}</td>` +
+          `<td>${esc(a.direction || '')}</td>` +
+          `<td>${esc(a.reason || '')}<br><span class="muted">read-only · kein Hardware-Write</span></td>` +
+        `</tr>`).join('');
+      }
+    }
+    const order = Array.isArray(planning.priorityOrder) ? planning.priorityOrder : [];
+    setText('meshPriorityOrder', order.length
+      ? order.map(o => `${o.rank}. ${o.name || o.id} (${o.type}/${o.role}, Priorität ${o.priority})`).join(' · ')
+      : 'Keine Prioritätsreihenfolge vorhanden.');
+  }
+
   function renderDiagnosis(payload) {
     const clusterIntent = payload && payload.clusterIntent ? payload.clusterIntent : {};
     const decision = payload && payload.decision ? payload.decision : {};
@@ -87,6 +128,7 @@
       setText('localUseW', fmtW(totals.localUsePotentialW || 0));
       setText('gridUsage', fmtPct(totals.gridLimitUsagePercent || 0));
       renderDiagnosis(payload);
+      renderPlanning(payload);
       renderNodes(payload.nodes || []);
     } catch (e) {
       setText('meshStatus', 'Fehler');

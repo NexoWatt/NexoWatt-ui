@@ -7,7 +7,7 @@
   <title>NexoWatt Mesh/Microgrid</title>
   <link rel="stylesheet" href="/static/styles.css" />
   <style>
-    body{margin:0;background:#07100d;color:#eefaf2;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.mesh-shell{max-width:1220px;margin:0 auto;padding:20px}.mesh-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px}.mesh-head h1{margin:0;font-size:26px}.muted{color:#9ab5a4}.warn{color:#ffd166}.pill{border:1px solid rgba(0,200,83,.35);border-radius:999px;padding:7px 11px;background:rgba(0,200,83,.08);color:#8ff7b0;font-weight:800}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.card{background:rgba(11,18,16,.96);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:16px;box-shadow:0 18px 40px rgba(0,0,0,.24)}.card small{display:block;color:#9ab5a4;margin-bottom:6px}.card b{font-size:22px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}.actions a,.actions button{border:1px solid rgba(0,200,83,.35);border-radius:12px;background:rgba(0,200,83,.12);color:#eefaf2;padding:10px 12px;text-decoration:none;cursor:pointer}.table-wrap{overflow:auto;border-radius:18px;border:1px solid rgba(255,255,255,.08)}table{width:100%;border-collapse:collapse;min-width:1060px;background:rgba(8,14,12,.92)}th,td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px;text-align:left}th{color:#8ff7b0;background:rgba(0,200,83,.08);position:sticky;top:0}.status-surplus{color:#8ff7b0}.status-demand{color:#ffd166}.status-balanced{color:#9ab5a4}.status-disabled{color:#ff8b8b}@media(max-width:920px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:580px){.grid{grid-template-columns:1fr}.mesh-shell{padding:12px}}
+    body{margin:0;background:#07100d;color:#eefaf2;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.mesh-shell{max-width:1220px;margin:0 auto;padding:20px}.mesh-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px}.mesh-head h1{margin:0;font-size:26px}.muted{color:#9ab5a4}.warn{color:#ffd166}.pill{border:1px solid rgba(0,200,83,.35);border-radius:999px;padding:7px 11px;background:rgba(0,200,83,.08);color:#8ff7b0;font-weight:800}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.card{background:rgba(11,18,16,.96);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:16px;box-shadow:0 18px 40px rgba(0,0,0,.24)}.card small{display:block;color:#9ab5a4;margin-bottom:6px}.card b{font-size:22px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}.actions a,.actions button{border:1px solid rgba(0,200,83,.35);border-radius:12px;background:rgba(0,200,83,.12);color:#eefaf2;padding:10px 12px;text-decoration:none;cursor:pointer}.table-wrap{overflow:auto;border-radius:18px;border:1px solid rgba(255,255,255,.08)}table{width:100%;border-collapse:collapse;min-width:1060px;background:rgba(8,14,12,.92)}th,td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px;text-align:left}th{color:#8ff7b0;background:rgba(0,200,83,.08);position:sticky;top:0}.status-surplus{color:#8ff7b0}.status-demand{color:#ffd166}.status-balanced{color:#9ab5a4}.status-disabled{color:#ff8b8b}.severity-critical{color:#ff8b8b;font-weight:800}.severity-warn{color:#ffd166;font-weight:800}.severity-info{color:#8ff7b0}.plan-grid{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:14px}@media(max-width:920px){.plan-grid{grid-template-columns:1fr}}@media(max-width:920px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:580px){.grid{grid-template-columns:1fr}.mesh-shell{padding:12px}}
   </style>
 </head>
 <body>
@@ -15,7 +15,7 @@
     <header class="mesh-head">
       <div>
         <h1>EOS Mesh/Microgrid</h1>
-        <div class="muted">Betreiberansicht für Cluster-Summen, Knoten, Local First / Grid Last und Snapshot-Export. Keine Einstellungen, keine Hardwaresteuerung.</div>
+        <div class="muted">Betreiberansicht für Cluster-Summen, Knoten, geplante Local-First/Grid-Last-Entscheidungen und Snapshot-Export. Keine Einstellungen, keine Hardwaresteuerung.</div>
       </div>
       <span id="meshStatus" class="pill">lade…</span>
     </header>
@@ -38,6 +38,13 @@
       <a href="/api/mesh/microgrid.csv">CSV Snapshot</a>
       <button id="refreshMesh" type="button">Aktualisieren</button>
     </nav>
+
+    <section class="plan-grid">
+      <div class="card"><small>Geplante Entscheidungen (Diagnosemodus)</small><div id="meshPlanSummary" class="muted">--</div></div>
+      <div class="card"><small>Regelbasis / Netzlimit</small><b id="meshReadiness">--</b><div id="meshGridLimitDiag" class="muted" style="margin-top:6px">--</div></div>
+    </section>
+    <section class="table-wrap" style="margin-bottom:14px"><table><thead><tr><th>Rang</th><th>Kategorie</th><th>Auslöser</th><th>Knoten</th><th>Ziel</th><th>Priorität</th><th>Leistung</th><th>Richtung</th><th>Hinweis</th></tr></thead><tbody id="meshPlanRows"><tr><td colspan="9" class="muted">lade…</td></tr></tbody></table></section>
+    <section class="card" style="margin-bottom:14px"><small>Prioritätsreihenfolge</small><div id="meshPriorityOrder" class="muted">--</div></section>
     <section class="card" style="margin-bottom:14px"><small>Local First / Grid Last Diagnose</small><div id="meshDiagnosis" class="muted">--</div></section>
     <section class="card" style="margin-bottom:14px"><small>Warnungen / fehlende Zuordnungen</small><div id="meshWarnings" class="muted">--</div></section>
     <section class="table-wrap"><table><thead><tr><th>Knoten</th><th>Typ</th><th>Rolle</th><th>Status</th><th>Priorität</th><th>Leistung</th><th>Erzeugung</th><th>Last</th><th>Überschuss</th><th>Bedarf</th><th>SoC</th><th>Intent</th></tr></thead><tbody id="meshRows"><tr><td colspan="12" class="muted">lade…</td></tr></tbody></table></section>
