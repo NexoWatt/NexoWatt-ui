@@ -168,86 +168,31 @@ class GridConstraintsModule extends BaseModule {
 
     /**
      * Code-Teil: _getExportLimitRunMode
-     * Zweck: Trennt die installateurseitige Funktionsfreigabe von der tatsächlichen Hardware-Ausführung.
-     * Zusammenhang: Für Erstinbetriebnahme und Service braucht der Export Guard einen Diagnose/Testmodus, in dem
-     * NexoWatt alle Grenzwerte, Überschreitungen und geplanten WR-Setpoints berechnet, aber keine WR-/PV-Write-
-     * Datenpunkte beschreibt. Das schützt reale Anlagen vor falschen Mapping- oder Vorzeichenfehlern.
+     * Zweck: Trennt die installateurseitige Inbetriebnahme der Einspeisebegrenzung in Diagnose/Test und Aktivbetrieb.
+     * Zusammenhang: Im Diagnosemodus berechnet und veröffentlicht NexoWatt alle Export-Guard-Werte, schreibt aber keine
+     * WR-/PV-Setpoints. Dadurch kann der Installateur die Richtung, Messwerte und Schreibfähigkeit prüfen, ohne Hardware
+     * zu beeinflussen. Die bestehende Regelstrecke bleibt unverändert; diese Funktion ist nur ein Sicherheits-Gate davor.
      */
     _getExportLimitRunMode(cfg) {
         const raw = String(
             cfg?.exportLimitRunMode ??
             cfg?.zeroExportRunMode ??
-            cfg?.exportGuardRunMode ??
-            ''
+            cfg?.exportGuardMode ??
+            'active'
         ).trim().toLowerCase();
-        if (raw === 'diagnostic' || raw === 'diagnose' || raw === 'test' || raw === 'dryrun' || raw === 'dry-run') return 'diagnostic';
-        if (raw === 'off' || raw === 'disabled' || raw === 'aus') return 'off';
-        // Rückwärtskompatibel bleibt eine bereits aktivierte Einspeisebegrenzung im aktiven Regelbetrieb,
-        // solange der Installateur nicht bewusst auf Testmodus oder Aus stellt.
+        if (raw === 'diagnostic' || raw === 'test' || raw === 'dryrun' || raw === 'dry-run' || raw === 'simulation') return 'diagnostic';
+        if (raw === 'active' || raw === 'on' || raw === 'write' || raw === 'productive') return 'active';
         return 'active';
     }
 
     /**
-     * Code-Teil: _isExportLimitActiveControl
-     * Zweck: Zentrale Guard-Funktion für schreibende Export-Guard-Pfade.
-     * Zusammenhang: Alle Hardware-Schreibpfade müssen diese Funktion beachten, damit der Diagnose/Testmodus
-     * garantiert read-only bleibt. Die Diagnose-States laufen trotzdem weiter.
+     * Code-Teil: _isExportLimitDiagnosticMode
+     * Zweck: Kleine, gut auffindbare Sicherheitsprüfung für alle Stellen, die entscheiden müssen, ob WR-Setpoints
+     * geschrieben werden dürfen. Wichtig: Dieser Modus gilt nur für die dynamische Einspeisebegrenzung, nicht für
+     * separate EVU-Relaisvorgaben.
      */
-    _isExportLimitActiveControl(cfg) {
-        return this._getExportLimitRunMode(cfg) === 'active';
-    }
-
-    /**
-     * Code-Teil: _buildExportLimitPlannedWrite
-     * Zweck: Erstellt einen herstellerneutralen, nicht-schreibenden Write-Plan für App-Center-Diagnose und Tests.
-     * Zusammenhang: Dieser Plan ist bewusst nur Anzeige/Diagnose. Er ersetzt nicht die bestehende Regelung und
-     * zählt keine Energie. Er zeigt dem Installateur, welche Setpoints im aktiven Modus voraussichtlich geschrieben
-     * würden.
-     */
-    _buildExportLimitPlannedWrite(cfg, modeResolved, maxFeedInPowerW, biasW, gridW, exportW, requiredCurtailmentW, writeDiag) {
-        const mode = String(modeResolved || 'off');
-        const ratedTotalW = mode === 'group'
-            ? this._sumRatedW(this._normalizeInvList(cfg && cfg.pvCurtailInvertersZero))
-            : this._getRatedPvW(cfg);
-        const requiredW = Math.max(0, Math.round(Number(requiredCurtailmentW) || 0));
-        const maxFeedInW = Math.max(0, Math.round(Number(maxFeedInPowerW) || 0));
-        const activeLimitW = ratedTotalW > 0 ? Math.max(0, Math.round(ratedTotalW - requiredW)) : null;
-        const activeLimitPct = (ratedTotalW > 0 && activeLimitW !== null) ? Math.round((activeLimitW / ratedTotalW) * 1000) / 10 : null;
-        const rows = [];
-        if (mode === 'group') {
-            const inv = this._normalizeInvList(cfg && cfg.pvCurtailInvertersZero);
-            for (const it of inv) {
-                const ratedW = Math.max(0, Number(it.ratedW) || 0);
-                rows.push({
-                    scope: `pv.zero.${it.idx}`,
-                    name: it.name || `WR ${it.idx}`,
-                    feedInLimitW: ratedTotalW > 0 ? Math.round(maxFeedInW * (ratedW / ratedTotalW)) : 0,
-                    pvLimitW: (ratedTotalW > 0 && activeLimitW !== null) ? Math.round(activeLimitW * (ratedW / ratedTotalW)) : null,
-                    pvLimitPct: activeLimitPct,
-                });
-            }
-        } else if (mode === 'feedInLimitW') {
-            rows.push({ scope: 'pv.feedInLimitW', feedInLimitW: maxFeedInW });
-        } else if (mode === 'pvLimitW') {
-            rows.push({ scope: 'pv.limitW', pvLimitW: activeLimitW });
-        } else if (mode === 'pvLimitPct') {
-            rows.push({ scope: 'pv.limitPct', pvLimitPct: activeLimitPct });
-        }
-        return {
-            schema: 'nexowatt.grid.export-guard.planned-write.v1',
-            dryRun: true,
-            directHardwareWrite: false,
-            mode,
-            gridW: Math.round(Number(gridW) || 0),
-            currentExportW: Math.max(0, Math.round(Number(exportW) || 0)),
-            maxFeedInW,
-            biasW: Math.max(0, Math.round(Number(biasW) || 0)),
-            requiredCurtailmentW: requiredW,
-            ratedTotalW: Math.max(0, Math.round(Number(ratedTotalW) || 0)),
-            writeCapable: !!(writeDiag && writeDiag.writable),
-            blockedByMissingWrites: !(writeDiag && writeDiag.writable),
-            rows,
-        };
+    _isExportLimitDiagnosticMode(cfg) {
+        return this._getExportLimitRunMode(cfg) === 'diagnostic';
     }
 
     /**
@@ -403,6 +348,11 @@ class GridConstraintsModule extends BaseModule {
         await mk('gridConstraints.exportLimit.usagePercent', 'Export limit usage (%)', 'number', 'value.percent');
         await mk('gridConstraints.exportLimit.targetGridW', 'Grid target (+ import / - export)', 'number', 'value.power');
         await mk('gridConstraints.exportLimit.statusLabel', 'Export Guard status label', 'string', 'text');
+        await mk('gridConstraints.exportLimit.runMode', 'Export Guard run mode', 'string', 'text');
+        await mk('gridConstraints.exportLimit.diagnosticOnly', 'Export Guard diagnostic only', 'boolean', 'indicator');
+        await mk('gridConstraints.exportLimit.plannedAction', 'Export Guard planned action', 'string', 'text');
+        await mk('gridConstraints.exportLimit.installerMessage', 'Export Guard installer message', 'string', 'text');
+        await mk('gridConstraints.exportLimit.installerChecklistJson', 'Export Guard installer checklist JSON', 'string', 'json');
         await mk('gridConstraints.exportLimit.negativePriceActive', 'Negative price strategy active', 'boolean', 'indicator');
         await mk('gridConstraints.exportLimit.negativePriceStrategy', 'Negative price strategy', 'string', 'text');
         await mk('gridConstraints.exportLimit.writeCapable', 'WR write capable', 'boolean', 'indicator');
@@ -413,11 +363,6 @@ class GridConstraintsModule extends BaseModule {
         await mk('gridConstraints.exportLimit.unusedPvPowerW', 'Unused PV power due to Export Guard (W)', 'number', 'value.power');
         await mk('gridConstraints.exportLimit.displayJson', 'Export Guard display JSON', 'string', 'json');
         await mk('gridConstraints.exportLimit.summaryJson', 'Export Guard summary JSON', 'string', 'json');
-        await mk('gridConstraints.exportLimit.runMode', 'Export Guard run mode', 'string', 'text');
-        await mk('gridConstraints.exportLimit.testMode', 'Export Guard test/diagnostic mode', 'boolean', 'indicator');
-        await mk('gridConstraints.exportLimit.activeControl', 'Export Guard active hardware control', 'boolean', 'indicator');
-        await mk('gridConstraints.exportLimit.plannedWriteJson', 'Planned WR write JSON (diagnostic)', 'string', 'json');
-        await mk('gridConstraints.exportLimit.installerHint', 'Installer hint', 'string', 'text');
 
         // PV curtail debug
         await mk('gridConstraints.pvCurtail.mode', 'Curtail mode (resolved)', 'string', 'text');
@@ -427,8 +372,6 @@ class GridConstraintsModule extends BaseModule {
         await mk('gridConstraints.pvCurtail.evuStagePct', 'EVU stage (%)', 'number', 'value');
         await mk('gridConstraints.pvCurtail.evuRelays', 'EVU relays (60/30/0)', 'string', 'text');
         await mk('gridConstraints.pvCurtail.estimatedCurtailmentW', 'Estimated curtailment (W)', 'number', 'value.power');
-        await mk('gridConstraints.pvCurtail.diagnosticOnly', 'PV curtail diagnostic-only mode', 'boolean', 'indicator');
-        await mk('gridConstraints.pvCurtail.plannedWriteJson', 'PV curtail planned write JSON', 'string', 'json');
 
         // Datapoint mapping
         const cfg = this._cfg();
@@ -651,10 +594,8 @@ class GridConstraintsModule extends BaseModule {
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     async _tickZeroExportGroup(nowMs, gridW, cfg, gridStale) {
-        const requested = !!cfg.zeroExportEnabled;
+        const enabled = !!cfg.zeroExportEnabled;
         const approved = this._isExportLimitInstallerApproved(cfg);
-        const runMode = this._getExportLimitRunMode(cfg);
-        const enabled = requested && runMode !== 'off';
         const inv = this._normalizeInvList(cfg.pvCurtailInvertersZero);
 
         const tariffGridImportPreferred = await this._isTariffGridImportPreferred();
@@ -676,8 +617,7 @@ class GridConstraintsModule extends BaseModule {
         await this.adapter.setStateAsync('gridConstraints.pvCurtail.mode', 'group', true);
 
         if (!enabled) {
-            const action = requested && runMode === 'off' ? 'export_guard_runmode_off' : 'off';
-            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', action, true);
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'off', true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', false, true);
             return { enabled: false, biasW, deadbandW, exportW, maxFeedInPowerW, targetGridW };
         }
@@ -692,12 +632,6 @@ class GridConstraintsModule extends BaseModule {
             await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'no_wr', true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', false, true);
             return { enabled: true, biasW, deadbandW, exportW };
-        }
-
-        if (!this._isExportLimitActiveControl(cfg)) {
-            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', this._getExportLimitRunMode(cfg) === 'diagnostic' ? 'diagnostic_only_group_no_write' : 'inactive_run_mode', true);
-            await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', false, true);
-            return { enabled: true, biasW, deadbandW, exportW, maxFeedInPowerW, targetGridW };
         }
 
         // If we cannot measure grid power reliably, go failsafe (cut PV / export)
@@ -957,12 +891,6 @@ class GridConstraintsModule extends BaseModule {
         this._pv.lastMode = modeResolved;
         await this.adapter.setStateAsync('gridConstraints.pvCurtail.mode', modeResolved, true);
 
-        if (!this._isExportLimitActiveControl(cfg)) {
-            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', this._getExportLimitRunMode(cfg) === 'diagnostic' ? 'diagnostic_only_no_write' : 'inactive_run_mode', true);
-            await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', false, true);
-            return { enabled: true, biasW, deadbandW, exportW, maxFeedInPowerW, targetGridW };
-        }
-
         // If we cannot measure grid power reliably, go failsafe (if possible)
         if (gridStale) {
             const ok = await this._applyCurtailFailsafe(cfg, modeResolved);
@@ -1088,9 +1016,9 @@ class GridConstraintsModule extends BaseModule {
         const missing = [];
         const rows = [];
         const hasText = (v) => typeof v === 'string' && v.trim().length > 0;
-        const add = (id, ok, label) => {
-            rows.push({ id, ok: !!ok, label });
-            if (!ok) missing.push(label);
+        const add = (id, ok, label, required = true, nextStep = '') => {
+            rows.push({ id, ok: !!ok, label, required: !!required, nextStep });
+            if (!ok && required) missing.push(label);
         };
         if (mode === 'group') {
             const list = Array.isArray(cfg && cfg.pvCurtailInvertersZero) ? cfg.pvCurtailInvertersZero : [];
@@ -1098,22 +1026,48 @@ class GridConstraintsModule extends BaseModule {
             list.forEach((it, i) => {
                 const idx = Number(it && it.index) || (i + 1);
                 const name = (it && String(it.name || '').trim()) || `WR ${idx}`;
-                const ok = hasText(it && it.feedInLimitWId) || hasText(it && it.pvFeedInLimitWId)
-                    || hasText(it && it.pvLimitWId) || hasText(it && it.limitWId)
-                    || hasText(it && it.pvLimitPctId) || hasText(it && it.limitPctId);
-                add(`pv.zero.${idx}`, ok, `${name}: kein WR-Write-Datenpunkt für Einspeise-/PV-Limit zugeordnet`);
+                const hasFeed = hasText(it && it.feedInLimitWId) || hasText(it && it.pvFeedInLimitWId);
+                const hasLimitW = hasText(it && it.pvLimitWId) || hasText(it && it.limitWId);
+                const hasLimitPct = hasText(it && it.pvLimitPctId) || hasText(it && it.limitPctId);
+                const ok = hasFeed || hasLimitW || hasLimitPct;
+                add(
+                    `pv.zero.${idx}`,
+                    ok,
+                    `${name}: kein WR-Write-Datenpunkt für Einspeise-/PV-Limit zugeordnet`,
+                    true,
+                    'In der WR-Gruppe mindestens Einspeise-Limit W, PV-Limit W oder PV-Limit % als Write-Datenpunkt zuordnen.'
+                );
+                if (ok) {
+                    rows.push({
+                        id: `pv.zero.${idx}.capability`,
+                        ok: true,
+                        required: false,
+                        label: `${name}: Schreibbrücke vorhanden (${hasFeed ? 'Feed-in W' : hasLimitW ? 'PV W' : 'PV %'})`,
+                        nextStep: '',
+                    });
+                }
             });
         } else if (mode === 'feedInLimitW') {
-            add('pv.feedInLimitW', hasText(cfg && cfg.pvFeedInLimitWId), 'PV/WR Feed-in-Limit W nicht zugeordnet');
+            add('pv.feedInLimitW', hasText(cfg && cfg.pvFeedInLimitWId), 'PV/WR Feed-in-Limit W nicht zugeordnet', true, 'Legacy-Schreibdatenpunkt „Einspeise-Limit (W)“ zuordnen oder WR-Gruppe nutzen.');
         } else if (mode === 'pvLimitW') {
-            add('pv.limitW', hasText(cfg && cfg.pvLimitWId), 'PV-Leistungsbegrenzung W nicht zugeordnet');
+            add('pv.limitW', hasText(cfg && cfg.pvLimitWId), 'PV-Leistungsbegrenzung W nicht zugeordnet', true, 'Legacy-Schreibdatenpunkt „PV-Limit (W)“ zuordnen oder WR-Gruppe nutzen.');
         } else if (mode === 'pvLimitPct') {
-            add('pv.limitPct', hasText(cfg && cfg.pvLimitPctId), 'PV-Leistungsbegrenzung % nicht zugeordnet');
+            add('pv.limitPct', hasText(cfg && cfg.pvLimitPctId), 'PV-Leistungsbegrenzung % nicht zugeordnet', true, 'Legacy-Schreibdatenpunkt „PV-Limit (%)“ zuordnen oder WR-Gruppe nutzen.');
         } else {
             missing.push('Keine WR-/PV-Write-Datenpunkte für die Einspeisebegrenzung zugeordnet');
-            rows.push({ id: 'off', ok: false, label: 'Keine steuerbare WR-/PV-Brücke' });
+            rows.push({ id: 'off', ok: false, required: true, label: 'Keine steuerbare WR-/PV-Brücke', nextStep: 'WR-Gruppe oder Legacy-PV-Curtail-Write-Datenpunkt zuordnen.' });
         }
-        return { schema: 'nexowatt.grid.export-write-capability.v1', mode, writable: missing.length === 0, missing, rows };
+        const nextStep = missing.length
+            ? 'Mapping im Installer/App-Center prüfen: WR-Gruppe Einspeisebegrenzung oder Legacy-PV-Curtail-Write-Datenpunkt zuordnen.'
+            : 'Schreibbrücke vorhanden. Im Diagnosemodus zunächst ohne Hardware-Schreiben prüfen; danach auf Aktiv stellen.';
+        return {
+            schema: 'nexowatt.grid.export-write-capability.v2',
+            mode,
+            writable: missing.length === 0,
+            missing,
+            rows,
+            nextStep,
+        };
     }
 
     /**
@@ -1155,7 +1109,7 @@ class GridConstraintsModule extends BaseModule {
      * Zusammenhang: Die Werte werden aus der bestehenden Grid-Constraints-Regelung abgeleitet. Dadurch gibt es
      * keine zweite Einspeisebegrenzung und keine doppelte Abregelungslogik.
      */
-    async _publishExportLimitStates(cfg, enabled, approved, maxFeedInPowerW, biasW, gridW, exportW, action, modeResolved, negativePriceActive) {
+    async _publishExportLimitStates(cfg, enabled, approved, maxFeedInPowerW, biasW, gridW, exportW, action, modeResolved, negativePriceActive, runModeOverride = null) {
         const set = async (id, val) => { try { await this.adapter.setStateAsync(id, val, true); } catch (_e) {} };
         const effectiveMaxW = Math.max(0, Math.round(Number(maxFeedInPowerW) || 0));
         const currentExportW = Math.max(0, Math.round(Number(exportW) || 0));
@@ -1164,34 +1118,54 @@ class GridConstraintsModule extends BaseModule {
         const overLimitW = Math.max(0, currentExportW - effectiveMaxW);
         const usagePercent = effectiveMaxW > 0 ? Math.round((currentExportW / effectiveMaxW) * 100) : (currentExportW > 0 ? 999 : 0);
         const mode = modeResolved || 'off';
+        const runMode = runModeOverride || this._getExportLimitRunMode(cfg);
+        const diagnosticOnly = enabled && runMode === 'diagnostic';
         const write = this._exportWriteDiagnostics(cfg, mode);
         const estimateW = this._estimateCurtailmentW(cfg, mode, overLimitW);
-        const runMode = this._getExportLimitRunMode(cfg);
-        const testMode = runMode === 'diagnostic';
-        const activeControl = !!enabled && !!approved && runMode === 'active';
         const requiredW = enabled && approved ? overLimitW : 0;
-        const plannedWrite = this._buildExportLimitPlannedWrite(cfg, mode, effectiveMaxW, biasW, gridW, currentExportW, requiredW || estimateW, write);
-        const statusLabel = !enabled ? 'off'
-            : !approved ? 'awaiting_installer_approval'
-            : testMode ? 'diagnostic_only_no_write'
-            : runMode === 'off' ? 'run_mode_off'
-            : !write.writable ? 'missing_wr_write_datapoints'
-            : overLimitW > 0 ? 'export_above_limit'
-            : negativePriceActive ? 'negative_price_guard_active'
-            : 'within_limit';
+        const plannedAction = !enabled
+            ? 'off'
+            : !approved
+                ? 'awaiting_installer_approval'
+                : !write.writable
+                    ? 'mapping_required'
+                    : diagnosticOnly
+                        ? `would_limit_${Math.max(0, Math.round(requiredW))}W`
+                        : String(action || 'active');
+        const statusLabel = !enabled ? 'off' : !approved ? 'awaiting_installer_approval' : diagnosticOnly ? 'diagnostic_only' : !write.writable ? 'missing_wr_write_datapoints' : overLimitW > 0 ? 'export_above_limit' : negativePriceActive ? 'negative_price_guard_active' : 'within_limit';
         const negativeStrategy = negativePriceActive ? `negative_price_import_bias_${Math.max(0, Math.round(Number(biasW) || 0))}W` : 'normal_export_limit';
         const warning = write.writable ? '' : write.missing.join(' | ');
-        const installerHint = !enabled ? 'Einspeisebegrenzung ist aus.'
-            : !approved ? 'Installateurfreigabe fehlt.'
-            : testMode ? 'Diagnose/Testmodus: NexoWatt berechnet nur, schreibt aber keine WR-/PV-Setpoints.'
-            : !write.writable ? 'WR-Write-Datenpunkte fehlen oder sind nicht zugeordnet.'
-            : 'Export Guard ist schreibfähig.';
-        const summary = {
-            schema: 'nexowatt.grid.export-limit.diagnostics.v2',
+        const installerMessage = !enabled
+            ? 'Export Guard ist deaktiviert.'
+            : !approved
+                ? 'Installateurfreigabe fehlt. Es wird nicht geregelt.'
+                : diagnosticOnly
+                    ? 'Diagnose/Testmodus aktiv: NexoWatt berechnet die Einspeisebegrenzung, schreibt aber keine WR-/PV-Setpoints.'
+                    : !write.writable
+                        ? 'Export Guard ist aktiv, aber es fehlen WR-/PV-Write-Datenpunkte. Es kann nicht geregelt werden.'
+                        : negativePriceActive
+                            ? 'Negativer Preis erkannt: Export Guard nutzt die konfigurierte Negative-Preis-Strategie.'
+                            : 'Export Guard ist aktiv und schreibfähig.';
+        const checklist = {
+            schema: 'nexowatt.grid.export-guard.installer-checklist.v1',
+            runMode,
+            diagnosticOnly,
             enabled: !!enabled,
             installerApproved: !!approved,
-            runMode,
-            testMode,
+            meterFresh: typeof gridW === 'number' && Number.isFinite(gridW),
+            writeCapable: !!write.writable,
+            currentExportW,
+            effectiveMaxFeedInW: effectiveMaxW,
+            exportOverLimitW: overLimitW,
+            plannedAction,
+            negativePriceActive: !!negativePriceActive,
+            nextStep: write.nextStep || '',
+            missingWriteDatapoints: write.missing || [],
+        };
+        const summary = {
+            schema: 'nexowatt.grid.export-limit.diagnostics.v1',
+            enabled: !!enabled,
+            installerApproved: !!approved,
             configuredMaxFeedInW: effectiveMaxW,
             effectiveMaxFeedInW: effectiveMaxW,
             currentExportW,
@@ -1200,19 +1174,17 @@ class GridConstraintsModule extends BaseModule {
             usagePercent,
             targetGridW,
             statusLabel,
+            runMode,
+            diagnosticOnly,
+            plannedAction,
+            installerMessage,
             negativePriceActive: !!negativePriceActive,
             negativePriceStrategy: negativeStrategy,
             action: String(action || ''),
             mode,
-            runMode,
-            testMode,
-            activeControl,
-            plannedWrite,
-            installerHint,
             writeCapable: !!write.writable,
             writeWarning: warning,
             missingWriteDatapoints: write.missing,
-            writePlan: plannedWrite,
             curtailmentRequiredW: requiredW,
             estimatedCurtailmentW: estimateW,
             unusedPvPowerW: estimateW,
@@ -1220,8 +1192,6 @@ class GridConstraintsModule extends BaseModule {
         };
         await set('gridConstraints.exportLimit.enabled', !!enabled);
         await set('gridConstraints.exportLimit.installerApproved', !!approved);
-        await set('gridConstraints.exportLimit.runMode', runMode);
-        await set('gridConstraints.exportLimit.testMode', testMode);
         await set('gridConstraints.exportLimit.configuredMaxFeedInW', effectiveMaxW);
         await set('gridConstraints.exportLimit.effectiveMaxFeedInW', effectiveMaxW);
         await set('gridConstraints.exportLimit.currentExportW', currentExportW);
@@ -1230,25 +1200,21 @@ class GridConstraintsModule extends BaseModule {
         await set('gridConstraints.exportLimit.usagePercent', usagePercent);
         await set('gridConstraints.exportLimit.targetGridW', targetGridW);
         await set('gridConstraints.exportLimit.statusLabel', statusLabel);
+        await set('gridConstraints.exportLimit.runMode', runMode);
+        await set('gridConstraints.exportLimit.diagnosticOnly', !!diagnosticOnly);
+        await set('gridConstraints.exportLimit.plannedAction', plannedAction);
+        await set('gridConstraints.exportLimit.installerMessage', installerMessage);
+        await set('gridConstraints.exportLimit.installerChecklistJson', JSON.stringify(checklist));
         await set('gridConstraints.exportLimit.negativePriceActive', !!negativePriceActive);
         await set('gridConstraints.exportLimit.negativePriceStrategy', negativeStrategy);
         await set('gridConstraints.exportLimit.writeCapable', !!write.writable);
         await set('gridConstraints.exportLimit.writeWarning', warning);
         await set('gridConstraints.exportLimit.missingWriteDatapointsJson', JSON.stringify(write));
-        await set('gridConstraints.exportLimit.writePlanJson', JSON.stringify(plannedWrite));
-        await set('gridConstraints.exportLimit.installerDiagnosisJson', JSON.stringify({ ...summary, writePlan: plannedWrite }));
         await set('gridConstraints.exportLimit.curtailmentRequiredW', requiredW);
         await set('gridConstraints.exportLimit.estimatedCurtailmentW', estimateW);
         await set('gridConstraints.exportLimit.unusedPvPowerW', estimateW);
         await set('gridConstraints.exportLimit.displayJson', JSON.stringify(summary));
         await set('gridConstraints.exportLimit.summaryJson', JSON.stringify(summary));
-        await set('gridConstraints.exportLimit.runMode', runMode);
-        await set('gridConstraints.exportLimit.testMode', !!testMode);
-        await set('gridConstraints.exportLimit.activeControl', !!activeControl);
-        await set('gridConstraints.exportLimit.plannedWriteJson', JSON.stringify(plannedWrite));
-        await set('gridConstraints.exportLimit.installerHint', installerHint);
-        await set('gridConstraints.pvCurtail.diagnosticOnly', !!testMode);
-        await set('gridConstraints.pvCurtail.plannedWriteJson', JSON.stringify(plannedWrite));
         await set('gridConstraints.pvCurtail.estimatedCurtailmentW', estimateW);
     }
 
@@ -1357,11 +1323,33 @@ class GridConstraintsModule extends BaseModule {
 
         const gridWNum = (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : 0;
         const hasZeroGroup = Array.isArray(cfg.pvCurtailInvertersZero) && cfg.pvCurtailInvertersZero.length > 0;
+        const exportGuardDiagnosticOnly = this._isExportLimitDiagnosticMode(cfg);
 
-        // Zero export tick (may work even if grid stale via failsafe)
-        const ze = hasZeroGroup
-            ? await this._tickZeroExportGroup(nowMs, gridWNum, cfg, gridStale)
-            : await this._tickZeroExport(nowMs, gridWNum, cfg, gridStale);
+        // Zero export tick (may work even if grid stale via failsafe).
+        // Sicherheitsregel 0.8.30: Im Diagnose/Testmodus wird die komplette Export-Guard-Planung
+        // veröffentlicht, aber die bestehende WR-/PV-Schreiblogik wird bewusst nicht aufgerufen.
+        // Dadurch kann der Installateur Messrichtung, Limit und geplante Aktion prüfen, bevor echte
+        // Setpoints auf Herstelleradapter/OCPP/Modbus/MQTT/REST-Brücken geschrieben werden.
+        let ze = { enabled: !!cfg.zeroExportEnabled, diagnosticOnly: exportGuardDiagnosticOnly };
+        if (cfg.zeroExportEnabled && exportGuardDiagnosticOnly) {
+            const tariffGridImportPreferredForDiag = await this._isTariffGridImportPreferred();
+            const targetForDiag = this._buildExportLimitTarget(cfg, tariffGridImportPreferredForDiag);
+            const exportWForDiag = Math.max(0, -Number(gridWNum || 0));
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.enabled', true, true);
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.installerApproved', !!this._isExportLimitInstallerApproved(cfg), true);
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.maxFeedInPowerW', Math.round(targetForDiag.maxFeedInPowerW), true);
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.targetGridW', Math.round(targetForDiag.targetGridW), true);
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.modeLabel', targetForDiag.maxFeedInPowerW > 0 ? `max_export_${targetForDiag.maxFeedInPowerW}W` : 'zero_export', true);
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.targetImportBiasW', Math.round(targetForDiag.biasW), true);
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.deadbandW', Math.round(targetForDiag.deadbandW), true);
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.exportW', Math.round(exportWForDiag), true);
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'diagnostic_only', true);
+            await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', false, true);
+        } else {
+            ze = hasZeroGroup
+                ? await this._tickZeroExportGroup(nowMs, gridWNum, cfg, gridStale)
+                : await this._tickZeroExport(nowMs, gridWNum, cfg, gridStale);
+        }
 
         // Export Guard Diagnose: zeigt aktuelle Einspeisung, erlaubtes Limit, Abregelungsbedarf,
         // negative-Preis-Strategie und WR-Schreibfähigkeit an. Die eigentliche Regelung bleibt die
@@ -1384,7 +1372,8 @@ class GridConstraintsModule extends BaseModule {
             Math.max(0, -Number(gridWNum || 0)),
             zeroAction,
             modeResolvedDiag,
-            tariffGridImportPreferred
+            tariffGridImportPreferred,
+            this._getExportLimitRunMode(cfg)
         );
 
         // Compute final "max import" cap: min(connectionLimit, rlmCapNow)

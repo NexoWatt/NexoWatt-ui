@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:09ccfc3623c790fb501e3fc49377163db8ff757bdf16688b310e916696a373bf
+ * Quell-Hash: sha256:8f1eefd66a7f48b8930d3f9e7d9b03b7752c47346540c314fbec81c4a9024b50
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -62,6 +62,7 @@ const { CountryProfileModule } = require('./modules/country-profile');
 const { EnergyWalletModule } = require('./modules/energy-wallet');
 const { ChargeKioskModule } = require('./modules/charge-kiosk');
 const { EnergyLedgerModule } = require('./modules/energy-ledger');
+const { NlP1DsmrModule } = require('./modules/nl-p1-dsmr');
 const featureFlags = require('./services/feature-flags');
 
 /**
@@ -308,6 +309,21 @@ class ModuleManager {
                 }
                 return false;
             },
+        });
+
+
+        // Niederlande P1/DSMR Basis: normalisiert P1-Daten für Netafname/Teruglevering.
+        // Das Modul bleibt read-only und ist bewusst hersteller-/adapteroffen. Es läuft für
+        // Home und EOS, wenn NL ausgewählt ist oder der Installer P1 explizit aktiviert.
+        this.modules.push({
+            key: 'nlP1',
+            instance: new NlP1DsmrModule(this.adapter, this.dp),
+            enabledFn: () => this._licenseAllowsApp('nlP1') && !!(
+                this.adapter && this.adapter.config && (
+                    (this.adapter.config.countryProfile && String(this.adapter.config.countryProfile.country || '').toUpperCase() === 'NL') ||
+                    (this.adapter.config.nlP1 && this.adapter.config.nlP1.enabled === true)
+                )
+            ),
         });
 
         // Energie-Wertkonto (read-only): Home + EOS. Bewertet PV-Nutzung in Euro, schaltet aber nichts.

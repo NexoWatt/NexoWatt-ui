@@ -1,33 +1,46 @@
 # NexoWatt UI 0.8.30 – Export Guard Stabilisierung
 
-## Ziel
+## Zweck
 
-Diese Version härtet die Einspeisebegrenzung für Deutschland und die Niederlande. Der Installateur kann die Funktion sicher im Testmodus prüfen, bevor WR-/PV-Setpoints geschrieben werden.
+Diese Version ergänzt die Einspeisebegrenzung um einen sicheren Diagnose/Testmodus und eine klarere Installer-Diagnose.
 
-## Neuer Betriebsmodus
+## Wichtige Bedienregel
 
-Im Installer/App-Center unter **Netzlimits → Einspeisebegrenzung / Export Guard** gibt es jetzt:
+Die Einspeisebegrenzung bleibt eine Installateurfunktion. Kunden können sie nicht im normalen Frontend aktivieren oder verändern.
 
-- **Diagnose/Testmodus**: NexoWatt berechnet die Regelentscheidung und den Write-Plan, schreibt aber keine WR-/PV-Setpoints.
-- **Aktiv**: NexoWatt schreibt freigegebene WR-/PV-Setpoints über die vorhandene herstellerneutrale Mapping-Schicht.
-- **Aus**: Export Guard bleibt trotz App-Modus ohne Regelwirkung.
+## Betriebsarten
+
+Im Installer/App-Center unter **EVU / PV Regelung** gibt es für die Einspeisebegrenzung jetzt:
+
+- **Diagnose/Testmodus**: NexoWatt berechnet Limit, Überschreitung und geplante Aktion, schreibt aber keine WR-/PV-Setpoints.
+- **Aktiv**: NexoWatt darf die vorhandene WR-/PV-Schreibbrücke nutzen.
+
+Empfehlung: Neue Anlagen zuerst im Diagnose/Testmodus prüfen. Erst nach plausibler Messrichtung, korrektem Einspeiselimit und vorhandenen WR-Write-Datenpunkten auf **Aktiv** stellen.
 
 ## Runtime-Diagnose
 
-Die Diagnosekarte zeigt unter anderem:
+Die Diagnose zeigt im App-Center:
 
 - aktuelle Einspeisung
 - erlaubtes Einspeiselimit
 - Überschreitung
-- geschätzte Abregelungsleistung
+- Rest bis Limit
+- geschätzte Abregelung
+- Betriebsart
+- geplante Aktion
 - WR-Schreibfähigkeit
 - Negative-Preis-Strategie
-- aktuelle Aktion
 
-## Wichtig
+## Neue States
 
-Die Funktion bleibt herstelleroffen. Es wird kein OCPP-only Pfad gebaut. WR-/PV-Write-Datenpunkte können über Modbus, MQTT, REST, Herstelleradapter, NexoWatt-Devices oder ioBroker-Aliase angebunden sein.
+```text
+gridConstraints.exportLimit.runMode
+gridConstraints.exportLimit.diagnosticOnly
+gridConstraints.exportLimit.plannedAction
+gridConstraints.exportLimit.installerMessage
+gridConstraints.exportLimit.installerChecklistJson
+```
 
-## Paketgröße
+## Keine doppelten Artefakte
 
-ZIP/TGZ-Repository-Artefakte werden nicht mehr in das auszuliefernde Repository-ZIP aufgenommen.
+ZIP- und TGZ-Dateien gehören nicht in das Repository oder Adapterpaket. `.npmignore` schließt `*.zip` und `*.tgz` aus.

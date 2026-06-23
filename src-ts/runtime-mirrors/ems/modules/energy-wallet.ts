@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e63eda1cdbac6cd4d6c84fd513b27a0b7605e50d936930313f2fcadb1f17bf39
+ * Original-Hash: 147b895f292d1505a1dd45cd6650ce0e0f10b5e48727411d4364229e596b5d69
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/energy-wallet.ts
- * Quell-Hash: sha256:8adfa4b82d5d231d5c04b6aab3aa6dc2c6910ca4d5029bd6e8ee62743f7077c9
+ * Quell-Hash: sha256:9d439332b33a4e192b9428ea06aa53ba7c5901e179618c24c06949599a229df4
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -82,6 +82,11 @@
  * - Vorbereitende Verbindung zum Local kWh Ledger. Die Wallet liest nur den
  *   Bridge-Payload `energyLedger.walletBridge.summaryJson` und zählt ihn bewusst nicht
  *   noch einmal in die Wallet-Werte hinein. So entstehen keine doppelten kWh.
+ *
+ * 0.8.31:
+ * - NL/P1-Brücke ergänzt. Das Wertkonto übernimmt Saldering-/Teruglevering-Infos
+ *   nur als Referenzanzeige aus `nl.saldering.summaryJson`/`nl.teruglevering.summaryJson`
+ *   und zählt diese Werte nicht erneut in die Home-/EOS-Wallet-Summen.
  */
 'use strict';
 
@@ -337,6 +342,11 @@ class EnergyWalletModule extends BaseModule {
       common: { name: 'Export Guard Brücke' },
       native: {},
     });
+    await a.setObjectNotExistsAsync('energyWallet.nlBridge', {
+      type: 'channel',
+      common: { name: 'NL P1/Saldering Brücke' },
+      native: {},
+    });
 
 /**
  * Code-Teil: mk
@@ -411,6 +421,11 @@ class EnergyWalletModule extends BaseModule {
     await mk('energyWallet.exportGuardBridge.currentExportW', 'aktuelle Einspeisung', 'number', 'value.power', 'W', 0);
     await mk('energyWallet.exportGuardBridge.negativePriceActive', 'negative Preisstrategie aktiv', 'boolean', 'indicator', '', false);
     await mk('energyWallet.exportGuardBridge.summaryJson', 'Export Guard Brücke JSON', 'string', 'json', '', '{}');
+    await mk('energyWallet.nlBridge.status', 'NL-Brücke Status', 'string', 'text', '', 'disabled');
+    await mk('energyWallet.nlBridge.terugleveringTodayEur', 'Teruglevering Wert heute', 'number', 'value.money', '€', 0);
+    await mk('energyWallet.nlBridge.terugleveringCostTodayEur', 'Teruglevering Kosten heute', 'number', 'value.money', '€', 0);
+    await mk('energyWallet.nlBridge.salderingExitRiskTodayEur', 'Saldering-Exit Risikowert heute', 'number', 'value.money', '€', 0);
+    await mk('energyWallet.nlBridge.summaryJson', 'NL P1/Saldering Brücke JSON', 'string', 'json', '', '{}');
   }
 
   async _ensurePeriodStates(prefix, keyLabel, defKey, mk) {
@@ -563,6 +578,30 @@ class EnergyWalletModule extends BaseModule {
     return { found: false, key: '', value: null, ts: 0, ageSec: 0 };
   }
 
+
+  _readStateString(keys, fallback = '') {
+    const a = this.adapter;
+    const cache = a && a.stateCache && typeof a.stateCache === 'object' ? a.stateCache : null;
+    const list = Array.isArray(keys) ? keys : [keys];
+    for (const key of list) {
+      try {
+        const id = String(key || '').trim();
+        if (!id) continue;
+        let val = null;
+        if (cache && Object.prototype.hasOwnProperty.call(cache, id)) {
+          const st = cache[id];
+          val = st && typeof st === 'object' && 'value' in st ? st.value : st;
+        } else if (cache && a && a.namespace && Object.prototype.hasOwnProperty.call(cache, `${a.namespace}.${id}`)) {
+          const st = cache[`${a.namespace}.${id}`];
+          val = st && typeof st === 'object' && 'value' in st ? st.value : st;
+        }
+        if (val !== null && val !== undefined && String(val).trim() !== '') return String(val);
+      } catch (_e) {}
+    }
+    return String(fallback || '');
+  }
+
+
   _readStateBool(keys, fallback = false) {
     const list = Array.isArray(keys) ? keys : [keys];
     for (const key of list) {
@@ -642,6 +681,30 @@ class EnergyWalletModule extends BaseModule {
    * Zusammenhang: Diese Brücke zählt keine kWh doppelt und schaltet keine Hardware. Sie übernimmt nur die
    * bereits vom Grid-Constraints-Modul berechnete Abregelungsleistung in die normale Wallet-Integration.
    */
+
+  _nlBridge() {
+    // 0.8.31: Referenzbrücke zum NL P1/DSMR-Modul. Wichtig: Diese Werte
+    // werden nicht in die Wallet-Summen addiert, weil das Wertkonto Einspeisung
+    // bereits über PV/Grid bewertet. Die Brücke macht nur sichtbar, welche NL-
+    // Saldering-/Teruglevering-Werte aus dem P1-Modul kommen.
+    const salderingRaw = this._readStateString(['nl.saldering.summaryJson'], '');
+    const terugRaw = this._readStateString(['nl.teruglevering.summaryJson'], '');
+    let saldering = null;
+    let teruglevering = null;
+    try { saldering = salderingRaw ? JSON.parse(salderingRaw) : null; } catch (_e) { saldering = null; }
+    try { teruglevering = terugRaw ? JSON.parse(terugRaw) : null; } catch (_e) { teruglevering = null; }
+    const active = !!(saldering || teruglevering);
+    return {
+      status: active ? 'linked' : 'disabled',
+      saldering: saldering || {},
+      teruglevering: teruglevering || {},
+      terugleveringTodayEur: Number(teruglevering && teruglevering.valueTodayEur) || 0,
+      terugleveringCostTodayEur: Number(teruglevering && teruglevering.costTodayEur) || 0,
+      salderingExitRiskTodayEur: Number(saldering && saldering.exitRiskEurToday) || 0,
+      note: active ? 'NL-Brücke aktiv; Anzeige ohne Doppelzählung in den Wallet-Summen.' : 'Keine NL P1/Saldering-Daten vorhanden.',
+    };
+  }
+
   _exportGuardBridge() {
     const a = this.adapter;
 /**
@@ -1198,6 +1261,13 @@ class EnergyWalletModule extends BaseModule {
     await set('energyWallet.exportGuardBridge.currentExportW', round(eb.currentExportW, 0));
     await set('energyWallet.exportGuardBridge.negativePriceActive', !!eb.negativePriceActive);
     await set('energyWallet.exportGuardBridge.summaryJson', JSON.stringify(eb));
+
+    const nb = this._nlBridge();
+    await set('energyWallet.nlBridge.status', String(nb.status || 'disabled'));
+    await set('energyWallet.nlBridge.terugleveringTodayEur', round(nb.terugleveringTodayEur || 0, 2));
+    await set('energyWallet.nlBridge.terugleveringCostTodayEur', round(nb.terugleveringCostTodayEur || 0, 2));
+    await set('energyWallet.nlBridge.salderingExitRiskTodayEur', round(nb.salderingExitRiskTodayEur || 0, 2));
+    await set('energyWallet.nlBridge.summaryJson', JSON.stringify(nb));
   }
 
   async _publishPeriod(prefix, keyName, periodKey, summary, set) {

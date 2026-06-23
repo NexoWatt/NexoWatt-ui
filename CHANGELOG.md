@@ -1,9 +1,9 @@
 ## 0.8.30
 
-- Export Guard: Diagnose-/Testmodus ergänzt. In diesem Modus berechnet NexoWatt Einspeiselimit, Überschreitung, Abregelungsbedarf und geplante WR-Setpoints, schreibt aber keine WR-/PV-Datenpunkte.
-- Installer/App-Center: Runtime-Diagnosekarte für Einspeisebegrenzung mit aktueller Einspeisung, erlaubtem Limit, Überschreitung, Abregelungsleistung, WR-Write-Status, negativer Preisstrategie und geplantem Write-Plan.
-- Export Guard: zentrale Run-Mode-Guards verhindern schreibende Failsafe-/Setpoint-Pfade im Diagnosemodus.
-- Release-Härtung: neuer Check verhindert, dass ZIP-/TGZ-Releasepakete versehentlich in den Repository-/Paketbaum gelangen.
+- Export Guard: Diagnose/Testmodus ergänzt. In diesem Modus werden Einspeiselimit, geplante Aktion und Abregelungsbedarf berechnet, aber keine WR-/PV-Setpoints geschrieben.
+- Installer/App-Center: Runtime-Diagnose für Einspeisebegrenzung zeigt aktuelle Einspeisung, erlaubtes Limit, Überschreitung, Abregelung, WR-Schreibfähigkeit, geplante Aktion und Negative-Preis-Strategie.
+- Grid Constraints: neue Diagnose-States `runMode`, `diagnosticOnly`, `plannedAction`, `installerMessage` und `installerChecklistJson` ergänzt.
+- Release-Hygiene: ZIP-/TGZ-Artefakte bleiben bewusst außerhalb des Pakets und werden durch `.npmignore` ausgeschlossen.
 
 ## 0.8.29
 

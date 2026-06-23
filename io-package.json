@@ -1,11 +1,15 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.30",
+    "version": "0.8.31",
     "news": {
+      "0.8.31": {
+        "de": "Version 0.8.31: Niederlande-Basis mit P1/DSMR-Mapping, Netafname/Teruglevering-Normalisierung, Saldering-Exit-Grundlogik und Energy-Wallet-Brücke ergänzt. Export Guard bleibt nur mit Installerfreigabe aktiv.",
+        "en": "Version 0.8.31: Adds Netherlands baseline with P1/DSMR mapping, Netafname/Teruglevering normalization, Saldering exit basics and Energy Wallet bridge. Export Guard still requires installer approval."
+      },
       "0.8.30": {
-        "de": "Version 0.8.30: Export Guard Stabilisierung mit Diagnose/Testmodus ohne WR-Schreibzugriff, geplanter Write-Plan, Runtime-Diagnose im Installer und Archiv-Schutz gegen eingebettete ZIP/TGZ-Dateien.",
-        "en": "Version 0.8.30: Export Guard stabilization with diagnostic/test mode without inverter writes, planned write plan, installer runtime diagnostics and archive guard against embedded ZIP/TGZ files."
+        "de": "Version 0.8.30: Export Guard Stabilisierung mit Diagnose/Testmodus ergänzt. Installer-Diagnose zeigt aktuelle Einspeisung, erlaubtes Limit, geplante Aktion, WR-Schreibfähigkeit und Negative-Preis-Strategie. Generierte ZIP/TGZ-Artefakte bleiben vom Paket ausgeschlossen.",
+        "en": "Version 0.8.30: Adds Export Guard stabilization with diagnostic/test mode. Installer diagnostics show current export, allowed limit, planned action, inverter write capability and negative-price strategy. Generated ZIP/TGZ artifacts remain excluded from the package."
       },
       "0.8.29": {
         "de": "Version 0.8.29: Export Guard Diagnose erweitert. Aktuelle Einspeisung vs. erlaubtes Limit, Abregelungsleistung, fehlende WR-Write-Datenpunkte und negative-Preis-Strategie werden sichtbar. Energie-Wertkonto bereitet abgeregelte kWh und nicht genutzten PV-Wert vor.",
@@ -26,10 +30,6 @@
       "0.8.25": {
         "de": "Version 0.8.25: DC Station Display Betreiberwerte erweitert. Letzte Session je LP wird persistent geführt, Tageswerte enthalten Solar-/Netzanteil, CSV-Export v2 und Betreiberdiagnose bleiben hersteller- und protokolloffen.",
         "en": "Version 0.8.25: Extends DC Station Display operator values. Last session per chargepoint is persisted, daily values include solar/grid split, CSV export v2 and operator diagnostics stay manufacturer/protocol agnostic."
-      },
-      "0.8.24": {
-        "de": "Version 0.8.24: Energie-Wertkonto Diagnose verfeinert. Kundenhinweise und Installateurdiagnose sind getrennt, dynamische Tarifpreise zeigen Quelle/Alter und die LIVE-Karte kann optional die Preisquelle anzeigen.",
-        "en": "Version 0.8.24: Refines Energy Wallet diagnostics. Customer hints and installer diagnostics are separated, dynamic tariff prices expose source/age, and the LIVE card can optionally show the price source."
       }
     },
     "title": "NexoWatt UI",
@@ -298,6 +298,21 @@
       "source": "chargeKiosk.lastSessionsByLpJson",
       "recentEntryLimit": 200,
       "processedSessionLimit": 2000
+    },
+    "nlP1": {
+      "enabled": false,
+      "staleTimeoutSec": 300,
+      "returnValueEurPerKwh": 0.08,
+      "returnCostEurPerKwh": 0.0,
+      "datapoints": {
+        "importPowerW": "",
+        "exportPowerW": "",
+        "netPowerW": "",
+        "importEnergyKwh": "",
+        "exportEnergyKwh": "",
+        "gasM3": "",
+        "activeTariff": ""
+      }
     }
   },
   "instanceObjects": [

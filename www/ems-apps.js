@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:45a0edc9b00cb72c2ea6bb39a96e0d135e3be7f95fc85e94d2ab00dab094be77
+ * Quell-Hash: sha256:348b25bc17dcbf31ba896d314b07d759c283bb0d306e57f83b3537b1abc98ac9
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -358,6 +358,7 @@
     { id: 'grid', label: 'Netzlimits', desc: 'Netzrestriktionen (RLM/0‑Einspeisung/Import‑Limits)', mandatory: false, hems: false },
     { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung: PV, Wetter, Tarif, Speicher, Wallboxen und Lastspitzen als Vorschläge auf der LIVE‑Seite', mandatory: false, hems: true },
     { id: 'energyWallet', label: 'Energie-Wertkonto', desc: 'PV-Wert, Eigenverbrauchswert, Solar-Laden und Einspeisewert im Nutzerfrontend (Home + EOS)', mandatory: true, hems: true },
+    { id: 'nlP1', label: 'NL P1/DSMR', desc: 'Niederlande: P1/DSMR Mapping für Netafname, Teruglevering und Saldering-Exit-Basis (Home + EOS)', mandatory: false, hems: true },
     { id: 'chargeKiosk', label: 'DC Station Display', desc: 'EOS: isolierte Vollbild-Bedienseiten pro DC-Ladestation mit zugeordneten LPs/Connectoren', mandatory: false, hems: false },
     { id: 'energyLedger', label: 'Local kWh Ledger', desc: 'EOS: lokale kWh-Zuordnung als Grundlage für Betreiberwerte, Export, Nachbarschaft und Microgrid', mandatory: false, hems: false },
     { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', mandatory: true, hems: true },
@@ -854,7 +855,7 @@
 
 
   const HEMS_APP_IDS = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet']);
-  const HOME_LICENSE_FEATURES = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations']);
+  const HOME_LICENSE_FEATURES = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations','nlP1','nlP1Basic','p1Dsmr']);
   const APP_LICENSE_FEATURES = Object.freeze({
     charging: 'chargingManagement',
     peak: 'peakShaving',
@@ -874,6 +875,7 @@
     energyWallet: 'energyWallet',
     chargeKiosk: 'chargeKiosk',
     energyLedger: 'energyLedger',
+    nlP1: 'nlP1',
     mesh: 'mesh',
     microgrid: 'microgrid',
     nlSaldering: 'nlSaldering',
@@ -1625,6 +1627,16 @@ function collectAiAdvisorConfigFromUI(base) {
     };
     return out;
   }
+
+  function _nwHtmlEscape(input) {
+    return String(input == null ? '' : input)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function _nwSystemProfileCountry() {
     const cp = currentConfig && currentConfig.countryProfile && typeof currentConfig.countryProfile === 'object' ? currentConfig.countryProfile : {};
     const raw = String(cp.country || cp.profile || 'DE').trim().toUpperCase();
@@ -1690,6 +1702,49 @@ function collectAiAdvisorConfigFromUI(base) {
     if (hint) hint.textContent = country === 'NL'
       ? 'NL aktiv: Begriffe wie Teruglevering/Netafname und spätere P1-/Saldering-Module werden vorbereitet.'
       : 'DE aktiv: Begriffe wie Einspeisung/Netzbezug und §14a-Module bleiben Standard.';
+    return card;
+  }
+
+
+  function buildNlP1Card() {
+    const card = document.createElement('div');
+    card.className = 'nw-config-card nw-nl-p1-card';
+    card.setAttribute('data-card', 'nl-p1-dsmr');
+    const country = _nwSystemProfileCountry();
+    const cfg = currentConfig && currentConfig.nlP1 && typeof currentConfig.nlP1 === 'object' ? currentConfig.nlP1 : {};
+    const dps = cfg.datapoints && typeof cfg.datapoints === 'object' ? cfg.datapoints : {};
+    const app = currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps && currentConfig.emsApps.apps.nlP1 ? currentConfig.emsApps.apps.nlP1 : null;
+    const enabled = cfg.enabled === true || !!(app && app.installed && app.enabled);
+    const disabledNote = country === 'NL'
+      ? 'NL aktiv: P1/DSMR-Datenpunkte können aus einem vorhandenen ioBroker-Adapter oder aus NexoWatt-Devices gemappt werden.'
+      : 'Länderprofil ist DE. P1/DSMR kann für Tests gemappt werden, läuft aber fachlich als NL-Modul.';
+    card.innerHTML = `
+      <div class="nw-config-card__header">
+        <div>
+          <div class="nw-config-card__title">NL P1/DSMR &amp; Teruglevering</div>
+          <div class="nw-config-card__subtitle">Installer-Mapping für Netafname/Teruglevering. Read-only, keine Einspeisebegrenzung und keine Hardwaresteuerung.</div>
+        </div>
+      </div>
+      <div class="nw-config-card__body">
+        <div class="nw-config-empty" style="text-align:left;margin-bottom:10px;">${_nwHtmlEscape(disabledNote)}</div>
+        <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:end;">
+          <label class="nw-config-field"><span class="nw-config-label">P1/DSMR aktiv</span><select class="nw-config-input" data-nlp1-field="enabled"><option value="false" ${enabled ? '' : 'selected'}>Aus</option><option value="true" ${enabled ? 'selected' : ''}>An</option></select><small>Kann automatisch laufen, wenn NL aktiv und Datenpunkte gemappt sind.</small></label>
+          <label class="nw-config-field"><span class="nw-config-label">Stale Timeout s</span><input class="nw-config-input" type="number" min="30" max="86400" step="1" data-nlp1-field="staleTimeoutSec" value="${Number.isFinite(Number(cfg.staleTimeoutSec)) ? Number(cfg.staleTimeoutSec) : 300}" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Teruglevering-Wert €/kWh</span><input class="nw-config-input" type="number" min="-5" max="5" step="0.0001" data-nlp1-field="returnValueEurPerKwh" value="${Number.isFinite(Number(cfg.returnValueEurPerKwh)) ? Number(cfg.returnValueEurPerKwh) : 0.08}" /><small>Fallback. Betreiberwert aus Frontend-Einstellungen hat Vorrang.</small></label>
+          <label class="nw-config-field"><span class="nw-config-label">Rücklieferkosten €/kWh</span><input class="nw-config-input" type="number" min="0" max="5" step="0.0001" data-nlp1-field="returnCostEurPerKwh" value="${Number.isFinite(Number(cfg.returnCostEurPerKwh)) ? Number(cfg.returnCostEurPerKwh) : 0}" /><small>Vorbereitung für Teruglevering-Kosten.</small></label>
+        </div>
+        <div class="nw-config-separator" style="margin:14px 0 10px;"></div>
+        <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;">
+          <label class="nw-config-field"><span class="nw-config-label">Importleistung / Netafname W</span><input class="nw-config-input" data-nlp1-dp="importPowerW" value="${_nwHtmlEscape(dps.importPowerW || '')}" placeholder="dsmr.0.power_delivered_w" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Exportleistung / Teruglevering W</span><input class="nw-config-input" data-nlp1-dp="exportPowerW" value="${_nwHtmlEscape(dps.exportPowerW || '')}" placeholder="dsmr.0.power_returned_w" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Signed Netzleistung optional</span><input class="nw-config-input" data-nlp1-dp="netPowerW" value="${_nwHtmlEscape(dps.netPowerW || '')}" placeholder="Import + / Rücklieferung -" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Importenergie kWh total</span><input class="nw-config-input" data-nlp1-dp="importEnergyKwh" value="${_nwHtmlEscape(dps.importEnergyKwh || '')}" placeholder="dsmr.0.energy_delivered_total" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Exportenergie kWh total</span><input class="nw-config-input" data-nlp1-dp="exportEnergyKwh" value="${_nwHtmlEscape(dps.exportEnergyKwh || '')}" placeholder="dsmr.0.energy_returned_total" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Gas m³ optional</span><input class="nw-config-input" data-nlp1-dp="gasM3" value="${_nwHtmlEscape(dps.gasM3 || '')}" placeholder="dsmr.0.gas_delivered_total" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Aktiver Tarif optional</span><input class="nw-config-input" data-nlp1-dp="activeTariff" value="${_nwHtmlEscape(dps.activeTariff || '')}" placeholder="dsmr.0.active_tariff" /></label>
+        </div>
+        <div class="nw-config-empty" style="text-align:left;margin-top:10px;">Hinweis: Einspeisebegrenzung/Nulleinspeisung wird nicht hier aktiviert. Dafür bleibt der Export Guard mit separater Installerfreigabe und maximaler Einspeiseleistung zuständig.</div>
+      </div>`;
     return card;
   }
 
@@ -1856,6 +1911,7 @@ function collectAiAdvisorConfigFromUI(base) {
     licenseCard.innerHTML = `<div class="nw-config-card__header"><div><div class="nw-config-card__title">Lizenz: ${_licenseLabel()}</div><div class="nw-config-card__subtitle">${_licenseEdition() === 'eos' ? 'EOS ist die Vollversion mit allen Apps und künftigen Erweiterungen.' : 'Home zeigt nur die freigegebenen Basis-Apps.'}${licenseLimit}</div></div></div>`;
     els.appsList.appendChild(licenseCard);
     els.appsList.appendChild(buildSystemProfileCard());
+    els.appsList.appendChild(buildNlP1Card());
     els.appsList.appendChild(buildChargeKioskCard());
 
     const visibleApps = APP_CATALOG.filter((app) => _isAppLicensed(app.id));
@@ -2002,6 +2058,12 @@ function collectAiAdvisorConfigFromUI(base) {
         const row = document.createElement('div');
         row.className = 'nw-config-card__row';
         row.textContent = 'Home + EOS: Das Energie-Wertkonto rechnet nur und schaltet keine Geräte. Kostenannahmen und An/Aus-Schalter pflegt der Betreiber im Nutzerfrontend unter Einstellungen.';
+        body.appendChild(row);
+      }
+      if (app.id === 'nlP1') {
+        const row = document.createElement('div');
+        row.className = 'nw-config-card__row';
+        row.textContent = 'Home + EOS: Normalisiert P1/DSMR-Werte für Netafname/Teruglevering. Read-only; technische Datenpunkte werden oben in der NL P1/DSMR-Karte gemappt.';
         body.appendChild(row);
       }
       if (app.id === 'chargeKiosk') {
@@ -6468,8 +6530,10 @@ function collectAiAdvisorConfigFromUI(base) {
     if (typeof gc.zeroExportInstallerApproved !== 'boolean') gc.zeroExportInstallerApproved = !!gc.zeroExportEnabled;
     const maxExport = Number(gc.zeroExportMaxExportW ?? gc.maxFeedInPowerW ?? gc.maxExportW ?? 0);
     gc.zeroExportMaxExportW = (Number.isFinite(maxExport) && maxExport >= 0) ? Math.round(maxExport) : 0;
-    const runModeRaw = String(gc.exportLimitRunMode || gc.zeroExportRunMode || '').trim().toLowerCase();
-    gc.exportLimitRunMode = ['active', 'diagnostic', 'off'].includes(runModeRaw) ? runModeRaw : (gc.zeroExportEnabled ? 'active' : 'diagnostic');
+    // 0.8.30: Diagnose/Testmodus schützt die Erstinbetriebnahme. Bei „diagnostic"
+    // berechnet der EMS-Kern alle Export-Guard-Werte, schreibt aber keine WR-Setpoints.
+    if (typeof gc.exportLimitRunMode !== 'string') gc.exportLimitRunMode = 'active';
+    if (!['diagnostic', 'active'].includes(String(gc.exportLimitRunMode))) gc.exportLimitRunMode = 'active';
 
     // PV Abregelung (EVU Relais) – optional zusätzlich zur 0‑Einspeisung
     if (typeof gc.pvEvuEnabled !== 'boolean') gc.pvEvuEnabled = false;
@@ -6804,94 +6868,125 @@ function collectAiAdvisorConfigFromUI(base) {
     };
 
     /**
-     * Code-Teil: mkExportGuardRuntimeCard
-     * Zweck: Zeigt dem Installateur die live berechnete Export-Guard-Diagnose ohne neue Regelstrecke.
-     * Zusammenhang: Die Karte liest ausschließlich veröffentlichte States aus gridConstraints.exportLimit.* und
-     * gridConstraints.pvCurtail.*. Sie schreibt keine Konfiguration und keine WR-/PV-Setpoints.
+     * Code-Teil: renderExportGuardRuntimeDiagnostics
+     * Zweck: Zeigt dem Installateur die aktuelle Export-Guard-Lage direkt im App-Center.
+     * Zusammenhang: Die Anzeige liest ausschließlich Runtime-States aus `/api/state`. Sie speichert keine
+     * Konfiguration und schreibt keine Hardware. Dadurch bleibt die Trennung sauber: Nutzerfrontend = Bedienung,
+     * Installerbereich = technische Diagnose/Zuordnung.
      */
-    const mkExportGuardRuntimeCard = () => {
-      const card = document.createElement('div');
-      card.className = 'nw-config-card nw-export-guard-runtime-card';
-      const title = document.createElement('div');
-      title.className = 'nw-config-card__title';
-      title.textContent = 'Runtime-Diagnose Export Guard';
-      const body = document.createElement('div');
-      body.className = 'nw-config-muted';
-      body.textContent = 'Lade aktuelle Diagnosewerte …';
-      card.appendChild(title);
-      card.appendChild(body);
+    const renderExportGuardRuntimeDiagnostics = (target) => {
+      if (!target) return;
+      const box = document.createElement('div');
+      box.className = 'nw-help';
+      box.style.marginTop = '10px';
+      box.textContent = 'Export-Guard-Diagnose wird geladen …';
+      target.appendChild(box);
 
       const fmtW = (v) => {
         const n = Number(v);
         if (!Number.isFinite(n)) return '—';
-        return Math.abs(n) >= 1000 ? (n / 1000).toFixed(2) + ' kW' : Math.round(n) + ' W';
+        if (Math.abs(n) >= 1000) return (n / 1000).toFixed(2) + ' kW';
+        return Math.round(n) + ' W';
       };
-      const fmtPct = (v) => {
-        const n = Number(v);
-        return Number.isFinite(n) ? Math.round(n) + ' %' : '—';
+      const readVal = (data, key) => {
+        const rec = data && data[key];
+        return rec && typeof rec === 'object' && Object.prototype.hasOwnProperty.call(rec, 'value') ? rec.value : undefined;
       };
-      const readVal = (payload, key) => {
-        const rec = payload && (payload[key] || (payload.states && payload.states[key]));
-        if (rec && typeof rec === 'object' && Object.prototype.hasOwnProperty.call(rec, 'value')) return rec.value;
-        if (rec && typeof rec === 'object' && Object.prototype.hasOwnProperty.call(rec, 'val')) return rec.val;
-        return rec;
+      const parseJson = (raw) => {
+        if (!raw) return null;
+        try { return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (_e) { return null; }
       };
-      const row = (label, value) => {
-        const r = document.createElement('div');
-        r.className = 'nw-config-row';
-        const l = document.createElement('span');
-        l.textContent = label;
-        const v = document.createElement('b');
-        v.textContent = value;
-        r.appendChild(l);
-        r.appendChild(v);
-        return r;
-      };
+      fetchJson('/api/state?t=' + Date.now(), { cache: 'no-store' })
+        .then((data) => {
+          const enabled = !!readVal(data, 'gridConstraints.exportLimit.enabled');
+          const approved = !!readVal(data, 'gridConstraints.exportLimit.installerApproved');
+          const runMode = String(readVal(data, 'gridConstraints.exportLimit.runMode') || gc.exportLimitRunMode || 'active');
+          const currentExport = readVal(data, 'gridConstraints.exportLimit.currentExportW');
+          const limit = readVal(data, 'gridConstraints.exportLimit.effectiveMaxFeedInW');
+          const over = readVal(data, 'gridConstraints.exportLimit.exportOverLimitW');
+          const remaining = readVal(data, 'gridConstraints.exportLimit.remainingFeedInW');
+          const usage = Number(readVal(data, 'gridConstraints.exportLimit.usagePercent'));
+          const curt = readVal(data, 'gridConstraints.exportLimit.estimatedCurtailmentW');
+          const status = String(readVal(data, 'gridConstraints.exportLimit.statusLabel') || '—');
+          const planned = String(readVal(data, 'gridConstraints.exportLimit.plannedAction') || '—');
+          const message = String(readVal(data, 'gridConstraints.exportLimit.installerMessage') || '');
+          const writeCapable = !!readVal(data, 'gridConstraints.exportLimit.writeCapable');
+          const writeWarning = String(readVal(data, 'gridConstraints.exportLimit.writeWarning') || '');
+          const negative = !!readVal(data, 'gridConstraints.exportLimit.negativePriceActive');
+          const negStrategy = String(readVal(data, 'gridConstraints.exportLimit.negativePriceStrategy') || '');
+          const checklist = parseJson(readVal(data, 'gridConstraints.exportLimit.installerChecklistJson')) || {};
 
-      fetchJson('/api/state?t=' + Date.now(), { cache: 'no-store' }).then((payload) => {
-        const runMode = String(readVal(payload, 'gridConstraints.exportLimit.runMode') || '—');
-        const testMode = !!readVal(payload, 'gridConstraints.exportLimit.testMode');
-        const activeControl = !!readVal(payload, 'gridConstraints.exportLimit.activeControl');
-        const currentExportW = readVal(payload, 'gridConstraints.exportLimit.currentExportW');
-        const maxFeedInW = readVal(payload, 'gridConstraints.exportLimit.effectiveMaxFeedInW');
-        const overW = readVal(payload, 'gridConstraints.exportLimit.exportOverLimitW');
-        const remainingW = readVal(payload, 'gridConstraints.exportLimit.remainingFeedInW');
-        const usage = readVal(payload, 'gridConstraints.exportLimit.usagePercent');
-        const curtailW = readVal(payload, 'gridConstraints.exportLimit.estimatedCurtailmentW');
-        const writeCapable = !!readVal(payload, 'gridConstraints.exportLimit.writeCapable');
-        const writeWarning = String(readVal(payload, 'gridConstraints.exportLimit.writeWarning') || '');
-        const neg = !!readVal(payload, 'gridConstraints.exportLimit.negativePriceActive');
-        const negStrategy = String(readVal(payload, 'gridConstraints.exportLimit.negativePriceStrategy') || '');
-        const hint = String(readVal(payload, 'gridConstraints.exportLimit.installerHint') || '');
-        const planned = String(readVal(payload, 'gridConstraints.exportLimit.plannedWriteJson') || '');
+          box.innerHTML = '';
+          const title = document.createElement('div');
+          title.style.fontWeight = '700';
+          title.style.marginBottom = '6px';
+          title.textContent = 'Export Guard Runtime-Diagnose';
+          box.appendChild(title);
 
-        body.innerHTML = '';
-        body.appendChild(row('Betriebsart', testMode ? 'Diagnose/Testmodus (kein Schreiben)' : (activeControl ? 'Aktiv' : runMode)));
-        body.appendChild(row('Aktuelle Einspeisung', fmtW(currentExportW)));
-        body.appendChild(row('Erlaubtes Einspeiselimit', fmtW(maxFeedInW)));
-        body.appendChild(row('Überschreitung', fmtW(overW)));
-        body.appendChild(row('Rest bis Limit', fmtW(remainingW)));
-        body.appendChild(row('Auslastung', fmtPct(usage)));
-        body.appendChild(row('Geschätzte Abregelungsleistung', fmtW(curtailW)));
-        body.appendChild(row('WR-Write-Datenpunkte', writeCapable ? 'vorhanden' : 'fehlen'));
-        body.appendChild(row('Negative Preisstrategie', neg ? (negStrategy || 'aktiv') : 'nicht aktiv'));
-        if (writeWarning) body.appendChild(mkHint('WR-Warnung: ' + writeWarning));
-        if (hint) body.appendChild(mkHint(hint));
-        if (planned) {
-          const details = document.createElement('details');
-          const sum = document.createElement('summary');
-          sum.textContent = 'Geplanter Write-Plan anzeigen';
-          const pre = document.createElement('pre');
-          pre.className = 'nw-debug-json';
-          pre.textContent = planned;
-          details.appendChild(sum);
-          details.appendChild(pre);
-          body.appendChild(details);
-        }
-      }).catch(() => {
-        body.textContent = 'Runtime-Diagnose aktuell nicht verfügbar. Der Adapter muss laufen und /api/state erreichbar sein.';
-      });
-      return card;
+          const rows = [
+            ['Status', status],
+            ['Betriebsart', runMode === 'diagnostic' ? 'Diagnose/Testmodus – keine WR-Schreibbefehle' : 'Aktiv – WR-Schreibbefehle erlaubt'],
+            ['Installateurfreigabe', approved ? 'Ja' : 'Nein'],
+            ['Aktuelle Einspeisung', fmtW(currentExport)],
+            ['Erlaubtes Limit', fmtW(limit)],
+            ['Überschreitung', fmtW(over)],
+            ['Rest bis Limit', fmtW(remaining)],
+            ['Auslastung', Number.isFinite(usage) ? Math.round(usage) + ' %' : '—'],
+            ['Geschätzte Abregelung', fmtW(curt)],
+            ['Geplante Aktion', planned],
+            ['WR-Schreibfähigkeit', writeCapable ? 'OK' : 'Fehlt / prüfen'],
+            ['Negative-Preis-Strategie', negative ? (negStrategy || 'aktiv') : 'nicht aktiv'],
+          ];
+          const table = document.createElement('div');
+          table.style.display = 'grid';
+          table.style.gridTemplateColumns = 'minmax(150px, 1fr) minmax(180px, 2fr)';
+          table.style.gap = '4px 10px';
+          for (const [k, v] of rows) {
+            const a = document.createElement('div');
+            a.style.opacity = '.78';
+            a.textContent = k;
+            const b = document.createElement('div');
+            b.style.fontWeight = '600';
+            b.textContent = String(v || '—');
+            table.appendChild(a);
+            table.appendChild(b);
+          }
+          box.appendChild(table);
+
+          if (message) {
+            const m = document.createElement('div');
+            m.className = 'nw-config-muted';
+            m.style.marginTop = '8px';
+            m.textContent = message;
+            box.appendChild(m);
+          }
+          if (writeWarning) {
+            const w = document.createElement('div');
+            w.style.marginTop = '8px';
+            w.style.color = '#facc15';
+            w.textContent = 'Fehlende WR-Write-Datenpunkte: ' + writeWarning;
+            box.appendChild(w);
+          }
+          if (checklist && checklist.nextStep) {
+            const n = document.createElement('div');
+            n.className = 'nw-config-muted';
+            n.style.marginTop = '8px';
+            n.textContent = 'Nächster Schritt: ' + checklist.nextStep;
+            box.appendChild(n);
+          }
+          if (!writeCapable && pvEl) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'nw-config-btn nw-config-btn--ghost';
+            btn.style.marginTop = '8px';
+            btn.textContent = 'Zum WR-Mapping springen';
+            btn.addEventListener('click', () => { try { pvEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_e) {} });
+            box.appendChild(btn);
+          }
+        })
+        .catch(() => {
+          box.textContent = 'Export-Guard-Diagnose konnte nicht geladen werden. Adapter/API prüfen.';
+        });
     };
 
     // Meter / Timeout
@@ -6972,25 +7067,24 @@ function collectAiAdvisorConfigFromUI(base) {
       }
 
       if (gc.zeroExportEnabled) {
-        zeroEl.appendChild(mkSelect('Betriebsart Einspeisebegrenzung', 'gc_exportLimitRunMode', gc.exportLimitRunMode || 'active', [
-          { v: 'diagnostic', t: 'Diagnose/Testmodus – nur berechnen, nicht schreiben' },
-          { v: 'active', t: 'Aktiv – nach Prüfung WR-/PV-Setpoints schreiben' },
-          { v: 'off', t: 'Aus – vorbereitet, aber nicht regeln' }
-        ], (v) => { gc.exportLimitRunMode = ['diagnostic', 'active', 'off'].includes(String(v)) ? String(v) : 'diagnostic'; scheduleValidation(200); }));
         zeroEl.appendChild(mkChk('Installateurfreigabe Einspeisebegrenzung', 'gc_zeroExportInstallerApproved', !!gc.zeroExportInstallerApproved, (b) => { gc.zeroExportInstallerApproved = b; }));
+        zeroEl.appendChild(mkSelect('Betriebsart Einspeisebegrenzung', 'gc_exportLimitRunMode', String(gc.exportLimitRunMode || 'active'), [
+          { v: 'diagnostic', t: 'Diagnose/Testmodus – nur berechnen, nicht schreiben' },
+          { v: 'active', t: 'Aktiv – WR-/PV-Setpoints schreiben' },
+        ], (v) => {
+          gc.exportLimitRunMode = (v === 'diagnostic') ? 'diagnostic' : 'active';
+        }));
         zeroEl.appendChild(mkNum('Maximale Einspeiseleistung', 'gc_zeroExportMaxExportW', Number(gc.zeroExportMaxExportW || 0) || 0, (n) => { gc.zeroExportMaxExportW = Math.max(0, Math.round(n)); }, 'W', '0 = keine Einspeisung'));
         zeroEl.appendChild(mkNum('Bias', 'gc_zeroExportBiasW', Number(gc.zeroExportBiasW || 0) || 0, (n) => { gc.zeroExportBiasW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 50'));
         zeroEl.appendChild(mkNum('Deadband', 'gc_zeroExportDeadbandW', Number(gc.zeroExportDeadbandW || 0) || 0, (n) => { gc.zeroExportDeadbandW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 15'));
         zeroEl.appendChild(mkHint('Export Guard für DE/NL: 0 W bedeutet echte Nulleinspeisung; Werte >0 erlauben nur die vom Installateur freigegebene maximale Einspeiseleistung. Bias/Deadband stabilisieren die Regelung.'));
-        if (String(gc.exportLimitRunMode || 'diagnostic') === 'diagnostic') {
-          zeroEl.appendChild(mkHint('Testmodus aktiv: NexoWatt berechnet die Export-Guard-Entscheidung und den Write-Plan, schreibt aber keine WR-/PV-Setpoints. Erst nach Umschaltung auf „Aktiv“ wird real geregelt.'));
-        }
+        zeroEl.appendChild(mkHint('Empfehlung: neue Anlagen zuerst im Diagnose/Testmodus prüfen. Erst wenn NVP-Vorzeichen, Einspeiselimit und WR-Schreibfähigkeit plausibel sind, auf „Aktiv" stellen.'));
+        renderExportGuardRuntimeDiagnostics(zeroEl);
       } else {
         zeroEl.appendChild(mkHint('Einspeisebegrenzung/0‑Einspeisung ist im aktuellen Modus deaktiviert.'));
       }
 
       zeroEl.appendChild(mkHint('Die Regelung arbeitet am NVP‑Datenpunkt (Zuordnung → Allgemein → Netzpunkt) und nutzt das Vorzeichen (Import + / Export −). Konfiguration nur durch den Installateur.'));
-      zeroEl.appendChild(mkExportGuardRuntimeCard());
     }
 
     // Card 2: Wechselrichter‑Gruppen (pro WR)
@@ -10836,6 +10930,39 @@ function collectAiAdvisorConfigFromUI(base) {
     // Kosten-/Preisannahmen werden ab 0.8.20 nicht mehr im App-Center gespeichert.
     // Sie sind kundennahe Betreiberwerte unter settings.energyWallet* im Frontend.
     // Alte Config-Werte bleiben nur als Legacy-Fallback im EMS-Modul erhalten.
+
+
+    // Niederlande P1/DSMR (Installer only): reine Datenpunkt-Verknüpfung.
+    // Kosten-/Preisannahmen bleiben kundennahe Einstellungen; Export Guard bleibt separat.
+    const nlp1EnabledEl = document.querySelector('[data-nlp1-field="enabled"]');
+    const readNlP1 = (name) => {
+      const el = document.querySelector(`[data-nlp1-field="${name}"]`);
+      return el ? String(el.value || '').trim() : '';
+    };
+    const readNlP1Dp = (name) => {
+      const el = document.querySelector(`[data-nlp1-dp="${name}"]`);
+      return el ? String(el.value || '').trim() : '';
+    };
+    const nlp1Number = (name, fallback, min, max) => {
+      const n = Number(readNlP1(name));
+      if (!Number.isFinite(n)) return fallback;
+      return Math.max(min, Math.min(max, Math.round(n * 10000) / 10000));
+    };
+    patch.nlP1 = deepMerge({}, (currentConfig && currentConfig.nlP1) ? currentConfig.nlP1 : {});
+    const nlp1AppState = patch.emsApps && patch.emsApps.apps && patch.emsApps.apps.nlP1 ? patch.emsApps.apps.nlP1 : null;
+    patch.nlP1.enabled = nlp1EnabledEl ? nlp1EnabledEl.value === 'true' : !!(nlp1AppState && nlp1AppState.installed && nlp1AppState.enabled);
+    patch.nlP1.staleTimeoutSec = Math.max(30, Math.min(86400, Math.round(Number(readNlP1('staleTimeoutSec')) || Number(patch.nlP1.staleTimeoutSec) || 300)));
+    patch.nlP1.returnValueEurPerKwh = nlp1Number('returnValueEurPerKwh', Number(patch.nlP1.returnValueEurPerKwh) || 0.08, -5, 5);
+    patch.nlP1.returnCostEurPerKwh = nlp1Number('returnCostEurPerKwh', Number(patch.nlP1.returnCostEurPerKwh) || 0, 0, 5);
+    patch.nlP1.datapoints = {
+      importPowerW: readNlP1Dp('importPowerW'),
+      exportPowerW: readNlP1Dp('exportPowerW'),
+      netPowerW: readNlP1Dp('netPowerW'),
+      importEnergyKwh: readNlP1Dp('importEnergyKwh'),
+      exportEnergyKwh: readNlP1Dp('exportEnergyKwh'),
+      gasM3: readNlP1Dp('gasM3'),
+      activeTariff: readNlP1Dp('activeTariff'),
+    };
 
     // EOS Local kWh Ledger (Installer only): Die Aktivierung folgt der EOS-App-Freigabe
     // und bleibt eine read-only Grundlage. Das Nutzerfrontend bekommt keine technischen

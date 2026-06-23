@@ -21,6 +21,7 @@ const HOME_APP_IDS = new Set([
   'tariff',
   'para14a',
   'energyWallet',
+  'nlP1',
 ]);
 
 const APP_FEATURE_MAP = Object.freeze({
@@ -45,6 +46,7 @@ const APP_FEATURE_MAP = Object.freeze({
   chargeKiosk: 'chargeKiosk',
   mesh: 'mesh',
   microgrid: 'microgrid',
+  nlP1: 'nlP1',
   nlSaldering: 'nlSaldering',
   nlEnergyHub: 'nlEnergyHub',
   aiAutopilot: 'aiAutopilot',
@@ -73,6 +75,9 @@ const HOME_FEATURES = new Set([
   'energyWalletPro',
   'energyWalletDetails',
   'energyWalletRecommendations',
+  'nlP1',
+  'nlP1Basic',
+  'p1Dsmr',
 ]);
 
 const EOS_ONLY_FEATURES = new Set([

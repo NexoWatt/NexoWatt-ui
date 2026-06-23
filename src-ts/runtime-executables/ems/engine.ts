@@ -861,6 +861,7 @@ class EmsEngine {
     try { adapter.subscribeStates('aiAdvisor.*'); } catch (_e) {}
     try { adapter.subscribeStates('energyWallet.*'); } catch (_e) {}
     try { adapter.subscribeStates('chargeKiosk.*'); } catch (_e) {}
+    try { adapter.subscribeStates('nl.*'); } catch (_e) {}
 
     // Start scheduler
     if (this._timer) this._clearInterval(this._timer);
