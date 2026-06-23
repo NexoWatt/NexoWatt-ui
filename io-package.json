@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.31",
+    "version": "0.8.32",
     "news": {
+      "0.8.32": {
+        "de": "Version 0.8.32: Ergänzt EOS Mesh/Microgrid als separate App mit read-only Knoten-/Cluster-/Energy-Intent-Datenmodell. Die App ist EOS-only, hersteller- und protokolloffen und schreibt keine Hardware-Sollwerte.",
+        "en": "Version 0.8.32: Adds EOS Mesh/Microgrid as a separate app with a read-only node/cluster/energy-intent data model. The app is EOS-only, manufacturer/protocol agnostic and does not write hardware setpoints."
+      },
       "0.8.31": {
         "de": "Version 0.8.31: Niederlande-Basis mit P1/DSMR-Mapping, Netafname/Teruglevering-Normalisierung, Saldering-Exit-Grundlogik und Energy-Wallet-Brücke ergänzt. Export Guard bleibt nur mit Installerfreigabe aktiv.",
         "en": "Version 0.8.31: Adds Netherlands baseline with P1/DSMR mapping, Netafname/Teruglevering normalization, Saldering exit basics and Energy Wallet bridge. Export Guard still requires installer approval."
@@ -26,10 +30,6 @@
       "0.8.26": {
         "de": "Version 0.8.26: Local kWh Ledger Grundlage ergänzt. EOS kann DC-Station-Display-Sessions herstellerneutral als kompakte kWh-Einträge mit Solar-/Netzanteil, Wert, Deduplikation und Exportbasis führen.",
         "en": "Version 0.8.26: Adds Local kWh Ledger foundation. EOS can keep DC station display sessions as compact manufacturer-neutral kWh entries with solar/grid split, value, deduplication and export basis."
-      },
-      "0.8.25": {
-        "de": "Version 0.8.25: DC Station Display Betreiberwerte erweitert. Letzte Session je LP wird persistent geführt, Tageswerte enthalten Solar-/Netzanteil, CSV-Export v2 und Betreiberdiagnose bleiben hersteller- und protokolloffen.",
-        "en": "Version 0.8.25: Extends DC Station Display operator values. Last session per chargepoint is persisted, daily values include solar/grid split, CSV export v2 and operator diagnostics stay manufacturer/protocol agnostic."
       }
     },
     "title": "NexoWatt UI",
@@ -313,6 +313,15 @@
         "gasM3": "",
         "activeTariff": ""
       }
+    },
+    "enableMeshMicrogrid": false,
+    "meshMicrogrid": {
+      "enabled": false,
+      "mode": "diagnostic",
+      "clusterId": "cluster_01",
+      "clusterName": "Lokaler Energieverbund",
+      "gridLimitW": 0,
+      "nodes": []
     }
   },
   "instanceObjects": [

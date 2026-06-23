@@ -363,6 +363,7 @@
     { id: 'nlP1', label: 'NL P1/DSMR', desc: 'Niederlande: P1/DSMR Mapping für Netafname, Teruglevering und Saldering-Exit-Basis (Home + EOS)', mandatory: false, hems: true },
     { id: 'chargeKiosk', label: 'DC Station Display', desc: 'EOS: isolierte Vollbild-Bedienseiten pro DC-Ladestation mit zugeordneten LPs/Connectoren', mandatory: false, hems: false },
     { id: 'energyLedger', label: 'Local kWh Ledger', desc: 'EOS: lokale kWh-Zuordnung als Grundlage für Betreiberwerte, Export, Nachbarschaft und Microgrid', mandatory: false, hems: false },
+    { id: 'meshMicrogrid', label: 'EOS Mesh/Microgrid', desc: 'EOS: separates Datenmodell für lokale Energie-Knoten, Cluster, Local First / Grid Last und spätere Nachbarschaftsversorgung', mandatory: false, hems: false },
     { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', mandatory: true, hems: true },
     { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls genutzt)', mandatory: false, hems: true },
     { id: 'multiuse', label: 'MultiUse', desc: 'Speicher Multi‑Use (SoC‑Zonen: Notstrom/LSK/Eigenverbrauch)', mandatory: false, hems: false }
@@ -880,6 +881,7 @@
     nlP1: 'nlP1',
     mesh: 'mesh',
     microgrid: 'microgrid',
+    meshMicrogrid: 'meshMicrogrid',
     nlSaldering: 'nlSaldering',
     nlEnergyHub: 'nlEnergyHub',
     aiAutopilot: 'aiAutopilot'
@@ -1887,6 +1889,94 @@ function collectAiAdvisorConfigFromUI(base) {
     });
     return card;
   }
+
+  function _meshHtmlEscape(input) {
+    return String(input === undefined || input === null ? '' : input)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function _meshNodes() {
+    const cfg = currentConfig && currentConfig.meshMicrogrid && typeof currentConfig.meshMicrogrid === 'object' ? currentConfig.meshMicrogrid : {};
+    return Array.isArray(cfg.nodes) ? cfg.nodes : [];
+  }
+
+  function _meshNodeRow(node, index) {
+    const n = node && typeof node === 'object' ? node : {};
+    const id = _meshHtmlEscape(n.id || `node_${index + 1}`);
+    const name = _meshHtmlEscape(n.name || `Energie-Knoten ${index + 1}`);
+    const type = _meshHtmlEscape(n.type || 'consumer');
+    const role = _meshHtmlEscape(n.role || 'consumer');
+    const priority = _meshHtmlEscape(n.priority || 100);
+    const powerDp = _meshHtmlEscape(n.powerDp || '');
+    const surplusPowerDp = _meshHtmlEscape(n.surplusPowerDp || '');
+    const demandPowerDp = _meshHtmlEscape(n.demandPowerDp || '');
+    const socDp = _meshHtmlEscape(n.socDp || '');
+    const gridImportPowerDp = _meshHtmlEscape(n.gridImportPowerDp || '');
+    const gridExportPowerDp = _meshHtmlEscape(n.gridExportPowerDp || '');
+    const enabled = n.enabled !== false ? 'true' : 'false';
+    return `
+      <div class="nw-config-subcard" data-mesh-node-row>
+        <div class="nw-config-grid nw-config-grid--3">
+          <label class="nw-config-field"><span class="nw-config-label">Knoten-ID</span><input class="nw-config-input" data-mesh-field="id" value="${id}" placeholder="pv_dach_1" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Name</span><input class="nw-config-input" data-mesh-field="name" value="${name}" placeholder="PV Dach 1" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Aktiv</span><select class="nw-config-input" data-mesh-field="enabled"><option value="true" ${enabled === 'true' ? 'selected' : ''}>Ja</option><option value="false" ${enabled === 'false' ? 'selected' : ''}>Nein</option></select></label>
+          <label class="nw-config-field"><span class="nw-config-label">Typ</span><select class="nw-config-input" data-mesh-field="type">
+            ${['producer','consumer','storage','grid','chargepoint','thermal','generic'].map(v => `<option value="${v}" ${type === v ? 'selected' : ''}>${v}</option>`).join('')}
+          </select></label>
+          <label class="nw-config-field"><span class="nw-config-label">Rolle</span><select class="nw-config-input" data-mesh-field="role">
+            ${['producer','consumer','storage','grid'].map(v => `<option value="${v}" ${role === v ? 'selected' : ''}>${v}</option>`).join('')}
+          </select><small>Rolle entscheidet, wie Leistung im Cluster gezählt wird.</small></label>
+          <label class="nw-config-field"><span class="nw-config-label">Priorität</span><input class="nw-config-input" data-mesh-field="priority" value="${priority}" placeholder="100" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Signed Leistung W</span><input class="nw-config-input" data-mesh-field="powerDp" value="${powerDp}" placeholder="alias.0.pv.power" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Überschuss W optional</span><input class="nw-config-input" data-mesh-field="surplusPowerDp" value="${surplusPowerDp}" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Bedarf W optional</span><input class="nw-config-input" data-mesh-field="demandPowerDp" value="${demandPowerDp}" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">SoC % optional</span><input class="nw-config-input" data-mesh-field="socDp" value="${socDp}" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Grid Import W optional</span><input class="nw-config-input" data-mesh-field="gridImportPowerDp" value="${gridImportPowerDp}" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Grid Export W optional</span><input class="nw-config-input" data-mesh-field="gridExportPowerDp" value="${gridExportPowerDp}" /></label>
+        </div>
+      </div>`;
+  }
+
+  function buildMeshMicrogridCard() {
+    const isEos = _licenseEdition() === 'eos';
+    const cfg = currentConfig && currentConfig.meshMicrogrid && typeof currentConfig.meshMicrogrid === 'object' ? currentConfig.meshMicrogrid : {};
+    const rows = _meshNodes().map((node, idx) => _meshNodeRow(node, idx)).join('');
+    const card = document.createElement('div');
+    card.className = 'nw-config-card nw-mesh-microgrid-card';
+    card.innerHTML = `
+      <div class="nw-config-card__header"><div><div class="nw-config-card__title">EOS Mesh/Microgrid Datenmodell</div><div class="nw-config-card__subtitle">Separate EOS-App für lokale Energie-Knoten, Cluster, Local First / Grid Last und spätere Nachbarschaftsversorgung. 0.8.32 ist read-only und schreibt keine Hardware.</div></div></div>
+      <div class="nw-config-card__body">
+        ${isEos ? '' : '<div class="nw-config-empty" style="text-align:left;margin-bottom:10px;">Nur mit EOS-Lizenz verfügbar.</div>'}
+        <div class="nw-config-grid nw-config-grid--3">
+          <label class="nw-config-field"><span class="nw-config-label">Mesh/Microgrid aktiv</span><select class="nw-config-input" id="meshMicrogridEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select></label>
+          <label class="nw-config-field"><span class="nw-config-label">Modus</span><select class="nw-config-input" id="meshMicrogridMode" ${isEos ? '' : 'disabled'}><option value="diagnostic">Diagnose / read-only</option><option value="local_first">Local First vorbereitet</option><option value="grid_last">Grid Last vorbereitet</option><option value="off">Aus</option></select></label>
+          <label class="nw-config-field"><span class="nw-config-label">Grid-/Clusterlimit W optional</span><input class="nw-config-input" id="meshMicrogridGridLimitW" value="${_meshHtmlEscape(cfg.gridLimitW || '')}" placeholder="60000" ${isEos ? '' : 'disabled'} /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Cluster-ID</span><input class="nw-config-input" id="meshMicrogridClusterId" value="${_meshHtmlEscape(cfg.clusterId || 'cluster_01')}" ${isEos ? '' : 'disabled'} /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Cluster-Name</span><input class="nw-config-input" id="meshMicrogridClusterName" value="${_meshHtmlEscape(cfg.clusterName || 'Lokaler Energieverbund')}" ${isEos ? '' : 'disabled'} /></label>
+        </div>
+        <div class="nw-config-card__subtitle" style="margin-top:10px;">Knoten: PV/Erzeuger, Verbraucher/Gebäude, Speicher, Netzpunkt, Ladepunktgruppen oder thermische Verbraucher. Technische Zuordnung bleibt im Installerbereich.</div>
+        <div id="meshMicrogridNodes">${rows || '<div class="nw-config-empty" style="text-align:left;">Noch keine Mesh-/Microgrid-Knoten angelegt.</div>'}</div>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px;"><button type="button" class="nw-btn" id="meshMicrogridAddNode" ${isEos ? '' : 'disabled'}>Knoten anlegen</button></div>
+      </div>`;
+    const enabled = card.querySelector('#meshMicrogridEnabled');
+    if (enabled) enabled.value = cfg.enabled === true ? 'true' : 'false';
+    const mode = card.querySelector('#meshMicrogridMode');
+    if (mode) mode.value = ['off','diagnostic','local_first','grid_last'].includes(String(cfg.mode || '')) ? String(cfg.mode) : 'diagnostic';
+    const add = card.querySelector('#meshMicrogridAddNode');
+    if (add) add.addEventListener('click', () => {
+      currentConfig.meshMicrogrid = currentConfig.meshMicrogrid || {};
+      const list = Array.isArray(currentConfig.meshMicrogrid.nodes) ? currentConfig.meshMicrogrid.nodes.slice() : [];
+      const next = list.length + 1;
+      list.push({ id: `node_${next}`, name: `Energie-Knoten ${next}`, type: 'consumer', role: 'consumer', enabled: true, priority: 100, powerDp: '' });
+      currentConfig.meshMicrogrid.nodes = list;
+      try { buildAppsUI(); } catch (_e) {}
+    });
+    return card;
+  }
+
   /**
    * Code-Teil: buildAppsUI
    * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
@@ -1915,6 +2005,7 @@ function collectAiAdvisorConfigFromUI(base) {
     els.appsList.appendChild(buildSystemProfileCard());
     els.appsList.appendChild(buildNlP1Card());
     els.appsList.appendChild(buildChargeKioskCard());
+    els.appsList.appendChild(buildMeshMicrogridCard());
 
     const visibleApps = APP_CATALOG.filter((app) => _isAppLicensed(app.id));
     for (const app of visibleApps) {
@@ -2072,6 +2163,12 @@ function collectAiAdvisorConfigFromUI(base) {
         const row = document.createElement('div');
         row.className = 'nw-config-card__row';
         row.textContent = 'EOS: Konfiguration oben in der Karte „EOS DC Station Display“. Die Displayseite ist isoliert und tokenisiert.';
+        body.appendChild(row);
+      }
+      if (app.id === 'meshMicrogrid') {
+        const row = document.createElement('div');
+        row.className = 'nw-config-card__row';
+        row.textContent = 'EOS: Das Mesh/Microgrid-Modul ist eine eigene App. Es baut in 0.8.32 nur das Knoten-/Cluster-Datenmodell auf und schaltet keine Hardware.';
         body.appendChild(row);
       }
       if (app.id === 'energyLedger') {
@@ -10975,6 +11072,46 @@ function collectAiAdvisorConfigFromUI(base) {
     patch.energyLedger.source = 'chargeKiosk.lastSessionsByLpJson';
     patch.energyLedger.recentEntryLimit = Number.isFinite(Number(patch.energyLedger.recentEntryLimit)) ? Number(patch.energyLedger.recentEntryLimit) : 200;
     patch.energyLedger.processedSessionLimit = Number.isFinite(Number(patch.energyLedger.processedSessionLimit)) ? Number(patch.energyLedger.processedSessionLimit) : 2000;
+
+    // EOS Mesh/Microgrid (Installer only): eigenes separates App-Modul.
+    // In 0.8.32 wird ausschließlich das Knoten-/Cluster-Datenmodell gespeichert;
+    // es werden keine Hardware-Schreibpfade und keine Steuerstrategien aktiviert.
+    const meshAppState = patch.emsApps && patch.emsApps.apps && patch.emsApps.apps.meshMicrogrid ? patch.emsApps.apps.meshMicrogrid : null;
+    const meshEnabledEl = document.getElementById('meshMicrogridEnabled');
+    const meshModeEl = document.getElementById('meshMicrogridMode');
+    const meshGridLimitEl = document.getElementById('meshMicrogridGridLimitW');
+    const meshClusterIdEl = document.getElementById('meshMicrogridClusterId');
+    const meshClusterNameEl = document.getElementById('meshMicrogridClusterName');
+    const meshRows = Array.from(document.querySelectorAll('[data-mesh-node-row]'));
+    const readMesh = (row, field) => {
+      const el = row && row.querySelector(`[data-mesh-field="${field}"]`);
+      return el ? String(el.value || '').trim() : '';
+    };
+    const safeMeshId = (value, fallback) => String(value || fallback || 'node').trim().toLowerCase().replace(/[^a-z0-9_\-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64) || fallback || 'node';
+    patch.meshMicrogrid = deepMerge({}, (currentConfig && currentConfig.meshMicrogrid) ? currentConfig.meshMicrogrid : {});
+    patch.meshMicrogrid.enabled = meshEnabledEl ? meshEnabledEl.value === 'true' : !!(meshAppState && meshAppState.installed && meshAppState.enabled);
+    patch.meshMicrogrid.mode = meshModeEl && ['off','diagnostic','local_first','grid_last'].includes(meshModeEl.value) ? meshModeEl.value : 'diagnostic';
+    patch.meshMicrogrid.clusterId = safeMeshId(meshClusterIdEl ? meshClusterIdEl.value : 'cluster_01', 'cluster_01');
+    patch.meshMicrogrid.clusterName = meshClusterNameEl ? String(meshClusterNameEl.value || 'Lokaler Energieverbund').trim() : 'Lokaler Energieverbund';
+    patch.meshMicrogrid.gridLimitW = Math.max(0, Math.round(Number(meshGridLimitEl ? meshGridLimitEl.value : 0) || 0));
+    patch.meshMicrogrid.nodes = meshRows.map((row, idx) => {
+      const type = ['producer','consumer','storage','grid','chargepoint','thermal','generic'].includes(readMesh(row, 'type')) ? readMesh(row, 'type') : 'consumer';
+      const role = ['producer','consumer','storage','grid'].includes(readMesh(row, 'role')) ? readMesh(row, 'role') : (type === 'producer' ? 'producer' : (type === 'storage' ? 'storage' : (type === 'grid' ? 'grid' : 'consumer')));
+      return {
+        id: safeMeshId(readMesh(row, 'id'), `node_${idx + 1}`),
+        name: readMesh(row, 'name') || `Energie-Knoten ${idx + 1}`,
+        enabled: readMesh(row, 'enabled') !== 'false',
+        type,
+        role,
+        priority: Math.max(1, Math.min(999, Math.round(Number(readMesh(row, 'priority')) || 100))),
+        powerDp: readMesh(row, 'powerDp'),
+        surplusPowerDp: readMesh(row, 'surplusPowerDp'),
+        demandPowerDp: readMesh(row, 'demandPowerDp'),
+        socDp: readMesh(row, 'socDp'),
+        gridImportPowerDp: readMesh(row, 'gridImportPowerDp'),
+        gridExportPowerDp: readMesh(row, 'gridExportPowerDp'),
+      };
+    });
 
     // EOS DC Station Display / Charge Kiosk (Installer only).
     // Das normale Nutzerfrontend bekommt keine Konfiguration; die Displayseite nutzt nur Token + zugeordnete LPs.

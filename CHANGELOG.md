@@ -1,3 +1,10 @@
+## 0.8.32
+
+- EOS: Neue separate App „EOS Mesh/Microgrid“ ergänzt.
+- EMS: Read-only Mesh-/Microgrid-Datenmodell mit Knoten, Cluster, Local-First-/Grid-Last-Vorbereitung und Energy-Intent-JSON-States.
+- App-Center: Installer kann Mesh-Knoten, Rollen und Datenpunktquellen anlegen; Home bleibt blockiert.
+- Sicherheit: Keine Hardware-Schreibbefehle, keine doppelte Ledger-/Wallet-/Export-Guard-Logik, keine Hersteller-/OCPP-Bindung.
+
 ## 0.8.30
 
 - Export Guard: Diagnose/Testmodus ergänzt. In diesem Modus werden Einspeiselimit, geplante Aktion und Abregelungsbedarf berechnet, aber keine WR-/PV-Setpoints geschrieben.

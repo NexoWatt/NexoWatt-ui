@@ -65,6 +65,7 @@ const { EnergyWalletModule } = require('./modules/energy-wallet');
 const { ChargeKioskModule } = require('./modules/charge-kiosk');
 const { EnergyLedgerModule } = require('./modules/energy-ledger');
 const { NlP1DsmrModule } = require('./modules/nl-p1-dsmr');
+const { MeshMicrogridModule } = require('./modules/mesh-microgrid');
 const featureFlags = require('./services/feature-flags');
 
 /**
@@ -360,6 +361,20 @@ class ModuleManager {
                     this.adapter.config.enableEnergyLedger === true ||
                     (this.adapter.config.energyLedger && this.adapter.config.energyLedger.enabled === true) ||
                     (this.adapter.config.chargeKiosk && this.adapter.config.chargeKiosk.enabled === true)
+                )
+            ),
+        });
+
+        // EOS Mesh/Microgrid Datenmodell: eigenes Zusatzmodul, bewusst getrennt von
+        // Energy Wallet, Ledger, Export Guard und DC Display. Es veröffentlicht in 0.8.32
+        // nur read-only Knoten-/Cluster-/Intent-Daten und schreibt keine Hardware-Sollwerte.
+        this.modules.push({
+            key: 'meshMicrogrid',
+            instance: new MeshMicrogridModule(this.adapter, this.dp),
+            enabledFn: () => this._licenseAllowsApp('meshMicrogrid') && !!(
+                this.adapter && this.adapter.config && (
+                    this.adapter.config.enableMeshMicrogrid === true ||
+                    (this.adapter.config.meshMicrogrid && this.adapter.config.meshMicrogrid.enabled === true)
                 )
             ),
         });

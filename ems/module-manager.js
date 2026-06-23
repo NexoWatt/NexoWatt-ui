@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:8f1eefd66a7f48b8930d3f9e7d9b03b7752c47346540c314fbec81c4a9024b50
+ * Quell-Hash: sha256:d8f46c9f537ed94bf208a7917972478b635c9cf9ad6f2ca83fb98004c2d4f992
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -63,6 +63,7 @@ const { EnergyWalletModule } = require('./modules/energy-wallet');
 const { ChargeKioskModule } = require('./modules/charge-kiosk');
 const { EnergyLedgerModule } = require('./modules/energy-ledger');
 const { NlP1DsmrModule } = require('./modules/nl-p1-dsmr');
+const { MeshMicrogridModule } = require('./modules/mesh-microgrid');
 const featureFlags = require('./services/feature-flags');
 
 /**
@@ -358,6 +359,20 @@ class ModuleManager {
                     this.adapter.config.enableEnergyLedger === true ||
                     (this.adapter.config.energyLedger && this.adapter.config.energyLedger.enabled === true) ||
                     (this.adapter.config.chargeKiosk && this.adapter.config.chargeKiosk.enabled === true)
+                )
+            ),
+        });
+
+        // EOS Mesh/Microgrid Datenmodell: eigenes Zusatzmodul, bewusst getrennt von
+        // Energy Wallet, Ledger, Export Guard und DC Display. Es veröffentlicht in 0.8.32
+        // nur read-only Knoten-/Cluster-/Intent-Daten und schreibt keine Hardware-Sollwerte.
+        this.modules.push({
+            key: 'meshMicrogrid',
+            instance: new MeshMicrogridModule(this.adapter, this.dp),
+            enabledFn: () => this._licenseAllowsApp('meshMicrogrid') && !!(
+                this.adapter && this.adapter.config && (
+                    this.adapter.config.enableMeshMicrogrid === true ||
+                    (this.adapter.config.meshMicrogrid && this.adapter.config.meshMicrogrid.enabled === true)
                 )
             ),
         });

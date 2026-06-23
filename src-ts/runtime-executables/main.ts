@@ -2066,7 +2066,7 @@ class NexoWattVis extends utils.Adapter {
       }
     } catch (_eFeatureFlags) {}
     const hemsFeatures = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations']);
-    const eosOnlyFeatures = ['peakShaving','storageFarm','multiUse','gridLimits','gridConstraints','generatorControl','bhkwControl','advancedChargingPark','advancedDiagnostics','energyWalletOperator','energyLedger','billingExport','chargeKiosk','solarChargeMode','solarChargeBilling','mesh','microgrid','neighborSharing','multiSiteWallet','nlSaldering','nlEnergyHub','aiAutopilot'];
+    const eosOnlyFeatures = ['peakShaving','storageFarm','multiUse','gridLimits','gridConstraints','generatorControl','bhkwControl','advancedChargingPark','advancedDiagnostics','energyWalletOperator','energyLedger','billingExport','chargeKiosk','solarChargeMode','solarChargeBilling','mesh','microgrid','meshMicrogrid','neighborSharing','multiSiteWallet','nlSaldering','nlEnergyHub','aiAutopilot'];
     const all = new Set([...hemsFeatures, ...eosOnlyFeatures]);
     const out = {};
     for (const f of all) out[f] = ed === 'eos' ? true : (ed === 'hems' ? hemsFeatures.has(f) : false);
@@ -2101,6 +2101,7 @@ class NexoWattVis extends utils.Adapter {
       chargeKiosk: 'chargeKiosk',
       mesh: 'mesh',
       microgrid: 'microgrid',
+      meshMicrogrid: 'meshMicrogrid',
       nlSaldering: 'nlSaldering',
       nlEnergyHub: 'nlEnergyHub',
       aiAutopilot: 'aiAutopilot'
@@ -3203,6 +3204,7 @@ class NexoWattVis extends utils.Adapter {
       'energyWallet',
       'energyLedger',
       'chargeKiosk',
+      'meshMicrogrid',
       'smartHome',
       'smartHomeConfig',
 
@@ -3355,6 +3357,14 @@ class NexoWattVis extends utils.Adapter {
       enabled: false,
       displayBasePath: '/display/station/',
       stations: [],
+    });
+    ensurePlainObj('meshMicrogrid', {
+      enabled: false,
+      mode: 'diagnostic',
+      clusterId: 'cluster_01',
+      clusterName: 'Lokaler Energieverbund',
+      gridLimitW: 0,
+      nodes: [],
     });
     ensurePlainObj('vis', {});
     ensurePlainObj('tsMigration', {
@@ -3703,6 +3713,7 @@ class NexoWattVis extends utils.Adapter {
       { id: 'aiAdvisor',   enableFlag: 'enableAiAdvisor' },
       { id: 'energyWallet', enableFlag: 'enableEnergyWallet', mandatory: true, defaultInstalled: true },
       { id: 'chargeKiosk', enableFlag: 'enableChargeKiosk' },
+      { id: 'meshMicrogrid', enableFlag: 'enableMeshMicrogrid' },
 
       // Shared helper module (always present for UI/runtime convenience)
       { id: 'tariff',      enableFlag: null, mandatory: true, defaultInstalled: true },
@@ -3817,6 +3828,7 @@ class NexoWattVis extends utils.Adapter {
       { id: 'aiAdvisor',   enableFlag: 'enableAiAdvisor' },
       { id: 'energyWallet', enableFlag: 'enableEnergyWallet' },
       { id: 'chargeKiosk', enableFlag: 'enableChargeKiosk' },
+      { id: 'meshMicrogrid', enableFlag: 'enableMeshMicrogrid' },
       { id: 'multiuse',    enableFlag: 'enableMultiUse' },
     ];
 
@@ -11927,6 +11939,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         enableAiAdvisor: (typeof n.enableAiAdvisor === 'boolean') ? n.enableAiAdvisor : undefined,
         enableEnergyWallet: (typeof n.enableEnergyWallet === 'boolean') ? n.enableEnergyWallet : undefined,
         enableChargeKiosk: (typeof n.enableChargeKiosk === 'boolean') ? n.enableChargeKiosk : undefined,
+        enableMeshMicrogrid: (typeof n.enableMeshMicrogrid === 'boolean') ? n.enableMeshMicrogrid : undefined,
         enableMultiUse: (typeof n.enableMultiUse === 'boolean') ? n.enableMultiUse : undefined,
 
         // Phase 2: App-Center state (install/enable)
@@ -11937,6 +11950,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         aiAdvisor: (n.aiAdvisor && typeof n.aiAdvisor === 'object') ? n.aiAdvisor : undefined,
         energyWallet: (n.energyWallet && typeof n.energyWallet === 'object') ? n.energyWallet : {},
         chargeKiosk: (n.chargeKiosk && typeof n.chargeKiosk === 'object') ? n.chargeKiosk : { enabled: false, displayBasePath: '/display/station/', stations: [] },
+        meshMicrogrid: (n.meshMicrogrid && typeof n.meshMicrogrid === 'object') ? n.meshMicrogrid : { enabled: false, mode: 'diagnostic', clusterId: 'cluster_01', clusterName: 'Lokaler Energieverbund', gridLimitW: 0, nodes: [] },
 
         // Scheduler
         schedulerIntervalMs: (typeof n.schedulerIntervalMs === 'number') ? n.schedulerIntervalMs : undefined,
@@ -12031,16 +12045,16 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         const allowedRoot = new Set([
           // Legacy enable flags (kept for backwards compatibility)
-          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableChargeKiosk','enableMultiUse',
+          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableChargeKiosk','enableMeshMicrogrid','enableMultiUse',
 
           // Phase 2: App Center state
           'emsApps',
 
           // Scheduler + base mapping
-          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','chargeKiosk','datapoints','vis','settings',
+          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','chargeKiosk','meshMicrogrid','datapoints','vis','settings',
 
           // App/module configs
-          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','chargingManagement',
+          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','meshMicrogrid','chargingManagement',
 
           // VIS configuration that is required to configure chargepoints/stations in the installer page
           'settingsConfig',
@@ -12238,16 +12252,16 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         const allowedRoot = new Set([
           // Legacy enable flags (kept for backwards compatibility)
-          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableChargeKiosk','enableMultiUse',
+          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableChargeKiosk','enableMeshMicrogrid','enableMultiUse',
 
           // Phase 2: App Center state
           'emsApps',
 
           // Scheduler + base mapping
-          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','chargeKiosk','datapoints','vis','settings',
+          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','chargeKiosk','meshMicrogrid','datapoints','vis','settings',
 
           // App/module configs
-          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','chargingManagement',
+          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','meshMicrogrid','chargingManagement',
 
           // VIS configuration that is required to configure chargepoints/stations in the installer page
           'settingsConfig',
