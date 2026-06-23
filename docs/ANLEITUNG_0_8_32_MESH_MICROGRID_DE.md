@@ -2,49 +2,69 @@
 
 ## Zweck
 
-Diese Version ergänzt **EOS Mesh/Microgrid** als separate App im Installer/App-Center. Die App bildet Energie-Knoten und lokale Cluster als read-only Datenmodell ab. Sie ist die Grundlage für spätere Nachbarschaftsversorgung, Energy Hubs und Microgrid-Steuerung.
+Diese Version ergänzt **EOS Mesh/Microgrid** als eigenes App-Modul. Die Funktion ist bewusst von Energy Wallet, Local kWh Ledger und DC Station Display getrennt.
 
-## Wichtig
+## Aktivierung
 
-- Nur EOS-Lizenz.
-- Home bleibt unverändert.
-- Keine Hardwaresteuerung in 0.8.32.
-- Keine OCPP-Pflicht. Daten können aus OCPP, Modbus, MQTT, REST, Herstelleradaptern, NexoWatt-Devices oder ioBroker-Aliassen kommen.
-- Keine doppelte Wallet-/Ledger-/Export-Guard-Logik.
+Pfad im Installer/App-Center:
 
-## Einrichtung
+```text
+NexoWatt EMS App-Center
+→ EOS Mesh/Microgrid
+```
 
-1. App-Center öffnen.
-2. App **EOS Mesh/Microgrid** installieren und aktivieren.
-3. In der Karte **EOS Mesh/Microgrid Datenmodell** Cluster-ID, Cluster-Name und optional Grid-/Clusterlimit setzen.
-4. Energie-Knoten anlegen.
-5. Knoten-Typ/Rolle auswählen: producer, consumer, storage, grid, chargepoint, thermal oder generic.
-6. Datenpunkte für Leistung, Bedarf, Überschuss, SoC oder Netz Import/Export zuordnen.
-7. Speichern.
+Voraussetzungen:
+
+```text
+EOS-Lizenz aktiv
+App „EOS Mesh/Microgrid“ installiert und aktiviert
+Mesh/Microgrid App aktiv = An
+```
+
+## Was die erste Stufe macht
+
+```text
+Energie-Knoten modellieren
+Cluster-ID und Cluster-Name setzen
+Local First / Grid Last Strategie vorbereiten
+Netz-, Import- und Exportlimit als Verbunddaten hinterlegen
+Energy-Intent-Preview erzeugen
+Microgrid-Entscheidungs-Preview erzeugen
+```
+
+## Was diese Stufe ausdrücklich nicht macht
+
+```text
+keine Hardwaresteuerung
+keine Wechselrichter-Setpoints
+keine Wallbox-Setpoints
+keine Batterie-Setpoints
+keine zweite Export-Guard-Regelung
+keine doppelte Ledger-Zählung
+```
 
 ## Wichtige States
 
 ```text
 meshMicrogrid.enabled
-meshMicrogrid.status
-meshMicrogrid.mode
-meshMicrogrid.cluster.*
-meshMicrogrid.power.*
-meshMicrogrid.nodesJson
-meshMicrogrid.intent.nodesJson
-meshMicrogrid.intent.clusterJson
-meshMicrogrid.summaryJson
-meshMicrogrid.lastDecisionJson
+meshMicrogrid.cluster.nodesJson
+meshMicrogrid.cluster.intentsJson
+meshMicrogrid.cluster.localSurplusW
+meshMicrogrid.cluster.localDeficitW
+meshMicrogrid.cluster.localUsePercent
+meshMicrogrid.microgrid.lastDecisionJson
+meshMicrogrid.export.ready
 ```
 
-## Interpretation
+## Nächste Ausbaustufe
 
-Das Modul veröffentlicht neutrale Energy-Intents:
+Die nächste Stufe kann auf diesem Datenmodell aufbauen:
 
 ```text
-surplus = Knoten/Cluster hat Energie übrig
-demand  = Knoten/Cluster braucht Energie
-balanced = ausgeglichen
+Mesh-Operatoransicht
+Knoten-Diagnose
+Energy Intent Protocol
+Nachbarschaftsversorgung
+Energy Hub / NL-GTO Vorbereitung
+CommandGuard für spätere aktive Microgrid-Steuerung
 ```
-
-Diese Intents sind in 0.8.32 nur Diagnose-/Datenmodell. Steuerstrategien folgen später separat.

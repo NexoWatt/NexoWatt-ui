@@ -66,9 +66,13 @@
     save: document.getElementById('nw-emsapps-save'),
     reload: document.getElementById('nw-emsapps-reload'),
     validate: document.getElementById('nw-emsapps-validate'),
+    backInstaller: document.getElementById('nw-emsapps-back-installer'),
 
     appsList: document.getElementById('appsList'),
     appsEmpty: document.getElementById('appsEmpty'),
+    systemProfileMount: document.getElementById('systemProfileCardMount') || document.getElementById('systemProfileMappingSlot'),
+    nlP1Mount: document.getElementById('nlP1CardMount') || document.getElementById('nlP1MappingSlot'),
+    chargeKioskMount: document.getElementById('chargeKioskCardMount') || document.getElementById('chargeKioskEvcsSlot'),
     nwDevicesQuickSetup: document.getElementById('nwDevicesQuickSetup'),
 
 
@@ -345,6 +349,9 @@
     els.flowInvertGrid.addEventListener('change', () => syncGridInvert(els.flowInvertGrid.checked));
   }
 
+  // App-Center-Schema: Diese Liste enthält nur echte Funktions-Apps.
+  // Marktprofile/P1-Mapping liegen im Tab „Zuordnung“, DC-Stationsdisplay im Tab „Ladepunkte“.
+  // Dadurch bleibt die Startseite übersichtlich und neue EOS-Module landen nicht ungeordnet unter Apps.
   // Phase 2: App-Center (install + enable per capability)
   const APP_CATALOG = [
     { id: 'charging', label: 'Lademanagement', desc: 'PV-Überschussladen, Budget-Verteilung, Ladepunkte/Ports (AC/DC) + Stationsgruppen', mandatory: false, hems: true },
@@ -360,15 +367,19 @@
     { id: 'grid', label: 'Netzlimits', desc: 'Netzrestriktionen (RLM/0‑Einspeisung/Import‑Limits)', mandatory: false, hems: false },
     { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung: PV, Wetter, Tarif, Speicher, Wallboxen und Lastspitzen als Vorschläge auf der LIVE‑Seite', mandatory: false, hems: true },
     { id: 'energyWallet', label: 'Energie-Wertkonto', desc: 'PV-Wert, Eigenverbrauchswert, Solar-Laden und Einspeisewert im Nutzerfrontend (Home + EOS)', mandatory: true, hems: true },
-    { id: 'nlP1', label: 'NL P1/DSMR', desc: 'Niederlande: P1/DSMR Mapping für Netafname, Teruglevering und Saldering-Exit-Basis (Home + EOS)', mandatory: false, hems: true },
-    { id: 'chargeKiosk', label: 'DC Station Display', desc: 'EOS: isolierte Vollbild-Bedienseiten pro DC-Ladestation mit zugeordneten LPs/Connectoren', mandatory: false, hems: false },
     { id: 'energyLedger', label: 'Local kWh Ledger', desc: 'EOS: lokale kWh-Zuordnung als Grundlage für Betreiberwerte, Export, Nachbarschaft und Microgrid', mandatory: false, hems: false },
-    { id: 'meshMicrogrid', label: 'EOS Mesh/Microgrid', desc: 'EOS: separates Datenmodell für lokale Energie-Knoten, Cluster, Local First / Grid Last und spätere Nachbarschaftsversorgung', mandatory: false, hems: false },
+    { id: 'meshMicrogrid', label: 'EOS Mesh/Microgrid', desc: 'EOS: eigenes Modul für Energie-Knoten, lokalen Verbund, Local First/Grid Last und Microgrid-Datenmodell', mandatory: false, hems: false },
     { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', mandatory: true, hems: true },
     { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls genutzt)', mandatory: false, hems: true },
     { id: 'multiuse', label: 'MultiUse', desc: 'Speicher Multi‑Use (SoC‑Zonen: Notstrom/LSK/Eigenverbrauch)', mandatory: false, hems: false }
   ];
 
+
+
+  // Diese IDs sind technisch weiterhin Lizenz-/Feature-Flags, werden aber nicht
+  // mehr als Kachel im Reiter „Apps“ angezeigt. Ihre Konfiguration sitzt in den
+  // fachlich passenden Reitern: NL/P1 unter „Zuordnung“, DC Display unter „Ladepunkte“.
+  const APP_CATALOG_ONLY_CONFIG_IDS = new Set(['nlP1', 'chargeKiosk']);
 
   const PS_VOLTAGE_THRESHOLDS = Object.freeze({
     HOS: 5,
@@ -838,6 +849,10 @@
   ];
 
   let currentConfig = null;
+  // Speicherfarm-Master-Detail: Der Installateur bearbeitet immer nur einen Speicher im Detail.
+  // Dadurch bleibt die Seite bei vielen Speichern übersichtlich und erzeugt keine langen
+  // rechtsbündigen Formularlisten mehr. Der Index ist nur UI-Zustand und wird nicht gespeichert.
+  let storageFarmSelectedIndex = 0;
   let currentLicenseInfo = { valid: false, edition: 'none', editionLabel: 'Keine Lizenz', maxWallboxes: 0, features: {} };
   let dpTargetInputId = null;
   let treePrefix = '';
@@ -878,10 +893,10 @@
     energyWallet: 'energyWallet',
     chargeKiosk: 'chargeKiosk',
     energyLedger: 'energyLedger',
+    meshMicrogrid: 'meshMicrogrid',
     nlP1: 'nlP1',
     mesh: 'mesh',
     microgrid: 'microgrid',
-    meshMicrogrid: 'meshMicrogrid',
     nlSaldering: 'nlSaldering',
     nlEnergyHub: 'nlEnergyHub',
     aiAutopilot: 'aiAutopilot'
@@ -1753,6 +1768,103 @@ function collectAiAdvisorConfigFromUI(base) {
   }
 
 
+  function _meshMicrogridNodes() {
+    const cfg = currentConfig && currentConfig.meshMicrogrid && typeof currentConfig.meshMicrogrid === 'object' ? currentConfig.meshMicrogrid : {};
+    return Array.isArray(cfg.nodes) ? cfg.nodes : [];
+  }
+
+  function _meshMicrogridNodeRowsHtml(nodes, isEos) {
+    return nodes.map((raw, idx) => {
+      const r = raw && typeof raw === 'object' ? raw : {};
+      const id = String(r.id || `node_${idx + 1}`).trim();
+      const name = String(r.name || id || `Knoten ${idx + 1}`).trim();
+      const type = String(r.type || 'generic').trim().toLowerCase();
+      const role = String(r.role || 'mixed').trim().toLowerCase();
+      const enabled = r.enabled !== false;
+      const generationPowerId = String(r.generationPowerId || '').trim();
+      const demandPowerId = String(r.demandPowerId || '').trim();
+      const generationW = Number.isFinite(Number(r.generationW)) ? Number(r.generationW) : '';
+      const demandW = Number.isFinite(Number(r.demandW)) ? Number(r.demandW) : '';
+      const priority = Number.isFinite(Number(r.priority)) ? Number(r.priority) : 100;
+      return `
+        <div class="nw-config-card" data-mesh-node-row="1" style="margin:10px 0;padding:12px;">
+          <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;align-items:end;">
+            <label class="nw-config-field"><span class="nw-config-label">Knoten-ID</span><input class="nw-config-input" data-mesh-field="id" value="${_nwHtmlEscape(id)}" placeholder="haus_a" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Name</span><input class="nw-config-input" data-mesh-field="name" value="${_nwHtmlEscape(name)}" placeholder="Haus A" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Typ</span><select class="nw-config-input" data-mesh-field="type" ${isEos ? '' : 'disabled'}><option value="house" ${type === 'house' ? 'selected' : ''}>Haus/Gebäude</option><option value="pv" ${type === 'pv' ? 'selected' : ''}>PV-Erzeuger</option><option value="storage" ${type === 'storage' ? 'selected' : ''}>Speicher</option><option value="charge" ${type === 'charge' ? 'selected' : ''}>Ladepunktgruppe</option><option value="heat" ${type === 'heat' ? 'selected' : ''}>Wärme/Wärmepumpe</option><option value="grid" ${type === 'grid' ? 'selected' : ''}>Netzanschluss</option><option value="generic" ${type === 'generic' ? 'selected' : ''}>Generisch</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Rolle</span><select class="nw-config-input" data-mesh-field="role" ${isEos ? '' : 'disabled'}><option value="mixed" ${role === 'mixed' ? 'selected' : ''}>Gemischt</option><option value="producer" ${role === 'producer' ? 'selected' : ''}>Erzeuger</option><option value="consumer" ${role === 'consumer' ? 'selected' : ''}>Verbraucher</option><option value="storage" ${role === 'storage' ? 'selected' : ''}>Speicher</option><option value="grid" ${role === 'grid' ? 'selected' : ''}>Netzgrenze</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Aktiv</span><select class="nw-config-input" data-mesh-field="enabled" ${isEos ? '' : 'disabled'}><option value="true" ${enabled ? 'selected' : ''}>An</option><option value="false" ${!enabled ? 'selected' : ''}>Aus</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Priorität</span><input class="nw-config-input" type="number" min="1" max="999" step="1" data-mesh-field="priority" value="${_nwHtmlEscape(priority)}" ${isEos ? '' : 'disabled'} /></label>
+          </div>
+          <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px;align-items:end;">
+            <label class="nw-config-field"><span class="nw-config-label">Erzeugungs-DP W optional</span><input class="nw-config-input" data-mesh-field="generationPowerId" value="${_nwHtmlEscape(generationPowerId)}" placeholder="alias.0.mesh.haus_a.pv_power" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Bedarfs-DP W optional</span><input class="nw-config-input" data-mesh-field="demandPowerId" value="${_nwHtmlEscape(demandPowerId)}" placeholder="alias.0.mesh.haus_a.load_power" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Fixe Erzeugung W optional</span><input class="nw-config-input" type="number" data-mesh-field="generationW" value="${_nwHtmlEscape(generationW)}" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Fixer Bedarf W optional</span><input class="nw-config-input" type="number" data-mesh-field="demandW" value="${_nwHtmlEscape(demandW)}" ${isEos ? '' : 'disabled'} /></label>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:8px;"><button type="button" class="nw-btn nw-btn-danger" data-mesh-delete="1" ${isEos ? '' : 'disabled'}>Knoten entfernen</button></div>
+        </div>`;
+    }).join('');
+  }
+
+  function buildMeshMicrogridCard() {
+    const card = document.createElement('div');
+    card.className = 'nw-config-card nw-mesh-microgrid-card';
+    card.setAttribute('data-card', 'mesh-microgrid');
+    const isEos = _licenseEdition() === 'eos';
+    const cfg = currentConfig && currentConfig.meshMicrogrid && typeof currentConfig.meshMicrogrid === 'object' ? currentConfig.meshMicrogrid : {};
+    const app = currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps && currentConfig.emsApps.apps.meshMicrogrid ? currentConfig.emsApps.apps.meshMicrogrid : null;
+    const enabled = cfg.enabled === true || !!(app && app.installed && app.enabled);
+    const strategy = String(cfg.strategy || 'local_first_grid_last').toLowerCase();
+    const nodes = _meshMicrogridNodes();
+    const rows = _meshMicrogridNodeRowsHtml(nodes, isEos);
+
+    card.innerHTML = `
+      <div class="nw-config-card__header">
+        <div>
+          <div class="nw-config-card__title">EOS Mesh/Microgrid</div>
+          <div class="nw-config-card__subtitle">Eigenes EOS-Modul für Energie-Knoten, Cluster und Local First / Grid Last. Stufe 1 ist read-only und schaltet keine Hardware.</div>
+        </div>
+      </div>
+      <div class="nw-config-card__body">
+        ${isEos ? '' : '<div class="nw-config-empty" style="text-align:left;margin-bottom:10px;">Diese App ist EOS-only. In Home bleibt sie unsichtbar/deaktiviert.</div>'}
+        <div class="nw-config-empty" style="text-align:left;margin-bottom:10px;">Dieses Modul ist getrennt von Energy Wallet, Local kWh Ledger und DC Station Display. Es nutzt deren Daten nur als Referenz und zählt nichts doppelt.</div>
+        <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:end;">
+          <label class="nw-config-field"><span class="nw-config-label">Mesh/Microgrid App aktiv</span><select class="nw-config-input" id="meshMicrogridEnabled" ${isEos ? '' : 'disabled'}><option value="false" ${enabled ? '' : 'selected'}>Aus</option><option value="true" ${enabled ? 'selected' : ''}>An</option></select></label>
+          <label class="nw-config-field"><span class="nw-config-label">Cluster-ID</span><input class="nw-config-input" id="meshMicrogridClusterId" value="${_nwHtmlEscape(cfg.clusterId || 'local_cluster_01')}" ${isEos ? '' : 'disabled'} /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Cluster-Name</span><input class="nw-config-input" id="meshMicrogridClusterName" value="${_nwHtmlEscape(cfg.clusterName || 'Lokaler Energieverbund')}" ${isEos ? '' : 'disabled'} /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Strategie</span><select class="nw-config-input" id="meshMicrogridStrategy" ${isEos ? '' : 'disabled'}><option value="local_first_grid_last" ${strategy === 'local_first_grid_last' ? 'selected' : ''}>Local First / Grid Last</option><option value="local_first" ${strategy === 'local_first' ? 'selected' : ''}>Local First</option><option value="grid_limit" ${strategy === 'grid_limit' ? 'selected' : ''}>Netzlimit-Fokus</option><option value="diagnostic" ${strategy === 'diagnostic' ? 'selected' : ''}>Nur Diagnose</option></select></label>
+        </div>
+        <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:10px;align-items:end;">
+          <label class="nw-config-field"><span class="nw-config-label">Netzlimit Verbund W optional</span><input class="nw-config-input" type="number" id="meshMicrogridGridLimitW" value="${Number.isFinite(Number(cfg.gridLimitW)) ? Number(cfg.gridLimitW) : ''}" ${isEos ? '' : 'disabled'} /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Importlimit W optional</span><input class="nw-config-input" type="number" id="meshMicrogridImportLimitW" value="${Number.isFinite(Number(cfg.importLimitW)) ? Number(cfg.importLimitW) : ''}" ${isEos ? '' : 'disabled'} /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Exportlimit W optional</span><input class="nw-config-input" type="number" id="meshMicrogridExportLimitW" value="${Number.isFinite(Number(cfg.exportLimitW)) ? Number(cfg.exportLimitW) : ''}" ${isEos ? '' : 'disabled'} /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Referenzquellen nutzen</span><select class="nw-config-input" id="meshMicrogridIncludeRefs" ${isEos ? '' : 'disabled'}><option value="true" ${cfg.includeReferenceNodes === false ? '' : 'selected'}>Ja</option><option value="false" ${cfg.includeReferenceNodes === false ? 'selected' : ''}>Nein</option></select><small>Export Guard, Ledger und NL P1 nur lesen – keine Doppelzählung.</small></label>
+        </div>
+        <div class="nw-config-separator" style="margin:14px 0 10px;"></div>
+        <div class="nw-config-card__subtitle">Mesh-Knoten</div>
+        <div id="meshMicrogridNodes">${rows || '<div class="nw-config-empty" style="text-align:left;">Noch keine manuellen Knoten angelegt. Referenzquellen können trotzdem angezeigt werden.</div>'}</div>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px;"><button type="button" class="nw-btn" id="meshMicrogridAddNode" ${isEos ? '' : 'disabled'}>Knoten anlegen</button></div>
+      </div>`;
+
+    card.querySelectorAll('[data-mesh-delete]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const row = btn.closest('[data-mesh-node-row]');
+        if (row) row.remove();
+      });
+    });
+    const add = card.querySelector('#meshMicrogridAddNode');
+    if (add) add.addEventListener('click', () => {
+      currentConfig.meshMicrogrid = currentConfig.meshMicrogrid || {};
+      const list = Array.isArray(currentConfig.meshMicrogrid.nodes) ? currentConfig.meshMicrogrid.nodes.slice() : [];
+      const next = list.length + 1;
+      list.push({ id: `node_${next}`, name: `Energie-Knoten ${next}`, type: 'generic', role: 'mixed', enabled: true, priority: 100 });
+      currentConfig.meshMicrogrid.nodes = list;
+      buildAppsUI();
+    });
+    return card;
+  }
+
 
   function _chargeKioskHtmlEscape(input) {
     return String(input == null ? '' : input)
@@ -1885,97 +1997,109 @@ function collectAiAdvisorConfigFromUI(base) {
       const next = list.length + 1;
       list.push({ id: `dc_station_${next}`, name: `DC Ladestation ${next}`, type: 'dc', token: _chargeKioskToken(), enabled: true, assignedChargepoints: [`lp${next}`], allowedModes: ['solar','fast'], showPrice: true, showSolarShare: true, allowStartStop: true, maintenanceMode: false, watchdogTimeoutSec: 45, displayRefreshSec: 3, layoutMode: 'auto', showLanguageSwitch: false, controlBridge: 'charging-management', protocolHint: 'manufacturer-open' });
       currentConfig.chargeKiosk.stations = list;
+      // Die Stationen-Konfiguration wird im Reiter "Ladepunkte" gerendert.
+      // buildAppsUI() baut zentral auch die fachlich platzierten Karten neu auf,
+      // damit die Token-/Command-State-Handler nach dem Anlegen sauber neu gebunden sind.
       buildAppsUI();
     });
     return card;
   }
 
-  function _meshHtmlEscape(input) {
-    return String(input === undefined || input === null ? '' : input)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+  /**
+   * Code-Teil: buildAppCenterPlacementUI
+   * Zweck: Hält das App-Center-Schema sauber: Apps enthalten nur Funktionsmodule,
+   * Zuordnung enthält Markt-/Länder- und P1/DSMR-Mapping und Ladepunkte enthält die
+   * DC-Stationsdisplay-Konfiguration. Dadurch werden neue EOS-Module nicht ungeordnet
+   * vorne unter „Apps“ abgelegt.
+   */
+  function buildAppCenterPlacementUI() {
+    const mount = (el, card) => {
+      if (!el) return;
+      el.innerHTML = '';
+      if (card) el.appendChild(card);
+    };
+    mount(els.systemProfileMount, buildSystemProfileCard());
+    mount(els.nlP1Mount, buildNlP1Card());
+    mount(els.chargeKioskMount, buildChargeKioskCard());
   }
 
-  function _meshNodes() {
-    const cfg = currentConfig && currentConfig.meshMicrogrid && typeof currentConfig.meshMicrogrid === 'object' ? currentConfig.meshMicrogrid : {};
-    return Array.isArray(cfg.nodes) ? cfg.nodes : [];
-  }
-
-  function _meshNodeRow(node, index) {
-    const n = node && typeof node === 'object' ? node : {};
-    const id = _meshHtmlEscape(n.id || `node_${index + 1}`);
-    const name = _meshHtmlEscape(n.name || `Energie-Knoten ${index + 1}`);
-    const type = _meshHtmlEscape(n.type || 'consumer');
-    const role = _meshHtmlEscape(n.role || 'consumer');
-    const priority = _meshHtmlEscape(n.priority || 100);
-    const powerDp = _meshHtmlEscape(n.powerDp || '');
-    const surplusPowerDp = _meshHtmlEscape(n.surplusPowerDp || '');
-    const demandPowerDp = _meshHtmlEscape(n.demandPowerDp || '');
-    const socDp = _meshHtmlEscape(n.socDp || '');
-    const gridImportPowerDp = _meshHtmlEscape(n.gridImportPowerDp || '');
-    const gridExportPowerDp = _meshHtmlEscape(n.gridExportPowerDp || '');
-    const enabled = n.enabled !== false ? 'true' : 'false';
-    return `
-      <div class="nw-config-subcard" data-mesh-node-row>
-        <div class="nw-config-grid nw-config-grid--3">
-          <label class="nw-config-field"><span class="nw-config-label">Knoten-ID</span><input class="nw-config-input" data-mesh-field="id" value="${id}" placeholder="pv_dach_1" /></label>
-          <label class="nw-config-field"><span class="nw-config-label">Name</span><input class="nw-config-input" data-mesh-field="name" value="${name}" placeholder="PV Dach 1" /></label>
-          <label class="nw-config-field"><span class="nw-config-label">Aktiv</span><select class="nw-config-input" data-mesh-field="enabled"><option value="true" ${enabled === 'true' ? 'selected' : ''}>Ja</option><option value="false" ${enabled === 'false' ? 'selected' : ''}>Nein</option></select></label>
-          <label class="nw-config-field"><span class="nw-config-label">Typ</span><select class="nw-config-input" data-mesh-field="type">
-            ${['producer','consumer','storage','grid','chargepoint','thermal','generic'].map(v => `<option value="${v}" ${type === v ? 'selected' : ''}>${v}</option>`).join('')}
-          </select></label>
-          <label class="nw-config-field"><span class="nw-config-label">Rolle</span><select class="nw-config-input" data-mesh-field="role">
-            ${['producer','consumer','storage','grid'].map(v => `<option value="${v}" ${role === v ? 'selected' : ''}>${v}</option>`).join('')}
-          </select><small>Rolle entscheidet, wie Leistung im Cluster gezählt wird.</small></label>
-          <label class="nw-config-field"><span class="nw-config-label">Priorität</span><input class="nw-config-input" data-mesh-field="priority" value="${priority}" placeholder="100" /></label>
-          <label class="nw-config-field"><span class="nw-config-label">Signed Leistung W</span><input class="nw-config-input" data-mesh-field="powerDp" value="${powerDp}" placeholder="alias.0.pv.power" /></label>
-          <label class="nw-config-field"><span class="nw-config-label">Überschuss W optional</span><input class="nw-config-input" data-mesh-field="surplusPowerDp" value="${surplusPowerDp}" /></label>
-          <label class="nw-config-field"><span class="nw-config-label">Bedarf W optional</span><input class="nw-config-input" data-mesh-field="demandPowerDp" value="${demandPowerDp}" /></label>
-          <label class="nw-config-field"><span class="nw-config-label">SoC % optional</span><input class="nw-config-input" data-mesh-field="socDp" value="${socDp}" /></label>
-          <label class="nw-config-field"><span class="nw-config-label">Grid Import W optional</span><input class="nw-config-input" data-mesh-field="gridImportPowerDp" value="${gridImportPowerDp}" /></label>
-          <label class="nw-config-field"><span class="nw-config-label">Grid Export W optional</span><input class="nw-config-input" data-mesh-field="gridExportPowerDp" value="${gridExportPowerDp}" /></label>
-        </div>
-      </div>`;
-  }
-
-  function buildMeshMicrogridCard() {
-    const isEos = _licenseEdition() === 'eos';
-    const cfg = currentConfig && currentConfig.meshMicrogrid && typeof currentConfig.meshMicrogrid === 'object' ? currentConfig.meshMicrogrid : {};
-    const rows = _meshNodes().map((node, idx) => _meshNodeRow(node, idx)).join('');
-    const card = document.createElement('div');
-    card.className = 'nw-config-card nw-mesh-microgrid-card';
-    card.innerHTML = `
-      <div class="nw-config-card__header"><div><div class="nw-config-card__title">EOS Mesh/Microgrid Datenmodell</div><div class="nw-config-card__subtitle">Separate EOS-App für lokale Energie-Knoten, Cluster, Local First / Grid Last und spätere Nachbarschaftsversorgung. 0.8.32 ist read-only und schreibt keine Hardware.</div></div></div>
-      <div class="nw-config-card__body">
-        ${isEos ? '' : '<div class="nw-config-empty" style="text-align:left;margin-bottom:10px;">Nur mit EOS-Lizenz verfügbar.</div>'}
-        <div class="nw-config-grid nw-config-grid--3">
-          <label class="nw-config-field"><span class="nw-config-label">Mesh/Microgrid aktiv</span><select class="nw-config-input" id="meshMicrogridEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select></label>
-          <label class="nw-config-field"><span class="nw-config-label">Modus</span><select class="nw-config-input" id="meshMicrogridMode" ${isEos ? '' : 'disabled'}><option value="diagnostic">Diagnose / read-only</option><option value="local_first">Local First vorbereitet</option><option value="grid_last">Grid Last vorbereitet</option><option value="off">Aus</option></select></label>
-          <label class="nw-config-field"><span class="nw-config-label">Grid-/Clusterlimit W optional</span><input class="nw-config-input" id="meshMicrogridGridLimitW" value="${_meshHtmlEscape(cfg.gridLimitW || '')}" placeholder="60000" ${isEos ? '' : 'disabled'} /></label>
-          <label class="nw-config-field"><span class="nw-config-label">Cluster-ID</span><input class="nw-config-input" id="meshMicrogridClusterId" value="${_meshHtmlEscape(cfg.clusterId || 'cluster_01')}" ${isEos ? '' : 'disabled'} /></label>
-          <label class="nw-config-field"><span class="nw-config-label">Cluster-Name</span><input class="nw-config-input" id="meshMicrogridClusterName" value="${_meshHtmlEscape(cfg.clusterName || 'Lokaler Energieverbund')}" ${isEos ? '' : 'disabled'} /></label>
-        </div>
-        <div class="nw-config-card__subtitle" style="margin-top:10px;">Knoten: PV/Erzeuger, Verbraucher/Gebäude, Speicher, Netzpunkt, Ladepunktgruppen oder thermische Verbraucher. Technische Zuordnung bleibt im Installerbereich.</div>
-        <div id="meshMicrogridNodes">${rows || '<div class="nw-config-empty" style="text-align:left;">Noch keine Mesh-/Microgrid-Knoten angelegt.</div>'}</div>
-        <div style="display:flex;justify-content:flex-end;margin-top:12px;"><button type="button" class="nw-btn" id="meshMicrogridAddNode" ${isEos ? '' : 'disabled'}>Knoten anlegen</button></div>
-      </div>`;
-    const enabled = card.querySelector('#meshMicrogridEnabled');
-    if (enabled) enabled.value = cfg.enabled === true ? 'true' : 'false';
-    const mode = card.querySelector('#meshMicrogridMode');
-    if (mode) mode.value = ['off','diagnostic','local_first','grid_last'].includes(String(cfg.mode || '')) ? String(cfg.mode) : 'diagnostic';
-    const add = card.querySelector('#meshMicrogridAddNode');
-    if (add) add.addEventListener('click', () => {
-      currentConfig.meshMicrogrid = currentConfig.meshMicrogrid || {};
-      const list = Array.isArray(currentConfig.meshMicrogrid.nodes) ? currentConfig.meshMicrogrid.nodes.slice() : [];
-      const next = list.length + 1;
-      list.push({ id: `node_${next}`, name: `Energie-Knoten ${next}`, type: 'consumer', role: 'consumer', enabled: true, priority: 100, powerDp: '' });
-      currentConfig.meshMicrogrid.nodes = list;
-      try { buildAppsUI(); } catch (_e) {}
+  /**
+   * Code-Teil: setupInstallerBackButton
+   * Zweck: Der Installer kann aus dem App-Center zurück auf die zentrale ioBroker-
+   * Installer-Startseite wechseln. Die Ziel-URL wird so gebaut, dass sie im ioBroker-
+   * Admin unter /adapter/nexowatt-ui/ funktioniert; bei direktem Adapter-Port bleibt
+   * ein relativer Fallback erhalten.
+   */
+  function setupInstallerBackButton() {
+    const btn = els.backInstaller;
+    if (!btn || btn.__nwBackInstallerBound) return;
+    btn.__nwBackInstallerBound = true;
+    const buildTarget = () => {
+      const search = window.location.search || '';
+      const path = window.location.pathname || '';
+      if (path.indexOf('/adapter/nexowatt-ui/') >= 0) return '/adapter/nexowatt-ui/tab.html' + search;
+      return 'tab.html' + search;
+    };
+    btn.setAttribute('href', buildTarget());
+    btn.addEventListener('click', (ev) => {
+      try {
+        ev.preventDefault();
+        window.top.location.href = buildTarget();
+      } catch (_e) {
+        window.location.href = buildTarget();
+      }
     });
-    return card;
   }
+
+  /**
+   * Code-Teil: buildMappingProfileCards
+   * Zweck: Kompatibilitätsfunktion für bestehende Aufrufstellen. Die eigentliche
+   * Platzierung der Karten erfolgt zentral in buildAppCenterPlacementUI(), damit
+   * System-/Marktprofil und NL-P1/DSMR nur im Reiter „Zuordnung“ erscheinen und
+   * nicht zusätzlich als App-Karten dupliziert werden.
+   */
+  function buildMappingProfileCards() {
+    // 0.8.33: Fallback-kompatibler Wrapper.
+    // Die eigentlichen Karten werden in feste HTML-Mounts unter „Zuordnung“ gerendert.
+    // Damit entstehen beim Neuaufbau keine doppelten System-/P1-Karten im MappingGrid.
+    if (els.systemProfileMount || els.nlP1Mount) {
+      buildAppCenterPlacementUI();
+      return;
+    }
+    const grid = document.getElementById('mappingGrid');
+    if (!grid) return;
+    Array.from(grid.querySelectorAll('[data-dynamic-placement="system-profile"], [data-dynamic-placement="nl-p1-dsmr"]')).forEach((el) => {
+      try { el.remove(); } catch (_e) {}
+    });
+    const systemCard = buildSystemProfileCard();
+    systemCard.setAttribute('data-dynamic-placement', 'system-profile');
+    const nlCard = buildNlP1Card();
+    nlCard.setAttribute('data-dynamic-placement', 'nl-p1-dsmr');
+    const anchor = grid.firstElementChild || null;
+    grid.insertBefore(nlCard, anchor);
+    grid.insertBefore(systemCard, nlCard);
+  }
+
+  /**
+   * Code-Teil: buildChargeKioskInEvcsTab
+   * Zweck: Kompatibilitätsfunktion für bestehende EVCS-Aufrufstellen. Die DC-
+   * Stationsdisplay-Konfiguration wird zentral in den Mount unter „Ladepunkte“
+   * gerendert; dadurch entsteht keine zweite Logik und keine doppelte App-Karte.
+   */
+  function buildChargeKioskInEvcsTab() {
+    // 0.8.33: Fallback-kompatibler Wrapper.
+    // Die Stationsdisplay-Konfiguration gehört unter Ladepunkte und nutzt den festen Mount.
+    // Ist der neue Mount vorhanden, wird die zentrale Platzierungsfunktion genutzt.
+    if (els.chargeKioskMount) {
+      buildAppCenterPlacementUI();
+      return;
+    }
+    const slot = document.getElementById('chargeKioskConfigSlot') || document.getElementById('chargeKioskEvcsSlot');
+    if (!slot) return;
+    slot.innerHTML = '';
+    slot.appendChild(buildChargeKioskCard());
+  }
+
 
   /**
    * Code-Teil: buildAppsUI
@@ -2002,12 +2126,9 @@ function collectAiAdvisorConfigFromUI(base) {
     const licenseLimit = _maxEvcsCount() < 50 ? ` · Lademanagement bis ${_maxEvcsCount()} Wallboxen` : ' · Vollzugriff';
     licenseCard.innerHTML = `<div class="nw-config-card__header"><div><div class="nw-config-card__title">Lizenz: ${_licenseLabel()}</div><div class="nw-config-card__subtitle">${_licenseEdition() === 'eos' ? 'EOS ist die Vollversion mit allen Apps und künftigen Erweiterungen.' : 'Home zeigt nur die freigegebenen Basis-Apps.'}${licenseLimit}</div></div></div>`;
     els.appsList.appendChild(licenseCard);
-    els.appsList.appendChild(buildSystemProfileCard());
-    els.appsList.appendChild(buildNlP1Card());
-    els.appsList.appendChild(buildChargeKioskCard());
-    els.appsList.appendChild(buildMeshMicrogridCard());
+    buildAppCenterPlacementUI();
 
-    const visibleApps = APP_CATALOG.filter((app) => _isAppLicensed(app.id));
+    const visibleApps = APP_CATALOG.filter((app) => _isAppLicensed(app.id) && !APP_CATALOG_ONLY_CONFIG_IDS.has(app.id));
     for (const app of visibleApps) {
       const st = getSt(app.id);
 
@@ -2153,24 +2274,6 @@ function collectAiAdvisorConfigFromUI(base) {
         row.textContent = 'Home + EOS: Das Energie-Wertkonto rechnet nur und schaltet keine Geräte. Kostenannahmen und An/Aus-Schalter pflegt der Betreiber im Nutzerfrontend unter Einstellungen.';
         body.appendChild(row);
       }
-      if (app.id === 'nlP1') {
-        const row = document.createElement('div');
-        row.className = 'nw-config-card__row';
-        row.textContent = 'Home + EOS: Normalisiert P1/DSMR-Werte für Netafname/Teruglevering. Read-only; technische Datenpunkte werden oben in der NL P1/DSMR-Karte gemappt.';
-        body.appendChild(row);
-      }
-      if (app.id === 'chargeKiosk') {
-        const row = document.createElement('div');
-        row.className = 'nw-config-card__row';
-        row.textContent = 'EOS: Konfiguration oben in der Karte „EOS DC Station Display“. Die Displayseite ist isoliert und tokenisiert.';
-        body.appendChild(row);
-      }
-      if (app.id === 'meshMicrogrid') {
-        const row = document.createElement('div');
-        row.className = 'nw-config-card__row';
-        row.textContent = 'EOS: Das Mesh/Microgrid-Modul ist eine eigene App. Es baut in 0.8.32 nur das Knoten-/Cluster-Datenmodell auf und schaltet keine Hardware.';
-        body.appendChild(row);
-      }
       if (app.id === 'energyLedger') {
         const row = document.createElement('div');
         row.className = 'nw-config-card__row';
@@ -2188,6 +2291,12 @@ function collectAiAdvisorConfigFromUI(base) {
         // wie JSON-/CSV-API und erzeugt keine zweite Ledger-Zählung.
         linkRow.appendChild(link);
         body.appendChild(linkRow);
+      }
+      if (app.id === 'meshMicrogrid') {
+        const row = document.createElement('div');
+        row.className = 'nw-config-card__row';
+        row.textContent = 'EOS: Eigenes Mesh/Microgrid-Modul. Die erste Stufe ist read-only und erzeugt nur Knoten-/Cluster-/Energy-Intent-Daten. Konfiguration oben in der Karte „EOS Mesh/Microgrid“. Keine Hardwaresteuerung.';
+        body.appendChild(row);
       }
 
       card.appendChild(header);
@@ -7960,6 +8069,9 @@ function collectAiAdvisorConfigFromUI(base) {
       els.storageFarmMode.onchange = () => {
         const sf2 = _ensureStorageFarmCfg();
         sf2.mode = String(els.storageFarmMode.value || 'pool') === 'groups' ? 'groups' : 'pool';
+        // Layout-Umbau 0.8.33: gewählten Speicher beibehalten, aber bei
+        // Konfigurationsänderungen sicher innerhalb der vorhandenen Liste halten.
+        window.__nwStorageFarmSelectedIndex = Math.max(0, Math.min(Number(window.__nwStorageFarmSelectedIndex || 0), (sf2.storages || []).length - 1));
         buildStorageFarmUI();
       };
     }
@@ -8214,117 +8326,156 @@ function collectAiAdvisorConfigFromUI(base) {
       return d;
     };
 
-    // Storages list
+    // Storages master/detail
+    // Ab 0.8.33 wird bei mehreren Speichern nicht mehr jede komplette Karte
+    // untereinander gerendert. Links steht eine kompakte Speicherliste, rechts
+    // nur der ausgewählte Speicher im Detail. Dadurch bleibt die Speicherfarm
+    // bei vielen Speichern bedienbar, ohne extrem nach unten scrollen zu müssen.
     if (!sf.storages || sf.storages.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'nw-config-empty';
       empty.textContent = 'Noch keine Speicher hinzugefügt.';
       els.storageFarmStorages.appendChild(empty);
     } else {
+      const selectedRaw = Number(window.__nwStorageFarmSelectedIndex || 0);
+      const selectedIndex = Math.max(0, Math.min(sf.storages.length - 1, Number.isFinite(selectedRaw) ? Math.round(selectedRaw) : 0));
+      window.__nwStorageFarmSelectedIndex = selectedIndex;
+
+      const layout = document.createElement('div');
+      layout.className = 'nw-storagefarm-master-detail';
+      layout.style.display = 'grid';
+      layout.style.gridTemplateColumns = 'minmax(220px, 310px) minmax(0, 1fr)';
+      layout.style.gap = '14px';
+      layout.style.alignItems = 'start';
+
+      const listCard = document.createElement('div');
+      listCard.className = 'nw-config-card nw-storagefarm-list-card';
+      listCard.innerHTML = '<div class="nw-config-card__header"><div><div class="nw-config-card__title">Speicherliste</div><div class="nw-config-card__subtitle">Speicher auswählen, rechts bearbeiten.</div></div></div>';
+      const listBody = document.createElement('div');
+      listBody.className = 'nw-config-card__body nw-storagefarm-list';
+
       for (let i = 0; i < sf.storages.length; i++) {
         const s = sf.storages[i] || {};
         const idx = i + 1;
-
-        const card = document.createElement('div');
-        card.className = 'nw-config-item';
-        card.style.marginBottom = '10px';
-
-        const left = document.createElement('div');
-        left.className = 'nw-config-item__left';
-
-        const title = document.createElement('div');
-        title.className = 'nw-config-item__title';
-        title.textContent = `Speicher ${idx}`;
-
-        const sub = document.createElement('div');
-        sub.className = 'nw-config-item__subtitle';
-        const grp = String(s.group || '').trim();
-        const mp = (String(s.signedPowerId || '').trim() || String(s.chargePowerId || '').trim() || String(s.dischargePowerId || '').trim()) ? 'Istwert: gesetzt' : 'Istwert: fehlt';
-        const sp = (String(s.setSignedPowerId || '').trim() || String(s.setChargePowerId || '').trim() || String(s.setDischargePowerId || '').trim()) ? 'Sollwert: gesetzt' : 'Sollwert: fehlt';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'nw-config-btn nw-storagefarm-list-btn' + (i === selectedIndex ? ' nw-storagefarm-list-btn--active' : '');
+        btn.style.width = '100%';
+        btn.style.marginBottom = '8px';
+        btn.style.textAlign = 'left';
+        btn.style.justifyContent = 'flex-start';
         const cpl = String(s.coupling || '').trim().toLowerCase();
         const cplTxt = (cpl === 'dc') ? 'DC' : ((cpl === 'ac') ? 'AC' : 'Auto');
-        sub.textContent = (sf.mode === 'groups' ? (`Gruppe: ${grp || '—'} • `) : '') + `Kopplung: ${cplTxt} • ${mp} • ${sp}`;
-
-        left.appendChild(title);
-        left.appendChild(sub);
-
-        const right = document.createElement('div');
-        right.className = 'nw-config-item__right';
-        right.style.width = '100%';
-
-        const grid = document.createElement('div');
-        grid.className = 'nw-flow-ctrl-grid';
-        // Grunddaten
-        grid.appendChild(mkCheckField('Aktiv', `sf_${idx}_enabled`, s.enabled !== false, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].enabled = !!v; }));
-        grid.appendChild(mkTextField('Name', `sf_${idx}_name`, s.name, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].name = v; }, 'z.B. Batterie 1'));
-        grid.appendChild(mkNumField('Kapazität (kWh)', `sf_${idx}_cap`, s.capacityKWh, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].capacityKWh = v; }, 'optional'));
-        if (sf.mode === 'groups') {
-          grid.appendChild(mkTextField('Gruppe', `sf_${idx}_group`, s.group, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].group = v; }, 'z.B. Gruppe A'));
-        }
-
-        grid.appendChild(mkSelectField('Kopplung', `sf_${idx}_coupling`, s.coupling || '', [
-          { value: '', label: 'Auto/Unbekannt' },
-          { value: 'ac', label: 'AC' },
-          { value: 'dc', label: 'DC' },
-        ], (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].coupling = String(v || '').trim().toLowerCase(); }));
-
-        grid.appendChild(mkDpField('PV Leistung (W) (DC)', `sf_${idx}_pvPowerId`, s.pvPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].pvPowerId = v; }, 'nur DC (optional)'));
-
-        // Istwerte (Messwerte)
-        grid.appendChild(mkGridDivider('Istwerte (Messwerte)'));
-
-        grid.appendChild(mkCheckField('Vorzeichen Istleistung Signed invertieren', `sf_${idx}_invSigned`, !!s.invertSignedPowerSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertSignedPowerSign = !!v; }));
-        grid.appendChild(mkCheckField('Vorzeichen Ladeleistung invertieren', `sf_${idx}_invChg`, !!s.invertChargeSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertChargeSign = !!v; }));
-        grid.appendChild(mkCheckField('Vorzeichen Entladeleistung invertieren', `sf_${idx}_invDchg`, !!s.invertDischargeSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertDischargeSign = !!v; }));
-
-        grid.appendChild(mkDpField('SoC (%)', `sf_${idx}_socId`, s.socId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].socId = v; }, 'SoC‑Datenpunkt'));
-        grid.appendChild(mkDpField('Istleistung Signed (W)', `sf_${idx}_signedPowerId`, s.signedPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].signedPowerId = v; }, '(-) laden / (+) entladen'));
-        grid.appendChild(mkDpField('Ist Ladeleistung (W)', `sf_${idx}_chargePowerId`, s.chargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].chargePowerId = v; }, 'Messwert (optional)'));
-        grid.appendChild(mkDpField('Ist Entladeleistung (W)', `sf_${idx}_dischargePowerId`, s.dischargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].dischargePowerId = v; }, 'Messwert (optional)'));
-
-        // Sollwerte (Setpoint)
-        grid.appendChild(mkGridDivider('Sollwerte (Setpoint)'));
-
-        grid.appendChild(mkDpField('Sollwert Signed (W)', `sf_${idx}_setSignedPowerId`, s.setSignedPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].setSignedPowerId = v; }, '(-) laden / (+) entladen'));
-        grid.appendChild(mkCheckField('Vorzeichen Sollwert Signed invertieren', `sf_${idx}_invSetSigned`, !!s.invertSetSignedPowerSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertSetSignedPowerSign = !!v; }));
-        grid.appendChild(mkDpField('Sollwert Laden (W)', `sf_${idx}_setChargePowerId`, s.setChargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].setChargePowerId = v; }, 'nur Laden (optional)'));
-        grid.appendChild(mkDpField('Sollwert Entladen (W)', `sf_${idx}_setDischargePowerId`, s.setDischargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].setDischargePowerId = v; }, 'nur Entladen (optional)'));
-
-        // Feste Leistungsgrenzen
-        grid.appendChild(mkGridDivider('Feste Leistungsgrenzen (direkte Eingabe)'));
-        grid.appendChild(mkGridHelp('Diese Werte begrenzen die Farm-Verteilung pro Speicher. Leer = unbegrenzt, 0 = diese Richtung sperren. Keine DP-Zuordnung nötig.'));
-        grid.appendChild(mkNumField('Max. Beladen (W)', `sf_${idx}_maxChargeW`, s.maxChargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxChargeW = v; }, 'z.B. 50000'));
-        grid.appendChild(mkNumField('Max. Entladen (W)', `sf_${idx}_maxDischargeW`, s.maxDischargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxDischargeW = v; }, 'z.B. 50000'));
-
-        // Verfügbarkeit & Freigaben
-        grid.appendChild(mkGridDivider('Verfügbarkeit & Freigaben'));
-        grid.appendChild(mkGridHelp('Freigabe-DPs sind optional. Leer = freigegeben. Nur zuordnen, wenn das Speichersystem einen echten Status-DP liefert.'));
-        grid.appendChild(mkDpField('Verfügbar / Freigabe', `sf_${idx}_availableId`, s.availableId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].availableId = v; }, 'true/1 = verfügbar, false/0 = gesperrt'));
-        grid.appendChild(mkDpField('Störung / Fehler', `sf_${idx}_faultId`, s.faultId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].faultId = v; }, 'true/1 = Störung'));
-        grid.appendChild(mkDpField('Ladefreigabe', `sf_${idx}_chargeAllowedId`, s.chargeAllowedId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].chargeAllowedId = v; }, 'true/1 = Laden erlaubt'));
-        grid.appendChild(mkDpField('Entladefreigabe', `sf_${idx}_dischargeAllowedId`, s.dischargeAllowedId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].dischargeAllowedId = v; }, 'true/1 = Entladen erlaubt'));
-
-        right.appendChild(grid);
-
-        const rm = document.createElement('button');
-        rm.type = 'button';
-        rm.className = 'nw-config-btn nw-config-btn--ghost';
-        rm.textContent = 'Entfernen';
-        rm.style.marginTop = '8px';
-        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an rm. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-        rm.addEventListener('click', () => {
-          const sf2 = _ensureStorageFarmCfg();
-          sf2.storages.splice(i, 1);
+        const name = String(s.name || `Speicher ${idx}`).trim();
+        const cap = Number(s.capacityKWH ?? s.capacityKWh);
+        const capTxt = Number.isFinite(cap) && cap > 0 ? ` · ${cap} kWh` : '';
+        const activeTxt = s.enabled === false ? 'inaktiv' : 'aktiv';
+        btn.innerHTML = `<strong>${_nwHtmlEscape(name)}</strong><br><small>${activeTxt} · ${cplTxt}${capTxt}</small>`;
+        btn.addEventListener('click', () => {
+          window.__nwStorageFarmSelectedIndex = i;
           buildStorageFarmUI();
-          scheduleValidation(200);
         });
-
-        right.appendChild(rm);
-
-        card.appendChild(left);
-        card.appendChild(right);
-        els.storageFarmStorages.appendChild(card);
+        listBody.appendChild(btn);
       }
+      listCard.appendChild(listBody);
+
+      const detailWrap = document.createElement('div');
+      detailWrap.className = 'nw-storagefarm-detail';
+
+      const i = selectedIndex;
+      const s = sf.storages[i] || {};
+      const idx = i + 1;
+
+      const card = document.createElement('div');
+      card.className = 'nw-config-item nw-storagefarm-detail-card';
+      card.style.marginBottom = '10px';
+
+      const left = document.createElement('div');
+      left.className = 'nw-config-item__left';
+
+      const title = document.createElement('div');
+      title.className = 'nw-config-item__title';
+      title.textContent = `Speicher ${idx}`;
+
+      const sub = document.createElement('div');
+      sub.className = 'nw-config-item__subtitle';
+      const grp = String(s.group || '').trim();
+      const mp = (String(s.signedPowerId || '').trim() || String(s.chargePowerId || '').trim() || String(s.dischargePowerId || '').trim()) ? 'Istwert: gesetzt' : 'Istwert: fehlt';
+      const sp = (String(s.setSignedPowerId || '').trim() || String(s.setChargePowerId || '').trim() || String(s.setDischargePowerId || '').trim()) ? 'Sollwert: gesetzt' : 'Sollwert: fehlt';
+      const cpl = String(s.coupling || '').trim().toLowerCase();
+      const cplTxt = (cpl === 'dc') ? 'DC' : ((cpl === 'ac') ? 'AC' : 'Auto');
+      sub.textContent = (sf.mode === 'groups' ? (`Gruppe: ${grp || '—'} • `) : '') + `Kopplung: ${cplTxt} • ${mp} • ${sp}`;
+
+      left.appendChild(title);
+      left.appendChild(sub);
+
+      const right = document.createElement('div');
+      right.className = 'nw-config-item__right';
+      right.style.width = '100%';
+
+      const grid = document.createElement('div');
+      grid.className = 'nw-flow-ctrl-grid';
+      grid.appendChild(mkCheckField('Aktiv', `sf_${idx}_enabled`, s.enabled !== false, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].enabled = !!v; }));
+      grid.appendChild(mkTextField('Name', `sf_${idx}_name`, s.name, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].name = v; }, 'z.B. Batterie 1'));
+      grid.appendChild(mkNumField('Kapazität (kWh)', `sf_${idx}_cap`, s.capacityKWh, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].capacityKWh = v; }, 'optional'));
+      if (sf.mode === 'groups') {
+        grid.appendChild(mkTextField('Gruppe', `sf_${idx}_group`, s.group, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].group = v; }, 'z.B. Gruppe A'));
+      }
+      grid.appendChild(mkSelectField('Kopplung', `sf_${idx}_coupling`, s.coupling || '', [
+        { value: '', label: 'Auto/Unbekannt' },
+        { value: 'ac', label: 'AC' },
+        { value: 'dc', label: 'DC' },
+      ], (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].coupling = String(v || '').trim().toLowerCase(); }));
+      grid.appendChild(mkDpField('PV Leistung (W) (DC)', `sf_${idx}_pvPowerId`, s.pvPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].pvPowerId = v; }, 'nur DC (optional)'));
+
+      grid.appendChild(mkGridDivider('Istwerte (Messwerte)'));
+      grid.appendChild(mkCheckField('Vorzeichen Istleistung Signed invertieren', `sf_${idx}_invSigned`, !!s.invertSignedPowerSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertSignedPowerSign = !!v; }));
+      grid.appendChild(mkCheckField('Vorzeichen Ladeleistung invertieren', `sf_${idx}_invChg`, !!s.invertChargeSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertChargeSign = !!v; }));
+      grid.appendChild(mkCheckField('Vorzeichen Entladeleistung invertieren', `sf_${idx}_invDchg`, !!s.invertDischargeSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertDischargeSign = !!v; }));
+      grid.appendChild(mkDpField('SoC (%)', `sf_${idx}_socId`, s.socId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].socId = v; }, 'SoC‑Datenpunkt'));
+      grid.appendChild(mkDpField('Istleistung Signed (W)', `sf_${idx}_signedPowerId`, s.signedPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].signedPowerId = v; }, '(-) laden / (+) entladen'));
+      grid.appendChild(mkDpField('Ist Ladeleistung (W)', `sf_${idx}_chargePowerId`, s.chargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].chargePowerId = v; }, 'Messwert (optional)'));
+      grid.appendChild(mkDpField('Ist Entladeleistung (W)', `sf_${idx}_dischargePowerId`, s.dischargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].dischargePowerId = v; }, 'Messwert (optional)'));
+
+      grid.appendChild(mkGridDivider('Sollwerte (Setpoint)'));
+      grid.appendChild(mkDpField('Sollwert Signed (W)', `sf_${idx}_setSignedPowerId`, s.setSignedPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].setSignedPowerId = v; }, '(-) laden / (+) entladen'));
+      grid.appendChild(mkCheckField('Vorzeichen Sollwert Signed invertieren', `sf_${idx}_invSetSigned`, !!s.invertSetSignedPowerSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertSetSignedPowerSign = !!v; }));
+      grid.appendChild(mkDpField('Sollwert Laden (W)', `sf_${idx}_setChargePowerId`, s.setChargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].setChargePowerId = v; }, 'nur Laden (optional)'));
+      grid.appendChild(mkDpField('Sollwert Entladen (W)', `sf_${idx}_setDischargePowerId`, s.setDischargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].setDischargePowerId = v; }, 'nur Entladen (optional)'));
+
+      grid.appendChild(mkGridDivider('Feste Leistungsgrenzen (direkte Eingabe)'));
+      grid.appendChild(mkGridHelp('Diese Werte begrenzen die Farm-Verteilung pro Speicher. Leer = unbegrenzt, 0 = diese Richtung sperren. Keine DP-Zuordnung nötig.'));
+      grid.appendChild(mkNumField('Max. Beladen (W)', `sf_${idx}_maxChargeW`, s.maxChargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxChargeW = v; }, 'z.B. 50000'));
+      grid.appendChild(mkNumField('Max. Entladen (W)', `sf_${idx}_maxDischargeW`, s.maxDischargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxDischargeW = v; }, 'z.B. 50000'));
+
+      grid.appendChild(mkGridDivider('Verfügbarkeit & Freigaben'));
+      grid.appendChild(mkGridHelp('Freigabe-DPs sind optional. Leer = freigegeben. Nur zuordnen, wenn das Speichersystem einen echten Status-DP liefert.'));
+      grid.appendChild(mkDpField('Verfügbar / Freigabe', `sf_${idx}_availableId`, s.availableId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].availableId = v; }, 'true/1 = verfügbar, false/0 = gesperrt'));
+      grid.appendChild(mkDpField('Störung / Fehler', `sf_${idx}_faultId`, s.faultId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].faultId = v; }, 'true/1 = Störung'));
+      grid.appendChild(mkDpField('Ladefreigabe', `sf_${idx}_chargeAllowedId`, s.chargeAllowedId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].chargeAllowedId = v; }, 'true/1 = Laden erlaubt'));
+      grid.appendChild(mkDpField('Entladefreigabe', `sf_${idx}_dischargeAllowedId`, s.dischargeAllowedId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].dischargeAllowedId = v; }, 'true/1 = Entladen erlaubt'));
+
+      right.appendChild(grid);
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'nw-config-btn nw-config-btn--ghost';
+      rm.textContent = 'Entfernen';
+      rm.style.marginTop = '8px';
+      rm.addEventListener('click', () => {
+        const sf2 = _ensureStorageFarmCfg();
+        sf2.storages.splice(i, 1);
+        window.__nwStorageFarmSelectedIndex = Math.max(0, Math.min(i, sf2.storages.length - 1));
+        buildStorageFarmUI();
+        scheduleValidation(200);
+      });
+      right.appendChild(rm);
+      card.appendChild(left);
+      card.appendChild(right);
+      detailWrap.appendChild(card);
+
+      layout.appendChild(listCard);
+      layout.appendChild(detailWrap);
+      els.storageFarmStorages.appendChild(layout);
     }
 
     if (els.storageFarmAddStorage) {
@@ -8357,6 +8508,7 @@ function collectAiAdvisorConfigFromUI(base) {
           capacityKWh: '',
           group: '',
         });
+        window.__nwStorageFarmSelectedIndex = sf2.storages.length - 1;
         buildStorageFarmUI();
       };
     }
@@ -8816,6 +8968,7 @@ function collectAiAdvisorConfigFromUI(base) {
       empty.textContent = 'Keine Wallbox konfiguriert. Setze die Anzahl auf 1 oder höher, wenn eine Ladestation vorhanden ist.';
       els.evcsList.appendChild(empty);
       try { if (els.stationGroups) els.stationGroups.innerHTML = ''; } catch (_e) {}
+      try { buildChargeKioskInEvcsTab(); } catch (_eChargePlacement) {}
       return;
     }
 
@@ -9671,6 +9824,7 @@ function collectAiAdvisorConfigFromUI(base) {
       card.appendChild(body);
       els.evcsList.appendChild(card);
     }
+    try { buildChargeKioskInEvcsTab(); } catch (_eChargePlacement) {}
   }
   /**
    * Code-Teil: buildStationGroupsUI
@@ -9814,6 +9968,8 @@ function collectAiAdvisorConfigFromUI(base) {
     // blieb trotz gültiger EOS-Lizenz "Keine Apps verfügbar" stehen. Deshalb zuerst
     // die lizenzabhängige App-Struktur neu erzeugen, danach die gespeicherten Toggles setzen.
     try { buildAppsUI(); } catch (_eBuildApps) {}
+    try { buildMappingProfileCards(); } catch (_eMappingPlacement) {}
+    try { buildChargeKioskInEvcsTab(); } catch (_eChargePlacement) {}
     setAppsFromConfig(currentConfig);
 
     // Plant params
@@ -11063,6 +11219,57 @@ function collectAiAdvisorConfigFromUI(base) {
       activeTariff: readNlP1Dp('activeTariff'),
     };
 
+
+    // EOS Mesh/Microgrid (Installer only): eigene App, getrennt von Ledger/Wallet/Display.
+    // Diese Stufe bleibt read-only und speichert nur das Datenmodell für Cluster und
+    // Knoten. Spätere Steuerung darf erst über einen separaten CommandGuard/WritePlan
+    // ergänzt werden, damit keine versteckte Hardwaresteuerung entsteht.
+    const meshAppState = patch.emsApps && patch.emsApps.apps && patch.emsApps.apps.meshMicrogrid ? patch.emsApps.apps.meshMicrogrid : null;
+    const meshEnabledEl = document.getElementById('meshMicrogridEnabled');
+    const meshRead = (id) => {
+      const el = document.getElementById(id);
+      return el ? String(el.value || '').trim() : '';
+    };
+    const meshNum = (id, fallback, min, max) => {
+      const raw = meshRead(id);
+      if (!raw) return fallback;
+      const n = Number(raw);
+      if (!Number.isFinite(n)) return fallback;
+      return Math.max(min, Math.min(max, Math.round(n)));
+    };
+    const meshRows = Array.from(document.querySelectorAll('[data-mesh-node-row]'));
+    const meshField = (row, field) => {
+      const el = row && row.querySelector(`[data-mesh-field="${field}"]`);
+      return el ? String(el.value || '').trim() : '';
+    };
+    patch.meshMicrogrid = deepMerge({}, (currentConfig && currentConfig.meshMicrogrid) ? currentConfig.meshMicrogrid : {});
+    patch.meshMicrogrid.enabled = meshEnabledEl ? meshEnabledEl.value === 'true' : !!(meshAppState && meshAppState.installed && meshAppState.enabled);
+    patch.meshMicrogrid.clusterId = meshRead('meshMicrogridClusterId') || 'local_cluster_01';
+    patch.meshMicrogrid.clusterName = meshRead('meshMicrogridClusterName') || 'Lokaler Energieverbund';
+    patch.meshMicrogrid.strategy = ['local_first_grid_last','local_first','grid_limit','diagnostic'].includes(meshRead('meshMicrogridStrategy')) ? meshRead('meshMicrogridStrategy') : 'local_first_grid_last';
+    patch.meshMicrogrid.gridLimitW = meshNum('meshMicrogridGridLimitW', Number(patch.meshMicrogrid.gridLimitW) || 0, 0, 100000000);
+    patch.meshMicrogrid.importLimitW = meshNum('meshMicrogridImportLimitW', Number(patch.meshMicrogrid.importLimitW) || 0, 0, 100000000);
+    patch.meshMicrogrid.exportLimitW = meshNum('meshMicrogridExportLimitW', Number(patch.meshMicrogrid.exportLimitW) || 0, 0, 100000000);
+    patch.meshMicrogrid.includeReferenceNodes = meshRead('meshMicrogridIncludeRefs') !== 'false';
+    patch.meshMicrogrid.nodes = meshRows.map((row, idx) => {
+      const id = meshField(row, 'id') || `node_${idx + 1}`;
+      const out = {
+        id,
+        name: meshField(row, 'name') || id,
+        type: meshField(row, 'type') || 'generic',
+        role: meshField(row, 'role') || 'mixed',
+        enabled: meshField(row, 'enabled') !== 'false',
+        priority: Math.max(1, Math.min(999, Math.round(Number(meshField(row, 'priority')) || 100))),
+        generationPowerId: meshField(row, 'generationPowerId'),
+        demandPowerId: meshField(row, 'demandPowerId'),
+      };
+      const generationW = Number(meshField(row, 'generationW'));
+      const demandW = Number(meshField(row, 'demandW'));
+      if (Number.isFinite(generationW)) out.generationW = generationW;
+      if (Number.isFinite(demandW)) out.demandW = demandW;
+      return out;
+    });
+
     // EOS Local kWh Ledger (Installer only): Die Aktivierung folgt der EOS-App-Freigabe
     // und bleibt eine read-only Grundlage. Das Nutzerfrontend bekommt keine technischen
     // Ledger-Verknüpfungen; spätere Betreiber-/Exportseiten lesen nur fertige States.
@@ -11072,46 +11279,6 @@ function collectAiAdvisorConfigFromUI(base) {
     patch.energyLedger.source = 'chargeKiosk.lastSessionsByLpJson';
     patch.energyLedger.recentEntryLimit = Number.isFinite(Number(patch.energyLedger.recentEntryLimit)) ? Number(patch.energyLedger.recentEntryLimit) : 200;
     patch.energyLedger.processedSessionLimit = Number.isFinite(Number(patch.energyLedger.processedSessionLimit)) ? Number(patch.energyLedger.processedSessionLimit) : 2000;
-
-    // EOS Mesh/Microgrid (Installer only): eigenes separates App-Modul.
-    // In 0.8.32 wird ausschließlich das Knoten-/Cluster-Datenmodell gespeichert;
-    // es werden keine Hardware-Schreibpfade und keine Steuerstrategien aktiviert.
-    const meshAppState = patch.emsApps && patch.emsApps.apps && patch.emsApps.apps.meshMicrogrid ? patch.emsApps.apps.meshMicrogrid : null;
-    const meshEnabledEl = document.getElementById('meshMicrogridEnabled');
-    const meshModeEl = document.getElementById('meshMicrogridMode');
-    const meshGridLimitEl = document.getElementById('meshMicrogridGridLimitW');
-    const meshClusterIdEl = document.getElementById('meshMicrogridClusterId');
-    const meshClusterNameEl = document.getElementById('meshMicrogridClusterName');
-    const meshRows = Array.from(document.querySelectorAll('[data-mesh-node-row]'));
-    const readMesh = (row, field) => {
-      const el = row && row.querySelector(`[data-mesh-field="${field}"]`);
-      return el ? String(el.value || '').trim() : '';
-    };
-    const safeMeshId = (value, fallback) => String(value || fallback || 'node').trim().toLowerCase().replace(/[^a-z0-9_\-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64) || fallback || 'node';
-    patch.meshMicrogrid = deepMerge({}, (currentConfig && currentConfig.meshMicrogrid) ? currentConfig.meshMicrogrid : {});
-    patch.meshMicrogrid.enabled = meshEnabledEl ? meshEnabledEl.value === 'true' : !!(meshAppState && meshAppState.installed && meshAppState.enabled);
-    patch.meshMicrogrid.mode = meshModeEl && ['off','diagnostic','local_first','grid_last'].includes(meshModeEl.value) ? meshModeEl.value : 'diagnostic';
-    patch.meshMicrogrid.clusterId = safeMeshId(meshClusterIdEl ? meshClusterIdEl.value : 'cluster_01', 'cluster_01');
-    patch.meshMicrogrid.clusterName = meshClusterNameEl ? String(meshClusterNameEl.value || 'Lokaler Energieverbund').trim() : 'Lokaler Energieverbund';
-    patch.meshMicrogrid.gridLimitW = Math.max(0, Math.round(Number(meshGridLimitEl ? meshGridLimitEl.value : 0) || 0));
-    patch.meshMicrogrid.nodes = meshRows.map((row, idx) => {
-      const type = ['producer','consumer','storage','grid','chargepoint','thermal','generic'].includes(readMesh(row, 'type')) ? readMesh(row, 'type') : 'consumer';
-      const role = ['producer','consumer','storage','grid'].includes(readMesh(row, 'role')) ? readMesh(row, 'role') : (type === 'producer' ? 'producer' : (type === 'storage' ? 'storage' : (type === 'grid' ? 'grid' : 'consumer')));
-      return {
-        id: safeMeshId(readMesh(row, 'id'), `node_${idx + 1}`),
-        name: readMesh(row, 'name') || `Energie-Knoten ${idx + 1}`,
-        enabled: readMesh(row, 'enabled') !== 'false',
-        type,
-        role,
-        priority: Math.max(1, Math.min(999, Math.round(Number(readMesh(row, 'priority')) || 100))),
-        powerDp: readMesh(row, 'powerDp'),
-        surplusPowerDp: readMesh(row, 'surplusPowerDp'),
-        demandPowerDp: readMesh(row, 'demandPowerDp'),
-        socDp: readMesh(row, 'socDp'),
-        gridImportPowerDp: readMesh(row, 'gridImportPowerDp'),
-        gridExportPowerDp: readMesh(row, 'gridExportPowerDp'),
-      };
-    });
 
     // EOS DC Station Display / Charge Kiosk (Installer only).
     // Das normale Nutzerfrontend bekommt keine Konfiguration; die Displayseite nutzt nur Token + zugeordnete LPs.
@@ -13780,6 +13947,7 @@ if (els.ocppAutoDetect) {
   if (els.dpUpBtn) els.dpUpBtn.addEventListener('click', () => { upOne(); refreshTree().catch(() => {}); });
 
   // Initial load
+  setupInstallerBackButton();
   loadConfig().catch(e => setStatus('Laden fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
   backupRefreshInfo().catch(() => {});
 

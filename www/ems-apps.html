@@ -91,6 +91,7 @@
     </div>
     <div class="nw-smarthome-header__right">
       <div class="nw-smarthome-header__actions">
+        <a id="nw-emsapps-back-installer" class="nw-config-btn nw-config-btn--ghost" href="/adapter/nexowatt-ui/tab.html" title="Zurück zur Installer-Startseite">← Zurück zum Installer</a>
         <button id="nw-emsapps-save" class="nw-config-btn nw-config-btn--primary" type="button">Speichern &amp; EMS neu starten</button>
         <button id="nw-emsapps-reload" class="nw-config-btn nw-config-btn--ghost" type="button">Neu laden</button>
         <button id="nw-emsapps-validate" class="nw-config-btn nw-config-btn--ghost" type="button">Validierung prüfen</button>
@@ -615,8 +616,10 @@
       Jede App hat ihre eigenen Datenpunkte. Ordne sie hier sauber zu, damit die Regelungen stabil und nachvollziehbar arbeiten.
     </div>
 
-    <div class="nw-config-grid" id="mappingGrid">
+    <div class="nw-config-grid nw-config-grid--installer-profile" id="systemProfileCardMount" style="margin-bottom:14px;"></div>
+    <div class="nw-config-grid nw-config-grid--installer-profile" id="nlP1CardMount" style="margin-bottom:14px;"></div>
 
+    <div class="nw-config-grid" id="mappingGrid">
       <div class="nw-config-card" data-card="general">
         <div class="nw-config-card__header">
           <div class="nw-config-card__title">Allgemein</div>
@@ -809,9 +812,9 @@
         Mehrere Speichersysteme als gemeinsamer Pool oder in Gruppen betreiben. SoC wird aggregiert, Sollleistung wird verteilt.
       </div>
 
-      <div class="nw-config-grid">
+      <div class="nw-config-grid nw-storagefarm-config-grid">
 
-        <div class="nw-config-card">
+        <div class="nw-config-card nw-storagefarm-mode-card">
           <div class="nw-config-card__header">
             <div class="nw-config-card__title">Modus</div>
             <div class="nw-config-card__subtitle">Pool oder Gruppen + Aktualisierung</div>
@@ -841,7 +844,7 @@
           </div>
         </div>
 
-        <div class="nw-config-card">
+        <div class="nw-config-card nw-storagefarm-master-detail-card" style="grid-column:1 / -1;">
           <div class="nw-config-card__header">
             <div class="nw-config-card__title">Speicher</div>
             <div class="nw-config-card__subtitle">Bis zu 10 Speicher. Ist-/Sollwerte: Signed oder getrennt. Leistungsgrenzen werden direkt je Speicher eingetragen.</div>
@@ -854,7 +857,7 @@
           </div>
         </div>
 
-        <div class="nw-config-card" id="storageFarmGroupsCard" style="display:none;">
+        <div class="nw-config-card" id="storageFarmGroupsCard" style="display:none;grid-column:1 / -1;">
           <div class="nw-config-card__header">
             <div class="nw-config-card__title">Gruppen</div>
             <div class="nw-config-card__subtitle">Optional: SoC‑Zonen und Prioritäten je Gruppe.</div>
@@ -884,9 +887,9 @@
         Multi‑Use bedeutet, dass ein Speichersystem mehrere Anwendungen abdeckt (z.B. Notstrom‑Reserve, Lastspitzenkappung, Eigenverbrauch) – gesteuert über SoC‑Zonen.
       </div>
 
-      <div class="nw-config-grid">
+      <div class="nw-config-grid nw-storagefarm-config-grid">
 
-        <div class="nw-config-card">
+        <div class="nw-config-card nw-storagefarm-mode-card">
           <div class="nw-config-card__header">
             <div class="nw-config-card__title">SoC‑Zonen</div>
             <div class="nw-config-card__subtitle">Reserve / LSK / Eigenverbrauch (manuell definierbar)</div>
@@ -1327,9 +1330,9 @@
         Hinweis: Die Netzanschlussleistung wird unter <b>Zuordnung → Allgemein</b> gesetzt und wird als obere Grenze genutzt.
       </div>
 
-      <div class="nw-config-grid">
+      <div class="nw-config-grid nw-storagefarm-config-grid">
 
-        <div class="nw-config-card">
+        <div class="nw-config-card nw-storagefarm-mode-card">
           <div class="nw-config-card__header">
             <div class="nw-config-card__title">Messung &amp; Stale‑Timeout</div>
             <div class="nw-config-card__subtitle">Optionaler Fallback‑Datenpunkt + Max. Alter der Netzmessung</div>
@@ -1372,9 +1375,9 @@
         PV‑Abregelung (EVU‑Relaisstufen) und 0‑Einspeisung (NVP‑Regler). Diese Funktionen dienen dem Netzschutz und werden ausschließlich im Installer‑/App‑Center konfiguriert.
       </div>
 
-      <div class="nw-config-grid">
+      <div class="nw-config-grid nw-storagefarm-config-grid">
 
-        <div class="nw-config-card">
+        <div class="nw-config-card nw-storagefarm-mode-card">
           <div class="nw-config-card__header">
             <div class="nw-config-card__title">EVU‑Abregelung &amp; 0‑Einspeisung</div>
             <div class="nw-config-card__subtitle">Modus, Relais‑Eingänge und Reglerparameter</div>
@@ -1564,7 +1567,21 @@
         <button id="addStationGroup" type="button" class="nw-config-btn nw-config-btn--ghost">+ Gruppe hinzufügen</button>
       </div>
     </section>
-  </div>
+
+    <section class="nw-config-section" id="chargeKioskSectionMount">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">DC Stationsseiten / Display</h2>
+      </div>
+      <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
+        Separate Display-Seiten pro Ladestation werden hier konfiguriert, weil sie fachlich zu Ladepunkten und Stationen gehören.
+      </div>
+      <div class="nw-config-grid" id="chargeKioskCardMount"></div>
+    </section>
+
+    <!-- 0.8.33: Display-/Stationsseiten gehören fachlich zu Ladepunkten.
+         Die eigentliche Karte wird in TypeScript gerendert, damit sie dieselbe
+         Config-/Tokenlogik nutzt wie bisher, aber nicht mehr den Apps-Reiter füllt. -->
+      </div>
 
   <div id="nw-tabpanel-status" data-tabpanel="status" style="display:none;">
     <section class="nw-config-section">

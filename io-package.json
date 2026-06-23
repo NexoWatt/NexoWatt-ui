@@ -1,11 +1,15 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.32",
+    "version": "0.8.33",
     "news": {
+      "0.8.33": {
+        "de": "Version 0.8.33: App-Center aufgeräumt. Apps enthält nur Funktionsmodule; System/Marktprofil und NL P1/DSMR liegen unter Zuordnung, DC-Station-Display unter Ladepunkte. Speicherfarm nutzt Master-Detail-Ansicht und der Installer-Zurück-Button wurde ergänzt.",
+        "en": "Version 0.8.33: Cleans up the App Center. Apps shows only functional modules; system/market profile and NL P1/DSMR moved to mapping, DC station display to charging. Storage farm uses a master-detail layout and an installer-back button was added."
+      },
       "0.8.32": {
-        "de": "Version 0.8.32: Ergänzt EOS Mesh/Microgrid als separate App mit read-only Knoten-/Cluster-/Energy-Intent-Datenmodell. Die App ist EOS-only, hersteller- und protokolloffen und schreibt keine Hardware-Sollwerte.",
-        "en": "Version 0.8.32: Adds EOS Mesh/Microgrid as a separate app with a read-only node/cluster/energy-intent data model. The app is EOS-only, manufacturer/protocol agnostic and does not write hardware setpoints."
+        "de": "Version 0.8.32: EOS Mesh/Microgrid als eigenes, getrenntes App-Modul ergänzt. Read-only Datenmodell für Energie-Knoten, Cluster, Local First/Grid Last, Microgrid-Preview und Energy-Intent-Export ohne Hardwaresteuerung.",
+        "en": "Version 0.8.32: Adds EOS Mesh/Microgrid as a separate app module. Read-only data model for energy nodes, clusters, Local First/Grid Last, microgrid preview and energy-intent export without hardware control."
       },
       "0.8.31": {
         "de": "Version 0.8.31: Niederlande-Basis mit P1/DSMR-Mapping, Netafname/Teruglevering-Normalisierung, Saldering-Exit-Grundlogik und Energy-Wallet-Brücke ergänzt. Export Guard bleibt nur mit Installerfreigabe aktiv.",
@@ -26,10 +30,6 @@
       "0.8.27": {
         "de": "Version 0.8.27: Local kWh Ledger um CSV-API, Betreiberansicht, Monats-/Jahres-Exportbasis, Quelle je kWh und Energy-Wallet-Bridge erweitert. Alle Sichten nutzen denselben Ledger-Puffer, damit keine Sessions doppelt gezählt werden.",
         "en": "Version 0.8.27: Extends Local kWh Ledger with CSV API, operator view, month/year export foundation, per-kWh source display and Energy Wallet bridge. All views use the same ledger buffer to avoid duplicate session counting."
-      },
-      "0.8.26": {
-        "de": "Version 0.8.26: Local kWh Ledger Grundlage ergänzt. EOS kann DC-Station-Display-Sessions herstellerneutral als kompakte kWh-Einträge mit Solar-/Netzanteil, Wert, Deduplikation und Exportbasis führen.",
-        "en": "Version 0.8.26: Adds Local kWh Ledger foundation. EOS can keep DC station display sessions as compact manufacturer-neutral kWh entries with solar/grid split, value, deduplication and export basis."
       }
     },
     "title": "NexoWatt UI",
@@ -314,13 +314,15 @@
         "activeTariff": ""
       }
     },
-    "enableMeshMicrogrid": false,
     "meshMicrogrid": {
       "enabled": false,
-      "mode": "diagnostic",
-      "clusterId": "cluster_01",
+      "clusterId": "local_cluster_01",
       "clusterName": "Lokaler Energieverbund",
+      "strategy": "local_first_grid_last",
       "gridLimitW": 0,
+      "importLimitW": 0,
+      "exportLimitW": 0,
+      "includeReferenceNodes": true,
       "nodes": []
     }
   },

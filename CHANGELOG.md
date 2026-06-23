@@ -1,9 +1,18 @@
+## 0.8.33
+
+- App-Center-Struktur bereinigt: Der Reiter „Apps“ zeigt nur noch echte Funktionsmodule.
+- „System & Marktprofil“ sowie „NL P1/DSMR & Teruglevering“ wurden in den Reiter „Zuordnung“ verschoben.
+- „EOS DC Station Display“ wurde in den Reiter „Ladepunkte“ verschoben, da Stationsseiten Teil der Ladepunkt-/Stationsverwaltung sind.
+- Neuer Button „Zurück zum Installer“ im App-Center-Kopfbereich führt zurück zur zentralen Installer-Startseite.
+- Speicherfarm-Konfiguration auf Master-Detail-Ansicht umgestellt: links Speicherliste, rechts nur der ausgewählte Speicher im Detail.
+- Neues App-Center-Schema dokumentiert: Apps = Funktionsmodule, Zuordnung = Mapping/Marktprofil, Ladepunkte = LP-/Stationsverwaltung, Status = Runtime/Diagnose.
+
 ## 0.8.32
 
-- EOS: Neue separate App „EOS Mesh/Microgrid“ ergänzt.
-- EMS: Read-only Mesh-/Microgrid-Datenmodell mit Knoten, Cluster, Local-First-/Grid-Last-Vorbereitung und Energy-Intent-JSON-States.
-- App-Center: Installer kann Mesh-Knoten, Rollen und Datenpunktquellen anlegen; Home bleibt blockiert.
-- Sicherheit: Keine Hardware-Schreibbefehle, keine doppelte Ledger-/Wallet-/Export-Guard-Logik, keine Hersteller-/OCPP-Bindung.
+- EOS: Mesh/Microgrid als eigenes, getrenntes App-Modul ergänzt. Die Aktivierung erfolgt nur über EOS-Lizenz und App-Center-Freigabe.
+- Neues read-only Datenmodell `meshMicrogrid.*` für Cluster, Energie-Knoten, Local First/Grid Last, Energy-Intent-Preview und Microgrid-Entscheidungs-Preview.
+- App-Center: separate Karte „EOS Mesh/Microgrid“ mit Cluster-Daten, Netz-/Import-/Exportlimit und manuellen Knoten.
+- Architektur: Modul liest Energy Wallet, Local kWh Ledger, Export Guard und NL P1/DSMR nur als Referenz. Keine doppelte Ledger-Zählung, keine zweite Export-Guard-Regelung, keine Hardwaresteuerung.
 
 ## 0.8.30
 

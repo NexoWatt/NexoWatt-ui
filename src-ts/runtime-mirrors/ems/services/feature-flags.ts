@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 51d49e7d7d209c4c6a3d6fc117614fba2ea03ba2d209e1aabd20aa51010ea4ce
+ * Original-Hash: 4eb44e485dc145c2322882787dd41e5f3542988bb96f0796c6c1b5e09fb5eecc
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/feature-flags.ts
- * Quell-Hash: sha256:a4c08822ff03715f1f1ac1a362e1868bb230633db1ce99494b83b7b677a11e51
+ * Quell-Hash: sha256:228d3c6b10652201a4f827de5ab7f9e59e14d040585bf74046c8bb818bb35dbe
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -91,9 +91,9 @@ const APP_FEATURE_MAP = Object.freeze({
   energyWallet: 'energyWallet',
   energyLedger: 'energyLedger',
   chargeKiosk: 'chargeKiosk',
+  meshMicrogrid: 'meshMicrogrid',
   mesh: 'mesh',
   microgrid: 'microgrid',
-  meshMicrogrid: 'meshMicrogrid',
   nlP1: 'nlP1',
   nlSaldering: 'nlSaldering',
   nlEnergyHub: 'nlEnergyHub',
@@ -142,11 +142,11 @@ const EOS_ONLY_FEATURES = new Set([
   'energyLedger',
   'billingExport',
   'chargeKiosk',
+  'meshMicrogrid',
   'solarChargeMode',
   'solarChargeBilling',
   'mesh',
   'microgrid',
-  'meshMicrogrid',
   'neighborSharing',
   'multiSiteWallet',
   'nlSaldering',
