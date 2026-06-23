@@ -72,6 +72,7 @@
     systemProfileMount: document.getElementById('systemProfileMappingSlot'),
     nlP1Mount: document.getElementById('nlP1MappingSlot'),
     chargeKioskMount: document.getElementById('chargeKioskEvcsSlot'),
+    meshMicrogridMount: document.getElementById('meshMicrogridConfigSlot'),
     appsEmpty: document.getElementById('appsEmpty'),
     nwDevicesQuickSetup: document.getElementById('nwDevicesQuickSetup'),
 
@@ -350,8 +351,11 @@
   }
 
   // Phase 2: App-Center (install + enable per capability)
-  // 0.8.33 App-Center-Schema: Diese Liste enthält nur Funktions-Apps.
+  // 0.8.37 App-Center-Schema: Diese Liste enthält nur Funktions-Apps.
   // Marktprofile/P1-Mapping liegen im Tab „Zuordnung“, Stationsseiten im Tab „Ladepunkte“.
+  // Große Funktionsmodule wie Mesh/Microgrid dürfen im Apps-Reiter nur installiert/aktiviert
+  // werden; ihre Detailkonfiguration liegt in einem eigenen Reiter, der erst nach Installation
+  // eingeblendet wird. So bleibt die Startseite übersichtlich.
   const APP_CATALOG = [
     { id: 'charging', label: 'Lademanagement', desc: 'PV-Überschussladen, Budget-Verteilung, Ladepunkte/Ports (AC/DC) + Stationsgruppen', mandatory: false, hems: true },
     { id: 'peak', label: 'Peak-Shaving', desc: 'Lastspitzenkappung / Import-Limit / Atypische HLZF', mandatory: false, hems: false },
@@ -1998,9 +2002,29 @@ function collectAiAdvisorConfigFromUI(base) {
       el.innerHTML = '';
       if (card) el.appendChild(card);
     };
+
+    /**
+     * App-Center-Ordnungsregel ab 0.8.37:
+     * - Der Reiter „Apps“ ist nur der App-Katalog mit Installiert/Aktiv.
+     * - Länder-/P1-Konfiguration bleibt in „Zuordnung“.
+     * - DC-Stationsseiten bleiben in „Ladepunkte“.
+     * - Mesh/Microgrid bekommt einen eigenen Reiter und wird nur sichtbar,
+     *   wenn die Funktions-App installiert ist. Dadurch stehen im Apps-Reiter
+     *   keine tiefen Modul-Einstellungen mehr.
+     */
+    const isMeshInstalled = (() => {
+      const cb = document.getElementById('app_meshMicrogrid_installed');
+      if (cb) return !!cb.checked;
+      const app = currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps && currentConfig.emsApps.apps.meshMicrogrid
+        ? currentConfig.emsApps.apps.meshMicrogrid
+        : null;
+      return !!(app && app.installed);
+    })();
+
     mount(els.systemProfileMount, buildSystemProfileCard());
     mount(els.nlP1Mount, buildNlP1Card());
     mount(els.chargeKioskMount, buildChargeKioskCard());
+    mount(els.meshMicrogridMount, isMeshInstalled ? buildMeshMicrogridCard() : null);
   }
 
   /**
@@ -2115,11 +2139,10 @@ function collectAiAdvisorConfigFromUI(base) {
     const licenseLimit = _maxEvcsCount() < 50 ? ` · Lademanagement bis ${_maxEvcsCount()} Wallboxen` : ' · Vollzugriff';
     licenseCard.innerHTML = `<div class="nw-config-card__header"><div><div class="nw-config-card__title">Lizenz: ${_licenseLabel()}</div><div class="nw-config-card__subtitle">${_licenseEdition() === 'eos' ? 'EOS ist die Vollversion mit allen Apps und künftigen Erweiterungen.' : 'Home zeigt nur die freigegebenen Basis-Apps.'}${licenseLimit}</div></div></div>`;
     els.appsList.appendChild(licenseCard);
-    // 0.8.33: Reine Zuordnungs-/Stationskarten werden fachlich passend in
-    // „Zuordnung“ bzw. „Ladepunkte“ gerendert. Der Apps-Reiter bleibt eine
-    // schlanke Liste echter Funktions-Apps mit Installiert/Aktiv-Schaltern.
+    // 0.8.37: Reine Zuordnungs-/Stationskarten und große Modul-Konfigurationen
+    // werden fachlich passend in eigene Reiter gerendert. Der Apps-Reiter bleibt
+    // eine schlanke Liste echter Funktions-Apps mit Installiert/Aktiv-Schaltern.
     buildAppCenterStructurePanels();
-    els.appsList.appendChild(buildMeshMicrogridCard());
 
     const visibleApps = APP_CATALOG.filter((app) => _isAppLicensed(app.id));
     for (const app of visibleApps) {
@@ -2221,7 +2244,10 @@ function collectAiAdvisorConfigFromUI(base) {
 
         try { if (window.nwSyncToggleButtons) window.nwSyncToggleButtons(tEnabled.inp.id); } catch (_e) {}
 
-        // Live UI: Mapping-Kacheln reagieren sofort auf Install/Uninstall
+        // Live UI: Zuordnungs-/Spezialreiter reagieren sofort auf Install/Uninstall.
+        // Mesh/Microgrid ist bewusst nicht mehr als Detailkarte im Apps-Reiter,
+        // sondern nur im eigenen Reiter vorhanden, sobald die App installiert ist.
+        try { buildAppCenterStructurePanels(); } catch (_e) {}
         try { applyAppDependentVisibility(); } catch (_e) {}
       });
 
@@ -2270,20 +2296,24 @@ function collectAiAdvisorConfigFromUI(base) {
       if (app.id === 'meshMicrogrid') {
         const row = document.createElement('div');
         row.className = 'nw-config-card__row';
-        row.textContent = 'EOS: Das Mesh/Microgrid-Modul ist eine eigene App. Es baut ein Knoten-/Cluster-Datenmodell auf und schaltet in dieser Stufe keine Hardware.';
+        row.textContent = st.installed
+          ? 'EOS: Detailkonfiguration im eigenen Reiter „Mesh/Microgrid“. Der Apps-Reiter bleibt nur für Installiert/Aktiv.'
+          : 'EOS: Nach Installation erscheint ein eigener Reiter „Mesh/Microgrid“ für Knoten, Cluster und Diagnose.';
         body.appendChild(row);
 
-        const linkRow = document.createElement('div');
-        linkRow.className = 'nw-config-card__row';
-        const link = document.createElement('a');
-        link.href = '/mesh/microgrid';
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.textContent = 'Betreiberansicht / Snapshot-Export öffnen';
-        // Nur Verweis: Die Betreiberansicht liest denselben meshMicrogrid-Statebaum
-        // wie JSON-/CSV-API. Es entsteht keine zweite Clusterlogik und keine Steuerung.
-        linkRow.appendChild(link);
-        body.appendChild(linkRow);
+        if (st.installed) {
+          const linkRow = document.createElement('div');
+          linkRow.className = 'nw-config-card__row';
+          const link = document.createElement('a');
+          link.href = '/mesh/microgrid';
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = 'Betreiberansicht / Snapshot-Export öffnen';
+          // Nur Verweis: Die Betreiberansicht liest denselben meshMicrogrid-Statebaum
+          // wie JSON-/CSV-API. Es entsteht keine zweite Clusterlogik und keine Steuerung.
+          linkRow.appendChild(link);
+          body.appendChild(linkRow);
+        }
       }
       if (app.id === 'energyLedger') {
         const row = document.createElement('div');
@@ -2398,6 +2428,10 @@ function collectAiAdvisorConfigFromUI(base) {
       { tab: 'evcs', app: 'charging' },
       { tab: 'storagefarm', app: 'storagefarm' },
       { tab: 'multiuse', app: 'multiuse' },
+      // 0.8.37: Der separate Mesh/Microgrid-Reiter wird erst sichtbar, wenn
+      // die EOS-App installiert ist. Nicht installierte Module sollen nicht
+      // als leere Konfigurationsbereiche im App-Center auftauchen.
+      { tab: 'meshmicrogrid', app: 'meshMicrogrid' },
     ];
 
     for (const t of tabMap) {

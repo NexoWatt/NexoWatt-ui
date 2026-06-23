@@ -122,4 +122,16 @@ mustNotContain(js, "{ id: 'chargeKiosk'", 'APP_CATALOG Runtime');
 mustContain(ts, 'nw-storagefarm-master-detail', 'Speicherfarm Master-Detail TS');
 mustContain(js, 'nw-storagefarm-master-detail', 'Speicherfarm Master-Detail Runtime');
 
-console.log('[app-center-structure] OK: App-Center-Schema, Admin-Rücksprung und Speicherfarm-Master-Detail sind abgesichert.');
+
+// 0.8.37: Mesh/Microgrid ist zwar eine Funktions-App, aber die Detailkonfiguration
+// darf nicht mehr auf der Apps-Startseite stehen. Installiert/Aktiv bleibt dort,
+// Details liegen in einem eigenen Reiter, der nur bei installierter App sichtbar wird.
+mustContain(html, 'data-tab="meshmicrogrid"', 'eigener Mesh/Microgrid-Reiter');
+mustContain(html, 'id="meshMicrogridConfigSlot"', 'Mesh/Microgrid-Konfigurationsslot');
+mustContain(ts, 'meshMicrogridMount', 'TS Mesh/Microgrid-Mount');
+mustContain(ts, "{ tab: 'meshmicrogrid', app: 'meshMicrogrid' }", 'Mesh/Microgrid-Tab-Installationsgate');
+mustContain(ts, 'eigene EOS-App und bekommt ab 0.8.37 einen eigenen', 'TS-Kommentar eigene Mesh-App/Reiter');
+mustNotContain(ts, 'els.appsList.appendChild(buildMeshMicrogridCard());', 'Mesh/Microgrid-Konfiguration im Apps-Reiter');
+mustNotContain(js, 'els.appsList.appendChild(buildMeshMicrogridCard());', 'Mesh/Microgrid-Konfiguration im Apps-Reiter Runtime');
+
+console.log('[app-center-structure] OK: App-Center-Schema, Admin-Rücksprung, Speicherfarm-Master-Detail und Mesh/Microgrid-Reiter sind abgesichert.');

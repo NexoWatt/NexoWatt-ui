@@ -1,3 +1,9 @@
+## 0.8.37
+
+- App-Center: Mesh/Microgrid-Detailkonfiguration aus dem Reiter Apps entfernt. Apps zeigt nur noch Installiert/Aktiv und einen Hinweis.
+- Neuer Reiter Mesh/Microgrid, sichtbar nur bei installierter EOS Mesh/Microgrid-App.
+- Regressionstest erweitert, damit große Modul-Konfigurationen nicht wieder auf der Apps-Startseite landen.
+
 ## 0.8.36
 
 - EOS Mesh/Microgrid: Regelbasis im Diagnosemodus ergänzt. Die Betreiberansicht zeigt geplante Local-First-/Grid-Last-Aktionen, Prioritätsreihenfolge und Netzlimit-Diagnose.

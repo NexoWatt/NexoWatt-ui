@@ -109,6 +109,7 @@
       <button type="button" class="nw-tab" data-tab="aiadvisor">KI‑Optimierung</button>
       <button type="button" class="nw-tab" data-tab="storagefarm">Speicherfarm</button>
       <button type="button" class="nw-tab" data-tab="multiuse">MultiUse</button>
+      <button type="button" class="nw-tab" data-tab="meshmicrogrid" style="display:none;">Mesh/Microgrid</button>
       <button type="button" class="nw-tab" data-tab="flow">Energiefluss</button>
       <button type="button" class="nw-tab" data-tab="thermal">Thermik</button>
       <button type="button" class="nw-tab" data-tab="heatingrod">Heizstab</button>
@@ -1005,6 +1006,21 @@
 
       </div>
 
+    </section>
+
+  </div>
+
+
+  <div id="nw-tabpanel-meshmicrogrid" data-tabpanel="meshmicrogrid" style="display:none;">
+
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">EOS Mesh/Microgrid</h2>
+      </div>
+      <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
+        Eigenständiges EOS-Modul für lokale Energie-Knoten, Cluster, Local First / Grid Last und spätere Nachbarschaftsversorgung. Dieser Reiter wird nur eingeblendet, wenn die App installiert ist.
+      </div>
+      <div id="meshMicrogridConfigSlot"></div>
     </section>
 
   </div>
