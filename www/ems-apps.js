@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:f3be7cc165bd98efb834a37db420da2a07d71b01b2d622e6d89286706689e0ee
+ * Quell-Hash: sha256:7cf6a35c596f4a4493fca9700fd573fd07b8f924167b8a0f12182de4af7a2143
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2268,8 +2268,20 @@ function collectAiAdvisorConfigFromUI(base) {
       if (app.id === 'meshMicrogrid') {
         const row = document.createElement('div');
         row.className = 'nw-config-card__row';
-        row.textContent = 'EOS: Das Mesh/Microgrid-Modul ist eine eigene App. Es baut in 0.8.32 nur das Knoten-/Cluster-Datenmodell auf und schaltet keine Hardware.';
+        row.textContent = 'EOS: Das Mesh/Microgrid-Modul ist eine eigene App. Es baut ein Knoten-/Cluster-Datenmodell auf und schaltet in dieser Stufe keine Hardware.';
         body.appendChild(row);
+
+        const linkRow = document.createElement('div');
+        linkRow.className = 'nw-config-card__row';
+        const link = document.createElement('a');
+        link.href = '/mesh/microgrid';
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = 'Betreiberansicht / Snapshot-Export öffnen';
+        // Nur Verweis: Die Betreiberansicht liest denselben meshMicrogrid-Statebaum
+        // wie JSON-/CSV-API. Es entsteht keine zweite Clusterlogik und keine Steuerung.
+        linkRow.appendChild(link);
+        body.appendChild(linkRow);
       }
       if (app.id === 'energyLedger') {
         const row = document.createElement('div');

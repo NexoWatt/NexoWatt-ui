@@ -17357,6 +17357,102 @@ app.get('/api/ledger/local-kwh.csv', (req, res) => {
 });
 
 
+// -----------------------------------------------------------------------------
+// EOS Mesh/Microgrid Betreiberansicht / Snapshot-Export
+// -----------------------------------------------------------------------------
+// 0.8.35: Diese Routen sind nur eine Betreiber- und Exportansicht auf denselben
+// read-only Mesh/Microgrid-Statebaum. Sie erzeugen keine zweite Clusterlogik,
+// keine Steuerentscheidungen und keine Hardware-Schreibpfade. Dadurch bleibt das
+// Modul als separate EOS-App sauber von Energy Wallet, Ledger, DC Display und
+// Export Guard getrennt.
+const _nwMeshMicrogridIsLicensed = () => {
+  try { return !!this._nwLicenseAllowsAppId('meshMicrogrid'); } catch (_e) { return false; }
+};
+const _nwMeshMicrogridBuildPayload = () => {
+  const snapshot = _nwEnergyLedgerJson('meshMicrogrid.export.snapshotJson', {});
+  const summary = _nwEnergyLedgerJson('meshMicrogrid.summaryJson', {});
+  const nodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : _nwEnergyLedgerJson('meshMicrogrid.nodesJson', []);
+  const intents = Array.isArray(snapshot.intents) ? snapshot.intents : _nwEnergyLedgerJson('meshMicrogrid.intent.nodesJson', []);
+  const clusterIntent = snapshot.clusterIntent && typeof snapshot.clusterIntent === 'object' ? snapshot.clusterIntent : _nwEnergyLedgerJson('meshMicrogrid.intent.clusterJson', {});
+  const decision = snapshot.decision && typeof snapshot.decision === 'object' ? snapshot.decision : _nwEnergyLedgerJson('meshMicrogrid.lastDecisionJson', {});
+  const missingMappings = Array.isArray(snapshot.missingMappings) ? snapshot.missingMappings : _nwEnergyLedgerJson('meshMicrogrid.diagnostics.missingMappingsJson', []);
+  const totals = (snapshot.totals && typeof snapshot.totals === 'object') ? snapshot.totals : (summary && summary.totals ? summary.totals : {});
+  const cluster = (snapshot.cluster && typeof snapshot.cluster === 'object') ? snapshot.cluster : {
+    id: _nwDisplayStateVal('meshMicrogrid.cluster.id', 'cluster_01'),
+    name: _nwDisplayStateVal('meshMicrogrid.cluster.name', 'Lokaler Energieverbund'),
+    mode: _nwDisplayStateVal('meshMicrogrid.mode', 'diagnostic'),
+    gridLimitW: Number(_nwDisplayStateVal('meshMicrogrid.cluster.gridLimitW', 0)) || 0,
+  };
+  const exportUrls = {
+    json: '/api/mesh/microgrid',
+    csv: '/api/mesh/microgrid.csv',
+    view: '/mesh/microgrid',
+  };
+  return {
+    ok: true,
+    schema: 'nexowatt.mesh-microgrid-operator-api.v1',
+    generatedAt: Date.now(),
+    enabled: _nwDisplayStateVal('meshMicrogrid.enabled', false) === true || _nwDisplayStateVal('meshMicrogrid.enabled', false) === 'true',
+    status: String(_nwDisplayStateVal('meshMicrogrid.status', summary && summary.status || 'unknown') || 'unknown'),
+    warning: String(_nwDisplayStateVal('meshMicrogrid.diagnostics.warning', summary && summary.warning || '') || ''),
+    cluster,
+    totals,
+    nodes: Array.isArray(nodes) ? nodes : [],
+    intents: Array.isArray(intents) ? intents : [],
+    clusterIntent,
+    decision,
+    missingMappings: Array.isArray(missingMappings) ? missingMappings : [],
+    exportUrls,
+    readOnly: true,
+    note: 'Betreiberansicht liest denselben Mesh/Microgrid-Statebaum. Keine Hardwaresteuerung.',
+  };
+};
+const _nwMeshMicrogridCsv = (payload) => {
+  const rows = [];
+  rows.push(['schema', 'nexowatt.mesh-microgrid-snapshot-export.v1'].map(_nwDisplayCsvEscape).join(';'));
+  rows.push(['generatedAt', String(payload && payload.generatedAt || Date.now()), 'cluster', payload && payload.cluster && payload.cluster.id || 'cluster_01'].map(_nwDisplayCsvEscape).join(';'));
+  rows.push('');
+  rows.push(['Typ','Cluster','Name','Modus','Status','GridLimit_W','Generation_W','Load_W','GridImport_W','GridExport_W','Surplus_W','Demand_W','LocalUsePotential_W','GridLimit_%'].map(_nwDisplayCsvEscape).join(';'));
+  const t = payload && payload.totals ? payload.totals : {};
+  const c = payload && payload.cluster ? payload.cluster : {};
+  rows.push(['Cluster', c.id || '', c.name || '', c.mode || '', payload.status || '', String(Math.round(Number(c.gridLimitW || 0))), String(Math.round(Number(t.generationW || 0))), String(Math.round(Number(t.loadW || 0))), String(Math.round(Number(t.gridImportW || 0))), String(Math.round(Number(t.gridExportW || 0))), String(Math.round(Number(t.surplusW || 0))), String(Math.round(Number(t.demandW || 0))), String(Math.round(Number(t.localUsePotentialW || 0))), String(Math.round(Number(t.gridLimitUsagePercent || 0)))].map(_nwDisplayCsvEscape).join(';'));
+  rows.push('');
+  rows.push(['Typ','Node_ID','Name','Knotentyp','Rolle','Status','Priorität','Power_W','Generation_W','Load_W','StorageCharge_W','StorageDischarge_W','GridImport_W','GridExport_W','Surplus_W','Demand_W','SoC_%','Intent'].map(_nwDisplayCsvEscape).join(';'));
+  const nodes = payload && Array.isArray(payload.nodes) ? payload.nodes : [];
+  for (const n of nodes) {
+    rows.push(['Node', n.id || '', n.name || '', n.type || '', n.role || '', n.status || '', String(n.priority || ''), String(n.powerW ?? ''), String(n.generationW || 0), String(n.loadW || 0), String(n.storageChargeW || 0), String(n.storageDischargeW || 0), String(n.gridImportW || 0), String(n.gridExportW || 0), String(n.surplusW || 0), String(n.demandW || 0), String(n.socPercent ?? ''), n.intent ? JSON.stringify(n.intent) : ''].map(_nwDisplayCsvEscape).join(';'));
+  }
+  rows.push('');
+  rows.push(['Hinweis', payload && payload.note || 'read-only'].map(_nwDisplayCsvEscape).join(';'));
+  return '\ufeff' + rows.join('\r\n');
+};
+app.get(['/mesh/microgrid', '/mesh/microgrid/'], (_req, res) => {
+  res.sendFile(path.join(__dirname, 'www', 'mesh-microgrid.html'));
+});
+app.get('/api/mesh/microgrid', (req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
+    return res.json(_nwMeshMicrogridBuildPayload());
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
+  }
+});
+app.get('/api/mesh/microgrid.csv', (req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwMeshMicrogridIsLicensed()) return res.status(403).type('text/plain').send('EOS-Lizenz erforderlich.');
+    const payload = _nwMeshMicrogridBuildPayload();
+    const cluster = String(payload && payload.cluster && payload.cluster.id || 'cluster_01').replace(/[^0-9A-Za-z_-]+/g, '_');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="NexoWatt_Mesh_Microgrid_${cluster}.csv"`);
+    return res.status(200).send(_nwMeshMicrogridCsv(payload));
+  } catch (e) {
+    return res.status(500).type('text/plain').send('Mesh/Microgrid CSV Export Fehler: ' + String(e && e.message ? e.message : e));
+  }
+});
+
+
 app.post('/api/display/station/:token/heartbeat', async (req, res) => {
   try {
     sendNoStore(res);

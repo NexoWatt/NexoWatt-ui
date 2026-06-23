@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>NexoWatt Mesh/Microgrid</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <style>
+    body{margin:0;background:#07100d;color:#eefaf2;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.mesh-shell{max-width:1220px;margin:0 auto;padding:20px}.mesh-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px}.mesh-head h1{margin:0;font-size:26px}.muted{color:#9ab5a4}.warn{color:#ffd166}.pill{border:1px solid rgba(0,200,83,.35);border-radius:999px;padding:7px 11px;background:rgba(0,200,83,.08);color:#8ff7b0;font-weight:800}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.card{background:rgba(11,18,16,.96);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:16px;box-shadow:0 18px 40px rgba(0,0,0,.24)}.card small{display:block;color:#9ab5a4;margin-bottom:6px}.card b{font-size:22px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}.actions a,.actions button{border:1px solid rgba(0,200,83,.35);border-radius:12px;background:rgba(0,200,83,.12);color:#eefaf2;padding:10px 12px;text-decoration:none;cursor:pointer}.table-wrap{overflow:auto;border-radius:18px;border:1px solid rgba(255,255,255,.08)}table{width:100%;border-collapse:collapse;min-width:1060px;background:rgba(8,14,12,.92)}th,td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px;text-align:left}th{color:#8ff7b0;background:rgba(0,200,83,.08);position:sticky;top:0}.status-surplus{color:#8ff7b0}.status-demand{color:#ffd166}.status-balanced{color:#9ab5a4}.status-disabled{color:#ff8b8b}@media(max-width:920px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:580px){.grid{grid-template-columns:1fr}.mesh-shell{padding:12px}}
+  </style>
+</head>
+<body>
+  <main class="mesh-shell">
+    <header class="mesh-head">
+      <div>
+        <h1>EOS Mesh/Microgrid</h1>
+        <div class="muted">Betreiberansicht für Cluster-Summen, Knoten, Local First / Grid Last und Snapshot-Export. Keine Einstellungen, keine Hardwaresteuerung.</div>
+      </div>
+      <span id="meshStatus" class="pill">lade…</span>
+    </header>
+    <section class="grid">
+      <div class="card"><small>Cluster</small><b id="clusterName">--</b></div>
+      <div class="card"><small>Modus</small><b id="clusterMode">--</b></div>
+      <div class="card"><small>Knoten</small><b id="nodeCount">--</b></div>
+      <div class="card"><small>Grid-Limit</small><b id="gridLimit">--</b></div>
+      <div class="card"><small>Erzeugung</small><b id="generationW">--</b></div>
+      <div class="card"><small>Last</small><b id="loadW">--</b></div>
+      <div class="card"><small>Überschuss</small><b id="surplusW">--</b></div>
+      <div class="card"><small>Restbedarf</small><b id="demandW">--</b></div>
+      <div class="card"><small>Netzbezug</small><b id="gridImportW">--</b></div>
+      <div class="card"><small>Einspeisung</small><b id="gridExportW">--</b></div>
+      <div class="card"><small>Lokales Potenzial</small><b id="localUseW">--</b></div>
+      <div class="card"><small>Netzlimit</small><b id="gridUsage">--</b></div>
+    </section>
+    <nav class="actions">
+      <a href="/api/mesh/microgrid" target="_blank" rel="noopener noreferrer">JSON Snapshot</a>
+      <a href="/api/mesh/microgrid.csv">CSV Snapshot</a>
+      <button id="refreshMesh" type="button">Aktualisieren</button>
+    </nav>
+    <section class="card" style="margin-bottom:14px"><small>Local First / Grid Last Diagnose</small><div id="meshDiagnosis" class="muted">--</div></section>
+    <section class="card" style="margin-bottom:14px"><small>Warnungen / fehlende Zuordnungen</small><div id="meshWarnings" class="muted">--</div></section>
+    <section class="table-wrap"><table><thead><tr><th>Knoten</th><th>Typ</th><th>Rolle</th><th>Status</th><th>Priorität</th><th>Leistung</th><th>Erzeugung</th><th>Last</th><th>Überschuss</th><th>Bedarf</th><th>SoC</th><th>Intent</th></tr></thead><tbody id="meshRows"><tr><td colspan="12" class="muted">lade…</td></tr></tbody></table></section>
+  </main>
+  <script src="/static/mesh-microgrid.js" defer></script>
+</body>
+</html>

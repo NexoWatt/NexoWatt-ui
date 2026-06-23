@@ -2270,8 +2270,20 @@ function collectAiAdvisorConfigFromUI(base) {
       if (app.id === 'meshMicrogrid') {
         const row = document.createElement('div');
         row.className = 'nw-config-card__row';
-        row.textContent = 'EOS: Das Mesh/Microgrid-Modul ist eine eigene App. Es baut in 0.8.32 nur das Knoten-/Cluster-Datenmodell auf und schaltet keine Hardware.';
+        row.textContent = 'EOS: Das Mesh/Microgrid-Modul ist eine eigene App. Es baut ein Knoten-/Cluster-Datenmodell auf und schaltet in dieser Stufe keine Hardware.';
         body.appendChild(row);
+
+        const linkRow = document.createElement('div');
+        linkRow.className = 'nw-config-card__row';
+        const link = document.createElement('a');
+        link.href = '/mesh/microgrid';
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = 'Betreiberansicht / Snapshot-Export öffnen';
+        // Nur Verweis: Die Betreiberansicht liest denselben meshMicrogrid-Statebaum
+        // wie JSON-/CSV-API. Es entsteht keine zweite Clusterlogik und keine Steuerung.
+        linkRow.appendChild(link);
+        body.appendChild(linkRow);
       }
       if (app.id === 'energyLedger') {
         const row = document.createElement('div');

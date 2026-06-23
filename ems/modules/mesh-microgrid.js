@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/mesh-microgrid.ts
- * Quell-Hash: sha256:96ddf6eb7a6379e23a18b098186e7fbe64d407ca37a4a055984c4b9b1cf5853e
+ * Quell-Hash: sha256:f9261e3bb2a619af8128791da07a70486ae060298f3fbfa42d678d9550733622
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -193,6 +193,8 @@ class MeshMicrogridModule extends BaseModule {
     await ch('meshMicrogrid.power', 'Mesh/Microgrid Leistung');
     await ch('meshMicrogrid.intent', 'Mesh/Microgrid Energy Intent');
     await ch('meshMicrogrid.diagnostics', 'Mesh/Microgrid Diagnose');
+    await ch('meshMicrogrid.export', 'Mesh/Microgrid Export');
+    await ch('meshMicrogrid.operator', 'Mesh/Microgrid Betreiberansicht');
 
     await mk('meshMicrogrid.enabled', 'Mesh/Microgrid App aktiv', 'boolean', 'indicator', '', false);
     await mk('meshMicrogrid.version', 'Mesh/Microgrid Schema', 'string', 'text', '', MODULE_VERSION);
@@ -229,6 +231,16 @@ class MeshMicrogridModule extends BaseModule {
     await mk('meshMicrogrid.diagnostics.warning', 'Mesh/Microgrid Warnung', 'string', 'text', '', '');
     await mk('meshMicrogrid.diagnostics.missingMappingsJson', 'Fehlende Knoten-Mappings JSON', 'string', 'json', '', '[]');
     await mk('meshMicrogrid.diagnostics.readOnly', 'Read-only Modul', 'boolean', 'indicator', '', true);
+
+    // 0.8.35 Betreiberansicht/Export: Diese States sind bewusst nur Links und
+    // Snapshots auf dieselbe Modulwahrheit. Es wird keine zweite Mesh-Logik,
+    // kein zweiter Cluster-Rechner und keine Steuerung aufgebaut.
+    await mk('meshMicrogrid.export.schema', 'Mesh/Microgrid Export-Schema', 'string', 'text', '', 'nexowatt.mesh-microgrid-export.v1');
+    await mk('meshMicrogrid.export.ready', 'Mesh/Microgrid Export bereit', 'boolean', 'indicator', '', false);
+    await mk('meshMicrogrid.export.jsonUrl', 'Mesh/Microgrid JSON Export URL', 'string', 'text', '', '/api/mesh/microgrid');
+    await mk('meshMicrogrid.export.csvUrl', 'Mesh/Microgrid CSV Export URL', 'string', 'text', '', '/api/mesh/microgrid.csv');
+    await mk('meshMicrogrid.export.snapshotJson', 'Mesh/Microgrid Snapshot JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.operator.viewUrl', 'Mesh/Microgrid Betreiberansicht URL', 'string', 'text', '', '/mesh/microgrid');
   }
 
   _getNumber(key, fallback = null) {
@@ -359,7 +371,9 @@ class MeshMicrogridModule extends BaseModule {
       localUsePotentialW: round(localUsePotentialW, 0),
       gridLimitW,
       gridLimitUsagePercent: gridUsagePercent,
-      note: '0.8.32 Datenmodell: keine automatische Steuerung, nur transparente Vorbereitung.',
+      localFirstDiagnosis: surplusW > 0 ? 'Lokaler Überschuss vorhanden; spätere Strategie kann lokale Senken priorisieren.' : 'Kein lokaler Überschuss vorhanden.',
+      gridLastDiagnosis: demandW > 0 ? 'Restbedarf vorhanden; spätere Strategie kann Netzbezug nach lokalen Quellen nachrangig behandeln.' : 'Kein Restbedarf vorhanden.',
+      note: '0.8.35 Betreiberansicht: keine automatische Steuerung, nur transparente Vorbereitung.',
     };
 
     const decision = {
@@ -477,6 +491,8 @@ class MeshMicrogridModule extends BaseModule {
       totals: snap.totals,
       readOnly: true,
       separateEosApp: true,
+      operatorViewUrl: '/mesh/microgrid',
+      exportUrls: { json: '/api/mesh/microgrid', csv: '/api/mesh/microgrid.csv' },
     };
 
     await set('meshMicrogrid.nodesJson', nodesJson);
@@ -488,6 +504,28 @@ class MeshMicrogridModule extends BaseModule {
     await set('meshMicrogrid.diagnostics.warning', snap.warning || '');
     await set('meshMicrogrid.diagnostics.missingMappingsJson', JSON.stringify(snap.missing || []));
     await set('meshMicrogrid.diagnostics.readOnly', true);
+
+    // Betreiber-/Export-Snapshot für UI und APIs. Dieser Snapshot ist exakt aus
+    // den gerade veröffentlichten Knoten-/Clusterwerten abgeleitet und dient nur
+    // als bequeme Ansicht. Keine weitere Berechnungsschicht zählt Werte erneut.
+    const exportSnapshot = {
+      schema: 'nexowatt.mesh-microgrid-export.v1',
+      ts: now,
+      cluster: { id: snap.clusterId, name: snap.clusterName, mode: snap.mode, gridLimitW: snap.gridLimitW },
+      totals: snap.totals || {},
+      nodes: snap.snapshots || [],
+      intents: (snap.snapshots || []).map(n => n.intent),
+      clusterIntent: snap.clusterIntent || {},
+      decision: snap.decision || {},
+      missingMappings: snap.missing || [],
+      readOnly: true,
+    };
+    await set('meshMicrogrid.export.schema', 'nexowatt.mesh-microgrid-export.v1');
+    await set('meshMicrogrid.export.ready', !!snap.enabled);
+    await set('meshMicrogrid.export.jsonUrl', '/api/mesh/microgrid');
+    await set('meshMicrogrid.export.csvUrl', '/api/mesh/microgrid.csv');
+    await set('meshMicrogrid.export.snapshotJson', JSON.stringify(exportSnapshot));
+    await set('meshMicrogrid.operator.viewUrl', '/mesh/microgrid');
     this._lastPublishTs = now;
   }
 }

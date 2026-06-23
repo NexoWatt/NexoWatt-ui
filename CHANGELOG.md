@@ -1,3 +1,10 @@
+## 0.8.35
+
+- EOS Mesh/Microgrid: Betreiberansicht `/mesh/microgrid` ergänzt.
+- Neue JSON-/CSV-Snapshot-APIs für Cluster, Knoten, Energy-Intents und Local-First/Grid-Last-Diagnose.
+- App-Center verweist aus der Mesh/Microgrid-App auf die Betreiberansicht; die Logik bleibt read-only und schaltet keine Hardware.
+- Service-Worker Cache auf `nexowatt-cache-v335` erhöht.
+
 ## 0.8.34
 
 - App-Center: Button „Zurück zum Installer“ korrigiert. Der Link springt jetzt auf den ioBroker-/EOS-Admin-Tab `#tab-nexowatt-ui-0` mit Admin-Port statt auf `tab.html` am Adapter-Webserver.

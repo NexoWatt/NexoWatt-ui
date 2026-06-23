@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.34",
+    "version": "0.8.35",
     "news": {
+      "0.8.35": {
+        "de": "Version 0.8.35: Ergänzt eine EOS Mesh/Microgrid Betreiberansicht mit Cluster-Summen, Knotenliste, Local-First/Grid-Last-Diagnose sowie JSON-/CSV-Snapshotexport. Keine Hardwaresteuerung, weiterhin read-only.",
+        "en": "Version 0.8.35: Adds an EOS Mesh/Microgrid operator view with cluster totals, node list, Local-First/Grid-Last diagnostics and JSON/CSV snapshot export. No hardware control, still read-only."
+      },
       "0.8.34": {
         "de": "Version 0.8.34: Korrigiert den Zurück-zum-Installer-Button im App-Center. Der Rücksprung führt jetzt auf den ioBroker-/EOS-Admin-Tab #tab-nexowatt-ui-0 statt auf /tab.html am Adapter-Port.",
         "en": "Version 0.8.34: Fixes the App Center back-to-installer button. It now returns to the ioBroker/EOS admin tab #tab-nexowatt-ui-0 instead of /tab.html on the adapter port."
@@ -26,10 +30,6 @@
       "0.8.29": {
         "de": "Version 0.8.29: Export Guard Diagnose erweitert. Aktuelle Einspeisung vs. erlaubtes Limit, Abregelungsleistung, fehlende WR-Write-Datenpunkte und negative-Preis-Strategie werden sichtbar. Energie-Wertkonto bereitet abgeregelte kWh und nicht genutzten PV-Wert vor.",
         "en": "Version 0.8.29: Extends Export Guard diagnostics. Current export versus allowed limit, curtailment power, missing inverter write datapoints and negative-price strategy are visible. Energy Wallet prepares curtailed kWh and unused PV value."
-      },
-      "0.8.28": {
-        "de": "Version 0.8.28: Export Guard erweitert die bisherige 0-Einspeisung um Installateurfreigabe und frei einstellbare maximale Einspeiseleistung für DE/NL. Die bestehende Grid-Constraints-Logik wird wiederverwendet, damit keine zweite Regelstrecke entsteht.",
-        "en": "Version 0.8.28: Export Guard extends the existing zero-export logic with installer approval and configurable maximum feed-in power for DE/NL. The existing grid-constraints control path is reused to avoid duplicate control logic."
       }
     },
     "title": "NexoWatt UI",
