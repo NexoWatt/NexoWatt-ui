@@ -35,21 +35,38 @@ import {
 const TARGETS = {
   appcenter: {
     title: 'EMS App-Center',
-    path: '/ems-apps.html?nwAdmin=1',
+    path: '/ems-apps.html',
+    needsAdminBackQuery: true,
   },
   simulation: {
     title: 'Simulation',
-    path: '/simulation.html?nwAdmin=1',
+    path: '/simulation.html',
+    needsAdminBackQuery: true,
   },
   'smarthome-config': {
     title: 'SmartHome Config',
-    path: '/smarthome-config.html?nwAdmin=1',
+    path: '/smarthome-config.html',
+    needsAdminBackQuery: true,
   },
   'smarthome-vis': {
     title: 'SmartHome VIS',
     path: '/smarthome.html',
+    needsAdminBackQuery: false,
   },
 };
+
+/**
+ * Code-Teil: appendAdminBackQuery
+ * Zweck: Externe Runtime-Seiten bekommen den Admin-Port und die Adapterinstanz,
+ * damit ihr „Zurück zum Installer“-Button nicht auf dem Runtime-Port nach
+ * `tab.html` sucht, sondern sicher zu `/#tab-nexowatt-ui-<instanz>` springt.
+ */
+function appendAdminBackQuery(path, instance) {
+  if (!path || !path.includes('.html')) return path;
+  const sep = path.includes('?') ? '&' : '?';
+  const adminPort = window.location.port || '8081';
+  return `${path}${sep}nwAdmin=1&instance=${encodeURIComponent(String(instance))}&adminPort=${encodeURIComponent(adminPort)}`;
+}
 
 export default function RedirectPage({ targetKey }) {
   const target = TARGETS[targetKey];
@@ -68,7 +85,7 @@ export default function RedirectPage({ targetKey }) {
 
       setPort(resolvedPort);
       const baseUrl = buildRuntimeBaseUrl(resolvedPort);
-      const url = `${baseUrl}${target.path}`;
+      const url = `${baseUrl}${target.needsAdminBackQuery ? appendAdminBackQuery(target.path, instance) : target.path}`;
       setStatus('Öffne Seite…');
       setTimeout(() => openExternal(url), 50);
     })();
@@ -77,7 +94,7 @@ export default function RedirectPage({ targetKey }) {
       active = false;
     };
   }, [instance, target.path]);
-  const targetUrl = useMemo(() => `${buildRuntimeBaseUrl(port)}${target.path}`, [port, target.path]);
+  const targetUrl = useMemo(() => `${buildRuntimeBaseUrl(port)}${target.needsAdminBackQuery ? appendAdminBackQuery(target.path, instance) : target.path}`, [port, target.path, target.needsAdminBackQuery, instance]);
 
   return (
     <PageShell title={target.title} subtitle="Weiterleitung wird vorbereitet…">

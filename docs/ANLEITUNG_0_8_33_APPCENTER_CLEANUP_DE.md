@@ -2,76 +2,61 @@
 
 ## Ziel
 
-Diese Version räumt den Installerbereich auf, damit neue EOS-Module nicht alle im Reiter **Apps** landen.
+Diese Version räumt den Installer-/App-Center-Bereich auf. Das App-Center folgt ab jetzt einer festen Sortierregel:
 
-## Neue App-Center-Regel
-
-- **Apps**: nur echte Funktionsmodule.
-- **Zuordnung**: Länder-/Marktprofil, technische Datenpunkt-Zuordnungen und NL P1/DSMR.
-- **Ladepunkte**: Ladepunkt-, Stationsgruppen- und DC-Stationsdisplay-Konfiguration.
-- **Status**: Laufzeitdiagnosen und Prüfungen.
+```text
+Apps        = echte Funktionsmodule aktivieren/deaktivieren
+Zuordnung   = Datenpunkte, Länderprofil, Markt-/P1-/DSMR-Mapping
+Ladepunkte  = Ladepunkt-, Stations- und Displayseiten-Konfiguration
+Status      = Runtime-/Diagnoseinformationen
+Eigene Tabs = große Spezialmodule, wenn sie sonst zu unübersichtlich würden
+```
 
 ## Geändert
 
-### System & Marktprofil
+### Reiter „Apps“
 
-Das System-/Marktprofil befindet sich jetzt unter:
+Der Apps-Reiter zeigt nur noch Funktionsmodule und deren Installiert/Aktiv-Schalter. Reine Mapping-/Stationskarten wurden entfernt.
 
-```text
-EMS Apps & Konfiguration → Zuordnung
-```
+### Reiter „Zuordnung“
 
-Dort wird weiter das Länderprofil **DE/NL** eingestellt. Die UI-Sprache wird weiterhin aus der ioBroker-Systemsprache übernommen.
+Folgende Karten liegen jetzt im Reiter Zuordnung:
 
-### NL P1/DSMR & Teruglevering
+- System & Marktprofil
+- Länderprofil DE/NL
+- ioBroker-Systemsprache
+- NL P1/DSMR & Teruglevering
 
-Die P1/DSMR-Zuordnung befindet sich jetzt ebenfalls unter:
+### Reiter „Ladepunkte“
 
-```text
-EMS Apps & Konfiguration → Zuordnung
-```
+Die Konfiguration der DC-Stationsseiten liegt jetzt bei den Ladepunkten:
 
-Dort werden Importleistung, Exportleistung, Energiezähler und Rücklieferwerte gemappt.
-
-### DC Station Display / Stationsseiten
-
-Die Konfiguration der Stationsseiten befindet sich jetzt unter:
-
-```text
-EMS Apps & Konfiguration → Ladepunkte
-```
-
-Dort werden Display-Stationen angelegt, Token erzeugt und LPs/Connectoren zugeordnet.
+- EOS DC Station Display
+- Stationen anlegen
+- Display-Token
+- Display-URL
+- LP-/Connector-Zuordnung
+- Steuerbrücke / Command-State
 
 ### Zurück zum Installer
 
-Oben im App-Center gibt es jetzt den Button:
+Oben im App-Center gibt es jetzt einen Button:
 
 ```text
-Zurück zum Installer
+← Zurück zum Installer
 ```
 
-Er führt zurück zur zentralen Installer-Startseite.
+Dieser führt zurück zur zentralen Installer-Startseite.
 
 ### Speicherfarm
 
-Die Speicherfarm nutzt jetzt eine übersichtlichere Master-Detail-Bedienung:
+Die Speicherfarm-Konfiguration wurde auf Master-Detail umgestellt:
 
-```text
-links: Speicherliste
-rechts: Detailformular des ausgewählten Speichers
-```
+- links: kompakte Speicherliste
+- rechts: Detailformular des ausgewählten Speichers
 
-Dadurch muss der Installateur bei mehreren Speichern nicht mehr durch alle Speicherformulare nach unten scrollen.
+Damit muss bei mehreren Speichern nicht mehr durch alle Speicher-Formulare untereinander gescrollt werden.
 
-## Test
+## Wichtig für zukünftige Erweiterungen
 
-Nach dem Update prüfen:
-
-1. App-Center öffnen.
-2. Reiter **Apps**: keine Länder-/P1-/Display-Konfigurationskarten mehr sichtbar.
-3. Reiter **Zuordnung**: System & Marktprofil sowie NL P1/DSMR sichtbar.
-4. Reiter **Ladepunkte**: DC Station Display sichtbar.
-5. Reiter **Speicherfarm**: Speicherliste links, Detail rechts.
-6. Button **Zurück zum Installer** oben testen.
-
+Neue Funktionen sollen dieses Schema einhalten. Technische Zuordnungen dürfen nicht wieder in den Apps-Reiter geschoben werden.

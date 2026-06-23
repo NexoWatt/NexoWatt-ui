@@ -59,6 +59,17 @@ export default function InstallerPage() {
     };
   }, [instance]);
   const baseUrl = useMemo(() => buildRuntimeBaseUrl(port), [port]);
+  /**
+   * Code-Teil: adminBackQuery
+   * Zweck: Übergibt dem extern geöffneten App-Center den echten Admin-Port und die
+   * Adapterinstanz. Das App-Center läuft auf dem Runtime-Port, der Rückweg zum
+   * Installer muss aber zum ioBroker-/EOS-Admin-Hash `/#tab-nexowatt-ui-<instanz>`
+   * führen. Ohne diese Information fällt das App-Center auf Port 8081 zurück.
+   */
+  const adminBackQuery = useMemo(() => {
+    const adminPort = window.location.port || '8081';
+    return `nwAdmin=1&instance=${encodeURIComponent(String(instance))}&adminPort=${encodeURIComponent(adminPort)}`;
+  }, [instance]);
 
   const actions = [
     {
@@ -68,11 +79,11 @@ export default function InstallerPage() {
     },
     {
       label: 'EMS Apps öffnen',
-      onClick: () => openExternal(`${baseUrl}/ems-apps.html?nwAdmin=1`),
+      onClick: () => openExternal(`${baseUrl}/ems-apps.html?${adminBackQuery}`),
     },
     {
       label: 'Simulation',
-      onClick: () => openExternal(`${baseUrl}/simulation.html?nwAdmin=1`),
+      onClick: () => openExternal(`${baseUrl}/simulation.html?${adminBackQuery}`),
     },
     {
       label: 'Lizenz',
@@ -84,7 +95,7 @@ export default function InstallerPage() {
     },
     {
       label: 'SmartHome Config',
-      onClick: () => openExternal(`${baseUrl}/smarthome-config.html?nwAdmin=1`),
+      onClick: () => openExternal(`${baseUrl}/smarthome-config.html?${adminBackQuery}`),
     },
   ];
 

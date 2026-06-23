@@ -2,19 +2,19 @@
 
 ## 0.8.34 – Mesh/Microgrid Betreiberansicht
 
-- Betreiberansicht für Cluster-Summen.
-- Knotenliste mit Status, Überschuss, Bedarf und Priorität.
-- Local-First-/Grid-Last-Diagnose.
-- JSON-/CSV-Snapshot der Meshdaten.
+- Betreiberansicht für Cluster-Summen
+- Knotenliste mit Status, Überschuss, Bedarf und Priorität
+- Local-First-/Grid-Last-Diagnose
+- CSV/JSON-Export der Mesh-Snapshotdaten
 
-## 0.8.35 – Nachbarschafts-/Community-Ledger Basis
+## 0.8.35 – Microgrid Local-First Preview
 
-- Lokale kWh-Zuordnung pro Knoten.
-- Community-/Nachbar-Zuordnung als Betreiberbasis.
-- Keine eichrechtsverbindliche Abrechnung.
+- Prioritätsmodell je Knoten
+- lokale Überschuss-/Bedarfsempfehlung
+- Export-Guard/Netzlimit-Verknüpfung als read-only Diagnose
 
-## 0.8.36 – Energy-Hub / NL-Erweiterung
+## 0.8.36 – Nachbarschafts-/Community-Ledger Grundlage
 
-- Energy-Hub-Modus für NL/Gewerbeparks vorbereiten.
-- gemeinsames Netz-/Export-/Importlimit im Cluster.
-- Reporting für Betreiber und Netzengpassmodus.
+- Ledger-Zuordnung auf Nutzergruppen vorbereiten
+- interne Wertverteilung je Knoten
+- keine eichrechtsverbindliche Abrechnung, nur Betreiber-/Optimierungsbasis

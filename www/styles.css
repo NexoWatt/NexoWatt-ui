@@ -11609,83 +11609,70 @@ input.nw-config-checkbox,
 }
 @media (max-width:720px){ .nw-energy-wallet-periods{ grid-template-columns:1fr; } }
 
-
-/* 0.8.33 App-Center-Struktur-Cleanup
-   Regel: Apps = Funktionsmodule, Zuordnung = Markt/Mappings, Ladepunkte = Stationsseiten.
-   Die Speicherfarm nutzt eine Master-Detail-Ansicht, damit mehrere Speicher nicht
-   schmal rechts untereinander laufen und Installateure weniger scrollen müssen. */
-body.nw-page-ems-apps #storageFarmStorages {
+/* 0.8.33 App-Center Cleanup: Speicherfarm Master-Detail-Layout.
+   Zweck: Bei mehreren Speichern wird links nur die kompakte Speicherliste und rechts
+   das Formular des ausgewählten Speichers angezeigt. Dadurch bleibt das Installer-UI
+   wartbar und vermeidet endloses Scrollen durch alle Speicher-Detailfelder. */
+.nw-storagefarm-master-detail {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
   gap: 14px;
   align-items: start;
 }
-body.nw-page-ems-apps #storageFarmStorages > .nw-storagefarm-storage-card {
-  margin-bottom: 0 !important;
-  align-items: start;
+.nw-storagefarm-storage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: sticky;
+  top: 8px;
 }
-body.nw-page-ems-apps #storageFarmStorages > .nw-storagefarm-storage-card .nw-config-item__right {
-  justify-content: stretch;
+.nw-storagefarm-storage-pill {
   width: 100%;
+  text-align: left;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.55);
+  color: #e5e7eb;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
 }
-body.nw-page-ems-apps #storageFarmStorages > .nw-storagefarm-storage-card .nw-flow-ctrl-grid {
-  width: 100%;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+.nw-storagefarm-storage-pill:hover,
+.nw-storagefarm-storage-pill.active {
+  border-color: rgba(34, 197, 94, 0.75);
+  background: rgba(6, 78, 59, 0.35);
 }
-body.nw-page-ems-apps .nw-storagefarm-config-grid {
-  grid-template-columns: minmax(0, 1fr) !important;
+.nw-storagefarm-storage-pill__name,
+.nw-storagefarm-storage-pill__meta {
+  display: block;
 }
-body.nw-page-ems-apps .nw-storagefarm-master-detail-card,
-body.nw-page-ems-apps #storageFarmGroupsCard {
-  grid-column: 1 / -1;
+.nw-storagefarm-storage-pill__name {
+  font-weight: 800;
+  margin-bottom: 3px;
 }
-@media (max-width: 900px) {
-  body.nw-page-ems-apps #storageFarmStorages {
+.nw-storagefarm-storage-pill__meta {
+  font-size: .78rem;
+  opacity: .78;
+  line-height: 1.3;
+}
+.nw-storagefarm-storage-detail {
+  min-width: 0;
+}
+.nw-storagefarm-detail-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  background: rgba(2, 6, 23, 0.35);
+}
+@media (max-width: 980px) {
+  .nw-storagefarm-master-detail {
     grid-template-columns: 1fr;
   }
-  body.nw-page-ems-apps #storageFarmStorages > .nw-storagefarm-storage-card {
-    grid-template-columns: 1fr;
-  }
-}
-
-
-/* 0.8.33 Speicherfarm Master-Detail
-   Links bleibt eine kompakte Speicherliste, rechts wird nur der aktive Speicher bearbeitet.
-   Dadurch bleibt die App-Center-Konfiguration auch bei vielen Speichern übersichtlich. */
-body.nw-page-ems-apps .nw-storagefarm-master-detail{
-  display:grid;
-  grid-template-columns:minmax(220px,310px) minmax(0,1fr);
-  gap:14px;
-  align-items:start;
-}
-body.nw-page-ems-apps .nw-storagefarm-list-card{
-  position:sticky;
-  top:12px;
-}
-body.nw-page-ems-apps .nw-storagefarm-list-btn{
-  min-height:58px;
-  white-space:normal;
-  line-height:1.25;
-  border-color:rgba(148,163,184,.24);
-}
-body.nw-page-ems-apps .nw-storagefarm-list-btn--active{
-  border-color:rgba(0,200,83,.75) !important;
-  box-shadow:0 0 0 1px rgba(0,200,83,.25),0 0 18px rgba(0,200,83,.14);
-  background:rgba(0,200,83,.12) !important;
-}
-body.nw-page-ems-apps .nw-storagefarm-detail-card{
-  display:block;
-  padding:14px;
-}
-body.nw-page-ems-apps .nw-storagefarm-detail-card .nw-config-item__right{
-  width:100%;
-  margin-top:12px;
-}
-@media (max-width: 980px){
-  body.nw-page-ems-apps .nw-storagefarm-master-detail{
-    grid-template-columns:1fr;
-  }
-  body.nw-page-ems-apps .nw-storagefarm-list-card{
-    position:static;
+  .nw-storagefarm-storage-list {
+    position: static;
   }
 }

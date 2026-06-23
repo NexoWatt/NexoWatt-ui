@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/feature-flags.ts
- * Quell-Hash: sha256:228d3c6b10652201a4f827de5ab7f9e59e14d040585bf74046c8bb818bb35dbe
+ * Quell-Hash: sha256:a4c08822ff03715f1f1ac1a362e1868bb230633db1ce99494b83b7b677a11e51
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -60,9 +60,9 @@ const APP_FEATURE_MAP = Object.freeze({
   energyWallet: 'energyWallet',
   energyLedger: 'energyLedger',
   chargeKiosk: 'chargeKiosk',
-  meshMicrogrid: 'meshMicrogrid',
   mesh: 'mesh',
   microgrid: 'microgrid',
+  meshMicrogrid: 'meshMicrogrid',
   nlP1: 'nlP1',
   nlSaldering: 'nlSaldering',
   nlEnergyHub: 'nlEnergyHub',
@@ -111,11 +111,11 @@ const EOS_ONLY_FEATURES = new Set([
   'energyLedger',
   'billingExport',
   'chargeKiosk',
-  'meshMicrogrid',
   'solarChargeMode',
   'solarChargeBilling',
   'mesh',
   'microgrid',
+  'meshMicrogrid',
   'neighborSharing',
   'multiSiteWallet',
   'nlSaldering',

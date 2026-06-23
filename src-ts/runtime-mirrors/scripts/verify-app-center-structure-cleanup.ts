@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 7c7b621b5609ce525c7ade3136b7bb4b87b3eee4563f74c2a9098b7cc0688f1c
+ * Original-Hash: d9935a17088f37d31c75f573d95a652e35d489348199fc82054e285477ec0b9f
  */
 
 /**
@@ -30,11 +30,25 @@
  */
 
 'use strict';
+
+/**
+ * Datei: scripts/verify-app-center-structure-cleanup.js
+ * Zweck: Regressionstest für das App-Center-Schema ab 0.8.33.
+ * Hintergrund: Der Apps-Reiter darf nur Funktionsmodule anzeigen. Reine Zuordnung
+ * wie Marktprofil/NL-P1 gehört in den Reiter Zuordnung; DC-Stationsseiten gehören
+ * in den Reiter Ladepunkte. Dieser Test verhindert, dass spätere Features wieder
+ * ungeordnet vorne unter „Apps“ abgelegt werden.
+ */
 const fs = require('fs');
 const path = require('path');
-const root = path.join(__dirname, '..');
+
+const root = path.resolve(__dirname, '..');
+const html = fs.readFileSync(path.join(root, 'www', 'ems-apps.html'), 'utf8');
+const js = fs.readFileSync(path.join(root, 'www', 'ems-apps.js'), 'utf8');
+const ts = fs.readFileSync(path.join(root, 'src-ts', 'runtime-executables', 'www', 'ems-apps.ts'), 'utf8');
+
 /**
- * Code-Teil: read
+ * Code-Teil: fail
  *
  * Zweck:
  * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
@@ -44,9 +58,12 @@ const root = path.join(__dirname, '..');
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function read(rel) { return fs.readFileSync(path.join(root, rel), 'utf8'); }
+function fail(message) {
+  console.error(`[app-center-structure] ERROR: ${message}`);
+  process.exit(1);
+}
 /**
- * Code-Teil: assert
+ * Code-Teil: mustContain
  *
  * Zweck:
  * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
@@ -56,20 +73,53 @@ function read(rel) { return fs.readFileSync(path.join(root, rel), 'utf8'); }
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function assert(cond, msg) { if (!cond) { console.error('[app-center-structure-cleanup] ' + msg); process.exit(1); } }
-const ts = read('src-ts/runtime-executables/www/ems-apps.ts');
-const html = read('www/ems-apps.html');
-assert(html.includes('id="nw-emsapps-back-installer"'), 'Zurück-zum-Installer-Button fehlt im App-Center-Header.');
-assert(html.includes('id="systemProfileCardMount"'), 'System-/Marktprofil-Mount im Reiter Zuordnung fehlt.');
-assert(html.includes('id="nlP1CardMount"'), 'NL-P1/DSMR-Mount im Reiter Zuordnung fehlt.');
-assert(html.includes('id="chargeKioskCardMount"') || html.includes('id="chargeKioskEvcsSlot"'), 'DC-Stationsdisplay-Mount im Reiter Ladepunkte fehlt.');
-assert(ts.includes('App-Center-Schema: Diese Liste enthält nur echte Funktions-Apps'), 'Kommentierte App-Center-Schema-Regel fehlt.');
-assert(ts.includes('buildAppCenterPlacementUI'), 'Zentrale Platzierungsfunktion für Zuordnung/Ladepunkte fehlt.');
-assert(ts.includes("mount(els.systemProfileMount, buildSystemProfileCard())"), 'Systemprofil wird nicht in den Zuordnung-Mount gerendert.');
-assert(ts.includes("mount(els.nlP1Mount, buildNlP1Card())"), 'NL-P1 wird nicht in den Zuordnung-Mount gerendert.');
-assert(ts.includes("mount(els.chargeKioskMount, buildChargeKioskCard())"), 'Charge-Kiosk wird nicht in den Ladepunkte-Mount gerendert.');
-assert(!ts.includes("{ id: 'nlP1', label: 'NL P1/DSMR'"), 'NL P1/DSMR darf nicht mehr als App-Kachel im APP_CATALOG stehen.');
-assert(!ts.includes("{ id: 'chargeKiosk', label: 'DC Station Display'"), 'DC Station Display darf nicht mehr als App-Kachel im APP_CATALOG stehen.');
-assert(ts.includes('nw-storagefarm-master-detail'), 'Speicherfarm-Master-Detail-Layout fehlt.');
-assert(ts.includes('Speicherliste'), 'Speicherfarm-Speicherliste fehlt.');
-console.log('[app-center-structure-cleanup] OK');
+function mustContain(text, needle, label) {
+  if (!text.includes(needle)) fail(`${label} fehlt: ${needle}`);
+}
+/**
+ * Code-Teil: mustNotContain
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function mustNotContain(text, needle, label) {
+  if (text.includes(needle)) fail(`${label} darf nicht enthalten: ${needle}`);
+}
+
+mustContain(html, 'id="systemProfileMappingSlot"', 'Zuordnung-Slot Marktprofil');
+mustContain(html, 'id="nlP1MappingSlot"', 'Zuordnung-Slot NL P1/DSMR');
+mustContain(html, 'id="chargeKioskEvcsSlot"', 'Ladepunkte-Slot DC Station Display');
+mustContain(html, 'id="nw-emsapps-back-installer"', 'Zurück-zum-Installer-Button');
+
+// 0.8.34: Der Zurück-Button muss auf den Admin-Tab zeigen, nicht auf tab.html
+// des Adapter-Webservers. Der Test schützt vor dem konkreten Fehlerbild
+// „Die Datei /tab.html konnte nicht abgerufen werden“.
+mustContain(html, 'href="/#tab-nexowatt-ui-0"', 'Zurück-Link Admin-Hash-Fallback');
+mustContain(ts, 'tab-nexowatt-ui-', 'Zurück-Button Admin-Hash im TS');
+mustContain(ts, 'detectAdminOrigin', 'Zurück-Button Admin-Origin-Erkennung');
+mustNotContain(ts, "return 'tab.html'", 'alter relativer tab.html-Fallback');
+mustNotContain(js, "return 'tab.html'", 'alter relativer tab.html-Fallback Runtime');
+mustContain(html, 'href="/#tab-nexowatt-ui-0"', 'statischer Fallback für Admin-Tab-Rücksprung');
+mustContain(ts, 'function getInstallerAdminUrl()', 'TS Admin-Rücksprung-URL-Resolver');
+mustContain(ts, '#tab-nexowatt-ui-0', 'TS Admin-Tab-Ziel');
+mustContain(ts, 'adminPort', 'TS Admin-Port-Fallback');
+mustContain(js, 'function getInstallerAdminUrl()', 'Runtime Admin-Rücksprung-URL-Resolver');
+mustContain(js, '#tab-nexowatt-ui-0', 'Runtime Admin-Tab-Ziel');
+
+mustContain(ts, 'function buildAppCenterStructurePanels()', 'TS-Struktur-Renderer');
+mustContain(js, 'function buildAppCenterStructurePanels()', 'Runtime-Struktur-Renderer');
+
+mustNotContain(ts, "{ id: 'nlP1'", 'APP_CATALOG');
+mustNotContain(ts, "{ id: 'chargeKiosk'", 'APP_CATALOG');
+mustNotContain(js, "{ id: 'nlP1'", 'APP_CATALOG Runtime');
+mustNotContain(js, "{ id: 'chargeKiosk'", 'APP_CATALOG Runtime');
+
+mustContain(ts, 'nw-storagefarm-master-detail', 'Speicherfarm Master-Detail TS');
+mustContain(js, 'nw-storagefarm-master-detail', 'Speicherfarm Master-Detail Runtime');
+
+console.log('[app-center-structure] OK: App-Center-Schema, Admin-Rücksprung und Speicherfarm-Master-Detail sind abgesichert.');

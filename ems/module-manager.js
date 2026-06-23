@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:63048e2dc1b4bdecd969311078af27a44ef0c5aff2cb947c748a09375eb93ca5
+ * Quell-Hash: sha256:d8f46c9f537ed94bf208a7917972478b635c9cf9ad6f2ca83fb98004c2d4f992
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -363,11 +363,9 @@ class ModuleManager {
             ),
         });
 
-
-        // EOS Mesh/Microgrid Datenmodell: eigene App, bewusst getrennt von Ledger,
-        // DC Station Display und Energy Wallet. Diese erste Stufe ist read-only und
-        // erzeugt nur Knoten-/Cluster-/Energy-Intent-Daten als Grundlage für spätere
-        // Nachbarschaftsversorgung, Energy Hub und Microgrid-Steuerung.
+        // EOS Mesh/Microgrid Datenmodell: eigenes Zusatzmodul, bewusst getrennt von
+        // Energy Wallet, Ledger, Export Guard und DC Display. Es veröffentlicht in 0.8.32
+        // nur read-only Knoten-/Cluster-/Intent-Daten und schreibt keine Hardware-Sollwerte.
         this.modules.push({
             key: 'meshMicrogrid',
             instance: new MeshMicrogridModule(this.adapter, this.dp),

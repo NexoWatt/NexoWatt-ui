@@ -1,18 +1,38 @@
+## 0.8.34
+
+- App-Center: Button „Zurück zum Installer“ korrigiert. Der Link springt jetzt auf den ioBroker-/EOS-Admin-Tab `#tab-nexowatt-ui-0` mit Admin-Port statt auf `tab.html` am Adapter-Webserver.
+- Admin-Port-Erkennung ergänzt: `adminPort`, `ioBrokerAdminPort` oder `port` können per URL übergeben werden; Standard bleibt 8081.
+- Referrer vom Adapter-Port wird nicht mehr als Admin-Ziel verwendet, damit kein Rücksprung auf den falschen Port entsteht.
+
+## 0.8.34
+
+- App-Center: Der Button „Zurück zum Installer“ verweist jetzt zuverlässig auf den ioBroker-/EOS-Admin-Tab `#tab-nexowatt-ui-0` auf dem Admin-Port statt auf `/tab.html` am Adapter-Webserver.
+- Regressionstest `test:installer-back-link` ergänzt, damit der falsche `/adapter/nexowatt-ui/tab.html`-/`tab.html`-Rücksprung nicht zurückkommt.
+- Service-Worker Cache auf `nexowatt-cache-v334` erhöht.
+
 ## 0.8.33
 
-- App-Center-Struktur bereinigt: Der Reiter „Apps“ zeigt nur noch echte Funktionsmodule.
-- „System & Marktprofil“ sowie „NL P1/DSMR & Teruglevering“ wurden in den Reiter „Zuordnung“ verschoben.
-- „EOS DC Station Display“ wurde in den Reiter „Ladepunkte“ verschoben, da Stationsseiten Teil der Ladepunkt-/Stationsverwaltung sind.
-- Neuer Button „Zurück zum Installer“ im App-Center-Kopfbereich führt zurück zur zentralen Installer-Startseite.
-- Speicherfarm-Konfiguration auf Master-Detail-Ansicht umgestellt: links Speicherliste, rechts nur der ausgewählte Speicher im Detail.
-- Neues App-Center-Schema dokumentiert: Apps = Funktionsmodule, Zuordnung = Mapping/Marktprofil, Ladepunkte = LP-/Stationsverwaltung, Status = Runtime/Diagnose.
+- App-Center-Struktur bereinigt: Apps zeigt nur noch Funktionsmodule; System-/Marktprofil und NL P1/DSMR liegen im Reiter Zuordnung.
+- EOS DC Station Display / Stationsseiten wurden in den Reiter Ladepunkte verschoben.
+- Button „Zurück zum Installer“ im App-Center-Header ergänzt.
+- Speicherfarm-Konfiguration als Master-Detail-Ansicht umgebaut: links Speicherliste, rechts nur das Detailformular des ausgewählten Speichers.
+- Kommentare zur verbindlichen App-Center-Sortierregel ergänzt.
+
+## 0.8.33
+
+- App-Center-Struktur bereinigt: Der Apps-Reiter zeigt nur noch Funktionsmodule.
+- System & Marktprofil sowie NL P1/DSMR & Teruglevering sind jetzt dem Reiter Zuordnung zugeordnet.
+- EOS DC Station Display / Ladestationsseiten sind jetzt dem Reiter Ladepunkte zugeordnet.
+- Neuer Button „Zurück zum Installer" im App-Center-Kopfbereich.
+- Speicherfarm auf Master-Detail-Ansicht umgestellt: links Speicherliste, rechts nur der ausgewählte Speicher im Detail.
+- Schema dokumentiert: Apps = Funktionsmodule, Zuordnung = Mapping/Marktprofil, Ladepunkte = LP/Stationsseiten, Status = Runtime/Diagnose.
 
 ## 0.8.32
 
-- EOS: Mesh/Microgrid als eigenes, getrenntes App-Modul ergänzt. Die Aktivierung erfolgt nur über EOS-Lizenz und App-Center-Freigabe.
-- Neues read-only Datenmodell `meshMicrogrid.*` für Cluster, Energie-Knoten, Local First/Grid Last, Energy-Intent-Preview und Microgrid-Entscheidungs-Preview.
-- App-Center: separate Karte „EOS Mesh/Microgrid“ mit Cluster-Daten, Netz-/Import-/Exportlimit und manuellen Knoten.
-- Architektur: Modul liest Energy Wallet, Local kWh Ledger, Export Guard und NL P1/DSMR nur als Referenz. Keine doppelte Ledger-Zählung, keine zweite Export-Guard-Regelung, keine Hardwaresteuerung.
+- EOS: Neue separate App „EOS Mesh/Microgrid“ ergänzt.
+- EMS: Read-only Mesh-/Microgrid-Datenmodell mit Knoten, Cluster, Local-First-/Grid-Last-Vorbereitung und Energy-Intent-JSON-States.
+- App-Center: Installer kann Mesh-Knoten, Rollen und Datenpunktquellen anlegen; Home bleibt blockiert.
+- Sicherheit: Keine Hardware-Schreibbefehle, keine doppelte Ledger-/Wallet-/Export-Guard-Logik, keine Hersteller-/OCPP-Bindung.
 
 ## 0.8.30
 
