@@ -1,3 +1,32 @@
+## 0.8.41
+
+- Mesh/Microgrid: Peer-Handshake (`/api/mesh/handshake`, `/api/mesh/status`) für getrenntes Tailscale-Mesh ergänzt.
+- Mesh/Microgrid: Command-Receiver (`POST /api/mesh/command/receive`) mit Tokenprüfung, Clusterprüfung, TTL und Replay-Schutz ergänzt.
+- Mesh/Microgrid: empfangene Remote-Commands werden nur als neutraler JSON-Command-State ausgegeben; keine direkten OCPP-/Modbus-/MQTT-/Hersteller-Hardwarewrites.
+- App-Center: Receiver-Konfiguration im eigenen Reiter Mesh/Microgrid ergänzt; Apps-Reiter bleibt reiner App-Katalog.
+- Betreiberansicht: Receiver-/ACK-/Replay-Diagnose ergänzt.
+
+## 0.8.40
+
+- Mesh/Microgrid: Feldtest-Steuerung ergänzt. Geplante Aktionen können nach Installateurfreigabe als neutrale JSON-Command-Intents in einen konfigurierten Command-State ausgegeben werden.
+- Mesh/Microgrid: Separates Tailscale-Mesh-Profil, lokale Node-ID und Peer-URLs vorbereitet, damit Fernwartung und Energieverbund getrennt bleiben.
+- Sicherheit: keine direkten OCPP-/Modbus-/MQTT-/Hersteller-Hardwarewrites; Umsetzung erfolgt nachgelagert über Bridge/Instanz.
+
+## 0.8.39
+
+- Mesh/Microgrid: CommandGuard-Vorbereitung ergänzt. Geplante Diagnoseaktionen werden jetzt als neutrale, blockierte Command-Intents veröffentlicht.
+- Mesh/Microgrid: Safety-Prüfungen für EOS-Lizenz, Feature-Freigabe, Netzlimit, Knotenprioritäten, Mapping-Vollständigkeit und Read-only-Gate ergänzt.
+- Mesh/Microgrid: API `/api/mesh/microgrid/command-guard` liefert die Guard-Vorschau; POST `/api/mesh/microgrid/command` bleibt absichtlich read-only blockiert.
+- Betreiberansicht: CommandGuard-Status, Safety-Checks und blockierte Command-Intents sichtbar gemacht. Keine Hardwaresteuerung.
+
+## 0.8.38
+
+- App-Center Strukturhärtung: Der Apps-Reiter bleibt strikt ein App-Katalog für Installiert/Aktiv und optionale Navigationsbuttons.
+- Schnell-Inbetriebnahme (Geräte + DPs) aus dem Apps-Reiter in den Reiter Zuordnung verschoben.
+- Optionale Detail-Reiter werden im HTML initial ausgeblendet und erst über den Installiert-Status sichtbar gemacht.
+- Regressionstest erweitert, damit neue Detailkonfigurationen nicht erneut im Apps-Reiter landen.
+- Service-Worker Cache auf `nexowatt-cache-v338` erhöht.
+
 ## 0.8.37
 
 - App-Center: Mesh/Microgrid-Detailkonfiguration aus dem Reiter Apps entfernt. Apps zeigt nur noch Installiert/Aktiv und einen Hinweis.

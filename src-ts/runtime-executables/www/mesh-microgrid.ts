@@ -90,6 +90,57 @@
       : 'Keine Prioritätsreihenfolge vorhanden.');
   }
 
+
+  function renderCommandGuard(payload) {
+    const guard = payload && payload.commandGuard ? payload.commandGuard : {};
+    const commands = Array.isArray(guard.plannedCommands) ? guard.plannedCommands : [];
+    const checks = Array.isArray(guard.safetyChecks) ? guard.safetyChecks : [];
+    setText('meshCommandGuardStatus', `${guard.status || 'blocked'} · Command-Ausgabe: ${guard.commandOutputAllowed ? 'freigegeben' : 'blockiert'} · direkter Hardware-Write: ${guard.hardwareWrite ? 'ja' : 'nein'}`);
+    setText('meshCommandGuardReason', guard.reason || 'CommandGuard wartet auf Feldtest-Freigabe oder Command-State.');
+    setText('meshCommandGuardCounts', `${commands.length} Command-Intent(s), ${guard.blockerCount || 0} Blocker, ${guard.warnCount || 0} Warnung(en)`);
+    const checkBox = $('meshCommandGuardChecks');
+    if (checkBox) {
+      checkBox.innerHTML = checks.length
+        ? checks.map(c => `<div><b>${esc(c.id || '')}</b>: ${esc(c.severity || '')} · ${esc(c.message || '')}</div>`).join('')
+        : '<span class="muted">Keine Safety-Checks vorhanden.</span>';
+    }
+    const rows = $('meshCommandRows');
+    if (rows) {
+      if (!commands.length) rows.innerHTML = '<tr><td colspan="8" class="muted">Keine Command-Intents vorhanden.</td></tr>';
+      else rows.innerHTML = commands.map(cmd => `<tr>` +
+        `<td>${esc(cmd.commandId || '')}</td>` +
+        `<td>${esc(cmd.category || '')}</td>` +
+        `<td>${esc(cmd.nodeName || cmd.nodeId || '')}<br><span class="muted">${esc(cmd.nodeId || '')}</span></td>` +
+        `<td>${esc(cmd.targetNodeName || cmd.targetNodeId || '--')}</td>` +
+        `<td>${fmtW(cmd.plannedPowerW || 0)}</td>` +
+        `<td>${esc(cmd.direction || '')}</td>` +
+        `<td class="${cmd.allowed ? 'severity-info' : 'severity-critical'}">${cmd.allowed ? 'freigegeben' : 'blockiert'}</td>` +
+        `<td>${esc(cmd.reason || '')}</td>` +
+      `</tr>`).join('');
+    }
+  }
+
+  function renderFieldControl(payload) {
+    const fc = payload && payload.fieldControl ? payload.fieldControl : {};
+    const ts = payload && payload.tailscale ? payload.tailscale : {};
+    setText('meshFieldStatus', `${fc.mode || 'diagnostic'} · ${fc.enabled ? 'aktiv' : 'aus'}`);
+    setText('meshFieldDetails', `Freigabe: ${fc.installerApproved ? 'ja' : 'nein'} · Command-State: ${fc.commandStateDp || '--'} · letzter Status: ${fc.lastWriteStatus || 'idle'} · Ausgabe: ${fc.outputCount || 0}`);
+    setText('meshTailscaleStatus', `${ts.enabled ? 'aktiv' : 'aus'} · ${ts.profile || 'mesh-microgrid'}`);
+    const peerInfo = Array.isArray(ts.peers) ? ts.peers.map(p => `${p.id || p.url}: ${p.ok ? 'ok' : 'Fehler'}`).join(' · ') : '';
+    setText('meshTailscaleDetails', `lokale Node: ${ts.localNodeId || '--'} · Peers: ${ts.peerCount || 0} · Remote-Knoten: ${ts.remoteNodeCount || 0} · Poll: ${ts.lastPollStatus || 'idle'}${peerInfo ? ' · ' + peerInfo : ''}`);
+  }
+
+  function renderReceiver(payload) {
+    const r = payload && payload.receiver ? payload.receiver : {};
+    setText('meshReceiverStatus', `${r.enabled ? 'aktiv' : 'aus'} · ${r.status || 'disabled'}`);
+    setText('meshReceiverDetails', `Command-State: ${r.commandStateDp || '--'} · Token: ${r.requireToken ? 'erforderlich' : 'aus'} · TTL: ${r.ttlSec || 120}s · accepted: ${r.acceptedCount || 0} · rejected: ${r.rejectedCount || 0}`);
+    const ack = r.lastAck || {};
+    const ackText = ack && Object.keys(ack).length
+      ? `${ack.status || '--'} · accepted: ${ack.acceptedCount || 0} · rejected: ${ack.rejectedCount || 0} · letzte ID: ${r.lastCommandId || '--'} · Replay blockiert: ${r.replayBlockedCount || 0}`
+      : `Noch kein ACK vorhanden. Replay blockiert: ${r.replayBlockedCount || 0}`;
+    setText('meshReceiverAck', ackText);
+  }
+
   function renderDiagnosis(payload) {
     const clusterIntent = payload && payload.clusterIntent ? payload.clusterIntent : {};
     const decision = payload && payload.decision ? payload.decision : {};
@@ -129,6 +180,9 @@
       setText('gridUsage', fmtPct(totals.gridLimitUsagePercent || 0));
       renderDiagnosis(payload);
       renderPlanning(payload);
+      renderCommandGuard(payload);
+      renderFieldControl(payload);
+      renderReceiver(payload);
       renderNodes(payload.nodes || []);
     } catch (e) {
       setText('meshStatus', 'Fehler');

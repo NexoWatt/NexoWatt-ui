@@ -93,4 +93,63 @@ mustContain(ts, 'separate Mesh/Microgrid-Reiter wird erst sichtbar', 'TS-Komment
 mustNotContain(ts, 'els.appsList.appendChild(buildMeshMicrogridCard());', 'Mesh/Microgrid-Konfiguration im Apps-Reiter');
 mustNotContain(js, 'els.appsList.appendChild(buildMeshMicrogridCard());', 'Mesh/Microgrid-Konfiguration im Apps-Reiter Runtime');
 
+
+// 0.8.38: Apps-Reiter bleibt Katalog. Er darf nur Installiert/Aktiv und
+// Navigationshinweise zu passenden Reitern/Betreiberansichten enthalten, aber
+// keine Detailkonfiguration. Konfigurationsziele sind zentral in TypeScript
+// dokumentiert und die Runtime muss synchron sein.
+mustContain(ts, 'const appConfigTargets = {', 'TS App-Konfigurationsziel-Mapping');
+mustContain(js, 'const appConfigTargets = {', 'Runtime App-Konfigurationsziel-Mapping');
+mustContain(ts, 'function appendAppConfigNavigation(body, app, st)', 'TS App-Katalog-Navigationshelfer');
+mustContain(js, 'function appendAppConfigNavigation(body, app, st)', 'Runtime App-Katalog-Navigationshelfer');
+mustContain(ts, 'data-app-config-nav', 'TS App-Konfigurationsnavigation-Datenattribut');
+mustContain(js, 'data-app-config-nav', 'Runtime App-Konfigurationsnavigation-Datenattribut');
+mustContain(ts, "meshMicrogrid: { tab: 'meshmicrogrid'", 'Mesh/Microgrid Zielreiter statt Detailkarte im Apps-Reiter');
+mustContain(ts, "charging: { tab: 'evcs'", 'Lademanagement Zielreiter Ladepunkte');
+mustContain(ts, "peak: { tab: 'peakconfig'", 'Peak-Shaving Zielreiter');
+mustContain(ts, "storagefarm: { tab: 'storagefarm'", 'Speicherfarm Zielreiter');
+mustContain(ts, "energyLedger: { url: '/ledger/local-kwh'", 'Ledger Betreiberansicht aus App-Katalog');
+mustNotContain(ts, 'id="meshMicrogridEnabled"</span>', 'Apps-Reiter darf keine Mesh-Aktiv-Detailkonfiguration enthalten');
+
+
+// 0.8.38: Der Apps-Reiter ist ein strikter Katalog. Es dürfen dort keine
+// langen App-spezifischen Einstellungs-/Mappingtexte mehr gerendert werden.
+// Fachliche Konfiguration liegt in Reitern oder externen Betreiber-/Nutzerseiten.
+mustContain(ts, 'function appendAppConfigNavigation(body, app, st)', 'TS App-Katalog-Navigation');
+mustContain(js, 'function appendAppConfigNavigation(body, app, st)', 'Runtime App-Katalog-Navigation');
+mustContain(ts, 'data-app-config-target', 'TS Reiter-Sprung aus App-Katalog');
+mustContain(js, 'data-app-config-target', 'Runtime Reiter-Sprung aus App-Katalog');
+mustContain(ts, 'Der Apps-Reiter ist strikt ein Katalog', 'TS Kommentar strikter Apps-Katalog');
+mustNotContain(ts, 'Konfiguration: Reiter „Ladepunkte“. Datenpunkte: pro Ladepunkt.', 'alter Lademanagement-Detailtext im Apps-Reiter');
+mustNotContain(ts, 'Kostenannahmen und An/Aus-Schalter pflegt der Betreiber', 'alter Energie-Wertkonto-Detailtext im Apps-Reiter');
+mustNotContain(ts, 'Cluster und Diagnose.', 'alter Mesh/Microgrid-Detailtext im Apps-Reiter');
+mustNotContain(js, 'Konfiguration: Reiter „Ladepunkte“. Datenpunkte: pro Ladepunkt.', 'alter Lademanagement-Detailtext im Apps-Reiter Runtime');
+mustNotContain(js, 'Kostenannahmen und An/Aus-Schalter pflegt der Betreiber', 'alter Energie-Wertkonto-Detailtext im Apps-Reiter Runtime');
+mustNotContain(js, 'Cluster und Diagnose.', 'alter Mesh/Microgrid-Detailtext im Apps-Reiter Runtime');
+
+// 0.8.38: Der Apps-Reiter ist nur App-Katalog. Schnell-Inbetriebnahme
+// gehört fachlich zu Zuordnung, weil dort Geräte-/Datenpunktmapping vorbereitet wird.
+const appsPanel = html.slice(html.indexOf('id="nw-tabpanel-apps"'), html.indexOf('id="nw-tabpanel-peakconfig"'));
+const mappingPanel = html.slice(html.indexOf('id="nw-tabpanel-mapping"'), html.indexOf('id="nw-tabpanel-storagefarm"'));
+if (!appsPanel.includes('data-appcenter-role="app-catalog"')) fail('Apps-Reiter braucht data-appcenter-role="app-catalog" als Schema-Marker.');
+if (appsPanel.includes('id="nwDevicesQuickSetup"')) fail('Schnell-Inbetriebnahme darf nicht im Apps-Reiter liegen.');
+if (!mappingPanel.includes('id="nwDevicesQuickSetup"')) fail('Schnell-Inbetriebnahme muss im Reiter Zuordnung liegen.');
+if (!appsPanel.includes('Nur App-Katalog')) fail('Apps-Reiter muss den Katalog-Hinweis anzeigen.');
+mustContain(ts, 'App-Center-Struktur ab 0.8.38', 'TS-Kommentar App-Center-Strukturhärtung');
+mustContain(js, 'App-Center-Struktur ab 0.8.38', 'Runtime-Kommentar App-Center-Strukturhärtung');
+mustContain(ts, 'appendAppConfigNavigation', 'TS App-Konfigurationsnavigation');
+mustContain(js, 'appendAppConfigNavigation', 'Runtime App-Konfigurationsnavigation');
+
+
+// 0.8.38 Härtung: Apps-Karten dürfen keine erklärenden Detail-/Konfigurationsblöcke
+// mehr enthalten. Sie zeigen nur noch Katalogstatus und optionalen Navigationssprung.
+mustNotContain(ts, 'Optional quick hints', 'Apps-Reiter darf keine alten Quick-Hints rendern');
+mustNotContain(js, 'Optional quick hints', 'Apps-Reiter Runtime darf keine alten Quick-Hints rendern');
+mustNotContain(ts, 'Kostenannahmen und An/Aus-Schalter pflegt der Betreiber', 'Energy-Wallet-Einstellungen gehören nicht in Apps-Karten');
+mustNotContain(js, 'Kostenannahmen und An/Aus-Schalter pflegt der Betreiber', 'Energy-Wallet-Einstellungen Runtime gehören nicht in Apps-Karten');
+mustContain(ts, 'Fachliche Einstellungen, Mappingfelder', 'TS Kommentar: Apps-Reiter bleibt reiner Katalog');
+mustContain(js, 'Fachliche Einstellungen, Mappingfelder', 'Runtime Kommentar: Apps-Reiter bleibt reiner Katalog');
+mustContain(ts, 'if (body.childElementCount > 0) card.appendChild(body)', 'Apps-Karte hängt Body nur bei Navigationsinhalt an');
+mustContain(js, 'if (body.childElementCount > 0) card.appendChild(body)', 'Runtime Apps-Karte hängt Body nur bei Navigationsinhalt an');
+
 console.log('[app-center-structure] OK: App-Center-Schema, Admin-Rücksprung, Speicherfarm-Master-Detail und Mesh/Microgrid-Reiter sind abgesichert.');

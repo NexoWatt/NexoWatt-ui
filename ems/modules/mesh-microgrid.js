@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/mesh-microgrid.ts
- * Quell-Hash: sha256:9ee1ae7925842cad9c72aa3f3c7ed9654f4567eee97cf754bcf19d47acfed720
+ * Quell-Hash: sha256:ab033964c96ca731befd604ce0202cc56aaf6b65b1ba70d8237d04fbf049232a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -40,7 +40,7 @@
 
 const { BaseModule } = require('./base');
 
-const MODULE_VERSION = 'nexowatt.mesh-microgrid-planning.v1';
+const MODULE_VERSION = 'nexowatt.mesh-microgrid-peer-receiver.v1';
 
 function safeId(input, fallback = 'node') {
   const s = String(input || '').trim().toLowerCase();
@@ -348,11 +348,181 @@ function buildPlanning(nodes, totals, gridLimitW, mode) {
   };
 }
 
+
+
+function normalizeCommandOutputCfg(raw) {
+  const cfg = raw && typeof raw === 'object' ? raw : {};
+  const mode = String(cfg.controlMode || cfg.executionMode || 'diagnostic').trim().toLowerCase();
+  const controlMode = ['off', 'diagnostic', 'field_test'].includes(mode) ? mode : 'diagnostic';
+  const commandStateDp = String(cfg.commandStateDp || cfg.commandStateId || cfg.commandOutputDp || '').trim();
+  const approved = cfg.fieldTestApproved === true || cfg.installerApproved === true;
+  const maxCommandsPerTick = Math.max(1, Math.min(10, Math.round(num(cfg.maxCommandsPerTick, 3)) || 3));
+  return { controlMode, commandStateDp, fieldTestApproved: approved, maxCommandsPerTick };
+}
+
+function normalizeTailscaleCfg(raw) {
+  const cfg = raw && typeof raw === 'object' ? raw : {};
+  const t = cfg.tailscale && typeof cfg.tailscale === 'object' ? cfg.tailscale : (cfg.tailscaleMesh && typeof cfg.tailscaleMesh === 'object' ? cfg.tailscaleMesh : {});
+  const enabled = t.enabled === true || cfg.tailscaleEnabled === true;
+  const profile = String(t.profile || t.profileName || cfg.tailscaleProfile || 'mesh-microgrid').trim() || 'mesh-microgrid';
+  const localNodeId = safeId(t.localNodeId || cfg.localNodeId || cfg.clusterId || 'local', 'local');
+  const timeoutMs = Math.max(500, Math.min(10000, Math.round(num(t.timeoutMs || t.timeout || cfg.tailscaleTimeoutMs, 2500)) || 2500));
+  const peerUrlText = Array.isArray(t.peerUrls) ? t.peerUrls.join('\n') : String(t.peerUrls || cfg.peerUrls || '');
+  const peerToken = String(t.peerToken || cfg.peerToken || '').trim();
+  const peerUrls = peerUrlText.split(/[\n,;]+/g).map(x => x.trim()).filter(Boolean).slice(0, 20);
+  return { enabled, profile, localNodeId, timeoutMs, peerUrls, peerToken };
+}
+
+
+/**
+ * Normalisiert die Command-Receiver-Konfiguration für den Feldtest mit zwei oder
+ * mehr NexoWatt-Instanzen. Der Receiver gehört fachlich zum separaten
+ * Mesh/Microgrid-Tailscale-Netz und bleibt von der Fernwartung getrennt.
+ *
+ * Wichtig: Auch empfangene Remote-Befehle werden nicht direkt auf Hardware
+ * geschrieben. Sie werden als neutraler JSON-Envelope in einen lokalen
+ * Command-State gespiegelt, den eine nachgelagerte Bridge/Adapterlogik auswertet.
+ */
+function normalizeReceiverCfg(raw) {
+  const cfg = raw && typeof raw === 'object' ? raw : {};
+  const r = cfg.receiver && typeof cfg.receiver === 'object' ? cfg.receiver : (cfg.commandReceiver && typeof cfg.commandReceiver === 'object' ? cfg.commandReceiver : {});
+  const enabled = r.enabled === true || cfg.receiverEnabled === true || cfg.commandReceiverEnabled === true;
+  const commandStateDp = String(r.commandStateDp || r.receiverCommandStateDp || cfg.receiverCommandStateDp || cfg.receivedCommandStateDp || '').trim();
+  const token = String(r.token || r.receiverToken || cfg.receiverToken || '').trim();
+  const requireToken = r.requireToken === false || cfg.receiverRequireToken === false ? false : true;
+  const ttlSec = Math.max(5, Math.min(900, Math.round(num(r.ttlSec || r.commandTtlSec || cfg.receiverTtlSec, 120)) || 120));
+  const maxProcessedIds = Math.max(20, Math.min(1000, Math.round(num(r.maxProcessedIds || cfg.receiverMaxProcessedIds, 200)) || 200));
+  const allowedPeerText = Array.isArray(r.allowedPeerNodeIds) ? r.allowedPeerNodeIds.join('\n') : String(r.allowedPeerNodeIds || cfg.allowedPeerNodeIds || '');
+  const allowedPeerNodeIds = allowedPeerText.split(/[\n,;]+/g).map(x => safeId(x.trim(), '')).filter(Boolean).slice(0, 100);
+  return { enabled, commandStateDp, token, requireToken, ttlSec, maxProcessedIds, allowedPeerNodeIds };
+}
+
+/**
+ * 0.8.40 Feldsteuerungs-CommandGuard für Mesh/Microgrid.
+ *
+ * Produktregel:
+ * - Das Modul darf für Feldtests neutrale NexoWatt-Command-Intents ausgeben,
+ *   wenn der Installateur dies explizit freigegeben und einen Command-State
+ *   hinterlegt hat.
+ * - Es schreibt weiterhin keine Wechselrichter-, Speicher-, Ladepunkt-, OCPP-,
+ *   Modbus-, MQTT- oder Hersteller-Rohdatenpunkte direkt. Die Ausgabe ist ein
+ *   herstellerneutraler JSON-Befehl, den eine nachgelagerte Bridge/Instanz im
+ *   separaten Tailscale-Mesh interpretieren kann.
+ * - Damit kann im Feld mit realen Instanzen getestet werden, ohne die EMS-Logik
+ *   an ein bestimmtes Protokoll zu koppeln.
+ */
+function buildCommandGuard(planning, nodes, cluster, controlCfg, tailscaleCfg) {
+  const actions = planning && Array.isArray(planning.actions) ? planning.actions : [];
+  const nodeList = Array.isArray(nodes) ? nodes : [];
+  const gridLimit = planning && planning.gridLimit ? planning.gridLimit : {};
+  const clusterId = cluster && cluster.clusterId ? cluster.clusterId : 'cluster_01';
+  const mode = cluster && cluster.mode ? cluster.mode : 'diagnostic';
+  const gridLimitW = Math.max(0, Math.round(num(cluster && cluster.gridLimitW, 0)));
+  const control = normalizeCommandOutputCfg(controlCfg || {});
+  const tailscale = normalizeTailscaleCfg(tailscaleCfg || {});
+  const knownNodeIds = new Set(nodeList.map(n => String(n && n.id || '')));
+  const priorityKnown = nodeList.length > 0 && nodeList.every(n => Number.isFinite(Number(n.priority)));
+  const isFieldMode = control.controlMode === 'field_test';
+  const commandStateReady = !!control.commandStateDp;
+  const installerApproved = control.fieldTestApproved === true;
+  const commandOutputAllowed = isFieldMode && installerApproved && commandStateReady;
+
+  const safetyChecks = [
+    { id: 'license', ok: true, severity: 'info', message: 'EOS Mesh/Microgrid-App ist freigegeben.' },
+    { id: 'control_mode', ok: isFieldMode, severity: isFieldMode ? 'info' : 'warn', message: isFieldMode ? 'Feldtest-Modus aktiv: neutrale Command-Intents dürfen ausgegeben werden.' : 'Feldtest-Modus ist nicht aktiv; es werden nur Diagnosen veröffentlicht.' },
+    { id: 'installer_approval', ok: installerApproved, severity: installerApproved ? 'info' : 'blocker', message: installerApproved ? 'Installateurfreigabe für Feldtest liegt vor.' : 'Installateurfreigabe fehlt; Command-Ausgabe blockiert.' },
+    { id: 'command_state', ok: commandStateReady, severity: commandStateReady ? 'info' : 'blocker', message: commandStateReady ? `Neutraler Command-State gesetzt: ${control.commandStateDp}` : 'Kein neutraler Command-State hinterlegt.' },
+    { id: 'direct_hardware_write', ok: true, severity: 'info', message: 'Direktes Hardware-Schreiben bleibt gesperrt; Ausgabe erfolgt nur als neutraler JSON-Intent.' },
+    { id: 'tailscale_mesh', ok: tailscale.enabled === true, severity: tailscale.enabled ? 'info' : 'warn', message: tailscale.enabled ? `Tailscale-Mesh-Profil aktiv: ${tailscale.profile}` : 'Tailscale-Mesh ist nicht aktiviert; lokale Command-Ausgabe bleibt möglich.' },
+    { id: 'grid_limit', ok: gridLimitW > 0 || String(gridLimit && gridLimit.severity || '') === 'off', severity: gridLimitW > 0 ? 'info' : 'warn', message: gridLimitW > 0 ? `Cluster-/Netzlimit ${gridLimitW} W ist vorhanden.` : 'Kein Cluster-/Netzlimit gesetzt; Feldtest sollte nur mit bewusst geprüfter Anlage erfolgen.' },
+    { id: 'node_priority', ok: priorityKnown, severity: priorityKnown ? 'info' : 'warn', message: priorityKnown ? 'Knotenprioritäten sind vorhanden.' : 'Knotenprioritäten fehlen oder sind unvollständig.' },
+  ];
+
+  const allowedCommands = [];
+  const blockedCommands = [];
+  const plannedCommands = actions.map((a, idx) => {
+    const nodeId = String(a && a.nodeId || '');
+    const nodeKnown = !nodeId || knownNodeIds.has(nodeId);
+    const missing = [];
+    if (!nodeKnown) missing.push('unknown_node');
+    if (a && a.severity === 'critical' && !gridLimitW) missing.push('missing_grid_limit');
+    if (!commandOutputAllowed) missing.push('field_control_not_approved');
+    const allowed = commandOutputAllowed && missing.length === 0 && Math.max(0, Math.round(num(a && a.plannedPowerW, 0))) > 0;
+    const cmd = {
+      schema: 'nexowatt.mesh-command-intent.v2',
+      commandId: `mesh_cmd_${idx + 1}`,
+      sourceActionId: a && a.actionId || '',
+      clusterId,
+      mode,
+      category: a && a.category || 'observe',
+      direction: a && a.direction || 'observe',
+      nodeId,
+      nodeName: a && a.nodeName || '',
+      targetNodeId: a && a.targetNodeId || '',
+      targetNodeName: a && a.targetNodeName || '',
+      priority: a && a.priority || 999,
+      plannedPowerW: Math.max(0, Math.round(num(a && a.plannedPowerW, 0))),
+      transport: tailscale.enabled ? 'tailscale-mesh' : 'local-command-state',
+      tailscaleProfile: tailscale.profile,
+      commandStateDp: control.commandStateDp,
+      safetyMissing: missing,
+      allowed,
+      blocked: !allowed,
+      readOnly: false,
+      neutralCommandOnly: true,
+      directHardwareWrite: false,
+      hardwareWrite: false,
+      reason: allowed
+        ? 'Feldtest freigegeben: neutraler NexoWatt-Command-Intent wird an den Command-State ausgegeben.'
+        : `CommandGuard blockiert: ${missing.join(', ') || 'keine ausführbare Leistung'}.`,
+    };
+    (allowed ? allowedCommands : blockedCommands).push(cmd);
+    return cmd;
+  });
+
+  const blockedActions = blockedCommands.map(cmd => ({ commandId: cmd.commandId, sourceActionId: cmd.sourceActionId, nodeId: cmd.nodeId, direction: cmd.direction, plannedPowerW: cmd.plannedPowerW, blocked: true, reason: cmd.reason }));
+  const blockerCount = safetyChecks.filter(c => c.severity === 'blocker' && c.ok !== true).length + blockedActions.length;
+  const warnCount = safetyChecks.filter(c => c.severity === 'warn' && c.ok !== true).length;
+  return {
+    schema: 'nexowatt.mesh-commandguard-field-control.v1',
+    status: commandOutputAllowed ? (allowedCommands.length ? 'field-output-ready' : 'field-output-idle') : 'blocked',
+    mode,
+    prepared: true,
+    allowed: commandOutputAllowed && allowedCommands.length > 0,
+    commandOutputAllowed,
+    automaticActionsBlocked: !commandOutputAllowed,
+    readOnly: false,
+    neutralCommandOnly: true,
+    directHardwareWrite: false,
+    hardwareWrite: false,
+    requiredLicense: 'EOS',
+    requiredFeature: 'meshMicrogridControl',
+    commandStateDp: control.commandStateDp,
+    controlMode: control.controlMode,
+    fieldTestApproved: installerApproved,
+    tailscale: { enabled: tailscale.enabled, profile: tailscale.profile, localNodeId: tailscale.localNodeId, peerCount: tailscale.peerUrls.length },
+    safetyChecks,
+    plannedCommands,
+    allowedCommands,
+    blockedActions,
+    blockerCount,
+    warnCount,
+    reason: commandOutputAllowed
+      ? `${allowedCommands.length} Command-Intent(s) für Feldtest-Ausgabe bereit; direkte Hardware-Schreibpfade bleiben gesperrt.`
+      : 'Mesh/Microgrid Feldsteuerung ist blockiert, bis Feldtest-Modus, Installateurfreigabe und Command-State gesetzt sind.',
+  };
+}
+
 class MeshMicrogridModule extends BaseModule {
   constructor(adapter, dpRegistry) {
     super(adapter, dpRegistry);
     this._lastConfigHash = '';
     this._lastPublishTs = 0;
+    this._lastCommandHash = '';
+    this._lastCommandWriteTs = 0;
+    this._lastCommandResult = null;
+    this._remoteSnapshots = [];
+    this._lastTailscalePoll = null;
   }
 
   _cfg() {
@@ -427,6 +597,10 @@ class MeshMicrogridModule extends BaseModule {
     await ch('meshMicrogrid.export', 'Mesh/Microgrid Export');
     await ch('meshMicrogrid.operator', 'Mesh/Microgrid Betreiberansicht');
     await ch('meshMicrogrid.planning', 'Mesh/Microgrid geplante Entscheidungen');
+    await ch('meshMicrogrid.commandGuard', 'Mesh/Microgrid CommandGuard / Feldsteuerung');
+    await ch('meshMicrogrid.fieldControl', 'Mesh/Microgrid Feldsteuerung');
+    await ch('meshMicrogrid.tailscale', 'Mesh/Microgrid Tailscale-Netz');
+    await ch('meshMicrogrid.receiver', 'Mesh/Microgrid Command Receiver');
 
     await mk('meshMicrogrid.enabled', 'Mesh/Microgrid App aktiv', 'boolean', 'indicator', '', false);
     await mk('meshMicrogrid.version', 'Mesh/Microgrid Schema', 'string', 'text', '', MODULE_VERSION);
@@ -489,6 +663,75 @@ class MeshMicrogridModule extends BaseModule {
     await mk('meshMicrogrid.planning.readOnly', 'Planung ist read-only', 'boolean', 'indicator', '', true);
     await mk('meshMicrogrid.planning.summaryJson', 'Planungszusammenfassung JSON', 'string', 'json', '', '{}');
     await mk('meshMicrogrid.planning.lastReason', 'Letzte Planungsbegründung', 'string', 'text', '', '');
+
+    // 0.8.39 CommandGuard-Vorbereitung: Sicherheitsdiagnose für spätere
+    // Freigaben. Diese States bleiben read-only und sind keine Produktivsteuerung.
+    await mk('meshMicrogrid.commandGuard.schema', 'CommandGuard Schema', 'string', 'text', '', 'nexowatt.mesh-commandguard-prep.v1');
+    await mk('meshMicrogrid.commandGuard.status', 'CommandGuard Status', 'string', 'text', '', 'blocked-readonly');
+    await mk('meshMicrogrid.commandGuard.prepared', 'CommandGuard vorbereitet', 'boolean', 'indicator', '', true);
+    await mk('meshMicrogrid.commandGuard.allowed', 'CommandGuard Ausführung erlaubt', 'boolean', 'indicator', '', false);
+    await mk('meshMicrogrid.commandGuard.automaticActionsBlocked', 'Automatische Aktionen blockiert', 'boolean', 'indicator', '', true);
+    await mk('meshMicrogrid.commandGuard.readOnly', 'CommandGuard read-only', 'boolean', 'indicator', '', true);
+    await mk('meshMicrogrid.commandGuard.hardwareWrite', 'Hardware-Schreiben aktiv', 'boolean', 'indicator', '', false);
+    await mk('meshMicrogrid.commandGuard.requiredLicense', 'Benötigte Lizenz', 'string', 'text', '', 'EOS');
+    await mk('meshMicrogrid.commandGuard.requiredFeature', 'Benötigtes Feature', 'string', 'text', '', 'meshMicrogridControl');
+    await mk('meshMicrogrid.commandGuard.reason', 'CommandGuard Sperrgrund', 'string', 'text', '', 'Automatische Ausführung ist noch gesperrt.');
+    await mk('meshMicrogrid.commandGuard.safetyChecksJson', 'CommandGuard Safety-Checks JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.commandGuard.plannedCommandsJson', 'Geplante Command-Intents JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.commandGuard.blockedActionsJson', 'Blockierte Aktionen JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.commandGuard.blockerCount', 'CommandGuard Blocker', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.commandGuard.warnCount', 'CommandGuard Warnungen', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.commandGuard.summaryJson', 'CommandGuard Zusammenfassung JSON', 'string', 'json', '', '{}');
+
+    // 0.8.40 Feldsteuerung: Diese States machen die Ausgabe neutraler Command-
+    // Intents sichtbar. Wichtig: Auch im Feldmodus schreibt NexoWatt hier keine
+    // Hardwaredatenpunkte direkt, sondern nur den konfigurierten JSON-Command-State.
+    await mk('meshMicrogrid.fieldControl.enabled', 'Feldsteuerung aktiv', 'boolean', 'indicator', '', false);
+    await mk('meshMicrogrid.fieldControl.mode', 'Feldsteuerungsmodus', 'string', 'text', '', 'diagnostic');
+    await mk('meshMicrogrid.fieldControl.installerApproved', 'Installateurfreigabe', 'boolean', 'indicator', '', false);
+    await mk('meshMicrogrid.fieldControl.commandStateDp', 'Neutraler Command-State', 'string', 'text', '', '');
+    await mk('meshMicrogrid.fieldControl.lastCommandAt', 'Letzte Command-Ausgabe', 'number', 'value.time', '', 0);
+    await mk('meshMicrogrid.fieldControl.lastCommandJson', 'Letzter Command-Envelope JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.fieldControl.lastWriteStatus', 'Letzter Write-Status', 'string', 'text', '', 'idle');
+    await mk('meshMicrogrid.fieldControl.lastWriteError', 'Letzter Write-Fehler', 'string', 'text', '', '');
+    await mk('meshMicrogrid.fieldControl.outputCount', 'Ausgegebene Command-Intents', 'number', 'value', '', 0);
+
+    // Separates Tailscale-Profil für Mesh/Microgrid. Fernwartungs-Tailscale und
+    // Mesh-Tailscale werden fachlich getrennt behandelt; der Adapter erwartet nur
+    // die über dieses Profil erreichbaren Peer-URLs und koppelt sich nicht an die
+    // Tailscale-Daemon-Implementierung.
+    await mk('meshMicrogrid.tailscale.enabled', 'Tailscale Mesh aktiv', 'boolean', 'indicator', '', false);
+    await mk('meshMicrogrid.tailscale.profile', 'Tailscale Profil', 'string', 'text', '', 'mesh-microgrid');
+    await mk('meshMicrogrid.tailscale.localNodeId', 'Lokale Mesh-Node-ID', 'string', 'text', '', 'local');
+    await mk('meshMicrogrid.tailscale.peerCount', 'Peer Anzahl', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.tailscale.remoteNodeCount', 'Remote-Knoten', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.tailscale.lastPollAt', 'Letzter Peer-Poll', 'number', 'value.time', '', 0);
+    await mk('meshMicrogrid.tailscale.lastPollStatus', 'Letzter Peer-Poll Status', 'string', 'text', '', 'idle');
+    await mk('meshMicrogrid.tailscale.peersJson', 'Tailscale Peers JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.tailscale.remoteNodesJson', 'Remote-Knoten JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.tailscale.lastPollJson', 'Letzter Peer-Poll JSON', 'string', 'json', '', '{}');
+
+    // 0.8.41 Command-Receiver: Empfangsschicht für neutrale Mesh-Commands von
+    // anderen NexoWatt-Instanzen über das separate Mesh-Tailscale. Diese States
+    // dokumentieren Handshake, Replay-Schutz und ACKs. Der Receiver schreibt nur
+    // in den konfigurierten lokalen JSON-Command-State, niemals direkt auf Geräte.
+    await mk('meshMicrogrid.receiver.enabled', 'Command Receiver aktiv', 'boolean', 'indicator', '', false);
+    await mk('meshMicrogrid.receiver.commandStateDp', 'Receiver Command-State', 'string', 'text', '', '');
+    await mk('meshMicrogrid.receiver.requireToken', 'Receiver Token erforderlich', 'boolean', 'indicator', '', true);
+    await mk('meshMicrogrid.receiver.ttlSec', 'Command TTL', 'number', 'value.interval', 's', 120);
+    await mk('meshMicrogrid.receiver.status', 'Receiver Status', 'string', 'text', '', 'disabled');
+    await mk('meshMicrogrid.receiver.lastHandshakeAt', 'Letzter Handshake', 'number', 'value.time', '', 0);
+    await mk('meshMicrogrid.receiver.lastHandshakeJson', 'Letzter Handshake JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.receiver.lastCommandAt', 'Letzter empfangener Command', 'number', 'value.time', '', 0);
+    await mk('meshMicrogrid.receiver.lastCommandId', 'Letzte Command-ID', 'string', 'text', '', '');
+    await mk('meshMicrogrid.receiver.lastCommandJson', 'Letzter empfangener Command JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.receiver.lastAckJson', 'Letztes ACK JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.receiver.lastRejectReason', 'Letzter Ablehnungsgrund', 'string', 'text', '', '');
+    await mk('meshMicrogrid.receiver.acceptedCount', 'Angenommene Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.receiver.rejectedCount', 'Abgelehnte Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.receiver.replayBlockedCount', 'Replay blockiert', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.receiver.processedCommandIdsJson', 'Verarbeitete Command-IDs JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.receiver.summaryJson', 'Receiver Zusammenfassung JSON', 'string', 'json', '', '{}');
   }
 
   _getNumber(key, fallback = null) {
@@ -496,6 +739,141 @@ class MeshMicrogridModule extends BaseModule {
       if (this.dp && typeof this.dp.getNumber === 'function') return this.dp.getNumber(key, fallback);
     } catch (_e) {}
     return fallback;
+  }
+
+  _commandOutputCfg() {
+    return normalizeCommandOutputCfg(this._cfg());
+  }
+
+  _tailscaleCfg() {
+    return normalizeTailscaleCfg(this._cfg());
+  }
+
+  _receiverCfg() {
+    return normalizeReceiverCfg(this._cfg());
+  }
+
+  _normalPeerUrl(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    const withProto = /^https?:\/\//i.test(s) ? s : `http://${s}`;
+    return withProto.replace(/\/+$/g, '');
+  }
+
+  /**
+   * Holt Remote-Snapshots über das getrennte Tailscale-Mesh-Netz.
+   * Der Adapter startet oder verwaltet Tailscale nicht selbst; er nutzt nur die
+   * über das zweite, für Mesh/Microgrid gedachte Tailnet erreichbaren Peer-URLs.
+   * Dadurch bleiben Fernwartung und Energieverbund fachlich getrennt.
+   */
+  async _pollTailscalePeers() {
+    const cfg = this._tailscaleCfg();
+    const now = Date.now();
+    if (!cfg.enabled || !cfg.peerUrls.length || typeof fetch !== 'function') {
+      this._remoteSnapshots = [];
+      this._lastTailscalePoll = { ts: now, status: cfg.enabled ? 'no-peers' : 'disabled', peers: [], remoteNodeCount: 0, profile: cfg.profile };
+      return;
+    }
+    const peers = [];
+    const remoteNodes = [];
+    for (const urlRaw of cfg.peerUrls) {
+      const base = this._normalPeerUrl(urlRaw);
+      if (!base) continue;
+      const peerId = safeId(base.replace(/^https?:\/\//i, '').replace(/[:\/]+/g, '_'), 'peer');
+      const endpoint = `${base}/api/mesh/microgrid`;
+      const started = Date.now();
+      const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_e) {} }, cfg.timeoutMs) : null;
+      try {
+        const headers = cfg.peerToken ? { 'x-nexowatt-mesh-token': cfg.peerToken } : {};
+        const res = await fetch(endpoint, { cache: 'no-store', headers, signal: ctrl ? ctrl.signal : undefined });
+        const payload = await res.json().catch(() => null);
+        if (!res.ok || !payload || payload.ok === false) throw new Error((payload && payload.message) || `HTTP ${res.status}`);
+        const nodes = Array.isArray(payload.nodes) ? payload.nodes : [];
+        for (const n of nodes) {
+          const remoteId = safeId(`${peerId}_${n && n.id || 'node'}`, `${peerId}_node`);
+          remoteNodes.push({
+            ...(n || {}),
+            id: remoteId,
+            originalNodeId: n && n.id || '',
+            name: `${payload.cluster && payload.cluster.name ? payload.cluster.name : peerId}: ${n && (n.name || n.id) || 'Remote-Knoten'}`,
+            peerId,
+            remote: true,
+            source: 'tailscale-mesh-peer',
+            tailscaleProfile: cfg.profile,
+            intent: n && n.intent ? { ...n.intent, remote: true, peerId, tailscaleProfile: cfg.profile } : undefined,
+          });
+        }
+        peers.push({ id: peerId, url: base, ok: true, status: 'ok', nodeCount: nodes.length, ms: Date.now() - started });
+      } catch (e) {
+        peers.push({ id: peerId, url: base, ok: false, status: 'error', error: String(e && e.message ? e.message : e), ms: Date.now() - started });
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    }
+    this._remoteSnapshots = remoteNodes;
+    this._lastTailscalePoll = { schema: 'nexowatt.tailscale-mesh-poll.v1', ts: now, status: peers.some(p => p.ok) ? 'ok' : 'error', profile: cfg.profile, localNodeId: cfg.localNodeId, peers, remoteNodeCount: remoteNodes.length };
+  }
+
+  _remoteNodeSnapshots() {
+    return Array.isArray(this._remoteSnapshots) ? this._remoteSnapshots.slice() : [];
+  }
+
+  _buildFieldCommandEnvelope(snap, commandGuard) {
+    const control = this._commandOutputCfg();
+    const tailscale = this._tailscaleCfg();
+    const commands = commandGuard && Array.isArray(commandGuard.allowedCommands) ? commandGuard.allowedCommands.slice(0, control.maxCommandsPerTick) : [];
+    return {
+      schema: 'nexowatt.mesh-field-command-envelope.v1',
+      version: MODULE_VERSION,
+      ts: Date.now(),
+      source: 'nexowatt-ui.meshMicrogrid',
+      clusterId: snap && snap.clusterId || 'cluster_01',
+      clusterName: snap && snap.clusterName || '',
+      transport: tailscale.enabled ? 'tailscale-mesh' : 'local-command-state',
+      tailscaleProfile: tailscale.profile,
+      localNodeId: tailscale.localNodeId,
+      commandStateDp: control.commandStateDp,
+      directHardwareWrite: false,
+      neutralCommandOnly: true,
+      commands,
+      totals: snap && snap.totals || {},
+      gridLimit: snap && snap.planning && snap.planning.gridLimit || {},
+      reason: commandGuard && commandGuard.reason || '',
+    };
+  }
+
+  /**
+   * Gibt freigegebene Feldtest-Kommandos als neutralen JSON-State aus.
+   * Dieser Pfad ist die reale Feldtest-Ausgabe für die Mesh/Microgrid-App, aber
+   * bewusst kein direkter Hardwarepfad. OCPP, Modbus, MQTT, REST oder ein zweites
+   * NexoWatt-EMS im Tailscale-Mesh können diesen JSON-State nachgelagert umsetzen.
+   */
+  async _writeFieldCommands(snap) {
+    const a = this.adapter;
+    const control = this._commandOutputCfg();
+    const guard = snap && snap.commandGuard ? snap.commandGuard : {};
+    const allowed = guard && guard.commandOutputAllowed === true && Array.isArray(guard.allowedCommands) && guard.allowedCommands.length > 0;
+    if (!a || !control.commandStateDp || !allowed) {
+      this._lastCommandResult = { ts: Date.now(), status: allowed ? 'missing-command-state' : 'blocked', commandCount: 0 };
+      return;
+    }
+    const envelope = this._buildFieldCommandEnvelope(snap, guard);
+    const hash = JSON.stringify(envelope.commands || []) + '|' + control.commandStateDp;
+    if (hash === this._lastCommandHash) {
+      this._lastCommandResult = { ts: Date.now(), status: 'unchanged', commandCount: envelope.commands.length, commandStateDp: control.commandStateDp };
+      return;
+    }
+    try {
+      const json = JSON.stringify(envelope);
+      if (typeof a.setForeignStateAsync === 'function') await a.setForeignStateAsync(control.commandStateDp, { val: json, ack: false });
+      else if (typeof a.setStateAsync === 'function') await a.setStateAsync(control.commandStateDp, { val: json, ack: false });
+      this._lastCommandHash = hash;
+      this._lastCommandWriteTs = Date.now();
+      this._lastCommandResult = { ts: this._lastCommandWriteTs, status: 'written', commandCount: envelope.commands.length, commandStateDp: control.commandStateDp, envelope };
+    } catch (e) {
+      this._lastCommandResult = { ts: Date.now(), status: 'error', commandCount: envelope.commands.length, commandStateDp: control.commandStateDp, error: String(e && e.message ? e.message : e) };
+    }
   }
 
   _nodeSnapshot(node) {
@@ -584,7 +962,9 @@ class MeshMicrogridModule extends BaseModule {
     const mode = this._mode();
     const nodes = this._nodes();
     const activeNodes = nodes.filter(n => n.enabled);
-    const snapshots = activeNodes.map(n => this._nodeSnapshot(n));
+    const localSnapshots = activeNodes.map(n => this._nodeSnapshot(n));
+    const remoteSnapshots = this._remoteNodeSnapshots();
+    const snapshots = [...localSnapshots, ...remoteSnapshots];
     const missing = nodes.filter(n => n.enabled && !n.powerDp && !n.surplusPowerDp && !n.demandPowerDp && !n.gridImportPowerDp && !n.gridExportPowerDp).map(n => ({ id: n.id, name: n.name, type: n.type, warning: 'Keine Leistungs-/Grid-Mappingdaten hinterlegt.' }));
 
     const sum = (field) => snapshots.reduce((acc, n) => acc + num(n[field], 0), 0);
@@ -621,23 +1001,25 @@ class MeshMicrogridModule extends BaseModule {
       gridLimitUsagePercent: gridUsagePercent,
       localFirstDiagnosis: surplusW > 0 ? 'Lokaler Überschuss vorhanden; spätere Strategie kann lokale Senken priorisieren.' : 'Kein lokaler Überschuss vorhanden.',
       gridLastDiagnosis: demandW > 0 ? 'Restbedarf vorhanden; spätere Strategie kann Netzbezug nach lokalen Quellen nachrangig behandeln.' : 'Kein Restbedarf vorhanden.',
-      note: '0.8.36 Regelbasis: geplante Entscheidungen werden angezeigt, bleiben aber ohne Hardware-Schreiben.',
+      note: '0.8.40 Feldsteuerung: bei Installateurfreigabe werden neutrale Command-Intents ausgegeben; direkte Hardware-Schreibpfade bleiben gesperrt.',
     };
 
     const planning = buildPlanning(snapshots, { generationW, loadW, storageChargeW, storageDischargeW, gridImportW, gridExportW, surplusW, demandW, localUsePotentialW, gridLimitUsagePercent: gridUsagePercent }, gridLimitW, mode);
+    const commandGuard = buildCommandGuard(planning, snapshots, { clusterId, clusterName, gridLimitW, mode }, this._commandOutputCfg(), this._tailscaleCfg());
 
     const decision = {
       schema: 'nexowatt.mesh-readonly-decision.v1',
       ts: Date.now(),
       mode,
       action: 'observe-only',
-      reason: enabled ? 'Mesh/Microgrid Datenmodell aktiv; Steuerstrategien werden später separat freigegeben.' : 'Mesh/Microgrid App deaktiviert.',
+      reason: enabled ? 'Mesh/Microgrid aktiv; Feldtest-Ausgabe erfolgt nur bei Installateurfreigabe über neutralen Command-State.' : 'Mesh/Microgrid App deaktiviert.',
       nextStep: surplusW > 0 ? 'Lokalen Überschuss für Speicher/Ladepunkte/Nachbarn priorisieren (spätere Strategie).' : (demandW > 0 ? 'Lokalen Bedarf mit PV/Speicher/Clusterquellen decken (spätere Strategie).' : 'Cluster aktuell ausgeglichen.'),
       plannedActionCount: planning.actionCount,
       criticalActionCount: planning.criticalActionCount,
       plannedActions: planning.actions,
       priorityOrder: planning.priorityOrder,
       gridLimitDiagnostics: planning.gridLimit,
+      commandGuard,
       readOnly: true,
     };
 
@@ -651,9 +1033,12 @@ class MeshMicrogridModule extends BaseModule {
       gridLimitW,
       nodes,
       snapshots,
+      localSnapshots,
+      remoteSnapshots,
       missing,
       clusterIntent,
       planning,
+      commandGuard,
       decision,
       totals: {
         generationW: round(generationW, 0),
@@ -688,8 +1073,10 @@ class MeshMicrogridModule extends BaseModule {
         await this._registerDatapoints();
       }
     } catch (_e) {}
+    await this._pollTailscalePeers();
     const snap = this._buildSnapshot();
     await this._publish(snap);
+    await this._writeFieldCommands(snap);
   }
 
   async _publish(snap) {
@@ -750,6 +1137,10 @@ class MeshMicrogridModule extends BaseModule {
       operatorViewUrl: '/mesh/microgrid',
       exportUrls: { json: '/api/mesh/microgrid', csv: '/api/mesh/microgrid.csv' },
       planning: snap.planning || {},
+      commandGuard: snap.commandGuard || {},
+      fieldControl: { ...this._commandOutputCfg(), lastCommand: this._lastCommandResult || {} },
+      tailscale: { ...this._tailscaleCfg(), lastPoll: this._lastTailscalePoll || {}, remoteNodeCount: Array.isArray(snap.remoteSnapshots) ? snap.remoteSnapshots.length : 0 },
+      receiver: { ...this._receiverCfg(), tokenConfigured: !!(this._receiverCfg().token), receiverUrl: '/api/mesh/command/receive', handshakeUrl: '/api/mesh/handshake' },
     };
 
     await set('meshMicrogrid.nodesJson', nodesJson);
@@ -774,9 +1165,15 @@ class MeshMicrogridModule extends BaseModule {
       intents: (snap.snapshots || []).map(n => n.intent),
       clusterIntent: snap.clusterIntent || {},
       planning: snap.planning || {},
+      commandGuard: snap.commandGuard || {},
+      fieldControl: { ...this._commandOutputCfg(), lastCommand: this._lastCommandResult || {} },
+      tailscale: { ...this._tailscaleCfg(), lastPoll: this._lastTailscalePoll || {}, remoteNodeCount: Array.isArray(snap.remoteSnapshots) ? snap.remoteSnapshots.length : 0 },
+      receiver: { ...this._receiverCfg(), tokenConfigured: !!(this._receiverCfg().token), receiverUrl: '/api/mesh/command/receive', handshakeUrl: '/api/mesh/handshake' },
       decision: snap.decision || {},
       missingMappings: snap.missing || [],
-      readOnly: true,
+      readOnly: false,
+      neutralCommandOnly: true,
+      directHardwareWrite: false,
     };
     await set('meshMicrogrid.export.schema', 'nexowatt.mesh-microgrid-export.v1');
     await set('meshMicrogrid.export.ready', !!snap.enabled);
@@ -798,6 +1195,70 @@ class MeshMicrogridModule extends BaseModule {
     await set('meshMicrogrid.planning.readOnly', true);
     await set('meshMicrogrid.planning.summaryJson', JSON.stringify({ schema: 'nexowatt.mesh-planning-summary.v1', ts: now, readOnly: true, actionCount: planning.actionCount || 0, criticalActionCount: planning.criticalActionCount || 0, readinessScorePercent: planning.readinessScorePercent || 0, summary: planning.summary || '', gridLimit: planning.gridLimit || {} }));
     await set('meshMicrogrid.planning.lastReason', String(planning.summary || 'Keine geplante Aktion.'));
+
+    const commandGuard = snap.commandGuard || {};
+    await set('meshMicrogrid.commandGuard.schema', commandGuard.schema || 'nexowatt.mesh-commandguard-field-control.v1');
+    await set('meshMicrogrid.commandGuard.status', commandGuard.status || 'blocked');
+    await set('meshMicrogrid.commandGuard.prepared', commandGuard.prepared !== false);
+    await set('meshMicrogrid.commandGuard.allowed', commandGuard.allowed === true);
+    await set('meshMicrogrid.commandGuard.automaticActionsBlocked', commandGuard.automaticActionsBlocked !== false);
+    await set('meshMicrogrid.commandGuard.readOnly', false);
+    await set('meshMicrogrid.commandGuard.hardwareWrite', false);
+    await set('meshMicrogrid.commandGuard.requiredLicense', commandGuard.requiredLicense || 'EOS');
+    await set('meshMicrogrid.commandGuard.requiredFeature', commandGuard.requiredFeature || 'meshMicrogridControl');
+    await set('meshMicrogrid.commandGuard.reason', String(commandGuard.reason || 'CommandGuard blockiert oder keine Commands vorhanden.'));
+    await set('meshMicrogrid.commandGuard.safetyChecksJson', JSON.stringify(commandGuard.safetyChecks || []));
+    await set('meshMicrogrid.commandGuard.plannedCommandsJson', JSON.stringify(commandGuard.plannedCommands || []));
+    await set('meshMicrogrid.commandGuard.blockedActionsJson', JSON.stringify(commandGuard.blockedActions || []));
+    await set('meshMicrogrid.commandGuard.blockerCount', Number(commandGuard.blockerCount || 0));
+    await set('meshMicrogrid.commandGuard.warnCount', Number(commandGuard.warnCount || 0));
+    await set('meshMicrogrid.commandGuard.summaryJson', JSON.stringify(commandGuard));
+
+    const control = this._commandOutputCfg();
+    const lastCmd = this._lastCommandResult || {};
+    await set('meshMicrogrid.fieldControl.enabled', commandGuard.commandOutputAllowed === true);
+    await set('meshMicrogrid.fieldControl.mode', control.controlMode || 'diagnostic');
+    await set('meshMicrogrid.fieldControl.installerApproved', control.fieldTestApproved === true);
+    await set('meshMicrogrid.fieldControl.commandStateDp', control.commandStateDp || '');
+    await set('meshMicrogrid.fieldControl.lastCommandAt', Number(lastCmd.ts || this._lastCommandWriteTs || 0));
+    await set('meshMicrogrid.fieldControl.lastCommandJson', JSON.stringify(lastCmd.envelope || {}));
+    await set('meshMicrogrid.fieldControl.lastWriteStatus', String(lastCmd.status || 'idle'));
+    await set('meshMicrogrid.fieldControl.lastWriteError', String(lastCmd.error || ''));
+    await set('meshMicrogrid.fieldControl.outputCount', Number(lastCmd.commandCount || 0));
+
+    const tailscale = this._tailscaleCfg();
+    const poll = this._lastTailscalePoll || { status: tailscale.enabled ? 'pending' : 'disabled', peers: [], remoteNodeCount: 0 };
+    await set('meshMicrogrid.tailscale.enabled', tailscale.enabled === true);
+    await set('meshMicrogrid.tailscale.profile', tailscale.profile || 'mesh-microgrid');
+    await set('meshMicrogrid.tailscale.localNodeId', tailscale.localNodeId || 'local');
+    await set('meshMicrogrid.tailscale.peerCount', Array.isArray(tailscale.peerUrls) ? tailscale.peerUrls.length : 0);
+    await set('meshMicrogrid.tailscale.remoteNodeCount', Array.isArray(snap.remoteSnapshots) ? snap.remoteSnapshots.length : 0);
+    await set('meshMicrogrid.tailscale.lastPollAt', Number(poll.ts || 0));
+    await set('meshMicrogrid.tailscale.lastPollStatus', String(poll.status || 'idle'));
+    await set('meshMicrogrid.tailscale.peersJson', JSON.stringify(poll.peers || []));
+    await set('meshMicrogrid.tailscale.remoteNodesJson', JSON.stringify(snap.remoteSnapshots || []));
+    await set('meshMicrogrid.tailscale.lastPollJson', JSON.stringify(poll));
+
+    const receiver = this._receiverCfg();
+    const receiverSummary = {
+      schema: 'nexowatt.mesh-command-receiver-config.v1',
+      ts: now,
+      enabled: receiver.enabled === true,
+      commandStateDp: receiver.commandStateDp || '',
+      requireToken: receiver.requireToken !== false,
+      tokenConfigured: !!receiver.token,
+      ttlSec: receiver.ttlSec,
+      allowedPeerNodeIds: receiver.allowedPeerNodeIds || [],
+      receiverUrl: '/api/mesh/command/receive',
+      handshakeUrl: '/api/mesh/handshake',
+      directHardwareWrite: false,
+      neutralCommandOnly: true,
+    };
+    await set('meshMicrogrid.receiver.enabled', receiver.enabled === true);
+    await set('meshMicrogrid.receiver.commandStateDp', receiver.commandStateDp || '');
+    await set('meshMicrogrid.receiver.requireToken', receiver.requireToken !== false);
+    await set('meshMicrogrid.receiver.ttlSec', Number(receiver.ttlSec || 120));
+    await set('meshMicrogrid.receiver.summaryJson', JSON.stringify(receiverSummary));
     this._lastPublishTs = now;
   }
 }

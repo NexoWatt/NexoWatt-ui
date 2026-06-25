@@ -134,4 +134,16 @@ mustContain(ts, 'eigene EOS-App und bekommt ab 0.8.37 einen eigenen', 'TS-Kommen
 mustNotContain(ts, 'els.appsList.appendChild(buildMeshMicrogridCard());', 'Mesh/Microgrid-Konfiguration im Apps-Reiter');
 mustNotContain(js, 'els.appsList.appendChild(buildMeshMicrogridCard());', 'Mesh/Microgrid-Konfiguration im Apps-Reiter Runtime');
 
+
+// 0.8.38 Härtung: Apps-Karten dürfen keine erklärenden Detail-/Konfigurationsblöcke
+// mehr enthalten. Sie zeigen nur noch Katalogstatus und optionalen Navigationssprung.
+mustNotContain(ts, 'Optional quick hints', 'Apps-Reiter darf keine alten Quick-Hints rendern');
+mustNotContain(js, 'Optional quick hints', 'Apps-Reiter Runtime darf keine alten Quick-Hints rendern');
+mustNotContain(ts, 'Kostenannahmen und An/Aus-Schalter pflegt der Betreiber', 'Energy-Wallet-Einstellungen gehören nicht in Apps-Karten');
+mustNotContain(js, 'Kostenannahmen und An/Aus-Schalter pflegt der Betreiber', 'Energy-Wallet-Einstellungen Runtime gehören nicht in Apps-Karten');
+mustContain(ts, 'Fachliche Einstellungen, Mappingfelder', 'TS Kommentar: Apps-Reiter bleibt reiner Katalog');
+mustContain(js, 'Fachliche Einstellungen, Mappingfelder', 'Runtime Kommentar: Apps-Reiter bleibt reiner Katalog');
+mustContain(ts, 'if (body.childElementCount > 0) card.appendChild(body)', 'Apps-Karte hängt Body nur bei Navigationsinhalt an');
+mustContain(js, 'if (body.childElementCount > 0) card.appendChild(body)', 'Runtime Apps-Karte hängt Body nur bei Navigationsinhalt an');
+
 console.log('[app-center-structure] OK: App-Center-Schema, Admin-Rücksprung, Speicherfarm-Master-Detail und Mesh/Microgrid-Reiter sind abgesichert.');

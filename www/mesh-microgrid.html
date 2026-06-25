@@ -44,6 +44,19 @@
       <div class="card"><small>Regelbasis / Netzlimit</small><b id="meshReadiness">--</b><div id="meshGridLimitDiag" class="muted" style="margin-top:6px">--</div></div>
     </section>
     <section class="table-wrap" style="margin-bottom:14px"><table><thead><tr><th>Rang</th><th>Kategorie</th><th>Auslöser</th><th>Knoten</th><th>Ziel</th><th>Priorität</th><th>Leistung</th><th>Richtung</th><th>Hinweis</th></tr></thead><tbody id="meshPlanRows"><tr><td colspan="9" class="muted">lade…</td></tr></tbody></table></section>
+    <section class="plan-grid">
+      <div class="card"><small>CommandGuard / Feldtest</small><b id="meshCommandGuardStatus">--</b><div id="meshCommandGuardReason" class="muted" style="margin-top:6px">--</div><div id="meshCommandGuardCounts" class="muted" style="margin-top:6px">--</div></div>
+      <div class="card"><small>Safety-Prüfungen</small><div id="meshCommandGuardChecks" class="muted">--</div></div>
+    </section>
+    <section class="plan-grid">
+      <div class="card"><small>Feldsteuerung</small><b id="meshFieldStatus">--</b><div id="meshFieldDetails" class="muted" style="margin-top:6px">--</div></div>
+      <div class="card"><small>Tailscale Mesh</small><b id="meshTailscaleStatus">--</b><div id="meshTailscaleDetails" class="muted" style="margin-top:6px">--</div></div>
+    </section>
+    <section class="plan-grid">
+      <div class="card"><small>Command Receiver</small><b id="meshReceiverStatus">--</b><div id="meshReceiverDetails" class="muted" style="margin-top:6px">--</div></div>
+      <div class="card"><small>Letztes ACK / Replay-Schutz</small><div id="meshReceiverAck" class="muted">--</div></div>
+    </section>
+    <section class="table-wrap" style="margin-bottom:14px"><table><thead><tr><th>Command</th><th>Kategorie</th><th>Knoten</th><th>Ziel</th><th>Leistung</th><th>Richtung</th><th>Status</th><th>Grund</th></tr></thead><tbody id="meshCommandRows"><tr><td colspan="8" class="muted">lade…</td></tr></tbody></table></section>
     <section class="card" style="margin-bottom:14px"><small>Prioritätsreihenfolge</small><div id="meshPriorityOrder" class="muted">--</div></section>
     <section class="card" style="margin-bottom:14px"><small>Local First / Grid Last Diagnose</small><div id="meshDiagnosis" class="muted">--</div></section>
     <section class="card" style="margin-bottom:14px"><small>Warnungen / fehlende Zuordnungen</small><div id="meshWarnings" class="muted">--</div></section>

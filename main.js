@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:1dcc3b61839eea2b58c0bc34588f010e97a6a5b703d41350199ea10c4333204a
+ * Quell-Hash: sha256:a55eb5aeaebd0475d70c1bed0d548a41a0947bdc1db9129fcb9ff59e0f8970c9
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -3362,6 +3362,18 @@ class NexoWattVis extends utils.Adapter {
       clusterId: 'cluster_01',
       clusterName: 'Lokaler Energieverbund',
       gridLimitW: 0,
+      controlMode: 'diagnostic',
+      fieldTestApproved: false,
+      commandStateDp: '',
+      maxCommandsPerTick: 3,
+      tailscale: {
+        enabled: false,
+        profile: 'mesh-microgrid',
+        localNodeId: 'local',
+        peerUrls: [],
+        peerToken: '',
+        timeoutMs: 2500,
+      },
       nodes: [],
     });
     ensurePlainObj('vis', {});
@@ -17385,6 +17397,23 @@ const _nwMeshMicrogridBuildPayload = () => {
     readOnly: true,
     hardwareWrite: false,
   };
+  const commandGuard = snapshot.commandGuard && typeof snapshot.commandGuard === 'object' ? snapshot.commandGuard : {
+    schema: _nwDisplayStateVal('meshMicrogrid.commandGuard.schema', 'nexowatt.mesh-commandguard-prep.v1'),
+    status: _nwDisplayStateVal('meshMicrogrid.commandGuard.status', 'blocked-readonly'),
+    prepared: _nwDisplayStateVal('meshMicrogrid.commandGuard.prepared', true) !== false,
+    allowed: false,
+    automaticActionsBlocked: true,
+    readOnly: true,
+    hardwareWrite: false,
+    requiredLicense: _nwDisplayStateVal('meshMicrogrid.commandGuard.requiredLicense', 'EOS'),
+    requiredFeature: _nwDisplayStateVal('meshMicrogrid.commandGuard.requiredFeature', 'meshMicrogridControl'),
+    reason: _nwDisplayStateVal('meshMicrogrid.commandGuard.reason', 'CommandGuard ist vorbereitet; automatische Ausführung bleibt gesperrt.'),
+    safetyChecks: _nwEnergyLedgerJson('meshMicrogrid.commandGuard.safetyChecksJson', []),
+    plannedCommands: _nwEnergyLedgerJson('meshMicrogrid.commandGuard.plannedCommandsJson', []),
+    blockedActions: _nwEnergyLedgerJson('meshMicrogrid.commandGuard.blockedActionsJson', []),
+    blockerCount: Number(_nwDisplayStateVal('meshMicrogrid.commandGuard.blockerCount', 0)) || 0,
+    warnCount: Number(_nwDisplayStateVal('meshMicrogrid.commandGuard.warnCount', 0)) || 0,
+  };
   const decision = snapshot.decision && typeof snapshot.decision === 'object' ? snapshot.decision : _nwEnergyLedgerJson('meshMicrogrid.lastDecisionJson', {});
   const missingMappings = Array.isArray(snapshot.missingMappings) ? snapshot.missingMappings : _nwEnergyLedgerJson('meshMicrogrid.diagnostics.missingMappingsJson', []);
   const totals = (snapshot.totals && typeof snapshot.totals === 'object') ? snapshot.totals : (summary && summary.totals ? summary.totals : {});
@@ -17412,11 +17441,51 @@ const _nwMeshMicrogridBuildPayload = () => {
     intents: Array.isArray(intents) ? intents : [],
     clusterIntent,
     planning,
+    commandGuard,
+    fieldControl: snapshot.fieldControl && typeof snapshot.fieldControl === 'object' ? snapshot.fieldControl : {
+      enabled: _nwDisplayStateVal('meshMicrogrid.fieldControl.enabled', false) === true,
+      mode: _nwDisplayStateVal('meshMicrogrid.fieldControl.mode', 'diagnostic'),
+      installerApproved: _nwDisplayStateVal('meshMicrogrid.fieldControl.installerApproved', false) === true,
+      commandStateDp: _nwDisplayStateVal('meshMicrogrid.fieldControl.commandStateDp', ''),
+      lastCommandAt: Number(_nwDisplayStateVal('meshMicrogrid.fieldControl.lastCommandAt', 0)) || 0,
+      lastWriteStatus: _nwDisplayStateVal('meshMicrogrid.fieldControl.lastWriteStatus', 'idle'),
+      outputCount: Number(_nwDisplayStateVal('meshMicrogrid.fieldControl.outputCount', 0)) || 0,
+    },
+    tailscale: snapshot.tailscale && typeof snapshot.tailscale === 'object' ? snapshot.tailscale : {
+      enabled: _nwDisplayStateVal('meshMicrogrid.tailscale.enabled', false) === true,
+      profile: _nwDisplayStateVal('meshMicrogrid.tailscale.profile', 'mesh-microgrid'),
+      localNodeId: _nwDisplayStateVal('meshMicrogrid.tailscale.localNodeId', 'local'),
+      peerCount: Number(_nwDisplayStateVal('meshMicrogrid.tailscale.peerCount', 0)) || 0,
+      remoteNodeCount: Number(_nwDisplayStateVal('meshMicrogrid.tailscale.remoteNodeCount', 0)) || 0,
+      lastPollStatus: _nwDisplayStateVal('meshMicrogrid.tailscale.lastPollStatus', 'idle'),
+      peers: _nwEnergyLedgerJson('meshMicrogrid.tailscale.peersJson', []),
+    },
+    receiver: {
+      enabled: _nwDisplayStateVal('meshMicrogrid.receiver.enabled', false) === true,
+      commandStateDp: _nwDisplayStateVal('meshMicrogrid.receiver.commandStateDp', ''),
+      requireToken: _nwDisplayStateVal('meshMicrogrid.receiver.requireToken', true) !== false,
+      ttlSec: Number(_nwDisplayStateVal('meshMicrogrid.receiver.ttlSec', 120)) || 120,
+      status: _nwDisplayStateVal('meshMicrogrid.receiver.status', 'disabled'),
+      lastHandshakeAt: Number(_nwDisplayStateVal('meshMicrogrid.receiver.lastHandshakeAt', 0)) || 0,
+      lastCommandAt: Number(_nwDisplayStateVal('meshMicrogrid.receiver.lastCommandAt', 0)) || 0,
+      lastCommandId: _nwDisplayStateVal('meshMicrogrid.receiver.lastCommandId', ''),
+      lastAck: _nwEnergyLedgerJson('meshMicrogrid.receiver.lastAckJson', {}),
+      lastRejectReason: _nwDisplayStateVal('meshMicrogrid.receiver.lastRejectReason', ''),
+      acceptedCount: Number(_nwDisplayStateVal('meshMicrogrid.receiver.acceptedCount', 0)) || 0,
+      rejectedCount: Number(_nwDisplayStateVal('meshMicrogrid.receiver.rejectedCount', 0)) || 0,
+      replayBlockedCount: Number(_nwDisplayStateVal('meshMicrogrid.receiver.replayBlockedCount', 0)) || 0,
+      receiverUrl: '/api/mesh/command/receive',
+      handshakeUrl: '/api/mesh/handshake',
+      directHardwareWrite: false,
+      neutralCommandOnly: true,
+    },
     decision,
     missingMappings: Array.isArray(missingMappings) ? missingMappings : [],
     exportUrls,
-    readOnly: true,
-    note: 'Betreiberansicht liest denselben Mesh/Microgrid-Statebaum. Geplante Entscheidungen sind read-only und ohne Hardwaresteuerung.',
+    readOnly: false,
+    neutralCommandOnly: true,
+    directHardwareWrite: false,
+    note: 'Betreiberansicht liest denselben Mesh/Microgrid-Statebaum. Im Feldtest kann ein neutraler JSON-Command-State ausgegeben werden; direkte Hardware-Schreibpfade bleiben gesperrt.',
   };
 };
 const _nwMeshMicrogridCsv = (payload) => {
@@ -17446,6 +17515,15 @@ const _nwMeshMicrogridCsv = (payload) => {
   const g = planning.gridLimit || {};
   rows.push(['GridLimitDiagnostic', String(g.limitW || 0), String(g.activePowerW || 0), g.direction || '', String(g.usagePercent || 0), String(g.remainingW || 0), String(g.overLimitW || 0), g.severity || '', g.message || ''].map(_nwDisplayCsvEscape).join(';'));
   rows.push('');
+  rows.push(['Typ','Status','Prepared','Allowed','HardwareWrite','Blocker','Warnungen','Grund'].map(_nwDisplayCsvEscape).join(';'));
+  const cg = payload && payload.commandGuard ? payload.commandGuard : {};
+  rows.push(['CommandGuard', cg.status || 'blocked-readonly', String(cg.prepared !== false), String(cg.allowed === true), String(cg.hardwareWrite === true), String(cg.blockerCount || 0), String(cg.warnCount || 0), cg.reason || 'read-only'].map(_nwDisplayCsvEscape).join(';'));
+  const cmds = Array.isArray(cg.plannedCommands) ? cg.plannedCommands : [];
+  rows.push(['Typ','CommandId','ActionId','Kategorie','Knoten','Ziel','Leistung_W','Richtung','Blockiert','Grund'].map(_nwDisplayCsvEscape).join(';'));
+  for (const cmd of cmds) {
+    rows.push(['CommandIntent', cmd.commandId || '', cmd.sourceActionId || '', cmd.category || '', cmd.nodeName || cmd.nodeId || '', cmd.targetNodeName || cmd.targetNodeId || '', String(cmd.plannedPowerW || 0), cmd.direction || '', String(cmd.blocked !== false), cmd.reason || ''].map(_nwDisplayCsvEscape).join(';'));
+  }
+  rows.push('');
   rows.push(['Hinweis', payload && payload.note || 'read-only'].map(_nwDisplayCsvEscape).join(';'));
   return '\ufeff' + rows.join('\r\n');
 };
@@ -17457,6 +17535,231 @@ app.get('/api/mesh/microgrid', (req, res) => {
     sendNoStore(res);
     if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
     return res.json(_nwMeshMicrogridBuildPayload());
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
+  }
+});
+app.get('/api/mesh/microgrid/command-guard', (req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
+    const payload = _nwMeshMicrogridBuildPayload();
+    return res.json({ ok: true, schema: 'nexowatt.mesh-commandguard-api.v1', generatedAt: Date.now(), commandGuard: payload.commandGuard || {}, readOnly: true, hardwareWrite: false });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// EOS Mesh/Microgrid Peer Handshake & Command Receiver
+// -----------------------------------------------------------------------------
+// 0.8.41: Diese Routen bilden die Feldtest-Schnittstelle zwischen zwei oder mehr
+// NexoWatt-Instanzen im separaten Mesh/Microgrid-Tailscale. Sie bleiben bewusst
+// herstellerneutral: Empfangen wird ein NexoWatt-Command-Intent, ausgegeben wird
+// nur ein lokaler JSON-Command-State. Direkte Hardware-Schreibpfade (OCPP,
+// Modbus, MQTT, Hersteller-APIs) sind hier weiterhin tabu.
+const _nwMeshCfg = () => (this.config && this.config.meshMicrogrid && typeof this.config.meshMicrogrid === 'object') ? this.config.meshMicrogrid : {};
+const _nwMeshSafeId = (value, fallback = 'local') => String(value || fallback).trim().toLowerCase().replace(/[^a-z0-9_\-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80) || fallback;
+const _nwMeshReceiverCfg = () => {
+  const cfg = _nwMeshCfg();
+  const r = cfg.receiver && typeof cfg.receiver === 'object' ? cfg.receiver : (cfg.commandReceiver && typeof cfg.commandReceiver === 'object' ? cfg.commandReceiver : {});
+  const tailscale = cfg.tailscale && typeof cfg.tailscale === 'object' ? cfg.tailscale : {};
+  const enabled = r.enabled === true || cfg.receiverEnabled === true || cfg.commandReceiverEnabled === true;
+  const commandStateDp = String(r.commandStateDp || r.receiverCommandStateDp || cfg.receiverCommandStateDp || cfg.receivedCommandStateDp || '').trim();
+  const token = String(r.token || r.receiverToken || cfg.receiverToken || tailscale.peerToken || cfg.peerToken || '').trim();
+  const requireToken = r.requireToken === false || cfg.receiverRequireToken === false ? false : true;
+  const ttlSec = Math.max(5, Math.min(900, Math.round(Number(r.ttlSec || r.commandTtlSec || cfg.receiverTtlSec || 120)) || 120));
+  const maxProcessedIds = Math.max(20, Math.min(1000, Math.round(Number(r.maxProcessedIds || cfg.receiverMaxProcessedIds || 200)) || 200));
+  const allowedPeerText = Array.isArray(r.allowedPeerNodeIds) ? r.allowedPeerNodeIds.join('\n') : String(r.allowedPeerNodeIds || cfg.allowedPeerNodeIds || '');
+  const allowedPeerNodeIds = allowedPeerText.split(/[\n,;]+/g).map(x => _nwMeshSafeId(x, '')).filter(Boolean).slice(0, 100);
+  return { enabled, commandStateDp, token, requireToken, ttlSec, maxProcessedIds, allowedPeerNodeIds };
+};
+const _nwMeshLocalIdentity = () => {
+  const cfg = _nwMeshCfg();
+  const tailscale = cfg.tailscale && typeof cfg.tailscale === 'object' ? cfg.tailscale : {};
+  const clusterId = _nwMeshSafeId(cfg.clusterId || 'cluster_01', 'cluster_01');
+  const nodeId = _nwMeshSafeId(tailscale.localNodeId || cfg.localNodeId || clusterId || 'local', 'local');
+  return {
+    nodeId,
+    clusterId,
+    clusterName: String(cfg.clusterName || 'Lokaler Energieverbund').trim() || 'Lokaler Energieverbund',
+    meshRole: String(cfg.meshRole || cfg.role || 'mesh-node').trim() || 'mesh-node',
+    tailscaleProfile: String(tailscale.profile || cfg.tailscaleProfile || 'mesh-microgrid').trim() || 'mesh-microgrid',
+  };
+};
+const _nwMeshHeaderToken = (req) => {
+  try {
+    return String((req.headers && (req.headers['x-nexowatt-mesh-token'] || req.headers['x-mesh-token'] || req.headers.authorization)) || '').replace(/^Bearer\s+/i, '').trim();
+  } catch (_e) { return ''; }
+};
+const _nwMeshTokenOk = (req, body) => {
+  const rcfg = _nwMeshReceiverCfg();
+  if (rcfg.requireToken === false) return { ok: true, required: false, configured: !!rcfg.token };
+  if (!rcfg.token) return { ok: false, required: true, configured: false, reason: 'receiver_token_not_configured' };
+  const token = _nwMeshHeaderToken(req) || String(body && (body.token || body.peerToken || body.meshToken) || '').trim();
+  return { ok: token === rcfg.token, required: true, configured: true, reason: token === rcfg.token ? '' : 'invalid_mesh_token' };
+};
+const _nwMeshSetState = async (id, value, ack = true) => {
+  try { await this.setStateAsync(id, { val: value, ack: !!ack }); } catch (_e) {}
+  try { if (typeof this.updateValue === 'function') this.updateValue(id, value, Date.now()); } catch (_e) {}
+};
+const _nwMeshProcessedIds = () => {
+  const list = _nwEnergyLedgerJson('meshMicrogrid.receiver.processedCommandIdsJson', []);
+  return Array.isArray(list) ? list.map(String).filter(Boolean) : [];
+};
+const _nwMeshNormalizeReceivedCommands = (body) => {
+  const b = body && typeof body === 'object' ? body : {};
+  const list = Array.isArray(b.commands) ? b.commands : (Array.isArray(b.commandIntents) ? b.commandIntents : [b.command || b]);
+  return list.filter(x => x && typeof x === 'object').map((cmd, idx) => ({
+    ...cmd,
+    commandId: String(cmd.commandId || cmd.id || `remote_cmd_${Date.now()}_${idx + 1}`),
+    ts: Number(cmd.ts || cmd.createdAt || b.ts || Date.now()) || Date.now(),
+    clusterId: _nwMeshSafeId(cmd.clusterId || b.clusterId || '', ''),
+    sourceNodeId: _nwMeshSafeId(cmd.sourceNodeId || cmd.senderNodeId || b.sourceNodeId || b.senderNodeId || 'remote', 'remote'),
+    directHardwareWrite: cmd.directHardwareWrite === true,
+    neutralCommandOnly: cmd.neutralCommandOnly !== false && b.neutralCommandOnly !== false,
+  }));
+};
+const _nwMeshReceiverReject = async (res, status, error, message, extra = {}) => {
+  const now = Date.now();
+  await _nwMeshSetState('meshMicrogrid.receiver.status', 'rejected', true);
+  await _nwMeshSetState('meshMicrogrid.receiver.lastRejectReason', error, true);
+  await _nwMeshSetState('meshMicrogrid.receiver.rejectedCount', Number(_nwDisplayStateVal('meshMicrogrid.receiver.rejectedCount', 0)) + 1, true);
+  const ack = { ok: false, schema: 'nexowatt.mesh-command-ack.v1', ts: now, status: 'rejected', error, message, ...extra };
+  await _nwMeshSetState('meshMicrogrid.receiver.lastAckJson', JSON.stringify(ack), true);
+  return res.status(status).json(ack);
+};
+
+app.get(['/api/mesh/handshake', '/api/mesh/status'], async (req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
+    const id = _nwMeshLocalIdentity();
+    const rcfg = _nwMeshReceiverCfg();
+    const payload = _nwMeshMicrogridBuildPayload();
+    const now = Date.now();
+    const handshake = {
+      ok: true,
+      schema: 'nexowatt.mesh-peer-handshake.v1',
+      ts: now,
+      version: '0.8.41',
+      nodeId: id.nodeId,
+      clusterId: id.clusterId,
+      clusterName: id.clusterName,
+      meshRole: id.meshRole,
+      tailscaleProfile: id.tailscaleProfile,
+      eos: true,
+      receiver: {
+        enabled: rcfg.enabled === true,
+        tokenRequired: rcfg.requireToken !== false,
+        tokenConfigured: !!rcfg.token,
+        receiverUrl: '/api/mesh/command/receive',
+        commandStateConfigured: !!rcfg.commandStateDp,
+        ttlSec: rcfg.ttlSec,
+      },
+      status: payload.status || 'unknown',
+      totals: payload.totals || {},
+      endpoints: { status: '/api/mesh/status', snapshot: '/api/mesh/microgrid', receiver: '/api/mesh/command/receive' },
+      directHardwareWrite: false,
+      neutralCommandOnly: true,
+    };
+    await _nwMeshSetState('meshMicrogrid.receiver.lastHandshakeAt', now, true);
+    await _nwMeshSetState('meshMicrogrid.receiver.lastHandshakeJson', JSON.stringify({ ts: now, remote: String(req.ip || ''), userAgent: String((req.headers && req.headers['user-agent']) || '').slice(0, 160), response: handshake }), true);
+    return res.json(handshake);
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
+  }
+});
+
+app.post('/api/mesh/command/receive', async (req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
+    const rcfg = _nwMeshReceiverCfg();
+    const id = _nwMeshLocalIdentity();
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    if (rcfg.enabled !== true) return _nwMeshReceiverReject(res, 423, 'receiver_disabled', 'Mesh/Microgrid Command Receiver ist nicht aktiviert.');
+    const tokenCheck = _nwMeshTokenOk(req, body);
+    if (!tokenCheck.ok) return _nwMeshReceiverReject(res, 403, tokenCheck.reason || 'invalid_mesh_token', 'Mesh-Peer-Token ungültig oder nicht konfiguriert.', { tokenRequired: tokenCheck.required, tokenConfigured: tokenCheck.configured });
+    if (!rcfg.commandStateDp) return _nwMeshReceiverReject(res, 409, 'missing_receiver_command_state', 'Kein lokaler Receiver Command-State konfiguriert.');
+    const commands = _nwMeshNormalizeReceivedCommands(body);
+    if (!commands.length) return _nwMeshReceiverReject(res, 400, 'empty_command_list', 'Keine neutralen Mesh-Commands im Payload gefunden.');
+    const processed = _nwMeshProcessedIds();
+    const processedSet = new Set(processed);
+    const accepted = [];
+    const rejected = [];
+    let replayBlocked = 0;
+    const now = Date.now();
+    for (const cmd of commands) {
+      const reasons = [];
+      if (cmd.clusterId && cmd.clusterId !== id.clusterId) reasons.push('cluster_mismatch');
+      if (rcfg.allowedPeerNodeIds.length && !rcfg.allowedPeerNodeIds.includes(cmd.sourceNodeId)) reasons.push('peer_not_allowed');
+      if (processedSet.has(cmd.commandId)) { reasons.push('duplicate_command'); replayBlocked += 1; }
+      const ageSec = Math.round(Math.abs(now - (Number(cmd.ts) || now)) / 1000);
+      if (ageSec > rcfg.ttlSec) reasons.push('command_expired');
+      if (cmd.directHardwareWrite === true) reasons.push('direct_hardware_write_forbidden');
+      if (cmd.neutralCommandOnly === false) reasons.push('non_neutral_command_forbidden');
+      if (reasons.length) rejected.push({ commandId: cmd.commandId, reasons, sourceNodeId: cmd.sourceNodeId });
+      else {
+        accepted.push({ ...cmd, receivedAt: now, receiverNodeId: id.nodeId, receiverClusterId: id.clusterId, bridgeRequired: true, directHardwareWrite: false, neutralCommandOnly: true });
+        processedSet.add(cmd.commandId);
+      }
+    }
+    if (!accepted.length) {
+      if (replayBlocked > 0) await _nwMeshSetState('meshMicrogrid.receiver.replayBlockedCount', Number(_nwDisplayStateVal('meshMicrogrid.receiver.replayBlockedCount', 0)) + replayBlocked, true);
+      return _nwMeshReceiverReject(res, 409, 'all_commands_rejected', 'Alle Mesh-Commands wurden vom Receiver blockiert.', { rejected });
+    }
+    const out = {
+      schema: 'nexowatt.mesh-received-command-envelope.v1',
+      ts: now,
+      receiverNodeId: id.nodeId,
+      receiverClusterId: id.clusterId,
+      source: 'mesh-command-receiver',
+      transport: 'tailscale-mesh',
+      directHardwareWrite: false,
+      neutralCommandOnly: true,
+      bridgeRequired: true,
+      commands: accepted,
+      rejected,
+    };
+    const json = JSON.stringify(out);
+    if (typeof this.setForeignStateAsync === 'function') await this.setForeignStateAsync(rcfg.commandStateDp, { val: json, ack: false });
+    else await this.setStateAsync(rcfg.commandStateDp, { val: json, ack: false });
+    const newProcessed = Array.from(processedSet).slice(-rcfg.maxProcessedIds);
+    await _nwMeshSetState('meshMicrogrid.receiver.status', rejected.length ? 'accepted-with-rejections' : 'accepted', true);
+    await _nwMeshSetState('meshMicrogrid.receiver.lastCommandAt', now, true);
+    await _nwMeshSetState('meshMicrogrid.receiver.lastCommandId', accepted[accepted.length - 1].commandId, true);
+    await _nwMeshSetState('meshMicrogrid.receiver.lastCommandJson', JSON.stringify(out), true);
+    await _nwMeshSetState('meshMicrogrid.receiver.processedCommandIdsJson', JSON.stringify(newProcessed), true);
+    await _nwMeshSetState('meshMicrogrid.receiver.acceptedCount', Number(_nwDisplayStateVal('meshMicrogrid.receiver.acceptedCount', 0)) + accepted.length, true);
+    await _nwMeshSetState('meshMicrogrid.receiver.rejectedCount', Number(_nwDisplayStateVal('meshMicrogrid.receiver.rejectedCount', 0)) + rejected.length, true);
+    if (replayBlocked > 0) await _nwMeshSetState('meshMicrogrid.receiver.replayBlockedCount', Number(_nwDisplayStateVal('meshMicrogrid.receiver.replayBlockedCount', 0)) + replayBlocked, true);
+    const ack = { ok: true, schema: 'nexowatt.mesh-command-ack.v1', ts: now, status: rejected.length ? 'accepted_partial' : 'accepted', receiverNodeId: id.nodeId, acceptedCount: accepted.length, rejectedCount: rejected.length, commandStateDp: rcfg.commandStateDp, acceptedCommandIds: accepted.map(c => c.commandId), rejected };
+    await _nwMeshSetState('meshMicrogrid.receiver.lastAckJson', JSON.stringify(ack), true);
+    await _nwMeshSetState('meshMicrogrid.receiver.lastRejectReason', rejected.length ? 'partial_reject' : '', true);
+    return res.status(202).json(ack);
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
+  }
+});
+
+app.post('/api/mesh/microgrid/command', (req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
+    const payload = _nwMeshMicrogridBuildPayload();
+    return res.status(202).json({
+      ok: true,
+      status: 'accepted-for-neutral-command-pipeline',
+      message: 'Mesh/Microgrid Befehle werden im Feldtest über den konfigurierten neutralen Command-State ausgegeben. Diese API schreibt keine Hardware direkt.',
+      requested: req && req.body ? req.body : null,
+      commandGuard: payload.commandGuard || {},
+      fieldControl: payload.fieldControl || {},
+      readOnly: false,
+      neutralCommandOnly: true,
+      directHardwareWrite: false,
+      hardwareWrite: false,
+    });
   } catch (e) {
     return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
   }

@@ -105,33 +105,35 @@
     <div class="nw-tabs" id="nw-ems-tabs">
       <button type="button" class="nw-tab nw-tab--active" data-tab="apps">Apps</button>
       <button type="button" class="nw-tab" data-tab="mapping">Zuordnung</button>
-      <button type="button" class="nw-tab" data-tab="peakconfig">Peak-Shaving</button>
-      <button type="button" class="nw-tab" data-tab="aiadvisor">KI‑Optimierung</button>
-      <button type="button" class="nw-tab" data-tab="storagefarm">Speicherfarm</button>
-      <button type="button" class="nw-tab" data-tab="multiuse">MultiUse</button>
+      <button type="button" class="nw-tab" data-tab="peakconfig" style="display:none;">Peak-Shaving</button>
+      <button type="button" class="nw-tab" data-tab="aiadvisor" style="display:none;">KI‑Optimierung</button>
+      <button type="button" class="nw-tab" data-tab="storagefarm" style="display:none;">Speicherfarm</button>
+      <button type="button" class="nw-tab" data-tab="multiuse" style="display:none;">MultiUse</button>
       <button type="button" class="nw-tab" data-tab="meshmicrogrid" style="display:none;">Mesh/Microgrid</button>
       <button type="button" class="nw-tab" data-tab="flow">Energiefluss</button>
-      <button type="button" class="nw-tab" data-tab="thermal">Thermik</button>
-      <button type="button" class="nw-tab" data-tab="heatingrod">Heizstab</button>
-      <button type="button" class="nw-tab" data-tab="bhkw">BHKW</button>
-      <button type="button" class="nw-tab" data-tab="generator">Generator</button>
-      <button type="button" class="nw-tab" data-tab="threshold">Schwellwerte</button>
-      <button type="button" class="nw-tab" data-tab="relay">Relais</button>
-      <button type="button" class="nw-tab" data-tab="grid">Netzlimits</button>
-      <button type="button" class="nw-tab" data-tab="evupv">EVU / PV Regelung</button>
-      <button type="button" class="nw-tab" data-tab="para14a">§14a</button>
-      <button type="button" class="nw-tab" data-tab="evcs">Ladepunkte</button>
+      <button type="button" class="nw-tab" data-tab="thermal" style="display:none;">Thermik</button>
+      <button type="button" class="nw-tab" data-tab="heatingrod" style="display:none;">Heizstab</button>
+      <button type="button" class="nw-tab" data-tab="bhkw" style="display:none;">BHKW</button>
+      <button type="button" class="nw-tab" data-tab="generator" style="display:none;">Generator</button>
+      <button type="button" class="nw-tab" data-tab="threshold" style="display:none;">Schwellwerte</button>
+      <button type="button" class="nw-tab" data-tab="relay" style="display:none;">Relais</button>
+      <button type="button" class="nw-tab" data-tab="grid" style="display:none;">Netzlimits</button>
+      <button type="button" class="nw-tab" data-tab="evupv" style="display:none;">EVU / PV Regelung</button>
+      <button type="button" class="nw-tab" data-tab="para14a" style="display:none;">§14a</button>
+      <button type="button" class="nw-tab" data-tab="evcs" style="display:none;">Ladepunkte</button>
       <button type="button" class="nw-tab" data-tab="status">Status</button>
     </div>
   </div>
 
   <div id="nw-tabpanel-apps" data-tabpanel="apps">
 
-  <section class="nw-config-section">
+  <section class="nw-config-section" data-appcenter-role="app-catalog">
     <div class="nw-config-section__head">
-      <h2 class="nw-config-section__title">Apps (Kernlogiken)</h2>
-      <div class="nw-config-row__actions">
-        <button id="nwDevicesQuickSetup" type="button" class="nw-config-btn nw-config-btn--ghost" title="Erkennt nexowatt-devices-Aliase und füllt sichere Standard-DPs in Energiefluss, Ladepunkte und Apps automatisch vor.">Schnell‑Inbetriebnahme (Geräte + DPs)</button>
+      <div>
+        <h2 class="nw-config-section__title">Apps (Kernlogiken)</h2>
+        <div class="nw-config-section__subtitle" style="margin:0;opacity:.85;line-height:1.35;">
+          Nur App-Katalog: Installieren und Aktivieren. Detail-Einstellungen liegen in den jeweiligen Reitern wie Zuordnung, Ladepunkte, Netzlimits oder Mesh/Microgrid.
+        </div>
       </div>
     </div>
     <div class="nw-config-grid" id="appsList"></div>
@@ -611,10 +613,15 @@
 
   <section class="nw-config-section">
     <div class="nw-config-section__head">
-      <h2 class="nw-config-section__title">Zuordnung &amp; Einstellungen</h2>
-    </div>
-    <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
-      Jede App hat ihre eigenen Datenpunkte. Ordne sie hier sauber zu, damit die Regelungen stabil und nachvollziehbar arbeiten.
+      <div>
+        <h2 class="nw-config-section__title">Zuordnung &amp; Einstellungen</h2>
+        <div class="nw-config-section__subtitle" style="margin:0;opacity:.85;line-height:1.35;">
+          Datenpunkte, Marktprofil und technische Verknüpfungen. App-Details bleiben aus dem Apps-Reiter heraus.
+        </div>
+      </div>
+      <div class="nw-config-row__actions">
+        <button id="nwDevicesQuickSetup" type="button" class="nw-config-btn nw-config-btn--ghost" title="Erkennt nexowatt-devices-Aliase und füllt sichere Standard-DPs in Energiefluss, Ladepunkte und Apps automatisch vor.">Schnell‑Inbetriebnahme (Geräte + DPs)</button>
+      </div>
     </div>
 
     <div class="nw-config-grid" id="mappingGrid">

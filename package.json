@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.8.37",
+  "version": "0.8.41",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -245,7 +245,10 @@
     "test:app-center-structure-cleanup": "node scripts/verify-app-center-structure-cleanup.js",
     "test:installer-back-link": "node scripts/verify-installer-back-link.js",
     "test:mesh-microgrid-operator": "node scripts/verify-mesh-microgrid-operator.js",
-    "test:mesh-microgrid-planning": "node scripts/verify-mesh-microgrid-planning.js"
+    "test:mesh-microgrid-planning": "node scripts/verify-mesh-microgrid-planning.js",
+    "test:mesh-microgrid-commandguard": "node scripts/verify-mesh-microgrid-commandguard.js",
+    "test:app-center-structure-hardening": "npm run test:app-center-structure-cleanup",
+    "test:mesh-peer-receiver": "node scripts/verify-mesh-peer-receiver.js"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",

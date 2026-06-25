@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:407751c86bbf6f20c4fc804ffe734f1a582c5baa1e0c5545d5fbf99f8da70d1a
+ * Quell-Hash: sha256:4740f8ce77900af27ac9efa77d7c465b2a2cf43f8fd4af0db137df3a0005aa16
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1965,6 +1965,27 @@ function collectAiAdvisorConfigFromUI(base) {
           <label class="nw-config-field"><span class="nw-config-label">Cluster-ID</span><input class="nw-config-input" id="meshMicrogridClusterId" value="${_meshHtmlEscape(cfg.clusterId || 'cluster_01')}" ${isEos ? '' : 'disabled'} /></label>
           <label class="nw-config-field"><span class="nw-config-label">Cluster-Name</span><input class="nw-config-input" id="meshMicrogridClusterName" value="${_meshHtmlEscape(cfg.clusterName || 'Lokaler Energieverbund')}" ${isEos ? '' : 'disabled'} /></label>
         </div>
+        <div class="nw-config-subcard" style="margin-top:12px;">
+          <div class="nw-config-card__title">Feldtest-Steuerung & Tailscale Mesh</div>
+          <div class="nw-config-card__subtitle">Für den direkten Feldtest wird ein neutraler JSON-Command-State ausgegeben. NexoWatt schreibt weiterhin keine OCPP-/Modbus-/MQTT-/Hersteller-Rohdatenpunkte direkt; die nachgelagerte Bridge oder die zweite NexoWatt-Instanz im separaten Mesh-Tailscale setzt den Intent um.</div>
+          <div class="nw-config-grid nw-config-grid--3">
+            <label class="nw-config-field"><span class="nw-config-label">Steuermodus</span><select class="nw-config-input" id="meshMicrogridControlMode" ${isEos ? '' : 'disabled'}><option value="diagnostic">Nur Diagnose</option><option value="field_test">Feldtest: JSON-Command-State ausgeben</option><option value="off">Aus</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Installateurfreigabe Feldtest</span><select class="nw-config-input" id="meshMicrogridFieldApproved" ${isEos ? '' : 'disabled'}><option value="false">Nein</option><option value="true">Ja</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Max. Commands je Tick</span><input class="nw-config-input" id="meshMicrogridMaxCommandsPerTick" value="${_meshHtmlEscape(cfg.maxCommandsPerTick || 3)}" placeholder="3" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Neutraler Command-State</span><input class="nw-config-input" id="meshMicrogridCommandStateDp" value="${_meshHtmlEscape(cfg.commandStateDp || '')}" placeholder="0_userdata.0.nexowatt.mesh.command" ${isEos ? '' : 'disabled'} /><small>Hier wird ein JSON-Envelope geschrieben. Die Umsetzung übernimmt eine separate Bridge/Instanz.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Tailscale Mesh aktiv</span><select class="nw-config-input" id="meshMicrogridTailscaleEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Tailscale Profil</span><input class="nw-config-input" id="meshMicrogridTailscaleProfile" value="${_meshHtmlEscape((cfg.tailscale && cfg.tailscale.profile) || 'mesh-microgrid')}" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Lokale Mesh-Node-ID</span><input class="nw-config-input" id="meshMicrogridTailscaleLocalNodeId" value="${_meshHtmlEscape((cfg.tailscale && cfg.tailscale.localNodeId) || cfg.clusterId || 'local')}" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Peer-URLs im Mesh-Tailscale</span><textarea class="nw-config-input" id="meshMicrogridTailscalePeerUrls" rows="3" placeholder="http://100.x.y.z:8188
+http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.isArray(cfg.tailscale && cfg.tailscale.peerUrls) ? cfg.tailscale.peerUrls.join('\n') : ((cfg.tailscale && cfg.tailscale.peerUrls) || ''))}</textarea><small>Diese Verbindung ist getrennt von der Fernwartung. Hier nur die Mesh/Microgrid-Tailscale-IP/URL eintragen.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Peer Token optional</span><input class="nw-config-input" id="meshMicrogridTailscalePeerToken" value="${_meshHtmlEscape((cfg.tailscale && cfg.tailscale.peerToken) || '')}" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Command Receiver aktiv</span><select class="nw-config-input" id="meshMicrogridReceiverEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select><small>Empfängt neutrale Commands von anderen NexoWatt-Instanzen im Mesh-Tailscale.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Receiver Token erforderlich</span><select class="nw-config-input" id="meshMicrogridReceiverRequireToken" ${isEos ? '' : 'disabled'}><option value="true">Ja</option><option value="false">Nein</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Command TTL Sekunden</span><input class="nw-config-input" id="meshMicrogridReceiverTtlSec" value="${_meshHtmlEscape((cfg.receiver && cfg.receiver.ttlSec) || cfg.receiverTtlSec || 120)}" placeholder="120" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Lokaler Receiver Command-State</span><input class="nw-config-input" id="meshMicrogridReceiverCommandStateDp" value="${_meshHtmlEscape((cfg.receiver && cfg.receiver.commandStateDp) || cfg.receiverCommandStateDp || '')}" placeholder="0_userdata.0.nexowatt.mesh.receivedCommand" ${isEos ? '' : 'disabled'} /><small>Remote-Commands werden nur als neutraler JSON-Envelope hierhin geschrieben. Die lokale Bridge setzt sie herstellerneutral um.</small></label>
+            <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Erlaubte Peer-Node-IDs optional</span><textarea class="nw-config-input" id="meshMicrogridReceiverAllowedPeers" rows="2" placeholder="haus_a&#10;hof_pv" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.isArray(cfg.receiver && cfg.receiver.allowedPeerNodeIds) ? cfg.receiver.allowedPeerNodeIds.join('\n') : ((cfg.receiver && cfg.receiver.allowedPeerNodeIds) || ''))}</textarea></label>
+          </div>
+        </div>
         <div class="nw-config-card__subtitle" style="margin-top:10px;">Knoten: PV/Erzeuger, Verbraucher/Gebäude, Speicher, Netzpunkt, Ladepunktgruppen oder thermische Verbraucher. Technische Zuordnung bleibt im Installerbereich.</div>
         <div id="meshMicrogridNodes">${rows || '<div class="nw-config-empty" style="text-align:left;">Noch keine Mesh-/Microgrid-Knoten angelegt.</div>'}</div>
         <div style="display:flex;justify-content:flex-end;margin-top:12px;"><button type="button" class="nw-btn" id="meshMicrogridAddNode" ${isEos ? '' : 'disabled'}>Knoten anlegen</button></div>
@@ -1973,6 +1994,16 @@ function collectAiAdvisorConfigFromUI(base) {
     if (enabled) enabled.value = cfg.enabled === true ? 'true' : 'false';
     const mode = card.querySelector('#meshMicrogridMode');
     if (mode) mode.value = ['off','diagnostic','local_first','grid_last'].includes(String(cfg.mode || '')) ? String(cfg.mode) : 'diagnostic';
+    const controlMode = card.querySelector('#meshMicrogridControlMode');
+    if (controlMode) controlMode.value = ['off','diagnostic','field_test'].includes(String(cfg.controlMode || '')) ? String(cfg.controlMode) : 'diagnostic';
+    const approved = card.querySelector('#meshMicrogridFieldApproved');
+    if (approved) approved.value = cfg.fieldTestApproved === true || cfg.installerApproved === true ? 'true' : 'false';
+    const tsEnabled = card.querySelector('#meshMicrogridTailscaleEnabled');
+    if (tsEnabled) tsEnabled.value = cfg.tailscale && cfg.tailscale.enabled === true ? 'true' : 'false';
+    const receiverEnabled = card.querySelector('#meshMicrogridReceiverEnabled');
+    if (receiverEnabled) receiverEnabled.value = cfg.receiver && cfg.receiver.enabled === true ? 'true' : 'false';
+    const receiverRequireToken = card.querySelector('#meshMicrogridReceiverRequireToken');
+    if (receiverRequireToken) receiverRequireToken.value = cfg.receiver && cfg.receiver.requireToken === false ? 'false' : 'true';
     const add = card.querySelector('#meshMicrogridAddNode');
     if (add) add.addEventListener('click', () => {
       currentConfig.meshMicrogrid = currentConfig.meshMicrogrid || {};
@@ -2142,6 +2173,72 @@ function collectAiAdvisorConfigFromUI(base) {
     // eine schlanke Liste echter Funktions-Apps mit Installiert/Aktiv-Schaltern.
     buildAppCenterStructurePanels();
 
+    /**
+     * App-Center-Struktur ab 0.8.38:
+     * Der Apps-Reiter ist strikt ein Katalog. Er zeigt Installiert/Aktiv und höchstens
+     * Navigationshinweise zu den fachlich passenden Konfigurationsreitern. Alle
+     * echten Einstellungen bleiben in Zuordnung, Ladepunkte oder eigenen Modulreitern.
+     */
+    const appConfigTargets = {
+      charging: { tab: 'evcs', label: 'Ladepunkte konfigurieren' },
+      peak: { tab: 'peakconfig', label: 'Peak-Shaving konfigurieren' },
+      storage: { tab: 'mapping', label: 'Speicher-Zuordnung öffnen' },
+      storagefarm: { tab: 'storagefarm', label: 'Speicherfarm konfigurieren' },
+      thermal: { tab: 'thermal', label: 'Thermik konfigurieren' },
+      heatingrod: { tab: 'heatingrod', label: 'Heizstab konfigurieren' },
+      bhkw: { tab: 'bhkw', label: 'BHKW konfigurieren' },
+      generator: { tab: 'generator', label: 'Generator konfigurieren' },
+      threshold: { tab: 'threshold', label: 'Schwellwerte konfigurieren' },
+      relay: { tab: 'relay', label: 'Relais konfigurieren' },
+      grid: { tab: 'grid', label: 'Netzlimits konfigurieren' },
+      aiAdvisor: { tab: 'aiadvisor', label: 'KI-Optimierung konfigurieren' },
+      tariff: { tab: 'mapping', label: 'Tarif-Zuordnung öffnen' },
+      para14a: { tab: 'para14a', label: '§14a konfigurieren' },
+      multiuse: { tab: 'multiuse', label: 'MultiUse konfigurieren' },
+      meshMicrogrid: { tab: 'meshmicrogrid', label: 'Mesh/Microgrid konfigurieren', operatorUrl: '/mesh/microgrid', operatorLabel: 'Betreiberansicht öffnen' },
+      energyLedger: { url: '/ledger/local-kwh', label: 'Betreiberansicht / Export öffnen' }
+    };
+
+    function appendAppConfigNavigation(body, app, st) {
+      const target = appConfigTargets[app.id];
+      if (!body || !target) return;
+      if (!app.mandatory && !st.installed) return;
+
+      const row = document.createElement('div');
+      row.className = 'nw-config-card__row nw-app-config-nav';
+      row.setAttribute('data-app-config-nav', app.id);
+
+      const btn = document.createElement(target.url ? 'a' : 'button');
+      btn.className = 'nw-btn nw-btn--small nw-app-config-nav__button';
+      btn.textContent = target.label || 'Konfiguration öffnen';
+      if (target.url) {
+        btn.setAttribute('href', target.url);
+        btn.setAttribute('target', '_blank');
+        btn.setAttribute('rel', 'noopener noreferrer');
+      } else {
+        btn.setAttribute('type', 'button');
+        btn.setAttribute('data-app-config-target', String(target.tab || ''));
+        btn.addEventListener('click', () => {
+          const tab = String(target.tab || '');
+          if (!tab) return;
+          const tabEl = document.querySelector(`.nw-tab[data-tab="${tab}"]`);
+          if (tabEl) tabEl.click();
+        });
+      }
+
+      row.appendChild(btn);
+      if (target.operatorUrl) {
+        const op = document.createElement('a');
+        op.className = 'nw-btn nw-btn--small nw-app-config-nav__button';
+        op.textContent = target.operatorLabel || 'Betreiberansicht öffnen';
+        op.setAttribute('href', target.operatorUrl); // href = '/mesh/microgrid'
+        op.setAttribute('target', '_blank');
+        op.setAttribute('rel', 'noopener noreferrer');
+        row.appendChild(op);
+      }
+      body.appendChild(row);
+    }
+
     const visibleApps = APP_CATALOG.filter((app) => _isAppLicensed(app.id));
     for (const app of visibleApps) {
       const st = getSt(app.id);
@@ -2149,6 +2246,7 @@ function collectAiAdvisorConfigFromUI(base) {
       const card = document.createElement('div');
       card.className = 'nw-config-card';
       card.setAttribute('data-app', app.id);
+      card.setAttribute('data-app-catalog-card', '1');
 
       const header = document.createElement('div');
       header.className = 'nw-config-card__header';
@@ -2264,76 +2362,15 @@ function collectAiAdvisorConfigFromUI(base) {
       const body = document.createElement('div');
       body.className = 'nw-config-card__body';
 
-      // Optional quick hints
-      if (app.id === 'charging') {
-        const row = document.createElement('div');
-        row.className = 'nw-config-card__row';
-        row.textContent = _licenseEdition() === 'hems'
-          ? 'Konfiguration: Reiter „Ladepunkte“. Home erlaubt bis zu 3 Wallboxen.'
-          : 'Konfiguration: Reiter „Ladepunkte“. Datenpunkte: pro Ladepunkt.';
-        body.appendChild(row);
-      }
-      if (app.id === 'peak') {
-        const row = document.createElement('div');
-        row.className = 'nw-config-card__row';
-        row.textContent = 'Konfiguration: Reiter „Peak-Shaving“. Dort normale LSK, atypische HLZF und Hybrid-Modus einstellen.';
-        body.appendChild(row);
-      }
-      if (app.id === 'aiAdvisor') {
-        const row = document.createElement('div');
-        row.className = 'nw-config-card__row';
-        row.textContent = 'Konfiguration: Reiter „KI‑Optimierung“. Im UI‑Adapter nur beratend, keine automatischen Schaltbefehle.';
-        body.appendChild(row);
-      }
-      if (app.id === 'energyWallet') {
-        const row = document.createElement('div');
-        row.className = 'nw-config-card__row';
-        row.textContent = 'Home + EOS: Das Energie-Wertkonto rechnet nur und schaltet keine Geräte. Kostenannahmen und An/Aus-Schalter pflegt der Betreiber im Nutzerfrontend unter Einstellungen.';
-        body.appendChild(row);
-      }
-      if (app.id === 'meshMicrogrid') {
-        const row = document.createElement('div');
-        row.className = 'nw-config-card__row';
-        row.textContent = st.installed
-          ? 'EOS: Detailkonfiguration im eigenen Reiter „Mesh/Microgrid“. Der Apps-Reiter bleibt nur für Installiert/Aktiv.'
-          : 'EOS: Nach Installation erscheint ein eigener Reiter „Mesh/Microgrid“ für Knoten, Cluster und Diagnose.';
-        body.appendChild(row);
-
-        if (st.installed) {
-          const linkRow = document.createElement('div');
-          linkRow.className = 'nw-config-card__row';
-          const link = document.createElement('a');
-          link.href = '/mesh/microgrid';
-          link.target = '_blank';
-          link.rel = 'noopener noreferrer';
-          link.textContent = 'Betreiberansicht / Snapshot-Export öffnen';
-          // Nur Verweis: Die Betreiberansicht liest denselben meshMicrogrid-Statebaum
-          // wie JSON-/CSV-API. Es entsteht keine zweite Clusterlogik und keine Steuerung.
-          linkRow.appendChild(link);
-          body.appendChild(linkRow);
-        }
-      }
-      if (app.id === 'energyLedger') {
-        const row = document.createElement('div');
-        row.className = 'nw-config-card__row';
-        row.textContent = 'EOS: Das Local kWh Ledger sammelt neutrale Session-/Solar-/Netzanteile als Grundlage für Export, Nachbarschaft und spätere Microgrid-Funktionen. Es schaltet keine Hardware.';
-        body.appendChild(row);
-
-        const linkRow = document.createElement('div');
-        linkRow.className = 'nw-config-card__row';
-        const link = document.createElement('a');
-        link.href = '/ledger/local-kwh';
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.textContent = 'Betreiberansicht / CSV-Export öffnen';
-        // Nur Verweis: Die Betreiberansicht liest denselben energyLedger-Puffer
-        // wie JSON-/CSV-API und erzeugt keine zweite Ledger-Zählung.
-        linkRow.appendChild(link);
-        body.appendChild(linkRow);
-      }
+      // 0.8.38 Strukturhärtung:
+      // Der Apps-Reiter ist strikt ein Katalog. Hier stehen nur
+      // Installiert/Aktiv und optional ein kompakter Sprung in den zuständigen
+      // Reiter oder die Betreiberansicht. Fachliche Einstellungen, Mappingfelder,
+      // Preise, Stationsseiten und Mesh-Knoten werden nie in dieser Karte gerendert.
+      appendAppConfigNavigation(body, app, st);
 
       card.appendChild(header);
-      card.appendChild(body);
+      if (body.childElementCount > 0) card.appendChild(body);
 
       els.appsList.appendChild(card);
     }
@@ -11259,6 +11296,20 @@ function collectAiAdvisorConfigFromUI(base) {
     const meshGridLimitEl = document.getElementById('meshMicrogridGridLimitW');
     const meshClusterIdEl = document.getElementById('meshMicrogridClusterId');
     const meshClusterNameEl = document.getElementById('meshMicrogridClusterName');
+    const meshControlModeEl = document.getElementById('meshMicrogridControlMode');
+    const meshFieldApprovedEl = document.getElementById('meshMicrogridFieldApproved');
+    const meshCommandStateEl = document.getElementById('meshMicrogridCommandStateDp');
+    const meshMaxCommandsEl = document.getElementById('meshMicrogridMaxCommandsPerTick');
+    const meshTsEnabledEl = document.getElementById('meshMicrogridTailscaleEnabled');
+    const meshTsProfileEl = document.getElementById('meshMicrogridTailscaleProfile');
+    const meshTsLocalNodeEl = document.getElementById('meshMicrogridTailscaleLocalNodeId');
+    const meshTsPeerUrlsEl = document.getElementById('meshMicrogridTailscalePeerUrls');
+    const meshTsPeerTokenEl = document.getElementById('meshMicrogridTailscalePeerToken');
+    const meshReceiverEnabledEl = document.getElementById('meshMicrogridReceiverEnabled');
+    const meshReceiverRequireTokenEl = document.getElementById('meshMicrogridReceiverRequireToken');
+    const meshReceiverTtlSecEl = document.getElementById('meshMicrogridReceiverTtlSec');
+    const meshReceiverCommandStateEl = document.getElementById('meshMicrogridReceiverCommandStateDp');
+    const meshReceiverAllowedPeersEl = document.getElementById('meshMicrogridReceiverAllowedPeers');
     const meshRows = Array.from(document.querySelectorAll('[data-mesh-node-row]'));
     const readMesh = (row, field) => {
       const el = row && row.querySelector(`[data-mesh-field="${field}"]`);
@@ -11271,6 +11322,22 @@ function collectAiAdvisorConfigFromUI(base) {
     patch.meshMicrogrid.clusterId = safeMeshId(meshClusterIdEl ? meshClusterIdEl.value : 'cluster_01', 'cluster_01');
     patch.meshMicrogrid.clusterName = meshClusterNameEl ? String(meshClusterNameEl.value || 'Lokaler Energieverbund').trim() : 'Lokaler Energieverbund';
     patch.meshMicrogrid.gridLimitW = Math.max(0, Math.round(Number(meshGridLimitEl ? meshGridLimitEl.value : 0) || 0));
+    patch.meshMicrogrid.controlMode = meshControlModeEl && ['off','diagnostic','field_test'].includes(meshControlModeEl.value) ? meshControlModeEl.value : 'diagnostic';
+    patch.meshMicrogrid.fieldTestApproved = meshFieldApprovedEl ? meshFieldApprovedEl.value === 'true' : false;
+    patch.meshMicrogrid.commandStateDp = meshCommandStateEl ? String(meshCommandStateEl.value || '').trim() : '';
+    patch.meshMicrogrid.maxCommandsPerTick = Math.max(1, Math.min(10, Math.round(Number(meshMaxCommandsEl ? meshMaxCommandsEl.value : 3) || 3)));
+    patch.meshMicrogrid.tailscale = patch.meshMicrogrid.tailscale && typeof patch.meshMicrogrid.tailscale === 'object' ? patch.meshMicrogrid.tailscale : {};
+    patch.meshMicrogrid.tailscale.enabled = meshTsEnabledEl ? meshTsEnabledEl.value === 'true' : false;
+    patch.meshMicrogrid.tailscale.profile = meshTsProfileEl ? String(meshTsProfileEl.value || 'mesh-microgrid').trim() : 'mesh-microgrid';
+    patch.meshMicrogrid.tailscale.localNodeId = safeMeshId(meshTsLocalNodeEl ? meshTsLocalNodeEl.value : patch.meshMicrogrid.clusterId, patch.meshMicrogrid.clusterId || 'local');
+    patch.meshMicrogrid.tailscale.peerUrls = String(meshTsPeerUrlsEl ? meshTsPeerUrlsEl.value || '' : '').split(/[\n,;]+/g).map((x) => x.trim()).filter(Boolean);
+    patch.meshMicrogrid.tailscale.peerToken = meshTsPeerTokenEl ? String(meshTsPeerTokenEl.value || '').trim() : '';
+    patch.meshMicrogrid.receiver = patch.meshMicrogrid.receiver && typeof patch.meshMicrogrid.receiver === 'object' ? patch.meshMicrogrid.receiver : {};
+    patch.meshMicrogrid.receiver.enabled = meshReceiverEnabledEl ? meshReceiverEnabledEl.value === 'true' : false;
+    patch.meshMicrogrid.receiver.requireToken = meshReceiverRequireTokenEl ? meshReceiverRequireTokenEl.value !== 'false' : true;
+    patch.meshMicrogrid.receiver.ttlSec = Math.max(5, Math.min(900, Math.round(Number(meshReceiverTtlSecEl ? meshReceiverTtlSecEl.value : 120) || 120)));
+    patch.meshMicrogrid.receiver.commandStateDp = meshReceiverCommandStateEl ? String(meshReceiverCommandStateEl.value || '').trim() : '';
+    patch.meshMicrogrid.receiver.allowedPeerNodeIds = String(meshReceiverAllowedPeersEl ? meshReceiverAllowedPeersEl.value || '' : '').split(/[\n,;]+/g).map((x) => String(x || '').trim().toLowerCase().replace(/[^a-z0-9_\-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64)).filter(Boolean);
     patch.meshMicrogrid.nodes = meshRows.map((row, idx) => {
       const type = ['producer','consumer','storage','grid','chargepoint','thermal','generic'].includes(readMesh(row, 'type')) ? readMesh(row, 'type') : 'consumer';
       const role = ['producer','consumer','storage','grid'].includes(readMesh(row, 'role')) ? readMesh(row, 'role') : (type === 'producer' ? 'producer' : (type === 'storage' ? 'storage' : (type === 'grid' ? 'grid' : 'consumer')));
