@@ -17380,6 +17380,148 @@ app.get('/api/ledger/local-kwh.csv', (req, res) => {
 const _nwMeshMicrogridIsLicensed = () => {
   try { return !!this._nwLicenseAllowsAppId('meshMicrogrid'); } catch (_e) { return false; }
 };
+
+const _nwMeshMicrogridCfg = () => {
+  const cfg = this && this.config && this.config.meshMicrogrid && typeof this.config.meshMicrogrid === 'object' ? this.config.meshMicrogrid : {};
+  return cfg;
+};
+const _nwMeshSafeId = (value, fallback = 'node') => String(value || fallback).trim().toLowerCase().replace(/[^a-z0-9_\-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64) || fallback;
+const _nwMeshReceiverCfg = () => {
+  const cfg = _nwMeshMicrogridCfg();
+  const r = cfg.receiver && typeof cfg.receiver === 'object' ? cfg.receiver : (cfg.commandReceiver && typeof cfg.commandReceiver === 'object' ? cfg.commandReceiver : {});
+  const tailscale = cfg.tailscale && typeof cfg.tailscale === 'object' ? cfg.tailscale : {};
+  const enabled = r.enabled === true || cfg.receiverEnabled === true;
+  const acceptRemoteCommands = r.acceptRemoteCommands === true || cfg.acceptRemoteCommands === true;
+  const localCommandStateDp = String(r.localCommandStateDp || r.receivedCommandStateDp || cfg.receivedCommandStateDp || '').trim();
+  const peerToken = String(r.peerToken || tailscale.peerToken || cfg.receiverToken || '').trim();
+  const requireClusterMatch = r.requireClusterMatch !== false;
+  const replayTtlSec = Math.max(30, Math.min(86400, Math.round(Number(r.replayTtlSec || cfg.replayTtlSec || 900)) || 900));
+  const processedLimit = Math.max(20, Math.min(2000, Math.round(Number(r.processedLimit || cfg.receiverProcessedLimit || 200)) || 200));
+  const allowedPeerText = Array.isArray(r.allowedPeerNodeIds) ? r.allowedPeerNodeIds.join('\n') : String(r.allowedPeerNodeIds || r.allowedPeers || r.peerAllowList || '');
+  const allowedPeerNodeIds = allowedPeerText.split(/[\n,; ]+/g).map((x) => _nwMeshSafeId(x, '')).filter(Boolean);
+  return { enabled, acceptRemoteCommands, localCommandStateDp, peerToken, requireClusterMatch, replayTtlSec, processedLimit, allowedPeerNodeIds };
+};
+
+const _nwMeshTailscaleCfg = () => {
+  const cfg = _nwMeshMicrogridCfg();
+  const t = cfg.tailscale && typeof cfg.tailscale === 'object' ? cfg.tailscale : (cfg.tailscaleMesh && typeof cfg.tailscaleMesh === 'object' ? cfg.tailscaleMesh : {});
+  const enabled = t.enabled === true || cfg.tailscaleEnabled === true;
+  const profile = String(t.profile || t.profileName || cfg.tailscaleProfile || 'mesh-microgrid').trim() || 'mesh-microgrid';
+  const localNodeId = _nwMeshSafeId(t.localNodeId || cfg.localNodeId || cfg.clusterId || 'local', 'local');
+  const timeoutMs = Math.max(500, Math.min(10000, Math.round(Number(t.timeoutMs || t.timeout || cfg.tailscaleTimeoutMs || 2500)) || 2500));
+  const peerUrlText = Array.isArray(t.peerUrls) ? t.peerUrls.join('\n') : String(t.peerUrls || cfg.peerUrls || '');
+  const peerToken = String(t.peerToken || cfg.peerToken || '').trim();
+  const peerUrls = peerUrlText.split(/[\n,;]+/g).map((x) => String(x || '').trim()).filter(Boolean).slice(0, 20);
+  return { enabled, profile, localNodeId, timeoutMs, peerUrls, peerToken };
+};
+const _nwMeshNormalPeerUrl = (raw) => {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  const withProto = /^https?:\/\//i.test(s) ? s : `http://${s}`;
+  return withProto.replace(/\/+$/g, '');
+};
+const _nwMeshPeerTokenFromReq = (req) => String((req && req.headers && (req.headers['x-nexowatt-mesh-token'] || req.headers['x-mesh-token'])) || (req && req.query && req.query.token) || (req && req.body && (req.body.peerToken || req.body.token)) || '').trim();
+const _nwMeshPeerTokenOk = (req) => {
+  const token = _nwMeshReceiverCfg().peerToken;
+  if (!token) return true;
+  return _nwMeshPeerTokenFromReq(req) === token;
+};
+const _nwMeshWriteState = async (id, value, ack = true) => {
+  try { if (typeof this.setStateAsync === 'function') await this.setStateAsync(id, { val: value, ack }); } catch (_e) {}
+};
+const _nwMeshStateJson = (id, fallback) => _nwEnergyLedgerJson(id, fallback);
+const _nwMeshNow = () => Date.now();
+const _nwMeshCommandIds = (body) => {
+  const list = body && Array.isArray(body.commands) ? body.commands : (body && body.command ? [body.command] : (body && body.commandId ? [body] : []));
+  return list.map((cmd, idx) => String((cmd && cmd.commandId) || (cmd && cmd.id) || `remote_cmd_${idx + 1}`).trim()).filter(Boolean);
+};
+
+/**
+ * 0.8.43 Peer-Härtung: Feldtestfehler werden bewusst in verständliche Klassen
+ * zerlegt. Der Installateur soll im Feld sofort unterscheiden können, ob Token,
+ * Cluster-ID, Receiver-Freigabe, Timeout oder ein normaler API-/Netzwerkfehler
+ * vorliegt. Diese Klassifizierung ist reine Diagnose und öffnet keinen
+ * Hardware-Schreibpfad.
+ */
+const _nwMeshPeerErrorClass = (peer) => {
+  const p = peer && typeof peer === 'object' ? peer : {};
+  const errors = Array.isArray(p.errors) ? p.errors.map(x => String(x || '').toLowerCase()) : [];
+  const ack = p.commandAck && typeof p.commandAck === 'object' ? p.commandAck : {};
+  const text = [p.error, p.lastError, p.status, p.commandStatus, ack.error, ack.status, ack.message, ...errors].filter(Boolean).join(' ').toLowerCase();
+  if (p.ok === true) return 'ok';
+  if (text.includes('token') || text.includes('401') || text.includes('mesh_token_invalid')) return 'token';
+  if (text.includes('cluster') || text.includes('cluster_mismatch')) return 'cluster';
+  if (text.includes('receiver') || text.includes('423') || text.includes('receiver_disabled')) return 'receiver';
+  if (text.includes('timeout') || text.includes('abort') || text.includes('aborted')) return 'timeout';
+  if (text.includes('replay') || text.includes('duplicate')) return 'replay';
+  if (p.handshakeOk === false) return 'handshake';
+  if (p.statusOk === false) return 'status';
+  if (p.commandAckOk === false) return 'command';
+  return 'unknown';
+};
+const _nwMeshRoundtripStatus = (ms) => {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n <= 0) return 'unknown';
+  if (n <= 500) return 'green';
+  if (n <= 1500) return 'yellow';
+  return 'red';
+};
+const _nwMeshRemoteNodeMatrix = (peers) => {
+  const rows = [];
+  for (const p of Array.isArray(peers) ? peers : []) {
+    const status = p && p.status && typeof p.status === 'object' ? p.status : null;
+    const mesh = status && status.mesh && typeof status.mesh === 'object' ? status.mesh : null;
+    const nodes = mesh && Array.isArray(mesh.nodes) ? mesh.nodes : [];
+    for (const n of nodes) {
+      rows.push({
+        schema: 'nexowatt.mesh-remote-node-matrix-row.v1',
+        peerUrl: p.url || '',
+        peerNodeId: (p.handshake && p.handshake.nodeId) || '',
+        peerClusterId: (p.handshake && p.handshake.clusterId) || '',
+        nodeId: n.id || '',
+        nodeName: n.name || n.id || '',
+        type: n.type || '',
+        role: n.role || '',
+        status: n.status || '',
+        priority: n.priority || '',
+        surplusW: Number(n.surplusW || 0) || 0,
+        demandW: Number(n.demandW || 0) || 0,
+        errorClass: p.errorClass || _nwMeshPeerErrorClass(p),
+        roundtripStatus: p.roundtripStatus || _nwMeshRoundtripStatus(p.ms || 0),
+      });
+    }
+  }
+  return rows;
+};
+const _nwMeshBuildHandshakePayload = () => {
+  const cfg = _nwMeshMicrogridCfg();
+  const receiver = _nwMeshReceiverCfg();
+  const payload = _nwMeshMicrogridBuildPayload();
+  const cluster = payload && payload.cluster ? payload.cluster : {};
+  const tailscale = payload && payload.tailscale ? payload.tailscale : {};
+  return {
+    ok: true,
+    schema: 'nexowatt.mesh-peer-handshake.v1',
+    generatedAt: Date.now(),
+    nodeId: _nwMeshSafeId((cfg.tailscale && cfg.tailscale.localNodeId) || cfg.localNodeId || cfg.clusterId || 'local', 'local'),
+    clusterId: cluster.id || cfg.clusterId || 'cluster_01',
+    clusterName: cluster.name || cfg.clusterName || 'Lokaler Energieverbund',
+    role: cfg.localRole || 'mesh-node',
+    eos: true,
+    feature: 'meshMicrogrid',
+    receiver: { enabled: receiver.enabled, acceptRemoteCommands: receiver.acceptRemoteCommands, tokenRequired: !!receiver.peerToken, localCommandStateDpSet: !!receiver.localCommandStateDp, requireClusterMatch: receiver.requireClusterMatch, allowedPeerNodeIds: receiver.allowedPeerNodeIds || [] },
+    tailscale: { enabled: !!tailscale.enabled, profile: tailscale.profile || 'mesh-microgrid', localNodeId: tailscale.localNodeId || 'local' },
+    endpoints: {
+      status: '/api/mesh/status',
+      snapshot: '/api/mesh/microgrid',
+      receiver: '/api/mesh/command/receive',
+      commandGuard: '/api/mesh/microgrid/command-guard',
+    },
+    directHardwareWrite: false,
+    neutralCommandOnly: true,
+    note: 'Peer-Handshake für das separate Mesh/Microgrid-Tailscale. Fernwartung bleibt getrennt.',
+  };
+};
 const _nwMeshMicrogridBuildPayload = () => {
   const snapshot = _nwEnergyLedgerJson('meshMicrogrid.export.snapshotJson', {});
   const summary = _nwEnergyLedgerJson('meshMicrogrid.summaryJson', {});
@@ -17453,6 +17595,29 @@ const _nwMeshMicrogridBuildPayload = () => {
       lastWriteStatus: _nwDisplayStateVal('meshMicrogrid.fieldControl.lastWriteStatus', 'idle'),
       outputCount: Number(_nwDisplayStateVal('meshMicrogrid.fieldControl.outputCount', 0)) || 0,
     },
+    limits: snapshot.limits && typeof snapshot.limits === 'object' ? snapshot.limits : _nwEnergyLedgerJson('meshMicrogrid.limits.summaryJson', { nodes: _nwEnergyLedgerJson('meshMicrogrid.limits.nodesJson', []), bridgeTargets: _nwEnergyLedgerJson('meshMicrogrid.limits.bridgeTargetsJson', []), limitedCommands: _nwEnergyLedgerJson('meshMicrogrid.limits.limitedCommandsJson', []), blockedCommands: _nwEnergyLedgerJson('meshMicrogrid.limits.blockedCommandsJson', []), limitedCount: Number(_nwDisplayStateVal('meshMicrogrid.limits.limitedCount', 0)) || 0, blockedCount: Number(_nwDisplayStateVal('meshMicrogrid.limits.blockedCount', 0)) || 0, activeLimitCount: Number(_nwDisplayStateVal('meshMicrogrid.limits.activeLimitCount', 0)) || 0, lastReason: _nwDisplayStateVal('meshMicrogrid.limits.lastReason', '') }),
+    targetGroups: snapshot.targetGroups && typeof snapshot.targetGroups === 'object' ? snapshot.targetGroups : _nwEnergyLedgerJson('meshMicrogrid.targetGroups.summaryJson', { groups: _nwEnergyLedgerJson('meshMicrogrid.targetGroups.groupsJson', []), priorityOrder: _nwEnergyLedgerJson('meshMicrogrid.targetGroups.priorityOrderJson', []), fairness: _nwEnergyLedgerJson('meshMicrogrid.targetGroups.fairnessJson', {}), groupCount: Number(_nwDisplayStateVal('meshMicrogrid.targetGroups.groupCount', 0)) || 0, activeGroupCount: Number(_nwDisplayStateVal('meshMicrogrid.targetGroups.activeGroupCount', 0)) || 0, limitedCommandCount: Number(_nwDisplayStateVal('meshMicrogrid.targetGroups.limitedCommandCount', 0)) || 0, blockedCommandCount: Number(_nwDisplayStateVal('meshMicrogrid.targetGroups.blockedCommandCount', 0)) || 0, lastReason: _nwDisplayStateVal('meshMicrogrid.targetGroups.lastReason', '') }),
+    localBridge: snapshot.localBridge && typeof snapshot.localBridge === 'object' ? snapshot.localBridge : {
+      enabled: _nwDisplayStateVal('meshMicrogrid.localBridge.enabled', false) === true,
+      outputMode: _nwDisplayStateVal('meshMicrogrid.localBridge.outputMode', 'global'),
+      defaultCommandStateDp: _nwDisplayStateVal('meshMicrogrid.localBridge.defaultCommandStateDp', ''),
+      mappingCount: Number(_nwDisplayStateVal('meshMicrogrid.localBridge.mappingCount', 0)) || 0,
+      mappedCommandCount: Number(_nwDisplayStateVal('meshMicrogrid.localBridge.mappedCommandCount', 0)) || 0,
+      unmappedCommandCount: Number(_nwDisplayStateVal('meshMicrogrid.localBridge.unmappedCommandCount', 0)) || 0,
+      routeReady: _nwDisplayStateVal('meshMicrogrid.localBridge.routeReady', false) === true,
+      mappings: _nwEnergyLedgerJson('meshMicrogrid.localBridge.mappingsJson', []),
+      mappedCommands: _nwEnergyLedgerJson('meshMicrogrid.localBridge.mappedCommandsJson', []),
+      unmappedCommands: _nwEnergyLedgerJson('meshMicrogrid.localBridge.unmappedCommandsJson', []),
+      lastWrites: _nwEnergyLedgerJson('meshMicrogrid.localBridge.lastWritesJson', []),
+      ack: _nwEnergyLedgerJson('meshMicrogrid.localBridge.ackSummaryJson', { status: _nwDisplayStateVal('meshMicrogrid.localBridge.ackStatus', 'disabled'), targets: _nwEnergyLedgerJson('meshMicrogrid.localBridge.ackTargetsJson', []) }),
+      ackGate: { status: _nwDisplayStateVal('meshMicrogrid.localBridge.ackGateStatus', 'disabled'), blockedCount: Number(_nwDisplayStateVal('meshMicrogrid.localBridge.ackGateBlockedCommandCount', 0)) || 0, blockedMappings: _nwEnergyLedgerJson('meshMicrogrid.localBridge.ackBlockedTargetsJson', []), targetLights: _nwEnergyLedgerJson('meshMicrogrid.localBridge.targetHealthJson', []) },
+      manualRelease: _nwEnergyLedgerJson('meshMicrogrid.localBridge.manualReleaseSummaryJson', { active: _nwEnergyLedgerJson('meshMicrogrid.localBridge.manualReleaseJson', []), activeCount: Number(_nwDisplayStateVal('meshMicrogrid.localBridge.manualReleaseCount', 0)) || 0 }),
+      targetCommandHistory: _nwEnergyLedgerJson('meshMicrogrid.localBridge.targetCommandHistoryJson', {}),
+      releaseReady: _nwDisplayStateVal('meshMicrogrid.localBridge.releaseReady', false) === true,
+      summary: _nwEnergyLedgerJson('meshMicrogrid.localBridge.summaryJson', {}),
+      directHardwareWrite: false,
+      neutralCommandOnly: true,
+    },
     tailscale: snapshot.tailscale && typeof snapshot.tailscale === 'object' ? snapshot.tailscale : {
       enabled: _nwDisplayStateVal('meshMicrogrid.tailscale.enabled', false) === true,
       profile: _nwDisplayStateVal('meshMicrogrid.tailscale.profile', 'mesh-microgrid'),
@@ -17461,25 +17626,40 @@ const _nwMeshMicrogridBuildPayload = () => {
       remoteNodeCount: Number(_nwDisplayStateVal('meshMicrogrid.tailscale.remoteNodeCount', 0)) || 0,
       lastPollStatus: _nwDisplayStateVal('meshMicrogrid.tailscale.lastPollStatus', 'idle'),
       peers: _nwEnergyLedgerJson('meshMicrogrid.tailscale.peersJson', []),
+      lastCommandDispatch: _nwEnergyLedgerJson('meshMicrogrid.tailscale.lastCommandDispatchJson', {}),
     },
-    receiver: {
+    receiver: snapshot.receiver && typeof snapshot.receiver === 'object' ? snapshot.receiver : {
       enabled: _nwDisplayStateVal('meshMicrogrid.receiver.enabled', false) === true,
-      commandStateDp: _nwDisplayStateVal('meshMicrogrid.receiver.commandStateDp', ''),
-      requireToken: _nwDisplayStateVal('meshMicrogrid.receiver.requireToken', true) !== false,
-      ttlSec: Number(_nwDisplayStateVal('meshMicrogrid.receiver.ttlSec', 120)) || 120,
+      acceptRemoteCommands: _nwDisplayStateVal('meshMicrogrid.receiver.acceptRemoteCommands', false) === true,
+      localCommandStateDp: _nwDisplayStateVal('meshMicrogrid.receiver.localCommandStateDp', ''),
+      peerTokenSet: _nwDisplayStateVal('meshMicrogrid.receiver.peerTokenSet', false) === true,
+      requireClusterMatch: _nwDisplayStateVal('meshMicrogrid.receiver.requireClusterMatch', true) !== false,
       status: _nwDisplayStateVal('meshMicrogrid.receiver.status', 'disabled'),
-      lastHandshakeAt: Number(_nwDisplayStateVal('meshMicrogrid.receiver.lastHandshakeAt', 0)) || 0,
-      lastCommandAt: Number(_nwDisplayStateVal('meshMicrogrid.receiver.lastCommandAt', 0)) || 0,
+      lastReceiveAt: Number(_nwDisplayStateVal('meshMicrogrid.receiver.lastReceiveAt', 0)) || 0,
       lastCommandId: _nwDisplayStateVal('meshMicrogrid.receiver.lastCommandId', ''),
       lastAck: _nwEnergyLedgerJson('meshMicrogrid.receiver.lastAckJson', {}),
       lastRejectReason: _nwDisplayStateVal('meshMicrogrid.receiver.lastRejectReason', ''),
+      receivedCount: Number(_nwDisplayStateVal('meshMicrogrid.receiver.receivedCount', 0)) || 0,
       acceptedCount: Number(_nwDisplayStateVal('meshMicrogrid.receiver.acceptedCount', 0)) || 0,
       rejectedCount: Number(_nwDisplayStateVal('meshMicrogrid.receiver.rejectedCount', 0)) || 0,
       replayBlockedCount: Number(_nwDisplayStateVal('meshMicrogrid.receiver.replayBlockedCount', 0)) || 0,
-      receiverUrl: '/api/mesh/command/receive',
-      handshakeUrl: '/api/mesh/handshake',
-      directHardwareWrite: false,
-      neutralCommandOnly: true,
+      processedCommandIds: _nwEnergyLedgerJson('meshMicrogrid.receiver.processedCommandIdsJson', []),
+      lastLocalWriteStatus: _nwDisplayStateVal('meshMicrogrid.receiver.lastLocalWriteStatus', 'idle'),
+    },
+    fieldTest: snapshot.fieldTest && typeof snapshot.fieldTest === 'object' ? snapshot.fieldTest : {
+      status: _nwDisplayStateVal('meshMicrogrid.fieldTest.status', 'not-ready'),
+      twoInstanceReady: _nwDisplayStateVal('meshMicrogrid.fieldTest.twoInstanceReady', false) === true,
+      fieldCommandReady: _nwDisplayStateVal('meshMicrogrid.fieldTest.fieldCommandReady', false) === true,
+      peerOnlineCount: Number(_nwDisplayStateVal('meshMicrogrid.fieldTest.peerOnlineCount', 0)) || 0,
+      peerCommandOkCount: Number(_nwDisplayStateVal('meshMicrogrid.fieldTest.peerCommandOkCount', 0)) || 0,
+      remoteNodeCount: Number(_nwDisplayStateVal('meshMicrogrid.fieldTest.remoteNodeCount', 0)) || 0,
+      lastRoundtripMs: Number(_nwDisplayStateVal('meshMicrogrid.fieldTest.lastRoundtripMs', 0)) || 0,
+      peerMatrix: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.peerMatrixJson', []),
+      commandHistory: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.commandHistoryJson', []),
+      lastAck: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.lastAckJson', {}),
+      warning: _nwDisplayStateVal('meshMicrogrid.fieldTest.warning', ''),
+      summary: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.summaryJson', {}),
+      manualTest: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.lastManualTestJson', {}),
     },
     decision,
     missingMappings: Array.isArray(missingMappings) ? missingMappings : [],
@@ -17521,9 +17701,44 @@ const _nwMeshMicrogridCsv = (payload) => {
   const cg = payload && payload.commandGuard ? payload.commandGuard : {};
   rows.push(['CommandGuard', cg.status || 'blocked-readonly', String(cg.prepared !== false), String(cg.allowed === true), String(cg.hardwareWrite === true), String(cg.blockerCount || 0), String(cg.warnCount || 0), cg.reason || 'read-only'].map(_nwDisplayCsvEscape).join(';'));
   const cmds = Array.isArray(cg.plannedCommands) ? cg.plannedCommands : [];
-  rows.push(['Typ','CommandId','ActionId','Kategorie','Knoten','Ziel','Leistung_W','Richtung','Blockiert','Grund'].map(_nwDisplayCsvEscape).join(';'));
+  rows.push(['Typ','CommandId','ActionId','Kategorie','Knoten','Ziel','Requested_W','Allowed_W','Richtung','Blockiert','LimitReason','Grund'].map(_nwDisplayCsvEscape).join(';'));
   for (const cmd of cmds) {
-    rows.push(['CommandIntent', cmd.commandId || '', cmd.sourceActionId || '', cmd.category || '', cmd.nodeName || cmd.nodeId || '', cmd.targetNodeName || cmd.targetNodeId || '', String(cmd.plannedPowerW || 0), cmd.direction || '', String(cmd.blocked !== false), cmd.reason || ''].map(_nwDisplayCsvEscape).join(';'));
+    const pl = cmd && cmd.powerLimit ? cmd.powerLimit : {};
+    rows.push(['CommandIntent', cmd.commandId || '', cmd.sourceActionId || '', cmd.category || '', cmd.nodeName || cmd.nodeId || '', cmd.targetNodeName || cmd.targetNodeId || '', String(pl.requestedPowerW || cmd.requestedPowerW || cmd.plannedPowerW || 0), String(pl.allowedPowerW || cmd.plannedPowerW || 0), cmd.direction || '', String(cmd.blocked !== false), cmd.limitReason || '', cmd.reason || ''].map(_nwDisplayCsvEscape).join(';'));
+  }
+  const targetGroups = payload && payload.targetGroups ? payload.targetGroups : {};
+  const tgRows = Array.isArray(targetGroups.groups) ? targetGroups.groups : [];
+  rows.push('');
+  rows.push(['Typ','GroupId','Name','Type','Priority','Strategy','Members','Requested_W','Allowed_W','MaxPower_W'].map(_nwDisplayCsvEscape).join(';'));
+  for (const g of tgRows) rows.push(['TargetGroup', g.id || '', g.name || '', g.type || '', String(g.priority || ''), g.strategy || '', String(g.memberCount || 0), String(g.requestedPowerW || 0), String(g.allowedPowerW || 0), String(g.maxPowerW || 0)].map(_nwDisplayCsvEscape).join(';'));
+  const fairness = targetGroups && targetGroups.fairness ? targetGroups.fairness : {};
+  const fairnessGroups = Array.isArray(fairness.groups) ? fairness.groups : [];
+  rows.push(['Typ','GroupId','Name','Budget_W','Used_W','Remaining_W','MinShare_W','Weight','Limited','Blocked'].map(_nwDisplayCsvEscape).join(';'));
+  for (const g of fairnessGroups) rows.push(['TargetGroupFairness', g.groupId || '', g.groupName || '', String(g.budgetW || 0), String(g.usedW || 0), String(g.remainingW || 0), String(g.minShareW || 0), String(g.fairShareWeight || 0), String(fairness.limitedCount || 0), String(fairness.blockedCount || 0)].map(_nwDisplayCsvEscape).join(';'));
+  const limits = payload && payload.limits ? payload.limits : {};
+  rows.push('');
+  rows.push(['Typ','CommandId','Node','Requested_W','Allowed_W','Limited','Blocked','Reason'].map(_nwDisplayCsvEscape).join(';'));
+  for (const row of (Array.isArray(limits.limitedCommands) ? limits.limitedCommands : [])) rows.push(['Limit', row.commandId || '', row.nodeId || row.targetNodeId || '', String(row.requestedPowerW || 0), String(row.allowedPowerW || 0), 'true', 'false', (row.reasons || []).map(r => r.id).join(',')].map(_nwDisplayCsvEscape).join(';'));
+  for (const row of (Array.isArray(limits.blockedCommands) ? limits.blockedCommands : [])) rows.push(['Limit', row.commandId || '', row.nodeId || row.targetNodeId || '', String(row.requestedPowerW || 0), String(row.allowedPowerW || 0), 'false', 'true', row.reason || (row.reasons || []).map(r => r.id).join(',')].map(_nwDisplayCsvEscape).join(';'));
+  rows.push('');
+  rows.push(['Typ','Enabled','OutputMode','MappingCount','MappedCommands','UnmappedCommands','RouteReady'].map(_nwDisplayCsvEscape).join(';'));
+  const lb = payload && payload.localBridge ? payload.localBridge : {};
+  rows.push(['LocalBridge', String(lb.enabled === true), lb.outputMode || 'global', String(lb.mappingCount || 0), String(lb.mappedCommandCount || 0), String(lb.unmappedCommandCount || 0), String(lb.routeReady === true)].map(_nwDisplayCsvEscape).join(';'));
+  rows.push(['Typ','MappingId','NodeId','TargetNodeId','CommandState','Type','MaxPower_W'].map(_nwDisplayCsvEscape).join(';'));
+  const lbMappings = Array.isArray(lb.mappings) ? lb.mappings : [];
+  for (const m of lbMappings) {
+    rows.push(['LocalBridgeMapping', m.id || '', m.nodeId || '', m.targetNodeId || '', m.commandStateDp || '', m.type || '', String(m.maxPowerW || 0)].map(_nwDisplayCsvEscape).join(';'));
+  }
+  rows.push(['Typ','CommandId','MappingId','CommandState','NodeId','TargetNodeId','Leistung_W','Richtung','Status'].map(_nwDisplayCsvEscape).join(';'));
+  const lbCommands = Array.isArray(lb.mappedCommands) ? lb.mappedCommands : [];
+  for (const cmd of lbCommands) {
+    rows.push(['LocalBridgeCommand', cmd.commandId || '', cmd.mappingId || '', cmd.commandStateDp || '', cmd.nodeId || '', cmd.targetNodeId || '', String(cmd.plannedPowerW || 0), cmd.direction || '', 'mapped'].map(_nwDisplayCsvEscape).join(';'));
+  }
+  rows.push(['Typ','MappingId','CommandState','AckState','StatusState','ACK_Status','OK','Meldung'].map(_nwDisplayCsvEscape).join(';'));
+  const lbAck = lb.ack && typeof lb.ack === 'object' ? lb.ack : {};
+  const lbAckTargets = Array.isArray(lbAck.targets) ? lbAck.targets : [];
+  for (const row of lbAckTargets) {
+    rows.push(['LocalBridgeAck', row.mappingId || '', row.commandStateDp || '', row.ackStateDp || '', row.statusStateDp || '', row.status || '', String(row.ok === true), row.message || ''].map(_nwDisplayCsvEscape).join(';'));
   }
   rows.push('');
   rows.push(['Hinweis', payload && payload.note || 'read-only'].map(_nwDisplayCsvEscape).join(';'));
@@ -17551,200 +17766,6 @@ app.get('/api/mesh/microgrid/command-guard', (req, res) => {
     return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
   }
 });
-
-// -----------------------------------------------------------------------------
-// EOS Mesh/Microgrid Peer Handshake & Command Receiver
-// -----------------------------------------------------------------------------
-// 0.8.41: Diese Routen bilden die Feldtest-Schnittstelle zwischen zwei oder mehr
-// NexoWatt-Instanzen im separaten Mesh/Microgrid-Tailscale. Sie bleiben bewusst
-// herstellerneutral: Empfangen wird ein NexoWatt-Command-Intent, ausgegeben wird
-// nur ein lokaler JSON-Command-State. Direkte Hardware-Schreibpfade (OCPP,
-// Modbus, MQTT, Hersteller-APIs) sind hier weiterhin tabu.
-const _nwMeshCfg = () => (this.config && this.config.meshMicrogrid && typeof this.config.meshMicrogrid === 'object') ? this.config.meshMicrogrid : {};
-const _nwMeshSafeId = (value, fallback = 'local') => String(value || fallback).trim().toLowerCase().replace(/[^a-z0-9_\-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80) || fallback;
-const _nwMeshReceiverCfg = () => {
-  const cfg = _nwMeshCfg();
-  const r = cfg.receiver && typeof cfg.receiver === 'object' ? cfg.receiver : (cfg.commandReceiver && typeof cfg.commandReceiver === 'object' ? cfg.commandReceiver : {});
-  const tailscale = cfg.tailscale && typeof cfg.tailscale === 'object' ? cfg.tailscale : {};
-  const enabled = r.enabled === true || cfg.receiverEnabled === true || cfg.commandReceiverEnabled === true;
-  const commandStateDp = String(r.commandStateDp || r.receiverCommandStateDp || cfg.receiverCommandStateDp || cfg.receivedCommandStateDp || '').trim();
-  const token = String(r.token || r.receiverToken || cfg.receiverToken || tailscale.peerToken || cfg.peerToken || '').trim();
-  const requireToken = r.requireToken === false || cfg.receiverRequireToken === false ? false : true;
-  const ttlSec = Math.max(5, Math.min(900, Math.round(Number(r.ttlSec || r.commandTtlSec || cfg.receiverTtlSec || 120)) || 120));
-  const maxProcessedIds = Math.max(20, Math.min(1000, Math.round(Number(r.maxProcessedIds || cfg.receiverMaxProcessedIds || 200)) || 200));
-  const allowedPeerText = Array.isArray(r.allowedPeerNodeIds) ? r.allowedPeerNodeIds.join('\n') : String(r.allowedPeerNodeIds || cfg.allowedPeerNodeIds || '');
-  const allowedPeerNodeIds = allowedPeerText.split(/[\n,;]+/g).map(x => _nwMeshSafeId(x, '')).filter(Boolean).slice(0, 100);
-  return { enabled, commandStateDp, token, requireToken, ttlSec, maxProcessedIds, allowedPeerNodeIds };
-};
-const _nwMeshLocalIdentity = () => {
-  const cfg = _nwMeshCfg();
-  const tailscale = cfg.tailscale && typeof cfg.tailscale === 'object' ? cfg.tailscale : {};
-  const clusterId = _nwMeshSafeId(cfg.clusterId || 'cluster_01', 'cluster_01');
-  const nodeId = _nwMeshSafeId(tailscale.localNodeId || cfg.localNodeId || clusterId || 'local', 'local');
-  return {
-    nodeId,
-    clusterId,
-    clusterName: String(cfg.clusterName || 'Lokaler Energieverbund').trim() || 'Lokaler Energieverbund',
-    meshRole: String(cfg.meshRole || cfg.role || 'mesh-node').trim() || 'mesh-node',
-    tailscaleProfile: String(tailscale.profile || cfg.tailscaleProfile || 'mesh-microgrid').trim() || 'mesh-microgrid',
-  };
-};
-const _nwMeshHeaderToken = (req) => {
-  try {
-    return String((req.headers && (req.headers['x-nexowatt-mesh-token'] || req.headers['x-mesh-token'] || req.headers.authorization)) || '').replace(/^Bearer\s+/i, '').trim();
-  } catch (_e) { return ''; }
-};
-const _nwMeshTokenOk = (req, body) => {
-  const rcfg = _nwMeshReceiverCfg();
-  if (rcfg.requireToken === false) return { ok: true, required: false, configured: !!rcfg.token };
-  if (!rcfg.token) return { ok: false, required: true, configured: false, reason: 'receiver_token_not_configured' };
-  const token = _nwMeshHeaderToken(req) || String(body && (body.token || body.peerToken || body.meshToken) || '').trim();
-  return { ok: token === rcfg.token, required: true, configured: true, reason: token === rcfg.token ? '' : 'invalid_mesh_token' };
-};
-const _nwMeshSetState = async (id, value, ack = true) => {
-  try { await this.setStateAsync(id, { val: value, ack: !!ack }); } catch (_e) {}
-  try { if (typeof this.updateValue === 'function') this.updateValue(id, value, Date.now()); } catch (_e) {}
-};
-const _nwMeshProcessedIds = () => {
-  const list = _nwEnergyLedgerJson('meshMicrogrid.receiver.processedCommandIdsJson', []);
-  return Array.isArray(list) ? list.map(String).filter(Boolean) : [];
-};
-const _nwMeshNormalizeReceivedCommands = (body) => {
-  const b = body && typeof body === 'object' ? body : {};
-  const list = Array.isArray(b.commands) ? b.commands : (Array.isArray(b.commandIntents) ? b.commandIntents : [b.command || b]);
-  return list.filter(x => x && typeof x === 'object').map((cmd, idx) => ({
-    ...cmd,
-    commandId: String(cmd.commandId || cmd.id || `remote_cmd_${Date.now()}_${idx + 1}`),
-    ts: Number(cmd.ts || cmd.createdAt || b.ts || Date.now()) || Date.now(),
-    clusterId: _nwMeshSafeId(cmd.clusterId || b.clusterId || '', ''),
-    sourceNodeId: _nwMeshSafeId(cmd.sourceNodeId || cmd.senderNodeId || b.sourceNodeId || b.senderNodeId || 'remote', 'remote'),
-    directHardwareWrite: cmd.directHardwareWrite === true,
-    neutralCommandOnly: cmd.neutralCommandOnly !== false && b.neutralCommandOnly !== false,
-  }));
-};
-const _nwMeshReceiverReject = async (res, status, error, message, extra = {}) => {
-  const now = Date.now();
-  await _nwMeshSetState('meshMicrogrid.receiver.status', 'rejected', true);
-  await _nwMeshSetState('meshMicrogrid.receiver.lastRejectReason', error, true);
-  await _nwMeshSetState('meshMicrogrid.receiver.rejectedCount', Number(_nwDisplayStateVal('meshMicrogrid.receiver.rejectedCount', 0)) + 1, true);
-  const ack = { ok: false, schema: 'nexowatt.mesh-command-ack.v1', ts: now, status: 'rejected', error, message, ...extra };
-  await _nwMeshSetState('meshMicrogrid.receiver.lastAckJson', JSON.stringify(ack), true);
-  return res.status(status).json(ack);
-};
-
-app.get(['/api/mesh/handshake', '/api/mesh/status'], async (req, res) => {
-  try {
-    sendNoStore(res);
-    if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
-    const id = _nwMeshLocalIdentity();
-    const rcfg = _nwMeshReceiverCfg();
-    const payload = _nwMeshMicrogridBuildPayload();
-    const now = Date.now();
-    const handshake = {
-      ok: true,
-      schema: 'nexowatt.mesh-peer-handshake.v1',
-      ts: now,
-      version: '0.8.41',
-      nodeId: id.nodeId,
-      clusterId: id.clusterId,
-      clusterName: id.clusterName,
-      meshRole: id.meshRole,
-      tailscaleProfile: id.tailscaleProfile,
-      eos: true,
-      receiver: {
-        enabled: rcfg.enabled === true,
-        tokenRequired: rcfg.requireToken !== false,
-        tokenConfigured: !!rcfg.token,
-        receiverUrl: '/api/mesh/command/receive',
-        commandStateConfigured: !!rcfg.commandStateDp,
-        ttlSec: rcfg.ttlSec,
-      },
-      status: payload.status || 'unknown',
-      totals: payload.totals || {},
-      endpoints: { status: '/api/mesh/status', snapshot: '/api/mesh/microgrid', receiver: '/api/mesh/command/receive' },
-      directHardwareWrite: false,
-      neutralCommandOnly: true,
-    };
-    await _nwMeshSetState('meshMicrogrid.receiver.lastHandshakeAt', now, true);
-    await _nwMeshSetState('meshMicrogrid.receiver.lastHandshakeJson', JSON.stringify({ ts: now, remote: String(req.ip || ''), userAgent: String((req.headers && req.headers['user-agent']) || '').slice(0, 160), response: handshake }), true);
-    return res.json(handshake);
-  } catch (e) {
-    return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
-  }
-});
-
-app.post('/api/mesh/command/receive', async (req, res) => {
-  try {
-    sendNoStore(res);
-    if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
-    const rcfg = _nwMeshReceiverCfg();
-    const id = _nwMeshLocalIdentity();
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    if (rcfg.enabled !== true) return _nwMeshReceiverReject(res, 423, 'receiver_disabled', 'Mesh/Microgrid Command Receiver ist nicht aktiviert.');
-    const tokenCheck = _nwMeshTokenOk(req, body);
-    if (!tokenCheck.ok) return _nwMeshReceiverReject(res, 403, tokenCheck.reason || 'invalid_mesh_token', 'Mesh-Peer-Token ungültig oder nicht konfiguriert.', { tokenRequired: tokenCheck.required, tokenConfigured: tokenCheck.configured });
-    if (!rcfg.commandStateDp) return _nwMeshReceiverReject(res, 409, 'missing_receiver_command_state', 'Kein lokaler Receiver Command-State konfiguriert.');
-    const commands = _nwMeshNormalizeReceivedCommands(body);
-    if (!commands.length) return _nwMeshReceiverReject(res, 400, 'empty_command_list', 'Keine neutralen Mesh-Commands im Payload gefunden.');
-    const processed = _nwMeshProcessedIds();
-    const processedSet = new Set(processed);
-    const accepted = [];
-    const rejected = [];
-    let replayBlocked = 0;
-    const now = Date.now();
-    for (const cmd of commands) {
-      const reasons = [];
-      if (cmd.clusterId && cmd.clusterId !== id.clusterId) reasons.push('cluster_mismatch');
-      if (rcfg.allowedPeerNodeIds.length && !rcfg.allowedPeerNodeIds.includes(cmd.sourceNodeId)) reasons.push('peer_not_allowed');
-      if (processedSet.has(cmd.commandId)) { reasons.push('duplicate_command'); replayBlocked += 1; }
-      const ageSec = Math.round(Math.abs(now - (Number(cmd.ts) || now)) / 1000);
-      if (ageSec > rcfg.ttlSec) reasons.push('command_expired');
-      if (cmd.directHardwareWrite === true) reasons.push('direct_hardware_write_forbidden');
-      if (cmd.neutralCommandOnly === false) reasons.push('non_neutral_command_forbidden');
-      if (reasons.length) rejected.push({ commandId: cmd.commandId, reasons, sourceNodeId: cmd.sourceNodeId });
-      else {
-        accepted.push({ ...cmd, receivedAt: now, receiverNodeId: id.nodeId, receiverClusterId: id.clusterId, bridgeRequired: true, directHardwareWrite: false, neutralCommandOnly: true });
-        processedSet.add(cmd.commandId);
-      }
-    }
-    if (!accepted.length) {
-      if (replayBlocked > 0) await _nwMeshSetState('meshMicrogrid.receiver.replayBlockedCount', Number(_nwDisplayStateVal('meshMicrogrid.receiver.replayBlockedCount', 0)) + replayBlocked, true);
-      return _nwMeshReceiverReject(res, 409, 'all_commands_rejected', 'Alle Mesh-Commands wurden vom Receiver blockiert.', { rejected });
-    }
-    const out = {
-      schema: 'nexowatt.mesh-received-command-envelope.v1',
-      ts: now,
-      receiverNodeId: id.nodeId,
-      receiverClusterId: id.clusterId,
-      source: 'mesh-command-receiver',
-      transport: 'tailscale-mesh',
-      directHardwareWrite: false,
-      neutralCommandOnly: true,
-      bridgeRequired: true,
-      commands: accepted,
-      rejected,
-    };
-    const json = JSON.stringify(out);
-    if (typeof this.setForeignStateAsync === 'function') await this.setForeignStateAsync(rcfg.commandStateDp, { val: json, ack: false });
-    else await this.setStateAsync(rcfg.commandStateDp, { val: json, ack: false });
-    const newProcessed = Array.from(processedSet).slice(-rcfg.maxProcessedIds);
-    await _nwMeshSetState('meshMicrogrid.receiver.status', rejected.length ? 'accepted-with-rejections' : 'accepted', true);
-    await _nwMeshSetState('meshMicrogrid.receiver.lastCommandAt', now, true);
-    await _nwMeshSetState('meshMicrogrid.receiver.lastCommandId', accepted[accepted.length - 1].commandId, true);
-    await _nwMeshSetState('meshMicrogrid.receiver.lastCommandJson', JSON.stringify(out), true);
-    await _nwMeshSetState('meshMicrogrid.receiver.processedCommandIdsJson', JSON.stringify(newProcessed), true);
-    await _nwMeshSetState('meshMicrogrid.receiver.acceptedCount', Number(_nwDisplayStateVal('meshMicrogrid.receiver.acceptedCount', 0)) + accepted.length, true);
-    await _nwMeshSetState('meshMicrogrid.receiver.rejectedCount', Number(_nwDisplayStateVal('meshMicrogrid.receiver.rejectedCount', 0)) + rejected.length, true);
-    if (replayBlocked > 0) await _nwMeshSetState('meshMicrogrid.receiver.replayBlockedCount', Number(_nwDisplayStateVal('meshMicrogrid.receiver.replayBlockedCount', 0)) + replayBlocked, true);
-    const ack = { ok: true, schema: 'nexowatt.mesh-command-ack.v1', ts: now, status: rejected.length ? 'accepted_partial' : 'accepted', receiverNodeId: id.nodeId, acceptedCount: accepted.length, rejectedCount: rejected.length, commandStateDp: rcfg.commandStateDp, acceptedCommandIds: accepted.map(c => c.commandId), rejected };
-    await _nwMeshSetState('meshMicrogrid.receiver.lastAckJson', JSON.stringify(ack), true);
-    await _nwMeshSetState('meshMicrogrid.receiver.lastRejectReason', rejected.length ? 'partial_reject' : '', true);
-    return res.status(202).json(ack);
-  } catch (e) {
-    return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
-  }
-});
-
 app.post('/api/mesh/microgrid/command', (req, res) => {
   try {
     sendNoStore(res);
@@ -17766,6 +17787,351 @@ app.post('/api/mesh/microgrid/command', (req, res) => {
     return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
   }
 });
+
+
+app.post('/api/mesh/local-bridge/release', async (req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
+    const body = req && req.body && typeof req.body === 'object' ? req.body : {};
+    const mappingId = _nwMeshSafeId(body.mappingId || body.id || '', '');
+    const commandStateDp = String(body.commandStateDp || '').trim();
+    if (!mappingId && !commandStateDp) return res.status(400).json({ ok: false, error: 'missing_target', message: 'mappingId oder commandStateDp erforderlich.' });
+    const now = Date.now();
+    const ttlSecRaw = Number(body.ttlSec || body.ttl || 300);
+    const ttlSec = Math.max(30, Math.min(86400, Number.isFinite(ttlSecRaw) ? Math.round(ttlSecRaw) : 300));
+    const raw = _nwMeshStateJson('meshMicrogrid.localBridge.manualReleaseJson', []);
+    const oldList = Array.isArray(raw) ? raw : [];
+    const filtered = oldList.filter((item) => {
+      const it = item && typeof item === 'object' ? item : {};
+      const exp = Number(it.expiresAt || 0);
+      if (exp && exp < now) return false;
+      if (mappingId && String(it.mappingId || '') === mappingId) return false;
+      if (commandStateDp && String(it.commandStateDp || '') === commandStateDp) return false;
+      return true;
+    });
+    const release = {
+      schema: 'nexowatt.mesh-local-bridge-manual-release.v1',
+      mappingId,
+      commandStateDp,
+      ts: now,
+      expiresAt: now + ttlSec * 1000,
+      ttlSec,
+      reason: String(body.reason || 'operator_manual_release').slice(0, 240),
+      by: 'operator-api',
+      directHardwareWrite: false,
+      neutralCommandOnly: true,
+    };
+    const next = [release].concat(filtered).slice(0, 100);
+    const result = { ok: true, schema: 'nexowatt.mesh-local-bridge-release-result.v1', generatedAt: now, status: 'released', release, activeCount: next.length, message: 'Bridge-Ziel wurde zeitlich begrenzt manuell freigegeben. Es wird keine Hardware direkt geschrieben.' };
+    await _nwMeshWriteState('meshMicrogrid.localBridge.manualReleaseJson', JSON.stringify(next), true);
+    await _nwMeshWriteState('meshMicrogrid.localBridge.lastManualReleaseAt', now, true);
+    await _nwMeshWriteState('meshMicrogrid.localBridge.lastManualReleaseResultJson', JSON.stringify(result), true);
+    await _nwMeshWriteState('meshMicrogrid.localBridge.manualReleaseCount', next.length, true);
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
+  }
+});
+
+app.get(['/api/mesh/handshake', '/api/mesh/status'], (req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
+    if (!_nwMeshPeerTokenOk(req)) return res.status(401).json({ ok: false, error: 'mesh_token_invalid', message: 'Mesh Peer Token ungültig.' });
+    const handshake = _nwMeshBuildHandshakePayload();
+    if (String(req.path || '').endsWith('/status')) {
+      const payload = _nwMeshMicrogridBuildPayload();
+      return res.json({ ...handshake, schema: 'nexowatt.mesh-peer-status.v1', mesh: payload });
+    }
+    return res.json(handshake);
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
+  }
+});
+
+
+const _nwMeshClassifyPeerError = (parts) => {
+  const text = (Array.isArray(parts) ? parts : [parts]).map(x => String(x || '').toLowerCase()).join(' ');
+  if (!text.trim()) return 'ok';
+  if (text.includes('401') || text.includes('token') || text.includes('mesh_token_invalid')) return 'token';
+  if (text.includes('cluster') || text.includes('409') || text.includes('cluster_mismatch')) return 'cluster';
+  if (text.includes('receiver') || text.includes('423') || text.includes('local_command_state') || text.includes('disabled')) return 'receiver';
+  if (text.includes('timeout') || text.includes('abort') || text.includes('aborted') || text.includes('etimedout')) return 'timeout';
+  if (text.includes('command_http') || text.includes('command')) return 'command';
+  if (text.includes('handshake') || text.includes('status_http') || text.includes('http_') || text.includes('http ')) return 'http';
+  return 'other';
+};
+const _nwMeshRoundtripLevel = (ms, ok) => {
+  const n = Number(ms);
+  if (ok === false) return 'offline';
+  if (!Number.isFinite(n) || n <= 0) return 'unknown';
+  if (n <= 800) return 'green';
+  if (n <= 2500) return 'yellow';
+  return 'red';
+};
+
+app.post('/api/mesh/command/receive', async (req, res) => {
+  const now = _nwMeshNow();
+  try {
+    sendNoStore(res);
+    if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, status: 'rejected', error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
+    const cfg = _nwMeshReceiverCfg();
+    const meshCfg = _nwMeshMicrogridCfg();
+    const clusterId = String(meshCfg.clusterId || 'cluster_01');
+    const reject = async (status, error, message, extra = {}) => {
+      const ack = { ok: false, schema: 'nexowatt.mesh-command-ack.v1', generatedAt: now, status, error, message, receiverNodeId: _nwMeshSafeId((meshCfg.tailscale && meshCfg.tailscale.localNodeId) || meshCfg.clusterId || 'local', 'local'), clusterId, directHardwareWrite: false, neutralCommandOnly: true, ...extra };
+      await _nwMeshWriteState('meshMicrogrid.receiver.status', status, true);
+      await _nwMeshWriteState('meshMicrogrid.receiver.lastRejectReason', `${error}: ${message}`, true);
+      await _nwMeshWriteState('meshMicrogrid.receiver.lastAckJson', JSON.stringify(ack), true);
+      await _nwMeshWriteState('meshMicrogrid.receiver.rejectedCount', (Number(_nwDisplayStateVal('meshMicrogrid.receiver.rejectedCount', 0)) || 0) + 1, true);
+      return res.status(extra.httpStatus || 403).json(ack);
+    };
+    if (!cfg.enabled || !cfg.acceptRemoteCommands) return reject('receiver_disabled', 'receiver_disabled', 'Command Receiver ist nicht freigegeben.', { httpStatus: 423 });
+    if (!_nwMeshPeerTokenOk(req)) return reject('token_invalid', 'mesh_token_invalid', 'Mesh Peer Token ungültig.', { httpStatus: 401 });
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const commands = Array.isArray(body.commands) ? body.commands : (body.command ? [body.command] : (body.commandId ? [body] : []));
+    if (!commands.length) return reject('bad_request', 'no_commands', 'Kein Command im Request enthalten.', { httpStatus: 400 });
+    const senderCluster = String(body.clusterId || (commands[0] && commands[0].clusterId) || '');
+    if (cfg.requireClusterMatch && senderCluster && senderCluster !== clusterId) return reject('cluster_mismatch', 'cluster_mismatch', `Cluster-ID passt nicht (${senderCluster} != ${clusterId}).`, { senderClusterId: senderCluster, httpStatus: 409 });
+    if (!cfg.localCommandStateDp) return reject('local_command_state_missing', 'local_command_state_missing', 'Kein lokaler Empfangs-Command-State konfiguriert.', { httpStatus: 409 });
+
+    const processedRaw = _nwMeshStateJson('meshMicrogrid.receiver.processedCommandIdsJson', []);
+    const processed = Array.isArray(processedRaw) ? processedRaw.filter(x => x && typeof x === 'object') : [];
+    const cutoff = now - (cfg.replayTtlSec * 1000);
+    const activeProcessed = processed.filter(x => Number(x.ts || 0) >= cutoff);
+    const processedKeys = new Set(activeProcessed.map(x => String(x.key || x.id || '')));
+    const senderNodeId = _nwMeshSafeId(body.localNodeId || body.senderNodeId || body.sourceNodeId || 'remote', 'remote');
+    if (Array.isArray(cfg.allowedPeerNodeIds) && cfg.allowedPeerNodeIds.length && !cfg.allowedPeerNodeIds.includes(senderNodeId)) {
+      return reject('peer_not_allowed', 'peer_not_allowed', `Peer-Node-ID ist nicht freigegeben: ${senderNodeId}`, { senderNodeId, allowedPeerNodeIds: cfg.allowedPeerNodeIds, httpStatus: 403 });
+    }
+    const acceptedCommands = [];
+    const replayCommands = [];
+    for (let i = 0; i < commands.length; i += 1) {
+      const cmd = commands[i] && typeof commands[i] === 'object' ? commands[i] : {};
+      const commandId = String(cmd.commandId || cmd.id || `remote_cmd_${i + 1}`).trim();
+      const key = `${senderNodeId}:${commandId}`;
+      if (processedKeys.has(key)) replayCommands.push({ commandId, key });
+      else acceptedCommands.push({ ...cmd, commandId, receiverKey: key });
+    }
+    if (!acceptedCommands.length) {
+      await _nwMeshWriteState('meshMicrogrid.receiver.replayBlockedCount', (Number(_nwDisplayStateVal('meshMicrogrid.receiver.replayBlockedCount', 0)) || 0) + replayCommands.length, true);
+      return reject('replay_blocked', 'replay_blocked', 'Alle Commands wurden als Replay/Duplikat blockiert.', { replayCommands, httpStatus: 409 });
+    }
+
+    const localEnvelope = {
+      schema: 'nexowatt.mesh-received-command-envelope.v1',
+      generatedAt: now,
+      receiverNodeId: _nwMeshSafeId((meshCfg.tailscale && meshCfg.tailscale.localNodeId) || meshCfg.clusterId || 'local', 'local'),
+      senderNodeId,
+      clusterId,
+      senderClusterId: senderCluster || '',
+      source: 'mesh-command-receiver',
+      transport: 'tailscale-mesh',
+      directHardwareWrite: false,
+      neutralCommandOnly: true,
+      commands: acceptedCommands,
+      originalSchema: body.schema || '',
+    };
+    let localWriteStatus = 'pending';
+    let localWriteError = '';
+    try {
+      const json = JSON.stringify(localEnvelope);
+      if (typeof this.setForeignStateAsync === 'function') await this.setForeignStateAsync(cfg.localCommandStateDp, { val: json, ack: false });
+      else if (typeof this.setStateAsync === 'function') await this.setStateAsync(cfg.localCommandStateDp, { val: json, ack: false });
+      localWriteStatus = 'written';
+    } catch (e) {
+      localWriteStatus = 'error';
+      localWriteError = String(e && e.message ? e.message : e);
+    }
+    const newProcessed = activeProcessed.concat(acceptedCommands.map(cmd => ({ key: cmd.receiverKey, id: cmd.commandId, senderNodeId, ts: now }))).slice(-cfg.processedLimit);
+    const ack = {
+      ok: localWriteStatus !== 'error',
+      schema: 'nexowatt.mesh-command-ack.v1',
+      generatedAt: now,
+      status: localWriteStatus === 'error' ? 'failed_local_write' : 'accepted',
+      receiverNodeId: localEnvelope.receiverNodeId,
+      senderNodeId,
+      clusterId,
+      acceptedCount: acceptedCommands.length,
+      replayBlockedCount: replayCommands.length,
+      localCommandStateDp: cfg.localCommandStateDp,
+      localWriteStatus,
+      localWriteError,
+      directHardwareWrite: false,
+      neutralCommandOnly: true,
+      commands: acceptedCommands.map(cmd => ({ commandId: cmd.commandId, status: localWriteStatus === 'error' ? 'failed_local_write' : 'accepted', receiverKey: cmd.receiverKey })),
+    };
+    await _nwMeshWriteState('meshMicrogrid.receiver.status', ack.status, true);
+    await _nwMeshWriteState('meshMicrogrid.receiver.lastReceiveAt', now, true);
+    await _nwMeshWriteState('meshMicrogrid.receiver.lastCommandId', acceptedCommands[0] && acceptedCommands[0].commandId || '', true);
+    await _nwMeshWriteState('meshMicrogrid.receiver.lastCommandJson', JSON.stringify(localEnvelope), true);
+    await _nwMeshWriteState('meshMicrogrid.receiver.lastAckJson', JSON.stringify(ack), true);
+    await _nwMeshWriteState('meshMicrogrid.receiver.lastRejectReason', localWriteError || '', true);
+    await _nwMeshWriteState('meshMicrogrid.receiver.receivedCount', (Number(_nwDisplayStateVal('meshMicrogrid.receiver.receivedCount', 0)) || 0) + commands.length, true);
+    await _nwMeshWriteState('meshMicrogrid.receiver.acceptedCount', (Number(_nwDisplayStateVal('meshMicrogrid.receiver.acceptedCount', 0)) || 0) + acceptedCommands.length, true);
+    await _nwMeshWriteState('meshMicrogrid.receiver.replayBlockedCount', (Number(_nwDisplayStateVal('meshMicrogrid.receiver.replayBlockedCount', 0)) || 0) + replayCommands.length, true);
+    await _nwMeshWriteState('meshMicrogrid.receiver.processedCommandIdsJson', JSON.stringify(newProcessed), true);
+    await _nwMeshWriteState('meshMicrogrid.receiver.lastLocalWriteStatus', localWriteStatus, true);
+    await _nwMeshWriteState('meshMicrogrid.receiver.lastLocalWriteError', localWriteError, true);
+    await _nwMeshWriteState('meshMicrogrid.receiver.summaryJson', JSON.stringify({ schema: 'nexowatt.mesh-command-receiver-summary.v1', ts: now, status: ack.status, acceptedCount: acceptedCommands.length, replayBlockedCount: replayCommands.length, senderNodeId, localCommandStateDp: cfg.localCommandStateDp, directHardwareWrite: false, neutralCommandOnly: true, allowedPeerNodeIds: receiver.allowedPeerNodeIds || [] }), true);
+    return res.status(localWriteStatus === 'error' ? 500 : 202).json(ack);
+  } catch (e) {
+    const msg = String(e && e.message ? e.message : e);
+    await _nwMeshWriteState('meshMicrogrid.receiver.status', 'error', true);
+    await _nwMeshWriteState('meshMicrogrid.receiver.lastRejectReason', msg, true);
+    return res.status(500).json({ ok: false, status: 'error', error: 'internal_error', message: msg });
+  }
+});
+
+app.post('/api/mesh/peer/fieldtest', async (req, res) => {
+  const now = Date.now();
+  try {
+    sendNoStore(res);
+    if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
+    const cfg = _nwMeshTailscaleCfg();
+    const meshCfg = _nwMeshMicrogridCfg();
+    const payload = _nwMeshMicrogridBuildPayload();
+    const clusterId = String((payload && payload.cluster && payload.cluster.id) || meshCfg.clusterId || 'cluster_01');
+    const localNodeId = cfg.localNodeId || _nwMeshSafeId(meshCfg.clusterId || 'local', 'local');
+    const probeRequested = !(req && req.body && req.body.probe === false);
+    const peers = [];
+    const startedAll = Date.now();
+    if (!cfg.enabled || !cfg.peerUrls.length || typeof fetch !== 'function') {
+      const result = { ok: false, schema: 'nexowatt.mesh-two-instance-fieldtest-api.v1', generatedAt: now, status: cfg.enabled ? 'no-peers' : 'tailscale-disabled', message: cfg.enabled ? 'Keine Mesh-Tailscale-Peer-URLs konfiguriert.' : 'Tailscale Mesh ist deaktiviert.', directHardwareWrite: false, neutralCommandOnly: true, peers: [] };
+      await _nwMeshWriteState('meshMicrogrid.fieldTest.status', result.status, true);
+      await _nwMeshWriteState('meshMicrogrid.fieldTest.lastManualTestJson', JSON.stringify(result), true);
+      await _nwMeshWriteState('meshMicrogrid.fieldTest.warning', result.message, true);
+      return res.status(409).json(result);
+    }
+    for (const rawUrl of cfg.peerUrls) {
+      const base = _nwMeshNormalPeerUrl(rawUrl);
+      if (!base) continue;
+      const peerStarted = Date.now();
+      const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_e) {} }, cfg.timeoutMs) : null;
+      const headers = {};
+      if (cfg.peerToken) headers['x-nexowatt-mesh-token'] = cfg.peerToken;
+      const peer = { url: base, ok: false, handshakeOk: false, statusOk: false, commandAckOk: false, ms: 0, errors: [] };
+      try {
+        const hsRes = await fetch(`${base}/api/mesh/handshake`, { cache: 'no-store', headers, signal: ctrl ? ctrl.signal : undefined });
+        const handshake = await hsRes.json().catch(() => null);
+        peer.handshakeOk = hsRes.ok && (!handshake || handshake.ok !== false);
+        peer.handshake = handshake;
+        if (!peer.handshakeOk) peer.errors.push(`handshake_http_${hsRes.status}`);
+        const stRes = await fetch(`${base}/api/mesh/status`, { cache: 'no-store', headers, signal: ctrl ? ctrl.signal : undefined });
+        const status = await stRes.json().catch(() => null);
+        peer.statusOk = stRes.ok && (!status || status.ok !== false);
+        peer.status = status;
+        if (!peer.statusOk) peer.errors.push(`status_http_${stRes.status}`);
+        if (probeRequested) {
+          const probeCommand = {
+            schema: 'nexowatt.mesh-fieldtest-probe-command.v1',
+            commandId: `mesh_probe_${localNodeId}_${now}`,
+            category: 'fieldtest_probe',
+            direction: 'observe',
+            plannedPowerW: 0,
+            nodeId: localNodeId,
+            targetNodeId: '',
+            directHardwareWrite: false,
+            neutralCommandOnly: true,
+            probeOnly: true,
+            reason: 'Zwei-Instanzen-Feldtest: Receiver, Token, Cluster und Replay-Schutz prüfen.'
+          };
+          const envelope = { schema: 'nexowatt.mesh-field-command-envelope.v1', version: '0.8.43', ts: now, source: 'nexowatt-ui.meshMicrogrid.fieldtest', clusterId, localNodeId, transport: 'tailscale-mesh', directHardwareWrite: false, neutralCommandOnly: true, fieldTestProbe: true, commands: [probeCommand] };
+          const cmdHeaders = { ...headers, 'content-type': 'application/json' };
+          const cmdRes = await fetch(`${base}/api/mesh/command/receive`, { method: 'POST', cache: 'no-store', headers: cmdHeaders, body: JSON.stringify(envelope), signal: ctrl ? ctrl.signal : undefined });
+          const ack = await cmdRes.json().catch(() => null);
+          peer.commandAckOk = cmdRes.ok && ack && ack.ok !== false;
+          peer.commandAck = ack;
+          if (!peer.commandAckOk) peer.errors.push(`command_http_${cmdRes.status}`);
+        }
+        peer.ok = peer.handshakeOk && peer.statusOk && (!probeRequested || peer.commandAckOk);
+      } catch (e) {
+        peer.errors.push(String(e && e.message ? e.message : e));
+      } finally {
+        if (timer) clearTimeout(timer);
+        peer.ms = Date.now() - peerStarted;
+      }
+      peer.errorClass = _nwMeshPeerErrorClass(peer);
+      peer.roundtripStatus = _nwMeshRoundtripStatus(peer.ms);
+      peer.errorLabel = peer.errorClass === 'ok' ? 'OK' : (peer.errorClass === 'token' ? 'Token prüfen' : (peer.errorClass === 'cluster' ? 'Cluster-ID prüfen' : (peer.errorClass === 'receiver' ? 'Receiver-Freigabe prüfen' : (peer.errorClass === 'timeout' ? 'Tailscale/Timeout prüfen' : peer.errorClass))));
+      peers.push(peer);
+    }
+    const remoteNodeMatrix = _nwMeshRemoteNodeMatrix(peers);
+    const errorClasses = peers.reduce((acc, p) => { const k = p.errorClass || 'unknown'; acc[k] = (acc[k] || 0) + 1; return acc; }, {});
+    for (const p of peers) {
+      p.errorClass = _nwMeshClassifyPeerError([p.errors, p.status, p.commandAck && (p.commandAck.error || p.commandAck.status || p.commandAck.message)]);
+      p.roundtripLevel = _nwMeshRoundtripLevel(p.ms, p.ok);
+      p.operatorHint = p.errorClass === 'ok' ? 'Peer-Feldtest erfolgreich.' : (p.errorClass === 'token' ? 'Peer Token prüfen.' : (p.errorClass === 'cluster' ? 'Cluster-ID prüfen.' : (p.errorClass === 'receiver' ? 'Command Receiver / lokalen Receiver-Command-State prüfen.' : (p.errorClass === 'timeout' ? 'Mesh-Tailscale-Verbindung/Port prüfen.' : 'Peer-Fehlerdetails prüfen.'))));
+    }
+    const errorClassCounts = peers.reduce((acc, p) => { const k = p.errorClass || 'unknown'; acc[k] = (acc[k] || 0) + 1; return acc; }, {});
+    const okPeerCount = peers.filter(p => p.ok).length;
+    const commandOkCount = peers.filter(p => p.commandAckOk).length;
+    const result = {
+      ok: okPeerCount > 0,
+      schema: 'nexowatt.mesh-two-instance-fieldtest-api.v1',
+      generatedAt: now,
+      status: okPeerCount > 0 ? 'ok' : 'failed',
+      profile: cfg.profile,
+      localNodeId,
+      clusterId,
+      peerCount: peers.length,
+      okPeerCount,
+      failedPeerCount: Math.max(0, peers.length - okPeerCount),
+      commandOkCount,
+      errorClassCounts,
+      roundtripStatus: _nwMeshRoundtripLevel(peers.reduce((max, p) => Math.max(max, Number(p.ms || 0)), 0), okPeerCount > 0),
+      probeRequested,
+      totalMs: Date.now() - startedAll,
+      errorClasses,
+      tokenErrorCount: Number(errorClasses.token || 0),
+      clusterMismatchCount: Number(errorClasses.cluster || 0),
+      receiverErrorCount: Number(errorClasses.receiver || 0),
+      timeoutCount: Number(errorClasses.timeout || 0),
+      roundtripStatus: _nwMeshRoundtripStatus(peers.reduce((max, p) => Math.max(max, Number(p.ms || 0)), 0)),
+      remoteNodeMatrix,
+      directHardwareWrite: false,
+      neutralCommandOnly: true,
+      peers,
+    };
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.status', result.status, true);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.twoInstanceReady', okPeerCount > 0, true);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.peerOnlineCount', okPeerCount, true);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.peerCommandOkCount', commandOkCount, true);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.lastRoundtripMs', peers.reduce((max, p) => Math.max(max, Number(p.ms || 0)), 0), true);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.peerMatrixJson', JSON.stringify(peers.map(p => ({ url: p.url, ok: p.ok, handshakeOk: p.handshakeOk, statusOk: p.statusOk, commandAckOk: p.commandAckOk, ms: p.ms, roundtripStatus: p.roundtripStatus, errorClass: p.errorClass, errorLabel: p.errorLabel, errors: p.errors }))), true);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.errorClassesJson', JSON.stringify(errorClasses), true);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.remoteNodeMatrixJson', JSON.stringify(remoteNodeMatrix), true);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.roundtripStatus', result.roundtripStatus, true);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.tokenErrorCount', Number(errorClasses.token || 0), true);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.clusterMismatchCount', Number(errorClasses.cluster || 0), true);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.receiverErrorCount', Number(errorClasses.receiver || 0), true);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.timeoutCount', Number(errorClasses.timeout || 0), true);
+    await _nwMeshWriteState('meshMicrogrid.peerHardening.summaryJson', JSON.stringify({ schema: 'nexowatt.mesh-peer-hardening-summary.v1', ts: now, errorClasses, roundtripStatus: result.roundtripStatus, remoteNodeCount: remoteNodeMatrix.length, directHardwareWrite: false, neutralCommandOnly: true, allowedPeerNodeIds: receiver.allowedPeerNodeIds || [] }), true);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.lastAckJson', JSON.stringify(peers.find(p => p.commandAck) || {}), true);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.lastManualTestJson', JSON.stringify(result), true);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.warning', result.ok ? '' : 'Kein Peer hat den Zwei-Instanzen-Feldtest vollständig bestanden.', true);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.summaryJson', JSON.stringify({ schema: 'nexowatt.mesh-two-instance-fieldtest-summary.v2', ts: now, status: result.status, okPeerCount, failedPeerCount: result.failedPeerCount, commandOkCount, totalMs: result.totalMs, errorClasses, roundtripStatus: result.roundtripStatus, remoteNodeCount: remoteNodeMatrix.length, directHardwareWrite: false, neutralCommandOnly: true, allowedPeerNodeIds: receiver.allowedPeerNodeIds || [] }), true);
+    return res.status(result.ok ? 200 : 409).json(result);
+  } catch (e) {
+    const msg = String(e && e.message ? e.message : e);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.status', 'error', true);
+    await _nwMeshWriteState('meshMicrogrid.fieldTest.warning', msg, true);
+    return res.status(500).json({ ok: false, status: 'error', error: 'internal_error', message: msg });
+  }
+});
+
+app.get('/api/mesh/peer/fieldtest', (req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
+    return res.json({ ok: true, schema: 'nexowatt.mesh-two-instance-fieldtest-state.v2', generatedAt: Date.now(), state: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.lastManualTestJson', {}), summary: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.summaryJson', {}), peerMatrix: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.peerMatrixJson', []), remoteNodeMatrix: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.remoteNodeMatrixJson', []), errorClasses: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.errorClassesJson', {}), roundtripStatus: _nwDisplayStateVal('meshMicrogrid.fieldTest.roundtripStatus', 'unknown'), lastAck: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.lastAckJson', {}), errorClasses: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.errorClassesJson', {}), roundtripStatus: _nwDisplayStateVal('meshMicrogrid.fieldTest.roundtripStatus', 'unknown'), peerRoundtripMatrix: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.peerRoundtripMatrixJson', []), remoteNodeMatrix: _nwEnergyLedgerJson('meshMicrogrid.fieldTest.remoteNodeMatrixJson', []), directHardwareWrite: false, neutralCommandOnly: true, allowedPeerNodeIds: receiver.allowedPeerNodeIds || [] });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
+  }
+});
+
 app.get('/api/mesh/microgrid.csv', (req, res) => {
   try {
     sendNoStore(res);

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2412c374a0e3a4b9ee68981f8263796623b4d2cf04e89d557950666e9207b5e3
+ * Original-Hash: 6763f6c3f3ab95e8b6691529a41c9b6c9d4eaac900a6f4b7187d29f23e07291b
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/grid-constraints.ts
- * Quell-Hash: sha256:f8930ca6a562fd6650ce90ae9bf0d6d66f16550a34f1e8142683e73f4d8d9695
+ * Quell-Hash: sha256:239e43247e0e1d165fafc72ba7b04b74c472e1e3b6fa9dd84f3898792300b02a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -392,6 +392,13 @@ class GridConstraintsModule extends BaseModule {
         await mk('gridConstraints.exportLimit.unusedPvPowerW', 'Unused PV power due to Export Guard (W)', 'number', 'value.power');
         await mk('gridConstraints.exportLimit.displayJson', 'Export Guard display JSON', 'string', 'json');
         await mk('gridConstraints.exportLimit.summaryJson', 'Export Guard summary JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.sinkPriorityOrderJson', '0-export sink priority order JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.sinkPriorityPlanJson', '0-export sink priority plan JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.nextSinkAction', 'Next 0-export sink action', 'string', 'text');
+        await mk('gridConstraints.exportLimit.sinkCommandEnvelopeJson', '0-export sink neutral command envelope JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.sinkCommandWriteStatus', '0-export sink command write status', 'string', 'text');
+        await mk('gridConstraints.exportLimit.sinkCommandWriteJson', '0-export sink command write JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.sinkCommandLastError', '0-export sink command last error', 'string', 'text');
 
         // PV curtail debug
         await mk('gridConstraints.pvCurtail.mode', 'Curtail mode (resolved)', 'string', 'text');
@@ -1040,6 +1047,125 @@ class GridConstraintsModule extends BaseModule {
      * Zusammenhang: Die Diagnose ist absichtlich read-only. Sie nutzt dieselben Mapping-Informationen
      * wie die bestehende PV-Curtail-Logik und erzeugt keinen zweiten Regelpfad.
      */
+    /**
+     * Code-Teil: _zeroExportSinkPriorityPlan
+     * Zweck: Definiert die fachlich richtige Reihenfolge für echte 0‑Einspeise-Anlagen.
+     * Wichtig: Verbrauch kommt immer zuerst, weil echter Haus-/Anlagenverbrauch bereits am
+     * Netzanschlusspunkt wirkt und nicht „geschaltet“ werden muss. Danach werden steuerbare
+     * Senken vorbereitet: Speicher laden, Ladepunkte, flexible Verbraucher, Mesh/Microgrid.
+     * Erst danach darf WR-/PV-Abregelung die Restleistung begrenzen. So bauen wir keine zweite
+     * Einspeiseregelung, sondern ergänzen den bestehenden Export Guard um eine klare Field-Order.
+     */
+    _zeroExportSinkPriorityPlan(cfg, exportOverLimitW, currentExportW, estimatedCurtailmentW) {
+/**
+ * Code-Teil: hasText
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const hasText = (v) => String(v || '').trim().length > 0;
+        const enabled = !!(cfg && cfg.zeroExportEnabled);
+        const maxFeedInW = this._getMaxFeedInPowerW(cfg || {});
+        const requiredW = Math.max(0, Math.round(Number(exportOverLimitW) || 0));
+        // Für aktive Senken-Commands darf nur die aktuelle Überschreitung verteilt werden.
+        // `estimatedCurtailmentW` bleibt Diagnosewert für WR-/PV-Abregelung und darf
+        // nicht als Speicher-/Ladepunkt-Sollleistung missverstanden werden.
+        const requestedReductionW = requiredW;
+        const diagnosticCurtailmentW = Math.max(0, Math.round(Number(estimatedCurtailmentW) || 0));
+        const order = [
+            'localConsumption',
+            'storageCharge',
+            'chargingStations',
+            'flexLoads',
+            'meshMicrogrid',
+            'inverterCurtailment',
+        ];
+        const labels = {
+            localConsumption: '1 Verbrauch zuerst / Eigenverbrauch am Netzpunkt',
+            storageCharge: '2 Speicher laden',
+            chargingStations: '3 Ladepunkte / Wallboxen / DC-Stationen',
+            flexLoads: '4 flexible Verbraucher / Heizstab / Wärmelast',
+            meshMicrogrid: '5 Mesh/Microgrid-Zielgruppen / Nachbar-Verbund',
+            inverterCurtailment: '6 Wechselrichter abregeln als letzte Stufe',
+        };
+        const mapped = {
+            localConsumption: true,
+            storageCharge: hasText(cfg?.zeroExportStorageChargeCommandStateId) || hasText(cfg?.batteryChargePowerWId) || hasText(cfg?.storageChargePowerWId),
+            chargingStations: hasText(cfg?.zeroExportChargingCommandStateId) || hasText(cfg?.chargingCommandStateId) || hasText(cfg?.evChargePowerWId),
+            flexLoads: hasText(cfg?.zeroExportFlexLoadCommandStateId) || hasText(cfg?.flexLoadCommandStateId) || hasText(cfg?.heatingRodPowerWId),
+            meshMicrogrid: hasText(cfg?.zeroExportMeshCommandStateId) || hasText(cfg?.meshMicrogridCommandStateId),
+            inverterCurtailment: this._exportWriteDiagnostics(cfg || {}, Array.isArray(cfg?.pvCurtailInvertersZero) && cfg.pvCurtailInvertersZero.length ? 'group' : this._resolveCurtailMode(cfg || {})).writable,
+        };
+        const nextAction = requiredW <= 0
+            ? 'observe'
+            : (mapped.storageCharge ? 'storageCharge'
+                : mapped.chargingStations ? 'chargingStations'
+                    : mapped.flexLoads ? 'flexLoads'
+                        : mapped.meshMicrogrid ? 'meshMicrogrid'
+                            : mapped.inverterCurtailment ? 'inverterCurtailment'
+                                : 'mappingRequired');
+        const steps = order.map((id, index) => ({
+            index: index + 1,
+            id,
+            label: labels[id],
+            mapped: !!mapped[id],
+            activeCandidate: id === nextAction,
+            requestedPowerW: id === 'localConsumption' ? Math.max(0, Math.round(Number(currentExportW) || 0)) : (id === nextAction ? requestedReductionW : 0),
+            commandStateId: id === 'storageCharge' ? String(cfg?.zeroExportStorageChargeCommandStateId || '')
+                : id === 'chargingStations' ? String(cfg?.zeroExportChargingCommandStateId || '')
+                    : id === 'flexLoads' ? String(cfg?.zeroExportFlexLoadCommandStateId || '')
+                        : id === 'meshMicrogrid' ? String(cfg?.zeroExportMeshCommandStateId || '')
+                            : '',
+            note: id === 'localConsumption'
+                ? 'Wirkt automatisch als natürliche Senke. Dieser Schritt wird nicht aktiv geschaltet.'
+                : id === 'inverterCurtailment'
+                    ? 'Letzte Stufe: WR/PV-Abregelung nur für Restleistung nach Verbrauch, Speicher und steuerbaren Senken.'
+                    : 'Neutraler Command-State/Mapping kann diese Senke aktivieren. Die konkrete Hardwaresteuerung bleibt bei lokaler Bridge/Adapter.',
+        }));
+        const commandEnvelope = {
+            schema: 'nexowatt.zero-export-sink-priority-command.v1',
+            mode: maxFeedInW === 0 ? 'zero_export' : 'export_limit',
+            enabled,
+            maxFeedInW,
+            requestedReductionW,
+            diagnosticCurtailmentW,
+            directHardwareWrite: false,
+            neutralCommandOnly: true,
+            priorityOrder: order,
+            nextAction,
+            commands: steps.filter(s => s.commandStateId && s.requestedPowerW > 0).map(s => ({
+                schema: 'nexowatt.zero-export-sink-command.v1',
+                sink: s.id,
+                label: s.label,
+                requestedPowerW: s.requestedPowerW,
+                commandStateId: s.commandStateId,
+                reason: '0-Einspeisung: Verbrauch zuerst, dann Speicher, dann Ladepunkte/flexible Senken, WR-Abregelung zuletzt.',
+                directHardwareWrite: false,
+                neutralCommandOnly: true,
+            })),
+        };
+        return {
+            schema: 'nexowatt.zero-export-sink-priority.v1',
+            enabled,
+            maxFeedInW,
+            zeroExport: maxFeedInW === 0,
+            requestedReductionW,
+            diagnosticCurtailmentW,
+            currentExportW: Math.max(0, Math.round(Number(currentExportW) || 0)),
+            exportOverLimitW: requiredW,
+            order,
+            steps,
+            nextAction,
+            commandEnvelope,
+            summary: 'Reihenfolge: Verbrauch zuerst, Speicher laden, Ladepunkte, flexible Verbraucher, Mesh/Microgrid, WR-Abregelung zuletzt.',
+        };
+    }
+
     _exportWriteDiagnostics(cfg, modeResolved) {
         const mode = String(modeResolved || '').trim() || 'off';
         const missing = [];
@@ -1155,6 +1281,65 @@ class GridConstraintsModule extends BaseModule {
     }
 
     /**
+     * Code-Teil: _writeZeroExportSinkCommands
+     * Zweck: Schreibt die aus der bestehenden Export-Guard-Regelung abgeleiteten
+     * 0-Einspeise-Senken als neutrale JSON-Commands in die vom Installateur
+     * angegebenen Command-States. Das ist keine zweite Regelung und keine direkte
+     * Hardwaresteuerung; lokale Bridges/Adapter entscheiden herstelleroffen über
+     * OCPP, Modbus, MQTT, REST oder Herstellerdatenpunkte.
+     */
+    async _writeZeroExportSinkCommands(sinkPriority, context) {
+        const commands = sinkPriority && sinkPriority.commandEnvelope && Array.isArray(sinkPriority.commandEnvelope.commands) ? sinkPriority.commandEnvelope.commands : [];
+        const result = {
+            schema: 'nexowatt.zero-export-sink-command-write-result.v1',
+            ts: Date.now(),
+            status: 'idle',
+            commandCount: commands.length,
+            writtenCount: 0,
+            failedCount: 0,
+            results: [],
+            directHardwareWrite: false,
+            neutralCommandOnly: true,
+        };
+        if (!commands.length) {
+            result.status = 'no_commands';
+            return result;
+        }
+        for (const cmd of commands) {
+            const stateId = String(cmd && cmd.commandStateId || '').trim();
+            if (!stateId) continue;
+            const envelope = {
+                schema: 'nexowatt.zero-export-sink-target-command.v1',
+                ts: Date.now(),
+                source: 'nexowatt-ui.gridConstraints.exportLimit',
+                sink: cmd.sink,
+                label: cmd.label,
+                requestedPowerW: Math.max(0, Math.round(Number(cmd.requestedPowerW) || 0)),
+                reason: cmd.reason || '0-Einspeise Senkenpriorität',
+                exportOverLimitW: Math.max(0, Math.round(Number(context && context.exportOverLimitW) || 0)),
+                currentExportW: Math.max(0, Math.round(Number(context && context.currentExportW) || 0)),
+                maxFeedInW: Math.max(0, Math.round(Number(context && context.maxFeedInW) || 0)),
+                priorityOrder: sinkPriority.order || [],
+                nextAction: sinkPriority.nextAction || 'observe',
+                directHardwareWrite: false,
+                neutralCommandOnly: true,
+            };
+            try {
+                const json = JSON.stringify(envelope);
+                if (this.adapter && typeof this.adapter.setForeignStateAsync === 'function') await this.adapter.setForeignStateAsync(stateId, { val: json, ack: false });
+                else if (this.adapter && typeof this.adapter.setStateAsync === 'function') await this.adapter.setStateAsync(stateId, { val: json, ack: false });
+                result.writtenCount += 1;
+                result.results.push({ stateId, sink: cmd.sink, status: 'written', requestedPowerW: envelope.requestedPowerW });
+            } catch (e) {
+                result.failedCount += 1;
+                result.results.push({ stateId, sink: cmd.sink, status: 'error', error: String(e && e.message ? e.message : e) });
+            }
+        }
+        result.status = result.failedCount ? (result.writtenCount ? 'partial-error' : 'error') : (result.writtenCount ? 'written' : 'no_targets');
+        return result;
+    }
+
+    /**
      * Code-Teil: _publishExportLimitStates
      * Zweck: Veröffentlicht die neue Export-Guard-Sicht für UI, Diagnose und Energy Wallet.
      * Zusammenhang: Die Werte werden aus der bestehenden Grid-Constraints-Regelung abgeleitet. Dadurch gibt es
@@ -1184,17 +1369,21 @@ class GridConstraintsModule extends BaseModule {
         const diagnosticOnly = enabled && runMode === 'diagnostic';
         const write = this._exportWriteDiagnostics(cfg, mode);
         const estimateW = this._estimateCurtailmentW(cfg, mode, overLimitW);
+        const sinkPriority = this._zeroExportSinkPriorityPlan(cfg, overLimitW, currentExportW, estimateW);
+        const sinkCommandReady = !!(sinkPriority && sinkPriority.commandEnvelope && Array.isArray(sinkPriority.commandEnvelope.commands) && sinkPriority.commandEnvelope.commands.length);
         const requiredW = enabled && approved ? overLimitW : 0;
         const plannedAction = !enabled
             ? 'off'
             : !approved
                 ? 'awaiting_installer_approval'
-                : !write.writable
-                    ? 'mapping_required'
-                    : diagnosticOnly
-                        ? `would_limit_${Math.max(0, Math.round(requiredW))}W`
-                        : String(action || 'active');
-        const statusLabel = !enabled ? 'off' : !approved ? 'awaiting_installer_approval' : diagnosticOnly ? 'diagnostic_only' : !write.writable ? 'missing_wr_write_datapoints' : overLimitW > 0 ? 'export_above_limit' : negativePriceActive ? 'negative_price_guard_active' : 'within_limit';
+                : diagnosticOnly
+                    ? (sinkCommandReady ? `would_dispatch_sink_${sinkPriority.nextAction}_${Math.max(0, Math.round(requiredW))}W` : `would_limit_${Math.max(0, Math.round(requiredW))}W`)
+                    : sinkCommandReady
+                        ? `dispatch_sink_${sinkPriority.nextAction}`
+                        : !write.writable
+                            ? 'mapping_required'
+                            : String(action || 'active');
+        const statusLabel = !enabled ? 'off' : !approved ? 'awaiting_installer_approval' : diagnosticOnly ? 'diagnostic_only' : sinkCommandReady ? 'sink_priority_command_ready' : !write.writable ? 'missing_wr_write_datapoints' : overLimitW > 0 ? 'export_above_limit' : negativePriceActive ? 'negative_price_guard_active' : 'within_limit';
         const negativeStrategy = negativePriceActive ? `negative_price_import_bias_${Math.max(0, Math.round(Number(biasW) || 0))}W` : 'normal_export_limit';
         const warning = write.writable ? '' : write.missing.join(' | ');
         const installerMessage = !enabled
@@ -1221,6 +1410,8 @@ class GridConstraintsModule extends BaseModule {
             exportOverLimitW: overLimitW,
             plannedAction,
             negativePriceActive: !!negativePriceActive,
+            zeroExportSinkPriority: sinkPriority,
+            sinkCommandReady,
             nextStep: write.nextStep || '',
             missingWriteDatapoints: write.missing || [],
         };
@@ -1250,8 +1441,15 @@ class GridConstraintsModule extends BaseModule {
             curtailmentRequiredW: requiredW,
             estimatedCurtailmentW: estimateW,
             unusedPvPowerW: estimateW,
+            zeroExportSinkPriority: sinkPriority,
+            sinkCommandReady,
             updatedAt: Date.now(),
         };
+        const sinkWriteResult = enabled && approved && !diagnosticOnly && sinkCommandReady
+            ? await this._writeZeroExportSinkCommands(sinkPriority, { exportOverLimitW: overLimitW, currentExportW, maxFeedInW: effectiveMaxW })
+            : { schema: 'nexowatt.zero-export-sink-command-write-result.v1', ts: Date.now(), status: diagnosticOnly ? 'diagnostic_only' : (sinkCommandReady ? 'blocked_not_allowed' : 'no_commands'), commandCount: sinkPriority && sinkPriority.commandEnvelope && Array.isArray(sinkPriority.commandEnvelope.commands) ? sinkPriority.commandEnvelope.commands.length : 0, writtenCount: 0, failedCount: 0, results: [], directHardwareWrite: false, neutralCommandOnly: true };
+        summary.zeroExportSinkCommandWrite = sinkWriteResult;
+        checklist.zeroExportSinkCommandWrite = sinkWriteResult;
         await set('gridConstraints.exportLimit.enabled', !!enabled);
         await set('gridConstraints.exportLimit.installerApproved', !!approved);
         await set('gridConstraints.exportLimit.configuredMaxFeedInW', effectiveMaxW);
@@ -1275,6 +1473,13 @@ class GridConstraintsModule extends BaseModule {
         await set('gridConstraints.exportLimit.curtailmentRequiredW', requiredW);
         await set('gridConstraints.exportLimit.estimatedCurtailmentW', estimateW);
         await set('gridConstraints.exportLimit.unusedPvPowerW', estimateW);
+        await set('gridConstraints.exportLimit.sinkPriorityOrderJson', JSON.stringify(sinkPriority.steps || []));
+        await set('gridConstraints.exportLimit.sinkPriorityPlanJson', JSON.stringify(sinkPriority));
+        await set('gridConstraints.exportLimit.nextSinkAction', sinkPriority.nextAction || 'observe');
+        await set('gridConstraints.exportLimit.sinkCommandEnvelopeJson', JSON.stringify(sinkPriority.commandEnvelope || {}));
+        await set('gridConstraints.exportLimit.sinkCommandWriteStatus', String(sinkWriteResult.status || 'idle'));
+        await set('gridConstraints.exportLimit.sinkCommandWriteJson', JSON.stringify(sinkWriteResult));
+        await set('gridConstraints.exportLimit.sinkCommandLastError', (sinkWriteResult.results || []).filter(r => r && r.status === 'error').map(r => `${r.stateId}: ${r.error}`).join(' | '));
         await set('gridConstraints.exportLimit.displayJson', JSON.stringify(summary));
         await set('gridConstraints.exportLimit.summaryJson', JSON.stringify(summary));
         await set('gridConstraints.pvCurtail.estimatedCurtailmentW', estimateW);

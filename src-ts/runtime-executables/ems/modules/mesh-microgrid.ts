@@ -12,19 +12,25 @@
  * - Dieses Modul ist eine EOS-App und gehört nicht zur Home-Basis.
  * - Es ist bewusst ein eigenes Modul, damit Microgrid/Nachbarschaft später nicht
  *   in Energie-Wertkonto, Ledger, DC Display oder Export Guard vermischt wird.
- * - Es ist in 0.8.32 read-only: keine Hardware-Schreibbefehle, keine WR-Setpoints,
- *   keine Ladepunkt-Setpoints, keine Schaltlogik.
+ * - Ab 0.8.43 kann es nach ausdrücklicher Installateurfreigabe reale
+ *   Local-First-/Grid-Last-Command-Intents ausgeben. Diese bleiben neutral:
+ *   keine direkten WR-, Ladepunkt-, Speicher-, OCPP-, Modbus-, MQTT- oder
+ *   Hersteller-Schreibbefehle aus diesem Modul heraus.
  *
  * Hersteller-/Protokolloffenheit:
  * Knoten können Daten aus beliebigen ioBroker-Datenpunkten liefern: OCPP, Modbus,
  * MQTT, REST, Herstelleradapter, NexoWatt-Devices oder Aliase. Das Modul sieht nur
  * normalisierte Leistung/SOC/Import/Export und bindet sich nicht an ein Protokoll.
  */
+
 'use strict';
 
 const { BaseModule } = require('./base');
 
-const MODULE_VERSION = 'nexowatt.mesh-microgrid-peer-receiver.v1';
+const MODULE_VERSION = 'nexowatt.mesh-microgrid-target-group-fairness.v1';
+// Backward-compatible schema marker for 0.8.49 tests: nexowatt.mesh-microgrid-target-groups.v1
+// Backward-compatible schema marker for 0.8.47 target-release tests: nexowatt.mesh-microgrid-target-release.v1
+// Backward-compatible schema marker for static fieldtest test: nexowatt.mesh-microgrid-two-instance-fieldtest.v1
 
 function safeId(input, fallback = 'node') {
   const s = String(input || '').trim().toLowerCase();
@@ -95,10 +101,177 @@ function normalizeNodes(raw) {
       socDp: String(n.socDp || n.socId || '').trim(),
       gridImportPowerDp: String(n.gridImportPowerDp || n.importPowerDp || '').trim(),
       gridExportPowerDp: String(n.gridExportPowerDp || n.exportPowerDp || '').trim(),
+      // 0.8.48 Leistungsgrenzen je Knoten. Die Limits werden im CommandGuard
+      // geprüft und begrenzen/blockieren nur neutrale Mesh-Command-Intents.
+      // Sie erzeugen keine direkte Hardwaresteuerung.
+      minPowerW: Math.max(0, Math.round(num(n.minPowerW, 0))),
       maxPowerW: Math.max(0, Math.round(num(n.maxPowerW, 0))),
+      maxImportW: Math.max(0, Math.round(num(n.maxImportW, n.importLimitW || 0))),
+      maxExportW: Math.max(0, Math.round(num(n.maxExportW, n.exportLimitW || 0))),
+      maxChargeW: Math.max(0, Math.round(num(n.maxChargeW, n.chargeLimitW || 0))),
+      maxDischargeW: Math.max(0, Math.round(num(n.maxDischargeW, n.dischargeLimitW || 0))),
+      maxLoadW: Math.max(0, Math.round(num(n.maxLoadW, n.loadLimitW || 0))),
+      maxGenerationW: Math.max(0, Math.round(num(n.maxGenerationW, n.generationLimitW || 0))),
+      // 0.8.49: Zielgruppen-Zuordnung. Gruppen steuern nur neutrale Command-Intents.
+      targetGroupIds: Array.isArray(n.targetGroupIds) ? n.targetGroupIds.map(x => safeId(x, '')).filter(Boolean) : String(n.targetGroupIds || n.targetGroups || '').split(/[\n,;]+/g).map(x => safeId(x, '')).filter(Boolean),
       note: String(n.note || '').trim(),
     };
   });
+}
+
+
+/**
+ * 0.8.49 Zielgruppen-Strategie.
+ *
+ * Zielgruppen bündeln Knoten fachlich: Ladepunkte, Speicher, Verbraucher,
+ * Erzeuger oder frei definierte Gruppen. Sie beeinflussen nur neutrale
+ * Mesh-Command-Intents: Gruppengrenzen, Gruppenpriorität und Gruppenanteile
+ * werden in CommandGuard und Betreiberansicht ausgewertet. Es gibt weiterhin
+ * keine direkte Hardwaresteuerung aus Mesh/Microgrid heraus.
+ */
+function normalizeTargetGroups(raw) {
+  const arr = Array.isArray(raw) ? raw : [];
+  const seen = new Set();
+  return arr.map((g, idx) => {
+    const x = g && typeof g === 'object' ? g : {};
+    let id = safeId(x.id || x.groupId || x.key || `group_${idx + 1}`, `group_${idx + 1}`);
+    if (seen.has(id)) id = `${id}_${idx + 1}`;
+    seen.add(id);
+    const type = normalizeType(x.type || x.groupType || 'generic');
+    const memberNodeIds = Array.isArray(x.memberNodeIds) ? x.memberNodeIds : (Array.isArray(x.nodes) ? x.nodes : String(x.memberNodeIds || x.nodes || '').split(/[\n,;]+/g));
+    const memberTypes = Array.isArray(x.memberTypes) ? x.memberTypes : String(x.memberTypes || '').split(/[\n,;]+/g);
+    return {
+      id,
+      name: String(x.name || x.label || id).trim() || id,
+      type,
+      enabled: x.enabled !== false,
+      priority: Math.max(1, Math.min(999, Math.round(num(x.priority, 100)))) || 100,
+      memberNodeIds: memberNodeIds.map(v => safeId(String(v || '').trim(), '')).filter(Boolean),
+      memberTypes: memberTypes.map(v => normalizeType(String(v || '').trim())).filter(Boolean),
+      maxPowerW: Math.max(0, Math.round(num(x.maxPowerW, 0))),
+      minPowerW: Math.max(0, Math.round(num(x.minPowerW, 0))),
+      maxImportW: Math.max(0, Math.round(num(x.maxImportW, 0))),
+      maxExportW: Math.max(0, Math.round(num(x.maxExportW, 0))),
+      maxChargeW: Math.max(0, Math.round(num(x.maxChargeW, 0))),
+      maxDischargeW: Math.max(0, Math.round(num(x.maxDischargeW, 0))),
+      maxLoadW: Math.max(0, Math.round(num(x.maxLoadW, 0))),
+      maxGenerationW: Math.max(0, Math.round(num(x.maxGenerationW, 0))),
+      strategy: String(x.strategy || 'local_first').trim().toLowerCase() || 'local_first',
+      // 0.8.50 Zielgruppen-Fairness: optionale Budget-/Mindestanteile für
+      // die Verteilung neutraler Local-First-/Grid-Last-Command-Intents.
+      // Gewicht und Mindestanteil erzeugen keine Hardwarebefehle, sondern
+      // verteilen nur das zulässige Gruppenbudget im CommandGuard.
+      fairShareWeight: Math.max(0, round(num(x.fairShareWeight || x.weight, 1), 3)),
+      minSharePercent: Math.max(0, Math.min(100, round(num(x.minSharePercent || x.minPercent, 0), 2))),
+      reservePowerW: Math.max(0, Math.round(num(x.reservePowerW || x.reservedPowerW, 0))),
+      maxSharePercent: Math.max(0, Math.min(100, round(num(x.maxSharePercent || 100, 100), 2))),
+      budgetPowerW: Math.max(0, Math.round(num(x.budgetPowerW || x.budgetW, 0))),
+      note: String(x.note || '').trim(),
+    };
+  }).filter(g => g.enabled !== false);
+}
+
+function nodeInTargetGroup(node, group) {
+  const n = node && typeof node === 'object' ? node : {};
+  const g = group && typeof group === 'object' ? group : {};
+  const id = safeId(n.id || '', '');
+  if (!id) return false;
+  if (Array.isArray(g.memberNodeIds) && g.memberNodeIds.includes(id)) return true;
+  if (Array.isArray(n.targetGroupIds) && n.targetGroupIds.includes(g.id)) return true;
+  if (Array.isArray(g.memberTypes) && g.memberTypes.includes(normalizeType(n.type))) return true;
+  return false;
+}
+
+function targetGroupsForCommand(command, node, groups) {
+  const n = node && typeof node === 'object' ? node : null;
+  const list = Array.isArray(groups) ? groups : [];
+  if (!n) return [];
+  return list.filter(g => nodeInTargetGroup(n, g)).sort(prioritySort);
+}
+
+function _meshGroupLimitForCommand(groups, node, command) {
+  const groupList = targetGroupsForCommand(command, node, groups);
+  const limits = [];
+  const minLimits = [];
+  const reasons = [];
+  const dir = String(command && command.direction || '').toLowerCase();
+  const cat = String(command && command.category || '').toLowerCase();
+  for (const g of groupList) {
+    const addMax = (value, id) => {
+      const v = Math.max(0, Math.round(num(value, 0)));
+      if (v > 0) { limits.push(v); reasons.push({ id: `group.${g.id}.${id}`, limitW: v, groupId: g.id, groupName: g.name }); }
+    };
+    const addMin = (value, id) => {
+      const v = Math.max(0, Math.round(num(value, 0)));
+      if (v > 0) { minLimits.push(v); reasons.push({ id: `group.${g.id}.${id}`, limitW: v, groupId: g.id, groupName: g.name }); }
+    };
+    addMax(g.maxPowerW, 'maxPowerW');
+    addMin(g.minPowerW, 'minPowerW');
+    if (g.type === 'chargepoint' || dir.includes('charge')) addMax(g.maxChargeW || g.maxLoadW, 'maxChargeW/maxLoadW');
+    if (g.type === 'storage' && (dir.includes('charge') || cat.includes('local_first'))) addMax(g.maxChargeW, 'maxChargeW');
+    if (g.type === 'storage' && (dir.includes('discharge') || cat.includes('grid_last'))) addMax(g.maxDischargeW, 'maxDischargeW');
+    if (g.type === 'consumer' || g.type === 'thermal' || dir.includes('load') || dir.includes('use')) addMax(g.maxLoadW, 'maxLoadW');
+    if (g.type === 'producer' || dir.includes('export') || dir.includes('generation')) addMax(g.maxGenerationW || g.maxExportW, 'maxGenerationW/maxExportW');
+    if (dir.includes('import')) addMax(g.maxImportW, 'maxImportW');
+    if (dir.includes('export')) addMax(g.maxExportW, 'maxExportW');
+  }
+  return {
+    groups: groupList.map(g => ({ id: g.id, name: g.name, type: g.type, priority: g.priority, strategy: g.strategy })),
+    minPowerW: minLimits.length ? Math.max(...minLimits) : 0,
+    maxPowerW: limits.length ? Math.min(...limits) : 0,
+    reasons,
+  };
+}
+
+function buildTargetGroupPlan(groups, nodes, commands) {
+  const groupList = Array.isArray(groups) ? groups : [];
+  const nodeList = Array.isArray(nodes) ? nodes : [];
+  const cmdList = Array.isArray(commands) ? commands : [];
+  const summaries = groupList.map(g => {
+    const members = nodeList.filter(n => nodeInTargetGroup(n, g));
+    const groupCommands = cmdList.filter(c => members.some(n => String(n.id) === String(c.nodeId || c.targetNodeId || '')));
+    const requestedW = groupCommands.reduce((sum, c) => sum + Math.max(0, Math.round(num(c.requestedPowerW || c.plannedPowerW, 0))), 0);
+    const allowedW = groupCommands.reduce((sum, c) => sum + Math.max(0, Math.round(num(c.plannedPowerW, 0))), 0);
+    return {
+      schema: 'nexowatt.mesh-target-group-summary.v1',
+      id: g.id,
+      name: g.name,
+      type: g.type,
+      priority: g.priority,
+      strategy: g.strategy,
+      minSharePercent: g.minSharePercent || 0,
+      maxSharePercent: g.maxSharePercent || 0,
+      fairnessWeight: g.fairnessWeight || 1,
+      minBudgetW: g.minBudgetW || 0,
+      maxBudgetW: g.maxBudgetW || 0,
+      memberCount: members.length,
+      members: members.map(n => ({ id: n.id, name: n.name, type: n.type, priority: n.priority })),
+      requestedPowerW: requestedW,
+      allowedPowerW: allowedW,
+      maxPowerW: g.maxPowerW || 0,
+      minPowerW: g.minPowerW || 0,
+      limits: {
+        maxImportW: g.maxImportW || 0,
+        maxExportW: g.maxExportW || 0,
+        maxChargeW: g.maxChargeW || 0,
+        maxDischargeW: g.maxDischargeW || 0,
+        maxLoadW: g.maxLoadW || 0,
+        maxGenerationW: g.maxGenerationW || 0,
+      },
+      directHardwareWrite: false,
+      neutralCommandOnly: true,
+    };
+  });
+  return {
+    schema: 'nexowatt.mesh-target-groups.v1',
+    groupCount: summaries.length,
+    activeGroupCount: summaries.filter(g => g.memberCount > 0).length,
+    groups: summaries,
+    priorityOrder: summaries.slice().sort(prioritySort).map((g, idx) => ({ rank: idx + 1, id: g.id, name: g.name, type: g.type, priority: g.priority, memberCount: g.memberCount })),
+    summary: summaries.length ? `${summaries.length} Zielgruppe(n) konfiguriert.` : 'Keine Zielgruppen konfiguriert.',
+    directHardwareWrite: false,
+    neutralCommandOnly: true,
+  };
 }
 
 
@@ -130,6 +303,7 @@ function priorityOrder(nodes) {
     .sort(prioritySort)
     .map((n, idx) => ({ rank: idx + 1, id: n.id, name: n.name, type: n.type, role: n.role, priority: n.priority }));
 }
+
 
 function buildGridLimitDiagnostics(totals, gridLimitW) {
   const limit = Math.max(0, Math.round(num(gridLimitW, 0)));
@@ -337,11 +511,11 @@ function buildPlanning(nodes, totals, gridLimitW, mode) {
 function normalizeCommandOutputCfg(raw) {
   const cfg = raw && typeof raw === 'object' ? raw : {};
   const mode = String(cfg.controlMode || cfg.executionMode || 'diagnostic').trim().toLowerCase();
-  const controlMode = ['off', 'diagnostic', 'field_test'].includes(mode) ? mode : 'diagnostic';
+  const controlMode = ['off', 'diagnostic', 'field_test', 'active'].includes(mode) ? mode : 'diagnostic';
   const commandStateDp = String(cfg.commandStateDp || cfg.commandStateId || cfg.commandOutputDp || '').trim();
-  const approved = cfg.fieldTestApproved === true || cfg.installerApproved === true;
+  const approved = cfg.fieldTestApproved === true || cfg.installerApproved === true || cfg.activeControlApproved === true;
   const maxCommandsPerTick = Math.max(1, Math.min(10, Math.round(num(cfg.maxCommandsPerTick, 3)) || 3));
-  return { controlMode, commandStateDp, fieldTestApproved: approved, maxCommandsPerTick };
+  return { controlMode, commandStateDp, fieldTestApproved: approved, activeControlApproved: approved, maxCommandsPerTick };
 }
 
 function normalizeTailscaleCfg(raw) {
@@ -357,45 +531,740 @@ function normalizeTailscaleCfg(raw) {
   return { enabled, profile, localNodeId, timeoutMs, peerUrls, peerToken };
 }
 
-
 /**
- * Normalisiert die Command-Receiver-Konfiguration für den Feldtest mit zwei oder
- * mehr NexoWatt-Instanzen. Der Receiver gehört fachlich zum separaten
- * Mesh/Microgrid-Tailscale-Netz und bleibt von der Fernwartung getrennt.
+ * 0.8.41 Command-Receiver-Konfiguration.
  *
- * Wichtig: Auch empfangene Remote-Befehle werden nicht direkt auf Hardware
- * geschrieben. Sie werden als neutraler JSON-Envelope in einen lokalen
- * Command-State gespiegelt, den eine nachgelagerte Bridge/Adapterlogik auswertet.
+ * Der Empfänger ist bewusst als separate, installerfreigegebene Sicherheitsgrenze
+ * modelliert: Remote-Kommandos aus dem Mesh-Tailscale werden nicht direkt auf
+ * Geräte geschrieben. Sie werden nach Token-, Cluster- und Replay-Prüfung nur in
+ * einen lokalen neutralen JSON-Command-State gespiegelt. Erst eine nachgelagerte
+ * lokale Bridge übersetzt den Intent in OCPP, Modbus, MQTT, REST oder
+ * herstellerspezifische Datenpunkte.
  */
 function normalizeReceiverCfg(raw) {
   const cfg = raw && typeof raw === 'object' ? raw : {};
   const r = cfg.receiver && typeof cfg.receiver === 'object' ? cfg.receiver : (cfg.commandReceiver && typeof cfg.commandReceiver === 'object' ? cfg.commandReceiver : {});
-  const enabled = r.enabled === true || cfg.receiverEnabled === true || cfg.commandReceiverEnabled === true;
-  const commandStateDp = String(r.commandStateDp || r.receiverCommandStateDp || cfg.receiverCommandStateDp || cfg.receivedCommandStateDp || '').trim();
-  const token = String(r.token || r.receiverToken || cfg.receiverToken || '').trim();
-  const requireToken = r.requireToken === false || cfg.receiverRequireToken === false ? false : true;
-  const ttlSec = Math.max(5, Math.min(900, Math.round(num(r.ttlSec || r.commandTtlSec || cfg.receiverTtlSec, 120)) || 120));
-  const maxProcessedIds = Math.max(20, Math.min(1000, Math.round(num(r.maxProcessedIds || cfg.receiverMaxProcessedIds, 200)) || 200));
-  const allowedPeerText = Array.isArray(r.allowedPeerNodeIds) ? r.allowedPeerNodeIds.join('\n') : String(r.allowedPeerNodeIds || cfg.allowedPeerNodeIds || '');
-  const allowedPeerNodeIds = allowedPeerText.split(/[\n,;]+/g).map(x => safeId(x.trim(), '')).filter(Boolean).slice(0, 100);
-  return { enabled, commandStateDp, token, requireToken, ttlSec, maxProcessedIds, allowedPeerNodeIds };
+  const tailscale = normalizeTailscaleCfg(cfg);
+  const enabled = r.enabled === true || cfg.receiverEnabled === true;
+  const acceptRemoteCommands = r.acceptRemoteCommands === true || cfg.acceptRemoteCommands === true;
+  const localCommandStateDp = String(r.localCommandStateDp || r.receivedCommandStateDp || cfg.receivedCommandStateDp || '').trim();
+  const peerToken = String(r.peerToken || tailscale.peerToken || cfg.receiverToken || '').trim();
+  const requireClusterMatch = r.requireClusterMatch !== false;
+  const replayTtlSec = Math.max(30, Math.min(86400, Math.round(num(r.replayTtlSec || cfg.replayTtlSec, 900)) || 900));
+  const processedLimit = Math.max(20, Math.min(2000, Math.round(num(r.processedLimit || cfg.receiverProcessedLimit, 200)) || 200));
+  const allowedPeerNodeIdsRaw = Array.isArray(r.allowedPeerNodeIds) ? r.allowedPeerNodeIds.join(',') : String(r.allowedPeerNodeIds || cfg.allowedPeerNodeIds || '');
+  const allowedPeerNodeIds = allowedPeerNodeIdsRaw.split(/[\n,;]+/g).map(x => safeId(x.trim(), '')).filter(Boolean);
+  return { enabled, acceptRemoteCommands, localCommandStateDp, peerToken, requireClusterMatch, replayTtlSec, processedLimit, allowedPeerNodeIds };
 }
 
 /**
- * 0.8.40 Feldsteuerungs-CommandGuard für Mesh/Microgrid.
+ * 0.8.43 Feld-/Aktivsteuerungs-CommandGuard für Mesh/Microgrid.
  *
  * Produktregel:
- * - Das Modul darf für Feldtests neutrale NexoWatt-Command-Intents ausgeben,
- *   wenn der Installateur dies explizit freigegeben und einen Command-State
- *   hinterlegt hat.
+ * - Das Modul darf für Feldtests und den aktiven Local-First-Betrieb neutrale
+ *   NexoWatt-Command-Intents ausgeben, wenn der Installateur dies explizit
+ *   freigegeben und einen Command-State oder Mesh-Peer-Transport hinterlegt hat.
  * - Es schreibt weiterhin keine Wechselrichter-, Speicher-, Ladepunkt-, OCPP-,
  *   Modbus-, MQTT- oder Hersteller-Rohdatenpunkte direkt. Die Ausgabe ist ein
  *   herstellerneutraler JSON-Befehl, den eine nachgelagerte Bridge/Instanz im
  *   separaten Tailscale-Mesh interpretieren kann.
- * - Damit kann im Feld mit realen Instanzen getestet werden, ohne die EMS-Logik
- *   an ein bestimmtes Protokoll zu koppeln.
+ * - Damit kann im Feld mit realen Instanzen gearbeitet werden, ohne die
+ *   EMS-Logik an ein bestimmtes Protokoll zu koppeln. Die Umsetzung bleibt
+ *   Aufgabe der lokalen Bridge/zweiten Instanz.
  */
-function buildCommandGuard(planning, nodes, cluster, controlCfg, tailscaleCfg) {
+
+/**
+ * 0.8.44 Lokale Bridge-Zuordnung für Mesh/Microgrid.
+ *
+ * Zweck:
+ * - Der Mesh-CommandGuard erzeugt herstellerneutrale Command-Intents.
+ * - Diese Zuordnung verbindet einen lokalen Mesh-Knoten mit einem lokalen
+ *   Ziel-Command-State, den eine lokale Bridge oder ein Herstelleradapter
+ *   auswerten kann.
+ * - Das Modul schreibt weiterhin keine OCPP-, Modbus-, MQTT-, REST- oder
+ *   Hersteller-Rohbefehle direkt. Es schreibt nur JSON-Intents in explizit vom
+ *   Installateur konfigurierte Command-States.
+ */
+function normalizeLocalBridgeCfg(raw) {
+  const cfg = raw && typeof raw === 'object' ? raw : {};
+  const b = cfg.localBridge && typeof cfg.localBridge === 'object' ? cfg.localBridge : (cfg.bridge && typeof cfg.bridge === 'object' ? cfg.bridge : {});
+  const enabled = b.enabled === true || cfg.localBridgeEnabled === true;
+  const modeRaw = String(b.outputMode || cfg.localBridgeOutputMode || 'global').trim().toLowerCase();
+  const outputMode = ['global', 'mapped', 'both'].includes(modeRaw) ? modeRaw : 'global';
+  const defaultCommandStateDp = String(b.defaultCommandStateDp || cfg.localBridgeDefaultCommandStateDp || '').trim();
+
+  // 0.8.45 Bridge-ACK/Zielstatus: Die lokale Bridge kann nach Umsetzung eines
+  // neutralen Mesh-Commands einen eigenen ACK-/Status-State schreiben. Das Mesh-
+  // Modul liest diese Rückmeldung nur aus und bewertet sie für den Betreiber;
+  // es entsteht dadurch weiterhin kein direkter Hardware-Schreibpfad.
+  const ackEnabled = b.ackEnabled === true || cfg.localBridgeAckEnabled === true;
+  // 0.8.46 ACK-Gate: Wenn aktiv, blockiert ein Ziel mit offenem/fehlerhaftem ACK
+  // weitere neutrale Commands für genau dieses Ziel. Das verhindert im Feld
+  // Command-Spam gegen eine Bridge, die den letzten Intent noch nicht bestätigt hat.
+  const ackRequired = b.ackRequired === true || cfg.localBridgeAckRequired === true;
+  const ackTimeoutSec = Math.max(5, Math.min(86400, Math.round(num(b.ackTimeoutSec || cfg.localBridgeAckTimeoutSec, 60)) || 60));
+  // 0.8.47 Ziel-Wiederfreigabe: ACK-OK gibt ein Ziel automatisch wieder frei.
+  // Zusätzlich kann der Betreiber im Feld ein einzelnes Ziel manuell für einen
+  // begrenzten Zeitraum freigeben. Diese Freigabe betrifft nur den neutralen
+  // Bridge-Command-State und schreibt niemals direkt auf Geräte-Hardware.
+  const ackAutoRelease = b.ackAutoRelease !== false && cfg.localBridgeAckAutoRelease !== false;
+  const manualReleaseEnabled = b.manualReleaseEnabled !== false && cfg.localBridgeManualReleaseEnabled !== false;
+  const manualReleaseTtlSec = Math.max(30, Math.min(86400, Math.round(num(b.manualReleaseTtlSec || cfg.localBridgeManualReleaseTtlSec, 300)) || 300));
+  const rawMappings = Array.isArray(b.mappings) ? b.mappings : (Array.isArray(cfg.localBridgeMappings) ? cfg.localBridgeMappings : []);
+  const mappings = rawMappings.map((item, idx) => {
+    const m = item && typeof item === 'object' ? item : {};
+    const id = safeId(m.id || m.mappingId || `bridge_${idx + 1}`, `bridge_${idx + 1}`);
+    const nodeId = safeId(m.nodeId || m.sourceNodeId || m.localNodeId || '', '');
+    const targetNodeId = safeId(m.targetNodeId || m.targetId || m.nodeTargetId || nodeId || '', '');
+    const commandStateDp = String(m.commandStateDp || m.commandStateId || m.targetCommandStateDp || defaultCommandStateDp || '').trim();
+    const directionsRaw = Array.isArray(m.directions) ? m.directions.join(',') : String(m.directions || m.direction || '');
+    const directions = directionsRaw.split(/[\n,;]+/g).map(x => String(x || '').trim()).filter(Boolean);
+    return {
+      id,
+      enabled: m.enabled !== false,
+      nodeId,
+      targetNodeId,
+      type: String(m.type || m.bridgeType || m.targetType || 'generic').trim().toLowerCase() || 'generic',
+      label: String(m.label || m.name || id).trim() || id,
+      commandStateDp,
+      ackStateDp: String(m.ackStateDp || m.ackStateId || m.targetAckStateDp || '').trim(),
+      statusStateDp: String(m.statusStateDp || m.statusStateId || m.targetStatusStateDp || '').trim(),
+      onlineStateDp: String(m.onlineStateDp || m.onlineStateId || m.targetOnlineStateDp || '').trim(),
+      errorStateDp: String(m.errorStateDp || m.errorStateId || m.targetErrorStateDp || '').trim(),
+      maxPowerW: Math.max(0, Math.round(num(m.maxPowerW, 0))),
+      minPowerW: Math.max(0, Math.round(num(m.minPowerW, 0))),
+      directions,
+      note: String(m.note || '').trim(),
+    };
+  }).filter(m => m && m.enabled !== false);
+  return { enabled, outputMode, defaultCommandStateDp, ackEnabled, ackRequired, ackTimeoutSec, ackAutoRelease, manualReleaseEnabled, manualReleaseTtlSec, mappings };
+}
+
+/**
+ * Bereinigt manuelle Bridge-Ziel-Freigaben.
+ *
+ * Freigaben werden vom Bediener/Installateur über die Betreiberansicht gesetzt
+ * und leben nur für eine begrenzte Zeit. Dadurch kann ein Ziel im Feld nach
+ * Sichtprüfung wieder freigegeben werden, ohne die ACK-Logik global abzuschalten.
+ */
+function normalizeManualReleaseList(raw, now) {
+  const ts = Number(now || Date.now());
+  const arr = Array.isArray(raw) ? raw : [];
+  const out = [];
+  for (const item of arr) {
+    const r = item && typeof item === 'object' ? item : {};
+    const mappingId = String(r.mappingId || r.id || '').trim();
+    const commandStateDp = String(r.commandStateDp || '').trim();
+    const expiresAt = Math.max(0, Number(r.expiresAt || 0));
+    if (!mappingId && !commandStateDp) continue;
+    if (expiresAt && expiresAt < ts) continue;
+    out.push({
+      schema: 'nexowatt.mesh-local-bridge-manual-release.v1',
+      mappingId,
+      commandStateDp,
+      ts: Math.max(0, Number(r.ts || ts)),
+      expiresAt,
+      ttlSec: Math.max(0, Number(r.ttlSec || 0)),
+      reason: String(r.reason || 'manual_release').trim() || 'manual_release',
+      by: String(r.by || 'operator').trim() || 'operator',
+    });
+  }
+  return out.slice(0, 100);
+}
+
+function buildManualReleaseSummary(raw, now) {
+  const active = normalizeManualReleaseList(raw, now);
+  return {
+    schema: 'nexowatt.mesh-local-bridge-manual-release-summary.v1',
+    ts: Number(now || Date.now()),
+    active,
+    activeCount: active.length,
+    mappingIds: active.map(x => x.mappingId).filter(Boolean),
+    commandStateDps: active.map(x => x.commandStateDp).filter(Boolean),
+    directHardwareWrite: false,
+    neutralCommandOnly: true,
+  };
+}
+
+function manualReleaseForMapping(manualReleaseSummary, mapping) {
+  const m = mapping && typeof mapping === 'object' ? mapping : {};
+  const list = manualReleaseSummary && Array.isArray(manualReleaseSummary.active) ? manualReleaseSummary.active : [];
+  const mappingId = String(m.id || m.mappingId || '').trim();
+  const commandStateDp = String(m.commandStateDp || '').trim();
+  return list.find(r => (mappingId && r.mappingId === mappingId) || (commandStateDp && r.commandStateDp === commandStateDp)) || null;
+}
+
+function buildTargetCommandHistory(commandHistory, maxPerTarget = 12) {
+  const rows = Array.isArray(commandHistory) ? commandHistory : [];
+  const byTarget = new Map();
+  for (const row of rows) {
+    const writes = Array.isArray(row && row.bridgeWrites) ? row.bridgeWrites : [];
+    for (const w of writes) {
+      const mappingIds = Array.isArray(w.mappingIds) && w.mappingIds.length ? w.mappingIds : (w.mappingId ? [w.mappingId] : []);
+      const commandIds = Array.isArray(w.commandIds) && w.commandIds.length ? w.commandIds : (w.commandId ? [w.commandId] : []);
+      const targets = mappingIds.length ? mappingIds : [String(w.commandStateDp || 'unmapped')];
+      for (const target of targets) {
+        if (!target) continue;
+        if (!byTarget.has(target)) byTarget.set(target, []);
+        byTarget.get(target).push({
+          ts: Number(w.ts || row.ts || 0),
+          mappingId: target,
+          commandStateDp: String(w.commandStateDp || ''),
+          status: String(w.status || row.status || ''),
+          reason: String(w.reason || row.localError || ''),
+          commandCount: Number(w.commandCount || 0),
+          commandIds,
+          directHardwareWrite: false,
+          neutralCommandOnly: true,
+        });
+      }
+    }
+  }
+  const targets = [];
+  for (const [mappingId, history] of byTarget.entries()) {
+    const sorted = history.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0)).slice(0, maxPerTarget);
+    targets.push({
+      mappingId,
+      lastStatus: sorted[0] && sorted[0].status || 'unknown',
+      lastTs: sorted[0] && sorted[0].ts || 0,
+      count: history.length,
+      history: sorted,
+    });
+  }
+  targets.sort((a, b) => Number(b.lastTs || 0) - Number(a.lastTs || 0));
+  return {
+    schema: 'nexowatt.mesh-local-bridge-target-command-history.v1',
+    generatedAt: Date.now(),
+    targetCount: targets.length,
+    targets,
+    directHardwareWrite: false,
+    neutralCommandOnly: true,
+  };
+}
+
+/**
+ * 0.8.46 ACK-Gate und Ziel-Ampel.
+ *
+ * Zweck:
+ * - Bridge-ACKs dürfen optional nur Diagnose sein oder als Sicherheits-Gate
+ *   wirken. Wenn der Installateur `ackRequired` aktiviert, blockiert ein
+ *   wartendes, fehlendes, fehlerhaftes oder veraltetes ACK Folge-Commands zu
+ *   genau diesem Bridge-Ziel.
+ * - Die Sperre bleibt auf die lokale Bridge-Zuordnung begrenzt. Es wird keine
+ *   Hardware direkt geschaltet und es entsteht kein zweiter Command-Regler.
+ * - Ziel-Ampeln fassen ACK, Online-Status und Fehlertext pro Mapping zusammen,
+ *   damit Feldtests mit echten Geräten schnell lesbar sind.
+ */
+
+function buildBridgeAckSummary(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const okCount = list.filter(r => r && (r.ackOk === true || r.ok === true)).length;
+  const timeoutCount = list.filter(r => r && String(r.ackStatus || r.status || '').toLowerCase().includes('timeout')).length;
+  const errorCount = list.filter(r => r && ['error','failed','rejected','blocked','read_error'].includes(String(r.ackStatus || r.status || '').toLowerCase())).length;
+  const waitingCount = list.filter(r => r && ['waiting','pending','waiting_for_new_ack'].includes(String(r.ackStatus || r.status || '').toLowerCase())).length;
+  return {
+    schema: 'nexowatt.mesh-local-bridge-ack-summary.v1',
+    enabled: false,
+    rows: list,
+    targets: list,
+    okCount,
+    timeoutCount,
+    errorCount,
+    pendingCount: waitingCount,
+    status: list.length ? ((timeoutCount || errorCount) ? 'error' : (waitingCount ? 'warn' : 'ok')) : 'no-targets',
+  };
+}
+
+function buildBridgeAckGate(localBridge, ackSummary, manualReleaseSummary) {
+  const lb = localBridge && typeof localBridge === 'object' ? localBridge : {};
+  const mappings = Array.isArray(lb.mappings) ? lb.mappings : [];
+  const ack = ackSummary && typeof ackSummary === 'object' ? ackSummary : buildBridgeAckSummary([]);
+  const rows = Array.isArray(ack.rows) ? ack.rows : (Array.isArray(ack.targets) ? ack.targets.map(t => ({ ...(t || {}), ackStatus: (t && (t.ackStatus || t.status)) || '', ackOk: t && t.ok === true, targetStatusClass: (t && (t.severity === 'critical' ? 'error' : (t.status === 'timeout' ? 'error' : 'unknown'))) || 'unknown' })) : []);
+  const byMapping = new Map();
+  for (const row of rows) {
+    if (!row) continue;
+    if (row.mappingId) byMapping.set(String(row.mappingId), row);
+    if (row.commandStateDp && !byMapping.has(String(row.commandStateDp))) byMapping.set(String(row.commandStateDp), row);
+  }
+
+  const enabled = lb.ackEnabled === true;
+  const required = lb.ackRequired === true;
+  const blockedMappings = [];
+  const allowedMappingIds = [];
+  const targetLights = [];
+
+  for (const m of mappings) {
+    const mappingId = String(m && (m.id || m.mappingId || m.commandStateDp) || '').trim();
+    if (!mappingId) continue;
+    const row = byMapping.get(mappingId) || byMapping.get(String(m.commandStateDp || '')) || null;
+    const noAckConfig = !(m && (m.ackStateDp || m.statusStateDp));
+    const ackStatus = row ? String(row.ackStatus || row.status || 'unknown') : (noAckConfig ? 'not-configured' : 'idle');
+    const lastWriteAt = Number(row && row.lastWriteAt || 0);
+    const targetClass = row ? String(row.targetStatusClass || 'unknown') : 'unknown';
+    const targetOffline = targetClass === 'offline';
+    const targetError = targetClass === 'error';
+    const ackOk = row && (row.ackOk === true || row.ok === true);
+    const hasPendingWrite = lastWriteAt > 0 && ackOk !== true;
+    const manualRelease = manualReleaseForMapping(manualReleaseSummary, m);
+    const manualReleaseActive = !!manualRelease;
+
+    let light = 'grey';
+    let block = false;
+    let reason = '';
+
+    if (manualReleaseActive && required && hasPendingWrite) {
+      light = 'green';
+      block = false;
+      reason = 'manual_release';
+    } else if (!enabled) {
+      light = 'grey';
+      reason = 'ack_disabled';
+    } else if (required && noAckConfig) {
+      light = 'red';
+      block = true;
+      reason = 'ack_not_configured';
+    } else if (enabled && targetError) {
+      light = required ? 'red' : 'yellow';
+      block = required;
+      reason = 'target_error';
+    } else if (enabled && targetOffline) {
+      light = required ? 'red' : 'yellow';
+      block = required;
+      reason = 'target_offline';
+    } else if (enabled && required && hasPendingWrite) {
+      if (ackStatus === 'waiting') { light = 'yellow'; block = true; reason = 'ack_waiting'; }
+      else if (ackStatus === 'timeout') { light = 'red'; block = true; reason = 'ack_timeout'; }
+      else if (['rejected','blocked','failed','error','unknown'].includes(ackStatus)) { light = 'red'; block = true; reason = `ack_${ackStatus}`; }
+      else { light = 'yellow'; block = true; reason = 'ack_not_ok'; }
+    } else if (enabled && ackOk) {
+      light = 'green';
+      reason = 'ack_ok';
+    } else if (enabled && !required && hasPendingWrite) {
+      light = ackStatus === 'timeout' ? 'yellow' : 'blue';
+      reason = `ack_observe_${ackStatus}`;
+    } else {
+      light = enabled ? 'blue' : 'grey';
+      reason = enabled ? 'ack_observe' : 'ack_disabled';
+    }
+
+    const rowOut = {
+      mappingId,
+      nodeId: m.nodeId || '',
+      targetNodeId: m.targetNodeId || '',
+      commandStateDp: m.commandStateDp || '',
+      ackStatus,
+      ackOk: ackOk === true,
+      targetStatusClass: targetClass,
+      targetOnline: row ? row.targetOnline : null,
+      ageSec: row ? row.ageSec : null,
+      light,
+      blocked: block,
+      reason,
+      lastCommandId: row ? (row.lastCommandId || '') : '',
+      manualReleaseActive,
+      manualReleaseUntil: manualRelease ? Number(manualRelease.expiresAt || 0) : 0,
+      directHardwareWrite: false,
+      neutralCommandOnly: true,
+    };
+    targetLights.push(rowOut);
+    if (block) blockedMappings.push(rowOut);
+    else allowedMappingIds.push(mappingId);
+  }
+
+  const timeoutCount = blockedMappings.filter(x => x.reason === 'ack_timeout').length;
+  const waitingCount = blockedMappings.filter(x => x.reason === 'ack_waiting').length;
+  const notConfiguredCount = blockedMappings.filter(x => x.reason === 'ack_not_configured').length;
+  const targetErrorCount = blockedMappings.filter(x => x.reason === 'target_error' || x.reason === 'target_offline').length;
+  const errorCount = blockedMappings.length - timeoutCount - waitingCount - notConfiguredCount - targetErrorCount;
+  const status = !enabled ? 'disabled' : (!required ? 'observe' : (blockedMappings.length ? 'blocking' : 'ready'));
+  return {
+    schema: 'nexowatt.mesh-local-bridge-ack-gate.v1',
+    enabled,
+    required,
+    status,
+    gateActive: enabled && required,
+    blockedCount: blockedMappings.length,
+    waitingCount,
+    timeoutCount,
+    errorCount: Math.max(0, errorCount),
+    notConfiguredCount,
+    targetErrorCount,
+    allowedMappingIds,
+    blockedMappings,
+    targetLights,
+    manualRelease: manualReleaseSummary || buildManualReleaseSummary([], Date.now()),
+    autoRelease: lb.ackAutoRelease !== false,
+    reason: !enabled
+      ? 'Bridge-ACK-Gate deaktiviert; ACKs sind nur ausgeblendet bzw. nicht bewertet.'
+      : (!required
+        ? 'Bridge-ACK wird beobachtet, blockiert aber keine Folge-Commands.'
+        : (blockedMappings.length ? `${blockedMappings.length} Bridge-Ziel(e) durch ACK-Gate blockiert.` : 'Bridge-ACK-Gate bereit; alle geprüften Ziele sind freigegeben.')),
+    directHardwareWrite: false,
+    neutralCommandOnly: true,
+  };
+}
+
+function findLocalBridgeMappingForCommand(command, mappings) {
+  const cmd = command && typeof command === 'object' ? command : {};
+  const list = Array.isArray(mappings) ? mappings : [];
+  const nodeId = safeId(cmd.nodeId || '', '');
+  const targetNodeId = safeId(cmd.targetNodeId || '', '');
+  const direction = String(cmd.direction || '').trim();
+  const candidates = list.filter(m => {
+    if (!m || !m.commandStateDp) return false;
+    const matchNode = m.nodeId && (m.nodeId === nodeId || m.nodeId === targetNodeId);
+    const matchTarget = m.targetNodeId && (m.targetNodeId === targetNodeId || m.targetNodeId === nodeId);
+    const matchAny = !m.nodeId && !m.targetNodeId;
+    if (!(matchNode || matchTarget || matchAny)) return false;
+    if (Array.isArray(m.directions) && m.directions.length && direction) return m.directions.includes(direction);
+    return true;
+  });
+  candidates.sort((a, b) => {
+    const aExact = (a.nodeId && a.nodeId === nodeId ? 0 : 1) + (a.targetNodeId && a.targetNodeId === targetNodeId ? 0 : 1);
+    const bExact = (b.nodeId && b.nodeId === nodeId ? 0 : 1) + (b.targetNodeId && b.targetNodeId === targetNodeId ? 0 : 1);
+    if (aExact !== bExact) return aExact - bExact;
+    return String(a.id).localeCompare(String(b.id));
+  });
+  return candidates[0] || null;
+}
+
+function buildLocalBridgePlan(commandGuard, bridgeCfg) {
+  const cfg = bridgeCfg && typeof bridgeCfg === 'object' ? bridgeCfg : normalizeLocalBridgeCfg({});
+  const commands = commandGuard && Array.isArray(commandGuard.allowedCommands) ? commandGuard.allowedCommands : [];
+  const mappedCommands = [];
+  const unmappedCommands = [];
+  for (const command of commands) {
+    const mapping = findLocalBridgeMappingForCommand(command, cfg.mappings);
+    if (!mapping) {
+      unmappedCommands.push({ commandId: command && command.commandId || '', nodeId: command && command.nodeId || '', targetNodeId: command && command.targetNodeId || '', reason: 'Keine lokale Bridge-Zuordnung für diesen Command gefunden.' });
+      continue;
+    }
+    const planned = Math.max(0, Math.round(num(command && command.plannedPowerW, 0)));
+    const limited = mapping.maxPowerW > 0 ? Math.min(planned, mapping.maxPowerW) : planned;
+    mappedCommands.push({
+      schema: 'nexowatt.mesh-local-bridge-command.v1',
+      mappingId: mapping.id,
+      mappingLabel: mapping.label,
+      bridgeType: mapping.type,
+      commandStateDp: mapping.commandStateDp,
+      ackStateDp: mapping.ackStateDp || '',
+      statusStateDp: mapping.statusStateDp || '',
+      onlineStateDp: mapping.onlineStateDp || '',
+      errorStateDp: mapping.errorStateDp || '',
+      commandId: command.commandId,
+      sourceActionId: command.sourceActionId || '',
+      clusterId: command.clusterId || '',
+      nodeId: command.nodeId || '',
+      targetNodeId: command.targetNodeId || '',
+      direction: command.direction || '',
+      category: command.category || '',
+      priority: command.priority || 999,
+      requestedPowerW: planned,
+      plannedPowerW: limited,
+      limitedByMapping: mapping.maxPowerW > 0 && limited < planned,
+      outputMode: cfg.outputMode,
+      neutralCommandOnly: true,
+      directHardwareWrite: false,
+      hardwareWrite: false,
+      note: mapping.note || 'Lokaler Bridge-Command; nachgelagerte Bridge setzt hersteller-/protokollspezifisch um.',
+      originalCommand: command,
+    });
+  }
+  const routeReady = cfg.enabled === true && ['mapped', 'both'].includes(cfg.outputMode) && mappedCommands.length > 0;
+  const warnings = [];
+  if (cfg.enabled && ['mapped', 'both'].includes(cfg.outputMode) && !cfg.mappings.length) warnings.push('Lokale Bridge ist aktiv, aber es sind keine Zuordnungen konfiguriert.');
+  if (cfg.enabled && ['mapped', 'both'].includes(cfg.outputMode) && unmappedCommands.length) warnings.push(`${unmappedCommands.length} Command(s) haben noch keine lokale Bridge-Zuordnung.`);
+  return {
+    schema: 'nexowatt.mesh-local-bridge-plan.v1',
+    enabled: cfg.enabled,
+    outputMode: cfg.outputMode,
+    defaultCommandStateDp: cfg.defaultCommandStateDp,
+    ackEnabled: cfg.ackEnabled === true,
+    ackRequired: cfg.ackRequired === true,
+    ackTimeoutSec: cfg.ackTimeoutSec,
+    ackAutoRelease: cfg.ackAutoRelease !== false,
+    manualReleaseEnabled: cfg.manualReleaseEnabled !== false,
+    manualReleaseTtlSec: cfg.manualReleaseTtlSec || 300,
+    mappingCount: cfg.mappings.length,
+    mappedCommandCount: mappedCommands.length,
+    unmappedCommandCount: unmappedCommands.length,
+    routeReady,
+    mappings: cfg.mappings,
+    mappedCommands,
+    unmappedCommands,
+    warnings,
+    reason: routeReady ? `${mappedCommands.length} lokale Bridge-Command(s) bereit.` : (warnings[0] || 'Lokale Bridge-Zuordnung nicht aktiv oder keine passenden Commands.'),
+    neutralCommandOnly: true,
+    directHardwareWrite: false,
+  };
+}
+
+
+
+/**
+ * 0.8.45 Bridge-ACK-Helfer.
+ *
+ * Lokale Bridges/Herstelleradapter dürfen nach der Umsetzung eines neutralen
+ * Mesh-Commands ihren eigenen ACK- oder Status-State schreiben. Diese Helfer
+ * klassifizieren solche Rückmeldungen herstellerneutral. Akzeptierte Begriffe
+ * sind bewusst breit gefasst, damit OCPP-, Modbus-, MQTT-, REST- oder eigene
+ * NexoWatt-Device-Bridges alle denselben Zielstatus liefern können.
+ */
+function _meshParseJsonMaybe(value) {
+  if (value && typeof value === 'object') return value;
+  const s = String(value == null ? '' : value).trim();
+  if (!s) return null;
+  try { return JSON.parse(s); } catch (_e) { return null; }
+}
+
+function _meshAckText(raw) {
+  const parsed = _meshParseJsonMaybe(raw);
+  if (parsed) {
+    return [parsed.status, parsed.state, parsed.result, parsed.ack, parsed.message, parsed.reason, parsed.error, parsed.commandId]
+      .filter(v => v !== undefined && v !== null)
+      .map(v => String(v).toLowerCase())
+      .join(' ');
+  }
+  return String(raw == null ? '' : raw).toLowerCase();
+}
+
+function classifyLocalBridgeAck(raw) {
+  const text = _meshAckText(raw);
+  if (!text) return { status: 'unknown', ok: false, label: 'unbekannt', severity: 'warn' };
+  if (/(success|succeeded|accepted|executed|done|ok|true|acknowledged|applied|completed)/.test(text)) return { status: 'ok', ok: true, label: 'angenommen/ausgeführt', severity: 'info' };
+  if (/(pending|queued|running|in_progress|waiting|processing)/.test(text)) return { status: 'pending', ok: false, label: 'wartet/läuft', severity: 'warn' };
+  if (/(reject|rejected|blocked|denied|failed|failure|error|false|timeout|expired)/.test(text)) return { status: 'error', ok: false, label: 'Fehler/blockiert', severity: 'critical' };
+  return { status: 'unknown', ok: false, label: 'unbekannt', severity: 'warn' };
+}
+
+
+/**
+ * 0.8.48 Node-/Bridge-Leistungsgrenzen.
+ *
+ * Dieses Limit-Gate liegt bewusst vor jeder neutralen Command-Ausgabe. Es ändert
+ * nur Mesh-Command-Intents: zu große Leistungen werden gekürzt oder blockiert.
+ * Es schreibt keine Hardware und ersetzt keinen lokalen Bridge-/Geräteadapter.
+ */
+
+/**
+ * 0.8.50 Zielgruppen-Fairness.
+ *
+ * Zweck:
+ * Verteilt das aktuell geplante Leistungsbudget auf Zielgruppen. Jede Gruppe kann
+ * Gewicht, Mindestanteil, Reservierung und harte Gruppenlimits besitzen. Die
+ * Funktion arbeitet ausschließlich auf neutralen Command-Intents und blockiert/
+ * reduziert diese, bevor sie in lokale Bridge-/Peer-States geschrieben werden.
+ */
+function buildTargetGroupFairnessPlan(groups, nodes, commands) {
+  const groupList = Array.isArray(groups) ? groups : [];
+  const nodeList = Array.isArray(nodes) ? nodes : [];
+  const cmdList = Array.isArray(commands) ? commands : [];
+  const nodeById = new Map(nodeList.map(n => [String(n && n.id || ''), n]));
+  const sortedGroups = groupList.slice().sort(prioritySort);
+  const totalRequestedW = cmdList.reduce((sum, c) => sum + Math.max(0, Math.round(num(c && (c.requestedPowerW || c.plannedPowerW), 0))), 0);
+  const totalHardBudgetW = sortedGroups.reduce((sum, g) => sum + Math.max(0, Math.round(num(g && g.maxPowerW, 0))), 0);
+  const fairnessBudgetW = totalHardBudgetW > 0 ? Math.min(totalRequestedW || totalHardBudgetW, totalHardBudgetW) : totalRequestedW;
+  const positiveWeights = sortedGroups.reduce((sum, g) => sum + Math.max(0, num(g && g.fairShareWeight, 1)), 0) || sortedGroups.length || 1;
+  const budgets = new Map();
+  for (const g of sortedGroups) {
+    const requestedW = cmdList.filter(c => nodeInTargetGroup(nodeById.get(String(c && (c.nodeId || c.targetNodeId) || '')), g)).reduce((sum, c) => sum + Math.max(0, Math.round(num(c && (c.requestedPowerW || c.plannedPowerW), 0))), 0);
+    const minShareW = Math.max(Math.round((fairnessBudgetW * Math.max(0, num(g.minSharePercent, 0))) / 100), Math.max(0, Math.round(num(g.reservePowerW, 0))));
+    const weightedShareW = Math.round((fairnessBudgetW * Math.max(0, num(g.fairShareWeight, 1))) / positiveWeights);
+    let budgetW = Math.max(minShareW, weightedShareW);
+    if (g.maxPowerW > 0) budgetW = Math.min(budgetW, g.maxPowerW);
+    if (requestedW > 0) budgetW = Math.min(budgetW, requestedW);
+    budgets.set(g.id, { groupId: g.id, groupName: g.name, priority: g.priority, requestedW, budgetW, usedW: 0, remainingW: budgetW, minShareW, weightedShareW, maxPowerW: g.maxPowerW || 0, fairShareWeight: g.fairShareWeight || 1, minSharePercent: g.minSharePercent || 0, reservePowerW: g.reservePowerW || 0 });
+  }
+  const limitedCommands = [];
+  const blockedCommands = [];
+  const fairnessCommands = cmdList.map(cmd => {
+    const c = cmd && typeof cmd === 'object' ? cmd : {};
+    const node = nodeById.get(String(c.nodeId || c.targetNodeId || '')) || null;
+    const memberships = targetGroupsForCommand(c, node, sortedGroups);
+    if (!memberships.length) return { ...c, targetGroupFairness: { schema: 'nexowatt.mesh-target-group-fairness-command.v1', applied: false, reason: 'no_target_group', directHardwareWrite: false, neutralCommandOnly: true } };
+    const g = memberships[0];
+    const b = budgets.get(g.id) || { budgetW: 0, usedW: 0, remainingW: 0 };
+    const requestedPowerW = Math.max(0, Math.round(num(c.plannedPowerW || c.requestedPowerW, 0)));
+    let allowedPowerW = requestedPowerW;
+    let limited = false;
+    let blocked = false;
+    if (b.budgetW > 0 && requestedPowerW > b.remainingW) {
+      allowedPowerW = Math.max(0, b.remainingW);
+      limited = allowedPowerW > 0;
+      blocked = allowedPowerW <= 0;
+    }
+    b.usedW += allowedPowerW;
+    b.remainingW = Math.max(0, b.budgetW - b.usedW);
+    budgets.set(g.id, b);
+    const fairness = { schema: 'nexowatt.mesh-target-group-fairness-command.v1', applied: true, groupId: g.id, groupName: g.name, requestedPowerW, allowedPowerW, budgetW: b.budgetW, usedW: b.usedW, remainingW: b.remainingW, limited, blocked, reason: blocked ? 'target_group_budget_exhausted' : (limited ? 'target_group_budget_limited' : 'within_target_group_budget'), directHardwareWrite: false, neutralCommandOnly: true };
+    const out = { ...c, plannedPowerW: allowedPowerW, targetGroupFairness: fairness };
+    if (limited) {
+      out.limitedByTargetGroupFairness = true;
+      limitedCommands.push({ commandId: out.commandId, nodeId: out.nodeId, targetNodeId: out.targetNodeId, groupId: g.id, requestedPowerW, allowedPowerW, reason: fairness.reason });
+    }
+    if (blocked) {
+      out.blockedByTargetGroupFairness = true;
+      out.allowed = false;
+      out.blocked = true;
+      const missing = Array.isArray(out.safetyMissing) ? out.safetyMissing.slice() : [];
+      if (!missing.includes('target_group_fairness_blocked')) missing.push('target_group_fairness_blocked');
+      out.safetyMissing = missing;
+      out.reason = `Zielgruppen-Fairness blockiert Command: ${g.name || g.id} Budget ausgeschöpft.`;
+      blockedCommands.push({ commandId: out.commandId, nodeId: out.nodeId, targetNodeId: out.targetNodeId, groupId: g.id, requestedPowerW, allowedPowerW, reason: out.reason });
+    }
+    return out;
+  });
+  const groupBudgets = Array.from(budgets.values()).map(b => ({ ...b, utilizationPercent: b.budgetW > 0 ? round((b.usedW / b.budgetW) * 100, 1) : 0 }));
+  return { schema: 'nexowatt.mesh-target-group-fairness.v1', totalRequestedW, fairnessBudgetW, groups: groupBudgets, commands: fairnessCommands, limitedCommands, blockedCommands, limitedCount: limitedCommands.length, blockedCount: blockedCommands.length, activeBudgetCount: groupBudgets.filter(g => g.budgetW > 0).length, summary: groupBudgets.length ? `${groupBudgets.length} Zielgruppen-Fairness-Budget(s) berechnet.` : 'Keine Zielgruppen-Fairness aktiv.', directHardwareWrite: false, neutralCommandOnly: true };
+}
+
+function _meshPositiveLimits(values) {
+  return (Array.isArray(values) ? values : [])
+    .map(v => Math.max(0, Math.round(num(v, 0))))
+    .filter(v => v > 0);
+}
+
+function _meshNodeLimitForCommand(node, command) {
+  const n = node && typeof node === 'object' ? node : {};
+  const cmd = command && typeof command === 'object' ? command : {};
+  const dir = String(cmd.direction || '').toLowerCase();
+  const cat = String(cmd.category || '').toLowerCase();
+  const type = normalizeType(n.type || cmd.targetType || 'generic');
+  const limits = [];
+  const reasons = [];
+  const add = (value, id) => {
+    const v = Math.max(0, Math.round(num(value, 0)));
+    if (v > 0) { limits.push(v); reasons.push({ id, limitW: v }); }
+  };
+  add(n.maxPowerW, 'node.maxPowerW');
+  if (type === 'chargepoint' || dir.includes('charge')) add(n.maxChargeW || n.maxLoadW, 'node.maxChargeW/maxLoadW');
+  if (type === 'storage' && (dir.includes('charge') || cat.includes('local_first'))) add(n.maxChargeW, 'node.maxChargeW');
+  if (type === 'storage' && (dir.includes('discharge') || cat.includes('grid_last'))) add(n.maxDischargeW, 'node.maxDischargeW');
+  if (type === 'consumer' || type === 'thermal' || dir.includes('load') || dir.includes('use')) add(n.maxLoadW, 'node.maxLoadW');
+  if (type === 'producer' || dir.includes('export') || dir.includes('generation')) add(n.maxGenerationW || n.maxExportW, 'node.maxGenerationW/maxExportW');
+  if (dir.includes('import')) add(n.maxImportW, 'node.maxImportW');
+  if (dir.includes('export')) add(n.maxExportW, 'node.maxExportW');
+  const minPowerW = Math.max(0, Math.round(num(n.minPowerW, 0)));
+  const maxPowerW = limits.length ? Math.min(...limits) : 0;
+  return { minPowerW, maxPowerW, reasons };
+}
+
+function _meshBridgeLimitForCommand(command, bridgeCfg) {
+  const cfg = bridgeCfg && typeof bridgeCfg === 'object' ? bridgeCfg : normalizeLocalBridgeCfg({});
+  const mapping = findLocalBridgeMappingForCommand(command, cfg.mappings || []);
+  if (!mapping) return { mapping: null, minPowerW: 0, maxPowerW: 0, reasons: [] };
+  const reasons = [];
+  const maxPowerW = Math.max(0, Math.round(num(mapping.maxPowerW, 0)));
+  const minPowerW = Math.max(0, Math.round(num(mapping.minPowerW, 0)));
+  if (maxPowerW > 0) reasons.push({ id: `bridge.${mapping.id}.maxPowerW`, limitW: maxPowerW });
+  if (minPowerW > 0) reasons.push({ id: `bridge.${mapping.id}.minPowerW`, limitW: minPowerW });
+  return { mapping, minPowerW, maxPowerW, reasons };
+}
+
+function buildCommandLimitDiagnostics(commands, nodes, bridgeCfg, targetGroups) {
+  const cmdList = Array.isArray(commands) ? commands : [];
+  const nodeList = Array.isArray(nodes) ? nodes : [];
+  const nodeById = new Map(nodeList.map(n => [String(n && n.id || ''), n]));
+  const limitedCommands = [];
+  const blockedCommands = [];
+  const enriched = cmdList.map(cmd => {
+    const c = cmd && typeof cmd === 'object' ? cmd : {};
+    const nodeId = String(c.nodeId || c.targetNodeId || '');
+    const node = nodeById.get(nodeId) || nodeById.get(String(c.targetNodeId || '')) || null;
+    const requestedPowerW = Math.max(0, Math.round(num(c.plannedPowerW, 0)));
+    const nodeLimit = _meshNodeLimitForCommand(node, c);
+    const bridgeLimit = _meshBridgeLimitForCommand(c, bridgeCfg);
+    const groupLimit = _meshGroupLimitForCommand(targetGroups, node, c);
+    const maxLimits = _meshPositiveLimits([nodeLimit.maxPowerW, bridgeLimit.maxPowerW, groupLimit.maxPowerW]);
+    const minLimits = _meshPositiveLimits([nodeLimit.minPowerW, bridgeLimit.minPowerW, groupLimit.minPowerW]);
+    const effectiveMaxPowerW = maxLimits.length ? Math.min(...maxLimits) : 0;
+    const effectiveMinPowerW = minLimits.length ? Math.max(...minLimits) : 0;
+    let allowedPowerW = requestedPowerW;
+    const reasons = [];
+    if (nodeLimit.reasons.length) reasons.push(...nodeLimit.reasons);
+    if (bridgeLimit.reasons.length) reasons.push(...bridgeLimit.reasons);
+    if (groupLimit.reasons.length) reasons.push(...groupLimit.reasons);
+    let blockedByLimit = false;
+    let limitedByLimit = false;
+    if (effectiveMaxPowerW > 0 && requestedPowerW > effectiveMaxPowerW) {
+      allowedPowerW = effectiveMaxPowerW;
+      limitedByLimit = true;
+    }
+    if (allowedPowerW > 0 && effectiveMinPowerW > 0 && allowedPowerW < effectiveMinPowerW) {
+      blockedByLimit = true;
+      allowedPowerW = 0;
+      reasons.push({ id: 'effectiveMinPowerW', limitW: effectiveMinPowerW });
+    }
+    if (requestedPowerW <= 0) blockedByLimit = true;
+    const powerLimit = {
+      schema: 'nexowatt.mesh-command-power-limit.v1',
+      nodeId: node ? node.id : nodeId,
+      nodeName: node ? node.name : '',
+      requestedPowerW,
+      allowedPowerW,
+      effectiveMaxPowerW,
+      effectiveMinPowerW,
+      limitedByLimit,
+      blockedByLimit,
+      reasons,
+      bridgeMappingId: bridgeLimit.mapping ? bridgeLimit.mapping.id : '',
+      targetGroups: groupLimit.groups || [],
+      directHardwareWrite: false,
+      neutralCommandOnly: true,
+    };
+    const out = { ...c, requestedPowerW, plannedPowerW: allowedPowerW, powerLimit };
+    if (limitedByLimit) {
+      out.limitedByPowerLimit = true;
+      out.limitReason = reasons.map(r => r.id).join(', ');
+      limitedCommands.push({ commandId: out.commandId, nodeId: out.nodeId, targetNodeId: out.targetNodeId, requestedPowerW, allowedPowerW, reasons });
+    }
+    if (blockedByLimit) {
+      out.blockedByPowerLimit = true;
+      out.allowed = false;
+      out.blocked = true;
+      const missing = Array.isArray(out.safetyMissing) ? out.safetyMissing.slice() : [];
+      if (!missing.includes('power_limit_blocked')) missing.push('power_limit_blocked');
+      out.safetyMissing = missing;
+      out.reason = `Leistungsgrenze blockiert Command: ${reasons.map(r => r.id).join(', ') || 'requestedPowerW=0'}.`;
+      blockedCommands.push({ commandId: out.commandId, nodeId: out.nodeId, targetNodeId: out.targetNodeId, requestedPowerW, allowedPowerW, reasons, reason: out.reason });
+    }
+    return out;
+  });
+  const nodeLimits = nodeList.map(n => ({
+    id: n.id, name: n.name, type: n.type, role: n.role,
+    minPowerW: n.minPowerW || 0, maxPowerW: n.maxPowerW || 0,
+    maxImportW: n.maxImportW || 0, maxExportW: n.maxExportW || 0,
+    maxChargeW: n.maxChargeW || 0, maxDischargeW: n.maxDischargeW || 0,
+    maxLoadW: n.maxLoadW || 0, maxGenerationW: n.maxGenerationW || 0,
+  }));
+  const bridgeTargets = (bridgeCfg && Array.isArray(bridgeCfg.mappings) ? bridgeCfg.mappings : []).map(m => ({ id: m.id, nodeId: m.nodeId, targetNodeId: m.targetNodeId, commandStateDp: m.commandStateDp, minPowerW: m.minPowerW || 0, maxPowerW: m.maxPowerW || 0 }));
+  const fairnessPlan = buildTargetGroupFairnessPlan(targetGroups, nodeList, enriched);
+  const fairnessCommands = fairnessPlan.commands || enriched;
+  const allLimitedCommands = limitedCommands.concat(fairnessPlan.limitedCommands || []);
+  const allBlockedCommands = blockedCommands.concat(fairnessPlan.blockedCommands || []);
+  const targetGroupPlan = buildTargetGroupPlan(targetGroups, nodeList, fairnessCommands);
+  targetGroupPlan.fairness = fairnessPlan;
+  return {
+    schema: 'nexowatt.mesh-power-limits.v2',
+    commands: fairnessCommands,
+    limitedCommands: allLimitedCommands,
+    blockedCommands: allBlockedCommands,
+    nodeLimits,
+    bridgeTargets,
+    targetGroups: targetGroupPlan.groups,
+    targetGroupPriorityOrder: targetGroupPlan.priorityOrder,
+    targetGroupSummary: targetGroupPlan,
+    targetGroupFairness: fairnessPlan,
+    limitedCount: allLimitedCommands.length,
+    blockedCount: allBlockedCommands.length,
+    activeLimitCount: nodeLimits.reduce((sum, n) => sum + ['minPowerW','maxPowerW','maxImportW','maxExportW','maxChargeW','maxDischargeW','maxLoadW','maxGenerationW'].filter(k => Number(n[k]) > 0).length, 0) + bridgeTargets.reduce((sum, t) => sum + (Number(t.minPowerW) > 0 ? 1 : 0) + (Number(t.maxPowerW) > 0 ? 1 : 0), 0) + targetGroupPlan.groups.reduce((sum, g) => sum + (Number(g.maxPowerW) > 0 ? 1 : 0) + (Number(g.minPowerW) > 0 ? 1 : 0) + Object.values(g.limits || {}).filter(v => Number(v) > 0).length, 0) + Number(fairnessPlan.activeBudgetCount || 0),
+    lastReason: allBlockedCommands.length ? `${allBlockedCommands.length} Command(s) durch Leistungs-/Fairness-Grenzen blockiert.` : (allLimitedCommands.length ? `${allLimitedCommands.length} Command(s) durch Leistungs-/Fairness-Grenzen gekürzt.` : 'Keine Leistungs- oder Fairness-Grenze hat den aktuellen Command-Plan begrenzt.'),
+    directHardwareWrite: false,
+    neutralCommandOnly: true,
+  };
+}
+
+function buildCommandGuard(planning, nodes, cluster, controlCfg, tailscaleCfg, bridgeCfg, targetGroupCfg) {
   const actions = planning && Array.isArray(planning.actions) ? planning.actions : [];
   const nodeList = Array.isArray(nodes) ? nodes : [];
   const gridLimit = planning && planning.gridLimit ? planning.gridLimit : {};
@@ -404,22 +1273,29 @@ function buildCommandGuard(planning, nodes, cluster, controlCfg, tailscaleCfg) {
   const gridLimitW = Math.max(0, Math.round(num(cluster && cluster.gridLimitW, 0)));
   const control = normalizeCommandOutputCfg(controlCfg || {});
   const tailscale = normalizeTailscaleCfg(tailscaleCfg || {});
+  const localBridgeCfg = normalizeLocalBridgeCfg(bridgeCfg || {});
+  const targetGroups = normalizeTargetGroups(targetGroupCfg);
   const knownNodeIds = new Set(nodeList.map(n => String(n && n.id || '')));
   const priorityKnown = nodeList.length > 0 && nodeList.every(n => Number.isFinite(Number(n.priority)));
   const isFieldMode = control.controlMode === 'field_test';
+  const isActiveMode = control.controlMode === 'active';
+  const isCommandMode = isFieldMode || isActiveMode;
   const commandStateReady = !!control.commandStateDp;
+  const tailscaleReady = tailscale.enabled === true && Array.isArray(tailscale.peerUrls) && tailscale.peerUrls.length > 0;
+  const transportReady = commandStateReady || tailscaleReady;
   const installerApproved = control.fieldTestApproved === true;
-  const commandOutputAllowed = isFieldMode && installerApproved && commandStateReady;
+  const commandOutputAllowed = isCommandMode && installerApproved && transportReady;
 
   const safetyChecks = [
     { id: 'license', ok: true, severity: 'info', message: 'EOS Mesh/Microgrid-App ist freigegeben.' },
-    { id: 'control_mode', ok: isFieldMode, severity: isFieldMode ? 'info' : 'warn', message: isFieldMode ? 'Feldtest-Modus aktiv: neutrale Command-Intents dürfen ausgegeben werden.' : 'Feldtest-Modus ist nicht aktiv; es werden nur Diagnosen veröffentlicht.' },
-    { id: 'installer_approval', ok: installerApproved, severity: installerApproved ? 'info' : 'blocker', message: installerApproved ? 'Installateurfreigabe für Feldtest liegt vor.' : 'Installateurfreigabe fehlt; Command-Ausgabe blockiert.' },
-    { id: 'command_state', ok: commandStateReady, severity: commandStateReady ? 'info' : 'blocker', message: commandStateReady ? `Neutraler Command-State gesetzt: ${control.commandStateDp}` : 'Kein neutraler Command-State hinterlegt.' },
+    { id: 'control_mode', ok: isCommandMode, severity: isCommandMode ? 'info' : 'warn', message: isActiveMode ? 'Aktivmodus: Local-First-/Grid-Last-Command-Intents dürfen neutral ausgegeben werden.' : (isFieldMode ? 'Feldtest-Modus aktiv: neutrale Command-Intents dürfen ausgegeben werden.' : 'Aktiv-/Feldtest-Modus ist nicht aktiv; es werden nur Diagnosen veröffentlicht.') },
+    { id: 'installer_approval', ok: installerApproved, severity: installerApproved ? 'info' : 'blocker', message: installerApproved ? 'Installateurfreigabe für Feld-/Aktivsteuerung liegt vor.' : 'Installateurfreigabe fehlt; Command-Ausgabe blockiert.' },
+    { id: 'command_state', ok: commandStateReady, severity: commandStateReady || tailscaleReady ? 'info' : 'blocker', message: commandStateReady ? `Neutraler Command-State gesetzt: ${control.commandStateDp}` : (tailscaleReady ? 'Lokaler Command-State fehlt, aber Tailscale-Peer-Dispatch ist verfügbar.' : 'Kein neutraler Command-State und kein Tailscale-Peer-Dispatch hinterlegt.') },
     { id: 'direct_hardware_write', ok: true, severity: 'info', message: 'Direktes Hardware-Schreiben bleibt gesperrt; Ausgabe erfolgt nur als neutraler JSON-Intent.' },
-    { id: 'tailscale_mesh', ok: tailscale.enabled === true, severity: tailscale.enabled ? 'info' : 'warn', message: tailscale.enabled ? `Tailscale-Mesh-Profil aktiv: ${tailscale.profile}` : 'Tailscale-Mesh ist nicht aktiviert; lokale Command-Ausgabe bleibt möglich.' },
+    { id: 'tailscale_mesh', ok: tailscaleReady, severity: tailscaleReady ? 'info' : 'warn', message: tailscaleReady ? `Tailscale-Mesh-Profil aktiv: ${tailscale.profile}; ${tailscale.peerUrls.length} Peer-URL(s) für Command-Dispatch vorhanden.` : 'Tailscale-Mesh ist nicht aktiv oder keine Peer-URL hinterlegt; lokale Command-Ausgabe bleibt möglich.' },
     { id: 'grid_limit', ok: gridLimitW > 0 || String(gridLimit && gridLimit.severity || '') === 'off', severity: gridLimitW > 0 ? 'info' : 'warn', message: gridLimitW > 0 ? `Cluster-/Netzlimit ${gridLimitW} W ist vorhanden.` : 'Kein Cluster-/Netzlimit gesetzt; Feldtest sollte nur mit bewusst geprüfter Anlage erfolgen.' },
     { id: 'node_priority', ok: priorityKnown, severity: priorityKnown ? 'info' : 'warn', message: priorityKnown ? 'Knotenprioritäten sind vorhanden.' : 'Knotenprioritäten fehlen oder sind unvollständig.' },
+    { id: 'target_groups', ok: true, severity: targetGroups.length ? 'info' : 'warn', message: targetGroups.length ? `${targetGroups.length} Zielgruppe(n) für Local-First-Verteilung konfiguriert.` : 'Keine Zielgruppen konfiguriert; Knotenprioritäten werden direkt genutzt.' },
   ];
 
   const allowedCommands = [];
@@ -453,23 +1329,34 @@ function buildCommandGuard(planning, nodes, cluster, controlCfg, tailscaleCfg) {
       allowed,
       blocked: !allowed,
       readOnly: false,
+      executionMode: control.controlMode,
+      activeControl: isActiveMode,
+      fieldTest: isFieldMode,
       neutralCommandOnly: true,
       directHardwareWrite: false,
       hardwareWrite: false,
       reason: allowed
-        ? 'Feldtest freigegeben: neutraler NexoWatt-Command-Intent wird an den Command-State ausgegeben.'
+        ? (isActiveMode ? 'Aktivsteuerung freigegeben: neutraler NexoWatt-Command-Intent wird an Bridge/Peer ausgegeben.' : 'Feldtest freigegeben: neutraler NexoWatt-Command-Intent wird an den Command-State ausgegeben.')
         : `CommandGuard blockiert: ${missing.join(', ') || 'keine ausführbare Leistung'}.`,
     };
     (allowed ? allowedCommands : blockedCommands).push(cmd);
     return cmd;
   });
 
-  const blockedActions = blockedCommands.map(cmd => ({ commandId: cmd.commandId, sourceActionId: cmd.sourceActionId, nodeId: cmd.nodeId, direction: cmd.direction, plannedPowerW: cmd.plannedPowerW, blocked: true, reason: cmd.reason }));
+  const limitDiagnostics = buildCommandLimitDiagnostics(plannedCommands, nodeList, localBridgeCfg, targetGroups);
+  allowedCommands.length = 0;
+  blockedCommands.length = 0;
+  for (const cmd of limitDiagnostics.commands) {
+    if (cmd && cmd.allowed === true) allowedCommands.push(cmd);
+    else blockedCommands.push(cmd);
+  }
+
+  const blockedActions = blockedCommands.map(cmd => ({ commandId: cmd.commandId, sourceActionId: cmd.sourceActionId, nodeId: cmd.nodeId, direction: cmd.direction, plannedPowerW: cmd.plannedPowerW, requestedPowerW: cmd.requestedPowerW || cmd.plannedPowerW, blocked: true, reason: cmd.reason, powerLimit: cmd.powerLimit || null }));
   const blockerCount = safetyChecks.filter(c => c.severity === 'blocker' && c.ok !== true).length + blockedActions.length;
   const warnCount = safetyChecks.filter(c => c.severity === 'warn' && c.ok !== true).length;
   return {
     schema: 'nexowatt.mesh-commandguard-field-control.v1',
-    status: commandOutputAllowed ? (allowedCommands.length ? 'field-output-ready' : 'field-output-idle') : 'blocked',
+    status: commandOutputAllowed ? (allowedCommands.length ? (isActiveMode ? 'active-output-ready' : 'field-output-ready') : (isActiveMode ? 'active-output-idle' : 'field-output-idle')) : 'blocked',
     mode,
     prepared: true,
     allowed: commandOutputAllowed && allowedCommands.length > 0,
@@ -484,16 +1371,294 @@ function buildCommandGuard(planning, nodes, cluster, controlCfg, tailscaleCfg) {
     commandStateDp: control.commandStateDp,
     controlMode: control.controlMode,
     fieldTestApproved: installerApproved,
+    activeControlApproved: installerApproved,
+    activeControl: isActiveMode,
+    fieldTest: isFieldMode,
     tailscale: { enabled: tailscale.enabled, profile: tailscale.profile, localNodeId: tailscale.localNodeId, peerCount: tailscale.peerUrls.length },
     safetyChecks,
-    plannedCommands,
+    plannedCommands: limitDiagnostics.commands,
+    limitDiagnostics,
+    targetGroups: limitDiagnostics.targetGroupSummary || buildTargetGroupPlan(targetGroups, nodeList, limitDiagnostics.commands || []),
     allowedCommands,
     blockedActions,
     blockerCount,
     warnCount,
     reason: commandOutputAllowed
-      ? `${allowedCommands.length} Command-Intent(s) für Feldtest-Ausgabe bereit; direkte Hardware-Schreibpfade bleiben gesperrt.`
-      : 'Mesh/Microgrid Feldsteuerung ist blockiert, bis Feldtest-Modus, Installateurfreigabe und Command-State gesetzt sind.',
+      ? `${allowedCommands.length} Command-Intent(s) für ${isActiveMode ? 'aktive Local-First-Ausgabe' : 'Feldtest-Ausgabe'} bereit; direkte Hardware-Schreibpfade bleiben gesperrt.`
+      : 'Mesh/Microgrid Feldsteuerung ist blockiert, bis Feldtest-Modus, Installateurfreigabe und mindestens ein neutraler Transportweg gesetzt sind.',
+  };
+}
+
+
+
+/**
+ * Klassifiziert Peer-/Receiver-Probleme für den Feldtest.
+ *
+ * Warum diese Funktion wichtig ist:
+ * Im Feldtest mit zwei NexoWatt-Instanzen müssen Installateure schnell sehen,
+ * ob ein Fehler durch Token, Cluster-ID, Receiver-Freigabe, Timeout oder eine
+ * normale HTTP-/Netzwerkstörung entsteht. Diese Klassifizierung ist reine
+ * Diagnose und erzeugt keine Steuerentscheidung und keinen Hardwarewrite.
+ */
+function classifyPeerFieldTestIssue(peer) {
+  const p = peer && typeof peer === 'object' ? peer : {};
+  const errors = Array.isArray(p.errors) ? p.errors.map(e => String(e || '').toLowerCase()) : [];
+  const text = [p.error, p.lastError, p.commandStatus, p.ackStatus, ...errors].filter(Boolean).join(' ').toLowerCase();
+  const ack = p.commandAck && typeof p.commandAck === 'object' ? p.commandAck : null;
+  const ackError = ack ? String(ack.error || ack.status || ack.message || '').toLowerCase() : '';
+  const hay = `${text} ${ackError}`;
+  if (p.ok === true || (p.handshakeOk === true && p.statusOk === true && (p.commandAckOk === true || p.commandAckOk === undefined))) return 'ok';
+  if (hay.includes('token') || hay.includes('401') || hay.includes('mesh_token_invalid')) return 'token';
+  if (hay.includes('cluster') || hay.includes('cluster_mismatch')) return 'cluster';
+  if (hay.includes('receiver') || hay.includes('423') || hay.includes('receiver_disabled')) return 'receiver';
+  if (hay.includes('timeout') || hay.includes('abort') || hay.includes('timed out')) return 'timeout';
+  if (hay.includes('replay') || hay.includes('duplicate')) return 'replay';
+  if (p.handshakeOk === false) return 'handshake';
+  if (p.statusOk === false) return 'status';
+  if (p.commandAckOk === false) return 'command';
+  return 'unknown';
+}
+
+/**
+ * Ampel für Roundtrip-Zeiten im Mesh-Tailscale.
+ * Die Schwellen sind bewusst konservativ: Das Mesh darf für Steuerentscheidungen
+ * nicht nur funktional erreichbar sein, sondern auch nachvollziehbar schnell
+ * reagieren. Die Ausgabe ist Diagnose; sie schaltet nichts.
+ */
+function classifyRoundtripStatus(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n <= 0) return 'unknown';
+  if (n <= 500) return 'green';
+  if (n <= 1500) return 'yellow';
+  return 'red';
+}
+
+function buildRemoteNodeMatrixFromPeers(peerMatrix) {
+  const rows = [];
+  for (const p of Array.isArray(peerMatrix) ? peerMatrix : []) {
+    const peerId = p.id || safeId(p.url || 'peer', 'peer');
+    const status = p.status && typeof p.status === 'object' ? p.status : null;
+    const mesh = status && status.mesh && typeof status.mesh === 'object' ? status.mesh : null;
+    const nodes = mesh && Array.isArray(mesh.nodes) ? mesh.nodes : [];
+    for (const n of nodes) {
+      rows.push({
+        schema: 'nexowatt.mesh-remote-node-matrix-row.v1',
+        peerId,
+        peerUrl: p.url || '',
+        nodeId: n.id || '',
+        nodeName: n.name || n.id || '',
+        type: n.type || '',
+        role: n.role || '',
+        status: n.status || '',
+        priority: n.priority || '',
+        surplusW: Math.max(0, Math.round(num(n.surplusW, 0))),
+        demandW: Math.max(0, Math.round(num(n.demandW, 0))),
+        errorClass: p.errorClass || classifyPeerFieldTestIssue(p),
+        roundtripStatus: p.roundtripStatus || classifyRoundtripStatus(Math.max(num(p.pollMs, 0), num(p.commandMs, 0), num(p.ms, 0))),
+      });
+    }
+  }
+  return rows;
+}
+
+/**
+ * 0.8.42 Feldtest-Diagnose für zwei NexoWatt-Instanzen.
+ *
+ * Zweck:
+ * - Der Betreiber/Installateur soll im Feld sofort sehen, ob zwei Instanzen über
+ *   das getrennte Mesh-Tailscale sauber verbunden sind.
+ * - Die Diagnose fasst Peer-Polling, Remote-Knoten, CommandGuard, letzte lokale
+ *   Command-Ausgabe und letzte ACKs der Remote-Receiver zusammen.
+ * - Sie erzeugt keine zusätzliche Regelung und keine Hardware-Schreibpfade. Die
+ *   echte Geräteumsetzung bleibt weiterhin bei lokalen Bridges/Herstelleradaptern.
+ */
+
+
+/**
+ * 0.8.43 Peer-Härtung: Fehler werden bewusst in klare Klassen normalisiert.
+ * Dadurch kann der Installateur im Feld sofort unterscheiden, ob ein Problem
+ * an Token, Cluster-ID, Receiver, Timeout, HTTP/API oder am lokalen Netzwerk
+ * liegt. Die Klassifizierung ist reine Diagnose und erzeugt keine Steuerung.
+ */
+function classifyPeerError(input) {
+  const status = String((input && (input.status || input.error || input.message)) || '').toLowerCase();
+  const http = Number(input && (input.httpStatus || input.statusCode || input.http));
+  const text = `${status} ${String((input && input.error) || '')} ${String((input && input.message) || '')}`.toLowerCase();
+  if (http === 401 || text.includes('token') || text.includes('mesh_token_invalid')) return 'token';
+  if (http === 409 || text.includes('cluster') || text.includes('cluster_mismatch')) return 'cluster';
+  if (http === 423 || text.includes('receiver_disabled') || text.includes('receiver')) return 'receiver';
+  if (text.includes('timeout') || text.includes('abort') || text.includes('timed')) return 'timeout';
+  if (http >= 500 || text.includes('internal_error')) return 'remote-api';
+  if (text.includes('fetch') || text.includes('network') || text.includes('enotfound') || text.includes('econn')) return 'network';
+  if (http >= 400) return 'http';
+  if (!status && !text.trim()) return 'none';
+  return 'unknown';
+}
+
+/**
+ * 0.8.43 Peer-Roundtrip-Ampel. Sie dient nur als Betreiberdiagnose für das
+ * separate Mesh-Tailscale und hat bewusst keine Wirkung auf Hardwareausgänge.
+ */
+function peerRoundtripStatus(ms, ok) {
+  if (!ok) return 'offline';
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n <= 0) return 'unknown';
+  if (n <= 500) return 'green';
+  if (n <= 2000) return 'yellow';
+  return 'red';
+}
+
+function buildRemoteNodeMatrix(remoteNodes, peers) {
+  const list = Array.isArray(remoteNodes) ? remoteNodes : [];
+  const peerRows = Array.isArray(peers) ? peers : [];
+  return list.map((n, idx) => {
+    const peer = peerRows.find(p => String(p.id || p.url || '') === String(n.peerId || n.sourcePeer || '')) || null;
+    return {
+      schema: 'nexowatt.mesh-remote-node-matrix-row.v1',
+      index: idx + 1,
+      peerId: n.peerId || n.sourcePeer || (peer && (peer.id || peer.url)) || '',
+      peerUrl: peer && peer.url || '',
+      nodeId: n.id || n.nodeId || '',
+      name: n.name || n.id || '',
+      type: n.type || '',
+      role: n.role || '',
+      status: n.status || '',
+      surplusW: Math.max(0, Math.round(num(n.surplusW, 0))),
+      demandW: Math.max(0, Math.round(num(n.demandW, 0))),
+      priority: n.priority || 999,
+      remote: true,
+      tailscaleProfile: n.tailscaleProfile || (peer && peer.tailscaleProfile) || '',
+    };
+  });
+}
+
+function buildAllowedPeerDiagnostics(receiverCfg) {
+  const r = receiverCfg || {};
+  const raw = Array.isArray(r.allowedPeerNodeIds) ? r.allowedPeerNodeIds.join(',') : String(r.allowedPeerNodeIds || r.allowedPeers || '');
+  const allowed = raw.split(/[\n,;]+/g).map(x => safeId(x.trim(), '')).filter(Boolean);
+  return {
+    schema: 'nexowatt.mesh-allowed-peer-diagnostics.v1',
+    allowListEnabled: allowed.length > 0,
+    allowedPeerNodeIds: allowed,
+    message: allowed.length ? `Nur ${allowed.length} Peer-Node-ID(s) erlaubt.` : 'Keine Peer-Allowlist gesetzt; Token und Cluster-ID bleiben die Hauptprüfung.',
+  };
+}
+
+
+
+function parseAllowedPeerNodeIds(receiverCfg) {
+  const diag = buildAllowedPeerDiagnostics(receiverCfg || {});
+  return Array.isArray(diag.allowedPeerNodeIds) ? diag.allowedPeerNodeIds : [];
+}
+
+function classifyPeerIssue(peer) {
+  const c = classifyPeerFieldTestIssue(peer);
+  if (c && c !== 'unknown') return c;
+  return classifyPeerError(peer);
+}
+
+function roundtripLevel(ms, ok) {
+  return peerRoundtripStatus(ms, ok);
+}
+
+function buildTwoInstanceFieldTestDiagnostics(input) {
+  const tailscale = input && input.tailscale ? input.tailscale : {};
+  const poll = input && input.poll ? input.poll : {};
+  const dispatch = input && input.dispatch ? input.dispatch : {};
+  const guard = input && input.guard ? input.guard : {};
+  const receiver = input && input.receiver ? input.receiver : {};
+  const commandHistory = Array.isArray(input && input.commandHistory) ? input.commandHistory : [];
+  const peers = Array.isArray(poll.peers) ? poll.peers : [];
+  const dispatchPeers = Array.isArray(dispatch.peers) ? dispatch.peers : [];
+  const allowedPeerNodeIds = parseAllowedPeerNodeIds(receiver);
+  const peerMatrix = peers.map((p) => {
+    const d = dispatchPeers.find(x => String(x.url || '') === String(p.url || '')) || null;
+    const ack = d && d.ack && typeof d.ack === 'object' ? d.ack : null;
+    const roundtripMs = Math.max(Number(p.ms || 0), d ? Number(d.ms || 0) : 0);
+    const baseRow = {
+      schema: 'nexowatt.mesh-peer-fieldtest-row.v2',
+      id: p.id || safeId(p.url || 'peer', 'peer'),
+      url: p.url || '',
+      pollOk: p.ok === true,
+      pollStatus: p.status || 'unknown',
+      nodeCount: Number(p.nodeCount || 0),
+      pollMs: Number(p.ms || 0),
+      commandOk: d ? d.ok === true : false,
+      commandStatus: d ? (d.status || 'unknown') : 'not-sent',
+      commandMs: d ? Number(d.ms || 0) : 0,
+      ackStatus: ack ? (ack.status || '') : '',
+      acceptedCount: ack ? Number(ack.acceptedCount || 0) : 0,
+      replayBlockedCount: ack ? Number(ack.replayBlockedCount || 0) : 0,
+      lastError: p.ok === true ? (d && (d.error || (d.ack && d.ack.error) || '') || '') : (p.error || ''),
+      errors: Array.isArray(p.errors) ? p.errors : [],
+      allowedPeerNodeIds,
+      allowedPeerConfigured: allowedPeerNodeIds.length > 0,
+      senderNodeId: ack ? (ack.senderNodeId || '') : '',
+      receiverNodeId: ack ? (ack.receiverNodeId || '') : '',
+      clusterId: ack ? (ack.clusterId || '') : '',
+      roundtripMs,
+    };
+    baseRow.errorClass = classifyPeerIssue(baseRow);
+    baseRow.roundtripLevel = roundtripLevel(roundtripMs, baseRow.pollOk || baseRow.commandOk);
+    baseRow.allowedPeerMatch = !allowedPeerNodeIds.length || !baseRow.senderNodeId || allowedPeerNodeIds.includes(safeId(baseRow.senderNodeId, ''));
+    baseRow.operatorHint = baseRow.errorClass === 'ok'
+      ? 'Peer erreichbar.'
+      : (baseRow.errorClass === 'token' ? 'Token auf beiden Mesh-Instanzen prüfen.'
+        : baseRow.errorClass === 'cluster' ? 'Cluster-ID beider Instanzen prüfen.'
+        : baseRow.errorClass === 'receiver' ? 'Command Receiver, Remote-Command-Freigabe und lokalen Receiver-Command-State prüfen.'
+        : baseRow.errorClass === 'timeout' ? 'Tailscale-Mesh-IP/Route, Firewall und Port prüfen.'
+        : 'Peer-Details im Feldtest/ACK prüfen.');
+    return baseRow;
+  });
+  const errorClassCounts = peerMatrix.reduce((acc, row) => { acc[row.errorClass || 'unknown'] = (acc[row.errorClass || 'unknown'] || 0) + 1; return acc; }, {});
+  const peerOnlineCount = peerMatrix.filter(p => p.pollOk).length;
+  const peerCommandOkCount = peerMatrix.filter(p => p.commandOk).length;
+  const remoteNodeCount = Number(poll.remoteNodeCount || 0);
+  const remoteNodeMatrix = buildRemoteNodeMatrixFromPeers(peerMatrix);
+  const commandsAllowed = guard.commandOutputAllowed === true;
+  const receiverReady = receiver.enabled === true && receiver.acceptRemoteCommands === true && !!receiver.localCommandStateDp;
+  const tailscaleReady = tailscale.enabled === true && peers.length > 0;
+  const twoInstanceReady = tailscaleReady && peerOnlineCount > 0 && receiverReady;
+  const fieldCommandReady = twoInstanceReady && commandsAllowed;
+  const warnings = [];
+  if (!tailscale.enabled) warnings.push('Tailscale Mesh ist deaktiviert.');
+  if (tailscale.enabled && !peers.length) warnings.push('Keine Peer-URLs für das Mesh-Tailscale hinterlegt.');
+  if (peers.length && peerOnlineCount <= 0) warnings.push('Keine Peer-Instanz erreichbar.');
+  if (!receiverReady) warnings.push('Command Receiver ist lokal noch nicht vollständig freigegeben oder kein lokaler Receiver-Command-State gesetzt.');
+  if (!commandsAllowed) warnings.push('CommandGuard gibt aktuell keine Feldtest-Commands frei.');
+  if (errorClassCounts.token) warnings.push('Mindestens ein Peer meldet Token-Fehler.');
+  if (errorClassCounts.cluster) warnings.push('Mindestens ein Peer meldet Cluster-ID-Konflikt.');
+  if (errorClassCounts.receiver) warnings.push('Mindestens ein Peer meldet Receiver-/Command-State-Problem.');
+  if (errorClassCounts.timeout) warnings.push('Mindestens ein Peer ist über das Mesh-Tailscale nicht rechtzeitig erreichbar.');
+  const maxRoundtripMs = peerMatrix.reduce((max, p) => Math.max(max, Number(p.roundtripMs || p.pollMs || 0), Number(p.commandMs || 0)), 0);
+  const roundtripLevelValue = roundtripLevel(maxRoundtripMs, peerOnlineCount > 0);
+  const status = fieldCommandReady ? 'fieldtest-ready' : (twoInstanceReady ? 'peer-ready-command-blocked' : 'not-ready');
+  const lastHistory = commandHistory.length ? commandHistory[0] : null;
+  return {
+    schema: 'nexowatt.mesh-two-instance-fieldtest.v2',
+    ts: Date.now(),
+    status,
+    twoInstanceReady,
+    fieldCommandReady,
+    tailscaleReady,
+    receiverReady,
+    peerOnlineCount,
+    peerCommandOkCount,
+    peerCount: peers.length,
+    remoteNodeCount,
+    peerMatrix,
+    remoteNodeMatrix,
+    errorClassCounts,
+    roundtripStatus: roundtripLevelValue,
+    allowedPeerNodeIds,
+    allowedPeerConfigured: allowedPeerNodeIds.length > 0,
+    warnings,
+    lastRoundtripMs: maxRoundtripMs,
+    lastCommandHistory: lastHistory || {},
+    commandHistory: commandHistory.slice(0, 20),
+    reason: warnings.length ? warnings.join(' ') : 'Zwei-Instanzen-Feldtest ist bereit; direkte Hardware-Schreibpfade bleiben weiterhin gesperrt.',
+    directHardwareWrite: false,
+    neutralCommandOnly: true,
   };
 }
 
@@ -507,6 +1672,13 @@ class MeshMicrogridModule extends BaseModule {
     this._lastCommandResult = null;
     this._remoteSnapshots = [];
     this._lastTailscalePoll = null;
+    this._lastPeerCommandDispatch = null;
+    this._commandHistory = [];
+    this._peerHistory = [];
+    this._lastFieldTest = null;
+    this._lastLocalBridgeAck = null;
+    this._lastManualReleaseSummary = buildManualReleaseSummary([], Date.now());
+    this._lastTargetCommandHistory = buildTargetCommandHistory([]);
   }
 
   _cfg() {
@@ -585,6 +1757,9 @@ class MeshMicrogridModule extends BaseModule {
     await ch('meshMicrogrid.fieldControl', 'Mesh/Microgrid Feldsteuerung');
     await ch('meshMicrogrid.tailscale', 'Mesh/Microgrid Tailscale-Netz');
     await ch('meshMicrogrid.receiver', 'Mesh/Microgrid Command Receiver');
+    await ch('meshMicrogrid.fieldTest', 'Mesh/Microgrid Zwei-Instanzen Feldtest');
+    await ch('meshMicrogrid.peerHardening', 'Mesh/Microgrid Peer-Härtung');
+    await ch('meshMicrogrid.localBridge', 'Mesh/Microgrid lokale Bridge-Zuordnung');
 
     await mk('meshMicrogrid.enabled', 'Mesh/Microgrid App aktiv', 'boolean', 'indicator', '', false);
     await mk('meshMicrogrid.version', 'Mesh/Microgrid Schema', 'string', 'text', '', MODULE_VERSION);
@@ -667,6 +1842,39 @@ class MeshMicrogridModule extends BaseModule {
     await mk('meshMicrogrid.commandGuard.warnCount', 'CommandGuard Warnungen', 'number', 'value', '', 0);
     await mk('meshMicrogrid.commandGuard.summaryJson', 'CommandGuard Zusammenfassung JSON', 'string', 'json', '', '{}');
 
+    // 0.8.48 Leistungsgrenzen: Knoten- und Bridge-Ziellimits werden nur gegen
+    // neutrale Mesh-Command-Intents geprüft. Es entstehen keine direkten
+    // Hardware-/Protokoll-Schreibbefehle.
+    await ch('meshMicrogrid.limits', 'Mesh/Microgrid Leistungsgrenzen');
+    await mk('meshMicrogrid.limits.nodesJson', 'Knoten-Leistungsgrenzen JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.limits.bridgeTargetsJson', 'Bridge-Ziel-Leistungsgrenzen JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.limits.limitedCommandsJson', 'Leistungsbegrenzte Commands JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.limits.blockedCommandsJson', 'Durch Leistungsgrenzen blockierte Commands JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.limits.summaryJson', 'Leistungsgrenzen Zusammenfassung JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.limits.activeLimitCount', 'Aktive Leistungsgrenzen', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.limits.limitedCount', 'Gekürzte Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.limits.blockedCount', 'Blockierte Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.limits.lastReason', 'Letzter Leistungsgrenzen-Grund', 'string', 'text', '', '');
+
+    // 0.8.49 Zielgruppenstrategie: Gruppen bündeln Ladepunkte, Speicher,
+    // Verbraucher und Erzeuger. Auch diese Grenzen wirken nur auf neutrale
+    // Command-Intents und erzeugen keinen direkten Hardwarepfad.
+    await ch('meshMicrogrid.targetGroups', 'Mesh/Microgrid Zielgruppen');
+    await mk('meshMicrogrid.targetGroups.groupsJson', 'Zielgruppen JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.targetGroups.priorityOrderJson', 'Zielgruppen Prioritäten JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.targetGroups.summaryJson', 'Zielgruppen Zusammenfassung JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.targetGroups.groupCount', 'Zielgruppen Anzahl', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.targetGroups.activeGroupCount', 'Aktive Zielgruppen', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.targetGroups.limitedCommandCount', 'Durch Zielgruppen begrenzte Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.targetGroups.blockedCommandCount', 'Durch Zielgruppen blockierte Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.targetGroups.fairnessJson', 'Zielgruppen-Fairness JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.targetGroups.fairnessBudgetsJson', 'Zielgruppen-Fairness Budgets JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.targetGroups.fairnessLimitedCommandsJson', 'Durch Fairness gekürzte Commands JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.targetGroups.fairnessBlockedCommandsJson', 'Durch Fairness blockierte Commands JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.targetGroups.fairnessLimitedCount', 'Durch Fairness gekürzte Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.targetGroups.fairnessBlockedCount', 'Durch Fairness blockierte Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.targetGroups.lastReason', 'Letzter Zielgruppen-Grund', 'string', 'text', '', '');
+
     // 0.8.40 Feldsteuerung: Diese States machen die Ausgabe neutraler Command-
     // Intents sichtbar. Wichtig: Auch im Feldmodus schreibt NexoWatt hier keine
     // Hardwaredatenpunkte direkt, sondern nur den konfigurierten JSON-Command-State.
@@ -694,28 +1902,115 @@ class MeshMicrogridModule extends BaseModule {
     await mk('meshMicrogrid.tailscale.peersJson', 'Tailscale Peers JSON', 'string', 'json', '', '[]');
     await mk('meshMicrogrid.tailscale.remoteNodesJson', 'Remote-Knoten JSON', 'string', 'json', '', '[]');
     await mk('meshMicrogrid.tailscale.lastPollJson', 'Letzter Peer-Poll JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.tailscale.lastCommandDispatchJson', 'Letzter Peer-Command-Dispatch JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.tailscale.lastCommandDispatchStatus', 'Letzter Peer-Command-Dispatch Status', 'string', 'text', '', 'idle');
 
-    // 0.8.41 Command-Receiver: Empfangsschicht für neutrale Mesh-Commands von
-    // anderen NexoWatt-Instanzen über das separate Mesh-Tailscale. Diese States
-    // dokumentieren Handshake, Replay-Schutz und ACKs. Der Receiver schreibt nur
-    // in den konfigurierten lokalen JSON-Command-State, niemals direkt auf Geräte.
+    // 0.8.41 Command-Receiver: Remote-Kommandos aus dem separaten Mesh-Tailscale
+    // werden ausschließlich nach Token-/Cluster-/Replay-Prüfung angenommen und
+    // als neutraler JSON-Command-State bereitgestellt. Keine direkte Hardwaresteuerung.
     await mk('meshMicrogrid.receiver.enabled', 'Command Receiver aktiv', 'boolean', 'indicator', '', false);
-    await mk('meshMicrogrid.receiver.commandStateDp', 'Receiver Command-State', 'string', 'text', '', '');
-    await mk('meshMicrogrid.receiver.requireToken', 'Receiver Token erforderlich', 'boolean', 'indicator', '', true);
-    await mk('meshMicrogrid.receiver.ttlSec', 'Command TTL', 'number', 'value.interval', 's', 120);
+    await mk('meshMicrogrid.receiver.acceptRemoteCommands', 'Remote Commands akzeptieren', 'boolean', 'indicator', '', false);
+    await mk('meshMicrogrid.receiver.localCommandStateDp', 'Lokaler Empfangs-Command-State', 'string', 'text', '', '');
+    await mk('meshMicrogrid.receiver.peerTokenSet', 'Receiver Token gesetzt', 'boolean', 'indicator', '', false);
+    await mk('meshMicrogrid.receiver.requireClusterMatch', 'Cluster-ID prüfen', 'boolean', 'indicator', '', true);
     await mk('meshMicrogrid.receiver.status', 'Receiver Status', 'string', 'text', '', 'disabled');
-    await mk('meshMicrogrid.receiver.lastHandshakeAt', 'Letzter Handshake', 'number', 'value.time', '', 0);
-    await mk('meshMicrogrid.receiver.lastHandshakeJson', 'Letzter Handshake JSON', 'string', 'json', '', '{}');
-    await mk('meshMicrogrid.receiver.lastCommandAt', 'Letzter empfangener Command', 'number', 'value.time', '', 0);
+    await mk('meshMicrogrid.receiver.lastReceiveAt', 'Letzter Empfang', 'number', 'value.time', '', 0);
     await mk('meshMicrogrid.receiver.lastCommandId', 'Letzte Command-ID', 'string', 'text', '', '');
     await mk('meshMicrogrid.receiver.lastCommandJson', 'Letzter empfangener Command JSON', 'string', 'json', '', '{}');
     await mk('meshMicrogrid.receiver.lastAckJson', 'Letztes ACK JSON', 'string', 'json', '', '{}');
-    await mk('meshMicrogrid.receiver.lastRejectReason', 'Letzter Ablehnungsgrund', 'string', 'text', '', '');
-    await mk('meshMicrogrid.receiver.acceptedCount', 'Angenommene Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.receiver.lastRejectReason', 'Letzter Reject-Grund', 'string', 'text', '', '');
+    await mk('meshMicrogrid.receiver.receivedCount', 'Empfangene Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.receiver.acceptedCount', 'Akzeptierte Commands', 'number', 'value', '', 0);
     await mk('meshMicrogrid.receiver.rejectedCount', 'Abgelehnte Commands', 'number', 'value', '', 0);
-    await mk('meshMicrogrid.receiver.replayBlockedCount', 'Replay blockiert', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.receiver.replayBlockedCount', 'Replay-blockierte Commands', 'number', 'value', '', 0);
     await mk('meshMicrogrid.receiver.processedCommandIdsJson', 'Verarbeitete Command-IDs JSON', 'string', 'json', '', '[]');
-    await mk('meshMicrogrid.receiver.summaryJson', 'Receiver Zusammenfassung JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.receiver.lastLocalWriteStatus', 'Letzter lokaler Write-Status', 'string', 'text', '', 'idle');
+    await mk('meshMicrogrid.receiver.lastLocalWriteError', 'Letzter lokaler Write-Fehler', 'string', 'text', '', '');
+    await mk('meshMicrogrid.receiver.summaryJson', 'Command Receiver Zusammenfassung JSON', 'string', 'json', '', '{}');
+
+    // 0.8.42 Zwei-Instanzen-Feldtest: Diese States zeigen, ob zwei
+    // NexoWatt-Instanzen über das separate Mesh-Tailscale wirklich miteinander
+    // sprechen, Commands quittieren und Remote-Knoten liefern. Auch diese Ebene
+    // bleibt eine Diagnose-/Transportebene; Geräte werden nur über lokale Bridges
+    // hinter den neutralen Command-States gesteuert.
+    await mk('meshMicrogrid.fieldTest.status', 'Zwei-Instanzen Feldtest Status', 'string', 'text', '', 'not-ready');
+    await mk('meshMicrogrid.fieldTest.twoInstanceReady', 'Zwei Instanzen verbunden', 'boolean', 'indicator', '', false);
+    await mk('meshMicrogrid.fieldTest.fieldCommandReady', 'Feld-Command bereit', 'boolean', 'indicator', '', false);
+    await mk('meshMicrogrid.fieldTest.peerOnlineCount', 'Online Peers', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.fieldTest.peerCommandOkCount', 'Peers mit Command-ACK', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.fieldTest.remoteNodeCount', 'Remote-Knoten im Feldtest', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.fieldTest.lastRoundtripMs', 'Letzte Peer-Roundtripzeit', 'number', 'value.interval', 'ms', 0);
+    await mk('meshMicrogrid.fieldTest.peerMatrixJson', 'Peer-Matrix JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.fieldTest.commandHistoryJson', 'Command-Verlauf JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.fieldTest.lastAckJson', 'Letztes Peer-ACK JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.fieldTest.lastManualTestJson', 'Letzter manueller Zwei-Instanzen-Test JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.fieldTest.summaryJson', 'Feldtest Zusammenfassung JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.fieldTest.warning', 'Feldtest Warnung', 'string', 'text', '', '');
+    // 0.8.43 Peer-Härtung: Verlauf, Fehlerklassen, Roundtrip-Ampel und Remote-Matrix
+    // bleiben Diagnosewerte. Sie steuern keine Hardware und dienen dem Feldtest über
+    // das separate Mesh-Tailscale.
+    await mk('meshMicrogrid.fieldTest.peerHistoryJson', 'Peer-Verlauf JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.fieldTest.errorClassesJson', 'Peer-Fehlerklassen JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.fieldTest.roundtripStatus', 'Peer-Roundtrip-Ampel', 'string', 'text', '', 'unknown');
+    await mk('meshMicrogrid.fieldTest.remoteNodeMatrixJson', 'Remote-Node-Matrix JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.fieldTest.allowedPeersDiagnosticJson', 'Erlaubte Peer-Diagnose JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.fieldTest.peerHistoryJson', 'Peer-Feldtest Verlauf JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.fieldTest.errorClassesJson', 'Peer Fehlerklassen JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.fieldTest.remoteNodeMatrixJson', 'Remote-Node Matrix JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.fieldTest.roundtripStatus', 'Roundtrip Ampel', 'string', 'text', '', 'unknown');
+    await mk('meshMicrogrid.fieldTest.tokenErrorCount', 'Token-Fehler', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.fieldTest.clusterMismatchCount', 'Cluster-ID Fehler', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.fieldTest.receiverErrorCount', 'Receiver-Fehler', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.fieldTest.timeoutCount', 'Timeouts', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.peerHardening.summaryJson', 'Peer-Härtung Zusammenfassung JSON', 'string', 'json', '', '{}');
+
+    // 0.8.44 Lokale Bridge-Zuordnung: verbindet neutrale Mesh-Commands mit
+    // lokalen Ziel-Command-States. Das sind weiterhin keine Rohdatenpunktwrites
+    // auf Geräte, sondern JSON-Intents für lokale Bridges/Herstelleradapter.
+    await mk('meshMicrogrid.localBridge.enabled', 'Lokale Bridge-Zuordnung aktiv', 'boolean', 'indicator', '', false);
+    await mk('meshMicrogrid.localBridge.outputMode', 'Lokale Bridge Ausgabemodus', 'string', 'text', '', 'global');
+    await mk('meshMicrogrid.localBridge.defaultCommandStateDp', 'Default Bridge Command-State', 'string', 'text', '', '');
+    await mk('meshMicrogrid.localBridge.mappingCount', 'Bridge-Zuordnungen', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.localBridge.mappedCommandCount', 'Gemappte Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.localBridge.unmappedCommandCount', 'Ungemappte Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.localBridge.routeReady', 'Lokale Bridge Route bereit', 'boolean', 'indicator', '', false);
+    await mk('meshMicrogrid.localBridge.mappingsJson', 'Bridge-Zuordnungen JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.localBridge.mappedCommandsJson', 'Gemappte Commands JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.localBridge.unmappedCommandsJson', 'Ungemappte Commands JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.localBridge.lastWriteAt', 'Letzter Bridge-Write', 'number', 'value.time', '', 0);
+    await mk('meshMicrogrid.localBridge.lastWriteStatus', 'Letzter Bridge-Write Status', 'string', 'text', '', 'idle');
+    await mk('meshMicrogrid.localBridge.lastWriteError', 'Letzter Bridge-Write Fehler', 'string', 'text', '', '');
+    await mk('meshMicrogrid.localBridge.lastWritesJson', 'Letzte Bridge-Writes JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.localBridge.ackEnabled', 'Bridge ACK-Auswertung aktiv', 'boolean', 'indicator', '', false);
+    await mk('meshMicrogrid.localBridge.ackRequired', 'Bridge ACK als Gate erforderlich', 'boolean', 'indicator', '', false);
+    await mk('meshMicrogrid.localBridge.ackGateStatus', 'Bridge ACK-Gate Status', 'string', 'text', '', 'disabled');
+    await mk('meshMicrogrid.localBridge.ackGateBlockedCommandCount', 'Bridge ACK-Gate blockierte Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.localBridge.ackBlockedTargetsJson', 'Bridge ACK-Gate blockierte Ziele JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.localBridge.targetHealthJson', 'Bridge Ziel-Ampel JSON', 'string', 'json', '', '[]');
+    // 0.8.47 Wiederfreigabe/Verlauf je Ziel: Diese States sind reine
+    // Diagnose-/Bedienzustände für die lokale Bridge. Sie schalten keine
+    // Hardware und ersetzen keine ACK-/Status-Datenpunkte.
+    await mk('meshMicrogrid.localBridge.manualReleaseEnabled', 'Manuelle Bridge-Ziel-Freigabe aktiv', 'boolean', 'indicator', '', true);
+    await mk('meshMicrogrid.localBridge.manualReleaseJson', 'Manuelle Bridge-Ziel-Freigaben JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.localBridge.manualReleaseSummaryJson', 'Manuelle Freigabe Zusammenfassung JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.localBridge.lastManualReleaseAt', 'Letzte manuelle Ziel-Freigabe', 'number', 'value.time', '', 0);
+    await mk('meshMicrogrid.localBridge.lastManualReleaseResultJson', 'Letzte manuelle Freigabe Ergebnis JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.localBridge.manualReleaseCount', 'Aktive manuelle Ziel-Freigaben', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.localBridge.targetCommandHistoryJson', 'Bridge Command-Verlauf je Ziel JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.localBridge.targetCommandHistoryCount', 'Bridge-Ziele mit Verlauf', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.localBridge.releaseReady', 'Bridge Wiederfreigabe bereit', 'boolean', 'indicator', '', false);
+    await mk('meshMicrogrid.localBridge.ackTimeoutSec', 'Bridge ACK Timeout Sekunden', 'number', 'value.interval', 's', 60);
+    await mk('meshMicrogrid.localBridge.ackStatus', 'Bridge ACK Status', 'string', 'text', '', 'disabled');
+    await mk('meshMicrogrid.localBridge.ackReady', 'Bridge ACK bereit', 'boolean', 'indicator', '', false);
+    await mk('meshMicrogrid.localBridge.ackOkCount', 'Bridge ACK ok', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.localBridge.ackPendingCount', 'Bridge ACK wartend', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.localBridge.ackErrorCount', 'Bridge ACK Fehler', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.localBridge.ackTimeoutCount', 'Bridge ACK Timeout', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.localBridge.ackMissingCount', 'Bridge ACK fehlend', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.localBridge.ackStaleCount', 'Bridge ACK veraltet', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.localBridge.ackTargetsJson', 'Bridge Zielstatus JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.localBridge.ackSummaryJson', 'Bridge ACK Zusammenfassung JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.localBridge.summaryJson', 'Lokale Bridge Zusammenfassung JSON', 'string', 'json', '', '{}');
   }
 
   _getNumber(key, fallback = null) {
@@ -735,6 +2030,37 @@ class MeshMicrogridModule extends BaseModule {
 
   _receiverCfg() {
     return normalizeReceiverCfg(this._cfg());
+  }
+
+  _localBridgeCfg() {
+    return normalizeLocalBridgeCfg(this._cfg());
+  }
+
+  _targetGroups() {
+    return normalizeTargetGroups(this._cfg().targetGroups);
+  }
+
+  async _stateJson(id, fallback) {
+    const a = this.adapter;
+    try {
+      let st = null;
+      if (a && typeof a.getStateAsync === 'function') st = await a.getStateAsync(id);
+      if (!st && a && typeof a.getForeignStateAsync === 'function') st = await a.getForeignStateAsync(`${a.namespace}.${id}`);
+      const raw = st && st.val;
+      if (typeof raw === 'string' && raw.trim()) return JSON.parse(raw);
+      if (raw && typeof raw === 'object') return raw;
+    } catch (_e) {}
+    return fallback;
+  }
+
+  async _readManualReleaseSummary() {
+    const cfg = this._localBridgeCfg();
+    const raw = await this._stateJson('meshMicrogrid.localBridge.manualReleaseJson', []);
+    const summary = buildManualReleaseSummary(cfg.manualReleaseEnabled === false ? [] : raw, Date.now());
+    summary.enabled = cfg.manualReleaseEnabled !== false;
+    summary.ttlSec = cfg.manualReleaseTtlSec || 300;
+    this._lastManualReleaseSummary = summary;
+    return summary;
   }
 
   _normalPeerUrl(raw) {
@@ -812,6 +2138,9 @@ class MeshMicrogridModule extends BaseModule {
       version: MODULE_VERSION,
       ts: Date.now(),
       source: 'nexowatt-ui.meshMicrogrid',
+      executionMode: control.controlMode,
+      activeControl: control.controlMode === 'active',
+      fieldTest: control.controlMode === 'field_test',
       clusterId: snap && snap.clusterId || 'cluster_01',
       clusterName: snap && snap.clusterName || '',
       transport: tailscale.enabled ? 'tailscale-mesh' : 'local-command-state',
@@ -821,10 +2150,277 @@ class MeshMicrogridModule extends BaseModule {
       directHardwareWrite: false,
       neutralCommandOnly: true,
       commands,
+      localBridge: snap && snap.localBridge || {},
       totals: snap && snap.totals || {},
       gridLimit: snap && snap.planning && snap.planning.gridLimit || {},
       reason: commandGuard && commandGuard.reason || '',
+      note: 'NexoWatt Mesh/Microgrid gibt nur neutrale Intents aus; lokale Bridges/Peers setzen diese hersteller- und protokollspezifisch um.',
     };
+  }
+
+  /**
+   * Sendet freigegebene Feldtest-Kommandos optional an konfigurierte Peer-Receiver.
+   * Die Zielinstanz prüft das Token, Cluster und Replay selbst erneut. Dieser
+   * Sender schreibt weiterhin keine Hardware; er überträgt nur den neutralen
+   * Command-Envelope über das separate Mesh-Tailscale-Netz.
+   */
+  async _sendFieldCommandsToPeers(envelope) {
+    const cfg = this._tailscaleCfg();
+    const now = Date.now();
+    if (!cfg.enabled || !cfg.peerUrls.length || !envelope || !Array.isArray(envelope.commands) || !envelope.commands.length || typeof fetch !== 'function') {
+      this._lastPeerCommandDispatch = { ts: now, status: cfg.enabled ? 'no-peer-dispatch' : 'disabled', peers: [], commandCount: envelope && Array.isArray(envelope.commands) ? envelope.commands.length : 0 };
+      return this._lastPeerCommandDispatch;
+    }
+    const peers = [];
+    for (const urlRaw of cfg.peerUrls) {
+      const base = this._normalPeerUrl(urlRaw);
+      if (!base) continue;
+      const endpoint = `${base}/api/mesh/command/receive`;
+      const started = Date.now();
+      const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_e) {} }, cfg.timeoutMs) : null;
+      try {
+        const headers = { 'content-type': 'application/json' };
+        if (cfg.peerToken) headers['x-nexowatt-mesh-token'] = cfg.peerToken;
+        const res = await fetch(endpoint, { method: 'POST', cache: 'no-store', headers, body: JSON.stringify(envelope), signal: ctrl ? ctrl.signal : undefined });
+        const ack = await res.json().catch(() => null);
+        peers.push({ url: base, endpoint, ok: res.ok && (!ack || ack.ok !== false), status: ack && ack.status || `http_${res.status}`, httpStatus: res.status, ack, ms: Date.now() - started });
+      } catch (e) {
+        peers.push({ url: base, endpoint, ok: false, status: 'error', error: String(e && e.message ? e.message : e), ms: Date.now() - started });
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    }
+    for (const p of peers) { this._rememberPeerHistory({ source: 'command-dispatch', url: p.url, ok: p.ok === true, status: p.status || '', httpStatus: p.httpStatus || 0, ms: p.ms || 0, error: p.error || '', ackStatus: p.ack && p.ack.status || '' }); }
+    const hardenedPeers = peers.map(p => ({ ...p, errorClass: classifyPeerError(p), roundtripStatus: peerRoundtripStatus(Number(p.ms || 0), p.ok === true) }));
+    this._lastPeerCommandDispatch = { schema: 'nexowatt.mesh-peer-command-dispatch.v1', ts: now, status: hardenedPeers.some(p => p.ok) ? 'ok' : 'error', profile: cfg.profile, localNodeId: cfg.localNodeId, commandCount: envelope.commands.length, peers: hardenedPeers };
+    return this._lastPeerCommandDispatch;
+  }
+
+
+  _rememberCommandHistory(entry) {
+    const item = { schema: 'nexowatt.mesh-command-history-row.v1', ts: Date.now(), ...(entry || {}) };
+    this._commandHistory = [item].concat(Array.isArray(this._commandHistory) ? this._commandHistory : []).slice(0, 50);
+    return item;
+  }
+
+  _rememberPeerHistory(entry) {
+    const item = { schema: 'nexowatt.mesh-peer-history-row.v1', ts: Date.now(), errorClass: classifyPeerError(entry || {}), roundtripStatus: peerRoundtripStatus(Number(entry && entry.ms || 0), entry && entry.ok === true), ...(entry || {}) };
+    this._peerHistory = [item].concat(Array.isArray(this._peerHistory) ? this._peerHistory : []).slice(0, 100);
+    return item;
+  }
+
+
+  /**
+   * Schreibt gemappte Local-Bridge-Commands in die vom Installateur angegebenen
+   * Ziel-Command-States. Diese Methode existiert bewusst als eigener, klarer
+   * Codepfad: Der globale Mesh-Envelope, der Peer-Dispatch und die lokale
+   * Bridge-Zuordnung bleiben getrennt prüfbar. Auch hier gilt: Es werden nur
+   * neutrale JSON-Intents geschrieben, keine OCPP-/Modbus-/MQTT-/Herstellerwerte.
+   */
+  async _writeLocalBridgeCommands(envelope, localBridge, control, ackGate) {
+    const a = this.adapter;
+    const bridgeWrites = [];
+    const commands = localBridge && Array.isArray(localBridge.mappedCommands) ? localBridge.mappedCommands : [];
+    if (!a || !localBridge || localBridge.enabled !== true || !commands.length) return bridgeWrites;
+    const gate = ackGate && typeof ackGate === 'object' ? ackGate : buildBridgeAckGate(localBridge, this._lastLocalBridgeAck || buildBridgeAckSummary([]));
+    const blockedByMapping = new Map();
+    for (const b of Array.isArray(gate.blockedMappings) ? gate.blockedMappings : []) {
+      if (!b) continue;
+      if (b.mappingId) blockedByMapping.set(String(b.mappingId), b);
+      if (b.commandStateDp && !blockedByMapping.has(String(b.commandStateDp))) blockedByMapping.set(String(b.commandStateDp), b);
+    }
+
+    const byState = new Map();
+    for (const cmd of commands) {
+      const dp = String(cmd.commandStateDp || '').trim();
+      if (!dp) continue;
+      const gateBlock = blockedByMapping.get(String(cmd.mappingId || '')) || blockedByMapping.get(dp) || null;
+      if (gateBlock) {
+        // 0.8.46: Wenn ACK als Gate gefordert ist, blockieren wir Folge-Commands
+        // gezielt für dieses Bridge-Ziel. Es wird kein leerer/alter Command-State
+        // überschrieben. Der lokale Herstelleradapter behält damit seinen letzten
+        // sicheren Zustand, bis ein gültiges ACK/Statussignal vorliegt.
+        bridgeWrites.push({
+          commandStateDp: dp,
+          status: 'blocked-by-ack-gate',
+          commandCount: 1,
+          commandId: cmd.commandId || '',
+          mappingId: cmd.mappingId || '',
+          reason: gateBlock.reason || 'ack_gate_blocked',
+          ackStatus: gateBlock.ackStatus || '',
+          targetStatusClass: gateBlock.targetStatusClass || '',
+          directHardwareWrite: false,
+          neutralCommandOnly: true,
+        });
+        continue;
+      }
+      if (!byState.has(dp)) byState.set(dp, []);
+      byState.get(dp).push(cmd);
+    }
+    for (const [dp, commandList] of byState.entries()) {
+      const bridgeEnvelope = {
+        schema: 'nexowatt.mesh-local-bridge-envelope.v1',
+        version: MODULE_VERSION,
+        ts: Date.now(),
+        source: 'nexowatt-ui.meshMicrogrid.localBridge',
+        executionMode: control && control.controlMode || 'diagnostic',
+        clusterId: envelope && envelope.clusterId || '',
+        transport: 'local-bridge-command-state',
+        commandStateDp: dp,
+        directHardwareWrite: false,
+        neutralCommandOnly: true,
+        commands: commandList,
+        originalEnvelopeCommandCount: Array.isArray(envelope && envelope.commands) ? envelope.commands.length : 0,
+        note: 'Lokale Bridge-Zuordnung: dieser JSON-State muss von einer lokalen Bridge/Herstellerintegration umgesetzt werden.',
+      };
+      try {
+        const json = JSON.stringify(bridgeEnvelope);
+        if (typeof a.setForeignStateAsync === 'function') await a.setForeignStateAsync(dp, { val: json, ack: false });
+        else if (typeof a.setStateAsync === 'function') await a.setStateAsync(dp, { val: json, ack: false });
+        bridgeWrites.push({ commandStateDp: dp, status: 'written', commandCount: commandList.length, ts: Date.now(), mappingIds: commandList.map(c => c.mappingId).filter(Boolean), commandIds: commandList.map(c => c.commandId).filter(Boolean) });
+      } catch (e) {
+        bridgeWrites.push({ commandStateDp: dp, status: 'error', commandCount: commandList.length, ts: Date.now(), mappingIds: commandList.map(c => c.mappingId).filter(Boolean), commandIds: commandList.map(c => c.commandId).filter(Boolean), error: String(e && e.message ? e.message : e) });
+      }
+    }
+    return bridgeWrites;
+  }
+
+  /**
+   * Liest ACK-/Status-Rückmeldungen der lokalen Bridge-Ziele.
+   *
+   * Produktregel:
+   * - Diese Methode liest ausschließlich vom Installateur angegebene ACK- oder
+   *   Status-States und klassifiziert deren Wert.
+   * - Sie schreibt keine Gerätewerte und ändert keine Mesh-Entscheidung.
+   * - Dadurch ist im Feld sichtbar, ob ein neutraler Command von der lokalen
+   *   Bridge angenommen, blockiert, noch bearbeitet oder nicht quittiert wurde.
+   */
+  async _evaluateLocalBridgeAck(localBridge, bridgeWrites) {
+    const a = this.adapter;
+    const cfg = this._localBridgeCfg();
+    const now = Date.now();
+    const enabled = cfg.enabled === true && cfg.ackEnabled === true;
+    const timeoutSec = Math.max(5, Math.round(num(cfg.ackTimeoutSec, 60)) || 60);
+    const writes = Array.isArray(bridgeWrites) ? bridgeWrites : [];
+    const targets = [];
+    const mappings = Array.isArray(cfg.mappings) ? cfg.mappings : [];
+    for (const mapping of mappings) {
+      const m = mapping && typeof mapping === 'object' ? mapping : {};
+      const ackDp = String(m.ackStateDp || '').trim();
+      const statusDp = String(m.statusStateDp || '').trim();
+      const write = writes.find(w => w && ((Array.isArray(w.mappingIds) && w.mappingIds.includes(m.id)) || (w.commandStateDp && w.commandStateDp === m.commandStateDp))) || null;
+      const target = {
+        schema: 'nexowatt.mesh-local-bridge-target-ack.v1',
+        mappingId: m.id || '',
+        label: m.label || m.id || '',
+        nodeId: m.nodeId || '',
+        targetNodeId: m.targetNodeId || '',
+        commandStateDp: m.commandStateDp || '',
+        ackStateDp: ackDp,
+        statusStateDp: statusDp,
+        onlineStateDp: m.onlineStateDp || '',
+        errorStateDp: m.errorStateDp || '',
+        lastWriteAt: Number(write && write.ts || 0),
+        lastCommandIds: Array.isArray(write && write.commandIds) ? write.commandIds : [],
+        status: enabled ? 'pending' : 'disabled',
+        severity: enabled ? 'warn' : 'info',
+        ok: false,
+        ageSec: null,
+        message: enabled ? 'ACK-Auswertung wartet auf Rückmeldung.' : 'ACK-Auswertung deaktiviert.',
+        rawValue: null,
+      };
+      if (!enabled) {
+        targets.push(target);
+        continue;
+      }
+      const readDp = ackDp || statusDp;
+      if (!readDp) {
+        target.status = 'missing_ack_mapping';
+        target.severity = 'warn';
+        target.message = 'Kein ACK-/Status-State für dieses Bridge-Ziel konfiguriert.';
+        targets.push(target);
+        continue;
+      }
+      try {
+        let st = null;
+        if (a && typeof a.getForeignStateAsync === 'function') st = await a.getForeignStateAsync(readDp);
+        else if (a && typeof a.getStateAsync === 'function') st = await a.getStateAsync(readDp);
+        if (!st) {
+          target.status = 'missing_state';
+          target.severity = 'warn';
+          target.message = `ACK-/Status-State nicht lesbar: ${readDp}`;
+          targets.push(target);
+          continue;
+        }
+        target.rawValue = st.val;
+        target.lastAckTs = Number(st.ts || st.lc || 0) || 0;
+        target.ageSec = target.lastAckTs ? Math.max(0, Math.round((now - target.lastAckTs) / 1000)) : null;
+        const writeTs = Number(target.lastWriteAt || 0);
+        const ackTs = Number(target.lastAckTs || 0);
+        if (writeTs > 0 && ackTs > 0 && ackTs < writeTs) {
+          const waitSec = Math.round((now - writeTs) / 1000);
+          if (waitSec > timeoutSec) {
+            target.status = 'timeout';
+            target.severity = 'critical';
+            target.message = `Kein neues ACK innerhalb von ${timeoutSec}s nach letztem Command.`;
+          } else {
+            target.status = 'waiting_for_new_ack';
+            target.severity = 'warn';
+            target.message = `Command geschrieben; ACK noch nicht aktualisiert (${waitSec}s).`;
+          }
+          targets.push(target);
+          continue;
+        }
+        const classified = classifyLocalBridgeAck(st.val);
+        target.status = classified.status;
+        target.severity = classified.severity;
+        target.ok = classified.ok === true;
+        target.message = classified.label;
+        if (target.ageSec !== null && target.ageSec > timeoutSec && classified.status !== 'ok') {
+          target.status = 'stale';
+          target.severity = 'warn';
+          target.message = `ACK-/Statuswert älter als ${timeoutSec}s.`;
+        }
+      } catch (e) {
+        target.status = 'read_error';
+        target.severity = 'critical';
+        target.message = String(e && e.message ? e.message : e);
+      }
+      targets.push(target);
+    }
+    const counts = targets.reduce((acc, t) => {
+      const st = String(t.status || 'unknown');
+      acc[st] = (acc[st] || 0) + 1;
+      if (t.ok) acc.ok = (acc.ok || 0) + 1;
+      if (t.severity === 'critical') acc.error = (acc.error || 0) + 1;
+      if (st === 'pending' || st === 'waiting_for_new_ack') acc.pending = (acc.pending || 0) + 1;
+      if (st === 'timeout') acc.timeout = (acc.timeout || 0) + 1;
+      if (st === 'missing_ack_mapping' || st === 'missing_state') acc.missing = (acc.missing || 0) + 1;
+      if (st === 'stale') acc.stale = (acc.stale || 0) + 1;
+      return acc;
+    }, { ok: 0, pending: 0, error: 0, timeout: 0, missing: 0, stale: 0 });
+    const summary = {
+      schema: 'nexowatt.mesh-local-bridge-ack-summary.v1',
+      ts: now,
+      enabled,
+      timeoutSec,
+      targetCount: targets.length,
+      okCount: counts.ok || 0,
+      pendingCount: counts.pending || 0,
+      errorCount: counts.error || 0,
+      timeoutCount: counts.timeout || 0,
+      missingCount: counts.missing || 0,
+      staleCount: counts.stale || 0,
+      ready: enabled && targets.length > 0 && !(counts.error || counts.timeout || counts.missing),
+      status: !enabled ? 'disabled' : (!targets.length ? 'no-targets' : ((counts.error || counts.timeout) ? 'error' : ((counts.pending || counts.missing || counts.stale) ? 'warn' : 'ok'))),
+      reason: !enabled ? 'Bridge-ACK-Auswertung deaktiviert.' : (targets.length ? 'Bridge-ACK/Zielstatus ausgewertet.' : 'Keine Bridge-Ziele für ACK-Auswertung vorhanden.'),
+      targets,
+      directHardwareWrite: false,
+      neutralCommandOnly: true,
+    };
+    this._lastLocalBridgeAck = summary;
+    return summary;
   }
 
   /**
@@ -836,28 +2432,56 @@ class MeshMicrogridModule extends BaseModule {
   async _writeFieldCommands(snap) {
     const a = this.adapter;
     const control = this._commandOutputCfg();
+    const tailscale = this._tailscaleCfg();
+    const bridgeCfg = this._localBridgeCfg();
     const guard = snap && snap.commandGuard ? snap.commandGuard : {};
+    const localBridge = snap && snap.localBridge ? snap.localBridge : buildLocalBridgePlan(guard, bridgeCfg);
+    const manualRelease = await this._readManualReleaseSummary();
+    const ackGate = buildBridgeAckGate(localBridge, (snap && snap.localBridgeAck) || this._lastLocalBridgeAck || buildBridgeAckSummary([]), manualRelease);
+    // 0.8.46: ACK-Gate hängt am Bridge-Plan, damit Betreiberansicht, JSON-API
+    // und Schreibpfad dieselbe Quelle verwenden. Es wird nichts doppelt gezählt
+    // und kein zweiter CommandGuard aufgebaut.
+    localBridge.ackGate = ackGate;
     const allowed = guard && guard.commandOutputAllowed === true && Array.isArray(guard.allowedCommands) && guard.allowedCommands.length > 0;
-    if (!a || !control.commandStateDp || !allowed) {
-      this._lastCommandResult = { ts: Date.now(), status: allowed ? 'missing-command-state' : 'blocked', commandCount: 0 };
+    const hasGlobalCommandState = !!control.commandStateDp && bridgeCfg.outputMode !== 'mapped';
+    const hasMappedBridge = bridgeCfg.enabled === true && ['mapped', 'both'].includes(bridgeCfg.outputMode) && Array.isArray(localBridge.mappedCommands) && localBridge.mappedCommands.length > 0;
+    const hasPeerDispatch = tailscale.enabled === true && Array.isArray(tailscale.peerUrls) && tailscale.peerUrls.length > 0;
+    if (!a || !allowed || (!hasGlobalCommandState && !hasMappedBridge && !hasPeerDispatch)) {
+      this._lastCommandResult = { ts: Date.now(), status: allowed ? 'missing-neutral-transport' : 'blocked', commandCount: 0, localBridge, peerDispatch: this._lastPeerCommandDispatch || null };
       return;
     }
     const envelope = this._buildFieldCommandEnvelope(snap, guard);
-    const hash = JSON.stringify(envelope.commands || []) + '|' + control.commandStateDp;
+    const hash = JSON.stringify(envelope.commands || []) + '|' + control.commandStateDp + '|' + JSON.stringify(tailscale.peerUrls || []) + '|' + JSON.stringify(localBridge.mappedCommands || []) + '|' + JSON.stringify(ackGate.blockedMappings || []) + '|' + bridgeCfg.outputMode;
     if (hash === this._lastCommandHash) {
-      this._lastCommandResult = { ts: Date.now(), status: 'unchanged', commandCount: envelope.commands.length, commandStateDp: control.commandStateDp };
+      this._lastCommandResult = { ts: Date.now(), status: 'unchanged', commandCount: envelope.commands.length, commandStateDp: control.commandStateDp, localBridge, peerDispatch: this._lastPeerCommandDispatch || null };
       return;
     }
+
+    let localStatus = hasGlobalCommandState ? 'pending' : 'skipped-no-global-command-state';
+    let localError = '';
     try {
       const json = JSON.stringify(envelope);
-      if (typeof a.setForeignStateAsync === 'function') await a.setForeignStateAsync(control.commandStateDp, { val: json, ack: false });
-      else if (typeof a.setStateAsync === 'function') await a.setStateAsync(control.commandStateDp, { val: json, ack: false });
-      this._lastCommandHash = hash;
-      this._lastCommandWriteTs = Date.now();
-      this._lastCommandResult = { ts: this._lastCommandWriteTs, status: 'written', commandCount: envelope.commands.length, commandStateDp: control.commandStateDp, envelope };
+      if (hasGlobalCommandState) {
+        if (typeof a.setForeignStateAsync === 'function') await a.setForeignStateAsync(control.commandStateDp, { val: json, ack: false });
+        else if (typeof a.setStateAsync === 'function') await a.setStateAsync(control.commandStateDp, { val: json, ack: false });
+        localStatus = 'written';
+      }
     } catch (e) {
-      this._lastCommandResult = { ts: Date.now(), status: 'error', commandCount: envelope.commands.length, commandStateDp: control.commandStateDp, error: String(e && e.message ? e.message : e) };
+      localStatus = 'error';
+      localError = String(e && e.message ? e.message : e);
     }
+
+    // 0.8.44 lokale Bridge-Zuordnung: gezielt je lokalem Knoten ausgeben.
+    const bridgeWrites = hasMappedBridge ? await this._writeLocalBridgeCommands(envelope, localBridge, control, ackGate) : [];
+
+    const peerDispatch = await this._sendFieldCommandsToPeers(envelope);
+    this._lastCommandHash = hash;
+    this._lastCommandWriteTs = Date.now();
+    const bridgeWriteErrors = bridgeWrites.filter(w => w.status === 'error');
+    const bridgeWriteBlocks = bridgeWrites.filter(w => w.status === 'blocked-by-ack-gate');
+    const effectiveStatus = localStatus === 'error' || bridgeWriteErrors.length ? 'error' : (bridgeWriteBlocks.length && !bridgeWrites.some(w => w.status === 'written') ? 'blocked-by-ack-gate' : 'written');
+    const historyRow = this._rememberCommandHistory({ status: effectiveStatus, localStatus, localError, commandCount: envelope.commands.length, commandStateDp: control.commandStateDp, localBridge, bridgeWrites, peerDispatch });
+    this._lastCommandResult = { ts: this._lastCommandWriteTs, status: effectiveStatus, localStatus, localError, commandCount: envelope.commands.length, commandStateDp: control.commandStateDp, envelope, localBridge, bridgeWrites, peerDispatch, historyRow };
   }
 
   _nodeSnapshot(node) {
@@ -989,7 +2613,10 @@ class MeshMicrogridModule extends BaseModule {
     };
 
     const planning = buildPlanning(snapshots, { generationW, loadW, storageChargeW, storageDischargeW, gridImportW, gridExportW, surplusW, demandW, localUsePotentialW, gridLimitUsagePercent: gridUsagePercent }, gridLimitW, mode);
-    const commandGuard = buildCommandGuard(planning, snapshots, { clusterId, clusterName, gridLimitW, mode }, this._commandOutputCfg(), this._tailscaleCfg());
+    const commandGuard = buildCommandGuard(planning, snapshots, { clusterId, clusterName, gridLimitW, mode }, this._commandOutputCfg(), this._tailscaleCfg(), this._localBridgeCfg(), this._targetGroups());
+    const localBridge = buildLocalBridgePlan(commandGuard, this._localBridgeCfg());
+    const fieldTest = buildTwoInstanceFieldTestDiagnostics({ tailscale: this._tailscaleCfg(), poll: this._lastTailscalePoll || {}, dispatch: this._lastPeerCommandDispatch || {}, guard: commandGuard, receiver: this._receiverCfg(), commandHistory: this._commandHistory, peerHistory: this._peerHistory, remoteNodes: this._remoteNodeSnapshots() });
+    this._lastFieldTest = fieldTest;
 
     const decision = {
       schema: 'nexowatt.mesh-readonly-decision.v1',
@@ -1004,6 +2631,7 @@ class MeshMicrogridModule extends BaseModule {
       priorityOrder: planning.priorityOrder,
       gridLimitDiagnostics: planning.gridLimit,
       commandGuard,
+      fieldTest,
       readOnly: true,
     };
 
@@ -1023,6 +2651,9 @@ class MeshMicrogridModule extends BaseModule {
       clusterIntent,
       planning,
       commandGuard,
+      localBridge,
+      targetGroups: commandGuard.targetGroups || buildTargetGroupPlan(this._targetGroups(), snapshots, commandGuard.allowedCommands || []),
+      fieldTest,
       decision,
       totals: {
         generationW: round(generationW, 0),
@@ -1122,9 +2753,13 @@ class MeshMicrogridModule extends BaseModule {
       exportUrls: { json: '/api/mesh/microgrid', csv: '/api/mesh/microgrid.csv' },
       planning: snap.planning || {},
       commandGuard: snap.commandGuard || {},
+      limits: snap.commandGuard && snap.commandGuard.limitDiagnostics ? snap.commandGuard.limitDiagnostics : {},
+      targetGroups: snap.targetGroups || {},
       fieldControl: { ...this._commandOutputCfg(), lastCommand: this._lastCommandResult || {} },
-      tailscale: { ...this._tailscaleCfg(), lastPoll: this._lastTailscalePoll || {}, remoteNodeCount: Array.isArray(snap.remoteSnapshots) ? snap.remoteSnapshots.length : 0 },
-      receiver: { ...this._receiverCfg(), tokenConfigured: !!(this._receiverCfg().token), receiverUrl: '/api/mesh/command/receive', handshakeUrl: '/api/mesh/handshake' },
+      localBridge: this._lastCommandResult && this._lastCommandResult.localBridge ? this._lastCommandResult.localBridge : (snap.localBridge || {}),
+      tailscale: { ...this._tailscaleCfg(), lastPoll: this._lastTailscalePoll || {}, lastCommandDispatch: this._lastPeerCommandDispatch || {}, remoteNodeCount: Array.isArray(snap.remoteSnapshots) ? snap.remoteSnapshots.length : 0 },
+      receiver: { ...this._receiverCfg(), note: 'Remote-Kommandos werden nur als neutraler lokaler Command-State angenommen.' },
+      fieldTest: snap.fieldTest || {},
     };
 
     await set('meshMicrogrid.nodesJson', nodesJson);
@@ -1150,12 +2785,19 @@ class MeshMicrogridModule extends BaseModule {
       clusterIntent: snap.clusterIntent || {},
       planning: snap.planning || {},
       commandGuard: snap.commandGuard || {},
+      limits: snap.commandGuard && snap.commandGuard.limitDiagnostics ? snap.commandGuard.limitDiagnostics : {},
+      targetGroups: snap.targetGroups || {},
       fieldControl: { ...this._commandOutputCfg(), lastCommand: this._lastCommandResult || {} },
-      tailscale: { ...this._tailscaleCfg(), lastPoll: this._lastTailscalePoll || {}, remoteNodeCount: Array.isArray(snap.remoteSnapshots) ? snap.remoteSnapshots.length : 0 },
-      receiver: { ...this._receiverCfg(), tokenConfigured: !!(this._receiverCfg().token), receiverUrl: '/api/mesh/command/receive', handshakeUrl: '/api/mesh/handshake' },
+      localBridge: this._lastCommandResult && this._lastCommandResult.localBridge ? this._lastCommandResult.localBridge : (snap.localBridge || {}),
+      tailscale: { ...this._tailscaleCfg(), lastPoll: this._lastTailscalePoll || {}, lastCommandDispatch: this._lastPeerCommandDispatch || {}, remoteNodeCount: Array.isArray(snap.remoteSnapshots) ? snap.remoteSnapshots.length : 0 },
+      receiver: { ...this._receiverCfg(), note: 'Remote-Kommandos werden nur als neutraler lokaler Command-State angenommen.' },
+      fieldTest: snap.fieldTest || {},
       decision: snap.decision || {},
       missingMappings: snap.missing || [],
       readOnly: false,
+      executionMode: (this._commandOutputCfg().controlMode || 'diagnostic'),
+      activeControl: this._commandOutputCfg().controlMode === 'active',
+      fieldTestMode: this._commandOutputCfg().controlMode === 'field_test',
       neutralCommandOnly: true,
       directHardwareWrite: false,
     };
@@ -1198,10 +2840,40 @@ class MeshMicrogridModule extends BaseModule {
     await set('meshMicrogrid.commandGuard.warnCount', Number(commandGuard.warnCount || 0));
     await set('meshMicrogrid.commandGuard.summaryJson', JSON.stringify(commandGuard));
 
+    const limitDiagnostics = commandGuard && commandGuard.limitDiagnostics ? commandGuard.limitDiagnostics : buildCommandLimitDiagnostics([], [], this._localBridgeCfg());
+    await set('meshMicrogrid.limits.nodesJson', JSON.stringify(limitDiagnostics.nodeLimits || []));
+    await set('meshMicrogrid.limits.bridgeTargetsJson', JSON.stringify(limitDiagnostics.bridgeTargets || []));
+    await set('meshMicrogrid.limits.limitedCommandsJson', JSON.stringify(limitDiagnostics.limitedCommands || []));
+    await set('meshMicrogrid.limits.blockedCommandsJson', JSON.stringify(limitDiagnostics.blockedCommands || []));
+    await set('meshMicrogrid.limits.summaryJson', JSON.stringify(limitDiagnostics));
+    await set('meshMicrogrid.limits.activeLimitCount', Number(limitDiagnostics.activeLimitCount || 0));
+    await set('meshMicrogrid.limits.limitedCount', Number(limitDiagnostics.limitedCount || 0));
+    await set('meshMicrogrid.limits.blockedCount', Number(limitDiagnostics.blockedCount || 0));
+    await set('meshMicrogrid.limits.lastReason', String(limitDiagnostics.lastReason || ''));
+
+    const targetGroupPlan = snap.targetGroups || (limitDiagnostics && limitDiagnostics.targetGroupSummary) || buildTargetGroupPlan(this._targetGroups(), snap.snapshots || [], commandGuard.allowedCommands || []);
+    await set('meshMicrogrid.targetGroups.groupsJson', JSON.stringify(targetGroupPlan.groups || []));
+    await set('meshMicrogrid.targetGroups.priorityOrderJson', JSON.stringify(targetGroupPlan.priorityOrder || []));
+    await set('meshMicrogrid.targetGroups.summaryJson', JSON.stringify(targetGroupPlan));
+    await set('meshMicrogrid.targetGroups.groupCount', Number(targetGroupPlan.groupCount || 0));
+    await set('meshMicrogrid.targetGroups.activeGroupCount', Number(targetGroupPlan.activeGroupCount || 0));
+    await set('meshMicrogrid.targetGroups.limitedCommandCount', Number((limitDiagnostics.limitedCommands || []).filter(c => (c.reasons || []).some(r => String(r.id || '').startsWith('group.'))).length));
+    await set('meshMicrogrid.targetGroups.blockedCommandCount', Number((limitDiagnostics.blockedCommands || []).filter(c => (c.reasons || []).some(r => String(r.id || '').startsWith('group.'))).length));
+    const fairnessPlan = (targetGroupPlan && targetGroupPlan.fairness) || (limitDiagnostics && limitDiagnostics.targetGroupFairness) || {};
+    await set('meshMicrogrid.targetGroups.fairnessJson', JSON.stringify(fairnessPlan));
+    await set('meshMicrogrid.targetGroups.fairnessBudgetsJson', JSON.stringify(fairnessPlan.groups || []));
+    await set('meshMicrogrid.targetGroups.fairnessLimitedCommandsJson', JSON.stringify(fairnessPlan.limitedCommands || []));
+    await set('meshMicrogrid.targetGroups.fairnessBlockedCommandsJson', JSON.stringify(fairnessPlan.blockedCommands || []));
+    await set('meshMicrogrid.targetGroups.fairnessLimitedCount', Number(fairnessPlan.limitedCount || 0));
+    await set('meshMicrogrid.targetGroups.fairnessBlockedCount', Number(fairnessPlan.blockedCount || 0));
+    await set('meshMicrogrid.targetGroups.lastReason', String((fairnessPlan && fairnessPlan.summary) || targetGroupPlan.summary || ''));
+
     const control = this._commandOutputCfg();
     const lastCmd = this._lastCommandResult || {};
     await set('meshMicrogrid.fieldControl.enabled', commandGuard.commandOutputAllowed === true);
     await set('meshMicrogrid.fieldControl.mode', control.controlMode || 'diagnostic');
+    await set('meshMicrogrid.fieldControl.executionMode', control.controlMode || 'diagnostic');
+    await set('meshMicrogrid.fieldControl.activeControl', control.controlMode === 'active' && commandGuard.commandOutputAllowed === true);
     await set('meshMicrogrid.fieldControl.installerApproved', control.fieldTestApproved === true);
     await set('meshMicrogrid.fieldControl.commandStateDp', control.commandStateDp || '');
     await set('meshMicrogrid.fieldControl.lastCommandAt', Number(lastCmd.ts || this._lastCommandWriteTs || 0));
@@ -1209,6 +2881,58 @@ class MeshMicrogridModule extends BaseModule {
     await set('meshMicrogrid.fieldControl.lastWriteStatus', String(lastCmd.status || 'idle'));
     await set('meshMicrogrid.fieldControl.lastWriteError', String(lastCmd.error || ''));
     await set('meshMicrogrid.fieldControl.outputCount', Number(lastCmd.commandCount || 0));
+
+    const localBridge = snap.localBridge || buildLocalBridgePlan(commandGuard, this._localBridgeCfg());
+    const lbLast = this._lastCommandResult || {};
+    const lbWrites = Array.isArray(lbLast.bridgeWrites) ? lbLast.bridgeWrites : [];
+    const lbAck = await this._evaluateLocalBridgeAck(localBridge, lbWrites);
+    const lbManualRelease = await this._readManualReleaseSummary();
+    const targetHistory = buildTargetCommandHistory(this._commandHistory || []);
+    this._lastTargetCommandHistory = targetHistory;
+    localBridge.ack = lbAck;
+    localBridge.manualRelease = lbManualRelease;
+    localBridge.targetCommandHistory = targetHistory;
+    await set('meshMicrogrid.localBridge.enabled', localBridge.enabled === true);
+    await set('meshMicrogrid.localBridge.outputMode', String(localBridge.outputMode || 'global'));
+    await set('meshMicrogrid.localBridge.defaultCommandStateDp', String(localBridge.defaultCommandStateDp || ''));
+    await set('meshMicrogrid.localBridge.mappingCount', Number(localBridge.mappingCount || 0));
+    await set('meshMicrogrid.localBridge.mappedCommandCount', Number(localBridge.mappedCommandCount || 0));
+    await set('meshMicrogrid.localBridge.unmappedCommandCount', Number(localBridge.unmappedCommandCount || 0));
+    await set('meshMicrogrid.localBridge.routeReady', localBridge.routeReady === true);
+    await set('meshMicrogrid.localBridge.mappingsJson', JSON.stringify(localBridge.mappings || []));
+    await set('meshMicrogrid.localBridge.mappedCommandsJson', JSON.stringify(localBridge.mappedCommands || []));
+    await set('meshMicrogrid.localBridge.unmappedCommandsJson', JSON.stringify(localBridge.unmappedCommands || []));
+    await set('meshMicrogrid.localBridge.lastWriteAt', Number(lbLast.ts || 0));
+    await set('meshMicrogrid.localBridge.lastWriteStatus', lbWrites.some(w => w.status === 'error') ? 'error' : (lbWrites.length ? 'written' : 'idle'));
+    await set('meshMicrogrid.localBridge.lastWriteError', lbWrites.filter(w => w.status === 'error').map(w => w.error || w.commandStateDp).join(' | '));
+    await set('meshMicrogrid.localBridge.lastWritesJson', JSON.stringify(lbWrites));
+    await set('meshMicrogrid.localBridge.ackEnabled', lbAck.enabled === true);
+    const lbGate = (localBridge && localBridge.ackGate) ? localBridge.ackGate : buildBridgeAckGate(localBridge, lbAck, lbManualRelease);
+    localBridge.ackGate = lbGate;
+    await set('meshMicrogrid.localBridge.ackRequired', lbGate.required === true || lbGate.ackRequired === true);
+    await set('meshMicrogrid.localBridge.ackGateStatus', String(lbGate.status || 'disabled'));
+    await set('meshMicrogrid.localBridge.ackGateBlockedCommandCount', Number(lbGate.blockedCount || lbGate.blockedCommandCount || 0));
+    await set('meshMicrogrid.localBridge.ackBlockedTargetsJson', JSON.stringify(lbGate.blockedMappings || lbGate.blockedTargets || []));
+    await set('meshMicrogrid.localBridge.targetHealthJson', JSON.stringify(lbGate.targetLights || lbGate.targetHealth || []));
+    await set('meshMicrogrid.localBridge.manualReleaseEnabled', lbManualRelease.enabled !== false);
+    await set('meshMicrogrid.localBridge.manualReleaseSummaryJson', JSON.stringify(lbManualRelease));
+    await set('meshMicrogrid.localBridge.manualReleaseCount', Number(lbManualRelease.activeCount || 0));
+    await set('meshMicrogrid.localBridge.targetCommandHistoryJson', JSON.stringify(targetHistory));
+    await set('meshMicrogrid.localBridge.targetCommandHistoryCount', Number(targetHistory.targetCount || 0));
+    await set('meshMicrogrid.localBridge.releaseReady', (lbGate.status === 'ready' || lbManualRelease.activeCount > 0 || lbAck.okCount > 0));
+    await set('meshMicrogrid.localBridge.ackTimeoutSec', Number(lbAck.timeoutSec || 0));
+    await set('meshMicrogrid.localBridge.ackStatus', String(lbAck.status || 'disabled'));
+    await set('meshMicrogrid.localBridge.ackReady', lbAck.ready === true);
+    await set('meshMicrogrid.localBridge.ackOkCount', Number(lbAck.okCount || 0));
+    await set('meshMicrogrid.localBridge.ackPendingCount', Number(lbAck.pendingCount || 0));
+    await set('meshMicrogrid.localBridge.ackErrorCount', Number(lbAck.errorCount || 0));
+    await set('meshMicrogrid.localBridge.ackTimeoutCount', Number(lbAck.timeoutCount || 0));
+    await set('meshMicrogrid.localBridge.ackMissingCount', Number(lbAck.missingCount || 0));
+    await set('meshMicrogrid.localBridge.ackStaleCount', Number(lbAck.staleCount || 0));
+    await set('meshMicrogrid.localBridge.ackTargetsJson', JSON.stringify(lbAck.targets || []));
+    await set('meshMicrogrid.localBridge.targetStatusJson', JSON.stringify(lbAck.targets || []));
+    await set('meshMicrogrid.localBridge.ackSummaryJson', JSON.stringify(lbAck));
+    await set('meshMicrogrid.localBridge.summaryJson', JSON.stringify(localBridge));
 
     const tailscale = this._tailscaleCfg();
     const poll = this._lastTailscalePoll || { status: tailscale.enabled ? 'pending' : 'disabled', peers: [], remoteNodeCount: 0 };
@@ -1222,27 +2946,47 @@ class MeshMicrogridModule extends BaseModule {
     await set('meshMicrogrid.tailscale.peersJson', JSON.stringify(poll.peers || []));
     await set('meshMicrogrid.tailscale.remoteNodesJson', JSON.stringify(snap.remoteSnapshots || []));
     await set('meshMicrogrid.tailscale.lastPollJson', JSON.stringify(poll));
+    await set('meshMicrogrid.tailscale.lastCommandDispatchJson', JSON.stringify(this._lastPeerCommandDispatch || {}));
+    await set('meshMicrogrid.tailscale.lastCommandDispatchStatus', String((this._lastPeerCommandDispatch && this._lastPeerCommandDispatch.status) || 'idle'));
 
     const receiver = this._receiverCfg();
-    const receiverSummary = {
-      schema: 'nexowatt.mesh-command-receiver-config.v1',
-      ts: now,
-      enabled: receiver.enabled === true,
-      commandStateDp: receiver.commandStateDp || '',
-      requireToken: receiver.requireToken !== false,
-      tokenConfigured: !!receiver.token,
-      ttlSec: receiver.ttlSec,
-      allowedPeerNodeIds: receiver.allowedPeerNodeIds || [],
-      receiverUrl: '/api/mesh/command/receive',
-      handshakeUrl: '/api/mesh/handshake',
-      directHardwareWrite: false,
-      neutralCommandOnly: true,
-    };
     await set('meshMicrogrid.receiver.enabled', receiver.enabled === true);
-    await set('meshMicrogrid.receiver.commandStateDp', receiver.commandStateDp || '');
-    await set('meshMicrogrid.receiver.requireToken', receiver.requireToken !== false);
-    await set('meshMicrogrid.receiver.ttlSec', Number(receiver.ttlSec || 120));
-    await set('meshMicrogrid.receiver.summaryJson', JSON.stringify(receiverSummary));
+    await set('meshMicrogrid.receiver.acceptRemoteCommands', receiver.acceptRemoteCommands === true);
+    await set('meshMicrogrid.receiver.localCommandStateDp', receiver.localCommandStateDp || '');
+    await set('meshMicrogrid.receiver.peerTokenSet', !!receiver.peerToken);
+    await set('meshMicrogrid.receiver.requireClusterMatch', receiver.requireClusterMatch !== false);
+    await set('meshMicrogrid.receiver.summaryJson', JSON.stringify({ schema: 'nexowatt.mesh-command-receiver-config.v1', enabled: receiver.enabled, acceptRemoteCommands: receiver.acceptRemoteCommands, localCommandStateDp: receiver.localCommandStateDp, peerTokenSet: !!receiver.peerToken, requireClusterMatch: receiver.requireClusterMatch, replayTtlSec: receiver.replayTtlSec, processedLimit: receiver.processedLimit, directHardwareWrite: false, neutralCommandOnly: true }));
+
+    const fieldTest = snap.fieldTest || this._lastFieldTest || {};
+    const peerMatrix = Array.isArray(fieldTest.peerMatrix) ? fieldTest.peerMatrix : [];
+    const commandHistory = Array.isArray(fieldTest.commandHistory) ? fieldTest.commandHistory : (Array.isArray(this._commandHistory) ? this._commandHistory : []);
+    const lastAck = peerMatrix.map(p => p && p.ackStatus ? p : null).filter(Boolean)[0] || (this._lastPeerCommandDispatch && Array.isArray(this._lastPeerCommandDispatch.peers) ? (this._lastPeerCommandDispatch.peers.find(p => p && p.ack) || {}).ack : {}) || {};
+    await set('meshMicrogrid.fieldTest.status', String(fieldTest.status || 'not-ready'));
+    await set('meshMicrogrid.fieldTest.twoInstanceReady', fieldTest.twoInstanceReady === true);
+    await set('meshMicrogrid.fieldTest.fieldCommandReady', fieldTest.fieldCommandReady === true);
+    await set('meshMicrogrid.fieldTest.peerOnlineCount', Number(fieldTest.peerOnlineCount || 0));
+    await set('meshMicrogrid.fieldTest.peerCommandOkCount', Number(fieldTest.peerCommandOkCount || 0));
+    await set('meshMicrogrid.fieldTest.remoteNodeCount', Number(fieldTest.remoteNodeCount || 0));
+    await set('meshMicrogrid.fieldTest.lastRoundtripMs', Number(fieldTest.lastRoundtripMs || 0));
+    await set('meshMicrogrid.fieldTest.peerMatrixJson', JSON.stringify(peerMatrix));
+    await set('meshMicrogrid.fieldTest.commandHistoryJson', JSON.stringify(commandHistory.slice(0, 50)));
+    await set('meshMicrogrid.fieldTest.peerHistoryJson', JSON.stringify(fieldTest.peerHistory || commandHistory.slice(0, 50)));
+    await set('meshMicrogrid.fieldTest.errorClassesJson', JSON.stringify(fieldTest.errorClasses || {}));
+    await set('meshMicrogrid.fieldTest.remoteNodeMatrixJson', JSON.stringify(fieldTest.remoteNodeMatrix || []));
+    await set('meshMicrogrid.fieldTest.roundtripStatus', String(fieldTest.roundtripStatus || 'unknown'));
+    await set('meshMicrogrid.fieldTest.tokenErrorCount', Number(fieldTest.tokenErrorCount || 0));
+    await set('meshMicrogrid.fieldTest.clusterMismatchCount', Number(fieldTest.clusterMismatchCount || 0));
+    await set('meshMicrogrid.fieldTest.receiverErrorCount', Number(fieldTest.receiverErrorCount || 0));
+    await set('meshMicrogrid.fieldTest.timeoutCount', Number(fieldTest.timeoutCount || 0));
+    await set('meshMicrogrid.fieldTest.lastAckJson', JSON.stringify(lastAck || {}));
+    await set('meshMicrogrid.fieldTest.peerHistoryJson', JSON.stringify(fieldTest.peerHistory || this._peerHistory || []));
+    await set('meshMicrogrid.fieldTest.errorClassesJson', JSON.stringify(fieldTest.errorClasses || {}));
+    await set('meshMicrogrid.fieldTest.roundtripStatus', String(fieldTest.roundtripStatus || 'unknown'));
+    await set('meshMicrogrid.fieldTest.remoteNodeMatrixJson', JSON.stringify(fieldTest.remoteNodeMatrix || []));
+    await set('meshMicrogrid.fieldTest.allowedPeersDiagnosticJson', JSON.stringify(fieldTest.allowedPeerDiagnostics || buildAllowedPeerDiagnostics(this._receiverCfg())));
+    await set('meshMicrogrid.fieldTest.summaryJson', JSON.stringify(fieldTest));
+    await set('meshMicrogrid.fieldTest.warning', Array.isArray(fieldTest.warnings) ? fieldTest.warnings.join(' ') : '');
+    await set('meshMicrogrid.peerHardening.summaryJson', JSON.stringify({ schema: 'nexowatt.mesh-peer-hardening-summary.v1', ts: now, roundtripStatus: fieldTest.roundtripStatus || 'unknown', errorClasses: fieldTest.errorClasses || {}, remoteNodeCount: Array.isArray(fieldTest.remoteNodeMatrix) ? fieldTest.remoteNodeMatrix.length : 0, directHardwareWrite: false, neutralCommandOnly: true }));
     this._lastPublishTs = now;
   }
 }

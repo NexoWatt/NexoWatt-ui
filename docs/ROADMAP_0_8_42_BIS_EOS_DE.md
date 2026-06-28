@@ -2,29 +2,30 @@
 
 ## 0.8.42 – Mesh Feldtest mit zwei Instanzen
 
-- Peer-Liste und Handshake-Status im App-Center besser anzeigen
-- Sender-ACK-Verlauf in der Betreiberansicht anzeigen
-- Command-Verlauf je Peer
-- Fehlerdiagnose für Token, Cluster-ID, TTL und Replay-Schutz
-- Feldtest-Checkliste für Instanz A / Instanz B
+- Peer-Status-Ampeln in der Betreiberansicht verbessern
+- Command-Verlauf für gesendete und empfangene Commands anzeigen
+- ACK/Roundtrip-Zeit je Peer sichtbar machen
+- Fehlerdiagnose für Token, Cluster-ID und Replay-Schutz erweitern
+- Anleitung für 2-Instanzen-Feldtest erstellen
 
-## 0.8.43 – Lokale Bridge-Härtung
+## 0.8.43 – Local-First Steuerlogik aktivierbar
 
-- neutrale Receiver-Commands pro Zielknoten routen
-- lokale Ziel-Command-States pro Knoten optional
-- Safety-Hinweise pro Zielgerät
-- max. Leistung pro Knoten als Installergrenze
+- Installerfreigabe für erste kontrollierte Aktionen
+- Leistungslimits pro Knoten
+- Prioritäten aktiv anwenden
+- CommandGuard bleibt Pflicht
+- weiterhin herstellerneutrale Command-Bridge
 
-## 0.8.44 – Local-First aktive Freigabe
-
-- Installerfreigabe für ausgewählte Aktionen
-- CommandGuard weiterhin zwingend
-- keine direkte Herstellerbindung
-- Prioritäten und Netzlimit aktiv in Commands übernehmen
-
-## 0.8.45 – Nachbarschafts-/Community-Ledger
+## 0.8.44 – Community-/Nachbarschaftsledger
 
 - kWh-Zuordnung zwischen Nodes
-- lokaler Anteil / Remote-Anteil
-- Wert je Knoten
-- Export für Betreiber/Community
+- Remote-Anteil und lokaler Anteil
+- Wert je Node/Peer
+- Export für Betreiber
+
+## 0.8.45 – Energy Hub / Microgrid Erweiterung
+
+- Verbund-Netzlimit je Cluster
+- mehrere Standorte/Peers
+- lokale Nutzung optimieren
+- Export Guard + Mesh koppeln, ohne doppelte Regler

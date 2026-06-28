@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 6a928baaab9018e203a6fd00a0eca3e0e9953c29144d1319d9230e3eb5a573a1
+ * Original-Hash: 2a7a0127673e48c4528cb80b5345b660271fbc7bd6b0e6c97ffd2c46f747368e
  */
 
 /**
@@ -92,7 +92,8 @@ has(html, 'NexoWatt Mesh/Microgrid', 'HTML Titel');
 has(html, '/api/mesh/microgrid.csv', 'CSV Link');
 has(pageTs, "fetch('/api/mesh/microgrid'", 'Frontend API Fetch');
 has(pageTs, 'keine eigene Mesh-Logik', 'Frontend Architekturkommentar');
-has(appsTs, "href = '/mesh/microgrid'", 'App-Center Link');
+has(appsTs, "meshMicrogrid: { tab: 'meshmicrogrid'", 'App-Center Mesh-Konfigurationsnavigation');
+has(appsTs, "Mesh/Microgrid konfigurieren", 'App-Center Mesh-Navigationslabel');
 has(sw, 'mesh-microgrid.html', 'Service Worker HTML Cache');
 has(sw, 'mesh-microgrid.js', 'Service Worker JS Cache');
 console.log('[mesh-operator] OK: Betreiberansicht, JSON-/CSV-API und read-only State-Snapshot sind abgesichert.');

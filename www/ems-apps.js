@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:4740f8ce77900af27ac9efa77d7c465b2a2cf43f8fd4af0db137df3a0005aa16
+ * Quell-Hash: sha256:0b638695f47c17691302a84bc8cb34a0eabd09851d7a1e22da09bfdf9c8e48f9
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -368,7 +368,7 @@
     { id: 'grid', label: 'Netzlimits', desc: 'Netzrestriktionen (RLM/0‑Einspeisung/Import‑Limits)', mandatory: false, hems: false },
     { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung: PV, Wetter, Tarif, Speicher, Wallboxen und Lastspitzen als Vorschläge auf der LIVE‑Seite', mandatory: false, hems: true },
     { id: 'energyWallet', label: 'Energie-Wertkonto', desc: 'PV-Wert, Eigenverbrauchswert, Solar-Laden und Einspeisewert im Nutzerfrontend (Home + EOS)', mandatory: true, hems: true },
-    { id: 'energyLedger', label: 'Local kWh Ledger', desc: 'EOS: lokale kWh-Zuordnung als Grundlage für Betreiberwerte, Export, Nachbarschaft und Microgrid', mandatory: false, hems: false },
+    { id: 'energyLedger', label: 'Local kWh Ledger', desc: 'EOS: lokale kWh-Zuordnung als Grundlage für Betreiberwerte, Export, Nachbarschaft und Microgrid; read-only und schaltet keine Hardware', mandatory: false, hems: false },
     { id: 'meshMicrogrid', label: 'EOS Mesh/Microgrid', desc: 'EOS: separates Datenmodell für lokale Energie-Knoten, Cluster, Local First / Grid Last und spätere Nachbarschaftsversorgung', mandatory: false, hems: false },
     { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', mandatory: true, hems: true },
     { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls genutzt)', mandatory: false, hems: true },
@@ -1924,6 +1924,15 @@ function collectAiAdvisorConfigFromUI(base) {
     const socDp = _meshHtmlEscape(n.socDp || '');
     const gridImportPowerDp = _meshHtmlEscape(n.gridImportPowerDp || '');
     const gridExportPowerDp = _meshHtmlEscape(n.gridExportPowerDp || '');
+    const minPowerW = _meshHtmlEscape(n.minPowerW || '');
+    const maxPowerW = _meshHtmlEscape(n.maxPowerW || '');
+    const maxImportW = _meshHtmlEscape(n.maxImportW || '');
+    const maxExportW = _meshHtmlEscape(n.maxExportW || '');
+    const maxChargeW = _meshHtmlEscape(n.maxChargeW || '');
+    const maxDischargeW = _meshHtmlEscape(n.maxDischargeW || '');
+    const maxLoadW = _meshHtmlEscape(n.maxLoadW || '');
+    const maxGenerationW = _meshHtmlEscape(n.maxGenerationW || '');
+    const targetGroupIds = _meshHtmlEscape(Array.isArray(n.targetGroupIds) ? n.targetGroupIds.join(',') : (n.targetGroupIds || n.targetGroups || ''));
     const enabled = n.enabled !== false ? 'true' : 'false';
     return `
       <div class="nw-config-subcard" data-mesh-node-row>
@@ -1945,6 +1954,17 @@ function collectAiAdvisorConfigFromUI(base) {
           <label class="nw-config-field"><span class="nw-config-label">Grid Import W optional</span><input class="nw-config-input" data-mesh-field="gridImportPowerDp" value="${gridImportPowerDp}" /></label>
           <label class="nw-config-field"><span class="nw-config-label">Grid Export W optional</span><input class="nw-config-input" data-mesh-field="gridExportPowerDp" value="${gridExportPowerDp}" /></label>
         </div>
+        <div class="nw-config-grid nw-config-grid--4" style="margin-top:10px;">
+          <label class="nw-config-field"><span class="nw-config-label">Min. Leistung W</span><input class="nw-config-input" data-mesh-field="minPowerW" value="${minPowerW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Leistung W</span><input class="nw-config-input" data-mesh-field="maxPowerW" value="${maxPowerW}" placeholder="0 = kein Limit" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Import W</span><input class="nw-config-input" data-mesh-field="maxImportW" value="${maxImportW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Export W</span><input class="nw-config-input" data-mesh-field="maxExportW" value="${maxExportW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Laden W</span><input class="nw-config-input" data-mesh-field="maxChargeW" value="${maxChargeW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Entladen W</span><input class="nw-config-input" data-mesh-field="maxDischargeW" value="${maxDischargeW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Last W</span><input class="nw-config-input" data-mesh-field="maxLoadW" value="${maxLoadW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Erzeugung W</span><input class="nw-config-input" data-mesh-field="maxGenerationW" value="${maxGenerationW}" placeholder="0" /></label>
+          <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Zielgruppen IDs optional</span><input class="nw-config-input" data-mesh-field="targetGroupIds" value="${targetGroupIds}" placeholder="lp_gruppe,speicher_gruppe" /><small>Optional: Knoten direkt Zielgruppen zuordnen. Alternativ Gruppen über memberNodeIds/memberTypes definieren.</small></label>
+        </div>
       </div>`;
   }
 
@@ -1952,6 +1972,9 @@ function collectAiAdvisorConfigFromUI(base) {
     const isEos = _licenseEdition() === 'eos';
     const cfg = currentConfig && currentConfig.meshMicrogrid && typeof currentConfig.meshMicrogrid === 'object' ? currentConfig.meshMicrogrid : {};
     const rows = _meshNodes().map((node, idx) => _meshNodeRow(node, idx)).join('');
+    const localBridge = cfg.localBridge && typeof cfg.localBridge === 'object' ? cfg.localBridge : {};
+    const localBridgeMappingsJson = _meshHtmlEscape(JSON.stringify(Array.isArray(localBridge.mappings) ? localBridge.mappings : [], null, 2));
+    const targetGroupsJson = _meshHtmlEscape(JSON.stringify(Array.isArray(cfg.targetGroups) ? cfg.targetGroups : [], null, 2));
     const card = document.createElement('div');
     card.className = 'nw-config-card nw-mesh-microgrid-card';
     card.innerHTML = `
@@ -1969,8 +1992,8 @@ function collectAiAdvisorConfigFromUI(base) {
           <div class="nw-config-card__title">Feldtest-Steuerung & Tailscale Mesh</div>
           <div class="nw-config-card__subtitle">Für den direkten Feldtest wird ein neutraler JSON-Command-State ausgegeben. NexoWatt schreibt weiterhin keine OCPP-/Modbus-/MQTT-/Hersteller-Rohdatenpunkte direkt; die nachgelagerte Bridge oder die zweite NexoWatt-Instanz im separaten Mesh-Tailscale setzt den Intent um.</div>
           <div class="nw-config-grid nw-config-grid--3">
-            <label class="nw-config-field"><span class="nw-config-label">Steuermodus</span><select class="nw-config-input" id="meshMicrogridControlMode" ${isEos ? '' : 'disabled'}><option value="diagnostic">Nur Diagnose</option><option value="field_test">Feldtest: JSON-Command-State ausgeben</option><option value="off">Aus</option></select></label>
-            <label class="nw-config-field"><span class="nw-config-label">Installateurfreigabe Feldtest</span><select class="nw-config-input" id="meshMicrogridFieldApproved" ${isEos ? '' : 'disabled'}><option value="false">Nein</option><option value="true">Ja</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Steuermodus</span><select class="nw-config-input" id="meshMicrogridControlMode" ${isEos ? '' : 'disabled'}><option value="diagnostic">Nur Diagnose</option><option value="field_test">Feldtest: JSON-Command-State ausgeben</option><option value="active">Aktiv: Local-First Commands ausgeben</option><option value="off">Aus</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Installateurfreigabe Steuerung</span><select class="nw-config-input" id="meshMicrogridFieldApproved" ${isEos ? '' : 'disabled'}><option value="false">Nein</option><option value="true">Ja</option></select></label>
             <label class="nw-config-field"><span class="nw-config-label">Max. Commands je Tick</span><input class="nw-config-input" id="meshMicrogridMaxCommandsPerTick" value="${_meshHtmlEscape(cfg.maxCommandsPerTick || 3)}" placeholder="3" ${isEos ? '' : 'disabled'} /></label>
             <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Neutraler Command-State</span><input class="nw-config-input" id="meshMicrogridCommandStateDp" value="${_meshHtmlEscape(cfg.commandStateDp || '')}" placeholder="0_userdata.0.nexowatt.mesh.command" ${isEos ? '' : 'disabled'} /><small>Hier wird ein JSON-Envelope geschrieben. Die Umsetzung übernimmt eine separate Bridge/Instanz.</small></label>
             <label class="nw-config-field"><span class="nw-config-label">Tailscale Mesh aktiv</span><select class="nw-config-input" id="meshMicrogridTailscaleEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select></label>
@@ -1979,12 +2002,38 @@ function collectAiAdvisorConfigFromUI(base) {
             <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Peer-URLs im Mesh-Tailscale</span><textarea class="nw-config-input" id="meshMicrogridTailscalePeerUrls" rows="3" placeholder="http://100.x.y.z:8188
 http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.isArray(cfg.tailscale && cfg.tailscale.peerUrls) ? cfg.tailscale.peerUrls.join('\n') : ((cfg.tailscale && cfg.tailscale.peerUrls) || ''))}</textarea><small>Diese Verbindung ist getrennt von der Fernwartung. Hier nur die Mesh/Microgrid-Tailscale-IP/URL eintragen.</small></label>
             <label class="nw-config-field"><span class="nw-config-label">Peer Token optional</span><input class="nw-config-input" id="meshMicrogridTailscalePeerToken" value="${_meshHtmlEscape((cfg.tailscale && cfg.tailscale.peerToken) || '')}" ${isEos ? '' : 'disabled'} /></label>
-            <label class="nw-config-field"><span class="nw-config-label">Command Receiver aktiv</span><select class="nw-config-input" id="meshMicrogridReceiverEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select><small>Empfängt neutrale Commands von anderen NexoWatt-Instanzen im Mesh-Tailscale.</small></label>
-            <label class="nw-config-field"><span class="nw-config-label">Receiver Token erforderlich</span><select class="nw-config-input" id="meshMicrogridReceiverRequireToken" ${isEos ? '' : 'disabled'}><option value="true">Ja</option><option value="false">Nein</option></select></label>
-            <label class="nw-config-field"><span class="nw-config-label">Command TTL Sekunden</span><input class="nw-config-input" id="meshMicrogridReceiverTtlSec" value="${_meshHtmlEscape((cfg.receiver && cfg.receiver.ttlSec) || cfg.receiverTtlSec || 120)}" placeholder="120" ${isEos ? '' : 'disabled'} /></label>
-            <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Lokaler Receiver Command-State</span><input class="nw-config-input" id="meshMicrogridReceiverCommandStateDp" value="${_meshHtmlEscape((cfg.receiver && cfg.receiver.commandStateDp) || cfg.receiverCommandStateDp || '')}" placeholder="0_userdata.0.nexowatt.mesh.receivedCommand" ${isEos ? '' : 'disabled'} /><small>Remote-Commands werden nur als neutraler JSON-Envelope hierhin geschrieben. Die lokale Bridge setzt sie herstellerneutral um.</small></label>
-            <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Erlaubte Peer-Node-IDs optional</span><textarea class="nw-config-input" id="meshMicrogridReceiverAllowedPeers" rows="2" placeholder="haus_a&#10;hof_pv" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.isArray(cfg.receiver && cfg.receiver.allowedPeerNodeIds) ? cfg.receiver.allowedPeerNodeIds.join('\n') : ((cfg.receiver && cfg.receiver.allowedPeerNodeIds) || ''))}</textarea></label>
           </div>
+        </div>
+        <div class="nw-config-subcard" style="margin-top:12px;">
+          <div class="nw-config-card__title">Command Receiver / Peer-Handshake</div>
+          <div class="nw-config-card__subtitle">Empfängt neutrale Mesh-Kommandos von anderen NexoWatt-Instanzen über das separate Mesh-Tailscale. Der Receiver schreibt keine Hardware direkt, sondern nur den lokalen Empfangs-Command-State für eine nachgelagerte Bridge.</div>
+          <div class="nw-config-grid nw-config-grid--3">
+            <label class="nw-config-field"><span class="nw-config-label">Command Receiver aktiv</span><select class="nw-config-input" id="meshMicrogridReceiverEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Remote Commands akzeptieren</span><select class="nw-config-input" id="meshMicrogridReceiverAccept" ${isEos ? '' : 'disabled'}><option value="false">Nein</option><option value="true">Ja</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Cluster-ID prüfen</span><select class="nw-config-input" id="meshMicrogridReceiverRequireCluster" ${isEos ? '' : 'disabled'}><option value="true">Ja</option><option value="false">Nein</option></select></label>
+            <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Lokaler Empfangs-Command-State</span><input class="nw-config-input" id="meshMicrogridReceiverStateDp" value="${_meshHtmlEscape((cfg.receiver && (cfg.receiver.localCommandStateDp || cfg.receiver.receivedCommandStateDp)) || '')}" placeholder="0_userdata.0.nexowatt.mesh.receivedCommand" ${isEos ? '' : 'disabled'} /><small>Remote-Kommandos werden hier als neutraler JSON-Envelope geschrieben. Die lokale Bridge setzt sie hersteller-/protokollspezifisch um.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Receiver Token optional</span><input class="nw-config-input" id="meshMicrogridReceiverToken" value="${_meshHtmlEscape((cfg.receiver && cfg.receiver.peerToken) || '')}" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Replay TTL Sekunden</span><input class="nw-config-input" id="meshMicrogridReceiverReplayTtl" value="${_meshHtmlEscape((cfg.receiver && cfg.receiver.replayTtlSec) || 900)}" placeholder="900" ${isEos ? '' : 'disabled'} /></label>
+          </div>
+        </div>
+        <div class="nw-config-subcard" style="margin-top:12px;">
+          <div class="nw-config-card__title">Lokale Bridge-Zuordnung</div>
+          <div class="nw-config-card__subtitle">Ordnet neutrale Mesh-Command-Intents lokalen Ziel-Command-States zu. Das bleibt hersteller- und protokolloffen: Die lokale Bridge/Herstellerintegration setzt den JSON-Intent um; Mesh/Microgrid schreibt keine Geräte-Rohbefehle direkt.</div>
+          <div class="nw-config-grid nw-config-grid--3">
+            <label class="nw-config-field"><span class="nw-config-label">Lokale Bridge aktiv</span><select class="nw-config-input" id="meshMicrogridLocalBridgeEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Ausgabemodus</span><select class="nw-config-input" id="meshMicrogridLocalBridgeOutputMode" ${isEos ? '' : 'disabled'}><option value="global">Globaler Command-State</option><option value="mapped">Nur gemappte Ziel-States</option><option value="both">Global + gemappt</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Default Bridge Command-State</span><input class="nw-config-input" id="meshMicrogridLocalBridgeDefaultState" value="${_meshHtmlEscape(localBridge.defaultCommandStateDp || '')}" placeholder="0_userdata.0.nexowatt.mesh.bridge.command" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Default Bridge ACK-State optional</span><input class="nw-config-input" id="meshMicrogridLocalBridgeDefaultAckState" value="${_meshHtmlEscape(localBridge.defaultAckStateDp || '')}" placeholder="0_userdata.0.nexowatt.mesh.bridge.ack" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Bridge-ACK auswerten</span><select class="nw-config-input" id="meshMicrogridLocalBridgeAckEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select><small>Nur Rückmeldungen lesen; keine Hardwaresteuerung.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">ACK als Gate erforderlich</span><select class="nw-config-input" id="meshMicrogridLocalBridgeAckRequired" ${isEos ? '' : 'disabled'}><option value="false">Nein, nur Diagnose</option><option value="true">Ja, Folge-Commands blockieren</option></select><small>Bei Timeout/Fehler/offenem ACK werden neue Commands zu diesem Ziel blockiert.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">ACK Timeout Sekunden</span><input class="nw-config-input" id="meshMicrogridLocalBridgeAckTimeoutSec" value="${_meshHtmlEscape(localBridge.ackTimeoutSec || 60)}" placeholder="60" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Bridge-Zuordnungen JSON</span><textarea class="nw-config-input" id="meshMicrogridLocalBridgeMappingsJson" rows="6" ${isEos ? '' : 'disabled'}>${localBridgeMappingsJson}</textarea><small>Beispiel je Eintrag: { "id":"lp1_bridge", "nodeId":"lp1", "commandStateDp":"0_userdata.0.nexowatt.mesh.lp1.command", "ackStateDp":"0_userdata.0.nexowatt.mesh.lp1.ack", "type":"chargepoint", "maxPowerW":11000 }. ACK-/Status-States werden nur gelesen; keine ZIP/TGZ und keine Roh-Hardwarebefehle.</small></label>
+          </div>
+        </div>
+        <div class="nw-config-subcard" style="margin-top:12px;">
+          <div class="nw-config-card__title">Zielgruppen-Strategie</div>
+          <div class="nw-config-card__subtitle">Bündelt Ladepunkte, Speicher, Verbraucher und Erzeuger in Gruppen. Gruppenprioritäten und Gruppenlimits werden im CommandGuard bewertet. Die Ausgabe bleibt ein neutraler Command-Intent ohne direkten Hardwarewrite.</div>
+          <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Zielgruppen JSON</span><textarea class="nw-config-input" id="meshMicrogridTargetGroupsJson" rows="7" ${isEos ? '' : 'disabled'}>${targetGroupsJson}</textarea><small>Beispiel: [{ "id":"lp_gruppe", "name":"Ladepunkte", "type":"chargepoint", "memberTypes":["chargepoint"], "priority":20, "maxPowerW":22000 }]. 0 = kein Limit.</small></label>
         </div>
         <div class="nw-config-card__subtitle" style="margin-top:10px;">Knoten: PV/Erzeuger, Verbraucher/Gebäude, Speicher, Netzpunkt, Ladepunktgruppen oder thermische Verbraucher. Technische Zuordnung bleibt im Installerbereich.</div>
         <div id="meshMicrogridNodes">${rows || '<div class="nw-config-empty" style="text-align:left;">Noch keine Mesh-/Microgrid-Knoten angelegt.</div>'}</div>
@@ -1995,15 +2044,28 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const mode = card.querySelector('#meshMicrogridMode');
     if (mode) mode.value = ['off','diagnostic','local_first','grid_last'].includes(String(cfg.mode || '')) ? String(cfg.mode) : 'diagnostic';
     const controlMode = card.querySelector('#meshMicrogridControlMode');
-    if (controlMode) controlMode.value = ['off','diagnostic','field_test'].includes(String(cfg.controlMode || '')) ? String(cfg.controlMode) : 'diagnostic';
+    if (controlMode) controlMode.value = ['off','diagnostic','field_test','active'].includes(String(cfg.controlMode || '')) ? String(cfg.controlMode) : 'diagnostic';
     const approved = card.querySelector('#meshMicrogridFieldApproved');
     if (approved) approved.value = cfg.fieldTestApproved === true || cfg.installerApproved === true ? 'true' : 'false';
     const tsEnabled = card.querySelector('#meshMicrogridTailscaleEnabled');
     if (tsEnabled) tsEnabled.value = cfg.tailscale && cfg.tailscale.enabled === true ? 'true' : 'false';
+    const rx = cfg.receiver && typeof cfg.receiver === 'object' ? cfg.receiver : {};
     const receiverEnabled = card.querySelector('#meshMicrogridReceiverEnabled');
-    if (receiverEnabled) receiverEnabled.value = cfg.receiver && cfg.receiver.enabled === true ? 'true' : 'false';
-    const receiverRequireToken = card.querySelector('#meshMicrogridReceiverRequireToken');
-    if (receiverRequireToken) receiverRequireToken.value = cfg.receiver && cfg.receiver.requireToken === false ? 'false' : 'true';
+    if (receiverEnabled) receiverEnabled.value = rx.enabled === true ? 'true' : 'false';
+    const receiverAccept = card.querySelector('#meshMicrogridReceiverAccept');
+    if (receiverAccept) receiverAccept.value = rx.acceptRemoteCommands === true ? 'true' : 'false';
+    const receiverRequire = card.querySelector('#meshMicrogridReceiverRequireCluster');
+    if (receiverRequire) receiverRequire.value = rx.requireClusterMatch === false ? 'false' : 'true';
+    const lbEnabled = card.querySelector('#meshMicrogridLocalBridgeEnabled');
+    if (lbEnabled) lbEnabled.value = localBridge.enabled === true ? 'true' : 'false';
+    const lbMode = card.querySelector('#meshMicrogridLocalBridgeOutputMode');
+    if (lbMode) lbMode.value = ['global','mapped','both'].includes(String(localBridge.outputMode || '')) ? String(localBridge.outputMode) : 'global';
+    const lbAckEnabled = card.querySelector('#meshMicrogridLocalBridgeAckEnabled');
+    if (lbAckEnabled) lbAckEnabled.value = localBridge.ackEnabled === true ? 'true' : 'false';
+    const lbAck = card.querySelector('#meshMicrogridLocalBridgeAckEnabled');
+    if (lbAck) lbAck.value = localBridge.ackEnabled === true ? 'true' : 'false';
+    const lbAckRequired = card.querySelector('#meshMicrogridLocalBridgeAckRequired');
+    if (lbAckRequired) lbAckRequired.value = localBridge.ackRequired === true ? 'true' : 'false';
     const add = card.querySelector('#meshMicrogridAddNode');
     if (add) add.addEventListener('click', () => {
       currentConfig.meshMicrogrid = currentConfig.meshMicrogrid || {};
@@ -6816,6 +6878,14 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // berechnet der EMS-Kern alle Export-Guard-Werte, schreibt aber keine WR-Setpoints.
     if (typeof gc.exportLimitRunMode !== 'string') gc.exportLimitRunMode = 'active';
     if (!['diagnostic', 'active'].includes(String(gc.exportLimitRunMode))) gc.exportLimitRunMode = 'active';
+    // 0.8.51: Reihenfolge für echte 0‑Einspeisung. Verbrauch ist immer natürliche
+    // erste Senke, danach Speicher, Ladepunkte, flexible Verbraucher, Mesh/Microgrid
+    // und erst zuletzt WR-Abregelung. Optionale Command-States bleiben neutral und
+    // herstelleroffen; keine direkten Hardware-Rohbefehle im App-Center.
+    if (typeof gc.zeroExportStorageChargeCommandStateId !== 'string') gc.zeroExportStorageChargeCommandStateId = '';
+    if (typeof gc.zeroExportChargingCommandStateId !== 'string') gc.zeroExportChargingCommandStateId = '';
+    if (typeof gc.zeroExportFlexLoadCommandStateId !== 'string') gc.zeroExportFlexLoadCommandStateId = '';
+    if (typeof gc.zeroExportMeshCommandStateId !== 'string') gc.zeroExportMeshCommandStateId = '';
 
     // PV Abregelung (EVU Relais) – optional zusätzlich zur 0‑Einspeisung
     if (typeof gc.pvEvuEnabled !== 'boolean') gc.pvEvuEnabled = false;
@@ -7197,6 +7267,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
           const negative = !!readVal(data, 'gridConstraints.exportLimit.negativePriceActive');
           const negStrategy = String(readVal(data, 'gridConstraints.exportLimit.negativePriceStrategy') || '');
           const checklist = parseJson(readVal(data, 'gridConstraints.exportLimit.installerChecklistJson')) || {};
+          const sinkPlan = parseJson(readVal(data, 'gridConstraints.exportLimit.sinkPriorityPlanJson')) || {};
+          const commissioning = parseJson(readVal(data, 'gridConstraints.exportLimit.commissioning.reportJson')) || {};
+          const commissioningChecklist = parseJson(readVal(data, 'gridConstraints.exportLimit.commissioning.checklistJson')) || {};
+          const nextSink = String(readVal(data, 'gridConstraints.exportLimit.nextSinkAction') || sinkPlan.nextAction || '—');
 
           box.innerHTML = '';
           const title = document.createElement('div');
@@ -7216,8 +7290,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
             ['Auslastung', Number.isFinite(usage) ? Math.round(usage) + ' %' : '—'],
             ['Geschätzte Abregelung', fmtW(curt)],
             ['Geplante Aktion', planned],
+            ['0‑Einspeise nächste Senke', nextSink],
             ['WR-Schreibfähigkeit', writeCapable ? 'OK' : 'Fehlt / prüfen'],
             ['Negative-Preis-Strategie', negative ? (negStrategy || 'aktiv') : 'nicht aktiv'],
+            ['Inbetriebnahme', commissioning.ready ? `Bereit (${commissioning.scorePercent || 0} %)` : `Prüfen (${commissioning.scorePercent || 0} %)`],
           ];
           const table = document.createElement('div');
           table.style.display = 'grid';
@@ -7234,6 +7310,25 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
             table.appendChild(b);
           }
           box.appendChild(table);
+          if (sinkPlan && Array.isArray(sinkPlan.steps)) {
+            const order = document.createElement('div');
+            order.className = 'nw-config-muted';
+            order.style.marginTop = '8px';
+            order.textContent = '0‑Einspeise-Reihenfolge: ' + sinkPlan.steps.map((x) => `${x.index}. ${x.label}${x.mapped ? '' : ' (nicht gemappt)'}`).join(' → ');
+            box.appendChild(order);
+          }
+
+          if (commissioningChecklist && Array.isArray(commissioningChecklist.items)) {
+            const wrap = document.createElement('div');
+            wrap.className = 'nw-config-muted';
+            wrap.style.marginTop = '10px';
+            const failed = commissioningChecklist.items.filter((i) => i.required && !i.ok).slice(0, 4);
+            const optional = commissioningChecklist.items.filter((i) => !i.required && !i.ok).slice(0, 3);
+            wrap.textContent = failed.length
+              ? '0‑Einspeise Checkliste offen: ' + failed.map((i) => i.label).join(' | ')
+              : (optional.length ? '0‑Einspeise Pflichtprüfung OK. Optionale Senken offen: ' + optional.map((i) => i.label).join(' | ') : '0‑Einspeise Inbetriebnahme-Checkliste OK.');
+            box.appendChild(wrap);
+          }
 
           if (message) {
             const m = document.createElement('div');
@@ -7359,6 +7454,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         zeroEl.appendChild(mkNum('Maximale Einspeiseleistung', 'gc_zeroExportMaxExportW', Number(gc.zeroExportMaxExportW || 0) || 0, (n) => { gc.zeroExportMaxExportW = Math.max(0, Math.round(n)); }, 'W', '0 = keine Einspeisung'));
         zeroEl.appendChild(mkNum('Bias', 'gc_zeroExportBiasW', Number(gc.zeroExportBiasW || 0) || 0, (n) => { gc.zeroExportBiasW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 50'));
         zeroEl.appendChild(mkNum('Deadband', 'gc_zeroExportDeadbandW', Number(gc.zeroExportDeadbandW || 0) || 0, (n) => { gc.zeroExportDeadbandW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 15'));
+        zeroEl.appendChild(mkHint('0‑Einspeise-Reihenfolge: 1 Verbrauch zuerst (natürlich am Netzpunkt), 2 Speicher laden, 3 Ladepunkte, 4 flexible Verbraucher, 5 Mesh/Microgrid, 6 WR-Abregelung zuletzt.'));
+        zeroEl.appendChild(mkDpField('Speicher-Lade-Command-State optional', 'gc_zeroExportStorageChargeCommandStateId', gc.zeroExportStorageChargeCommandStateId || '', (v) => { gc.zeroExportStorageChargeCommandStateId = v; }, 'Neutraler JSON-Command-State, z.B. 0_userdata.0.nexowatt.zero.storage.command'));
+        zeroEl.appendChild(mkDpField('Ladepunkt-Command-State optional', 'gc_zeroExportChargingCommandStateId', gc.zeroExportChargingCommandStateId || '', (v) => { gc.zeroExportChargingCommandStateId = v; }, 'Neutraler JSON-Command-State für Wallbox/DC-Ladepunkte'));
+        zeroEl.appendChild(mkDpField('Flexible Verbraucher Command-State optional', 'gc_zeroExportFlexLoadCommandStateId', gc.zeroExportFlexLoadCommandStateId || '', (v) => { gc.zeroExportFlexLoadCommandStateId = v; }, 'Heizstab/Wärmepumpe/flexible Last – neutraler JSON-Command-State'));
+        zeroEl.appendChild(mkDpField('Mesh/Microgrid Command-State optional', 'gc_zeroExportMeshCommandStateId', gc.zeroExportMeshCommandStateId || '', (v) => { gc.zeroExportMeshCommandStateId = v; }, 'Optionaler Übergang in Mesh/Microgrid-Zielgruppen'));
         zeroEl.appendChild(mkHint('Export Guard für DE/NL: 0 W bedeutet echte Nulleinspeisung; Werte >0 erlauben nur die vom Installateur freigegebene maximale Einspeiseleistung. Bias/Deadband stabilisieren die Regelung.'));
         zeroEl.appendChild(mkHint('Empfehlung: neue Anlagen zuerst im Diagnose/Testmodus prüfen. Erst wenn NVP-Vorzeichen, Einspeiselimit und WR-Schreibfähigkeit plausibel sind, auf „Aktiv" stellen.'));
         renderExportGuardRuntimeDiagnostics(zeroEl);
@@ -11306,10 +11406,20 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const meshTsPeerUrlsEl = document.getElementById('meshMicrogridTailscalePeerUrls');
     const meshTsPeerTokenEl = document.getElementById('meshMicrogridTailscalePeerToken');
     const meshReceiverEnabledEl = document.getElementById('meshMicrogridReceiverEnabled');
-    const meshReceiverRequireTokenEl = document.getElementById('meshMicrogridReceiverRequireToken');
-    const meshReceiverTtlSecEl = document.getElementById('meshMicrogridReceiverTtlSec');
-    const meshReceiverCommandStateEl = document.getElementById('meshMicrogridReceiverCommandStateDp');
-    const meshReceiverAllowedPeersEl = document.getElementById('meshMicrogridReceiverAllowedPeers');
+    const meshReceiverAcceptEl = document.getElementById('meshMicrogridReceiverAccept');
+    const meshReceiverRequireClusterEl = document.getElementById('meshMicrogridReceiverRequireCluster');
+    const meshReceiverStateEl = document.getElementById('meshMicrogridReceiverStateDp');
+    const meshReceiverTokenEl = document.getElementById('meshMicrogridReceiverToken');
+    const meshReceiverReplayTtlEl = document.getElementById('meshMicrogridReceiverReplayTtl');
+    const meshLocalBridgeEnabledEl = document.getElementById('meshMicrogridLocalBridgeEnabled');
+    const meshLocalBridgeModeEl = document.getElementById('meshMicrogridLocalBridgeOutputMode');
+    const meshLocalBridgeDefaultStateEl = document.getElementById('meshMicrogridLocalBridgeDefaultState');
+    const meshLocalBridgeAckEnabledEl = document.getElementById('meshMicrogridLocalBridgeAckEnabled');
+    const meshLocalBridgeAckRequiredEl = document.getElementById('meshMicrogridLocalBridgeAckRequired');
+    const meshLocalBridgeDefaultAckStateEl = document.getElementById('meshMicrogridLocalBridgeDefaultAckState');
+    const meshLocalBridgeAckTimeoutEl = document.getElementById('meshMicrogridLocalBridgeAckTimeoutSec');
+    const meshLocalBridgeMappingsEl = document.getElementById('meshMicrogridLocalBridgeMappingsJson');
+    const meshTargetGroupsEl = document.getElementById('meshMicrogridTargetGroupsJson');
     const meshRows = Array.from(document.querySelectorAll('[data-mesh-node-row]'));
     const readMesh = (row, field) => {
       const el = row && row.querySelector(`[data-mesh-field="${field}"]`);
@@ -11322,8 +11432,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     patch.meshMicrogrid.clusterId = safeMeshId(meshClusterIdEl ? meshClusterIdEl.value : 'cluster_01', 'cluster_01');
     patch.meshMicrogrid.clusterName = meshClusterNameEl ? String(meshClusterNameEl.value || 'Lokaler Energieverbund').trim() : 'Lokaler Energieverbund';
     patch.meshMicrogrid.gridLimitW = Math.max(0, Math.round(Number(meshGridLimitEl ? meshGridLimitEl.value : 0) || 0));
-    patch.meshMicrogrid.controlMode = meshControlModeEl && ['off','diagnostic','field_test'].includes(meshControlModeEl.value) ? meshControlModeEl.value : 'diagnostic';
+    patch.meshMicrogrid.controlMode = meshControlModeEl && ['off','diagnostic','field_test','active'].includes(meshControlModeEl.value) ? meshControlModeEl.value : 'diagnostic';
     patch.meshMicrogrid.fieldTestApproved = meshFieldApprovedEl ? meshFieldApprovedEl.value === 'true' : false;
+    patch.meshMicrogrid.activeControlApproved = patch.meshMicrogrid.fieldTestApproved;
     patch.meshMicrogrid.commandStateDp = meshCommandStateEl ? String(meshCommandStateEl.value || '').trim() : '';
     patch.meshMicrogrid.maxCommandsPerTick = Math.max(1, Math.min(10, Math.round(Number(meshMaxCommandsEl ? meshMaxCommandsEl.value : 3) || 3)));
     patch.meshMicrogrid.tailscale = patch.meshMicrogrid.tailscale && typeof patch.meshMicrogrid.tailscale === 'object' ? patch.meshMicrogrid.tailscale : {};
@@ -11334,10 +11445,35 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     patch.meshMicrogrid.tailscale.peerToken = meshTsPeerTokenEl ? String(meshTsPeerTokenEl.value || '').trim() : '';
     patch.meshMicrogrid.receiver = patch.meshMicrogrid.receiver && typeof patch.meshMicrogrid.receiver === 'object' ? patch.meshMicrogrid.receiver : {};
     patch.meshMicrogrid.receiver.enabled = meshReceiverEnabledEl ? meshReceiverEnabledEl.value === 'true' : false;
-    patch.meshMicrogrid.receiver.requireToken = meshReceiverRequireTokenEl ? meshReceiverRequireTokenEl.value !== 'false' : true;
-    patch.meshMicrogrid.receiver.ttlSec = Math.max(5, Math.min(900, Math.round(Number(meshReceiverTtlSecEl ? meshReceiverTtlSecEl.value : 120) || 120)));
-    patch.meshMicrogrid.receiver.commandStateDp = meshReceiverCommandStateEl ? String(meshReceiverCommandStateEl.value || '').trim() : '';
-    patch.meshMicrogrid.receiver.allowedPeerNodeIds = String(meshReceiverAllowedPeersEl ? meshReceiverAllowedPeersEl.value || '' : '').split(/[\n,;]+/g).map((x) => String(x || '').trim().toLowerCase().replace(/[^a-z0-9_\-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64)).filter(Boolean);
+    patch.meshMicrogrid.receiver.acceptRemoteCommands = meshReceiverAcceptEl ? meshReceiverAcceptEl.value === 'true' : false;
+    patch.meshMicrogrid.receiver.requireClusterMatch = meshReceiverRequireClusterEl ? meshReceiverRequireClusterEl.value !== 'false' : true;
+    patch.meshMicrogrid.receiver.localCommandStateDp = meshReceiverStateEl ? String(meshReceiverStateEl.value || '').trim() : '';
+    patch.meshMicrogrid.receiver.peerToken = meshReceiverTokenEl ? String(meshReceiverTokenEl.value || '').trim() : '';
+    patch.meshMicrogrid.receiver.replayTtlSec = Math.max(30, Math.min(86400, Math.round(Number(meshReceiverReplayTtlEl ? meshReceiverReplayTtlEl.value : 900) || 900)));
+    patch.meshMicrogrid.localBridge = patch.meshMicrogrid.localBridge && typeof patch.meshMicrogrid.localBridge === 'object' ? patch.meshMicrogrid.localBridge : {};
+    patch.meshMicrogrid.localBridge.enabled = meshLocalBridgeEnabledEl ? meshLocalBridgeEnabledEl.value === 'true' : false;
+    patch.meshMicrogrid.localBridge.outputMode = meshLocalBridgeModeEl && ['global','mapped','both'].includes(meshLocalBridgeModeEl.value) ? meshLocalBridgeModeEl.value : 'global';
+    patch.meshMicrogrid.localBridge.defaultCommandStateDp = meshLocalBridgeDefaultStateEl ? String(meshLocalBridgeDefaultStateEl.value || '').trim() : '';
+    patch.meshMicrogrid.localBridge.ackEnabled = meshLocalBridgeAckEnabledEl ? meshLocalBridgeAckEnabledEl.value === 'true' : false;
+    patch.meshMicrogrid.localBridge.ackRequired = meshLocalBridgeAckRequiredEl ? meshLocalBridgeAckRequiredEl.value === 'true' : false;
+    patch.meshMicrogrid.localBridge.defaultAckStateDp = meshLocalBridgeDefaultAckStateEl ? String(meshLocalBridgeDefaultAckStateEl.value || '').trim() : '';
+    patch.meshMicrogrid.localBridge.ackTimeoutSec = Math.max(5, Math.min(86400, Math.round(Number(meshLocalBridgeAckTimeoutEl ? meshLocalBridgeAckTimeoutEl.value : 120) || 120)));
+    try {
+      const parsedBridgeMappings = meshLocalBridgeMappingsEl && String(meshLocalBridgeMappingsEl.value || '').trim() ? JSON.parse(String(meshLocalBridgeMappingsEl.value || '[]')) : [];
+      patch.meshMicrogrid.localBridge.mappings = Array.isArray(parsedBridgeMappings) ? parsedBridgeMappings : [];
+    } catch (_meshBridgeJsonError) {
+      patch.meshMicrogrid.localBridge.mappings = Array.isArray(patch.meshMicrogrid.localBridge.mappings) ? patch.meshMicrogrid.localBridge.mappings : [];
+    }
+    try {
+      const parsedTargetGroups = meshTargetGroupsEl && String(meshTargetGroupsEl.value || '').trim() ? JSON.parse(String(meshTargetGroupsEl.value || '[]')) : [];
+      patch.meshMicrogrid.targetGroups = Array.isArray(parsedTargetGroups) ? parsedTargetGroups : [];
+    } catch (_meshTargetGroupJsonError) {
+      patch.meshMicrogrid.targetGroups = Array.isArray(patch.meshMicrogrid.targetGroups) ? patch.meshMicrogrid.targetGroups : [];
+    }
+    const readMeshPowerLimit = (row, field) => {
+      const n = Number(readMesh(row, field));
+      return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
+    };
     patch.meshMicrogrid.nodes = meshRows.map((row, idx) => {
       const type = ['producer','consumer','storage','grid','chargepoint','thermal','generic'].includes(readMesh(row, 'type')) ? readMesh(row, 'type') : 'consumer';
       const role = ['producer','consumer','storage','grid'].includes(readMesh(row, 'role')) ? readMesh(row, 'role') : (type === 'producer' ? 'producer' : (type === 'storage' ? 'storage' : (type === 'grid' ? 'grid' : 'consumer')));
@@ -11354,6 +11490,15 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         socDp: readMesh(row, 'socDp'),
         gridImportPowerDp: readMesh(row, 'gridImportPowerDp'),
         gridExportPowerDp: readMesh(row, 'gridExportPowerDp'),
+        minPowerW: readMeshPowerLimit(row, 'minPowerW'),
+        maxPowerW: readMeshPowerLimit(row, 'maxPowerW'),
+        maxImportW: readMeshPowerLimit(row, 'maxImportW'),
+        maxExportW: readMeshPowerLimit(row, 'maxExportW'),
+        maxChargeW: readMeshPowerLimit(row, 'maxChargeW'),
+        maxDischargeW: readMeshPowerLimit(row, 'maxDischargeW'),
+        maxLoadW: readMeshPowerLimit(row, 'maxLoadW'),
+        maxGenerationW: readMeshPowerLimit(row, 'maxGenerationW'),
+        targetGroupIds: String(readMesh(row, 'targetGroupIds') || '').split(/[\n,;]+/g).map((x) => safeMeshId(x.trim(), '')).filter(Boolean),
       };
     });
 

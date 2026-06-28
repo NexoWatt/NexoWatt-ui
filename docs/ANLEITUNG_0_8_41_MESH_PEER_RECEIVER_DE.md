@@ -1,17 +1,17 @@
-# NexoWatt UI 0.8.41 – Mesh/Microgrid Peer-Handshake & Command Receiver
+# NexoWatt UI 0.8.41 – Mesh Peer-Handshake & Command-Receiver
 
 ## Ziel
 
-Diese Version erweitert die EOS-App **Mesh/Microgrid** für den Feldtest mit zwei oder mehr NexoWatt-Instanzen über ein separates Tailscale-Mesh.
+Diese Version ergänzt die Mesh/Microgrid-App um eine echte Instanz-zu-Instanz-Grundlage für Feldtests über das getrennte Mesh-Tailscale-Netz.
 
-Wichtig: Die Fernwartung bleibt getrennt. Das Mesh/Microgrid nutzt ein eigenes Tailscale-Profil beziehungsweise ein eigenes Tailnet/Interface.
+Wichtig: Die Fernwartung bleibt getrennt vom Mesh/Microgrid-Tailscale.
 
 ```text
 Tailscale 1 = Fernwartung / Support
-Tailscale 2 = Mesh/Microgrid Instanz-zu-Instanz
+Tailscale 2 = Mesh/Microgrid / Energieverbund
 ```
 
-## Neue APIs
+## Neue Endpunkte
 
 ```text
 GET  /api/mesh/handshake
@@ -19,107 +19,74 @@ GET  /api/mesh/status
 POST /api/mesh/command/receive
 ```
 
-Der Handshake liefert Node-ID, Cluster-ID, Tailscale-Profil, Receiver-Status und die verfügbaren Endpunkte.
+Der Receiver nimmt Remote-Kommandos nur an, wenn die EOS-Lizenz aktiv ist und der Installateur den Receiver im Reiter `Mesh/Microgrid` freigibt.
 
-Der Command Receiver nimmt neutrale NexoWatt-Command-Intents an, prüft diese und schreibt sie nur in einen lokalen JSON-Command-State.
+## Installer-Konfiguration
 
-## Sicherheitsregeln
-
-Der Receiver prüft:
+Im App-Center liegt die Konfiguration weiter im separaten Reiter:
 
 ```text
-EOS-Lizenz
-Receiver aktiv
-Peer-Token
-Cluster-ID
-Command-TTL
-Replay/Duplikate
-allowedPeerNodeIds optional
-directHardwareWrite ist verboten
-nur neutrale Commands
+Mesh/Microgrid → Command Receiver / Peer-Handshake
 ```
 
-Es gibt weiterhin keine direkten Hardware-Schreibpfade aus der Mesh/Microgrid-App.
-
-## Installer/App-Center
-
-Die Einstellungen liegen im eigenen Reiter:
+Dort einstellen:
 
 ```text
-Mesh/Microgrid → Feldtest-Steuerung & Tailscale Mesh
+Command Receiver aktiv = An
+Remote Commands akzeptieren = Ja
+Cluster-ID prüfen = Ja/Nein
+Lokaler Empfangs-Command-State = z. B. 0_userdata.0.nexowatt.mesh.receivedCommand
+Receiver Token optional = gemeinsames Peer-Token
+Replay TTL Sekunden = z. B. 900
 ```
 
-Neu dort:
+## Sicherheit
+
+Remote-Kommandos werden nicht direkt auf Hardware geschrieben.
+
+Ablauf:
 
 ```text
-Command Receiver aktiv
-Receiver Token erforderlich
-Command TTL Sekunden
-Lokaler Receiver Command-State
-Erlaubte Peer-Node-IDs optional
+Peer A sendet neutralen Command-Envelope
+→ Peer B prüft Token, Cluster-ID und Replay-Schutz
+→ Peer B schreibt nur lokalen neutralen JSON-Command-State
+→ lokale Bridge übersetzt später hersteller-/protokollspezifisch
 ```
 
-Der Apps-Reiter bleibt nur App-Katalog.
+Damit bleibt NexoWatt offen für OCPP, Modbus, MQTT, REST, Herstelleradapter und NexoWatt-Devices.
 
-## Beispiel Peer-Aufruf
+## API-Beispiel
 
-Instanz A sendet an Instanz B:
-
-```text
-POST http://100.x.y.z:8188/api/mesh/command/receive
-Header: x-nexowatt-mesh-token: <peer-token>
+```bash
+curl -H "x-nexowatt-mesh-token: <TOKEN>" \
+  http://100.x.y.z:8188/api/mesh/handshake
 ```
 
-Payload-Beispiel:
+Command-Empfang:
 
-```json
-{
-  "schema": "nexowatt.mesh-field-command-envelope.v1",
-  "clusterId": "cluster_01",
-  "sourceNodeId": "haus_a",
-  "neutralCommandOnly": true,
-  "directHardwareWrite": false,
-  "commands": [
-    {
-      "commandId": "cmd_001",
-      "ts": 1760000000000,
-      "clusterId": "cluster_01",
-      "sourceNodeId": "haus_a",
-      "category": "local_first",
-      "direction": "increase_local_use",
-      "nodeId": "lp1",
-      "plannedPowerW": 3000,
-      "directHardwareWrite": false,
-      "neutralCommandOnly": true
-    }
-  ]
-}
+```bash
+curl -X POST \
+  -H "content-type: application/json" \
+  -H "x-nexowatt-mesh-token: <TOKEN>" \
+  -d '{"schema":"nexowatt.mesh-field-command-envelope.v1","clusterId":"cluster_01","localNodeId":"haus_a","commands":[{"commandId":"cmd_1","category":"local_first","nodeId":"lp1","plannedPowerW":3000}]}' \
+  http://100.x.y.z:8188/api/mesh/command/receive
 ```
-
-Die empfangende Instanz schreibt dann einen lokalen JSON-Envelope in den konfigurierten Receiver Command-State. Die lokale Bridge beziehungsweise ein Herstelleradapter setzt den Intent um.
 
 ## Neue States
 
 ```text
 meshMicrogrid.receiver.enabled
-meshMicrogrid.receiver.commandStateDp
-meshMicrogrid.receiver.requireToken
-meshMicrogrid.receiver.ttlSec
+meshMicrogrid.receiver.acceptRemoteCommands
+meshMicrogrid.receiver.localCommandStateDp
 meshMicrogrid.receiver.status
-meshMicrogrid.receiver.lastHandshakeAt
-meshMicrogrid.receiver.lastHandshakeJson
-meshMicrogrid.receiver.lastCommandAt
-meshMicrogrid.receiver.lastCommandId
+meshMicrogrid.receiver.lastReceiveAt
 meshMicrogrid.receiver.lastCommandJson
 meshMicrogrid.receiver.lastAckJson
-meshMicrogrid.receiver.lastRejectReason
-meshMicrogrid.receiver.acceptedCount
-meshMicrogrid.receiver.rejectedCount
-meshMicrogrid.receiver.replayBlockedCount
 meshMicrogrid.receiver.processedCommandIdsJson
-meshMicrogrid.receiver.summaryJson
+meshMicrogrid.receiver.replayBlockedCount
+meshMicrogrid.tailscale.lastCommandDispatchJson
 ```
 
-## Browser nach Update
+## Wichtig
 
-Nach dem Update bitte einen Hard Reload ausführen, damit `nexowatt-cache-v341` aktiv wird.
+Die App-Seite `Apps` bleibt reiner App-Katalog. Alle Mesh/Microgrid-Details bleiben im Reiter `Mesh/Microgrid`.

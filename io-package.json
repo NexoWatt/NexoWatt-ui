@@ -1,35 +1,35 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.41",
+    "version": "0.8.55",
     "news": {
-      "0.8.41": {
-        "de": "Version 0.8.41: Mesh/Microgrid Peer-Handshake und Command-Receiver ergänzt. Instanzen können über ein separates Tailscale-Mesh neutralisierte Commands empfangen, per Token/Cluster/Replay-Schutz prüfen und lokal als JSON-Command-State an eine herstellerneutrale Bridge übergeben. Keine direkten Hardwarewrites.",
-        "en": "Version 0.8.41: Adds Mesh/Microgrid peer handshake and command receiver. Instances can receive neutral commands over a separate Tailscale mesh, validate token/cluster/replay protection and hand them over locally as JSON command state to a manufacturer-neutral bridge. No direct hardware writes."
+      "0.8.55": {
+        "de": "Version 0.8.55: Ergänzt 0-Einspeise Senken-Freigabe und schnellen Aktivbetrieb. Schreibtests laufen nicht pro Regel-Tick; gespeicherte ACK-/Freigabedaten steuern Speicher, Ladepunkte, flexible Lasten, Mesh und WR-Fallback.",
+        "en": "Version 0.8.55: Adds zero-export sink approval and fast active operation. Write tests are not executed every control tick; stored ACK/approval data drives storage, chargers, flexible loads, mesh and inverter fallback."
       },
-      "0.8.40": {
-        "de": "Version 0.8.40: Mesh/Microgrid Feldtest-Steuerung ergänzt. Geplante Aktionen können nach Installateurfreigabe als neutrale JSON-Command-Intents ausgegeben werden; getrenntes Tailscale-Mesh-Profil und Peer-URLs vorbereitet. Keine direkten OCPP-/Modbus-/Hersteller-Hardwarewrites.",
-        "en": "Version 0.8.40: Adds Mesh/Microgrid field-test control. Planned actions can be emitted as neutral JSON command intents after installer approval; separate Tailscale mesh profile and peer URLs are prepared. No direct OCPP/Modbus/vendor hardware writes."
+      "0.8.54": {
+        "de": "Version 0.8.54: Ergänzt den 0-Einspeise Inbetriebnahme-Assistenten. Die bestehende Export-Guard-Logik wird nicht doppelt gebaut; Smartmeter, WR-Write, Senkenreihenfolge, Testmodus, Write-Test-Vorschau und Feldreport werden diagnostisch geprüft.",
+        "en": "Version 0.8.54: Adds the zero-export commissioning assistant. The existing Export Guard logic is not duplicated; smart meter, inverter write capability, sink priority, test mode, write-test preview and field report are checked diagnostically."
       },
-      "0.8.39": {
-        "de": "Version 0.8.39: Bereitet den EOS Mesh/Microgrid CommandGuard vor. Geplante Aktionen werden als blockierte Command-Intents mit Safety-Prüfungen, Read-only-Gate und API-Preview angezeigt; weiterhin ohne Hardware-Schreiben.",
-        "en": "Version 0.8.39: Prepares the EOS Mesh/Microgrid CommandGuard. Planned actions are exposed as blocked command intents with safety checks, read-only gate and API preview; still without hardware writes."
+      "0.8.53": {
+        "de": "Version 0.8.53: Audit-/Regression-Fix. Alte Mesh-/0-Einspeise-Testskripte und Runtime-Spiegel auf den aktuellen Stand synchronisiert; keine neue Regelstrecke, keine App-Center-Detailkonfiguration im Apps-Reiter, keine Hardwarewrites aus Mesh/Microgrid.",
+        "en": "Version 0.8.53: Audit/regression fix. Legacy Mesh/zero-export tests and runtime mirrors synchronized with the current version; no new control loop, no app-detail configuration in the Apps tab, no hardware writes from Mesh/Microgrid."
       },
-      "0.8.38": {
-        "de": "Version 0.8.38: App-Center-Struktur weiter gehärtet. Der Apps-Reiter bleibt reiner App-Katalog mit Installiert/Aktiv und Konfigurationsnavigation; Detailkonfiguration bleibt in Zuordnung, Ladepunkte oder eigenen Modulreitern.",
-        "en": "Version 0.8.38: Further hardens App Center structure. The Apps tab remains a pure app catalog with installed/enabled and navigation to configuration; detailed settings stay in mapping, chargepoints or dedicated module tabs."
+      "0.8.52": {
+        "de": "Version 0.8.52: Hotfix für 0-Einspeise Senkenkaskade. Konfigurierte Speicher-/Ladepunkt-/Flex-/Mesh-Command-States werden im Aktivmodus als neutrale JSON-Commands beschrieben; WR-Write fehlt nicht mehr fälschlich als alleiniger Blocker, wenn Senken verfügbar sind.",
+        "en": "Version 0.8.52: Hotfix for zero-export sink cascade. Configured storage/charging/flexible/mesh command states are written as neutral JSON commands in active mode; missing inverter write points are no longer treated as the only blocker when sinks are available."
       },
-      "0.8.37": {
-        "de": "Version 0.8.37: App-Center bereinigt Mesh/Microgrid strikt aus dem Apps-Reiter. Die App-Karte zeigt nur Installiert/Aktiv und Links; die Detailkonfiguration liegt im eigenen Reiter Mesh/Microgrid und erscheint nur bei installierter App.",
-        "en": "Version 0.8.37: App Center keeps Mesh/Microgrid configuration out of the Apps tab. The app card now only exposes install/enable and links; detailed configuration lives in a separate Mesh/Microgrid tab shown only when installed."
+      "0.8.51": {
+        "de": "Version 0.8.51: Ergänzt die 0‑Einspeise-Senkenreihenfolge: Verbrauch zuerst, danach Speicher laden, Ladepunkte, flexible Verbraucher, Mesh/Microgrid und WR-Abregelung zuletzt. Die bestehende Export-Guard-Regelung wird nicht doppelt gebaut, sondern feldtauglicher diagnostiziert.",
+        "en": "Version 0.8.51: Adds the zero-export sink priority order: consumption first, then battery charging, charging stations, flexible loads, Mesh/Microgrid and inverter curtailment last. The existing Export Guard is not duplicated, only improved for field diagnostics."
       },
-      "0.8.36": {
-        "de": "Version 0.8.36: Ergänzt die EOS Mesh/Microgrid Regelbasis im Diagnosemodus mit geplanten Entscheidungen, Prioritätsauswertung, Netzlimit-Diagnose und Local-First/Grid-Last-Aktionsvorschau. Weiterhin read-only ohne Hardware-Schreiben.",
-        "en": "Version 0.8.36: Adds the EOS Mesh/Microgrid control foundation in diagnostic mode with planned decisions, priority evaluation, grid-limit diagnostics and Local-First/Grid-Last action previews. Still read-only without hardware writes."
+      "0.8.50": {
+        "de": "Version 0.8.50: Mesh/Microgrid Zielgruppen-Fairness ergänzt. Verfügbare Leistung wird über Zielgruppen-Budgets, Gewichtung, Mindestanteile und Restbudget verteilt; Commands werden neutral gekürzt oder blockiert.",
+        "en": "Version 0.8.50: Adds Mesh/Microgrid target group fairness. Available power is distributed via target group budgets, weights, minimum shares and remaining budget; commands are neutrally limited or blocked."
       },
-      "0.8.35": {
-        "de": "Version 0.8.35: Ergänzt eine EOS Mesh/Microgrid Betreiberansicht mit Cluster-Summen, Knotenliste, Local-First/Grid-Last-Diagnose sowie JSON-/CSV-Snapshotexport. Keine Hardwaresteuerung, weiterhin read-only.",
-        "en": "Version 0.8.35: Adds an EOS Mesh/Microgrid operator view with cluster totals, node list, Local-First/Grid-Last diagnostics and JSON/CSV snapshot export. No hardware control, still read-only."
+      "0.8.49": {
+        "de": "Version 0.8.49: Mesh/Microgrid Zielgruppen-Strategie ergänzt. Ladepunkte, Speicher, Verbraucher und Erzeuger können als Gruppen mit Priorität und Leistungsgrenzen geplant werden; CommandGuard begrenzt/blockiert nur neutrale Command-Intents, ohne direkte Hardwarewrites.",
+        "en": "Version 0.8.49: Adds Mesh/Microgrid target-group strategy. Charge points, storage, loads and generators can be planned as groups with priority and power limits; CommandGuard only limits/blocks neutral command intents without direct hardware writes."
       }
     },
     "title": "NexoWatt UI",

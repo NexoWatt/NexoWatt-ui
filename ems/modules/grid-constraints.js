@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/grid-constraints.ts
- * Quell-Hash: sha256:f8930ca6a562fd6650ce90ae9bf0d6d66f16550a34f1e8142683e73f4d8d9695
+ * Quell-Hash: sha256:05fdd2a7c757dc600a6f910f579af978ca07e0a5b8ade4c1a962cafc8da5d7fe
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -98,6 +98,13 @@ class GridConstraintsModule extends BaseModule {
         this._pvEvu = {
             lastStagePct: null,
         };
+
+        // 0.8.55: Schneller 0-Einspeise-Aktivbetrieb.
+        // Schreibtests laufen nicht in jedem Regel-Tick. Diese Runtime hält
+        // letzte ACK-/Blockierinformationen je Senke, damit der Export Guard
+        // im Aktivbetrieb sofort auf freigegebene Ziele schreiben kann und bei
+        // Fehlern ohne Verzögerung auf die nächste Senke bzw. WR-Abregelung fällt.
+        this._zeroExportSinkRuntime = {};
     }
 
     /**
@@ -283,7 +290,7 @@ class GridConstraintsModule extends BaseModule {
             native: {},
         });
 
-        for (const ch of ['control', 'rlm', 'zeroExport', 'exportLimit', 'pvCurtail']) {
+        for (const ch of ['control', 'rlm', 'zeroExport', 'exportLimit', 'exportLimit.commissioning', 'exportLimit.sinks', 'exportLimit.sinks.storage', 'exportLimit.sinks.charging', 'exportLimit.sinks.flexLoads', 'exportLimit.sinks.mesh', 'exportLimit.sinks.inverter', 'pvCurtail']) {
             await this.adapter.setObjectNotExistsAsync(`gridConstraints.${ch}`, {
                 type: 'channel',
                 common: { name: ch },
@@ -361,6 +368,44 @@ class GridConstraintsModule extends BaseModule {
         await mk('gridConstraints.exportLimit.unusedPvPowerW', 'Unused PV power due to Export Guard (W)', 'number', 'value.power');
         await mk('gridConstraints.exportLimit.displayJson', 'Export Guard display JSON', 'string', 'json');
         await mk('gridConstraints.exportLimit.summaryJson', 'Export Guard summary JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.sinkPriorityOrderJson', '0-export sink priority order JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.sinkPriorityPlanJson', '0-export sink priority plan JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.nextSinkAction', 'Next 0-export sink action', 'string', 'text');
+        await mk('gridConstraints.exportLimit.sinkCommandEnvelopeJson', '0-export sink neutral command envelope JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.sinkCommandWriteStatus', '0-export sink command write status', 'string', 'text');
+        await mk('gridConstraints.exportLimit.sinkCommandWriteJson', '0-export sink command write JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.sinkCommandLastError', '0-export sink command last error', 'string', 'text');
+
+        // 0.8.55: Senken-Freigabe und schneller Aktivbetrieb.
+        // Diese States sind die schnelle Betriebsdiagnose: keine Schreibtests pro Tick,
+        // sondern Nutzung gespeicherter Freigaben/ACKs und zielweises Blockieren bei Fehlern.
+        await mk('gridConstraints.exportLimit.sinkAvailabilityJson', '0-export sink availability JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.fastPathReady', '0-export fast path ready', 'boolean', 'indicator');
+        await mk('gridConstraints.exportLimit.activeSinkJson', '0-export active sink JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.fallbackReason', '0-export fallback reason', 'string', 'text');
+        await mk('gridConstraints.exportLimit.sinkAckSummaryJson', '0-export sink ACK summary JSON', 'string', 'json');
+        for (const sink of ['storage', 'charging', 'flexLoads', 'mesh', 'inverter']) {
+            await mk(`gridConstraints.exportLimit.sinks.${sink}.usable`, `${sink} usable for zero export`, 'boolean', 'indicator');
+            await mk(`gridConstraints.exportLimit.sinks.${sink}.lastAck`, `${sink} last ACK`, 'string', 'text');
+            await mk(`gridConstraints.exportLimit.sinks.${sink}.lastWriteTest`, `${sink} last write-test`, 'string', 'text');
+            await mk(`gridConstraints.exportLimit.sinks.${sink}.blockedUntil`, `${sink} blocked until`, 'number', 'value.time');
+            await mk(`gridConstraints.exportLimit.sinks.${sink}.lastReason`, `${sink} last reason`, 'string', 'text');
+        }
+
+        // 0.8.54: 0-Einspeise Inbetriebnahme-Assistent.
+        // Der Assistent baut keine zweite Regelstrecke. Er bewertet nur die vorhandene
+        // Export-Guard-/Grid-Constraints-Logik und macht für den Installateur sichtbar,
+        // ob Smartmeter, WR-Write, Speicher-/LP-Senken, Testmodus und Aktivfreigabe passen.
+        await mk('gridConstraints.exportLimit.commissioning.status', '0-export commissioning status', 'string', 'text');
+        await mk('gridConstraints.exportLimit.commissioning.stage', '0-export commissioning stage', 'string', 'text');
+        await mk('gridConstraints.exportLimit.commissioning.ready', '0-export commissioning ready', 'boolean', 'indicator');
+        await mk('gridConstraints.exportLimit.commissioning.scorePercent', '0-export commissioning score', 'number', 'value.percent');
+        await mk('gridConstraints.exportLimit.commissioning.nextStep', '0-export commissioning next step', 'string', 'text');
+        await mk('gridConstraints.exportLimit.commissioning.lastReason', '0-export commissioning reason', 'string', 'text');
+        await mk('gridConstraints.exportLimit.commissioning.checklistJson', '0-export commissioning checklist JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.commissioning.writeTestPreviewJson', '0-export commissioning write-test preview JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.commissioning.sinkStatusJson', '0-export commissioning sink status JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.commissioning.reportJson', '0-export commissioning report JSON', 'string', 'json');
 
         // PV curtail debug
         await mk('gridConstraints.pvCurtail.mode', 'Curtail mode (resolved)', 'string', 'text');
@@ -1009,6 +1054,274 @@ class GridConstraintsModule extends BaseModule {
      * Zusammenhang: Die Diagnose ist absichtlich read-only. Sie nutzt dieselben Mapping-Informationen
      * wie die bestehende PV-Curtail-Logik und erzeugt keinen zweiten Regelpfad.
      */
+    /**
+     * Code-Teil: _zeroExportSinkPriorityPlan
+     * Zweck: Definiert die fachlich richtige Reihenfolge für echte 0‑Einspeise-Anlagen.
+     * Wichtig: Verbrauch kommt immer zuerst, weil echter Haus-/Anlagenverbrauch bereits am
+     * Netzanschlusspunkt wirkt und nicht „geschaltet“ werden muss. Danach werden steuerbare
+     * Senken vorbereitet: Speicher laden, Ladepunkte, flexible Verbraucher, Mesh/Microgrid.
+     * Erst danach darf WR-/PV-Abregelung die Restleistung begrenzen. So bauen wir keine zweite
+     * Einspeiseregelung, sondern ergänzen den bestehenden Export Guard um eine klare Field-Order.
+     */
+    _zeroExportSinkRuntimeFor(id) {
+        if (!this._zeroExportSinkRuntime || typeof this._zeroExportSinkRuntime !== 'object') this._zeroExportSinkRuntime = {};
+        if (!this._zeroExportSinkRuntime[id]) this._zeroExportSinkRuntime[id] = { usable: true, lastAck: 'unknown', blockedUntil: 0, lastWriteTest: 'not_per_tick', lastReason: '' };
+        return this._zeroExportSinkRuntime[id];
+    }
+
+    _zeroExportSinkConfig(cfg) {
+        const s = cfg || {};
+        const commonTimeout = Math.max(5, Math.min(3600, Math.round(Number(s.zeroExportSinkAckTimeoutSec || s.zeroExportAckTimeoutSec || 60) || 60)));
+        const blockSec = Math.max(5, Math.min(3600, Math.round(Number(s.zeroExportSinkBlockSec || s.zeroExportBlockSec || 120) || 120)));
+        const commonAckRequired = s.zeroExportSinkAckRequired === true || s.zeroExportAckRequired === true;
+        const make = (id, commandStateId, ackStateId, ackRequired) => ({
+            id,
+            commandStateId: String(commandStateId || '').trim(),
+            ackStateId: String(ackStateId || '').trim(),
+            ackRequired: ackRequired === true || commonAckRequired,
+            ackTimeoutSec: commonTimeout,
+            blockSec,
+        });
+        return {
+            storageCharge: make('storageCharge', s.zeroExportStorageChargeCommandStateId || s.storageChargeCommandStateId, s.zeroExportStorageAckStateId || s.storageAckStateId || s.storageChargeAckStateId, s.zeroExportStorageAckRequired),
+            chargingStations: make('chargingStations', s.zeroExportChargingCommandStateId || s.chargingCommandStateId, s.zeroExportChargingAckStateId || s.chargingAckStateId || s.evcsAckStateId, s.zeroExportChargingAckRequired),
+            flexLoads: make('flexLoads', s.zeroExportFlexLoadCommandStateId || s.flexLoadCommandStateId, s.zeroExportFlexLoadAckStateId || s.flexLoadAckStateId || s.heatingRodAckStateId, s.zeroExportFlexLoadAckRequired),
+            meshMicrogrid: make('meshMicrogrid', s.zeroExportMeshCommandStateId || s.meshMicrogridCommandStateId, s.zeroExportMeshAckStateId || s.meshMicrogridAckStateId, s.zeroExportMeshAckRequired),
+            inverterCurtailment: make('inverterCurtailment', '', s.zeroExportInverterAckStateId || s.inverterAckStateId || s.pvCurtailAckStateId, s.zeroExportInverterAckRequired),
+        };
+    }
+
+    _classifyZeroExportSinkAck(raw) {
+        const txt = String(raw == null ? '' : raw).toLowerCase();
+        if (!txt) return { status: 'unknown', ok: false, usable: true, severity: 'warn', reason: 'Kein ACK-Wert vorhanden.' };
+        if (/(ok|accepted|success|succeeded|executed|done|completed|true|ack)/.test(txt)) return { status: 'ok', ok: true, usable: true, severity: 'info', reason: 'ACK OK.' };
+        if (/(pending|queued|running|processing|waiting)/.test(txt)) return { status: 'pending', ok: false, usable: false, severity: 'warn', reason: 'ACK wartet; Folge-Commands werden bis zum ACK zurückgehalten.' };
+        if (/(error|fail|failed|rejected|blocked|timeout|offline|false)/.test(txt)) return { status: 'error', ok: false, usable: false, severity: 'critical', reason: 'ACK meldet Fehler oder Blockierung.' };
+        return { status: 'unknown', ok: false, usable: true, severity: 'warn', reason: 'ACK-Wert unbekannt; Senke bleibt nur diagnostisch freigegeben.' };
+    }
+
+    async _readZeroExportAckState(id) {
+        const stateId = String(id || '').trim();
+        if (!stateId || !this.adapter) return null;
+        try {
+            if (typeof this.adapter.getForeignStateAsync === 'function') return await this.adapter.getForeignStateAsync(stateId);
+            if (typeof this.adapter.getStateAsync === 'function') return await this.adapter.getStateAsync(stateId);
+        } catch (_e) {}
+        return null;
+    }
+
+    async _zeroExportSinkAvailability(cfg, sinkPriority) {
+        const now = Date.now();
+        const sinkCfg = this._zeroExportSinkConfig(cfg || {});
+        const steps = Array.isArray(sinkPriority && sinkPriority.steps) ? sinkPriority.steps : [];
+        const out = {
+            schema: 'nexowatt.zero-export-sink-availability.v1',
+            ts: now,
+            fastPath: true,
+            reason: 'Schreibtests laufen nur bei Inbetriebnahme/Änderung/Fehler; Aktivbetrieb nutzt gespeicherte ACK-/Freigabedaten.',
+            sinks: {},
+            summary: { usableCount: 0, blockedCount: 0, ackRequiredCount: 0, waitingCount: 0, errorCount: 0 },
+        };
+        for (const step of steps) {
+            const id = step && step.id;
+            if (!id || id === 'localConsumption') continue;
+            const cfgRow = sinkCfg[id] || { id };
+            const rt = this._zeroExportSinkRuntimeFor(id);
+            const mapped = !!(step && step.mapped);
+            let usable = mapped && !(rt.blockedUntil && rt.blockedUntil > now);
+            let lastAck = rt.lastAck || 'not_required';
+            let reason = mapped ? 'Senke ist grundsätzlich gemappt.' : 'Senke ist nicht gemappt.';
+            let ackAgeSec = null;
+            if (cfgRow.ackRequired) out.summary.ackRequiredCount += 1;
+            if (cfgRow.ackStateId) {
+                const st = await this._readZeroExportAckState(cfgRow.ackStateId);
+                if (st) {
+                    const classified = this._classifyZeroExportSinkAck(st.val);
+                    ackAgeSec = st.ts ? Math.max(0, Math.round((now - Number(st.ts || 0)) / 1000)) : null;
+                    lastAck = classified.status;
+                    reason = classified.reason;
+                    if (classified.ok) {
+                        rt.blockedUntil = 0;
+                        rt.usable = true;
+                        usable = mapped;
+                    } else if (cfgRow.ackRequired) {
+                        usable = false;
+                        if (classified.status === 'pending') out.summary.waitingCount += 1;
+                        if (classified.status === 'error') out.summary.errorCount += 1;
+                    }
+                    rt.lastAck = lastAck;
+                    rt.lastReason = reason;
+                } else if (cfgRow.ackRequired) {
+                    usable = false;
+                    lastAck = 'missing_ack_state';
+                    reason = `ACK-State nicht lesbar: ${cfgRow.ackStateId}`;
+                    out.summary.errorCount += 1;
+                }
+            } else if (cfgRow.ackRequired) {
+                usable = false;
+                lastAck = 'missing_ack_mapping';
+                reason = 'ACK ist erforderlich, aber kein ACK-State ist konfiguriert.';
+                out.summary.errorCount += 1;
+            }
+            if (rt.blockedUntil && rt.blockedUntil > now) {
+                usable = false;
+                reason = rt.lastReason || `Senke bis ${new Date(rt.blockedUntil).toISOString()} blockiert.`;
+            }
+            rt.usable = usable;
+            out.sinks[id] = {
+                id,
+                label: step.label || id,
+                mapped,
+                commandStateId: cfgRow.commandStateId || step.commandStateId || '',
+                ackStateId: cfgRow.ackStateId || '',
+                ackRequired: !!cfgRow.ackRequired,
+                usable,
+                lastAck,
+                lastWriteTest: rt.lastWriteTest || 'not_per_tick',
+                blockedUntil: Number(rt.blockedUntil || 0),
+                ackAgeSec,
+                reason,
+            };
+            if (usable) out.summary.usableCount += 1;
+            else out.summary.blockedCount += 1;
+        }
+        out.fastPathReady = Object.values(out.sinks).some((s) => s && s.usable) || (sinkPriority && sinkPriority.nextAction === 'inverterCurtailment');
+        return out;
+    }
+
+    _applyZeroExportAvailabilityToPlan(sinkPriority, availability) {
+        const plan = sinkPriority || {};
+        const av = availability && availability.sinks ? availability.sinks : {};
+        if (!Array.isArray(plan.steps)) return plan;
+        const order = ['storageCharge', 'chargingStations', 'flexLoads', 'meshMicrogrid', 'inverterCurtailment'];
+        const requiredW = Math.max(0, Math.round(Number(plan.requestedReductionW || plan.exportOverLimitW || 0)));
+        if (requiredW <= 0) return plan;
+        const next = order.find((id) => {
+            if (id === 'inverterCurtailment') return plan.steps.find(s => s.id === id && s.mapped);
+            const row = av[id];
+            return row && row.usable === true && row.commandStateId;
+        }) || 'mappingRequired';
+        plan.nextAction = next;
+        plan.steps = plan.steps.map((s) => ({ ...s, activeCandidate: s.id === next, requestedPowerW: s.id === 'localConsumption' ? s.requestedPowerW : (s.id === next ? requiredW : 0), availability: av[s.id] || null }));
+        plan.commandEnvelope = { ...(plan.commandEnvelope || {}), nextAction: next, commands: plan.steps.filter(s => s.commandStateId && s.requestedPowerW > 0 && (!s.availability || s.availability.usable !== false)).map(s => ({
+            schema: 'nexowatt.zero-export-sink-command.v1',
+            sink: s.id,
+            label: s.label,
+            requestedPowerW: s.requestedPowerW,
+            commandStateId: s.commandStateId,
+            reason: '0-Einspeisung Schnellpfad: Schreibtest nicht pro Tick, gespeicherte Freigabe/ACK wird genutzt.',
+            directHardwareWrite: false,
+            neutralCommandOnly: true,
+        })) };
+        return plan;
+    }
+
+    _zeroExportSinkPriorityPlan(cfg, exportOverLimitW, currentExportW, estimatedCurtailmentW) {
+        const hasText = (v) => String(v || '').trim().length > 0;
+        const enabled = !!(cfg && cfg.zeroExportEnabled);
+        const maxFeedInW = this._getMaxFeedInPowerW(cfg || {});
+        const requiredW = Math.max(0, Math.round(Number(exportOverLimitW) || 0));
+        // Für aktive Senken-Commands darf nur die aktuelle Überschreitung verteilt werden.
+        // `estimatedCurtailmentW` bleibt Diagnosewert für WR-/PV-Abregelung und darf
+        // nicht als Speicher-/Ladepunkt-Sollleistung missverstanden werden.
+        const requestedReductionW = requiredW;
+        const diagnosticCurtailmentW = Math.max(0, Math.round(Number(estimatedCurtailmentW) || 0));
+        const order = [
+            'localConsumption',
+            'storageCharge',
+            'chargingStations',
+            'flexLoads',
+            'meshMicrogrid',
+            'inverterCurtailment',
+        ];
+        const labels = {
+            localConsumption: '1 Verbrauch zuerst / Eigenverbrauch am Netzpunkt',
+            storageCharge: '2 Speicher laden',
+            chargingStations: '3 Ladepunkte / Wallboxen / DC-Stationen',
+            flexLoads: '4 flexible Verbraucher / Heizstab / Wärmelast',
+            meshMicrogrid: '5 Mesh/Microgrid-Zielgruppen / Nachbar-Verbund',
+            inverterCurtailment: '6 Wechselrichter abregeln als letzte Stufe',
+        };
+        const mapped = {
+            localConsumption: true,
+            storageCharge: hasText(cfg?.zeroExportStorageChargeCommandStateId) || hasText(cfg?.batteryChargePowerWId) || hasText(cfg?.storageChargePowerWId),
+            chargingStations: hasText(cfg?.zeroExportChargingCommandStateId) || hasText(cfg?.chargingCommandStateId) || hasText(cfg?.evChargePowerWId),
+            flexLoads: hasText(cfg?.zeroExportFlexLoadCommandStateId) || hasText(cfg?.flexLoadCommandStateId) || hasText(cfg?.heatingRodPowerWId),
+            meshMicrogrid: hasText(cfg?.zeroExportMeshCommandStateId) || hasText(cfg?.meshMicrogridCommandStateId),
+            inverterCurtailment: this._exportWriteDiagnostics(cfg || {}, Array.isArray(cfg?.pvCurtailInvertersZero) && cfg.pvCurtailInvertersZero.length ? 'group' : this._resolveCurtailMode(cfg || {})).writable,
+        };
+        const now = Date.now();
+        const usableByRuntime = (id) => {
+            const row = this._zeroExportSinkRuntimeFor ? this._zeroExportSinkRuntimeFor(id) : null;
+            if (!row) return true;
+            if (row.blockedUntil && row.blockedUntil > now) return false;
+            return row.usable !== false;
+        };
+        const nextAction = requiredW <= 0
+            ? 'observe'
+            : (mapped.storageCharge && usableByRuntime('storageCharge') ? 'storageCharge'
+                : mapped.chargingStations && usableByRuntime('chargingStations') ? 'chargingStations'
+                    : mapped.flexLoads && usableByRuntime('flexLoads') ? 'flexLoads'
+                        : mapped.meshMicrogrid && usableByRuntime('meshMicrogrid') ? 'meshMicrogrid'
+                            : mapped.inverterCurtailment ? 'inverterCurtailment'
+                                : 'mappingRequired');
+        const steps = order.map((id, index) => ({
+            index: index + 1,
+            id,
+            label: labels[id],
+            mapped: !!mapped[id],
+            activeCandidate: id === nextAction,
+            requestedPowerW: id === 'localConsumption' ? Math.max(0, Math.round(Number(currentExportW) || 0)) : (id === nextAction ? requestedReductionW : 0),
+            commandStateId: id === 'storageCharge' ? String(cfg?.zeroExportStorageChargeCommandStateId || '')
+                : id === 'chargingStations' ? String(cfg?.zeroExportChargingCommandStateId || '')
+                    : id === 'flexLoads' ? String(cfg?.zeroExportFlexLoadCommandStateId || '')
+                        : id === 'meshMicrogrid' ? String(cfg?.zeroExportMeshCommandStateId || '')
+                            : '',
+            note: id === 'localConsumption'
+                ? 'Wirkt automatisch als natürliche Senke. Dieser Schritt wird nicht aktiv geschaltet.'
+                : id === 'inverterCurtailment'
+                    ? 'Letzte Stufe: WR/PV-Abregelung nur für Restleistung nach Verbrauch, Speicher und steuerbaren Senken.'
+                    : 'Neutraler Command-State/Mapping kann diese Senke aktivieren. Die konkrete Hardwaresteuerung bleibt bei lokaler Bridge/Adapter.',
+        }));
+        const commandEnvelope = {
+            schema: 'nexowatt.zero-export-sink-priority-command.v1',
+            mode: maxFeedInW === 0 ? 'zero_export' : 'export_limit',
+            enabled,
+            maxFeedInW,
+            requestedReductionW,
+            diagnosticCurtailmentW,
+            directHardwareWrite: false,
+            neutralCommandOnly: true,
+            priorityOrder: order,
+            nextAction,
+            commands: steps.filter(s => s.commandStateId && s.requestedPowerW > 0).map(s => ({
+                schema: 'nexowatt.zero-export-sink-command.v1',
+                sink: s.id,
+                label: s.label,
+                requestedPowerW: s.requestedPowerW,
+                commandStateId: s.commandStateId,
+                reason: '0-Einspeisung: Verbrauch zuerst, dann Speicher, dann Ladepunkte/flexible Senken, WR-Abregelung zuletzt.',
+                directHardwareWrite: false,
+                neutralCommandOnly: true,
+            })),
+        };
+        return {
+            schema: 'nexowatt.zero-export-sink-priority.v1',
+            enabled,
+            maxFeedInW,
+            zeroExport: maxFeedInW === 0,
+            requestedReductionW,
+            diagnosticCurtailmentW,
+            currentExportW: Math.max(0, Math.round(Number(currentExportW) || 0)),
+            exportOverLimitW: requiredW,
+            order,
+            steps,
+            nextAction,
+            commandEnvelope,
+            summary: 'Reihenfolge: Verbrauch zuerst, Speicher laden, Ladepunkte, flexible Verbraucher, Mesh/Microgrid, WR-Abregelung zuletzt.',
+        };
+    }
+
     _exportWriteDiagnostics(cfg, modeResolved) {
         const mode = String(modeResolved || '').trim() || 'off';
         const missing = [];
@@ -1102,6 +1415,214 @@ class GridConstraintsModule extends BaseModule {
     }
 
     /**
+     * Code-Teil: _writeZeroExportSinkCommands
+     * Zweck: Schreibt die aus der bestehenden Export-Guard-Regelung abgeleiteten
+     * 0-Einspeise-Senken als neutrale JSON-Commands in die vom Installateur
+     * angegebenen Command-States. Das ist keine zweite Regelung und keine direkte
+     * Hardwaresteuerung; lokale Bridges/Adapter entscheiden herstelleroffen über
+     * OCPP, Modbus, MQTT, REST oder Herstellerdatenpunkte.
+     */
+    async _writeZeroExportSinkCommands(sinkPriority, context) {
+        const commands = sinkPriority && sinkPriority.commandEnvelope && Array.isArray(sinkPriority.commandEnvelope.commands) ? sinkPriority.commandEnvelope.commands : [];
+        const availability = context && context.sinkAvailability && context.sinkAvailability.sinks ? context.sinkAvailability.sinks : {};
+        const result = {
+            schema: 'nexowatt.zero-export-sink-command-write-result.v1',
+            ts: Date.now(),
+            status: 'idle',
+            commandCount: commands.length,
+            writtenCount: 0,
+            failedCount: 0,
+            results: [],
+            skippedCount: 0,
+            blockedCount: 0,
+            directHardwareWrite: false,
+            neutralCommandOnly: true,
+        };
+        if (!commands.length) {
+            result.status = 'no_commands';
+            return result;
+        }
+        for (const cmd of commands) {
+            const stateId = String(cmd && cmd.commandStateId || '').trim();
+            if (!stateId) continue;
+            const av = availability && availability[cmd.sink] ? availability[cmd.sink] : null;
+            if (av && av.usable === false) {
+                result.blockedCount += 1;
+                result.skippedCount += 1;
+                result.results.push({ stateId, sink: cmd.sink, status: 'blocked-by-sink-availability', requestedPowerW: Math.max(0, Math.round(Number(cmd.requestedPowerW) || 0)), reason: av.reason || 'Senke ist aktuell nicht freigegeben.' });
+                continue;
+            }
+            const envelope = {
+                schema: 'nexowatt.zero-export-sink-target-command.v1',
+                ts: Date.now(),
+                source: 'nexowatt-ui.gridConstraints.exportLimit',
+                sink: cmd.sink,
+                label: cmd.label,
+                requestedPowerW: Math.max(0, Math.round(Number(cmd.requestedPowerW) || 0)),
+                reason: cmd.reason || '0-Einspeise Senkenpriorität',
+                exportOverLimitW: Math.max(0, Math.round(Number(context && context.exportOverLimitW) || 0)),
+                currentExportW: Math.max(0, Math.round(Number(context && context.currentExportW) || 0)),
+                maxFeedInW: Math.max(0, Math.round(Number(context && context.maxFeedInW) || 0)),
+                priorityOrder: sinkPriority.order || [],
+                nextAction: sinkPriority.nextAction || 'observe',
+                directHardwareWrite: false,
+                neutralCommandOnly: true,
+            };
+            try {
+                const json = JSON.stringify(envelope);
+                if (this.adapter && typeof this.adapter.setForeignStateAsync === 'function') await this.adapter.setForeignStateAsync(stateId, { val: json, ack: false });
+                else if (this.adapter && typeof this.adapter.setStateAsync === 'function') await this.adapter.setStateAsync(stateId, { val: json, ack: false });
+                result.writtenCount += 1;
+                const rt = this._zeroExportSinkRuntimeFor ? this._zeroExportSinkRuntimeFor(cmd.sink) : null;
+                if (rt) {
+                    rt.lastWriteTs = Date.now();
+                    rt.lastAck = 'pending';
+                    rt.lastWriteTest = rt.lastWriteTest || 'not_per_tick';
+                    const cfgRow = this._zeroExportSinkConfig ? this._zeroExportSinkConfig(this.adapter && this.adapter.config ? this.adapter.config : {})[cmd.sink] : null;
+                    if (cfgRow && cfgRow.ackRequired) {
+                        rt.usable = false;
+                        rt.blockedUntil = Date.now() + Math.max(5, Number(cfgRow.ackTimeoutSec || 60)) * 1000;
+                        rt.lastReason = 'Command geschrieben; wartet auf ACK, kein erneuter Schreibtest im Regel-Tick.';
+                    }
+                }
+                result.results.push({ stateId, sink: cmd.sink, status: 'written', requestedPowerW: envelope.requestedPowerW });
+            } catch (e) {
+                result.failedCount += 1;
+                const rt = this._zeroExportSinkRuntimeFor ? this._zeroExportSinkRuntimeFor(cmd.sink) : null;
+                if (rt) {
+                    const cfgRow = this._zeroExportSinkConfig ? this._zeroExportSinkConfig(this.adapter && this.adapter.config ? this.adapter.config : {})[cmd.sink] : null;
+                    rt.usable = false;
+                    rt.lastAck = 'write_error';
+                    rt.blockedUntil = Date.now() + Math.max(5, Number(cfgRow && cfgRow.blockSec || 120)) * 1000;
+                    rt.lastReason = String(e && e.message ? e.message : e);
+                }
+                result.results.push({ stateId, sink: cmd.sink, status: 'error', error: String(e && e.message ? e.message : e) });
+            }
+        }
+        result.status = result.failedCount ? (result.writtenCount ? 'partial-error' : 'error') : (result.writtenCount ? 'written' : (result.blockedCount ? 'blocked-by-availability' : 'no_targets'));
+        return result;
+    }
+
+    /**
+     * Code-Teil: _buildZeroExportCommissioningAssistant
+     * Zweck: Baut den 0-Einspeise-Inbetriebnahme-Assistenten als reine Diagnose-/Prüfschicht.
+     * Zusammenhang: Diese Funktion nutzt ausschließlich vorhandene Export-Guard-/Grid-Constraints-Daten.
+     * Sie baut keine zweite Regelung, schreibt keine Hardware und ersetzt keine WR-/Speicherlogik.
+     * Sie macht nur sichtbar, ob die Feld-Inbetriebnahme sauber vorbereitet ist.
+     */
+    _buildZeroExportCommissioningAssistant(cfg, ctx) {
+        const c = ctx && typeof ctx === 'object' ? ctx : {};
+        const hasText = (v) => typeof v === 'string' && v.trim().length > 0;
+        const sink = c.sinkPriority || {};
+        const write = c.write || { writable: false, missing: [] };
+        const maxFeedInW = Math.max(0, Math.round(Number(c.maxFeedInW) || 0));
+        const zeroExport = maxFeedInW === 0;
+        const gridFresh = typeof c.gridW === 'number' && Number.isFinite(c.gridW);
+        const storageMapped = hasText(cfg && cfg.zeroExportStorageChargeCommandStateId);
+        const chargingMapped = hasText(cfg && cfg.zeroExportChargingCommandStateId);
+        const flexMapped = hasText(cfg && cfg.zeroExportFlexLoadCommandStateId);
+        const meshMapped = hasText(cfg && cfg.zeroExportMeshCommandStateId);
+        const neutralSinkMapped = storageMapped || chargingMapped || flexMapped || meshMapped;
+        const sinkSteps = Array.isArray(sink.steps) ? sink.steps : [];
+        const sinkOrder = sinkSteps.length ? sinkSteps.map(s => s.id) : ['localConsumption', 'storageCharge', 'chargingStations', 'flexLoads', 'meshMicrogrid', 'inverterCurtailment'];
+        const expectedOrder = ['localConsumption', 'storageCharge', 'chargingStations', 'flexLoads', 'meshMicrogrid', 'inverterCurtailment'];
+        const sinkOrderOk = expectedOrder.every((id, idx) => sinkOrder[idx] === id);
+        const diagnostic = c.diagnosticOnly === true || String(c.runMode || '') === 'diagnostic';
+        const active = String(c.runMode || '') === 'active';
+        const sinkWrite = c.sinkWriteResult || {};
+        const sinkWriteOk = ['written', 'partial-error', 'diagnostic_only', 'blocked_not_allowed', 'no_commands'].includes(String(sinkWrite.status || ''));
+        const items = [];
+        const add = (id, label, ok, required, nextStep, value = null) => {
+            items.push({ id, label, ok: !!ok, required: required !== false, nextStep: nextStep || '', value });
+        };
+
+        add('export_guard_enabled', 'Export Guard / Einspeisebegrenzung aktiv', !!c.enabled, true, 'Im Reiter Netzlimits/Einspeisebegrenzung aktivieren.');
+        add('installer_approved', 'Installateurfreigabe gesetzt', !!c.approved, true, 'Installateurfreigabe erst nach Mapping-/Vorzeichenprüfung setzen.');
+        add('zero_export_limit', 'Maximale Einspeisung ist 0 W', zeroExport, true, 'Für echte 0-Einspeisung maximale Einspeisung auf 0 W setzen.', maxFeedInW);
+        add('grid_meter_fresh', 'Smartmeter / Netzpunkt plausibel', gridFresh, true, 'Netzpunkt-/Smartmeter-Mapping prüfen. Vorzeichen: Bezug positiv, Einspeisung negativ.');
+        add('run_mode_safe', 'Betriebsart Diagnose oder Aktiv', diagnostic || active, true, 'Neue Anlagen zuerst im Diagnose/Testmodus prüfen, danach Aktivmodus freigeben.', c.runMode || '');
+        add('wr_write_capable', 'WR-/PV-Write-Datenpunkte vorhanden', !!write.writable, true, write.nextStep || 'WR-Gruppe oder PV-Curtail-Write-Datenpunkt zuordnen.');
+        add('sink_order', 'Senkenreihenfolge korrekt', sinkOrderOk, true, 'Reihenfolge muss Verbrauch → Speicher → Ladepunkte → flexible Verbraucher → Mesh/Microgrid → WR-Abregelung sein.', sinkOrder);
+        add('storage_sink', 'Speicher-Lade-Command-State optional vorhanden', storageMapped, false, 'Für saubere 0-Einspeisung Speicher als erste steuerbare Senke zuordnen.', cfg && cfg.zeroExportStorageChargeCommandStateId || '');
+        add('charging_sink', 'Ladepunkt-Command-State optional vorhanden', chargingMapped, false, 'Ladepunkt-/DC-Station-Bridge als zweite steuerbare Senke zuordnen.', cfg && cfg.zeroExportChargingCommandStateId || '');
+        add('flex_sink', 'Flexible Verbraucher optional vorhanden', flexMapped, false, 'Heizstab/Wärmepumpe/Relaisverbraucher optional als dritte steuerbare Senke zuordnen.', cfg && cfg.zeroExportFlexLoadCommandStateId || '');
+        add('mesh_sink', 'Mesh/Microgrid optional vorhanden', meshMapped, false, 'Mesh/Microgrid-Zielgruppen optional nach lokalen Senken nutzen.', cfg && cfg.zeroExportMeshCommandStateId || '');
+        add('neutral_sink_or_wr', 'Mindestens WR-Write oder neutrale Senke vorhanden', !!write.writable || neutralSinkMapped, true, 'Ohne WR-Write und ohne neutrale Senken kann nur angezeigt, aber nicht geregelt werden.');
+        add('sink_command_pipeline', 'Senken-Command-Pipeline plausibel', sinkWriteOk, false, 'Im Diagnosemodus wird nur Vorschau angezeigt; im Aktivmodus Schreibstatus prüfen.', sinkWrite.status || '');
+
+        const required = items.filter(i => i.required);
+        const okRequired = required.filter(i => i.ok).length;
+        const score = required.length ? Math.round((okRequired / required.length) * 100) : 0;
+        const blockers = required.filter(i => !i.ok);
+        const warnings = items.filter(i => !i.required && !i.ok);
+        const ready = blockers.length === 0;
+        const stage = !c.enabled ? 'disabled'
+            : !c.approved ? 'awaiting_installer_approval'
+                : blockers.length ? 'mapping_required'
+                    : diagnostic ? 'diagnostic_ready'
+                        : active ? 'active_ready' : 'ready';
+        const nextStep = blockers.length
+            ? blockers[0].nextStep
+            : diagnostic
+                ? 'Diagnose/Testmodus prüfen: Sollwert-Vorschau, Senkenreihenfolge, WR-Writefähigkeit und ACKs beobachten. Danach bewusst auf Aktiv stellen.'
+                : '0-Einspeise-Kaskade ist bereit. Verbrauch zuerst, dann Speicher, Ladepunkte, flexible Verbraucher, Mesh/Microgrid, WR-Abregelung zuletzt.';
+        const writeTestPreview = {
+            schema: 'nexowatt.zero-export-commissioning.write-test-preview.v1',
+            diagnosticOnly: !!diagnostic,
+            directHardwareWrite: false,
+            neutralCommandOnly: true,
+            currentExportW: Math.max(0, Math.round(Number(c.currentExportW) || 0)),
+            exportOverLimitW: Math.max(0, Math.round(Number(c.exportOverLimitW) || 0)),
+            maxFeedInW,
+            plannedSinkAction: sink.nextAction || 'observe',
+            wrWriteCapable: !!write.writable,
+            wrWriteMode: write.mode || '',
+            neutralCommands: sink && sink.commandEnvelope && Array.isArray(sink.commandEnvelope.commands) ? sink.commandEnvelope.commands : [],
+            note: 'Write-Test-Vorschau: keine direkte Hardwaresteuerung; echte Writes nur im bestehenden Export Guard Aktivmodus bzw. über neutrale lokale Bridges.',
+        };
+        const sinkStatus = {
+            schema: 'nexowatt.zero-export-commissioning.sink-status.v1',
+            order: expectedOrder,
+            localConsumption: { available: true, active: true, note: 'Verbrauch wirkt immer zuerst als natürliche Senke am Netzpunkt.' },
+            storageCharge: { mapped: storageMapped, commandStateId: cfg && cfg.zeroExportStorageChargeCommandStateId || '', priority: 2 },
+            chargingStations: { mapped: chargingMapped, commandStateId: cfg && cfg.zeroExportChargingCommandStateId || '', priority: 3 },
+            flexLoads: { mapped: flexMapped, commandStateId: cfg && cfg.zeroExportFlexLoadCommandStateId || '', priority: 4 },
+            meshMicrogrid: { mapped: meshMapped, commandStateId: cfg && cfg.zeroExportMeshCommandStateId || '', priority: 5 },
+            inverterCurtailment: { mapped: !!write.writable, priority: 6, note: 'Letzte Stufe nach Verbrauch, Speicher, Ladepunkten, flexiblen Verbrauchern und Mesh/Microgrid.' },
+        };
+        return {
+            schema: 'nexowatt.zero-export-commissioning.v1',
+            status: ready ? (diagnostic ? 'ready_diagnostic' : 'ready') : 'blocked',
+            stage,
+            ready,
+            scorePercent: score,
+            nextStep,
+            lastReason: blockers.length ? blockers.map(b => b.label).join(' | ') : (warnings.length ? warnings.map(w => w.label).join(' | ') : 'Alle Pflichtprüfungen bestanden.'),
+            blockers,
+            warnings,
+            checklist: { schema: 'nexowatt.zero-export-commissioning.checklist.v1', items },
+            writeTestPreview,
+            sinkStatus,
+            report: {
+                schema: 'nexowatt.zero-export-commissioning.report.v1',
+                generatedAt: Date.now(),
+                zeroExport,
+                runMode: c.runMode,
+                enabled: !!c.enabled,
+                installerApproved: !!c.approved,
+                scorePercent: score,
+                ready,
+                nextStep,
+                currentExportW: Math.max(0, Math.round(Number(c.currentExportW) || 0)),
+                exportOverLimitW: Math.max(0, Math.round(Number(c.exportOverLimitW) || 0)),
+                writeDiagnostics: write,
+                sinkPriority: sink,
+                sinkCommandWrite: sinkWrite,
+            },
+        };
+    }
+
+    /**
      * Code-Teil: _publishExportLimitStates
      * Zweck: Veröffentlicht die neue Export-Guard-Sicht für UI, Diagnose und Energy Wallet.
      * Zusammenhang: Die Werte werden aus der bestehenden Grid-Constraints-Regelung abgeleitet. Dadurch gibt es
@@ -1120,17 +1641,24 @@ class GridConstraintsModule extends BaseModule {
         const diagnosticOnly = enabled && runMode === 'diagnostic';
         const write = this._exportWriteDiagnostics(cfg, mode);
         const estimateW = this._estimateCurtailmentW(cfg, mode, overLimitW);
+        let sinkPriority = this._zeroExportSinkPriorityPlan(cfg, overLimitW, currentExportW, estimateW);
+        let sinkAvailability = await this._zeroExportSinkAvailability(cfg, sinkPriority);
+        sinkPriority = this._applyZeroExportAvailabilityToPlan(sinkPriority, sinkAvailability);
+        sinkAvailability = await this._zeroExportSinkAvailability(cfg, sinkPriority);
+        const sinkCommandReady = !!(sinkPriority && sinkPriority.commandEnvelope && Array.isArray(sinkPriority.commandEnvelope.commands) && sinkPriority.commandEnvelope.commands.length);
         const requiredW = enabled && approved ? overLimitW : 0;
         const plannedAction = !enabled
             ? 'off'
             : !approved
                 ? 'awaiting_installer_approval'
-                : !write.writable
-                    ? 'mapping_required'
-                    : diagnosticOnly
-                        ? `would_limit_${Math.max(0, Math.round(requiredW))}W`
-                        : String(action || 'active');
-        const statusLabel = !enabled ? 'off' : !approved ? 'awaiting_installer_approval' : diagnosticOnly ? 'diagnostic_only' : !write.writable ? 'missing_wr_write_datapoints' : overLimitW > 0 ? 'export_above_limit' : negativePriceActive ? 'negative_price_guard_active' : 'within_limit';
+                : diagnosticOnly
+                    ? (sinkCommandReady ? `would_dispatch_sink_${sinkPriority.nextAction}_${Math.max(0, Math.round(requiredW))}W` : `would_limit_${Math.max(0, Math.round(requiredW))}W`)
+                    : sinkCommandReady
+                        ? `dispatch_sink_${sinkPriority.nextAction}`
+                        : !write.writable
+                            ? 'mapping_required'
+                            : String(action || 'active');
+        const statusLabel = !enabled ? 'off' : !approved ? 'awaiting_installer_approval' : diagnosticOnly ? 'diagnostic_only' : sinkCommandReady ? 'sink_priority_command_ready' : !write.writable ? 'missing_wr_write_datapoints' : overLimitW > 0 ? 'export_above_limit' : negativePriceActive ? 'negative_price_guard_active' : 'within_limit';
         const negativeStrategy = negativePriceActive ? `negative_price_import_bias_${Math.max(0, Math.round(Number(biasW) || 0))}W` : 'normal_export_limit';
         const warning = write.writable ? '' : write.missing.join(' | ');
         const installerMessage = !enabled
@@ -1157,6 +1685,9 @@ class GridConstraintsModule extends BaseModule {
             exportOverLimitW: overLimitW,
             plannedAction,
             negativePriceActive: !!negativePriceActive,
+            zeroExportSinkPriority: sinkPriority,
+            sinkAvailability,
+            sinkCommandReady,
             nextStep: write.nextStep || '',
             missingWriteDatapoints: write.missing || [],
         };
@@ -1186,8 +1717,36 @@ class GridConstraintsModule extends BaseModule {
             curtailmentRequiredW: requiredW,
             estimatedCurtailmentW: estimateW,
             unusedPvPowerW: estimateW,
+            zeroExportSinkPriority: sinkPriority,
+            sinkAvailability,
+            fastPathReady: !!(sinkAvailability && sinkAvailability.fastPathReady),
+            sinkCommandReady,
             updatedAt: Date.now(),
         };
+        const sinkWriteResult = enabled && approved && !diagnosticOnly && sinkCommandReady
+            ? await this._writeZeroExportSinkCommands(sinkPriority, { exportOverLimitW: overLimitW, currentExportW, maxFeedInW: effectiveMaxW, sinkAvailability })
+            : { schema: 'nexowatt.zero-export-sink-command-write-result.v1', ts: Date.now(), status: diagnosticOnly ? 'diagnostic_only' : (sinkCommandReady ? 'blocked_not_allowed' : 'no_commands'), commandCount: sinkPriority && sinkPriority.commandEnvelope && Array.isArray(sinkPriority.commandEnvelope.commands) ? sinkPriority.commandEnvelope.commands.length : 0, writtenCount: 0, failedCount: 0, results: [], directHardwareWrite: false, neutralCommandOnly: true };
+        summary.zeroExportSinkCommandWrite = sinkWriteResult;
+        checklist.zeroExportSinkCommandWrite = sinkWriteResult;
+        const commissioning = this._buildZeroExportCommissioningAssistant(cfg, {
+            enabled,
+            approved,
+            runMode,
+            diagnosticOnly,
+            write,
+            sinkPriority,
+            sinkAvailability,
+            sinkWriteResult,
+            currentExportW,
+            exportOverLimitW: overLimitW,
+            maxFeedInW: effectiveMaxW,
+            gridW,
+            mode,
+            negativePriceActive,
+            estimatedCurtailmentW: estimateW,
+        });
+        summary.commissioning = commissioning;
+        checklist.commissioning = commissioning.report || {};
         await set('gridConstraints.exportLimit.enabled', !!enabled);
         await set('gridConstraints.exportLimit.installerApproved', !!approved);
         await set('gridConstraints.exportLimit.configuredMaxFeedInW', effectiveMaxW);
@@ -1211,6 +1770,37 @@ class GridConstraintsModule extends BaseModule {
         await set('gridConstraints.exportLimit.curtailmentRequiredW', requiredW);
         await set('gridConstraints.exportLimit.estimatedCurtailmentW', estimateW);
         await set('gridConstraints.exportLimit.unusedPvPowerW', estimateW);
+        await set('gridConstraints.exportLimit.sinkPriorityOrderJson', JSON.stringify(sinkPriority.steps || []));
+        await set('gridConstraints.exportLimit.sinkPriorityPlanJson', JSON.stringify(sinkPriority));
+        await set('gridConstraints.exportLimit.nextSinkAction', sinkPriority.nextAction || 'observe');
+        await set('gridConstraints.exportLimit.sinkCommandEnvelopeJson', JSON.stringify(sinkPriority.commandEnvelope || {}));
+        await set('gridConstraints.exportLimit.sinkCommandWriteStatus', String(sinkWriteResult.status || 'idle'));
+        await set('gridConstraints.exportLimit.sinkCommandWriteJson', JSON.stringify(sinkWriteResult));
+        await set('gridConstraints.exportLimit.sinkCommandLastError', (sinkWriteResult.results || []).filter(r => r && r.status === 'error').map(r => `${r.stateId}: ${r.error}`).join(' | '));
+        await set('gridConstraints.exportLimit.sinkAvailabilityJson', JSON.stringify(sinkAvailability || {}));
+        await set('gridConstraints.exportLimit.fastPathReady', !!(sinkAvailability && sinkAvailability.fastPathReady));
+        await set('gridConstraints.exportLimit.activeSinkJson', JSON.stringify((sinkPriority.steps || []).find(s => s && s.activeCandidate) || {}));
+        await set('gridConstraints.exportLimit.fallbackReason', String((sinkAvailability && sinkAvailability.reason) || ''));
+        await set('gridConstraints.exportLimit.sinkAckSummaryJson', JSON.stringify((sinkAvailability && sinkAvailability.summary) || {}));
+        const sinkStateMap = { storage: 'storageCharge', charging: 'chargingStations', flexLoads: 'flexLoads', mesh: 'meshMicrogrid', inverter: 'inverterCurtailment' };
+        for (const key of Object.keys(sinkStateMap)) {
+            const row = sinkAvailability && sinkAvailability.sinks ? sinkAvailability.sinks[sinkStateMap[key]] || {} : {};
+            await set(`gridConstraints.exportLimit.sinks.${key}.usable`, row.usable === true);
+            await set(`gridConstraints.exportLimit.sinks.${key}.lastAck`, String(row.lastAck || 'unknown'));
+            await set(`gridConstraints.exportLimit.sinks.${key}.lastWriteTest`, String(row.lastWriteTest || 'not_per_tick'));
+            await set(`gridConstraints.exportLimit.sinks.${key}.blockedUntil`, Number(row.blockedUntil || 0));
+            await set(`gridConstraints.exportLimit.sinks.${key}.lastReason`, String(row.reason || ''));
+        }
+        await set('gridConstraints.exportLimit.commissioning.status', String(commissioning.status || 'unknown'));
+        await set('gridConstraints.exportLimit.commissioning.stage', String(commissioning.stage || 'unknown'));
+        await set('gridConstraints.exportLimit.commissioning.ready', commissioning.ready === true);
+        await set('gridConstraints.exportLimit.commissioning.scorePercent', Math.max(0, Math.min(100, Math.round(Number(commissioning.scorePercent) || 0))));
+        await set('gridConstraints.exportLimit.commissioning.nextStep', String(commissioning.nextStep || ''));
+        await set('gridConstraints.exportLimit.commissioning.lastReason', String(commissioning.lastReason || ''));
+        await set('gridConstraints.exportLimit.commissioning.checklistJson', JSON.stringify(commissioning.checklist || {}));
+        await set('gridConstraints.exportLimit.commissioning.writeTestPreviewJson', JSON.stringify(commissioning.writeTestPreview || {}));
+        await set('gridConstraints.exportLimit.commissioning.sinkStatusJson', JSON.stringify(commissioning.sinkStatus || {}));
+        await set('gridConstraints.exportLimit.commissioning.reportJson', JSON.stringify(commissioning.report || commissioning));
         await set('gridConstraints.exportLimit.displayJson', JSON.stringify(summary));
         await set('gridConstraints.exportLimit.summaryJson', JSON.stringify(summary));
         await set('gridConstraints.pvCurtail.estimatedCurtailmentW', estimateW);

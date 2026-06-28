@@ -1,10 +1,103 @@
+## 0.8.55
+
+- 0-Einspeise: Senken-Freigabe und schneller Aktivbetrieb ergänzt. Schreibtests werden nicht in jedem Regel-Tick ausgeführt.
+- Export Guard nutzt gespeicherte ACK-/Freigabedaten je Senke und blockiert fehlerhafte Ziele temporär, bevor die nächste Senke oder WR-Abregelung als Fallback genutzt wird.
+- Neue Runtime-States für Fast-Path, Sink Availability, ACK-Zusammenfassung und Zielblockierung ergänzt.
+- Bestehende Export-Guard-Regelstrecke bleibt die einzige Regelstrecke; keine zweite 0-Einspeise-Regelung.
+
+## 0.8.54
+
+- 0-Einspeise Inbetriebnahme-Assistent ergänzt. Bestehender Export Guard wird nicht dupliziert.
+- Checkliste für Smartmeter, Installateurfreigabe, 0-W-Limit, WR-Write, Senkenreihenfolge und neutrale Senken ergänzt.
+- Write-Test-Vorschau und Feldreport unter `gridConstraints.exportLimit.commissioning.*` ergänzt.
+- App-Center Diagnose zeigt Inbetriebnahme-Score und offene Pflichtprüfungen.
+
+## 0.8.53
+
+- Audit-/Regression-Fix: alte Versionsanker in Mesh-/0-Einspeise-Testskripten korrigiert.
+- Runtime-TS-Spiegel synchronisiert, damit `check:ts-runtime-mirrors` wieder sauber läuft.
+- Keine neue EMS-Regelstrecke, keine direkte Hardwaresteuerung, kein App-Center-Schemawechsel.
+
+## 0.8.52
+
+- Hotfix: 0-Einspeise-Senkenkaskade schreibt konfigurierte Speicher-/Ladepunkt-/Flex-/Mesh-Command-States jetzt im Aktivmodus als neutrale JSON-Commands.
+- Hotfix: Fehlende WR-Write-Datenpunkte werden nicht mehr als alleiniger Blocker bewertet, wenn aktive Senken-Command-States vorhanden sind; WR-Abregelung bleibt letzte Stufe.
+- Neue Diagnose-States für Sink-Command-Write-Status und Fehlertext ergänzt.
+
+## 0.8.51
+
+- Export Guard/0‑Einspeisung: Senkenreihenfolge festgelegt und sichtbar gemacht: Verbrauch zuerst, Speicher laden, Ladepunkte, flexible Verbraucher, Mesh/Microgrid, WR-Abregelung zuletzt.
+- Installer: optionale neutrale Command-State-Felder für Speicher, Ladepunkte, flexible Verbraucher und Mesh/Microgrid ergänzt.
+- Runtime-Diagnose: `gridConstraints.exportLimit.sinkPriority*` States und nächster Senken-Schritt ergänzt.
+- Architektur: keine zweite Einspeiseregelung; die bestehende Export-Guard-/Grid-Constraints-Regelung bleibt Quelle der Wahrheit.
+
+## 0.8.50
+
+- Mesh/Microgrid: Zielgruppen-Verteilung/Fairness ergänzt. Zielgruppen erhalten transparente Budgets, Mindestanteile, Gewichtung und Reserven.
+- CommandGuard: Zielgruppen-Fairness begrenzt/blockiert nur neutrale Command-Intents; keine direkten Hardwarewrites.
+- Betreiberansicht: Fairness-Budget und Restbudget je Zielgruppe sichtbar.
+
+## 0.8.49
+
+- Mesh/Microgrid: Zielgruppen-Strategie ergänzt. Knoten können zu Gruppen wie Ladepunkte, Speicher, Verbraucher oder Erzeuger gebündelt werden.
+- CommandGuard berücksichtigt Gruppenpriorität, Gruppenlimits und Gruppenbudgets, bevor neutrale Command-Intents ausgegeben werden.
+- App-Center: Zielgruppen-JSON im separaten Mesh/Microgrid-Reiter ergänzt; Apps bleibt reiner App-Katalog.
+- Betreiberansicht/API/CSV enthalten Zielgruppen, Prioritätsreihenfolge und gruppenbedingte Limit-/Blockiergründe.
+- Weiterhin keine direkten OCPP-/Modbus-/MQTT-/Herstellerwrites aus Mesh/Microgrid.
+
+## 0.8.48
+
+- Mesh/Microgrid: Leistungsgrenzen je Knoten ergänzt. `minPowerW`, `maxPowerW`, `maxImportW`, `maxExportW`, `maxChargeW`, `maxDischargeW`, `maxLoadW` und `maxGenerationW` können im Mesh/Microgrid-Reiter gepflegt werden.
+- CommandGuard: Node- und Bridge-Ziel-Limits begrenzen oder blockieren neutrale Command-Intents vor der Ausgabe.
+- Betreiberansicht und CSV/API: gekürzte und blockierte Commands mit Limitgrund sichtbar.
+- Architektur: weiterhin herstellerneutral, keine direkten Hardwarewrites aus Mesh/Microgrid.
+
+## 0.8.47
+
+- Mesh/Microgrid: Bridge-Wiederfreigabe je Ziel ergänzt. ACK-OK gibt blockierte Ziele automatisch wieder frei.
+- Mesh/Microgrid: manuelle Ziel-Freigabe über API/Betreiberansicht vorbereitet, ohne direkte Hardwarewrites.
+- Mesh/Microgrid: Command-Verlauf je Bridge-Ziel als Diagnose-/Feldtestbasis ergänzt.
+
+## 0.8.46
+
+- Mesh/Microgrid: Bridge-ACK-Gate ergänzt. Optional kann ACK pro lokaler Bridge-Zuordnung als Voraussetzung für Folge-Commands gesetzt werden.
+- Mesh/Microgrid: Ziel-Ampel und blockierte Ziele werden als Diagnose-States veröffentlicht; direkte Hardwarewrites bleiben weiterhin ausgeschlossen.
+- App-Center: ACK-Gate-Schalter im Reiter Mesh/Microgrid ergänzt; Apps-Reiter bleibt reiner App-Katalog.
+- Paket: Keine ZIP/TGZ-Artefakte im Paketbaum; TypeScript bleibt fachliche Quelle.
+
+## 0.8.45
+
+- Mesh/Microgrid: Local Bridge ACK- und Zielstatus ergänzt. Bridge-Zuordnungen können jetzt optionale ACK-/Status-States enthalten, die nur gelesen und herstellerneutral klassifiziert werden.
+- Betreiberansicht: Bridge ACK / Zielstatus zeigt ok, pending, timeout, Fehler, veraltete und fehlende Rückmeldungen je Bridge-Ziel.
+- App-Center: lokale Bridge-Zuordnung erhält ACK-Auswertung und Timeout, weiterhin im separaten Mesh/Microgrid-Reiter und nicht im Apps-Katalog.
+- Sicherheit: keine direkten OCPP-/Modbus-/MQTT-/Herstellerwrites; das Mesh-Modul bleibt bei neutralen JSON-Command-Intents und liest ACKs nur zur Diagnose.
+
+## 0.8.44
+
+- Mesh/Microgrid: Local Bridge Mapping ergänzt. Freigegebene neutrale Mesh-Command-Intents können jetzt lokal auf Ziel-Command-States je Knoten geroutet werden.
+- App-Center: Konfiguration bleibt im separaten Reiter Mesh/Microgrid; Apps-Reiter bleibt reiner App-Katalog.
+- Betreiberansicht: Local-Bridge-Status, Mappingdiagnose, geroutete/ungemappte Commands und letzte Bridge-Writes sichtbar.
+- Sicherheitsgrenze: weiterhin keine direkten OCPP-/Modbus-/MQTT-/REST-/Herstellerwrites aus der Mesh-App; lokale Bridges/Adapter setzen den JSON-Intent um.
+
+## 0.8.43
+
+- Mesh/Microgrid: Zwei-Instanzen-Feldtest mit Peer-Fehlerklassen, Roundtrip-Ampel und Remote-Node-Matrix gehärtet.
+- Mesh/Microgrid: Feldtest-Verlauf persistenter als Diagnose-State veröffentlicht und Betreiberansicht erweitert.
+- Sicherheit: Weiterhin keine direkten Hardwarewrites; Command-Receiver arbeitet ausschließlich über neutrale JSON-Command-States.
+
+## 0.8.42
+
+- Mesh/Microgrid: Feldtestansicht für zwei Instanzen ergänzt.
+- Betreiberansicht zeigt Peer-Matrix, Handshake-Status, Command-/ACK-Verlauf und Fehlerklassifikation für Token, Cluster, TTL und Replay.
+- Neuer manueller Probe-Endpunkt `/api/mesh/peer/fieldtest` prüft Handshake, Status und Command-Receiver über das separate Mesh-Tailscale.
+- Weiterhin herstellerneutral: keine direkten Hardwarewrites, nur neutrale JSON-Command-Envelopes für lokale Bridges.
+
 ## 0.8.41
 
-- Mesh/Microgrid: Peer-Handshake (`/api/mesh/handshake`, `/api/mesh/status`) für getrenntes Tailscale-Mesh ergänzt.
-- Mesh/Microgrid: Command-Receiver (`POST /api/mesh/command/receive`) mit Tokenprüfung, Clusterprüfung, TTL und Replay-Schutz ergänzt.
-- Mesh/Microgrid: empfangene Remote-Commands werden nur als neutraler JSON-Command-State ausgegeben; keine direkten OCPP-/Modbus-/MQTT-/Hersteller-Hardwarewrites.
-- App-Center: Receiver-Konfiguration im eigenen Reiter Mesh/Microgrid ergänzt; Apps-Reiter bleibt reiner App-Katalog.
-- Betreiberansicht: Receiver-/ACK-/Replay-Diagnose ergänzt.
+- Mesh/Microgrid: Peer-Handshake und Command-Receiver für das separate Mesh-Tailscale ergänzt.
+- Remote-Kommandos werden tokenisiert, Cluster-geprüft, replay-geschützt und nur als neutraler lokaler JSON-Command-State ausgegeben.
+- API-Routen `/api/mesh/handshake`, `/api/mesh/status` und `/api/mesh/command/receive` ergänzt.
+- App-Center Mesh/Microgrid-Reiter um Command-Receiver-Konfiguration erweitert; Apps-Reiter bleibt reiner App-Katalog.
 
 ## 0.8.40
 

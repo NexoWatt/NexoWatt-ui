@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.8.41",
+  "version": "0.8.55",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -248,7 +248,21 @@
     "test:mesh-microgrid-planning": "node scripts/verify-mesh-microgrid-planning.js",
     "test:mesh-microgrid-commandguard": "node scripts/verify-mesh-microgrid-commandguard.js",
     "test:app-center-structure-hardening": "npm run test:app-center-structure-cleanup",
-    "test:mesh-peer-receiver": "node scripts/verify-mesh-peer-receiver.js"
+    "test:mesh-microgrid-receiver": "node scripts/verify-mesh-microgrid-receiver.js",
+    "test:mesh-two-instance-fieldtest": "node scripts/verify-mesh-two-instance-fieldtest.js",
+    "test:mesh-peer-fieldtest": "node scripts/verify-mesh-peer-fieldtest.js",
+    "test:mesh-peer-hardening": "node scripts/verify-mesh-peer-hardening.js",
+    "test:mesh-active-control": "node scripts/verify-mesh-active-control.js",
+    "test:mesh-local-bridge": "node scripts/verify-mesh-local-bridge.js",
+    "test:mesh-bridge-ack": "node scripts/verify-mesh-bridge-ack.js",
+    "test:mesh-ack-gate": "node scripts/verify-mesh-ack-gate.js",
+    "test:mesh-target-release": "node scripts/verify-mesh-target-release.js",
+    "test:mesh-node-limits": "node scripts/verify-mesh-node-limits.js",
+    "test:mesh-target-groups": "node scripts/verify-mesh-target-groups.js",
+    "test:mesh-target-fairness": "node scripts/verify-mesh-target-fairness.js",
+    "test:zero-export-sink-priority": "node scripts/verify-zero-export-sink-priority.js",
+    "test:zero-export-commissioning": "node scripts/verify-zero-export-commissioning.js",
+    "test:zero-export-fast-path": "node scripts/verify-zero-export-fast-path.js"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",

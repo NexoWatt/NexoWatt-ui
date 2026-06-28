@@ -66,8 +66,14 @@ function runBrandHeaderCleanupTest(): void {
   assert(read('src-ts/runtime-executables/www/app.ts').includes('function nwNormalizeBrandHeader'), 'app.ts muss den TS-Branding-Normalizer enthalten.');
   assert(read('src-ts/runtime-executables/www/nw-shell.ts').includes('function nwNormalizeBrandHeader'), 'nw-shell.ts muss den TS-Branding-Normalizer enthalten.');
   assert(read('src-ts/runtime-executables/www/cockpit-shell.ts').includes('function nwNormalizeBrandHeader'), 'cockpit-shell.ts muss den TS-Branding-Normalizer enthalten.');
-  assert(read('src-ts/runtime-executables/www/sw.ts').includes("nexowatt-cache-v328"), 'Service-Worker-TS-Quelle muss Cache v327 nutzen.');
-  assert(read('www/sw.js').includes("nexowatt-cache-v328"), 'Generierter Service Worker muss Cache v327 nutzen.');
+  const versionParts = expectedVersion.split('.').map((part: string) => Number(part));
+  const patchVersionCandidate = versionParts[2] ?? 0;
+  const patchVersion: number = Number.isFinite(patchVersionCandidate) ? patchVersionCandidate : 0;
+  const expectedCacheName = `nexowatt-cache-v${300 + patchVersion}`;
+  const swTs = read('src-ts/runtime-executables/www/sw.ts');
+  const swJs = read('www/sw.js');
+  assert(swTs.includes(expectedCacheName), `Service-Worker-TS-Quelle muss ${expectedCacheName} nutzen.`);
+  assert(swJs.includes(expectedCacheName), `Generierter Service Worker muss ${expectedCacheName} nutzen.`);
 }
 
 runBrandHeaderCleanupTest();
