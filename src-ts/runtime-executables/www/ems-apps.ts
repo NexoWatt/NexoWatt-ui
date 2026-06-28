@@ -1083,10 +1083,32 @@
       const parsed = (raw && typeof raw === 'object') ? raw : JSON.parse(String(raw || '[]'));
       if (Array.isArray(parsed)) return parsed;
       if (parsed && typeof parsed === 'object' && Array.isArray(parsed.storages)) return parsed.storages;
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.rows)) return parsed.rows;
       return [];
     } catch (_e) {
       return [];
     }
+  }
+
+  function _recoverStorageFarmRowsFromStatusRows(statusRows) {
+    const rows = Array.isArray(statusRows) ? statusRows : [];
+    return rows
+      .filter((row) => row && typeof row === 'object')
+      .map((row, index) => ({
+        enabled: true,
+        name: String(row.name || row.label || '').trim() || `Speicher ${index + 1}`,
+        group: String(row.group || '').trim(),
+        // Diese Runtime-Statusquelle kennt in der Regel keine DP-Zuordnungen.
+        // Darum werden leere editierbare Felder angelegt, damit der Installateur
+        // die Speicher direkt wieder anbinden kann, statt bei "Noch keine Speicher"
+        // festzuhängen.
+        socId: '', signedPowerId: '', chargePowerId: '', dischargePowerId: '', pvPowerId: '',
+        setChargePowerId: '', setDischargePowerId: '', setSignedPowerId: '',
+        capacityKWh: (row.capacityKWh !== undefined && row.capacityKWh !== null && row.capacityKWh !== '') ? Number(row.capacityKWh) : '',
+        maxChargeW: (row.maxChargeW !== undefined && row.maxChargeW !== null && row.maxChargeW !== '') ? Number(row.maxChargeW) : '',
+        maxDischargeW: (row.maxDischargeW !== undefined && row.maxDischargeW !== null && row.maxDischargeW !== '') ? Number(row.maxDischargeW) : '',
+        _runtimeStatusRecovered: true,
+      }));
   }
 
   function _normalizeRecoveredStorageFarmRow(row, index) {
@@ -1128,13 +1150,30 @@
     } catch (_e) {
       return root;
     }
-    const runtimeRows = _parseStorageFarmRuntimeList(_readApiStateValue(statePayload, 'storageFarm.configJson', '[]'));
+    let runtimeRows = _parseStorageFarmRuntimeList(_readApiStateValue(statePayload, 'storageFarm.configJson', '[]'));
+    let fallbackSource = 'storageFarm.configJson';
+    if (!runtimeRows.length) {
+      // 0.8.58: Wenn configJson schon leer/kaputt ist, die laufende Farm aber in
+      // der Betreiberansicht noch Speicher zeigt, kommen die Namen aus
+      // storagesStatusJson. Daraus erzeugen wir editierbare Platzhalterzeilen,
+      // damit der Installateur die Speicher wieder anbinden kann.
+      const statusRows = _parseStorageFarmRuntimeList(_readApiStateValue(statePayload, 'storageFarm.storagesStatusJson', '[]'));
+      runtimeRows = _recoverStorageFarmRowsFromStatusRows(statusRows);
+      fallbackSource = 'storageFarm.storagesStatusJson';
+    }
+    if (!runtimeRows.length) {
+      const total = Number(_readApiStateValue(statePayload, 'storageFarm.storagesTotal', 0));
+      if (Number.isFinite(total) && total > 0) {
+        runtimeRows = Array.from({ length: Math.min(10, Math.max(1, Math.round(total))) }, (_x, i) => ({ enabled: true, name: `Speicher ${i + 1}`, _runtimeCountRecovered: true }));
+        fallbackSource = 'storageFarm.storagesTotal';
+      }
+    }
     if (!runtimeRows.length) return root;
 
     root.storageFarm = root.storageFarm && typeof root.storageFarm === 'object' ? root.storageFarm : {};
     root.storageFarm.storages = runtimeRows.slice(0, 10).map(_normalizeRecoveredStorageFarmRow);
     root.storageFarm._runtimeRecovered = true;
-    root.storageFarm.__runtimeStateFallbackSource = 'storageFarm.configJson';
+    root.storageFarm.__runtimeStateFallbackSource = fallbackSource;
     // Bestehende produktive Speicherfarm nicht ausblenden, wenn nur die Admin-
     // Konfiguration leer war. Dies ändert keine Lizenz; es hält App-Schalter und
     // Speicherfarm-Reiter konsistent zur laufenden Runtime-Konfiguration.
@@ -1762,6 +1801,14 @@ function collectAiAdvisorConfigFromUI(base) {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
   }
+
+  // 0.8.58 Hotfix: Die Speicherfarm-Master-Detail-Ansicht verwendete nach
+  // der TS-Migration versehentlich `htmlEscape`, obwohl die gemeinsame
+  // Escape-Funktion `_nwHtmlEscape` heißt. Sobald ein Speicher hinzugefügt oder
+  // aus Runtime-State wiederhergestellt wurde, brach buildStorageFarmUI() ab und
+  // der Reiter blieb leer. Alias bewusst lokal halten, damit alte Aufrufstellen
+  // stabil bleiben und später sauber typisiert ersetzt werden können.
+  const htmlEscape = _nwHtmlEscape;
 
   function _nwSystemProfileCountry() {
     const cp = currentConfig && currentConfig.countryProfile && typeof currentConfig.countryProfile === 'object' ? currentConfig.countryProfile : {};
@@ -8626,7 +8673,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (sf._runtimeRecovered) {
       const recovered = document.createElement('div');
       recovered.className = 'nw-help';
-      recovered.textContent = 'Speicherfarm-Konfiguration wurde aus dem Runtime-State storageFarm.configJson wiederhergestellt. Bitte prüfen und speichern, damit die Admin-Konfiguration wieder vollständig ist. Die laufende Farm-Regelung wurde dadurch nicht geändert.';
+      recovered.textContent = `Speicherfarm-Konfiguration wurde aus dem Runtime-State ${sf.__runtimeStateFallbackSource || 'storageFarm.configJson'} wiederhergestellt. Bitte prüfen und speichern, damit die Admin-Konfiguration wieder vollständig ist. Die laufende Farm-Regelung wurde dadurch nicht geändert.`;
       els.storageFarmStorages.appendChild(recovered);
     }
 

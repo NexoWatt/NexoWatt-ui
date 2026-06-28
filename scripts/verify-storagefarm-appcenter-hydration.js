@@ -25,6 +25,10 @@ must('src-ts/runtime-executables/www/ems-apps.ts', 'async function hydrateStorag
 must('src-ts/runtime-executables/www/ems-apps.ts', "_readApiStateValue(statePayload, 'storageFarm.configJson'", 'Runtime configJson Fallback TS');
 must('src-ts/runtime-executables/www/ems-apps.ts', "_readApiStateValue(statePayload, 'storageFarm.groupsJson'", 'Runtime groupsJson Fallback TS');
 must('src-ts/runtime-executables/www/ems-apps.ts', 'root.storageFarm._runtimeRecovered = true', 'Recover Marker TS');
+must('src-ts/runtime-executables/main.ts', 'fromStatusRows', 'Backend storagesStatusJson Recovery');
+must('src-ts/runtime-executables/www/ems-apps.ts', 'const htmlEscape = _nwHtmlEscape', 'htmlEscape Alias TS');
+must('src-ts/runtime-executables/www/ems-apps.ts', "_readApiStateValue(statePayload, 'storageFarm.storagesStatusJson'", 'Runtime storagesStatusJson Fallback TS');
+must('src-ts/runtime-executables/www/ems-apps.ts', '_recoverStorageFarmRowsFromStatusRows', 'StatusJson-Recovery TS');
 must('src-ts/runtime-executables/www/ems-apps.ts', 'würde der Installer fälschlich', 'Fehlerbild-Kommentar TS');
 must('www/ems-apps.js', 'async function hydrateStorageFarmConfigFromRuntimeState(cfg)', 'Hydrationsfunktion Runtime');
 must('www/ems-apps.js', "_readApiStateValue(statePayload, 'storageFarm.configJson'", 'Runtime configJson Fallback Runtime');

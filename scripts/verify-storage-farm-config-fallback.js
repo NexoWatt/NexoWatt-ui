@@ -9,7 +9,7 @@ const fs = require('fs');
 function read(p){ return fs.readFileSync(p,'utf8'); }
 function must(file, needle, label){ const s=read(file); if(!s.includes(needle)){ console.error(`[storage-farm-fallback] Missing ${label}: ${needle} in ${file}`); process.exit(1); } }
 function mustNot(file, needle, label){ const s=read(file); if(s.includes(needle)){ console.error(`[storage-farm-fallback] Forbidden ${label}: ${needle} in ${file}`); process.exit(1); } }
-must('package.json','"version": "0.8.57"','package version');
+must('package.json','"version": "0.8.58"','package version');
 must('src-ts/runtime-executables/www/ems-apps.ts','hydrateStorageFarmConfigFromRuntimeState','App-Center Runtime-Fallback');
 must('src-ts/runtime-executables/www/ems-apps.ts','storageFarm.configJson','App-Center liest storageFarm.configJson');
 must('src-ts/runtime-executables/www/ems-apps.ts','storageFarm.groupsJson','App-Center liest storageFarm.groupsJson');

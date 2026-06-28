@@ -12029,11 +12029,40 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           if (!txt || txt === 'null' || txt === 'undefined') return fallback;
           try { return JSON.parse(txt); } catch (_e) { return fallback; }
         };
+        const asList = (parsed) => {
+          if (Array.isArray(parsed)) return parsed;
+          if (parsed && typeof parsed === 'object' && Array.isArray(parsed.storages)) return parsed.storages;
+          if (parsed && typeof parsed === 'object' && Array.isArray(parsed.rows)) return parsed.rows;
+          return [];
+        };
+        const fromStatusRows = (rows) => (Array.isArray(rows) ? rows : [])
+          .filter(r => r && typeof r === 'object')
+          .map((r, i) => ({
+            enabled: true,
+            name: String(r.name || r.label || '').trim() || `Speicher ${i + 1}`,
+            group: String(r.group || '').trim(),
+            capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : '',
+            maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : '',
+            maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : '',
+            _runtimeStatusRecovered: true,
+          }));
         const stCfg = await this.getStateAsync('storageFarm.configJson').catch(() => null);
         const parsedCfg = parseJson(stCfg && stCfg.val, []);
-        const storages = Array.isArray(parsedCfg)
-          ? parsedCfg
-          : (parsedCfg && typeof parsedCfg === 'object' && Array.isArray(parsedCfg.storages) ? parsedCfg.storages : []);
+        let storages = asList(parsedCfg);
+        let fallbackSource = 'storageFarm.configJson';
+        if (!storages.length) {
+          const stStatus = await this.getStateAsync('storageFarm.storagesStatusJson').catch(() => null);
+          storages = fromStatusRows(asList(parseJson(stStatus && stStatus.val, [])));
+          fallbackSource = 'storageFarm.storagesStatusJson';
+        }
+        if (!storages.length) {
+          const stTotal = await this.getStateAsync('storageFarm.storagesTotal').catch(() => null);
+          const total = Math.max(0, Math.min(10, Math.round(Number(stTotal && stTotal.val) || 0)));
+          if (total > 0) {
+            storages = Array.from({ length: total }, (_x, i) => ({ enabled: true, name: `Speicher ${i + 1}`, _runtimeCountRecovered: true }));
+            fallbackSource = 'storageFarm.storagesTotal';
+          }
+        }
         if (!storages.length) return out;
 
         const normalized = storages
@@ -12067,7 +12096,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         sf.storages = normalized;
         sf.__runtimeStateFallback = true;
-        sf.__runtimeStateFallbackSource = 'storageFarm.configJson';
+        sf.__runtimeStateFallbackSource = fallbackSource;
 
         const stMode = await this.getStateAsync('storageFarm.mode').catch(() => null);
         const mode = String(stMode && stMode.val || sf.mode || 'pool').trim().toLowerCase();

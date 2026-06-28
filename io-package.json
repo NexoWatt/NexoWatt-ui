@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.57",
+    "version": "0.8.58",
     "news": {
+      "0.8.58": {
+        "de": "Version 0.8.58: Hotfix für Speicherfarm-App-Center. Behebt leeren Speicherfarm-Reiter durch fehlende Escape-Funktion und stellt Speicher auch aus storagesStatusJson/storagesTotal wieder her, damit vorhandene Speicher wieder sichtbar und neu anbindbar sind.",
+        "en": "Version 0.8.58: Storage farm App Center hotfix. Fixes the empty storage farm tab caused by a missing escape helper and restores storages from storagesStatusJson/storagesTotal when needed, so existing storages become visible and bindable again."
+      },
       "0.8.57": {
         "de": "Version 0.8.57: Behebt Speicherfarm-App-Center-Fallback. Bestehende Speicher werden im Installer wieder aus storageFarm.configJson geladen, wenn installer.configJson leer/inkonsistent ist. Keine neue Regelstrecke.",
         "en": "Version 0.8.57: Fixes storage farm App Center fallback. Existing storages are restored in the installer from storageFarm.configJson when installer.configJson is empty/inconsistent. No new control logic."
@@ -26,10 +30,6 @@
       "0.8.52": {
         "de": "Version 0.8.52: Hotfix für 0-Einspeise Senkenkaskade. Konfigurierte Speicher-/Ladepunkt-/Flex-/Mesh-Command-States werden im Aktivmodus als neutrale JSON-Commands beschrieben; WR-Write fehlt nicht mehr fälschlich als alleiniger Blocker, wenn Senken verfügbar sind.",
         "en": "Version 0.8.52: Hotfix for zero-export sink cascade. Configured storage/charging/flexible/mesh command states are written as neutral JSON commands in active mode; missing inverter write points are no longer treated as the only blocker when sinks are available."
-      },
-      "0.8.51": {
-        "de": "Version 0.8.51: Ergänzt die 0‑Einspeise-Senkenreihenfolge: Verbrauch zuerst, danach Speicher laden, Ladepunkte, flexible Verbraucher, Mesh/Microgrid und WR-Abregelung zuletzt. Die bestehende Export-Guard-Regelung wird nicht doppelt gebaut, sondern feldtauglicher diagnostiziert.",
-        "en": "Version 0.8.51: Adds the zero-export sink priority order: consumption first, then battery charging, charging stations, flexible loads, Mesh/Microgrid and inverter curtailment last. The existing Export Guard is not duplicated, only improved for field diagnostics."
       }
     },
     "title": "NexoWatt UI",

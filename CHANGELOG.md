@@ -1,3 +1,9 @@
+## 0.8.58
+
+- Speicherfarm/App-Center: Fehler behoben, durch den die Master-Detail-Ansicht nach dem Hinzufügen oder Wiederherstellen eines Speichers wegen undefiniertem `htmlEscape` abbrechen konnte.
+- Speicherfarm/App-Center: Runtime-Fallback erweitert. Wenn `storageFarm.configJson` leer ist, werden sichtbare Speicher aus `storageFarm.storagesStatusJson` oder notfalls aus `storageFarm.storagesTotal` als editierbare Platzhalter wiederhergestellt.
+- Sicherheit: keine Änderung an Speicherfarm-Regelung, Dispatch, Export Guard, Mesh/Microgrid oder Hardwarewrites. Nur UI-/Konfigurationswiederherstellung.
+
 ## 0.8.57
 
 - Bugfix: Speicherfarm-Konfiguration im App-Center wird wieder aus `storageFarm.configJson`/`storageFarm.groupsJson` hydratisiert, wenn `installer.configJson` keine `storageFarm.storages` enthält.
