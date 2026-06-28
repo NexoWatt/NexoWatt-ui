@@ -9,7 +9,7 @@ const fs = require('fs');
 function read(p){ return fs.readFileSync(p,'utf8'); }
 function must(file, needle){ const s=read(file); if(!s.includes(needle)){ console.error(`[mesh-target-groups] Missing in ${file}: ${needle}`); process.exit(1); } }
 function mustNot(file, needle){ const s=read(file); if(s.includes(needle)){ console.error(`[mesh-target-groups] Forbidden in ${file}: ${needle}`); process.exit(1); } }
-must('package.json','"version": "0.8.55"');
+must('package.json','"version": "0.8.56"');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts','nexowatt.mesh-microgrid-target-group-fairness.v1');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts','function normalizeTargetGroups');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts','function buildTargetGroupPlan');

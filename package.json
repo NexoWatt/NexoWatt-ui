@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.8.55",
+  "version": "0.8.57",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -262,7 +262,12 @@
     "test:mesh-target-fairness": "node scripts/verify-mesh-target-fairness.js",
     "test:zero-export-sink-priority": "node scripts/verify-zero-export-sink-priority.js",
     "test:zero-export-commissioning": "node scripts/verify-zero-export-commissioning.js",
-    "test:zero-export-fast-path": "node scripts/verify-zero-export-fast-path.js"
+    "test:zero-export-fast-path": "node scripts/verify-zero-export-fast-path.js",
+    "test:zero-export-sink-ack-history": "node scripts/verify-zero-export-sink-ack-history.js",
+    "test:storage-farm-appcenter-restore": "node scripts/verify-storage-farm-appcenter-restore.js",
+    "test:storage-farm-config-fallback": "node scripts/verify-storage-farm-config-fallback.js",
+    "test:storagefarm-appcenter-restore": "node scripts/verify-storagefarm-appcenter-restore.js",
+    "test:storagefarm-appcenter-hydration": "node scripts/verify-storagefarm-appcenter-hydration.js"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",

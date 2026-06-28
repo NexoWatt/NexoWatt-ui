@@ -1,3 +1,17 @@
+## 0.8.57
+
+- Bugfix: Speicherfarm-Konfiguration im App-Center wird wieder aus `storageFarm.configJson`/`storageFarm.groupsJson` hydratisiert, wenn `installer.configJson` keine `storageFarm.storages` enthält.
+- Schutz: Speichern im App-Center überschreibt produktiv laufende Speicherfarm-Konfiguration nicht mehr versehentlich mit einer leeren Speicherliste.
+- Regressionstest `test:storage-farm-appcenter-restore` ergänzt.
+- Keine neue Regelstrecke, keine neue Hardwaresteuerung.
+
+## 0.8.56
+
+- 0-Einspeise: Senken-ACK-Verlauf und Feldprotokoll ergänzt.
+- ACK-/Status-States je Senke werden nachgelagert gelesen; kein Schreibtest pro Regel-Tick.
+- Fehler/Timeout blockieren nur die betroffene Senke, damit der Export Guard schnell zur nächsten Senke oder WR-Abregelung wechseln kann.
+- Neue Diagnose-States unter `gridConstraints.exportLimit.sinkAck*` und `gridConstraints.exportLimit.sinks.*.ack*`.
+
 ## 0.8.55
 
 - 0-Einspeise: Senken-Freigabe und schneller Aktivbetrieb ergänzt. Schreibtests werden nicht in jedem Regel-Tick ausgeführt.

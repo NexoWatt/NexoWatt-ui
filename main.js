@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:42b44d8a93127c6c93b8ac56156d9d90aaf0093f2039644f58fe1be71527d9e0
+ * Quell-Hash: sha256:32d508a1ff167ec02f008b15578fa5d1816d1c770e241c84082d290368a16bb7
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -11999,6 +11999,150 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       };
     };
     /**
+     * Code-Teil: _nwHydrateStorageFarmConfigFromRuntimeStates
+     * Zweck: Stellt sicher, dass die App-Center-Konfiguration der Speicherfarm
+     *        nicht leer erscheint, wenn die laufende Speicherfarm-Konfiguration
+     *        bereits in `storageFarm.configJson` gespiegelt ist.
+     *
+     * Hintergrund/Fix:
+     * Die Speicherfarm arbeitet im Runtime-/VIS-Bereich aus `storageFarm.configJson`.
+     * Nach mehreren App-Center-/Installer-Migrationen kann `installer.configJson`
+     * aber `storageFarm.storages` nicht mehr enthalten, obwohl die Farm produktiv
+     * läuft. Dann zeigte der Reiter Speicherfarm im App-Center keine Speicher mehr
+     * und ein Speichern hätte die bestehende Konfiguration gefährlich überschreiben
+     * können. Dieser Fallback liest die Runtime-Spiegelstates nur, wenn die
+     * Installer-Konfiguration leer ist.
+     */
+    const _nwHydrateStorageFarmConfigFromRuntimeStates = async (cfgOut) => {
+      try {
+        const out = cfgOut && typeof cfgOut === 'object' ? cfgOut : {};
+        out.storageFarm = (out.storageFarm && typeof out.storageFarm === 'object') ? out.storageFarm : {};
+        const sf = out.storageFarm;
+        const hasInstallerStorages = Array.isArray(sf.storages) && sf.storages.some(r => r && typeof r === 'object');
+        if (hasInstallerStorages) return out;
+
+        const parseJson = (raw, fallback) => {
+          if (raw && typeof raw === 'object') return raw;
+          const txt = String(raw == null ? '' : raw).trim();
+          if (!txt || txt === 'null' || txt === 'undefined') return fallback;
+          try { return JSON.parse(txt); } catch (_e) { return fallback; }
+        };
+        const stCfg = await this.getStateAsync('storageFarm.configJson').catch(() => null);
+        const parsedCfg = parseJson(stCfg && stCfg.val, []);
+        const storages = Array.isArray(parsedCfg)
+          ? parsedCfg
+          : (parsedCfg && typeof parsedCfg === 'object' && Array.isArray(parsedCfg.storages) ? parsedCfg.storages : []);
+        if (!storages.length) return out;
+
+        const normalized = storages
+          .filter(r => r && typeof r === 'object')
+          .map((r, i) => ({
+            enabled: r.enabled === false ? false : true,
+            name: String(r.name || '').trim() || `Speicher ${i + 1}`,
+            coupling: String(r.coupling || '').trim().toLowerCase(),
+            socId: String(r.socId || '').trim(),
+            signedPowerId: String(r.signedPowerId || '').trim(),
+            chargePowerId: String(r.chargePowerId || '').trim(),
+            dischargePowerId: String(r.dischargePowerId || '').trim(),
+            pvPowerId: String(r.pvPowerId || '').trim(),
+            invertSignedPowerSign: !!r.invertSignedPowerSign,
+            invertChargeSign: !!r.invertChargeSign,
+            invertDischargeSign: !!r.invertDischargeSign,
+            setChargePowerId: String(r.setChargePowerId || '').trim(),
+            setDischargePowerId: String(r.setDischargePowerId || '').trim(),
+            setSignedPowerId: String(r.setSignedPowerId || '').trim(),
+            invertSetSignedPowerSign: !!r.invertSetSignedPowerSign,
+            maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : '',
+            maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : '',
+            availableId: String(r.availableId || '').trim(),
+            faultId: String(r.faultId || '').trim(),
+            chargeAllowedId: String(r.chargeAllowedId || '').trim(),
+            dischargeAllowedId: String(r.dischargeAllowedId || '').trim(),
+            capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : '',
+            group: String(r.group || '').trim(),
+          }));
+        if (!normalized.length) return out;
+
+        sf.storages = normalized;
+        sf.__runtimeStateFallback = true;
+        sf.__runtimeStateFallbackSource = 'storageFarm.configJson';
+
+        const stMode = await this.getStateAsync('storageFarm.mode').catch(() => null);
+        const mode = String(stMode && stMode.val || sf.mode || 'pool').trim().toLowerCase();
+        sf.mode = mode === 'groups' ? 'groups' : 'pool';
+
+        const stGroups = await this.getStateAsync('storageFarm.groupsJson').catch(() => null);
+        const parsedGroups = parseJson(stGroups && stGroups.val, []);
+        if ((!Array.isArray(sf.groups) || !sf.groups.length) && Array.isArray(parsedGroups) && parsedGroups.length) {
+          sf.groups = parsedGroups.filter(g => g && typeof g === 'object').map((g, i) => ({
+            enabled: g.enabled === false ? false : true,
+            name: String(g.name || '').trim() || `Gruppe ${String.fromCharCode(65 + i)}`,
+            socMin: (g.socMin !== undefined && g.socMin !== null && g.socMin !== '') ? Number(g.socMin) : '',
+            socMax: (g.socMax !== undefined && g.socMax !== null && g.socMax !== '') ? Number(g.socMax) : '',
+            priority: (g.priority !== undefined && g.priority !== null && g.priority !== '') ? Number(g.priority) : (100 + i),
+          }));
+        }
+
+        // Wenn Speicher produktiv laufen, muss der App-Center-Reiter sichtbar bleiben.
+        // Das ändert keine Lizenz; es hält nur die bestehende Installiert/Aktiv-Anzeige
+        // konsistent zur Runtime-Konfiguration.
+        out.emsApps = out.emsApps && typeof out.emsApps === 'object' ? out.emsApps : {};
+        out.emsApps.apps = out.emsApps.apps && typeof out.emsApps.apps === 'object' ? out.emsApps.apps : {};
+        const st = out.emsApps.apps.storagefarm && typeof out.emsApps.apps.storagefarm === 'object' ? out.emsApps.apps.storagefarm : {};
+        out.emsApps.apps.storagefarm = Object.assign({}, st, { installed: true, enabled: st.enabled !== false });
+        out.enableStorageFarm = true;
+        return out;
+      } catch (e) {
+        try { this.log && this.log.warn && this.log.warn('storageFarm runtime fallback failed: ' + (e && e.message ? e.message : e)); } catch (_e) {}
+        return cfgOut;
+      }
+    };
+
+    /**
+     * StorageFarm-Hotfix 0.8.57: schützt produktive Speicherfarm-Mappings beim
+     * Speichern aus einem stale/leer gerenderten App-Center.
+     *
+     * Wenn `storageFarm.storages` aus der UI leer kommt, der Runtime-State
+     * `storageFarm.configJson` aber produktive Speicher enthält, wird die leere
+     * Liste durch die Runtime-Liste ersetzt. So kann ein leerer App-Center-Reiter
+     * die funktionierende Speicherfarm nicht versehentlich löschen.
+     */
+    const _nwProtectStorageFarmPatchFromEmptySubmit = async (patchObj) => {
+      try {
+        const patch = patchObj && typeof patchObj === 'object' ? patchObj : {};
+        const sf = patch.storageFarm && typeof patch.storageFarm === 'object' ? patch.storageFarm : null;
+        if (!sf) return patch;
+        const allowEmpty = sf.__allowEmptyStorages === true || sf.__explicitDeleteAll === true;
+        const sentStorages = Array.isArray(sf.storages) ? sf.storages : null;
+        const sentEmpty = sentStorages && sentStorages.length === 0;
+        if (sentEmpty && !allowEmpty) {
+          const shadow = { storageFarm: {} };
+          await _nwHydrateStorageFarmConfigFromRuntimeStates(shadow);
+          const restored = shadow.storageFarm && Array.isArray(shadow.storageFarm.storages) ? shadow.storageFarm.storages : [];
+          if (restored.length) {
+            sf.storages = restored;
+            sf.__protectedFromEmptySubmit = true;
+            sf.__runtimeStateFallback = true;
+            sf.__runtimeStateFallbackSource = 'storageFarm.configJson';
+            try { this.log && this.log.warn && this.log.warn(`[storageFarm] Empty App-Center submit protected; restored ${restored.length} storage entries from storageFarm.configJson.`); } catch (_eLog) {}
+          }
+        }
+        const sentGroups = Array.isArray(sf.groups) ? sf.groups : null;
+        const groupsEmpty = sentGroups && sentGroups.length === 0;
+        if (groupsEmpty && !allowEmpty) {
+          const shadow = { storageFarm: {} };
+          await _nwHydrateStorageFarmConfigFromRuntimeStates(shadow);
+          const groups = shadow.storageFarm && Array.isArray(shadow.storageFarm.groups) ? shadow.storageFarm.groups : [];
+          if (groups.length) sf.groups = groups;
+        }
+        return patch;
+      } catch (e) {
+        try { this.log && this.log.warn && this.log.warn('storageFarm empty-submit protection failed: ' + (e && e.message ? e.message : e)); } catch (_e) {}
+        return patchObj;
+      }
+    };
+
+    /**
      * Code-Teil: _nwRestartEms
      * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
      * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -12029,7 +12173,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         // system.adapter.<instance>.native. Persisting to native triggers an ioBroker instance restart
         // and breaks the UI with "Failed to fetch" + SSE disconnects.
         const nativeObj = (this.config && typeof this.config === 'object') ? this.config : {};
-        const cfgOut = _nwPickInstallerConfig(nativeObj);
+        const cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickInstallerConfig(nativeObj));
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
         cfgOut.locale = this._nwBuildLocaleInfo();
         cfgOut.countryProfile = Object.assign({}, cfgOut.countryProfile || {}, this._nwBuildCountryProfileInfo());
@@ -12084,6 +12228,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           safePatch[k] = v;
         }
         this._nwApplyLicenseLimitsToInstallerPatch(safePatch);
+        await _nwProtectStorageFarmPatchFromEmptySubmit(safePatch);
 
         // Persist (state-based) + apply to runtime config.
         // We merge into the already persisted patch (loaded on startup) to keep full configuration.
@@ -12166,7 +12311,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         }
 
         try { await this._nwInitLicense(); } catch (e) { try { this.log.warn('License refresh after installer config save failed: ' + (e && e.message ? e.message : e)); } catch (_eLog) {} }
-        const cfgOut = _nwPickInstallerConfig(this.config || {});
+        const cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickInstallerConfig(this.config || {}));
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
         cfgOut.locale = this._nwBuildLocaleInfo();
         cfgOut.countryProfile = Object.assign({}, cfgOut.countryProfile || {}, this._nwBuildCountryProfileInfo());

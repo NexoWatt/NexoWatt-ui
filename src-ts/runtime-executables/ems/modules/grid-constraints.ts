@@ -102,11 +102,13 @@ class GridConstraintsModule extends BaseModule {
         };
 
         // 0.8.55: Schneller 0-Einspeise-Aktivbetrieb.
+        // 0.8.56: ACK-Verlauf/Feldprotokoll je Senke ohne Schreibtest pro Tick.
         // Schreibtests laufen nicht in jedem Regel-Tick. Diese Runtime hält
         // letzte ACK-/Blockierinformationen je Senke, damit der Export Guard
         // im Aktivbetrieb sofort auf freigegebene Ziele schreiben kann und bei
         // Fehlern ohne Verzögerung auf die nächste Senke bzw. WR-Abregelung fällt.
         this._zeroExportSinkRuntime = {};
+        this._zeroExportSinkAckHistory = {};
     }
 
     /**
@@ -379,6 +381,7 @@ class GridConstraintsModule extends BaseModule {
         await mk('gridConstraints.exportLimit.sinkCommandLastError', '0-export sink command last error', 'string', 'text');
 
         // 0.8.55: Senken-Freigabe und schneller Aktivbetrieb.
+        // 0.8.56: Senken-ACK-Verlauf und Feldprotokoll.
         // Diese States sind die schnelle Betriebsdiagnose: keine Schreibtests pro Tick,
         // sondern Nutzung gespeicherter Freigaben/ACKs und zielweises Blockieren bei Fehlern.
         await mk('gridConstraints.exportLimit.sinkAvailabilityJson', '0-export sink availability JSON', 'string', 'json');
@@ -386,12 +389,23 @@ class GridConstraintsModule extends BaseModule {
         await mk('gridConstraints.exportLimit.activeSinkJson', '0-export active sink JSON', 'string', 'json');
         await mk('gridConstraints.exportLimit.fallbackReason', '0-export fallback reason', 'string', 'text');
         await mk('gridConstraints.exportLimit.sinkAckSummaryJson', '0-export sink ACK summary JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.sinkAckHistoryJson', '0-export sink ACK history JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.sinkAckFieldProtocolJson', '0-export sink ACK field protocol JSON', 'string', 'json');
+        await mk('gridConstraints.exportLimit.sinkAckOkCount', '0-export sink ACK ok count', 'number', 'value');
+        await mk('gridConstraints.exportLimit.sinkAckPendingCount', '0-export sink ACK pending count', 'number', 'value');
+        await mk('gridConstraints.exportLimit.sinkAckErrorCount', '0-export sink ACK error count', 'number', 'value');
+        await mk('gridConstraints.exportLimit.sinkAckTimeoutCount', '0-export sink ACK timeout count', 'number', 'value');
+        await mk('gridConstraints.exportLimit.sinkAckLastEvent', '0-export sink last ACK event', 'string', 'text');
         for (const sink of ['storage', 'charging', 'flexLoads', 'mesh', 'inverter']) {
             await mk(`gridConstraints.exportLimit.sinks.${sink}.usable`, `${sink} usable for zero export`, 'boolean', 'indicator');
             await mk(`gridConstraints.exportLimit.sinks.${sink}.lastAck`, `${sink} last ACK`, 'string', 'text');
             await mk(`gridConstraints.exportLimit.sinks.${sink}.lastWriteTest`, `${sink} last write-test`, 'string', 'text');
             await mk(`gridConstraints.exportLimit.sinks.${sink}.blockedUntil`, `${sink} blocked until`, 'number', 'value.time');
             await mk(`gridConstraints.exportLimit.sinks.${sink}.lastReason`, `${sink} last reason`, 'string', 'text');
+            await mk(`gridConstraints.exportLimit.sinks.${sink}.ackHistoryJson`, `${sink} ACK history JSON`, 'string', 'json');
+            await mk(`gridConstraints.exportLimit.sinks.${sink}.ackOkCount`, `${sink} ACK ok count`, 'number', 'value');
+            await mk(`gridConstraints.exportLimit.sinks.${sink}.ackErrorCount`, `${sink} ACK error count`, 'number', 'value');
+            await mk(`gridConstraints.exportLimit.sinks.${sink}.ackTimeoutCount`, `${sink} ACK timeout count`, 'number', 'value');
         }
 
         // 0.8.54: 0-Einspeise Inbetriebnahme-Assistent.
@@ -1112,6 +1126,156 @@ class GridConstraintsModule extends BaseModule {
         return null;
     }
 
+
+    _rememberZeroExportSinkAck(sink, row, maxRows = 20) {
+        const id = String(sink || '').trim();
+        if (!id) return [];
+        if (!this._zeroExportSinkAckHistory || typeof this._zeroExportSinkAckHistory !== 'object') this._zeroExportSinkAckHistory = {};
+        if (!Array.isArray(this._zeroExportSinkAckHistory[id])) this._zeroExportSinkAckHistory[id] = [];
+        const list = this._zeroExportSinkAckHistory[id];
+        const hash = `${row && row.status}|${row && row.reason}|${row && row.ackStateId}|${row && row.lastWriteTs}|${row && row.ackTs}|${row && row.event}`;
+        const last = list.length ? list[list.length - 1] : null;
+        if (last && last._hash === hash && Date.now() - Number(last.ts || 0) < 10_000) return list;
+        list.push({ ...(row || {}), _hash: hash, directHardwareWrite: false, neutralCommandOnly: true });
+        this._zeroExportSinkAckHistory[id] = list.slice(-Math.max(1, Math.min(100, Number(maxRows) || 20)));
+        return this._zeroExportSinkAckHistory[id];
+    }
+
+    /**
+     * Code-Teil: _updateZeroExportSinkAcks
+     * Zweck: Hält den ACK-Verlauf je 0-Einspeise-Senke aktuell.
+     * Wichtig: Kein Schreibtest pro Tick. Diese Funktion liest nur ACK-/Status-States,
+     * führt kurze Historien und blockiert nur die betroffene Senke bei Timeout/Fehler.
+     */
+    async _updateZeroExportSinkAcks(cfg, sinkPriority) {
+        const now = Date.now();
+        const sinkCfg = this._zeroExportSinkConfig(cfg || {});
+        const steps = Array.isArray(sinkPriority && sinkPriority.steps) ? sinkPriority.steps : [];
+        const ids = ['storageCharge', 'chargingStations', 'flexLoads', 'meshMicrogrid', 'inverterCurtailment'];
+        const rows = [];
+        for (const id of ids) {
+            const step = steps.find(s => s && s.id === id) || {};
+            const cfgRow = sinkCfg[id] || { id };
+            const rt = this._zeroExportSinkRuntimeFor(id);
+            const lastWriteTs = Number(rt.lastWriteTs || 0);
+            let status = rt.lastAck || (cfgRow.ackRequired ? 'waiting' : 'not_required');
+            let reason = rt.lastReason || '';
+            let value = null;
+            let ackTs = 0;
+            let event = 'ack_read';
+            if (cfgRow.ackStateId) {
+                const st = await this._readZeroExportAckState(cfgRow.ackStateId);
+                if (st) {
+                    value = st.val;
+                    ackTs = Number(st.ts || st.lc || 0) || now;
+                    const cls = this._classifyZeroExportSinkAck(st.val);
+                    status = cls.status;
+                    reason = cls.reason;
+                    if (lastWriteTs && ackTs < lastWriteTs && cfgRow.ackRequired && now - lastWriteTs > cfgRow.ackTimeoutSec * 1000) {
+                        status = 'timeout';
+                        reason = `ACK nicht innerhalb von ${cfgRow.ackTimeoutSec}s nach letztem Command aktualisiert.`;
+                    }
+                } else if (cfgRow.ackRequired && lastWriteTs && now - lastWriteTs > cfgRow.ackTimeoutSec * 1000) {
+                    status = 'timeout';
+                    reason = `ACK-State nicht lesbar oder nicht aktualisiert: ${cfgRow.ackStateId}`;
+                } else if (cfgRow.ackRequired) {
+                    status = 'pending';
+                    reason = 'ACK erforderlich; Rückmeldung steht aus.';
+                }
+            } else if (cfgRow.ackRequired) {
+                status = 'missing_ack_mapping';
+                reason = 'ACK ist erforderlich, aber kein ACK-State ist konfiguriert.';
+            }
+            const critical = ['timeout', 'error', 'missing_ack_mapping', 'missing_ack_state'].includes(status);
+            if (status === 'ok') {
+                if (rt.blockedUntil && rt.blockedUntil > now) event = 'auto_release';
+                rt.blockedUntil = 0;
+                rt.usable = true;
+                rt.autoReleaseCount = Number(rt.autoReleaseCount || 0) + (event === 'auto_release' ? 1 : 0);
+            } else if (critical) {
+                rt.usable = false;
+                rt.blockedUntil = Math.max(Number(rt.blockedUntil || 0), now + cfgRow.blockSec * 1000);
+            }
+            rt.lastAck = status;
+            rt.lastAckAt = ackTs || Number(rt.lastAckAt || 0);
+            rt.lastReason = reason;
+            if (status === 'ok') rt.ackOkCount = Number(rt.ackOkCount || 0) + 1;
+            if (status === 'error' || status === 'missing_ack_mapping') rt.ackErrorCount = Number(rt.ackErrorCount || 0) + 1;
+            if (status === 'timeout') rt.ackTimeoutCount = Number(rt.ackTimeoutCount || 0) + 1;
+            const row = {
+                schema: 'nexowatt.zero-export-sink-ack.v1', ts: now, sink: id, label: step.label || id,
+                event, ackStateId: cfgRow.ackStateId || '', status, reason, value,
+                lastWriteTs, ackTs: ackTs || 0, blockedUntil: Number(rt.blockedUntil || 0),
+            };
+            rows.push(row);
+            this._rememberZeroExportSinkAck(id, row, 20);
+        }
+        return this._zeroExportSinkAckHistorySummary(rows);
+    }
+
+    _zeroExportSinkAckHistorySummary(rows = null) {
+        const ids = ['storageCharge', 'chargingStations', 'flexLoads', 'meshMicrogrid', 'inverterCurtailment'];
+        const history = this._zeroExportSinkAckHistory && typeof this._zeroExportSinkAckHistory === 'object' ? this._zeroExportSinkAckHistory : {};
+        const perSink = ids.map((id) => {
+            const list = Array.isArray(history[id]) ? history[id].map(e => ({ ...e, _hash: undefined })) : [];
+            const rt = this._zeroExportSinkRuntimeFor(id);
+            return { sink: id, history: list, last: list.length ? list[list.length - 1] : null, ackOkCount: Number(rt.ackOkCount || 0), ackErrorCount: Number(rt.ackErrorCount || 0), ackTimeoutCount: Number(rt.ackTimeoutCount || 0), autoReleaseCount: Number(rt.autoReleaseCount || 0) };
+        });
+        const all = perSink.flatMap(x => x.history || []).sort((a,b)=>Number(b.ts||0)-Number(a.ts||0));
+        return {
+            schema: 'nexowatt.zero-export-sink-ack-history.v1',
+            ts: Date.now(),
+            status: all.some(e => e && ['timeout','error','missing_ack_mapping'].includes(e.status)) ? 'warn' : 'ok',
+            rows: Array.isArray(rows) ? rows : [],
+            history: Object.fromEntries(perSink.map(x => [x.sink, x.history])),
+            perSink,
+            okCount: perSink.reduce((s,x)=>s+Number(x.ackOkCount||0),0),
+            pendingCount: all.filter(e=>e && e.status==='pending').length,
+            errorCount: perSink.reduce((s,x)=>s+Number(x.ackErrorCount||0),0),
+            timeoutCount: perSink.reduce((s,x)=>s+Number(x.ackTimeoutCount||0),0),
+            autoReleaseCount: perSink.reduce((s,x)=>s+Number(x.autoReleaseCount||0),0),
+            lastEvent: all.length ? all[0] : null,
+            note: 'ACK-Verlauf/Feldprotokoll je Senke. Kein Schreibtest pro Regel-Tick.',
+        };
+    }
+
+    _rememberZeroExportSinkAck(id, row, maxRows = 20) {
+        const sink = String(id || '').trim();
+        if (!sink) return [];
+        if (!this._zeroExportSinkAckHistory || typeof this._zeroExportSinkAckHistory !== 'object') this._zeroExportSinkAckHistory = {};
+        const list = Array.isArray(this._zeroExportSinkAckHistory[sink]) ? this._zeroExportSinkAckHistory[sink] : [];
+        list.push({ schema: 'nexowatt.zero-export-sink-ack-event.v1', ts: Date.now(), sink, ...(row || {}) });
+        this._zeroExportSinkAckHistory[sink] = list.slice(-Math.max(1, Math.min(100, Number(maxRows) || 20)));
+        return this._zeroExportSinkAckHistory[sink];
+    }
+
+    _zeroExportSinkAckSummary() {
+        const history = this._zeroExportSinkAckHistory && typeof this._zeroExportSinkAckHistory === 'object' ? this._zeroExportSinkAckHistory : {};
+        const rows = ['storageCharge', 'chargingStations', 'flexLoads', 'meshMicrogrid', 'inverterCurtailment'].map((sink) => {
+            const list = Array.isArray(history[sink]) ? history[sink] : [];
+            const last = list.length ? list[list.length - 1] : null;
+            const okCount = list.filter(r => ['ok','written'].includes(String(r && (r.status || r.lastAck)))).length;
+            const pendingCount = list.filter(r => /pending|waiting/i.test(String(r && (r.status || r.lastAck || '')))).length;
+            const errorCount = list.filter(r => /error|failed|rejected|blocked/i.test(String(r && (r.status || r.lastAck || '')))).length;
+            const timeoutCount = list.filter(r => /timeout|expired/i.test(String(r && (r.status || r.lastAck || '')))).length;
+            return { sink, eventCount: list.length, okCount, pendingCount, errorCount, timeoutCount, last };
+        });
+        const all = rows.flatMap(r => Array.isArray(history[r.sink]) ? history[r.sink] : []);
+        const lastEvent = all.slice().sort((a,b) => Number(b.ts||0) - Number(a.ts||0))[0] || null;
+        return {
+            schema: 'nexowatt.zero-export-sink-ack-history.v1',
+            ts: Date.now(),
+            rows,
+            history,
+            okCount: rows.reduce((a,r)=>a+(r.okCount||0),0),
+            pendingCount: rows.reduce((a,r)=>a+(r.pendingCount||0),0),
+            errorCount: rows.reduce((a,r)=>a+(r.errorCount||0),0),
+            timeoutCount: rows.reduce((a,r)=>a+(r.timeoutCount||0),0),
+            lastEvent,
+            note: 'ACK-Verlauf/Feldprotokoll je Senke. Kein Schreibtest pro Tick.',
+        };
+    }
+
     async _zeroExportSinkAvailability(cfg, sinkPriority) {
         const now = Date.now();
         const sinkCfg = this._zeroExportSinkConfig(cfg || {});
@@ -1170,7 +1334,7 @@ class GridConstraintsModule extends BaseModule {
                 reason = rt.lastReason || `Senke bis ${new Date(rt.blockedUntil).toISOString()} blockiert.`;
             }
             rt.usable = usable;
-            out.sinks[id] = {
+            const sinkRow = {
                 id,
                 label: step.label || id,
                 mapped,
@@ -1184,6 +1348,14 @@ class GridConstraintsModule extends BaseModule {
                 ackAgeSec,
                 reason,
             };
+            out.sinks[id] = sinkRow;
+            const previousAck = rt._lastHistoryAck || '';
+            const previousReason = rt._lastHistoryReason || '';
+            if (lastAck && (previousAck !== lastAck || previousReason !== reason)) {
+                this._rememberZeroExportSinkAck(id, { event: 'ack_read', status: lastAck, lastAck, ackStateId: cfgRow.ackStateId || '', ackAgeSec, usable, blockedUntil: Number(rt.blockedUntil || 0), reason }, 20);
+                rt._lastHistoryAck = lastAck;
+                rt._lastHistoryReason = reason;
+            }
             if (usable) out.summary.usableCount += 1;
             else out.summary.blockedCount += 1;
         }
@@ -1644,6 +1816,7 @@ class GridConstraintsModule extends BaseModule {
         const write = this._exportWriteDiagnostics(cfg, mode);
         const estimateW = this._estimateCurtailmentW(cfg, mode, overLimitW);
         let sinkPriority = this._zeroExportSinkPriorityPlan(cfg, overLimitW, currentExportW, estimateW);
+        const sinkAckSummary = await this._updateZeroExportSinkAcks(cfg || {}, sinkPriority);
         let sinkAvailability = await this._zeroExportSinkAvailability(cfg, sinkPriority);
         sinkPriority = this._applyZeroExportAvailabilityToPlan(sinkPriority, sinkAvailability);
         sinkAvailability = await this._zeroExportSinkAvailability(cfg, sinkPriority);
@@ -1721,6 +1894,7 @@ class GridConstraintsModule extends BaseModule {
             unusedPvPowerW: estimateW,
             zeroExportSinkPriority: sinkPriority,
             sinkAvailability,
+            sinkAckSummary,
             fastPathReady: !!(sinkAvailability && sinkAvailability.fastPathReady),
             sinkCommandReady,
             updatedAt: Date.now(),
@@ -1783,7 +1957,22 @@ class GridConstraintsModule extends BaseModule {
         await set('gridConstraints.exportLimit.fastPathReady', !!(sinkAvailability && sinkAvailability.fastPathReady));
         await set('gridConstraints.exportLimit.activeSinkJson', JSON.stringify((sinkPriority.steps || []).find(s => s && s.activeCandidate) || {}));
         await set('gridConstraints.exportLimit.fallbackReason', String((sinkAvailability && sinkAvailability.reason) || ''));
-        await set('gridConstraints.exportLimit.sinkAckSummaryJson', JSON.stringify((sinkAvailability && sinkAvailability.summary) || {}));
+        await set('gridConstraints.exportLimit.sinkAckSummaryJson', JSON.stringify(sinkAckSummary || {}));
+        await set('gridConstraints.exportLimit.sinkAckHistoryJson', JSON.stringify((sinkAckSummary && sinkAckSummary.history) || {}));
+        await set('gridConstraints.exportLimit.sinkFieldProtocolJson', JSON.stringify({ schema: 'nexowatt.zero-export-field-protocol.v1', ts: Date.now(), sinkAckSummary, sinkCommandWrite: sinkWriteResult, activeSink: sinkAvailability && sinkAvailability.activeSink || null, fallbackReason: sinkAvailability && sinkAvailability.fallbackReason || '' }));
+        await set('gridConstraints.exportLimit.sinkAckOkCount', Number(sinkAckSummary && sinkAckSummary.okCount || 0));
+        await set('gridConstraints.exportLimit.sinkAckPendingCount', Number(sinkAckSummary && sinkAckSummary.pendingCount || 0));
+        await set('gridConstraints.exportLimit.sinkAckErrorCount', Number(sinkAckSummary && sinkAckSummary.errorCount || 0));
+        await set('gridConstraints.exportLimit.sinkAckTimeoutCount', Number(sinkAckSummary && sinkAckSummary.timeoutCount || 0));
+        await set('gridConstraints.exportLimit.sinkAckLastEvent', JSON.stringify((sinkAckSummary && sinkAckSummary.lastEvent) || {}));
+        const sinkAckHistory = this._zeroExportSinkAckSummary ? this._zeroExportSinkAckSummary() : { schema: 'nexowatt.zero-export-sink-ack-history.v1', rows: [], history: {} };
+        await set('gridConstraints.exportLimit.sinkAckHistoryJson', JSON.stringify(sinkAckHistory.history || {}));
+        await set('gridConstraints.exportLimit.sinkAckFieldProtocolJson', JSON.stringify(sinkAckHistory));
+        await set('gridConstraints.exportLimit.sinkAckOkCount', Number(sinkAckHistory.okCount || 0));
+        await set('gridConstraints.exportLimit.sinkAckPendingCount', Number(sinkAckHistory.pendingCount || 0));
+        await set('gridConstraints.exportLimit.sinkAckErrorCount', Number(sinkAckHistory.errorCount || 0));
+        await set('gridConstraints.exportLimit.sinkAckTimeoutCount', Number(sinkAckHistory.timeoutCount || 0));
+        await set('gridConstraints.exportLimit.sinkAckLastEvent', sinkAckHistory.lastEvent ? `${sinkAckHistory.lastEvent.sink}:${sinkAckHistory.lastEvent.status || sinkAckHistory.lastEvent.lastAck || ''}` : '');
         const sinkStateMap = { storage: 'storageCharge', charging: 'chargingStations', flexLoads: 'flexLoads', mesh: 'meshMicrogrid', inverter: 'inverterCurtailment' };
         for (const key of Object.keys(sinkStateMap)) {
             const row = sinkAvailability && sinkAvailability.sinks ? sinkAvailability.sinks[sinkStateMap[key]] || {} : {};
@@ -1792,6 +1981,13 @@ class GridConstraintsModule extends BaseModule {
             await set(`gridConstraints.exportLimit.sinks.${key}.lastWriteTest`, String(row.lastWriteTest || 'not_per_tick'));
             await set(`gridConstraints.exportLimit.sinks.${key}.blockedUntil`, Number(row.blockedUntil || 0));
             await set(`gridConstraints.exportLimit.sinks.${key}.lastReason`, String(row.reason || ''));
+            const histKey = sinkStateMap[key] || row.id;
+            const hist = sinkAckSummary && sinkAckSummary.history ? sinkAckSummary.history[histKey] || [] : [];
+            const rt = this._zeroExportSinkRuntimeFor ? this._zeroExportSinkRuntimeFor(histKey) : {};
+            await set(`gridConstraints.exportLimit.sinks.${key}.ackHistoryJson`, JSON.stringify(hist));
+            await set(`gridConstraints.exportLimit.sinks.${key}.ackOkCount`, Number(rt.ackOkCount || 0));
+            await set(`gridConstraints.exportLimit.sinks.${key}.ackErrorCount`, Number(rt.ackErrorCount || 0));
+            await set(`gridConstraints.exportLimit.sinks.${key}.ackTimeoutCount`, Number(rt.ackTimeoutCount || 0));
         }
         await set('gridConstraints.exportLimit.commissioning.status', String(commissioning.status || 'unknown'));
         await set('gridConstraints.exportLimit.commissioning.stage', String(commissioning.stage || 'unknown'));

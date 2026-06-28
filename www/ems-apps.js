@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:0b638695f47c17691302a84bc8cb34a0eabd09851d7a1e22da09bfdf9c8e48f9
+ * Quell-Hash: sha256:3a4eb6c42ca1b54e321129c43144b1ce1d39ed914d8208ab7e7bb0204f2f0cf5
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1044,6 +1044,120 @@
   }
 
   let _licenseLiveRefreshInFlight = false;
+  /**
+   * Code-Teil: hydrateStorageFarmConfigFromRuntimeState
+   * Zweck: Repariert/übernimmt Speicherfarm-Konfiguration aus Runtime-States, wenn
+   * die Admin-jsonConfig leer ist, die Runtime aber noch eine funktionierende Farm
+   * unter storageFarm.configJson hat.
+   *
+   * Warum nötig:
+   * Die Kunden-/Betreiberansicht liest die laufende Speicherfarm aus
+   * storageFarm.configJson. Wenn bei Migrationen oder App-Center-Änderungen
+   * currentConfig.storageFarm.storages leer ist, würde der Installer fälschlich
+   * „Noch keine Speicher“ anzeigen und beim Speichern die Admin-Konfiguration
+   * ohne Speicher zurückschreiben. Diese Funktion verhindert Datenverlust und
+   * macht bestehende Speicher wieder im Speicherfarm-Reiter sichtbar.
+   */
+  function _readApiStateValue(statePayload, key, fallback = undefined) {
+    try {
+      let rec = statePayload && statePayload[key];
+      // 0.8.57 Hotfix: Manche /api/state-Varianten liefern lokale States mit
+      // Namespace-Präfix. Für die Speicherfarm-Migration darf `storageFarm.configJson`
+      // deshalb auch als `nexowatt-ui.0.storageFarm.configJson` gefunden werden.
+      if (!rec && statePayload && typeof statePayload === 'object') {
+        const suffix = '.' + String(key || '');
+        const foundKey = Object.keys(statePayload).find((k) => k === key || String(k).endsWith(suffix));
+        if (foundKey) rec = statePayload[foundKey];
+      }
+      if (rec && Object.prototype.hasOwnProperty.call(rec, 'value')) return rec.value;
+      if (rec && Object.prototype.hasOwnProperty.call(rec, 'val')) return rec.val;
+    } catch (_e) {}
+    return fallback;
+  }
+
+  function _parseStorageFarmRuntimeList(raw) {
+    try {
+      if (Array.isArray(raw)) return raw;
+      const parsed = (raw && typeof raw === 'object') ? raw : JSON.parse(String(raw || '[]'));
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.storages)) return parsed.storages;
+      return [];
+    } catch (_e) {
+      return [];
+    }
+  }
+
+  function _normalizeRecoveredStorageFarmRow(row, index) {
+    const r = row && typeof row === 'object' ? row : {};
+    return {
+      enabled: r.enabled === false ? false : true,
+      name: String(r.name || '').trim() || `Speicher ${index + 1}`,
+      coupling: String(r.coupling || '').trim().toLowerCase() === 'dc' ? 'dc' : (String(r.coupling || '').trim().toLowerCase() === 'ac' ? 'ac' : ''),
+      socId: String(r.socId || '').trim(),
+      signedPowerId: String(r.signedPowerId || '').trim(),
+      chargePowerId: String(r.chargePowerId || '').trim(),
+      dischargePowerId: String(r.dischargePowerId || '').trim(),
+      pvPowerId: String(r.pvPowerId || '').trim(),
+      invertSignedPowerSign: !!r.invertSignedPowerSign,
+      invertChargeSign: !!r.invertChargeSign,
+      invertDischargeSign: !!r.invertDischargeSign,
+      setChargePowerId: String(r.setChargePowerId || '').trim(),
+      setDischargePowerId: String(r.setDischargePowerId || '').trim(),
+      setSignedPowerId: String(r.setSignedPowerId || '').trim(),
+      invertSetSignedPowerSign: !!r.invertSetSignedPowerSign,
+      maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : '',
+      maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : '',
+      availableId: String(r.availableId || '').trim(),
+      faultId: String(r.faultId || '').trim(),
+      chargeAllowedId: String(r.chargeAllowedId || '').trim(),
+      dischargeAllowedId: String(r.dischargeAllowedId || '').trim(),
+      capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : '',
+      group: String(r.group || '').trim(),
+    };
+  }
+
+  async function hydrateStorageFarmConfigFromRuntimeState(cfg) {
+    const root = cfg && typeof cfg === 'object' ? cfg : {};
+    const sf = root.storageFarm && typeof root.storageFarm === 'object' ? root.storageFarm : {};
+    if (Array.isArray(sf.storages) && sf.storages.length > 0) return root;
+    let statePayload = null;
+    try {
+      statePayload = await fetchJson('/api/state?t=' + Date.now(), { cache: 'no-store' });
+    } catch (_e) {
+      return root;
+    }
+    const runtimeRows = _parseStorageFarmRuntimeList(_readApiStateValue(statePayload, 'storageFarm.configJson', '[]'));
+    if (!runtimeRows.length) return root;
+
+    root.storageFarm = root.storageFarm && typeof root.storageFarm === 'object' ? root.storageFarm : {};
+    root.storageFarm.storages = runtimeRows.slice(0, 10).map(_normalizeRecoveredStorageFarmRow);
+    root.storageFarm._runtimeRecovered = true;
+    root.storageFarm.__runtimeStateFallbackSource = 'storageFarm.configJson';
+    // Bestehende produktive Speicherfarm nicht ausblenden, wenn nur die Admin-
+    // Konfiguration leer war. Dies ändert keine Lizenz; es hält App-Schalter und
+    // Speicherfarm-Reiter konsistent zur laufenden Runtime-Konfiguration.
+    root.enableStorageFarm = true;
+    root.emsApps = root.emsApps && typeof root.emsApps === 'object' ? root.emsApps : {};
+    root.emsApps.apps = root.emsApps.apps && typeof root.emsApps.apps === 'object' ? root.emsApps.apps : {};
+    const oldSfApp = root.emsApps.apps.storagefarm && typeof root.emsApps.apps.storagefarm === 'object' ? root.emsApps.apps.storagefarm : {};
+    root.emsApps.apps.storagefarm = Object.assign({}, oldSfApp, { installed: true, enabled: oldSfApp.enabled !== false });
+
+    const mode = String(_readApiStateValue(statePayload, 'storageFarm.mode', root.storageFarm.mode || 'pool') || 'pool').trim().toLowerCase();
+    root.storageFarm.mode = mode === 'groups' ? 'groups' : 'pool';
+
+    const runtimeGroups = _parseStorageFarmRuntimeList(_readApiStateValue(statePayload, 'storageFarm.groupsJson', '[]'));
+    if ((!Array.isArray(root.storageFarm.groups) || !root.storageFarm.groups.length) && runtimeGroups.length) {
+      root.storageFarm.groups = runtimeGroups.slice(0, 5).map((g, i) => ({
+        enabled: g && g.enabled === false ? false : true,
+        name: String(g && g.name || '').trim() || `Gruppe ${String.fromCharCode(65 + i)}`,
+        socMin: g && g.socMin !== undefined && g.socMin !== null && g.socMin !== '' ? Number(g.socMin) : '',
+        socMax: g && g.socMax !== undefined && g.socMax !== null && g.socMax !== '' ? Number(g.socMax) : '',
+        priority: g && g.priority !== undefined && g.priority !== null && g.priority !== '' ? Number(g.priority) : (100 + i),
+      }));
+    }
+    return root;
+  }
+
   async function refreshLicenseForAppCenter(reason) {
     if (_licenseLiveRefreshInFlight) return;
     _licenseLiveRefreshInFlight = true;
@@ -8503,6 +8617,17 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       return d;
     };
 
+    // Speicherfarm-Migrationsschutz: Wenn die App-Center-jsonConfig leer war,
+    // aber storageFarm.configJson noch funktionierende Speicher enthielt, wurden
+    // diese beim Laden wiederhergestellt. Sichtbar machen, damit der Installateur
+    // nach dem Speichern weiß, dass die Admin-Konfiguration wieder gefüllt wird.
+    if (sf._runtimeRecovered) {
+      const recovered = document.createElement('div');
+      recovered.className = 'nw-help';
+      recovered.textContent = 'Speicherfarm-Konfiguration wurde aus dem Runtime-State storageFarm.configJson wiederhergestellt. Bitte prüfen und speichern, damit die Admin-Konfiguration wieder vollständig ist. Die laufende Farm-Regelung wurde dadurch nicht geändert.';
+      els.storageFarmStorages.appendChild(recovered);
+    }
+
     // Storages list (0.8.33 Master-Detail)
     // Wichtig: Bei mehreren Speichern wird nur noch der ausgewählte Speicher als
     // Detailformular gerendert. Die linke Liste bleibt kurz und übersichtlich; damit
@@ -11291,6 +11416,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       cfg.license = _inferLicenseFromSuccessfulInstallerGate(data, cfg);
     }
 
+    await hydrateStorageFarmConfigFromRuntimeState(cfg);
     applyConfigToUI(cfg);
     scheduleValidation(300);
     setStatus('Konfiguration geladen.', 'ok');
