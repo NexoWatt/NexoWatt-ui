@@ -19,7 +19,7 @@ function mustNot(file, needle, label) {
 }
 const cm = 'src-ts/runtime-executables/ems/modules/charging-management.ts';
 const core = 'src-ts/runtime-executables/ems/modules/core-limits.ts';
-must(cm, 'gridBaseLoadRawW = gridW - (Number.isFinite(totalPowerW) ? totalPowerW : 0);', 'raw base load');
+must(cm, 'gridBaseLoadRawW = gridW - gridEvcsActualForCapW;', 'raw base load');
 must(cm, 'derived.core.building.loadRestW', 'energy-flow loadRestW preference');
 must(cm, 'gridBaseLoadW = Number.isFinite(Number(derivedBaseLoadW))', 'derived base load preference');
 must(cm, 'gridLocalSupportW = Math.max(0, gridBaseLoadW - Math.max(0, gridBaseLoadRawW));', 'local support diagnosis');

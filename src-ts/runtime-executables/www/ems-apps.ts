@@ -13575,7 +13575,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
           .map((c) => {
             const reserveW = n(c.usedW ?? c.reserveW ?? c.requestedW);
             const pvReserveW = n(c.pvUsedW ?? c.pvReserveW ?? (c.pvOnly ? reserveW : 0));
-            const actualW = n(c.actualW ?? c.usedW ?? c.reserveW ?? c.requestedW);
+            // 0.8.64: In der Prioritäten-Kachel darf 'Ist' nicht aus Reserve/Setpoint
+            // rekonstruiert werden. Wenn kein echter Istwert kommt, bleibt Ist = 0;
+            // Reserve und PV-Reserve werden separat angezeigt.
+            const actualW = n(c.actualW ?? c.actualPowerW ?? c.measuredW ?? 0);
             return Object.assign({}, c, { reserveW, pvReserveW, actualW });
           })
           // Nur echte aktive/relevante Reservierungen als Zeile anzeigen.
@@ -13652,9 +13655,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // Summary (optional)
     if (sum) {
       els.chargingBudget.appendChild(mkCard('Summary', [
-        { label: 'EVCS Ist', value: _fmtW(n(sum.totalPowerW)) },
-        { label: 'EVCS Reserviert', value: _fmtW(n(sum.totalReservedPowerW ?? ctrl.reserveW)) },
-        { label: 'EVCS Soll', value: _fmtW(n(sum.totalTargetPowerW)) },
+        { label: 'EVCS Ist', value: _fmtW(n(ctrl.actualW ?? ctrl.gridEvcsActualForCapW ?? sum.totalPowerW ?? 0)) },
+        { label: 'EVCS Reserviert', value: _fmtW(n(sum.totalReservedPowerW ?? ctrl.reserveW ?? 0)) },
+        { label: 'EVCS Soll', value: _fmtW(n(sum.totalTargetPowerW ?? ctrl.usedW ?? 0)) },
+        { label: 'Ist-Quelle', value: 'frischer Messwert / Grid-Gate' },
         { label: 'Online Ports', value: (sum.onlineWallboxes != null) ? String(sum.onlineWallboxes) : '--' },
       ], ''));
     }

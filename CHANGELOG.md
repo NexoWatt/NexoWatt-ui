@@ -1,3 +1,16 @@
+## 0.8.64
+
+- Loadmanagement/Budget: EVCS-Ist wird in Status/Prioritäten nicht mehr aus Reservierung oder Sollwert rekonstruiert.
+- Loadmanagement/Budget: Budget-Diagnose trennt EVCS-Ist, EVCS-Reservierung und EVCS-Sollwert klar.
+- Core-Limits: PV-Budget bleibt physikalisch durch aktuelle PV-Erzeugung begrenzt; künstliches PV-Budget aus EVCS-Reservierung/Speicherentladung wird verhindert.
+- Keine Änderung an Hardwarewrites, Export Guard, Speicherfarm oder Mesh/Microgrid.
+
+## 0.8.63
+
+- Core-Limits/Loadmanagement: Zentrales PV-Budget durch physikalische PV-Erzeugung gedeckelt. Flexible Lasten und Batterieentladung können bei PV=0 kein künstliches PV-Budget mehr erzeugen.
+- Statusdiagnose: zusätzliche Rohdiagnose für PV-Budget-Rekonstruktion, physikalischen PV-Cap und geklemmte Leistung ergänzt.
+- Keine Änderung an Hardware-Schreibpfaden, Speicherfarm, Export Guard oder Mesh/Microgrid.
+
 ## 0.8.62
 
 - Lastmanagement: Gate-A-Netzbudget nutzt nur frisch gemessene EVCS-Istleistung für die Netzanschluss-Kappe. Alte Sollwert-/Reservierungswerte können dadurch kein fiktives EVCS-Cap mehr erzeugen.
