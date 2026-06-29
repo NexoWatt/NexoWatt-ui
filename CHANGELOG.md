@@ -1,3 +1,16 @@
+## 0.8.60
+
+- Core-Limits: TS-Shadow-Logfix für `grid.effectiveW` ergänzt. Anlagen ohne konfiguriertes Netzimportlimit erzeugen keinen minütlichen Warn-Spam mehr.
+- Die Abweichung `JS null/unlimited` gegen `TS 0/missing-input` bleibt als Info-Diagnose im Shadow-JSON sichtbar.
+- Der produktive TS-Core-Budget-Takeover bleibt in diesem Fall bewusst gesperrt; die stabile JS-Runtime bleibt führend.
+- Keine Änderung an Export Guard, Speicherfarm, Mesh/Microgrid oder Hardware-Schreibpfaden.
+
+## 0.8.59
+
+- App-Center: Regression Safety Gate ergänzt. Bekannte Speicherfarm-Konfigurationen werden beim Speichern nicht mehr versehentlich mit leerer UI-Liste überschrieben.
+- Qualität: Kritische Release-Gates für Speicherfarm, App-Center-Struktur, No-Release-Artefakte und Runtime-Sync gebündelt.
+- Sicherheit: Keine Änderung an Regelung, Export Guard, Mesh/Microgrid oder Hardware-Schreibpfaden.
+
 ## 0.8.58
 
 - Speicherfarm/App-Center: Fehler behoben, durch den die Master-Detail-Ansicht nach dem Hinzufügen oder Wiederherstellen eines Speichers wegen undefiniertem `htmlEscape` abbrechen konnte.

@@ -9,7 +9,7 @@ const fs = require('fs');
 function read(p){ return fs.readFileSync(p,'utf8'); }
 function must(file, needle){ const s=read(file); if(!s.includes(needle)){ console.error(`[storagefarm-restore] Missing in ${file}: ${needle}`); process.exit(1); } }
 function mustNot(file, needle){ const s=read(file); if(s.includes(needle)){ console.error(`[storagefarm-restore] Forbidden in ${file}: ${needle}`); process.exit(1); } }
-must('package.json', '"version": "0.8.58"');
+must('package.json', '"version": "0.8.59"');
 must('src-ts/runtime-executables/main.ts', '_nwHydrateStorageFarmConfigFromRuntimeStates');
 must('src-ts/runtime-executables/main.ts', 'storageFarm.configJson');
 must('src-ts/runtime-executables/main.ts', 'storageFarm.groupsJson');

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 9c0aa8cdc7b18260bc3a35743d034aec66e288dcb587cb88d7d07abd8f44912a
+ * Original-Hash: ea375d5bcb204ff830878fd7d56bdaf358caaf8f227365b90e1adc80bfaf534c
  */
 
 /**
@@ -67,7 +67,7 @@ function must(file, text){ const s=read(file); if(!s.includes(text)){ console.er
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function forbid(file, text){ const s=read(file); if(s.includes(text)){ console.error(`Forbidden in ${file}: ${text}`); process.exit(1); } }
-must('package.json','"version": "0.8.53"');
+must('package.json','"version": "0.8.59"');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','_zeroExportSinkPriorityPlan');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','localConsumption');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','storageCharge');

@@ -1266,17 +1266,43 @@ class CoreLimitsModule extends BaseModule {
                 peakShavingActive: false,
                 externalLimitActive: false,
             });
-            const mismatches = [
+            const rawMismatches = [
                 compareShadowWatt('pv.rawW', pv.rawW, ts && ts.pv ? ts.pv.rawW : null),
                 compareShadowWatt('pv.effectiveW', pv.effectiveW, ts && ts.pv ? ts.pv.effectiveW : null),
                 compareShadowWatt('grid.effectiveW', grid.headroomW, ts && ts.grid ? ts.grid.effectiveW : null),
                 compareShadowWatt('total.effectiveW', total.effectiveW, ts && ts.total ? ts.total.effectiveW : null),
             ].filter(Boolean);
+
+            // 0.8.60: Log-Spam-Fix für Anlagen ohne konfiguriertes Netzimportlimit.
+            // Die JS-Runtime beschreibt diesen Fall bei `grid.headroomW` als `null`
+            // (= kein wirksamer Headroom-Deckel / nicht begrenzt), während der
+            // TypeScript-Spiegel konservativ `0 W` mit Grund `missing-input` liefert.
+            // Das ist kein produktives Risiko und darf nicht minütlich als Warnung
+            // im ioBroker-Log erscheinen. Für die produktive TS-Übernahme bleibt es
+            // trotzdem ein Fallback-Fall, weil `null` und `0` fachlich nicht dasselbe
+            // sind. Ergebnis: keine Warnspam, aber weiterhin kein unsicherer TS-Takeover.
+            const isBenignGridNoLimitMismatch = (m) => {
+                if (!m || m.field !== 'grid.effectiveW') return false;
+                const jsHeadroomMissing = grid.headroomW === null || grid.headroomW === undefined || !Number.isFinite(Number(grid.headroomW));
+                const tsGrid = ts && ts.grid ? ts.grid : null;
+                const tsMissingInputZero = tsGrid && Number(tsGrid.effectiveW) === 0 && String(tsGrid.reason || '') === 'missing-input';
+                const jsImportLimitMissing = !Number.isFinite(Number(grid.importLimitW)) || Number(grid.importLimitW) <= 0;
+                return !!(jsHeadroomMissing && tsMissingInputZero && jsImportLimitMissing);
+            };
+            const benignMismatches = rawMismatches
+                .filter(isBenignGridNoLimitMismatch)
+                .map(m => ({ ...m, severity: 'info', benign: true, reason: 'js-grid-headroom-unlimited-vs-ts-missing-input-zero' }));
+            const blockingMismatches = rawMismatches
+                .filter(m => !isBenignGridNoLimitMismatch(m))
+                .map(m => ({ ...m, severity: 'warn', benign: false }));
+            const mismatches = blockingMismatches.concat(benignMismatches);
             const result = {
                 available: true,
-                ok: mismatches.length === 0,
+                ok: blockingMismatches.length === 0 && benignMismatches.length === 0,
                 source: 'ts-mirror-shadow',
                 mismatches,
+                blockingMismatches,
+                benignMismatches,
                 js: {
                     pvRawW: roundW(pv.rawW),
                     pvEffectiveW: roundW(pv.effectiveW),
@@ -1293,12 +1319,12 @@ class CoreLimitsModule extends BaseModule {
                 // Übernahme verfügbar. Er wird nur genutzt, wenn der Shadow-Vergleich OK ist.
                 tsSnapshot: ts || null,
             };
-            if (!result.ok) {
+            if (blockingMismatches.length > 0) {
                 const now = Date.now();
                 if (!this._coreTsShadowLastWarnMs || now - this._coreTsShadowLastWarnMs > 60000) {
                     this._coreTsShadowLastWarnMs = now;
                     try {
-                        this.adapter.log && this.adapter.log.warn && this.adapter.log.warn(`[core-limits-ts-shadow] JS/TS budget mismatch: ${mismatches.map(m => m.field).join(', ')}`);
+                        this.adapter.log && this.adapter.log.warn && this.adapter.log.warn(`[core-limits-ts-shadow] JS/TS budget mismatch: ${blockingMismatches.map(m => m.field).join(', ')}`);
                     } catch (_eLog) {}
                 }
             }

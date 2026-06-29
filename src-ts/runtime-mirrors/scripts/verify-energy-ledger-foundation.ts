@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4cdddf83f0af8252f4b346510311aa5be92f642dbc2f2fccb1b657c79f11efc3
+ * Original-Hash: acbe0af5635a4073e856c4bf133515099c96b41a8a8bbca097931141541409b0
  */
 
 /**
@@ -94,5 +94,5 @@ need('src-ts/runtime-executables/ems/module-manager.ts', "this._licenseAllowsApp
 need('src-ts/runtime-executables/www/ems-apps.ts', "id: 'energyLedger'", 'App-Center führt Local kWh Ledger');
 need('src-ts/runtime-executables/www/ems-apps.ts', 'schaltet keine Hardware', 'Installer-Hinweis: read-only');
 need('src-ts/runtime-executables/main.ts', "ensurePlainObj('energyLedger'", 'Default-Config energyLedger');
-match('package.json', /"version"\s*:\s*"0\.8\.(2[7-9]|[3-9][0-9])"/, 'Paketversion >=0.8.27');
+match('package.json', /"version"\s*:\s*"0\.8\.(2[7-9]|[3-9][0-9])"/, 'Paketversion >=0.8.59');
 console.log('[energy-ledger] OK: Local kWh Ledger Grundlage/Export-Erweiterung ist statisch abgesichert.');

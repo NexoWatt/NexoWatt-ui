@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:abd351c8a8ab23c0f28f360941e146aca8481a886ce327f556064c20cc835f9f
+ * Quell-Hash: sha256:73e2916eceac1a183aaa947b08167a0ed8cb97cb94b7552928bb931f0b333543
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -12171,6 +12171,105 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       }
     };
 
+
+    /**
+     * 0.8.59 Release-Schutz / Regression Safety Gate.
+     *
+     * Zweck:
+     * App-Center-Saves dürfen Kernbereiche nicht stillschweigend leeren, wenn
+     * der Nutzer nur einen anderen Reiter bearbeitet oder die UI wegen eines
+     * Render-/Hydration-Fehlers eine leere Liste sendet. Genau das hatte die
+     * Speicherfarm betroffen. Dieses Gate schützt deshalb generisch weitere
+     * installer-kritische Listen, ohne fachliche Regler zu verändern.
+     *
+     * Wichtig:
+     * - Kein neuer EMS-Regler.
+     * - Keine Hardware-Schreibbefehle.
+     * - Nur Save-Payload-Validierung und Wiederherstellung aus letzter
+     *   persistierter Konfiguration/Runtime-Fallbacks.
+     */
+    const _nwRegressionSafetyListInfo = (obj, pathText) => {
+      try {
+        const parts = String(pathText || '').split('.').filter(Boolean);
+        let cur = obj;
+        for (const part of parts) cur = cur && typeof cur === 'object' ? cur[part] : undefined;
+        return { exists: Array.isArray(cur), length: Array.isArray(cur) ? cur.length : 0, value: Array.isArray(cur) ? cur : undefined };
+      } catch (_e) {
+        return { exists: false, length: 0, value: undefined };
+      }
+    };
+    const _nwRegressionSafetySetPath = (obj, pathText, value) => {
+      const parts = String(pathText || '').split('.').filter(Boolean);
+      if (!obj || !parts.length) return;
+      let cur = obj;
+      for (let i = 0; i < parts.length - 1; i += 1) {
+        const p = parts[i];
+        cur[p] = cur[p] && typeof cur[p] === 'object' ? cur[p] : {};
+        cur = cur[p];
+      }
+      cur[parts[parts.length - 1]] = Array.isArray(value) ? value.slice() : value;
+    };
+    const _nwBuildRegressionSafetyReport = (patchObj, baseObj) => {
+      const patch = patchObj && typeof patchObj === 'object' ? patchObj : {};
+      const base = baseObj && typeof baseObj === 'object' ? baseObj : {};
+      const rules = [
+        { id: 'storagefarm_storages', path: 'storageFarm.storages', allowFlags: ['storageFarm.__allowEmptyStorages', 'storageFarm.__explicitDeleteAll'], reason: 'Speicherfarm-Speicher dürfen nicht durch leeren App-Center-Payload verschwinden.' },
+        { id: 'storagefarm_groups', path: 'storageFarm.groups', allowFlags: ['storageFarm.__allowEmptyStorages', 'storageFarm.__explicitDeleteAll'], reason: 'Speicherfarm-Gruppen dürfen nicht versehentlich geleert werden.' },
+        { id: 'chargekiosk_stations', path: 'chargeKiosk.stations', allowFlags: ['chargeKiosk.__allowEmptyStations', 'chargeKiosk.__explicitDeleteAll'], reason: 'DC-Station-Display-Stationen dürfen nicht durch andere App-Center-Reiter verschwinden.' },
+        { id: 'mesh_nodes', path: 'meshMicrogrid.nodes', allowFlags: ['meshMicrogrid.__allowEmptyNodes', 'meshMicrogrid.__explicitDeleteAll'], reason: 'Mesh/Microgrid-Knoten dürfen nicht ohne explizite Löschfreigabe geleert werden.' },
+        { id: 'mesh_bridge_mappings', path: 'meshMicrogrid.localBridge.mappings', allowFlags: ['meshMicrogrid.localBridge.__allowEmptyMappings', 'meshMicrogrid.__explicitDeleteAll'], reason: 'Mesh Local-Bridge-Mappings dürfen nicht ohne explizite Löschfreigabe geleert werden.' },
+        { id: 'mesh_target_groups', path: 'meshMicrogrid.targetGroups.groups', allowFlags: ['meshMicrogrid.targetGroups.__allowEmptyGroups', 'meshMicrogrid.__explicitDeleteAll'], reason: 'Mesh-Zielgruppen dürfen nicht ohne explizite Löschfreigabe geleert werden.' },
+        { id: 'evcs_list', path: 'settingsConfig.evcsList', allowFlags: ['settingsConfig.__allowEmptyEvcsList', 'settingsConfig.__explicitDeleteAll'], reason: 'Ladepunkt-/EVCS-Zuordnungen dürfen nicht versehentlich geleert werden.' },
+      ];
+      const checks = [];
+      for (const rule of rules) {
+        const patchInfo = _nwRegressionSafetyListInfo(patch, rule.path);
+        const baseInfo = _nwRegressionSafetyListInfo(base, rule.path);
+        const explicitAllow = (rule.allowFlags || []).some((flagPath) => {
+          const info = _nwRegressionSafetyListInfo({ root: patch }, 'root.' + flagPath);
+          if (info.exists) return false;
+          try {
+            const parts = String(flagPath).split('.').filter(Boolean);
+            let cur = patch;
+            for (const part of parts) cur = cur && typeof cur === 'object' ? cur[part] : undefined;
+            return cur === true;
+          } catch (_e) { return false; }
+        });
+        const destructiveEmpty = patchInfo.exists && patchInfo.length === 0 && baseInfo.length > 0 && !explicitAllow;
+        checks.push({ id: rule.id, path: rule.path, patchExists: patchInfo.exists, patchLength: patchInfo.length, baseLength: baseInfo.length, explicitAllow, destructiveEmpty, reason: rule.reason });
+      }
+      const destructive = checks.filter(c => c.destructiveEmpty);
+      return {
+        schema: 'nexowatt.installer-regression-safety.v1',
+        ts: Date.now(),
+        ok: destructive.length === 0,
+        destructiveCount: destructive.length,
+        checks,
+        destructive,
+        note: 'Safety Gate schützt App-Center-Saves vor unbeabsichtigtem Leeren kritischer Bereiche.',
+      };
+    };
+    const _nwApplyInstallerRegressionSafetyGate = async (patchObj, baseObj) => {
+      const patch = patchObj && typeof patchObj === 'object' ? patchObj : {};
+      const base = baseObj && typeof baseObj === 'object' ? baseObj : {};
+      const report = _nwBuildRegressionSafetyReport(patch, base);
+      for (const item of report.destructive || []) {
+        const baseInfo = _nwRegressionSafetyListInfo(base, item.path);
+        if (baseInfo.exists && baseInfo.length > 0) {
+          _nwRegressionSafetySetPath(patch, item.path, baseInfo.value);
+          item.restored = true;
+          item.restoredLength = baseInfo.length;
+          try { this.log && this.log.warn && this.log.warn(`[RegressionSafetyGate] Restored ${item.path} (${baseInfo.length} entries) from last installer config; destructive empty submit blocked.`); } catch (_eLog) {}
+        }
+      }
+      const finalReport = _nwBuildRegressionSafetyReport(patch, base);
+      finalReport.restored = (report.destructive || []).filter(x => x.restored).map(x => ({ id: x.id, path: x.path, restoredLength: x.restoredLength }));
+      try {
+        this._nwInstallerRegressionSafetyLastReport = finalReport;
+      } catch (_e) {}
+      return { patch, report: finalReport };
+    };
+
     /**
      * Code-Teil: _nwRestartEms
      * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -12206,6 +12305,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
         cfgOut.locale = this._nwBuildLocaleInfo();
         cfgOut.countryProfile = Object.assign({}, cfgOut.countryProfile || {}, this._nwBuildCountryProfileInfo());
+        cfgOut.regressionSafety = this._nwInstallerRegressionSafetyLastReport || { schema: 'nexowatt.installer-regression-safety.v1', ok: true, checks: [] };
         res.json({ ok: true, license: cfgOut.license, config: cfgOut });
       } catch (e) {
         this.log.warn('Installer config API error: ' + e.message);
@@ -12257,12 +12357,14 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           safePatch[k] = v;
         }
         this._nwApplyLicenseLimitsToInstallerPatch(safePatch);
-        await _nwProtectStorageFarmPatchFromEmptySubmit(safePatch);
 
         // Persist (state-based) + apply to runtime config.
         // We merge into the already persisted patch (loaded on startup) to keep full configuration.
         const basePatch = (this._nwInstallerConfigPatch && typeof this._nwInstallerConfigPatch === 'object') ? this._nwInstallerConfigPatch : {};
-        let mergedPatch = this.nwDeepMerge(this.nwDeepMerge({}, basePatch), safePatch);
+        await _nwProtectStorageFarmPatchFromEmptySubmit(safePatch);
+        const gateResult = await _nwApplyInstallerRegressionSafetyGate(safePatch, basePatch);
+        const guardedPatch = gateResult && gateResult.patch ? gateResult.patch : safePatch;
+        let mergedPatch = this.nwDeepMerge(this.nwDeepMerge({}, basePatch), guardedPatch);
         this._nwApplyLicenseLimitsToInstallerPatch(mergedPatch);
 
         // Map App toggles to legacy enable* flags and ensure forward-compatible shape

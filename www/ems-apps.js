@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:4d81ffd41ef0c01bcf7df56d39f218083222e3c9fd731804753a13ae5fe748b4
+ * Quell-Hash: sha256:0d1abf4eff513fb06a92ac85043f6f41fddb344563c936f6ebf04ca3d5b8d749
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -11474,6 +11474,51 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
    * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
+  /**
+   * Release Safety Gate 0.8.59.
+   *
+   * Verhindert, dass ein stale/fehlerhaft gerenderter App-Center-Screen
+   * produktive Kernbereiche leer überschreibt. Das ist bewusst Frontend-Schutz;
+   * das Backend hat zusätzlich eigene Guards für Speicherfarm-Runtime-Fallbacks.
+   *
+   * Wichtig:
+   * - keine fachliche Regelung
+   * - keine Hardwarewrites
+   * - nur Schutz des Save-Payloads
+   */
+  function applyReleaseSafetyGateToPatch(patch) {
+    const out = patch && typeof patch === 'object' ? patch : {};
+    const restoreArrayIfDangerouslyEmpty = (section, key, markerName) => {
+      try {
+        const src = currentConfig && currentConfig[section] && typeof currentConfig[section] === 'object' ? currentConfig[section] : null;
+        const dst = out[section] && typeof out[section] === 'object' ? out[section] : null;
+        if (!src || !dst) return;
+        const currentRows = Array.isArray(src[key]) ? src[key] : [];
+        const patchRows = Array.isArray(dst[key]) ? dst[key] : null;
+        const explicitDelete = dst.__allowEmpty === true || dst.__allowEmptyStorages === true || dst.__explicitDeleteAll === true;
+        if (currentRows.length > 0 && patchRows && patchRows.length === 0 && !explicitDelete) {
+          dst[key] = currentRows.slice();
+          dst.__releaseSafetyGate = true;
+          dst.__releaseSafetyGateReason = `${section}.${key} restored from currentConfig because App-Center payload was empty`;
+          try { console.warn(`[NexoWatt] ReleaseSafetyGate restored ${section}.${key} (${currentRows.length}) from currentConfig.`); } catch (_e) {}
+        }
+      } catch (_e) {}
+    };
+
+    // Kernbereiche, die nicht durch einen Renderfehler verschwinden dürfen.
+    restoreArrayIfDangerouslyEmpty('storageFarm', 'storages', 'storageFarm');
+    restoreArrayIfDangerouslyEmpty('storageFarm', 'groups', 'storageFarmGroups');
+    restoreArrayIfDangerouslyEmpty('chargeKiosk', 'stations', 'chargeKioskStations');
+    restoreArrayIfDangerouslyEmpty('meshMicrogrid', 'nodes', 'meshMicrogridNodes');
+    restoreArrayIfDangerouslyEmpty('meshMicrogrid', 'targetGroups', 'meshMicrogridTargetGroups');
+    restoreArrayIfDangerouslyEmpty('meshMicrogrid', 'localBridgeMappings', 'meshMicrogridLocalBridgeMappings');
+
+    // Strukturmarker für Release-/Regressionstests. Wird vom Backend ignoriert,
+    // hilft aber, Save-Payloads im Feld eindeutig zu diagnostizieren.
+    out.__releaseSafetyGateVersion = '0.8.59';
+    return out;
+  }
+
   function collectPatchFromUI() {
     const patch = {};
 
@@ -11862,13 +11907,16 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       ? !!(currentConfig.storage && currentConfig.storage.feneconAcMode)
       : false;
 
-    // Optional raw patch
+    // Optional raw patch. Auch Raw-Patches laufen jetzt durch das Release Safety Gate,
+    // damit ein Debug-/Installer-Payload nicht versehentlich produktive Kernlisten
+    // leert, solange kein expliziter Löschmarker gesetzt ist.
     const raw = String(els.rawPatch.value || '').trim();
+    let finalPatch = patch;
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
-          return deepMerge(patch, parsed);
+          finalPatch = deepMerge(patch, parsed);
         }
       } catch (e) {
         // ignore invalid JSON
@@ -11876,10 +11924,174 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     }
 
     // Keep installerConfig as single source of truth for installer-only features
-    patch.installerConfig = deepMerge({}, (currentConfig && currentConfig.installerConfig) ? currentConfig.installerConfig : {}, patch.installerConfig || {});
+    finalPatch.installerConfig = deepMerge({}, (currentConfig && currentConfig.installerConfig) ? currentConfig.installerConfig : {}, finalPatch.installerConfig || {});
 
-    return patch;
+    return applyReleaseSafetyGateToPatch(finalPatch);
   }
+  /**
+   * Code-Teil: _storageFarmStorageCount
+   * Zweck: Ermittelt, ob eine Speicherfarm-Konfiguration echte Speicher enthält.
+   * Regression-Schutz 0.8.59: Verhindert, dass ein App-Center-Save bekannte
+   * Speicherfarm-Konfigurationen versehentlich mit einer leeren Liste überschreibt.
+   */
+  function _storageFarmStorageCount(cfg) {
+    const sf = cfg && cfg.storageFarm && typeof cfg.storageFarm === 'object' ? cfg.storageFarm : {};
+    return Array.isArray(sf.storages) ? sf.storages.filter((s) => s && typeof s === 'object').length : 0;
+  }
+
+  /**
+   * Code-Teil: applyAppCenterRegressionSafetyGate
+   * Zweck: Letzter Schutz direkt vor dem Speichern der App-Center-Konfiguration.
+   * Dieser Guard ist bewusst klein und hart: Er darf keine neue Regelung bauen,
+   * sondern verhindert nur Regressionen, bei denen UI-/Hydration-Fehler kritische
+   * Konfigurationen leeren würden.
+   */
+  function applyAppCenterRegressionSafetyGate(patch) {
+    const p = patch && typeof patch === 'object' ? patch : {};
+    const beforeCount = _storageFarmStorageCount(currentConfig);
+    const afterCount = _storageFarmStorageCount(p);
+    const storagefarmApp = p.emsApps && p.emsApps.apps && p.emsApps.apps.storagefarm ? p.emsApps.apps.storagefarm : null;
+    const storagefarmExpected = beforeCount > 0 || (storagefarmApp && (storagefarmApp.installed || storagefarmApp.enabled));
+
+    if (storagefarmExpected && beforeCount > 0 && afterCount === 0) {
+      // Safety-Entscheidung: Bekannte Speicher werden nicht mit leerer UI-Liste
+      // überschrieben. Falls der Reiter einmal nicht rendert, bleibt die letzte
+      // bekannte Konfiguration erhalten und der Installateur verliert keine DP-
+      // Zuordnungen. Das ist ein Save-Guard, keine Speicherregelung.
+      p.storageFarm = deepMerge({}, (currentConfig && currentConfig.storageFarm) ? currentConfig.storageFarm : {});
+      p.storageFarm.__saveGuardRestored = true;
+      p.storageFarm.__saveGuardReason = 'storageFarm.storages would be emptied although existing storages are known';
+    }
+
+    const guarded = [];
+    if (beforeCount > 0 && _storageFarmStorageCount(p) > 0) guarded.push('storageFarm');
+    p.__appCenterRegressionSafetyGate = {
+      schema: 'nexowatt.appcenter-regression-safety-gate.v1',
+      ts: Date.now(),
+      guarded,
+      storageFarmBeforeCount: beforeCount,
+      storageFarmAfterCount: _storageFarmStorageCount(p),
+      storageFarmRestored: !!(p.storageFarm && p.storageFarm.__saveGuardRestored),
+      note: 'Save-Guard verhindert das Leeren bekannter Kernkonfigurationen. Keine Hardwaresteuerung.',
+    };
+    return p;
+  }
+
+
+  /**
+   * Code-Teil: Release-/Regression-Safety-Gate
+   * Zweck: verhindert, dass ein App-Center-Release durch UI-/Tab-/Hydration-
+   * Regressionen bestehende Kernkonfigurationen leer speichert.
+   *
+   * Hintergrund:
+   * Nach mehreren Mesh-/0-Einspeise-Erweiterungen darf ein neuer Bereich niemals
+   * Speicherfarm, Ladepunkte, DC-Stationen, NL/P1 oder Mesh-Konfiguration löschen,
+   * nur weil der passende Reiter nicht gerendert, ein DOM-Element fehlt oder eine
+   * Runtime-Hydration noch läuft. Dieses Gate arbeitet defensiv: wenn die bisherige
+   * Konfiguration Daten enthält, der neue Patch aber leer wäre, werden die alten
+   * Werte übernommen und im Report vermerkt. Bewusstes Löschen ganzer Kernbereiche
+   * muss später über eine separate, explizite Löschfunktion erfolgen.
+   */
+  function _sgArray(v) { return Array.isArray(v) ? v : []; }
+  function _sgObject(v) { return v && typeof v === 'object' ? v : {}; }
+  function _sgNonEmptyString(v) { return String(v == null ? '' : v).trim() !== ''; }
+  function _sgCountStorages(cfg) { return _sgArray(_sgObject(cfg.storageFarm).storages).length; }
+  function _sgCountGroups(cfg) { return _sgArray(_sgObject(cfg.storageFarm).groups).length; }
+  function _sgCountEvcs(cfg) {
+    const settings = _sgObject(cfg.settings);
+    return Math.max(Number(settings.evcsCount) || 0, _sgArray(settings.evcsList).length);
+  }
+  function _sgCountChargeKiosk(cfg) { return _sgArray(_sgObject(cfg.chargeKiosk).stations).length; }
+  function _sgCountMeshNodes(cfg) { return _sgArray(_sgObject(cfg.meshMicrogrid).nodes).length; }
+  function _sgCountMeshPeers(cfg) {
+    const mm = _sgObject(cfg.meshMicrogrid);
+    const tailscalePeers = _sgArray(_sgObject(mm.tailscale).peerUrls).length;
+    const meshLinkPeers = _sgArray(_sgObject(_sgObject(mm.meshLink).peers)).length;
+    return Math.max(tailscalePeers, meshLinkPeers);
+  }
+  function _sgCountNlP1Mappings(cfg) {
+    const dps = _sgObject(_sgObject(cfg.nlP1).datapoints);
+    return Object.keys(dps).filter(k => _sgNonEmptyString(dps[k])).length;
+  }
+  function _sgRestore(report, path, reason) {
+    report.restored.push({ path, reason });
+    report.changed = true;
+  }
+  function applyReleaseRegressionSafetyGate(patch) {
+    const report = { schema: 'nexowatt.appcenter-regression-safety-gate.v1', version: '0.8.59', changed: false, restored: [], warnings: [] };
+    const oldCfg = currentConfig && typeof currentConfig === 'object' ? currentConfig : {};
+    const next = patch && typeof patch === 'object' ? patch : {};
+
+    // Speicherfarm: darf nie durch einen leeren UI-Save verschwinden, wenn der
+    // aktuelle Config-/Runtime-Fallback Speicher kennt.
+    const oldStorages = _sgCountStorages(oldCfg);
+    const newStorages = _sgCountStorages(next);
+    if (oldStorages > 0 && newStorages === 0) {
+      next.storageFarm = deepMerge({}, _sgObject(oldCfg.storageFarm), _sgObject(next.storageFarm));
+      next.storageFarm.storages = _sgArray(_sgObject(oldCfg.storageFarm).storages).slice();
+      if (_sgCountGroups(oldCfg) > 0 && _sgCountGroups(next) === 0) next.storageFarm.groups = _sgArray(_sgObject(oldCfg.storageFarm).groups).slice();
+      next.storageFarm._releaseSafetyRestored = true;
+      _sgRestore(report, 'storageFarm.storages', `Bestehende Speicherfarm mit ${oldStorages} Speicher(n) vor leerem Save geschützt.`);
+    }
+
+    // Ladepunkte: verhindert Verlust der LP-Liste, wenn EVCS-Tab/DOM nicht korrekt
+    // gerendert wurde. Einzelne Änderungen bleiben möglich; nur kompletter Verlust
+    // wird abgefangen.
+    const oldEvcs = _sgCountEvcs(oldCfg);
+    const newEvcs = _sgCountEvcs(next);
+    if (oldEvcs > 0 && newEvcs === 0) {
+      next.settings = deepMerge({}, _sgObject(oldCfg.settings), _sgObject(next.settings));
+      next.settings.evcsCount = _sgObject(oldCfg.settings).evcsCount;
+      next.settings.evcsList = _sgArray(_sgObject(oldCfg.settings).evcsList).slice();
+      _sgRestore(report, 'settings.evcsList', `Bestehende Ladepunktliste mit ${oldEvcs} Eintrag/Einträgen vor leerem Save geschützt.`);
+    }
+
+    // DC-Station Display: Stationsseiten gehören zu Ladepunkte und dürfen bei
+    // App-Center-Umbauten nicht verschwinden.
+    const oldStations = _sgCountChargeKiosk(oldCfg);
+    const newStations = _sgCountChargeKiosk(next);
+    if (oldStations > 0 && newStations === 0) {
+      next.chargeKiosk = deepMerge({}, _sgObject(oldCfg.chargeKiosk), _sgObject(next.chargeKiosk));
+      next.chargeKiosk.stations = _sgArray(_sgObject(oldCfg.chargeKiosk).stations).slice();
+      _sgRestore(report, 'chargeKiosk.stations', `Bestehende DC-Station-Display-Konfiguration mit ${oldStations} Station(en) vor leerem Save geschützt.`);
+    }
+
+    // NL/P1: Zuordnungen liegen im Reiter Zuordnung. Wenn dort beim Speichern
+    // keine Felder gerendert wurden, dürfen vorhandene DSMR-/P1-Mappings nicht leer
+    // geschrieben werden.
+    const oldNlP1 = _sgCountNlP1Mappings(oldCfg);
+    const newNlP1 = _sgCountNlP1Mappings(next);
+    if (oldNlP1 > 0 && newNlP1 === 0) {
+      next.nlP1 = deepMerge({}, _sgObject(oldCfg.nlP1), _sgObject(next.nlP1));
+      next.nlP1.datapoints = deepMerge({}, _sgObject(_sgObject(oldCfg.nlP1).datapoints), _sgObject(_sgObject(next.nlP1).datapoints));
+      _sgRestore(report, 'nlP1.datapoints', `Bestehende NL/P1-Zuordnung mit ${oldNlP1} Mapping(s) vor leerem Save geschützt.`);
+    }
+
+    // Mesh/Microgrid: Detailkonfiguration liegt in eigenem Reiter. Nodes/Peers
+    // dürfen nicht verschwinden, nur weil ein anderes Modul gespeichert wurde.
+    const oldMeshNodes = _sgCountMeshNodes(oldCfg);
+    const newMeshNodes = _sgCountMeshNodes(next);
+    if (oldMeshNodes > 0 && newMeshNodes === 0) {
+      next.meshMicrogrid = deepMerge({}, _sgObject(oldCfg.meshMicrogrid), _sgObject(next.meshMicrogrid));
+      next.meshMicrogrid.nodes = _sgArray(_sgObject(oldCfg.meshMicrogrid).nodes).slice();
+      _sgRestore(report, 'meshMicrogrid.nodes', `Bestehende Mesh-Knoten mit ${oldMeshNodes} Eintrag/Einträgen vor leerem Save geschützt.`);
+    }
+    const oldMeshPeers = _sgCountMeshPeers(oldCfg);
+    const newMeshPeers = _sgCountMeshPeers(next);
+    if (oldMeshPeers > 0 && newMeshPeers === 0) {
+      next.meshMicrogrid = deepMerge({}, _sgObject(oldCfg.meshMicrogrid), _sgObject(next.meshMicrogrid));
+      if (_sgObject(oldCfg.meshMicrogrid).tailscale) next.meshMicrogrid.tailscale = deepMerge({}, _sgObject(_sgObject(oldCfg.meshMicrogrid).tailscale), _sgObject(_sgObject(next.meshMicrogrid).tailscale));
+      if (_sgObject(oldCfg.meshMicrogrid).meshLink) next.meshMicrogrid.meshLink = deepMerge({}, _sgObject(_sgObject(oldCfg.meshMicrogrid).meshLink), _sgObject(_sgObject(next.meshMicrogrid).meshLink));
+      _sgRestore(report, 'meshMicrogrid.peers', `Bestehende Mesh-Peer-Konfiguration mit ${oldMeshPeers} Peer(s) vor leerem Save geschützt.`);
+    }
+
+    if (report.changed) {
+      next._releaseSafetyGate = report;
+      report.warnings.push('Release-Safety-Gate hat kritische Bestandskonfigurationen vor einem leeren Save geschützt. Bitte betroffene Reiter prüfen und danach erneut speichern.');
+    }
+    return report;
+  }
+
   /**
    * Code-Teil: saveConfig
    * Zweck: Speichert Benutzereingaben oder Konfiguration.
@@ -11888,7 +12100,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
    */
   async function saveConfig() {
     setStatus('Speichere…');
-    const patch = collectPatchFromUI();
+    const patch = applyAppCenterRegressionSafetyGate(collectPatchFromUI());
+    const safetyReport = applyReleaseRegressionSafetyGate(patch);
+    if (safetyReport && safetyReport.changed) {
+      setStatus('Release-Schutz hat bestehende Konfigurationen vor leerem Speichern geschützt. Bitte prüfen und erneut speichern.', 'warn');
+    }
     const payload = { patch, restartEms: true };
     const data = await fetchJson('/api/installer/config', { method: 'POST', body: JSON.stringify(payload) });
     applyConfigToUI(data.config || {});

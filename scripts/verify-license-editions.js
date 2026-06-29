@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Prüft das Lizenzmodell ab 0.8.8:
+ * Prüft das Lizenzmodell ab 0.8.59:
  * - EOS = Vollversion
  * - HEMS = kleiner freigegebener Funktionsumfang
  * - alte NW1/NW1T-Schlüssel bleiben EOS-kompatibel

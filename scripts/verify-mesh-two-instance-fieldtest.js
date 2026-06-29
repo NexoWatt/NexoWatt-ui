@@ -38,7 +38,7 @@ must(html, 'runMeshFieldTest', 'Feldtest-Button im HTML');
 must(html, 'meshFieldTestPeerRows', 'Peer-Matrix-Tabelle im HTML');
 must(html, 'meshFieldTestHistoryRows', 'Command-History-Tabelle im HTML');
 if (!/^0\.8\.(4[2-9]|[5-9][0-9])$/.test(String(pkg.version || ''))) {
-  console.error(`[mesh-two-instance-fieldtest] package.json Version ist ${pkg.version}, erwartet 0.8.42+`);
+  console.error(`[mesh-two-instance-fieldtest] package.json Version ist ${pkg.version}, erwartet 0.8.59+`);
   process.exit(1);
 }
 console.log('[mesh-two-instance-fieldtest] OK');

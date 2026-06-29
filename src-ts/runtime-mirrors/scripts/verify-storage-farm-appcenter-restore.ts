@@ -1,11 +1,11 @@
 // @ts-nocheck
 /**
- * TypeScript-Parallelspiegel: scripts/verify-mesh-active-control.js
+ * TypeScript-Parallelspiegel: scripts/verify-storage-farm-appcenter-restore.js
  *
  * Zweck:
  * Diese Datei ist die TypeScript-Vorbereitung der bestehenden JavaScript-Runtime-Datei.
  * Sie wird noch nicht produktiv ausgeführt. Die produktive Quelle bleibt vorerst:
- * scripts/verify-mesh-active-control.js
+ * scripts/verify-storage-farm-appcenter-restore.js
  *
  * Zusammenhang:
  * Der Spiegel hilft uns, die JS-Datei später schrittweise zu typisieren, zu testen und
@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 35fee3d571d0bd3143f8e5f1c507c0eefedd13abcaefc585791f81ad4b87a607
+ * Original-Hash: b621786ad2a30edeb20e075552352b3fcafb990eac95ed142f27a2920f9fcd53
  */
 
 /**
@@ -30,22 +30,24 @@
  */
 
 'use strict';
-
+/**
+ * Regressionstest: Speicherfarm-Konfiguration darf im App-Center nicht verschwinden,
+ * wenn sie produktiv in storageFarm.configJson gespiegelt ist, aber installer.configJson
+ * keine storageFarm.storages mehr enthält.
+ */
 const fs = require('fs');
-const path = require('path');
-const root = path.resolve(__dirname, '..');
 /**
  * Code-Teil: read
  *
  * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
  * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
  *
  * Zusammenhang:
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
+function read(file) { return fs.readFileSync(file, 'utf8'); }
 /**
  * Code-Teil: must
  *
@@ -57,10 +59,10 @@ const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function must(file, needle) {
+function must(file, text, label) {
   const s = read(file);
-  if (!s.includes(needle)) {
-    console.error(`Missing in ${file}: ${needle}`);
+  if (!s.includes(text)) {
+    console.error(`[storage-farm-restore] FEHLT ${label}: ${text} in ${file}`);
     process.exit(1);
   }
 }
@@ -75,31 +77,21 @@ function must(file, needle) {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function mustNot(file, needle) {
+function mustNot(file, text, label) {
   const s = read(file);
-  if (s.includes(needle)) {
-    console.error(`Forbidden in ${file}: ${needle}`);
+  if (s.includes(text)) {
+    console.error(`[storage-farm-restore] DARF NICHT ENTHALTEN ${label}: ${text} in ${file}`);
     process.exit(1);
   }
 }
-
-for (const file of ['src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'ems/modules/mesh-microgrid.js']) {
-  must(file, "'active'");
-  must(file, 'active-output-ready');
-  must(file, 'Aktivsteuerung freigegeben');
-  must(file, 'executionMode');
-  must(file, 'activeControl');
-  must(file, 'directHardwareWrite: false');
-  must(file, 'neutralCommandOnly: true');
-  must(file, 'setForeignStateAsync(control.commandStateDp');
-  mustNot(file, 'new OCPP');
-  mustNot(file, 'directOcpp');
-}
-
-must('src-ts/runtime-executables/www/ems-apps.ts', 'Aktiv: Local-First Commands ausgeben');
-must('www/ems-apps.js', 'Aktiv: Local-First Commands ausgeben');
-must('src-ts/runtime-executables/www/ems-apps.ts', "['off','diagnostic','field_test','active']");
-must('package.json', '"version": "0.8.59"');
-must('io-package.json', '0.8.52');
-
-console.log('OK: Mesh/Microgrid Aktivmodus gibt nur neutrale Local-First-/Grid-Last-Command-Intents aus und bleibt herstellerneutral.');
+must('src-ts/runtime-executables/main.ts', '_nwHydrateStorageFarmConfigFromRuntimeStates', 'Backend-Fallback-Helfer');
+must('src-ts/runtime-executables/main.ts', 'storageFarm.configJson', 'Runtime-State als Quelle');
+must('src-ts/runtime-executables/main.ts', 'storageFarm.groupsJson', 'Gruppen-Fallback');
+must('src-ts/runtime-executables/main.ts', '__runtimeStateFallbackSource', 'Fallback-Marker für Diagnose');
+must('src-ts/runtime-executables/main.ts', 'out.emsApps.apps.storagefarm', 'App-Center Installiert/Aktiv konsistent halten');
+must('main.js', '_nwHydrateStorageFarmConfigFromRuntimeStates', 'Runtime-Fallback-Helfer');
+must('main.js', 'storageFarm.configJson', 'Runtime-State als Quelle in Runtime');
+must('src-ts/runtime-executables/www/ems-apps.ts', 'nw-storagefarm-master-detail', 'Speicherfarm Master-Detail bleibt vorhanden');
+must('src-ts/runtime-executables/www/ems-apps.ts', 'storageFarmStorages', 'Speicherfarm-Container wird gerendert');
+mustNot('src-ts/runtime-executables/www/ems-apps.ts', 'sf.storages = [];//', 'kein hartes Leeren der Speicherliste');
+console.log('[storage-farm-restore] OK: App-Center hydratisiert Speicherfarm aus Runtime-State-Fallback und verliert bestehende Speicher nicht.');

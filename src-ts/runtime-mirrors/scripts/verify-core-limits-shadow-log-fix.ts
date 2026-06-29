@@ -1,11 +1,11 @@
 // @ts-nocheck
 /**
- * TypeScript-Parallelspiegel: scripts/verify-mesh-active-control.js
+ * TypeScript-Parallelspiegel: scripts/verify-core-limits-shadow-log-fix.js
  *
  * Zweck:
  * Diese Datei ist die TypeScript-Vorbereitung der bestehenden JavaScript-Runtime-Datei.
  * Sie wird noch nicht produktiv ausgeführt. Die produktive Quelle bleibt vorerst:
- * scripts/verify-mesh-active-control.js
+ * scripts/verify-core-limits-shadow-log-fix.js
  *
  * Zusammenhang:
  * Der Spiegel hilft uns, die JS-Datei später schrittweise zu typisieren, zu testen und
@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 35fee3d571d0bd3143f8e5f1c507c0eefedd13abcaefc585791f81ad4b87a607
+ * Original-Hash: 5142e21972ea4319d74088d297af12fe0e5b2d9b5f2df7d041d46febffeeaf67
  */
 
 /**
@@ -30,22 +30,25 @@
  */
 
 'use strict';
-
+/**
+ * 0.8.60 Regression: Core-Limits TS-Shadow darf bei Anlagen ohne Netzlimit
+ * keinen minütlichen Warn-Spam für grid.effectiveW erzeugen. Die Abweichung
+ * bleibt als Info im tsShadowJson sichtbar, aber der produktive TS-Takeover
+ * bleibt blockiert, weil JS null/unlimited und TS 0/missing-input nicht identisch sind.
+ */
 const fs = require('fs');
-const path = require('path');
-const root = path.resolve(__dirname, '..');
 /**
  * Code-Teil: read
  *
  * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
  * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
  *
  * Zusammenhang:
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
+function read(p){ return fs.readFileSync(p,'utf8'); }
 /**
  * Code-Teil: must
  *
@@ -57,13 +60,7 @@ const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function must(file, needle) {
-  const s = read(file);
-  if (!s.includes(needle)) {
-    console.error(`Missing in ${file}: ${needle}`);
-    process.exit(1);
-  }
-}
+function must(file, needle, label){ const s=read(file); if(!s.includes(needle)){ console.error(`[core-shadow-log-fix] Missing ${label}: ${needle}`); process.exit(1);} }
 /**
  * Code-Teil: mustNot
  *
@@ -75,31 +72,14 @@ function must(file, needle) {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function mustNot(file, needle) {
-  const s = read(file);
-  if (s.includes(needle)) {
-    console.error(`Forbidden in ${file}: ${needle}`);
-    process.exit(1);
-  }
+function mustNot(file, needle, label){ const s=read(file); if(s.includes(needle)){ console.error(`[core-shadow-log-fix] Forbidden ${label}: ${needle}`); process.exit(1);} }
+for (const file of ['src-ts/runtime-executables/ems/modules/core-limits.ts','ems/modules/core-limits.js']) {
+  must(file, 'isBenignGridNoLimitMismatch', 'benign no-limit classifier');
+  must(file, 'js-grid-headroom-unlimited-vs-ts-missing-input-zero', 'benign mismatch reason');
+  must(file, 'blockingMismatches', 'blocking mismatch list');
+  must(file, 'benignMismatches', 'benign mismatch list');
+  must(file, 'if (blockingMismatches.length > 0)', 'warn only for blocking mismatches');
+  must(file, 'keine Warnspam', 'German documentation for no warning spam');
+  mustNot(file, 'if (!result.ok) {\n                const now = Date.now();', 'old warn-on-any-mismatch block');
 }
-
-for (const file of ['src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'ems/modules/mesh-microgrid.js']) {
-  must(file, "'active'");
-  must(file, 'active-output-ready');
-  must(file, 'Aktivsteuerung freigegeben');
-  must(file, 'executionMode');
-  must(file, 'activeControl');
-  must(file, 'directHardwareWrite: false');
-  must(file, 'neutralCommandOnly: true');
-  must(file, 'setForeignStateAsync(control.commandStateDp');
-  mustNot(file, 'new OCPP');
-  mustNot(file, 'directOcpp');
-}
-
-must('src-ts/runtime-executables/www/ems-apps.ts', 'Aktiv: Local-First Commands ausgeben');
-must('www/ems-apps.js', 'Aktiv: Local-First Commands ausgeben');
-must('src-ts/runtime-executables/www/ems-apps.ts', "['off','diagnostic','field_test','active']");
-must('package.json', '"version": "0.8.59"');
-must('io-package.json', '0.8.52');
-
-console.log('OK: Mesh/Microgrid Aktivmodus gibt nur neutrale Local-First-/Grid-Last-Command-Intents aus und bleibt herstellerneutral.');
+console.log('[core-shadow-log-fix] OK: grid.effectiveW Shadow-Warnspam ist entschärft, Diagnose bleibt erhalten.');

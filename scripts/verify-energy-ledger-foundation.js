@@ -31,5 +31,5 @@ need('src-ts/runtime-executables/ems/module-manager.ts', "this._licenseAllowsApp
 need('src-ts/runtime-executables/www/ems-apps.ts', "id: 'energyLedger'", 'App-Center führt Local kWh Ledger');
 need('src-ts/runtime-executables/www/ems-apps.ts', 'schaltet keine Hardware', 'Installer-Hinweis: read-only');
 need('src-ts/runtime-executables/main.ts', "ensurePlainObj('energyLedger'", 'Default-Config energyLedger');
-match('package.json', /"version"\s*:\s*"0\.8\.(2[7-9]|[3-9][0-9])"/, 'Paketversion >=0.8.27');
+match('package.json', /"version"\s*:\s*"0\.8\.(2[7-9]|[3-9][0-9])"/, 'Paketversion >=0.8.59');
 console.log('[energy-ledger] OK: Local kWh Ledger Grundlage/Export-Erweiterung ist statisch abgesichert.');

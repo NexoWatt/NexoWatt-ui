@@ -1,11 +1,11 @@
 // @ts-nocheck
 /**
- * TypeScript-Parallelspiegel: scripts/verify-mesh-active-control.js
+ * TypeScript-Parallelspiegel: scripts/verify-zero-export-commissioning.js
  *
  * Zweck:
  * Diese Datei ist die TypeScript-Vorbereitung der bestehenden JavaScript-Runtime-Datei.
  * Sie wird noch nicht produktiv ausgeführt. Die produktive Quelle bleibt vorerst:
- * scripts/verify-mesh-active-control.js
+ * scripts/verify-zero-export-commissioning.js
  *
  * Zusammenhang:
  * Der Spiegel hilft uns, die JS-Datei später schrittweise zu typisieren, zu testen und
@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 35fee3d571d0bd3143f8e5f1c507c0eefedd13abcaefc585791f81ad4b87a607
+ * Original-Hash: 3c441629ba8edbb18af815572906f49e57bc898d45f6557b3795a27b1940e0b5
  */
 
 /**
@@ -30,22 +30,19 @@
  */
 
 'use strict';
-
 const fs = require('fs');
-const path = require('path');
-const root = path.resolve(__dirname, '..');
 /**
  * Code-Teil: read
  *
  * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
  * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
  *
  * Zusammenhang:
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
+function read(p){return fs.readFileSync(p,'utf8');}
 /**
  * Code-Teil: must
  *
@@ -57,13 +54,7 @@ const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function must(file, needle) {
-  const s = read(file);
-  if (!s.includes(needle)) {
-    console.error(`Missing in ${file}: ${needle}`);
-    process.exit(1);
-  }
-}
+function must(file, needle){const s=read(file); if(!s.includes(needle)){console.error(`Missing in ${file}: ${needle}`); process.exit(1);}}
 /**
  * Code-Teil: mustNot
  *
@@ -75,31 +66,16 @@ function must(file, needle) {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function mustNot(file, needle) {
-  const s = read(file);
-  if (s.includes(needle)) {
-    console.error(`Forbidden in ${file}: ${needle}`);
-    process.exit(1);
-  }
-}
-
-for (const file of ['src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'ems/modules/mesh-microgrid.js']) {
-  must(file, "'active'");
-  must(file, 'active-output-ready');
-  must(file, 'Aktivsteuerung freigegeben');
-  must(file, 'executionMode');
-  must(file, 'activeControl');
-  must(file, 'directHardwareWrite: false');
-  must(file, 'neutralCommandOnly: true');
-  must(file, 'setForeignStateAsync(control.commandStateDp');
-  mustNot(file, 'new OCPP');
-  mustNot(file, 'directOcpp');
-}
-
-must('src-ts/runtime-executables/www/ems-apps.ts', 'Aktiv: Local-First Commands ausgeben');
-must('www/ems-apps.js', 'Aktiv: Local-First Commands ausgeben');
-must('src-ts/runtime-executables/www/ems-apps.ts', "['off','diagnostic','field_test','active']");
-must('package.json', '"version": "0.8.59"');
-must('io-package.json', '0.8.52');
-
-console.log('OK: Mesh/Microgrid Aktivmodus gibt nur neutrale Local-First-/Grid-Last-Command-Intents aus und bleibt herstellerneutral.');
+function mustNot(file, needle){const s=read(file); if(s.includes(needle)){console.error(`Forbidden in ${file}: ${needle}`); process.exit(1);}}
+must('package.json','"version": "0.8.59"');
+must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','_buildZeroExportCommissioningAssistant');
+must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','gridConstraints.exportLimit.commissioning.checklistJson');
+must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','gridConstraints.exportLimit.commissioning.writeTestPreviewJson');
+must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','Verbrauch → Speicher → Ladepunkte');
+must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','keine zweite Regelung');
+must('src-ts/runtime-executables/www/ems-apps.ts','commissioning.reportJson');
+must('src-ts/runtime-executables/www/ems-apps.ts','0‑Einspeise Inbetriebnahme-Checkliste');
+must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','directHardwareWrite: false');
+must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','neutralCommandOnly: true');
+mustNot('src-ts/runtime-executables/ems/modules/grid-constraints.ts','new ZeroExport');
+console.log('OK: 0-Einspeise Inbetriebnahme-Assistent ist diagnostisch, nicht doppelt geregelt und app-center-konform vorbereitet.');

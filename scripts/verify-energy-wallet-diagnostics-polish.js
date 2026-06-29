@@ -19,7 +19,7 @@ const appTs = read('src-ts/runtime-executables/www/app.ts');
 const settingsHtml = read('www/settings.html');
 const mainTs = read('src-ts/runtime-executables/main.ts');
 const pkg = JSON.parse(read('package.json'));
-need(pkg.version === '0.8.24', 'package.json Version muss 0.8.24 sein.');
+need(pkg.version === '0.8.59', 'package.json Version muss 0.8.59 sein.');
 for (const src of [walletTs, walletJs]) {
   need(src.includes('energyWallet.diagnostics.userWarning'), 'userWarning-State fehlt in EnergyWallet Runtime.');
   need(src.includes('energyWallet.diagnostics.installerWarning'), 'installerWarning-State fehlt in EnergyWallet Runtime.');
