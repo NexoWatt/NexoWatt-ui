@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:3d3b58aa152722b52bc3fc7f24ff076ad7c27cbd93c2f336d87c35e22bec076d
+ * Quell-Hash: sha256:bb34d5a7e9ea7d3d2b9c94fd673ee1b1161f1a27905d87a619bd28080235dae8
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -13472,6 +13472,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       { label: 'Netz (W)', value: _fmtW(n(ctrl.gridImportW)) },
       { label: 'Grundlast (wirksam)', value: _fmtW(n(ctrl.gridBaseLoadW)) },
       { label: 'Lokale Deckung', value: _fmtW(n(ctrl.gridLocalSupportW)) },
+      { label: 'EVCS Ist für Netz-Gate', value: _fmtW(n(ctrl.gridEvcsActualForCapW)) },
+      { label: 'Reservierung ignoriert', value: _fmtW(n(ctrl.gridEvcsReserveIgnoredForCapW)) },
       { label: 'EVCS Cap (Netz sicher)', value: _fmtW(n(ctrl.gridCapEvcsW)) },
       { label: 'Binding', value: _fmtBool(gridBind, 'JA', 'NEIN') },
     ], gridBind ? 'warn' : 'ok');
@@ -13639,7 +13641,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       { label: 'Tarif', value: tariffTxt },
       { label: 'Mode', value: String(ctrl.budgetMode || '') },
       { label: 'Budget', value: _fmtW(budgetW) },
-      { label: 'Used', value: _fmtW(usedW) },
+      { label: 'Ist', value: _fmtW(n(ctrl.actualW ?? usedW)) },
+      { label: 'Reserviert', value: _fmtW(n(ctrl.reserveW ?? usedW)) },
       { label: 'Remaining', value: _fmtW(remW) },
       { label: 'Status', value: String(ctrl.status || '') },
     ], budgetKind));
@@ -13648,6 +13651,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (sum) {
       els.chargingBudget.appendChild(mkCard('Summary', [
         { label: 'EVCS Ist', value: _fmtW(n(sum.totalPowerW)) },
+        { label: 'EVCS Reserviert', value: _fmtW(n(sum.totalReservedPowerW ?? ctrl.reserveW)) },
         { label: 'EVCS Soll', value: _fmtW(n(sum.totalTargetPowerW)) },
         { label: 'Online Ports', value: (sum.onlineWallboxes != null) ? String(sum.onlineWallboxes) : '--' },
       ], ''));

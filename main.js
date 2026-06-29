@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:4bcdf2363dd2318ab4fcf1855a998abb9ee523c4058883f771b1c2b4651ce404
+ * Quell-Hash: sha256:ad8810698bebff23b98146dccff8681e276cb48ddac2eb59b684e895ce1c3155
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -13840,6 +13840,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           budgetMode: await getOwn('chargingManagement.control.budgetMode'),
           budgetW: await getOwn('chargingManagement.control.budgetW'),
           usedW: await getOwn('chargingManagement.control.usedW'),
+          actualW: await getOwn('chargingManagement.control.actualW'),
+          reserveW: await getOwn('chargingManagement.control.reserveW'),
           remainingW: await getOwn('chargingManagement.control.remainingW'),
 
           pvCapRawW: await getOwn('chargingManagement.control.pvCapRawW'),
@@ -13855,6 +13857,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           gridBaseLoadW: await getOwn('chargingManagement.control.gridBaseLoadW'),
           gridBaseLoadRawW: await getOwn('chargingManagement.control.gridBaseLoadRawW'),
           gridLocalSupportW: await getOwn('chargingManagement.control.gridLocalSupportW'),
+          gridEvcsActualForCapW: await getOwn('chargingManagement.control.gridEvcsActualForCapW'),
+          gridEvcsReserveIgnoredForCapW: await getOwn('chargingManagement.control.gridEvcsReserveIgnoredForCapW'),
           gridCapEvcsW: await getOwn('chargingManagement.control.gridCapEvcsW'),
           gridCapBinding: await getOwn('chargingManagement.control.gridCapBinding'),
 

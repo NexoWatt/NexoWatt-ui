@@ -13842,6 +13842,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           budgetMode: await getOwn('chargingManagement.control.budgetMode'),
           budgetW: await getOwn('chargingManagement.control.budgetW'),
           usedW: await getOwn('chargingManagement.control.usedW'),
+          actualW: await getOwn('chargingManagement.control.actualW'),
+          reserveW: await getOwn('chargingManagement.control.reserveW'),
           remainingW: await getOwn('chargingManagement.control.remainingW'),
 
           pvCapRawW: await getOwn('chargingManagement.control.pvCapRawW'),
@@ -13857,6 +13859,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           gridBaseLoadW: await getOwn('chargingManagement.control.gridBaseLoadW'),
           gridBaseLoadRawW: await getOwn('chargingManagement.control.gridBaseLoadRawW'),
           gridLocalSupportW: await getOwn('chargingManagement.control.gridLocalSupportW'),
+          gridEvcsActualForCapW: await getOwn('chargingManagement.control.gridEvcsActualForCapW'),
+          gridEvcsReserveIgnoredForCapW: await getOwn('chargingManagement.control.gridEvcsReserveIgnoredForCapW'),
           gridCapEvcsW: await getOwn('chargingManagement.control.gridCapEvcsW'),
           gridCapBinding: await getOwn('chargingManagement.control.gridCapBinding'),
 

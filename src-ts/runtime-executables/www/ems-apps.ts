@@ -13474,6 +13474,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       { label: 'Netz (W)', value: _fmtW(n(ctrl.gridImportW)) },
       { label: 'Grundlast (wirksam)', value: _fmtW(n(ctrl.gridBaseLoadW)) },
       { label: 'Lokale Deckung', value: _fmtW(n(ctrl.gridLocalSupportW)) },
+      { label: 'EVCS Ist für Netz-Gate', value: _fmtW(n(ctrl.gridEvcsActualForCapW)) },
+      { label: 'Reservierung ignoriert', value: _fmtW(n(ctrl.gridEvcsReserveIgnoredForCapW)) },
       { label: 'EVCS Cap (Netz sicher)', value: _fmtW(n(ctrl.gridCapEvcsW)) },
       { label: 'Binding', value: _fmtBool(gridBind, 'JA', 'NEIN') },
     ], gridBind ? 'warn' : 'ok');
@@ -13641,7 +13643,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       { label: 'Tarif', value: tariffTxt },
       { label: 'Mode', value: String(ctrl.budgetMode || '') },
       { label: 'Budget', value: _fmtW(budgetW) },
-      { label: 'Used', value: _fmtW(usedW) },
+      { label: 'Ist', value: _fmtW(n(ctrl.actualW ?? usedW)) },
+      { label: 'Reserviert', value: _fmtW(n(ctrl.reserveW ?? usedW)) },
       { label: 'Remaining', value: _fmtW(remW) },
       { label: 'Status', value: String(ctrl.status || '') },
     ], budgetKind));
@@ -13650,6 +13653,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (sum) {
       els.chargingBudget.appendChild(mkCard('Summary', [
         { label: 'EVCS Ist', value: _fmtW(n(sum.totalPowerW)) },
+        { label: 'EVCS Reserviert', value: _fmtW(n(sum.totalReservedPowerW ?? ctrl.reserveW)) },
         { label: 'EVCS Soll', value: _fmtW(n(sum.totalTargetPowerW)) },
         { label: 'Online Ports', value: (sum.onlineWallboxes != null) ? String(sum.onlineWallboxes) : '--' },
       ], ''));

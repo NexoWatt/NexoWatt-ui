@@ -2405,7 +2405,8 @@ class ChargingManagementModule extends BaseModule {
 
         await mk('chargingManagement.wallboxCount', 'Ladepunkt count', 'number', 'value');
         await mk('chargingManagement.stationCount', 'Station count', 'number', 'value');
-        await mk('chargingManagement.summary.totalPowerW', 'Total power (W)', 'number', 'value.power');
+        await mk('chargingManagement.summary.totalPowerW', 'Total actual power (W)', 'number', 'value.power');
+        await mk('chargingManagement.summary.totalReservedPowerW', 'Total reserved/commanded power (W)', 'number', 'value.power');
         await mk('chargingManagement.summary.totalCurrentA', 'Total current (A)', 'number', 'value.current');
         await mk('chargingManagement.summary.onlineWallboxes', 'Online Ladepunkte', 'number', 'value');
         await mk('chargingManagement.summary.totalTargetPowerW', 'Total target power (W)', 'number', 'value.power');
@@ -2417,7 +2418,11 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.status', 'Status', 'string', 'text');
         await mk('chargingManagement.control.budgetMode', 'Budget mode', 'string', 'text');
         await mk('chargingManagement.control.budgetW', 'Budget (W)', 'number', 'value.power');
-        await mk('chargingManagement.control.usedW', 'Used (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.usedW', 'Reserved/used budget (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.actualW', 'Actual measured EVCS power (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.reserveW', 'Reserved/commanded EVCS power (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.gridEvcsActualForCapW', 'EVCS actual used for grid cap (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.gridEvcsReserveIgnoredForCapW', 'EVCS reserved ignored for grid cap (W)', 'number', 'value.power');
         await mk('chargingManagement.control.remainingW', 'Remaining (W)', 'number', 'value.power');
         await mk('chargingManagement.control.tsControlShadowJson', 'TypeScript EVCS-Control Shadow / Vorbereitung (JSON)', 'string', 'json');
         await mk('chargingManagement.control.tsControlProductivePrepJson', 'TypeScript EVCS-Control Produktiv-Vorbereitung (JSON)', 'string', 'json');
@@ -4196,7 +4201,8 @@ class ChargingManagementModule extends BaseModule {
         }
 
         await this._queueState('chargingManagement.wallboxCount', wbList.length, true);
-        await this._queueState('chargingManagement.summary.totalPowerW', totalPowerW, true);
+        await this._queueState('chargingManagement.summary.totalPowerW', totalFreshActualPowerW, true);
+        await this._queueState('chargingManagement.summary.totalReservedPowerW', totalPowerW, true);
         await this._queueState('chargingManagement.summary.totalCurrentA', totalCurrentA, true);
         await this._queueState('chargingManagement.summary.onlineWallboxes', onlineCount, true);
 
@@ -5344,7 +5350,13 @@ if (components.length) {
             // Verbrauch". If the central value is not available, fall back to the
             // grid equation but clamp the effective base load to >= 0. In every case
             // the cap is hard-clamped to the effective grid limit.
-            gridBaseLoadRawW = gridW - (Number.isFinite(totalPowerW) ? totalPowerW : 0);
+            const gridEvcsActualForCapW = Number.isFinite(totalFreshActualPowerW) ? Math.max(0, Number(totalFreshActualPowerW)) : 0;
+            const gridEvcsReserveIgnoredForCapW = Math.max(0, (Number.isFinite(totalPowerW) ? Number(totalPowerW) : 0) - gridEvcsActualForCapW);
+            // Wichtig: Für das Netzanschluss-Gate zählt nur frisch gemessene EVCS-Leistung.
+            // Alte Setpoints/Reservierungen dürfen nicht vom Netzbezug abgezogen werden,
+            // sonst sieht Gate A ein fiktives freies Budget und der Status bleibt bei
+            // alten Ladeleistungen stehen, obwohl der Energiefluss EVCS = 0 W zeigt.
+            gridBaseLoadRawW = gridW - gridEvcsActualForCapW;
             let derivedBaseLoadW = null;
             let derivedBaseLoadSource = '';
             try {
@@ -5374,7 +5386,9 @@ if (components.length) {
             gridCapEvcsW = clamp(gridImportLimitEffW - gridBaseLoadW, 0, gridImportLimitEffW);
             try {
                 budgetDebug = budgetDebug || {};
-                budgetDebug.gridBaseLoadSource = derivedBaseLoadSource || 'gridW-minus-evcs-clamped';
+                budgetDebug.gridBaseLoadSource = derivedBaseLoadSource || 'gridW-minus-fresh-evcs-clamped';
+                budgetDebug.gridEvcsActualForCapW = gridEvcsActualForCapW;
+                budgetDebug.gridEvcsReserveIgnoredForCapW = gridEvcsReserveIgnoredForCapW;
             } catch (_eBaseLoadDebug) {}
 
             // Apply cap (always)
@@ -5506,6 +5520,8 @@ if (components.length) {
             await this._queueState('chargingManagement.control.gridBaseLoadW', (typeof gridBaseLoadW === 'number' && Number.isFinite(gridBaseLoadW)) ? gridBaseLoadW : 0, true);
             await this._queueState('chargingManagement.control.gridBaseLoadRawW', (typeof gridBaseLoadRawW === 'number' && Number.isFinite(gridBaseLoadRawW)) ? gridBaseLoadRawW : 0, true);
             await this._queueState('chargingManagement.control.gridLocalSupportW', (typeof gridLocalSupportW === 'number' && Number.isFinite(gridLocalSupportW)) ? gridLocalSupportW : 0, true);
+            await this._queueState('chargingManagement.control.gridEvcsActualForCapW', (typeof totalFreshActualPowerW === 'number' && Number.isFinite(totalFreshActualPowerW)) ? totalFreshActualPowerW : 0, true);
+            await this._queueState('chargingManagement.control.gridEvcsReserveIgnoredForCapW', Math.max(0, (Number.isFinite(totalPowerW) ? totalPowerW : 0) - (Number.isFinite(totalFreshActualPowerW) ? totalFreshActualPowerW : 0)), true);
             await this._queueState('chargingManagement.control.gridCapEvcsW', (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : 0, true);
             await this._queueState('chargingManagement.control.gridCapBinding', !!gridCapBinding, true);
             await this._queueState('chargingManagement.control.gridMaxPhaseA', gridMaxPhaseA || 0, true);
@@ -6061,6 +6077,8 @@ if (components.length) {
             // ignore
         }
 
+        await this._queueState('chargingManagement.summary.totalPowerW', totalFreshActualPowerW, true);
+        await this._queueState('chargingManagement.summary.totalReservedPowerW', totalPowerW, true);
         await this._queueState('chargingManagement.summary.totalTargetPowerW', totalTargetPowerW, true);
             await this._queueState('chargingManagement.summary.totalTargetCurrentA', totalTargetCurrentA, true);
             await this._queueState('chargingManagement.summary.lastUpdate', Date.now(), true);
@@ -7488,6 +7506,8 @@ if (components.length) {
         await this._queueState('chargingManagement.control.status', tsControlApply ? tsControlApply.status : finalStatus, true);
         await this._queueState('chargingManagement.control.budgetW', tsControlApply ? tsControlApply.budgetW : (Number.isFinite(budgetW) ? budgetW : 0), true);
         await this._queueState('chargingManagement.control.usedW', tsControlApply ? tsControlApply.usedW : (Number.isFinite(budgetW) ? usedW : totalTargetPowerW), true);
+        await this._queueState('chargingManagement.control.actualW', Math.max(0, Math.round(Number(totalFreshActualPowerW || 0))), true);
+        await this._queueState('chargingManagement.control.reserveW', Math.max(0, Math.round(Number.isFinite(budgetW) ? usedW : totalTargetPowerW)), true);
         await this._queueState('chargingManagement.control.remainingW', tsControlApply ? tsControlApply.remainingW : (Number.isFinite(budgetW) ? remainingW : 0), true);
 
         await this._publishChargingNormalSourceState({
@@ -7509,13 +7529,15 @@ if (components.length) {
         try {
             const rt = this.adapter && this.adapter._emsBudget;
             if (rt && typeof rt.reserve === 'function') {
+                const evcsActualW = Math.max(0, Math.round(Number(totalFreshActualPowerW || 0)));
                 const evcsReserveW = Math.max(0, Math.round(Number.isFinite(budgetW) ? usedW : totalTargetPowerW));
-                const evcsPvReserveW = Math.max(0, Math.min(evcsReserveW, Math.round(pvEvcsUsedWForBudget || 0)));
+                const evcsPvReserveW = Math.max(0, Math.min(evcsReserveW, (pvAvailableState ? Math.round(pvEvcsUsedWForBudget || 0) : 0)));
                 rt.reserve({
                     key: 'evcs',
                     app: 'chargingManagement',
                     label: 'Ladepunkte',
                     priority: 100,
+                    actualW: evcsActualW,
                     requestedW: evcsReserveW,
                     reserveW: evcsReserveW,
                     pvReserveW: evcsPvReserveW,

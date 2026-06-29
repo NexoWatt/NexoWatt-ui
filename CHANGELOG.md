@@ -1,3 +1,9 @@
+## 0.8.62
+
+- Lastmanagement: Gate-A-Netzbudget nutzt nur frisch gemessene EVCS-Istleistung für die Netzanschluss-Kappe. Alte Sollwert-/Reservierungswerte können dadurch kein fiktives EVCS-Cap mehr erzeugen.
+- Status/App-Center: EVCS Ist, EVCS Reserviert und EVCS Soll werden getrennt angezeigt.
+- Zentrales EMS-Budget: EVCS-Reservierung bleibt für Downstream-Apps erhalten, EVCS-Ist wird aber als echte Messleistung veröffentlicht.
+
 ## 0.8.61
 
 - Lademanagement: EVCS-Netzcap konservativ gehärtet. Negative Grundlast durch laufende, lokal gedeckte EVCS-Leistung wird nicht mehr als zusätzliche Netzanschlusskapazität genutzt.
