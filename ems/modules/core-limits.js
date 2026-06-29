@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/core-limits.ts
- * Quell-Hash: sha256:d2c4d03ba74784ce5dabcbc9052c4db73be8a930dfd5a2018c7ac8dc04e36063
+ * Quell-Hash: sha256:1437c12fac1f67998eec1143fabfdb2b896067829c965ea84bceeb036723eedc
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1103,7 +1103,11 @@ class CoreLimitsModule extends BaseModule {
 
         // Total controlled-load budget for grid-cap/§14a/peak/tariff layer.
         const gridLimitW = coreSnapshot && coreSnapshot.grid ? Number(coreSnapshot.grid.gridImportLimitW_effective || 0) : 0;
-        const gridHeadroomW = gridLimitW > 0 ? Math.max(0, gridLimitW - gridImportW + flexUsedW) : Number.POSITIVE_INFINITY;
+        // 0.8.61: Zentrales Gate A konservativ klemmen. Die alte Anzeigeformel
+        // `gridLimit - Netz + flexible Lasten` ist als Rohdiagnose nützlich,
+        // darf aber das wirksame Netzbudget nicht über das Anschlusslimit heben.
+        const gridHeadroomRawW = gridLimitW > 0 ? Math.max(0, gridLimitW - gridImportW + flexUsedW) : Number.POSITIVE_INFINITY;
+        const gridHeadroomW = gridLimitW > 0 ? Math.min(gridLimitW, gridHeadroomRawW) : Number.POSITIVE_INFINITY;
         const highLevelCapW = coreSnapshot && coreSnapshot.evcsHighLevel && isFiniteNumber(coreSnapshot.evcsHighLevel.capW)
             ? Math.max(0, Number(coreSnapshot.evcsHighLevel.capW))
             : Number.POSITIVE_INFINITY;
@@ -1162,6 +1166,7 @@ class CoreLimitsModule extends BaseModule {
                     importW: roundW(gridImportW),
                     exportW: roundW(gridExportW),
                     headroomW: Number.isFinite(gridHeadroomW) ? roundW(gridHeadroomW) : null,
+                    headroomRawW: Number.isFinite(gridHeadroomRawW) ? roundW(gridHeadroomRawW) : null,
                 },
                 pv: {
                     available: !!pvAvailable,
@@ -1264,43 +1269,33 @@ class CoreLimitsModule extends BaseModule {
                 peakShavingActive: false,
                 externalLimitActive: false,
             });
-            const rawMismatches = [
+            const mismatches = [
                 compareShadowWatt('pv.rawW', pv.rawW, ts && ts.pv ? ts.pv.rawW : null),
                 compareShadowWatt('pv.effectiveW', pv.effectiveW, ts && ts.pv ? ts.pv.effectiveW : null),
+                // 0.8.60: grid.effectiveW ist im TS-Spiegel ein enger Netzbudget-Begriff,
+                // während die produktive JS-Runtime hier historisch `grid.headroomW` mit
+                // zusätzlichen High-Level-/Flex-Load-Kontexten vergleicht. Ein einzelner
+                // Unterschied an diesem Feld ist deshalb Diagnose, aber kein Grund für
+                // minütlichen Warn-Log-Spam. Produktiv bleibt JS trotzdem Fallback, solange
+                // der Gesamt-Shadow nicht vollständig passt.
                 compareShadowWatt('grid.effectiveW', grid.headroomW, ts && ts.grid ? ts.grid.effectiveW : null),
                 compareShadowWatt('total.effectiveW', total.effectiveW, ts && ts.total ? ts.total.effectiveW : null),
-            ].filter(Boolean);
-
-            // 0.8.60: Log-Spam-Fix für Anlagen ohne konfiguriertes Netzimportlimit.
-            // Die JS-Runtime beschreibt diesen Fall bei `grid.headroomW` als `null`
-            // (= kein wirksamer Headroom-Deckel / nicht begrenzt), während der
-            // TypeScript-Spiegel konservativ `0 W` mit Grund `missing-input` liefert.
-            // Das ist kein produktives Risiko und darf nicht minütlich als Warnung
-            // im ioBroker-Log erscheinen. Für die produktive TS-Übernahme bleibt es
-            // trotzdem ein Fallback-Fall, weil `null` und `0` fachlich nicht dasselbe
-            // sind. Ergebnis: keine Warnspam, aber weiterhin kein unsicherer TS-Takeover.
-            const isBenignGridNoLimitMismatch = (m) => {
-                if (!m || m.field !== 'grid.effectiveW') return false;
-                const jsHeadroomMissing = grid.headroomW === null || grid.headroomW === undefined || !Number.isFinite(Number(grid.headroomW));
-                const tsGrid = ts && ts.grid ? ts.grid : null;
-                const tsMissingInputZero = tsGrid && Number(tsGrid.effectiveW) === 0 && String(tsGrid.reason || '') === 'missing-input';
-                const jsImportLimitMissing = !Number.isFinite(Number(grid.importLimitW)) || Number(grid.importLimitW) <= 0;
-                return !!(jsHeadroomMissing && tsMissingInputZero && jsImportLimitMissing);
-            };
-            const benignMismatches = rawMismatches
-                .filter(isBenignGridNoLimitMismatch)
-                .map(m => ({ ...m, severity: 'info', benign: true, reason: 'js-grid-headroom-unlimited-vs-ts-missing-input-zero' }));
-            const blockingMismatches = rawMismatches
-                .filter(m => !isBenignGridNoLimitMismatch(m))
-                .map(m => ({ ...m, severity: 'warn', benign: false }));
-            const mismatches = blockingMismatches.concat(benignMismatches);
+            ].filter(Boolean).map((m) => {
+                if (m && m.field === 'grid.effectiveW') {
+                    return { ...m, diagnosticOnly: true, severity: 'diagnostic', reason: 'grid-headroom-vs-ts-effective-budget' };
+                }
+                return { ...m, diagnosticOnly: false, severity: 'warn' };
+            });
+            const warningMismatches = mismatches.filter((m) => !(m && m.diagnosticOnly === true));
+            const diagnosticOnlyMismatches = mismatches.filter((m) => m && m.diagnosticOnly === true);
             const result = {
                 available: true,
-                ok: blockingMismatches.length === 0 && benignMismatches.length === 0,
+                ok: mismatches.length === 0,
                 source: 'ts-mirror-shadow',
                 mismatches,
-                blockingMismatches,
-                benignMismatches,
+                warningMismatches,
+                diagnosticOnlyMismatches,
+                logSuppressed: warningMismatches.length === 0 && diagnosticOnlyMismatches.length > 0,
                 js: {
                     pvRawW: roundW(pv.rawW),
                     pvEffectiveW: roundW(pv.effectiveW),
@@ -1317,12 +1312,12 @@ class CoreLimitsModule extends BaseModule {
                 // Übernahme verfügbar. Er wird nur genutzt, wenn der Shadow-Vergleich OK ist.
                 tsSnapshot: ts || null,
             };
-            if (blockingMismatches.length > 0) {
+            if (warningMismatches.length > 0) {
                 const now = Date.now();
                 if (!this._coreTsShadowLastWarnMs || now - this._coreTsShadowLastWarnMs > 60000) {
                     this._coreTsShadowLastWarnMs = now;
                     try {
-                        this.adapter.log && this.adapter.log.warn && this.adapter.log.warn(`[core-limits-ts-shadow] JS/TS budget mismatch: ${blockingMismatches.map(m => m.field).join(', ')}`);
+                        this.adapter.log && this.adapter.log.warn && this.adapter.log.warn(`[core-limits-ts-shadow] JS/TS budget mismatch: ${warningMismatches.map(m => m.field).join(', ')}`);
                     } catch (_eLog) {}
                 }
             }

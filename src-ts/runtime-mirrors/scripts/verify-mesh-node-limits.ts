@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4c0b5041e80329200d855d0e5622ff41a2d0001a8f6c7151683beba6b3a21517
+ * Original-Hash: 0a51715ec6d0e3ba28f729e5b0899488e542a72948005dbc132086bfcc96ec7a
  */
 
 /**
@@ -72,7 +72,7 @@ function must(file, text){ const s=read(file); if(!s.includes(text)){ console.er
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function mustNot(file, text){ const s=read(file); if(s.includes(text)){ console.error(`Forbidden in ${file}: ${text}`); process.exit(1); } }
-must('package.json', '"version": "0.8.59"');
+must('package.json', '"version": "0.8.53"');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'nexowatt.mesh-microgrid-target-group-fairness.v1');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'buildCommandLimitDiagnostics');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'maxImportW');

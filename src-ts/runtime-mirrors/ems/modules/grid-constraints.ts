@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 16eff0058cefe6f4f41cd697e0250ffc92da2f8ed6e4d1f331ef460077d62dd9
+ * Original-Hash: 6763f6c3f3ab95e8b6691529a41c9b6c9d4eaac900a6f4b7187d29f23e07291b
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/grid-constraints.ts
- * Quell-Hash: sha256:151d5c7e4a5c4435eec6ba73bde324ebca22635564af2cc6b3a7728cc3fbde47
+ * Quell-Hash: sha256:239e43247e0e1d165fafc72ba7b04b74c472e1e3b6fa9dd84f3898792300b02a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -129,15 +129,6 @@ class GridConstraintsModule extends BaseModule {
         this._pvEvu = {
             lastStagePct: null,
         };
-
-        // 0.8.55: Schneller 0-Einspeise-Aktivbetrieb.
-        // 0.8.56: ACK-Verlauf/Feldprotokoll je Senke ohne Schreibtest pro Tick.
-        // Schreibtests laufen nicht in jedem Regel-Tick. Diese Runtime hält
-        // letzte ACK-/Blockierinformationen je Senke, damit der Export Guard
-        // im Aktivbetrieb sofort auf freigegebene Ziele schreiben kann und bei
-        // Fehlern ohne Verzögerung auf die nächste Senke bzw. WR-Abregelung fällt.
-        this._zeroExportSinkRuntime = {};
-        this._zeroExportSinkAckHistory = {};
     }
 
     /**
@@ -323,7 +314,7 @@ class GridConstraintsModule extends BaseModule {
             native: {},
         });
 
-        for (const ch of ['control', 'rlm', 'zeroExport', 'exportLimit', 'exportLimit.commissioning', 'exportLimit.sinks', 'exportLimit.sinks.storage', 'exportLimit.sinks.charging', 'exportLimit.sinks.flexLoads', 'exportLimit.sinks.mesh', 'exportLimit.sinks.inverter', 'pvCurtail']) {
+        for (const ch of ['control', 'rlm', 'zeroExport', 'exportLimit', 'pvCurtail']) {
             await this.adapter.setObjectNotExistsAsync(`gridConstraints.${ch}`, {
                 type: 'channel',
                 common: { name: ch },
@@ -408,49 +399,6 @@ class GridConstraintsModule extends BaseModule {
         await mk('gridConstraints.exportLimit.sinkCommandWriteStatus', '0-export sink command write status', 'string', 'text');
         await mk('gridConstraints.exportLimit.sinkCommandWriteJson', '0-export sink command write JSON', 'string', 'json');
         await mk('gridConstraints.exportLimit.sinkCommandLastError', '0-export sink command last error', 'string', 'text');
-
-        // 0.8.55: Senken-Freigabe und schneller Aktivbetrieb.
-        // 0.8.56: Senken-ACK-Verlauf und Feldprotokoll.
-        // Diese States sind die schnelle Betriebsdiagnose: keine Schreibtests pro Tick,
-        // sondern Nutzung gespeicherter Freigaben/ACKs und zielweises Blockieren bei Fehlern.
-        await mk('gridConstraints.exportLimit.sinkAvailabilityJson', '0-export sink availability JSON', 'string', 'json');
-        await mk('gridConstraints.exportLimit.fastPathReady', '0-export fast path ready', 'boolean', 'indicator');
-        await mk('gridConstraints.exportLimit.activeSinkJson', '0-export active sink JSON', 'string', 'json');
-        await mk('gridConstraints.exportLimit.fallbackReason', '0-export fallback reason', 'string', 'text');
-        await mk('gridConstraints.exportLimit.sinkAckSummaryJson', '0-export sink ACK summary JSON', 'string', 'json');
-        await mk('gridConstraints.exportLimit.sinkAckHistoryJson', '0-export sink ACK history JSON', 'string', 'json');
-        await mk('gridConstraints.exportLimit.sinkAckFieldProtocolJson', '0-export sink ACK field protocol JSON', 'string', 'json');
-        await mk('gridConstraints.exportLimit.sinkAckOkCount', '0-export sink ACK ok count', 'number', 'value');
-        await mk('gridConstraints.exportLimit.sinkAckPendingCount', '0-export sink ACK pending count', 'number', 'value');
-        await mk('gridConstraints.exportLimit.sinkAckErrorCount', '0-export sink ACK error count', 'number', 'value');
-        await mk('gridConstraints.exportLimit.sinkAckTimeoutCount', '0-export sink ACK timeout count', 'number', 'value');
-        await mk('gridConstraints.exportLimit.sinkAckLastEvent', '0-export sink last ACK event', 'string', 'text');
-        for (const sink of ['storage', 'charging', 'flexLoads', 'mesh', 'inverter']) {
-            await mk(`gridConstraints.exportLimit.sinks.${sink}.usable`, `${sink} usable for zero export`, 'boolean', 'indicator');
-            await mk(`gridConstraints.exportLimit.sinks.${sink}.lastAck`, `${sink} last ACK`, 'string', 'text');
-            await mk(`gridConstraints.exportLimit.sinks.${sink}.lastWriteTest`, `${sink} last write-test`, 'string', 'text');
-            await mk(`gridConstraints.exportLimit.sinks.${sink}.blockedUntil`, `${sink} blocked until`, 'number', 'value.time');
-            await mk(`gridConstraints.exportLimit.sinks.${sink}.lastReason`, `${sink} last reason`, 'string', 'text');
-            await mk(`gridConstraints.exportLimit.sinks.${sink}.ackHistoryJson`, `${sink} ACK history JSON`, 'string', 'json');
-            await mk(`gridConstraints.exportLimit.sinks.${sink}.ackOkCount`, `${sink} ACK ok count`, 'number', 'value');
-            await mk(`gridConstraints.exportLimit.sinks.${sink}.ackErrorCount`, `${sink} ACK error count`, 'number', 'value');
-            await mk(`gridConstraints.exportLimit.sinks.${sink}.ackTimeoutCount`, `${sink} ACK timeout count`, 'number', 'value');
-        }
-
-        // 0.8.54: 0-Einspeise Inbetriebnahme-Assistent.
-        // Der Assistent baut keine zweite Regelstrecke. Er bewertet nur die vorhandene
-        // Export-Guard-/Grid-Constraints-Logik und macht für den Installateur sichtbar,
-        // ob Smartmeter, WR-Write, Speicher-/LP-Senken, Testmodus und Aktivfreigabe passen.
-        await mk('gridConstraints.exportLimit.commissioning.status', '0-export commissioning status', 'string', 'text');
-        await mk('gridConstraints.exportLimit.commissioning.stage', '0-export commissioning stage', 'string', 'text');
-        await mk('gridConstraints.exportLimit.commissioning.ready', '0-export commissioning ready', 'boolean', 'indicator');
-        await mk('gridConstraints.exportLimit.commissioning.scorePercent', '0-export commissioning score', 'number', 'value.percent');
-        await mk('gridConstraints.exportLimit.commissioning.nextStep', '0-export commissioning next step', 'string', 'text');
-        await mk('gridConstraints.exportLimit.commissioning.lastReason', '0-export commissioning reason', 'string', 'text');
-        await mk('gridConstraints.exportLimit.commissioning.checklistJson', '0-export commissioning checklist JSON', 'string', 'json');
-        await mk('gridConstraints.exportLimit.commissioning.writeTestPreviewJson', '0-export commissioning write-test preview JSON', 'string', 'json');
-        await mk('gridConstraints.exportLimit.commissioning.sinkStatusJson', '0-export commissioning sink status JSON', 'string', 'json');
-        await mk('gridConstraints.exportLimit.commissioning.reportJson', '0-export commissioning report JSON', 'string', 'json');
 
         // PV curtail debug
         await mk('gridConstraints.pvCurtail.mode', 'Curtail mode (resolved)', 'string', 'text');
@@ -1108,328 +1056,6 @@ class GridConstraintsModule extends BaseModule {
      * Erst danach darf WR-/PV-Abregelung die Restleistung begrenzen. So bauen wir keine zweite
      * Einspeiseregelung, sondern ergänzen den bestehenden Export Guard um eine klare Field-Order.
      */
-    _zeroExportSinkRuntimeFor(id) {
-        if (!this._zeroExportSinkRuntime || typeof this._zeroExportSinkRuntime !== 'object') this._zeroExportSinkRuntime = {};
-        if (!this._zeroExportSinkRuntime[id]) this._zeroExportSinkRuntime[id] = { usable: true, lastAck: 'unknown', blockedUntil: 0, lastWriteTest: 'not_per_tick', lastReason: '' };
-        return this._zeroExportSinkRuntime[id];
-    }
-
-    _zeroExportSinkConfig(cfg) {
-        const s = cfg || {};
-        const commonTimeout = Math.max(5, Math.min(3600, Math.round(Number(s.zeroExportSinkAckTimeoutSec || s.zeroExportAckTimeoutSec || 60) || 60)));
-        const blockSec = Math.max(5, Math.min(3600, Math.round(Number(s.zeroExportSinkBlockSec || s.zeroExportBlockSec || 120) || 120)));
-        const commonAckRequired = s.zeroExportSinkAckRequired === true || s.zeroExportAckRequired === true;
-/**
- * Code-Teil: make
- *
- * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-        const make = (id, commandStateId, ackStateId, ackRequired) => ({
-            id,
-            commandStateId: String(commandStateId || '').trim(),
-            ackStateId: String(ackStateId || '').trim(),
-            ackRequired: ackRequired === true || commonAckRequired,
-            ackTimeoutSec: commonTimeout,
-            blockSec,
-        });
-        return {
-            storageCharge: make('storageCharge', s.zeroExportStorageChargeCommandStateId || s.storageChargeCommandStateId, s.zeroExportStorageAckStateId || s.storageAckStateId || s.storageChargeAckStateId, s.zeroExportStorageAckRequired),
-            chargingStations: make('chargingStations', s.zeroExportChargingCommandStateId || s.chargingCommandStateId, s.zeroExportChargingAckStateId || s.chargingAckStateId || s.evcsAckStateId, s.zeroExportChargingAckRequired),
-            flexLoads: make('flexLoads', s.zeroExportFlexLoadCommandStateId || s.flexLoadCommandStateId, s.zeroExportFlexLoadAckStateId || s.flexLoadAckStateId || s.heatingRodAckStateId, s.zeroExportFlexLoadAckRequired),
-            meshMicrogrid: make('meshMicrogrid', s.zeroExportMeshCommandStateId || s.meshMicrogridCommandStateId, s.zeroExportMeshAckStateId || s.meshMicrogridAckStateId, s.zeroExportMeshAckRequired),
-            inverterCurtailment: make('inverterCurtailment', '', s.zeroExportInverterAckStateId || s.inverterAckStateId || s.pvCurtailAckStateId, s.zeroExportInverterAckRequired),
-        };
-    }
-
-    _classifyZeroExportSinkAck(raw) {
-        const txt = String(raw == null ? '' : raw).toLowerCase();
-        if (!txt) return { status: 'unknown', ok: false, usable: true, severity: 'warn', reason: 'Kein ACK-Wert vorhanden.' };
-        if (/(ok|accepted|success|succeeded|executed|done|completed|true|ack)/.test(txt)) return { status: 'ok', ok: true, usable: true, severity: 'info', reason: 'ACK OK.' };
-        if (/(pending|queued|running|processing|waiting)/.test(txt)) return { status: 'pending', ok: false, usable: false, severity: 'warn', reason: 'ACK wartet; Folge-Commands werden bis zum ACK zurückgehalten.' };
-        if (/(error|fail|failed|rejected|blocked|timeout|offline|false)/.test(txt)) return { status: 'error', ok: false, usable: false, severity: 'critical', reason: 'ACK meldet Fehler oder Blockierung.' };
-        return { status: 'unknown', ok: false, usable: true, severity: 'warn', reason: 'ACK-Wert unbekannt; Senke bleibt nur diagnostisch freigegeben.' };
-    }
-
-    async _readZeroExportAckState(id) {
-        const stateId = String(id || '').trim();
-        if (!stateId || !this.adapter) return null;
-        try {
-            if (typeof this.adapter.getForeignStateAsync === 'function') return await this.adapter.getForeignStateAsync(stateId);
-            if (typeof this.adapter.getStateAsync === 'function') return await this.adapter.getStateAsync(stateId);
-        } catch (_e) {}
-        return null;
-    }
-
-
-    _rememberZeroExportSinkAck(sink, row, maxRows = 20) {
-        const id = String(sink || '').trim();
-        if (!id) return [];
-        if (!this._zeroExportSinkAckHistory || typeof this._zeroExportSinkAckHistory !== 'object') this._zeroExportSinkAckHistory = {};
-        if (!Array.isArray(this._zeroExportSinkAckHistory[id])) this._zeroExportSinkAckHistory[id] = [];
-        const list = this._zeroExportSinkAckHistory[id];
-        const hash = `${row && row.status}|${row && row.reason}|${row && row.ackStateId}|${row && row.lastWriteTs}|${row && row.ackTs}|${row && row.event}`;
-        const last = list.length ? list[list.length - 1] : null;
-        if (last && last._hash === hash && Date.now() - Number(last.ts || 0) < 10_000) return list;
-        list.push({ ...(row || {}), _hash: hash, directHardwareWrite: false, neutralCommandOnly: true });
-        this._zeroExportSinkAckHistory[id] = list.slice(-Math.max(1, Math.min(100, Number(maxRows) || 20)));
-        return this._zeroExportSinkAckHistory[id];
-    }
-
-    /**
-     * Code-Teil: _updateZeroExportSinkAcks
-     * Zweck: Hält den ACK-Verlauf je 0-Einspeise-Senke aktuell.
-     * Wichtig: Kein Schreibtest pro Tick. Diese Funktion liest nur ACK-/Status-States,
-     * führt kurze Historien und blockiert nur die betroffene Senke bei Timeout/Fehler.
-     */
-    async _updateZeroExportSinkAcks(cfg, sinkPriority) {
-        const now = Date.now();
-        const sinkCfg = this._zeroExportSinkConfig(cfg || {});
-        const steps = Array.isArray(sinkPriority && sinkPriority.steps) ? sinkPriority.steps : [];
-        const ids = ['storageCharge', 'chargingStations', 'flexLoads', 'meshMicrogrid', 'inverterCurtailment'];
-        const rows = [];
-        for (const id of ids) {
-            const step = steps.find(s => s && s.id === id) || {};
-            const cfgRow = sinkCfg[id] || { id };
-            const rt = this._zeroExportSinkRuntimeFor(id);
-            const lastWriteTs = Number(rt.lastWriteTs || 0);
-            let status = rt.lastAck || (cfgRow.ackRequired ? 'waiting' : 'not_required');
-            let reason = rt.lastReason || '';
-            let value = null;
-            let ackTs = 0;
-            let event = 'ack_read';
-            if (cfgRow.ackStateId) {
-                const st = await this._readZeroExportAckState(cfgRow.ackStateId);
-                if (st) {
-                    value = st.val;
-                    ackTs = Number(st.ts || st.lc || 0) || now;
-                    const cls = this._classifyZeroExportSinkAck(st.val);
-                    status = cls.status;
-                    reason = cls.reason;
-                    if (lastWriteTs && ackTs < lastWriteTs && cfgRow.ackRequired && now - lastWriteTs > cfgRow.ackTimeoutSec * 1000) {
-                        status = 'timeout';
-                        reason = `ACK nicht innerhalb von ${cfgRow.ackTimeoutSec}s nach letztem Command aktualisiert.`;
-                    }
-                } else if (cfgRow.ackRequired && lastWriteTs && now - lastWriteTs > cfgRow.ackTimeoutSec * 1000) {
-                    status = 'timeout';
-                    reason = `ACK-State nicht lesbar oder nicht aktualisiert: ${cfgRow.ackStateId}`;
-                } else if (cfgRow.ackRequired) {
-                    status = 'pending';
-                    reason = 'ACK erforderlich; Rückmeldung steht aus.';
-                }
-            } else if (cfgRow.ackRequired) {
-                status = 'missing_ack_mapping';
-                reason = 'ACK ist erforderlich, aber kein ACK-State ist konfiguriert.';
-            }
-            const critical = ['timeout', 'error', 'missing_ack_mapping', 'missing_ack_state'].includes(status);
-            if (status === 'ok') {
-                if (rt.blockedUntil && rt.blockedUntil > now) event = 'auto_release';
-                rt.blockedUntil = 0;
-                rt.usable = true;
-                rt.autoReleaseCount = Number(rt.autoReleaseCount || 0) + (event === 'auto_release' ? 1 : 0);
-            } else if (critical) {
-                rt.usable = false;
-                rt.blockedUntil = Math.max(Number(rt.blockedUntil || 0), now + cfgRow.blockSec * 1000);
-            }
-            rt.lastAck = status;
-            rt.lastAckAt = ackTs || Number(rt.lastAckAt || 0);
-            rt.lastReason = reason;
-            if (status === 'ok') rt.ackOkCount = Number(rt.ackOkCount || 0) + 1;
-            if (status === 'error' || status === 'missing_ack_mapping') rt.ackErrorCount = Number(rt.ackErrorCount || 0) + 1;
-            if (status === 'timeout') rt.ackTimeoutCount = Number(rt.ackTimeoutCount || 0) + 1;
-            const row = {
-                schema: 'nexowatt.zero-export-sink-ack.v1', ts: now, sink: id, label: step.label || id,
-                event, ackStateId: cfgRow.ackStateId || '', status, reason, value,
-                lastWriteTs, ackTs: ackTs || 0, blockedUntil: Number(rt.blockedUntil || 0),
-            };
-            rows.push(row);
-            this._rememberZeroExportSinkAck(id, row, 20);
-        }
-        return this._zeroExportSinkAckHistorySummary(rows);
-    }
-
-    _zeroExportSinkAckHistorySummary(rows = null) {
-        const ids = ['storageCharge', 'chargingStations', 'flexLoads', 'meshMicrogrid', 'inverterCurtailment'];
-        const history = this._zeroExportSinkAckHistory && typeof this._zeroExportSinkAckHistory === 'object' ? this._zeroExportSinkAckHistory : {};
-        const perSink = ids.map((id) => {
-            const list = Array.isArray(history[id]) ? history[id].map(e => ({ ...e, _hash: undefined })) : [];
-            const rt = this._zeroExportSinkRuntimeFor(id);
-            return { sink: id, history: list, last: list.length ? list[list.length - 1] : null, ackOkCount: Number(rt.ackOkCount || 0), ackErrorCount: Number(rt.ackErrorCount || 0), ackTimeoutCount: Number(rt.ackTimeoutCount || 0), autoReleaseCount: Number(rt.autoReleaseCount || 0) };
-        });
-        const all = perSink.flatMap(x => x.history || []).sort((a,b)=>Number(b.ts||0)-Number(a.ts||0));
-        return {
-            schema: 'nexowatt.zero-export-sink-ack-history.v1',
-            ts: Date.now(),
-            status: all.some(e => e && ['timeout','error','missing_ack_mapping'].includes(e.status)) ? 'warn' : 'ok',
-            rows: Array.isArray(rows) ? rows : [],
-            history: Object.fromEntries(perSink.map(x => [x.sink, x.history])),
-            perSink,
-            okCount: perSink.reduce((s,x)=>s+Number(x.ackOkCount||0),0),
-            pendingCount: all.filter(e=>e && e.status==='pending').length,
-            errorCount: perSink.reduce((s,x)=>s+Number(x.ackErrorCount||0),0),
-            timeoutCount: perSink.reduce((s,x)=>s+Number(x.ackTimeoutCount||0),0),
-            autoReleaseCount: perSink.reduce((s,x)=>s+Number(x.autoReleaseCount||0),0),
-            lastEvent: all.length ? all[0] : null,
-            note: 'ACK-Verlauf/Feldprotokoll je Senke. Kein Schreibtest pro Regel-Tick.',
-        };
-    }
-
-    _rememberZeroExportSinkAck(id, row, maxRows = 20) {
-        const sink = String(id || '').trim();
-        if (!sink) return [];
-        if (!this._zeroExportSinkAckHistory || typeof this._zeroExportSinkAckHistory !== 'object') this._zeroExportSinkAckHistory = {};
-        const list = Array.isArray(this._zeroExportSinkAckHistory[sink]) ? this._zeroExportSinkAckHistory[sink] : [];
-        list.push({ schema: 'nexowatt.zero-export-sink-ack-event.v1', ts: Date.now(), sink, ...(row || {}) });
-        this._zeroExportSinkAckHistory[sink] = list.slice(-Math.max(1, Math.min(100, Number(maxRows) || 20)));
-        return this._zeroExportSinkAckHistory[sink];
-    }
-
-    _zeroExportSinkAckSummary() {
-        const history = this._zeroExportSinkAckHistory && typeof this._zeroExportSinkAckHistory === 'object' ? this._zeroExportSinkAckHistory : {};
-        const rows = ['storageCharge', 'chargingStations', 'flexLoads', 'meshMicrogrid', 'inverterCurtailment'].map((sink) => {
-            const list = Array.isArray(history[sink]) ? history[sink] : [];
-            const last = list.length ? list[list.length - 1] : null;
-            const okCount = list.filter(r => ['ok','written'].includes(String(r && (r.status || r.lastAck)))).length;
-            const pendingCount = list.filter(r => /pending|waiting/i.test(String(r && (r.status || r.lastAck || '')))).length;
-            const errorCount = list.filter(r => /error|failed|rejected|blocked/i.test(String(r && (r.status || r.lastAck || '')))).length;
-            const timeoutCount = list.filter(r => /timeout|expired/i.test(String(r && (r.status || r.lastAck || '')))).length;
-            return { sink, eventCount: list.length, okCount, pendingCount, errorCount, timeoutCount, last };
-        });
-        const all = rows.flatMap(r => Array.isArray(history[r.sink]) ? history[r.sink] : []);
-        const lastEvent = all.slice().sort((a,b) => Number(b.ts||0) - Number(a.ts||0))[0] || null;
-        return {
-            schema: 'nexowatt.zero-export-sink-ack-history.v1',
-            ts: Date.now(),
-            rows,
-            history,
-            okCount: rows.reduce((a,r)=>a+(r.okCount||0),0),
-            pendingCount: rows.reduce((a,r)=>a+(r.pendingCount||0),0),
-            errorCount: rows.reduce((a,r)=>a+(r.errorCount||0),0),
-            timeoutCount: rows.reduce((a,r)=>a+(r.timeoutCount||0),0),
-            lastEvent,
-            note: 'ACK-Verlauf/Feldprotokoll je Senke. Kein Schreibtest pro Tick.',
-        };
-    }
-
-    async _zeroExportSinkAvailability(cfg, sinkPriority) {
-        const now = Date.now();
-        const sinkCfg = this._zeroExportSinkConfig(cfg || {});
-        const steps = Array.isArray(sinkPriority && sinkPriority.steps) ? sinkPriority.steps : [];
-        const out = {
-            schema: 'nexowatt.zero-export-sink-availability.v1',
-            ts: now,
-            fastPath: true,
-            reason: 'Schreibtests laufen nur bei Inbetriebnahme/Änderung/Fehler; Aktivbetrieb nutzt gespeicherte ACK-/Freigabedaten.',
-            sinks: {},
-            summary: { usableCount: 0, blockedCount: 0, ackRequiredCount: 0, waitingCount: 0, errorCount: 0 },
-        };
-        for (const step of steps) {
-            const id = step && step.id;
-            if (!id || id === 'localConsumption') continue;
-            const cfgRow = sinkCfg[id] || { id };
-            const rt = this._zeroExportSinkRuntimeFor(id);
-            const mapped = !!(step && step.mapped);
-            let usable = mapped && !(rt.blockedUntil && rt.blockedUntil > now);
-            let lastAck = rt.lastAck || 'not_required';
-            let reason = mapped ? 'Senke ist grundsätzlich gemappt.' : 'Senke ist nicht gemappt.';
-            let ackAgeSec = null;
-            if (cfgRow.ackRequired) out.summary.ackRequiredCount += 1;
-            if (cfgRow.ackStateId) {
-                const st = await this._readZeroExportAckState(cfgRow.ackStateId);
-                if (st) {
-                    const classified = this._classifyZeroExportSinkAck(st.val);
-                    ackAgeSec = st.ts ? Math.max(0, Math.round((now - Number(st.ts || 0)) / 1000)) : null;
-                    lastAck = classified.status;
-                    reason = classified.reason;
-                    if (classified.ok) {
-                        rt.blockedUntil = 0;
-                        rt.usable = true;
-                        usable = mapped;
-                    } else if (cfgRow.ackRequired) {
-                        usable = false;
-                        if (classified.status === 'pending') out.summary.waitingCount += 1;
-                        if (classified.status === 'error') out.summary.errorCount += 1;
-                    }
-                    rt.lastAck = lastAck;
-                    rt.lastReason = reason;
-                } else if (cfgRow.ackRequired) {
-                    usable = false;
-                    lastAck = 'missing_ack_state';
-                    reason = `ACK-State nicht lesbar: ${cfgRow.ackStateId}`;
-                    out.summary.errorCount += 1;
-                }
-            } else if (cfgRow.ackRequired) {
-                usable = false;
-                lastAck = 'missing_ack_mapping';
-                reason = 'ACK ist erforderlich, aber kein ACK-State ist konfiguriert.';
-                out.summary.errorCount += 1;
-            }
-            if (rt.blockedUntil && rt.blockedUntil > now) {
-                usable = false;
-                reason = rt.lastReason || `Senke bis ${new Date(rt.blockedUntil).toISOString()} blockiert.`;
-            }
-            rt.usable = usable;
-            const sinkRow = {
-                id,
-                label: step.label || id,
-                mapped,
-                commandStateId: cfgRow.commandStateId || step.commandStateId || '',
-                ackStateId: cfgRow.ackStateId || '',
-                ackRequired: !!cfgRow.ackRequired,
-                usable,
-                lastAck,
-                lastWriteTest: rt.lastWriteTest || 'not_per_tick',
-                blockedUntil: Number(rt.blockedUntil || 0),
-                ackAgeSec,
-                reason,
-            };
-            out.sinks[id] = sinkRow;
-            const previousAck = rt._lastHistoryAck || '';
-            const previousReason = rt._lastHistoryReason || '';
-            if (lastAck && (previousAck !== lastAck || previousReason !== reason)) {
-                this._rememberZeroExportSinkAck(id, { event: 'ack_read', status: lastAck, lastAck, ackStateId: cfgRow.ackStateId || '', ackAgeSec, usable, blockedUntil: Number(rt.blockedUntil || 0), reason }, 20);
-                rt._lastHistoryAck = lastAck;
-                rt._lastHistoryReason = reason;
-            }
-            if (usable) out.summary.usableCount += 1;
-            else out.summary.blockedCount += 1;
-        }
-        out.fastPathReady = Object.values(out.sinks).some((s) => s && s.usable) || (sinkPriority && sinkPriority.nextAction === 'inverterCurtailment');
-        return out;
-    }
-
-    _applyZeroExportAvailabilityToPlan(sinkPriority, availability) {
-        const plan = sinkPriority || {};
-        const av = availability && availability.sinks ? availability.sinks : {};
-        if (!Array.isArray(plan.steps)) return plan;
-        const order = ['storageCharge', 'chargingStations', 'flexLoads', 'meshMicrogrid', 'inverterCurtailment'];
-        const requiredW = Math.max(0, Math.round(Number(plan.requestedReductionW || plan.exportOverLimitW || 0)));
-        if (requiredW <= 0) return plan;
-        const next = order.find((id) => {
-            if (id === 'inverterCurtailment') return plan.steps.find(s => s.id === id && s.mapped);
-            const row = av[id];
-            return row && row.usable === true && row.commandStateId;
-        }) || 'mappingRequired';
-        plan.nextAction = next;
-        plan.steps = plan.steps.map((s) => ({ ...s, activeCandidate: s.id === next, requestedPowerW: s.id === 'localConsumption' ? s.requestedPowerW : (s.id === next ? requiredW : 0), availability: av[s.id] || null }));
-        plan.commandEnvelope = { ...(plan.commandEnvelope || {}), nextAction: next, commands: plan.steps.filter(s => s.commandStateId && s.requestedPowerW > 0 && (!s.availability || s.availability.usable !== false)).map(s => ({
-            schema: 'nexowatt.zero-export-sink-command.v1',
-            sink: s.id,
-            label: s.label,
-            requestedPowerW: s.requestedPowerW,
-            commandStateId: s.commandStateId,
-            reason: '0-Einspeisung Schnellpfad: Schreibtest nicht pro Tick, gespeicherte Freigabe/ACK wird genutzt.',
-            directHardwareWrite: false,
-            neutralCommandOnly: true,
-        })) };
-        return plan;
-    }
-
     _zeroExportSinkPriorityPlan(cfg, exportOverLimitW, currentExportW, estimatedCurtailmentW) {
 /**
  * Code-Teil: hasText
@@ -1475,30 +1101,12 @@ class GridConstraintsModule extends BaseModule {
             meshMicrogrid: hasText(cfg?.zeroExportMeshCommandStateId) || hasText(cfg?.meshMicrogridCommandStateId),
             inverterCurtailment: this._exportWriteDiagnostics(cfg || {}, Array.isArray(cfg?.pvCurtailInvertersZero) && cfg.pvCurtailInvertersZero.length ? 'group' : this._resolveCurtailMode(cfg || {})).writable,
         };
-        const now = Date.now();
-/**
- * Code-Teil: usableByRuntime
- *
- * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-        const usableByRuntime = (id) => {
-            const row = this._zeroExportSinkRuntimeFor ? this._zeroExportSinkRuntimeFor(id) : null;
-            if (!row) return true;
-            if (row.blockedUntil && row.blockedUntil > now) return false;
-            return row.usable !== false;
-        };
         const nextAction = requiredW <= 0
             ? 'observe'
-            : (mapped.storageCharge && usableByRuntime('storageCharge') ? 'storageCharge'
-                : mapped.chargingStations && usableByRuntime('chargingStations') ? 'chargingStations'
-                    : mapped.flexLoads && usableByRuntime('flexLoads') ? 'flexLoads'
-                        : mapped.meshMicrogrid && usableByRuntime('meshMicrogrid') ? 'meshMicrogrid'
+            : (mapped.storageCharge ? 'storageCharge'
+                : mapped.chargingStations ? 'chargingStations'
+                    : mapped.flexLoads ? 'flexLoads'
+                        : mapped.meshMicrogrid ? 'meshMicrogrid'
                             : mapped.inverterCurtailment ? 'inverterCurtailment'
                                 : 'mappingRequired');
         const steps = order.map((id, index) => ({
@@ -1682,7 +1290,6 @@ class GridConstraintsModule extends BaseModule {
      */
     async _writeZeroExportSinkCommands(sinkPriority, context) {
         const commands = sinkPriority && sinkPriority.commandEnvelope && Array.isArray(sinkPriority.commandEnvelope.commands) ? sinkPriority.commandEnvelope.commands : [];
-        const availability = context && context.sinkAvailability && context.sinkAvailability.sinks ? context.sinkAvailability.sinks : {};
         const result = {
             schema: 'nexowatt.zero-export-sink-command-write-result.v1',
             ts: Date.now(),
@@ -1691,8 +1298,6 @@ class GridConstraintsModule extends BaseModule {
             writtenCount: 0,
             failedCount: 0,
             results: [],
-            skippedCount: 0,
-            blockedCount: 0,
             directHardwareWrite: false,
             neutralCommandOnly: true,
         };
@@ -1703,13 +1308,6 @@ class GridConstraintsModule extends BaseModule {
         for (const cmd of commands) {
             const stateId = String(cmd && cmd.commandStateId || '').trim();
             if (!stateId) continue;
-            const av = availability && availability[cmd.sink] ? availability[cmd.sink] : null;
-            if (av && av.usable === false) {
-                result.blockedCount += 1;
-                result.skippedCount += 1;
-                result.results.push({ stateId, sink: cmd.sink, status: 'blocked-by-sink-availability', requestedPowerW: Math.max(0, Math.round(Number(cmd.requestedPowerW) || 0)), reason: av.reason || 'Senke ist aktuell nicht freigegeben.' });
-                continue;
-            }
             const envelope = {
                 schema: 'nexowatt.zero-export-sink-target-command.v1',
                 ts: Date.now(),
@@ -1731,175 +1329,14 @@ class GridConstraintsModule extends BaseModule {
                 if (this.adapter && typeof this.adapter.setForeignStateAsync === 'function') await this.adapter.setForeignStateAsync(stateId, { val: json, ack: false });
                 else if (this.adapter && typeof this.adapter.setStateAsync === 'function') await this.adapter.setStateAsync(stateId, { val: json, ack: false });
                 result.writtenCount += 1;
-                const rt = this._zeroExportSinkRuntimeFor ? this._zeroExportSinkRuntimeFor(cmd.sink) : null;
-                if (rt) {
-                    rt.lastWriteTs = Date.now();
-                    rt.lastAck = 'pending';
-                    rt.lastWriteTest = rt.lastWriteTest || 'not_per_tick';
-                    const cfgRow = this._zeroExportSinkConfig ? this._zeroExportSinkConfig(this.adapter && this.adapter.config ? this.adapter.config : {})[cmd.sink] : null;
-                    if (cfgRow && cfgRow.ackRequired) {
-                        rt.usable = false;
-                        rt.blockedUntil = Date.now() + Math.max(5, Number(cfgRow.ackTimeoutSec || 60)) * 1000;
-                        rt.lastReason = 'Command geschrieben; wartet auf ACK, kein erneuter Schreibtest im Regel-Tick.';
-                    }
-                }
                 result.results.push({ stateId, sink: cmd.sink, status: 'written', requestedPowerW: envelope.requestedPowerW });
             } catch (e) {
                 result.failedCount += 1;
-                const rt = this._zeroExportSinkRuntimeFor ? this._zeroExportSinkRuntimeFor(cmd.sink) : null;
-                if (rt) {
-                    const cfgRow = this._zeroExportSinkConfig ? this._zeroExportSinkConfig(this.adapter && this.adapter.config ? this.adapter.config : {})[cmd.sink] : null;
-                    rt.usable = false;
-                    rt.lastAck = 'write_error';
-                    rt.blockedUntil = Date.now() + Math.max(5, Number(cfgRow && cfgRow.blockSec || 120)) * 1000;
-                    rt.lastReason = String(e && e.message ? e.message : e);
-                }
                 result.results.push({ stateId, sink: cmd.sink, status: 'error', error: String(e && e.message ? e.message : e) });
             }
         }
-        result.status = result.failedCount ? (result.writtenCount ? 'partial-error' : 'error') : (result.writtenCount ? 'written' : (result.blockedCount ? 'blocked-by-availability' : 'no_targets'));
+        result.status = result.failedCount ? (result.writtenCount ? 'partial-error' : 'error') : (result.writtenCount ? 'written' : 'no_targets');
         return result;
-    }
-
-    /**
-     * Code-Teil: _buildZeroExportCommissioningAssistant
-     * Zweck: Baut den 0-Einspeise-Inbetriebnahme-Assistenten als reine Diagnose-/Prüfschicht.
-     * Zusammenhang: Diese Funktion nutzt ausschließlich vorhandene Export-Guard-/Grid-Constraints-Daten.
-     * Sie baut keine zweite Regelung, schreibt keine Hardware und ersetzt keine WR-/Speicherlogik.
-     * Sie macht nur sichtbar, ob die Feld-Inbetriebnahme sauber vorbereitet ist.
-     */
-    _buildZeroExportCommissioningAssistant(cfg, ctx) {
-        const c = ctx && typeof ctx === 'object' ? ctx : {};
-/**
- * Code-Teil: hasText
- *
- * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-        const hasText = (v) => typeof v === 'string' && v.trim().length > 0;
-        const sink = c.sinkPriority || {};
-        const write = c.write || { writable: false, missing: [] };
-        const maxFeedInW = Math.max(0, Math.round(Number(c.maxFeedInW) || 0));
-        const zeroExport = maxFeedInW === 0;
-        const gridFresh = typeof c.gridW === 'number' && Number.isFinite(c.gridW);
-        const storageMapped = hasText(cfg && cfg.zeroExportStorageChargeCommandStateId);
-        const chargingMapped = hasText(cfg && cfg.zeroExportChargingCommandStateId);
-        const flexMapped = hasText(cfg && cfg.zeroExportFlexLoadCommandStateId);
-        const meshMapped = hasText(cfg && cfg.zeroExportMeshCommandStateId);
-        const neutralSinkMapped = storageMapped || chargingMapped || flexMapped || meshMapped;
-        const sinkSteps = Array.isArray(sink.steps) ? sink.steps : [];
-        const sinkOrder = sinkSteps.length ? sinkSteps.map(s => s.id) : ['localConsumption', 'storageCharge', 'chargingStations', 'flexLoads', 'meshMicrogrid', 'inverterCurtailment'];
-        const expectedOrder = ['localConsumption', 'storageCharge', 'chargingStations', 'flexLoads', 'meshMicrogrid', 'inverterCurtailment'];
-        const sinkOrderOk = expectedOrder.every((id, idx) => sinkOrder[idx] === id);
-        const diagnostic = c.diagnosticOnly === true || String(c.runMode || '') === 'diagnostic';
-        const active = String(c.runMode || '') === 'active';
-        const sinkWrite = c.sinkWriteResult || {};
-        const sinkWriteOk = ['written', 'partial-error', 'diagnostic_only', 'blocked_not_allowed', 'no_commands'].includes(String(sinkWrite.status || ''));
-        const items = [];
-/**
- * Code-Teil: add
- *
- * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-        const add = (id, label, ok, required, nextStep, value = null) => {
-            items.push({ id, label, ok: !!ok, required: required !== false, nextStep: nextStep || '', value });
-        };
-
-        add('export_guard_enabled', 'Export Guard / Einspeisebegrenzung aktiv', !!c.enabled, true, 'Im Reiter Netzlimits/Einspeisebegrenzung aktivieren.');
-        add('installer_approved', 'Installateurfreigabe gesetzt', !!c.approved, true, 'Installateurfreigabe erst nach Mapping-/Vorzeichenprüfung setzen.');
-        add('zero_export_limit', 'Maximale Einspeisung ist 0 W', zeroExport, true, 'Für echte 0-Einspeisung maximale Einspeisung auf 0 W setzen.', maxFeedInW);
-        add('grid_meter_fresh', 'Smartmeter / Netzpunkt plausibel', gridFresh, true, 'Netzpunkt-/Smartmeter-Mapping prüfen. Vorzeichen: Bezug positiv, Einspeisung negativ.');
-        add('run_mode_safe', 'Betriebsart Diagnose oder Aktiv', diagnostic || active, true, 'Neue Anlagen zuerst im Diagnose/Testmodus prüfen, danach Aktivmodus freigeben.', c.runMode || '');
-        add('wr_write_capable', 'WR-/PV-Write-Datenpunkte vorhanden', !!write.writable, true, write.nextStep || 'WR-Gruppe oder PV-Curtail-Write-Datenpunkt zuordnen.');
-        add('sink_order', 'Senkenreihenfolge korrekt', sinkOrderOk, true, 'Reihenfolge muss Verbrauch → Speicher → Ladepunkte → flexible Verbraucher → Mesh/Microgrid → WR-Abregelung sein.', sinkOrder);
-        add('storage_sink', 'Speicher-Lade-Command-State optional vorhanden', storageMapped, false, 'Für saubere 0-Einspeisung Speicher als erste steuerbare Senke zuordnen.', cfg && cfg.zeroExportStorageChargeCommandStateId || '');
-        add('charging_sink', 'Ladepunkt-Command-State optional vorhanden', chargingMapped, false, 'Ladepunkt-/DC-Station-Bridge als zweite steuerbare Senke zuordnen.', cfg && cfg.zeroExportChargingCommandStateId || '');
-        add('flex_sink', 'Flexible Verbraucher optional vorhanden', flexMapped, false, 'Heizstab/Wärmepumpe/Relaisverbraucher optional als dritte steuerbare Senke zuordnen.', cfg && cfg.zeroExportFlexLoadCommandStateId || '');
-        add('mesh_sink', 'Mesh/Microgrid optional vorhanden', meshMapped, false, 'Mesh/Microgrid-Zielgruppen optional nach lokalen Senken nutzen.', cfg && cfg.zeroExportMeshCommandStateId || '');
-        add('neutral_sink_or_wr', 'Mindestens WR-Write oder neutrale Senke vorhanden', !!write.writable || neutralSinkMapped, true, 'Ohne WR-Write und ohne neutrale Senken kann nur angezeigt, aber nicht geregelt werden.');
-        add('sink_command_pipeline', 'Senken-Command-Pipeline plausibel', sinkWriteOk, false, 'Im Diagnosemodus wird nur Vorschau angezeigt; im Aktivmodus Schreibstatus prüfen.', sinkWrite.status || '');
-
-        const required = items.filter(i => i.required);
-        const okRequired = required.filter(i => i.ok).length;
-        const score = required.length ? Math.round((okRequired / required.length) * 100) : 0;
-        const blockers = required.filter(i => !i.ok);
-        const warnings = items.filter(i => !i.required && !i.ok);
-        const ready = blockers.length === 0;
-        const stage = !c.enabled ? 'disabled'
-            : !c.approved ? 'awaiting_installer_approval'
-                : blockers.length ? 'mapping_required'
-                    : diagnostic ? 'diagnostic_ready'
-                        : active ? 'active_ready' : 'ready';
-        const nextStep = blockers.length
-            ? blockers[0].nextStep
-            : diagnostic
-                ? 'Diagnose/Testmodus prüfen: Sollwert-Vorschau, Senkenreihenfolge, WR-Writefähigkeit und ACKs beobachten. Danach bewusst auf Aktiv stellen.'
-                : '0-Einspeise-Kaskade ist bereit. Verbrauch zuerst, dann Speicher, Ladepunkte, flexible Verbraucher, Mesh/Microgrid, WR-Abregelung zuletzt.';
-        const writeTestPreview = {
-            schema: 'nexowatt.zero-export-commissioning.write-test-preview.v1',
-            diagnosticOnly: !!diagnostic,
-            directHardwareWrite: false,
-            neutralCommandOnly: true,
-            currentExportW: Math.max(0, Math.round(Number(c.currentExportW) || 0)),
-            exportOverLimitW: Math.max(0, Math.round(Number(c.exportOverLimitW) || 0)),
-            maxFeedInW,
-            plannedSinkAction: sink.nextAction || 'observe',
-            wrWriteCapable: !!write.writable,
-            wrWriteMode: write.mode || '',
-            neutralCommands: sink && sink.commandEnvelope && Array.isArray(sink.commandEnvelope.commands) ? sink.commandEnvelope.commands : [],
-            note: 'Write-Test-Vorschau: keine direkte Hardwaresteuerung; echte Writes nur im bestehenden Export Guard Aktivmodus bzw. über neutrale lokale Bridges.',
-        };
-        const sinkStatus = {
-            schema: 'nexowatt.zero-export-commissioning.sink-status.v1',
-            order: expectedOrder,
-            localConsumption: { available: true, active: true, note: 'Verbrauch wirkt immer zuerst als natürliche Senke am Netzpunkt.' },
-            storageCharge: { mapped: storageMapped, commandStateId: cfg && cfg.zeroExportStorageChargeCommandStateId || '', priority: 2 },
-            chargingStations: { mapped: chargingMapped, commandStateId: cfg && cfg.zeroExportChargingCommandStateId || '', priority: 3 },
-            flexLoads: { mapped: flexMapped, commandStateId: cfg && cfg.zeroExportFlexLoadCommandStateId || '', priority: 4 },
-            meshMicrogrid: { mapped: meshMapped, commandStateId: cfg && cfg.zeroExportMeshCommandStateId || '', priority: 5 },
-            inverterCurtailment: { mapped: !!write.writable, priority: 6, note: 'Letzte Stufe nach Verbrauch, Speicher, Ladepunkten, flexiblen Verbrauchern und Mesh/Microgrid.' },
-        };
-        return {
-            schema: 'nexowatt.zero-export-commissioning.v1',
-            status: ready ? (diagnostic ? 'ready_diagnostic' : 'ready') : 'blocked',
-            stage,
-            ready,
-            scorePercent: score,
-            nextStep,
-            lastReason: blockers.length ? blockers.map(b => b.label).join(' | ') : (warnings.length ? warnings.map(w => w.label).join(' | ') : 'Alle Pflichtprüfungen bestanden.'),
-            blockers,
-            warnings,
-            checklist: { schema: 'nexowatt.zero-export-commissioning.checklist.v1', items },
-            writeTestPreview,
-            sinkStatus,
-            report: {
-                schema: 'nexowatt.zero-export-commissioning.report.v1',
-                generatedAt: Date.now(),
-                zeroExport,
-                runMode: c.runMode,
-                enabled: !!c.enabled,
-                installerApproved: !!c.approved,
-                scorePercent: score,
-                ready,
-                nextStep,
-                currentExportW: Math.max(0, Math.round(Number(c.currentExportW) || 0)),
-                exportOverLimitW: Math.max(0, Math.round(Number(c.exportOverLimitW) || 0)),
-                writeDiagnostics: write,
-                sinkPriority: sink,
-                sinkCommandWrite: sinkWrite,
-            },
-        };
     }
 
     /**
@@ -1932,11 +1369,7 @@ class GridConstraintsModule extends BaseModule {
         const diagnosticOnly = enabled && runMode === 'diagnostic';
         const write = this._exportWriteDiagnostics(cfg, mode);
         const estimateW = this._estimateCurtailmentW(cfg, mode, overLimitW);
-        let sinkPriority = this._zeroExportSinkPriorityPlan(cfg, overLimitW, currentExportW, estimateW);
-        const sinkAckSummary = await this._updateZeroExportSinkAcks(cfg || {}, sinkPriority);
-        let sinkAvailability = await this._zeroExportSinkAvailability(cfg, sinkPriority);
-        sinkPriority = this._applyZeroExportAvailabilityToPlan(sinkPriority, sinkAvailability);
-        sinkAvailability = await this._zeroExportSinkAvailability(cfg, sinkPriority);
+        const sinkPriority = this._zeroExportSinkPriorityPlan(cfg, overLimitW, currentExportW, estimateW);
         const sinkCommandReady = !!(sinkPriority && sinkPriority.commandEnvelope && Array.isArray(sinkPriority.commandEnvelope.commands) && sinkPriority.commandEnvelope.commands.length);
         const requiredW = enabled && approved ? overLimitW : 0;
         const plannedAction = !enabled
@@ -1978,7 +1411,6 @@ class GridConstraintsModule extends BaseModule {
             plannedAction,
             negativePriceActive: !!negativePriceActive,
             zeroExportSinkPriority: sinkPriority,
-            sinkAvailability,
             sinkCommandReady,
             nextStep: write.nextStep || '',
             missingWriteDatapoints: write.missing || [],
@@ -2010,36 +1442,14 @@ class GridConstraintsModule extends BaseModule {
             estimatedCurtailmentW: estimateW,
             unusedPvPowerW: estimateW,
             zeroExportSinkPriority: sinkPriority,
-            sinkAvailability,
-            sinkAckSummary,
-            fastPathReady: !!(sinkAvailability && sinkAvailability.fastPathReady),
             sinkCommandReady,
             updatedAt: Date.now(),
         };
         const sinkWriteResult = enabled && approved && !diagnosticOnly && sinkCommandReady
-            ? await this._writeZeroExportSinkCommands(sinkPriority, { exportOverLimitW: overLimitW, currentExportW, maxFeedInW: effectiveMaxW, sinkAvailability })
+            ? await this._writeZeroExportSinkCommands(sinkPriority, { exportOverLimitW: overLimitW, currentExportW, maxFeedInW: effectiveMaxW })
             : { schema: 'nexowatt.zero-export-sink-command-write-result.v1', ts: Date.now(), status: diagnosticOnly ? 'diagnostic_only' : (sinkCommandReady ? 'blocked_not_allowed' : 'no_commands'), commandCount: sinkPriority && sinkPriority.commandEnvelope && Array.isArray(sinkPriority.commandEnvelope.commands) ? sinkPriority.commandEnvelope.commands.length : 0, writtenCount: 0, failedCount: 0, results: [], directHardwareWrite: false, neutralCommandOnly: true };
         summary.zeroExportSinkCommandWrite = sinkWriteResult;
         checklist.zeroExportSinkCommandWrite = sinkWriteResult;
-        const commissioning = this._buildZeroExportCommissioningAssistant(cfg, {
-            enabled,
-            approved,
-            runMode,
-            diagnosticOnly,
-            write,
-            sinkPriority,
-            sinkAvailability,
-            sinkWriteResult,
-            currentExportW,
-            exportOverLimitW: overLimitW,
-            maxFeedInW: effectiveMaxW,
-            gridW,
-            mode,
-            negativePriceActive,
-            estimatedCurtailmentW: estimateW,
-        });
-        summary.commissioning = commissioning;
-        checklist.commissioning = commissioning.report || {};
         await set('gridConstraints.exportLimit.enabled', !!enabled);
         await set('gridConstraints.exportLimit.installerApproved', !!approved);
         await set('gridConstraints.exportLimit.configuredMaxFeedInW', effectiveMaxW);
@@ -2070,52 +1480,6 @@ class GridConstraintsModule extends BaseModule {
         await set('gridConstraints.exportLimit.sinkCommandWriteStatus', String(sinkWriteResult.status || 'idle'));
         await set('gridConstraints.exportLimit.sinkCommandWriteJson', JSON.stringify(sinkWriteResult));
         await set('gridConstraints.exportLimit.sinkCommandLastError', (sinkWriteResult.results || []).filter(r => r && r.status === 'error').map(r => `${r.stateId}: ${r.error}`).join(' | '));
-        await set('gridConstraints.exportLimit.sinkAvailabilityJson', JSON.stringify(sinkAvailability || {}));
-        await set('gridConstraints.exportLimit.fastPathReady', !!(sinkAvailability && sinkAvailability.fastPathReady));
-        await set('gridConstraints.exportLimit.activeSinkJson', JSON.stringify((sinkPriority.steps || []).find(s => s && s.activeCandidate) || {}));
-        await set('gridConstraints.exportLimit.fallbackReason', String((sinkAvailability && sinkAvailability.reason) || ''));
-        await set('gridConstraints.exportLimit.sinkAckSummaryJson', JSON.stringify(sinkAckSummary || {}));
-        await set('gridConstraints.exportLimit.sinkAckHistoryJson', JSON.stringify((sinkAckSummary && sinkAckSummary.history) || {}));
-        await set('gridConstraints.exportLimit.sinkFieldProtocolJson', JSON.stringify({ schema: 'nexowatt.zero-export-field-protocol.v1', ts: Date.now(), sinkAckSummary, sinkCommandWrite: sinkWriteResult, activeSink: sinkAvailability && sinkAvailability.activeSink || null, fallbackReason: sinkAvailability && sinkAvailability.fallbackReason || '' }));
-        await set('gridConstraints.exportLimit.sinkAckOkCount', Number(sinkAckSummary && sinkAckSummary.okCount || 0));
-        await set('gridConstraints.exportLimit.sinkAckPendingCount', Number(sinkAckSummary && sinkAckSummary.pendingCount || 0));
-        await set('gridConstraints.exportLimit.sinkAckErrorCount', Number(sinkAckSummary && sinkAckSummary.errorCount || 0));
-        await set('gridConstraints.exportLimit.sinkAckTimeoutCount', Number(sinkAckSummary && sinkAckSummary.timeoutCount || 0));
-        await set('gridConstraints.exportLimit.sinkAckLastEvent', JSON.stringify((sinkAckSummary && sinkAckSummary.lastEvent) || {}));
-        const sinkAckHistory = this._zeroExportSinkAckSummary ? this._zeroExportSinkAckSummary() : { schema: 'nexowatt.zero-export-sink-ack-history.v1', rows: [], history: {} };
-        await set('gridConstraints.exportLimit.sinkAckHistoryJson', JSON.stringify(sinkAckHistory.history || {}));
-        await set('gridConstraints.exportLimit.sinkAckFieldProtocolJson', JSON.stringify(sinkAckHistory));
-        await set('gridConstraints.exportLimit.sinkAckOkCount', Number(sinkAckHistory.okCount || 0));
-        await set('gridConstraints.exportLimit.sinkAckPendingCount', Number(sinkAckHistory.pendingCount || 0));
-        await set('gridConstraints.exportLimit.sinkAckErrorCount', Number(sinkAckHistory.errorCount || 0));
-        await set('gridConstraints.exportLimit.sinkAckTimeoutCount', Number(sinkAckHistory.timeoutCount || 0));
-        await set('gridConstraints.exportLimit.sinkAckLastEvent', sinkAckHistory.lastEvent ? `${sinkAckHistory.lastEvent.sink}:${sinkAckHistory.lastEvent.status || sinkAckHistory.lastEvent.lastAck || ''}` : '');
-        const sinkStateMap = { storage: 'storageCharge', charging: 'chargingStations', flexLoads: 'flexLoads', mesh: 'meshMicrogrid', inverter: 'inverterCurtailment' };
-        for (const key of Object.keys(sinkStateMap)) {
-            const row = sinkAvailability && sinkAvailability.sinks ? sinkAvailability.sinks[sinkStateMap[key]] || {} : {};
-            await set(`gridConstraints.exportLimit.sinks.${key}.usable`, row.usable === true);
-            await set(`gridConstraints.exportLimit.sinks.${key}.lastAck`, String(row.lastAck || 'unknown'));
-            await set(`gridConstraints.exportLimit.sinks.${key}.lastWriteTest`, String(row.lastWriteTest || 'not_per_tick'));
-            await set(`gridConstraints.exportLimit.sinks.${key}.blockedUntil`, Number(row.blockedUntil || 0));
-            await set(`gridConstraints.exportLimit.sinks.${key}.lastReason`, String(row.reason || ''));
-            const histKey = sinkStateMap[key] || row.id;
-            const hist = sinkAckSummary && sinkAckSummary.history ? sinkAckSummary.history[histKey] || [] : [];
-            const rt = this._zeroExportSinkRuntimeFor ? this._zeroExportSinkRuntimeFor(histKey) : {};
-            await set(`gridConstraints.exportLimit.sinks.${key}.ackHistoryJson`, JSON.stringify(hist));
-            await set(`gridConstraints.exportLimit.sinks.${key}.ackOkCount`, Number(rt.ackOkCount || 0));
-            await set(`gridConstraints.exportLimit.sinks.${key}.ackErrorCount`, Number(rt.ackErrorCount || 0));
-            await set(`gridConstraints.exportLimit.sinks.${key}.ackTimeoutCount`, Number(rt.ackTimeoutCount || 0));
-        }
-        await set('gridConstraints.exportLimit.commissioning.status', String(commissioning.status || 'unknown'));
-        await set('gridConstraints.exportLimit.commissioning.stage', String(commissioning.stage || 'unknown'));
-        await set('gridConstraints.exportLimit.commissioning.ready', commissioning.ready === true);
-        await set('gridConstraints.exportLimit.commissioning.scorePercent', Math.max(0, Math.min(100, Math.round(Number(commissioning.scorePercent) || 0))));
-        await set('gridConstraints.exportLimit.commissioning.nextStep', String(commissioning.nextStep || ''));
-        await set('gridConstraints.exportLimit.commissioning.lastReason', String(commissioning.lastReason || ''));
-        await set('gridConstraints.exportLimit.commissioning.checklistJson', JSON.stringify(commissioning.checklist || {}));
-        await set('gridConstraints.exportLimit.commissioning.writeTestPreviewJson', JSON.stringify(commissioning.writeTestPreview || {}));
-        await set('gridConstraints.exportLimit.commissioning.sinkStatusJson', JSON.stringify(commissioning.sinkStatus || {}));
-        await set('gridConstraints.exportLimit.commissioning.reportJson', JSON.stringify(commissioning.report || commissioning));
         await set('gridConstraints.exportLimit.displayJson', JSON.stringify(summary));
         await set('gridConstraints.exportLimit.summaryJson', JSON.stringify(summary));
         await set('gridConstraints.pvCurtail.estimatedCurtailmentW', estimateW);

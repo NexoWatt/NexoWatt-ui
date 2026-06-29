@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 5ef596af14474aff1b1da71ccefb3c3a5aad69b382de44bc58fcdf4b6a8b5a19
+ * Original-Hash: 82ce82da2c7b795b344813f35bc987774f852e5c9cfbb1a58cc49bffebb87aec
  */
 
 /**
@@ -67,7 +67,7 @@ function must(file, text){const s=read(file); if(!s.includes(text)){console.erro
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function mustNot(file, text){const s=read(file); if(s.includes(text)){console.error(`Forbidden in ${file}: ${text}`); process.exit(1);}}
-must('package.json', '"version": "0.8.59"');
+must('package.json', '"version": "0.8.53"');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', '0.8.46 ACK-Gate');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'buildBridgeAckGate');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'meshMicrogrid.localBridge.ackRequired');

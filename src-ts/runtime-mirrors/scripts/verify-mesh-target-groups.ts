@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 38a9e98dc2a31e665a2ed2ad377ebcc915079f69c0b14f0a1fb2a0a5d0976d0a
+ * Original-Hash: 63f3598f1af655f5d50fbcbb4d4a5f5647c10e57edfede7e693fe779dff1257d
  */
 
 /**
@@ -72,7 +72,7 @@ function must(file, needle){ const s=read(file); if(!s.includes(needle)){ consol
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function mustNot(file, needle){ const s=read(file); if(s.includes(needle)){ console.error(`[mesh-target-groups] Forbidden in ${file}: ${needle}`); process.exit(1); } }
-must('package.json','"version": "0.8.59"');
+must('package.json','"version": "0.8.53"');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts','nexowatt.mesh-microgrid-target-group-fairness.v1');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts','function normalizeTargetGroups');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts','function buildTargetGroupPlan');

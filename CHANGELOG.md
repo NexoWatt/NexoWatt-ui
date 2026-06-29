@@ -1,9 +1,14 @@
+## 0.8.61
+
+- Lademanagement: EVCS-Netzcap konservativ gehärtet. Negative Grundlast durch laufende, lokal gedeckte EVCS-Leistung wird nicht mehr als zusätzliche Netzanschlusskapazität genutzt.
+- App-Center Status: zeigt jetzt „Lokale Deckung“ separat und „EVCS Cap (Netz sicher)“ statt eines missverständlichen Caps über dem Netzanschluss.
+- Regelung: keine Änderung an Hardwarewrites; nur Budget-/Diagnoseformel für Gate A Netz korrigiert.
+
 ## 0.8.60
 
-- Core-Limits: TS-Shadow-Logfix für `grid.effectiveW` ergänzt. Anlagen ohne konfiguriertes Netzimportlimit erzeugen keinen minütlichen Warn-Spam mehr.
-- Die Abweichung `JS null/unlimited` gegen `TS 0/missing-input` bleibt als Info-Diagnose im Shadow-JSON sichtbar.
-- Der produktive TS-Core-Budget-Takeover bleibt in diesem Fall bewusst gesperrt; die stabile JS-Runtime bleibt führend.
-- Keine Änderung an Export Guard, Speicherfarm, Mesh/Microgrid oder Hardware-Schreibpfaden.
+- Core-Limits: TS-Shadow-Vergleich für `grid.effectiveW` als Diagnose-only klassifiziert, damit kein minütlicher Warn-Log-Spam mehr entsteht.
+- Core-Limits: Warnungen werden nur noch für echte Warnfelder ausgegeben; `grid.effectiveW` bleibt im Diagnose-JSON sichtbar.
+- Sicherheit: keine Änderung an produktiver Regelung, 0-Einspeisung, Speicherfarm, Mesh/Microgrid oder Hardwarewrites.
 
 ## 0.8.59
 

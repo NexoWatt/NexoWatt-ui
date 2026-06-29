@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:0d1abf4eff513fb06a92ac85043f6f41fddb344563c936f6ebf04ca3d5b8d749
+ * Quell-Hash: sha256:3d3b58aa152722b52bc3fc7f24ff076ad7c27cbd93c2f336d87c35e22bec076d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -13470,8 +13470,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       { label: 'Netzlimit (cfg)', value: _fmtW(n(ctrl.gridImportLimitW)) },
       { label: 'Netzlimit (eff)', value: _fmtW(n(ctrl.gridImportLimitEffW)) },
       { label: 'Netz (W)', value: _fmtW(n(ctrl.gridImportW)) },
-      { label: 'Grundlast (est.)', value: _fmtW(n(ctrl.gridBaseLoadW)) },
-      { label: 'EVCS Cap (Netz)', value: _fmtW(n(ctrl.gridCapEvcsW)) },
+      { label: 'Grundlast (wirksam)', value: _fmtW(n(ctrl.gridBaseLoadW)) },
+      { label: 'Lokale Deckung', value: _fmtW(n(ctrl.gridLocalSupportW)) },
+      { label: 'EVCS Cap (Netz sicher)', value: _fmtW(n(ctrl.gridCapEvcsW)) },
       { label: 'Binding', value: _fmtBool(gridBind, 'JA', 'NEIN') },
     ], gridBind ? 'warn' : 'ok');
 

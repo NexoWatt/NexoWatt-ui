@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 626af08cb25b3aa08b66a1a76fc58e0ca2d44d2dd1aee0d5f14d59c42c766b10
+ * Original-Hash: e91ecb01bb743cbb94332c02e8102c7e591ee7cc850c218655d72d3320c21281
  */
 
 /**
@@ -71,7 +71,7 @@ const appTs = read('src-ts/runtime-executables/www/app.ts');
 const settingsHtml = read('www/settings.html');
 const mainTs = read('src-ts/runtime-executables/main.ts');
 const pkg = JSON.parse(read('package.json'));
-need(pkg.version === '0.8.59', 'package.json Version muss 0.8.59 sein.');
+need(pkg.version === '0.8.24', 'package.json Version muss 0.8.24 sein.');
 for (const src of [walletTs, walletJs]) {
   need(src.includes('energyWallet.diagnostics.userWarning'), 'userWarning-State fehlt in EnergyWallet Runtime.');
   need(src.includes('energyWallet.diagnostics.installerWarning'), 'installerWarning-State fehlt in EnergyWallet Runtime.');

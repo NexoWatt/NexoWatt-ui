@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:b5a0e8152bc967cef60481e4e3602f6af0afddc10daf82cb20a8117bdfd23b0b
+ * Quell-Hash: sha256:720906cc46990ea034e1706440ea03cc91ac72ee51c37565ab0590dd307edd7f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2480,6 +2480,8 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.gridImportLimitW_effective', 'Grid import limit (W) effective', 'number', 'value.power');
         await mk('chargingManagement.control.gridImportW', 'Grid power (W) (import + / export -)', 'number', 'value.power');
         await mk('chargingManagement.control.gridBaseLoadW', 'Estimated base load (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.gridBaseLoadRawW', 'Raw base load before clamp (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.gridLocalSupportW', 'Local PV/storage support for EVCS (W)', 'number', 'value.power');
         await mk('chargingManagement.control.gridCapEvcsW', 'Grid-based EVCS cap (W)', 'number', 'value.power');
         await mk('chargingManagement.control.gridCapBinding', 'Grid cap binding', 'boolean', 'indicator');
         await mk('chargingManagement.control.gridMaxPhaseA', 'Grid max phase current (A) configured', 'number', 'value.current');
@@ -3203,6 +3205,13 @@ class ChargingManagementModule extends BaseModule {
 
         // Measurements and object mapping
         let totalPowerW = 0;
+        // 0.8.61: Gate-A Netzbudget muss mit frischen realen Ladepunkt-Messwerten rechnen.
+        // `totalPowerW` kann wegen Setpoint-Fallbacks bewusst weiter als Reservierung/Regelwert
+        // dienen. Für die Netzanschluss-Grenze darf ein alter Ladepunkt-Setpoint aber nicht als
+        // aktueller Verbrauch vom Netzanschluss abgezogen werden, sonst entsteht ein zu hoher
+        // EVCS-Cap (z.B. 40 kW Anschluss + stale 10.9 kW = falsch 50.9 kW).
+        let totalFreshActualPowerW = 0;
+        let totalStaleActualIgnoredForGridW = 0;
         let totalCurrentA = 0;
         let onlineCount = 0;
 
@@ -3669,8 +3678,12 @@ class ChargingManagementModule extends BaseModule {
                 }
             }
 
+            const pWFreshActualForGridW = (online && enabled && !meterStale && typeof pW === 'number' && Number.isFinite(pW)) ? Math.max(0, Math.abs(pW)) : 0;
+            const pWStaleIgnoredForGridW = (online && enabled && meterStale && typeof pW === 'number' && Number.isFinite(pW)) ? Math.max(0, Math.abs(pW)) : 0;
             if (typeof pWUsed === 'number' && Number.isFinite(pWUsed)) totalPowerW += pWUsed;
-            if (typeof iA === 'number') totalCurrentA += iA;
+            totalFreshActualPowerW += pWFreshActualForGridW;
+            totalStaleActualIgnoredForGridW += pWStaleIgnoredForGridW;
+            if (typeof iA === 'number' && !meterStale) totalCurrentA += iA;
             if (online) onlineCount += 1;
 
             await this._queueState(`${ch}.name`, String(wb.name || key), true);
@@ -5309,16 +5322,58 @@ if (components.length) {
 
         // Derive base load and EVCS cap from import limit
         let gridBaseLoadW = null;
+        let gridBaseLoadRawW = null;
+        let gridLocalSupportW = null;
         let gridCapEvcsW = null;
         let gridCapBinding = false;
         const budgetBeforeGridCaps = budgetW;
         const budgetModeBeforeGridCaps = String(effectiveBudgetMode || budgetMode || 'unlimited');
 
         if (gridImportLimitEffW > 0 && typeof gridW === 'number' && Number.isFinite(gridW)) {
-            // baseLoad includes everything except EV charging (approx.)
-            gridBaseLoadW = gridW - (Number.isFinite(totalPowerW) ? totalPowerW : 0);
-            // Max EVCS total to keep grid import under limit: baseLoad + EVCS <= limit
-            gridCapEvcsW = clamp(gridImportLimitEffW - gridBaseLoadW, 0, 1e12);
+            // 0.8.61: load-management grid cap regression guard.
+            //
+            // A battery discharge can make the old approximation `gridW - EVCS`
+            // negative while the building still consumes power. Using that negative
+            // value increased the visible EVCS cap above the physical connection
+            // (e.g. 40 kW -> 50.94 kW). That is unsafe and confusing.
+            //
+            // Prefer the central energy-flow building load without EV/extras when it
+            // is fresh. That keeps the cap aligned with "Netzanschluss minus realer
+            // Verbrauch". If the central value is not available, fall back to the
+            // grid equation but clamp the effective base load to >= 0. In every case
+            // the cap is hard-clamped to the effective grid limit.
+            gridBaseLoadRawW = gridW - (Number.isFinite(totalPowerW) ? totalPowerW : 0);
+            let derivedBaseLoadW = null;
+            let derivedBaseLoadSource = '';
+            try {
+                const candidates = [
+                    ['derived.core.building.loadRestW', 'derived.core.building.loadRestW'],
+                    ['historie.core.building.loadRestW', 'historie.core.building.loadRestW'],
+                    ['derived.core.building.loadTotalW', 'derived.core.building.loadTotalW'],
+                    ['historie.core.building.loadTotalW', 'historie.core.building.loadTotalW'],
+                    ['consumptionTotal', 'consumptionTotal'],
+                ];
+                for (const [id, source] of candidates) {
+                    const st = await this._getStateCached(id);
+                    const ts = st && Number(st.ts || st.lc || 0);
+                    const fresh = !Number.isFinite(ts) || ts <= 0 || (Date.now() - ts) <= Math.max(staleTimeoutMs, 120000);
+                    const v = st ? Number(st.val) : NaN;
+                    if (fresh && Number.isFinite(v) && v >= 0) {
+                        derivedBaseLoadW = Math.max(0, v);
+                        derivedBaseLoadSource = source;
+                        break;
+                    }
+                }
+            } catch (_eBaseLoad) {}
+            gridBaseLoadW = Number.isFinite(Number(derivedBaseLoadW)) ? Math.max(0, Number(derivedBaseLoadW)) : Math.max(0, gridBaseLoadRawW);
+            gridLocalSupportW = Math.max(0, gridBaseLoadW - Math.max(0, gridBaseLoadRawW));
+            // Max EVCS total to keep grid import under limit: baseLoad + EVCS <= limit.
+            // Hard cap: EVCS Cap (Netz sicher) must stay <= effective grid limit.
+            gridCapEvcsW = clamp(gridImportLimitEffW - gridBaseLoadW, 0, gridImportLimitEffW);
+            try {
+                budgetDebug = budgetDebug || {};
+                budgetDebug.gridBaseLoadSource = derivedBaseLoadSource || 'gridW-minus-evcs-clamped';
+            } catch (_eBaseLoadDebug) {}
 
             // Apply cap (always)
             const before = budgetW;
@@ -5401,6 +5456,8 @@ if (components.length) {
         const chargingBudgetTsProductive = await this._runChargingBudgetTsProductive({
             budgetW: Number.isFinite(budgetBeforeGridCaps) ? budgetBeforeGridCaps : null,
             budgetMode: budgetModeBeforeGridCaps,
+            gridBaseLoadRawW: (typeof gridBaseLoadRawW === 'number' && Number.isFinite(gridBaseLoadRawW)) ? gridBaseLoadRawW : null,
+            gridLocalSupportW: (typeof gridLocalSupportW === 'number' && Number.isFinite(gridLocalSupportW)) ? gridLocalSupportW : null,
             gridCapEvcsW: (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : null,
             // For TS parity this flag means 'cap is active/available'; the returned apply.gridCapBinding still means 'actually binding'.
             gridCapBinding: (gridImportLimitEffW > 0 && typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)),
@@ -5445,6 +5502,8 @@ if (components.length) {
             await this._queueState('chargingManagement.control.gridImportLimitW_effective', gridImportLimitEffW || 0, true);
             await this._queueState('chargingManagement.control.gridImportW', (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : 0, true);
             await this._queueState('chargingManagement.control.gridBaseLoadW', (typeof gridBaseLoadW === 'number' && Number.isFinite(gridBaseLoadW)) ? gridBaseLoadW : 0, true);
+            await this._queueState('chargingManagement.control.gridBaseLoadRawW', (typeof gridBaseLoadRawW === 'number' && Number.isFinite(gridBaseLoadRawW)) ? gridBaseLoadRawW : 0, true);
+            await this._queueState('chargingManagement.control.gridLocalSupportW', (typeof gridLocalSupportW === 'number' && Number.isFinite(gridLocalSupportW)) ? gridLocalSupportW : 0, true);
             await this._queueState('chargingManagement.control.gridCapEvcsW', (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : 0, true);
             await this._queueState('chargingManagement.control.gridCapBinding', !!gridCapBinding, true);
             await this._queueState('chargingManagement.control.gridMaxPhaseA', gridMaxPhaseA || 0, true);
@@ -5468,6 +5527,8 @@ if (components.length) {
             budgetDebug.gridW = (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null;
             budgetDebug.evcsActualW = (typeof totalPowerW === 'number' && Number.isFinite(totalPowerW)) ? totalPowerW : null;
             budgetDebug.gridBaseLoadW = (typeof gridBaseLoadW === 'number' && Number.isFinite(gridBaseLoadW)) ? gridBaseLoadW : null;
+            budgetDebug.gridBaseLoadRawW = (typeof gridBaseLoadRawW === 'number' && Number.isFinite(gridBaseLoadRawW)) ? gridBaseLoadRawW : null;
+            budgetDebug.gridLocalSupportW = (typeof gridLocalSupportW === 'number' && Number.isFinite(gridLocalSupportW)) ? gridLocalSupportW : null;
             budgetDebug.gridCapEvcsW = (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : null;
             budgetDebug.gridCapBinding = !!gridCapBinding;
             budgetDebug.gridMaxPhaseA = gridMaxPhaseA || 0;
@@ -5805,6 +5866,8 @@ if (components.length) {
                 await this._queueState('chargingManagement.control.gridImportLimitW_effective', (typeof gridImportLimitEffW === 'number' && Number.isFinite(gridImportLimitEffW)) ? gridImportLimitEffW : 0, true);
                 await this._queueState('chargingManagement.control.gridImportW', (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : 0, true);
                 await this._queueState('chargingManagement.control.gridBaseLoadW', (typeof gridBaseLoadW === 'number' && Number.isFinite(gridBaseLoadW)) ? gridBaseLoadW : 0, true);
+                await this._queueState('chargingManagement.control.gridBaseLoadRawW', (typeof gridBaseLoadRawW === 'number' && Number.isFinite(gridBaseLoadRawW)) ? gridBaseLoadRawW : 0, true);
+                await this._queueState('chargingManagement.control.gridLocalSupportW', (typeof gridLocalSupportW === 'number' && Number.isFinite(gridLocalSupportW)) ? gridLocalSupportW : 0, true);
                 await this._queueState('chargingManagement.control.gridCapEvcsW', (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : 0, true);
                 await this._queueState('chargingManagement.control.gridCapBinding', false, true);
 

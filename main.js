@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:73e2916eceac1a183aaa947b08167a0ed8cb97cb94b7552928bb931f0b333543
+ * Quell-Hash: sha256:4bcdf2363dd2318ab4fcf1855a998abb9ee523c4058883f771b1c2b4651ce404
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -13853,6 +13853,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           gridImportLimitEffW: await getOwn('chargingManagement.control.gridImportLimitW_effective'),
           gridImportW,
           gridBaseLoadW: await getOwn('chargingManagement.control.gridBaseLoadW'),
+          gridBaseLoadRawW: await getOwn('chargingManagement.control.gridBaseLoadRawW'),
+          gridLocalSupportW: await getOwn('chargingManagement.control.gridLocalSupportW'),
           gridCapEvcsW: await getOwn('chargingManagement.control.gridCapEvcsW'),
           gridCapBinding: await getOwn('chargingManagement.control.gridCapBinding'),
 

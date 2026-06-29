@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: db1d5b0ed006d0a99d411fab74f38592e65c838e1ff291af14a4b9d17761285f
+ * Original-Hash: b9bcd570b0f67c02dc06b4b04844423cdbf27fa1d7751a09387d6a4545321f0f
  */
 
 /**
@@ -67,7 +67,7 @@ function must(file, text){const s=read(file); if(!s.includes(text)){console.erro
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function mustNot(file, text){const s=read(file); if(s.includes(text)){console.error(`Forbidden in ${file}: ${text}`); process.exit(1);}}
-must('package.json', '"version": "0.8.59"');
+must('package.json', '"version": "0.8.53"');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', '0.8.44 Lokale Bridge-Zuordnung');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'normalizeLocalBridgeCfg');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'buildLocalBridgePlan');

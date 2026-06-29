@@ -13855,6 +13855,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           gridImportLimitEffW: await getOwn('chargingManagement.control.gridImportLimitW_effective'),
           gridImportW,
           gridBaseLoadW: await getOwn('chargingManagement.control.gridBaseLoadW'),
+          gridBaseLoadRawW: await getOwn('chargingManagement.control.gridBaseLoadRawW'),
+          gridLocalSupportW: await getOwn('chargingManagement.control.gridLocalSupportW'),
           gridCapEvcsW: await getOwn('chargingManagement.control.gridCapEvcsW'),
           gridCapBinding: await getOwn('chargingManagement.control.gridCapBinding'),
 
