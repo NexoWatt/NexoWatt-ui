@@ -1,3 +1,10 @@
+## 0.8.65
+
+- Loadmanagement/Budget: EVCS wird im zentralen EMS-Budget nur noch bei aktivem Ladebedarf reserviert. Wartende Ladepunkte ohne Istleistung und ohne zugewiesene Ladeleistung erzeugen keinen künstlichen 0-W-Consumer mehr.
+- Lademanagement: Auto-Modus bleibt feldtesttauglich und berücksichtigt weiter Ziel-/Zeitladen, PV-Überschuss, optionale Tarif-/Netzentgeltlogik, Notfall-Netzladen sowie harte Netz-/Phasen-/§14a-Limits.
+- Diagnose: Budget-Debug zeigt jetzt, ob die EVCS-Budgetreservierung aktiv war oder wegen `no-active-demand` beziehungsweise `zero-watt-demand` ausgelassen wurde.
+- Qualität: Regressionstest `test:loadmanagement-evcs-active-demand-reserve` ergänzt; Runtime- und EMS-TS-Spiegel synchronisiert.
+
 ## 0.8.64
 
 - Loadmanagement/Budget: EVCS-Ist wird in Status/Prioritäten nicht mehr aus Reservierung oder Sollwert rekonstruiert.

@@ -30,8 +30,10 @@ export interface ChargingRuntimeInput {
   totalTargetCurrentA?: number;
   budgetW?: number | null;
   usedW?: number | null;
+  actualW?: number | null;
   remainingW?: number | null;
   pvEvcsUsedWForBudget?: number | null;
+  activeChargingNeed?: boolean | null;
   gridCapBinding?: boolean;
   phaseCapBinding?: boolean;
   para14aActive?: boolean;
@@ -48,6 +50,10 @@ export interface ChargingReservationPlan {
   requestedW: number;
   reserveW: number;
   pvReserveW: number;
+  actualW: number;
+  activeChargingNeed: boolean;
+  reservationActive: boolean;
+  skippedReason: string;
   pvOnly: false;
   mode: string;
 }
@@ -78,6 +84,8 @@ export interface ChargingRuntimePrepResult {
     remainingW: number;
     pvEvcsUsedWForBudget: number;
     evcsHighLevelCapW: number | null;
+    activeChargingNeed: boolean;
+    reservationActive: boolean;
   };
   warnings: string[];
 }
@@ -141,8 +149,12 @@ export function normalizeChargingMode(mode: unknown): string {
 export function buildChargingReservationPlan(input: ChargingRuntimeInput): ChargingReservationPlan {
   const usedW = toNonNegativeWatt(input.usedW ?? input.totalTargetPowerW ?? 0);
   const targetW = toNonNegativeWatt(input.totalTargetPowerW ?? usedW);
-  const reserveW = Math.max(usedW, targetW);
-  const pvReserveW = Math.max(0, Math.min(reserveW, toNonNegativeWatt(input.pvEvcsUsedWForBudget ?? 0)));
+  const actualW = toNonNegativeWatt(input.actualW ?? 0);
+  const rawReserveW = Math.max(usedW, targetW);
+  const activeChargingNeed = input.activeChargingNeed === true || actualW > 0 || rawReserveW > 0;
+  const reserveW = activeChargingNeed ? rawReserveW : 0;
+  const pvReserveW = activeChargingNeed ? Math.max(0, Math.min(reserveW, toNonNegativeWatt(input.pvEvcsUsedWForBudget ?? 0))) : 0;
+  const reservationActive = activeChargingNeed && (actualW > 0 || reserveW > 0 || pvReserveW > 0);
   return {
     key: 'evcs',
     app: 'chargingManagement',
@@ -151,6 +163,10 @@ export function buildChargingReservationPlan(input: ChargingRuntimeInput): Charg
     requestedW: reserveW,
     reserveW,
     pvReserveW,
+    actualW,
+    activeChargingNeed,
+    reservationActive,
+    skippedReason: reservationActive ? '' : (activeChargingNeed ? 'zero-watt-demand' : 'no-active-demand'),
     pvOnly: false,
     mode: normalizeChargingMode(input.mode || 'auto'),
   };
@@ -206,6 +222,8 @@ export function buildChargingManagementRuntimePrep(input: ChargingRuntimeInput):
       remainingW,
       pvEvcsUsedWForBudget: toNonNegativeWatt(input.pvEvcsUsedWForBudget ?? 0),
       evcsHighLevelCapW: toFiniteNumber(input.evcsHighLevelCapW, null),
+      activeChargingNeed: reservation.activeChargingNeed,
+      reservationActive: reservation.reservationActive,
     },
     warnings,
   };

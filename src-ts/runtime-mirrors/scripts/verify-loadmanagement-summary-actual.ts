@@ -1,11 +1,11 @@
 // @ts-nocheck
 /**
- * TypeScript-Parallelspiegel: scripts/verify-mesh-local-bridge.js
+ * TypeScript-Parallelspiegel: scripts/verify-loadmanagement-summary-actual.js
  *
  * Zweck:
  * Diese Datei ist die TypeScript-Vorbereitung der bestehenden JavaScript-Runtime-Datei.
  * Sie wird noch nicht produktiv ausgeführt. Die produktive Quelle bleibt vorerst:
- * scripts/verify-mesh-local-bridge.js
+ * scripts/verify-loadmanagement-summary-actual.js
  *
  * Zusammenhang:
  * Der Spiegel hilft uns, die JS-Datei später schrittweise zu typisieren, zu testen und
@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: db1d5b0ed006d0a99d411fab74f38592e65c838e1ff291af14a4b9d17761285f
+ * Original-Hash: 8bee32dd4957a0850d4f547a031a1ad339cdd286aa396dc70a40e395c2e03a8b
  */
 
 /**
@@ -44,7 +44,7 @@ const fs = require('fs');
  */
 function read(p){return fs.readFileSync(p,'utf8');}
 /**
- * Code-Teil: must
+ * Code-Teil: need
  *
  * Zweck:
  * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
@@ -54,28 +54,13 @@ function read(p){return fs.readFileSync(p,'utf8');}
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function must(file, text){const s=read(file); if(!s.includes(text)){console.error(`Missing in ${file}: ${text}`); process.exit(1);}}
-/**
- * Code-Teil: mustNot
- *
- * Zweck:
- * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-function mustNot(file, text){const s=read(file); if(s.includes(text)){console.error(`Forbidden in ${file}: ${text}`); process.exit(1);}}
-must('package.json', '"version": "0.8.59"');
-must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', '0.8.44 Lokale Bridge-Zuordnung');
-must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'normalizeLocalBridgeCfg');
-must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'buildLocalBridgePlan');
-must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'lastWritesJson');
-must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'directHardwareWrite: false');
-must('src-ts/runtime-executables/www/ems-apps.ts', 'meshMicrogridLocalBridgeMappingsJson');
-must('src-ts/runtime-executables/www/ems-apps.ts', 'Bridge-Zuordnungen JSON');
-must('src-ts/runtime-executables/www/mesh-microgrid.ts', 'renderLocalBridge');
-must('www/mesh-microgrid.html', 'Lokale Bridge-Zuordnung');
-mustNot('www/ems-apps.html', 'Mesh/Microgrid aktiv</span><select');
-console.log('OK: Mesh/Microgrid Local Bridge Mapping ist TypeScript-first, app-center-konform und herstellerneutral abgesichert.');
+function need(p,s,label){const t=read(p); if(!t.includes(s)){console.error(`[loadmanagement-summary-actual] missing ${label}: ${s}`); process.exit(1);}}
+const cm = read('src-ts/runtime-executables/ems/modules/charging-management.ts');
+need('package.json','"version": "0.8.65"','version 0.8.65');
+need('src-ts/runtime-executables/ems/modules/charging-management.ts','applyActualW','TS-Control darf Summary-Ist nicht aus Reserve überschreiben');
+need('src-ts/runtime-executables/ems/modules/charging-management.ts','totalPowerW: totalFreshActualPowerW','TS-Control bekommt Actual statt Reserve');
+need('src-ts/runtime-executables/ems/modules/charging-management.ts','summary.totalReservedPowerW','Reservierung bleibt getrennt');
+need('src-ts/runtime-executables/ems/modules/charging-management.ts','budgetDebug.evcsActualW = (typeof totalFreshActualPowerW','Debug actual nutzt frischen Istwert');
+const badApply = "await this._queueState('chargingManagement.summary.totalPowerW', Number.isFinite(Number(apply.totalPowerW)) ? Number(apply.totalPowerW) : 0, true);";
+if (cm.includes(badApply)) { console.error('[loadmanagement-summary-actual] old apply.totalPowerW overwrite still present'); process.exit(1); }
+console.log('[loadmanagement-summary-actual] OK');

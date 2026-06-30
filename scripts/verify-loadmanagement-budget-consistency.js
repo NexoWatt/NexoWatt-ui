@@ -4,7 +4,7 @@ const fs = require('fs');
 function read(p){ return fs.readFileSync(p,'utf8'); }
 function must(file, needle){ const s=read(file); if(!s.includes(needle)){ console.error(`Missing in ${file}: ${needle}`); process.exit(1); } }
 function mustNot(file, needle){ const s=read(file); if(s.includes(needle)){ console.error(`Forbidden in ${file}: ${needle}`); process.exit(1); } }
-must('package.json','"version": "0.8.64"');
+must('package.json','"version": "0.8.65"');
 must('src-ts/runtime-executables/ems/modules/core-limits.ts','pvBudgetPhysicalCapW');
 must('src-ts/runtime-executables/ems/modules/core-limits.ts','Math.min(pvBudgetFlowRawW, pvPhysicalCapW)');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts','budgetDebug.evcsActualW = (typeof totalFreshActualPowerW');

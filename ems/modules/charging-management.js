@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:af15ba07b421f911f9c292aad90fe3ecb4d5ed88d142a45dd137c445e69fc694
+ * Quell-Hash: sha256:126a37740822f06673249514b3a0a1b7a32eff2caeab6d6377ebef3d94aaef5c
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -7537,24 +7537,56 @@ if (components.length) {
         // Central EMS Budget & Gates: EVCS is the first flexible consumer group.
         // This does not change EVCS allocation; it only reserves the already decided target/usage
         // for downstream apps (thermal, heating rod, generic loads) in the same tick.
+        // 0.8.65: EVCS-Reservierung nur bei aktivem Ladebedarf mit realer Istleistung
+        // oder zugewiesener Ladeleistung. Eine wartende Wallbox ohne Watt-Bedarf erzeugt
+        // keinen künstlichen 0-W-Consumer im zentralen EMS-Budget mehr.
         try {
             const rt = this.adapter && this.adapter._emsBudget;
             if (rt && typeof rt.reserve === 'function') {
                 const evcsActualW = Math.max(0, Math.round(Number(totalFreshActualPowerW || 0)));
                 const evcsReserveW = Math.max(0, Math.round(Number.isFinite(budgetW) ? usedW : totalTargetPowerW));
                 const evcsPvReserveW = Math.max(0, Math.min(evcsReserveW, (pvAvailableState ? Math.round(pvEvcsUsedWForBudget || 0) : 0)));
-                rt.reserve({
-                    key: 'evcs',
-                    app: 'chargingManagement',
-                    label: 'Ladepunkte',
-                    priority: 100,
-                    actualW: evcsActualW,
-                    requestedW: evcsReserveW,
-                    reserveW: evcsReserveW,
-                    pvReserveW: evcsPvReserveW,
-                    pvOnly: false,
-                    mode: String(mode || ''),
+                const evcsHasWallboxDemand = (Array.isArray(wbList) ? wbList : []).some((w) => {
+                    if (!w || w.enabled !== true || w.online !== true) return false;
+                    if (w.vehiclePlugged === false) return false;
+                    const actualW = Math.max(0, Math.abs(Number(w.actualPowerW || 0)));
+                    return w.charging === true
+                        || actualW > Math.max(0, Number(activityThresholdW || 0))
+                        || w.goalActive === true;
                 });
+                const evcsHasActiveChargingNeed = !!(evcsActualW > 0 || evcsReserveW > 0 || evcsPvReserveW > 0 || evcsHasWallboxDemand);
+                const evcsShouldReserve = !!(evcsHasActiveChargingNeed && (evcsActualW > 0 || evcsReserveW > 0 || evcsPvReserveW > 0));
+
+                if (budgetDebug && typeof budgetDebug === 'object') {
+                    budgetDebug.evcsActiveChargingNeed = evcsHasActiveChargingNeed;
+                    budgetDebug.evcsBudgetReservationActive = evcsShouldReserve;
+                    budgetDebug.evcsBudgetReservationSkippedReason = evcsShouldReserve ? '' : (evcsHasActiveChargingNeed ? 'zero-watt-demand' : 'no-active-demand');
+                    budgetDebug.evcsBudgetReservationActualW = evcsActualW;
+                    budgetDebug.evcsBudgetReservationReserveW = evcsReserveW;
+                    budgetDebug.evcsBudgetReservationPvReserveW = evcsPvReserveW;
+                }
+
+                if (evcsShouldReserve) {
+                    rt.reserve({
+                        key: 'evcs',
+                        app: 'chargingManagement',
+                        label: 'Ladepunkte',
+                        priority: 100,
+                        actualW: evcsActualW,
+                        requestedW: evcsReserveW,
+                        reserveW: evcsReserveW,
+                        pvReserveW: evcsPvReserveW,
+                        pvOnly: false,
+                        mode: String(mode || ''),
+                    });
+                } else if (this.adapter && typeof this.adapter.setStateAsync === 'function') {
+                    // consumersJson bleibt in diesem Tick leer bzw. ohne EVCS; die Detailstates
+                    // werden nur auf 0 gesetzt, damit keine alte EVCS-Reservierung sichtbar bleibt.
+                    this.adapter.setStateAsync('ems.budget.consumers.evcs.usedW', 0, true).catch(() => {});
+                    this.adapter.setStateAsync('ems.budget.consumers.evcs.pvUsedW', 0, true).catch(() => {});
+                    this.adapter.setStateAsync('ems.budget.consumers.evcs.actualW', evcsActualW, true).catch(() => {});
+                    this.adapter.setStateAsync('ems.budget.consumers.evcs.mode', String(mode || ''), true).catch(() => {});
+                }
             }
         } catch (_e) {
             // budget diagnostics only
