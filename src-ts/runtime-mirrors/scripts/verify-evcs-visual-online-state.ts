@@ -1,11 +1,11 @@
 // @ts-nocheck
 /**
- * TypeScript-Parallelspiegel: scripts/verify-loadmanagement-budget-consistency.js
+ * TypeScript-Parallelspiegel: scripts/verify-evcs-visual-online-state.js
  *
  * Zweck:
  * Diese Datei ist die TypeScript-Vorbereitung der bestehenden JavaScript-Runtime-Datei.
  * Sie wird noch nicht produktiv ausgeführt. Die produktive Quelle bleibt vorerst:
- * scripts/verify-loadmanagement-budget-consistency.js
+ * scripts/verify-evcs-visual-online-state.js
  *
  * Zusammenhang:
  * Der Spiegel hilft uns, die JS-Datei später schrittweise zu typisieren, zu testen und
@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2ab8fe0e06b8bcb4eb0b3f3183a359cc6b0301422151b5e35cc7e1fbfd5c7d26
+ * Original-Hash: aa32d8a920263dd5a21e2299cea754273e37a7ad0e6709927cfdb80db2533ad7
  */
 
 /**
@@ -42,7 +42,7 @@ const fs = require('fs');
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function read(p){ return fs.readFileSync(p,'utf8'); }
+function read(p){ return fs.readFileSync(p, 'utf8'); }
 /**
  * Code-Teil: must
  *
@@ -54,7 +54,7 @@ function read(p){ return fs.readFileSync(p,'utf8'); }
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function must(file, needle){ const s=read(file); if(!s.includes(needle)){ console.error(`Missing in ${file}: ${needle}`); process.exit(1); } }
+function must(file, needle, label = needle){ const s = read(file); if (!s.includes(needle)) { console.error(`[evcs-visual-online-state] missing ${label}: ${needle}`); process.exit(1); } }
 /**
  * Code-Teil: mustNot
  *
@@ -66,16 +66,15 @@ function must(file, needle){ const s=read(file); if(!s.includes(needle)){ consol
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function mustNot(file, needle){ const s=read(file); if(s.includes(needle)){ console.error(`Forbidden in ${file}: ${needle}`); process.exit(1); } }
-must('package.json','"version": "0.8.65"');
-must('src-ts/runtime-executables/ems/modules/core-limits.ts','pvBudgetPhysicalCapW');
-must('src-ts/runtime-executables/ems/modules/core-limits.ts','Math.min(pvBudgetFlowRawW, pvPhysicalCapW)');
-must('src-ts/runtime-executables/ems/modules/charging-management.ts','budgetDebug.evcsActualW = (typeof totalFreshActualPowerW');
-must('src-ts/runtime-executables/ems/modules/charging-management.ts','budgetDebug.evcsPotentialReservedW = (typeof totalPowerW');
-must('src-ts/runtime-executables/ems/modules/charging-management.ts','budgetDebug.evcsReservedW = evcsControlReserveW');
-must('src-ts/runtime-executables/ems/modules/charging-management.ts','evcsActiveDemandReserveW');
-must('src-ts/runtime-executables/www/ems-apps.ts','Reserve und PV-Reserve werden separat angezeigt.');
-must('src-ts/runtime-executables/www/ems-apps.ts','ctrl.actualW ?? ctrl.gridEvcsActualForCapW');
-must('src-ts/runtime-executables/www/ems-apps.ts',"{ label: 'Ist-Quelle', value: 'frischer Messwert / Grid-Gate' }");
-mustNot('src-ts/runtime-executables/www/ems-apps.ts','const actualW = n(c.actualW ?? c.usedW ?? c.reserveW');
-console.log('OK: Loadmanagement Budget-Konsistenz: PV physisch geklemmt, EVCS-Ist getrennt, Reserve aus aktivem Ladebedarf.');
+function mustNot(file, needle, label = needle){ const s = read(file); if (s.includes(needle)) { console.error(`[evcs-visual-online-state] forbidden ${label}: ${needle}`); process.exit(1); } }
+const evcs = 'src-ts/runtime-executables/www/evcs.ts';
+must('package.json', '"version": "0.8.65"', 'version 0.8.65');
+must(evcs, 'function _evcsBoolOrNull(value)', 'online bool normalizer');
+must(evcs, 'function _tileStateClass({ powerW, reason, active, regEnabled, online, status })', 'tile state signature includes online/status');
+must(evcs, "onlineState === false || r === 'OFFLINE' || offlineByStatus", 'offline class derived from online/reason/status');
+must(evcs, "active=false", 'comment documents active=false idle semantics');
+must(evcs, 'const online = hasEms ? d(`${cm}.online`) : d(`evcs.${i}.online`);', 'render reads online state');
+must(evcs, '_shortStatusText(status, emsReason, online)', 'status text gets online state');
+must(evcs, '_tileStateClass({ powerW, reason: emsReason, active, regEnabled, online, status })', 'tile state gets online/status');
+mustNot(evcs, 'active === false || regEnabled === false', 'online idle must not be disabled by active=false');
+console.log('[evcs-visual-online-state] OK');

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 69c20d7e0b18216652bc61a06b202b4d35efedbbdb66916b1cd529439c975c38
+ * Original-Hash: 97a5cca43cf272c1f48b500465940bc241fe4eea798f3e9e3100cab8b5b920d6
  */
 
 /**
@@ -74,7 +74,8 @@ must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridEvcsR
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridBaseLoadRawW = gridW - gridEvcsActualForCapW');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', "chargingManagement.summary.totalReservedPowerW");
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', "actualW: evcsActualW");
-must('src-ts/runtime-executables/ems/modules/charging-management.ts', "pvAvailableState ? Math.round(pvEvcsUsedWForBudget || 0) : 0");
+must('src-ts/runtime-executables/ems/modules/charging-management.ts', "pvAvailableState ? evcsControlPvReserveW : 0");
+must('src-ts/runtime-executables/ems/modules/charging-management.ts', "reserveW: evcsReserveW");
 must('src-ts/runtime-executables/main.ts', 'actualW: await getOwn');
 must('src-ts/runtime-executables/main.ts', 'gridEvcsReserveIgnoredForCapW');
 must('src-ts/runtime-executables/www/ems-apps.ts', 'EVCS Ist für Netz-Gate');

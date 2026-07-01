@@ -278,7 +278,8 @@
     "test:core-limits-pv-physical-cap": "node scripts/verify-core-limits-pv-physical-cap.js",
     "test:loadmanagement-budget-consistency": "node scripts/verify-loadmanagement-budget-consistency.js",
     "test:loadmanagement-summary-actual": "node scripts/verify-loadmanagement-summary-actual.js",
-    "test:loadmanagement-evcs-active-demand-reserve": "node scripts/verify-loadmanagement-evcs-active-demand-reserve.js"
+    "test:evcs-visual-online-state": "node scripts/verify-evcs-visual-online-state.js",
+    "test:charging-active-demand-reserve": "node scripts/verify-charging-active-demand-reserve.js"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",

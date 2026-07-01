@@ -11,7 +11,8 @@ must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridEvcsR
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridBaseLoadRawW = gridW - gridEvcsActualForCapW');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', "chargingManagement.summary.totalReservedPowerW");
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', "actualW: evcsActualW");
-must('src-ts/runtime-executables/ems/modules/charging-management.ts', "pvAvailableState ? Math.round(pvEvcsUsedWForBudget || 0) : 0");
+must('src-ts/runtime-executables/ems/modules/charging-management.ts', "pvAvailableState ? evcsControlPvReserveW : 0");
+must('src-ts/runtime-executables/ems/modules/charging-management.ts', "reserveW: evcsReserveW");
 must('src-ts/runtime-executables/main.ts', 'actualW: await getOwn');
 must('src-ts/runtime-executables/main.ts', 'gridEvcsReserveIgnoredForCapW');
 must('src-ts/runtime-executables/www/ems-apps.ts', 'EVCS Ist für Netz-Gate');

@@ -1,11 +1,11 @@
 // @ts-nocheck
 /**
- * TypeScript-Parallelspiegel: scripts/verify-loadmanagement-budget-consistency.js
+ * TypeScript-Parallelspiegel: scripts/verify-charging-active-demand-reserve.js
  *
  * Zweck:
  * Diese Datei ist die TypeScript-Vorbereitung der bestehenden JavaScript-Runtime-Datei.
  * Sie wird noch nicht produktiv ausgeführt. Die produktive Quelle bleibt vorerst:
- * scripts/verify-loadmanagement-budget-consistency.js
+ * scripts/verify-charging-active-demand-reserve.js
  *
  * Zusammenhang:
  * Der Spiegel hilft uns, die JS-Datei später schrittweise zu typisieren, zu testen und
@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2ab8fe0e06b8bcb4eb0b3f3183a359cc6b0301422151b5e35cc7e1fbfd5c7d26
+ * Original-Hash: 3711a7145c664b34186d0168d5335121625ced480f2f782c1205b8c9206891e5
  */
 
 /**
@@ -42,7 +42,7 @@ const fs = require('fs');
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function read(p){ return fs.readFileSync(p,'utf8'); }
+function read(p){ return fs.readFileSync(p, 'utf8'); }
 /**
  * Code-Teil: must
  *
@@ -54,7 +54,7 @@ function read(p){ return fs.readFileSync(p,'utf8'); }
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function must(file, needle){ const s=read(file); if(!s.includes(needle)){ console.error(`Missing in ${file}: ${needle}`); process.exit(1); } }
+function must(file, needle, label = needle){ const s = read(file); if (!s.includes(needle)) { console.error(`[charging-active-demand-reserve] missing ${label}: ${needle}`); process.exit(1); } }
 /**
  * Code-Teil: mustNot
  *
@@ -66,16 +66,22 @@ function must(file, needle){ const s=read(file); if(!s.includes(needle)){ consol
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function mustNot(file, needle){ const s=read(file); if(s.includes(needle)){ console.error(`Forbidden in ${file}: ${needle}`); process.exit(1); } }
-must('package.json','"version": "0.8.65"');
-must('src-ts/runtime-executables/ems/modules/core-limits.ts','pvBudgetPhysicalCapW');
-must('src-ts/runtime-executables/ems/modules/core-limits.ts','Math.min(pvBudgetFlowRawW, pvPhysicalCapW)');
-must('src-ts/runtime-executables/ems/modules/charging-management.ts','budgetDebug.evcsActualW = (typeof totalFreshActualPowerW');
-must('src-ts/runtime-executables/ems/modules/charging-management.ts','budgetDebug.evcsPotentialReservedW = (typeof totalPowerW');
-must('src-ts/runtime-executables/ems/modules/charging-management.ts','budgetDebug.evcsReservedW = evcsControlReserveW');
-must('src-ts/runtime-executables/ems/modules/charging-management.ts','evcsActiveDemandReserveW');
-must('src-ts/runtime-executables/www/ems-apps.ts','Reserve und PV-Reserve werden separat angezeigt.');
-must('src-ts/runtime-executables/www/ems-apps.ts','ctrl.actualW ?? ctrl.gridEvcsActualForCapW');
-must('src-ts/runtime-executables/www/ems-apps.ts',"{ label: 'Ist-Quelle', value: 'frischer Messwert / Grid-Gate' }");
-mustNot('src-ts/runtime-executables/www/ems-apps.ts','const actualW = n(c.actualW ?? c.usedW ?? c.reserveW');
-console.log('OK: Loadmanagement Budget-Konsistenz: PV physisch geklemmt, EVCS-Ist getrennt, Reserve aus aktivem Ladebedarf.');
+function mustNot(file, needle, label = needle){ const s = read(file); if (s.includes(needle)) { console.error(`[charging-active-demand-reserve] forbidden ${label}: ${needle}`); process.exit(1); } }
+const cm = 'src-ts/runtime-executables/ems/modules/charging-management.ts';
+must('package.json', '"version": "0.8.65"', 'version 0.8.65');
+must(cm, 'let evcsActiveDemandReserveW = 0;', 'active-demand reserve accumulator');
+must(cm, 'const activeChargingDemand = !!(', 'active-demand predicate');
+must(cm, "w.vehiclePlugged !== false", 'only connected/unknown-plug demand reserves');
+must(cm, 'demandActualW >= activityThresholdW', 'actual power counts as demand');
+must(cm, 'demandCommandW >= activityThresholdW', 'commanded setpoint counts as demand');
+must(cm, 'demandTargetW >= activityThresholdW', 'target setpoint counts as demand');
+must(cm, 'const evcsControlReserveW = Math.max(0, Math.round(evcsActiveDemandReserveW));', 'control reserve comes from active demand');
+must(cm, "chargingManagement.control.activeDemandReserveW", 'diagnostic active demand reserve state');
+must(cm, "chargingManagement.control.activeDemandWallboxes", 'diagnostic active wallbox count state');
+must(cm, 'const evcsReserveW = evcsControlReserveW;', 'central EMS reserve uses active demand');
+must(cm, 'requestedW: evcsReserveW', 'central request uses active demand');
+must(cm, 'reserveW: evcsReserveW', 'central reserve uses active demand');
+must(cm, 'pvAvailableState ? evcsControlPvReserveW : 0', 'PV reserve capped to active demand PV share');
+must(cm, "chargingManagement.summary.totalReservedPowerW', evcsControlReserveW", 'summary reserve is active demand reserve');
+mustNot(cm, 'const evcsReserveW = Math.max(0, Math.round(Number.isFinite(budgetW) ? usedW : totalTargetPowerW));', 'old ghost reserve formula removed');
+console.log('[charging-active-demand-reserve] OK');

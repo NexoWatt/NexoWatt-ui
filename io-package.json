@@ -4,8 +4,8 @@
     "version": "0.8.65",
     "news": {
       "0.8.65": {
-        "de": "Version 0.8.65: EVCS-Reservierung im zentralen EMS-Budget nur noch bei aktivem Ladebedarf. Auto-Modus bleibt feldtesttauglich: Zeit-Zielladen, PV-Erzeugung, Tarif-/Netzentgeltlogik, Notfall-Netzladen sowie harte Netz-/Phasen-/§14a-Limits bleiben getrennt aktiv.",
-        "en": "Version 0.8.65: EVCS reservation in the central EMS budget is now written only when there is active charging demand. Auto mode remains field-test ready: timed target charging, PV generation, tariff/grid-fee logic, emergency grid charging and hard grid/phase/§14a limits stay active independently."
+        "de": "Version 0.8.65: EVCS VIS Online/Offline-Darstellung korrigiert und zentrale EVCS-Reservierung auf aktiven Ladebedarf begrenzt. Inaktive Ladepunkte blockieren kein Budget; Diagnose für Active-Demand-Reserve ergänzt.",
+        "en": "Version 0.8.65: Fixes EVCS VIS online/offline tile state and limits central EVCS reservation to active charging demand. Idle charge points no longer block budget; active-demand reserve diagnostics added."
       },
       "0.8.64": {
         "de": "Version 0.8.64: Budget-Konsistenzmonitor und EVCS-Ist/Reservierung-Korrektur. PV-Budget bleibt physikalisch durch aktuelle PV-Erzeugung geklemmt; EVCS-Ist wird nicht mehr aus Reservierung oder Setpoint angezeigt.",
