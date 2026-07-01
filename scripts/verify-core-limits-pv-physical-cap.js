@@ -5,7 +5,7 @@ function read(p){ return fs.readFileSync(p,'utf8'); }
 function must(file, needle){ const s=read(file); if(!s.includes(needle)){ console.error(`[pv-physical-cap] Missing in ${file}: ${needle}`); process.exit(1); } }
 function mustNot(file, needle){ const s=read(file); if(s.includes(needle)){ console.error(`[pv-physical-cap] Forbidden in ${file}: ${needle}`); process.exit(1); } }
 const ts='src-ts/runtime-executables/ems/modules/core-limits.ts';
-must('package.json','"version": "0.8.65"');
+must('package.json','"version": "0.8.66"');
 must(ts,'const pvBudgetFlowRawW = Math.max(0, gridExportW + flexUsedW + storageChargeW - storageDischargeW);');
 must(ts,'const pvPhysicalCapW = Math.max(0, pvPowerW);');
 must(ts,'const pvBudgetRawW = Math.min(pvBudgetFlowRawW, pvPhysicalCapW);');

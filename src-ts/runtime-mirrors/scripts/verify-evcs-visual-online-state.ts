@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: aa32d8a920263dd5a21e2299cea754273e37a7ad0e6709927cfdb80db2533ad7
+ * Original-Hash: 83e9baf20bab6c28f09a2d76fada4ce9accdb1354c81e8a6874a410428316874
  */
 
 /**
@@ -68,12 +68,14 @@ function must(file, needle, label = needle){ const s = read(file); if (!s.includ
  */
 function mustNot(file, needle, label = needle){ const s = read(file); if (s.includes(needle)) { console.error(`[evcs-visual-online-state] forbidden ${label}: ${needle}`); process.exit(1); } }
 const evcs = 'src-ts/runtime-executables/www/evcs.ts';
-must('package.json', '"version": "0.8.65"', 'version 0.8.65');
+must('package.json', '"version": "0.8.66"', 'version 0.8.66');
 must(evcs, 'function _evcsBoolOrNull(value)', 'online bool normalizer');
 must(evcs, 'function _tileStateClass({ powerW, reason, active, regEnabled, online, status })', 'tile state signature includes online/status');
 must(evcs, "onlineState === false || r === 'OFFLINE' || offlineByStatus", 'offline class derived from online/reason/status');
 must(evcs, "active=false", 'comment documents active=false idle semantics');
-must(evcs, 'const online = hasEms ? d(`${cm}.online`) : d(`evcs.${i}.online`);', 'render reads online state');
+must(evcs, 'const localOnline = d(`evcs.${i}.online`);', 'render reads local online mirror');
+must(evcs, 'const emsOnline = hasEms ? d(`${cm}.online`) : null;', 'render reads EMS online state');
+must(evcs, 'const online = (_evcsBoolOrNull(localOnline) !== null) ? localOnline : emsOnline;', 'local onlineId mirror wins over EMS fallback');
 must(evcs, '_shortStatusText(status, emsReason, online)', 'status text gets online state');
 must(evcs, '_tileStateClass({ powerW, reason: emsReason, active, regEnabled, online, status })', 'tile state gets online/status');
 mustNot(evcs, 'active === false || regEnabled === false', 'online idle must not be disabled by active=false');

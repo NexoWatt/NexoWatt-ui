@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 97a5cca43cf272c1f48b500465940bc241fe4eea798f3e9e3100cab8b5b920d6
+ * Original-Hash: b227d67a5d99c168c26c528532c87cafc5aabc2d0c9b28ca7813637755be4468
  */
 
 /**
@@ -67,7 +67,7 @@ function must(file, needle){ const s=read(file); if(!s.includes(needle)){ consol
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function mustNot(file, needle){ const s=read(file); if(s.includes(needle)){ console.error(`[loadmanagement-actual-vs-reserve] Forbidden in ${file}: ${needle}`); process.exit(1); } }
-must('package.json', '"version": "0.8.65"');
+must('package.json', '"version": "0.8.66"');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'totalFreshActualPowerW');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridEvcsActualForCapW');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridEvcsReserveIgnoredForCapW');

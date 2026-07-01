@@ -4,7 +4,7 @@ const fs = require('fs');
 function read(p){ return fs.readFileSync(p,'utf8'); }
 function must(file, needle){ const s=read(file); if(!s.includes(needle)){ console.error(`[charging-grid-cap-safe] Missing in ${file}: ${needle}`); process.exit(1); } }
 function mustNot(file, needle){ const s=read(file); if(s.includes(needle)){ console.error(`[charging-grid-cap-safe] Forbidden in ${file}: ${needle}`); process.exit(1); } }
-must('package.json', '"version": "0.8.65"');
+must('package.json', '"version": "0.8.66"');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridBaseLoadRawW = gridW -');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'derived.core.building.loadRestW');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridBaseLoadW = Number.isFinite(Number(derivedBaseLoadW))');

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c893876abbc79e09be9d78ece6f9ff87c436059f645dc13e32e1448967addab9
+ * Original-Hash: 856bddec98d6682ab543502562e8a9e53e496f21b65f134cbe67f632be3422ec
  */
 
 /**
@@ -68,7 +68,7 @@ function must(file, needle){ const s=read(file); if(!s.includes(needle)){ consol
  */
 function mustNot(file, needle){ const s=read(file); if(s.includes(needle)){ console.error(`[pv-physical-cap] Forbidden in ${file}: ${needle}`); process.exit(1); } }
 const ts='src-ts/runtime-executables/ems/modules/core-limits.ts';
-must('package.json','"version": "0.8.65"');
+must('package.json','"version": "0.8.66"');
 must(ts,'const pvBudgetFlowRawW = Math.max(0, gridExportW + flexUsedW + storageChargeW - storageDischargeW);');
 must(ts,'const pvPhysicalCapW = Math.max(0, pvPowerW);');
 must(ts,'const pvBudgetRawW = Math.min(pvBudgetFlowRawW, pvPhysicalCapW);');

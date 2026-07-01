@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 1c644209f482ed88e968a631b87327d0b7afdae0e926754e991597a025b40cce
+ * Original-Hash: 15a193c06eb2453fe548968d26fc8271e9171d9a076f7946f74e7bb966755fe5
  */
 
 /**
@@ -56,7 +56,7 @@ function read(p){return fs.readFileSync(p,'utf8');}
  */
 function need(p,s,label){const t=read(p); if(!t.includes(s)){console.error(`[loadmanagement-summary-actual] missing ${label}: ${s}`); process.exit(1);}}
 const cm = read('src-ts/runtime-executables/ems/modules/charging-management.ts');
-need('package.json','"version": "0.8.65"','version 0.8.65');
+need('package.json','"version": "0.8.66"','version 0.8.66');
 need('src-ts/runtime-executables/ems/modules/charging-management.ts','applyActualW','TS-Control darf Summary-Ist nicht aus Reserve überschreiben');
 need('src-ts/runtime-executables/ems/modules/charging-management.ts','totalPowerW: totalFreshActualPowerW','TS-Control bekommt Actual statt Reserve');
 need('src-ts/runtime-executables/ems/modules/charging-management.ts','summary.totalReservedPowerW','Reservierung bleibt getrennt');

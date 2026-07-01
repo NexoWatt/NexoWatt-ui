@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2ab8fe0e06b8bcb4eb0b3f3183a359cc6b0301422151b5e35cc7e1fbfd5c7d26
+ * Original-Hash: 632606a5fabceb6c49da5c35026602e95b6f47132fa9fec080a618f44f0f058b
  */
 
 /**
@@ -67,7 +67,7 @@ function must(file, needle){ const s=read(file); if(!s.includes(needle)){ consol
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function mustNot(file, needle){ const s=read(file); if(s.includes(needle)){ console.error(`Forbidden in ${file}: ${needle}`); process.exit(1); } }
-must('package.json','"version": "0.8.65"');
+must('package.json','"version": "0.8.66"');
 must('src-ts/runtime-executables/ems/modules/core-limits.ts','pvBudgetPhysicalCapW');
 must('src-ts/runtime-executables/ems/modules/core-limits.ts','Math.min(pvBudgetFlowRawW, pvPhysicalCapW)');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts','budgetDebug.evcsActualW = (typeof totalFreshActualPowerW');

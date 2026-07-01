@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0538d1dec0b053c5f7588ca062c63530c8e65fd65c5083056b21c905c95621ae
+ * Original-Hash: b87e3992edecce7d05b1712063c7effa3ac36828d3cb43b6481297561e4535d3
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/evcs.ts
- * Quell-Hash: sha256:aa91ae23825d45c4368cedfa336d318cd47dbd85e2f79bbf2a41cc87068bdcf0
+ * Quell-Hash: sha256:635f3b6ce2d60032e014226e95e5935e35b79bcdd98b68190d6c4d56a85c7ccd
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1220,7 +1220,10 @@ function render() {
     const soc = d(`evcs.${i}.vehicleSoc`);
     const status = d(`evcs.${i}.status`);
     const active = d(`evcs.${i}.active`);
-    const online = hasEms ? d(`${cm}.online`) : d(`evcs.${i}.online`);
+    const localOnline = d(`evcs.${i}.online`);
+    const emsOnline = hasEms ? d(`${cm}.online`) : null;
+    // Explicit EVCS onlineId mirror wins over EMS/status fallback.
+    const online = (_evcsBoolOrNull(localOnline) !== null) ? localOnline : emsOnline;
 
     const regEnabled = hasEms ? d(`${cm}.userEnabled`) : null;
     const emsReason = hasEms ? d(`${cm}.reason`) : null;

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 3711a7145c664b34186d0168d5335121625ced480f2f782c1205b8c9206891e5
+ * Original-Hash: f43e7bb853196cfea0f1f786011a55e8b3ada4d58d4b5e57cca5d880d1b876e6
  */
 
 /**
@@ -68,7 +68,7 @@ function must(file, needle, label = needle){ const s = read(file); if (!s.includ
  */
 function mustNot(file, needle, label = needle){ const s = read(file); if (s.includes(needle)) { console.error(`[charging-active-demand-reserve] forbidden ${label}: ${needle}`); process.exit(1); } }
 const cm = 'src-ts/runtime-executables/ems/modules/charging-management.ts';
-must('package.json', '"version": "0.8.65"', 'version 0.8.65');
+must('package.json', '"version": "0.8.66"', 'version 0.8.66');
 must(cm, 'let evcsActiveDemandReserveW = 0;', 'active-demand reserve accumulator');
 must(cm, 'const activeChargingDemand = !!(', 'active-demand predicate');
 must(cm, "w.vehiclePlugged !== false", 'only connected/unknown-plug demand reserves');

@@ -1,3 +1,10 @@
+## 0.8.66
+
+- Release: Versionsnummer auf 0.8.66 erhöht, damit npm nicht versucht, die bereits veröffentlichte 0.8.65 erneut zu überschreiben.
+- EVCS Online-Erkennung: `onlineId` wird jetzt als eigener EVCS-State gespiegelt und im Charging-Management separat von `statusId` verarbeitet. Ein echter Online-/Offline-Datenpunkt ist damit authoritative; Status-Texte wie `Available` bleiben reine Anzeige-/Fallback-Information.
+- EVCS VIS: Kachelzustand bevorzugt den echten Online-Zustand (`evcs.<n>.online`/`chargingManagement.wallboxes.lp<n>.online`) und wertet `active=false` weiterhin nur als Idle, nicht als Offline.
+- Feldtest-Sicherheit: Active-Demand-Reservierung aus 0.8.65 bleibt unverändert; die zusätzliche Prüfung verhindert falsche Optik und falsche Online-Gates bei gemischten Status-/Online-Datenpunkten.
+
 ## 0.8.65
 
 - EVCS/VIS: Ladepunkt-Kacheln unterscheiden Online/Idle und Offline jetzt sauber; online verfügbare Wallboxen werden nicht mehr ausgegraut, offline Ladepunkte werden gedimmt dargestellt.

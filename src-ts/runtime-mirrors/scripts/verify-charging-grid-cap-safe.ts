@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: d95db45e0327e65021d36c6329cda1ba6bc348d9896adb8d5090cb2c53e59f12
+ * Original-Hash: 613e771c1aea379225f7366ffaefea388ace8fb0d847fc300a6feef118f0af99
  */
 
 /**
@@ -67,7 +67,7 @@ function must(file, needle){ const s=read(file); if(!s.includes(needle)){ consol
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function mustNot(file, needle){ const s=read(file); if(s.includes(needle)){ console.error(`[charging-grid-cap-safe] Forbidden in ${file}: ${needle}`); process.exit(1); } }
-must('package.json', '"version": "0.8.65"');
+must('package.json', '"version": "0.8.66"');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridBaseLoadRawW = gridW -');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'derived.core.building.loadRestW');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridBaseLoadW = Number.isFinite(Number(derivedBaseLoadW))');

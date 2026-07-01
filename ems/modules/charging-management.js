@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:5bcfe1fce1bc431bd439fac85e0f93de1372163ab1fada5e2de9c576254bf742
+ * Quell-Hash: sha256:b4013f7348475445293518f04deaf8cab3e2526765e7297460f44c9f22b55cd2
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -513,6 +513,23 @@ function availabilityReason(cfgEnabled, userEnabled, online) {
     if (!userEnabled) return ReasonCodes.CONTROL_DISABLED;
     if (!online) return ReasonCodes.OFFLINE;
     return ReasonCodes.SKIPPED;
+}
+
+/**
+ * Code-Teil: normalizeEvcsOnlineFlag
+ * Zweck: Normalisiert echte Wallbox-Erreichbarkeit aus bool/number/string Datenpunkten.
+ * Zusammenhang: EVCS Online-Gate und VIS-Zustand; explizite onlineId-Werte sind authoritative.
+ */
+function normalizeEvcsOnlineFlag(value, fallback = null) {
+    if (value === true || value === false) return value;
+    if (typeof value === 'number' && Number.isFinite(value)) return value !== 0;
+    if (typeof value === 'string') {
+        const s = value.trim().toLowerCase();
+        if (!s) return fallback;
+        if (['true', '1', 'on', 'yes', 'ja', 'online', 'connected', 'available', 'reachable', 'ready'].includes(s)) return true;
+        if (['false', '0', 'off', 'no', 'nein', 'offline', 'disconnected', 'unavailable', 'unreachable', 'faulted', 'error'].includes(s)) return false;
+    }
+    return fallback;
 }
 /**
  * Code-Teil: normalizeChargerType
@@ -3436,6 +3453,7 @@ class ChargingManagementModule extends BaseModule {
             const setCurrentAId = String(wb.setCurrentAId || '').trim();
             const setPowerWId = String(wb.setPowerWId || '').trim();
             const enableId = String(wb.enableId || '').trim();
+            const onlineId = String(wb.onlineId || '').trim();
             const statusId = String(wb.statusId || '').trim();
 
             // phase measurement IDs (optional)
@@ -3452,6 +3470,7 @@ class ChargingManagementModule extends BaseModule {
                 if (setCurrentAId) await this.dp.upsert({ key: `cm.wb.${safe}.setA`, objectId: setCurrentAId, dataType: 'number', direction: 'out', unit: 'A', deadband: 0.1, maxWriteIntervalMs: 45000 });
                 if (setPowerWId) await this.dp.upsert({ key: `cm.wb.${safe}.setW`, objectId: setPowerWId, dataType: 'number', direction: 'out', unit: 'W', deadband: 25, maxWriteIntervalMs: 45000 });
                 if (enableId) await this.dp.upsert({ key: `cm.wb.${safe}.en`, objectId: enableId, dataType: 'boolean', direction: 'out' });
+                if (onlineId) await this.dp.upsert({ key: `cm.wb.${safe}.onlineRaw`, objectId: onlineId, dataType: 'mixed', direction: 'in' });
                 if (statusId) await this.dp.upsert({ key: `cm.wb.${safe}.st`, objectId: statusId, dataType: 'mixed', direction: 'in' });
                 if (phaseSwitchId) await this.dp.upsert({ key: `cm.wb.${safe}.phaseSet`, objectId: phaseSwitchId, dataType: 'mixed', direction: 'out' });
                 if (phaseFeedbackId) await this.dp.upsert({ key: `cm.wb.${safe}.phaseFb`, objectId: phaseFeedbackId, dataType: 'mixed', direction: 'in' });
@@ -3465,19 +3484,16 @@ class ChargingManagementModule extends BaseModule {
             const pW = (actualPowerWId && this.dp) ? this.dp.getNumber(`cm.wb.${safe}.pW`, null) : null;
             const iA = (actualCurrentAId && this.dp) ? this.dp.getNumber(`cm.wb.${safe}.iA`, null) : null;
 
-            // Online detection: status if present, otherwise assume online when enabled
+            // Online detection: an explicit onlineId is authoritative; statusId is only fallback.
+            // This keeps display status texts such as "Available" separate from reachability.
+            const onlineRaw = (onlineId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.onlineRaw`) : null;
             const statusRaw = (statusId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.st`) : null;
             let online = enabled;
-            if (statusId) {
-                if (statusRaw === null || statusRaw === undefined) online = false;
-                else if (typeof statusRaw === 'boolean') online = statusRaw;
-                else if (typeof statusRaw === 'number') online = statusRaw !== 0;
-                else if (typeof statusRaw === 'string') {
-                    const s = statusRaw.trim().toLowerCase();
-                    online = !(s === '' || s === 'offline' || s === 'false' || s === '0' || s === 'disconnected');
-                } else {
-                    online = true;
-                }
+            if (onlineId) {
+                online = normalizeEvcsOnlineFlag(onlineRaw, false);
+            } else if (statusId) {
+                online = normalizeEvcsOnlineFlag(statusRaw, false);
+                if (online === null) online = true;
             }
 
             const normalizePhaseFeedbackRuntime = (value) => {

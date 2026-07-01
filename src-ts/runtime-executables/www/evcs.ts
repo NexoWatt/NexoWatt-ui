@@ -1103,7 +1103,10 @@ function render() {
     const soc = d(`evcs.${i}.vehicleSoc`);
     const status = d(`evcs.${i}.status`);
     const active = d(`evcs.${i}.active`);
-    const online = hasEms ? d(`${cm}.online`) : d(`evcs.${i}.online`);
+    const localOnline = d(`evcs.${i}.online`);
+    const emsOnline = hasEms ? d(`${cm}.online`) : null;
+    // Explicit EVCS onlineId mirror wins over EMS/status fallback.
+    const online = (_evcsBoolOrNull(localOnline) !== null) ? localOnline : emsOnline;
 
     const regEnabled = hasEms ? d(`${cm}.userEnabled`) : null;
     const emsReason = hasEms ? d(`${cm}.reason`) : null;

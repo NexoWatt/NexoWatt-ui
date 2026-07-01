@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.65",
+    "version": "0.8.66",
     "news": {
+      "0.8.66": {
+        "de": "Version 0.8.66: NPM-Release-Version erhöht und EVCS-Online-Erkennung vertieft. Explizite Online-Datenpunkte werden separat gespiegelt und im Lademanagement als authoritative Quelle vor Status-Texten genutzt; VIS bevorzugt den echten Online-Zustand vor active/idle.",
+        "en": "Version 0.8.66: Bumps npm release version and hardens EVCS online detection. Explicit online datapoints are mirrored separately and used as authoritative source before status text; VIS prefers the real online state over active/idle."
+      },
       "0.8.65": {
         "de": "Version 0.8.65: EVCS VIS Online/Offline-Darstellung korrigiert und zentrale EVCS-Reservierung auf aktiven Ladebedarf begrenzt. Inaktive Ladepunkte blockieren kein Budget; Diagnose für Active-Demand-Reserve ergänzt.",
         "en": "Version 0.8.65: Fixes EVCS VIS online/offline tile state and limits central EVCS reservation to active charging demand. Idle charge points no longer block budget; active-demand reserve diagnostics added."
@@ -26,10 +30,6 @@
       "0.8.60": {
         "de": "Version 0.8.60: Core-Limits TS-Shadow Log-Fix. grid.effectiveW-Abweichungen bleiben im Diagnose-JSON, werden aber als diagnosticOnly klassifiziert und erzeugen keinen minütlichen Warn-Log-Spam mehr. Keine Änderung an produktiver Regelung oder Hardwaresteuerung.",
         "en": "Version 0.8.60: Core-Limits TS-shadow log fix. grid.effectiveW deviations remain in diagnostics but are classified as diagnosticOnly and no longer create minute-by-minute warning log spam. No change to productive control or hardware writes."
-      },
-      "0.8.59": {
-        "de": "Version 0.8.59: Release-Schutz / Regression Safety Gate ergänzt. Der App-Center Save-Payload schützt Speicherfarm, Ladepunkte, Mesh/Microgrid-Knoten und Zielgruppen vor versehentlichem Leerüberschreiben durch stale/fehlerhaft gerenderte UI.",
-        "en": "Version 0.8.59: Adds release protection / regression safety gate. App Center save payload protects storage farm, charging stations, mesh/microgrid nodes and target groups from accidental empty overwrites caused by stale or broken UI rendering."
       }
     },
     "title": "NexoWatt UI",

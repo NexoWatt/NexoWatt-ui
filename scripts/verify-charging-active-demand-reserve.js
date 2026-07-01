@@ -5,7 +5,7 @@ function read(p){ return fs.readFileSync(p, 'utf8'); }
 function must(file, needle, label = needle){ const s = read(file); if (!s.includes(needle)) { console.error(`[charging-active-demand-reserve] missing ${label}: ${needle}`); process.exit(1); } }
 function mustNot(file, needle, label = needle){ const s = read(file); if (s.includes(needle)) { console.error(`[charging-active-demand-reserve] forbidden ${label}: ${needle}`); process.exit(1); } }
 const cm = 'src-ts/runtime-executables/ems/modules/charging-management.ts';
-must('package.json', '"version": "0.8.65"', 'version 0.8.65');
+must('package.json', '"version": "0.8.66"', 'version 0.8.66');
 must(cm, 'let evcsActiveDemandReserveW = 0;', 'active-demand reserve accumulator');
 must(cm, 'const activeChargingDemand = !!(', 'active-demand predicate');
 must(cm, "w.vehiclePlugged !== false", 'only connected/unknown-plug demand reserves');

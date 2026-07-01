@@ -21,7 +21,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: 3e271be7e850f31c6c3fac9163c4b12fad0c88ff7c01df012bc3f6c483b04735
+ * Original-Hash: e03b86f691bbf80298571e4e523a29ff6ebabd68a7ef7b1cddce918b06a905a7
  */
 
 /**
@@ -6426,6 +6426,7 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       if (wb.powerId) this.evcsIdToKey[wb.powerId] = `evcs.${wb.index}.powerW`;
       if (wb.energyTotalId) this.evcsIdToKey[wb.energyTotalId] = `evcs.${wb.index}.energyTotalKwh`;
       if (wb.statusId) this.evcsIdToKey[wb.statusId] = `evcs.${wb.index}.status`;
+      if (wb.onlineId) this.evcsIdToKey[wb.onlineId] = `evcs.${wb.index}.online`;
       if (wb.activeId) this.evcsIdToKey[wb.activeId] = `evcs.${wb.index}.active`;
       if (wb.lockWriteId) this.evcsIdToKey[wb.lockWriteId] = `evcs.${wb.index}.lock`;
       if (wb.rfidReadId) this.evcsIdToKey[wb.rfidReadId] = `evcs.${wb.index}.rfidLast`;
@@ -6481,6 +6482,7 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
                 _dayBaseKwh:  { type: 'number', role: 'value', def: 0, read: true, write: false, unit: 'kWh' },
         _dayBaseDate: { type: 'string', role: 'text', def: '', read: true, write: false },
         status:        { type: 'string', role: 'state', def: '', read: true, write: false },
+        online:        { type: 'boolean', role: 'indicator.reachable', def: false, read: true, write: false },
         active:        { type: 'boolean', role: 'switch', def: false, read: true, write: false },
         // Modus ist bewusst writeable: die VIS kann je Ladepunkt den Betriebsmodus setzen (internes EMS).
         // 0=Auto, 1=Boost, 2=Min+PV, 3=PV
@@ -6982,7 +6984,7 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
     if (!Array.isArray(this.evcsList)) return;
 
     for (const wb of this.evcsList) {
-      const ids = [wb.powerId, wb.energyTotalId, wb.statusId, wb.activeId, wb.modeId, wb.lockWriteId, wb.rfidReadId, wb.vehicleSocId].filter(Boolean);
+      const ids = [wb.powerId, wb.energyTotalId, wb.statusId, wb.onlineId, wb.activeId, wb.modeId, wb.lockWriteId, wb.rfidReadId, wb.vehicleSocId].filter(Boolean);
       for (const id of ids) {
         try {
           await this.subscribeForeignStatesAsync(id);
@@ -19268,6 +19270,7 @@ return res.json(out);
         if (!wb || typeof wb !== 'object') continue;
         add(wb.powerId, this.evcsIdToKey && wb.powerId ? this.evcsIdToKey[wb.powerId] : '');
         add(wb.statusId, this.evcsIdToKey && wb.statusId ? this.evcsIdToKey[wb.statusId] : '');
+        add(wb.onlineId, this.evcsIdToKey && wb.onlineId ? this.evcsIdToKey[wb.onlineId] : '');
         add(wb.activeId, this.evcsIdToKey && wb.activeId ? this.evcsIdToKey[wb.activeId] : '');
       }
     } catch (_e) {}
