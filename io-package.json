@@ -30,10 +30,6 @@
       "0.8.42": {
         "de": "Version 0.8.42: Mesh/Microgrid Zwei-Instanzen-Feldtest ergänzt. Betreiber können Peer-Handshake, Status und neutralen Probe-Command über das separate Mesh-Tailscale prüfen. Keine direkten Hardwarewrites.",
         "en": "Version 0.8.42: Adds Mesh/Microgrid two-instance field test. Operators can verify peer handshake, status and neutral probe command via the separate mesh Tailscale. No direct hardware writes."
-      },
-      "0.8.40": {
-        "de": "Version 0.8.40: Mesh/Microgrid Feldtest-Steuerung ergänzt. Geplante Aktionen können nach Installateurfreigabe als neutrale JSON-Command-Intents ausgegeben werden; getrenntes Tailscale-Mesh-Profil und Peer-URLs vorbereitet. Keine direkten OCPP-/Modbus-/Hersteller-Hardwarewrites.",
-        "en": "Version 0.8.40: Adds Mesh/Microgrid field-test control. Planned actions can be emitted as neutral JSON command intents after installer approval; separate Tailscale mesh profile and peer URLs are prepared. No direct OCPP/Modbus/vendor hardware writes."
       }
     },
     "title": "NexoWatt UI",
