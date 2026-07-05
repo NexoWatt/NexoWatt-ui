@@ -9518,6 +9518,13 @@ async onReady() {
       const currentLicenseKey = keyInfo.key;
       const access = (authEnabled && protectWrites) ? await resolveAccess(req) : { isAdmin: true, role: 'admin', capabilities: ['*'] };
       const canSeeFullLicenseKey = !!(access && hasCapability(access, 'license.manage'));
+      if (authEnabled && protectWrites && !canSeeFullLicenseKey) {
+        return res.status(access && access.role !== 'none' ? 403 : 401).json({
+          ok: false,
+          error: access && access.role !== 'none' ? 'forbidden' : 'unauthorized',
+          message: 'Lizenzverwaltung ist nur für EOS/Admin-Benutzer freigegeben.',
+        });
+      }
       const maskedLicenseKey = currentLicenseKey
         ? `${currentLicenseKey.slice(0, 8)}…${currentLicenseKey.slice(-6)}`
         : '';
@@ -10009,6 +10016,43 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
     const requireCustomerSmartHome = requireCapability('smarthome.configureCustomer');
     const requireCustomerNexoLogic = requireCapability('nexologic.configureCustomer');
     const requireAdmin = requireCapability('license.manage');
+
+    /**
+     * Minimale Sperrseite für Rollen-geschützte Runtime-Seiten.
+     * Wichtig: Diese Seite enthält keine App-Center-/Lizenz-/Simulation-Werte.
+     * Sie lädt nur auth.js, damit sich ein Admin/Installer am Adapter anmelden
+     * kann. Nach erfolgreicher Anmeldung wird die ursprüngliche URL neu geladen.
+     */
+    const renderRuntimeAccessPage = (title, capability, requiredRole) => `<!doctype html>
+<html lang="de"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>NexoWatt – Zugriff geschützt</title><link href="/static/styles.css" rel="stylesheet"/></head>
+<body class="nw-cockpit-page nw-cockpit-skin" data-nw-required-capability="${String(capability || '')}" data-nw-page-name="${String(title || 'geschützte Seite')}" data-nw-required-role="${String(requiredRole || 'passende Rolle')}">
+<main><section class="nw-config-card" style="max-width:760px;margin:48px auto;padding:22px">
+<div class="nw-config-card__title">${String(title || 'Zugriff geschützt')}</div>
+<p class="nw-config-card__subtitle">Diese Seite ist geschützt. Bitte mit passender EOS-Rolle anmelden. Ohne Berechtigung werden keine Hintergrundwerte geladen oder angezeigt.</p>
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px"><button class="btn" id="nwAccessLoginBtn" type="button">Anmelden</button><button class="btn secondary" id="nwAccessAdminBtn" type="button">Zurück zum EOS Admin</button></div>
+</section></main><script src="/static/auth.js"></script><script>
+window.addEventListener('nw-auth-login', function(){ try { window.location.reload(); } catch(e) {} });
+document.addEventListener('DOMContentLoaded', function(){
+  try { document.getElementById('nwAccessLoginBtn').addEventListener('click', function(){ window.NW_AUTH && window.NW_AUTH.showLogin('Bitte als ${String(requiredRole || 'berechtigter Benutzer')} anmelden.', { mandatory: true }); }); } catch(e) {}
+  try { document.getElementById('nwAccessAdminBtn').addEventListener('click', function(){ var h=window.location.hostname||'localhost'; window.location.href=(window.location.protocol||'http:')+'//'+h+':8081/#tab-nexowatt-ui-0'; }); } catch(e) {}
+});
+</script></body></html>`;
+
+    /** Rollenprüfung direkt vor Auslieferung sensibler HTML-Seiten. */
+    const requirePageAccessOrRenderLock = async (req, res, cap, title, requiredRole) => {
+      if (!authEnabled || !protectWrites) return { ok: true, access: { role: 'admin', capabilities: ['*'] } };
+      const access = await resolveAccess(req);
+      if (!access || access.role === 'none') {
+        res.status(401).send(renderRuntimeAccessPage(title, cap, requiredRole));
+        return { ok: false, access };
+      }
+      if (!hasCapability(access, cap)) {
+        res.status(403).send(renderRuntimeAccessPage(title, cap, requiredRole));
+        return { ok: false, access };
+      }
+      return { ok: true, access };
+    };
 
     // Auth status (used by UI)
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/auth/status', (req, res) => {
@@ -14304,13 +14348,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/ems-apps.html', '/ems-apps'], (req, res) => {
     app.get(['/ems-apps.html', '/ems-apps'], async (req, res) => {
       try {
-        // App-Center ist nur für EOS Admin und Installer. Ohne Session wird die Seite
-        // trotzdem ausgeliefert, damit auth.js den Login-Dialog anzeigen kann; nach
-        // Kunden-Login blockiert die API serverseitig.
-        const access = await resolveAccess(req);
-        if (access && access.role !== 'none' && !hasCapability(access, 'appcenter.open')) {
-          return res.status(403).send('Zugriff verweigert: App-Center ist nur für Admin/Installer freigegeben.');
-        }
+        // App-Center ist sensibel: Es enthält technische Zuordnung, Netz-/WR-Limits,
+        // Ladepunkt- und Mesh-Konfiguration. Ohne Admin-/Installer-Session darf die
+        // HTML-Seite selbst nicht ausgeliefert werden, damit auch nach „Abbrechen“ im
+        // Login keine Hintergrundwerte oder Formularfelder sichtbar bleiben.
+        const gate = await requirePageAccessOrRenderLock(req, res, 'appcenter.open', 'App-Center', 'Admin oder Installer');
+        if (!gate.ok) return;
         const file = require('path').join(__dirname, 'www', 'ems-apps.html');
         res.sendFile(file);
       } catch (e) {
@@ -14323,10 +14366,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/simulation.html', '/simulation'], (req, res) => {
     app.get(['/simulation.html', '/simulation'], async (req, res) => {
       try {
-        const access = await resolveAccess(req);
-        if (access && access.role !== 'none' && !hasCapability(access, 'simulation.open')) {
-          return res.status(403).send('Zugriff verweigert: Simulation ist nur für Admin/Installer freigegeben.');
-        }
+        const gate = await requirePageAccessOrRenderLock(req, res, 'simulation.open', 'Simulation', 'Admin oder Installer');
+        if (!gate.ok) return;
         const file = require('path').join(__dirname, 'www', 'simulation.html');
         res.sendFile(file);
       } catch (e) {

@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.67",
+    "version": "0.8.68",
     "news": {
+      "0.8.68": {
+        "de": "Version 0.8.68: Härtet die Rollenfreigabe für App-Center und Lizenzverwaltung. Geschützte Seiten laden keine Hintergrundwerte mehr ohne Admin-/Installer-Session; Abbrechen im Login legt keine Konfiguration frei. Lizenz-Info ist Admin-only.",
+        "en": "Version 0.8.68: Hardens role-gated access for App Center and license management. Protected pages no longer load background values without an admin/installer session; cancelling login cannot reveal configuration. License info is admin-only."
+      },
       "0.8.67": {
         "de": "Version 0.8.67: EOS Access-Control auf die bestehenden Gruppen system.group.administrator, system.group.installer und system.group.user ausgerichtet. Admin hat Vollzugriff, Installer darf Setup ohne Lizenzverwaltung, Benutzer erhält SmartHome-/NexoLogik-/Kundeneinstellungen.",
         "en": "Version 0.8.67: Aligns EOS access control with the existing groups system.group.administrator, system.group.installer and system.group.user. Admin has full access, installer can configure without license management, customer gets SmartHome/NexoLogic/customer settings."
@@ -26,10 +30,6 @@
       "0.8.62": {
         "de": "Version 0.8.62: Fix für Lastmanagement Budget/EVCS-Istwerte. Gate A nutzt nur frisch gemessene EVCS-Leistung für Netzbudget; stale Reservierungen erzeugen kein fiktives EVCS-Cap und EVCS-Ist/Reservierung werden getrennt angezeigt.",
         "en": "Version 0.8.62: Fixes load management budget/EVCS actual values. Gate A uses only fresh measured EVCS power for grid budgeting; stale reservations no longer create fictitious EVCS cap and EVCS actual/reservation are displayed separately."
-      },
-      "0.8.61": {
-        "de": "Version 0.8.61: Behebt EVCS-Netzbudget-Anzeige und Berechnung. Negative Grundlast durch Speicher/PV-Entlastung wird nicht mehr als wirksame Grundlast genutzt; EVCS Cap (Netz) bleibt hart auf das effektive Netzlimit geklemmt. Lokale Entlastung wird separat diagnostiziert.",
-        "en": "Version 0.8.61: Fixes EVCS grid budget display and calculation. Negative base load caused by storage/PV support is no longer used as effective base load; EVCS grid cap is hard-clamped to the effective grid limit. Local support is shown separately."
       }
     },
     "title": "NexoWatt UI",

@@ -14665,19 +14665,52 @@ if (els.ocppAutoDetect) {
   if (els.dpRootBtn) els.dpRootBtn.addEventListener('click', () => { treePrefix = ''; refreshTree().catch(() => {}); });
   if (els.dpUpBtn) els.dpUpBtn.addEventListener('click', () => { upOne(); refreshTree().catch(() => {}); });
 
-  // Initial load
-  setupInstallerBackButton();
-  loadConfig().catch(e => setStatus('Laden fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
-  backupRefreshInfo().catch(() => {});
+  /**
+   * App-Center hart gegen unberechtigte Einsicht schützen.
+   * Hintergrund: Das App-Center enthält technische Zuordnung, Netzlimits und
+   * Modulkonfiguration. Es darf nicht ausreichen, nachträglich einzelne Buttons
+   * zu sperren. Ohne Admin-/Installer-Rolle wird kein Config-Load gestartet und
+   * der Seiteninhalt bleibt durch auth.ts ersetzt/gesperrt.
+   */
+  async function requireAppCenterAccessBeforeLoad() {
+    try {
+      if (window.NW_AUTH && typeof window.NW_AUTH.requireCapability === 'function') {
+        return await window.NW_AUTH.requireCapability('appcenter.open', {
+          pageName: 'App-Center',
+          requiredRole: 'Admin oder Installer',
+        });
+      }
+      const r = await fetch('/api/session/me?t=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' });
+      const j = r && r.ok ? await r.json() : null;
+      const caps = j && Array.isArray(j.capabilities) ? j.capabilities : [];
+      return !!(j && j.authed && (caps.includes('*') || caps.includes('appcenter.open')));
+    } catch (_e) {
+      return false;
+    }
+  }
 
-  // 0.8.7: Wenn die Lizenz in einem anderen Admin-Tab aktiviert wird, soll das bereits offene
-  // App-Center automatisch von "Keine Lizenz" auf EOS/Home umschalten und die Apps wieder anzeigen.
-  window.addEventListener('focus', () => { refreshLicenseForAppCenter('focus').catch(() => {}); });
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) refreshLicenseForAppCenter('visible').catch(() => {});
+  // Initial load: erst nach Rollenprüfung. Dadurch kann „Abbrechen“ im Login
+  // nicht mehr die App-Center-Werte im Hintergrund sichtbar machen.
+  setupInstallerBackButton();
+  requireAppCenterAccessBeforeLoad().then((allowed) => {
+    if (!allowed) {
+      try { setStatus('App-Center gesperrt: Anmeldung als Admin oder Installer erforderlich.', 'error'); } catch (_e) {}
+      return;
+    }
+    loadConfig().catch(e => setStatus('Laden fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
+    backupRefreshInfo().catch(() => {});
+
+    // 0.8.7: Wenn die Lizenz in einem anderen Admin-Tab aktiviert wird, soll das bereits offene
+    // App-Center automatisch von "Keine Lizenz" auf EOS/Home umschalten und die Apps wieder anzeigen.
+    window.addEventListener('focus', () => { refreshLicenseForAppCenter('focus').catch(() => {}); });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) refreshLicenseForAppCenter('visible').catch(() => {});
+    });
+    window.setInterval(() => {
+      if (_licenseEdition() === 'none') refreshLicenseForAppCenter('poll').catch(() => {});
+    }, 5000);
+  }).catch(() => {
+    try { setStatus('App-Center gesperrt: Anmeldung als Admin oder Installer erforderlich.', 'error'); } catch (_e) {}
   });
-  window.setInterval(() => {
-    if (_licenseEdition() === 'none') refreshLicenseForAppCenter('poll').catch(() => {});
-  }, 5000);
 
 })();

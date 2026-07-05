@@ -1,3 +1,9 @@
+## 0.8.68
+
+- Access-Control: App-Center und Simulation liefern ohne passende Admin-/Installer-Session nur noch eine Sperrseite; es werden keine Hintergrundwerte geladen oder angezeigt.
+- Auth: Pflicht-Login-Modus verhindert, dass Abbrechen den App-Center-Inhalt wieder freilegt.
+- Lizenz: /api/license/info gibt Lizenzdaten nur noch für Admin-Rolle aus; Lizenzverwaltung bleibt Admin-only.
+
 ## 0.8.66
 
 - Release: Versionsnummer auf 0.8.66 erhöht, damit npm nicht versucht, die bereits veröffentlichte 0.8.65 erneut zu überschreiben.

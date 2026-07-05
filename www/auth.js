@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/auth.ts
- * Quell-Hash: sha256:5791b3baee60cea8ac37814dc7a9fb7dcb800442a0c2fff5d3327db8f3d77312
+ * Quell-Hash: sha256:677244ea4f6b42f555828cd755f9d93731a67b9386597a14d541f95d53df2154
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -61,7 +61,11 @@
     protectWrites: false,
     authed: false,
     user: null,
+    role: 'none',
+    capabilities: [],
+    isAdmin: false,
     isInstaller: false,
+    isCustomer: false,
     _loaded: false,
   };
 
@@ -71,6 +75,30 @@
   let passEl = null;
   let btnEl = null;
   let cancelEl = null;
+  let mandatoryLock = false;
+  let mandatoryReason = '';
+
+  /**
+   * Prüft eine NexoWatt-Capability im Frontend.
+   * Wichtig: Das ist nur Komfort-/Sichtbarkeitsschutz. Die eigentliche Sperre
+   * muss weiterhin serverseitig in main.ts greifen, damit Werte nicht über API
+   * oder direkte URLs sichtbar bzw. schreibbar werden.
+   */
+  function hasCapability(capabilities, cap) {
+    const caps = Array.isArray(capabilities) ? capabilities : [];
+    return caps.includes('*') || caps.includes(String(cap || ''));
+  }
+
+  /** Rücksprung in den EOS/ioBroker Admin-Tab des NexoWatt-Adapters. */
+  function adminUrl() {
+    try {
+      const proto = window.location.protocol || 'http:';
+      const host = window.location.hostname || String(window.location.host || '').split(':')[0] || 'localhost';
+      return proto + '//' + host + ':8081/#tab-nexowatt-ui-0';
+    } catch (_e) {
+      return '/';
+    }
+  }
   /**
    * Code-Teil: ensureStyles
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -214,17 +242,23 @@
     });
 
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an cancelEl. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    cancelEl.addEventListener('click', () => hideOverlay());
+    cancelEl.addEventListener('click', () => {
+      if (mandatoryLock) {
+        setMsg(mandatoryReason || 'Anmeldung erforderlich. Ohne passende Rolle bleibt diese Seite gesperrt.');
+        return;
+      }
+      hideOverlay();
+    });
 
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an overlayEl. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     overlayEl.addEventListener('click', (e) => {
       // click outside dialog closes
-      if (e.target === overlayEl) hideOverlay();
+      if (e.target === overlayEl && !mandatoryLock) hideOverlay();
     });
 
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') hideOverlay();
+      if (e.key === 'Escape' && !mandatoryLock) hideOverlay();
     });
 
     return overlayEl;
@@ -244,9 +278,12 @@
    * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
-  function showOverlay(message) {
+  function showOverlay(message, options) {
     ensureOverlay();
+    mandatoryLock = !!(options && options.mandatory);
+    mandatoryReason = String((options && options.reason) || message || '');
     if (message) setMsg(message);
+    if (cancelEl) cancelEl.style.display = mandatoryLock ? 'none' : '';
     overlayEl.classList.add('show');
     try {
       // focus on password if user prefilled
@@ -262,9 +299,39 @@
    */
   function hideOverlay() {
     if (!overlayEl) return;
+    if (mandatoryLock) {
+      setMsg(mandatoryReason || 'Anmeldung erforderlich.');
+      return;
+    }
     overlayEl.classList.remove('show');
     setMsg('');
     try { if (passEl) passEl.value = ''; } catch (_e) {}
+  }
+
+  /**
+   * Ersetzt den Seiteninhalt durch einen Sperrbildschirm. Dadurch bleiben
+   * App-Center-, Simulation- oder Lizenzwerte unsichtbar, solange keine passende
+   * EOS-Rolle angemeldet ist. Abbrechen im Login-Dialog kann die Seite nicht
+   * wieder freilegen.
+   */
+  function renderPageLock(message) {
+    try {
+      const main = document.querySelector('main') || document.body;
+      main.innerHTML = '' +
+        '<section class="nw-config-card" style="max-width:760px;margin:48px auto;padding:22px">' +
+        '<div class="nw-config-card__title">Zugriff geschützt</div>' +
+        '<p class="nw-config-card__subtitle">' + String(message || 'Bitte mit passender EOS-Rolle anmelden.') + '</p>' +
+        '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">' +
+        '<button class="btn" id="nwAccessLoginBtn" type="button">Anmelden</button>' +
+        '<button class="btn secondary" id="nwAccessAdminBtn" type="button">Zurück zum EOS Admin</button>' +
+        '</div></section>';
+      const loginBtn = document.getElementById('nwAccessLoginBtn');
+      if (loginBtn) loginBtn.addEventListener('click', () => showOverlay('Bitte mit passender EOS-Rolle anmelden.', { mandatory: true, reason: message }));
+      const adminBtn = document.getElementById('nwAccessAdminBtn');
+      if (adminBtn) adminBtn.addEventListener('click', () => { window.location.href = adminUrl(); });
+    } catch (_e) {
+      // ignore
+    }
   }
   /**
    * Code-Teil: refreshStatus
@@ -281,7 +348,11 @@
       state.protectWrites = !!(j && j.protectWrites);
       state.authed = !!(j && j.authed);
       state.user = (j && j.user) ? String(j.user) : null;
+      state.role = (j && j.role) ? String(j.role) : 'none';
+      state.capabilities = (j && Array.isArray(j.capabilities)) ? j.capabilities.slice() : [];
+      state.isAdmin = !!(j && j.isAdmin);
       state.isInstaller = !!(j && j.isInstaller);
+      state.isCustomer = !!(j && j.isCustomer);
       state._loaded = true;
       updateHeader();
       return state;
@@ -291,7 +362,11 @@
       state.protectWrites = false;
       state.authed = false;
       state.user = null;
+      state.role = 'none';
+      state.capabilities = [];
+      state.isAdmin = false;
       state.isInstaller = false;
+      state.isCustomer = false;
       state._loaded = true;
       updateHeader();
       return state;
@@ -325,6 +400,7 @@
       }
       try { localStorage.setItem('nwAuthUser', u); } catch (_e) {}
       await refreshStatus();
+      try { window.dispatchEvent(new CustomEvent('nw-auth-login', { detail: Object.assign({}, state) })); } catch (_e) {}
       setMsg('');
       return true;
     } catch (_e) {
@@ -426,15 +502,48 @@
   };
 
   // Expose minimal API (optional)
+  /**
+   * Harte Frontend-Sperre für geschützte Seiten. Ohne passende Rolle wird der
+   * Seiteninhalt durch einen Sperrbildschirm ersetzt und der Login-Dialog im
+   * Pflichtmodus geöffnet. Dadurch kann „Abbrechen“ keine Hintergrundwerte mehr
+   * sichtbar machen.
+   */
+  async function requireCapability(capability, options) {
+    const cap = String(capability || '');
+    const pageName = String((options && options.pageName) || 'diese Seite');
+    const requiredRole = String((options && options.requiredRole) || 'passende EOS-Rolle');
+    const info = await refreshStatus();
+    const ok = !!(info && info.authed && hasCapability(info.capabilities, cap));
+    if (ok) return true;
+
+    const msg = info && info.authed
+      ? 'Keine Berechtigung für ' + pageName + '. Erforderlich: ' + requiredRole + '.'
+      : 'Bitte anmelden. Erforderlich für ' + pageName + ': ' + requiredRole + '.';
+    renderPageLock(msg);
+    showOverlay(msg, { mandatory: true, reason: msg });
+    return false;
+  }
+
   window.NW_AUTH = {
     getState: () => Object.assign({}, state),
     refreshStatus,
-    showLogin: (msg) => showOverlay(msg || 'Bitte anmelden.'),
+    requireCapability,
+    hasCapability: (cap) => hasCapability(state.capabilities, cap),
+    showLogin: (msg, options) => showOverlay(msg || 'Bitte anmelden.', options || {}),
     logout,
   };
 
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'DOMContentLoaded' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('DOMContentLoaded', () => {
-    refreshStatus();
+    refreshStatus().then(() => {
+      try {
+        const cap = document.body && document.body.getAttribute('data-nw-required-capability');
+        if (cap) {
+          const pageName = document.body.getAttribute('data-nw-page-name') || 'geschützte Seite';
+          const requiredRole = document.body.getAttribute('data-nw-required-role') || 'passende Rolle';
+          requireCapability(cap, { pageName, requiredRole }).catch(() => {});
+        }
+      } catch (_e) {}
+    });
   });
 })();
