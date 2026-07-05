@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/core-limits.ts
- * Quell-Hash: sha256:1b108d224819a3674836efdb1b07b2c2370c29a8487dc83f21708f0321728ddd
+ * Quell-Hash: sha256:499990e7d0bccf8ce3a2f7ae9a40273291e7edfb4a3b27adda3fa960a1b12428
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -626,6 +626,9 @@ class CoreLimitsModule extends BaseModule {
         await mk('ems.budget.storageChargeW', 'Storage charge power (W)', 'number', 'value.power', 'W');
         await mk('ems.budget.storageDischargeW', 'Storage discharge power (W)', 'number', 'value.power', 'W');
         await mk('ems.budget.pvPowerW', 'PV production power (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.pvBudgetFlowRawW', 'PV budget flow reconstruction raw (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.pvBudgetPhysicalCapW', 'PV budget physical PV cap (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.pvBudgetClampedW', 'PV budget clamped by physical PV (W)', 'number', 'value.power', 'W');
         await mk('ems.budget.flexUsedW', 'Already active flexible load (W)', 'number', 'value.power', 'W');
         await mk('ems.budget.binding', 'Budget binding source', 'string', 'text');
         await mk('ems.budget.consumersJson', 'Budget consumers (JSON)', 'string', 'text');
@@ -1093,17 +1096,33 @@ class CoreLimitsModule extends BaseModule {
         const heatingRodUsedW = heatingRodEnabled ? heatingRodUsedRawW : 0;
         const flexUsedW = Math.max(0, evcsUsedW + thermalUsedW + heatingRodUsedW);
 
-        // The raw PV budget is reconstructed from the NVP plus already-running controlled loads.
-        // Storage charging is added as parked PV, because consumers with lower priority may be allowed
-        // to use it later if their app-specific reserve permits it. Active storage discharge is never PV.
-        const pvBudgetRawW = Math.max(0, gridExportW + flexUsedW + storageChargeW - storageDischargeW);
+        // 0.8.63: PV-Budget darf nie durch alte/fremde flexible Lasten oder
+        // Batterieentladung künstlich entstehen. Vorher konnte bei PV = 0 W und
+        // aktiver EVCS-Reservierung ein positiver PV-Budgetwert entstehen, weil
+        // `flexUsedW - storageDischargeW` als rekonstruierter PV-Überschuss
+        // gewertet wurde. Das ist für Bestandsanlagen gefährlich: PV-Budget muss
+        // physikalisch durch frische PV-Erzeugung gedeckelt sein.
+        //
+        // Rohdiagnose bleibt erhalten, aber das wirksame PV-Budget wird auf die
+        // aktuelle PV-Erzeugung begrenzt. Damit gilt:
+        // PV = 0 W  => PV Budget raw/effective = 0 W
+        // EVCS/Speicher-Reservierungen bleiben Gesamtbudget-/Prioritätsdaten,
+        // erzeugen aber kein PV-Budget mehr.
+        const pvBudgetFlowRawW = Math.max(0, gridExportW + flexUsedW + storageChargeW - storageDischargeW);
+        const pvPhysicalCapW = Math.max(0, pvPowerW);
+        const pvBudgetRawW = Math.min(pvBudgetFlowRawW, pvPhysicalCapW);
+        const pvBudgetClampedW = Math.max(0, pvBudgetFlowRawW - pvBudgetRawW);
         const pvReserveW = clamp(num(cmCfg.pvChargeReserveW, 500), 0, 1e12, 500) || 0;
         const pvBudgetEffectiveW = Math.max(0, pvBudgetRawW - pvReserveW);
         const pvAvailable = pvBudgetEffectiveW > 0;
 
         // Total controlled-load budget for grid-cap/§14a/peak/tariff layer.
         const gridLimitW = coreSnapshot && coreSnapshot.grid ? Number(coreSnapshot.grid.gridImportLimitW_effective || 0) : 0;
-        const gridHeadroomW = gridLimitW > 0 ? Math.max(0, gridLimitW - gridImportW + flexUsedW) : Number.POSITIVE_INFINITY;
+        // 0.8.61: Zentrales Gate A konservativ klemmen. Die alte Anzeigeformel
+        // `gridLimit - Netz + flexible Lasten` ist als Rohdiagnose nützlich,
+        // darf aber das wirksame Netzbudget nicht über das Anschlusslimit heben.
+        const gridHeadroomRawW = gridLimitW > 0 ? Math.max(0, gridLimitW - gridImportW + flexUsedW) : Number.POSITIVE_INFINITY;
+        const gridHeadroomW = gridLimitW > 0 ? Math.min(gridLimitW, gridHeadroomRawW) : Number.POSITIVE_INFINITY;
         const highLevelCapW = coreSnapshot && coreSnapshot.evcsHighLevel && isFiniteNumber(coreSnapshot.evcsHighLevel.capW)
             ? Math.max(0, Number(coreSnapshot.evcsHighLevel.capW))
             : Number.POSITIVE_INFINITY;
@@ -1155,6 +1174,9 @@ class CoreLimitsModule extends BaseModule {
                 heatingRodUsedW: roundW(heatingRodUsedW),
                 flexUsedW: roundW(flexUsedW),
                 pvReserveW: roundW(pvReserveW),
+                pvBudgetFlowRawW: roundW(pvBudgetFlowRawW),
+                pvBudgetPhysicalCapW: roundW(pvPhysicalCapW),
+                pvBudgetClampedW: roundW(pvBudgetClampedW),
             },
             gates: {
                 grid: {
@@ -1162,13 +1184,18 @@ class CoreLimitsModule extends BaseModule {
                     importW: roundW(gridImportW),
                     exportW: roundW(gridExportW),
                     headroomW: Number.isFinite(gridHeadroomW) ? roundW(gridHeadroomW) : null,
+                    headroomRawW: Number.isFinite(gridHeadroomRawW) ? roundW(gridHeadroomRawW) : null,
                 },
                 pv: {
                     available: !!pvAvailable,
                     rawW: roundW(pvBudgetRawW),
+                    flowRawW: roundW(pvBudgetFlowRawW),
+                    physicalCapW: roundW(pvPhysicalCapW),
+                    clampedW: roundW(pvBudgetClampedW),
                     reserveW: roundW(pvReserveW),
                     effectiveW: roundW(pvBudgetEffectiveW),
-                    source: 'nvp+controlledLoads+storageCharge-storageDischarge',
+                    source: 'min(physicalPV,nvp+controlledLoads+storageCharge-storageDischarge)',
+                    clampReason: pvBudgetClampedW > 0 ? 'physical_pv_cap' : '',
                 },
                 storage: {
                     chargeW: roundW(storageChargeW),
@@ -1267,14 +1294,30 @@ class CoreLimitsModule extends BaseModule {
             const mismatches = [
                 compareShadowWatt('pv.rawW', pv.rawW, ts && ts.pv ? ts.pv.rawW : null),
                 compareShadowWatt('pv.effectiveW', pv.effectiveW, ts && ts.pv ? ts.pv.effectiveW : null),
+                // 0.8.60: grid.effectiveW ist im TS-Spiegel ein enger Netzbudget-Begriff,
+                // während die produktive JS-Runtime hier historisch `grid.headroomW` mit
+                // zusätzlichen High-Level-/Flex-Load-Kontexten vergleicht. Ein einzelner
+                // Unterschied an diesem Feld ist deshalb Diagnose, aber kein Grund für
+                // minütlichen Warn-Log-Spam. Produktiv bleibt JS trotzdem Fallback, solange
+                // der Gesamt-Shadow nicht vollständig passt.
                 compareShadowWatt('grid.effectiveW', grid.headroomW, ts && ts.grid ? ts.grid.effectiveW : null),
                 compareShadowWatt('total.effectiveW', total.effectiveW, ts && ts.total ? ts.total.effectiveW : null),
-            ].filter(Boolean);
+            ].filter(Boolean).map((m) => {
+                if (m && m.field === 'grid.effectiveW') {
+                    return { ...m, diagnosticOnly: true, severity: 'diagnostic', reason: 'grid-headroom-vs-ts-effective-budget' };
+                }
+                return { ...m, diagnosticOnly: false, severity: 'warn' };
+            });
+            const warningMismatches = mismatches.filter((m) => !(m && m.diagnosticOnly === true));
+            const diagnosticOnlyMismatches = mismatches.filter((m) => m && m.diagnosticOnly === true);
             const result = {
                 available: true,
                 ok: mismatches.length === 0,
                 source: 'ts-mirror-shadow',
                 mismatches,
+                warningMismatches,
+                diagnosticOnlyMismatches,
+                logSuppressed: warningMismatches.length === 0 && diagnosticOnlyMismatches.length > 0,
                 js: {
                     pvRawW: roundW(pv.rawW),
                     pvEffectiveW: roundW(pv.effectiveW),
@@ -1291,12 +1334,12 @@ class CoreLimitsModule extends BaseModule {
                 // Übernahme verfügbar. Er wird nur genutzt, wenn der Shadow-Vergleich OK ist.
                 tsSnapshot: ts || null,
             };
-            if (!result.ok) {
+            if (warningMismatches.length > 0) {
                 const now = Date.now();
                 if (!this._coreTsShadowLastWarnMs || now - this._coreTsShadowLastWarnMs > 60000) {
                     this._coreTsShadowLastWarnMs = now;
                     try {
-                        this.adapter.log && this.adapter.log.warn && this.adapter.log.warn(`[core-limits-ts-shadow] JS/TS budget mismatch: ${mismatches.map(m => m.field).join(', ')}`);
+                        this.adapter.log && this.adapter.log.warn && this.adapter.log.warn(`[core-limits-ts-shadow] JS/TS budget mismatch: ${warningMismatches.map(m => m.field).join(', ')}`);
                     } catch (_eLog) {}
                 }
             }
@@ -1812,6 +1855,9 @@ class CoreLimitsModule extends BaseModule {
             await this.adapter.setStateAsync('ems.budget.storageChargeW', roundW(b.raw.storageChargeW), true);
             await this.adapter.setStateAsync('ems.budget.storageDischargeW', roundW(b.raw.storageDischargeW), true);
             await this.adapter.setStateAsync('ems.budget.pvPowerW', roundW(b.raw.pvPowerW), true);
+            await this.adapter.setStateAsync('ems.budget.pvBudgetFlowRawW', roundW(b.raw.pvBudgetFlowRawW), true);
+            await this.adapter.setStateAsync('ems.budget.pvBudgetPhysicalCapW', roundW(b.raw.pvBudgetPhysicalCapW), true);
+            await this.adapter.setStateAsync('ems.budget.pvBudgetClampedW', roundW(b.raw.pvBudgetClampedW), true);
             await this.adapter.setStateAsync('ems.budget.flexUsedW', roundW(b.raw.flexUsedW), true);
             await this.adapter.setStateAsync('ems.budget.binding', b.gates.total.binding || '', true);
             const consumersInit = Object.keys(b.consumers || {}).map(k => ({ key: k, ...(b.consumers[k] || {}) }));
@@ -1870,6 +1916,9 @@ class CoreLimitsModule extends BaseModule {
                 this.adapter.updateValue('ems.budget.remainingPvW', roundW(b.gates.pv.effectiveW), now);
                 this.adapter.updateValue('ems.budget.pvBudgetW', roundW(b.gates.pv.effectiveW), now);
                 this.adapter.updateValue('ems.budget.pvBudgetRawW', roundW(b.gates.pv.rawW), now);
+                this.adapter.updateValue('ems.budget.pvBudgetFlowRawW', roundW(b.raw.pvBudgetFlowRawW), now);
+                this.adapter.updateValue('ems.budget.pvBudgetPhysicalCapW', roundW(b.raw.pvBudgetPhysicalCapW), now);
+                this.adapter.updateValue('ems.budget.pvBudgetClampedW', roundW(b.raw.pvBudgetClampedW), now);
                 this.adapter.updateValue('ems.budget.gridW', roundW(b.raw.gridW), now);
                 this.adapter.updateValue('ems.budget.flexUsedW', roundW(b.raw.flexUsedW), now);
                 this.adapter.updateValue('ems.budget.consumersJson', JSON.stringify(consumersInit), now);

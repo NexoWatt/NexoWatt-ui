@@ -4,8 +4,8 @@ const fs = require('fs');
 function read(p){return fs.readFileSync(p,'utf8');}
 function must(file, text){const s=read(file); if(!s.includes(text)){console.error(`Missing in ${file}: ${text}`); process.exit(1);}}
 function mustNot(file, text){const s=read(file); if(s.includes(text)){console.error(`Forbidden in ${file}: ${text}`); process.exit(1);}}
-must('package.json', '"version": "0.8.47"');
-must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'nexowatt.mesh-microgrid-target-release.v1');
+must('package.json', '"version": "0.8.59"');
+must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'nexowatt.mesh-microgrid-target-group-fairness.v1');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'normalizeManualReleaseList');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'buildTargetCommandHistory');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'manualReleaseActive');

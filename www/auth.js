@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/auth.ts
- * Quell-Hash: sha256:91d6888427372903115148ddd0423bc0363491032c75ff68768fb94450233f7c
+ * Quell-Hash: sha256:5791b3baee60cea8ac37814dc7a9fb7dcb800442a0c2fff5d3327db8f3d77312
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -61,13 +61,7 @@
     protectWrites: false,
     authed: false,
     user: null,
-    role: 'none',
-    roles: [],
-    groups: [],
-    capabilities: [],
-    isAdmin: false,
     isInstaller: false,
-    isCustomer: false,
     _loaded: false,
   };
 
@@ -287,13 +281,7 @@
       state.protectWrites = !!(j && j.protectWrites);
       state.authed = !!(j && j.authed);
       state.user = (j && j.user) ? String(j.user) : null;
-      state.role = (j && j.role) ? String(j.role) : 'none';
-      state.roles = Array.isArray(j && j.roles) ? j.roles : [];
-      state.groups = Array.isArray(j && j.groups) ? j.groups : [];
-      state.capabilities = Array.isArray(j && j.capabilities) ? j.capabilities : [];
-      state.isAdmin = !!(j && j.isAdmin);
       state.isInstaller = !!(j && j.isInstaller);
-      state.isCustomer = !!(j && j.isCustomer);
       state._loaded = true;
       updateHeader();
       return state;
@@ -303,13 +291,7 @@
       state.protectWrites = false;
       state.authed = false;
       state.user = null;
-      state.role = 'none';
-      state.roles = [];
-      state.groups = [];
-      state.capabilities = [];
-      state.isAdmin = false;
       state.isInstaller = false;
-      state.isCustomer = false;
       state._loaded = true;
       updateHeader();
       return state;

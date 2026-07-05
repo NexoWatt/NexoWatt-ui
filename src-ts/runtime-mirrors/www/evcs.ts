@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 75d9df30681327b65dca75143d714234935045a12d38a023aeb929af0e9b6f0e
+ * Original-Hash: b87e3992edecce7d05b1712063c7effa3ac36828d3cb43b6481297561e4535d3
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/evcs.ts
- * Quell-Hash: sha256:2d6ba1d38d00dead8b7ea4e56442b25805694ffcee53371c3e035809459e68b8
+ * Quell-Hash: sha256:635f3b6ce2d60032e014226e95e5935e35b79bcdd98b68190d6c4d56a85c7ccd
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -709,12 +709,39 @@ function _modeBadge(emsUserMode) {
  * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
-function _tileStateClass({ powerW, reason, active, regEnabled }) {
+function _evcsBoolOrNull(value) {
+  if (value === true || value === false) return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return value !== 0;
+  const s = String(value ?? '').trim().toLowerCase();
+  if (!s) return null;
+  if (['true', '1', 'on', 'yes', 'ja', 'online', 'connected', 'available'].includes(s)) return true;
+  if (['false', '0', 'off', 'no', 'nein', 'offline', 'disconnected', 'unavailable'].includes(s)) return false;
+  return null;
+}
+
+/**
+ * Code-Teil: _tileStateClass
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function _tileStateClass({ powerW, reason, active, regEnabled, online, status }) {
   const p = Number(powerW);
   const r = String(reason ?? '').trim().toUpperCase();
+  const st = String(status ?? '').trim().toLowerCase();
+  const onlineState = _evcsBoolOrNull(online);
+  const offlineByStatus = st === 'offline' || st === 'unavailable' || st === 'disconnected' || st === 'faulted' || st === 'error';
 
-  if (r === 'OFFLINE' || r === 'NO_SETPOINT' || r === 'STALE_METER') return 'nw-tile--state-warning';
-  if (active === false || regEnabled === false) return 'nw-tile--state-disabled';
+  // Online/idle darf nicht wie offline wirken: `active=false` bedeutet bei mehreren EVCS-Adaptern
+  // nur „kein Fahrzeug lädt / kein aktiver Ladevorgang“, nicht „Wallbox offline“.
+  if (onlineState === false || r === 'OFFLINE' || offlineByStatus) return 'nw-tile--state-disabled nw-tile--state-offline';
+  if (r === 'NO_SETPOINT' || r === 'STALE_METER') return 'nw-tile--state-warning';
+  if (regEnabled === false) return 'nw-tile--state-disabled';
   if (isFinite(p) && Math.abs(p) >= 80) return 'nw-tile--state-on';
   return 'nw-tile--state-off';
 }
@@ -724,13 +751,14 @@ function _tileStateClass({ powerW, reason, active, regEnabled }) {
  * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
-function _shortStatusText(status, reason) {
-  const st = String(status ?? '').trim();
-  if (st) return st;
+function _shortStatusText(status, reason, online) {
+  const onlineState = _evcsBoolOrNull(online);
   const r = String(reason ?? '').trim().toUpperCase();
-  if (r === 'OFFLINE') return 'Offline';
+  if (onlineState === false || r === 'OFFLINE') return 'Offline';
   if (r === 'DISABLED') return 'Deaktiviert';
   if (r === 'CONTROL_DISABLED') return 'Regelung aus';
+  const st = String(status ?? '').trim();
+  if (st) return st;
   if (r) return r;
   return '--';
 }
@@ -1192,6 +1220,10 @@ function render() {
     const soc = d(`evcs.${i}.vehicleSoc`);
     const status = d(`evcs.${i}.status`);
     const active = d(`evcs.${i}.active`);
+    const localOnline = d(`evcs.${i}.online`);
+    const emsOnline = hasEms ? d(`${cm}.online`) : null;
+    // Explicit EVCS onlineId mirror wins over EMS/status fallback.
+    const online = (_evcsBoolOrNull(localOnline) !== null) ? localOnline : emsOnline;
 
     const regEnabled = hasEms ? d(`${cm}.userEnabled`) : null;
     const emsReason = hasEms ? d(`${cm}.reason`) : null;
@@ -1202,9 +1234,9 @@ function render() {
     const ctBadge = (ct === 'DC' || ct === 'AC') ? ct : '';
 
     const badge = ctBadge || _modeBadge(emsUserMode) || 'EV';
-    const statusTxt = _shortStatusText(status, emsReason);
+    const statusTxt = _shortStatusText(status, emsReason, online);
 
-    const tileCls = _tileStateClass({ powerW, reason: emsReason, active, regEnabled });
+    const tileCls = _tileStateClass({ powerW, reason: emsReason, active, regEnabled, online, status });
 
     const socTxt = (soc != null) ? ('SoC ' + fmtPct(soc)) : 'SoC --';
     const modeTxt = hasEms ? (_modeBadge(emsUserMode) || 'AUTO') : '—';

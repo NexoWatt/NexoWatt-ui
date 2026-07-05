@@ -63,13 +63,7 @@
     protectWrites: false,
     authed: false,
     user: null,
-    role: 'none',
-    roles: [],
-    groups: [],
-    capabilities: [],
-    isAdmin: false,
     isInstaller: false,
-    isCustomer: false,
     _loaded: false,
   };
 
@@ -289,13 +283,7 @@
       state.protectWrites = !!(j && j.protectWrites);
       state.authed = !!(j && j.authed);
       state.user = (j && j.user) ? String(j.user) : null;
-      state.role = (j && j.role) ? String(j.role) : 'none';
-      state.roles = Array.isArray(j && j.roles) ? j.roles : [];
-      state.groups = Array.isArray(j && j.groups) ? j.groups : [];
-      state.capabilities = Array.isArray(j && j.capabilities) ? j.capabilities : [];
-      state.isAdmin = !!(j && j.isAdmin);
       state.isInstaller = !!(j && j.isInstaller);
-      state.isCustomer = !!(j && j.isCustomer);
       state._loaded = true;
       updateHeader();
       return state;
@@ -305,13 +293,7 @@
       state.protectWrites = false;
       state.authed = false;
       state.user = null;
-      state.role = 'none';
-      state.roles = [];
-      state.groups = [];
-      state.capabilities = [];
-      state.isAdmin = false;
       state.isInstaller = false;
-      state.isCustomer = false;
       state._loaded = true;
       updateHeader();
       return state;

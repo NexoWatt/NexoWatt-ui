@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: f62aaa2702841545cfbffa7fcdfd98d94506d3bcec138171818654d93eb40557
+ * Original-Hash: 35fee3d571d0bd3143f8e5f1c507c0eefedd13abcaefc585791f81ad4b87a607
  */
 
 /**
@@ -99,7 +99,7 @@ for (const file of ['src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 
 must('src-ts/runtime-executables/www/ems-apps.ts', 'Aktiv: Local-First Commands ausgeben');
 must('www/ems-apps.js', 'Aktiv: Local-First Commands ausgeben');
 must('src-ts/runtime-executables/www/ems-apps.ts', "['off','diagnostic','field_test','active']");
-must('package.json', '"version": "0.8.44"');
-must('io-package.json', '0.8.44');
+must('package.json', '"version": "0.8.59"');
+must('io-package.json', '0.8.52');
 
 console.log('OK: Mesh/Microgrid Aktivmodus gibt nur neutrale Local-First-/Grid-Last-Command-Intents aus und bleibt herstellerneutral.');

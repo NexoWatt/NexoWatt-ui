@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:5bc26c262df6d0d0295b38301d92b6f9e9ecdf979b46d662a9bb00c548e8904d
+ * Quell-Hash: sha256:e38b698a6b2653c54b6ec20d4a011178a052fc8cbab0d0a39a7c8f84a62d8703
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -368,7 +368,7 @@
     { id: 'grid', label: 'Netzlimits', desc: 'Netzrestriktionen (RLM/0‑Einspeisung/Import‑Limits)', mandatory: false, hems: false },
     { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung: PV, Wetter, Tarif, Speicher, Wallboxen und Lastspitzen als Vorschläge auf der LIVE‑Seite', mandatory: false, hems: true },
     { id: 'energyWallet', label: 'Energie-Wertkonto', desc: 'PV-Wert, Eigenverbrauchswert, Solar-Laden und Einspeisewert im Nutzerfrontend (Home + EOS)', mandatory: true, hems: true },
-    { id: 'energyLedger', label: 'Local kWh Ledger', desc: 'EOS: lokale kWh-Zuordnung als Grundlage für Betreiberwerte, Export, Nachbarschaft und Microgrid', mandatory: false, hems: false },
+    { id: 'energyLedger', label: 'Local kWh Ledger', desc: 'EOS: lokale kWh-Zuordnung als Grundlage für Betreiberwerte, Export, Nachbarschaft und Microgrid; read-only und schaltet keine Hardware', mandatory: false, hems: false },
     { id: 'meshMicrogrid', label: 'EOS Mesh/Microgrid', desc: 'EOS: separates Datenmodell für lokale Energie-Knoten, Cluster, Local First / Grid Last und spätere Nachbarschaftsversorgung', mandatory: false, hems: false },
     { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', mandatory: true, hems: true },
     { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls genutzt)', mandatory: false, hems: true },
@@ -1044,6 +1044,159 @@
   }
 
   let _licenseLiveRefreshInFlight = false;
+  /**
+   * Code-Teil: hydrateStorageFarmConfigFromRuntimeState
+   * Zweck: Repariert/übernimmt Speicherfarm-Konfiguration aus Runtime-States, wenn
+   * die Admin-jsonConfig leer ist, die Runtime aber noch eine funktionierende Farm
+   * unter storageFarm.configJson hat.
+   *
+   * Warum nötig:
+   * Die Kunden-/Betreiberansicht liest die laufende Speicherfarm aus
+   * storageFarm.configJson. Wenn bei Migrationen oder App-Center-Änderungen
+   * currentConfig.storageFarm.storages leer ist, würde der Installer fälschlich
+   * „Noch keine Speicher“ anzeigen und beim Speichern die Admin-Konfiguration
+   * ohne Speicher zurückschreiben. Diese Funktion verhindert Datenverlust und
+   * macht bestehende Speicher wieder im Speicherfarm-Reiter sichtbar.
+   */
+  function _readApiStateValue(statePayload, key, fallback = undefined) {
+    try {
+      let rec = statePayload && statePayload[key];
+      // 0.8.57 Hotfix: Manche /api/state-Varianten liefern lokale States mit
+      // Namespace-Präfix. Für die Speicherfarm-Migration darf `storageFarm.configJson`
+      // deshalb auch als `nexowatt-ui.0.storageFarm.configJson` gefunden werden.
+      if (!rec && statePayload && typeof statePayload === 'object') {
+        const suffix = '.' + String(key || '');
+        const foundKey = Object.keys(statePayload).find((k) => k === key || String(k).endsWith(suffix));
+        if (foundKey) rec = statePayload[foundKey];
+      }
+      if (rec && Object.prototype.hasOwnProperty.call(rec, 'value')) return rec.value;
+      if (rec && Object.prototype.hasOwnProperty.call(rec, 'val')) return rec.val;
+    } catch (_e) {}
+    return fallback;
+  }
+
+  function _parseStorageFarmRuntimeList(raw) {
+    try {
+      if (Array.isArray(raw)) return raw;
+      const parsed = (raw && typeof raw === 'object') ? raw : JSON.parse(String(raw || '[]'));
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.storages)) return parsed.storages;
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.rows)) return parsed.rows;
+      return [];
+    } catch (_e) {
+      return [];
+    }
+  }
+
+  function _recoverStorageFarmRowsFromStatusRows(statusRows) {
+    const rows = Array.isArray(statusRows) ? statusRows : [];
+    return rows
+      .filter((row) => row && typeof row === 'object')
+      .map((row, index) => ({
+        enabled: true,
+        name: String(row.name || row.label || '').trim() || `Speicher ${index + 1}`,
+        group: String(row.group || '').trim(),
+        // Diese Runtime-Statusquelle kennt in der Regel keine DP-Zuordnungen.
+        // Darum werden leere editierbare Felder angelegt, damit der Installateur
+        // die Speicher direkt wieder anbinden kann, statt bei "Noch keine Speicher"
+        // festzuhängen.
+        socId: '', signedPowerId: '', chargePowerId: '', dischargePowerId: '', pvPowerId: '',
+        setChargePowerId: '', setDischargePowerId: '', setSignedPowerId: '',
+        capacityKWh: (row.capacityKWh !== undefined && row.capacityKWh !== null && row.capacityKWh !== '') ? Number(row.capacityKWh) : '',
+        maxChargeW: (row.maxChargeW !== undefined && row.maxChargeW !== null && row.maxChargeW !== '') ? Number(row.maxChargeW) : '',
+        maxDischargeW: (row.maxDischargeW !== undefined && row.maxDischargeW !== null && row.maxDischargeW !== '') ? Number(row.maxDischargeW) : '',
+        _runtimeStatusRecovered: true,
+      }));
+  }
+
+  function _normalizeRecoveredStorageFarmRow(row, index) {
+    const r = row && typeof row === 'object' ? row : {};
+    return {
+      enabled: r.enabled === false ? false : true,
+      name: String(r.name || '').trim() || `Speicher ${index + 1}`,
+      coupling: String(r.coupling || '').trim().toLowerCase() === 'dc' ? 'dc' : (String(r.coupling || '').trim().toLowerCase() === 'ac' ? 'ac' : ''),
+      socId: String(r.socId || '').trim(),
+      signedPowerId: String(r.signedPowerId || '').trim(),
+      chargePowerId: String(r.chargePowerId || '').trim(),
+      dischargePowerId: String(r.dischargePowerId || '').trim(),
+      pvPowerId: String(r.pvPowerId || '').trim(),
+      invertSignedPowerSign: !!r.invertSignedPowerSign,
+      invertChargeSign: !!r.invertChargeSign,
+      invertDischargeSign: !!r.invertDischargeSign,
+      setChargePowerId: String(r.setChargePowerId || '').trim(),
+      setDischargePowerId: String(r.setDischargePowerId || '').trim(),
+      setSignedPowerId: String(r.setSignedPowerId || '').trim(),
+      invertSetSignedPowerSign: !!r.invertSetSignedPowerSign,
+      maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : '',
+      maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : '',
+      availableId: String(r.availableId || '').trim(),
+      faultId: String(r.faultId || '').trim(),
+      chargeAllowedId: String(r.chargeAllowedId || '').trim(),
+      dischargeAllowedId: String(r.dischargeAllowedId || '').trim(),
+      capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : '',
+      group: String(r.group || '').trim(),
+    };
+  }
+
+  async function hydrateStorageFarmConfigFromRuntimeState(cfg) {
+    const root = cfg && typeof cfg === 'object' ? cfg : {};
+    const sf = root.storageFarm && typeof root.storageFarm === 'object' ? root.storageFarm : {};
+    if (Array.isArray(sf.storages) && sf.storages.length > 0) return root;
+    let statePayload = null;
+    try {
+      statePayload = await fetchJson('/api/state?t=' + Date.now(), { cache: 'no-store' });
+    } catch (_e) {
+      return root;
+    }
+    let runtimeRows = _parseStorageFarmRuntimeList(_readApiStateValue(statePayload, 'storageFarm.configJson', '[]'));
+    let fallbackSource = 'storageFarm.configJson';
+    if (!runtimeRows.length) {
+      // 0.8.58: Wenn configJson schon leer/kaputt ist, die laufende Farm aber in
+      // der Betreiberansicht noch Speicher zeigt, kommen die Namen aus
+      // storagesStatusJson. Daraus erzeugen wir editierbare Platzhalterzeilen,
+      // damit der Installateur die Speicher wieder anbinden kann.
+      const statusRows = _parseStorageFarmRuntimeList(_readApiStateValue(statePayload, 'storageFarm.storagesStatusJson', '[]'));
+      runtimeRows = _recoverStorageFarmRowsFromStatusRows(statusRows);
+      fallbackSource = 'storageFarm.storagesStatusJson';
+    }
+    if (!runtimeRows.length) {
+      const total = Number(_readApiStateValue(statePayload, 'storageFarm.storagesTotal', 0));
+      if (Number.isFinite(total) && total > 0) {
+        runtimeRows = Array.from({ length: Math.min(10, Math.max(1, Math.round(total))) }, (_x, i) => ({ enabled: true, name: `Speicher ${i + 1}`, _runtimeCountRecovered: true }));
+        fallbackSource = 'storageFarm.storagesTotal';
+      }
+    }
+    if (!runtimeRows.length) return root;
+
+    root.storageFarm = root.storageFarm && typeof root.storageFarm === 'object' ? root.storageFarm : {};
+    root.storageFarm.storages = runtimeRows.slice(0, 10).map(_normalizeRecoveredStorageFarmRow);
+    root.storageFarm._runtimeRecovered = true;
+    root.storageFarm.__runtimeStateFallbackSource = fallbackSource;
+    // Bestehende produktive Speicherfarm nicht ausblenden, wenn nur die Admin-
+    // Konfiguration leer war. Dies ändert keine Lizenz; es hält App-Schalter und
+    // Speicherfarm-Reiter konsistent zur laufenden Runtime-Konfiguration.
+    root.enableStorageFarm = true;
+    root.emsApps = root.emsApps && typeof root.emsApps === 'object' ? root.emsApps : {};
+    root.emsApps.apps = root.emsApps.apps && typeof root.emsApps.apps === 'object' ? root.emsApps.apps : {};
+    const oldSfApp = root.emsApps.apps.storagefarm && typeof root.emsApps.apps.storagefarm === 'object' ? root.emsApps.apps.storagefarm : {};
+    root.emsApps.apps.storagefarm = Object.assign({}, oldSfApp, { installed: true, enabled: oldSfApp.enabled !== false });
+
+    const mode = String(_readApiStateValue(statePayload, 'storageFarm.mode', root.storageFarm.mode || 'pool') || 'pool').trim().toLowerCase();
+    root.storageFarm.mode = mode === 'groups' ? 'groups' : 'pool';
+
+    const runtimeGroups = _parseStorageFarmRuntimeList(_readApiStateValue(statePayload, 'storageFarm.groupsJson', '[]'));
+    if ((!Array.isArray(root.storageFarm.groups) || !root.storageFarm.groups.length) && runtimeGroups.length) {
+      root.storageFarm.groups = runtimeGroups.slice(0, 5).map((g, i) => ({
+        enabled: g && g.enabled === false ? false : true,
+        name: String(g && g.name || '').trim() || `Gruppe ${String.fromCharCode(65 + i)}`,
+        socMin: g && g.socMin !== undefined && g.socMin !== null && g.socMin !== '' ? Number(g.socMin) : '',
+        socMax: g && g.socMax !== undefined && g.socMax !== null && g.socMax !== '' ? Number(g.socMax) : '',
+        priority: g && g.priority !== undefined && g.priority !== null && g.priority !== '' ? Number(g.priority) : (100 + i),
+      }));
+    }
+    return root;
+  }
+
   async function refreshLicenseForAppCenter(reason) {
     if (_licenseLiveRefreshInFlight) return;
     _licenseLiveRefreshInFlight = true;
@@ -1647,6 +1800,14 @@ function collectAiAdvisorConfigFromUI(base) {
       .replace(/'/g, '&#39;');
   }
 
+  // 0.8.58 Hotfix: Die Speicherfarm-Master-Detail-Ansicht verwendete nach
+  // der TS-Migration versehentlich `htmlEscape`, obwohl die gemeinsame
+  // Escape-Funktion `_nwHtmlEscape` heißt. Sobald ein Speicher hinzugefügt oder
+  // aus Runtime-State wiederhergestellt wurde, brach buildStorageFarmUI() ab und
+  // der Reiter blieb leer. Alias bewusst lokal halten, damit alte Aufrufstellen
+  // stabil bleiben und später sauber typisiert ersetzt werden können.
+  const htmlEscape = _nwHtmlEscape;
+
   function _nwSystemProfileCountry() {
     const cp = currentConfig && currentConfig.countryProfile && typeof currentConfig.countryProfile === 'object' ? currentConfig.countryProfile : {};
     const raw = String(cp.country || cp.profile || 'DE').trim().toUpperCase();
@@ -1924,6 +2085,15 @@ function collectAiAdvisorConfigFromUI(base) {
     const socDp = _meshHtmlEscape(n.socDp || '');
     const gridImportPowerDp = _meshHtmlEscape(n.gridImportPowerDp || '');
     const gridExportPowerDp = _meshHtmlEscape(n.gridExportPowerDp || '');
+    const minPowerW = _meshHtmlEscape(n.minPowerW || '');
+    const maxPowerW = _meshHtmlEscape(n.maxPowerW || '');
+    const maxImportW = _meshHtmlEscape(n.maxImportW || '');
+    const maxExportW = _meshHtmlEscape(n.maxExportW || '');
+    const maxChargeW = _meshHtmlEscape(n.maxChargeW || '');
+    const maxDischargeW = _meshHtmlEscape(n.maxDischargeW || '');
+    const maxLoadW = _meshHtmlEscape(n.maxLoadW || '');
+    const maxGenerationW = _meshHtmlEscape(n.maxGenerationW || '');
+    const targetGroupIds = _meshHtmlEscape(Array.isArray(n.targetGroupIds) ? n.targetGroupIds.join(',') : (n.targetGroupIds || n.targetGroups || ''));
     const enabled = n.enabled !== false ? 'true' : 'false';
     return `
       <div class="nw-config-subcard" data-mesh-node-row>
@@ -1945,6 +2115,17 @@ function collectAiAdvisorConfigFromUI(base) {
           <label class="nw-config-field"><span class="nw-config-label">Grid Import W optional</span><input class="nw-config-input" data-mesh-field="gridImportPowerDp" value="${gridImportPowerDp}" /></label>
           <label class="nw-config-field"><span class="nw-config-label">Grid Export W optional</span><input class="nw-config-input" data-mesh-field="gridExportPowerDp" value="${gridExportPowerDp}" /></label>
         </div>
+        <div class="nw-config-grid nw-config-grid--4" style="margin-top:10px;">
+          <label class="nw-config-field"><span class="nw-config-label">Min. Leistung W</span><input class="nw-config-input" data-mesh-field="minPowerW" value="${minPowerW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Leistung W</span><input class="nw-config-input" data-mesh-field="maxPowerW" value="${maxPowerW}" placeholder="0 = kein Limit" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Import W</span><input class="nw-config-input" data-mesh-field="maxImportW" value="${maxImportW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Export W</span><input class="nw-config-input" data-mesh-field="maxExportW" value="${maxExportW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Laden W</span><input class="nw-config-input" data-mesh-field="maxChargeW" value="${maxChargeW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Entladen W</span><input class="nw-config-input" data-mesh-field="maxDischargeW" value="${maxDischargeW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Last W</span><input class="nw-config-input" data-mesh-field="maxLoadW" value="${maxLoadW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Erzeugung W</span><input class="nw-config-input" data-mesh-field="maxGenerationW" value="${maxGenerationW}" placeholder="0" /></label>
+          <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Zielgruppen IDs optional</span><input class="nw-config-input" data-mesh-field="targetGroupIds" value="${targetGroupIds}" placeholder="lp_gruppe,speicher_gruppe" /><small>Optional: Knoten direkt Zielgruppen zuordnen. Alternativ Gruppen über memberNodeIds/memberTypes definieren.</small></label>
+        </div>
       </div>`;
   }
 
@@ -1954,6 +2135,7 @@ function collectAiAdvisorConfigFromUI(base) {
     const rows = _meshNodes().map((node, idx) => _meshNodeRow(node, idx)).join('');
     const localBridge = cfg.localBridge && typeof cfg.localBridge === 'object' ? cfg.localBridge : {};
     const localBridgeMappingsJson = _meshHtmlEscape(JSON.stringify(Array.isArray(localBridge.mappings) ? localBridge.mappings : [], null, 2));
+    const targetGroupsJson = _meshHtmlEscape(JSON.stringify(Array.isArray(cfg.targetGroups) ? cfg.targetGroups : [], null, 2));
     const card = document.createElement('div');
     card.className = 'nw-config-card nw-mesh-microgrid-card';
     card.innerHTML = `
@@ -2008,6 +2190,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
             <label class="nw-config-field"><span class="nw-config-label">ACK Timeout Sekunden</span><input class="nw-config-input" id="meshMicrogridLocalBridgeAckTimeoutSec" value="${_meshHtmlEscape(localBridge.ackTimeoutSec || 60)}" placeholder="60" ${isEos ? '' : 'disabled'} /></label>
             <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Bridge-Zuordnungen JSON</span><textarea class="nw-config-input" id="meshMicrogridLocalBridgeMappingsJson" rows="6" ${isEos ? '' : 'disabled'}>${localBridgeMappingsJson}</textarea><small>Beispiel je Eintrag: { "id":"lp1_bridge", "nodeId":"lp1", "commandStateDp":"0_userdata.0.nexowatt.mesh.lp1.command", "ackStateDp":"0_userdata.0.nexowatt.mesh.lp1.ack", "type":"chargepoint", "maxPowerW":11000 }. ACK-/Status-States werden nur gelesen; keine ZIP/TGZ und keine Roh-Hardwarebefehle.</small></label>
           </div>
+        </div>
+        <div class="nw-config-subcard" style="margin-top:12px;">
+          <div class="nw-config-card__title">Zielgruppen-Strategie</div>
+          <div class="nw-config-card__subtitle">Bündelt Ladepunkte, Speicher, Verbraucher und Erzeuger in Gruppen. Gruppenprioritäten und Gruppenlimits werden im CommandGuard bewertet. Die Ausgabe bleibt ein neutraler Command-Intent ohne direkten Hardwarewrite.</div>
+          <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Zielgruppen JSON</span><textarea class="nw-config-input" id="meshMicrogridTargetGroupsJson" rows="7" ${isEos ? '' : 'disabled'}>${targetGroupsJson}</textarea><small>Beispiel: [{ "id":"lp_gruppe", "name":"Ladepunkte", "type":"chargepoint", "memberTypes":["chargepoint"], "priority":20, "maxPowerW":22000 }]. 0 = kein Limit.</small></label>
         </div>
         <div class="nw-config-card__subtitle" style="margin-top:10px;">Knoten: PV/Erzeuger, Verbraucher/Gebäude, Speicher, Netzpunkt, Ladepunktgruppen oder thermische Verbraucher. Technische Zuordnung bleibt im Installerbereich.</div>
         <div id="meshMicrogridNodes">${rows || '<div class="nw-config-empty" style="text-align:left;">Noch keine Mesh-/Microgrid-Knoten angelegt.</div>'}</div>
@@ -6852,6 +7039,14 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // berechnet der EMS-Kern alle Export-Guard-Werte, schreibt aber keine WR-Setpoints.
     if (typeof gc.exportLimitRunMode !== 'string') gc.exportLimitRunMode = 'active';
     if (!['diagnostic', 'active'].includes(String(gc.exportLimitRunMode))) gc.exportLimitRunMode = 'active';
+    // 0.8.51: Reihenfolge für echte 0‑Einspeisung. Verbrauch ist immer natürliche
+    // erste Senke, danach Speicher, Ladepunkte, flexible Verbraucher, Mesh/Microgrid
+    // und erst zuletzt WR-Abregelung. Optionale Command-States bleiben neutral und
+    // herstelleroffen; keine direkten Hardware-Rohbefehle im App-Center.
+    if (typeof gc.zeroExportStorageChargeCommandStateId !== 'string') gc.zeroExportStorageChargeCommandStateId = '';
+    if (typeof gc.zeroExportChargingCommandStateId !== 'string') gc.zeroExportChargingCommandStateId = '';
+    if (typeof gc.zeroExportFlexLoadCommandStateId !== 'string') gc.zeroExportFlexLoadCommandStateId = '';
+    if (typeof gc.zeroExportMeshCommandStateId !== 'string') gc.zeroExportMeshCommandStateId = '';
 
     // PV Abregelung (EVU Relais) – optional zusätzlich zur 0‑Einspeisung
     if (typeof gc.pvEvuEnabled !== 'boolean') gc.pvEvuEnabled = false;
@@ -7233,6 +7428,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
           const negative = !!readVal(data, 'gridConstraints.exportLimit.negativePriceActive');
           const negStrategy = String(readVal(data, 'gridConstraints.exportLimit.negativePriceStrategy') || '');
           const checklist = parseJson(readVal(data, 'gridConstraints.exportLimit.installerChecklistJson')) || {};
+          const sinkPlan = parseJson(readVal(data, 'gridConstraints.exportLimit.sinkPriorityPlanJson')) || {};
+          const commissioning = parseJson(readVal(data, 'gridConstraints.exportLimit.commissioning.reportJson')) || {};
+          const commissioningChecklist = parseJson(readVal(data, 'gridConstraints.exportLimit.commissioning.checklistJson')) || {};
+          const nextSink = String(readVal(data, 'gridConstraints.exportLimit.nextSinkAction') || sinkPlan.nextAction || '—');
 
           box.innerHTML = '';
           const title = document.createElement('div');
@@ -7252,8 +7451,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
             ['Auslastung', Number.isFinite(usage) ? Math.round(usage) + ' %' : '—'],
             ['Geschätzte Abregelung', fmtW(curt)],
             ['Geplante Aktion', planned],
+            ['0‑Einspeise nächste Senke', nextSink],
             ['WR-Schreibfähigkeit', writeCapable ? 'OK' : 'Fehlt / prüfen'],
             ['Negative-Preis-Strategie', negative ? (negStrategy || 'aktiv') : 'nicht aktiv'],
+            ['Inbetriebnahme', commissioning.ready ? `Bereit (${commissioning.scorePercent || 0} %)` : `Prüfen (${commissioning.scorePercent || 0} %)`],
           ];
           const table = document.createElement('div');
           table.style.display = 'grid';
@@ -7270,6 +7471,25 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
             table.appendChild(b);
           }
           box.appendChild(table);
+          if (sinkPlan && Array.isArray(sinkPlan.steps)) {
+            const order = document.createElement('div');
+            order.className = 'nw-config-muted';
+            order.style.marginTop = '8px';
+            order.textContent = '0‑Einspeise-Reihenfolge: ' + sinkPlan.steps.map((x) => `${x.index}. ${x.label}${x.mapped ? '' : ' (nicht gemappt)'}`).join(' → ');
+            box.appendChild(order);
+          }
+
+          if (commissioningChecklist && Array.isArray(commissioningChecklist.items)) {
+            const wrap = document.createElement('div');
+            wrap.className = 'nw-config-muted';
+            wrap.style.marginTop = '10px';
+            const failed = commissioningChecklist.items.filter((i) => i.required && !i.ok).slice(0, 4);
+            const optional = commissioningChecklist.items.filter((i) => !i.required && !i.ok).slice(0, 3);
+            wrap.textContent = failed.length
+              ? '0‑Einspeise Checkliste offen: ' + failed.map((i) => i.label).join(' | ')
+              : (optional.length ? '0‑Einspeise Pflichtprüfung OK. Optionale Senken offen: ' + optional.map((i) => i.label).join(' | ') : '0‑Einspeise Inbetriebnahme-Checkliste OK.');
+            box.appendChild(wrap);
+          }
 
           if (message) {
             const m = document.createElement('div');
@@ -7395,6 +7615,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         zeroEl.appendChild(mkNum('Maximale Einspeiseleistung', 'gc_zeroExportMaxExportW', Number(gc.zeroExportMaxExportW || 0) || 0, (n) => { gc.zeroExportMaxExportW = Math.max(0, Math.round(n)); }, 'W', '0 = keine Einspeisung'));
         zeroEl.appendChild(mkNum('Bias', 'gc_zeroExportBiasW', Number(gc.zeroExportBiasW || 0) || 0, (n) => { gc.zeroExportBiasW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 50'));
         zeroEl.appendChild(mkNum('Deadband', 'gc_zeroExportDeadbandW', Number(gc.zeroExportDeadbandW || 0) || 0, (n) => { gc.zeroExportDeadbandW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 15'));
+        zeroEl.appendChild(mkHint('0‑Einspeise-Reihenfolge: 1 Verbrauch zuerst (natürlich am Netzpunkt), 2 Speicher laden, 3 Ladepunkte, 4 flexible Verbraucher, 5 Mesh/Microgrid, 6 WR-Abregelung zuletzt.'));
+        zeroEl.appendChild(mkDpField('Speicher-Lade-Command-State optional', 'gc_zeroExportStorageChargeCommandStateId', gc.zeroExportStorageChargeCommandStateId || '', (v) => { gc.zeroExportStorageChargeCommandStateId = v; }, 'Neutraler JSON-Command-State, z.B. 0_userdata.0.nexowatt.zero.storage.command'));
+        zeroEl.appendChild(mkDpField('Ladepunkt-Command-State optional', 'gc_zeroExportChargingCommandStateId', gc.zeroExportChargingCommandStateId || '', (v) => { gc.zeroExportChargingCommandStateId = v; }, 'Neutraler JSON-Command-State für Wallbox/DC-Ladepunkte'));
+        zeroEl.appendChild(mkDpField('Flexible Verbraucher Command-State optional', 'gc_zeroExportFlexLoadCommandStateId', gc.zeroExportFlexLoadCommandStateId || '', (v) => { gc.zeroExportFlexLoadCommandStateId = v; }, 'Heizstab/Wärmepumpe/flexible Last – neutraler JSON-Command-State'));
+        zeroEl.appendChild(mkDpField('Mesh/Microgrid Command-State optional', 'gc_zeroExportMeshCommandStateId', gc.zeroExportMeshCommandStateId || '', (v) => { gc.zeroExportMeshCommandStateId = v; }, 'Optionaler Übergang in Mesh/Microgrid-Zielgruppen'));
         zeroEl.appendChild(mkHint('Export Guard für DE/NL: 0 W bedeutet echte Nulleinspeisung; Werte >0 erlauben nur die vom Installateur freigegebene maximale Einspeiseleistung. Bias/Deadband stabilisieren die Regelung.'));
         zeroEl.appendChild(mkHint('Empfehlung: neue Anlagen zuerst im Diagnose/Testmodus prüfen. Erst wenn NVP-Vorzeichen, Einspeiselimit und WR-Schreibfähigkeit plausibel sind, auf „Aktiv" stellen.'));
         renderExportGuardRuntimeDiagnostics(zeroEl);
@@ -8438,6 +8663,17 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       d.textContent = text;
       return d;
     };
+
+    // Speicherfarm-Migrationsschutz: Wenn die App-Center-jsonConfig leer war,
+    // aber storageFarm.configJson noch funktionierende Speicher enthielt, wurden
+    // diese beim Laden wiederhergestellt. Sichtbar machen, damit der Installateur
+    // nach dem Speichern weiß, dass die Admin-Konfiguration wieder gefüllt wird.
+    if (sf._runtimeRecovered) {
+      const recovered = document.createElement('div');
+      recovered.className = 'nw-help';
+      recovered.textContent = `Speicherfarm-Konfiguration wurde aus dem Runtime-State ${sf.__runtimeStateFallbackSource || 'storageFarm.configJson'} wiederhergestellt. Bitte prüfen und speichern, damit die Admin-Konfiguration wieder vollständig ist. Die laufende Farm-Regelung wurde dadurch nicht geändert.`;
+      els.storageFarmStorages.appendChild(recovered);
+    }
 
     // Storages list (0.8.33 Master-Detail)
     // Wichtig: Bei mehreren Speichern wird nur noch der ausgewählte Speicher als
@@ -11227,6 +11463,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       cfg.license = _inferLicenseFromSuccessfulInstallerGate(data, cfg);
     }
 
+    await hydrateStorageFarmConfigFromRuntimeState(cfg);
     applyConfigToUI(cfg);
     scheduleValidation(300);
     setStatus('Konfiguration geladen.', 'ok');
@@ -11237,6 +11474,51 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
    * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
+  /**
+   * Release Safety Gate 0.8.59.
+   *
+   * Verhindert, dass ein stale/fehlerhaft gerenderter App-Center-Screen
+   * produktive Kernbereiche leer überschreibt. Das ist bewusst Frontend-Schutz;
+   * das Backend hat zusätzlich eigene Guards für Speicherfarm-Runtime-Fallbacks.
+   *
+   * Wichtig:
+   * - keine fachliche Regelung
+   * - keine Hardwarewrites
+   * - nur Schutz des Save-Payloads
+   */
+  function applyReleaseSafetyGateToPatch(patch) {
+    const out = patch && typeof patch === 'object' ? patch : {};
+    const restoreArrayIfDangerouslyEmpty = (section, key, markerName) => {
+      try {
+        const src = currentConfig && currentConfig[section] && typeof currentConfig[section] === 'object' ? currentConfig[section] : null;
+        const dst = out[section] && typeof out[section] === 'object' ? out[section] : null;
+        if (!src || !dst) return;
+        const currentRows = Array.isArray(src[key]) ? src[key] : [];
+        const patchRows = Array.isArray(dst[key]) ? dst[key] : null;
+        const explicitDelete = dst.__allowEmpty === true || dst.__allowEmptyStorages === true || dst.__explicitDeleteAll === true;
+        if (currentRows.length > 0 && patchRows && patchRows.length === 0 && !explicitDelete) {
+          dst[key] = currentRows.slice();
+          dst.__releaseSafetyGate = true;
+          dst.__releaseSafetyGateReason = `${section}.${key} restored from currentConfig because App-Center payload was empty`;
+          try { console.warn(`[NexoWatt] ReleaseSafetyGate restored ${section}.${key} (${currentRows.length}) from currentConfig.`); } catch (_e) {}
+        }
+      } catch (_e) {}
+    };
+
+    // Kernbereiche, die nicht durch einen Renderfehler verschwinden dürfen.
+    restoreArrayIfDangerouslyEmpty('storageFarm', 'storages', 'storageFarm');
+    restoreArrayIfDangerouslyEmpty('storageFarm', 'groups', 'storageFarmGroups');
+    restoreArrayIfDangerouslyEmpty('chargeKiosk', 'stations', 'chargeKioskStations');
+    restoreArrayIfDangerouslyEmpty('meshMicrogrid', 'nodes', 'meshMicrogridNodes');
+    restoreArrayIfDangerouslyEmpty('meshMicrogrid', 'targetGroups', 'meshMicrogridTargetGroups');
+    restoreArrayIfDangerouslyEmpty('meshMicrogrid', 'localBridgeMappings', 'meshMicrogridLocalBridgeMappings');
+
+    // Strukturmarker für Release-/Regressionstests. Wird vom Backend ignoriert,
+    // hilft aber, Save-Payloads im Feld eindeutig zu diagnostizieren.
+    out.__releaseSafetyGateVersion = '0.8.59';
+    return out;
+  }
+
   function collectPatchFromUI() {
     const patch = {};
 
@@ -11355,6 +11637,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const meshLocalBridgeDefaultAckStateEl = document.getElementById('meshMicrogridLocalBridgeDefaultAckState');
     const meshLocalBridgeAckTimeoutEl = document.getElementById('meshMicrogridLocalBridgeAckTimeoutSec');
     const meshLocalBridgeMappingsEl = document.getElementById('meshMicrogridLocalBridgeMappingsJson');
+    const meshTargetGroupsEl = document.getElementById('meshMicrogridTargetGroupsJson');
     const meshRows = Array.from(document.querySelectorAll('[data-mesh-node-row]'));
     const readMesh = (row, field) => {
       const el = row && row.querySelector(`[data-mesh-field="${field}"]`);
@@ -11399,6 +11682,16 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     } catch (_meshBridgeJsonError) {
       patch.meshMicrogrid.localBridge.mappings = Array.isArray(patch.meshMicrogrid.localBridge.mappings) ? patch.meshMicrogrid.localBridge.mappings : [];
     }
+    try {
+      const parsedTargetGroups = meshTargetGroupsEl && String(meshTargetGroupsEl.value || '').trim() ? JSON.parse(String(meshTargetGroupsEl.value || '[]')) : [];
+      patch.meshMicrogrid.targetGroups = Array.isArray(parsedTargetGroups) ? parsedTargetGroups : [];
+    } catch (_meshTargetGroupJsonError) {
+      patch.meshMicrogrid.targetGroups = Array.isArray(patch.meshMicrogrid.targetGroups) ? patch.meshMicrogrid.targetGroups : [];
+    }
+    const readMeshPowerLimit = (row, field) => {
+      const n = Number(readMesh(row, field));
+      return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
+    };
     patch.meshMicrogrid.nodes = meshRows.map((row, idx) => {
       const type = ['producer','consumer','storage','grid','chargepoint','thermal','generic'].includes(readMesh(row, 'type')) ? readMesh(row, 'type') : 'consumer';
       const role = ['producer','consumer','storage','grid'].includes(readMesh(row, 'role')) ? readMesh(row, 'role') : (type === 'producer' ? 'producer' : (type === 'storage' ? 'storage' : (type === 'grid' ? 'grid' : 'consumer')));
@@ -11415,6 +11708,15 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         socDp: readMesh(row, 'socDp'),
         gridImportPowerDp: readMesh(row, 'gridImportPowerDp'),
         gridExportPowerDp: readMesh(row, 'gridExportPowerDp'),
+        minPowerW: readMeshPowerLimit(row, 'minPowerW'),
+        maxPowerW: readMeshPowerLimit(row, 'maxPowerW'),
+        maxImportW: readMeshPowerLimit(row, 'maxImportW'),
+        maxExportW: readMeshPowerLimit(row, 'maxExportW'),
+        maxChargeW: readMeshPowerLimit(row, 'maxChargeW'),
+        maxDischargeW: readMeshPowerLimit(row, 'maxDischargeW'),
+        maxLoadW: readMeshPowerLimit(row, 'maxLoadW'),
+        maxGenerationW: readMeshPowerLimit(row, 'maxGenerationW'),
+        targetGroupIds: String(readMesh(row, 'targetGroupIds') || '').split(/[\n,;]+/g).map((x) => safeMeshId(x.trim(), '')).filter(Boolean),
       };
     });
 
@@ -11605,13 +11907,16 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       ? !!(currentConfig.storage && currentConfig.storage.feneconAcMode)
       : false;
 
-    // Optional raw patch
+    // Optional raw patch. Auch Raw-Patches laufen jetzt durch das Release Safety Gate,
+    // damit ein Debug-/Installer-Payload nicht versehentlich produktive Kernlisten
+    // leert, solange kein expliziter Löschmarker gesetzt ist.
     const raw = String(els.rawPatch.value || '').trim();
+    let finalPatch = patch;
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
-          return deepMerge(patch, parsed);
+          finalPatch = deepMerge(patch, parsed);
         }
       } catch (e) {
         // ignore invalid JSON
@@ -11619,10 +11924,174 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     }
 
     // Keep installerConfig as single source of truth for installer-only features
-    patch.installerConfig = deepMerge({}, (currentConfig && currentConfig.installerConfig) ? currentConfig.installerConfig : {}, patch.installerConfig || {});
+    finalPatch.installerConfig = deepMerge({}, (currentConfig && currentConfig.installerConfig) ? currentConfig.installerConfig : {}, finalPatch.installerConfig || {});
 
-    return patch;
+    return applyReleaseSafetyGateToPatch(finalPatch);
   }
+  /**
+   * Code-Teil: _storageFarmStorageCount
+   * Zweck: Ermittelt, ob eine Speicherfarm-Konfiguration echte Speicher enthält.
+   * Regression-Schutz 0.8.59: Verhindert, dass ein App-Center-Save bekannte
+   * Speicherfarm-Konfigurationen versehentlich mit einer leeren Liste überschreibt.
+   */
+  function _storageFarmStorageCount(cfg) {
+    const sf = cfg && cfg.storageFarm && typeof cfg.storageFarm === 'object' ? cfg.storageFarm : {};
+    return Array.isArray(sf.storages) ? sf.storages.filter((s) => s && typeof s === 'object').length : 0;
+  }
+
+  /**
+   * Code-Teil: applyAppCenterRegressionSafetyGate
+   * Zweck: Letzter Schutz direkt vor dem Speichern der App-Center-Konfiguration.
+   * Dieser Guard ist bewusst klein und hart: Er darf keine neue Regelung bauen,
+   * sondern verhindert nur Regressionen, bei denen UI-/Hydration-Fehler kritische
+   * Konfigurationen leeren würden.
+   */
+  function applyAppCenterRegressionSafetyGate(patch) {
+    const p = patch && typeof patch === 'object' ? patch : {};
+    const beforeCount = _storageFarmStorageCount(currentConfig);
+    const afterCount = _storageFarmStorageCount(p);
+    const storagefarmApp = p.emsApps && p.emsApps.apps && p.emsApps.apps.storagefarm ? p.emsApps.apps.storagefarm : null;
+    const storagefarmExpected = beforeCount > 0 || (storagefarmApp && (storagefarmApp.installed || storagefarmApp.enabled));
+
+    if (storagefarmExpected && beforeCount > 0 && afterCount === 0) {
+      // Safety-Entscheidung: Bekannte Speicher werden nicht mit leerer UI-Liste
+      // überschrieben. Falls der Reiter einmal nicht rendert, bleibt die letzte
+      // bekannte Konfiguration erhalten und der Installateur verliert keine DP-
+      // Zuordnungen. Das ist ein Save-Guard, keine Speicherregelung.
+      p.storageFarm = deepMerge({}, (currentConfig && currentConfig.storageFarm) ? currentConfig.storageFarm : {});
+      p.storageFarm.__saveGuardRestored = true;
+      p.storageFarm.__saveGuardReason = 'storageFarm.storages would be emptied although existing storages are known';
+    }
+
+    const guarded = [];
+    if (beforeCount > 0 && _storageFarmStorageCount(p) > 0) guarded.push('storageFarm');
+    p.__appCenterRegressionSafetyGate = {
+      schema: 'nexowatt.appcenter-regression-safety-gate.v1',
+      ts: Date.now(),
+      guarded,
+      storageFarmBeforeCount: beforeCount,
+      storageFarmAfterCount: _storageFarmStorageCount(p),
+      storageFarmRestored: !!(p.storageFarm && p.storageFarm.__saveGuardRestored),
+      note: 'Save-Guard verhindert das Leeren bekannter Kernkonfigurationen. Keine Hardwaresteuerung.',
+    };
+    return p;
+  }
+
+
+  /**
+   * Code-Teil: Release-/Regression-Safety-Gate
+   * Zweck: verhindert, dass ein App-Center-Release durch UI-/Tab-/Hydration-
+   * Regressionen bestehende Kernkonfigurationen leer speichert.
+   *
+   * Hintergrund:
+   * Nach mehreren Mesh-/0-Einspeise-Erweiterungen darf ein neuer Bereich niemals
+   * Speicherfarm, Ladepunkte, DC-Stationen, NL/P1 oder Mesh-Konfiguration löschen,
+   * nur weil der passende Reiter nicht gerendert, ein DOM-Element fehlt oder eine
+   * Runtime-Hydration noch läuft. Dieses Gate arbeitet defensiv: wenn die bisherige
+   * Konfiguration Daten enthält, der neue Patch aber leer wäre, werden die alten
+   * Werte übernommen und im Report vermerkt. Bewusstes Löschen ganzer Kernbereiche
+   * muss später über eine separate, explizite Löschfunktion erfolgen.
+   */
+  function _sgArray(v) { return Array.isArray(v) ? v : []; }
+  function _sgObject(v) { return v && typeof v === 'object' ? v : {}; }
+  function _sgNonEmptyString(v) { return String(v == null ? '' : v).trim() !== ''; }
+  function _sgCountStorages(cfg) { return _sgArray(_sgObject(cfg.storageFarm).storages).length; }
+  function _sgCountGroups(cfg) { return _sgArray(_sgObject(cfg.storageFarm).groups).length; }
+  function _sgCountEvcs(cfg) {
+    const settings = _sgObject(cfg.settings);
+    return Math.max(Number(settings.evcsCount) || 0, _sgArray(settings.evcsList).length);
+  }
+  function _sgCountChargeKiosk(cfg) { return _sgArray(_sgObject(cfg.chargeKiosk).stations).length; }
+  function _sgCountMeshNodes(cfg) { return _sgArray(_sgObject(cfg.meshMicrogrid).nodes).length; }
+  function _sgCountMeshPeers(cfg) {
+    const mm = _sgObject(cfg.meshMicrogrid);
+    const tailscalePeers = _sgArray(_sgObject(mm.tailscale).peerUrls).length;
+    const meshLinkPeers = _sgArray(_sgObject(_sgObject(mm.meshLink).peers)).length;
+    return Math.max(tailscalePeers, meshLinkPeers);
+  }
+  function _sgCountNlP1Mappings(cfg) {
+    const dps = _sgObject(_sgObject(cfg.nlP1).datapoints);
+    return Object.keys(dps).filter(k => _sgNonEmptyString(dps[k])).length;
+  }
+  function _sgRestore(report, path, reason) {
+    report.restored.push({ path, reason });
+    report.changed = true;
+  }
+  function applyReleaseRegressionSafetyGate(patch) {
+    const report = { schema: 'nexowatt.appcenter-regression-safety-gate.v1', version: '0.8.59', changed: false, restored: [], warnings: [] };
+    const oldCfg = currentConfig && typeof currentConfig === 'object' ? currentConfig : {};
+    const next = patch && typeof patch === 'object' ? patch : {};
+
+    // Speicherfarm: darf nie durch einen leeren UI-Save verschwinden, wenn der
+    // aktuelle Config-/Runtime-Fallback Speicher kennt.
+    const oldStorages = _sgCountStorages(oldCfg);
+    const newStorages = _sgCountStorages(next);
+    if (oldStorages > 0 && newStorages === 0) {
+      next.storageFarm = deepMerge({}, _sgObject(oldCfg.storageFarm), _sgObject(next.storageFarm));
+      next.storageFarm.storages = _sgArray(_sgObject(oldCfg.storageFarm).storages).slice();
+      if (_sgCountGroups(oldCfg) > 0 && _sgCountGroups(next) === 0) next.storageFarm.groups = _sgArray(_sgObject(oldCfg.storageFarm).groups).slice();
+      next.storageFarm._releaseSafetyRestored = true;
+      _sgRestore(report, 'storageFarm.storages', `Bestehende Speicherfarm mit ${oldStorages} Speicher(n) vor leerem Save geschützt.`);
+    }
+
+    // Ladepunkte: verhindert Verlust der LP-Liste, wenn EVCS-Tab/DOM nicht korrekt
+    // gerendert wurde. Einzelne Änderungen bleiben möglich; nur kompletter Verlust
+    // wird abgefangen.
+    const oldEvcs = _sgCountEvcs(oldCfg);
+    const newEvcs = _sgCountEvcs(next);
+    if (oldEvcs > 0 && newEvcs === 0) {
+      next.settings = deepMerge({}, _sgObject(oldCfg.settings), _sgObject(next.settings));
+      next.settings.evcsCount = _sgObject(oldCfg.settings).evcsCount;
+      next.settings.evcsList = _sgArray(_sgObject(oldCfg.settings).evcsList).slice();
+      _sgRestore(report, 'settings.evcsList', `Bestehende Ladepunktliste mit ${oldEvcs} Eintrag/Einträgen vor leerem Save geschützt.`);
+    }
+
+    // DC-Station Display: Stationsseiten gehören zu Ladepunkte und dürfen bei
+    // App-Center-Umbauten nicht verschwinden.
+    const oldStations = _sgCountChargeKiosk(oldCfg);
+    const newStations = _sgCountChargeKiosk(next);
+    if (oldStations > 0 && newStations === 0) {
+      next.chargeKiosk = deepMerge({}, _sgObject(oldCfg.chargeKiosk), _sgObject(next.chargeKiosk));
+      next.chargeKiosk.stations = _sgArray(_sgObject(oldCfg.chargeKiosk).stations).slice();
+      _sgRestore(report, 'chargeKiosk.stations', `Bestehende DC-Station-Display-Konfiguration mit ${oldStations} Station(en) vor leerem Save geschützt.`);
+    }
+
+    // NL/P1: Zuordnungen liegen im Reiter Zuordnung. Wenn dort beim Speichern
+    // keine Felder gerendert wurden, dürfen vorhandene DSMR-/P1-Mappings nicht leer
+    // geschrieben werden.
+    const oldNlP1 = _sgCountNlP1Mappings(oldCfg);
+    const newNlP1 = _sgCountNlP1Mappings(next);
+    if (oldNlP1 > 0 && newNlP1 === 0) {
+      next.nlP1 = deepMerge({}, _sgObject(oldCfg.nlP1), _sgObject(next.nlP1));
+      next.nlP1.datapoints = deepMerge({}, _sgObject(_sgObject(oldCfg.nlP1).datapoints), _sgObject(_sgObject(next.nlP1).datapoints));
+      _sgRestore(report, 'nlP1.datapoints', `Bestehende NL/P1-Zuordnung mit ${oldNlP1} Mapping(s) vor leerem Save geschützt.`);
+    }
+
+    // Mesh/Microgrid: Detailkonfiguration liegt in eigenem Reiter. Nodes/Peers
+    // dürfen nicht verschwinden, nur weil ein anderes Modul gespeichert wurde.
+    const oldMeshNodes = _sgCountMeshNodes(oldCfg);
+    const newMeshNodes = _sgCountMeshNodes(next);
+    if (oldMeshNodes > 0 && newMeshNodes === 0) {
+      next.meshMicrogrid = deepMerge({}, _sgObject(oldCfg.meshMicrogrid), _sgObject(next.meshMicrogrid));
+      next.meshMicrogrid.nodes = _sgArray(_sgObject(oldCfg.meshMicrogrid).nodes).slice();
+      _sgRestore(report, 'meshMicrogrid.nodes', `Bestehende Mesh-Knoten mit ${oldMeshNodes} Eintrag/Einträgen vor leerem Save geschützt.`);
+    }
+    const oldMeshPeers = _sgCountMeshPeers(oldCfg);
+    const newMeshPeers = _sgCountMeshPeers(next);
+    if (oldMeshPeers > 0 && newMeshPeers === 0) {
+      next.meshMicrogrid = deepMerge({}, _sgObject(oldCfg.meshMicrogrid), _sgObject(next.meshMicrogrid));
+      if (_sgObject(oldCfg.meshMicrogrid).tailscale) next.meshMicrogrid.tailscale = deepMerge({}, _sgObject(_sgObject(oldCfg.meshMicrogrid).tailscale), _sgObject(_sgObject(next.meshMicrogrid).tailscale));
+      if (_sgObject(oldCfg.meshMicrogrid).meshLink) next.meshMicrogrid.meshLink = deepMerge({}, _sgObject(_sgObject(oldCfg.meshMicrogrid).meshLink), _sgObject(_sgObject(next.meshMicrogrid).meshLink));
+      _sgRestore(report, 'meshMicrogrid.peers', `Bestehende Mesh-Peer-Konfiguration mit ${oldMeshPeers} Peer(s) vor leerem Save geschützt.`);
+    }
+
+    if (report.changed) {
+      next._releaseSafetyGate = report;
+      report.warnings.push('Release-Safety-Gate hat kritische Bestandskonfigurationen vor einem leeren Save geschützt. Bitte betroffene Reiter prüfen und danach erneut speichern.');
+    }
+    return report;
+  }
+
   /**
    * Code-Teil: saveConfig
    * Zweck: Speichert Benutzereingaben oder Konfiguration.
@@ -11631,7 +12100,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
    */
   async function saveConfig() {
     setStatus('Speichere…');
-    const patch = collectPatchFromUI();
+    const patch = applyAppCenterRegressionSafetyGate(collectPatchFromUI());
+    const safetyReport = applyReleaseRegressionSafetyGate(patch);
+    if (safetyReport && safetyReport.changed) {
+      setStatus('Release-Schutz hat bestehende Konfigurationen vor leerem Speichern geschützt. Bitte prüfen und erneut speichern.', 'warn');
+    }
     const payload = { patch, restartEms: true };
     const data = await fetchJson('/api/installer/config', { method: 'POST', body: JSON.stringify(payload) });
     applyConfigToUI(data.config || {});
@@ -12997,8 +13470,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       { label: 'Netzlimit (cfg)', value: _fmtW(n(ctrl.gridImportLimitW)) },
       { label: 'Netzlimit (eff)', value: _fmtW(n(ctrl.gridImportLimitEffW)) },
       { label: 'Netz (W)', value: _fmtW(n(ctrl.gridImportW)) },
-      { label: 'Grundlast (est.)', value: _fmtW(n(ctrl.gridBaseLoadW)) },
-      { label: 'EVCS Cap (Netz)', value: _fmtW(n(ctrl.gridCapEvcsW)) },
+      { label: 'Grundlast (wirksam)', value: _fmtW(n(ctrl.gridBaseLoadW)) },
+      { label: 'Lokale Deckung', value: _fmtW(n(ctrl.gridLocalSupportW)) },
+      { label: 'EVCS Ist für Netz-Gate', value: _fmtW(n(ctrl.gridEvcsActualForCapW)) },
+      { label: 'Reservierung ignoriert', value: _fmtW(n(ctrl.gridEvcsReserveIgnoredForCapW)) },
+      { label: 'EVCS Cap (Netz sicher)', value: _fmtW(n(ctrl.gridCapEvcsW)) },
       { label: 'Binding', value: _fmtBool(gridBind, 'JA', 'NEIN') },
     ], gridBind ? 'warn' : 'ok');
 
@@ -13097,7 +13573,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
           .map((c) => {
             const reserveW = n(c.usedW ?? c.reserveW ?? c.requestedW);
             const pvReserveW = n(c.pvUsedW ?? c.pvReserveW ?? (c.pvOnly ? reserveW : 0));
-            const actualW = n(c.actualW ?? c.usedW ?? c.reserveW ?? c.requestedW);
+            // 0.8.64: In der Prioritäten-Kachel darf 'Ist' nicht aus Reserve/Setpoint
+            // rekonstruiert werden. Wenn kein echter Istwert kommt, bleibt Ist = 0;
+            // Reserve und PV-Reserve werden separat angezeigt.
+            const actualW = n(c.actualW ?? c.actualPowerW ?? c.measuredW ?? 0);
             return Object.assign({}, c, { reserveW, pvReserveW, actualW });
           })
           // Nur echte aktive/relevante Reservierungen als Zeile anzeigen.
@@ -13165,7 +13644,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       { label: 'Tarif', value: tariffTxt },
       { label: 'Mode', value: String(ctrl.budgetMode || '') },
       { label: 'Budget', value: _fmtW(budgetW) },
-      { label: 'Used', value: _fmtW(usedW) },
+      { label: 'Ist', value: _fmtW(n(ctrl.actualW ?? usedW)) },
+      { label: 'Reserviert', value: _fmtW(n(ctrl.reserveW ?? usedW)) },
       { label: 'Remaining', value: _fmtW(remW) },
       { label: 'Status', value: String(ctrl.status || '') },
     ], budgetKind));
@@ -13173,8 +13653,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // Summary (optional)
     if (sum) {
       els.chargingBudget.appendChild(mkCard('Summary', [
-        { label: 'EVCS Ist', value: _fmtW(n(sum.totalPowerW)) },
-        { label: 'EVCS Soll', value: _fmtW(n(sum.totalTargetPowerW)) },
+        { label: 'EVCS Ist', value: _fmtW(n(ctrl.actualW ?? ctrl.gridEvcsActualForCapW ?? sum.totalPowerW ?? 0)) },
+        { label: 'EVCS Reserviert', value: _fmtW(n(sum.totalReservedPowerW ?? ctrl.reserveW ?? 0)) },
+        { label: 'EVCS Soll', value: _fmtW(n(sum.totalTargetPowerW ?? ctrl.usedW ?? 0)) },
+        { label: 'Ist-Quelle', value: 'frischer Messwert / Grid-Gate' },
         { label: 'Online Ports', value: (sum.onlineWallboxes != null) ? String(sum.onlineWallboxes) : '--' },
       ], ''));
     }

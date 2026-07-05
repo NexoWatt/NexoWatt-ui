@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/mesh-microgrid.ts
- * Quell-Hash: sha256:9477df2dcffd21b5ad1165c662ba28dc9d796c17a636b1730eb9ba8d3b50fc2d
+ * Quell-Hash: sha256:eb05e7f57b25f20b875fa858911f32afccce60c37d83c8b977f24fb2e292c2d0
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -19,7 +19,9 @@
 
 const { BaseModule } = require('./base');
 
-const MODULE_VERSION = 'nexowatt.mesh-microgrid-target-release.v1';
+const MODULE_VERSION = 'nexowatt.mesh-microgrid-target-group-fairness.v1';
+// Backward-compatible schema marker for 0.8.49 tests: nexowatt.mesh-microgrid-target-groups.v1
+// Backward-compatible schema marker for 0.8.47 target-release tests: nexowatt.mesh-microgrid-target-release.v1
 // Backward-compatible schema marker for static fieldtest test: nexowatt.mesh-microgrid-two-instance-fieldtest.v1
 
 function safeId(input, fallback = 'node') {
@@ -91,10 +93,177 @@ function normalizeNodes(raw) {
       socDp: String(n.socDp || n.socId || '').trim(),
       gridImportPowerDp: String(n.gridImportPowerDp || n.importPowerDp || '').trim(),
       gridExportPowerDp: String(n.gridExportPowerDp || n.exportPowerDp || '').trim(),
+      // 0.8.48 Leistungsgrenzen je Knoten. Die Limits werden im CommandGuard
+      // geprüft und begrenzen/blockieren nur neutrale Mesh-Command-Intents.
+      // Sie erzeugen keine direkte Hardwaresteuerung.
+      minPowerW: Math.max(0, Math.round(num(n.minPowerW, 0))),
       maxPowerW: Math.max(0, Math.round(num(n.maxPowerW, 0))),
+      maxImportW: Math.max(0, Math.round(num(n.maxImportW, n.importLimitW || 0))),
+      maxExportW: Math.max(0, Math.round(num(n.maxExportW, n.exportLimitW || 0))),
+      maxChargeW: Math.max(0, Math.round(num(n.maxChargeW, n.chargeLimitW || 0))),
+      maxDischargeW: Math.max(0, Math.round(num(n.maxDischargeW, n.dischargeLimitW || 0))),
+      maxLoadW: Math.max(0, Math.round(num(n.maxLoadW, n.loadLimitW || 0))),
+      maxGenerationW: Math.max(0, Math.round(num(n.maxGenerationW, n.generationLimitW || 0))),
+      // 0.8.49: Zielgruppen-Zuordnung. Gruppen steuern nur neutrale Command-Intents.
+      targetGroupIds: Array.isArray(n.targetGroupIds) ? n.targetGroupIds.map(x => safeId(x, '')).filter(Boolean) : String(n.targetGroupIds || n.targetGroups || '').split(/[\n,;]+/g).map(x => safeId(x, '')).filter(Boolean),
       note: String(n.note || '').trim(),
     };
   });
+}
+
+
+/**
+ * 0.8.49 Zielgruppen-Strategie.
+ *
+ * Zielgruppen bündeln Knoten fachlich: Ladepunkte, Speicher, Verbraucher,
+ * Erzeuger oder frei definierte Gruppen. Sie beeinflussen nur neutrale
+ * Mesh-Command-Intents: Gruppengrenzen, Gruppenpriorität und Gruppenanteile
+ * werden in CommandGuard und Betreiberansicht ausgewertet. Es gibt weiterhin
+ * keine direkte Hardwaresteuerung aus Mesh/Microgrid heraus.
+ */
+function normalizeTargetGroups(raw) {
+  const arr = Array.isArray(raw) ? raw : [];
+  const seen = new Set();
+  return arr.map((g, idx) => {
+    const x = g && typeof g === 'object' ? g : {};
+    let id = safeId(x.id || x.groupId || x.key || `group_${idx + 1}`, `group_${idx + 1}`);
+    if (seen.has(id)) id = `${id}_${idx + 1}`;
+    seen.add(id);
+    const type = normalizeType(x.type || x.groupType || 'generic');
+    const memberNodeIds = Array.isArray(x.memberNodeIds) ? x.memberNodeIds : (Array.isArray(x.nodes) ? x.nodes : String(x.memberNodeIds || x.nodes || '').split(/[\n,;]+/g));
+    const memberTypes = Array.isArray(x.memberTypes) ? x.memberTypes : String(x.memberTypes || '').split(/[\n,;]+/g);
+    return {
+      id,
+      name: String(x.name || x.label || id).trim() || id,
+      type,
+      enabled: x.enabled !== false,
+      priority: Math.max(1, Math.min(999, Math.round(num(x.priority, 100)))) || 100,
+      memberNodeIds: memberNodeIds.map(v => safeId(String(v || '').trim(), '')).filter(Boolean),
+      memberTypes: memberTypes.map(v => normalizeType(String(v || '').trim())).filter(Boolean),
+      maxPowerW: Math.max(0, Math.round(num(x.maxPowerW, 0))),
+      minPowerW: Math.max(0, Math.round(num(x.minPowerW, 0))),
+      maxImportW: Math.max(0, Math.round(num(x.maxImportW, 0))),
+      maxExportW: Math.max(0, Math.round(num(x.maxExportW, 0))),
+      maxChargeW: Math.max(0, Math.round(num(x.maxChargeW, 0))),
+      maxDischargeW: Math.max(0, Math.round(num(x.maxDischargeW, 0))),
+      maxLoadW: Math.max(0, Math.round(num(x.maxLoadW, 0))),
+      maxGenerationW: Math.max(0, Math.round(num(x.maxGenerationW, 0))),
+      strategy: String(x.strategy || 'local_first').trim().toLowerCase() || 'local_first',
+      // 0.8.50 Zielgruppen-Fairness: optionale Budget-/Mindestanteile für
+      // die Verteilung neutraler Local-First-/Grid-Last-Command-Intents.
+      // Gewicht und Mindestanteil erzeugen keine Hardwarebefehle, sondern
+      // verteilen nur das zulässige Gruppenbudget im CommandGuard.
+      fairShareWeight: Math.max(0, round(num(x.fairShareWeight || x.weight, 1), 3)),
+      minSharePercent: Math.max(0, Math.min(100, round(num(x.minSharePercent || x.minPercent, 0), 2))),
+      reservePowerW: Math.max(0, Math.round(num(x.reservePowerW || x.reservedPowerW, 0))),
+      maxSharePercent: Math.max(0, Math.min(100, round(num(x.maxSharePercent || 100, 100), 2))),
+      budgetPowerW: Math.max(0, Math.round(num(x.budgetPowerW || x.budgetW, 0))),
+      note: String(x.note || '').trim(),
+    };
+  }).filter(g => g.enabled !== false);
+}
+
+function nodeInTargetGroup(node, group) {
+  const n = node && typeof node === 'object' ? node : {};
+  const g = group && typeof group === 'object' ? group : {};
+  const id = safeId(n.id || '', '');
+  if (!id) return false;
+  if (Array.isArray(g.memberNodeIds) && g.memberNodeIds.includes(id)) return true;
+  if (Array.isArray(n.targetGroupIds) && n.targetGroupIds.includes(g.id)) return true;
+  if (Array.isArray(g.memberTypes) && g.memberTypes.includes(normalizeType(n.type))) return true;
+  return false;
+}
+
+function targetGroupsForCommand(command, node, groups) {
+  const n = node && typeof node === 'object' ? node : null;
+  const list = Array.isArray(groups) ? groups : [];
+  if (!n) return [];
+  return list.filter(g => nodeInTargetGroup(n, g)).sort(prioritySort);
+}
+
+function _meshGroupLimitForCommand(groups, node, command) {
+  const groupList = targetGroupsForCommand(command, node, groups);
+  const limits = [];
+  const minLimits = [];
+  const reasons = [];
+  const dir = String(command && command.direction || '').toLowerCase();
+  const cat = String(command && command.category || '').toLowerCase();
+  for (const g of groupList) {
+    const addMax = (value, id) => {
+      const v = Math.max(0, Math.round(num(value, 0)));
+      if (v > 0) { limits.push(v); reasons.push({ id: `group.${g.id}.${id}`, limitW: v, groupId: g.id, groupName: g.name }); }
+    };
+    const addMin = (value, id) => {
+      const v = Math.max(0, Math.round(num(value, 0)));
+      if (v > 0) { minLimits.push(v); reasons.push({ id: `group.${g.id}.${id}`, limitW: v, groupId: g.id, groupName: g.name }); }
+    };
+    addMax(g.maxPowerW, 'maxPowerW');
+    addMin(g.minPowerW, 'minPowerW');
+    if (g.type === 'chargepoint' || dir.includes('charge')) addMax(g.maxChargeW || g.maxLoadW, 'maxChargeW/maxLoadW');
+    if (g.type === 'storage' && (dir.includes('charge') || cat.includes('local_first'))) addMax(g.maxChargeW, 'maxChargeW');
+    if (g.type === 'storage' && (dir.includes('discharge') || cat.includes('grid_last'))) addMax(g.maxDischargeW, 'maxDischargeW');
+    if (g.type === 'consumer' || g.type === 'thermal' || dir.includes('load') || dir.includes('use')) addMax(g.maxLoadW, 'maxLoadW');
+    if (g.type === 'producer' || dir.includes('export') || dir.includes('generation')) addMax(g.maxGenerationW || g.maxExportW, 'maxGenerationW/maxExportW');
+    if (dir.includes('import')) addMax(g.maxImportW, 'maxImportW');
+    if (dir.includes('export')) addMax(g.maxExportW, 'maxExportW');
+  }
+  return {
+    groups: groupList.map(g => ({ id: g.id, name: g.name, type: g.type, priority: g.priority, strategy: g.strategy })),
+    minPowerW: minLimits.length ? Math.max(...minLimits) : 0,
+    maxPowerW: limits.length ? Math.min(...limits) : 0,
+    reasons,
+  };
+}
+
+function buildTargetGroupPlan(groups, nodes, commands) {
+  const groupList = Array.isArray(groups) ? groups : [];
+  const nodeList = Array.isArray(nodes) ? nodes : [];
+  const cmdList = Array.isArray(commands) ? commands : [];
+  const summaries = groupList.map(g => {
+    const members = nodeList.filter(n => nodeInTargetGroup(n, g));
+    const groupCommands = cmdList.filter(c => members.some(n => String(n.id) === String(c.nodeId || c.targetNodeId || '')));
+    const requestedW = groupCommands.reduce((sum, c) => sum + Math.max(0, Math.round(num(c.requestedPowerW || c.plannedPowerW, 0))), 0);
+    const allowedW = groupCommands.reduce((sum, c) => sum + Math.max(0, Math.round(num(c.plannedPowerW, 0))), 0);
+    return {
+      schema: 'nexowatt.mesh-target-group-summary.v1',
+      id: g.id,
+      name: g.name,
+      type: g.type,
+      priority: g.priority,
+      strategy: g.strategy,
+      minSharePercent: g.minSharePercent || 0,
+      maxSharePercent: g.maxSharePercent || 0,
+      fairnessWeight: g.fairnessWeight || 1,
+      minBudgetW: g.minBudgetW || 0,
+      maxBudgetW: g.maxBudgetW || 0,
+      memberCount: members.length,
+      members: members.map(n => ({ id: n.id, name: n.name, type: n.type, priority: n.priority })),
+      requestedPowerW: requestedW,
+      allowedPowerW: allowedW,
+      maxPowerW: g.maxPowerW || 0,
+      minPowerW: g.minPowerW || 0,
+      limits: {
+        maxImportW: g.maxImportW || 0,
+        maxExportW: g.maxExportW || 0,
+        maxChargeW: g.maxChargeW || 0,
+        maxDischargeW: g.maxDischargeW || 0,
+        maxLoadW: g.maxLoadW || 0,
+        maxGenerationW: g.maxGenerationW || 0,
+      },
+      directHardwareWrite: false,
+      neutralCommandOnly: true,
+    };
+  });
+  return {
+    schema: 'nexowatt.mesh-target-groups.v1',
+    groupCount: summaries.length,
+    activeGroupCount: summaries.filter(g => g.memberCount > 0).length,
+    groups: summaries,
+    priorityOrder: summaries.slice().sort(prioritySort).map((g, idx) => ({ rank: idx + 1, id: g.id, name: g.name, type: g.type, priority: g.priority, memberCount: g.memberCount })),
+    summary: summaries.length ? `${summaries.length} Zielgruppe(n) konfiguriert.` : 'Keine Zielgruppen konfiguriert.',
+    directHardwareWrite: false,
+    neutralCommandOnly: true,
+  };
 }
 
 
@@ -126,6 +295,7 @@ function priorityOrder(nodes) {
     .sort(prioritySort)
     .map((n, idx) => ({ rank: idx + 1, id: n.id, name: n.name, type: n.type, role: n.role, priority: n.priority }));
 }
+
 
 function buildGridLimitDiagnostics(totals, gridLimitW) {
   const limit = Math.max(0, Math.round(num(gridLimitW, 0)));
@@ -859,7 +1029,234 @@ function classifyLocalBridgeAck(raw) {
   return { status: 'unknown', ok: false, label: 'unbekannt', severity: 'warn' };
 }
 
-function buildCommandGuard(planning, nodes, cluster, controlCfg, tailscaleCfg) {
+
+/**
+ * 0.8.48 Node-/Bridge-Leistungsgrenzen.
+ *
+ * Dieses Limit-Gate liegt bewusst vor jeder neutralen Command-Ausgabe. Es ändert
+ * nur Mesh-Command-Intents: zu große Leistungen werden gekürzt oder blockiert.
+ * Es schreibt keine Hardware und ersetzt keinen lokalen Bridge-/Geräteadapter.
+ */
+
+/**
+ * 0.8.50 Zielgruppen-Fairness.
+ *
+ * Zweck:
+ * Verteilt das aktuell geplante Leistungsbudget auf Zielgruppen. Jede Gruppe kann
+ * Gewicht, Mindestanteil, Reservierung und harte Gruppenlimits besitzen. Die
+ * Funktion arbeitet ausschließlich auf neutralen Command-Intents und blockiert/
+ * reduziert diese, bevor sie in lokale Bridge-/Peer-States geschrieben werden.
+ */
+function buildTargetGroupFairnessPlan(groups, nodes, commands) {
+  const groupList = Array.isArray(groups) ? groups : [];
+  const nodeList = Array.isArray(nodes) ? nodes : [];
+  const cmdList = Array.isArray(commands) ? commands : [];
+  const nodeById = new Map(nodeList.map(n => [String(n && n.id || ''), n]));
+  const sortedGroups = groupList.slice().sort(prioritySort);
+  const totalRequestedW = cmdList.reduce((sum, c) => sum + Math.max(0, Math.round(num(c && (c.requestedPowerW || c.plannedPowerW), 0))), 0);
+  const totalHardBudgetW = sortedGroups.reduce((sum, g) => sum + Math.max(0, Math.round(num(g && g.maxPowerW, 0))), 0);
+  const fairnessBudgetW = totalHardBudgetW > 0 ? Math.min(totalRequestedW || totalHardBudgetW, totalHardBudgetW) : totalRequestedW;
+  const positiveWeights = sortedGroups.reduce((sum, g) => sum + Math.max(0, num(g && g.fairShareWeight, 1)), 0) || sortedGroups.length || 1;
+  const budgets = new Map();
+  for (const g of sortedGroups) {
+    const requestedW = cmdList.filter(c => nodeInTargetGroup(nodeById.get(String(c && (c.nodeId || c.targetNodeId) || '')), g)).reduce((sum, c) => sum + Math.max(0, Math.round(num(c && (c.requestedPowerW || c.plannedPowerW), 0))), 0);
+    const minShareW = Math.max(Math.round((fairnessBudgetW * Math.max(0, num(g.minSharePercent, 0))) / 100), Math.max(0, Math.round(num(g.reservePowerW, 0))));
+    const weightedShareW = Math.round((fairnessBudgetW * Math.max(0, num(g.fairShareWeight, 1))) / positiveWeights);
+    let budgetW = Math.max(minShareW, weightedShareW);
+    if (g.maxPowerW > 0) budgetW = Math.min(budgetW, g.maxPowerW);
+    if (requestedW > 0) budgetW = Math.min(budgetW, requestedW);
+    budgets.set(g.id, { groupId: g.id, groupName: g.name, priority: g.priority, requestedW, budgetW, usedW: 0, remainingW: budgetW, minShareW, weightedShareW, maxPowerW: g.maxPowerW || 0, fairShareWeight: g.fairShareWeight || 1, minSharePercent: g.minSharePercent || 0, reservePowerW: g.reservePowerW || 0 });
+  }
+  const limitedCommands = [];
+  const blockedCommands = [];
+  const fairnessCommands = cmdList.map(cmd => {
+    const c = cmd && typeof cmd === 'object' ? cmd : {};
+    const node = nodeById.get(String(c.nodeId || c.targetNodeId || '')) || null;
+    const memberships = targetGroupsForCommand(c, node, sortedGroups);
+    if (!memberships.length) return { ...c, targetGroupFairness: { schema: 'nexowatt.mesh-target-group-fairness-command.v1', applied: false, reason: 'no_target_group', directHardwareWrite: false, neutralCommandOnly: true } };
+    const g = memberships[0];
+    const b = budgets.get(g.id) || { budgetW: 0, usedW: 0, remainingW: 0 };
+    const requestedPowerW = Math.max(0, Math.round(num(c.plannedPowerW || c.requestedPowerW, 0)));
+    let allowedPowerW = requestedPowerW;
+    let limited = false;
+    let blocked = false;
+    if (b.budgetW > 0 && requestedPowerW > b.remainingW) {
+      allowedPowerW = Math.max(0, b.remainingW);
+      limited = allowedPowerW > 0;
+      blocked = allowedPowerW <= 0;
+    }
+    b.usedW += allowedPowerW;
+    b.remainingW = Math.max(0, b.budgetW - b.usedW);
+    budgets.set(g.id, b);
+    const fairness = { schema: 'nexowatt.mesh-target-group-fairness-command.v1', applied: true, groupId: g.id, groupName: g.name, requestedPowerW, allowedPowerW, budgetW: b.budgetW, usedW: b.usedW, remainingW: b.remainingW, limited, blocked, reason: blocked ? 'target_group_budget_exhausted' : (limited ? 'target_group_budget_limited' : 'within_target_group_budget'), directHardwareWrite: false, neutralCommandOnly: true };
+    const out = { ...c, plannedPowerW: allowedPowerW, targetGroupFairness: fairness };
+    if (limited) {
+      out.limitedByTargetGroupFairness = true;
+      limitedCommands.push({ commandId: out.commandId, nodeId: out.nodeId, targetNodeId: out.targetNodeId, groupId: g.id, requestedPowerW, allowedPowerW, reason: fairness.reason });
+    }
+    if (blocked) {
+      out.blockedByTargetGroupFairness = true;
+      out.allowed = false;
+      out.blocked = true;
+      const missing = Array.isArray(out.safetyMissing) ? out.safetyMissing.slice() : [];
+      if (!missing.includes('target_group_fairness_blocked')) missing.push('target_group_fairness_blocked');
+      out.safetyMissing = missing;
+      out.reason = `Zielgruppen-Fairness blockiert Command: ${g.name || g.id} Budget ausgeschöpft.`;
+      blockedCommands.push({ commandId: out.commandId, nodeId: out.nodeId, targetNodeId: out.targetNodeId, groupId: g.id, requestedPowerW, allowedPowerW, reason: out.reason });
+    }
+    return out;
+  });
+  const groupBudgets = Array.from(budgets.values()).map(b => ({ ...b, utilizationPercent: b.budgetW > 0 ? round((b.usedW / b.budgetW) * 100, 1) : 0 }));
+  return { schema: 'nexowatt.mesh-target-group-fairness.v1', totalRequestedW, fairnessBudgetW, groups: groupBudgets, commands: fairnessCommands, limitedCommands, blockedCommands, limitedCount: limitedCommands.length, blockedCount: blockedCommands.length, activeBudgetCount: groupBudgets.filter(g => g.budgetW > 0).length, summary: groupBudgets.length ? `${groupBudgets.length} Zielgruppen-Fairness-Budget(s) berechnet.` : 'Keine Zielgruppen-Fairness aktiv.', directHardwareWrite: false, neutralCommandOnly: true };
+}
+
+function _meshPositiveLimits(values) {
+  return (Array.isArray(values) ? values : [])
+    .map(v => Math.max(0, Math.round(num(v, 0))))
+    .filter(v => v > 0);
+}
+
+function _meshNodeLimitForCommand(node, command) {
+  const n = node && typeof node === 'object' ? node : {};
+  const cmd = command && typeof command === 'object' ? command : {};
+  const dir = String(cmd.direction || '').toLowerCase();
+  const cat = String(cmd.category || '').toLowerCase();
+  const type = normalizeType(n.type || cmd.targetType || 'generic');
+  const limits = [];
+  const reasons = [];
+  const add = (value, id) => {
+    const v = Math.max(0, Math.round(num(value, 0)));
+    if (v > 0) { limits.push(v); reasons.push({ id, limitW: v }); }
+  };
+  add(n.maxPowerW, 'node.maxPowerW');
+  if (type === 'chargepoint' || dir.includes('charge')) add(n.maxChargeW || n.maxLoadW, 'node.maxChargeW/maxLoadW');
+  if (type === 'storage' && (dir.includes('charge') || cat.includes('local_first'))) add(n.maxChargeW, 'node.maxChargeW');
+  if (type === 'storage' && (dir.includes('discharge') || cat.includes('grid_last'))) add(n.maxDischargeW, 'node.maxDischargeW');
+  if (type === 'consumer' || type === 'thermal' || dir.includes('load') || dir.includes('use')) add(n.maxLoadW, 'node.maxLoadW');
+  if (type === 'producer' || dir.includes('export') || dir.includes('generation')) add(n.maxGenerationW || n.maxExportW, 'node.maxGenerationW/maxExportW');
+  if (dir.includes('import')) add(n.maxImportW, 'node.maxImportW');
+  if (dir.includes('export')) add(n.maxExportW, 'node.maxExportW');
+  const minPowerW = Math.max(0, Math.round(num(n.minPowerW, 0)));
+  const maxPowerW = limits.length ? Math.min(...limits) : 0;
+  return { minPowerW, maxPowerW, reasons };
+}
+
+function _meshBridgeLimitForCommand(command, bridgeCfg) {
+  const cfg = bridgeCfg && typeof bridgeCfg === 'object' ? bridgeCfg : normalizeLocalBridgeCfg({});
+  const mapping = findLocalBridgeMappingForCommand(command, cfg.mappings || []);
+  if (!mapping) return { mapping: null, minPowerW: 0, maxPowerW: 0, reasons: [] };
+  const reasons = [];
+  const maxPowerW = Math.max(0, Math.round(num(mapping.maxPowerW, 0)));
+  const minPowerW = Math.max(0, Math.round(num(mapping.minPowerW, 0)));
+  if (maxPowerW > 0) reasons.push({ id: `bridge.${mapping.id}.maxPowerW`, limitW: maxPowerW });
+  if (minPowerW > 0) reasons.push({ id: `bridge.${mapping.id}.minPowerW`, limitW: minPowerW });
+  return { mapping, minPowerW, maxPowerW, reasons };
+}
+
+function buildCommandLimitDiagnostics(commands, nodes, bridgeCfg, targetGroups) {
+  const cmdList = Array.isArray(commands) ? commands : [];
+  const nodeList = Array.isArray(nodes) ? nodes : [];
+  const nodeById = new Map(nodeList.map(n => [String(n && n.id || ''), n]));
+  const limitedCommands = [];
+  const blockedCommands = [];
+  const enriched = cmdList.map(cmd => {
+    const c = cmd && typeof cmd === 'object' ? cmd : {};
+    const nodeId = String(c.nodeId || c.targetNodeId || '');
+    const node = nodeById.get(nodeId) || nodeById.get(String(c.targetNodeId || '')) || null;
+    const requestedPowerW = Math.max(0, Math.round(num(c.plannedPowerW, 0)));
+    const nodeLimit = _meshNodeLimitForCommand(node, c);
+    const bridgeLimit = _meshBridgeLimitForCommand(c, bridgeCfg);
+    const groupLimit = _meshGroupLimitForCommand(targetGroups, node, c);
+    const maxLimits = _meshPositiveLimits([nodeLimit.maxPowerW, bridgeLimit.maxPowerW, groupLimit.maxPowerW]);
+    const minLimits = _meshPositiveLimits([nodeLimit.minPowerW, bridgeLimit.minPowerW, groupLimit.minPowerW]);
+    const effectiveMaxPowerW = maxLimits.length ? Math.min(...maxLimits) : 0;
+    const effectiveMinPowerW = minLimits.length ? Math.max(...minLimits) : 0;
+    let allowedPowerW = requestedPowerW;
+    const reasons = [];
+    if (nodeLimit.reasons.length) reasons.push(...nodeLimit.reasons);
+    if (bridgeLimit.reasons.length) reasons.push(...bridgeLimit.reasons);
+    if (groupLimit.reasons.length) reasons.push(...groupLimit.reasons);
+    let blockedByLimit = false;
+    let limitedByLimit = false;
+    if (effectiveMaxPowerW > 0 && requestedPowerW > effectiveMaxPowerW) {
+      allowedPowerW = effectiveMaxPowerW;
+      limitedByLimit = true;
+    }
+    if (allowedPowerW > 0 && effectiveMinPowerW > 0 && allowedPowerW < effectiveMinPowerW) {
+      blockedByLimit = true;
+      allowedPowerW = 0;
+      reasons.push({ id: 'effectiveMinPowerW', limitW: effectiveMinPowerW });
+    }
+    if (requestedPowerW <= 0) blockedByLimit = true;
+    const powerLimit = {
+      schema: 'nexowatt.mesh-command-power-limit.v1',
+      nodeId: node ? node.id : nodeId,
+      nodeName: node ? node.name : '',
+      requestedPowerW,
+      allowedPowerW,
+      effectiveMaxPowerW,
+      effectiveMinPowerW,
+      limitedByLimit,
+      blockedByLimit,
+      reasons,
+      bridgeMappingId: bridgeLimit.mapping ? bridgeLimit.mapping.id : '',
+      targetGroups: groupLimit.groups || [],
+      directHardwareWrite: false,
+      neutralCommandOnly: true,
+    };
+    const out = { ...c, requestedPowerW, plannedPowerW: allowedPowerW, powerLimit };
+    if (limitedByLimit) {
+      out.limitedByPowerLimit = true;
+      out.limitReason = reasons.map(r => r.id).join(', ');
+      limitedCommands.push({ commandId: out.commandId, nodeId: out.nodeId, targetNodeId: out.targetNodeId, requestedPowerW, allowedPowerW, reasons });
+    }
+    if (blockedByLimit) {
+      out.blockedByPowerLimit = true;
+      out.allowed = false;
+      out.blocked = true;
+      const missing = Array.isArray(out.safetyMissing) ? out.safetyMissing.slice() : [];
+      if (!missing.includes('power_limit_blocked')) missing.push('power_limit_blocked');
+      out.safetyMissing = missing;
+      out.reason = `Leistungsgrenze blockiert Command: ${reasons.map(r => r.id).join(', ') || 'requestedPowerW=0'}.`;
+      blockedCommands.push({ commandId: out.commandId, nodeId: out.nodeId, targetNodeId: out.targetNodeId, requestedPowerW, allowedPowerW, reasons, reason: out.reason });
+    }
+    return out;
+  });
+  const nodeLimits = nodeList.map(n => ({
+    id: n.id, name: n.name, type: n.type, role: n.role,
+    minPowerW: n.minPowerW || 0, maxPowerW: n.maxPowerW || 0,
+    maxImportW: n.maxImportW || 0, maxExportW: n.maxExportW || 0,
+    maxChargeW: n.maxChargeW || 0, maxDischargeW: n.maxDischargeW || 0,
+    maxLoadW: n.maxLoadW || 0, maxGenerationW: n.maxGenerationW || 0,
+  }));
+  const bridgeTargets = (bridgeCfg && Array.isArray(bridgeCfg.mappings) ? bridgeCfg.mappings : []).map(m => ({ id: m.id, nodeId: m.nodeId, targetNodeId: m.targetNodeId, commandStateDp: m.commandStateDp, minPowerW: m.minPowerW || 0, maxPowerW: m.maxPowerW || 0 }));
+  const fairnessPlan = buildTargetGroupFairnessPlan(targetGroups, nodeList, enriched);
+  const fairnessCommands = fairnessPlan.commands || enriched;
+  const allLimitedCommands = limitedCommands.concat(fairnessPlan.limitedCommands || []);
+  const allBlockedCommands = blockedCommands.concat(fairnessPlan.blockedCommands || []);
+  const targetGroupPlan = buildTargetGroupPlan(targetGroups, nodeList, fairnessCommands);
+  targetGroupPlan.fairness = fairnessPlan;
+  return {
+    schema: 'nexowatt.mesh-power-limits.v2',
+    commands: fairnessCommands,
+    limitedCommands: allLimitedCommands,
+    blockedCommands: allBlockedCommands,
+    nodeLimits,
+    bridgeTargets,
+    targetGroups: targetGroupPlan.groups,
+    targetGroupPriorityOrder: targetGroupPlan.priorityOrder,
+    targetGroupSummary: targetGroupPlan,
+    targetGroupFairness: fairnessPlan,
+    limitedCount: allLimitedCommands.length,
+    blockedCount: allBlockedCommands.length,
+    activeLimitCount: nodeLimits.reduce((sum, n) => sum + ['minPowerW','maxPowerW','maxImportW','maxExportW','maxChargeW','maxDischargeW','maxLoadW','maxGenerationW'].filter(k => Number(n[k]) > 0).length, 0) + bridgeTargets.reduce((sum, t) => sum + (Number(t.minPowerW) > 0 ? 1 : 0) + (Number(t.maxPowerW) > 0 ? 1 : 0), 0) + targetGroupPlan.groups.reduce((sum, g) => sum + (Number(g.maxPowerW) > 0 ? 1 : 0) + (Number(g.minPowerW) > 0 ? 1 : 0) + Object.values(g.limits || {}).filter(v => Number(v) > 0).length, 0) + Number(fairnessPlan.activeBudgetCount || 0),
+    lastReason: allBlockedCommands.length ? `${allBlockedCommands.length} Command(s) durch Leistungs-/Fairness-Grenzen blockiert.` : (allLimitedCommands.length ? `${allLimitedCommands.length} Command(s) durch Leistungs-/Fairness-Grenzen gekürzt.` : 'Keine Leistungs- oder Fairness-Grenze hat den aktuellen Command-Plan begrenzt.'),
+    directHardwareWrite: false,
+    neutralCommandOnly: true,
+  };
+}
+
+function buildCommandGuard(planning, nodes, cluster, controlCfg, tailscaleCfg, bridgeCfg, targetGroupCfg) {
   const actions = planning && Array.isArray(planning.actions) ? planning.actions : [];
   const nodeList = Array.isArray(nodes) ? nodes : [];
   const gridLimit = planning && planning.gridLimit ? planning.gridLimit : {};
@@ -868,6 +1265,8 @@ function buildCommandGuard(planning, nodes, cluster, controlCfg, tailscaleCfg) {
   const gridLimitW = Math.max(0, Math.round(num(cluster && cluster.gridLimitW, 0)));
   const control = normalizeCommandOutputCfg(controlCfg || {});
   const tailscale = normalizeTailscaleCfg(tailscaleCfg || {});
+  const localBridgeCfg = normalizeLocalBridgeCfg(bridgeCfg || {});
+  const targetGroups = normalizeTargetGroups(targetGroupCfg);
   const knownNodeIds = new Set(nodeList.map(n => String(n && n.id || '')));
   const priorityKnown = nodeList.length > 0 && nodeList.every(n => Number.isFinite(Number(n.priority)));
   const isFieldMode = control.controlMode === 'field_test';
@@ -888,6 +1287,7 @@ function buildCommandGuard(planning, nodes, cluster, controlCfg, tailscaleCfg) {
     { id: 'tailscale_mesh', ok: tailscaleReady, severity: tailscaleReady ? 'info' : 'warn', message: tailscaleReady ? `Tailscale-Mesh-Profil aktiv: ${tailscale.profile}; ${tailscale.peerUrls.length} Peer-URL(s) für Command-Dispatch vorhanden.` : 'Tailscale-Mesh ist nicht aktiv oder keine Peer-URL hinterlegt; lokale Command-Ausgabe bleibt möglich.' },
     { id: 'grid_limit', ok: gridLimitW > 0 || String(gridLimit && gridLimit.severity || '') === 'off', severity: gridLimitW > 0 ? 'info' : 'warn', message: gridLimitW > 0 ? `Cluster-/Netzlimit ${gridLimitW} W ist vorhanden.` : 'Kein Cluster-/Netzlimit gesetzt; Feldtest sollte nur mit bewusst geprüfter Anlage erfolgen.' },
     { id: 'node_priority', ok: priorityKnown, severity: priorityKnown ? 'info' : 'warn', message: priorityKnown ? 'Knotenprioritäten sind vorhanden.' : 'Knotenprioritäten fehlen oder sind unvollständig.' },
+    { id: 'target_groups', ok: true, severity: targetGroups.length ? 'info' : 'warn', message: targetGroups.length ? `${targetGroups.length} Zielgruppe(n) für Local-First-Verteilung konfiguriert.` : 'Keine Zielgruppen konfiguriert; Knotenprioritäten werden direkt genutzt.' },
   ];
 
   const allowedCommands = [];
@@ -935,7 +1335,15 @@ function buildCommandGuard(planning, nodes, cluster, controlCfg, tailscaleCfg) {
     return cmd;
   });
 
-  const blockedActions = blockedCommands.map(cmd => ({ commandId: cmd.commandId, sourceActionId: cmd.sourceActionId, nodeId: cmd.nodeId, direction: cmd.direction, plannedPowerW: cmd.plannedPowerW, blocked: true, reason: cmd.reason }));
+  const limitDiagnostics = buildCommandLimitDiagnostics(plannedCommands, nodeList, localBridgeCfg, targetGroups);
+  allowedCommands.length = 0;
+  blockedCommands.length = 0;
+  for (const cmd of limitDiagnostics.commands) {
+    if (cmd && cmd.allowed === true) allowedCommands.push(cmd);
+    else blockedCommands.push(cmd);
+  }
+
+  const blockedActions = blockedCommands.map(cmd => ({ commandId: cmd.commandId, sourceActionId: cmd.sourceActionId, nodeId: cmd.nodeId, direction: cmd.direction, plannedPowerW: cmd.plannedPowerW, requestedPowerW: cmd.requestedPowerW || cmd.plannedPowerW, blocked: true, reason: cmd.reason, powerLimit: cmd.powerLimit || null }));
   const blockerCount = safetyChecks.filter(c => c.severity === 'blocker' && c.ok !== true).length + blockedActions.length;
   const warnCount = safetyChecks.filter(c => c.severity === 'warn' && c.ok !== true).length;
   return {
@@ -960,7 +1368,9 @@ function buildCommandGuard(planning, nodes, cluster, controlCfg, tailscaleCfg) {
     fieldTest: isFieldMode,
     tailscale: { enabled: tailscale.enabled, profile: tailscale.profile, localNodeId: tailscale.localNodeId, peerCount: tailscale.peerUrls.length },
     safetyChecks,
-    plannedCommands,
+    plannedCommands: limitDiagnostics.commands,
+    limitDiagnostics,
+    targetGroups: limitDiagnostics.targetGroupSummary || buildTargetGroupPlan(targetGroups, nodeList, limitDiagnostics.commands || []),
     allowedCommands,
     blockedActions,
     blockerCount,
@@ -1424,6 +1834,39 @@ class MeshMicrogridModule extends BaseModule {
     await mk('meshMicrogrid.commandGuard.warnCount', 'CommandGuard Warnungen', 'number', 'value', '', 0);
     await mk('meshMicrogrid.commandGuard.summaryJson', 'CommandGuard Zusammenfassung JSON', 'string', 'json', '', '{}');
 
+    // 0.8.48 Leistungsgrenzen: Knoten- und Bridge-Ziellimits werden nur gegen
+    // neutrale Mesh-Command-Intents geprüft. Es entstehen keine direkten
+    // Hardware-/Protokoll-Schreibbefehle.
+    await ch('meshMicrogrid.limits', 'Mesh/Microgrid Leistungsgrenzen');
+    await mk('meshMicrogrid.limits.nodesJson', 'Knoten-Leistungsgrenzen JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.limits.bridgeTargetsJson', 'Bridge-Ziel-Leistungsgrenzen JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.limits.limitedCommandsJson', 'Leistungsbegrenzte Commands JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.limits.blockedCommandsJson', 'Durch Leistungsgrenzen blockierte Commands JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.limits.summaryJson', 'Leistungsgrenzen Zusammenfassung JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.limits.activeLimitCount', 'Aktive Leistungsgrenzen', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.limits.limitedCount', 'Gekürzte Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.limits.blockedCount', 'Blockierte Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.limits.lastReason', 'Letzter Leistungsgrenzen-Grund', 'string', 'text', '', '');
+
+    // 0.8.49 Zielgruppenstrategie: Gruppen bündeln Ladepunkte, Speicher,
+    // Verbraucher und Erzeuger. Auch diese Grenzen wirken nur auf neutrale
+    // Command-Intents und erzeugen keinen direkten Hardwarepfad.
+    await ch('meshMicrogrid.targetGroups', 'Mesh/Microgrid Zielgruppen');
+    await mk('meshMicrogrid.targetGroups.groupsJson', 'Zielgruppen JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.targetGroups.priorityOrderJson', 'Zielgruppen Prioritäten JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.targetGroups.summaryJson', 'Zielgruppen Zusammenfassung JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.targetGroups.groupCount', 'Zielgruppen Anzahl', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.targetGroups.activeGroupCount', 'Aktive Zielgruppen', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.targetGroups.limitedCommandCount', 'Durch Zielgruppen begrenzte Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.targetGroups.blockedCommandCount', 'Durch Zielgruppen blockierte Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.targetGroups.fairnessJson', 'Zielgruppen-Fairness JSON', 'string', 'json', '', '{}');
+    await mk('meshMicrogrid.targetGroups.fairnessBudgetsJson', 'Zielgruppen-Fairness Budgets JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.targetGroups.fairnessLimitedCommandsJson', 'Durch Fairness gekürzte Commands JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.targetGroups.fairnessBlockedCommandsJson', 'Durch Fairness blockierte Commands JSON', 'string', 'json', '', '[]');
+    await mk('meshMicrogrid.targetGroups.fairnessLimitedCount', 'Durch Fairness gekürzte Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.targetGroups.fairnessBlockedCount', 'Durch Fairness blockierte Commands', 'number', 'value', '', 0);
+    await mk('meshMicrogrid.targetGroups.lastReason', 'Letzter Zielgruppen-Grund', 'string', 'text', '', '');
+
     // 0.8.40 Feldsteuerung: Diese States machen die Ausgabe neutraler Command-
     // Intents sichtbar. Wichtig: Auch im Feldmodus schreibt NexoWatt hier keine
     // Hardwaredatenpunkte direkt, sondern nur den konfigurierten JSON-Command-State.
@@ -1583,6 +2026,10 @@ class MeshMicrogridModule extends BaseModule {
 
   _localBridgeCfg() {
     return normalizeLocalBridgeCfg(this._cfg());
+  }
+
+  _targetGroups() {
+    return normalizeTargetGroups(this._cfg().targetGroups);
   }
 
   async _stateJson(id, fallback) {
@@ -2158,7 +2605,7 @@ class MeshMicrogridModule extends BaseModule {
     };
 
     const planning = buildPlanning(snapshots, { generationW, loadW, storageChargeW, storageDischargeW, gridImportW, gridExportW, surplusW, demandW, localUsePotentialW, gridLimitUsagePercent: gridUsagePercent }, gridLimitW, mode);
-    const commandGuard = buildCommandGuard(planning, snapshots, { clusterId, clusterName, gridLimitW, mode }, this._commandOutputCfg(), this._tailscaleCfg());
+    const commandGuard = buildCommandGuard(planning, snapshots, { clusterId, clusterName, gridLimitW, mode }, this._commandOutputCfg(), this._tailscaleCfg(), this._localBridgeCfg(), this._targetGroups());
     const localBridge = buildLocalBridgePlan(commandGuard, this._localBridgeCfg());
     const fieldTest = buildTwoInstanceFieldTestDiagnostics({ tailscale: this._tailscaleCfg(), poll: this._lastTailscalePoll || {}, dispatch: this._lastPeerCommandDispatch || {}, guard: commandGuard, receiver: this._receiverCfg(), commandHistory: this._commandHistory, peerHistory: this._peerHistory, remoteNodes: this._remoteNodeSnapshots() });
     this._lastFieldTest = fieldTest;
@@ -2197,6 +2644,7 @@ class MeshMicrogridModule extends BaseModule {
       planning,
       commandGuard,
       localBridge,
+      targetGroups: commandGuard.targetGroups || buildTargetGroupPlan(this._targetGroups(), snapshots, commandGuard.allowedCommands || []),
       fieldTest,
       decision,
       totals: {
@@ -2297,6 +2745,8 @@ class MeshMicrogridModule extends BaseModule {
       exportUrls: { json: '/api/mesh/microgrid', csv: '/api/mesh/microgrid.csv' },
       planning: snap.planning || {},
       commandGuard: snap.commandGuard || {},
+      limits: snap.commandGuard && snap.commandGuard.limitDiagnostics ? snap.commandGuard.limitDiagnostics : {},
+      targetGroups: snap.targetGroups || {},
       fieldControl: { ...this._commandOutputCfg(), lastCommand: this._lastCommandResult || {} },
       localBridge: this._lastCommandResult && this._lastCommandResult.localBridge ? this._lastCommandResult.localBridge : (snap.localBridge || {}),
       tailscale: { ...this._tailscaleCfg(), lastPoll: this._lastTailscalePoll || {}, lastCommandDispatch: this._lastPeerCommandDispatch || {}, remoteNodeCount: Array.isArray(snap.remoteSnapshots) ? snap.remoteSnapshots.length : 0 },
@@ -2327,6 +2777,8 @@ class MeshMicrogridModule extends BaseModule {
       clusterIntent: snap.clusterIntent || {},
       planning: snap.planning || {},
       commandGuard: snap.commandGuard || {},
+      limits: snap.commandGuard && snap.commandGuard.limitDiagnostics ? snap.commandGuard.limitDiagnostics : {},
+      targetGroups: snap.targetGroups || {},
       fieldControl: { ...this._commandOutputCfg(), lastCommand: this._lastCommandResult || {} },
       localBridge: this._lastCommandResult && this._lastCommandResult.localBridge ? this._lastCommandResult.localBridge : (snap.localBridge || {}),
       tailscale: { ...this._tailscaleCfg(), lastPoll: this._lastTailscalePoll || {}, lastCommandDispatch: this._lastPeerCommandDispatch || {}, remoteNodeCount: Array.isArray(snap.remoteSnapshots) ? snap.remoteSnapshots.length : 0 },
@@ -2379,6 +2831,34 @@ class MeshMicrogridModule extends BaseModule {
     await set('meshMicrogrid.commandGuard.blockerCount', Number(commandGuard.blockerCount || 0));
     await set('meshMicrogrid.commandGuard.warnCount', Number(commandGuard.warnCount || 0));
     await set('meshMicrogrid.commandGuard.summaryJson', JSON.stringify(commandGuard));
+
+    const limitDiagnostics = commandGuard && commandGuard.limitDiagnostics ? commandGuard.limitDiagnostics : buildCommandLimitDiagnostics([], [], this._localBridgeCfg());
+    await set('meshMicrogrid.limits.nodesJson', JSON.stringify(limitDiagnostics.nodeLimits || []));
+    await set('meshMicrogrid.limits.bridgeTargetsJson', JSON.stringify(limitDiagnostics.bridgeTargets || []));
+    await set('meshMicrogrid.limits.limitedCommandsJson', JSON.stringify(limitDiagnostics.limitedCommands || []));
+    await set('meshMicrogrid.limits.blockedCommandsJson', JSON.stringify(limitDiagnostics.blockedCommands || []));
+    await set('meshMicrogrid.limits.summaryJson', JSON.stringify(limitDiagnostics));
+    await set('meshMicrogrid.limits.activeLimitCount', Number(limitDiagnostics.activeLimitCount || 0));
+    await set('meshMicrogrid.limits.limitedCount', Number(limitDiagnostics.limitedCount || 0));
+    await set('meshMicrogrid.limits.blockedCount', Number(limitDiagnostics.blockedCount || 0));
+    await set('meshMicrogrid.limits.lastReason', String(limitDiagnostics.lastReason || ''));
+
+    const targetGroupPlan = snap.targetGroups || (limitDiagnostics && limitDiagnostics.targetGroupSummary) || buildTargetGroupPlan(this._targetGroups(), snap.snapshots || [], commandGuard.allowedCommands || []);
+    await set('meshMicrogrid.targetGroups.groupsJson', JSON.stringify(targetGroupPlan.groups || []));
+    await set('meshMicrogrid.targetGroups.priorityOrderJson', JSON.stringify(targetGroupPlan.priorityOrder || []));
+    await set('meshMicrogrid.targetGroups.summaryJson', JSON.stringify(targetGroupPlan));
+    await set('meshMicrogrid.targetGroups.groupCount', Number(targetGroupPlan.groupCount || 0));
+    await set('meshMicrogrid.targetGroups.activeGroupCount', Number(targetGroupPlan.activeGroupCount || 0));
+    await set('meshMicrogrid.targetGroups.limitedCommandCount', Number((limitDiagnostics.limitedCommands || []).filter(c => (c.reasons || []).some(r => String(r.id || '').startsWith('group.'))).length));
+    await set('meshMicrogrid.targetGroups.blockedCommandCount', Number((limitDiagnostics.blockedCommands || []).filter(c => (c.reasons || []).some(r => String(r.id || '').startsWith('group.'))).length));
+    const fairnessPlan = (targetGroupPlan && targetGroupPlan.fairness) || (limitDiagnostics && limitDiagnostics.targetGroupFairness) || {};
+    await set('meshMicrogrid.targetGroups.fairnessJson', JSON.stringify(fairnessPlan));
+    await set('meshMicrogrid.targetGroups.fairnessBudgetsJson', JSON.stringify(fairnessPlan.groups || []));
+    await set('meshMicrogrid.targetGroups.fairnessLimitedCommandsJson', JSON.stringify(fairnessPlan.limitedCommands || []));
+    await set('meshMicrogrid.targetGroups.fairnessBlockedCommandsJson', JSON.stringify(fairnessPlan.blockedCommands || []));
+    await set('meshMicrogrid.targetGroups.fairnessLimitedCount', Number(fairnessPlan.limitedCount || 0));
+    await set('meshMicrogrid.targetGroups.fairnessBlockedCount', Number(fairnessPlan.blockedCount || 0));
+    await set('meshMicrogrid.targetGroups.lastReason', String((fairnessPlan && fairnessPlan.summary) || targetGroupPlan.summary || ''));
 
     const control = this._commandOutputCfg();
     const lastCmd = this._lastCommandResult || {};

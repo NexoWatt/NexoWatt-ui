@@ -1,15 +1,127 @@
+## 0.8.66
+
+- Release: Versionsnummer auf 0.8.66 erhöht, damit npm nicht versucht, die bereits veröffentlichte 0.8.65 erneut zu überschreiben.
+- EVCS Online-Erkennung: `onlineId` wird jetzt als eigener EVCS-State gespiegelt und im Charging-Management separat von `statusId` verarbeitet. Ein echter Online-/Offline-Datenpunkt ist damit authoritative; Status-Texte wie `Available` bleiben reine Anzeige-/Fallback-Information.
+- EVCS VIS: Kachelzustand bevorzugt den echten Online-Zustand (`evcs.<n>.online`/`chargingManagement.wallboxes.lp<n>.online`) und wertet `active=false` weiterhin nur als Idle, nicht als Offline.
+- Feldtest-Sicherheit: Active-Demand-Reservierung aus 0.8.65 bleibt unverändert; die zusätzliche Prüfung verhindert falsche Optik und falsche Online-Gates bei gemischten Status-/Online-Datenpunkten.
+
+## 0.8.65
+
+- EVCS/VIS: Ladepunkt-Kacheln unterscheiden Online/Idle und Offline jetzt sauber; online verfügbare Wallboxen werden nicht mehr ausgegraut, offline Ladepunkte werden gedimmt dargestellt.
+- Lademanagement/Budget: Die zentrale EVCS-Reservierung wird nur noch aus aktivem Ladebedarf gebildet (frische Istleistung oder gültiger Ziel-/Sollwert bei verbundenem Fahrzeug). Inaktive/idle Ladepunkte blockieren kein Budget mehr.
+- Diagnose: Active-Demand-Reserve und Anzahl aktiver Ladebedarf-Ladepunkte werden separat veröffentlicht.
+- Keine Änderung an Hardwarewrites, Export Guard, Speicherfarm oder Mesh/Microgrid.
+
+## 0.8.64
+
+- Loadmanagement/Budget: EVCS-Ist wird in Status/Prioritäten nicht mehr aus Reservierung oder Sollwert rekonstruiert.
+- Loadmanagement/Budget: Budget-Diagnose trennt EVCS-Ist, EVCS-Reservierung und EVCS-Sollwert klar.
+- Core-Limits: PV-Budget bleibt physikalisch durch aktuelle PV-Erzeugung begrenzt; künstliches PV-Budget aus EVCS-Reservierung/Speicherentladung wird verhindert.
+- Keine Änderung an Hardwarewrites, Export Guard, Speicherfarm oder Mesh/Microgrid.
+
+## 0.8.63
+
+- Core-Limits/Loadmanagement: Zentrales PV-Budget durch physikalische PV-Erzeugung gedeckelt. Flexible Lasten und Batterieentladung können bei PV=0 kein künstliches PV-Budget mehr erzeugen.
+- Statusdiagnose: zusätzliche Rohdiagnose für PV-Budget-Rekonstruktion, physikalischen PV-Cap und geklemmte Leistung ergänzt.
+- Keine Änderung an Hardware-Schreibpfaden, Speicherfarm, Export Guard oder Mesh/Microgrid.
+
+## 0.8.62
+
+- Lastmanagement: Gate-A-Netzbudget nutzt nur frisch gemessene EVCS-Istleistung für die Netzanschluss-Kappe. Alte Sollwert-/Reservierungswerte können dadurch kein fiktives EVCS-Cap mehr erzeugen.
+- Status/App-Center: EVCS Ist, EVCS Reserviert und EVCS Soll werden getrennt angezeigt.
+- Zentrales EMS-Budget: EVCS-Reservierung bleibt für Downstream-Apps erhalten, EVCS-Ist wird aber als echte Messleistung veröffentlicht.
+
+## 0.8.61
+
+- Lademanagement: EVCS-Netzcap konservativ gehärtet. Negative Grundlast durch laufende, lokal gedeckte EVCS-Leistung wird nicht mehr als zusätzliche Netzanschlusskapazität genutzt.
+- App-Center Status: zeigt jetzt „Lokale Deckung“ separat und „EVCS Cap (Netz sicher)“ statt eines missverständlichen Caps über dem Netzanschluss.
+- Regelung: keine Änderung an Hardwarewrites; nur Budget-/Diagnoseformel für Gate A Netz korrigiert.
+
+## 0.8.60
+
+- Core-Limits: TS-Shadow-Vergleich für `grid.effectiveW` als Diagnose-only klassifiziert, damit kein minütlicher Warn-Log-Spam mehr entsteht.
+- Core-Limits: Warnungen werden nur noch für echte Warnfelder ausgegeben; `grid.effectiveW` bleibt im Diagnose-JSON sichtbar.
+- Sicherheit: keine Änderung an produktiver Regelung, 0-Einspeisung, Speicherfarm, Mesh/Microgrid oder Hardwarewrites.
+
+## 0.8.59
+
+- App-Center: Regression Safety Gate ergänzt. Bekannte Speicherfarm-Konfigurationen werden beim Speichern nicht mehr versehentlich mit leerer UI-Liste überschrieben.
+- Qualität: Kritische Release-Gates für Speicherfarm, App-Center-Struktur, No-Release-Artefakte und Runtime-Sync gebündelt.
+- Sicherheit: Keine Änderung an Regelung, Export Guard, Mesh/Microgrid oder Hardware-Schreibpfaden.
+
+## 0.8.58
+
+- Speicherfarm/App-Center: Fehler behoben, durch den die Master-Detail-Ansicht nach dem Hinzufügen oder Wiederherstellen eines Speichers wegen undefiniertem `htmlEscape` abbrechen konnte.
+- Speicherfarm/App-Center: Runtime-Fallback erweitert. Wenn `storageFarm.configJson` leer ist, werden sichtbare Speicher aus `storageFarm.storagesStatusJson` oder notfalls aus `storageFarm.storagesTotal` als editierbare Platzhalter wiederhergestellt.
+- Sicherheit: keine Änderung an Speicherfarm-Regelung, Dispatch, Export Guard, Mesh/Microgrid oder Hardwarewrites. Nur UI-/Konfigurationswiederherstellung.
+
+## 0.8.57
+
+- Bugfix: Speicherfarm-Konfiguration im App-Center wird wieder aus `storageFarm.configJson`/`storageFarm.groupsJson` hydratisiert, wenn `installer.configJson` keine `storageFarm.storages` enthält.
+- Schutz: Speichern im App-Center überschreibt produktiv laufende Speicherfarm-Konfiguration nicht mehr versehentlich mit einer leeren Speicherliste.
+- Regressionstest `test:storage-farm-appcenter-restore` ergänzt.
+- Keine neue Regelstrecke, keine neue Hardwaresteuerung.
+
+## 0.8.56
+
+- 0-Einspeise: Senken-ACK-Verlauf und Feldprotokoll ergänzt.
+- ACK-/Status-States je Senke werden nachgelagert gelesen; kein Schreibtest pro Regel-Tick.
+- Fehler/Timeout blockieren nur die betroffene Senke, damit der Export Guard schnell zur nächsten Senke oder WR-Abregelung wechseln kann.
+- Neue Diagnose-States unter `gridConstraints.exportLimit.sinkAck*` und `gridConstraints.exportLimit.sinks.*.ack*`.
+
+## 0.8.55
+
+- 0-Einspeise: Senken-Freigabe und schneller Aktivbetrieb ergänzt. Schreibtests werden nicht in jedem Regel-Tick ausgeführt.
+- Export Guard nutzt gespeicherte ACK-/Freigabedaten je Senke und blockiert fehlerhafte Ziele temporär, bevor die nächste Senke oder WR-Abregelung als Fallback genutzt wird.
+- Neue Runtime-States für Fast-Path, Sink Availability, ACK-Zusammenfassung und Zielblockierung ergänzt.
+- Bestehende Export-Guard-Regelstrecke bleibt die einzige Regelstrecke; keine zweite 0-Einspeise-Regelung.
+
+## 0.8.54
+
+- 0-Einspeise Inbetriebnahme-Assistent ergänzt. Bestehender Export Guard wird nicht dupliziert.
+- Checkliste für Smartmeter, Installateurfreigabe, 0-W-Limit, WR-Write, Senkenreihenfolge und neutrale Senken ergänzt.
+- Write-Test-Vorschau und Feldreport unter `gridConstraints.exportLimit.commissioning.*` ergänzt.
+- App-Center Diagnose zeigt Inbetriebnahme-Score und offene Pflichtprüfungen.
+
+## 0.8.53
+
+- Audit-/Regression-Fix: alte Versionsanker in Mesh-/0-Einspeise-Testskripten korrigiert.
+- Runtime-TS-Spiegel synchronisiert, damit `check:ts-runtime-mirrors` wieder sauber läuft.
+- Keine neue EMS-Regelstrecke, keine direkte Hardwaresteuerung, kein App-Center-Schemawechsel.
+
+## 0.8.52
+
+- Hotfix: 0-Einspeise-Senkenkaskade schreibt konfigurierte Speicher-/Ladepunkt-/Flex-/Mesh-Command-States jetzt im Aktivmodus als neutrale JSON-Commands.
+- Hotfix: Fehlende WR-Write-Datenpunkte werden nicht mehr als alleiniger Blocker bewertet, wenn aktive Senken-Command-States vorhanden sind; WR-Abregelung bleibt letzte Stufe.
+- Neue Diagnose-States für Sink-Command-Write-Status und Fehlertext ergänzt.
+
+## 0.8.51
+
+- Export Guard/0‑Einspeisung: Senkenreihenfolge festgelegt und sichtbar gemacht: Verbrauch zuerst, Speicher laden, Ladepunkte, flexible Verbraucher, Mesh/Microgrid, WR-Abregelung zuletzt.
+- Installer: optionale neutrale Command-State-Felder für Speicher, Ladepunkte, flexible Verbraucher und Mesh/Microgrid ergänzt.
+- Runtime-Diagnose: `gridConstraints.exportLimit.sinkPriority*` States und nächster Senken-Schritt ergänzt.
+- Architektur: keine zweite Einspeiseregelung; die bestehende Export-Guard-/Grid-Constraints-Regelung bleibt Quelle der Wahrheit.
+
+## 0.8.50
+
+- Mesh/Microgrid: Zielgruppen-Verteilung/Fairness ergänzt. Zielgruppen erhalten transparente Budgets, Mindestanteile, Gewichtung und Reserven.
+- CommandGuard: Zielgruppen-Fairness begrenzt/blockiert nur neutrale Command-Intents; keine direkten Hardwarewrites.
+- Betreiberansicht: Fairness-Budget und Restbudget je Zielgruppe sichtbar.
+
 ## 0.8.49
 
-- Access-Control: bestehende Gruppen `system.group.installer` und `system.group.user` als Installer-/Customer-Rollen ergänzt.
-- Gespeicherte Gruppen werden mit Pflichtgruppen gemerged, damit normaler Admin und EOS Admin dieselben Rollen sauber abbilden.
+- Mesh/Microgrid: Zielgruppen-Strategie ergänzt. Knoten können zu Gruppen wie Ladepunkte, Speicher, Verbraucher oder Erzeuger gebündelt werden.
+- CommandGuard berücksichtigt Gruppenpriorität, Gruppenlimits und Gruppenbudgets, bevor neutrale Command-Intents ausgegeben werden.
+- App-Center: Zielgruppen-JSON im separaten Mesh/Microgrid-Reiter ergänzt; Apps bleibt reiner App-Katalog.
+- Betreiberansicht/API/CSV enthalten Zielgruppen, Prioritätsreihenfolge und gruppenbedingte Limit-/Blockiergründe.
+- Weiterhin keine direkten OCPP-/Modbus-/MQTT-/Herstellerwrites aus Mesh/Microgrid.
 
 ## 0.8.48
 
-- EOS Access Control vorbereitet: Rollen `admin`, `installer`, `customer` und `display` mit zentraler Capability-Matrix.
-- Rechte werden aus EOS/ioBroker Benutzern und Gruppen abgeleitet; Standardgruppen: `system.group.eosAdmin`, `system.group.eosInstaller`, `system.group.eosUser` plus NexoWatt-Aliasse.
-- `/api/session/me` ergänzt; `/api/auth/status` und `/config` liefern Rolle und Capabilities für Frontend-Menüs.
-- Lizenz-Speichern ist admin-only; Installer darf App-Center/Simulation/Zuordnung, aber keine Lizenzverwaltung.
-- App-Center und Simulation werden serverseitig geschützt; SmartHome-Kundenkonfiguration bleibt für Endkunden vorbereitet.
+- Mesh/Microgrid: Leistungsgrenzen je Knoten ergänzt. `minPowerW`, `maxPowerW`, `maxImportW`, `maxExportW`, `maxChargeW`, `maxDischargeW`, `maxLoadW` und `maxGenerationW` können im Mesh/Microgrid-Reiter gepflegt werden.
+- CommandGuard: Node- und Bridge-Ziel-Limits begrenzen oder blockieren neutrale Command-Intents vor der Ausgabe.
+- Betreiberansicht und CSV/API: gekürzte und blockierte Commands mit Limitgrund sichtbar.
+- Architektur: weiterhin herstellerneutral, keine direkten Hardwarewrites aus Mesh/Microgrid.
 
 ## 0.8.47
 
