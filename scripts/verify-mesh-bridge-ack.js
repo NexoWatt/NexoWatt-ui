@@ -4,7 +4,7 @@ const fs = require('fs');
 function read(p){return fs.readFileSync(p,'utf8');}
 function must(file, text){const s=read(file); if(!s.includes(text)){console.error(`Missing in ${file}: ${text}`); process.exit(1);}}
 function mustNot(file, text){const s=read(file); if(s.includes(text)){console.error(`Forbidden in ${file}: ${text}`); process.exit(1);}}
-must('package.json', '"version": "0.8.59"');
+must('package.json', '"version": "0.8.47"');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', '0.8.45 Bridge-ACK');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', '_evaluateLocalBridgeAck');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'classifyLocalBridgeAck');

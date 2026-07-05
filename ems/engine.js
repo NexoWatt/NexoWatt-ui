@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:93706b79b4297bea4d7c08000f0b1244a2272cd18db0e9ffa282ff5d36da1e6b
+ * Quell-Hash: sha256:56fff527514144e379bf71a927d04b16b2b1f621bd79de8ed86357d37846d2bc
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -395,9 +395,8 @@ class EmsEngine {
       const setCurrentAId = (wb.setCurrentAId || '').trim();
       const setPowerWId = (wb.setPowerWId || '').trim();
 
-      // Online detection: prefer explicit online dp (bool), keep statusId as display/status fallback.
-      const onlineId = (wb.onlineId || '').trim();
-      const statusId = (wb.statusId || '').trim();
+      // Online detection: prefer explicit online dp (bool), otherwise statusId
+      const statusId = ((wb.onlineId || '').trim()) || ((wb.statusId || '').trim()) || '';
 
       // Enable DP (optional)
       const enableId = (wb.enableWriteId || '').trim();
@@ -475,7 +474,6 @@ class EmsEngine {
         ...(setCurrentAId ? { setCurrentAId } : {}),
         ...(setPowerWId ? { setPowerWId } : {}),
         ...(enableId ? { enableId } : {}),
-        ...(onlineId ? { onlineId } : {}),
         ...(statusId ? { statusId } : {}),
 
         // admin default for runtime user mode

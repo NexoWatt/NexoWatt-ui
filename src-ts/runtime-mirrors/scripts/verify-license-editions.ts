@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 82336e25ffe5afac7a4d0f9bd998a202b98a05db9ab756fa805158d36d73b2ad
+ * Original-Hash: 357a0a046de74aa21717b65e40ceeaedf4e67194a33617d9f6d216fbb1d0a2ca
  */
 
 /**
@@ -32,7 +32,7 @@
 'use strict';
 
 /**
- * Prüft das Lizenzmodell ab 0.8.59:
+ * Prüft das Lizenzmodell ab 0.8.8:
  * - EOS = Vollversion
  * - HEMS = kleiner freigegebener Funktionsumfang
  * - alte NW1/NW1T-Schlüssel bleiben EOS-kompatibel

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 840b66dd3e5d90832f0ce974e8f89d8c6931a1467da42544fbdf6151584f151e
+ * Original-Hash: 7aa946d809c1c8d479c24c12e991ebf4e4b7a3af010c608f47df15959b00d2f8
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/mesh-microgrid.ts
- * Quell-Hash: sha256:672ff8e0d85aeb555a5500a388405e705f46f7c183be70cedd1b122a89f095ec
+ * Quell-Hash: sha256:0c25245a6ea41ec75e9ebacf0ff07d1056854e7ec1d20f1de9bec18cacd892b9
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -238,77 +238,6 @@
 
 
 /**
- * Code-Teil: renderTargetGroups
- *
- * Zweck:
- * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-  function renderTargetGroups(payload) {
-    const tg = payload && payload.targetGroups ? payload.targetGroups : {};
-    const groups = Array.isArray(tg.groups) ? tg.groups : [];
-    const fairness = tg.fairness && typeof tg.fairness === 'object' ? tg.fairness : {};
-    setText('meshTargetGroupsStatus', `${tg.groupCount || groups.length || 0} Zielgruppe(n) · ${tg.activeGroupCount || 0} aktiv · Fairness: ${fairness.limitedCount || 0} gekürzt / ${fairness.blockedCount || 0} blockiert`);
-    setText('meshTargetGroupsReason', (fairness.summary ? fairness.summary + ' · ' : '') + (tg.summary || tg.lastReason || 'Keine Zielgruppen konfiguriert. Knotenprioritäten werden direkt genutzt.'));
-    const rows = $('meshTargetGroupRows');
-    if (rows) {
-      if (!groups.length) rows.innerHTML = '<tr><td colspan="9" class="muted">Keine Zielgruppen konfiguriert.</td></tr>';
-      else rows.innerHTML = groups.map(g => `<tr>` +
-        `<td>${esc(g.name || g.id || '')}<br><span class="muted">${esc(g.id || '')}</span></td>` +
-        `<td>${esc(g.type || '')}</td>` +
-        `<td>${esc(g.priority || '')}</td>` +
-        `<td>${esc(g.strategy || '')}</td>` +
-        `<td>${esc(g.memberCount || 0)}</td>` +
-        `<td>${fmtW(g.requestedPowerW || 0)}</td>` +
-        `<td>${fmtW(g.allowedPowerW || 0)}</td>` +
-        `<td>${fmtW(g.maxPowerW || 0)}</td>` +
-        `<td>${fmtW((fairness.groups || []).find(x => x.groupId === g.id)?.budgetW || 0)} / ${fmtW((fairness.groups || []).find(x => x.groupId === g.id)?.remainingW || 0)}<br><span class="muted">Fairness Budget / Rest</span></td>` +
-      `</tr>`).join('');
-    }
-    const prio = Array.isArray(tg.priorityOrder) ? tg.priorityOrder : [];
-    setText('meshTargetGroupPriority', prio.length ? prio.map(g => `${g.rank}. ${g.name || g.id} (${g.type}, Prio ${g.priority}, ${g.memberCount || 0} Knoten)`).join(' · ') : 'Keine Zielgruppen-Priorität vorhanden.');
-  }
-
-/**
- * Code-Teil: renderLimits
- *
- * Zweck:
- * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-  function renderLimits(payload) {
-    const limits = payload && payload.limits ? payload.limits : {};
-    const limited = Array.isArray(limits.limitedCommands) ? limits.limitedCommands : [];
-    const blocked = Array.isArray(limits.blockedCommands) ? limits.blockedCommands : [];
-    setText('meshLimitsStatus', `${limits.activeLimitCount || 0} aktive Limit(s) · ${limits.limitedCount || limited.length || 0} gekürzt · ${limits.blockedCount || blocked.length || 0} blockiert`);
-    setText('meshLimitsReason', limits.lastReason || 'Keine Leistungsgrenze hat den aktuellen Command-Plan begrenzt.');
-    const rows = $('meshLimitRows');
-    if (rows) {
-      const all = limited.concat(blocked);
-      if (!all.length) rows.innerHTML = '<tr><td colspan="8" class="muted">Keine aktuell gekürzten oder blockierten Commands.</td></tr>';
-      else rows.innerHTML = all.map(row => `<tr>` +
-        `<td>${esc(row.commandId || '')}</td>` +
-        `<td>${esc(row.nodeId || row.targetNodeId || '')}</td>` +
-        `<td>${fmtW(row.requestedPowerW || 0)}</td>` +
-        `<td>${fmtW(row.allowedPowerW || 0)}</td>` +
-        `<td class="${row.allowedPowerW > 0 ? 'severity-warn' : 'severity-critical'}">${row.allowedPowerW > 0 ? 'gekürzt' : 'blockiert'}</td>` +
-        `<td>${esc((row.reasons || []).map(r => `${r.id}:${r.limitW}W`).join(' · '))}</td>` +
-        `<td>${esc(row.reason || '')}</td>` +
-        `<td>${fmtW((fairness.groups || []).find(x => x.groupId === g.id)?.budgetW || 0)} / ${fmtW((fairness.groups || []).find(x => x.groupId === g.id)?.remainingW || 0)}<br><span class="muted">Fairness Budget / Rest</span></td>` +
-      `</tr>`).join('');
-    }
-  }
-
-
-/**
  * Code-Teil: renderCommandGuard
  *
  * Zweck:
@@ -364,22 +293,10 @@
     const lb = payload && payload.localBridge ? payload.localBridge : {};
     const mapped = Array.isArray(lb.mappedCommands) ? lb.mappedCommands : [];
     const unmapped = Array.isArray(lb.unmappedCommands) ? lb.unmappedCommands : [];
-    const writes = Array.isArray(lb.lastWrites) ? lb.lastWrites : [];
-    const ackSummary = lb.ackSummary && typeof lb.ackSummary === 'object'
-      ? lb.ackSummary
-      : (lb.ack && typeof lb.ack === 'object' ? lb.ack : {});
-    const targetStatus = Array.isArray(lb.targetStatus) ? lb.targetStatus : (Array.isArray(ackSummary.targets) ? ackSummary.targets : []);
-
+    const writes = Array.isArray(lb.lastWrites) ? lb.lastWrites : (lb.summary && Array.isArray(lb.summary.lastWrites) ? lb.summary.lastWrites : []);
     setText('meshLocalBridgeStatus', `${lb.enabled ? 'aktiv' : 'aus'} · Modus: ${lb.outputMode || 'global'} · Route: ${lb.routeReady ? 'bereit' : 'nicht bereit'}`);
     setText('meshLocalBridgeDetails', `Zuordnungen: ${lb.mappingCount || 0} · gemappt: ${lb.mappedCommandCount || mapped.length || 0} · ungemappt: ${lb.unmappedCommandCount || unmapped.length || 0} · Default-State: ${lb.defaultCommandStateDp || '--'}`);
     setText('meshLocalBridgeWrites', writes.length ? writes.map(w => `${w.commandStateDp || '--'}: ${w.status || '--'} (${w.commandCount || 0})`).join(' · ') : 'Noch keine lokalen Bridge-Writes.');
-    setText('meshLocalBridgeAck', `ACK: ${ackSummary.status || lb.ackStatus || 'not-configured'} · Ziele ${ackSummary.configuredTargetCount || 0}/${ackSummary.expectedCount || targetStatus.length || 0} · OK ${ackSummary.okCount || ackSummary.ackOkCount || 0} · Warnung ${ackSummary.warnCount || 0} · Fehler/Timeout ${(ackSummary.errorCount || 0) + (ackSummary.timeoutCount || 0)}`);
-    const ackGate = lb.ackGate && typeof lb.ackGate === 'object' ? lb.ackGate : {};
-    const manualRelease = lb.manualRelease && typeof lb.manualRelease === 'object' ? lb.manualRelease : {};
-    const targetHistory = lb.targetCommandHistory && typeof lb.targetCommandHistory === 'object' ? lb.targetCommandHistory : {};
-    setText('meshLocalBridgeAckGate', `ACK-Gate: ${ackGate.status || 'disabled'} · erforderlich: ${(ackGate.required || ackGate.ackRequired) ? 'ja' : 'nein'} · blockiert: ${ackGate.blockedCount || ackGate.blockedCommandCount || 0} · ${ackGate.reason || ''}`);
-    setText('meshLocalBridgeRelease', `Wiederfreigabe: aktive manuelle Freigaben ${manualRelease.activeCount || 0} · ACK-Auto-Release: ${(ackGate.autoRelease === false) ? 'aus' : 'an'} · Verlauf-Ziele ${targetHistory.targetCount || 0}`);
-
     const rows = $('meshLocalBridgeRows');
     if (rows) {
       if (!mapped.length && !unmapped.length) rows.innerHTML = '<tr><td colspan="8" class="muted">Noch keine lokalen Bridge-Commands vorhanden.</td></tr>';
@@ -391,7 +308,7 @@
         `<td>${esc(cmd.targetNodeId || '--')}</td>` +
         `<td>${fmtW(cmd.plannedPowerW || 0)}</td>` +
         `<td>${esc(cmd.direction || '')}</td>` +
-        `<td class="severity-info">${esc((targetStatus.find(t => t.mappingId === cmd.mappingId) || {}).status || 'gemappt')}</td>` +
+        `<td class="severity-info">gemappt</td>` +
       `</tr>`).concat(unmapped.map(cmd => `<tr>` +
         `<td>${esc(cmd.commandId || '')}</td>` +
         `<td>--</td>` +
@@ -402,66 +319,6 @@
         `<td>--</td>` +
         `<td class="severity-warn">${esc(cmd.reason || 'ungemappt')}</td>` +
       `</tr>`)).join('');
-    }
-
-    const ackRows = $('meshLocalBridgeAckRows');
-    if (ackRows) {
-      if (!targetStatus.length) ackRows.innerHTML = '<tr><td colspan="9" class="muted">Noch keine ACK-/Zielstatusdaten vorhanden.</td></tr>';
-      else ackRows.innerHTML = targetStatus.map(t => `<tr>` +
-        `<td>${esc(t.mappingId || '')}</td>` +
-        `<td>${esc(t.commandStateDp || '')}</td>` +
-        `<td>${esc(t.ackStateDp || '--')}</td>` +
-        `<td>${esc(t.statusStateDp || '--')}</td>` +
-        `<td class="${t.severity === 'critical' ? 'severity-critical' : (t.severity === 'warn' ? 'severity-warn' : 'severity-info')}">${esc(t.status || '')}</td>` +
-        `<td>${esc(t.ok === true ? 'ja' : 'nein')}</td>` +
-        `<td>${esc(Math.round(Number(t.ageMs || 0) / 1000))} s</td>` +
-        `<td>${esc(t.message || '')}</td>` +
-        `<td><button class="meshReleaseTarget" data-mapping="${esc(t.mappingId || '')}" data-command-state="${esc(t.commandStateDp || '')}" type="button">Freigeben</button></td>` +
-      `</tr>`).join('');
-      ackRows.querySelectorAll('button.meshReleaseTarget').forEach((btn) => {
-        btn.addEventListener('click', () => releaseBridgeTarget(btn.getAttribute('data-mapping') || '', btn.getAttribute('data-command-state') || ''));
-      });
-    }
-
-    const histRows = $('meshLocalBridgeHistoryRows');
-    if (histRows) {
-      const targets = Array.isArray(targetHistory.targets) ? targetHistory.targets : [];
-      if (!targets.length) histRows.innerHTML = '<tr><td colspan="7" class="muted">Noch kein zielweiser Bridge-Command-Verlauf vorhanden.</td></tr>';
-      else histRows.innerHTML = targets.slice(0, 30).map(t => {
-        const h = Array.isArray(t.history) && t.history.length ? t.history[0] : {};
-        return `<tr>` +
-          `<td>${esc(t.mappingId || '')}</td>` +
-          `<td>${h.ts ? new Date(Number(h.ts)).toLocaleString() : '--'}</td>` +
-          `<td>${esc(t.lastStatus || h.status || '')}</td>` +
-          `<td>${esc(h.commandCount || 0)}</td>` +
-          `<td>${esc(Array.isArray(h.commandIds) ? h.commandIds.join(', ') : '')}</td>` +
-          `<td>${esc(h.commandStateDp || '')}</td>` +
-          `<td>${esc(h.reason || '')}</td>` +
-        `</tr>`;
-      }).join('');
-    }
-  }
-
-
-  /**
-   * 0.8.47 Manuelle Ziel-Wiederfreigabe.
-   *
-   * Der Button gibt ausschließlich das neutrale Bridge-Ziel zeitlich begrenzt
-   * wieder frei. Er schreibt keine Gerätewerte und ändert keine Bridge-ACKs.
-   * Die lokale Bridge/Herstellerintegration bleibt weiterhin die einzige Stelle,
-   * die einen neutralen Command in ein reales Geräteprotokoll übersetzen darf.
-   */
-  async function releaseBridgeTarget(mappingId, commandStateDp) {
-    const ok = window.confirm('Bridge-Ziel für Folge-Commands zeitlich begrenzt freigeben? Es wird keine Hardware direkt geschrieben.');
-    if (!ok) return;
-    try {
-      const res = await fetch('/api/mesh/local-bridge/release', { method: 'POST', cache: 'no-store', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mappingId, commandStateDp, ttlSec: 300, reason: 'operator-ui' }) });
-      const payload = await res.json().catch(() => null);
-      if (!res.ok || !payload || payload.ok === false) throw new Error((payload && (payload.message || payload.error)) || `HTTP ${res.status}`);
-      setText('meshLocalBridgeRelease', 'Manuelle Freigabe gesetzt: ' + (payload.release && (payload.release.mappingId || payload.release.commandStateDp) || mappingId || commandStateDp || 'Ziel'));
-      await load();
-    } catch (e) {
-      setText('meshLocalBridgeRelease', 'Manuelle Freigabe fehlgeschlagen: ' + (e && e.message ? e.message : e));
     }
   }
 
@@ -664,8 +521,6 @@
       setText('gridUsage', fmtPct(totals.gridLimitUsagePercent || 0));
       renderDiagnosis(payload);
       renderPlanning(payload);
-      renderTargetGroups(payload);
-      renderLimits(payload);
       renderCommandGuard(payload);
       renderLocalBridge(payload);
       renderFieldControl(payload);

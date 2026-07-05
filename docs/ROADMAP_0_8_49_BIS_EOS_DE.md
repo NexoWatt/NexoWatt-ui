@@ -1,24 +1,21 @@
-# Roadmap ab NexoWatt UI 0.8.49
+# Roadmap ab 0.8.49
 
-## 0.8.49 – Mesh/Microgrid Zielgruppen-Strategie
+## 0.8.49 – SmartHome/NexoLogik Customer-Sandbox
 
-- Zielgruppen für Ladepunkte, Speicher, Verbraucher und Erzeuger definieren
-- maximale Leistung je Zielgruppe
-- Prioritäten je Zielgruppe
-- Local-First-Verteilung über Zielgruppen
-- CommandGuard wertet Gruppenlimits aus
-- weiterhin keine direkten Hardwarewrites aus Mesh/Microgrid
+- Gerätefreigaben für Endkunden präzisieren.
+- NexoLogik-Regelaktionen nach Capability und Gerätetyp begrenzen.
+- Roh-Datenpunkt-Mapping für Kunden hart sperren.
+- SmartHome-Kundenlayout getrennt von Installer-Mapping führen.
 
-## 0.8.50 – Mesh Safety-Limits und Feldtest-Härtung
+## 0.8.50 – Access-Control UI Feinschliff
 
-- globale Safety-Limits je Cluster
-- Zielgruppen- und Knotenlimits zusammenführen
-- bessere Fehlermeldungen bei Limitkonflikten
-- Betreiberansicht mit Limit-Ampeln
+- Rollenanzeige im Frontend.
+- Sichtbarkeit der Menüs nach Capabilities härten.
+- Admin-/Installer-/Kunden-Hinweise im App-Center verbessern.
+- Tests für Benutzerrollen erweitern.
 
-## 0.8.51 – Community-/Nachbarschafts-Ledger
+## Danach
 
-- kWh-Zuordnung zwischen Mesh-Knoten
-- lokaler Anteil / Remote-Anteil / Netzanteil
-- Export je Knoten und Peer
-- keine eichrechtsverbindliche Abrechnung
+- Mesh/Microgrid Leistungsgrenzen je Knoten weiterführen.
+- Community-/Nachbarschaftsledger.
+- EOS-SSO-Token direkt aus EOS Admin anbinden.

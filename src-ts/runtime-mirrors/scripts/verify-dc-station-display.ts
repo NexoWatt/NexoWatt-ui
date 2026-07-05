@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 10fe72f82cd33e152c4c5ebefffb1a49a07e689a7dc2fa0f38492c84ef502318
+ * Original-Hash: 6b0113141f361cfa03ec85f8e0794f10cd7d3db2e104a840c26df240f76b79a5
  */
 
 /**
@@ -168,7 +168,7 @@ mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'data-ck-field="contro
 mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'Kein OCPP-Zwang', 'Installer-Hinweis zur Herstelleroffenheit');
 mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'data-ck-field="controlBridge"', 'Steuerbrücke im Installer');
 mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'data-ck-field="protocolHint"', 'Protokoll-Hinweis im Installer');
-mustMatch('package.json', /"version"\s*:\s*"0\.8\.(2[5-9]|[3-9][0-9])"/, 'Paketversion 0.8.59+');
+mustMatch('package.json', /"version"\s*:\s*"0\.8\.(2[5-9]|3[0-9])"/, 'Paketversion 0.8.25+');
 
 console.log('[dc-station-display] OK: Display-API, Watchdog, Layout, Wartungsmodus und Session-/Betreiberbasis und herstelleroffene Steuerbrücke sind abgesichert.');
 

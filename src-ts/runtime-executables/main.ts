@@ -137,6 +137,7 @@ const NwChannelDetector =
 const { EmsEngine } = require('./ems/engine');
 const nwCountryProfileService = require('./ems/services/country-profile-service');
 const nwFeatureFlagsService = require('./ems/services/feature-flags');
+const nwAccessControlService = require('./ems/services/access-control');
 
 // NexoLogic (node/graph) runtime engine
 const { NexoLogicEngine } = require('./ems/nexologic-engine');
@@ -346,10 +347,194 @@ class NexoWattVis extends utils.Adapter {
       lastActiveJson: '',
     };
 
+    // EOS Access Control: eigene Adapter-Sessions werden nur als Brücke zur EOS/ioBroker-Benutzerprüfung genutzt.
+    // Die eigentliche Rollenentscheidung erfolgt zentral über ems/services/access-control.ts.
+    this._authSessions = new Map();
+
     this.on('ready', this.onReady.bind(this));
     this.on('stateChange', this.onStateChange.bind(this));
     this.on('unload', this.onUnload.bind(this));
   }
+
+  /**
+   * EOS Access Control: zentrale Konfiguration aus Adapter-Native + sicheren Defaults bauen.
+   *
+   * Zweck:
+   * - EOS Admin / Installer / Benutzer werden über EOS/ioBroker Benutzergruppen abgebildet.
+   * - Die Methode wird von Seiten-Gates, API-Gates und /api/session/me verwendet.
+   * - App-Center-UI darf Funktionen verstecken, aber diese Methode liefert die Backend-Wahrheit.
+   */
+  _nwAccessConfig() {
+    try {
+      return nwAccessControlService.normalizeAccessConfig(
+        this.config && this.config.accessControl,
+        this.config && this.config.auth
+      );
+    } catch (_e) {
+      return nwAccessControlService.normalizeAccessConfig({}, this.config && this.config.auth);
+    }
+  }
+
+  /**
+   * EOS Access Control: konfigurierte Gruppenmitgliedschaften des Benutzers lesen.
+   *
+   * Wichtig:
+   * Wir scannen nicht blind alle ioBroker-Gruppen, sondern prüfen nur die konfigurierten
+   * EOS-/NexoWatt-Gruppen. Das ist schneller, vorhersehbarer und vermeidet unerwartete
+   * Rechte durch fremde Systemgruppen.
+   */
+  async _nwAccessGroupsForUser(user) {
+    const cfg = this._nwAccessConfig();
+    const u = String(user || '').trim();
+    if (!u) return [];
+    const groupsToCheck = Array.from(new Set([
+      ...(cfg.adminGroups || []),
+      ...(cfg.installerGroups || []),
+      ...(cfg.customerGroups || []),
+    ]));
+    const out = [];
+    const userId = 'system.user.' + u;
+    for (const gid of groupsToCheck) {
+      try {
+        const obj = await this.getForeignObjectAsync(String(gid || '').trim());
+        const members = obj && obj.common && Array.isArray(obj.common.members) ? obj.common.members : [];
+        if (members.includes(userId)) out.push(String(gid));
+      } catch (_e) {
+        // Gruppe existiert evtl. noch nicht. Das ist bei Erstinstallation erlaubt und wird dokumentiert.
+      }
+    }
+    return out;
+  }
+
+  /**
+   * EOS Access Control: vorhandene Adapter-Session aus nw_session/installer_session lesen.
+   *
+   * Diese Session ist kein eigenes paralleles Rechtesystem. Sie speichert nur den
+   * bereits gegen EOS/ioBroker geprüften Benutzer und wird anschließend erneut über
+   * die Gruppen-/Capability-Matrix bewertet.
+   */
+  _nwAccessSessionFromRequest(req) {
+    try {
+      const sessions = this._authSessions;
+      if (!sessions || typeof sessions.get !== 'function') return null;
+      const cookies = parseCookies(req);
+      const token = cookies.nw_session || cookies.installer_session || '';
+      if (!token) return null;
+      const session = sessions.get(token);
+      if (!session) return null;
+      if (!session.exp || session.exp <= Date.now()) {
+        try { sessions.delete(token); } catch (_e) {}
+        return null;
+      }
+      return session;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  /**
+   * EOS Access Control: Rolle für einen bekannten Benutzer berechnen.
+   *
+   * Reihenfolge:
+   * 1. Admin-Gruppen/-Benutzer
+   * 2. Installer-Gruppen/-Benutzer
+   * 3. Kunden-Gruppen/-Benutzer
+   * 4. defaultRole
+   */
+  async _nwAccessForUser(user, source = 'user') {
+    const cfg = this._nwAccessConfig();
+    const groups = await this._nwAccessGroupsForUser(user);
+    const role = nwAccessControlService.roleFromUserAndGroups(user, groups, cfg);
+    return nwAccessControlService.buildAccessPayload({
+      enabled: cfg.enabled,
+      user,
+      role,
+      groups,
+      source,
+    });
+  }
+
+  /**
+   * EOS Access Control: Request-Kontext aus Session oder vorbereitetem EOS-SSO-Header auflösen.
+   *
+   * Feldtest-/Integrationshinweis:
+   * - Primärer Weg ist Login/Session gegen EOS/ioBroker Benutzer.
+   * - Für euren eigenen EOS Admin ist ein späterer SSO-Header vorbereitet. Dieser wird
+   *   nur akzeptiert, wenn accessControl.trustedHeaderEnabled=true und, falls gesetzt,
+   *   das Secret passt. So kann der EOS Admin später Benutzer + Gruppen an den Adapter
+   *   übergeben, ohne ein zweites Login zu erzwingen.
+   */
+  async _nwAccessForRequest(req) {
+    const cfg = this._nwAccessConfig();
+    if (!cfg.enabled) {
+      return nwAccessControlService.buildAccessPayload({ enabled: false, user: '', role: 'admin', groups: [], source: 'disabled' });
+    }
+
+    const session = this._nwAccessSessionFromRequest(req);
+    if (session && session.user) {
+      return this._nwAccessForUser(session.user, 'session');
+    }
+
+    try {
+      const hdrUser = String((req.headers && (req.headers['x-eos-user'] || req.headers['x-iobroker-user'])) || '').trim();
+      const hdrGroupsRaw = String((req.headers && (req.headers['x-eos-groups'] || req.headers['x-iobroker-groups'])) || '').trim();
+      const hdrRole = String((req.headers && req.headers['x-eos-role']) || '').trim();
+      const hdrSecret = String((req.headers && req.headers['x-eos-access-secret']) || '').trim();
+      if (cfg.trustedHeaderEnabled && hdrUser) {
+        if (cfg.trustedHeaderSecret && hdrSecret !== cfg.trustedHeaderSecret) {
+          return nwAccessControlService.buildAccessPayload({ enabled: cfg.enabled, user: '', role: cfg.defaultRole, groups: [], source: 'header-secret-mismatch' });
+        }
+        const groups = hdrGroupsRaw ? hdrGroupsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+        const role = hdrRole ? nwAccessControlService.normalizeRole(hdrRole) : nwAccessControlService.roleFromUserAndGroups(hdrUser, groups, cfg);
+        return nwAccessControlService.buildAccessPayload({ enabled: cfg.enabled, user: hdrUser, role, groups, source: 'eos-header' });
+      }
+    } catch (_e) {}
+
+    return nwAccessControlService.buildAccessPayload({ enabled: cfg.enabled, user: '', role: cfg.defaultRole, groups: [], source: 'anonymous' });
+  }
+
+  /** Prüft eine einzelne Capability gegen das zentrale Rollenmodell. */
+  _nwAccessCan(access, capability) {
+    return nwAccessControlService.can(access, capability);
+  }
+
+  /**
+   * Express-Middleware für Capability-Gates.
+   * Sie schützt Backend-Routen auch dann, wenn jemand die URL kennt oder Buttons im UI manipuliert.
+   */
+  _nwRequireCapability(capability) {
+    return async (req, res, next) => {
+      try {
+        const access = await this._nwAccessForRequest(req);
+        if (!this._nwAccessCan(access, capability)) {
+          return res.status(403).json({ ok: false, error: 'forbidden', requiredCapability: capability, role: access.role, source: access.source });
+        }
+        req.nwAccess = access;
+        req.nwSession = Object.assign({}, req.nwSession || {}, { user: access.user, role: access.role, isInstaller: access.isInstaller });
+        return next();
+      } catch (e) {
+        try { this.log.warn('Access capability check failed: ' + (e && e.message ? e.message : e)); } catch (_e) {}
+        return res.status(500).json({ ok: false, error: 'access_check_failed' });
+      }
+    };
+  }
+
+  /** Sendet eine HTML-Sperrseite für direkte Seitenaufrufe ohne Capability. */
+  async _nwSendProtectedFile(req, res, capability, fileRel) {
+    const access = await this._nwAccessForRequest(req);
+    if (!this._nwAccessCan(access, capability)) {
+      // Nicht angemeldete Benutzer dürfen die HTML-Hülle laden, damit auth.js den Login-Dialog
+      // anzeigen kann. Echte Daten-/Schreibzugriffe bleiben trotzdem durch API-Capabilities gesperrt.
+      if (access && access.role === 'none') {
+        res.sendFile(path.join(__dirname, fileRel));
+        return;
+      }
+      res.status(403).type('html').send(`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Zugriff verweigert</title><style>body{font-family:system-ui;background:#0c0f12;color:#e8eef4;padding:32px}.box{max-width:720px;margin:auto;background:#111820;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:24px}a{color:#00c853}</style></head><body><div class="box"><h1>Zugriff verweigert</h1><p>Diese Seite ist für deine EOS-Rolle nicht freigegeben.</p><p>Rolle: <strong>${String(access.role || 'none')}</strong></p><p>Benötigte Berechtigung: <code>${String(capability)}</code></p><p><a href="/">Zurück zum Dashboard</a></p></div></body></html>`);
+      return;
+    }
+    res.sendFile(path.join(__dirname, fileRel));
+  }
+
   /**
    * Code-Teil: _nwSetTimeout
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -6747,7 +6932,6 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       if (wb.powerId) this.evcsIdToKey[wb.powerId] = `evcs.${wb.index}.powerW`;
       if (wb.energyTotalId) this.evcsIdToKey[wb.energyTotalId] = `evcs.${wb.index}.energyTotalKwh`;
       if (wb.statusId) this.evcsIdToKey[wb.statusId] = `evcs.${wb.index}.status`;
-      if (wb.onlineId) this.evcsIdToKey[wb.onlineId] = `evcs.${wb.index}.online`;
       if (wb.activeId) this.evcsIdToKey[wb.activeId] = `evcs.${wb.index}.active`;
       if (wb.lockWriteId) this.evcsIdToKey[wb.lockWriteId] = `evcs.${wb.index}.lock`;
       if (wb.rfidReadId) this.evcsIdToKey[wb.rfidReadId] = `evcs.${wb.index}.rfidLast`;
@@ -6803,7 +6987,6 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
                 _dayBaseKwh:  { type: 'number', role: 'value', def: 0, read: true, write: false, unit: 'kWh' },
         _dayBaseDate: { type: 'string', role: 'text', def: '', read: true, write: false },
         status:        { type: 'string', role: 'state', def: '', read: true, write: false },
-        online:        { type: 'boolean', role: 'indicator.reachable', def: false, read: true, write: false },
         active:        { type: 'boolean', role: 'switch', def: false, read: true, write: false },
         // Modus ist bewusst writeable: die VIS kann je Ladepunkt den Betriebsmodus setzen (internes EMS).
         // 0=Auto, 1=Boost, 2=Min+PV, 3=PV
@@ -7305,7 +7488,7 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
     if (!Array.isArray(this.evcsList)) return;
 
     for (const wb of this.evcsList) {
-      const ids = [wb.powerId, wb.energyTotalId, wb.statusId, wb.onlineId, wb.activeId, wb.modeId, wb.lockWriteId, wb.rfidReadId, wb.vehicleSocId].filter(Boolean);
+      const ids = [wb.powerId, wb.energyTotalId, wb.statusId, wb.activeId, wb.modeId, wb.lockWriteId, wb.rfidReadId, wb.vehicleSocId].filter(Boolean);
       for (const id of ids) {
         try {
           await this.subscribeForeignStatesAsync(id);
@@ -9504,8 +9687,10 @@ async onReady() {
     });
     // Abschnitt: Lizenz-API. Maskierte Platzhalter dürfen hier nie als echter Lizenzschlüssel gespeichert oder geprüft werden.
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/license/info', async (_req, res) => {
-    app.get('/api/license/info', async (_req, res) => {
+    app.get('/api/license/info', async (req, res) => {
       sendLicenseCors(res);
+      const nwAccess = await this._nwAccessForRequest(req);
+      const nwCanManageLicense = this._nwAccessCan(nwAccess, 'license.manage');
       if (!this._nwSystemUuid) {
         try { this._nwSystemUuid = await this._nwGetSystemUuid(); } catch (_e) {}
       }
@@ -9534,11 +9719,14 @@ async onReady() {
         expiresAt: Number(info.expiresAt || 0),
         daysRemaining: Number(info.daysRemaining || 0),
         licenseKeyConfigured: !!currentLicenseKey,
-        licenseKeyMasked: maskedLicenseKey,
-        // Needed by the Admin-only license page so a saved full license remains visible
-        // after leaving/re-opening the adapter page. The endpoint is intentionally
-        // before the license gate because activation must also work while locked.
-        licenseKey: currentLicenseKey,
+        licenseKeyMasked: nwCanManageLicense ? maskedLicenseKey : '',
+        access: {
+          role: nwAccess.role,
+          canManageLicense: !!nwCanManageLicense,
+        },
+        // Lizenzschlüssel nur für EOS Admin / license.manage. Installer und Kunde
+        // sehen höchstens, dass eine Lizenz vorhanden ist; der echte Schlüssel bleibt geschützt.
+        licenseKey: nwCanManageLicense ? currentLicenseKey : '',
       });
     });
 
@@ -9550,6 +9738,10 @@ async onReady() {
     app.post('/api/license/save', express.json({ limit: '64kb' }), async (req, res) => {
       sendLicenseCors(res);
       try {
+        const nwAccess = await this._nwAccessForRequest(req);
+        if (!this._nwAccessCan(nwAccess, 'license.manage')) {
+          return res.status(403).json({ ok: false, error: 'forbidden', requiredCapability: 'license.manage', role: nwAccess.role });
+        }
         const licenseKeyRaw = String((req.body && (req.body.licenseKey || req.body.key)) || '').trim();
         if (this._nwLooksLikeMaskedLicenseKey(licenseKeyRaw)) {
           const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
@@ -9757,12 +9949,18 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
     // bzw. über den Installer-Reiter im UI.
     // Daher werden schreibende Endpunkte nicht zusätzlich durch ein VIS-eigenes Login geschützt.
     const authCfg = (this.config && this.config.auth) || {};
-    const authEnabled = false;
-    const protectWrites = false;
-    const sessionTtlMs = 2 * 60 * 60 * 1000;
+    // EOS Access Control ist ab 0.8.48 aktiv: Der Adapter nutzt EOS/ioBroker Benutzer
+    // und Gruppen, statt ein separates Rollenmodell zu erfinden. auth.enabled=false
+    // kann für reine Labor-/Legacy-Systeme weiterhin bewusst gesetzt werden.
+    const authEnabled = authCfg.enabled !== false;
+    const protectWrites = authCfg.protectWrites !== false;
+    const sessionTtlMs = Math.max(5, Math.round(Number(authCfg.sessionTtlMin || 120))) * 60 * 1000;
 
-    const installerUsers = new Set(['admin', 'installer']);
-    const installerGroups = ['system.group.administrator'];
+    const installerUsers = new Set(nwAccessControlService.parseList(authCfg.installerUsers, ['admin', 'installer']));
+    const installerGroups = nwAccessControlService.uniqueList(
+      nwAccessControlService.parseList(authCfg.installerGroups, ['system.group.administrator', 'system.group.installer', 'system.group.eosInstaller', 'system.group.nexowattInstaller'])
+        .concat(['system.group.administrator', 'system.group.installer'])
+    );
 
     const COOKIE_NAME = 'nw_session';
     const LEGACY_COOKIE_NAME = 'installer_session';
@@ -9834,11 +10032,12 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
      * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    const requireAuth = (req, res, next) => {
+    const requireAuth = async (req, res, next) => {
       if (!authEnabled || !protectWrites) return next();
-      const s = getSession(req);
-      if (!s) return res.status(401).json({ ok: false, error: 'unauthorized' });
-      req.nwSession = s;
+      const access = await this._nwAccessForRequest(req);
+      if (!access || access.role === 'none') return res.status(401).json({ ok: false, error: 'unauthorized' });
+      req.nwAccess = access;
+      req.nwSession = Object.assign({}, req.nwSession || {}, { user: access.user, role: access.role, isInstaller: access.isInstaller });
       next();
     };
     /**
@@ -9847,12 +10046,13 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
      * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    const requireInstaller = (req, res, next) => {
+    const requireInstaller = async (req, res, next) => {
       if (!authEnabled || !protectWrites) return next();
-      const s = getSession(req);
-      if (!s) return res.status(401).json({ ok: false, error: 'unauthorized' });
-      if (!s.isInstaller) return res.status(403).json({ ok: false, error: 'forbidden' });
-      req.nwSession = s;
+      const access = await this._nwAccessForRequest(req);
+      if (!access || access.role === 'none') return res.status(401).json({ ok: false, error: 'unauthorized' });
+      if (!this._nwAccessCan(access, 'appcenter.open')) return res.status(403).json({ ok: false, error: 'forbidden', requiredCapability: 'appcenter.open', role: access.role });
+      req.nwAccess = access;
+      req.nwSession = Object.assign({}, req.nwSession || {}, { user: access.user, role: access.role, isInstaller: access.isInstaller });
       next();
     };
     /**
@@ -9893,31 +10093,30 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     const computeIsInstaller = async (user) => {
-      const u = String(user || '').trim();
-      if (!u) return false;
-      if (installerUsers.has(u)) return true;
-      // administrators are always allowed
-      for (const gid of installerGroups) {
-        // ignore empty
-        if (!gid) continue;
-        // a user can be member of multiple groups; first match wins
-        if (await isUserInGroup(u, gid)) return true;
-      }
-      return false;
+      const access = await this._nwAccessForUser(user, 'login-check');
+      return !!(access && access.isInstaller);
     };
 
     // Auth status (used by UI)
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/auth/status', (req, res) => {
     app.get('/api/auth/status', (req, res) => {
       const s = getSession(req);
-      res.json({
-        ok: true,
-        enabled: !!authEnabled,
-        authed: !!s,
-        user: (s && s.user) ? String(s.user) : null,
-        isInstaller: !!(s && s.isInstaller),
-        protectWrites: !!protectWrites,
-      });
+      this._nwAccessForRequest(req).then((access) => {
+        res.json({
+          ok: true,
+          enabled: !!authEnabled,
+          authed: !!(s || (access && access.role !== 'none')),
+          user: (access && access.user) ? String(access.user) : ((s && s.user) ? String(s.user) : null),
+          role: access ? access.role : 'none',
+          roles: access ? access.roles : [],
+          groups: access ? access.groups : [],
+          capabilities: access ? access.capabilities : [],
+          isAdmin: !!(access && access.isAdmin),
+          isInstaller: !!(access && access.isInstaller),
+          isCustomer: !!(access && access.isCustomer),
+          protectWrites: !!protectWrites,
+        });
+      }).catch((e) => res.status(500).json({ ok: false, error: 'access_status_failed', message: String(e && e.message ? e.message : e) }));
     });
     /**
      * Code-Teil: doAuthLogin
@@ -9936,11 +10135,21 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
         const ok = await checkPasswordAsync(user, password);
         if (!ok) return res.status(401).json({ ok: false, error: 'unauthorized' });
 
-        const isInstaller = await computeIsInstaller(user);
+        const access = await this._nwAccessForUser(user, 'login');
+        const isInstaller = !!(access && access.isInstaller);
         const token = createToken();
-        this._authSessions.set(token, { user, isInstaller, exp: Date.now() + sessionTtlMs });
+        this._authSessions.set(token, {
+          user,
+          role: access.role,
+          groups: access.groups,
+          capabilities: access.capabilities,
+          isInstaller,
+          isAdmin: !!access.isAdmin,
+          isCustomer: !!access.isCustomer,
+          exp: Date.now() + sessionTtlMs,
+        });
         setSessionCookie(res, token, sessionTtlMs);
-        res.json({ ok: true, enabled: true, authed: true, user, isInstaller });
+        res.json({ ok: true, enabled: true, authed: true, user, role: access.role, groups: access.groups, capabilities: access.capabilities, isInstaller, isAdmin: !!access.isAdmin, isCustomer: !!access.isCustomer });
       } catch (e) {
         this.log.warn('auth login error: ' + (e && e.message ? e.message : e));
         res.status(500).json({ ok: false, error: 'internal_error' });
@@ -9980,6 +10189,19 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
       clearSessionCookie(res);
       res.json({ ok: true });
     });
+
+
+    // EOS Access Control Session API: Frontend und EOS Admin können hier die aktuell
+    // wirksame Rolle samt Capabilities abfragen. Diese API ist absichtlich read-only.
+    app.get('/api/session/me', async (req, res) => {
+      try {
+        const access = await this._nwAccessForRequest(req);
+        res.json(access);
+      } catch (e) {
+        res.status(500).json({ ok: false, error: 'session_access_failed', message: String(e && e.message ? e.message : e) });
+      }
+    });
+
 
 
     // --- SmartHome page & API (erste Switch-Kachel) ---
@@ -11975,6 +12197,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         // Plant-level
         installerConfig: (n.installerConfig && typeof n.installerConfig === 'object') ? n.installerConfig : {},
+        accessControl: (n.accessControl && typeof n.accessControl === 'object') ? n.accessControl : this._nwAccessConfig(),
         countryProfile: (n.countryProfile && typeof n.countryProfile === 'object') ? n.countryProfile : { country: 'DE', languageMode: 'system' },
 
         // Mapping
@@ -12002,278 +12225,6 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         aiOptimization: (n.aiOptimization && typeof n.aiOptimization === 'object') ? n.aiOptimization : {},
       };
     };
-    /**
-     * Code-Teil: _nwHydrateStorageFarmConfigFromRuntimeStates
-     * Zweck: Stellt sicher, dass die App-Center-Konfiguration der Speicherfarm
-     *        nicht leer erscheint, wenn die laufende Speicherfarm-Konfiguration
-     *        bereits in `storageFarm.configJson` gespiegelt ist.
-     *
-     * Hintergrund/Fix:
-     * Die Speicherfarm arbeitet im Runtime-/VIS-Bereich aus `storageFarm.configJson`.
-     * Nach mehreren App-Center-/Installer-Migrationen kann `installer.configJson`
-     * aber `storageFarm.storages` nicht mehr enthalten, obwohl die Farm produktiv
-     * läuft. Dann zeigte der Reiter Speicherfarm im App-Center keine Speicher mehr
-     * und ein Speichern hätte die bestehende Konfiguration gefährlich überschreiben
-     * können. Dieser Fallback liest die Runtime-Spiegelstates nur, wenn die
-     * Installer-Konfiguration leer ist.
-     */
-    const _nwHydrateStorageFarmConfigFromRuntimeStates = async (cfgOut) => {
-      try {
-        const out = cfgOut && typeof cfgOut === 'object' ? cfgOut : {};
-        out.storageFarm = (out.storageFarm && typeof out.storageFarm === 'object') ? out.storageFarm : {};
-        const sf = out.storageFarm;
-        const hasInstallerStorages = Array.isArray(sf.storages) && sf.storages.some(r => r && typeof r === 'object');
-        if (hasInstallerStorages) return out;
-
-        const parseJson = (raw, fallback) => {
-          if (raw && typeof raw === 'object') return raw;
-          const txt = String(raw == null ? '' : raw).trim();
-          if (!txt || txt === 'null' || txt === 'undefined') return fallback;
-          try { return JSON.parse(txt); } catch (_e) { return fallback; }
-        };
-        const asList = (parsed) => {
-          if (Array.isArray(parsed)) return parsed;
-          if (parsed && typeof parsed === 'object' && Array.isArray(parsed.storages)) return parsed.storages;
-          if (parsed && typeof parsed === 'object' && Array.isArray(parsed.rows)) return parsed.rows;
-          return [];
-        };
-        const fromStatusRows = (rows) => (Array.isArray(rows) ? rows : [])
-          .filter(r => r && typeof r === 'object')
-          .map((r, i) => ({
-            enabled: true,
-            name: String(r.name || r.label || '').trim() || `Speicher ${i + 1}`,
-            group: String(r.group || '').trim(),
-            capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : '',
-            maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : '',
-            maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : '',
-            _runtimeStatusRecovered: true,
-          }));
-        const stCfg = await this.getStateAsync('storageFarm.configJson').catch(() => null);
-        const parsedCfg = parseJson(stCfg && stCfg.val, []);
-        let storages = asList(parsedCfg);
-        let fallbackSource = 'storageFarm.configJson';
-        if (!storages.length) {
-          const stStatus = await this.getStateAsync('storageFarm.storagesStatusJson').catch(() => null);
-          storages = fromStatusRows(asList(parseJson(stStatus && stStatus.val, [])));
-          fallbackSource = 'storageFarm.storagesStatusJson';
-        }
-        if (!storages.length) {
-          const stTotal = await this.getStateAsync('storageFarm.storagesTotal').catch(() => null);
-          const total = Math.max(0, Math.min(10, Math.round(Number(stTotal && stTotal.val) || 0)));
-          if (total > 0) {
-            storages = Array.from({ length: total }, (_x, i) => ({ enabled: true, name: `Speicher ${i + 1}`, _runtimeCountRecovered: true }));
-            fallbackSource = 'storageFarm.storagesTotal';
-          }
-        }
-        if (!storages.length) return out;
-
-        const normalized = storages
-          .filter(r => r && typeof r === 'object')
-          .map((r, i) => ({
-            enabled: r.enabled === false ? false : true,
-            name: String(r.name || '').trim() || `Speicher ${i + 1}`,
-            coupling: String(r.coupling || '').trim().toLowerCase(),
-            socId: String(r.socId || '').trim(),
-            signedPowerId: String(r.signedPowerId || '').trim(),
-            chargePowerId: String(r.chargePowerId || '').trim(),
-            dischargePowerId: String(r.dischargePowerId || '').trim(),
-            pvPowerId: String(r.pvPowerId || '').trim(),
-            invertSignedPowerSign: !!r.invertSignedPowerSign,
-            invertChargeSign: !!r.invertChargeSign,
-            invertDischargeSign: !!r.invertDischargeSign,
-            setChargePowerId: String(r.setChargePowerId || '').trim(),
-            setDischargePowerId: String(r.setDischargePowerId || '').trim(),
-            setSignedPowerId: String(r.setSignedPowerId || '').trim(),
-            invertSetSignedPowerSign: !!r.invertSetSignedPowerSign,
-            maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : '',
-            maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : '',
-            availableId: String(r.availableId || '').trim(),
-            faultId: String(r.faultId || '').trim(),
-            chargeAllowedId: String(r.chargeAllowedId || '').trim(),
-            dischargeAllowedId: String(r.dischargeAllowedId || '').trim(),
-            capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : '',
-            group: String(r.group || '').trim(),
-          }));
-        if (!normalized.length) return out;
-
-        sf.storages = normalized;
-        sf.__runtimeStateFallback = true;
-        sf.__runtimeStateFallbackSource = fallbackSource;
-
-        const stMode = await this.getStateAsync('storageFarm.mode').catch(() => null);
-        const mode = String(stMode && stMode.val || sf.mode || 'pool').trim().toLowerCase();
-        sf.mode = mode === 'groups' ? 'groups' : 'pool';
-
-        const stGroups = await this.getStateAsync('storageFarm.groupsJson').catch(() => null);
-        const parsedGroups = parseJson(stGroups && stGroups.val, []);
-        if ((!Array.isArray(sf.groups) || !sf.groups.length) && Array.isArray(parsedGroups) && parsedGroups.length) {
-          sf.groups = parsedGroups.filter(g => g && typeof g === 'object').map((g, i) => ({
-            enabled: g.enabled === false ? false : true,
-            name: String(g.name || '').trim() || `Gruppe ${String.fromCharCode(65 + i)}`,
-            socMin: (g.socMin !== undefined && g.socMin !== null && g.socMin !== '') ? Number(g.socMin) : '',
-            socMax: (g.socMax !== undefined && g.socMax !== null && g.socMax !== '') ? Number(g.socMax) : '',
-            priority: (g.priority !== undefined && g.priority !== null && g.priority !== '') ? Number(g.priority) : (100 + i),
-          }));
-        }
-
-        // Wenn Speicher produktiv laufen, muss der App-Center-Reiter sichtbar bleiben.
-        // Das ändert keine Lizenz; es hält nur die bestehende Installiert/Aktiv-Anzeige
-        // konsistent zur Runtime-Konfiguration.
-        out.emsApps = out.emsApps && typeof out.emsApps === 'object' ? out.emsApps : {};
-        out.emsApps.apps = out.emsApps.apps && typeof out.emsApps.apps === 'object' ? out.emsApps.apps : {};
-        const st = out.emsApps.apps.storagefarm && typeof out.emsApps.apps.storagefarm === 'object' ? out.emsApps.apps.storagefarm : {};
-        out.emsApps.apps.storagefarm = Object.assign({}, st, { installed: true, enabled: st.enabled !== false });
-        out.enableStorageFarm = true;
-        return out;
-      } catch (e) {
-        try { this.log && this.log.warn && this.log.warn('storageFarm runtime fallback failed: ' + (e && e.message ? e.message : e)); } catch (_e) {}
-        return cfgOut;
-      }
-    };
-
-    /**
-     * StorageFarm-Hotfix 0.8.57: schützt produktive Speicherfarm-Mappings beim
-     * Speichern aus einem stale/leer gerenderten App-Center.
-     *
-     * Wenn `storageFarm.storages` aus der UI leer kommt, der Runtime-State
-     * `storageFarm.configJson` aber produktive Speicher enthält, wird die leere
-     * Liste durch die Runtime-Liste ersetzt. So kann ein leerer App-Center-Reiter
-     * die funktionierende Speicherfarm nicht versehentlich löschen.
-     */
-    const _nwProtectStorageFarmPatchFromEmptySubmit = async (patchObj) => {
-      try {
-        const patch = patchObj && typeof patchObj === 'object' ? patchObj : {};
-        const sf = patch.storageFarm && typeof patch.storageFarm === 'object' ? patch.storageFarm : null;
-        if (!sf) return patch;
-        const allowEmpty = sf.__allowEmptyStorages === true || sf.__explicitDeleteAll === true;
-        const sentStorages = Array.isArray(sf.storages) ? sf.storages : null;
-        const sentEmpty = sentStorages && sentStorages.length === 0;
-        if (sentEmpty && !allowEmpty) {
-          const shadow = { storageFarm: {} };
-          await _nwHydrateStorageFarmConfigFromRuntimeStates(shadow);
-          const restored = shadow.storageFarm && Array.isArray(shadow.storageFarm.storages) ? shadow.storageFarm.storages : [];
-          if (restored.length) {
-            sf.storages = restored;
-            sf.__protectedFromEmptySubmit = true;
-            sf.__runtimeStateFallback = true;
-            sf.__runtimeStateFallbackSource = 'storageFarm.configJson';
-            try { this.log && this.log.warn && this.log.warn(`[storageFarm] Empty App-Center submit protected; restored ${restored.length} storage entries from storageFarm.configJson.`); } catch (_eLog) {}
-          }
-        }
-        const sentGroups = Array.isArray(sf.groups) ? sf.groups : null;
-        const groupsEmpty = sentGroups && sentGroups.length === 0;
-        if (groupsEmpty && !allowEmpty) {
-          const shadow = { storageFarm: {} };
-          await _nwHydrateStorageFarmConfigFromRuntimeStates(shadow);
-          const groups = shadow.storageFarm && Array.isArray(shadow.storageFarm.groups) ? shadow.storageFarm.groups : [];
-          if (groups.length) sf.groups = groups;
-        }
-        return patch;
-      } catch (e) {
-        try { this.log && this.log.warn && this.log.warn('storageFarm empty-submit protection failed: ' + (e && e.message ? e.message : e)); } catch (_e) {}
-        return patchObj;
-      }
-    };
-
-
-    /**
-     * 0.8.59 Release-Schutz / Regression Safety Gate.
-     *
-     * Zweck:
-     * App-Center-Saves dürfen Kernbereiche nicht stillschweigend leeren, wenn
-     * der Nutzer nur einen anderen Reiter bearbeitet oder die UI wegen eines
-     * Render-/Hydration-Fehlers eine leere Liste sendet. Genau das hatte die
-     * Speicherfarm betroffen. Dieses Gate schützt deshalb generisch weitere
-     * installer-kritische Listen, ohne fachliche Regler zu verändern.
-     *
-     * Wichtig:
-     * - Kein neuer EMS-Regler.
-     * - Keine Hardware-Schreibbefehle.
-     * - Nur Save-Payload-Validierung und Wiederherstellung aus letzter
-     *   persistierter Konfiguration/Runtime-Fallbacks.
-     */
-    const _nwRegressionSafetyListInfo = (obj, pathText) => {
-      try {
-        const parts = String(pathText || '').split('.').filter(Boolean);
-        let cur = obj;
-        for (const part of parts) cur = cur && typeof cur === 'object' ? cur[part] : undefined;
-        return { exists: Array.isArray(cur), length: Array.isArray(cur) ? cur.length : 0, value: Array.isArray(cur) ? cur : undefined };
-      } catch (_e) {
-        return { exists: false, length: 0, value: undefined };
-      }
-    };
-    const _nwRegressionSafetySetPath = (obj, pathText, value) => {
-      const parts = String(pathText || '').split('.').filter(Boolean);
-      if (!obj || !parts.length) return;
-      let cur = obj;
-      for (let i = 0; i < parts.length - 1; i += 1) {
-        const p = parts[i];
-        cur[p] = cur[p] && typeof cur[p] === 'object' ? cur[p] : {};
-        cur = cur[p];
-      }
-      cur[parts[parts.length - 1]] = Array.isArray(value) ? value.slice() : value;
-    };
-    const _nwBuildRegressionSafetyReport = (patchObj, baseObj) => {
-      const patch = patchObj && typeof patchObj === 'object' ? patchObj : {};
-      const base = baseObj && typeof baseObj === 'object' ? baseObj : {};
-      const rules = [
-        { id: 'storagefarm_storages', path: 'storageFarm.storages', allowFlags: ['storageFarm.__allowEmptyStorages', 'storageFarm.__explicitDeleteAll'], reason: 'Speicherfarm-Speicher dürfen nicht durch leeren App-Center-Payload verschwinden.' },
-        { id: 'storagefarm_groups', path: 'storageFarm.groups', allowFlags: ['storageFarm.__allowEmptyStorages', 'storageFarm.__explicitDeleteAll'], reason: 'Speicherfarm-Gruppen dürfen nicht versehentlich geleert werden.' },
-        { id: 'chargekiosk_stations', path: 'chargeKiosk.stations', allowFlags: ['chargeKiosk.__allowEmptyStations', 'chargeKiosk.__explicitDeleteAll'], reason: 'DC-Station-Display-Stationen dürfen nicht durch andere App-Center-Reiter verschwinden.' },
-        { id: 'mesh_nodes', path: 'meshMicrogrid.nodes', allowFlags: ['meshMicrogrid.__allowEmptyNodes', 'meshMicrogrid.__explicitDeleteAll'], reason: 'Mesh/Microgrid-Knoten dürfen nicht ohne explizite Löschfreigabe geleert werden.' },
-        { id: 'mesh_bridge_mappings', path: 'meshMicrogrid.localBridge.mappings', allowFlags: ['meshMicrogrid.localBridge.__allowEmptyMappings', 'meshMicrogrid.__explicitDeleteAll'], reason: 'Mesh Local-Bridge-Mappings dürfen nicht ohne explizite Löschfreigabe geleert werden.' },
-        { id: 'mesh_target_groups', path: 'meshMicrogrid.targetGroups.groups', allowFlags: ['meshMicrogrid.targetGroups.__allowEmptyGroups', 'meshMicrogrid.__explicitDeleteAll'], reason: 'Mesh-Zielgruppen dürfen nicht ohne explizite Löschfreigabe geleert werden.' },
-        { id: 'evcs_list', path: 'settingsConfig.evcsList', allowFlags: ['settingsConfig.__allowEmptyEvcsList', 'settingsConfig.__explicitDeleteAll'], reason: 'Ladepunkt-/EVCS-Zuordnungen dürfen nicht versehentlich geleert werden.' },
-      ];
-      const checks = [];
-      for (const rule of rules) {
-        const patchInfo = _nwRegressionSafetyListInfo(patch, rule.path);
-        const baseInfo = _nwRegressionSafetyListInfo(base, rule.path);
-        const explicitAllow = (rule.allowFlags || []).some((flagPath) => {
-          const info = _nwRegressionSafetyListInfo({ root: patch }, 'root.' + flagPath);
-          if (info.exists) return false;
-          try {
-            const parts = String(flagPath).split('.').filter(Boolean);
-            let cur = patch;
-            for (const part of parts) cur = cur && typeof cur === 'object' ? cur[part] : undefined;
-            return cur === true;
-          } catch (_e) { return false; }
-        });
-        const destructiveEmpty = patchInfo.exists && patchInfo.length === 0 && baseInfo.length > 0 && !explicitAllow;
-        checks.push({ id: rule.id, path: rule.path, patchExists: patchInfo.exists, patchLength: patchInfo.length, baseLength: baseInfo.length, explicitAllow, destructiveEmpty, reason: rule.reason });
-      }
-      const destructive = checks.filter(c => c.destructiveEmpty);
-      return {
-        schema: 'nexowatt.installer-regression-safety.v1',
-        ts: Date.now(),
-        ok: destructive.length === 0,
-        destructiveCount: destructive.length,
-        checks,
-        destructive,
-        note: 'Safety Gate schützt App-Center-Saves vor unbeabsichtigtem Leeren kritischer Bereiche.',
-      };
-    };
-    const _nwApplyInstallerRegressionSafetyGate = async (patchObj, baseObj) => {
-      const patch = patchObj && typeof patchObj === 'object' ? patchObj : {};
-      const base = baseObj && typeof baseObj === 'object' ? baseObj : {};
-      const report = _nwBuildRegressionSafetyReport(patch, base);
-      for (const item of report.destructive || []) {
-        const baseInfo = _nwRegressionSafetyListInfo(base, item.path);
-        if (baseInfo.exists && baseInfo.length > 0) {
-          _nwRegressionSafetySetPath(patch, item.path, baseInfo.value);
-          item.restored = true;
-          item.restoredLength = baseInfo.length;
-          try { this.log && this.log.warn && this.log.warn(`[RegressionSafetyGate] Restored ${item.path} (${baseInfo.length} entries) from last installer config; destructive empty submit blocked.`); } catch (_eLog) {}
-        }
-      }
-      const finalReport = _nwBuildRegressionSafetyReport(patch, base);
-      finalReport.restored = (report.destructive || []).filter(x => x.restored).map(x => ({ id: x.id, path: x.path, restoredLength: x.restoredLength }));
-      try {
-        this._nwInstallerRegressionSafetyLastReport = finalReport;
-      } catch (_e) {}
-      return { patch, report: finalReport };
-    };
-
     /**
      * Code-Teil: _nwRestartEms
      * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -12305,11 +12256,10 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         // system.adapter.<instance>.native. Persisting to native triggers an ioBroker instance restart
         // and breaks the UI with "Failed to fetch" + SSE disconnects.
         const nativeObj = (this.config && typeof this.config === 'object') ? this.config : {};
-        const cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickInstallerConfig(nativeObj));
+        const cfgOut = _nwPickInstallerConfig(nativeObj);
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
         cfgOut.locale = this._nwBuildLocaleInfo();
         cfgOut.countryProfile = Object.assign({}, cfgOut.countryProfile || {}, this._nwBuildCountryProfileInfo());
-        cfgOut.regressionSafety = this._nwInstallerRegressionSafetyLastReport || { schema: 'nexowatt.installer-regression-safety.v1', ok: true, checks: [] };
         res.json({ ok: true, license: cfgOut.license, config: cfgOut });
       } catch (e) {
         this.log.warn('Installer config API error: ' + e.message);
@@ -12338,7 +12288,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           'emsApps',
 
           // Scheduler + base mapping
-          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','chargeKiosk','meshMicrogrid','datapoints','vis','settings',
+          'schedulerIntervalMs','installerConfig','accessControl','countryProfile','energyWallet','chargeKiosk','meshMicrogrid','datapoints','vis','settings',
 
           // App/module configs
           'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','meshMicrogrid','chargingManagement',
@@ -12365,10 +12315,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         // Persist (state-based) + apply to runtime config.
         // We merge into the already persisted patch (loaded on startup) to keep full configuration.
         const basePatch = (this._nwInstallerConfigPatch && typeof this._nwInstallerConfigPatch === 'object') ? this._nwInstallerConfigPatch : {};
-        await _nwProtectStorageFarmPatchFromEmptySubmit(safePatch);
-        const gateResult = await _nwApplyInstallerRegressionSafetyGate(safePatch, basePatch);
-        const guardedPatch = gateResult && gateResult.patch ? gateResult.patch : safePatch;
-        let mergedPatch = this.nwDeepMerge(this.nwDeepMerge({}, basePatch), guardedPatch);
+        let mergedPatch = this.nwDeepMerge(this.nwDeepMerge({}, basePatch), safePatch);
         this._nwApplyLicenseLimitsToInstallerPatch(mergedPatch);
 
         // Map App toggles to legacy enable* flags and ensure forward-compatible shape
@@ -12446,7 +12393,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         }
 
         try { await this._nwInitLicense(); } catch (e) { try { this.log.warn('License refresh after installer config save failed: ' + (e && e.message ? e.message : e)); } catch (_eLog) {} }
-        const cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickInstallerConfig(this.config || {}));
+        const cfgOut = _nwPickInstallerConfig(this.config || {});
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
         cfgOut.locale = this._nwBuildLocaleInfo();
         cfgOut.countryProfile = Object.assign({}, cfgOut.countryProfile || {}, this._nwBuildCountryProfileInfo());
@@ -13844,8 +13791,6 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           budgetMode: await getOwn('chargingManagement.control.budgetMode'),
           budgetW: await getOwn('chargingManagement.control.budgetW'),
           usedW: await getOwn('chargingManagement.control.usedW'),
-          actualW: await getOwn('chargingManagement.control.actualW'),
-          reserveW: await getOwn('chargingManagement.control.reserveW'),
           remainingW: await getOwn('chargingManagement.control.remainingW'),
 
           pvCapRawW: await getOwn('chargingManagement.control.pvCapRawW'),
@@ -13859,10 +13804,6 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           gridImportLimitEffW: await getOwn('chargingManagement.control.gridImportLimitW_effective'),
           gridImportW,
           gridBaseLoadW: await getOwn('chargingManagement.control.gridBaseLoadW'),
-          gridBaseLoadRawW: await getOwn('chargingManagement.control.gridBaseLoadRawW'),
-          gridLocalSupportW: await getOwn('chargingManagement.control.gridLocalSupportW'),
-          gridEvcsActualForCapW: await getOwn('chargingManagement.control.gridEvcsActualForCapW'),
-          gridEvcsReserveIgnoredForCapW: await getOwn('chargingManagement.control.gridEvcsReserveIgnoredForCapW'),
           gridCapEvcsW: await getOwn('chargingManagement.control.gridCapEvcsW'),
           gridCapBinding: await getOwn('chargingManagement.control.gridCapBinding'),
 
@@ -14180,10 +14121,9 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
 // --- EMS Apps / Installer Page ---
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/ems-apps.html', '/ems-apps'], (req, res) => {
-    app.get(['/ems-apps.html', '/ems-apps'], (req, res) => {
+    app.get(['/ems-apps.html', '/ems-apps'], async (req, res) => {
       try {
-        const file = require('path').join(__dirname, 'www', 'ems-apps.html');
-        res.sendFile(file);
+        await this._nwSendProtectedFile(req, res, 'appcenter.open', path.join('www', 'ems-apps.html'));
       } catch (e) {
         this.log.warn('EMS Apps page error: ' + e.message);
         res.status(500).send('EMS Apps page error');
@@ -14192,10 +14132,9 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
 // --- Simulation Page ---
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/simulation.html', '/simulation'], (req, res) => {
-    app.get(['/simulation.html', '/simulation'], (req, res) => {
+    app.get(['/simulation.html', '/simulation'], async (req, res) => {
       try {
-        const file = require('path').join(__dirname, 'www', 'simulation.html');
-        res.sendFile(file);
+        await this._nwSendProtectedFile(req, res, 'simulation.open', path.join('www', 'simulation.html'));
       } catch (e) {
         this.log.warn('Simulation page error: ' + e.message);
         res.status(500).send('Simulation page error');
@@ -14204,10 +14143,11 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
 // --- SmartHomeConfig Page (VIS-Konfig-Ansicht) ---
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/smarthome-config.html', '/smarthome-config'], (req, res) => {
-    app.get(['/smarthome-config.html', '/smarthome-config'], (req, res) => {
+    app.get(['/smarthome-config.html', '/smarthome-config'], async (req, res) => {
       try {
-        const file = require('path').join(__dirname, 'www', 'smarthome-config.html');
-        res.sendFile(file);
+        // Endkunden dürfen die freigegebene SmartHome-Kundenkonfiguration öffnen.
+        // Roh-DP-Mapping und technische Freigaben bleiben über API-Capabilities geschützt.
+        await this._nwSendProtectedFile(req, res, 'smarthome.configureCustomer', path.join('www', 'smarthome-config.html'));
       } catch (e) {
         this.log.warn('SmartHomeConfig page error: ' + e.message);
         res.status(500).send('SmartHomeConfig page error');
@@ -14323,7 +14263,7 @@ app.get('/api/logic/blocks', async (_req, res) => {
 
 // --- NexoLogic (node/graph) editor config API ---
 // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/logic/editor', async (_req, res) => {
-app.get('/api/logic/editor', async (_req, res) => {
+app.get('/api/logic/editor', this._nwRequireCapability('nexologic.configureCustomer'), async (_req, res) => {
   try {
     const cfg = (typeof this.getLogicEditorConfig === 'function')
       ? this.getLogicEditorConfig()
@@ -14337,7 +14277,7 @@ app.get('/api/logic/editor', async (_req, res) => {
 });
 
 // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/logic/editor', requireInstaller, async (req, res) => {
-app.post('/api/logic/editor', requireInstaller, async (req, res) => {
+app.post('/api/logic/editor', this._nwRequireCapability('nexologic.configureCustomer'), async (req, res) => {
   try {
     const body = (req && req.body) || {};
     const inCfg = body.config;
@@ -14367,10 +14307,9 @@ app.post('/api/logic/editor', requireInstaller, async (req, res) => {
 
 // --- Logic (NexoLogic) Page ---
 // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/logic.html','/logic'], (req, res) => {
-app.get(['/logic.html','/logic'], (req, res) => {
+app.get(['/logic.html','/logic'], async (req, res) => {
   try {
-    const file = require('path').join(__dirname, 'www', 'logic.html');
-    res.sendFile(file);
+    await this._nwSendProtectedFile(req, res, 'nexologic.configureCustomer', path.join('www', 'logic.html'));
   } catch (e) {
     this.log.warn('Logic page error: ' + e.message);
     res.status(500).send('Logic page error');
@@ -17879,8 +17818,6 @@ const _nwMeshMicrogridBuildPayload = () => {
       lastWriteStatus: _nwDisplayStateVal('meshMicrogrid.fieldControl.lastWriteStatus', 'idle'),
       outputCount: Number(_nwDisplayStateVal('meshMicrogrid.fieldControl.outputCount', 0)) || 0,
     },
-    limits: snapshot.limits && typeof snapshot.limits === 'object' ? snapshot.limits : _nwEnergyLedgerJson('meshMicrogrid.limits.summaryJson', { nodes: _nwEnergyLedgerJson('meshMicrogrid.limits.nodesJson', []), bridgeTargets: _nwEnergyLedgerJson('meshMicrogrid.limits.bridgeTargetsJson', []), limitedCommands: _nwEnergyLedgerJson('meshMicrogrid.limits.limitedCommandsJson', []), blockedCommands: _nwEnergyLedgerJson('meshMicrogrid.limits.blockedCommandsJson', []), limitedCount: Number(_nwDisplayStateVal('meshMicrogrid.limits.limitedCount', 0)) || 0, blockedCount: Number(_nwDisplayStateVal('meshMicrogrid.limits.blockedCount', 0)) || 0, activeLimitCount: Number(_nwDisplayStateVal('meshMicrogrid.limits.activeLimitCount', 0)) || 0, lastReason: _nwDisplayStateVal('meshMicrogrid.limits.lastReason', '') }),
-    targetGroups: snapshot.targetGroups && typeof snapshot.targetGroups === 'object' ? snapshot.targetGroups : _nwEnergyLedgerJson('meshMicrogrid.targetGroups.summaryJson', { groups: _nwEnergyLedgerJson('meshMicrogrid.targetGroups.groupsJson', []), priorityOrder: _nwEnergyLedgerJson('meshMicrogrid.targetGroups.priorityOrderJson', []), fairness: _nwEnergyLedgerJson('meshMicrogrid.targetGroups.fairnessJson', {}), groupCount: Number(_nwDisplayStateVal('meshMicrogrid.targetGroups.groupCount', 0)) || 0, activeGroupCount: Number(_nwDisplayStateVal('meshMicrogrid.targetGroups.activeGroupCount', 0)) || 0, limitedCommandCount: Number(_nwDisplayStateVal('meshMicrogrid.targetGroups.limitedCommandCount', 0)) || 0, blockedCommandCount: Number(_nwDisplayStateVal('meshMicrogrid.targetGroups.blockedCommandCount', 0)) || 0, lastReason: _nwDisplayStateVal('meshMicrogrid.targetGroups.lastReason', '') }),
     localBridge: snapshot.localBridge && typeof snapshot.localBridge === 'object' ? snapshot.localBridge : {
       enabled: _nwDisplayStateVal('meshMicrogrid.localBridge.enabled', false) === true,
       outputMode: _nwDisplayStateVal('meshMicrogrid.localBridge.outputMode', 'global'),
@@ -17985,25 +17922,10 @@ const _nwMeshMicrogridCsv = (payload) => {
   const cg = payload && payload.commandGuard ? payload.commandGuard : {};
   rows.push(['CommandGuard', cg.status || 'blocked-readonly', String(cg.prepared !== false), String(cg.allowed === true), String(cg.hardwareWrite === true), String(cg.blockerCount || 0), String(cg.warnCount || 0), cg.reason || 'read-only'].map(_nwDisplayCsvEscape).join(';'));
   const cmds = Array.isArray(cg.plannedCommands) ? cg.plannedCommands : [];
-  rows.push(['Typ','CommandId','ActionId','Kategorie','Knoten','Ziel','Requested_W','Allowed_W','Richtung','Blockiert','LimitReason','Grund'].map(_nwDisplayCsvEscape).join(';'));
+  rows.push(['Typ','CommandId','ActionId','Kategorie','Knoten','Ziel','Leistung_W','Richtung','Blockiert','Grund'].map(_nwDisplayCsvEscape).join(';'));
   for (const cmd of cmds) {
-    const pl = cmd && cmd.powerLimit ? cmd.powerLimit : {};
-    rows.push(['CommandIntent', cmd.commandId || '', cmd.sourceActionId || '', cmd.category || '', cmd.nodeName || cmd.nodeId || '', cmd.targetNodeName || cmd.targetNodeId || '', String(pl.requestedPowerW || cmd.requestedPowerW || cmd.plannedPowerW || 0), String(pl.allowedPowerW || cmd.plannedPowerW || 0), cmd.direction || '', String(cmd.blocked !== false), cmd.limitReason || '', cmd.reason || ''].map(_nwDisplayCsvEscape).join(';'));
+    rows.push(['CommandIntent', cmd.commandId || '', cmd.sourceActionId || '', cmd.category || '', cmd.nodeName || cmd.nodeId || '', cmd.targetNodeName || cmd.targetNodeId || '', String(cmd.plannedPowerW || 0), cmd.direction || '', String(cmd.blocked !== false), cmd.reason || ''].map(_nwDisplayCsvEscape).join(';'));
   }
-  const targetGroups = payload && payload.targetGroups ? payload.targetGroups : {};
-  const tgRows = Array.isArray(targetGroups.groups) ? targetGroups.groups : [];
-  rows.push('');
-  rows.push(['Typ','GroupId','Name','Type','Priority','Strategy','Members','Requested_W','Allowed_W','MaxPower_W'].map(_nwDisplayCsvEscape).join(';'));
-  for (const g of tgRows) rows.push(['TargetGroup', g.id || '', g.name || '', g.type || '', String(g.priority || ''), g.strategy || '', String(g.memberCount || 0), String(g.requestedPowerW || 0), String(g.allowedPowerW || 0), String(g.maxPowerW || 0)].map(_nwDisplayCsvEscape).join(';'));
-  const fairness = targetGroups && targetGroups.fairness ? targetGroups.fairness : {};
-  const fairnessGroups = Array.isArray(fairness.groups) ? fairness.groups : [];
-  rows.push(['Typ','GroupId','Name','Budget_W','Used_W','Remaining_W','MinShare_W','Weight','Limited','Blocked'].map(_nwDisplayCsvEscape).join(';'));
-  for (const g of fairnessGroups) rows.push(['TargetGroupFairness', g.groupId || '', g.groupName || '', String(g.budgetW || 0), String(g.usedW || 0), String(g.remainingW || 0), String(g.minShareW || 0), String(g.fairShareWeight || 0), String(fairness.limitedCount || 0), String(fairness.blockedCount || 0)].map(_nwDisplayCsvEscape).join(';'));
-  const limits = payload && payload.limits ? payload.limits : {};
-  rows.push('');
-  rows.push(['Typ','CommandId','Node','Requested_W','Allowed_W','Limited','Blocked','Reason'].map(_nwDisplayCsvEscape).join(';'));
-  for (const row of (Array.isArray(limits.limitedCommands) ? limits.limitedCommands : [])) rows.push(['Limit', row.commandId || '', row.nodeId || row.targetNodeId || '', String(row.requestedPowerW || 0), String(row.allowedPowerW || 0), 'true', 'false', (row.reasons || []).map(r => r.id).join(',')].map(_nwDisplayCsvEscape).join(';'));
-  for (const row of (Array.isArray(limits.blockedCommands) ? limits.blockedCommands : [])) rows.push(['Limit', row.commandId || '', row.nodeId || row.targetNodeId || '', String(row.requestedPowerW || 0), String(row.allowedPowerW || 0), 'false', 'true', row.reason || (row.reasons || []).map(r => r.id).join(',')].map(_nwDisplayCsvEscape).join(';'));
   rows.push('');
   rows.push(['Typ','Enabled','OutputMode','MappingCount','MappedCommands','UnmappedCommands','RouteReady'].map(_nwDisplayCsvEscape).join(';'));
   const lb = payload && payload.localBridge ? payload.localBridge : {};
@@ -18513,12 +18435,14 @@ app.post('/api/display/station/:token/command', async (req, res) => {
 });
 
 
-// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/config', (req, res) => {
-app.get('/config', (req, res) => {
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/config', async (req, res) => {
+app.get('/config', async (req, res) => {
       // UI flags: treat missing (undefined) EMS module flags as sensible defaults.
       // This avoids "legacy" fallbacks in the EVCS UI on upgrades where config flags
       // were not persisted yet.
       const cfg = this.config || {};
+      const sess = getSession(req);
+      const nwConfigAccess = await this._nwAccessForRequest(req);
       /**
        * Code-Teil: boolOr
        * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -18719,8 +18643,6 @@ app.get('/config', (req, res) => {
         if (typeof v === 'boolean') return v && evcsAvailableEffective;
         return evcsAvailableEffective;
       };
-
-      const sess = getSession(req);
 
       res.json({
         locale: this._nwBuildLocaleInfo(),
@@ -19230,17 +19152,28 @@ settingsConfig: {
 
           return { apps: {} };
         })(),
-        auth: {
-          enabled: !!authEnabled,
-          authed: !!sess,
-          user: (sess && sess.user) ? String(sess.user) : null,
-          isInstaller: !!(sess && sess.isInstaller),
-          protectWrites: !!protectWrites,
-        },
+        auth: (() => {
+          // EOS Access Control Payload für Frontend-Menüs. Die UI darf hieraus Menüs
+          // ausblenden; Backend-APIs prüfen dieselben Capabilities erneut serverseitig.
+          return {
+            enabled: !!authEnabled,
+            authed: !!(nwConfigAccess && nwConfigAccess.role !== 'none'),
+            user: (nwConfigAccess && nwConfigAccess.user) ? String(nwConfigAccess.user) : ((sess && sess.user) ? String(sess.user) : null),
+            role: nwConfigAccess ? nwConfigAccess.role : 'none',
+            roles: nwConfigAccess ? nwConfigAccess.roles : [],
+            groups: nwConfigAccess ? nwConfigAccess.groups : [],
+            capabilities: nwConfigAccess ? nwConfigAccess.capabilities : [],
+            isAdmin: !!(nwConfigAccess && nwConfigAccess.isAdmin),
+            isInstaller: !!(nwConfigAccess && nwConfigAccess.isInstaller),
+            isCustomer: !!(nwConfigAccess && nwConfigAccess.isCustomer),
+            protectWrites: !!protectWrites,
+          };
+        })(),
+        session: nwConfigAccess || null,
         // UI compatibility flag: old frontends used "installerLocked".
         // New behaviour: installer-level features are locked until the user logs in
         // with an account that has installer rights.
-        installerLocked: (authEnabled && protectWrites) ? !(sess && sess.isInstaller) : false
+        installerLocked: (authEnabled && protectWrites) ? !(nwConfigAccess && nwConfigAccess.isInstaller) : false
       });
     });
 
@@ -22120,7 +22053,6 @@ return res.json(out);
         if (!wb || typeof wb !== 'object') continue;
         add(wb.powerId, this.evcsIdToKey && wb.powerId ? this.evcsIdToKey[wb.powerId] : '');
         add(wb.statusId, this.evcsIdToKey && wb.statusId ? this.evcsIdToKey[wb.statusId] : '');
-        add(wb.onlineId, this.evcsIdToKey && wb.onlineId ? this.evcsIdToKey[wb.onlineId] : '');
         add(wb.activeId, this.evcsIdToKey && wb.activeId ? this.evcsIdToKey[wb.activeId] : '');
       }
     } catch (_e) {}

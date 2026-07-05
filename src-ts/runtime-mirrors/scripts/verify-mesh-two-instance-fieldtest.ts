@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e9228f4b9db2a9e61b3c46172ac248258d8ecb694da753c687b24b361ed7e2ab
+ * Original-Hash: fee163279314e9fc09010be3e867ef5319f8b41700ff4d5479b3779392f375d1
  */
 
 /**
@@ -89,8 +89,8 @@ must(uiTs, "fetch('/api/mesh/peer/fieldtest'", 'Feldtest-Button nutzt API');
 must(html, 'runMeshFieldTest', 'Feldtest-Button im HTML');
 must(html, 'meshFieldTestPeerRows', 'Peer-Matrix-Tabelle im HTML');
 must(html, 'meshFieldTestHistoryRows', 'Command-History-Tabelle im HTML');
-if (!/^0\.8\.(4[2-9]|[5-9][0-9])$/.test(String(pkg.version || ''))) {
-  console.error(`[mesh-two-instance-fieldtest] package.json Version ist ${pkg.version}, erwartet 0.8.59+`);
+if (pkg.version !== '0.8.42') {
+  console.error(`[mesh-two-instance-fieldtest] package.json Version ist ${pkg.version}, erwartet 0.8.42`);
   process.exit(1);
 }
 console.log('[mesh-two-instance-fieldtest] OK');

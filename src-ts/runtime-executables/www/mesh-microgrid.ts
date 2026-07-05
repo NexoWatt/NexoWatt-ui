@@ -91,55 +91,6 @@
   }
 
 
-  function renderTargetGroups(payload) {
-    const tg = payload && payload.targetGroups ? payload.targetGroups : {};
-    const groups = Array.isArray(tg.groups) ? tg.groups : [];
-    const fairness = tg.fairness && typeof tg.fairness === 'object' ? tg.fairness : {};
-    setText('meshTargetGroupsStatus', `${tg.groupCount || groups.length || 0} Zielgruppe(n) · ${tg.activeGroupCount || 0} aktiv · Fairness: ${fairness.limitedCount || 0} gekürzt / ${fairness.blockedCount || 0} blockiert`);
-    setText('meshTargetGroupsReason', (fairness.summary ? fairness.summary + ' · ' : '') + (tg.summary || tg.lastReason || 'Keine Zielgruppen konfiguriert. Knotenprioritäten werden direkt genutzt.'));
-    const rows = $('meshTargetGroupRows');
-    if (rows) {
-      if (!groups.length) rows.innerHTML = '<tr><td colspan="9" class="muted">Keine Zielgruppen konfiguriert.</td></tr>';
-      else rows.innerHTML = groups.map(g => `<tr>` +
-        `<td>${esc(g.name || g.id || '')}<br><span class="muted">${esc(g.id || '')}</span></td>` +
-        `<td>${esc(g.type || '')}</td>` +
-        `<td>${esc(g.priority || '')}</td>` +
-        `<td>${esc(g.strategy || '')}</td>` +
-        `<td>${esc(g.memberCount || 0)}</td>` +
-        `<td>${fmtW(g.requestedPowerW || 0)}</td>` +
-        `<td>${fmtW(g.allowedPowerW || 0)}</td>` +
-        `<td>${fmtW(g.maxPowerW || 0)}</td>` +
-        `<td>${fmtW((fairness.groups || []).find(x => x.groupId === g.id)?.budgetW || 0)} / ${fmtW((fairness.groups || []).find(x => x.groupId === g.id)?.remainingW || 0)}<br><span class="muted">Fairness Budget / Rest</span></td>` +
-      `</tr>`).join('');
-    }
-    const prio = Array.isArray(tg.priorityOrder) ? tg.priorityOrder : [];
-    setText('meshTargetGroupPriority', prio.length ? prio.map(g => `${g.rank}. ${g.name || g.id} (${g.type}, Prio ${g.priority}, ${g.memberCount || 0} Knoten)`).join(' · ') : 'Keine Zielgruppen-Priorität vorhanden.');
-  }
-
-  function renderLimits(payload) {
-    const limits = payload && payload.limits ? payload.limits : {};
-    const limited = Array.isArray(limits.limitedCommands) ? limits.limitedCommands : [];
-    const blocked = Array.isArray(limits.blockedCommands) ? limits.blockedCommands : [];
-    setText('meshLimitsStatus', `${limits.activeLimitCount || 0} aktive Limit(s) · ${limits.limitedCount || limited.length || 0} gekürzt · ${limits.blockedCount || blocked.length || 0} blockiert`);
-    setText('meshLimitsReason', limits.lastReason || 'Keine Leistungsgrenze hat den aktuellen Command-Plan begrenzt.');
-    const rows = $('meshLimitRows');
-    if (rows) {
-      const all = limited.concat(blocked);
-      if (!all.length) rows.innerHTML = '<tr><td colspan="8" class="muted">Keine aktuell gekürzten oder blockierten Commands.</td></tr>';
-      else rows.innerHTML = all.map(row => `<tr>` +
-        `<td>${esc(row.commandId || '')}</td>` +
-        `<td>${esc(row.nodeId || row.targetNodeId || '')}</td>` +
-        `<td>${fmtW(row.requestedPowerW || 0)}</td>` +
-        `<td>${fmtW(row.allowedPowerW || 0)}</td>` +
-        `<td class="${row.allowedPowerW > 0 ? 'severity-warn' : 'severity-critical'}">${row.allowedPowerW > 0 ? 'gekürzt' : 'blockiert'}</td>` +
-        `<td>${esc((row.reasons || []).map(r => `${r.id}:${r.limitW}W`).join(' · '))}</td>` +
-        `<td>${esc(row.reason || '')}</td>` +
-        `<td>${fmtW((fairness.groups || []).find(x => x.groupId === g.id)?.budgetW || 0)} / ${fmtW((fairness.groups || []).find(x => x.groupId === g.id)?.remainingW || 0)}<br><span class="muted">Fairness Budget / Rest</span></td>` +
-      `</tr>`).join('');
-    }
-  }
-
-
   function renderCommandGuard(payload) {
     const guard = payload && payload.commandGuard ? payload.commandGuard : {};
     const commands = Array.isArray(guard.plannedCommands) ? guard.plannedCommands : [];
@@ -419,8 +370,6 @@
       setText('gridUsage', fmtPct(totals.gridLimitUsagePercent || 0));
       renderDiagnosis(payload);
       renderPlanning(payload);
-      renderTargetGroups(payload);
-      renderLimits(payload);
       renderCommandGuard(payload);
       renderLocalBridge(payload);
       renderFieldControl(payload);

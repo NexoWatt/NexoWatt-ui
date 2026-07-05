@@ -36,7 +36,7 @@ for (const file of ['src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 
 must('src-ts/runtime-executables/www/ems-apps.ts', 'Aktiv: Local-First Commands ausgeben');
 must('www/ems-apps.js', 'Aktiv: Local-First Commands ausgeben');
 must('src-ts/runtime-executables/www/ems-apps.ts', "['off','diagnostic','field_test','active']");
-must('package.json', '"version": "0.8.59"');
-must('io-package.json', '0.8.52');
+must('package.json', '"version": "0.8.47"');
+must('io-package.json', '0.8.44');
 
 console.log('OK: Mesh/Microgrid Aktivmodus gibt nur neutrale Local-First-/Grid-Last-Command-Intents aus und bleibt herstellerneutral.');

@@ -32,8 +32,7 @@ must('src-ts/runtime-executables/ems/module-manager.ts', "require('./modules/nl-
 must('src-ts/runtime-executables/ems/module-manager.ts', "key: 'nlP1'");
 must('src-ts/runtime-executables/ems/services/feature-flags.ts', "nlP1: 'nlP1'");
 must('src-ts/runtime-executables/ems/services/feature-flags.ts', "'nlP1Basic'");
-must('src-ts/runtime-executables/www/ems-apps.ts', 'nlP1Mount: document.getElementById');
-must('www/ems-apps.html', 'id="nlP1MappingSlot"');
+must('src-ts/runtime-executables/www/ems-apps.ts', "{ id: 'nlP1'");
 must('src-ts/runtime-executables/www/ems-apps.ts', 'buildNlP1Card');
 must('src-ts/runtime-executables/www/ems-apps.ts', 'data-nlp1-dp="importPowerW"');
 must('src-ts/runtime-executables/www/ems-apps.ts', 'patch.nlP1.datapoints');

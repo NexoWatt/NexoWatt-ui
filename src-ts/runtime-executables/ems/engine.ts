@@ -397,9 +397,8 @@ class EmsEngine {
       const setCurrentAId = (wb.setCurrentAId || '').trim();
       const setPowerWId = (wb.setPowerWId || '').trim();
 
-      // Online detection: prefer explicit online dp (bool), keep statusId as display/status fallback.
-      const onlineId = (wb.onlineId || '').trim();
-      const statusId = (wb.statusId || '').trim();
+      // Online detection: prefer explicit online dp (bool), otherwise statusId
+      const statusId = ((wb.onlineId || '').trim()) || ((wb.statusId || '').trim()) || '';
 
       // Enable DP (optional)
       const enableId = (wb.enableWriteId || '').trim();
@@ -477,7 +476,6 @@ class EmsEngine {
         ...(setCurrentAId ? { setCurrentAId } : {}),
         ...(setPowerWId ? { setPowerWId } : {}),
         ...(enableId ? { enableId } : {}),
-        ...(onlineId ? { onlineId } : {}),
         ...(statusId ? { statusId } : {}),
 
         // admin default for runtime user mode
