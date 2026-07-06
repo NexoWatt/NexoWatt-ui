@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.72",
+    "version": "0.8.73",
     "news": {
+      "0.8.73": {
+        "de": "Version 0.8.73: EVCS-Kacheln flackern beim Hover nicht mehr. Hover bleibt auf der Ladepunktseite neutral; grüne Umrandung/Leuchten erscheint nur bei echter aktiver Ladung.",
+        "en": "Version 0.8.73: EVCS tiles no longer flicker on hover. Hover remains neutral on the chargepoint page; green border/glow is shown only for real active charging."
+      },
       "0.8.72": {
         "de": "Version 0.8.72: App-Center-Heizstab-Eingaben stabilisiert. Stufenwerte lösen beim Tippen keinen vollständigen Rebuild mehr aus; notwendige Strukturänderungen erhalten Scrollposition und Fokus.",
         "en": "Version 0.8.72: Stabilizes App Center heating-rod inputs. Stage values no longer trigger a full rebuild while typing; required structural updates preserve scroll position and focus."
@@ -26,10 +30,6 @@
       "0.8.67": {
         "de": "Version 0.8.67: EOS Access-Control auf die bestehenden Gruppen system.group.administrator, system.group.installer und system.group.user ausgerichtet. Admin hat Vollzugriff, Installer darf Setup ohne Lizenzverwaltung, Benutzer erhält SmartHome-/NexoLogik-/Kundeneinstellungen.",
         "en": "Version 0.8.67: Aligns EOS access control with the existing groups system.group.administrator, system.group.installer and system.group.user. Admin has full access, installer can configure without license management, customer gets SmartHome/NexoLogic/customer settings."
-      },
-      "0.8.66": {
-        "de": "Version 0.8.66: NPM-Release-Version erhöht und EVCS-Online-Erkennung vertieft. Explizite Online-Datenpunkte werden separat gespiegelt und im Lademanagement als authoritative Quelle vor Status-Texten genutzt; VIS bevorzugt den echten Online-Zustand vor active/idle.",
-        "en": "Version 0.8.66: Bumps npm release version and hardens EVCS online detection. Explicit online datapoints are mirrored separately and used as authoritative source before status text; VIS prefers the real online state over active/idle."
       }
     },
     "title": "NexoWatt UI",

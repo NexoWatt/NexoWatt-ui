@@ -11676,3 +11676,62 @@ input.nw-config-checkbox,
     position: static;
   }
 }
+
+/* 0.8.73 EVCS: Kacheln dürfen beim Überfahren mit der Maus nicht grün blinken.
+   Die grüne Umrandung ist ein Betriebszustand und wird ausschließlich über
+   `nw-tile--state-on` gesetzt, also wenn der Ladepunkt wirklich aktiv lädt.
+   Hover bleibt auf der EVCS-Seite rein passiv, damit Live-Updates + Mausbewegung
+   keine optischen Flacker-/Blinkeffekte erzeugen. */
+body.nw-page-evcs #evcsList .nw-tile{
+  transform:none !important;
+  transition:opacity .14s ease, border-color .14s ease, box-shadow .14s ease, background .14s ease !important;
+}
+body.nw-page-evcs #evcsList .nw-tile:hover,
+body.nw-page-evcs #evcsList .nw-tile:focus{
+  transform:none !important;
+}
+body.nw-page-evcs #evcsList .nw-tile:not(.nw-tile--state-on):hover,
+body.nw-page-evcs #evcsList .nw-tile:not(.nw-tile--state-on):focus{
+  border-color:rgba(255,255,255,.075) !important;
+  box-shadow:0 10px 30px rgba(0,0,0,.40) !important;
+}
+body.nw-page-evcs #evcsList .nw-tile.nw-tile--state-warning:hover,
+body.nw-page-evcs #evcsList .nw-tile.nw-tile--state-warning:focus{
+  border-color:rgba(249,115,22,.90) !important;
+}
+body.nw-page-evcs #evcsList .nw-tile.nw-tile--state-on,
+body.nw-page-evcs #evcsList .nw-tile.nw-tile--state-on:hover,
+body.nw-page-evcs #evcsList .nw-tile.nw-tile--state-on:focus{
+  border-color:rgba(0,230,118,.86) !important;
+  box-shadow:0 0 0 1px rgba(0,230,118,.18), 0 10px 30px rgba(0,0,0,.40) !important;
+  transform:none !important;
+}
+
+/* NexoWatt 0.8.73 – EVCS-Kacheln: Hover darf keine Aktiv-/Blink-Optik erzeugen.
+   Grund: Ladepunkt-Kacheln werden per SSE regelmäßig aktualisiert. Ein globaler Hover-
+   Effekt mit grünem Rand/Transform wirkt dadurch wie Flackern. Auf der EVCS-Seite
+   bleibt Hover deshalb optisch neutral; grün leuchtet nur bei echter aktiver Ladung
+   über die vorhandene Zustandsklasse .nw-tile--state-on. */
+body.nw-page-evcs .nw-evcs-page .nw-tile,
+body.nw-page-evcs .nw-evcs-page .nw-tile:hover,
+body.nw-page-evcs .nw-evcs-page .nw-tile:focus,
+body.nw-page-evcs .nw-evcs-page .nw-tile:focus-visible{
+  transform:none !important;
+}
+
+body.nw-page-evcs .nw-evcs-page .nw-tile:not(.nw-tile--state-on):hover,
+body.nw-page-evcs .nw-evcs-page .nw-tile:not(.nw-tile--state-on):focus,
+body.nw-page-evcs .nw-evcs-page .nw-tile:not(.nw-tile--state-on):focus-visible{
+  border-color:rgba(255,255,255,.075) !important;
+  box-shadow:0 10px 30px rgba(0,0,0,.40) !important;
+  background:rgba(255,255,255,.045) !important;
+}
+
+body.nw-page-evcs .nw-evcs-page .nw-tile.nw-tile--state-on,
+body.nw-page-evcs .nw-evcs-page .nw-tile.nw-tile--state-on:hover,
+body.nw-page-evcs .nw-evcs-page .nw-tile.nw-tile--state-on:focus,
+body.nw-page-evcs .nw-evcs-page .nw-tile.nw-tile--state-on:focus-visible{
+  border-color:rgba(0,230,118,.88) !important;
+  box-shadow:0 0 0 1px rgba(0,230,118,.24), 0 0 18px rgba(0,230,118,.22), 0 10px 30px rgba(0,0,0,.40) !important;
+  background:radial-gradient(circle at top left, rgba(0,230,118,.16), rgba(255,255,255,.045)) !important;
+}

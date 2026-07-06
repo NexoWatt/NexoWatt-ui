@@ -1,3 +1,9 @@
+## 0.8.73
+
+- EVCS/VIS: Ladepunkt-Kacheln behalten beim Hover eine neutrale Optik; der globale grüne Hover-Rand wird auf der EVCS-Seite unterdrückt.
+- Grüne Umrandung und dezentes Leuchten werden nur noch über den echten Ladezustand `nw-tile--state-on` angezeigt.
+- Keine Änderung an Lademanagement, Speicherregelung, Export Guard oder Hardwarewrites.
+
 ## 0.8.71
 
 - Speicherregelung: NVP-basierte Eigenverbrauchs-/Tarif-Entladung gegen überschießende Sollwerte gehärtet.
