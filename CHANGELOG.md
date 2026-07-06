@@ -1,3 +1,10 @@
+## 0.8.69
+
+- Speicherregelung: Hersteller-offener Zielpfad für Einzel-Speicher ergänzt. Neben dem allgemeinen signed Sollleistungs-DP können jetzt getrennte positive Lade-/Entlade-Sollwert-DPs gemappt werden.
+- Speicherregelung: Optionaler Run-/Externe-Regelung-DP ergänzt, damit Adapter/Bridges wie Sungrow-Profile die externe Sollwertführung aktivieren können.
+- Speicherregelung: Eigenverbrauchs-Entladung ist für generische Speicher ohne explizite Gegenkonfiguration standardmäßig aktiv; Reserve, Tariffenster, SoC-Grenzen und Safety-Gates bleiben erhalten.
+- Diagnose: Zielpfad, Split-Ziel-DPs, Run-DP und letzter Split-Schreibwert werden als States veröffentlicht.
+
 ## 0.8.68
 
 - Access-Control: App-Center und Simulation liefern ohne passende Admin-/Installer-Session nur noch eine Sperrseite; es werden keine Hintergrundwerte geladen oder angezeigt.

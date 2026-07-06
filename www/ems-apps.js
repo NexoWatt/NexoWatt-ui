@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:7458ed0f4133791399b23cb27dc1b9e1238ab3cead785a132e57d27324ea30eb
+ * Quell-Hash: sha256:b67055e847f703efcfbbb5238e35389900b755455679543ddd7e2d75191824ed
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -835,7 +835,10 @@
   const STORAGE_DP_FIELDS = [
     { key: 'socObjectId', label: 'SoC (%)', requiredModes: ['targetPower','limits','enableFlags'] },
     { key: 'batteryPowerObjectId', label: 'Ist-Leistung (W) (optional)', requiredModes: [] },
-    { key: 'targetPowerObjectId', label: 'Sollleistung (W)', requiredModes: ['targetPower'], hint: 'Bei FENECON‑Hybrid ist das der einzige beschreibbare Vorgabe‑DP für Be-/Entladung. SetGridActivePower wird nicht verwendet.' },
+    { key: 'targetPowerObjectId', label: 'Sollleistung signed (W)', requiredModes: ['targetPower'], hint: 'Allgemeiner bidirektionaler Sollwert. NexoWatt-Konvention: +W = Entladen, -W = Laden. Wenn getrennte Lade-/Entlade-Sollwerte gemappt sind, nutzt NexoWatt diese herstellerfreundlich bevorzugt.' },
+    { key: 'targetChargePowerObjectId', label: 'Sollwert Laden (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional für Hersteller wie Sungrow: positiver Lade-Sollwert. Wird zusammen mit „Sollwert Entladen“ bevorzugt, wenn beide gemappt sind.' },
+    { key: 'targetDischargePowerObjectId', label: 'Sollwert Entladen (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional für Hersteller wie Sungrow: positiver Entlade-Sollwert. Dadurch ist kein Vorzeichen-Signed-DP nötig.' },
+    { key: 'runObjectId', label: 'Run / externe Speicherregelung (bool)', requiredModes: ['targetPower'], hint: 'Optional: wird auf true gesetzt, wenn NexoWatt einen Lade-/Entlade-Sollwert vorgibt, und auf false bei 0 W. Hilfreich für herstelleroffene Bridges/Sungrow-ctrl.run.' },
     { key: 'maxChargeObjectId', label: 'Max Ladeleistung (W)', requiredModes: ['limits'] },
     { key: 'maxDischargeObjectId', label: 'Max Entladeleistung (W)', requiredModes: ['limits'] },
     { key: 'chargeEnableObjectId', label: 'Laden erlaubt (bool)', requiredModes: ['enableFlags'] },

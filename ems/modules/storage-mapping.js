@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-mapping.ts
- * Quell-Hash: sha256:a9287eb489ecdd1238506ab473213ae9276ef9ffda9168029917b1d6d2cac7ee
+ * Quell-Hash: sha256:4f66aeacbd06705e07101801b235fa0a02c9de8240562d7ce78de85387bdec01
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -146,7 +146,10 @@ class SpeicherMappingModule extends BaseModule {
 
             { id: `${base}.mapping.socId`, name: 'SoC Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.istLeistungId`, name: 'Ist-Leistung Datenpunkt-ID', type: 'string', role: 'text', def: '' },
-            { id: `${base}.mapping.sollLeistungId`, name: 'Sollleistung Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.sollLeistungId`, name: 'Sollleistung signed Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.sollLadeId`, name: 'Sollwert Laden Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.sollEntladeId`, name: 'Sollwert Entladen Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.runId`, name: 'Run/Externe Regelung Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.maxLadeId`, name: 'Max Ladeleistung Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.maxEntladeId`, name: 'Max Entladeleistung Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.ladenErlaubtId`, name: 'Laden erlaubt Datenpunkt-ID', type: 'string', role: 'text', def: '' },
@@ -234,6 +237,21 @@ class SpeicherMappingModule extends BaseModule {
         const sollScale = Number.isFinite(Number(dp.targetPowerScale)) ? Number(dp.targetPowerScale) : 1;
         const sollInv = !!dp.targetPowerInvert;
 
+        // Hersteller-offene Einzel-Speicherregelung:
+        // Einige Systeme (z. B. Sungrow über nexowatt-devices) nutzen keine signed
+        // Sollleistung, sondern getrennte positive Vorgaben für Laden und Entladen.
+        // Diese DPs werden als alternative Zielpfade zum allgemeinen signed targetPower
+        // registriert. Wenn beide Split-DPs vorhanden sind, bevorzugt storage-control
+        // später diesen Pfad und setzt den jeweils nicht genutzten Gegenpfad auf 0 W.
+        const sollChargeId = String(dp.targetChargePowerObjectId || '').trim();
+        const sollChargeScale = Number.isFinite(Number(dp.targetChargePowerScale)) ? Number(dp.targetChargePowerScale) : 1;
+        const sollChargeInv = !!dp.targetChargePowerInvert;
+        const sollDischargeId = String(dp.targetDischargePowerObjectId || '').trim();
+        const sollDischargeScale = Number.isFinite(Number(dp.targetDischargePowerScale)) ? Number(dp.targetDischargePowerScale) : 1;
+        const sollDischargeInv = !!dp.targetDischargePowerInvert;
+        const runId = String(dp.runObjectId || '').trim();
+        const runInv = !!dp.runInvert;
+
         const maxChargeId = String(dp.maxChargeObjectId || '').trim();
         const maxDischargeId = String(dp.maxDischargeObjectId || '').trim();
         const chargeEnId = String(dp.chargeEnableObjectId || '').trim();
@@ -248,6 +266,9 @@ class SpeicherMappingModule extends BaseModule {
         await this._setIfChanged('speicher.mapping.socId', socId);
         await this._setIfChanged('speicher.mapping.istLeistungId', istId);
         await this._setIfChanged('speicher.mapping.sollLeistungId', sollId);
+        await this._setIfChanged('speicher.mapping.sollLadeId', sollChargeId);
+        await this._setIfChanged('speicher.mapping.sollEntladeId', sollDischargeId);
+        await this._setIfChanged('speicher.mapping.runId', runId);
         await this._setIfChanged('speicher.mapping.maxLadeId', maxChargeId);
         await this._setIfChanged('speicher.mapping.maxEntladeId', maxDischargeId);
         await this._setIfChanged('speicher.mapping.ladenErlaubtId', chargeEnId);
@@ -293,7 +314,7 @@ class SpeicherMappingModule extends BaseModule {
         if (sollId) {
             await this.dp.upsert({
                 key: 'st.targetPowerW',
-                name: 'Speicher Sollleistung',
+                name: 'Speicher Sollleistung signed',
                 objectId: sollId,
                 dataType: 'number',
                 direction: 'out',
@@ -302,7 +323,53 @@ class SpeicherMappingModule extends BaseModule {
                 offset: 0,
                 invert: sollInv,
                 deadband: 0,
-                note: 'Schreiben'
+                note: 'Schreiben; NexoWatt-Konvention +W=Entladen, -W=Laden'
+            });
+        }
+
+        if (sollChargeId) {
+            await this.dp.upsert({
+                key: 'st.targetChargePowerW',
+                name: 'Speicher Sollwert Laden',
+                objectId: sollChargeId,
+                dataType: 'number',
+                direction: 'out',
+                unit: 'W',
+                scale: sollChargeScale,
+                offset: 0,
+                invert: sollChargeInv,
+                deadband: 0,
+                min: 0,
+                note: 'Schreiben; getrennte positive Ladeleistung'
+            });
+        }
+
+        if (sollDischargeId) {
+            await this.dp.upsert({
+                key: 'st.targetDischargePowerW',
+                name: 'Speicher Sollwert Entladen',
+                objectId: sollDischargeId,
+                dataType: 'number',
+                direction: 'out',
+                unit: 'W',
+                scale: sollDischargeScale,
+                offset: 0,
+                invert: sollDischargeInv,
+                deadband: 0,
+                min: 0,
+                note: 'Schreiben; getrennte positive Entladeleistung'
+            });
+        }
+
+        if (runId) {
+            await this.dp.upsert({
+                key: 'st.run',
+                name: 'Speicher Run / externe Regelung',
+                objectId: runId,
+                dataType: 'boolean',
+                direction: 'out',
+                invert: runInv,
+                note: 'Optional; true bei aktiver NexoWatt-Sollwertvorgabe, false bei 0 W'
             });
         }
 
@@ -373,9 +440,13 @@ class SpeicherMappingModule extends BaseModule {
         const feneconHybridConfiguredRaw = (typeof feneconGridControlEnabled === 'boolean') ? (feneconGridControlEnabled === true) : (feneconAcMode === true);
         const feneconHybridConfigured = !!(feneconHybridConfiguredRaw && !farmEnabled);
         if (feneconHybridConfigured || String(controlMode) === 'targetPower') {
-            // FENECON-Hybrid schreibt nur in den Betriebsfällen, in denen NexoWatt wirklich extern führen soll,
-            // auf den normalen beschreibbaren Batterie-Sollleistungs-DP. SetGridActivePower wird nicht benutzt.
-            if (!sollId) missing.push('Sollleistung (W)');
+            // Für targetPower reicht entweder ein allgemeiner signed Sollleistungs-DP
+            // ODER ein getrenntes Paar aus Lade- und Entlade-Sollwert. Dadurch bleiben
+            // FENECON-/Victron-/OpenEMS-ähnliche signed Setpoints und Sungrow-/Bridge-
+            // Profile mit getrennten positiven Vorgaben gleichwertig nutzbar.
+            const hasSignedTarget = !!sollId;
+            const hasSplitTarget = !!(sollChargeId && sollDischargeId);
+            if (!hasSignedTarget && !hasSplitTarget) missing.push('Sollleistung signed oder Sollwert Laden+Entladen');
         } else if (String(controlMode) === 'limits') {
             if (!maxChargeId) missing.push('Max Ladeleistung (W)');
             if (!maxDischargeId) missing.push('Max Entladeleistung (W)');

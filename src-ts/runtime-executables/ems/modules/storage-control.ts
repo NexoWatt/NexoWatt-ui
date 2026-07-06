@@ -469,7 +469,9 @@ class SpeicherRegelungModule extends BaseModule {
         const farmRows = Array.isArray(farmCfg.storages) ? farmCfg.storages : [];
         const hasFarmSetpoints = farmEnabled && farmRows.some(r => r && r.enabled !== false && (String(r.setSignedPowerId||'').trim() || String(r.setChargePowerId||'').trim() || String(r.setDischargePowerId||'').trim()));
 
-        const hasTarget = this.dp ? !!this.dp.getEntry('st.targetPowerW') : false;
+        const hasSignedTarget = this.dp ? !!this.dp.getEntry('st.targetPowerW') : false;
+        const hasSplitTarget = this.dp ? (!!this.dp.getEntry('st.targetChargePowerW') && !!this.dp.getEntry('st.targetDischargePowerW')) : false;
+        const hasTarget = hasSignedTarget || hasSplitTarget;
         const feneconHybridConfigured = this._isFeneconHybridControlConfigured(cfg);
         const feneconHybridActive = !!(feneconHybridConfigured && !farmEnabled);
         const feneconHybridBlockedByFarm = !!(feneconHybridConfigured && farmEnabled);
@@ -505,10 +507,10 @@ class SpeicherRegelungModule extends BaseModule {
         if (!hasTarget && !hasFarmSetpoints) {
             await this._setIfChanged('speicher.regelung.requestW', 0);
             await this._setIfChanged('speicher.regelung.requestQuelle', 'aus');
-            await this._setIfChanged('speicher.regelung.requestGrund', 'Sollleistung-Datenpunkt fehlt (Zuordnung)');
-            await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({ ts: Date.now(), reqW: 0, reason: 'Sollleistung-Datenpunkt fehlt (Zuordnung)', src: 'aus' }));
+            await this._setIfChanged('speicher.regelung.requestGrund', 'Sollleistung-Datenpunkt fehlt: signed Ziel oder getrennte Lade-/Entlade-Sollwerte');
+            await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({ ts: Date.now(), reqW: 0, reason: 'Sollleistung-Datenpunkt fehlt: signed Ziel oder getrennte Lade-/Entlade-Sollwerte', src: 'aus' }));
 
-            await this._applyTargetW(0, 'Sollleistung-Datenpunkt fehlt (Zuordnung)', 'aus');
+            await this._applyTargetW(0, 'Sollleistung-Datenpunkt fehlt: signed Ziel oder getrennte Lade-/Entlade-Sollwerte', 'aus');
             return;
         }
 
@@ -1044,9 +1046,10 @@ if (typeof soc === 'number') {
         // mehr aktiviert. Flexible Verbraucher bleiben in der bestehenden Standardlogik.
         const evPriorityBlockStorageCharge = false;
         const evPriorityStarvedW = 0;
+        const genericSelfDischargeDefault = true;
         const selfDischargeEnabled = hasExplicitSelfFlag
             ? (cfg.selfDischargeEnabled === true)
-            : (farmSelfDischargeFallback || feneconLowPvSelfDischargeFallback);
+            : (farmSelfDischargeFallback || feneconLowPvSelfDischargeFallback || genericSelfDischargeDefault);
         const selfMinSoc = clamp(num(cfg.selfMinSocPct, reserveMin), 0, 100);
         const selfMaxSoc = clamp(num(cfg.selfMaxSocPct, 100), 0, 100);
         // Eigenverbrauchs-Optimierung: Ziel-Netzbezug am NVP.
@@ -2771,19 +2774,29 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     async _applyTargetW(targetW, reason, source) {
         const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
 
-        // Diagnose: Ziel-Datenpunkt (Sollleistung)
-        try {
-            const e = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.targetPowerW') : null;
-            await this._setIfChanged('speicher.regelung.targetObjId', e && e.objectId ? String(e.objectId) : '');
-        } catch {
-            await this._setIfChanged('speicher.regelung.targetObjId', '');
-        }
+        const signedEntry = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.targetPowerW') : null;
+        const chargeEntry = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.targetChargePowerW') : null;
+        const dischargeEntry = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.targetDischargePowerW') : null;
+        const runEntry = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.run') : null;
+        const hasSplitTarget = !!(chargeEntry && dischargeEntry);
 
-        // schreiben (Sollleistung)
-        // Wenn die Speicherfarm aktiv ist, ist die Farm-Verteilung der führende Pfad.
-        // Ein Rückfall auf den klassischen Einzel-Speicher-Sollwert ist im Farmbetrieb bewusst gesperrt,
-        // außer der Betreiber gibt ihn explizit frei. Dadurch vermeiden wir, dass ein Farm-Gesamtsollwert
-        // versehentlich auf ein einzelnes System geschrieben wird.
+        // Hersteller-offene Zielpfade:
+        // - split: getrennte positive Lade-/Entlade-Sollwerte, bevorzugt wenn beide DPs gemappt sind.
+        //   Beispiel Sungrow/nexowatt-devices: ctrl.chargePowerW + ctrl.dischargePowerW.
+        // - signed: allgemeiner bidirektionaler Sollwert mit NexoWatt-Konvention +W=Entladen, -W=Laden.
+        //   Dieser Pfad bleibt für bestehende Installationen unverändert.
+        const targetMode = hasSplitTarget ? 'split-charge-discharge' : (signedEntry ? 'signed-targetPower' : 'none');
+        await this._setIfChanged('speicher.regelung.targetMode', targetMode);
+        await this._setIfChanged('speicher.regelung.targetObjId', signedEntry && signedEntry.objectId ? String(signedEntry.objectId) : '');
+        await this._setIfChanged('speicher.regelung.splitTargetObjIds', JSON.stringify({
+            charge: chargeEntry && chargeEntry.objectId ? String(chargeEntry.objectId) : '',
+            discharge: dischargeEntry && dischargeEntry.objectId ? String(dischargeEntry.objectId) : '',
+        }));
+        await this._setIfChanged('speicher.regelung.runObjId', runEntry && runEntry.objectId ? String(runEntry.objectId) : '');
+
+        // Wenn Speicherfarm aktiv ist, bleibt die Farm-Verteilung der führende Pfad.
+        // Split-/Signed-Einzelpfade werden nur genutzt, wenn keine Farm aktiv ist oder
+        // der Betreiber den alten Einzelziel-Fallback ausdrücklich freigibt.
         let writeResult = null;
         let farmApplied = false;
         let farmReason = '';
@@ -2804,15 +2817,43 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         }
 
         const mayUseSingleTarget = !farmEnabledForWrite || allowSingleTargetFallback;
+        const writeResults = [];
 
         if (!farmApplied) {
             if (!mayUseSingleTarget) {
                 writeResult = false;
                 await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
-            } else if (this.dp && this.dp.getEntry('st.targetPowerW')) {
-                // Rohwert berechnen (Skalierung/Offset/Invert), damit der Installateur den Weg bis zum Endgerät nachvollziehen kann.
+                await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
+            } else if (hasSplitTarget) {
+                // Split-Zielpfad: der Speicher bekommt positive Werte auf separaten DPs.
+                // Bei Laden (w < 0) wird charge=|w| und discharge=0 geschrieben.
+                // Bei Entladen (w > 0) wird discharge=w und charge=0 geschrieben.
+                // Bei 0 W werden beide Pfade auf 0 gesetzt. Optional wird ein Run-DP
+                // passend gesetzt, damit Bridges/Herstellerprofile externe Regelung aktivieren.
+                const chargeW = w < 0 ? Math.abs(w) : 0;
+                const dischargeW = w > 0 ? w : 0;
+                await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+                await this._setIfChanged('speicher.regelung.lastWriteSplitJson', JSON.stringify({
+                    chargeW,
+                    dischargeW,
+                    run: w !== 0,
+                    mode: targetMode,
+                }));
+
+                try { writeResults.push(await this.dp.writeNumber('st.targetChargePowerW', chargeW, false)); } catch (_e) { writeResults.push(false); }
+                try { writeResults.push(await this.dp.writeNumber('st.targetDischargePowerW', dischargeW, false)); } catch (_e) { writeResults.push(false); }
+                if (runEntry && this.dp && typeof this.dp.writeBoolean === 'function') {
+                    try { writeResults.push(await this.dp.writeBoolean('st.run', w !== 0, false)); } catch (_e) { writeResults.push(false); }
+                }
+
+                const failed = writeResults.some(r => r === false);
+                writeResult = failed ? false : true;
+            } else if (signedEntry) {
+                // Signed-Zielpfad: bestehende Installationen bleiben unverändert.
+                // Optionaler Run-DP wird zusätzlich gesetzt, damit herstelleroffene
+                // Adapter/Bridges die externe Sollwertführung aktivieren können.
                 try {
-                    const e = this.dp.getEntry('st.targetPowerW');
+                    const e = signedEntry;
                     const scale = (e && Number.isFinite(Number(e.scale)) && Number(e.scale) !== 0) ? Number(e.scale) : 1;
                     const offset = (e && Number.isFinite(Number(e.offset))) ? Number(e.offset) : 0;
                     let raw = (w - offset) / scale;
@@ -2820,21 +2861,27 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     if (e && Number.isFinite(Number(e.min))) raw = Math.max(Number(e.min), raw);
                     if (e && Number.isFinite(Number(e.max))) raw = Math.min(Number(e.max), raw);
                     await this._setIfChanged('speicher.regelung.lastWriteRaw', Math.round(raw));
+                    await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
                 } catch {
                     await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+                    await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
                 }
 
-                try {
-                    writeResult = await this.dp.writeNumber('st.targetPowerW', w, false);
-                } catch (e) {
-                    writeResult = false;
+                try { writeResults.push(await this.dp.writeNumber('st.targetPowerW', w, false)); } catch (_e) { writeResults.push(false); }
+                if (runEntry && this.dp && typeof this.dp.writeBoolean === 'function') {
+                    try { writeResults.push(await this.dp.writeBoolean('st.run', w !== 0, false)); } catch (_e) { writeResults.push(false); }
                 }
+                const failed = writeResults.some(r => r === false);
+                writeResult = failed ? false : true;
             } else {
                 await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+                await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
+                writeResult = false;
             }
         } else {
             // Bei Speicherfarm werden Setpoints pro Speicher geschrieben.
             await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+            await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
         }
 
         // Diagnose-Zustände schreiben
@@ -2846,7 +2893,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             ? 'farm'
             : (farmEnabledForWrite && !allowSingleTargetFallback
                 ? ('farm-nicht-moeglich' + (farmReason ? ':' + farmReason : ''))
-                : ((writeResult === null) ? 'unverändert' : (writeResult === true ? 'geschrieben' : 'nicht möglich')));
+                : ((writeResult === null) ? 'unverändert' : (writeResult === true ? (hasSplitTarget ? 'split-geschrieben' : 'geschrieben') : 'nicht möglich')));
         await this._setIfChanged('speicher.regelung.schreibStatus', writeStatus);
 
         this._lastTargetW = w;
@@ -2939,8 +2986,12 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.grund', 'Grund', 'string', 'text', '');
         await mk('speicher.regelung.schreibStatus', 'Schreibstatus', 'string', 'text', '');
         await mk('speicher.regelung.schreibOk', 'Schreiben OK', 'boolean', 'indicator', false);
-        await mk('speicher.regelung.targetObjId', 'Sollleistung Ziel-Datenpunkt (Objekt-ID)', 'string', 'text', '');
-        await mk('speicher.regelung.lastWriteRaw', 'Letzter Rohwert (Setpoint)', 'number', 'value');
+        await mk('speicher.regelung.targetObjId', 'Sollleistung signed Ziel-Datenpunkt (Objekt-ID)', 'string', 'text', '');
+        await mk('speicher.regelung.targetMode', 'Speicher Zielpfad', 'string', 'text', '');
+        await mk('speicher.regelung.splitTargetObjIds', 'Split-Sollwert Datenpunkte (JSON)', 'string', 'text', '');
+        await mk('speicher.regelung.runObjId', 'Run/Externe-Regelung Datenpunkt (Objekt-ID)', 'string', 'text', '');
+        await mk('speicher.regelung.lastWriteRaw', 'Letzter Rohwert (signed Setpoint)', 'number', 'value');
+        await mk('speicher.regelung.lastWriteSplitJson', 'Letzter Split-Sollwert (JSON)', 'string', 'text', '');
 
         await mk('speicher.regelung.feneconGridAktiv', 'FENECON Legacy Netzpunktführung aktiv (nicht genutzt)', 'boolean', 'indicator', false);
         await mk('speicher.regelung.feneconGridSollW', 'FENECON Legacy SetGridActivePower Sollwert (nicht genutzt)', 'number', 'value.power', 0);

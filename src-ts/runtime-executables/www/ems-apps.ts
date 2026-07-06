@@ -837,7 +837,10 @@
   const STORAGE_DP_FIELDS = [
     { key: 'socObjectId', label: 'SoC (%)', requiredModes: ['targetPower','limits','enableFlags'] },
     { key: 'batteryPowerObjectId', label: 'Ist-Leistung (W) (optional)', requiredModes: [] },
-    { key: 'targetPowerObjectId', label: 'Sollleistung (W)', requiredModes: ['targetPower'], hint: 'Bei FENECON‑Hybrid ist das der einzige beschreibbare Vorgabe‑DP für Be-/Entladung. SetGridActivePower wird nicht verwendet.' },
+    { key: 'targetPowerObjectId', label: 'Sollleistung signed (W)', requiredModes: ['targetPower'], hint: 'Allgemeiner bidirektionaler Sollwert. NexoWatt-Konvention: +W = Entladen, -W = Laden. Wenn getrennte Lade-/Entlade-Sollwerte gemappt sind, nutzt NexoWatt diese herstellerfreundlich bevorzugt.' },
+    { key: 'targetChargePowerObjectId', label: 'Sollwert Laden (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional für Hersteller wie Sungrow: positiver Lade-Sollwert. Wird zusammen mit „Sollwert Entladen“ bevorzugt, wenn beide gemappt sind.' },
+    { key: 'targetDischargePowerObjectId', label: 'Sollwert Entladen (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional für Hersteller wie Sungrow: positiver Entlade-Sollwert. Dadurch ist kein Vorzeichen-Signed-DP nötig.' },
+    { key: 'runObjectId', label: 'Run / externe Speicherregelung (bool)', requiredModes: ['targetPower'], hint: 'Optional: wird auf true gesetzt, wenn NexoWatt einen Lade-/Entlade-Sollwert vorgibt, und auf false bei 0 W. Hilfreich für herstelleroffene Bridges/Sungrow-ctrl.run.' },
     { key: 'maxChargeObjectId', label: 'Max Ladeleistung (W)', requiredModes: ['limits'] },
     { key: 'maxDischargeObjectId', label: 'Max Entladeleistung (W)', requiredModes: ['limits'] },
     { key: 'chargeEnableObjectId', label: 'Laden erlaubt (bool)', requiredModes: ['enableFlags'] },

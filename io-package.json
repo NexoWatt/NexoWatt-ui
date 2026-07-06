@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.68",
+    "version": "0.8.69",
     "news": {
+      "0.8.69": {
+        "de": "Version 0.8.69: Speicherregelung herstelleroffener: getrennte Lade-/Entlade-Sollwert-DPs und optionaler Run-DP für Einzel-Speicher ergänzt. Eigenverbrauchs-Entladung ist für generische Speicher nun standardmäßig aktiv, solange keine Reserve-/Tarifsperre greift.",
+        "en": "Version 0.8.69: Storage control is more vendor-open: adds separate charge/discharge target datapoints and an optional run datapoint for single storages. Self-consumption discharge is now enabled by default for generic storages unless reserve/tariff gates block it."
+      },
       "0.8.68": {
         "de": "Version 0.8.68: Härtet die Rollenfreigabe für App-Center und Lizenzverwaltung. Geschützte Seiten laden keine Hintergrundwerte mehr ohne Admin-/Installer-Session; Abbrechen im Login legt keine Konfiguration frei. Lizenz-Info ist Admin-only.",
         "en": "Version 0.8.68: Hardens role-gated access for App Center and license management. Protected pages no longer load background values without an admin/installer session; cancelling login cannot reveal configuration. License info is admin-only."
@@ -26,10 +30,6 @@
       "0.8.63": {
         "de": "Version 0.8.63: Fix für zentrales PV-Budget. PV-Budget wird jetzt durch die tatsächliche PV-Erzeugung gedeckelt, damit EVCS-/Speicher-Reservierungen bei PV=0 kein künstliches PV-Budget erzeugen.",
         "en": "Version 0.8.63: Fixes central PV budget. PV budget is now capped by actual PV production so EVCS/storage reservations cannot create artificial PV budget when PV=0."
-      },
-      "0.8.62": {
-        "de": "Version 0.8.62: Fix für Lastmanagement Budget/EVCS-Istwerte. Gate A nutzt nur frisch gemessene EVCS-Leistung für Netzbudget; stale Reservierungen erzeugen kein fiktives EVCS-Cap und EVCS-Ist/Reservierung werden getrennt angezeigt.",
-        "en": "Version 0.8.62: Fixes load management budget/EVCS actual values. Gate A uses only fresh measured EVCS power for grid budgeting; stale reservations no longer create fictitious EVCS cap and EVCS actual/reservation are displayed separately."
       }
     },
     "title": "NexoWatt UI",
