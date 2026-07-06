@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.71",
+    "version": "0.8.72",
     "news": {
+      "0.8.72": {
+        "de": "Version 0.8.72: App-Center-Heizstab-Eingaben stabilisiert. Stufenwerte lösen beim Tippen keinen vollständigen Rebuild mehr aus; notwendige Strukturänderungen erhalten Scrollposition und Fokus.",
+        "en": "Version 0.8.72: Stabilizes App Center heating-rod inputs. Stage values no longer trigger a full rebuild while typing; required structural updates preserve scroll position and focus."
+      },
       "0.8.71": {
         "de": "Version 0.8.71: Speicherregelung gegen überschießende Eigenverbrauchs-Entlade-Sollwerte gehärtet. Ist-Leistung wird nicht mehr aus Steuer-/Setpoint-DPs fürs Balancing genutzt; Demand-Cap wird nach der Rampe erneut hart angewendet.",
         "en": "Version 0.8.71: Hardens storage control against excessive self-consumption discharge setpoints. Battery actual power is no longer taken from control/setpoint datapoints for balancing; demand cap is enforced again after ramp limiting."
@@ -26,10 +30,6 @@
       "0.8.66": {
         "de": "Version 0.8.66: NPM-Release-Version erhöht und EVCS-Online-Erkennung vertieft. Explizite Online-Datenpunkte werden separat gespiegelt und im Lademanagement als authoritative Quelle vor Status-Texten genutzt; VIS bevorzugt den echten Online-Zustand vor active/idle.",
         "en": "Version 0.8.66: Bumps npm release version and hardens EVCS online detection. Explicit online datapoints are mirrored separately and used as authoritative source before status text; VIS prefers the real online state over active/idle."
-      },
-      "0.8.65": {
-        "de": "Version 0.8.65: EVCS VIS Online/Offline-Darstellung korrigiert und zentrale EVCS-Reservierung auf aktiven Ladebedarf begrenzt. Inaktive Ladepunkte blockieren kein Budget; Diagnose für Active-Demand-Reserve ergänzt.",
-        "en": "Version 0.8.65: Fixes EVCS VIS online/offline tile state and limits central EVCS reservation to active charging demand. Idle charge points no longer block budget; active-demand reserve diagnostics added."
       }
     },
     "title": "NexoWatt UI",

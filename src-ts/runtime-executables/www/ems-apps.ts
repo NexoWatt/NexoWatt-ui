@@ -4503,7 +4503,12 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // Heizstab Speicher-Reserve snapped back to the default 1000 W).
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     inp.addEventListener('change', commit);
-    if (type !== 'checkbox') inp.addEventListener('input', commit);
+    // Installer-UX: Some controls trigger a structural re-render of their
+    // section (for example changing the heating-rod stage count). For normal
+    // text/number fields we still commit live, but callers can disable live
+    // input commits with opts.commitOnInput=false so typing inside deep forms
+    // never rebuilds the section and jumps the page to the top.
+    if (type !== 'checkbox' && opts.commitOnInput !== false) inp.addEventListener('input', commit);
     return inp;
   }
   /**
@@ -4899,6 +4904,47 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     });
   }
   /**
+   * Code-Teil: rebuildHeatingRodUIStable
+   * Zweck: Rendert die Heizstab-Konfiguration neu, ohne den Installateur beim
+   * Bearbeiten tiefer Felder an den Seitenanfang zu springen. Diese Funktion
+   * ist nur für echte Strukturänderungen gedacht (z. B. Stufenzahl oder DP-
+   * Auswahl). Reine Zahlenänderungen in Stufenfeldern dürfen nicht komplett
+   * neu rendern, weil sonst Fokus, Cursor und Scrollposition verloren gehen.
+   */
+  function rebuildHeatingRodUIStable(reason = '') {
+    let scrollX = 0;
+    let scrollY = 0;
+    let activeId = '';
+    let activeValue = null;
+    try {
+      scrollX = window.scrollX || 0;
+      scrollY = window.scrollY || 0;
+      const active = document && document.activeElement;
+      activeId = active && active.id ? String(active.id) : '';
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
+        activeValue = ('value' in active) ? active.value : null;
+      }
+    } catch (_e) {}
+
+    try { buildHeatingRodUI(); } catch (_e) {}
+
+    try {
+      requestAnimationFrame(() => {
+        try {
+          window.scrollTo(scrollX, scrollY);
+          if (activeId) {
+            const restored = document.getElementById(activeId);
+            if (restored && typeof restored.focus === 'function') {
+              restored.focus({ preventScroll: true });
+              if (activeValue !== null && 'value' in restored && restored.value === '') restored.value = activeValue;
+            }
+          }
+        } catch (_e2) {}
+      });
+    } catch (_e) {}
+  }
+
+  /**
    * Code-Teil: buildHeatingRodUI
    * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
    * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -5053,8 +5099,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       grpBasic.body.appendChild(_mkCfgField('Name (optional)', _mkCfgInput('text', dev.name || '', (v) => { dev.name = String(v || '').trim(); setDirty(); }, { width: '220px', placeholder: 'Anzeige-Name' }), 'Leer lassen = Name aus Energiefluss-Slot.'));
       grpBasic.body.appendChild(_mkCfgField('Modus', _mkCfgSelect(dev.mode || 'pvAuto', modeOptions, (v) => { dev.mode = v; setDirty(); }, { width: '160px' }), 'PV-Auto = native Stufenregelung, Manuell = nur bilanzieren, Aus = alles aus.'));
       grpBasic.body.appendChild(_mkCfgField('Priorität', _mkCfgInput('number', dev.priority, (v) => { dev.priority = _clampInt(v, 1, 999, 200 + slot); setDirty(); }, { min: 1, max: 999, step: 1, width: '110px' }), 'Kleinere Zahl = wird früher aus PV versorgt.'));
-      grpBasic.body.appendChild(_mkCfgField('Max. Leistung (W)', _mkCfgInput('number', dev.maxPowerW, (v) => { dev.maxPowerW = Math.max(0, Math.round(Number(v) || 0)); _syncHeatingRodDeviceStages(dev); buildHeatingRodUI(); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Gesamtleistung des Heizstabs / Verbunds.'));
-      grpBasic.body.appendChild(_mkCfgField('Stufen', _mkCfgSelect(String(dev.stageCount || 1), stageCountOptions, (v) => { dev.stageCount = _clampInt(v, 1, 12, 1); _syncHeatingRodDeviceStages(dev); buildHeatingRodUI(); setDirty(); }, { width: '110px' }), 'Anzahl nativer Heizstab-Stufen.'));
+      grpBasic.body.appendChild(_mkCfgField('Max. Leistung (W)', _mkCfgInput('number', dev.maxPowerW, (v) => { dev.maxPowerW = Math.max(0, Math.round(Number(v) || 0)); _syncHeatingRodDeviceStages(dev); rebuildHeatingRodUIStable('heatingrod-max-power'); setDirty(); }, { min: 0, step: 10, width: '150px', commitOnInput: false }), 'Gesamtleistung des Heizstabs / Verbunds.'));
+      grpBasic.body.appendChild(_mkCfgField('Stufen', _mkCfgSelect(String(dev.stageCount || 1), stageCountOptions, (v) => { dev.stageCount = _clampInt(v, 1, 12, 1); _syncHeatingRodDeviceStages(dev); rebuildHeatingRodUIStable('heatingrod-stage-count'); setDirty(); }, { width: '110px' }), 'Anzahl nativer Heizstab-Stufen.'));
       right.appendChild(grpBasic.wrap);
 
       const grpTiming = _mkCfgGroup('Timing');
@@ -5067,7 +5113,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an resetBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       resetBtn.addEventListener('click', () => {
         _syncHeatingRodDeviceStages(dev, { resetAll: true });
-        buildHeatingRodUI();
+        rebuildHeatingRodUIStable('heatingrod-stage-reset');
         setDirty();
       });
       grpTiming.body.appendChild(_mkCfgField('Stufenhilfe', resetBtn, 'Verteilt die Gesamtleistung gleichmäßig über alle aktuell konfigurierten Stufen und setzt passende Default-Grenzen.'));
@@ -5147,26 +5193,38 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         label.appendChild(labelSub);
         sRow.appendChild(label);
 
-        sRow.appendChild(_mkCfgInput('number', stage.powerW, (v) => {
+        // Wichtig: Diese drei Stufenfelder dürfen beim Tippen nicht die komplette
+        // Heizstab-UI neu aufbauen. Ein Rebuild entfernt das aktive Eingabefeld
+        // aus dem DOM und der Browser springt in langen Installerseiten an den
+        // Anfang. Deshalb schreiben wir hier nur in die In-Memory-Konfiguration;
+        // Strukturänderungen bleiben auf Stufenzahl, Reset und DP-Auswahl begrenzt.
+        let offBelowInput = null;
+        const powerInput = _mkCfgInput('number', stage.powerW, (v) => {
           stage.powerW = Math.max(0, Math.round(Number(v) || 0));
           dev.maxPowerW = Math.max(0, (dev.stages || []).reduce((sum, it) => sum + Math.max(0, Math.round(Number(it.powerW) || 0)), 0));
-          buildHeatingRodUI();
           setDirty();
-        }, { min: 0, step: 10, width: '100%' }));
+        }, { min: 0, step: 10, width: '100%' });
+        sRow.appendChild(powerInput);
 
-        sRow.appendChild(_mkCfgInput('number', stage.onAboveW, (v) => {
+        const onAboveInput = _mkCfgInput('number', stage.onAboveW, (v) => {
           stage.onAboveW = Math.max(0, Math.round(Number(v) || 0));
-          if (stage.offBelowW > stage.onAboveW) stage.offBelowW = stage.onAboveW;
-          buildHeatingRodUI();
+          if (stage.offBelowW > stage.onAboveW) {
+            stage.offBelowW = stage.onAboveW;
+            if (offBelowInput) offBelowInput.value = String(stage.offBelowW);
+          }
           setDirty();
-        }, { min: 0, step: 10, width: '100%' }));
+        }, { min: 0, step: 10, width: '100%' });
+        sRow.appendChild(onAboveInput);
 
-        sRow.appendChild(_mkCfgInput('number', stage.offBelowW, (v) => {
+        offBelowInput = _mkCfgInput('number', stage.offBelowW, (v) => {
           stage.offBelowW = Math.max(0, Math.round(Number(v) || 0));
-          if (stage.offBelowW > stage.onAboveW) stage.offBelowW = stage.onAboveW;
-          buildHeatingRodUI();
+          if (stage.offBelowW > stage.onAboveW) {
+            stage.offBelowW = stage.onAboveW;
+            offBelowInput.value = String(stage.offBelowW);
+          }
           setDirty();
-        }, { min: 0, step: 10, width: '100%' }));
+        }, { min: 0, step: 10, width: '100%' });
+        sRow.appendChild(offBelowInput);
 
         stageWrap.appendChild(sRow);
 
@@ -5185,13 +5243,13 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
         dpRow.appendChild(mkStageDpField(`Stufe ${s} Write (bool)`, `heatingrod_${slot}_stage${s}_w`, stage.writeId || '', (v) => {
           stage.writeId = String(v || '').trim();
-          buildHeatingRodUI();
+          rebuildHeatingRodUIStable('heatingrod-stage-write-dp');
           setDirty();
         }, 'Schalt-DP / KNX Write'));
 
         dpRow.appendChild(mkStageDpField(`Stufe ${s} Read (bool)`, `heatingrod_${slot}_stage${s}_r`, stage.readId || '', (v) => {
           stage.readId = String(v || '').trim();
-          buildHeatingRodUI();
+          rebuildHeatingRodUIStable('heatingrod-stage-read-dp');
           setDirty();
         }, 'Status-DP / KNX Read (optional)'));
 
