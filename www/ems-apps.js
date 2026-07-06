@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:b67055e847f703efcfbbb5238e35389900b755455679543ddd7e2d75191824ed
+ * Quell-Hash: sha256:8da6fb5dd3a6058cc8011167063c7cdd2c459d3ebd8b6709c9d5e2c85fcffc37
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -835,10 +835,10 @@
   const STORAGE_DP_FIELDS = [
     { key: 'socObjectId', label: 'SoC (%)', requiredModes: ['targetPower','limits','enableFlags'] },
     { key: 'batteryPowerObjectId', label: 'Ist-Leistung (W) (optional)', requiredModes: [] },
-    { key: 'targetPowerObjectId', label: 'Sollleistung signed (W)', requiredModes: ['targetPower'], hint: 'Allgemeiner bidirektionaler Sollwert. NexoWatt-Konvention: +W = Entladen, -W = Laden. Wenn getrennte Lade-/Entlade-Sollwerte gemappt sind, nutzt NexoWatt diese herstellerfreundlich bevorzugt.' },
-    { key: 'targetChargePowerObjectId', label: 'Sollwert Laden (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional für Hersteller wie Sungrow: positiver Lade-Sollwert. Wird zusammen mit „Sollwert Entladen“ bevorzugt, wenn beide gemappt sind.' },
-    { key: 'targetDischargePowerObjectId', label: 'Sollwert Entladen (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional für Hersteller wie Sungrow: positiver Entlade-Sollwert. Dadurch ist kein Vorzeichen-Signed-DP nötig.' },
-    { key: 'runObjectId', label: 'Run / externe Speicherregelung (bool)', requiredModes: ['targetPower'], hint: 'Optional: wird auf true gesetzt, wenn NexoWatt einen Lade-/Entlade-Sollwert vorgibt, und auf false bei 0 W. Hilfreich für herstelleroffene Bridges/Sungrow-ctrl.run.' },
+    { key: 'targetPowerObjectId', label: 'Sollleistung signed (W)', requiredModes: ['targetPower'], hint: 'Allgemeiner bidirektionaler Sollwert. NexoWatt-Konvention: +W = Entladen, -W = Laden. Wenn getrennte Lade-/Entlade-Sollwerte gemappt sind, nutzt NexoWatt diese bevorzugt.' },
+    { key: 'targetChargePowerObjectId', label: 'Sollwert Laden (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional: positiver Lade-Sollwert. Wird zusammen mit „Sollwert Entladen“ bevorzugt, wenn beide gemappt sind.' },
+    { key: 'targetDischargePowerObjectId', label: 'Sollwert Entladen (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional: positiver Entlade-Sollwert. Dadurch ist kein Vorzeichen-Signed-DP nötig.' },
+    { key: 'runObjectId', label: 'Run / externe Speicherregelung (bool)', requiredModes: ['targetPower'], hint: 'Optional: wird auf true gesetzt, wenn NexoWatt einen Lade-/Entlade-Sollwert vorgibt, und auf false bei 0 W. Hilfreich für externe Speicher-Controller oder Alias-Bridge-Datenpunkte.' },
     { key: 'maxChargeObjectId', label: 'Max Ladeleistung (W)', requiredModes: ['limits'] },
     { key: 'maxDischargeObjectId', label: 'Max Entladeleistung (W)', requiredModes: ['limits'] },
     { key: 'chargeEnableObjectId', label: 'Laden erlaubt (bool)', requiredModes: ['enableFlags'] },
@@ -11894,7 +11894,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     patch.storage.controlMode = getStorageMode();
     patch.storage.datapoints = deepMerge({}, (currentConfig.storage && currentConfig.storage.datapoints) ? currentConfig.storage.datapoints : {});
     patch.storage.feneconGridControlEnabled = !!(els.storageFeneconAcMode && els.storageFeneconAcMode.checked);
-    // Der Haken bedeutet ab 0.6.255: FENECON-Hybrid/FEMS-Priorität.
+    // Der Haken bedeutet ab 0.6.255: Hybrid-/Gateway-Priorität.
     // SetGridActivePower wird nicht mehr verwendet; ein eventuell vorhandener Legacy-DP wird entfernt.
     try {
       delete patch.storage.datapoints.feneconGridSetpointObjectId;
@@ -11902,7 +11902,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       delete patch.storage.datapoints.feneconGridSetpointScale;
       delete patch.storage.datapoints.feneconGridSetpointInvert;
     } catch (_e) {}
-    // Alte FENECON-AC-Direktlogik nicht mehr über den Haken aktivieren.
+    // Alte alte AC-Direktlogik nicht mehr über den Haken aktivieren.
     // Für SpeicherFarm-Altanlagen bleibt ein bereits vorhandenes feneconAcMode intern erhalten,
     // ansonsten wird es beim Speichern auf false gesetzt.
     const storageFarmEnabledForLegacy = !!(patch.emsApps && patch.emsApps.apps && patch.emsApps.apps.storagefarm && patch.emsApps.apps.storagefarm.enabled);

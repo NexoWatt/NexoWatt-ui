@@ -3010,9 +3010,9 @@ class ChargingManagementModule extends BaseModule {
         if (!this._isEnabled()) return;
 
         const cfg = this.adapter.config.chargingManagement || {};
-        // Alte FENECON-EVCS-vor-Speicher-Priorität deaktiviert.
-        // Der FENECON-Hybrid-Haken steuert ab 0.6.255 ausschließlich die
-        // Speicher-Sonderpolicy (FEMS-No-Write / Zusatz-PV-Laden / Low-PV-Regelung).
+        // Alte Gateway-EVCS-vor-Speicher-Priorität deaktiviert.
+        // Der Hybrid-/Gateway-Priorität-Haken steuert ab 0.6.255 ausschließlich die
+        // Speicher-Sonderpolicy (Gateway-No-Write / Zusatz-PV-Laden / Low-PV-Regelung).
         // Standard-/Farm-/Wallbox-Verhalten bleibt dadurch unverändert.
         const feneconEvPriorityActive = false;
 

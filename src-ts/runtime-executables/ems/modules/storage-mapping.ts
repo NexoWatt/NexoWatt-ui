@@ -157,7 +157,7 @@ class SpeicherMappingModule extends BaseModule {
             { id: `${base}.mapping.ladenErlaubtId`, name: 'Laden erlaubt Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.entladenErlaubtId`, name: 'Entladen erlaubt Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.reserveSocId`, name: 'Reserve-SoC Datenpunkt-ID', type: 'string', role: 'text', def: '' },
-            { id: `${base}.mapping.feneconGridSetpointId`, name: 'FENECON SetGridActivePower Datenpunkt-ID (Legacy, nicht genutzt)', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.feneconGridSetpointId`, name: 'Legacy Netzpunkt-Sollwert Datenpunkt-ID (nicht genutzt)', type: 'string', role: 'text', def: '' },
 
             { id: `${base}.socPct`, name: 'Speicher Ladezustand (SoC)', type: 'number', role: 'value.battery', def: 0 },
             { id: `${base}.socAlterMs`, name: 'SoC Alter (ms)', type: 'number', role: 'value.interval', def: 0 },
@@ -240,7 +240,7 @@ class SpeicherMappingModule extends BaseModule {
         const sollInv = !!dp.targetPowerInvert;
 
         // Hersteller-offene Einzel-Speicherregelung:
-        // Einige Systeme (z. B. Sungrow über nexowatt-devices) nutzen keine signed
+        // Einige Systeme (z. B. Split-Sollwertsysteme über nexowatt-devices) nutzen keine signed
         // Sollleistung, sondern getrennte positive Vorgaben für Laden und Entladen.
         // Diese DPs werden als alternative Zielpfade zum allgemeinen signed targetPower
         // registriert. Wenn beide Split-DPs vorhanden sind, bevorzugt storage-control
@@ -259,7 +259,7 @@ class SpeicherMappingModule extends BaseModule {
         const chargeEnId = String(dp.chargeEnableObjectId || '').trim();
         const dischargeEnId = String(dp.dischargeEnableObjectId || '').trim();
         const reserveSocId = String(dp.reserveSocObjectId || '').trim();
-        // FENECON-Hybrid ab 0.6.255 nutzt keinen SetGridActivePower-DP mehr.
+        // Hybrid-/Gateway-Priorität ab 0.6.255 nutzt keinen SetGridActivePower-DP mehr.
         // Der alte Konfigurationswert bleibt nur als Legacy-Diagnose erhalten.
         const feneconGridSetpointId = '';
 
@@ -444,7 +444,7 @@ class SpeicherMappingModule extends BaseModule {
         if (feneconHybridConfigured || String(controlMode) === 'targetPower') {
             // Für targetPower reicht entweder ein allgemeiner signed Sollleistungs-DP
             // ODER ein getrenntes Paar aus Lade- und Entlade-Sollwert. Dadurch bleiben
-            // FENECON-/Victron-/OpenEMS-ähnliche signed Setpoints und Sungrow-/Bridge-
+            // Gateway-/Victron-/OpenEMS-ähnliche signed Setpoints und Split-/Bridge-
             // Profile mit getrennten positiven Vorgaben gleichwertig nutzbar.
             const hasSignedTarget = !!sollId;
             const hasSplitTarget = !!(sollChargeId && sollDischargeId);

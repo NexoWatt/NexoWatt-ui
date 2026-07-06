@@ -769,14 +769,14 @@
             </div>
           </div>
           <div class="nw-config-field-row">
-            <div class="nw-config-field-label">FENECON Hybrid</div>
+            <div class="nw-config-field-label">Hybrid-/Gateway-Priorität</div>
             <div class="nw-config-field-control nw-config-field-control--stack">
               <label class="nw-config-checklabel" for="storageFeneconAcMode">
                 <input id="storageFeneconAcMode" class="nw-config-checkbox" type="checkbox" />
-                <span>FENECON‑Hybrid/FEMS‑Priorität aktivieren</span>
+                <span>Interne Speicher-/Gateway-Priorität aktivieren</span>
               </label>
               <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
-                Ersetzt die alte FENECON‑AC‑Sonderlogik. Bei interner FENECON‑PV ab ca. <b>1&nbsp;kW</b> schreibt NexoWatt <b>keine</b> Batterie‑Vorgabe, damit das FEMS selbst sauber regelt. Nur bei wenig/keiner FENECON‑PV oder bei zusätzlicher externer PV nutzt NexoWatt den normalen beschreibbaren <b>Sollleistung‑DP</b> innerhalb des FENECON‑Watchdogs. <b>SetGridActivePower wird nicht verwendet.</b> Bei aktiver <b>Speicherfarm</b> wird dieser Modus ignoriert; die Farm‑Regelung bleibt unverändert.
+                Für Systeme mit eigener interner PV-/Speicherlogik: Bei starker interner PV schreibt NexoWatt <b>keine</b> Batterie-Vorgabe, damit das lokale Gateway selbst sauber regelt. Nur bei wenig/keiner interner PV oder bei zusätzlicher externer PV nutzt NexoWatt den normalen beschreibbaren <b>Sollleistungs-DP</b>. Bei aktiver <b>Speicherfarm</b> wird dieser Modus ignoriert; die Farm-Regelung bleibt unverändert.
               </div>
             </div>
           </div>

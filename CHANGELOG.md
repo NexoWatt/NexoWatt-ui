@@ -1,3 +1,16 @@
+## 0.8.71
+
+- Speicherregelung: NVP-basierte Eigenverbrauchs-/Tarif-Entladung gegen überschießende Sollwerte gehärtet.
+- Ist-Leistung wird ignoriert, wenn sie auf Steuer-/Setpoint-DPs wie `aliases.ctrl.*`, `powerSetpointW`, `chargePowerW` oder `dischargePowerW` verweist.
+- Entlade-Demand-Cap wird nach der Rampenbegrenzung erneut hart angewendet, damit ein alter hoher Sollwert nicht weitergeschleppt wird.
+- Neue Diagnose: `speicher.regelung.batteryPowerTrusted`, `batteryPowerIgnoredReason`, `dischargeDemandCapW`, `dischargeDemandCapReason`.
+
+## 0.8.70
+
+- Speicher-App-Center bereinigt: sichtbare Hersteller-/Produktnamen in der Speichersteuerung durch allgemeine DP-Zuordnungs- und Gateway-Begriffe ersetzt.
+- Keine Herstellerprofile: Steuerpfad bleibt herstellerunabhängig über Datenpunkt-Zuordnung und Capability-Erkennung.
+- Legacy-State-IDs bleiben kompatibel, sichtbare Labels/Hinweise sind neutralisiert.
+
 ## 0.8.69
 
 - Speicherregelung: Hersteller-offener Zielpfad für Einzel-Speicher ergänzt. Neben dem allgemeinen signed Sollleistungs-DP können jetzt getrennte positive Lade-/Entlade-Sollwert-DPs gemappt werden.
