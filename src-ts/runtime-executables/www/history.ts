@@ -385,7 +385,7 @@
 
   const EXTRA_COLORS = {
     // 10 Verbraucher
-    consumer: ['#22d3ee','#38bdf8','#60a5fa','#818cf8','#a78bfa','#c4b5fd','#f0abfc','#f472b6','#fb7185','#fdba74'],
+    consumer: ['#22d3ee','#f472b6','#bef264','#c084fc','#fb7185','#2dd4bf','#fde047','#818cf8','#fda4af','#34d399'],
     // 5 Erzeuger
     producer: ['#a3e635','#84cc16','#22c55e','#10b981','#14b8a6']
   };

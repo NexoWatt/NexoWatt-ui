@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/app.ts
- * Quell-Hash: sha256:97beae1a1fbbe82f4a8fb3a85e919944e45b46c405b68d0af320545e320c8b56
+ * Quell-Hash: sha256:1f7ed12575a1e58657130c4c70679fef6ea44a867540c14907918a374adb9d91
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -6555,7 +6555,7 @@ function initThresholdModal() {
       return;
     }
 
-    setHint('Nur freigegebene Felder sind veränderbar (pro Regel konfigurierbar).', false);
+    setHint('Alle sichtbaren Felder sind im Frontend bedienbar.', false);
 
     /**
      * Code-Teil: Arrow-Funktion `mkRow`
@@ -6682,7 +6682,8 @@ function initThresholdModal() {
       curMode = Math.max(0, Math.min(2, curMode));
       let curModeUi = (curMode === 0) ? 0 : 1;
 
-      if (r.userCanToggle) {
+      const canToggle = true;
+      if (canToggle) {
         const box = document.createElement('div');
         const l = document.createElement('div');
         l.style.fontSize = '0.78rem';
@@ -6752,7 +6753,8 @@ function initThresholdModal() {
         ctl.appendChild(mkKpi('Regel ein/aus', 'gesperrt'));
       }
 
-      if (r.userCanSetThreshold) {
+      const canSetThreshold = true;
+      if (canSetThreshold) {
         const box = document.createElement('div');
         const l = document.createElement('div');
         l.style.fontSize = '0.78rem';
@@ -6781,8 +6783,8 @@ function initThresholdModal() {
       }
 
       // Optional timing parameters: allow Endkunde to adjust MinOn/MinOff (if enabled in App-Center)
-      const canMinOn = (typeof r.userCanSetMinOnSec === 'boolean') ? r.userCanSetMinOnSec : !!r.userCanSetThreshold;
-      const canMinOff = (typeof r.userCanSetMinOffSec === 'boolean') ? r.userCanSetMinOffSec : !!r.userCanSetThreshold;
+      const canMinOn = true;
+      const canMinOff = true;
 
       if (canMinOn) {
         const box = document.createElement('div');
@@ -7012,7 +7014,7 @@ function initRelayModal() {
       return;
     }
 
-    setHint('Nur freigegebene Ausgänge sind steuerbar (pro Ausgang konfigurierbar).', false);
+    setHint('Alle sichtbaren Ausgänge sind im Frontend steuerbar.', false);
 
     /**
      * Code-Teil: Arrow-Funktion `mkRow`
@@ -7095,7 +7097,7 @@ function initRelayModal() {
       ctl.style.gap = '8px';
 
       if (r.type === 'boolean') {
-        const can = !!r.userCanToggle;
+        const can = true;
 
         // Use the same button style as other VIS controls (Aus/An) instead of a checkbox
         const btnWrap = document.createElement('div');
@@ -7142,12 +7144,12 @@ function initRelayModal() {
           ctl.appendChild(lock);
         }
       } else {
-        const can = !!r.userCanSetValue;
+        const can = true;
         const box = document.createElement('div');
         const l = document.createElement('div');
         l.style.fontSize = '0.78rem';
         l.style.opacity = '0.85';
-        l.textContent = can ? 'Wert setzen' : 'Wert (gesperrt)';
+        l.textContent = 'Wert setzen';
         const inp = document.createElement('input');
         inp.type = 'number';
         inp.className = 'input';
@@ -7439,7 +7441,7 @@ function initBhkwModal() {
       body.appendChild(mkKpi('Status', statusTxt));
 
       const mode = String(d.mode || 'auto').toLowerCase();
-      const canControl = isInstaller || !!d.userCanControl;
+      const canControl = true;
 
       const ctl = document.createElement('div');
       ctl.style.display = 'flex';
@@ -7451,7 +7453,7 @@ function initBhkwModal() {
       const l = document.createElement('div');
       l.style.fontSize = '0.78rem';
       l.style.opacity = '0.85';
-      l.textContent = canControl ? 'Modus' : 'Modus (gesperrt)';
+      l.textContent = 'Modus';
       const grp = document.createElement('div');
       grp.className = 'nw-evcs-mode-buttons nw-evcs-mode-buttons-3';
 
@@ -7783,7 +7785,7 @@ function initGeneratorModal() {
       body.appendChild(mkKpi('Status', statusTxt));
 
       const mode = String(d.mode || 'auto').toLowerCase();
-      const canControl = isInstaller || !!d.userCanControl;
+      const canControl = true;
 
       const ctl = document.createElement('div');
       ctl.style.display = 'flex';
@@ -7795,7 +7797,7 @@ function initGeneratorModal() {
       const l = document.createElement('div');
       l.style.fontSize = '0.78rem';
       l.style.opacity = '0.85';
-      l.textContent = canControl ? 'Modus' : 'Modus (gesperrt)';
+      l.textContent = 'Modus';
       const grp = document.createElement('div');
       grp.className = 'nw-evcs-mode-buttons nw-evcs-mode-buttons-3';
 

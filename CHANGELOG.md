@@ -1,3 +1,19 @@
+## 0.8.75
+
+- Kunden-/LIVE-Frontend: Passwortschutz für sichtbare Bedienung entfernt. Schnellsteuerung, EVCS, SmartHome, RFID und Kundeneinstellungen können ohne Admin-/Installer-Login genutzt werden.
+- Schnellsteuerungs-Gates entfernt: Heizstab/Flow, Schwellwertregeln, Relais, BHKW und Generator werten keine Endkunden-Sperrflags mehr als Frontend-Bedienverbot aus.
+- Auth-Leiste/Login-Dialog aus LIVE- und Einstellungsseite entfernt; App-Center-/Installer-/Adminseiten behalten ihren Rollen-/Capability-Schutz.
+- Service-Worker Cache auf `nexowatt-cache-v376` erhöht, damit die offenen Controls sicher neu geladen werden.
+- Keine Änderung an Export Guard, Netzschutz, Lademanagement-Budget oder Speicherregelung.
+
+## 0.8.74
+
+- History: Zusätzliche Energiefluss-Verbraucher verwenden jetzt eine stärker unterscheidbare 10-Farben-Palette; die gestrichelten Linien bleiben unverändert.
+- Kundenmenü: Speicherfarm-Link und Speicherfarm-Reiter werden nur noch angezeigt, wenn die Speicherfarm im App-Center installiert/aktiv ist und eine echte Speicherfarm-Konfiguration vorhanden ist.
+- Statische Unterseiten starten die Speicherfarm-Navigation versteckt und lassen sie erst nach der `/config`-Prüfung sichtbar werden.
+- Service-Worker-Cache erhöht, damit die aktualisierte History-/Menüansicht nach dem Update zuverlässig neu geladen wird.
+- Keine Änderung an EMS-Regelung, Lademanagement, Speicherregelung, Export Guard oder Hardwarewrites.
+
 ## 0.8.73
 
 - EVCS/VIS: Ladepunkt-Kacheln behalten beim Hover eine neutrale Optik; der globale grüne Hover-Rand wird auf der EVCS-Seite unterdrückt.

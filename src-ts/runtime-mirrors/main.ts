@@ -21,7 +21,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: e03b86f691bbf80298571e4e523a29ff6ebabd68a7ef7b1cddce918b06a905a7
+ * Original-Hash: 121e7c76c79fd8c0c97965f90c8d9f4a814f29e5be81741010400e9e1ca58cd1
  */
 
 /**
@@ -9436,12 +9436,19 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
      * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    const requireAuth = (req, res, next) => {
-      if (!authEnabled || !protectWrites) return next();
-      const s = getSession(req);
-      if (!s) return res.status(401).json({ ok: false, error: 'unauthorized' });
-      req.nwSession = s;
+    const attachOptionalAuth = (req, _res, next) => {
+      if (authEnabled && protectWrites) {
+        try {
+          const s = getSession(req);
+          if (s) req.nwSession = s;
+        } catch (_e) {}
+      }
       next();
+    };
+    const requireAuth = (req, res, next) => {
+      // 0.8.75: Endkunden-/LIVE-Frontends sind bewusst ohne Passwort bedienbar.
+      // Dieser Spiegel-Helfer hängt nur noch optional eine vorhandene Session an.
+      return attachOptionalAuth(req, res, next);
     };
     /**
      * Code-Teil: requireInstaller
@@ -15785,10 +15792,27 @@ app.get('/config', (req, res) => {
         }
       };
       const storageRowsFromConfig = Array.isArray(cfg && cfg.storageFarm && cfg.storageFarm.storages) ? cfg.storageFarm.storages : [];
+      const storageFarmAppActive = (() => {
+        try {
+          const emsApps = (cfg && cfg.emsApps && typeof cfg.emsApps === 'object') ? cfg.emsApps : {};
+          const apps = (emsApps.apps && typeof emsApps.apps === 'object') ? emsApps.apps : {};
+          const app = (apps.storagefarm && typeof apps.storagefarm === 'object')
+            ? apps.storagefarm
+            : ((apps.storageFarm && typeof apps.storageFarm === 'object') ? apps.storageFarm : null);
+          if (app) {
+            const installed = (typeof app.installed === 'boolean') ? app.installed : !!app.enabled;
+            const enabled = (typeof app.enabled === 'boolean') ? app.enabled : false;
+            // App-Center ist der Sichtbarkeits-Gatekeeper: deaktivierte oder deinstallierte
+            // Speicherfarm-Apps dürfen keinen Kundenmenüpunkt mehr freischalten.
+            return !!(installed && enabled && cfg.enableStorageFarm !== false);
+          }
+        } catch (_e) {}
+        return !!cfg.enableStorageFarm;
+      })();
       // Stale runtime states from older builds must not expose the customer Speicherfarm page.
-      // The page is visible only when the installer configured at least one active storage row.
+      // The page is visible only when the App-Center app is active and at least one storage row exists.
       const storageFarmConfigured = storageRowsFromConfig.some((row) => row && row.enabled !== false);
-      const storageFarmAvailable = !!(cfg.enableStorageFarm && storageFarmConfigured);
+      const storageFarmAvailable = !!(storageFarmAppActive && storageFarmConfigured);
 
       /**
        * Code-Teil: featureVisibilityTsPreview
@@ -15851,7 +15875,7 @@ app.get('/config', (req, res) => {
           );
           const visibility = mirror.buildFeatureVisibilityState({
             evcsProofs,
-            storageFarmEnabled: !!cfg.enableStorageFarm,
+            storageFarmEnabled: storageFarmAppActive,
             storageFarmProofs,
             smartHomeEnabled: !!(cfg.smartHome && cfg.smartHome.enabled),
             weatherEnabled: !!(cfg && cfg.settings && cfg.settings.weatherEnabled) || !!(this.stateCache && this.stateCache['settings.weatherEnabled'] && this.stateCache['settings.weatherEnabled'].value === true),
@@ -16256,6 +16280,7 @@ settingsConfig: {
         smartHome: cfg.smartHome || {},
         smartHomeEnabled: smartHomeEnabledEffective,
         storageFarmEnabled: storageFarmAvailableEffective,
+        storageFarmAppActive: storageFarmAppActive,
         ems: {
           chargingEnabled: inferChargingEnabled(),
           evcsAvailable: evcsAvailableEffective,
@@ -16264,6 +16289,7 @@ settingsConfig: {
           gridConstraintsEnabled: boolOr(cfg.enableGridConstraints, false),
           storageEnabled: boolOr(cfg.enableStorageControl, false),
           storageFarmEnabled: storageFarmAvailableEffective,
+          storageFarmAppActive: storageFarmAppActive,
           heatingRodEnabled: boolOr(cfg.enableHeatingRodControl, false),
           thresholdEnabled: boolOr(cfg.enableThresholdControl, false),
           relayEnabled: boolOr(cfg.enableRelayControl, false),
@@ -16285,10 +16311,10 @@ settingsConfig: {
               used.add(idx);
               const name = String(r.name || '').trim() || `Regel ${idx}`;
               const enabled = (typeof r.enabled === 'boolean') ? !!r.enabled : false;
-              const userCanToggle = (typeof r.userCanToggle === 'boolean') ? !!r.userCanToggle : true;
-              const userCanSetThreshold = (typeof r.userCanSetThreshold === 'boolean') ? !!r.userCanSetThreshold : true;
-              const userCanSetMinOnSec = (typeof r.userCanSetMinOnSec === 'boolean') ? !!r.userCanSetMinOnSec : userCanSetThreshold;
-              const userCanSetMinOffSec = (typeof r.userCanSetMinOffSec === 'boolean') ? !!r.userCanSetMinOffSec : userCanSetThreshold;
+              const userCanToggle = true;
+              const userCanSetThreshold = true;
+              const userCanSetMinOnSec = true;
+              const userCanSetMinOffSec = true;
               const configured = !!(String(r.inputId || r.inputObjectId || '').trim() && String(r.outputId || r.outputObjectId || '').trim());
               out.push({ idx, name, enabled, configured, userCanToggle, userCanSetThreshold, userCanSetMinOnSec, userCanSetMinOffSec });
             }
@@ -16317,8 +16343,8 @@ settingsConfig: {
               const showInLive = (typeof it.showInLive === 'boolean') ? !!it.showInLive : true;
               const type = (String(it.type || '').toLowerCase() === 'boolean' || String(it.type || '').toLowerCase() === 'bool' || String(it.type || '').toLowerCase() === 'switch') ? 'boolean' : 'number';
               const configured = !!String(it.writeId || it.writeObjectId || '').trim();
-              const userCanToggle = (typeof it.userCanToggle === 'boolean') ? !!it.userCanToggle : true;
-              const userCanSetValue = (typeof it.userCanSetValue === 'boolean') ? !!it.userCanSetValue : true;
+              const userCanToggle = true;
+              const userCanSetValue = true;
               const min = Number.isFinite(Number(it.min)) ? Number(it.min) : null;
               const max = Number.isFinite(Number(it.max)) ? Number(it.max) : null;
               const step = Number.isFinite(Number(it.step)) ? Number(it.step) : null;
@@ -16347,7 +16373,7 @@ settingsConfig: {
               const name = String(it.name || '').trim() || `BHKW ${idx}`;
               const enabled = (typeof it.enabled === 'boolean') ? !!it.enabled : true;
               const showInLive = (typeof it.showInLive === 'boolean') ? !!it.showInLive : true;
-              const userCanControl = (typeof it.userCanControl === 'boolean') ? !!it.userCanControl : true;
+              const userCanControl = true;
 
               const startId = String(it.startWriteId || it.startObjectId || it.startId || '').trim();
               const stopId = String(it.stopWriteId || it.stopObjectId || it.stopId || '').trim();
@@ -16389,7 +16415,7 @@ settingsConfig: {
               const name = String(it.name || '').trim() || `Generator ${idx}`;
               const enabled = (typeof it.enabled === 'boolean') ? !!it.enabled : true;
               const showInLive = (typeof it.showInLive === 'boolean') ? !!it.showInLive : true;
-              const userCanControl = (typeof it.userCanControl === 'boolean') ? !!it.userCanControl : true;
+              const userCanControl = true;
 
               const startId = String(it.startWriteId || it.startObjectId || it.startId || '').trim();
               const stopId = String(it.stopWriteId || it.stopObjectId || it.stopId || '').trim();
@@ -17055,7 +17081,7 @@ settingsConfig: {
       }
     });
 
-    // generic setter for settings/installer datapoints
+    // generic setter for customer-facing settings and commands
     // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/set', requireAuth, async (req, res) => {
     app.post('/api/set', requireAuth, async (req, res) => {
       try {
@@ -17107,8 +17133,8 @@ settingsConfig: {
           }
         }
 
-        // Installer-only scopes (protect RFID whitelist + installer settings)
-        if ((scope === 'installer' || scope === 'rfid') && authEnabled && protectWrites) {
+        // Installer-only scope remains protected; all visible customer frontend scopes are public.
+        if (scope === 'installer' && authEnabled && protectWrites) {
           const s = req.nwSession;
           if (!s || !s.isInstaller) return res.status(403).json({ ok: false, error: 'forbidden' });
         }
@@ -17301,19 +17327,7 @@ settingsConfig: {
           const idx = Math.max(1, Math.min(10, Math.round(Number(m[1] || 0)) || 0));
           const prop = String(m[2] || '').toLowerCase();
 
-          // Permission: Endkunden-Steuerung optional (pro Gerät). Falls gesperrt → nur Installateur.
-          let userCan = true;
-          try {
-            const b = (cfg.bhkw && typeof cfg.bhkw === 'object') ? cfg.bhkw : {};
-            const list = Array.isArray(b.devices) ? b.devices : [];
-            const dev = list.find(d => d && Math.round(Number(d.idx ?? d.index ?? d.id)) === idx) || null;
-            if (dev && typeof dev.userCanControl === 'boolean') userCan = !!dev.userCanControl;
-          } catch (_e) {}
-
-          if (authEnabled && protectWrites && !userCan) {
-            const s = req.nwSession;
-            if (!s || !s.isInstaller) return res.status(403).json({ ok: false, error: 'forbidden' });
-          }
+          // Endkunden-Frontend: sichtbare BHKW-Schnellsteuerung bleibt ohne Rollen-/Passwortsperre bedienbar.
 
           if (prop === 'mode') {
             let v = String(value === null || value === undefined ? 'auto' : value).trim().toLowerCase();
@@ -17369,19 +17383,7 @@ settingsConfig: {
           const idx = Math.max(1, Math.min(10, Math.round(Number(m[1] || 0)) || 0));
           const prop = String(m[2] || '').toLowerCase();
 
-          // Permission: Endkunden-Steuerung optional (pro Gerät). Falls gesperrt → nur Installateur.
-          let userCan = true;
-          try {
-            const g = (cfg.generator && typeof cfg.generator === 'object') ? cfg.generator : {};
-            const list = Array.isArray(g.devices) ? g.devices : [];
-            const dev = list.find(d => d && Math.round(Number(d.idx ?? d.index ?? d.id)) === idx) || null;
-            if (dev && typeof dev.userCanControl === 'boolean') userCan = !!dev.userCanControl;
-          } catch (_e) {}
-
-          if (authEnabled && protectWrites && !userCan) {
-            const s = req.nwSession;
-            if (!s || !s.isInstaller) return res.status(403).json({ ok: false, error: 'forbidden' });
-          }
+          // Endkunden-Frontend: sichtbare Generator-Schnellsteuerung bleibt ohne Rollen-/Passwortsperre bedienbar.
 
           if (prop === 'mode') {
             let v = String(value === null || value === undefined ? 'auto' : value).trim().toLowerCase();
@@ -17419,7 +17421,7 @@ settingsConfig: {
         }
 
 
-        // Schwellwertsteuerung – optionale Endkunden-Overrides (Enable/Modus/Schwellwert)
+        // Schwellwertsteuerung – sichtbare Endkunden-Overrides ohne Rollen-/Passwortsperre
         // Keys:
         // - r1.enabled
         // - r1.mode
@@ -17437,7 +17439,7 @@ settingsConfig: {
           const idx = Math.max(1, Math.min(10, Math.round(Number(m[1] || 0)) || 0));
           const prop = String(m[2] || '').toLowerCase();
 
-          // Resolve rule permissions from installer config
+          // Frontend-Regeln sind bedienbar, sobald sie im LIVE-Frontend sichtbar sind.
           const t = (cfg.threshold && typeof cfg.threshold === 'object') ? cfg.threshold : {};
           const list = Array.isArray(t.rules) ? t.rules : [];
           let rule = null;
@@ -17447,15 +17449,7 @@ settingsConfig: {
             if (ridx === idx) { rule = r; break; }
           }
 
-          const userCanToggle = (rule && typeof rule.userCanToggle === 'boolean') ? !!rule.userCanToggle : true;
-          const userCanSetThreshold = (rule && typeof rule.userCanSetThreshold === 'boolean') ? !!rule.userCanSetThreshold : true;
-          const userCanSetMinOnSec = (rule && typeof rule.userCanSetMinOnSec === 'boolean') ? !!rule.userCanSetMinOnSec : userCanSetThreshold;
-          const userCanSetMinOffSec = (rule && typeof rule.userCanSetMinOffSec === 'boolean') ? !!rule.userCanSetMinOffSec : userCanSetThreshold;
-
-          if ((prop === 'enabled' || prop === 'mode') && !userCanToggle) return res.status(403).json({ ok: false, error: 'forbidden' });
-          if (prop === 'threshold' && !userCanSetThreshold) return res.status(403).json({ ok: false, error: 'forbidden' });
-          if (prop === 'minonsec' && !userCanSetMinOnSec) return res.status(403).json({ ok: false, error: 'forbidden' });
-          if (prop === 'minoffsec' && !userCanSetMinOffSec) return res.status(403).json({ ok: false, error: 'forbidden' });
+          // Keine zusätzlichen Endkunden-Sperrflags: sichtbare Regeln sind direkt bedienbar.
 
           // Best effort: ensure objects exist (robust against partial upgrades)
           try {
@@ -17528,7 +17522,7 @@ settingsConfig: {
         }
 
 
-        // Relaissteuerung – manuelle Ausgänge (Endkundenbedienung optional pro Ausgang)
+        // Relaissteuerung – sichtbare manuelle Ausgänge ohne Rollen-/Passwortsperre
         // Keys:
         // - r1.switch  (boolean)
         // - r1.value   (number)
@@ -17562,12 +17556,8 @@ settingsConfig: {
 
           const invert = (typeof it.invert === 'boolean') ? !!it.invert : false;
 
-          const userCanToggle = (typeof it.userCanToggle === 'boolean') ? !!it.userCanToggle : true;
-          const userCanSetValue = (typeof it.userCanSetValue === 'boolean') ? !!it.userCanSetValue : true;
-
           if (prop === 'switch') {
             if (type !== 'boolean') return res.status(400).json({ ok: false, error: 'bad request' });
-            if (!userCanToggle) return res.status(403).json({ ok: false, error: 'forbidden' });
 
             let b = !!value;
             if (invert) b = !b;
@@ -17604,7 +17594,6 @@ settingsConfig: {
 
           // value
           if (type !== 'number') return res.status(400).json({ ok: false, error: 'bad request' });
-          if (!userCanSetValue) return res.status(403).json({ ok: false, error: 'forbidden' });
 
           const n = Number(value);
           if (!Number.isFinite(n)) return res.status(400).json({ ok: false, error: 'bad request' });
@@ -18612,8 +18601,8 @@ return res.json(out);
           const readId = String(it.readId || it.readObjectId || '').trim();
           const configured = !!writeId;
 
-          const userCanToggle = (typeof it.userCanToggle === 'boolean') ? !!it.userCanToggle : true;
-          const userCanSetValue = (typeof it.userCanSetValue === 'boolean') ? !!it.userCanSetValue : true;
+          const userCanToggle = true;
+          const userCanSetValue = true;
 
           let val = null;
           let ts = 0;
@@ -18682,7 +18671,7 @@ return res.json(out);
 
           const enabled = (typeof it.enabled === 'boolean') ? !!it.enabled : false;
           const showInLive = (typeof it.showInLive === 'boolean') ? !!it.showInLive : true;
-          const userCanControl = (typeof it.userCanControl === 'boolean') ? !!it.userCanControl : true;
+          const userCanControl = true;
 
           const name = String(it.name || '').trim() || `BHKW ${idx}`;
 
@@ -18751,7 +18740,7 @@ return res.json(out);
 
           const enabled = (typeof it.enabled === 'boolean') ? !!it.enabled : false;
           const showInLive = (typeof it.showInLive === 'boolean') ? !!it.showInLive : true;
-          const userCanControl = (typeof it.userCanControl === 'boolean') ? !!it.userCanControl : true;
+          const userCanControl = true;
 
           const name = String(it.name || '').trim() || `Generator ${idx}`;
 

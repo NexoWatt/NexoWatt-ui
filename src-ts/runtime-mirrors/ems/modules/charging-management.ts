@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 7e2c4a58c17ed31139036ee6ffed20b6a2e561dafb2267e0ffd2284270680133
+ * Original-Hash: f1a539c64464c28f9d35060ad81a5d66ba25911a6be210c483ab0e99a1540d0d
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:b4013f7348475445293518f04deaf8cab3e2526765e7297460f44c9f22b55cd2
+ * Quell-Hash: sha256:44d8814b7e14456278aeeae7000a698bc89a95eb6e23e13ea7b74266b05dbea3
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -3039,9 +3039,9 @@ class ChargingManagementModule extends BaseModule {
         if (!this._isEnabled()) return;
 
         const cfg = this.adapter.config.chargingManagement || {};
-        // Alte FENECON-EVCS-vor-Speicher-Priorität deaktiviert.
-        // Der FENECON-Hybrid-Haken steuert ab 0.6.255 ausschließlich die
-        // Speicher-Sonderpolicy (FEMS-No-Write / Zusatz-PV-Laden / Low-PV-Regelung).
+        // Alte Gateway-EVCS-vor-Speicher-Priorität deaktiviert.
+        // Der Hybrid-/Gateway-Priorität-Haken steuert ab 0.6.255 ausschließlich die
+        // Speicher-Sonderpolicy (Gateway-No-Write / Zusatz-PV-Laden / Low-PV-Regelung).
         // Standard-/Farm-/Wallbox-Verhalten bleibt dadurch unverändert.
         const feneconEvPriorityActive = false;
 

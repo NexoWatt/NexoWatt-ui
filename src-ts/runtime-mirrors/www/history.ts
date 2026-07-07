@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 3afc34273e41857fbabb233053fb2e37031bb42601aca324451684dce2389bc1
+ * Original-Hash: 70c308a687fcee1b1edccb09b93cceb981d5b5591cb2f27dccebe9be0c6baa07
  */
 
 /**
@@ -571,7 +571,7 @@ const historyWindow = window as HistoryWindow;
 
   const EXTRA_COLORS = {
     // 10 Verbraucher
-    consumer: ['#22d3ee','#38bdf8','#60a5fa','#818cf8','#a78bfa','#c4b5fd','#f0abfc','#f472b6','#fb7185','#fdba74'],
+    consumer: ['#22d3ee','#f472b6','#bef264','#c084fc','#fb7185','#2dd4bf','#fde047','#818cf8','#fda4af','#34d399'],
     // 5 Erzeuger
     producer: ['#a3e635','#84cc16','#22c55e','#10b981','#14b8a6']
   };
