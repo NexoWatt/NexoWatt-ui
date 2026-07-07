@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:6b7ec494d1bab9fdda2475cb48a7b76939b314bdf82058f13d2bc87acb00fb36
+ * Quell-Hash: sha256:876e7e6fa3faf21e9e26bbe869fc3da79bcb4ff73bcea0ef4ba41db278709210
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -21360,6 +21360,27 @@ settingsConfig: {
               const cfgEnabled = (typeof dev.enabled === 'boolean') ? !!dev.enabled : false;
               const modeRaw = String(dev.mode || 'pvAuto').trim().toLowerCase();
               const cfgMode = (modeRaw === 'manual' || modeRaw === 'off') ? modeRaw : 'pvAuto';
+              const hCfg = (cfg.heatingRod && typeof cfg.heatingRod === 'object') ? cfg.heatingRod : {};
+              const zeroCfg = (hCfg.zeroExport && typeof hCfg.zeroExport === 'object') ? hCfg.zeroExport : {};
+              /**
+               * Code-Teil: normalizeHeatingRodAutoModeLocal
+               * Zweck: Meldet der Schnellsteuerung, welche Regelstrategie hinter dem einen Auto-Button aktiv ist.
+               * Zusammenhang: Gleiche Normalisierung wie AppCenter/Heizstab-Runtime; bei neuen Betriebsarten alle drei Stellen gemeinsam ändern.
+               * TypeScript: Später als geteilte Hilfsfunktion/Union-Typ auslagern.
+               */
+              const normalizeHeatingRodAutoModeLocal = (raw) => {
+                const s = String(raw || '').trim().toLowerCase();
+                if (s === 'zeroexportforecast' || s === 'zero-export-forecast' || s === 'zero_export_forecast'
+                  || s === 'zeroexport' || s === 'zero-export' || s === 'zero_export'
+                  || s === 'zerofeedin' || s === 'zero-feed-in' || s === 'zero_feed_in'
+                  || s === 'zero' || s === '0w' || s === '0-w' || s === '0_w'
+                  || s === '0einspeisung' || s === '0-einspeisung' || s === '0_einspeisung'
+                  || s === 'zeroeinspeisung' || s === 'forecast') return 'zeroExportForecast';
+                return 'pvSurplus';
+              };
+              const legacyZeroModeActive = !!(zeroCfg.enabled || zeroCfg.active);
+              const autoMode = normalizeHeatingRodAutoModeLocal(hCfg.autoMode || hCfg.automationMode || zeroCfg.autoMode || zeroCfg.mode || (legacyZeroModeActive ? 'zeroExportForecast' : 'pvSurplus'));
+              const autoModeLabel = autoMode === 'zeroExportForecast' ? '0-W / Forecast' : 'PV-Überschuss';
 
               let userEnabled = true;
               let userMode = 'inherit';
@@ -21406,6 +21427,8 @@ settingsConfig: {
 
               let currentStage = 0;
               let targetStage = 0;
+              let zeroExportReason = '';
+              let zeroExportCanProbe = false;
               let stageCount = Math.max(1, Math.round(Number(dev.stageCount ?? 1) || 1));
               let wiredStages = 0;
               let maxPowerW = Math.max(0, Math.round(Number(dev.maxPowerW ?? 0) || 0));
@@ -21425,6 +21448,14 @@ settingsConfig: {
               try {
                 const s = await this.getStateAsync(`heatingRod.devices.c${idx}.effectiveMode`);
                 if (s && s.val !== undefined && s.val !== null) effectiveMode = String(s.val || '').trim() || effectiveMode;
+              } catch (_e) {}
+              try {
+                const s = await this.getStateAsync(`heatingRod.devices.c${idx}.zeroExportReason`);
+                if (s && s.val !== undefined && s.val !== null) zeroExportReason = String(s.val || '').trim();
+              } catch (_e) {}
+              try {
+                const s = await this.getStateAsync(`heatingRod.devices.c${idx}.zeroExportCanProbe`);
+                if (s && s.val !== undefined && s.val !== null) zeroExportCanProbe = !!s.val;
               } catch (_e) {}
 
               const stages = Array.isArray(dev.stages) ? dev.stages : [];
@@ -21449,6 +21480,11 @@ settingsConfig: {
                 userMode,
                 effectiveEnabled,
                 effectiveMode,
+                autoMode,
+                autoModeLabel,
+                zeroExportActive: autoMode === 'zeroExportForecast',
+                zeroExportCanProbe,
+                zeroExportReason,
                 currentStage,
                 targetStage,
                 stageCount,
@@ -21464,7 +21500,7 @@ settingsConfig: {
                 boostUntil: out.boostUntil || 0,
                 boostRemainingMin: out.boostRemainingMin || 0,
                 modes: [
-                  { value: 'pvAuto', label: 'Auto (PV)' },
+                  { value: 'pvAuto', label: 'Auto' },
                   { value: 'manual1', label: 'Stufe 1' },
                   { value: 'manual2', label: 'Stufe 2' },
                   { value: 'manual3', label: 'Stufe 3' },

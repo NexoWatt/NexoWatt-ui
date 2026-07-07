@@ -8231,7 +8231,7 @@ function _labelThermalMode(mode){
   const k = m.toLowerCase();
   if (!m) return '—';
   if (k === 'inherit') return 'Auto';
-  if (k === 'pvauto') return 'PV‑Auto';
+  if (k === 'pvauto') return 'Auto';
   if (k === 'sgready') return 'SG‑Ready';
   if (k === 'manual') return 'Manuell';
   if (k === 'manual1') return 'Stufe 1';
@@ -10101,7 +10101,7 @@ function openFlowQc(kind, idx){
     const s = String(m || '').trim();
     const k = s.toLowerCase();
     if (k === 'inherit' || k === 'system') return 'System';
-    if (k === 'pvauto' || k === 'auto' || k === 'pv') return 'Auto (PV)';
+    if (k === 'pvauto' || k === 'auto' || k === 'pv') return 'Auto';
     if (k === 'manual' || k === 'manuell') return 'Manuell';
     if (k === 'manual1') return 'Stufe 1';
     if (k === 'manual2') return 'Stufe 2';
@@ -10321,8 +10321,8 @@ function openFlowQc(kind, idx){
         if (regHint) {
           regHint.textContent = isRod
             ? (uEn
-                ? 'PV-Regelung aktiv. Manuelle Stufen und Boost bleiben zusätzlich verfügbar.'
-                : 'PV-Regelung aus. Der Adapter greift nicht automatisch ein; Stufen, Boost und Aus bleiben händisch verfügbar.')
+                ? `Regelung aktiv. Auto nutzt: ${String(ctl.autoModeLabel || 'PV-Überschuss')}. Manuelle Stufen und Boost bleiben zusätzlich verfügbar.`
+                : 'Regelung aus. Der Adapter greift nicht automatisch ein; Stufen, Boost und Aus bleiben händisch verfügbar.')
             : (uEn
                 ? 'Automatik aktiv. Manuelle Bedienung bleibt möglich.'
                 : 'Regelung deaktiviert – manuelle Bedienung bleibt möglich.');
@@ -10338,13 +10338,16 @@ function openFlowQc(kind, idx){
             const maxPowerInfo = Number(ctl.maxPowerW || 0) > 0 ? ` • max. ${formatPower(Number(ctl.maxPowerW || 0))}` : '';
             const dupInfo = Array.isArray(ctl.duplicateWriteIds) && ctl.duplicateWriteIds.length ? ' • DP doppelt' : '';
             const stageInfo = stageMax > 0 ? ` • ${Number(ctl.currentStage || 0)}/${stageMax} Stufen${maxPowerInfo}${dupInfo}` : maxPowerInfo;
+            const autoModeLabel = String(ctl.autoModeLabel || 'PV-Überschuss');
+            const zeroReason = (String(ctl.autoMode || '') === 'zeroExportForecast' && ctl.zeroExportReason) ? ` · ${String(ctl.zeroExportReason)}` : '';
+            const strategyInfo = ` • Auto-Betriebsart: ${autoModeLabel}${zeroReason}`;
             const backMode = (rawUserMode && rawUserMode !== 'inherit') ? rawUserMode : (String(ctl.cfgMode || 'pvAuto'));
             if (ctl.boostActive) {
-              modeHint.textContent = `Boost aktiv (${Number(ctl.boostRemainingMin || 0)} min) – danach ${modeLabel(backMode)}${stageInfo}`;
+              modeHint.textContent = `Boost aktiv (${Number(ctl.boostRemainingMin || 0)} min) – danach ${modeLabel(backMode)}${stageInfo}${strategyInfo}`;
             } else if (rawUserMode === 'inherit') {
-              modeHint.textContent = `System: ${modeLabel(ctl.cfgMode)} (aktiv: ${modeLabel(effMode)})${stageInfo}`;
+              modeHint.textContent = `System: ${modeLabel(ctl.cfgMode)} (aktiv: ${modeLabel(effMode)})${stageInfo}${strategyInfo}`;
             } else {
-              modeHint.textContent = `Aktiv: ${modeLabel(effMode)}${stageInfo}`;
+              modeHint.textContent = `Aktiv: ${modeLabel(effMode)}${stageInfo}${strategyInfo}`;
             }
           } else {
             if (String(rawUserMode || '').toLowerCase() === 'inherit') {
@@ -10577,7 +10580,7 @@ function openFlowQc(kind, idx){
       if (modeHint) modeHint.textContent = '';
       if (qc.controlKind === 'heatingRod') {
         renderModeButtons([
-          { value: 'pvAuto', label: 'Auto (PV)' },
+          { value: 'pvAuto', label: 'Auto' },
           { value: 'manual1', label: 'Stufe 1' },
           { value: 'manual2', label: 'Stufe 2' },
           { value: 'manual3', label: 'Stufe 3' },
@@ -10585,7 +10588,7 @@ function openFlowQc(kind, idx){
         ], 'pvAuto');
       } else {
         renderModeButtons([
-          { value: 'pvAuto', label: 'Auto (PV)' },
+          { value: 'pvAuto', label: 'Auto' },
           { value: 'manual', label: 'Manuell' },
           { value: 'off', label: 'Aus' },
           { value: 'inherit', label: 'System' },

@@ -172,6 +172,23 @@ function normalizeUserMode(raw) {
     return 'inherit';
 }
 /**
+ * Code-Teil: normalizeHeatingRodAutoMode
+ * Zweck: Normalisiert die Betriebsart, die hinter dem einen sichtbaren Auto-Button liegt.
+ * Zusammenhang: `pvAuto` bleibt der Kundenmodus im Frontend; diese Auswahl entscheidet intern,
+ * ob Auto nach gemessenem PV-Überschuss am NVP oder nach 0-W-Einspeisung/Forecast regelt.
+ * TypeScript: Beim späteren Ausbau als Union-Typ `'pvSurplus' | 'zeroExportForecast'` führen.
+ */
+function normalizeHeatingRodAutoMode(raw) {
+    const s = String(raw || '').trim().toLowerCase();
+    if (s === 'zeroexportforecast' || s === 'zero-export-forecast' || s === 'zero_export_forecast'
+        || s === 'zeroexport' || s === 'zero-export' || s === 'zero_export'
+        || s === 'zerofeedin' || s === 'zero-feed-in' || s === 'zero_feed_in'
+        || s === 'zero' || s === '0w' || s === '0-w' || s === '0_w'
+        || s === '0einspeisung' || s === '0-einspeisung' || s === '0_einspeisung'
+        || s === 'zeroeinspeisung' || s === 'forecast') return 'zeroExportForecast';
+    return 'pvSurplus';
+}
+/**
  * Code-Teil: normalizeConsumerType
  * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
  * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -600,7 +617,7 @@ class HeatingRodControlModule extends BaseModule {
                     def: 'inherit',
                     states: {
                         inherit: 'System',
-                        pvAuto: 'Auto (PV)',
+                        pvAuto: 'Auto',
                         manual1: 'Manuell Stufe 1',
                         manual2: 'Manuell Stufe 2',
                         manual3: 'Manuell Stufe 3',
@@ -671,6 +688,7 @@ class HeatingRodControlModule extends BaseModule {
         await mk('heatingRod.summary.tsLegacyFinalCleanupJson', 'TypeScript Heizstab Legacy-JS-Final-Cleanup (JSON)', 'string', 'json');
         await mk('heatingRod.summary.tsLegacyNormalDiagnosticsJson', 'TypeScript Heizstab Legacy-JS-Normaldiagnose entfernt (JSON)', 'string', 'json');
         await mk('heatingRod.summary.legacyJsReferenceJson', 'Heizstab Legacy-JS-Referenzdiagnose Alias (JSON)', 'string', 'json');
+        await mk('heatingRod.summary.autoMode', 'Heizstab Auto-Betriebsart', 'string', 'text');
         await mk('heatingRod.summary.zeroExportActive', 'Zero/minus feed-in logic active', 'boolean', 'indicator');
         await mk('heatingRod.summary.zeroExportCanProbe', 'Zero/minus feed-in probe allowed', 'boolean', 'indicator');
         await mk('heatingRod.summary.zeroExportReason', 'Zero/minus feed-in reason', 'string', 'text');
@@ -737,6 +755,7 @@ class HeatingRodControlModule extends BaseModule {
             await mk(`heatingRod.devices.${d.id}.appliedW`, 'Applied power (W)', 'number', 'value.power', 'W');
             await mk(`heatingRod.devices.${d.id}.measuredW`, 'Measured (W)', 'number', 'value.power', 'W');
             await mk(`heatingRod.devices.${d.id}.status`, 'Status', 'string', 'text');
+            await mk(`heatingRod.devices.${d.id}.autoMode`, 'Auto-Betriebsart', 'string', 'text');
             await mk(`heatingRod.devices.${d.id}.zeroExportActive`, 'Zero/minus feed-in active', 'boolean', 'indicator');
             await mk(`heatingRod.devices.${d.id}.zeroExportReason`, 'Zero/minus feed-in reason', 'string', 'text');
             await mk(`heatingRod.devices.${d.id}.zeroExportCanProbe`, 'Zero/minus feed-in probe allowed', 'boolean', 'indicator');
@@ -1399,8 +1418,17 @@ class HeatingRodControlModule extends BaseModule {
             return Math.round(clamp(def, minV, maxV));
         };
 
+        // Betriebsart des einen Auto-Buttons: neue Konfiguration (`cfg.autoMode`) hat Vorrang.
+        // Alte Installationen mit `zeroExport.enabled=true` werden nur dann automatisch migriert,
+        // wenn noch keine explizite Betriebsart gespeichert wurde. So kann ein späteres Zurückstellen
+        // auf PV-Überschuss nicht durch ein altes Detail-Flag wieder überschrieben werden.
+        const explicitAutoMode = cfg.autoMode ?? cfg.automationMode ?? raw.autoMode ?? raw.mode;
+        const legacyZeroEnabled = !!(raw.enabled || raw.active);
+        const autoMode = normalizeHeatingRodAutoMode(explicitAutoMode || (legacyZeroEnabled ? 'zeroExportForecast' : 'pvSurplus'));
+
         return {
-            enabled: !!(raw.enabled || raw.active),
+            autoMode,
+            enabled: autoMode === 'zeroExportForecast',
             feedInLimitW: n(['feedInLimitW', 'allowedExportW', 'exportLimitW'], 1000, 0, 1000000),
             feedInToleranceW: n(['feedInToleranceW', 'exportToleranceW'], 150, 0, 100000),
             targetExportBufferW: n(['targetExportBufferW', 'exportBufferW'], 100, 0, 100000),
@@ -1625,7 +1653,7 @@ class HeatingRodControlModule extends BaseModule {
     _computeZeroExportInfo(pvBase) {
         const cfg = this._getZeroExportCfg();
         if (!cfg.enabled) {
-            return { active: false, canProbe: false, reason: 'disabled', cfg };
+            return { active: false, canProbe: false, reason: 'auto_mode_pv_surplus', cfg };
         }
         if (!pvBase || !pvBase.gridKnown) {
             return { active: true, canProbe: false, reason: 'grid_unknown', cfg };
@@ -2325,12 +2353,12 @@ class HeatingRodControlModule extends BaseModule {
             };
         }
 
-        // Speicher-Vorrang darf nur die zusätzliche 0-Einspeise-Testlast sperren.
-        // Normaler, am Netzpunkt/Speicherladung rekonstruierter PV-Überschuss darf weiter genutzt
-        // werden. Deshalb reduzieren wir hier nur, wenn aus der normalen PV-Bilanz kein Ziel mehr
-        // übrig ist (targetStage <= 0), aber noch eine physische Stufe läuft.
-        if (info && info.active && info.storageReady === false && targetStage <= 0 && Math.max(currentStage, observedStage) > 0) {
-            const reduceBase = Math.max(currentStage, observedStage);
+        // In der Betriebsart 0-W/Forecast ersetzt diese Strategie den normalen
+        // PV-Überschuss-Start. Speicher-Vorrang reduziert deshalb auch laufende
+        // Auto-Stufen stufenweise, damit der Heizstab keinen Akku leerzieht, wenn
+        // die versteckte PV-Leistung noch nicht belastbar bestätigt ist.
+        if (info && info.active && info.storageReady === false && Math.max(currentStage, observedStage, targetStage) > 0) {
+            const reduceBase = Math.max(currentStage, observedStage, targetStage);
             targetStage = Math.min(targetStage, this._previousPhysicalStageBelow(d, reduceBase));
             st.zeroCooldownUntilMs = now + Math.max(0, cfg.cooldownSec * 1000);
             st.zeroLastStepDownMs = now;
@@ -2338,6 +2366,30 @@ class HeatingRodControlModule extends BaseModule {
             st.zeroProbe = null;
             st.targetStage = targetStage;
             reason = 'storage_priority_reduce';
+            this._stageCtl.set(d.id, st);
+            return {
+                targetStage,
+                reduceNow: true,
+                hardOff: false,
+                reason,
+                importHoldMs,
+                dischargeHoldMs,
+                nextAllowedAt: st.zeroCooldownUntilMs || 0,
+            };
+        }
+
+        // Ohne Netzpunktmessung fehlt der harte 0-W-Schutz. In dieser Situation
+        // hält die 0-W-/Forecast-Betriebsart keine Auto-Stufe fest, sondern reduziert
+        // kontrolliert, bis wieder belastbare NVP-Daten vorliegen.
+        if (info && info.active && String(info.reason || '') === 'grid_unknown' && Math.max(currentStage, observedStage, targetStage) > 0) {
+            const reduceBase = Math.max(currentStage, observedStage, targetStage);
+            targetStage = this._previousPhysicalStageBelow(d, reduceBase);
+            st.zeroCooldownUntilMs = now + Math.max(0, cfg.cooldownSec * 1000);
+            st.zeroLastStepDownMs = now;
+            st.lastDecreaseMs = now;
+            st.zeroProbe = null;
+            st.targetStage = targetStage;
+            reason = 'grid_unknown_reduce';
             this._stageCtl.set(d.id, st);
             return {
                 targetStage,
@@ -3919,6 +3971,13 @@ class HeatingRodControlModule extends BaseModule {
                 ...extra,
             };
         };
+        // Der TS-Spiegel modelliert den normalen PV-/Budgetpfad. Die 0-W-/Forecast-
+        // Strategie arbeitet bewusst mit Probe-Stufen und Live-Netzpunktwächter und
+        // bleibt deshalb hier JS-autoritativer Pfad, damit TS den Probe-Zielwert nicht
+        // mit einem klassischen Überschussziel überschreibt.
+        if (entry && entry.zeroExportActive) {
+            return fallback('zero-export-forecast-js-strategy', { zeroExportActive: true });
+        }
         if (!evaluate) return fallback('missing-ts-mirror');
         try {
             const d = entry && entry.device || {};
@@ -4073,6 +4132,10 @@ class HeatingRodControlModule extends BaseModule {
         const pvBase = this._computeBasePvAvailableW(currentAutoHeatingRodW);
         const budgetProtection = this._updateBudgetGateProtection(pvBase, now);
         const zeroExportInfo = this._computeZeroExportInfo(pvBase);
+        // Diese Betriebsart bestimmt nur die interne Auto-Strategie. Im Kunden-UI bleibt
+        // weiterhin genau ein Auto-Button (`pvAuto`) sichtbar.
+        const heatingRodAutoMode = normalizeHeatingRodAutoMode(zeroExportInfo && zeroExportInfo.cfg && zeroExportInfo.cfg.autoMode);
+        const zeroExportStrategyActive = heatingRodAutoMode === 'zeroExportForecast' && !!zeroExportInfo.active;
         const minPvAutomationW = this._getPvAutomationMinW();
         const pvNowForAutomationW = this._readPvNowW(staleMs);
         const pvAutomationAllowedByMin = minPvAutomationW <= 0 || pvNowForAutomationW >= minPvAutomationW;
@@ -4102,8 +4165,9 @@ class HeatingRodControlModule extends BaseModule {
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.maxPowerW`, Math.round(num(d.maxPowerW, 0)));
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.stageCount`, d.stageCount);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.wiredStages`, d.wiredStages);
-            await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportActive`, !!zeroExportInfo.active);
-            await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportCanProbe`, !!zeroExportInfo.canProbe);
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.autoMode`, heatingRodAutoMode);
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportActive`, !!zeroExportStrategyActive);
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportCanProbe`, !!(zeroExportStrategyActive && zeroExportInfo.canProbe));
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportReason`, String(zeroExportInfo.reason || ''));
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportNextAllowedAt`, Math.round(num((this._stageCtl.get(d.id) || {}).zeroCooldownUntilMs, 0)));
 
@@ -4324,27 +4388,32 @@ class HeatingRodControlModule extends BaseModule {
                 continue;
             }
 
-            let desiredStage = this._computeDesiredStage(d, remainingW, observedStage, measuredW);
+            let desiredStage = 0;
             let zeroDecision = null;
-            let budgetDecision = this._applyBudgetFollowerStageStrategy(d, desiredStage, observedStage, pvBase, budgetProtection, now, !pvMinBlocksStepUp);
-            desiredStage = Math.max(0, Math.min(num(budgetDecision.targetStage, desiredStage), d.stageCount));
-            // 0-/Minus-Einspeiseanlagen verstecken PV-Überschuss am Netzpunkt, weil der
-            // Wechselrichter/FEMS die PV abregelt. In diesem Sondermodus darf PV-Auto vorsichtig
-            // eine physische Heizstab-Stufe als Testlast zuschalten, wenn Forecast, PV-Leistung,
-            // Speicher-SOC und Einspeiselimit zusammenpassen. Danach entscheidet der Netzpunkt:
-            // Netzbezug oder Speicherentladung -> schnell reduzieren; stabil PV -> halten/weiter prüfen.
-            if (zeroExportInfo.active) {
+            let budgetDecision = null;
+            // Die globale Betriebsart ersetzt nur den Algorithmus hinter `pvAuto`;
+            // die Kundenbedienung bleibt ein einzelner Auto-Button. Im 0-W-/Forecast-Modus
+            // darf der sichtbare NVP-Überschuss NICHT als Startbudget dienen, weil WR/Speicher
+            // ihn bei 0-Einspeisung absichtlich auf 0 W halten.
+            if (zeroExportStrategyActive) {
+                const st = this._ensureStageCtlState(d.id, observedStage);
+                desiredStage = Math.max(0, Math.min(Math.round(Number(st.targetStage ?? observedStage) || 0), d.stageCount));
+                budgetDecision = { targetStage: desiredStage, reduceNow: false, hardOff: false, reason: 'zero_export_replaces_pv_surplus' };
                 zeroDecision = this._applyZeroExportStageStrategy(d, desiredStage, observedStage, pvBase, zeroExportInfo, now, measuredW);
                 desiredStage = Math.max(0, Math.min(num(zeroDecision.targetStage, desiredStage), d.stageCount));
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportReason`, String(zeroDecision.reason || zeroExportInfo.reason || ''));
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportNextAllowedAt`, Math.round(num(zeroDecision.nextAllowedAt, 0)));
+            } else {
+                desiredStage = this._computeDesiredStage(d, remainingW, observedStage, measuredW);
+                budgetDecision = this._applyBudgetFollowerStageStrategy(d, desiredStage, observedStage, pvBase, budgetProtection, now, !pvMinBlocksStepUp);
+                desiredStage = Math.max(0, Math.min(num(budgetDecision.targetStage, desiredStage), d.stageCount));
             }
 
             // Reiner PV-Betrieb: bei Netzbezug oder Speicherentladung keine Stufe halten
             // oder neu zuschalten. Bei aktivem 0-Einspeise-Sondermodus werden kurze Transienten
             // nicht sofort gekillt, sondern erst nach den konfigurierten Schutzzeiten.
             let forceNonPvDown = !!((budgetDecision && budgetDecision.reduceNow) || (budgetProtection && budgetProtection.reduceNow));
-            if (zeroExportInfo.active) forceNonPvDown = !!(forceNonPvDown || (zeroDecision && zeroDecision.reduceNow));
+            if (zeroExportStrategyActive) forceNonPvDown = !!(forceNonPvDown || (zeroDecision && zeroDecision.reduceNow));
             if (forceNonPvDown) {
                 // Reduce to the next lower *physical* actuator set. This is important for
                 // installations that accidentally map several virtual stages to the same KNX/relay
@@ -4356,7 +4425,7 @@ class HeatingRodControlModule extends BaseModule {
                 desiredStage = Math.min(desiredStage, lowerPhysicalStage);
             }
 
-            const forceStorageProtectOff = !!(pvBase.forceOff && desiredStage <= 0 && !(zeroExportInfo.active && zeroDecision && !zeroDecision.reduceNow));
+            const forceStorageProtectOff = !!(pvBase.forceOff && desiredStage <= 0 && !(zeroExportStrategyActive && zeroDecision && !zeroDecision.reduceNow));
             let targetStage = forceStorageProtectOff
                 ? 0
                 : (forceNonPvDown ? desiredStage : this._applyTiming(d, desiredStage, observedStage));
@@ -4369,7 +4438,8 @@ class HeatingRodControlModule extends BaseModule {
                 deviceId: d.id,
                 jsTargetStage: jsTargetStageBeforeTs,
                 jsTargetW: jsTargetWBeforeTs,
-                jsStatus: forceStorageProtectOff ? 'storage_protect' : (forceNonPvDown ? 'pv_only_protect' : 'pv_auto'),
+                jsStatus: zeroExportStrategyActive ? 'zero_export_forecast_auto' : (forceStorageProtectOff ? 'storage_protect' : (forceNonPvDown ? 'pv_only_protect' : 'pv_auto')),
+                zeroExportActive: !!zeroExportStrategyActive,
                 effectiveMode,
                 availablePvW: Math.max(0, Number(pvBase && pvBase.availableW) || 0),
                 availableTotalW: pvBase && pvBase.budgetGateEffectiveW !== null && pvBase.budgetGateEffectiveW !== undefined ? Math.max(0, Number(pvBase.budgetGateEffectiveW) || 0) : Math.max(0, Number(pvBase && pvBase.availableW) || 0),
@@ -4421,7 +4491,7 @@ class HeatingRodControlModule extends BaseModule {
             const forcePvWrite = !!(forceStorageProtectOff || forceNonPvDown || (targetStage <= 0 && mayWriteOff && offWouldTouchLoad));
             const res = await this._applyStageState(d, targetStage, feedback, { force: forcePvWrite });
             const effectiveTargetStage = Math.max(0, Math.min(num(res.targetStage, targetStage), d.wiredStages));
-            this._markAutoOwnership(d, effectiveTargetStage > 0, effectiveTargetStage, 'pvAuto');
+            this._markAutoOwnership(d, effectiveTargetStage > 0, effectiveTargetStage, zeroExportStrategyActive ? 'zeroExportForecast' : 'pvAuto');
             const targetW = this._sumStagePowerModel(d, effectiveTargetStage, observedStage, measuredW);
             const measuredUsedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                 ? Math.max(0, measuredW)
@@ -4595,7 +4665,10 @@ class HeatingRodControlModule extends BaseModule {
                     pvReserveW: tariffImportPreferred ? 0 : used,
                     actualW: Math.max(0, Math.round(currentHeatingRodW || appliedTotalW || used || 0)),
                     pvOnly: !tariffImportPreferred,
-                    mode: tariffImportPreferred ? 'tariffNegative' : 'pvAuto',
+                    // Budget-Diagnose: bei gleichem Frontend-Auto-Button sichtbar machen,
+                    // ob der Heizstab gerade klassisch nach NVP-Überschuss oder per
+                    // 0-W-/Forecast-Strategie geführt wird.
+                    mode: tariffImportPreferred ? 'tariffNegative' : (zeroExportStrategyActive ? 'zeroExportForecast' : 'pvAuto'),
                 });
             }
         } catch (_e) {
@@ -4622,12 +4695,13 @@ class HeatingRodControlModule extends BaseModule {
         await this._setStateIfChanged('heatingRod.summary.gridImportLimitW', Math.round(num(pvBase.importToleranceW, 0)));
         await this._setStateIfChanged('heatingRod.summary.gridImportExceeded', !!(budgetProtection && budgetProtection.importActive));
         await this._setStateIfChanged('heatingRod.summary.storageDischargeExceeded', !!(budgetProtection && budgetProtection.dischargeActive));
-        await this._setStateIfChanged('heatingRod.summary.zeroExportActive', !!zeroExportInfo.active);
-        await this._setStateIfChanged('heatingRod.summary.zeroExportCanProbe', !!zeroExportInfo.canProbe);
+        await this._setStateIfChanged('heatingRod.summary.autoMode', heatingRodAutoMode);
+        await this._setStateIfChanged('heatingRod.summary.zeroExportActive', !!zeroExportStrategyActive);
+        await this._setStateIfChanged('heatingRod.summary.zeroExportCanProbe', !!(zeroExportStrategyActive && zeroExportInfo.canProbe));
         await this._setStateIfChanged('heatingRod.summary.zeroExportReason', String(zeroExportInfo.reason || ''));
         await this._setStateIfChanged('heatingRod.summary.zeroExportPvNowW', Math.round(num(zeroExportInfo.pvNowW, 0)));
-        await this._setStateIfChanged('heatingRod.summary.zeroExportForecastOk', !!zeroExportInfo.forecastOk);
-        await this._setStateIfChanged('heatingRod.summary.zeroExportFeedInAtLimit', !!zeroExportInfo.feedInAtLimit);
+        await this._setStateIfChanged('heatingRod.summary.zeroExportForecastOk', !!(zeroExportStrategyActive && zeroExportInfo.forecastOk));
+        await this._setStateIfChanged('heatingRod.summary.zeroExportFeedInAtLimit', !!(zeroExportStrategyActive && zeroExportInfo.feedInAtLimit));
         await this._setStateIfChanged('heatingRod.summary.pvAutomationMinW', Math.round(num(minPvAutomationW, 0)));
         await this._setStateIfChanged('heatingRod.summary.pvAutomationPvNowW', Math.round(num(pvNowForAutomationW, 0)));
         await this._setStateIfChanged('heatingRod.summary.pvAutomationAllowed', !!pvAutomationAllowedByMin);
@@ -4714,8 +4788,9 @@ class HeatingRodControlModule extends BaseModule {
                 protection: budgetProtection || null,
             },
             zeroExport: {
-                active: !!zeroExportInfo.active,
-                canProbe: !!zeroExportInfo.canProbe,
+                autoMode: heatingRodAutoMode,
+                active: !!zeroExportStrategyActive,
+                canProbe: !!(zeroExportStrategyActive && zeroExportInfo.canProbe),
                 reason: zeroExportInfo.reason,
                 pvNowW: Math.round(num(zeroExportInfo.pvNowW, 0)),
                 feedInAtLimit: !!zeroExportInfo.feedInAtLimit,
@@ -4726,7 +4801,7 @@ class HeatingRodControlModule extends BaseModule {
             },
         }));
         await this._setStateIfChanged('heatingRod.summary.lastUpdate', now);
-        await this._setStateIfChanged('heatingRod.summary.status', (this._devices && this._devices.length) ? `ok_${pvBase.source}${!pvAutomationAllowedByMin ? '_pv_min_block' : ''}${pvBase.forceOff ? '_storage_protect' : ''}${budgetProtection && budgetProtection.reason !== 'ok' ? `_gate_${String(budgetProtection.reason)}` : ''}${zeroExportInfo.active ? `_zero_${String(zeroExportInfo.reason || 'active')}` : ''}` : 'no_devices');
+        await this._setStateIfChanged('heatingRod.summary.status', (this._devices && this._devices.length) ? `ok_${pvBase.source}${!pvAutomationAllowedByMin ? '_pv_min_block' : ''}${pvBase.forceOff ? '_storage_protect' : ''}${budgetProtection && budgetProtection.reason !== 'ok' ? `_gate_${String(budgetProtection.reason)}` : ''}${zeroExportStrategyActive ? `_zero_${String(zeroExportInfo.reason || 'active')}` : ''}` : 'no_devices');
     }
 }
 

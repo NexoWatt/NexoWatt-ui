@@ -1,3 +1,12 @@
+## 0.8.76
+
+- Heizstab-App: Neuer Reiter/Block „Betriebsart“ für den vorhandenen Auto-Button; auswählbar sind „PV-Überschuss am NVP“ und „0-W-Einspeisung / Forecast“.
+- 0-W-/Forecast-Logik ersetzt im Auto-Modus die klassische PV-Überschusssteuerung, statt als zweite Testlast-Aktivierung daneben zu laufen.
+- Alte `zeroExport.enabled`-Konfiguration wird nur noch zur Migration gelesen; die Laufzeitentscheidung hängt danach sauber an `heatingRod.autoMode`.
+- Schnellsteuerung zeigt weiterhin nur einen Auto-Button und ergänzt Status/Diagnose zur aktiven Auto-Betriebsart.
+- TS-Normalpfad überschreibt die JS-Probe-/Live-Guard-Strategie der 0-W-/Forecast-Betriebsart nicht mehr.
+- Service-Worker Cache auf `nexowatt-cache-v377` erhöht.
+
 ## 0.8.75
 
 - Kunden-/LIVE-Frontend: Passwortschutz für sichtbare Bedienung entfernt. Schnellsteuerung, EVCS, SmartHome, RFID und Kundeneinstellungen können ohne Admin-/Installer-Login genutzt werden.

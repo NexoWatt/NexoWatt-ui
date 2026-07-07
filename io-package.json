@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.75",
+    "version": "0.8.76",
     "news": {
+      "0.8.76": {
+        "de": "Version 0.8.76: Ergänzt die Heizstab-Betriebsart für den bestehenden Auto-Button. Im Heizstab-AppCenter kann jetzt zwischen PV-Überschuss am NVP und 0-W-Einspeisung/Forecast gewählt werden; die alte separate Testlast-Aktivierung wurde bereinigt.",
+        "en": "Version 0.8.76: Adds a heating-rod operating mode behind the existing Auto button. The heating-rod App Center can now select PV surplus at the grid connection point or zero-export/forecast control; the old separate test-load activation was cleaned up."
+      },
       "0.8.75": {
         "de": "Version 0.8.75: Entfernt den Passwortschutz aus dem Kunden-/LIVE-Frontend. Schnellsteuerung, EVCS, SmartHome, RFID und Kundeneinstellungen sind ohne Admin-/Installer-Login bedienbar; App-Center, Simulation, Mapping und Lizenz bleiben geschützt.",
         "en": "Version 0.8.75: Removes the password gate from the customer/LIVE frontend. Quick controls, EVCS, SmartHome, RFID and customer settings are operable without admin/installer login; App Center, simulation, mapping and license remain protected."
@@ -26,10 +30,6 @@
       "0.8.70": {
         "de": "Version 0.8.70: Speicher-Einstellungen herstellerneutral bereinigt. Sichtbare FENECON-/Sungrow-Texte wurden durch allgemeine DP-Zuordnungs- und Gateway-Beschreibungen ersetzt; Legacy-IDs bleiben intern kompatibel.",
         "en": "Version 0.8.70: Cleans up storage settings to be vendor-neutral. Visible FENECON/Sungrow wording was replaced by generic datapoint-mapping and gateway descriptions; legacy IDs remain internally compatible."
-      },
-      "0.8.69": {
-        "de": "Version 0.8.69: Speicherregelung herstelleroffener: getrennte Lade-/Entlade-Sollwert-DPs und optionaler Run-DP für Einzel-Speicher ergänzt. Eigenverbrauchs-Entladung ist für generische Speicher nun standardmäßig aktiv, solange keine Reserve-/Tarifsperre greift.",
-        "en": "Version 0.8.69: Storage control is more vendor-open: adds separate charge/discharge target datapoints and an optional run datapoint for single storages. Self-consumption discharge is now enabled by default for generic storages unless reserve/tariff gates block it."
       }
     },
     "title": "NexoWatt UI",

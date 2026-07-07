@@ -4295,6 +4295,36 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     return t;
   }
   /**
+   * Code-Teil: _normalizeHeatingRodAutoMode
+   * Zweck: Normalisiert die Betriebsart hinter dem einen Frontend-Auto-Button der Heizstab-App.
+   * Zusammenhang: Das Dropdown speichert nur die Auto-Strategie; Kunden bedienen weiter `Auto`,
+   * während die Runtime entweder NVP-PV-Überschuss oder 0-W/Forecast nutzt.
+   * TypeScript: Beim späteren Umbau als Union-Typ `'pvSurplus' | 'zeroExportForecast'` führen.
+   */
+  function _normalizeHeatingRodAutoMode(raw) {
+    const s = String(raw || '').trim().toLowerCase();
+    if (s === 'zeroexportforecast' || s === 'zero-export-forecast' || s === 'zero_export_forecast'
+      || s === 'zeroexport' || s === 'zero-export' || s === 'zero_export'
+      || s === 'zerofeedin' || s === 'zero-feed-in' || s === 'zero_feed_in'
+      || s === 'zero' || s === '0w' || s === '0-w' || s === '0_w'
+      || s === '0einspeisung' || s === '0-einspeisung' || s === '0_einspeisung'
+      || s === 'zeroeinspeisung' || s === 'forecast') return 'zeroExportForecast';
+    return 'pvSurplus';
+  }
+
+  /**
+   * Code-Teil: _heatingRodAutoModeLabel
+   * Zweck: Liefert kurze, konsistente UI-Texte zur Heizstab-Betriebsart.
+   * Zusammenhang: Wird im AppCenter und in Status-/Hinweistexten genutzt; bei neuen
+   * Betriebsarten immer gemeinsam mit Runtime und Schnellsteuerung erweitern.
+   */
+  function _heatingRodAutoModeLabel(mode) {
+    return _normalizeHeatingRodAutoMode(mode) === 'zeroExportForecast'
+      ? '0-W-Einspeisung / Forecast'
+      : 'PV-Überschuss am NVP';
+  }
+
+  /**
    * Code-Teil: _ensureHeatingRodCfg
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
    * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -4313,6 +4343,13 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     h.minPvPowerW = Math.max(0, Math.round(Number.isFinite(hMinPvRaw) ? hMinPvRaw : 800));
     h.useBudgetGates = true;
     const legacyZeroForBudget = (h.zeroExport && typeof h.zeroExport === 'object') ? h.zeroExport : {};
+    // Das alte Detail-Flag `zeroExport.enabled` wird nur zur Migration verwendet.
+    // Danach steuert ausschließlich `h.autoMode`, welche Regelstrategie der normale
+    // Auto-Button nutzt; so gibt es keine zweite, widersprüchliche Aktivierung mehr.
+    const legacyZeroModeActive = !!(legacyZeroForBudget.enabled || legacyZeroForBudget.active);
+    h.autoMode = _normalizeHeatingRodAutoMode(
+      h.autoMode || h.automationMode || legacyZeroForBudget.autoMode || legacyZeroForBudget.mode || (legacyZeroModeActive ? 'zeroExportForecast' : 'pvSurplus')
+    );
     const legacyBudgetAliases = {
       maxGridImportW: ['maxGridImportW', 'gridImportTripW'],
       gridImportHoldSec: ['gridImportHoldSec', 'gridImportTripSec'],
@@ -4375,7 +4412,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       n = Math.max(min, Math.min(max, n));
       z[key] = integer ? Math.round(n) : n;
     };
-    z.enabled = (typeof z.enabled === 'boolean') ? !!z.enabled : false;
+    z.enabled = h.autoMode === 'zeroExportForecast';
+    z.autoMode = h.autoMode;
     zn('feedInLimitW', 1000, 0, 1000000);
     zn('feedInToleranceW', 150, 0, 100000);
     zn('targetExportBufferW', 100, 0, 100000);
@@ -4793,7 +4831,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     els.thermalDevices.innerHTML = '';
 
     const modeOptions = [
-      { value: 'pvAuto', label: 'PV-Auto' },
+      { value: 'pvAuto', label: 'Auto' },
       { value: 'manual', label: 'Manuell' },
       { value: 'off', label: 'Aus' },
     ];
@@ -4969,21 +5007,50 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     }
 
     const modeOptions = [
-      { value: 'pvAuto', label: 'PV-Auto' },
+      { value: 'pvAuto', label: 'Auto' },
       { value: 'manual', label: 'Manuell' },
       { value: 'off', label: 'Aus' },
     ];
     const stageCountOptions = Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}` }));
 
-    const grpAuto = _mkCfgGroup('PV-Auto – Budget & Speicher');
+    const grpMode = _mkCfgGroup('Betriebsart');
+    const modeInfo = document.createElement('div');
+    modeInfo.className = 'nw-config-field-hint';
+    modeInfo.style.flexBasis = '100%';
+    modeInfo.textContent = 'Diese Einstellung entscheidet, welche Regelstrategie der normale Auto-Button verwendet. Es wird bewusst kein zweiter Auto-Button erzeugt.';
+    grpMode.body.appendChild(modeInfo);
+    const autoModeSelect = _mkCfgSelect(cfg.autoMode || 'pvSurplus', [
+      { value: 'pvSurplus', label: 'PV-Überschuss am NVP' },
+      { value: 'zeroExportForecast', label: '0-W-Einspeisung / Forecast' },
+    ], (v) => {
+      cfg.autoMode = _normalizeHeatingRodAutoMode(v);
+      cfg.zeroExport = (cfg.zeroExport && typeof cfg.zeroExport === 'object') ? cfg.zeroExport : {};
+      cfg.zeroExport.enabled = cfg.autoMode === 'zeroExportForecast';
+      cfg.zeroExport.autoMode = cfg.autoMode;
+      rebuildHeatingRodUIStable('heatingrod-auto-mode');
+      setDirty();
+    }, { width: '260px' });
+    grpMode.body.appendChild(_mkCfgField('Automatik-Regelung', autoModeSelect, cfg.autoMode === 'zeroExportForecast'
+      ? 'Auto nutzt Forecast, Teststufen und Live-Netzpunkt-/Speicher-Schutz für Anlagen mit 0-W-Einspeisung.'
+      : 'Auto nutzt den gemessenen PV-Überschuss am Netzverknüpfungspunkt.'));
+    const modeStatus = document.createElement('div');
+    modeStatus.className = 'nw-config-field-hint';
+    modeStatus.style.flexBasis = '100%';
+    modeStatus.textContent = `Auto-Button verwendet aktuell: ${_heatingRodAutoModeLabel(cfg.autoMode)}`;
+    grpMode.body.appendChild(modeStatus);
+    els.heatingRodDevices.appendChild(grpMode.wrap);
+
+    const grpAuto = _mkCfgGroup('Auto – Budget & Speicher');
     const autoInfo = document.createElement('div');
     autoInfo.className = 'nw-config-field-hint';
     autoInfo.style.flexBasis = '100%';
-    autoInfo.textContent = 'Zentrale EMS-Budget-Gates lesen, PV/NVP-Überschuss verfolgen und eigene PV-Auto-Stufen halten. Externe KNX-/Relais-Schaltungen werden nur beobachtet.';
+    autoInfo.textContent = cfg.autoMode === 'zeroExportForecast'
+      ? 'Auto arbeitet im 0-W-/Forecast-Modus: Forecast gibt frei, Probe-Stufen testen PV-Nachregelung, Netzpunkt und Speicher schützen live.'
+      : 'Auto arbeitet im klassischen PV-Überschussmodus: Zentrale EMS-Budget-Gates lesen, NVP-Überschuss verfolgen und eigene Auto-Stufen halten. Externe KNX-/Relais-Schaltungen werden nur beobachtet.';
     grpAuto.body.appendChild(autoInfo);
     grpAuto.body.appendChild(_mkCfgField('Speicher-Reserve (W)', _mkHeatingRodNumberInput('storageReserveW', cfg.storageReserveW, (v) => { cfg.storageReserveW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Bleibt für Speicherladung frei, solange der Speicher unter dem Ziel-SoC liegt.'));
     grpAuto.body.appendChild(_mkCfgField('Reserve bis SoC (%)', _mkHeatingRodNumberInput('storageTargetSocPct', cfg.storageTargetSocPct, (v) => { cfg.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '130px' }), 'Ab diesem SoC darf der Heizstab den Überschuss ohne Speicherreserve nutzen.'));
-    grpAuto.body.appendChild(_mkCfgField('PV-Auto ab PV (W)', _mkHeatingRodNumberInput('minPvPowerW', cfg.minPvPowerW, (v) => { cfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Start-/Hochschaltgrenze. Unterhalb wird nicht neu zugeschaltet, laufende Auto-Stufen werden aber über Netz-/Speichergates stabil gehalten.'));
+    grpAuto.body.appendChild(_mkCfgField('Auto ab PV (W)', _mkHeatingRodNumberInput('minPvPowerW', cfg.minPvPowerW, (v) => { cfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Start-/Hochschaltgrenze. Unterhalb wird nicht neu zugeschaltet, laufende Auto-Stufen werden aber über Netz-/Speichergates stabil gehalten.'));
     grpAuto.body.appendChild(_mkCfgField('Sicherheitsreserve (W)', _mkHeatingRodNumberInput('budgetSafetyReserveW', cfg.budgetSafetyReserveW, (v) => { cfg.budgetSafetyReserveW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Abzug vom Heizstab-Budget gegen Messrauschen.'));
     els.heatingRodDevices.appendChild(grpAuto.wrap);
 
@@ -5008,13 +5075,17 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     els.heatingRodDevices.appendChild(grpProtect.wrap);
 
     const zeroCfg = cfg.zeroExport || {};
-    const grpZero = _mkCfgDetailsGroup('Erweitert: 0-/Minus-Einspeise-Testlast', !!zeroCfg.enabled);
+    const zeroModeActive = cfg.autoMode === 'zeroExportForecast';
+    zeroCfg.enabled = zeroModeActive;
+    zeroCfg.autoMode = cfg.autoMode;
+    const grpZero = _mkCfgDetailsGroup('Details: 0-W-Einspeisung / Forecast', zeroModeActive);
     const zeroInfo = document.createElement('div');
     zeroInfo.className = 'nw-config-field-hint';
     zeroInfo.style.flexBasis = '100%';
-    zeroInfo.textContent = 'Nur öffnen, wenn die Anlage bei 0-/Minus-Einspeisung PV abregelt und der Heizstab als Testlast vorsichtig PV-Nachregelung auslösen soll.';
+    zeroInfo.textContent = zeroModeActive
+      ? 'Diese Detailwerte konfigurieren die aktive 0-W-/Forecast-Betriebsart. Die Aktivierung erfolgt ausschließlich oben über „Betriebsart“.'
+      : 'Die Detailwerte bleiben gespeichert. Aktiv wird diese Logik erst, wenn oben als Betriebsart „0-W-Einspeisung / Forecast“ gewählt ist.';
     grpZero.body.appendChild(zeroInfo);
-    grpZero.body.appendChild(_mkCfgField('Testlast aktiv', _mkCfgToggle(!!zeroCfg.enabled, (v) => { zeroCfg.enabled = !!v; setDirty(); }), 'Nur Heizstab-PV-Auto; kein Eingriff in Ladepark oder Speicher.'));
     grpZero.body.appendChild(_mkCfgField('Erlaubte Einspeisung (W)', _mkCfgInput('number', zeroCfg.feedInLimitW, (v) => { zeroCfg.feedInLimitW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), '0 bei echter 0-Einspeisung, 1000 bei -1 kW Limit.'));
     grpZero.body.appendChild(_mkCfgField('Mindest-PV Testlast (W)', _mkCfgInput('number', zeroCfg.minPvPowerW, (v) => { zeroCfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Zusätzliche Freigabe für Testlasten.'));
     grpZero.body.appendChild(_mkCfgField('Forecast erforderlich', _mkCfgToggle(zeroCfg.requireForecast !== false, (v) => { zeroCfg.requireForecast = !!v; setDirty(); }), 'Forecast nur als Plausibilität; Netzpunkt entscheidet danach.'));
@@ -5095,9 +5166,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       right.appendChild(info);
 
       const grpBasic = _mkCfgGroup('Grunddaten');
-      grpBasic.body.appendChild(_mkCfgField('PV-Auto aktiv', _mkCfgToggle(dev.enabled, (v) => { dev.enabled = !!v; setDirty(); }), 'Aktiviert die native Heizstab-Regelung für diesen Slot.'));
+      grpBasic.body.appendChild(_mkCfgField('Auto aktiv', _mkCfgToggle(dev.enabled, (v) => { dev.enabled = !!v; setDirty(); }), 'Aktiviert die native Heizstab-Automatik für diesen Slot. Die Betriebsart kommt aus dem Dropdown oben.'));
       grpBasic.body.appendChild(_mkCfgField('Name (optional)', _mkCfgInput('text', dev.name || '', (v) => { dev.name = String(v || '').trim(); setDirty(); }, { width: '220px', placeholder: 'Anzeige-Name' }), 'Leer lassen = Name aus Energiefluss-Slot.'));
-      grpBasic.body.appendChild(_mkCfgField('Modus', _mkCfgSelect(dev.mode || 'pvAuto', modeOptions, (v) => { dev.mode = v; setDirty(); }, { width: '160px' }), 'PV-Auto = native Stufenregelung, Manuell = nur bilanzieren, Aus = alles aus.'));
+      grpBasic.body.appendChild(_mkCfgField('Modus', _mkCfgSelect(dev.mode || 'pvAuto', modeOptions, (v) => { dev.mode = v; setDirty(); }, { width: '160px' }), 'Auto = native Stufenregelung mit der oben gewählten Betriebsart; Manuell = nur bilanzieren; Aus = alles aus.'));
       grpBasic.body.appendChild(_mkCfgField('Priorität', _mkCfgInput('number', dev.priority, (v) => { dev.priority = _clampInt(v, 1, 999, 200 + slot); setDirty(); }, { min: 1, max: 999, step: 1, width: '110px' }), 'Kleinere Zahl = wird früher aus PV versorgt.'));
       grpBasic.body.appendChild(_mkCfgField('Max. Leistung (W)', _mkCfgInput('number', dev.maxPowerW, (v) => { dev.maxPowerW = Math.max(0, Math.round(Number(v) || 0)); _syncHeatingRodDeviceStages(dev); rebuildHeatingRodUIStable('heatingrod-max-power'); setDirty(); }, { min: 0, step: 10, width: '150px', commitOnInput: false }), 'Gesamtleistung des Heizstabs / Verbunds.'));
       grpBasic.body.appendChild(_mkCfgField('Stufen', _mkCfgSelect(String(dev.stageCount || 1), stageCountOptions, (v) => { dev.stageCount = _clampInt(v, 1, 12, 1); _syncHeatingRodDeviceStages(dev); rebuildHeatingRodUIStable('heatingrod-stage-count'); setDirty(); }, { width: '110px' }), 'Anzahl nativer Heizstab-Stufen.'));
