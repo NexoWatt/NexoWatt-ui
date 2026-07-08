@@ -106,6 +106,7 @@
     <div class="nw-tabs" id="nw-ems-tabs">
       <button type="button" class="nw-tab nw-tab--active" data-tab="apps">Apps</button>
       <button type="button" class="nw-tab" data-tab="mapping">Zuordnung</button>
+      <button type="button" class="nw-tab" data-tab="storageconfig" style="display:none;">Speicher</button>
       <button type="button" class="nw-tab" data-tab="peakconfig" style="display:none;">Peak-Shaving</button>
       <button type="button" class="nw-tab" data-tab="aiadvisor" style="display:none;">KI‑Optimierung</button>
       <button type="button" class="nw-tab" data-tab="storagefarm" style="display:none;">Speicherfarm</button>
@@ -743,12 +744,71 @@
         </div>
       </div>
 
+      <div class="nw-config-card" data-card="peak">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Peak-Shaving</div>
+          <div class="nw-config-card__subtitle">Lastspitzenkappung inkl. atypischer HLZF-Kappung auf Basis der Netzleistung</div>
+        </div>
+        <div class="nw-config-card__body">
+          <div class="nw-config-card__row" style="opacity:.9;line-height:1.35;">
+            Peak‑Shaving nutzt die Netzpunkt‑Messung aus <b>Zuordnung → Allgemein</b> (NVP) bzw. die interne Berechnung <span style="opacity:.85;">(ems.gridPowerW)</span>.
+            <br/>
+            Grenzwert = Netzanschlussleistung (Allgemein). Für atypische Lastspitzenkappung kann zusätzlich peakShaving.atypical per JSON/Backup konfiguriert werden. Ein separater Netzleistungs‑Datenpunkt ist nicht erforderlich.
+          </div>
+        </div>
+      </div>
+
+      <div class="nw-config-card" data-card="expert">
+
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Experte</div>
+          <div class="nw-config-card__subtitle">Optional: JSON-Patch (wird beim Speichern zusätzlich gemerged)</div>
+        </div>
+        <div class="nw-config-card__body">
+          <textarea id="rawPatch" class="nw-config-input" rows="6" style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;" placeholder='{"peakShaving":{"maxImportW":12345}}'></textarea>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  </div>
+
+
+  <div id="nw-tabpanel-storageconfig" data-tabpanel="storageconfig" style="display:none;">
+
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">Speicherregelung</h2>
+        <div class="nw-config-section__subtitle">Einzel-Speicher: Eigenverbrauchsoptimierung, Speicher-Typ und herstellerunabhängige Datenpunkte. Bei mehreren Speichern die Speicherfarm verwenden.</div>
+      </div>
+      <div class="nw-config-grid">
       <div class="nw-config-card" data-card="storage">
         <div class="nw-config-card__header">
           <div class="nw-config-card__title">Speicher</div>
           <div class="nw-config-card__subtitle">Herstellerunabhängige Zuordnung + Steuerungsart</div>
         </div>
         <div class="nw-config-card__body">
+          <div class="nw-config-field-row">
+            <div class="nw-config-field-label">Speicher-Typ</div>
+            <div class="nw-config-field-control nw-config-field-control--stack">
+              <select id="storageCouplingMode" class="nw-config-input">
+                <option value="ac">AC-Speicher / AC-gekoppelt</option>
+                <option value="dc">DC-/Hybrid-Speicher</option>
+              </select>
+              <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
+                AC: Batterie-Wechselrichter wird getrennt von der PV betrachtet. DC/Hybrid: PV-Erzeugung und Batterie können am selben Wechselrichter-/Gateway-Ausgang liegen; der zusätzliche PV-Datenpunkt hilft der Speicher- und 0‑Einspeise-Logik bei der sauberen Zuordnung.
+              </div>
+            </div>
+          </div>
+          <div class="nw-config-field-row" id="storageDcPvHintRow" style="display:none;">
+            <div class="nw-config-field-label">DC-/Hybrid-PV Leistung</div>
+            <div class="nw-config-field-control nw-config-field-control--stack">
+              <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
+                Der PV-Leistungsdatenpunkt wird unten in der Speicher-Zuordnung als <b>DC-/Hybrid-PV Erzeugung (W)</b> eingetragen. Er beschreibt nur die Erzeugungsleistung, nicht den Batteriesollwert.
+              </div>
+            </div>
+          </div>
           <div class="nw-config-field-row">
             <div class="nw-config-field-label">Steuerungsart</div>
             <div class="nw-config-field-control">
@@ -791,36 +851,10 @@
           <div id="storageTable" class="nw-config-list" style="margin-top:6px;"></div>
         </div>
       </div>
-      <div class="nw-config-card" data-card="peak">
-        <div class="nw-config-card__header">
-          <div class="nw-config-card__title">Peak-Shaving</div>
-          <div class="nw-config-card__subtitle">Lastspitzenkappung inkl. atypischer HLZF-Kappung auf Basis der Netzleistung</div>
-        </div>
-        <div class="nw-config-card__body">
-          <div class="nw-config-card__row" style="opacity:.9;line-height:1.35;">
-            Peak‑Shaving nutzt die Netzpunkt‑Messung aus <b>Zuordnung → Allgemein</b> (NVP) bzw. die interne Berechnung <span style="opacity:.85;">(ems.gridPowerW)</span>.
-            <br/>
-            Grenzwert = Netzanschlussleistung (Allgemein). Für atypische Lastspitzenkappung kann zusätzlich peakShaving.atypical per JSON/Backup konfiguriert werden. Ein separater Netzleistungs‑Datenpunkt ist nicht erforderlich.
-          </div>
-        </div>
       </div>
-
-      <div class="nw-config-card" data-card="expert">
-
-        <div class="nw-config-card__header">
-          <div class="nw-config-card__title">Experte</div>
-          <div class="nw-config-card__subtitle">Optional: JSON-Patch (wird beim Speichern zusätzlich gemerged)</div>
-        </div>
-        <div class="nw-config-card__body">
-          <textarea id="rawPatch" class="nw-config-input" rows="6" style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;" placeholder='{"peakShaving":{"maxImportW":12345}}'></textarea>
-        </div>
-      </div>
-
-    </div>
-  </section>
+    </section>
 
   </div>
-
 
   <div id="nw-tabpanel-storagefarm" data-tabpanel="storagefarm" style="display:none;">
 

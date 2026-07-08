@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 7b40afcf5210c2a8e41e8b1746aa4acabe292190ee73d4298263e2f955f1cfae
+ * Original-Hash: 0d2ff014f29709b4b3c1dce31669e55260377f0f825e1437358467600ccfc911
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-mapping.ts
- * Quell-Hash: sha256:c7f9ce0ffa49ccc8a36c162080f6e2d65aad87599901e13029bdfcf61f7edeee
+ * Quell-Hash: sha256:aec67e657607d17131420785bc061fac85ee6622b6de5a8a79bd6d77456c4eb6
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -153,6 +153,20 @@ class SpeicherMappingModule extends BaseModule {
         if (typeof socAge === 'number') {
             await this._setIfChanged('speicher.socAlterMs', Math.round(socAge));
         }
+
+        // Einzel-DC-/Hybrid-Speicher: PV-Erzeugungswert separat spiegeln, damit
+        // Diagnose und 0-Einspeise-/FENECON-Erkennung nicht den Batterie-Sollwert
+        // oder den gemischten AC-Ausgang als PV-Quelle missverstehen.
+        // Wichtig: Der Wert wird nur bei aktivem DC-/Hybrid-Typ und gemapptem DP genutzt;
+        // alte Mapping-Reste aus AC-Konfigurationen werden bewusst auf 0 gespiegelt.
+        const cfg = this._getCfg();
+        const dcPvMapped = cfg.coupling === 'dc' && !!String(cfg.dp && cfg.dp.dcPvPowerObjectId || '').trim();
+        const dcPvW = dcPvMapped ? this.dp.getNumber('st.dcPvPowerW', null) : null;
+        if (typeof dcPvW === 'number' && Number.isFinite(dcPvW)) {
+            await this._setIfChanged('speicher.dcPvPowerW', Math.round(dcPvW));
+        } else {
+            await this._setIfChanged('speicher.dcPvPowerW', 0);
+        }
     }
 
     /**
@@ -172,11 +186,13 @@ class SpeicherMappingModule extends BaseModule {
         const defs = [
             { id: `${base}.mapping.aktiv`, name: 'Speicher-Zuordnung aktiv', type: 'boolean', role: 'indicator', def: false },
             { id: `${base}.mapping.modus`, name: 'Speicher Steuerungsart', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.kopplung`, name: 'Speicher-Kopplung AC/DC', type: 'string', role: 'text', def: 'ac' },
             { id: `${base}.mapping.ok`, name: 'Speicher-Zuordnung vollständig', type: 'boolean', role: 'indicator', def: false },
             { id: `${base}.mapping.fehlt`, name: 'Fehlende Datenpunkte (Liste)', type: 'string', role: 'text', def: '' },
 
             { id: `${base}.mapping.socId`, name: 'SoC Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.istLeistungId`, name: 'Ist-Leistung Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.dcPvId`, name: 'DC-/Hybrid-PV Leistungs-Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.sollLeistungId`, name: 'Sollleistung signed Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.sollLadeId`, name: 'Sollwert Laden Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.sollEntladeId`, name: 'Sollwert Entladen Datenpunkt-ID', type: 'string', role: 'text', def: '' },
@@ -189,6 +205,7 @@ class SpeicherMappingModule extends BaseModule {
             { id: `${base}.mapping.feneconGridSetpointId`, name: 'Legacy Netzpunkt-Sollwert Datenpunkt-ID (nicht genutzt)', type: 'string', role: 'text', def: '' },
 
             { id: `${base}.socPct`, name: 'Speicher Ladezustand (SoC)', type: 'number', role: 'value.battery', def: 0 },
+            { id: `${base}.dcPvPowerW`, name: 'DC-/Hybrid-PV Erzeugungsleistung', type: 'number', role: 'value.power', def: 0 },
             { id: `${base}.socAlterMs`, name: 'SoC Alter (ms)', type: 'number', role: 'value.interval', def: 0 },
         ];
 
@@ -233,11 +250,13 @@ class SpeicherMappingModule extends BaseModule {
     _getCfg() {
         const storage = (this.adapter.config && this.adapter.config.storage) ? this.adapter.config.storage : {};
         const controlMode = (storage && typeof storage.controlMode === 'string') ? storage.controlMode : 'targetPower';
+        const couplingRaw = (storage && typeof storage.coupling === 'string') ? storage.coupling.trim().toLowerCase() : 'ac';
+        const coupling = couplingRaw === 'dc' ? 'dc' : 'ac';
         const dp = (storage && storage.datapoints && typeof storage.datapoints === 'object') ? storage.datapoints : {};
         const feneconGridControlEnabled = storage.feneconGridControlEnabled;
         const feneconAcMode = storage.feneconAcMode;
         const farmEnabled = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
-        return { controlMode, dp, feneconGridControlEnabled, feneconAcMode, farmEnabled };
+        return { controlMode, coupling, dp, feneconGridControlEnabled, feneconAcMode, farmEnabled };
     }
 
     /**
@@ -255,7 +274,7 @@ class SpeicherMappingModule extends BaseModule {
     async _upsertFromConfig() {
         if (!this.dp) return;
 
-        const { controlMode, dp, feneconGridControlEnabled, feneconAcMode, farmEnabled } = this._getCfg();
+        const { controlMode, coupling, dp, feneconGridControlEnabled, feneconAcMode, farmEnabled } = this._getCfg();
 
         const socId = String(dp.socObjectId || '').trim();
         const socScale = Number.isFinite(Number(dp.socScale)) ? Number(dp.socScale) : 1;
@@ -263,6 +282,14 @@ class SpeicherMappingModule extends BaseModule {
         const istId = String(dp.batteryPowerObjectId || '').trim();
         const istScale = Number.isFinite(Number(dp.batteryPowerScale)) ? Number(dp.batteryPowerScale) : 1;
         const istInv = !!dp.batteryPowerInvert;
+
+        // Optionaler DC-/Hybrid-PV-Messwert fuer Einzel-Speicher.
+        // Dieser Wert ist bewusst ein Eingang (PV-Erzeugung), kein Speicher-Sollwert.
+        // Er hilft der 0-Einspeise- und FENECON-/OpenEMS-Erkennung, wenn PV und Batterie
+        // am gleichen Hybrid-/Gateway-Ausgang zusammenfallen.
+        const dcPvId = String(dp.dcPvPowerObjectId || '').trim();
+        const dcPvScale = Number.isFinite(Number(dp.dcPvPowerScale)) ? Number(dp.dcPvPowerScale) : 1;
+        const dcPvInv = !!dp.dcPvPowerInvert;
 
         const sollId = String(dp.targetPowerObjectId || '').trim();
         const sollScale = Number.isFinite(Number(dp.targetPowerScale)) ? Number(dp.targetPowerScale) : 1;
@@ -294,8 +321,10 @@ class SpeicherMappingModule extends BaseModule {
 
         // Diagnose schreiben
         await this._setIfChanged('speicher.mapping.modus', String(controlMode || ''));
+        await this._setIfChanged('speicher.mapping.kopplung', String(coupling || 'ac'));
         await this._setIfChanged('speicher.mapping.socId', socId);
         await this._setIfChanged('speicher.mapping.istLeistungId', istId);
+        await this._setIfChanged('speicher.mapping.dcPvId', dcPvId);
         await this._setIfChanged('speicher.mapping.sollLeistungId', sollId);
         await this._setIfChanged('speicher.mapping.sollLadeId', sollChargeId);
         await this._setIfChanged('speicher.mapping.sollEntladeId', sollDischargeId);
@@ -339,6 +368,22 @@ class SpeicherMappingModule extends BaseModule {
                 invert: istInv,
                 deadband: 0,
                 note: 'Optional'
+            });
+        }
+
+        if (coupling === 'dc' && dcPvId) {
+            await this.dp.upsert({
+                key: 'st.dcPvPowerW',
+                name: 'DC-/Hybrid-PV Erzeugung',
+                objectId: dcPvId,
+                dataType: 'number',
+                direction: 'in',
+                unit: 'W',
+                scale: dcPvScale,
+                offset: 0,
+                invert: dcPvInv,
+                deadband: 0,
+                note: 'Optional; Einzel-DC-/Hybrid-Speicher, Erzeugungsleistung des PV-/Hybrid-Wechselrichters'
             });
         }
 

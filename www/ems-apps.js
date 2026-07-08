@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:c8a1946a449b0e80564e6872d03ddb17b3b3ca9d0b2d4f1d01ea3582c56b6760
+ * Quell-Hash: sha256:60a7782912b912c0900e4a873ca4498365fd3cd769db1fcf6902b875bb6238a4
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -105,6 +105,8 @@
 
     storageControlMode: document.getElementById('storageControlMode'),
     storageCapacityKWh: document.getElementById('storageCapacityKWh'),
+    storageCouplingMode: document.getElementById('storageCouplingMode'),
+    storageDcPvHintRow: document.getElementById('storageDcPvHintRow'),
     storageFeneconAcMode: document.getElementById('storageFeneconAcMode'),
     storageFeneconDayNoWrite: document.getElementById('storageFeneconDayNoWrite'),
     storageFeneconAssist: document.getElementById('storageFeneconAssist'),
@@ -837,6 +839,7 @@
   const STORAGE_DP_FIELDS = [
     { key: 'socObjectId', label: 'SoC (%)', requiredModes: ['targetPower','limits','enableFlags'] },
     { key: 'batteryPowerObjectId', label: 'Ist-Leistung (W) (optional)', requiredModes: [] },
+    { key: 'dcPvPowerObjectId', label: 'DC-/Hybrid-PV Erzeugung (W)', requiredModes: [], showForCoupling: ['dc'], hint: 'Nur bei DC-/Hybrid-Speichern: Erzeugungsleistung des Hybrid-/PV-Wechselrichters. Dieser Wert ist eine Messung, kein Batterie-Sollwert, und hilft bei Forecast-/0-Einspeise-/FENECON-Erkennung.' },
     { key: 'targetPowerObjectId', label: 'Sollleistung signed (W)', requiredModes: ['targetPower'], hint: 'Allgemeiner bidirektionaler Sollwert. NexoWatt-Konvention: +W = Entladen, -W = Laden. Wenn getrennte Lade-/Entlade-Sollwerte gemappt sind, nutzt NexoWatt diese bevorzugt.' },
     { key: 'targetChargePowerObjectId', label: 'Sollwert Laden (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional: positiver Lade-Sollwert. Wird zusammen mit „Sollwert Entladen“ bevorzugt, wenn beide gemappt sind.' },
     { key: 'targetDischargePowerObjectId', label: 'Sollwert Entladen (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional: positiver Entlade-Sollwert. Dadurch ist kein Vorzeichen-Signed-DP nötig.' },
@@ -2410,7 +2413,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const appConfigTargets = {
       charging: { tab: 'evcs', label: 'Ladepunkte konfigurieren' },
       peak: { tab: 'peakconfig', label: 'Peak-Shaving konfigurieren' },
-      storage: { tab: 'mapping', label: 'Speicher-Zuordnung öffnen' },
+      storage: { tab: 'storageconfig', label: 'Speicher konfigurieren' },
       storagefarm: { tab: 'storagefarm', label: 'Speicherfarm konfigurieren' },
       thermal: { tab: 'thermal', label: 'Thermik konfigurieren' },
       heatingrod: { tab: 'heatingrod', label: 'Heizstab konfigurieren' },
@@ -2677,6 +2680,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     // Tabs: optional ein-/ausblenden (App-Center)
     const tabMap = [
+      { tab: 'storageconfig', app: 'storage' },
       { tab: 'peakconfig', app: 'peak' },
       { tab: 'aiadvisor', app: 'aiAdvisor' },
       { tab: 'thermal', app: 'thermal' },
@@ -8390,6 +8394,29 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const v = (els.storageControlMode && els.storageControlMode.value) ? String(els.storageControlMode.value) : 'targetPower';
     return (['targetPower','limits','enableFlags'].includes(v)) ? v : 'targetPower';
   }
+
+  /**
+   * Code-Teil: getStorageCoupling
+   * Zweck: Ermittelt den Einzel-Speicher-Typ fuer die Speicherregelungs-App.
+   * Zusammenhang: AC-Speicher werden wie getrennte Batterie-Wechselrichter bewertet;
+   * DC-/Hybrid-Speicher koennen PV und Batterie an einem Ausgang mischen und bekommen
+   * deshalb einen eigenen PV-Messdatenpunkt fuer saubere Zuordnung und Diagnose.
+   */
+  function getStorageCoupling() {
+    const v = (els.storageCouplingMode && els.storageCouplingMode.value) ? String(els.storageCouplingMode.value).trim().toLowerCase() : 'ac';
+    return v === 'dc' ? 'dc' : 'ac';
+  }
+
+  /**
+   * Code-Teil: updateStorageCouplingUi
+   * Zweck: Blendet DC-/Hybrid-Hinweise und die passenden Speicher-DP-Felder ein.
+   * Zusammenhang: Der Reiter „Speicher“ bleibt dadurch fuer Einzelanlagen uebersichtlich;
+   * DC-Sonderfelder erscheinen nur, wenn dieser Speichertyp wirklich gewaehlt wurde.
+   */
+  function updateStorageCouplingUi() {
+    const coupling = getStorageCoupling();
+    if (els.storageDcPvHintRow) els.storageDcPvHintRow.style.display = (coupling === 'dc') ? '' : 'none';
+  }
   /**
    * Code-Teil: rebuildStorageTable
    * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
@@ -8398,7 +8425,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
    */
   function rebuildStorageTable() {
     const mode = getStorageMode();
+    const coupling = getStorageCoupling();
+    updateStorageCouplingUi();
     const fields = STORAGE_DP_FIELDS.filter(f => {
+      if (Array.isArray(f.showForCoupling) && f.showForCoupling.length && !f.showForCoupling.includes(coupling)) return false;
       if (!f.requiredModes || !f.requiredModes.length) return true;
       return f.requiredModes.includes(mode);
     });
@@ -10611,6 +10641,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // Storage
     const mode = (currentConfig.storage && typeof currentConfig.storage.controlMode === 'string') ? currentConfig.storage.controlMode : 'targetPower';
     els.storageControlMode.value = (['targetPower','limits','enableFlags'].includes(mode)) ? mode : 'targetPower';
+    if (els.storageCouplingMode) {
+      const couplingRaw = currentConfig.storage && typeof currentConfig.storage.coupling === 'string' ? currentConfig.storage.coupling.trim().toLowerCase() : 'ac';
+      els.storageCouplingMode.value = couplingRaw === 'dc' ? 'dc' : 'ac';
+    }
+    updateStorageCouplingUi();
 
     // Optional: Kapazität (kWh) – relevant für PV‑Forecast / Tarif‑Netzladeentscheidungen
     if (els.storageCapacityKWh) {
@@ -12036,6 +12071,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // Storage
     patch.storage = deepMerge({}, currentConfig.storage || {});
     patch.storage.controlMode = getStorageMode();
+    patch.storage.coupling = getStorageCoupling();
     patch.storage.datapoints = deepMerge({}, (currentConfig.storage && currentConfig.storage.datapoints) ? currentConfig.storage.datapoints : {});
     patch.storage.feneconGridControlEnabled = !!(els.storageFeneconAcMode && els.storageFeneconAcMode.checked);
     // FENECON/OpenEMS/FEMS: Der Haupt-Haken aktiviert den herstellerspezifischen
@@ -14225,6 +14261,26 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       currentConfig.storage.controlMode = getStorageMode();
       rebuildStorageTable();
     });
+  }
+
+  if (els.storageCouplingMode) {
+    /**
+     * Code-Teil: _updateStorageCoupling
+     * Zweck: Speichert den AC/DC-Speichertyp direkt in currentConfig und baut die
+     * sichtbare DP-Liste neu auf.
+     * Zusammenhang: Bei DC-/Hybrid-Speichern wird der PV-Erzeugungs-DP sichtbar;
+     * bei AC-Speichern bleibt die Einzel-Speicher-Konfiguration schlank.
+     */
+    const _updateStorageCoupling = () => {
+      currentConfig = currentConfig || {};
+      currentConfig.storage = currentConfig.storage || {};
+      currentConfig.storage.coupling = getStorageCoupling();
+      updateStorageCouplingUi();
+      rebuildStorageTable();
+      scheduleValidation(200);
+    };
+    els.storageCouplingMode.addEventListener('change', _updateStorageCoupling);
+    els.storageCouplingMode.addEventListener('input', _updateStorageCoupling);
   }
 
   if (els.storageCapacityKWh) {

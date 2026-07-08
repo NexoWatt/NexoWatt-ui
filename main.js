@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:b1d4e1f7d0d1826d1392530c3814badef891097f3ce2ad24d97ae693345f266c
+ * Quell-Hash: sha256:24f536897fa676815e94003cbabbd3fee2b97da5d99954042063656d32dee02d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -26230,23 +26230,44 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     let pvTotal = Number.isFinite(pvW) ? Math.max(0, pvW) : null;
 
     // In Farm-/DC-Speicher-Setups kommt ein Teil der PV-Leistung direkt aus den Speichersystemen (DC-PV).
-    // Diese Summe wird unter storageFarm.totalPvPowerW bereitgestellt und soll auch in der Historie/Abrechnung
-    // zur PV-Erzeugung addiert werden (mit einfacher Double-Count-Heuristik analog zum Energiefluss-Monitor).
+    // Speicherfarm: Die Summe wird unter storageFarm.totalPvPowerW bereitgestellt.
+    // Einzel-DC-/Hybrid-Speicher: Die Speicherregelungs-App spiegelt den optionalen
+    // PV-Erzeugungs-DP unter speicher.dcPvPowerW. Beide Wege werden mit derselben
+    // Double-Count-Heuristik zur Historie/Abrechnung addiert.
     const sfEnabled = this._nwStorageFarmIsActiveFromCache ? this._nwStorageFarmIsActiveFromCache() : !!this._nwGetNumberFromCache('storageFarm.enabled');
-    const pvFarmW = this._nwGetNumberFromCache('storageFarm.totalPvPowerW');
-    if (sfEnabled && Number.isFinite(pvFarmW) && pvFarmW > 0) {
-      const farmAbs = Math.abs(pvFarmW);
+    const singleStorageDcEnabled = !!(this.config
+      && this.config.enableStorageControl
+      && !sfEnabled
+      && this.config.storage
+      && String(this.config.storage.coupling || '').trim().toLowerCase() === 'dc');
+
+    /**
+     * Code-Teil: addDcPvToHistorieTotal
+     * Zweck: Fuegt DC-/Hybrid-PV zur PV-Historiensumme hinzu, ohne eine bereits
+     * im AC-/PV-Datenpunkt enthaltene Leistung offensichtlich doppelt zu zaehlen.
+     * Zusammenhang: Einzel-DC-Speicher und Speicherfarm nutzen dieselbe Bilanzlogik;
+     * Batterie-Sollwerte werden dadurch nicht beeinflusst.
+     */
+    const addDcPvToHistorieTotal = (dcValueW) => {
+      if (!Number.isFinite(dcValueW) || dcValueW === 0) return;
+      const dcAbs = Math.abs(dcValueW);
       if (pvTotal === null || pvTotal === 0) {
-        pvTotal = farmAbs;
+        pvTotal = dcAbs;
       } else {
         const pvAbs = Math.abs(pvTotal);
-        const relDiff = Math.abs(pvAbs - farmAbs) / Math.max(1, farmAbs);
+        const relDiff = Math.abs(pvAbs - dcAbs) / Math.max(1, dcAbs);
         if (relDiff < 0.05) {
-          pvTotal = Math.max(pvAbs, farmAbs);
+          pvTotal = Math.max(pvAbs, dcAbs);
         } else {
-          pvTotal = pvAbs + farmAbs;
+          pvTotal = pvAbs + dcAbs;
         }
       }
+    };
+
+    if (sfEnabled) {
+      addDcPvToHistorieTotal(this._nwGetNumberFromCache('storageFarm.totalPvPowerW'));
+    } else if (singleStorageDcEnabled) {
+      addDcPvToHistorieTotal(this._nwGetNumberFromCache('speicher.dcPvPowerW'));
     }
 
     // In StorageFarm mode the storageFlow resolver already prefers the aggregated farm
@@ -27513,25 +27534,40 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     }
 
-    // --- PV (DC) from Speicherfarm (optional) ---
+    // --- PV (DC) from Speicherfarm or single DC-/Hybrid-Speicher (optional) ---
     const sfEnabled = this._nwStorageFarmIsActiveFromCache ? this._nwStorageFarmIsActiveFromCache() : !!(this.stateCache?.['storageFarm.enabled'] && this.stateCache['storageFarm.enabled'].value);
+    const singleStorageDcEnabled = !!(this.config
+      && this.config.enableStorageControl
+      && !sfEnabled
+      && this.config.storage
+      && String(this.config.storage.coupling || '').trim().toLowerCase() === 'dc');
     let pvDcW = 0;
+    let pvDcSource = '';
     if (sfEnabled) {
       const dc = this._nwGetNumberFromCache('storageFarm.totalPvPowerW');
-      if (dc !== null && Number.isFinite(Number(dc))) pvDcW = Math.max(0, Math.abs(Number(dc)));
+      if (dc !== null && Number.isFinite(Number(dc))) {
+        pvDcW = Math.max(0, Math.abs(Number(dc)));
+        pvDcSource = 'farm:dc';
+      }
+    } else if (singleStorageDcEnabled) {
+      const dc = this._nwGetNumberFromCache('speicher.dcPvPowerW');
+      if (dc !== null && Number.isFinite(Number(dc))) {
+        pvDcW = Math.max(0, Math.abs(Number(dc)));
+        pvDcSource = 'storage:dc';
+      }
     }
 
-    // PV total = AC + optional DC (Speicherfarm).
-    // In Farm-/DC-Setups kann PV direkt aus den Speichersystemen kommen (DC-PV).
+    // PV total = AC + optional DC (Speicherfarm oder Einzel-DC-/Hybrid-Speicher).
+    // In DC-/Hybrid-Setups kann PV direkt aus dem Speichersystem/Gateway kommen.
     // Wir berücksichtigen diese Leistung grundsätzlich, vermeiden aber offensichtliches Double-Count
     // via einfacher Heuristik (analog Energiefluss/Historie).
     let pvTotalW = pvAcW;
     let pvDcIncluded = false;
-    if (sfEnabled && pvDcW > 0) {
+    if (pvDcW > 0) {
       if (!pvTotalW || pvTotalW === 0) {
         pvTotalW = pvDcW;
         pvDcIncluded = true;
-        if (pvSource === 'missing') pvSource = 'farm:dc';
+        if (pvSource === 'missing') pvSource = pvDcSource || 'dc';
       } else {
         const acAbs = Math.abs(pvTotalW);
         const dcAbs = Math.abs(pvDcW);
@@ -27580,6 +27616,9 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       pushTs('storageFarm.totalPvPowerW');
       pushTs('storageFarm.totalChargePowerW');
       pushTs('storageFarm.totalDischargePowerW');
+    }
+    if (singleStorageDcEnabled) {
+      pushTs('speicher.dcPvPowerW');
     }
     const inputSkewMs = (tsList.length >= 2) ? (Math.max(...tsList) - Math.min(...tsList)) : null;
 
@@ -27796,6 +27835,8 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
             mappedPvPower: pvPowerMapped,
             mappedProductionTotal: prodTotalMapped,
             sfEnabled,
+            singleStorageDcEnabled,
+            dcSource: pvDcSource || null,
           },
           storage: { chargeW: publishChargeRound, dischargeW: publishDischargeRound, runtimeChargeW: Math.round(chargeW), runtimeDischargeW: Math.round(dischargeW), src: storageSrc },
           extraProductionW: Math.round(producerSumW),

@@ -1,3 +1,14 @@
+## 0.8.83
+
+- App-Center: Speicherregelung aus der allgemeinen Zuordnung in einen eigenen Reiter „Speicher“ verschoben, damit Einzel-Speicher-Konfigurationen übersichtlicher bleiben.
+- Speicherregelungs-App: Speichertyp AC oder DC/Hybrid auswählbar. AC bleibt Standard; DC/Hybrid aktiviert zusätzliche PV-Erzeugungs-Zuordnung für Hybrid-/Gateway-Systeme.
+- Einzel-DC-/Hybrid-Speicher: Neuer optionaler Messdatenpunkt `dcPvPowerObjectId` für die PV-Erzeugung des Hybrid-/PV-Wechselrichters. Der Wert ist ausdrücklich Messung/Kontext und kein Batterie-Sollwert.
+- Speicher-Mapping/Diagnose: `speicher.mapping.kopplung`, `speicher.mapping.dcPvId`, `speicher.dcPvPowerW`, `speicher.regelung.speicherKopplung` und `speicher.regelung.dcPvPowerW` ergänzt. Alte DC-PV-Reste werden bei AC-Betrieb nicht weiter genutzt.
+- Energiefluss/History: Einzel-DC-/Hybrid-PV kann analog zur Speicherfarm in die PV-Summe einfließen, mit Double-Count-Heuristik gegen doppelte Zählung.
+- FENECON-/0-Einspeise-Kontext nutzt den Einzel-DC-/Hybrid-PV-Messwert als sauberes PV-/Tages-Signal, falls er gemappt ist.
+- Regressionstest `test:storage-single-tab-coupling` ergänzt.
+- Service-Worker Cache auf `nexowatt-cache-v385` erhöht.
+
 ## 0.8.82
 
 - Speicher/FENECON/OpenEMS/FEMS: separater Hersteller-/Gateway-Haken in der Speicher-App ergänzt.

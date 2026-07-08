@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.82",
+    "version": "0.8.83",
     "news": {
+      "0.8.83": {
+        "de": "Version 0.8.83: Verschiebt die Einzel-Speicherregelung in einen eigenen App-Center-Reiter und ergänzt AC/DC-Hybrid-Auswahl mit optionaler DC-/Hybrid-PV-Erzeugungszuordnung. Dieser PV-Wert wird als Messwert für Energiefluss, Historie und FENECON-/0-Einspeise-Kontext genutzt, nicht als Speicher-Sollwert.",
+        "en": "Version 0.8.83: Moves single-storage control into its own App Center tab and adds AC/DC-hybrid selection with an optional DC/hybrid PV generation mapping. This PV value is used as measurement context for energy flow, history and FENECON/zero-export handling, not as a battery setpoint."
+      },
       "0.8.82": {
         "de": "Version 0.8.82: Ergänzt den FENECON/OpenEMS/FEMS-Speichermodus. Im Tages-/PV-Betrieb kann NexoWatt externe Speicheranforderungen pausieren, damit FEMS intern regelt; ein optionaler Assist greift nur zeitverzögert und NVP-begrenzt bei dauerhaftem Netzbezug.",
         "en": "Version 0.8.82: Adds the FENECON/OpenEMS/FEMS storage mode. During day/PV operation NexoWatt can pause external battery setpoints so FEMS controls internally; an optional assist only intervenes after sustained grid import and is capped at NVP demand."
@@ -26,10 +30,6 @@
       "0.8.77": {
         "de": "Version 0.8.77: Korrigiert die Speichersteuerung für Speicherfarm-/MultiUse-Setups. Speicherfarm-Sollwerte laufen nun auch ohne aktive MultiUse-App; alte MultiUse-SoC-Zonen blockieren Eigenverbrauch nicht mehr und 0-W-Farm-Limits bedeuten unbegrenzt statt Sperre.",
         "en": "Version 0.8.77: Fixes storage control for storage-farm/MultiUse setups. Storage-farm setpoints now run without the MultiUse app; stale MultiUse SoC zones no longer block self-consumption and 0-W farm limits mean unlimited instead of blocked."
-      },
-      "0.8.76": {
-        "de": "Version 0.8.76: Ergänzt die Heizstab-Betriebsart für den bestehenden Auto-Button. Im Heizstab-AppCenter kann jetzt zwischen PV-Überschuss am NVP und 0-W-Einspeisung/Forecast gewählt werden; die alte separate Testlast-Aktivierung wurde bereinigt.",
-        "en": "Version 0.8.76: Adds a heating-rod operating mode behind the existing Auto button. The heating-rod App Center can now select PV surplus at the grid connection point or zero-export/forecast control; the old separate test-load activation was cleaned up."
       }
     },
     "title": "NexoWatt UI",

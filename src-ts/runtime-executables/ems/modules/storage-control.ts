@@ -653,6 +653,17 @@ class SpeicherRegelungModule extends BaseModule {
             // ignore
         }
 
+        // Einzel-DC-/Hybrid-Speicher: optionaler separater PV-Erzeugungswert.
+        // Dieser Messwert wird nur als Kontext/Diagnose genutzt; die Batterie-Sollwerte
+        // bleiben weiterhin hart am NVP und an den Speichergrenzen begrenzt.
+        const storageCoupling = String(cfg.coupling || 'ac').trim().toLowerCase() === 'dc' ? 'dc' : 'ac';
+        const dcPvMapped = storageCoupling === 'dc' && !!String(cfg.dcPvPowerObjectId || '').trim();
+        const dcPvPowerW = (dcPvMapped && this.dp) ? this.dp.getNumberFresh('st.dcPvPowerW', staleMs, null) : null;
+        const dcPvPowerAge = (dcPvMapped && this.dp && this.dp.getEntry('st.dcPvPowerW')) ? this.dp.getAgeMs('st.dcPvPowerW') : null;
+        await this._setIfChanged('speicher.regelung.speicherKopplung', storageCoupling);
+        await this._setIfChanged('speicher.regelung.dcPvPowerW', (typeof dcPvPowerW === 'number' && Number.isFinite(dcPvPowerW)) ? Math.round(dcPvPowerW) : 0);
+        await this._setIfChanged('speicher.regelung.dcPvPowerAlterMs', (typeof dcPvPowerAge === 'number' && Number.isFinite(dcPvPowerAge)) ? Math.round(dcPvPowerAge) : null);
+
         // Speicherfarm: aggregierte Ist-Leistung nutzen (Netto: Entladen - Laden).
         //
         // Hintergrund:
@@ -2562,8 +2573,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 					ageMs: (typeof gridAge === 'number' && Number.isFinite(gridAge)) ? Math.round(gridAge) : null,
 				},
 				battery: {
+					coupling: storageCoupling,
 					powerW: (typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Math.round(battPowerW) : null,
 					ageMs: (typeof battPowerAge === 'number' && Number.isFinite(battPowerAge)) ? Math.round(battPowerAge) : null,
+					dcPvPowerW: (typeof dcPvPowerW === 'number' && Number.isFinite(dcPvPowerW)) ? Math.round(dcPvPowerW) : null,
+					dcPvAgeMs: (typeof dcPvPowerAge === 'number' && Number.isFinite(dcPvPowerAge)) ? Math.round(dcPvPowerAge) : null,
 					invalidReason: (battPowerInvalidReason && String(battPowerInvalidReason).trim()) ? String(battPowerInvalidReason).trim() : null,
 				},
                 soc: (typeof soc === 'number' && Number.isFinite(soc)) ? soc : null,
@@ -2712,6 +2726,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const storage = (this.adapter.config && this.adapter.config.storage) ? this.adapter.config.storage : {};
         return {
             controlMode: storage.controlMode,
+            // Einzel-Speicher-Typ aus dem App-Center. AC bleibt der Standard.
+            // DC/Hybrid nutzt zusaetzlich den optionalen PV-Erzeugungs-DP st.dcPvPowerW,
+            // damit FENECON-/0-Einspeise-Erkennung nicht den Batterie-Sollwert mit PV verwechselt.
+            coupling: (String(storage.coupling || 'ac').trim().toLowerCase() === 'dc') ? 'dc' : 'ac',
+            dcPvPowerObjectId: storage.datapoints && storage.datapoints.dcPvPowerObjectId,
             staleTimeoutSec: storage.staleTimeoutSec,
             socHystPct: storage.socHystPct,
             modeHoldSec: storage.modeHoldSec,
@@ -2889,6 +2908,13 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
         pushCandidate(await readOwnFreshNumber('derived.core.pv.totalW'), 'derived.core.pv.totalW');
         pushCandidate(await readOwnFreshNumber('derived.core.pv.acW'), 'derived.core.pv.acW');
+        // Einzel-DC-/Hybrid-Speicher: wenn ein separater PV-Erzeugungs-DP gemappt ist,
+        // ist er fuer FENECON/OpenEMS die sauberste Tages-/PV-Erkennung. Gerade bei
+        // Hybrid-AC-Ausgaengen kann die normale PV-Summe 0 W sein, obwohl der Speicher
+        // intern PV sieht.
+        if (this.dp && String(cfg.coupling || 'ac').trim().toLowerCase() === 'dc' && String(cfg.dcPvPowerObjectId || '').trim()) {
+            pushCandidate(this.dp.getNumberFresh('st.dcPvPowerW', staleMs, null), 'st.dcPvPowerW');
+        }
         pushCandidate(readCache('pvPower'), 'pvPower');
         pushCandidate(readCache('productionTotal'), 'productionTotal');
         if (this.dp) {
@@ -3427,6 +3453,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.aktivAutoMultiUse', 'Auto-Aktivierung durch MultiUse-Policy', 'boolean', 'indicator', false);
         await mk('speicher.regelung.aktivSpeicherfarm', 'Speicherfarm-Verteilpfad verfügbar', 'boolean', 'indicator', false);
         await mk('speicher.regelung.aktivAutoSpeicherfarm', 'Auto-Aktivierung durch Speicherfarm (deaktiviert)', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.speicherKopplung', 'Speicher-Kopplung AC/DC', 'string', 'text', 'ac');
+        await mk('speicher.regelung.dcPvPowerW', 'DC-/Hybrid-PV Erzeugungsleistung', 'number', 'value.power', 0);
+        await mk('speicher.regelung.dcPvPowerAlterMs', 'DC-/Hybrid-PV Erzeugungswert Alter', 'number', 'value.interval', null);
 
         // Phase 2: Dispatcher-Diagnose
         await mk('speicher.regelung.dispatcherVersion', 'Dispatcher-Version', 'string', 'text', '2.0');
