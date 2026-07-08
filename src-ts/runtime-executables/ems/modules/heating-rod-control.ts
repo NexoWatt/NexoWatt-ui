@@ -693,6 +693,9 @@ class HeatingRodControlModule extends BaseModule {
         await mk('heatingRod.summary.zeroExportCanProbe', 'Zero/minus feed-in probe allowed', 'boolean', 'indicator');
         await mk('heatingRod.summary.zeroExportReason', 'Zero/minus feed-in reason', 'string', 'text');
         await mk('heatingRod.summary.zeroExportPvNowW', 'Zero/minus feed-in PV now (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.zeroExportPotentialW', 'Zero/minus feed-in usable potential (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.zeroExportBudgetW', 'Zero/minus feed-in central budget cap (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.zeroExportBudgetSource', 'Zero/minus feed-in budget source', 'string', 'text');
         await mk('heatingRod.summary.zeroExportForecastOk', 'Zero/minus feed-in forecast ok', 'boolean', 'indicator');
         await mk('heatingRod.summary.zeroExportFeedInAtLimit', 'Zero/minus feed-in limit reached', 'boolean', 'indicator');
         await mk('heatingRod.summary.pvAutomationMinW', 'PV-Auto minimum PV power (W)', 'number', 'value.power', 'W');
@@ -1429,7 +1432,7 @@ class HeatingRodControlModule extends BaseModule {
         return {
             autoMode,
             enabled: autoMode === 'zeroExportForecast',
-            feedInLimitW: n(['feedInLimitW', 'allowedExportW', 'exportLimitW'], 1000, 0, 1000000),
+            feedInLimitW: n(['feedInLimitW', 'allowedExportW', 'exportLimitW'], 0, 0, 1000000),
             feedInToleranceW: n(['feedInToleranceW', 'exportToleranceW'], 150, 0, 100000),
             targetExportBufferW: n(['targetExportBufferW', 'exportBufferW'], 100, 0, 100000),
             minPvPowerW: n(['minPvPowerW', 'minCurrentPvW'], 1000, 0, 1000000),
@@ -1661,10 +1664,10 @@ class HeatingRodControlModule extends BaseModule {
 
         const staleTimeoutSec = clamp(num(this._getCfg().staleTimeoutSec, 15), 1, 3600);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
-        // Use only the actually measured PV generation for this guard. The reconstructed
-        // NVP/own-load budget can include a running Heizstab and must not masquerade as
-        // fresh PV generation; otherwise PV-Auto may keep regulating although the roof
-        // generation has already fallen away.
+        // 0-W-Einspeisung darf nicht nur den sichtbaren NVP-Export betrachten. Bei
+        // abgeregelten Hybrid-/WR-Systemen steigt die PV-/Hybridleistung erst, wenn
+        // eine Last zugeschaltet wird. Deshalb wird PV-Ist nur als Signal genutzt;
+        // die eigentliche Freigabe kommt aus Forecast + zentralem Restbudget.
         const pvNowW = this._readPvNowW(staleMs);
         const feedLimitW = Math.max(0, Math.round(num(cfg.feedInLimitW, 0)));
         const tolW = Math.max(0, Math.round(num(cfg.feedInToleranceW, 0)));
@@ -1688,20 +1691,70 @@ class HeatingRodControlModule extends BaseModule {
             )
         );
 
+        // Zentrale Budgetlogik bleibt führend: EVCS und Thermik reservieren vor dem
+        // Heizstab. Für 0-W-Anlagen wird nur ein zusätzliches PV-Potential aufgebaut,
+        // aber niemals über das zentrale Rest-/Netzbudget hinaus geschaltet.
+        const gateCfg = (pvBase && pvBase.gateCfg) ? pvBase.gateCfg : this._getBudgetGateCfg();
+        const currentOwnW = Math.max(0, Math.round(num(pvBase.currentHeatingRodW, 0)));
+        const safetyW = Math.max(0, Math.round(num(gateCfg.budgetSafetyReserveW, 0)));
+        const evcsUsedW = Math.max(0, Math.round(num(pvBase.evcsUsedW, 0)));
+        const storageReserveMissingW = Math.max(0, Math.round(num(pvBase.storageReserveMissingW, 0)));
+        const storageChargeUsableW = Math.max(0, Math.round(num(pvBase.storageChargeUsableW, 0)));
+        const storageDischargeW = Math.max(0, Math.round(num(pvBase.storageDischargeW, 0)));
+        const liveBudgetW = Math.max(0, Math.round(num(pvBase.nvpAvailableW, 0)));
+        const forecastPowerW = Math.max(
+            0,
+            Math.round(num(pvBase.forecastStepCapW, 0)),
+            Math.round(num(forecast.peakW, 0)),
+            pvNowW
+        );
+        const totalGateRaw = Number(pvBase.budgetGateRemainingW);
+        const totalBudgetCapW = Number.isFinite(totalGateRaw) ? Math.max(0, Math.round(totalGateRaw)) : Number.POSITIVE_INFINITY;
+        const totalBudgetForDiagW = Number.isFinite(totalBudgetCapW) ? totalBudgetCapW : 0;
+
+        // Forecast-Potential: grobe Dach-/Hybrid-Erwartung nach EVCS-Priorität,
+        // Speicherreserve und Sicherheitsabstand. Es ist nur eine Obergrenze für
+        // stufenweise Tests; der Live-Guard am NVP/Speicher entscheidet weiterhin.
+        const forecastPotentialW = forecastOk
+            ? Math.max(0, forecastPowerW - evcsUsedW - storageReserveMissingW - safetyW)
+            : 0;
+        // Live-Potential: bestätigte Leistung aus laufendem Heizstab, NVP-Bilanz und
+        // zusätzlicher Speicherladung. Dadurch fällt eine stabile Stufe bei 0 W Export
+        // nicht auf 0 zurück, nur weil der NVP weiterhin sauber geregelt ist.
+        const livePotentialW = Math.max(0, liveBudgetW, currentOwnW + storageChargeUsableW - storageDischargeW - safetyW);
+        const rawPotentialW = Math.max(currentOwnW, livePotentialW, forecastPotentialW);
+        const zeroPotentialW = Math.max(0, Math.round(Math.min(
+            rawPotentialW,
+            Number.isFinite(totalBudgetCapW) ? totalBudgetCapW : rawPotentialW
+        )));
+
         const pvNowOk = pvNowW >= Math.max(0, cfg.minPvPowerW);
+        const forecastSignalOk = forecastOk && forecastPowerW >= Math.max(0, cfg.minPvPowerW);
+        const liveSignalOk = liveBudgetW >= Math.max(0, Math.min(cfg.minPvPowerW, Math.max(50, safetyW))) || currentOwnW > 50;
+        const pvSignalOk = !!(pvNowOk || forecastSignalOk || liveSignalOk);
         const soc = (typeof pvBase.storageSocPct === 'number' && Number.isFinite(pvBase.storageSocPct)) ? pvBase.storageSocPct : null;
         const storageKnown = soc !== null || num(pvBase.storageChargeW, 0) > 0 || num(pvBase.storageDischargeW, 0) > 0;
-        const storageReady = !storageKnown || soc === null || soc >= cfg.storageFullSocPct;
+        const storageReady = !storageKnown
+            || storageReserveMissingW <= Math.max(50, safetyW)
+            || storageChargeUsableW > 0
+            || (soc !== null && soc >= cfg.storageFullSocPct)
+            || (forecastPotentialW > 0 && storageDischargeW <= cfg.storageDischargeToleranceW);
+        const noSoftNonPv = !(pvBase.importW > cfg.gridImportTripW || pvBase.storageDischargeW > cfg.storageDischargeToleranceW);
         const noHardNonPv = !(pvBase.importW > cfg.hardGridImportW || pvBase.storageDischargeW > cfg.hardStorageDischargeW);
+        const totalBudgetOk = !Number.isFinite(totalBudgetCapW) || totalBudgetCapW > 50;
 
         let reason = 'ready';
         if (!feedInAtLimit) reason = 'feed_in_not_at_limit';
-        else if (!pvNowOk) reason = 'pv_now_too_low';
+        else if (!pvSignalOk) reason = 'pv_or_forecast_signal_too_low';
         else if (!forecastOk) reason = 'forecast_not_ok';
-        else if (!storageReady) reason = 'storage_priority';
+        else if (!totalBudgetOk || zeroPotentialW <= 50) reason = 'central_budget_zero';
         else if (!noHardNonPv) reason = 'non_pv_hard_block';
+        else if (!noSoftNonPv) reason = 'non_pv_watch';
 
-        const canProbe = !!(feedInAtLimit && pvNowOk && forecastOk && storageReady && noHardNonPv);
+        const canProbe = !!(feedInAtLimit && pvSignalOk && forecastOk && totalBudgetOk && zeroPotentialW > 50 && noHardNonPv && noSoftNonPv);
+        const potentialSource = forecastPotentialW >= livePotentialW
+            ? 'forecast+central-budget-after-priority'
+            : 'nvp-confirmed-own-load+storage-flow';
 
         return {
             active: true,
@@ -1714,9 +1767,23 @@ class HeatingRodControlModule extends BaseModule {
             forecast,
             storageReady,
             pvNowOk,
+            pvSignalOk,
+            forecastSignalOk,
+            liveSignalOk,
             exportW,
             feedInLimitW: feedLimitW,
             feedInToleranceW: tolW,
+            forecastPowerW,
+            forecastPotentialW: Math.round(forecastPotentialW),
+            livePotentialW: Math.round(livePotentialW),
+            zeroPotentialW,
+            zeroBudgetW: totalBudgetForDiagW,
+            zeroPotentialSource: potentialSource,
+            storageReserveMissingW,
+            storageChargeUsableW,
+            evcsUsedW,
+            noSoftNonPv,
+            noHardNonPv,
         };
     }
 
@@ -2312,6 +2379,26 @@ class HeatingRodControlModule extends BaseModule {
         const dischargeActive = !!(pvBase && num(pvBase.storageDischargeW, 0) > cfg.storageDischargeToleranceW);
         const hardImport = !!(pvBase && pvBase.gridKnown && num(pvBase.importW, 0) > cfg.hardGridImportW);
         const hardDischarge = !!(pvBase && num(pvBase.storageDischargeW, 0) > cfg.hardStorageDischargeW);
+        const zeroPotentialW = Math.max(0, Math.round(num(info && info.zeroPotentialW, 0)));
+        const stageBudgetToleranceW = Math.max(50, Math.round(num((pvBase && pvBase.gateCfg && pvBase.gateCfg.budgetSafetyReserveW), 200)));
+        // Gerätespezifischer Budgetdeckel: Die Leistung der vorhandenen Heizstab-Stufen
+        // kommt aus der aktuellen App-Konfiguration. Es werden keine separaten 0-W-Stufen
+        // gepflegt; die 0-W-Strategie nutzt denselben Stufenplan wie der Auto-Button.
+        const maxStageForZeroBudget = (budgetW) => {
+            const budget = Math.max(0, Math.round(num(budgetW, 0)));
+            let maxStage = 0;
+            for (let s = 1; s <= d.stageCount; s++) {
+                const needW = this._sumStagePowerModel(d, s, observedStage, measuredW);
+                if (needW <= budget + stageBudgetToleranceW) maxStage = s;
+                else break;
+            }
+            return Math.max(0, Math.min(maxStage, d.stageCount));
+        };
+        const budgetStageCap = maxStageForZeroBudget(zeroPotentialW);
+        if (targetStage > budgetStageCap) {
+            targetStage = budgetStageCap;
+            reason = 'zero_export_budget_stage_cap';
+        }
 
         if (importActive) {
             if (!st.zeroImportSinceMs) st.zeroImportSinceMs = now;
@@ -2353,11 +2440,11 @@ class HeatingRodControlModule extends BaseModule {
             };
         }
 
-        // In der Betriebsart 0-W/Forecast ersetzt diese Strategie den normalen
-        // PV-Überschuss-Start. Speicher-Vorrang reduziert deshalb auch laufende
-        // Auto-Stufen stufenweise, damit der Heizstab keinen Akku leerzieht, wenn
-        // die versteckte PV-Leistung noch nicht belastbar bestätigt ist.
-        if (info && info.active && info.storageReady === false && Math.max(currentStage, observedStage, targetStage) > 0) {
+        // Speicher-Vorrang wird in der 0-W-Betriebsart nicht mehr als harte SoC-Sperre
+        // umgesetzt. Speicherreserve und EVCS-Priorität stecken bereits im zentralen Budget;
+        // echte Batterieentladung wird weiter unten über den Live-Guard reduziert. Damit kann
+        // eine 0-Einspeiseanlage ihr abgeregeltes PV-Potential nutzen, ohne den Akku leerzuziehen.
+        if (info && info.active && info.storagePriorityReduce === true && Math.max(currentStage, observedStage, targetStage) > 0) {
             const reduceBase = Math.max(currentStage, observedStage, targetStage);
             targetStage = Math.min(targetStage, this._previousPhysicalStageBelow(d, reduceBase));
             st.zeroCooldownUntilMs = now + Math.max(0, cfg.cooldownSec * 1000);
@@ -2435,7 +2522,15 @@ class HeatingRodControlModule extends BaseModule {
                     Math.round(addedPowerW * Math.max(0, num(cfg.probeMinPvRisePct, 20)) / 100)
                 );
 
-                if (riseW + 1 < needRiseW) {
+                const probePowerW = this._sumStagePowerModel(d, probeStage, observedStage, measuredW);
+                const nvpStable = !!(pvBase && pvBase.gridKnown && num(pvBase.importW, 0) <= cfg.gridImportTripW);
+                const storageStable = !!(num(pvBase && pvBase.storageDischargeW, 0) <= cfg.storageDischargeToleranceW);
+                const budgetStillOk = probePowerW <= zeroPotentialW + stageBudgetToleranceW;
+                const pvRiseOk = riseW + 1 >= needRiseW;
+                // Bei Hybrid-/0-Einspeiseanlagen ist ein separater PV-Anstieg nicht immer als
+                // eigener DP sichtbar. Die Probe gilt deshalb auch als bestätigt, wenn NVP,
+                // Speicherentladung und zentrales Budget nach Ablauf der Beobachtung stabil sind.
+                if (!pvRiseOk && !(nvpStable && storageStable && budgetStillOk)) {
                     const reduceBase = Math.max(currentStage, observedStage, targetStage, probeStage);
                     targetStage = this._previousPhysicalStageBelow(d, reduceBase);
                     st.zeroCooldownUntilMs = now + Math.max(0, cfg.probeRetrySec * 1000);
@@ -2457,7 +2552,21 @@ class HeatingRodControlModule extends BaseModule {
                 }
 
                 st.zeroProbe = null;
-                reason = `probe_pv_rise_ok_${riseW}of${needRiseW}W`;
+                reason = pvRiseOk ? `probe_pv_rise_ok_${riseW}of${needRiseW}W` : 'probe_nvp_budget_ok';
+                // Nach einer bestätigten Probe erst den bestätigten Zustand halten.
+                // Die nächste Stufe wird frühestens im folgenden Tick bewertet, damit
+                // Hybrid-/0-W-Anlagen nicht mehrere Relais in einem Rechenschritt ziehen.
+                st.targetStage = Math.max(0, Math.min(Math.round(Number(targetStage) || 0), d.stageCount));
+                this._stageCtl.set(d.id, st);
+                return {
+                    targetStage: st.targetStage,
+                    reduceNow: false,
+                    hardOff: false,
+                    reason,
+                    importHoldMs,
+                    dischargeHoldMs,
+                    nextAllowedAt: 0,
+                };
             }
         }
 
@@ -2469,7 +2578,8 @@ class HeatingRodControlModule extends BaseModule {
             const nextStage = this._nextPhysicalStageAbove(d, baseStage);
             const lastUp = Math.max(num(st.zeroLastStepUpMs, 0), num(st.lastIncreaseMs, 0));
             const stepWaitMs = Math.max(0, cfg.stepUpDelaySec * 1000);
-            const mayStep = nextStage > baseStage && (!lastUp || (now - lastUp) >= stepWaitMs);
+            const nextAllowedByBudget = nextStage > baseStage && nextStage <= budgetStageCap;
+            const mayStep = nextAllowedByBudget && (!lastUp || (now - lastUp) >= stepWaitMs);
             if (mayStep) {
                 const basePowerW = this._sumStagePowerModel(d, baseStage, observedStage, measuredW);
                 const nextPowerW = this._sumStagePowerModel(d, nextStage, observedStage, measuredW);
@@ -2482,9 +2592,11 @@ class HeatingRodControlModule extends BaseModule {
                     addedPowerW: Math.max(0, nextPowerW - basePowerW),
                     startMs: now,
                 };
-                reason = 'probe_step_up';
+                reason = 'probe_step_up_budget_ok';
             } else {
-                reason = (nextStage <= baseStage) ? 'max_physical_stage' : 'waiting_step_up_delay';
+                reason = (nextStage <= baseStage)
+                    ? 'max_physical_stage'
+                    : (!nextAllowedByBudget ? 'zero_budget_stage_cap' : 'waiting_step_up_delay');
             }
         } else if (cooldownActive) {
             reason = 'cooldown';
@@ -4700,6 +4812,9 @@ class HeatingRodControlModule extends BaseModule {
         await this._setStateIfChanged('heatingRod.summary.zeroExportCanProbe', !!(zeroExportStrategyActive && zeroExportInfo.canProbe));
         await this._setStateIfChanged('heatingRod.summary.zeroExportReason', String(zeroExportInfo.reason || ''));
         await this._setStateIfChanged('heatingRod.summary.zeroExportPvNowW', Math.round(num(zeroExportInfo.pvNowW, 0)));
+        await this._setStateIfChanged('heatingRod.summary.zeroExportPotentialW', Math.round(num(zeroExportInfo.zeroPotentialW, 0)));
+        await this._setStateIfChanged('heatingRod.summary.zeroExportBudgetW', Math.round(num(zeroExportInfo.zeroBudgetW, 0)));
+        await this._setStateIfChanged('heatingRod.summary.zeroExportBudgetSource', String(zeroExportInfo.zeroPotentialSource || ''));
         await this._setStateIfChanged('heatingRod.summary.zeroExportForecastOk', !!(zeroExportStrategyActive && zeroExportInfo.forecastOk));
         await this._setStateIfChanged('heatingRod.summary.zeroExportFeedInAtLimit', !!(zeroExportStrategyActive && zeroExportInfo.feedInAtLimit));
         await this._setStateIfChanged('heatingRod.summary.pvAutomationMinW', Math.round(num(minPvAutomationW, 0)));
@@ -4797,6 +4912,17 @@ class HeatingRodControlModule extends BaseModule {
                 feedInLimitW: Math.round(num(zeroExportInfo.feedInLimitW, 0)),
                 forecastOk: !!zeroExportInfo.forecastOk,
                 forecast: zeroExportInfo.forecast || null,
+                forecastPowerW: Math.round(num(zeroExportInfo.forecastPowerW, 0)),
+                forecastPotentialW: Math.round(num(zeroExportInfo.forecastPotentialW, 0)),
+                livePotentialW: Math.round(num(zeroExportInfo.livePotentialW, 0)),
+                zeroPotentialW: Math.round(num(zeroExportInfo.zeroPotentialW, 0)),
+                zeroBudgetW: Math.round(num(zeroExportInfo.zeroBudgetW, 0)),
+                zeroPotentialSource: zeroExportInfo.zeroPotentialSource || '',
+                pvSignalOk: !!zeroExportInfo.pvSignalOk,
+                noSoftNonPv: !!zeroExportInfo.noSoftNonPv,
+                noHardNonPv: !!zeroExportInfo.noHardNonPv,
+                evcsUsedW: Math.round(num(zeroExportInfo.evcsUsedW, 0)),
+                storageReserveMissingW: Math.round(num(zeroExportInfo.storageReserveMissingW, 0)),
                 storageReady: !!zeroExportInfo.storageReady,
             },
         }));
