@@ -1,3 +1,12 @@
+## 0.8.85
+
+- Speicherfarm-Menü/Topbar: Sichtbarkeit jetzt strikt an `/config.featureVisibility.hasStorageFarm` gebunden. Dieses Flag entsteht nur aus AppCenter `storagefarm` installiert+aktiv und echten Farm-Datenpunkten.
+- Backend: alte `enableStorageFarm`-Fallbacks und `storageFarm.*` Runtime-States dürfen den Kundenmenüpunkt nicht mehr allein öffnen.
+- Speicherfarm-Runtime-Hydration: rettet weiterhin vorhandene Farm-Zeilen für die Bearbeitung, aktiviert oder installiert die App aber nicht mehr automatisch.
+- Frontend-Unterseiten nutzen die zentrale Feature-Sichtbarkeit, damit Live, History, EVCS, Reports, SmartHome und Storagefarm-Seite denselben Gatekeeper verwenden.
+- Regressionstest `test:storagefarm-menu-appcenter-gate` ergänzt.
+- Service-Worker Cache auf `nexowatt-cache-v387` erhöht.
+
 ## 0.8.83
 
 - App-Center: Speicherregelung aus der allgemeinen Zuordnung in einen eigenen Reiter „Speicher“ verschoben, damit Einzel-Speicher-Konfigurationen übersichtlicher bleiben.

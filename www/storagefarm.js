@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/storagefarm.ts
- * Quell-Hash: sha256:6c6304da9653cf1506b4494a785154c24156515a243345a5377439e665968344
+ * Quell-Hash: sha256:a8fb64497a782517fd2964dfdcdcc25056cd8f5df83d0c8c1d4908fc4edae797
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -250,7 +250,7 @@
       var settingsConfig = (cfg && cfg.settingsConfig) || {};
       var evcsCount = Math.max(0, Math.round(Number(settingsConfig.evcsCount) || 0));
       var smartHomeEnabled = !!(cfg && cfg.smartHome && cfg.smartHome.enabled);
-      var storageFarmEnabled = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(ems.storageFarmEnabled || cfg.storageFarmEnabled);
+      var storageFarmEnabled = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (ems.storageFarmEnabled || cfg.storageFarmEnabled)));
       var evcsAvailable = ((Number(settingsConfig.evcsConfiguredCount || 0) || (Array.isArray(settingsConfig.evcsList) ? settingsConfig.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
       var evcsTab = el('tabEvcs');
       var evcsMenu = el('menuEvcsLink');

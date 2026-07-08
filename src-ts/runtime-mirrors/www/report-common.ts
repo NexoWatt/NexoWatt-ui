@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 76bad2fe4d4ba6192ec9a4d26e87f85cef20549a64772efcdebf30326b1ab420
+ * Original-Hash: bf126565262881620d02385515a4c094903bc5a351398a73c3abc430242e8ca1
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/report-common.ts
- * Quell-Hash: sha256:0e864fe4a142127ef0bf474a0372ed5c33337e5e93e560aa4473309a8fca9235
+ * Quell-Hash: sha256:923b395c924237e0c0123aa3685cd64e5a176334d14dcf86f1e8209fcf6a7b91
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -321,7 +321,7 @@
         const cfg = await res.json();
         const settingsConfig = (cfg && cfg.settingsConfig) || {};
         const smartHomeEnabled = !!(cfg && (cfg.smartHomeEnabled || (cfg.smartHome && cfg.smartHome.enabled)));
-        const storageFarmEnabled = !!(cfg && ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
+        const storageFarmEnabled = !!(cfg && ((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled))));
         const evcsAvailable = ((Number(settingsConfig.evcsConfiguredCount || 0) || (Array.isArray(settingsConfig.evcsList) ? settingsConfig.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
         const evcsCount = evcsAvailable ? Math.max(0, Math.round(Number(settingsConfig.evcsCount) || 0)) : 0;
         const showEvcs = evcsAvailable && evcsCount >= 2;

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/evcs.ts
- * Quell-Hash: sha256:635f3b6ce2d60032e014226e95e5935e35b79bcdd98b68190d6c4d56a85c7ccd
+ * Quell-Hash: sha256:7f8859a59b59cef89b2140e5ab2a816c65ec5c6e1ae6f9a60f3b67b720b9ac67
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1734,7 +1734,7 @@ async function bootstrap() {
     if (sl) sl.classList.toggle('hidden', !sh);
     const st = document.getElementById('tabSmartHome');
     if (st) st.classList.toggle('hidden', !sh);
-    const sf = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(cfg.ems && cfg.ems.storageFarmEnabled);
+    const sf = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
     const sfMenu = document.getElementById('menuStorageFarmLink');
     if (sfMenu) sfMenu.classList.toggle('hidden', !sf);
     const sfTab = document.getElementById('tabStorageFarm');

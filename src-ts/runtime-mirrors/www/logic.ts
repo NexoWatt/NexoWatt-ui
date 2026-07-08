@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: f8a7d2c4cb1376c2c9287e2ca4c555ffde19588c452c22e4a6d692ed2dcb87e3
+ * Original-Hash: 3619d31f062439ac078d5f45fb788d0a7dcc9c5c59b06354a8989122ffe1cab1
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/logic.ts
- * Quell-Hash: sha256:088ffb0d44cb1a38c6d70cca985ae998a98d97c43a8c12865e190238d54b0904
+ * Quell-Hash: sha256:e5a7a2dfbc4d4e69874b1feb2a1ef37a8a4c622106ba8e78882e99cd980f50e4
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -3737,7 +3737,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (sl) sl.classList.toggle('hidden', !sh);
     const st = document.getElementById('tabSmartHome');
     if (st) st.classList.toggle('hidden', !sh);
-    const sf = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(cfg.ems && cfg.ems.storageFarmEnabled);
+    const sf = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
     const sfMenu = document.getElementById('menuStorageFarmLink');
     if (sfMenu) sfMenu.classList.toggle('hidden', !sf);
     const sfTab = document.getElementById('tabStorageFarm');

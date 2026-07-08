@@ -393,7 +393,7 @@ function toISODate(ms){
       const cfg = await res.json();
       const settingsConfig = (cfg && cfg.settingsConfig) || {};
       const smartHomeEnabled = !!(cfg && (cfg.smartHomeEnabled || (cfg.smartHome && cfg.smartHome.enabled)));
-      const storageFarmEnabled = !!(cfg && ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
+      const storageFarmEnabled = !!(cfg && ((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled))));
       const evcsAvailable = ((Number(settingsConfig.evcsConfiguredCount || 0) || (Array.isArray(settingsConfig.evcsList) ? settingsConfig.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
       const evcsCount = evcsAvailable ? Math.max(0, Math.round(Number(settingsConfig.evcsCount) || 0)) : 0;
 

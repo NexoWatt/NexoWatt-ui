@@ -3000,7 +3000,7 @@ async function load(force = false){
     if (st) st.classList.toggle('hidden', !sh);
 
     // Speicherfarm Tab/Link nur anzeigen, wenn eine Farm wirklich konfiguriert ist.
-    const sf = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(cfg.ems && cfg.ems.storageFarmEnabled);
+    const sf = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
     const sft = document.getElementById('tabStorageFarm');
     if (sft) sft.classList.toggle('hidden', !sf);
     const sfl = document.getElementById('menuStorageFarmLink');

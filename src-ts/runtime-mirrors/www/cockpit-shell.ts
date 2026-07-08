@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4b30151edd76f8e635054f7aa097be74de755db3161a77bf67351471e71103d0
+ * Original-Hash: 9018100c7a1b94b75c9cfa82d053cbed166a97f647674a695c7b2cf85f76448d
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/cockpit-shell.ts
- * Quell-Hash: sha256:0f8e1e7d6e4100390d1a06f9118a4f42698a6dc4ac038f02b21ff933ef588e98
+ * Quell-Hash: sha256:7e45d6cec96f6c0ae128eb63d98e5d2f5b11279a6059cdb1404d5de7b9480a92
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -160,7 +160,9 @@
           var evCount = Math.max(0, Math.round(Number(sc.evcsCount || 0) || 0));
           var showEvcs = evAvail && evCount >= 2;
           var sh = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
-          var sf = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(cfg.ems && cfg.ems.storageFarmEnabled);
+          // Speicherfarm-Menü nur über die zentrale /config-Feature-Sichtbarkeit öffnen.
+          // Alte storageFarm.* Runtime-States oder enableStorageFarm-Legacywerte dürfen den Link nicht mehr allein anzeigen.
+          var sf = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
           [['tabEvcs', showEvcs], ['menuEvcsLink', showEvcs], ['tabSmartHome', sh], ['menuSmartHomeLink', sh], ['tabStorageFarm', sf], ['menuStorageFarmLink', sf]].forEach(function(pair){
             var el = document.getElementById(pair[0]);
             if (el) el.classList.toggle('hidden', !pair[1]);

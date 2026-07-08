@@ -10209,7 +10209,7 @@ async function nwLoadUiConfigFlags() {
     const evcsAvailable = ((Number(sc.evcsConfiguredCount || 0) || (Array.isArray(sc.evcsList) ? sc.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
     nwEvcsCount = evcsAvailable ? Math.max(0, Math.round(Number(sc.evcsCount) || 0)) : 0;
     nwSmartHomeEnabled = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
-    const storageFarmEnabled = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(cfg.ems && cfg.ems.storageFarmEnabled);
+    const storageFarmEnabled = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
 
     // EVCS visibility
     const showEvcs = evcsAvailable && nwEvcsCount >= 2;

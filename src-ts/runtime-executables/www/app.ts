@@ -1584,14 +1584,46 @@ function nwEvcsCountFromConfig(inputCfg) {
  * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
+function nwStorageFarmAppCenterActiveFromConfig(inputCfg) {
+  const c = inputCfg || window.__nwCfg || {};
+  try {
+    const appsRoot = (c.emsApps && typeof c.emsApps === 'object') ? c.emsApps : {};
+    const apps = (appsRoot.apps && typeof appsRoot.apps === 'object') ? appsRoot.apps : {};
+    const app = (apps.storagefarm && typeof apps.storagefarm === 'object')
+      ? apps.storagefarm
+      : ((apps.storageFarm && typeof apps.storageFarm === 'object') ? apps.storageFarm : null);
+    if (!app) return false;
+    return app.installed === true && app.enabled === true;
+  } catch (_e) {
+    return false;
+  }
+}
+function nwStorageFarmHasRealRowsFromConfig(inputCfg) {
+  const c = inputCfg || window.__nwCfg || {};
+  try {
+    const sf = (c.storageFarm && typeof c.storageFarm === 'object') ? c.storageFarm : {};
+    const rows = Array.isArray(sf.storages) ? sf.storages : [];
+    return rows.some((row) => {
+      const r = row && typeof row === 'object' ? row : null;
+      if (!r || r.enabled === false) return false;
+      return ['socId','socDp','chargePowerId','chargeDp','dischargePowerId','dischargeDp','signedPowerId','signedPowerDp','powerId'].some((key) => String(r[key] || '').trim());
+    });
+  } catch (_e) {
+    return false;
+  }
+}
 function nwStorageFarmFeatureFromConfig(inputCfg, stateSnapshot) {
   const c = inputCfg || window.__nwCfg || {};
-  if (typeof c.storageFarmEnabled === 'boolean') return c.storageFarmEnabled;
-  if (c.ems && typeof c.ems.storageFarmEnabled === 'boolean') return c.ems.storageFarmEnabled;
+  const appCenterActive = nwStorageFarmAppCenterActiveFromConfig(c);
+  if (!appCenterActive) return false;
+  if (c.featureVisibility && typeof c.featureVisibility.hasStorageFarm === 'boolean') return c.featureVisibility.hasStorageFarm === true;
+  if (typeof c.storageFarmEnabled === 'boolean') return c.storageFarmEnabled === true && nwStorageFarmHasRealRowsFromConfig(c);
+  if (c.ems && typeof c.ems.storageFarmEnabled === 'boolean') return c.ems.storageFarmEnabled === true && nwStorageFarmHasRealRowsFromConfig(c);
   try {
     const st = stateSnapshot || window.latestState || state || {};
     const enabled = nwAsBool(st['storageFarm.enabled'] && st['storageFarm.enabled'].value, false);
     const total = Number(st['storageFarm.storagesTotal'] && st['storageFarm.storagesTotal'].value);
+    // Runtime-States sind nur noch ein letzter Fallback, wenn App-Center aktiv ist.
     return enabled && Number.isFinite(total) && total > 0;
   } catch (_e) {
     return false;

@@ -3708,7 +3708,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (sl) sl.classList.toggle('hidden', !sh);
     const st = document.getElementById('tabSmartHome');
     if (st) st.classList.toggle('hidden', !sh);
-    const sf = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(cfg.ems && cfg.ems.storageFarmEnabled);
+    const sf = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
     const sfMenu = document.getElementById('menuStorageFarmLink');
     if (sfMenu) sfMenu.classList.toggle('hidden', !sf);
     const sfTab = document.getElementById('tabStorageFarm');

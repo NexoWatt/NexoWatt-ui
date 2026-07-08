@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:24f536897fa676815e94003cbabbd3fee2b97da5d99954042063656d32dee02d
+ * Quell-Hash: sha256:d03a84e2099f0be48bf59e54760a05729454c0a4ec2f0a858bef5b78e887a418
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -12330,14 +12330,10 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           }));
         }
 
-        // Wenn Speicher produktiv laufen, muss der App-Center-Reiter sichtbar bleiben.
-        // Das ändert keine Lizenz; es hält nur die bestehende Installiert/Aktiv-Anzeige
-        // konsistent zur Runtime-Konfiguration.
-        out.emsApps = out.emsApps && typeof out.emsApps === 'object' ? out.emsApps : {};
-        out.emsApps.apps = out.emsApps.apps && typeof out.emsApps.apps === 'object' ? out.emsApps.apps : {};
-        const st = out.emsApps.apps.storagefarm && typeof out.emsApps.apps.storagefarm === 'object' ? out.emsApps.apps.storagefarm : {};
-        out.emsApps.apps.storagefarm = Object.assign({}, st, { installed: true, enabled: st.enabled !== false });
-        out.enableStorageFarm = true;
+        // App-Center bleibt die einzige Quelle dafür, ob die Speicherfarm im Kundenmenü erscheint.
+        // Der Runtime-Fallback darf nur vorhandene Farm-Zeilen für die Bearbeitung retten, aber niemals
+        // eine deaktivierte oder deinstallierte Speicherfarm-App wieder automatisch aktivieren.
+        // So bleibt ein Einzel-Speicher mit alter Farm-Runtime sauber aus dem Burger-Menü ausgeblendet.
         return out;
       } catch (e) {
         try { this.log && this.log.warn && this.log.warn('storageFarm runtime fallback failed: ' + (e && e.message ? e.message : e)); } catch (_e) {}
@@ -18800,19 +18796,23 @@ app.get('/config', (req, res) => {
           const app = (apps.storagefarm && typeof apps.storagefarm === 'object')
             ? apps.storagefarm
             : ((apps.storageFarm && typeof apps.storageFarm === 'object') ? apps.storageFarm : null);
-          if (app) {
-            const installed = (typeof app.installed === 'boolean') ? app.installed : !!app.enabled;
-            const enabled = (typeof app.enabled === 'boolean') ? app.enabled : false;
-            // App-Center ist der Sichtbarkeits-Gatekeeper: deaktivierte oder deinstallierte
-            // Speicherfarm-Apps dürfen keinen Kundenmenüpunkt mehr freischalten.
-            return !!(installed && enabled && cfg.enableStorageFarm !== false);
-          }
-        } catch (_e) {}
-        return !!cfg.enableStorageFarm;
+          if (!app) return false;
+          // App-Center ist der alleinige Sichtbarkeits-Gatekeeper: ein altes
+          // enableStorageFarm-Flag oder ein alter Runtime-State darf die Kunden-Navigation
+          // nicht mehr öffnen, wenn die App nicht installiert UND aktiv ist.
+          return app.installed === true && app.enabled === true;
+        } catch (_e) {
+          return false;
+        }
       })();
+      const storageFarmRowHasRealDatapoint = (row) => {
+        const r = row && typeof row === 'object' ? row : null;
+        if (!r || r.enabled === false) return false;
+        return ['socId', 'socDp', 'chargePowerId', 'chargeDp', 'dischargePowerId', 'dischargeDp', 'signedPowerId', 'signedPowerDp', 'powerId'].some((key) => String(r[key] || '').trim());
+      };
       // Stale runtime states from older builds must not expose the customer Speicherfarm page.
-      // The page is visible only when the App-Center app is active and at least one storage row exists.
-      const storageFarmConfigured = storageRowsFromConfig.some((row) => row && row.enabled !== false);
+      // The page is visible only when the App-Center app is active and at least one real farm DP exists.
+      const storageFarmConfigured = storageRowsFromConfig.some(storageFarmRowHasRealDatapoint);
       const storageFarmAvailable = !!(storageFarmAppActive && storageFarmConfigured);
 
       /**

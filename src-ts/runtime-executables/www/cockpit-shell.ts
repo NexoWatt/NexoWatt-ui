@@ -131,7 +131,9 @@
           var evCount = Math.max(0, Math.round(Number(sc.evcsCount || 0) || 0));
           var showEvcs = evAvail && evCount >= 2;
           var sh = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
-          var sf = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(cfg.ems && cfg.ems.storageFarmEnabled);
+          // Speicherfarm-Menü nur über die zentrale /config-Feature-Sichtbarkeit öffnen.
+          // Alte storageFarm.* Runtime-States oder enableStorageFarm-Legacywerte dürfen den Link nicht mehr allein anzeigen.
+          var sf = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
           [['tabEvcs', showEvcs], ['menuEvcsLink', showEvcs], ['tabSmartHome', sh], ['menuSmartHomeLink', sh], ['tabStorageFarm', sf], ['menuStorageFarmLink', sf]].forEach(function(pair){
             var el = document.getElementById(pair[0]);
             if (el) el.classList.toggle('hidden', !pair[1]);

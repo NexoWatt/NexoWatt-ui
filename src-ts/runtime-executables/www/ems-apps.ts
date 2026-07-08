@@ -1182,15 +1182,9 @@
     root.storageFarm.storages = runtimeRows.slice(0, 10).map(_normalizeRecoveredStorageFarmRow);
     root.storageFarm._runtimeRecovered = true;
     root.storageFarm.__runtimeStateFallbackSource = fallbackSource;
-    // Bestehende produktive Speicherfarm nicht ausblenden, wenn nur die Admin-
-    // Konfiguration leer war. Dies ändert keine Lizenz; es hält App-Schalter und
-    // Speicherfarm-Reiter konsistent zur laufenden Runtime-Konfiguration.
-    root.enableStorageFarm = true;
-    root.emsApps = root.emsApps && typeof root.emsApps === 'object' ? root.emsApps : {};
-    root.emsApps.apps = root.emsApps.apps && typeof root.emsApps.apps === 'object' ? root.emsApps.apps : {};
-    const oldSfApp = root.emsApps.apps.storagefarm && typeof root.emsApps.apps.storagefarm === 'object' ? root.emsApps.apps.storagefarm : {};
-    root.emsApps.apps.storagefarm = Object.assign({}, oldSfApp, { installed: true, enabled: oldSfApp.enabled !== false });
-
+    // Die Runtime-Hydration rettet nur vorhandene Speicherfarm-Zeilen für die Bearbeitung.
+    // Sie darf die App-Center-Schalter nicht selbst installieren oder aktivieren, sonst erscheint
+    // die Speicherfarm bei Einzel-Speicher-Anlagen wieder fälschlich im Kundenmenü.
     const mode = String(_readApiStateValue(statePayload, 'storageFarm.mode', root.storageFarm.mode || 'pool') || 'pool').trim().toLowerCase();
     root.storageFarm.mode = mode === 'groups' ? 'groups' : 'pool';
 

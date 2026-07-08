@@ -252,7 +252,7 @@
       var settingsConfig = (cfg && cfg.settingsConfig) || {};
       var evcsCount = Math.max(0, Math.round(Number(settingsConfig.evcsCount) || 0));
       var smartHomeEnabled = !!(cfg && cfg.smartHome && cfg.smartHome.enabled);
-      var storageFarmEnabled = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(ems.storageFarmEnabled || cfg.storageFarmEnabled);
+      var storageFarmEnabled = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (ems.storageFarmEnabled || cfg.storageFarmEnabled)));
       var evcsAvailable = ((Number(settingsConfig.evcsConfiguredCount || 0) || (Array.isArray(settingsConfig.evcsList) ? settingsConfig.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
       var evcsTab = el('tabEvcs');
       var evcsMenu = el('menuEvcsLink');

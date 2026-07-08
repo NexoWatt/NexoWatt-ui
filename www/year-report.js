@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/year-report.ts
- * Quell-Hash: sha256:57f2b12348edd101582760258f19dd206cfe56d69c7796e1b0bb82fff8fcbc25
+ * Quell-Hash: sha256:d573168ee93013cc044df3effa7faf42b5709d41476dc43ed84da1662f7652eb
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -991,7 +991,7 @@
         const st = document.getElementById('tabSmartHome');
         if (st) st.classList.toggle('hidden', !sh);
 
-        const sf = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(cfg.ems && cfg.ems.storageFarmEnabled);
+        const sf = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
         const sft = document.getElementById('tabStorageFarm');
         if (sft) sft.classList.toggle('hidden', !sf);
         const sfl = document.getElementById('menuStorageFarmLink');
