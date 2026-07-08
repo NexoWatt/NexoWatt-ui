@@ -5345,6 +5345,31 @@ class NexoWattVis extends utils.Adapter {
         const hasDischargeSetpoint = !!(setSignedPowerId || setDischargePowerId);
         const hasAnySetpoint = !!(setSignedPowerId || setChargePowerId || setDischargePowerId);
 
+        // Feldschutz 0.8.79: Ist-Leistungs-DPs der Speicherfarm dürfen niemals
+        // auf Steuer-/Sollwert-DPs zeigen. Sonst liest die Farm ihre eigene
+        // dischargePowerW-/powerSetpointW-Vorgabe als echte Entladung zurück;
+        // die NVP-Regelung sieht dann eine künstlich hohe Batterie-Istleistung
+        // und kann bis zu absurden Sollwerten hochintegrieren.
+        const targetPowerIds = [setSignedPowerId, setChargePowerId, setDischargePowerId].filter(Boolean);
+        const looksLikeSetpointPowerId = (id) => {
+          const sid = String(id || '').trim();
+          if (!sid) return false;
+          const lower = sid.toLowerCase();
+          return targetPowerIds.includes(sid) ||
+            lower.includes('.aliases.ctrl.') ||
+            lower.includes('.ctrl.') ||
+            lower.includes('powersetpoint') ||
+            lower.includes('setpoint');
+        };
+        const signedFeedbackUsable = !!signedId && !looksLikeSetpointPowerId(signedId);
+        const chargeFeedbackUsable = !!chgId && !looksLikeSetpointPowerId(chgId);
+        const dischargeFeedbackUsable = !!dchgId && !looksLikeSetpointPowerId(dchgId);
+        const ignoredPowerFeedback = [];
+        if (signedId && !signedFeedbackUsable) ignoredPowerFeedback.push('signedPowerId wirkt wie Sollwert-DP');
+        if (chgId && !chargeFeedbackUsable) ignoredPowerFeedback.push('chargePowerId wirkt wie Sollwert-DP');
+        if (dchgId && !dischargeFeedbackUsable) ignoredPowerFeedback.push('dischargePowerId wirkt wie Sollwert-DP');
+        if (ignoredPowerFeedback.length) status.powerFeedbackIgnoredReason = ignoredPowerFeedback.join('; ');
+
         // Ab v0.6.258 sind die Leistungsgrenzen bewusst feste Eingaben in der Farm-Konfiguration.
         // Dynamische Max-Leistungs-DPs werden in der harten Dispatch-Logik nicht mehr verwendet,
         // damit die Speicherfarm auch mit einfachen Signed-DP-Systemen herstellerneutral läuft.
@@ -5386,9 +5411,9 @@ class NexoWattVis extends utils.Adapter {
         };
 
         addBases(socId);
-        addBases(signedId);
-        addBases(chgId);
-        addBases(dchgId);
+        if (signedFeedbackUsable) addBases(signedId);
+        if (chargeFeedbackUsable) addBases(chgId);
+        if (dischargeFeedbackUsable) addBases(dchgId);
         addBases(pvId);
         addBases(availableId);
         addBases(faultId);
@@ -5462,9 +5487,9 @@ class NexoWattVis extends utils.Adapter {
         considerTs(stConn);
         considerTs(stOff);
         considerTs(stErr);
-        if (signedId) considerTs(await getState(signedId));
-        if (chgId) considerTs(await getState(chgId));
-        if (dchgId) considerTs(await getState(dchgId));
+        if (signedFeedbackUsable) considerTs(await getState(signedId));
+        if (chargeFeedbackUsable) considerTs(await getState(chgId));
+        if (dischargeFeedbackUsable) considerTs(await getState(dchgId));
         if (pvId) considerTs(await getState(pvId));
         if (availableId) considerTs(await getState(availableId));
         if (faultId) considerTs(await getState(faultId));
@@ -5478,7 +5503,7 @@ class NexoWattVis extends utils.Adapter {
         // Do we have any feedback values configured/available?
         // Setpoint-DPs alone are enough for dispatch, but they are not treated as real feedback.
         let hasFeedbackValue = false;
-        for (const id of [signedId, chgId, dchgId, pvId, socId, availableId, faultId, chargeAllowedId, dischargeAllowedId]) {
+        for (const id of [signedFeedbackUsable ? signedId : '', chargeFeedbackUsable ? chgId : '', dischargeFeedbackUsable ? dchgId : '', pvId, socId, availableId, faultId, chargeAllowedId, dischargeAllowedId]) {
           if (!id) continue;
           const st = await getState(id);
           if (st && st.val !== undefined && st.val !== null) { hasFeedbackValue = true; break; }
@@ -5720,7 +5745,7 @@ class NexoWattVis extends utils.Adapter {
 
         let usedSigned = false;
 
-        if (signedId) {
+        if (signedFeedbackUsable) {
           const v = await readNumber(signedId, 'power', { allowStale: true });
           if (Number.isFinite(v)) {
             let vv = invSigned ? -v : v;
@@ -5740,7 +5765,7 @@ class NexoWattVis extends utils.Adapter {
         }
 
         // Fallback: getrennte Messwerte
-        if (!usedSigned && chgId) {
+        if (!usedSigned && chargeFeedbackUsable) {
           const v = await readNumber(chgId, 'power', { allowStale: true });
           if (Number.isFinite(v)) {
             let vv = invChg ? -v : v;
@@ -5751,7 +5776,7 @@ class NexoWattVis extends utils.Adapter {
           }
         }
 
-        if (!usedSigned && dchgId) {
+        if (!usedSigned && dischargeFeedbackUsable) {
           const v = await readNumber(dchgId, 'power', { allowStale: true });
           if (Number.isFinite(v)) {
             let vv = invDchg ? -v : v;

@@ -1677,16 +1677,25 @@ if (typeof soc === 'number') {
 							: ((typeof battW === 'number') ? (battW + errAdjW) : (curSetW + errAdjW));
 
 						// Safety-Clamp gegen unnötige Export-Spikes:
-						// Begrenze grob auf aktuelle Hauslast am NVP: Import (roh) + aktuelle Entladung (falls messbar) + Puffer.
-						// Bei aktiver Regelung zählt der letzte selbst gesetzte Sollwert als plausible Entladebasis,
-						// damit zeitversetzte/0-W-Istwerte die Farm nicht künstlich herunterziehen.
+						// Begrenze die Entladung auf die plausibel aktuelle Last am NVP.
+						// WICHTIGER Feldfix 0.8.79: Der letzte Sollwert darf hier NICHT als
+						// aktuelle Entladung/Demand-Basis zählen. Wenn ein Speicher träge reagiert
+						// oder die Istleistung nicht vertrauenswürdig ist, würde der Integrator
+						// sonst immer weiter hochlaufen (z. B. 2,6 kW Netzbezug -> 71,6 kW
+						// Entladevorgabe). Als Demand zählen nur echte Messwerte plus eine
+						// separate Lastschätzung aus dem Energiefluss.
 						const importRawNowW = Math.max(0, (typeof nvpRawW === 'number') ? nvpRawW : 0);
 						const measuredDischargeNowW = (typeof battW === 'number') ? Math.max(0, battW) : 0;
-						const commandedDischargeNowW = curSetW > 0 ? curSetW : 0;
-						const dischargeNowW = Math.max(measuredDischargeNowW, commandedDischargeNowW);
+						const loadEstimate = getFeneconAcLoadTargetW();
+						const loadEstimateW = (loadEstimate && Number.isFinite(Number(loadEstimate.w))) ? Math.max(0, Number(loadEstimate.w)) : 0;
 						const safetyMarginW = 200;
-						const maxByDemandW = importRawNowW + dischargeNowW + safetyMarginW;
+						const demandBaseW = Math.max(importRawNowW + measuredDischargeNowW, loadEstimateW);
+						const maxByDemandW = demandBaseW + safetyMarginW;
 						if (Number.isFinite(maxByDemandW) && maxByDemandW > 0) {
+							dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
+								? Math.min(dischargeDemandHardCapW, maxByDemandW)
+								: maxByDemandW;
+							dischargeDemandHardCapReason = `Tarif-NVP-Demand-Cap (${String(loadEstimate && loadEstimate.source ? loadEstimate.source : 'live-nvp')})`;
 							nextSetW = Math.min(nextSetW, maxByDemandW);
 						}
 
@@ -1855,25 +1864,24 @@ if (targetW === 0 && selfDischargeEnabled) {
 
     // Safety-Clamp gegen Überschwingen:
     // Wenn battW nicht gemappt ist (oder NVP kurzfristig "alt" ist), kann die inkrementelle Regelung
-    // zu großen Sollwerten aufintegrieren. Wir begrenzen deshalb die Entladeleistung grob auf
-    // "aktuelle Last" am NVP: Import (roh) + aktuelle Entladung (falls messbar) + kleiner Puffer.
-    // Dadurch bleibt die Regelung im Bereich der realen Hauslast und erzeugt keine Export-Spikes.
-    // Bei aktiver Eigenverbrauchsregelung zählt der letzte selbst gesetzte Sollwert als plausible
-    // Entladebasis, damit zeitversetzte/0-W-Istwerte die Farm nicht künstlich herunterziehen.
+    // zu großen Sollwerten aufintegrieren. Wir begrenzen deshalb die Entladeleistung auf die
+    // plausibel aktuelle Last: echter NVP-Import + echte Batterie-Ist-Entladung bzw. eine
+    // separate Lastschätzung aus dem Energiefluss.
+    // WICHTIGER Feldfix 0.8.79: Der letzte eigene Sollwert darf hier NICHT als Demand-Basis
+    // verwendet werden. Genau diese Rückkopplung hat aus einem kleinen Netzbezug eine
+    // viel zu hohe Entladevorgabe aufintegriert.
     const importRawNowW = Math.max(0, (typeof nvpRawW === 'number') ? nvpRawW : 0);
     const measuredDischargeNowW = (typeof battW === 'number') ? Math.max(0, battW) : 0;
-    // Wenn Farm-/Gateway-Istwerte 0 W oder zeitversetzt liefern, darf der Demand-Cap
-    // die laufende Eigenverbrauchs-Entladung nicht künstlich auf Import+Puffer drücken.
-    // Der letzte eigene Sollwert zählt deshalb als plausible aktuelle Entladebasis.
-    const commandedDischargeNowW = curSetW > 0 ? curSetW : 0;
-    const dischargeNowW = Math.max(measuredDischargeNowW, commandedDischargeNowW);
+    const loadEstimate = getFeneconAcLoadTargetW();
+    const loadEstimateW = (loadEstimate && Number.isFinite(Number(loadEstimate.w))) ? Math.max(0, Number(loadEstimate.w)) : 0;
     const safetyMarginW = 200; // bewusst konservativ; Feintuning über selfTargetGridW/Deadband/Rampe
-    const maxByDemandW = importRawNowW + dischargeNowW + safetyMarginW;
+    const demandBaseW = Math.max(importRawNowW + measuredDischargeNowW, loadEstimateW);
+    const maxByDemandW = demandBaseW + safetyMarginW;
     if (Number.isFinite(maxByDemandW) && maxByDemandW >= 0) {
         dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
             ? Math.min(dischargeDemandHardCapW, maxByDemandW)
             : maxByDemandW;
-        dischargeDemandHardCapReason = 'Eigenverbrauch-NVP-Demand-Cap';
+        dischargeDemandHardCapReason = `Eigenverbrauch-NVP-Demand-Cap (${String(loadEstimate && loadEstimate.source ? loadEstimate.source : 'live-nvp')})`;
         nextSetW = Math.min(nextSetW, maxByDemandW);
     }
 

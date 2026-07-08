@@ -1,3 +1,11 @@
+## 0.8.79
+
+- Speicher-Entladevorgabe abgesichert: Der letzte Sollwert wird nicht mehr als echte Entladeleistung in den NVP-Demand-Cap zurückgeführt. Dadurch kann die Eigenverbrauchs-/Tarifregelung bei kleinem Netzbezug nicht mehr auf viel zu hohe Entladeleistungen hochintegrieren.
+- Harte Nach-Rampen-Begrenzung für NVP-Entladung ergänzt: Tarif- und Eigenverbrauchsmodus werden nach der Rampenlogik auf plausible aktuelle Last begrenzt.
+- Speicherfarm-Istwertschutz ergänzt: Ist-Leistungs-DPs, die auf Steuer-/Sollwert-DPs zeigen, werden nicht mehr als echte Lade-/Entladeleistung der Farm verwendet und in der Diagnose markiert.
+- Regressionstest für den 71,6-kW-Feldfehler ergänzt.
+- Service-Worker Cache auf `nexowatt-cache-v380` erhöht.
+
 ## 0.8.78
 
 - Speicherregelung/App-Trennung korrigiert: Speicherregelungs-App startet die normale Eigenverbrauchsoptimierung; Speicherfarm startet die Regelung nicht mehr alleine, sondern bleibt Verteil-/Schreibschicht.
