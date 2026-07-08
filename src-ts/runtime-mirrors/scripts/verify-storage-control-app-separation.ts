@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 85b1780d10d0df66a2ece372ed8e7749ae6d075a194eabe88c05c8f08f2a5a74
+ * Original-Hash: 59ad62152349e0cc0f6174359245c2143a841dd86b6c5c6fdaf4e39bb9a8b2d6
  */
 
 /**
@@ -31,10 +31,11 @@
 
 'use strict';
 /**
- * Regressionstest 0.8.78: Speicherregelung, MultiUse und Speicherfarm müssen getrennte Rollen behalten.
- * - Speicherregelung/MultiUse starten die Regelung.
- * - Speicherfarm verteilt nur vorhandene Sollwerte und startet die Regelung nicht allein.
- * - 0-W-Grenzen in der Speicherfarm bleiben bewusste Sperren pro Richtung.
+ * Regressionstest 0.8.81: Speicherregelung, MultiUse und Speicherfarm bleiben sauber getrennt.
+ * - Speicherregelung aktiv => reine Eigenverbrauchsoptimierung.
+ * - MultiUse aktiv => fuehrt SoC-Zonen, Reserve, LSK/Peak-Shaving und Komfortkopplungen.
+ * - Speicherfarm aktiv => verteilt nur den fertigen Sollwert; kein eigener Regelungsstart.
+ * - 0-W-Limits in der Farm bleiben bewusste Richtungssperren; leer bleibt unbegrenzt.
  */
 const fs = require('fs');
 
@@ -91,24 +92,41 @@ function mustNot(file, needle, label) {
   }
 }
 
-must('src-ts/runtime-executables/ems/modules/storage-control.ts', 'const enabled = cfgEnabled || autoTarifEnabled;', 'Speicherfarm startet Speicherregelung nicht automatisch');
-must('src-ts/runtime-executables/ems/modules/storage-control.ts', 'Speicherfarm ist hier KEIN eigener Auto-Start mehr', 'Kommentar zur Rollenverteilung');
-must('src-ts/runtime-executables/ems/modules/storage-control.ts', "await this._setIfChanged('speicher.regelung.aktivAutoSpeicherfarm', false);", 'alte Auto-Speicherfarm-Diagnose wird neutralisiert');
-must('src-ts/runtime-executables/ems/modules/storage-control.ts', 'const hasFarmSetpoints = farmEnabled && farmRows.some', 'Speicherfarm bleibt Ziel-/Verteilpfad');
-must('src-ts/runtime-executables/ems/modules/storage-control.ts', 'const ignoreStaleMultiUsePolicy = !!(multiUsePolicyConfigured && !multiUsePolicyActive);', 'inaktive MultiUse-Policy wird erkannt');
-must('src-ts/runtime-executables/ems/modules/storage-control.ts', "await this._setIfChanged('speicher.regelung.policyMode', multiUsePolicyActive ? 'multiuse' : 'speicherregelung');", 'Policy-Modus-Diagnose');
+for (const file of [
+  'src-ts/runtime-executables/ems/modules/storage-control.ts',
+  'src-ts/runtime-mirrors/ems/modules/storage-control.ts',
+  'ems/modules/storage-control.js',
+]) {
+  must(file, 'const enabled = cfgEnabled || autoTarifEnabled || multiUseAppPolicyActive;', 'Aktivierung ueber Speicherregelung/Tarif/MultiUse, nicht Farm');
+  must(file, 'Die Speicherfarm ist hier KEIN eigener Auto-Start.', 'Speicherfarm-Kommentar Rollenverteilung');
+  must(file, "await this._setIfChanged('speicher.regelung.aktivAutoMultiUse', multiUseAppPolicyActive);", 'MultiUse Auto-Diagnose');
+  must(file, "await this._setIfChanged('speicher.regelung.aktivAutoSpeicherfarm', false);", 'Farm-Autostart neutralisiert');
+  must(file, 'const storageOnlyPolicyActive = !multiUsePolicyActive;', 'Storage-only Policy-Schicht');
+  must(file, 'const multiUseOwnsZones = !!multiUsePolicyActive;', 'SoC-Zonen gehoeren MultiUse');
+  must(file, 'const reserveEnabled = multiUseOwnsZones && !!cfg.reserveEnabled;', 'Reserve nur MultiUse');
+  must(file, 'const lskEnabledCfg = multiUseOwnsZones && (cfg.lskEnabled !== false);', 'LSK nur MultiUse');
+  must(file, 'const evcsStorageAssistPolicyAllowed = !!multiUsePolicyActive;', 'EVCS-Speicherassist nur MultiUse');
+  must(file, "await this._setIfChanged('speicher.regelung.policyMode', multiUsePolicyActive ? 'multiuse' : 'eigenverbrauch');", 'Policy-Modus eigenverbrauch/multiuse');
+  must(file, 'pureSelfConsumptionWithoutMultiUse: !multiUsePolicyActive', 'Policy-JSON reine Eigenverbrauchsebene');
+}
 
-must('src-ts/runtime-executables/main.ts', 'if (!nativeObj.enableMultiUse || mu.enabled !== true)', 'MultiUse wirkt nur bei aktiver App und aktiver Policy');
-must('src-ts/runtime-executables/main.ts', 'st.multiUsePolicyActive = true;', 'aktive MultiUse-Policy wird markiert');
-mustNot('src-ts/runtime-executables/main.ts', 'delete st[k]', 'MultiUse darf Storage-Config nicht loeschen');
+for (const file of [
+  'src-ts/runtime-executables/main.ts',
+  'src-ts/runtime-mirrors/main.ts',
+  'main.js',
+]) {
+  must(file, 'if (!nativeObj.enableMultiUse || mu.enabled !== true)', 'MultiUse wirkt nur bei aktiver App und Policy');
+  must(file, 'st.multiUsePolicyActive = true;', 'aktive MultiUse-Policy wird markiert');
+  must(file, 'Reserve/LSK gelten nur, wenn MultiUse aktiv führt', 'Farm-Floor folgt Rollenmodell');
+  must(file, 'const reserveEnabled = multiUsePolicyActive && !!storageCfg.reserveEnabled;', 'Farm-Reserve nur MultiUse');
+  must(file, 'const lskEnabled = !!(multiUsePolicyActive && storageCfg.lskDischargeEnabled !== false && storageCfg.lskEnabled !== false);', 'Farm-LSK nur MultiUse');
+  mustNot(file, 'delete st[k]', 'MultiUse darf Storage-Config nicht loeschen');
+}
 
 must('src-ts/runtime-executables/main.ts', 'Eine bewusst eingetragene 0-W-Vorgabe sperrt diese Richtung', '0-W-Limit als Sperre im Farm-Status');
 must('src-ts/runtime-executables/main.ts', 'if (!Number.isFinite(n) || n < 0) return null;', '0-W-Limit wird nicht als leer verworfen');
 must('src-ts/runtime-executables/main.ts', 'if (Number.isFinite(v) && v >= 0) return Math.round(v);', 'Farm-Verteilung akzeptiert 0 W als echtes Limit');
 must('src-ts/runtime-executables/www/ems-apps.ts', 'Leer = unbegrenzt, 0 W = diese Richtung sperren', 'UI-Hinweis fuer 0-W-Sperre');
-
-must('ems/modules/storage-control.js', 'const enabled = cfgEnabled || autoTarifEnabled;', 'Runtime-Speicherregelung ohne Farm-Autostart');
-must('main.js', 'Eine bewusst eingetragene 0-W-Vorgabe sperrt diese Richtung', 'Runtime-Farm-Limit-Kommentar');
-must('www/ems-apps.js', 'Leer = unbegrenzt, 0 W = diese Richtung sperren', 'Runtime-UI-Hinweis');
+must('www/ems-apps.js', 'Leer = unbegrenzt, 0 W = diese Richtung sperren', 'Runtime-UI-Hinweis fuer 0-W-Sperre');
 
 console.log('[storage-control-app-separation] OK: Speicherregelung, MultiUse, Speicherfarm und 0-W-Limits sind sauber getrennt.');

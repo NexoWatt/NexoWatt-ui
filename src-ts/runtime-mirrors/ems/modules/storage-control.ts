@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 7505ea6096a6e9796786ec44fa2fbe804e9fce4e0e937b26af2ba4e72dc726e7
+ * Original-Hash: 7725937064c3731204ae069d909acf0b04efbc18a991da06885be73af7890c3b
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:be276c78afd9b41451793405bafb264900c9d4652653fa584eed0990c6b1d4c3
+ * Quell-Hash: sha256:2283b89c99f9ffe25d330808c0d26278a5b1fefe24df7168f4ab30a78e39ffb9
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -439,15 +439,24 @@ class SpeicherRegelungModule extends BaseModule {
             autoTarifEnabled = false;
         }
 
-        // Effektive Aktivierung bewusst nur über Speicherregelungs-App, Tarif-Automatik
-        // oder MultiUse (MultiUse setzt enableStorageControl beim Speichern selbst).
-        // Die Speicherfarm ist hier KEIN eigener Auto-Start mehr: sie ist der Verteil-/
-        // Schreibpfad, sobald die Speicherregelung oder MultiUse einen Sollwert erzeugt.
-        // So bleibt die Rollenverteilung sauber:
-        // - Speicherregelung aktiv => normale Eigenverbrauchsoptimierung erzeugt Sollwerte.
-        // - MultiUse aktiv => MultiUse schreibt SoC-Zonen und aktiviert die Speicherregelung.
-        // - Speicherfarm aktiv => verteilt den erzeugten Sollwert auf mehrere Speicher.
-        const enabled = cfgEnabled || autoTarifEnabled;
+        // Policy-Router: Speicherregelung, MultiUse und Speicherfarm haben getrennte Rollen.
+        // - Speicherregelungs-App: startet die reine Eigenverbrauchsoptimierung als Basis.
+        // - MultiUse-App: startet/fuehrt zusaetzlich Reserve-, LSK- und SoC-Zonen.
+        // - Speicherfarm: verteilt nur den fertigen Sollwert und startet keine Regelung allein.
+        // Diese fruehe Erkennung verhindert, dass eine aktive MultiUse-Policy wegen eines
+        // fehlenden enableStorageControl-Hakens wirkungslos bleibt.
+        const installerCfgForMultiUseEarly = (this.adapter && this.adapter.config && this.adapter.config.installerConfig && typeof this.adapter.config.installerConfig === 'object')
+            ? this.adapter.config.installerConfig
+            : {};
+        const storageMultiUseCfgEarly = (installerCfgForMultiUseEarly.storageMultiUse && typeof installerCfgForMultiUseEarly.storageMultiUse === 'object')
+            ? installerCfgForMultiUseEarly.storageMultiUse
+            : null;
+        const multiUsePolicyConfiguredEarly = !!storageMultiUseCfgEarly;
+        const multiUseAppPolicyActive = !!(this.adapter && this.adapter.config && this.adapter.config.enableMultiUse && storageMultiUseCfgEarly && storageMultiUseCfgEarly.enabled === true);
+
+        // Effektive Aktivierung bewusst nur ueber Speicherregelungs-App, Tarif-Automatik
+        // oder aktive MultiUse-Policy. Die Speicherfarm ist hier KEIN eigener Auto-Start.
+        const enabled = cfgEnabled || autoTarifEnabled || multiUseAppPolicyActive;
 
         // SoC-Hysterese optional aus Konfig lesen (falls später im Admin ergänzt).
         // Default bleibt 0.5 %-Punkte.
@@ -457,6 +466,7 @@ class SpeicherRegelungModule extends BaseModule {
         await this._setIfChanged('speicher.regelung.aktiv', enabled);
         await this._setIfChanged('speicher.regelung.aktivKonfig', cfgEnabled);
         await this._setIfChanged('speicher.regelung.aktivAutoTarif', autoTarifEnabled);
+        await this._setIfChanged('speicher.regelung.aktivAutoMultiUse', multiUseAppPolicyActive);
         await this._setIfChanged('speicher.regelung.aktivAutoSpeicherfarm', false);
 
         // Wenn effektiv deaktiviert: nur Diagnose aktualisieren – KEINE Setpoints schreiben.
@@ -832,6 +842,13 @@ class SpeicherRegelungModule extends BaseModule {
         let dischargeDemandHardCapW = null;
         let dischargeDemandHardCapReason = '';
 
+        // Harte Lade-Demand-Cap für PV-/Tarif-/Reserve-Laden.
+        // Hintergrund: Auch beim Laden darf die Rampe keinen alten negativen Sollwert weiter
+        // halten, wenn PV-Export, Netz-Headroom oder die aktuelle Ladeanforderung bereits
+        // kleiner/0 W geworden sind. 0 W heißt dabei bewusst: diese Richtung jetzt stoppen.
+        let chargeDemandHardCapW = null;
+        let chargeDemandHardCapReason = '';
+
         const exportW = Math.max(0, -gridW); // negative Netzleistung = Einspeisung (geglättet)
         const importW = Math.max(0, gridW);  // positive Netzleistung = Bezug (geglättet)
         const nvpRawW = (typeof gridRawW === 'number') ? gridRawW : gridW; // Import + / Export -
@@ -1088,20 +1105,27 @@ if (typeof soc === 'number') {
         // Alte MultiUse-Werte wie selfDischargeEnabled=false dürfen dann keine
         // dauerhafte 0-W-Sperre mehr verursachen; echte 0-W-Sollwerte auf den
         // Ziel-DPs bleiben davon unberührt und stoppen den Speicher weiterhin.
-        const installerCfgForMultiUse = (this.adapter && this.adapter.config && this.adapter.config.installerConfig && typeof this.adapter.config.installerConfig === 'object')
-            ? this.adapter.config.installerConfig
-            : {};
-        const storageMultiUseCfg = (installerCfgForMultiUse.storageMultiUse && typeof installerCfgForMultiUse.storageMultiUse === 'object')
-            ? installerCfgForMultiUse.storageMultiUse
-            : null;
-        const multiUsePolicyConfigured = !!storageMultiUseCfg;
-        const multiUsePolicyActive = !!(this.adapter && this.adapter.config && this.adapter.config.enableMultiUse && storageMultiUseCfg && storageMultiUseCfg.enabled === true);
+        const installerCfgForMultiUse = installerCfgForMultiUseEarly;
+        const storageMultiUseCfg = storageMultiUseCfgEarly;
+        const multiUsePolicyConfigured = !!multiUsePolicyConfiguredEarly;
+        const multiUsePolicyActive = !!multiUseAppPolicyActive;
         const ignoreStaleMultiUsePolicy = !!(multiUsePolicyConfigured && !multiUsePolicyActive);
+        const storageOnlyPolicyActive = !multiUsePolicyActive;
 
-        // Notstrom-Reserve: harte Untergrenze für Entladen
-        const reserveEnabled = ignoreStaleMultiUsePolicy ? false : !!cfg.reserveEnabled;
-        const reserveMin = clamp(num(ignoreStaleMultiUsePolicy ? undefined : cfg.reserveMinSocPct, 20), 0, 100);
-        const reserveTarget = clamp(num(ignoreStaleMultiUsePolicy ? undefined : cfg.reserveTargetSocPct, reserveMin), 0, 100);
+        // Rollenmodell Speicherregelung:
+        // Ohne aktive MultiUse-App ist die Speicherregelungs-App bewusst eine
+        // reine Eigenverbrauchsoptimierung: PV-Überschuss laden und Netzbezug
+        // am NVP reduzieren. SoC-Zonen für Notstrom/Reserve und LSK gehören
+        // erst zur aktiven MultiUse-Policy, damit alte MultiUse-Werte die
+        // normale Speicherregelung nicht versteckt sperren oder verschieben.
+        const multiUseOwnsZones = !!multiUsePolicyActive;
+
+        // Notstrom-Reserve: harte Untergrenze nur als aktive MultiUse-Zone.
+        // Die reine Eigenverbrauchsoptimierung nutzt unten selfMinSoc als
+        // Sicherheits-Minimum, aber keine separate Reserve-/Refill-Policy.
+        const reserveEnabled = multiUseOwnsZones && !!cfg.reserveEnabled;
+        const reserveMin = clamp(num(multiUseOwnsZones ? cfg.reserveMinSocPct : undefined, 20), 0, 100);
+        const reserveTarget = clamp(num(multiUseOwnsZones ? cfg.reserveTargetSocPct : undefined, reserveMin), 0, 100);
 
         const reserveActive = reserveEnabled && (typeof soc === 'number') && (soc <= reserveMin);
 
@@ -1119,10 +1143,16 @@ if (typeof soc === 'number') {
         await this._setIfChanged('speicher.regelung.reserveMinSocPct', reserveMin);
         await this._setIfChanged('speicher.regelung.reserveZielSocPct', reserveTarget);
 
-        // LSK (Peak-Shaving über Speicher)
-        const lskEnabledCfg = ignoreStaleMultiUsePolicy ? true : (cfg.lskEnabled !== false); // Default: an (damit bestehende Installationen unverändert bleiben)
-        const lskMinSoc = clamp(num(ignoreStaleMultiUsePolicy ? undefined : cfg.lskMinSocPct, reserveMin), 0, 100);
-        const lskMaxSoc = clamp(num(ignoreStaleMultiUsePolicy ? undefined : cfg.lskMaxSocPct, 100), 0, 100);
+        // LSK/Peak-Shaving über den Speicher ist eine MultiUse-Funktion.
+        // Ohne MultiUse bleibt die Speicher-App bei reiner Eigenverbrauchslogik;
+        // Peak-Shaving kann dann nicht heimlich über alte SoC-Zonen eingreifen.
+        const lskEnabledCfg = multiUseOwnsZones && (cfg.lskEnabled !== false);
+        // Richtungs-Freigaben getrennt halten: Entladen kappt Peaks, Laden füllt die
+        // LSK-Zone wieder auf. Beide dürfen nur wirken, wenn MultiUse die Policy führt.
+        const lskDischargeEnabledCfg = !!(lskEnabledCfg && cfg.lskDischargeEnabled !== false);
+        const lskChargeEnabledCfg = !!(lskEnabledCfg && cfg.lskChargeEnabled !== false);
+        const lskMinSoc = clamp(num(multiUseOwnsZones ? cfg.lskMinSocPct : undefined, reserveMin), 0, 100);
+        const lskMaxSoc = clamp(num(multiUseOwnsZones ? cfg.lskMaxSocPct : undefined, 100), 0, 100);
 
         // Eigenverbrauch (Entladen optional)
         // Hybrid-/Gateway-Priorität ab 0.6.255:
@@ -1135,7 +1165,7 @@ if (typeof soc === 'number') {
         // Ist MultiUse deaktiviert, wird ein alter gespeicherter false-Wert ignoriert, damit die
         // normale Eigenverbrauchsregelung bei SoC + Netzbezug weiter arbeiten kann.
         const hasStoredSelfFlag = (cfg.selfDischargeEnabled === true || cfg.selfDischargeEnabled === false);
-        const hasExplicitSelfFlag = hasStoredSelfFlag && !ignoreStaleMultiUsePolicy;
+        const hasExplicitSelfFlag = hasStoredSelfFlag && (!multiUsePolicyConfigured || multiUseOwnsZones);
         const feneconAcMode = false;
         // Farm-Verhalten bewusst unverändert lassen: ältere Farm-Setups, die den alten
         // Haken nur als implizite Eigenverbrauchs-Freigabe genutzt haben, behalten diesen
@@ -1150,16 +1180,18 @@ if (typeof soc === 'number') {
         const selfDischargeEnabled = hasExplicitSelfFlag
             ? (cfg.selfDischargeEnabled === true)
             : (farmSelfDischargeFallback || feneconLowPvSelfDischargeFallback || genericSelfDischargeDefault);
-        const selfMinSoc = clamp(num(ignoreStaleMultiUsePolicy ? undefined : cfg.selfMinSocPct, reserveMin), 0, 100);
-        const selfMaxSoc = clamp(num(ignoreStaleMultiUsePolicy ? undefined : cfg.selfMaxSocPct, 100), 0, 100);
+        const selfMinSoc = clamp(num((multiUseOwnsZones || !multiUsePolicyConfigured) ? cfg.selfMinSocPct : undefined, reserveMin), 0, 100);
+        const selfMaxSoc = clamp(num((multiUseOwnsZones || !multiUsePolicyConfigured) ? cfg.selfMaxSocPct : undefined, 100), 0, 100);
         // Eigenverbrauchs-Optimierung: Ziel-Netzbezug am NVP.
         // Praxis: ein kleiner Bezug (z. B. 50–150 W) ist oft stabiler als exakt 0 W
         // (Messrauschen, Totzeiten, Geräte-Rampen).
         // Standard-Eigenverbrauch bleibt herstellerunabhängig bei kleinem Ziel-Import.
         // Hybrid-/Gateway-Priorität entscheidet später pro Tick: Gateway-No-Write, Zusatz-PV-Laden
         // oder normale externe Vorgabe bei wenig/keiner interner PV.
-        const selfTargetGridW = Math.max(0, num(ignoreStaleMultiUsePolicy ? undefined : cfg.selfTargetGridImportW, 50));
-        const selfImportThresholdW = Math.max(0, num(ignoreStaleMultiUsePolicy ? undefined : cfg.selfImportThresholdW, 50));
+        // Zielwert/Deadband sind Tuningwerte der Eigenverbrauchsregelung und
+        // dürfen auch ohne MultiUse genutzt werden. Sie bilden keine SoC-Zonen.
+        const selfTargetGridW = Math.max(0, num(cfg.selfTargetGridImportW, 50));
+        const selfImportThresholdW = Math.max(0, num(cfg.selfImportThresholdW, 50));
 
         await this._setIfChanged('speicher.regelung.lskMinSocPct', lskMinSoc);
         await this._setIfChanged('speicher.regelung.lskMaxSocPct', lskMaxSoc);
@@ -1168,9 +1200,13 @@ if (typeof soc === 'number') {
         await this._setIfChanged('speicher.regelung.selfTargetGridImportW', selfTargetGridW);
         await this._setIfChanged('speicher.regelung.selfImportThresholdW', selfImportThresholdW);
         await this._setIfChanged('speicher.regelung.selfEntladenAktiviert', !!selfDischargeEnabled);
+        await this._setIfChanged('speicher.regelung.lskPolicyAktiv', !!lskEnabledCfg);
+        await this._setIfChanged('speicher.regelung.lskEntladenAktiviert', !!lskDischargeEnabledCfg);
+        await this._setIfChanged('speicher.regelung.lskLadenAktiviert', !!lskChargeEnabledCfg);
         await this._setIfChanged('speicher.regelung.multiUsePolicyActive', !!multiUsePolicyActive);
         await this._setIfChanged('speicher.regelung.multiUsePolicyIgnored', !!ignoreStaleMultiUsePolicy);
-        await this._setIfChanged('speicher.regelung.policyMode', multiUsePolicyActive ? 'multiuse' : 'speicherregelung');
+        await this._setIfChanged('speicher.regelung.policyMode', multiUsePolicyActive ? 'multiuse' : 'eigenverbrauch');
+        await this._setIfChanged('speicher.regelung.policyLayerStorageOnly', !!storageOnlyPolicyActive);
 
         // Grenzen / Glättung
         // maxChargeW/maxDischargeW sind *optionale* Software-Clamps.
@@ -1199,7 +1235,7 @@ if (typeof soc === 'number') {
         //    Wichtig: Diese Logik darf den Netzanschluss NICHT überlasten. Daher wird hier nicht "absolut" auf
         //    (Import - Limit) gesetzt (das führt zu einem Fixpunkt), sondern als Delta/Integrator auf die bestehende
         //    Sollleistung aufaddiert. Dadurch erreicht der Speicher das Ziel (Import <= Limit) zuverlässig.
-        if (peakEnabled && lskEnabledCfg && (cfg.lskDischargeEnabled !== false)) {
+        if (peakEnabled && lskDischargeEnabledCfg) {
             const limitW = (typeof psLimitW === 'number' && psLimitW > 0) ? psLimitW : null;
 
             // Für die Schutzfunktion immer den Rohwert am Netzanschlusspunkt verwenden (keine Mittelwert-Schönung).
@@ -1258,6 +1294,27 @@ if (typeof soc === 'number') {
                         : ((typeof psOverW === 'number' && psOverW > 0) ? psOverW : 0);
                     if (needW > 0 && nextSetW < needW) nextSetW = clamp(needW, 0, lskMaxDischargeEff);
 
+                    // Feldschutz 0.8.81: Lastspitzenkappung darf nicht über den sichtbaren
+                    // Peak-Bedarf hinaus hochintegrieren. Der sichere Bedarf ist hier:
+                    // echte Überschreitung am NVP + echte Batterie-Istentladung + Puffer.
+                    // Der letzte Sollwert zählt bewusst NICHT als Demand-Basis. Wenn die
+                    // Batterie-Istleistung fehlt, bleibt der Regler NVP-basiert konservativ;
+                    // dadurch kann ein falscher Modbus-/Setpoint-DP keinen Industrieanschluss
+                    // mit einem zu hohen Entladesollwert gefährden.
+                    const lskOverLimitW = Math.max(0, importNowW - limitW);
+                    const lskMeasuredDischargeW = (battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW))
+                        ? Math.max(0, battPowerW)
+                        : 0;
+                    const lskSafetyMarginW = 200;
+                    const lskDemandCapW = Math.max(0, lskOverLimitW + lskMeasuredDischargeW + lskSafetyMarginW);
+                    dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
+                        ? Math.min(dischargeDemandHardCapW, lskDemandCapW)
+                        : lskDemandCapW;
+                    dischargeDemandHardCapReason = (battPowerTrusted && typeof battPowerW === 'number')
+                        ? 'LSK-NVP-Demand-Cap (Peak-Überlast+Batterie)'
+                        : 'LSK-NVP-Demand-Cap (Peak-Überlast ohne Batterie-Istleistung)';
+                    nextSetW = Math.min(nextSetW, lskDemandCapW);
+
                     targetW = nextSetW;
                     reason = `Lastspitzenkappung: entladen (Import ${Math.round(importNowW)} W > Limit ${Math.round(limitW)} W)`;
                     source = 'lastspitze';
@@ -1269,36 +1326,46 @@ if (typeof soc === 'number') {
             }
         }
 
-        // 2) Gate C: Ladepark-Unterstützung (EVCS Boost/Auto) via Speicher-Entladung,
-        // sofern keine Lastspitzenkappung aktiv ist.
+        // 2) Gate C: Ladepark-Unterstützung (EVCS Boost/Auto) via Speicher-Entladung.
+        // Rollenmodell 0.8.81: Diese Kopplung gehört zu MultiUse. Die reine
+        // Speicherregelungs-App bleibt Eigenverbrauchsoptimierung und darf keine
+        // Ladepark-/Komfortentladung aus alten States starten.
+        const evcsStorageAssistPolicyAllowed = !!multiUsePolicyActive;
         if (targetW === 0 && !feneconAcMode) {
             const assistW = await this._readOwnNumber('chargingManagement.control.storageAssistW');
             evcsAssistReqW = (typeof assistW === 'number' && Number.isFinite(assistW)) ? assistW : 0;
             if (typeof assistW === 'number' && assistW > 0) {
-                // EVCS-Unterstützung ist "komfort" – wenn Reserve wieder aufgefüllt werden soll, blockieren wir das.
-                const reserveMinEff = reserveEnabled ? reserveMin : 0;
-                const socOk = (typeof soc !== 'number') ? true : (soc > Math.max(reserveMinEff, selfMinSoc));
-                if (typeof dischargeAllowed === 'boolean' && dischargeAllowed === false) {
+                if (!evcsStorageAssistPolicyAllowed) {
                     targetW = 0;
-                    reason = 'EVCS-Unterstützung blockiert (Tarif: Entladen gesperrt)';
-                    source = 'evcs';
-                } else if (reserveActive) {
-                    targetW = 0;
-                    reason = 'EVCS-Unterstützung nötig, aber Notstrom-Reserve aktiv';
-                    source = 'evcs';
-                } else if (reserveChargeWanted) {
-                    targetW = 0;
-                    reason = 'EVCS-Unterstützung blockiert (Reserve soll aufgefüllt werden)';
-                    source = 'evcs';
-                } else if (!socOk) {
-                    targetW = 0;
-                    reason = 'EVCS-Unterstützung blockiert (SoC unter Minimum)';
+                    reason = 'EVCS-Unterstützung blockiert (MultiUse nicht aktiv; Speicherregelung = Eigenverbrauch pur)';
                     source = 'evcs';
                 } else {
-                    targetW = clamp(assistW, 0, maxDischargeW);
-                    reason = `EVCS-Unterstützung: entladen (${Math.round(assistW)} W angefordert)`;
-                    source = 'evcs';
-                    hardDischargeMinSoc = Math.max(hardDischargeMinSoc, Math.max(reserveMinEff, selfMinSoc));
+                    // EVCS-Unterstützung ist MultiUse-Komfort – wenn Reserve wieder aufgefüllt
+                    // werden soll, blockieren wir das bewusst.
+                    const reserveMinEff = reserveEnabled ? reserveMin : 0;
+                    const socOk = (typeof soc !== 'number') ? true : (soc > Math.max(reserveMinEff, selfMinSoc));
+                    if (typeof dischargeAllowed === 'boolean' && dischargeAllowed === false) {
+                        targetW = 0;
+                        reason = 'EVCS-Unterstützung blockiert (Tarif: Entladen gesperrt)';
+                        source = 'evcs';
+                    } else if (reserveActive) {
+                        targetW = 0;
+                        reason = 'EVCS-Unterstützung nötig, aber Notstrom-Reserve aktiv';
+                        source = 'evcs';
+                    } else if (reserveChargeWanted) {
+                        targetW = 0;
+                        reason = 'EVCS-Unterstützung blockiert (Reserve soll aufgefüllt werden)';
+                        source = 'evcs';
+                    } else if (!socOk) {
+                        targetW = 0;
+                        reason = 'EVCS-Unterstützung blockiert (SoC unter Minimum)';
+                        source = 'evcs';
+                    } else {
+                        targetW = clamp(assistW, 0, maxDischargeW);
+                        reason = `EVCS-Unterstützung: entladen (${Math.round(assistW)} W angefordert)`;
+                        source = 'evcs';
+                        hardDischargeMinSoc = Math.max(hardDischargeMinSoc, Math.max(reserveMinEff, selfMinSoc));
+                    }
                 }
             }
         }
@@ -1640,7 +1707,14 @@ if (typeof soc === 'number') {
 						if (pvBlockGridCharge) {
 						  chargeW = 0;
 						}
-						targetW = -Math.max(0, chargeW);
+						chargeW = Math.max(0, chargeW);
+						// Lade-Cap 0.8.80: Der nach Headroom, Importlimit und PV-Reserve erlaubte
+						// Netzlade-Wert wird nach der Rampe erneut hart angewendet. Dadurch kann
+						// ein alter hoher Lade-Sollwert nicht weiterlaufen, wenn der Tarif-/Headroom
+						// Regler im aktuellen Tick nur noch wenig oder 0 W Laden erlaubt.
+						chargeDemandHardCapW = chargeW;
+						chargeDemandHardCapReason = pvBlockGridCharge ? 'Tarif-PV-Reserve-Lade-Cap' : 'Tarif-Netzlade-Headroom-Cap';
+						targetW = -chargeW;
 						if (pvBlockGridCharge) {
 							reason = pvBlockReason || 'Tarif: günstig – PV Forecast -> Netzladen gesperrt';
 						} else if (tariffNegativeImportPreferred) {
@@ -1675,10 +1749,12 @@ if (typeof soc === 'number') {
 						const nvpCtrlW = (typeof nvpRawW === 'number') ? nvpRawW : gridW;
 
 						// Basis ist entweder:
-						// - die Ist-Batterieleistung (OpenEMS-Balancing: batt + (grid-target)) oder
-						// - der letzte Sollwert (Fallback: inkrementelle Regelung), falls keine Istleistung verfügbar ist.
+						// - die echte, frische Ist-Batterieleistung (OpenEMS-Balancing: batt + (grid-target)) oder
+						// - ein konservativer NVP-Fallback ohne Integrator, wenn keine vertrauenswürdige Istleistung vorliegt.
+						// Wichtig: Der letzte Sollwert darf ohne echte Rückmeldung nicht als Istleistung zählen,
+						// weil sonst ein Setpoint-/Modbus-Fehler bis in gefährliche Leistungsbereiche hochlaufen kann.
 						const curSetW = (typeof this._lastTargetW === 'number' && this._lastTargetW > 0) ? this._lastTargetW : 0;
-						const battWRaw = (typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Number(battPowerW) : null;
+						const battWRaw = (battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Number(battPowerW) : null;
 						const battW = (typeof battWRaw === 'number') ? Math.max(0, battWRaw) : null;
 
 						let errW = (typeof nvpCtrlW === 'number') ? (nvpCtrlW - targetImportW) : 0;
@@ -1697,34 +1773,44 @@ if (typeof soc === 'number') {
 						let errAdjW = outsideDeadband ? errW : 0;
 
 						// OpenEMS-Balancing (Vorbild): neuer Sollwert = battIst + (gridIst - gridZiel).
-						// Innerhalb der Deadband halten wir aber den letzten Sollwert, statt auf die
-						// zeitversetzte Istleistung zu springen.
-						// Fallback ohne Ist-Batterieleistung: inkrementelle Regelung (Soll = letzter Sollwert + Fehler).
-						// Rampe/Schrittweite/Anti-PingPong folgen im Dispatcher weiter unten.
-						let nextSetW = holdInDeadband
-							? curSetW
-							: ((typeof battW === 'number') ? (battW + errAdjW) : (curSetW + errAdjW));
+						// Ohne vertrauenswürdige Batterie-Istleistung arbeiten wir bewusst konservativ:
+						// - innerhalb der Deadband darf ein bestehender Sollwert gehalten werden,
+						// - außerhalb der Deadband wird NICHT mehr über den alten Sollwert hochintegriert,
+						//   sondern nur der aktuell sichtbare NVP-Fehler kommandiert.
+						// Dadurch bleibt die Tarif-Entladung auch bei falschem Modbus-/Setpoint-Mapping sicher.
+						let nextSetW;
+						if (holdInDeadband) {
+							nextSetW = curSetW;
+						} else if (typeof battW === 'number') {
+							nextSetW = battW + errAdjW;
+						} else if (errAdjW < 0) {
+							nextSetW = Math.max(0, curSetW + errAdjW);
+						} else {
+							nextSetW = errAdjW;
+						}
 
 						// Safety-Clamp gegen unnötige Export-Spikes:
-						// Begrenze die Entladung auf die plausibel aktuelle Last am NVP.
-						// WICHTIGER Feldfix 0.8.79: Der letzte Sollwert darf hier NICHT als
-						// aktuelle Entladung/Demand-Basis zählen. Wenn ein Speicher träge reagiert
-						// oder die Istleistung nicht vertrauenswürdig ist, würde der Integrator
-						// sonst immer weiter hochlaufen (z. B. 2,6 kW Netzbezug -> 71,6 kW
-						// Entladevorgabe). Als Demand zählen nur echte Messwerte plus eine
-						// separate Lastschätzung aus dem Energiefluss.
+						// Begrenze die Entladung auf den aktuell am NVP belegbaren Bedarf:
+						// echter Import + echte gemessene Batterie-Entladung + kleiner Puffer.
+						// WICHTIGER Feldfix 0.8.81: Abgeleitete Gebäudelasten (z. B. derived.loadTotalW)
+						// dürfen diesen Cap NICHT vergrößern. Bei gleichzeitiger PV-Erzeugung kann die
+						// Gebäudelast deutlich größer als der Netzbezug sein; würde man sie als Cap nutzen,
+						// könnte der Speicher trotz nur 2-3 kW Import wieder auf zweistellige kW-Werte laufen.
 						const importRawNowW = Math.max(0, (typeof nvpRawW === 'number') ? nvpRawW : 0);
 						const measuredDischargeNowW = (typeof battW === 'number') ? Math.max(0, battW) : 0;
-						const loadEstimate = getFeneconAcLoadTargetW();
-						const loadEstimateW = (loadEstimate && Number.isFinite(Number(loadEstimate.w))) ? Math.max(0, Number(loadEstimate.w)) : 0;
 						const safetyMarginW = 200;
-						const demandBaseW = Math.max(importRawNowW + measuredDischargeNowW, loadEstimateW);
-						const maxByDemandW = demandBaseW + safetyMarginW;
-						if (Number.isFinite(maxByDemandW) && maxByDemandW > 0) {
+						const measuredDemandCapW = Math.max(0, importRawNowW + measuredDischargeNowW + safetyMarginW);
+						// Ohne vertrauenswürdige Batterie-Istleistung darf der letzte Sollwert auch in
+						// der Deadband nicht als harte Obergrenze weiterleben. Sonst kann ein alter
+						// hoher Entladebefehl nach der Rampe erneut durchrutschen.
+						const maxByDemandW = measuredDemandCapW;
+						if (Number.isFinite(maxByDemandW) && maxByDemandW >= 0) {
 							dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
 								? Math.min(dischargeDemandHardCapW, maxByDemandW)
 								: maxByDemandW;
-							dischargeDemandHardCapReason = `Tarif-NVP-Demand-Cap (${String(loadEstimate && loadEstimate.source ? loadEstimate.source : 'live-nvp')})`;
+							dischargeDemandHardCapReason = (typeof battW === 'number')
+								? 'Tarif-NVP-Demand-Cap (NVP+gemessene Batterie)'
+								: 'Tarif-NVP-Demand-Cap (konservativ ohne Batterie-Istleistung)';
 							nextSetW = Math.min(nextSetW, maxByDemandW);
 						}
 
@@ -1884,33 +1970,45 @@ if (targetW === 0 && selfDischargeEnabled) {
     let errAdjW = outsideDeadband ? errW : 0;
 
         // OpenEMS-Balancing (Vorbild): battIst + (gridIst - gridZiel).
-        // Innerhalb der Deadband halten wir den letzten Sollwert statt auf die
-        // zeitversetzte Istleistung zu springen.
-        // Fallback: letzter Sollwert + Fehler
-        let nextSetW = holdInDeadband
-            ? curSetW
-            : ((typeof battW === 'number') ? (battW + errAdjW) : (curSetW + errAdjW));
+        // Ohne vertrauenswürdige Batterie-Istleistung wird nicht mehr über den
+        // alten Sollwert hochintegriert. Der Fallback nutzt dann nur den aktuell
+        // sichtbaren NVP-Fehler; in der Deadband darf ein bereits stabiler Sollwert
+        // gehalten werden. Das schützt die Eigenverbrauchsoptimierung vor falschen
+        // Modbus-/Setpoint-DPs und verhindert 71-kW-Ausreißer bei nur wenigen kW Import.
+        let nextSetW;
+        if (holdInDeadband) {
+            nextSetW = curSetW;
+        } else if (typeof battW === 'number') {
+            nextSetW = battW + errAdjW;
+        } else if (errAdjW < 0) {
+            nextSetW = Math.max(0, curSetW + errAdjW);
+        } else {
+            nextSetW = errAdjW;
+        }
 
     // Safety-Clamp gegen Überschwingen:
-    // Wenn battW nicht gemappt ist (oder NVP kurzfristig "alt" ist), kann die inkrementelle Regelung
-    // zu großen Sollwerten aufintegrieren. Wir begrenzen deshalb die Entladeleistung auf die
-    // plausibel aktuelle Last: echter NVP-Import + echte Batterie-Ist-Entladung bzw. eine
-    // separate Lastschätzung aus dem Energiefluss.
-    // WICHTIGER Feldfix 0.8.79: Der letzte eigene Sollwert darf hier NICHT als Demand-Basis
-    // verwendet werden. Genau diese Rückkopplung hat aus einem kleinen Netzbezug eine
-    // viel zu hohe Entladevorgabe aufintegriert.
+    // Die Eigenverbrauchsoptimierung darf nur den aktuell am Netzpunkt sichtbaren
+    // Restbedarf ausregeln. Der sichere Cap ist deshalb: echter NVP-Import + echte
+    // gemessene Batterie-Entladung + Puffer. Abgeleitete Gebäudelasten werden hier
+    // bewusst NICHT als Obergrenze genutzt, weil sie bei PV-Erzeugung viel höher als
+    // der Netzbezug sein können und sonst wieder zu überhöhten Setpoints führen.
+    // WICHTIGER Feldfix 0.8.81: Der letzte eigene Sollwert und derived.loadTotalW
+    // dürfen die Demand-Basis nicht vergrößern. Ohne vertrauenswürdige Batterie-
+    // Istleistung zählt nur der aktuelle NVP-Import plus kleiner Sicherheitsreserve.
+    // Dadurch wird auch innerhalb der Deadband kein alter Setpoint konserviert, der
+    // einen Kundenanschluss überlasten könnte. Stabile Haltewerte sind nur mit echter
+    // Batterie-Istleistung erlaubt.
     const importRawNowW = Math.max(0, (typeof nvpRawW === 'number') ? nvpRawW : 0);
     const measuredDischargeNowW = (typeof battW === 'number') ? Math.max(0, battW) : 0;
-    const loadEstimate = getFeneconAcLoadTargetW();
-    const loadEstimateW = (loadEstimate && Number.isFinite(Number(loadEstimate.w))) ? Math.max(0, Number(loadEstimate.w)) : 0;
     const safetyMarginW = 200; // bewusst konservativ; Feintuning über selfTargetGridW/Deadband/Rampe
-    const demandBaseW = Math.max(importRawNowW + measuredDischargeNowW, loadEstimateW);
-    const maxByDemandW = demandBaseW + safetyMarginW;
+    const maxByDemandW = Math.max(0, importRawNowW + measuredDischargeNowW + safetyMarginW);
     if (Number.isFinite(maxByDemandW) && maxByDemandW >= 0) {
         dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
             ? Math.min(dischargeDemandHardCapW, maxByDemandW)
             : maxByDemandW;
-        dischargeDemandHardCapReason = `Eigenverbrauch-NVP-Demand-Cap (${String(loadEstimate && loadEstimate.source ? loadEstimate.source : 'live-nvp')})`;
+        dischargeDemandHardCapReason = (typeof battW === 'number')
+            ? 'Eigenverbrauch-NVP-Demand-Cap (NVP+gemessene Batterie)'
+            : 'Eigenverbrauch-NVP-Demand-Cap (konservativ ohne Batterie-Istleistung)';
         nextSetW = Math.min(nextSetW, maxByDemandW);
     }
 
@@ -1959,7 +2057,7 @@ if (targetW === 0 && selfDischargeEnabled) {
             const thr = zeEnabled ? Math.min(thrBase, zeDeadband) : thrBase;
 
             // Max-SoC für Laden: größter Bereich (Self/LSK/Reserve-Ziel)
-            const lskMaxSocForCharge = (cfg.lskChargeEnabled !== false) ? lskMaxSoc : selfMaxSoc;
+            const lskMaxSocForCharge = lskChargeEnabledCfg ? lskMaxSoc : selfMaxSoc;
         const maxSocForCharge = clamp(Math.max(selfMaxSoc, lskMaxSocForCharge, reserveTarget), 0, 100);
             hardChargeMaxSoc = maxSocForCharge;
 
@@ -1980,6 +2078,10 @@ if (targetW === 0 && selfDischargeEnabled) {
             const pvChargeWouldBeActive = exportRawW >= thr && canChargeBySoc && chargeLimitW > 0;
             if (pvChargeWouldBeActive && evPriorityBlockStorageCharge) {
                 targetW = 0;
+                // Lade-Cap 0.8.80: Wenn EV-Priorität den Speicher blockiert, darf ein
+                // alter PV-Ladesollwert nicht durch die Rampe weiterlaufen.
+                chargeDemandHardCapW = 0;
+                chargeDemandHardCapReason = 'EV-Priorität-Lade-Cap';
                 reason = evPriorityStarvedW > 0
                     ? `EV-Priorität: PV zuerst an Ladepunkte (${Math.round(evPriorityStarvedW)} W offen)`
                     : 'EV-Priorität: PV zuerst an Ladepunkte';
@@ -1989,7 +2091,21 @@ if (targetW === 0 && selfDischargeEnabled) {
                 // damit die Ladeleistung bei wolkigem Himmel nicht "zittert".
                 const exportCtrlW = (typeof exportW === 'number') ? exportW : exportRawW;
                 const extraBias = (zeEnabled && gridChargeAllowed) ? zeBias : 0;
-                targetW = -clamp(exportCtrlW + extraBias, 0, chargeLimitW);
+                // Der harte Sicherheits-Cap nutzt bewusst den RAW-Export am NVP.
+                // Wenn der Export in diesem Tick wegbricht, wird nach der Rampe sofort
+                // auf diesen Rohwert begrenzt und nicht erst langsam heruntergefahren.
+                // Feldschutz 0.8.81: Der geglättete Export darf nur als ruhiger
+                // Regelwunsch dienen. Die aktuelle RAW-Messung bleibt die harte
+                // Obergrenze, damit ein alter PV-Ladesollwert bei Netzbezug nicht
+                // weiterläuft. Der Zero-Export-Bias wird nur addiert, solange RAW
+                // tatsächlich Export zeigt; bei RAW=0/Import darf er keinen Netzbezug
+                // in die Batterie ziehen.
+                const exportCtrlCapW = Math.max(0, exportCtrlW + extraBias);
+                const exportRawCapW = exportRawW > 0 ? Math.max(0, exportRawW + extraBias) : 0;
+                const pvRawChargeCapW = clamp(Math.min(exportCtrlCapW, exportRawCapW), 0, chargeLimitW);
+                chargeDemandHardCapW = pvRawChargeCapW;
+                chargeDemandHardCapReason = zeEnabled ? 'Nulleinspeisung-PV-Rohwert-Lade-Cap' : 'PV-Rohwert-Lade-Cap';
+                targetW = -pvRawChargeCapW;
                 reason = zeEnabled ? 'Nulleinspeisung: Export in Speicher umleiten' : 'Eigenverbrauch: PV-Überschuss laden';
                 source = 'pv';
             }
@@ -2011,6 +2127,11 @@ if (targetW === 0 && selfDischargeEnabled) {
                 } else if (typeof psHeadroomW === 'number') {
                     wantW = Math.min(wantW, psHeadroomW);
                 }
+
+                // Lade-Cap 0.8.80: Die Reserve-Nachladung darf nach der Rampe nie
+                // stärker bleiben als der aktuelle Headroom-/Reserve-Wunsch.
+                chargeDemandHardCapW = Math.max(0, wantW);
+                chargeDemandHardCapReason = 'Notstrom-Reserve-Lade-Cap';
 
                 if (wantW > 0) {
                     targetW = -wantW;
@@ -2040,8 +2161,7 @@ if (targetW === 0 && selfDischargeEnabled) {
         if (
             targetW === 0 &&
             peakEnabled &&
-            lskEnabledCfg &&
-            (cfg.lskChargeEnabled !== false) &&
+            lskChargeEnabledCfg &&
             (typeof psHeadroomEffW === 'number' && psHeadroomEffW > 0) &&
             (gridW >= 0)
         ) {
@@ -2098,6 +2218,11 @@ if (targetW === 0 && selfDischargeEnabled) {
 
                 wantW = (typeof this._lskRefillHoldW === 'number') ? this._lskRefillHoldW : wantW;
 
+                // Lade-Cap 0.8.80: Auch LSK-Refill darf nach der Rampe nicht über dem
+                // aktuellen Peak-/Import-Headroom weiterlaufen.
+                chargeDemandHardCapW = Math.max(0, wantW);
+                chargeDemandHardCapReason = 'LSK-Refill-Lade-Cap';
+
                 if (wantW > 0) {
                     targetW = -wantW;
                     reason = `LSK: Reserve über Netz nachladen (${Math.round(psHeadroomEffW)} W frei)`;
@@ -2113,8 +2238,7 @@ if (targetW === 0 && selfDischargeEnabled) {
         if (
             targetW === 0 &&
             peakEnabled &&
-            lskEnabledCfg &&
-            (cfg.lskChargeEnabled !== false) &&
+            lskChargeEnabledCfg &&
             (gridW >= 0) &&
             (typeof soc === 'number') && (this._socLskRefillEnabled === true)
         ) {
@@ -2229,8 +2353,13 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 {
     const d = targetW - _prevRampW;
 
-    // PV-Überschuss-Laden: schneller hochfahren (mehr Laden), aber schnell zurücknehmen (sicher gegen Netzbezug)
-    if (source === 'pv' && targetW < 0) {
+    // Lade-Sicherheitsrücknahme: Wenn ein Speicher im letzten Tick geladen hat
+    // (negativer Sollwert) und die aktuelle Policy weniger laden oder auf 0 gehen will,
+    // darf die Standardrampe den alten Lade-Sollwert nicht künstlich halten.
+    // Das ist sicherheitsrelevant für PV-Wolken, wegfallenden Netz-Headroom und EV-Priorität.
+    if (_prevRampW < 0 && targetW >= _prevRampW) {
+        // Weniger laden / Richtung 0 -> bewusst ohne Rampe.
+    } else if (source === 'pv' && targetW < 0) {
         const pvMaxDelta = (pvMaxDeltaCfg > 0) ? pvMaxDeltaCfg : maxDelta;
 
         if (pvMaxDelta > 0 && d < 0 && Math.abs(d) > pvMaxDelta) {
@@ -2262,6 +2391,33 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
         const _rampW = targetW;
 
+        // Harte Lade-Cap NACH der Rampenbegrenzung.
+        // Der Entlade-Feldfix aus 0.8.79 braucht die gleiche Absicherung für negative
+        // Ladesollwerte: Wenn die aktuelle Policy 0 W oder weniger Ladeleistung fordert,
+        // darf ein alter Lade-Sollwert nicht langsam über die Standardrampe auslaufen.
+        if (targetW < 0 || (_prevRampW < 0 && _reqW >= 0)) {
+            let capW = (typeof chargeDemandHardCapW === 'number' && Number.isFinite(chargeDemandHardCapW))
+                ? Math.max(0, chargeDemandHardCapW)
+                : null;
+            if (_reqW >= 0) {
+                // Keine aktuelle Ladeanforderung: 0 W stoppt die Laderichtung sofort.
+                capW = 0;
+                if (!chargeDemandHardCapReason) chargeDemandHardCapReason = 'Keine aktuelle Ladeanforderung';
+            } else if (capW === null && _reqW < 0) {
+                // Fallback: Aktueller Policy-Wunsch ist die Obergrenze. Dadurch kann die
+                // Rampe einen alten höheren Ladesollwert nicht über den neuen Wunsch ziehen.
+                capW = Math.max(0, -_reqW);
+                chargeDemandHardCapReason = 'Aktuelle Ladeanforderung-Cap';
+            }
+            if (typeof capW === 'number' && targetW < -capW) {
+                targetW = -capW;
+                reason = `${reason} (Lade-Cap ${Math.round(capW)} W nach Rampe)`;
+            }
+        }
+        await this._setIfChanged('speicher.regelung.chargeDemandCapW',
+            (typeof chargeDemandHardCapW === 'number' && Number.isFinite(chargeDemandHardCapW)) ? Math.round(chargeDemandHardCapW) : 0);
+        await this._setIfChanged('speicher.regelung.chargeDemandCapReason', String(chargeDemandHardCapReason || ''));
+
         // Harte Demand-Cap NACH der Rampenbegrenzung.
         // Der vorherige Code konnte einen korrekt auf ca. Netzbezug begrenzten Sollwert
         // durch die Rampe wieder in Richtung altem, zu hohem Sollwert ziehen. Beispiel aus
@@ -2270,7 +2426,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         // NVP-basierte Entladequellen.
         if (targetW > 0 && typeof dischargeDemandHardCapW === 'number' && Number.isFinite(dischargeDemandHardCapW)) {
             const capW = Math.max(0, dischargeDemandHardCapW);
-            if ((source === 'eigenverbrauch' || source === 'tarif' || source === 'fenecon') && targetW > capW) {
+            const activeNvpDischargeSource = (source === 'eigenverbrauch' || source === 'tarif' || source === 'fenecon' || source === 'lastspitze');
+            if (activeNvpDischargeSource && targetW > capW) {
                 targetW = capW;
                 reason = `${reason} (Demand-Cap ${Math.round(capW)} W nach Rampe)`;
             }
@@ -2448,11 +2605,14 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     importHeadroomW: (typeof importHeadroomEffW === 'number' && Number.isFinite(importHeadroomEffW)) ? Math.round(importHeadroomEffW) : null,
                 },
                 appPolicy: {
-                    mode: multiUsePolicyActive ? 'multiuse' : 'speicherregelung',
+                    mode: multiUsePolicyActive ? 'multiuse' : 'eigenverbrauch',
                     storageControlActive: !!cfgEnabled,
+                    autoTariffActive: !!autoTarifEnabled,
                     multiUseActive: !!multiUsePolicyActive,
                     inactiveMultiUseZonesIgnored: !!ignoreStaleMultiUsePolicy,
+                    pureSelfConsumptionWithoutMultiUse: !multiUsePolicyActive,
                     storageFarmDistribution: !!hasFarmSetpoints,
+                    storageFarmAutoStart: false,
                 },
                 reserve: {
                     active: !!reserveActive,
@@ -3118,6 +3278,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.aktiv', 'Speicher-Regelung aktiv (effektiv)', 'boolean', 'indicator', false);
         await mk('speicher.regelung.aktivKonfig', 'Speicher-Regelung aktiv (Konfiguration)', 'boolean', 'indicator', false);
         await mk('speicher.regelung.aktivAutoTarif', 'Auto-Aktivierung durch Tarif', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.aktivAutoMultiUse', 'Auto-Aktivierung durch MultiUse-Policy', 'boolean', 'indicator', false);
         await mk('speicher.regelung.aktivSpeicherfarm', 'Speicherfarm-Verteilpfad verfügbar', 'boolean', 'indicator', false);
         await mk('speicher.regelung.aktivAutoSpeicherfarm', 'Auto-Aktivierung durch Speicherfarm (deaktiviert)', 'boolean', 'indicator', false);
 
@@ -3143,6 +3304,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.batteryPowerIgnoredReason', 'Ignorierte Ist-Leistung Grund', 'string', 'text', '');
         await mk('speicher.regelung.dischargeDemandCapW', 'Entlade-Demand-Cap nach Netzbezug (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.dischargeDemandCapReason', 'Entlade-Demand-Cap Grund', 'string', 'text', '');
+        await mk('speicher.regelung.chargeDemandCapW', 'Lade-Demand-Cap nach Headroom/PV (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.chargeDemandCapReason', 'Lade-Demand-Cap Grund', 'string', 'text', '');
 
         await mk('speicher.regelung.feneconGridAktiv', 'Legacy Netzpunktführung aktiv (nicht genutzt)', 'boolean', 'indicator', false);
         await mk('speicher.regelung.feneconGridSollW', 'Legacy Netzpunkt-Sollwert (nicht genutzt)', 'number', 'value.power', 0);
@@ -3193,12 +3356,16 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
         await mk('speicher.regelung.lskMinSocPct', 'LSK Min-SoC (%)', 'number', 'value', 0);
         await mk('speicher.regelung.lskMaxSocPct', 'LSK Max-SoC (%)', 'number', 'value', 0);
+        await mk('speicher.regelung.lskPolicyAktiv', 'LSK-Policy aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.lskEntladenAktiviert', 'LSK-Entladen aktiviert', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.lskLadenAktiviert', 'LSK-Laden aktiviert', 'boolean', 'indicator', false);
         await mk('speicher.regelung.selfMinSocPct', 'Eigenverbrauch Min-SoC (%)', 'number', 'value', 0);
         await mk('speicher.regelung.selfMaxSocPct', 'Eigenverbrauch Max-SoC (%)', 'number', 'value', 0);
         await mk('speicher.regelung.selfTargetGridImportW', 'Eigenverbrauch Ziel-Netzbezug (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.selfImportThresholdW', 'Eigenverbrauch Deadband (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.selfEntladenAktiviert', 'Eigenverbrauch-Entladen aktiviert', 'boolean', 'indicator', false);
-        await mk('speicher.regelung.policyMode', 'Speicher-Policy-Modus', 'string', 'text', 'speicherregelung');
+        await mk('speicher.regelung.policyMode', 'Speicher-Policy-Modus', 'string', 'text', 'eigenverbrauch');
+        await mk('speicher.regelung.policyLayerStorageOnly', 'Policy-Schicht reine Eigenverbrauchsoptimierung', 'boolean', 'indicator', true);
         await mk('speicher.regelung.multiUsePolicyActive', 'MultiUse-Policy aktiv', 'boolean', 'indicator', false);
         await mk('speicher.regelung.multiUsePolicyIgnored', 'Inaktive MultiUse-Policy ignoriert', 'boolean', 'indicator', false);
 

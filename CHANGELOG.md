@@ -1,3 +1,13 @@
+## 0.8.81
+
+- Speicherlogik komplett nach Rollenmodell nachgezogen: Speicherregelungs-App = reine Eigenverbrauchsoptimierung; MultiUse = führende Policy für Reserve, LSK/Peak-Shaving, EVCS-Kopplung und SoC-Zonen; Speicherfarm = reine Verteil-/Schreibschicht.
+- Inaktive MultiUse-Zonen aktivieren keine Reserve-/LSK-/EVCS-Logik mehr und blockieren die normale Eigenverbrauchsregelung nicht.
+- Entlade-Demand-Caps verschärft: Eigenverbrauch, Tarif-NVP-Entladung und LSK nutzen keinen alten Sollwert und keine abgeleitete Gebäudelast mehr als Demand-Basis.
+- LSK-Cap korrigiert: Begrenzung basiert auf echter Peak-Überschreitung am NVP plus echter Batterie-Istentladung und Sicherheitsreserve, nicht auf gesamtem Import oder altem Sollwert.
+- Speicherfarm-Floors an MultiUse-Rollenmodell angepasst: Reserve/LSK-Floors gelten nur bei aktiver MultiUse-Policy; 0-W-Limits bleiben bewusste Sperren pro Richtung.
+- Regressionstests für Speicher-Baseline, Policy-Trennung, Lade-Cap und Entlade-Cap ergänzt/aktualisiert.
+- Service-Worker Cache auf `nexowatt-cache-v383` erhöht.
+
 ## 0.8.79
 
 - Speicher-Entladevorgabe abgesichert: Der letzte Sollwert wird nicht mehr als echte Entladeleistung in den NVP-Demand-Cap zurückgeführt. Dadurch kann die Eigenverbrauchs-/Tarifregelung bei kleinem Netzbezug nicht mehr auf viel zu hohe Entladeleistungen hochintegrieren.

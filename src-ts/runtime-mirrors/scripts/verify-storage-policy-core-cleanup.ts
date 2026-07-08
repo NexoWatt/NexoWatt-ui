@@ -1,11 +1,11 @@
 // @ts-nocheck
 /**
- * TypeScript-Parallelspiegel: scripts/verify-storage-discharge-demand-cap.js
+ * TypeScript-Parallelspiegel: scripts/verify-storage-policy-core-cleanup.js
  *
  * Zweck:
  * Diese Datei ist die TypeScript-Vorbereitung der bestehenden JavaScript-Runtime-Datei.
  * Sie wird noch nicht produktiv ausgeführt. Die produktive Quelle bleibt vorerst:
- * scripts/verify-storage-discharge-demand-cap.js
+ * scripts/verify-storage-policy-core-cleanup.js
  *
  * Zusammenhang:
  * Der Spiegel hilft uns, die JS-Datei später schrittweise zu typisieren, zu testen und
@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 8e3e95c9fc8790cd8ebdfebd92820dcc51626eeda8bc5bcca6b2839e1323fbce
+ * Original-Hash: 086355d36037ee0035065d6522e2c08dfc6c25a067aff4172e0cb648e8e43193
  */
 
 /**
@@ -31,9 +31,11 @@
 
 'use strict';
 /**
- * Regressionstest 0.8.81: Entladen darf nicht ueber alte Sollwerte oder abgeleitete
- * Gebaeudelasten hochintegrieren. Feldfall: ca. 2,6 kW Netzbezug duerfen keine
- * 71-kW-Entladevorgabe erzeugen.
+ * Regressionstest 0.8.81: Kern-Policy der Speicherlogik.
+ * Zielbild:
+ * - Speicherregelung ohne MultiUse = Eigenverbrauchsoptimierung.
+ * - MultiUse aktiv = führende Policy für Reserve, LSK und SoC-Zonen.
+ * - Speicherfarm = Verteilung/Schreiben des fertigen Sollwertes.
  */
 const fs = require('fs');
 
@@ -51,7 +53,6 @@ const fs = require('fs');
 function read(file) {
   return fs.readFileSync(file, 'utf8');
 }
-
 /**
  * Code-Teil: must
  *
@@ -66,11 +67,10 @@ function read(file) {
 function must(file, needle, label) {
   const text = read(file);
   if (!text.includes(needle)) {
-    console.error(`[storage-discharge-demand-cap] FEHLT ${label}: ${needle}`);
+    console.error(`[storage-policy-core-cleanup] FEHLT ${label}: ${needle}`);
     process.exit(1);
   }
 }
-
 /**
  * Code-Teil: mustNot
  *
@@ -85,7 +85,7 @@ function must(file, needle, label) {
 function mustNot(file, needle, label) {
   const text = read(file);
   if (text.includes(needle)) {
-    console.error(`[storage-discharge-demand-cap] VERBOTEN ${label}: ${needle}`);
+    console.error(`[storage-policy-core-cleanup] VERBOTEN ${label}: ${needle}`);
     process.exit(1);
   }
 }
@@ -95,20 +95,16 @@ for (const file of [
   'src-ts/runtime-mirrors/ems/modules/storage-control.ts',
   'ems/modules/storage-control.js',
 ]) {
-  must(file, 'WICHTIGER Feldfix 0.8.81: Abgeleitete Gebäudelasten', 'Tarif-Kommentar gegen Gebaeudelast-Cap');
-  must(file, 'WICHTIGER Feldfix 0.8.81: Der letzte eigene Sollwert und derived.loadTotalW', 'Eigenverbrauch-Kommentar gegen Sollwert-/Gebaeudelast-Cap');
-  must(file, 'const battWRaw = (battPowerTrusted && typeof battPowerW ===', 'Balancing nutzt nur vertrauenswuerdige Batterie-Istleistung');
-    must(file, 'const measuredDemandCapW = Math.max(0, importRawNowW + measuredDischargeNowW + safetyMarginW);', 'Demand-Cap aus NVP plus echter Batterie-Istleistung');
-  must(file, "'Tarif-NVP-Demand-Cap (konservativ ohne Batterie-Istleistung)'", 'Tarif-NVP-Cap Diagnose ohne Feedback');
-  must(file, "'Eigenverbrauch-NVP-Demand-Cap (konservativ ohne Batterie-Istleistung)'", 'Eigenverbrauch-NVP-Cap Diagnose ohne Feedback');
-  must(file, 'Feldschutz 0.8.81: Lastspitzenkappung darf nicht über den sichtbaren', 'LSK gegen Integrator-Hochlauf abgesichert');
-  must(file, 'const lskOverLimitW = Math.max(0, importNowW - limitW);', 'LSK-Cap auf echte Peak-Ueberschreitung');
-  must(file, 'const lskDemandCapW = Math.max(0, lskOverLimitW + lskMeasuredDischargeW + lskSafetyMarginW);', 'LSK-Cap ohne alten Sollwert');
-  must(file, "source === 'lastspitze'", 'Demand-Cap greift auch nach Rampe bei LSK');
-  mustNot(file, 'feedbacklessHoldCapW', 'feedbackloser Deadband-Hold darf den Demand-Cap nicht erweitern');
-  mustNot(file, 'feedbacklessHoldPlausible', 'alte Sollwerte duerfen ohne Batterie-Istleistung nicht gehalten werden');
-  mustNot(file, 'commandedDischargeNowW', 'alter Sollwert darf nicht Demand-Basis sein');
-  mustNot(file, 'const demandBaseW = Math.max(importRawNowW + measuredDischargeNowW, loadEstimateW);', 'abgeleitete Gebaeudelast darf Demand-Cap nicht vergroessern');
+  must(file, 'const multiUseOwnsZones = !!multiUsePolicyActive;', 'MultiUse führt SoC-Zonen nur aktiv');
+  must(file, 'const reserveEnabled = multiUseOwnsZones && !!cfg.reserveEnabled;', 'Reserve nur aktive MultiUse-Zone');
+  must(file, 'const lskEnabledCfg = multiUseOwnsZones && (cfg.lskEnabled !== false);', 'LSK nur aktive MultiUse-Zone');
+  must(file, 'const lskDischargeEnabledCfg = !!(lskEnabledCfg && cfg.lskDischargeEnabled !== false);', 'LSK-Entladefreigabe getrennt');
+  must(file, 'const lskChargeEnabledCfg = !!(lskEnabledCfg && cfg.lskChargeEnabled !== false);', 'LSK-Ladefreigabe getrennt');
+  must(file, 'if (peakEnabled && lskDischargeEnabledCfg) {', 'Peak-Shaving-Entladung nur bei MultiUse-LSK');
+  must(file, 'lskChargeEnabledCfg &&', 'LSK-Refill nur bei MultiUse-LSK-Ladefreigabe');
+  must(file, 'const selfTargetGridW = Math.max(0, num(cfg.selfTargetGridImportW, 50));', 'Eigenverbrauchs-Zielwert bleibt Basis-Policy');
+  must(file, "await this._setIfChanged('speicher.regelung.lskPolicyAktiv', !!lskEnabledCfg);", 'LSK-Diagnose');
+  must(file, "await this._setIfChanged('speicher.regelung.policyMode', multiUsePolicyActive ? 'multiuse' : 'eigenverbrauch');", 'Policy-Modus eigenverbrauch/multiuse');
 }
 
 for (const file of [
@@ -116,10 +112,10 @@ for (const file of [
   'src-ts/runtime-mirrors/main.ts',
   'main.js',
 ]) {
-  must(file, 'Feldschutz 0.8.79: Ist-Leistungs-DPs der Speicherfarm dürfen niemals', 'Farm-Istwertschutz');
-  must(file, 'const looksLikeSetpointPowerId = (id) => {', 'Setpoint-Erkennung bleibt JS-kompatibel');
-  must(file, 'status.powerFeedbackIgnoredReason = ignoredPowerFeedback.join', 'Diagnose ignorierter Istwerte');
-  mustNot(file, 'id: unknown', 'Runtime-TS darf keine TypeScript-Annotation in JS spiegeln');
+  must(file, 'Speicherfarm verteilt nur den fertigen Zielwert', 'Farm-Floor-Kommentar');
+  must(file, 'const reserveEnabled = multiUsePolicyActive && !!storageCfg.reserveEnabled;', 'Farm-Reserve-Floor nur MultiUse');
+  must(file, 'const lskEnabled = !!(multiUsePolicyActive && storageCfg.lskDischargeEnabled !== false && storageCfg.lskEnabled !== false);', 'Farm-LSK-Floor nur MultiUse');
+  mustNot(file, 'const ignoreInactiveMultiUseZones =', 'alte Farm-Floor-Umschaltung entfernt');
 }
 
-console.log('[storage-discharge-demand-cap] OK: NVP-Entladevorgabe ist gegen Sollwert-/Last-Rueckkopplung abgesichert.');
+console.log('[storage-policy-core-cleanup] OK: Speicher-Basislogik, MultiUse-Policy und Speicherfarm-Verteilung sind sauber geschichtet.');

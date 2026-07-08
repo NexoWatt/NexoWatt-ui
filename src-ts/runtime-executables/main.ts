@@ -5974,25 +5974,24 @@ try {
     const ic = (this.config && this.config.installerConfig && typeof this.config.installerConfig === 'object') ? this.config.installerConfig : {};
     const mu = (ic.storageMultiUse && typeof ic.storageMultiUse === 'object') ? ic.storageMultiUse : null;
     const multiUsePolicyActive = !!(this.config && this.config.enableMultiUse && mu && mu.enabled === true);
-    const ignoreInactiveMultiUseZones = !!(mu && !multiUsePolicyActive);
-
-    // Speicherfarm verteilt nur den Zielwert. Die SoC-Floors kommen entweder aus
-    // aktiver MultiUse-Policy oder aus normaler Speicherregelung. Ist MultiUse deaktiviert,
-    // dürfen alte MultiUse-Floors nicht als zusätzliche Sperre wirken.
-    const reserveEnabled = ignoreInactiveMultiUseZones ? false : !!storageCfg.reserveEnabled;
-    const reserveMin = Number(ignoreInactiveMultiUseZones ? NaN : storageCfg.reserveMinSocPct);
+    // Speicherfarm verteilt nur den fertigen Zielwert. SoC-Floors dürfen deshalb
+    // keine eigene Policy starten: Reserve/LSK gelten nur, wenn MultiUse aktiv führt.
+    // Ist MultiUse deaktiviert, ignoriert die Farm alte MultiUse-Zonen und nutzt für
+    // Eigenverbrauch/Tarif nur den Eigenverbrauchs-Min-SoC der Speicherregelung.
+    const reserveEnabled = multiUsePolicyActive && !!storageCfg.reserveEnabled;
+    const reserveMin = Number(multiUsePolicyActive ? storageCfg.reserveMinSocPct : NaN);
     const reserveFloor = (reserveEnabled && Number.isFinite(reserveMin)) ? reserveMin : 0;
 
     const farmEnabled = !!(this.config && this.config.enableStorageFarm);
     const hasStoredSelfFlag = (storageCfg.selfDischargeEnabled === true || storageCfg.selfDischargeEnabled === false);
-    const hasEffectiveSelfFlag = hasStoredSelfFlag && !ignoreInactiveMultiUseZones;
+    const hasEffectiveSelfFlag = hasStoredSelfFlag && (!mu || multiUsePolicyActive);
     const feneconFarmFallback = !!(farmEnabled && storageCfg.feneconAcMode === true && !hasEffectiveSelfFlag);
     const selfEnabled = hasEffectiveSelfFlag ? storageCfg.selfDischargeEnabled === true : (feneconFarmFallback || true);
-    const selfMinRaw = Number(ignoreInactiveMultiUseZones ? 20 : storageCfg.selfMinSocPct);
+    const selfMinRaw = Number((multiUsePolicyActive || !mu) ? storageCfg.selfMinSocPct : 20);
     const selfFloor = (selfEnabled && Number.isFinite(selfMinRaw)) ? Math.max(0, Math.min(100, selfMinRaw)) : 0;
 
-    const lskEnabled = ignoreInactiveMultiUseZones ? true : ((storageCfg.lskDischargeEnabled !== false) && (storageCfg.lskEnabled !== false));
-    const lskMin = Number(ignoreInactiveMultiUseZones ? 20 : storageCfg.lskMinSocPct);
+    const lskEnabled = !!(multiUsePolicyActive && storageCfg.lskDischargeEnabled !== false && storageCfg.lskEnabled !== false);
+    const lskMin = Number(multiUsePolicyActive ? storageCfg.lskMinSocPct : NaN);
     const lskFloor = (lskEnabled && Number.isFinite(lskMin)) ? lskMin : 0;
 
     if (src === 'eigenverbrauch' || src === 'evcs' || src === 'tarif') return Math.max(0, Math.min(100, Math.max(reserveFloor, selfFloor)));
