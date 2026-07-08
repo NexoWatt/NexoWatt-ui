@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.83",
+    "version": "0.8.84",
     "news": {
+      "0.8.84": {
+        "de": "Version 0.8.84: Koppelt die Heizstab-Betriebsart 0-W-Einspeisung/Forecast an die zentrale Budgetlogik. EVCS-Priorität, NVP-Messung und Speicherflüsse werden aus den vorhandenen EMS-/Lastmanagement-Werten genutzt; die bestehenden Heizstab-Stufenleistungen bleiben maßgeblich. Hybrid-Proben können nun über stabile NVP-/Speicher-/Budgetwerte bestätigt werden, auch wenn kein separater PV-DP-Anstieg sichtbar ist.",
+        "en": "Version 0.8.84: Connects the heating-rod zero-export/forecast mode to the central budget logic. EVCS priority, NVP metering and storage flows use the existing EMS/load-management values; the configured heating-rod stage powers stay authoritative. Hybrid probes can now be confirmed via stable NVP/storage/budget values even when no separate PV datapoint rise is visible."
+      },
       "0.8.83": {
         "de": "Version 0.8.83: Verschiebt die Einzel-Speicherregelung in einen eigenen App-Center-Reiter und ergänzt AC/DC-Hybrid-Auswahl mit optionaler DC-/Hybrid-PV-Erzeugungszuordnung. Dieser PV-Wert wird als Messwert für Energiefluss, Historie und FENECON-/0-Einspeise-Kontext genutzt, nicht als Speicher-Sollwert.",
         "en": "Version 0.8.83: Moves single-storage control into its own App Center tab and adds AC/DC-hybrid selection with an optional DC/hybrid PV generation mapping. This PV value is used as measurement context for energy flow, history and FENECON/zero-export handling, not as a battery setpoint."
@@ -26,10 +30,6 @@
       "0.8.78": {
         "de": "Version 0.8.78: Korrigiert die Speicher-App-Trennung. Speicherregelung steuert wieder die normale Eigenverbrauchsoptimierung, MultiUse greift nur aktiv als SoC-Zonen-Policy, Speicherfarm verteilt nur Sollwerte und 0-W-Farm-Limits sperren wieder bewusst die jeweilige Richtung.",
         "en": "Version 0.8.78: Fixes storage app separation. Storage control again handles normal self-consumption optimization, MultiUse only applies as an active SoC-zone policy, the storage farm only distributes setpoints, and 0-W farm limits intentionally block the respective direction again."
-      },
-      "0.8.77": {
-        "de": "Version 0.8.77: Korrigiert die Speichersteuerung für Speicherfarm-/MultiUse-Setups. Speicherfarm-Sollwerte laufen nun auch ohne aktive MultiUse-App; alte MultiUse-SoC-Zonen blockieren Eigenverbrauch nicht mehr und 0-W-Farm-Limits bedeuten unbegrenzt statt Sperre.",
-        "en": "Version 0.8.77: Fixes storage control for storage-farm/MultiUse setups. Storage-farm setpoints now run without the MultiUse app; stale MultiUse SoC zones no longer block self-consumption and 0-W farm limits mean unlimited instead of blocked."
       }
     },
     "title": "NexoWatt UI",
