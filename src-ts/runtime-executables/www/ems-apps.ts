@@ -8914,9 +8914,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       // Feste Leistungsgrenzen
       grid.appendChild(mkGridDivider('Feste Leistungsgrenzen (direkte Eingabe)'));
-      grid.appendChild(mkGridHelp('Diese Werte begrenzen die Farm-Verteilung pro Speicher. Leer = unbegrenzt, 0 = diese Richtung sperren. Keine DP-Zuordnung nötig.'));
-      grid.appendChild(mkNumField('Max. Beladen (W)', `sf_${idx}_maxChargeW`, s.maxChargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxChargeW = v; }, 'z.B. 50000'));
-      grid.appendChild(mkNumField('Max. Entladen (W)', `sf_${idx}_maxDischargeW`, s.maxDischargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxDischargeW = v; }, 'z.B. 50000'));
+      grid.appendChild(mkGridHelp('Diese Werte begrenzen die Farm-Verteilung pro Speicher. Leer = unbegrenzt, 0 W = diese Richtung sperren.'));
+      grid.appendChild(mkNumField('Max. Beladen (W)', `sf_${idx}_maxChargeW`, s.maxChargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxChargeW = v; }, 'leer = unbegrenzt, 0 = sperren'));
+      grid.appendChild(mkNumField('Max. Entladen (W)', `sf_${idx}_maxDischargeW`, s.maxDischargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxDischargeW = v; }, 'leer = unbegrenzt, 0 = sperren'));
 
       // Verfügbarkeit & Freigaben
       grid.appendChild(mkGridDivider('Verfügbarkeit & Freigaben'));

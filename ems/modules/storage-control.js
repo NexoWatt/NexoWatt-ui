@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:4024e592c4267021d4208883381fcea4ba94988ed029251a71839f96f953249d
+ * Quell-Hash: sha256:4d2234db2a1c6d62fe65d90a3934f90c4e63de05764335f660e735b93542b93d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -408,6 +408,14 @@ class SpeicherRegelungModule extends BaseModule {
             autoTarifEnabled = false;
         }
 
+        // Effektive Aktivierung bewusst nur über Speicherregelungs-App, Tarif-Automatik
+        // oder MultiUse (MultiUse setzt enableStorageControl beim Speichern selbst).
+        // Die Speicherfarm ist hier KEIN eigener Auto-Start mehr: sie ist der Verteil-/
+        // Schreibpfad, sobald die Speicherregelung oder MultiUse einen Sollwert erzeugt.
+        // So bleibt die Rollenverteilung sauber:
+        // - Speicherregelung aktiv => normale Eigenverbrauchsoptimierung erzeugt Sollwerte.
+        // - MultiUse aktiv => MultiUse schreibt SoC-Zonen und aktiviert die Speicherregelung.
+        // - Speicherfarm aktiv => verteilt den erzeugten Sollwert auf mehrere Speicher.
         const enabled = cfgEnabled || autoTarifEnabled;
 
         // SoC-Hysterese optional aus Konfig lesen (falls später im Admin ergänzt).
@@ -418,6 +426,7 @@ class SpeicherRegelungModule extends BaseModule {
         await this._setIfChanged('speicher.regelung.aktiv', enabled);
         await this._setIfChanged('speicher.regelung.aktivKonfig', cfgEnabled);
         await this._setIfChanged('speicher.regelung.aktivAutoTarif', autoTarifEnabled);
+        await this._setIfChanged('speicher.regelung.aktivAutoSpeicherfarm', false);
 
         // Wenn effektiv deaktiviert: nur Diagnose aktualisieren – KEINE Setpoints schreiben.
         // (Wichtig, damit keine "0" als externe Vorgabe an ein Speichersystem gesendet wird.)
@@ -465,7 +474,10 @@ class SpeicherRegelungModule extends BaseModule {
         const farmCfg = (this.adapter && this.adapter.config && this.adapter.config.storageFarm) ? this.adapter.config.storageFarm : {};
         const farmEnabled = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
         const farmRows = Array.isArray(farmCfg.storages) ? farmCfg.storages : [];
+        // Speicherfarm ist ein Ziel-/Verteilpfad, kein eigener Regler-Start. Wenn die
+        // Speicherregelung aktiv ist, reicht ein Farm-Sollwert-DP als beschreibbares Ziel.
         const hasFarmSetpoints = farmEnabled && farmRows.some(r => r && r.enabled !== false && (String(r.setSignedPowerId||'').trim() || String(r.setChargePowerId||'').trim() || String(r.setDischargePowerId||'').trim()));
+        await this._setIfChanged('speicher.regelung.aktivSpeicherfarm', !!hasFarmSetpoints);
 
         const hasSignedTarget = this.dp ? !!this.dp.getEntry('st.targetPowerW') : false;
         const hasSplitTarget = this.dp ? (!!this.dp.getEntry('st.targetChargePowerW') && !!this.dp.getEntry('st.targetDischargePowerW')) : false;
@@ -1039,10 +1051,26 @@ if (typeof soc === 'number') {
         // ------------------------------------------------------------
         // Gate E: Multiuse-Speicherstrategie (SoC-Zonen)
         // ------------------------------------------------------------
+        // MultiUse schreibt seine SoC-Zonen in storage.* und darf nur führen,
+        // wenn die MultiUse-App wirklich aktiv ist. Ist MultiUse deaktiviert, läuft
+        // die Speicherregelungs-App wieder mit der normalen Eigenverbrauchslogik.
+        // Alte MultiUse-Werte wie selfDischargeEnabled=false dürfen dann keine
+        // dauerhafte 0-W-Sperre mehr verursachen; echte 0-W-Sollwerte auf den
+        // Ziel-DPs bleiben davon unberührt und stoppen den Speicher weiterhin.
+        const installerCfgForMultiUse = (this.adapter && this.adapter.config && this.adapter.config.installerConfig && typeof this.adapter.config.installerConfig === 'object')
+            ? this.adapter.config.installerConfig
+            : {};
+        const storageMultiUseCfg = (installerCfgForMultiUse.storageMultiUse && typeof installerCfgForMultiUse.storageMultiUse === 'object')
+            ? installerCfgForMultiUse.storageMultiUse
+            : null;
+        const multiUsePolicyConfigured = !!storageMultiUseCfg;
+        const multiUsePolicyActive = !!(this.adapter && this.adapter.config && this.adapter.config.enableMultiUse && storageMultiUseCfg && storageMultiUseCfg.enabled === true);
+        const ignoreStaleMultiUsePolicy = !!(multiUsePolicyConfigured && !multiUsePolicyActive);
+
         // Notstrom-Reserve: harte Untergrenze für Entladen
-        const reserveEnabled = !!cfg.reserveEnabled;
-        const reserveMin = clamp(num(cfg.reserveMinSocPct, 20), 0, 100);
-        const reserveTarget = clamp(num(cfg.reserveTargetSocPct, reserveMin), 0, 100);
+        const reserveEnabled = ignoreStaleMultiUsePolicy ? false : !!cfg.reserveEnabled;
+        const reserveMin = clamp(num(ignoreStaleMultiUsePolicy ? undefined : cfg.reserveMinSocPct, 20), 0, 100);
+        const reserveTarget = clamp(num(ignoreStaleMultiUsePolicy ? undefined : cfg.reserveTargetSocPct, reserveMin), 0, 100);
 
         const reserveActive = reserveEnabled && (typeof soc === 'number') && (soc <= reserveMin);
 
@@ -1061,9 +1089,9 @@ if (typeof soc === 'number') {
         await this._setIfChanged('speicher.regelung.reserveZielSocPct', reserveTarget);
 
         // LSK (Peak-Shaving über Speicher)
-        const lskEnabledCfg = cfg.lskEnabled !== false; // Default: an (damit bestehende Installationen unverändert bleiben)
-        const lskMinSoc = clamp(num(cfg.lskMinSocPct, reserveMin), 0, 100);
-        const lskMaxSoc = clamp(num(cfg.lskMaxSocPct, 100), 0, 100);
+        const lskEnabledCfg = ignoreStaleMultiUsePolicy ? true : (cfg.lskEnabled !== false); // Default: an (damit bestehende Installationen unverändert bleiben)
+        const lskMinSoc = clamp(num(ignoreStaleMultiUsePolicy ? undefined : cfg.lskMinSocPct, reserveMin), 0, 100);
+        const lskMaxSoc = clamp(num(ignoreStaleMultiUsePolicy ? undefined : cfg.lskMaxSocPct, 100), 0, 100);
 
         // Eigenverbrauch (Entladen optional)
         // Hybrid-/Gateway-Priorität ab 0.6.255:
@@ -1072,7 +1100,11 @@ if (typeof soc === 'number') {
         // Bei wenig/keiner PV darf NexoWatt wieder über den normalen Sollleistungs-DP
         // arbeiten, damit dynamische Tariflogik, Reserve und LSK nutzbar bleiben.
         const feneconAcModeConfigured = !!feneconHybridConfigured;
-        const hasExplicitSelfFlag = (cfg.selfDischargeEnabled === true || cfg.selfDischargeEnabled === false);
+        // Nur aktive MultiUse-Policies dürfen selfDischargeEnabled=false als harte Sperre setzen.
+        // Ist MultiUse deaktiviert, wird ein alter gespeicherter false-Wert ignoriert, damit die
+        // normale Eigenverbrauchsregelung bei SoC + Netzbezug weiter arbeiten kann.
+        const hasStoredSelfFlag = (cfg.selfDischargeEnabled === true || cfg.selfDischargeEnabled === false);
+        const hasExplicitSelfFlag = hasStoredSelfFlag && !ignoreStaleMultiUsePolicy;
         const feneconAcMode = false;
         // Farm-Verhalten bewusst unverändert lassen: ältere Farm-Setups, die den alten
         // Haken nur als implizite Eigenverbrauchs-Freigabe genutzt haben, behalten diesen
@@ -1087,16 +1119,16 @@ if (typeof soc === 'number') {
         const selfDischargeEnabled = hasExplicitSelfFlag
             ? (cfg.selfDischargeEnabled === true)
             : (farmSelfDischargeFallback || feneconLowPvSelfDischargeFallback || genericSelfDischargeDefault);
-        const selfMinSoc = clamp(num(cfg.selfMinSocPct, reserveMin), 0, 100);
-        const selfMaxSoc = clamp(num(cfg.selfMaxSocPct, 100), 0, 100);
+        const selfMinSoc = clamp(num(ignoreStaleMultiUsePolicy ? undefined : cfg.selfMinSocPct, reserveMin), 0, 100);
+        const selfMaxSoc = clamp(num(ignoreStaleMultiUsePolicy ? undefined : cfg.selfMaxSocPct, 100), 0, 100);
         // Eigenverbrauchs-Optimierung: Ziel-Netzbezug am NVP.
         // Praxis: ein kleiner Bezug (z. B. 50–150 W) ist oft stabiler als exakt 0 W
         // (Messrauschen, Totzeiten, Geräte-Rampen).
         // Standard-Eigenverbrauch bleibt herstellerunabhängig bei kleinem Ziel-Import.
         // Hybrid-/Gateway-Priorität entscheidet später pro Tick: Gateway-No-Write, Zusatz-PV-Laden
         // oder normale externe Vorgabe bei wenig/keiner interner PV.
-        const selfTargetGridW = Math.max(0, num(cfg.selfTargetGridImportW, 50));
-        const selfImportThresholdW = Math.max(0, num(cfg.selfImportThresholdW, 50));
+        const selfTargetGridW = Math.max(0, num(ignoreStaleMultiUsePolicy ? undefined : cfg.selfTargetGridImportW, 50));
+        const selfImportThresholdW = Math.max(0, num(ignoreStaleMultiUsePolicy ? undefined : cfg.selfImportThresholdW, 50));
 
         await this._setIfChanged('speicher.regelung.lskMinSocPct', lskMinSoc);
         await this._setIfChanged('speicher.regelung.lskMaxSocPct', lskMaxSoc);
@@ -1105,6 +1137,9 @@ if (typeof soc === 'number') {
         await this._setIfChanged('speicher.regelung.selfTargetGridImportW', selfTargetGridW);
         await this._setIfChanged('speicher.regelung.selfImportThresholdW', selfImportThresholdW);
         await this._setIfChanged('speicher.regelung.selfEntladenAktiviert', !!selfDischargeEnabled);
+        await this._setIfChanged('speicher.regelung.multiUsePolicyActive', !!multiUsePolicyActive);
+        await this._setIfChanged('speicher.regelung.multiUsePolicyIgnored', !!ignoreStaleMultiUsePolicy);
+        await this._setIfChanged('speicher.regelung.policyMode', multiUsePolicyActive ? 'multiuse' : 'speicherregelung');
 
         // Grenzen / Glättung
         // maxChargeW/maxDischargeW sind *optionale* Software-Clamps.
@@ -1825,8 +1860,13 @@ if (targetW === 0 && selfDischargeEnabled) {
     // Entladebasis, damit zeitversetzte/0-W-Istwerte die Farm nicht künstlich herunterziehen.
     const importRawNowW = Math.max(0, (typeof nvpRawW === 'number') ? nvpRawW : 0);
     const measuredDischargeNowW = (typeof battW === 'number') ? Math.max(0, battW) : 0;
+    // Wenn Farm-/Gateway-Istwerte 0 W oder zeitversetzt liefern, darf der Demand-Cap
+    // die laufende Eigenverbrauchs-Entladung nicht künstlich auf Import+Puffer drücken.
+    // Der letzte eigene Sollwert zählt deshalb als plausible aktuelle Entladebasis.
+    const commandedDischargeNowW = curSetW > 0 ? curSetW : 0;
+    const dischargeNowW = Math.max(measuredDischargeNowW, commandedDischargeNowW);
     const safetyMarginW = 200; // bewusst konservativ; Feintuning über selfTargetGridW/Deadband/Rampe
-    const maxByDemandW = importRawNowW + measuredDischargeNowW + safetyMarginW;
+    const maxByDemandW = importRawNowW + dischargeNowW + safetyMarginW;
     if (Number.isFinite(maxByDemandW) && maxByDemandW >= 0) {
         dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
             ? Math.min(dischargeDemandHardCapW, maxByDemandW)
@@ -2367,6 +2407,13 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 limits: {
                     importLimitW: (typeof importLimitW === 'number' && Number.isFinite(importLimitW)) ? Math.round(importLimitW) : null,
                     importHeadroomW: (typeof importHeadroomEffW === 'number' && Number.isFinite(importHeadroomEffW)) ? Math.round(importHeadroomEffW) : null,
+                },
+                appPolicy: {
+                    mode: multiUsePolicyActive ? 'multiuse' : 'speicherregelung',
+                    storageControlActive: !!cfgEnabled,
+                    multiUseActive: !!multiUsePolicyActive,
+                    inactiveMultiUseZonesIgnored: !!ignoreStaleMultiUsePolicy,
+                    storageFarmDistribution: !!hasFarmSetpoints,
                 },
                 reserve: {
                     active: !!reserveActive,
@@ -3032,6 +3079,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.aktiv', 'Speicher-Regelung aktiv (effektiv)', 'boolean', 'indicator', false);
         await mk('speicher.regelung.aktivKonfig', 'Speicher-Regelung aktiv (Konfiguration)', 'boolean', 'indicator', false);
         await mk('speicher.regelung.aktivAutoTarif', 'Auto-Aktivierung durch Tarif', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.aktivSpeicherfarm', 'Speicherfarm-Verteilpfad verfügbar', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.aktivAutoSpeicherfarm', 'Auto-Aktivierung durch Speicherfarm (deaktiviert)', 'boolean', 'indicator', false);
 
         // Phase 2: Dispatcher-Diagnose
         await mk('speicher.regelung.dispatcherVersion', 'Dispatcher-Version', 'string', 'text', '2.0');
@@ -3110,6 +3159,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.selfTargetGridImportW', 'Eigenverbrauch Ziel-Netzbezug (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.selfImportThresholdW', 'Eigenverbrauch Deadband (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.selfEntladenAktiviert', 'Eigenverbrauch-Entladen aktiviert', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.policyMode', 'Speicher-Policy-Modus', 'string', 'text', 'speicherregelung');
+        await mk('speicher.regelung.multiUsePolicyActive', 'MultiUse-Policy aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.multiUsePolicyIgnored', 'Inaktive MultiUse-Policy ignoriert', 'boolean', 'indicator', false);
 
         await mk('speicher.regelung.maxChargeW', 'Max Ladeleistung (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.maxDischargeW', 'Max Entladeleistung (W)', 'number', 'value.power', 0);

@@ -18,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: a6588dcc1ffcabc45ae0751d5e4ff7a7da2a807d5d0a4189dbdd93f0eed7882c
+ * Original-Hash: a57e80251c32f5b292db3a84c771589c07c16c55c6162803157146e378ac6350
  */
 
 /**
@@ -7831,9 +7831,9 @@ function collectAiAdvisorConfigFromUI(base) {
 
         // Feste Leistungsgrenzen
         grid.appendChild(mkGridDivider('Feste Leistungsgrenzen (direkte Eingabe)'));
-        grid.appendChild(mkGridHelp('Diese Werte begrenzen die Farm-Verteilung pro Speicher. Leer = unbegrenzt, 0 = diese Richtung sperren. Keine DP-Zuordnung nötig.'));
-        grid.appendChild(mkNumField('Max. Beladen (W)', `sf_${idx}_maxChargeW`, s.maxChargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxChargeW = v; }, 'z.B. 50000'));
-        grid.appendChild(mkNumField('Max. Entladen (W)', `sf_${idx}_maxDischargeW`, s.maxDischargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxDischargeW = v; }, 'z.B. 50000'));
+        grid.appendChild(mkGridHelp('Diese Werte begrenzen die Farm-Verteilung pro Speicher. Leer = unbegrenzt, 0 W = diese Richtung sperren.'));
+        grid.appendChild(mkNumField('Max. Beladen (W)', `sf_${idx}_maxChargeW`, s.maxChargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxChargeW = v; }, 'leer = unbegrenzt, 0 = sperren'));
+        grid.appendChild(mkNumField('Max. Entladen (W)', `sf_${idx}_maxDischargeW`, s.maxDischargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxDischargeW = v; }, 'leer = unbegrenzt, 0 = sperren'));
 
         // Verfügbarkeit & Freigaben
         grid.appendChild(mkGridDivider('Verfügbarkeit & Freigaben'));

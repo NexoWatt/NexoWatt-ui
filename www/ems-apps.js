@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:ca46f8fd3f66622bd548af0ece398b2bc3ab5e75a0ec44615cd3e01d693a8d58
+ * Quell-Hash: sha256:277900cdec5c47dd668a929b3e9c43ccb04d827e0a06e7b8dc0bd2b7e1bb862d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -8912,9 +8912,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       // Feste Leistungsgrenzen
       grid.appendChild(mkGridDivider('Feste Leistungsgrenzen (direkte Eingabe)'));
-      grid.appendChild(mkGridHelp('Diese Werte begrenzen die Farm-Verteilung pro Speicher. Leer = unbegrenzt, 0 = diese Richtung sperren. Keine DP-Zuordnung nötig.'));
-      grid.appendChild(mkNumField('Max. Beladen (W)', `sf_${idx}_maxChargeW`, s.maxChargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxChargeW = v; }, 'z.B. 50000'));
-      grid.appendChild(mkNumField('Max. Entladen (W)', `sf_${idx}_maxDischargeW`, s.maxDischargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxDischargeW = v; }, 'z.B. 50000'));
+      grid.appendChild(mkGridHelp('Diese Werte begrenzen die Farm-Verteilung pro Speicher. Leer = unbegrenzt, 0 W = diese Richtung sperren.'));
+      grid.appendChild(mkNumField('Max. Beladen (W)', `sf_${idx}_maxChargeW`, s.maxChargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxChargeW = v; }, 'leer = unbegrenzt, 0 = sperren'));
+      grid.appendChild(mkNumField('Max. Entladen (W)', `sf_${idx}_maxDischargeW`, s.maxDischargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxDischargeW = v; }, 'leer = unbegrenzt, 0 = sperren'));
 
       // Verfügbarkeit & Freigaben
       grid.appendChild(mkGridDivider('Verfügbarkeit & Freigaben'));

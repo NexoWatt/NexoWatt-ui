@@ -21,7 +21,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: 524955f635905cfb4fabc404e584be90c26512b22b57f061c7713f38eb033e60
+ * Original-Hash: 9b1514a2e1f683ffed421907563a9b73a08baea27d93d68676c6be4c141e5c1c
  */
 
 /**
@@ -3555,7 +3555,7 @@ class NexoWattVis extends utils.Adapter {
       // ignore
     }
 
-    // Apply installer-only MultiUse (storage SoC zones) policy (if enabled)
+    // Apply installer-only MultiUse (storage SoC zones) policy; inactive/stale MultiUse fields are neutralized inside the helper.
     try {
       this.nwApplyStorageMultiUsePolicy(n);
     } catch (_e) {
@@ -3608,16 +3608,26 @@ class NexoWattVis extends utils.Adapter {
       const mu = (ic && typeof ic.storageMultiUse === 'object') ? ic.storageMultiUse : null;
       if (!mu) return nativeObj;
 
+      nativeObj.storage = (nativeObj.storage && typeof nativeObj.storage === 'object') ? nativeObj.storage : {};
+      const st = nativeObj.storage;
+
+      // MultiUse darf nur führen, wenn sowohl die App als auch die Speicher-MultiUse-Policy
+      // aktiv sind. Bei deaktiviertem MultiUse löschen wir keine normalen Speicherwerte,
+      // sondern markieren nur den Zustand. Die Speicherregelung nutzt dann wieder ihre
+      // normale Eigenverbrauchsoptimierung und ignoriert alte MultiUse-Zonen im Tick.
+      if (!nativeObj.enableMultiUse || mu.enabled !== true) {
+        st.multiUsePolicyActive = false;
+        return nativeObj;
+      }
+
       // Only apply when the MultiUse app itself is enabled.
       // If MultiUse is enabled, storage-control must be active, otherwise the SoC zones have no effect.
       // We therefore implicitly enable storage-control at runtime when MultiUse is active.
-      if (!nativeObj.enableMultiUse) return nativeObj;
-
-      if (mu.enabled !== true) return nativeObj;
-
       if (!nativeObj.enableStorageControl) {
         nativeObj.enableStorageControl = true;
       }
+      st.multiUsePolicyActive = true;
+      st.multiUsePolicyApplied = true;
       /**
        * Code-Teil: clampInt
        * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -3656,9 +3666,6 @@ class NexoWattVis extends utils.Adapter {
       const selfBaseMin = peakEnabled ? lskMax : reserveBaseMin;
       const selfMin = clampInt(mu.selfMinSocPct, selfBaseMin, 100, selfBaseMin);
       const selfMax = clampInt(mu.selfMaxSocPct, selfMin, 100, legacySelfTo);
-
-      nativeObj.storage = (nativeObj.storage && typeof nativeObj.storage === 'object') ? nativeObj.storage : {};
-      const st = nativeObj.storage;
 
       // Notstrom / Reserve: blocks discharge below reserveMin. Optionaler Refill bis reserveTarget.
       st.reserveEnabled = reserveEnabled;
@@ -5224,8 +5231,8 @@ class NexoWattVis extends utils.Adapter {
          */
         const normalizeLimitW = (v) => {
           // Leer / nicht gesetzt bedeutet: keine harte Begrenzung.
-          // Wichtig: Number(null) und Number('') wären 0 und würden den Speicher
-          // fälschlich mit charge_limit_zero/discharge_limit_zero sperren.
+          // Eine bewusst eingetragene 0-W-Vorgabe sperrt diese Richtung, bis der
+          // Installateur wieder ein positives Limit oder leer (= unbegrenzt) setzt.
           if (v === undefined || v === null) return null;
           if (typeof v === 'string' && v.trim() === '') return null;
           const n = Number(String(v).replace(',', '.'));
@@ -5631,19 +5638,28 @@ try {
     const storageCfg = (this.config && this.config.storage && typeof this.config.storage === 'object') ? this.config.storage : {};
     const src = String(source || '').toLowerCase().trim();
 
-    const reserveEnabled = !!storageCfg.reserveEnabled;
-    const reserveMin = Number(storageCfg.reserveMinSocPct);
+    const ic = (this.config && this.config.installerConfig && typeof this.config.installerConfig === 'object') ? this.config.installerConfig : {};
+    const mu = (ic.storageMultiUse && typeof ic.storageMultiUse === 'object') ? ic.storageMultiUse : null;
+    const multiUsePolicyActive = !!(this.config && this.config.enableMultiUse && mu && mu.enabled === true);
+    const ignoreInactiveMultiUseZones = !!(mu && !multiUsePolicyActive);
+
+    // Speicherfarm verteilt nur den Zielwert. Die SoC-Floors kommen entweder aus
+    // aktiver MultiUse-Policy oder aus normaler Speicherregelung. Ist MultiUse deaktiviert,
+    // dürfen alte MultiUse-Floors nicht als zusätzliche Sperre wirken.
+    const reserveEnabled = ignoreInactiveMultiUseZones ? false : !!storageCfg.reserveEnabled;
+    const reserveMin = Number(ignoreInactiveMultiUseZones ? NaN : storageCfg.reserveMinSocPct);
     const reserveFloor = (reserveEnabled && Number.isFinite(reserveMin)) ? reserveMin : 0;
 
     const farmEnabled = !!(this.config && this.config.enableStorageFarm);
-    const feneconFarmFallback = !!(farmEnabled && storageCfg.feneconAcMode === true
-      && !(storageCfg.selfDischargeEnabled === true || storageCfg.selfDischargeEnabled === false));
-    const selfEnabled = storageCfg.selfDischargeEnabled === true || feneconFarmFallback;
-    const selfMin = Number(storageCfg.selfMinSocPct);
-    const selfFloor = (selfEnabled && Number.isFinite(selfMin)) ? selfMin : 0;
+    const hasStoredSelfFlag = (storageCfg.selfDischargeEnabled === true || storageCfg.selfDischargeEnabled === false);
+    const hasEffectiveSelfFlag = hasStoredSelfFlag && !ignoreInactiveMultiUseZones;
+    const feneconFarmFallback = !!(farmEnabled && storageCfg.feneconAcMode === true && !hasEffectiveSelfFlag);
+    const selfEnabled = hasEffectiveSelfFlag ? storageCfg.selfDischargeEnabled === true : (feneconFarmFallback || true);
+    const selfMinRaw = Number(ignoreInactiveMultiUseZones ? 20 : storageCfg.selfMinSocPct);
+    const selfFloor = (selfEnabled && Number.isFinite(selfMinRaw)) ? Math.max(0, Math.min(100, selfMinRaw)) : 0;
 
-    const lskEnabled = (storageCfg.lskDischargeEnabled !== false) && (storageCfg.lskEnabled !== false);
-    const lskMin = Number(storageCfg.lskMinSocPct);
+    const lskEnabled = ignoreInactiveMultiUseZones ? true : ((storageCfg.lskDischargeEnabled !== false) && (storageCfg.lskEnabled !== false));
+    const lskMin = Number(ignoreInactiveMultiUseZones ? 20 : storageCfg.lskMinSocPct);
     const lskFloor = (lskEnabled && Number.isFinite(lskMin)) ? lskMin : 0;
 
     if (src === 'eigenverbrauch' || src === 'evcs' || src === 'tarif') return Math.max(0, Math.min(100, Math.max(reserveFloor, selfFloor)));
@@ -5798,7 +5814,8 @@ try {
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     const finiteLimitOrNull = (v) => {
-      // Leer / null / undefined = unlimitiert. Nicht als 0 interpretieren.
+      // Leer / null / undefined = unlimitiert. 0 ist eine bewusste 0-W-Sperre
+      // fuer die jeweilige Richtung und wird deshalb als echtes Limit beibehalten.
       if (v === undefined || v === null) return null;
       if (typeof v === 'string' && v.trim() === '') return null;
       const n = Number(String(v).replace(',', '.'));
@@ -5852,7 +5869,8 @@ try {
      */
     const getLimitW = (storage, dir) => {
       const raw = (dir === 'charge') ? (storage && storage.maxChargeW) : (storage && storage.maxDischargeW);
-      // Leer / null / undefined = unlimitiert. 0 ist nur dann Sperre, wenn bewusst 0 eingetragen wurde.
+      // Leer / null / undefined = unlimitiert. Eine 0-W-Vorgabe ist dagegen
+      // eine gewollte Sperre für diese Richtung und muss die Farm-Verteilung stoppen.
       if (raw === undefined || raw === null) return Number.POSITIVE_INFINITY;
       if (typeof raw === 'string' && raw.trim() === '') return Number.POSITIVE_INFINITY;
       const v = Number(String(raw).replace(',', '.'));

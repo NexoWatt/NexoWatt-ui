@@ -1,3 +1,19 @@
+## 0.8.78
+
+- Speicherregelung/App-Trennung korrigiert: Speicherregelungs-App startet die normale Eigenverbrauchsoptimierung; Speicherfarm startet die Regelung nicht mehr alleine, sondern bleibt Verteil-/Schreibschicht.
+- MultiUse-Policy sauber abgegrenzt: SoC-Zonen werden nur bei aktiver MultiUse-App als führende Policy genutzt; inaktive MultiUse-Konfigurationen blockieren die normale Speicherregelung nicht.
+- Speicherfarm-Limits zurückgestellt: Leere Be-/Entlade-Grenzen bedeuten unbegrenzt, 0 W sperrt die jeweilige Richtung bewusst.
+- Diagnose ergänzt: Policy-Modus und aktive/ignorierte MultiUse-Policy werden als Speicherregelungs-States bereitgestellt.
+
+## 0.8.77
+
+- Speichersteuerung: Speicherfarm-Sollwerte aktivieren die zentrale Speicherregelung jetzt automatisch, auch wenn MultiUse nicht aktiv/installiert ist.
+- MultiUse: Inaktive oder alte MultiUse-SoC-Zonen werden im Runtime-Config neutralisiert, damit Eigenverbrauchs-Entladen bei ausreichend SoC und Netzbezug nicht mehr auf 0 W hängen bleibt.
+- Speicherfarm: Leere oder 0-W-Be-/Entladegrenzen bedeuten jetzt konsistent „unbegrenzt“ statt `charge_limit_zero`/`discharge_limit_zero`.
+- Eigenverbrauchsregelung: Der Demand-Cap berücksichtigt den letzten eigenen Entlade-Sollwert, damit verzögerte/0-W-Istwerte der Farm den Sollwert nicht künstlich herunterziehen.
+- Speicherfarm-UI: Hilfetexte und Platzhalter für Max. Beladen/Entladen auf „leer/0 = unbegrenzt“ korrigiert.
+- Service-Worker Cache auf `nexowatt-cache-v378` erhöht.
+
 ## 0.8.76
 
 - Heizstab-App: Neuer Reiter/Block „Betriebsart“ für den vorhandenen Auto-Button; auswählbar sind „PV-Überschuss am NVP“ und „0-W-Einspeisung / Forecast“.
