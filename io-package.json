@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.81",
+    "version": "0.8.82",
     "news": {
+      "0.8.82": {
+        "de": "Version 0.8.82: Ergänzt den FENECON/OpenEMS/FEMS-Speichermodus. Im Tages-/PV-Betrieb kann NexoWatt externe Speicheranforderungen pausieren, damit FEMS intern regelt; ein optionaler Assist greift nur zeitverzögert und NVP-begrenzt bei dauerhaftem Netzbezug.",
+        "en": "Version 0.8.82: Adds the FENECON/OpenEMS/FEMS storage mode. During day/PV operation NexoWatt can pause external battery setpoints so FEMS controls internally; an optional assist only intervenes after sustained grid import and is capped at NVP demand."
+      },
       "0.8.81": {
         "de": "Version 0.8.81: Speicherlogik fachlich neu abgesichert. Speicherregelung bleibt reine Eigenverbrauchsoptimierung, MultiUse führt Reserve/LSK/EVCS-Zonen, Speicherfarm verteilt nur Sollwerte; Entlade-Caps verhindern alte Sollwert-/Last-Rückkopplungen für Eigenverbrauch, Tarif und LSK.",
         "en": "Version 0.8.81: Hardens the storage control policy routing. Storage control stays pure self-consumption, MultiUse owns reserve/peak/EVCS zones, the storage farm only dispatches targets; discharge caps prevent stale setpoint/load feedback for self-consumption, tariff and peak shaving."
@@ -26,10 +30,6 @@
       "0.8.76": {
         "de": "Version 0.8.76: Ergänzt die Heizstab-Betriebsart für den bestehenden Auto-Button. Im Heizstab-AppCenter kann jetzt zwischen PV-Überschuss am NVP und 0-W-Einspeisung/Forecast gewählt werden; die alte separate Testlast-Aktivierung wurde bereinigt.",
         "en": "Version 0.8.76: Adds a heating-rod operating mode behind the existing Auto button. The heating-rod App Center can now select PV surplus at the grid connection point or zero-export/forecast control; the old separate test-load activation was cleaned up."
-      },
-      "0.8.75": {
-        "de": "Version 0.8.75: Entfernt den Passwortschutz aus dem Kunden-/LIVE-Frontend. Schnellsteuerung, EVCS, SmartHome, RFID und Kundeneinstellungen sind ohne Admin-/Installer-Login bedienbar; App-Center, Simulation, Mapping und Lizenz bleiben geschützt.",
-        "en": "Version 0.8.75: Removes the password gate from the customer/LIVE frontend. Quick controls, EVCS, SmartHome, RFID and customer settings are operable without admin/installer login; App Center, simulation, mapping and license remain protected."
       }
     },
     "title": "NexoWatt UI",

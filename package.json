@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.8.81",
+  "version": "0.8.82",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -288,6 +288,7 @@
     "test:storage-charge-demand-cap": "node scripts/verify-storage-charge-demand-cap.js",
     "test:storage-policy-core-cleanup": "node scripts/verify-storage-policy-core-cleanup.js",
     "test:storage-control-runtime-scenarios": "node scripts/verify-storage-control-runtime-scenarios.js",
+    "test:storage-fenecon-day-no-write": "node scripts/verify-storage-fenecon-day-no-write.js",
     "test:storage-policy-baseline": "node scripts/verify-storage-policy-baseline.js",
     "test:storage-control-functional-safety": "node scripts/verify-storage-control-functional-safety.js",
     "test:storage-policy-runtime": "node scripts/verify-storage-policy-runtime.js"

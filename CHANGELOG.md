@@ -1,3 +1,14 @@
+## 0.8.82
+
+- Speicher/FENECON/OpenEMS/FEMS: separater Hersteller-/Gateway-Haken in der Speicher-App ergänzt.
+- Neuer Tages-/PV-No-Write-Modus: Bei FENECON kann NexoWatt im Tag-/PV-Betrieb keine externe Speicheranforderung mehr schreiben, damit FEMS/OpenEMS nach Watchdog-Ablauf wieder intern regeln kann.
+- Optionaler NexoWatt-Assist ergänzt: Bei dauerhaftem Netzbezug darf NexoWatt zeitverzögert und hart NVP-begrenzt eine kleine Entladevorgabe setzen.
+- MultiUse, Peak-Shaving, Tarif- und Reserve-Anforderungen bleiben als übergeordnete Policies schreibberechtigt.
+- Speicherfarm-Zusammenspiel: Im FENECON-No-Write wird auch kein Farm-Sollwert verteilt; bei Assist oder übergeordneten Policies verteilt die Farm den NVP-begrenzten Zielwert weiter.
+- FENECON-Diagnose um Tag-/PV-No-Write, Forecast-/Tageserkennung und Assist-Status erweitert.
+- Regressionstest `test:storage-fenecon-day-no-write` ergänzt.
+- Service-Worker Cache auf `nexowatt-cache-v384` erhöht.
+
 ## 0.8.81
 
 - Speicherlogik komplett nach Rollenmodell nachgezogen: Speicherregelungs-App = reine Eigenverbrauchsoptimierung; MultiUse = führende Policy für Reserve, LSK/Peak-Shaving, EVCS-Kopplung und SoC-Zonen; Speicherfarm = reine Verteil-/Schreibschicht.

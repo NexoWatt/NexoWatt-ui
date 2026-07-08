@@ -326,6 +326,15 @@ class SpeicherRegelungModule extends BaseModule {
         this._feneconHybridWasExternal = false;
         this._feneconHybridLastMode = '';
 
+        // FENECON/OpenEMS-Assist-Zustand:
+        // Wenn die interne FEMS-Regelung tagsueber freigegeben ist, schreibt
+        // NexoWatt normalerweise gar keinen Batterie-Sollwert. Diese Timer merken
+        // nur, ob trotz dieser Freigabe dauerhaft Netzbezug stehen bleibt; erst
+        // dann darf ein begrenzter Assist-Sollwert geschrieben werden.
+        this._feneconAssistImportSinceMs = 0;
+        this._feneconAssistReleaseSinceMs = 0;
+        this._feneconAssistActive = false;
+
     }
 
     /**
@@ -470,6 +479,9 @@ class SpeicherRegelungModule extends BaseModule {
                     this._feneconHybridLastMode = 'disabled';
                     this._feneconGridWasActive = false;
                     this._feneconGridReleasedDirectTarget = false;
+                    this._feneconAssistActive = false;
+                    this._feneconAssistImportSinceMs = 0;
+                    this._feneconAssistReleaseSinceMs = 0;
                 }
             } catch {
                 // ignore
@@ -495,26 +507,13 @@ class SpeicherRegelungModule extends BaseModule {
         const hasSplitTarget = this.dp ? (!!this.dp.getEntry('st.targetChargePowerW') && !!this.dp.getEntry('st.targetDischargePowerW')) : false;
         const hasTarget = hasSignedTarget || hasSplitTarget;
         const feneconHybridConfigured = this._isFeneconHybridControlConfigured(cfg);
-        const feneconHybridActive = !!(feneconHybridConfigured && !farmEnabled);
-        const feneconHybridBlockedByFarm = !!(feneconHybridConfigured && farmEnabled);
-
-        // Hybrid-/Gateway-Priorität ab 0.6.255:
-        // Der App-Center-Haken aktiviert keine SetGridActivePower-Netzpunktführung mehr.
-        // Die normale Speicherfarm bleibt unverändert. Bei Single-Gateway entscheidet die
-        // Policy weiter unten pro Tick, ob überhaupt auf den Batterie-Sollleistungs-DP
-        // geschrieben wird. Tagsüber mit interner interner PV wird bewusst NICHT geschrieben,
-        // damit Gateway selbst regelt und nach seinem 10s-Watchdog im Normalmodus bleibt.
-        if (feneconHybridBlockedByFarm) {
-            await this._setFeneconHybridDiag({
-                active: false,
-                mode: 'blocked-by-farm',
-                reason: 'Hybrid-/Gateway-Priorität-Sondermodus wird bei aktiver Speicherfarm ignoriert',
-                writeMode: 'farm-standard',
-            });
-            this._feneconHybridWasExternal = false;
-            this._feneconHybridLastMode = 'blocked-by-farm';
-        }
-
+        // FENECON/OpenEMS ist kein Speicherfarm-Blocker mehr:
+        // Der No-Write-Entscheid liegt vor _applyTargetW(). Bei Tages-/PV-Pass-through
+        // wird dadurch weder ein Einzel-Sollwert noch ein Farm-Sollwert geschrieben.
+        // Bei uebergeordneten Policies (MultiUse/Peak/Tarif/Reserve) oder Assist darf
+        // die Speicherfarm den erzeugten Zielwert weiter wie gewohnt verteilen.
+        const feneconHybridActive = !!feneconHybridConfigured;
+        const feneconHybridBlockedByFarm = false;
 
         if (controlMode !== 'targetPower') {
             await this._setIfChanged('speicher.regelung.requestW', 0);
@@ -926,6 +925,12 @@ class SpeicherRegelungModule extends BaseModule {
                 additionalPvW: feneconHybridCtx.additionalPvW,
                 thresholdW: feneconHybridCtx.thresholdW,
                 additionalThresholdW: feneconHybridCtx.additionalThresholdW,
+                nvpW: feneconHybridCtx.nvpW,
+                forecastW: feneconHybridCtx.forecastW,
+                forecastSource: feneconHybridCtx.forecastSource,
+                dayOrPvActive: feneconHybridCtx.dayOrPvActive,
+                assistActive: feneconHybridCtx.assistActive,
+                assistImportThresholdW: feneconHybridCtx.assistImportThresholdW,
             });
         }
 
@@ -2257,7 +2262,7 @@ if (targetW === 0 && selfDischargeEnabled) {
             // NVP-Balancing (Eigenverbrauch-/Tarif-Entladung): hier wollen wir auch kleine Leistungen zulassen,
             // sonst bleibt ein Rest-Netzbezug (z. B. 30–90 W) dauerhaft stehen.
             // Erkennung: Quellen mit feiner Entlade-Regelung (Eigenverbrauch, Tarif, Gateway AC).
-            const isNvpBalancing = (targetW > 0) && (source === 'eigenverbrauch' || source === 'tarif' || source === 'fenecon');
+            const isNvpBalancing = (targetW > 0) && (source === 'eigenverbrauch' || source === 'tarif' || source === 'fenecon' || source === 'fenecon-assist');
             const zeroBandW = Math.max(psHystW, stepW, isNvpBalancing ? 20 : 100);
 
             // Optional: Expert-Parameter. Wenn nicht gesetzt, Default 5s.
@@ -2347,7 +2352,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 	            targetW = _prevRampW + Math.sign(d) * maxDelta;
 	            reason = `${reason} (LSK‑Rampe)`;
 	        }
-    } else if (source === 'fenecon' || this._lastSource === 'fenecon') {
+    } else if (source === 'fenecon' || source === 'fenecon-assist' || this._lastSource === 'fenecon' || this._lastSource === 'fenecon-assist') {
         // Gateway AC-Lastfolger: Lastsprünge müssen in beide Richtungen schnell übernommen werden,
         // sonst bleibt kurz Netzbezug stehen oder es entsteht beim Lastabwurf unnötige Einspeisung.
         // Deshalb hier bewusst keine zusätzliche Rampe.
@@ -2397,7 +2402,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         // NVP-basierte Entladequellen.
         if (targetW > 0 && typeof dischargeDemandHardCapW === 'number' && Number.isFinite(dischargeDemandHardCapW)) {
             const capW = Math.max(0, dischargeDemandHardCapW);
-            const activeNvpDischargeSource = (source === 'eigenverbrauch' || source === 'tarif' || source === 'fenecon' || source === 'lastspitze');
+            const activeNvpDischargeSource = (source === 'eigenverbrauch' || source === 'tarif' || source === 'fenecon' || source === 'fenecon-assist' || source === 'lastspitze');
             if (activeNvpDischargeSource && targetW > capW) {
                 targetW = capW;
                 reason = `${reason} (Demand-Cap ${Math.round(capW)} W nach Rampe)`;
@@ -2437,14 +2442,53 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             const ctx = feneconHybridCtx || {};
             const mode = String(ctx.mode || '');
 
-            if (mode === 'fems-pass-through') {
-                // Interne interner PV ist aktiv und keine zusätzliche externe PV erkannt:
-                // NexoWatt schreibt nichts, Gateway regelt den Hybrid-Speicher selbst.
-                targetW = 0;
-                source = 'fenecon-fems';
-                reason = ctx.reason || 'Hybrid-/Gateway-Priorität: PV aktiv – lokales Gateway regelt selbst, keine externe Vorgabe';
-                feneconNoWrite = true;
-                feneconWriteMode = 'no-write';
+            if (mode === 'fems-pass-through' || mode === 'fems-assist') {
+                // FENECON/OpenEMS/FEMS Tagesbetrieb:
+                // Grundsatz: keine externe Batterie-Vorgabe schreiben, damit der FEMS-
+                // Watchdog auslaufen kann und das lokale Gateway die 0-Einspeisung/
+                // Eigenverbrauchsregelung selbst fuehrt. Externe Schreibzugriffe bleiben
+                // nur fuer echte uebergeordnete Anforderungen erlaubt.
+                const srcNorm = String(source || '').toLowerCase();
+                const isCriticalExternalRequest = targetW !== 0 && (
+                    srcNorm === 'lastspitze' ||
+                    srcNorm === 'lastspitze_refill' ||
+                    srcNorm === 'reserve' ||
+                    srcNorm === 'tarif' ||
+                    srcNorm === 'evcs'
+                );
+                const isAssistRequest = !!(mode === 'fems-assist' && targetW > 0 && (srcNorm === 'eigenverbrauch' || srcNorm === 'tarif'));
+
+                if (isCriticalExternalRequest) {
+                    feneconWriteMode = 'write-critical-policy';
+                    reason = String(reason || 'externe Speicheranforderung') + ' · FENECON/OpenEMS: uebergeordnete Policy darf schreiben';
+                } else if (isAssistRequest) {
+                    // Assist immer am aktuellen NVP-Bedarf begrenzen. Wir geben nicht die
+                    // Gebaeudelast an FENECON weiter, weil am Hybrid-AC-Ausgang PV und Batterie
+                    // zusammenliegen koennen. Fuehrungsgroesse bleibt nur der verbleibende
+                    // Netzbezug plus kleiner Puffer.
+                    const nvpNowW = (typeof ctx.nvpW === 'number' && Number.isFinite(ctx.nvpW)) ? Number(ctx.nvpW) : ((typeof gridRawW === 'number') ? Number(gridRawW) : Number(gridW || 0));
+                    const targetImportW = Math.max(0, num(cfg.feneconAssistTargetGridImportW, selfTargetGridW));
+                    const assistBufferW = Math.max(0, num(cfg.feneconAssistBufferW, 150));
+                    const assistCapW = Math.max(0, Math.max(0, nvpNowW) - targetImportW + assistBufferW);
+                    targetW = Math.min(Math.max(0, targetW), assistCapW);
+                    if (targetW > 0) {
+                        source = 'fenecon-assist';
+                        reason = `FENECON/OpenEMS Assist: Entladung ${Math.round(targetW)} W gegen dauerhaften Netzbezug (NVP ${Math.round(nvpNowW)} W)`;
+                        feneconWriteMode = 'write-assist-on-demand';
+                    } else {
+                        targetW = 0;
+                        source = 'fenecon-fems';
+                        reason = 'FENECON/OpenEMS Assist: NVP-Cap 0 W – keine externe Vorgabe';
+                        feneconNoWrite = true;
+                        feneconWriteMode = 'no-write';
+                    }
+                } else {
+                    targetW = 0;
+                    source = 'fenecon-fems';
+                    reason = ctx.reason || 'FENECON/OpenEMS: Tages-/PV-Betrieb – lokales Gateway regelt selbst, keine externe Vorgabe';
+                    feneconNoWrite = true;
+                    feneconWriteMode = 'no-write';
+                }
             } else if (mode === 'external-pv-charge-only') {
                 // Zusätzliche PV ist aktiv: Nur PV-Überschuss-Ladung darf extern vorgegeben
                 // werden. Tarif-/Entlade-/Peak-Setpoints werden während interner PV nicht
@@ -2483,6 +2527,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 thresholdW: ctx.thresholdW,
                 additionalThresholdW: ctx.additionalThresholdW,
                 nvpW: (typeof gridRawW === 'number' && Number.isFinite(gridRawW)) ? gridRawW : gridW,
+                forecastW: ctx.forecastW,
+                forecastSource: ctx.forecastSource,
+                dayOrPvActive: ctx.dayOrPvActive,
+                assistActive: ctx.assistActive,
+                assistImportThresholdW: ctx.assistImportThresholdW,
             });
         }
 
@@ -2561,8 +2610,15 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     pvW: (feneconHybridCtx && Number.isFinite(Number(feneconHybridCtx.pvW))) ? Math.round(Number(feneconHybridCtx.pvW)) : null,
                     additionalPvW: (feneconHybridCtx && Number.isFinite(Number(feneconHybridCtx.additionalPvW))) ? Math.round(Number(feneconHybridCtx.additionalPvW)) : 0,
                     thresholdW: (feneconHybridCtx && Number.isFinite(Number(feneconHybridCtx.thresholdW))) ? Math.round(Number(feneconHybridCtx.thresholdW)) : null,
+                    forecastW: (feneconHybridCtx && Number.isFinite(Number(feneconHybridCtx.forecastW))) ? Math.round(Number(feneconHybridCtx.forecastW)) : 0,
+                    dayNoWrite: !!(feneconHybridCtx && feneconHybridCtx.dayNoWriteEnabled),
+                    dayOrPvActive: !!(feneconHybridCtx && feneconHybridCtx.dayOrPvActive),
+                    clockDayActive: !!(feneconHybridCtx && feneconHybridCtx.clockDayActive),
+                    assistEnabled: !!(feneconHybridCtx && feneconHybridCtx.assistEnabled),
+                    assistActive: !!(feneconHybridCtx && feneconHybridCtx.assistActive),
+                    assistImportThresholdW: (feneconHybridCtx && Number.isFinite(Number(feneconHybridCtx.assistImportThresholdW))) ? Math.round(Number(feneconHybridCtx.assistImportThresholdW)) : null,
                     reason: feneconHybridCtx && feneconHybridCtx.reason ? String(feneconHybridCtx.reason) : '',
-                    watchdogSec: 10,
+                    watchdogSec: 60,
                     setGridActivePowerUsed: false,
                 } : {
                     hybridMode: false,
@@ -2691,6 +2747,22 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             // Haken, bedeutet ab 0.6.255 aber: Hybrid-/Gateway-Priorität-Gateway-Priorität.
             feneconAcMode: storage.feneconAcMode,
             feneconGridControlEnabled: storage.feneconGridControlEnabled,
+            // FENECON/OpenEMS/FEMS: separater Installer-Haken fuer den neuen
+            // Tagsueber-No-Write-Betrieb. Wenn nicht gesetzt, bleibt der
+            // sichere Default bei aktivem FENECON-Modus: keine externe Vorgabe
+            // im PV-/Tagbetrieb, damit FEMS den Speicher selbst fuehren kann.
+            feneconDayNoWriteEnabled: storage.feneconDayNoWriteEnabled,
+            feneconAssistEnabled: storage.feneconAssistEnabled,
+            feneconDayClockFallbackEnabled: storage.feneconDayClockFallbackEnabled,
+            feneconDayStartHour: storage.feneconDayStartHour,
+            feneconDayEndHour: storage.feneconDayEndHour,
+            feneconForecastThresholdW: storage.feneconForecastThresholdW,
+            feneconAssistImportThresholdW: storage.feneconAssistImportThresholdW,
+            feneconAssistDelaySec: storage.feneconAssistDelaySec,
+            feneconAssistReleaseImportW: storage.feneconAssistReleaseImportW,
+            feneconAssistReleaseDelaySec: storage.feneconAssistReleaseDelaySec,
+            feneconAssistTargetGridImportW: storage.feneconAssistTargetGridImportW,
+            feneconAssistBufferW: storage.feneconAssistBufferW,
             feneconPvPassthroughThresholdW: storage.feneconPvPassthroughThresholdW,
             feneconAdditionalPvThresholdW: storage.feneconAdditionalPvThresholdW,
             feneconGridTargetW: storage.feneconGridTargetW,
@@ -2746,21 +2818,16 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         return this._isFeneconHybridControlConfigured(cfg);
     }
     async _buildFeneconHybridContext({ cfg = {}, staleMs = 15000, readCacheNumber = null, gridW = null, gridRawW = null } = {}) {
-        const thresholdW = Math.max(0, num(cfg.feneconPvPassthroughThresholdW, 1000));
+        const thresholdW = Math.max(0, num(cfg.feneconPvPassthroughThresholdW, 300));
         const additionalThresholdW = Math.max(0, num(cfg.feneconAdditionalPvThresholdW, 100));
+        const forecastThresholdW = Math.max(0, num(cfg.feneconForecastThresholdW, 500));
         const now = Date.now();
 
         /**
-         * Code-Teil: Arrow-Funktion `readCache`
-         * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
-         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-         */
-        /**
          * Code-Teil: readCache
-         * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
-         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         * Zweck: Liest frische Fremd-/Mappingwerte fuer die FENECON-Erkennung.
+         * Wichtig: Dieser Pfad darf keine Sollwerte schreiben; er entscheidet nur,
+         * ob FEMS/OpenEMS intern regeln darf oder ob NexoWatt einen Assist braucht.
          */
         const readCache = (key) => {
             const sid = String(key || '').trim();
@@ -2791,16 +2858,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
         const candidates = [];
         /**
-         * Code-Teil: Arrow-Funktion `pushCandidate`
-         * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-         */
-        /**
          * Code-Teil: pushCandidate
-         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         * Zweck: Sammle moegliche PV-/Hybrid-AC-Leistungen. Bei FENECON sieht
+         * NexoWatt haeufig nur den AC-Ausgang aus PV+Batterie; deshalb ist die
+         * Erkennung bewusst breit, die eigentliche Leistungsregelung bleibt aber
+         * spaeter hart am NVP begrenzt.
          */
         const pushCandidate = (value, source) => {
             const n = Number(value);
@@ -2808,9 +2870,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         };
         /**
          * Code-Teil: readOwnFreshNumber
-         * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
-         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         * Zweck: Liest eigene Diagnose-/Forecaststates frisch aus dem Adapter.
+         * Damit kann der FENECON-No-Write-Modus auch dann tagsueber greifen,
+         * wenn der Kunden-Gateway-AC-Ausgang nicht als klassische PV gemappt ist.
          */
         const readOwnFreshNumber = async (id) => {
             try {
@@ -2857,15 +2919,107 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             ? Number(gridRawW)
             : ((typeof gridW === 'number' && Number.isFinite(gridW)) ? Number(gridW) : null);
         const exportW = (typeof nvpW === 'number') ? Math.max(0, -nvpW) : 0;
+        const importW = (typeof nvpW === 'number') ? Math.max(0, nvpW) : 0;
+
+        // Forecast-Erkennung: der Forecast ist keine direkte Vorgabe, sondern nur
+        // eine Tages-/PV-Freigabe fuer den No-Write-Modus. So kann FEMS selbst regeln,
+        // obwohl NexoWatt bei 0-Einspeisung aktuell 0 W PV am NVP sieht.
+        let forecastMaxW = 0;
+        let forecastSource = 'missing';
+        try {
+            const pf = (this.adapter && this.adapter._pvForecast && typeof this.adapter._pvForecast === 'object') ? this.adapter._pvForecast : null;
+            const curve = pf && Array.isArray(pf.curve) ? pf.curve : [];
+            const horizonMs = 30 * 60000;
+            if (pf && pf.valid && (pf.ageMs === null || pf.ageMs === undefined || Number(pf.ageMs) <= 24 * 3600000)) {
+                for (const seg of curve) {
+                    if (!seg || !Number.isFinite(Number(seg.t)) || !Number.isFinite(Number(seg.dtMs)) || !Number.isFinite(Number(seg.w))) continue;
+                    const t0 = Number(seg.t);
+                    const t1 = t0 + Number(seg.dtMs);
+                    if (t1 < now || t0 > now + horizonMs) continue;
+                    forecastMaxW = Math.max(forecastMaxW, Math.max(0, Number(seg.w)));
+                }
+                if (forecastMaxW > 0) forecastSource = 'pvForecast.curve.next30min';
+                if (forecastMaxW <= 0 && Number.isFinite(Number(pf.peakWNext24h))) {
+                    forecastMaxW = Math.max(0, Number(pf.peakWNext24h));
+                    forecastSource = 'pvForecast.peak24h';
+                }
+            }
+        } catch {
+            // Forecast ist optional; bei Fehlern bleibt die FENECON-Logik bei Messwert/Uhr-Fallback.
+        }
 
         const internalPvActive = pvW >= thresholdW;
+        const forecastActive = forecastMaxW >= forecastThresholdW;
         const additionalPvActive = additionalPvW >= additionalThresholdW;
+
+        // Uhr-Fallback: In FENECON-Anlagen kann die PV in NexoWatt absichtlich 0 W sein,
+        // weil der AC-Hybrid-Ausgang PV+Batterie zusammenfuehrt. Damit tagsueber trotzdem
+        // keine externe Vorgabe den FEMS-Normalbetrieb festhaelt, gibt es einen einfachen
+        // Tagesfenster-Fallback. Er kann in Expertenconfig deaktiviert werden.
+        const clockFallbackEnabled = cfg.feneconDayClockFallbackEnabled !== false;
+        const dayStartHour = clamp(num(cfg.feneconDayStartHour, 7), 0, 23);
+        const dayEndHour = clamp(num(cfg.feneconDayEndHour, 20), 1, 24);
+        const hour = new Date(now).getHours();
+        const clockDayActive = clockFallbackEnabled && (dayStartHour < dayEndHour
+            ? (hour >= dayStartHour && hour < dayEndHour)
+            : (hour >= dayStartHour || hour < dayEndHour));
+
+        const dayNoWriteEnabled = cfg.feneconDayNoWriteEnabled !== false;
+        const dayOrPvActive = !!(internalPvActive || forecastActive || clockDayActive);
+
+        // Assist-Regler: Nur wenn FEMS trotz internem Tagesbetrieb dauerhaft Netzbezug
+        // stehen laesst, darf NexoWatt kurzzeitig mit einem kleinen NVP-begrenzten
+        // Entlade-Sollwert helfen. Ohne diese Verzögerung wuerden wir den Gateway-Modus
+        // wieder dauerhaft mit externen Schreibzugriffen blockieren.
+        const assistEnabled = cfg.feneconAssistEnabled !== false;
+        const assistThresholdW = Math.max(0, num(cfg.feneconAssistImportThresholdW, 800));
+        const assistDelayMs = Math.max(0, num(cfg.feneconAssistDelaySec, 60)) * 1000;
+        const releaseImportW = Math.max(0, num(cfg.feneconAssistReleaseImportW, 200));
+        const releaseDelayMs = Math.max(0, num(cfg.feneconAssistReleaseDelaySec, 90)) * 1000;
+
+        if (!dayNoWriteEnabled || !assistEnabled || !dayOrPvActive) {
+            this._feneconAssistImportSinceMs = 0;
+            this._feneconAssistReleaseSinceMs = 0;
+            this._feneconAssistActive = false;
+        } else {
+            const importAbove = importW >= assistThresholdW;
+            if (importAbove) {
+                if (!this._feneconAssistImportSinceMs) this._feneconAssistImportSinceMs = now;
+            } else {
+                this._feneconAssistImportSinceMs = 0;
+            }
+
+            if (this._feneconAssistActive) {
+                if (importW <= releaseImportW) {
+                    if (!this._feneconAssistReleaseSinceMs) this._feneconAssistReleaseSinceMs = now;
+                    if ((now - this._feneconAssistReleaseSinceMs) >= releaseDelayMs) {
+                        this._feneconAssistActive = false;
+                        this._feneconAssistImportSinceMs = 0;
+                    }
+                } else {
+                    this._feneconAssistReleaseSinceMs = 0;
+                }
+            } else if (importAbove && this._feneconAssistImportSinceMs && (now - this._feneconAssistImportSinceMs) >= assistDelayMs) {
+                this._feneconAssistActive = true;
+                this._feneconAssistReleaseSinceMs = 0;
+            }
+        }
 
         let mode = 'external-control-low-pv';
         let writeMode = 'write-low-pv';
-        let reason = 'Hybrid-/Gateway-Priorität: PV < ' + Math.round(thresholdW) + ' W – NexoWatt-Regelung aktiv';
+        let reason = 'FENECON/OpenEMS: kein PV-/Tagbetrieb erkannt – NexoWatt-Regelung aktiv';
 
-        if (internalPvActive && additionalPvActive) {
+        if (dayNoWriteEnabled && dayOrPvActive) {
+            if (this._feneconAssistActive) {
+                mode = 'fems-assist';
+                writeMode = 'write-assist-on-demand';
+                reason = 'FENECON/OpenEMS: Tagesbetrieb intern freigegeben, Assist wegen dauerhaftem Netzbezug aktiv';
+            } else {
+                mode = 'fems-pass-through';
+                writeMode = 'no-write';
+                reason = 'FENECON/OpenEMS: Tages-/PV-Betrieb – keine externe Speicheranforderung, FEMS regelt selbst';
+            }
+        } else if (internalPvActive && additionalPvActive) {
             mode = 'external-pv-charge-only';
             writeMode = 'write-extra-pv-charge';
             reason = 'Hybrid-/Gateway-Priorität: interne PV aktiv, Zusatz-PV erkannt (' + Math.round(additionalPvW) + ' W) – nur Zusatz-PV-Laden extern';
@@ -2890,7 +3044,22 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             additionalThresholdW,
             additionalPvActive,
             internalPvActive,
+            forecastW: forecastMaxW,
+            forecastSource,
+            forecastThresholdW,
+            forecastActive,
+            clockDayActive,
+            dayNoWriteEnabled,
+            dayOrPvActive,
+            assistEnabled,
+            assistActive: !!this._feneconAssistActive,
+            assistImportThresholdW: assistThresholdW,
+            assistImportSinceMs: this._feneconAssistImportSinceMs || 0,
+            assistDelayMs,
+            assistReleaseImportW: releaseImportW,
+            assistReleaseDelayMs: releaseDelayMs,
             nvpW,
+            importW,
             exportW,
         };
     }
@@ -2923,6 +3092,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await this._setIfChanged('speicher.regelung.feneconHybridZusatzSchwelleW', n(ctx.additionalThresholdW));
         await this._setIfChanged('speicher.regelung.feneconHybridSollW', n(ctx.targetW, 0));
         await this._setIfChanged('speicher.regelung.feneconHybridNvpW', n(ctx.nvpW));
+        await this._setIfChanged('speicher.regelung.feneconHybridForecastW', n(ctx.forecastW, 0));
+        await this._setIfChanged('speicher.regelung.feneconHybridForecastQuelle', String(ctx.forecastSource || ''));
+        await this._setIfChanged('speicher.regelung.feneconHybridTagAktiv', !!ctx.dayOrPvActive);
+        await this._setIfChanged('speicher.regelung.feneconHybridAssistAktiv', !!ctx.assistActive);
+        await this._setIfChanged('speicher.regelung.feneconHybridAssistSchwelleW', n(ctx.assistImportThresholdW, 800));
 
         // Legacy-Diagnosen aus 0.6.254 neutral halten, damit alte VIS/Debug-Ansichten nicht
         // fälschlich eine SetGridActivePower-Nutzung anzeigen.
@@ -2954,6 +3128,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             await this._setIfChanged('speicher.regelung.targetObjId', '');
         }
         await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+        await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
         await this._setIfChanged('speicher.regelung.sollW', w);
         await this._setIfChanged('speicher.regelung.quelle', String(source || ''));
         await this._setIfChanged('speicher.regelung.grund', String(reason || ''));
@@ -3297,6 +3472,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.feneconHybridZusatzSchwelleW', 'Hybrid-/Gateway-Priorität Zusatz-PV-Schwellwert', 'number', 'value.power', 100);
         await mk('speicher.regelung.feneconHybridSollW', 'Hybrid-/Gateway-Priorität angewendeter Sollwert', 'number', 'value.power', 0);
         await mk('speicher.regelung.feneconHybridNvpW', 'Hybrid-/Gateway-Priorität Netzpunktleistung', 'number', 'value.power', null);
+        await mk('speicher.regelung.feneconHybridForecastW', 'FENECON/OpenEMS Forecast-/Tagesleistung', 'number', 'value.power', 0);
+        await mk('speicher.regelung.feneconHybridForecastQuelle', 'FENECON/OpenEMS Forecast-/Tagesquelle', 'string', 'text', '');
+        await mk('speicher.regelung.feneconHybridTagAktiv', 'FENECON/OpenEMS Tag-/PV-No-Write aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.feneconHybridAssistAktiv', 'FENECON/OpenEMS Assist aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.feneconHybridAssistSchwelleW', 'FENECON/OpenEMS Assist Netzbezugsschwelle', 'number', 'value.power', 800);
 
         await mk('speicher.regelung.netzLeistungW', 'Netzleistung (W)', 'number', 'value.power');
         await mk('speicher.regelung.netzAlterMs', 'Netzleistung Alter (ms)', 'number', 'value.interval');

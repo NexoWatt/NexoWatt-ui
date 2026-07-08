@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:277900cdec5c47dd668a929b3e9c43ccb04d827e0a06e7b8dc0bd2b7e1bb862d
+ * Quell-Hash: sha256:c8a1946a449b0e80564e6872d03ddb17b3b3ca9d0b2d4f1d01ea3582c56b6760
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -106,6 +106,8 @@
     storageControlMode: document.getElementById('storageControlMode'),
     storageCapacityKWh: document.getElementById('storageCapacityKWh'),
     storageFeneconAcMode: document.getElementById('storageFeneconAcMode'),
+    storageFeneconDayNoWrite: document.getElementById('storageFeneconDayNoWrite'),
+    storageFeneconAssist: document.getElementById('storageFeneconAssist'),
 
     // Speicherfarm
     storageFarmMode: document.getElementById('storageFarmMode'),
@@ -10615,11 +10617,24 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       const cap = Number(currentConfig.storage && currentConfig.storage.capacityKWh);
       els.storageCapacityKWh.value = (Number.isFinite(cap) && cap > 0) ? String(cap) : '';
     }
+    const stF = (currentConfig.storage && typeof currentConfig.storage === 'object') ? currentConfig.storage : {};
+    const feneconModeActive = (typeof stF.feneconGridControlEnabled === 'boolean')
+      ? !!stF.feneconGridControlEnabled
+      : !!stF.feneconAcMode;
     if (els.storageFeneconAcMode) {
-      const stF = (currentConfig.storage && typeof currentConfig.storage === 'object') ? currentConfig.storage : {};
-      els.storageFeneconAcMode.checked = (typeof stF.feneconGridControlEnabled === 'boolean')
-        ? !!stF.feneconGridControlEnabled
-        : !!stF.feneconAcMode;
+      els.storageFeneconAcMode.checked = feneconModeActive;
+    }
+    if (els.storageFeneconDayNoWrite) {
+      // FENECON-Sicherheitsdefault: Wenn der Modus aktiv ist und der neue Haken
+      // noch nicht existierte, ist Tagsueber-No-Write eingeschaltet. So wird eine
+      // vorhandene FEMS-0-Einspeise-/Speicherlogik nicht durch 0-W-Schreibzyklen
+      // oder kleine externe Eigenverbrauchs-Sollwerte blockiert.
+      els.storageFeneconDayNoWrite.checked = feneconModeActive && (stF.feneconDayNoWriteEnabled !== false);
+    }
+    if (els.storageFeneconAssist) {
+      // Der Assist bleibt optional, ist aber bei FENECON-Anlagen hilfreich, wenn
+      // trotz interner Freigabe und ausreichend SoC dauerhaft Netzbezug stehen bleibt.
+      els.storageFeneconAssist.checked = feneconModeActive && (stF.feneconAssistEnabled !== false);
     }
     rebuildStorageTable();
     try { buildStorageFarmUI(); } catch (_e) {}
@@ -12023,6 +12038,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     patch.storage.controlMode = getStorageMode();
     patch.storage.datapoints = deepMerge({}, (currentConfig.storage && currentConfig.storage.datapoints) ? currentConfig.storage.datapoints : {});
     patch.storage.feneconGridControlEnabled = !!(els.storageFeneconAcMode && els.storageFeneconAcMode.checked);
+    // FENECON/OpenEMS/FEMS: Der Haupt-Haken aktiviert den herstellerspezifischen
+    // Gateway-Modus. Die Zusatz-Haken steuern, ob NexoWatt tagsueber gar nicht
+    // schreibt und ob ein zeitverzoegerter NVP-Assist erlaubt ist.
+    patch.storage.feneconDayNoWriteEnabled = !!(els.storageFeneconDayNoWrite && els.storageFeneconDayNoWrite.checked);
+    patch.storage.feneconAssistEnabled = !!(els.storageFeneconAssist && els.storageFeneconAssist.checked);
     // Der Haken bedeutet ab 0.6.255: Hybrid-/Gateway-Priorität.
     // SetGridActivePower wird nicht mehr verwendet; ein eventuell vorhandener Legacy-DP wird entfernt.
     try {
@@ -14233,19 +14253,41 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
   if (els.storageFeneconAcMode) {
     /**
      * Code-Teil: _update
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     * Zweck: Synchronisiert die FENECON/OpenEMS-Haken direkt in currentConfig.
+     * Zusammenhang: Diese Werte steuern den Speicher-Schreibpfad: normaler
+     * Generic-Sollwert oder tagsueber No-Write mit optionalem NVP-Assist.
+     * TypeScript: DOM-Checkboxen spaeter als HTMLInputElement typisieren.
      */
     const _update = () => {
       currentConfig = currentConfig || {};
       currentConfig.storage = currentConfig.storage || {};
-      currentConfig.storage.feneconGridControlEnabled = !!els.storageFeneconAcMode.checked;
+      const active = !!els.storageFeneconAcMode.checked;
+      currentConfig.storage.feneconGridControlEnabled = active;
+      if (els.storageFeneconDayNoWrite) {
+        if (active && !els.storageFeneconDayNoWrite.checked && currentConfig.storage.feneconDayNoWriteEnabled === undefined) {
+          els.storageFeneconDayNoWrite.checked = true;
+        }
+        currentConfig.storage.feneconDayNoWriteEnabled = !!els.storageFeneconDayNoWrite.checked;
+      }
+      if (els.storageFeneconAssist) {
+        if (active && !els.storageFeneconAssist.checked && currentConfig.storage.feneconAssistEnabled === undefined) {
+          els.storageFeneconAssist.checked = true;
+        }
+        currentConfig.storage.feneconAssistEnabled = !!els.storageFeneconAssist.checked;
+      }
     };
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.storageFeneconAcMode. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.storageFeneconAcMode.addEventListener('change', _update);
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an els.storageFeneconAcMode. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.storageFeneconAcMode.addEventListener('input', _update);
+    if (els.storageFeneconDayNoWrite) {
+      els.storageFeneconDayNoWrite.addEventListener('change', _update);
+      els.storageFeneconDayNoWrite.addEventListener('input', _update);
+    }
+    if (els.storageFeneconAssist) {
+      els.storageFeneconAssist.addEventListener('change', _update);
+      els.storageFeneconAssist.addEventListener('input', _update);
+    }
   }
 
 
