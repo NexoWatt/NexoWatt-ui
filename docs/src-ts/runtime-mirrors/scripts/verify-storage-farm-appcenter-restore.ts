@@ -1,0 +1,97 @@
+// @ts-nocheck
+/**
+ * TypeScript-Parallelspiegel: scripts/verify-storage-farm-appcenter-restore.js
+ *
+ * Zweck:
+ * Diese Datei ist die TypeScript-Vorbereitung der bestehenden JavaScript-Runtime-Datei.
+ * Sie wird noch nicht produktiv ausgeführt. Die produktive Quelle bleibt vorerst:
+ * scripts/verify-storage-farm-appcenter-restore.js
+ *
+ * Zusammenhang:
+ * Der Spiegel hilft uns, die JS-Datei später schrittweise zu typisieren, zu testen und
+ * kontrolliert auf TypeScript umzustellen. Änderungen an der Runtime müssen aktuell noch
+ * in der JS-Datei erfolgen und danach mit diesem Spiegel synchronisiert werden.
+ *
+ * Wichtig für die Migration:
+ * - Diese Datei enthält vorübergehend @ts-nocheck.
+ * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
+ * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
+ *
+ * Original-Hash: b621786ad2a30edeb20e075552352b3fcafb990eac95ed142f27a2920f9fcd53
+ */
+
+/**
+ * Code-Teil: Runtime-Spiegel der kompletten Datei
+ *
+ * Zweck:
+ * Dieser Abschnitt enthält den ursprünglichen JavaScript-Code als TypeScript-Parallelkopie.
+ * Einzelne Funktionen werden später pro Modul weiter typisiert; Dateien ohne eigene
+ * Funktionsdeklarationen bleiben trotzdem über diesen Dateikommentar dokumentiert.
+ */
+
+'use strict';
+/**
+ * Regressionstest: Speicherfarm-Konfiguration darf im App-Center nicht verschwinden,
+ * wenn sie produktiv in storageFarm.configJson gespiegelt ist, aber installer.configJson
+ * keine storageFarm.storages mehr enthält.
+ */
+const fs = require('fs');
+/**
+ * Code-Teil: read
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function read(file) { return fs.readFileSync(file, 'utf8'); }
+/**
+ * Code-Teil: must
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function must(file, text, label) {
+  const s = read(file);
+  if (!s.includes(text)) {
+    console.error(`[storage-farm-restore] FEHLT ${label}: ${text} in ${file}`);
+    process.exit(1);
+  }
+}
+/**
+ * Code-Teil: mustNot
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function mustNot(file, text, label) {
+  const s = read(file);
+  if (s.includes(text)) {
+    console.error(`[storage-farm-restore] DARF NICHT ENTHALTEN ${label}: ${text} in ${file}`);
+    process.exit(1);
+  }
+}
+must('src-ts/runtime-executables/main.ts', '_nwHydrateStorageFarmConfigFromRuntimeStates', 'Backend-Fallback-Helfer');
+must('src-ts/runtime-executables/main.ts', 'storageFarm.configJson', 'Runtime-State als Quelle');
+must('src-ts/runtime-executables/main.ts', 'storageFarm.groupsJson', 'Gruppen-Fallback');
+must('src-ts/runtime-executables/main.ts', '__runtimeStateFallbackSource', 'Fallback-Marker für Diagnose');
+must('src-ts/runtime-executables/main.ts', 'out.emsApps.apps.storagefarm', 'App-Center Installiert/Aktiv konsistent halten');
+must('main.js', '_nwHydrateStorageFarmConfigFromRuntimeStates', 'Runtime-Fallback-Helfer');
+must('main.js', 'storageFarm.configJson', 'Runtime-State als Quelle in Runtime');
+must('src-ts/runtime-executables/www/ems-apps.ts', 'nw-storagefarm-master-detail', 'Speicherfarm Master-Detail bleibt vorhanden');
+must('src-ts/runtime-executables/www/ems-apps.ts', 'storageFarmStorages', 'Speicherfarm-Container wird gerendert');
+mustNot('src-ts/runtime-executables/www/ems-apps.ts', 'sf.storages = [];//', 'kein hartes Leeren der Speicherliste');
+console.log('[storage-farm-restore] OK: App-Center hydratisiert Speicherfarm aus Runtime-State-Fallback und verliert bestehende Speicher nicht.');

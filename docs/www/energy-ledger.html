@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>NexoWatt Local kWh Ledger</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <style>
+    body{margin:0;background:#07100d;color:#eefaf2;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.ledger-shell{max-width:1180px;margin:0 auto;padding:20px}.ledger-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px}.ledger-head h1{margin:0;font-size:26px}.muted{color:#9ab5a4}.warn{color:#ffd166}.pill{border:1px solid rgba(0,200,83,.35);border-radius:999px;padding:7px 11px;background:rgba(0,200,83,.08);color:#8ff7b0;font-weight:800}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.card{background:rgba(11,18,16,.96);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:16px;box-shadow:0 18px 40px rgba(0,0,0,.24)}.card small{display:block;color:#9ab5a4;margin-bottom:6px}.card b{font-size:22px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}.actions a,.actions button{border:1px solid rgba(0,200,83,.35);border-radius:12px;background:rgba(0,200,83,.12);color:#eefaf2;padding:10px 12px;text-decoration:none;cursor:pointer}.table-wrap{overflow:auto;border-radius:18px;border:1px solid rgba(255,255,255,.08)}table{width:100%;border-collapse:collapse;min-width:960px;background:rgba(8,14,12,.92)}th,td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px;text-align:left}th{color:#8ff7b0;background:rgba(0,200,83,.08);position:sticky;top:0}@media(max-width:860px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.grid{grid-template-columns:1fr}.ledger-shell{padding:12px}}
+  </style>
+</head>
+<body>
+  <main class="ledger-shell">
+    <header class="ledger-head">
+      <div>
+        <h1>Local kWh Ledger</h1>
+        <div class="muted">Betreiberansicht für Summen, Quelle je kWh und Exporte. Keine Einstellungen, keine Hardwaresteuerung.</div>
+      </div>
+      <span id="ledgerStatus" class="pill">lade…</span>
+    </header>
+    <section class="grid">
+      <div class="card"><small>Heute geladen</small><b id="todayKwh">--</b></div>
+      <div class="card"><small>Lokal/Solar heute</small><b id="todayLocal">--</b></div>
+      <div class="card"><small>Netz heute</small><b id="todayGrid">--</b></div>
+      <div class="card"><small>Wert heute</small><b id="todayValue">--</b></div>
+      <div class="card"><small>Monat kWh</small><b id="monthKwh">--</b></div>
+      <div class="card"><small>Monat Wert</small><b id="monthValue">--</b></div>
+      <div class="card"><small>Jahr kWh</small><b id="yearKwh">--</b></div>
+      <div class="card"><small>Jahr Wert</small><b id="yearValue">--</b></div>
+    </section>
+    <nav class="actions">
+      <a href="/api/ledger/local-kwh.csv?period=today">CSV heute</a>
+      <a href="/api/ledger/local-kwh.csv?period=month">CSV Monat</a>
+      <a href="/api/ledger/local-kwh.csv?period=year">CSV Jahr</a>
+      <a href="/api/ledger/local-kwh.csv?period=all">CSV alle</a>
+      <button id="refreshLedger" type="button">Aktualisieren</button>
+    </nav>
+    <section class="card" style="margin-bottom:14px"><small>Quelle je kWh</small><div id="ledgerSources" class="muted">--</div></section>
+    <section class="card" style="margin-bottom:14px"><small>Energy-Wallet-Verbindung</small><div id="walletBridge" class="muted">--</div></section>
+    <section class="table-wrap"><table><thead><tr><th>Zeit</th><th>Station</th><th>LP</th><th>Session</th><th>Quelle</th><th>kWh</th><th>Lokal/Solar</th><th>Netz</th><th>Wert</th></tr></thead><tbody id="ledgerRows"><tr><td colspan="9" class="muted">lade…</td></tr></tbody></table></section>
+  </main>
+  <script src="/static/energy-ledger.js" defer></script>
+</body>
+</html>
