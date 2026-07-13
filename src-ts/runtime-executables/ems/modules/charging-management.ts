@@ -2530,6 +2530,10 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.storageAssistActive', 'Storage assist active', 'boolean', 'indicator');
         await mk('chargingManagement.control.storageAssistW', 'Storage assist (W)', 'number', 'value.power');
         await mk('chargingManagement.control.storageAssistSoCPct', 'Storage SoC (%)', 'number', 'value.percent');
+        await mk('chargingManagement.control.storageProtectedLoadW', 'EVCS load protected from storage (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.storageProtectedWallboxes', 'EVCS wallboxes protected from storage', 'number', 'value');
+        await mk('chargingManagement.control.storageProtectedLoadTs', 'EVCS storage-protection timestamp', 'number', 'value.time');
+        await mk('chargingManagement.control.storageAssistRequestedLoadW', 'EVCS load allowed to use storage (W)', 'number', 'value.power');
         await this.adapter.setObjectNotExistsAsync('chargingManagement.debug', {
             type: 'channel',
             common: { name: 'Debug' },
@@ -3290,6 +3294,18 @@ class ChargingManagementModule extends BaseModule {
             storageYieldW: 0,
             storageSource: '',
         });
+
+        // Speicher-Schutz fuer EVCS/Wallbox:
+        // Wenn der Kunde am Ladepunkt "Speicher schuetzen" gewaehlt hat oder der
+        // Installateur die Speicher-Mitnutzung nicht freigegeben hat, darf die
+        // Speicher-Eigenverbrauchsoptimierung den NVP-Import dieser Wallbox nicht
+        // wegregeln. Die Speicherregelung liest diese Summe herstellerneutral und
+        // verschiebt ihr NVP-Ziel um diese Leistung nach oben. So funktioniert der
+        // Schutz auch bei Herstellern wie E3/DC, die nicht ueber einen signed-DP,
+        // sondern ueber SET_POWER_MODE/SET_POWER_VALUE geschrieben werden.
+        let storageProtectedLoadW = 0;
+        let storageProtectedWallboxes = 0;
+        let storageAssistRequestedLoadW = 0;
         for (let wbIndex = 0; wbIndex < wallboxes.length; wbIndex++) {
             const wb = wallboxes[wbIndex];
             const key = String(wb.key || '').trim();
@@ -3710,6 +3726,19 @@ class ChargingManagementModule extends BaseModule {
 
             const pWFreshActualForGridW = (online && enabled && !meterStale && typeof pW === 'number' && Number.isFinite(pW)) ? Math.max(0, Math.abs(pW)) : 0;
             const pWStaleIgnoredForGridW = (online && enabled && meterStale && typeof pW === 'number' && Number.isFinite(pW)) ? Math.max(0, Math.abs(pW)) : 0;
+
+            // Speicher-Schutz: Nur frische, reale Wallbox-Leistung wird als
+            // geschuetzte Last an die Speicherregelung uebergeben. Stale Setpoint-
+            // Fallbacks duerfen den Speicher nicht kuenstlich sperren.
+            if (pWFreshActualForGridW > 0) {
+                if (storageAssistRequested) {
+                    storageAssistRequestedLoadW += pWFreshActualForGridW;
+                } else {
+                    storageProtectedLoadW += pWFreshActualForGridW;
+                    storageProtectedWallboxes += 1;
+                }
+            }
+
             if (typeof pWUsed === 'number' && Number.isFinite(pWUsed)) totalPowerW += pWUsed;
             totalFreshActualPowerW += pWFreshActualForGridW;
             totalStaleActualIgnoredForGridW += pWStaleIgnoredForGridW;
@@ -5695,6 +5724,10 @@ if (components.length) {
             await this._queueState('chargingManagement.control.storageAssistSoCPct', Number.isFinite(storageSoC) ? storageSoC : 0, true);
             await this._queueState('chargingManagement.control.storageAssistActive', !!storageAssistActive, true);
             await this._queueState('chargingManagement.control.storageAssistW', Number.isFinite(storageAssistW) ? storageAssistW : 0, true);
+            await this._queueState('chargingManagement.control.storageProtectedLoadW', Math.max(0, Math.round(Number(storageProtectedLoadW || 0))), true);
+            await this._queueState('chargingManagement.control.storageProtectedWallboxes', Math.max(0, Math.round(Number(storageProtectedWallboxes || 0))), true);
+            await this._queueState('chargingManagement.control.storageProtectedLoadTs', now, true);
+            await this._queueState('chargingManagement.control.storageAssistRequestedLoadW', Math.max(0, Math.round(Number(storageAssistRequestedLoadW || 0))), true);
         } catch {
             // ignore
         }
