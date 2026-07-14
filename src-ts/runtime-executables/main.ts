@@ -3714,7 +3714,7 @@ class NexoWattVis extends utils.Adapter {
       { id: 'charging',    enableFlag: 'enableChargingManagement', defaultInstalled: true },
       { id: 'peak',        enableFlag: 'enablePeakShaving' },
       { id: 'storage',     enableFlag: 'enableStorageControl' },
-      { id: 'storagefarm', enableFlag: 'enableStorageFarm' },
+      { id: 'storagefarm', enableFlag: 'enableStorageFarm', noLegacyDefault: true },
       { id: 'thermal',     enableFlag: 'enableThermalControl' },
       { id: 'heatingrod',  enableFlag: 'enableHeatingRodControl' },
       { id: 'bhkw',        enableFlag: 'enableBhkwControl' },
@@ -3769,7 +3769,7 @@ class NexoWattVis extends utils.Adapter {
       if (installed === undefined) {
         if (a.mandatory) installed = true;
         else if (a.defaultInstalled) installed = true;
-        else if (a.enableFlag && typeof n[a.enableFlag] === 'boolean') installed = !!n[a.enableFlag];
+        else if (!a.noLegacyDefault && a.enableFlag && typeof n[a.enableFlag] === 'boolean') installed = !!n[a.enableFlag];
         else installed = false;
       }
 
@@ -3779,7 +3779,7 @@ class NexoWattVis extends utils.Adapter {
       // - otherwise enabled == installed
       if (enabled === undefined) {
         if (a.mandatory) enabled = true;
-        else if (a.enableFlag && typeof n[a.enableFlag] === 'boolean') enabled = !!n[a.enableFlag];
+        else if (!a.noLegacyDefault && a.enableFlag && typeof n[a.enableFlag] === 'boolean') enabled = !!n[a.enableFlag];
         else enabled = installed;
       }
 
@@ -4021,6 +4021,11 @@ class NexoWattVis extends utils.Adapter {
   async loadInstallerConfigFromState() {
     try {
       const baseNative = (this.config && typeof this.config === 'object') ? this.config : {};
+      // Kunden-Navigation: Admin-native Schalter dürfen nicht durch alte Installer-Patches
+      // übersteuert werden. Wir merken uns deshalb den nativen Stand vor der
+      // App-Center-/Installer-Hydration; /config nutzt diesen Snapshot für optionale
+      // Kundenunterseiten wie SmartHome.
+      try { this._nwNativeConfigBase = this._nwDeepClone ? (this._nwDeepClone(baseNative) || {}) : JSON.parse(JSON.stringify(baseNative || {})); } catch (_eNativeSnap) { this._nwNativeConfigBase = baseNative || {}; }
 
       let patch = {};
       let needPersist = false;
@@ -4083,6 +4088,9 @@ class NexoWattVis extends utils.Adapter {
       if (norm.changed) needPersist = true;
 
       this._nwInstallerConfigPatch = patch;
+      // Roh-Patch separat merken: Sichtbarkeitsentscheidungen sollen nicht durch
+      // automatisch aus Legacy-Flags normalisierte App-Zustände verfälscht werden.
+      try { this._nwInstallerConfigRawPatch = this._nwDeepClone ? (this._nwDeepClone(patch) || {}) : JSON.parse(JSON.stringify(patch || {})); } catch (_eRawPatchSnap) { this._nwInstallerConfigRawPatch = patch || {}; }
 
       // Apply patch as installer SoT (replace installer-managed sections)
       this.config = this.nwApplyInstallerPatchToRuntimeConfig(baseNative, patch);
@@ -18813,9 +18821,35 @@ app.get('/config', (req, res) => {
         return ['socId', 'socDp', 'chargePowerId', 'chargeDp', 'dischargePowerId', 'dischargeDp', 'signedPowerId', 'signedPowerDp', 'powerId'].some((key) => String(r[key] || '').trim());
       };
       // Stale runtime states from older builds must not expose the customer Speicherfarm page.
-      // The page is visible only when the App-Center app is active and at least one real farm DP exists.
-      const storageFarmConfigured = storageRowsFromConfig.some(storageFarmRowHasRealDatapoint);
+      // Die Kunden-Unterseite ist nur sinnvoll, wenn die App-Center-App aktiv ist UND
+      // mindestens zwei echte Farm-Speicher konfiguriert sind. Einzel-Speicher-Anlagen
+      // laufen über die normale Speicherregelung und dürfen keinen Farm-Menüpunkt zeigen.
+      const storageFarmConfiguredCount = storageRowsFromConfig.filter(storageFarmRowHasRealDatapoint).length;
+      const storageFarmConfigured = storageFarmConfiguredCount >= 2;
       const storageFarmAvailable = !!(storageFarmAppActive && storageFarmConfigured);
+
+      const smartHomeAdminEnabled = (() => {
+        try {
+          const nativeCfg = (this._nwNativeConfigBase && typeof this._nwNativeConfigBase === 'object') ? this._nwNativeConfigBase : {};
+          const nativeSmartHome = (nativeCfg.smartHome && typeof nativeCfg.smartHome === 'object') ? nativeCfg.smartHome : null;
+          if (nativeSmartHome && typeof nativeSmartHome.enabled === 'boolean') return nativeSmartHome.enabled === true;
+        } catch (_e) {}
+        return !!(cfg.smartHome && cfg.smartHome.enabled);
+      })();
+      const smartHomeAppCenterActive = (() => {
+        try {
+          const emsApps = (cfg && cfg.emsApps && typeof cfg.emsApps === 'object') ? cfg.emsApps : {};
+          const apps = (emsApps.apps && typeof emsApps.apps === 'object') ? emsApps.apps : {};
+          const app = (apps.smartHome && typeof apps.smartHome === 'object')
+            ? apps.smartHome
+            : ((apps.smarthome && typeof apps.smarthome === 'object') ? apps.smarthome : null);
+          return !!(app && app.installed === true && app.enabled === true);
+        } catch (_e) {
+          return false;
+        }
+      })();
+      const smartHomeCustomerEnabled = !!(smartHomeAdminEnabled || smartHomeAppCenterActive);
+      const smartHomeForConfig = Object.assign({}, (cfg.smartHome && typeof cfg.smartHome === 'object') ? cfg.smartHome : {}, { enabled: smartHomeCustomerEnabled });
 
       /**
        * Code-Teil: featureVisibilityTsPreview
@@ -18880,7 +18914,7 @@ app.get('/config', (req, res) => {
             evcsProofs,
             storageFarmEnabled: storageFarmAppActive,
             storageFarmProofs,
-            smartHomeEnabled: !!(cfg.smartHome && cfg.smartHome.enabled),
+            smartHomeEnabled: smartHomeCustomerEnabled,
             weatherEnabled: !!(cfg && cfg.settings && cfg.settings.weatherEnabled) || !!(this.stateCache && this.stateCache['settings.weatherEnabled'] && this.stateCache['settings.weatherEnabled'].value === true),
             weatherHasData,
             aiAdvisorInstalled: !!cfg.enableAiAdvisor,
@@ -18889,7 +18923,7 @@ app.get('/config', (req, res) => {
           const runtime = {
             hasEvcs: evcsAvailable,
             hasStorageFarm: storageFarmAvailable,
-            hasSmartHome: !!(cfg.smartHome && cfg.smartHome.enabled),
+            hasSmartHome: smartHomeCustomerEnabled,
             hasWeather: visibility.hasWeather,
             hasAiAdvisor: !!cfg.enableAiAdvisor && aiCustomerEnabled,
           };
@@ -18937,7 +18971,7 @@ app.get('/config', (req, res) => {
         return {
           hasEvcs: evcsAvailable,
           hasStorageFarm: storageFarmAvailable,
-          hasSmartHome: !!(cfg.smartHome && cfg.smartHome.enabled),
+          hasSmartHome: smartHomeCustomerEnabled,
           hasWeather: (!!(cfg && cfg.settings && cfg.settings.weatherEnabled) || !!(this.stateCache && this.stateCache['settings.weatherEnabled'] && this.stateCache['settings.weatherEnabled'].value === true)) && weatherHasData,
           hasAiAdvisor: !!cfg.enableAiAdvisor && aiCustomerEnabled,
         };
@@ -19290,10 +19324,11 @@ settingsConfig: {
           evcsMaxPowerKw: (cfg && cfg.settingsConfig && Number(cfg.settingsConfig.evcsMaxPowerKw)) || 11,
           evcsList: evcsAvailableEffective ? evcsListForConfig : []
         },
-        smartHome: cfg.smartHome || {},
+        smartHome: smartHomeForConfig,
         smartHomeEnabled: smartHomeEnabledEffective,
         storageFarmEnabled: storageFarmAvailableEffective,
         storageFarmAppActive: storageFarmAppActive,
+        storageFarmConfiguredCount: storageFarmConfiguredCount,
         ems: {
           chargingEnabled: inferChargingEnabled(),
           evcsAvailable: evcsAvailableEffective,
@@ -19303,6 +19338,7 @@ settingsConfig: {
           storageEnabled: boolOr(cfg.enableStorageControl, false),
           storageFarmEnabled: storageFarmAvailableEffective,
           storageFarmAppActive: storageFarmAppActive,
+          storageFarmConfiguredCount: storageFarmConfiguredCount,
           heatingRodEnabled: boolOr(cfg.enableHeatingRodControl, false),
           thresholdEnabled: boolOr(cfg.enableThresholdControl, false),
           relayEnabled: boolOr(cfg.enableRelayControl, false),
@@ -26032,6 +26068,18 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       native: {},
     });
 
+    await this.setObjectNotExistsAsync('derived.core.building.loadSource', {
+      type: 'state',
+      common: {
+        name: 'Gebäudeverbrauch Quelle',
+        type: 'string',
+        role: 'text',
+        read: true,
+        write: false,
+      },
+      native: {},
+    });
+
     // PV (berechnet) – AC/DC/Total
     await this.setObjectNotExistsAsync('derived.core.pv', {
       type: 'channel',
@@ -27590,10 +27638,25 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     // --- Derived loads ---
     const rawLoadTotalW = productionW + gridBuyW + dischargeW - gridSellW - chargeW;
 
+    // Gebäudeverbrauchs-Quelle:
+    // Wenn ein direkter Gebäude-/Verbrauchs-DP gemappt ist, ist dieser Messwert für
+    // LIVE, Sungrow/FENECON-Deckungslogik und Diagnose die stabilere Quelle als die
+    // Bilanzgleichung aus PV + NVP + Speicher. Die Bilanz bleibt als Fallback und
+    // Kontrollwert erhalten, weil Einzelwerte zeitlich versetzt eintreffen koennen.
+    const directLoadMaxAgeMs = Math.max(10 * 1000, Number(this.config?.settings?.deviceStaleTimeoutSec || 60) * 1000);
+    const directLoadTotalRaw = consumptionMapped
+      ? this._nwGetNumberFromCacheFresh('consumptionTotal', directLoadMaxAgeMs, null, ts)
+      : null;
+    const directLoadTotalW = (typeof directLoadTotalRaw === 'number' && Number.isFinite(directLoadTotalRaw) && directLoadTotalRaw >= 0)
+      ? Math.max(0, directLoadTotalRaw)
+      : null;
+    const directLoadAgeMs = consumptionMapped ? this._nwGetCacheAgeMs('consumptionTotal', ts) : null;
+    let loadTotalSource = directLoadTotalW !== null ? 'mapped:consumptionTotal' : 'balance:pv+nvp+storage';
+
     // Some meters/adapters update asynchronously (grid/PV/battery).
     // This can temporarily yield an impossible negative power balance.
     // To avoid 0 W spikes in the VIS, we hold the last plausible value for a short time.
-    let loadTotalW = rawLoadTotalW;
+    let loadTotalW = directLoadTotalW !== null ? directLoadTotalW : rawLoadTotalW;
 
     const activityW = (Math.abs(productionW) + Math.abs(gridBuyW) + Math.abs(gridSellW) + Math.abs(chargeW) + Math.abs(dischargeW));
     const hasActivity = activityW > 200;
@@ -27639,10 +27702,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     if (loadTotalW < 0 || (loadTotalW === 0 && hasActivity)) {
       if (goodLoad !== null && goodAgeMs <= holdMaxAgeMs) {
         loadTotalW = goodLoad;
+        loadTotalSource = `${loadTotalSource}:hold-last-good`;
         usedFallback = true;
       } else if (hasActivity) {
         // Minimal plausible base-load to avoid "0.00 kW" optics while there is clearly energy activity.
         loadTotalW = 100;
+        loadTotalSource = `${loadTotalSource}:minimal-plausible`;
         usedFallback = true;
       } else {
         loadTotalW = 0;
@@ -27661,7 +27726,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     }
 
-    const rawLoadRestW = rawLoadTotalW - evW - consumersW;
+    const rawLoadRestW = loadTotalW - evW - consumersW;
 
     let loadRestW = loadTotalW - evW - consumersW;
     // If we had to hold/fallback the total load, prefer holding the last plausible rest-load as well.
@@ -27759,16 +27824,18 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     } catch (_eTsLiveState) {}
 
-    // Update last-plausible cache only when the raw balance is plausible
-    // (avoid locking-in 0W during active operation).
+    // Update last-plausible cache from the selected building-load source.
+    // Direkte Verbrauchs-DPs sind dabei bevorzugt; die Bilanz bleibt Fallback. So
+    // halten wir bei asynchronen PV/NVP/Speicher-Ticks keinen alten Bilanzwert fest,
+    // wenn ein frischer Gebäudeverbrauch bereits vorhanden ist.
     try {
-      if (Number.isFinite(rawLoadTotalW) && rawLoadTotalW >= 0) {
-        const rawRound = Math.round(rawLoadTotalW);
-        const rawRestRound = Math.round(Math.max(0, rawLoadRestW));
-        const goodCandidateOk = (rawRound > 10) || !hasActivity;
+      if (Number.isFinite(loadTotalW) && loadTotalW >= 0) {
+        const selectedRound = Math.round(loadTotalW);
+        const selectedRestRound = Math.round(Math.max(0, rawLoadRestW));
+        const goodCandidateOk = (selectedRound > 10) || !hasActivity;
         if (goodCandidateOk) {
-          good.loadTotalW = rawRound;
-          good.loadRestW = rawRestRound;
+          good.loadTotalW = selectedRound;
+          good.loadRestW = selectedRestRound;
           good.ts = ts;
         }
       }
@@ -27782,6 +27849,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     if (this._derivedFlow?.last?.loadRestW !== publishLoadRestRound) {
       this._derivedFlow.last.loadRestW = publishLoadRestRound;
       await this.setStateAsync('derived.core.building.loadRestW', { val: publishLoadRestRound, ack: true });
+    }
+    if (this._derivedFlow?.last?.loadSource !== loadTotalSource) {
+      this._derivedFlow.last.loadSource = loadTotalSource;
+      await this.setStateAsync('derived.core.building.loadSource', { val: loadTotalSource, ack: true });
     }
 
     const pvAcRound = Math.round(pvAcW);
@@ -27844,9 +27915,18 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
           extraProductionW: Math.round(producerSumW),
           consumersW: Math.round(consumersW),
           evW: Math.round(evW),
-          building: { loadTotalW: publishLoadTotalRound, loadRestW: publishLoadRestRound, runtimeLoadTotalW: loadTotalRound, runtimeLoadRestW: loadRestRound },
+          building: {
+            loadTotalW: publishLoadTotalRound,
+            loadRestW: publishLoadRestRound,
+            runtimeLoadTotalW: loadTotalRound,
+            runtimeLoadRestW: loadRestRound,
+            source: loadTotalSource,
+            directMappedW: directLoadTotalW !== null ? Math.round(directLoadTotalW) : null,
+            directAgeMs: directLoadAgeMs,
+          },
           balance: {
             rawLoadTotalW: Math.round(rawLoadTotalW),
+            selectedLoadTotalW: loadTotalRound,
             rawLoadRestW: Math.round(Math.max(0, rawLoadRestW)),
             usedFallback: !!usedFallback,
             inputSkewMs: inputSkewMs,

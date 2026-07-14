@@ -1,8 +1,20 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.90",
+    "version": "0.8.93",
     "news": {
+      "0.8.93": {
+        "de": "Version 0.8.93: Berechnet Speicher-Lade- und Entladesollwerte aus frischer Batterie-Istleistung plus aktueller NVP-Differenz. Alte Sollwerte werden ohne gueltiges Istfeedback nicht mehr hochintegriert; kontrollierter Aufbau, schnelle Ruecknahme und 0-W-Zwischenstufe beruhigen die Eigenverbrauchsregelung.",
+        "en": "Version 0.8.93: Calculates storage charge and discharge targets from fresh actual battery power plus the current grid-connection-point error. Old targets are no longer accumulated without valid feedback; controlled ramp-up, fast release and a zero-watt transition stabilize self-consumption control."
+      },
+      "0.8.92": {
+        "de": "Version 0.8.92: Glättet die Speicher-Eigenverbrauchsoptimierung am NVP mit Zielband, Filterzeit und RAW-Schutz, damit der Energiefluss ruhiger läuft ohne echten Netzbezug/Export zu verschleppen. Die Gebäudeverbrauchsberechnung bevorzugt frische gemappte Verbrauchs-DPs und nutzt die Bilanz aus PV, NVP und Speicher als Fallback/Diagnose.",
+        "en": "Version 0.8.92: Smooths storage self-consumption control at the grid connection point with a target band, filter time and raw guard so the energy flow is calmer without delaying real import/export. Building load calculation now prefers fresh mapped consumption datapoints and uses the PV, grid and storage balance as fallback/diagnostics."
+      },
+      "0.8.91": {
+        "de": "Version 0.8.91: Korrigiert die Sichtbarkeit optionaler Kunden-Unterseiten. SmartHome und Speicherfarm erscheinen im Burger-Menü nur noch über /config.featureVisibility; alte Runtime-/Legacy-Flags können sie nicht mehr einblenden. Speicherfarm ist zusätzlich erst ab aktiver AppCenter-App und mindestens zwei echten Farm-Speichern sichtbar.",
+        "en": "Version 0.8.91: Fixes visibility of optional customer pages. SmartHome and storage farm are now shown in the burger menu only via /config.featureVisibility; stale runtime/legacy flags can no longer expose them. Storage farm additionally requires the active AppCenter app and at least two real farm storages."
+      },
       "0.8.90": {
         "de": "Version 0.8.90: Korrigiert den Wallbox-Speicherschutz herstellerübergreifend. Ladepunkte ohne Speicher-Mitnutzung verschieben jetzt das NVP-Ziel der Speicher-Eigenverbrauchsoptimierung, sodass der Speicher nur den Hausverbrauch ohne Wallbox abdeckt. Die Korrektur greift vor den Zielpfaden für signed/split-DPs, Sungrow, FENECON und E3/DC RSCP.",
         "en": "Version 0.8.90: Fixes wallbox storage protection across manufacturer profiles. Charge points without storage assist now shift the storage self-consumption NVP target so the battery only covers house load excluding the wallbox. The correction is applied before the signed/split, Sungrow, FENECON and E3/DC RSCP target paths."
@@ -18,18 +30,6 @@
       "0.8.87": {
         "de": "Version 0.8.87: Korrigiert das Sungrow-Hybrid-ESS-NVP-Balancing. Die Speicherregelung verrechnet jetzt laufende Be-/Entladung mit der aktuellen NVP-Abweichung, damit Rest-Netzbezug über dem Zielband und Rest-Export nachgeregelt werden. PV-deckender Sungrow-Betrieb schreibt nur noch 0 W, wenn der NVP wirklich im Zielband liegt.",
         "en": "Version 0.8.87: Fixes Sungrow Hybrid ESS NVP balancing. Storage control now combines the current charge/discharge power with the live NVP deviation so residual grid import above the target band and residual export are corrected. PV-covering Sungrow operation only writes 0 W when the NVP is actually within the target band."
-      },
-      "0.8.86": {
-        "de": "Version 0.8.86: Ergänzt Herstellerprofile in der Einzel-Speicherregelung und einen Sungrow-Hybrid-ESS-Modus. Sungrow-Anlagen setzen bei PV-deckender Leistung externe Lade-/Entladevorgaben auf 0 und entladen nur noch NVP-begrenzt bei echtem Netzbezug; FENECON/OpenEMS bleibt getrennt. Diagnosewerte für Sungrow-Hybrid wurden ergänzt.",
-        "en": "Version 0.8.86: Adds manufacturer profiles to single-storage control and a Sungrow Hybrid ESS mode. Sungrow systems now zero external charge/discharge setpoints when PV covers building load and only discharge with an NVP-capped assist on real grid import; FENECON/OpenEMS remains separate. Sungrow hybrid diagnostics were added."
-      },
-      "0.8.85": {
-        "de": "Version 0.8.85: Bindet den Speicherfarm-Menüpunkt strikt an AppCenter installiert+aktiv und echte Speicherfarm-Datenpunkte. Alte storageFarm-Runtime-States oder Legacy-Flags können den Kundenmenüpunkt nicht mehr sichtbar machen; Runtime-Hydration rettet nur noch Zeilen, aktiviert die App aber nicht automatisch.",
-        "en": "Version 0.8.85: Strictly gates the storage farm menu entry on the App Center app being installed+enabled and real storage-farm datapoints. Stale storageFarm runtime states or legacy flags can no longer expose the customer menu item; runtime hydration only recovers rows and no longer auto-enables the app."
-      },
-      "0.8.84": {
-        "de": "Version 0.8.84: Koppelt die Heizstab-Betriebsart 0-W-Einspeisung/Forecast an die zentrale Budgetlogik. EVCS-Priorität, NVP-Messung und Speicherflüsse werden aus den vorhandenen EMS-/Lastmanagement-Werten genutzt; die bestehenden Heizstab-Stufenleistungen bleiben maßgeblich. Hybrid-Proben können nun über stabile NVP-/Speicher-/Budgetwerte bestätigt werden, auch wenn kein separater PV-DP-Anstieg sichtbar ist.",
-        "en": "Version 0.8.84: Connects the heating-rod zero-export/forecast mode to the central budget logic. EVCS priority, NVP metering and storage flows use the existing EMS/load-management values; the configured heating-rod stage powers stay authoritative. Hybrid probes can now be confirmed via stable NVP/storage/budget values even when no separate PV datapoint rise is visible."
       }
     },
     "title": "NexoWatt UI",

@@ -26,9 +26,11 @@ for (const file of [
   must(file, 'let chargeDemandHardCapW = null;', 'Lade-Cap Laufzeitvariable');
   must(file, '0 W heißt dabei bewusst: diese Richtung jetzt stoppen.', '0-W-Stop-Kommentar');
   must(file, "'Tarif-Netzlade-Headroom-Cap'", 'Tarif-Netzlade-Cap');
-  must(file, 'const exportCtrlCapW = Math.max(0, currentChargeForBalancingW + exportCtrlW + extraBias);', 'PV-Cap nutzt laufende Ladung plus geglaetteten Exportwunsch');
-  must(file, 'const exportRawCapW = exportRawW > 0 ? Math.max(0, currentChargeForBalancingW + exportRawW + extraBias) : currentChargeForBalancingW;', 'PV-Cap RAW-Export nutzt laufende Ladung plus aktuellen NVP-Export');
-  must(file, 'const pvRawChargeCapW = clamp(Math.min(exportCtrlCapW, exportRawCapW), 0, chargeLimitW);', 'PV-Wunsch wird durch RAW hart begrenzt');
+  must(file, 'const pvTargetImportW = selfTargetGridW + evcsStorageProtectedNvpTargetShiftW + extraBias;', 'PV-Cap beruecksichtigt den konfigurierten NVP-Zielbezug');
+  must(file, 'const exportCtrlCapW = Math.max(0, currentChargeForBalancingW + exportCtrlW + pvTargetImportW);', 'PV-Cap nutzt laufende Ladung plus geglaetteten Exportwunsch');
+  must(file, 'const exportRawCapW = exportRawW > 0', 'PV-Cap RAW-Export nutzt laufende Ladung plus aktuellen NVP-Export');
+  must(file, 'const requestedChargeW = Math.max(0, -Number(pvBalance.targetW || 0));', 'PV-Ladewunsch stammt aus Istleistung plus NVP-Differenz');
+  must(file, 'const pvRawChargeCapW = clamp(Math.min(requestedChargeW, exportCtrlCapW, exportRawCapW), 0, chargeLimitW);', 'PV-Wunsch wird durch RAW hart begrenzt');
   must(file, 'targetW = -pvRawChargeCapW;', 'PV-Zielwert nutzt harten RAW-Cap');
   must(file, "chargeDemandHardCapReason = zeEnabled ? 'Nulleinspeisung-NVP-Lade-Cap (aktuelle Ladung+Export)' : 'PV-NVP-Lade-Cap (aktuelle Ladung+Export)';", 'PV-NVP-Cap Diagnose mit laufender Ladung');
   must(file, "chargeDemandHardCapReason = 'Notstrom-Reserve-Lade-Cap';", 'Reserve-Lade-Cap');

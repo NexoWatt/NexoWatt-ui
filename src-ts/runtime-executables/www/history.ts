@@ -2993,14 +2993,14 @@ async function load(force = false){
     document.querySelectorAll('[data-feature="evcs"]').forEach(function(el){
       el.classList.toggle('hidden', !showEvcsHistory);
     });
-    const sh = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
+    const sh = !!(cfg.featureVisibility && cfg.featureVisibility.hasSmartHome === true);
     const sl = document.getElementById('menuSmartHomeLink');
     if (sl) sl.classList.toggle('hidden', !sh);
     const st = document.getElementById('tabSmartHome');
     if (st) st.classList.toggle('hidden', !sh);
 
     // Speicherfarm Tab/Link nur anzeigen, wenn eine Farm wirklich konfiguriert ist.
-    const sf = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
+    const sf = !!(cfg.featureVisibility && cfg.featureVisibility.hasStorageFarm === true);
     const sft = document.getElementById('tabStorageFarm');
     if (sft) sft.classList.toggle('hidden', !sf);
     const sfl = document.getElementById('menuStorageFarmLink');

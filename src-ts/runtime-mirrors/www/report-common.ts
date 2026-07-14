@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: bf126565262881620d02385515a4c094903bc5a351398a73c3abc430242e8ca1
+ * Original-Hash: e909770f9e98d7968809f6e2006da8380c3ab93b8fc02269c227f920a8c77065
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/report-common.ts
- * Quell-Hash: sha256:923b395c924237e0c0123aa3685cd64e5a176334d14dcf86f1e8209fcf6a7b91
+ * Quell-Hash: sha256:a62e375e41a2454afabb3b6f0b9ae8a6fbfbdbb099db33a5ea0c1f33bb1d7dd3
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -320,8 +320,8 @@
         const res = await fetch('/config');
         const cfg = await res.json();
         const settingsConfig = (cfg && cfg.settingsConfig) || {};
-        const smartHomeEnabled = !!(cfg && (cfg.smartHomeEnabled || (cfg.smartHome && cfg.smartHome.enabled)));
-        const storageFarmEnabled = !!(cfg && ((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled))));
+        const smartHomeEnabled = !!(cfg && cfg.featureVisibility && cfg.featureVisibility.hasSmartHome === true);
+        const storageFarmEnabled = !!(cfg && cfg.featureVisibility && cfg.featureVisibility.hasStorageFarm === true);
         const evcsAvailable = ((Number(settingsConfig.evcsConfiguredCount || 0) || (Array.isArray(settingsConfig.evcsList) ? settingsConfig.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
         const evcsCount = evcsAvailable ? Math.max(0, Math.round(Number(settingsConfig.evcsCount) || 0)) : 0;
         const showEvcs = evcsAvailable && evcsCount >= 2;

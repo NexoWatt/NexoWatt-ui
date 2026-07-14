@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/app.ts
- * Quell-Hash: sha256:917c46d43090750c227574edf56e90d2d82549c6f85e926657259e31850a72b9
+ * Quell-Hash: sha256:33029a0e65a17230c7678de6074dce47dfaf6b3ce3abdd37473f89027df2da7a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1582,6 +1582,18 @@ function nwEvcsCountFromConfig(inputCfg) {
  * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
+function nwOptionalFeatureFromConfig(inputCfg, key, fallback) {
+  const c = inputCfg || window.__nwCfg || {};
+  try {
+    const fv = (c.featureVisibility && typeof c.featureVisibility === 'object') ? c.featureVisibility : null;
+    if (fv && typeof fv[key] === 'boolean') return fv[key] === true;
+  } catch (_e) {}
+  return !!fallback;
+}
+function nwSmartHomeFeatureFromConfig(inputCfg) {
+  const c = inputCfg || window.__nwCfg || {};
+  return nwOptionalFeatureFromConfig(c, 'hasSmartHome', !!(c && c.smartHome && c.smartHome.enabled));
+}
 function nwStorageFarmAppCenterActiveFromConfig(inputCfg) {
   const c = inputCfg || window.__nwCfg || {};
   try {
@@ -1601,11 +1613,12 @@ function nwStorageFarmHasRealRowsFromConfig(inputCfg) {
   try {
     const sf = (c.storageFarm && typeof c.storageFarm === 'object') ? c.storageFarm : {};
     const rows = Array.isArray(sf.storages) ? sf.storages : [];
-    return rows.some((row) => {
+    const realCount = rows.filter((row) => {
       const r = row && typeof row === 'object' ? row : null;
       if (!r || r.enabled === false) return false;
       return ['socId','socDp','chargePowerId','chargeDp','dischargePowerId','dischargeDp','signedPowerId','signedPowerDp','powerId'].some((key) => String(r[key] || '').trim());
-    });
+    }).length;
+    return realCount >= 2;
   } catch (_e) {
     return false;
   }
@@ -1614,15 +1627,17 @@ function nwStorageFarmFeatureFromConfig(inputCfg, stateSnapshot) {
   const c = inputCfg || window.__nwCfg || {};
   const appCenterActive = nwStorageFarmAppCenterActiveFromConfig(c);
   if (!appCenterActive) return false;
-  if (c.featureVisibility && typeof c.featureVisibility.hasStorageFarm === 'boolean') return c.featureVisibility.hasStorageFarm === true;
-  if (typeof c.storageFarmEnabled === 'boolean') return c.storageFarmEnabled === true && nwStorageFarmHasRealRowsFromConfig(c);
-  if (c.ems && typeof c.ems.storageFarmEnabled === 'boolean') return c.ems.storageFarmEnabled === true && nwStorageFarmHasRealRowsFromConfig(c);
+  if (c.featureVisibility && typeof c.featureVisibility.hasStorageFarm === 'boolean') return c.featureVisibility.hasStorageFarm === true && nwStorageFarmHasRealRowsFromConfig(c);
+  // Keine Legacy-Fallbacks mehr: storageFarmEnabled/emulated EMS-Flags dürfen den
+  // Kunden-Menüpunkt nicht öffnen. Nur featureVisibility oder der State-Fallback
+  // nach AppCenter- und >=2-Speicher-Prüfung gelten.
   try {
     const st = stateSnapshot || window.latestState || state || {};
     const enabled = nwAsBool(st['storageFarm.enabled'] && st['storageFarm.enabled'].value, false);
     const total = Number(st['storageFarm.storagesTotal'] && st['storageFarm.storagesTotal'].value);
     // Runtime-States sind nur noch ein letzter Fallback, wenn App-Center aktiv ist.
-    return enabled && Number.isFinite(total) && total > 0;
+    // Auch hier gilt: Farm-Menü erst ab zwei echten Speichern.
+    return enabled && Number.isFinite(total) && total >= 2;
   } catch (_e) {
     return false;
   }
@@ -1705,7 +1720,7 @@ function nwBuildTsFeatureVisibilityInput(inputCfg, stateSnapshot) {
     evcsProofs,
     storageFarmEnabled: nwStorageFarmFeatureFromConfig(c, st),
     storageFarmProofs,
-    smartHomeEnabled: !!(c && c.smartHome && c.smartHome.enabled),
+    smartHomeEnabled: nwSmartHomeFeatureFromConfig(c),
     weatherEnabled: nwAsBool(st['settings.weatherEnabled'] && st['settings.weatherEnabled'].value, !!(c && c.settings && c.settings.weatherEnabled)),
     weatherHasData: (weatherTemp !== undefined && weatherTemp !== null && weatherTemp !== '') || !!String(weatherText || '').trim(),
     aiAdvisorInstalled: nwAsBool(aiEnabled, !!(c && c.aiAdvisor && c.aiAdvisor.enabled !== false)),
@@ -1797,7 +1812,7 @@ function nwApplyCustomerFeatureVisibility(inputCfg, stateSnapshot) {
     nwRunTsFeatureVisibilityShadowCheck(c, stateSnapshot, {
       hasEvcs: evcsAvailable,
       hasStorageFarm: storageFarmAvailable,
-      hasSmartHome: !!(c && c.smartHome && c.smartHome.enabled),
+      hasSmartHome: nwSmartHomeFeatureFromConfig(c),
       hasWeather: true,
       hasAiAdvisor: true,
     });
@@ -3508,7 +3523,7 @@ async function bootstrap() {
       if (l) l.classList.toggle('hidden', !(evcsAvailable && c >= 2));
       const t = document.getElementById('tabEvcs');
       if (t) t.classList.toggle('hidden', !(evcsAvailable && c >= 2));
-      const sh = !!(cfg.smartHome && cfg.smartHome.enabled);
+      const sh = nwSmartHomeFeatureFromConfig(cfg);
       window.__nwSmartHomeEnabled = sh;
       const sl = document.getElementById('menuSmartHomeLink');
       if (sl) sl.classList.toggle('hidden', !sh);
@@ -3601,7 +3616,7 @@ const applyConfigSnapshot = (nextCfg) => {
     if (tabEvcs) tabEvcs.classList.toggle('hidden', !showEvcsPage);
 
     // SmartHome enabled flag is part of cfg.smartHome
-    window.__nwSmartHomeEnabled = !!(cfg && cfg.smartHome && cfg.smartHome.enabled);
+    window.__nwSmartHomeEnabled = nwSmartHomeFeatureFromConfig(cfg);
     const menuSmartHomeLink = document.getElementById('menuSmartHomeLink');
     const tabSmartHome = document.getElementById('tabSmartHome');
     if (menuSmartHomeLink) menuSmartHomeLink.classList.toggle('hidden', !window.__nwSmartHomeEnabled);

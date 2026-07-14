@@ -842,6 +842,32 @@
               </div>
             </div>
           </div>
+          <div class="nw-config-field-row">
+            <div class="nw-config-field-label">NVP-Regelung Eigenverbrauch</div>
+            <div class="nw-config-field-control nw-config-field-control--stack">
+              <div style="display:grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap:8px;">
+                <label class="nw-config-help" style="display:flex; flex-direction:column; gap:4px; opacity:0.95;">
+                  Zielbezug (W)
+                  <input id="storageSelfTargetGridImportW" class="nw-config-input" type="number" min="0" step="10" placeholder="50" />
+                </label>
+                <label class="nw-config-help" style="display:flex; flex-direction:column; gap:4px; opacity:0.95;">
+                  Deadband (W)
+                  <input id="storageSelfImportThresholdW" class="nw-config-input" type="number" min="0" step="10" placeholder="50" />
+                </label>
+                <label class="nw-config-help" style="display:flex; flex-direction:column; gap:4px; opacity:0.95;">
+                  Glättung (s)
+                  <input id="storageSelfNvpSmoothingSec" class="nw-config-input" type="number" min="0" step="1" placeholder="8" />
+                </label>
+                <label class="nw-config-help" style="display:flex; flex-direction:column; gap:4px; opacity:0.95;">
+                  RAW-Guard (W)
+                  <input id="storageSelfNvpRawGuardW" class="nw-config-input" type="number" min="50" step="10" placeholder="100" />
+                </label>
+              </div>
+              <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
+                Zielbezug + Deadband beruhigen die Speicherregelung am NVP. Die Glättung reduziert Springen zwischen Bezug und Einspeisung; der RAW-Guard greift sofort, wenn der echte NVP deutlich außerhalb des Zielbandes liegt. Standardziel bleibt ca. 50 W, damit der Restbezug normalerweise unter 100 W bleibt.
+              </div>
+            </div>
+          </div>
           <div class="nw-config-field-row" id="storageFeneconOptionsRow">
             <div class="nw-config-field-label">FENECON / OpenEMS</div>
             <div class="nw-config-field-control nw-config-field-control--stack">

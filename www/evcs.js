@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/evcs.ts
- * Quell-Hash: sha256:7f8859a59b59cef89b2140e5ab2a816c65ec5c6e1ae6f9a60f3b67b720b9ac67
+ * Quell-Hash: sha256:ee29dba0d05968b9640023f5069d13af21fc3f80bce1b2f41816b44f5444098a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1729,12 +1729,12 @@ async function bootstrap() {
     if (t) t.classList.toggle('hidden', !showEvcsPage);
     const n = document.getElementById('nav-evcs');
     if (n) n.classList.toggle('hidden', !showEvcsPage);
-    const sh = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
+    const sh = !!(cfg.featureVisibility && cfg.featureVisibility.hasSmartHome === true);
     const sl = document.getElementById('menuSmartHomeLink');
     if (sl) sl.classList.toggle('hidden', !sh);
     const st = document.getElementById('tabSmartHome');
     if (st) st.classList.toggle('hidden', !sh);
-    const sf = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
+    const sf = !!(cfg.featureVisibility && cfg.featureVisibility.hasStorageFarm === true);
     const sfMenu = document.getElementById('menuStorageFarmLink');
     if (sfMenu) sfMenu.classList.toggle('hidden', !sf);
     const sfTab = document.getElementById('tabStorageFarm');
