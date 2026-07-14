@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: fe45b2ab77353c8c21148e5593f274224c99acd4b710c57a174e9eb6639f173a
+ * Original-Hash: 4794a14c9886c7cec8907ab4d751ea18401a8e286dfec8387896725a2a607e22
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:950f967472084877f597cb633de84d42d216fee40ba98ca01825a26159efa23e
+ * Quell-Hash: sha256:36de4389601ac85f886154e9dc7604e8dd1e2eaa41b7325228bf46863ba45ecc
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -378,6 +378,14 @@ class SpeicherRegelungModule extends BaseModule {
         // stehen bleiben.
         this._e3dcRscpLastMode = '';
 
+        // NVP-Glättung für die Speicher-Eigenverbrauchsoptimierung:
+        // Die Messung am Netzverknüpfungspunkt kann durch Zähler-Latenzen, Speicher-Rampen
+        // und Hybrid-Gateways kurz zwischen Bezug und Einspeisung springen. Dieser Filter
+        // liefert einen ruhigen Führungswert für die Regelung; harte RAW-Caps bleiben
+        // zusätzlich aktiv, damit Anschluss- und 0-Einspeise-Sicherheit erhalten bleiben.
+        this._selfNvpFilteredW = null;
+        this._selfNvpLastTs = 0;
+
     }
 
     /**
@@ -638,7 +646,20 @@ class SpeicherRegelungModule extends BaseModule {
             gridW = gridRawW;
         }
 
-        const gridAge = this.dp ? (this.dp.getEntry('grid.powerW') ? this.dp.getAgeMs('grid.powerW') : (this.dp.getEntry('ps.gridPowerW') ? this.dp.getAgeMs('ps.gridPowerW') : null)) : null;
+        // Fuer die geschlossene NVP-Regelung brauchen wir nicht nur "irgendein"
+        // Alter der Netzleistung, sondern getrennt das Alter des gefilterten und
+        // des RAW-Werts. Nur so koennen Batterie-Istleistung und NVP-Messung auf
+        // zeitliche Plausibilitaet geprueft werden. Asynchrone Werte sind eine
+        // Hauptursache fuer wechselnde Lade-/Entlade-Sollwerte.
+        const gridFilteredAge = this.dp && this.dp.getEntry('grid.powerW')
+            ? this.dp.getAgeMs('grid.powerW')
+            : null;
+        const gridRawAge = this.dp
+            ? (this.dp.getEntry('grid.powerRawW')
+                ? this.dp.getAgeMs('grid.powerRawW')
+                : (this.dp.getEntry('ps.gridPowerW') ? this.dp.getAgeMs('ps.gridPowerW') : null))
+            : null;
+        const gridAge = (typeof gridFilteredAge === 'number') ? gridFilteredAge : gridRawAge;
 
         // SoC für Reserve (bei Speicherfarm: aggregierten SoC nutzen)
         let soc = this.dp ? this.dp.getNumberFresh('st.socPct', staleMs, null) : null;
@@ -914,6 +935,14 @@ class SpeicherRegelungModule extends BaseModule {
         let chargeDemandHardCapW = null;
         let chargeDemandHardCapReason = '';
 
+        // Gemeinsame Diagnose und Rampensteuerung fuer alle NVP-basierten
+        // Speicherpfade. Sobald frische Batterie-Istleistung verwendet wird,
+        // begrenzt der Balancing-Helfer die Korrektur bereits relativ zur echten
+        // Speicherleistung. Eine zweite Rampe relativ zum alten Sollwert wuerde
+        // die Werte erneut auseinanderziehen und sichtbares Springen erzeugen.
+        let storageNvpBalanceDiag = null;
+        let storageNvpBalanceRampManaged = false;
+
         const exportW = Math.max(0, -gridW); // negative Netzleistung = Einspeisung (geglättet)
         const importW = Math.max(0, gridW);  // positive Netzleistung = Bezug (geglättet)
         const nvpRawW = (typeof gridRawW === 'number') ? gridRawW : gridW; // Import + / Export -
@@ -963,7 +992,7 @@ class SpeicherRegelungModule extends BaseModule {
         // der neue NVP-Export geschrieben wird statt "alte Ladung + neuer Export".
         const isStorageBalanceSource = (src) => {
             const x = String(src || '').toLowerCase();
-            return x === 'eigenverbrauch' || x === 'pv' || x === 'sungrow-hybrid' || x === 'sungrow-assist' || x === 'fenecon' || x === 'fenecon-assist';
+            return x === 'eigenverbrauch' || x === 'pv' || x === 'tarif' || x === 'sungrow-hybrid' || x === 'sungrow-assist' || x === 'fenecon' || x === 'fenecon-assist';
         };
 /**
  * Code-Teil: getLastStorageBalanceTargetW
@@ -1347,6 +1376,25 @@ if (typeof soc === 'number') {
         // dürfen auch ohne MultiUse genutzt werden. Sie bilden keine SoC-Zonen.
         const selfTargetGridW = Math.max(0, num(cfg.selfTargetGridImportW, 50));
         const selfImportThresholdW = Math.max(0, num(cfg.selfImportThresholdW, 50));
+
+        // NVP-Stabilisator: Fuehrungsgroesse fuer die Eigenverbrauchsregelung.
+        // Die RAW-Messung bleibt fuer harte Caps/Schutzlogik erhalten, aber der
+        // eigentliche Sollwert folgt im Normalbereich dem gefilterten NVP. Dadurch
+        // wird das sichtbare Springen zwischen Netzbezug und Einspeisung reduziert.
+        const selfNvpBaseW = (typeof gridRawW === 'number' && Number.isFinite(gridRawW))
+            ? gridRawW
+            : ((typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null);
+        const selfNvpStabilizer = this._buildSelfNvpControlSignal(
+            selfNvpBaseW,
+            now,
+            cfg,
+            selfTargetGridW + evcsStorageProtectedNvpTargetShiftW,
+            selfImportThresholdW,
+        );
+        await this._setIfChanged('speicher.regelung.selfNvpRawW', Number.isFinite(Number(selfNvpStabilizer.rawW)) ? Math.round(Number(selfNvpStabilizer.rawW)) : null);
+        await this._setIfChanged('speicher.regelung.selfNvpFilteredW', Number.isFinite(Number(selfNvpStabilizer.filteredW)) ? Math.round(Number(selfNvpStabilizer.filteredW)) : null);
+        await this._setIfChanged('speicher.regelung.selfNvpControlW', Number.isFinite(Number(selfNvpStabilizer.controlW)) ? Math.round(Number(selfNvpStabilizer.controlW)) : null);
+        await this._setIfChanged('speicher.regelung.selfNvpControlMode', String(selfNvpStabilizer.mode || ''));
 
         await this._setIfChanged('speicher.regelung.lskMinSocPct', lskMinSoc);
         await this._setIfChanged('speicher.regelung.lskMaxSocPct', lskMaxSoc);
@@ -1903,46 +1951,34 @@ if (typeof soc === 'number') {
 						const nvpRawW = (typeof gridRawW === 'number') ? gridRawW : gridW;
 						const nvpCtrlW = (typeof nvpRawW === 'number') ? nvpRawW : gridW;
 
-						// Basis ist entweder:
-						// - die echte, frische Ist-Batterieleistung (OpenEMS-Balancing: batt + (grid-target)) oder
-						// - ein konservativer NVP-Fallback ohne Integrator, wenn keine vertrauenswürdige Istleistung vorliegt.
-						// Wichtig: Der letzte Sollwert darf ohne echte Rückmeldung nicht als Istleistung zählen,
-						// weil sonst ein Setpoint-/Modbus-Fehler bis in gefährliche Leistungsbereiche hochlaufen kann.
-						const curSetW = (typeof this._lastTargetW === 'number' && this._lastTargetW > 0) ? this._lastTargetW : 0;
-						const battWRaw = (battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Number(battPowerW) : null;
-						const battW = (typeof battWRaw === 'number') ? Math.max(0, battWRaw) : null;
-
-						let errW = (typeof nvpCtrlW === 'number') ? (nvpCtrlW - targetImportW) : 0;
-						// Wenn RAW bereits Export zeigt, sofort reduzieren.
-						if (typeof nvpRawW === 'number' && nvpRawW < (targetImportW - deadbandW)) {
-							errW = nvpRawW - targetImportW;
-						}
-
-						// Deadband gegen Flattern: erst außerhalb der Bandbreite nachregeln.
-						// WICHTIG: Innerhalb der Deadband darf der Sollwert nicht mit der Batterie-Istleistung
-						// mitwandern. Viele Speicher/Farm-DPs melden die Istleistung zeitversetzt oder leicht
-						// springend. Wenn wir bei err=0 trotzdem battIst als neuen Sollwert übernehmen,
-						// entstehen sichtbare Sollwertsprünge trotz konstantem Verbrauch.
-						const outsideDeadband = (errW > deadbandW || errW < -deadbandW);
-						const holdInDeadband = !outsideDeadband && curSetW > 0;
-						let errAdjW = outsideDeadband ? errW : 0;
-
-						// OpenEMS-Balancing (Vorbild): neuer Sollwert = battIst + (gridIst - gridZiel).
-						// Ohne vertrauenswürdige Batterie-Istleistung arbeiten wir bewusst konservativ:
-						// - innerhalb der Deadband darf ein bestehender Sollwert gehalten werden,
-						// - außerhalb der Deadband wird NICHT mehr über den alten Sollwert hochintegriert,
-						//   sondern nur der aktuell sichtbare NVP-Fehler kommandiert.
-						// Dadurch bleibt die Tarif-Entladung auch bei falschem Modbus-/Setpoint-Mapping sicher.
-						let nextSetW;
-						if (holdInDeadband) {
-							nextSetW = curSetW;
-						} else if (typeof battW === 'number') {
-							nextSetW = battW + errAdjW;
-						} else if (errAdjW < 0) {
-							nextSetW = Math.max(0, curSetW + errAdjW);
-						} else {
-							nextSetW = errAdjW;
-						}
+						// Auch im teuren Tarif-Fenster gilt dieselbe physikalische Regelung wie
+						// bei der reinen Eigenverbrauchsoptimierung: echte Batterie-Istleistung
+						// plus NVP-Differenz. So springt die Vorgabe nicht zwischen altem Sollwert
+						// und aktuellem Netzbezug, sondern folgt der bereits wirksamen Leistung.
+						const lastTariffTargetW = (this._lastSource === 'tarif' && Number.isFinite(Number(this._lastTargetW)))
+							? Number(this._lastTargetW)
+							: 0;
+						const balance = this._buildActualAwareNvpBalance({
+							rawNvpW: nvpRawW,
+							fallbackNvpW: nvpCtrlW,
+							nvpAgeMs: (typeof gridRawAge === 'number') ? gridRawAge : gridAge,
+							targetNvpW: targetImportW,
+							deadbandW,
+							batteryPowerW: battPowerW,
+							batteryAgeMs: battPowerAge,
+							batteryPowerTrusted: battPowerTrusted,
+							lastTargetW: lastTariffTargetW,
+							lastTargetAllowed: this._lastSource === 'tarif',
+							maxDischargeCorrectionW: maxDelta,
+							maxChargeCorrectionW: pvMaxDeltaCfg > 0 ? pvMaxDeltaCfg : maxDelta,
+							feedbackMaxAgeMs: Math.min(staleMs, Math.max(1000, num(cfg.balanceFeedbackMaxAgeMs, 8000))),
+							feedbackMaxSkewMs: Math.max(0, num(cfg.balanceFeedbackMaxSkewMs, 5000)),
+							stepW,
+						});
+						storageNvpBalanceDiag = { ...balance, policy: 'tarif' };
+						storageNvpBalanceRampManaged = storageNvpBalanceRampManaged || balance.rampManaged;
+						const battW = balance.feedbackUsed ? Math.max(0, Number(battPowerW) || 0) : null;
+						let nextSetW = Math.max(0, Number(balance.targetW) || 0);
 
 						// Safety-Clamp gegen unnötige Export-Spikes:
 						// Begrenze die Entladung auf den aktuell am NVP belegbaren Bedarf:
@@ -2097,58 +2133,47 @@ if (targetW === 0 && selfDischargeEnabled) {
     // Sollwert-Spikes/Überschwinger erzeugt.
     // Stabilität kommt hier aus Deadband + Schrittweite/Rampe im Dispatcher.
     const nvpRawW = (typeof gridRawW === 'number') ? gridRawW : gridW;      // roh (Fallback)
-    const nvpCtrlW = (typeof nvpRawW === 'number') ? nvpRawW : gridW;       // aktuell für Regelung
     const desiredNvpW = selfTargetGridW + evcsStorageProtectedNvpTargetShiftW; // kleiner Haus-Import plus geschuetzte EVCS-Last
     const deadbandW = Math.max(0, selfImportThresholdW); // Start-/Stop-Schwelle gegen Flattern
+    const nvpCtrlW = (selfNvpStabilizer && typeof selfNvpStabilizer.controlW === 'number' && Number.isFinite(selfNvpStabilizer.controlW))
+        ? selfNvpStabilizer.controlW
+        : ((typeof nvpRawW === 'number') ? nvpRawW : gridW);       // gefiltert + RAW-Guard für Regelung
 
-    // Eigenverbrauch hat einen eigenen "Integrator": nur fortsetzen, wenn wir in der letzten Runde
-    // auch aus Eigenverbrauch geregelt haben. Sonst bei 0 starten, damit LSK/Tarif nicht "nachhängt".
+    // Eigenverbrauch darf nur seinen eigenen letzten Sollwert als konservativen
+    // Fallback verwenden. Der Normalfall nutzt die echte Speicher-Istleistung;
+    // damit wird nicht mehr gegen einen alten Sollwert integriert.
     const lastWasSelf = (this._lastSource === 'eigenverbrauch');
-    const curSetW = (lastWasSelf && typeof this._lastTargetW === 'number' && this._lastTargetW > 0)
-        ? this._lastTargetW
-        : 0;
+    const lastBalanceW = getLastStorageBalanceTargetW();
+    const lastWasPvBalance = (String(this._lastSource || '') === 'pv');
+    const lastWasAnyBalance = lastWasSelf || lastWasPvBalance;
+    const balance = this._buildActualAwareNvpBalance({
+        rawNvpW: nvpRawW,
+        fallbackNvpW: nvpCtrlW,
+        nvpAgeMs: (typeof gridRawAge === 'number') ? gridRawAge : gridAge,
+        targetNvpW: desiredNvpW,
+        deadbandW,
+        batteryPowerW: battPowerW,
+        batteryAgeMs: battPowerAge,
+        batteryPowerTrusted: battPowerTrusted,
+        lastTargetW: lastBalanceW,
+        lastTargetAllowed: lastWasAnyBalance,
+        maxDischargeCorrectionW: maxDelta,
+        maxChargeCorrectionW: pvMaxDeltaCfg > 0 ? pvMaxDeltaCfg : maxDelta,
+        feedbackMaxAgeMs: Math.min(staleMs, Math.max(1000, num(cfg.balanceFeedbackMaxAgeMs, 8000))),
+        feedbackMaxSkewMs: Math.max(0, num(cfg.balanceFeedbackMaxSkewMs, 5000)),
+        stepW,
+    });
+    storageNvpBalanceDiag = { ...balance, policy: 'eigenverbrauch' };
+    storageNvpBalanceRampManaged = storageNvpBalanceRampManaged || balance.rampManaged;
 
-        // Ist-Batterieleistung (positiv = Entladung, negativ = Beladung).
-        // Fuer saubere Eigenverbrauchsoptimierung wird bidirektional am NVP bilanziert:
-        // naechster Sollwert = aktuelle Batterie-Istleistung + (NVP-Ist - NVP-Ziel).
-        // Dadurch werden sowohl Entladung als auch laufende PV-Beladung nachgeregelt.
-        const battSignedRawW = (battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Number(battPowerW) : null;
-        const battW = (typeof battSignedRawW === 'number') ? Math.max(0, battSignedRawW) : null;
-        const battChargeW = (typeof battSignedRawW === 'number') ? Math.max(0, -battSignedRawW) : null;
-        const lastBalanceW = getLastStorageBalanceTargetW();
-        const lastWasPvBalance = (String(this._lastSource || '') === 'pv');
-        const lastWasAnyBalance = lastWasSelf || lastWasPvBalance;
-
-    // Fehler: positiver Fehler => zu viel Import => mehr entladen bzw. weniger laden.
-    // negativer Fehler => Export/zu wenig Import => mehr laden bzw. weniger entladen.
-    // NOTE: Wenn ROH bereits Export zeigt, ist nvpCtrlW ohnehin negativ – dadurch wird sofort reduziert/geladen.
-    const errW = (typeof nvpCtrlW === 'number') ? (nvpCtrlW - desiredNvpW) : 0;
-
-    // PI-light: Inkrement-Regelung.
-    // Hinweis: Stabilisierung erfolgt über Deadband + Dispatcher (Schrittweite/Rampe/Anti-PingPong).
-    // WICHTIG: Innerhalb der Deadband den letzten Sollwert halten. Sonst wandert der
-    // Sollwert mit der zeitversetzten Batterie-/Farm-Istleistung mit und springt trotz
-    // konstantem Hausverbrauch unnötig hoch/runter.
-    const outsideDeadband = (errW > deadbandW || errW < -deadbandW);
-    const holdInDeadband = !outsideDeadband && lastWasAnyBalance && Math.abs(lastBalanceW) > 0;
-    let errAdjW = outsideDeadband ? errW : 0;
-
-        // OpenEMS-Balancing (Vorbild): battIst + (gridIst - gridZiel).
-        // Ohne vertrauenswürdige Batterie-Istleistung darf ein alter positiver
-        // Entlade-Sollwert nicht weiter hochintegrieren (71-kW-Feldfehler). Ein
-        // alter negativer Lade-Sollwert darf aber fuer PV-Export genutzt werden,
-        // damit "alte Ladung + aktueller NVP-Export" zum neuen Ladeziel wird.
-        let nextSignedW;
-        if (holdInDeadband) {
-            nextSignedW = (typeof battSignedRawW === 'number') ? battSignedRawW : lastBalanceW;
-        } else if (typeof battSignedRawW === 'number') {
-            nextSignedW = battSignedRawW + errAdjW;
-        } else if (lastBalanceW < 0 || errAdjW < 0) {
-            nextSignedW = lastBalanceW + errAdjW;
-        } else {
-            nextSignedW = errAdjW;
-        }
-        let nextSetW = Math.max(0, nextSignedW);
+    // Ist-Batterieleistung nur dann fuer harte Caps verwenden, wenn sie auch fuer
+    // das NVP-Balancing frisch und zeitlich plausibel war. Ein zwar "nicht stale",
+    // aber mehrere Sekunden versetzter Wert darf die Anschluss-Caps nicht aufweiten.
+    const battSignedRawW = balance.feedbackUsed ? Number(battPowerW) : null;
+    const battW = (typeof battSignedRawW === 'number') ? Math.max(0, battSignedRawW) : null;
+    const battChargeW = (typeof battSignedRawW === 'number') ? Math.max(0, -battSignedRawW) : null;
+    const nextSignedW = Number(balance.targetW) || 0;
+    let nextSetW = Math.max(0, nextSignedW);
 
     // Safety-Clamp gegen Überschwingen:
     // WICHTIGER Feldfix 0.8.81: Der letzte eigene Sollwert und derived.loadTotalW
@@ -2163,7 +2188,7 @@ if (targetW === 0 && selfDischargeEnabled) {
     const importRawNowW = Math.max(0, (typeof nvpRawW === 'number') ? nvpRawW : 0);
     const measuredDischargeNowW = (typeof battW === 'number') ? Math.max(0, battW) : 0;
     const measuredChargeNowW = (typeof battChargeW === 'number') ? Math.max(0, battChargeW) : 0;
-    const lastChargeNowW = (!battPowerTrusted && lastBalanceW < 0) ? Math.max(0, -lastBalanceW) : 0;
+    const lastChargeNowW = (!balance.feedbackUsed && lastBalanceW < 0) ? Math.max(0, -lastBalanceW) : 0;
     const currentChargeForBalancingW = (typeof battChargeW === 'number') ? measuredChargeNowW : lastChargeNowW;
     const safetyMarginW = 200; // bewusst konservativ; Feintuning über selfTargetGridW/Deadband/Rampe
     const protectedSelfImportW = Math.max(0, importRawNowW - evcsStorageProtectedLoadW);
@@ -2180,7 +2205,7 @@ if (targetW === 0 && selfDischargeEnabled) {
     }
 
     const chargeBalanceCapW = exportRawW > 0
-        ? Math.max(0, currentChargeForBalancingW + exportRawW)
+        ? Math.max(0, currentChargeForBalancingW + exportRawW + desiredNvpW)
         : ((typeof battChargeW === 'number' && importRawNowW > desiredNvpW)
             ? Math.max(0, currentChargeForBalancingW)
             : 0);
@@ -2214,7 +2239,7 @@ if (targetW === 0 && selfDischargeEnabled) {
 
     // Aktivierung: Nur wenn Import oberhalb der Schwelle liegt ODER wir bereits aktiv waren
     // (Integrator hält den Sollwert dann stabil und passt ihn nach oben/unten an).
-    const importNowW = Math.max(0, (typeof nvpCtrlW === 'number') ? nvpCtrlW : 0);
+    const importNowW = Math.max(0, Number.isFinite(Number(balance.nvpW)) ? Number(balance.nvpW) : 0);
     const startCond = (importNowW >= deadbandW) || lastWasSelf;
 
     if (allow && nextSignedW < 0) {
@@ -2223,7 +2248,7 @@ if (targetW === 0 && selfDischargeEnabled) {
         hardChargeMaxSoc = Math.max(hardChargeMaxSoc, selfMaxSoc);
         if (chargeW > 0) {
             targetW = -chargeW;
-            reason = `Eigenverbrauch: NVP-Balancing laden (${Math.round(chargeW)} W, Export ${Math.round(exportRawW)} W, laufende Ladung ${Math.round(currentChargeForBalancingW)} W)`;
+            reason = `Eigenverbrauch: NVP-Balancing laden (${Math.round(chargeW)} W, Ist ${Math.round(Number(balance.baseW) || 0)} W, Differenz ${Math.round(Number(balance.nvpErrorW) || 0)} W)`;
             source = 'pv';
         } else if ((source === 'idle' || reason === 'Keine Aktion') && Math.abs(nextSignedW) > 0) {
             reason = (typeof soc === 'number' && soc >= selfMaxSoc)
@@ -2233,7 +2258,7 @@ if (targetW === 0 && selfDischargeEnabled) {
         }
     } else if (allow && startCond && nextSetW > 0) {
         targetW = nextSetW;
-            reason = `Eigenverbrauch: entladen (${Math.round(targetW)} W${(typeof battW === 'number') ? ', Balancing' : ''})`;
+            reason = `Eigenverbrauch: NVP-Balancing entladen (${Math.round(targetW)} W, Ist ${Math.round(Number(balance.baseW) || 0)} W, Differenz ${Math.round(Number(balance.nvpErrorW) || 0)} W)`;
         source = 'eigenverbrauch';
         hardDischargeMinSoc = Math.max(hardDischargeMinSoc, selfMinSoc);
     }
@@ -2296,24 +2321,54 @@ if (targetW === 0 && selfDischargeEnabled) {
                 // weiterläuft. Der Zero-Export-Bias wird nur addiert, solange RAW
                 // tatsächlich Export zeigt; bei RAW=0/Import darf er keinen Netzbezug
                 // in die Batterie ziehen.
-                const measuredChargeNowW = (battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW))
-                    ? Math.max(0, -Number(battPowerW))
-                    : 0;
                 const lastBalanceWForCharge = getLastStorageBalanceTargetW();
-                const lastChargeNowW = (!battPowerTrusted && lastBalanceWForCharge < 0) ? Math.max(0, -lastBalanceWForCharge) : 0;
-                const currentChargeForBalancingW = battPowerTrusted ? measuredChargeNowW : lastChargeNowW;
+                const pvBalance = this._buildActualAwareNvpBalance({
+                    rawNvpW: nvpRawW,
+                    fallbackNvpW: (typeof selfNvpStabilizer.controlW === 'number') ? selfNvpStabilizer.controlW : nvpRawW,
+                    nvpAgeMs: (typeof gridRawAge === 'number') ? gridRawAge : gridAge,
+                    // Der Zero-Export-Bias wird als etwas hoeherer Zielbezug abgebildet.
+                    // Dadurch entsteht mathematisch derselbe Ladeaufschlag, aber in
+                    // derselben Istleistung-plus-NVP-Differenz-Regelung wie beim Entladen.
+                    targetNvpW: selfTargetGridW + evcsStorageProtectedNvpTargetShiftW + extraBias,
+                    deadbandW: selfImportThresholdW,
+                    batteryPowerW: battPowerW,
+                    batteryAgeMs: battPowerAge,
+                    batteryPowerTrusted: battPowerTrusted,
+                    lastTargetW: lastBalanceWForCharge,
+                    lastTargetAllowed: isStorageBalanceSource(this._lastSource),
+                    maxDischargeCorrectionW: maxDelta,
+                    maxChargeCorrectionW: pvMaxDeltaCfg > 0 ? pvMaxDeltaCfg : maxDelta,
+                    feedbackMaxAgeMs: Math.min(staleMs, Math.max(1000, num(cfg.balanceFeedbackMaxAgeMs, 8000))),
+                    feedbackMaxSkewMs: Math.max(0, num(cfg.balanceFeedbackMaxSkewMs, 5000)),
+                    stepW,
+                });
+                storageNvpBalanceDiag = { ...pvBalance, policy: 'pv' };
+                storageNvpBalanceRampManaged = storageNvpBalanceRampManaged || pvBalance.rampManaged;
 
-                // NVP-Lade-Balancing: nicht nur den aktuellen Export schreiben,
-                // sondern laufende Ladung + neuen Export. Beispiel Feldfall:
-                // Speicher laedt bereits 2,9 kW und am NVP bleiben weitere 2,9 kW Export
-                // sichtbar => Sollwert muss auf ca. 5,8 kW Ladung steigen.
-                const exportCtrlCapW = Math.max(0, currentChargeForBalancingW + exportCtrlW + extraBias);
-                const exportRawCapW = exportRawW > 0 ? Math.max(0, currentChargeForBalancingW + exportRawW + extraBias) : currentChargeForBalancingW;
-                const pvRawChargeCapW = clamp(Math.min(exportCtrlCapW, exportRawCapW), 0, chargeLimitW);
+                const measuredChargeNowW = pvBalance.feedbackUsed
+                    ? Math.max(0, -Number(battPowerW || 0))
+                    : 0;
+                const lastChargeNowW = (!pvBalance.feedbackUsed && lastBalanceWForCharge < 0)
+                    ? Math.max(0, -lastBalanceWForCharge)
+                    : 0;
+                const currentChargeForBalancingW = pvBalance.feedbackUsed ? measuredChargeNowW : lastChargeNowW;
+
+                // Der Balancing-Helfer liefert bereits "Istleistung + Differenz".
+                // Der RAW-Cap bleibt als harte Anschlussgrenze bestehen, damit ein
+                // alter Ladesollwert bei wegfallendem Export nicht nachlaufen kann.
+                const requestedChargeW = Math.max(0, -Number(pvBalance.targetW || 0));
+                const pvTargetImportW = selfTargetGridW + evcsStorageProtectedNvpTargetShiftW + extraBias;
+                const exportCtrlCapW = Math.max(0, currentChargeForBalancingW + exportCtrlW + pvTargetImportW);
+                const exportRawCapW = exportRawW > 0
+                    ? Math.max(0, currentChargeForBalancingW + exportRawW + pvTargetImportW)
+                    : currentChargeForBalancingW;
+                const pvRawChargeCapW = clamp(Math.min(requestedChargeW, exportCtrlCapW, exportRawCapW), 0, chargeLimitW);
                 chargeDemandHardCapW = pvRawChargeCapW;
                 chargeDemandHardCapReason = zeEnabled ? 'Nulleinspeisung-NVP-Lade-Cap (aktuelle Ladung+Export)' : 'PV-NVP-Lade-Cap (aktuelle Ladung+Export)';
                 targetW = -pvRawChargeCapW;
-                reason = zeEnabled ? 'Nulleinspeisung: Export plus laufende Ladung in Speicher umleiten' : 'Eigenverbrauch: PV-Überschuss plus laufende Ladung nutzen';
+                reason = zeEnabled
+                    ? `Nulleinspeisung: Ist ${Math.round(Number(pvBalance.baseW) || 0)} W plus NVP-Differenz ${Math.round(Number(pvBalance.nvpErrorW) || 0)} W`
+                    : `Eigenverbrauch PV-Laden: Ist ${Math.round(Number(pvBalance.baseW) || 0)} W plus NVP-Differenz ${Math.round(Number(pvBalance.nvpErrorW) || 0)} W`;
                 source = 'pv';
             }
         }
@@ -2560,11 +2615,17 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 {
     const d = targetW - _prevRampW;
 
+    // Istleistungsbasiertes NVP-Balancing hat seine Korrektur bereits relativ zur
+    // realen Batterie-Leistung begrenzt. Eine zweite Rampe gegen den alten Sollwert
+    // wuerde die physikalische Basis wieder verfälschen und ist genau die Ursache
+    // fuer wechselnde Sollwerte bei zeitversetzten Speicherreaktionen.
+    if (storageNvpBalanceRampManaged) {
+        // Keine zweite Rampe. Sicherheits-Caps und SoC-Grenzen folgen weiterhin.
     // Lade-Sicherheitsrücknahme: Wenn ein Speicher im letzten Tick geladen hat
     // (negativer Sollwert) und die aktuelle Policy weniger laden oder auf 0 gehen will,
     // darf die Standardrampe den alten Lade-Sollwert nicht künstlich halten.
     // Das ist sicherheitsrelevant für PV-Wolken, wegfallenden Netz-Headroom und EV-Priorität.
-    if (_prevRampW < 0 && targetW >= _prevRampW) {
+    } else if (_prevRampW < 0 && targetW >= _prevRampW) {
         // Weniger laden / Richtung 0 -> bewusst ohne Rampe.
     } else if (source === 'pv' && targetW < 0) {
         const pvMaxDelta = (pvMaxDeltaCfg > 0) ? pvMaxDeltaCfg : maxDelta;
@@ -2803,21 +2864,43 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             // Batterie laedt 2,9 kW und am NVP stehen noch 2,9 kW Export -> Ziel wird ca.
             // 5,8 kW Laden, nicht erneut nur 2,9 kW oder 0 W.
             const nvpDeadbandW = Math.max(0, Number(ctx.dischargeThresholdW) || selfImportThresholdW || 100);
-            const nvpErrorW = Number.isFinite(Number(nvpNowW)) ? (nvpNowW - targetImportW) : 0;
+            const nvpControlForBalanceW = (selfNvpStabilizer && typeof selfNvpStabilizer.controlW === 'number' && Number.isFinite(selfNvpStabilizer.controlW))
+                ? Number(selfNvpStabilizer.controlW)
+                : nvpNowW;
+            const lastSungrowBalanceW = getLastStorageBalanceTargetW();
+            const sungrowBalance = this._buildActualAwareNvpBalance({
+                rawNvpW: nvpNowW,
+                fallbackNvpW: nvpControlForBalanceW,
+                nvpAgeMs: (typeof gridRawAge === 'number') ? gridRawAge : gridAge,
+                targetNvpW: targetImportW,
+                deadbandW: nvpDeadbandW,
+                batteryPowerW: battPowerW,
+                batteryAgeMs: battPowerAge,
+                batteryPowerTrusted: battPowerTrusted,
+                lastTargetW: lastSungrowBalanceW,
+                lastTargetAllowed: isStorageBalanceSource(this._lastSource),
+                maxDischargeCorrectionW: maxDelta,
+                maxChargeCorrectionW: pvMaxDeltaCfg > 0 ? pvMaxDeltaCfg : maxDelta,
+                feedbackMaxAgeMs: Math.min(staleMs, Math.max(1000, num(cfg.balanceFeedbackMaxAgeMs, 8000))),
+                feedbackMaxSkewMs: Math.max(0, num(cfg.balanceFeedbackMaxSkewMs, 5000)),
+                stepW,
+            });
+            storageNvpBalanceDiag = { ...sungrowBalance, policy: 'sungrow-hybrid' };
+            storageNvpBalanceRampManaged = storageNvpBalanceRampManaged || sungrowBalance.rampManaged;
+            const nvpErrorW = Number(sungrowBalance.nvpErrorW) || 0;
             const importBalanceNeeded = nvpErrorW > nvpDeadbandW;
             const exportBalanceNeeded = nvpErrorW < -nvpDeadbandW;
             const nvpBalanceNeeded = !!(isStorageSelfOrPv && !isCriticalPolicy && (importBalanceNeeded || exportBalanceNeeded));
-            const battSignedNowW = (battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Number(battPowerW) : null;
-            const lastSungrowBalanceW = getLastStorageBalanceTargetW();
-            const balanceBaseW = (typeof battSignedNowW === 'number') ? battSignedNowW : lastSungrowBalanceW;
-            let nvpBalancedTargetW = balanceBaseW + nvpErrorW;
+            const battSignedNowW = sungrowBalance.feedbackUsed ? Number(battPowerW) : null;
+            const balanceBaseW = Number(sungrowBalance.baseW) || 0;
+            let nvpBalancedTargetW = Number(sungrowBalance.targetW) || 0;
             let sungrowBalanceBaseW = balanceBaseW;
             let sungrowNvpErrorW = nvpErrorW;
             let sungrowNvpBalancedTargetW = nvpBalancedTargetW;
 
             if (nvpBalanceNeeded) {
-                const currentDischargeForCapW = Math.max(0, (typeof battSignedNowW === 'number') ? battSignedNowW : Math.max(0, lastSungrowBalanceW));
-                const currentChargeForCapW = Math.max(0, (typeof battSignedNowW === 'number') ? -battSignedNowW : Math.max(0, -lastSungrowBalanceW));
+                const currentDischargeForCapW = Math.max(0, balanceBaseW);
+                const currentChargeForCapW = Math.max(0, -balanceBaseW);
                 const sungrowNonEvcsImportW = Math.max(0, importNowW - evcsStorageProtectedLoadW);
                 const dischargeCapW = Math.max(0, sungrowNonEvcsImportW + currentDischargeForCapW + (sungrowNonEvcsImportW > 0 ? assistBufferW : 0));
                 const chargeCapW = Math.max(0, exportNowW + currentChargeForCapW + assistBufferW);
@@ -2832,7 +2915,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                         targetW = clamp(nvpBalancedTargetW, 0, Math.min(maxDischargeW, dischargeCapW));
                         if (targetW > 0) {
                             source = 'sungrow-assist';
-                            reason = `Sungrow Hybrid ESS: NVP-Balancing Entladung ${Math.round(targetW)} W (Batterie ${Math.round(balanceBaseW)} W + NVP-Fehler ${Math.round(nvpErrorW)} W, Ziel ${Math.round(targetImportW)} W)`;
+                            reason = `Sungrow Hybrid ESS: NVP-Balancing Entladung ${Math.round(targetW)} W (Ist ${Math.round(balanceBaseW)} W + Korrektur ${Math.round(Number(sungrowBalance.appliedCorrectionW) || 0)} W, NVP-Fehler ${Math.round(nvpErrorW)} W)`;
                             sungrowWriteMode = 'write-nvp-balance-discharge';
                             dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
                                 ? Math.min(dischargeDemandHardCapW, dischargeCapW)
@@ -2850,7 +2933,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     if (chargeW > 0) {
                         targetW = -chargeW;
                         source = 'sungrow-assist';
-                        reason = `Sungrow Hybrid ESS: NVP-Balancing Laden ${Math.round(chargeW)} W (Batterie ${Math.round(balanceBaseW)} W + NVP-Fehler ${Math.round(nvpErrorW)} W, Ziel ${Math.round(targetImportW)} W)`;
+                        reason = `Sungrow Hybrid ESS: NVP-Balancing Laden ${Math.round(chargeW)} W (Ist ${Math.round(balanceBaseW)} W + Korrektur ${Math.round(Number(sungrowBalance.appliedCorrectionW) || 0)} W, NVP-Fehler ${Math.round(nvpErrorW)} W)`;
                         sungrowWriteMode = 'write-nvp-balance-charge';
                         chargeDemandHardCapW = (typeof chargeDemandHardCapW === 'number')
                             ? Math.min(chargeDemandHardCapW, chargeCapW)
@@ -2944,6 +3027,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             });
         }
 
+        // Herstellerunabhaengige NVP-Balancing-Diagnose erst nach den
+        // Herstellerprofilen schreiben, damit bei Sungrow der tatsaechlich
+        // verwendete Istleistung-plus-Differenz-Pfad sichtbar ist.
+        await this._setStorageNvpBalanceDiag(storageNvpBalanceDiag);
+
         // ------------------------------------------------------------
         // Phase 2: Dispatcher-Diagnose-Zustände schreiben
         // ------------------------------------------------------------
@@ -2978,6 +3066,23 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 					dcPvAgeMs: (typeof dcPvPowerAge === 'number' && Number.isFinite(dcPvPowerAge)) ? Math.round(dcPvPowerAge) : null,
 					invalidReason: (battPowerInvalidReason && String(battPowerInvalidReason).trim()) ? String(battPowerInvalidReason).trim() : null,
 				},
+				balance: storageNvpBalanceDiag ? {
+					policy: String(storageNvpBalanceDiag.policy || ''),
+					mode: String(storageNvpBalanceDiag.mode || ''),
+					feedbackUsed: !!storageNvpBalanceDiag.feedbackUsed,
+					actualBatteryW: (storageNvpBalanceDiag.actualBatteryW !== null && storageNvpBalanceDiag.actualBatteryW !== undefined && Number.isFinite(Number(storageNvpBalanceDiag.actualBatteryW)))
+						? Math.round(Number(storageNvpBalanceDiag.actualBatteryW))
+						: null,
+					baseW: Number.isFinite(Number(storageNvpBalanceDiag.baseW)) ? Math.round(Number(storageNvpBalanceDiag.baseW)) : null,
+					baseSource: String(storageNvpBalanceDiag.baseSource || ''),
+					nvpW: Number.isFinite(Number(storageNvpBalanceDiag.nvpW)) ? Math.round(Number(storageNvpBalanceDiag.nvpW)) : null,
+					nvpTargetW: Number.isFinite(Number(storageNvpBalanceDiag.nvpTargetW)) ? Math.round(Number(storageNvpBalanceDiag.nvpTargetW)) : null,
+					nvpErrorW: Number.isFinite(Number(storageNvpBalanceDiag.nvpErrorW)) ? Math.round(Number(storageNvpBalanceDiag.nvpErrorW)) : null,
+					rawTargetW: Number.isFinite(Number(storageNvpBalanceDiag.rawTargetW)) ? Math.round(Number(storageNvpBalanceDiag.rawTargetW)) : null,
+					appliedCorrectionW: Number.isFinite(Number(storageNvpBalanceDiag.appliedCorrectionW)) ? Math.round(Number(storageNvpBalanceDiag.appliedCorrectionW)) : null,
+					targetW: Number.isFinite(Number(storageNvpBalanceDiag.targetW)) ? Math.round(Number(storageNvpBalanceDiag.targetW)) : null,
+					measurementSkewMs: Number.isFinite(Number(storageNvpBalanceDiag.measurementSkewMs)) ? Math.round(Number(storageNvpBalanceDiag.measurementSkewMs)) : null,
+				} : null,
                 soc: (typeof soc === 'number' && Number.isFinite(soc)) ? soc : null,
                 permissions: {
                     gridChargeAllowed: (typeof gridChargeAllowed === 'boolean') ? gridChargeAllowed : null,
@@ -3124,6 +3229,281 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
+    /**
+     * Code-Teil: _buildSelfNvpControlSignal
+     * Zweck: Erzeugt fuer die Speicher-Eigenverbrauchsoptimierung einen ruhigen
+     * NVP-Fuehrungswert, ohne die harten RAW-Schutzgrenzen zu verlieren.
+     * Zusammenhang: Der Energieflussmonitor zeigte bei manchen Speichern ein
+     * Pendeln zwischen kleinem Netzbezug und Einspeisung. Ursache sind schnelle
+     * Messwertspruenge am NVP plus Speicher-/Gateway-Latenzen. Die Regelung nutzt
+     * deshalb einen gleitend gefilterten NVP-Wert, reagiert aber bei deutlichem
+     * Import/Export weiterhin sofort auf den RAW-Wert.
+     */
+    _buildSelfNvpControlSignal(rawOrFilteredW, nowMs, cfg = {}, targetW = 50, deadbandW = 50) {
+        const raw = Number(rawOrFilteredW);
+        const now = Number(nowMs) || Date.now();
+        const smoothingEnabled = cfg.selfNvpSmoothingEnabled !== false;
+        const filterSec = clamp(num(cfg.selfNvpSmoothingSec, 8), 0, 120);
+        const rawGuardW = Math.max(50, num(cfg.selfNvpRawGuardW, Math.max(100, Number(deadbandW) || 50)));
+        let filtered = Number(this._selfNvpFilteredW);
+        let mode = 'raw';
+
+        if (!Number.isFinite(raw)) {
+            this._selfNvpFilteredW = null;
+            this._selfNvpLastTs = 0;
+            return { rawW: null, filteredW: null, controlW: null, mode: 'missing', smoothingEnabled: false, filterSec, rawGuardW };
+        }
+
+        if (!smoothingEnabled || filterSec <= 0 || !Number.isFinite(filtered) || !this._selfNvpLastTs) {
+            filtered = raw;
+            mode = smoothingEnabled && filterSec > 0 ? 'init' : 'raw';
+        } else {
+            const dtSec = clamp((now - Number(this._selfNvpLastTs || now)) / 1000, 0.1, 60);
+            const alpha = clamp(dtSec / (filterSec + dtSec), 0.02, 1);
+            filtered = filtered + (raw - filtered) * alpha;
+            mode = 'filtered';
+        }
+
+        this._selfNvpFilteredW = filtered;
+        this._selfNvpLastTs = now;
+
+        // RAW-Guard: Der geglaettete Fuehrungswert darf kleine Messspruenge beruhigen,
+        // aber keinen echten Anschlussfehler verstecken. Wenn RAW deutlich ausserhalb
+        // des Zielbandes liegt, wird der schlechtere RAW-Wert als Regelfuehrung genutzt.
+        const upperGuard = Number(targetW) + rawGuardW;
+        const lowerGuard = Number(targetW) - rawGuardW;
+        let control = filtered;
+        if (raw > upperGuard) {
+            control = Math.max(filtered, raw);
+            mode = 'raw-import-guard';
+        } else if (raw < lowerGuard) {
+            control = Math.min(filtered, raw);
+            mode = 'raw-export-guard';
+        }
+
+        return { rawW: raw, filteredW: filtered, controlW: control, mode, smoothingEnabled, filterSec, rawGuardW };
+    }
+
+    /**
+     * Code-Teil: _buildActualAwareNvpBalance
+     * Zweck: Berechnet den naechsten bidirektionalen Speicher-Sollwert aus der
+     * echten Batterie-Istleistung und der aktuellen Abweichung am NVP.
+     *
+     * Physikalische Regelgleichung (NexoWatt-Vorzeichen):
+     *   Batterie +W = Entladen, -W = Laden
+     *   NVP      +W = Netzbezug, -W = Einspeisung
+     *   Sollwert     = Batterie-Ist + (NVP-Ist - NVP-Ziel)
+     *
+     * Damit wird die aktuell bereits wirksame Lade-/Entladeleistung nicht bei
+     * jedem Tick "vergessen". Beispiel: Speicher laedt 2,9 kW und am NVP sind
+     * weitere 2,9 kW Export sichtbar. Das Rohziel ist dann rund -5,8 kW statt
+     * erneut nur -2,9 kW. Umgekehrt wird bei Netzbezug die Differenz zur echten
+     * Entladeleistung addiert.
+     *
+     * Sicherheits-/Stabilitaetsregeln:
+     * - Batterie-Ist und RAW-NVP werden nur gemeinsam genutzt, wenn beide frisch
+     *   und zeitlich ausreichend nah beieinander sind.
+     * - Mehr Leistung wird mit der konfigurierten Delta-Grenze aufgebaut.
+     * - Leistung in Richtung 0 darf schneller zurueckgenommen werden, damit bei
+     *   Wolken/Lastabwurf kein unnoetiger Netzbezug oder Export stehen bleibt.
+     * - Ein Richtungswechsel geht zuerst auf 0; die bestehende Anti-PingPong-
+     *   Sperre entscheidet danach ueber Laden bzw. Entladen.
+     * - Ohne vertrauenswuerdige Istleistung wird ein alter positiver Entlade-
+     *   Sollwert niemals hochintegriert (Schutz gegen den frueheren 71-kW-Fehler).
+     */
+    _buildActualAwareNvpBalance(ctx = {}) {
+/**
+ * Code-Teil: finite
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const finite = (v) => Number.isFinite(Number(v));
+        const rawNvpW = finite(ctx.rawNvpW) ? Number(ctx.rawNvpW) : null;
+        const fallbackNvpW = finite(ctx.fallbackNvpW)
+            ? Number(ctx.fallbackNvpW)
+            : rawNvpW;
+        const targetNvpW = finite(ctx.targetNvpW) ? Number(ctx.targetNvpW) : 0;
+        const deadbandW = Math.max(0, finite(ctx.deadbandW) ? Number(ctx.deadbandW) : 50);
+        const batteryPowerW = finite(ctx.batteryPowerW) ? Number(ctx.batteryPowerW) : null;
+        const batteryAgeMs = finite(ctx.batteryAgeMs) ? Math.max(0, Number(ctx.batteryAgeMs)) : null;
+        const nvpAgeMs = finite(ctx.nvpAgeMs) ? Math.max(0, Number(ctx.nvpAgeMs)) : null;
+        const feedbackMaxAgeMs = Math.max(500, finite(ctx.feedbackMaxAgeMs) ? Number(ctx.feedbackMaxAgeMs) : 8000);
+        const feedbackMaxSkewMs = Math.max(0, finite(ctx.feedbackMaxSkewMs) ? Number(ctx.feedbackMaxSkewMs) : 5000);
+        const maxDischargeCorrectionW = Math.max(0, finite(ctx.maxDischargeCorrectionW) ? Number(ctx.maxDischargeCorrectionW) : 500);
+        const maxChargeCorrectionW = Math.max(0, finite(ctx.maxChargeCorrectionW) ? Number(ctx.maxChargeCorrectionW) : maxDischargeCorrectionW);
+        const lastTargetW = finite(ctx.lastTargetW) ? Number(ctx.lastTargetW) : 0;
+        const lastTargetAllowed = ctx.lastTargetAllowed === true;
+        const stepW = Math.max(0, finite(ctx.stepW) ? Number(ctx.stepW) : 0);
+        const measurementSkewMs = (batteryAgeMs !== null && nvpAgeMs !== null)
+            ? Math.abs(batteryAgeMs - nvpAgeMs)
+            : null;
+
+        const batteryFresh = !!(
+            ctx.batteryPowerTrusted === true
+            && batteryPowerW !== null
+            && batteryAgeMs !== null
+            && batteryAgeMs <= feedbackMaxAgeMs
+        );
+        const nvpFreshForFeedback = !!(
+            rawNvpW !== null
+            && (nvpAgeMs === null || nvpAgeMs <= feedbackMaxAgeMs)
+        );
+        const measurementsAligned = measurementSkewMs === null || measurementSkewMs <= feedbackMaxSkewMs;
+        const feedbackUsed = !!(batteryFresh && nvpFreshForFeedback && measurementsAligned);
+        const nvpW = feedbackUsed ? rawNvpW : fallbackNvpW;
+
+        if (nvpW === null) {
+            return {
+                active: false,
+                targetW: 0,
+                rawTargetW: 0,
+                baseW: 0,
+                baseSource: 'missing-nvp',
+                measuredBatteryW: batteryPowerW,
+                actualBatteryW: null,
+                nvpW: null,
+                nvpTargetW: targetNvpW,
+                nvpErrorW: 0,
+                correctionW: 0,
+                appliedCorrectionW: 0,
+                feedbackUsed: false,
+                batteryFresh,
+                batteryAgeMs,
+                nvpAgeMs,
+                measurementSkewMs,
+                mode: 'missing-nvp',
+                outsideDeadband: false,
+                rampManaged: false,
+            };
+        }
+
+        const nvpErrorW = nvpW - targetNvpW;
+        const outsideDeadband = Math.abs(nvpErrorW) > deadbandW;
+        let baseW = 0;
+        let baseSource = 'zero-safe-fallback';
+
+        if (feedbackUsed) {
+            baseW = batteryPowerW;
+            baseSource = 'battery-actual';
+        } else if (lastTargetAllowed) {
+            // Ohne vertrauenswuerdige Istleistung ist der letzte Sollwert KEIN
+            // Ersatz fuer die reale Batterie-Leistung. Er darf deshalb nur zum
+            // sicheren Zurueckregeln in Richtung 0 verwendet werden. Ein weiteres
+            // Aufaddieren auf einen alten Lade- oder Entladesollwert wuerde bei
+            // ausbleibender Speicherreaktion erneut eine Sollwert-Rueckkopplung
+            // erzeugen. Fuer den Leistungsaufbau gilt im Fallback ausschliesslich
+            // die aktuell sichtbare NVP-Abweichung.
+            const mayUseLastTargetForRelease = (lastTargetW > 0 && nvpErrorW < 0)
+                || (lastTargetW < 0 && nvpErrorW > 0);
+            if (mayUseLastTargetForRelease) {
+                baseW = lastTargetW;
+                baseSource = 'last-target-release-only';
+            }
+        }
+
+        const holdToleranceW = Math.max(100, deadbandW, stepW > 0 ? stepW * 2 : 0);
+        let rawTargetW = baseW;
+        let correctionW = 0;
+        let appliedCorrectionW = 0;
+        let targetW = baseW;
+        let mode = feedbackUsed ? 'feedback' : 'fallback';
+
+        if (!outsideDeadband) {
+            // Im Zielband keine neue Energieanforderung erzeugen. Wenn der letzte
+            // externe Sollwert nahe an der echten Leistung liegt, halten wir ihn,
+            // damit Messrauschen nicht als neuer Schreibwert sichtbar wird.
+            if (feedbackUsed && lastTargetAllowed && Math.sign(lastTargetW) === Math.sign(baseW) && Math.abs(lastTargetW - baseW) <= holdToleranceW) {
+                targetW = lastTargetW;
+                rawTargetW = baseW;
+                mode = 'feedback-hold-command';
+            } else if (feedbackUsed) {
+                targetW = baseW;
+                rawTargetW = baseW;
+                mode = 'feedback-track-actual';
+            } else {
+                targetW = 0;
+                rawTargetW = 0;
+                baseW = 0;
+                baseSource = 'deadband-no-feedback';
+                mode = 'fallback-deadband-zero';
+            }
+        } else {
+            correctionW = nvpErrorW;
+            rawTargetW = baseW + correctionW;
+
+            const crossesDirection = baseW !== 0
+                && rawTargetW !== 0
+                && Math.sign(baseW) !== Math.sign(rawTargetW);
+            const reducesMagnitude = baseW !== 0
+                && !crossesDirection
+                && Math.abs(rawTargetW) < Math.abs(baseW);
+
+            if (crossesDirection) {
+                // Keine direkte Lade-/Entlade-Umkehr in einem Tick. Der Dispatcher
+                // bekommt 0 W und kann danach die vorhandene Anti-PingPong-Zeit nutzen.
+                targetW = 0;
+                appliedCorrectionW = -baseW;
+                mode = `${mode}-zero-before-reverse`;
+            } else if (reducesMagnitude) {
+                // Leistung zuruecknehmen darf schneller erfolgen als Leistung aufbauen.
+                // Dadurch wird bei Lastabwurf/Wolken nicht weiter gegen den NVP gefahren.
+                targetW = rawTargetW;
+                appliedCorrectionW = correctionW;
+                mode = `${mode}-fast-release`;
+            } else if (!feedbackUsed && baseW === 0) {
+                // Ohne Batterie-Istleistung ist nur die aktuelle NVP-Abweichung
+                // belastbar. Sie wird direkt als konservativer Lade-/Entladewunsch
+                // verwendet. Dadurch entsteht weder die alte 50-%-Fixpunktlogik
+                // noch eine Hochintegration aus einem vergangenen Sollwert. Die
+                // nachgelagerten Lade-/Entlade-Caps bleiben als harte Grenzen aktiv.
+                targetW = rawTargetW;
+                appliedCorrectionW = correctionW;
+                mode = correctionW >= 0 ? 'fallback-direct-import' : 'fallback-direct-export';
+            } else {
+                // Mehr Entladung bzw. mehr Beladung wird kontrolliert aufgebaut. Die
+                // Korrektur bezieht sich auf die echte Istleistung, nicht auf einen
+                // moeglicherweise veralteten letzten Sollwert.
+                const positiveCap = maxDischargeCorrectionW > 0 ? maxDischargeCorrectionW : Math.abs(correctionW);
+                const negativeCap = maxChargeCorrectionW > 0 ? maxChargeCorrectionW : Math.abs(correctionW);
+                appliedCorrectionW = clamp(correctionW, -negativeCap, positiveCap);
+                targetW = baseW + appliedCorrectionW;
+                mode = `${mode}-slew-limited`;
+            }
+        }
+
+        return {
+            active: true,
+            targetW,
+            rawTargetW,
+            baseW,
+            baseSource,
+            measuredBatteryW: batteryPowerW,
+            actualBatteryW: feedbackUsed ? batteryPowerW : null,
+            nvpW,
+            nvpTargetW: targetNvpW,
+            nvpErrorW,
+            correctionW,
+            appliedCorrectionW,
+            feedbackUsed,
+            batteryFresh,
+            batteryAgeMs,
+            nvpAgeMs,
+            measurementSkewMs,
+            mode,
+            outsideDeadband,
+            // Auch der konservative Fallback begrenzt seinen Aufbau bereits selbst.
+            // Deshalb darf die nachgelagerte Rampe niemals einen alten Sollwert wieder
+            // in den aktuellen sicheren Balancing-Wert hineinziehen.
+            rampManaged: true,
+        };
+    }
+
     _getCfg() {
         const storage = (this.adapter.config && this.adapter.config.storage) ? this.adapter.config.storage : {};
         return {
@@ -3217,6 +3597,14 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             selfMaxSocPct: storage.selfMaxSocPct,
             selfTargetGridImportW: storage.selfTargetGridImportW,
             selfImportThresholdW: storage.selfImportThresholdW,
+            selfNvpSmoothingEnabled: storage.selfNvpSmoothingEnabled,
+            selfNvpSmoothingSec: storage.selfNvpSmoothingSec,
+            selfNvpRawGuardW: storage.selfNvpRawGuardW,
+            // Experten-Fallbacks fuer die zeitliche Plausibilitaet von NVP und
+            // Speicher-Istleistung. Noch ohne eigenes UI; die sicheren Defaults
+            // greifen automatisch und koennen bei Bedarf per Config gesetzt werden.
+            balanceFeedbackMaxAgeMs: storage.balanceFeedbackMaxAgeMs,
+            balanceFeedbackMaxSkewMs: storage.balanceFeedbackMaxSkewMs,
             selfMaxChargeW: storage.selfMaxChargeW,
             selfMaxDischargeW: storage.selfMaxDischargeW,
             capacityKWh: storage.capacityKWh,
@@ -3432,6 +3820,48 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             importW,
             exportW,
         };
+    }
+
+    /**
+     * Code-Teil: _setStorageNvpBalanceDiag
+     * Zweck: Schreibt die herstellerunabhaengige Diagnose der geschlossenen
+     * Speicher-NVP-Regelung. Damit ist im Feld sichtbar, ob die Vorgabe aus
+     * Batterie-Istleistung plus NVP-Differenz entstanden ist oder ob wegen
+     * alter/asynchroner Messwerte ein konservativer Fallback aktiv war.
+     */
+    async _setStorageNvpBalanceDiag(ctx = null) {
+        const active = !!(ctx && ctx.active);
+/**
+ * Code-Teil: n
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const n = (v, fallback = null) => (v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v)))
+            ? Math.round(Number(v))
+            : fallback;
+        await this._setIfChanged('speicher.regelung.balanceAktiv', active);
+        await this._setIfChanged('speicher.regelung.balancePolicy', active ? String(ctx.policy || '') : '');
+        await this._setIfChanged('speicher.regelung.balanceIstLeistungW', active ? n(ctx.actualBatteryW) : null);
+        await this._setIfChanged('speicher.regelung.balanceIstLeistungAlterMs', active ? n(ctx.batteryAgeMs) : null);
+        await this._setIfChanged('speicher.regelung.balanceBasisW', active ? n(ctx.baseW, 0) : 0);
+        await this._setIfChanged('speicher.regelung.balanceNvpW', active ? n(ctx.nvpW) : null);
+        await this._setIfChanged('speicher.regelung.balanceNvpAlterMs', active ? n(ctx.nvpAgeMs) : null);
+        await this._setIfChanged('speicher.regelung.balanceNvpZielW', active ? n(ctx.nvpTargetW, 0) : 0);
+        await this._setIfChanged('speicher.regelung.balanceNvpFehlerW', active ? n(ctx.nvpErrorW, 0) : 0);
+        await this._setIfChanged('speicher.regelung.balanceBasisQuelle', active ? String(ctx.baseSource || '') : '');
+        await this._setIfChanged('speicher.regelung.balanceRohSollW', active ? n(ctx.rawTargetW, 0) : 0);
+        await this._setIfChanged('speicher.regelung.balanceKorrekturW', active ? n(ctx.correctionW, 0) : 0);
+        await this._setIfChanged('speicher.regelung.balanceAngewandteKorrekturW', active ? n(ctx.appliedCorrectionW, 0) : 0);
+        await this._setIfChanged('speicher.regelung.balanceSollW', active ? n(ctx.targetW, 0) : 0);
+        await this._setIfChanged('speicher.regelung.balanceFeedbackVerwendet', !!(active && ctx.feedbackUsed));
+        await this._setIfChanged('speicher.regelung.balanceMessversatzMs', active ? n(ctx.measurementSkewMs) : null);
+        await this._setIfChanged('speicher.regelung.balanceModus', active ? String(ctx.mode || '') : 'inactive');
     }
 
     /**
@@ -4421,6 +4851,27 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.selfMaxSocPct', 'Eigenverbrauch Max-SoC (%)', 'number', 'value', 0);
         await mk('speicher.regelung.selfTargetGridImportW', 'Eigenverbrauch Ziel-Netzbezug (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.selfImportThresholdW', 'Eigenverbrauch Deadband (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.selfNvpRawW', 'Eigenverbrauch NVP RAW (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.selfNvpFilteredW', 'Eigenverbrauch NVP gefiltert (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.selfNvpControlW', 'Eigenverbrauch NVP Fuehrungswert (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.selfNvpControlMode', 'Eigenverbrauch NVP Glättungsmodus', 'string', 'text', '');
+        await mk('speicher.regelung.balanceAktiv', 'Speicher NVP-Balancing aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.balancePolicy', 'Speicher NVP-Balancing Policy', 'string', 'text', '');
+        await mk('speicher.regelung.balanceIstLeistungW', 'Speicher NVP-Balancing verwendete Batterie-Istleistung (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.balanceIstLeistungAlterMs', 'Speicher-Istleistung Alter im NVP-Balancing (ms)', 'number', 'value.interval', null);
+        await mk('speicher.regelung.balanceBasisW', 'Speicher NVP-Balancing Rechenbasis (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.balanceNvpW', 'Speicher NVP-Balancing Netzleistung (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.balanceNvpAlterMs', 'NVP Alter im Speicher-Balancing (ms)', 'number', 'value.interval', null);
+        await mk('speicher.regelung.balanceNvpZielW', 'Speicher NVP-Balancing Ziel (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.balanceNvpFehlerW', 'Speicher NVP-Balancing Differenz (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.balanceBasisQuelle', 'Speicher NVP-Balancing Basisquelle', 'string', 'text', '');
+        await mk('speicher.regelung.balanceRohSollW', 'Speicher NVP-Balancing Roh-Sollwert (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.balanceKorrekturW', 'Speicher NVP-Balancing Roh-Korrektur (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.balanceAngewandteKorrekturW', 'Speicher NVP-Balancing angewendete Korrektur (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.balanceSollW', 'Speicher NVP-Balancing Sollwert (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.balanceFeedbackVerwendet', 'Speicher-Istleistung im NVP-Balancing verwendet', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.balanceMessversatzMs', 'Messversatz Batterie zu NVP (ms)', 'number', 'value.interval', null);
+        await mk('speicher.regelung.balanceModus', 'Speicher NVP-Balancing Modus', 'string', 'text', 'inactive');
         await mk('speicher.regelung.selfEntladenAktiviert', 'Eigenverbrauch-Entladen aktiviert', 'boolean', 'indicator', false);
         await mk('speicher.regelung.evcsSpeicherSchutzLastW', 'EVCS-Leistung mit Speicher-Schutz (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.evcsSpeicherSchutzWallboxen', 'Wallboxen mit Speicher-Schutz', 'number', 'value', 0);

@@ -30,7 +30,10 @@
   Updates all relevant adapter versions:
     - package.json.version
     - io-package.json.common.version
-    - io-package.json.version
+    - www/manifest.webmanifest.version / appVersion
+
+  The deprecated top-level io-package.json.version is removed because
+  ioBroker uses common.version and the publish check rejects the duplicate.
 
   Usage:
     node scripts/bump-version.js [patch|minor|major] [--dry-run] [--quiet]
@@ -116,9 +119,11 @@ function main() {
   const root = path.join(__dirname, '..');
   const pkgPath = path.join(root, 'package.json');
   const ioPath = path.join(root, 'io-package.json');
+  const manifestPath = path.join(root, 'www', 'manifest.webmanifest');
 
   const pkg = readJson(pkgPath);
   const io = readJson(ioPath);
+  const manifest = fs.existsSync(manifestPath) ? readJson(manifestPath) : null;
 
   const pkgVer = pkg.json && pkg.json.version ? String(pkg.json.version) : '';
   const ioVer = io.json && io.json.common && io.json.common.version ? String(io.json.common.version) : '';
@@ -126,7 +131,7 @@ function main() {
 
   const current = pkgVer || ioVer || ioTopVer;
   if (!current) {
-    throw new Error('Unable to detect current version (package.json.version / io-package.json.common.version / io-package.json.version).');
+    throw new Error('Unable to detect current version (package.json.version / io-package.json.common.version).');
   }
 
   if (pkgVer && ioVer && pkgVer !== ioVer) {
@@ -136,11 +141,10 @@ function main() {
     );
   }
 
-  if (ioTopVer && ioVer && ioTopVer !== ioVer) {
-    throw new Error(
-      `Version mismatch: io-package.json.version=${ioTopVer} vs io-package.json.common.version=${ioVer}. ` +
-        'Please align them first (or fix manually) before bumping.'
-    );
+  // Legacy packages may still contain a top-level version. It is not a
+  // second source of truth and will be removed on every real bump.
+  if (ioTopVer && ioVer && ioTopVer !== ioVer && !quiet) {
+    console.warn(`[version] Ignoring deprecated io-package.json.version=${ioTopVer}; common.version=${ioVer} is authoritative.`);
   }
 
   const next = bumpSemver(current, bumpType);
@@ -154,10 +158,16 @@ function main() {
   pkg.json.version = next;
   io.json.common = io.json.common && typeof io.json.common === 'object' ? io.json.common : {};
   io.json.common.version = next;
-  io.json.version = next;
+  delete io.json.version;
+
+  if (manifest && manifest.json && typeof manifest.json === 'object') {
+    manifest.json.version = next;
+    manifest.json.appVersion = next;
+  }
 
   writeJson(pkgPath, pkg.json);
   writeJson(ioPath, io.json);
+  if (manifest) writeJson(manifestPath, manifest.json);
 }
 
 try {

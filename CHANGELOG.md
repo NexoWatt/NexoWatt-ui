@@ -1,3 +1,23 @@
+## 0.8.93
+
+- Speicherregelung: Be- und Entladevorgaben werden jetzt zentral aus der frischen Batterie-Istleistung plus aktueller NVP-Differenz berechnet (`Soll = Istleistung + NVP-Ist - NVP-Ziel`).
+- Verhindert sprunghaftes Hin-und-her-Regeln durch alte Sollwerte: Der Leistungsaufbau wird begrenzt, die Ruecknahme in Richtung `0 W` erfolgt schnell und ein Richtungswechsel geht zuerst ueber `0 W`.
+- Batterie-Istleistung und RAW-NVP werden nur gemeinsam verwendet, wenn beide Messwerte frisch und zeitlich plausibel zueinander sind. Ohne gueltiges Istfeedback wird kein alter Lade-/Entladesollwert mehr hochintegriert.
+- Die Logik greift fuer Eigenverbrauch, PV-Ueberschussladen, Tarif-NVP-Entladung und Sungrow-NVP-Balancing; Generic signed-/Split-DPs, E3/DC-RSCP und Speicherfarm nutzen den daraus erzeugten sicheren Zielwert ueber ihren bestehenden Schreib-/Verteilpfad.
+- Harte Lade-/Entlade-Caps bleiben nach der Regelung aktiv, damit weder alte Rampenwerte noch asynchrone Messungen Anschlussbedarf oder PV-Ueberschuss kuenstlich vergroessern.
+- Neue Diagnosen: `speicher.regelung.balanceIstLeistungW`, `balanceBasisW`, `balanceNvpW`, `balanceNvpFehlerW`, `balanceKorrekturW`, `balanceSollW`, `balanceFeedbackVerwendet`, `balanceMessversatzMs` und `balanceModus`.
+- Regressionstest `test:storage-actual-power-nvp-balance` prueft Laden, Entladen, Deadband, schnelle Ruecknahme, Richtungswechsel, stale Messwerte und den produktiven Tick ohne zweite Sollwert-Rampe.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v395` erhoeht.
+
+## 0.8.92
+
+- Speicherregelung/Eigenverbrauch: NVP-Führungswert geglättet, damit der Speicher im Energiefluss nicht mehr bei kleinen Messsprüngen zwischen Bezug und Einspeisung pendelt.
+- RAW-Schutz bleibt aktiv: größerer echter Netzbezug oder Export übersteuert den Filter sofort, damit keine träge Regelung entsteht.
+- AppCenter/Speicher: neue Tuningwerte für Ziel-Netzbezug, Deadband, Glättungszeit und RAW-Guard ergänzt.
+- Gebäudeverbrauch: frische direkt gemappte Verbrauchs-DPs werden bevorzugt; die Bilanz aus PV + NVP + Speicher bleibt Fallback und Diagnosewert.
+- Neue Diagnosen: `speicher.regelung.selfNvpRawW`, `selfNvpFilteredW`, `selfNvpControlW`, `selfNvpControlMode` und `derived.core.building.loadSource`.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v394` erhöht.
+
 ## 0.8.90
 
 - Wallbox-/EVCS-Speicherschutz herstellerübergreifend korrigiert.

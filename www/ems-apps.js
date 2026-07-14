@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:69c06d1347d5cea3371f3482717d051a6b7eed79cb7d9a9697e76fef76b89d5f
+ * Quell-Hash: sha256:1dec665ba9a93c7c800563dc3870f8adcdcfc8299a96262304752b1656c81201
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -105,6 +105,10 @@
 
     storageControlMode: document.getElementById('storageControlMode'),
     storageCapacityKWh: document.getElementById('storageCapacityKWh'),
+    storageSelfTargetGridImportW: document.getElementById('storageSelfTargetGridImportW'),
+    storageSelfImportThresholdW: document.getElementById('storageSelfImportThresholdW'),
+    storageSelfNvpSmoothingSec: document.getElementById('storageSelfNvpSmoothingSec'),
+    storageSelfNvpRawGuardW: document.getElementById('storageSelfNvpRawGuardW'),
     storageCouplingMode: document.getElementById('storageCouplingMode'),
     storageDcPvHintRow: document.getElementById('storageDcPvHintRow'),
     storageVendorProfile: document.getElementById('storageVendorProfile'),
@@ -10703,6 +10707,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       const cap = Number(currentConfig.storage && currentConfig.storage.capacityKWh);
       els.storageCapacityKWh.value = (Number.isFinite(cap) && cap > 0) ? String(cap) : '';
     }
+    const stSelf = (currentConfig.storage && typeof currentConfig.storage === 'object') ? currentConfig.storage : {};
+    if (els.storageSelfTargetGridImportW) els.storageSelfTargetGridImportW.value = Number.isFinite(Number(stSelf.selfTargetGridImportW)) ? String(Math.round(Number(stSelf.selfTargetGridImportW))) : '50';
+    if (els.storageSelfImportThresholdW) els.storageSelfImportThresholdW.value = Number.isFinite(Number(stSelf.selfImportThresholdW)) ? String(Math.round(Number(stSelf.selfImportThresholdW))) : '50';
+    if (els.storageSelfNvpSmoothingSec) els.storageSelfNvpSmoothingSec.value = Number.isFinite(Number(stSelf.selfNvpSmoothingSec)) ? String(Math.round(Number(stSelf.selfNvpSmoothingSec))) : '8';
+    if (els.storageSelfNvpRawGuardW) els.storageSelfNvpRawGuardW.value = Number.isFinite(Number(stSelf.selfNvpRawGuardW)) ? String(Math.round(Number(stSelf.selfNvpRawGuardW))) : '100';
     const stF = (currentConfig.storage && typeof currentConfig.storage === 'object') ? currentConfig.storage : {};
     const legacyFeneconModeActive = (typeof stF.feneconGridControlEnabled === 'boolean')
       ? !!stF.feneconGridControlEnabled
@@ -12174,6 +12183,29 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     patch.storage.e3dcZeroMode = (els.storageE3dcZeroMode && String(els.storageE3dcZeroMode.value).toLowerCase() === 'idle') ? 'idle' : 'normal';
     patch.storage.e3dcAllowGridCharge = !!(els.storageE3dcAllowGridCharge && els.storageE3dcAllowGridCharge.checked);
     patch.storage.e3dcUsePowerLimits = !!(els.storageE3dcUsePowerLimits && els.storageE3dcUsePowerLimits.checked);
+
+    // Eigenverbrauchsoptimierung / NVP-Regelung:
+    // Die Speicherregelung nutzt diese Werte als Zielband und glaettet nur die
+    // Fuehrungsgroesse, nicht die harten Schutzgrenzen. Dadurch wird das
+    // Hin-und-Her zwischen Bezug/Einspeisung im Energiefluss ruhiger, ohne dass
+    // echter groesserer Netzbezug oder Export verschleppt wird.
+    patch.storage.selfTargetGridImportW = _clampInt(
+      els.storageSelfTargetGridImportW ? els.storageSelfTargetGridImportW.value : patch.storage.selfTargetGridImportW,
+      0, 1000000, 50,
+    );
+    patch.storage.selfImportThresholdW = _clampInt(
+      els.storageSelfImportThresholdW ? els.storageSelfImportThresholdW.value : patch.storage.selfImportThresholdW,
+      0, 1000000, 50,
+    );
+    patch.storage.selfNvpSmoothingEnabled = true;
+    patch.storage.selfNvpSmoothingSec = _clampInt(
+      els.storageSelfNvpSmoothingSec ? els.storageSelfNvpSmoothingSec.value : patch.storage.selfNvpSmoothingSec,
+      0, 120, 8,
+    );
+    patch.storage.selfNvpRawGuardW = _clampInt(
+      els.storageSelfNvpRawGuardW ? els.storageSelfNvpRawGuardW.value : patch.storage.selfNvpRawGuardW,
+      50, 1000000, 100,
+    );
     // Der Haken bedeutet ab 0.6.255: Hybrid-/Gateway-Priorität.
     // SetGridActivePower wird nicht mehr verwendet; ein eventuell vorhandener Legacy-DP wird entfernt.
     try {
@@ -14399,6 +14431,48 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     els.storageCapacityKWh.addEventListener('change', _update);
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an els.storageCapacityKWh. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.storageCapacityKWh.addEventListener('input', _update);
+  }
+
+  {
+    /**
+     * Code-Teil: _updateStorageSelfNvpControl
+     * Zweck: Synchronisiert Zielband und Filterparameter der Einzel-Speicher-
+     * Eigenverbrauchsoptimierung direkt in currentConfig.
+     * Zusammenhang: Die Runtime regelt weiterhin auf NVP, nutzt aber einen
+     * geglaetteten Fuehrungswert mit RAW-Schutz, damit Speicher nicht sichtbar
+     * zwischen Bezug und Einspeisung pendeln.
+     */
+    const _updateStorageSelfNvpControl = () => {
+      currentConfig = currentConfig || {};
+      currentConfig.storage = currentConfig.storage || {};
+      currentConfig.storage.selfTargetGridImportW = _clampInt(
+        els.storageSelfTargetGridImportW ? els.storageSelfTargetGridImportW.value : currentConfig.storage.selfTargetGridImportW,
+        0, 1000000, 50,
+      );
+      currentConfig.storage.selfImportThresholdW = _clampInt(
+        els.storageSelfImportThresholdW ? els.storageSelfImportThresholdW.value : currentConfig.storage.selfImportThresholdW,
+        0, 1000000, 50,
+      );
+      currentConfig.storage.selfNvpSmoothingEnabled = true;
+      currentConfig.storage.selfNvpSmoothingSec = _clampInt(
+        els.storageSelfNvpSmoothingSec ? els.storageSelfNvpSmoothingSec.value : currentConfig.storage.selfNvpSmoothingSec,
+        0, 120, 8,
+      );
+      currentConfig.storage.selfNvpRawGuardW = _clampInt(
+        els.storageSelfNvpRawGuardW ? els.storageSelfNvpRawGuardW.value : currentConfig.storage.selfNvpRawGuardW,
+        50, 1000000, 100,
+      );
+      scheduleValidation(200);
+    };
+    [
+      els.storageSelfTargetGridImportW,
+      els.storageSelfImportThresholdW,
+      els.storageSelfNvpSmoothingSec,
+      els.storageSelfNvpRawGuardW,
+    ].filter(Boolean).forEach((el) => {
+      el.addEventListener('change', _updateStorageSelfNvpControl);
+      el.addEventListener('input', _updateStorageSelfNvpControl);
+    });
   }
 
   {
