@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/app.ts
- * Quell-Hash: sha256:33029a0e65a17230c7678de6074dce47dfaf6b3ce3abdd37473f89027df2da7a
+ * Quell-Hash: sha256:8591751aaa2d7a031884db0e5b86c246cf6c18a7da85ac6127ab7d9111494778
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -4629,6 +4629,9 @@ function bindInputValue(el, stateKey) {
       if (scope === 'settings' && key === 'aiAdvisorEnabled') {
         try { updateAiAdvisorLiveUi(); } catch (_e) {}
       }
+      if (scope === 'settings' && key === 'pvSurplusPriority') {
+        try { updatePvSurplusSettingsUi(); } catch (_e) {}
+      }
     } catch (_e) {}
 
     try {
@@ -4639,6 +4642,38 @@ function bindInputValue(el, stateKey) {
       });
     } catch (e) { /* ignore */ }
   });
+}
+
+/**
+ * Code-Teil: updatePvSurplusSettingsUi
+ * Zweck: Zeigt den prozentualen EVCS-Anteil nur bei der gemeinsamen
+ * PV-Ueberschuss-Verteilung an. Speicher- oder E-Mobilitaets-Prioritaet
+ * benoetigen keinen zusaetzlichen Prozentwert.
+ * Zusammenhang: Die Werte werden als settings.* States gespeichert und vom
+ * zentralen EMS-Budget in Core-Limits ausgewertet.
+ */
+function updatePvSurplusSettingsUi(){
+  const select = document.getElementById('s_pvSurplusPriority');
+  const row = document.getElementById('pvSurplusEvcsShareRow');
+  if (!select || !row) return;
+  row.classList.toggle('hidden', String(select.value || 'both').trim().toLowerCase() !== 'both');
+}
+
+/**
+ * Code-Teil: setupPvSurplusSettingsUi
+ * Zweck: Bindet die lokale Sichtbarkeitslogik einmalig und aktualisiert sie
+ * nach dem Laden der gespeicherten Kundeneinstellung.
+ * Zusammenhang: bindInputValue schreibt weiterhin ueber /api/set; diese
+ * Funktion veraendert ausschliesslich die Darstellung des Einstellungsreiters.
+ */
+function setupPvSurplusSettingsUi(){
+  const select = document.getElementById('s_pvSurplusPriority');
+  if (!select) return;
+  if (select.dataset.nwPvSurplusBound !== '1') {
+    select.dataset.nwPvSurplusBound = '1';
+    select.addEventListener('change', updatePvSurplusSettingsUi);
+  }
+  updatePvSurplusSettingsUi();
 }
 /**
  * Code-Teil: initSettingsPageTabs
@@ -4929,6 +4964,7 @@ function setupSettingsReportButtons(){
 function setupSettings(){
   document.querySelectorAll('[data-scope="settings"]').forEach(el=> bindInputValue(el, 'settings.'+el.dataset.key));
   document.querySelectorAll('[data-scope="rfid"]').forEach(el=> bindInputValue(el, 'evcs.rfid.'+el.dataset.key));
+  try { setupPvSurplusSettingsUi(); } catch (e) {}
   try { setupRfidWhitelistUi(); } catch (e) {}
   try { setupRfidLearningUi(); } catch (e) {}
   try { setupRfidBillingUi(); } catch (e) {}

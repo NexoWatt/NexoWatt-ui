@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Runtime-Szenariotest 0.8.81: Speichergrundlogik im Feldschutz.
+ * Runtime-Szenariotest 0.8.94: Speichergrundlogik, NVP-Hold und Feldschutz.
  *
  * Zweck:
  * - Eigenverbrauch darf einen alten sehr hohen Entlade-Sollwert nicht weiterführen.
  * - Vertrauenswürdige Batterie-Istleistung muss stabile Eigenverbrauchsregelung erlauben.
- * - PV-Laden darf bei wegfallendem Export sofort stoppen.
+ * - Ein am NVP-Ziel wirksamer Sollwert bleibt aktiv; 0 W bleibt ein expliziter Stop.
+ * - Bei echtem Netzbezug, SoC-/Messwertschutz oder Richtungswechsel darf weiterhin sofort gestoppt werden.
  *
  * Dieser Test instanziiert das echte Storage-Modul mit einem kleinen ioBroker-/DP-Stub,
  * damit nicht nur Textmuster, sondern der produktive Tick-Pfad geprüft wird.
@@ -131,25 +132,31 @@ async function runTick({ gridW, gridRawW = gridW, soc = 80, battPowerW = null, l
   const stable = await runTick({ gridW: 120, gridRawW: 120, battPowerW: 3000, lastTargetW: 3000, lastSource: 'eigenverbrauch' });
   assert(stable.targetW >= 2800 && stable.targetW <= 3400, `vertrauenswürdiges Batteriefeedback hält nicht stabil: ${stable.targetW}`);
 
-  // Ohne Batterie-Istleistung darf auch ein plausibler laufender Sollwert innerhalb der
-  // Deadband nicht blind gehalten werden. Sicherheit geht hier vor Glättung: Der Regler
-  // fällt auf den aktuellen NVP-Bedarf plus Puffer zurück, damit kein Anschluss überlastet.
+  // Ohne Batterie-Istleistung bleibt der letzte nicht-null Sollwert aktiv, wenn der
+  // frische NVP bereits im Zielband liegt. Der NVP ist hier der physikalische Beleg,
+  // dass die laufende Vorgabe gerade passt; 0 W würde den Speicher ungewollt stoppen.
   const boundedHold = await runTick({ gridW: 80, gridRawW: 80, battPowerW: null, lastTargetW: 3000, lastSource: 'eigenverbrauch' });
-  assert(boundedHold.targetW >= 0 && boundedHold.targetW <= 500, `feedbackloser Deadband-Sollwert wurde nicht auf NVP-Bedarf gecappt: ${boundedHold.targetW}`);
+  assert.strictEqual(boundedHold.targetW, 3000, `feedbackloser Deadband-Sollwert muss aktiv bleiben: ${boundedHold.targetW}`);
 
-  // Ein unplausibel hoher alter Sollwert darf selbst innerhalb der Deadband nicht konserviert werden.
-  const boundedDrop = await runTick({ gridW: 80, gridRawW: 80, battPowerW: null, lastTargetW: 8000, lastSource: 'eigenverbrauch' });
-  assert(boundedDrop.targetW >= 0 && boundedDrop.targetW <= 500, `unplausibler Deadband-Hold wurde nicht gecappt: ${boundedDrop.targetW}`);
+  // Auch ein größerer laufender Sollwert wird im Zielband nicht allein aufgrund seiner
+  // Höhe verworfen. Sobald der NVP abweicht, greifen weiterhin Differenzregelung und Caps.
+  const largeBalancedHold = await runTick({ gridW: 80, gridRawW: 80, battPowerW: null, lastTargetW: 8000, lastSource: 'eigenverbrauch' });
+  assert.strictEqual(largeBalancedHold.targetW, 8000, `wirksamer Deadband-Sollwert wurde fälschlich gestoppt: ${largeBalancedHold.targetW}`);
 
   // PV-Überschuss-Laden wird auf den aktuellen RAW-Export begrenzt.
   const pv = await runTick({ gridW: -5000, gridRawW: -5000, battPowerW: null, lastTargetW: 0, lastSource: 'idle', extraConfig: { storage: { pvMaxDeltaWPerTick: 10000 } } });
   assert(pv.targetW <= -4500 && pv.targetW >= -5200, `PV-Laden folgt nicht dem Export-Cap: ${pv.targetW}`);
 
-  // Wenn Export wegfällt, darf ein alter negativer Lade-Sollwert nicht über die Rampe weiterlaufen.
-  const stopCharge = await runTick({ gridW: 0, gridRawW: 0, battPowerW: null, lastTargetW: -10000, lastSource: 'pv' });
-  assert.strictEqual(stopCharge.targetW, 0, `wegfallender Export muss Lade-Sollwert stoppen: ${stopCharge.targetW}`);
+  // NVP im Zielband: Die laufende PV-Ladung bleibt aktiv. 0 W ist kein Regelergebnis,
+  // sondern nur ein expliziter Stopbefehl.
+  const holdCharge = await runTick({ gridW: 0, gridRawW: 0, battPowerW: null, lastTargetW: -10000, lastSource: 'pv' });
+  assert.strictEqual(holdCharge.targetW, -10000, `NVP-Ziel darf laufende PV-Ladung nicht stoppen: ${holdCharge.targetW}`);
 
-  console.log('[storage-control-runtime-scenarios] OK: Speicher-Eigenverbrauch, Entlade-Cap und Lade-Stop laufen durch echte Tick-Szenarien.');
+  // Echter Netzbezug bei laufender Ladung ist dagegen eine klare Stop-/Korrekturbedingung.
+  const stopChargeOnImport = await runTick({ gridW: 1000, gridRawW: 1000, battPowerW: null, lastTargetW: -10000, lastSource: 'pv' });
+  assert.strictEqual(stopChargeOnImport.targetW, 0, `Netzbezug muss feedbacklose PV-Ladung sicher stoppen: ${stopChargeOnImport.targetW}`);
+
+  console.log('[storage-control-runtime-scenarios] OK: Speicher-Eigenverbrauch, NVP-Hold, Demand-Caps und explizite Stopbedingungen laufen durch echte Tick-Szenarien.');
 })().catch((err) => {
   console.error('[storage-control-runtime-scenarios] ERROR:', err && err.stack ? err.stack : err);
   process.exit(1);

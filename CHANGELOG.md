@@ -1,3 +1,15 @@
+## 0.8.94
+
+- Speicherregelung/Eigenverbrauch: Erreicht der Speicher durch eine laufende Be- oder Entladevorgabe das NVP-Zielband, bleibt der letzte erfolgreich geschriebene Nicht-Null-Sollwert aktiv. `0 W` wird nicht mehr als normales Regelergebnis verwendet, sondern nur noch für ausdrückliche Stopbedingungen wie SoC-Grenzen, deaktivierte Regelung, fehlende NVP-Messung, Richtungswechsel oder aufgehobene PV-Freigabe.
+- Die Istleistungs-/NVP-Differenzregelung bleibt aktiv: Außerhalb des Zielbands wird weiterhin aus Batterie-Istleistung plus aktueller NVP-Abweichung nachgeregelt; alte Sollwerte werden dabei nicht hochintegriert.
+- Zentrale PV-Budgetierung erweitert: PV-/Min+PV-Wallboxen und Speicher teilen denselben physikalischen PV-Überschuss, ohne ihn doppelt zu verplanen. EVCS reserviert zuerst seinen zulässigen Anteil, der Speicher nutzt anschließend das im selben EMS-Tick verbleibende PV-Budget.
+- Kundeneinstellungen: neuer Reiter **PV-Überschuss** mit den Prioritäten **Speicher zuerst**, **E-Mobilität zuerst** oder **Speicher & E-Mobilität**. Im gemeinsamen Modus ist der maximale EVCS-Anteil prozentual einstellbar; nicht genutzter EVCS-Anteil bleibt für den Speicher verfügbar.
+- Dynamische Tarife, Reserve-/Netzladen sowie harte Netz-, Phasen- und §14a-Grenzen bleiben von der PV-Prioritätsauswahl getrennt und weiterhin übergeordnet wirksam.
+- EVCS-PV-Rekonstruktion berücksichtigt eine bereits laufende Speicherladung beziehungsweise -entladung, damit der tatsächlich verteilbare PV-Anteil bei NVP-Regelung sichtbar bleibt.
+- Neue Diagnosen für NVP-Hold und PV-Aufteilung, unter anderem `speicher.regelung.balanceLetztenSollwertGehalten`, `balanceGehaltenSollW`, `pvBudgetAllocationMode`, `pvBudgetReservedW` sowie `ems.budget.pvAllocation*` und `chargingManagement.control.pvAllocation*`.
+- Neue Regressionstests `test:storage-actual-power-nvp-balance` und `test:pv-surplus-budget-priority`; bestehende Speicher-Feldtests auf die neue Nicht-Null-Haltefunktion erweitert.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v396` erhöht.
+
 ## 0.8.93
 
 - Speicherregelung: Be- und Entladevorgaben werden jetzt zentral aus der frischen Batterie-Istleistung plus aktueller NVP-Differenz berechnet (`Soll = Istleistung + NVP-Ist - NVP-Ziel`).

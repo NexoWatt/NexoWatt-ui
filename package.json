@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.8.93",
+  "version": "0.8.94",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -301,7 +301,8 @@
     "test:storage-evcs-protect-vendor-profiles": "node scripts/verify-storage-evcs-protect-vendor-profiles.js",
     "test:optional-menu-feature-visibility": "node scripts/verify-optional-menu-feature-visibility.js",
     "test:storage-nvp-smoothing-building-load": "node scripts/verify-storage-nvp-smoothing-building-load.js",
-    "test:storage-actual-power-nvp-balance": "node scripts/verify-storage-actual-power-nvp-balance.js"
+    "test:storage-actual-power-nvp-balance": "node scripts/verify-storage-actual-power-nvp-balance.js",
+    "test:pv-surplus-budget-priority": "node scripts/verify-pv-surplus-budget-priority.js"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",

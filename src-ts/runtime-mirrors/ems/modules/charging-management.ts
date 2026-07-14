@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 65553baa873ac1b6254b6c5709cfbbf5669f1d110ee2f4e1cd80215e4f8e8fca
+ * Original-Hash: 47025529aad5fea85914f4750597fc4bc8d11ef4d4810f6f1778404b07fbfb41
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:e9680b19b20ac9b431661918b7fb713a95f6c23160e3de4b3fa5f64c1cd753a2
+ * Quell-Hash: sha256:784c3b8296d878aa7be97e20b1ec2c9a746467014699ae26383f7f591cd898e2
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2523,6 +2523,11 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.pvCapRawW', 'PV surplus raw cap (W)', 'number', 'value.power');
         await mk('chargingManagement.control.pvCapEffectiveW', 'PV cap effective (W)', 'number', 'value.power');
         await mk('chargingManagement.control.pvAvailable', 'PV available (hysteresis)', 'boolean', 'indicator');
+        await mk('chargingManagement.control.pvAllocationMode', 'PV surplus allocation mode', 'string', 'text');
+        await mk('chargingManagement.control.pvAllocationEvcsSharePct', 'PV surplus EVCS share (%)', 'number', 'value.percent');
+        await mk('chargingManagement.control.pvAllocationEvcsCapW', 'PV surplus EVCS allocation cap (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvAllocationUncappedW', 'PV surplus EVCS cap before allocation (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvAllocationStorageActualChargeW', 'Storage actual charge considered for PV allocation (W)', 'number', 'value.power');
 
         // Debug: PV surplus without EVCS (instant + smoothed)
         // Used to verify sign conventions / smoothing for PV-only charging.
@@ -4917,6 +4922,13 @@ class ChargingManagementModule extends BaseModule {
         let pvSurplusNoEvAvg5mWState = 0;
         // Central EMS budget coordinator: reserve the PV part used by EVCS later in the tick.
         let pvEvcsUsedWForBudget = 0;
+        // Kundenauswahl aus dem zentralen EMS-Budget. Diese Diagnose bleibt auch
+        // sichtbar, wenn aktuell keine Wallbox im PV-Modus laeuft.
+        let pvAllocationModeState = 'both';
+        let pvAllocationEvcsSharePctState = 50;
+        let pvAllocationEvcsCapWState = 0;
+        let pvAllocationUncappedWState = 0;
+        let pvAllocationStorageActualChargeWState = 0;
 
         if (needPvBudget || needPvDiagnostics) {
             // PV-Überschuss sauber ermitteln:
@@ -5080,23 +5092,26 @@ class ChargingManagementModule extends BaseModule {
             let pvSurplusNoEvW = null;
             if (typeof pvDirectW === 'number' && Number.isFinite(pvDirectW)
                 && typeof loadTotalDirectW === 'number' && Number.isFinite(loadTotalDirectW)) {
-                // Bevorzugte direkte Berechnung für reinen PV-Überschuss:
-                //   PV - (Verbrauch ohne EV) - Speicherladung
-                // Bei aktiver EV-Priorität wird PV-Speicherladung, die gerade den Überschuss bindet,
-                // nicht abgezogen. Diese Leistung soll zuerst der Wallbox angeboten werden.
+                // Bevorzugte direkte Berechnung des gesamten verteilbaren PV-Potentials:
+                //   PV - Verbrauch ohne EVCS
+                // Die aktuelle Speicherladung wird hier bewusst NICHT abgezogen. Sonst
+                // waere der bereits vom Speicher gebundene PV-Anteil fuer Wallboxen unsichtbar
+                // und die neue zentrale Prioritaet koennte ihn nicht zwischen Speicher und
+                // E-Mobilitaet verteilen. Wer welchen Anteil bekommt, entscheidet danach
+                // ausschliesslich `ems.budget.gates.pvAllocation`.
                 const evcsForLoadW = (pvEvcsUsedW > pvEvcsActualW && loadTotalDirectW >= (pvEvcsUsedW - 100))
                     ? pvEvcsUsedW
                     : pvEvcsActualW;
                 const baseLoadNoEvW = Math.max(0, loadTotalDirectW - evcsForLoadW);
-                const storageChargeBlockingPvW = Math.max(0, storageChargeNowW - evPriorityStorageYieldW);
-                pvSurplusNoEvW = Math.max(0, pvDirectW - baseLoadNoEvW - storageChargeBlockingPvW);
-                gridImportNoEvW = Math.max(0, baseLoadNoEvW + storageChargeBlockingPvW - pvDirectW);
+                pvSurplusNoEvW = Math.max(0, pvDirectW - baseLoadNoEvW);
+                gridImportNoEvW = Math.max(0, baseLoadNoEvW - pvDirectW);
             } else if (typeof gridW === 'number' && Number.isFinite(gridW)) {
-                // Fallback-Rekonstruktion ohne direkte PV-/Verbrauchs-DPs.
-                // WICHTIG: Speicher-Entladung darf PV-Only NICHT künstlich vergrößern.
-                // Deshalb ziehen wir aktive Batterie-Entladung hier ab.
-                pvSurplusNoEvW = Math.max(0, (-gridW) + pvEvcsUsedW - storageDischargeNowW + evPriorityStorageYieldW);
-                gridImportNoEvW = Math.max(0, gridW - pvEvcsUsedW + storageDischargeNowW - evPriorityStorageYieldW);
+                // Fallback-Rekonstruktion ohne direkte PV-/Verbrauchs-DPs. Wir rechnen
+                // sowohl EVCS als auch die aktuelle Speicherladung zum sichtbaren Export
+                // zurueck. Batterie-Entladung wird abgezogen, weil sie kein PV-Ueberschuss
+                // ist und das Wallbox-Budget niemals kuenstlich vergroessern darf.
+                pvSurplusNoEvW = Math.max(0, (-gridW) + pvEvcsUsedW + storageChargeNowW - storageDischargeNowW);
+                gridImportNoEvW = Math.max(0, gridW - pvEvcsUsedW - storageChargeNowW + storageDischargeNowW);
             } else if (typeof pvSurplusCfgW === 'number' && Number.isFinite(pvSurplusCfgW)) {
                 // Fallback wenn kein Grid-DP verfügbar (z. B. nur PV-Surplus DP konfiguriert)
                 pvSurplusNoEvW = Math.max(0, pvSurplusCfgW);
@@ -5145,8 +5160,37 @@ class ChargingManagementModule extends BaseModule {
             // Rundungsfehler und minimale Hauslaständerungen abfedert, ohne die restliche Logik zu ändern.
             const pvChargeReserveW = clamp(num(cfg.pvChargeReserveW, 500), 0, 1e12);
             const pvCapBudgetW = Math.max(0, pvCapRawW - pvChargeReserveW);
-            pvStartReadyBudgetW = pvCapBudgetW;
-            pvCapW = pvCapBudgetW;
+            pvAllocationUncappedWState = pvCapBudgetW;
+            pvAllocationStorageActualChargeWState = Math.max(0, Math.round(storageChargeNowW || 0));
+
+            // Die Kundenauswahl wird im Core-Limits-Modul aus demselben physikalischen
+            // PV-Budget erzeugt. Sie begrenzt nur PV-/Min+PV-Wallboxen; Normal-/Boost-
+            // und dynamische Tarifpfade bleiben davon unberuehrt.
+            const centralBudget = this.adapter && this.adapter._emsBudget;
+            const allocationGate = centralBudget
+                && centralBudget.gates
+                && centralBudget.gates.pvAllocation
+                && typeof centralBudget.gates.pvAllocation === 'object'
+                ? centralBudget.gates.pvAllocation
+                : null;
+            if (allocationGate) {
+                pvAllocationModeState = String(allocationGate.mode || 'both');
+                pvAllocationEvcsSharePctState = Number.isFinite(Number(allocationGate.evcsSharePct))
+                    ? Math.max(0, Math.min(100, Number(allocationGate.evcsSharePct)))
+                    : 50;
+                pvAllocationEvcsCapWState = Number.isFinite(Number(allocationGate.evcsCapW))
+                    ? Math.max(0, Number(allocationGate.evcsCapW))
+                    : pvCapBudgetW;
+            } else {
+                // Rueckwaertskompatibler Fallback, falls Core-Limits in einem alten
+                // Laufzeitstand noch keinen Allocation-Gate bereitstellt.
+                pvAllocationModeState = 'legacy-full-evcs';
+                pvAllocationEvcsSharePctState = 100;
+                pvAllocationEvcsCapWState = pvCapBudgetW;
+            }
+            const pvCapAllocatedW = Math.max(0, Math.min(pvCapBudgetW, pvAllocationEvcsCapWState));
+            pvStartReadyBudgetW = pvCapAllocatedW;
+            pvCapW = pvCapAllocatedW;
 
             // -----------------------------------------------------------------
             // Gate B: PV hysteresis / start-stop protection
@@ -5176,14 +5220,14 @@ class ChargingManagementModule extends BaseModule {
             // sauber am Fahrzeug ankommt und nicht sofort wieder auf 0 fällt.
             if (!(typeof gridImportNoEvW === 'number' && Number.isFinite(gridImportNoEvW))) {
                 gridImportNoEvW = (typeof gridW === 'number' && Number.isFinite(gridW))
-                    ? Math.max(0, gridW - pvEvcsUsedW + storageDischargeNowW)
+                    ? Math.max(0, gridW - pvEvcsUsedW - storageChargeNowW + storageDischargeNowW)
                     : 0;
             }
             const forcedBelow = !pvStartupHoldActive && (pvAbortImportW > 0 && gridImportNoEvW > pvAbortImportW);
-            const suppressStopGate = pvStartupHoldActive && pvCapBudgetW > 0;
+            const suppressStopGate = pvStartupHoldActive && pvCapAllocatedW > 0;
 
-            const above = (!forcedBelow) && ((startW > 0) ? (pvCapBudgetW >= startW) : (pvCapBudgetW > 0));
-            const below = !suppressStopGate && (forcedBelow || (pvCapBudgetW <= stopW));
+            const above = (!forcedBelow) && ((startW > 0) ? (pvCapAllocatedW >= startW) : (pvCapAllocatedW > 0));
+            const below = !suppressStopGate && (forcedBelow || (pvCapAllocatedW <= stopW));
 
             let pvAvail = !!this._pvAvailable;
 
@@ -5206,7 +5250,7 @@ class ChargingManagementModule extends BaseModule {
             }
 
             this._pvAvailable = pvAvail;
-            pvCapW = pvAvail ? pvCapBudgetW : 0;
+            pvCapW = pvAvail ? pvCapAllocatedW : 0;
 
             pvCapRawWState = pvCapRawW;
             pvCapEffectiveWState = (typeof pvCapW === 'number' && Number.isFinite(pvCapW)) ? pvCapW : 0;
@@ -5232,6 +5276,11 @@ class ChargingManagementModule extends BaseModule {
             await this._queueState('chargingManagement.control.pvAvailable', !!pvAvailableState, true);
             await this._queueState('chargingManagement.control.pvSurplusNoEvRawW', pvSurplusNoEvRawWState || 0, true);
             await this._queueState('chargingManagement.control.pvSurplusNoEvAvg5mW', pvSurplusNoEvAvg5mWState || 0, true);
+            await this._queueState('chargingManagement.control.pvAllocationMode', String(pvAllocationModeState || 'both'), true);
+            await this._queueState('chargingManagement.control.pvAllocationEvcsSharePct', Math.round(Number(pvAllocationEvcsSharePctState) || 0), true);
+            await this._queueState('chargingManagement.control.pvAllocationEvcsCapW', Math.round(Number(pvAllocationEvcsCapWState) || 0), true);
+            await this._queueState('chargingManagement.control.pvAllocationUncappedW', Math.round(Number(pvAllocationUncappedWState) || 0), true);
+            await this._queueState('chargingManagement.control.pvAllocationStorageActualChargeW', Math.round(Number(pvAllocationStorageActualChargeWState) || 0), true);
         } catch {
             // ignore
         }
@@ -5349,6 +5398,11 @@ if (components.length) {
                 gridImportNoEvW: (typeof gridImportNoEvW === 'number' && Number.isFinite(gridImportNoEvW)) ? gridImportNoEvW : null,
                 pvSurplusW: (typeof pvSurplusW === 'number' && Number.isFinite(pvSurplusW)) ? pvSurplusW : null,
                 pvSurplusAvg5mW: (typeof pvSurplusNoEvAvg5mWState === 'number' && Number.isFinite(pvSurplusNoEvAvg5mWState)) ? pvSurplusNoEvAvg5mWState : null,
+                pvAllocationMode: String(pvAllocationModeState || ''),
+                pvAllocationEvcsSharePct: Math.round(Number(pvAllocationEvcsSharePctState) || 0),
+                pvAllocationEvcsCapW: Math.round(Number(pvAllocationEvcsCapWState) || 0),
+                pvAllocationUncappedW: Math.round(Number(pvAllocationUncappedWState) || 0),
+                pvAllocationStorageActualChargeW: Math.round(Number(pvAllocationStorageActualChargeWState) || 0),
                 evPriorityStorageYieldW: Math.round(evPriorityStorageYieldW || 0),
                 components,
             };

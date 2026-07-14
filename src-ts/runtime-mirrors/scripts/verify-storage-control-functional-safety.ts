@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: d6e3ecc06a493739ed4374c76db8a3e6e9064a9d70d6b4b420ef6fd81553a079
+ * Original-Hash: c9e0a63283fb2515d0e64dc9e55d564c25a47586d0300f3d1690ee3479395c2e
  */
 
 /**
@@ -31,13 +31,14 @@
 
 'use strict';
 /**
- * Funktionaler Feldtest 0.8.81 für die Speicherregelung.
+ * Funktionaler Feldtest 0.8.94 für Speicherregelung, NVP-Hold und Feldschutz.
  *
  * Zweck:
  * - Prüft die vollständige Policy-Kette Speicherregelung → MultiUse → Speicherfarm.
  * - Sichert den konkreten Feldfehler ab: alter/abgeleiteter 71-kW-Wert darf bei
  *   nur wenigen kW NVP-Import nicht mehr als Entlade-Sollwert geschrieben werden.
- * - Prüft die Laderichtung gegen alten negativen Sollwert-Nachlauf.
+ * - Prüft, dass ein wirksamer nicht-null Sollwert im frischen NVP-Zielband aktiv bleibt.
+ * - Prüft explizite Stopbedingungen bei Netzbezug und Schutzgrenzen.
  *
  * Vorzeichenkonvention:
  * +W = Speicher entlädt, -W = Speicher lädt.
@@ -322,10 +323,12 @@ async function runScenario({ name, config, values, entries, stateCache, states, 
     assert(r.soll < 5000, `${r.name}: gefährlicher Sollwert >5 kW: ${r.soll} W`);
   }
 
-  // 3) Selbst innerhalb der Deadband darf ein alter feedbackloser 71-kW-Wert nicht gehalten werden.
+  // 3) Im frischen NVP-Zielband bleibt der zuletzt erfolgreich geschriebene
+  // nicht-null Sollwert aktiv. Der NVP belegt physikalisch, dass die laufende
+  // Vorgabe gerade passt; 0 W wäre ein ungewollter Stopbefehl.
   {
     const r = await runScenario({
-      name: 'Feedbackloser Deadband-Hold plausibilisiert alten Sollwert',
+      name: 'Feedbackloser Deadband-Hold hält wirksamen Sollwert',
       config: baseConfig(),
       entries: baseEntries({ battery: false }),
       values: {
@@ -336,13 +339,13 @@ async function runScenario({ name, config, values, entries, stateCache, states, 
       lastTargetW: 71600,
       lastSource: 'eigenverbrauch',
     });
-    assert(r.soll <= 500, `${r.name}: alter 71-kW-Wert wurde gehalten (${r.soll} W)`);
+    assert.strictEqual(r.soll, 71600, `${r.name}: wirksamer Sollwert wurde fälschlich gestoppt (${r.soll} W)`);
   }
 
-  // 4) Beladung: alter negativer Lade-Sollwert darf bei fehlendem PV-Export nicht weiterlaufen.
+  // 4) NVP im Zielband: Auch ein laufender Lade-Sollwert bleibt aktiv.
   {
     const r = await runScenario({
-      name: 'Alter Lade-Sollwert stoppt bei fehlendem Export',
+      name: 'Lade-Sollwert bleibt bei erreichtem NVP-Ziel aktiv',
       config: baseConfig(),
       entries: baseEntries(),
       values: {
@@ -353,7 +356,24 @@ async function runScenario({ name, config, values, entries, stateCache, states, 
       lastTargetW: -50000,
       lastSource: 'pv',
     });
-    assert.strictEqual(r.soll, 0, `${r.name}: Laden muss auf 0 fallen, erhalten ${r.soll} W (${r.reason})`);
+    assert.strictEqual(r.soll, -50000, `${r.name}: Laden darf nicht auf 0 fallen, erhalten ${r.soll} W (${r.reason})`);
+  }
+
+  // 4b) Echter Netzbezug ist dagegen eine eindeutige Stop-/Korrekturbedingung.
+  {
+    const r = await runScenario({
+      name: 'Feedbacklose PV-Ladung stoppt bei Netzbezug',
+      config: baseConfig(),
+      entries: baseEntries(),
+      values: {
+        'grid.powerW': nowState(1000),
+        'grid.powerRawW': nowState(1000),
+        'st.socPct': nowState(50),
+      },
+      lastTargetW: -50000,
+      lastSource: 'pv',
+    });
+    assert.strictEqual(r.soll, 0, `${r.name}: Netzbezug muss die PV-Ladung stoppen, erhalten ${r.soll} W (${r.reason})`);
   }
 
   // 5) Beladung: PV-Überschuss wird in der Grundlogik sauber als negativer Sollwert genutzt.

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Regression 0.8.93: Istleistungsbasiertes Speicher-NVP-Balancing.
+ * Regression 0.8.94: Istleistungsbasiertes Speicher-NVP-Balancing mit
+ * stabilem Halten des letzten nicht-null Sollwerts im NVP-Zielband.
  *
  * Geprueft wird die zentrale Regelgleichung fuer Laden und Entladen:
  *   Soll = Batterie-Ist + (NVP-Ist - NVP-Ziel)
@@ -12,7 +13,9 @@
  * - Richtungswechsel immer zuerst ueber 0 W,
  * - RAW-NVP bei frischer, zeitlich plausibler Batterie-Istleistung,
  * - sicherer Fallback ohne Hochintegration alter Entlade-Sollwerte,
- * - keine zweite Rampe relativ zu einem alten Sollwert im produktiven Tick.
+ * - keine zweite Rampe relativ zu einem alten Sollwert im produktiven Tick,
+ * - 0 W bleibt ein ausdruecklicher Stop und wird nicht bei erreichtem NVP-Ziel
+ *   versehentlich als neuer Lade-/Entladesollwert geschrieben.
  */
 const assert = require('assert');
 const { SpeicherRegelungModule } = require('../ems/modules/storage-control');
@@ -132,6 +135,7 @@ async function runTick({
   battPowerW,
   battAgeMs = 0,
   gridAgeMs = 0,
+  socPct = 80,
   lastTargetW = 0,
   lastSource = 'eigenverbrauch',
   storagePatch = {},
@@ -139,7 +143,7 @@ async function runTick({
   const dp = new FakeDp({
     'grid.powerW': entry(gridW, 'grid.filtered', gridAgeMs),
     'grid.powerRawW': entry(gridRawW, 'grid.raw', gridAgeMs),
-    'st.socPct': entry(80, 'battery.soc'),
+    'st.socPct': entry(socPct, 'battery.soc'),
     'st.batteryPowerW': entry(battPowerW, 'battery.actualPower', battAgeMs),
     'st.targetPowerW': entry(0, 'battery.target'),
   });
@@ -175,6 +179,30 @@ async function runTick({
   });
   assert.strictEqual(Math.round(stable.targetW), 1000, 'im Zielband muss der passende Sollwert stabil bleiben');
   assert.strictEqual(stable.mode, 'feedback-hold-command', 'Zielband muss ohne Messwertzittern halten');
+
+  const explicitChargeHold = buildBalance(mod, {
+    rawNvpW: 50,
+    fallbackNvpW: 50,
+    batteryPowerW: 0,
+    batteryAgeMs: 9000,
+    lastTargetW: -3000,
+    holdLastNonZeroInDeadband: true,
+  });
+  assert.strictEqual(explicitChargeHold.feedbackUsed, false, 'Hold-Test muss ohne Istfeedback laufen');
+  assert.strictEqual(explicitChargeHold.targetW, -3000, 'letzte Ladeanforderung muss im Zielband aktiv bleiben');
+  assert.strictEqual(explicitChargeHold.holdingLastCommand, true, 'Lade-Hold muss diagnostiziert werden');
+  assert.strictEqual(explicitChargeHold.mode, 'fallback-hold-last-command', 'Lade-Hold braucht eindeutigen Diagnosemodus');
+
+  const explicitDischargeHold = buildBalance(mod, {
+    rawNvpW: 50,
+    fallbackNvpW: 50,
+    batteryPowerW: 0,
+    batteryAgeMs: 9000,
+    lastTargetW: 2500,
+    holdLastNonZeroInDeadband: true,
+  });
+  assert.strictEqual(explicitDischargeHold.targetW, 2500, 'letzte Entladeanforderung muss im Zielband aktiv bleiben');
+  assert.strictEqual(explicitDischargeHold.holdingLastCommand, true, 'Entlade-Hold muss diagnostiziert werden');
 
   const release = buildBalance(mod, {
     rawNvpW: -600,
@@ -292,7 +320,47 @@ async function runTick({
   });
   assert.strictEqual(tickReverse.targetW, 0, `Richtungswechsel muss im produktiven Tick zuerst 0 W schreiben: ${tickReverse.targetW}`);
 
-  console.log('[storage-actual-power-nvp-balance] OK: Istleistung plus NVP-Differenz regelt Laden/Entladen stabil, begrenzt und ohne alte Sollwert-Rueckkopplung.');
+  const holdChargeTick = await runTick({
+    gridW: 50,
+    battPowerW: 0,
+    battAgeMs: 9000,
+    lastTargetW: -3000,
+    lastSource: 'pv',
+  });
+  assert.strictEqual(holdChargeTick.targetW, -3000, `NVP-Ziel darf laufende Beladung nicht mit 0 W stoppen: ${holdChargeTick.targetW}`);
+  assert.strictEqual(holdChargeTick.adapter._states.get('speicher.regelung.balanceLetztenSollwertGehalten').val, true, 'produktiver Lade-Hold muss sichtbar sein');
+
+  const holdDischargeTick = await runTick({
+    gridW: 50,
+    battPowerW: 0,
+    battAgeMs: 9000,
+    lastTargetW: 2500,
+    lastSource: 'eigenverbrauch',
+  });
+  assert.strictEqual(holdDischargeTick.targetW, 2500, `NVP-Ziel darf laufende Entladung nicht mit 0 W stoppen: ${holdDischargeTick.targetW}`);
+  assert.strictEqual(holdDischargeTick.adapter._states.get('speicher.regelung.balanceGehaltenSollW').val, 2500, 'gehaltener Entladesollwert muss sichtbar sein');
+
+  const chargeSocStop = await runTick({
+    gridW: 50,
+    battPowerW: 0,
+    battAgeMs: 9000,
+    socPct: 100,
+    lastTargetW: -3000,
+    lastSource: 'pv',
+  });
+  assert.strictEqual(chargeSocStop.targetW, 0, 'Max-SoC bleibt ein ausdruecklicher Lade-Stop mit 0 W');
+
+  const dischargeSocStop = await runTick({
+    gridW: 50,
+    battPowerW: 0,
+    battAgeMs: 9000,
+    socPct: 20,
+    lastTargetW: 2500,
+    lastSource: 'eigenverbrauch',
+  });
+  assert.strictEqual(dischargeSocStop.targetW, 0, 'Min-SoC bleibt ein ausdruecklicher Entlade-Stop mit 0 W');
+
+  console.log('[storage-actual-power-nvp-balance] OK: Istleistung plus NVP-Differenz regelt stabil; im Zielband bleibt der letzte nicht-null Sollwert aktiv, waehrend Schutzgrenzen weiterhin 0 W stoppen.');
 })().catch((err) => {
   console.error('[storage-actual-power-nvp-balance] ERROR:', err && err.stack ? err.stack : err);
   process.exit(1);

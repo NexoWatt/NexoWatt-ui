@@ -68,6 +68,8 @@ export const DEFAULT_MAIN_SETTING_DEFINITIONS: readonly MainSettingDefinition[] 
   // und berühren keine Installer-DP-Zuordnung.
   { key: 'deviceStaleTimeoutSec', stateId: 'settings.deviceStaleTimeoutSec', kind: 'number', min: 30, max: 86400 },
   { key: 'dynamicTariff', stateId: 'settings.dynamicTariff', kind: 'boolean' },
+  { key: 'pvSurplusPriority', stateId: 'settings.pvSurplusPriority', kind: 'string' },
+  { key: 'pvSurplusEvcsSharePct', stateId: 'settings.pvSurplusEvcsSharePct', kind: 'number', min: 0, max: 100 },
   { key: 'storagePower', stateId: 'settings.storagePower', kind: 'number', min: 0, max: 1000000000 },
   { key: 'price', stateId: 'settings.price', kind: 'number', min: -100, max: 1000 },
   { key: 'priority', stateId: 'settings.priority', kind: 'number', min: 0, max: 100 },

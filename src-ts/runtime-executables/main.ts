@@ -2483,6 +2483,11 @@ class NexoWattVis extends utils.Adapter {
       aiAdvisorPriorityGeneric: { type: 'number', role: 'value', def: 40 },
 
       dynamicTariff: { type: 'boolean', role: 'state', def: false },
+      // Kundenseitige PV-Ueberschuss-Verteilung. Die Auswahl wirkt nur auf
+      // PV-/Min+PV-Wallboxen und die Speicher-PV-Ladung im zentralen EMS-Budget;
+      // Tarif- und Sicherheitsgates bleiben davon unabhaengig.
+      pvSurplusPriority: { type: 'string', role: 'text', def: 'both' },
+      pvSurplusEvcsSharePct: { type: 'number', role: 'value.percent', def: 50 },
       storagePower: { type: 'number', role: 'value.power', def: 1000 },
       price: { type: 'number', role: 'value', def: 0.25 },
       priority: { type: 'number', role: 'value', def: 2 },
@@ -22557,7 +22562,7 @@ return res.json(out);
       'aiAdvisorEvReadyBy','aiAdvisorEvTargetSocPct','aiAdvisorThermalReadyBy',
       'aiAdvisorPriorityStorage','aiAdvisorPriorityEvcs','aiAdvisorPriorityThermal','aiAdvisorPriorityHeatingRod','aiAdvisorPriorityGeneric',
       // Tariff/charging settings
-      'dynamicTariff','storagePower','price','priority','tariffMode',
+      'dynamicTariff','pvSurplusPriority','pvSurplusEvcsSharePct','storagePower','price','priority','tariffMode',
       // Energie-Wertkonto: kundenseitiger Schalter + Preise aus settings.html.
       'energyWalletEnabled','energyWalletShowPriceSource','energyWalletFixedImportEurPerKwh','energyWalletFeedInEurPerKwh','energyWalletEvcsValueEurPerKwh',
       // PV Saisonprofil (Quartale)

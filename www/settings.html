@@ -86,6 +86,10 @@
           <span class="nw-settings-nav__title">Dynamische Zeittarife</span>
           <small>Tarif, Netzentgelt, Saisonprofil</small>
         </button>
+        <button class="nw-settings-nav__item" type="button" data-settings-page-target="pv-surplus">
+          <span class="nw-settings-nav__title">PV-Überschuss</span>
+          <small>Speicher und E-Mobilität priorisieren</small>
+        </button>
         <button class="nw-settings-nav__item" type="button" data-settings-page-target="rfid">
           <span class="nw-settings-nav__title">RFID</span>
           <small>Whitelist, Lernen, Abrechnung</small>
@@ -523,6 +527,31 @@
             </small>
           </div>
         </div>
+        </div>
+      </section>
+
+      <section class="card nw-settings-page hidden" data-settings-panel="pv-surplus">
+        <div class="card-header"><span>PV-Überschuss</span></div>
+        <div class="form">
+          <div class="nw-settings-note">
+            Diese Priorität gilt nur für PV- und Min+PV-Laden. Die zentrale EMS-Budgetierung verteilt den physikalisch verfügbaren PV-Überschuss zwischen Speicher und Ladeinfrastruktur; dynamische Tarife und harte Netzgrenzen bleiben davon getrennt.
+          </div>
+
+          <label class="row"><span>PV-Überschuss priorisieren</span>
+            <select id="s_pvSurplusPriority" data-scope="settings" data-key="pvSurplusPriority" style="min-width:260px;max-width:100%;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.08);background:#a7c400;color:#000;">
+              <option value="storage">Speicher zuerst</option>
+              <option value="emobility">E-Mobilität zuerst</option>
+              <option value="both" selected>Speicher &amp; E-Mobilität</option>
+            </select>
+          </label>
+
+          <label class="row" id="pvSurplusEvcsShareRow"><span>Max. Anteil E-Mobilität (%)</span>
+            <input type="number" min="0" max="100" step="5" value="50" id="s_pvSurplusEvcsSharePct" data-scope="settings" data-key="pvSurplusEvcsSharePct">
+          </label>
+
+          <small style="opacity:.75;display:block;margin-top:8px">
+            Bei „Speicher &amp; E-Mobilität“ ist der Prozentwert der maximal reservierte Wallbox-Anteil. Wird er nicht vollständig genutzt, bleibt das freie PV-Budget im selben EMS-Zyklus für den Speicher verfügbar. Bei „E-Mobilität zuerst“ bekommt der Speicher den nach den Wallboxen verbleibenden Rest.
+          </small>
         </div>
       </section>
 

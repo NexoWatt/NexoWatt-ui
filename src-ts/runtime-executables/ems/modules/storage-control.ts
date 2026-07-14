@@ -485,6 +485,11 @@ class SpeicherRegelungModule extends BaseModule {
             await this._setIfChanged('speicher.regelung.requestQuelle', 'aus');
             await this._setIfChanged('speicher.regelung.requestGrund', 'Deaktiviert');
             await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({ ts: Date.now(), disabled: true, reason: 'Deaktiviert' }));
+            await this._setStorageNvpBalanceDiag(null);
+            await this._setIfChanged('speicher.regelung.pvBudgetAllocationMode', '');
+            await this._setIfChanged('speicher.regelung.pvBudgetRemainingBeforeStorageW', 0);
+            await this._setIfChanged('speicher.regelung.pvBudgetStorageAvailableW', 0);
+            await this._setIfChanged('speicher.regelung.pvBudgetReservedW', 0);
 
             // Hybrid-/Gateway-Priorität: Bei deaktivierter Speicherregelung nicht zyklisch auf den
             // Batterie-Sollleistungs-DP schreiben. Dadurch kann das Gateway nach seinem Watchdog
@@ -812,6 +817,11 @@ class SpeicherRegelungModule extends BaseModule {
             await this._setIfChanged('speicher.regelung.netzLadenErlaubt', null);
             await this._setIfChanged('speicher.regelung.entladenErlaubt', null);
             await this._setIfChanged('speicher.regelung.tarifState', '');
+            await this._setStorageNvpBalanceDiag(null);
+            await this._setIfChanged('speicher.regelung.pvBudgetAllocationMode', '');
+            await this._setIfChanged('speicher.regelung.pvBudgetRemainingBeforeStorageW', 0);
+            await this._setIfChanged('speicher.regelung.pvBudgetStorageAvailableW', 0);
+            await this._setIfChanged('speicher.regelung.pvBudgetReservedW', 0);
             await this._setIfChanged('speicher.regelung.policyJson', JSON.stringify({ ts: Date.now(), disabled: true, reason: 'Netzleistung fehlt oder zu alt', feneconHybrid: !!feneconHybridActive }));
             return;
         }
@@ -913,6 +923,15 @@ class SpeicherRegelungModule extends BaseModule {
         // die Werte erneut auseinanderziehen und sichtbares Springen erzeugen.
         let storageNvpBalanceDiag = null;
         let storageNvpBalanceRampManaged = false;
+
+        // Zentrales PV-Budget fuer die gemeinsame Verteilung zwischen EVCS,
+        // Speicher und nachgelagerten Verbrauchern. Das Lademanagement laeuft
+        // vor der Speicherregelung und reserviert seinen tatsaechlich benoetigten
+        // PV-Anteil. Der Speicher darf danach nur das noch freie PV-Budget nutzen.
+        let pvBudgetAllocationMode = '';
+        let pvBudgetRemainingBeforeStorageW = 0;
+        let pvBudgetStorageAvailableW = 0;
+        let pvBudgetReservedW = 0;
 
         const exportW = Math.max(0, -gridW); // negative Netzleistung = Einspeisung (geglättet)
         const importW = Math.max(0, gridW);  // positive Netzleistung = Bezug (geglättet)
@@ -2106,6 +2125,11 @@ if (targetW === 0 && selfDischargeEnabled) {
         batteryPowerTrusted: battPowerTrusted,
         lastTargetW: lastBalanceW,
         lastTargetAllowed: lastWasAnyBalance,
+            // Eigenverbrauchsoptimierung: 0 W ist ein expliziter STOP-Befehl. Wenn der
+            // NVP im Zielband liegt, hat der zuletzt akzeptierte Lade-/Entladesollwert
+            // genau den gewuenschten Zustand hergestellt und muss deshalb weiter aktiv
+            // bleiben, statt durch eine neue 0-W-Vorgabe den Speicher abzuschalten.
+            holdLastNonZeroInDeadband: true,
         maxDischargeCorrectionW: maxDelta,
         maxChargeCorrectionW: pvMaxDeltaCfg > 0 ? pvMaxDeltaCfg : maxDelta,
         feedbackMaxAgeMs: Math.min(staleMs, Math.max(1000, num(cfg.balanceFeedbackMaxAgeMs, 8000))),
@@ -2142,7 +2166,14 @@ if (targetW === 0 && selfDischargeEnabled) {
     const safetyMarginW = 200; // bewusst konservativ; Feintuning über selfTargetGridW/Deadband/Rampe
     const protectedSelfImportW = Math.max(0, importRawNowW - evcsStorageProtectedLoadW);
     const protectedSelfMarginW = protectedSelfImportW > 0 ? safetyMarginW : 0;
-    const maxByDemandW = Math.max(0, protectedSelfImportW + measuredDischargeNowW + protectedSelfMarginW);
+    const heldDischargeCommandW = balance.holdingLastCommand && nextSignedW > 0
+        ? Math.max(0, nextSignedW)
+        : 0;
+    const maxByDemandW = Math.max(
+        0,
+        protectedSelfImportW + measuredDischargeNowW + protectedSelfMarginW,
+        heldDischargeCommandW,
+    );
     if (Number.isFinite(maxByDemandW) && maxByDemandW >= 0) {
         dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
             ? Math.min(dischargeDemandHardCapW, maxByDemandW)
@@ -2153,11 +2184,15 @@ if (targetW === 0 && selfDischargeEnabled) {
         nextSetW = Math.min(nextSetW, maxByDemandW);
     }
 
-    const chargeBalanceCapW = exportRawW > 0
+    const heldChargeCommandW = balance.holdingLastCommand && nextSignedW < 0
+        ? Math.max(0, -nextSignedW)
+        : 0;
+    const chargeBalanceCapWBase = exportRawW > 0
         ? Math.max(0, currentChargeForBalancingW + exportRawW + desiredNvpW)
         : ((typeof battChargeW === 'number' && importRawNowW > desiredNvpW)
             ? Math.max(0, currentChargeForBalancingW)
             : 0);
+    const chargeBalanceCapW = Math.max(chargeBalanceCapWBase, heldChargeCommandW);
     if (nextSignedW < 0) {
         chargeDemandHardCapW = (typeof chargeDemandHardCapW === 'number')
             ? Math.min(chargeDemandHardCapW, chargeBalanceCapW)
@@ -2285,6 +2320,11 @@ if (targetW === 0 && selfDischargeEnabled) {
                     batteryPowerTrusted: battPowerTrusted,
                     lastTargetW: lastBalanceWForCharge,
                     lastTargetAllowed: isStorageBalanceSource(this._lastSource),
+                    // Auch im separaten PV-Ladepfad darf das Erreichen des NVP-Ziels
+                    // nicht als Stop interpretiert werden. Der letzte nicht-null Sollwert
+                    // bleibt aktiv, bis eine echte NVP-Abweichung oder Schutzgrenze eine
+                    // Korrektur bzw. einen ausdruecklichen Stop verlangt.
+                    holdLastNonZeroInDeadband: true,
                     maxDischargeCorrectionW: maxDelta,
                     maxChargeCorrectionW: pvMaxDeltaCfg > 0 ? pvMaxDeltaCfg : maxDelta,
                     feedbackMaxAgeMs: Math.min(staleMs, Math.max(1000, num(cfg.balanceFeedbackMaxAgeMs, 8000))),
@@ -2463,6 +2503,41 @@ if (targetW === 0 && selfDischargeEnabled) {
         }
 
         // ------------------------------------------------------------
+        // Zentrale PV-Ueberschuss-Verteilung
+        // ------------------------------------------------------------
+        // Das Lademanagement laeuft vor diesem Modul und reserviert nur den PV-Anteil,
+        // den PV-/Min+PV-Wallboxen nach der Kundeneinstellung wirklich nutzen duerfen.
+        // Der Speicher bekommt anschliessend das noch freie PV-Budget. Dadurch koennen
+        // Speicher und E-Mobilitaet denselben physikalischen PV-Ueberschuss nicht doppelt
+        // verplanen. Tarif-/Reserve-Netzladen bleibt davon bewusst unberuehrt.
+        try {
+            const budgetRuntime = this.adapter && this.adapter._emsBudget;
+            const allocationGate = budgetRuntime && budgetRuntime.gates && budgetRuntime.gates.pvAllocation
+                ? budgetRuntime.gates.pvAllocation
+                : null;
+            pvBudgetAllocationMode = allocationGate ? String(allocationGate.mode || '') : '';
+            pvBudgetRemainingBeforeStorageW = budgetRuntime && Number.isFinite(Number(budgetRuntime.remainingPvW))
+                ? Math.max(0, Number(budgetRuntime.remainingPvW))
+                : 0;
+            pvBudgetStorageAvailableW = pvBudgetRemainingBeforeStorageW;
+
+            if (budgetRuntime && targetW < 0 && source === 'pv') {
+                const pvCapW = pvBudgetStorageAvailableW;
+                if (Math.abs(targetW) > pvCapW) {
+                    targetW = -pvCapW;
+                    reason = `${reason} (zentrales PV-Restbudget ${Math.round(pvCapW)} W)`;
+                }
+                chargeDemandHardCapW = (typeof chargeDemandHardCapW === 'number' && Number.isFinite(chargeDemandHardCapW))
+                    ? Math.min(chargeDemandHardCapW, pvCapW)
+                    : pvCapW;
+                chargeDemandHardCapReason = 'Zentrales PV-Restbudget nach E-Mobilitaet';
+            }
+        } catch {
+            // Fehlt die zentrale Budget-Runtime, bleibt die bisherige lokale
+            // Speicherregelung als Rueckfall erhalten.
+        }
+
+        // ------------------------------------------------------------
         // Phase 2: Dispatcher-Diagnose (Policy-Request vs. finaler Setpoint)
         // ------------------------------------------------------------
         const _reqW = targetW;
@@ -2513,8 +2588,25 @@ if (targetW === 0 && selfDischargeEnabled) {
                 this._signLockUntilMs = 0;
                 this._signLockReason = '';
             } else {
-                // Kleine Zielwerte um 0 => 0 (Anti-Flattern)
-                if (Math.abs(targetW) < zeroBandW) {
+                // Ein im NVP-Zielband bewusst gehaltener Lade-/Entladesollwert darf
+                // nicht durch das allgemeine Anti-Flatter-Deadband auf 0 W fallen.
+                // 0 W ist bei den Speicherprofilen ein echter Stop-Befehl. Schutz-
+                // und Richtungswechselbedingungen setzen targetW bereits vorher
+                // explizit auf 0 und bleiben deshalb voll wirksam.
+                const heldTargetW = storageNvpBalanceDiag && Number.isFinite(Number(storageNvpBalanceDiag.heldTargetW))
+                    ? Number(storageNvpBalanceDiag.heldTargetW)
+                    : 0;
+                const preserveHeldNvpCommand = !!(
+                    storageNvpBalanceDiag
+                    && storageNvpBalanceDiag.holdingLastCommand === true
+                    && targetW !== 0
+                    && heldTargetW !== 0
+                    && Math.sign(targetW) === Math.sign(heldTargetW)
+                );
+
+                // Kleine neue Zielwerte um 0 => 0 (Anti-Flattern). Ein bereits
+                // wirksamer, gehaltener NVP-Sollwert ist hiervon ausgenommen.
+                if (!preserveHeldNvpCommand && Math.abs(targetW) < zeroBandW) {
                     targetW = 0;
                     // Diagnose: Der Sollwert wurde bewusst auf 0 gesetzt.
                     // (ohne Änderung wäre für den Betreiber nicht ersichtlich, warum keine Entladung/Ladung stattfindet)
@@ -2981,6 +3073,45 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         // verwendete Istleistung-plus-Differenz-Pfad sichtbar ist.
         await this._setStorageNvpBalanceDiag(storageNvpBalanceDiag);
 
+        // Den finalen PV-Ladesollwert fuer nachgelagerte Verbraucher im zentralen
+        // Budget reservieren. Die Reservierung reduziert nur remainingPvW, nicht
+        // das Netz-/Gesamtbudget, weil es sich um PV-Laden und nicht um zusaetzlichen
+        // Netzbezug handelt. FENECON-No-Write reserviert bewusst nichts, da dort das
+        // lokale Gateway ohne externen NexoWatt-Sollwert arbeitet.
+        try {
+            const budgetRuntime = this.adapter && this.adapter._emsBudget;
+            const pvSource = source === 'pv' || source === 'fenecon-extra-pv' || source === 'sungrow-assist';
+            if (!feneconNoWrite && budgetRuntime && typeof budgetRuntime.reserve === 'function' && targetW < 0 && pvSource) {
+                const chargeW = Math.max(0, -Number(targetW));
+                const remainingPvW = Number.isFinite(Number(budgetRuntime.remainingPvW))
+                    ? Math.max(0, Number(budgetRuntime.remainingPvW))
+                    : 0;
+                pvBudgetReservedW = Math.min(chargeW, remainingPvW);
+                const actualChargeW = battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW)
+                    ? Math.max(0, -battPowerW)
+                    : chargeW;
+                budgetRuntime.reserve({
+                    key: 'storage',
+                    app: 'storageControl',
+                    label: 'Speicher',
+                    priority: 150,
+                    actualW: actualChargeW,
+                    requestedW: chargeW,
+                    reserveW: 0,
+                    pvReserveW: pvBudgetReservedW,
+                    pvOnly: true,
+                    mode: pvBudgetAllocationMode || 'pv',
+                });
+            }
+        } catch {
+            // Budgetdiagnose darf die sichere Speicheransteuerung nicht abbrechen.
+        }
+
+        await this._setIfChanged('speicher.regelung.pvBudgetAllocationMode', pvBudgetAllocationMode);
+        await this._setIfChanged('speicher.regelung.pvBudgetRemainingBeforeStorageW', Math.round(pvBudgetRemainingBeforeStorageW));
+        await this._setIfChanged('speicher.regelung.pvBudgetStorageAvailableW', Math.round(pvBudgetStorageAvailableW));
+        await this._setIfChanged('speicher.regelung.pvBudgetReservedW', Math.round(pvBudgetReservedW));
+
         // ------------------------------------------------------------
         // Phase 2: Dispatcher-Diagnose-Zustände schreiben
         // ------------------------------------------------------------
@@ -3031,6 +3162,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 					appliedCorrectionW: Number.isFinite(Number(storageNvpBalanceDiag.appliedCorrectionW)) ? Math.round(Number(storageNvpBalanceDiag.appliedCorrectionW)) : null,
 					targetW: Number.isFinite(Number(storageNvpBalanceDiag.targetW)) ? Math.round(Number(storageNvpBalanceDiag.targetW)) : null,
 					measurementSkewMs: Number.isFinite(Number(storageNvpBalanceDiag.measurementSkewMs)) ? Math.round(Number(storageNvpBalanceDiag.measurementSkewMs)) : null,
+					holdingLastCommand: !!storageNvpBalanceDiag.holdingLastCommand,
+					heldTargetW: Number.isFinite(Number(storageNvpBalanceDiag.heldTargetW)) ? Math.round(Number(storageNvpBalanceDiag.heldTargetW)) : 0,
 				} : null,
                 soc: (typeof soc === 'number' && Number.isFinite(soc)) ? soc : null,
                 permissions: {
@@ -3070,6 +3203,12 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     requestedCount: (feneconAcMode && Number.isFinite(Number(evPriorityCaps.requestedCount))) ? Math.round(Number(evPriorityCaps.requestedCount)) : 0,
                     limitedWallboxes: (feneconAcMode && Number.isFinite(Number(evPriorityCaps.limitedWallboxes))) ? Math.round(Number(evPriorityCaps.limitedWallboxes)) : 0,
                 } : null,
+                pvAllocation: {
+                    mode: pvBudgetAllocationMode,
+                    remainingBeforeStorageW: Math.round(pvBudgetRemainingBeforeStorageW || 0),
+                    storageAvailableW: Math.round(pvBudgetStorageAvailableW || 0),
+                    storageReservedW: Math.round(pvBudgetReservedW || 0),
+                },
                 fenecon: feneconHybridConfigured ? {
                     hybridMode: !!feneconHybridActive,
                     configured: !!feneconHybridConfigured,
@@ -3277,6 +3416,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const maxChargeCorrectionW = Math.max(0, finite(ctx.maxChargeCorrectionW) ? Number(ctx.maxChargeCorrectionW) : maxDischargeCorrectionW);
         const lastTargetW = finite(ctx.lastTargetW) ? Number(ctx.lastTargetW) : 0;
         const lastTargetAllowed = ctx.lastTargetAllowed === true;
+        const holdLastNonZeroInDeadband = ctx.holdLastNonZeroInDeadband === true;
         const stepW = Math.max(0, finite(ctx.stepW) ? Number(ctx.stepW) : 0);
         const measurementSkewMs = (batteryAgeMs !== null && nvpAgeMs !== null)
             ? Math.abs(batteryAgeMs - nvpAgeMs)
@@ -3317,6 +3457,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 measurementSkewMs,
                 mode: 'missing-nvp',
                 outsideDeadband: false,
+                holdingLastCommand: false,
+                heldTargetW: 0,
                 rampManaged: false,
             };
         }
@@ -3351,12 +3493,26 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         let appliedCorrectionW = 0;
         let targetW = baseW;
         let mode = feedbackUsed ? 'feedback' : 'fallback';
+        let holdingLastCommand = false;
+        let heldTargetW = 0;
 
         if (!outsideDeadband) {
-            // Im Zielband keine neue Energieanforderung erzeugen. Wenn der letzte
-            // externe Sollwert nahe an der echten Leistung liegt, halten wir ihn,
-            // damit Messrauschen nicht als neuer Schreibwert sichtbar wird.
-            if (feedbackUsed && lastTargetAllowed && Math.sign(lastTargetW) === Math.sign(baseW) && Math.abs(lastTargetW - baseW) <= holdToleranceW) {
+            // Eigenverbrauchs-/PV-Regelung: 0 W ist bei den konfigurierten Speichern
+            // ein echter STOP-Befehl. Hat der letzte nicht-null Sollwert den NVP bereits
+            // ins Zielband gebracht, wird genau dieser Sollwert weiter geschrieben.
+            // Eine 0-W-Vorgabe erfolgt erst durch eine ausdrueckliche Schutz-/Stop-
+            // Bedingung (SoC, Deaktivierung, Richtungswechsel, fehlende Messung usw.).
+            // Das Halten erhoeht den Sollwert niemals und kann daher den frueheren
+            // Hochintegrationsfehler nicht wieder einfuehren.
+            if (holdLastNonZeroInDeadband && lastTargetAllowed && Math.abs(lastTargetW) > 0) {
+                targetW = lastTargetW;
+                rawTargetW = lastTargetW;
+                holdingLastCommand = true;
+                heldTargetW = lastTargetW;
+                mode = feedbackUsed ? 'feedback-hold-last-command' : 'fallback-hold-last-command';
+            // Standardpfade (z. B. Tarif) halten nur einen zur echten Istleistung
+            // passenden Sollwert. Dadurch bleibt deren bisheriges Verhalten erhalten.
+            } else if (feedbackUsed && lastTargetAllowed && Math.sign(lastTargetW) === Math.sign(baseW) && Math.abs(lastTargetW - baseW) <= holdToleranceW) {
                 targetW = lastTargetW;
                 rawTargetW = baseW;
                 mode = 'feedback-hold-command';
@@ -3435,6 +3591,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             measurementSkewMs,
             mode,
             outsideDeadband,
+            holdingLastCommand,
+            heldTargetW,
             // Auch der konservative Fallback begrenzt seinen Aufbau bereits selbst.
             // Deshalb darf die nachgelagerte Rampe niemals einen alten Sollwert wieder
             // in den aktuellen sicheren Balancing-Wert hineinziehen.
@@ -3778,6 +3936,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await this._setIfChanged('speicher.regelung.balanceFeedbackVerwendet', !!(active && ctx.feedbackUsed));
         await this._setIfChanged('speicher.regelung.balanceMessversatzMs', active ? n(ctx.measurementSkewMs) : null);
         await this._setIfChanged('speicher.regelung.balanceModus', active ? String(ctx.mode || '') : 'inactive');
+        await this._setIfChanged('speicher.regelung.balanceLetztenSollwertGehalten', !!(active && ctx.holdingLastCommand));
+        await this._setIfChanged('speicher.regelung.balanceGehaltenSollW', active ? n(ctx.heldTargetW, 0) : 0);
     }
 
     /**
@@ -4722,6 +4882,12 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.balanceFeedbackVerwendet', 'Speicher-Istleistung im NVP-Balancing verwendet', 'boolean', 'indicator', false);
         await mk('speicher.regelung.balanceMessversatzMs', 'Messversatz Batterie zu NVP (ms)', 'number', 'value.interval', null);
         await mk('speicher.regelung.balanceModus', 'Speicher NVP-Balancing Modus', 'string', 'text', 'inactive');
+        await mk('speicher.regelung.balanceLetztenSollwertGehalten', 'Letzten nicht-null NVP-Sollwert im Zielband gehalten', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.balanceGehaltenSollW', 'Im NVP-Zielband gehaltener Speicher-Sollwert (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.pvBudgetAllocationMode', 'PV-Ueberschuss Prioritaetsmodus', 'string', 'text', '');
+        await mk('speicher.regelung.pvBudgetRemainingBeforeStorageW', 'PV-Restbudget vor Speicher (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.pvBudgetStorageAvailableW', 'PV-Budget fuer Speicher (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.pvBudgetReservedW', 'Vom Speicher reserviertes PV-Budget (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.selfEntladenAktiviert', 'Eigenverbrauch-Entladen aktiviert', 'boolean', 'indicator', false);
         await mk('speicher.regelung.evcsSpeicherSchutzLastW', 'EVCS-Leistung mit Speicher-Schutz (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.evcsSpeicherSchutzWallboxen', 'Wallboxen mit Speicher-Schutz', 'number', 'value', 0);
