@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.8.89",
+  "version": "0.8.90",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -297,7 +297,8 @@
     "test:storagefarm-menu-appcenter-gate": "node scripts/verify-storagefarm-menu-appcenter-gate.js",
     "test:storage-sungrow-hybrid-profile": "node scripts/verify-storage-sungrow-hybrid-profile.js",
     "test:storage-sungrow-diagnostics-split-targets": "node scripts/verify-storage-sungrow-diagnostics-split-targets.js",
-    "test:storage-e3dc-rscp-profile": "node scripts/verify-storage-e3dc-rscp-profile.js"
+    "test:storage-e3dc-rscp-profile": "node scripts/verify-storage-e3dc-rscp-profile.js",
+    "test:storage-evcs-protect-vendor-profiles": "node scripts/verify-storage-evcs-protect-vendor-profiles.js"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",

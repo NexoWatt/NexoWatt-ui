@@ -1,3 +1,12 @@
+## 0.8.90
+
+- Wallbox-/EVCS-Speicherschutz herstellerübergreifend korrigiert.
+- Wallboxen ohne aktive Speicher-Mitnutzung werden jetzt als geschützte Last an die Speicherregelung übergeben.
+- Die Speicher-Eigenverbrauchsoptimierung verschiebt ihr NVP-Ziel um diese geschützte EVCS-Leistung, sodass nur der Hausverbrauch ohne Wallbox durch den Speicher abgedeckt wird.
+- Die Korrektur greift vor dem Hersteller-Schreibpfad und funktioniert dadurch mit Generic signed-DP, getrennten Lade-/Entlade-DPs, Sungrow Hybrid, FENECON/OpenEMS und E3/DC RSCP.
+- Neue Diagnosen: `chargingManagement.control.storageProtectedLoadW`, `chargingManagement.control.storageProtectedWallboxes`, `chargingManagement.control.storageAssistRequestedLoadW`, `speicher.regelung.evcsSpeicherSchutzLastW` und `speicher.regelung.evcsSpeicherSchutzNvpZielOffsetW`.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v392` erhöht.
+
 ## 0.8.89
 
 - Ergänzt das Herstellerprofil **E3/DC RSCP / ioBroker.e3dc-rscp** in der Einzel-Speicherregelung.

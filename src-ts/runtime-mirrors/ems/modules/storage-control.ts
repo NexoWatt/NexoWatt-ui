@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 69cfef217019ee5c70f06fdf77e9c82617d45d432ac3404c819d54852c592096
+ * Original-Hash: fe45b2ab77353c8c21148e5593f274224c99acd4b710c57a174e9eb6639f173a
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:e490bf02b6ecb49ff95069f0a20c082ceb91150108ead21635882bf00fccd7b1
+ * Quell-Hash: sha256:950f967472084877f597cb633de84d42d216fee40ba98ca01825a26159efa23e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -920,6 +920,42 @@ class SpeicherRegelungModule extends BaseModule {
         const importRawW = Math.max(0, nvpRawW);
         const exportRawW = Math.max(0, -nvpRawW);
 
+        // EVCS-Speicher-Schutz:
+        // Die Wallbox-Steuerung veroeffentlicht die aktuelle Ladeleistung der Ladepunkte,
+        // bei denen "Speicher schuetzen" aktiv ist. Diese Leistung darf von der
+        // Speicher-Eigenverbrauchsoptimierung nicht am NVP weggeregelt werden. Wir
+        // verschieben deshalb das NVP-Ziel herstellerneutral um diese EVCS-Leistung.
+        // Dadurch greift der Schutz auch bei Sungrow/FENECON/E3DC-Herstellerprofilen
+        // und bei getrennten Lade-/Entlade-Sollwerten, weil die Korrektur vor dem
+        // jeweiligen Hersteller-Schreibpfad erfolgt.
+        const protectedEvcsMaxAgeMs = Math.max(staleMs * 3, 60000);
+        const evcsStorageProtectedLoadWRaw = await this._readOwnNumberFresh('chargingManagement.control.storageProtectedLoadW', protectedEvcsMaxAgeMs);
+        const evcsStorageProtectedLoadW = Math.max(0, Number.isFinite(Number(evcsStorageProtectedLoadWRaw)) ? Number(evcsStorageProtectedLoadWRaw) : 0);
+        const evcsStorageProtectedWallboxesRaw = await this._readOwnNumberFresh('chargingManagement.control.storageProtectedWallboxes', protectedEvcsMaxAgeMs);
+        const evcsStorageProtectedWallboxes = Math.max(0, Number.isFinite(Number(evcsStorageProtectedWallboxesRaw)) ? Math.round(Number(evcsStorageProtectedWallboxesRaw)) : 0);
+        const evcsStorageAssistRequestedLoadWRaw = await this._readOwnNumberFresh('chargingManagement.control.storageAssistRequestedLoadW', protectedEvcsMaxAgeMs);
+        const evcsStorageAssistRequestedLoadW = Math.max(0, Number.isFinite(Number(evcsStorageAssistRequestedLoadWRaw)) ? Number(evcsStorageAssistRequestedLoadWRaw) : 0);
+        const evcsStorageProtectedNvpTargetShiftW = evcsStorageProtectedLoadW;
+        const importRawWithoutProtectedEvcsW = Math.max(0, importRawW - evcsStorageProtectedLoadW);
+
+        await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzLastW', Math.round(evcsStorageProtectedLoadW));
+        await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzWallboxen', evcsStorageProtectedWallboxes);
+        await this._setIfChanged('speicher.regelung.evcsSpeicherMitnutzungLastW', Math.round(evcsStorageAssistRequestedLoadW));
+        await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzNvpZielOffsetW', Math.round(evcsStorageProtectedNvpTargetShiftW));
+
+/**
+ * Code-Teil: stripProtectedEvcsLoadW
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const stripProtectedEvcsLoadW = (w) => Math.max(0, Math.max(0, Number(w) || 0) - evcsStorageProtectedLoadW);
+
         // NVP-Balancing-Hilfswerte fuer Eigenverbrauch/PV-Laden.
         // Wichtig: Bei Speicherregelung muss der naechste Sollwert immer aus
         // "aktueller Batterieleistung + aktueller NVP-Abweichung" entstehen.
@@ -999,13 +1035,13 @@ class SpeicherRegelungModule extends BaseModule {
 
             const loadTotalDerivedW = readCacheNumber('derived.core.building.loadTotalW', null);
             if (typeof loadTotalDerivedW === 'number' && Number.isFinite(loadTotalDerivedW) && loadTotalDerivedW >= 0) {
-                feneconAcLoadMemo = { w: Math.max(0, loadTotalDerivedW), source: 'derived.loadTotalW' };
+                feneconAcLoadMemo = { w: stripProtectedEvcsLoadW(loadTotalDerivedW), source: evcsStorageProtectedLoadW > 0 ? 'derived.loadTotalW-evcsProtected' : 'derived.loadTotalW' };
                 return feneconAcLoadMemo;
             }
 
             const loadTotalMappedW = readCacheNumber('consumptionTotal', null);
             if (typeof loadTotalMappedW === 'number' && Number.isFinite(loadTotalMappedW) && loadTotalMappedW >= 0) {
-                feneconAcLoadMemo = { w: Math.max(0, loadTotalMappedW), source: 'consumptionTotal' };
+                feneconAcLoadMemo = { w: stripProtectedEvcsLoadW(loadTotalMappedW), source: evcsStorageProtectedLoadW > 0 ? 'consumptionTotal-evcsProtected' : 'consumptionTotal' };
                 return feneconAcLoadMemo;
             }
 
@@ -1018,26 +1054,26 @@ class SpeicherRegelungModule extends BaseModule {
                     if (typeof c === 'number' && Number.isFinite(c)) consumersTotalW += Math.abs(c);
                 }
                 feneconAcLoadMemo = {
-                    w: Math.max(0, loadRestDerivedW + evTotalW + consumersTotalW),
-                    source: 'derived.loadRestW+slots',
+                    w: stripProtectedEvcsLoadW(loadRestDerivedW + evTotalW + consumersTotalW),
+                    source: evcsStorageProtectedLoadW > 0 ? 'derived.loadRestW+slots-evcsProtected' : 'derived.loadRestW+slots',
                 };
                 return feneconAcLoadMemo;
             }
 
             const dischargeNowW = (typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Math.max(0, battPowerW) : 0;
             feneconAcLoadMemo = {
-                w: Math.max(0, importRawW + dischargeNowW),
-                source: 'approx.import+battery',
+                w: Math.max(0, importRawWithoutProtectedEvcsW + dischargeNowW),
+                source: evcsStorageProtectedLoadW > 0 ? 'approx.import+battery-evcsProtected' : 'approx.import+battery',
             };
             return feneconAcLoadMemo;
         };
 
         const feneconHybridCtx = feneconHybridActive
-            ? await this._buildFeneconHybridContext({ cfg, staleMs, readCacheNumber, gridW, gridRawW })
+            ? await this._buildFeneconHybridContext({ cfg, staleMs, readCacheNumber, gridW, gridRawW, protectedEvcsLoadW: evcsStorageProtectedLoadW })
             : { active: false, configured: !!feneconHybridConfigured, farmBlocked: !!feneconHybridBlockedByFarm, mode: feneconHybridBlockedByFarm ? 'blocked-by-farm' : 'standard' };
 
         const sungrowHybridCtx = sungrowHybridActive
-            ? await this._buildSungrowHybridContext({ cfg, staleMs, readCacheNumber, gridW, gridRawW })
+            ? await this._buildSungrowHybridContext({ cfg, staleMs, readCacheNumber, gridW, gridRawW, protectedEvcsLoadW: evcsStorageProtectedLoadW })
             : { active: false, configured: !!sungrowHybridConfigured, mode: 'standard' };
 
         if (feneconHybridActive) {
@@ -1857,7 +1893,7 @@ if (typeof soc === 'number') {
 						reason = 'Tarif: Entladen blockiert (SoC-Min erreicht)';
 						source = 'tarif';
 					} else {
-						const targetImportW = Math.max(0, num(cfg.tariffTargetGridImportW, selfTargetGridW));
+						const targetImportW = Math.max(0, num(cfg.tariffTargetGridImportW, selfTargetGridW) + evcsStorageProtectedNvpTargetShiftW);
 						const deadbandW = Math.max(0, num(cfg.tariffImportThresholdW, selfImportThresholdW));
 
 						// Tarif-Entladung regelt am NVP.
@@ -1918,7 +1954,9 @@ if (typeof soc === 'number') {
 						const importRawNowW = Math.max(0, (typeof nvpRawW === 'number') ? nvpRawW : 0);
 						const measuredDischargeNowW = (typeof battW === 'number') ? Math.max(0, battW) : 0;
 						const safetyMarginW = 200;
-						const measuredDemandCapW = Math.max(0, importRawNowW + measuredDischargeNowW + safetyMarginW);
+						const protectedTariffImportW = Math.max(0, importRawNowW - evcsStorageProtectedLoadW);
+							const protectedTariffMarginW = protectedTariffImportW > 0 ? safetyMarginW : 0;
+							const measuredDemandCapW = Math.max(0, protectedTariffImportW + measuredDischargeNowW + protectedTariffMarginW);
 						// Ohne vertrauenswürdige Batterie-Istleistung darf der letzte Sollwert auch in
 						// der Deadband nicht als harte Obergrenze weiterleben. Sonst kann ein alter
 						// hoher Entladebefehl nach der Rampe erneut durchrutschen.
@@ -1997,7 +2035,8 @@ if (targetW === 0 && selfDischargeEnabled) {
         const currentDischargeW = (battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW))
             ? Math.max(0, battPowerW)
             : 0;
-        const feneconErrW = (typeof feneconNvpW === 'number') ? (feneconNvpW - selfTargetGridW) : 0;
+        const feneconTargetNvpW = selfTargetGridW + evcsStorageProtectedNvpTargetShiftW;
+        const feneconErrW = (typeof feneconNvpW === 'number') ? (feneconNvpW - feneconTargetNvpW) : 0;
         const feneconLoadLimitW = acLoadW > 0
             ? acLoadW
             : Math.max(0, importRawW + currentDischargeW);
@@ -2011,7 +2050,8 @@ if (targetW === 0 && selfDischargeEnabled) {
             nextSetW = 0;
         }
 
-        const feneconDemandCapW = Math.max(0, (typeof feneconNvpW === 'number' ? Math.max(0, feneconNvpW) : 0) + currentDischargeW + 200);
+        const feneconNonEvcsImportW = Math.max(0, (typeof feneconNvpW === 'number' ? Math.max(0, feneconNvpW) : 0) - evcsStorageProtectedLoadW);
+        const feneconDemandCapW = Math.max(0, feneconNonEvcsImportW + currentDischargeW + (feneconNonEvcsImportW > 0 ? 200 : 0));
         dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
             ? Math.min(dischargeDemandHardCapW, feneconDemandCapW)
             : feneconDemandCapW;
@@ -2034,7 +2074,7 @@ if (targetW === 0 && selfDischargeEnabled) {
                 reason = `Gateway AC: NVP-Balancing blockiert (SoC <= ${selfMinSoc}%)`;
                 source = 'reserve';
             } else if (typeof feneconNvpW === 'number' && feneconNvpW <= selfTargetGridW) {
-                reason = `Gateway AC: keine Entladung nötig (NVP ${Math.round(feneconNvpW)} W <= Ziel ${Math.round(selfTargetGridW)} W)`;
+                reason = `Gateway AC: keine Entladung nötig (NVP ${Math.round(feneconNvpW)} W <= Ziel ${Math.round(feneconTargetNvpW)} W inkl. EVCS-Schutz)`;
                 source = 'idle';
             }
         }
@@ -2058,7 +2098,7 @@ if (targetW === 0 && selfDischargeEnabled) {
     // Stabilität kommt hier aus Deadband + Schrittweite/Rampe im Dispatcher.
     const nvpRawW = (typeof gridRawW === 'number') ? gridRawW : gridW;      // roh (Fallback)
     const nvpCtrlW = (typeof nvpRawW === 'number') ? nvpRawW : gridW;       // aktuell für Regelung
-    const desiredNvpW = selfTargetGridW; // typischerweise kleiner Import (Default 100 W)
+    const desiredNvpW = selfTargetGridW + evcsStorageProtectedNvpTargetShiftW; // kleiner Haus-Import plus geschuetzte EVCS-Last
     const deadbandW = Math.max(0, selfImportThresholdW); // Start-/Stop-Schwelle gegen Flattern
 
     // Eigenverbrauch hat einen eigenen "Integrator": nur fortsetzen, wenn wir in der letzten Runde
@@ -2126,7 +2166,9 @@ if (targetW === 0 && selfDischargeEnabled) {
     const lastChargeNowW = (!battPowerTrusted && lastBalanceW < 0) ? Math.max(0, -lastBalanceW) : 0;
     const currentChargeForBalancingW = (typeof battChargeW === 'number') ? measuredChargeNowW : lastChargeNowW;
     const safetyMarginW = 200; // bewusst konservativ; Feintuning über selfTargetGridW/Deadband/Rampe
-    const maxByDemandW = Math.max(0, importRawNowW + measuredDischargeNowW + safetyMarginW);
+    const protectedSelfImportW = Math.max(0, importRawNowW - evcsStorageProtectedLoadW);
+    const protectedSelfMarginW = protectedSelfImportW > 0 ? safetyMarginW : 0;
+    const maxByDemandW = Math.max(0, protectedSelfImportW + measuredDischargeNowW + protectedSelfMarginW);
     if (Number.isFinite(maxByDemandW) && maxByDemandW >= 0) {
         dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
             ? Math.min(dischargeDemandHardCapW, maxByDemandW)
@@ -2731,7 +2773,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         if (sungrowHybridActive) {
             const ctx = sungrowHybridCtx || {};
             const srcNorm = String(source || '').toLowerCase();
-            const targetImportW = Math.max(0, num(cfg.sungrowTargetGridImportW, selfTargetGridW));
+            const targetImportW = Math.max(0, num(cfg.sungrowTargetGridImportW, selfTargetGridW) + evcsStorageProtectedNvpTargetShiftW);
             const assistBufferW = Math.max(0, num(cfg.sungrowAssistBufferW, 150));
             const dischargeOnlyOnImport = cfg.sungrowDischargeOnlyOnGridImport !== false;
             const pvPassthrough = cfg.sungrowPvPassthroughEnabled !== false;
@@ -2776,7 +2818,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             if (nvpBalanceNeeded) {
                 const currentDischargeForCapW = Math.max(0, (typeof battSignedNowW === 'number') ? battSignedNowW : Math.max(0, lastSungrowBalanceW));
                 const currentChargeForCapW = Math.max(0, (typeof battSignedNowW === 'number') ? -battSignedNowW : Math.max(0, -lastSungrowBalanceW));
-                const dischargeCapW = Math.max(0, importNowW + currentDischargeForCapW + assistBufferW);
+                const sungrowNonEvcsImportW = Math.max(0, importNowW - evcsStorageProtectedLoadW);
+                const dischargeCapW = Math.max(0, sungrowNonEvcsImportW + currentDischargeForCapW + (sungrowNonEvcsImportW > 0 ? assistBufferW : 0));
                 const chargeCapW = Math.max(0, exportNowW + currentChargeForCapW + assistBufferW);
 
                 if (nvpBalancedTargetW > 0) {
@@ -2855,7 +2898,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     reason = 'Sungrow Hybrid ESS: PV deckt die Last und NVP ist im Zielband – keine externe Entladung';
                     sungrowWriteMode = 'write-zero-pv-covered';
                 } else {
-                    const assistCapW = Math.max(0, importNowW - targetImportW + assistBufferW);
+                    const sungrowAssistNonEvcsImportW = Math.max(0, importNowW - evcsStorageProtectedLoadW);
+                    const assistCapW = Math.max(0, sungrowAssistNonEvcsImportW - num(cfg.sungrowTargetGridImportW, selfTargetGridW) + (sungrowAssistNonEvcsImportW > 0 ? assistBufferW : 0));
                     targetW = Math.min(Math.max(0, targetW), assistCapW);
                     if (targetW > 0) {
                         source = 'sungrow-assist';
@@ -2958,6 +3002,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 pvAwareTarifNetzladen: pvAwareTariff ? pvAwareTariff : null,
                 evcs: {
                     storageAssistReqW: (typeof evcsAssistReqW === 'number' && Number.isFinite(evcsAssistReqW)) ? Math.round(evcsAssistReqW) : 0,
+                    storageProtectedLoadW: Math.round(evcsStorageProtectedLoadW || 0),
+                    storageProtectedWallboxes: Math.round(evcsStorageProtectedWallboxes || 0),
+                    storageAssistRequestedLoadW: Math.round(evcsStorageAssistRequestedLoadW || 0),
+                    nvpTargetOffsetW: Math.round(evcsStorageProtectedNvpTargetShiftW || 0),
                 },
                 evPriority: evPriorityCaps ? {
                     active: !!(feneconAcMode && evPriorityCaps.active),
@@ -3235,7 +3283,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     _isFeneconGridControlConfigured(cfg = {}) {
         return this._isFeneconHybridControlConfigured(cfg);
     }
-    async _buildSungrowHybridContext({ cfg = {}, staleMs = 15000, readCacheNumber = null, gridW = null, gridRawW = null } = {}) {
+    async _buildSungrowHybridContext({ cfg = {}, staleMs = 15000, readCacheNumber = null, gridW = null, gridRawW = null, protectedEvcsLoadW = 0 } = {}) {
         const thresholdW = Math.max(0, num(cfg.sungrowPvThresholdW, 300));
         const loadCoverReserveW = Math.max(0, num(cfg.sungrowLoadCoverReserveW, 300));
         const dischargeThresholdW = Math.max(0, num(cfg.sungrowImportThresholdW, num(cfg.selfImportThresholdW, 100)));
@@ -3325,6 +3373,13 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             }
         }
 
+        const protectedEvcsW = Math.max(0, Number.isFinite(Number(protectedEvcsLoadW)) ? Number(protectedEvcsLoadW) : 0);
+        const loadWIncludingEvcs = loadW;
+        if (protectedEvcsW > 0) {
+            loadW = Math.max(0, loadW - protectedEvcsW);
+            loadSource = loadSource && loadSource !== 'missing' ? `${loadSource}-evcsProtected` : 'evcsProtected';
+        }
+
         const nvpW = (typeof gridRawW === 'number' && Number.isFinite(gridRawW))
             ? Number(gridRawW)
             : ((typeof gridW === 'number' && Number.isFinite(gridW)) ? Number(gridW) : null);
@@ -3364,6 +3419,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             pvSource,
             thresholdW,
             loadW,
+            loadWIncludingEvcs,
+            protectedEvcsLoadW: protectedEvcsW,
             loadSource,
             loadCoverReserveW,
             loadKnown,
@@ -4365,6 +4422,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.selfTargetGridImportW', 'Eigenverbrauch Ziel-Netzbezug (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.selfImportThresholdW', 'Eigenverbrauch Deadband (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.selfEntladenAktiviert', 'Eigenverbrauch-Entladen aktiviert', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.evcsSpeicherSchutzLastW', 'EVCS-Leistung mit Speicher-Schutz (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.evcsSpeicherSchutzWallboxen', 'Wallboxen mit Speicher-Schutz', 'number', 'value', 0);
+        await mk('speicher.regelung.evcsSpeicherMitnutzungLastW', 'EVCS-Leistung mit Speicher-Mitnutzung (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.evcsSpeicherSchutzNvpZielOffsetW', 'NVP-Zieloffset durch EVCS-Speicher-Schutz (W)', 'number', 'value.power', 0);
 
         // Sungrow-Hybrid-Diagnoseobjekte vor dem ersten zyklischen Schreiben anlegen.
         // Zusätzlich sichert _setIfChanged fehlende Runtime-States ab, falls ein Update
@@ -4488,6 +4549,26 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         try {
             const s = await this.adapter.getStateAsync(id);
             const n = Number(s ? s.val : NaN);
+            return Number.isFinite(n) ? n : null;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Code-Teil: _readOwnNumberFresh
+     * Zweck: Liest interne Diagnose-/Koordinationswerte nur, wenn sie frisch sind.
+     * Zusammenhang: EVCS-Speicher-Schutz darf einen Speicher nicht mit alten Wallbox-
+     * Leistungswerten sperren; deshalb wird der ioBroker-State-Zeitstempel hier hart
+     * gegen einen Maximalwert geprüft.
+     */
+    async _readOwnNumberFresh(id, maxAgeMs = 60000) {
+        try {
+            const s = await this.adapter.getStateAsync(id);
+            if (!s) return null;
+            const ts = Number(s.ts);
+            if (Number.isFinite(ts) && maxAgeMs > 0 && (Date.now() - ts) > maxAgeMs) return null;
+            const n = Number(s.val);
             return Number.isFinite(n) ? n : null;
         } catch {
             return null;

@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.89",
+    "version": "0.8.90",
     "news": {
+      "0.8.90": {
+        "de": "Version 0.8.90: Korrigiert den Wallbox-Speicherschutz herstellerübergreifend. Ladepunkte ohne Speicher-Mitnutzung verschieben jetzt das NVP-Ziel der Speicher-Eigenverbrauchsoptimierung, sodass der Speicher nur den Hausverbrauch ohne Wallbox abdeckt. Die Korrektur greift vor den Zielpfaden für signed/split-DPs, Sungrow, FENECON und E3/DC RSCP.",
+        "en": "Version 0.8.90: Fixes wallbox storage protection across manufacturer profiles. Charge points without storage assist now shift the storage self-consumption NVP target so the battery only covers house load excluding the wallbox. The correction is applied before the signed/split, Sungrow, FENECON and E3/DC RSCP target paths."
+      },
       "0.8.89": {
         "de": "Version 0.8.89: Ergänzt das Herstellerprofil E3/DC RSCP für die Einzel-Speicherregelung. Der ioBroker.e3dc-rscp Adapter wird über EMS.SET_POWER_MODE und EMS.SET_POWER_VALUE angesteuert; optionale PowerLimits und Diagnose-States wurden ergänzt. Die E3/DC-spezifischen Datenpunkte sind nur beim E3/DC-Herstellerprofil sichtbar.",
         "en": "Version 0.8.89: Adds the E3/DC RSCP manufacturer profile for single-storage control. The ioBroker.e3dc-rscp adapter is controlled via EMS.SET_POWER_MODE and EMS.SET_POWER_VALUE; optional power limits and diagnostic states were added. E3/DC-specific datapoints are only visible for the E3/DC manufacturer profile."
@@ -26,10 +30,6 @@
       "0.8.84": {
         "de": "Version 0.8.84: Koppelt die Heizstab-Betriebsart 0-W-Einspeisung/Forecast an die zentrale Budgetlogik. EVCS-Priorität, NVP-Messung und Speicherflüsse werden aus den vorhandenen EMS-/Lastmanagement-Werten genutzt; die bestehenden Heizstab-Stufenleistungen bleiben maßgeblich. Hybrid-Proben können nun über stabile NVP-/Speicher-/Budgetwerte bestätigt werden, auch wenn kein separater PV-DP-Anstieg sichtbar ist.",
         "en": "Version 0.8.84: Connects the heating-rod zero-export/forecast mode to the central budget logic. EVCS priority, NVP metering and storage flows use the existing EMS/load-management values; the configured heating-rod stage powers stay authoritative. Hybrid probes can now be confirmed via stable NVP/storage/budget values even when no separate PV datapoint rise is visible."
-      },
-      "0.8.83": {
-        "de": "Version 0.8.83: Verschiebt die Einzel-Speicherregelung in einen eigenen App-Center-Reiter und ergänzt AC/DC-Hybrid-Auswahl mit optionaler DC-/Hybrid-PV-Erzeugungszuordnung. Dieser PV-Wert wird als Messwert für Energiefluss, Historie und FENECON-/0-Einspeise-Kontext genutzt, nicht als Speicher-Sollwert.",
-        "en": "Version 0.8.83: Moves single-storage control into its own App Center tab and adds AC/DC-hybrid selection with an optional DC/hybrid PV generation mapping. This PV value is used as measurement context for energy flow, history and FENECON/zero-export handling, not as a battery setpoint."
       }
     },
     "title": "NexoWatt UI",
