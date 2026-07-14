@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/year-report.ts
- * Quell-Hash: sha256:d573168ee93013cc044df3effa7faf42b5709d41476dc43ed84da1662f7652eb
+ * Quell-Hash: sha256:a5e9239f6088995595d69f0b055e9570cbb33f70aa0f7f082cb0ac690d6f9294
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -985,13 +985,13 @@
         const t = document.getElementById('tabEvcs');
         if (t) t.classList.toggle('hidden', !showEvcs);
 
-        const sh = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
+        const sh = !!(cfg.featureVisibility && cfg.featureVisibility.hasSmartHome === true);
         const sl = document.getElementById('menuSmartHomeLink');
         if (sl) sl.classList.toggle('hidden', !sh);
         const st = document.getElementById('tabSmartHome');
         if (st) st.classList.toggle('hidden', !sh);
 
-        const sf = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
+        const sf = !!(cfg.featureVisibility && cfg.featureVisibility.hasStorageFarm === true);
         const sft = document.getElementById('tabStorageFarm');
         if (sft) sft.classList.toggle('hidden', !sf);
         const sfl = document.getElementById('menuStorageFarmLink');

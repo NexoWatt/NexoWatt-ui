@@ -1,3 +1,47 @@
+## 0.8.90
+
+- Wallbox-/EVCS-Speicherschutz herstellerübergreifend korrigiert.
+- Wallboxen ohne aktive Speicher-Mitnutzung werden jetzt als geschützte Last an die Speicherregelung übergeben.
+- Die Speicher-Eigenverbrauchsoptimierung verschiebt ihr NVP-Ziel um diese geschützte EVCS-Leistung, sodass nur der Hausverbrauch ohne Wallbox durch den Speicher abgedeckt wird.
+- Die Korrektur greift vor dem Hersteller-Schreibpfad und funktioniert dadurch mit Generic signed-DP, getrennten Lade-/Entlade-DPs, Sungrow Hybrid, FENECON/OpenEMS und E3/DC RSCP.
+- Neue Diagnosen: `chargingManagement.control.storageProtectedLoadW`, `chargingManagement.control.storageProtectedWallboxes`, `chargingManagement.control.storageAssistRequestedLoadW`, `speicher.regelung.evcsSpeicherSchutzLastW` und `speicher.regelung.evcsSpeicherSchutzNvpZielOffsetW`.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v392` erhöht.
+
+## 0.8.89
+
+- Ergänzt das Herstellerprofil **E3/DC RSCP / ioBroker.e3dc-rscp** in der Einzel-Speicherregelung.
+- Registriert die E3/DC-Steuerdatenpunkte `EMS.SET_POWER_MODE` und `EMS.SET_POWER_VALUE` als eigenen Speicher-Zielpfad.
+- Unterstützt optional `EMS.POWER_LIMITS_USED`, `EMS.MAX_CHARGE_POWER` und `EMS.MAX_DISCHARGE_POWER`.
+- Blendet E3/DC-spezifische Datenpunkte und Optionen nur beim E3/DC-Herstellerprofil ein.
+- Ergänzt Diagnose-States für E3/DC-RSCP-Schreibmodus, Moduscode, Wert, GRID_CHARGE und Schreibstatus.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v391` erhöht.
+
+## 0.8.88
+
+- Speicherregelung/Sungrow: fehlende Diagnose-Objekte `speicher.regelung.sungrowHybrid*` werden jetzt in `_ensureStates()` angelegt, damit ioBroker keine zyklischen `State ... has no existing object`-Warnungen mehr schreibt.
+- Speicherregelung/Eigenverbrauch: getrennte Lade-/Entlade-Sollwert-DPs werden jetzt auch einzeln unterstützt. Wenn nur eine Richtung gemappt ist, bleibt diese Richtung nutzbar; eine fehlende Richtung fällt bei vorhandenem signed-DP auf diesen zurück oder wird sicher auf `0 W` verriegelt.
+- Diagnose: `targetMode`, `splitTargetObjIds`, `lastWriteSplitJson` und `schreibStatus` zeigen jetzt sauber, ob `signed`, `split-charge-discharge`, `split-charge-only` oder `split-discharge-only` verwendet wird.
+- Test: `test:storage-sungrow-diagnostics-split-targets` prüft fehlende Sungrow-Diagnoseobjekte und alle Split-/signed-Zielpfade.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v390` erhöht.
+
+## 0.8.87
+
+- Speicherregelung/Sungrow Hybrid ESS: NVP-Balancing korrigiert. Bei Rest-Netzbezug oder Rest-Export wird jetzt die aktuelle Batterie-Istleistung bzw. der letzte gültige NVP-Balancing-Sollwert mit der aktuellen NVP-Abweichung verrechnet.
+- Sungrow: PV-deckender Betrieb setzt externe Lade-/Entladevorgaben nur noch auf `0 W`, wenn der NVP wirklich im Zielband liegt. Bei z. B. `700 W` Netzbezug wird weiter geregelt, bis der Zielbezug erreicht ist.
+- Sungrow: laufende Beladung plus aktueller NVP-Export wird genutzt; Beispiel `2,9 kW` Ladung und `2,9 kW` Export ergibt ca. `5,8 kW` Ladeziel statt weiterem Restexport.
+- Diagnose: zusätzliche `speicher.regelung.sungrowHybridNvp*`-States für Zielbezug, Deadband, Regelfehler, Balancing-Basis und Balancing-Ziel.
+- Test: `test:storage-sungrow-hybrid-profile` erweitert um Import-, Entlade- und Lade-Balancing-Fälle aus dem Feld.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v389` erhöht.
+
+## 0.8.86
+
+- AppCenter/Speicher: Herstellerprofil-Auswahl ergänzt (`Generic`, `FENECON/OpenEMS/FEMS`, `Sungrow Hybrid ESS`).
+- Speicherregelung: Sungrow-Hybrid-ESS-Modus ergänzt. Bei PV-deckender Leistung werden externe Lade-/Entladevorgaben auf `0 W` gesetzt, damit die interne Sungrow-PV-/Batterielogik nicht durch eine Entladeanforderung übersteuert wird.
+- Speicherregelung: Sungrow entlädt nur noch NVP-begrenzt bei echtem Netzbezug ohne ausreichende PV-Deckung; PV-Laden wird bei Sungrow nicht extern erzwungen.
+- Diagnose: neue `speicher.regelung.sungrowHybrid*`-States für Modus, Grund, PV/Last/NVP und Schreibmodus.
+- Tests: Regressionstest `test:storage-sungrow-hybrid-profile` ergänzt.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v388` erhöht.
+
 ## 0.8.85
 
 - Speicherfarm-Menü/Topbar: Sichtbarkeit jetzt strikt an `/config.featureVisibility.hasStorageFarm` gebunden. Dieses Flag entsteht nur aus AppCenter `storagefarm` installiert+aktiv und echten Farm-Datenpunkten.

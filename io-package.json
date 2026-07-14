@@ -1,35 +1,35 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.85",
+    "version": "0.8.91",
     "news": {
+      "0.8.91": {
+        "de": "Version 0.8.91: Korrigiert die Sichtbarkeit optionaler Kunden-Unterseiten. SmartHome und Speicherfarm erscheinen im Burger-Menü nur noch über /config.featureVisibility; alte Runtime-/Legacy-Flags können sie nicht mehr einblenden. Speicherfarm ist zusätzlich erst ab aktiver AppCenter-App und mindestens zwei echten Farm-Speichern sichtbar.",
+        "en": "Version 0.8.91: Fixes visibility of optional customer pages. SmartHome and storage farm are now shown in the burger menu only via /config.featureVisibility; stale runtime/legacy flags can no longer expose them. Storage farm additionally requires the active AppCenter app and at least two real farm storages."
+      },
+      "0.8.90": {
+        "de": "Version 0.8.90: Korrigiert den Wallbox-Speicherschutz herstellerübergreifend. Ladepunkte ohne Speicher-Mitnutzung verschieben jetzt das NVP-Ziel der Speicher-Eigenverbrauchsoptimierung, sodass der Speicher nur den Hausverbrauch ohne Wallbox abdeckt. Die Korrektur greift vor den Zielpfaden für signed/split-DPs, Sungrow, FENECON und E3/DC RSCP.",
+        "en": "Version 0.8.90: Fixes wallbox storage protection across manufacturer profiles. Charge points without storage assist now shift the storage self-consumption NVP target so the battery only covers house load excluding the wallbox. The correction is applied before the signed/split, Sungrow, FENECON and E3/DC RSCP target paths."
+      },
+      "0.8.89": {
+        "de": "Version 0.8.89: Ergänzt das Herstellerprofil E3/DC RSCP für die Einzel-Speicherregelung. Der ioBroker.e3dc-rscp Adapter wird über EMS.SET_POWER_MODE und EMS.SET_POWER_VALUE angesteuert; optionale PowerLimits und Diagnose-States wurden ergänzt. Die E3/DC-spezifischen Datenpunkte sind nur beim E3/DC-Herstellerprofil sichtbar.",
+        "en": "Version 0.8.89: Adds the E3/DC RSCP manufacturer profile for single-storage control. The ioBroker.e3dc-rscp adapter is controlled via EMS.SET_POWER_MODE and EMS.SET_POWER_VALUE; optional power limits and diagnostic states were added. E3/DC-specific datapoints are only visible for the E3/DC manufacturer profile."
+      },
+      "0.8.88": {
+        "de": "Version 0.8.88: Legt alle Sungrow-Hybrid-Diagnose-States vor dem zyklischen Schreiben an, damit keine ioBroker-Logflut durch fehlende Objekte entsteht. Die Speicherregelung berücksichtigt getrennte Lade-/Entlade-Sollwertpfade jetzt auch einzeln und nutzt den signed-Sollwert als Fallback, wenn eine Richtung nicht separat gemappt ist.",
+        "en": "Version 0.8.88: Creates all Sungrow hybrid diagnostic states before cyclic writes to avoid ioBroker log spam from missing objects. Storage control now supports separate charge/discharge target paths individually and uses the signed target as fallback when one direction is not mapped separately."
+      },
+      "0.8.87": {
+        "de": "Version 0.8.87: Korrigiert das Sungrow-Hybrid-ESS-NVP-Balancing. Die Speicherregelung verrechnet jetzt laufende Be-/Entladung mit der aktuellen NVP-Abweichung, damit Rest-Netzbezug über dem Zielband und Rest-Export nachgeregelt werden. PV-deckender Sungrow-Betrieb schreibt nur noch 0 W, wenn der NVP wirklich im Zielband liegt.",
+        "en": "Version 0.8.87: Fixes Sungrow Hybrid ESS NVP balancing. Storage control now combines the current charge/discharge power with the live NVP deviation so residual grid import above the target band and residual export are corrected. PV-covering Sungrow operation only writes 0 W when the NVP is actually within the target band."
+      },
+      "0.8.86": {
+        "de": "Version 0.8.86: Ergänzt Herstellerprofile in der Einzel-Speicherregelung und einen Sungrow-Hybrid-ESS-Modus. Sungrow-Anlagen setzen bei PV-deckender Leistung externe Lade-/Entladevorgaben auf 0 und entladen nur noch NVP-begrenzt bei echtem Netzbezug; FENECON/OpenEMS bleibt getrennt. Diagnosewerte für Sungrow-Hybrid wurden ergänzt.",
+        "en": "Version 0.8.86: Adds manufacturer profiles to single-storage control and a Sungrow Hybrid ESS mode. Sungrow systems now zero external charge/discharge setpoints when PV covers building load and only discharge with an NVP-capped assist on real grid import; FENECON/OpenEMS remains separate. Sungrow hybrid diagnostics were added."
+      },
       "0.8.85": {
         "de": "Version 0.8.85: Bindet den Speicherfarm-Menüpunkt strikt an AppCenter installiert+aktiv und echte Speicherfarm-Datenpunkte. Alte storageFarm-Runtime-States oder Legacy-Flags können den Kundenmenüpunkt nicht mehr sichtbar machen; Runtime-Hydration rettet nur noch Zeilen, aktiviert die App aber nicht automatisch.",
         "en": "Version 0.8.85: Strictly gates the storage farm menu entry on the App Center app being installed+enabled and real storage-farm datapoints. Stale storageFarm runtime states or legacy flags can no longer expose the customer menu item; runtime hydration only recovers rows and no longer auto-enables the app."
-      },
-      "0.8.84": {
-        "de": "Version 0.8.84: Koppelt die Heizstab-Betriebsart 0-W-Einspeisung/Forecast an die zentrale Budgetlogik. EVCS-Priorität, NVP-Messung und Speicherflüsse werden aus den vorhandenen EMS-/Lastmanagement-Werten genutzt; die bestehenden Heizstab-Stufenleistungen bleiben maßgeblich. Hybrid-Proben können nun über stabile NVP-/Speicher-/Budgetwerte bestätigt werden, auch wenn kein separater PV-DP-Anstieg sichtbar ist.",
-        "en": "Version 0.8.84: Connects the heating-rod zero-export/forecast mode to the central budget logic. EVCS priority, NVP metering and storage flows use the existing EMS/load-management values; the configured heating-rod stage powers stay authoritative. Hybrid probes can now be confirmed via stable NVP/storage/budget values even when no separate PV datapoint rise is visible."
-      },
-      "0.8.83": {
-        "de": "Version 0.8.83: Verschiebt die Einzel-Speicherregelung in einen eigenen App-Center-Reiter und ergänzt AC/DC-Hybrid-Auswahl mit optionaler DC-/Hybrid-PV-Erzeugungszuordnung. Dieser PV-Wert wird als Messwert für Energiefluss, Historie und FENECON-/0-Einspeise-Kontext genutzt, nicht als Speicher-Sollwert.",
-        "en": "Version 0.8.83: Moves single-storage control into its own App Center tab and adds AC/DC-hybrid selection with an optional DC/hybrid PV generation mapping. This PV value is used as measurement context for energy flow, history and FENECON/zero-export handling, not as a battery setpoint."
-      },
-      "0.8.82": {
-        "de": "Version 0.8.82: Ergänzt den FENECON/OpenEMS/FEMS-Speichermodus. Im Tages-/PV-Betrieb kann NexoWatt externe Speicheranforderungen pausieren, damit FEMS intern regelt; ein optionaler Assist greift nur zeitverzögert und NVP-begrenzt bei dauerhaftem Netzbezug.",
-        "en": "Version 0.8.82: Adds the FENECON/OpenEMS/FEMS storage mode. During day/PV operation NexoWatt can pause external battery setpoints so FEMS controls internally; an optional assist only intervenes after sustained grid import and is capped at NVP demand."
-      },
-      "0.8.81": {
-        "de": "Version 0.8.81: Speicherlogik fachlich neu abgesichert. Speicherregelung bleibt reine Eigenverbrauchsoptimierung, MultiUse führt Reserve/LSK/EVCS-Zonen, Speicherfarm verteilt nur Sollwerte; Entlade-Caps verhindern alte Sollwert-/Last-Rückkopplungen für Eigenverbrauch, Tarif und LSK.",
-        "en": "Version 0.8.81: Hardens the storage control policy routing. Storage control stays pure self-consumption, MultiUse owns reserve/peak/EVCS zones, the storage farm only dispatches targets; discharge caps prevent stale setpoint/load feedback for self-consumption, tariff and peak shaving."
-      },
-      "0.8.80": {
-        "de": "Version 0.8.80: Härtet zusätzlich die Speicher-Beladung. Alte negative Ladesollwerte laufen nicht mehr über die Rampe weiter, wenn PV-Export, Netz-Headroom oder die aktuelle Ladeanforderung auf weniger/0 W fallen; neue Diagnosewerte zeigen den Lade-Cap.",
-        "en": "Version 0.8.80: Also hardens storage charging. Old negative charge setpoints no longer continue through ramping when PV export, grid headroom or the active charge request drop to less/0 W; new diagnostics expose the charge cap."
-      },
-      "0.8.79": {
-        "de": "Version 0.8.79: Härtet die Speicher-Entladeregelung gegen Sollwert-Rückkopplung. Der letzte Entlade-Sollwert wird nicht mehr als echte Ist-Entladung für den NVP-Demand-Cap genutzt; Tarif- und Eigenverbrauchsmodus werden nach der Rampe hart auf die plausible Last begrenzt. Speicherfarm-Istleistungs-DPs, die auf Steuer-/Setpoint-DPs zeigen, werden ignoriert und diagnostiziert.",
-        "en": "Version 0.8.79: Hardens storage discharge control against setpoint feedback. The last discharge setpoint is no longer used as real measured discharge for the NVP demand cap; tariff and self-consumption modes are hard-capped after ramping to plausible load. Storage-farm feedback power datapoints that point to control/setpoint datapoints are ignored and diagnosed."
       }
     },
     "title": "NexoWatt UI",

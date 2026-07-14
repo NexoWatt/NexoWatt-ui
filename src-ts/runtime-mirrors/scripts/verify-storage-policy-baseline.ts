@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 582e9865d0581afb7fe22c6b1027c3dac3c58b3eed2a430f9fa5a05474a8d8b1
+ * Original-Hash: a61f6472ab6824f48c9c897ff8bb81a87a2d67e83224e3a07b87554511daa9f0
  */
 
 /**
@@ -98,7 +98,7 @@ for (const file of storageFiles) {
   must(file, 'const lskEnabledCfg = multiUseOwnsZones && (cfg.lskEnabled !== false);', 'LSK nur MultiUse');
   must(file, 'const evcsStorageAssistPolicyAllowed = !!multiUsePolicyActive;', 'EVCS-Assist nur MultiUse');
   must(file, 'const maxByDemandW = measuredDemandCapW;', 'Entlade-Demand-Cap ohne alten Sollwert');
-  must(file, 'const activeNvpDischargeSource = (source === \'eigenverbrauch\' || source === \'tarif\' || source === \'fenecon\' || source === \'fenecon-assist\' || source === \'lastspitze\');', 'Demand-Cap greift nach Rampe fuer alle NVP-Entladequellen');
+  must(file, 'const activeNvpDischargeSource = (source === \'eigenverbrauch\' || source === \'tarif\' || source === \'fenecon\' || source === \'fenecon-assist\' || source === \'sungrow-assist\' || source === \'lastspitze\');', 'Demand-Cap greift nach Rampe fuer alle NVP-Entladequellen');
   mustNot(file, 'const lskEnabledCfg = ignoreStaleMultiUsePolicy ? true', 'inaktiver MultiUse darf LSK nicht einschalten');
   mustNot(file, 'lskResponseHoldW', 'LSK darf alten Sollwert nicht als Demand-Hold nutzen');
 }

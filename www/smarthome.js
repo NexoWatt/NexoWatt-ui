@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/smarthome.ts
- * Quell-Hash: sha256:1d77d63ec60d72739ddd2d3ef5b91de5e6eecc661fcdb36bad7fc91e77cadf37
+ * Quell-Hash: sha256:090664230366791ca3446059b5d7cb363502bfeec6db45f6b8711d5e9a9fb498
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -10206,8 +10206,8 @@ async function nwLoadUiConfigFlags() {
     const sc = (cfg && cfg.settingsConfig) || {};
     const evcsAvailable = ((Number(sc.evcsConfiguredCount || 0) || (Array.isArray(sc.evcsList) ? sc.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
     nwEvcsCount = evcsAvailable ? Math.max(0, Math.round(Number(sc.evcsCount) || 0)) : 0;
-    nwSmartHomeEnabled = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
-    const storageFarmEnabled = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
+    nwSmartHomeEnabled = !!(cfg.featureVisibility && cfg.featureVisibility.hasSmartHome === true);
+    const storageFarmEnabled = !!(cfg.featureVisibility && cfg.featureVisibility.hasStorageFarm === true);
 
     // EVCS visibility
     const showEvcs = evcsAvailable && nwEvcsCount >= 2;

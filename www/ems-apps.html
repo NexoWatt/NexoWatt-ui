@@ -801,6 +801,20 @@
               </div>
             </div>
           </div>
+          <div class="nw-config-field-row">
+            <div class="nw-config-field-label">Herstellerprofil</div>
+            <div class="nw-config-field-control nw-config-field-control--stack">
+              <select id="storageVendorProfile" class="nw-config-input">
+                <option value="generic">Generic / Standard-Speicher</option>
+                <option value="fenecon-openems">FENECON / OpenEMS / FEMS</option>
+                <option value="sungrow-hybrid">Sungrow Hybrid ESS</option>
+                <option value="e3dc-rscp">E3/DC RSCP / ioBroker.e3dc-rscp</option>
+              </select>
+              <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
+                Herstellerprofile ändern nur den Schreibpfad und die Schutzlogik der Einzel-Speicherregelung. Grundlogik, NVP-Messung, SoC und Budget bleiben weiterhin zentral geführt.
+              </div>
+            </div>
+          </div>
           <div class="nw-config-field-row" id="storageDcPvHintRow" style="display:none;">
             <div class="nw-config-field-label">DC-/Hybrid-PV Leistung</div>
             <div class="nw-config-field-control nw-config-field-control--stack">
@@ -828,7 +842,7 @@
               </div>
             </div>
           </div>
-          <div class="nw-config-field-row">
+          <div class="nw-config-field-row" id="storageFeneconOptionsRow">
             <div class="nw-config-field-label">FENECON / OpenEMS</div>
             <div class="nw-config-field-control nw-config-field-control--stack">
               <label class="nw-config-checklabel" for="storageFeneconAcMode">
@@ -845,6 +859,53 @@
               </label>
               <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
                 Für FENECON/OpenEMS/FEMS mit eigener 0‑Einspeise-/PV-/Speicherlogik: Im Tages-/PV-Betrieb schreibt NexoWatt <b>keine</b> externe Batterie-Vorgabe, damit das lokale Gateway nach seinem Watchdog wieder selbst regelt. Der Assist greift nur zeitverzögert und NVP-begrenzt ein, wenn trotz SoC dauerhaft Netzbezug stehen bleibt. MultiUse, Tarif- und Peak-Shaving-Anforderungen bleiben priorisiert.
+              </div>
+            </div>
+          </div>
+          <div class="nw-config-field-row" id="storageSungrowOptionsRow" style="display:none;">
+            <div class="nw-config-field-label">Sungrow Hybrid ESS</div>
+            <div class="nw-config-field-control nw-config-field-control--stack">
+              <label class="nw-config-checklabel" for="storageSungrowPvPassthrough">
+                <input id="storageSungrowPvPassthrough" class="nw-config-checkbox" type="checkbox" />
+                <span>PV-/Tagesbetrieb durch Sungrow intern priorisieren</span>
+              </label>
+              <label class="nw-config-checklabel" for="storageSungrowZeroOnPvCoverage">
+                <input id="storageSungrowZeroOnPvCoverage" class="nw-config-checkbox" type="checkbox" />
+                <span>Bei PV-deckender Leistung Lade-/Entladevorgaben auf 0 setzen</span>
+              </label>
+              <label class="nw-config-checklabel" for="storageSungrowDischargeOnlyOnImport">
+                <input id="storageSungrowDischargeOnlyOnImport" class="nw-config-checkbox" type="checkbox" />
+                <span>Entladen nur bei echtem NVP-Netzbezug erlauben</span>
+              </label>
+              <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
+                Für Sungrow SH/RS/RT/MG-Hybrid-ESS: NexoWatt nutzt den NVP als Führungsgröße. Wenn PV den Gebäudeverbrauch deckt, werden externe Lade-/Entladevorgaben auf 0 gesetzt, damit Sungrow seine interne PV-/Batterielogik nicht durch einen Entlade-Sollwert übersteuert. Erst bei echtem Netzbezug ohne ausreichende PV-Deckung wird ein NVP-begrenzter Entlade-Assist geschrieben.
+              </div>
+            </div>
+          </div>
+          <div class="nw-config-field-row" id="storageE3dcOptionsRow" style="display:none;">
+            <div class="nw-config-field-label">E3/DC RSCP</div>
+            <div class="nw-config-field-control nw-config-field-control--stack">
+              <label class="nw-config-checklabel" for="storageE3dcRscpEnabled">
+                <input id="storageE3dcRscpEnabled" class="nw-config-checkbox" type="checkbox" />
+                <span>E3/DC SET_POWER über ioBroker.e3dc-rscp verwenden</span>
+              </label>
+              <label class="nw-config-checklabel" for="storageE3dcAllowGridCharge">
+                <input id="storageE3dcAllowGridCharge" class="nw-config-checkbox" type="checkbox" />
+                <span>Tarif-/Reserve-Netzladen als GRID_CHARGE erlauben</span>
+              </label>
+              <label class="nw-config-checklabel" for="storageE3dcUsePowerLimits">
+                <input id="storageE3dcUsePowerLimits" class="nw-config-checkbox" type="checkbox" />
+                <span>PowerLimits automatisch setzen</span>
+              </label>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <span class="nw-config-help" style="min-width:160px; opacity:0.85;">0-W-Vorgabe schreibt:</span>
+                <select id="storageE3dcZeroMode" class="nw-config-input" style="max-width:240px;">
+                  <option value="normal">NORMAL (interne Regelung)</option>
+                  <option value="idle">IDLE (halten/pausieren)</option>
+                </select>
+              </div>
+              <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
+                Für den ioBroker.e3dc-rscp Adapter nutzt NexoWatt <b>EMS.SET_POWER_MODE</b> und <b>EMS.SET_POWER_VALUE</b>. Positiver NexoWatt-Sollwert wird als DISCHARGE geschrieben, negativer als CHARGE bzw. bei erlaubtem Tarif-/Reserve-Netzladen als GRID_CHARGE. Die E3/DC-spezifischen Datenpunkte werden unten nur bei diesem Herstellerprofil eingeblendet.
               </div>
             </div>
           </div>

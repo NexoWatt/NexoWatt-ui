@@ -3714,7 +3714,7 @@ class NexoWattVis extends utils.Adapter {
       { id: 'charging',    enableFlag: 'enableChargingManagement', defaultInstalled: true },
       { id: 'peak',        enableFlag: 'enablePeakShaving' },
       { id: 'storage',     enableFlag: 'enableStorageControl' },
-      { id: 'storagefarm', enableFlag: 'enableStorageFarm' },
+      { id: 'storagefarm', enableFlag: 'enableStorageFarm', noLegacyDefault: true },
       { id: 'thermal',     enableFlag: 'enableThermalControl' },
       { id: 'heatingrod',  enableFlag: 'enableHeatingRodControl' },
       { id: 'bhkw',        enableFlag: 'enableBhkwControl' },
@@ -3769,7 +3769,7 @@ class NexoWattVis extends utils.Adapter {
       if (installed === undefined) {
         if (a.mandatory) installed = true;
         else if (a.defaultInstalled) installed = true;
-        else if (a.enableFlag && typeof n[a.enableFlag] === 'boolean') installed = !!n[a.enableFlag];
+        else if (!a.noLegacyDefault && a.enableFlag && typeof n[a.enableFlag] === 'boolean') installed = !!n[a.enableFlag];
         else installed = false;
       }
 
@@ -3779,7 +3779,7 @@ class NexoWattVis extends utils.Adapter {
       // - otherwise enabled == installed
       if (enabled === undefined) {
         if (a.mandatory) enabled = true;
-        else if (a.enableFlag && typeof n[a.enableFlag] === 'boolean') enabled = !!n[a.enableFlag];
+        else if (!a.noLegacyDefault && a.enableFlag && typeof n[a.enableFlag] === 'boolean') enabled = !!n[a.enableFlag];
         else enabled = installed;
       }
 
@@ -4021,6 +4021,11 @@ class NexoWattVis extends utils.Adapter {
   async loadInstallerConfigFromState() {
     try {
       const baseNative = (this.config && typeof this.config === 'object') ? this.config : {};
+      // Kunden-Navigation: Admin-native Schalter dürfen nicht durch alte Installer-Patches
+      // übersteuert werden. Wir merken uns deshalb den nativen Stand vor der
+      // App-Center-/Installer-Hydration; /config nutzt diesen Snapshot für optionale
+      // Kundenunterseiten wie SmartHome.
+      try { this._nwNativeConfigBase = this._nwDeepClone ? (this._nwDeepClone(baseNative) || {}) : JSON.parse(JSON.stringify(baseNative || {})); } catch (_eNativeSnap) { this._nwNativeConfigBase = baseNative || {}; }
 
       let patch = {};
       let needPersist = false;
@@ -4083,6 +4088,9 @@ class NexoWattVis extends utils.Adapter {
       if (norm.changed) needPersist = true;
 
       this._nwInstallerConfigPatch = patch;
+      // Roh-Patch separat merken: Sichtbarkeitsentscheidungen sollen nicht durch
+      // automatisch aus Legacy-Flags normalisierte App-Zustände verfälscht werden.
+      try { this._nwInstallerConfigRawPatch = this._nwDeepClone ? (this._nwDeepClone(patch) || {}) : JSON.parse(JSON.stringify(patch || {})); } catch (_eRawPatchSnap) { this._nwInstallerConfigRawPatch = patch || {}; }
 
       // Apply patch as installer SoT (replace installer-managed sections)
       this.config = this.nwApplyInstallerPatchToRuntimeConfig(baseNative, patch);
@@ -18813,9 +18821,35 @@ app.get('/config', (req, res) => {
         return ['socId', 'socDp', 'chargePowerId', 'chargeDp', 'dischargePowerId', 'dischargeDp', 'signedPowerId', 'signedPowerDp', 'powerId'].some((key) => String(r[key] || '').trim());
       };
       // Stale runtime states from older builds must not expose the customer Speicherfarm page.
-      // The page is visible only when the App-Center app is active and at least one real farm DP exists.
-      const storageFarmConfigured = storageRowsFromConfig.some(storageFarmRowHasRealDatapoint);
+      // Die Kunden-Unterseite ist nur sinnvoll, wenn die App-Center-App aktiv ist UND
+      // mindestens zwei echte Farm-Speicher konfiguriert sind. Einzel-Speicher-Anlagen
+      // laufen über die normale Speicherregelung und dürfen keinen Farm-Menüpunkt zeigen.
+      const storageFarmConfiguredCount = storageRowsFromConfig.filter(storageFarmRowHasRealDatapoint).length;
+      const storageFarmConfigured = storageFarmConfiguredCount >= 2;
       const storageFarmAvailable = !!(storageFarmAppActive && storageFarmConfigured);
+
+      const smartHomeAdminEnabled = (() => {
+        try {
+          const nativeCfg = (this._nwNativeConfigBase && typeof this._nwNativeConfigBase === 'object') ? this._nwNativeConfigBase : {};
+          const nativeSmartHome = (nativeCfg.smartHome && typeof nativeCfg.smartHome === 'object') ? nativeCfg.smartHome : null;
+          if (nativeSmartHome && typeof nativeSmartHome.enabled === 'boolean') return nativeSmartHome.enabled === true;
+        } catch (_e) {}
+        return !!(cfg.smartHome && cfg.smartHome.enabled);
+      })();
+      const smartHomeAppCenterActive = (() => {
+        try {
+          const emsApps = (cfg && cfg.emsApps && typeof cfg.emsApps === 'object') ? cfg.emsApps : {};
+          const apps = (emsApps.apps && typeof emsApps.apps === 'object') ? emsApps.apps : {};
+          const app = (apps.smartHome && typeof apps.smartHome === 'object')
+            ? apps.smartHome
+            : ((apps.smarthome && typeof apps.smarthome === 'object') ? apps.smarthome : null);
+          return !!(app && app.installed === true && app.enabled === true);
+        } catch (_e) {
+          return false;
+        }
+      })();
+      const smartHomeCustomerEnabled = !!(smartHomeAdminEnabled || smartHomeAppCenterActive);
+      const smartHomeForConfig = Object.assign({}, (cfg.smartHome && typeof cfg.smartHome === 'object') ? cfg.smartHome : {}, { enabled: smartHomeCustomerEnabled });
 
       /**
        * Code-Teil: featureVisibilityTsPreview
@@ -18880,7 +18914,7 @@ app.get('/config', (req, res) => {
             evcsProofs,
             storageFarmEnabled: storageFarmAppActive,
             storageFarmProofs,
-            smartHomeEnabled: !!(cfg.smartHome && cfg.smartHome.enabled),
+            smartHomeEnabled: smartHomeCustomerEnabled,
             weatherEnabled: !!(cfg && cfg.settings && cfg.settings.weatherEnabled) || !!(this.stateCache && this.stateCache['settings.weatherEnabled'] && this.stateCache['settings.weatherEnabled'].value === true),
             weatherHasData,
             aiAdvisorInstalled: !!cfg.enableAiAdvisor,
@@ -18889,7 +18923,7 @@ app.get('/config', (req, res) => {
           const runtime = {
             hasEvcs: evcsAvailable,
             hasStorageFarm: storageFarmAvailable,
-            hasSmartHome: !!(cfg.smartHome && cfg.smartHome.enabled),
+            hasSmartHome: smartHomeCustomerEnabled,
             hasWeather: visibility.hasWeather,
             hasAiAdvisor: !!cfg.enableAiAdvisor && aiCustomerEnabled,
           };
@@ -18937,7 +18971,7 @@ app.get('/config', (req, res) => {
         return {
           hasEvcs: evcsAvailable,
           hasStorageFarm: storageFarmAvailable,
-          hasSmartHome: !!(cfg.smartHome && cfg.smartHome.enabled),
+          hasSmartHome: smartHomeCustomerEnabled,
           hasWeather: (!!(cfg && cfg.settings && cfg.settings.weatherEnabled) || !!(this.stateCache && this.stateCache['settings.weatherEnabled'] && this.stateCache['settings.weatherEnabled'].value === true)) && weatherHasData,
           hasAiAdvisor: !!cfg.enableAiAdvisor && aiCustomerEnabled,
         };
@@ -19290,10 +19324,11 @@ settingsConfig: {
           evcsMaxPowerKw: (cfg && cfg.settingsConfig && Number(cfg.settingsConfig.evcsMaxPowerKw)) || 11,
           evcsList: evcsAvailableEffective ? evcsListForConfig : []
         },
-        smartHome: cfg.smartHome || {},
+        smartHome: smartHomeForConfig,
         smartHomeEnabled: smartHomeEnabledEffective,
         storageFarmEnabled: storageFarmAvailableEffective,
         storageFarmAppActive: storageFarmAppActive,
+        storageFarmConfiguredCount: storageFarmConfiguredCount,
         ems: {
           chargingEnabled: inferChargingEnabled(),
           evcsAvailable: evcsAvailableEffective,
@@ -19303,6 +19338,7 @@ settingsConfig: {
           storageEnabled: boolOr(cfg.enableStorageControl, false),
           storageFarmEnabled: storageFarmAvailableEffective,
           storageFarmAppActive: storageFarmAppActive,
+          storageFarmConfiguredCount: storageFarmConfiguredCount,
           heatingRodEnabled: boolOr(cfg.enableHeatingRodControl, false),
           thresholdEnabled: boolOr(cfg.enableThresholdControl, false),
           relayEnabled: boolOr(cfg.enableRelayControl, false),

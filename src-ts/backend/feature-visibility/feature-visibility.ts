@@ -40,14 +40,17 @@ export function hasEvcsPresence(proofs: ReadonlyArray<EvcsPresenceProof | undefi
  * Entscheidet, ob wirklich ein Speicherfarm-Speicher konfiguriert ist.
  *
  * Wichtig:
- * Die Farm wird nur sichtbar, wenn mindestens ein Farmspeicher echte Datenpunkte besitzt.
+ * Die Farm wird nur sichtbar, wenn mindestens zwei Farmspeicher echte Datenpunkte besitzen.
+ * Einzel-Speicher-Anlagen laufen über die normale Speicherregelung und dürfen keinen
+ * Speicherfarm-Menüpunkt im Kundenfrontend öffnen.
  */
 export function hasStorageFarmPresence(proofs: ReadonlyArray<StorageFarmPresenceProof | undefined>): boolean {
-  return proofs.some((proof) => {
+  const realCount = proofs.filter((proof) => {
     if (!proof) return false;
     if (proof.hasAnyRealDatapoint) return true;
     return hasText(proof.socDp) || hasText(proof.chargeDp) || hasText(proof.dischargeDp) || hasText(proof.signedPowerDp);
-  });
+  }).length;
+  return realCount >= 2;
 }
 
 /** Eingaben für die zentrale Sichtbarkeitsentscheidung. */

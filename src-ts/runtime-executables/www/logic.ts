@@ -3703,12 +3703,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if(l) l.classList.toggle('hidden', !showEvcs);
     const t=document.getElementById('tabEvcs');
     if(t) t.classList.toggle('hidden', !showEvcs);
-    const sh = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
+    const sh = !!(cfg.featureVisibility && cfg.featureVisibility.hasSmartHome === true);
     const sl = document.getElementById('menuSmartHomeLink');
     if (sl) sl.classList.toggle('hidden', !sh);
     const st = document.getElementById('tabSmartHome');
     if (st) st.classList.toggle('hidden', !sh);
-    const sf = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
+    const sf = !!(cfg.featureVisibility && cfg.featureVisibility.hasStorageFarm === true);
     const sfMenu = document.getElementById('menuStorageFarmLink');
     if (sfMenu) sfMenu.classList.toggle('hidden', !sf);
     const sfTab = document.getElementById('tabStorageFarm');

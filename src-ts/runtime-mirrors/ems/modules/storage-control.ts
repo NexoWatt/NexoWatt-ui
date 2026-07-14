@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 67e2df7de2309c652f636ad4029039b6a69b355ab7387b900293e94d39cc843f
+ * Original-Hash: fe45b2ab77353c8c21148e5593f274224c99acd4b710c57a174e9eb6639f173a
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:4d6688025ec8401b808b944956296a857494f59dd800db4114d4a57b3989f519
+ * Quell-Hash: sha256:950f967472084877f597cb633de84d42d216fee40ba98ca01825a26159efa23e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -364,6 +364,20 @@ class SpeicherRegelungModule extends BaseModule {
         this._feneconAssistReleaseSinceMs = 0;
         this._feneconAssistActive = false;
 
+        // Sungrow Hybrid ESS Sondermodus:
+        // Der SH/RS/RT/MG-Hybrid fuehrt PV und Batterie intern. NexoWatt darf
+        // deshalb im PV-deckenden Betrieb keine Entladung gegen diese interne
+        // Logik anfordern, sondern setzt externe Vorgaben auf 0 und greift nur
+        // NVP-begrenzt bei echtem Netzbezug ohne PV-Deckung ein.
+        this._sungrowHybridLastMode = '';
+
+        // E3/DC RSCP Sondermodus:
+        // Der ioBroker.e3dc-rscp Adapter steuert den Speicher ueber zwei gekoppelte
+        // EMS-Datenpunkte: SET_POWER_MODE und SET_POWER_VALUE. Dieser Marker dient
+        // nur der Diagnose, damit nach Profilwechseln keine alten Statusmeldungen
+        // stehen bleiben.
+        this._e3dcRscpLastMode = '';
+
     }
 
     /**
@@ -512,6 +526,24 @@ class SpeicherRegelungModule extends BaseModule {
                     this._feneconAssistImportSinceMs = 0;
                     this._feneconAssistReleaseSinceMs = 0;
                 }
+                if (this._isSungrowHybridControlConfigured(cfg) || this._sungrowHybridLastMode) {
+                    await this._setSungrowHybridDiag({
+                        active: false,
+                        mode: 'disabled',
+                        reason: 'Speicherregelung deaktiviert – Sungrow-Herstellerprofil in Ruhe',
+                        writeMode: 'disabled',
+                    });
+                    this._sungrowHybridLastMode = 'disabled';
+                }
+                if (this._isE3dcRscpControlConfigured(cfg) || this._e3dcRscpLastMode) {
+                    await this._setE3dcRscpDiag({
+                        active: false,
+                        mode: 'disabled',
+                        reason: 'Speicherregelung deaktiviert – E3/DC-RSCP-Schreibpfad in Ruhe',
+                        writeMode: 'disabled',
+                    });
+                    this._e3dcRscpLastMode = 'disabled';
+                }
             } catch {
                 // ignore
             }
@@ -533,15 +565,29 @@ class SpeicherRegelungModule extends BaseModule {
         await this._setIfChanged('speicher.regelung.aktivSpeicherfarm', !!hasFarmSetpoints);
 
         const hasSignedTarget = this.dp ? !!this.dp.getEntry('st.targetPowerW') : false;
-        const hasSplitTarget = this.dp ? (!!this.dp.getEntry('st.targetChargePowerW') && !!this.dp.getEntry('st.targetDischargePowerW')) : false;
-        const hasTarget = hasSignedTarget || hasSplitTarget;
+        const hasChargeTarget = this.dp ? !!this.dp.getEntry('st.targetChargePowerW') : false;
+        const hasDischargeTarget = this.dp ? !!this.dp.getEntry('st.targetDischargePowerW') : false;
+        // Herstellerprofile koennen entweder einen bidirektionalen signed-Sollwert
+        // oder getrennte Lade-/Entlade-DPs anbieten. Fuer Feldanlagen darf auch ein
+        // einzelner Split-DP als gueltiger Zielpfad gelten; die fehlende Richtung wird
+        // spaeter in _applyTargetW sauber gesperrt bzw. auf signed fallback gesetzt.
+        const hasSplitTarget = hasChargeTarget || hasDischargeTarget;
+        const storageVendorProfile = this._getStorageVendorProfile(cfg);
+        const e3dcRscpConfigured = this._isE3dcRscpControlConfigured(cfg);
+        const hasE3dcSetPowerTarget = e3dcRscpConfigured && this.dp
+            ? !!(this.dp.getEntry('st.e3dcSetPowerMode') && this.dp.getEntry('st.e3dcSetPowerValueW'))
+            : false;
+        const hasTarget = hasSignedTarget || hasSplitTarget || hasE3dcSetPowerTarget;
         const feneconHybridConfigured = this._isFeneconHybridControlConfigured(cfg);
+        const sungrowHybridConfigured = this._isSungrowHybridControlConfigured(cfg);
         // FENECON/OpenEMS ist kein Speicherfarm-Blocker mehr:
         // Der No-Write-Entscheid liegt vor _applyTargetW(). Bei Tages-/PV-Pass-through
         // wird dadurch weder ein Einzel-Sollwert noch ein Farm-Sollwert geschrieben.
         // Bei uebergeordneten Policies (MultiUse/Peak/Tarif/Reserve) oder Assist darf
         // die Speicherfarm den erzeugten Zielwert weiter wie gewohnt verteilen.
         const feneconHybridActive = !!feneconHybridConfigured;
+        const sungrowHybridActive = !!sungrowHybridConfigured;
+        await this._setIfChanged('speicher.regelung.herstellerprofil', storageVendorProfile);
         const feneconHybridBlockedByFarm = false;
 
         if (controlMode !== 'targetPower') {
@@ -557,8 +603,8 @@ class SpeicherRegelungModule extends BaseModule {
         if (!hasTarget && !hasFarmSetpoints) {
             await this._setIfChanged('speicher.regelung.requestW', 0);
             await this._setIfChanged('speicher.regelung.requestQuelle', 'aus');
-            await this._setIfChanged('speicher.regelung.requestGrund', 'Sollleistung-Datenpunkt fehlt: signed Ziel oder getrennte Lade-/Entlade-Sollwerte');
-            await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({ ts: Date.now(), reqW: 0, reason: 'Sollleistung-Datenpunkt fehlt: signed Ziel oder getrennte Lade-/Entlade-Sollwerte', src: 'aus' }));
+            await this._setIfChanged('speicher.regelung.requestGrund', 'Sollleistung-Datenpunkt fehlt: signed Ziel, getrennte Lade-/Entlade-Sollwerte oder E3/DC SET_POWER_MODE + SET_POWER_VALUE');
+            await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({ ts: Date.now(), reqW: 0, reason: 'Sollleistung-Datenpunkt fehlt: signed Ziel, getrennte Lade-/Entlade-Sollwerte oder E3/DC SET_POWER_MODE + SET_POWER_VALUE', src: 'aus' }));
 
             await this._applyTargetW(0, 'Sollleistung-Datenpunkt fehlt: signed Ziel oder getrennte Lade-/Entlade-Sollwerte', 'aus');
             return;
@@ -744,6 +790,15 @@ class SpeicherRegelungModule extends BaseModule {
         // keine externe Vorgabe, damit Gateway selbst weiterregelt und nicht durch eine
         // stale/geschätzte NexoWatt-Vorgabe festgehalten wird.
         if (typeof gridW !== 'number') {
+            if (sungrowHybridActive) {
+                await this._setSungrowHybridDiag({
+                    active: true,
+                    mode: 'no-grid-zero',
+                    reason: 'Sungrow Hybrid ESS: NVP-Messung fehlt – externe Lade-/Entladevorgaben werden sicher auf 0 gesetzt',
+                    writeMode: 'write-zero-no-grid',
+                    targetW: 0,
+                });
+            }
             await this._setIfChanged('speicher.regelung.requestW', 0);
             await this._setIfChanged('speicher.regelung.requestQuelle', 'aus');
             await this._setIfChanged('speicher.regelung.requestGrund', 'Netzleistung fehlt oder zu alt');
@@ -865,6 +920,68 @@ class SpeicherRegelungModule extends BaseModule {
         const importRawW = Math.max(0, nvpRawW);
         const exportRawW = Math.max(0, -nvpRawW);
 
+        // EVCS-Speicher-Schutz:
+        // Die Wallbox-Steuerung veroeffentlicht die aktuelle Ladeleistung der Ladepunkte,
+        // bei denen "Speicher schuetzen" aktiv ist. Diese Leistung darf von der
+        // Speicher-Eigenverbrauchsoptimierung nicht am NVP weggeregelt werden. Wir
+        // verschieben deshalb das NVP-Ziel herstellerneutral um diese EVCS-Leistung.
+        // Dadurch greift der Schutz auch bei Sungrow/FENECON/E3DC-Herstellerprofilen
+        // und bei getrennten Lade-/Entlade-Sollwerten, weil die Korrektur vor dem
+        // jeweiligen Hersteller-Schreibpfad erfolgt.
+        const protectedEvcsMaxAgeMs = Math.max(staleMs * 3, 60000);
+        const evcsStorageProtectedLoadWRaw = await this._readOwnNumberFresh('chargingManagement.control.storageProtectedLoadW', protectedEvcsMaxAgeMs);
+        const evcsStorageProtectedLoadW = Math.max(0, Number.isFinite(Number(evcsStorageProtectedLoadWRaw)) ? Number(evcsStorageProtectedLoadWRaw) : 0);
+        const evcsStorageProtectedWallboxesRaw = await this._readOwnNumberFresh('chargingManagement.control.storageProtectedWallboxes', protectedEvcsMaxAgeMs);
+        const evcsStorageProtectedWallboxes = Math.max(0, Number.isFinite(Number(evcsStorageProtectedWallboxesRaw)) ? Math.round(Number(evcsStorageProtectedWallboxesRaw)) : 0);
+        const evcsStorageAssistRequestedLoadWRaw = await this._readOwnNumberFresh('chargingManagement.control.storageAssistRequestedLoadW', protectedEvcsMaxAgeMs);
+        const evcsStorageAssistRequestedLoadW = Math.max(0, Number.isFinite(Number(evcsStorageAssistRequestedLoadWRaw)) ? Number(evcsStorageAssistRequestedLoadWRaw) : 0);
+        const evcsStorageProtectedNvpTargetShiftW = evcsStorageProtectedLoadW;
+        const importRawWithoutProtectedEvcsW = Math.max(0, importRawW - evcsStorageProtectedLoadW);
+
+        await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzLastW', Math.round(evcsStorageProtectedLoadW));
+        await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzWallboxen', evcsStorageProtectedWallboxes);
+        await this._setIfChanged('speicher.regelung.evcsSpeicherMitnutzungLastW', Math.round(evcsStorageAssistRequestedLoadW));
+        await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzNvpZielOffsetW', Math.round(evcsStorageProtectedNvpTargetShiftW));
+
+/**
+ * Code-Teil: stripProtectedEvcsLoadW
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const stripProtectedEvcsLoadW = (w) => Math.max(0, Math.max(0, Number(w) || 0) - evcsStorageProtectedLoadW);
+
+        // NVP-Balancing-Hilfswerte fuer Eigenverbrauch/PV-Laden.
+        // Wichtig: Bei Speicherregelung muss der naechste Sollwert immer aus
+        // "aktueller Batterieleistung + aktueller NVP-Abweichung" entstehen.
+        // Sonst bleibt bei laufender Ladung z. B. 2,9 kW Export stehen, weil nur
+        // der neue NVP-Export geschrieben wird statt "alte Ladung + neuer Export".
+        const isStorageBalanceSource = (src) => {
+            const x = String(src || '').toLowerCase();
+            return x === 'eigenverbrauch' || x === 'pv' || x === 'sungrow-hybrid' || x === 'sungrow-assist' || x === 'fenecon' || x === 'fenecon-assist';
+        };
+/**
+ * Code-Teil: getLastStorageBalanceTargetW
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const getLastStorageBalanceTargetW = () => {
+            const last = Number(this._lastTargetW);
+            if (!Number.isFinite(last)) return 0;
+            return isStorageBalanceSource(this._lastSource) ? last : 0;
+        };
+
         // Gateway AC: Lastreferenz für den AC-Teil des Speichers.
         // Wichtig: Die eigentliche Sollleistung wird weiter unten am NVP bilanziert,
         // damit PV-Überschuss-/EVCS-Situationen nicht zu Batterieentladung in die Einspeisung führen.
@@ -918,13 +1035,13 @@ class SpeicherRegelungModule extends BaseModule {
 
             const loadTotalDerivedW = readCacheNumber('derived.core.building.loadTotalW', null);
             if (typeof loadTotalDerivedW === 'number' && Number.isFinite(loadTotalDerivedW) && loadTotalDerivedW >= 0) {
-                feneconAcLoadMemo = { w: Math.max(0, loadTotalDerivedW), source: 'derived.loadTotalW' };
+                feneconAcLoadMemo = { w: stripProtectedEvcsLoadW(loadTotalDerivedW), source: evcsStorageProtectedLoadW > 0 ? 'derived.loadTotalW-evcsProtected' : 'derived.loadTotalW' };
                 return feneconAcLoadMemo;
             }
 
             const loadTotalMappedW = readCacheNumber('consumptionTotal', null);
             if (typeof loadTotalMappedW === 'number' && Number.isFinite(loadTotalMappedW) && loadTotalMappedW >= 0) {
-                feneconAcLoadMemo = { w: Math.max(0, loadTotalMappedW), source: 'consumptionTotal' };
+                feneconAcLoadMemo = { w: stripProtectedEvcsLoadW(loadTotalMappedW), source: evcsStorageProtectedLoadW > 0 ? 'consumptionTotal-evcsProtected' : 'consumptionTotal' };
                 return feneconAcLoadMemo;
             }
 
@@ -937,23 +1054,27 @@ class SpeicherRegelungModule extends BaseModule {
                     if (typeof c === 'number' && Number.isFinite(c)) consumersTotalW += Math.abs(c);
                 }
                 feneconAcLoadMemo = {
-                    w: Math.max(0, loadRestDerivedW + evTotalW + consumersTotalW),
-                    source: 'derived.loadRestW+slots',
+                    w: stripProtectedEvcsLoadW(loadRestDerivedW + evTotalW + consumersTotalW),
+                    source: evcsStorageProtectedLoadW > 0 ? 'derived.loadRestW+slots-evcsProtected' : 'derived.loadRestW+slots',
                 };
                 return feneconAcLoadMemo;
             }
 
             const dischargeNowW = (typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Math.max(0, battPowerW) : 0;
             feneconAcLoadMemo = {
-                w: Math.max(0, importRawW + dischargeNowW),
-                source: 'approx.import+battery',
+                w: Math.max(0, importRawWithoutProtectedEvcsW + dischargeNowW),
+                source: evcsStorageProtectedLoadW > 0 ? 'approx.import+battery-evcsProtected' : 'approx.import+battery',
             };
             return feneconAcLoadMemo;
         };
 
         const feneconHybridCtx = feneconHybridActive
-            ? await this._buildFeneconHybridContext({ cfg, staleMs, readCacheNumber, gridW, gridRawW })
+            ? await this._buildFeneconHybridContext({ cfg, staleMs, readCacheNumber, gridW, gridRawW, protectedEvcsLoadW: evcsStorageProtectedLoadW })
             : { active: false, configured: !!feneconHybridConfigured, farmBlocked: !!feneconHybridBlockedByFarm, mode: feneconHybridBlockedByFarm ? 'blocked-by-farm' : 'standard' };
+
+        const sungrowHybridCtx = sungrowHybridActive
+            ? await this._buildSungrowHybridContext({ cfg, staleMs, readCacheNumber, gridW, gridRawW, protectedEvcsLoadW: evcsStorageProtectedLoadW })
+            : { active: false, configured: !!sungrowHybridConfigured, mode: 'standard' };
 
         if (feneconHybridActive) {
             await this._setFeneconHybridDiag({
@@ -971,6 +1092,24 @@ class SpeicherRegelungModule extends BaseModule {
                 dayOrPvActive: feneconHybridCtx.dayOrPvActive,
                 assistActive: feneconHybridCtx.assistActive,
                 assistImportThresholdW: feneconHybridCtx.assistImportThresholdW,
+            });
+        }
+
+        if (sungrowHybridActive) {
+            await this._setSungrowHybridDiag({
+                active: true,
+                mode: sungrowHybridCtx.mode,
+                reason: sungrowHybridCtx.reason,
+                writeMode: sungrowHybridCtx.writeMode,
+                pvW: sungrowHybridCtx.pvW,
+                loadW: sungrowHybridCtx.loadW,
+                nvpW: sungrowHybridCtx.nvpW,
+                importW: sungrowHybridCtx.importW,
+                exportW: sungrowHybridCtx.exportW,
+                pvCoversLoad: sungrowHybridCtx.pvCoversLoad,
+                thresholdW: sungrowHybridCtx.thresholdW,
+                loadCoverReserveW: sungrowHybridCtx.loadCoverReserveW,
+                dischargeThresholdW: sungrowHybridCtx.dischargeThresholdW,
             });
         }
 
@@ -1754,7 +1893,7 @@ if (typeof soc === 'number') {
 						reason = 'Tarif: Entladen blockiert (SoC-Min erreicht)';
 						source = 'tarif';
 					} else {
-						const targetImportW = Math.max(0, num(cfg.tariffTargetGridImportW, selfTargetGridW));
+						const targetImportW = Math.max(0, num(cfg.tariffTargetGridImportW, selfTargetGridW) + evcsStorageProtectedNvpTargetShiftW);
 						const deadbandW = Math.max(0, num(cfg.tariffImportThresholdW, selfImportThresholdW));
 
 						// Tarif-Entladung regelt am NVP.
@@ -1815,7 +1954,9 @@ if (typeof soc === 'number') {
 						const importRawNowW = Math.max(0, (typeof nvpRawW === 'number') ? nvpRawW : 0);
 						const measuredDischargeNowW = (typeof battW === 'number') ? Math.max(0, battW) : 0;
 						const safetyMarginW = 200;
-						const measuredDemandCapW = Math.max(0, importRawNowW + measuredDischargeNowW + safetyMarginW);
+						const protectedTariffImportW = Math.max(0, importRawNowW - evcsStorageProtectedLoadW);
+							const protectedTariffMarginW = protectedTariffImportW > 0 ? safetyMarginW : 0;
+							const measuredDemandCapW = Math.max(0, protectedTariffImportW + measuredDischargeNowW + protectedTariffMarginW);
 						// Ohne vertrauenswürdige Batterie-Istleistung darf der letzte Sollwert auch in
 						// der Deadband nicht als harte Obergrenze weiterleben. Sonst kann ein alter
 						// hoher Entladebefehl nach der Rampe erneut durchrutschen.
@@ -1894,7 +2035,8 @@ if (targetW === 0 && selfDischargeEnabled) {
         const currentDischargeW = (battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW))
             ? Math.max(0, battPowerW)
             : 0;
-        const feneconErrW = (typeof feneconNvpW === 'number') ? (feneconNvpW - selfTargetGridW) : 0;
+        const feneconTargetNvpW = selfTargetGridW + evcsStorageProtectedNvpTargetShiftW;
+        const feneconErrW = (typeof feneconNvpW === 'number') ? (feneconNvpW - feneconTargetNvpW) : 0;
         const feneconLoadLimitW = acLoadW > 0
             ? acLoadW
             : Math.max(0, importRawW + currentDischargeW);
@@ -1908,7 +2050,8 @@ if (targetW === 0 && selfDischargeEnabled) {
             nextSetW = 0;
         }
 
-        const feneconDemandCapW = Math.max(0, (typeof feneconNvpW === 'number' ? Math.max(0, feneconNvpW) : 0) + currentDischargeW + 200);
+        const feneconNonEvcsImportW = Math.max(0, (typeof feneconNvpW === 'number' ? Math.max(0, feneconNvpW) : 0) - evcsStorageProtectedLoadW);
+        const feneconDemandCapW = Math.max(0, feneconNonEvcsImportW + currentDischargeW + (feneconNonEvcsImportW > 0 ? 200 : 0));
         dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
             ? Math.min(dischargeDemandHardCapW, feneconDemandCapW)
             : feneconDemandCapW;
@@ -1931,7 +2074,7 @@ if (targetW === 0 && selfDischargeEnabled) {
                 reason = `Gateway AC: NVP-Balancing blockiert (SoC <= ${selfMinSoc}%)`;
                 source = 'reserve';
             } else if (typeof feneconNvpW === 'number' && feneconNvpW <= selfTargetGridW) {
-                reason = `Gateway AC: keine Entladung nötig (NVP ${Math.round(feneconNvpW)} W <= Ziel ${Math.round(selfTargetGridW)} W)`;
+                reason = `Gateway AC: keine Entladung nötig (NVP ${Math.round(feneconNvpW)} W <= Ziel ${Math.round(feneconTargetNvpW)} W inkl. EVCS-Schutz)`;
                 source = 'idle';
             }
         }
@@ -1955,7 +2098,7 @@ if (targetW === 0 && selfDischargeEnabled) {
     // Stabilität kommt hier aus Deadband + Schrittweite/Rampe im Dispatcher.
     const nvpRawW = (typeof gridRawW === 'number') ? gridRawW : gridW;      // roh (Fallback)
     const nvpCtrlW = (typeof nvpRawW === 'number') ? nvpRawW : gridW;       // aktuell für Regelung
-    const desiredNvpW = selfTargetGridW; // typischerweise kleiner Import (Default 100 W)
+    const desiredNvpW = selfTargetGridW + evcsStorageProtectedNvpTargetShiftW; // kleiner Haus-Import plus geschuetzte EVCS-Last
     const deadbandW = Math.max(0, selfImportThresholdW); // Start-/Stop-Schwelle gegen Flattern
 
     // Eigenverbrauch hat einen eigenen "Integrator": nur fortsetzen, wenn wir in der letzten Runde
@@ -1965,15 +2108,20 @@ if (targetW === 0 && selfDischargeEnabled) {
         ? this._lastTargetW
         : 0;
 
-        // Ist-Batterieleistung (positiv = Entladung). Falls verfügbar nutzen wir eine
-        // OpenEMS-ähnliche Balancing-Regelung: Soll = battIst + (gridIst - gridZiel).
-        // Ohne Istleistung bleibt der bisherige Fallback (inkrementell über letzten Sollwert).
-        const battWRaw = (battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Number(battPowerW) : null;
-        const battW = (typeof battWRaw === 'number') ? Math.max(0, battWRaw) : null;
+        // Ist-Batterieleistung (positiv = Entladung, negativ = Beladung).
+        // Fuer saubere Eigenverbrauchsoptimierung wird bidirektional am NVP bilanziert:
+        // naechster Sollwert = aktuelle Batterie-Istleistung + (NVP-Ist - NVP-Ziel).
+        // Dadurch werden sowohl Entladung als auch laufende PV-Beladung nachgeregelt.
+        const battSignedRawW = (battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Number(battPowerW) : null;
+        const battW = (typeof battSignedRawW === 'number') ? Math.max(0, battSignedRawW) : null;
+        const battChargeW = (typeof battSignedRawW === 'number') ? Math.max(0, -battSignedRawW) : null;
+        const lastBalanceW = getLastStorageBalanceTargetW();
+        const lastWasPvBalance = (String(this._lastSource || '') === 'pv');
+        const lastWasAnyBalance = lastWasSelf || lastWasPvBalance;
 
-    // Fehler: positiver Fehler => zu viel Import => mehr entladen.
-    // negativer Fehler => Export/zu wenig Import => Entladung reduzieren.
-    // NOTE: Wenn ROH bereits Export zeigt, ist nvpCtrlW ohnehin negativ – dadurch wird sofort reduziert.
+    // Fehler: positiver Fehler => zu viel Import => mehr entladen bzw. weniger laden.
+    // negativer Fehler => Export/zu wenig Import => mehr laden bzw. weniger entladen.
+    // NOTE: Wenn ROH bereits Export zeigt, ist nvpCtrlW ohnehin negativ – dadurch wird sofort reduziert/geladen.
     const errW = (typeof nvpCtrlW === 'number') ? (nvpCtrlW - desiredNvpW) : 0;
 
     // PI-light: Inkrement-Regelung.
@@ -1982,42 +2130,45 @@ if (targetW === 0 && selfDischargeEnabled) {
     // Sollwert mit der zeitversetzten Batterie-/Farm-Istleistung mit und springt trotz
     // konstantem Hausverbrauch unnötig hoch/runter.
     const outsideDeadband = (errW > deadbandW || errW < -deadbandW);
-    const holdInDeadband = !outsideDeadband && lastWasSelf && curSetW > 0;
+    const holdInDeadband = !outsideDeadband && lastWasAnyBalance && Math.abs(lastBalanceW) > 0;
     let errAdjW = outsideDeadband ? errW : 0;
 
         // OpenEMS-Balancing (Vorbild): battIst + (gridIst - gridZiel).
-        // Ohne vertrauenswürdige Batterie-Istleistung wird nicht mehr über den
-        // alten Sollwert hochintegriert. Der Fallback nutzt dann nur den aktuell
-        // sichtbaren NVP-Fehler; in der Deadband darf ein bereits stabiler Sollwert
-        // gehalten werden. Das schützt die Eigenverbrauchsoptimierung vor falschen
-        // Modbus-/Setpoint-DPs und verhindert 71-kW-Ausreißer bei nur wenigen kW Import.
-        let nextSetW;
+        // Ohne vertrauenswürdige Batterie-Istleistung darf ein alter positiver
+        // Entlade-Sollwert nicht weiter hochintegrieren (71-kW-Feldfehler). Ein
+        // alter negativer Lade-Sollwert darf aber fuer PV-Export genutzt werden,
+        // damit "alte Ladung + aktueller NVP-Export" zum neuen Ladeziel wird.
+        let nextSignedW;
         if (holdInDeadband) {
-            nextSetW = curSetW;
-        } else if (typeof battW === 'number') {
-            nextSetW = battW + errAdjW;
-        } else if (errAdjW < 0) {
-            nextSetW = Math.max(0, curSetW + errAdjW);
+            nextSignedW = (typeof battSignedRawW === 'number') ? battSignedRawW : lastBalanceW;
+        } else if (typeof battSignedRawW === 'number') {
+            nextSignedW = battSignedRawW + errAdjW;
+        } else if (lastBalanceW < 0 || errAdjW < 0) {
+            nextSignedW = lastBalanceW + errAdjW;
         } else {
-            nextSetW = errAdjW;
+            nextSignedW = errAdjW;
         }
+        let nextSetW = Math.max(0, nextSignedW);
 
     // Safety-Clamp gegen Überschwingen:
-    // Die Eigenverbrauchsoptimierung darf nur den aktuell am Netzpunkt sichtbaren
-    // Restbedarf ausregeln. Der sichere Cap ist deshalb: echter NVP-Import + echte
-    // gemessene Batterie-Entladung + Puffer. Abgeleitete Gebäudelasten werden hier
-    // bewusst NICHT als Obergrenze genutzt, weil sie bei PV-Erzeugung viel höher als
-    // der Netzbezug sein können und sonst wieder zu überhöhten Setpoints führen.
     // WICHTIGER Feldfix 0.8.81: Der letzte eigene Sollwert und derived.loadTotalW
-    // dürfen die Demand-Basis nicht vergrößern. Ohne vertrauenswürdige Batterie-
-    // Istleistung zählt nur der aktuelle NVP-Import plus kleiner Sicherheitsreserve.
-    // Dadurch wird auch innerhalb der Deadband kein alter Setpoint konserviert, der
-    // einen Kundenanschluss überlasten könnte. Stabile Haltewerte sind nur mit echter
-    // Batterie-Istleistung erlaubt.
+    // duerfen den Entlade-Cap nicht vergroessern; nur NVP plus echte Batterie-Istleistung
+    // sind fuer die harte Anschluss-Sicherheit zulaessig.
+    // Die Eigenverbrauchsoptimierung darf nur den aktuell am Netzpunkt sichtbaren
+    // Restbedarf ausregeln. Der sichere Entlade-Cap ist deshalb: echter NVP-Import +
+    // echte gemessene Batterie-Entladung + Puffer. Fuer die Laderichtung gilt analog:
+    // laufende reale/zuletzt geschriebene Ladung + aktueller NVP-Export. Genau dieser
+    // zweite Teil hat vorher gefehlt und fuehrte zu stabilen Rest-Exporten/-Importen
+    // (z. B. 2,9 kW Ladung + 2,9 kW Export => neuer Sollwert muss ca. 5,8 kW Ladung sein).
     const importRawNowW = Math.max(0, (typeof nvpRawW === 'number') ? nvpRawW : 0);
     const measuredDischargeNowW = (typeof battW === 'number') ? Math.max(0, battW) : 0;
+    const measuredChargeNowW = (typeof battChargeW === 'number') ? Math.max(0, battChargeW) : 0;
+    const lastChargeNowW = (!battPowerTrusted && lastBalanceW < 0) ? Math.max(0, -lastBalanceW) : 0;
+    const currentChargeForBalancingW = (typeof battChargeW === 'number') ? measuredChargeNowW : lastChargeNowW;
     const safetyMarginW = 200; // bewusst konservativ; Feintuning über selfTargetGridW/Deadband/Rampe
-    const maxByDemandW = Math.max(0, importRawNowW + measuredDischargeNowW + safetyMarginW);
+    const protectedSelfImportW = Math.max(0, importRawNowW - evcsStorageProtectedLoadW);
+    const protectedSelfMarginW = protectedSelfImportW > 0 ? safetyMarginW : 0;
+    const maxByDemandW = Math.max(0, protectedSelfImportW + measuredDischargeNowW + protectedSelfMarginW);
     if (Number.isFinite(maxByDemandW) && maxByDemandW >= 0) {
         dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
             ? Math.min(dischargeDemandHardCapW, maxByDemandW)
@@ -2028,7 +2179,22 @@ if (targetW === 0 && selfDischargeEnabled) {
         nextSetW = Math.min(nextSetW, maxByDemandW);
     }
 
-    // Nur Entladen in diesem Block (kein Laden). Negative Werte sind hier nicht sinnvoll.
+    const chargeBalanceCapW = exportRawW > 0
+        ? Math.max(0, currentChargeForBalancingW + exportRawW)
+        : ((typeof battChargeW === 'number' && importRawNowW > desiredNvpW)
+            ? Math.max(0, currentChargeForBalancingW)
+            : 0);
+    if (nextSignedW < 0) {
+        chargeDemandHardCapW = (typeof chargeDemandHardCapW === 'number')
+            ? Math.min(chargeDemandHardCapW, chargeBalanceCapW)
+            : chargeBalanceCapW;
+        chargeDemandHardCapReason = (typeof battChargeW === 'number')
+            ? 'Eigenverbrauch-NVP-Lade-Cap (aktuelle Ladung+NVP-Export/Import-Reduktion)'
+            : 'Eigenverbrauch-NVP-Lade-Cap (letzter Ladesollwert nur bei aktuellem Export)';
+    }
+
+    // Positive Werte in diesem Pfad sind Entladung; negative Werte reduzieren/erhoehen
+    // laufende PV-Beladung. Beides bleibt NVP-gefuehrt und wird weiter unten gerampt.
     nextSetW = clamp(nextSetW, 0, selfMaxDischargeEff);
 
     // SoC-Hysterese: verhindert Flattern um die Untergrenze und sorgt für eine
@@ -2051,7 +2217,21 @@ if (targetW === 0 && selfDischargeEnabled) {
     const importNowW = Math.max(0, (typeof nvpCtrlW === 'number') ? nvpCtrlW : 0);
     const startCond = (importNowW >= deadbandW) || lastWasSelf;
 
-    if (allow && startCond && nextSetW > 0) {
+    if (allow && nextSignedW < 0) {
+        const maxChargeBySocW = (typeof soc === 'number' && soc >= selfMaxSoc) ? 0 : selfMaxChargeEff;
+        const chargeW = clamp(Math.abs(nextSignedW), 0, Math.min(maxChargeBySocW, chargeBalanceCapW));
+        hardChargeMaxSoc = Math.max(hardChargeMaxSoc, selfMaxSoc);
+        if (chargeW > 0) {
+            targetW = -chargeW;
+            reason = `Eigenverbrauch: NVP-Balancing laden (${Math.round(chargeW)} W, Export ${Math.round(exportRawW)} W, laufende Ladung ${Math.round(currentChargeForBalancingW)} W)`;
+            source = 'pv';
+        } else if ((source === 'idle' || reason === 'Keine Aktion') && Math.abs(nextSignedW) > 0) {
+            reason = (typeof soc === 'number' && soc >= selfMaxSoc)
+                ? `Eigenverbrauch: Laden blockiert (SoC >= ${selfMaxSoc}%)`
+                : 'Eigenverbrauch: keine NVP-Ladefreigabe';
+            source = 'pv';
+        }
+    } else if (allow && startCond && nextSetW > 0) {
         targetW = nextSetW;
             reason = `Eigenverbrauch: entladen (${Math.round(targetW)} W${(typeof battW === 'number') ? ', Balancing' : ''})`;
         source = 'eigenverbrauch';
@@ -2116,13 +2296,24 @@ if (targetW === 0 && selfDischargeEnabled) {
                 // weiterläuft. Der Zero-Export-Bias wird nur addiert, solange RAW
                 // tatsächlich Export zeigt; bei RAW=0/Import darf er keinen Netzbezug
                 // in die Batterie ziehen.
-                const exportCtrlCapW = Math.max(0, exportCtrlW + extraBias);
-                const exportRawCapW = exportRawW > 0 ? Math.max(0, exportRawW + extraBias) : 0;
+                const measuredChargeNowW = (battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW))
+                    ? Math.max(0, -Number(battPowerW))
+                    : 0;
+                const lastBalanceWForCharge = getLastStorageBalanceTargetW();
+                const lastChargeNowW = (!battPowerTrusted && lastBalanceWForCharge < 0) ? Math.max(0, -lastBalanceWForCharge) : 0;
+                const currentChargeForBalancingW = battPowerTrusted ? measuredChargeNowW : lastChargeNowW;
+
+                // NVP-Lade-Balancing: nicht nur den aktuellen Export schreiben,
+                // sondern laufende Ladung + neuen Export. Beispiel Feldfall:
+                // Speicher laedt bereits 2,9 kW und am NVP bleiben weitere 2,9 kW Export
+                // sichtbar => Sollwert muss auf ca. 5,8 kW Ladung steigen.
+                const exportCtrlCapW = Math.max(0, currentChargeForBalancingW + exportCtrlW + extraBias);
+                const exportRawCapW = exportRawW > 0 ? Math.max(0, currentChargeForBalancingW + exportRawW + extraBias) : currentChargeForBalancingW;
                 const pvRawChargeCapW = clamp(Math.min(exportCtrlCapW, exportRawCapW), 0, chargeLimitW);
                 chargeDemandHardCapW = pvRawChargeCapW;
-                chargeDemandHardCapReason = zeEnabled ? 'Nulleinspeisung-PV-Rohwert-Lade-Cap' : 'PV-Rohwert-Lade-Cap';
+                chargeDemandHardCapReason = zeEnabled ? 'Nulleinspeisung-NVP-Lade-Cap (aktuelle Ladung+Export)' : 'PV-NVP-Lade-Cap (aktuelle Ladung+Export)';
                 targetW = -pvRawChargeCapW;
-                reason = zeEnabled ? 'Nulleinspeisung: Export in Speicher umleiten' : 'Eigenverbrauch: PV-Überschuss laden';
+                reason = zeEnabled ? 'Nulleinspeisung: Export plus laufende Ladung in Speicher umleiten' : 'Eigenverbrauch: PV-Überschuss plus laufende Ladung nutzen';
                 source = 'pv';
             }
         }
@@ -2392,7 +2583,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 	            targetW = _prevRampW + Math.sign(d) * maxDelta;
 	            reason = `${reason} (LSK‑Rampe)`;
 	        }
-    } else if (source === 'fenecon' || source === 'fenecon-assist' || this._lastSource === 'fenecon' || this._lastSource === 'fenecon-assist') {
+    } else if (source === 'fenecon' || source === 'fenecon-assist' || source === 'sungrow-assist' || this._lastSource === 'fenecon' || this._lastSource === 'fenecon-assist' || this._lastSource === 'sungrow-assist') {
         // Gateway AC-Lastfolger: Lastsprünge müssen in beide Richtungen schnell übernommen werden,
         // sonst bleibt kurz Netzbezug stehen oder es entsteht beim Lastabwurf unnötige Einspeisung.
         // Deshalb hier bewusst keine zusätzliche Rampe.
@@ -2442,7 +2633,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         // NVP-basierte Entladequellen.
         if (targetW > 0 && typeof dischargeDemandHardCapW === 'number' && Number.isFinite(dischargeDemandHardCapW)) {
             const capW = Math.max(0, dischargeDemandHardCapW);
-            const activeNvpDischargeSource = (source === 'eigenverbrauch' || source === 'tarif' || source === 'fenecon' || source === 'fenecon-assist' || source === 'lastspitze');
+            const activeNvpDischargeSource = (source === 'eigenverbrauch' || source === 'tarif' || source === 'fenecon' || source === 'fenecon-assist' || source === 'sungrow-assist' || source === 'lastspitze');
             if (activeNvpDischargeSource && targetW > capW) {
                 targetW = capW;
                 reason = `${reason} (Demand-Cap ${Math.round(capW)} W nach Rampe)`;
@@ -2478,6 +2669,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         // ------------------------------------------------------------
         let feneconNoWrite = false;
         let feneconWriteMode = '';
+        let sungrowWriteMode = '';
         if (feneconHybridActive) {
             const ctx = feneconHybridCtx || {};
             const mode = String(ctx.mode || '');
@@ -2576,6 +2768,183 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         }
 
         // ------------------------------------------------------------
+        // Sungrow Hybrid ESS Herstellerprofil
+        // ------------------------------------------------------------
+        if (sungrowHybridActive) {
+            const ctx = sungrowHybridCtx || {};
+            const srcNorm = String(source || '').toLowerCase();
+            const targetImportW = Math.max(0, num(cfg.sungrowTargetGridImportW, selfTargetGridW) + evcsStorageProtectedNvpTargetShiftW);
+            const assistBufferW = Math.max(0, num(cfg.sungrowAssistBufferW, 150));
+            const dischargeOnlyOnImport = cfg.sungrowDischargeOnlyOnGridImport !== false;
+            const pvPassthrough = cfg.sungrowPvPassthroughEnabled !== false;
+            const zeroOnPvCoverage = cfg.sungrowZeroOnPvCoverage !== false;
+            const nvpNowW = (typeof ctx.nvpW === 'number' && Number.isFinite(ctx.nvpW))
+                ? Number(ctx.nvpW)
+                : ((typeof gridRawW === 'number' && Number.isFinite(gridRawW)) ? Number(gridRawW) : Number(gridW || 0));
+            const importNowW = Math.max(0, nvpNowW);
+            const exportNowW = Math.max(0, -nvpNowW);
+            const pvCoversLoad = !!ctx.pvCoversLoad;
+            const pvActive = !!ctx.pvActive;
+            const isStorageSelfOrPv = srcNorm === 'eigenverbrauch' || srcNorm === 'pv' || srcNorm === 'idle' || srcNorm === 'sungrow-hybrid' || srcNorm === 'sungrow-assist';
+            const isCriticalPolicy = targetW !== 0 && (
+                srcNorm === 'lastspitze' ||
+                srcNorm === 'lastspitze_refill' ||
+                srcNorm === 'reserve' ||
+                srcNorm === 'tarif' ||
+                srcNorm === 'evcs'
+            );
+
+            // Sungrow-Hybrid Feldfix 0.8.87:
+            // Das Herstellerprofil darf PV-/Tagesbetrieb nicht blind mit 0 W "freigeben",
+            // solange der NVP sichtbar außerhalb des Zielbandes liegt. Fuehrungsgroesse ist
+            // immer der Netzverknuepfungspunkt: neuer Sollwert = aktuelle Batterie-Istleistung
+            // plus aktuelle NVP-Abweichung. Damit werden sowohl Rest-Netzbezug (z. B. 700 W
+            // statt max. 100 W) als auch Rest-Export korrekt nachgeregelt. Beispiel Laden:
+            // Batterie laedt 2,9 kW und am NVP stehen noch 2,9 kW Export -> Ziel wird ca.
+            // 5,8 kW Laden, nicht erneut nur 2,9 kW oder 0 W.
+            const nvpDeadbandW = Math.max(0, Number(ctx.dischargeThresholdW) || selfImportThresholdW || 100);
+            const nvpErrorW = Number.isFinite(Number(nvpNowW)) ? (nvpNowW - targetImportW) : 0;
+            const importBalanceNeeded = nvpErrorW > nvpDeadbandW;
+            const exportBalanceNeeded = nvpErrorW < -nvpDeadbandW;
+            const nvpBalanceNeeded = !!(isStorageSelfOrPv && !isCriticalPolicy && (importBalanceNeeded || exportBalanceNeeded));
+            const battSignedNowW = (battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Number(battPowerW) : null;
+            const lastSungrowBalanceW = getLastStorageBalanceTargetW();
+            const balanceBaseW = (typeof battSignedNowW === 'number') ? battSignedNowW : lastSungrowBalanceW;
+            let nvpBalancedTargetW = balanceBaseW + nvpErrorW;
+            let sungrowBalanceBaseW = balanceBaseW;
+            let sungrowNvpErrorW = nvpErrorW;
+            let sungrowNvpBalancedTargetW = nvpBalancedTargetW;
+
+            if (nvpBalanceNeeded) {
+                const currentDischargeForCapW = Math.max(0, (typeof battSignedNowW === 'number') ? battSignedNowW : Math.max(0, lastSungrowBalanceW));
+                const currentChargeForCapW = Math.max(0, (typeof battSignedNowW === 'number') ? -battSignedNowW : Math.max(0, -lastSungrowBalanceW));
+                const sungrowNonEvcsImportW = Math.max(0, importNowW - evcsStorageProtectedLoadW);
+                const dischargeCapW = Math.max(0, sungrowNonEvcsImportW + currentDischargeForCapW + (sungrowNonEvcsImportW > 0 ? assistBufferW : 0));
+                const chargeCapW = Math.max(0, exportNowW + currentChargeForCapW + assistBufferW);
+
+                if (nvpBalancedTargetW > 0) {
+                    if (dischargeOnlyOnImport && importNowW <= (targetImportW + nvpDeadbandW)) {
+                        targetW = 0;
+                        source = 'sungrow-hybrid';
+                        reason = `Sungrow Hybrid ESS: Entladung blockiert, NVP im Zielband (${Math.round(importNowW)} W, Ziel ${Math.round(targetImportW)} W)`;
+                        sungrowWriteMode = 'write-zero-no-import';
+                    } else {
+                        targetW = clamp(nvpBalancedTargetW, 0, Math.min(maxDischargeW, dischargeCapW));
+                        if (targetW > 0) {
+                            source = 'sungrow-assist';
+                            reason = `Sungrow Hybrid ESS: NVP-Balancing Entladung ${Math.round(targetW)} W (Batterie ${Math.round(balanceBaseW)} W + NVP-Fehler ${Math.round(nvpErrorW)} W, Ziel ${Math.round(targetImportW)} W)`;
+                            sungrowWriteMode = 'write-nvp-balance-discharge';
+                            dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
+                                ? Math.min(dischargeDemandHardCapW, dischargeCapW)
+                                : dischargeCapW;
+                            dischargeDemandHardCapReason = 'Sungrow-NVP-Balancing-Entlade-Cap (Ist/letzter Wert + NVP)';
+                        } else {
+                            source = 'sungrow-hybrid';
+                            reason = 'Sungrow Hybrid ESS: NVP-Balancing Entlade-Cap 0 W – Vorgabe 0';
+                            sungrowWriteMode = 'write-zero-assist-cap';
+                        }
+                    }
+                } else if (nvpBalancedTargetW < 0) {
+                    const maxChargeBySocW = (typeof soc === 'number' && soc >= hardChargeMaxSoc) ? 0 : maxChargeW;
+                    const chargeW = clamp(Math.abs(nvpBalancedTargetW), 0, Math.min(maxChargeBySocW, chargeCapW));
+                    if (chargeW > 0) {
+                        targetW = -chargeW;
+                        source = 'sungrow-assist';
+                        reason = `Sungrow Hybrid ESS: NVP-Balancing Laden ${Math.round(chargeW)} W (Batterie ${Math.round(balanceBaseW)} W + NVP-Fehler ${Math.round(nvpErrorW)} W, Ziel ${Math.round(targetImportW)} W)`;
+                        sungrowWriteMode = 'write-nvp-balance-charge';
+                        chargeDemandHardCapW = (typeof chargeDemandHardCapW === 'number')
+                            ? Math.min(chargeDemandHardCapW, chargeCapW)
+                            : chargeCapW;
+                        chargeDemandHardCapReason = 'Sungrow-NVP-Balancing-Lade-Cap (Ist/letzter Wert + NVP)';
+                    } else {
+                        targetW = 0;
+                        source = 'sungrow-hybrid';
+                        reason = (typeof soc === 'number' && soc >= hardChargeMaxSoc)
+                            ? `Sungrow Hybrid ESS: NVP-Laden blockiert (SoC >= ${hardChargeMaxSoc}%)`
+                            : 'Sungrow Hybrid ESS: NVP-Lade-Cap 0 W – Vorgabe 0';
+                        sungrowWriteMode = 'write-zero-charge-cap';
+                    }
+                } else {
+                    targetW = 0;
+                    source = 'sungrow-hybrid';
+                    reason = 'Sungrow Hybrid ESS: NVP-Balancing im Ziel – Vorgabe 0';
+                    sungrowWriteMode = 'write-zero-nvp-balanced';
+                }
+            } else if (pvPassthrough && zeroOnPvCoverage && pvCoversLoad && !isCriticalPolicy) {
+                // Nur wenn der NVP im Zielband ist, darf Sungrow im PV-deckenden Betrieb
+                // komplett intern weiterlaufen. Bei Rest-Import/-Export greift oben das
+                // NVP-Balancing und schreibt nicht blind 0 W.
+                targetW = 0;
+                source = 'sungrow-hybrid';
+                reason = `Sungrow Hybrid ESS: PV deckt Gebäudelast und NVP ist im Zielband – Lade-/Entladevorgaben 0`;
+                sungrowWriteMode = 'write-zero-pv-covered';
+            } else if (pvPassthrough && pvActive && srcNorm === 'pv' && targetW < 0) {
+                // PV-Laden nur dann nicht extern erzwingen, wenn am NVP kein relevanter
+                // Export mehr sichtbar ist. Rest-Export wird oben mit "aktuelle Ladung +
+                // NVP-Export" nachgeführt.
+                targetW = 0;
+                source = 'sungrow-hybrid';
+                reason = 'Sungrow Hybrid ESS: PV-Laden intern geführt, NVP im Zielband – externe Ladevorgabe 0';
+                sungrowWriteMode = 'write-zero-pv-internal';
+            } else if (targetW > 0 && (srcNorm === 'eigenverbrauch' || srcNorm === 'tarif')) {
+                if (dischargeOnlyOnImport && importNowW <= Math.max(targetImportW + nvpDeadbandW, Number(ctx.dischargeThresholdW) || selfImportThresholdW)) {
+                    targetW = 0;
+                    source = 'sungrow-hybrid';
+                    reason = `Sungrow Hybrid ESS: Entladung blockiert, kein echter NVP-Netzbezug (${Math.round(importNowW)} W)`;
+                    sungrowWriteMode = 'write-zero-no-import';
+                } else if (pvPassthrough && pvCoversLoad) {
+                    targetW = 0;
+                    source = 'sungrow-hybrid';
+                    reason = 'Sungrow Hybrid ESS: PV deckt die Last und NVP ist im Zielband – keine externe Entladung';
+                    sungrowWriteMode = 'write-zero-pv-covered';
+                } else {
+                    const sungrowAssistNonEvcsImportW = Math.max(0, importNowW - evcsStorageProtectedLoadW);
+                    const assistCapW = Math.max(0, sungrowAssistNonEvcsImportW - num(cfg.sungrowTargetGridImportW, selfTargetGridW) + (sungrowAssistNonEvcsImportW > 0 ? assistBufferW : 0));
+                    targetW = Math.min(Math.max(0, targetW), assistCapW);
+                    if (targetW > 0) {
+                        source = 'sungrow-assist';
+                        reason = `Sungrow Hybrid ESS: NVP-Assist Entladung ${Math.round(targetW)} W gegen Netzbezug ${Math.round(importNowW)} W`;
+                        sungrowWriteMode = 'write-nvp-assist';
+                        dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
+                            ? Math.min(dischargeDemandHardCapW, assistCapW)
+                            : assistCapW;
+                        dischargeDemandHardCapReason = 'Sungrow-NVP-Assist-Cap';
+                    } else {
+                        source = 'sungrow-hybrid';
+                        reason = 'Sungrow Hybrid ESS: NVP-Assist-Cap 0 W – Vorgabe 0';
+                        sungrowWriteMode = 'write-zero-assist-cap';
+                    }
+                }
+            } else {
+                sungrowWriteMode = 'standard';
+            }
+
+            this._sungrowHybridLastMode = sungrowWriteMode || 'standard';
+            await this._setSungrowHybridDiag({
+                active: true,
+                mode: (sungrowWriteMode || String(ctx.mode || 'standard')),
+                reason,
+                writeMode: sungrowWriteMode || 'standard',
+                targetW,
+                pvW: ctx.pvW,
+                loadW: ctx.loadW,
+                nvpW: nvpNowW,
+                importW: importNowW,
+                exportW: exportNowW,
+                pvCoversLoad,
+                thresholdW: ctx.thresholdW,
+                loadCoverReserveW: ctx.loadCoverReserveW,
+                dischargeThresholdW: ctx.dischargeThresholdW,
+                nvpTargetW: targetImportW,
+                nvpDeadbandW,
+                nvpErrorW: sungrowNvpErrorW,
+                nvpBalanceBaseW: sungrowBalanceBaseW,
+                nvpBalanceTargetW: sungrowNvpBalancedTargetW,
+                nvpBalanceNeeded,
+            });
+        }
+
+        // ------------------------------------------------------------
         // Phase 2: Dispatcher-Diagnose-Zustände schreiben
         // ------------------------------------------------------------
         const _finalW = targetW;
@@ -2633,6 +3002,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 pvAwareTarifNetzladen: pvAwareTariff ? pvAwareTariff : null,
                 evcs: {
                     storageAssistReqW: (typeof evcsAssistReqW === 'number' && Number.isFinite(evcsAssistReqW)) ? Math.round(evcsAssistReqW) : 0,
+                    storageProtectedLoadW: Math.round(evcsStorageProtectedLoadW || 0),
+                    storageProtectedWallboxes: Math.round(evcsStorageProtectedWallboxes || 0),
+                    storageAssistRequestedLoadW: Math.round(evcsStorageAssistRequestedLoadW || 0),
+                    nvpTargetOffsetW: Math.round(evcsStorageProtectedNvpTargetShiftW || 0),
                 },
                 evPriority: evPriorityCaps ? {
                     active: !!(feneconAcMode && evPriorityCaps.active),
@@ -2790,6 +3163,27 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
 
             selfDischargeEnabled: storage.selfDischargeEnabled,
+            // Herstellerprofile: generisch bleibt die normale Eigenverbrauchslogik,
+            // FENECON/OpenEMS nutzt No-Write/Assist, Sungrow Hybrid nutzt NVP-geführte
+            // 0-W-Kommandos im PV-deckenden Betrieb.
+            vendorProfile: storage.vendorProfile,
+            sungrowHybridEnabled: storage.sungrowHybridEnabled,
+            sungrowPvPassthroughEnabled: storage.sungrowPvPassthroughEnabled,
+            sungrowZeroOnPvCoverage: storage.sungrowZeroOnPvCoverage,
+            sungrowDischargeOnlyOnGridImport: storage.sungrowDischargeOnlyOnGridImport,
+            sungrowPvThresholdW: storage.sungrowPvThresholdW,
+            sungrowLoadCoverReserveW: storage.sungrowLoadCoverReserveW,
+            sungrowTargetGridImportW: storage.sungrowTargetGridImportW,
+            sungrowImportThresholdW: storage.sungrowImportThresholdW,
+            sungrowAssistBufferW: storage.sungrowAssistBufferW,
+            // E3/DC RSCP Herstellerprofil: NexoWatt schreibt keine signed Batterie-
+            // Sollleistung, sondern das vom ioBroker.e3dc-rscp Adapter erwartete
+            // Tupel EMS.SET_POWER_MODE + EMS.SET_POWER_VALUE. PowerLimits sind
+            // optional und werden nur geschrieben, wenn der Installer sie bewusst aktiviert.
+            e3dcRscpEnabled: storage.e3dcRscpEnabled,
+            e3dcZeroMode: storage.e3dcZeroMode,
+            e3dcAllowGridCharge: storage.e3dcAllowGridCharge,
+            e3dcUsePowerLimits: storage.e3dcUsePowerLimits,
             // Legacy: feneconAcMode bleibt als Migrations-Alias erhalten.
             // feneconGridControlEnabled ist aus UI-/Migrationsgründen der gespeicherte
             // Haken, bedeutet ab 0.6.255 aber: Hybrid-/Gateway-Priorität-Gateway-Priorität.
@@ -2847,12 +3241,36 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
      * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
+    _getStorageVendorProfile(cfg = {}) {
+        const raw = String((cfg && cfg.vendorProfile) || '').trim().toLowerCase();
+        if (raw === 'fenecon' || raw === 'openems' || raw === 'fems' || raw === 'fenecon-openems') return 'fenecon-openems';
+        if (raw === 'sungrow' || raw === 'sungrow-ess' || raw === 'sungrow-hybrid') return 'sungrow-hybrid';
+        if (raw === 'e3dc' || raw === 'e3/dc' || raw === 'e3dc-rscp' || raw === 'e3dc-rscp-iobroker') return 'e3dc-rscp';
+        // Migration: alte FENECON-Haken bleiben als Profil erkennbar, solange kein
+        // explizites anderes Herstellerprofil gespeichert wurde.
+        if (!raw && cfg && (cfg.feneconGridControlEnabled === true || cfg.feneconAcMode === true)) return 'fenecon-openems';
+        if (!raw && cfg && cfg.sungrowHybridEnabled === true) return 'sungrow-hybrid';
+        if (!raw && cfg && cfg.e3dcRscpEnabled === true) return 'e3dc-rscp';
+        return 'generic';
+    }
+
     _isFeneconHybridControlConfigured(cfg = {}) {
+        const profile = this._getStorageVendorProfile(cfg);
+        if (profile === 'fenecon-openems') return true;
+        if (profile !== 'generic') return false;
         if (cfg && typeof cfg.feneconGridControlEnabled === 'boolean') return cfg.feneconGridControlEnabled === true;
         // Migration: ältere Installationen hatten nur storage.feneconAcMode.
         // Ab 0.6.255 bedeutet dieser alte Haken: Hybrid-/Gateway-Priorität-Sondermodus
         // (Gateway-Priorität am Tag, NexoWatt nur bei Zusatz-PV oder wenig/keiner PV).
         return !!(cfg && cfg.feneconAcMode === true);
+    }
+
+    _isSungrowHybridControlConfigured(cfg = {}) {
+        return this._getStorageVendorProfile(cfg) === 'sungrow-hybrid';
+    }
+
+    _isE3dcRscpControlConfigured(cfg = {}) {
+        return this._getStorageVendorProfile(cfg) === 'e3dc-rscp';
     }
 
     // Legacy-Alias für ältere interne Aufrufe.
@@ -2865,6 +3283,359 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     _isFeneconGridControlConfigured(cfg = {}) {
         return this._isFeneconHybridControlConfigured(cfg);
     }
+    async _buildSungrowHybridContext({ cfg = {}, staleMs = 15000, readCacheNumber = null, gridW = null, gridRawW = null, protectedEvcsLoadW = 0 } = {}) {
+        const thresholdW = Math.max(0, num(cfg.sungrowPvThresholdW, 300));
+        const loadCoverReserveW = Math.max(0, num(cfg.sungrowLoadCoverReserveW, 300));
+        const dischargeThresholdW = Math.max(0, num(cfg.sungrowImportThresholdW, num(cfg.selfImportThresholdW, 100)));
+        const targetGridImportW = Math.max(0, num(cfg.sungrowTargetGridImportW, num(cfg.selfTargetGridImportW, 100)));
+        const now = Date.now();
+
+        /**
+         * Code-Teil: readCache
+         * Zweck: Liest frische Mapping-/Derived-Werte fuer das Sungrow-Herstellerprofil.
+         * Zusammenhang: Sungrow Hybrid ESS wird nicht ueber Gebaeudelast blind gefuehrt;
+         * diese Werte dienen nur zur Entscheidung, ob PV die Last bereits deckt.
+         */
+        const readCache = (key) => {
+            const sid = String(key || '').trim();
+            if (!sid) return null;
+            try {
+                if (typeof readCacheNumber === 'function') {
+                    const n = readCacheNumber(sid, null);
+                    if (typeof n === 'number' && Number.isFinite(n)) return n;
+                }
+            } catch {
+                // ignore
+            }
+            return null;
+        };
+
+        const candidates = [];
+/**
+ * Code-Teil: pushCandidate
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const pushCandidate = (value, source) => {
+            const n = Number(value);
+            if (Number.isFinite(n)) candidates.push({ w: Math.max(0, Math.abs(n)), source });
+        };
+
+        // Bei Sungrow DC-/Hybrid-Anlagen ist der separate DC-/Hybrid-PV-DP die beste
+        // Quelle. Falls er fehlt, nutzen wir die zentralen Core-/PV-Mirrors als Kontext.
+        if (this.dp && String(cfg.coupling || 'ac').trim().toLowerCase() === 'dc' && String(cfg.dcPvPowerObjectId || '').trim()) {
+            pushCandidate(this.dp.getNumberFresh('st.dcPvPowerW', staleMs, null), 'st.dcPvPowerW');
+        }
+        pushCandidate(readCache('derived.core.pv.totalW'), 'derived.core.pv.totalW');
+        pushCandidate(readCache('derived.core.pv.dcW'), 'derived.core.pv.dcW');
+        pushCandidate(readCache('pvPower'), 'pvPower');
+        pushCandidate(readCache('productionTotal'), 'productionTotal');
+        if (this.dp) pushCandidate(this.dp.getNumberFresh('ps.pvW', staleMs, null), 'ps.pvW');
+
+        let pvW = 0;
+        let pvSource = 'missing';
+        for (const c of candidates) {
+            if (c.w >= pvW) {
+                pvW = c.w;
+                pvSource = c.source;
+            }
+        }
+
+        let loadW = 0;
+        let loadSource = 'missing';
+        const loadTotalDerivedW = readCache('derived.core.building.loadTotalW');
+        if (typeof loadTotalDerivedW === 'number' && Number.isFinite(loadTotalDerivedW) && loadTotalDerivedW >= 0) {
+            loadW = Math.max(0, loadTotalDerivedW);
+            loadSource = 'derived.core.building.loadTotalW';
+        } else {
+            const loadTotalMappedW = readCache('consumptionTotal');
+            if (typeof loadTotalMappedW === 'number' && Number.isFinite(loadTotalMappedW) && loadTotalMappedW >= 0) {
+                loadW = Math.max(0, loadTotalMappedW);
+                loadSource = 'consumptionTotal';
+            } else {
+                const loadRestDerivedW = readCache('derived.core.building.loadRestW');
+                if (typeof loadRestDerivedW === 'number' && Number.isFinite(loadRestDerivedW) && loadRestDerivedW >= 0) {
+                    const evTotalW = Math.max(0, Math.abs(num(readCache('evcs.totalPowerW'), 0)));
+                    let consumersTotalW = 0;
+                    for (let i = 1; i <= 10; i++) {
+                        const c = readCache(`consumer${i}Power`);
+                        if (typeof c === 'number' && Number.isFinite(c)) consumersTotalW += Math.abs(c);
+                    }
+                    loadW = Math.max(0, loadRestDerivedW + evTotalW + consumersTotalW);
+                    loadSource = 'derived.core.building.loadRestW+slots';
+                }
+            }
+        }
+
+        const protectedEvcsW = Math.max(0, Number.isFinite(Number(protectedEvcsLoadW)) ? Number(protectedEvcsLoadW) : 0);
+        const loadWIncludingEvcs = loadW;
+        if (protectedEvcsW > 0) {
+            loadW = Math.max(0, loadW - protectedEvcsW);
+            loadSource = loadSource && loadSource !== 'missing' ? `${loadSource}-evcsProtected` : 'evcsProtected';
+        }
+
+        const nvpW = (typeof gridRawW === 'number' && Number.isFinite(gridRawW))
+            ? Number(gridRawW)
+            : ((typeof gridW === 'number' && Number.isFinite(gridW)) ? Number(gridW) : null);
+        const importW = (typeof nvpW === 'number') ? Math.max(0, nvpW) : 0;
+        const exportW = (typeof nvpW === 'number') ? Math.max(0, -nvpW) : 0;
+        const pvActive = pvW >= thresholdW;
+
+        // PV deckt Last: Nur dann blocken wir die externe Entladung hart. Falls kein
+        // Lastwert vorliegt, gilt NVP nahe Zielbezug als Deckungsersatz; bei echtem
+        // Import ohne Lastkontext bleibt der NVP-Assist moeglich.
+        const loadKnown = loadW > 0;
+        const pvCoversLoad = !!(pvActive && (
+            (loadKnown && pvW >= (loadW + loadCoverReserveW)) ||
+            (!loadKnown && importW <= Math.max(targetGridImportW, dischargeThresholdW))
+        ));
+
+        let mode = 'nvp-control';
+        let writeMode = 'standard';
+        let reason = 'Sungrow Hybrid ESS: NVP-geführte Standardregelung';
+        if (pvCoversLoad) {
+            mode = 'pv-covered-zero';
+            writeMode = 'write-zero-pv-covered';
+            reason = 'Sungrow Hybrid ESS: PV deckt Gebäudelast – externe Speicheranforderung auf 0';
+        } else if (pvActive) {
+            mode = 'pv-active-nvp-assist';
+            writeMode = 'nvp-assist-if-import';
+            reason = 'Sungrow Hybrid ESS: PV aktiv, NVP entscheidet über Assist';
+        }
+
+        return {
+            active: true,
+            configured: true,
+            mode,
+            writeMode,
+            reason,
+            pvW,
+            pvSource,
+            thresholdW,
+            loadW,
+            loadWIncludingEvcs,
+            protectedEvcsLoadW: protectedEvcsW,
+            loadSource,
+            loadCoverReserveW,
+            loadKnown,
+            pvActive,
+            pvCoversLoad,
+            targetGridImportW,
+            dischargeThresholdW,
+            nvpW,
+            importW,
+            exportW,
+        };
+    }
+
+    /**
+     * Code-Teil: Methode `_setSungrowHybridDiag`
+     * Zweck: schreibt Diagnosewerte fuer das Sungrow-Herstellerprofil.
+     * Zusammenhang: Macht im Feld sichtbar, ob NexoWatt externe Vorgaben auf 0
+     * setzt, weil PV die Last deckt, oder ob ein NVP-begrenzter Assist aktiv ist.
+     */
+    async _setSungrowHybridDiag(ctx = {}) {
+        const active = !!ctx.active;
+/**
+ * Code-Teil: n
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const n = (v, fallback = null) => Number.isFinite(Number(v)) ? Math.round(Number(v)) : fallback;
+        await this._setIfChanged('speicher.regelung.sungrowHybridAktiv', active);
+        await this._setIfChanged('speicher.regelung.sungrowHybridModus', String(ctx.mode || ''));
+        await this._setIfChanged('speicher.regelung.sungrowHybridGrund', String(ctx.reason || ''));
+        await this._setIfChanged('speicher.regelung.sungrowHybridSchreibmodus', String(ctx.writeMode || ''));
+        await this._setIfChanged('speicher.regelung.sungrowHybridSollW', n(ctx.targetW, 0));
+        await this._setIfChanged('speicher.regelung.sungrowHybridPvW', n(ctx.pvW, 0));
+        await this._setIfChanged('speicher.regelung.sungrowHybridLastW', n(ctx.loadW, 0));
+        await this._setIfChanged('speicher.regelung.sungrowHybridNvpW', n(ctx.nvpW));
+        await this._setIfChanged('speicher.regelung.sungrowHybridImportW', n(ctx.importW, 0));
+        await this._setIfChanged('speicher.regelung.sungrowHybridExportW', n(ctx.exportW, 0));
+        await this._setIfChanged('speicher.regelung.sungrowHybridPvDecktLast', !!ctx.pvCoversLoad);
+        await this._setIfChanged('speicher.regelung.sungrowHybridSchwelleW', n(ctx.thresholdW, 300));
+        await this._setIfChanged('speicher.regelung.sungrowHybridLastReserveW', n(ctx.loadCoverReserveW, 300));
+        await this._setIfChanged('speicher.regelung.sungrowHybridImportSchwelleW', n(ctx.dischargeThresholdW, 100));
+        await this._setIfChanged('speicher.regelung.sungrowHybridNvpZielW', n(ctx.nvpTargetW, 100));
+        await this._setIfChanged('speicher.regelung.sungrowHybridNvpDeadbandW', n(ctx.nvpDeadbandW, 100));
+        await this._setIfChanged('speicher.regelung.sungrowHybridNvpFehlerW', n(ctx.nvpErrorW, 0));
+        await this._setIfChanged('speicher.regelung.sungrowHybridNvpBalanceBasisW', n(ctx.nvpBalanceBaseW, 0));
+        await this._setIfChanged('speicher.regelung.sungrowHybridNvpBalanceZielW', n(ctx.nvpBalanceTargetW, 0));
+        await this._setIfChanged('speicher.regelung.sungrowHybridNvpBalanceAktiv', !!ctx.nvpBalanceNeeded);
+    }
+
+    /**
+     * Code-Teil: _isE3dcGridChargeSource
+     * Zweck: Erkennt, ob ein negativer Speicher-Sollwert wirklich Netzladen bedeutet.
+     * Zusammenhang: E3/DC unterscheidet bei SET_POWER_MODE zwischen CHARGE und
+     * GRID_CHARGE. Standard-PV-Laden bleibt CHARGE; GRID_CHARGE wird nur fuer
+     * Tarif-/Reserve-/LSK-Nachladung verwendet und muss im Herstellerprofil erlaubt sein.
+     */
+    _isE3dcGridChargeSource(source) {
+        const s = String(source || '').trim().toLowerCase();
+        return s === 'tarif_grid_charge'
+            || s === 'tarif-netzladen'
+            || s === 'reserve_grid'
+            || s === 'reserve-netzladen'
+            || s === 'lastspitze_refill'
+            || s === 'lsk_refill'
+            || s === 'grid_charge';
+    }
+
+    /**
+     * Code-Teil: _writeE3dcRscpTargetW
+     * Zweck: Uebersetzt die NexoWatt-Konvention (+W Entladen, -W Laden) in die
+     * ioBroker.e3dc-rscp-Datenpunkte EMS.SET_POWER_MODE und EMS.SET_POWER_VALUE.
+     * Zusammenhang: Der e3dc-rscp Adapter reagiert auf Aenderungen beider States;
+     * deshalb schreibt NexoWatt den Modus zuerst und danach den Leistungswert. So
+     * wird bei Richtungswechseln nicht kurz die alte Richtung mit neuem Wert gesendet.
+     */
+    async _writeE3dcRscpTargetW(targetW, reason, source, cfg = {}) {
+        const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
+        const absW = Math.max(0, Math.abs(w));
+        const allowGridCharge = cfg.e3dcAllowGridCharge === true;
+        const gridCharge = !!(w < 0 && allowGridCharge && this._isE3dcGridChargeSource(source));
+        const zeroModeRaw = String(cfg.e3dcZeroMode || 'normal').trim().toLowerCase();
+        const zeroModeCode = zeroModeRaw === 'idle' ? 1 : 0;
+
+        // ioBroker.e3dc-rscp / RSCP SET_POWER_MODE:
+        // 0=NORMAL, 1=IDLE, 2=DISCHARGE, 3=CHARGE, 4=GRID_CHARGE.
+        // Bei 0 W wird standardmaessig NORMAL geschrieben, damit E3/DC wieder seine
+        // eigene Eigenverbrauchslogik fuehren kann. IDLE bleibt als Expertenoption
+        // verfuegbar, wenn bewusst eine Batteriepause gewuenscht ist.
+        const modeCode = w > 0 ? 2 : (w < 0 ? (gridCharge ? 4 : 3) : zeroModeCode);
+        const modeName = ({ 0: 'NORMAL', 1: 'IDLE', 2: 'DISCHARGE', 3: 'CHARGE', 4: 'GRID_CHARGE' })[modeCode] || 'NORMAL';
+        const writes = [];
+        let ok = true;
+
+/**
+ * Code-Teil: writeNumber
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const writeNumber = async (key, value) => {
+            try {
+                const res = await this.dp.writeNumber(key, value, false);
+                writes.push({ key, value, result: res });
+                if (res === false) ok = false;
+                return res;
+            } catch (_e) {
+                writes.push({ key, value, result: false });
+                ok = false;
+                return false;
+            }
+        };
+/**
+ * Code-Teil: writeBoolean
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const writeBoolean = async (key, value) => {
+            try {
+                const res = await this.dp.writeBoolean(key, value, false);
+                writes.push({ key, value: !!value, result: res });
+                if (res === false) ok = false;
+                return res;
+            } catch (_e) {
+                writes.push({ key, value: !!value, result: false });
+                ok = false;
+                return false;
+            }
+        };
+
+        // Optional: E3/DC PowerLimits aktivieren und die Maximalwerte mitfuehren.
+        // Diese DPs sind nicht fuer den normalen Zielwert erforderlich, schuetzen aber
+        // Anlagen, bei denen E3/DC die gesetzten Limits nur mit POWER_LIMITS_USED=true
+        // beachtet. Der Haken bleibt bewusst aus, bis der Installer ihn aktiviert.
+        const useLimits = cfg.e3dcUsePowerLimits === true;
+        const hasLimitFlag = !!(this.dp && this.dp.getEntry && this.dp.getEntry('st.e3dcPowerLimitsUsed'));
+        const hasMaxCharge = !!(this.dp && this.dp.getEntry && this.dp.getEntry('st.e3dcMaxChargePowerW'));
+        const hasMaxDischarge = !!(this.dp && this.dp.getEntry && this.dp.getEntry('st.e3dcMaxDischargePowerW'));
+        if (useLimits && hasLimitFlag) await writeBoolean('st.e3dcPowerLimitsUsed', true);
+        const cfgMaxChargeW = Number(cfg.maxChargeW);
+        const cfgMaxDischargeW = Number(cfg.maxDischargeW);
+        if (useLimits && hasMaxCharge && Number.isFinite(cfgMaxChargeW) && cfgMaxChargeW > 0) await writeNumber('st.e3dcMaxChargePowerW', Math.round(cfgMaxChargeW));
+        if (useLimits && hasMaxDischarge && Number.isFinite(cfgMaxDischargeW) && cfgMaxDischargeW > 0) await writeNumber('st.e3dcMaxDischargePowerW', Math.round(cfgMaxDischargeW));
+
+        await writeNumber('st.e3dcSetPowerMode', modeCode);
+        await writeNumber('st.e3dcSetPowerValueW', absW);
+
+        this._e3dcRscpLastMode = modeName;
+        await this._setE3dcRscpDiag({
+            active: true,
+            mode: modeName,
+            modeCode,
+            valueW: absW,
+            targetW: w,
+            writeMode: 'set-power',
+            reason: String(reason || ''),
+            source: String(source || ''),
+            gridCharge,
+            zeroMode: zeroModeCode === 1 ? 'idle' : 'normal',
+            powerLimitsUsed: useLimits,
+            ok,
+        });
+
+        return { ok, modeCode, modeName, valueW: absW, targetW: w, gridCharge, powerLimitsUsed: useLimits, writes };
+    }
+
+    /**
+     * Code-Teil: _setE3dcRscpDiag
+     * Zweck: Spiegeln des E3/DC-Schreibpfads in eigene Diagnose-States, damit keine
+     * ioBroker-Warnungen durch fehlende Objekte entstehen und der Installateur sieht,
+     * welches SET_POWER-Tupel zuletzt geschrieben wurde.
+     */
+    async _setE3dcRscpDiag(ctx = {}) {
+/**
+ * Code-Teil: n
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const n = (v, def = 0) => Number.isFinite(Number(v)) ? Math.round(Number(v)) : def;
+        await this._setIfChanged('speicher.regelung.e3dcRscpAktiv', !!ctx.active);
+        await this._setIfChanged('speicher.regelung.e3dcRscpModus', String(ctx.mode || ''));
+        await this._setIfChanged('speicher.regelung.e3dcRscpModeCode', n(ctx.modeCode, 0));
+        await this._setIfChanged('speicher.regelung.e3dcRscpValueW', n(ctx.valueW, 0));
+        await this._setIfChanged('speicher.regelung.e3dcRscpSollW', n(ctx.targetW, 0));
+        await this._setIfChanged('speicher.regelung.e3dcRscpSchreibmodus', String(ctx.writeMode || ''));
+        await this._setIfChanged('speicher.regelung.e3dcRscpQuelle', String(ctx.source || ''));
+        await this._setIfChanged('speicher.regelung.e3dcRscpGrund', String(ctx.reason || ''));
+        await this._setIfChanged('speicher.regelung.e3dcRscpGridCharge', !!ctx.gridCharge);
+        await this._setIfChanged('speicher.regelung.e3dcRscpZeroMode', String(ctx.zeroMode || ''));
+        await this._setIfChanged('speicher.regelung.e3dcRscpPowerLimitsUsed', !!ctx.powerLimitsUsed);
+        await this._setIfChanged('speicher.regelung.e3dcRscpSchreibOk', ctx.ok === true);
+    }
+
     async _buildFeneconHybridContext({ cfg = {}, staleMs = 15000, readCacheNumber = null, gridW = null, gridRawW = null } = {}) {
         const thresholdW = Math.max(0, num(cfg.feneconPvPassthroughThresholdW, 300));
         const additionalThresholdW = Math.max(0, num(cfg.feneconAdditionalPvThresholdW, 100));
@@ -3284,19 +4055,79 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const chargeEntry = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.targetChargePowerW') : null;
         const dischargeEntry = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.targetDischargePowerW') : null;
         const runEntry = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.run') : null;
-        const hasSplitTarget = !!(chargeEntry && dischargeEntry);
 
-        // Hersteller-offene Zielpfade:
-        // - split: getrennte positive Lade-/Entlade-Sollwerte, bevorzugt wenn beide DPs gemappt sind.
-        //   Beispiel Split-Sollwertsystem/nexowatt-devices: ctrl.chargePowerW + ctrl.dischargePowerW.
-        // - signed: allgemeiner bidirektionaler Sollwert mit NexoWatt-Konvention +W=Entladen, -W=Laden.
-        //   Dieser Pfad bleibt für bestehende Installationen unverändert.
-        const targetMode = hasSplitTarget ? 'split-charge-discharge' : (signedEntry ? 'signed-targetPower' : 'none');
+        // E3/DC RSCP-Profil: Der ioBroker.e3dc-rscp Adapter schreibt aktive
+        // Speicherleistung nicht ueber einen signed W-DP, sondern ueber das gekoppelte
+        // Tupel EMS.SET_POWER_MODE + EMS.SET_POWER_VALUE. Diese beiden Datenpunkte
+        // werden nur genutzt, wenn das E3/DC-Herstellerprofil im AppCenter aktiv ist;
+        // alle generischen Speicher bleiben auf signed/split Zielpfaden.
+        const cfg = this._getCfg();
+        const storageVendorProfile = this._getStorageVendorProfile(cfg);
+        const e3dcModeEntry = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.e3dcSetPowerMode') : null;
+        const e3dcValueEntry = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.e3dcSetPowerValueW') : null;
+        const e3dcTargetConfigured = storageVendorProfile === 'e3dc-rscp' && !!(e3dcModeEntry && e3dcValueEntry);
+
+/**
+ * Code-Teil: objectIdOf
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const objectIdOf = (entry) => entry && entry.objectId ? String(entry.objectId).trim() : '';
+/**
+ * Code-Teil: sameObject
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const sameObject = (a, b) => {
+            const aa = objectIdOf(a);
+            const bb = objectIdOf(b);
+            return !!(aa && bb && aa === bb);
+        };
+
+        // Zielpfad-Regel:
+        // - Signed-DP bleibt der bidirektionale Standard (+W=Entladen, -W=Laden).
+        // - Getrennte Lade-/Entlade-DPs koennen einzeln oder zusammen gemappt werden.
+        // - Sind Signed und Split vorhanden, werden die Split-DPs synchron genullt/gesetzt
+        //   und der Signed-DP bleibt als bidirektionaler Hauptpfad konsistent.
+        // - Wenn ein Split-DP versehentlich auf dasselbe Objekt wie der Signed-DP zeigt,
+        //   schreibt NexoWatt diesen Split-DP nicht nochmal mit anderer Vorzeichenlogik.
+        const chargeSameAsSigned = sameObject(chargeEntry, signedEntry);
+        const dischargeSameAsSigned = sameObject(dischargeEntry, signedEntry);
+        const canWriteChargeSplit = !!(chargeEntry && !chargeSameAsSigned);
+        const canWriteDischargeSplit = !!(dischargeEntry && !dischargeSameAsSigned);
+        const hasAnySplitTarget = !!(chargeEntry || dischargeEntry);
+        const hasAnyWritableSplit = !!(canWriteChargeSplit || canWriteDischargeSplit);
+        const hasSignedTarget = !!signedEntry;
+        const genericDirectionSupported = w === 0 || hasSignedTarget || (w < 0 ? canWriteChargeSplit : canWriteDischargeSplit);
+        const directionSupported = e3dcTargetConfigured ? true : genericDirectionSupported;
+        const genericTargetMode = hasSignedTarget && hasAnySplitTarget
+            ? 'signed+split-targetPower'
+            : (hasAnySplitTarget
+                ? (canWriteChargeSplit && canWriteDischargeSplit
+                    ? 'split-charge-discharge'
+                    : (canWriteChargeSplit ? 'split-charge-only' : (canWriteDischargeSplit ? 'split-discharge-only' : 'split-unwritable')))
+                : (hasSignedTarget ? 'signed-targetPower' : 'none'));
+        const targetMode = e3dcTargetConfigured ? 'e3dc-rscp-set-power' : genericTargetMode;
+
         await this._setIfChanged('speicher.regelung.targetMode', targetMode);
         await this._setIfChanged('speicher.regelung.targetObjId', signedEntry && signedEntry.objectId ? String(signedEntry.objectId) : '');
         await this._setIfChanged('speicher.regelung.splitTargetObjIds', JSON.stringify({
             charge: chargeEntry && chargeEntry.objectId ? String(chargeEntry.objectId) : '',
             discharge: dischargeEntry && dischargeEntry.objectId ? String(dischargeEntry.objectId) : '',
+            chargeSkippedBecauseSignedSameObject: !!chargeSameAsSigned,
+            dischargeSkippedBecauseSignedSameObject: !!dischargeSameAsSigned,
         }));
         await this._setIfChanged('speicher.regelung.runObjId', runEntry && runEntry.objectId ? String(runEntry.objectId) : '');
 
@@ -3330,55 +4161,68 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 writeResult = false;
                 await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
                 await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
-            } else if (hasSplitTarget) {
-                // Split-Zielpfad: der Speicher bekommt positive Werte auf separaten DPs.
-                // Bei Laden (w < 0) wird charge=|w| und discharge=0 geschrieben.
-                // Bei Entladen (w > 0) wird discharge=w und charge=0 geschrieben.
-                // Bei 0 W werden beide Pfade auf 0 gesetzt. Optional wird ein Run-DP
-                // passend gesetzt, damit Bridges/Herstellerprofile externe Regelung aktivieren.
-                const chargeW = w < 0 ? Math.abs(w) : 0;
-                const dischargeW = w > 0 ? w : 0;
-                await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
-                await this._setIfChanged('speicher.regelung.lastWriteSplitJson', JSON.stringify({
-                    chargeW,
-                    dischargeW,
-                    run: w !== 0,
+            } else if (e3dcTargetConfigured) {
+                const e3dcResult = await this._writeE3dcRscpTargetW(w, reason, source, cfg);
+                writeResult = e3dcResult && e3dcResult.ok === true;
+                await this._setIfChanged('speicher.regelung.lastWriteRaw', e3dcResult ? Math.round(Number(e3dcResult.valueW) || 0) : null);
+                await this._setIfChanged('speicher.regelung.lastWriteSplitJson', e3dcResult ? JSON.stringify({
+                    profile: 'e3dc-rscp',
+                    modeCode: e3dcResult.modeCode,
+                    modeName: e3dcResult.modeName,
+                    valueW: e3dcResult.valueW,
+                    gridCharge: !!e3dcResult.gridCharge,
+                    powerLimitsUsed: !!e3dcResult.powerLimitsUsed,
+                    writes: e3dcResult.writes || [],
+                }) : null);
+            } else if (hasSignedTarget || hasAnySplitTarget) {
+                const chargeW = directionSupported && w < 0 ? Math.abs(w) : 0;
+                const dischargeW = directionSupported && w > 0 ? w : 0;
+                const runActive = directionSupported && w !== 0;
+                let wroteAnyTarget = false;
+
+                if (canWriteChargeSplit) {
+                    try { writeResults.push(await this.dp.writeNumber('st.targetChargePowerW', chargeW, false)); wroteAnyTarget = true; } catch (_e) { writeResults.push(false); }
+                }
+                if (canWriteDischargeSplit) {
+                    try { writeResults.push(await this.dp.writeNumber('st.targetDischargePowerW', dischargeW, false)); wroteAnyTarget = true; } catch (_e) { writeResults.push(false); }
+                }
+
+                await this._setIfChanged('speicher.regelung.lastWriteSplitJson', hasAnySplitTarget ? JSON.stringify({
+                    chargeW: canWriteChargeSplit ? chargeW : null,
+                    dischargeW: canWriteDischargeSplit ? dischargeW : null,
+                    run: runActive,
                     mode: targetMode,
-                }));
+                    signedAlsoWritten: !!hasSignedTarget,
+                    directionSupported,
+                    chargeSkippedBecauseSignedSameObject: !!chargeSameAsSigned,
+                    dischargeSkippedBecauseSignedSameObject: !!dischargeSameAsSigned,
+                }) : null);
 
-                try { writeResults.push(await this.dp.writeNumber('st.targetChargePowerW', chargeW, false)); } catch (_e) { writeResults.push(false); }
-                try { writeResults.push(await this.dp.writeNumber('st.targetDischargePowerW', dischargeW, false)); } catch (_e) { writeResults.push(false); }
-                if (runEntry && this.dp && typeof this.dp.writeBoolean === 'function') {
-                    try { writeResults.push(await this.dp.writeBoolean('st.run', w !== 0, false)); } catch (_e) { writeResults.push(false); }
-                }
+                if (hasSignedTarget) {
+                    try {
+                        const e = signedEntry;
+                        const scale = (e && Number.isFinite(Number(e.scale)) && Number(e.scale) !== 0) ? Number(e.scale) : 1;
+                        const offset = (e && Number.isFinite(Number(e.offset))) ? Number(e.offset) : 0;
+                        let raw = (w - offset) / scale;
+                        if (e && e.invert) raw = -raw;
+                        if (e && Number.isFinite(Number(e.min))) raw = Math.max(Number(e.min), raw);
+                        if (e && Number.isFinite(Number(e.max))) raw = Math.min(Number(e.max), raw);
+                        await this._setIfChanged('speicher.regelung.lastWriteRaw', Math.round(raw));
+                    } catch {
+                        await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+                    }
 
-                const failed = writeResults.some(r => r === false);
-                writeResult = failed ? false : true;
-            } else if (signedEntry) {
-                // Signed-Zielpfad: bestehende Installationen bleiben unverändert.
-                // Optionaler Run-DP wird zusätzlich gesetzt, damit herstelleroffene
-                // Adapter/Bridges die externe Sollwertführung aktivieren können.
-                try {
-                    const e = signedEntry;
-                    const scale = (e && Number.isFinite(Number(e.scale)) && Number(e.scale) !== 0) ? Number(e.scale) : 1;
-                    const offset = (e && Number.isFinite(Number(e.offset))) ? Number(e.offset) : 0;
-                    let raw = (w - offset) / scale;
-                    if (e && e.invert) raw = -raw;
-                    if (e && Number.isFinite(Number(e.min))) raw = Math.max(Number(e.min), raw);
-                    if (e && Number.isFinite(Number(e.max))) raw = Math.min(Number(e.max), raw);
-                    await this._setIfChanged('speicher.regelung.lastWriteRaw', Math.round(raw));
-                    await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
-                } catch {
+                    try { writeResults.push(await this.dp.writeNumber('st.targetPowerW', w, false)); wroteAnyTarget = true; } catch (_e) { writeResults.push(false); }
+                } else {
                     await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
-                    await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
                 }
 
-                try { writeResults.push(await this.dp.writeNumber('st.targetPowerW', w, false)); } catch (_e) { writeResults.push(false); }
                 if (runEntry && this.dp && typeof this.dp.writeBoolean === 'function') {
-                    try { writeResults.push(await this.dp.writeBoolean('st.run', w !== 0, false)); } catch (_e) { writeResults.push(false); }
+                    try { writeResults.push(await this.dp.writeBoolean('st.run', runActive, false)); } catch (_e) { writeResults.push(false); }
                 }
+
                 const failed = writeResults.some(r => r === false);
-                writeResult = failed ? false : true;
+                writeResult = (!directionSupported || !wroteAnyTarget || failed) ? false : true;
             } else {
                 await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
                 await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
@@ -3395,14 +4239,17 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await this._setIfChanged('speicher.regelung.quelle', String(source || ''));
         await this._setIfChanged('speicher.regelung.grund', String(reason || ''));
         await this._setIfChanged('speicher.regelung.schreibOk', writeResult === true);
+        const singleStatus = writeResult === true
+            ? (e3dcTargetConfigured ? 'e3dc-rscp-geschrieben' : (hasSignedTarget && hasAnyWritableSplit ? 'signed+split-geschrieben' : (hasAnyWritableSplit ? 'split-geschrieben' : 'geschrieben')))
+            : (!directionSupported ? 'zielrichtung-nicht-gemappt' : 'nicht möglich');
         const writeStatus = farmApplied
             ? 'farm'
             : (farmEnabledForWrite && !allowSingleTargetFallback
                 ? ('farm-nicht-moeglich' + (farmReason ? ':' + farmReason : ''))
-                : ((writeResult === null) ? 'unverändert' : (writeResult === true ? (hasSplitTarget ? 'split-geschrieben' : 'geschrieben') : 'nicht möglich')));
+                : ((writeResult === null) ? 'unverändert' : singleStatus));
         await this._setIfChanged('speicher.regelung.schreibStatus', writeStatus);
 
-        this._lastTargetW = w;
+        this._lastTargetW = (writeResult === true || farmApplied) ? w : 0;
         this._lastReason = String(reason || '');
         this._lastSource = String(source || '');
     }
@@ -3482,6 +4329,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.aktivAutoMultiUse', 'Auto-Aktivierung durch MultiUse-Policy', 'boolean', 'indicator', false);
         await mk('speicher.regelung.aktivSpeicherfarm', 'Speicherfarm-Verteilpfad verfügbar', 'boolean', 'indicator', false);
         await mk('speicher.regelung.aktivAutoSpeicherfarm', 'Auto-Aktivierung durch Speicherfarm (deaktiviert)', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.herstellerprofil', 'Speicher-Herstellerprofil', 'string', 'text', 'generic');
         await mk('speicher.regelung.speicherKopplung', 'Speicher-Kopplung AC/DC', 'string', 'text', 'ac');
         await mk('speicher.regelung.dcPvPowerW', 'DC-/Hybrid-PV Erzeugungsleistung', 'number', 'value.power', 0);
         await mk('speicher.regelung.dcPvPowerAlterMs', 'DC-/Hybrid-PV Erzeugungswert Alter', 'number', 'value.interval', null);
@@ -3536,6 +4384,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.feneconHybridAssistAktiv', 'FENECON/OpenEMS Assist aktiv', 'boolean', 'indicator', false);
         await mk('speicher.regelung.feneconHybridAssistSchwelleW', 'FENECON/OpenEMS Assist Netzbezugsschwelle', 'number', 'value.power', 800);
 
+
         await mk('speicher.regelung.netzLeistungW', 'Netzleistung (W)', 'number', 'value.power');
         await mk('speicher.regelung.netzAlterMs', 'Netzleistung Alter (ms)', 'number', 'value.interval');
         await mk('speicher.regelung.netzLadenErlaubt', 'Netzladen erlaubt', 'boolean', 'indicator', true);
@@ -3573,6 +4422,51 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.selfTargetGridImportW', 'Eigenverbrauch Ziel-Netzbezug (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.selfImportThresholdW', 'Eigenverbrauch Deadband (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.selfEntladenAktiviert', 'Eigenverbrauch-Entladen aktiviert', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.evcsSpeicherSchutzLastW', 'EVCS-Leistung mit Speicher-Schutz (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.evcsSpeicherSchutzWallboxen', 'Wallboxen mit Speicher-Schutz', 'number', 'value', 0);
+        await mk('speicher.regelung.evcsSpeicherMitnutzungLastW', 'EVCS-Leistung mit Speicher-Mitnutzung (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.evcsSpeicherSchutzNvpZielOffsetW', 'NVP-Zieloffset durch EVCS-Speicher-Schutz (W)', 'number', 'value.power', 0);
+
+        // Sungrow-Hybrid-Diagnoseobjekte vor dem ersten zyklischen Schreiben anlegen.
+        // Zusätzlich sichert _setIfChanged fehlende Runtime-States ab, falls ein Update
+        // ohne sauberen Objekt-Neuaufbau gestartet wurde.
+        await mk('speicher.regelung.sungrowHybridAktiv', 'Sungrow Hybrid Herstellerprofil aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.sungrowHybridModus', 'Sungrow Hybrid Modus', 'string', 'text', '');
+        await mk('speicher.regelung.sungrowHybridGrund', 'Sungrow Hybrid Grund', 'string', 'text', '');
+        await mk('speicher.regelung.sungrowHybridSchreibmodus', 'Sungrow Hybrid Schreibmodus', 'string', 'text', '');
+        await mk('speicher.regelung.sungrowHybridSollW', 'Sungrow Hybrid angewendeter Sollwert', 'number', 'value.power', 0);
+        await mk('speicher.regelung.sungrowHybridPvW', 'Sungrow Hybrid erkannte PV-Leistung', 'number', 'value.power', 0);
+        await mk('speicher.regelung.sungrowHybridLastW', 'Sungrow Hybrid erkannte Gebäudelast', 'number', 'value.power', 0);
+        await mk('speicher.regelung.sungrowHybridNvpW', 'Sungrow Hybrid Netzpunktleistung', 'number', 'value.power', null);
+        await mk('speicher.regelung.sungrowHybridImportW', 'Sungrow Hybrid Netzbezug', 'number', 'value.power', 0);
+        await mk('speicher.regelung.sungrowHybridExportW', 'Sungrow Hybrid Netzeinspeisung', 'number', 'value.power', 0);
+        await mk('speicher.regelung.sungrowHybridPvDecktLast', 'Sungrow Hybrid PV deckt Gebäudelast', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.sungrowHybridSchwelleW', 'Sungrow Hybrid PV-Schwellwert', 'number', 'value.power', 300);
+        await mk('speicher.regelung.sungrowHybridLastReserveW', 'Sungrow Hybrid Lastdeckungsreserve', 'number', 'value.power', 300);
+        await mk('speicher.regelung.sungrowHybridImportSchwelleW', 'Sungrow Hybrid Import-Schwelle', 'number', 'value.power', 100);
+
+        await mk('speicher.regelung.sungrowHybridNvpZielW', 'Sungrow NVP Zielbezug (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.sungrowHybridNvpDeadbandW', 'Sungrow NVP Deadband (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.sungrowHybridNvpFehlerW', 'Sungrow NVP Regelfehler (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.sungrowHybridNvpBalanceBasisW', 'Sungrow NVP Balancing Basis/Ist (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.sungrowHybridNvpBalanceZielW', 'Sungrow NVP Balancing Ziel (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.sungrowHybridNvpBalanceAktiv', 'Sungrow NVP Balancing aktiv', 'boolean', 'indicator', false);
+
+        // E3/DC-RSCP-Diagnoseobjekte vor dem ersten Schreibzugriff anlegen.
+        // Der ioBroker.e3dc-rscp Adapter nutzt SET_POWER_MODE + SET_POWER_VALUE;
+        // diese States zeigen transparent, welches RSCP-Tupel NexoWatt zuletzt gesetzt hat.
+        await mk('speicher.regelung.e3dcRscpAktiv', 'E3/DC RSCP Herstellerprofil aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.e3dcRscpModus', 'E3/DC RSCP Modus', 'string', 'text', '');
+        await mk('speicher.regelung.e3dcRscpModeCode', 'E3/DC RSCP SET_POWER_MODE Code', 'number', 'value', 0);
+        await mk('speicher.regelung.e3dcRscpValueW', 'E3/DC RSCP SET_POWER_VALUE (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.e3dcRscpSollW', 'E3/DC RSCP NexoWatt Sollwert (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.e3dcRscpSchreibmodus', 'E3/DC RSCP Schreibmodus', 'string', 'text', '');
+        await mk('speicher.regelung.e3dcRscpQuelle', 'E3/DC RSCP Quelle', 'string', 'text', '');
+        await mk('speicher.regelung.e3dcRscpGrund', 'E3/DC RSCP Grund', 'string', 'text', '');
+        await mk('speicher.regelung.e3dcRscpGridCharge', 'E3/DC RSCP GRID_CHARGE aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.e3dcRscpZeroMode', 'E3/DC RSCP 0-W-Modus', 'string', 'text', 'normal');
+        await mk('speicher.regelung.e3dcRscpPowerLimitsUsed', 'E3/DC RSCP PowerLimits gesetzt', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.e3dcRscpSchreibOk', 'E3/DC RSCP Schreiben OK', 'boolean', 'indicator', false);
         await mk('speicher.regelung.policyMode', 'Speicher-Policy-Modus', 'string', 'text', 'eigenverbrauch');
         await mk('speicher.regelung.policyLayerStorageOnly', 'Policy-Schicht reine Eigenverbrauchsoptimierung', 'boolean', 'indicator', true);
         await mk('speicher.regelung.multiUsePolicyActive', 'MultiUse-Policy aktiv', 'boolean', 'indicator', false);
@@ -3597,12 +4491,42 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
+    async _ensureRuntimeStateObject(id, val) {
+        // Sicherheitsnetz fuer Feld-Updates: Wenn ein neuer Diagnose-State vor dem
+        // Objekt-Rebuild geschrieben wird, legt ioBroker sonst bei jedem Tick eine
+        // Warnung ins Log. Wir legen nur eigene Runtime-States im Speicher-Regelungs-
+        // Namespace nachtraeglich an und vermeiden damit Log-Spam durch neue States.
+        try {
+            if (!this.adapter || typeof this.adapter.setObjectNotExistsAsync !== 'function') return;
+            const sid = String(id || '');
+            if (!sid.startsWith('speicher.regelung.')) return;
+            const numericById = /W$|Pct$|Ms$|Limit|Headroom|Schwelle|Reserve|Soc|SoC|Ziel|Fehler|Basis/.test(sid);
+            const booleanById = /Aktiv$|Ok$|Erlaubt$|DecktLast$|Ignored$|Active$/.test(sid);
+            const type = (typeof val === 'boolean' || booleanById)
+                ? 'boolean'
+                : ((typeof val === 'number' || numericById) ? 'number' : 'string');
+            let role = type === 'boolean' ? 'indicator' : (type === 'number' ? 'value' : 'text');
+            if (type === 'number') {
+                if (/W$/.test(sid) || /Power/.test(sid) || /Leistung/.test(sid)) role = 'value.power';
+                else if (/Ms$/.test(sid) || /Alter/.test(sid)) role = 'value.interval';
+            }
+            await this.adapter.setObjectNotExistsAsync(sid, {
+                type: 'state',
+                common: { name: sid, type, role, read: true, write: false, def: val === undefined ? null : val },
+                native: {},
+            });
+        } catch {
+            // Diagnose-Objekterstellung darf den Regeltakt nie abbrechen.
+        }
+    }
+
     async _setIfChanged(id, val) {
         const v = (val === undefined) ? null : val;
         try {
             const cur = await this.adapter.getStateAsync(id);
             const curVal = cur ? cur.val : null;
             if (cur && curVal === v) return;
+            if (!cur) await this._ensureRuntimeStateObject(id, v);
             await this.adapter.setStateAsync(id, v, true);
         } catch (e) {
             // ignore
@@ -3625,6 +4549,26 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         try {
             const s = await this.adapter.getStateAsync(id);
             const n = Number(s ? s.val : NaN);
+            return Number.isFinite(n) ? n : null;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Code-Teil: _readOwnNumberFresh
+     * Zweck: Liest interne Diagnose-/Koordinationswerte nur, wenn sie frisch sind.
+     * Zusammenhang: EVCS-Speicher-Schutz darf einen Speicher nicht mit alten Wallbox-
+     * Leistungswerten sperren; deshalb wird der ioBroker-State-Zeitstempel hier hart
+     * gegen einen Maximalwert geprüft.
+     */
+    async _readOwnNumberFresh(id, maxAgeMs = 60000) {
+        try {
+            const s = await this.adapter.getStateAsync(id);
+            if (!s) return null;
+            const ts = Number(s.ts);
+            if (Number.isFinite(ts) && maxAgeMs > 0 && (Date.now() - ts) > maxAgeMs) return null;
+            const n = Number(s.val);
             return Number.isFinite(n) ? n : null;
         } catch {
             return null;

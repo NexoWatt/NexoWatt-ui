@@ -35,7 +35,7 @@ for (const file of storageFiles) {
   must(file, 'const lskEnabledCfg = multiUseOwnsZones && (cfg.lskEnabled !== false);', 'LSK nur MultiUse');
   must(file, 'const evcsStorageAssistPolicyAllowed = !!multiUsePolicyActive;', 'EVCS-Assist nur MultiUse');
   must(file, 'const maxByDemandW = measuredDemandCapW;', 'Entlade-Demand-Cap ohne alten Sollwert');
-  must(file, 'const activeNvpDischargeSource = (source === \'eigenverbrauch\' || source === \'tarif\' || source === \'fenecon\' || source === \'fenecon-assist\' || source === \'lastspitze\');', 'Demand-Cap greift nach Rampe fuer alle NVP-Entladequellen');
+  must(file, 'const activeNvpDischargeSource = (source === \'eigenverbrauch\' || source === \'tarif\' || source === \'fenecon\' || source === \'fenecon-assist\' || source === \'sungrow-assist\' || source === \'lastspitze\');', 'Demand-Cap greift nach Rampe fuer alle NVP-Entladequellen');
   mustNot(file, 'const lskEnabledCfg = ignoreStaleMultiUsePolicy ? true', 'inaktiver MultiUse darf LSK nicht einschalten');
   mustNot(file, 'lskResponseHoldW', 'LSK darf alten Sollwert nicht als Demand-Hold nutzen');
 }

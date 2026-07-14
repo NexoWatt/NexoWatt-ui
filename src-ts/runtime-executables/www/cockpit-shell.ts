@@ -130,10 +130,12 @@
           var evAvail = ((Number(sc.evcsConfiguredCount || 0) || (Array.isArray(sc.evcsList) ? sc.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
           var evCount = Math.max(0, Math.round(Number(sc.evcsCount || 0) || 0));
           var showEvcs = evAvail && evCount >= 2;
-          var sh = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
-          // Speicherfarm-Menü nur über die zentrale /config-Feature-Sichtbarkeit öffnen.
-          // Alte storageFarm.* Runtime-States oder enableStorageFarm-Legacywerte dürfen den Link nicht mehr allein anzeigen.
-          var sf = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
+          var fv = (cfg.featureVisibility && typeof cfg.featureVisibility === 'object') ? cfg.featureVisibility : {};
+          // Optionale Kunden-Unterseiten werden ausschließlich über /config.featureVisibility geöffnet.
+          // Konkret: featureVisibility.hasSmartHome und featureVisibility.hasStorageFarm.
+          // Dadurch können alte Legacy-Flags oder Runtime-States keine SmartHome-/Farm-Menüpunkte mehr sichtbar machen.
+          var sh = fv.hasSmartHome === true;
+          var sf = fv.hasStorageFarm === true;
           [['tabEvcs', showEvcs], ['menuEvcsLink', showEvcs], ['tabSmartHome', sh], ['menuSmartHomeLink', sh], ['tabStorageFarm', sf], ['menuStorageFarmLink', sf]].forEach(function(pair){
             var el = document.getElementById(pair[0]);
             if (el) el.classList.toggle('hidden', !pair[1]);

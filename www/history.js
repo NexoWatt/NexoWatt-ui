@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/history.ts
- * Quell-Hash: sha256:1830e9d77dff0a707d3c536d0e7f4e4b797bd17fd45a4b2ca97487f2e5ca323b
+ * Quell-Hash: sha256:408666a0e7fee0ceee1772272efb00ebc0cd6b69b2970b7b474b621f8b7775d2
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2991,14 +2991,14 @@ async function load(force = false){
     document.querySelectorAll('[data-feature="evcs"]').forEach(function(el){
       el.classList.toggle('hidden', !showEvcsHistory);
     });
-    const sh = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
+    const sh = !!(cfg.featureVisibility && cfg.featureVisibility.hasSmartHome === true);
     const sl = document.getElementById('menuSmartHomeLink');
     if (sl) sl.classList.toggle('hidden', !sh);
     const st = document.getElementById('tabSmartHome');
     if (st) st.classList.toggle('hidden', !sh);
 
     // Speicherfarm Tab/Link nur anzeigen, wenn eine Farm wirklich konfiguriert ist.
-    const sf = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
+    const sf = !!(cfg.featureVisibility && cfg.featureVisibility.hasStorageFarm === true);
     const sft = document.getElementById('tabStorageFarm');
     if (sft) sft.classList.toggle('hidden', !sf);
     const sfl = document.getElementById('menuStorageFarmLink');

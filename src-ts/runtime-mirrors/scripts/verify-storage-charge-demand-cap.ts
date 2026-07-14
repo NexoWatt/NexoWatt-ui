@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2f70442ca57152f082c4c836599684d6fa54ae227122205ffb757542d8dbc899
+ * Original-Hash: f9fc9f936ba61aef9e7817fc8f1ed1aa234687fc923ca2f0ce5c856a6f776733
  */
 
 /**
@@ -78,11 +78,11 @@ for (const file of [
   must(file, 'let chargeDemandHardCapW = null;', 'Lade-Cap Laufzeitvariable');
   must(file, '0 W heißt dabei bewusst: diese Richtung jetzt stoppen.', '0-W-Stop-Kommentar');
   must(file, "'Tarif-Netzlade-Headroom-Cap'", 'Tarif-Netzlade-Cap');
-  must(file, 'const exportCtrlCapW = Math.max(0, exportCtrlW + extraBias);', 'PV-Cap auf geglaetteten Wunsch');
-  must(file, 'const exportRawCapW = exportRawW > 0 ? Math.max(0, exportRawW + extraBias) : 0;', 'PV-Cap RAW-Export stoppt bei Import');
+  must(file, 'const exportCtrlCapW = Math.max(0, currentChargeForBalancingW + exportCtrlW + extraBias);', 'PV-Cap nutzt laufende Ladung plus geglaetteten Exportwunsch');
+  must(file, 'const exportRawCapW = exportRawW > 0 ? Math.max(0, currentChargeForBalancingW + exportRawW + extraBias) : currentChargeForBalancingW;', 'PV-Cap RAW-Export nutzt laufende Ladung plus aktuellen NVP-Export');
   must(file, 'const pvRawChargeCapW = clamp(Math.min(exportCtrlCapW, exportRawCapW), 0, chargeLimitW);', 'PV-Wunsch wird durch RAW hart begrenzt');
   must(file, 'targetW = -pvRawChargeCapW;', 'PV-Zielwert nutzt harten RAW-Cap');
-  must(file, "chargeDemandHardCapReason = zeEnabled ? 'Nulleinspeisung-PV-Rohwert-Lade-Cap' : 'PV-Rohwert-Lade-Cap';", 'PV-Rohwert-Cap Diagnose');
+  must(file, "chargeDemandHardCapReason = zeEnabled ? 'Nulleinspeisung-NVP-Lade-Cap (aktuelle Ladung+Export)' : 'PV-NVP-Lade-Cap (aktuelle Ladung+Export)';", 'PV-NVP-Cap Diagnose mit laufender Ladung');
   must(file, "chargeDemandHardCapReason = 'Notstrom-Reserve-Lade-Cap';", 'Reserve-Lade-Cap');
   must(file, "chargeDemandHardCapReason = 'LSK-Refill-Lade-Cap';", 'LSK-Refill-Lade-Cap');
   must(file, 'if (_prevRampW < 0 && targetW >= _prevRampW) {', 'Laderuecknahme ohne Rampe');

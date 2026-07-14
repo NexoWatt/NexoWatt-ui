@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/frontend/customer-feature-visibility.ts
- * Quell-Hash: sha256:0794fc7a96c2719055d0de5d4171973278c4412689099e8e44b1bbbd958d4a9b
+ * Quell-Hash: sha256:e49664d52761944c66f99d41b3cad52a0a17a5299fcff12c7738caecec0741c4
  * Erzeugung: npm run sync:ts-frontend-mirrors
  *
  * Zweck:
@@ -88,10 +88,10 @@ export function decideStorageFarmVisibility(input) {
     if (input.storageFarmEnabled !== true) {
         return { key: 'storageFarm', visible: false, reason: 'farm-disabled', hint: 'Speicherfarm ausgeblendet: Feature ist im Installer nicht aktiv.' };
     }
-    const hasFarm = (input.storageFarmProofs ?? []).some(hasRealStorageFarmProof);
-    return hasFarm
-        ? { key: 'storageFarm', visible: true, reason: 'farm-real-storage', hint: 'Speicherfarm sichtbar: mindestens ein echter Farmspeicher ist konfiguriert.' }
-        : { key: 'storageFarm', visible: false, reason: 'farm-no-real-storage', hint: 'Speicherfarm ausgeblendet: keine echten Farmspeicher-Datenpunkte vorhanden.' };
+    const realFarmCount = (input.storageFarmProofs ?? []).filter(hasRealStorageFarmProof).length;
+    return realFarmCount >= 2
+        ? { key: 'storageFarm', visible: true, reason: 'farm-real-storage', hint: 'Speicherfarm sichtbar: mindestens zwei echte Farmspeicher sind konfiguriert.' }
+        : { key: 'storageFarm', visible: false, reason: 'farm-no-real-storage', hint: 'Speicherfarm ausgeblendet: weniger als zwei echte Farmspeicher-Datenpunkte vorhanden.' };
 }
 /**
  * Code-Teil: decideSmartHomeVisibility

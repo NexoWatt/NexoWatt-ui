@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/logic.ts
- * Quell-Hash: sha256:e5a7a2dfbc4d4e69874b1feb2a1ef37a8a4c622106ba8e78882e99cd980f50e4
+ * Quell-Hash: sha256:3f3d49c8de007bbc3c5934a067e6fba5a239435fe168c09e3eacd4e468dfdf53
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -3701,12 +3701,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if(l) l.classList.toggle('hidden', !showEvcs);
     const t=document.getElementById('tabEvcs');
     if(t) t.classList.toggle('hidden', !showEvcs);
-    const sh = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
+    const sh = !!(cfg.featureVisibility && cfg.featureVisibility.hasSmartHome === true);
     const sl = document.getElementById('menuSmartHomeLink');
     if (sl) sl.classList.toggle('hidden', !sh);
     const st = document.getElementById('tabSmartHome');
     if (st) st.classList.toggle('hidden', !sh);
-    const sf = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
+    const sf = !!(cfg.featureVisibility && cfg.featureVisibility.hasStorageFarm === true);
     const sfMenu = document.getElementById('menuStorageFarmLink');
     if (sfMenu) sfMenu.classList.toggle('hidden', !sf);
     const sfTab = document.getElementById('tabStorageFarm');

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0d2ff014f29709b4b3c1dce31669e55260377f0f825e1437358467600ccfc911
+ * Original-Hash: feee9c3f9d0f93f36288b2433bd8fcf60b9c2e064a23b8761bed7aca0401c43e
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-mapping.ts
- * Quell-Hash: sha256:aec67e657607d17131420785bc061fac85ee6622b6de5a8a79bd6d77456c4eb6
+ * Quell-Hash: sha256:fce39f5e4f2f86558710d8f15a4c7724ea785664577ed8076bb3236d709a270b
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -187,6 +187,7 @@ class SpeicherMappingModule extends BaseModule {
             { id: `${base}.mapping.aktiv`, name: 'Speicher-Zuordnung aktiv', type: 'boolean', role: 'indicator', def: false },
             { id: `${base}.mapping.modus`, name: 'Speicher Steuerungsart', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.kopplung`, name: 'Speicher-Kopplung AC/DC', type: 'string', role: 'text', def: 'ac' },
+            { id: `${base}.mapping.herstellerprofil`, name: 'Speicher-Herstellerprofil', type: 'string', role: 'text', def: 'generic' },
             { id: `${base}.mapping.ok`, name: 'Speicher-Zuordnung vollständig', type: 'boolean', role: 'indicator', def: false },
             { id: `${base}.mapping.fehlt`, name: 'Fehlende Datenpunkte (Liste)', type: 'string', role: 'text', def: '' },
 
@@ -203,6 +204,11 @@ class SpeicherMappingModule extends BaseModule {
             { id: `${base}.mapping.entladenErlaubtId`, name: 'Entladen erlaubt Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.reserveSocId`, name: 'Reserve-SoC Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.feneconGridSetpointId`, name: 'Legacy Netzpunkt-Sollwert Datenpunkt-ID (nicht genutzt)', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.e3dcSetPowerModeId`, name: 'E3/DC EMS.SET_POWER_MODE Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.e3dcSetPowerValueId`, name: 'E3/DC EMS.SET_POWER_VALUE Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.e3dcPowerLimitsUsedId`, name: 'E3/DC EMS.POWER_LIMITS_USED Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.e3dcMaxChargePowerId`, name: 'E3/DC EMS.MAX_CHARGE_POWER Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.e3dcMaxDischargePowerId`, name: 'E3/DC EMS.MAX_DISCHARGE_POWER Datenpunkt-ID', type: 'string', role: 'text', def: '' },
 
             { id: `${base}.socPct`, name: 'Speicher Ladezustand (SoC)', type: 'number', role: 'value.battery', def: 0 },
             { id: `${base}.dcPvPowerW`, name: 'DC-/Hybrid-PV Erzeugungsleistung', type: 'number', role: 'value.power', def: 0 },
@@ -252,11 +258,31 @@ class SpeicherMappingModule extends BaseModule {
         const controlMode = (storage && typeof storage.controlMode === 'string') ? storage.controlMode : 'targetPower';
         const couplingRaw = (storage && typeof storage.coupling === 'string') ? storage.coupling.trim().toLowerCase() : 'ac';
         const coupling = couplingRaw === 'dc' ? 'dc' : 'ac';
+/**
+ * Code-Teil: normalizeVendorProfile
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const normalizeVendorProfile = (value) => {
+            const raw = String(value || '').trim().toLowerCase();
+            if (raw === 'fenecon' || raw === 'openems' || raw === 'fems' || raw === 'fenecon-openems') return 'fenecon-openems';
+            if (raw === 'sungrow' || raw === 'sungrow-ess' || raw === 'sungrow-hybrid') return 'sungrow-hybrid';
+            if (raw === 'e3dc' || raw === 'e3/dc' || raw === 'e3dc-rscp' || raw === 'e3dc-rscp-iobroker') return 'e3dc-rscp';
+            if (!raw && storage && storage.e3dcRscpEnabled === true) return 'e3dc-rscp';
+            return 'generic';
+        };
+        const vendorProfile = normalizeVendorProfile(storage.vendorProfile);
         const dp = (storage && storage.datapoints && typeof storage.datapoints === 'object') ? storage.datapoints : {};
         const feneconGridControlEnabled = storage.feneconGridControlEnabled;
         const feneconAcMode = storage.feneconAcMode;
         const farmEnabled = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
-        return { controlMode, coupling, dp, feneconGridControlEnabled, feneconAcMode, farmEnabled };
+        return { controlMode, coupling, vendorProfile, dp, feneconGridControlEnabled, feneconAcMode, farmEnabled };
     }
 
     /**
@@ -274,7 +300,7 @@ class SpeicherMappingModule extends BaseModule {
     async _upsertFromConfig() {
         if (!this.dp) return;
 
-        const { controlMode, coupling, dp, feneconGridControlEnabled, feneconAcMode, farmEnabled } = this._getCfg();
+        const { controlMode, coupling, vendorProfile, dp, feneconGridControlEnabled, feneconAcMode, farmEnabled } = this._getCfg();
 
         const socId = String(dp.socObjectId || '').trim();
         const socScale = Number.isFinite(Number(dp.socScale)) ? Number(dp.socScale) : 1;
@@ -299,8 +325,10 @@ class SpeicherMappingModule extends BaseModule {
         // Einige Systeme (z. B. Split-Sollwertsysteme über nexowatt-devices) nutzen keine signed
         // Sollleistung, sondern getrennte positive Vorgaben für Laden und Entladen.
         // Diese DPs werden als alternative Zielpfade zum allgemeinen signed targetPower
-        // registriert. Wenn beide Split-DPs vorhanden sind, bevorzugt storage-control
-        // später diesen Pfad und setzt den jeweils nicht genutzten Gegenpfad auf 0 W.
+        // registriert. storage-control beruecksichtigt jeden Split-DP einzeln: sind
+        // beide vorhanden, werden beide sauber gegeneinander verriegelt; ist nur eine
+        // Richtung vorhanden, bleibt diese nutzbar und die fehlende Richtung kann bei
+        // Bedarf ueber den signed-DP als Fallback laufen.
         const sollChargeId = String(dp.targetChargePowerObjectId || '').trim();
         const sollChargeScale = Number.isFinite(Number(dp.targetChargePowerScale)) ? Number(dp.targetChargePowerScale) : 1;
         const sollChargeInv = !!dp.targetChargePowerInvert;
@@ -319,9 +347,21 @@ class SpeicherMappingModule extends BaseModule {
         // Der alte Konfigurationswert bleibt nur als Legacy-Diagnose erhalten.
         const feneconGridSetpointId = '';
 
+        // E3/DC RSCP / ioBroker.e3dc-rscp: Dieser Adapter steuert aktive
+        // Batterie-Vorgaben nicht ueber einen signed Leistungs-DP, sondern ueber
+        // das gekoppelte Tupel EMS.SET_POWER_MODE + EMS.SET_POWER_VALUE.
+        // Optional koennen PowerLimits mitgefuehrt werden, wenn die Anlage diese
+        // Grenzen ebenfalls ueber den RSCP-Adapter setzen soll.
+        const e3dcSetPowerModeId = String(dp.e3dcSetPowerModeObjectId || '').trim();
+        const e3dcSetPowerValueId = String(dp.e3dcSetPowerValueObjectId || '').trim();
+        const e3dcPowerLimitsUsedId = String(dp.e3dcPowerLimitsUsedObjectId || '').trim();
+        const e3dcMaxChargePowerId = String(dp.e3dcMaxChargePowerObjectId || '').trim();
+        const e3dcMaxDischargePowerId = String(dp.e3dcMaxDischargePowerObjectId || '').trim();
+
         // Diagnose schreiben
         await this._setIfChanged('speicher.mapping.modus', String(controlMode || ''));
         await this._setIfChanged('speicher.mapping.kopplung', String(coupling || 'ac'));
+        await this._setIfChanged('speicher.mapping.herstellerprofil', String(vendorProfile || 'generic'));
         await this._setIfChanged('speicher.mapping.socId', socId);
         await this._setIfChanged('speicher.mapping.istLeistungId', istId);
         await this._setIfChanged('speicher.mapping.dcPvId', dcPvId);
@@ -335,6 +375,11 @@ class SpeicherMappingModule extends BaseModule {
         await this._setIfChanged('speicher.mapping.entladenErlaubtId', dischargeEnId);
         await this._setIfChanged('speicher.mapping.reserveSocId', reserveSocId);
         await this._setIfChanged('speicher.mapping.feneconGridSetpointId', feneconGridSetpointId);
+        await this._setIfChanged('speicher.mapping.e3dcSetPowerModeId', e3dcSetPowerModeId);
+        await this._setIfChanged('speicher.mapping.e3dcSetPowerValueId', e3dcSetPowerValueId);
+        await this._setIfChanged('speicher.mapping.e3dcPowerLimitsUsedId', e3dcPowerLimitsUsedId);
+        await this._setIfChanged('speicher.mapping.e3dcMaxChargePowerId', e3dcMaxChargePowerId);
+        await this._setIfChanged('speicher.mapping.e3dcMaxDischargePowerId', e3dcMaxDischargePowerId);
 
         // Datenpunkte registrieren (st.*)
         if (socId) {
@@ -495,6 +540,70 @@ class SpeicherMappingModule extends BaseModule {
             });
         }
 
+        if (e3dcSetPowerModeId) {
+            await this.dp.upsert({
+                key: 'st.e3dcSetPowerMode',
+                name: 'E3/DC EMS.SET_POWER_MODE',
+                objectId: e3dcSetPowerModeId,
+                dataType: 'number',
+                direction: 'out',
+                unit: '',
+                min: 0,
+                max: 4,
+                note: 'ioBroker.e3dc-rscp; 0=NORMAL, 1=IDLE, 2=DISCHARGE, 3=CHARGE, 4=GRID_CHARGE'
+            });
+        }
+
+        if (e3dcSetPowerValueId) {
+            await this.dp.upsert({
+                key: 'st.e3dcSetPowerValueW',
+                name: 'E3/DC EMS.SET_POWER_VALUE',
+                objectId: e3dcSetPowerValueId,
+                dataType: 'number',
+                direction: 'out',
+                unit: 'W',
+                min: 0,
+                note: 'ioBroker.e3dc-rscp; positive Absolutleistung passend zum SET_POWER_MODE'
+            });
+        }
+
+        if (e3dcPowerLimitsUsedId) {
+            await this.dp.upsert({
+                key: 'st.e3dcPowerLimitsUsed',
+                name: 'E3/DC EMS.POWER_LIMITS_USED',
+                objectId: e3dcPowerLimitsUsedId,
+                dataType: 'boolean',
+                direction: 'out',
+                note: 'Optional; aktiviert RSCP PowerLimits, wenn im Herstellerprofil freigegeben'
+            });
+        }
+
+        if (e3dcMaxChargePowerId) {
+            await this.dp.upsert({
+                key: 'st.e3dcMaxChargePowerW',
+                name: 'E3/DC EMS.MAX_CHARGE_POWER',
+                objectId: e3dcMaxChargePowerId,
+                dataType: 'number',
+                direction: 'out',
+                unit: 'W',
+                min: 0,
+                note: 'Optional; Ladeleistungsgrenze fuer E3/DC RSCP'
+            });
+        }
+
+        if (e3dcMaxDischargePowerId) {
+            await this.dp.upsert({
+                key: 'st.e3dcMaxDischargePowerW',
+                name: 'E3/DC EMS.MAX_DISCHARGE_POWER',
+                objectId: e3dcMaxDischargePowerId,
+                dataType: 'number',
+                direction: 'out',
+                unit: 'W',
+                min: 0,
+                note: 'Optional; Entladeleistungsgrenze fuer E3/DC RSCP'
+            });
+        }
+
         if (reserveSocId) {
             await this.dp.upsert({
                 key: 'st.reserveSocPct',
@@ -516,13 +625,21 @@ class SpeicherMappingModule extends BaseModule {
         const feneconHybridConfiguredRaw = (typeof feneconGridControlEnabled === 'boolean') ? (feneconGridControlEnabled === true) : (feneconAcMode === true);
         const feneconHybridConfigured = !!(feneconHybridConfiguredRaw && !farmEnabled);
         if (feneconHybridConfigured || String(controlMode) === 'targetPower') {
-            // Für targetPower reicht entweder ein allgemeiner signed Sollleistungs-DP
-            // ODER ein getrenntes Paar aus Lade- und Entlade-Sollwert. Dadurch bleiben
-            // Gateway-/Victron-/OpenEMS-ähnliche signed Setpoints und Split-/Bridge-
-            // Profile mit getrennten positiven Vorgaben gleichwertig nutzbar.
+            // Für targetPower reicht entweder ein allgemeiner signed Sollleistungs-DP,
+            // ein Split-Zielpfad oder beim E3/DC-RSCP-Profil das Tupel aus
+            // EMS.SET_POWER_MODE + EMS.SET_POWER_VALUE. Split-Zielpfade duerfen auch
+            // einzeln vorhanden sein; storage-control sperrt die nicht gemappte Richtung
+            // oder nutzt signed als Fallback, falls vorhanden.
             const hasSignedTarget = !!sollId;
-            const hasSplitTarget = !!(sollChargeId && sollDischargeId);
-            if (!hasSignedTarget && !hasSplitTarget) missing.push('Sollleistung signed oder Sollwert Laden+Entladen');
+            const hasSplitTarget = !!(sollChargeId || sollDischargeId);
+            const hasE3dcTarget = !!(e3dcSetPowerModeId && e3dcSetPowerValueId);
+            if (vendorProfile === 'e3dc-rscp') {
+                if (!hasE3dcTarget && !hasSignedTarget && !hasSplitTarget) {
+                    missing.push('E3/DC EMS.SET_POWER_MODE + EMS.SET_POWER_VALUE oder normaler Sollwert');
+                }
+            } else if (!hasSignedTarget && !hasSplitTarget) {
+                missing.push('Sollleistung signed oder Sollwert Laden/Entladen');
+            }
         } else if (String(controlMode) === 'limits') {
             if (!maxChargeId) missing.push('Max Ladeleistung (W)');
             if (!maxDischargeId) missing.push('Max Entladeleistung (W)');

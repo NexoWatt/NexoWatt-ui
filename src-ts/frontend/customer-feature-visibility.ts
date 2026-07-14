@@ -129,10 +129,10 @@ export function decideStorageFarmVisibility(input: CustomerFeatureVisibilityInpu
   if (input.storageFarmEnabled !== true) {
     return { key: 'storageFarm', visible: false, reason: 'farm-disabled', hint: 'Speicherfarm ausgeblendet: Feature ist im Installer nicht aktiv.' };
   }
-  const hasFarm = (input.storageFarmProofs ?? []).some(hasRealStorageFarmProof);
-  return hasFarm
-    ? { key: 'storageFarm', visible: true, reason: 'farm-real-storage', hint: 'Speicherfarm sichtbar: mindestens ein echter Farmspeicher ist konfiguriert.' }
-    : { key: 'storageFarm', visible: false, reason: 'farm-no-real-storage', hint: 'Speicherfarm ausgeblendet: keine echten Farmspeicher-Datenpunkte vorhanden.' };
+  const realFarmCount = (input.storageFarmProofs ?? []).filter(hasRealStorageFarmProof).length;
+  return realFarmCount >= 2
+    ? { key: 'storageFarm', visible: true, reason: 'farm-real-storage', hint: 'Speicherfarm sichtbar: mindestens zwei echte Farmspeicher sind konfiguriert.' }
+    : { key: 'storageFarm', visible: false, reason: 'farm-no-real-storage', hint: 'Speicherfarm ausgeblendet: weniger als zwei echte Farmspeicher-Datenpunkte vorhanden.' };
 }
 
 /**

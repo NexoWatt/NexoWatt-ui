@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 9018100c7a1b94b75c9cfa82d053cbed166a97f647674a695c7b2cf85f76448d
+ * Original-Hash: 7a8b72874cfe5f58b90c28190016e47d710a3c545a8bd2a7030353bf0534ab7e
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/cockpit-shell.ts
- * Quell-Hash: sha256:7e45d6cec96f6c0ae128eb63d98e5d2f5b11279a6059cdb1404d5de7b9480a92
+ * Quell-Hash: sha256:885777f3ec4f1a0e4d6ad92ccc3c40685303eda72a1a6593c706c3f944020f95
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -159,10 +159,12 @@
           var evAvail = ((Number(sc.evcsConfiguredCount || 0) || (Array.isArray(sc.evcsList) ? sc.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
           var evCount = Math.max(0, Math.round(Number(sc.evcsCount || 0) || 0));
           var showEvcs = evAvail && evCount >= 2;
-          var sh = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
-          // Speicherfarm-Menü nur über die zentrale /config-Feature-Sichtbarkeit öffnen.
-          // Alte storageFarm.* Runtime-States oder enableStorageFarm-Legacywerte dürfen den Link nicht mehr allein anzeigen.
-          var sf = !!((cfg.featureVisibility && typeof cfg.featureVisibility.hasStorageFarm === 'boolean') ? cfg.featureVisibility.hasStorageFarm : ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
+          var fv = (cfg.featureVisibility && typeof cfg.featureVisibility === 'object') ? cfg.featureVisibility : {};
+          // Optionale Kunden-Unterseiten werden ausschließlich über /config.featureVisibility geöffnet.
+          // Konkret: featureVisibility.hasSmartHome und featureVisibility.hasStorageFarm.
+          // Dadurch können alte Legacy-Flags oder Runtime-States keine SmartHome-/Farm-Menüpunkte mehr sichtbar machen.
+          var sh = fv.hasSmartHome === true;
+          var sf = fv.hasStorageFarm === true;
           [['tabEvcs', showEvcs], ['menuEvcsLink', showEvcs], ['tabSmartHome', sh], ['menuSmartHomeLink', sh], ['tabStorageFarm', sf], ['menuStorageFarmLink', sf]].forEach(function(pair){
             var el = document.getElementById(pair[0]);
             if (el) el.classList.toggle('hidden', !pair[1]);
