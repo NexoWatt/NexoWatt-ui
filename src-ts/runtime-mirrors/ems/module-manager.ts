@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 23100ddb952bafb5985a11bf7c9d9bd0f062ea54039278499210e76547956c7d
+ * Original-Hash: e9d0da7ebdf5f483e7185d5047e51ea6f8ccd2f2de5453534a8c8310ee5f823e
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:d8f46c9f537ed94bf208a7917972478b635c9cf9ad6f2ca83fb98004c2d4f992
+ * Quell-Hash: sha256:b2c220b6a9d0043b186b9d31962cdcd5d36801c0a3cde3fabf1414e08475c34a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -508,6 +508,7 @@ class ModuleManager {
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     async tick() {
+        if (!this.adapter || this.adapter._nwShuttingDown) return;
         const diag = this._getDiagCfg();
         const now = Date.now();
         const t0 = now;
@@ -519,6 +520,7 @@ class ModuleManager {
         const errors = [];
 
         for (const m of this.modules) {
+            if (!this.adapter || this.adapter._nwShuttingDown) break;
             const enabled = !!(m && typeof m.enabledFn === 'function' && m.enabledFn());
             const key = String((m && m.key) || 'unknown');
             if (!enabled || !m || !m.instance || typeof m.instance.tick !== 'function') {
@@ -555,7 +557,7 @@ class ModuleManager {
             // ignore
         }
 
-        if (!diag.enabled) return;
+        if (!this.adapter || this.adapter._nwShuttingDown || !diag.enabled) return;
 
         const hasError = errors.length > 0;
         const shouldLog = (diag.logIntervalMs <= 0)
@@ -595,6 +597,22 @@ class ModuleManager {
                 await this.adapter.setStateAsync('diagnostics.errors', errText, true);
             } catch (e) {
                 this.adapter.log.debug(`Diagnostics state write failed: ${String((e && e.message) ? e.message : e)}`);
+            }
+        }
+    }
+
+    /**
+     * Code-Teil: stop
+     * Zweck: Beendet optionale Modul-Timer und Publish-Queues beim Adapter-Unload.
+     * Zusammenhang: Verhindert, dass ein Modul nach Beginn des ioBroker-Shutdowns neue
+     * adapter.setTimeout-Aufrufe oder State-Publishes startet.
+     */
+    stop() {
+        for (const m of this.modules || []) {
+            try {
+                if (m && m.instance && typeof m.instance.stop === 'function') m.instance.stop();
+            } catch (_e) {
+                // Ein fehlerhaftes Modul darf den restlichen Shutdown nicht blockieren.
             }
         }
     }

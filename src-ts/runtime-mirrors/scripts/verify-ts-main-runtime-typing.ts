@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0bb860146d53779d72180e6e8dd000a245dce9a3c19ad0b5f7d7bf05dd3a40a4
+ * Original-Hash: dd3714220dea9b043bab8bdecb45c5fe9a4950c1f81b06d0907ffda632d2dca1
  */
 
 /**
@@ -116,7 +116,7 @@ const connection: MainConnectionUpdate = { online: true, reason: 'server-listeni
 const license: MainLicenseRuntimeState = { ok: false, status: 'missing', keyPresent: false, keyMasked: false };
 const switchDecision: MainEnergyFlowSwitchDecision = { requestedMode: 'shadow', effectiveSource: 'js-runtime', useTs: false, productionAllowed: false, shadowOk: true, candidateOk: false, plantGateOk: false, blockers: [], warnings: [], reason: 'shadow-only' };
 const patch: MainInstallerConfigPatch = { tsMigration: config.tsMigration, datapoints: config.datapoints };
-const internals: MainRuntimeInternals = { stateCache, _nwRawValueCache: {}, sseClients: new Set([sse]), _serverSockets: new Set(), _serverClosing: false, _nwConnectionOnline: true, _nwLicenseOk: true, _nwSystemUuid: 'system', emsEngine: null, logicEngine: null };
+const internals: MainRuntimeInternals = { stateCache, _nwRawValueCache: {}, sseClients: new Set([sse]), _serverSockets: new Set(), _serverClosing: false, _nwShuttingDown: false, _nwShutdownStartedAt: 0, _nwConnectionOnline: true, _nwLicenseOk: true, _nwSystemUuid: 'system', emsEngine: null, logicEngine: null };
 void adapter; void apiState; void cfgResponse; void setRequest; void setResult; void web; void connection; void license; void switchDecision; void patch; void internals;
 `;
   fs.writeFileSync(tempSource, harness, 'utf8');

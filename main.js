@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:a9a6a44b09b099e48478afffd5cd7418ebf9d52d303ccf8785e7130a80672009
+ * Quell-Hash: sha256:678bb5b40dc7714880ea043e18d5dc8471447aabbfefa62feed822e0e6f1035b
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -204,6 +204,14 @@ class NexoWattVis extends utils.Adapter {
     this._sseFlushTimer = null;
     this._serverSockets = new Set();
     this._serverClosing = false;
+
+    // Adapter-Lifecycle-Guard: Sobald ioBroker den Unload startet, dürfen keine neuen
+    // Adapter-Timer, SSE-Batches oder abgeleiteten Berechnungen mehr geplant werden.
+    // Andernfalls meldet @iobroker/adapter-core zyklisch
+    // "setTimeout called, but adapter is shutting down" und das Log läuft voll.
+    this._nwShuttingDown = false;
+    this._nwShutdownStartedAt = 0;
+
     this._nwConnectionOnline = false;
     this._nwConnectionHeartbeatTimer = null;
     // TS-Migration: Diagnose-/Statusdaten für /api/state und /api/set.
@@ -355,7 +363,17 @@ class NexoWattVis extends utils.Adapter {
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   _nwSetTimeout(fn, ms, ...args) {
-    return (typeof this.setTimeout === 'function') ? this.setTimeout(fn, ms, ...args) : setTimeout(fn, ms, ...args);
+    // Nie einen ioBroker-Adapter-Timer erzeugen, nachdem der Unload begonnen hat.
+    // Bereits geplante Callbacks prüfen den Guard ebenfalls, damit asynchrone Restarbeit
+    // beim Herunterfahren keine neuen Timerketten oder State-Publishes startet.
+    if (this._nwShuttingDown || typeof fn !== 'function') return null;
+    const guarded = (...cbArgs) => {
+      if (this._nwShuttingDown) return;
+      return fn(...cbArgs);
+    };
+    return (typeof this.setTimeout === 'function')
+      ? this.setTimeout(guarded, ms, ...args)
+      : setTimeout(guarded, ms, ...args);
   }
   /**
    * Code-Teil: _nwSetInterval
@@ -364,7 +382,14 @@ class NexoWattVis extends utils.Adapter {
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   _nwSetInterval(fn, ms, ...args) {
-    return (typeof this.setInterval === 'function') ? this.setInterval(fn, ms, ...args) : setInterval(fn, ms, ...args);
+    if (this._nwShuttingDown || typeof fn !== 'function') return null;
+    const guarded = (...cbArgs) => {
+      if (this._nwShuttingDown) return;
+      return fn(...cbArgs);
+    };
+    return (typeof this.setInterval === 'function')
+      ? this.setInterval(guarded, ms, ...args)
+      : setInterval(guarded, ms, ...args);
   }
   /**
    * Code-Teil: _nwClearTimeout
@@ -395,7 +420,11 @@ class NexoWattVis extends utils.Adapter {
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   _nwSleep(ms) {
-    return new Promise((resolve) => this._nwSetTimeout(resolve, ms));
+    if (this._nwShuttingDown) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      const timer = this._nwSetTimeout(() => resolve(true), ms);
+      if (!timer) resolve(false);
+    });
   }
   /**
    * Code-Teil: ensureInfoConnectionState
@@ -456,9 +485,11 @@ class NexoWattVis extends utils.Adapter {
       try { this.log.debug('info.connection update failed' + (reason ? ` (${reason})` : '') + ': ' + (e && e.message ? e.message : e)); } catch (_eLog) {}
     }
 
-    // Keep /api/state + SSE clients aligned with the ioBroker state. This prevents the
-    // customer UI from showing "Offline" until the next unrelated datapoint changes.
-    try { this.updateValue('info.connection', val, ts, { raw: false }); } catch (_eUpd) {}
+    // Keep /api/state + SSE clients aligned during normal operation. During unload the
+    // ioBroker state is still written, but no new SSE flush timer may be scheduled.
+    if (!this._nwShuttingDown) {
+      try { this.updateValue('info.connection', val, ts, { raw: false }); } catch (_eUpd) {}
+    }
   }
 
 
@@ -629,7 +660,7 @@ class NexoWattVis extends utils.Adapter {
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   _nwStartConnectionHeartbeat() {
-    if (this._nwConnectionHeartbeatTimer) return;
+    if (this._nwShuttingDown || this._nwConnectionHeartbeatTimer) return;
     this._nwConnectionHeartbeatTimer = this._nwSetInterval(() => {
       const online = this._nwIsHttpServerListening();
       // Re-assert the state regularly. ioBroker/Admin updates or failed optional startup
@@ -22428,7 +22459,7 @@ return res.json(out);
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   async _nwRefreshLiveCoreDatapoints(reason = 'interval') {
-    if (this._nwLiveCoreRefreshRunning) return;
+    if (this._nwShuttingDown || this._nwLiveCoreRefreshRunning) return;
 
     const plan = (Array.isArray(this._nwLiveCoreRefreshPlan) && this._nwLiveCoreRefreshPlan.length)
       ? this._nwLiveCoreRefreshPlan
@@ -22449,7 +22480,7 @@ return res.json(out);
        * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
        */
       const applyState = async (entry) => {
-        if (!entry || !entry.id) return;
+        if (this._nwShuttingDown || !entry || !entry.id) return;
 
         let st = null;
         try {
@@ -22513,6 +22544,7 @@ return res.json(out);
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   _nwStartLiveCoreRefresh() {
+    if (this._nwShuttingDown) return;
     const plan = this._nwBuildLiveCoreRefreshPlan();
 
     this._nwStopLiveCoreRefresh();
@@ -22701,7 +22733,7 @@ return res.json(out);
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   onStateChange(id, state) {
-    if (!state) return;
+    if (this._nwShuttingDown || !state) return;
     // Feed EMS datapoint cache (for embedded charging engine)
     try {
       if (this.emsEngine && this.emsEngine.dp && typeof this.emsEngine.dp.handleStateChange === 'function') {
@@ -27453,6 +27485,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   scheduleDerivedFlowUpdate(reason = '') {
+    if (this._nwShuttingDown) return;
     // Throttle derived calculations to avoid excessive state writes on high-frequency meters.
     const now = Date.now();
     const minMs = this._derivedFlow?.minIntervalMs ?? 250;
@@ -28870,6 +28903,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
   }
   updateValue(key, value, ts, opts = {}) {
+    // Nach Beginn des Unloads keine Cache-Kaskaden, abgeleiteten Berechnungen oder
+    // SSE-Batches mehr erzeugen. Laufende Hardware-/State-Schreibvorgänge werden durch
+    // ihre jeweiligen Module beendet; die Kundenanzeige braucht beim Shutdown kein Update.
+    if (this._nwShuttingDown) return;
     const rawValue = value;
     try {
       const keepRaw = !(opts && opts.raw === false);
@@ -29107,6 +29144,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   onUnload(callback) {
+    // Der Guard muss vor jedem asynchronen State-/Timer-Aufruf gesetzt werden. Besonders
+    // info.connection und noch laufende StateChange-/EMS-Callbacks dürfen beim Shutdown
+    // keinen neuen adapter.setTimeout mehr anlegen.
+    this._nwShuttingDown = true;
+    this._nwShutdownStartedAt = Date.now();
+
     try { this._nwStopConnectionHeartbeat(); } catch (_eBeat) {}
     try { this._nwSetInfoConnection(false, 'unload').catch(() => {}); } catch (_eConn) {}
     /**
@@ -29145,6 +29188,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       try { this._nwStopLiveCoreRefresh(); } catch (_e2) {}
       try { if (this.emsEngine && typeof this.emsEngine.stop === 'function') this.emsEngine.stop(); } catch (_e3) {}
       try { if (this.logicEngine && typeof this.logicEngine.stop === 'function') this.logicEngine.stop(); } catch (_e4) {}
+      try {
+        if (this._derivedFlow) this._derivedFlow.pending = false;
+        this._ssePendingPayload = {};
+      } catch (_ePending) {}
       try { this._nwCloseSseClients(); } catch (_e5) {}
 
       this._nwCloseServer(done);

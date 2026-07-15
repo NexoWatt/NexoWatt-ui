@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:784c3b8296d878aa7be97e20b1ec2c9a746467014699ae26383f7f591cd898e2
+ * Quell-Hash: sha256:8a25c115cffbdf9188cd106d5740428f0d8d62314a084ec51fc7d88b443df0b6
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2213,7 +2213,14 @@ class ChargingManagementModule extends BaseModule {
      */
     _setTimeout(fn, ms) {
         const a = this.adapter;
-        return (a && typeof a.setTimeout === 'function') ? a.setTimeout(fn, ms) : setTimeout(fn, ms);
+        if (!a || a._nwShuttingDown || typeof fn !== 'function') return null;
+        const guarded = (...args) => {
+            if (!this.adapter || this.adapter._nwShuttingDown) return;
+            return fn(...args);
+        };
+        return (typeof a._nwSetTimeout === 'function')
+            ? a._nwSetTimeout(guarded, ms)
+            : ((typeof a.setTimeout === 'function') ? a.setTimeout(guarded, ms) : setTimeout(guarded, ms));
     }
     /**
      * Code-Teil: _clearTimeout
@@ -2241,6 +2248,10 @@ class ChargingManagementModule extends BaseModule {
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     _schedulePubFlush() {
+        if (!this.adapter || this.adapter._nwShuttingDown) {
+            this._pubQueue.clear();
+            return;
+        }
         if (this._pubFlushTimer) return;
 
         const now = Date.now();
@@ -2267,6 +2278,10 @@ class ChargingManagementModule extends BaseModule {
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     async _flushPubQueue() {
+        if (!this.adapter || this.adapter._nwShuttingDown) {
+            this._pubQueue.clear();
+            return;
+        }
         if (this._pubFlushInFlight) {
             // A flush is already running; make sure we flush again afterwards.
             this._schedulePubFlush();
@@ -2311,6 +2326,21 @@ class ChargingManagementModule extends BaseModule {
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
+    /**
+     * Code-Teil: stop
+     * Zweck: Leert die gebündelte Diagnose-/State-Publish-Queue beim Adapter-Unload.
+     * Zusammenhang: Die Queue arbeitet mit einem kurzen Timer und darf nach gesetztem
+     * Shutdown-Guard keinen weiteren Timerzyklus erzeugen.
+     */
+    stop() {
+        if (this._pubFlushTimer) {
+            try { this._clearTimeout(this._pubFlushTimer); } catch (_e) {}
+            this._pubFlushTimer = null;
+        }
+        try { this._pubQueue.clear(); } catch (_e) {}
+        this._pubFlushInFlight = false;
+    }
+
     _isEnabled() {
         // Backwards compatible default: older configs may not have the new flag stored yet.
         // If the flag is missing, enable the module when at least one chargepoint

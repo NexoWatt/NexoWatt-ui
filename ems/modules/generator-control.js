@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/generator-control.ts
- * Quell-Hash: sha256:b9063203a6236df9d9b6e79935eba53797841d9985ef565ef46c9ee2282aa6c9
+ * Quell-Hash: sha256:84208946eee9731774300ea5192a31a0d55bb18245a8806feb060e8c4cd0a8b3
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -446,15 +446,16 @@ class GeneratorControlModule extends BaseModule {
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     async _pulseWrite(objectId, pulseMs) {
-        if (!objectId) return false;
+        if (!objectId || !this.adapter || this.adapter._nwShuttingDown) return false;
         try {
             await this.adapter.setForeignStateAsync(objectId, true, false);
-            const setTimer = (this.adapter && typeof this.adapter.setTimeout === 'function')
-                ? this.adapter.setTimeout.bind(this.adapter)
-                : setTimeout;
-            setTimer(() => {
+            const reset = () => {
+                if (!this.adapter || this.adapter._nwShuttingDown) return;
                 this.adapter.setForeignStateAsync(objectId, false, false).catch(() => {});
-            }, pulseMs);
+            };
+            if (typeof this.adapter._nwSetTimeout === 'function') this.adapter._nwSetTimeout(reset, pulseMs);
+            else if (typeof this.adapter.setTimeout === 'function' && !this.adapter._nwShuttingDown) this.adapter.setTimeout(reset, pulseMs);
+            else if (!this.adapter._nwShuttingDown) setTimeout(reset, pulseMs);
             return true;
         } catch (e) {
             this.adapter.log.warn(`Generator write failed for '${objectId}': ${e?.message || e}`);

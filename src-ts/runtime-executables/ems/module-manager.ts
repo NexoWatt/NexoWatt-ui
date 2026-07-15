@@ -479,6 +479,7 @@ class ModuleManager {
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     async tick() {
+        if (!this.adapter || this.adapter._nwShuttingDown) return;
         const diag = this._getDiagCfg();
         const now = Date.now();
         const t0 = now;
@@ -490,6 +491,7 @@ class ModuleManager {
         const errors = [];
 
         for (const m of this.modules) {
+            if (!this.adapter || this.adapter._nwShuttingDown) break;
             const enabled = !!(m && typeof m.enabledFn === 'function' && m.enabledFn());
             const key = String((m && m.key) || 'unknown');
             if (!enabled || !m || !m.instance || typeof m.instance.tick !== 'function') {
@@ -526,7 +528,7 @@ class ModuleManager {
             // ignore
         }
 
-        if (!diag.enabled) return;
+        if (!this.adapter || this.adapter._nwShuttingDown || !diag.enabled) return;
 
         const hasError = errors.length > 0;
         const shouldLog = (diag.logIntervalMs <= 0)
@@ -566,6 +568,22 @@ class ModuleManager {
                 await this.adapter.setStateAsync('diagnostics.errors', errText, true);
             } catch (e) {
                 this.adapter.log.debug(`Diagnostics state write failed: ${String((e && e.message) ? e.message : e)}`);
+            }
+        }
+    }
+
+    /**
+     * Code-Teil: stop
+     * Zweck: Beendet optionale Modul-Timer und Publish-Queues beim Adapter-Unload.
+     * Zusammenhang: Verhindert, dass ein Modul nach Beginn des ioBroker-Shutdowns neue
+     * adapter.setTimeout-Aufrufe oder State-Publishes startet.
+     */
+    stop() {
+        for (const m of this.modules || []) {
+            try {
+                if (m && m.instance && typeof m.instance.stop === 'function') m.instance.stop();
+            } catch (_e) {
+                // Ein fehlerhaftes Modul darf den restlichen Shutdown nicht blockieren.
             }
         }
     }

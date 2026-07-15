@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/bhkw-control.ts
- * Quell-Hash: sha256:3c0bff1f8150baf04ac89904fc724d91f78d6087340b8569d411f8c7cdf6e1c2
+ * Quell-Hash: sha256:5d5c7c06ddf1ec48413bbc84e9f68eaf6527365a94bf27c8b6a3f68507486b80
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -446,15 +446,16 @@ class BhkwControlModule extends BaseModule {
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     async _pulseWrite(objectId, pulseMs) {
-        if (!objectId) return false;
+        if (!objectId || !this.adapter || this.adapter._nwShuttingDown) return false;
         try {
             await this.adapter.setForeignStateAsync(objectId, true, false);
-            const setTimer = (this.adapter && typeof this.adapter.setTimeout === 'function')
-                ? this.adapter.setTimeout.bind(this.adapter)
-                : setTimeout;
-            setTimer(() => {
+            const reset = () => {
+                if (!this.adapter || this.adapter._nwShuttingDown) return;
                 this.adapter.setForeignStateAsync(objectId, false, false).catch(() => {});
-            }, pulseMs);
+            };
+            if (typeof this.adapter._nwSetTimeout === 'function') this.adapter._nwSetTimeout(reset, pulseMs);
+            else if (typeof this.adapter.setTimeout === 'function' && !this.adapter._nwShuttingDown) this.adapter.setTimeout(reset, pulseMs);
+            else if (!this.adapter._nwShuttingDown) setTimeout(reset, pulseMs);
             return true;
         } catch (e) {
             this.adapter.log.warn(`BHKW write failed for '${objectId}': ${e?.message || e}`);

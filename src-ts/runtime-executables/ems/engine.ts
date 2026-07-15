@@ -124,7 +124,12 @@ class EmsEngine {
    */
   _setInterval(fn, ms) {
     const a = this.adapter;
-    return (a && typeof a.setInterval === 'function') ? a.setInterval(fn, ms) : setInterval(fn, ms);
+    if (!a || a._nwShuttingDown || typeof fn !== 'function') return null;
+    const guarded = (...args) => {
+      if (!this.adapter || this.adapter._nwShuttingDown) return;
+      return fn(...args);
+    };
+    return (typeof a.setInterval === 'function') ? a.setInterval(guarded, ms) : setInterval(guarded, ms);
   }
   /**
    * Code-Teil: _clearInterval
@@ -889,7 +894,7 @@ class EmsEngine {
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   async tick() {
-    if (!this.adapter || !this.dp || !this.mm) return;
+    if (!this.adapter || this.adapter._nwShuttingDown || !this.dp || !this.mm) return;
 
     // Prevent overlapping async ticks (deterministic scheduler).
     if (this._tickRunning) {
@@ -1111,6 +1116,12 @@ class EmsEngine {
       this._clearInterval(this._timer);
       this._timer = null;
     }
+    // Module dürfen eigene Publish-/Pulse-Timer besitzen. Diese werden beim Adapter-
+    // Unload explizit beendet, damit kein Modul nachträglich adapter.setTimeout aufruft.
+    try {
+      if (this.mm && typeof this.mm.stop === 'function') this.mm.stop();
+    } catch (_e) {}
+    this._tickRunning = false;
   }
 }
 

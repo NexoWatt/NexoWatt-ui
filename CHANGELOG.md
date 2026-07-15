@@ -1,3 +1,13 @@
+## 0.8.97
+
+- Adapter-Lifecycle: zentraler Shutdown-Guard ergänzt. Sobald `onUnload()` beginnt, werden keine neuen Adapter-Timer, State-/SSE-Folgeverarbeitungen, abgeleiteten Energieflussberechnungen oder Live-Core-Refreshes mehr gestartet.
+- EMS-Abschaltung vervollständigt: Engine und Module werden gestoppt; Charging-Management-Publish-Queue sowie BHKW-/Generator-Pulstimer werden beim Shutdown nicht erneut geplant. Dadurch verschwindet der Log-Spam `setTimeout called, but adapter is shutting down`.
+- `info.connection` wird beim Beenden weiterhin korrekt auf `false` geschrieben, löst danach aber keine neue interne State-/SSE-Timerkette mehr aus.
+- LIVE-Energiefluss: sichtbare Telemetrie wird im Kundenfrontend nur noch in einem festen 15-Sekunden-Takt gerendert. Häufige SSE-Werte werden im Hintergrund gepuffert; beim ersten Laden und nach Rückkehr in den sichtbaren Browser-Tab erscheint der aktuelle Stand sofort.
+- Wichtig: Die 15 Sekunden betreffen ausschließlich die Anzeige. Datenerfassung, Speicher-/EVCS-/Heizstabregelung und übrige EMS-Regelkreise behalten ihren schnellen bisherigen Takt.
+- Neue Regressionen `test:adapter-shutdown-timer-guard` und `test:live-energy-flow-15s-cadence` sichern Shutdown ohne neue Timer sowie die getrennte Anzeige-/Regelungsfrequenz ab.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v399` erhöht.
+
 ## 0.8.96
 
 - Speicherregelung: Direkter PV-/Gebäudelast-Feed-forward ergänzt. Die primäre NVP-Regelgleichung bleibt `Soll = Batterie-Ist + (NVP-Ist - NVP-Ziel)`; PV wird dort ausdrücklich nicht zusätzlich addiert und dadurch nicht doppelt gezählt.

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/app.ts
- * Quell-Hash: sha256:8591751aaa2d7a031884db0e5b86c246cf6c18a7da85ac6127ab7d9111494778
+ * Quell-Hash: sha256:cb8faf585f71e6461611a68495f0c1c5838229fd7268e868eb99404775abf02c
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -457,6 +457,49 @@ function scheduleRender(force = false){
     try{ render(); }catch(_e){}
   }, wait);
 }
+
+// Kundenanzeige: Messwerte des Energieflussmonitors werden bewusst nur alle 15 Sekunden
+// neu gerendert. Die Backend-Messung und sämtliche EMS-Regelkreise bleiben unverändert
+// schnell; gedrosselt wird ausschließlich die sichtbare LIVE-Darstellung, damit kurze
+// NVP-/Speicher-Messversätze nicht als hektisches Springen erscheinen.
+const LIVE_TELEMETRY_RENDER_INTERVAL_MS = 15000;
+let _liveTelemetryRenderTimer = null;
+let _lastLiveTelemetryRenderTs = 0;
+
+/**
+ * Code-Teil: scheduleLiveTelemetryRender
+ * Zweck: Bündelt häufige SSE-Messwertupdates auf einen festen 15-Sekunden-Anzeigetakt.
+ * Zusammenhang: Verändert keine Statewerte und keine Regelung; nur render() im LIVE-Frontend
+ * wird verzögert. Initialdaten, Konfigurationsänderungen und bewusste UI-Aktionen dürfen
+ * weiterhin sofort gerendert werden.
+ */
+function scheduleLiveTelemetryRender(force = false){
+  const now = Date.now();
+  const elapsed = now - (_lastLiveTelemetryRenderTs || 0);
+
+  if (force || !_lastLiveTelemetryRenderTs || elapsed >= LIVE_TELEMETRY_RENDER_INTERVAL_MS) {
+    if (_liveTelemetryRenderTimer) {
+      try { clearTimeout(_liveTelemetryRenderTimer); } catch(_e) {}
+      _liveTelemetryRenderTimer = null;
+    }
+    _lastLiveTelemetryRenderTs = now;
+    scheduleRender(true);
+    return;
+  }
+
+  if (_liveTelemetryRenderTimer) return;
+  const wait = Math.max(0, LIVE_TELEMETRY_RENDER_INTERVAL_MS - elapsed);
+  _liveTelemetryRenderTimer = setTimeout(() => {
+    _liveTelemetryRenderTimer = null;
+    _lastLiveTelemetryRenderTs = Date.now();
+    scheduleRender(true);
+  }, wait);
+}
+
+// Nach Rückkehr in einen sichtbaren Tab sofort den neuesten gepufferten Stand zeigen.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') scheduleLiveTelemetryRender(true);
+});
 /**
  * Code-Teil: formatPower
  * Zweck: Formatiert Daten für Anzeige oder Logs.
@@ -3677,7 +3720,8 @@ const refreshConfig = async () => {
   } catch(e){}
 
   window.latestState = state;
-  scheduleRender();
+  _lastLiveTelemetryRenderTs = Date.now();
+  scheduleRender(true);
 
   try { if (typeof setupSettings === 'function') setupSettings(); } catch (e) {}
   // Settings-UI muss nach dem Hydrate der Inputs erneut aktualisiert werden
@@ -3706,8 +3750,10 @@ const refreshConfig = async () => {
     es.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data);
-        if (msg.type === 'init' && msg.payload) { state = msg.payload; window.latestState = state; }
-        else if (msg.type === 'update' && msg.payload) { Object.assign(state, msg.payload); window.latestState = state; }
+        const isInitMessage = msg.type === 'init' && msg.payload;
+        const isUpdateMessage = msg.type === 'update' && msg.payload;
+        if (isInitMessage) { state = msg.payload; window.latestState = state; }
+        else if (isUpdateMessage) { Object.assign(state, msg.payload); window.latestState = state; }
 
         // App-Center config changed? Refresh /config so tiles + slot layout update without reload.
         try {
@@ -3718,7 +3764,8 @@ const refreshConfig = async () => {
           }
         } catch (_e) {}
 
-        scheduleRender();
+        if (isInitMessage) scheduleLiveTelemetryRender(true);
+        else if (isUpdateMessage) scheduleLiveTelemetryRender(false);
       } catch (e) { console.warn(e); }
     };
   } catch(e){ console.warn('events', e); setTimeout(startEvents, 3000); }

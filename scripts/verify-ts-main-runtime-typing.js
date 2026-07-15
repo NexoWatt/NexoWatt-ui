@@ -53,7 +53,7 @@ const connection: MainConnectionUpdate = { online: true, reason: 'server-listeni
 const license: MainLicenseRuntimeState = { ok: false, status: 'missing', keyPresent: false, keyMasked: false };
 const switchDecision: MainEnergyFlowSwitchDecision = { requestedMode: 'shadow', effectiveSource: 'js-runtime', useTs: false, productionAllowed: false, shadowOk: true, candidateOk: false, plantGateOk: false, blockers: [], warnings: [], reason: 'shadow-only' };
 const patch: MainInstallerConfigPatch = { tsMigration: config.tsMigration, datapoints: config.datapoints };
-const internals: MainRuntimeInternals = { stateCache, _nwRawValueCache: {}, sseClients: new Set([sse]), _serverSockets: new Set(), _serverClosing: false, _nwConnectionOnline: true, _nwLicenseOk: true, _nwSystemUuid: 'system', emsEngine: null, logicEngine: null };
+const internals: MainRuntimeInternals = { stateCache, _nwRawValueCache: {}, sseClients: new Set([sse]), _serverSockets: new Set(), _serverClosing: false, _nwShuttingDown: false, _nwShutdownStartedAt: 0, _nwConnectionOnline: true, _nwLicenseOk: true, _nwSystemUuid: 'system', emsEngine: null, logicEngine: null };
 void adapter; void apiState; void cfgResponse; void setRequest; void setResult; void web; void connection; void license; void switchDecision; void patch; void internals;
 `;
   fs.writeFileSync(tempSource, harness, 'utf8');

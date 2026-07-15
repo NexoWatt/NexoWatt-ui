@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4c4532bf89f9c92b3e7d9e31bc60ea69bf9aff23ee86d4b94bb34bd771eaa456
+ * Original-Hash: 420ba64a195a868b628332e62194090507e02319ca3b0a94c76eff0db2260359
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:93706b79b4297bea4d7c08000f0b1244a2272cd18db0e9ffa282ff5d36da1e6b
+ * Quell-Hash: sha256:10712c2666cc1d4cc6f3bffbb661d40ff78ec04362c871b9dd22d06b54f78937
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -153,7 +153,23 @@ class EmsEngine {
    */
   _setInterval(fn, ms) {
     const a = this.adapter;
-    return (a && typeof a.setInterval === 'function') ? a.setInterval(fn, ms) : setInterval(fn, ms);
+    if (!a || a._nwShuttingDown || typeof fn !== 'function') return null;
+/**
+ * Code-Teil: guarded
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+    const guarded = (...args) => {
+      if (!this.adapter || this.adapter._nwShuttingDown) return;
+      return fn(...args);
+    };
+    return (typeof a.setInterval === 'function') ? a.setInterval(guarded, ms) : setInterval(guarded, ms);
   }
   /**
    * Code-Teil: _clearInterval
@@ -918,7 +934,7 @@ class EmsEngine {
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   async tick() {
-    if (!this.adapter || !this.dp || !this.mm) return;
+    if (!this.adapter || this.adapter._nwShuttingDown || !this.dp || !this.mm) return;
 
     // Prevent overlapping async ticks (deterministic scheduler).
     if (this._tickRunning) {
@@ -1140,6 +1156,12 @@ class EmsEngine {
       this._clearInterval(this._timer);
       this._timer = null;
     }
+    // Module dürfen eigene Publish-/Pulse-Timer besitzen. Diese werden beim Adapter-
+    // Unload explizit beendet, damit kein Modul nachträglich adapter.setTimeout aufruft.
+    try {
+      if (this.mm && typeof this.mm.stop === 'function') this.mm.stop();
+    } catch (_e) {}
+    this._tickRunning = false;
   }
 }
 
