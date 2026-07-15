@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 99cb694562c31926c558c49dd83a29bde31fc6b82f39cea4c9ca49961bd060e4
+ * Original-Hash: bbf7d269dfaaa9bfc19a4bbdd7b828dbdba467cd137ea61327d6dc2914731e29
  */
 
 /**
@@ -88,7 +88,8 @@ for (const file of [
   must(file, "chargeDemandHardCapReason = 'Notstrom-Reserve-Lade-Cap';", 'Reserve-Lade-Cap');
   must(file, "chargeDemandHardCapReason = 'LSK-Refill-Lade-Cap';", 'LSK-Refill-Lade-Cap');
   must(file, 'if (_prevRampW < 0 && targetW >= _prevRampW) {', 'Laderuecknahme ohne Rampe');
-  must(file, 'if (_reqW >= 0) {', 'keine aktuelle Ladeanforderung stoppt Restladung');
+  must(file, 'if (_reqW >= 0 && !deferEmptyChargeRequestToSungrow) {', 'keine aktuelle Ladeanforderung stoppt Restladung ausser vor der finalen Sungrow-NVP-Berechnung');
+  must(file, 'const deferEmptyChargeRequestToSungrow = _reqW >= 0', 'Sungrow-Herstellerpfad darf nicht durch einen vorlaeufigen 0-W-Lade-Cap blockiert werden');
   must(file, 'Lade-Cap ${Math.round(capW)} W nach Rampe', 'harter Lade-Cap nach Rampe');
   must(file, 'speicher.regelung.chargeDemandCapW', 'Lade-Cap Diagnose-State');
   must(file, 'speicher.regelung.chargeDemandCapReason', 'Lade-Cap Diagnose-Grund');

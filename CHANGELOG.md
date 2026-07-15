@@ -1,3 +1,16 @@
+## 0.8.98
+
+- Zentrale PV-Budgetrekonstruktion korrigiert: Das physikalische PV-Budget verwendet jetzt den **signierten NVP-Wert**. Netzbezug wird abgezogen, sodass laufende Wallbox- oder Speicherlasten das vermeintliche PV-Angebot nicht mehr selbst aufblähen können.
+- PV-Priorisierung **Speicher & E-Mobilität** nachgebessert: Das EVCS-Modul reserviert zuerst seinen tatsächlich genutzten Anteil; der Speicher erhält anschließend ausschließlich den verbleibenden PV-Anteil. Nicht genutzter EVCS-Anteil bleibt im selben EMS-Zyklus für den Speicher verfügbar.
+- Sungrow-Herstellerpfad korrigiert: Der geschlossene NVP-Regelkreis kann den zentralen EVCS-/Speicher-PV-Cap nach der Herstellerberechnung nicht mehr überschreiben. Der finale Cap wird unmittelbar vor dem Geräte-Schreibpfad erneut angewendet.
+- Kurzzeitig inkonsistente `remainingPvW`-Werte werden aus dem autoritativen Allocation-Gate und der tatsächlichen EVCS-Reservierung rekonstruiert. Dadurch entsteht zwischen zwei gültigen Ladezyklen kein falscher `0-W`-Stopp.
+- Sungrow-0-W-Firewall ergänzt: Normale Zielband-, Telemetrieversatz- und Leerlaufzyklen verwenden **No-Write/Hold**. `0 W` wird nur noch bei ausdrücklich erkannten Stopbedingungen, SoC-/Leistungsgrenzen, sicherem Richtungswechsel, vollständig verbrauchtem PV-Budget oder längerem NVP-Ausfall geschrieben.
+- Sungrow-Hersteller-Neuberechnung übernimmt die gemeinsame Eigenverbrauchs-Min-SoC-/Reservegrenze jetzt nochmals als finale Entladefreigabe. Dadurch kann der NVP-Regelkreis einen echten SoC-Schutzstopp nicht nachträglich überschreiben.
+- Kurze Sungrow-NVP-Aussetzer erhalten den letzten erfolgreich geschriebenen Nicht-Null-Sollwert standardmäßig 30 Sekunden ohne neuen Gerätebefehl; erst danach greift der Sicherheitsstopp.
+- Neue Diagnosen `pvBudgetPostVendorCapW`, `pvBudgetPostVendorCapped`, `pvBudgetRuntimeRemainingW`, `pvBudgetAllocationDerivedW`, `pvBudgetEvcsReservedW` und `pvBudgetResolution` zeigen die tatsächliche EVCS-/Speicher-Aufteilung und eventuelle Runtime-Rekonstruktionen.
+- Regressionen erweitert: signierte NVP-Budgetberechnung, Sungrow-80/20-Feldszenario, finaler Hersteller-Cap, inkonsistenter Runtime-Rest, NVP-Zielband ohne 0-W-Puls und kurzer NVP-Ausfall mit No-Write.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v400` erhöht.
+
 ## 0.8.97
 
 - Adapter-Lifecycle: zentraler Shutdown-Guard ergänzt. Sobald `onUnload()` beginnt, werden keine neuen Adapter-Timer, State-/SSE-Folgeverarbeitungen, abgeleiteten Energieflussberechnungen oder Live-Core-Refreshes mehr gestartet.

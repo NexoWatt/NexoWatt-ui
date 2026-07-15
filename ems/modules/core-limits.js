@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/core-limits.ts
- * Quell-Hash: sha256:a915668f8cb572c1627cd8e59ba9916a32750ee5754d003523919487e6192fdf
+ * Quell-Hash: sha256:9af7313d920fd6780840316de43c4cd4a9aa8dddf952baabb2a25696155383ac
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -211,6 +211,27 @@ function buildPvSurplusAllocation(totalW, modeRaw, evcsSharePctRaw, options = {}
         storageMaxChargeW: Number.isFinite(storageMaxChargeW) ? roundW(storageMaxChargeW) : null,
         reason,
     };
+}
+
+/**
+ * Code-Teil: computePvBudgetFlowRawW
+ * Zweck: Rekonstruiert das physikalische PV-Budget fuer flexible Verbraucher
+ * und Speicher aus dem signierten NVP-Wert. Netzbezug muss dabei abgezogen
+ * werden; nur den Exportanteil zu addieren wuerde bei gleichzeitigem Netzbezug
+ * ein zu grosses PV-Budget erzeugen und die Speicher-/EVCS-Prioritaet aushebeln.
+ *
+ * Vorzeichen:
+ * - gridW > 0: Netzbezug
+ * - gridW < 0: Einspeisung
+ * - storageChargeW > 0: Speicher nimmt Leistung auf
+ * - storageDischargeW > 0: Speicher gibt Leistung ab
+ */
+function computePvBudgetFlowRawW({ gridW = 0, flexUsedW = 0, storageChargeW = 0, storageDischargeW = 0 } = {}) {
+    const signedGridW = Number.isFinite(Number(gridW)) ? Number(gridW) : 0;
+    const flexW = Math.max(0, Number(flexUsedW) || 0);
+    const chargeW = Math.max(0, Number(storageChargeW) || 0);
+    const dischargeW = Math.max(0, Number(storageDischargeW) || 0);
+    return Math.max(0, (-signedGridW) + flexW + chargeW - dischargeW);
 }
 /**
  * Code-Teil: isPeakShavingRuntimeEnabled
@@ -1186,7 +1207,15 @@ class CoreLimitsModule extends BaseModule {
         // PV = 0 W  => PV Budget raw/effective = 0 W
         // EVCS/Speicher-Reservierungen bleiben Gesamtbudget-/Prioritätsdaten,
         // erzeugen aber kein PV-Budget mehr.
-        const pvBudgetFlowRawW = Math.max(0, gridExportW + flexUsedW + storageChargeW - storageDischargeW);
+        // Signierter NVP statt nur Export: Bei Netzbezug muss der importierte
+        // Anteil vom rekonstruierten PV-Budget abgezogen werden. Sonst kann z. B.
+        // eine bereits zu hohe Speicherladung das Budget selbst kuenstlich aufblasen.
+        const pvBudgetFlowRawW = computePvBudgetFlowRawW({
+            gridW,
+            flexUsedW,
+            storageChargeW,
+            storageDischargeW,
+        });
         const pvPhysicalCapW = Math.max(0, pvPowerW);
         const pvBudgetRawW = Math.min(pvBudgetFlowRawW, pvPhysicalCapW);
         const pvBudgetClampedW = Math.max(0, pvBudgetFlowRawW - pvBudgetRawW);
@@ -1326,7 +1355,7 @@ class CoreLimitsModule extends BaseModule {
                     clampedW: roundW(pvBudgetClampedW),
                     reserveW: roundW(pvReserveW),
                     effectiveW: roundW(pvBudgetEffectiveW),
-                    source: 'min(physicalPV,nvp+controlledLoads+storageCharge-storageDischarge)',
+                    source: 'min(physicalPV,-signedNvp+controlledLoads+storageCharge-storageDischarge)',
                     clampReason: pvBudgetClampedW > 0 ? 'physical_pv_cap' : '',
                 },
                 storage: {
@@ -2110,4 +2139,5 @@ module.exports = {
     CoreLimitsModule,
     normalizePvSurplusPriority,
     buildPvSurplusAllocation,
+    computePvBudgetFlowRawW,
 };

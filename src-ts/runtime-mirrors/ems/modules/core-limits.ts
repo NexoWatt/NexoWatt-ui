@@ -28,7 +28,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: a2a8291ef4c2e35c95f8415dc4473bc3c3c4dd854fef7e6fd3c38c9d556b333b
+ * Original-Hash: 1b759eb2ef43453e3c6db191632076a4a047f2df2142ab94ebd7f41ef192b38e
  */
 
 /**
@@ -205,6 +205,20 @@ function roundW(v, fallback = 0) {
  */
 function isFiniteNumber(v) {
     return typeof v === 'number' && Number.isFinite(v);
+}
+/**
+ * Code-Teil: computePvBudgetFlowRawW
+ * Zweck: Rekonstruiert das physikalische PV-Budget aus dem signierten NVP,
+ * laufenden flexiblen Lasten sowie Speicherladung/-entladung. Netzbezug wird
+ * abgezogen, damit netzgestuetzte Verbraucher das PV-Budget nicht aufblaehen.
+ * Zusammenhang: Gemeinsame Budgetbasis fuer EVCS-/Speicher-Priorisierung.
+ */
+function computePvBudgetFlowRawW({ gridW = 0, flexUsedW = 0, storageChargeW = 0, storageDischargeW = 0 } = {}) {
+    const signedGridW = Number.isFinite(Number(gridW)) ? Number(gridW) : 0;
+    const flexW = Math.max(0, Number(flexUsedW) || 0);
+    const chargeW = Math.max(0, Number(storageChargeW) || 0);
+    const dischargeW = Math.max(0, Number(storageDischargeW) || 0);
+    return Math.max(0, (-signedGridW) + flexW + chargeW - dischargeW);
 }
 /**
  * Code-Teil: isPeakShavingRuntimeEnabled
@@ -1154,10 +1168,19 @@ class CoreLimitsModule extends BaseModule {
         const heatingRodUsedW = heatingRodEnabled ? heatingRodUsedRawW : 0;
         const flexUsedW = Math.max(0, evcsUsedW + thermalUsedW + heatingRodUsedW);
 
-        // The raw PV budget is reconstructed from the NVP plus already-running controlled loads.
-        // Storage charging is added as parked PV, because consumers with lower priority may be allowed
-        // to use it later if their app-specific reserve permits it. Active storage discharge is never PV.
-        const pvBudgetRawW = Math.max(0, gridExportW + flexUsedW + storageChargeW - storageDischargeW);
+        // Das physikalische PV-Budget wird aus dem signierten NVP rekonstruiert.
+        // Ein positiver NVP-Wert ist Netzbezug und muss abgezogen werden; sonst
+        // koennen EVCS- oder Speicherlasten das vermeintliche PV-Budget selbst
+        // aufblaehen und die Kunden-Priorisierung aushebeln.
+        const pvBudgetFlowRawW = computePvBudgetFlowRawW({
+            gridW,
+            flexUsedW,
+            storageChargeW,
+            storageDischargeW,
+        });
+        const pvPhysicalCapW = Math.max(0, pvPowerW);
+        const pvBudgetRawW = Math.min(pvBudgetFlowRawW, pvPhysicalCapW);
+        const pvBudgetClampedW = Math.max(0, pvBudgetFlowRawW - pvBudgetRawW);
         const pvReserveW = clamp(num(cmCfg.pvChargeReserveW, 500), 0, 1e12, 500) || 0;
         const pvBudgetEffectiveW = Math.max(0, pvBudgetRawW - pvReserveW);
         const pvAvailable = pvBudgetEffectiveW > 0;
@@ -1216,6 +1239,9 @@ class CoreLimitsModule extends BaseModule {
                 heatingRodUsedW: roundW(heatingRodUsedW),
                 flexUsedW: roundW(flexUsedW),
                 pvReserveW: roundW(pvReserveW),
+                pvBudgetFlowRawW: roundW(pvBudgetFlowRawW),
+                pvBudgetPhysicalCapW: roundW(pvPhysicalCapW),
+                pvBudgetClampedW: roundW(pvBudgetClampedW),
             },
             gates: {
                 grid: {
@@ -1227,9 +1253,13 @@ class CoreLimitsModule extends BaseModule {
                 pv: {
                     available: !!pvAvailable,
                     rawW: roundW(pvBudgetRawW),
+                    flowRawW: roundW(pvBudgetFlowRawW),
+                    physicalCapW: roundW(pvPhysicalCapW),
+                    clampedW: roundW(pvBudgetClampedW),
                     reserveW: roundW(pvReserveW),
                     effectiveW: roundW(pvBudgetEffectiveW),
-                    source: 'nvp+controlledLoads+storageCharge-storageDischarge',
+                    source: 'min(physicalPV,nvp+controlledLoads+storageCharge-storageDischarge)',
+                    clampReason: pvBudgetClampedW > 0 ? 'physical_pv_cap' : '',
                 },
                 storage: {
                     chargeW: roundW(storageChargeW),
@@ -1758,4 +1788,7 @@ class CoreLimitsModule extends BaseModule {
     }
 }
 
-module.exports = { CoreLimitsModule };
+module.exports = {
+    CoreLimitsModule,
+    computePvBudgetFlowRawW,
+};

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 632606a5fabceb6c49da5c35026602e95b6f47132fa9fec080a618f44f0f058b
+ * Original-Hash: 757deed2bf464f1e6bfd84dadefd684bfc4c1418c66700ffcd88f71ebef2fac4
  */
 
 /**
@@ -67,8 +67,10 @@ function must(file, needle){ const s=read(file); if(!s.includes(needle)){ consol
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function mustNot(file, needle){ const s=read(file); if(s.includes(needle)){ console.error(`Forbidden in ${file}: ${needle}`); process.exit(1); } }
-must('package.json','"version": "0.8.66"');
+const pkg = JSON.parse(read('package.json'));
+if (!/^\d+\.\d+\.\d+$/.test(String(pkg.version || ''))) { console.error('package.json: ungueltige SemVer-Version'); process.exit(1); }
 must('src-ts/runtime-executables/ems/modules/core-limits.ts','pvBudgetPhysicalCapW');
+must('src-ts/runtime-executables/ems/modules/core-limits.ts','computePvBudgetFlowRawW({');
 must('src-ts/runtime-executables/ems/modules/core-limits.ts','Math.min(pvBudgetFlowRawW, pvPhysicalCapW)');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts','budgetDebug.evcsActualW = (typeof totalFreshActualPowerW');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts','budgetDebug.evcsPotentialReservedW = (typeof totalPowerW');

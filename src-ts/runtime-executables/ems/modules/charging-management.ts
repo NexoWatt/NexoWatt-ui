@@ -180,6 +180,38 @@ function clamp(n, min, max) {
     if (Number.isFinite(max)) n = Math.min(max, n);
     return n;
 }
+
+/**
+ * Code-Teil: computePvManagedDemandIntentW
+ * Zweck: Ermittelt den PV-Anteil eines aktiven Ladebedarfs unabhaengig von
+ * kurzzeitigem Zaehler-/Hystereseversatz. PV-only reserviert den kompletten
+ * Bedarf; Min+PV reserviert nur den Anteil oberhalb der konfigurierten
+ * Mindestleistung. Normal-/Boost-Laden erzeugt keinen PV-Intent.
+ */
+function computePvManagedDemandIntentW(modeRaw, demandReserveW, minPowerW = 0) {
+    const mode = String(modeRaw || '').trim().toLowerCase();
+    const demandW = Math.max(0, Number(demandReserveW) || 0);
+    const minW = Math.max(0, Number(minPowerW) || 0);
+    if (mode === 'pv') return demandW;
+    if (mode === 'minpv') return Math.max(0, demandW - Math.min(demandW, minW));
+    return 0;
+}
+
+/**
+ * Code-Teil: computeEvcsPvBudgetReservationW
+ * Zweck: Vereint tatsaechlich verwendeten PV-Anteil und aktiven PV-Ladeintent
+ * zu einer stabilen zentralen EVCS-Reservierung. Die Reservierung wird immer
+ * durch Gesamtbedarf und den kundenseitigen EVCS-Allocation-Cap begrenzt.
+ * Ein flackerndes pvAvailable-Hysteresesignal darf sie nicht auf 0 setzen.
+ */
+function computeEvcsPvBudgetReservationW({ reserveW = 0, actualPvW = 0, intentPvW = 0, allocationCapW = 0 } = {}) {
+    const totalDemandW = Math.max(0, Number(reserveW) || 0);
+    const pvDemandW = Math.max(0, Number(actualPvW) || 0, Number(intentPvW) || 0);
+    const capW = Number.isFinite(Number(allocationCapW))
+        ? Math.max(0, Number(allocationCapW))
+        : totalDemandW;
+    return Math.max(0, Math.min(totalDemandW, capW, pvDemandW));
+}
 /**
  * Code-Teil: toBool
  * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -2529,6 +2561,8 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.pvAllocationEvcsCapW', 'PV surplus EVCS allocation cap (W)', 'number', 'value.power');
         await mk('chargingManagement.control.pvAllocationUncappedW', 'PV surplus EVCS cap before allocation (W)', 'number', 'value.power');
         await mk('chargingManagement.control.pvAllocationStorageActualChargeW', 'Storage actual charge considered for PV allocation (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvActiveDemandReserveW', 'Actual PV share reserved by active EVCS demand (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvActiveDemandIntentW', 'PV intent reserved during EVCS ramp/telemetry lag (W)', 'number', 'value.power');
 
         // Debug: PV surplus without EVCS (instant + smoothed)
         // Used to verify sign conventions / smoothing for PV-only charging.
@@ -6023,6 +6057,8 @@ if (components.length) {
             await this._queueState('chargingManagement.control.actualW', Math.max(0, Math.round(Number(totalFreshActualPowerW || 0))), true);
             await this._queueState('chargingManagement.control.reserveW', 0, true);
             await this._queueState('chargingManagement.control.activeDemandReserveW', 0, true);
+            await this._queueState('chargingManagement.control.pvActiveDemandReserveW', 0, true);
+            await this._queueState('chargingManagement.control.pvActiveDemandIntentW', 0, true);
             await this._queueState('chargingManagement.control.activeDemandWallboxes', 0, true);
 
             // Phase 4.2: Even in failsafe, publish Gate A (Netz/Phasen) diagnostics so the
@@ -6269,6 +6305,8 @@ if (components.length) {
             await this._queueState('chargingManagement.control.actualW', Math.max(0, Math.round(Number(totalFreshActualPowerW || 0))), true);
             await this._queueState('chargingManagement.control.reserveW', 0, true);
             await this._queueState('chargingManagement.control.activeDemandReserveW', 0, true);
+            await this._queueState('chargingManagement.control.pvActiveDemandReserveW', 0, true);
+            await this._queueState('chargingManagement.control.pvActiveDemandIntentW', 0, true);
             await this._queueState('chargingManagement.control.activeDemandWallboxes', 0, true);
             // Cleanup session tracking for removed wallboxes (avoid memory leaks)
             for (const [safeKey, lastSeenTs] of this._chargingLastSeenMs.entries()) {
@@ -6362,6 +6400,8 @@ if (components.length) {
                 await this._queueState('chargingManagement.control.actualW', Math.max(0, Math.round(Number(totalFreshActualPowerW || 0))), true);
                 await this._queueState('chargingManagement.control.reserveW', 0, true);
                 await this._queueState('chargingManagement.control.activeDemandReserveW', 0, true);
+                await this._queueState('chargingManagement.control.pvActiveDemandReserveW', 0, true);
+                await this._queueState('chargingManagement.control.pvActiveDemandIntentW', 0, true);
                 await this._queueState('chargingManagement.control.activeDemandWallboxes', 0, true);
 
             // Gate C: Speicher-Unterstützung in Failsafe immer deaktivieren
@@ -6690,6 +6730,11 @@ if (components.length) {
         let totalTargetCurrentA = 0;
         let evcsActiveDemandReserveW = 0;
         let evcsActiveDemandPvReserveW = 0;
+        // PV-Intent bleibt waehrend Wallbox-Rampe, Start-Hysterese und zaeher
+        // Leistungstelemetrie sichtbar. Ohne diesen zweiten Wert kann die zentrale
+        // Budgetierung den EVCS-Anteil fuer einen Tick auf 0 setzen und der Speicher
+        // nimmt anschliessend den kompletten PV-Ueberschuss.
+        let evcsActiveDemandPvIntentW = 0;
         let evcsActiveDemandWallboxes = 0;
 
         // More specific budget limitation reason based on the active caps in this tick.
@@ -7266,7 +7311,18 @@ if (components.length) {
             const demandReserveThisW = activeChargingDemand ? Math.max(demandActualW, demandCommandW, demandTargetW) : 0;
             if (demandReserveThisW > 0) {
                 evcsActiveDemandReserveW += demandReserveThisW;
-                evcsActiveDemandPvReserveW += Math.max(0, Math.min(demandReserveThisW, pvUsedThisW || 0));
+
+                // PV-Reservierung besteht aus zwei bewusst getrennten Signalen:
+                // 1) tatsaechlich im aktuellen Allocation-Schritt genutzter PV-Anteil,
+                // 2) aktiver PV-Ladeintent aus Ist-, Kommando- oder Zielwert.
+                // Der Intent verhindert eine kurzzeitige Freigabe des EVCS-Anteils an
+                // den Speicher, wenn PV-Hysterese oder Wallbox-Telemetrie fuer einen
+                // einzelnen Tick noch keinen pvUsedThisW liefern. Der zentrale EVCS-Cap
+                // begrenzt diesen Wert spaeter weiterhin strikt auf die Kundenvorgabe.
+                const demandPvActualThisW = Math.max(0, Math.min(demandReserveThisW, pvUsedThisW || 0));
+                const demandPvIntentThisW = computePvManagedDemandIntentW(effMode, demandReserveThisW, w.minPW);
+                evcsActiveDemandPvReserveW += demandPvActualThisW;
+                evcsActiveDemandPvIntentW += demandPvIntentThisW;
                 evcsActiveDemandWallboxes += 1;
             }
 
@@ -7530,6 +7586,7 @@ if (components.length) {
 
         const evcsControlReserveW = Math.max(0, Math.round(evcsActiveDemandReserveW));
         const evcsControlPvReserveW = Math.max(0, Math.round(evcsActiveDemandPvReserveW));
+        const evcsControlPvIntentW = Math.max(0, Math.round(evcsActiveDemandPvIntentW));
         const evcsControlRemainingW = Number.isFinite(budgetW)
             ? Math.max(0, Math.round(Number(budgetW) - evcsControlReserveW))
             : 0;
@@ -7538,6 +7595,7 @@ if (components.length) {
                 budgetDebug.evcsReservedW = evcsControlReserveW;
                 budgetDebug.evcsActiveDemandReserveW = evcsControlReserveW;
                 budgetDebug.evcsActiveDemandPvReserveW = evcsControlPvReserveW;
+                budgetDebug.evcsActiveDemandPvIntentW = evcsControlPvIntentW;
                 budgetDebug.evcsActiveDemandWallboxes = evcsActiveDemandWallboxes;
             }
             const budgetEntry = debugAlloc.find(a => a && a.type === 'budget');
@@ -7545,6 +7603,7 @@ if (components.length) {
                 budgetEntry.details.evcsReservedW = evcsControlReserveW;
                 budgetEntry.details.evcsActiveDemandReserveW = evcsControlReserveW;
                 budgetEntry.details.evcsActiveDemandPvReserveW = evcsControlPvReserveW;
+                budgetEntry.details.evcsActiveDemandPvIntentW = evcsControlPvIntentW;
                 budgetEntry.details.evcsActiveDemandWallboxes = evcsActiveDemandWallboxes;
             }
         } catch {
@@ -7725,6 +7784,8 @@ if (components.length) {
         await this._queueState('chargingManagement.control.actualW', Math.max(0, Math.round(Number(totalFreshActualPowerW || 0))), true);
         await this._queueState('chargingManagement.control.reserveW', evcsControlReserveW, true);
         await this._queueState('chargingManagement.control.activeDemandReserveW', evcsControlReserveW, true);
+        await this._queueState('chargingManagement.control.pvActiveDemandReserveW', evcsControlPvReserveW, true);
+        await this._queueState('chargingManagement.control.pvActiveDemandIntentW', evcsControlPvIntentW, true);
         await this._queueState('chargingManagement.control.activeDemandWallboxes', evcsActiveDemandWallboxes, true);
         await this._queueState('chargingManagement.control.remainingW', tsControlApply ? tsControlApply.remainingW : evcsControlRemainingW, true);
 
@@ -7749,7 +7810,18 @@ if (components.length) {
             if (rt && typeof rt.reserve === 'function') {
                 const evcsActualW = Math.max(0, Math.round(Number(totalFreshActualPowerW || 0)));
                 const evcsReserveW = evcsControlReserveW;
-                const evcsPvReserveW = Math.max(0, Math.min(evcsReserveW, (pvAvailableState ? evcsControlPvReserveW : 0)));
+                const evcsAllocationCapW = Number.isFinite(Number(pvAllocationEvcsCapWState))
+                    ? Math.max(0, Number(pvAllocationEvcsCapWState))
+                    : evcsReserveW;
+                // Nicht an pvAvailableState koppeln: Dieses Hysterese-Signal darf den
+                // bereits aktiven/angeforderten EVCS-PV-Anteil nicht fuer einen einzelnen
+                // Tick freigeben. Der Allocation-Cap bleibt die harte Obergrenze.
+                const evcsPvReserveW = computeEvcsPvBudgetReservationW({
+                    reserveW: evcsReserveW,
+                    actualPvW: evcsControlPvReserveW,
+                    intentPvW: evcsControlPvIntentW,
+                    allocationCapW: evcsAllocationCapW,
+                });
                 rt.reserve({
                     key: 'evcs',
                     app: 'chargingManagement',
@@ -7787,4 +7859,4 @@ if (components.length) {
     }
 }
 
-module.exports = { ChargingManagementModule };
+module.exports = { ChargingManagementModule, computePvManagedDemandIntentW, computeEvcsPvBudgetReservationW };

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: f43e7bb853196cfea0f1f786011a55e8b3ada4d58d4b5e57cca5d880d1b876e6
+ * Original-Hash: 6f439b792400c57b8a171050fc8ca2620ae14e6abcc969e46b1ceb299a4ca3c9
  */
 
 /**
@@ -68,7 +68,8 @@ function must(file, needle, label = needle){ const s = read(file); if (!s.includ
  */
 function mustNot(file, needle, label = needle){ const s = read(file); if (s.includes(needle)) { console.error(`[charging-active-demand-reserve] forbidden ${label}: ${needle}`); process.exit(1); } }
 const cm = 'src-ts/runtime-executables/ems/modules/charging-management.ts';
-must('package.json', '"version": "0.8.66"', 'version 0.8.66');
+const pkg = JSON.parse(read('package.json'));
+if (!/^\d+\.\d+\.\d+$/.test(String(pkg.version || ''))) { console.error('[charging-active-demand-reserve] invalid SemVer'); process.exit(1); }
 must(cm, 'let evcsActiveDemandReserveW = 0;', 'active-demand reserve accumulator');
 must(cm, 'const activeChargingDemand = !!(', 'active-demand predicate');
 must(cm, "w.vehiclePlugged !== false", 'only connected/unknown-plug demand reserves');
@@ -81,7 +82,11 @@ must(cm, "chargingManagement.control.activeDemandWallboxes", 'diagnostic active 
 must(cm, 'const evcsReserveW = evcsControlReserveW;', 'central EMS reserve uses active demand');
 must(cm, 'requestedW: evcsReserveW', 'central request uses active demand');
 must(cm, 'reserveW: evcsReserveW', 'central reserve uses active demand');
-must(cm, 'pvAvailableState ? evcsControlPvReserveW : 0', 'PV reserve capped to active demand PV share');
+must(cm, 'function computeEvcsPvBudgetReservationW(', 'central helper combines actual PV use and active PV intent');
+must(cm, 'const pvDemandW = Math.max(0, Number(actualPvW) || 0, Number(intentPvW) || 0);', 'PV reserve uses active demand and current PV intent');
+must(cm, 'return Math.max(0, Math.min(totalDemandW, capW, pvDemandW));', 'PV reserve remains capped by active demand and central allocation');
+must(cm, 'const evcsPvReserveW = computeEvcsPvBudgetReservationW({', 'central EMS reservation uses the stable PV demand helper');
+mustNot(cm, 'pvAvailableState ? evcsControlPvReserveW : 0', 'single-tick PV hysteresis must not clear an active PV reservation');
 must(cm, "chargingManagement.summary.totalReservedPowerW', evcsControlReserveW", 'summary reserve is active demand reserve');
 mustNot(cm, 'const evcsReserveW = Math.max(0, Math.round(Number.isFinite(budgetW) ? usedW : totalTargetPowerW));', 'old ghost reserve formula removed');
 console.log('[charging-active-demand-reserve] OK');

@@ -12,12 +12,35 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
-const { buildPvSurplusAllocation, normalizePvSurplusPriority } = require('../ems/modules/core-limits');
+const { buildPvSurplusAllocation, normalizePvSurplusPriority, computePvBudgetFlowRawW } = require('../ems/modules/core-limits');
 const { SpeicherRegelungModule } = require('../ems/modules/storage-control');
 
 assert.strictEqual(normalizePvSurplusPriority('Speicher'), 'storage');
 assert.strictEqual(normalizePvSurplusPriority('wallbox'), 'emobility');
 assert.strictEqual(normalizePvSurplusPriority('unbekannt'), 'both');
+
+
+// Das zentrale PV-Budget muss den signierten NVP verwenden. Bei 5,9 kW
+// Netzbezug duerfen 8,1 kW EVCS + 8,4 kW Speicherladung nicht als 16,5 kW
+// PV-Ueberschuss gelten; der Netzbezug wird abgezogen und es bleiben 10,6 kW.
+assert.strictEqual(computePvBudgetFlowRawW({
+  gridW: 5900,
+  flexUsedW: 8100,
+  storageChargeW: 8400,
+  storageDischargeW: 0,
+}), 10600, 'Netzbezug muss aus dem rekonstruierten PV-Budget herausgerechnet werden');
+assert.strictEqual(computePvBudgetFlowRawW({
+  gridW: -2500,
+  flexUsedW: 8100,
+  storageChargeW: 0,
+  storageDischargeW: 0,
+}), 10600, 'NVP-Export plus EVCS-PV-Nutzung muss denselben physikalischen PV-Ueberschuss ergeben');
+assert.strictEqual(computePvBudgetFlowRawW({
+  gridW: 10000,
+  flexUsedW: 10000,
+  storageChargeW: 0,
+  storageDischargeW: 0,
+}), 0, 'Reiner Netzbezug darf kein PV-Budget erzeugen');
 
 const storageFirst = buildPvSurplusAllocation(10000, 'storage', 50, {
   storageEligible: true,
@@ -165,6 +188,7 @@ assert(html.includes('data-key="pvSurplusEvcsSharePct"'), 'EVCS-Anteil fuer geme
 
 const coreSource = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/ems/modules/core-limits.ts'), 'utf8');
 assert(coreSource.includes('gates: {'), 'zentraler Budget-Snapshot fehlt');
+assert(coreSource.includes('computePvBudgetFlowRawW({'), 'PV-Budget muss den signierten NVP ueber die gemeinsame Rekonstruktionsfunktion beruecksichtigen');
 assert(coreSource.includes('pvAllocation: pvAllocationGate'), 'PV-Verteilung muss im zentralen Gate liegen');
 assert(coreSource.includes("for (const key of ['evcs', 'storage', 'thermal', 'heatingRod', 'generic'])"), 'Speicher muss als zentraler Budgetverbraucher registriert sein');
 

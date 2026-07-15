@@ -64,6 +64,17 @@ class FakeDp {
     const matches = this.writesFor(key);
     return matches.length ? matches[matches.length - 1].value : null;
   }
+  clearWrites() { this.writes.length = 0; }
+  setValue(key, value, objectId) {
+    const previous = this.entries[key] || {};
+    this.entries[key] = {
+      ...previous,
+      val: value,
+      ts: nowMs(),
+      objectId: objectId || previous.objectId || `test.${key}`,
+    };
+  }
+  remove(key) { delete this.entries[key]; }
 }
 
 function makeEntry(val, objectId) {
@@ -136,7 +147,7 @@ function makeAdapter(extraConfig = {}, stateCache = {}) {
   };
 }
 
-async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, pvW = 0, loadW = 0, extraConfig = {} }) {
+async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, pvW = 0, loadW = 0, extraConfig = {}, emsBudget = null }) {
   const entries = {
     'grid.powerW': makeEntry(gridW, 'grid.filtered'),
     'grid.powerRawW': makeEntry(gridRawW, 'grid.raw'),
@@ -156,9 +167,63 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, p
   };
   const dp = new FakeDp(entries);
   const adapter = makeAdapter(extraConfig, stateCache);
+  if (emsBudget) adapter._emsBudget = emsBudget;
   const mod = new SpeicherRegelungModule(adapter, dp);
   await mod.tick();
   return { dp, adapter, mod };
+}
+
+
+function makeSharedPvBudget({ totalW = 10100, evcsCapW = 8080, evcsReservedW = 8080, remainingPvW = 2020 } = {}) {
+  const reservations = [];
+  return {
+    gates: {
+      pvAllocation: {
+        mode: 'both',
+        evcsSharePct: 80,
+        totalW,
+        evcsCapW,
+        storageGuaranteedW: Math.max(0, totalW - evcsCapW),
+      },
+    },
+    remainingPvW,
+    consumers: {
+      evcs: {
+        pvReserveW: evcsReservedW,
+        pvUsedW: evcsReservedW,
+      },
+    },
+    order: ['evcs'],
+    reservations,
+    reserve(req) {
+      reservations.push({ ...req });
+      const pvReserveW = Math.max(0, Number(req && req.pvReserveW) || 0);
+      this.remainingPvW = Math.max(0, Number(this.remainingPvW || 0) - pvReserveW);
+    },
+  };
+}
+
+function makePersistentSungrowScenario() {
+  const dp = new FakeDp({
+    'grid.powerW': makeEntry(-2900, 'grid.filtered'),
+    'grid.powerRawW': makeEntry(-2900, 'grid.raw'),
+    'st.socPct': makeEntry(62, 'battery.soc'),
+    'st.batteryPowerW': makeEntry(-2900, 'battery.actualPower'),
+    'st.dcPvPowerW': makeEntry(12000, 'pv.dc'),
+    'st.targetChargePowerW': { objectId: 'battery.chargeTarget', ts: nowMs(), val: 0 },
+    'st.targetDischargePowerW': { objectId: 'battery.dischargeTarget', ts: nowMs(), val: 0 },
+    'st.run': { objectId: 'battery.run', ts: nowMs(), val: false },
+  });
+  const stateCache = {
+    consumptionTotal: { value: 3000, ts: nowMs() },
+    pvPower: { value: 12000, ts: nowMs() },
+    'derived.core.pv.totalW': { value: 12000, ts: nowMs() },
+    'derived.core.building.loadTotalW': { value: 3000, ts: nowMs() },
+    'derived.core.building.loadSource': { value: 'mapped:consumptionTotal', ts: nowMs() },
+  };
+  const adapter = makeAdapter({}, stateCache);
+  const mod = new SpeicherRegelungModule(adapter, dp);
+  return { dp, adapter, mod, stateCache };
 }
 
 (async () => {
@@ -203,6 +268,14 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, p
   assert(dchgNoPv <= 2400, `Sungrow-Assist muss am NVP begrenzt bleiben: ${dchgNoPv}`);
   assert.strictEqual(assist.adapter._states.get('speicher.regelung.sungrowHybridSchreibmodus').val, 'write-nvp-balance-discharge', 'Schreibmodus muss NVP-Balancing Entladung anzeigen');
 
+  // Gemeinsame Schutzlogik bleibt hoeher priorisiert als die Hersteller-Neuberechnung.
+  // Bei zu niedrigem SoC muss ein echter 0-W-Stop geschrieben werden; die Sungrow-
+  // Firewall darf diesen Stop nicht in No-Write/Halten des letzten Werts umwandeln.
+  const lowSocStop = await runTick({ gridW: 2300, gridRawW: 2300, pvW: 100, loadW: 5500, battPowerW: 500, soc: 10 });
+  assert.strictEqual(lowSocStop.dp.lastWrite('st.targetChargePowerW'), 0, 'SoC-Schutz darf keine Ladung anfordern');
+  assert.strictEqual(lowSocStop.dp.lastWrite('st.targetDischargePowerW'), 0, 'SoC-Schutz muss die Entladung mit 0 W stoppen');
+  assert.strictEqual(lowSocStop.adapter._states.get('speicher.regelung.sungrowHybridSchreibmodus').val, 'write-stop-discharge-limit', 'Gemeinsamer SoC-/Reserve-Stopp muss als expliziter Sungrow-Stop erhalten bleiben');
+
   // Rest-Export trotz laufender Ladung: die alte Ladeleistung und der aktuelle
   // NVP-Export werden addiert, damit 2,9 kW Ladung + 2,9 kW Export zu ca. 5,85 kW werden.
   const pvCharge = await runTick({ gridW: -2900, gridRawW: -2900, pvW: 12000, loadW: 3000, battPowerW: -2900 });
@@ -219,7 +292,89 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, p
   assert.strictEqual(pvStable.dp.lastWrite('st.targetDischargePowerW'), 0, 'Sungrow Feed-forward-Laden darf keinen Entlade-Sollwert setzen');
   assert.strictEqual(pvStable.adapter._states.get('speicher.regelung.sungrowHybridSchreibmodus').val, 'write-pv-load-feed-forward-charge', 'Schreibmodus muss direkten PV-/Last-Feed-forward anzeigen');
 
-  console.log('[storage-sungrow-hybrid-profile] OK: Sungrow bilanziert am NVP, nutzt direkte PV/Last nur als Feed-forward und schreibt keine alten PV-Deckungs-0-W-Stopps mehr.');
+
+  // 80/20-Feldszenario: Nach 8,08 kW EVCS-PV-Reservierung bleiben von
+  // 10,1 kW zentralem PV-Budget exakt 2,02 kW fuer den Speicher. Der nachgelagerte
+  // Sungrow-Regelkreis darf diesen Cap nicht wieder auf den vollen Export aufweiten.
+  const sharedBudget = makeSharedPvBudget();
+  const sharedPriority = await runTick({
+    gridW: -2500,
+    gridRawW: -2500,
+    pvW: 17000,
+    loadW: 6400,
+    battPowerW: 0,
+    emsBudget: sharedBudget,
+  });
+  assert.strictEqual(sharedPriority.dp.lastWrite('st.targetChargePowerW'), 2020, 'Sungrow muss bei 80 % E-Mobilitaet auf das verbleibende 20-%-PV-Budget begrenzt werden');
+  assert.strictEqual(sharedPriority.adapter._states.get('speicher.regelung.pvBudgetPostVendorCapped').val, true, 'Finaler Hersteller-Cap muss diagnostiziert werden');
+  assert.strictEqual(sharedPriority.adapter._states.get('speicher.regelung.pvBudgetPostVendorCapW').val, 2020, 'Diagnose muss den finalen 2,02-kW-Cap zeigen');
+  assert(sharedPriority.adapter._states.get('speicher.regelung.sungrowHybridSchreibmodus').val.includes('pv-budget-capped'), 'Sungrow-Schreibmodus muss den finalen PV-Cap ausweisen');
+  assert.strictEqual(sharedBudget.reservations.length, 1, 'Speicher muss nur den final begrenzten PV-Anteil reservieren');
+  assert.strictEqual(sharedBudget.reservations[0].pvReserveW, 2020, 'Speicherreservierung darf nicht den EVCS-Anteil doppelt verwenden');
+
+  // Bereits ueberladender Speicher im selben 80/20-Szenario: Der laufende
+  // Batterie-Istwert darf die Hersteller-Neuberechnung nicht erneut auf mehrere
+  // Kilowatt aufweiten. Die aktuelle NVP-Differenz reduziert den Istwert auf den
+  // verbleibenden Speicheranteil; der finale Budget-Cap bleibt die letzte Schranke.
+  const overdrawingBudget = makeSharedPvBudget();
+  const overdrawingStorage = await runTick({
+    gridW: 6380,
+    gridRawW: 6380,
+    pvW: 17000,
+    loadW: 6400,
+    battPowerW: -8400,
+    emsBudget: overdrawingBudget,
+  });
+  const overdrawingChargeW = overdrawingStorage.dp.lastWrite('st.targetChargePowerW');
+  assert(overdrawingChargeW > 0 && overdrawingChargeW <= 2020, `Sungrow muss eine bereits zu hohe Ladung auf den 20-%-Speicheranteil zuruecknehmen, nicht auf 0 oder wieder auf Volllast: ${overdrawingChargeW}`);
+  assert(!overdrawingStorage.dp.writes.some((row) => row.key === 'st.targetChargePowerW' && row.value === 0), '80/20-Ruecknahme darf keinen zwischengeschobenen 0-W-Ladestopp erzeugen');
+  assert.strictEqual(overdrawingStorage.adapter._states.get('speicher.regelung.pvBudgetPostVendorCapped').val, true, 'Ueberhoehte laufende Sungrow-Ladung muss final durch das PV-Budget begrenzt werden');
+
+  // Runtime-Abgleich: Selbst wenn remainingPvW kurzzeitig inkonsistent 0 meldet,
+  // ist das Allocation-Gate mit EVCS-Reservierung autoritativ. Dadurch entsteht
+  // kein falscher 0-W-Stopp zwischen zwei korrekten Ladezyklen.
+  const reconciledBudget = makeSharedPvBudget({ remainingPvW: 0 });
+  const reconciledPriority = await runTick({
+    gridW: -2500,
+    gridRawW: -2500,
+    pvW: 17000,
+    loadW: 6400,
+    battPowerW: 0,
+    emsBudget: reconciledBudget,
+  });
+  assert.strictEqual(reconciledPriority.dp.lastWrite('st.targetChargePowerW'), 2020, 'Allocation-Abgleich muss einen falschen 0-W-Runtime-Rest korrigieren');
+  assert.strictEqual(reconciledPriority.adapter._states.get('speicher.regelung.pvBudgetResolution').val, 'allocation-reconciled', 'Diagnose muss die Budget-Rekonstruktion ausweisen');
+  assert.strictEqual(reconciledBudget.reservations.length, 1, 'Auch nach Allocation-Abgleich muss der reale Speicheranteil zentral reserviert werden');
+  assert.strictEqual(reconciledBudget.reservations[0].pvReserveW, 2020, 'Rekonstruierter Speicheranteil darf fuer nachgelagerte Verbraucher nicht erneut frei erscheinen');
+
+  // Sequenzieller Regeltest: Laden, NVP-Zielband und kurzer NVP-Aussetzer duerfen
+  // keinen zwischengeschobenen 0-W-Befehl auf charge/discharge/run erzeugen.
+  const persistent = makePersistentSungrowScenario();
+  await persistent.mod.tick();
+  const firstChargeW = persistent.dp.lastWrite('st.targetChargePowerW');
+  assert(firstChargeW > 5000, `Erster Sungrow-Ladesollwert muss aktiv sein: ${firstChargeW}`);
+
+  persistent.dp.clearWrites();
+  persistent.dp.setValue('grid.powerW', 50, 'grid.filtered');
+  persistent.dp.setValue('grid.powerRawW', 50, 'grid.raw');
+  persistent.dp.setValue('st.batteryPowerW', -firstChargeW, 'battery.actualPower');
+  persistent.dp.setValue('st.dcPvPowerW', 3000 + firstChargeW + 50, 'pv.dc');
+  persistent.stateCache.consumptionTotal = { value: 3000, ts: nowMs() };
+  persistent.stateCache.pvPower = { value: 3000 + firstChargeW + 50, ts: nowMs() };
+  persistent.stateCache['derived.core.pv.totalW'] = { value: 3000 + firstChargeW + 50, ts: nowMs() };
+  await persistent.mod.tick();
+  const heldChargeW = persistent.dp.lastWrite('st.targetChargePowerW');
+  assert(heldChargeW > 0, `Im NVP-Zielband muss der aktive Ladewert erhalten bleiben: ${heldChargeW}`);
+  assert(!persistent.dp.writes.some((row) => (row.key === 'st.targetChargePowerW' || row.key === 'st.targetPowerW') && row.value === 0), 'NVP-Zielband darf keinen 0-W-Ladestopp schreiben');
+
+  persistent.dp.clearWrites();
+  persistent.dp.remove('grid.powerW');
+  persistent.dp.remove('grid.powerRawW');
+  await persistent.mod.tick();
+  assert.strictEqual(persistent.dp.writes.length, 0, 'Kurzer Sungrow-NVP-Aussetzer muss No-Write statt 0 W ausloesen');
+  assert.strictEqual(persistent.adapter._states.get('speicher.regelung.schreibStatus').val, 'sungrow-hybrid:no-write-nvp-grace', 'NVP-Grace muss im Schreibstatus sichtbar sein');
+
+  console.log('[storage-sungrow-hybrid-profile] OK: Sungrow bilanziert am NVP, unterdrueckt unbeabsichtigte 0-W-Zyklen und respektiert die zentrale 80/20-PV-Prioritaet auch nach der Herstellerlogik.');
 })().catch((err) => {
   console.error('[storage-sungrow-hybrid-profile] ERROR:', err && err.stack ? err.stack : err);
   process.exit(1);
