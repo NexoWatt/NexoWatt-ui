@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.98",
+    "version": "0.8.99",
     "news": {
+      "0.8.99": {
+        "de": "Version 0.8.99: Vereinheitlicht die PV-Verteilung vollständig über das zentrale EMS-Budget. EVCS reserviert auch einen gültigen PV-Start-Intent vor dem messbaren Ladebeginn, Speicher und Herstellerprofile erhalten nur das verbleibende Grant, und Thermik sowie Heizstab arbeiten anschließend ausschließlich mit dem Restbudget. Konflikte zwischen direkter PV-Messung, NVP-Einspeisung und laufenden flexiblen Lasten werden zentral aufgelöst.",
+        "en": "Version 0.8.99: Unifies PV distribution completely through the central EMS budget. EVCS also reserves a valid PV start intent before measurable charging begins, storage and vendor profiles receive only the remaining grant, and thermal loads plus heating rods then work exclusively with the residual budget. Conflicts between direct PV metering, grid export and running flexible loads are resolved centrally."
+      },
       "0.8.95": {
         "de": "Version 0.8.95: Stabilisiert den herstellerübergreifenden Speicher-NVP-Regelkreis bei asynchronen Messwerten. Der letzte echte Batterie-Istwert bleibt zeitlich begrenzt als Regelbasis erhalten, Sollwertänderungen werden während der Anlagenreaktion kontrolliert fortgeführt und alte Sollwerte werden ohne physisches Feedback weiterhin nicht hochintegriert. Gilt für Generic, Split-DPs, Sungrow, E3/DC und Speicherfarm.",
         "en": "Version 0.8.95: Stabilizes the cross-vendor storage grid-connection control loop with asynchronous measurements. The last real battery power reading is retained for a limited time as the control basis, target changes are carried forward in a controlled manner while the plant responds, and old targets are still never accumulated without physical feedback. Applies to generic, split datapoints, Sungrow, E3/DC and storage farm."
@@ -26,10 +30,6 @@
       "0.8.89": {
         "de": "Version 0.8.89: Ergänzt das Herstellerprofil E3/DC RSCP für die Einzel-Speicherregelung. Der ioBroker.e3dc-rscp Adapter wird über EMS.SET_POWER_MODE und EMS.SET_POWER_VALUE angesteuert; optionale PowerLimits und Diagnose-States wurden ergänzt. Die E3/DC-spezifischen Datenpunkte sind nur beim E3/DC-Herstellerprofil sichtbar.",
         "en": "Version 0.8.89: Adds the E3/DC RSCP manufacturer profile for single-storage control. The ioBroker.e3dc-rscp adapter is controlled via EMS.SET_POWER_MODE and EMS.SET_POWER_VALUE; optional power limits and diagnostic states were added. E3/DC-specific datapoints are only visible for the E3/DC manufacturer profile."
-      },
-      "0.8.88": {
-        "de": "Version 0.8.88: Legt alle Sungrow-Hybrid-Diagnose-States vor dem zyklischen Schreiben an, damit keine ioBroker-Logflut durch fehlende Objekte entsteht. Die Speicherregelung berücksichtigt getrennte Lade-/Entlade-Sollwertpfade jetzt auch einzeln und nutzt den signed-Sollwert als Fallback, wenn eine Richtung nicht separat gemappt ist.",
-        "en": "Version 0.8.88: Creates all Sungrow hybrid diagnostic states before cyclic writes to avoid ioBroker log spam from missing objects. Storage control now supports separate charge/discharge target paths individually and uses the signed target as fallback when one direction is not mapped separately."
       }
     },
     "title": "NexoWatt UI",

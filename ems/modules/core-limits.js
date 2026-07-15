@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/core-limits.ts
- * Quell-Hash: sha256:9af7313d920fd6780840316de43c4cd4a9aa8dddf952baabb2a25696155383ac
+ * Quell-Hash: sha256:1d298689267d125e66b5388d56ec9b726df614e3430d5af5f2684c30232eea1c
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -233,6 +233,175 @@ function computePvBudgetFlowRawW({ gridW = 0, flexUsedW = 0, storageChargeW = 0,
     const dischargeW = Math.max(0, Number(storageDischargeW) || 0);
     return Math.max(0, (-signedGridW) + flexW + chargeW - dischargeW);
 }
+
+/**
+ * Code-Teil: computeCentralBudgetGrant
+ * Zweck: Berechnet einen unverbindlichen Grant aus dem aktuellen zentralen
+ * Gesamt-/PV-Restbudget. Alle flexiblen Verbraucher verwenden damit dieselbe
+ * Quelle, bevor sie ihren finalen Sollwert bilden und anschließend reservieren.
+ *
+ * Wichtig:
+ * - Die Funktion verändert das Budget nicht.
+ * - `pvOnly=true` begrenzt zugleich auf Gesamt- und PV-Restbudget.
+ * - Ein unendliches Gesamtbudget bleibt zulässig; das PV-Budget bleibt immer
+ *   eine endliche physikalische Größe.
+ */
+function computeCentralBudgetGrant(runtime = {}, request = {}) {
+    const requestedRawW = Number(request && request.requestedW);
+    const requestedW = Number.isFinite(requestedRawW)
+        ? Math.max(0, requestedRawW)
+        : Number.MAX_SAFE_INTEGER;
+    const pvOnly = request && request.pvOnly === true;
+    const key = String((request && (request.key || request.consumer || request.app)) || '').trim().toLowerCase();
+    const remainingTotalRaw = Number(runtime && runtime.remainingTotalW);
+    const remainingTotalW = Number.isFinite(remainingTotalRaw)
+        ? Math.max(0, remainingTotalRaw)
+        : Number.POSITIVE_INFINITY;
+    const remainingPvW = Math.max(0, Number(runtime && runtime.remainingPvW) || 0);
+    const requestCapRaw = Number(request && request.maxW);
+    let requestCapW = Number.isFinite(requestCapRaw)
+        ? Math.max(0, requestCapRaw)
+        : Number.POSITIVE_INFINITY;
+
+    // Der EVCS-Anteil wird nur hier im zentralen Budget begrenzt. Nach der
+    // EVCS-Reservierung sehen Speicher, Thermik und Heizstab automatisch nur
+    // noch den Rest. Damit darf kein Herstellerpfad die Kundenvorgabe (z. B.
+    // 80 % E-Mobilitaet / 20 % Speicher) spaeter wieder aushebeln.
+    const allocation = runtime
+        && runtime.gates
+        && runtime.gates.pvAllocation
+        && typeof runtime.gates.pvAllocation === 'object'
+        ? runtime.gates.pvAllocation
+        : null;
+    if (pvOnly && key === 'evcs' && allocation && Number.isFinite(Number(allocation.evcsCapW))) {
+        requestCapW = Math.min(requestCapW, Math.max(0, Number(allocation.evcsCapW)));
+    }
+
+    const availableW = pvOnly
+        ? Math.min(remainingTotalW, remainingPvW, requestCapW)
+        : Math.min(remainingTotalW, requestCapW);
+    const grantW = Math.max(0, Math.min(requestedW, availableW));
+
+    return {
+        requestedW: Number.isFinite(requestedRawW) ? roundW(requestedW) : null,
+        grantW: roundW(grantW),
+        availableW: Number.isFinite(availableW) ? roundW(availableW) : null,
+        remainingTotalW: Number.isFinite(remainingTotalW) ? roundW(remainingTotalW) : null,
+        remainingPvW: roundW(remainingPvW),
+        allocationMode: allocation ? String(allocation.mode || '') : '',
+        allocationEvcsCapW: allocation && Number.isFinite(Number(allocation.evcsCapW))
+            ? roundW(Math.max(0, Number(allocation.evcsCapW)))
+            : null,
+        pvOnly,
+        key,
+        source: 'central-ems-budget',
+    };
+}
+
+
+/**
+ * Code-Teil: resolvePvBudgetPhysicalCapW
+ * Zweck: Ermittelt die physikalisch belegte Obergrenze des zentralen PV-Budgets.
+ *
+ * Hintergrund:
+ * Ein einzelner veralteter oder herstellerspezifisch kurzzeitig 0 W meldender
+ * PV-Datenpunkt darf eine gleichzeitig klar gemessene NVP-Einspeisung nicht auf
+ * 0 W Budget klemmen. Umgekehrt dürfen Ladepunkt- oder Speicher-Sollwerte bei
+ * Nacht kein künstliches PV-Budget erzeugen.
+ *
+ * Regeln:
+ * - Frische direkte PV-Leistung bleibt die bevorzugte Quelle.
+ * - Reale NVP-Einspeisung ist ein unabhängiger physikalischer Beleg. In diesem
+ *   Fall darf die aus NVP + laufenden flexiblen Lasten rekonstruierte Leistung
+ *   die direkte PV-Messung überstimmen.
+ * - Bei 0-Einspeisung darf ein kurz zuvor vertrauenswürdiger Wert nur solange
+ *   gehalten werden, wie weiterhin eine reale PV-Senke (Speicher/EVCS/etc.)
+ *   aktiv ist und kein deutlicher Netzbezug besteht.
+ * - Ohne irgendeinen physikalischen Beleg bleibt die Obergrenze 0 W.
+ */
+function resolvePvBudgetPhysicalCapW({
+    measuredPvW = 0,
+    measuredPvFresh = false,
+    flowRawW = 0,
+    gridExportW = 0,
+    gridImportW = 0,
+    activePvSinkW = 0,
+    lastTrustedW = 0,
+    lastTrustedAgeMs = null,
+    holdMs = 30000,
+    exportEvidenceThresholdW = 250,
+    importToleranceW = 250,
+} = {}) {
+    const measuredW = Math.max(0, Number(measuredPvW) || 0);
+    const flowW = Math.max(0, Number(flowRawW) || 0);
+    const exportW = Math.max(0, Number(gridExportW) || 0);
+    const importW = Math.max(0, Number(gridImportW) || 0);
+    const sinkW = Math.max(0, Number(activePvSinkW) || 0);
+    const lastW = Math.max(0, Number(lastTrustedW) || 0);
+    const ageMs = Number(lastTrustedAgeMs);
+    const trustedAgeOk = Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= Math.max(0, Number(holdMs) || 0);
+
+    // Eine frische positive PV-Messung darf durch die NVP-Bilanz nach oben
+    // plausibilisiert werden, weil bereits laufende Speicher-/EVCS-Lasten den
+    // sichtbaren Export reduzieren. Bei einer frischen 0-W-PV-Messung darf ein
+    // alter/fremder flexibler Verbraucher dagegen kein künstliches PV-Budget
+    // erzeugen; dafür ist ausschließlich der begrenzte Trusted-Hold vorgesehen.
+    if (measuredPvFresh && measuredW > 0) {
+        return {
+            capW: exportW >= Math.max(0, Number(exportEvidenceThresholdW) || 0) && flowW > 0
+                ? Math.max(measuredW, flowW)
+                : measuredW,
+            source: exportW >= Math.max(0, Number(exportEvidenceThresholdW) || 0) && flowW > measuredW
+                ? 'direct-pv+nvp-flow-confirmed'
+                : 'direct-pv-fresh',
+            trusted: true,
+            held: false,
+        };
+    }
+
+    // Fehlt jede frische direkte PV-Messung, ist ein realer NVP-Export ein
+    // unabhängiger physikalischer Beleg. Das ist ein Kompatibilitätsfallback
+    // für Anlagen ohne vollständiges PV-Mapping, kein Parallelbudget.
+    if (!measuredPvFresh && exportW >= Math.max(0, Number(exportEvidenceThresholdW) || 0) && flowW > 0) {
+        return {
+            capW: flowW,
+            source: 'nvp-export-flow-fallback',
+            trusted: true,
+            held: false,
+        };
+    }
+
+    if (trustedAgeOk && lastW > 0 && flowW > 0 && sinkW > 0 && importW <= Math.max(0, Number(importToleranceW) || 0)) {
+        return {
+            capW: Math.min(lastW, flowW),
+            source: 'trusted-pv-hold-with-active-sink',
+            trusted: true,
+            held: true,
+        };
+    }
+
+    // Ein klarer realer Export am NVP ist auch dann mindestens als Exportbetrag
+    // nutzbar, wenn ein direkt gemappter PV-DP frisch aber offensichtlich falsch
+    // 0 W meldet. Wir verwenden in diesem Konflikt bewusst nur den gemessenen
+    // Export und NICHT `flowW`: So kann eine alte flexible Last kein kuenstliches
+    // Zusatzbudget erzeugen, waehrend eine reale Einspeisung dennoch nicht die
+    // gesamte EVCS-/Speicherfreigabe auf 0 klemmt.
+    if (measuredPvFresh && measuredW <= 0 && exportW >= Math.max(0, Number(exportEvidenceThresholdW) || 0)) {
+        return {
+            capW: exportW,
+            source: 'nvp-export-minimum-despite-zero-pv',
+            trusted: true,
+            held: false,
+        };
+    }
+
+    return {
+        capW: 0,
+        source: 'no-physical-pv-evidence',
+        trusted: false,
+        held: false,
+    };
+}
 /**
  * Code-Teil: isPeakShavingRuntimeEnabled
  * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -326,6 +495,37 @@ function makeBudgetRuntime(adapter, snapshot) {
         tsReservationLast: null,
 
         /**
+         * Code-Teil: grant
+         * Zweck: Liefert einem Modul den aktuell zulässigen zentralen Grant, ohne
+         * das Budget zu verändern. Erst der tatsächlich gewählte Sollwert wird
+         * anschließend über `reserve()` verbucht. Damit arbeiten EVCS, Speicher,
+         * Thermik und Heizstab über denselben Budgetstand.
+         */
+        grant(req) {
+            return computeCentralBudgetGrant(this, req);
+        },
+
+        /**
+         * Code-Teil: getPvGrant
+         * Zweck: Explizite API fuer alle PV-gesteuerten Verbraucher. Sie ist
+         * absichtlich nur lesend; erst `reserve()` reduziert das gemeinsame
+         * Restbudget. So verwenden EVCS, Speicher, Thermik und Heizstab exakt
+         * denselben Budget-Snapshot und dieselbe Prioritaetsreihenfolge.
+         */
+        getPvGrant(req) {
+            return computeCentralBudgetGrant(this, { ...(req || {}), pvOnly: true });
+        },
+
+        /**
+         * Code-Teil: getTotalGrant
+         * Zweck: Explizite API fuer Gesamt-/Netzbudget-Pfade, etwa Tarifladung.
+         * PV- und Gesamtbudget bleiben dadurch sauber getrennt.
+         */
+        getTotalGrant(req) {
+            return computeCentralBudgetGrant(this, { ...(req || {}), pvOnly: false });
+        },
+
+        /**
          * Code-Teil: Methode `reserve`
          * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
          * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
@@ -365,10 +565,11 @@ function makeBudgetRuntime(adapter, snapshot) {
              */
             const jsRemainingTotalBefore = Number.isFinite(this.remainingTotalW) ? this.remainingTotalW : Number.POSITIVE_INFINITY;
             const jsRemainingPvBefore = Math.max(0, this.remainingPvW);
-            const jsTotalCap = Number.isFinite(jsRemainingTotalBefore) ? jsRemainingTotalBefore : Number.POSITIVE_INFINITY;
-            const jsPvCap = Math.max(0, jsRemainingPvBefore);
-            const jsCap = r.pvOnly ? Math.min(jsTotalCap, jsPvCap) : jsTotalCap;
-            const jsGrantW = Math.max(0, Math.min(requestedW, jsCap));
+            const jsGrant = computeCentralBudgetGrant(this, {
+                ...r,
+                requestedW,
+            });
+            const jsGrantW = Math.max(0, Number(jsGrant.grantW) || 0);
             const jsNextRemainingTotalW = Number.isFinite(jsRemainingTotalBefore) ? Math.max(0, jsRemainingTotalBefore - reserveW) : Number.POSITIVE_INFINITY;
             const jsNextRemainingPvW = Math.max(0, jsRemainingPvBefore - pvReserveW);
             const jsEntry = {
@@ -603,6 +804,11 @@ class CoreLimitsModule extends BaseModule {
     constructor(adapter, dpRegistry) {
         super(adapter, dpRegistry);
         this._inited = false;
+        // Letzte physikalisch belegte PV-Obergrenze. Dieser kurze Hold ist nur
+        // für asynchrone Hybrid-/Gateway-Telemetrie gedacht; er erzeugt ohne
+        // aktive PV-Senke und ohne plausiblen NVP keinen neuen Überschuss.
+        this._lastTrustedPvPhysicalCapW = 0;
+        this._lastTrustedPvPhysicalCapTs = 0;
     }
     /**
      * Code-Teil: init
@@ -727,8 +933,13 @@ class CoreLimitsModule extends BaseModule {
         await mk('ems.budget.pvPowerW', 'PV production power (W)', 'number', 'value.power', 'W');
         await mk('ems.budget.pvBudgetFlowRawW', 'PV budget flow reconstruction raw (W)', 'number', 'value.power', 'W');
         await mk('ems.budget.pvBudgetPhysicalCapW', 'PV budget physical PV cap (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.pvBudgetPhysicalSource', 'PV budget physical evidence source', 'string', 'text');
+        await mk('ems.budget.pvBudgetPhysicalHeld', 'PV budget uses short trusted hold', 'boolean', 'indicator');
+        await mk('ems.budget.pvBudgetDirectSource', 'Direct PV source used by central budget', 'string', 'text');
+        await mk('ems.budget.pvBudgetDirectFresh', 'Direct PV source is fresh', 'boolean', 'indicator');
+        await mk('ems.budget.pvBudgetPvFlexUsedW', 'Physical PV flexible load used for reconstruction (W)', 'number', 'value.power', 'W');
         await mk('ems.budget.pvBudgetClampedW', 'PV budget clamped by physical PV (W)', 'number', 'value.power', 'W');
-        await mk('ems.budget.flexUsedW', 'Already active flexible load (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.flexUsedW', 'Already active/reserved flexible load (W)', 'number', 'value.power', 'W');
         await mk('ems.budget.binding', 'Budget binding source', 'string', 'text');
         await mk('ems.budget.consumersJson', 'Budget consumers (JSON)', 'string', 'text');
         await mk('ems.budget.snapshot', 'Budget snapshot (JSON)', 'string', 'text');
@@ -842,6 +1053,94 @@ class CoreLimitsModule extends BaseModule {
             } catch (_e) {}
         }
         return fallback;
+    }
+
+
+    /**
+     * Code-Teil: _readCacheNumberFresh
+     * Zweck: Liest einen Zahlenwert nur dann aus dem Adapter-Cache, wenn dessen
+     * Zeitstempel innerhalb des vorgegebenen Fensters liegt. Damit kann das
+     * zentrale Budget direkte PV-/NVP-Werte herstellerübergreifend nutzen, ohne
+     * einen alten Cachewert als aktuellen Überschuss zu behandeln.
+     */
+    _readCacheNumberFresh(keys, maxAgeMs, fallback = null) {
+        const cache = this.adapter && this.adapter.stateCache ? this.adapter.stateCache : null;
+        if (!cache || !Array.isArray(keys)) return fallback;
+        const now = Date.now();
+        const maxAge = Number(maxAgeMs);
+        for (const k of keys) {
+            if (!k) continue;
+            try {
+                const rec = cache[String(k)];
+                if (!rec) continue;
+                const raw = rec && typeof rec === 'object' && Object.prototype.hasOwnProperty.call(rec, 'value') ? rec.value : rec;
+                const v = Number(raw);
+                if (!Number.isFinite(v)) continue;
+                if (Number.isFinite(maxAge) && maxAge > 0 && rec && typeof rec === 'object') {
+                    const ts = Number(rec.ts);
+                    if (Number.isFinite(ts) && ts > 0 && Math.max(0, now - ts) > maxAge) continue;
+                }
+                return v;
+            } catch (_e) {}
+        }
+        return fallback;
+    }
+
+    /**
+     * Code-Teil: _resolveDirectPvPower
+     * Zweck: Vergleicht alle frischen direkten PV-Quellen und verwendet die
+     * höchste plausible Messung. Ein vorhandener, aber 0 W meldender Alias darf
+     * dadurch eine gleichzeitig frische `derived.core.pv.totalW`-Messung nicht
+     * mehr verdecken. Es wird bewusst nicht summiert, damit dieselbe PV-Anlage
+     * über mehrere Aliase niemals doppelt gezählt wird.
+     */
+    _resolveDirectPvPower(maxAgeMs) {
+        const candidates = [];
+        const push = (key, value, sourceType) => {
+            const n = Number(value);
+            if (!Number.isFinite(n)) return;
+            candidates.push({ key: String(key || ''), valueW: Math.max(0, n), sourceType: String(sourceType || '') });
+        };
+
+        if (this.dp) {
+            for (const key of ['ps.pvW', 'cm.pvPowerW']) {
+                try {
+                    push(key, this.dp.getNumberFresh(String(key), maxAgeMs, null), 'dp-registry');
+                } catch (_e) {}
+            }
+        }
+
+        for (const key of [
+            'derived.core.pv.totalW',
+            'pvPower',
+            'productionTotal',
+            'storageFarm.totalPvPowerW',
+            'speicher.dcPvPowerW',
+        ]) {
+            push(key, this._readCacheNumberFresh([key], maxAgeMs, null), 'adapter-cache');
+        }
+
+        if (!candidates.length) {
+            return { powerW: 0, fresh: false, source: 'missing-or-stale', candidates: [] };
+        }
+
+        candidates.sort((a, b) => {
+            const diff = Number(b.valueW) - Number(a.valueW);
+            if (Math.abs(diff) > 0.001) return diff;
+            // Bei gleichem Wert ist die zentrale abgeleitete PV-Summe die beste
+            // herstellerübergreifende Quelle; danach folgen direkte Registry-DPs.
+            const score = (row) => row.key === 'derived.core.pv.totalW'
+                ? 3
+                : (row.sourceType === 'dp-registry' ? 2 : 1);
+            return score(b) - score(a);
+        });
+        const selected = candidates[0];
+        return {
+            powerW: Math.max(0, Number(selected.valueW) || 0),
+            fresh: true,
+            source: `${selected.sourceType}:${selected.key}`,
+            candidates,
+        };
     }
 
     /**
@@ -1132,11 +1431,12 @@ class CoreLimitsModule extends BaseModule {
          * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
          * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
          */
-        const pvPowerW = (() => {
-            const dpVal = this._readDpNumberFresh(['ps.pvW', 'cm.pvPowerW'], staleMs, null);
-            if (isFiniteNumber(dpVal)) return Math.max(0, dpVal);
-            return Math.max(0, this._readCacheNumber(['derived.core.pv.totalW', 'pvPower', 'productionTotal', 'storageFarm.totalPvPowerW'], 0) || 0);
-        })();
+        // PV-/Hybrid-Messwerte kommen bei manchen Herstellern deutlich langsamer
+        // als der NVP. Das zentrale Budget darf deshalb nicht nach 15 s auf 0 W
+        // fallen, während der Energiefluss weiterhin eine klare Einspeisung zeigt.
+        const pvSourceMaxAgeMs = Math.max(staleMs * 3, 45000);
+        const pvPowerInfo = this._resolveDirectPvPower(pvSourceMaxAgeMs);
+        const pvPowerW = Math.max(0, Number(pvPowerInfo.powerW) || 0);
 
         // Speicherleistung wird zentral wie im Energiefluss aufgelöst:
         // - getrennte Lade-/Entlade-DPs bleiben vollständig gültig
@@ -1181,10 +1481,29 @@ class CoreLimitsModule extends BaseModule {
         const thermalEnabled = cfg.enableThermalControl === true;
         const heatingRodEnabled = cfg.enableHeatingRodControl === true;
 
-        const evcsUsedRawW = Math.max(0, this._readCacheNumber(['chargingManagement.control.usedW', 'evcs.totalPowerW'], 0) || 0);
-        const evcsPvUsedRawW = Math.max(0, this._readCacheNumber(['chargingManagement.control.pvEvcsUsedW'], 0) || 0);
-        const thermalUsedRawW = Math.max(0, this._readRuntimeOrStateNumber(['_thermalBudgetUsedW'], null) ?? this._readCacheNumber(['thermal.summary.budgetUsedW'], 0) ?? 0);
-        const heatingRodUsedRawW = Math.max(0, this._readRuntimeOrStateNumber(['_heatingRodBudgetUsedW'], null) ?? this._readCacheNumber(['heatingRod.summary.budgetUsedW'], 0) ?? 0);
+        // Der Core läuft vor den Verbrauchermodulen und verwendet deshalb deren
+        // zuletzt veröffentlichten Ist-/Intentstand aus dem vorherigen EMS-Tick.
+        // Diese Werte dürfen aber nicht unbegrenzt weiterleben: Ein alter EVCS-
+        // oder Thermikwert könnte sonst nachts bzw. nach einer Deaktivierung ein
+        // künstliches PV-Potential rekonstruieren. Das Fenster ist bewusst länger
+        // als ein normaler Modultick, bleibt aber klar endlich.
+        const flexibleFlowMaxAgeMs = Math.max(staleMs * 3, 45000);
+        const evcsUsedRawW = Math.max(0, this._readCacheNumberFresh([
+            'chargingManagement.control.usedW',
+            'evcs.totalPowerW',
+        ], flexibleFlowMaxAgeMs, 0) || 0);
+        const evcsPvUsedRawW = Math.max(0, this._readCacheNumberFresh([
+            'chargingManagement.control.pvEvcsPhysicalPvManagedW',
+            'chargingManagement.control.pvEvcsUsedW',
+        ], flexibleFlowMaxAgeMs, 0) || 0);
+        const thermalRuntimeW = this._readRuntimeOrStateNumber(['_thermalBudgetUsedW'], null);
+        const heatingRodRuntimeW = this._readRuntimeOrStateNumber(['_heatingRodBudgetUsedW'], null);
+        const thermalUsedRawW = Math.max(0, Number.isFinite(Number(thermalRuntimeW))
+            ? Number(thermalRuntimeW)
+            : (this._readCacheNumberFresh(['thermal.summary.budgetUsedW'], flexibleFlowMaxAgeMs, 0) || 0));
+        const heatingRodUsedRawW = Math.max(0, Number.isFinite(Number(heatingRodRuntimeW))
+            ? Number(heatingRodRuntimeW)
+            : (this._readCacheNumberFresh(['heatingRod.summary.budgetUsedW'], flexibleFlowMaxAgeMs, 0) || 0));
 
         // Only active EMS-controlled apps may reserve central budget. Disabled apps can
         // still have old summary states from before a restart/update; those must not
@@ -1210,13 +1529,38 @@ class CoreLimitsModule extends BaseModule {
         // Signierter NVP statt nur Export: Bei Netzbezug muss der importierte
         // Anteil vom rekonstruierten PV-Budget abgezogen werden. Sonst kann z. B.
         // eine bereits zu hohe Speicherladung das Budget selbst kuenstlich aufblasen.
+        // Für die physikalische PV-Rekonstruktion darf nicht die reine
+        // Budgetreservierung (`usedW`) verwendet werden. Eine wartende Wallbox kann
+        // bereits PV-Priorität reservieren, ohne real Leistung zu beziehen. Nur der
+        // gemessene bzw. über den letzten Setpoint plausibilisierte EVCS-PV-Fluss
+        // (`pvEvcsUsedW`) darf zum NVP zurückgerechnet werden.
+        const pvFlexUsedW = Math.max(0, evcsPvUsedW + thermalUsedW + heatingRodUsedW);
         const pvBudgetFlowRawW = computePvBudgetFlowRawW({
             gridW,
-            flexUsedW,
+            flexUsedW: pvFlexUsedW,
             storageChargeW,
             storageDischargeW,
         });
-        const pvPhysicalCapW = Math.max(0, pvPowerW);
+        const activePvSinkW = Math.max(0, pvFlexUsedW + storageChargeW);
+        const lastTrustedAgeMs = this._lastTrustedPvPhysicalCapTs > 0
+            ? Math.max(0, now - this._lastTrustedPvPhysicalCapTs)
+            : null;
+        const pvPhysicalResolution = resolvePvBudgetPhysicalCapW({
+            measuredPvW: pvPowerW,
+            measuredPvFresh: pvPowerInfo.fresh === true,
+            flowRawW: pvBudgetFlowRawW,
+            gridExportW,
+            gridImportW,
+            activePvSinkW,
+            lastTrustedW: this._lastTrustedPvPhysicalCapW,
+            lastTrustedAgeMs,
+            holdMs: Math.max(30000, pvSourceMaxAgeMs),
+        });
+        const pvPhysicalCapW = Math.max(0, Number(pvPhysicalResolution.capW) || 0);
+        if (pvPhysicalResolution.trusted === true && pvPhysicalCapW > 0) {
+            this._lastTrustedPvPhysicalCapW = pvPhysicalCapW;
+            this._lastTrustedPvPhysicalCapTs = now;
+        }
         const pvBudgetRawW = Math.min(pvBudgetFlowRawW, pvPhysicalCapW);
         const pvBudgetClampedW = Math.max(0, pvBudgetFlowRawW - pvBudgetRawW);
         const pvReserveW = clamp(num(cmCfg.pvChargeReserveW, 500), 0, 1e12, 500) || 0;
@@ -1334,9 +1678,14 @@ class CoreLimitsModule extends BaseModule {
                 thermalUsedW: roundW(thermalUsedW),
                 heatingRodUsedW: roundW(heatingRodUsedW),
                 flexUsedW: roundW(flexUsedW),
+                pvFlexUsedW: roundW(pvFlexUsedW),
                 pvReserveW: roundW(pvReserveW),
                 pvBudgetFlowRawW: roundW(pvBudgetFlowRawW),
                 pvBudgetPhysicalCapW: roundW(pvPhysicalCapW),
+                pvBudgetPhysicalSource: String(pvPhysicalResolution.source || ''),
+                pvBudgetPhysicalHeld: pvPhysicalResolution.held === true,
+                pvBudgetDirectSource: String(pvPowerInfo.source || ''),
+                pvBudgetDirectFresh: pvPowerInfo.fresh === true,
                 pvBudgetClampedW: roundW(pvBudgetClampedW),
             },
             gates: {
@@ -1355,7 +1704,10 @@ class CoreLimitsModule extends BaseModule {
                     clampedW: roundW(pvBudgetClampedW),
                     reserveW: roundW(pvReserveW),
                     effectiveW: roundW(pvBudgetEffectiveW),
-                    source: 'min(physicalPV,-signedNvp+controlledLoads+storageCharge-storageDischarge)',
+                    source: String(pvPhysicalResolution.source || 'central-physical-budget'),
+                    directPvSource: String(pvPowerInfo.source || ''),
+                    directPvFresh: pvPowerInfo.fresh === true,
+                    physicalHeld: pvPhysicalResolution.held === true,
                     clampReason: pvBudgetClampedW > 0 ? 'physical_pv_cap' : '',
                 },
                 storage: {
@@ -2035,6 +2387,11 @@ class CoreLimitsModule extends BaseModule {
             await this.adapter.setStateAsync('ems.budget.pvPowerW', roundW(b.raw.pvPowerW), true);
             await this.adapter.setStateAsync('ems.budget.pvBudgetFlowRawW', roundW(b.raw.pvBudgetFlowRawW), true);
             await this.adapter.setStateAsync('ems.budget.pvBudgetPhysicalCapW', roundW(b.raw.pvBudgetPhysicalCapW), true);
+            await this.adapter.setStateAsync('ems.budget.pvBudgetPhysicalSource', String(b.raw.pvBudgetPhysicalSource || ''), true);
+            await this.adapter.setStateAsync('ems.budget.pvBudgetPhysicalHeld', b.raw.pvBudgetPhysicalHeld === true, true);
+            await this.adapter.setStateAsync('ems.budget.pvBudgetDirectSource', String(b.raw.pvBudgetDirectSource || ''), true);
+            await this.adapter.setStateAsync('ems.budget.pvBudgetDirectFresh', b.raw.pvBudgetDirectFresh === true, true);
+            await this.adapter.setStateAsync('ems.budget.pvBudgetPvFlexUsedW', roundW(b.raw.pvFlexUsedW), true);
             await this.adapter.setStateAsync('ems.budget.pvBudgetClampedW', roundW(b.raw.pvBudgetClampedW), true);
             await this.adapter.setStateAsync('ems.budget.flexUsedW', roundW(b.raw.flexUsedW), true);
             await this.adapter.setStateAsync('ems.budget.binding', b.gates.total.binding || '', true);
@@ -2110,6 +2467,11 @@ class CoreLimitsModule extends BaseModule {
                 this.adapter.updateValue('ems.budget.pvAllocationReason', String(pvAllocation.reason || ''), now);
                 this.adapter.updateValue('ems.budget.pvBudgetFlowRawW', roundW(b.raw.pvBudgetFlowRawW), now);
                 this.adapter.updateValue('ems.budget.pvBudgetPhysicalCapW', roundW(b.raw.pvBudgetPhysicalCapW), now);
+                this.adapter.updateValue('ems.budget.pvBudgetPhysicalSource', String(b.raw.pvBudgetPhysicalSource || ''), now);
+                this.adapter.updateValue('ems.budget.pvBudgetPhysicalHeld', b.raw.pvBudgetPhysicalHeld === true, now);
+                this.adapter.updateValue('ems.budget.pvBudgetDirectSource', String(b.raw.pvBudgetDirectSource || ''), now);
+                this.adapter.updateValue('ems.budget.pvBudgetDirectFresh', b.raw.pvBudgetDirectFresh === true, now);
+                this.adapter.updateValue('ems.budget.pvBudgetPvFlexUsedW', roundW(b.raw.pvFlexUsedW), now);
                 this.adapter.updateValue('ems.budget.pvBudgetClampedW', roundW(b.raw.pvBudgetClampedW), now);
                 this.adapter.updateValue('ems.budget.gridW', roundW(b.raw.gridW), now);
                 this.adapter.updateValue('ems.budget.flexUsedW', roundW(b.raw.flexUsedW), now);
@@ -2137,7 +2499,10 @@ class CoreLimitsModule extends BaseModule {
 
 module.exports = {
     CoreLimitsModule,
+    makeBudgetRuntime,
+    computeCentralBudgetGrant,
     normalizePvSurplusPriority,
     buildPvSurplusAllocation,
     computePvBudgetFlowRawW,
+    resolvePvBudgetPhysicalCapW,
 };

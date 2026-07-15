@@ -1,29 +1,126 @@
 #!/usr/bin/env node
 'use strict';
+
+/**
+ * Regression: Reale Ladeleistung und noch wartender PV-Start-Intent muessen
+ * getrennt im zentralen Budget verbucht werden.
+ *
+ * - Reale/kommandierte EVCS-Leistung reduziert das Gesamtbudget.
+ * - Ein verbundener `SuspendedEVSE`-Ladepunkt reserviert seinen zentralen
+ *   PV-Anteil bereits vor dem Leistungsfluss.
+ * - Dieser Pending-Intent reduziert nur das PV-Restbudget, nicht das Netzbudget.
+ */
+const assert = require('assert');
 const fs = require('fs');
-function read(p){ return fs.readFileSync(p, 'utf8'); }
-function must(file, needle, label = needle){ const s = read(file); if (!s.includes(needle)) { console.error(`[charging-active-demand-reserve] missing ${label}: ${needle}`); process.exit(1); } }
-function mustNot(file, needle, label = needle){ const s = read(file); if (s.includes(needle)) { console.error(`[charging-active-demand-reserve] forbidden ${label}: ${needle}`); process.exit(1); } }
+const {
+  computePendingPvStartIntentW,
+  computePendingPvStartTotalBudgetW,
+  computeEvcsPvBudgetReservationW,
+} = require('../ems/modules/charging-management');
+
+function read(p) { return fs.readFileSync(p, 'utf8'); }
+function must(file, needle, label = needle) {
+  const s = read(file);
+  if (!s.includes(needle)) {
+    console.error(`[charging-active-demand-reserve] missing ${label}: ${needle}`);
+    process.exit(1);
+  }
+}
+function mustNot(file, needle, label = needle) {
+  const s = read(file);
+  if (s.includes(needle)) {
+    console.error(`[charging-active-demand-reserve] forbidden ${label}: ${needle}`);
+    process.exit(1);
+  }
+}
+
 const cm = 'src-ts/runtime-executables/ems/modules/charging-management.ts';
 const pkg = JSON.parse(read('package.json'));
-if (!/^\d+\.\d+\.\d+$/.test(String(pkg.version || ''))) { console.error('[charging-active-demand-reserve] invalid SemVer'); process.exit(1); }
+if (!/^\d+\.\d+\.\d+$/.test(String(pkg.version || ''))) {
+  console.error('[charging-active-demand-reserve] invalid SemVer');
+  process.exit(1);
+}
+
 must(cm, 'let evcsActiveDemandReserveW = 0;', 'active-demand reserve accumulator');
 must(cm, 'const activeChargingDemand = !!(', 'active-demand predicate');
-must(cm, "w.vehiclePlugged !== false", 'only connected/unknown-plug demand reserves');
-must(cm, 'demandActualW >= activityThresholdW', 'actual power counts as demand');
-must(cm, 'demandCommandW >= activityThresholdW', 'commanded setpoint counts as demand');
-must(cm, 'demandTargetW >= activityThresholdW', 'target setpoint counts as demand');
-must(cm, 'const evcsControlReserveW = Math.max(0, Math.round(evcsActiveDemandReserveW));', 'control reserve comes from active demand');
-must(cm, "chargingManagement.control.activeDemandReserveW", 'diagnostic active demand reserve state');
-must(cm, "chargingManagement.control.activeDemandWallboxes", 'diagnostic active wallbox count state');
+must(cm, 'let evcsPendingDemandPvIntentW = 0;', 'pending PV intent accumulator');
+must(cm, 'function computePendingPvStartIntentW(', 'pending PV helper');
+must(cm, 'function computePendingPvStartTotalBudgetW(', 'pending total-budget helper');
+must(cm, 'status: w.connectorStatus', 'connector status reaches pending helper');
+must(cm, 'centralTotalGrantW: evcsPendingCentralTotalGrantW', 'pending intent uses central total grant during PV start hysteresis');
+must(cm, 'const evcsControlTotalPvIntentW = Math.max(0, evcsControlPvIntentW + evcsControlPendingPvIntentW);', 'active and waiting PV intent are combined');
+must(cm, "chargingManagement.control.pvPendingDemandIntentW", 'pending demand diagnostic state');
+must(cm, "chargingManagement.control.pvCentralRemainingAfterEvcsW", 'central remaining PV diagnostic state');
 must(cm, 'const evcsReserveW = evcsControlReserveW;', 'central EMS reserve uses active demand');
-must(cm, 'requestedW: evcsReserveW', 'central request uses active demand');
-must(cm, 'reserveW: evcsReserveW', 'central reserve uses active demand');
-must(cm, 'function computeEvcsPvBudgetReservationW(', 'central helper combines actual PV use and active PV intent');
-must(cm, 'const pvDemandW = Math.max(0, Number(actualPvW) || 0, Number(intentPvW) || 0);', 'PV reserve uses active demand and current PV intent');
-must(cm, 'return Math.max(0, Math.min(totalDemandW, capW, pvDemandW));', 'PV reserve remains capped by active demand and central allocation');
-must(cm, 'const evcsPvReserveW = computeEvcsPvBudgetReservationW({', 'central EMS reservation uses the stable PV demand helper');
-mustNot(cm, 'pvAvailableState ? evcsControlPvReserveW : 0', 'single-tick PV hysteresis must not clear an active PV reservation');
-must(cm, "chargingManagement.summary.totalReservedPowerW', evcsControlReserveW", 'summary reserve is active demand reserve');
-mustNot(cm, 'const evcsReserveW = Math.max(0, Math.round(Number.isFinite(budgetW) ? usedW : totalTargetPowerW));', 'old ghost reserve formula removed');
-console.log('[charging-active-demand-reserve] OK');
+must(cm, 'requestedW: Math.max(0, evcsReserveW + evcsControlPendingDemandW)', 'central request includes active load plus waiting PV intent');
+must(cm, 'reserveW: evcsReserveW', 'only active load reduces total budget');
+must(cm, 'pendingIntentPvW: evcsControlPendingPvIntentW', 'pending intent reaches central PV reservation');
+mustNot(cm, 'pvAvailableState ? evcsControlPvReserveW : 0', 'single-tick PV hysteresis must not clear PV reservation');
+mustNot(cm, 'computePendingPvDemandIntentW', 'obsolete parallel pending helper removed');
+
+const pendingTotalW = computePendingPvStartTotalBudgetW({
+  localRemainingW: 0,
+  centralTotalGrantW: 10920,
+  activeDemandW: 3000,
+});
+assert.strictEqual(pendingTotalW, 7920, 'Pending start must use central remaining total budget after active EVCS demand');
+
+const suspendedEvse = computePendingPvStartIntentW({
+  mode: 'pv',
+  enabled: true,
+  online: true,
+  connected: true,
+  controlBasis: 'power',
+  status: 'SuspendedEVSE',
+  currentPowerW: 0,
+  currentPvIntentW: 0,
+  minPowerW: 4140,
+  technicalMinW: 4140,
+  maxPowerW: 11000,
+  totalRemainingW: pendingTotalW,
+  stationRemainingW: 11000,
+  pvRemainingW: 7920,
+});
+assert.strictEqual(suspendedEvse.intentW, 7920, 'SuspendedEVSE muss den zentralen 80-%-EVCS-Anteil reservieren');
+assert.strictEqual(suspendedEvse.reason, 'pv-start-intent');
+
+const suspendedEv = computePendingPvStartIntentW({
+  mode: 'pv',
+  enabled: true,
+  online: true,
+  connected: true,
+  controlBasis: 'power',
+  status: 'SuspendedEV',
+  minPowerW: 4140,
+  technicalMinW: 4140,
+  maxPowerW: 11000,
+  totalRemainingW: 20000,
+  stationRemainingW: 11000,
+  pvRemainingW: 7920,
+});
+assert.strictEqual(suspendedEv.intentW, 0, 'Ein Fahrzeug ohne Ladeanforderung darf kein PV-Budget blockieren');
+assert.strictEqual(suspendedEv.reason, 'vehicle-not-requesting');
+
+const reserve = computeEvcsPvBudgetReservationW({
+  reserveW: 0,
+  demandW: 0,
+  pendingDemandW: suspendedEvse.intentW,
+  actualPvW: 0,
+  intentPvW: 0,
+  pendingIntentPvW: suspendedEvse.intentW,
+  allocationCapW: 7920,
+});
+assert.strictEqual(reserve, 7920, 'Pending-Intent muss den EVCS-PV-Anteil zentral reservieren');
+
+const activePlusPending = computeEvcsPvBudgetReservationW({
+  reserveW: 3000,
+  demandW: 3000,
+  pendingDemandW: 4920,
+  actualPvW: 3000,
+  intentPvW: 3000,
+  pendingIntentPvW: 4920,
+  allocationCapW: 7920,
+});
+assert.strictEqual(activePlusPending, 7920, 'Aktive und wartende PV-Leistung muessen gemeinsam bis zum Cap reserviert werden');
+
+console.log('[charging-active-demand-reserve] OK: EVCS-Aktivlast und Pending-PV-Intent werden zentral und ohne Doppelbuchung reserviert.');

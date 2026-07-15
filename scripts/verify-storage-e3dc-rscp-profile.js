@@ -172,6 +172,21 @@ async function apply(targetW, source = 'eigenverbrauch', storage = {}) {
   ], 'Tarif-/Reserve-Netzladen darf bei Haken MODE=GRID_CHARGE nutzen');
   assert.strictEqual(gridCharge.adapter._states.get('speicher.regelung.e3dcRscpGridCharge').val, true, 'GRID_CHARGE muss diagnostiziert werden');
 
+  // Die produktive Speicher-Policy verwendet als Quelle auch die direkten Namen
+  // `tarif` und `reserve`. Beide muessen denselben E3/DC-GRID_CHARGE-Pfad nutzen,
+  // damit das zentrale Gesamtbudget nicht nur bei alten Aliasnamen greift.
+  const tariffDirect = await apply(-800, 'tarif', { e3dcAllowGridCharge: true });
+  assert.deepStrictEqual(tariffDirect.dp.writes.slice(-2).map(w => [w.key, w.value]), [
+    ['st.e3dcSetPowerMode', 4],
+    ['st.e3dcSetPowerValueW', 800],
+  ], 'Direkte Quelle tarif muss MODE=GRID_CHARGE nutzen');
+
+  const reserveDirect = await apply(-700, 'reserve', { e3dcAllowGridCharge: true });
+  assert.deepStrictEqual(reserveDirect.dp.writes.slice(-2).map(w => [w.key, w.value]), [
+    ['st.e3dcSetPowerMode', 4],
+    ['st.e3dcSetPowerValueW', 700],
+  ], 'Direkte Quelle reserve muss MODE=GRID_CHARGE nutzen');
+
   const zeroNormal = await apply(0, 'aus', { e3dcZeroMode: 'normal' });
   assert.deepStrictEqual(zeroNormal.dp.writes.slice(-2).map(w => [w.key, w.value]), [
     ['st.e3dcSetPowerMode', 0],

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/thermal-control.ts
- * Quell-Hash: sha256:4cc937e319e2252558a26128c14cf942e44ec42f9adacf4a067b4efb18a85582
+ * Quell-Hash: sha256:22ebcd4e22e908c4d6fb0b7a0865f8d42e1fef4c8492d0f1d9b9d4ce9ea04c9f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -682,6 +682,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
 
         // Primary: central EMS Budget & Gates. Charging management reserves EVCS first,
         // thermal consumers get the next priority layer, and heating rods receive the remaining PV budget.
+        const centralRuntimePresent = !!(this.adapter && this.adapter._emsBudget);
         try {
             const rt = this.adapter && this.adapter._emsBudget;
             const snap = rt && typeof rt.peek === 'function' ? rt.peek() : null;
@@ -695,22 +696,45 @@ const mk = async (id, name, type, role, unit = undefined) => {
                 if (Number.isFinite(remainingPvW) && remainingPvW >= 0) {
                     const evcs = snap.consumers && snap.consumers.evcs ? snap.consumers.evcs : null;
                     const evcsUsedW = evcs && Number.isFinite(Number(evcs.reserveW)) ? Math.max(0, Number(evcs.reserveW)) : 0;
-                    const availableByTariffW = (tariffImportPreferred && Number.isFinite(remainingTotalW) && remainingTotalW >= 0)
-                        ? Math.max(0, remainingTotalW)
+                    const totalGrant = tariffImportPreferred && typeof rt.getTotalGrant === 'function'
+                        ? rt.getTotalGrant({ key: 'thermal', requestedW: Number.MAX_SAFE_INTEGER })
                         : null;
+                    const pvGrant = !tariffImportPreferred && typeof rt.getPvGrant === 'function'
+                        ? rt.getPvGrant({ key: 'thermal', requestedW: Number.MAX_SAFE_INTEGER })
+                        : null;
+                    const availableByTariffW = tariffImportPreferred
+                        ? (totalGrant && Number.isFinite(Number(totalGrant.grantW))
+                            ? Math.max(0, Number(totalGrant.grantW))
+                            : (Number.isFinite(remainingTotalW) && remainingTotalW >= 0 ? Math.max(0, remainingTotalW) : null))
+                        : null;
+                    const availablePvGrantW = pvGrant && Number.isFinite(Number(pvGrant.grantW))
+                        ? Math.max(0, Number(pvGrant.grantW))
+                        : Math.max(0, remainingPvW);
                     return {
-                        pvCapW: Math.max(0, Number.isFinite(pvTotalW) ? pvTotalW : remainingPvW),
+                        pvCapW: Math.max(0, Number.isFinite(pvTotalW) ? pvTotalW : availablePvGrantW),
                         evcsUsedW,
-                        availableW: availableByTariffW !== null ? availableByTariffW : Math.max(0, remainingPvW),
-                        source: availableByTariffW !== null ? 'ems.budget.tariffNegative' : 'ems.budget',
+                        availableW: availableByTariffW !== null ? availableByTariffW : availablePvGrantW,
+                        source: availableByTariffW !== null ? 'ems.budget.tariffNegative' : 'ems.budget.central-grant',
                     };
                 }
             }
         } catch (_e) {
-            // fall back to legacy budget source
+            // Die zentrale Runtime bleibt autoritativ. Ein Fehler darf kein
+            // lokales Parallelbudget aus NVP/Charging-States aktivieren.
         }
 
-        // Legacy fallback: PV cap (effective) after EVCS, provided by charging module.
+        if (centralRuntimePresent) {
+            return {
+                pvCapW: 0,
+                evcsUsedW: 0,
+                availableW: 0,
+                source: 'ems.budget.central-stale-or-invalid-blocked',
+            };
+        }
+
+        // Legacy fallback: Nur fuer Alt-Laufzeiten ohne Core-Limits. Sobald die
+        // zentrale Runtime existiert, wird niemals auf ein zweites lokales
+        // PV-Budget ausgewichen.
         const pvCapW = this.dp ? this.dp.getNumberFresh('th.cm.pvCapW', staleMs, null) : null;
         const usedW = this.dp ? this.dp.getNumberFresh('th.cm.usedW', staleMs, null) : null;
 

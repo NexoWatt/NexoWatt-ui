@@ -1,3 +1,18 @@
+## 0.8.99
+
+- Zentrale EMS-Budget-Orchestrierung vereinheitlicht: EVCS, Speicher, Thermik und Heizstab beziehen ihre PV- und Gesamtleistungsfreigaben jetzt über dieselbe Grant-/Reserve-Runtime. Die feste Regelreihenfolge lautet `Core → EVCS → Speicher → Thermik → Heizstab`.
+- PV-Quellenauflösung korrigiert: Ein frischer, aber fehlerhaft `0 W` meldender PV-Alias kann eine gleichzeitig frische `derived.core.pv.totalW`-Messung nicht mehr verdecken. Es wird die höchste plausible direkte PV-Quelle verwendet, ohne mehrere Aliase derselben Anlage zu addieren.
+- Physikalisches PV-Budget nutzt den signierten NVP sowie reale flexible PV-Lasten: NVP-Einspeisung, laufende EVCS-PV-Leistung und Speicherladung werden zusammengeführt; Netzbezug und Speicherentladung werden abgezogen. Veraltete Verbraucherwerte besitzen ein endliches Freshness-Fenster und können kein Nacht-/Ghost-Budget erzeugen.
+- Kundenpriorität `Speicher & E-Mobilität` wird ausschließlich im zentralen Core aufgeteilt. Bei 80 % E-Mobilität und 20 % Speicher erhält EVCS einen zentralen Maximal-Grant; der Speicher sieht danach nur den tatsächlich verbleibenden Rest. Ungenutzter EVCS-Anteil bleibt im selben EMS-Zyklus für den Speicher verfügbar.
+- EVCS-PV-Start-Intent ergänzt: Ein verbundener Ladepunkt im Status `SuspendedEVSE` reserviert seinen technisch nutzbaren PV-Anteil bereits während Start-Hysterese, Rampenaufbau oder verzögerter Leistungstelemetrie. Der Intent reduziert nur das PV-Restbudget und täuscht keine bereits vorhandene Netz-/Anschlusslast vor; `SuspendedEV` reserviert bewusst nichts.
+- Die lokale EVCS-PV-Rekonstruktion bleibt nur Diagnose beziehungsweise Kompatibilitätsfallback für Alt-Laufzeiten ohne Core. Sobald die zentrale Runtime vorhanden ist, wird bei einem fehlenden oder veralteten Core-Snapshot sicher blockiert, statt ein zweites lokales PV-Budget zu starten.
+- Speicherregelung berechnet keine eigene 80/20-Verteilung mehr. Generic-, Split-DP-, Sungrow-, E3/DC-, FENECON-Assist- und Speicherfarm-Pfade verwenden den zentralen Grant nach der EVCS-Reservierung; der finale Hersteller-Sollwert bleibt durch denselben Rest-Cap begrenzt.
+- Speicher-Netzladen aus Tarif, Reserve oder LSK verwendet ebenfalls den zentralen Gesamtgrant nach der EVCS-Reservierung und reserviert seinen tatsächlich freigegebenen Anteil für nachgelagerte Verbraucher. E3/DC erkennt dabei auch die direkten Quellen `tarif` und `reserve` als `GRID_CHARGE`.
+- Thermik und Heizstab verwenden ausschließlich die nach EVCS und Speicher verbleibenden zentralen Grants. Tarif-/Netzbudget und PV-Budget bleiben getrennte Gates, werden aber über dieselbe sequenzielle Runtime reserviert.
+- Feldregression ergänzt: `17,7 kW PV`, `7,4 kW NVP-Einspeisung`, `3,0 kW laufende Speicherladung` und `0,5 kW Reserve` ergeben `9,9 kW` zentrales PV-Budget; bei 80/20 werden `7,92 kW` für E-Mobilität und `1,98 kW` für den Speicher freigegeben.
+- Neue Regression `test:central-pv-budget-orchestration` sichert PV-/Gesamtbudget, EVCS-Pending-Intent, Speicher-Restgrant und die nachgelagerten Verbraucher gegen Doppelbelegung ab.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v401` erhöht.
+
 ## 0.8.98
 
 - Zentrale PV-Budgetrekonstruktion korrigiert: Das physikalische PV-Budget verwendet jetzt den **signierten NVP-Wert**. Netzbezug wird abgezogen, sodass laufende Wallbox- oder Speicherlasten das vermeintliche PV-Angebot nicht mehr selbst aufblähen können.

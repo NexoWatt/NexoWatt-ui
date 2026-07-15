@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:4e01f1da16bf52e91b4e72fe721d2cee1818c88702c27259aa5cafa8e597e13e
+ * Quell-Hash: sha256:1025dc730540f20cd2e4bcd4cc52a666acbab06392d2206f509ff65809deaaf8
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -202,13 +202,294 @@ function computePvManagedDemandIntentW(modeRaw, demandReserveW, minPowerW = 0) {
  * durch Gesamtbedarf und den kundenseitigen EVCS-Allocation-Cap begrenzt.
  * Ein flackerndes pvAvailable-Hysteresesignal darf sie nicht auf 0 setzen.
  */
-function computeEvcsPvBudgetReservationW({ reserveW = 0, actualPvW = 0, intentPvW = 0, allocationCapW = 0 } = {}) {
-    const totalDemandW = Math.max(0, Number(reserveW) || 0);
-    const pvDemandW = Math.max(0, Number(actualPvW) || 0, Number(intentPvW) || 0);
+function computeEvcsPvBudgetReservationW({
+    reserveW = 0,
+    demandW = null,
+    pendingDemandW = 0,
+    actualPvW = 0,
+    intentPvW = 0,
+    pendingIntentPvW = 0,
+    allocationCapW = 0,
+} = {}) {
+    // `reserveW` bildet die bereits physisch/kommandierte Ladeleistung ab.
+    // `demandW` darf zusätzlich einen verbundenen, noch wartenden PV-Ladepunkt
+    // enthalten. So kann die zentrale Budgetierung den EVCS-Anteil schon waehrend
+    // Startverzoegerung oder Wallbox-Telemetrie-Lag reservieren, ohne ihn als
+    // reale Netz-/Gesamtlast zu verbuchen.
+    const activeDemandW = Math.max(
+        0,
+        Number(reserveW) || 0,
+        Number.isFinite(Number(demandW)) ? Number(demandW) : 0,
+    );
+    const pendingW = Math.max(0, Number(pendingDemandW) || 0);
+    const totalDemandW = activeDemandW + pendingW;
+    const activePvDemandW = Math.max(0, Number(actualPvW) || 0, Number(intentPvW) || 0);
+    const pvDemandW = activePvDemandW + Math.max(0, Number(pendingIntentPvW) || 0);
     const capW = Number.isFinite(Number(allocationCapW))
         ? Math.max(0, Number(allocationCapW))
         : totalDemandW;
     return Math.max(0, Math.min(totalDemandW, capW, pvDemandW));
+}
+
+/**
+ * Code-Teil: computePendingPvStartIntentW
+ * Zweck: Reserviert den zentral zugeteilten PV-Anteil bereits fuer einen
+ * verbundenen PV-/Min+PV-Ladepunkt, bevor dessen reale Leistung oder Sollwert
+ * wegen Start-Hysterese, Rampenbegrenzung oder traeger Wallbox-Telemetrie sichtbar
+ * wird. Der Wert reduziert nur das zentrale PV-Restbudget; er wird nicht als
+ * bereits bezogene Netz-/Gesamtleistung verbucht.
+ *
+ * Sicherheitsregeln:
+ * - Nur installierte, online erreichbare und wirklich verbundene Ladepunkte mit
+ *   einem beschreibbaren Sollwert duerfen einen Intent erzeugen.
+ * - Ein Start-Cooldown oder eine wartende Ziel-SoC-Freigabe blockiert den Intent.
+ * - Stations-, Anschluss-, Wallbox- und zentraler PV-Cap bleiben verbindlich.
+ * - Bei PV-only muss die technische Mindestleistung erreichbar sein.
+ * - Bei Min+PV wird nur der Anteil oberhalb der Mindest-/Netzgrundlast als PV
+ *   reserviert; dadurch wird kein Netzbudget als vermeintlicher PV-Anteil gebucht.
+ */
+function computePendingPvStartIntentW({
+    mode = '',
+    enabled = false,
+    online = false,
+    connected = false,
+    controlBasis = 'none',
+    status = '',
+    startCooldownActive = false,
+    goalBlocked = false,
+    currentPowerW = 0,
+    currentPvIntentW = 0,
+    minPowerW = 0,
+    technicalMinW = 0,
+    maxPowerW = 0,
+    totalRemainingW = Number.POSITIVE_INFINITY,
+    stationRemainingW = Number.POSITIVE_INFINITY,
+    pvRemainingW = 0,
+    activityThresholdW = 100,
+} = {}) {
+    const normalizedMode = String(mode || '').trim().toLowerCase();
+    const isPvOnly = normalizedMode === 'pv';
+    const isMinPv = normalizedMode === 'minpv';
+    const validControl = String(controlBasis || '').trim().toLowerCase() !== 'none';
+    if ((!isPvOnly && !isMinPv) || !enabled || !online || !connected || !validControl || startCooldownActive || goalBlocked) {
+        return { intentW: 0, totalDemandW: 0, reason: 'not-eligible' };
+    }
+
+    // OCPP/Herstellerstatus trennt ein wartendes EVSE von einem Fahrzeug, das
+    // selbst keine Energie anfordert. `SuspendedEVSE` darf reservieren, weil die
+    // Wallbox typischerweise auf EMS-Leistung wartet. `SuspendedEV` darf dagegen
+    // keinen PV-Anteil fuer ein gerade nicht ladewilliges Fahrzeug blockieren.
+    const normalizedStatus = String(status || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const suspendedByEvse = normalizedStatus.includes('suspendedevse');
+    const suspendedByVehicle = normalizedStatus.includes('suspendedev') && !suspendedByEvse;
+    if (suspendedByVehicle) {
+        return { intentW: 0, totalDemandW: 0, reason: 'vehicle-not-requesting' };
+    }
+    const statusCanRequestPower = !normalizedStatus
+        || suspendedByEvse
+        || normalizedStatus.includes('preparing')
+        || normalizedStatus.includes('occupied')
+        || normalizedStatus.includes('reserved')
+        || normalizedStatus.includes('charging');
+    if (!statusCanRequestPower) {
+        return { intentW: 0, totalDemandW: 0, reason: 'status-not-requesting' };
+    }
+
+    const maxW = Math.max(0, Number(maxPowerW) || 0);
+    const currentW = Math.max(0, Math.min(maxW, Number(currentPowerW) || 0));
+    const currentIntentW = Math.max(0, Number(currentPvIntentW) || 0);
+    const minW = Math.max(0, Number(minPowerW) || 0);
+    const technicalW = Math.max(minW, Number(technicalMinW) || 0);
+    const thresholdW = Math.max(1, Number(activityThresholdW) || 100);
+    const totalAvailW = Number.isFinite(Number(totalRemainingW))
+        ? Math.max(0, Number(totalRemainingW))
+        : Number.POSITIVE_INFINITY;
+    const stationAvailW = Number.isFinite(Number(stationRemainingW))
+        ? Math.max(0, Number(stationRemainingW))
+        : Number.POSITIVE_INFINITY;
+    const pvAvailW = Math.max(0, Number(pvRemainingW) || 0);
+    if (maxW <= 0 || pvAvailW <= 0) {
+        return { intentW: 0, totalDemandW: 0, reason: 'no-capacity' };
+    }
+
+    // Das verbleibende Gesamt-/Stationsbudget beschreibt nur zusaetzliche
+    // Leistung, weil die bereits kommandierte Leistung im Hauptlauf zuvor
+    // abgezogen wurde. So kann kein Ladepunkt denselben Anschlussanteil doppelt
+    // fuer einen aktiven Sollwert und einen Start-Intent verwenden.
+    const additionalConnectorW = Math.max(0, maxW - currentW);
+    const additionalTotalW = Math.max(0, Math.min(additionalConnectorW, totalAvailW, stationAvailW));
+    const potentialTotalW = currentW + additionalTotalW;
+
+    if (isPvOnly) {
+        const isAlreadyActive = currentW >= thresholdW;
+        if (!isAlreadyActive && technicalW > 0 && potentialTotalW < technicalW) {
+            return { intentW: 0, totalDemandW: 0, reason: 'below-technical-minimum' };
+        }
+        const desiredPvTotalW = Math.max(0, potentialTotalW);
+        const intentGapW = Math.max(0, desiredPvTotalW - currentIntentW);
+        const intentW = Math.max(0, Math.min(intentGapW, pvAvailW));
+        return {
+            intentW,
+            totalDemandW: intentW,
+            reason: intentW > 0 ? (isAlreadyActive ? 'pv-ramp-intent' : 'pv-start-intent') : 'covered',
+        };
+    }
+
+    // Min+PV benoetigt zunaechst seine Mindestleistung aus dem normalen
+    // Gesamtbudget. Nur die darueber hinaus moegliche Leistung ist PV-Intent.
+    if (minW > 0 && potentialTotalW < minW) {
+        return { intentW: 0, totalDemandW: 0, reason: 'below-minpv-base' };
+    }
+    const desiredPvTotalW = Math.max(0, potentialTotalW - Math.min(minW, potentialTotalW));
+    const intentGapW = Math.max(0, desiredPvTotalW - currentIntentW);
+    const intentW = Math.max(0, Math.min(intentGapW, pvAvailW));
+    if (intentW <= 0) {
+        return { intentW: 0, totalDemandW: 0, reason: 'covered' };
+    }
+    const missingBaseW = currentW >= minW ? 0 : Math.max(0, minW - currentW);
+    return {
+        intentW,
+        totalDemandW: Math.max(0, missingBaseW + intentW),
+        reason: currentW >= thresholdW ? 'minpv-ramp-intent' : 'minpv-start-intent',
+    };
+}
+
+/**
+ * Code-Teil: computePendingPvStartTotalBudgetW
+ * Zweck: Loest den Start-Deadlock zwischen PV-Hysterese und zentraler
+ * Budgetreservierung auf.
+ *
+ * Hintergrund:
+ * Der normale EVCS-Sollwert darf waehrend der PV-Startverzoegerung noch 0 W
+ * sein. Dadurch kann auch das lokale `remainingW` voruebergehend 0 W melden,
+ * obwohl das zentrale EMS bereits einen gueltigen PV- und Gesamt-Grant sieht.
+ * Wuerde der Pending-Intent dieses lokale 0-W-Ergebnis verwenden, koennte der
+ * Speicher den kompletten PV-Anteil uebernehmen und die Wallbox kaeme nie aus
+ * `SuspendedEVSE` heraus.
+ *
+ * Die Funktion verwendet deshalb fuer den noch nicht gestarteten Ladeanteil
+ * den groesseren Wert aus:
+ * - lokal verbleibendem Anschluss-/Stationsbudget und
+ * - zentralem Gesamt-Grant nach Abzug bereits aktiver EVCS-Leistung.
+ *
+ * Stations-, Wallbox-, Phasen- und technische Mindestgrenzen werden danach im
+ * Pending-Intent weiterhin separat angewendet. Der Wert reserviert nur einen
+ * Startwunsch; er wird nicht als bereits gemessener Netzbezug verbucht.
+ */
+function computePendingPvStartTotalBudgetW({
+    localRemainingW = 0,
+    centralTotalGrantW = null,
+    activeDemandW = 0,
+} = {}) {
+    const localRaw = Number(localRemainingW);
+    const localW = localRaw === Number.POSITIVE_INFINITY
+        ? Number.POSITIVE_INFINITY
+        : (Number.isFinite(localRaw) ? Math.max(0, localRaw) : 0);
+    const centralRaw = Number(centralTotalGrantW);
+    if (!Number.isFinite(centralRaw)) return localW;
+
+    const centralAdditionalW = Math.max(0, centralRaw - Math.max(0, Number(activeDemandW) || 0));
+    return Math.max(localW, centralAdditionalW);
+}
+
+/**
+ * Code-Teil: resolveChargingPvBudgetControl
+ * Zweck: Macht das zentrale EMS-PV-Budget zur autoritativen Quelle fuer PV-
+ * und Min+PV-Ladepunkte. Die lokale EVCS-Rekonstruktion bleibt nur Diagnose-
+ * und Rueckwaertskompatibilitaets-Fallback, damit Speicher, Wallboxen,
+ * Heizstaebe und weitere Verbraucher niemals mit getrennten PV-Budgets regeln.
+ */
+function resolveChargingPvBudgetControl({
+    centralBudget = null,
+    now = Date.now(),
+    maxAgeMs = 30000,
+    localRawW = 0,
+    localEffectiveW = 0,
+} = {}) {
+    const localRaw = Math.max(0, Number(localRawW) || 0);
+    const localEffective = Math.max(0, Number(localEffectiveW) || 0);
+    const rt = centralBudget && typeof centralBudget === 'object' ? centralBudget : null;
+    const ts = rt ? Number(rt.ts) : NaN;
+    const ageMs = Number.isFinite(ts) && ts > 0 ? Math.max(0, Number(now) - ts) : null;
+    const fresh = ageMs !== null && ageMs <= Math.max(1000, Number(maxAgeMs) || 30000);
+    const pvGate = rt && rt.gates && rt.gates.pv && typeof rt.gates.pv === 'object'
+        ? rt.gates.pv
+        : null;
+    const allocation = rt && rt.gates && rt.gates.pvAllocation && typeof rt.gates.pvAllocation === 'object'
+        ? rt.gates.pvAllocation
+        : null;
+
+    if (fresh && pvGate) {
+        const gateEffectiveW = Math.max(0, Number(pvGate.effectiveW) || 0);
+        const allocationTotalW = allocation && Number.isFinite(Number(allocation.totalW))
+            ? Math.max(0, Number(allocation.totalW))
+            : gateEffectiveW;
+        const allocationCapW = allocation && Number.isFinite(Number(allocation.evcsCapW))
+            ? Math.max(0, Number(allocation.evcsCapW))
+            : allocationTotalW;
+        const allocationLimitedW = Math.max(0, Math.min(allocationTotalW, allocationCapW));
+        const centralGrant = typeof rt.getPvGrant === 'function'
+            ? rt.getPvGrant({ key: 'evcs', requestedW: allocationLimitedW, maxW: allocationLimitedW })
+            : (typeof rt.grant === 'function'
+                ? rt.grant({ key: 'evcs', requestedW: allocationLimitedW, maxW: allocationLimitedW, pvOnly: true })
+                : null);
+        const evcsCapW = centralGrant && Number.isFinite(Number(centralGrant.grantW))
+            ? Math.max(0, Math.min(allocationLimitedW, Number(centralGrant.grantW)))
+            : allocationLimitedW;
+        return {
+            authoritative: true,
+            source: 'central-ems-budget',
+            ageMs,
+            rawW: Math.max(0, Number(pvGate.rawW) || 0),
+            totalW: allocationTotalW,
+            evcsCapW,
+            allocation: allocation || {},
+            localRawW: localRaw,
+            localEffectiveW: localEffective,
+            mismatchW: evcsCapW - localEffective,
+            centralGrantW: evcsCapW,
+        };
+    }
+
+    // In der aktuellen Adaptergeneration ist Core-Limits immer vor dem
+    // Lademanagement aktiv. Existiert die zentrale Runtime, ist sie daher auch
+    // bei einem kurzzeitig fehlenden/stalen Snapshot die einzige Quelle. Ein
+    // Rueckfall auf die lokale EVCS-PV-Rekonstruktion wuerde genau das zweite
+    // Parallelbudget erzeugen, das Speicher und Wallbox gegeneinander regeln
+    // laesst. In diesem Fehlerfall wird PV-Laden sicher blockiert, bis der Core
+    // wieder einen frischen Grant liefert.
+    if (rt) {
+        return {
+            authoritative: true,
+            blocked: true,
+            source: fresh ? 'central-ems-budget-missing-pv-gate' : 'central-ems-budget-stale-blocked',
+            ageMs,
+            rawW: 0,
+            totalW: 0,
+            evcsCapW: 0,
+            allocation: allocation || null,
+            localRawW: localRaw,
+            localEffectiveW: localEffective,
+            mismatchW: -localEffective,
+            centralGrantW: 0,
+        };
+    }
+
+    // Nur fuer sehr alte Laufzeiten ohne Core-Limits bleibt der lokale Wert als
+    // Kompatibilitaetsfallback erhalten. Im regulaeren NexoWatt-EMS wird dieser
+    // Zweig wegen der festen Modulreihenfolge nicht verwendet.
+    return {
+        authoritative: false,
+        source: 'local-fallback-no-central-budget',
+        ageMs,
+        rawW: localRaw,
+        totalW: localEffective,
+        evcsCapW: localEffective,
+        allocation: null,
+        localRawW: localRaw,
+        localEffectiveW: localEffective,
+        mismatchW: 0,
+    };
 }
 /**
  * Code-Teil: toBool
@@ -2559,8 +2840,21 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.pvAllocationEvcsCapW', 'PV surplus EVCS allocation cap (W)', 'number', 'value.power');
         await mk('chargingManagement.control.pvAllocationUncappedW', 'PV surplus EVCS cap before allocation (W)', 'number', 'value.power');
         await mk('chargingManagement.control.pvAllocationStorageActualChargeW', 'Storage actual charge considered for PV allocation (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvBudgetSource', 'Authoritative PV budget source', 'string', 'text');
+        await mk('chargingManagement.control.pvBudgetCentralAgeMs', 'Central PV budget age (ms)', 'number', 'value.interval');
+        await mk('chargingManagement.control.pvBudgetCentralTotalW', 'Central total PV budget (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvBudgetCentralEvcsCapW', 'Central EVCS PV allocation cap (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvBudgetLocalEstimateW', 'Local EVCS PV estimate for diagnostics (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvBudgetMismatchW', 'Central EVCS cap minus local estimate (W)', 'number', 'value.power');
         await mk('chargingManagement.control.pvActiveDemandReserveW', 'Actual PV share reserved by active EVCS demand (W)', 'number', 'value.power');
         await mk('chargingManagement.control.pvActiveDemandIntentW', 'PV intent reserved during EVCS ramp/telemetry lag (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvPendingDemandIntentW', 'Connected PV charging demand reserved before power flow starts (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvPendingDemandTotalW', 'Total EVCS demand reserved while PV charging starts or ramps (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvPendingDemandWallboxes', 'Wallboxes with pending central PV demand', 'number', 'value');
+        await mk('chargingManagement.control.pvTotalDemandIntentW', 'Total active and pending central EVCS PV demand (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvCentralGrantW', 'Central EMS PV grant available to EVCS (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvCentralReservedW', 'PV budget reserved centrally by EVCS (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvCentralRemainingAfterEvcsW', 'Central PV budget remaining after EVCS reservation (W)', 'number', 'value.power');
 
         // Debug: PV surplus without EVCS (instant + smoothed)
         // Used to verify sign conventions / smoothing for PV-only charging.
@@ -2571,7 +2865,8 @@ class ChargingManagementModule extends BaseModule {
         // (helps diagnosing start/stop "hopping" when meters update delayed)
         await mk('chargingManagement.control.pvEvcsActualW', 'EVCS actual power sum (W)', 'number', 'value.power');
         await mk('chargingManagement.control.pvEvcsCmdW', 'EVCS last commanded power sum (W)', 'number', 'value.power');
-        await mk('chargingManagement.control.pvEvcsUsedW', 'EVCS power used for PV surplus calc (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvEvcsUsedW', 'EVCS power used for local PV surplus diagnostics (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvEvcsPhysicalPvManagedW', 'Measured PV-managed EVCS power for central PV reconstruction (W)', 'number', 'value.power');
 
         // Gate A: hard grid safety caps (transparency)
         await mk('chargingManagement.control.gridImportLimitW', 'Grid import limit (W) configured', 'number', 'value.power');
@@ -4246,6 +4541,8 @@ class ChargingManagementModule extends BaseModule {
                 userMode,
                 evcsIndex: (Number.isFinite(evcsIndex) && evcsIndex > 0) ? Math.round(evcsIndex) : 0,
                 vehiclePlugged,
+                connectorStatus: String(statusForPlug || ''),
+                connectorStatusSource: String(statusForPlugSource || ''),
                 goalEnabled,
                 goalActive,
                 goalStatus,
@@ -4940,6 +5237,13 @@ class ChargingManagementModule extends BaseModule {
         let pvAllocationEvcsCapWState = 0;
         let pvAllocationUncappedWState = 0;
         let pvAllocationStorageActualChargeWState = 0;
+        let pvBudgetSourceState = 'none';
+        let pvBudgetCentralAgeMsState = null;
+        let pvBudgetCentralTotalWState = 0;
+        let pvBudgetCentralEvcsCapWState = 0;
+        let pvBudgetLocalEstimateWState = 0;
+        let pvBudgetMismatchWState = 0;
+        let pvBudgetCentralAuthoritative = false;
 
         if (needPvBudget || needPvDiagnostics) {
             // PV-Überschuss sauber ermitteln:
@@ -4967,6 +5271,7 @@ class ChargingManagementModule extends BaseModule {
             let pvEvcsActualW = 0;
             let pvEvcsCmdW = 0;
             let pvEvcsUsedW = 0;
+            let pvEvcsPhysicalPvManagedW = 0;
 
             try {
                 for (const w of wbList) {
@@ -4977,6 +5282,18 @@ class ChargingManagementModule extends BaseModule {
                         ? Math.max(0, Math.abs(w.actualPowerW))
                         : 0;
                     pvEvcsActualW += a;
+
+                    // Fuer die zentrale physikalische PV-Rekonstruktion zaehlt nur
+                    // gemessene Leistung von PV-/Min+PV-Ladepunkten. Normal/Boost
+                    // ist bereits eine priorisierte Last und darf kein neues
+                    // Speicher-PV-Budget erzeugen. Kommandowerte werden hier bewusst
+                    // nicht verwendet; der NVP bildet den realen Leistungsfluss ab.
+                    const effectiveMode = String(w.effectiveMode || '').trim().toLowerCase();
+                    if (effectiveMode === 'pv') {
+                        pvEvcsPhysicalPvManagedW += a;
+                    } else if (effectiveMode === 'minpv') {
+                        pvEvcsPhysicalPvManagedW += Math.max(0, a - Math.min(a, Math.max(0, Number(w.minPW) || 0)));
+                    }
 
                     const prevCmd = (this._lastCmdTargetW && typeof this._lastCmdTargetW.get === 'function')
                         ? this._lastCmdTargetW.get(w.safe)
@@ -5003,13 +5320,14 @@ class ChargingManagementModule extends BaseModule {
                 pvEvcsActualW = pvEvcsUsedW;
                 pvEvcsCmdW = pvEvcsUsedW;
             }
-            pvEvcsUsedWForBudget = Math.max(0, Math.round(pvEvcsUsedW || 0));
+            pvEvcsUsedWForBudget = Math.max(0, Math.round(pvEvcsPhysicalPvManagedW || 0));
 
             // Diagnostics (UI)
             try {
                 await this._queueState('chargingManagement.control.pvEvcsActualW', Math.round(pvEvcsActualW || 0), true);
                 await this._queueState('chargingManagement.control.pvEvcsCmdW', Math.round(pvEvcsCmdW || 0), true);
                 await this._queueState('chargingManagement.control.pvEvcsUsedW', Math.round(pvEvcsUsedW || 0), true);
+                await this._queueState('chargingManagement.control.pvEvcsPhysicalPvManagedW', Math.round(pvEvcsPhysicalPvManagedW || 0), true);
             } catch {
                 // ignore
             }
@@ -5170,36 +5488,52 @@ class ChargingManagementModule extends BaseModule {
             // Effektiv bleibt dadurch im PV-Budget ein Puffer (Default 500 W), der kurze Messwertsprünge,
             // Rundungsfehler und minimale Hauslaständerungen abfedert, ohne die restliche Logik zu ändern.
             const pvChargeReserveW = clamp(num(cfg.pvChargeReserveW, 500), 0, 1e12);
-            const pvCapBudgetW = Math.max(0, pvCapRawW - pvChargeReserveW);
-            pvAllocationUncappedWState = pvCapBudgetW;
+            const pvCapBudgetLocalW = Math.max(0, pvCapRawW - pvChargeReserveW);
+            pvBudgetLocalEstimateWState = pvCapBudgetLocalW;
             pvAllocationStorageActualChargeWState = Math.max(0, Math.round(storageChargeNowW || 0));
 
-            // Die Kundenauswahl wird im Core-Limits-Modul aus demselben physikalischen
-            // PV-Budget erzeugt. Sie begrenzt nur PV-/Min+PV-Wallboxen; Normal-/Boost-
-            // und dynamische Tarifpfade bleiben davon unberuehrt.
+            // Zentrale Orchestrierung: Core-Limits berechnet EIN physikalisches PV-Budget
+            // und teilt es gemaess Kundeneinstellung zwischen EVCS und Speicher. Die lokale
+            // EVCS-Rekonstruktion bleibt nur Diagnose/Fallback. Ein `Math.min(local, central)`
+            // waere fachlich falsch: Ein kurzzeitig 0 W meldender lokaler PV-/Last-DP wuerde
+            // sonst trotz klarer NVP-Einspeisung den zentralen EVCS-Anteil wieder auf 0 setzen.
             const centralBudget = this.adapter && this.adapter._emsBudget;
-            const allocationGate = centralBudget
-                && centralBudget.gates
-                && centralBudget.gates.pvAllocation
-                && typeof centralBudget.gates.pvAllocation === 'object'
-                ? centralBudget.gates.pvAllocation
-                : null;
+            const pvBudgetControl = resolveChargingPvBudgetControl({
+                centralBudget,
+                now,
+                maxAgeMs: Math.max(15000, clamp(num(cfg.centralBudgetMaxAgeSec, 30), 5, 120) * 1000),
+                localRawW: pvCapRawW,
+                localEffectiveW: pvCapBudgetLocalW,
+            });
+            const allocationGate = pvBudgetControl.allocation;
+            pvBudgetCentralAuthoritative = pvBudgetControl.authoritative === true;
+            pvBudgetSourceState = String(pvBudgetControl.source || '');
+            pvBudgetCentralAgeMsState = pvBudgetControl.ageMs;
+            pvBudgetCentralTotalWState = Math.max(0, Number(pvBudgetControl.totalW) || 0);
+            pvBudgetCentralEvcsCapWState = Math.max(0, Number(pvBudgetControl.evcsCapW) || 0);
+            pvBudgetMismatchWState = Number.isFinite(Number(pvBudgetControl.mismatchW))
+                ? Number(pvBudgetControl.mismatchW)
+                : 0;
+
             if (allocationGate) {
                 pvAllocationModeState = String(allocationGate.mode || 'both');
                 pvAllocationEvcsSharePctState = Number.isFinite(Number(allocationGate.evcsSharePct))
                     ? Math.max(0, Math.min(100, Number(allocationGate.evcsSharePct)))
                     : 50;
-                pvAllocationEvcsCapWState = Number.isFinite(Number(allocationGate.evcsCapW))
-                    ? Math.max(0, Number(allocationGate.evcsCapW))
-                    : pvCapBudgetW;
             } else {
-                // Rueckwaertskompatibler Fallback, falls Core-Limits in einem alten
-                // Laufzeitstand noch keinen Allocation-Gate bereitstellt.
                 pvAllocationModeState = 'legacy-full-evcs';
                 pvAllocationEvcsSharePctState = 100;
-                pvAllocationEvcsCapWState = pvCapBudgetW;
             }
-            const pvCapAllocatedW = Math.max(0, Math.min(pvCapBudgetW, pvAllocationEvcsCapWState));
+
+            // `totalW` ist das zentrale PV-Budget nach zentraler Reserve. `evcsCapW`
+            // ist daraus der maximal zulaessige EVCS-Anteil. Beide Werte stammen aus
+            // demselben Budget-Snapshot, den Speicher, Heizstab und weitere Verbraucher
+            // anschliessend ueber `reserve()` weiter reduzieren.
+            pvAllocationUncappedWState = pvBudgetCentralTotalWState;
+            pvAllocationEvcsCapWState = pvBudgetCentralEvcsCapWState;
+            const pvCapAllocatedW = pvBudgetCentralAuthoritative
+                ? pvBudgetCentralEvcsCapWState
+                : Math.max(0, pvCapBudgetLocalW);
             pvStartReadyBudgetW = pvCapAllocatedW;
             pvCapW = pvCapAllocatedW;
 
@@ -5263,7 +5597,9 @@ class ChargingManagementModule extends BaseModule {
             this._pvAvailable = pvAvail;
             pvCapW = pvAvail ? pvCapAllocatedW : 0;
 
-            pvCapRawWState = pvCapRawW;
+            pvCapRawWState = pvBudgetCentralAuthoritative
+                ? Math.max(0, Number(pvBudgetControl.rawW) || 0)
+                : pvCapRawW;
             pvCapEffectiveWState = (typeof pvCapW === 'number' && Number.isFinite(pvCapW)) ? pvCapW : 0;
             pvAvailableState = pvAvail;
 
@@ -5278,6 +5614,13 @@ class ChargingManagementModule extends BaseModule {
             pvAvailableState = false;
             pvSurplusNoEvRawWState = 0;
             pvSurplusNoEvAvg5mWState = 0;
+            pvBudgetSourceState = 'inactive';
+            pvBudgetCentralAgeMsState = null;
+            pvBudgetCentralTotalWState = 0;
+            pvBudgetCentralEvcsCapWState = 0;
+            pvBudgetLocalEstimateWState = 0;
+            pvBudgetMismatchWState = 0;
+            pvBudgetCentralAuthoritative = false;
         }
 
         // Publish PV diagnostics (even if PV budgeting is not active)
@@ -5292,6 +5635,16 @@ class ChargingManagementModule extends BaseModule {
             await this._queueState('chargingManagement.control.pvAllocationEvcsCapW', Math.round(Number(pvAllocationEvcsCapWState) || 0), true);
             await this._queueState('chargingManagement.control.pvAllocationUncappedW', Math.round(Number(pvAllocationUncappedWState) || 0), true);
             await this._queueState('chargingManagement.control.pvAllocationStorageActualChargeW', Math.round(Number(pvAllocationStorageActualChargeWState) || 0), true);
+            await this._queueState('chargingManagement.control.pvBudgetSource', String(pvBudgetSourceState || ''), true);
+            await this._queueState(
+                'chargingManagement.control.pvBudgetCentralAgeMs',
+                Number.isFinite(Number(pvBudgetCentralAgeMsState)) ? Math.round(Number(pvBudgetCentralAgeMsState)) : 0,
+                true,
+            );
+            await this._queueState('chargingManagement.control.pvBudgetCentralTotalW', Math.round(Number(pvBudgetCentralTotalWState) || 0), true);
+            await this._queueState('chargingManagement.control.pvBudgetCentralEvcsCapW', Math.round(Number(pvBudgetCentralEvcsCapWState) || 0), true);
+            await this._queueState('chargingManagement.control.pvBudgetLocalEstimateW', Math.round(Number(pvBudgetLocalEstimateWState) || 0), true);
+            await this._queueState('chargingManagement.control.pvBudgetMismatchW', Math.round(Number(pvBudgetMismatchWState) || 0), true);
         } catch {
             // ignore
         }
@@ -5414,6 +5767,13 @@ if (components.length) {
                 pvAllocationEvcsCapW: Math.round(Number(pvAllocationEvcsCapWState) || 0),
                 pvAllocationUncappedW: Math.round(Number(pvAllocationUncappedWState) || 0),
                 pvAllocationStorageActualChargeW: Math.round(Number(pvAllocationStorageActualChargeWState) || 0),
+                pvBudgetSource: String(pvBudgetSourceState || ''),
+                pvBudgetCentralAuthoritative: !!pvBudgetCentralAuthoritative,
+                pvBudgetCentralAgeMs: Number.isFinite(Number(pvBudgetCentralAgeMsState)) ? Math.round(Number(pvBudgetCentralAgeMsState)) : null,
+                pvBudgetCentralTotalW: Math.round(Number(pvBudgetCentralTotalWState) || 0),
+                pvBudgetCentralEvcsCapW: Math.round(Number(pvBudgetCentralEvcsCapWState) || 0),
+                pvBudgetLocalEstimateW: Math.round(Number(pvBudgetLocalEstimateWState) || 0),
+                pvBudgetMismatchW: Math.round(Number(pvBudgetMismatchWState) || 0),
                 evPriorityStorageYieldW: Math.round(evPriorityStorageYieldW || 0),
                 components,
             };
@@ -6057,6 +6417,9 @@ if (components.length) {
             await this._queueState('chargingManagement.control.activeDemandReserveW', 0, true);
             await this._queueState('chargingManagement.control.pvActiveDemandReserveW', 0, true);
             await this._queueState('chargingManagement.control.pvActiveDemandIntentW', 0, true);
+            await this._queueState('chargingManagement.control.pvPendingDemandIntentW', 0, true);
+            await this._queueState('chargingManagement.control.pvPendingDemandTotalW', 0, true);
+            await this._queueState('chargingManagement.control.pvPendingDemandWallboxes', 0, true);
             await this._queueState('chargingManagement.control.activeDemandWallboxes', 0, true);
 
             // Phase 4.2: Even in failsafe, publish Gate A (Netz/Phasen) diagnostics so the
@@ -6305,6 +6668,9 @@ if (components.length) {
             await this._queueState('chargingManagement.control.activeDemandReserveW', 0, true);
             await this._queueState('chargingManagement.control.pvActiveDemandReserveW', 0, true);
             await this._queueState('chargingManagement.control.pvActiveDemandIntentW', 0, true);
+            await this._queueState('chargingManagement.control.pvPendingDemandIntentW', 0, true);
+            await this._queueState('chargingManagement.control.pvPendingDemandTotalW', 0, true);
+            await this._queueState('chargingManagement.control.pvPendingDemandWallboxes', 0, true);
             await this._queueState('chargingManagement.control.activeDemandWallboxes', 0, true);
             // Cleanup session tracking for removed wallboxes (avoid memory leaks)
             for (const [safeKey, lastSeenTs] of this._chargingLastSeenMs.entries()) {
@@ -6400,6 +6766,9 @@ if (components.length) {
                 await this._queueState('chargingManagement.control.activeDemandReserveW', 0, true);
                 await this._queueState('chargingManagement.control.pvActiveDemandReserveW', 0, true);
                 await this._queueState('chargingManagement.control.pvActiveDemandIntentW', 0, true);
+                await this._queueState('chargingManagement.control.pvPendingDemandIntentW', 0, true);
+                await this._queueState('chargingManagement.control.pvPendingDemandTotalW', 0, true);
+                await this._queueState('chargingManagement.control.pvPendingDemandWallboxes', 0, true);
                 await this._queueState('chargingManagement.control.activeDemandWallboxes', 0, true);
 
             // Gate C: Speicher-Unterstützung in Failsafe immer deaktivieren
@@ -6734,6 +7103,14 @@ if (components.length) {
         // nimmt anschliessend den kompletten PV-Ueberschuss.
         let evcsActiveDemandPvIntentW = 0;
         let evcsActiveDemandWallboxes = 0;
+        // Noch nicht physisch gestartete beziehungsweise erst hochregelnde
+        // PV-Ladepunkte erhalten ihren Anteil als reinen PV-Intent. Dadurch bleibt
+        // die Kundenprioritaet waehrend Start-Hysterese/EVSE-Suspend und Rampe
+        // zentral reserviert, ohne ihn als bereits bezogene Netzlast zu verbuchen.
+        let evcsPendingDemandPvIntentW = 0;
+        let evcsPendingDemandTotalW = 0;
+        let evcsPendingDemandWallboxes = 0;
+        let evcsPendingCentralTotalGrantW = null;
 
         // More specific budget limitation reason based on the active caps in this tick.
         // Used for per-connector diagnostics (without changing the underlying allocation math).
@@ -7582,9 +7959,129 @@ if (components.length) {
         }
 
 
+        /**
+         * Code-Teil: zentrale PV-Intent-Reservierung vor Speicherregelung
+         * Zweck: Ermittelt nach der realen Wallbox-Allokation den noch offenen,
+         * technisch nutzbaren PV-Bedarf verbundener Ladepunkte. Dieser zweite
+         * Durchlauf ist bewusst nach allen Sollwerten angeordnet: Erst dadurch
+         * sind Anschluss-, Stations- und aktive EVCS-Verbraeuche eindeutig
+         * abgezogen, sodass mehrere Ladepunkte denselben Rest nicht doppelt
+         * reservieren koennen.
+         */
+        try {
+            const centralEvcsCapW = Math.max(0, Number(pvStartReadyBudgetW) || 0);
+            let pendingPvRemainingW = Math.max(
+                0,
+                centralEvcsCapW - Math.min(centralEvcsCapW, Math.max(0, Number(evcsActiveDemandPvIntentW) || 0)),
+            );
+            const centralBudgetRuntime = this.adapter && this.adapter._emsBudget;
+            const centralTotalGrant = centralBudgetRuntime && typeof centralBudgetRuntime.getTotalGrant === 'function'
+                ? centralBudgetRuntime.getTotalGrant({ key: 'evcs', requestedW: Number.MAX_SAFE_INTEGER })
+                : (centralBudgetRuntime && typeof centralBudgetRuntime.grant === 'function'
+                    ? centralBudgetRuntime.grant({ key: 'evcs', requestedW: Number.MAX_SAFE_INTEGER, pvOnly: false })
+                    : null);
+            evcsPendingCentralTotalGrantW = centralTotalGrant && Number.isFinite(Number(centralTotalGrant.grantW))
+                ? Math.max(0, Number(centralTotalGrant.grantW))
+                : null;
+            let pendingTotalRemainingW = computePendingPvStartTotalBudgetW({
+                localRemainingW: Number.isFinite(Number(remainingW))
+                    ? Math.max(0, Number(remainingW))
+                    : Number.POSITIVE_INFINITY,
+                centralTotalGrantW: evcsPendingCentralTotalGrantW,
+                activeDemandW: evcsActiveDemandReserveW,
+            });
+            const pendingStationRemainingW = new Map(stationRemainingW);
+            const allocationRows = new Map(
+                debugAlloc
+                    .filter((row) => row && typeof row.safe === 'string')
+                    .map((row) => [String(row.safe), row]),
+            );
+
+            for (const w of sorted) {
+                if (pendingPvRemainingW <= 0) break;
+                const row = allocationRows.get(String(w.safe || '')) || {};
+                const effMode = String(w.effectiveMode || row.effectiveMode || '').trim().toLowerCase();
+                if (effMode !== 'pv' && effMode !== 'minpv') continue;
+
+                const actualNowW = (typeof w.actualPowerW === 'number' && Number.isFinite(w.actualPowerW))
+                    ? Math.max(0, Math.abs(w.actualPowerW))
+                    : 0;
+                const commandNowW = Math.max(0, Number(row.targetW) || 0);
+                const demandNowW = Math.max(0, Number(row.demandReserveW) || 0, actualNowW, commandNowW);
+                const activePvIntentW = computePvManagedDemandIntentW(effMode, demandNowW, w.minPW);
+                const stationAvailW = w.stationKey && pendingStationRemainingW.has(w.stationKey)
+                    ? Math.max(0, Number(pendingStationRemainingW.get(w.stationKey)) || 0)
+                    : Number.POSITIVE_INFINITY;
+                const technicalMinW = (w.chargerType === 'AC' && Number(w.phases || 0) === 3)
+                    ? Math.max(0, Math.max(num(w.minPW, 0), acMinPower3pW))
+                    : Math.max(0, num(w.minPW, 0));
+                const startCooldownActive = effMode === 'pv'
+                    && Number.isFinite(Number(w.pvStartCooldownUntilMs))
+                    && Number(w.pvStartCooldownUntilMs) > now;
+                const goalBlocked = w.goalEnabled === true
+                    && (String(w.goalStatus || '') === 'waiting_soc' || String(w.goalStatus || '') === 'soc_stale');
+
+                const pending = computePendingPvStartIntentW({
+                    mode: effMode,
+                    enabled: w.enabled === true,
+                    online: w.online === true,
+                    connected: w.vehiclePlugged === true,
+                    controlBasis: w.controlBasis,
+                    status: w.connectorStatus,
+                    startCooldownActive,
+                    goalBlocked,
+                    currentPowerW: demandNowW,
+                    currentPvIntentW: activePvIntentW,
+                    minPowerW: w.minPW,
+                    technicalMinW,
+                    maxPowerW: w.maxPW,
+                    totalRemainingW: pendingTotalRemainingW,
+                    stationRemainingW: stationAvailW,
+                    pvRemainingW: pendingPvRemainingW,
+                    activityThresholdW,
+                });
+                const pendingIntentW = Math.max(0, Number(pending.intentW) || 0);
+                if (pendingIntentW <= 0) {
+                    row.pendingPvIntentW = 0;
+                    row.pendingPvIntentReason = String(pending.reason || '');
+                    continue;
+                }
+
+                const pendingTotalDemandW = Math.max(pendingIntentW, Number(pending.totalDemandW) || 0);
+                evcsPendingDemandPvIntentW += pendingIntentW;
+                evcsPendingDemandTotalW += pendingTotalDemandW;
+                evcsPendingDemandWallboxes += 1;
+                pendingPvRemainingW = Math.max(0, pendingPvRemainingW - pendingIntentW);
+                if (Number.isFinite(pendingTotalRemainingW)) {
+                    pendingTotalRemainingW = Math.max(0, pendingTotalRemainingW - pendingTotalDemandW);
+                }
+                if (w.stationKey && pendingStationRemainingW.has(w.stationKey)) {
+                    pendingStationRemainingW.set(
+                        w.stationKey,
+                        Math.max(0, stationAvailW - pendingTotalDemandW),
+                    );
+                }
+
+                row.pendingPvIntentW = Math.round(pendingIntentW);
+                row.pendingPvIntentTotalDemandW = Math.round(pendingTotalDemandW);
+                row.pendingPvIntentReason = String(pending.reason || '');
+            }
+        } catch (_ePendingPvIntent) {
+            // Sicherheitsfallback: Ein Diagnose-/Intentfehler darf die produktive
+            // Wallbox-Allokation nicht unterbrechen. Ohne Intent bleibt nur die
+            // bereits aktive EVCS-PV-Reservierung bestehen.
+            evcsPendingDemandPvIntentW = 0;
+            evcsPendingDemandTotalW = 0;
+            evcsPendingDemandWallboxes = 0;
+        }
+
+
         const evcsControlReserveW = Math.max(0, Math.round(evcsActiveDemandReserveW));
         const evcsControlPvReserveW = Math.max(0, Math.round(evcsActiveDemandPvReserveW));
         const evcsControlPvIntentW = Math.max(0, Math.round(evcsActiveDemandPvIntentW));
+        const evcsControlPendingPvIntentW = Math.max(0, Math.round(evcsPendingDemandPvIntentW));
+        const evcsControlPendingDemandW = Math.max(0, Math.round(evcsPendingDemandTotalW));
+        const evcsControlTotalPvIntentW = Math.max(0, evcsControlPvIntentW + evcsControlPendingPvIntentW);
         const evcsControlRemainingW = Number.isFinite(budgetW)
             ? Math.max(0, Math.round(Number(budgetW) - evcsControlReserveW))
             : 0;
@@ -7594,6 +8091,13 @@ if (components.length) {
                 budgetDebug.evcsActiveDemandReserveW = evcsControlReserveW;
                 budgetDebug.evcsActiveDemandPvReserveW = evcsControlPvReserveW;
                 budgetDebug.evcsActiveDemandPvIntentW = evcsControlPvIntentW;
+                budgetDebug.evcsPendingDemandPvIntentW = evcsControlPendingPvIntentW;
+                budgetDebug.evcsPendingDemandTotalW = evcsControlPendingDemandW;
+                budgetDebug.evcsPendingDemandWallboxes = evcsPendingDemandWallboxes;
+                budgetDebug.evcsTotalPvIntentW = evcsControlTotalPvIntentW;
+                budgetDebug.evcsPendingCentralTotalGrantW = Number.isFinite(Number(evcsPendingCentralTotalGrantW))
+                    ? Math.round(Number(evcsPendingCentralTotalGrantW))
+                    : null;
                 budgetDebug.evcsActiveDemandWallboxes = evcsActiveDemandWallboxes;
             }
             const budgetEntry = debugAlloc.find(a => a && a.type === 'budget');
@@ -7602,6 +8106,13 @@ if (components.length) {
                 budgetEntry.details.evcsActiveDemandReserveW = evcsControlReserveW;
                 budgetEntry.details.evcsActiveDemandPvReserveW = evcsControlPvReserveW;
                 budgetEntry.details.evcsActiveDemandPvIntentW = evcsControlPvIntentW;
+                budgetEntry.details.evcsPendingDemandPvIntentW = evcsControlPendingPvIntentW;
+                budgetEntry.details.evcsPendingDemandTotalW = evcsControlPendingDemandW;
+                budgetEntry.details.evcsPendingDemandWallboxes = evcsPendingDemandWallboxes;
+                budgetEntry.details.evcsTotalPvIntentW = evcsControlTotalPvIntentW;
+                budgetEntry.details.evcsPendingCentralTotalGrantW = Number.isFinite(Number(evcsPendingCentralTotalGrantW))
+                    ? Math.round(Number(evcsPendingCentralTotalGrantW))
+                    : null;
                 budgetEntry.details.evcsActiveDemandWallboxes = evcsActiveDemandWallboxes;
             }
         } catch {
@@ -7784,6 +8295,13 @@ if (components.length) {
         await this._queueState('chargingManagement.control.activeDemandReserveW', evcsControlReserveW, true);
         await this._queueState('chargingManagement.control.pvActiveDemandReserveW', evcsControlPvReserveW, true);
         await this._queueState('chargingManagement.control.pvActiveDemandIntentW', evcsControlPvIntentW, true);
+        await this._queueState('chargingManagement.control.pvPendingDemandIntentW', evcsControlPendingPvIntentW, true);
+        await this._queueState('chargingManagement.control.pvPendingDemandTotalW', evcsControlPendingDemandW, true);
+        await this._queueState('chargingManagement.control.pvPendingDemandWallboxes', evcsPendingDemandWallboxes, true);
+        await this._queueState('chargingManagement.control.pvTotalDemandIntentW', evcsControlTotalPvIntentW, true);
+        await this._queueState('chargingManagement.control.pvCentralGrantW', 0, true);
+        await this._queueState('chargingManagement.control.pvCentralReservedW', 0, true);
+        await this._queueState('chargingManagement.control.pvCentralRemainingAfterEvcsW', 0, true);
         await this._queueState('chargingManagement.control.activeDemandWallboxes', evcsActiveDemandWallboxes, true);
         await this._queueState('chargingManagement.control.remainingW', tsControlApply ? tsControlApply.remainingW : evcsControlRemainingW, true);
 
@@ -7814,11 +8332,28 @@ if (components.length) {
                 // Nicht an pvAvailableState koppeln: Dieses Hysterese-Signal darf den
                 // bereits aktiven/angeforderten EVCS-PV-Anteil nicht fuer einen einzelnen
                 // Tick freigeben. Der Allocation-Cap bleibt die harte Obergrenze.
+                const centralGrantFn = typeof rt.getPvGrant === 'function'
+                    ? rt.getPvGrant.bind(rt)
+                    : (typeof rt.grant === 'function' ? rt.grant.bind(rt) : null);
+                const totalPvDemandW = Math.max(0, evcsControlTotalPvIntentW, evcsControlPvReserveW);
+                const centralGrant = centralGrantFn
+                    ? centralGrantFn({ key: 'evcs', requestedW: totalPvDemandW, maxW: evcsAllocationCapW, pvOnly: true })
+                    : null;
+                const centralGrantW = centralGrant && Number.isFinite(Number(centralGrant.grantW))
+                    ? Math.max(0, Number(centralGrant.grantW))
+                    : evcsAllocationCapW;
                 const evcsPvReserveW = computeEvcsPvBudgetReservationW({
                     reserveW: evcsReserveW,
+                    // Aktive Ladeleistung bleibt reale Gesamtlast. Ein noch nicht
+                    // gestarteter PV-Anteil wird ausschließlich als Intent geführt,
+                    // damit er das Speicher-PV-Budget reduziert, ohne Netz-/Anschluss-
+                    // leistung vorzutäuschen.
+                    demandW: evcsReserveW,
+                    pendingDemandW: evcsControlPendingDemandW,
                     actualPvW: evcsControlPvReserveW,
                     intentPvW: evcsControlPvIntentW,
-                    allocationCapW: evcsAllocationCapW,
+                    pendingIntentPvW: evcsControlPendingPvIntentW,
+                    allocationCapW: Math.min(evcsAllocationCapW, centralGrantW),
                 });
                 rt.reserve({
                     key: 'evcs',
@@ -7826,12 +8361,23 @@ if (components.length) {
                     label: 'Ladepunkte',
                     priority: 100,
                     actualW: evcsActualW,
-                    requestedW: evcsReserveW,
+                    requestedW: Math.max(0, evcsReserveW + evcsControlPendingDemandW),
                     reserveW: evcsReserveW,
                     pvReserveW: evcsPvReserveW,
                     pvOnly: false,
                     mode: String(mode || ''),
                 });
+
+                // Diagnose nach der Reservierung veröffentlichen. Speicher,
+                // Thermik und Heizstab sehen im selben EMS-Zyklus genau diesen
+                // Restwert; damit existiert kein paralleles Modulbudget mehr.
+                await this._queueState('chargingManagement.control.pvCentralGrantW', Math.round(centralGrantW), true);
+                await this._queueState('chargingManagement.control.pvCentralReservedW', Math.round(evcsPvReserveW), true);
+                await this._queueState(
+                    'chargingManagement.control.pvCentralRemainingAfterEvcsW',
+                    Number.isFinite(Number(rt.remainingPvW)) ? Math.round(Math.max(0, Number(rt.remainingPvW))) : 0,
+                    true,
+                );
             }
         } catch (_e) {
             // budget diagnostics only
@@ -7857,4 +8403,11 @@ if (components.length) {
     }
 }
 
-module.exports = { ChargingManagementModule, computePvManagedDemandIntentW, computeEvcsPvBudgetReservationW };
+module.exports = {
+    ChargingManagementModule,
+    computePvManagedDemandIntentW,
+    computePendingPvStartIntentW,
+    computePendingPvStartTotalBudgetW,
+    computeEvcsPvBudgetReservationW,
+    resolveChargingPvBudgetControl,
+};

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:96ae2a4092adb65cb1dd62aea22aa5960d6e05cd0a57f44dc3ccb0e450203f19
+ * Quell-Hash: sha256:dd4a6049d131a045fb8561897e593dcbc45871a0851a266faa0b2cdfc170d782
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -526,6 +526,9 @@ class SpeicherRegelungModule extends BaseModule {
             await this._setIfChanged('speicher.regelung.pvBudgetAllocationDerivedW', 0);
             await this._setIfChanged('speicher.regelung.pvBudgetEvcsReservedW', 0);
             await this._setIfChanged('speicher.regelung.pvBudgetResolution', 'disabled');
+            await this._setIfChanged('speicher.regelung.totalBudgetStorageAvailableW', 0);
+            await this._setIfChanged('speicher.regelung.totalBudgetStorageReservedW', 0);
+            await this._setIfChanged('speicher.regelung.totalBudgetStorageCapped', false);
 
             // Interne Sollwertprognose beim Deaktivieren verwerfen. Es wird dabei
             // bewusst nichts an den Speicher geschrieben; nur die lokale Regel-
@@ -915,6 +918,9 @@ class SpeicherRegelungModule extends BaseModule {
                     await this._setIfChanged('speicher.regelung.pvBudgetPostVendorCapped', false);
                     await this._setIfChanged('speicher.regelung.pvBudgetPostVendorNoWriteHold', false);
                     await this._setIfChanged('speicher.regelung.pvBudgetPostVendorNoWriteReason', '');
+                    await this._setIfChanged('speicher.regelung.totalBudgetStorageAvailableW', 0);
+                    await this._setIfChanged('speicher.regelung.totalBudgetStorageReservedW', 0);
+                    await this._setIfChanged('speicher.regelung.totalBudgetStorageCapped', false);
                     await this._setIfChanged('speicher.regelung.policyJson', JSON.stringify({
                         ts: now,
                         disabled: false,
@@ -967,6 +973,9 @@ class SpeicherRegelungModule extends BaseModule {
             await this._setIfChanged('speicher.regelung.pvBudgetRemainingBeforeStorageW', 0);
             await this._setIfChanged('speicher.regelung.pvBudgetStorageAvailableW', 0);
             await this._setIfChanged('speicher.regelung.pvBudgetReservedW', 0);
+            await this._setIfChanged('speicher.regelung.totalBudgetStorageAvailableW', 0);
+            await this._setIfChanged('speicher.regelung.totalBudgetStorageReservedW', 0);
+            await this._setIfChanged('speicher.regelung.totalBudgetStorageCapped', false);
             await this._setIfChanged('speicher.regelung.policyJson', JSON.stringify({ ts: now, disabled: true, reason: 'Netzleistung fehlt oder zu alt', feneconHybrid: !!feneconHybridActive, sungrowHybrid: !!sungrowHybridActive }));
             return;
         }
@@ -1086,6 +1095,9 @@ class SpeicherRegelungModule extends BaseModule {
         let pvBudgetAllocationDerivedW = 0;
         let pvBudgetEvcsReservedW = 0;
         let pvBudgetResolution = 'runtime-remaining';
+        let totalBudgetStorageAvailableW = 0;
+        let totalBudgetStorageReservedW = 0;
+        let totalBudgetStorageCapped = false;
         let centralPvBudgetRuntime = null;
         let centralPvAllocationGate = null;
 
@@ -1098,6 +1110,30 @@ class SpeicherRegelungModule extends BaseModule {
             return normalized === 'pv'
                 || normalized === 'fenecon-extra-pv'
                 || normalized === 'sungrow-assist';
+        };
+
+        /**
+         * Code-Teil: isCentralGridChargeSource
+         * Zweck: Kennzeichnet Speicher-Ladeanforderungen, die bewusst aus dem
+         * Netz-/Gesamtbudget kommen. Diese Pfade muessen nach der EVCS-
+         * Reservierung denselben zentralen Gesamt-Grant verwenden und ihre
+         * Leistung fuer Thermik/Heizstab reservieren.
+         *
+         * PV-/NVP-Laden bleibt davon getrennt und verbraucht ausschliesslich das
+         * zentrale PV-Restbudget.
+         */
+        const isCentralGridChargeSource = (src, signedTargetW) => {
+            if (!(Number(signedTargetW) < 0)) return false;
+            const normalized = String(src || '').trim().toLowerCase();
+            return normalized === 'tarif'
+                || normalized === 'tarif_grid_charge'
+                || normalized === 'tarif-netzladen'
+                || normalized === 'reserve'
+                || normalized === 'reserve_grid'
+                || normalized === 'reserve-netzladen'
+                || normalized === 'lastspitze_refill'
+                || normalized === 'lsk_refill'
+                || normalized === 'grid_charge';
         };
 
         /**
@@ -1126,59 +1162,72 @@ class SpeicherRegelungModule extends BaseModule {
         /**
          * Code-Teil: resolveStoragePvBudgetW
          * Zweck: Ermittelt das fuer den Speicher verfuegbare PV-Budget nach der
-         * EVCS-Reservierung. Bei vorhandenem Allocation-Gate wird die Aufteilung
-         * aus Gesamtbudget minus tatsaechlich reserviertem EVCS-PV-Anteil erneut
-         * nachvollzogen. Damit kann ein kurzzeitig inkonsistentes remainingPvW
-         * weder die 80/20-Prioritaet aushebeln noch einen falschen 0-W-Stopp ausloesen.
-         * Zusammenhang: EVCS wird im EMS vor dem Speicher reserviert; vor dem
-         * Speicher darf daher nur der EVCS-Verbraucher im Budget stehen. Andere
-         * bereits reservierte Verbraucher verhindern bewusst diese Rekonstruktion.
+         * EVCS-Reservierung. Die zentrale Runtime ist die einzige autoritative
+         * Quelle; Prozentwerte aus dem Allocation-Gate werden hier nicht nochmals
+         * zu einem zweiten Speicherbudget rekonstruiert.
+         * Zusammenhang: EVCS wird im EMS vor dem Speicher reserviert. Dadurch ist
+         * der Grant bereits exakt der Rest, den der Speicher in diesem Tick nutzen
+         * darf. Alte Laufzeiten ohne Grant-API verwenden nur remainingPvW als
+         * Kompatibilitaetsfallback.
          */
-        const resolveStoragePvBudgetW = (runtime, allocationGate, fallbackW = 0) => {
-            const runtimeRemainingW = runtime && Number.isFinite(Number(runtime.remainingPvW))
+        const resolveStoragePvBudgetW = (runtime, _allocationGate, fallbackW = 0) => {
+            const runtimeTs = runtime ? Number(runtime.ts) : NaN;
+            const runtimeAgeMs = Number.isFinite(runtimeTs) && runtimeTs > 0
+                ? Math.max(0, now - runtimeTs)
+                : null;
+            const runtimeMaxAgeMs = Math.max(30000, staleMs * 2);
+            const runtimeFresh = !!runtime
+                && runtimeAgeMs !== null
+                && runtimeAgeMs <= runtimeMaxAgeMs;
+            const runtimeRemainingW = runtimeFresh && Number.isFinite(Number(runtime.remainingPvW))
                 ? Math.max(0, Number(runtime.remainingPvW))
-                : Math.max(0, Number(fallbackW) || 0);
+                : (!runtime ? Math.max(0, Number(fallbackW) || 0) : 0);
             pvBudgetRuntimeRemainingW = runtimeRemainingW;
             pvBudgetAllocationDerivedW = runtimeRemainingW;
             pvBudgetEvcsReservedW = 0;
-            pvBudgetResolution = 'runtime-remaining';
+            pvBudgetResolution = runtime
+                ? (runtimeFresh ? 'runtime-remaining-fallback' : 'central-stale-blocked')
+                : 'local-fallback-no-central-budget';
 
-            if (!runtime || !allocationGate || !Number.isFinite(Number(allocationGate.totalW))) {
-                return runtimeRemainingW;
+            // Eine vorhandene zentrale Runtime bleibt immer autoritativ. Bei
+            // einem veralteten Snapshot wird PV-Laden sicher gesperrt, statt aus
+            // NVP/Allocation lokal ein zweites Speicherbudget zu rekonstruieren.
+            if (runtime && !runtimeFresh) return 0;
+
+            // EVCS laeuft in der zentralen Modulreihenfolge vor dem Speicher und
+            // reserviert dort sowohl reale PV-Leistung als auch einen technisch
+            // begruendeten Start-Intent. Der Speicher darf deshalb ausschliesslich
+            // den danach verbliebenen zentralen Grant verwenden. Eine erneute
+            // Rekonstruktion aus Allocation-Prozenten waere ein Parallelbudget und
+            // koennte die echte EVCS-Reservierung wieder ueberschreiben.
+            if (runtime) {
+                const grantFn = typeof runtime.getPvGrant === 'function'
+                    ? runtime.getPvGrant.bind(runtime)
+                    : (typeof runtime.grant === 'function' ? runtime.grant.bind(runtime) : null);
+                if (grantFn) {
+                    const grant = grantFn({
+                        key: 'storage',
+                        requestedW: Number.MAX_SAFE_INTEGER,
+                        pvOnly: true,
+                    });
+                    if (grant && Number.isFinite(Number(grant.grantW))) {
+                        const consumers = runtime.consumers && typeof runtime.consumers === 'object'
+                            ? runtime.consumers
+                            : {};
+                        const evcs = consumers.evcs && typeof consumers.evcs === 'object'
+                            ? consumers.evcs
+                            : null;
+                        pvBudgetEvcsReservedW = evcs
+                            ? Math.max(0, Number(evcs.pvReserveW ?? evcs.pvUsedW) || 0)
+                            : 0;
+                        pvBudgetAllocationDerivedW = Math.max(0, Number(grant.grantW) || 0);
+                        pvBudgetResolution = 'central-grant-after-evcs';
+                        return pvBudgetAllocationDerivedW;
+                    }
+                }
             }
 
-            const totalW = Math.max(0, Number(allocationGate.totalW));
-            const consumers = runtime.consumers && typeof runtime.consumers === 'object'
-                ? runtime.consumers
-                : {};
-            const evcs = consumers.evcs && typeof consumers.evcs === 'object'
-                ? consumers.evcs
-                : null;
-            const order = Array.isArray(runtime.order) ? runtime.order.map((key) => String(key || '')) : [];
-            const storageIndex = order.indexOf('storage');
-            const precedingConsumers = (storageIndex >= 0 ? order.slice(0, storageIndex) : order)
-                .filter((key) => key);
-            const onlyEvcsBeforeStorage = precedingConsumers.every((key) => key === 'evcs');
-
-            if (!evcs || !onlyEvcsBeforeStorage) return runtimeRemainingW;
-
-            const evcsReservedRawW = Math.max(
-                0,
-                Number.isFinite(Number(evcs.pvReserveW)) ? Number(evcs.pvReserveW) : 0,
-                Number.isFinite(Number(evcs.pvUsedW)) ? Number(evcs.pvUsedW) : 0,
-            );
-            const evcsCapW = Number.isFinite(Number(allocationGate.evcsCapW))
-                ? Math.max(0, Number(allocationGate.evcsCapW))
-                : totalW;
-            const evcsReservedW = Math.max(0, Math.min(totalW, evcsCapW, evcsReservedRawW));
-            const allocationRemainingW = Math.max(0, totalW - evcsReservedW);
-
-            pvBudgetEvcsReservedW = evcsReservedW;
-            pvBudgetAllocationDerivedW = allocationRemainingW;
-            pvBudgetResolution = Math.abs(allocationRemainingW - runtimeRemainingW) > 1
-                ? 'allocation-reconciled'
-                : 'allocation-confirmed';
-            return allocationRemainingW;
+            return runtimeRemainingW;
         };
 
         const exportW = Math.max(0, -gridW); // negative Netzleistung = Einspeisung (geglättet)
@@ -3251,6 +3300,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         let sungrowWriteMode = '';
         let sungrowNoWrite = false;
         let sungrowDiagPayload = null;
+        // Herstellerprofile duerfen die technische Schreibweise aendern, aber
+        // nicht die Herkunft des Budgets verschleiern. Fuer den finalen zentralen
+        // PV-/Gesamt-Cap bleibt deshalb die Policy-Quelle vor dem Herstellerpfad
+        // erhalten.
+        const policySourceBeforeVendor = String(source || '');
         if (feneconHybridActive) {
             const ctx = feneconHybridCtx || {};
             const mode = String(ctx.mode || '');
@@ -3763,6 +3817,54 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         }
 
         // ------------------------------------------------------------
+        // Finaler zentraler Gesamtbudget-Cap fuer Speicher-Netzladen
+        // ------------------------------------------------------------
+        // Tarif-, Reserve- und LSK-Nachladung sind keine PV-Senken. Sie duerfen
+        // deshalb nur den nach der EVCS-Reservierung verbleibenden Gesamt-Grant
+        // nutzen. Der Cap liegt bewusst nach allen Herstellerberechnungen, damit
+        // Sungrow/E3DC/Generic denselben finalen Wert erhalten.
+        try {
+            const budgetRuntime = this.adapter && this.adapter._emsBudget;
+            const sourceForBudget = policySourceBeforeVendor || String(source || '');
+            const gridChargeSource = isCentralGridChargeSource(sourceForBudget, targetW);
+            if (!feneconNoWrite && !sungrowNoWrite && budgetRuntime && targetW < 0 && gridChargeSource) {
+                const requestedChargeW = Math.max(0, -Number(targetW));
+                const totalGrant = typeof budgetRuntime.getTotalGrant === 'function'
+                    ? budgetRuntime.getTotalGrant({ key: 'storage', requestedW: requestedChargeW })
+                    : (typeof budgetRuntime.grant === 'function'
+                        ? budgetRuntime.grant({ key: 'storage', requestedW: requestedChargeW, pvOnly: false })
+                        : null);
+                totalBudgetStorageAvailableW = totalGrant && Number.isFinite(Number(totalGrant.grantW))
+                    ? Math.max(0, Number(totalGrant.grantW))
+                    : requestedChargeW;
+                const allowedChargeW = Math.min(requestedChargeW, totalBudgetStorageAvailableW);
+                totalBudgetStorageCapped = allowedChargeW + 0.5 < requestedChargeW;
+                if (totalBudgetStorageCapped) {
+                    targetW = allowedChargeW > 0 ? -allowedChargeW : 0;
+                    chargeDemandHardCapW = (typeof chargeDemandHardCapW === 'number' && Number.isFinite(chargeDemandHardCapW))
+                        ? Math.min(Math.max(0, chargeDemandHardCapW), allowedChargeW)
+                        : allowedChargeW;
+                    chargeDemandHardCapReason = 'Finales zentrales Gesamtbudget nach E-Mobilitaet';
+                    reason = `${reason} (zentrales Gesamtbudget nach E-Mobilitaet ${Math.round(allowedChargeW)} W)`;
+                    if (sungrowHybridActive && targetW === 0) {
+                        sungrowWriteMode = 'write-stop-central-total-budget-exhausted';
+                        this._sungrowHybridLastMode = sungrowWriteMode;
+                    }
+                    if (storageNvpBalanceDiag && typeof storageNvpBalanceDiag === 'object') {
+                        storageNvpBalanceDiag = {
+                            ...storageNvpBalanceDiag,
+                            targetW,
+                            finalTotalBudgetCapW: allowedChargeW,
+                            finalTotalBudgetCapped: true,
+                        };
+                    }
+                }
+            }
+        } catch {
+            // Budgetdiagnose darf die sichere Speicheransteuerung nicht abbrechen.
+        }
+
+        // ------------------------------------------------------------
         // Sungrow 0-W-Firewall nach allen Policies und Budget-Caps
         // ------------------------------------------------------------
         // Ein 0-W-Schreiben ist bei Sungrow nur fuer einen ausdruecklichen Stop
@@ -3829,27 +3931,37 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             (typeof chargeDemandHardCapW === 'number' && Number.isFinite(chargeDemandHardCapW)) ? Math.round(chargeDemandHardCapW) : 0);
         await this._setIfChanged('speicher.regelung.chargeDemandCapReason', String(chargeDemandHardCapReason || ''));
 
-        // Den finalen PV-Ladesollwert fuer nachgelagerte Verbraucher im zentralen
-        // Budget reservieren. Die Reservierung reduziert nur remainingPvW, nicht
-        // das Netz-/Gesamtbudget, weil es sich um PV-Laden und nicht um zusaetzlichen
-        // Netzbezug handelt. FENECON-No-Write reserviert bewusst nichts, da dort das
-        // lokale Gateway ohne externen NexoWatt-Sollwert arbeitet.
+        // Den finalen Speicher-Ladesollwert fuer nachgelagerte Verbraucher im
+        // zentralen Budget reservieren:
+        // - PV-/NVP-Laden reduziert nur remainingPvW.
+        // - Tarif-/Reserve-/LSK-Netzladen reduziert remainingTotalW.
+        // FENECON-/Sungrow-No-Write reserviert bewusst nichts, da kein neuer
+        // externer NexoWatt-Sollwert ausgegeben wird.
         try {
             const budgetRuntime = this.adapter && this.adapter._emsBudget;
-            const pvSource = source === 'pv' || source === 'fenecon-extra-pv' || source === 'sungrow-assist';
-            if (!feneconNoWrite && budgetRuntime && typeof budgetRuntime.reserve === 'function' && targetW < 0 && pvSource) {
+            const sourceForBudget = policySourceBeforeVendor || String(source || '');
+            const pvSource = isCentralPvChargeSource(source, targetW)
+                || isCentralPvChargeSource(sourceForBudget, targetW);
+            const gridChargeSource = isCentralGridChargeSource(sourceForBudget, targetW);
+            if (!feneconNoWrite && !sungrowNoWrite && budgetRuntime && typeof budgetRuntime.reserve === 'function' && targetW < 0 && (pvSource || gridChargeSource)) {
                 const chargeW = Math.max(0, -Number(targetW));
-                // Fuer die Reservierung denselben reconcilierten Cap verwenden wie
-                // fuer den Schreibpfad. So bleibt die Budgetdiagnose auch dann korrekt,
-                // wenn remainingPvW in einem Tick noch 0 meldet, das Allocation-Gate
-                // aber aus Gesamtbudget minus EVCS-Reservierung einen gueltigen Rest zeigt.
-                const resolvedStoragePvW = Math.max(0, Number(pvBudgetStorageAvailableW) || 0);
-                pvBudgetReservedW = Math.min(chargeW, resolvedStoragePvW);
                 const actualChargeW = balanceBatteryTrusted
                     ? Math.max(0, -Number(balanceBatteryPowerW || 0))
                     : ((battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW))
                         ? Math.max(0, -battPowerW)
                         : chargeW);
+                if (pvSource) {
+                    // Fuer PV-Laden exakt denselben zentralen Grant verwenden wie
+                    // fuer den Schreibpfad. Prozent-Gates werden hier nicht erneut
+                    // rekonstruiert.
+                    const resolvedStoragePvW = Math.max(0, Number(pvBudgetStorageAvailableW) || 0);
+                    pvBudgetReservedW = Math.min(chargeW, resolvedStoragePvW);
+                } else {
+                    totalBudgetStorageReservedW = Math.min(
+                        chargeW,
+                        totalBudgetStorageAvailableW > 0 ? totalBudgetStorageAvailableW : chargeW,
+                    );
+                }
                 budgetRuntime.reserve({
                     key: 'storage',
                     app: 'storageControl',
@@ -3857,10 +3969,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     priority: 150,
                     actualW: actualChargeW,
                     requestedW: chargeW,
-                    reserveW: 0,
-                    pvReserveW: pvBudgetReservedW,
-                    pvOnly: true,
-                    mode: pvBudgetAllocationMode || 'pv',
+                    reserveW: gridChargeSource ? totalBudgetStorageReservedW : 0,
+                    pvReserveW: pvSource ? pvBudgetReservedW : 0,
+                    pvOnly: pvSource,
+                    mode: pvSource ? (pvBudgetAllocationMode || 'pv') : String(sourceForBudget || 'grid-charge'),
                 });
             }
         } catch {
@@ -3879,6 +3991,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await this._setIfChanged('speicher.regelung.pvBudgetAllocationDerivedW', Math.round(pvBudgetAllocationDerivedW));
         await this._setIfChanged('speicher.regelung.pvBudgetEvcsReservedW', Math.round(pvBudgetEvcsReservedW));
         await this._setIfChanged('speicher.regelung.pvBudgetResolution', String(pvBudgetResolution || ''));
+        await this._setIfChanged('speicher.regelung.totalBudgetStorageAvailableW', Math.round(totalBudgetStorageAvailableW));
+        await this._setIfChanged('speicher.regelung.totalBudgetStorageReservedW', Math.round(totalBudgetStorageReservedW));
+        await this._setIfChanged('speicher.regelung.totalBudgetStorageCapped', !!totalBudgetStorageCapped);
 
         // ------------------------------------------------------------
         // Phase 2: Dispatcher-Diagnose-Zustände schreiben
@@ -5277,8 +5392,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      */
     _isE3dcGridChargeSource(source) {
         const s = String(source || '').trim().toLowerCase();
-        return s === 'tarif_grid_charge'
+        return s === 'tarif'
+            || s === 'tarif_grid_charge'
             || s === 'tarif-netzladen'
+            || s === 'reserve'
             || s === 'reserve_grid'
             || s === 'reserve-netzladen'
             || s === 'lastspitze_refill'
@@ -6266,6 +6383,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.pvBudgetAllocationDerivedW', 'Aus EVCS-Allocation abgeleitetes Speicher-PV-Budget (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.pvBudgetEvcsReservedW', 'Im zentralen Budget reservierter EVCS-PV-Anteil (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.pvBudgetResolution', 'Quelle/Abgleich des Speicher-PV-Budgets', 'string', 'text', 'runtime-remaining');
+        await mk('speicher.regelung.totalBudgetStorageAvailableW', 'Zentrales Gesamtbudget fuer Speicher-Netzladen (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.totalBudgetStorageReservedW', 'Vom Speicher reserviertes Gesamtbudget fuer Netzladen (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.totalBudgetStorageCapped', 'Speicher-Netzladen durch zentrales Gesamtbudget begrenzt', 'boolean', 'indicator', false);
         await mk('speicher.regelung.selfEntladenAktiviert', 'Eigenverbrauch-Entladen aktiviert', 'boolean', 'indicator', false);
         await mk('speicher.regelung.evcsSpeicherSchutzLastW', 'EVCS-Leistung mit Speicher-Schutz (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.evcsSpeicherSchutzWallboxen', 'Wallboxen mit Speicher-Schutz', 'number', 'value', 0);

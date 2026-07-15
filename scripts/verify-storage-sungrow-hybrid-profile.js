@@ -177,6 +177,7 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, p
 function makeSharedPvBudget({ totalW = 10100, evcsCapW = 8080, evcsReservedW = 8080, remainingPvW = 2020 } = {}) {
   const reservations = [];
   return {
+    ts: Date.now(),
     gates: {
       pvAllocation: {
         mode: 'both',
@@ -195,6 +196,17 @@ function makeSharedPvBudget({ totalW = 10100, evcsCapW = 8080, evcsReservedW = 8
     },
     order: ['evcs'],
     reservations,
+    getPvGrant(req = {}) {
+      const requestedW = Number.isFinite(Number(req.requestedW)) ? Math.max(0, Number(req.requestedW)) : Number.MAX_SAFE_INTEGER;
+      const maxW = Number.isFinite(Number(req.maxW)) ? Math.max(0, Number(req.maxW)) : Number.POSITIVE_INFINITY;
+      const grantW = Math.max(0, Math.min(requestedW, maxW, Number(this.remainingPvW) || 0));
+      return { grantW, remainingPvW: Math.max(0, Number(this.remainingPvW) || 0), source: 'central-ems-budget' };
+    },
+    grant(req = {}) {
+      return req.pvOnly === false
+        ? { grantW: Math.max(0, Number(req.requestedW) || 0), source: 'central-ems-budget' }
+        : this.getPvGrant(req);
+    },
     reserve(req) {
       reservations.push({ ...req });
       const pvReserveW = Math.max(0, Number(req && req.pvReserveW) || 0);
@@ -330,22 +342,22 @@ function makePersistentSungrowScenario() {
   assert(!overdrawingStorage.dp.writes.some((row) => row.key === 'st.targetChargePowerW' && row.value === 0), '80/20-Ruecknahme darf keinen zwischengeschobenen 0-W-Ladestopp erzeugen');
   assert.strictEqual(overdrawingStorage.adapter._states.get('speicher.regelung.pvBudgetPostVendorCapped').val, true, 'Ueberhoehte laufende Sungrow-Ladung muss final durch das PV-Budget begrenzt werden');
 
-  // Runtime-Abgleich: Selbst wenn remainingPvW kurzzeitig inkonsistent 0 meldet,
-  // ist das Allocation-Gate mit EVCS-Reservierung autoritativ. Dadurch entsteht
-  // kein falscher 0-W-Stopp zwischen zwei korrekten Ladezyklen.
-  const reconciledBudget = makeSharedPvBudget({ remainingPvW: 0 });
-  const reconciledPriority = await runTick({
+  // Die zentrale Runtime ist jetzt die einzige autoritative Budgetquelle. Ein
+  // lokal aus Prozentwerten rekonstruiertes Parallelbudget ist ausdrücklich
+  // verboten: meldet der zentrale Grant 0 W, darf der Herstellerpfad nicht aus
+  // dem Allocation-Gate selbst wieder 2,02 kW erzeugen.
+  const exhaustedBudget = makeSharedPvBudget({ remainingPvW: 0 });
+  const exhaustedPriority = await runTick({
     gridW: -2500,
     gridRawW: -2500,
     pvW: 17000,
     loadW: 6400,
     battPowerW: 0,
-    emsBudget: reconciledBudget,
+    emsBudget: exhaustedBudget,
   });
-  assert.strictEqual(reconciledPriority.dp.lastWrite('st.targetChargePowerW'), 2020, 'Allocation-Abgleich muss einen falschen 0-W-Runtime-Rest korrigieren');
-  assert.strictEqual(reconciledPriority.adapter._states.get('speicher.regelung.pvBudgetResolution').val, 'allocation-reconciled', 'Diagnose muss die Budget-Rekonstruktion ausweisen');
-  assert.strictEqual(reconciledBudget.reservations.length, 1, 'Auch nach Allocation-Abgleich muss der reale Speicheranteil zentral reserviert werden');
-  assert.strictEqual(reconciledBudget.reservations[0].pvReserveW, 2020, 'Rekonstruierter Speicheranteil darf fuer nachgelagerte Verbraucher nicht erneut frei erscheinen');
+  assert.strictEqual(exhaustedPriority.dp.lastWrite('st.targetChargePowerW'), 0, 'Ein zentral erschoepftes PV-Budget darf lokal nicht neu rekonstruiert werden');
+  assert.strictEqual(exhaustedPriority.adapter._states.get('speicher.regelung.pvBudgetResolution').val, 'central-grant-after-evcs', 'Diagnose muss den zentralen Grant als Quelle ausweisen');
+  assert.strictEqual(exhaustedBudget.reservations.length, 0, 'Ohne zentralen Speicher-Grant darf kein PV-Anteil erneut reserviert werden');
 
   // Sequenzieller Regeltest: Laden, NVP-Zielband und kurzer NVP-Aussetzer duerfen
   // keinen zwischengeschobenen 0-W-Befehl auf charge/discharge/run erzeugen.

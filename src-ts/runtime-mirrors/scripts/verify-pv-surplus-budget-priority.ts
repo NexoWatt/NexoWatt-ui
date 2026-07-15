@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 9e0e1505615e8819f2d27404b215d99fbc6a191c4da0e24532222d0f3f351fb7
+ * Original-Hash: 400a864eac54c88234c628dd90ac061cc23758107ae1c87bbce2086dc58c6fcf
  */
 
 /**
@@ -214,9 +214,17 @@ async function runStorageBudgetTick({ gridW, remainingPvW, lastTargetW = null, l
     async getStateAsync(id) { return states.get(id) || null; },
     _nwGetNumberFromCache() { return null; },
     _emsBudget: {
+      ts: Date.now(),
       gates: { pvAllocation: { mode: 'both', evcsSharePct: 50 } },
       remainingPvW,
-      reserve(req) { reservations.push({ ...req }); },
+      getPvGrant(req = {}) {
+        const requestedW = Number.isFinite(Number(req.requestedW)) ? Math.max(0, Number(req.requestedW)) : Number.MAX_SAFE_INTEGER;
+        return { grantW: Math.min(requestedW, Math.max(0, Number(this.remainingPvW) || 0)), source: 'central-ems-budget' };
+      },
+      reserve(req) {
+        reservations.push({ ...req });
+        this.remainingPvW = Math.max(0, Number(this.remainingPvW || 0) - Math.max(0, Number(req && req.pvReserveW) || 0));
+      },
     },
   };
   const dp = new FakeDp({
@@ -246,7 +254,8 @@ assert(coreSource.includes("for (const key of ['evcs', 'storage', 'thermal', 'he
 
 const chargingSource = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/ems/modules/charging-management.ts'), 'utf8');
 assert(chargingSource.includes('(-gridW) + pvEvcsUsedW + storageChargeNowW - storageDischargeNowW'), 'EVCS-PV-Rekonstruktion muss laufende Speicherladung zurueckrechnen');
-assert(chargingSource.includes('centralBudget.gates.pvAllocation'), 'Wallbox-Regelung muss das zentrale Allocation-Gate lesen');
+assert(chargingSource.includes('resolveChargingPvBudgetControl'), 'Wallbox-Regelung muss das zentrale Budget als autoritative Quelle aufloesen');
+assert(chargingSource.includes('getPvGrant'), 'Wallbox-Regelung muss den zentralen EVCS-PV-Grant verwenden');
 assert(chargingSource.includes('pvCapAllocatedW'), 'Wallbox-PV-Cap muss durch die Kundenauswahl begrenzt werden');
 
 const storageSource = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/ems/modules/storage-control.ts'), 'utf8');

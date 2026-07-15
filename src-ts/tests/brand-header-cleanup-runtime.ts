@@ -66,13 +66,16 @@ function runBrandHeaderCleanupTest(): void {
   assert(read('src-ts/runtime-executables/www/app.ts').includes('function nwNormalizeBrandHeader'), 'app.ts muss den TS-Branding-Normalizer enthalten.');
   assert(read('src-ts/runtime-executables/www/nw-shell.ts').includes('function nwNormalizeBrandHeader'), 'nw-shell.ts muss den TS-Branding-Normalizer enthalten.');
   assert(read('src-ts/runtime-executables/www/cockpit-shell.ts').includes('function nwNormalizeBrandHeader'), 'cockpit-shell.ts muss den TS-Branding-Normalizer enthalten.');
-  const versionParts = expectedVersion.split('.').map((part: string) => Number(part));
-  const patchVersionCandidate = versionParts[2] ?? 0;
-  const patchVersion: number = Number.isFinite(patchVersionCandidate) ? patchVersionCandidate : 0;
-  const expectedCacheName = `nexowatt-cache-v${300 + patchVersion}`;
+  // Der Service-Worker-Cache wird bewusst monoton hochgezählt und ist nicht
+  // mehr direkt aus der SemVer-Patchnummer ableitbar. Wichtig ist deshalb,
+  // dass kanonische TS-Quelle und generiertes JS exakt denselben gültigen
+  // Cache-Namen verwenden; so vermeiden wir bei Hotfix-Reihen Kollisionen mit
+  // bereits ausgelieferten Browser-Caches.
   const swTs = read('src-ts/runtime-executables/www/sw.ts');
   const swJs = read('www/sw.js');
-  assert(swTs.includes(expectedCacheName), `Service-Worker-TS-Quelle muss ${expectedCacheName} nutzen.`);
+  const cacheMatch = swTs.match(/nexowatt-cache-v\d+/);
+  assert(Boolean(cacheMatch), 'Service-Worker-TS-Quelle braucht einen versionierten NexoWatt-Cache-Namen.');
+  const expectedCacheName = String(cacheMatch?.[0] || '');
   assert(swJs.includes(expectedCacheName), `Generierter Service Worker muss ${expectedCacheName} nutzen.`);
 }
 

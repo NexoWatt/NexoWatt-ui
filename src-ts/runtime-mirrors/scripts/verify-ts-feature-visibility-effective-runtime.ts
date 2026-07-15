@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: cda60a6b58824ee966c9ae27e71f9c91a561305c9cdf23de3cc5565850f9c3e4
+ * Original-Hash: 688ca05cb41259bd1ad2f01b1c0d142aa414d7672d40440658f70207119b5d88
  */
 
 /**
@@ -116,10 +116,21 @@ if (noEvcs.hasEvcs !== false) fail('EVCS must stay hidden without real charging 
 if (noEvcs.hasStorageFarm !== false) fail('Storage farm must stay hidden without farm proofs');
 if (noEvcs.hasAiAdvisor !== false) fail('AI advisor must respect customer switch off');
 
+// Eine Einzel-Speicher-Anlage darf die Speicherfarm nicht sichtbar machen.
+// Die Farmseite ist erst ab zwei real konfigurierten Farmspeichern zulässig.
+const singleStorageFarmProof = mirror.buildFeatureVisibilityState({
+  storageFarmEnabled: true,
+  storageFarmProofs: [{ socDp: 'system.adapter.x.soc' }],
+});
+if (singleStorageFarmProof.hasStorageFarm !== false) fail('Storage farm must stay hidden with only one storage proof');
+
 const withFeatures = mirror.buildFeatureVisibilityState({
   evcsProofs: [{ hasAnyRealDatapoint: true }],
   storageFarmEnabled: true,
-  storageFarmProofs: [{ socDp: 'system.adapter.x.soc' }],
+  storageFarmProofs: [
+    { socDp: 'system.adapter.x.soc' },
+    { signedPowerDp: 'system.adapter.y.power' },
+  ],
   smartHomeEnabled: true,
   weatherEnabled: true,
   weatherHasData: true,
@@ -127,7 +138,7 @@ const withFeatures = mirror.buildFeatureVisibilityState({
   aiAdvisorCustomerEnabled: true,
 });
 if (withFeatures.hasEvcs !== true) fail('EVCS should become visible with real proof');
-if (withFeatures.hasStorageFarm !== true) fail('Storage farm should become visible with enabled farm and proof');
+if (withFeatures.hasStorageFarm !== true) fail('Storage farm should become visible with enabled farm and two real proofs');
 if (withFeatures.hasSmartHome !== true) fail('SmartHome should become visible when enabled');
 if (withFeatures.hasWeather !== true) fail('Weather should become visible when enabled and data exists');
 if (withFeatures.hasAiAdvisor !== true) fail('AI advisor should become visible when installed and customer enabled');

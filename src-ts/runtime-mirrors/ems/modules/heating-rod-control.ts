@@ -30,7 +30,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e72401220e9903ee8c11f20dfbae8f0cc094f61cd58aebceb3b35cf8479a753f
+ * Original-Hash: b30d1665e3661e773337a54183992a1ddbea41941d3dc2c94566048e8193e2ae
  */
 
 /**
@@ -1351,20 +1351,29 @@ class HeatingRodControlModule extends BaseModule {
         // Charging reserves EVCS first, Thermal reserves second, Heizstab follows the remaining PV budget.
         // We still apply Heizstab-specific Speicherreserve/Sicherheitsreserve here, because this app owns
         // the staged relay decision and must protect manual/external channels.
+        const centralRuntimePresent = !!(this.adapter && this.adapter._emsBudget);
+        let centralBudgetSnapshotUsed = false;
         try {
             const rt = this.adapter && this.adapter._emsBudget;
             const snap = rt && typeof rt.peek === 'function' ? rt.peek() : null;
             const age = snap && Number.isFinite(Number(snap.ts)) ? (Date.now() - Number(snap.ts)) : Number.POSITIVE_INFINITY;
             if (snap && age <= staleMs) {
+                centralBudgetSnapshotUsed = true;
                 const remTotal = Number(snap.remainingTotalW);
                 if (Number.isFinite(remTotal) && remTotal >= 0) {
-                    // remainingTotalW is already after lower-priority live reservations. For the
-                    // current Heizstab hold decision, add back only our own PV-Auto load so Gate A
-                    // does not force a down-step merely because the rod already reserved budget.
-                    const remTotalHoldW = Math.max(0, remTotal + currentW);
-                    totalGateRemainingW = Math.min(totalGateRemainingW, remTotalHoldW);
-                    totalGateBudgetW = Number.isFinite(totalGateBudgetW) ? totalGateBudgetW : Math.max(0, remTotalHoldW);
-                    totalGateSource = 'ems.budget.remainingTotalW+ownAutoLoad';
+                    // Core-Limits rekonstruiert das physikalische Budget bereits inklusive
+                    // der aktuell laufenden Heizstableistung. Da der Heizstab in diesem Tick
+                    // noch nicht reserviert hat, darf seine eigene Leistung hier nicht erneut
+                    // addiert werden. Das verhindert doppelte PV-Nutzung.
+                    const totalGrant = typeof rt.getTotalGrant === 'function'
+                        ? rt.getTotalGrant({ key: 'heatingRod', requestedW: Number.MAX_SAFE_INTEGER })
+                        : null;
+                    const centralTotalW = totalGrant && Number.isFinite(Number(totalGrant.grantW))
+                        ? Math.max(0, Number(totalGrant.grantW))
+                        : Math.max(0, remTotal);
+                    totalGateRemainingW = Math.min(totalGateRemainingW, centralTotalW);
+                    totalGateBudgetW = Number.isFinite(totalGateBudgetW) ? totalGateBudgetW : centralTotalW;
+                    totalGateSource = 'ems.budget.central-total-grant';
                 }
 
                 const fg = snap.gates && snap.gates.forecast ? snap.gates.forecast : null;
@@ -1377,37 +1386,58 @@ class HeatingRodControlModule extends BaseModule {
 
                 const remPv = Number(snap.remainingPvW);
                 if (Number.isFinite(remPv) && remPv >= 0) {
-                    // Sobald der zentrale Budget-Koordinator frisch ist, ist sein Rest-PV-Budget
-                    // maßgeblich. Legacy-NVP/CM-Werte bleiben nur Fallback, damit nach Priorität
-                    // keine App wieder ein bereits vergebenes PV-Budget doppelt nutzt.
-                    // The central coordinator already subtracts active flexible loads. For a
-                    // stepped Heizstab we need a hold budget: add back only the
-                    // Heizstab power that this PV-Auto currently owns. Otherwise an
-                    // already-running stage would make ems.budget.remainingPvW drop to 0
-                    // and the app would nervously switch off although NVP is still clean.
-                    let centralPvW = Math.max(0, remPv + currentW - storageReserveMissingW - gateCfg.budgetSafetyReserveW);
-                    // Physical PV-only cross-check: the central coordinator may still carry the
-                    // previous tick's own Heizstab reservation. The live NVP/storage balance is the
-                    // final truth for PV-only: if the battery is discharging or the roof output has
-                    // fallen, do not let the old reservation masquerade as available PV.
+                    // Autoritativer Grant nach EVCS, Speicher und Thermik. Die aktuell
+                    // laufende Heizstableistung ist bereits Teil der physikalischen
+                    // Core-Rekonstruktion und wird deshalb nicht noch einmal addiert.
+                    const pvGrant = typeof rt.getPvGrant === 'function'
+                        ? rt.getPvGrant({ key: 'heatingRod', requestedW: Number.MAX_SAFE_INTEGER })
+                        : null;
+                    let centralPvW = pvGrant && Number.isFinite(Number(pvGrant.grantW))
+                        ? Math.max(0, Number(pvGrant.grantW))
+                        : Math.max(0, remPv);
+                    // Der Speicher lief in der zentralen Modulreihenfolge bereits
+                    // vor dem Heizstab und hat seinen tatsaechlich angeforderten
+                    // PV-Anteil reserviert. Eine zweite lokale Speicherreserve
+                    // wuerde denselben Anteil doppelt abziehen und waere ein
+                    // Parallelbudget. Hier bleibt deshalb nur der allgemeine
+                    // Sicherheitsabstand des Heizstabs.
+                    centralPvW = Math.max(0, centralPvW - gateCfg.budgetSafetyReserveW);
+                    // Der NVP bleibt der physikalische Sicherheitscheck. Er darf den
+                    // zentralen Grant nur reduzieren, niemals ein zweites Budget erzeugen.
                     if (gridKnown) centralPvW = Math.min(centralPvW, Math.max(0, nvpAvailableW));
                     pvBudgetGateW = centralPvW;
-                    pvBudgetSource = 'ems.budget.remainingPvW+ownAutoLoad+nvpPhysicalCap';
+                    pvBudgetSource = 'ems.budget.central-pv-grant+nvpPhysicalCap';
                     pvBudgetFromCentral = true;
                 }
 
                 const tariffGate = snap.gates && snap.gates.tariff ? snap.gates.tariff : null;
                 const tariffImportPreferred = !!(tariffGate && tariffGate.gridImportPreferred);
                 if (tariffImportPreferred && Number.isFinite(remTotal) && remTotal >= 0) {
-                    // Gate E: Bei Negativpreis darf der Heizstab als aktivierter flexibler
-                    // Verbraucher Netzbudget nutzen. Gate A/A2/Peak bleiben über remTotal aktiv.
-                    pvBudgetGateW = Math.max(0, remTotal + currentW - gateCfg.budgetSafetyReserveW);
-                    pvBudgetSource = 'ems.budget.tariffNegative.remainingTotalW+ownAutoLoad';
+                    // Gate E: Auch bei Negativpreis stammt die Freigabe aus dem
+                    // zentralen Gesamtbudget. Eigene Last wird nicht doppelt addiert.
+                    const tariffGrant = typeof rt.getTotalGrant === 'function'
+                        ? rt.getTotalGrant({ key: 'heatingRod', requestedW: Number.MAX_SAFE_INTEGER })
+                        : null;
+                    const tariffAvailableW = tariffGrant && Number.isFinite(Number(tariffGrant.grantW))
+                        ? Math.max(0, Number(tariffGrant.grantW))
+                        : Math.max(0, remTotal);
+                    pvBudgetGateW = Math.max(0, tariffAvailableW - gateCfg.budgetSafetyReserveW);
+                    pvBudgetSource = 'ems.budget.tariffNegative.central-total-grant';
                     pvBudgetFromCentral = true;
                 }
             }
         } catch (_e) {
-            // legacy NVP/CM fallback remains active
+            // Die zentrale Runtime bleibt autoritativ. Ein Fehler darf keinen
+            // zweiten lokalen CM-/NVP-Budgetpfad aktivieren.
+        }
+
+        if (centralRuntimePresent && !centralBudgetSnapshotUsed) {
+            pvBudgetGateW = 0;
+            totalGateRemainingW = 0;
+            totalGateBudgetW = 0;
+            pvBudgetSource = 'ems.budget.central-stale-or-invalid-blocked';
+            totalGateSource = 'ems.budget.central-stale-or-invalid-blocked';
+            pvBudgetFromCentral = true;
         }
 
         const effectiveGateW = Math.max(0, Math.min(
@@ -1422,7 +1452,7 @@ class HeatingRodControlModule extends BaseModule {
         const forceOff = effectiveGateW <= 50 && currentW > 0 && (importW > gateCfg.hardGridImportW || storage.dischargeW > gateCfg.hardStorageDischargeW);
 
         return {
-            pvCapW: Math.max(pvBudgetGateW, pvCapW, nvpSurplusBeforeFlexW),
+            pvCapW: centralRuntimePresent ? Math.max(0, pvBudgetGateW) : Math.max(pvBudgetGateW, pvCapW, nvpSurplusBeforeFlexW),
             evcsUsedW,
             availableW: effectiveGateW,
             source,
