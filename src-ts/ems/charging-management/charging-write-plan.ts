@@ -30,6 +30,14 @@ export interface ChargingSetpointWritePlanWallboxInput {
   phaseSwitchSafetyStopRequired?: unknown;
   targetPhaseCount?: unknown;
   currentPhaseCount?: unknown;
+  allocationRank?: unknown;
+  pvUsedW?: unknown;
+  stationKey?: unknown;
+  stationMaxPowerW?: unknown;
+  stationAllocatedW?: unknown;
+  stationRemainingW?: unknown;
+  allocationSafetyCapped?: unknown;
+  allocationSafetyReason?: unknown;
 }
 
 
@@ -58,6 +66,14 @@ export interface ChargingSetpointWritePlanEntry {
   ack: false;
   deadband: number;
   writeRequired: boolean;
+  allocationRank: number;
+  pvUsedW: number;
+  stationKey: string;
+  stationMaxPowerW: number;
+  stationAllocatedW: number;
+  stationRemainingW: number;
+  allocationSafetyCapped: boolean;
+  allocationSafetyReason: string;
   blocked: boolean;
   reason: string;
 }
@@ -199,7 +215,11 @@ function buildAllocationMap(input: ChargingSetpointWritePlanInput): Map<string, 
   const map = new Map<string, Record<string, unknown>>();
   const fromPlan = input.allocationPlan && Array.isArray(input.allocationPlan.wallboxes) ? input.allocationPlan.wallboxes : [];
   const fromAlloc = Array.isArray(input.allocations) ? input.allocations : [];
-  [...fromPlan, ...fromAlloc].forEach((entry, index) => {
+  // Legacy-/Runtime-Zeilen sind nur Fallback. Der final geprüfte Allocation-Plan
+  // wird bewusst zuletzt eingetragen und überschreibt bei gleichem Ladepunkt alle
+  // älteren Zielwerte. Andernfalls könnten Stations- oder Budget-Caps im Write-Plan
+  // wieder durch die vorgelagerte Diagnose-Allocation ausgehebelt werden.
+  [...fromAlloc, ...fromPlan].forEach((entry, index) => {
     if (!entry || typeof entry !== 'object' || String(entry.type || '') === 'budget') return;
     const safe = safeKey(entry.safe ?? entry.key ?? entry.id ?? entry.name, index);
     map.set(safe, entry);
@@ -266,6 +286,14 @@ export function buildChargingSetpointWritePlan(input: ChargingSetpointWritePlanI
       ack: false,
       deadband: basis === 'current' ? 0.1 : 5,
       writeRequired,
+      allocationRank: nonNegative(alloc.allocationRank ?? wb.allocationRank),
+      pvUsedW: nonNegative(alloc.pvUsedW ?? wb.pvUsedW),
+      stationKey: str(alloc.stationKey ?? wb.stationKey),
+      stationMaxPowerW: nonNegative(alloc.stationMaxPowerW ?? wb.stationMaxPowerW),
+      stationAllocatedW: nonNegative(alloc.stationAllocatedW ?? wb.stationAllocatedW),
+      stationRemainingW: nonNegative(alloc.stationRemainingW ?? wb.stationRemainingW),
+      allocationSafetyCapped: boolValue(alloc.allocationSafetyCapped ?? wb.allocationSafetyCapped, false),
+      allocationSafetyReason: str(alloc.allocationSafetyReason ?? wb.allocationSafetyReason),
       blocked,
       reason: reason || (writeRequired ? 'write-planned' : 'no-write'),
     });
@@ -309,6 +337,14 @@ export function buildChargingSetpointWritePlan(input: ChargingSetpointWritePlanI
         ack: false,
         deadband: 0,
         writeRequired: phaseWriteRequired,
+        allocationRank: nonNegative(alloc.allocationRank ?? wb.allocationRank),
+        pvUsedW: 0,
+        stationKey: str(alloc.stationKey ?? wb.stationKey),
+        stationMaxPowerW: nonNegative(alloc.stationMaxPowerW ?? wb.stationMaxPowerW),
+        stationAllocatedW: nonNegative(alloc.stationAllocatedW ?? wb.stationAllocatedW),
+        stationRemainingW: nonNegative(alloc.stationRemainingW ?? wb.stationRemainingW),
+        allocationSafetyCapped: false,
+        allocationSafetyReason: '',
         blocked: phaseBlocked,
         reason: phaseBlockedReason || (phaseWriteRequired ? 'phase-switch-write-planned' : 'phase-switch-no-write'),
       });

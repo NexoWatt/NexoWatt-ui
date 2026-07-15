@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 83e9baf20bab6c28f09a2d76fada4ce9accdb1354c81e8a6874a410428316874
+ * Original-Hash: 0e2ce4f6fc25bc851da0913a0552d504744f8ee69dfe1e06e6cfe77a99f030c1
  */
 
 /**
@@ -68,7 +68,8 @@ function must(file, needle, label = needle){ const s = read(file); if (!s.includ
  */
 function mustNot(file, needle, label = needle){ const s = read(file); if (s.includes(needle)) { console.error(`[evcs-visual-online-state] forbidden ${label}: ${needle}`); process.exit(1); } }
 const evcs = 'src-ts/runtime-executables/www/evcs.ts';
-must('package.json', '"version": "0.8.66"', 'version 0.8.66');
+const pkgVersion = JSON.parse(read('package.json')).version;
+if (!/^\d+\.\d+\.\d+$/.test(String(pkgVersion || ''))) { console.error(`[$evcs-visual-online-state] invalid package version: ${pkgVersion}`); process.exit(1); }
 must(evcs, 'function _evcsBoolOrNull(value)', 'online bool normalizer');
 must(evcs, 'function _tileStateClass({ powerW, reason, active, regEnabled, online, status })', 'tile state signature includes online/status');
 must(evcs, "onlineState === false || r === 'OFFLINE' || offlineByStatus", 'offline class derived from online/reason/status');

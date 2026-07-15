@@ -64,8 +64,25 @@ export interface ChargingAllocationWallboxInput {
   targetA?: unknown;
   actualPowerW?: unknown;
   priority?: unknown;
+  orderIndex?: unknown;
+  allocationRank?: unknown;
+  chargingSinceMs?: unknown;
+  goalActive?: unknown;
+  goalFinishTs?: unknown;
+  goalUrgency?: unknown;
+  goalDesiredW?: unknown;
+  goalOverdue?: unknown;
   stationKey?: unknown;
+  stationMaxPowerW?: unknown;
   connectorNo?: unknown;
+  stepW?: unknown;
+  stepA?: unknown;
+  maxDeltaWPerTick?: unknown;
+  maxDeltaAPerTick?: unknown;
+  pvRampUpWPerTick?: unknown;
+  pvRampUpAPerTick?: unknown;
+  lastCommandPowerW?: unknown;
+  lastCommandCurrentA?: unknown;
   setAKey?: unknown;
   setWKey?: unknown;
   enableKey?: unknown;
@@ -81,6 +98,7 @@ export interface ChargingAllocationRuntimeInput {
   mode?: unknown;
   budgetMode?: unknown;
   budgetW?: unknown;
+  budgetUnlimited?: unknown;
   usedW?: unknown;
   remainingW?: unknown;
   totalPowerW?: unknown;
@@ -148,15 +166,39 @@ export interface ChargingAllocationWallboxPlan {
   minA: number;
   maxA: number;
   priority: number;
+  orderIndex: number;
+  allocationRank: number;
+  chargingSinceMs: number;
+  goalActive: boolean;
+  goalFinishTs: number;
+  goalUrgency: number;
+  goalDesiredW: number;
+  goalOverdue: boolean;
   stationKey: string;
+  stationMaxPowerW: number;
+  stationAllocatedW: number;
+  stationRemainingW: number;
   connectorNo: number;
+  stepW: number;
+  stepA: number;
+  maxDeltaWPerTick: number;
+  maxDeltaAPerTick: number;
+  pvRampUpWPerTick: number;
+  pvRampUpAPerTick: number;
+  lastCommandPowerW: number;
+  lastCommandCurrentA: number;
   setAKey: string;
   setWKey: string;
   enableKey: string;
+  requestedPowerW: number;
+  requestedCurrentA: number;
   targetPowerW: number;
   targetCurrentA: number;
   actualPowerW: number;
+  staleAny: boolean;
   pvUsedW: number;
+  allocationSafetyCapped: boolean;
+  allocationSafetyReason: string;
   blocked: boolean;
   reason: string;
   writeRequired: boolean;
@@ -288,7 +330,7 @@ export interface ChargingAllocationProductiveDecision {
     tsNormalSourceLocked: true;
     jsShadowComparisonDiagnosticOnly: true;
     jsMismatchDoesNotBlockNormalPath: true;
-    nativeTsAllocatorCanIgnoreJsTargets: true;
+    nativeTsAllocatorRespectsDemandCeilings: true;
     allowsTsSafetyStopHandover: true;
     safeStopCanBypassStaleBlockersForZeroTargets: true;
     nonZeroSafetyStopRejected: true;
@@ -387,11 +429,18 @@ function allocationSafe(allocation: Record<string, unknown>, fallbackIndex = 0):
 
 function buildAllocationMap(allocations: readonly Record<string, unknown>[]): Map<string, Record<string, unknown>> {
   const map = new Map<string, Record<string, unknown>>();
+  let allocationRank = 0;
   allocations.forEach((allocation, index) => {
     if (!allocation || typeof allocation !== 'object') return;
     if (String(allocation.type || '') === 'budget') return;
     const safe = allocationSafe(allocation, index);
-    if (safe) map.set(safe, allocation);
+    if (!safe) return;
+    allocationRank += 1;
+    // Die zentrale Runtime liefert den bereits hysterese-/rampenbereinigten und fachlich
+    // priorisierten Ladeplan. TypeScript übernimmt danach ausschließlich den finalen
+    // Sicherheitsvertrag für Gesamt-/PV-Budget, technische Mindestleistung und Stationslimit.
+    // Der Rang transportiert die zustandsbehaftete Round-Robin-Reihenfolge in den reinen Guard.
+    map.set(safe, { ...allocation, __allocationRank: allocationRank });
   });
   return map;
 }
@@ -417,24 +466,99 @@ function isJsComparisonDiagnosticOnly(input: ChargingAllocationRuntimeInput, pla
   return boolValue(input.allowJsComparisonFallback, true) === false;
 }
 
+type NativeChargingMode = 'auto' | 'pv' | 'minpv' | 'boost' | 'off';
+
+interface NativeAllocationCandidate {
+  wb: ChargingAllocationWallboxPlan;
+  sourceIndex: number;
+  mode: NativeChargingMode;
+  minW: number;
+  maxW: number;
+  requestW: number;
+  allocatedW: number;
+  pvUsedW: number;
+  reason: string;
+  eligible: boolean;
+}
+
+function normalizedChargingMode(wb: ChargingAllocationWallboxPlan): NativeChargingMode {
+  // Der wirksame Modus hat Vorrang vor der Benutzerwahl. Das ist insbesondere bei
+  // Tarif-/Safety-Uebersteuerungen wichtig: Ein effektives "auto" darf nicht allein
+  // wegen eines gespeicherten Benutzerwerts "pv" erneut als PV-only behandelt werden.
+  const effectiveRaw = String(wb.effectiveMode || '').trim().toLowerCase();
+  const userRaw = String(wb.userMode || '').trim().toLowerCase();
+  const raw = effectiveRaw || userRaw;
+  if (raw.includes('boost') || raw.includes('turbo')) return 'boost';
+  if (raw.includes('minpv') || raw.includes('min+pv') || raw.includes('min_pv') || raw.includes('min-plus-pv')) return 'minpv';
+  if (raw === 'pv' || raw.includes('pvonly') || raw.includes('pv_only') || raw.includes('pvsurplus')) return 'pv';
+  if (raw.includes('off') || raw.includes('disabled') || raw.includes('aus')) return 'off';
+  return 'auto';
+}
+
+function floorToPositiveStep(value: number, step: number): number {
+  if (!(value > 0)) return 0;
+  if (!(step > 0)) return value;
+  return Math.floor((value + 1e-9) / step) * step;
+}
+
+function ceilToPositiveStep(value: number, step: number): number {
+  if (!(value > 0)) return 0;
+  if (!(step > 0)) return value;
+  return Math.ceil((value - 1e-9) / step) * step;
+}
+
+function powerFactorWPerA(wb: ChargingAllocationWallboxPlan): number {
+  return Math.max(1, wb.phases || 1) * Math.max(1, wb.voltageV || 230);
+}
+
 function technicalMinPowerW(wb: ChargingAllocationWallboxPlan): number {
-  if (wb.minPowerW > 0) return wb.minPowerW;
-  if (wb.minA > 0) return Math.round(Math.max(1, wb.phases || 1) * Math.max(1, wb.voltageV || 230) * wb.minA);
-  return 0;
+  if (wb.controlBasis === 'current') {
+    const minA = Math.max(0, wb.minA || 0);
+    if (!(minA > 0)) return Math.max(0, wb.minPowerW || 0);
+    const stepA = wb.stepA > 0 ? wb.stepA : 0.1;
+    return Math.max(0, Math.round(ceilToPositiveStep(minA, stepA) * powerFactorWPerA(wb)));
+  }
+  const rawMin = Math.max(0, wb.minPowerW || 0);
+  if (!(rawMin > 0)) return 0;
+  return Math.max(0, Math.round(ceilToPositiveStep(rawMin, wb.stepW)));
 }
 
 function technicalMaxPowerW(wb: ChargingAllocationWallboxPlan): number {
-  if (wb.maxPowerW > 0) return wb.maxPowerW;
-  if (wb.maxA > 0) return Math.round(Math.max(1, wb.phases || 1) * Math.max(1, wb.voltageV || 230) * wb.maxA);
-  return wb.chargerType === 'dc' ? 50000 : 11000;
+  let rawMax = wb.maxPowerW > 0
+    ? wb.maxPowerW
+    : (wb.maxA > 0 ? powerFactorWPerA(wb) * wb.maxA : (wb.chargerType === 'dc' ? 50000 : 11000));
+  if (wb.controlBasis === 'current') {
+    const maxA = wb.maxA > 0 ? wb.maxA : rawMax / powerFactorWPerA(wb);
+    const stepA = wb.stepA > 0 ? wb.stepA : 0.1;
+    rawMax = floorToPositiveStep(maxA, stepA) * powerFactorWPerA(wb);
+  } else {
+    rawMax = floorToPositiveStep(rawMax, wb.stepW);
+  }
+  return Math.max(0, Math.round(rawMax));
 }
 
-function currentForPowerA(wb: ChargingAllocationWallboxPlan, targetPowerW: number): number {
-  const denom = Math.max(1, wb.phases || 1) * Math.max(1, wb.voltageV || 230);
-  let amps = targetPowerW > 0 ? targetPowerW / denom : 0;
-  if (amps > 0 && wb.minA > 0 && amps < wb.minA) amps = wb.minA;
-  if (wb.maxA > 0 && amps > wb.maxA) amps = wb.maxA;
-  return Number(Math.max(0, amps).toFixed(3));
+function quantizeTargetDown(wb: ChargingAllocationWallboxPlan, requestedW: number): { powerW: number; currentA: number } {
+  const maxW = technicalMaxPowerW(wb);
+  const boundedW = Math.max(0, Math.min(maxW, Number.isFinite(requestedW) ? requestedW : 0));
+  if (!(boundedW > 0)) return { powerW: 0, currentA: 0 };
+
+  if (wb.controlBasis === 'current') {
+    const factor = powerFactorWPerA(wb);
+    const stepA = wb.stepA > 0 ? wb.stepA : 0.1;
+    const maxA = wb.maxA > 0 ? wb.maxA : maxW / factor;
+    let amps = floorToPositiveStep(Math.min(maxA, boundedW / factor), stepA);
+    amps = Number(Math.max(0, amps).toFixed(3));
+    if (amps > 0 && wb.minA > 0 && amps + 1e-9 < wb.minA) return { powerW: 0, currentA: 0 };
+    const powerW = Math.max(0, Math.round(amps * factor));
+    if (wb.minPowerW > 0 && powerW < wb.minPowerW) return { powerW: 0, currentA: 0 };
+    return { powerW, currentA: amps };
+  }
+
+  const steppedW = floorToPositiveStep(boundedW, wb.stepW);
+  const powerW = Math.max(0, Math.floor(steppedW + 1e-9));
+  if (wb.minPowerW > 0 && powerW < wb.minPowerW) return { powerW: 0, currentA: 0 };
+  const currentA = wb.chargerType === 'dc' ? 0 : Number((powerW / powerFactorWPerA(wb)).toFixed(3));
+  return { powerW, currentA };
 }
 
 function capFromBinding(binding: unknown, cap: unknown): number | null {
@@ -444,10 +568,23 @@ function capFromBinding(binding: unknown, cap: unknown): number | null {
 }
 
 function effectiveNativeBudgetW(input: ChargingAllocationRuntimeInput, candidates: ChargingAllocationWallboxPlan[]): number {
+  const requestedCandidateW = candidates.reduce((sum, wb) => sum + Math.max(0, wb.requestedPowerW || 0), 0);
   const maxCandidateW = candidates.reduce((sum, wb) => sum + technicalMaxPowerW(wb), 0);
+  const fallbackDemandW = requestedCandidateW > 0 ? requestedCandidateW : maxCandidateW;
   const budget = finiteOrNull(input.budgetW);
   const remaining = finiteOrNull(input.remainingW);
-  let available = budget === null ? (remaining !== null && remaining > 0 ? remaining : maxCandidateW) : budget;
+  const budgetMode = String(input.budgetMode || '').trim().toLowerCase();
+  const unlimitedBudget = boolValue(input.budgetUnlimited, false)
+    || budgetMode === 'unlimited'
+    || budgetMode.endsWith(':unlimited')
+    || budgetMode.includes('+unlimited');
+  // Ein explizit vorhandenes Restbudget von 0 W ist ein harter Stop und darf
+  // niemals als "Budget fehlt" auf den vorherigen Ladebedarf zurueckfallen. Bei
+  // bewusst unbegrenztem Gesamtbudget bleibt dagegen der aktuelle Ladebedarf die
+  // Obergrenze; `Infinity` wird nicht versehentlich als fehlendes 0-W-Budget behandelt.
+  let available = unlimitedBudget
+    ? fallbackDemandW
+    : (budget === null ? (remaining !== null ? remaining : fallbackDemandW) : budget);
   if (!Number.isFinite(available) || available < 0) available = 0;
   const caps = [
     capFromBinding(input.gridCapBinding, input.gridCapEvcsW),
@@ -460,59 +597,492 @@ function effectiveNativeBudgetW(input: ChargingAllocationRuntimeInput, candidate
 }
 
 function isChargingCandidate(wb: ChargingAllocationWallboxPlan): boolean {
-  const modeText = `${wb.effectiveMode || ''} ${wb.userMode || ''}`.toLowerCase();
+  const mode = normalizedChargingMode(wb);
   if (!wb.enabled || !wb.online || !wb.connected) return false;
   if (!wb.hasSetpoint) return false;
-  if (modeText.includes('off') || modeText.includes('disabled') || modeText.includes('aus')) return false;
+  if (mode === 'off') return false;
   if (wb.phaseSwitchRequired || wb.phaseSwitchSafetyStopRequired) return false;
-  return true;
+  return wb.requestedPowerW > 0 || wb.requestedCurrentA > 0;
+}
+
+
+function finalGuardPriority(a: ChargingAllocationWallboxPlan, b: ChargingAllocationWallboxPlan): number {
+  // allocationRank transportiert die bereits zustandsbehaftete Reihenfolge der zentralen
+  // Runtime (Boost, Ziel-Laden, laufende Session, Prioritaet und Stations-Round-Robin).
+  // Der Abschluss-Guard darf diese Reihenfolge nicht neu erfinden.
+  const aRank = a.allocationRank > 0 ? a.allocationRank : Number.POSITIVE_INFINITY;
+  const bRank = b.allocationRank > 0 ? b.allocationRank : Number.POSITIVE_INFINITY;
+  if (aRank !== bRank) return aRank - bRank;
+
+  const aBoost = normalizedChargingMode(a) === 'boost' || a.boost ? 0 : 1;
+  const bBoost = normalizedChargingMode(b) === 'boost' || b.boost ? 0 : 1;
+  if (aBoost !== bBoost) return aBoost - bBoost;
+  const aGoal = a.goalActive ? 0 : 1;
+  const bGoal = b.goalActive ? 0 : 1;
+  if (aGoal !== bGoal) return aGoal - bGoal;
+  const aCharging = a.charging ? 0 : 1;
+  const bCharging = b.charging ? 0 : 1;
+  if (aCharging !== bCharging) return aCharging - bCharging;
+  const aPriority = a.priority > 0 ? a.priority : 9999;
+  const bPriority = b.priority > 0 ? b.priority : 9999;
+  if (aPriority !== bPriority) return aPriority - bPriority;
+  if (a.orderIndex !== b.orderIndex) return a.orderIndex - b.orderIndex;
+  return a.safe.localeCompare(b.safe);
+}
+
+function appendAllocationSafetyReason(current: string, reason: string): string {
+  const reasons = String(current || '').split(',').map((item) => item.trim()).filter(Boolean);
+  if (reason && !reasons.includes(reason)) reasons.push(reason);
+  return reasons.join(',');
+}
+
+function actualPowerReservationW(wallbox: ChargingAllocationWallboxPlan): number {
+  const actualW = Math.max(0, Number.isFinite(wallbox.actualPowerW) ? wallbox.actualPowerW : 0);
+  if (!(actualW > 0) || !wallbox.online) return 0;
+  // Bei veralteter Leistungstelemetrie wird nur dann weiter konservativ reserviert,
+  // wenn die Wallbox selbst noch einen aktiven Ladevorgang meldet. So kann ein alter
+  // Messwert weder ein Stationsbudget dauerhaft blockieren noch während realem Laden
+  // vorschnell freigegeben werden.
+  if (wallbox.staleAny && !wallbox.charging) return 0;
+  return actualW;
+}
+
+function pvReservationForPowerW(wallbox: ChargingAllocationWallboxPlan, powerW: number): number {
+  const mode = normalizedChargingMode(wallbox);
+  const safePowerW = Math.max(0, Number.isFinite(powerW) ? powerW : 0);
+  if (mode === 'pv') return safePowerW;
+  if (mode === 'minpv') return Math.max(0, safePowerW - technicalMinPowerW(wallbox));
+  return 0;
+}
+
+/**
+ * Code-Teil: applyFinalAllocationSafetyGuards
+ * Zweck: Erzwingt direkt vor dem produktiven Write-Plan die vier unverhandelbaren
+ * Lademanagement-Invarianten: Gesamtbudget, PV-Grant, Stationslimit und technische
+ * Mindest-/Schrittleistung. Der Guard verteilt keine zusaetzliche Leistung und kann
+ * einen bereits zentral ermittelten Zielwert ausschliesslich reduzieren.
+ */
+function applyFinalAllocationSafetyGuards(
+  planRaw: ChargingAllocationWallboxPlan[],
+  input: ChargingAllocationRuntimeInput,
+): ChargingAllocationWallboxPlan[] {
+  const planned = planRaw.map((wallbox) => ({ ...wallbox }));
+  const totalBudgetW = effectiveNativeBudgetW(input, planned);
+  const hasPvManagedDemand = planned.some((wallbox) => {
+    const mode = normalizedChargingMode(wallbox);
+    return mode === 'pv' || mode === 'minpv';
+  });
+  let totalRemainingW = Math.max(0, totalBudgetW);
+  let pvRemainingW = hasPvManagedDemand ? Math.max(0, nonNegative(input.pvAvailableW)) : Number.POSITIVE_INFINITY;
+
+  const stationCapByKey = new Map<string, number>();
+  for (const wallbox of planned) {
+    const stationKey = String(wallbox.stationKey || '').trim();
+    const capW = Math.max(0, wallbox.stationMaxPowerW || 0);
+    if (!stationKey || !(capW > 0)) continue;
+    const previous = stationCapByKey.get(stationKey);
+    stationCapByKey.set(stationKey, previous !== undefined ? Math.min(previous, capW) : capW);
+  }
+  const stationRemainingW = new Map<string, number>(stationCapByKey);
+  const stationAllocatedW = new Map<string, number>();
+
+  // Bereits physisch fließende Ladeleistung muss bis zur bestätigten Rücknahme im
+  // Gesamt- und Stationsbudget reserviert bleiben. Andernfalls könnte ein zweiter
+  // Connector sofort hochfahren, während der erste den vorherigen Sollwert noch umsetzt.
+  // Der Guard arbeitet deshalb mit max(Istleistung, neuem Sollwert), nicht nur mit Zielwerten.
+  const actualReservationBySafe = new Map<string, number>();
+  const actualPvReservationBySafe = new Map<string, number>();
+  let totalReservedW = 0;
+  let pvReservedW = 0;
+  const stationReservedW = new Map<string, number>();
+  for (const wallbox of planned) {
+    const actualW = actualPowerReservationW(wallbox);
+    const actualPvW = pvReservationForPowerW(wallbox, actualW);
+    actualReservationBySafe.set(wallbox.safe, actualW);
+    actualPvReservationBySafe.set(wallbox.safe, actualPvW);
+    totalReservedW += actualW;
+    pvReservedW += actualPvW;
+    const stationKey = String(wallbox.stationKey || '').trim();
+    if (stationKey && stationCapByKey.has(stationKey)) {
+      stationReservedW.set(stationKey, (stationReservedW.get(stationKey) || 0) + actualW);
+    }
+  }
+  totalRemainingW = Math.max(0, totalBudgetW - totalReservedW);
+  if (Number.isFinite(pvRemainingW)) pvRemainingW = Math.max(0, pvRemainingW - pvReservedW);
+  for (const [stationKey, capW] of stationCapByKey.entries()) {
+    stationRemainingW.set(stationKey, Math.max(0, capW - (stationReservedW.get(stationKey) || 0)));
+  }
+
+  const guardedBySafe = new Map<string, ChargingAllocationWallboxPlan>();
+  const candidates = [...planned].sort(finalGuardPriority);
+  for (const wallbox of candidates) {
+    const mode = normalizedChargingMode(wallbox);
+    const requestedW = Math.max(0, Math.min(
+      technicalMaxPowerW(wallbox),
+      Number.isFinite(wallbox.targetPowerW) ? wallbox.targetPowerW : 0,
+    ));
+    let safetyReason = String(wallbox.allocationSafetyReason || '');
+    let allowedW = requestedW;
+    const actualReservedW = Math.max(0, actualReservationBySafe.get(wallbox.safe) || 0);
+    const actualPvReservedW = Math.max(0, actualPvReservationBySafe.get(wallbox.safe) || 0);
+
+    const canRun = wallbox.enabled
+      && wallbox.online
+      && wallbox.connected
+      && wallbox.hasSetpoint
+      && mode !== 'off'
+      && !wallbox.phaseSwitchRequired
+      && !wallbox.phaseSwitchSafetyStopRequired
+      && !boolValue(input.pausedByPeakShaving, false);
+
+    if (!canRun || !(requestedW > 0)) {
+      allowedW = 0;
+      if (requestedW > 0) safetyReason = appendAllocationSafetyReason(safetyReason, 'availability-or-safety');
+    }
+
+    const totalAllowedForWallboxW = Math.max(0, totalBudgetW - Math.max(0, totalReservedW - actualReservedW));
+    if (allowedW > totalAllowedForWallboxW) {
+      allowedW = totalAllowedForWallboxW;
+      safetyReason = appendAllocationSafetyReason(safetyReason, 'central-budget');
+    }
+
+    const stationKey = String(wallbox.stationKey || '').trim();
+    if (allowedW > 0 && stationKey && stationRemainingW.has(stationKey)) {
+      const stationCapW = Math.max(0, Number(stationCapByKey.get(stationKey) || 0));
+      const stationReservedTotalW = Math.max(0, Number(stationReservedW.get(stationKey) || 0));
+      const stationAllowedForWallboxW = Math.max(0, stationCapW - Math.max(0, stationReservedTotalW - actualReservedW));
+      if (allowedW > stationAllowedForWallboxW) {
+        allowedW = stationAllowedForWallboxW;
+        safetyReason = appendAllocationSafetyReason(safetyReason, 'station-limit');
+      }
+    }
+
+    const minW = technicalMinPowerW(wallbox);
+    if (allowedW > 0 && mode === 'pv') {
+      const maxByPvW = Math.max(0, nonNegative(input.pvAvailableW) - Math.max(0, pvReservedW - actualPvReservedW));
+      if (allowedW > maxByPvW) {
+        allowedW = maxByPvW;
+        safetyReason = appendAllocationSafetyReason(safetyReason, 'pv-grant');
+      }
+    } else if (allowedW > 0 && mode === 'minpv') {
+      // Bei Min+PV kommt nur die technische Basis aus dem Gesamtbudget. Alles oberhalb
+      // dieser Basis muss durch den zentralen PV-Grant gedeckt sein.
+      const pvAllowedForWallboxW = Math.max(0, nonNegative(input.pvAvailableW) - Math.max(0, pvReservedW - actualPvReservedW));
+      const maxByPvW = Math.max(0, minW) + pvAllowedForWallboxW;
+      if (allowedW > maxByPvW) {
+        allowedW = maxByPvW;
+        safetyReason = appendAllocationSafetyReason(safetyReason, 'pv-grant');
+      }
+    }
+
+    let quantized = quantizeTargetDown(wallbox, allowedW);
+    if (quantized.powerW > 0 && minW > 0 && quantized.powerW + 1e-6 < minW) {
+      quantized = { powerW: 0, currentA: 0 };
+      safetyReason = appendAllocationSafetyReason(safetyReason, 'technical-minimum');
+    }
+    if (requestedW > 0 && quantized.powerW <= 0 && !safetyReason) {
+      safetyReason = 'technical-minimum';
+    }
+    if (quantized.powerW + 1 < requestedW && !safetyReason) {
+      safetyReason = 'quantization';
+    }
+
+    const finalPowerW = Math.max(0, Math.min(requestedW, quantized.powerW));
+    const finalCurrentA = finalPowerW <= 0
+      ? 0
+      : (wallbox.controlBasis === 'current'
+          ? Math.max(0, quantized.currentA)
+          : (Math.abs(finalPowerW - requestedW) <= 1
+              ? Math.max(0, wallbox.targetCurrentA || 0)
+              : Number((finalPowerW / powerFactorWPerA(wallbox)).toFixed(3))));
+    const pvUsedW = mode === 'pv'
+      ? finalPowerW
+      : (mode === 'minpv' ? Math.max(0, finalPowerW - Math.min(finalPowerW, minW)) : 0);
+
+    const finalReservedW = Math.max(actualReservedW, finalPowerW);
+    const finalPvReservedW = Math.max(actualPvReservedW, pvUsedW);
+    totalReservedW += Math.max(0, finalReservedW - actualReservedW);
+    totalRemainingW = Math.max(0, totalBudgetW - totalReservedW);
+    if (Number.isFinite(pvRemainingW)) {
+      pvReservedW += Math.max(0, finalPvReservedW - actualPvReservedW);
+      pvRemainingW = Math.max(0, nonNegative(input.pvAvailableW) - pvReservedW);
+    }
+    if (stationKey && stationRemainingW.has(stationKey)) {
+      const nextStationReservedW = Math.max(0, Number(stationReservedW.get(stationKey) || 0))
+        + Math.max(0, finalReservedW - actualReservedW);
+      stationReservedW.set(stationKey, nextStationReservedW);
+      stationRemainingW.set(stationKey, Math.max(0, Number(stationCapByKey.get(stationKey) || 0) - nextStationReservedW));
+      stationAllocatedW.set(stationKey, (stationAllocatedW.get(stationKey) || 0) + finalPowerW);
+    }
+
+    guardedBySafe.set(wallbox.safe, {
+      ...wallbox,
+      targetPowerW: finalPowerW,
+      targetCurrentA: finalCurrentA,
+      pvUsedW,
+      allocationSafetyCapped: finalPowerW + 1 < requestedW
+        || (wallbox.controlBasis === 'current' && finalCurrentA + 0.001 < Math.max(0, wallbox.targetCurrentA || 0)),
+      allocationSafetyReason: safetyReason,
+      // Ein positiver Runtime-Wunsch, der wegen Budget/Minimum final auf 0 faellt,
+      // muss als expliziter Stop an den bestehenden Executor uebergeben werden.
+      writeRequired: wallbox.online && wallbox.hasSetpoint && (wallbox.writeRequired || requestedW > 0),
+      reason: finalPowerW > 0
+        ? (wallbox.reason || 'central-allocation-final')
+        : (requestedW > 0 ? (safetyReason || 'central-allocation-blocked') : wallbox.reason),
+    });
+  }
+
+  return planned.map((wallbox) => {
+    const guarded = guardedBySafe.get(wallbox.safe) || { ...wallbox };
+    const stationKey = String(guarded.stationKey || '').trim();
+    const stationCapW = stationKey && stationCapByKey.has(stationKey) ? Number(stationCapByKey.get(stationKey) || 0) : 0;
+    const stationUsedW = stationKey && stationCapByKey.has(stationKey) ? Number(stationAllocatedW.get(stationKey) || 0) : 0;
+    const stationSafeRemainingW = stationKey && stationRemainingW.has(stationKey)
+      ? Number(stationRemainingW.get(stationKey) || 0)
+      : 0;
+    return {
+      ...guarded,
+      stationAllocatedW: Math.max(0, Math.round(stationUsedW)),
+      stationRemainingW: stationCapW > 0 ? Math.max(0, Math.round(stationSafeRemainingW)) : 0,
+    };
+  });
+}
+
+function compareNativeCandidates(a: NativeAllocationCandidate, b: NativeAllocationCandidate): number {
+  const aBoost = a.mode === 'boost' || a.wb.boost ? 0 : 1;
+  const bBoost = b.mode === 'boost' || b.wb.boost ? 0 : 1;
+  if (aBoost !== bBoost) return aBoost - bBoost;
+
+  const aGoal = a.wb.goalActive ? 0 : 1;
+  const bGoal = b.wb.goalActive ? 0 : 1;
+  if (aGoal !== bGoal) return aGoal - bGoal;
+  if (a.wb.goalActive && b.wb.goalActive) {
+    const aFinish = a.wb.goalFinishTs > 0 ? a.wb.goalFinishTs : Number.POSITIVE_INFINITY;
+    const bFinish = b.wb.goalFinishTs > 0 ? b.wb.goalFinishTs : Number.POSITIVE_INFINITY;
+    if (aFinish !== bFinish) return aFinish - bFinish;
+    if (a.wb.goalUrgency !== b.wb.goalUrgency) return b.wb.goalUrgency - a.wb.goalUrgency;
+  }
+
+  const aCharging = a.wb.charging ? 0 : 1;
+  const bCharging = b.wb.charging ? 0 : 1;
+  if (aCharging !== bCharging) return aCharging - bCharging;
+  const aSince = a.wb.chargingSinceMs > 0 ? a.wb.chargingSinceMs : Number.POSITIVE_INFINITY;
+  const bSince = b.wb.chargingSinceMs > 0 ? b.wb.chargingSinceMs : Number.POSITIVE_INFINITY;
+  if (aSince !== bSince) return aSince - bSince;
+
+  // In der NexoWatt-Konfiguration bedeutet eine kleinere Zahl eine höhere Priorität.
+  if (a.wb.priority !== b.wb.priority) return a.wb.priority - b.wb.priority;
+  if (a.wb.allocationRank !== b.wb.allocationRank) return a.wb.allocationRank - b.wb.allocationRank;
+  if (a.wb.orderIndex !== b.wb.orderIndex) return a.wb.orderIndex - b.wb.orderIndex;
+  return a.wb.safe.localeCompare(b.wb.safe);
+}
+
+function nativePriorityGroupKey(candidate: NativeAllocationCandidate): string {
+  const wb = candidate.wb;
+  const boost = candidate.mode === 'boost' || wb.boost ? 1 : 0;
+  const goal = wb.goalActive ? 1 : 0;
+  const finishBucket = goal && wb.goalFinishTs > 0 ? Math.floor(wb.goalFinishTs / 60000) : 0;
+  const charging = wb.charging ? 1 : 0;
+  return `${boost}|${goal}|${finishBucket}|${charging}|${wb.priority}`;
+}
+
+function buildStationCaps(candidates: NativeAllocationCandidate[]): Map<string, number> {
+  const caps = new Map<string, number>();
+  for (const candidate of candidates) {
+    const key = String(candidate.wb.stationKey || '').trim();
+    const cap = Math.max(0, candidate.wb.stationMaxPowerW || 0);
+    if (!key || !(cap > 0)) continue;
+    const previous = caps.get(key);
+    caps.set(key, previous !== undefined ? Math.min(previous, cap) : cap);
+  }
+  return caps;
+}
+
+function stationResourceW(candidate: NativeAllocationCandidate, stationRemaining: Map<string, number>): number {
+  const key = String(candidate.wb.stationKey || '').trim();
+  if (!key || !stationRemaining.has(key)) return Number.POSITIVE_INFINITY;
+  return Math.max(0, Number(stationRemaining.get(key) || 0));
+}
+
+function pvRequiredForIncrement(candidate: NativeAllocationCandidate, incrementW: number): number {
+  if (!(incrementW > 0)) return 0;
+  if (candidate.mode === 'pv') return incrementW;
+  if (candidate.mode === 'minpv') {
+    const beforeExtra = Math.max(0, candidate.allocatedW - candidate.minW);
+    const afterExtra = Math.max(0, candidate.allocatedW + incrementW - candidate.minW);
+    return Math.max(0, afterExtra - beforeExtra);
+  }
+  return 0;
+}
+
+function maxIncrementByPv(candidate: NativeAllocationCandidate, pvRemainingW: number): number {
+  if (candidate.mode === 'pv') return Math.max(0, pvRemainingW);
+  if (candidate.mode === 'minpv') {
+    const freeBaseW = Math.max(0, candidate.minW - candidate.allocatedW);
+    return freeBaseW + Math.max(0, pvRemainingW);
+  }
+  return Number.POSITIVE_INFINITY;
 }
 
 function applyTsNativeAllocationPlan(plannedRaw: ChargingAllocationWallboxPlan[], input: ChargingAllocationRuntimeInput): ChargingAllocationWallboxPlan[] {
-  const candidates = plannedRaw
-    .filter(isChargingCandidate)
-    .map((wb, index) => ({ wb, index, priority: Number.isFinite(Number(wb.priority)) ? Number(wb.priority) : 0 }))
-    .sort((a, b) => (b.priority - a.priority) || (a.index - b.index));
-  const availableW = effectiveNativeBudgetW(input, candidates.map((item) => item.wb));
-  const selected = new Map<string, { targetW: number; maxW: number; reason: string }>();
-  let remainingW = availableW;
-
-  for (const item of candidates) {
-    const wb = item.wb;
+  const allCandidates: NativeAllocationCandidate[] = plannedRaw.map((wb, sourceIndex) => {
     const minW = technicalMinPowerW(wb);
     const maxW = Math.max(minW, technicalMaxPowerW(wb));
-    if (remainingW <= 0) {
-      selected.set(wb.safe, { targetW: 0, maxW, reason: 'no-budget' });
-      continue;
+    // Auch der experimentelle TS-Native-Modus darf keinen Ladebedarf erfinden.
+    // Der zustandsbehaftete Runtime-Plan liefert den maximal aktuell erlaubten Demand
+    // (einschliesslich Hysterese, Startfreigabe und Rampen); TypeScript verteilt diesen
+    // Demand nur innerhalb von Gesamt-, PV- und Stationsbudget.
+    const demandCeilingW = Math.max(0, Math.min(maxW, wb.requestedPowerW || 0));
+    const requested = quantizeTargetDown(wb, demandCeilingW);
+    return {
+      wb,
+      sourceIndex,
+      mode: normalizedChargingMode(wb),
+      minW,
+      maxW,
+      requestW: requested.powerW,
+      allocatedW: 0,
+      pvUsedW: 0,
+      reason: requested.powerW > 0 ? 'ts-native-demand-ready' : 'no-demand',
+      eligible: false,
+    };
+  });
+
+  const candidates = allCandidates.filter((candidate) => isChargingCandidate(candidate.wb)).sort(compareNativeCandidates);
+  const availableW = effectiveNativeBudgetW(input, candidates.map((item) => item.wb));
+  const hasPvManagedDemand = candidates.some((candidate) => candidate.mode === 'pv' || candidate.mode === 'minpv');
+  let remainingW = availableW;
+  let pvRemainingW = hasPvManagedDemand ? Math.max(0, nonNegative(input.pvAvailableW)) : Number.POSITIVE_INFINITY;
+  const stationCaps = buildStationCaps(candidates);
+  const stationRemaining = new Map<string, number>(stationCaps);
+
+  const consume = (candidate: NativeAllocationCandidate, incrementW: number): boolean => {
+    if (!(incrementW > 0)) return false;
+    const quantized = quantizeTargetDown(candidate.wb, candidate.allocatedW + incrementW);
+    const nextW = Math.min(candidate.requestW, quantized.powerW);
+    const actualIncrementW = Math.max(0, nextW - candidate.allocatedW);
+    if (!(actualIncrementW > 0)) return false;
+    if (actualIncrementW > remainingW + 1e-6) return false;
+    const stationAvailableW = stationResourceW(candidate, stationRemaining);
+    if (actualIncrementW > stationAvailableW + 1e-6) return false;
+    const pvIncrementW = pvRequiredForIncrement(candidate, actualIncrementW);
+    if (pvIncrementW > pvRemainingW + 1e-6) return false;
+
+    candidate.allocatedW += actualIncrementW;
+    candidate.pvUsedW += pvIncrementW;
+    remainingW = Math.max(0, remainingW - actualIncrementW);
+    if (Number.isFinite(pvRemainingW)) pvRemainingW = Math.max(0, pvRemainingW - pvIncrementW);
+    const stationKey = String(candidate.wb.stationKey || '').trim();
+    if (stationKey && stationRemaining.has(stationKey)) {
+      stationRemaining.set(stationKey, Math.max(0, Number(stationRemaining.get(stationKey) || 0) - actualIncrementW));
     }
-    if (minW > 0 && remainingW < minW) {
-      selected.set(wb.safe, { targetW: 0, maxW, reason: 'budget-below-minimum' });
-      continue;
-    }
-    const base = minW > 0 ? minW : 0;
-    selected.set(wb.safe, { targetW: base, maxW, reason: base > 0 ? 'ts-native-minimum' : 'ts-native-eligible' });
-    remainingW -= base;
+    candidate.reason = candidate.allocatedW + 1 >= candidate.requestW ? 'ts-native-request-satisfied' : 'ts-native-budget-allocated';
+    return true;
+  };
+
+  // Prioritaetsklassen werden nacheinander abgearbeitet. Dadurch kann eine niedriger
+  // priorisierte Klasse nicht bereits Mindestleistung reservieren, solange eine hoehere
+  // Klasse noch ungedeckten Bedarf hat. Innerhalb derselben Klasse wird fair verteilt;
+  // allocationRank bildet dabei die zustandsbehaftete Stations-Round-Robin-Reihenfolge ab.
+  const groups: NativeAllocationCandidate[][] = [];
+  for (const candidate of candidates) {
+    const key = nativePriorityGroupKey(candidate);
+    const previous = groups.length ? groups[groups.length - 1] : null;
+    if (!previous || !previous[0] || nativePriorityGroupKey(previous[0]) !== key) groups.push([candidate]);
+    else previous.push(candidate);
   }
 
-  let guard = 0;
-  while (remainingW > 0 && guard < 20) {
-    guard += 1;
-    const adjustable = Array.from(selected.entries()).filter(([, item]) => item.targetW < item.maxW);
-    if (!adjustable.length) break;
-    const share = Math.max(1, Math.floor(remainingW / adjustable.length));
-    let usedThisRound = 0;
-    for (const [safe, item] of adjustable) {
-      const add = Math.min(item.maxW - item.targetW, share, remainingW - usedThisRound);
-      if (add <= 0) continue;
-      item.targetW += add;
-      item.reason = 'ts-native-allocated';
-      usedThisRound += add;
-      if (usedThisRound >= remainingW) break;
+  for (const group of groups) {
+    // Nur vollstaendige technische Mindestleistungen werden gestartet. Ein Ladepunkt
+    // erhaelt niemals einen Teilwert unterhalb von 6 A / seiner konfigurierten Basis.
+    for (const candidate of group) {
+      if (!(candidate.requestW > 0)) {
+        candidate.reason = 'no-demand';
+        continue;
+      }
+      if (candidate.minW > 0 && candidate.requestW < candidate.minW) {
+        candidate.reason = 'requested-below-minimum';
+        continue;
+      }
+      const startW = candidate.minW > 0 ? candidate.minW : 0;
+      const stationAvailableW = stationResourceW(candidate, stationRemaining);
+      const pvStartW = candidate.mode === 'pv' ? startW : 0;
+      if (startW > remainingW + 1e-6) {
+        candidate.reason = 'budget-below-minimum';
+        continue;
+      }
+      if (startW > stationAvailableW + 1e-6) {
+        candidate.reason = 'station-budget-below-minimum';
+        continue;
+      }
+      if (pvStartW > pvRemainingW + 1e-6) {
+        candidate.reason = 'pv-budget-below-minimum';
+        continue;
+      }
+      candidate.eligible = true;
+      if (startW > 0) consume(candidate, startW);
     }
-    if (usedThisRound <= 0) break;
-    remainingW -= usedThisRound;
+
+    let guard = 0;
+    while (remainingW > 0 && guard < 200) {
+      guard += 1;
+      const active = group.filter((candidate) => candidate.eligible && candidate.allocatedW + 1 < candidate.requestW);
+      if (!active.length) break;
+      const activePv = active.filter((candidate) => candidate.mode === 'pv' || candidate.mode === 'minpv');
+      const activeByStation = new Map<string, number>();
+      for (const candidate of active) {
+        const key = String(candidate.wb.stationKey || '').trim();
+        if (key && stationRemaining.has(key)) activeByStation.set(key, (activeByStation.get(key) || 0) + 1);
+      }
+
+      const globalShareW = Number.isFinite(remainingW) ? Math.max(0, Math.floor(remainingW / active.length)) : Number.POSITIVE_INFINITY;
+      const pvShareW = Number.isFinite(pvRemainingW) && activePv.length ? Math.max(0, Math.floor(pvRemainingW / activePv.length)) : Number.POSITIVE_INFINITY;
+      let progress = false;
+
+      for (const candidate of active) {
+        const roomW = Math.max(0, candidate.requestW - candidate.allocatedW);
+        const stationKey = String(candidate.wb.stationKey || '').trim();
+        const stationCount = stationKey && activeByStation.has(stationKey) ? Math.max(1, Number(activeByStation.get(stationKey) || 1)) : 1;
+        const stationShareW = stationKey && stationRemaining.has(stationKey)
+          ? Math.max(0, Math.floor(Number(stationRemaining.get(stationKey) || 0) / stationCount))
+          : Number.POSITIVE_INFINITY;
+        const candidatePvShareW = candidate.mode === 'pv' || candidate.mode === 'minpv' ? pvShareW : Number.POSITIVE_INFINITY;
+        const addLimitW = Math.min(roomW, globalShareW, stationShareW, maxIncrementByPv(candidate, candidatePvShareW));
+        if (addLimitW > 0 && consume(candidate, addLimitW)) progress = true;
+      }
+
+      if (progress) continue;
+
+      // Falls der faire Anteil kleiner als ein Geraeteschritt ist, erhaelt der erste
+      // passende Ladepunkt genau einen quantisierten Schritt. So bleibt das Budget
+      // nutzbar, ohne durch Aufrunden ueberschritten zu werden.
+      for (const candidate of active) {
+        const beforeW = candidate.allocatedW;
+        const stepRequestW = candidate.wb.controlBasis === 'current'
+          ? powerFactorWPerA(candidate.wb) * (candidate.wb.stepA > 0 ? candidate.wb.stepA : 0.1)
+          : (candidate.wb.stepW > 0 ? candidate.wb.stepW : 1);
+        if (consume(candidate, Math.max(1, stepRequestW))) {
+          progress = candidate.allocatedW > beforeW;
+          if (progress) break;
+        }
+      }
+      if (!progress) break;
+    }
+
+    // Solange diese Klasse ihr zulaessiges Budget nicht ausschöpfen konnte, darf die
+    // naechste Klasse den verbleibenden Rest nutzen. Ist das Gesamtbudget bereits leer,
+    // endet die Verteilung sofort.
+    if (!(remainingW > 0)) break;
   }
 
+  const finalStationAllocated = new Map<string, number>();
+  for (const candidate of allCandidates) {
+    const key = String(candidate.wb.stationKey || '').trim();
+    if (!key || !stationCaps.has(key)) continue;
+    finalStationAllocated.set(key, (finalStationAllocated.get(key) || 0) + candidate.allocatedW);
+  }
+
+  const bySafe = new Map(allCandidates.map((candidate) => [candidate.wb.safe, candidate]));
   return plannedRaw.map((wb) => {
     if (wb.phaseSwitchRequired || wb.phaseSwitchSafetyStopRequired) {
       const canWriteSafeStop = wb.online && wb.hasSetpoint;
@@ -524,40 +1094,45 @@ function applyTsNativeAllocationPlan(plannedRaw: ChargingAllocationWallboxPlan[]
         targetPowerW: 0,
         targetCurrentA: 0,
         pvUsedW: 0,
+        stationAllocatedW: 0,
+        stationRemainingW: wb.stationMaxPowerW,
         blocked: !canWriteSafeStop,
         reason: canWriteSafeStop ? reason : (wb.online ? 'missing-wallbox-setpoint' : 'offline'),
         writeRequired: canWriteSafeStop,
         boost: false,
       };
     }
-    const chosen = selected.get(wb.safe);
-    let targetPowerW = chosen ? Math.max(0, Math.round(chosen.targetW)) : 0;
-    let reason = chosen ? chosen.reason : '';
+
+    const chosen = bySafe.get(wb.safe);
+    const quantized = chosen ? quantizeTargetDown(wb, chosen.allocatedW) : { powerW: 0, currentA: 0 };
+    let reason = chosen ? chosen.reason : 'no-demand';
     let blocked = false;
     if (!wb.online) { blocked = true; reason = 'offline'; }
     else if (!wb.enabled) { blocked = false; reason = 'control_disabled'; }
-    else if (!wb.connected) { blocked = true; reason = 'not_connected'; }
+    else if (!wb.connected) { blocked = false; reason = 'not_connected'; }
     else if (!wb.hasSetpoint) { blocked = true; reason = 'missing-wallbox-setpoint'; }
-    else if (targetPowerW <= 0 && !reason) { reason = 'no-budget'; }
+    else if (wb.requestedPowerW <= 0 && reason === 'no-demand') { reason = wb.reason || 'no-demand'; }
 
-    const controlBasis = wb.controlBasis === 'current' ? 'current' : 'power';
-    const targetCurrentA = controlBasis === 'current' ? currentForPowerA(wb, targetPowerW) : 0;
-    if (controlBasis === 'current' && targetCurrentA > 0) {
-      targetPowerW = Math.round(targetCurrentA * Math.max(1, wb.phases || 1) * Math.max(1, wb.voltageV || 230));
-    }
-    const writeRequired = wb.hasSetpoint && wb.online && (targetPowerW > 0 || targetCurrentA > 0 || (!wb.enabled && !!(wb.setAKey || wb.setWKey)) || reason === 'control_disabled');
+    const stationKey = String(wb.stationKey || '').trim();
+    const stationCapW = stationKey && stationCaps.has(stationKey) ? Number(stationCaps.get(stationKey) || 0) : 0;
+    const stationAllocatedW = stationKey && stationCaps.has(stationKey) ? Number(finalStationAllocated.get(stationKey) || 0) : 0;
+    const stationRemainingW = stationCapW > 0 ? Math.max(0, stationCapW - stationAllocatedW) : 0;
+    const writeRequired = wb.hasSetpoint && wb.online;
     return {
       ...wb,
-      targetPowerW,
-      targetCurrentA,
-      pvUsedW: Math.min(targetPowerW, nonNegative(input.pvAvailableW)),
+      targetPowerW: quantized.powerW,
+      targetCurrentA: quantized.currentA,
+      pvUsedW: chosen ? Math.max(0, Math.round(chosen.pvUsedW)) : 0,
+      stationAllocatedW: Math.max(0, Math.round(stationAllocatedW)),
+      stationRemainingW: Math.max(0, Math.round(stationRemainingW)),
       blocked,
-      reason: reason || 'ts-native-allocated',
+      reason: reason || 'ts-native-budget-allocated',
       writeRequired,
-      boost: String(wb.effectiveMode || '').toLowerCase().includes('boost'),
+      boost: normalizedChargingMode(wb) === 'boost',
     };
   });
 }
+
 
 function normalizeWallboxPlan(
   wallbox: ChargingAllocationWallboxInput,
@@ -589,9 +1164,20 @@ function normalizeWallboxPlan(
   const derivedMaxW = phases * voltageV * maxA;
   const minPowerW = nonNegative(wallbox.minPowerW ?? wallbox.minPW, derivedMinW);
   const maxPowerW = nonNegative(wallbox.maxPowerW ?? wallbox.maxPW, derivedMaxW);
-  const targetPowerW = nonNegative((allocation ? (allocation.targetW ?? allocation.targetPowerW) : undefined) ?? wallbox.targetPowerW ?? wallbox.targetW);
-  const targetCurrentA = nonNegativeFloat((allocation ? (allocation.targetA ?? allocation.targetCurrentA) : undefined) ?? wallbox.targetCurrentA ?? wallbox.targetA);
+  const requestedCurrentA = nonNegativeFloat((allocation ? (allocation.targetA ?? allocation.targetCurrentA) : undefined) ?? wallbox.targetCurrentA ?? wallbox.targetA);
+  const requestedPowerExplicitW = nonNegative((allocation ? (allocation.targetW ?? allocation.targetPowerW) : undefined) ?? wallbox.targetPowerW ?? wallbox.targetW);
+  const requestedPowerW = requestedPowerExplicitW > 0
+    ? requestedPowerExplicitW
+    : (requestedCurrentA > 0 ? Math.round(requestedCurrentA * phases * voltageV) : 0);
+  // Im nicht nativen Diagnosepfad bleiben die gelieferten Zielwerte unverändert sichtbar.
+  // Im TS-Normalpfad dienen sie ausschließlich als pro Ladepunkt angeforderte Obergrenze;
+  // die endgültige Verteilung erfolgt danach zentral gegen Gesamt-, PV- und Stationsbudget.
+  const targetPowerW = requestedPowerW;
+  const targetCurrentA = requestedCurrentA > 0
+    ? requestedCurrentA
+    : (controlBasis === 'current' && requestedPowerW > 0 ? Number((requestedPowerW / (phases * voltageV)).toFixed(3)) : 0);
   const actualPowerW = nonNegative(wallbox.actualPowerW ?? (allocation ? allocation.actualPowerW : undefined));
+  const staleAny = boolValue(wallbox.staleAny ?? (allocation ? allocation.staleAny : undefined), false);
   const pvUsedW = nonNegative(allocation ? allocation.pvUsedW : undefined);
   const hasPowerSetpoint = boolValue(wallbox.hasSetPower, typeof wallbox.setWKey === 'string' && wallbox.setWKey.trim().length > 0);
   const hasCurrentSetpoint = boolValue(wallbox.hasSetCurrent, typeof wallbox.setAKey === 'string' && wallbox.setAKey.trim().length > 0);
@@ -640,16 +1226,40 @@ function normalizeWallboxPlan(
     maxPowerW,
     minA,
     maxA,
-    priority: nonNegative(wallbox.priority ?? (allocation ? allocation.priority : undefined)),
+    priority: nonNegative(wallbox.priority ?? (allocation ? allocation.priority : undefined), 999) || 999,
+    orderIndex: nonNegative(wallbox.orderIndex ?? (allocation ? allocation.orderIndex : undefined), index),
+    allocationRank: nonNegative(wallbox.allocationRank ?? (allocation ? (allocation.allocationRank ?? allocation.__allocationRank) : undefined), index + 1) || (index + 1),
+    chargingSinceMs: nonNegative(wallbox.chargingSinceMs ?? (allocation ? allocation.chargingSinceMs : undefined)),
+    goalActive: boolValue(wallbox.goalActive ?? (allocation ? allocation.goalActive : undefined), false),
+    goalFinishTs: nonNegative(wallbox.goalFinishTs ?? (allocation ? allocation.goalFinishTs : undefined)),
+    goalUrgency: nonNegativeFloat(wallbox.goalUrgency ?? (allocation ? allocation.goalUrgency : undefined), 0),
+    goalDesiredW: nonNegative(wallbox.goalDesiredW ?? (allocation ? allocation.goalDesiredW : undefined)),
+    goalOverdue: boolValue(wallbox.goalOverdue ?? (allocation ? allocation.goalOverdue : undefined), false),
     stationKey: str(wallbox.stationKey ?? (allocation ? allocation.stationKey : undefined)),
+    stationMaxPowerW: nonNegative(wallbox.stationMaxPowerW ?? (allocation ? allocation.stationMaxPowerW : undefined)),
+    stationAllocatedW: 0,
+    stationRemainingW: 0,
     connectorNo: nonNegative(wallbox.connectorNo ?? (allocation ? allocation.connectorNo : undefined)),
+    stepW: nonNegative(wallbox.stepW ?? (allocation ? allocation.stepW : undefined)),
+    stepA: nonNegativeFloat(wallbox.stepA ?? (allocation ? allocation.stepA : undefined), controlBasis === 'current' ? 0.1 : 0),
+    maxDeltaWPerTick: nonNegative(wallbox.maxDeltaWPerTick ?? (allocation ? allocation.maxDeltaWPerTick : undefined)),
+    maxDeltaAPerTick: nonNegativeFloat(wallbox.maxDeltaAPerTick ?? (allocation ? allocation.maxDeltaAPerTick : undefined), 0),
+    pvRampUpWPerTick: nonNegative(wallbox.pvRampUpWPerTick ?? (allocation ? allocation.pvRampUpWPerTick : undefined)),
+    pvRampUpAPerTick: nonNegativeFloat(wallbox.pvRampUpAPerTick ?? (allocation ? allocation.pvRampUpAPerTick : undefined), 0),
+    lastCommandPowerW: nonNegative(wallbox.lastCommandPowerW ?? (allocation ? allocation.lastCommandPowerW : undefined)),
+    lastCommandCurrentA: nonNegativeFloat(wallbox.lastCommandCurrentA ?? (allocation ? allocation.lastCommandCurrentA : undefined), 0),
     setAKey: str(wallbox.setAKey ?? (allocation ? allocation.setAKey : undefined)),
     setWKey: str(wallbox.setWKey ?? (allocation ? allocation.setWKey : undefined)),
     enableKey: str(wallbox.enableKey ?? (allocation ? allocation.enableKey : undefined)),
+    requestedPowerW,
+    requestedCurrentA,
     targetPowerW,
     targetCurrentA,
     actualPowerW,
+    staleAny,
     pvUsedW,
+    allocationSafetyCapped: false,
+    allocationSafetyReason: '',
     blocked,
     reason,
     writeRequired,
@@ -682,6 +1292,7 @@ export function buildChargingAllocationShadowPlan(input: ChargingAllocationRunti
       if (!plannedRaw.some((w) => w.safe === safe)) plannedRaw.push(normalizeWallboxPlan({ safe }, plannedRaw.length, allocation, input, phaseDecisionMap.get(safe) || null));
     }
   }
+  const allocatedPlan = useTsNativeAllocation ? applyTsNativeAllocationPlan(plannedRaw, input) : plannedRaw;
   const planned = safetyStop
     ? plannedRaw.map((wb) => {
         const hasAnySetpoint = !!(wb.hasSetpoint || wb.setAKey || wb.setWKey);
@@ -691,18 +1302,33 @@ export function buildChargingAllocationShadowPlan(input: ChargingAllocationRunti
           targetPowerW: 0,
           targetCurrentA: 0,
           pvUsedW: 0,
+          allocationSafetyCapped: wb.targetPowerW > 0 || wb.targetCurrentA > 0,
+          allocationSafetyReason: 'central-budget',
+          stationAllocatedW: 0,
+          stationRemainingW: wb.stationMaxPowerW,
           boost: false,
           blocked: !canWriteSafeStop,
           reason: canWriteSafeStop ? safetyReason : (wb.online ? 'missing-wallbox-setpoint' : 'offline'),
           writeRequired: canWriteSafeStop,
         };
       })
-    : (useTsNativeAllocation ? applyTsNativeAllocationPlan(plannedRaw, input) : plannedRaw);
+    : applyFinalAllocationSafetyGuards(allocatedPlan, input);
 
   const sumTargetPowerW = planned.reduce((sum, wb) => sum + Math.max(0, wb.targetPowerW || 0), 0);
   const sumTargetCurrentA = planned.reduce((sum, wb) => sum + Math.max(0, wb.targetCurrentA || 0), 0);
-  const explicitTotalPower = safetyStop ? 0 : (useTsNativeAllocation ? null : finiteOrNull(input.totalTargetPowerW));
-  const explicitTotalCurrent = safetyStop ? 0 : (useTsNativeAllocation ? null : finiteOrNull(input.totalTargetCurrentA));
+  const finalGuardChangedPlan = planned.some((wb) => wb.allocationSafetyCapped);
+  // Im kompatiblen Runtime-Normalpfad bleiben die bereits zentral berechneten Summen
+  // erhalten, solange der Abschluss-Guard nichts reduzieren musste. Sobald ein Cap
+  // greift, werden die Summen zwingend aus den finalen Einzelzielen neu gebildet.
+  const explicitTotalPower = safetyStop
+    ? 0
+    : (!useTsNativeAllocation && !finalGuardChangedPlan ? finiteOrNull(input.totalTargetPowerW) : null);
+  const explicitTotalCurrent = safetyStop
+    ? 0
+    : (!useTsNativeAllocation && !finalGuardChangedPlan ? finiteOrNull(input.totalTargetCurrentA) : null);
+  const finalBudgetW = finiteOrNull(input.budgetW);
+  const finalUsedW = Math.max(0, Math.round(sumTargetPowerW));
+  const finalRemainingW = finalBudgetW === null ? nonNegative(input.remainingW) : Math.max(0, Math.round(finalBudgetW - finalUsedW));
   const blockers: string[] = [];
   const warnings: string[] = [];
   if (useTsNativeAllocation) warnings.push('ts-native-allocation-active');
@@ -716,6 +1342,8 @@ export function buildChargingAllocationShadowPlan(input: ChargingAllocationRunti
   if (planned.some((wb) => wb.enabled && wb.online && !wb.hasSetpoint)) warnings.push('enabled-online-wallbox-without-setpoint');
   if (planned.some((wb) => wb.phaseSwitchRequired)) warnings.push('phase-switch-pending');
   if (planned.some((wb) => wb.phaseSwitchCommandAllowed)) warnings.push('phase-switch-command-ready');
+  if (planned.some((wb) => wb.allocationSafetyCapped)) warnings.push('final-allocation-safety-cap-active');
+  if (planned.some((wb) => String(wb.allocationSafetyReason || '').split(',').includes('station-limit'))) warnings.push('station-limit-finally-enforced');
   if (planned.some((wb) => wb.phaseSwitchRequired && !wb.phaseSwitchAllowed)) blockers.push('phase-switch-blocked');
 
   return {
@@ -731,8 +1359,8 @@ export function buildChargingAllocationShadowPlan(input: ChargingAllocationRunti
     tsNormalSourceLock: useTsNativeAllocation,
     jsComparisonDiagnosticOnly: diagnosticOnlyComparison,
     budgetW: finiteOrNull(input.budgetW),
-    usedW: nonNegative(input.usedW, sumTargetPowerW),
-    remainingW: nonNegative(input.remainingW),
+    usedW: finalUsedW,
+    remainingW: finalRemainingW,
     totalPowerW: nonNegative(input.totalPowerW),
     totalTargetPowerW: explicitTotalPower === null ? Math.round(sumTargetPowerW) : Math.max(0, Math.round(explicitTotalPower)),
     totalTargetCurrentA: explicitTotalCurrent === null ? Number(sumTargetCurrentA.toFixed(3)) : Math.max(0, Number(explicitTotalCurrent.toFixed(3))),
@@ -944,7 +1572,7 @@ export function buildChargingAllocationProductive(
       tsNormalSourceLocked: true,
       jsShadowComparisonDiagnosticOnly: true,
       jsMismatchDoesNotBlockNormalPath: true,
-      nativeTsAllocatorCanIgnoreJsTargets: true,
+      nativeTsAllocatorRespectsDemandCeilings: true,
       allowsTsSafetyStopHandover: true,
       safeStopCanBypassStaleBlockersForZeroTargets: true,
       nonZeroSafetyStopRejected: true,

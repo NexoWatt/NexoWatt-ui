@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 10fe72f82cd33e152c4c5ebefffb1a49a07e689a7dc2fa0f38492c84ef502318
+ * Original-Hash: ecc1f8e7bd7f31e72f8d88985e0dcbb7afa18ad2eafc6a456478350680fcbe44
  */
 
 /**
@@ -82,6 +82,40 @@ function mustMatch(rel, regex, message) {
   const text = read(rel);
   if (!regex.test(text)) {
     console.error(`[dc-station-display] FEHLER: ${message || regex} fehlt in ${rel}`);
+    process.exit(1);
+  }
+}
+
+/** Vergleicht Paketversionen numerisch, damit Patch-Versionen ab 100 nicht an alten Regex-Grenzen scheitern. */
+function mustPackageVersionAtLeast(minVersion, message) {
+  const pkg = JSON.parse(read('package.json'));
+/**
+ * Code-Teil: parse
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+  const parse = value => {
+    const match = String(value || '').match(/^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/);
+    return match ? match.slice(1).map(Number) : null;
+  };
+  const actual = parse(pkg.version);
+  const minimum = parse(minVersion);
+  let valid = Boolean(actual && minimum);
+  if (valid) {
+    for (let index = 0; index < actual.length; index += 1) {
+      if (actual[index] === minimum[index]) continue;
+      valid = actual[index] > minimum[index];
+      break;
+    }
+  }
+  if (!valid) {
+    console.error(`[dc-station-display] FEHLER: ${message || `Paketversion >= ${minVersion}`} (ist ${pkg.version || 'unbekannt'})`);
     process.exit(1);
   }
 }
@@ -168,7 +202,7 @@ mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'data-ck-field="contro
 mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'Kein OCPP-Zwang', 'Installer-Hinweis zur Herstelleroffenheit');
 mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'data-ck-field="controlBridge"', 'Steuerbrücke im Installer');
 mustContain('src-ts/runtime-executables/www/ems-apps.ts', 'data-ck-field="protocolHint"', 'Protokoll-Hinweis im Installer');
-mustMatch('package.json', /"version"\s*:\s*"0\.8\.(2[5-9]|[3-9][0-9])"/, 'Paketversion 0.8.59+');
+mustPackageVersionAtLeast('0.8.25', 'Paketversion 0.8.25+');
 
 console.log('[dc-station-display] OK: Display-API, Watchdog, Layout, Wartungsmodus und Session-/Betreiberbasis und herstelleroffene Steuerbrücke sind abgesichert.');
 

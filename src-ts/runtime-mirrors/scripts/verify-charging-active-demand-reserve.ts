@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 876b54b80aa0df91fd0399ea5d6b6840e8c0b62bfb1e822ac8a011bc17a8395e
+ * Original-Hash: 17bb2b3d706a01838c6c8887f450cef2fe3a24a8a05556090e91396b596f6aab
  */
 
 /**
@@ -111,7 +111,7 @@ must(cm, 'function computePendingPvStartIntentW(', 'pending PV helper');
 must(cm, 'function computePendingPvStartTotalBudgetW(', 'pending total-budget helper');
 must(cm, 'status: w.connectorStatus', 'connector status reaches pending helper');
 must(cm, 'centralTotalGrantW: evcsPendingCentralTotalGrantW', 'pending intent uses central total grant during PV start hysteresis');
-must(cm, 'const evcsControlTotalPvIntentW = Math.max(0, evcsControlPvIntentW + evcsControlPendingPvIntentW);', 'active and waiting PV intent are combined');
+must(cm, 'let evcsControlTotalPvIntentW = Math.max(0, evcsControlPvIntentW + evcsControlPendingPvIntentW);', 'active and waiting PV intent are combined and can be recomputed from the final plan');
 must(cm, "chargingManagement.control.pvPendingDemandIntentW", 'pending demand diagnostic state');
 must(cm, "chargingManagement.control.pvCentralRemainingAfterEvcsW", 'central remaining PV diagnostic state');
 must(cm, 'const evcsReserveW = evcsControlReserveW;', 'central EMS reserve uses active demand');

@@ -29,6 +29,7 @@
 
   Updates all relevant adapter versions:
     - package.json.version
+    - package-lock.json.version / packages[""].version
     - io-package.json.common.version
     - www/manifest.webmanifest.version / appVersion
 
@@ -118,10 +119,12 @@ function main() {
 
   const root = path.join(__dirname, '..');
   const pkgPath = path.join(root, 'package.json');
+  const lockPath = path.join(root, 'package-lock.json');
   const ioPath = path.join(root, 'io-package.json');
   const manifestPath = path.join(root, 'www', 'manifest.webmanifest');
 
   const pkg = readJson(pkgPath);
+  const lock = fs.existsSync(lockPath) ? readJson(lockPath) : null;
   const io = readJson(ioPath);
   const manifest = fs.existsSync(manifestPath) ? readJson(manifestPath) : null;
 
@@ -156,6 +159,15 @@ function main() {
   if (dryRun) return;
 
   pkg.json.version = next;
+  if (lock && lock.json && typeof lock.json === 'object') {
+    // npm lockfileVersion 2/3 führt die Projektversion sowohl oben als auch im
+    // Root-Paket. Beide Werte müssen mit package.json identisch bleiben, damit
+    // ZIP-/Publish-Prüfungen keinen veralteten Release-Stand ausliefern.
+    lock.json.version = next;
+    lock.json.packages = lock.json.packages && typeof lock.json.packages === 'object' ? lock.json.packages : {};
+    lock.json.packages[''] = lock.json.packages[''] && typeof lock.json.packages[''] === 'object' ? lock.json.packages[''] : {};
+    lock.json.packages[''].version = next;
+  }
   io.json.common = io.json.common && typeof io.json.common === 'object' ? io.json.common : {};
   io.json.common.version = next;
   delete io.json.version;
@@ -166,6 +178,7 @@ function main() {
   }
 
   writeJson(pkgPath, pkg.json);
+  if (lock) writeJson(lockPath, lock.json);
   writeJson(ioPath, io.json);
   if (manifest) writeJson(manifestPath, manifest.json);
 }

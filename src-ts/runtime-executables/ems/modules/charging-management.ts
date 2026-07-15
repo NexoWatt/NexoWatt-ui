@@ -1595,8 +1595,25 @@ class ChargingManagementModule extends BaseModule {
             maxA: w && w.maxA,
             actualPowerW: w && w.actualPowerW,
             priority: w && w.priority,
+            orderIndex: w && w.orderIndex,
+            allocationRank: w && w.allocationRank,
+            chargingSinceMs: w && w.chargingSinceMs,
+            goalActive: !!(w && w.goalActive),
+            goalFinishTs: w && w.goalFinishTs,
+            goalUrgency: w && w.goalUrgency,
+            goalDesiredW: w && w.goalDesiredW,
+            goalOverdue: !!(w && w.goalOverdue),
             stationKey: w && w.stationKey,
+            stationMaxPowerW: w && w.stationMaxPowerW,
             connectorNo: w && w.connectorNo,
+            stepW: w && w.stepW,
+            stepA: w && w.stepA,
+            maxDeltaWPerTick: w && w.maxDeltaWPerTick,
+            maxDeltaAPerTick: w && w.maxDeltaAPerTick,
+            pvRampUpWPerTick: w && w.pvRampUpWPerTick,
+            pvRampUpAPerTick: w && (w.pvRampUpAPerTick !== undefined ? w.pvRampUpAPerTick : w.pvRampUpAperTick),
+            lastCommandPowerW: this._lastCmdTargetW && typeof this._lastCmdTargetW.get === 'function' ? this._lastCmdTargetW.get(w && w.safe) : 0,
+            lastCommandCurrentA: this._lastCmdTargetA && typeof this._lastCmdTargetA.get === 'function' ? this._lastCmdTargetA.get(w && w.safe) : 0,
             setAKey: w && w.setAKey,
             setWKey: w && w.setWKey,
             enableKey: w && w.enableKey,
@@ -1607,6 +1624,180 @@ class ChargingManagementModule extends BaseModule {
         }));
     }
 
+
+    /**
+     * Code-Teil: _publishChargingStationDiagnosticsFromAllocationPlan
+     * Zweck: Spiegelt Stationsverbrauch und Restleistung aus dem finalen TS-geprueften
+     * Write-Plan. Dadurch zeigen UI und Diagnose exakt denselben Plan, der danach auf
+     * die Ladepunkte geschrieben wird; alte Vorberechnungen koennen die Anzeige nicht
+     * mehr von den tatsaechlichen Stationslimits entkoppeln.
+     */
+    async _publishChargingStationDiagnosticsFromAllocationPlan(allocationState, wbList) {
+        try {
+            const normalDecision = allocationState && allocationState.normalSourceDecision;
+            const productiveDecision = allocationState && allocationState.productiveDecision;
+            const decision = normalDecision && normalDecision.apply
+                ? normalDecision
+                : (productiveDecision && productiveDecision.apply ? productiveDecision : null);
+            const plans = decision && decision.apply && Array.isArray(decision.apply.wallboxes)
+                ? decision.apply.wallboxes
+                : [];
+            const bySafe = new Map((Array.isArray(wbList) ? wbList : []).filter(w => w && w.safe).map(w => [String(w.safe), w]));
+            const capByStation = new Map();
+            const nameByStation = new Map();
+            const connectorsByStation = new Map();
+            const targetByStation = new Map();
+            const boostByStation = new Map();
+            const pvByStation = new Map();
+
+            for (const w of Array.isArray(wbList) ? wbList : []) {
+                if (!w) continue;
+                const stationKey = String(w.stationKey || '').trim();
+                const capW = Number(w.stationMaxPowerW);
+                if (!stationKey || !Number.isFinite(capW) || capW <= 0) continue;
+                const previousCap = capByStation.get(stationKey);
+                capByStation.set(stationKey, Number.isFinite(previousCap) ? Math.min(previousCap, capW) : capW);
+                if (!nameByStation.has(stationKey)) nameByStation.set(stationKey, String(w.stationName || w.name || stationKey));
+                const set = connectorsByStation.get(stationKey) || new Set();
+                set.add(String(w.safe || ''));
+                connectorsByStation.set(stationKey, set);
+            }
+
+            for (const plan of plans) {
+                if (!plan || !plan.safe) continue;
+                const w = bySafe.get(String(plan.safe));
+                const stationKey = String((plan.stationKey || (w && w.stationKey) || '')).trim();
+                if (!stationKey || !capByStation.has(stationKey)) continue;
+                const targetW = Math.max(0, Number(plan.targetPowerW || 0));
+                targetByStation.set(stationKey, (targetByStation.get(stationKey) || 0) + (Number.isFinite(targetW) ? targetW : 0));
+                if (plan.boost === true || String(plan.effectiveMode || '').toLowerCase() === 'boost') {
+                    boostByStation.set(stationKey, (boostByStation.get(stationKey) || 0) + 1);
+                }
+                if (String(plan.effectiveMode || '').toLowerCase().includes('pv')) {
+                    pvByStation.set(stationKey, (pvByStation.get(stationKey) || 0) + 1);
+                }
+            }
+
+            await this._queueState('chargingManagement.stationCount', capByStation.size, true);
+            for (const [stationKey, capW] of capByStation.entries()) {
+                const targetW = Math.max(0, targetByStation.get(stationKey) || 0);
+                const remainingW = Math.max(0, capW - targetW);
+                const toleranceW = Math.max(50, capW * 0.005);
+                const channel = await this._ensureStationChannel(stationKey);
+                const connectors = connectorsByStation.get(stationKey) || new Set();
+                await this._queueState(`${channel}.stationKey`, stationKey, true);
+                await this._queueState(`${channel}.name`, nameByStation.get(stationKey) || stationKey, true);
+                await this._queueState(`${channel}.maxPowerW`, Math.round(capW), true);
+                await this._queueState(`${channel}.remainingW`, Math.round(remainingW), true);
+                await this._queueState(`${channel}.usedW`, Math.round(targetW), true);
+                await this._queueState(`${channel}.binding`, remainingW <= toleranceW, true);
+                await this._queueState(`${channel}.headroomW`, Math.round(remainingW), true);
+                await this._queueState(`${channel}.targetSumW`, Math.round(targetW), true);
+                await this._queueState(`${channel}.connectorCount`, connectors.size, true);
+                await this._queueState(`${channel}.boostConnectors`, boostByStation.get(stationKey) || 0, true);
+                await this._queueState(`${channel}.pvLimitedConnectors`, pvByStation.get(stationKey) || 0, true);
+                await this._queueState(`${channel}.connectors`, Array.from(connectors).filter(Boolean).join(','), true);
+                await this._queueState(`${channel}.lastUpdate`, Date.now(), true);
+
+                for (const safe of connectors) {
+                    const w = bySafe.get(String(safe));
+                    if (!w || !w.ch) continue;
+                    await this._queueState(`${w.ch}.stationRemainingW`, Math.round(remainingW), true);
+                }
+            }
+            return true;
+        } catch (_eStationDiagnostics) {
+            return false;
+        }
+    }
+
+
+    /**
+     * Code-Teil: _buildChargingFinalAllocationMetrics
+     * Zweck: Leitet die zentrale EVCS-Reservierung ausschließlich aus dem finalen,
+     * budget-/PV-/stationsgeprüften Allocation-Plan ab. Dadurch sehen Speicher,
+     * Thermik und Heizstab exakt dieselben Ladepunktziele, die anschließend über
+     * den Write-Plan ausgeführt werden; vorgelagerte Rohziele können kein Budget
+     * mehr reservieren, das der finale Stations- oder Mindestleistungs-Guard verworfen hat.
+     */
+    _buildChargingFinalAllocationMetrics(allocationState, wbList, activityThresholdW = 100) {
+        try {
+            const normalDecision = allocationState && allocationState.normalSourceDecision;
+            const productiveDecision = allocationState && allocationState.productiveDecision;
+            const decision = normalDecision && normalDecision.apply
+                ? normalDecision
+                : (productiveDecision && productiveDecision.apply ? productiveDecision : null);
+            const plans = decision && decision.apply && Array.isArray(decision.apply.wallboxes)
+                ? decision.apply.wallboxes
+                : [];
+            if (!plans.length) return null;
+
+            const bySafe = new Map((Array.isArray(wbList) ? wbList : [])
+                .filter(w => w && w.safe)
+                .map(w => [String(w.safe), w]));
+            const thresholdW = Math.max(1, Number.isFinite(Number(activityThresholdW)) ? Number(activityThresholdW) : 100);
+            let totalTargetPowerW = 0;
+            let totalTargetCurrentA = 0;
+            let reserveW = 0;
+            let pvReserveW = 0;
+            let pvIntentW = 0;
+            let activeDemandWallboxes = 0;
+
+            for (const plan of plans) {
+                if (!plan || !plan.safe) continue;
+                const w = bySafe.get(String(plan.safe)) || null;
+                const targetW = Math.max(0, Number.isFinite(Number(plan.targetPowerW)) ? Number(plan.targetPowerW) : 0);
+                const targetA = Math.max(0, Number.isFinite(Number(plan.targetCurrentA)) ? Number(plan.targetCurrentA) : 0);
+                const actualW = Math.max(0, Number.isFinite(Number(w && w.actualPowerW)) ? Math.abs(Number(w.actualPowerW)) : 0);
+                totalTargetPowerW += targetW;
+                totalTargetCurrentA += targetA;
+
+                const enabled = w ? w.enabled !== false : plan.enabled !== false;
+                const online = w ? w.online === true : plan.online === true;
+                const connected = w ? w.vehiclePlugged !== false : plan.connected !== false;
+                const hasControl = w ? w.controlBasis !== 'none' : plan.hasSetpoint !== false;
+                const charging = !!(w && w.charging) || plan.charging === true;
+                const goalActive = !!(w && w.goalActive) || plan.goalActive === true;
+                const activeDemand = !!(
+                    enabled
+                    && online
+                    && connected
+                    && hasControl
+                    && (
+                        charging
+                        || actualW >= thresholdW
+                        || targetW >= thresholdW
+                        || (goalActive && targetW > 0)
+                    )
+                );
+                if (!activeDemand) continue;
+
+                const reserveThisW = Math.max(actualW, targetW);
+                if (!(reserveThisW > 0)) continue;
+                const finalPvUsedW = Math.max(0, Number.isFinite(Number(plan.pvUsedW)) ? Number(plan.pvUsedW) : 0);
+                const minPowerW = Math.max(0, Number.isFinite(Number(plan.minPowerW))
+                    ? Number(plan.minPowerW)
+                    : (Number.isFinite(Number(w && w.minPW)) ? Number(w.minPW) : 0));
+                const effectiveMode = String(plan.effectiveMode || (w && w.effectiveMode) || '');
+
+                reserveW += reserveThisW;
+                pvReserveW += Math.min(reserveThisW, finalPvUsedW);
+                pvIntentW += computePvManagedDemandIntentW(effectiveMode, reserveThisW, minPowerW);
+                activeDemandWallboxes += 1;
+            }
+
+            return {
+                totalTargetPowerW: Math.max(0, Math.round(totalTargetPowerW)),
+                totalTargetCurrentA: Math.max(0, Number(totalTargetCurrentA.toFixed(3))),
+                reserveW: Math.max(0, Math.round(reserveW)),
+                pvReserveW: Math.max(0, Math.round(pvReserveW)),
+                pvIntentW: Math.max(0, Math.round(pvIntentW)),
+                activeDemandWallboxes,
+            };
+        } catch (_eFinalAllocationMetrics) {
+            return null;
+        }
+    }
 
     /**
      * Code-Teil: _publishChargingPhaseSelectionRuntimeStates
@@ -2158,6 +2349,11 @@ class ChargingManagementModule extends BaseModule {
             }
             try { await this._queueState(`${w.ch}.targetCurrentA`, targetA, true); } catch { /* ignore */ }
             try { await this._queueState(`${w.ch}.targetPowerW`, targetW, true); } catch { /* ignore */ }
+            // Die Diagnose folgt dem finalen Write-Plan. So bleiben Grund, Rang und
+            // Stationsrest identisch zu den tatsächlich geschriebenen Sollwerten.
+            try { await this._queueState(`${w.ch}.reason`, String(entry.reason || applyStatus || ''), true); } catch { /* ignore */ }
+            try { await this._queueState(`${w.ch}.allocationRank`, Math.max(0, Math.round(Number(entry.allocationRank || 0))), true); } catch { /* ignore */ }
+            try { await this._queueState(`${w.ch}.stationRemainingW`, Math.max(0, Math.round(Number(entry.stationRemainingW || 0))), true); } catch { /* ignore */ }
             if (isPhaseSwitchEntry) {
                 try { await this._queueState(`${w.ch}.phaseSwitchState`, applyStatus, true); } catch { /* ignore */ }
                 try { await this._queueState(`${w.ch}.targetPhaseCount`, Number(entry.targetPhaseCount || 0), true); } catch { /* ignore */ }
@@ -2184,12 +2380,40 @@ class ChargingManagementModule extends BaseModule {
                 dbg.writePlanFallbackReason = fallbackReason || '';
                 dbg.executorBasis = plannedBasis;
                 dbg.executorSetpointKey = plannedSetpointKey || '';
+                dbg.targetW = targetW;
+                dbg.targetA = targetA;
+                dbg.reason = String(entry.reason || dbg.reason || '');
+                dbg.pvUsedW = Math.max(0, Math.round(Number(entry.pvUsedW || 0)));
+                dbg.stationAllocatedW = Math.max(0, Math.round(Number(entry.stationAllocatedW || 0)));
+                dbg.stationRemainingW = Math.max(0, Math.round(Number(entry.stationRemainingW || 0)));
+                dbg.allocationSafetyCapped = entry.allocationSafetyCapped === true;
+                dbg.allocationSafetyReason = String(entry.allocationSafetyReason || '');
                 if (isPhaseSwitchEntry) {
                     dbg.phaseSwitchApplied = applied;
                     dbg.phaseSwitchValue = entry.targetValue;
                 }
             }
-            result.entries.push({ safe, targetW, targetA, basis: isPhaseSwitchEntry ? 'phase' : plannedBasis, setpointKey: plannedSetpointKey || '', applied, status: applyStatus, source: executorSource || '', targetPhaseCount: Number(entry.targetPhaseCount || 0), targetValue: entry.targetValue });
+            result.entries.push({
+                safe,
+                targetW,
+                targetA,
+                basis: isPhaseSwitchEntry ? 'phase' : plannedBasis,
+                setpointKey: plannedSetpointKey || '',
+                applied,
+                status: applyStatus,
+                source: executorSource || '',
+                reason: String(entry.reason || ''),
+                allocationRank: Math.max(0, Math.round(Number(entry.allocationRank || 0))),
+                pvUsedW: Math.max(0, Math.round(Number(entry.pvUsedW || 0))),
+                stationKey: String(entry.stationKey || ''),
+                stationMaxPowerW: Math.max(0, Math.round(Number(entry.stationMaxPowerW || 0))),
+                stationAllocatedW: Math.max(0, Math.round(Number(entry.stationAllocatedW || 0))),
+                stationRemainingW: Math.max(0, Math.round(Number(entry.stationRemainingW || 0))),
+                allocationSafetyCapped: entry.allocationSafetyCapped === true,
+                allocationSafetyReason: String(entry.allocationSafetyReason || ''),
+                targetPhaseCount: Number(entry.targetPhaseCount || 0),
+                targetValue: entry.targetValue,
+            });
         }
         this._chargingWritePlanExecutorLast = result;
         try {
@@ -4560,6 +4784,7 @@ class ChargingManagementModule extends BaseModule {
                 goalUrgency,
                 goalOverdue,
                 stationKey,
+                stationName: stationNameByKey.get(stationKey) || '',
                 connectorNo,
                 stationMaxPowerW,
                 allowBoost,
@@ -4603,6 +4828,15 @@ class ChargingManagementModule extends BaseModule {
                 para14aCapped,
                 userLimitSet,
                 vFactor,
+                // Diese Werte werden an den finalen TypeScript-Write-Plan weitergereicht.
+                // Dadurch kann der Abschluss-Guard technische Stufen und Rampen prüfen,
+                // ohne eine zweite, abweichende Ladepunktverteilung zu erzeugen.
+                stepW: clamp(num(wb.stepW, stepW), 0, 1e12),
+                stepA: clamp(num(wb.stepA, stepA), 0, 1e6),
+                maxDeltaWPerTick: clamp(num(wb.maxDeltaWPerTick, maxDeltaWPerTick), 0, 1e12),
+                maxDeltaAPerTick: clamp(num(wb.maxDeltaAPerTick, maxDeltaAPerTick), 0, 1e6),
+                pvRampUpWPerTick: clamp(num(wb.pvRampUpWPerTick, pvRampUpWPerTick), 0, 1e12),
+                pvRampUpAperTick: clamp(num(wb.pvRampUpAperTick, pvRampUpAperTick), 0, 1e6),
                 setAKey: hasSetA ? `cm.wb.${safe}.setA` : null,
                 setWKey: hasSetW ? `cm.wb.${safe}.setW` : null,
                 enableKey: enableId ? `cm.wb.${safe}.en` : null,
@@ -6518,6 +6752,7 @@ if (components.length) {
                 mode,
                 budgetMode: effectiveBudgetMode,
                 budgetW: 0,
+                budgetUnlimited: false,
                 usedW: 0,
                 remainingW: 0,
                 totalPowerW,
@@ -6539,12 +6774,16 @@ if (components.length) {
                 safetyReason: 'stale-meter-safety-stop',
                 staleMeter,
                 staleBudget,
-                preferTsNativeAllocation: true,
-                tsNormalSourceLock: true,
+                // Eine einzige fachliche Verteilung: Die zentrale Runtime-Allokation
+                // (Budget, Modi, Mindestleistungen, Prioritaeten und Stationslimits)
+                // liefert den Plan. Der TS-Spiegel validiert und begrenzt ihn nur noch.
+                preferTsNativeAllocation: false,
+                tsNormalSourceLock: false,
                 allowJsComparisonFallback: false,
                 wallboxes: this._mapChargingWallboxesForTsAllocation(wbList),
                 allocations: debugAlloc,
             });
+            await this._publishChargingStationDiagnosticsFromAllocationPlan(tsAllocationState, wbList);
             const tsWritePlanProductive = tsAllocationState && tsAllocationState.writePlanProductive ? tsAllocationState.writePlanProductive : null;
             const tsWritePlanUsed = await this._executeChargingTsSetpointPlan(tsWritePlanProductive, wbList, debugAlloc);
             const legacyFallbackReason = tsWritePlanProductive && tsWritePlanProductive.fallbackReason
@@ -6841,6 +7080,7 @@ if (components.length) {
                     mode,
                     budgetMode: effectiveBudgetMode,
                     budgetW: 0,
+                    budgetUnlimited: false,
                     usedW: 0,
                     remainingW: 0,
                     totalPowerW,
@@ -6862,12 +7102,13 @@ if (components.length) {
                     safetyReason: 'peak-shaving-safety-stop',
                     staleMeter,
                     staleBudget,
-                    preferTsNativeAllocation: true,
-                    tsNormalSourceLock: true,
+                    preferTsNativeAllocation: false,
+                    tsNormalSourceLock: false,
                     allowJsComparisonFallback: false,
                     wallboxes: this._mapChargingWallboxesForTsAllocation(wbList),
                     allocations: debugAlloc,
                 });
+                await this._publishChargingStationDiagnosticsFromAllocationPlan(tsAllocationState, wbList);
                 const tsWritePlanProductive = tsAllocationState && tsAllocationState.writePlanProductive ? tsAllocationState.writePlanProductive : null;
                 const tsWritePlanUsed = await this._executeChargingTsSetpointPlan(tsWritePlanProductive, wbList, debugAlloc);
                 const legacyFallbackReason = tsWritePlanProductive && tsWritePlanProductive.fallbackReason
@@ -6992,27 +7233,33 @@ if (components.length) {
                 // Ziel-Laden soll seine Priorität behalten: nicht in Round-Robin rotieren
                 if (w.goalActive) continue;
 
-                const arr = idxByStation.get(sk) || [];
+                // Round-Robin darf nur innerhalb fachlich gleichwertiger Ladepunkte
+                // rotieren. Andernfalls könnte ein Connector mit Priorität 200 vor einem
+                // Connector mit Priorität 100 oder ein Auto-Ladepunkt vor einem PV-Ladepunkt
+                // einsortiert werden. Station, Priorität, Ladezustand und Betriebsart bilden
+                // deshalb gemeinsam die Fairness-Gruppe.
+                const rrGroupKey = `${sk}|p:${Number.isFinite(Number(w.priority)) ? Number(w.priority) : 9999}|c:${w.charging ? 1 : 0}|m:${String(w.effectiveMode || 'auto')}`;
+                const arr = idxByStation.get(rrGroupKey) || [];
                 arr.push(i);
-                idxByStation.set(sk, arr);
+                idxByStation.set(rrGroupKey, arr);
             }
 
             const rrIntervalMs = 10 * 1000; // rotate at most every 10s (serienreif, weniger UI-Flattern)
-            for (const [sk, positions] of idxByStation.entries()) {
+            for (const [rrGroupKey, positions] of idxByStation.entries()) {
                 const n = positions.length;
                 if (n <= 1) continue;
 
-                const prev = this._stationRoundRobinOffset.get(sk);
+                const prev = this._stationRoundRobinOffset.get(rrGroupKey);
                 let offset = (typeof prev === 'number' && Number.isFinite(prev) ? prev : 0) % n;
 
-                const lastRot = this._stationRoundRobinLastRotateMs.get(sk);
+                const lastRot = this._stationRoundRobinLastRotateMs.get(rrGroupKey);
                 if (typeof lastRot !== 'number' || !Number.isFinite(lastRot) || lastRot <= 0) {
                     // first seen -> keep offset, start timer
-                    this._stationRoundRobinLastRotateMs.set(sk, now);
+                    this._stationRoundRobinLastRotateMs.set(rrGroupKey, now);
                 } else if ((now - lastRot) >= rrIntervalMs) {
                     offset = (offset + 1) % n;
-                    this._stationRoundRobinOffset.set(sk, offset);
-                    this._stationRoundRobinLastRotateMs.set(sk, now);
+                    this._stationRoundRobinOffset.set(rrGroupKey, offset);
+                    this._stationRoundRobinLastRotateMs.set(rrGroupKey, now);
                 }
 
                 if (offset > 0) {
@@ -7022,13 +7269,16 @@ if (components.length) {
                         sorted[positions[j]] = rotated[j];
                     }
                 }
-}
+            }
         }
 
 
         // MU3.1: expose allocation order for transparency
         for (let i = 0; i < sorted.length; i++) {
             const w = sorted[i];
+            // Die reife zentrale Runtime-Verteilung bleibt die einzige fachliche
+            // Reihenfolge. Der nachgelagerte TS-Guard darf nur begrenzen, nie neu sortieren.
+            w.allocationRank = i + 1;
             await this._queueState(`${w.ch}.allocationRank`, i + 1, true);
         }
         await this._queueState('chargingManagement.debug.sortedOrder', sorted.map(w => w.safe).join(','), true);
@@ -7850,12 +8100,20 @@ if (components.length) {
                 enabled: !!w.enabled,
                 connected: w.vehiclePlugged !== false,
                 priority: w.priority,
+                orderIndex: w.orderIndex || 0,
+                allocationRank: w.allocationRank || 0,
+                goalActive: !!w.goalActive,
+                goalFinishTs: w.goalFinishTs || 0,
+                goalUrgency: w.goalUrgency || 0,
+                goalDesiredW: w.goalDesiredW || 0,
+                goalOverdue: !!w.goalOverdue,
                 controlBasis: w.controlBasis,
                 chargerType: w.chargerType,
                 minPowerW: w.minPW,
                 maxPowerW: w.maxPW,
                 phaseCount: w.phases,
                 stationKey: w.stationKey || '',
+                stationMaxPowerW: (typeof w.stationMaxPowerW === 'number' && Number.isFinite(w.stationMaxPowerW)) ? w.stationMaxPowerW : 0,
                 connectorNo: w.connectorNo || 0,
                 rawTargetW: targetW,
                 rawTargetA: targetA,
@@ -7931,12 +8189,20 @@ if (components.length) {
                 enabled: !!w.enabled,
                 connected: w.vehiclePlugged !== false,
                 priority: w.priority,
+                orderIndex: w.orderIndex || 0,
+                allocationRank: w.allocationRank || 0,
+                goalActive: !!w.goalActive,
+                goalFinishTs: w.goalFinishTs || 0,
+                goalUrgency: w.goalUrgency || 0,
+                goalDesiredW: w.goalDesiredW || 0,
+                goalOverdue: !!w.goalOverdue,
                 controlBasis: w.controlBasis,
                 chargerType: w.chargerType,
                 minPowerW: w.minPW,
                 maxPowerW: w.maxPW,
                 phaseCount: w.phases,
                 stationKey: w.stationKey || '',
+                stationMaxPowerW: (typeof w.stationMaxPowerW === 'number' && Number.isFinite(w.stationMaxPowerW)) ? w.stationMaxPowerW : 0,
                 connectorNo: w.connectorNo || 0,
                 rawTargetW: 0,
                 rawTargetA: 0,
@@ -8078,13 +8344,13 @@ if (components.length) {
         }
 
 
-        const evcsControlReserveW = Math.max(0, Math.round(evcsActiveDemandReserveW));
-        const evcsControlPvReserveW = Math.max(0, Math.round(evcsActiveDemandPvReserveW));
-        const evcsControlPvIntentW = Math.max(0, Math.round(evcsActiveDemandPvIntentW));
+        let evcsControlReserveW = Math.max(0, Math.round(evcsActiveDemandReserveW));
+        let evcsControlPvReserveW = Math.max(0, Math.round(evcsActiveDemandPvReserveW));
+        let evcsControlPvIntentW = Math.max(0, Math.round(evcsActiveDemandPvIntentW));
         const evcsControlPendingPvIntentW = Math.max(0, Math.round(evcsPendingDemandPvIntentW));
         const evcsControlPendingDemandW = Math.max(0, Math.round(evcsPendingDemandTotalW));
-        const evcsControlTotalPvIntentW = Math.max(0, evcsControlPvIntentW + evcsControlPendingPvIntentW);
-        const evcsControlRemainingW = Number.isFinite(budgetW)
+        let evcsControlTotalPvIntentW = Math.max(0, evcsControlPvIntentW + evcsControlPendingPvIntentW);
+        let evcsControlRemainingW = Number.isFinite(budgetW)
             ? Math.max(0, Math.round(Number(budgetW) - evcsControlReserveW))
             : 0;
         try {
@@ -8126,6 +8392,7 @@ if (components.length) {
             mode,
             budgetMode: effectiveBudgetMode,
             budgetW,
+            budgetUnlimited: !Number.isFinite(budgetW),
             usedW: Number.isFinite(budgetW) ? usedW : totalTargetPowerW,
             remainingW: Number.isFinite(budgetW) ? remainingW : 0,
             totalPowerW: totalFreshActualPowerW,
@@ -8145,8 +8412,10 @@ if (components.length) {
             pausedByPeakShaving,
             staleMeter,
             staleBudget,
-            preferTsNativeAllocation: true,
-            tsNormalSourceLock: true,
+            // Produktiv wird nur der zuvor zentral verteilte Runtime-Plan verwendet.
+            // Der zweite TS-Native-Allocator bleibt damit ausserhalb des Feldpfads.
+            preferTsNativeAllocation: false,
+            tsNormalSourceLock: false,
             allowJsComparisonFallback: false,
             wallboxes: tsWallboxesForAllocation,
             allocations: debugAlloc,
@@ -8173,6 +8442,57 @@ if (components.length) {
             },
         });
         await this._publishChargingPhaseSelectionRuntimeStates(tsAllocationState && tsAllocationState.phasePlan ? tsAllocationState.phasePlan : null, wbList);
+        await this._publishChargingStationDiagnosticsFromAllocationPlan(tsAllocationState, wbList);
+
+        // Zentrale Reservierung und nachgelagerte Verbraucher müssen denselben finalen
+        // Mehrladepunkt-Plan sehen, der anschließend tatsächlich geschrieben wird. Der
+        // Abschluss-Guard kann Rohziele wegen Stationslimit, PV-Grant, Mindestleistung
+        // oder Quantisierung reduzieren; deshalb werden alle Summen erst hier verbindlich.
+        const finalAllocationMetrics = this._buildChargingFinalAllocationMetrics(tsAllocationState, wbList, activityThresholdW);
+        if (finalAllocationMetrics) {
+            totalTargetPowerW = finalAllocationMetrics.totalTargetPowerW;
+            totalTargetCurrentA = finalAllocationMetrics.totalTargetCurrentA;
+            usedW = finalAllocationMetrics.totalTargetPowerW;
+            remainingW = Number.isFinite(budgetW)
+                ? Math.max(0, Number(budgetW) - finalAllocationMetrics.totalTargetPowerW)
+                : remainingW;
+            evcsControlReserveW = finalAllocationMetrics.reserveW;
+            evcsControlPvReserveW = finalAllocationMetrics.pvReserveW;
+            evcsControlPvIntentW = finalAllocationMetrics.pvIntentW;
+            evcsControlTotalPvIntentW = Math.max(0, evcsControlPvIntentW + evcsControlPendingPvIntentW);
+            evcsControlRemainingW = Number.isFinite(budgetW)
+                ? Math.max(0, Math.round(Number(budgetW) - evcsControlReserveW))
+                : 0;
+            evcsActiveDemandWallboxes = finalAllocationMetrics.activeDemandWallboxes;
+
+            try {
+                if (budgetDebug && typeof budgetDebug === 'object') {
+                    budgetDebug.evcsReservedW = evcsControlReserveW;
+                    budgetDebug.evcsActiveDemandReserveW = evcsControlReserveW;
+                    budgetDebug.evcsActiveDemandPvReserveW = evcsControlPvReserveW;
+                    budgetDebug.evcsActiveDemandPvIntentW = evcsControlPvIntentW;
+                    budgetDebug.evcsTotalPvIntentW = evcsControlTotalPvIntentW;
+                    budgetDebug.evcsActiveDemandWallboxes = evcsActiveDemandWallboxes;
+                    budgetDebug.evcsFinalTargetPowerW = totalTargetPowerW;
+                    budgetDebug.evcsFinalTargetCurrentA = totalTargetCurrentA;
+                    budgetDebug.evcsFinalAllocationSource = 'ts-final-allocation-plan';
+                }
+                const budgetEntry = debugAlloc.find(a => a && a.type === 'budget');
+                if (budgetEntry && budgetEntry.details && typeof budgetEntry.details === 'object') {
+                    budgetEntry.details.evcsReservedW = evcsControlReserveW;
+                    budgetEntry.details.evcsActiveDemandReserveW = evcsControlReserveW;
+                    budgetEntry.details.evcsActiveDemandPvReserveW = evcsControlPvReserveW;
+                    budgetEntry.details.evcsActiveDemandPvIntentW = evcsControlPvIntentW;
+                    budgetEntry.details.evcsTotalPvIntentW = evcsControlTotalPvIntentW;
+                    budgetEntry.details.evcsActiveDemandWallboxes = evcsActiveDemandWallboxes;
+                    budgetEntry.details.evcsFinalTargetPowerW = totalTargetPowerW;
+                    budgetEntry.details.evcsFinalTargetCurrentA = totalTargetCurrentA;
+                    budgetEntry.details.evcsFinalAllocationSource = 'ts-final-allocation-plan';
+                }
+            } catch (_eFinalAllocationDiagnostics) {
+                // diagnostics only
+            }
+        }
 
         const tsWritePlanProductive = tsAllocationState && tsAllocationState.writePlanProductive ? tsAllocationState.writePlanProductive : null;
         const tsWritePlanUsed = await this._executeChargingTsSetpointPlan(

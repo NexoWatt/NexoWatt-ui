@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 5adf22bef85f0e9f8bb6fedb6f7546ce4edf142dc6558f298e3d87b291771556
+ * Original-Hash: 9358947b32024b8ec2806be32be196446a6f75c406113bf64703aabf9c9febe6
  */
 
 /**
@@ -139,8 +139,8 @@ const nativeInput = {
   preferTsNativeAllocation: true,
   tsNormalSourceLock: true,
   allowJsComparisonFallback: false,
-  budgetW: 6000,
-  remainingW: 6000,
+  budgetW: 3000,
+  remainingW: 3000,
   totalTargetPowerW: 3200,
   totalTargetCurrentA: 13.9,
 };
@@ -153,8 +153,8 @@ if (!nativePlan.warnings.includes('ts-native-allocation-active') || !nativePlan.
   console.error('[ts-charging-normal-source-lockdown] TS-native/Diagnose-only Warnungen fehlen.');
   process.exit(1);
 }
-if (!(nativePlan.totalTargetPowerW > input.totalTargetPowerW)) {
-  console.error('[ts-charging-normal-source-lockdown] TS-native Allocation darf nicht nur alte JS-Zielwerte übernehmen.');
+if (nativePlan.totalTargetPowerW !== 3000 || nativePlan.totalTargetPowerW > input.totalTargetPowerW) {
+  console.error('[ts-charging-normal-source-lockdown] TS-native Allocation respektiert Demand-Obergrenze oder Zentralbudget nicht.');
   process.exit(1);
 }
 const nativeComparison = allocation.compareChargingAllocationShadowPlan(nativeInput, nativePlan);

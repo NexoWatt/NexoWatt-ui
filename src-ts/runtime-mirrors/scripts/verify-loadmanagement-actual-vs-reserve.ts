@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b227d67a5d99c168c26c528532c87cafc5aabc2d0c9b28ca7813637755be4468
+ * Original-Hash: 6ebc69be9956e72f28f1f41f18b26ace5300b82c2aa65487ac2fb0de110fbfc8
  */
 
 /**
@@ -67,14 +67,21 @@ function must(file, needle){ const s=read(file); if(!s.includes(needle)){ consol
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function mustNot(file, needle){ const s=read(file); if(s.includes(needle)){ console.error(`[loadmanagement-actual-vs-reserve] Forbidden in ${file}: ${needle}`); process.exit(1); } }
-must('package.json', '"version": "0.8.66"');
+// Die Regression ist versionsunabhängig. Ein fest verdrahteter alter Release-String
+// würde jeden späteren, fachlich korrekten Patch fälschlich blockieren.
+const packageJson = JSON.parse(read('package.json'));
+if (!/^\d+\.\d+\.\d+$/.test(String(packageJson.version || ''))) {
+  console.error('[loadmanagement-actual-vs-reserve] package.json enthält keine gültige SemVer-Version.');
+  process.exit(1);
+}
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'totalFreshActualPowerW');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridEvcsActualForCapW');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridEvcsReserveIgnoredForCapW');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'gridBaseLoadRawW = gridW - gridEvcsActualForCapW');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', "chargingManagement.summary.totalReservedPowerW");
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', "actualW: evcsActualW");
-must('src-ts/runtime-executables/ems/modules/charging-management.ts', "pvAvailableState ? evcsControlPvReserveW : 0");
+must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'actualPvW: evcsControlPvReserveW');
+must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'Nicht an pvAvailableState koppeln');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', "reserveW: evcsReserveW");
 must('src-ts/runtime-executables/main.ts', 'actualW: await getOwn');
 must('src-ts/runtime-executables/main.ts', 'gridEvcsReserveIgnoredForCapW');

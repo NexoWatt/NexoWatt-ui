@@ -5,7 +5,8 @@ function read(p){ return fs.readFileSync(p, 'utf8'); }
 function must(file, needle, label = needle){ const s = read(file); if (!s.includes(needle)) { console.error(`[evcs-visual-online-state] missing ${label}: ${needle}`); process.exit(1); } }
 function mustNot(file, needle, label = needle){ const s = read(file); if (s.includes(needle)) { console.error(`[evcs-visual-online-state] forbidden ${label}: ${needle}`); process.exit(1); } }
 const evcs = 'src-ts/runtime-executables/www/evcs.ts';
-must('package.json', '"version": "0.8.66"', 'version 0.8.66');
+const pkgVersion = JSON.parse(read('package.json')).version;
+if (!/^\d+\.\d+\.\d+$/.test(String(pkgVersion || ''))) { console.error(`[$evcs-visual-online-state] invalid package version: ${pkgVersion}`); process.exit(1); }
 must(evcs, 'function _evcsBoolOrNull(value)', 'online bool normalizer');
 must(evcs, 'function _tileStateClass({ powerW, reason, active, regEnabled, online, status })', 'tile state signature includes online/status');
 must(evcs, "onlineState === false || r === 'OFFLINE' || offlineByStatus", 'offline class derived from online/reason/status');

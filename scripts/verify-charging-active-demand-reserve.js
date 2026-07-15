@@ -48,7 +48,7 @@ must(cm, 'function computePendingPvStartIntentW(', 'pending PV helper');
 must(cm, 'function computePendingPvStartTotalBudgetW(', 'pending total-budget helper');
 must(cm, 'status: w.connectorStatus', 'connector status reaches pending helper');
 must(cm, 'centralTotalGrantW: evcsPendingCentralTotalGrantW', 'pending intent uses central total grant during PV start hysteresis');
-must(cm, 'const evcsControlTotalPvIntentW = Math.max(0, evcsControlPvIntentW + evcsControlPendingPvIntentW);', 'active and waiting PV intent are combined');
+must(cm, 'let evcsControlTotalPvIntentW = Math.max(0, evcsControlPvIntentW + evcsControlPendingPvIntentW);', 'active and waiting PV intent are combined and can be recomputed from the final plan');
 must(cm, "chargingManagement.control.pvPendingDemandIntentW", 'pending demand diagnostic state');
 must(cm, "chargingManagement.control.pvCentralRemainingAfterEvcsW", 'central remaining PV diagnostic state');
 must(cm, 'const evcsReserveW = evcsControlReserveW;', 'central EMS reserve uses active demand');

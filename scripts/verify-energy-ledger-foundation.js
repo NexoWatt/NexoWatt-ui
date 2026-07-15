@@ -19,6 +19,31 @@ function match(rel, regex, msg) {
   }
 }
 
+/** Vergleicht Paketversionen numerisch und unterstützt damit auch Patch-Versionen ab 100. */
+function requirePackageVersionAtLeast(minVersion, message) {
+  const pkg = JSON.parse(read('package.json'));
+  const parse = value => {
+    const match = String(value || '').match(/^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/);
+    return match ? match.slice(1).map(Number) : null;
+  };
+  const actual = parse(pkg.version);
+  const minimum = parse(minVersion);
+  let valid = Boolean(actual && minimum);
+  if (valid) {
+    valid = false;
+    for (let index = 0; index < actual.length; index += 1) {
+      if (actual[index] === minimum[index]) continue;
+      valid = actual[index] > minimum[index];
+      break;
+    }
+    if (actual.every((part, index) => part === minimum[index])) valid = true;
+  }
+  if (!valid) {
+    console.error(`[energy-ledger] FEHLER: ${message || `Paketversion >= ${minVersion}`} (ist ${pkg.version || 'unbekannt'})`);
+    process.exit(1);
+  }
+}
+
 need('src-ts/runtime-executables/ems/modules/energy-ledger.ts', 'nexowatt.local-kwh-ledger.v2', 'Ledger-Schema v2');
 need('src-ts/runtime-executables/ems/modules/energy-ledger.ts', 'chargeKiosk.stations.*.lastSessionsByLpJson', 'Charge-Kiosk-Sessionquelle dokumentiert');
 need('src-ts/runtime-executables/ems/modules/energy-ledger.ts', 'OCPP, Modbus, MQTT', 'Hersteller-/Protokolloffenheit dokumentiert');
@@ -31,5 +56,5 @@ need('src-ts/runtime-executables/ems/module-manager.ts', "this._licenseAllowsApp
 need('src-ts/runtime-executables/www/ems-apps.ts', "id: 'energyLedger'", 'App-Center führt Local kWh Ledger');
 need('src-ts/runtime-executables/www/ems-apps.ts', 'schaltet keine Hardware', 'Installer-Hinweis: read-only');
 need('src-ts/runtime-executables/main.ts', "ensurePlainObj('energyLedger'", 'Default-Config energyLedger');
-match('package.json', /"version"\s*:\s*"0\.8\.(2[7-9]|[3-9][0-9])"/, 'Paketversion >=0.8.59');
+requirePackageVersionAtLeast('0.8.27', 'Paketversion >= 0.8.27');
 console.log('[energy-ledger] OK: Local kWh Ledger Grundlage/Export-Erweiterung ist statisch abgesichert.');

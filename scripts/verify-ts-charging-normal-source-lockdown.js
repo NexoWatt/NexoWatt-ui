@@ -87,8 +87,8 @@ const nativeInput = {
   preferTsNativeAllocation: true,
   tsNormalSourceLock: true,
   allowJsComparisonFallback: false,
-  budgetW: 6000,
-  remainingW: 6000,
+  budgetW: 3000,
+  remainingW: 3000,
   totalTargetPowerW: 3200,
   totalTargetCurrentA: 13.9,
 };
@@ -101,8 +101,8 @@ if (!nativePlan.warnings.includes('ts-native-allocation-active') || !nativePlan.
   console.error('[ts-charging-normal-source-lockdown] TS-native/Diagnose-only Warnungen fehlen.');
   process.exit(1);
 }
-if (!(nativePlan.totalTargetPowerW > input.totalTargetPowerW)) {
-  console.error('[ts-charging-normal-source-lockdown] TS-native Allocation darf nicht nur alte JS-Zielwerte übernehmen.');
+if (nativePlan.totalTargetPowerW !== 3000 || nativePlan.totalTargetPowerW > input.totalTargetPowerW) {
+  console.error('[ts-charging-normal-source-lockdown] TS-native Allocation respektiert Demand-Obergrenze oder Zentralbudget nicht.');
   process.exit(1);
 }
 const nativeComparison = allocation.compareChargingAllocationShadowPlan(nativeInput, nativePlan);

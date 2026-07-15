@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.99",
+    "version": "0.8.100",
     "news": {
+      "0.8.100": {
+        "de": "Version 0.8.100: Stabilisiert das Lademanagement für mehrere Ladepunkte. Gesamt- und PV-Budget, technische Mindestleistung, Strom-/Leistungsschritte sowie Stationslimits werden unmittelbar vor dem Geräte-Schreibpfad nochmals verbindlich geprüft. Prioritäten, Boost, Ziel-Laden, laufende Sessions und Stations-Round-Robin bleiben erhalten; Stationsdiagnosen zeigen jetzt exakt den final geschriebenen Ladeplan.",
+        "en": "Version 0.8.100: Stabilizes charging management for multiple charge points. Total and PV budgets, technical minimum power, current/power steps and station limits are now enforced again immediately before device setpoints are written. Priorities, boost, target charging, active sessions and station round-robin remain intact, while station diagnostics now reflect the exact final write plan."
+      },
       "0.8.99": {
         "de": "Version 0.8.99: Vereinheitlicht die PV-Verteilung vollständig über das zentrale EMS-Budget. EVCS reserviert auch einen gültigen PV-Start-Intent vor dem messbaren Ladebeginn, Speicher und Herstellerprofile erhalten nur das verbleibende Grant, und Thermik sowie Heizstab arbeiten anschließend ausschließlich mit dem Restbudget. Konflikte zwischen direkter PV-Messung, NVP-Einspeisung und laufenden flexiblen Lasten werden zentral aufgelöst.",
         "en": "Version 0.8.99: Unifies PV distribution completely through the central EMS budget. EVCS also reserves a valid PV start intent before measurable charging begins, storage and vendor profiles receive only the remaining grant, and thermal loads plus heating rods then work exclusively with the residual budget. Conflicts between direct PV metering, grid export and running flexible loads are resolved centrally."
@@ -26,10 +30,6 @@
       "0.8.90": {
         "de": "Version 0.8.90: Korrigiert den Wallbox-Speicherschutz herstellerübergreifend. Ladepunkte ohne Speicher-Mitnutzung verschieben jetzt das NVP-Ziel der Speicher-Eigenverbrauchsoptimierung, sodass der Speicher nur den Hausverbrauch ohne Wallbox abdeckt. Die Korrektur greift vor den Zielpfaden für signed/split-DPs, Sungrow, FENECON und E3/DC RSCP.",
         "en": "Version 0.8.90: Fixes wallbox storage protection across manufacturer profiles. Charge points without storage assist now shift the storage self-consumption NVP target so the battery only covers house load excluding the wallbox. The correction is applied before the signed/split, Sungrow, FENECON and E3/DC RSCP target paths."
-      },
-      "0.8.89": {
-        "de": "Version 0.8.89: Ergänzt das Herstellerprofil E3/DC RSCP für die Einzel-Speicherregelung. Der ioBroker.e3dc-rscp Adapter wird über EMS.SET_POWER_MODE und EMS.SET_POWER_VALUE angesteuert; optionale PowerLimits und Diagnose-States wurden ergänzt. Die E3/DC-spezifischen Datenpunkte sind nur beim E3/DC-Herstellerprofil sichtbar.",
-        "en": "Version 0.8.89: Adds the E3/DC RSCP manufacturer profile for single-storage control. The ioBroker.e3dc-rscp adapter is controlled via EMS.SET_POWER_MODE and EMS.SET_POWER_VALUE; optional power limits and diagnostic states were added. E3/DC-specific datapoints are only visible for the E3/DC manufacturer profile."
       }
     },
     "title": "NexoWatt UI",

@@ -1,3 +1,16 @@
+## 0.8.100
+
+- Lademanagement auf eine einzige produktive Mehrladepunkt-Allokation vereinheitlicht: Der reife zentrale Runtime-Plan bleibt für Budget, Betriebsarten, Hysterese, Rampen, Prioritäten und Stations-Round-Robin maßgeblich; der nachgelagerte TypeScript-Vertrag validiert und begrenzt ausschließlich den finalen Write-Plan.
+- Harte Abschlussinvarianten ergänzt: Summe aller Ladepunkte bleibt unter dem zentralen EVCS-Gesamtgrant, PV-/Min+PV-Anteile bleiben unter dem zentralen PV-Grant und jede Stationsgruppe bleibt unter ihrem konfigurierten Stationslimit.
+- Technische Mindestleistung korrigiert: Ein Ladepunkt erhält entweder `0 W` oder mindestens seine fahrbare Mindestleistung. Teilwerte unter 6 A beziehungsweise unter der konfigurierten Mindestleistung werden nicht mehr geschrieben.
+- Strom-/Leistungsquantisierung budgetfest gemacht: Sollwerte werden immer nach unten auf Geräte-Schritte quantisiert. Eine nachträgliche Anhebung auf Mindeststrom kann dadurch weder Gesamtbudget noch Stationslimit überschreiten.
+- Ladepunkt-Prioritäten vereinheitlicht: Kleinere Prioritätszahl wird zuerst bedient; Boost, aktives Ziel-/Deadline-Laden, laufende Session, Anschlussreihenfolge und die zustandsbehaftete Stations-Round-Robin-Reihenfolge bleiben vor dem finalen Write-Plan erhalten.
+- Betriebsarten getrennt abgesichert: `PV` nutzt ausschließlich den zentralen PV-Grant, `Min+PV` verwendet das Gesamtbudget nur für die technische Basis und PV nur für die Zusatzleistung; `Auto`/`Boost` bleiben am Gesamtbudget geführt.
+- Stationsdiagnose wird nach der finalen TypeScript-Prüfung neu veröffentlicht. `usedW`, `remainingW`, `binding`, `targetSumW` und `stationRemainingW` entsprechen damit exakt den anschließend geschriebenen Ladepunkt-Sollwerten.
+- Ein explizites zentrales Restbudget von `0 W` ist jetzt ein harter Stop. Der Abschluss-Guard kann diesen Wert nicht mehr als fehlendes Budget interpretieren und auf einen früheren Ladebedarf zurückfallen.
+- Neue Regression `test:charging-multipoint-station-budget` prüft mehrere AC-/DC-kompatible Zielpfade, Mindeststrom, Quantisierung, gemischte Modi, Prioritäten und Stationslimits gegen Budgetüberschreitung.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v402` erhöht.
+
 ## 0.8.99
 
 - Zentrale EMS-Budget-Orchestrierung vereinheitlicht: EVCS, Speicher, Thermik und Heizstab beziehen ihre PV- und Gesamtleistungsfreigaben jetzt über dieselbe Grant-/Reserve-Runtime. Die feste Regelreihenfolge lautet `Core → EVCS → Speicher → Thermik → Heizstab`.

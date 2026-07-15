@@ -11,7 +11,8 @@ const engineTs = 'src-ts/runtime-executables/ems/engine.ts';
 const cm = 'ems/modules/charging-management.js';
 const cmTs = 'src-ts/runtime-executables/ems/modules/charging-management.ts';
 const evcsTs = 'src-ts/runtime-executables/www/evcs.ts';
-must('package.json', '"version": "0.8.66"', 'version 0.8.66');
+const pkgVersion = JSON.parse(read('package.json')).version;
+if (!/^\d+\.\d+\.\d+$/.test(String(pkgVersion || ''))) { console.error(`[$evcs-online-id-depth] invalid package version: ${pkgVersion}`); process.exit(1); }
 for (const f of [main, mainTs]) {
   must(f, 'if (wb.onlineId) this.evcsIdToKey[wb.onlineId] = `evcs.${wb.index}.online`;', `${f} maps onlineId to evcs online mirror`);
   must(f, "online:        { type: 'boolean', role: 'indicator.reachable'", `${f} creates evcs.<n>.online state`);
