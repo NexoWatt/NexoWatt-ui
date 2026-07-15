@@ -1079,6 +1079,28 @@ class SpeicherRegelungModule extends BaseModule {
             return fallback;
         };
 
+        // Unabhaengiger PV-/Last-Feed-forward fuer den gemeinsamen NVP-Regelkreis.
+        // Er wird pro Policy mit deren NVP-Ziel aufgebaut und nur dann verwendet,
+        // wenn direkte, frische und zeitlich plausible PV-/Lastmessungen vorliegen.
+        // Der normale Regler addiert PV ausdruecklich nicht zur NVP-Differenz; damit
+        // bleibt der Feed-forward eine Ersatz-/Plausibilitaetsgroesse ohne Doppelzaehlung.
+        const buildStorageFeedForward = (targetNvpW) => this._buildIndependentPvLoadFeedForward({
+            nowMs: now,
+            staleMs: Math.max(staleMs, num(cfg.balanceFeedForwardMaxAgeMs, staleMs)),
+            maxSkewMs: Math.max(0, num(cfg.balanceFeedForwardMaxSkewMs, 15000)),
+            rawNvpW: nvpRawW,
+            nvpAgeMs: (typeof gridRawAge === 'number') ? gridRawAge : gridAge,
+            targetNvpW,
+            protectedEvcsLoadW: evcsStorageProtectedLoadW,
+            coupling: storageCoupling,
+            dcPvPowerW,
+            dcPvPowerAgeMs: dcPvPowerAge,
+        });
+        const balanceFeedForwardPlausibilityW = Math.max(
+            200,
+            num(cfg.balanceFeedForwardPlausibilityW, Math.max(1000, Math.max(0, num(cfg.maxDeltaWPerTick, 500)) * 2)),
+        );
+
         let feneconAcLoadMemo = null;
         /**
          * Code-Teil: Arrow-Funktion `getFeneconAcLoadTargetW`
@@ -1135,7 +1157,17 @@ class SpeicherRegelungModule extends BaseModule {
             : { active: false, configured: !!feneconHybridConfigured, farmBlocked: !!feneconHybridBlockedByFarm, mode: feneconHybridBlockedByFarm ? 'blocked-by-farm' : 'standard' };
 
         const sungrowHybridCtx = sungrowHybridActive
-            ? await this._buildSungrowHybridContext({ cfg, staleMs, readCacheNumber, gridW, gridRawW, protectedEvcsLoadW: evcsStorageProtectedLoadW })
+            ? await this._buildSungrowHybridContext({
+                cfg,
+                staleMs,
+                gridW,
+                gridRawW,
+                gridAgeMs: (typeof gridRawAge === 'number') ? gridRawAge : gridAge,
+                protectedEvcsLoadW: evcsStorageProtectedLoadW,
+                coupling: storageCoupling,
+                dcPvPowerW,
+                dcPvPowerAgeMs: dcPvPowerAge,
+            })
             : { active: false, configured: !!sungrowHybridConfigured, mode: 'standard' };
 
         if (feneconHybridActive) {
@@ -2040,6 +2072,7 @@ if (typeof soc === 'number') {
 						const lastTariffTargetW = (this._lastSource === 'tarif' && Number.isFinite(Number(this._lastTargetW)))
 							? Number(this._lastTargetW)
 							: 0;
+						const tariffFeedForward = buildStorageFeedForward(targetImportW);
 						const balance = this._buildActualAwareNvpBalance({
 							rawNvpW: nvpRawW,
 							fallbackNvpW: nvpCtrlW,
@@ -2063,6 +2096,16 @@ if (typeof soc === 'number') {
 							nvpFeedbackMaxAgeMs: staleMs,
 							feedbackMaxSkewMs: Math.max(0, num(cfg.balanceFeedbackMaxSkewMs, 5000)),
 							feedbackRequireAligned: false,
+							feedForwardUsable: tariffFeedForward.usable === true,
+							feedForwardTargetW: tariffFeedForward.targetW,
+							feedForwardExpectedActualW: tariffFeedForward.expectedActualW,
+							feedForwardPvW: tariffFeedForward.pvW,
+							feedForwardLoadW: tariffFeedForward.loadW,
+							feedForwardPvSource: tariffFeedForward.pvSource,
+							feedForwardLoadSource: tariffFeedForward.loadSource,
+							feedForwardReason: tariffFeedForward.reason,
+							feedForwardMeasurementSkewMs: tariffFeedForward.measurementSkewMs,
+							feedForwardPlausibilityW: balanceFeedForwardPlausibilityW,
 							stepW,
 						});
 						storageNvpBalanceDiag = { ...balance, policy: 'tarif' };
@@ -2238,6 +2281,7 @@ if (targetW === 0 && selfDischargeEnabled) {
     const lastBalanceW = getLastStorageBalanceTargetW();
     const lastWasPvBalance = (String(this._lastSource || '') === 'pv');
     const lastWasAnyBalance = lastWasSelf || lastWasPvBalance;
+    const selfFeedForward = buildStorageFeedForward(desiredNvpW);
     const balance = this._buildActualAwareNvpBalance({
         rawNvpW: nvpRawW,
         fallbackNvpW: nvpCtrlW,
@@ -2266,6 +2310,16 @@ if (targetW === 0 && selfDischargeEnabled) {
         nvpFeedbackMaxAgeMs: staleMs,
         feedbackMaxSkewMs: Math.max(0, num(cfg.balanceFeedbackMaxSkewMs, 5000)),
         feedbackRequireAligned: false,
+        feedForwardUsable: selfFeedForward.usable === true,
+        feedForwardTargetW: selfFeedForward.targetW,
+        feedForwardExpectedActualW: selfFeedForward.expectedActualW,
+        feedForwardPvW: selfFeedForward.pvW,
+        feedForwardLoadW: selfFeedForward.loadW,
+        feedForwardPvSource: selfFeedForward.pvSource,
+        feedForwardLoadSource: selfFeedForward.loadSource,
+        feedForwardReason: selfFeedForward.reason,
+        feedForwardMeasurementSkewMs: selfFeedForward.measurementSkewMs,
+        feedForwardPlausibilityW: balanceFeedForwardPlausibilityW,
         stepW,
     });
     storageNvpBalanceDiag = { ...balance, policy: 'eigenverbrauch' };
@@ -2301,10 +2355,14 @@ if (targetW === 0 && selfDischargeEnabled) {
     const heldDischargeCommandW = balance.holdingLastCommand && nextSignedW > 0
         ? Math.max(0, nextSignedW)
         : 0;
+    const feedForwardDischargeW = balance.feedForwardUsed && nextSignedW > 0
+        ? Math.max(0, nextSignedW)
+        : 0;
     const maxByDemandW = Math.max(
         0,
         protectedSelfImportW + measuredDischargeNowW + protectedSelfMarginW,
         heldDischargeCommandW,
+        feedForwardDischargeW,
     );
     if (Number.isFinite(maxByDemandW) && maxByDemandW >= 0) {
         dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
@@ -2319,12 +2377,15 @@ if (targetW === 0 && selfDischargeEnabled) {
     const heldChargeCommandW = balance.holdingLastCommand && nextSignedW < 0
         ? Math.max(0, -nextSignedW)
         : 0;
+    const feedForwardChargeW = balance.feedForwardUsed && nextSignedW < 0
+        ? Math.max(0, -nextSignedW)
+        : 0;
     const chargeBalanceCapWBase = exportRawW > 0
         ? Math.max(0, currentChargeForBalancingW + exportRawW + desiredNvpW)
         : ((typeof battChargeW === 'number' && importRawNowW > desiredNvpW)
             ? Math.max(0, currentChargeForBalancingW)
             : 0);
-    const chargeBalanceCapW = Math.max(chargeBalanceCapWBase, heldChargeCommandW);
+    const chargeBalanceCapW = Math.max(chargeBalanceCapWBase, heldChargeCommandW, feedForwardChargeW);
     if (nextSignedW < 0) {
         chargeDemandHardCapW = (typeof chargeDemandHardCapW === 'number')
             ? Math.min(chargeDemandHardCapW, chargeBalanceCapW)
@@ -2438,6 +2499,8 @@ if (targetW === 0 && selfDischargeEnabled) {
                 // tatsächlich Export zeigt; bei RAW=0/Import darf er keinen Netzbezug
                 // in die Batterie ziehen.
                 const lastBalanceWForCharge = getLastStorageBalanceTargetW();
+                const pvTargetNvpW = selfTargetGridW + evcsStorageProtectedNvpTargetShiftW + extraBias;
+                const pvFeedForward = buildStorageFeedForward(pvTargetNvpW);
                 const pvBalance = this._buildActualAwareNvpBalance({
                     rawNvpW: nvpRawW,
                     fallbackNvpW: (typeof selfNvpStabilizer.controlW === 'number') ? selfNvpStabilizer.controlW : nvpRawW,
@@ -2445,7 +2508,7 @@ if (targetW === 0 && selfDischargeEnabled) {
                     // Der Zero-Export-Bias wird als etwas hoeherer Zielbezug abgebildet.
                     // Dadurch entsteht mathematisch derselbe Ladeaufschlag, aber in
                     // derselben Istleistung-plus-NVP-Differenz-Regelung wie beim Entladen.
-                    targetNvpW: selfTargetGridW + evcsStorageProtectedNvpTargetShiftW + extraBias,
+                    targetNvpW: pvTargetNvpW,
                     deadbandW: selfImportThresholdW,
                     batteryPowerW: balanceBatteryPowerW,
                     batteryMeasuredW: balanceBatteryMeasuredW,
@@ -2469,6 +2532,16 @@ if (targetW === 0 && selfDischargeEnabled) {
                     nvpFeedbackMaxAgeMs: staleMs,
                     feedbackMaxSkewMs: Math.max(0, num(cfg.balanceFeedbackMaxSkewMs, 5000)),
                     feedbackRequireAligned: false,
+                    feedForwardUsable: pvFeedForward.usable === true,
+                    feedForwardTargetW: pvFeedForward.targetW,
+                    feedForwardExpectedActualW: pvFeedForward.expectedActualW,
+                    feedForwardPvW: pvFeedForward.pvW,
+                    feedForwardLoadW: pvFeedForward.loadW,
+                    feedForwardPvSource: pvFeedForward.pvSource,
+                    feedForwardLoadSource: pvFeedForward.loadSource,
+                    feedForwardReason: pvFeedForward.reason,
+                    feedForwardMeasurementSkewMs: pvFeedForward.measurementSkewMs,
+                    feedForwardPlausibilityW: balanceFeedForwardPlausibilityW,
                     stepW,
                 });
                 storageNvpBalanceDiag = { ...pvBalance, policy: 'pv' };
@@ -2709,11 +2782,27 @@ if (targetW === 0 && selfDischargeEnabled) {
             // Daher: Peak-Hysterese nur für peak-bezogene Quellen (LSK/Refill).
             const psRelevant = (source === 'lastspitze' || source === 'lastspitze_refill');
             const psHystW = psRelevant ? Math.max(0, num(psCfg.hysteresisW, 0)) : 0;
-            // NVP-Balancing (Eigenverbrauch-/Tarif-Entladung): hier wollen wir auch kleine Leistungen zulassen,
-            // sonst bleibt ein Rest-Netzbezug (z. B. 30–90 W) dauerhaft stehen.
-            // Erkennung: Quellen mit feiner Entlade-Regelung (Eigenverbrauch, Tarif, Gateway AC).
-            const isNvpBalancing = (targetW > 0) && (source === 'eigenverbrauch' || source === 'tarif' || source === 'fenecon' || source === 'fenecon-assist');
-            const zeroBandW = Math.max(psHystW, stepW, isNvpBalancing ? 20 : 100);
+            // NVP-Balancing gilt bidirektional. Die alte Erkennung betrachtete nur
+            // positive Entladung; kleine negative Lade-Sollwerte konnten deshalb vom
+            // allgemeinen 100-W-Deadband auf 0 W gesetzt werden. Da 0 W am Speicher
+            // ein echter Stop ist, bekommt jeder aktive NVP-Regelpfad dasselbe feine
+            // 20-W-Band – unabhaengig von Hersteller und Richtung.
+            const isNvpBalancing = !!(
+                targetW !== 0
+                && (
+                    (storageNvpBalanceDiag && storageNvpBalanceDiag.active === true)
+                    || source === 'eigenverbrauch'
+                    || source === 'pv'
+                    || source === 'tarif'
+                    || source === 'fenecon'
+                    || source === 'fenecon-assist'
+                    || source === 'sungrow-hybrid'
+                    || source === 'sungrow-assist'
+                )
+            );
+            const zeroBandW = isNvpBalancing
+                ? Math.max(psHystW, 20)
+                : Math.max(psHystW, stepW, 100);
 
             // Optional: Expert-Parameter. Wenn nicht gesetzt, Default 5s.
             const cfgHoldSec = Math.max(0, num(cfg.modeHoldSec, 0));
@@ -2738,10 +2827,15 @@ if (targetW === 0 && selfDischargeEnabled) {
                     : 0;
                 const preserveHeldNvpCommand = !!(
                     storageNvpBalanceDiag
-                    && storageNvpBalanceDiag.holdingLastCommand === true
+                    && (
+                        storageNvpBalanceDiag.holdingLastCommand === true
+                        || storageNvpBalanceDiag.feedForwardUsed === true
+                    )
                     && targetW !== 0
-                    && heldTargetW !== 0
-                    && Math.sign(targetW) === Math.sign(heldTargetW)
+                    && (
+                        (heldTargetW !== 0 && Math.sign(targetW) === Math.sign(heldTargetW))
+                        || storageNvpBalanceDiag.feedForwardUsed === true
+                    )
                 );
 
                 // Kleine neue Zielwerte um 0 => 0 (Anti-Flattern). Ein bereits
@@ -3017,38 +3111,35 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             const srcNorm = String(source || '').toLowerCase();
             const targetImportW = Math.max(0, num(cfg.sungrowTargetGridImportW, selfTargetGridW) + evcsStorageProtectedNvpTargetShiftW);
             const assistBufferW = Math.max(0, num(cfg.sungrowAssistBufferW, 150));
-            const dischargeOnlyOnImport = cfg.sungrowDischargeOnlyOnGridImport !== false;
-            const pvPassthrough = cfg.sungrowPvPassthroughEnabled !== false;
-            const zeroOnPvCoverage = cfg.sungrowZeroOnPvCoverage !== false;
+            const nvpDeadbandW = Math.max(0, Number(ctx.dischargeThresholdW) || selfImportThresholdW || 100);
             const nvpNowW = (typeof ctx.nvpW === 'number' && Number.isFinite(ctx.nvpW))
                 ? Number(ctx.nvpW)
                 : ((typeof gridRawW === 'number' && Number.isFinite(gridRawW)) ? Number(gridRawW) : Number(gridW || 0));
             const importNowW = Math.max(0, nvpNowW);
             const exportNowW = Math.max(0, -nvpNowW);
-            const pvCoversLoad = !!ctx.pvCoversLoad;
-            const pvActive = !!ctx.pvActive;
-            const isStorageSelfOrPv = srcNorm === 'eigenverbrauch' || srcNorm === 'pv' || srcNorm === 'idle' || srcNorm === 'sungrow-hybrid' || srcNorm === 'sungrow-assist';
+            const isStorageSelfOrPv = srcNorm === 'eigenverbrauch'
+                || srcNorm === 'pv'
+                || srcNorm === 'idle'
+                || srcNorm === 'sungrow-hybrid'
+                || srcNorm === 'sungrow-assist';
             const isCriticalPolicy = targetW !== 0 && (
-                srcNorm === 'lastspitze' ||
-                srcNorm === 'lastspitze_refill' ||
-                srcNorm === 'reserve' ||
-                srcNorm === 'tarif' ||
-                srcNorm === 'evcs'
+                srcNorm === 'lastspitze'
+                || srcNorm === 'lastspitze_refill'
+                || srcNorm === 'reserve'
+                || srcNorm === 'tarif'
+                || srcNorm === 'evcs'
             );
 
-            // Sungrow-Hybrid Feldfix 0.8.87:
-            // Das Herstellerprofil darf PV-/Tagesbetrieb nicht blind mit 0 W "freigeben",
-            // solange der NVP sichtbar außerhalb des Zielbandes liegt. Fuehrungsgroesse ist
-            // immer der Netzverknuepfungspunkt: neuer Sollwert = aktuelle Batterie-Istleistung
-            // plus aktuelle NVP-Abweichung. Damit werden sowohl Rest-Netzbezug (z. B. 700 W
-            // statt max. 100 W) als auch Rest-Export korrekt nachgeregelt. Beispiel Laden:
-            // Batterie laedt 2,9 kW und am NVP stehen noch 2,9 kW Export -> Ziel wird ca.
-            // 5,8 kW Laden, nicht erneut nur 2,9 kW oder 0 W.
-            const nvpDeadbandW = Math.max(0, Number(ctx.dischargeThresholdW) || selfImportThresholdW || 100);
+            // Sungrow nutzt denselben geschlossenen Regelkreis wie alle anderen
+            // Speicherprofile. Alte Sonderzweige, die bei PV-Deckung, kleinem Import
+            // oder erreichtem NVP-Ziel zyklisch 0 W geschrieben haben, sind bewusst
+            // entfernt. 0 W bleibt ausschliesslich ein echter Stop-Befehl, z. B. bei
+            // SoC-Grenze, fehlender NVP-Messung oder sicherem Richtungswechsel.
             const nvpControlForBalanceW = (selfNvpStabilizer && typeof selfNvpStabilizer.controlW === 'number' && Number.isFinite(selfNvpStabilizer.controlW))
                 ? Number(selfNvpStabilizer.controlW)
                 : nvpNowW;
             const lastSungrowBalanceW = getLastStorageBalanceTargetW();
+            const sungrowFeedForward = buildStorageFeedForward(targetImportW);
             const sungrowBalance = this._buildActualAwareNvpBalance({
                 rawNvpW: nvpNowW,
                 fallbackNvpW: nvpControlForBalanceW,
@@ -3066,9 +3157,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 batteryFeedbackHoldAgeMs: balanceFeedbackHoldMs,
                 lastTargetW: lastSungrowBalanceW,
                 lastTargetAllowed: isStorageBalanceSource(this._lastSource),
-                // Auch Sungrow darf bei erreichtem NVP-Ziel einen laufenden
-                // Nicht-Null-Sollwert nicht auf 0 W abwerfen. 0 W bleibt ein
-                // ausdruecklicher Stop bzw. eine Freigabe ohne aktive Vorgabe.
                 holdLastNonZeroInDeadband: true,
                 maxDischargeCorrectionW: maxDelta,
                 maxChargeCorrectionW: pvMaxDeltaCfg > 0 ? pvMaxDeltaCfg : maxDelta,
@@ -3076,161 +3164,145 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 nvpFeedbackMaxAgeMs: staleMs,
                 feedbackMaxSkewMs: Math.max(0, num(cfg.balanceFeedbackMaxSkewMs, 5000)),
                 feedbackRequireAligned: false,
+                feedForwardUsable: sungrowFeedForward.usable === true,
+                feedForwardTargetW: sungrowFeedForward.targetW,
+                feedForwardExpectedActualW: sungrowFeedForward.expectedActualW,
+                feedForwardPvW: sungrowFeedForward.pvW,
+                feedForwardLoadW: sungrowFeedForward.loadW,
+                feedForwardPvSource: sungrowFeedForward.pvSource,
+                feedForwardLoadSource: sungrowFeedForward.loadSource,
+                feedForwardReason: sungrowFeedForward.reason,
+                feedForwardMeasurementSkewMs: sungrowFeedForward.measurementSkewMs,
+                feedForwardPlausibilityW: balanceFeedForwardPlausibilityW,
                 stepW,
             });
-            storageNvpBalanceDiag = { ...sungrowBalance, policy: 'sungrow-hybrid' };
-            storageNvpBalanceRampManaged = storageNvpBalanceRampManaged || sungrowBalance.rampManaged;
-            const nvpErrorW = Number(sungrowBalance.nvpErrorW) || 0;
-            const importBalanceNeeded = nvpErrorW > nvpDeadbandW;
-            const exportBalanceNeeded = nvpErrorW < -nvpDeadbandW;
-            const nvpBalanceNeeded = !!(isStorageSelfOrPv && !isCriticalPolicy && (importBalanceNeeded || exportBalanceNeeded));
-            const nvpHoldNeeded = !!(
-                isStorageSelfOrPv
-                && !isCriticalPolicy
-                && !importBalanceNeeded
-                && !exportBalanceNeeded
-                && Math.abs(Number(sungrowBalance.targetW) || 0) > 0
-                && (
-                    sungrowBalance.holdingLastCommand === true
-                    || (isStorageBalanceSource(this._lastSource) && Math.abs(lastSungrowBalanceW) > 0)
-                )
-            );
-            const balanceBaseW = Number(sungrowBalance.baseW) || 0;
-            let nvpBalancedTargetW = Number(sungrowBalance.targetW) || 0;
-            let sungrowBalanceBaseW = balanceBaseW;
-            let sungrowNvpErrorW = nvpErrorW;
-            let sungrowNvpBalancedTargetW = nvpBalancedTargetW;
 
-            if (nvpBalanceNeeded || nvpHoldNeeded) {
-                const currentDischargeForCapW = Math.max(0, balanceBaseW);
-                const currentChargeForCapW = Math.max(0, -balanceBaseW);
-                const sungrowNonEvcsImportW = Math.max(0, importNowW - evcsStorageProtectedLoadW);
-                const dischargeCapW = Math.max(0, sungrowNonEvcsImportW + currentDischargeForCapW + (sungrowNonEvcsImportW > 0 ? assistBufferW : 0));
-                const chargeCapW = Math.max(0, exportNowW + currentChargeForCapW + assistBufferW);
+            let sungrowWriteMode = 'standard-policy';
+            if (isStorageSelfOrPv && !isCriticalPolicy) {
+                storageNvpBalanceDiag = { ...sungrowBalance, policy: 'sungrow-hybrid' };
+                storageNvpBalanceRampManaged = storageNvpBalanceRampManaged || sungrowBalance.rampManaged;
 
-                if (nvpBalancedTargetW > 0) {
-                    if (!nvpHoldNeeded && dischargeOnlyOnImport && importNowW <= (targetImportW + nvpDeadbandW)) {
-                        targetW = 0;
-                        source = 'sungrow-hybrid';
-                        reason = `Sungrow Hybrid ESS: Entladung blockiert, NVP im Zielband (${Math.round(importNowW)} W, Ziel ${Math.round(targetImportW)} W)`;
-                        sungrowWriteMode = 'write-zero-no-import';
-                    } else {
-                        targetW = clamp(nvpBalancedTargetW, 0, Math.min(maxDischargeW, dischargeCapW));
-                        if (targetW > 0) {
-                            source = 'sungrow-assist';
-                            reason = nvpHoldNeeded
-                                ? `Sungrow Hybrid ESS: NVP im Zielband – laufende Entladung ${Math.round(targetW)} W halten`
-                                : `Sungrow Hybrid ESS: NVP-Balancing Entladung ${Math.round(targetW)} W (Ist ${Math.round(balanceBaseW)} W + Korrektur ${Math.round(Number(sungrowBalance.appliedCorrectionW) || 0)} W, NVP-Fehler ${Math.round(nvpErrorW)} W)`;
-                            sungrowWriteMode = nvpHoldNeeded ? 'write-nvp-hold-discharge' : 'write-nvp-balance-discharge';
-                            dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
-                                ? Math.min(dischargeDemandHardCapW, dischargeCapW)
-                                : dischargeCapW;
-                            dischargeDemandHardCapReason = 'Sungrow-NVP-Balancing-Entlade-Cap (Ist/letzter Wert + NVP)';
-                        } else {
-                            source = 'sungrow-hybrid';
-                            reason = 'Sungrow Hybrid ESS: NVP-Balancing Entlade-Cap 0 W – Vorgabe 0';
-                            sungrowWriteMode = 'write-zero-assist-cap';
-                        }
-                    }
-                } else if (nvpBalancedTargetW < 0) {
+                const balancedTargetW = Number(sungrowBalance.targetW) || 0;
+                const currentDischargeW = sungrowBalance.feedbackUsed
+                    ? Math.max(0, Number(sungrowBalance.baseW) || 0)
+                    : 0;
+                const currentChargeW = sungrowBalance.feedbackUsed
+                    ? Math.max(0, -Number(sungrowBalance.baseW || 0))
+                    : 0;
+                const heldDischargeW = sungrowBalance.holdingLastCommand && balancedTargetW > 0
+                    ? Math.max(0, balancedTargetW)
+                    : 0;
+                const heldChargeW = sungrowBalance.holdingLastCommand && balancedTargetW < 0
+                    ? Math.max(0, -balancedTargetW)
+                    : 0;
+                const feedForwardDischargeW = sungrowBalance.feedForwardUsed && balancedTargetW > 0
+                    ? Math.max(0, balancedTargetW)
+                    : 0;
+                const feedForwardChargeW = sungrowBalance.feedForwardUsed && balancedTargetW < 0
+                    ? Math.max(0, -balancedTargetW)
+                    : 0;
+                const nonEvcsImportW = Math.max(0, importNowW - evcsStorageProtectedLoadW);
+                const dischargeCapW = Math.max(
+                    0,
+                    nonEvcsImportW + currentDischargeW + (nonEvcsImportW > 0 ? assistBufferW : 0),
+                    heldDischargeW,
+                    feedForwardDischargeW,
+                );
+                const chargeCapW = Math.max(
+                    0,
+                    exportNowW + currentChargeW + targetImportW + assistBufferW,
+                    heldChargeW,
+                    feedForwardChargeW,
+                );
+
+                if (balancedTargetW > 0) {
+                    // Bestehende globale Demand-/Budget-Caps bleiben auch im
+                    // Hersteller-Schreibpfad verbindlich. Das Sungrow-Profil darf
+                    // weder EVCS-Speicherschutz noch Peak-/SoC-/Anschlussgrenzen
+                    // durch eine nachgelagerte Neuberechnung wieder aufweiten.
+                    const upstreamDischargeCapW = (typeof dischargeDemandHardCapW === 'number' && Number.isFinite(dischargeDemandHardCapW))
+                        ? Math.max(0, dischargeDemandHardCapW)
+                        : maxDischargeW;
+                    const effectiveDischargeCapW = Math.min(maxDischargeW, dischargeCapW, upstreamDischargeCapW);
+                    targetW = clamp(balancedTargetW, 0, effectiveDischargeCapW);
+                    source = 'sungrow-assist';
+                    reason = sungrowBalance.holdingLastCommand
+                        ? `Sungrow Hybrid ESS: NVP im Zielband – Entladung ${Math.round(targetW)} W halten`
+                        : `Sungrow Hybrid ESS: geschlossener NVP-Regelkreis Entladen ${Math.round(targetW)} W (${String(sungrowBalance.baseSource || '')})`;
+                    sungrowWriteMode = sungrowBalance.holdingLastCommand
+                        ? 'write-nvp-hold-discharge'
+                        : (sungrowBalance.feedForwardUsed ? 'write-pv-load-feed-forward-discharge' : 'write-nvp-balance-discharge');
+                    dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
+                        ? Math.min(dischargeDemandHardCapW, dischargeCapW)
+                        : dischargeCapW;
+                    dischargeDemandHardCapReason = sungrowBalance.feedForwardUsed
+                        ? 'Sungrow direkter PV-/Last-Feed-forward-Cap'
+                        : 'Sungrow NVP-Balancing-Entlade-Cap';
+                } else if (balancedTargetW < 0) {
                     const maxChargeBySocW = (typeof soc === 'number' && soc >= hardChargeMaxSoc) ? 0 : maxChargeW;
-                    const chargeW = clamp(Math.abs(nvpBalancedTargetW), 0, Math.min(maxChargeBySocW, chargeCapW));
-                    if (chargeW > 0) {
-                        targetW = -chargeW;
-                        source = 'sungrow-assist';
-                        reason = nvpHoldNeeded
-                            ? `Sungrow Hybrid ESS: NVP im Zielband – laufende Beladung ${Math.round(chargeW)} W halten`
-                            : `Sungrow Hybrid ESS: NVP-Balancing Laden ${Math.round(chargeW)} W (Ist ${Math.round(balanceBaseW)} W + Korrektur ${Math.round(Number(sungrowBalance.appliedCorrectionW) || 0)} W, NVP-Fehler ${Math.round(nvpErrorW)} W)`;
-                        sungrowWriteMode = nvpHoldNeeded ? 'write-nvp-hold-charge' : 'write-nvp-balance-charge';
-                        chargeDemandHardCapW = (typeof chargeDemandHardCapW === 'number')
-                            ? Math.min(chargeDemandHardCapW, chargeCapW)
-                            : chargeCapW;
-                        chargeDemandHardCapReason = 'Sungrow-NVP-Balancing-Lade-Cap (Ist/letzter Wert + NVP)';
-                    } else {
-                        targetW = 0;
-                        source = 'sungrow-hybrid';
-                        reason = (typeof soc === 'number' && soc >= hardChargeMaxSoc)
-                            ? `Sungrow Hybrid ESS: NVP-Laden blockiert (SoC >= ${hardChargeMaxSoc}%)`
-                            : 'Sungrow Hybrid ESS: NVP-Lade-Cap 0 W – Vorgabe 0';
-                        sungrowWriteMode = 'write-zero-charge-cap';
-                    }
+                    const upstreamChargeCapW = (typeof chargeDemandHardCapW === 'number' && Number.isFinite(chargeDemandHardCapW))
+                        ? Math.max(0, chargeDemandHardCapW)
+                        : maxChargeW;
+                    const effectiveChargeCapW = Math.min(maxChargeBySocW, chargeCapW, upstreamChargeCapW);
+                    const chargeW = clamp(Math.abs(balancedTargetW), 0, effectiveChargeCapW);
+                    targetW = chargeW > 0 ? -chargeW : 0;
+                    source = 'sungrow-assist';
+                    reason = chargeW > 0
+                        ? (sungrowBalance.holdingLastCommand
+                            ? `Sungrow Hybrid ESS: NVP im Zielband – Beladung ${Math.round(chargeW)} W halten`
+                            : `Sungrow Hybrid ESS: geschlossener NVP-Regelkreis Laden ${Math.round(chargeW)} W (${String(sungrowBalance.baseSource || '')})`)
+                        : `Sungrow Hybrid ESS: Laden durch SoC-/Leistungsgrenze gestoppt`;
+                    sungrowWriteMode = chargeW > 0
+                        ? (sungrowBalance.holdingLastCommand
+                            ? 'write-nvp-hold-charge'
+                            : (sungrowBalance.feedForwardUsed ? 'write-pv-load-feed-forward-charge' : 'write-nvp-balance-charge'))
+                        : 'write-stop-charge-limit';
+                    chargeDemandHardCapW = (typeof chargeDemandHardCapW === 'number')
+                        ? Math.min(chargeDemandHardCapW, chargeCapW)
+                        : chargeCapW;
+                    chargeDemandHardCapReason = sungrowBalance.feedForwardUsed
+                        ? 'Sungrow direkter PV-/Last-Feed-forward-Cap'
+                        : 'Sungrow NVP-Balancing-Lade-Cap';
                 } else {
+                    // Ein Nullwert aus dem Balancing ist nur noch ein expliziter Stop
+                    // (insbesondere zero-before-reverse) oder ein echter Leerlauf ohne
+                    // zuvor aktiven NexoWatt-Sollwert. Die alten PV-Deckungs-Nullzweige
+                    // existieren nicht mehr.
                     targetW = 0;
                     source = 'sungrow-hybrid';
-                    reason = 'Sungrow Hybrid ESS: NVP-Balancing im Ziel – Vorgabe 0';
-                    sungrowWriteMode = 'write-zero-nvp-balanced';
-                }
-            } else if (pvPassthrough && zeroOnPvCoverage && pvCoversLoad && !isCriticalPolicy) {
-                // Nur wenn der NVP im Zielband ist, darf Sungrow im PV-deckenden Betrieb
-                // komplett intern weiterlaufen. Bei Rest-Import/-Export greift oben das
-                // NVP-Balancing und schreibt nicht blind 0 W.
-                targetW = 0;
-                source = 'sungrow-hybrid';
-                reason = `Sungrow Hybrid ESS: PV deckt Gebäudelast und NVP ist im Zielband – Lade-/Entladevorgaben 0`;
-                sungrowWriteMode = 'write-zero-pv-covered';
-            } else if (pvPassthrough && pvActive && srcNorm === 'pv' && targetW < 0) {
-                // PV-Laden nur dann nicht extern erzwingen, wenn am NVP kein relevanter
-                // Export mehr sichtbar ist. Rest-Export wird oben mit "aktuelle Ladung +
-                // NVP-Export" nachgeführt.
-                targetW = 0;
-                source = 'sungrow-hybrid';
-                reason = 'Sungrow Hybrid ESS: PV-Laden intern geführt, NVP im Zielband – externe Ladevorgabe 0';
-                sungrowWriteMode = 'write-zero-pv-internal';
-            } else if (targetW > 0 && (srcNorm === 'eigenverbrauch' || srcNorm === 'tarif')) {
-                if (dischargeOnlyOnImport && importNowW <= Math.max(targetImportW + nvpDeadbandW, Number(ctx.dischargeThresholdW) || selfImportThresholdW)) {
-                    targetW = 0;
-                    source = 'sungrow-hybrid';
-                    reason = `Sungrow Hybrid ESS: Entladung blockiert, kein echter NVP-Netzbezug (${Math.round(importNowW)} W)`;
-                    sungrowWriteMode = 'write-zero-no-import';
-                } else if (pvPassthrough && pvCoversLoad) {
-                    targetW = 0;
-                    source = 'sungrow-hybrid';
-                    reason = 'Sungrow Hybrid ESS: PV deckt die Last und NVP ist im Zielband – keine externe Entladung';
-                    sungrowWriteMode = 'write-zero-pv-covered';
-                } else {
-                    const sungrowAssistNonEvcsImportW = Math.max(0, importNowW - evcsStorageProtectedLoadW);
-                    const assistCapW = Math.max(0, sungrowAssistNonEvcsImportW - num(cfg.sungrowTargetGridImportW, selfTargetGridW) + (sungrowAssistNonEvcsImportW > 0 ? assistBufferW : 0));
-                    targetW = Math.min(Math.max(0, targetW), assistCapW);
-                    if (targetW > 0) {
-                        source = 'sungrow-assist';
-                        reason = `Sungrow Hybrid ESS: NVP-Assist Entladung ${Math.round(targetW)} W gegen Netzbezug ${Math.round(importNowW)} W`;
-                        sungrowWriteMode = 'write-nvp-assist';
-                        dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
-                            ? Math.min(dischargeDemandHardCapW, assistCapW)
-                            : assistCapW;
-                        dischargeDemandHardCapReason = 'Sungrow-NVP-Assist-Cap';
-                    } else {
-                        source = 'sungrow-hybrid';
-                        reason = 'Sungrow Hybrid ESS: NVP-Assist-Cap 0 W – Vorgabe 0';
-                        sungrowWriteMode = 'write-zero-assist-cap';
-                    }
+                    reason = String(sungrowBalance.mode || '').includes('zero-before-reverse')
+                        ? 'Sungrow Hybrid ESS: sicherer 0-W-Zwischenschritt vor Richtungswechsel'
+                        : 'Sungrow Hybrid ESS: kein aktiver externer Lade-/Entladesollwert';
+                    sungrowWriteMode = String(sungrowBalance.mode || '').includes('zero-before-reverse')
+                        ? 'write-stop-before-reverse'
+                        : 'idle-no-active-command';
                 }
             } else {
-                sungrowWriteMode = 'standard';
+                sungrowWriteMode = `policy-${srcNorm || 'standard'}`;
             }
 
-            this._sungrowHybridLastMode = sungrowWriteMode || 'standard';
+            this._sungrowHybridLastMode = sungrowWriteMode;
             await this._setSungrowHybridDiag({
                 active: true,
-                mode: (sungrowWriteMode || String(ctx.mode || 'standard')),
+                mode: String(sungrowBalance.mode || ctx.mode || 'nvp-closed-loop'),
                 reason,
-                writeMode: sungrowWriteMode || 'standard',
+                writeMode: sungrowWriteMode,
                 targetW,
-                pvW: ctx.pvW,
-                loadW: ctx.loadW,
+                pvW: sungrowFeedForward.pvW !== null && sungrowFeedForward.pvW !== undefined ? sungrowFeedForward.pvW : ctx.pvW,
+                loadW: sungrowFeedForward.loadW !== null && sungrowFeedForward.loadW !== undefined ? sungrowFeedForward.loadW : ctx.loadW,
                 nvpW: nvpNowW,
                 importW: importNowW,
                 exportW: exportNowW,
-                pvCoversLoad,
+                pvCoversLoad: !!ctx.pvCoversLoad,
                 thresholdW: ctx.thresholdW,
                 loadCoverReserveW: ctx.loadCoverReserveW,
                 dischargeThresholdW: ctx.dischargeThresholdW,
                 nvpTargetW: targetImportW,
                 nvpDeadbandW,
-                nvpErrorW: sungrowNvpErrorW,
-                nvpBalanceBaseW: sungrowBalanceBaseW,
-                nvpBalanceTargetW: sungrowNvpBalancedTargetW,
-                nvpBalanceNeeded,
+                nvpErrorW: sungrowBalance.nvpErrorW,
+                nvpBalanceBaseW: sungrowBalance.baseW,
+                nvpBalanceTargetW: sungrowBalance.targetW,
+                nvpBalanceNeeded: Math.abs(Number(sungrowBalance.nvpErrorW) || 0) > nvpDeadbandW,
             });
         }
 
@@ -3332,6 +3404,18 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 					measurementSkewMs: Number.isFinite(Number(storageNvpBalanceDiag.measurementSkewMs)) ? Math.round(Number(storageNvpBalanceDiag.measurementSkewMs)) : null,
 					holdingLastCommand: !!storageNvpBalanceDiag.holdingLastCommand,
 					heldTargetW: Number.isFinite(Number(storageNvpBalanceDiag.heldTargetW)) ? Math.round(Number(storageNvpBalanceDiag.heldTargetW)) : 0,
+					feedForwardAvailable: !!storageNvpBalanceDiag.feedForwardAvailable,
+					feedForwardUsed: !!storageNvpBalanceDiag.feedForwardUsed,
+					feedForwardTargetW: Number.isFinite(Number(storageNvpBalanceDiag.feedForwardTargetW)) ? Math.round(Number(storageNvpBalanceDiag.feedForwardTargetW)) : null,
+					feedForwardExpectedActualW: Number.isFinite(Number(storageNvpBalanceDiag.feedForwardExpectedActualW)) ? Math.round(Number(storageNvpBalanceDiag.feedForwardExpectedActualW)) : null,
+					feedForwardPvW: Number.isFinite(Number(storageNvpBalanceDiag.feedForwardPvW)) ? Math.round(Number(storageNvpBalanceDiag.feedForwardPvW)) : null,
+					feedForwardLoadW: Number.isFinite(Number(storageNvpBalanceDiag.feedForwardLoadW)) ? Math.round(Number(storageNvpBalanceDiag.feedForwardLoadW)) : null,
+					feedForwardPvSource: String(storageNvpBalanceDiag.feedForwardPvSource || ''),
+					feedForwardLoadSource: String(storageNvpBalanceDiag.feedForwardLoadSource || ''),
+					feedForwardReason: String(storageNvpBalanceDiag.feedForwardReason || ''),
+					feedForwardMeasurementSkewMs: Number.isFinite(Number(storageNvpBalanceDiag.feedForwardMeasurementSkewMs)) ? Math.round(Number(storageNvpBalanceDiag.feedForwardMeasurementSkewMs)) : null,
+					feedbackPlausibilityErrorW: Number.isFinite(Number(storageNvpBalanceDiag.feedbackPlausibilityErrorW)) ? Math.round(Number(storageNvpBalanceDiag.feedbackPlausibilityErrorW)) : null,
+					feedbackRejectedByFeedForward: !!storageNvpBalanceDiag.feedbackRejectedByFeedForward,
 				} : null,
                 soc: (typeof soc === 'number' && Number.isFinite(soc)) ? soc : null,
                 permissions: {
@@ -3718,6 +3802,234 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     }
 
     /**
+     * Code-Teil: _buildIndependentPvLoadFeedForward
+     * Zweck: Ermittelt einen absoluten Speicher-Sollwert aus direkt gemessener
+     * PV-Erzeugung und direkt gemessenem Gebaeudeverbrauch. Dieser Wert ist nur
+     * eine unabhaengige Ersatz-/Plausibilitaetsgroesse fuer den NVP-Regelkreis.
+     *
+     * Wichtig gegen Regel-Loops:
+     * - Die normale Regelgleichung bleibt Batterie-Ist + NVP-Differenz.
+     * - PV wird dort NICHT zusaetzlich addiert, weil sie im NVP bereits enthalten ist.
+     * - Fuer Feed-forward ist nur ein direkt gemappter Verbrauchswert erlaubt.
+     *   Ein aus PV + NVP + Speicher abgeleiteter Gebaeudeverbrauch wuerde den
+     *   Ausgang des Regelkreises wieder in seinen Eingang fuehren.
+     * - Bei aktivem EVCS-Speicherschutz wird Feed-forward nicht verwendet, weil
+     *   je nach Zaehlerkonzept nicht sicher erkennbar ist, ob der direkte Last-DP
+     *   die Wallbox bereits enthaelt. Der NVP-Regelkreis bleibt dann fuehrend.
+     */
+    _buildIndependentPvLoadFeedForward(ctx = {}) {
+        const finite = (v) => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
+        const now = finite(ctx.nowMs) ? Number(ctx.nowMs) : Date.now();
+        const staleMs = Math.max(1000, finite(ctx.staleMs) ? Number(ctx.staleMs) : 15000);
+        const maxSkewMs = Math.max(0, finite(ctx.maxSkewMs) ? Number(ctx.maxSkewMs) : 15000);
+        const targetNvpW = finite(ctx.targetNvpW) ? Number(ctx.targetNvpW) : 0;
+        const rawNvpW = finite(ctx.rawNvpW) ? Number(ctx.rawNvpW) : null;
+        const nvpAgeMs = finite(ctx.nvpAgeMs) ? Math.max(0, Number(ctx.nvpAgeMs)) : null;
+        const protectedEvcsLoadW = Math.max(0, finite(ctx.protectedEvcsLoadW) ? Number(ctx.protectedEvcsLoadW) : 0);
+        const adapter = this.adapter || {};
+
+        const getCacheRecord = (key) => {
+            try {
+                return adapter && adapter.stateCache ? adapter.stateCache[String(key || '').trim()] || null : null;
+            } catch {
+                return null;
+            }
+        };
+        const getCacheAgeMs = (key) => {
+            try {
+                if (adapter && typeof adapter._nwGetCacheAgeMs === 'function') {
+                    const age = adapter._nwGetCacheAgeMs(key, now);
+                    return finite(age) ? Math.max(0, Number(age)) : null;
+                }
+            } catch {
+                // Fallback auf den lokalen State-Cache.
+            }
+            const rec = getCacheRecord(key);
+            const ts = Number(rec && rec.ts);
+            return Number.isFinite(ts) && ts > 0 ? Math.max(0, now - ts) : null;
+        };
+        const getCacheValue = (key, fallback = null) => {
+            try {
+                if (adapter && typeof adapter._nwGetNumberFromCacheFresh === 'function') {
+                    const value = adapter._nwGetNumberFromCacheFresh(key, staleMs, fallback, now);
+                    return finite(value) ? Number(value) : fallback;
+                }
+            } catch {
+                // Fallback auf den lokalen State-Cache.
+            }
+            const rec = getCacheRecord(key);
+            const value = Number(rec && rec.value);
+            const age = getCacheAgeMs(key);
+            if (!Number.isFinite(value)) return fallback;
+            if (age !== null && age > staleMs) return fallback;
+            return value;
+        };
+        const getCacheString = (key) => {
+            const rec = getCacheRecord(key);
+            if (!rec || rec.value === null || rec.value === undefined) return '';
+            return String(rec.value);
+        };
+        const isMapped = (key) => {
+            try {
+                if (adapter && typeof adapter._nwHasMappedDatapoint === 'function') {
+                    return adapter._nwHasMappedDatapoint(key) === true;
+                }
+            } catch {
+                // Fallback auf config.datapoints.
+            }
+            try {
+                const dps = adapter && adapter.config && adapter.config.datapoints
+                    ? adapter.config.datapoints
+                    : {};
+                return !!String(dps && dps[key] ? dps[key] : '').trim();
+            } catch {
+                return false;
+            }
+        };
+
+        if (protectedEvcsLoadW > 0) {
+            return {
+                active: false,
+                usable: false,
+                reason: 'evcs-protected-load-active',
+                targetW: null,
+                expectedActualW: null,
+                loadW: null,
+                loadSource: '',
+                loadAgeMs: null,
+                pvW: null,
+                pvSource: '',
+                pvAgeMs: null,
+                measurementSkewMs: null,
+                aligned: false,
+                nvpW: rawNvpW,
+                nvpAgeMs,
+                targetNvpW,
+            };
+        }
+
+        let loadW = null;
+        let loadSource = '';
+        let loadAgeMs = null;
+        const directLoadKeys = ['consumptionTotal', 'housePower'];
+        for (const key of directLoadKeys) {
+            if (!isMapped(key)) continue;
+            const value = getCacheValue(key, null);
+            if (!finite(value) || Number(value) < 0) continue;
+            loadW = Math.max(0, Number(value));
+            loadSource = `mapped:${key}`;
+            loadAgeMs = getCacheAgeMs(key);
+            break;
+        }
+
+        // Das Derived-Mirror ist nur erlaubt, wenn seine eigene Quellen-Diagnose
+        // bestaetigt, dass es direkt aus einem gemappten Verbrauchs-DP stammt.
+        if (loadW === null) {
+            const derivedSource = getCacheString('derived.core.building.loadSource');
+            if (/^mapped:(consumptionTotal|housePower)$/i.test(derivedSource)) {
+                const value = getCacheValue('derived.core.building.loadTotalW', null);
+                if (finite(value) && Number(value) >= 0) {
+                    loadW = Math.max(0, Number(value));
+                    loadSource = `derived:${derivedSource}`;
+                    loadAgeMs = getCacheAgeMs('derived.core.building.loadTotalW');
+                }
+            }
+        }
+
+        const pvCandidates = [];
+        const pushPv = (value, source, ageMs, priority = 0) => {
+            if (!finite(value) || Number(value) < 0) return;
+            const age = finite(ageMs) ? Math.max(0, Number(ageMs)) : null;
+            if (age !== null && age > staleMs) return;
+            pvCandidates.push({ w: Math.max(0, Number(value)), source, ageMs: age, priority });
+        };
+
+        const coupling = String(ctx.coupling || 'ac').trim().toLowerCase();
+        if (coupling === 'dc' && finite(ctx.dcPvPowerW)) {
+            pushPv(ctx.dcPvPowerW, 'st.dcPvPowerW', ctx.dcPvPowerAgeMs, 100);
+        }
+        for (const key of ['pvPower', 'productionTotal']) {
+            if (!isMapped(key)) continue;
+            pushPv(getCacheValue(key, null), `mapped:${key}`, getCacheAgeMs(key), key === 'pvPower' ? 80 : 60);
+        }
+        try {
+            const psEntry = this.dp && typeof this.dp.getEntry === 'function' ? this.dp.getEntry('ps.pvW') : null;
+            if (psEntry && this.dp && typeof this.dp.getNumberFresh === 'function') {
+                pushPv(
+                    this.dp.getNumberFresh('ps.pvW', staleMs, null),
+                    'ps.pvW',
+                    typeof this.dp.getAgeMs === 'function' ? this.dp.getAgeMs('ps.pvW') : null,
+                    70,
+                );
+            }
+        } catch {
+            // Ein fehlender optionaler PV-DP deaktiviert nur Feed-forward.
+        }
+
+        pvCandidates.sort((a, b) => (b.priority - a.priority) || (b.w - a.w));
+        const selectedPv = pvCandidates.length ? pvCandidates[0] : null;
+        const pvW = selectedPv ? selectedPv.w : null;
+        const pvSource = selectedPv ? selectedPv.source : '';
+        const pvAgeMs = selectedPv ? selectedPv.ageMs : null;
+
+        const ages = [loadAgeMs, pvAgeMs, nvpAgeMs].filter((v) => finite(v)).map(Number);
+        const measurementSkewMs = ages.length >= 2 ? Math.max(...ages) - Math.min(...ages) : 0;
+        const nvpFresh = rawNvpW !== null && (nvpAgeMs === null || nvpAgeMs <= staleMs);
+        const loadFresh = loadW !== null && (loadAgeMs === null || loadAgeMs <= staleMs);
+        const pvFresh = pvW !== null && (pvAgeMs === null || pvAgeMs <= staleMs);
+        const aligned = measurementSkewMs <= maxSkewMs;
+        const usable = !!(nvpFresh && loadFresh && pvFresh && aligned);
+
+        if (!usable) {
+            let reason = 'missing-direct-pv-or-load';
+            if (!nvpFresh) reason = 'nvp-missing-or-stale';
+            else if (!loadFresh) reason = 'direct-load-missing-or-stale';
+            else if (!pvFresh) reason = 'direct-pv-missing-or-stale';
+            else if (!aligned) reason = 'pv-load-nvp-not-aligned';
+            return {
+                active: false,
+                usable: false,
+                reason,
+                targetW: null,
+                expectedActualW: null,
+                loadW,
+                loadSource,
+                loadAgeMs,
+                pvW,
+                pvSource,
+                pvAgeMs,
+                measurementSkewMs,
+                aligned,
+                nvpW: rawNvpW,
+                nvpAgeMs,
+                targetNvpW,
+            };
+        }
+
+        // NexoWatt-Vorzeichen: +W Entladen, -W Laden.
+        const targetW = loadW - pvW - targetNvpW;
+        const expectedActualW = loadW - pvW - rawNvpW;
+        return {
+            active: true,
+            usable: true,
+            reason: 'direct-pv-load-feed-forward',
+            targetW,
+            expectedActualW,
+            loadW,
+            loadSource,
+            loadAgeMs,
+            pvW,
+            pvSource,
+            pvAgeMs,
+            measurementSkewMs,
+            aligned,
+            nvpW: rawNvpW,
+            nvpAgeMs,
+            targetNvpW,
+        };
+    }
+
+    /**
      * Code-Teil: _buildActualAwareNvpBalance
      * Zweck: Berechnet den naechsten bidirektionalen Speicher-Sollwert aus der
      * echten Batterie-Istleistung und der aktuellen Abweichung am NVP.
@@ -3775,6 +4087,23 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const lastTargetAllowed = ctx.lastTargetAllowed === true;
         const holdLastNonZeroInDeadband = ctx.holdLastNonZeroInDeadband === true;
         const stepW = Math.max(0, finite(ctx.stepW) ? Number(ctx.stepW) : 0);
+        const feedForwardUsable = ctx.feedForwardUsable === true && finite(ctx.feedForwardTargetW);
+        const feedForwardTargetW = feedForwardUsable ? Number(ctx.feedForwardTargetW) : null;
+        const feedForwardExpectedActualW = feedForwardUsable && finite(ctx.feedForwardExpectedActualW)
+            ? Number(ctx.feedForwardExpectedActualW)
+            : null;
+        const feedForwardPvW = feedForwardUsable && finite(ctx.feedForwardPvW) ? Number(ctx.feedForwardPvW) : null;
+        const feedForwardLoadW = feedForwardUsable && finite(ctx.feedForwardLoadW) ? Number(ctx.feedForwardLoadW) : null;
+        const feedForwardPvSource = String(ctx.feedForwardPvSource || '');
+        const feedForwardLoadSource = String(ctx.feedForwardLoadSource || '');
+        const feedForwardReason = String(ctx.feedForwardReason || '');
+        const feedForwardMeasurementSkewMs = feedForwardUsable && finite(ctx.feedForwardMeasurementSkewMs)
+            ? Math.max(0, Number(ctx.feedForwardMeasurementSkewMs))
+            : null;
+        const feedForwardPlausibilityW = Math.max(
+            200,
+            finite(ctx.feedForwardPlausibilityW) ? Number(ctx.feedForwardPlausibilityW) : 1000,
+        );
         const measurementSkewMs = (batteryAgeMs !== null && nvpAgeMs !== null)
             ? Math.abs(batteryAgeMs - nvpAgeMs)
             : null;
@@ -3790,8 +4119,18 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             && (nvpAgeMs === null || nvpAgeMs <= nvpFeedbackMaxAgeMs)
         );
         const measurementsAligned = !feedbackRequireAligned || measurementSkewMs === null || measurementSkewMs <= feedbackMaxSkewMs;
-        const feedbackUsed = !!(batteryFresh && nvpFreshForFeedback && measurementsAligned);
-        const nvpW = feedbackUsed ? rawNvpW : fallbackNvpW;
+        const feedbackCandidateUsed = !!(batteryFresh && nvpFreshForFeedback && measurementsAligned);
+        const feedbackPlausibilityErrorW = feedbackCandidateUsed && feedForwardExpectedActualW !== null
+            ? batteryPowerW - feedForwardExpectedActualW
+            : null;
+        const feedbackRejectedByFeedForward = !!(
+            feedbackCandidateUsed
+            && feedForwardUsable
+            && feedbackPlausibilityErrorW !== null
+            && Math.abs(feedbackPlausibilityErrorW) > feedForwardPlausibilityW
+        );
+        const feedbackUsed = feedbackCandidateUsed && !feedbackRejectedByFeedForward;
+        const nvpW = (feedbackCandidateUsed || feedForwardUsable) ? rawNvpW : fallbackNvpW;
 
         if (nvpW === null) {
             return {
@@ -3825,6 +4164,19 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 outsideDeadband: false,
                 holdingLastCommand: false,
                 heldTargetW: 0,
+                feedForwardAvailable: feedForwardUsable,
+                feedForwardUsed: false,
+                feedForwardTargetW,
+                feedForwardExpectedActualW,
+                feedForwardPvW,
+                feedForwardLoadW,
+                feedForwardPvSource,
+                feedForwardLoadSource,
+                feedForwardReason,
+                feedForwardMeasurementSkewMs,
+                feedbackPlausibilityErrorW,
+                feedbackRejectedByFeedForward,
+                feedForwardPlausibilityW,
                 rampManaged: false,
             };
         }
@@ -3861,6 +4213,49 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         let mode = feedbackUsed ? 'feedback' : 'fallback';
         let holdingLastCommand = false;
         let heldTargetW = 0;
+        let feedForwardUsed = false;
+
+        /**
+         * Absoluten Feed-forward-Sollwert kontrolliert anfahren.
+         * Anders als die NVP-Korrektur ist `desiredW` bereits der vollstaendige
+         * Zielwert. Deshalb wird er niemals noch einmal auf Batterie-Ist oder den
+         * letzten Sollwert addiert. Der letzte Sollwert dient nur als Rampenanker.
+         */
+        const applyFeedForwardTarget = (desiredW, modePrefix) => {
+            const desired = Number(desiredW) || 0;
+            const anchor = lastTargetAllowed && Number.isFinite(lastTargetW) ? lastTargetW : 0;
+            const crossesDirection = anchor !== 0
+                && desired !== 0
+                && Math.sign(anchor) !== Math.sign(desired);
+            if (crossesDirection) {
+                return {
+                    targetW: 0,
+                    appliedCorrectionW: -anchor,
+                    mode: `${modePrefix}-zero-before-reverse`,
+                };
+            }
+
+            const reducesMagnitude = anchor !== 0
+                && Math.sign(anchor) === Math.sign(desired)
+                && Math.abs(desired) < Math.abs(anchor);
+            if (reducesMagnitude || desired === 0) {
+                return {
+                    targetW: desired,
+                    appliedCorrectionW: desired - anchor,
+                    mode: `${modePrefix}-fast-release`,
+                };
+            }
+
+            const delta = desired - anchor;
+            const positiveCap = maxDischargeCorrectionW > 0 ? maxDischargeCorrectionW : Math.abs(delta);
+            const negativeCap = maxChargeCorrectionW > 0 ? maxChargeCorrectionW : Math.abs(delta);
+            const applied = clamp(delta, -negativeCap, positiveCap);
+            return {
+                targetW: anchor + applied,
+                appliedCorrectionW: applied,
+                mode: `${modePrefix}-slew-limited`,
+            };
+        };
 
         if (!outsideDeadband) {
             // Eigenverbrauchs-/PV-Regelung: 0 W ist bei den konfigurierten Speichern
@@ -3876,6 +4271,16 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 holdingLastCommand = true;
                 heldTargetW = lastTargetW;
                 mode = feedbackUsed ? 'feedback-hold-last-command' : 'fallback-hold-last-command';
+            } else if (feedForwardUsable && feedForwardTargetW !== null && Math.abs(feedForwardTargetW) > 0) {
+                const ff = applyFeedForwardTarget(feedForwardTargetW, 'feed-forward-deadband');
+                targetW = ff.targetW;
+                rawTargetW = feedForwardTargetW;
+                baseW = 0;
+                baseSource = 'pv-load-feed-forward';
+                correctionW = feedForwardTargetW;
+                appliedCorrectionW = ff.appliedCorrectionW;
+                mode = ff.mode;
+                feedForwardUsed = true;
             // Standardpfade (z. B. Tarif) halten nur einen zur echten Istleistung
             // passenden Sollwert. Dadurch bleibt deren bisheriges Verhalten erhalten.
             } else if (feedbackUsed && lastTargetAllowed && Math.sign(lastTargetW) === Math.sign(baseW) && Math.abs(lastTargetW - baseW) <= holdToleranceW) {
@@ -3893,6 +4298,18 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 baseSource = 'deadband-no-feedback';
                 mode = 'fallback-deadband-zero';
             }
+        } else if (feedForwardUsable && (!feedbackUsed || feedbackRejectedByFeedForward)) {
+            const ff = applyFeedForwardTarget(feedForwardTargetW, feedbackRejectedByFeedForward
+                ? 'feed-forward-reject-feedback'
+                : 'feed-forward-no-feedback');
+            targetW = ff.targetW;
+            rawTargetW = feedForwardTargetW;
+            baseW = 0;
+            baseSource = 'pv-load-feed-forward';
+            correctionW = feedForwardTargetW;
+            appliedCorrectionW = ff.appliedCorrectionW;
+            mode = ff.mode;
+            feedForwardUsed = true;
         } else {
             correctionW = nvpErrorW;
             rawTargetW = baseW + correctionW;
@@ -3968,6 +4385,19 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             outsideDeadband,
             holdingLastCommand,
             heldTargetW,
+            feedForwardAvailable: feedForwardUsable,
+            feedForwardUsed,
+            feedForwardTargetW,
+            feedForwardExpectedActualW,
+            feedForwardPvW,
+            feedForwardLoadW,
+            feedForwardPvSource,
+            feedForwardLoadSource,
+            feedForwardReason,
+            feedForwardMeasurementSkewMs,
+            feedbackPlausibilityErrorW,
+            feedbackRejectedByFeedForward,
+            feedForwardPlausibilityW,
             // Auch der konservative Fallback begrenzt seinen Aufbau bereits selbst.
             // Deshalb darf die nachgelagerte Rampe niemals einen alten Sollwert wieder
             // in den aktuellen sicheren Balancing-Wert hineinziehen.
@@ -4015,13 +4445,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
             selfDischargeEnabled: storage.selfDischargeEnabled,
             // Herstellerprofile: generisch bleibt die normale Eigenverbrauchslogik,
-            // FENECON/OpenEMS nutzt No-Write/Assist, Sungrow Hybrid nutzt NVP-geführte
-            // 0-W-Kommandos im PV-deckenden Betrieb.
+            // FENECON/OpenEMS nutzt No-Write/Assist. Sungrow nutzt ab 0.8.96 denselben
+            // geschlossenen NVP-Regelkreis wie Generic/E3DC/Farm; alte PV-Deckungs-
+            // Nullkommandos werden nicht mehr ausgewertet.
             vendorProfile: storage.vendorProfile,
             sungrowHybridEnabled: storage.sungrowHybridEnabled,
-            sungrowPvPassthroughEnabled: storage.sungrowPvPassthroughEnabled,
-            sungrowZeroOnPvCoverage: storage.sungrowZeroOnPvCoverage,
-            sungrowDischargeOnlyOnGridImport: storage.sungrowDischargeOnlyOnGridImport,
             sungrowPvThresholdW: storage.sungrowPvThresholdW,
             sungrowLoadCoverReserveW: storage.sungrowLoadCoverReserveW,
             sungrowTargetGridImportW: storage.sungrowTargetGridImportW,
@@ -4081,6 +4509,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             // Installationen ihre bisherigen Tuningwerte nicht verlieren.
             balanceFeedbackMaxAgeMs: storage.balanceFeedbackMaxAgeMs,
             balanceFeedbackMaxSkewMs: storage.balanceFeedbackMaxSkewMs,
+            // Direkter PV-/Last-Feed-forward als herstellerunabhaengiger Fallback.
+            // Diese Expertenwerte sind absichtlich nicht im Kunden-UI sichtbar.
+            balanceFeedForwardMaxAgeMs: storage.balanceFeedForwardMaxAgeMs,
+            balanceFeedForwardMaxSkewMs: storage.balanceFeedForwardMaxSkewMs,
+            balanceFeedForwardPlausibilityW: storage.balanceFeedForwardPlausibilityW,
             selfMaxChargeW: storage.selfMaxChargeW,
             selfMaxDischargeW: storage.selfMaxDischargeW,
             capacityKWh: storage.capacityKWh,
@@ -4147,134 +4580,67 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     _isFeneconGridControlConfigured(cfg = {}) {
         return this._isFeneconHybridControlConfigured(cfg);
     }
-    async _buildSungrowHybridContext({ cfg = {}, staleMs = 15000, readCacheNumber = null, gridW = null, gridRawW = null, protectedEvcsLoadW = 0 } = {}) {
+    async _buildSungrowHybridContext({
+        cfg = {},
+        staleMs = 15000,
+        gridW = null,
+        gridRawW = null,
+        gridAgeMs = null,
+        protectedEvcsLoadW = 0,
+        coupling = 'ac',
+        dcPvPowerW = null,
+        dcPvPowerAgeMs = null,
+    } = {}) {
         const thresholdW = Math.max(0, num(cfg.sungrowPvThresholdW, 300));
         const loadCoverReserveW = Math.max(0, num(cfg.sungrowLoadCoverReserveW, 300));
         const dischargeThresholdW = Math.max(0, num(cfg.sungrowImportThresholdW, num(cfg.selfImportThresholdW, 100)));
         const targetGridImportW = Math.max(0, num(cfg.sungrowTargetGridImportW, num(cfg.selfTargetGridImportW, 100)));
-        const now = Date.now();
-
-        /**
-         * Code-Teil: readCache
-         * Zweck: Liest frische Mapping-/Derived-Werte fuer das Sungrow-Herstellerprofil.
-         * Zusammenhang: Sungrow Hybrid ESS wird nicht ueber Gebaeudelast blind gefuehrt;
-         * diese Werte dienen nur zur Entscheidung, ob PV die Last bereits deckt.
-         */
-        const readCache = (key) => {
-            const sid = String(key || '').trim();
-            if (!sid) return null;
-            try {
-                if (typeof readCacheNumber === 'function') {
-                    const n = readCacheNumber(sid, null);
-                    if (typeof n === 'number' && Number.isFinite(n)) return n;
-                }
-            } catch {
-                // ignore
-            }
-            return null;
-        };
-
-        const candidates = [];
-        const pushCandidate = (value, source) => {
-            const n = Number(value);
-            if (Number.isFinite(n)) candidates.push({ w: Math.max(0, Math.abs(n)), source });
-        };
-
-        // Bei Sungrow DC-/Hybrid-Anlagen ist der separate DC-/Hybrid-PV-DP die beste
-        // Quelle. Falls er fehlt, nutzen wir die zentralen Core-/PV-Mirrors als Kontext.
-        if (this.dp && String(cfg.coupling || 'ac').trim().toLowerCase() === 'dc' && String(cfg.dcPvPowerObjectId || '').trim()) {
-            pushCandidate(this.dp.getNumberFresh('st.dcPvPowerW', staleMs, null), 'st.dcPvPowerW');
-        }
-        pushCandidate(readCache('derived.core.pv.totalW'), 'derived.core.pv.totalW');
-        pushCandidate(readCache('derived.core.pv.dcW'), 'derived.core.pv.dcW');
-        pushCandidate(readCache('pvPower'), 'pvPower');
-        pushCandidate(readCache('productionTotal'), 'productionTotal');
-        if (this.dp) pushCandidate(this.dp.getNumberFresh('ps.pvW', staleMs, null), 'ps.pvW');
-
-        let pvW = 0;
-        let pvSource = 'missing';
-        for (const c of candidates) {
-            if (c.w >= pvW) {
-                pvW = c.w;
-                pvSource = c.source;
-            }
-        }
-
-        let loadW = 0;
-        let loadSource = 'missing';
-        const loadTotalDerivedW = readCache('derived.core.building.loadTotalW');
-        if (typeof loadTotalDerivedW === 'number' && Number.isFinite(loadTotalDerivedW) && loadTotalDerivedW >= 0) {
-            loadW = Math.max(0, loadTotalDerivedW);
-            loadSource = 'derived.core.building.loadTotalW';
-        } else {
-            const loadTotalMappedW = readCache('consumptionTotal');
-            if (typeof loadTotalMappedW === 'number' && Number.isFinite(loadTotalMappedW) && loadTotalMappedW >= 0) {
-                loadW = Math.max(0, loadTotalMappedW);
-                loadSource = 'consumptionTotal';
-            } else {
-                const loadRestDerivedW = readCache('derived.core.building.loadRestW');
-                if (typeof loadRestDerivedW === 'number' && Number.isFinite(loadRestDerivedW) && loadRestDerivedW >= 0) {
-                    const evTotalW = Math.max(0, Math.abs(num(readCache('evcs.totalPowerW'), 0)));
-                    let consumersTotalW = 0;
-                    for (let i = 1; i <= 10; i++) {
-                        const c = readCache(`consumer${i}Power`);
-                        if (typeof c === 'number' && Number.isFinite(c)) consumersTotalW += Math.abs(c);
-                    }
-                    loadW = Math.max(0, loadRestDerivedW + evTotalW + consumersTotalW);
-                    loadSource = 'derived.core.building.loadRestW+slots';
-                }
-            }
-        }
-
-        const protectedEvcsW = Math.max(0, Number.isFinite(Number(protectedEvcsLoadW)) ? Number(protectedEvcsLoadW) : 0);
-        const loadWIncludingEvcs = loadW;
-        if (protectedEvcsW > 0) {
-            loadW = Math.max(0, loadW - protectedEvcsW);
-            loadSource = loadSource && loadSource !== 'missing' ? `${loadSource}-evcsProtected` : 'evcsProtected';
-        }
-
         const nvpW = (typeof gridRawW === 'number' && Number.isFinite(gridRawW))
             ? Number(gridRawW)
             : ((typeof gridW === 'number' && Number.isFinite(gridW)) ? Number(gridW) : null);
         const importW = (typeof nvpW === 'number') ? Math.max(0, nvpW) : 0;
         const exportW = (typeof nvpW === 'number') ? Math.max(0, -nvpW) : 0;
+
+        // Das Herstellerprofil nutzt dieselbe direkte PV-/Lastquelle wie der
+        // gemeinsame Feed-forward-Regler. Dadurch wird fuer Diagnose und Regelung
+        // niemals ein aus PV + NVP + Speicher rueckgerechneter Lastwert verwendet.
+        const feedForward = this._buildIndependentPvLoadFeedForward({
+            nowMs: Date.now(),
+            staleMs,
+            maxSkewMs: Math.max(0, num(cfg.balanceFeedForwardMaxSkewMs, 15000)),
+            rawNvpW: nvpW,
+            nvpAgeMs: gridAgeMs,
+            targetNvpW: targetGridImportW,
+            protectedEvcsLoadW,
+            coupling,
+            dcPvPowerW,
+            dcPvPowerAgeMs,
+        });
+        const pvW = feedForward.pvW !== null && feedForward.pvW !== undefined
+            ? Math.max(0, Number(feedForward.pvW) || 0)
+            : 0;
+        const loadW = feedForward.loadW !== null && feedForward.loadW !== undefined
+            ? Math.max(0, Number(feedForward.loadW) || 0)
+            : 0;
         const pvActive = pvW >= thresholdW;
-
-        // PV deckt Last: Nur dann blocken wir die externe Entladung hart. Falls kein
-        // Lastwert vorliegt, gilt NVP nahe Zielbezug als Deckungsersatz; bei echtem
-        // Import ohne Lastkontext bleibt der NVP-Assist moeglich.
-        const loadKnown = loadW > 0;
-        const pvCoversLoad = !!(pvActive && (
-            (loadKnown && pvW >= (loadW + loadCoverReserveW)) ||
-            (!loadKnown && importW <= Math.max(targetGridImportW, dischargeThresholdW))
-        ));
-
-        let mode = 'nvp-control';
-        let writeMode = 'standard';
-        let reason = 'Sungrow Hybrid ESS: NVP-geführte Standardregelung';
-        if (pvCoversLoad) {
-            mode = 'pv-covered-zero';
-            writeMode = 'write-zero-pv-covered';
-            reason = 'Sungrow Hybrid ESS: PV deckt Gebäudelast – externe Speicheranforderung auf 0';
-        } else if (pvActive) {
-            mode = 'pv-active-nvp-assist';
-            writeMode = 'nvp-assist-if-import';
-            reason = 'Sungrow Hybrid ESS: PV aktiv, NVP entscheidet über Assist';
-        }
+        const loadKnown = feedForward.usable === true && loadW >= 0;
+        const pvCoversLoad = !!(loadKnown && pvActive && pvW >= (loadW + loadCoverReserveW));
 
         return {
             active: true,
             configured: true,
-            mode,
-            writeMode,
-            reason,
+            mode: feedForward.usable ? 'nvp-closed-loop-with-direct-feed-forward' : 'nvp-closed-loop',
+            writeMode: 'closed-loop-no-legacy-zero',
+            reason: feedForward.usable
+                ? 'Sungrow Hybrid ESS: NVP-Regelkreis mit direktem PV-/Last-Feed-forward'
+                : `Sungrow Hybrid ESS: NVP-Regelkreis, Feed-forward nicht nutzbar (${String(feedForward.reason || 'keine direkten Messwerte')})`,
             pvW,
-            pvSource,
+            pvSource: String(feedForward.pvSource || ''),
             thresholdW,
             loadW,
-            loadWIncludingEvcs,
-            protectedEvcsLoadW: protectedEvcsW,
-            loadSource,
+            loadWIncludingEvcs: loadW,
+            protectedEvcsLoadW: Math.max(0, Number(protectedEvcsLoadW) || 0),
+            loadSource: String(feedForward.loadSource || ''),
             loadCoverReserveW,
             loadKnown,
             pvActive,
@@ -4284,6 +4650,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             nvpW,
             importW,
             exportW,
+            feedForward,
         };
     }
 
@@ -4326,6 +4693,18 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await this._setIfChanged('speicher.regelung.balanceModus', active ? String(ctx.mode || '') : 'inactive');
         await this._setIfChanged('speicher.regelung.balanceLetztenSollwertGehalten', !!(active && ctx.holdingLastCommand));
         await this._setIfChanged('speicher.regelung.balanceGehaltenSollW', active ? n(ctx.heldTargetW, 0) : 0);
+        await this._setIfChanged('speicher.regelung.balanceFeedForwardVerfuegbar', !!(active && ctx.feedForwardAvailable));
+        await this._setIfChanged('speicher.regelung.balanceFeedForwardVerwendet', !!(active && ctx.feedForwardUsed));
+        await this._setIfChanged('speicher.regelung.balanceFeedForwardSollW', active ? n(ctx.feedForwardTargetW) : null);
+        await this._setIfChanged('speicher.regelung.balanceFeedForwardErwarteteIstW', active ? n(ctx.feedForwardExpectedActualW) : null);
+        await this._setIfChanged('speicher.regelung.balanceFeedForwardPvW', active ? n(ctx.feedForwardPvW) : null);
+        await this._setIfChanged('speicher.regelung.balanceFeedForwardLastW', active ? n(ctx.feedForwardLoadW) : null);
+        await this._setIfChanged('speicher.regelung.balanceFeedForwardPvQuelle', active ? String(ctx.feedForwardPvSource || '') : '');
+        await this._setIfChanged('speicher.regelung.balanceFeedForwardLastQuelle', active ? String(ctx.feedForwardLoadSource || '') : '');
+        await this._setIfChanged('speicher.regelung.balanceFeedForwardGrund', active ? String(ctx.feedForwardReason || '') : '');
+        await this._setIfChanged('speicher.regelung.balanceFeedForwardMessversatzMs', active ? n(ctx.feedForwardMeasurementSkewMs) : null);
+        await this._setIfChanged('speicher.regelung.balanceFeedbackPlausibilitaetsfehlerW', active ? n(ctx.feedbackPlausibilityErrorW) : null);
+        await this._setIfChanged('speicher.regelung.balanceFeedbackDurchFeedForwardVerworfen', !!(active && ctx.feedbackRejectedByFeedForward));
     }
 
     /**
@@ -5079,8 +5458,16 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await this._setIfChanged('speicher.regelung.schreibStatus', writeStatus);
 
         const writeSucceeded = writeResult === true || farmApplied;
+        const previousTargetW = Number.isFinite(Number(this._lastTargetW)) ? Number(this._lastTargetW) : null;
+        const targetChanged = writeSucceeded && (previousTargetW === null || Math.abs(previousTargetW - w) >= 0.5);
         this._lastTargetW = writeSucceeded ? w : 0;
-        this._lastTargetWriteMs = writeSucceeded ? Date.now() : 0;
+        // Dieser Zeitstempel beschreibt die letzte echte SollwertAENDERUNG, nicht
+        // jedes Watchdog-/Refresh-Schreiben desselben Werts. Nur so kann die
+        // Istleistungsprognose erkennen, ob ein Messwert tatsaechlich noch vor dem
+        // aktuellen Kommando lag. Wiederholtes Schreiben von z. B. 3000 W darf das
+        // Einschwingfenster nicht in jedem Tick von vorn starten.
+        if (writeSucceeded && targetChanged) this._lastTargetWriteMs = Date.now();
+        else if (!writeSucceeded) this._lastTargetWriteMs = 0;
         this._lastReason = String(reason || '');
         this._lastSource = String(source || '');
     }
@@ -5292,6 +5679,18 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.balanceModus', 'Speicher NVP-Balancing Modus', 'string', 'text', 'inactive');
         await mk('speicher.regelung.balanceLetztenSollwertGehalten', 'Letzten nicht-null NVP-Sollwert im Zielband gehalten', 'boolean', 'indicator', false);
         await mk('speicher.regelung.balanceGehaltenSollW', 'Im NVP-Zielband gehaltener Speicher-Sollwert (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.balanceFeedForwardVerfuegbar', 'Direkter PV-/Last-Feed-forward verfügbar', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.balanceFeedForwardVerwendet', 'Direkter PV-/Last-Feed-forward verwendet', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.balanceFeedForwardSollW', 'PV-/Last-Feed-forward Speicher-Sollwert (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.balanceFeedForwardErwarteteIstW', 'Aus PV/Last/NVP erwartete Speicher-Istleistung (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.balanceFeedForwardPvW', 'Direkte PV-Leistung im Feed-forward (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.balanceFeedForwardLastW', 'Direkter Gebäudeverbrauch im Feed-forward (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.balanceFeedForwardPvQuelle', 'PV-Quelle des Feed-forward', 'string', 'text', '');
+        await mk('speicher.regelung.balanceFeedForwardLastQuelle', 'Lastquelle des Feed-forward', 'string', 'text', '');
+        await mk('speicher.regelung.balanceFeedForwardGrund', 'Grund/Status des PV-/Last-Feed-forward', 'string', 'text', '');
+        await mk('speicher.regelung.balanceFeedForwardMessversatzMs', 'Messversatz PV/Last/NVP Feed-forward (ms)', 'number', 'value.interval', null);
+        await mk('speicher.regelung.balanceFeedbackPlausibilitaetsfehlerW', 'Plausibilitätsfehler Batterie-Ist zu PV-/Last-Bilanz (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.balanceFeedbackDurchFeedForwardVerworfen', 'Batterie-Istwert wegen PV-/Last-Plausibilität verworfen', 'boolean', 'indicator', false);
         await mk('speicher.regelung.pvBudgetAllocationMode', 'PV-Ueberschuss Prioritaetsmodus', 'string', 'text', '');
         await mk('speicher.regelung.pvBudgetRemainingBeforeStorageW', 'PV-Restbudget vor Speicher (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.pvBudgetStorageAvailableW', 'PV-Budget fuer Speicher (W)', 'number', 'value.power', 0);

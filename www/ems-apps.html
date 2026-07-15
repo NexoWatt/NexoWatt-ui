@@ -895,20 +895,8 @@
           <div class="nw-config-field-row" id="storageSungrowOptionsRow" style="display:none;">
             <div class="nw-config-field-label">Sungrow Hybrid ESS</div>
             <div class="nw-config-field-control nw-config-field-control--stack">
-              <label class="nw-config-checklabel" for="storageSungrowPvPassthrough">
-                <input id="storageSungrowPvPassthrough" class="nw-config-checkbox" type="checkbox" />
-                <span>PV-/Tagesbetrieb durch Sungrow intern priorisieren</span>
-              </label>
-              <label class="nw-config-checklabel" for="storageSungrowZeroOnPvCoverage">
-                <input id="storageSungrowZeroOnPvCoverage" class="nw-config-checkbox" type="checkbox" />
-                <span>Bei PV-Deckung ohne aktive NVP-Korrektur Sungrow intern freigeben</span>
-              </label>
-              <label class="nw-config-checklabel" for="storageSungrowDischargeOnlyOnImport">
-                <input id="storageSungrowDischargeOnlyOnImport" class="nw-config-checkbox" type="checkbox" />
-                <span>Entladen nur bei echtem NVP-Netzbezug erlauben</span>
-              </label>
               <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
-                Für Sungrow SH/RS/RT/MG-Hybrid-ESS: NexoWatt nutzt den NVP als Führungsgröße. Ein laufender NVP-Sollwert bleibt auch im Zielband aktiv und wird mit der gehaltenen Batterie-Istleistung weitergeführt; dadurch fällt die Vorgabe nicht mehr zwischen wenigen hundert Watt und mehreren Kilowatt hin und her. Nur wenn keine aktive NVP-Korrektur vorhanden ist, darf die Option Sungrow mit 0 W in seine interne PV-/Batterielogik freigeben. Bei echtem Netzbezug wird weiterhin NVP-begrenzt entladen.
+                Für Sungrow SH/RS/RT/MG-Hybrid-ESS verwendet NexoWatt einen geschlossenen NVP-Regelkreis: <b>neuer Sollwert = aktuelle Speicher-Istleistung + aktuelle NVP-Differenz</b>. Direkte PV-Erzeugung und ein direkt gemessener Gebäudeverbrauch dienen nur als unabhängiger Feed-forward bzw. Plausibilitätsprüfung, damit zeitversetzte Speicherwerte nicht zu 0-W- oder Sollwertsprüngen führen. PV wird nicht zusätzlich auf die NVP-Gleichung addiert. <b>0 W bleibt ausschließlich ein echter Stop-Befehl</b> bei Schutzgrenze oder sicherem Richtungswechsel.
               </div>
             </div>
           </div>

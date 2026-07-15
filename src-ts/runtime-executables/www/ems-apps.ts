@@ -120,9 +120,6 @@
     storageFeneconDayNoWrite: document.getElementById('storageFeneconDayNoWrite'),
     storageFeneconAssist: document.getElementById('storageFeneconAssist'),
     storageSungrowOptionsRow: document.getElementById('storageSungrowOptionsRow'),
-    storageSungrowPvPassthrough: document.getElementById('storageSungrowPvPassthrough'),
-    storageSungrowZeroOnPvCoverage: document.getElementById('storageSungrowZeroOnPvCoverage'),
-    storageSungrowDischargeOnlyOnImport: document.getElementById('storageSungrowDischargeOnlyOnImport'),
     storageE3dcOptionsRow: document.getElementById('storageE3dcOptionsRow'),
     storageE3dcRscpEnabled: document.getElementById('storageE3dcRscpEnabled'),
     storageE3dcZeroMode: document.getElementById('storageE3dcZeroMode'),
@@ -10732,7 +10729,6 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     updateStorageVendorProfileUi();
 
     const feneconModeActive = vendorProfile === 'fenecon-openems';
-    const sungrowModeActive = vendorProfile === 'sungrow-hybrid';
     const e3dcModeActive = vendorProfile === 'e3dc-rscp';
     if (els.storageFeneconAcMode) {
       els.storageFeneconAcMode.checked = feneconModeActive;
@@ -10748,15 +10744,6 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       // Der Assist bleibt optional, ist aber bei FENECON-Anlagen hilfreich, wenn
       // trotz interner Freigabe und ausreichend SoC dauerhaft Netzbezug stehen bleibt.
       els.storageFeneconAssist.checked = feneconModeActive && (stF.feneconAssistEnabled !== false);
-    }
-    if (els.storageSungrowPvPassthrough) {
-      els.storageSungrowPvPassthrough.checked = sungrowModeActive && (stF.sungrowPvPassthroughEnabled !== false);
-    }
-    if (els.storageSungrowZeroOnPvCoverage) {
-      els.storageSungrowZeroOnPvCoverage.checked = sungrowModeActive && (stF.sungrowZeroOnPvCoverage !== false);
-    }
-    if (els.storageSungrowDischargeOnlyOnImport) {
-      els.storageSungrowDischargeOnlyOnImport.checked = sungrowModeActive && (stF.sungrowDischargeOnlyOnGridImport !== false);
     }
     if (els.storageE3dcRscpEnabled) {
       els.storageE3dcRscpEnabled.checked = e3dcModeActive;
@@ -12182,12 +12169,12 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // schreibt und ob ein zeitverzoegerter NVP-Assist erlaubt ist.
     patch.storage.feneconDayNoWriteEnabled = !!(els.storageFeneconDayNoWrite && els.storageFeneconDayNoWrite.checked);
     patch.storage.feneconAssistEnabled = !!(els.storageFeneconAssist && els.storageFeneconAssist.checked);
-    // Sungrow Hybrid ESS: NexoWatt arbeitet NVP-gefuehrt und setzt im PV-deckenden
-    // Tagesbetrieb die externen Lade-/Entladevorgaben auf 0, damit die interne
-    // Sungrow-PV-/Batterielogik nicht durch eine Fremdvorgabe uebersteuert wird.
-    patch.storage.sungrowPvPassthroughEnabled = !!(els.storageSungrowPvPassthrough && els.storageSungrowPvPassthrough.checked);
-    patch.storage.sungrowZeroOnPvCoverage = !!(els.storageSungrowZeroOnPvCoverage && els.storageSungrowZeroOnPvCoverage.checked);
-    patch.storage.sungrowDischargeOnlyOnGridImport = !!(els.storageSungrowDischargeOnlyOnImport && els.storageSungrowDischargeOnlyOnImport.checked);
+    // Sungrow Hybrid ESS nutzt ab 0.8.96 fest den gemeinsamen geschlossenen
+    // NVP-Regelkreis. Die alten PV-Passthrough-/0-W-Schalter werden bewusst nicht
+    // mehr gespeichert, weil zyklische 0-W-Freigaben den Speicher stoppen konnten.
+    delete patch.storage.sungrowPvPassthroughEnabled;
+    delete patch.storage.sungrowZeroOnPvCoverage;
+    delete patch.storage.sungrowDischargeOnlyOnGridImport;
     // E3/DC RSCP: SET_POWER_MODE + SET_POWER_VALUE werden nur beim Herstellerprofil
     // E3/DC sichtbar/gespeichert; die Grundlogik bleibt weiterhin reine NVP-/Budget-
     // Eigenverbrauchsoptimierung.
@@ -14500,7 +14487,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
      * Code-Teil: _updateStorageVendorProfile
      * Zweck: Synchronisiert Herstellerprofil-Optionen direkt in currentConfig.
      * Zusammenhang: FENECON/OpenEMS nutzt No-Write/Assist; Sungrow Hybrid nutzt
-     * NVP-geführte 0-W-Kommandos im PV-deckenden Betrieb.
+     * fest den gemeinsamen NVP-Regelkreis ohne alte PV-Deckungs-0-W-Sonderzweige.
      * TypeScript: DOM-Checkboxen spaeter als HTMLInputElement typisieren.
      */
     const _updateStorageVendorProfile = () => {
@@ -14526,24 +14513,6 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         currentConfig.storage.feneconAssistEnabled = !!els.storageFeneconAssist.checked;
       }
 
-      if (els.storageSungrowPvPassthrough) {
-        if (profile === 'sungrow-hybrid' && !els.storageSungrowPvPassthrough.checked && currentConfig.storage.sungrowPvPassthroughEnabled === undefined) {
-          els.storageSungrowPvPassthrough.checked = true;
-        }
-        currentConfig.storage.sungrowPvPassthroughEnabled = !!els.storageSungrowPvPassthrough.checked;
-      }
-      if (els.storageSungrowZeroOnPvCoverage) {
-        if (profile === 'sungrow-hybrid' && !els.storageSungrowZeroOnPvCoverage.checked && currentConfig.storage.sungrowZeroOnPvCoverage === undefined) {
-          els.storageSungrowZeroOnPvCoverage.checked = true;
-        }
-        currentConfig.storage.sungrowZeroOnPvCoverage = !!els.storageSungrowZeroOnPvCoverage.checked;
-      }
-      if (els.storageSungrowDischargeOnlyOnImport) {
-        if (profile === 'sungrow-hybrid' && !els.storageSungrowDischargeOnlyOnImport.checked && currentConfig.storage.sungrowDischargeOnlyOnGridImport === undefined) {
-          els.storageSungrowDischargeOnlyOnImport.checked = true;
-        }
-        currentConfig.storage.sungrowDischargeOnlyOnGridImport = !!els.storageSungrowDischargeOnlyOnImport.checked;
-      }
 
       if (els.storageE3dcRscpEnabled) {
         els.storageE3dcRscpEnabled.checked = profile === 'e3dc-rscp';
@@ -14567,7 +14536,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       els.storageVendorProfile.addEventListener('change', _updateStorageVendorProfile);
       els.storageVendorProfile.addEventListener('input', _updateStorageVendorProfile);
     }
-    [els.storageFeneconAcMode, els.storageFeneconDayNoWrite, els.storageFeneconAssist, els.storageSungrowPvPassthrough, els.storageSungrowZeroOnPvCoverage, els.storageSungrowDischargeOnlyOnImport, els.storageE3dcRscpEnabled, els.storageE3dcZeroMode, els.storageE3dcAllowGridCharge, els.storageE3dcUsePowerLimits]
+    [els.storageFeneconAcMode, els.storageFeneconDayNoWrite, els.storageFeneconAssist, els.storageE3dcRscpEnabled, els.storageE3dcZeroMode, els.storageE3dcAllowGridCharge, els.storageE3dcUsePowerLimits]
       .filter(Boolean)
       .forEach((el) => {
         el.addEventListener('change', _updateStorageVendorProfile);

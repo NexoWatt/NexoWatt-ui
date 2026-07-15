@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 58598ba31e159195d395aaca57d03574b553ff4946ea2d85577b8be917424bb3
+ * Original-Hash: ff17e9491a6e8fb53022b39f705e6e472d370567faf8e242cfcc6fa391733148
  */
 
 /**
@@ -41,7 +41,8 @@
  * - kontrollierter Leistungsaufbau statt Sollwert-Spruengen,
  * - schnelle Ruecknahme bei Lastabwurf/Wolken,
  * - Richtungswechsel immer zuerst ueber 0 W,
- * - RAW-NVP bei frischer, zeitlich plausibler Batterie-Istleistung,
+ * - RAW-NVP bei frischer oder begrenzt gehaltener Batterie-Istleistung,
+ * - asynchrone Batterie-/NVP-Zeitstempel ohne Sollwert-Absturz,
  * - sicherer Fallback ohne Hochintegration alter Entlade-Sollwerte,
  * - keine zweite Rampe relativ zu einem alten Sollwert im produktiven Tick,
  * - 0 W bleibt ein ausdruecklicher Stop und wird nicht bei erreichtem NVP-Ziel
@@ -375,7 +376,20 @@ async function runTick({
     feedbackMaxAgeMs: 8000,
     feedbackMaxSkewMs: 5000,
   });
-  assert.strictEqual(skewed.feedbackUsed, false, 'stark zeitversetzte NVP-/Batteriewerte duerfen nicht gemeinsam bilanziert werden');
+  assert.strictEqual(skewed.feedbackUsed, true, 'asynchrone Speicher-/NVP-Werte muessen standardmaessig gemeinsam bilanziert werden');
+  assert.strictEqual(Math.round(skewed.targetW), 1000, 'Zeitversatz darf die Istleistung-plus-NVP-Regelung nicht auf den NVP-Einzelwert abwerfen');
+
+  const alignmentOptIn = buildBalance(mod, {
+    rawNvpW: 700,
+    fallbackNvpW: 700,
+    batteryPowerW: 500,
+    batteryAgeMs: 7000,
+    nvpAgeMs: 100,
+    feedbackMaxAgeMs: 8000,
+    feedbackMaxSkewMs: 5000,
+    feedbackRequireAligned: true,
+  });
+  assert.strictEqual(alignmentOptIn.feedbackUsed, false, 'explizit angeforderte Zeitgleichheit muss weiterhin als Experten-Sicherheitsoption funktionieren');
 
   // Produktiver Tick: Ein alter 5-kW-Sollwert darf den neuen, aus 500 W Ist +
   // 650 W NVP-Fehler (auf 500 W Korrektur begrenzt) berechneten Wert nicht durch
@@ -396,10 +410,10 @@ async function runTick({
     battAgeMs: 9000,
     lastTargetW: 71600,
   });
-  assert.strictEqual(staleTick.adapter._states.get('speicher.regelung.balanceFeedbackVerwendet').val, false, 'stales Istfeedback muss im produktiven Tick deaktiviert werden');
-  assert.strictEqual(staleTick.adapter._states.get('speicher.regelung.balanceIstLeistungW').val, null, 'nicht verwendete Istleistung darf nicht als 0-W-Messung erscheinen');
-  assert.strictEqual(staleTick.adapter._states.get('speicher.regelung.balanceBasisW').val, 0, 'Fallback-Rechenbasis muss separat sichtbar sein');
-  assert(staleTick.targetW >= 2500 && staleTick.targetW <= 2600, `staler Istwert darf alten Sollwert nicht hochintegrieren: ${staleTick.targetW}`);
+  assert.strictEqual(staleTick.adapter._states.get('speicher.regelung.balanceFeedbackVerwendet').val, true, '9 s alter Speicher-Istwert muss innerhalb der neuen Haltezeit weiter verwendet werden');
+  assert.strictEqual(staleTick.adapter._states.get('speicher.regelung.balanceFeedbackGehalten').val, true, 'gehaltener Istwert muss diagnostiziert werden');
+  assert.strictEqual(staleTick.adapter._states.get('speicher.regelung.balanceIstLeistungW').val, 3000, 'gehaltener echter Istwert muss als Regelbasis sichtbar bleiben');
+  assert(staleTick.targetW >= 3400 && staleTick.targetW <= 3500, `gehaltener Istwert plus begrenzte NVP-Korrektur erwartet: ${staleTick.targetW}`);
 
   const tickCharge = await runTick({
     gridW: -1000,

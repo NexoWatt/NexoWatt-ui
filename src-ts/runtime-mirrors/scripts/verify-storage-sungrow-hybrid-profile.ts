@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 91ffb81258e58862a8df30c75f702ecda2d07e15246bb3cd9a2e817c4560ca71
+ * Original-Hash: e04723948c5f420dfef748b4cefb8e2b87003724cf42d73a38ca660812cf5e89
  */
 
 /**
@@ -39,8 +39,9 @@
  * - Wenn der NVP ausserhalb des Zielbandes liegt, wird der alte/aktuelle
  *   Batteriefluss mit der neuen NVP-Abweichung verrechnet: neue Vorgabe =
  *   Batterie-Istleistung + (NVP-Ist - Ziel).
- * - Nur wenn der NVP im Zielband liegt, werden PV-/Tagesvorgaben auf 0 gesetzt
- *   und Sungrow darf intern weiterregeln.
+ * - Im NVP-Zielband bleibt eine wirksame Nicht-Null-Vorgabe erhalten; direkte
+ *   PV-/Lastmessungen duerfen einen unplausiblen 0-W-Istwert ersetzen.
+ * - Alte PV-Deckungszweige duerfen keinen zyklischen 0-W-Stop mehr schreiben.
  */
 const assert = require('assert');
 const fs = require('fs');
@@ -153,6 +154,10 @@ function makeAdapter(extraConfig = {}, stateCache = {}) {
       enablePeakShaving: false,
       enableGridConstraints: false,
       storageFarm: {},
+      datapoints: {
+        consumptionTotal: 'meter.buildingPowerW',
+        pvPower: 'inverter.pvPowerW',
+      },
       storage: {
         controlMode: 'targetPower',
         coupling: 'dc',
@@ -168,9 +173,6 @@ function makeAdapter(extraConfig = {}, stateCache = {}) {
         selfMinSocPct: 20,
         selfMaxSocPct: 100,
         vendorProfile: 'sungrow-hybrid',
-        sungrowPvPassthroughEnabled: true,
-        sungrowZeroOnPvCoverage: true,
-        sungrowDischargeOnlyOnGridImport: true,
         sungrowPvThresholdW: 300,
         sungrowLoadCoverReserveW: 300,
         sungrowImportThresholdW: 50,
@@ -185,10 +187,24 @@ function makeAdapter(extraConfig = {}, stateCache = {}) {
     async setObjectNotExistsAsync() {},
     async setStateAsync(id, val) { states.set(id, { val, ts: nowMs() }); },
     async getStateAsync(id) { return states.get(id) || null; },
+    _nwHasMappedDatapoint(key) {
+      return !!String(this.config.datapoints && this.config.datapoints[key] || '').trim();
+    },
     _nwGetNumberFromCache(id) {
       const rec = this.stateCache && this.stateCache[id];
       const n = Number(rec && rec.value);
       return Number.isFinite(n) ? n : null;
+    },
+    _nwGetCacheAgeMs(id, now = nowMs()) {
+      const rec = this.stateCache && this.stateCache[id];
+      if (!rec || !Number.isFinite(Number(rec.ts))) return null;
+      return Math.max(0, Number(now) - Number(rec.ts));
+    },
+    _nwGetNumberFromCacheFresh(id, maxAgeMs, fallback = null, now = nowMs()) {
+      const age = this._nwGetCacheAgeMs(id, now);
+      if (age !== null && Number.isFinite(Number(maxAgeMs)) && age > Number(maxAgeMs)) return fallback;
+      const value = this._nwGetNumberFromCache(id);
+      return value === null ? fallback : value;
     },
     _states: states,
   };
@@ -217,8 +233,11 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, p
   };
   if (battPowerW !== null) entries['st.batteryPowerW'] = makeEntry(battPowerW, 'battery.actualPower');
   const stateCache = {
+    consumptionTotal: { value: loadW, ts: nowMs() },
+    pvPower: { value: pvW, ts: nowMs() },
     'derived.core.pv.totalW': { value: pvW, ts: nowMs() },
     'derived.core.building.loadTotalW': { value: loadW, ts: nowMs() },
+    'derived.core.building.loadSource': { value: 'mapped:consumptionTotal', ts: nowMs() },
   };
   const dp = new FakeDp(entries);
   const adapter = makeAdapter(extraConfig, stateCache);
@@ -237,6 +256,11 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, p
   assert(ui.includes('patch.storage.vendorProfile = getStorageVendorProfile();'), 'UI muss das Herstellerprofil speichern');
   assert(control.includes('_buildSungrowHybridContext'), 'Backend muss Sungrow-Kontext berechnen');
   assert(control.includes('sungrowHybridPvDecktLast'), 'Backend muss PV-deckt-Last diagnostizieren');
+  assert(!control.includes('write-zero-pv-covered'), 'Alter Sungrow-PV-Deckungs-Nullzweig muss entfernt sein');
+  assert(!control.includes('write-zero-pv-internal'), 'Alter Sungrow-PV-intern-Nullzweig muss entfernt sein');
+  assert(!control.includes('write-zero-nvp-balanced'), 'Alter Sungrow-NVP-Nullzweig muss entfernt sein');
+  assert(!html.includes('id="storageSungrowZeroOnPvCoverage"'), 'Alter 0-W-PV-Deckungs-Schalter darf nicht mehr sichtbar sein');
+  assert(!html.includes('id="storageSungrowPvPassthrough"'), 'Alter Sungrow-Passthrough-Schalter darf nicht mehr sichtbar sein');
 
   // Kundenszenario aus dem Screenshot: PV ca. 17 kW, Last ca. 5,5 kW,
   // NVP zeigt Import, Batterie laedt. Sungrow darf hier nicht blind 0 W setzen:
@@ -272,12 +296,15 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, p
   assert.strictEqual(pvCharge.dp.lastWrite('st.targetDischargePowerW'), 0, 'Sungrow PV-Export darf keinen Entlade-Sollwert setzen');
   assert.strictEqual(pvCharge.adapter._states.get('speicher.regelung.sungrowHybridSchreibmodus').val, 'write-nvp-balance-charge', 'Schreibmodus muss NVP-Balancing Laden anzeigen');
 
-  // Wenn der NVP im Zielband ist, bleibt die alte interne Sungrow-Freigabe erhalten.
+  // NVP im Zielband, aber direkter PV-/Lastabgleich zeigt weiterhin eine deutliche
+  // Batterieladung. Ein unplausibler 0-W-Istwert darf deshalb keinen Stop ausloesen.
   const pvStable = await runTick({ gridW: 80, gridRawW: 80, pvW: 12000, loadW: 3000, battPowerW: 0 });
-  assert.strictEqual(pvStable.dp.lastWrite('st.targetChargePowerW'), 0, 'Sungrow NVP im Zielband muss Lade-Sollwert 0 schreiben');
-  assert.strictEqual(pvStable.dp.lastWrite('st.targetDischargePowerW'), 0, 'Sungrow NVP im Zielband muss Entlade-Sollwert 0 schreiben');
+  const stableCharge = pvStable.dp.lastWrite('st.targetChargePowerW');
+  assert(stableCharge >= 9000 && stableCharge <= 9100, `Sungrow muss im Zielband den direkten PV-/Last-Feed-forward nutzen statt 0 W: ${stableCharge}`);
+  assert.strictEqual(pvStable.dp.lastWrite('st.targetDischargePowerW'), 0, 'Sungrow Feed-forward-Laden darf keinen Entlade-Sollwert setzen');
+  assert.strictEqual(pvStable.adapter._states.get('speicher.regelung.sungrowHybridSchreibmodus').val, 'write-pv-load-feed-forward-charge', 'Schreibmodus muss direkten PV-/Last-Feed-forward anzeigen');
 
-  console.log('[storage-sungrow-hybrid-profile] OK: Sungrow Herstellerprofil bilanziert am NVP mit Ist-/Altwert plus aktueller Abweichung.');
+  console.log('[storage-sungrow-hybrid-profile] OK: Sungrow bilanziert am NVP, nutzt direkte PV/Last nur als Feed-forward und schreibt keine alten PV-Deckungs-0-W-Stopps mehr.');
 })().catch((err) => {
   console.error('[storage-sungrow-hybrid-profile] ERROR:', err && err.stack ? err.stack : err);
   process.exit(1);

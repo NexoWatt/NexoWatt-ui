@@ -1,9 +1,24 @@
+## 0.8.96
+
+- Speicherregelung: Direkter PV-/Gebäudelast-Feed-forward ergänzt. Die primäre NVP-Regelgleichung bleibt `Soll = Batterie-Ist + (NVP-Ist - NVP-Ziel)`; PV wird dort ausdrücklich nicht zusätzlich addiert und dadurch nicht doppelt gezählt.
+- Der Feed-forward verwendet ausschließlich frische, direkt gemappte PV- und Gebäudeverbrauchswerte. Eine aus PV + NVP + Speicher rückgerechnete Gebäudelast ist als Regelquelle gesperrt, damit kein zirkulärer Regel-Loop entsteht.
+- Plausibilitätsprüfung ergänzt: Meldet ein Speicher zeitweise `0 W` oder einen deutlich unplausiblen Istwert, obwohl die direkte PV-/Last-/NVP-Bilanz eine laufende Be- oder Entladung ergibt, übernimmt kontrolliert der absolute Feed-forward-Sollwert statt eines unberechtigten `0-W`-Stopps.
+- Sungrow Hybrid ESS vollständig auf den gemeinsamen geschlossenen NVP-Regelkreis umgestellt. Alte Zweige `write-zero-pv-covered`, `write-zero-pv-internal` und `write-zero-nvp-balanced` sowie die zugehörigen AppCenter-Schalter wurden entfernt.
+- `0 W` bleibt ausschließlich ein bewusster Stop bei Schutzgrenze, fehlender NVP-Messung oder sicherem Richtungswechsel. Im NVP-Zielband wird ein aktiver Nicht-Null-Sollwert weiter gehalten.
+- Hersteller- und Zielpfade vereinheitlicht: Generic signed-DP, getrennte Lade-/Entlade-DPs, Sungrow, E3/DC RSCP und Speicherfarm nutzen dieselbe Istleistungs-/NVP-/Feed-forward-Basis; FENECON-No-Write bleibt unverändert.
+- Sungrow respektiert nach der Hersteller-Neuberechnung weiterhin alle vorgeschalteten Demand-, EVCS-, Budget-, SoC- und Anschluss-Caps und kann diese nicht mehr nachträglich aufweiten.
+- Neue Diagnosen `speicher.regelung.balanceFeedForward*` sowie Plausibilitätsfehler/Feedback-Verwerfung ergänzt. Neue Regression `test:storage-pv-load-feedforward-zero-stop`; Sungrow- und asynchrone Hersteller-Tests auf die bereinigte Logik aktualisiert.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v398` erhöht.
+
 ## 0.8.95
 
-- Speicherregelung: Der gemeinsame NVP-Regelkreis nutzt bei asynchroner Telemetrie weiterhin den letzten echten physischen Batterie-Istwert als Regelbasis, statt zwischen Istleistung und reiner NVP-Differenz zu springen.
-- Die Regelgleichung bleibt herstellerübergreifend `Soll = Batterie-Istleistung + NVP-Abweichung`; eine begrenzte Einschwing-/Haltephase verhindert sowohl Sollwertabstürze auf wenige hundert Watt als auch wiederholtes Hochintegrieren derselben Abweichung.
-- Gilt für Generic signed-DP, getrennte Lade-/Entlade-DPs, Sungrow Hybrid, E3/DC RSCP, FENECON-Assist und Speicherfarm. Der FENECON-No-Write-Modus bleibt unverändert.
-- Neue Regression `test:storage-async-feedback-all-profiles` prüft zeitversetzte Batterie-/NVP-Werte über alle Herstellerpfade.
+- Speicherregelung/NVP-Balancing: Herstellerübergreifender Batterie-Istwert-Puffer ergänzt, damit asynchron aktualisierte NVP- und Speicherwerte den Sollwert nicht mehr zwischen wenigen hundert Watt und mehreren Kilowatt springen lassen.
+- Neue gemeinsame Regelbasis: Der letzte echte physische Speicher-Istwert bleibt standardmäßig bis zu 45 Sekunden verwendbar; NVP-Werte müssen weiterhin aktuell sein. Alte Sollwerte werden niemals als vermeintliche Istleistung übernommen.
+- Einschwingkompensation: Nach einer echten Sollwertänderung wird die Reaktion des Speichers kontrolliert abgewartet. Wiederholtes Schreiben desselben Werts startet die Einschwingzeit nicht erneut.
+- Im NVP-Zielband bleibt ein aktiver Nicht-Null-Sollwert stabil erhalten. `0 W` bleibt ausschließlich ein bewusster Stop-, Schutz- oder Richtungswechselbefehl.
+- Gilt für Generic signed-DP, getrennte Lade-/Entlade-DPs, Sungrow Hybrid ESS, E3/DC RSCP, Speicherfarm, Eigenverbrauchsoptimierung, PV-Überschussladung und NVP-geführte Tarifpfade. Der FENECON-No-Write-Modus bleibt unverändert.
+- AppCenter/Speicher: Parameter **Istwert halten (s)** ergänzt; Standard 45 Sekunden. Diagnosewerte `batteryPowerFeedback*` und erweiterte `balance*`-States zeigen Messwertalter, Halten/Prognose und aktive Regelbasis.
+- Neue Regression `test:storage-async-feedback-all-profiles` prüft signed, split, Sungrow, E3/DC und Speicherfarm sowie den Schutz gegen Hochintegration ohne echten Istwert.
 - Cache: Service-Worker-Cache auf `nexowatt-cache-v397` erhöht.
 
 ## 0.8.94

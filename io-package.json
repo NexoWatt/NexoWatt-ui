@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.95",
+    "version": "0.8.96",
     "news": {
+      "0.8.95": {
+        "de": "Version 0.8.95: Stabilisiert den herstellerübergreifenden Speicher-NVP-Regelkreis bei asynchronen Messwerten. Der letzte echte Batterie-Istwert bleibt zeitlich begrenzt als Regelbasis erhalten, Sollwertänderungen werden während der Anlagenreaktion kontrolliert fortgeführt und alte Sollwerte werden ohne physisches Feedback weiterhin nicht hochintegriert. Gilt für Generic, Split-DPs, Sungrow, E3/DC und Speicherfarm.",
+        "en": "Version 0.8.95: Stabilizes the cross-vendor storage grid-connection control loop with asynchronous measurements. The last real battery power reading is retained for a limited time as the control basis, target changes are carried forward in a controlled manner while the plant responds, and old targets are still never accumulated without physical feedback. Applies to generic, split datapoints, Sungrow, E3/DC and storage farm."
+      },
       "0.8.93": {
         "de": "Version 0.8.93: Berechnet Speicher-Lade- und Entladesollwerte aus frischer Batterie-Istleistung plus aktueller NVP-Differenz. Alte Sollwerte werden ohne gueltiges Istfeedback nicht mehr hochintegriert; kontrollierter Aufbau, schnelle Ruecknahme und 0-W-Zwischenstufe beruhigen die Eigenverbrauchsregelung.",
         "en": "Version 0.8.93: Calculates storage charge and discharge targets from fresh actual battery power plus the current grid-connection-point error. Old targets are no longer accumulated without valid feedback; controlled ramp-up, fast release and a zero-watt transition stabilize self-consumption control."
@@ -26,10 +30,6 @@
       "0.8.88": {
         "de": "Version 0.8.88: Legt alle Sungrow-Hybrid-Diagnose-States vor dem zyklischen Schreiben an, damit keine ioBroker-Logflut durch fehlende Objekte entsteht. Die Speicherregelung berücksichtigt getrennte Lade-/Entlade-Sollwertpfade jetzt auch einzeln und nutzt den signed-Sollwert als Fallback, wenn eine Richtung nicht separat gemappt ist.",
         "en": "Version 0.8.88: Creates all Sungrow hybrid diagnostic states before cyclic writes to avoid ioBroker log spam from missing objects. Storage control now supports separate charge/discharge target paths individually and uses the signed target as fallback when one direction is not mapped separately."
-      },
-      "0.8.87": {
-        "de": "Version 0.8.87: Korrigiert das Sungrow-Hybrid-ESS-NVP-Balancing. Die Speicherregelung verrechnet jetzt laufende Be-/Entladung mit der aktuellen NVP-Abweichung, damit Rest-Netzbezug über dem Zielband und Rest-Export nachgeregelt werden. PV-deckender Sungrow-Betrieb schreibt nur noch 0 W, wenn der NVP wirklich im Zielband liegt.",
-        "en": "Version 0.8.87: Fixes Sungrow Hybrid ESS NVP balancing. Storage control now combines the current charge/discharge power with the live NVP deviation so residual grid import above the target band and residual export are corrected. PV-covering Sungrow operation only writes 0 W when the NVP is actually within the target band."
       }
     },
     "title": "NexoWatt UI",

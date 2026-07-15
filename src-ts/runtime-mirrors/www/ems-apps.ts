@@ -18,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: cfe675734a23e7ac4c39f2c1d5eff8d37be604d79557fc0a07298802c33815e2
+ * Original-Hash: 2e3f38afb627f1cc0cb847242e7b0a0c230310c6cffd4b7d07b165d9704def7e
  */
 
 /**
@@ -163,6 +163,7 @@ interface EmsAppsEnergyFlowConfig {
 interface EmsAppsStorageConfig {
   controlMode?: 'targetPower' | 'selfConsumption' | 'disabled' | string;
   capacityKWh?: number;
+  balanceFeedbackHoldSec?: number;
   feneconAcMode?: boolean;
   feneconGridControlEnabled?: boolean;
   datapoints?: Record<string, EmsAppsDatapointId>;

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 25386cc0f7979249aaa7ea8149660430af921b38c06db8068adf3559d6d05045
+ * Original-Hash: 0068ce85025659e93b05f5e5dd6214b3a323c2787e6b1e7d091a74817ff56b05
  */
 
 /**
@@ -98,7 +98,7 @@ for (const file of [
   must(file, 'WICHTIGER Feldfix 0.8.81: Abgeleitete Gebäudelasten', 'Tarif-Kommentar gegen Gebaeudelast-Cap');
   must(file, 'WICHTIGER Feldfix 0.8.81: Der letzte eigene Sollwert und derived.loadTotalW', 'Eigenverbrauch-Kommentar gegen Sollwert-/Gebaeudelast-Cap');
   must(file, '_buildActualAwareNvpBalance', 'gemeinsamer Istleistungs-NVP-Balancing-Helfer');
-  must(file, "baseSource = 'battery-actual';", 'Balancing nutzt nur frische vertrauenswuerdige Batterie-Istleistung');
+  must(file, "baseSource = batteryFeedbackSource || 'battery-actual';", 'Balancing nutzt ausschließlich aufgelöstes physisches Batterie-Feedback als Istleistungsbasis');
   must(file, 'rawTargetW = baseW + correctionW;', 'Balancing addiert NVP-Differenz zur Istleistung');
     must(file, 'const measuredDemandCapW = Math.max(0, protectedTariffImportW + measuredDischargeNowW + protectedTariffMarginW);', 'Demand-Cap aus NVP plus echter Batterie-Istleistung und EVCS-Schutz');
   must(file, "'Tarif-NVP-Demand-Cap (konservativ ohne Batterie-Istleistung)'", 'Tarif-NVP-Cap Diagnose ohne Feedback');

@@ -1,4 +1,34 @@
-#!/usr/bin/env node
+// @ts-nocheck
+/**
+ * TypeScript-Parallelspiegel: scripts/verify-storage-async-feedback-all-profiles.js
+ *
+ * Zweck:
+ * Diese Datei ist die TypeScript-Vorbereitung der bestehenden JavaScript-Runtime-Datei.
+ * Sie wird noch nicht produktiv ausgeführt. Die produktive Quelle bleibt vorerst:
+ * scripts/verify-storage-async-feedback-all-profiles.js
+ *
+ * Zusammenhang:
+ * Der Spiegel hilft uns, die JS-Datei später schrittweise zu typisieren, zu testen und
+ * kontrolliert auf TypeScript umzustellen. Änderungen an der Runtime müssen aktuell noch
+ * in der JS-Datei erfolgen und danach mit diesem Spiegel synchronisiert werden.
+ *
+ * Wichtig für die Migration:
+ * - Diese Datei enthält vorübergehend @ts-nocheck.
+ * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
+ * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
+ *
+ * Original-Hash: 9e3d3a3b1cf63c47edb6ba1472199be30ae433dbec02fe94457e6a8061d7d4e3
+ */
+
+/**
+ * Code-Teil: Runtime-Spiegel der kompletten Datei
+ *
+ * Zweck:
+ * Dieser Abschnitt enthält den ursprünglichen JavaScript-Code als TypeScript-Parallelkopie.
+ * Einzelne Funktionen werden später pro Modul weiter typisiert; Dateien ohne eigene
+ * Funktionsdeklarationen bleiben trotzdem über diesen Dateikommentar dokumentiert.
+ */
+
 'use strict';
 /**
  * Regression 0.8.95: Herstellerunabhaengiger Speicher-Istwert-Puffer.
@@ -22,8 +52,30 @@
 const assert = require('assert');
 const { SpeicherRegelungModule } = require('../ems/modules/storage-control');
 
+/**
+ * Code-Teil: nowMs
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
 function nowMs() { return Date.now(); }
 
+/**
+ * Code-Teil: MutableDp
+ *
+ * Zweck:
+ * Automatisch markierter Klasse-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
 class MutableDp {
   constructor(entries = {}) {
     this.entries = entries;
@@ -83,6 +135,17 @@ class MutableDp {
   }
 }
 
+/**
+ * Code-Teil: entry
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
 function entry(value, objectId, ageMs = 0) {
   return {
     val: value,
@@ -91,6 +154,17 @@ function entry(value, objectId, ageMs = 0) {
   };
 }
 
+/**
+ * Code-Teil: makeAdapter
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
 function makeAdapter({ profile = 'generic', farm = false } = {}) {
   const states = new Map();
   const farmWrites = [];
@@ -162,6 +236,17 @@ function makeAdapter({ profile = 'generic', farm = false } = {}) {
   return adapter;
 }
 
+/**
+ * Code-Teil: makeDp
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
 function makeDp({ targetMode = 'signed', profile = 'generic', includeActual = true } = {}) {
   const entries = {
     'grid.powerW': entry(1800, 'grid.filtered'),
@@ -191,6 +276,17 @@ function makeDp({ targetMode = 'signed', profile = 'generic', includeActual = tr
   return new MutableDp(entries);
 }
 
+/**
+ * Code-Teil: getWrittenTarget
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
 function getWrittenTarget({ profile, targetMode, dp, adapter }) {
   if (adapter.config.enableStorageFarm) {
     const list = adapter._farmWrites;
@@ -201,6 +297,17 @@ function getWrittenTarget({ profile, targetMode, dp, adapter }) {
   return dp.lastWrite('st.targetPowerW');
 }
 
+/**
+ * Code-Teil: runPersistentDischargeProfile
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
 async function runPersistentDischargeProfile({ name, profile = 'generic', targetMode = 'signed', farm = false }) {
   const adapter = makeAdapter({ profile, farm });
   const dp = makeDp({ targetMode, profile, includeActual: !farm });
@@ -245,6 +352,17 @@ async function runPersistentDischargeProfile({ name, profile = 'generic', target
   }
 }
 
+/**
+ * Code-Teil: runChargeSequence
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
 async function runChargeSequence() {
   const adapter = makeAdapter({ profile: 'generic', farm: false });
   adapter.config.storage.pvEnabled = true;
@@ -274,6 +392,17 @@ async function runChargeSequence() {
   assert(held <= -3600, `Generic Laden: im Zielband muss die laufende Beladung gehalten werden: ${held}`);
 }
 
+/**
+ * Code-Teil: runNoFeedbackSafety
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
 async function runNoFeedbackSafety() {
   const adapter = makeAdapter({ profile: 'generic', farm: false });
   const dp = makeDp({ targetMode: 'signed', profile: 'generic', includeActual: false });
