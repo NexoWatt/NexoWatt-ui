@@ -259,10 +259,27 @@ class SpeicherRegelungModule extends BaseModule {
 
         /** @type {number|null} */
         this._lastTargetW = null;
+        /** @type {number} */
+        this._lastTargetWriteMs = 0;
         /** @type {string} */
         this._lastReason = '';
         /** @type {string} */
         this._lastSource = '';
+
+        // Herstellerunabhaengiger Batterie-Istwert-Puffer fuer das geschlossene
+        // NVP-Balancing. Viele Speicher/Adapter aktualisieren NVP und Batterie-
+        // Istleistung nicht im selben EMS-Tick. Der letzte valide Messwert bleibt
+        // deshalb fuer eine begrenzte Zeit als Regelbasis erhalten. Ein danach
+        // geschriebener Sollwert darf die Basis nur innerhalb eines eng begrenzten
+        // Prognosefensters fortschreiben; dadurch bleibt die Regelung ruhig, ohne
+        // den frueheren Sollwert-Hochintegrationsfehler wieder einzufuehren.
+        this._batteryBalanceFeedback = {
+            key: '',
+            objectId: '',
+            source: '',
+            measuredW: null,
+            sampleTs: 0,
+        };
 
         // --- Anti-Oszillation / Anti-PingPong (Charge <-> Discharge) ---
         // Hintergrund: Wenn mehrere Logiken (LSK/Peak, Eigenverbrauch, PV-Überschuss, Reserve)
@@ -486,10 +503,26 @@ class SpeicherRegelungModule extends BaseModule {
             await this._setIfChanged('speicher.regelung.requestGrund', 'Deaktiviert');
             await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({ ts: Date.now(), disabled: true, reason: 'Deaktiviert' }));
             await this._setStorageNvpBalanceDiag(null);
+            await this._setIfChanged('speicher.regelung.batteryPowerBalanceTrusted', false);
+            await this._setIfChanged('speicher.regelung.batteryPowerFeedbackMode', 'inactive');
+            await this._setIfChanged('speicher.regelung.batteryPowerFeedbackMeasuredW', null);
+            await this._setIfChanged('speicher.regelung.batteryPowerFeedbackBasisW', null);
+            await this._setIfChanged('speicher.regelung.batteryPowerFeedbackAgeMs', null);
+            await this._setIfChanged('speicher.regelung.batteryPowerFeedbackHeld', false);
+            await this._setIfChanged('speicher.regelung.batteryPowerFeedbackPredicted', false);
+            await this._setIfChanged('speicher.regelung.batteryPowerFeedbackPredictionDeltaW', 0);
             await this._setIfChanged('speicher.regelung.pvBudgetAllocationMode', '');
             await this._setIfChanged('speicher.regelung.pvBudgetRemainingBeforeStorageW', 0);
             await this._setIfChanged('speicher.regelung.pvBudgetStorageAvailableW', 0);
             await this._setIfChanged('speicher.regelung.pvBudgetReservedW', 0);
+
+            // Interne Sollwertprognose beim Deaktivieren verwerfen. Es wird dabei
+            // bewusst nichts an den Speicher geschrieben; nur die lokale Regel-
+            // erinnerung wird geloescht, damit ein spaeteres Reaktivieren nicht mit
+            // einem alten Kommando als vermeintlicher Istleistung startet.
+            this._lastTargetW = 0;
+            this._lastTargetWriteMs = 0;
+            this._lastSource = 'aus';
 
             // Hybrid-/Gateway-Priorität: Bei deaktivierter Speicherregelung nicht zyklisch auf den
             // Batterie-Sollleistungs-DP schreiben. Dadurch kann das Gateway nach seinem Watchdog
@@ -681,9 +714,25 @@ class SpeicherRegelungModule extends BaseModule {
         // für Ist- UND Sollleistung mapped (z. B. beide auf Register 706), würde die Regelung
         // "ihre eigene Vorgabe" als Messwert lesen und dadurch massiv überschwingen.
         // -> Deshalb ignorieren wir st.batteryPowerW, wenn er auf das gleiche Objekt wie st.targetPowerW zeigt.
-        let battPowerW = this.dp ? this.dp.getNumberFresh('st.batteryPowerW', staleMs, null) : null;
+        // Schutz-/Cap-Pfade verwenden weiterhin nur den innerhalb `staleMs`
+        // frischen Istwert (`battPowerW`). Fuer das geschlossene NVP-Balancing
+        // lesen wir parallel den letzten rohen Messwert (`battPowerObservedW`).
+        // Dieser darf spaeter ueber einen begrenzten, herstellerunabhaengigen
+        // Feedback-Puffer gehalten werden, ohne stale Werte pauschal fuer alle
+        // Sicherheitsentscheidungen freizugeben.
+        let battPowerObservedW = this.dp ? this.dp.getNumber('st.batteryPowerW', null) : null;
         let battPowerAge = this.dp ? (this.dp.getEntry('st.batteryPowerW') ? this.dp.getAgeMs('st.batteryPowerW') : null) : null;
         let battPowerInvalidReason = '';
+        let battPowerObjectId = '';
+        let battPowerFeedbackSource = 'single-storage';
+        let battPowerMappingTrusted = !!(this.dp && this.dp.getEntry && this.dp.getEntry('st.batteryPowerW'));
+        const battPowerAgeKnown = typeof battPowerAge === 'number' && Number.isFinite(battPowerAge);
+        let battPowerW = battPowerMappingTrusted
+            && typeof battPowerObservedW === 'number'
+            && Number.isFinite(battPowerObservedW)
+            && (!battPowerAgeKnown || battPowerAge <= staleMs)
+            ? Number(battPowerObservedW)
+            : null;
         let battPowerTrusted = (typeof battPowerW === 'number' && Number.isFinite(battPowerW));
 
         try {
@@ -692,6 +741,7 @@ class SpeicherRegelungModule extends BaseModule {
             const eChargeTarget = this.dp ? this.dp.getEntry('st.targetChargePowerW') : null;
             const eDischargeTarget = this.dp ? this.dp.getEntry('st.targetDischargePowerW') : null;
             const battObj = eBatt && eBatt.objectId ? String(eBatt.objectId) : '';
+            battPowerObjectId = battObj;
             const targetObjs = [eTarget, eChargeTarget, eDischargeTarget]
                 .map(e => e && e.objectId ? String(e.objectId) : '')
                 .filter(Boolean);
@@ -714,8 +764,10 @@ class SpeicherRegelungModule extends BaseModule {
             );
 
             if (sameAsWriteTarget || looksLikeControlDp) {
+                battPowerObservedW = null;
                 battPowerW = null;
                 battPowerAge = null;
+                battPowerMappingTrusted = false;
                 battPowerTrusted = false;
                 battPowerInvalidReason = sameAsWriteTarget
                     ? 'Ist-Leistung verweist auf einen Sollwert-Datenpunkt (Mapping-Fehler)'
@@ -743,8 +795,11 @@ class SpeicherRegelungModule extends BaseModule {
         // oder (Fehler) sogar auf einen Setpoint. Das führt bei NVP-Balancing zu einem
         // stabilen Fehlpunkt (z. B. ~50% Netzbezug).
         //
-        // Daher: wenn Farm aktiv ist und die abgeleiteten Summen frisch sind,
-        // überschreiben wir battPowerW mit der Farm-Nettoleistung.
+        // Daher: wenn Farm aktiv ist und die abgeleiteten Summen vorhanden sind,
+        // ueberschreiben wir den beobachteten Einzel-Istwert mit der Farm-
+        // Nettoleistung. Der strenge `battPowerW` bleibt weiterhin nur innerhalb
+        // staleMs gueltig; der spaetere Feedback-Puffer entscheidet separat ueber
+        // eine begrenzte Haltezeit fuer das geschlossene NVP-Balancing.
         if (farmEnabled) {
             try {
                 const stOnline = await this.adapter.getStateAsync('storageFarm.storagesOnline');
@@ -765,10 +820,14 @@ class SpeicherRegelungModule extends BaseModule {
                     const ageDchg = stDchg && typeof stDchg.ts === 'number' ? (now - Number(stDchg.ts)) : null;
                     const age = (ageChg === null && ageDchg === null) ? null : Math.max(ageChg || 0, ageDchg || 0);
 
-                    if (Number.isFinite(chg) && Number.isFinite(dchg) && (age === null || age <= staleMs)) {
-                        battPowerW = dchg - chg;
+                    if (Number.isFinite(chg) && Number.isFinite(dchg)) {
+                        battPowerObservedW = dchg - chg;
                         battPowerAge = age;
-                        battPowerTrusted = true;
+                        battPowerObjectId = 'storageFarm.totalDischargePowerW-storageFarm.totalChargePowerW';
+                        battPowerFeedbackSource = 'storage-farm';
+                        battPowerMappingTrusted = true;
+                        battPowerW = (age === null || age <= staleMs) ? battPowerObservedW : null;
+                        battPowerTrusted = typeof battPowerW === 'number' && Number.isFinite(battPowerW);
                         battPowerInvalidReason = hasOnline
                             ? 'Farm: aggregierte Ist-Leistung (Entladen-Laden)'
                             : 'Farm: aggregierte Ist-Leistung, degraded/dispatchbar';
@@ -818,6 +877,12 @@ class SpeicherRegelungModule extends BaseModule {
             await this._setIfChanged('speicher.regelung.entladenErlaubt', null);
             await this._setIfChanged('speicher.regelung.tarifState', '');
             await this._setStorageNvpBalanceDiag(null);
+            await this._setIfChanged('speicher.regelung.batteryPowerBalanceTrusted', false);
+            await this._setIfChanged('speicher.regelung.batteryPowerFeedbackMode', 'missing-nvp');
+            await this._setIfChanged('speicher.regelung.batteryPowerFeedbackBasisW', null);
+            await this._setIfChanged('speicher.regelung.batteryPowerFeedbackHeld', false);
+            await this._setIfChanged('speicher.regelung.batteryPowerFeedbackPredicted', false);
+            await this._setIfChanged('speicher.regelung.batteryPowerFeedbackPredictionDeltaW', 0);
             await this._setIfChanged('speicher.regelung.pvBudgetAllocationMode', '');
             await this._setIfChanged('speicher.regelung.pvBudgetRemainingBeforeStorageW', 0);
             await this._setIfChanged('speicher.regelung.pvBudgetStorageAvailableW', 0);
@@ -1390,6 +1455,53 @@ if (typeof soc === 'number') {
         const maxDelta = Math.max(0, num(cfg.maxDeltaWPerTick, 500));
         const pvMaxDeltaCfg = Math.max(0, num(cfg.pvMaxDeltaWPerTick, 1500)); // 0 => nutzt globale Rampe
 
+        // Herstellerunabhaengiger Istwert-Puffer fuer das geschlossene NVP-
+        // Balancing. Der normale staleTimeout bleibt fuer Schutzpfade unveraendert;
+        // nur die Regelbasis darf den letzten validen Batterie-Istwert laenger
+        // halten, weil viele Speicher NVP und Batterieleistung asynchron melden.
+        const legacyFeedbackFreshMs = Math.max(1000, num(cfg.balanceFeedbackMaxAgeMs, 8000));
+        const balanceFeedbackFreshMs = Math.min(staleMs, legacyFeedbackFreshMs);
+        const balanceFeedbackHoldSec = clamp(num(cfg.balanceFeedbackHoldSec, 45), 1, 300);
+        const balanceFeedbackHoldMs = Math.max(balanceFeedbackFreshMs, balanceFeedbackHoldSec * 1000);
+        const balanceFeedbackPredictionSteps = clamp(num(cfg.balanceFeedbackPredictionSteps, 4), 0, 20);
+        const derivedPredictionLimitW = Math.max(
+            500,
+            Math.min(10000, (maxDelta > 0 ? maxDelta : 500) * balanceFeedbackPredictionSteps),
+        );
+        const balanceFeedbackPredictionMaxW = Math.max(
+            0,
+            num(cfg.balanceFeedbackPredictionMaxW, derivedPredictionLimitW),
+        );
+        const storageBalanceFeedback = this._resolveBatteryBalanceFeedback({
+            nowMs: now,
+            measuredW: battPowerObservedW,
+            measuredAgeMs: battPowerAge,
+            mappingTrusted: battPowerMappingTrusted,
+            objectId: battPowerObjectId,
+            source: battPowerFeedbackSource,
+            freshAgeMs: balanceFeedbackFreshMs,
+            holdAgeMs: balanceFeedbackHoldMs,
+            lastTargetW: getLastStorageBalanceTargetW(),
+            lastTargetWriteMs: this._lastTargetWriteMs,
+            lastTargetAllowed: isStorageBalanceSource(this._lastSource),
+            maxPredictionDeltaW: balanceFeedbackPredictionMaxW,
+            zeroToleranceW: Math.max(100, stepW * 2, selfImportThresholdW),
+        });
+        const balanceBatteryPowerW = storageBalanceFeedback.usable ? Number(storageBalanceFeedback.feedbackW) : null;
+        const balanceBatteryMeasuredW = storageBalanceFeedback.usable ? Number(storageBalanceFeedback.measuredW) : null;
+        const balanceBatteryAgeMs = storageBalanceFeedback.usable ? Number(storageBalanceFeedback.sampleAgeMs) : null;
+        const balanceBatteryTrusted = storageBalanceFeedback.usable === true;
+
+        await this._setIfChanged('speicher.regelung.batteryPowerBalanceTrusted', balanceBatteryTrusted);
+        await this._setIfChanged('speicher.regelung.batteryPowerFeedbackMode', String(storageBalanceFeedback.source || ''));
+        await this._setIfChanged('speicher.regelung.batteryPowerFeedbackMeasuredW', Number.isFinite(balanceBatteryMeasuredW) ? Math.round(balanceBatteryMeasuredW) : null);
+        await this._setIfChanged('speicher.regelung.batteryPowerFeedbackBasisW', Number.isFinite(balanceBatteryPowerW) ? Math.round(balanceBatteryPowerW) : null);
+        await this._setIfChanged('speicher.regelung.batteryPowerFeedbackAgeMs', Number.isFinite(balanceBatteryAgeMs) ? Math.round(balanceBatteryAgeMs) : null);
+        await this._setIfChanged('speicher.regelung.batteryPowerFeedbackHeld', !!storageBalanceFeedback.held);
+        await this._setIfChanged('speicher.regelung.batteryPowerFeedbackPredicted', !!storageBalanceFeedback.predicted);
+        await this._setIfChanged('speicher.regelung.batteryPowerFeedbackPredictionDeltaW', Math.round(Number(storageBalanceFeedback.predictionDeltaW) || 0));
+        await this._setIfChanged('speicher.regelung.batteryPowerFeedbackHoldMs', Math.round(balanceFeedbackHoldMs));
+
         // Policy-spezifische Limits (0 => global)
         const lskMaxChargeW_cfg = Math.max(0, num(cfg.lskMaxChargeW, 0));
         const lskMaxDischargeW_cfg = Math.max(0, num(cfg.lskMaxDischargeW, 0));
@@ -1574,7 +1686,9 @@ if (typeof soc === 'number') {
 						//
 						// realNvpW = NVP + battPowerW  (battPowerW: +Entladen, -Laden)
 						// -> ergibt näherungsweise die Last ohne Batterieeinfluss.
-						const battSignedW = (typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Number(battPowerW) : 0;
+						const battSignedW = balanceBatteryTrusted
+							? Number(balanceBatteryPowerW)
+							: ((typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Number(battPowerW) : 0);
 						const nvpNowW = (typeof gridRawW === 'number' && Number.isFinite(gridRawW)) ? Number(gridRawW) : num(gridW, 0);
 						const realNvpW = nvpNowW + battSignedW;
 						const realImportW = Math.max(0, realNvpW);
@@ -1932,20 +2046,28 @@ if (typeof soc === 'number') {
 							nvpAgeMs: (typeof gridRawAge === 'number') ? gridRawAge : gridAge,
 							targetNvpW: targetImportW,
 							deadbandW,
-							batteryPowerW: battPowerW,
-							batteryAgeMs: battPowerAge,
-							batteryPowerTrusted: battPowerTrusted,
+							batteryPowerW: balanceBatteryPowerW,
+							batteryMeasuredW: balanceBatteryMeasuredW,
+							batteryAgeMs: balanceBatteryAgeMs,
+							batteryPowerTrusted: balanceBatteryTrusted,
+							batteryFeedbackSource: storageBalanceFeedback.source,
+							batteryFeedbackHeld: storageBalanceFeedback.held,
+							batteryFeedbackPredicted: storageBalanceFeedback.predicted,
+							batteryFeedbackPredictionDeltaW: storageBalanceFeedback.predictionDeltaW,
+							batteryFeedbackHoldAgeMs: balanceFeedbackHoldMs,
 							lastTargetW: lastTariffTargetW,
 							lastTargetAllowed: this._lastSource === 'tarif',
 							maxDischargeCorrectionW: maxDelta,
 							maxChargeCorrectionW: pvMaxDeltaCfg > 0 ? pvMaxDeltaCfg : maxDelta,
-							feedbackMaxAgeMs: Math.min(staleMs, Math.max(1000, num(cfg.balanceFeedbackMaxAgeMs, 8000))),
+							feedbackMaxAgeMs: balanceFeedbackHoldMs,
+							nvpFeedbackMaxAgeMs: staleMs,
 							feedbackMaxSkewMs: Math.max(0, num(cfg.balanceFeedbackMaxSkewMs, 5000)),
+							feedbackRequireAligned: false,
 							stepW,
 						});
 						storageNvpBalanceDiag = { ...balance, policy: 'tarif' };
 						storageNvpBalanceRampManaged = storageNvpBalanceRampManaged || balance.rampManaged;
-						const battW = balance.feedbackUsed ? Math.max(0, Number(battPowerW) || 0) : null;
+						const battW = balance.feedbackUsed ? Math.max(0, Number(balance.baseW) || 0) : null;
 						let nextSetW = Math.max(0, Number(balance.targetW) || 0);
 
 						// Safety-Clamp gegen unnötige Export-Spikes:
@@ -2036,9 +2158,11 @@ if (targetW === 0 && selfDischargeEnabled) {
             ? nvpRawW
             : ((typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null);
         const lastWasFenecon = this._lastSource === 'fenecon';
-        const currentDischargeW = (battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW))
-            ? Math.max(0, battPowerW)
-            : 0;
+        const currentDischargeW = balanceBatteryTrusted
+            ? Math.max(0, Number(balanceBatteryPowerW) || 0)
+            : ((battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW))
+                ? Math.max(0, battPowerW)
+                : 0);
         const feneconTargetNvpW = selfTargetGridW + evcsStorageProtectedNvpTargetShiftW;
         const feneconErrW = (typeof feneconNvpW === 'number') ? (feneconNvpW - feneconTargetNvpW) : 0;
         const feneconLoadLimitW = acLoadW > 0
@@ -2120,9 +2244,15 @@ if (targetW === 0 && selfDischargeEnabled) {
         nvpAgeMs: (typeof gridRawAge === 'number') ? gridRawAge : gridAge,
         targetNvpW: desiredNvpW,
         deadbandW,
-        batteryPowerW: battPowerW,
-        batteryAgeMs: battPowerAge,
-        batteryPowerTrusted: battPowerTrusted,
+        batteryPowerW: balanceBatteryPowerW,
+        batteryMeasuredW: balanceBatteryMeasuredW,
+        batteryAgeMs: balanceBatteryAgeMs,
+        batteryPowerTrusted: balanceBatteryTrusted,
+        batteryFeedbackSource: storageBalanceFeedback.source,
+        batteryFeedbackHeld: storageBalanceFeedback.held,
+        batteryFeedbackPredicted: storageBalanceFeedback.predicted,
+        batteryFeedbackPredictionDeltaW: storageBalanceFeedback.predictionDeltaW,
+        batteryFeedbackHoldAgeMs: balanceFeedbackHoldMs,
         lastTargetW: lastBalanceW,
         lastTargetAllowed: lastWasAnyBalance,
             // Eigenverbrauchsoptimierung: 0 W ist ein expliziter STOP-Befehl. Wenn der
@@ -2132,8 +2262,10 @@ if (targetW === 0 && selfDischargeEnabled) {
             holdLastNonZeroInDeadband: true,
         maxDischargeCorrectionW: maxDelta,
         maxChargeCorrectionW: pvMaxDeltaCfg > 0 ? pvMaxDeltaCfg : maxDelta,
-        feedbackMaxAgeMs: Math.min(staleMs, Math.max(1000, num(cfg.balanceFeedbackMaxAgeMs, 8000))),
+        feedbackMaxAgeMs: balanceFeedbackHoldMs,
+        nvpFeedbackMaxAgeMs: staleMs,
         feedbackMaxSkewMs: Math.max(0, num(cfg.balanceFeedbackMaxSkewMs, 5000)),
+        feedbackRequireAligned: false,
         stepW,
     });
     storageNvpBalanceDiag = { ...balance, policy: 'eigenverbrauch' };
@@ -2142,7 +2274,7 @@ if (targetW === 0 && selfDischargeEnabled) {
     // Ist-Batterieleistung nur dann fuer harte Caps verwenden, wenn sie auch fuer
     // das NVP-Balancing frisch und zeitlich plausibel war. Ein zwar "nicht stale",
     // aber mehrere Sekunden versetzter Wert darf die Anschluss-Caps nicht aufweiten.
-    const battSignedRawW = balance.feedbackUsed ? Number(battPowerW) : null;
+    const battSignedRawW = balance.feedbackUsed ? Number(balance.baseW) : null;
     const battW = (typeof battSignedRawW === 'number') ? Math.max(0, battSignedRawW) : null;
     const battChargeW = (typeof battSignedRawW === 'number') ? Math.max(0, -battSignedRawW) : null;
     const nextSignedW = Number(balance.targetW) || 0;
@@ -2315,9 +2447,15 @@ if (targetW === 0 && selfDischargeEnabled) {
                     // derselben Istleistung-plus-NVP-Differenz-Regelung wie beim Entladen.
                     targetNvpW: selfTargetGridW + evcsStorageProtectedNvpTargetShiftW + extraBias,
                     deadbandW: selfImportThresholdW,
-                    batteryPowerW: battPowerW,
-                    batteryAgeMs: battPowerAge,
-                    batteryPowerTrusted: battPowerTrusted,
+                    batteryPowerW: balanceBatteryPowerW,
+                    batteryMeasuredW: balanceBatteryMeasuredW,
+                    batteryAgeMs: balanceBatteryAgeMs,
+                    batteryPowerTrusted: balanceBatteryTrusted,
+                    batteryFeedbackSource: storageBalanceFeedback.source,
+                    batteryFeedbackHeld: storageBalanceFeedback.held,
+                    batteryFeedbackPredicted: storageBalanceFeedback.predicted,
+                    batteryFeedbackPredictionDeltaW: storageBalanceFeedback.predictionDeltaW,
+                    batteryFeedbackHoldAgeMs: balanceFeedbackHoldMs,
                     lastTargetW: lastBalanceWForCharge,
                     lastTargetAllowed: isStorageBalanceSource(this._lastSource),
                     // Auch im separaten PV-Ladepfad darf das Erreichen des NVP-Ziels
@@ -2327,15 +2465,17 @@ if (targetW === 0 && selfDischargeEnabled) {
                     holdLastNonZeroInDeadband: true,
                     maxDischargeCorrectionW: maxDelta,
                     maxChargeCorrectionW: pvMaxDeltaCfg > 0 ? pvMaxDeltaCfg : maxDelta,
-                    feedbackMaxAgeMs: Math.min(staleMs, Math.max(1000, num(cfg.balanceFeedbackMaxAgeMs, 8000))),
+                    feedbackMaxAgeMs: balanceFeedbackHoldMs,
+                    nvpFeedbackMaxAgeMs: staleMs,
                     feedbackMaxSkewMs: Math.max(0, num(cfg.balanceFeedbackMaxSkewMs, 5000)),
+                    feedbackRequireAligned: false,
                     stepW,
                 });
                 storageNvpBalanceDiag = { ...pvBalance, policy: 'pv' };
                 storageNvpBalanceRampManaged = storageNvpBalanceRampManaged || pvBalance.rampManaged;
 
                 const measuredChargeNowW = pvBalance.feedbackUsed
-                    ? Math.max(0, -Number(battPowerW || 0))
+                    ? Math.max(0, -Number(pvBalance.baseW || 0))
                     : 0;
                 const lastChargeNowW = (!pvBalance.feedbackUsed && lastBalanceWForCharge < 0)
                     ? Math.max(0, -lastBalanceWForCharge)
@@ -2915,15 +3055,27 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 nvpAgeMs: (typeof gridRawAge === 'number') ? gridRawAge : gridAge,
                 targetNvpW: targetImportW,
                 deadbandW: nvpDeadbandW,
-                batteryPowerW: battPowerW,
-                batteryAgeMs: battPowerAge,
-                batteryPowerTrusted: battPowerTrusted,
+                batteryPowerW: balanceBatteryPowerW,
+                batteryMeasuredW: balanceBatteryMeasuredW,
+                batteryAgeMs: balanceBatteryAgeMs,
+                batteryPowerTrusted: balanceBatteryTrusted,
+                batteryFeedbackSource: storageBalanceFeedback.source,
+                batteryFeedbackHeld: storageBalanceFeedback.held,
+                batteryFeedbackPredicted: storageBalanceFeedback.predicted,
+                batteryFeedbackPredictionDeltaW: storageBalanceFeedback.predictionDeltaW,
+                batteryFeedbackHoldAgeMs: balanceFeedbackHoldMs,
                 lastTargetW: lastSungrowBalanceW,
                 lastTargetAllowed: isStorageBalanceSource(this._lastSource),
+                // Auch Sungrow darf bei erreichtem NVP-Ziel einen laufenden
+                // Nicht-Null-Sollwert nicht auf 0 W abwerfen. 0 W bleibt ein
+                // ausdruecklicher Stop bzw. eine Freigabe ohne aktive Vorgabe.
+                holdLastNonZeroInDeadband: true,
                 maxDischargeCorrectionW: maxDelta,
                 maxChargeCorrectionW: pvMaxDeltaCfg > 0 ? pvMaxDeltaCfg : maxDelta,
-                feedbackMaxAgeMs: Math.min(staleMs, Math.max(1000, num(cfg.balanceFeedbackMaxAgeMs, 8000))),
+                feedbackMaxAgeMs: balanceFeedbackHoldMs,
+                nvpFeedbackMaxAgeMs: staleMs,
                 feedbackMaxSkewMs: Math.max(0, num(cfg.balanceFeedbackMaxSkewMs, 5000)),
+                feedbackRequireAligned: false,
                 stepW,
             });
             storageNvpBalanceDiag = { ...sungrowBalance, policy: 'sungrow-hybrid' };
@@ -2932,14 +3084,24 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             const importBalanceNeeded = nvpErrorW > nvpDeadbandW;
             const exportBalanceNeeded = nvpErrorW < -nvpDeadbandW;
             const nvpBalanceNeeded = !!(isStorageSelfOrPv && !isCriticalPolicy && (importBalanceNeeded || exportBalanceNeeded));
-            const battSignedNowW = sungrowBalance.feedbackUsed ? Number(battPowerW) : null;
+            const nvpHoldNeeded = !!(
+                isStorageSelfOrPv
+                && !isCriticalPolicy
+                && !importBalanceNeeded
+                && !exportBalanceNeeded
+                && Math.abs(Number(sungrowBalance.targetW) || 0) > 0
+                && (
+                    sungrowBalance.holdingLastCommand === true
+                    || (isStorageBalanceSource(this._lastSource) && Math.abs(lastSungrowBalanceW) > 0)
+                )
+            );
             const balanceBaseW = Number(sungrowBalance.baseW) || 0;
             let nvpBalancedTargetW = Number(sungrowBalance.targetW) || 0;
             let sungrowBalanceBaseW = balanceBaseW;
             let sungrowNvpErrorW = nvpErrorW;
             let sungrowNvpBalancedTargetW = nvpBalancedTargetW;
 
-            if (nvpBalanceNeeded) {
+            if (nvpBalanceNeeded || nvpHoldNeeded) {
                 const currentDischargeForCapW = Math.max(0, balanceBaseW);
                 const currentChargeForCapW = Math.max(0, -balanceBaseW);
                 const sungrowNonEvcsImportW = Math.max(0, importNowW - evcsStorageProtectedLoadW);
@@ -2947,7 +3109,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 const chargeCapW = Math.max(0, exportNowW + currentChargeForCapW + assistBufferW);
 
                 if (nvpBalancedTargetW > 0) {
-                    if (dischargeOnlyOnImport && importNowW <= (targetImportW + nvpDeadbandW)) {
+                    if (!nvpHoldNeeded && dischargeOnlyOnImport && importNowW <= (targetImportW + nvpDeadbandW)) {
                         targetW = 0;
                         source = 'sungrow-hybrid';
                         reason = `Sungrow Hybrid ESS: Entladung blockiert, NVP im Zielband (${Math.round(importNowW)} W, Ziel ${Math.round(targetImportW)} W)`;
@@ -2956,8 +3118,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                         targetW = clamp(nvpBalancedTargetW, 0, Math.min(maxDischargeW, dischargeCapW));
                         if (targetW > 0) {
                             source = 'sungrow-assist';
-                            reason = `Sungrow Hybrid ESS: NVP-Balancing Entladung ${Math.round(targetW)} W (Ist ${Math.round(balanceBaseW)} W + Korrektur ${Math.round(Number(sungrowBalance.appliedCorrectionW) || 0)} W, NVP-Fehler ${Math.round(nvpErrorW)} W)`;
-                            sungrowWriteMode = 'write-nvp-balance-discharge';
+                            reason = nvpHoldNeeded
+                                ? `Sungrow Hybrid ESS: NVP im Zielband – laufende Entladung ${Math.round(targetW)} W halten`
+                                : `Sungrow Hybrid ESS: NVP-Balancing Entladung ${Math.round(targetW)} W (Ist ${Math.round(balanceBaseW)} W + Korrektur ${Math.round(Number(sungrowBalance.appliedCorrectionW) || 0)} W, NVP-Fehler ${Math.round(nvpErrorW)} W)`;
+                            sungrowWriteMode = nvpHoldNeeded ? 'write-nvp-hold-discharge' : 'write-nvp-balance-discharge';
                             dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number')
                                 ? Math.min(dischargeDemandHardCapW, dischargeCapW)
                                 : dischargeCapW;
@@ -2974,8 +3138,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     if (chargeW > 0) {
                         targetW = -chargeW;
                         source = 'sungrow-assist';
-                        reason = `Sungrow Hybrid ESS: NVP-Balancing Laden ${Math.round(chargeW)} W (Ist ${Math.round(balanceBaseW)} W + Korrektur ${Math.round(Number(sungrowBalance.appliedCorrectionW) || 0)} W, NVP-Fehler ${Math.round(nvpErrorW)} W)`;
-                        sungrowWriteMode = 'write-nvp-balance-charge';
+                        reason = nvpHoldNeeded
+                            ? `Sungrow Hybrid ESS: NVP im Zielband – laufende Beladung ${Math.round(chargeW)} W halten`
+                            : `Sungrow Hybrid ESS: NVP-Balancing Laden ${Math.round(chargeW)} W (Ist ${Math.round(balanceBaseW)} W + Korrektur ${Math.round(Number(sungrowBalance.appliedCorrectionW) || 0)} W, NVP-Fehler ${Math.round(nvpErrorW)} W)`;
+                        sungrowWriteMode = nvpHoldNeeded ? 'write-nvp-hold-charge' : 'write-nvp-balance-charge';
                         chargeDemandHardCapW = (typeof chargeDemandHardCapW === 'number')
                             ? Math.min(chargeDemandHardCapW, chargeCapW)
                             : chargeCapW;
@@ -3087,9 +3253,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     ? Math.max(0, Number(budgetRuntime.remainingPvW))
                     : 0;
                 pvBudgetReservedW = Math.min(chargeW, remainingPvW);
-                const actualChargeW = battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW)
-                    ? Math.max(0, -battPowerW)
-                    : chargeW;
+                const actualChargeW = balanceBatteryTrusted
+                    ? Math.max(0, -Number(balanceBatteryPowerW || 0))
+                    : ((battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW))
+                        ? Math.max(0, -battPowerW)
+                        : chargeW);
                 budgetRuntime.reserve({
                     key: 'storage',
                     app: 'storageControl',
@@ -3373,6 +3541,183 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     }
 
     /**
+     * Code-Teil: _resolveBatteryBalanceFeedback
+     * Zweck: Liefert fuer alle Speicher-Hersteller eine stabile Batterie-
+     * Istleistungsbasis, auch wenn Batterie- und NVP-Telemetrie asynchron kommen.
+     *
+     * Hintergrund:
+     * Viele Wechselrichter/Adapter aktualisieren die Batterie-Istleistung nur alle
+     * 10 bis 30 Sekunden, waehrend der NVP jede Sekunde kommt. Die alte Logik hat
+     * den Batterie-Istwert bei zu grossem Zeitversatz komplett verworfen. Danach
+     * wurde nur noch die kleine aktuelle NVP-Differenz geschrieben, wodurch Soll-
+     * werte z. B. von 9 kW auf 300 W und im naechsten Messzyklus wieder auf mehrere
+     * kW sprangen.
+     *
+     * Sicherheitsmodell:
+     * - Ein echter, nicht auf einen Steuer-DP gemappter Istwert wird begrenzt
+     *   gehalten (`holdAgeMs`).
+     * - Ein nach diesem Messwert erfolgreich geschriebener Sollwert darf als
+     *   kurzfristige Prognosebasis dienen, aber nur im selben Vorzeichen und nur
+     *   innerhalb `maxPredictionDeltaW` um den letzten echten Messwert.
+     * - Ohne jemals gesehenen gueltigen Istwert wird kein alter Sollwert als
+     *   Batterie-Istleistung verwendet. Dann bleibt der sichere NVP-Fallback aktiv.
+     * - Ein Mapping-/Quellenwechsel verwirft den Puffer sofort.
+     */
+    _resolveBatteryBalanceFeedback(ctx = {}) {
+        const finite = (v) => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
+        const now = finite(ctx.nowMs) ? Number(ctx.nowMs) : Date.now();
+        const objectId = String(ctx.objectId || '').trim();
+        const source = String(ctx.source || 'single-storage').trim() || 'single-storage';
+        const key = `${source}|${objectId}`;
+        const mappingTrusted = ctx.mappingTrusted === true;
+        const measuredW = finite(ctx.measuredW) ? Number(ctx.measuredW) : null;
+        const measuredAgeMs = finite(ctx.measuredAgeMs) ? Math.max(0, Number(ctx.measuredAgeMs)) : null;
+        const freshAgeMs = Math.max(250, finite(ctx.freshAgeMs) ? Number(ctx.freshAgeMs) : 8000);
+        const holdAgeMs = Math.max(freshAgeMs, finite(ctx.holdAgeMs) ? Number(ctx.holdAgeMs) : 45000);
+        const maxPredictionDeltaW = Math.max(0, finite(ctx.maxPredictionDeltaW) ? Number(ctx.maxPredictionDeltaW) : 2000);
+        const zeroToleranceW = Math.max(0, finite(ctx.zeroToleranceW) ? Number(ctx.zeroToleranceW) : 100);
+        const lastTargetW = finite(ctx.lastTargetW) ? Number(ctx.lastTargetW) : 0;
+        const lastTargetWriteMs = finite(ctx.lastTargetWriteMs) ? Number(ctx.lastTargetWriteMs) : 0;
+        const lastTargetAllowed = ctx.lastTargetAllowed === true;
+
+        const resetCache = () => {
+            this._batteryBalanceFeedback = {
+                key,
+                objectId,
+                source,
+                measuredW: null,
+                sampleTs: 0,
+            };
+        };
+
+        const cache = (this._batteryBalanceFeedback && typeof this._batteryBalanceFeedback === 'object')
+            ? this._batteryBalanceFeedback
+            : null;
+
+        // Ein anderer Mess-DP oder ein Wechsel Einzel-Speicher <-> Farm darf nie
+        // den alten Istwert als Basis weiterverwenden.
+        if (!cache || String(cache.key || '') !== key) {
+            resetCache();
+        }
+
+        // Ein erkannter Mapping-Fehler (Ist-DP zeigt auf Setpoint/ctrl) loescht den
+        // Puffer sofort. Nur ein voruebergehend alter/fehlender Messwert darf gehalten
+        // werden, niemals ein fachlich ungueltiger Datenpunkt.
+        if (!mappingTrusted) {
+            resetCache();
+            return {
+                usable: false,
+                feedbackW: null,
+                measuredW,
+                measuredAgeMs,
+                sampleAgeMs: null,
+                sampleTs: 0,
+                source: 'invalid-mapping',
+                held: false,
+                predicted: false,
+                predictionDeltaW: 0,
+                holdAgeMs,
+                freshAgeMs,
+                maxPredictionDeltaW,
+                objectId,
+            };
+        }
+
+        if (measuredW !== null && (measuredAgeMs === null || measuredAgeMs <= holdAgeMs)) {
+            const sampleTs = measuredAgeMs === null ? now : Math.max(0, now - measuredAgeMs);
+            const current = this._batteryBalanceFeedback;
+            const currentTs = finite(current && current.sampleTs) ? Number(current.sampleTs) : 0;
+            const currentW = finite(current && current.measuredW) ? Number(current.measuredW) : null;
+
+            // Gleicher Zeitstempel mit geaendertem Wert kommt bei einigen Alias-/
+            // Adapterpfaden vor. Auch dann aktualisieren wir den Messwert.
+            if (!currentTs || sampleTs > currentTs || (sampleTs === currentTs && currentW !== measuredW)) {
+                this._batteryBalanceFeedback = {
+                    key,
+                    objectId,
+                    source,
+                    measuredW,
+                    sampleTs,
+                };
+            }
+        }
+
+        const resolved = this._batteryBalanceFeedback;
+        const sampleW = finite(resolved && resolved.measuredW) ? Number(resolved.measuredW) : null;
+        const sampleTs = finite(resolved && resolved.sampleTs) ? Number(resolved.sampleTs) : 0;
+        const sampleAgeMs = sampleTs > 0 ? Math.max(0, now - sampleTs) : null;
+        const sampleUsable = sampleW !== null && sampleAgeMs !== null && sampleAgeMs <= holdAgeMs;
+
+        if (!sampleUsable) {
+            return {
+                usable: false,
+                feedbackW: null,
+                measuredW,
+                measuredAgeMs,
+                sampleAgeMs,
+                sampleTs,
+                source: sampleW === null ? 'missing' : 'expired',
+                held: false,
+                predicted: false,
+                predictionDeltaW: 0,
+                holdAgeMs,
+                freshAgeMs,
+                maxPredictionDeltaW,
+                objectId,
+            };
+        }
+
+        const held = sampleAgeMs > freshAgeMs;
+        let feedbackW = sampleW;
+        let predicted = false;
+        let predictionDeltaW = 0;
+        let feedbackSource = held ? 'battery-held' : 'battery-live';
+
+        // Liegt der letzte erfolgreich geschriebene NVP-Sollwert zeitlich nach dem
+        // letzten echten Istwert, kann er die noch nicht aktualisierte Telemetrie
+        // kurzfristig fortschreiben. Das Prognosefenster ist absolut begrenzt und
+        // erlaubt keinen direkten Vorzeichenwechsel. Dadurch bleibt z. B. 8,4 kW
+        // Ist + 0,5 kW Korrektur als ca. 8,9-kW-Basis erhalten, ohne aus einem
+        // alten Sollwert unkontrolliert 71 kW hochzuintegrieren.
+        const targetWriteAgeMs = lastTargetWriteMs > 0 ? Math.max(0, now - lastTargetWriteMs) : null;
+        const targetAfterSample = lastTargetWriteMs > (sampleTs + 25);
+        const sameDirection = Math.abs(sampleW) <= zeroToleranceW
+            || Math.sign(lastTargetW) === Math.sign(sampleW);
+        const targetRecentEnough = targetWriteAgeMs !== null && targetWriteAgeMs <= holdAgeMs;
+
+        if (
+            lastTargetAllowed
+            && lastTargetW !== 0
+            && targetAfterSample
+            && targetRecentEnough
+            && sameDirection
+            && maxPredictionDeltaW > 0
+        ) {
+            predictionDeltaW = clamp(lastTargetW - sampleW, -maxPredictionDeltaW, maxPredictionDeltaW);
+            feedbackW = sampleW + predictionDeltaW;
+            predicted = Math.abs(predictionDeltaW) > 0;
+            if (predicted) feedbackSource = held ? 'battery-held-command-predicted' : 'battery-live-command-predicted';
+        }
+
+        return {
+            usable: true,
+            feedbackW,
+            measuredW: sampleW,
+            measuredAgeMs,
+            sampleAgeMs,
+            sampleTs,
+            source: feedbackSource,
+            held,
+            predicted,
+            predictionDeltaW,
+            holdAgeMs,
+            freshAgeMs,
+            maxPredictionDeltaW,
+            objectId,
+        };
+    }
+
+    /**
      * Code-Teil: _buildActualAwareNvpBalance
      * Zweck: Berechnet den naechsten bidirektionalen Speicher-Sollwert aus der
      * echten Batterie-Istleistung und der aktuellen Abweichung am NVP.
@@ -3400,7 +3745,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      *   Sollwert niemals hochintegriert (Schutz gegen den frueheren 71-kW-Fehler).
      */
     _buildActualAwareNvpBalance(ctx = {}) {
-        const finite = (v) => Number.isFinite(Number(v));
+        const finite = (v) => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
         const rawNvpW = finite(ctx.rawNvpW) ? Number(ctx.rawNvpW) : null;
         const fallbackNvpW = finite(ctx.fallbackNvpW)
             ? Number(ctx.fallbackNvpW)
@@ -3408,10 +3753,22 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const targetNvpW = finite(ctx.targetNvpW) ? Number(ctx.targetNvpW) : 0;
         const deadbandW = Math.max(0, finite(ctx.deadbandW) ? Number(ctx.deadbandW) : 50);
         const batteryPowerW = finite(ctx.batteryPowerW) ? Number(ctx.batteryPowerW) : null;
+        const batteryMeasuredW = finite(ctx.batteryMeasuredW) ? Number(ctx.batteryMeasuredW) : batteryPowerW;
         const batteryAgeMs = finite(ctx.batteryAgeMs) ? Math.max(0, Number(ctx.batteryAgeMs)) : null;
         const nvpAgeMs = finite(ctx.nvpAgeMs) ? Math.max(0, Number(ctx.nvpAgeMs)) : null;
         const feedbackMaxAgeMs = Math.max(500, finite(ctx.feedbackMaxAgeMs) ? Number(ctx.feedbackMaxAgeMs) : 8000);
+        const nvpFeedbackMaxAgeMs = Math.max(250, finite(ctx.nvpFeedbackMaxAgeMs) ? Number(ctx.nvpFeedbackMaxAgeMs) : feedbackMaxAgeMs);
         const feedbackMaxSkewMs = Math.max(0, finite(ctx.feedbackMaxSkewMs) ? Number(ctx.feedbackMaxSkewMs) : 5000);
+        const feedbackRequireAligned = ctx.feedbackRequireAligned === true;
+        const batteryFeedbackSource = String(ctx.batteryFeedbackSource || 'battery-actual');
+        const batteryFeedbackHeld = ctx.batteryFeedbackHeld === true;
+        const batteryFeedbackPredicted = ctx.batteryFeedbackPredicted === true;
+        const batteryFeedbackPredictionDeltaW = finite(ctx.batteryFeedbackPredictionDeltaW)
+            ? Number(ctx.batteryFeedbackPredictionDeltaW)
+            : 0;
+        const batteryFeedbackHoldAgeMs = finite(ctx.batteryFeedbackHoldAgeMs)
+            ? Math.max(0, Number(ctx.batteryFeedbackHoldAgeMs))
+            : feedbackMaxAgeMs;
         const maxDischargeCorrectionW = Math.max(0, finite(ctx.maxDischargeCorrectionW) ? Number(ctx.maxDischargeCorrectionW) : 500);
         const maxChargeCorrectionW = Math.max(0, finite(ctx.maxChargeCorrectionW) ? Number(ctx.maxChargeCorrectionW) : maxDischargeCorrectionW);
         const lastTargetW = finite(ctx.lastTargetW) ? Number(ctx.lastTargetW) : 0;
@@ -3430,9 +3787,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         );
         const nvpFreshForFeedback = !!(
             rawNvpW !== null
-            && (nvpAgeMs === null || nvpAgeMs <= feedbackMaxAgeMs)
+            && (nvpAgeMs === null || nvpAgeMs <= nvpFeedbackMaxAgeMs)
         );
-        const measurementsAligned = measurementSkewMs === null || measurementSkewMs <= feedbackMaxSkewMs;
+        const measurementsAligned = !feedbackRequireAligned || measurementSkewMs === null || measurementSkewMs <= feedbackMaxSkewMs;
         const feedbackUsed = !!(batteryFresh && nvpFreshForFeedback && measurementsAligned);
         const nvpW = feedbackUsed ? rawNvpW : fallbackNvpW;
 
@@ -3443,7 +3800,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 rawTargetW: 0,
                 baseW: 0,
                 baseSource: 'missing-nvp',
-                measuredBatteryW: batteryPowerW,
+                measuredBatteryW: batteryMeasuredW,
                 actualBatteryW: null,
                 nvpW: null,
                 nvpTargetW: targetNvpW,
@@ -3455,6 +3812,15 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 batteryAgeMs,
                 nvpAgeMs,
                 measurementSkewMs,
+                measurementsAligned,
+                feedbackRequireAligned,
+                batteryFeedbackSource,
+                batteryFeedbackHeld,
+                batteryFeedbackPredicted,
+                batteryFeedbackPredictionDeltaW,
+                batteryFeedbackHoldAgeMs,
+                feedbackMaxAgeMs,
+                nvpFeedbackMaxAgeMs,
                 mode: 'missing-nvp',
                 outsideDeadband: false,
                 holdingLastCommand: false,
@@ -3470,7 +3836,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
         if (feedbackUsed) {
             baseW = batteryPowerW;
-            baseSource = 'battery-actual';
+            baseSource = batteryFeedbackSource || 'battery-actual';
         } else if (lastTargetAllowed) {
             // Ohne vertrauenswuerdige Istleistung ist der letzte Sollwert KEIN
             // Ersatz fuer die reale Batterie-Leistung. Er darf deshalb nur zum
@@ -3577,7 +3943,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             rawTargetW,
             baseW,
             baseSource,
-            measuredBatteryW: batteryPowerW,
+            measuredBatteryW: batteryMeasuredW,
             actualBatteryW: feedbackUsed ? batteryPowerW : null,
             nvpW,
             nvpTargetW: targetNvpW,
@@ -3589,6 +3955,15 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             batteryAgeMs,
             nvpAgeMs,
             measurementSkewMs,
+            measurementsAligned,
+            feedbackRequireAligned,
+            batteryFeedbackSource,
+            batteryFeedbackHeld,
+            batteryFeedbackPredicted,
+            batteryFeedbackPredictionDeltaW,
+            batteryFeedbackHoldAgeMs,
+            feedbackMaxAgeMs,
+            nvpFeedbackMaxAgeMs,
             mode,
             outsideDeadband,
             holdingLastCommand,
@@ -3696,9 +4071,14 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             selfNvpSmoothingEnabled: storage.selfNvpSmoothingEnabled,
             selfNvpSmoothingSec: storage.selfNvpSmoothingSec,
             selfNvpRawGuardW: storage.selfNvpRawGuardW,
-            // Experten-Fallbacks fuer die zeitliche Plausibilitaet von NVP und
-            // Speicher-Istleistung. Noch ohne eigenes UI; die sicheren Defaults
-            // greifen automatisch und koennen bei Bedarf per Config gesetzt werden.
+            // Herstellerunabhaengige Istwert-Halte-/Prognoseparameter fuer das
+            // geschlossene NVP-Balancing. `balanceFeedbackHoldSec` ist im
+            // AppCenter sichtbar; die weiteren Werte bleiben Expertenparameter.
+            balanceFeedbackHoldSec: storage.balanceFeedbackHoldSec,
+            balanceFeedbackPredictionSteps: storage.balanceFeedbackPredictionSteps,
+            balanceFeedbackPredictionMaxW: storage.balanceFeedbackPredictionMaxW,
+            // Legacy-/Expertenparameter bleiben lesbar, damit bestehende
+            // Installationen ihre bisherigen Tuningwerte nicht verlieren.
             balanceFeedbackMaxAgeMs: storage.balanceFeedbackMaxAgeMs,
             balanceFeedbackMaxSkewMs: storage.balanceFeedbackMaxSkewMs,
             selfMaxChargeW: storage.selfMaxChargeW,
@@ -3921,6 +4301,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             : fallback;
         await this._setIfChanged('speicher.regelung.balanceAktiv', active);
         await this._setIfChanged('speicher.regelung.balancePolicy', active ? String(ctx.policy || '') : '');
+        await this._setIfChanged('speicher.regelung.balanceMesswertW', active ? n(ctx.measuredBatteryW) : null);
         await this._setIfChanged('speicher.regelung.balanceIstLeistungW', active ? n(ctx.actualBatteryW) : null);
         await this._setIfChanged('speicher.regelung.balanceIstLeistungAlterMs', active ? n(ctx.batteryAgeMs) : null);
         await this._setIfChanged('speicher.regelung.balanceBasisW', active ? n(ctx.baseW, 0) : 0);
@@ -3934,7 +4315,14 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await this._setIfChanged('speicher.regelung.balanceAngewandteKorrekturW', active ? n(ctx.appliedCorrectionW, 0) : 0);
         await this._setIfChanged('speicher.regelung.balanceSollW', active ? n(ctx.targetW, 0) : 0);
         await this._setIfChanged('speicher.regelung.balanceFeedbackVerwendet', !!(active && ctx.feedbackUsed));
+        await this._setIfChanged('speicher.regelung.balanceFeedbackQuelle', active ? String(ctx.batteryFeedbackSource || '') : '');
+        await this._setIfChanged('speicher.regelung.balanceFeedbackGehalten', !!(active && ctx.batteryFeedbackHeld));
+        await this._setIfChanged('speicher.regelung.balanceFeedbackPrognoseAktiv', !!(active && ctx.batteryFeedbackPredicted));
+        await this._setIfChanged('speicher.regelung.balanceFeedbackPrognoseDeltaW', active ? n(ctx.batteryFeedbackPredictionDeltaW, 0) : 0);
+        await this._setIfChanged('speicher.regelung.balanceFeedbackHaltezeitMs', active ? n(ctx.batteryFeedbackHoldAgeMs, 0) : 0);
         await this._setIfChanged('speicher.regelung.balanceMessversatzMs', active ? n(ctx.measurementSkewMs) : null);
+        await this._setIfChanged('speicher.regelung.balanceMessungSynchronErforderlich', !!(active && ctx.feedbackRequireAligned));
+        await this._setIfChanged('speicher.regelung.balanceMessungSynchron', !!(active && ctx.measurementsAligned));
         await this._setIfChanged('speicher.regelung.balanceModus', active ? String(ctx.mode || '') : 'inactive');
         await this._setIfChanged('speicher.regelung.balanceLetztenSollwertGehalten', !!(active && ctx.holdingLastCommand));
         await this._setIfChanged('speicher.regelung.balanceGehaltenSollW', active ? n(ctx.heldTargetW, 0) : 0);
@@ -4423,6 +4811,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await this._setIfChanged('speicher.regelung.schreibOk', false);
         await this._setIfChanged('speicher.regelung.schreibStatus', String(status || 'no-write'));
         this._lastTargetW = 0;
+        this._lastTargetWriteMs = 0;
         this._lastReason = String(reason || '');
         this._lastSource = String(source || '');
     }
@@ -4689,7 +5078,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 : ((writeResult === null) ? 'unverändert' : singleStatus));
         await this._setIfChanged('speicher.regelung.schreibStatus', writeStatus);
 
-        this._lastTargetW = (writeResult === true || farmApplied) ? w : 0;
+        const writeSucceeded = writeResult === true || farmApplied;
+        this._lastTargetW = writeSucceeded ? w : 0;
+        this._lastTargetWriteMs = writeSucceeded ? Date.now() : 0;
         this._lastReason = String(reason || '');
         this._lastSource = String(source || '');
     }
@@ -4792,8 +5183,17 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.runObjId', 'Run/Externe-Regelung Datenpunkt (Objekt-ID)', 'string', 'text', '');
         await mk('speicher.regelung.lastWriteRaw', 'Letzter Rohwert (signed Setpoint)', 'number', 'value');
         await mk('speicher.regelung.lastWriteSplitJson', 'Letzter Split-Sollwert (JSON)', 'string', 'text', '');
-        await mk('speicher.regelung.batteryPowerTrusted', 'Ist-Leistung für Balancing vertrauenswürdig', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.batteryPowerTrusted', 'Direkter Batterie-Istwert innerhalb staleTimeout', 'boolean', 'indicator', false);
         await mk('speicher.regelung.batteryPowerIgnoredReason', 'Ignorierte Ist-Leistung Grund', 'string', 'text', '');
+        await mk('speicher.regelung.batteryPowerBalanceTrusted', 'Ist-Leistung/Puffer für NVP-Balancing verwendbar', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.batteryPowerFeedbackMode', 'Batterie-Istwert Feedback-Modus', 'string', 'text', '');
+        await mk('speicher.regelung.batteryPowerFeedbackMeasuredW', 'Letzter echter Batterie-Istwert (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.batteryPowerFeedbackBasisW', 'Wirksame Batterie-Regelbasis (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.batteryPowerFeedbackAgeMs', 'Alter des gehaltenen Batterie-Istwerts (ms)', 'number', 'value.interval', null);
+        await mk('speicher.regelung.batteryPowerFeedbackHeld', 'Batterie-Istwert zeitlich gehalten', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.batteryPowerFeedbackPredicted', 'Batterie-Regelbasis aus begrenzter Sollwertprognose', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.batteryPowerFeedbackPredictionDeltaW', 'Begrenzte Sollwertprognose zur Istleistung (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.batteryPowerFeedbackHoldMs', 'Konfigurierte Istwert-Haltezeit (ms)', 'number', 'value.interval', 45000);
         await mk('speicher.regelung.dischargeDemandCapW', 'Entlade-Demand-Cap nach Netzbezug (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.dischargeDemandCapReason', 'Entlade-Demand-Cap Grund', 'string', 'text', '');
         await mk('speicher.regelung.chargeDemandCapW', 'Lade-Demand-Cap nach Headroom/PV (W)', 'number', 'value.power', 0);
@@ -4867,6 +5267,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.selfNvpControlMode', 'Eigenverbrauch NVP Glättungsmodus', 'string', 'text', '');
         await mk('speicher.regelung.balanceAktiv', 'Speicher NVP-Balancing aktiv', 'boolean', 'indicator', false);
         await mk('speicher.regelung.balancePolicy', 'Speicher NVP-Balancing Policy', 'string', 'text', '');
+        await mk('speicher.regelung.balanceMesswertW', 'Speicher NVP-Balancing letzter echter Batterie-Messwert (W)', 'number', 'value.power', null);
         await mk('speicher.regelung.balanceIstLeistungW', 'Speicher NVP-Balancing verwendete Batterie-Istleistung (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.balanceIstLeistungAlterMs', 'Speicher-Istleistung Alter im NVP-Balancing (ms)', 'number', 'value.interval', null);
         await mk('speicher.regelung.balanceBasisW', 'Speicher NVP-Balancing Rechenbasis (W)', 'number', 'value.power', 0);
@@ -4880,7 +5281,14 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.balanceAngewandteKorrekturW', 'Speicher NVP-Balancing angewendete Korrektur (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.balanceSollW', 'Speicher NVP-Balancing Sollwert (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.balanceFeedbackVerwendet', 'Speicher-Istleistung im NVP-Balancing verwendet', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.balanceFeedbackQuelle', 'Speicher NVP-Balancing Feedbackquelle', 'string', 'text', '');
+        await mk('speicher.regelung.balanceFeedbackGehalten', 'Speicher-Istwert im NVP-Balancing gehalten', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.balanceFeedbackPrognoseAktiv', 'Begrenzte Sollwertprognose im NVP-Balancing aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.balanceFeedbackPrognoseDeltaW', 'Begrenzte Sollwertprognose im NVP-Balancing (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.balanceFeedbackHaltezeitMs', 'Istwert-Haltezeit im NVP-Balancing (ms)', 'number', 'value.interval', 0);
         await mk('speicher.regelung.balanceMessversatzMs', 'Messversatz Batterie zu NVP (ms)', 'number', 'value.interval', null);
+        await mk('speicher.regelung.balanceMessungSynchronErforderlich', 'Zeitgleiche Batterie-/NVP-Messung erforderlich', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.balanceMessungSynchron', 'Batterie-/NVP-Messung zeitlich synchron', 'boolean', 'indicator', false);
         await mk('speicher.regelung.balanceModus', 'Speicher NVP-Balancing Modus', 'string', 'text', 'inactive');
         await mk('speicher.regelung.balanceLetztenSollwertGehalten', 'Letzten nicht-null NVP-Sollwert im Zielband gehalten', 'boolean', 'indicator', false);
         await mk('speicher.regelung.balanceGehaltenSollW', 'Im NVP-Zielband gehaltener Speicher-Sollwert (W)', 'number', 'value.power', 0);

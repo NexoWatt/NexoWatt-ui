@@ -845,7 +845,7 @@
           <div class="nw-config-field-row">
             <div class="nw-config-field-label">NVP-Regelung Eigenverbrauch</div>
             <div class="nw-config-field-control nw-config-field-control--stack">
-              <div style="display:grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap:8px;">
+              <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap:8px;">
                 <label class="nw-config-help" style="display:flex; flex-direction:column; gap:4px; opacity:0.95;">
                   Zielbezug (W)
                   <input id="storageSelfTargetGridImportW" class="nw-config-input" type="number" min="0" step="10" placeholder="50" />
@@ -862,9 +862,13 @@
                   RAW-Guard (W)
                   <input id="storageSelfNvpRawGuardW" class="nw-config-input" type="number" min="50" step="10" placeholder="100" />
                 </label>
+                <label class="nw-config-help" style="display:flex; flex-direction:column; gap:4px; opacity:0.95;">
+                  Istwert halten (s)
+                  <input id="storageBalanceFeedbackHoldSec" class="nw-config-input" type="number" min="1" max="300" step="1" placeholder="45" />
+                </label>
               </div>
               <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
-                Zielbezug + Deadband beruhigen die Speicherregelung am NVP. Die Glättung reduziert Springen zwischen Bezug und Einspeisung; der RAW-Guard greift sofort, wenn der echte NVP deutlich außerhalb des Zielbandes liegt. Standardziel bleibt ca. 50 W, damit der Restbezug normalerweise unter 100 W bleibt.
+                Zielbezug + Deadband beruhigen die Speicherregelung am NVP. Die Glättung reduziert Springen zwischen Bezug und Einspeisung; der RAW-Guard greift sofort, wenn der echte NVP deutlich außerhalb des Zielbandes liegt. <b>Istwert halten</b> überbrückt langsame/asynchrone Batterie-Telemetrie herstellerübergreifend, während der NVP weiterhin frisch sein muss. Ein aktiver Nicht-Null-Sollwert bleibt im Zielband erhalten; <b>0 W bleibt ausschließlich ein Stop-Befehl</b>. Standardziel bleibt ca. 50 W, damit der Restbezug normalerweise unter 100 W bleibt.
               </div>
             </div>
           </div>
@@ -897,14 +901,14 @@
               </label>
               <label class="nw-config-checklabel" for="storageSungrowZeroOnPvCoverage">
                 <input id="storageSungrowZeroOnPvCoverage" class="nw-config-checkbox" type="checkbox" />
-                <span>Bei PV-deckender Leistung Lade-/Entladevorgaben auf 0 setzen</span>
+                <span>Bei PV-Deckung ohne aktive NVP-Korrektur Sungrow intern freigeben</span>
               </label>
               <label class="nw-config-checklabel" for="storageSungrowDischargeOnlyOnImport">
                 <input id="storageSungrowDischargeOnlyOnImport" class="nw-config-checkbox" type="checkbox" />
                 <span>Entladen nur bei echtem NVP-Netzbezug erlauben</span>
               </label>
               <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
-                Für Sungrow SH/RS/RT/MG-Hybrid-ESS: NexoWatt nutzt den NVP als Führungsgröße. Wenn PV den Gebäudeverbrauch deckt, werden externe Lade-/Entladevorgaben auf 0 gesetzt, damit Sungrow seine interne PV-/Batterielogik nicht durch einen Entlade-Sollwert übersteuert. Erst bei echtem Netzbezug ohne ausreichende PV-Deckung wird ein NVP-begrenzter Entlade-Assist geschrieben.
+                Für Sungrow SH/RS/RT/MG-Hybrid-ESS: NexoWatt nutzt den NVP als Führungsgröße. Ein laufender NVP-Sollwert bleibt auch im Zielband aktiv und wird mit der gehaltenen Batterie-Istleistung weitergeführt; dadurch fällt die Vorgabe nicht mehr zwischen wenigen hundert Watt und mehreren Kilowatt hin und her. Nur wenn keine aktive NVP-Korrektur vorhanden ist, darf die Option Sungrow mit 0 W in seine interne PV-/Batterielogik freigeben. Bei echtem Netzbezug wird weiterhin NVP-begrenzt entladen.
               </div>
             </div>
           </div>

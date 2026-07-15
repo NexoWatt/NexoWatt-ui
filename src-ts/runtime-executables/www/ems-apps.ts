@@ -111,6 +111,7 @@
     storageSelfImportThresholdW: document.getElementById('storageSelfImportThresholdW'),
     storageSelfNvpSmoothingSec: document.getElementById('storageSelfNvpSmoothingSec'),
     storageSelfNvpRawGuardW: document.getElementById('storageSelfNvpRawGuardW'),
+    storageBalanceFeedbackHoldSec: document.getElementById('storageBalanceFeedbackHoldSec'),
     storageCouplingMode: document.getElementById('storageCouplingMode'),
     storageDcPvHintRow: document.getElementById('storageDcPvHintRow'),
     storageVendorProfile: document.getElementById('storageVendorProfile'),
@@ -10714,6 +10715,14 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (els.storageSelfImportThresholdW) els.storageSelfImportThresholdW.value = Number.isFinite(Number(stSelf.selfImportThresholdW)) ? String(Math.round(Number(stSelf.selfImportThresholdW))) : '50';
     if (els.storageSelfNvpSmoothingSec) els.storageSelfNvpSmoothingSec.value = Number.isFinite(Number(stSelf.selfNvpSmoothingSec)) ? String(Math.round(Number(stSelf.selfNvpSmoothingSec))) : '8';
     if (els.storageSelfNvpRawGuardW) els.storageSelfNvpRawGuardW.value = Number.isFinite(Number(stSelf.selfNvpRawGuardW)) ? String(Math.round(Number(stSelf.selfNvpRawGuardW))) : '100';
+    if (els.storageBalanceFeedbackHoldSec) {
+      const explicitHoldSec = Number(stSelf.balanceFeedbackHoldSec);
+      const legacyHoldSec = Number(stSelf.balanceFeedbackMaxAgeMs) / 1000;
+      const effectiveHoldSec = Number.isFinite(explicitHoldSec) && explicitHoldSec > 0
+        ? explicitHoldSec
+        : (Number.isFinite(legacyHoldSec) && legacyHoldSec > 0 ? Math.max(45, legacyHoldSec) : 45);
+      els.storageBalanceFeedbackHoldSec.value = String(Math.round(effectiveHoldSec));
+    }
     const stF = (currentConfig.storage && typeof currentConfig.storage === 'object') ? currentConfig.storage : {};
     const legacyFeneconModeActive = (typeof stF.feneconGridControlEnabled === 'boolean')
       ? !!stF.feneconGridControlEnabled
@@ -12207,6 +12216,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     patch.storage.selfNvpRawGuardW = _clampInt(
       els.storageSelfNvpRawGuardW ? els.storageSelfNvpRawGuardW.value : patch.storage.selfNvpRawGuardW,
       50, 1000000, 100,
+    );
+    patch.storage.balanceFeedbackHoldSec = _clampInt(
+      els.storageBalanceFeedbackHoldSec ? els.storageBalanceFeedbackHoldSec.value : patch.storage.balanceFeedbackHoldSec,
+      1, 300, 45,
     );
     // Der Haken bedeutet ab 0.6.255: Hybrid-/Gateway-Priorität.
     // SetGridActivePower wird nicht mehr verwendet; ein eventuell vorhandener Legacy-DP wird entfernt.
@@ -14464,6 +14477,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         els.storageSelfNvpRawGuardW ? els.storageSelfNvpRawGuardW.value : currentConfig.storage.selfNvpRawGuardW,
         50, 1000000, 100,
       );
+      currentConfig.storage.balanceFeedbackHoldSec = _clampInt(
+        els.storageBalanceFeedbackHoldSec ? els.storageBalanceFeedbackHoldSec.value : currentConfig.storage.balanceFeedbackHoldSec,
+        1, 300, 45,
+      );
       scheduleValidation(200);
     };
     [
@@ -14471,6 +14488,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       els.storageSelfImportThresholdW,
       els.storageSelfNvpSmoothingSec,
       els.storageSelfNvpRawGuardW,
+      els.storageBalanceFeedbackHoldSec,
     ].filter(Boolean).forEach((el) => {
       el.addEventListener('change', _updateStorageSelfNvpControl);
       el.addEventListener('input', _updateStorageSelfNvpControl);

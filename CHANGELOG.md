@@ -1,3 +1,11 @@
+## 0.8.95
+
+- Speicherregelung: Der gemeinsame NVP-Regelkreis nutzt bei asynchroner Telemetrie weiterhin den letzten echten physischen Batterie-Istwert als Regelbasis, statt zwischen Istleistung und reiner NVP-Differenz zu springen.
+- Die Regelgleichung bleibt herstellerübergreifend `Soll = Batterie-Istleistung + NVP-Abweichung`; eine begrenzte Einschwing-/Haltephase verhindert sowohl Sollwertabstürze auf wenige hundert Watt als auch wiederholtes Hochintegrieren derselben Abweichung.
+- Gilt für Generic signed-DP, getrennte Lade-/Entlade-DPs, Sungrow Hybrid, E3/DC RSCP, FENECON-Assist und Speicherfarm. Der FENECON-No-Write-Modus bleibt unverändert.
+- Neue Regression `test:storage-async-feedback-all-profiles` prüft zeitversetzte Batterie-/NVP-Werte über alle Herstellerpfade.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v397` erhöht.
+
 ## 0.8.94
 
 - Speicherregelung/Eigenverbrauch: Erreicht der Speicher durch eine laufende Be- oder Entladevorgabe das NVP-Zielband, bleibt der letzte erfolgreich geschriebene Nicht-Null-Sollwert aktiv. `0 W` wird nicht mehr als normales Regelergebnis verwendet, sondern nur noch für ausdrückliche Stopbedingungen wie SoC-Grenzen, deaktivierte Regelung, fehlende NVP-Messung, Richtungswechsel oder aufgehobene PV-Freigabe.
