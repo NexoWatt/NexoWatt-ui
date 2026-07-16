@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2f88d2715d844d143505482435b06a132edf44cbbedbaa0629918d2e11b43175
+ * Original-Hash: 99b64323284d6e19abf0add0dd03d18bf29b93f39d626d568b67118623e8150c
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:3310df2555da37981452e4daad87b5ac9feaee5a81f82f23ffd5b002e3dffdfc
+ * Quell-Hash: sha256:d4e4040a9bd7d6426192c8ad6286d14864d3fa2fd6acf43017a45647c019acbb
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -965,6 +965,14 @@ function normalizeWallboxModeOverride(v) {
     if (s === 'boost' || s === 'turbo') return 'boost';
 
     return 'auto';
+}
+
+/** Trennt normal, expliziten Schutz und Assist; ohne Installer-Freigabe gilt immer normal. */
+function resolveEvcsStoragePolicy(customerAllowed, userAssistEnabled) {
+    const allowed = customerAllowed === true;
+    const assist = allowed && userAssistEnabled === true;
+    const protect = allowed && !assist;
+    return { mode: assist ? 'assist' : (protect ? 'protect' : 'normal'), assistRequested: assist, protectionRequested: protect };
 }
 
 /** Code-Teil: Klasse `ChargingManagementModule` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
@@ -3222,7 +3230,9 @@ class ChargingManagementModule extends BaseModule {
 
         // Speicher-Mitnutzung pro Ladepunkt: Installer-Freigabe + Kundenwahl + effektive Regelentscheidung
         await mk('storageAssistCustomerAllowed', 'Speicher-Mitnutzung im Kunden-UI freigegeben', 'boolean', 'indicator');
-        await mk('userStorageAssistEnabled', 'Speicher für Laden mitnutzen (User)', 'boolean', 'switch.enable', true, { def: false, states: { true: 'Mitnutzen', false: 'Schützen' } });
+        await mk('userStorageAssistEnabled', 'Speicher für Laden mitnutzen (User)', 'boolean', 'switch.enable', true, { def: false, states: { true: 'Mitnutzen', false: 'Nicht mitnutzen' } });
+        await mk('storagePolicyMode', 'Speicher-Policy (normal|protect|assist)', 'string', 'text');
+        await mk('storageProtectionRequested', 'Speicher-Schutz für Ladepunkt explizit aktiv', 'boolean', 'indicator');
         await mk('effectiveStorageAssist', 'Speicher-Mitnutzung effektiv', 'boolean', 'indicator');
         await mk('storageAssistBlockedReason', 'Speicher-Mitnutzung Grund', 'string', 'text');
         await mk('batteryContributionW', 'Speicheranteil EVCS (W)', 'number', 'value.power');
@@ -3671,6 +3681,15 @@ class ChargingManagementModule extends BaseModule {
             }
         };
 
+        /** Same-cycle Policy-Snapshot für das nachfolgende Storage-Control; States bleiben Diagnose/Fallback. */
+        const publishEvStoragePolicyCaps = (patch) => {
+            try {
+                const caps = (this.adapter && this.adapter._emsCaps && typeof this.adapter._emsCaps === 'object') ? this.adapter._emsCaps : {};
+                const prev = (caps.evcsStoragePolicy && typeof caps.evcsStoragePolicy === 'object') ? caps.evcsStoragePolicy : {};
+                this.adapter._emsCaps = { ...caps, evcsStoragePolicy: { ...prev, ...(patch || {}), ts: now } };
+            } catch { /* diagnostics only */ }
+        };
+
         // Reset the shared EV-priority snapshot on every tick so Storage-Control never sees stale flags
         // when Charging-Management is off or returns early in this cycle.
         publishEvPriorityCaps({
@@ -3684,17 +3703,18 @@ class ChargingManagementModule extends BaseModule {
             storageSource: '',
         });
 
-        // Speicher-Schutz fuer EVCS/Wallbox:
-        // Wenn der Kunde am Ladepunkt "Speicher schuetzen" gewaehlt hat oder der
-        // Installateur die Speicher-Mitnutzung nicht freigegeben hat, darf die
-        // Speicher-Eigenverbrauchsoptimierung den NVP-Import dieser Wallbox nicht
-        // wegregeln. Die Speicherregelung liest diese Summe herstellerneutral und
-        // verschiebt ihr NVP-Ziel um diese Leistung nach oben. So funktioniert der
-        // Schutz auch bei Herstellern wie E3/DC, die nicht ueber einen signed-DP,
-        // sondern ueber SET_POWER_MODE/SET_POWER_VALUE geschrieben werden.
-        let storageProtectedLoadW = 0;
-        let storageProtectedWallboxes = 0;
-        let storageAssistRequestedLoadW = 0;
+        // Neutraler Tick-Start verhindert, dass ein früher Return alte Schutzlasten stehen lässt.
+        publishEvStoragePolicyCaps({ protectedLoadW: 0, protectedWallboxes: 0, assistRequestedLoadW: 0, source: 'charging-tick-reset' });
+        let storageProtectedLoadW = 0, storageProtectedWallboxes = 0, storageAssistRequestedLoadW = 0;
+        try {
+            await Promise.all([
+                this._queueState('chargingManagement.control.storageProtectedLoadW', 0, true),
+                this._queueState('chargingManagement.control.storageProtectedWallboxes', 0, true),
+                this._queueState('chargingManagement.control.storageProtectedLoadTs', now, true),
+                this._queueState('chargingManagement.control.storageAssistRequestedLoadW', 0, true),
+            ]);
+        } catch { /* diagnostics only */ }
+
         for (let wbIndex = 0; wbIndex < wallboxes.length; wbIndex++) {
             const wb = wallboxes[wbIndex];
             const key = String(wb.key || '').trim();
@@ -3841,16 +3861,19 @@ class ChargingManagementModule extends BaseModule {
             } catch {
                 userStorageAssistEnabled = false;
             }
-            const storageAssistRequested = !!(storageAssistCustomerAllowed && userStorageAssistEnabled);
+            // Keine Installer-Freigabe = normaler Eigenverbrauch; nur die sichtbare Kundenwahl aktiviert protect/assist.
+            const storagePolicy = resolveEvcsStoragePolicy(storageAssistCustomerAllowed, userStorageAssistEnabled);
+            const storageAssistRequested = storagePolicy.assistRequested;
+            const storageProtectionRequested = storagePolicy.protectionRequested;
             try {
                 await this._queueState(`${ch}.storageAssistCustomerAllowed`, !!storageAssistCustomerAllowed, true);
                 if (!storageAssistCustomerAllowed && userStorageAssistEnabled) {
                     await this._queueState(`${ch}.userStorageAssistEnabled`, false, true);
                     userStorageAssistEnabled = false;
                 }
-            } catch {
-                // ignore
-            }
+                await this._queueState(`${ch}.storagePolicyMode`, storagePolicy.mode, true);
+                await this._queueState(`${ch}.storageProtectionRequested`, storageProtectionRequested, true);
+            } catch { /* diagnostics only */ }
 
             let minA = clamp(num(wb.minA, defaultMinA), 0, 2000);
             const maxA = clamp(num(wb.maxA, defaultMaxA), 0, 2000);
@@ -4138,13 +4161,11 @@ class ChargingManagementModule extends BaseModule {
             const pWFreshActualForGridW = (online && enabled && !meterStale && typeof pW === 'number' && Number.isFinite(pW)) ? Math.max(0, Math.abs(pW)) : 0;
             const pWStaleIgnoredForGridW = (online && enabled && meterStale && typeof pW === 'number' && Number.isFinite(pW)) ? Math.max(0, Math.abs(pW)) : 0;
 
-            // Speicher-Schutz: Nur frische, reale Wallbox-Leistung wird als
-            // geschuetzte Last an die Speicherregelung uebergeben. Stale Setpoint-
-            // Fallbacks duerfen den Speicher nicht kuenstlich sperren.
+            // Nur expliziter protect-Modus nimmt die frische Wallboxlast aus dem NVP-Regelkreis.
             if (pWFreshActualForGridW > 0) {
                 if (storageAssistRequested) {
                     storageAssistRequestedLoadW += pWFreshActualForGridW;
-                } else {
+                } else if (storageProtectionRequested) {
                     storageProtectedLoadW += pWFreshActualForGridW;
                     storageProtectedWallboxes += 1;
                 }
@@ -4624,6 +4645,7 @@ class ChargingManagementModule extends BaseModule {
                 storageAssistCustomerAllowed,
                 userStorageAssistEnabled,
                 storageAssistRequested,
+                storageProtectionRequested,
                 effectiveStorageAssist: false,
                 storageAssistBlockedReason: storageAssistCustomerAllowed ? (userStorageAssistEnabled ? 'pending' : 'user-disabled') : 'installer-locked',
                 batteryContributionW: 0,
@@ -6178,8 +6200,9 @@ if (components.length) {
             for (const w of wbList) {
                 const effectiveStorageAssist = !!(storageAssistActive && storageAssistW > 0 && w.storageAssistRequested === true);
                 let storageReason = '';
-                if (!w.storageAssistCustomerAllowed) storageReason = 'installer-locked';
-                else if (!w.userStorageAssistEnabled) storageReason = 'user-disabled';
+                if (!w.storageAssistCustomerAllowed) storageReason = 'normal-self-consumption';
+                else if (w.storageProtectionRequested) storageReason = 'storage-protected';
+                else if (!w.userStorageAssistEnabled) storageReason = 'normal-self-consumption';
                 else if (effectiveStorageAssist) storageReason = 'allowed';
                 else storageReason = storagePolicyGlobalBlocker || 'not-active';
                 w.effectiveStorageAssist = effectiveStorageAssist;
@@ -6192,6 +6215,9 @@ if (components.length) {
         } catch {
             // ignore
         }
+
+        // Finaler Same-cycle Stand; persistente States darunter bleiben Diagnose/Fallback.
+        publishEvStoragePolicyCaps({ protectedLoadW: Math.max(0, Math.round(Number(storageProtectedLoadW || 0))), protectedWallboxes: Math.max(0, Math.round(Number(storageProtectedWallboxes || 0))), assistRequestedLoadW: Math.max(0, Math.round(Number(storageAssistRequestedLoadW || 0))), source: 'charging-runtime' });
 
         // Publish diagnostics for UI
         try {
@@ -8674,4 +8700,5 @@ module.exports = {
     computePendingPvStartTotalBudgetW,
     computeEvcsPvBudgetReservationW,
     resolveChargingPvBudgetControl,
+    resolveEvcsStoragePolicy,
 };

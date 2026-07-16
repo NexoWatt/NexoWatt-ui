@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2d685cd30ec9f35e6b3bc192210185a5d0f3c256124373157b35a7d343404147
+ * Original-Hash: 2f277ef96bb292492b0828fe1a97e66781af269de59c34e80375eb0134b321bf
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:e6549122297b6f5b2c92383c7f32538b0a685df4551dc9e8042ba58725c71b50
+ * Quell-Hash: sha256:e2ac22c032089679b8418814722ed82f80870d3476cebfc025b654f8f932d90a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1293,12 +1293,21 @@ class SpeicherRegelungModule extends BaseModule {
         // und bei getrennten Lade-/Entlade-Sollwerten, weil die Korrektur vor dem
         // jeweiligen Hersteller-Schreibpfad erfolgt.
         const protectedEvcsMaxAgeMs = Math.max(staleMs * 3, 60000);
-        const evcsStorageProtectedLoadWRaw = await this._readOwnNumberFresh('chargingManagement.control.storageProtectedLoadW', protectedEvcsMaxAgeMs);
-        const evcsStorageProtectedLoadW = Math.max(0, Number.isFinite(Number(evcsStorageProtectedLoadWRaw)) ? Number(evcsStorageProtectedLoadWRaw) : 0);
-        const evcsStorageProtectedWallboxesRaw = await this._readOwnNumberFresh('chargingManagement.control.storageProtectedWallboxes', protectedEvcsMaxAgeMs);
-        const evcsStorageProtectedWallboxes = Math.max(0, Number.isFinite(Number(evcsStorageProtectedWallboxesRaw)) ? Math.round(Number(evcsStorageProtectedWallboxesRaw)) : 0);
-        const evcsStorageAssistRequestedLoadWRaw = await this._readOwnNumberFresh('chargingManagement.control.storageAssistRequestedLoadW', protectedEvcsMaxAgeMs);
-        const evcsStorageAssistRequestedLoadW = Math.max(0, Number.isFinite(Number(evcsStorageAssistRequestedLoadWRaw)) ? Number(evcsStorageAssistRequestedLoadWRaw) : 0);
+        const sharedCaps = (this.adapter && this.adapter._emsCaps && typeof this.adapter._emsCaps === 'object') ? this.adapter._emsCaps : null;
+        const runtimeEvcsStoragePolicy = (sharedCaps && sharedCaps.evcsStoragePolicy && typeof sharedCaps.evcsStoragePolicy === 'object') ? sharedCaps.evcsStoragePolicy : null;
+        const runtimePolicyTs = Number(runtimeEvcsStoragePolicy && runtimeEvcsStoragePolicy.ts);
+        const runtimePolicyFresh = !!(runtimeEvcsStoragePolicy && runtimePolicyTs > 0 && (now - runtimePolicyTs) <= protectedEvcsMaxAgeMs);
+        // Same-cycle Snapshot verhindert, dass ein alter asynchroner Schutz-State noch einen Tick blockiert.
+        const policyValue = async (key, stateId) => runtimePolicyFresh
+            ? runtimeEvcsStoragePolicy[key]
+            : this._readOwnNumberFresh(stateId, protectedEvcsMaxAgeMs);
+        const protectedRaw = await policyValue('protectedLoadW', 'chargingManagement.control.storageProtectedLoadW');
+        const protectedBoxesRaw = await policyValue('protectedWallboxes', 'chargingManagement.control.storageProtectedWallboxes');
+        const assistRaw = await policyValue('assistRequestedLoadW', 'chargingManagement.control.storageAssistRequestedLoadW');
+        const evcsStorageProtectedLoadW = Math.max(0, Number(protectedRaw) || 0);
+        const evcsStorageProtectedWallboxes = Math.max(0, Math.round(Number(protectedBoxesRaw) || 0));
+        const evcsStorageAssistRequestedLoadW = Math.max(0, Number(assistRaw) || 0);
+        const evcsStoragePolicySource = runtimePolicyFresh ? String(runtimeEvcsStoragePolicy.source || 'ems-runtime') : 'state-fallback';
         const evcsStorageProtectedNvpTargetShiftW = evcsStorageProtectedLoadW;
         const importRawWithoutProtectedEvcsW = Math.max(0, importRawW - evcsStorageProtectedLoadW);
 
@@ -1306,6 +1315,7 @@ class SpeicherRegelungModule extends BaseModule {
         await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzWallboxen', evcsStorageProtectedWallboxes);
         await this._setIfChanged('speicher.regelung.evcsSpeicherMitnutzungLastW', Math.round(evcsStorageAssistRequestedLoadW));
         await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzNvpZielOffsetW', Math.round(evcsStorageProtectedNvpTargetShiftW));
+        await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzQuelle', evcsStoragePolicySource);
 
 /**
  * Code-Teil: stripProtectedEvcsLoadW
@@ -6694,6 +6704,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.evcsSpeicherSchutzWallboxen', 'Wallboxen mit Speicher-Schutz', 'number', 'value', 0);
         await mk('speicher.regelung.evcsSpeicherMitnutzungLastW', 'EVCS-Leistung mit Speicher-Mitnutzung (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.evcsSpeicherSchutzNvpZielOffsetW', 'NVP-Zieloffset durch EVCS-Speicher-Schutz (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.evcsSpeicherSchutzQuelle', 'Quelle der EVCS-Speicher-Policy', 'string', 'text', '');
 
         // Sungrow-Hybrid-Diagnoseobjekte vor dem ersten zyklischen Schreiben anlegen.
         // Zusätzlich sichert _setIfChanged fehlende Runtime-States ab, falls ein Update

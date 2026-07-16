@@ -1,3 +1,16 @@
+## 0.8.107
+
+- Speicher-Eigenverbrauch bei aktiven Ladepunkten korrigiert: Ohne im AppCenter freigegebene Kundenwahl bleibt die Wallboxlast Bestandteil des normalen NVP-Regelkreises. Der Speicher darf den Netzbezug damit wie jede andere Last ausregeln.
+- Impliziten Speicherschutz entfernt: `Speicher-Assist nicht freigegeben` bedeutet nicht mehr automatisch `Speicher schützen`. Schutz wirkt nur, wenn die Kundenbedienung pro Ladepunkt freigegeben und dort ausdrücklich „Schützen“ gewählt wurde.
+- Speicher-Policy pro Ladepunkt getrennt: `normal` = Eigenverbrauchsoptimierung, `protect` = EVCS-Last nicht aus dem Speicher versorgen, `assist` = optionale aktive Speicherunterstützung des Lademanagements.
+- Same-cycle Übergabe ergänzt: Charging-Management veröffentlicht Schutz-/Assistlasten direkt im gemeinsamen EMS-Runtime-Snapshot. Storage-Control nutzt diesen Stand vor den asynchronen Diagnose-States, sodass alte Schutzwerte die Entladung nicht noch einen Zyklus blockieren.
+- Früher Rückkehrpfad abgesichert: Jeder Charging-Tick setzt die gemeinsame EVCS-Speicherpolicy zunächst neutral. Stale Meter, Safety-Gates oder fehlende Ladepunktdaten können dadurch keinen alten Schutzwert stehen lassen.
+- Herstellerunabhängige Wirkung bleibt erhalten: Expliziter Schutz wird weiterhin vor Generic-/Split-, Sungrow-, FENECON-, E3/DC- und Speicherfarm-Schreibpfaden berücksichtigt.
+- Neue Diagnosen: `chargingManagement.wallboxes.<LP>.storagePolicyMode`, `storageProtectionRequested` und `speicher.regelung.evcsSpeicherSchutzQuelle`.
+- Ladepunkt-Zuordnungen bleiben unverändert: Die im Admin pro LP konfigurierten Mess- und Steuer-DPs werden von dieser Korrektur weder ersetzt noch automatisch umgebogen.
+- Neue Runtime-Regression `test:evcs-storage-policy-default-self-consumption` prüft normalen Eigenverbrauch, expliziten Schutz, Assist, Same-cycle-Stale-Schutz und State-Fallback durch den echten Speicher-Tick.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v409` erhöht.
+
 ## 0.8.106
 
 - EVCS-Steuerpfade für bestehende `nexowatt-devices`-Anlagen feldkompatibel aufgelöst: Neben den bisherigen Aliasnamen `currentLimitA`/`powerLimitW` erkennt NexoWatt jetzt auch `targetCurrentA`/`targetPowerW` sowie die kompatiblen `setCurrentA`/`setPowerW`-Varianten.

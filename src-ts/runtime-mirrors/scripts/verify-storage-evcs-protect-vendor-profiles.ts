@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: f7c96a951be71b46867795431f0845a02ac8c3864077a25f09a0b04bf6ec3d6f
+ * Original-Hash: 583c56f06136b7d3b7ea588cb36dc99e05de8eb82655bc67b3ae73ca4a9dbcce
  */
 
 /**
@@ -77,16 +77,26 @@ function assertRegex(text, regex, label) {
 }
 
 // Wallbox/EVCS publishes the measured load that must not be supplied by the battery
-// while "Speicher schuetzen" is active. If storage assist is explicitly requested,
-// that load is separated and can still be supplied by storage.
+// only while "Speicher schuetzen" is explicitly enabled. Without installer/customer
+// activation, normal self-consumption remains active and the wallbox load is not removed
+// from the NVP demand. If storage assist is requested, that load is tracked separately.
 assertContains(charging, "chargingManagement.control.storageProtectedLoadW", 'EVCS protected-load state');
 assertContains(charging, "chargingManagement.control.storageAssistRequestedLoadW", 'EVCS storage-assist load state');
-assertContains(charging, "storageProtectedLoadW += pWFreshActualForGridW", 'fresh EVCS load contributes to storage protection');
+assertContains(charging, "function resolveEvcsStoragePolicy(customerAllowed, userAssistEnabled)", 'central EVCS storage-policy resolver');
+assertContains(charging, "const protect = allowed && !assist", 'storage protection requires explicit installer/customer activation');
+assertContains(charging, "const allowed = customerAllowed === true", 'installer permission is explicit');
+assertContains(charging, "mode: assist ? 'assist' : (protect ? 'protect' : 'normal')", 'hidden/disabled storage policy defaults to normal self-consumption');
+assertContains(charging, "else if (storageProtectionRequested)", 'fresh EVCS load is protected only in explicit protect mode');
+assertContains(charging, "storageProtectedLoadW += pWFreshActualForGridW", 'explicitly protected EVCS load contributes to storage protection');
 assertContains(charging, "storageAssistRequestedLoadW += pWFreshActualForGridW", 'storage-assist EVCS load is not protected from battery');
 
 // Storage control must apply the EVCS protection before the vendor write layer so it
 // works for signed DPs, split charge/discharge targets, Sungrow, FENECON and E3/DC.
-assertContains(storage, "_readOwnNumberFresh('chargingManagement.control.storageProtectedLoadW'", 'storage reads fresh protected EVCS load');
+assertContains(charging, 'publishEvStoragePolicyCaps', 'charging publishes same-cycle EVCS storage policy');
+assertContains(charging, 'evcsStoragePolicy: { ...prev', 'shared EMS runtime contains EVCS storage policy');
+assertContains(storage, 'sharedCaps.evcsStoragePolicy', 'storage reads same-cycle EVCS storage policy');
+assertContains(storage, "policyValue('protectedLoadW', 'chargingManagement.control.storageProtectedLoadW')", 'storage keeps state fallback for protected EVCS load');
+assertContains(storage, "speicher.regelung.evcsSpeicherSchutzQuelle", 'storage exposes EVCS policy source diagnostic');
 assertContains(storage, "const evcsStorageProtectedNvpTargetShiftW = evcsStorageProtectedLoadW", 'NVP target shift equals protected EVCS load');
 assertContains(storage, "const desiredNvpW = selfTargetGridW + evcsStorageProtectedNvpTargetShiftW", 'generic self-consumption NVP target shifted');
 assertContains(storage, "const protectedSelfImportW = Math.max(0, importRawNowW - evcsStorageProtectedLoadW)", 'generic discharge demand excludes protected EVCS load');

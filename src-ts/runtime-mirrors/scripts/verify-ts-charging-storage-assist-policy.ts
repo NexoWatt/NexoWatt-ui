@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: a20cf943806bdeae874e7f6c03d854b7b8987d974bae92c3e6238542ef91152c
+ * Original-Hash: 3e800c029f2b74c302a78ea3c65f70690e9dcad61624ce9013b067357afe5a30
  */
 
 /**
@@ -97,6 +97,9 @@ mustContain('src-ts/runtime-executables/main.ts', 'userStorageAssistEnabled', 'B
 mustContain('src-ts/runtime-executables/ems/modules/charging-management.ts', 'storageAssistCustomerAllowed', 'Runtime Installer-Freigabe');
 mustContain('src-ts/runtime-executables/ems/modules/charging-management.ts', 'effectiveStorageAssist', 'Runtime effektive Speicher-Mitnutzung');
 mustContain('src-ts/runtime-executables/ems/modules/charging-management.ts', 'batteryContributionW', 'Runtime Batterieanteil');
+mustContain('src-ts/runtime-executables/ems/modules/charging-management.ts', 'storageProtectionRequested', 'Runtime expliziter Speicher-Schutz');
+mustContain('src-ts/runtime-executables/ems/modules/charging-management.ts', 'normal-self-consumption', 'Runtime Default Eigenverbrauch ohne Schutzfreigabe');
+mustContain('src-ts/runtime-executables/ems/modules/charging-management.ts', "mode: assist ? 'assist' : (protect ? 'protect' : 'normal')", 'Keine implizite Schutzaktivierung ohne Installer-Freigabe');
 mustContain('src-ts/runtime-executables/ems/modules/charging-management.ts', 'installer-locked', 'Runtime Sperrgrund');
 mustContain('src-ts/ems/charging-management/charging-allocation.ts', 'storageAssistCustomerAllowed', 'TS Allocation Storage-Felder');
 mustContain('src-ts/ems/charging-management/charging-allocation.ts', 'batteryContributionW', 'TS Allocation Batterieanteil');

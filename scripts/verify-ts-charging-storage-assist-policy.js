@@ -34,6 +34,9 @@ mustContain('src-ts/runtime-executables/main.ts', 'userStorageAssistEnabled', 'B
 mustContain('src-ts/runtime-executables/ems/modules/charging-management.ts', 'storageAssistCustomerAllowed', 'Runtime Installer-Freigabe');
 mustContain('src-ts/runtime-executables/ems/modules/charging-management.ts', 'effectiveStorageAssist', 'Runtime effektive Speicher-Mitnutzung');
 mustContain('src-ts/runtime-executables/ems/modules/charging-management.ts', 'batteryContributionW', 'Runtime Batterieanteil');
+mustContain('src-ts/runtime-executables/ems/modules/charging-management.ts', 'storageProtectionRequested', 'Runtime expliziter Speicher-Schutz');
+mustContain('src-ts/runtime-executables/ems/modules/charging-management.ts', 'normal-self-consumption', 'Runtime Default Eigenverbrauch ohne Schutzfreigabe');
+mustContain('src-ts/runtime-executables/ems/modules/charging-management.ts', "mode: assist ? 'assist' : (protect ? 'protect' : 'normal')", 'Keine implizite Schutzaktivierung ohne Installer-Freigabe');
 mustContain('src-ts/runtime-executables/ems/modules/charging-management.ts', 'installer-locked', 'Runtime Sperrgrund');
 mustContain('src-ts/ems/charging-management/charging-allocation.ts', 'storageAssistCustomerAllowed', 'TS Allocation Storage-Felder');
 mustContain('src-ts/ems/charging-management/charging-allocation.ts', 'batteryContributionW', 'TS Allocation Batterieanteil');
