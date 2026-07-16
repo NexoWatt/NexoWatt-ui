@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.8.105",
+  "version": "0.8.106",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -213,7 +213,7 @@
     "test:charging-allocation-productive": "node scripts/verify-ts-charging-allocation-productive.js",
     "test:charging-write-plan-productive": "node scripts/verify-ts-charging-write-plan-productive.js",
     "test:charging-js-executor-fallback": "node scripts/verify-ts-charging-js-executor-fallback.js",
-    "test:charging-productive-hardening": "npm run test:charging-allocation-productive && npm run test:charging-write-plan-productive && npm run test:charging-js-executor-fallback && npm run test:charging-safety-handover && npm run test:charging-normal-source-lockdown && npm run test:charging-final-handover && npm run test:charging-multipoint-station-budget && npm run test:charging-minpv-base-reaction && npm run test:pv-unused-evcs-release-to-storage && npm run test:charging-infrastructure-budget",
+    "test:charging-productive-hardening": "npm run test:charging-allocation-productive && npm run test:charging-write-plan-productive && npm run test:charging-js-executor-fallback && npm run test:charging-safety-handover && npm run test:charging-normal-source-lockdown && npm run test:charging-final-handover && npm run test:charging-multipoint-station-budget && npm run test:charging-minpv-base-reaction && npm run test:pv-unused-evcs-release-to-storage && npm run test:charging-infrastructure-budget && npm run test:evcs-control-alias-mapping",
     "test:charging-safety-handover": "node scripts/verify-ts-charging-safety-handover.js",
     "test:charging-normal-source-lockdown": "node scripts/verify-ts-charging-normal-source-lockdown.js",
     "test:charging-final-handover": "node scripts/verify-ts-charging-final-handover.js",
@@ -318,7 +318,8 @@
     "test:field-security-hardening": "npm run test:public-api-security && npm run test:mesh-peer-fail-closed && npm run test:customer-write-policy",
     "test:charging-minpv-base-reaction": "node scripts/verify-charging-minpv-base-reaction.js",
     "test:pv-unused-evcs-release-to-storage": "node scripts/verify-pv-unused-evcs-release-to-storage.js",
-    "test:charging-infrastructure-budget": "node scripts/verify-charging-infrastructure-budget.js"
+    "test:charging-infrastructure-budget": "node scripts/verify-charging-infrastructure-budget.js",
+    "test:evcs-control-alias-mapping": "node scripts/verify-evcs-control-alias-mapping.js"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",

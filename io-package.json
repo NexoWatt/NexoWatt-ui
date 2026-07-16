@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.105",
+    "version": "0.8.106",
     "news": {
+      "0.8.106": {
+        "de": "Version 0.8.106: Aktuelle nexowatt-devices-Wallboxprofile mit targetCurrentA/targetPowerW werden automatisch als steuerbar erkannt. Bestehende Mess-/Statuszuordnungen werden feldkompatibel um die real vorhandenen Steuer-DPs ergänzt, sodass berechnete EMS-Sollwerte wieder am Ladepunkt ankommen. Manuelle Installer-Zuordnungen bleiben unverändert.",
+        "en": "Version 0.8.106: Current nexowatt-devices wallbox profiles using targetCurrentA/targetPowerW are now detected as controllable. Existing measurement/status mappings are field-compatibly completed with real control datapoints so calculated EMS targets reach the charger again. Manual installer mappings remain unchanged."
+      },
       "0.8.105": {
         "de": "Version 0.8.105: Das EVCS-Gesamtbudget summiert wieder alle aktivierten, steuerbaren Ladepunkte statt nur einer 11-kW-Nennleistung. Stations-, NVP-, Phasen- und §14a-Grenzen bleiben verbindlich. Wenn das sichere Budget reicht, werden die technischen Mindestleistungen aller verbundenen Auto-, Boost- und Min+PV-Ladepunkte zuerst erhalten; Zusatzleistung wird danach nach Priorität verteilt.",
         "en": "Version 0.8.105: The EVCS infrastructure budget once again sums all enabled controllable charge points instead of being limited to one 11 kW nominal value. Station, grid-connection, phase and §14a limits remain binding. When the safe budget is sufficient, the technical minimum of every connected Auto, Boost and Min+PV connector is preserved first; additional power is allocated afterwards by priority."
@@ -26,10 +30,6 @@
       "0.8.100": {
         "de": "Version 0.8.100: Stabilisiert das Lademanagement für mehrere Ladepunkte. Gesamt- und PV-Budget, technische Mindestleistung, Strom-/Leistungsschritte sowie Stationslimits werden unmittelbar vor dem Geräte-Schreibpfad nochmals verbindlich geprüft. Prioritäten, Boost, Ziel-Laden, laufende Sessions und Stations-Round-Robin bleiben erhalten; Stationsdiagnosen zeigen jetzt exakt den final geschriebenen Ladeplan.",
         "en": "Version 0.8.100: Stabilizes charging management for multiple charge points. Total and PV budgets, technical minimum power, current/power steps and station limits are now enforced again immediately before device setpoints are written. Priorities, boost, target charging, active sessions and station round-robin remain intact, while station diagnostics now reflect the exact final write plan."
-      },
-      "0.8.99": {
-        "de": "Version 0.8.99: Vereinheitlicht die PV-Verteilung vollständig über das zentrale EMS-Budget. EVCS reserviert auch einen gültigen PV-Start-Intent vor dem messbaren Ladebeginn, Speicher und Herstellerprofile erhalten nur das verbleibende Grant, und Thermik sowie Heizstab arbeiten anschließend ausschließlich mit dem Restbudget. Konflikte zwischen direkter PV-Messung, NVP-Einspeisung und laufenden flexiblen Lasten werden zentral aufgelöst.",
-        "en": "Version 0.8.99: Unifies PV distribution completely through the central EMS budget. EVCS also reserves a valid PV start intent before measurable charging begins, storage and vendor profiles receive only the remaining grant, and thermal loads plus heating rods then work exclusively with the residual budget. Conflicts between direct PV metering, grid export and running flexible loads are resolved centrally."
       }
     },
     "title": "NexoWatt UI",

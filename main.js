@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:4375ad3a021678ec12cc48e488b5693f811822b631ced003a1b46392ca1616fa
+ * Quell-Hash: sha256:c97a0dc29ec626fd772474770476e299a7a80c096aebd590b5bb6cd41b34fe65
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -141,6 +141,7 @@ const {
   combineStorageFarmPv: nwCombineStorageFarmPv,
   normalizeFarmPower: nwNormalizeFarmPower,
 } = require('./ems/services/storage-farm-aggregation');
+const { resolveEvcsControlMapping } = require('./ems/evcs-control-mapping');
 
 // NexoLogic (node/graph) runtime engine
 const { NexoLogicEngine } = require('./ems/nexologic-engine');
@@ -6832,11 +6833,69 @@ class NexoWattVis extends utils.Adapter {
     this.evcsCount = evcsCount;
     this.log.info(`[NexoWatt UI] Ladepunkte konfiguriert: ${evcsCount}`);
 
+    // Feldkompatibilitaet fuer bestehende `nexowatt-devices`-Anlagen:
+    // Der Geräteadapter hat die schreibbaren EVCS-Aliase im Laufe der Zeit von
+    // `currentLimitA`/`powerLimitW` auf `targetCurrentA`/`targetPowerW`
+    // erweitert. Fehlen die expliziten AppCenter-Zuordnungen, lösen wir diese
+    // Aliase einmal beim Adapterstart auf. Nur real vorhandene, schreibbare
+    // State-Objekte werden übernommen; frei konstruierte Blindpfade sind
+    // ausdrücklich nicht zulässig.
+    const canUseEvcsControlDp = async (id) => {
+      const objectId = String(id || '').trim();
+      if (!objectId) return false;
+      try {
+        const obj = await this.getForeignObjectAsync(objectId);
+        if (obj && obj.type === 'state') {
+          return !(obj.common && obj.common.write === false);
+        }
+      } catch (_eObj) {
+        // Optionaler Fallback auf einen bereits vorhandenen State. Das ist für
+        // ältere Aliasobjekte relevant, deren Objektmetadaten kurzzeitig später
+        // als der State im Objektbaum verfügbar werden.
+      }
+      try {
+        const state = await this.getForeignStateAsync(objectId);
+        return !!state;
+      } catch (_eState) {
+        return false;
+      }
+    };
+
 
     // derive evcs list (names) from config; keep it stable and only as long as explicitly configured
     const evcsList = [];
     for (let i = 0; i < evcsCount; i++) {
-      const row = rawList[i] || {};
+      let row = rawList[i] || {};
+      let controlMappingAutoResolved = false;
+      let controlMappingAutoResolvedCurrent = false;
+      let controlMappingAutoResolvedPower = false;
+      let controlMappingAutoResolvedEnable = false;
+      try {
+        const resolved = await resolveEvcsControlMapping(row, canUseEvcsControlDp);
+        if (resolved && resolved.row) row = resolved.row;
+        controlMappingAutoResolved = !!(resolved && resolved.changed);
+        controlMappingAutoResolvedCurrent = !!(resolved && resolved.inferredCurrent);
+        controlMappingAutoResolvedPower = !!(resolved && resolved.inferredPower);
+        controlMappingAutoResolvedEnable = !!(resolved && resolved.inferredEnable);
+        if (controlMappingAutoResolved) {
+          // Die Ergänzung wird absichtlich nur in die laufende Native-Konfiguration
+          // gespiegelt. Beim nächsten Start wird sie erneut sicher validiert; eine
+          // automatische dauerhafte Änderung der Installer-Konfiguration erfolgt
+          // nicht ohne ausdrückliches Speichern im AppCenter.
+          if (Array.isArray(cfg.evcsList)) cfg.evcsList[i] = { ...row };
+          try {
+            const parts = [
+              controlMappingAutoResolvedCurrent ? 'Sollstrom' : '',
+              controlMappingAutoResolvedPower ? 'Sollleistung' : '',
+              controlMappingAutoResolvedEnable ? 'Freigabe' : '',
+            ].filter(Boolean).join(', ');
+            this.log.info(`[NexoWatt UI] Ladepunkt ${i + 1}: Steuer-Datenpunkte automatisch aus der Geräte-Aliasstruktur ergänzt (${parts || 'Mapping'}).`);
+          } catch (_eLog) {}
+        }
+      } catch (_eResolveEvcsControl) {
+        // Explizite Installer-Zuordnungen bleiben bei jedem Auflösungsfehler
+        // unverändert aktiv. Die Ladepunktregelung arbeitet dann wie bisher.
+      }
       const name = (row && typeof row.name === 'string' && row.name.trim()) ? row.name.trim() : `Ladepunkt ${i+1}`;
       const note = (row && typeof row.note === 'string' && row.note.trim()) ? row.note.trim() : '';
       const powerId = (row && typeof row.powerId === 'string' && row.powerId.trim()) ? row.powerId.trim() : '';
@@ -6903,7 +6962,7 @@ class NexoWattVis extends utils.Adapter {
       const phaseSwitchSettleSec = (row && row.phaseSwitchSettleSec !== undefined && row.phaseSwitchSettleSec !== null && String(row.phaseSwitchSettleSec).trim() !== '' && Number.isFinite(Number(row.phaseSwitchSettleSec))) ? Number(row.phaseSwitchSettleSec) : 30;
       // Installer-Freigabe: Nur wenn aktiv, darf der Kunde im Frontend Speicher-Mitnutzung für diesen Ladepunkt wählen.
       const storageAssistCustomerAllowed = (row && row.storageAssistCustomerAllowed !== undefined && row.storageAssistCustomerAllowed !== null) ? !!row.storageAssistCustomerAllowed : false;
-evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec, storageAssistCustomerAllowed });
+evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec, storageAssistCustomerAllowed, controlMappingAutoResolved, controlMappingAutoResolvedCurrent, controlMappingAutoResolvedPower, controlMappingAutoResolvedEnable });
     }
     this.evcsList = evcsList;
     // Stationsgruppen (für DC-Stationen mit mehreren Ladepunkten)
@@ -14015,9 +14074,9 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
             energyTotalKWh: aliases['r.energyTotal'] || hasState('energyTotal') || '',
             statusCode: aliases['r.statusCode'] || hasState('statusCode') || '',
             connected: aliases['comm.connected'] || '',
-            ctrlRun: aliases['ctrl.run'] || '',
-            ctrlCurrentLimitA: aliases['ctrl.currentLimitA'] || '',
-            ctrlPowerLimitW: aliases['ctrl.powerLimitW'] || '',
+            ctrlRun: aliases['ctrl.run'] || aliases['ctrl.enable'] || aliases['ctrl.enabled'] || '',
+            ctrlCurrentLimitA: aliases['ctrl.targetCurrentA'] || aliases['ctrl.currentLimitA'] || aliases['ctrl.setCurrentA'] || '',
+            ctrlPowerLimitW: aliases['ctrl.targetPowerW'] || aliases['ctrl.powerLimitW'] || aliases['ctrl.setPowerW'] || '',
             ctrlPvLimitPct: aliases['ctrl.powerLimitPct'] || '',
             ctrlPvLimitEnable: aliases['ctrl.powerLimitEnable'] || '',
           };

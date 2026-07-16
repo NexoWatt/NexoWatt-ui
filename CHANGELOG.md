@@ -1,3 +1,11 @@
+## 0.8.106
+
+- EVCS-Steuerpfade für bestehende `nexowatt-devices`-Anlagen feldkompatibel aufgelöst: Neben den bisherigen Aliasnamen `currentLimitA`/`powerLimitW` erkennt NexoWatt jetzt auch `targetCurrentA`/`targetPowerW` sowie die kompatiblen `setCurrentA`/`setPowerW`-Varianten.
+- Fehlende Sollwertzuordnungen werden beim Adapterstart ausschließlich aus real vorhandenen und schreibbaren States derselben Gerätebasis ergänzt. Manuelle Installer-Zuordnungen bleiben unverändert; Steuerpfade verschiedener Ladepunkte werden nicht vermischt.
+- AppCenter-Schnellerkennung und Backend-Geräteinventar verwenden dieselbe Aliasauflösung. Dadurch werden korrekt angebundene Ladepunkte wieder als steuerbar gezählt, die installierte Portsumme fließt in das zentrale NVP-/Stationsbudget ein und der finale EVCS-Write-Plan erreicht den tatsächlichen Geräte-DP.
+- Neue Regression `test:evcs-control-alias-mapping` prüft Target-/Legacy-Aliase, Schutz manueller Zuordnungen, Gerätebasis-Isolation, 4×11-kW-Infrastruktur, Engine-Erkennung und den realen Sollstrom-Schreibpfad.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v408` erhöht.
+
 ## 0.8.105
 
 - EVCS-Infrastrukturgrenze korrigiert: Die im AppCenter konfigurierte Nennleistung gilt wieder pro Ladepunkt. Der Engine-Modus summiert alle aktivierten und steuerbaren Ladepunkte; ein alter 11-kW-Einzelwert kann die gesamte Ladeinfrastruktur nicht mehr global begrenzen.

@@ -11073,9 +11073,27 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     setIf('onlineId', _nwGetAlias(dev, 'comm.connected'));
 
     // Control (optional)
-    setIf('setCurrentAId', _nwGetAlias(dev, 'ctrl.currentLimitA'));
-    setIf('setPowerWId', _nwGetAlias(dev, 'ctrl.powerLimitW'));
-    setIf('enableWriteId', _nwGetAlias(dev, 'ctrl.run'));
+    // Feldkompatibilität: ältere Geräteprofile verwenden `currentLimitA` /
+    // `powerLimitW`, neuere NexoWatt-Devices-Profile dagegen häufig
+    // `targetCurrentA` / `targetPowerW`. Beide Varianten beschreiben denselben
+    // schreibbaren EMS-Sollwert und müssen bei der Schnell-Inbetriebnahme
+    // erkannt werden, damit ein vorhandener Ladepunkt nicht als "nicht
+    // steuerbar" im zentralen Budget erscheint.
+    setIf('setCurrentAId',
+      _nwGetAlias(dev, 'ctrl.targetCurrentA')
+      || _nwGetAlias(dev, 'ctrl.currentLimitA')
+      || _nwGetAlias(dev, 'ctrl.setCurrentA')
+      || (dev && dev.dp && dev.dp.ctrlCurrentLimitA));
+    setIf('setPowerWId',
+      _nwGetAlias(dev, 'ctrl.targetPowerW')
+      || _nwGetAlias(dev, 'ctrl.powerLimitW')
+      || _nwGetAlias(dev, 'ctrl.setPowerW')
+      || (dev && dev.dp && dev.dp.ctrlPowerLimitW));
+    setIf('enableWriteId',
+      _nwGetAlias(dev, 'ctrl.run')
+      || _nwGetAlias(dev, 'ctrl.enable')
+      || _nwGetAlias(dev, 'ctrl.enabled')
+      || (dev && dev.dp && dev.dp.ctrlRun));
 
     // Some devices expose "active" as status; we keep it optional
     // setIf('activeId', _nwGetAlias(dev, 'r.active'));
