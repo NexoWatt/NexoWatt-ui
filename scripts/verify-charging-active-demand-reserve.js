@@ -6,8 +6,9 @@
  * getrennt im zentralen Budget verbucht werden.
  *
  * - Reale/kommandierte EVCS-Leistung reduziert das Gesamtbudget.
- * - Ein verbundener `SuspendedEVSE`-Ladepunkt reserviert seinen zentralen
- *   PV-Anteil bereits vor dem Leistungsfluss.
+ * - Ein verbundener `SuspendedEVSE`-Ladepunkt reserviert vor dem Start nur
+ *   seine technisch fahrbare Mindestleistung; ungenutzter PV-Anteil bleibt
+ *   fuer Speicher und nachgelagerte Verbraucher frei.
  * - Dieser Pending-Intent reduziert nur das PV-Restbudget, nicht das Netzbudget.
  */
 const assert = require('assert');
@@ -81,8 +82,8 @@ const suspendedEvse = computePendingPvStartIntentW({
   stationRemainingW: 11000,
   pvRemainingW: 7920,
 });
-assert.strictEqual(suspendedEvse.intentW, 7920, 'SuspendedEVSE muss den zentralen 80-%-EVCS-Anteil reservieren');
-assert.strictEqual(suspendedEvse.reason, 'pv-start-intent');
+assert.strictEqual(suspendedEvse.intentW, 4140, 'SuspendedEVSE darf vor dem Start nur das technische PV-Startminimum reservieren');
+assert.strictEqual(suspendedEvse.reason, 'pv-start-minimum-intent');
 
 const suspendedEv = computePendingPvStartIntentW({
   mode: 'pv',
@@ -110,7 +111,7 @@ const reserve = computeEvcsPvBudgetReservationW({
   pendingIntentPvW: suspendedEvse.intentW,
   allocationCapW: 7920,
 });
-assert.strictEqual(reserve, 7920, 'Pending-Intent muss den EVCS-PV-Anteil zentral reservieren');
+assert.strictEqual(reserve, 4140, 'Pending-Intent darf vor dem Start nur das technische Minimum zentral reservieren');
 
 const activePlusPending = computeEvcsPvBudgetReservationW({
   reserveW: 3000,

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 579c454f59ef7553c6aee4be5822e270e9fb00ae96c5dfdc784c8e5a502b7c50
+ * Original-Hash: 977a95f03ac3bee2d424c1e5de81155e914380836025847da954488564015cbd
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:3f543d6269d9afbbeee19ee94167e4a1504420638c24f0219a1083674809d718
+ * Quell-Hash: sha256:7717c20ba287bf2fecfb0a2d4cb56f671e4a526231ecb2bb812cbe1350f147e8
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -75,6 +75,10 @@
 
 const { DatapointRegistry } = require('./datapoints');
 const { ModuleManager } = require('./module-manager');
+const {
+  deriveChargingConnectorCapacityW,
+  computeChargingInfrastructureCapacity,
+} = require('./charging-budget-helpers');
 /** Code-Teil: clampNumber – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
 function clampNumber(n, min, max, fallback) {
   const v = Number(n);
@@ -574,6 +578,7 @@ class EmsEngine {
         chargerType,
         controlBasis,
         phases,
+        voltageV,
 
         // Stationsmeta
         ...(stationKey ? { stationKey } : {}),
@@ -602,8 +607,22 @@ class EmsEngine {
       });
     }
 
+    // Die AppCenter-Angabe ist eine Nennleistung PRO Ladepunkt. Fuer das
+    // Gesamtbudget muss deshalb die installierte Leistung aller steuerbaren
+    // Ladepunkte summiert werden. Stationsgruppen werden dabei bereits auf ihr
+    // gemeinsames Stationslimit begrenzt; die NVP-/Phasen-/§14a-Grenzen folgen
+    // spaeter im Lademanagement und koennen diesen Wert nur weiter reduzieren.
+    const infrastructure = computeChargingInfrastructureCapacity({
+      wallboxes,
+      stationGroups,
+      fallbackPerConnectorW: ratedW,
+    });
+
     // enableChargingManagement only if at least one controllable wallbox exists
     const anyControl = wallboxes.some(w => (w && w.enabled !== false) && (w.setCurrentAId || w.setPowerWId));
+    const infrastructureCapacityW = infrastructure.effectiveCapacityW > 0
+      ? infrastructure.effectiveCapacityW
+      : (anyControl ? ratedW : 0);
 
     const chargingCfg = {
       // Keep consistent with multiuse module
@@ -612,9 +631,17 @@ class EmsEngine {
       // PV-only is handled per-wallbox via runtime mode (pv/minpv). Keep global default off.
       pvSurplusOnly: false,
 
-      // Budget: engine (static+tariff+peak+external; implemented in module)
+      // Budget: engine (Infrastruktur + Tarif + Peak + externe Gates).
+      // `staticMaxChargingPowerW` ist im Engine-Modus die automatisch summierte
+      // Infrastrukturgrenze und nicht mehr die Nennleistung nur eines Ladepunkts.
       totalBudgetMode: 'engine',
-      staticMaxChargingPowerW: ratedW,
+      staticMaxChargingPowerW: infrastructureCapacityW,
+      infrastructureRawCapacityW: infrastructure.rawCapacityW,
+      infrastructureCapacityW,
+      infrastructureWallboxCount: infrastructure.wallboxCount,
+      infrastructureStationCount: infrastructure.stationCount,
+      infrastructurePerConnectorFallbackW: ratedW,
+      infrastructureHardCapW: 0,
 
       // PV surplus input (optional)
       ...(pvSurplusPowerId ? { pvSurplusPowerId } : {}),
@@ -691,7 +718,30 @@ class EmsEngine {
       if (bm) chargingCfg.totalBudgetMode = bm;
 
       const staticW = Number(userCm.staticMaxChargingPowerW);
-      if (Number.isFinite(staticW) && staticW > 0) chargingCfg.staticMaxChargingPowerW = Math.round(staticW);
+      const infrastructureHardCapW = Number(userCm.infrastructureHardCapW);
+      if (chargingCfg.totalBudgetMode === 'static') {
+        // Im ausdruecklichen Static-Modus bleibt ein manuell gepflegtes
+        // Gesamtbudget kompatibel. Dieser Modus ist eine bewusste feste Grenze.
+        if (Number.isFinite(staticW) && staticW > 0) {
+          chargingCfg.staticMaxChargingPowerW = Math.round(staticW);
+        }
+      } else if (chargingCfg.totalBudgetMode === 'engine') {
+        // Alte Installationen koennen noch den frueheren versteckten 11-kW-Wert
+        // in `staticMaxChargingPowerW` besitzen. Im Engine-Modus darf dieser die
+        // automatisch summierte Ladeinfrastruktur nicht mehr auf einen einzelnen
+        // Ladepunkt begrenzen. Ein optionaler neuer Hard-Cap ist dagegen explizit.
+        const hardCapW = Number.isFinite(infrastructureHardCapW) && infrastructureHardCapW > 0
+          ? Math.round(infrastructureHardCapW)
+          : 0;
+        chargingCfg.infrastructureHardCapW = hardCapW;
+        chargingCfg.staticMaxChargingPowerW = hardCapW > 0
+          ? Math.min(infrastructureCapacityW, hardCapW)
+          : infrastructureCapacityW;
+      } else if (Number.isFinite(staticW) && staticW > 0) {
+        // Kompatibilitaet fuer alternative Budgetmodi; der Wert ist dort nur ein
+        // Diagnose-/Fallbackwert und ersetzt nicht deren eigenen Datenpunkt.
+        chargingCfg.staticMaxChargingPowerW = Math.round(staticW);
+      }
 
       const budgetId = (typeof userCm.budgetPowerId === 'string') ? userCm.budgetPowerId.trim() : '';
       if (budgetId) chargingCfg.budgetPowerId = budgetId;
@@ -1241,4 +1291,4 @@ class EmsEngine {
   }
 }
 
-module.exports = { EmsEngine };
+module.exports = { EmsEngine, deriveChargingConnectorCapacityW, computeChargingInfrastructureCapacity };

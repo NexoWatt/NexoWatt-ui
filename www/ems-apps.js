@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:7cebe8ccd2bf760f0f8a608a4a406e0694df06bdab288a3fabda15dd3fdbd0e5
+ * Quell-Hash: sha256:0b6faa7161ee7510bc9d0c8f7dbaa3a10862e0cbcacd7c30b512b284c90ad853
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -13959,7 +13959,13 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     els.chargingBudget.appendChild(mkCard('Ladebudget EVCS', [
       { label: 'Tarif', value: tariffTxt },
       { label: 'Mode', value: String(ctrl.budgetMode || '') },
-      { label: 'Budget', value: _fmtW(budgetW) },
+      { label: 'Ladepunkte steuerbar', value: String(Math.max(0, Math.round(n(ctrl.infrastructureWallboxCount) || 0))) },
+      { label: 'Portsumme installiert', value: _fmtW(n(ctrl.infrastructureRawCapacityW)) },
+      { label: 'Infrastruktur wirksam', value: _fmtW(n(ctrl.infrastructureCapacityW)) },
+      { label: 'Optionaler Hard-Cap', value: _fmtW(n(ctrl.infrastructureHardCapW)) },
+      { label: 'Budget nach allen Gates', value: _fmtW(budgetW) },
+      { label: 'Mindestversorgung gesamt', value: _fmtW(n(ctrl.minimumServiceRequiredW)) },
+      { label: 'Alle Minima gehalten', value: _fmtBool(b(ctrl.minimumServicePreserved), 'JA', 'NEIN') },
       { label: 'Ist', value: _fmtW(n(ctrl.actualW ?? usedW)) },
       { label: 'Reserviert', value: _fmtW(n(ctrl.reserveW ?? usedW)) },
       { label: 'Remaining', value: _fmtW(remW) },

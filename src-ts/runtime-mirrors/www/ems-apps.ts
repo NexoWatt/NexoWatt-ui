@@ -18,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 428c920f4da018ea43159f6d4bc32b0c4b8a780bdd5622291800f17a7864c6b2
+ * Original-Hash: 4a0e19a908003a08fd47aeee68170aecce4d17dc35e4b2b68c383b2ee416cd2b
  */
 
 /**
@@ -12062,8 +12062,15 @@ function collectAiAdvisorConfigFromUI(base) {
     els.chargingBudget.appendChild(mkCard('Ladebudget EVCS', [
       { label: 'Tarif', value: tariffTxt },
       { label: 'Mode', value: String(ctrl.budgetMode || '') },
-      { label: 'Budget', value: _fmtW(budgetW) },
-      { label: 'Used', value: _fmtW(usedW) },
+      { label: 'Ladepunkte steuerbar', value: String(Math.max(0, Math.round(n(ctrl.infrastructureWallboxCount) || 0))) },
+      { label: 'Portsumme installiert', value: _fmtW(n(ctrl.infrastructureRawCapacityW)) },
+      { label: 'Infrastruktur wirksam', value: _fmtW(n(ctrl.infrastructureCapacityW)) },
+      { label: 'Optionaler Hard-Cap', value: _fmtW(n(ctrl.infrastructureHardCapW)) },
+      { label: 'Budget nach allen Gates', value: _fmtW(budgetW) },
+      { label: 'Mindestversorgung gesamt', value: _fmtW(n(ctrl.minimumServiceRequiredW)) },
+      { label: 'Alle Minima gehalten', value: _fmtBool(b(ctrl.minimumServicePreserved), 'JA', 'NEIN') },
+      { label: 'Ist', value: _fmtW(n(ctrl.actualW ?? usedW)) },
+      { label: 'Reserviert', value: _fmtW(n(ctrl.reserveW ?? usedW)) },
       { label: 'Remaining', value: _fmtW(remW) },
       { label: 'Status', value: String(ctrl.status || '') },
     ], budgetKind));

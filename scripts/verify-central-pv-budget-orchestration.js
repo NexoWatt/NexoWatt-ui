@@ -15,8 +15,11 @@
  * Erwartung:
  * - physikalisches PV-Potential 10,4 kW
  * - nach 0,5 kW Reserve zentrales Budget 9,9 kW
- * - EVCS-Grant/Intent 7,92 kW
- * - Speicher-Grant 1,98 kW
+ * - EVCS-Maximalgrant 7,92 kW
+ * - noch nicht gestartete Ladepunkte reservieren davon nur ihre technisch
+ *   fahrbaren Startminima
+ * - der gesamte ungenutzte EVCS-Anteil bleibt im selben EMS-Zyklus fuer den
+ *   Speicher verfuegbar
  * - der Pending-EVCS-Intent reduziert ausschließlich remainingPvW, nicht das
  *   Gesamt-/Netzbudget.
  */
@@ -139,7 +142,7 @@ const wallboxOne = computePendingPvStartIntentW({
   stationRemainingW: 11000,
   pvRemainingW: chargingBudget.evcsCapW,
 });
-assert.strictEqual(wallboxOne.intentW, 5000);
+assert.strictEqual(wallboxOne.intentW, 4140, 'Ein wartender Ladepunkt darf nur sein technisches Startminimum reservieren');
 
 const wallboxTwo = computePendingPvStartIntentW({
   mode: 'pv',
@@ -157,10 +160,10 @@ const wallboxTwo = computePendingPvStartIntentW({
   stationRemainingW: 6000,
   pvRemainingW: chargingBudget.evcsCapW - wallboxOne.intentW,
 });
-assert.strictEqual(wallboxTwo.intentW, 2920, 'Zweiter Ladepunkt darf nur den zentral verbleibenden EVCS-Anteil reservieren');
+assert.strictEqual(wallboxTwo.intentW, 1380, 'Zweiter Ladepunkt darf nur sein technisches Startminimum reservieren');
 
 const pendingPvIntentW = wallboxOne.intentW + wallboxTwo.intentW;
-assert.strictEqual(pendingPvIntentW, 7920);
+assert.strictEqual(pendingPvIntentW, 5520, 'Pending-Intent darf den ungenutzten prozentualen EVCS-Anteil nicht vorsorglich blockieren');
 const pendingTotalDemandW = wallboxOne.totalDemandW + wallboxTwo.totalDemandW;
 const evcsPvReserveW = computeEvcsPvBudgetReservationW({
   reserveW: 0,
@@ -171,7 +174,7 @@ const evcsPvReserveW = computeEvcsPvBudgetReservationW({
   pendingIntentPvW: pendingPvIntentW,
   allocationCapW: chargingBudget.evcsCapW,
 });
-assert.strictEqual(evcsPvReserveW, 7920);
+assert.strictEqual(evcsPvReserveW, 5520);
 
 const totalBeforeEvcs = runtime.remainingTotalW;
 runtime.reserve({
@@ -186,9 +189,9 @@ runtime.reserve({
   pvOnly: false,
   mode: 'pv',
 });
-assert.strictEqual(runtime.remainingPvW, 1980, 'EVCS-Pending-Intent muss nur 1,98 kW für den Speicher übriglassen');
+assert.strictEqual(runtime.remainingPvW, 4380, 'Ungenutzter EVCS-Anteil muss im selben Tick fuer den Speicher frei bleiben');
 assert.strictEqual(runtime.remainingTotalW, totalBeforeEvcs, 'Pending-PV-Intent darf das Gesamt-/Netzbudget nicht reduzieren');
-assert.strictEqual(runtime.consumers.evcs.pvReserveW, 7920);
+assert.strictEqual(runtime.consumers.evcs.pvReserveW, 5520);
 assert.strictEqual(runtime.consumers.evcs.reserveW, 0);
 
 const storageGrant = runtime.getPvGrant({
@@ -196,7 +199,7 @@ const storageGrant = runtime.getPvGrant({
   requestedW: 30000,
   pvOnly: true,
 });
-assert.strictEqual(storageGrant.grantW, 1980, 'Speicher darf nur den zentralen Rest nach EVCS erhalten');
+assert.strictEqual(storageGrant.grantW, 4380, 'Speicher muss den gesamten ungenutzten Rest nach echten EVCS-Reservierungen erhalten');
 
 runtime.reserve({
   key: 'storage',
@@ -212,6 +215,49 @@ assert.strictEqual(runtime.remainingPvW, 0);
 assert.strictEqual(runtime.getPvGrant({ key: 'thermal', requestedW: 5000, pvOnly: true }).grantW, 0);
 assert.strictEqual(runtime.getPvGrant({ key: 'heatingRod', requestedW: 5000, pvOnly: true }).grantW, 0);
 assert.deepStrictEqual(runtime.order.slice(0, 2), ['evcs', 'storage'], 'Prioritätsreihenfolge muss EVCS vor Speicher abbilden');
+
+// Kein aktiver oder pending Ladebedarf: Die prozentuale EVCS-Freigabe ist nur
+// ein Maximalcap und darf nicht als Ghost-Reservierung wirken. Der Speicher muss
+// den kompletten physikalischen PV-Rest erhalten.
+const idleAllocation = buildPvSurplusAllocation(5300, 'both', 50, {
+  storageEligible: true,
+  storageMaxChargeW: 30000,
+});
+const idleRuntime = makeBudgetRuntime(adapter, {
+  ts: Date.now(),
+  raw: { gridW: -2700, storageChargeW: 2600 },
+  gates: {
+    total: { effectiveW: null },
+    pv: { rawW: 5300, effectiveW: 5300 },
+    pvAllocation: idleAllocation,
+  },
+});
+const idleEvcsReserveW = computeEvcsPvBudgetReservationW({
+  reserveW: 0,
+  demandW: 0,
+  pendingDemandW: 0,
+  actualPvW: 0,
+  intentPvW: 0,
+  pendingIntentPvW: 0,
+  allocationCapW: idleAllocation.evcsCapW,
+});
+assert.strictEqual(idleEvcsReserveW, 0, 'Ohne Ladebedarf darf kein EVCS-PV-Budget reserviert werden');
+idleRuntime.reserve({
+  key: 'evcs',
+  app: 'chargingManagement',
+  priority: 100,
+  requestedW: 0,
+  reserveW: 0,
+  pvReserveW: idleEvcsReserveW,
+  pvOnly: false,
+  mode: 'pv',
+});
+assert.strictEqual(idleRuntime.remainingPvW, 5300, '50-%-EVCS-Cap darf ohne reale Reservierung keinen PV-Rest abschneiden');
+assert.strictEqual(
+  idleRuntime.getPvGrant({ key: 'storage', requestedW: 30000, pvOnly: true }).grantW,
+  5300,
+  'Speicher muss ohne aktive/reservierte Verbraucher den kompletten PV-Ueberschuss erhalten',
+);
 
 // Netz-/Gesamtbudget wird ueber dieselbe Runtime sequenziell verteilt. Damit
 // kann ein tarif- oder reservebedingtes Speicher-Netzladen nach der EVCS-

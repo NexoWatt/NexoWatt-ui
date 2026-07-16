@@ -1,3 +1,25 @@
+## 0.8.105
+
+- EVCS-Infrastrukturgrenze korrigiert: Die im AppCenter konfigurierte Nennleistung gilt wieder pro Ladepunkt. Der Engine-Modus summiert alle aktivierten und steuerbaren Ladepunkte; ein alter 11-kW-Einzelwert kann die gesamte Ladeinfrastruktur nicht mehr global begrenzen.
+- Stationsgruppen bereits in der Infrastrukturkapazität berücksichtigt: Die rohe Portsumme bleibt als Diagnose sichtbar, die wirksame Gesamtleistung begrenzt gemeinsam genutzte Stationen auf ihr Stationslimit.
+- NVP-/Lastmanagement bleibt führend: Das finale EVCS-Budget ist weiterhin das Minimum aus Infrastrukturleistung, Netzanschluss-Headroom, Phasenlimit, §14a, Peak-Shaving, Tarif- und Stationsgrenzen.
+- Mindestversorgung mehrerer Ladepunkte ergänzt: Reicht das sichere Gesamt- und Stationsbudget für alle verbundenen Auto-, Boost- und Min+PV-Ladepunkte, werden zuerst alle technischen Mindestleistungen reserviert. Zusatzleistung wird danach gemäß Boost, Zeit-Ziel, laufender Session, Priorität und Round-Robin verteilt.
+- Ladepunkte werden nur noch vollständig abgeschaltet, wenn das sichere Budget nicht einmal alle technischen Mindestleistungen tragen kann. Teilwerte unter dem Mindeststrom bleiben weiterhin verboten.
+- Reines PV-Laden bleibt unverändert am zentralen PV-Grant geführt; Auto, Boost, Min+PV, Zeit-Ziel und dynamischer Tarif behalten ihre bisherigen Betriebsregeln und umgehen keine Netz-/Phasen-/§14a-/Stationsgrenzen.
+- AppCenter-Diagnose erweitert: installierte Portsumme, wirksame Infrastrukturkapazität, Anzahl steuerbarer Ladepunkte, optionaler Hard-Cap und gemeinsame Mindestversorgung werden separat angezeigt.
+- Neue Regression `test:charging-infrastructure-budget` prüft 4 Ladepunkte am 40-kW-NVP, Legacy-11-kW-Konfiguration, Stationscaps und die Mindestversorgung aller technisch versorgbaren Ladepunkte.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v407` erhöht.
+
+## 0.8.104
+
+- Ungenutzte EVCS-PV-Anteile werden im selben EMS-Zyklus vollständig an den Speicher freigegeben. Die prozentuale Einstellung ist nur ein maximaler EVCS-Cap und keine pauschale Reservierung.
+- Reines PV-Laden reserviert vor dem tatsächlichen Start nur noch die technisch fahrbare Mindestleistung. Liegt der zugeteilte EVCS-Anteil unter diesem Minimum, entsteht keine Teil-/Ghost-Reservierung und der Speicher erhält den kompletten PV-Rest.
+- Min+PV reserviert vor dem Start ausschließlich seine netzgestützte Mindestleistung im Gesamtbudget. Zusätzlicher PV-Anteil wird erst bei realem oder kommandiertem Ladebetrieb reserviert.
+- Aktive beziehungsweise bereits hochregelnde Ladepunkte behalten ihren realen PV-Rampenbedarf; Startfähigkeit, Stationslimit, Anschlusslimit, Phasenlimit und §14a bleiben verbindlich.
+- Kundenhilfe präzisiert: Ohne aktive oder technisch fahrbare Wallbox-Reservierung fließt der vollständige freie PV-Überschuss zuerst in den Speicher; danach erhalten Thermik und Heizstäbe nur den verbleibenden Rest.
+- Neue Regression `test:pv-unused-evcs-release-to-storage` prüft das Feldszenario 2,7 kW Einspeisung + 2,6 kW Speicherladung bei 50/50-Priorität sowie PV-Startminimum und Min+PV-Startbasis.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v406` erhöht.
+
 ## 0.8.103
 
 - Min+PV-Grundlogik korrigiert: Die technische Mindestleistung des Ladepunkts wird aus dem normalen Gesamt-/Netzbudget gehalten, auch wenn aktuell `0 W` PV-Überschuss verfügbar sind. Das verhindert Ladeabbrüche bei bewölktem Wetter.

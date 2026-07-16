@@ -47,6 +47,7 @@
 const { BaseModule } = require('./base');
 const { applySetpoint } = require('../consumers');
 const { ReasonCodes } = require('../reasons');
+const { computeChargingMinimumServicePlan } = require('../charging-budget-helpers');
 
 /** Code-Teil: chargingManagementTsRuntimeMirror – Dokumentiert diesen Regelungs- oder Diagnosebaustein. */
 let chargingManagementTsRuntimeMirror = null;
@@ -170,20 +171,25 @@ function computeEvcsPvBudgetReservationW({
 
 /**
  * Code-Teil: computePendingPvStartIntentW
- * Zweck: Reserviert den zentral zugeteilten PV-Anteil bereits fuer einen
- * verbundenen PV-/Min+PV-Ladepunkt, bevor dessen reale Leistung oder Sollwert
- * wegen Start-Hysterese, Rampenbegrenzung oder traeger Wallbox-Telemetrie sichtbar
- * wird. Der Wert reduziert nur das zentrale PV-Restbudget; er wird nicht als
- * bereits bezogene Netz-/Gesamtleistung verbucht.
+ * Zweck: Reserviert fuer einen verbundenen PV-/Min+PV-Ladepunkt nur den
+ * technisch erforderlichen Startbedarf, bevor dessen reale Leistung oder
+ * Sollwert wegen Start-Hysterese, Rampenbegrenzung oder traeger
+ * Wallbox-Telemetrie sichtbar wird. Nicht genutzte prozentuale EVCS-Anteile
+ * bleiben dadurch im selben EMS-Zyklus fuer den Speicher verfuegbar.
+ * Der Wert reduziert nur das zentrale PV-Restbudget; er wird nicht als bereits
+ * bezogene Netz-/Gesamtleistung verbucht.
  *
  * Sicherheitsregeln:
  * - Nur installierte, online erreichbare und wirklich verbundene Ladepunkte mit
  *   einem beschreibbaren Sollwert duerfen einen Intent erzeugen.
  * - Ein Start-Cooldown oder eine wartende Ziel-SoC-Freigabe blockiert den Intent.
  * - Stations-, Anschluss-, Wallbox- und zentraler PV-Cap bleiben verbindlich.
- * - Bei PV-only muss die technische Mindestleistung erreichbar sein.
- * - Bei Min+PV wird nur der Anteil oberhalb der Mindest-/Netzgrundlast als PV
- *   reserviert; dadurch wird kein Netzbudget als vermeintlicher PV-Anteil gebucht.
+ * - Bei PV-only muss die technische Mindestleistung aus dem PV-Grant voll
+ *   erreichbar sein; Teilreservierungen unterhalb des fahrbaren Minimums sind
+ *   verboten.
+ * - Bei Min+PV wird vor dem Start nur die Mindest-/Netzgrundlast im Gesamtbudget
+ *   reserviert. PV-Zusatzleistung wird erst bei realem/kommandiertem Ladebetrieb
+ *   reserviert; dadurch blockiert ein wartender Ladepunkt keinen Speicheranteil.
  */
 
 /**
@@ -357,16 +363,42 @@ function computePendingPvStartIntentW({
 
     if (isPvOnly) {
         const isAlreadyActive = currentW >= thresholdW;
-        if (!isAlreadyActive && technicalW > 0 && potentialTotalW < technicalW) {
-            return { intentW: 0, totalDemandW: 0, reason: 'below-technical-minimum' };
+
+        // Ein noch nicht gestarteter reiner PV-Ladepunkt darf nicht vorsorglich
+        // seinen kompletten prozentualen EVCS-Anteil blockieren. Fuer den Start
+        // wird nur die technisch wirklich benoetigte Mindestleistung reserviert.
+        // Ist selbst diese Mindestleistung im zentralen PV-Grant nicht vorhanden,
+        // entsteht bewusst gar kein Pending-Intent. Der ungenutzte PV-Anteil bleibt
+        // dadurch im selben EMS-Zyklus fuer Speicher und nachgelagerte Verbraucher
+        // verfuegbar, statt als nicht fahrbare Teilreservierung liegen zu bleiben.
+        const startMinimumW = technicalW > 0
+            ? Math.min(maxW, technicalW)
+            : Math.min(maxW, Math.max(thresholdW, minW));
+        if (!isAlreadyActive) {
+            const startAvailableW = Math.max(0, Math.min(potentialTotalW, pvAvailW));
+            if (startMinimumW > 0 && startAvailableW + 1e-6 < startMinimumW) {
+                return { intentW: 0, totalDemandW: 0, reason: 'below-technical-minimum' };
+            }
+            const desiredStartW = Math.max(0, Math.min(potentialTotalW, pvAvailW, startMinimumW || pvAvailW));
+            const intentW = Math.max(0, desiredStartW - Math.min(desiredStartW, currentIntentW));
+            return {
+                intentW,
+                totalDemandW: intentW,
+                reason: intentW > 0 ? 'pv-start-minimum-intent' : 'covered',
+            };
         }
+
+        // Sobald ein Ladepunkt wirklich kommandiert/laedt, darf sein aktiver
+        // Rampenbedarf bis zum zentralen PV-Cap reserviert werden. Dann handelt es
+        // sich nicht mehr um eine vorsorgliche Startreservierung, sondern um realen
+        // beziehungsweise unmittelbar wirksamen Ladebedarf.
         const desiredPvTotalW = Math.max(0, potentialTotalW);
         const intentGapW = Math.max(0, desiredPvTotalW - currentIntentW);
         const intentW = Math.max(0, Math.min(intentGapW, pvAvailW));
         return {
             intentW,
             totalDemandW: intentW,
-            reason: intentW > 0 ? (isAlreadyActive ? 'pv-ramp-intent' : 'pv-start-intent') : 'covered',
+            reason: intentW > 0 ? 'pv-ramp-intent' : 'covered',
         };
     }
 
@@ -377,10 +409,18 @@ function computePendingPvStartIntentW({
     if (minPvBaseW > 0 && potentialTotalW + 1e-6 < minPvBaseW) {
         return { intentW: 0, totalDemandW: 0, reason: 'below-minpv-base' };
     }
-    const desiredPvTotalW = Math.max(0, potentialTotalW - Math.min(minPvBaseW, potentialTotalW));
+    const missingBaseW = currentW >= minPvBaseW ? 0 : Math.max(0, minPvBaseW - currentW);
+    // Vor dem tatsaechlichen/kommandierten Start reserviert Min+PV ausschliesslich
+    // seine netzgestuetzte Mindestleistung im Gesamtbudget. Ein zusaetzlicher
+    // PV-Anteil wird erst reserviert, sobald die Mindestladung wirklich steht.
+    // So kann ein idle oder noch wartender Min+PV-Ladepunkt keinen PV-Ueberschuss
+    // blockieren, den der Speicher in diesem Moment sinnvoll aufnehmen kann.
+    const baseEstablished = currentW >= Math.max(thresholdW, Math.max(0, minPvBaseW - 1));
+    const desiredPvTotalW = baseEstablished
+        ? Math.max(0, potentialTotalW - Math.min(minPvBaseW, potentialTotalW))
+        : 0;
     const intentGapW = Math.max(0, desiredPvTotalW - currentIntentW);
     const intentW = Math.max(0, Math.min(intentGapW, pvAvailW));
-    const missingBaseW = currentW >= minPvBaseW ? 0 : Math.max(0, minPvBaseW - currentW);
     const totalDemandW = Math.max(0, missingBaseW + intentW);
     if (totalDemandW <= 0) {
         return { intentW: 0, totalDemandW: 0, reason: 'covered' };
@@ -2900,6 +2940,14 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.gridLocalSupportW', 'Local PV/storage support for EVCS (W)', 'number', 'value.power');
         await mk('chargingManagement.control.gridCapEvcsW', 'Grid-based EVCS cap (W)', 'number', 'value.power');
         await mk('chargingManagement.control.gridCapBinding', 'Grid cap binding', 'boolean', 'indicator');
+        await mk('chargingManagement.control.infrastructureRawCapacityW', 'Installed EVCS port capacity before station caps (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.infrastructureCapacityW', 'Effective EVCS infrastructure capacity (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.infrastructureWallboxCount', 'Controllable EVCS connector count', 'number', 'value');
+        await mk('chargingManagement.control.infrastructureHardCapW', 'Optional EVCS infrastructure hard cap (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.minimumServicePreserved', 'All grid-capable EVCS minimum services preserved', 'boolean', 'indicator');
+        await mk('chargingManagement.control.minimumServiceRequiredW', 'Total technical minimum service required (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.minimumServiceConnectorCount', 'Grid-capable connectors included in minimum service', 'number', 'value');
+        await mk('chargingManagement.control.minimumServiceReservedFutureW', 'Minimum service reserved for later connectors (W)', 'number', 'value.power');
         await mk('chargingManagement.control.gridMaxPhaseA', 'Grid max phase current (A) configured', 'number', 'value.current');
         await mk('chargingManagement.control.gridWorstPhaseA', 'Grid worst phase current (A)', 'number', 'value.current');
         await mk('chargingManagement.control.gridPhaseCapEvcsW', 'Phase-based EVCS cap (W)', 'number', 'value.power');
@@ -5921,6 +5969,10 @@ if (components.length) {
             await this._queueState('chargingManagement.control.gridEvcsReserveIgnoredForCapW', Math.max(0, (Number.isFinite(totalPowerW) ? totalPowerW : 0) - (Number.isFinite(totalFreshActualPowerW) ? totalFreshActualPowerW : 0)), true);
             await this._queueState('chargingManagement.control.gridCapEvcsW', (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : 0, true);
             await this._queueState('chargingManagement.control.gridCapBinding', !!gridCapBinding, true);
+            await this._queueState('chargingManagement.control.infrastructureRawCapacityW', Math.round(Math.max(0, Number(cfg.infrastructureRawCapacityW) || 0)), true);
+            await this._queueState('chargingManagement.control.infrastructureCapacityW', Math.round(Math.max(0, Number(cfg.infrastructureCapacityW ?? staticBudgetW) || 0)), true);
+            await this._queueState('chargingManagement.control.infrastructureWallboxCount', Math.round(Math.max(0, Number(cfg.infrastructureWallboxCount) || 0)), true);
+            await this._queueState('chargingManagement.control.infrastructureHardCapW', Math.round(Math.max(0, Number(cfg.infrastructureHardCapW) || 0)), true);
             await this._queueState('chargingManagement.control.gridMaxPhaseA', gridMaxPhaseA || 0, true);
             await this._queueState('chargingManagement.control.gridWorstPhaseA', (typeof worstPhaseA === 'number' && Number.isFinite(worstPhaseA)) ? worstPhaseA : 0, true);
             await this._queueState('chargingManagement.control.gridPhaseCapEvcsW', (typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)) ? phaseCapEvcsW : 0, true);
@@ -5951,6 +6003,10 @@ if (components.length) {
             budgetDebug.gridLocalSupportW = (typeof gridLocalSupportW === 'number' && Number.isFinite(gridLocalSupportW)) ? gridLocalSupportW : null;
             budgetDebug.gridCapEvcsW = (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : null;
             budgetDebug.gridCapBinding = !!gridCapBinding;
+            budgetDebug.infrastructureRawCapacityW = Math.round(Math.max(0, Number(cfg.infrastructureRawCapacityW) || 0));
+            budgetDebug.infrastructureCapacityW = Math.round(Math.max(0, Number(cfg.infrastructureCapacityW ?? staticBudgetW) || 0));
+            budgetDebug.infrastructureWallboxCount = Math.round(Math.max(0, Number(cfg.infrastructureWallboxCount) || 0));
+            budgetDebug.infrastructureHardCapW = Math.round(Math.max(0, Number(cfg.infrastructureHardCapW) || 0));
             budgetDebug.gridMaxPhaseA = gridMaxPhaseA || 0;
             budgetDebug.worstPhaseA = (typeof worstPhaseA === 'number' && Number.isFinite(worstPhaseA)) ? worstPhaseA : null;
             budgetDebug.phaseCapEvcsW = (typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)) ? phaseCapEvcsW : null;
@@ -6944,6 +7000,18 @@ if (components.length) {
             if (typeof cap === 'number' && Number.isFinite(cap) && cap > 0) stationCapW.set(sk, cap);
         }
 
+        // Solange das bereits durch NVP, Phasen, §14a, Tarif und Peak-Shaving
+        // begrenzte EVCS-Budget alle technischen Mindestleistungen tragen kann,
+        // reservieren wir diese Basis fuer alle verbundenen Auto-/Boost-/Min+PV-
+        // Ladepunkte. Erst der darueber liegende Leistungsanteil wird nach der
+        // bestehenden Prioritaet verteilt. Reines PV-Laden bleibt PV-Grant-gefuehrt.
+        const minimumServicePlan = computeChargingMinimumServicePlan({
+            wallboxes: sorted,
+            totalBudgetW: budgetW,
+            stationCaps: stationCapW,
+        });
+        let maximumFutureMinimumReservedW = 0;
+
         // Station diagnostics accumulators
         /** @type {Map<string, number>} */
         const stationTargetSumW = new Map();
@@ -6994,17 +7062,19 @@ if (components.length) {
         let totalTargetCurrentA = 0;
         let evcsActiveDemandReserveW = 0;
         let evcsActiveDemandPvReserveW = 0;
-        // PV-Intent bleibt waehrend Wallbox-Rampe, Start-Hysterese und zaeher
-        // Leistungstelemetrie sichtbar. Ohne diesen zweiten Wert kann die zentrale
-        // Budgetierung den EVCS-Anteil fuer einen Tick auf 0 setzen und der Speicher
-        // nimmt anschliessend den kompletten PV-Ueberschuss.
+        // PV-Intent bleibt waehrend einer bereits wirksamen Wallbox-Rampe und bei
+        // zaeher Leistungstelemetrie sichtbar. Ein noch nicht gestarteter Ladepunkt
+        // reserviert dagegen nur sein technisch fahrbares Startminimum. So bekommt
+        // der Speicher den kompletten ungenutzten PV-Rest, ohne dass ein echter
+        // EVCS-Start durch die Speicherladung blockiert wird.
         let evcsActiveDemandPvIntentW = 0;
         let evcsActiveDemandPurePvIntentW = 0;
         let evcsActiveDemandWallboxes = 0;
-        // Noch nicht physisch gestartete beziehungsweise erst hochregelnde
-        // PV-Ladepunkte erhalten ihren Anteil als reinen PV-Intent. Dadurch bleibt
-        // die Kundenprioritaet waehrend Start-Hysterese/EVSE-Suspend und Rampe
-        // zentral reserviert, ohne ihn als bereits bezogene Netzlast zu verbuchen.
+        // Noch nicht physisch gestartete PV-Ladepunkte erhalten nur die technisch
+        // notwendige Startreservierung. Erst hochregelnde/aktive Ladepunkte duerfen
+        // ihren realen Rampenbedarf als PV-Intent reservieren. Nicht genutzte
+        // Prozentanteile werden dadurch sofort an Speicher und Folgeverbraucher
+        // freigegeben, ohne sie als bereits bezogene Netzlast zu verbuchen.
         let evcsPendingDemandPvIntentW = 0;
         let evcsPendingDemandPurePvIntentW = 0;
         let evcsPendingDemandTotalW = 0;
@@ -7103,9 +7173,29 @@ if (components.length) {
                 ? Math.max(0, stationRemainingW.get(w.stationKey))
                 : Number.POSITIVE_INFINITY;
 
+            // Wenn alle verbundenen netzfaehigen Ladepunkte gleichzeitig ihre
+            // technische Mindestleistung erhalten koennen, bleibt dieser Anteil
+            // fuer spaeter einsortierte Ladepunkte reserviert. Ein frueher Boost-
+            // oder Auto-Ladepunkt darf dann nur die echte Zusatzleistung nutzen.
+            // Wird die Anschluss-/Stationsgrenze zu klein fuer alle Minima, greift
+            // unveraendert die Prioritaets-/Round-Robin-Abschaltung ganzer Punkte.
+            const futureMinimumW = minimumServicePlan.preserveAll
+                ? Math.max(0, Number(minimumServicePlan.futureMinimumBySafe.get(w.safe)) || 0)
+                : 0;
+            const futureStationMinimumW = minimumServicePlan.preserveAll
+                ? Math.max(0, Number(minimumServicePlan.futureStationMinimumBySafe.get(w.safe)) || 0)
+                : 0;
+            maximumFutureMinimumReservedW = Math.max(maximumFutureMinimumReservedW, futureMinimumW);
+            const fairTotalAvailW = Number.isFinite(totalAvailW)
+                ? Math.max(0, totalAvailW - futureMinimumW)
+                : Number.POSITIVE_INFINITY;
+            const fairStationAvailW = Number.isFinite(stationAvailW)
+                ? Math.max(0, stationAvailW - futureStationMinimumW)
+                : Number.POSITIVE_INFINITY;
+
             const availW = isPvOnly
-                ? Math.min(totalAvailW, pvAvailW, stationAvailW)
-                : Math.min(totalAvailW, stationAvailW);
+                ? Math.min(fairTotalAvailW, pvAvailW, fairStationAvailW)
+                : Math.min(fairTotalAvailW, fairStationAvailW);
 
             // Track which constraint is currently binding (helps to set a meaningful reason code)
             let limiter = 'none'; // 'station' | 'total' | 'pv' | 'none'
@@ -7113,11 +7203,11 @@ if (components.length) {
                 const tol = 1e-6;
                 if (Number.isFinite(availW)) {
                     // Station limit has precedence for diagnostics (hard cap, shared across connectors)
-                    if (Number.isFinite(stationAvailW) && stationAvailW < Number.POSITIVE_INFINITY && stationAvailW <= (availW + tol)) {
+                    if (Number.isFinite(fairStationAvailW) && fairStationAvailW < Number.POSITIVE_INFINITY && fairStationAvailW <= (availW + tol)) {
                         limiter = 'station';
                     } else if (isPvOnly && Number.isFinite(pvAvailW) && pvAvailW < Number.POSITIVE_INFINITY && pvAvailW <= (availW + tol)) {
                         limiter = 'pv';
-                    } else if (Number.isFinite(totalAvailW) && totalAvailW < Number.POSITIVE_INFINITY && totalAvailW <= (availW + tol)) {
+                    } else if (Number.isFinite(fairTotalAvailW) && fairTotalAvailW < Number.POSITIVE_INFINITY && fairTotalAvailW <= (availW + tol)) {
                         limiter = 'total';
                     }
                 }
@@ -7143,8 +7233,8 @@ if (components.length) {
                     minPowerW: minPvBaseW,
                     technicalMinW: minPvBaseW,
                     maxPowerW: w.maxPW,
-                    totalAvailableW: totalAvailW,
-                    stationAvailableW: stationAvailW,
+                    totalAvailableW: fairTotalAvailW,
+                    stationAvailableW: fairStationAvailW,
                     pvAvailableW: pvAvailW,
                 });
                 minpvMaxTotal = minPvPlan.hardAvailableW;
@@ -7152,7 +7242,7 @@ if (components.length) {
                 if (targetW > 0) {
                     reason = ReasonCodes.ALLOCATED;
                 } else if (minPvPlan.reason === 'below-minpv-base') {
-                    reason = (totalAvailW <= 0) ? ReasonCodes.NO_BUDGET : ReasonCodes.BELOW_MIN;
+                    reason = (fairTotalAvailW <= 0) ? ReasonCodes.NO_BUDGET : ReasonCodes.BELOW_MIN;
                 } else {
                     reason = ReasonCodes.NO_BUDGET;
                 }
@@ -7163,7 +7253,7 @@ if (components.length) {
             } else if (availW <= 0) {
                 targetW = 0;
                 // Distinguish PV constraint from total budget constraint
-                reason = (isPvOnly && pvAvailW <= 0 && totalAvailW > 0) ? (ReasonCodes.NO_PV_SURPLUS) : ReasonCodes.NO_BUDGET;
+                reason = (isPvOnly && pvAvailW <= 0 && fairTotalAvailW > 0) ? (ReasonCodes.NO_PV_SURPLUS) : ReasonCodes.NO_BUDGET;
             } else if (availW >= w.minPW || w.minPW === 0) {
                 targetW = Math.min(availW, w.maxPW);
                 reason = ReasonCodes.ALLOCATED;
@@ -7179,14 +7269,14 @@ if (components.length) {
             // Refine reason codes for transparency: station caps, grid caps and user-defined limits.
             try {
                 const budgetReason = pickBudgetReason();
-                const stationFinite = (Number.isFinite(stationAvailW) && stationAvailW < Number.POSITIVE_INFINITY);
-                const totalFinite = (Number.isFinite(totalAvailW) && totalAvailW < Number.POSITIVE_INFINITY);
+                const stationFinite = (Number.isFinite(fairStationAvailW) && fairStationAvailW < Number.POSITIVE_INFINITY);
+                const totalFinite = (Number.isFinite(fairTotalAvailW) && fairTotalAvailW < Number.POSITIVE_INFINITY);
                 const tol = 1e-6;
 
                 if (w.controlBasis !== 'none') {
                     // If we are fully blocked, prefer the hard limiter if it is obvious.
                     if (targetW <= 0) {
-                        if (stationFinite && stationAvailW <= 0 && totalAvailW > 0 && (!isPvOnly || pvAvailW > 0)) {
+                        if (stationFinite && fairStationAvailW <= 0 && fairTotalAvailW > 0 && (!isPvOnly || pvAvailW > 0)) {
                             reason = ReasonCodes.LIMITED_BY_STATION_CAP;
                         } else if (reason === ReasonCodes.NO_BUDGET && limiter === 'total') {
                             // Prefer a more specific budget reason (grid import / phase cap / §14a)
@@ -7194,17 +7284,17 @@ if (components.length) {
                         }
                     } else {
                         // Station is the binding min (hard shared cap)
-                        if (stationFinite && stationAvailW < w.maxPW - tol) {
-                            const nearStation = Math.abs(targetW - Math.min(stationAvailW, w.maxPW)) <= Math.max(1, 0.01 * w.maxPW);
-                            if ((limiter === 'station' && nearStation) || (isMinPv && Number.isFinite(minpvMaxTotal) && minpvMaxTotal === stationAvailW && nearStation)) {
+                        if (stationFinite && fairStationAvailW < w.maxPW - tol) {
+                            const nearStation = Math.abs(targetW - Math.min(fairStationAvailW, w.maxPW)) <= Math.max(1, 0.01 * w.maxPW);
+                            if ((limiter === 'station' && nearStation) || (isMinPv && Number.isFinite(minpvMaxTotal) && minpvMaxTotal === fairStationAvailW && nearStation)) {
                                 reason = ReasonCodes.LIMITED_BY_STATION_CAP;
                             }
                         }
 
                         // Total budget is binding (grid/phase/§14a)
-                        if (totalFinite && totalAvailW < w.maxPW - tol) {
-                            const nearTotal = Math.abs(targetW - Math.min(totalAvailW, w.maxPW)) <= Math.max(1, 0.01 * w.maxPW);
-                            if ((limiter === 'total' && nearTotal) || (isMinPv && Number.isFinite(minpvMaxTotal) && minpvMaxTotal === totalAvailW && nearTotal)) {
+                        if (totalFinite && fairTotalAvailW < w.maxPW - tol) {
+                            const nearTotal = Math.abs(targetW - Math.min(fairTotalAvailW, w.maxPW)) <= Math.max(1, 0.01 * w.maxPW);
+                            if ((limiter === 'total' && nearTotal) || (isMinPv && Number.isFinite(minpvMaxTotal) && minpvMaxTotal === fairTotalAvailW && nearTotal)) {
                                 // Do not override a station cap reason if station is already the limiting factor.
                                 if (reason !== ReasonCodes.LIMITED_BY_STATION_CAP) {
                                     reason = budgetReason;
@@ -7291,12 +7381,13 @@ if (components.length) {
                 const startReadyKey = String(w.safe || '');
                 const needStartW = Math.max(0, pvTechnicalMinW || pvStartCommandW || 0);
                 const startReadyBudgetW = Math.max(0, Math.min(
-                    stationAvailW,
+                    fairTotalAvailW,
+                    fairStationAvailW,
                     (typeof pvStartReadyBudgetW === 'number' && Number.isFinite(pvStartReadyBudgetW)) ? pvStartReadyBudgetW : pvAvailW,
                     Number.isFinite(w.maxPW) ? w.maxPW : Number.POSITIVE_INFINITY,
                 ));
-                const startBudgetW = Math.max(0, Math.min(totalAvailW, stationAvailW, pvAvailW, Number.isFinite(w.maxPW) ? w.maxPW : Number.POSITIVE_INFINITY));
-                const holdBudgetW = Math.max(0, Math.min(totalAvailW, stationAvailW, Number.isFinite(w.maxPW) ? w.maxPW : Number.POSITIVE_INFINITY));
+                const startBudgetW = Math.max(0, Math.min(fairTotalAvailW, fairStationAvailW, pvAvailW, Number.isFinite(w.maxPW) ? w.maxPW : Number.POSITIVE_INFINITY));
+                const holdBudgetW = Math.max(0, Math.min(fairTotalAvailW, fairStationAvailW, Number.isFinite(w.maxPW) ? w.maxPW : Number.POSITIVE_INFINITY));
                 let startReadySince = this._pvStartReadySinceMs.get(startReadyKey) || 0;
                 let belowMinSince = this._pvBelowMinSinceMs.get(startReadyKey) || 0;
                 const canTrackPvRun = w.vehiclePlugged !== false && w.enabled && w.online && w.controlBasis !== 'none';
@@ -7536,8 +7627,8 @@ if (components.length) {
                     // darf Rest-PV in den Speicher gehen.
                     const nonPvAvailW = Math.min(
                         w.maxPW,
-                        Number.isFinite(totalAvailW) ? totalAvailW : Number.POSITIVE_INFINITY,
-                        Number.isFinite(stationAvailW) ? stationAvailW : Number.POSITIVE_INFINITY,
+                        Number.isFinite(fairTotalAvailW) ? fairTotalAvailW : Number.POSITIVE_INFINITY,
+                        Number.isFinite(fairStationAvailW) ? fairStationAvailW : Number.POSITIVE_INFINITY,
                     );
                     const nonPvTargetW = Number.isFinite(nonPvAvailW) ? Math.max(0, nonPvAvailW) : Math.max(0, w.maxPW || 0);
                     const evPriorityCanUseNow = (targetW > tolW) || (cmdW > tolW) || actualOrCmdActive;
@@ -8124,6 +8215,15 @@ if (components.length) {
             // diagnostics only
         }
 
+        try {
+            await this._queueState('chargingManagement.control.minimumServicePreserved', !!minimumServicePlan.preserveAll, true);
+            await this._queueState('chargingManagement.control.minimumServiceRequiredW', Math.round(minimumServicePlan.totalMinimumW || 0), true);
+            await this._queueState('chargingManagement.control.minimumServiceConnectorCount', Math.round(minimumServicePlan.eligibleCount || 0), true);
+            await this._queueState('chargingManagement.control.minimumServiceReservedFutureW', Math.round(maximumFutureMinimumReservedW || 0), true);
+        } catch (_eMinimumServiceDiag) {
+            // Diagnose darf den produktiven Ladeplan niemals blockieren.
+        }
+
         const tsWallboxesForAllocation = this._mapChargingWallboxesForTsAllocation(wbList);
         // Phase selection uses the budget that matches each wallbox mode: pure PV
         // gets the customer-priority cap, Min+PV gets the physical PV remainder,
@@ -8495,6 +8595,7 @@ module.exports = {
     ChargingManagementModule,
     computeMinPvAllocationW,
     computeGoalPowerCapW,
+    computeChargingMinimumServicePlan,
     computePvManagedDemandIntentW,
     computePendingPvStartIntentW,
     computePendingPvStartTotalBudgetW,

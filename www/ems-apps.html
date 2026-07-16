@@ -1676,7 +1676,7 @@
         <div class="nw-config-item">
           <div class="nw-config-item__left">
             <div class="nw-config-item__title">Nennleistung pro Ladepunkt (kW)</div>
-            <div class="nw-config-item__subtitle">Wird u.a. für Budget-Berechnungen genutzt (Standard: 11 kW).</div>
+            <div class="nw-config-item__subtitle">Fallback pro Ladepunkt, falls dort keine eigene Maximalleistung hinterlegt ist. Das EVCS-Gesamtbudget summiert automatisch alle aktivierten, steuerbaren Ladepunkte und berücksichtigt anschließend Stations-, NVP-, Phasen- und §14a-Grenzen (Standard: 11 kW je Ladepunkt).</div>
           </div>
           <div class="nw-config-item__right">
             <input id="evcsMaxPowerKw" class="nw-config-input" type="number" min="0" step="0.1" placeholder="11"/>

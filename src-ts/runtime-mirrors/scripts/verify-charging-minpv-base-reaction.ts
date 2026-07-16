@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4b3082b3703e2cff83433f478cd6873d705bb8d2f8bd1950762127eaa7f51b14
+ * Original-Hash: 9de95efb6bc11d9bece73b5e0a9107a47b07d8ffffba6ba3fc9f1cac120362f9
  */
 
 /**
@@ -258,6 +258,25 @@ async function main() {
   assert(pendingMinPv.intentW === 0, 'Min+PV reserviert bei 0 W PV fälschlich PV-Leistung.', pendingMinPv);
   assert(pendingMinPv.totalDemandW === 4200, 'Min+PV meldet seine netzgestützte Startbasis nicht als Gesamtbedarf.', pendingMinPv);
 
+  const pendingMinPvWithSurplus = computePendingPvStartIntentW({
+    mode: 'minpv',
+    enabled: true,
+    online: true,
+    connected: true,
+    controlBasis: 'powerW',
+    status: 'SuspendedEVSE',
+    currentPowerW: 0,
+    currentPvIntentW: 0,
+    minPowerW: 4200,
+    technicalMinW: 4200,
+    maxPowerW: 11000,
+    totalRemainingW: 11000,
+    stationRemainingW: 11000,
+    pvRemainingW: 5000,
+  });
+  assert(pendingMinPvWithSurplus.intentW === 0, 'Ein noch nicht gestarteter Min+PV-Ladepunkt blockiert fälschlich PV-Zusatzleistung.', pendingMinPvWithSurplus);
+  assert(pendingMinPvWithSurplus.totalDemandW === 4200, 'Min+PV darf vor dem Start nur seine Netz-/Gesamtbudget-Basis reservieren.', pendingMinPvWithSurplus);
+
   const pendingPvOnly = computePendingPvStartIntentW({
     mode: 'pv',
     enabled: true,
@@ -274,6 +293,42 @@ async function main() {
     pvRemainingW: 0,
   });
   assert(pendingPvOnly.intentW === 0 && pendingPvOnly.totalDemandW === 0, 'PV-only bildet ohne PV einen Startbedarf.', pendingPvOnly);
+
+  const pendingPvBelowMinimum = computePendingPvStartIntentW({
+    mode: 'pv',
+    enabled: true,
+    online: true,
+    connected: true,
+    controlBasis: 'powerW',
+    status: 'SuspendedEVSE',
+    currentPowerW: 0,
+    minPowerW: 4200,
+    technicalMinW: 4200,
+    maxPowerW: 11000,
+    totalRemainingW: 11000,
+    stationRemainingW: 11000,
+    pvRemainingW: 2650,
+  });
+  assert(pendingPvBelowMinimum.intentW === 0 && pendingPvBelowMinimum.totalDemandW === 0,
+    'Ein nicht fahrbarer PV-Teilanteil unter Mindestleistung darf den Speicher nicht blockieren.', pendingPvBelowMinimum);
+
+  const pendingPvStartMinimum = computePendingPvStartIntentW({
+    mode: 'pv',
+    enabled: true,
+    online: true,
+    connected: true,
+    controlBasis: 'powerW',
+    status: 'SuspendedEVSE',
+    currentPowerW: 0,
+    minPowerW: 4200,
+    technicalMinW: 4200,
+    maxPowerW: 11000,
+    totalRemainingW: 11000,
+    stationRemainingW: 11000,
+    pvRemainingW: 8000,
+  });
+  assert(pendingPvStartMinimum.intentW === 4200 && pendingPvStartMinimum.totalDemandW === 4200,
+    'Ein wartender PV-Ladepunkt darf nur sein technisches Startminimum reservieren.', pendingPvStartMinimum);
 
   // Die Kundenpriorisierung Speicher/E-Mobilitaet darf ausschliesslich reine
   // PV-Ladepunkte begrenzen. Min+PV nutzt seine Mindestleistung aus dem normalen
