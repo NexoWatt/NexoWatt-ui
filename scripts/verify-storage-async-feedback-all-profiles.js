@@ -102,7 +102,13 @@ function makeAdapter({ profile = 'generic', farm = false } = {}) {
       enablePeakShaving: false,
       enableGridConstraints: false,
       storageFarm: farm ? {
-        storages: [{ enabled: true, setSignedPowerId: 'farm.storage.1.setPowerW' }],
+        // Eine Speicherfarm ist fachlich erst ab zwei realen Speicherzeilen aktiv.
+        // Der Regressionstest bildet deshalb zwei steuerbare Speicher ab, auch wenn
+        // die aggregierte Istleistung zentral über storageFarm.totalPowerW kommt.
+        storages: [
+          { enabled: true, setSignedPowerId: 'farm.storage.1.setPowerW' },
+          { enabled: true, setSignedPowerId: 'farm.storage.2.setPowerW' },
+        ],
       } : {},
       storage: {
         controlMode: 'targetPower',
@@ -152,8 +158,8 @@ function makeAdapter({ profile = 'generic', farm = false } = {}) {
 
   if (farm) {
     const oldTs = nowMs() - 20000;
-    states.set('storageFarm.storagesOnline', { val: 1, ts: nowMs() });
-    states.set('storageFarm.storagesDispatchAvailable', { val: 1, ts: nowMs() });
+    states.set('storageFarm.storagesOnline', { val: 2, ts: nowMs() });
+    states.set('storageFarm.storagesDispatchAvailable', { val: 2, ts: nowMs() });
     states.set('storageFarm.totalSocOnline', { val: 80, ts: nowMs() });
     states.set('storageFarm.totalChargePowerW', { val: 0, ts: oldTs });
     states.set('storageFarm.totalDischargePowerW', { val: 8400, ts: oldTs });

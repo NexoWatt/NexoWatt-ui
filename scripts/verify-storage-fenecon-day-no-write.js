@@ -156,7 +156,13 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, l
     gridRawW: 900,
     extraConfig: {
       root: { enableStorageFarm: true },
-      storageFarm: { storages: [{ enabled: true, setSignedPowerId: 'fenecon.target' }] },
+      storageFarm: {
+        // Eine aktive Speicherfarm benötigt mindestens zwei echte Speicherzeilen.
+        storages: [
+          { enabled: true, setSignedPowerId: 'fenecon.target.1' },
+          { enabled: true, setSignedPowerId: 'fenecon.target.2' },
+        ],
+      },
       storage: { feneconAssistEnabled: false },
     },
   });
@@ -187,7 +193,13 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, l
     gridRawW: 1700,
     extraConfig: {
       root: { enableStorageFarm: true },
-      storageFarm: { storages: [{ enabled: true, setSignedPowerId: 'fenecon.target' }] },
+      storageFarm: {
+        // Eine aktive Speicherfarm benötigt mindestens zwei echte Speicherzeilen.
+        storages: [
+          { enabled: true, setSignedPowerId: 'fenecon.target.1' },
+          { enabled: true, setSignedPowerId: 'fenecon.target.2' },
+        ],
+      },
       storage: {
         feneconAssistEnabled: true,
         feneconAssistDelaySec: 0,

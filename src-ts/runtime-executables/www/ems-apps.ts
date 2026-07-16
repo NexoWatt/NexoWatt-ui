@@ -8975,7 +8975,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         { value: 'dc', label: 'DC' },
       ], (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].coupling = String(v || '').trim().toLowerCase(); }));
 
-      grid.appendChild(mkDpField('PV Leistung (W) (DC)', `sf_${idx}_pvPowerId`, s.pvPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].pvPowerId = v; }, 'nur DC (optional)'));
+      grid.appendChild(mkDpField('PV-/WR-Leistung (W)', `sf_${idx}_pvPowerId`, s.pvPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].pvPowerId = v; }, 'optional · DC wird addiert, AC dient als Anlagen-PV-Fallback'));
+      grid.appendChild(mkGridHelp('PV-/WR-Leistung passend zur Kopplung zuordnen. Derselbe Wechselrichter-DP wird in der Farm nur einmal gezählt. Bei vorhandener Anlagen-PV werden AC-/unbekannte Farmwerte nicht doppelt addiert; DC-/Hybrid-PV wird nur ergänzt, wenn sie noch nicht enthalten ist.'));
 
       // Istwerte (Messwerte)
       grid.appendChild(mkGridDivider('Istwerte (Messwerte)'));

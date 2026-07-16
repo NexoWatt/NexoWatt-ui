@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:678bb5b40dc7714880ea043e18d5dc8471447aabbfefa62feed822e0e6f1035b
+ * Quell-Hash: sha256:4e960409cfe300fe68c7a7590bb5eb8a609ab1a06f5ed4132c5b55142398eb0e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -135,6 +135,12 @@ const NwChannelDetector =
 const { EmsEngine } = require('./ems/engine');
 const nwCountryProfileService = require('./ems/services/country-profile-service');
 const nwFeatureFlagsService = require('./ems/services/feature-flags');
+const {
+  arithmeticMean: nwArithmeticMean,
+  capacityWeightedMean: nwCapacityWeightedMean,
+  combineStorageFarmPv: nwCombineStorageFarmPv,
+  normalizeFarmPower: nwNormalizeFarmPower,
+} = require('./ems/services/storage-farm-aggregation');
 
 // NexoLogic (node/graph) runtime engine
 const { NexoLogicEngine } = require('./ems/nexologic-engine');
@@ -4861,6 +4867,95 @@ class NexoWattVis extends utils.Adapter {
 
   // Speicherfarm (mehrere Speichersysteme als Pool/Gruppe)
   /**
+   * Code-Teil: _nwStorageFarmRowHasRealDatapoint
+   * Zweck: Erkennt eine echte Speicherzeile unabhängig davon, ob der Hersteller
+   * signed, getrennte Istwerte oder reine Setpoint-DPs verwendet. Ein alleiniger
+   * PV-/Wechselrichter-DP reicht bewusst nicht aus, weil er keinen Speicher bildet.
+   */
+  _nwStorageFarmRowHasRealDatapoint(row) {
+    const r = row && typeof row === 'object' ? row : null;
+    if (!r || r.enabled === false) return false;
+    return [
+      'socId', 'chargePowerId', 'dischargePowerId', 'signedPowerId',
+      'setChargePowerId', 'setDischargePowerId', 'setSignedPowerId',
+      'availableId', 'faultId', 'chargeAllowedId', 'dischargeAllowedId',
+    ].some((key) => String(r[key] || '').trim());
+  }
+
+  /**
+   * Code-Teil: _nwGetStorageFarmRuntimeInfo
+   * Zweck: Liefert eine einzige, autoritative Aktiv-/Konfigurationsbewertung für
+   * Speicherfarm-Aggregation, Energiefluss, Scheduler und Kunden-Feature-Gates.
+   * Zusammenhang: App-Center ist führend. Legacy-enableStorageFarm bleibt nur dann
+   * kompatibel, wenn noch kein expliziter App-Center-Eintrag existiert.
+   */
+  _nwGetStorageFarmRuntimeInfo() {
+    try {
+      const cfg = this.config || {};
+      const sf = (cfg.storageFarm && typeof cfg.storageFarm === 'object') ? cfg.storageFarm : {};
+      let rows = Array.isArray(sf.storages) ? sf.storages : [];
+      let configuredRows = rows.filter((row) => this._nwStorageFarmRowHasRealDatapoint(row));
+      let rowsSource = 'config';
+
+      // Feldmigration: Bei älteren Installationen kann die produktive Farmtabelle noch
+      // ausschließlich in storageFarm.configJson liegen, obwohl der AppCenter-Eintrag
+      // korrekt installiert/aktiv ist. Dieser Runtime-Fallback stellt nur die Zeilen
+      // wieder her; er aktiviert die App niemals selbst.
+      if (configuredRows.length < 2) {
+        try {
+          const rec = this.stateCache && this.stateCache['storageFarm.configJson'];
+          const rawRuntime = rec ? rec.value : null;
+          const parsedRuntime = typeof rawRuntime === 'string'
+            ? JSON.parse(rawRuntime || '[]')
+            : rawRuntime;
+          if (Array.isArray(parsedRuntime)) {
+            const runtimeConfiguredRows = parsedRuntime.filter((row) => this._nwStorageFarmRowHasRealDatapoint(row));
+            if (runtimeConfiguredRows.length > configuredRows.length) {
+              rows = parsedRuntime;
+              configuredRows = runtimeConfiguredRows;
+              rowsSource = 'runtime-state';
+            }
+          }
+        } catch (_eRuntimeRows) {}
+      }
+
+      const appsRoot = (cfg.emsApps && typeof cfg.emsApps === 'object') ? cfg.emsApps : {};
+      const apps = (appsRoot.apps && typeof appsRoot.apps === 'object') ? appsRoot.apps : {};
+      const app = (apps.storagefarm && typeof apps.storagefarm === 'object')
+        ? apps.storagefarm
+        : ((apps.storageFarm && typeof apps.storageFarm === 'object') ? apps.storageFarm : null);
+      const appRecordPresent = !!app;
+      const appCenterActive = !!(app && app.installed === true && app.enabled === true);
+      const legacyActive = cfg.enableStorageFarm === true;
+
+      // Eine Farm ist erst ab zwei real konfigurierten Speichern fachlich aktiv.
+      const configuredCount = configuredRows.length;
+      const enabledByConfig = appRecordPresent ? appCenterActive : legacyActive;
+      return {
+        active: !!(enabledByConfig && configuredCount >= 2),
+        appCenterActive,
+        legacyActive,
+        appRecordPresent,
+        configuredCount,
+        configuredRows,
+        rows,
+        rowsSource,
+      };
+    } catch (_e) {
+      return {
+        active: false,
+        appCenterActive: false,
+        legacyActive: false,
+        appRecordPresent: false,
+        configuredCount: 0,
+        configuredRows: [],
+        rows: [],
+        rowsSource: 'missing',
+      };
+    }
+  }
+
+  /**
    * Code-Teil: ensureStorageFarmStates
    * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
    * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -4878,15 +4973,26 @@ class NexoWattVis extends utils.Adapter {
       mode: { type: 'string', role: 'text', def: 'pool', name: 'Modus: pool | groups' },
       configJson: { type: 'string', role: 'json', def: '[]', name: 'Speicherfarm Konfiguration (JSON, Liste)' },
       groupsJson: { type: 'string', role: 'json', def: '[]', name: 'Gruppenkonfiguration (optional)' },
-      totalSoc: { type: 'number', role: 'value', def: 0, name: 'Gesamt SoC (%) (abgeleitet)' },
-      totalSocOnline: { type: 'number', role: 'value', def: 0, name: 'Gesamt SoC (%) Online (Debug)' },
+      totalSoc: { type: 'number', role: 'value', def: 0, name: 'Gesamt SoC (%) – arithmetischer Mittelwert' },
+      totalSocOnline: { type: 'number', role: 'value', def: 0, name: 'Gesamt SoC (%) Online – arithmetischer Mittelwert (Debug)' },
+      capacityWeightedSoc: { type: 'number', role: 'value', def: 0, name: 'Kapazitätsgewichteter SoC (%) (Debug)' },
+      capacityWeightedSocOnline: { type: 'number', role: 'value', def: 0, name: 'Kapazitätsgewichteter SoC (%) Online (Debug)' },
       socSourcesTotal: { type: 'number', role: 'value', def: 0, name: 'SoC Quellen (gesamt, Debug)' },
       socSourcesOnline: { type: 'number', role: 'value', def: 0, name: 'SoC Quellen (online, Debug)' },
       socDegraded: { type: 'boolean', role: 'indicator', def: false, name: 'SoC Qualität reduziert (Debug)' },
       medianSoc: { type: 'number', role: 'value', def: 0, name: 'SoC Median (%) (abgeleitet)' },
-      totalChargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt Ladeleistung (W) (abgeleitet)' },
-      totalDischargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt Entladeleistung (W) (abgeleitet)' },
-      totalPvPowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt PV-Leistung (W) (DC, abgeleitet)' },
+      totalPowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamtleistung Speicherfarm (W, + Entladen / - Laden)' },
+      powerSourcesTotal: { type: 'number', role: 'value', def: 0, name: 'Eindeutige Speicher-Leistungsquellen der Farm' },
+      powerSourcesOnline: { type: 'number', role: 'value', def: 0, name: 'Aktive Speicher-Leistungsquellen der Farm' },
+      totalChargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Brutto-Ladeleistung aller Speicher (W) (abgeleitet)' },
+      totalDischargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Brutto-Entladeleistung aller Speicher (W) (abgeleitet)' },
+      totalPvPowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt PV-/WR-Leistung der Farm (W)' },
+      totalPvAcPowerW: { type: 'number', role: 'value.power', def: 0, name: 'PV-/WR-Leistung AC der Farm (W)' },
+      totalPvDcPowerW: { type: 'number', role: 'value.power', def: 0, name: 'PV-Leistung DC/Hybrid der Farm (W)' },
+      totalPvUnknownPowerW: { type: 'number', role: 'value.power', def: 0, name: 'PV-/WR-Leistung unbekannter Kopplung der Farm (W)' },
+      pvSourcesTotal: { type: 'number', role: 'value', def: 0, name: 'Eindeutige PV-/WR-Quellen der Farm' },
+      pvSourcesOnline: { type: 'number', role: 'value', def: 0, name: 'Aktive PV-/WR-Quellen der Farm' },
+      pvSourcesJson: { type: 'string', role: 'json', def: '[]', name: 'PV-/WR-Quellen der Farm (JSON, Debug)' },
       storagesOnline: { type: 'number', role: 'value', def: 0, name: 'Online Speicher (frisch, abgeleitet)' },
       storagesDegraded: { type: 'number', role: 'value', def: 0, name: 'Degraded Speicher (abgeleitet)' },
       storagesDispatchAvailable: { type: 'number', role: 'value', def: 0, name: 'Regelverfügbare Speicher (abgeleitet)' },
@@ -4935,13 +5041,24 @@ class NexoWattVis extends utils.Adapter {
       groupsJson: '[]',
       totalSoc: 0,
       totalSocOnline: 0,
+      capacityWeightedSoc: 0,
+      capacityWeightedSocOnline: 0,
       socSourcesTotal: 0,
       socSourcesOnline: 0,
       socDegraded: false,
       medianSoc: 0,
+      totalPowerW: 0,
+      powerSourcesTotal: 0,
+      powerSourcesOnline: 0,
       totalChargePowerW: 0,
       totalDischargePowerW: 0,
       totalPvPowerW: 0,
+      totalPvAcPowerW: 0,
+      totalPvDcPowerW: 0,
+      totalPvUnknownPowerW: 0,
+      pvSourcesTotal: 0,
+      pvSourcesOnline: 0,
+      pvSourcesJson: '[]',
       storagesOnline: 0,
       storagesDegraded: 0,
       storagesDispatchAvailable: 0,
@@ -4984,8 +5101,14 @@ class NexoWattVis extends utils.Adapter {
       const cfg = this.config || {};
       const adminSf = (cfg.storageFarm && typeof cfg.storageFarm === 'object') ? cfg.storageFarm : {};
       const rowsRaw = Array.isArray(adminSf.storages) ? adminSf.storages : [];
-      const hasConfiguredStorage = rowsRaw.some(r => r && typeof r === 'object' && r.enabled !== false);
-      const enabled = !!cfg.enableStorageFarm && hasConfiguredStorage;
+      // AppCenter ist die autoritative Aktivierungsquelle. Das alte enableStorageFarm-
+      // Flag bleibt nur für Anlagen ohne expliziten AppCenter-Eintrag kompatibel.
+      // Dadurch werden Farm-Aggregation und Kunden-Energiefluss nicht versehentlich
+      // abgeschaltet, wenn die App korrekt installiert/aktiv ist.
+      const runtimeInfo = (typeof this._nwGetStorageFarmRuntimeInfo === 'function')
+        ? this._nwGetStorageFarmRuntimeInfo()
+        : { active: !!cfg.enableStorageFarm };
+      const enabled = !!runtimeInfo.active;
 
       // Master-Enable aus Admin in State spiegeln (damit UI + Runtime konsistent bleiben).
       // Ohne konfigurierte Speicher bleibt die Kunden-Farmansicht unsichtbar.
@@ -4994,8 +5117,9 @@ class NexoWattVis extends utils.Adapter {
         try { this.updateValue('storageFarm.enabled', enabled, Date.now()); } catch (_e0) {}
       } catch (_e1) {}
 
-      if (!enabled) return;
-
+      // Auch bei deaktivierter App spiegeln wir die Tabellenkonfiguration. Dadurch ist
+      // sie nach einer erneuten Aktivierung sofort vollständig verfügbar; nur der
+      // `storageFarm.enabled`-State bleibt bis dahin false.
       const modeRaw = String(adminSf.mode || 'pool').toLowerCase().trim();
       const mode = (modeRaw === 'groups') ? 'groups' : 'pool';
 
@@ -5079,16 +5203,24 @@ class NexoWattVis extends utils.Adapter {
    */
   async updateStorageFarmDerived(reason = 'timer') {
     try {
-      // Only compute if feature is enabled in Admin (EMS) AND at least one storage is configured.
+      // Die Farm-Aggregation folgt derselben autoritativen Aktivierung wie AppCenter,
+      // Navigation, Dispatcher und Energiefluss. Ein reines Legacy-Flag darf weder eine
+      // aktive App abschalten noch eine inaktive Farm heimlich wieder einschalten.
       const cfg = this.config || {};
-      const enabledInAdmin = !!cfg.enableStorageFarm;
-      if (!enabledInAdmin) return;
+      const runtimeInfo = (typeof this._nwGetStorageFarmRuntimeInfo === 'function')
+        ? this._nwGetStorageFarmRuntimeInfo()
+        : { active: !!cfg.enableStorageFarm };
+      if (!runtimeInfo.active) return;
 
       const stCfg = await this.getStateAsync('storageFarm.configJson');
       const raw = (stCfg && typeof stCfg.val === 'string') ? stCfg.val : '[]';
       let list = [];
       try { list = raw ? JSON.parse(raw) : []; } catch (_e) { list = []; }
       if (!Array.isArray(list)) list = [];
+      // Nach Updates oder einer frischen Aktivierung kann der State-Spiegel einen Tick
+      // hinter der Admin-Konfiguration liegen. In diesem Fall direkt mit den bereits
+      // autoritativ geprüften Farm-Zeilen weiterrechnen, statt 0 W zu veröffentlichen.
+      if (!list.length && Array.isArray(runtimeInfo.rows)) list = runtimeInfo.rows.slice();
 
       // --- Offline/Stale detection -------------------------------------------------
       // If a device adapter (e.g. nexowatt-devices / modbus) hangs, ioBroker keeps the
@@ -5326,7 +5458,15 @@ class NexoWattVis extends utils.Adapter {
 
       let totalCharge = 0;
       let totalDischarge = 0;
-      let totalPv = 0;
+      let totalPvAc = 0;
+      let totalPvDc = 0;
+      let totalPvUnknown = 0;
+      const seenPvSourceIds = new Set();
+      const pvSourceRows = [];
+      // Doppelte Leistungs-DPs dürfen weder Farmleistung noch NVP-Bilanz aufblasen.
+      // Pro eindeutigem Signed- oder Split-Feedbackpfad wird deshalb genau einmal summiert.
+      const seenPowerSourceKeys = new Set();
+      let powerSourcesOnline = 0;
       let onlineFresh = 0;
       let available = 0;
       let degraded = 0;
@@ -5341,12 +5481,10 @@ class NexoWattVis extends utils.Adapter {
       // temporarily stops responding (adapter hiccups).
       // We therefore aggregate SoC from the *last known* value per storage
       // (independent of the online flag) and expose additional quality flags.
-      let socWeightedAll = 0;
-      let socWeightAll = 0;
-      let socWeightedOnline = 0;
-      let socWeightOnline = 0;
       const socListAll = [];
       const socListOnline = [];
+      const socWeightedEntriesAll = [];
+      const socWeightedEntriesOnline = [];
       let socSourcesTotal = 0;
       let socSourcesOnline = 0;
 
@@ -5363,7 +5501,13 @@ class NexoWattVis extends utils.Adapter {
           soc: null,
           chargePowerW: null,
           dischargePowerW: null,
+          signedPowerW: null,
+          powerSourceKey: '',
+          powerSourceOnline: false,
           pvPowerW: null,
+          pvSourceId: '',
+          pvSourceCoupling: '',
+          pvSourceOnline: false,
           online: false,
           displayOnline: false,
           dispatchAvailable: false,
@@ -5412,6 +5556,22 @@ class NexoWattVis extends utils.Adapter {
         if (dchgId && !dischargeFeedbackUsable) ignoredPowerFeedback.push('dischargePowerId wirkt wie Sollwert-DP');
         if (ignoredPowerFeedback.length) status.powerFeedbackIgnoredReason = ignoredPowerFeedback.join('; ');
 
+        const powerSourceKey = signedFeedbackUsable
+          ? `signed:${signedId}`
+          : ((chargeFeedbackUsable || dischargeFeedbackUsable)
+            ? `split:${chargeFeedbackUsable ? chgId : ''}|${dischargeFeedbackUsable ? dchgId : ''}`
+            : '');
+        let powerSourceDuplicate = false;
+        if (powerSourceKey) {
+          status.powerSourceKey = powerSourceKey;
+          if (seenPowerSourceKeys.has(powerSourceKey)) {
+            powerSourceDuplicate = true;
+            status.powerDuplicateSource = true;
+          } else {
+            seenPowerSourceKeys.add(powerSourceKey);
+          }
+        }
+
         // Ab v0.6.258 sind die Leistungsgrenzen bewusst feste Eingaben in der Farm-Konfiguration.
         // Dynamische Max-Leistungs-DPs werden in der harten Dispatch-Logik nicht mehr verwendet,
         // damit die Speicherfarm auch mit einfachen Signed-DP-Systemen herstellerneutral läuft.
@@ -5424,6 +5584,8 @@ class NexoWattVis extends utils.Adapter {
 
         const coupling = String(row.coupling || '').trim().toLowerCase();
         const isDcCoupled = coupling === 'dc';
+        const isAcCoupled = coupling === 'ac';
+        const pvCoupling = isDcCoupled ? 'dc' : (isAcCoupled ? 'ac' : 'unknown');
 
         let pvId = String(row.pvPowerId || '').trim();
 
@@ -5748,14 +5910,12 @@ class NexoWattVis extends utils.Adapter {
           if (Number.isFinite(socTs)) status.socAgeSec = Math.max(0, Math.floor((now - socTs) / 1000));
 
           socListAll.push(socVal);
-          socWeightedAll += socVal * w;
-          socWeightAll += w;
+          socWeightedEntriesAll.push({ value: socVal, weight: w });
           socSourcesTotal++;
 
           if (isFreshOnline) {
             socListOnline.push(socVal);
-            socWeightedOnline += socVal * w;
-            socWeightOnline += w;
+            socWeightedEntriesOnline.push({ value: socVal, weight: w });
             socSourcesOnline++;
           }
         }
@@ -5774,6 +5934,55 @@ class NexoWattVis extends utils.Adapter {
           else availableDischargePowerUnbounded = true;
         }
 
+        // PV-/Wechselrichter-Leistung wird unabhängig vom Speicher-Heartbeat gelesen.
+        // Ein DC-/Hybrid-Speicher kann seine PV-Leistung aktualisieren, obwohl SoC oder
+        // Batterie-Istleistung langsamer kommen. Konfigurierte AC-/WR-DPs werden ebenfalls
+        // erfasst; nur die automatische r.pvPower-Suche bleibt auf DC/Hybrid beschränkt.
+        if (pvId) {
+          const pvSourceId = String(pvId || '').trim();
+          status.pvSourceId = pvSourceId;
+          status.pvSourceCoupling = pvCoupling;
+
+          if (seenPvSourceIds.has(pvSourceId)) {
+            // Derselbe Wechselrichter darf nicht mehrfach summiert werden, wenn er bei
+            // mehreren Speichern derselben Farm zugeordnet ist.
+            status.pvDuplicateSource = true;
+          } else {
+            seenPvSourceIds.add(pvSourceId);
+            const stPv = await getState(pvSourceId);
+            const pvAgeMs = (stPv && typeof stPv.ts === 'number' && Number.isFinite(stPv.ts))
+              ? Math.max(0, now - Number(stPv.ts))
+              : null;
+            // Der zugeordnete Wechselrichter ist eine eigenständige Messquelle.
+            // Ein offline gemeldeter Speicher darf eine weiterhin frische PV-/WR-
+            // Leistung nicht aus der Farm- und Energiefluss-Summe entfernen.
+            const pvFresh = !!(stPv && stPv.val !== undefined && stPv.val !== null && (pvAgeMs === null || pvAgeMs <= staleMs));
+            const pvValue = pvFresh ? await readNumber(pvSourceId, 'power', { allowStale: false }) : NaN;
+            const pvAbs = Number.isFinite(pvValue) ? Math.max(0, Math.abs(pvValue)) : 0;
+
+            status.pvSourceOnline = !!pvFresh;
+            if (pvAgeMs !== null) status.pvSourceAgeSec = Math.floor(pvAgeMs / 1000);
+            if (pvFresh && Number.isFinite(pvValue)) status.pvPowerW = pvAbs;
+
+            const pvSourceInfo = {
+              id: pvSourceId,
+              coupling: pvCoupling,
+              online: !!pvFresh,
+              powerW: Math.round(pvAbs),
+              ageMs: pvAgeMs,
+              storage: status.name,
+              autoDetected: !!status.pvAutoId,
+            };
+            pvSourceRows.push(pvSourceInfo);
+
+            if (pvFresh && Number.isFinite(pvValue)) {
+              if (pvCoupling === 'dc') totalPvDc += pvAbs;
+              else if (pvCoupling === 'ac') totalPvAc += pvAbs;
+              else totalPvUnknown += pvAbs;
+            }
+          }
+        }
+
         // Only fresh-online storages contribute live power values to the farm totals.
         // Degraded/stale systems stay visible and may remain dispatchable, but they are
         // excluded from live power aggregation to avoid reporting cached Istleistung as active power.
@@ -5786,11 +5995,12 @@ class NexoWattVis extends utils.Adapter {
         // ---------------------------------------------------------------------
 
         let usedSigned = false;
+        let powerFeedbackIncluded = false;
 
-        if (signedFeedbackUsable) {
-          const v = await readNumber(signedId, 'power', { allowStale: true });
+        if (!powerSourceDuplicate && signedFeedbackUsable) {
+          const v = await readNumber(signedId, 'power', { allowStale: false });
           if (Number.isFinite(v)) {
-            let vv = invSigned ? -v : v;
+            const vv = invSigned ? -v : v;
 
             // Signed: (-) laden / (+) entladen
             const charge = vv < 0 ? Math.abs(vv) : 0;
@@ -5801,43 +6011,43 @@ class NexoWattVis extends utils.Adapter {
 
             status.chargePowerW = charge;
             status.dischargePowerW = discharge;
+            status.signedPowerW = discharge - charge;
 
             usedSigned = true;
+            powerFeedbackIncluded = true;
           }
         }
 
-        // Fallback: getrennte Messwerte
-        if (!usedSigned && chargeFeedbackUsable) {
-          const v = await readNumber(chgId, 'power', { allowStale: true });
+        // Fallback: getrennte Messwerte. Beide Richtungen gehören zu derselben
+        // Speicherquelle und werden erst nach erfolgreichem Lesen als online gezählt.
+        if (!powerSourceDuplicate && !usedSigned && chargeFeedbackUsable) {
+          const v = await readNumber(chgId, 'power', { allowStale: false });
           if (Number.isFinite(v)) {
             let vv = invChg ? -v : v;
-            // In der Farm interpretieren wir Ladeleistung als positive Größe.
             if (vv < 0) vv = 0;
             totalCharge += vv;
             status.chargePowerW = vv;
+            powerFeedbackIncluded = true;
           }
         }
 
-        if (!usedSigned && dischargeFeedbackUsable) {
-          const v = await readNumber(dchgId, 'power', { allowStale: true });
+        if (!powerSourceDuplicate && !usedSigned && dischargeFeedbackUsable) {
+          const v = await readNumber(dchgId, 'power', { allowStale: false });
           if (Number.isFinite(v)) {
             let vv = invDchg ? -v : v;
-            // In der Farm interpretieren wir Entladeleistung als positive Größe.
             if (vv < 0) vv = 0;
             totalDischarge += vv;
             status.dischargePowerW = vv;
+            powerFeedbackIncluded = true;
           }
         }
 
-        // PV-Leistung (nur DC-gekoppelte Speicher) – als positive Größe
-        if (isDcCoupled && pvId) {
-          const v = await readNumber(pvId, 'power', { allowStale: true });
-          if (Number.isFinite(v)) {
-            let vv = v;
-            if (vv < 0) vv = Math.abs(vv);
-            totalPv += vv;
-            status.pvPowerW = vv;
-          }
+        if (!usedSigned) {
+          status.signedPowerW = Math.max(0, Number(status.dischargePowerW) || 0) - Math.max(0, Number(status.chargePowerW) || 0);
+        }
+        if (powerFeedbackIncluded) {
+          status.powerSourceOnline = true;
+          powerSourcesOnline++;
         }
 
         statusRows.push(status);
@@ -5857,19 +6067,52 @@ class NexoWattVis extends utils.Adapter {
         return (arr[mid - 1] + arr[mid]) / 2;
       })();
 
-      const totalSoc = socWeightAll > 0 ? (socWeightedAll / socWeightAll) : 0;
-      const totalSocOnline = socWeightOnline > 0 ? (socWeightedOnline / socWeightOnline) : 0;
+      // Der vom Kunden gewünschte Farm-SoC ist der arithmetische Mittelwert aller
+      // gültigen Speicher-SoCs. Kapazitätsgewichtete Werte bleiben separat als Debug-
+      // Diagnose erhalten und beeinflussen die Anzeige/Regelung nicht mehr.
+      const totalSoc = nwArithmeticMean(socListAll);
+      const totalSocOnline = nwArithmeticMean(socListOnline);
+      const capacityWeightedSoc = nwCapacityWeightedMean(socWeightedEntriesAll);
+      const capacityWeightedSocOnline = nwCapacityWeightedMean(socWeightedEntriesOnline);
+      const normalizedFarmPower = nwNormalizeFarmPower(totalCharge, totalDischarge);
+      const totalPower = normalizedFarmPower.signedW;
+      const totalPv = totalPvAc + totalPvDc + totalPvUnknown;
+      const pvSourcesOnline = pvSourceRows.filter((row) => row && row.online === true).length;
       const socDegraded = (degraded > 0) || (socSourcesTotal > 0 && socSourcesOnline >= 0 && socSourcesOnline < socSourcesTotal) || (available < configured);
 
-      await this.setStateAsync('storageFarm.totalSoc', { val: Math.round(totalSoc * 10) / 10, ack: true });
+      const totalSocState = Math.round(totalSoc * 10) / 10;
+      const totalSocOnlineState = Math.round(totalSocOnline * 10) / 10;
+      const capacityWeightedSocState = Math.round(capacityWeightedSoc * 10) / 10;
+      const capacityWeightedSocOnlineState = Math.round(capacityWeightedSocOnline * 10) / 10;
+      const totalPowerState = Math.round(totalPower);
+      const totalChargeState = Math.round(totalCharge);
+      const totalDischargeState = Math.round(totalDischarge);
+      const totalPvState = Math.round(totalPv);
+      const totalPvAcState = Math.round(totalPvAc);
+      const totalPvDcState = Math.round(totalPvDc);
+      const totalPvUnknownState = Math.round(totalPvUnknown);
+      const pvSourcesJson = JSON.stringify(pvSourceRows);
+
+      await this.setStateAsync('storageFarm.totalSoc', { val: totalSocState, ack: true });
       await this.setStateAsync('storageFarm.medianSoc', { val: Math.round(medianSoc * 10) / 10, ack: true });
-      await this.setStateAsync('storageFarm.totalSocOnline', { val: Math.round(totalSocOnline * 10) / 10, ack: true });
+      await this.setStateAsync('storageFarm.totalSocOnline', { val: totalSocOnlineState, ack: true });
+      await this.setStateAsync('storageFarm.capacityWeightedSoc', { val: capacityWeightedSocState, ack: true });
+      await this.setStateAsync('storageFarm.capacityWeightedSocOnline', { val: capacityWeightedSocOnlineState, ack: true });
       await this.setStateAsync('storageFarm.socSourcesTotal', { val: socSourcesTotal, ack: true });
       await this.setStateAsync('storageFarm.socSourcesOnline', { val: socSourcesOnline, ack: true });
       await this.setStateAsync('storageFarm.socDegraded', { val: !!socDegraded, ack: true });
-      await this.setStateAsync('storageFarm.totalChargePowerW', { val: Math.round(totalCharge), ack: true });
-      await this.setStateAsync('storageFarm.totalDischargePowerW', { val: Math.round(totalDischarge), ack: true });
-      await this.setStateAsync('storageFarm.totalPvPowerW', { val: Math.round(totalPv), ack: true });
+      await this.setStateAsync('storageFarm.totalPowerW', { val: totalPowerState, ack: true });
+      await this.setStateAsync('storageFarm.powerSourcesTotal', { val: seenPowerSourceKeys.size, ack: true });
+      await this.setStateAsync('storageFarm.powerSourcesOnline', { val: powerSourcesOnline, ack: true });
+      await this.setStateAsync('storageFarm.totalChargePowerW', { val: totalChargeState, ack: true });
+      await this.setStateAsync('storageFarm.totalDischargePowerW', { val: totalDischargeState, ack: true });
+      await this.setStateAsync('storageFarm.totalPvPowerW', { val: totalPvState, ack: true });
+      await this.setStateAsync('storageFarm.totalPvAcPowerW', { val: totalPvAcState, ack: true });
+      await this.setStateAsync('storageFarm.totalPvDcPowerW', { val: totalPvDcState, ack: true });
+      await this.setStateAsync('storageFarm.totalPvUnknownPowerW', { val: totalPvUnknownState, ack: true });
+      await this.setStateAsync('storageFarm.pvSourcesTotal', { val: seenPvSourceIds.size, ack: true });
+      await this.setStateAsync('storageFarm.pvSourcesOnline', { val: pvSourcesOnline, ack: true });
+      await this.setStateAsync('storageFarm.pvSourcesJson', { val: pvSourcesJson, ack: true });
       await this.setStateAsync('storageFarm.storagesOnline', { val: available, ack: true });
       await this.setStateAsync('storageFarm.storagesDegraded', { val: degraded, ack: true });
       const availableChargePowerState = availableChargePowerUnbounded ? null : Math.round(availableChargePowerW);
@@ -5884,15 +6127,26 @@ class NexoWattVis extends utils.Adapter {
       // keep stateCache fresh for the UI
       try {
         const now = Date.now();
-        this.updateValue('storageFarm.totalSoc', Math.round(totalSoc * 10) / 10, now);
+        this.updateValue('storageFarm.totalSoc', totalSocState, now);
         this.updateValue('storageFarm.medianSoc', Math.round(medianSoc * 10) / 10, now);
-        this.updateValue('storageFarm.totalSocOnline', Math.round(totalSocOnline * 10) / 10, now);
+        this.updateValue('storageFarm.totalSocOnline', totalSocOnlineState, now);
+        this.updateValue('storageFarm.capacityWeightedSoc', capacityWeightedSocState, now);
+        this.updateValue('storageFarm.capacityWeightedSocOnline', capacityWeightedSocOnlineState, now);
         this.updateValue('storageFarm.socSourcesTotal', socSourcesTotal, now);
         this.updateValue('storageFarm.socSourcesOnline', socSourcesOnline, now);
         this.updateValue('storageFarm.socDegraded', !!socDegraded, now);
-        this.updateValue('storageFarm.totalChargePowerW', Math.round(totalCharge), now);
-        this.updateValue('storageFarm.totalDischargePowerW', Math.round(totalDischarge), now);
-        this.updateValue('storageFarm.totalPvPowerW', Math.round(totalPv), now);
+        this.updateValue('storageFarm.totalPowerW', totalPowerState, now);
+        this.updateValue('storageFarm.powerSourcesTotal', seenPowerSourceKeys.size, now);
+        this.updateValue('storageFarm.powerSourcesOnline', powerSourcesOnline, now);
+        this.updateValue('storageFarm.totalChargePowerW', totalChargeState, now);
+        this.updateValue('storageFarm.totalDischargePowerW', totalDischargeState, now);
+        this.updateValue('storageFarm.totalPvPowerW', totalPvState, now);
+        this.updateValue('storageFarm.totalPvAcPowerW', totalPvAcState, now);
+        this.updateValue('storageFarm.totalPvDcPowerW', totalPvDcState, now);
+        this.updateValue('storageFarm.totalPvUnknownPowerW', totalPvUnknownState, now);
+        this.updateValue('storageFarm.pvSourcesTotal', seenPvSourceIds.size, now);
+        this.updateValue('storageFarm.pvSourcesOnline', pvSourcesOnline, now);
+        this.updateValue('storageFarm.pvSourcesJson', pvSourcesJson, now);
         this.updateValue('storageFarm.storagesOnline', available, now);
         this.updateValue('storageFarm.storagesDegraded', degraded, now);
         this.updateValue('storageFarm.storagesDispatchAvailable', dispatchAvailableCount, now);
@@ -5901,27 +6155,28 @@ class NexoWattVis extends utils.Adapter {
         this.updateValue('storageFarm.storagesTotal', configured, now);
         this.updateValue('storageFarm.storagesStatusJson', JSON.stringify(statusRows), now);
 
-        // Im Farm‑Modus sollen Energiefluss + Historie immer die Farm‑Summen anzeigen.
-// Dafür spiegeln wir die aggregierten Werte bewusst auf die generischen Keys
-// (storageSoc/storageChargePower/storageDischargePower/batteryPower).
-// Hintergrund: In vielen Setups sind dort Einzel‑Speicher gemappt – im Farm‑Modus
-// soll jedoch die Pool‑/Gruppen‑Summe angezeigt werden (ohne die Regel‑Logik zu verändern).
-try {
-  // SoC: Für die aktive Farm-Anzeige bevorzugen wir den frischen Online-SoC.
-  // Der stabile Gesamt-SoC bleibt weiterhin unter storageFarm.totalSoc verfügbar.
-  const activeSoc = socSourcesOnline > 0 ? totalSocOnline : totalSoc;
-  this.updateValue('storageSoc', Math.round(activeSoc * 10) / 10, now, { raw: false });
-  this.updateValue('storageChargePower', Math.round(totalCharge), now, { raw: false });
-  this.updateValue('storageDischargePower', Math.round(totalDischarge), now, { raw: false });
-  this.updateValue('batteryPower', Math.round(totalDischarge - totalCharge), now, { raw: false });
+        // Im Farm-Modus sollen Energiefluss und Historie immer die konsolidierten
+        // Farmwerte sehen. Die generischen Keys bleiben als Kompatibilitätsbrücke für
+        // ältere Frontends erhalten; die zentrale Auflösung bevorzugt dennoch die
+        // expliziten storageFarm.*-States.
+        try {
+          const netCharge = totalPowerState < 0 ? Math.abs(totalPowerState) : 0;
+          const netDischarge = totalPowerState > 0 ? totalPowerState : 0;
+          this.updateValue('storageSoc', totalSocState, now, { raw: false });
+          this.updateValue('storageChargePower', netCharge, now, { raw: false });
+          this.updateValue('storageDischargePower', netDischarge, now, { raw: false });
+          this.updateValue('batteryPower', totalPowerState, now, { raw: false });
 
-  // PV (DC) Farm‑Summe nur als Fallback, wenn kein PV‑DP gemappt ist
-  if (typeof this._nwHasMappedDatapoint === 'function') {
-    if (!this._nwHasMappedDatapoint('pvPower') && totalPv > 0) this.updateValue('pvPower', Math.round(totalPv), now);
-    if (!this._nwHasMappedDatapoint('productionTotal') && totalPv > 0) this.updateValue('productionTotal', Math.round(totalPv), now);
-  }
-} catch (_e3) {}
-} catch (_e2) {}
+          // PV bleibt ausschließlich in storageFarm.totalPv*. Die zentrale
+          // Energieflussauflösung führt Farm-PV und Anlagen-PV nachvollziehbar
+          // zusammen; ein Spiegel auf pvPower würde Doppelzählungen verstecken.
+        } catch (_e3) {}
+
+        // Nach der Aggregation genau einen abgeleiteten Energiefluss-Tick planen.
+        if (typeof this.scheduleDerivedFlowUpdate === 'function') {
+          this.scheduleDerivedFlowUpdate('storage-farm-aggregate');
+        }
+      } catch (_e2) {}
     } catch (e) {
       this.log.debug('storageFarm derive failed (' + reason + '): ' + (e && e.message ? e.message : e));
     }
@@ -5939,7 +6194,9 @@ try {
    */
   _sfGetNormalizedFarmConfig() {
     const cfg = this.config || {};
-    const enabled = !!cfg.enableStorageFarm;
+    // Aggregation, Energiefluss und Sollwert-Dispatcher verwenden dieselbe
+    // App-Center-Aktivierung. Legacy-Flags dürfen keinen Parallelzustand erzeugen.
+    const enabled = !!this._nwGetStorageFarmRuntimeInfo().active;
     const sf = (cfg.storageFarm && typeof cfg.storageFarm === 'object') ? cfg.storageFarm : {};
     const modeRaw = String(sf.mode || 'pool').toLowerCase().trim();
     const mode = (modeRaw === 'groups') ? 'groups' : 'pool';
@@ -6024,7 +6281,7 @@ try {
     const reserveMin = Number(multiUsePolicyActive ? storageCfg.reserveMinSocPct : NaN);
     const reserveFloor = (reserveEnabled && Number.isFinite(reserveMin)) ? reserveMin : 0;
 
-    const farmEnabled = !!(this.config && this.config.enableStorageFarm);
+    const farmEnabled = !!(typeof this._nwGetStorageFarmRuntimeInfo === 'function' && this._nwGetStorageFarmRuntimeInfo().active);
     const hasStoredSelfFlag = (storageCfg.selfDischargeEnabled === true || storageCfg.selfDischargeEnabled === false);
     const hasEffectiveSelfFlag = hasStoredSelfFlag && (!mu || multiUsePolicyActive);
     const feneconFarmFallback = !!(farmEnabled && storageCfg.feneconAcMode === true && !hasEffectiveSelfFlag);
@@ -9259,7 +9516,7 @@ async onReady() {
 
       // Speicherfarm: abgeleitete Summenwerte (SoC/Leistung) regelmäßig aktualisieren
       try {
-        const sfEnabled = !!(this.config && this.config.enableStorageFarm);
+        const sfEnabled = !!(typeof this._nwGetStorageFarmRuntimeInfo === 'function' && this._nwGetStorageFarmRuntimeInfo().active);
         const sfCfg = (this.config && this.config.storageFarm) || {};
         const intervalRaw = Number(sfCfg.schedulerIntervalMs);
         const interval = Number.isFinite(intervalRaw) ? Math.max(250, Math.min(60000, Math.round(intervalRaw))) : 2000;
@@ -12683,7 +12940,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
             this._nwStorageFarmTimer = null;
           }
 
-          const enabledSf = !!(this.config && this.config.enableStorageFarm);
+          const enabledSf = !!this._nwGetStorageFarmRuntimeInfo().active;
           const sfCfg = (this.config && this.config.storageFarm && typeof this.config.storageFarm === 'object') ? this.config.storageFarm : {};
           const interval = (sfCfg.schedulerIntervalMs !== undefined && sfCfg.schedulerIntervalMs !== null && Number.isFinite(Number(sfCfg.schedulerIntervalMs)))
             ? Math.max(500, Math.round(Number(sfCfg.schedulerIntervalMs)))
@@ -18833,34 +19090,21 @@ app.get('/config', (req, res) => {
         }
       };
       const storageRowsFromConfig = Array.isArray(cfg && cfg.storageFarm && cfg.storageFarm.storages) ? cfg.storageFarm.storages : [];
-      const storageFarmAppActive = (() => {
-        try {
-          const emsApps = (cfg && cfg.emsApps && typeof cfg.emsApps === 'object') ? cfg.emsApps : {};
-          const apps = (emsApps.apps && typeof emsApps.apps === 'object') ? emsApps.apps : {};
-          const app = (apps.storagefarm && typeof apps.storagefarm === 'object')
-            ? apps.storagefarm
-            : ((apps.storageFarm && typeof apps.storageFarm === 'object') ? apps.storageFarm : null);
-          if (!app) return false;
-          // App-Center ist der alleinige Sichtbarkeits-Gatekeeper: ein altes
-          // enableStorageFarm-Flag oder ein alter Runtime-State darf die Kunden-Navigation
-          // nicht mehr öffnen, wenn die App nicht installiert UND aktiv ist.
-          return app.installed === true && app.enabled === true;
-        } catch (_e) {
-          return false;
-        }
-      })();
-      const storageFarmRowHasRealDatapoint = (row) => {
-        const r = row && typeof row === 'object' ? row : null;
-        if (!r || r.enabled === false) return false;
-        return ['socId', 'socDp', 'chargePowerId', 'chargeDp', 'dischargePowerId', 'dischargeDp', 'signedPowerId', 'signedPowerDp', 'powerId'].some((key) => String(r[key] || '').trim());
-      };
-      // Stale runtime states from older builds must not expose the customer Speicherfarm page.
-      // Die Kunden-Unterseite ist nur sinnvoll, wenn die App-Center-App aktiv ist UND
-      // mindestens zwei echte Farm-Speicher konfiguriert sind. Einzel-Speicher-Anlagen
-      // laufen über die normale Speicherregelung und dürfen keinen Farm-Menüpunkt zeigen.
+      const storageFarmRuntimeInfo = (typeof this._nwGetStorageFarmRuntimeInfo === 'function')
+        ? this._nwGetStorageFarmRuntimeInfo()
+        : { appCenterActive: false, configuredCount: 0 };
+      const storageFarmAppActive = !!storageFarmRuntimeInfo.appCenterActive;
+      const storageFarmRowHasRealDatapoint = (row) => (typeof this._nwStorageFarmRowHasRealDatapoint === 'function')
+        ? this._nwStorageFarmRowHasRealDatapoint(row)
+        : false;
+      // Stale Runtime-States und Legacy-enableStorageFarm dürfen die Kundenansicht
+      // nicht öffnen. Sichtbar ist die Farm nur bei AppCenter installed+enabled und
+      // mindestens zwei echten Speicherzeilen; dieselbe Zeilenerkennung nutzt auch
+      // Aggregation und Scheduler.
       const storageFarmConfiguredCount = storageRowsFromConfig.filter(storageFarmRowHasRealDatapoint).length;
       const storageFarmConfigured = storageFarmConfiguredCount >= 2;
       const storageFarmAvailable = !!(storageFarmAppActive && storageFarmConfigured);
+
 
       const smartHomeAdminEnabled = (() => {
         try {
@@ -19064,6 +19308,11 @@ app.get('/config', (req, res) => {
           hasSmartHome: smartHomeEnabledEffective,
           hasWeather: !!featureVisibilityEffective.hasWeather,
           hasAiAdvisor: aiAdvisorEnabledEffective,
+        },
+        storageFarmSummary: {
+          active: storageFarmAvailableEffective,
+          appCenterActive: storageFarmAppActive,
+          configuredCount: storageFarmConfiguredCount,
         },
         // Legacy compatibility for older/front-end helper code: exposing the raw mapping here
         // allows the VIS to decide which live values are authoritative.
@@ -22609,7 +22858,17 @@ return res.json(out);
       // Weather App (FIS settings)
       'weatherEnabled','weatherUsageMode','weatherApiKey'
     ];
-    const storageFarmLocalKeys = ['enabled', 'mode', 'configJson', 'groupsJson', 'totalSoc', 'medianSoc', 'totalSocOnline', 'socSourcesTotal', 'socSourcesOnline', 'socDegraded', 'totalChargePowerW', 'totalDischargePowerW', 'totalPvPowerW', 'storagesOnline', 'storagesDegraded', 'storagesDispatchAvailable', 'availableChargePowerW', 'availableDischargePowerW', 'storagesTotal', 'storagesStatusJson', 'lastDispatchJson'];
+    const storageFarmLocalKeys = [
+      'enabled', 'mode', 'configJson', 'groupsJson',
+      'totalSoc', 'medianSoc', 'totalSocOnline', 'capacityWeightedSoc', 'capacityWeightedSocOnline',
+      'socSourcesTotal', 'socSourcesOnline', 'socDegraded',
+      'totalPowerW', 'powerSourcesTotal', 'powerSourcesOnline', 'totalChargePowerW', 'totalDischargePowerW',
+      'totalPvPowerW', 'totalPvAcPowerW', 'totalPvDcPowerW', 'totalPvUnknownPowerW',
+      'pvSourcesTotal', 'pvSourcesOnline', 'pvSourcesJson',
+      'storagesOnline', 'storagesDegraded', 'storagesDispatchAvailable',
+      'availableChargePowerW', 'availableDischargePowerW', 'storagesTotal',
+      'storagesStatusJson', 'lastDispatchJson',
+    ];
     // Weitere lokale States, die in der VIS angezeigt werden sollen (ohne Admin-Mapping)
     // Wichtig: Diese Keys müssen auch dann funktionieren, wenn sie NICHT im Admin unter
     // "Datenpunkte" gemappt wurden. Daher wird im Subscribe-Loop unten auf die lokalen
@@ -24059,25 +24318,168 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
    */
   _nwStorageFarmIsActiveFromCache() {
     try {
-      const cfg = this.config || {};
-      const sf = (cfg.storageFarm && typeof cfg.storageFarm === 'object') ? cfg.storageFarm : {};
-      const rows = Array.isArray(sf.storages) ? sf.storages : [];
-      const configured = rows.some(r => r && typeof r === 'object' && r.enabled !== false);
-      if (!cfg.enableStorageFarm || !configured) return false;
-
-      const rec = this.stateCache && this.stateCache['storageFarm.enabled'];
-      if (rec && rec.value === false) return false;
-
-      const totalRec = this.stateCache && this.stateCache['storageFarm.storagesTotal'];
-      if (totalRec && totalRec.value !== undefined && totalRec.value !== null) {
-        const total = Number(totalRec.value);
-        if (Number.isFinite(total) && total <= 0) return false;
-      }
-      return true;
+      // AppCenter + reale Farmzeilen sind die einzige Aktivierungsquelle. Die
+      // Runtime-States sind Ergebnisse dieser Konfiguration und dürfen sie nicht
+      // rückwärts durch einen alten false-/0-Wert überschreiben.
+      const runtimeInfo = this._nwGetStorageFarmRuntimeInfo();
+      return !!(runtimeInfo.active && Number(runtimeInfo.configuredCount || 0) >= 2);
     } catch (_e) {
       return false;
     }
   }
+
+  /**
+   * Code-Teil: _nwResolveStorageFarmMetricsFromCache
+   * Zweck: Liefert einen kanonischen Snapshot der Farm für Energiefluss, Historie und
+   * Speicherregelung. Brutto-Laden/-Entladen bleiben Diagnosewerte; die sichtbare
+   * Gesamtleistung ist immer die signierte Nettoleistung (+ Entladen / - Laden).
+   */
+  _nwResolveStorageFarmMetricsFromCache(opts = {}) {
+    const now = Number.isFinite(Number(opts.now)) ? Number(opts.now) : Date.now();
+    const active = this._nwStorageFarmIsActiveFromCache();
+    const read = (key) => {
+      const value = this._nwGetNumberFromCache(key);
+      return Number.isFinite(Number(value)) ? Number(value) : null;
+    };
+
+    const grossChargeW = Math.max(0, Math.abs(read('storageFarm.totalChargePowerW') || 0));
+    const grossDischargeW = Math.max(0, Math.abs(read('storageFarm.totalDischargePowerW') || 0));
+    const powerSourcesTotal = Math.max(0, Math.round(read('storageFarm.powerSourcesTotal') || 0));
+    const signedState = read('storageFarm.totalPowerW');
+
+    // Nach einem Update kann der neu angelegte totalPowerW-State kurz 0 W enthalten,
+    // während die bereits vorhandenen Brutto-States noch den echten Farmfluss zeigen.
+    // Erst nach mindestens einer ausgewerteten Leistungsquelle ist totalPowerW führend.
+    const signedW = (signedState !== null && (powerSourcesTotal > 0 || (grossChargeW <= 0 && grossDischargeW <= 0)))
+      ? signedState
+      : (grossDischargeW - grossChargeW);
+    const chargeW = signedW < 0 ? Math.abs(signedW) : 0;
+    const dischargeW = signedW > 0 ? signedW : 0;
+
+    const pvTotalState = Math.max(0, Math.abs(read('storageFarm.totalPvPowerW') || 0));
+    let pvAcW = Math.max(0, Math.abs(read('storageFarm.totalPvAcPowerW') || 0));
+    let pvDcW = Math.max(0, Math.abs(read('storageFarm.totalPvDcPowerW') || 0));
+    let pvUnknownW = Math.max(0, Math.abs(read('storageFarm.totalPvUnknownPowerW') || 0));
+    if ((pvAcW + pvDcW + pvUnknownW) <= 0 && pvTotalState > 0) {
+      // Rückwärtskompatibilität: Vor 0.8.101 enthielt totalPvPowerW ausschließlich
+      // DC-/Hybrid-PV. Alte Runtime-Stände werden deshalb sicher als DC interpretiert.
+      pvDcW = pvTotalState;
+    }
+    const pvTotalW = Math.max(pvTotalState, pvAcW + pvDcW + pvUnknownW);
+
+    let pvSources = [];
+    try {
+      const rec = this.stateCache && this.stateCache['storageFarm.pvSourcesJson'];
+      const raw = rec ? rec.value : '[]';
+      const parsed = typeof raw === 'string' ? JSON.parse(raw || '[]') : raw;
+      if (Array.isArray(parsed)) pvSources = parsed.filter((row) => row && typeof row === 'object');
+    } catch (_eSources) {
+      pvSources = [];
+    }
+
+    return {
+      active,
+      soc: read('storageFarm.totalSoc'),
+      totalPowerW: Math.round(signedW),
+      chargeW: Math.round(chargeW),
+      dischargeW: Math.round(dischargeW),
+      grossChargeW: Math.round(grossChargeW),
+      grossDischargeW: Math.round(grossDischargeW),
+      pvTotalW: Math.round(pvTotalW),
+      pvAcW: Math.round(pvAcW),
+      pvDcW: Math.round(pvDcW),
+      pvUnknownW: Math.round(pvUnknownW),
+      pvSources,
+      ageMs: {
+        totalPowerW: this._nwGetCacheAgeMs('storageFarm.totalPowerW', now),
+        totalSoc: this._nwGetCacheAgeMs('storageFarm.totalSoc', now),
+        totalPvPowerW: this._nwGetCacheAgeMs('storageFarm.totalPvPowerW', now),
+      },
+    };
+  }
+
+  /**
+   * Code-Teil: _nwMergeStorageFarmPvWithBase
+   * Zweck: Führt Anlagen-PV und Farm-/Wechselrichter-PV ohne Doppelzählung zusammen.
+   * AC-/unbekannte Farmquellen dienen bei vorhandener Anlagen-PV als Fallback. Echte
+   * DC-/Hybrid-PV wird addiert, außer sie ist dieselbe Quelle oder offensichtlich schon
+   * im Anlagenwert enthalten.
+   */
+  _nwMergeStorageFarmPvWithBase(baseAcW, opts = {}) {
+    const baseW = Number.isFinite(Number(baseAcW)) ? Math.max(0, Math.abs(Number(baseAcW))) : 0;
+    const metrics = opts.metrics && typeof opts.metrics === 'object'
+      ? opts.metrics
+      : this._nwResolveStorageFarmMetricsFromCache({ now: opts.now });
+    if (!metrics || !metrics.active) {
+      return {
+        totalW: Math.round(baseW),
+        acW: Math.round(baseW),
+        dcW: 0,
+        farmAddedW: 0,
+        farmFallbackUsed: false,
+        duplicateSuppressedW: 0,
+        source: baseW > 0 ? 'base' : 'missing',
+        metrics,
+      };
+    }
+
+    const baseSourceIds = new Set();
+    const singleBaseSourceId = String(opts.baseSourceId || '').trim();
+    if (singleBaseSourceId) baseSourceIds.add(singleBaseSourceId);
+    for (const sourceId of (Array.isArray(opts.baseSourceIds) ? opts.baseSourceIds : [])) {
+      const normalizedId = String(sourceId || '').trim();
+      if (normalizedId) baseSourceIds.add(normalizedId);
+    }
+    const sources = Array.isArray(metrics.pvSources) ? metrics.pvSources : [];
+    let overlapAcW = 0;
+    let overlapDcW = 0;
+    let overlapUnknownW = 0;
+    if (baseSourceIds.size > 0) {
+      for (const row of sources) {
+        if (!baseSourceIds.has(String(row && row.id || '').trim())) continue;
+        const valueW = Math.max(0, Number(row && row.powerW) || 0);
+        const coupling = String(row && row.coupling || '').trim().toLowerCase();
+        if (coupling === 'dc') overlapDcW += valueW;
+        else if (coupling === 'ac') overlapAcW += valueW;
+        else overlapUnknownW += valueW;
+      }
+    }
+
+    const farmAcW = Math.max(0, Number(metrics.pvAcW) || 0);
+    const farmDcW = Math.max(0, Number(metrics.pvDcW) || 0);
+    const farmUnknownW = Math.max(0, Number(metrics.pvUnknownW) || 0);
+    const farmTotalW = Math.max(0, Number(metrics.pvTotalW) || (farmAcW + farmDcW + farmUnknownW));
+
+    // Dieselbe zentrale Funktion entscheidet sowohl bei exakter DP-Überlappung als
+    // auch bei unterschiedlichen Anlagen-/Farm-Sichten. Damit verwenden Energiefluss,
+    // Historie und Tests exakt dieselben Doppelzählungs- und Fallback-Regeln.
+    const combined = nwCombineStorageFarmPv({
+      sitePvW: baseW,
+      farmAcW,
+      farmDcW,
+      farmUnknownW,
+      farmTotalW,
+      overlapAcW,
+      overlapDcW,
+      overlapUnknownW,
+      tolerance: 0.08,
+    });
+    const totalW = Math.max(0, Number(combined.totalW) || 0);
+    const acW = Math.max(0, Number(combined.acW) || 0);
+    const dcW = Math.max(0, Number(combined.dcW) || 0);
+    const farmAddedW = Math.max(0, Number(combined.farmAddedW) || 0);
+    return {
+      totalW: Math.round(totalW),
+      acW: Math.round(acW),
+      dcW: Math.round(dcW),
+      farmAddedW: Math.round(farmAddedW),
+      farmFallbackUsed: !!combined.farmFallbackUsed,
+      duplicateSuppressedW: Math.round(Math.max(0, Number(combined.duplicateSuppressedW) || 0)),
+      source: String(combined.source || (farmAddedW > 0 ? 'base+storage-farm' : (baseW > 0 ? 'base' : 'missing'))),
+      metrics,
+    };
+  }
+
   _nwResolveBatteryFlowFromCache(opts = {}) {
     const now = Number.isFinite(Number(opts.now)) ? Number(opts.now) : Date.now();
     const maxAgeMs = opts.maxAgeMs === undefined ? this._nwLiveInputMaxAgeMs() : opts.maxAgeMs;
@@ -24221,24 +24623,32 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     // Speicherfarm nur dann als Quelle verwenden, wenn sie in der Admin-Konfiguration
     // wirklich aktiv ist und konfigurierte Speicher enthält. Ein alter stateCache-Wert
     // "storageFarm.enabled=true" darf normale Einzelanlagen nicht übernehmen.
-    const sfEnabled = this._nwStorageFarmIsActiveFromCache && this._nwStorageFarmIsActiveFromCache();
+    const farmMetrics = (typeof this._nwResolveStorageFarmMetricsFromCache === 'function')
+      ? this._nwResolveStorageFarmMetricsFromCache({ now })
+      : null;
+    const sfEnabled = !!(farmMetrics && farmMetrics.active);
     if (sfEnabled) {
-      const farmCharge = readMapped('storageFarm.totalChargePowerW', false, false);
-      const farmDischarge = readMapped('storageFarm.totalDischargePowerW', false, false);
-      if (farmCharge !== null || farmDischarge !== null) {
-        let c = Math.max(0, Math.abs(Number(farmCharge || 0)));
-        let d = Math.max(0, Math.abs(Number(farmDischarge || 0)));
-        if (inv) { const t = c; c = d; d = t; }
+      let signed = Number(farmMetrics.totalPowerW);
+      if (Number.isFinite(signed)) {
+        // storageFarm.totalPowerW ist bereits pro Speicher normalisiert und besitzt
+        // eine feste Konvention (+ Entladen / - Laden). Das globale Einzel-Speicher-
+        // Anzeige-Invert darf diesen kanonischen Farmwert nicht ein zweites Mal drehen.
+        if (Math.abs(signed) <= deadbandW) signed = 0;
+        const c = signed < 0 ? Math.abs(signed) : 0;
+        const d = signed > 0 ? signed : 0;
         return {
           chargeW: Math.round(c),
           dischargeW: Math.round(d),
-          signedW: Math.round(d - c),
-          src: inv ? 'storageFarm(inv)' : 'storageFarm',
-          inverted: inv,
-          fromSigned: false,
+          signedW: Math.round(signed),
+          src: 'storageFarmNet',
+          inverted: false,
+          fromSigned: true,
           derived: false,
           mirror: true,
+          grossChargeW: farmMetrics.grossChargeW,
+          grossDischargeW: farmMetrics.grossDischargeW,
           staleMs: {
+            farmPower: farmMetrics.ageMs && farmMetrics.ageMs.totalPowerW,
             farmCharge: this._nwGetCacheAgeMs('storageFarm.totalChargePowerW', now),
             farmDischarge: this._nwGetCacheAgeMs('storageFarm.totalDischargePowerW', now),
           },
@@ -26300,8 +26710,11 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       gridBuyW,
       gridSellW,
     } = this._nwResolveGridImportExportFromCache();
-    const pvW = this._nwGetNumberFromCache('pvPower');
-    const loadW = this._nwGetNumberFromCache('consumptionTotal');
+    const historyCoreMaxAgeMs = Math.max(30000, Number(this.config?.settings?.deviceStaleTimeoutSec || 60) * 1000);
+    const pvDerivedW = this._nwGetNumberFromCacheFresh('derived.core.pv.totalW', historyCoreMaxAgeMs, null, now);
+    const pvW = this._nwGetNumberFromCache('pvPower') ?? this._nwGetNumberFromCache('productionTotal');
+    const loadDerivedW = this._nwGetNumberFromCacheFresh('derived.core.building.loadTotalW', historyCoreMaxAgeMs, null, now);
+    const loadW = Number.isFinite(Number(loadDerivedW)) ? Number(loadDerivedW) : this._nwGetNumberFromCache('consumptionTotal');
     const storageFlowHist = this._nwResolveBatteryFlowFromCache({ now });
     let chgW = Number(storageFlowHist.chargeW);
     let dchgW = Number(storageFlowHist.dischargeW);
@@ -26312,54 +26725,56 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const gridSell = Number.isFinite(gridSellW) ? Math.max(0, gridSellW) : 0;
     const gridNet = gridBuy - gridSell;
 
-    let pvTotal = Number.isFinite(pvW) ? Math.max(0, pvW) : null;
+    // Der bereits abgeleitete PV-Gesamtwert ist die kanonische Quelle für LIVE,
+    // Historie und Budgetierung. Nur wenn er fehlt/veraltet ist, wird die Farm-PV
+    // hier noch einmal mit dem direkten Anlagen-PV-DP zusammengeführt.
+    let pvTotal = Number.isFinite(Number(pvDerivedW))
+      ? Math.max(0, Number(pvDerivedW))
+      : (Number.isFinite(Number(pvW)) ? Math.max(0, Number(pvW)) : null);
+    const pvTotalFromDerived = Number.isFinite(Number(pvDerivedW));
 
-    // In Farm-/DC-Speicher-Setups kommt ein Teil der PV-Leistung direkt aus den Speichersystemen (DC-PV).
-    // Speicherfarm: Die Summe wird unter storageFarm.totalPvPowerW bereitgestellt.
-    // Einzel-DC-/Hybrid-Speicher: Die Speicherregelungs-App spiegelt den optionalen
-    // PV-Erzeugungs-DP unter speicher.dcPvPowerW. Beide Wege werden mit derselben
-    // Double-Count-Heuristik zur Historie/Abrechnung addiert.
-    const sfEnabled = this._nwStorageFarmIsActiveFromCache ? this._nwStorageFarmIsActiveFromCache() : !!this._nwGetNumberFromCache('storageFarm.enabled');
+    // Historie und LIVE verwenden dieselbe zentrale Farm-PV-Zusammenführung. Dadurch
+    // stimmen die aktuellen Energieflüsse, History-States und späteren Energiesummen
+    // überein, ohne AC-Wechselrichter oder Hybrid-PV doppelt zu zählen.
+    const farmMetricsHist = (typeof this._nwResolveStorageFarmMetricsFromCache === 'function')
+      ? this._nwResolveStorageFarmMetricsFromCache({ now })
+      : null;
+    const sfEnabled = !!(farmMetricsHist && farmMetricsHist.active);
     const singleStorageDcEnabled = !!(this.config
       && this.config.enableStorageControl
       && !sfEnabled
       && this.config.storage
       && String(this.config.storage.coupling || '').trim().toLowerCase() === 'dc');
 
-    /**
-     * Code-Teil: addDcPvToHistorieTotal
-     * Zweck: Fuegt DC-/Hybrid-PV zur PV-Historiensumme hinzu, ohne eine bereits
-     * im AC-/PV-Datenpunkt enthaltene Leistung offensichtlich doppelt zu zaehlen.
-     * Zusammenhang: Einzel-DC-Speicher und Speicherfarm nutzen dieselbe Bilanzlogik;
-     * Batterie-Sollwerte werden dadurch nicht beeinflusst.
-     */
-    const addDcPvToHistorieTotal = (dcValueW) => {
-      if (!Number.isFinite(dcValueW) || dcValueW === 0) return;
-      const dcAbs = Math.abs(dcValueW);
-      if (pvTotal === null || pvTotal === 0) {
-        pvTotal = dcAbs;
-      } else {
-        const pvAbs = Math.abs(pvTotal);
-        const relDiff = Math.abs(pvAbs - dcAbs) / Math.max(1, dcAbs);
-        if (relDiff < 0.05) {
-          pvTotal = Math.max(pvAbs, dcAbs);
-        } else {
-          pvTotal = pvAbs + dcAbs;
+    if (!pvTotalFromDerived && sfEnabled && typeof this._nwMergeStorageFarmPvWithBase === 'function') {
+      const dps = (this.config && this.config.datapoints && typeof this.config.datapoints === 'object') ? this.config.datapoints : {};
+      const baseSourceId = String(dps.pvPower || dps.productionTotal || '').trim();
+      const merged = this._nwMergeStorageFarmPvWithBase(pvTotal || 0, {
+        now,
+        metrics: farmMetricsHist,
+        baseSourceId,
+      });
+      pvTotal = Math.max(0, Number(merged.totalW) || 0);
+    } else if (singleStorageDcEnabled) {
+      const dcValueW = this._nwGetNumberFromCache('speicher.dcPvPowerW');
+      if (Number.isFinite(dcValueW) && Number(dcValueW) !== 0) {
+        const dcAbs = Math.abs(Number(dcValueW));
+        if (pvTotal === null || pvTotal === 0) pvTotal = dcAbs;
+        else {
+          const pvAbs = Math.abs(pvTotal);
+          const relDiff = Math.abs(pvAbs - dcAbs) / Math.max(1, dcAbs);
+          pvTotal = relDiff < 0.05 ? Math.max(pvAbs, dcAbs) : (pvAbs + dcAbs);
         }
       }
-    };
-
-    if (sfEnabled) {
-      addDcPvToHistorieTotal(this._nwGetNumberFromCache('storageFarm.totalPvPowerW'));
-    } else if (singleStorageDcEnabled) {
-      addDcPvToHistorieTotal(this._nwGetNumberFromCache('speicher.dcPvPowerW'));
     }
 
     // In StorageFarm mode the storageFlow resolver already prefers the aggregated farm
     // charge/discharge totals. Keep the farm SoC preference here for history/export.
     if (sfEnabled) {
-      const socFarm = this._nwGetNumberFromCache('storageFarm.totalSoc');
-      if (Number.isFinite(socFarm)) soc = socFarm;
+      const socFarm = farmMetricsHist && Number.isFinite(Number(farmMetricsHist.soc))
+        ? Number(farmMetricsHist.soc)
+        : this._nwGetNumberFromCache('storageFarm.totalSoc');
+      if (Number.isFinite(Number(socFarm))) soc = Number(socFarm);
     }
 
     let loadTotal = Number.isFinite(loadW) ? Math.max(0, loadW) : null;
@@ -27567,12 +27982,18 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     // --- PV (AC) ---
     let pvAcRaw = null;
     let pvSource = '';
+    let pvBaseSourceId = '';
+    let pvBaseSourceIds = [];
     if (pvPowerMapped) {
       pvAcRaw = this._nwGetNumberFromCache('pvPower');
       pvSource = 'mapped:pvPower';
+      pvBaseSourceId = String(this.config?.datapoints?.pvPower || '').trim();
+      pvBaseSourceIds = pvBaseSourceId ? [pvBaseSourceId] : [];
     } else if (prodTotalMapped) {
       pvAcRaw = this._nwGetNumberFromCache('productionTotal');
       pvSource = 'mapped:productionTotal';
+      pvBaseSourceId = String(this.config?.datapoints?.productionTotal || '').trim();
+      pvBaseSourceIds = pvBaseSourceId ? [pvBaseSourceId] : [];
     }
 
     let pvAcW = 0;
@@ -27606,6 +28027,8 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         if (!Number.isFinite(v)) continue;
         sum += Math.abs(v);
         used++;
+        const sourceId = String(dev && dev.powerId || '').trim();
+        if (sourceId && !pvBaseSourceIds.includes(sourceId)) pvBaseSourceIds.push(sourceId);
       }
 
       if (used > 0) {
@@ -27620,8 +28043,14 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     }
 
-    // --- PV (DC) from Speicherfarm or single DC-/Hybrid-Speicher (optional) ---
-    const sfEnabled = this._nwStorageFarmIsActiveFromCache ? this._nwStorageFarmIsActiveFromCache() : !!(this.stateCache?.['storageFarm.enabled'] && this.stateCache['storageFarm.enabled'].value);
+    // --- PV aus Speicherfarm oder Einzel-DC-/Hybrid-Speicher -------------------
+    // Die Farm liefert getrennte AC-, DC- und unbekannte WR-Anteile. Eine zentrale
+    // Merge-Funktion verhindert, dass dieselbe Anlagen-PV im Energiefluss doppelt
+    // erscheint. Fehlt die Anlagen-PV, dient die komplette Farm-Summe als Fallback.
+    const farmMetrics = (typeof this._nwResolveStorageFarmMetricsFromCache === 'function')
+      ? this._nwResolveStorageFarmMetricsFromCache({ now: ts })
+      : null;
+    const sfEnabled = !!(farmMetrics && farmMetrics.active);
     const singleStorageDcEnabled = !!(this.config
       && this.config.enableStorageControl
       && !sfEnabled
@@ -27629,41 +28058,43 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       && String(this.config.storage.coupling || '').trim().toLowerCase() === 'dc');
     let pvDcW = 0;
     let pvDcSource = '';
-    if (sfEnabled) {
-      const dc = this._nwGetNumberFromCache('storageFarm.totalPvPowerW');
-      if (dc !== null && Number.isFinite(Number(dc))) {
-        pvDcW = Math.max(0, Math.abs(Number(dc)));
-        pvDcSource = 'farm:dc';
-      }
+    let pvDcIncluded = false;
+    let pvFarmMerge = null;
+    let pvTotalW = pvAcW;
+
+    if (sfEnabled && typeof this._nwMergeStorageFarmPvWithBase === 'function') {
+      pvFarmMerge = this._nwMergeStorageFarmPvWithBase(pvAcW, {
+        now: ts,
+        metrics: farmMetrics,
+        baseSourceId: pvBaseSourceId,
+        baseSourceIds: pvBaseSourceIds,
+      });
+      pvAcW = Math.max(0, Number(pvFarmMerge.acW) || 0);
+      pvDcW = Math.max(0, Number(pvFarmMerge.dcW) || 0);
+      pvTotalW = Math.max(0, Number(pvFarmMerge.totalW) || 0);
+      pvDcIncluded = pvDcW > 0;
+      pvDcSource = pvDcW > 0 ? 'farm:dc' : '';
+      if (pvFarmMerge.farmFallbackUsed && pvSource === 'missing') pvSource = 'farm:pv-sources';
+      else if (pvFarmMerge.farmAddedW > 0) pvSource = pvSource === 'missing' ? 'farm:pv-sources' : `${pvSource}+farm`;
     } else if (singleStorageDcEnabled) {
       const dc = this._nwGetNumberFromCache('speicher.dcPvPowerW');
       if (dc !== null && Number.isFinite(Number(dc))) {
         pvDcW = Math.max(0, Math.abs(Number(dc)));
         pvDcSource = 'storage:dc';
       }
-    }
 
-    // PV total = AC + optional DC (Speicherfarm oder Einzel-DC-/Hybrid-Speicher).
-    // In DC-/Hybrid-Setups kann PV direkt aus dem Speichersystem/Gateway kommen.
-    // Wir berücksichtigen diese Leistung grundsätzlich, vermeiden aber offensichtliches Double-Count
-    // via einfacher Heuristik (analog Energiefluss/Historie).
-    let pvTotalW = pvAcW;
-    let pvDcIncluded = false;
-    if (pvDcW > 0) {
-      if (!pvTotalW || pvTotalW === 0) {
-        pvTotalW = pvDcW;
-        pvDcIncluded = true;
-        if (pvSource === 'missing') pvSource = pvDcSource || 'dc';
-      } else {
-        const acAbs = Math.abs(pvTotalW);
-        const dcAbs = Math.abs(pvDcW);
-        const relDiff = Math.abs(acAbs - dcAbs) / Math.max(1, dcAbs);
-        if (relDiff < 0.05) {
-          // likely already included
-          pvTotalW = Math.max(acAbs, dcAbs);
-        } else {
-          pvTotalW = acAbs + dcAbs;
+      if (pvDcW > 0) {
+        if (!pvTotalW || pvTotalW === 0) {
+          pvTotalW = pvDcW;
           pvDcIncluded = true;
+          if (pvSource === 'missing') pvSource = pvDcSource;
+        } else {
+          const relDiff = Math.abs(Math.abs(pvTotalW) - pvDcW) / Math.max(1, pvDcW);
+          if (relDiff < 0.05) pvTotalW = Math.max(Math.abs(pvTotalW), pvDcW);
+          else {
+            pvTotalW = Math.abs(pvTotalW) + pvDcW;
+            pvDcIncluded = true;
+          }
         }
       }
     }
@@ -27715,6 +28146,9 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     pushTs('pvPower'); pushTs('productionTotal');
     if (sfEnabled) {
       pushTs('storageFarm.totalPvPowerW');
+      pushTs('storageFarm.totalPvAcPowerW');
+      pushTs('storageFarm.totalPvDcPowerW');
+      pushTs('storageFarm.totalPowerW');
       pushTs('storageFarm.totalChargePowerW');
       pushTs('storageFarm.totalDischargePowerW');
     }
@@ -27908,6 +28342,16 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       await this.setStateAsync('derived.core.pv.totalW', { val: pvTotalRound, ack: true });
     }
 
+    // Die abgeleiteten Kernwerte werden zusätzlich in den API-/SSE-Cache gespiegelt.
+    // Das Kundenfrontend verwendet dadurch exakt denselben kanonischen Energiefluss wie
+    // Historie und EMS und muss Farm-PV/-Leistung nicht noch einmal lokal rekonstruieren.
+    this.updateValue('derived.core.building.loadTotalW', publishLoadTotalRound, ts, { raw: false });
+    this.updateValue('derived.core.building.loadRestW', publishLoadRestRound, ts, { raw: false });
+    this.updateValue('derived.core.building.loadSource', loadTotalSource, ts, { raw: false });
+    this.updateValue('derived.core.pv.acW', pvAcRound, ts, { raw: false });
+    this.updateValue('derived.core.pv.dcW', pvDcRound, ts, { raw: false });
+    this.updateValue('derived.core.pv.totalW', pvTotalRound, ts, { raw: false });
+
     // --- Quality indicator ---
     let quality = 'ok';
     if (!hasGrid) quality = 'missing-grid';
@@ -27946,6 +28390,14 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
             sfEnabled,
             singleStorageDcEnabled,
             dcSource: pvDcSource || null,
+            farmMerge: pvFarmMerge ? {
+              addedW: pvFarmMerge.farmAddedW,
+              fallbackUsed: pvFarmMerge.farmFallbackUsed,
+              duplicateSuppressedW: pvFarmMerge.duplicateSuppressedW,
+              farmAcW: farmMetrics ? farmMetrics.pvAcW : 0,
+              farmDcW: farmMetrics ? farmMetrics.pvDcW : 0,
+              farmUnknownW: farmMetrics ? farmMetrics.pvUnknownW : 0,
+            } : null,
           },
           storage: { chargeW: publishChargeRound, dischargeW: publishDischargeRound, runtimeChargeW: Math.round(chargeW), runtimeDischargeW: Math.round(dischargeW), src: storageSrc },
           extraProductionW: Math.round(producerSumW),

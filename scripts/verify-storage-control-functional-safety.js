@@ -324,7 +324,11 @@ async function runScenario({ name, config, values, entries, stateCache, states, 
     const farmCfg = baseConfig({
       enableStorageControl: false,
       enableStorageFarm: true,
-      storageFarm: { storages: [{ enabled: true, setSignedPowerId: 'mock.farm.ess1.target' }] },
+      emsApps: { apps: { storagefarm: { installed: true, enabled: true } } },
+      storageFarm: { storages: [
+        { enabled: true, setSignedPowerId: 'mock.farm.ess1.target' },
+        { enabled: true, setSignedPowerId: 'mock.farm.ess2.target' },
+      ] },
     });
     const r = await runScenario({
       name: 'Speicherfarm allein startet nicht',
@@ -342,7 +346,11 @@ async function runScenario({ name, config, values, entries, stateCache, states, 
     const farmActiveCfg = baseConfig({
       enableStorageControl: true,
       enableStorageFarm: true,
-      storageFarm: { storages: [{ enabled: true, setSignedPowerId: 'mock.farm.ess1.target' }] },
+      emsApps: { apps: { storagefarm: { installed: true, enabled: true } } },
+      storageFarm: { storages: [
+        { enabled: true, setSignedPowerId: 'mock.farm.ess1.target' },
+        { enabled: true, setSignedPowerId: 'mock.farm.ess2.target' },
+      ] },
     });
     const r2 = await runScenario({
       name: 'Speicherfarm verteilt fertigen Speicherregelungs-Sollwert',

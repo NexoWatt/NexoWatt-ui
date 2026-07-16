@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b73c3f15d4990300d6c1824bfd734c22e140668c9652abd3b34ae375d3f6284c
+ * Original-Hash: 2d685cd30ec9f35e6b3bc192210185a5d0f3c256124373157b35a7d343404147
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:dd4a6049d131a045fb8561897e593dcbc45871a0851a266faa0b2cdfc170d782
+ * Quell-Hash: sha256:e6549122297b6f5b2c92383c7f32538b0a685df4551dc9e8042ba58725c71b50
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -620,7 +620,7 @@ class SpeicherRegelungModule extends BaseModule {
         // Speicherfarm: wenn aktiv und Setpoint-DPs pro Speicher vorhanden sind,
         // erlauben wir die Regelung auch ohne klassische Sollleistungs-Zuordnung (st.targetPowerW).
         const farmCfg = (this.adapter && this.adapter.config && this.adapter.config.storageFarm) ? this.adapter.config.storageFarm : {};
-        const farmEnabled = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
+        const farmEnabled = this._isStorageFarmEnabled();
         const farmRows = Array.isArray(farmCfg.storages) ? farmCfg.storages : [];
         // Speicherfarm ist ein Ziel-/Verteilpfad, kein eigener Regler-Start. Wenn die
         // Speicherregelung aktiv ist, reicht ein Farm-Sollwert-DP als beschreibbares Ziel.
@@ -856,27 +856,44 @@ class SpeicherRegelungModule extends BaseModule {
                 const hasDispatchable = Number.isFinite(dispatchN) && dispatchN > 0;
 
                 if (hasOnline || hasDispatchable) {
-                    const stChg = await this.adapter.getStateAsync('storageFarm.totalChargePowerW');
-                    const stDchg = await this.adapter.getStateAsync('storageFarm.totalDischargePowerW');
+                    // Ab 0.8.101 liefert die Farm einen kanonischen signierten Netto-DP.
+                    // Dieser Wert verhindert, dass gleichzeitiges Laden und Entladen
+                    // verschiedener Speicher als zwei getrennte Feedbackpfade wirken.
+                    const stNet = await this.adapter.getStateAsync('storageFarm.totalPowerW');
+                    const net = stNet && stNet.val !== undefined && stNet.val !== null ? Number(stNet.val) : NaN;
+                    const ageNet = stNet && typeof stNet.ts === 'number' ? (now - Number(stNet.ts)) : null;
 
-                    const chg = stChg && stChg.val !== undefined && stChg.val !== null ? Number(stChg.val) : NaN;
-                    const dchg = stDchg && stDchg.val !== undefined && stDchg.val !== null ? Number(stDchg.val) : NaN;
-
-                    const ageChg = stChg && typeof stChg.ts === 'number' ? (now - Number(stChg.ts)) : null;
-                    const ageDchg = stDchg && typeof stDchg.ts === 'number' ? (now - Number(stDchg.ts)) : null;
-                    const age = (ageChg === null && ageDchg === null) ? null : Math.max(ageChg || 0, ageDchg || 0);
-
-                    if (Number.isFinite(chg) && Number.isFinite(dchg)) {
-                        battPowerObservedW = dchg - chg;
-                        battPowerAge = age;
-                        battPowerObjectId = 'storageFarm.totalDischargePowerW-storageFarm.totalChargePowerW';
-                        battPowerFeedbackSource = 'storage-farm';
+                    if (Number.isFinite(net)) {
+                        battPowerObservedW = net;
+                        battPowerAge = ageNet;
+                        battPowerObjectId = 'storageFarm.totalPowerW';
+                        battPowerFeedbackSource = 'storage-farm-net';
                         battPowerMappingTrusted = true;
-                        battPowerW = (age === null || age <= staleMs) ? battPowerObservedW : null;
+                        battPowerW = (ageNet === null || ageNet <= staleMs) ? battPowerObservedW : null;
                         battPowerTrusted = typeof battPowerW === 'number' && Number.isFinite(battPowerW);
                         battPowerInvalidReason = hasOnline
-                            ? 'Farm: aggregierte Ist-Leistung (Entladen-Laden)'
-                            : 'Farm: aggregierte Ist-Leistung, degraded/dispatchbar';
+                            ? 'Farm: aggregierte Netto-Istleistung'
+                            : 'Farm: aggregierte Netto-Istleistung, degraded/dispatchbar';
+                    } else {
+                        // Kompatibilitätsfallback für alte Runtime-Stände.
+                        const stChg = await this.adapter.getStateAsync('storageFarm.totalChargePowerW');
+                        const stDchg = await this.adapter.getStateAsync('storageFarm.totalDischargePowerW');
+                        const chg = stChg && stChg.val !== undefined && stChg.val !== null ? Number(stChg.val) : NaN;
+                        const dchg = stDchg && stDchg.val !== undefined && stDchg.val !== null ? Number(stDchg.val) : NaN;
+                        const ageChg = stChg && typeof stChg.ts === 'number' ? (now - Number(stChg.ts)) : null;
+                        const ageDchg = stDchg && typeof stDchg.ts === 'number' ? (now - Number(stDchg.ts)) : null;
+                        const age = (ageChg === null && ageDchg === null) ? null : Math.max(ageChg || 0, ageDchg || 0);
+
+                        if (Number.isFinite(chg) && Number.isFinite(dchg)) {
+                            battPowerObservedW = dchg - chg;
+                            battPowerAge = age;
+                            battPowerObjectId = 'storageFarm.totalDischargePowerW-storageFarm.totalChargePowerW';
+                            battPowerFeedbackSource = 'storage-farm-gross-fallback';
+                            battPowerMappingTrusted = true;
+                            battPowerW = (age === null || age <= staleMs) ? battPowerObservedW : null;
+                            battPowerTrusted = typeof battPowerW === 'number' && Number.isFinite(battPowerW);
+                            battPowerInvalidReason = 'Farm: Brutto-Fallback (Entladen-Laden)';
+                        }
                     }
                 }
             } catch (_eFarm) {
@@ -2075,7 +2092,7 @@ if (typeof soc === 'number') {
 						      let capKWhEstimated = false;
 						      try {
 						        const farmCfg2 = (this.adapter && this.adapter.config && this.adapter.config.storageFarm) ? this.adapter.config.storageFarm : null;
-						        const farmEnabledForCapacity = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
+						        const farmEnabledForCapacity = this._isStorageFarmEnabled();
 						        if (farmEnabledForCapacity && farmCfg2 && Array.isArray(farmCfg2.storages)) {
 						          let sum = 0;
 						          for (const s of farmCfg2.storages) {
@@ -5346,6 +5363,52 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
      * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
+    /**
+     * Prüft die Speicherfarm mit derselben AppCenter-Regel wie Adapterkern und UI.
+     * Die Farm ist nur aktiv, wenn die App installiert und eingeschaltet ist und
+     * mindestens zwei reale Speicherzeilen konfiguriert sind. Das Legacy-Flag wird
+     * ausschließlich verwendet, wenn noch kein AppCenter-Datensatz existiert.
+     * Dadurch greifen Regelung, Kapazitätsberechnung und Schreibverteilung nicht
+     * versehentlich auf eine alte oder nur teilweise konfigurierte Farm zurück.
+     */
+    _isStorageFarmEnabled() {
+        try {
+            // Der Adapterkern besitzt die autoritative AppCenter-/Zeilenbewertung.
+            // Hersteller- und Speicherregelung verwenden exakt denselben Aktivzustand
+            // wie Aggregation, Navigation und Energiefluss.
+            if (this.adapter && typeof this.adapter._nwGetStorageFarmRuntimeInfo === 'function') {
+                const info = this.adapter._nwGetStorageFarmRuntimeInfo();
+                return !!(info && info.active);
+            }
+
+            const rootCfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
+            const sf = (rootCfg.storageFarm && typeof rootCfg.storageFarm === 'object') ? rootCfg.storageFarm : {};
+            const rows = Array.isArray(sf.storages) ? sf.storages : [];
+            const realKeys = [
+                'socId', 'chargePowerId', 'dischargePowerId', 'signedPowerId',
+                'setChargePowerId', 'setDischargePowerId', 'setSignedPowerId',
+                'availableId', 'faultId', 'chargeAllowedId', 'dischargeAllowedId',
+            ];
+            const configuredCount = rows.filter((row) => {
+                if (!row || typeof row !== 'object' || row.enabled === false) return false;
+                return realKeys.some((key) => String(row[key] || '').trim());
+            }).length;
+
+            const appsRoot = (rootCfg.emsApps && typeof rootCfg.emsApps === 'object') ? rootCfg.emsApps : {};
+            const apps = (appsRoot.apps && typeof appsRoot.apps === 'object') ? appsRoot.apps : {};
+            const app = (apps.storagefarm && typeof apps.storagefarm === 'object')
+                ? apps.storagefarm
+                : ((apps.storageFarm && typeof apps.storageFarm === 'object') ? apps.storageFarm : null);
+            const enabledByConfig = app
+                ? (app.installed === true && app.enabled === true)
+                : (rootCfg.enableStorageFarm === true);
+
+            return !!(enabledByConfig && configuredCount >= 2);
+        } catch {
+            return false;
+        }
+    }
+
     _getStorageVendorProfile(cfg = {}) {
         const raw = String((cfg && cfg.vendorProfile) || '').trim().toLowerCase();
         if (raw === 'fenecon' || raw === 'openems' || raw === 'fems' || raw === 'fenecon-openems') return 'fenecon-openems';
@@ -6265,7 +6328,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         let writeResult = null;
         let farmApplied = false;
         let farmReason = '';
-        const farmEnabledForWrite = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
+        const farmEnabledForWrite = this._isStorageFarmEnabled();
         const farmCfgForWrite = (this.adapter && this.adapter.config && this.adapter.config.storageFarm) ? this.adapter.config.storageFarm : {};
         const allowSingleTargetFallback = farmEnabledForWrite && (farmCfgForWrite.allowSingleTargetFallback === true || farmCfgForWrite.allowSingleTargetFallback === 'true');
 

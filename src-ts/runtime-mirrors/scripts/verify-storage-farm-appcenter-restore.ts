@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b621786ad2a30edeb20e075552352b3fcafb990eac95ed142f27a2920f9fcd53
+ * Original-Hash: 5eeed089300ea9f151098203ed46408acf2b72645d6caf893f2b805604f2696c
  */
 
 /**
@@ -88,7 +88,8 @@ must('src-ts/runtime-executables/main.ts', '_nwHydrateStorageFarmConfigFromRunti
 must('src-ts/runtime-executables/main.ts', 'storageFarm.configJson', 'Runtime-State als Quelle');
 must('src-ts/runtime-executables/main.ts', 'storageFarm.groupsJson', 'Gruppen-Fallback');
 must('src-ts/runtime-executables/main.ts', '__runtimeStateFallbackSource', 'Fallback-Marker für Diagnose');
-must('src-ts/runtime-executables/main.ts', 'out.emsApps.apps.storagefarm', 'App-Center Installiert/Aktiv konsistent halten');
+must('src-ts/runtime-executables/main.ts', 'App-Center bleibt die einzige Quelle dafür, ob die Speicherfarm im Kundenmenü erscheint.', 'Runtime-Hydration verändert die AppCenter-Aktivierung nicht');
+mustNot('src-ts/runtime-executables/main.ts', 'out.emsApps.apps.storagefarm =', 'Runtime-Hydration darf AppCenter nicht aktivieren');
 must('main.js', '_nwHydrateStorageFarmConfigFromRuntimeStates', 'Runtime-Fallback-Helfer');
 must('main.js', 'storageFarm.configJson', 'Runtime-State als Quelle in Runtime');
 must('src-ts/runtime-executables/www/ems-apps.ts', 'nw-storagefarm-master-detail', 'Speicherfarm Master-Detail bleibt vorhanden');

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: ee3077f05fc1f78be11f8b68c6b2d802be49b6380db2ee0d13fa7cbbd8958541
+ * Original-Hash: f0460e436b105be8ecb3a4f9a84f4f5ce37e41dbd585a815357c8ee230553a21
  */
 
 /**
@@ -241,7 +241,13 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, l
     gridRawW: 900,
     extraConfig: {
       root: { enableStorageFarm: true },
-      storageFarm: { storages: [{ enabled: true, setSignedPowerId: 'fenecon.target' }] },
+      storageFarm: {
+        // Eine aktive Speicherfarm benötigt mindestens zwei echte Speicherzeilen.
+        storages: [
+          { enabled: true, setSignedPowerId: 'fenecon.target.1' },
+          { enabled: true, setSignedPowerId: 'fenecon.target.2' },
+        ],
+      },
       storage: { feneconAssistEnabled: false },
     },
   });
@@ -272,7 +278,13 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, l
     gridRawW: 1700,
     extraConfig: {
       root: { enableStorageFarm: true },
-      storageFarm: { storages: [{ enabled: true, setSignedPowerId: 'fenecon.target' }] },
+      storageFarm: {
+        // Eine aktive Speicherfarm benötigt mindestens zwei echte Speicherzeilen.
+        storages: [
+          { enabled: true, setSignedPowerId: 'fenecon.target.1' },
+          { enabled: true, setSignedPowerId: 'fenecon.target.2' },
+        ],
+      },
       storage: {
         feneconAssistEnabled: true,
         feneconAssistDelaySec: 0,

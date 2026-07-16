@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c9e0a63283fb2515d0e64dc9e55d564c25a47586d0300f3d1690ee3479395c2e
+ * Original-Hash: 86f0a8f458f0dd935cf8fa8484c039283a6a9f47846306936dcb25c8cce05fed
  */
 
 /**
@@ -420,7 +420,11 @@ async function runScenario({ name, config, values, entries, stateCache, states, 
     const farmCfg = baseConfig({
       enableStorageControl: false,
       enableStorageFarm: true,
-      storageFarm: { storages: [{ enabled: true, setSignedPowerId: 'mock.farm.ess1.target' }] },
+      emsApps: { apps: { storagefarm: { installed: true, enabled: true } } },
+      storageFarm: { storages: [
+        { enabled: true, setSignedPowerId: 'mock.farm.ess1.target' },
+        { enabled: true, setSignedPowerId: 'mock.farm.ess2.target' },
+      ] },
     });
     const r = await runScenario({
       name: 'Speicherfarm allein startet nicht',
@@ -438,7 +442,11 @@ async function runScenario({ name, config, values, entries, stateCache, states, 
     const farmActiveCfg = baseConfig({
       enableStorageControl: true,
       enableStorageFarm: true,
-      storageFarm: { storages: [{ enabled: true, setSignedPowerId: 'mock.farm.ess1.target' }] },
+      emsApps: { apps: { storagefarm: { installed: true, enabled: true } } },
+      storageFarm: { storages: [
+        { enabled: true, setSignedPowerId: 'mock.farm.ess1.target' },
+        { enabled: true, setSignedPowerId: 'mock.farm.ess2.target' },
+      ] },
     });
     const r2 = await runScenario({
       name: 'Speicherfarm verteilt fertigen Speicherregelungs-Sollwert',

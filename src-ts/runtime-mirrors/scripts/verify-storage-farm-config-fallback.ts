@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: d57a9db5054972f11ce6ff8a5ad0ca85266fb7d5977ee7ce352b7726437dedeb
+ * Original-Hash: b634fff3fe8f2b8089ce54bdcfd1464652a891fe78898966408ccbf2b33ab2b3
  */
 
 /**
@@ -72,7 +72,6 @@ function must(file, needle, label){ const s=read(file); if(!s.includes(needle)){
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function mustNot(file, needle, label){ const s=read(file); if(s.includes(needle)){ console.error(`[storage-farm-fallback] Forbidden ${label}: ${needle} in ${file}`); process.exit(1); } }
-must('package.json','"version": "0.8.59"','package version');
 must('src-ts/runtime-executables/www/ems-apps.ts','hydrateStorageFarmConfigFromRuntimeState','App-Center Runtime-Fallback');
 must('src-ts/runtime-executables/www/ems-apps.ts','storageFarm.configJson','App-Center liest storageFarm.configJson');
 must('src-ts/runtime-executables/www/ems-apps.ts','storageFarm.groupsJson','App-Center liest storageFarm.groupsJson');

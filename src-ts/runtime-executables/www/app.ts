@@ -1661,7 +1661,11 @@ function nwStorageFarmHasRealRowsFromConfig(inputCfg) {
     const realCount = rows.filter((row) => {
       const r = row && typeof row === 'object' ? row : null;
       if (!r || r.enabled === false) return false;
-      return ['socId','socDp','chargePowerId','chargeDp','dischargePowerId','dischargeDp','signedPowerId','signedPowerDp','powerId'].some((key) => String(r[key] || '').trim());
+      return [
+        'socId','socDp','chargePowerId','chargeDp','dischargePowerId','dischargeDp',
+        'signedPowerId','signedPowerDp','powerId','setChargePowerId','setDischargePowerId',
+        'setSignedPowerId','availableId','faultId','chargeAllowedId','dischargeAllowedId',
+      ].some((key) => String(r[key] || '').trim());
     }).length;
     return realCount >= 2;
   } catch (_e) {
@@ -1670,18 +1674,26 @@ function nwStorageFarmHasRealRowsFromConfig(inputCfg) {
 }
 function nwStorageFarmFeatureFromConfig(inputCfg, stateSnapshot) {
   const c = inputCfg || window.__nwCfg || {};
+
+  // `/config.featureVisibility` ist bereits serverseitig gegen AppCenter installed +
+  // enabled und mindestens zwei echte Farm-Zeilen geprüft. Die Kundenantwort enthält
+  // aus Sicherheitsgründen nicht zwingend die vollständigen Farm-DPs; deshalb darf das
+  // Frontend die autoritative Freigabe nicht nochmals an versteckten Zeilen ablehnen.
+  if (c.featureVisibility && typeof c.featureVisibility.hasStorageFarm === 'boolean') {
+    return c.featureVisibility.hasStorageFarm === true;
+  }
+  if (c.storageFarmSummary && typeof c.storageFarmSummary.active === 'boolean') {
+    return c.storageFarmSummary.active === true;
+  }
+
+  // Kompatibilitätsfallback für ältere Backends ohne featureVisibility.
   const appCenterActive = nwStorageFarmAppCenterActiveFromConfig(c);
   if (!appCenterActive) return false;
-  if (c.featureVisibility && typeof c.featureVisibility.hasStorageFarm === 'boolean') return c.featureVisibility.hasStorageFarm === true && nwStorageFarmHasRealRowsFromConfig(c);
-  // Keine Legacy-Fallbacks mehr: storageFarmEnabled/emulated EMS-Flags dürfen den
-  // Kunden-Menüpunkt nicht öffnen. Nur featureVisibility oder der State-Fallback
-  // nach AppCenter- und >=2-Speicher-Prüfung gelten.
+  if (nwStorageFarmHasRealRowsFromConfig(c)) return true;
   try {
     const st = stateSnapshot || window.latestState || state || {};
     const enabled = nwAsBool(st['storageFarm.enabled'] && st['storageFarm.enabled'].value, false);
     const total = Number(st['storageFarm.storagesTotal'] && st['storageFarm.storagesTotal'].value);
-    // Runtime-States sind nur noch ein letzter Fallback, wenn App-Center aktiv ist.
-    // Auch hier gilt: Farm-Menü erst ab zwei echten Speichern.
     return enabled && Number.isFinite(total) && total >= 2;
   } catch (_e) {
     return false;
@@ -3207,15 +3219,35 @@ function getNormalizedBatteryFlow() {
 
   const sfEnabled = nwStorageFarmFeatureFromConfig(window.__nwCfg || {}, state || window.latestState || {});
   if (sfEnabled) {
+    const signedFarm = getStableFlowNumber('storageFarm.totalPowerW');
+    if (signedFarm !== null) {
+      // Die Farm ist im Backend bereits pro Speicher auf +Entladen/-Laden normalisiert.
+      // Ein globales Einzel-Speicher-Invert würde den Gesamtfluss hier doppelt drehen.
+      let signed = Number(signedFarm);
+      if (!Number.isFinite(signed)) signed = 0;
+      if (Math.abs(signed) <= deadbandW) signed = 0;
+      return {
+        chargeW: signed < 0 ? Math.abs(signed) : 0,
+        dischargeW: signed > 0 ? signed : 0,
+        signedW: signed,
+        src: 'storageFarmNet',
+        inverted: false,
+        fromSigned: true,
+        derived: false,
+      };
+    }
+
+    // Rückwärtskompatibilität für alte Adapterstände ohne totalPowerW. Auch diese
+    // Brutto-States sind bereits in der Farmzeile normalisiert und werden nicht erneut
+    // mit settings.flowInvertBattery vertauscht.
     const fc = getStableFlowNumber('storageFarm.totalChargePowerW');
     const fd = getStableFlowNumber('storageFarm.totalDischargePowerW');
     if (fc !== null || fd !== null) {
       let c = Math.max(0, Math.abs(Number(fc || 0)));
       let d = Math.max(0, Math.abs(Number(fd || 0)));
-      if (inv) { const t = c; c = d; d = t; }
       if (c <= deadbandW) c = 0;
       if (d <= deadbandW) d = 0;
-      return { chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'storageFarm(inv)' : 'storageFarm', inverted: inv, fromSigned: false, derived: false };
+      return { chargeW: c, dischargeW: d, signedW: d - c, src: 'storageFarmGross', inverted: false, fromSigned: false, derived: false };
     }
   }
 
@@ -3246,6 +3278,39 @@ function getNormalizedBatteryFlow() {
 
   return { chargeW: 0, dischargeW: 0, signedW: 0, src: anyStorageMapped ? 'mapped-missing' : 'missing', inverted: inv, fromSigned: false, derived: false };
 }
+
+/**
+ * Code-Teil: getCanonicalPvPowerW
+ * Zweck: Nutzt bevorzugt den vom Backend zusammengeführten PV-Gesamtwert. Nur für
+ * ältere Backends wird Anlagen-PV mit der Farm-PV lokal und konservativ verbunden.
+ * AC-Farmwerte sind bei vorhandener Anlagen-PV ein Fallback; DC-/Hybrid-PV darf
+ * addiert werden, solange sie nicht offensichtlich bereits enthalten ist.
+ */
+function getCanonicalPvPowerW(readValue) {
+  const d = typeof readValue === 'function' ? readValue : ((key) => state[key]?.value);
+  const derived = Number(d('derived.core.pv.totalW'));
+  if (Number.isFinite(derived) && derived >= 0) return derived;
+
+  let base = Number(d('pvPower') ?? d('productionTotal') ?? 0);
+  if (!Number.isFinite(base)) base = 0;
+  const baseAbs = Math.abs(base);
+  if (!nwStorageFarmFeatureFromConfig(window.__nwCfg || {}, state || window.latestState || {})) return baseAbs;
+
+  const farmTotal = Math.max(0, Math.abs(Number(d('storageFarm.totalPvPowerW')) || 0));
+  const farmAc = Math.max(0, Math.abs(Number(d('storageFarm.totalPvAcPowerW')) || 0));
+  const farmDc = Math.max(0, Math.abs(Number(d('storageFarm.totalPvDcPowerW')) || 0));
+  const farmUnknown = Math.max(0, Math.abs(Number(d('storageFarm.totalPvUnknownPowerW')) || 0));
+  const farmAcLike = farmAc + farmUnknown;
+  if (baseAbs <= 0) return farmTotal;
+  if (farmTotal <= 0) return baseAbs;
+
+  // Kompatibilitätsfallback für alte Backends: AC-/WR-Summen und Anlagen-PV sind
+  // alternative Sichten auf dieselbe Erzeugung, reine DC-/Hybrid-PV wird nur bei
+  // eindeutig zusätzlichem Anteil addiert. Neue Backends liefern ohnehin derived.*.
+  if (farmAcLike > 0) return Math.max(baseAbs, farmTotal);
+  const relDiff = Math.abs(baseAbs - farmDc) / Math.max(1, farmDc);
+  return (baseAbs >= farmDc || relDiff < 0.05) ? baseAbs : (baseAbs + farmDc);
+}
 // Abschnitt: Haupt-Renderlauf des LIVE-Dashboards. Alle DOM-Werte für Energiefluss, KPIs, KI-Berater und Schnellzugriffe werden hier aktualisiert.
 /**
  * Code-Teil: render
@@ -3265,28 +3330,10 @@ function render() {
 
   // Top ring values: map PV, Grid, Load, Bat flows to percent of max for visualization
   const sfEnabled = nwStorageFarmFeatureFromConfig(window.__nwCfg || {}, s || state || {});
-  const pvMapped = isMappedDatapoint('pvPower') || isMappedDatapoint('productionTotal');
 
-  // PV (W): primary from mapped PV datapoint; fallback to productionTotal if used as power DP.
-  let pv = d('pvPower') ?? d('productionTotal');
-  pv = (pv == null || isNaN(Number(pv))) ? 0 : Number(pv);
-
-  // Speicherfarm (DC‑PV): im Farm‑Modus zur PV‑Erzeugung addieren (oder ersetzen, wenn kein PV‑DP gemappt ist).
-  if (sfEnabled) {
-    const pvFarmRaw = d('storageFarm.totalPvPowerW');
-    const pvFarm = (pvFarmRaw == null || isNaN(Number(pvFarmRaw))) ? 0 : Number(pvFarmRaw);
-    if (pvFarm > 0) {
-      if (!pvMapped || pv === 0) {
-        pv = pvFarm;
-      } else {
-        const sign = pv < 0 ? -1 : 1;
-        const pvAbs = Math.abs(pv);
-        const relDiff = Math.abs(pvAbs - pvFarm) / Math.max(1, pvFarm);
-        if (relDiff < 0.05) pv = sign * pvFarm;
-        else pv = pv + (sign * pvFarm);
-      }
-    }
-  }
+  // Der sichtbare PV-Wert kommt aus dem zentralen Backend-Energiefluss. Damit zeigen
+  // LIVE, Historie und EMS dieselbe Farm-/Wechselrichter-Gesamtleistung.
+  let pv = getCanonicalPvPowerW(d);
 
   const load = d('consumptionTotal');
   const { buy, sell } = getGridImportExport(d);
@@ -8520,30 +8567,10 @@ function updateEnergyWeb() {
 
   // Raw datapoints (1:1)
   const sfEnabled = nwStorageFarmFeatureFromConfig(window.__nwCfg || {}, s || state || {});
-  const pvMapped = isMappedDatapoint('pvPower') || isMappedDatapoint('productionTotal');
 
-  // PV (W): primary from mapped PV datapoint; fallback to productionTotal if used as power DP.
-  let pv = +(d('pvPower') ?? d('productionTotal') ?? 0);
-  if (!Number.isFinite(pv)) pv = 0;
-
-  // Speicherfarm (DC‑PV): im Farm‑Modus zur PV‑Erzeugung addieren (oder ersetzen, wenn kein PV‑DP gemappt ist).
-  if (sfEnabled) {
-    const pvFarm = +(d('storageFarm.totalPvPowerW') ?? 0);
-    if (Number.isFinite(pvFarm) && pvFarm > 0) {
-      if (!pvMapped || pv === 0) {
-        pv = pvFarm;
-      } else {
-        // Keep sign-consistency (some adapters use negative PV generation)
-        const sign = pv < 0 ? -1 : 1;
-        const pvAbs = Math.abs(pv);
-        const relDiff = Math.abs(pvAbs - pvFarm) / Math.max(1, pvFarm);
-
-        // Avoid obvious double counting if pvPower already equals the farm sum
-        if (relDiff < 0.05) pv = sign * pvFarm;
-        else pv = pv + (sign * pvFarm);
-      }
-    }
-  }
+  // Backend-konsolidierte Anlagen-/Farm-PV verwenden; lokaler Fallback nur für
+  // ältere Adapterstände ohne derived.core.pv.totalW.
+  let pv = getCanonicalPvPowerW(d);
   let { buy, sell } = getGridImportExport(d);
   let load = +(d('consumptionTotal') ?? 0);
   let c2 = +(d('evcs.totalPowerW') ?? d('consumptionEvcs') ?? 0); // Wallbox (sum)

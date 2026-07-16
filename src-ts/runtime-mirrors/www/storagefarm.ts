@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: bfd7f9757b31f7d0c1c514587c215c305ace4193540d96f8c0f4895f61beccf3
+ * Original-Hash: c0995d8ca0bb3482979007316337a18a3573ce63074e24d1d6128408742b2908
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/storagefarm.ts
- * Quell-Hash: sha256:143568294402f96e17dd15e7a93d6ffe73a902024b4ebf5231a0c6af9c3e7411
+ * Quell-Hash: sha256:a54579b6fdd327553559419316b2c79a017a5677d7828de32394045fe0923fe3
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -246,14 +246,23 @@
     if (modeLabel) modeLabel.textContent = 'Modus: ' + (mode === 'groups' ? 'Gruppen' : 'Pool');
 
     var soc = stateVal('storageFarm.totalSoc');
+    var net = stateVal('storageFarm.totalPowerW');
     var chg = stateVal('storageFarm.totalChargePowerW');
     var dchg = stateVal('storageFarm.totalDischargePowerW');
+    var pv = stateVal('storageFarm.totalPvPowerW');
     var on = stateVal('storageFarm.storagesOnline');
     var disp = stateVal('storageFarm.storagesDispatchAvailable');
     var deg = stateVal('storageFarm.storagesDegraded');
     var tot = stateVal('storageFarm.storagesTotal');
     var socText = num(soc) === null ? '--' : num(soc).toFixed(1);
-    var text = 'SoC Ø: ' + socText + ' % | Laden: ' + formatPower(chg) + ' | Entladen: ' + formatPower(dchg) + ' | Online: ' + (on !== undefined ? on : '--') + '/' + (tot !== undefined ? tot : '--') + ' | Regelbar: ' + (disp !== undefined ? disp : '--') + '/' + (tot !== undefined ? tot : '--');
+    var netN = num(net);
+    if (netN === null) {
+      var chgN = num(chg);
+      var dchgN = num(dchg);
+      if (chgN !== null || dchgN !== null) netN = Math.max(0, dchgN || 0) - Math.max(0, chgN || 0);
+    }
+    var netText = netN === null ? '--' : (netN > 0 ? 'Entladen ' : (netN < 0 ? 'Laden ' : 'Neutral ')) + formatPower(Math.abs(netN));
+    var text = 'SoC Ø: ' + socText + ' % | Farm netto: ' + netText + ' | PV/WR: ' + formatPower(pv) + ' | Brutto Laden: ' + formatPower(chg) + ' | Brutto Entladen: ' + formatPower(dchg) + ' | Online: ' + (on !== undefined ? on : '--') + '/' + (tot !== undefined ? tot : '--') + ' | Regelbar: ' + (disp !== undefined ? disp : '--') + '/' + (tot !== undefined ? tot : '--');
     if (deg !== undefined && Number(deg) > 0) text += ' | Degraded: ' + deg;
     var summary = el('sf_summary');
     if (summary) summary.textContent = text;

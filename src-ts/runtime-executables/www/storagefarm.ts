@@ -217,14 +217,23 @@
     if (modeLabel) modeLabel.textContent = 'Modus: ' + (mode === 'groups' ? 'Gruppen' : 'Pool');
 
     var soc = stateVal('storageFarm.totalSoc');
+    var net = stateVal('storageFarm.totalPowerW');
     var chg = stateVal('storageFarm.totalChargePowerW');
     var dchg = stateVal('storageFarm.totalDischargePowerW');
+    var pv = stateVal('storageFarm.totalPvPowerW');
     var on = stateVal('storageFarm.storagesOnline');
     var disp = stateVal('storageFarm.storagesDispatchAvailable');
     var deg = stateVal('storageFarm.storagesDegraded');
     var tot = stateVal('storageFarm.storagesTotal');
     var socText = num(soc) === null ? '--' : num(soc).toFixed(1);
-    var text = 'SoC Ø: ' + socText + ' % | Laden: ' + formatPower(chg) + ' | Entladen: ' + formatPower(dchg) + ' | Online: ' + (on !== undefined ? on : '--') + '/' + (tot !== undefined ? tot : '--') + ' | Regelbar: ' + (disp !== undefined ? disp : '--') + '/' + (tot !== undefined ? tot : '--');
+    var netN = num(net);
+    if (netN === null) {
+      var chgN = num(chg);
+      var dchgN = num(dchg);
+      if (chgN !== null || dchgN !== null) netN = Math.max(0, dchgN || 0) - Math.max(0, chgN || 0);
+    }
+    var netText = netN === null ? '--' : (netN > 0 ? 'Entladen ' : (netN < 0 ? 'Laden ' : 'Neutral ')) + formatPower(Math.abs(netN));
+    var text = 'SoC Ø: ' + socText + ' % | Farm netto: ' + netText + ' | PV/WR: ' + formatPower(pv) + ' | Brutto Laden: ' + formatPower(chg) + ' | Brutto Entladen: ' + formatPower(dchg) + ' | Online: ' + (on !== undefined ? on : '--') + '/' + (tot !== undefined ? tot : '--') + ' | Regelbar: ' + (disp !== undefined ? disp : '--') + '/' + (tot !== undefined ? tot : '--');
     if (deg !== undefined && Number(deg) > 0) text += ' | Degraded: ' + deg;
     var summary = el('sf_summary');
     if (summary) summary.textContent = text;

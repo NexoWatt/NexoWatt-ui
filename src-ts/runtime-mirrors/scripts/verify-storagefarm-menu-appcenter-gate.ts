@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 26b998ec780b21865ec68a1e2a95d542875726c1e8fd56650ff4475f3aa41cc7
+ * Original-Hash: c69bd69ba3c51e43cd33ca4a44500f4ff60d1faadd4bcb6745892a15204cfa35
  */
 
 /**
@@ -110,10 +110,11 @@ function mustNotContain(rel, needle, label) {
 }
 
 // Backend-/Config-Gate: AppCenter installed+enabled ist Pflicht; Legacy-Fallbacks sind verboten.
-mustContain('src-ts/runtime-executables/main.ts', 'return app.installed === true && app.enabled === true;', 'AppCenter-Pflicht im Backend');
+mustContain('src-ts/runtime-executables/main.ts', 'const appCenterActive = !!(app && app.installed === true && app.enabled === true);', 'AppCenter-Pflicht im Backend');
 mustContain('src-ts/runtime-executables/main.ts', "storagefarm', enableFlag: 'enableStorageFarm', noLegacyDefault: true", 'Speicherfarm darf nicht aus Legacy-enableStorageFarm aktiviert werden');
-mustContain('src-ts/runtime-executables/main.ts', 'const storageFarmRowHasRealDatapoint', 'echter Farm-DP-Nachweis im Backend');
+mustContain('src-ts/runtime-executables/main.ts', '_nwStorageFarmRowHasRealDatapoint', 'zentraler echter Farm-DP-Nachweis im Backend');
 mustContain('src-ts/runtime-executables/main.ts', 'storageFarmConfiguredCount >= 2', 'Speicherfarm erst ab zwei echten Speichern');
+mustContain('src-ts/runtime-executables/main.ts', 'const storageFarmAvailable = !!(storageFarmAppActive && storageFarmConfigured);', 'Kundensichtbarkeit nur bei AppCenter + zwei Speichern');
 mustNotContain('src-ts/runtime-executables/main.ts', 'return !!cfg.enableStorageFarm;\n      })();\n      // Stale runtime states', 'Legacy-enableStorageFarm-Fallback für Kundenmenü');
 mustNotContain('src-ts/runtime-executables/main.ts', 'out.enableStorageFarm = true;', 'Backend-Hydration darf Farm nicht aktivieren');
 mustNotContain('src-ts/runtime-executables/www/ems-apps.ts', 'root.enableStorageFarm = true;', 'AppCenter-Hydration darf Farm nicht aktivieren');
@@ -133,11 +134,11 @@ for (const rel of [
 }
 
 // Nach dem Runtime-Sync muss der gleiche Schutz auch im ausgelieferten JS stehen.
-mustContain('main.js', 'return app.installed === true && app.enabled === true;', 'Runtime-Backend AppCenter-Pflicht');
+mustContain('main.js', 'const appCenterActive = !!(app && app.installed === true && app.enabled === true);', 'Runtime-Backend AppCenter-Pflicht');
 mustNotContain('main.js', 'out.enableStorageFarm = true;', 'Runtime-Backend-Hydration darf Farm nicht aktivieren');
 mustNotContain('www/ems-apps.js', 'root.enableStorageFarm = true;', 'Runtime-AppCenter-Hydration darf Farm nicht aktivieren');
 mustContain('www/app.js', 'function nwStorageFarmAppCenterActiveFromConfig', 'Runtime-LIVE AppCenter-Helfer');
-mustContain('www/app.js', 'Keine Legacy-Fallbacks mehr', 'Runtime-LIVE ohne Legacy-Farm-Fallbacks');
+mustContain('www/app.js', 'featureVisibility.hasStorageFarm', 'Runtime-LIVE autoritative Farm-Sichtbarkeit');
 mustContain('www/cockpit-shell.js', 'featureVisibility.hasStorageFarm', 'Runtime-Shell Feature-Sichtbarkeit');
 
 console.log('[storagefarm-menu-appcenter-gate] OK: Speicherfarm-Menü ist an AppCenter installed+enabled + echte Farm-DPs gebunden.');

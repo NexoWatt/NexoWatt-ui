@@ -1,3 +1,17 @@
+## 0.8.101
+
+- Speicherfarm-Aggregation zentralisiert: `storageFarm.totalPowerW` liefert die signierte Netto-Gesamtleistung der Farm (`+W` Entladen, `-W` Laden). Brutto-Lade- und Brutto-Entladeleistung bleiben getrennt als Diagnose verfügbar.
+- Farm-SoC korrigiert: Der im Kunden-Energiefluss verwendete Gesamt-SoC ist jetzt der arithmetische Mittelwert aller gültigen Speicher-SoCs. Ein kapazitätsgewichteter Mittelwert bleibt ausschließlich als Diagnosewert erhalten.
+- PV-/Wechselrichter-Summe der Speicherfarm erweitert: eindeutige AC-, DC-/Hybrid- und unbekannte PV-Quellen werden getrennt erfasst, doppelte Datenpunkte nur einmal gezählt und anschließend zentral mit der Anlagen-PV zusammengeführt.
+- Doppelzählungsschutz verbessert: Ist die Anlagen-PV praktisch identisch mit der vollständigen Farm-PV, wird die Farm nicht erneut addiert. Ein zusätzlicher, noch nicht enthaltener DC-/Hybrid-Anteil kann weiterhin ergänzt werden.
+- Wechselrichter-Telemetrie von Speicherstatus entkoppelt: Ein offline oder degraded gemeldeter Speicher blendet eine weiterhin frische PV-/WR-Messung nicht mehr aus dem Energiefluss aus.
+- LIVE-Energiefluss, Historie und EMS verwenden denselben Backend-Gesamtwert `derived.core.pv.totalW`; die Farm-Gesamtleistung und der SoC-Mittelwert werden ebenfalls aus den kanonischen `storageFarm.*`-States übernommen.
+- AppCenter-, Scheduler-, Speicherregelungs- und Farm-Dispatcher-Aktivierung vereinheitlicht: Die Farm ist nur bei installierter/aktiver App und mindestens zwei real konfigurierten Speichern aktiv; alte Legacy-Flags können keinen Parallelzustand erzeugen.
+- Speicherregelung und Speicherfarm-Schreibpfad nutzen denselben AppCenter-Status. Kapazitätsberechnung, Istleistungsfeedback und Sollwertverteilung können dadurch nicht mehr auseinanderlaufen.
+- AppCenter-Hilfe zur PV-/WR-Zuordnung ergänzt und Farmseite um Nettoleistung, PV-/WR-Summe sowie Brutto-Richtungswerte erweitert.
+- Neue Regression `test:storage-farm-energy-flow-aggregation` prüft SoC-Mittelwert, Nettoleistung, PV-Zusammenführung, Doppelzählungsschutz und die gemeinsamen Backend-/Frontend-Verträge.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v403` erhöht.
+
 ## 0.8.100
 
 - Lademanagement auf eine einzige produktive Mehrladepunkt-Allokation vereinheitlicht: Der reife zentrale Runtime-Plan bleibt für Budget, Betriebsarten, Hysterese, Rampen, Prioritäten und Stations-Round-Robin maßgeblich; der nachgelagerte TypeScript-Vertrag validiert und begrenzt ausschließlich den finalen Write-Plan.

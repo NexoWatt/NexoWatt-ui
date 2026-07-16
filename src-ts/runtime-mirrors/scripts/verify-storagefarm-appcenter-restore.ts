@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: fd08ae00acffed93f825c04c0691f80feb37802f003d2bce905f064bba42c1f3
+ * Original-Hash: 4549b44cafe4a97685f0018112fd67b328d81a39aba6eef1327e4d85314ae8f9
  */
 
 /**
@@ -72,7 +72,6 @@ function must(file, needle){ const s=read(file); if(!s.includes(needle)){ consol
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function mustNot(file, needle){ const s=read(file); if(s.includes(needle)){ console.error(`[storagefarm-restore] Forbidden in ${file}: ${needle}`); process.exit(1); } }
-must('package.json', '"version": "0.8.59"');
 must('src-ts/runtime-executables/main.ts', '_nwHydrateStorageFarmConfigFromRuntimeStates');
 must('src-ts/runtime-executables/main.ts', 'storageFarm.configJson');
 must('src-ts/runtime-executables/main.ts', 'storageFarm.groupsJson');
