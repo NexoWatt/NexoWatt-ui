@@ -46,12 +46,7 @@
 
 const { DatapointRegistry } = require('./datapoints');
 const { ModuleManager } = require('./module-manager');
-/**
- * Code-Teil: clampNumber
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+/** Code-Teil: clampNumber – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
 function clampNumber(n, min, max, fallback) {
   const v = Number(n);
   if (!Number.isFinite(v)) return fallback;
@@ -96,6 +91,15 @@ class EmsEngine {
     this._timer = null;
     this._intervalMs = 1000;
 
+    // Reaktionspfad für Bedienänderungen: Ein Moduswechsel im Kundenfrontend
+    // soll nicht bis zum nächsten regulären Scheduler-Tick warten. Der kurze
+    // Debounce fasst API-Write und nachfolgenden StateChange zu genau einem
+    // zusätzlichen Tick zusammen; der Tick-Mutex verhindert Überschneidungen.
+    this._immediateTickTimer = null;
+    this._immediateTickPending = false;
+    this._immediateTickReason = '';
+    this._immediateTickDebounceMs = 25;
+
     // Tick mutex (Phase 4.0): prevent overlapping async ticks.
     this._tickRunning = false;
     this._tickSkipCount = 0;
@@ -131,17 +135,84 @@ class EmsEngine {
     };
     return (typeof a.setInterval === 'function') ? a.setInterval(guarded, ms) : setInterval(guarded, ms);
   }
-  /**
-   * Code-Teil: _clearInterval
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _clearInterval – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _clearInterval(timer) {
     if (!timer) return;
     const a = this.adapter;
     if (a && typeof a.clearInterval === 'function') a.clearInterval(timer);
     else clearInterval(timer);
+  }
+
+  /**
+   * Code-Teil: _setTimeout
+   * Zweck: Startet einen shutdown-sicheren Einmal-Timer. Bedienänderungen dürfen
+   * während des Adapter-Unloads keinen neuen ioBroker-Timer mehr erzeugen.
+   */
+  _setTimeout(fn, ms) {
+    const a = this.adapter;
+    if (!a || a._nwShuttingDown || typeof fn !== 'function') return null;
+    const guarded = (...args) => {
+      if (!this.adapter || this.adapter._nwShuttingDown) return;
+      return fn(...args);
+    };
+    return (typeof a.setTimeout === 'function') ? a.setTimeout(guarded, ms) : setTimeout(guarded, ms);
+  }
+
+  /**
+   * Code-Teil: _clearTimeout
+   * Zweck: Beendet den Einmal-Timer des schnellen Bedienpfads beim Stoppen der
+   * Engine, damit kein verspäteter EMS-Tick nach dem Unload startet.
+   */
+  _clearTimeout(timer) {
+    if (!timer) return;
+    const a = this.adapter;
+    if (a && typeof a.clearTimeout === 'function') a.clearTimeout(timer);
+    else clearTimeout(timer);
+  }
+
+  /**
+   * Code-Teil: _scheduleImmediateTick
+   * Zweck: Plant genau einen zusätzlichen EMS-Tick nach einer Bedienänderung.
+   * Läuft gerade ein regulärer Tick, bleibt die Anforderung vorgemerkt und wird
+   * im finally-Block dieses Ticks erneut eingeplant. Dadurch gibt es weder
+   * parallele Regelzyklen noch unnötige Wartezeit bis zum nächsten Intervall.
+   */
+  _scheduleImmediateTick(delayMs = this._immediateTickDebounceMs) {
+    if (!this.adapter || this.adapter._nwShuttingDown || !this._immediateTickPending) return false;
+    if (this._immediateTickTimer) return true;
+
+    const delay = clampNumber(delayMs, 0, 1000, this._immediateTickDebounceMs);
+    this._immediateTickTimer = this._setTimeout(async () => {
+      this._immediateTickTimer = null;
+      if (!this.adapter || this.adapter._nwShuttingDown || !this._immediateTickPending) return;
+
+      // Ein bereits laufender Tick bleibt führend. Sein finally-Block plant die
+      // weiterhin vorgemerkte Bedienanforderung unmittelbar danach neu ein.
+      if (this._tickRunning) return;
+
+      const reason = String(this._immediateTickReason || 'external-control');
+      this._immediateTickPending = false;
+      this._immediateTickReason = '';
+      try {
+        await this.tick();
+      } catch (err) {
+        try { this.adapter.log.warn(`[EMS] immediate tick failed (${reason}): ${err?.message || err}`); } catch (_e) {}
+      }
+    }, delay);
+    return !!this._immediateTickTimer;
+  }
+
+  /**
+   * Code-Teil: requestImmediateTick
+   * Zweck: Öffentliche, debouncte Reaktionsschnittstelle für EVCS-Modus-,
+   * Freigabe-, Ziel- und Phasenänderungen. Harte EMS-Grenzen werden nicht
+   * umgangen; es wird lediglich der normale zentrale Regelzyklus früher gestartet.
+   */
+  requestImmediateTick(reason = 'external-control') {
+    if (!this.adapter || this.adapter._nwShuttingDown || !this.dp || !this.mm) return false;
+    this._immediateTickPending = true;
+    this._immediateTickReason = String(reason || 'external-control').slice(0, 160);
+    return this._scheduleImmediateTick(this._immediateTickDebounceMs);
   }
 
   /**
@@ -153,12 +224,7 @@ class EmsEngine {
    * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
    * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
    */
-  /**
-   * Code-Teil: _ensureInternalStates
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _ensureInternalStates – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   async _ensureInternalStates() {
     const a = this.adapter;
     await a.setObjectNotExistsAsync('ems', {
@@ -298,12 +364,7 @@ class EmsEngine {
    * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
    * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
    */
-  /**
-   * Code-Teil: _buildChargingConfig
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _buildChargingConfig – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _buildChargingConfig() {
     const adapter = this.adapter;
     const cfg = adapter.config || {};
@@ -887,12 +948,7 @@ class EmsEngine {
    * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
    * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
    */
-  /**
-   * Code-Teil: tick
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: tick – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   async tick() {
     if (!this.adapter || this.adapter._nwShuttingDown || !this.dp || !this.mm) return;
 
@@ -981,12 +1037,7 @@ class EmsEngine {
 	         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
 	         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
 	         */
-	        /**
-	         * Code-Teil: isFiniteNum
-	         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-	         * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-	         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-	         */
+	        /** Code-Teil: isFiniteNum – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
 	        const isFiniteNum = (v) => (typeof v === 'number' && Number.isFinite(v));
 	        const impValid = isFiniteNum(importVal);
 	        const expValid = isFiniteNum(exportVal);
@@ -1096,6 +1147,14 @@ class EmsEngine {
       } catch (_e2) {
         // ignore
       }
+
+      // Wurde während dieses Regelzyklus ein Modus oder eine Bedienfreigabe
+      // geändert, folgt direkt ein weiterer normaler EMS-Tick. Die kurze
+      // Nachlaufverzögerung verhindert einen Busy-Loop und lässt State-Updates
+      // desselben Bedienvorgangs zusammenlaufen.
+      if (this._immediateTickPending && !this._immediateTickTimer && this.adapter && !this.adapter._nwShuttingDown) {
+        this._scheduleImmediateTick(10);
+      }
     }
   }
 
@@ -1116,6 +1175,12 @@ class EmsEngine {
       this._clearInterval(this._timer);
       this._timer = null;
     }
+    if (this._immediateTickTimer) {
+      this._clearTimeout(this._immediateTickTimer);
+      this._immediateTickTimer = null;
+    }
+    this._immediateTickPending = false;
+    this._immediateTickReason = '';
     // Module dürfen eigene Publish-/Pulse-Timer besitzen. Diese werden beim Adapter-
     // Unload explizit beendet, damit kein Modul nachträglich adapter.setTimeout aufruft.
     try {

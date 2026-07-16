@@ -29,7 +29,8 @@ for (const snippet of [
   '_nwBuildApiStateTsRuntimeResponse',
   '_nwTryApplyApiSetTsSettingsPlan',
   "const tsStates = this._nwBuildApiStateTsRuntimeResponse('GET /api/state')",
-  'res.json(tsStates || this.stateCache)',
+  'const source = tsStates || this.stateCache;',
+  'installerAccess ? source : nwBuildPublicStateSnapshot(source, true)',
   "source: 'ts-settings-plan'",
   'apiStateRuntime: this._nwApiStateTsRuntimeLast',
   'apiSetRuntime: this._nwApiSetTsRuntimeLast',
@@ -68,4 +69,4 @@ if (!stringPlan.ok || !stringPlan.plan || stringPlan.plan.value !== '12345') fai
 const numberPlan = apiSetMirror.buildMainSettingsWritePlan({ scope: 'settings', key: 'aiAdvisorEvTargetSocPct', value: '500' });
 if (!numberPlan.ok || !numberPlan.plan || numberPlan.plan.value !== 100) fail('/api/set TS-Plan begrenzt aiAdvisorEvTargetSocPct nicht korrekt.');
 
-console.log('[ts-main-api-productive] OK: /api/state und settings-/api/set TS-Produktivpfad geprüft.');
+console.log('[ts-main-api-productive] OK: /api/state nutzt TS-Produktivpfad mit redigierter Kundenantwort; settings-/api/set TS-Produktivpfad geprüft.');

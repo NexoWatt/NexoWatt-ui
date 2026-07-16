@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c592f0784aecba2917969c1d20a4e38addedf8c8cbfbde9d128dee0f869c53a1
+ * Original-Hash: e2941b568036ed0f55eca9ff78462ae03ad0c0b81da454425d0d706c66901c6f
  */
 
 /**
@@ -67,7 +67,12 @@ function must(file, text){const s=read(file); if(!s.includes(text)){console.erro
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function mustNot(file, text){const s=read(file); if(s.includes(text)){console.error(`Forbidden in ${file}: ${text}`); process.exit(1);}}
-must('package.json', '"version": "0.8.59"');
+const releasePkg = JSON.parse(read('package.json'));
+const releaseIo = JSON.parse(read('io-package.json'));
+if (!releasePkg.version || !releaseIo.common || releasePkg.version !== releaseIo.common.version) {
+  console.error(`Version mismatch: package.json=${releasePkg.version || ''}, io-package.json=${releaseIo.common && releaseIo.common.version || ''}`);
+  process.exit(1);
+}
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', '0.8.45 Bridge-ACK');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', '_evaluateLocalBridgeAck');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'classifyLocalBridgeAck');

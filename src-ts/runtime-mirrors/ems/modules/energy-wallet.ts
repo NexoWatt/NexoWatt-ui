@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 147b895f292d1505a1dd45cd6650ce0e0f10b5e48727411d4364229e596b5d69
+ * Original-Hash: c8b6be243b0c6c3ba00cfcd6d74943dffa64fca679434831dd183b5b5e274fe5
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/energy-wallet.ts
- * Quell-Hash: sha256:9d439332b33a4e192b9428ea06aa53ba7c5901e179618c24c06949599a229df4
+ * Quell-Hash: sha256:06d6e6bfc4cc86036b764c4fbc3ab12688bc5c2545901cf184eb14b2ea287a41
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -89,9 +89,7 @@
  *   und zählt diese Werte nicht erneut in die Home-/EOS-Wallet-Summen.
  */
 'use strict';
-
 const { BaseModule } = require('./base');
-
 /**
  * Code-Teil: num
  *
@@ -107,7 +105,6 @@ function num(v, fallback = null) {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }
-
 /**
  * Code-Teil: round
  *
@@ -397,6 +394,7 @@ class EnergyWalletModule extends BaseModule {
     await mk('energyWallet.configuredPrices.fixedGridImportEurPerKwh', 'fester Preis aus Frontend-Einstellungen', 'number', 'value.price', '€/kWh', 0.35);
     await mk('energyWallet.configuredPrices.dynamicTariffActive', 'dynamischer Zeittarif aktiv', 'boolean', 'indicator', '', false);
     await mk('energyWallet.configuredPrices.dynamicTariffAvailable', 'dynamischer Tarifpreis verfügbar', 'boolean', 'indicator', '', false);
+    await mk('energyWallet.configuredPrices.dynamicTariffStale', 'dynamischer Tarifpreis veraltet', 'boolean', 'indicator', '', false);
     await mk('energyWallet.configuredPrices.currentDynamicPriceEurPerKwh', 'aktueller dynamischer Tarifpreis', 'number', 'value.price', '€/kWh', 0);
     await mk('energyWallet.configuredPrices.priceSource', 'Preisquelle', 'string', 'text', '', 'fixed');
     await mk('energyWallet.configuredPrices.priceSourceLabel', 'Preisquelle Anzeige', 'string', 'text', '', 'Festpreis');
@@ -830,6 +828,7 @@ class EnergyWalletModule extends BaseModule {
       fixedGridImportEurPerKwh: fixedGridImport,
       dynamicTariffActive: !!dynamicTariffActive,
       dynamicTariffAvailable: !!dynamicTariffAvailable,
+      dynamicTariffStale: !!(dynamicTariffActive && tariffCandidate.found && tariffFinite && !tariffFresh),
       currentDynamicPriceEurPerKwh: tariffFinite ? tariffNow : null,
       currentDynamicPriceSource: tariffCandidate.found ? tariffCandidate.key : '',
       currentDynamicPriceAgeSec: tariffCandidate.found ? tariffCandidate.ageSec : 0,
@@ -1235,6 +1234,7 @@ class EnergyWalletModule extends BaseModule {
     await set('energyWallet.configuredPrices.fixedGridImportEurPerKwh', round(s.prices.fixedGridImportEurPerKwh, 4));
     await set('energyWallet.configuredPrices.dynamicTariffActive', !!s.prices.dynamicTariffActive);
     await set('energyWallet.configuredPrices.dynamicTariffAvailable', !!s.prices.dynamicTariffAvailable);
+    await set('energyWallet.configuredPrices.dynamicTariffStale', !!s.prices.dynamicTariffStale);
     await set('energyWallet.configuredPrices.currentDynamicPriceEurPerKwh', s.prices.currentDynamicPriceEurPerKwh === null ? 0 : round(s.prices.currentDynamicPriceEurPerKwh, 4));
     await set('energyWallet.configuredPrices.priceSource', String(s.prices.priceSource || 'fixed'));
     await set('energyWallet.configuredPrices.priceSourceLabel', String(s.prices.priceSourceLabel || s.prices.priceSource || 'Festpreis'));

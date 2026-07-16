@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: a4c8fc648845838532cd165ffab666514c3ecf9f9b7509599bea812bf1c3a4ec
+ * Original-Hash: ffbe483df5dfb9aeb191b307602463bccf7e8453079c4eceb21a72db371b2d2e
  */
 
 /**
@@ -217,14 +217,18 @@ function allocationRows(wallboxes) {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function runtimePlan(wallboxes, budgetW, pvAvailableW) {
+function runtimePlan(wallboxes, budgetW, pvAvailableW, options = {}) {
+  const physicalPvW = options.physicalPvW === undefined ? pvAvailableW : Number(options.physicalPvW);
+  const purePvW = options.purePvW === undefined ? pvAvailableW : Number(options.purePvW);
   return allocation.buildChargingAllocationShadowPlan({
     mode: 'auto',
     budgetMode: 'engine:central',
     budgetW,
     remainingW: budgetW,
-    pvAvailableW,
-    pvAvailable: pvAvailableW > 0,
+    pvAvailableW: physicalPvW,
+    pvPureAvailableW: purePvW,
+    pvPhysicalAvailableW: physicalPvW,
+    pvAvailable: physicalPvW > 0,
     preferTsNativeAllocation: false,
     tsNormalSourceLock: false,
     allowJsComparisonFallback: false,
@@ -349,6 +353,43 @@ function runtimePlan(wallboxes, budgetW, pvAvailableW) {
   const wb = plan.wallboxes[0];
   assert(wb.targetPowerW >= 4140 && wb.targetPowerW <= 6140, 'Min+PV nutzt mehr als Basis plus zentralen PV-Grant.', wb);
   assert(wb.pvUsedW <= 2000, 'Min+PV verbucht zu viel PV-Leistung.', wb);
+}
+
+// 4b) Die Kundenprioritaet begrenzt nur reines PV-Laden. Min+PV darf
+// seine Grundlast aus dem Gesamtbudget und den Zusatz aus dem physikalischen
+// PV-Rest beziehen; ein 0-W-PV-Rest stoppt die Grundlast nicht.
+{
+  const pure = runtimePlan([powerWallbox('pure_priority_cap', {
+    targetW: 8000, mode: 'pv', minPowerW: 1000, stepW: 10, allocationRank: 1,
+  })], 11000, 6000, { purePvW: 2000, physicalPvW: 6000 });
+  assert(pure.wallboxes[0].targetPowerW === 2000, 'Reines PV-Laden überschreitet den priorisierten EVCS-Anteil.', pure.wallboxes[0]);
+
+  const minpv = runtimePlan([powerWallbox('minpv_physical_cap', {
+    targetW: 8000, mode: 'minpv', minPowerW: 4140, stepW: 10, allocationRank: 1,
+  })], 11000, 6000, { purePvW: 2000, physicalPvW: 6000 });
+  assert(minpv.wallboxes[0].targetPowerW === 8000, 'Min+PV wird unzulässig vom reinen PV-Prioritätsanteil begrenzt.', minpv.wallboxes[0]);
+  assert(minpv.wallboxes[0].pvUsedW === 3860, 'Min+PV verbucht seine netzgestützte Basis fälschlich als PV.', minpv.wallboxes[0]);
+
+  const minpvNoPv = runtimePlan([powerWallbox('minpv_no_pv', {
+    targetW: 4140, mode: 'minpv', minPowerW: 4140, stepW: 10, allocationRank: 1,
+  })], 11000, 0, { purePvW: 0, physicalPvW: 0 });
+  assert(minpvNoPv.wallboxes[0].targetPowerW === 4140, 'Min+PV-Grundlast fällt bei 0 W PV auf 0 W.', minpvNoPv.wallboxes[0]);
+}
+
+// 4c) In gemischten PV-/Min+PV-Gruppen bleiben beide Invarianten gleichzeitig
+// verbindlich: pure PV <= Prioritätscap und gesamte PV-Nutzung <= physikalischer Cap.
+{
+  const wallboxes = [
+    powerWallbox('mixed_pure', { targetW: 5000, mode: 'pv', minPowerW: 1000, stepW: 10, allocationRank: 1 }),
+    powerWallbox('mixed_minpv', { targetW: 8000, mode: 'minpv', minPowerW: 4140, stepW: 10, allocationRank: 2 }),
+  ];
+  const plan = runtimePlan(wallboxes, 16000, 6000, { purePvW: 2000, physicalPvW: 6000 });
+  const pure = plan.wallboxes.find((wb) => wb.safe === 'mixed_pure');
+  const minpv = plan.wallboxes.find((wb) => wb.safe === 'mixed_minpv');
+  const pvUsedW = plan.wallboxes.reduce((sum, wb) => sum + Math.max(0, Number(wb.pvUsedW) || 0), 0);
+  assert(pure && pure.targetPowerW <= 2000, 'Gemischte Gruppe überschreitet den reinen PV-Prioritätscap.', plan.wallboxes);
+  assert(minpv && minpv.targetPowerW >= 4140, 'Gemischte Gruppe verliert die Min+PV-Grundlast.', plan.wallboxes);
+  assert(pvUsedW <= 6000, 'Gemischte Gruppe überschreitet das physikalische PV-Budget.', { pvUsedW, wallboxes: plan.wallboxes });
 }
 
 // 5) Der experimentelle TS-Native-Allocator bleibt für spätere Migration sicher:

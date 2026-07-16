@@ -104,7 +104,15 @@ export interface ChargingAllocationRuntimeInput {
   totalPowerW?: unknown;
   totalTargetPowerW?: unknown;
   totalTargetCurrentA?: unknown;
+  /**
+   * Rueckwaertskompatibler physikalischer PV-Rest. Neue Aufrufer setzen
+   * zusaetzlich die beiden expliziten Felder darunter.
+   */
   pvAvailableW?: unknown;
+  /** Kundenseitiger EVCS-Anteil fuer reine PV-Ladepunkte. */
+  pvPureAvailableW?: unknown;
+  /** Gesamter physikalischer PV-Rest fuer PV und Min+PV-Zusatzleistung. */
+  pvPhysicalAvailableW?: unknown;
   pvAvailable?: unknown;
   gridCapEvcsW?: unknown;
   gridCapBinding?: unknown;
@@ -250,6 +258,8 @@ export interface ChargingAllocationShadowPlan {
   safetyReason: string;
   caps: {
     pvAvailableW: number;
+    pvPureAvailableW: number;
+    pvPhysicalAvailableW: number;
     gridCapEvcsW: number;
     phaseCapEvcsW: number;
     para14aCapEvcsW: number;
@@ -391,6 +401,32 @@ function nonNegativeFloat(value: unknown, fallback = 0): number {
   const n = finiteOrNull(value);
   const v = n === null ? fallback : n;
   return v > 0 ? Number(v.toFixed(3)) : 0;
+}
+
+/**
+ * Code-Teil: physicalPvBudgetW
+ * Zweck: Liefert den gesamten physikalischen PV-Rest, den reine PV-Ladepunkte
+ * und die Zusatzleistung von Min+PV gemeinsam verwenden. Das alte Feld
+ * `pvAvailableW` bleibt als Kompatibilitaetsfallback erhalten.
+ */
+function physicalPvBudgetW(input: ChargingAllocationRuntimeInput): number {
+  const explicit = finiteOrNull(input.pvPhysicalAvailableW);
+  if (explicit !== null) return Math.max(0, Math.round(explicit));
+  return nonNegative(input.pvAvailableW);
+}
+
+/**
+ * Code-Teil: purePvBudgetW
+ * Zweck: Liefert den kundenseitig priorisierten EVCS-Anteil fuer reine
+ * PV-Ladepunkte. Min+PV, Auto, Boost und Zeit-Ziel-Laden werden durch diesen
+ * Anteil nicht begrenzt. Der Wert kann niemals groesser als das physikalische
+ * PV-Budget sein.
+ */
+function purePvBudgetW(input: ChargingAllocationRuntimeInput): number {
+  const physicalW = physicalPvBudgetW(input);
+  const explicit = finiteOrNull(input.pvPureAvailableW);
+  if (explicit === null) return physicalW;
+  return Math.max(0, Math.min(physicalW, Math.round(explicit)));
 }
 
 function boolValue(value: unknown, fallback = false): boolean {
@@ -673,7 +709,10 @@ function applyFinalAllocationSafetyGuards(
     return mode === 'pv' || mode === 'minpv';
   });
   let totalRemainingW = Math.max(0, totalBudgetW);
-  let pvRemainingW = hasPvManagedDemand ? Math.max(0, nonNegative(input.pvAvailableW)) : Number.POSITIVE_INFINITY;
+  const physicalPvBudgetTotalW = hasPvManagedDemand ? physicalPvBudgetW(input) : Number.POSITIVE_INFINITY;
+  const purePvBudgetTotalW = hasPvManagedDemand ? purePvBudgetW(input) : Number.POSITIVE_INFINITY;
+  let physicalPvRemainingW = physicalPvBudgetTotalW;
+  let purePvRemainingW = purePvBudgetTotalW;
 
   const stationCapByKey = new Map<string, number>();
   for (const wallbox of planned) {
@@ -692,23 +731,33 @@ function applyFinalAllocationSafetyGuards(
   // Der Guard arbeitet deshalb mit max(Istleistung, neuem Sollwert), nicht nur mit Zielwerten.
   const actualReservationBySafe = new Map<string, number>();
   const actualPvReservationBySafe = new Map<string, number>();
+  const actualPurePvReservationBySafe = new Map<string, number>();
   let totalReservedW = 0;
-  let pvReservedW = 0;
+  let physicalPvReservedW = 0;
+  let purePvReservedW = 0;
   const stationReservedW = new Map<string, number>();
   for (const wallbox of planned) {
     const actualW = actualPowerReservationW(wallbox);
     const actualPvW = pvReservationForPowerW(wallbox, actualW);
+    const actualPurePvW = normalizedChargingMode(wallbox) === 'pv' ? actualPvW : 0;
     actualReservationBySafe.set(wallbox.safe, actualW);
     actualPvReservationBySafe.set(wallbox.safe, actualPvW);
+    actualPurePvReservationBySafe.set(wallbox.safe, actualPurePvW);
     totalReservedW += actualW;
-    pvReservedW += actualPvW;
+    physicalPvReservedW += actualPvW;
+    purePvReservedW += actualPurePvW;
     const stationKey = String(wallbox.stationKey || '').trim();
     if (stationKey && stationCapByKey.has(stationKey)) {
       stationReservedW.set(stationKey, (stationReservedW.get(stationKey) || 0) + actualW);
     }
   }
   totalRemainingW = Math.max(0, totalBudgetW - totalReservedW);
-  if (Number.isFinite(pvRemainingW)) pvRemainingW = Math.max(0, pvRemainingW - pvReservedW);
+  if (Number.isFinite(physicalPvRemainingW)) {
+    physicalPvRemainingW = Math.max(0, physicalPvRemainingW - physicalPvReservedW);
+  }
+  if (Number.isFinite(purePvRemainingW)) {
+    purePvRemainingW = Math.max(0, purePvRemainingW - purePvReservedW);
+  }
   for (const [stationKey, capW] of stationCapByKey.entries()) {
     stationRemainingW.set(stationKey, Math.max(0, capW - (stationReservedW.get(stationKey) || 0)));
   }
@@ -725,6 +774,7 @@ function applyFinalAllocationSafetyGuards(
     let allowedW = requestedW;
     const actualReservedW = Math.max(0, actualReservationBySafe.get(wallbox.safe) || 0);
     const actualPvReservedW = Math.max(0, actualPvReservationBySafe.get(wallbox.safe) || 0);
+    const actualPurePvReservedW = Math.max(0, actualPurePvReservationBySafe.get(wallbox.safe) || 0);
 
     const canRun = wallbox.enabled
       && wallbox.online
@@ -759,15 +809,28 @@ function applyFinalAllocationSafetyGuards(
 
     const minW = technicalMinPowerW(wallbox);
     if (allowedW > 0 && mode === 'pv') {
-      const maxByPvW = Math.max(0, nonNegative(input.pvAvailableW) - Math.max(0, pvReservedW - actualPvReservedW));
+      const physicalAllowedForWallboxW = Math.max(
+        0,
+        physicalPvBudgetTotalW - Math.max(0, physicalPvReservedW - actualPvReservedW),
+      );
+      const pureAllowedForWallboxW = Math.max(
+        0,
+        purePvBudgetTotalW - Math.max(0, purePvReservedW - actualPurePvReservedW),
+      );
+      const maxByPvW = Math.min(physicalAllowedForWallboxW, pureAllowedForWallboxW);
       if (allowedW > maxByPvW) {
         allowedW = maxByPvW;
         safetyReason = appendAllocationSafetyReason(safetyReason, 'pv-grant');
       }
     } else if (allowedW > 0 && mode === 'minpv') {
       // Bei Min+PV kommt nur die technische Basis aus dem Gesamtbudget. Alles oberhalb
-      // dieser Basis muss durch den zentralen PV-Grant gedeckt sein.
-      const pvAllowedForWallboxW = Math.max(0, nonNegative(input.pvAvailableW) - Math.max(0, pvReservedW - actualPvReservedW));
+      // dieser Basis muss durch den physikalischen PV-Rest gedeckt sein. Die
+      // kundenseitige Speicher/E-Mobilitaets-Aufteilung gilt nur fuer reine
+      // PV-Ladepunkte und darf Min+PV nicht unter seine Betriebssemantik druecken.
+      const pvAllowedForWallboxW = Math.max(
+        0,
+        physicalPvBudgetTotalW - Math.max(0, physicalPvReservedW - actualPvReservedW),
+      );
       const maxByPvW = Math.max(0, minW) + pvAllowedForWallboxW;
       if (allowedW > maxByPvW) {
         allowedW = maxByPvW;
@@ -798,14 +861,20 @@ function applyFinalAllocationSafetyGuards(
     const pvUsedW = mode === 'pv'
       ? finalPowerW
       : (mode === 'minpv' ? Math.max(0, finalPowerW - Math.min(finalPowerW, minW)) : 0);
+    const purePvUsedW = mode === 'pv' ? pvUsedW : 0;
 
     const finalReservedW = Math.max(actualReservedW, finalPowerW);
     const finalPvReservedW = Math.max(actualPvReservedW, pvUsedW);
+    const finalPurePvReservedW = Math.max(actualPurePvReservedW, purePvUsedW);
     totalReservedW += Math.max(0, finalReservedW - actualReservedW);
     totalRemainingW = Math.max(0, totalBudgetW - totalReservedW);
-    if (Number.isFinite(pvRemainingW)) {
-      pvReservedW += Math.max(0, finalPvReservedW - actualPvReservedW);
-      pvRemainingW = Math.max(0, nonNegative(input.pvAvailableW) - pvReservedW);
+    if (Number.isFinite(physicalPvRemainingW)) {
+      physicalPvReservedW += Math.max(0, finalPvReservedW - actualPvReservedW);
+      physicalPvRemainingW = Math.max(0, physicalPvBudgetTotalW - physicalPvReservedW);
+    }
+    if (Number.isFinite(purePvRemainingW)) {
+      purePvReservedW += Math.max(0, finalPurePvReservedW - actualPurePvReservedW);
+      purePvRemainingW = Math.max(0, purePvBudgetTotalW - purePvReservedW);
     }
     if (stationKey && stationRemainingW.has(stationKey)) {
       const nextStationReservedW = Math.max(0, Number(stationReservedW.get(stationKey) || 0))
@@ -952,7 +1021,8 @@ function applyTsNativeAllocationPlan(plannedRaw: ChargingAllocationWallboxPlan[]
   const availableW = effectiveNativeBudgetW(input, candidates.map((item) => item.wb));
   const hasPvManagedDemand = candidates.some((candidate) => candidate.mode === 'pv' || candidate.mode === 'minpv');
   let remainingW = availableW;
-  let pvRemainingW = hasPvManagedDemand ? Math.max(0, nonNegative(input.pvAvailableW)) : Number.POSITIVE_INFINITY;
+  let physicalPvRemainingW = hasPvManagedDemand ? physicalPvBudgetW(input) : Number.POSITIVE_INFINITY;
+  let purePvRemainingW = hasPvManagedDemand ? purePvBudgetW(input) : Number.POSITIVE_INFINITY;
   const stationCaps = buildStationCaps(candidates);
   const stationRemaining = new Map<string, number>(stationCaps);
 
@@ -966,12 +1036,19 @@ function applyTsNativeAllocationPlan(plannedRaw: ChargingAllocationWallboxPlan[]
     const stationAvailableW = stationResourceW(candidate, stationRemaining);
     if (actualIncrementW > stationAvailableW + 1e-6) return false;
     const pvIncrementW = pvRequiredForIncrement(candidate, actualIncrementW);
-    if (pvIncrementW > pvRemainingW + 1e-6) return false;
+    const purePvIncrementW = candidate.mode === 'pv' ? pvIncrementW : 0;
+    if (pvIncrementW > physicalPvRemainingW + 1e-6) return false;
+    if (purePvIncrementW > purePvRemainingW + 1e-6) return false;
 
     candidate.allocatedW += actualIncrementW;
     candidate.pvUsedW += pvIncrementW;
     remainingW = Math.max(0, remainingW - actualIncrementW);
-    if (Number.isFinite(pvRemainingW)) pvRemainingW = Math.max(0, pvRemainingW - pvIncrementW);
+    if (Number.isFinite(physicalPvRemainingW)) {
+      physicalPvRemainingW = Math.max(0, physicalPvRemainingW - pvIncrementW);
+    }
+    if (Number.isFinite(purePvRemainingW)) {
+      purePvRemainingW = Math.max(0, purePvRemainingW - purePvIncrementW);
+    }
     const stationKey = String(candidate.wb.stationKey || '').trim();
     if (stationKey && stationRemaining.has(stationKey)) {
       stationRemaining.set(stationKey, Math.max(0, Number(stationRemaining.get(stationKey) || 0) - actualIncrementW));
@@ -1015,7 +1092,7 @@ function applyTsNativeAllocationPlan(plannedRaw: ChargingAllocationWallboxPlan[]
         candidate.reason = 'station-budget-below-minimum';
         continue;
       }
-      if (pvStartW > pvRemainingW + 1e-6) {
+      if (pvStartW > physicalPvRemainingW + 1e-6 || pvStartW > purePvRemainingW + 1e-6) {
         candidate.reason = 'pv-budget-below-minimum';
         continue;
       }
@@ -1029,6 +1106,7 @@ function applyTsNativeAllocationPlan(plannedRaw: ChargingAllocationWallboxPlan[]
       const active = group.filter((candidate) => candidate.eligible && candidate.allocatedW + 1 < candidate.requestW);
       if (!active.length) break;
       const activePv = active.filter((candidate) => candidate.mode === 'pv' || candidate.mode === 'minpv');
+      const activePurePv = active.filter((candidate) => candidate.mode === 'pv');
       const activeByStation = new Map<string, number>();
       for (const candidate of active) {
         const key = String(candidate.wb.stationKey || '').trim();
@@ -1036,7 +1114,12 @@ function applyTsNativeAllocationPlan(plannedRaw: ChargingAllocationWallboxPlan[]
       }
 
       const globalShareW = Number.isFinite(remainingW) ? Math.max(0, Math.floor(remainingW / active.length)) : Number.POSITIVE_INFINITY;
-      const pvShareW = Number.isFinite(pvRemainingW) && activePv.length ? Math.max(0, Math.floor(pvRemainingW / activePv.length)) : Number.POSITIVE_INFINITY;
+      const physicalPvShareW = Number.isFinite(physicalPvRemainingW) && activePv.length
+        ? Math.max(0, Math.floor(physicalPvRemainingW / activePv.length))
+        : Number.POSITIVE_INFINITY;
+      const purePvShareW = Number.isFinite(purePvRemainingW) && activePurePv.length
+        ? Math.max(0, Math.floor(purePvRemainingW / activePurePv.length))
+        : Number.POSITIVE_INFINITY;
       let progress = false;
 
       for (const candidate of active) {
@@ -1046,7 +1129,9 @@ function applyTsNativeAllocationPlan(plannedRaw: ChargingAllocationWallboxPlan[]
         const stationShareW = stationKey && stationRemaining.has(stationKey)
           ? Math.max(0, Math.floor(Number(stationRemaining.get(stationKey) || 0) / stationCount))
           : Number.POSITIVE_INFINITY;
-        const candidatePvShareW = candidate.mode === 'pv' || candidate.mode === 'minpv' ? pvShareW : Number.POSITIVE_INFINITY;
+        const candidatePvShareW = candidate.mode === 'pv'
+          ? Math.min(physicalPvShareW, purePvShareW)
+          : (candidate.mode === 'minpv' ? physicalPvShareW : Number.POSITIVE_INFINITY);
         const addLimitW = Math.min(roomW, globalShareW, stationShareW, maxIncrementByPv(candidate, candidatePvShareW));
         if (addLimitW > 0 && consume(candidate, addLimitW)) progress = true;
       }
@@ -1387,7 +1472,11 @@ export function buildChargingAllocationShadowPlan(input: ChargingAllocationRunti
     },
     safetyReason,
     caps: {
-      pvAvailableW: nonNegative(input.pvAvailableW),
+      // Der Plan gibt beide PV-Budgetebenen aus: den kundenseitig priorisierten
+      // Anteil fuer reine PV-Ladepunkte und den physikalischen Rest fuer Min+PV.
+      pvAvailableW: physicalPvBudgetW(input),
+      pvPureAvailableW: purePvBudgetW(input),
+      pvPhysicalAvailableW: physicalPvBudgetW(input),
       gridCapEvcsW: nonNegative(input.gridCapEvcsW),
       phaseCapEvcsW: nonNegative(input.phaseCapEvcsW),
       para14aCapEvcsW: nonNegative(input.para14aCapEvcsW),

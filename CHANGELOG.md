@@ -1,3 +1,25 @@
+## 0.8.103
+
+- Min+PV-Grundlogik korrigiert: Die technische Mindestleistung des Ladepunkts wird aus dem normalen Gesamt-/Netzbudget gehalten, auch wenn aktuell `0 W` PV-Überschuss verfügbar sind. Das verhindert Ladeabbrüche bei bewölktem Wetter.
+- PV-Priorisierung sauber getrennt: Einstellungen wie `80 % E-Mobilität / 20 % Speicher` begrenzen ausschließlich reines PV-Laden. Min+PV hält seine netzgestützte Mindestleistung aus dem Gesamtbudget und nutzt für die Zusatzleistung den vollständigen physikalisch verbleibenden PV-Grant.
+- Reines `PV`, `Auto` und `Boost` bleiben fachlich unverändert. Min+PV darf weiterhin nur starten beziehungsweise laufen, wenn Anschluss-, Phasen-, §14a-, Stations- und Ladepunktgrenzen mindestens die technische Basis zulassen.
+- Pending-/Start-Intent erweitert: Ein verbundener Min+PV-Ladepunkt kann seine fehlende Mindestleistung aus dem zentralen Gesamtbudget reservieren, ohne diese Grundlast fälschlich als PV-Verbrauch zu buchen. Dadurch kann der Speicher die notwendige Ladebasis nicht während Start-Hysterese oder verzögerter Wallbox-Telemetrie übernehmen.
+- Reaktionszeit verbessert: Änderungen an Modus, Kundenfreigabe, Phasenwahl, Speicherassist und Zeit-/Zielladen lösen einen debouncten zusätzlichen zentralen EMS-Tick aus. Der normale Budget- und Sicherheitsablauf bleibt vollständig erhalten; parallele Regelzyklen werden verhindert.
+- Neue Regression `test:charging-minpv-base-reaction` prüft Min+PV bei `0 W` PV, technische Mindestleistung, reine PV-Abgrenzung, Auto/Boost, Stationslimits sowie die unmittelbare Modusreaktion und den Shutdown-sicheren Timerpfad.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v405` erhöht.
+
+## 0.8.102
+
+- Öffentliche Kunden-APIs feldkompatibel gehärtet: `/api/state`, `/events` und `/config` liefern nur noch freigegebene Betriebswerte; API-Schlüssel, E-Mail-Adressen, Lizenz-/Mesh-Geheimnisse, Installerdiagnosen, RFID-Rohdaten und interne ioBroker-Datenpunktpfade werden nicht mehr öffentlich verteilt.
+- Kontrollierte Kundenendpunkte ergänzt: RFID-Whitelist/Lernstatus und Test-E-Mail bleiben funktionsfähig, ohne den vollständigen internen State-Cache offenzulegen; beliebige E-Mail-Ziele bleiben Installer/Admin vorbehalten.
+- Kunden-Zugriffspolicy ergänzt: Bestehende Installationen bleiben standardmäßig im kompatiblen Modus `all`; optional können Bedienzugriffe auf Anlagen-LAN/VPN (`lan`) oder authentifizierte Sitzungen (`session`) begrenzt werden. Unvertrauenswürdige Forwarded-IP-Header erzeugen keine lokale Berechtigung.
+- Browser- und Login-Schutz ergänzt: Same-Origin-Prüfung für Schreibzugriffe, Security-Header, Login-Rate-Limit, temporäre Sperre bei Fehlversuchen und sichere Session-Cookies bei HTTPS.
+- Mesh-Kommandos arbeiten jetzt fail-closed: Ohne konfiguriertes Peer-Token werden keine Remote-Kommandos angenommen; Tokens werden ausschließlich aus Headern gelesen und zeitkonstant verglichen. Release-/Feldtest-/Operator-Endpunkte benötigen Installerrechte.
+- Doppelte Speicherfarm-Sichtbarkeitsregel bereinigt: Der zentrale Resolver verlangt wie die produktive Runtime mindestens zwei reale Farmspeicher.
+- TypeScript-Migration abgesichert: Ein versioniertes No-Growth-Budget verhindert, dass weitere produktive Runtime-Dateien oder Zeilen unter `@ts-nocheck` hinzukommen. Die bestehenden Regelalgorithmen wurden in diesem Release nicht fachlich verändert.
+- Release- und Regressionstests um Public-API-Sicherheit, Kunden-Zugriffspolicy, Mesh-Fail-Closed und TypeScript-No-Growth erweitert.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v404` erhöht.
+
 ## 0.8.101
 
 - Speicherfarm-Aggregation zentralisiert: `storageFarm.totalPowerW` liefert die signierte Netto-Gesamtleistung der Farm (`+W` Entladen, `-W` Laden). Brutto-Lade- und Brutto-Entladeleistung bleiben getrennt als Diagnose verfügbar.

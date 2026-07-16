@@ -102,7 +102,10 @@ function makeAdapter({ profile = 'generic', coupling = 'ac', farm = false, state
       enableGridConstraints: false,
       datapoints,
       storageFarm: farm ? {
-        storages: [{ enabled: true, setSignedPowerId: 'farm.storage.1.setPowerW' }],
+        storages: [
+          { enabled: true, setSignedPowerId: 'farm.storage.1.setPowerW' },
+          { enabled: true, setSignedPowerId: 'farm.storage.2.setPowerW' },
+        ],
       } : {},
       storage: {
         controlMode: 'targetPower',
@@ -169,8 +172,8 @@ function makeAdapter({ profile = 'generic', coupling = 'ac', farm = false, state
   };
 
   if (farm) {
-    states.set('storageFarm.storagesOnline', { val: 1, ts: nowMs() });
-    states.set('storageFarm.storagesDispatchAvailable', { val: 1, ts: nowMs() });
+    states.set('storageFarm.storagesOnline', { val: 2, ts: nowMs() });
+    states.set('storageFarm.storagesDispatchAvailable', { val: 2, ts: nowMs() });
     states.set('storageFarm.totalSocOnline', { val: 60, ts: nowMs() });
   }
 

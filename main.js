@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:4e960409cfe300fe68c7a7590bb5eb8a609ab1a06f5ed4132c5b55142398eb0e
+ * Quell-Hash: sha256:4375ad3a021678ec12cc48e488b5693f811822b631ced003a1b46392ca1616fa
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -165,12 +165,7 @@ function parseCookies(req) {
   });
   return out;
 }
-/**
- * Code-Teil: createToken
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+/** Code-Teil: createToken – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
 function createToken() {
   return crypto.randomBytes(24).toString('base64url');
 }
@@ -362,12 +357,7 @@ class NexoWattVis extends utils.Adapter {
     this.on('stateChange', this.onStateChange.bind(this));
     this.on('unload', this.onUnload.bind(this));
   }
-  /**
-   * Code-Teil: _nwSetTimeout
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwSetTimeout – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwSetTimeout(fn, ms, ...args) {
     // Nie einen ioBroker-Adapter-Timer erzeugen, nachdem der Unload begonnen hat.
     // Bereits geplante Callbacks prüfen den Guard ebenfalls, damit asynchrone Restarbeit
@@ -381,12 +371,7 @@ class NexoWattVis extends utils.Adapter {
       ? this.setTimeout(guarded, ms, ...args)
       : setTimeout(guarded, ms, ...args);
   }
-  /**
-   * Code-Teil: _nwSetInterval
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwSetInterval – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwSetInterval(fn, ms, ...args) {
     if (this._nwShuttingDown || typeof fn !== 'function') return null;
     const guarded = (...cbArgs) => {
@@ -397,34 +382,19 @@ class NexoWattVis extends utils.Adapter {
       ? this.setInterval(guarded, ms, ...args)
       : setInterval(guarded, ms, ...args);
   }
-  /**
-   * Code-Teil: _nwClearTimeout
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwClearTimeout – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwClearTimeout(timer) {
     if (!timer) return;
     if (typeof this.clearTimeout === 'function') this.clearTimeout(timer);
     else clearTimeout(timer);
   }
-  /**
-   * Code-Teil: _nwClearInterval
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwClearInterval – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwClearInterval(timer) {
     if (!timer) return;
     if (typeof this.clearInterval === 'function') this.clearInterval(timer);
     else clearInterval(timer);
   }
-  /**
-   * Code-Teil: _nwSleep
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwSleep – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwSleep(ms) {
     if (this._nwShuttingDown) return Promise.resolve(false);
     return new Promise((resolve) => {
@@ -432,12 +402,7 @@ class NexoWattVis extends utils.Adapter {
       if (!timer) resolve(false);
     });
   }
-  /**
-   * Code-Teil: ensureInfoConnectionState
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: ensureInfoConnectionState – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   async ensureInfoConnectionState() {
     await this.setObjectNotExistsAsync('info', {
       type: 'channel',
@@ -457,21 +422,11 @@ class NexoWattVis extends utils.Adapter {
       native: {},
     });
   }
-  /**
-   * Code-Teil: _nwIsHttpServerListening
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwIsHttpServerListening – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwIsHttpServerListening() {
     return !!(this.server && this.server.listening && !this._serverClosing);
   }
-  /**
-   * Code-Teil: _nwSetInfoConnection
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwSetInfoConnection – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   async _nwSetInfoConnection(online, reason = '') {
     let connectionPlan = null;
     try {
@@ -659,12 +614,7 @@ class NexoWattVis extends utils.Adapter {
     }
   }
 
-  /**
-   * Code-Teil: _nwStartConnectionHeartbeat
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwStartConnectionHeartbeat – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwStartConnectionHeartbeat() {
     if (this._nwShuttingDown || this._nwConnectionHeartbeatTimer) return;
     this._nwConnectionHeartbeatTimer = this._nwSetInterval(() => {
@@ -674,23 +624,13 @@ class NexoWattVis extends utils.Adapter {
       this._nwSetInfoConnection(online, online ? 'heartbeat' : 'heartbeat-offline').catch(() => {});
     }, 30000);
   }
-  /**
-   * Code-Teil: _nwStopConnectionHeartbeat
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwStopConnectionHeartbeat – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwStopConnectionHeartbeat() {
     if (!this._nwConnectionHeartbeatTimer) return;
     try { this._nwClearInterval(this._nwConnectionHeartbeatTimer); } catch (_e) {}
     this._nwConnectionHeartbeatTimer = null;
   }
-  /**
-   * Code-Teil: ensureInstallerStates
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: ensureInstallerStates – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   async ensureInstallerStates() {
     const defs = {
       adminUrl:     { type: 'string', role: 'state', def: '' },
@@ -718,12 +658,7 @@ class NexoWattVis extends utils.Adapter {
 
 
   // --- SmartHome: Zeitschaltuhren (Endkunde) ---
-  /**
-   * Code-Teil: ensureSmartHomeUserStates
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: ensureSmartHomeUserStates – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   async ensureSmartHomeUserStates() {
     // Keep user-editable SmartHome features (timers) in states so no ioBroker instance restart is required.
     await this.setObjectNotExistsAsync('smarthome', {
@@ -819,12 +754,7 @@ class NexoWattVis extends utils.Adapter {
       native: {},
     });
   }
-  /**
-   * Code-Teil: _nwParseTimeToMinutes
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwParseTimeToMinutes – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwParseTimeToMinutes(hhmm) {
     const s = String(hhmm || '').trim();
     if (!s) return null;
@@ -837,12 +767,7 @@ class NexoWattVis extends utils.Adapter {
     if (mm < 0 || mm > 59) return null;
     return (hh * 60) + mm;
   }
-  /**
-   * Code-Teil: _nwNormalizeDaysArray
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwNormalizeDaysArray – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwNormalizeDaysArray(days) {
     const out = [];
     const seen = new Set();
@@ -860,12 +785,7 @@ class NexoWattVis extends utils.Adapter {
     out.sort((a, b) => a - b);
     return out;
   }
-  /**
-   * Code-Teil: _nwNormalizeSmartHomeTimersConfig
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwNormalizeSmartHomeTimersConfig – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwNormalizeSmartHomeTimersConfig(rawCfg) {
     const base = (rawCfg && typeof rawCfg === 'object') ? rawCfg : {};
     const version = typeof base.version === 'number' ? base.version : 1;
@@ -949,21 +869,11 @@ class NexoWattVis extends utils.Adapter {
 
     this._nwScheduleNextSmartHomeTimer('load');
   }
-  /**
-   * Code-Teil: getSmartHomeTimersConfig
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: getSmartHomeTimersConfig – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   getSmartHomeTimersConfig() {
     return this._nwShTimersCfg || { version: 1, updatedAt: 0, timers: [] };
   }
-  /**
-   * Code-Teil: persistSmartHomeTimersToState
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: persistSmartHomeTimersToState – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   async persistSmartHomeTimersToState(cfg) {
     const normalized = this._nwNormalizeSmartHomeTimersConfig(cfg);
     normalized.updatedAt = Date.now();
@@ -979,12 +889,7 @@ class NexoWattVis extends utils.Adapter {
     this._nwScheduleNextSmartHomeTimer('persist');
     return normalized;
   }
-  /**
-   * Code-Teil: _nwComputeNextOccurrence
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwComputeNextOccurrence – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwComputeNextOccurrence(nowTs, daysArr, timeMinutes) {
     if (typeof nowTs !== 'number' || !Number.isFinite(nowTs)) nowTs = Date.now();
     if (typeof timeMinutes !== 'number' || !Number.isFinite(timeMinutes)) return null;
@@ -1006,12 +911,7 @@ class NexoWattVis extends utils.Adapter {
     }
     return null;
   }
-  /**
-   * Code-Teil: _nwComputeNextSmartHomeTimerEvents
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwComputeNextSmartHomeTimerEvents – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwComputeNextSmartHomeTimerEvents(nowTs) {
     const cfg = this.getSmartHomeTimersConfig();
     const nextByDev = Object.create(null);
@@ -1047,12 +947,7 @@ class NexoWattVis extends utils.Adapter {
 
     return { earliest, nextByDev };
   }
-  /**
-   * Code-Teil: _nwClearSmartHomeTimerSchedule
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwClearSmartHomeTimerSchedule – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwClearSmartHomeTimerSchedule() {
     if (this._nwShTimersTimeout) {
       try { this._nwClearTimeout(this._nwShTimersTimeout); } catch (_e) {}
@@ -1060,12 +955,7 @@ class NexoWattVis extends utils.Adapter {
     }
     this._nwShTimersNextEvent = null;
   }
-  /**
-   * Code-Teil: _nwScheduleNextSmartHomeTimer
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwScheduleNextSmartHomeTimer – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwScheduleNextSmartHomeTimer(reason) {
     this._nwClearSmartHomeTimerSchedule();
     const now = Date.now();
@@ -1094,12 +984,7 @@ class NexoWattVis extends utils.Adapter {
       this.log.debug && this.log.debug(`SmartHome timers: scheduled next (${reason}) at ${new Date(earliest.at).toISOString()} (${earliest.deviceId}/${earliest.kind})`);
     }
   }
-  /**
-   * Code-Teil: _nwRunDueSmartHomeTimer
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwRunDueSmartHomeTimer – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   async _nwRunDueSmartHomeTimer() {
     const ev = this._nwShTimersNextEvent;
     if (!ev || !ev.deviceId || typeof ev.at !== 'number' || !ev.kind) {
@@ -1125,12 +1010,7 @@ class NexoWattVis extends utils.Adapter {
     // Reschedule
     this._nwScheduleNextSmartHomeTimer('executed');
   }
-  /**
-   * Code-Teil: _nwExecuteSmartHomeTimerAction
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwExecuteSmartHomeTimerAction – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   async _nwExecuteSmartHomeTimerAction(timer, kind) {
     if (!timer || !timer.deviceId) return false;
     const deviceId = String(timer.deviceId);
@@ -1227,19 +1107,9 @@ class NexoWattVis extends utils.Adapter {
 
 
   // --- SmartHome Logik-Uhren (Installer / Logic editor inputs) ---
-  /**
-   * Code-Teil: _nwNormalizeSmartHomeLogicClocksConfig
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwNormalizeSmartHomeLogicClocksConfig – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwNormalizeSmartHomeLogicClocksConfig(rawCfg) {
-    /**
-     * Code-Teil: toSafeIdPart
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+    /** Code-Teil: toSafeIdPart – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
     const toSafeIdPart = (input) => {
       const s = String(input || '').trim();
       if (!s) return '';
@@ -1286,12 +1156,7 @@ class NexoWattVis extends utils.Adapter {
 
     return { version, updatedAt, clocks: outClocks };
   }
-  /**
-   * Code-Teil: getSmartHomeLogicClocksConfig
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: getSmartHomeLogicClocksConfig – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   getSmartHomeLogicClocksConfig() {
     return this._nwShLogicClocksCfg || { version: 1, updatedAt: 0, clocks: [] };
   }
@@ -1331,12 +1196,7 @@ class NexoWattVis extends utils.Adapter {
 
     this._nwScheduleNextSmartHomeLogicClock('load');
   }
-  /**
-   * Code-Teil: persistSmartHomeLogicClocksToState
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: persistSmartHomeLogicClocksToState – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   async persistSmartHomeLogicClocksToState(cfg) {
     const normalized = this._nwNormalizeSmartHomeLogicClocksConfig(cfg);
     normalized.updatedAt = Date.now();
@@ -1354,12 +1214,7 @@ class NexoWattVis extends utils.Adapter {
     this._nwScheduleNextSmartHomeLogicClock('persist');
     return normalized;
   }
-  /**
-   * Code-Teil: _nwShiftDays
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwShiftDays – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwShiftDays(daysArr, shift) {
     const out = [];
     const seen = new Set();
@@ -1376,12 +1231,7 @@ class NexoWattVis extends utils.Adapter {
     out.sort((a, b) => a - b);
     return out;
   }
-  /**
-   * Code-Teil: _nwIsLogicClockActive
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+  /** Code-Teil: _nwIsLogicClockActive – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
   _nwIsLogicClockActive(clock, nowTs) {
     if (!clock || !clock.id || !clock.enabled) return false;
     const fromMin = this._nwParseTimeToMinutes(clock.fromTime);
@@ -9816,6 +9666,230 @@ async onReady() {
   async startServer() {
     const app = express();
 
+    // -----------------------------------------------------------------------
+    // Feldkompatible Web-/API-Härtung
+    // -----------------------------------------------------------------------
+    // Die Kundenoberfläche bleibt weiterhin ohne zusätzliches Frontend-Passwort
+    // nutzbar. Sensible Konfigurationen und Geheimnisse werden jedoch nicht mehr
+    // über den globalen State-/SSE-Snapshot verteilt. Schreibzugriffe können
+    // zusätzlich auf LAN/VPN oder eine gültige Kundensession begrenzt werden.
+    app.disable('x-powered-by');
+
+    /** IPv4-mapped IPv6 und Zonenkennungen auf eine vergleichbare Adresse reduzieren. */
+    const nwNormalizeRemoteIp = (raw) => {
+      let ip = String(raw || '').trim().toLowerCase();
+      if (!ip) return '';
+      const pct = ip.indexOf('%');
+      if (pct >= 0) ip = ip.slice(0, pct);
+      if (ip.startsWith('::ffff:')) ip = ip.slice(7);
+      if (ip === '::1') return '127.0.0.1';
+      return ip;
+    };
+
+    /** Tatsächliche Socket-Adresse lesen; Forwarded-Header werden standardmäßig nicht vertraut. */
+    const nwRequestRemoteIp = (req) => {
+      try {
+        return nwNormalizeRemoteIp(
+          (req && req.socket && req.socket.remoteAddress) ||
+          (req && req.connection && req.connection.remoteAddress) ||
+          ''
+        );
+      } catch (_e) {
+        return '';
+      }
+    };
+
+    /** Private/loopback/link-local Netze für die optionale LAN-Policy erkennen. */
+    const nwIsTrustedLanIp = (raw) => {
+      const ip = nwNormalizeRemoteIp(raw);
+      if (!ip) return false;
+      if (ip === '127.0.0.1' || ip === '0.0.0.0') return true;
+      if (/^10\./.test(ip) || /^192\.168\./.test(ip) || /^169\.254\./.test(ip)) return true;
+      const m172 = /^172\.(\d{1,3})\./.exec(ip);
+      if (m172 && Number(m172[1]) >= 16 && Number(m172[1]) <= 31) return true;
+      const m100 = /^100\.(\d{1,3})\./.exec(ip);
+      if (m100 && Number(m100[1]) >= 64 && Number(m100[1]) <= 127) return true;
+      if (/^(fc|fd)[0-9a-f]{2}:/i.test(ip) || /^fe[89ab][0-9a-f]:/i.test(ip)) return true;
+      return false;
+    };
+
+    /** Browser-Origin gegen Host prüfen; derselbe Host auf ioBroker-Admin-Port bleibt erlaubt. */
+    const nwRequestOriginAllowed = (req) => {
+      try {
+        const originRaw = String((req && req.headers && req.headers.origin) || '').trim();
+        if (!originRaw || originRaw === 'null') return true;
+        const origin = new URL(originRaw);
+        const hostRaw = String((req && req.headers && req.headers.host) || '').trim();
+        const hostName = hostRaw.startsWith('[')
+          ? hostRaw.slice(1, hostRaw.indexOf(']'))
+          : hostRaw.split(':')[0];
+        if (origin.hostname && hostName && origin.hostname.toLowerCase() === hostName.toLowerCase()) return true;
+        const ac = (this.config && this.config.accessControl && typeof this.config.accessControl === 'object') ? this.config.accessControl : {};
+        const allowed = Array.isArray(ac.allowedOrigins)
+          ? ac.allowedOrigins
+          : String(ac.allowedOrigins || '').split(/[\n,;]+/g);
+        return allowed.map((v) => String(v || '').trim().replace(/\/$/, '')).filter(Boolean).includes(originRaw.replace(/\/$/, ''));
+      } catch (_e) {
+        return false;
+      }
+    };
+
+    /** Sicherheitsheader ohne riskanten Bruch bestehender Inline-Skripte setzen. */
+    app.use((req, res, next) => {
+      try {
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+        res.setHeader('Referrer-Policy', 'no-referrer');
+        res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+        res.setHeader('Content-Security-Policy', "base-uri 'self'; object-src 'none'; frame-ancestors 'self'");
+      } catch (_e) {}
+      next();
+    });
+
+    /** Browser-Schreibzugriffe von fremden Origins blockieren; Maschinen-APIs ohne Origin bleiben kompatibel. */
+    app.use((req, res, next) => {
+      const method = String((req && req.method) || 'GET').toUpperCase();
+      if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return next();
+      if (nwRequestOriginAllowed(req)) return next();
+      return res.status(403).json({ ok: false, error: 'origin_forbidden', message: 'Schreibzugriff von fremder Origin blockiert.' });
+    });
+
+    /** E-Mail-Adresse für öffentliche Diagnose maskieren, ohne sie vollständig preiszugeben. */
+    const nwMaskEmail = (raw) => {
+      const value = String(raw || '').trim();
+      const at = value.lastIndexOf('@');
+      if (at <= 0) return value ? '••••••' : '';
+      const local = value.slice(0, at);
+      const domain = value.slice(at + 1);
+      return `${local.slice(0, 1) || '•'}•••@${domain}`;
+    };
+
+    /** Interne oder personenbezogene State-Schlüssel vom globalen Kundensnapshot ausschließen. */
+    const nwPublicStateKeyBlocked = (rawKey) => {
+      const key = String(rawKey || '');
+      const lower = key.toLowerCase();
+      if (!key) return true;
+      if (lower.startsWith('installer.') || lower.startsWith('diagnostics.') || lower.startsWith('license.')) return true;
+      if (lower.startsWith('meshMicrogrid.receiver.'.toLowerCase()) || lower.startsWith('meshMicrogrid.fieldTest.'.toLowerCase())) return true;
+      if (lower === 'settings.weatherapikey' || lower === 'settings.email') return true;
+      if (lower === 'evcs.rfid.whitelistjson' || lower === 'evcs.rfid.learning.lastcaptured' || lower === 'evcs.rfid.learning.lastcapturedts') return true;
+      if (/^evcs\.\d+\.(rfidlast|rfidlastts|rfiduser|rfidreason)$/i.test(key)) return true;
+      if (/(^|\.)(password|passwd|secret|apikey|api_key|licensekey|trustedheadersecret)(\.|$)/i.test(key)) return true;
+      if (/(^|\.)(peerToken|receiverToken|accessToken|refreshToken|sessionToken)(\.|$)/i.test(key)) return true;
+      if (/\.mapping\./i.test(key)) return true;
+      if (/(objectid|objid|datapointid|targetobjid|splitTargetObjIds|sourceobjectid)$/i.test(key)) return true;
+      if (/(^|\.)(configjson|installerconfigjson|migrationjson)$/i.test(key)) return true;
+      return false;
+    };
+
+    /** Verschachtelte Objekte/JSON-Werte auf bekannte Geheimnisfelder reduzieren. */
+    const nwRedactPublicValue = (value, depth = 0) => {
+      if (depth > 8) return null;
+      if (Array.isArray(value)) return value.map((item) => nwRedactPublicValue(item, depth + 1));
+      if (value && typeof value === 'object') {
+        const out = {};
+        for (const [key, child] of Object.entries(value)) {
+          if (/(password|passwd|secret|token|apikey|api_key|licensekey|weatherapikey|email|objectid|objid|datapointid)/i.test(String(key))) continue;
+          out[key] = nwRedactPublicValue(child, depth + 1);
+        }
+        return out;
+      }
+      if (typeof value === 'string') {
+        const text = value.trim();
+        if ((text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))) {
+          try { return JSON.stringify(nwRedactPublicValue(JSON.parse(text), depth + 1)); } catch (_e) {}
+        }
+      }
+      return value;
+    };
+
+    /** Öffentlichen State-/SSE-Snapshot erzeugen; operative Leistungswerte bleiben unverändert. */
+    const nwBuildPublicStateSnapshot = (source, includeDerived = true) => {
+      const input = (source && typeof source === 'object') ? source : {};
+      const out = {};
+      for (const [key, entry] of Object.entries(input)) {
+        if (nwPublicStateKeyBlocked(key)) continue;
+        if (entry && typeof entry === 'object' && Object.prototype.hasOwnProperty.call(entry, 'value')) {
+          out[key] = Object.assign({}, entry, { value: nwRedactPublicValue(entry.value) });
+        } else {
+          out[key] = nwRedactPublicValue(entry);
+        }
+      }
+      if (includeDerived) {
+        const cache = (this.stateCache && typeof this.stateCache === 'object') ? this.stateCache : {};
+        const stateValue = (key) => cache[key] && Object.prototype.hasOwnProperty.call(cache[key], 'value') ? cache[key].value : undefined;
+        const weatherKey = String(stateValue('settings.weatherApiKey') || '').trim();
+        const email = String(stateValue('settings.email') || '').trim();
+        const now = Date.now();
+        out['settings.weatherApiKeyConfigured'] = { value: !!weatherKey, ts: now };
+        out['settings.emailConfigured'] = { value: !!email, ts: now };
+        out['settings.emailMasked'] = { value: nwMaskEmail(email), ts: now };
+        const ac = (this.config && this.config.accessControl && typeof this.config.accessControl === 'object') ? this.config.accessControl : {};
+        out['security.customerWritePolicy'] = { value: ['all', 'lan', 'session'].includes(String(ac.customerWritePolicy || '').toLowerCase()) ? String(ac.customerWritePolicy).toLowerCase() : 'all', ts: now };
+        out['security.publicStateFiltered'] = { value: true, ts: now };
+      }
+      return out;
+    };
+    this._nwBuildPublicStateSnapshot = nwBuildPublicStateSnapshot;
+    this._nwBuildPublicStatePatch = (patch) => nwBuildPublicStateSnapshot(patch, false);
+
+    /** Öffentliche /config-Antwort von Datenpunktpfaden und Migrationsdiagnose befreien. */
+    const nwSanitizePublicConfig = (payload, installerAccess = false) => {
+      if (installerAccess) return payload;
+      const src = (payload && typeof payload === 'object') ? payload : {};
+      const out = Object.assign({}, src);
+      delete out.featureVisibilityTsPreview;
+      delete out.mainApiTsShadow;
+      delete out.installer;
+
+      const safeSettings = nwRedactPublicValue(src.settings && typeof src.settings === 'object' ? src.settings : {});
+      if (safeSettings && typeof safeSettings === 'object') {
+        delete safeSettings.weatherApiKey;
+        delete safeSettings.email;
+        safeSettings.weatherApiKeyConfigured = !!(this.stateCache && this.stateCache['settings.weatherApiKey'] && String(this.stateCache['settings.weatherApiKey'].value || '').trim());
+        const email = this.stateCache && this.stateCache['settings.email'] ? String(this.stateCache['settings.email'].value || '').trim() : '';
+        safeSettings.emailConfigured = !!email;
+        safeSettings.emailMasked = nwMaskEmail(email);
+      }
+      out.settings = safeSettings || {};
+
+      const flags = src.datapointFlags && typeof src.datapointFlags === 'object' ? src.datapointFlags : {};
+      out.datapoints = Object.fromEntries(Object.entries(flags).map(([key, configured]) => [key, configured ? 'configured' : '']));
+
+      const settingsConfig = src.settingsConfig && typeof src.settingsConfig === 'object' ? src.settingsConfig : {};
+      const safeSettingsConfig = nwRedactPublicValue(settingsConfig) || {};
+      const rows = Array.isArray(settingsConfig.evcsList) ? settingsConfig.evcsList : [];
+      out.settingsConfig = Object.assign({}, safeSettingsConfig, {
+        evcsList: rows.map((row, index) => {
+          const r = row && typeof row === 'object' ? row : {};
+          return {
+            index: Number(r.index || index + 1) || (index + 1),
+            name: String(r.name || `Ladepunkt ${index + 1}`),
+            enabled: r.enabled !== false,
+            priority: Number(r.priority || 100) || 100,
+            chargerType: String(r.chargerType || ''),
+            phases: Number(r.phases || 0) || 0,
+            maxPowerW: Number(r.maxPowerW || 0) || 0,
+            userMode: String(r.userMode || ''),
+            stationKey: String(r.stationKey || ''),
+            connectorNo: Number(r.connectorNo || 0) || 0,
+            phaseMode: String(r.phaseMode || ''),
+            allowBoost: r.allowBoost !== false,
+            storageAssistCustomerAllowed: r.storageAssistCustomerAllowed === true,
+          };
+        }),
+      });
+      out.smartHome = { enabled: !!(src.smartHome && src.smartHome.enabled) };
+      const ac = (this.config && this.config.accessControl && typeof this.config.accessControl === 'object') ? this.config.accessControl : {};
+      out.security = {
+        publicStateFiltered: true,
+        customerWritePolicy: ['all', 'lan', 'session'].includes(String(ac.customerWritePolicy || '').toLowerCase()) ? String(ac.customerWritePolicy).toLowerCase() : 'all',
+        remoteIp: '',
+      };
+      return out;
+    };
+    this._nwSanitizePublicConfig = nwSanitizePublicConfig;
+
     // Public license information endpoint for the Admin license page.
     // Must be registered before the license gate so the UUID can be copied
     // even when the adapter/VIS itself is still locked.
@@ -10131,6 +10205,44 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
     const acCfg = (this.config && this.config.accessControl && typeof this.config.accessControl === 'object') ? this.config.accessControl : {};
     const authEnabled = authCfg.enabled !== false;
     const protectWrites = authCfg.protectWrites !== false;
+    // Feldkompatibilität: Bestehende Installationen ohne neuen Schalter behalten
+    // vorerst das bisherige Verhalten. Betreiber können schrittweise auf LAN/VPN
+    // oder zwingende Kundensession umstellen.
+    const customerWritePolicy = ['all', 'lan', 'session'].includes(String(acCfg.customerWritePolicy || '').trim().toLowerCase())
+      ? String(acCfg.customerWritePolicy).trim().toLowerCase()
+      : 'all';
+
+    // Login-Rate-Limit schützt Installer-/Kundenkonten vor einfachem Passwort-Raten,
+    // ohne bestehende Sessions oder Maschinen-APIs zu beeinflussen.
+    const nwLoginAttempts = new Map();
+    const nwLoginWindowMs = 5 * 60 * 1000;
+    const nwLoginLockMs = 10 * 60 * 1000;
+    const nwLoginMaxFailures = 5;
+    const nwLoginRateStatus = (req) => {
+      const key = nwRequestRemoteIp(req) || 'unknown';
+      const now = Date.now();
+      const rec = nwLoginAttempts.get(key);
+      if (!rec) return { key, blocked: false, retryAfterSec: 0 };
+      if (rec.lockUntil && rec.lockUntil > now) return { key, blocked: true, retryAfterSec: Math.max(1, Math.ceil((rec.lockUntil - now) / 1000)) };
+      if (!rec.windowStart || (now - rec.windowStart) > nwLoginWindowMs) {
+        nwLoginAttempts.delete(key);
+        return { key, blocked: false, retryAfterSec: 0 };
+      }
+      return { key, blocked: false, retryAfterSec: 0 };
+    };
+    const nwLoginRecordFailure = (key) => {
+      const now = Date.now();
+      const old = nwLoginAttempts.get(key);
+      const rec = (!old || !old.windowStart || (now - old.windowStart) > nwLoginWindowMs)
+        ? { windowStart: now, failures: 0, lockUntil: 0 }
+        : old;
+      rec.failures = Number(rec.failures || 0) + 1;
+      if (rec.failures >= nwLoginMaxFailures) rec.lockUntil = now + nwLoginLockMs;
+      nwLoginAttempts.set(key, rec);
+      return rec;
+    };
+    const nwLoginRecordSuccess = (key) => { try { nwLoginAttempts.delete(key); } catch (_e) {} };
+
     const sessionTtlMin = Number(authCfg.sessionTtlMin || acCfg.sessionTtlMin || 120);
     const sessionTtlMs = Math.max(5, Number.isFinite(sessionTtlMin) ? sessionTtlMin : 120) * 60 * 1000;
 
@@ -10234,10 +10346,12 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
       return sess;
     };
     /** Session-Cookie für Adapter-eigene Anmeldung setzen. */
-    const setSessionCookie = (res, token, ttlMs) => {
+    const setSessionCookie = (res, token, ttlMs, req) => {
       const maxAge = Math.max(1, Math.floor(ttlMs / 1000));
-      const base = `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
-      const legacy = `${LEGACY_COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
+      const secure = !!(req && req.socket && req.socket.encrypted);
+      const secureAttr = secure ? '; Secure' : '';
+      const base = `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secureAttr}`;
+      const legacy = `${LEGACY_COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secureAttr}`;
       res.setHeader('Set-Cookie', [base, legacy]);
     };
     /** Session-Cookies löschen. */
@@ -10350,16 +10464,22 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
       next();
     };
     const requireAuth = async (req, _res, next) => {
-      // 0.8.75: Endkunden-/LIVE-Frontends sind bewusst ohne Passwort bedienbar.
-      // Diese Middleware hängt nur noch optional eine vorhandene Session an.
-      // Echte Installer-/Admin-Seiten bleiben über requireCapability geschützt.
+      // Endkunden-/LIVE-Steuerung bleibt ohne zusätzliches Passwort möglich,
+      // sofern die konfigurierte Vertrauensgrenze eingehalten wird.
+      let access = null;
       if (authEnabled && protectWrites) {
         try {
-          const access = await resolveAccess(req);
+          access = await resolveAccess(req);
           if (access && access.role !== 'none') req.nwSession = access;
         } catch (_e) {}
       }
-      next();
+      if (access && access.role !== 'none') return next();
+      if (customerWritePolicy === 'all') return next();
+      if (customerWritePolicy === 'lan' && nwIsTrustedLanIp(nwRequestRemoteIp(req))) return next();
+      if (customerWritePolicy === 'session') {
+        return _res.status(401).json({ ok: false, error: 'customer_session_required', message: 'Für diese Kundensteuerung ist eine Anmeldung erforderlich.' });
+      }
+      return _res.status(403).json({ ok: false, error: 'customer_network_forbidden', message: 'Kundensteuerung ist nur aus dem Anlagen-LAN/VPN freigegeben.' });
     };
     const requireInstaller = requireCapability('appcenter.open');
     const requireCustomerSmartHome = requireCapability('smarthome.configureCustomer');
@@ -10445,16 +10565,27 @@ document.addEventListener('DOMContentLoaded', function(){
 
         const user = String((req.body && (req.body.user || req.body.username)) || '').trim();
         const password = String((req.body && req.body.password) || '');
+        const rate = nwLoginRateStatus(req);
+        if (rate.blocked) {
+          res.setHeader('Retry-After', String(rate.retryAfterSec));
+          return res.status(429).json({ ok: false, error: 'login_rate_limited', retryAfterSec: rate.retryAfterSec });
+        }
         if (!user || !password) return res.status(400).json({ ok: false, error: 'missing_credentials' });
 
         const ok = await checkPasswordAsync(user, password);
-        if (!ok) return res.status(401).json({ ok: false, error: 'unauthorized' });
+        if (!ok) {
+          const failed = nwLoginRecordFailure(rate.key);
+          const locked = Number(failed.lockUntil || 0) > Date.now();
+          if (locked) res.setHeader('Retry-After', String(Math.max(1, Math.ceil((Number(failed.lockUntil) - Date.now()) / 1000))));
+          return res.status(locked ? 429 : 401).json({ ok: false, error: locked ? 'login_rate_limited' : 'unauthorized' });
+        }
 
+        nwLoginRecordSuccess(rate.key);
         const info = await computeRoleInfo(user);
         const token = createToken();
         const session = Object.assign({}, info, { exp: Date.now() + sessionTtlMs });
         this._authSessions.set(token, session);
-        setSessionCookie(res, token, sessionTtlMs);
+        setSessionCookie(res, token, sessionTtlMs, req);
         res.json({ ok: true, enabled: true, authed: true, user, role: info.role, roles: info.roles, groups: info.groups, capabilities: info.capabilities, isAdmin: info.isAdmin, isInstaller: info.isInstaller, isCustomer: info.isCustomer });
       } catch (e) {
         this.log.warn('auth login error: ' + (e && e.message ? e.message : e));
@@ -18231,11 +18362,20 @@ const _nwMeshNormalPeerUrl = (raw) => {
   const withProto = /^https?:\/\//i.test(s) ? s : `http://${s}`;
   return withProto.replace(/\/+$/g, '');
 };
-const _nwMeshPeerTokenFromReq = (req) => String((req && req.headers && (req.headers['x-nexowatt-mesh-token'] || req.headers['x-mesh-token'])) || (req && req.query && req.query.token) || (req && req.body && (req.body.peerToken || req.body.token)) || '').trim();
+// Peer-Tokens werden nur im Header akzeptiert. URL-/Body-Tokens würden sonst
+// in Browserhistorie, Proxy-Logs oder Diagnosepayloads landen.
+const _nwMeshPeerTokenFromReq = (req) => String((req && req.headers && (req.headers['x-nexowatt-mesh-token'] || req.headers['x-mesh-token'])) || '').trim();
 const _nwMeshPeerTokenOk = (req) => {
-  const token = _nwMeshReceiverCfg().peerToken;
-  if (!token) return true;
-  return _nwMeshPeerTokenFromReq(req) === token;
+  const token = String(_nwMeshReceiverCfg().peerToken || '');
+  const given = _nwMeshPeerTokenFromReq(req);
+  if (!token || !given) return false;
+  try {
+    const expectedBuf = Buffer.from(token, 'utf8');
+    const givenBuf = Buffer.from(given, 'utf8');
+    return expectedBuf.length === givenBuf.length && crypto.timingSafeEqual(expectedBuf, givenBuf);
+  } catch (_e) {
+    return false;
+  }
 };
 const _nwMeshWriteState = async (id, value, ack = true) => {
   try { if (typeof this.setStateAsync === 'function') await this.setStateAsync(id, { val: value, ack }); } catch (_e) {}
@@ -18577,7 +18717,7 @@ app.get('/api/mesh/microgrid/command-guard', (req, res) => {
     return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
   }
 });
-app.post('/api/mesh/microgrid/command', (req, res) => {
+app.post('/api/mesh/microgrid/command', requireInstaller, (req, res) => {
   try {
     sendNoStore(res);
     if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
@@ -18600,7 +18740,7 @@ app.post('/api/mesh/microgrid/command', (req, res) => {
 });
 
 
-app.post('/api/mesh/local-bridge/release', async (req, res) => {
+app.post('/api/mesh/local-bridge/release', requireInstaller, async (req, res) => {
   try {
     sendNoStore(res);
     if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
@@ -18795,7 +18935,7 @@ app.post('/api/mesh/command/receive', async (req, res) => {
   }
 });
 
-app.post('/api/mesh/peer/fieldtest', async (req, res) => {
+app.post('/api/mesh/peer/fieldtest', requireInstaller, async (req, res) => {
   const now = Date.now();
   try {
     sendNoStore(res);
@@ -18933,7 +19073,7 @@ app.post('/api/mesh/peer/fieldtest', async (req, res) => {
   }
 });
 
-app.get('/api/mesh/peer/fieldtest', (req, res) => {
+app.get('/api/mesh/peer/fieldtest', requireInstaller, (req, res) => {
   try {
     sendNoStore(res);
     if (!_nwMeshMicrogridIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Mesh/Microgrid ist nur in EOS verfügbar.' });
@@ -19041,7 +19181,7 @@ app.post('/api/display/station/:token/command', async (req, res) => {
 
 
 // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/config', (req, res) => {
-app.get('/config', (req, res) => {
+app.get('/config', async (req, res) => {
       // UI flags: treat missing (undefined) EMS module flags as sensible defaults.
       // This avoids "legacy" fallbacks in the EVCS UI on upgrades where config flags
       // were not persisted yet.
@@ -19281,9 +19421,9 @@ app.get('/config', (req, res) => {
         return evcsAvailableEffective;
       };
 
-      const sess = getSession(req);
+      const sess = authEnabled ? await resolveAccess(req) : null;
 
-      res.json({
+      const nwConfigPayload = {
         locale: this._nwBuildLocaleInfo(),
         countryProfile: this._nwBuildCountryProfileInfo(),
         units: cfg.units || { power: 'W', energy: 'kWh' },
@@ -19811,7 +19951,8 @@ settingsConfig: {
         // New behaviour: installer-level features are locked until the user logs in
         // with an account that has installer rights.
         installerLocked: (authEnabled && protectWrites) ? !(sess && sess.isInstaller) : false
-      });
+      };
+      return res.json(nwSanitizePublicConfig(nwConfigPayload, !!(authEnabled && sess && sess.isInstaller)));
     });
 
     // snapshot
@@ -20384,13 +20525,46 @@ settingsConfig: {
 
     // Abschnitt: Live-State-Snapshot. Diese Antwort ist die wichtigste Datenquelle für Dashboard, Settings und viele Unterseiten.
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/state', (_req, res) => {
-    app.get('/api/state', (_req, res) => {
+    app.get('/api/state', async (req, res) => {
       // TS-Migration 0.7.100: /api/state nutzt produktiv den TS-Builder.
-      // Die Antwortform bleibt identisch: ein Objekt mit State-Keys und `{ value, ts }`-Einträgen.
-      // Falls der TS-Spiegel fehlt oder fehlschlägt, fällt der Adapter auf `this.stateCache` zurück.
+      // Installer erhalten nach gültiger Anmeldung die vollständige Diagnose;
+      // das Kundenfrontend bekommt ausschließlich den redigierten Betriebs-Snapshot.
       this._nwRunApiStateTsShadowComparison('GET /api/state');
       const tsStates = this._nwBuildApiStateTsRuntimeResponse('GET /api/state');
-      res.json(tsStates || this.stateCache);
+      const source = tsStates || this.stateCache;
+      const access = authEnabled ? await resolveAccess(req) : null;
+      const installerAccess = !!(authEnabled && access && access.isInstaller);
+      return res.json(installerAccess ? source : nwBuildPublicStateSnapshot(source, true));
+    });
+
+    // RFID-Kundendaten liegen bewusst nicht mehr im globalen State-/SSE-Snapshot.
+    // Der Editor lädt sie nur bei Bedarf über diesen kontrollierten Endpunkt.
+    app.get('/api/rfid/customer', requireAuth, async (_req, res) => {
+      try {
+        const valueOf = (key, fallback) => {
+          const rec = this.stateCache && this.stateCache[key];
+          return rec && Object.prototype.hasOwnProperty.call(rec, 'value') ? rec.value : fallback;
+        };
+        const rawWhitelist = String(valueOf('evcs.rfid.whitelistJson', '[]') || '[]');
+        let whitelist = [];
+        try {
+          const parsed = JSON.parse(rawWhitelist);
+          whitelist = Array.isArray(parsed) ? parsed : [];
+        } catch (_e) { whitelist = []; }
+        return res.json({
+          ok: true,
+          enabled: valueOf('evcs.rfid.enabled', false) === true,
+          whitelist,
+          whitelistJson: JSON.stringify(whitelist),
+          learning: {
+            active: valueOf('evcs.rfid.learning.active', false) === true,
+            lastCaptured: String(valueOf('evcs.rfid.learning.lastCaptured', '') || ''),
+            lastCapturedTs: Number(valueOf('evcs.rfid.learning.lastCapturedTs', 0)) || 0,
+          },
+        });
+      } catch (e) {
+        return res.status(500).json({ ok: false, error: String(e && e.message ? e.message : e) });
+      }
     });
 
     // Test email for notification commissioning
@@ -20399,7 +20573,12 @@ settingsConfig: {
       try {
         const body = (req && req.body) ? req.body : {};
         const toBody = (body && body.to) ? String(body.to).trim() : '';
-        const to = toBody || this._notifyGetSettingString('email', '');
+        const configuredTo = this._notifyGetSettingString('email', '');
+        const access = authEnabled ? await resolveAccess(req) : null;
+        if (toBody && toBody.toLowerCase() !== String(configuredTo || '').trim().toLowerCase() && !(access && access.isInstaller)) {
+          return res.status(403).json({ ok: false, error: 'recipient_forbidden', message: 'Kunden dürfen nur die konfigurierte Empfängeradresse testen.' });
+        }
+        const to = toBody || configuredTo;
         if (!to) return res.status(400).json({ ok: false, error: 'missing recipient' });
 
         const now = Date.now();
@@ -20528,6 +20707,9 @@ settingsConfig: {
             const id = `chargingManagement.wallboxes.${safe}.userEnabled`;
             try {
               await this.setStateAsync(id, b, false);
+              const controlTs = Date.now();
+              try { this.updateValue(id, b, controlTs); } catch (_e) {}
+              this._nwRequestImmediateEmsTick(`api:${id}`);
 
               // UX: beim Deaktivieren Boost-Indikatoren sofort zurücksetzen (keine "hängenden" Zustände)
               if (!b) {
@@ -20560,6 +20742,7 @@ settingsConfig: {
             try {
               await this.setStateAsync(id, v, false);
               try { this.updateValue(id, v, Date.now()); } catch (_e) {}
+              this._nwRequestImmediateEmsTick(`api:${id}`);
               return res.json({ ok: true });
             } catch (_e) {
               return res.status(409).json({ ok: false, error: 'not_ready' });
@@ -20587,6 +20770,7 @@ settingsConfig: {
             try {
               await this.setStateAsync(id, b, false);
               try { this.updateValue(id, b, Date.now()); } catch (_e) {}
+              this._nwRequestImmediateEmsTick(`api:${id}`);
               return res.json({ ok: true });
             } catch (_e) {
               return res.status(409).json({ ok: false, error: 'not_ready' });
@@ -20604,6 +20788,7 @@ settingsConfig: {
             try {
               await this.setStateAsync(id, b, false);
               try { this.updateValue(id, b, Date.now()); } catch (_e) {}
+              this._nwRequestImmediateEmsTick(`api:${id}`);
               return res.json({ ok: true });
             } catch (_e) {
               return res.status(409).json({ ok: false, error: 'not_ready' });
@@ -20618,6 +20803,7 @@ settingsConfig: {
             try {
               await this.setStateAsync(id, v, false);
               try { this.updateValue(id, v, Date.now()); } catch (_e) {}
+              this._nwRequestImmediateEmsTick(`api:${id}`);
               return res.json({ ok: true });
             } catch (_e) {
               return res.status(409).json({ ok: false, error: 'not_ready' });
@@ -20655,6 +20841,7 @@ settingsConfig: {
             try {
               await this.setStateAsync(id, v, false);
               try { this.updateValue(id, v, Date.now()); } catch (_e) {}
+              this._nwRequestImmediateEmsTick(`api:${id}`);
               return res.json({ ok: true });
             } catch (_e) {
               return res.status(409).json({ ok: false, error: 'not_ready' });
@@ -20670,6 +20857,7 @@ settingsConfig: {
             try {
               await this.setStateAsync(id, v, false);
               try { this.updateValue(id, v, Date.now()); } catch (_e) {}
+              this._nwRequestImmediateEmsTick(`api:${id}`);
               return res.json({ ok: true });
             } catch (_e) {
               return res.status(409).json({ ok: false, error: 'not_ready' });
@@ -20684,6 +20872,9 @@ settingsConfig: {
           const id = `chargingManagement.wallboxes.${safe}.userMode`;
           try {
             await this.setStateAsync(id, v, false);
+            const controlTs = Date.now();
+            try { this.updateValue(id, v, controlTs); } catch (_e) {}
+            this._nwRequestImmediateEmsTick(`api:${id}`);
 
             // UX/Serienreife: allow manual boost cancel.
             // If the operator switches away from boost, clear the boost runtime indicators
@@ -22226,7 +22417,7 @@ return res.json(out);
     // server-sent events for live updates
     // Abschnitt: SSE-Livekanal. Push für /api/state-Änderungen; Verbindungen im unload sauber schließen.
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/events', (req, res) => {
-    app.get('/events', (req, res) => {
+    app.get('/events', async (req, res) => {
       res.set({
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
@@ -22234,11 +22425,13 @@ return res.json(out);
       });
       res.flushHeaders();
 
-      const client = { req, res };
+      const access = authEnabled ? await resolveAccess(req) : null;
+      const client = { req, res, internal: !!(authEnabled && access && access.isInstaller) };
       this.sseClients.add(client);
 
-      // send initial payload
-      res.write("data: " + JSON.stringify({ type: 'init', payload: this.stateCache }) + "\n\n");
+      // Initialpayload folgt derselben Sicherheitsgrenze wie /api/state.
+      const initialPayload = client.internal ? this.stateCache : nwBuildPublicStateSnapshot(this.stateCache, true);
+      res.write("data: " + JSON.stringify({ type: 'init', payload: initialPayload }) + "\n\n");
 
       req.on('close', () => {
         this.sseClients.delete(client);
@@ -22986,6 +23179,26 @@ return res.json(out);
     } catch (_e) {}
   }
   /**
+   * Code-Teil: _nwRequestImmediateEmsTick
+   * Zweck: Bündelt schnelle Kunden-/State-Änderungen auf den normalen zentralen
+   * EMS-Regelzyklus. Die Methode verändert keine Budget- oder Sicherheitsgrenze;
+   * sie verkürzt ausschließlich die Reaktionszeit nach Modus-, Freigabe-,
+   * Phasen- oder Zieländerungen im Lademanagement.
+   */
+  _nwRequestImmediateEmsTick(reason = 'customer-control') {
+    try {
+      if (this._nwShuttingDown) return false;
+      const engine = this.emsEngine;
+      if (engine && typeof engine.requestImmediateTick === 'function') {
+        return engine.requestImmediateTick(String(reason || 'customer-control')) === true;
+      }
+    } catch (_e) {
+      // Der reguläre Scheduler bleibt der sichere Fallback.
+    }
+    return false;
+  }
+
+  /**
    * Code-Teil: onStateChange
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
    * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -23010,6 +23223,13 @@ return res.json(out);
       const key = this.keyFromId(id);
       if (key) {
         this.updateValue(key, this._nwScaleMappedValue(key, id, state.val), state.ts);
+
+        // Bedienzustände der Ladepunkte werden sofort im stateCache sichtbar und
+        // lösen einen debouncten zentralen EMS-Tick aus. Das gilt auch für externe
+        // ioBroker-Schreibzugriffe, nicht nur für die NexoWatt-Weboberfläche.
+        if (/^chargingManagement\.wallboxes\.[a-z0-9_]+\.(userMode|userEnabled|userPhaseMode|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i.test(key)) {
+          this._nwRequestImmediateEmsTick(`state:${key}`);
+        }
       }
 
       // Weather-App activation (FIS → Einstellungen)
@@ -23045,7 +23265,10 @@ return res.json(out);
             const idx = Number(m[1]);
             const mv = Number(state.val);
             const userMode = (mv === 1) ? 'boost' : (mv === 2) ? 'minpv' : (mv === 3) ? 'pv' : 'auto';
-            this.setStateAsync(`chargingManagement.wallboxes.lp${idx}.userMode`, userMode, false).catch(()=>{});
+            const userModeKey = `chargingManagement.wallboxes.lp${idx}.userMode`;
+            this.setStateAsync(userModeKey, userMode, false).catch(()=>{});
+            try { this.updateValue(userModeKey, userMode, Number(state.ts) || Date.now()); } catch (_e3) {}
+            this._nwRequestImmediateEmsTick(`state:${userModeKey}`);
           }
 
           // 2) Wenn userMode geändert wird, spiegle in evcs.<i>.mode (ack=true), damit UI/Kompatibilität stimmt.
@@ -29460,7 +29683,11 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
           for (const client of Array.from(this.sseClients)) {
             try {
-              client.res.write("data: " + JSON.stringify({ type: 'update', payload: p }) + "\n\n");
+              const publicPatch = client && client.internal
+                ? p
+                : (typeof this._nwBuildPublicStatePatch === 'function' ? this._nwBuildPublicStatePatch(p) : {});
+              if (!publicPatch || !Object.keys(publicPatch).length) continue;
+              client.res.write("data: " + JSON.stringify({ type: 'update', payload: publicPatch }) + "\n\n");
             } catch (_e) {
               this.sseClients.delete(client);
             }

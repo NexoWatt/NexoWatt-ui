@@ -154,11 +154,34 @@ export const customerFeatureVisibilityCases: ReadonlyArray<CustomerFeatureVisibi
     },
   },
   {
-    name: 'Aktivierte Speicherfarm mit echtem Speicher wird sichtbar',
+    name: 'Aktivierte Speicherfarm mit nur einem echten Speicher bleibt unsichtbar',
     input: {
       evcsProofs: [],
       storageFarmEnabled: true,
-      storageFarmProofs: [{ index: 1, name: 'Farm-Speicher', signedPowerDp: 'storageFarm.1.power', hasAnyRealDatapoint: false }],
+      storageFarmProofs: [{ index: 1, name: 'Farm-Speicher 1', signedPowerDp: 'storageFarm.1.power', hasAnyRealDatapoint: false }],
+      smartHomeEnabled: false,
+      weatherEnabled: false,
+      weatherHasData: false,
+      aiAdvisorInstalled: false,
+      aiAdvisorCustomerEnabled: true,
+    },
+    expected: {
+      hasEvcs: false,
+      hasStorageFarm: false,
+      hasSmartHome: false,
+      hasWeather: false,
+      hasAiAdvisor: false,
+    },
+  },
+  {
+    name: 'Aktivierte Speicherfarm mit zwei echten Speichern wird sichtbar',
+    input: {
+      evcsProofs: [],
+      storageFarmEnabled: true,
+      storageFarmProofs: [
+        { index: 1, name: 'Farm-Speicher 1', signedPowerDp: 'storageFarm.1.power', hasAnyRealDatapoint: false },
+        { index: 2, name: 'Farm-Speicher 2', socDp: 'storageFarm.2.soc', hasAnyRealDatapoint: false },
+      ],
       smartHomeEnabled: false,
       weatherEnabled: false,
       weatherHasData: false,

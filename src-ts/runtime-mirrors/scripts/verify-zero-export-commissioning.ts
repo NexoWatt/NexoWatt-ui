@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 3c441629ba8edbb18af815572906f49e57bc898d45f6557b3795a27b1940e0b5
+ * Original-Hash: ebdfa5d445f761d2e7c802d40237103000901973222b36b783565ee4070be35e
  */
 
 /**
@@ -67,7 +67,12 @@ function must(file, needle){const s=read(file); if(!s.includes(needle)){console.
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function mustNot(file, needle){const s=read(file); if(s.includes(needle)){console.error(`Forbidden in ${file}: ${needle}`); process.exit(1);}}
-must('package.json','"version": "0.8.59"');
+const releasePkg = JSON.parse(read('package.json'));
+const releaseIo = JSON.parse(read('io-package.json'));
+if (!releasePkg.version || !releaseIo.common || releasePkg.version !== releaseIo.common.version) {
+  console.error(`Version mismatch: package.json=${releasePkg.version || ''}, io-package.json=${releaseIo.common && releaseIo.common.version || ''}`);
+  process.exit(1);
+}
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','_buildZeroExportCommissioningAssistant');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','gridConstraints.exportLimit.commissioning.checklistJson');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','gridConstraints.exportLimit.commissioning.writeTestPreviewJson');

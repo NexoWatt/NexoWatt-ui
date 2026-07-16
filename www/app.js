@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/app.ts
- * Quell-Hash: sha256:936d39a5904bb1903d12796c692d4afd8c083410a537fca537e46e24b94f7443
+ * Quell-Hash: sha256:5e263283d18556a2f51eac0aec77d06a4bab21e434311fb6048e586e9589b999
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -3767,6 +3767,10 @@ const refreshConfig = async () => {
   } catch(e){}
 
   window.latestState = state;
+  // RFID-Whitelist und Lerncode liegen aus Datenschutzgründen nicht mehr im
+  // globalen /api/state-Snapshot. Sie werden nur für die Kunden-Einstellseite
+  // über den kontrollierten RFID-Endpunkt nachgeladen.
+  try { await loadRfidCustomerState(); } catch (_e) {}
   _lastLiveTelemetryRenderTs = Date.now();
   scheduleRender(true);
 
@@ -4252,6 +4256,15 @@ function initSettingsPanel(){
     if (weatherUsageInput.value !== mode) weatherUsageInput.value = mode;
 
     const keyVal = (weatherApiKey && String(weatherApiKey.value || '').trim()) || '';
+    const stateNow = window.latestState || {};
+    const cfgNow = window.__nwCfg || SERVER_CFG || {};
+    const keyConfigured = !!(
+      (stateNow['settings.weatherApiKeyConfigured'] && stateNow['settings.weatherApiKeyConfigured'].value === true) ||
+      (cfgNow.settings && cfgNow.settings.weatherApiKeyConfigured === true)
+    );
+    if (weatherApiKey && keyConfigured && !keyVal) {
+      weatherApiKey.placeholder = 'Gespeichert – nur zum Ändern neu eingeben';
+    }
 
     if (weatherBtns) {
       [...weatherBtns.querySelectorAll('button')].forEach(btn => {
@@ -4264,7 +4277,7 @@ function initSettingsPanel(){
     if (weatherHintCommercial) weatherHintCommercial.style.display = isCommercial ? 'block' : 'none';
     if (weatherApiRow) weatherApiRow.style.display = isCommercial ? 'block' : 'none';
 
-    const missing = isCommercial && !keyVal;
+    const missing = isCommercial && !keyVal && !keyConfigured;
     if (weatherApiMissing) weatherApiMissing.style.display = missing ? 'block' : 'none';
   };
 
@@ -4347,6 +4360,20 @@ function initSettingsPanel(){
   }
   if (weatherUsageInput) weatherUsageInput.addEventListener('change', updateWeatherModeUi);
   if (weatherApiKey) weatherApiKey.addEventListener('input', updateWeatherModeUi);
+
+  // Geheimnisse werden vom Backend nicht mehr im Klartext ausgeliefert. Die
+  // Platzhalter bestätigen eine bestehende Konfiguration, ohne sie preiszugeben.
+  try {
+    const emailInput = document.getElementById('s_email');
+    const stNow = window.latestState || {};
+    const cfgNow = window.__nwCfg || SERVER_CFG || {};
+    const masked = String(
+      (stNow['settings.emailMasked'] && stNow['settings.emailMasked'].value) ||
+      (cfgNow.settings && cfgNow.settings.emailMasked) ||
+      ''
+    ).trim();
+    if (emailInput && masked && !String(emailInput.value || '').trim()) emailInput.placeholder = `Gespeichert: ${masked}`;
+  } catch (_e) {}
 
   // Test-Mail für Benachrichtigungen
   const notifyTestBtn = document.getElementById('notifyTestBtn');
@@ -5248,6 +5275,31 @@ function initStorageFarmPanel(){
   storageFarmApply();
 }
 /**
+ * Code-Teil: loadRfidCustomerState
+ * Zweck: Lädt Whitelist und Lernstatus über den datensparsamen RFID-Endpunkt.
+ * Zusammenhang: Die Rohdaten werden bewusst nicht über /api/state oder SSE verteilt;
+ * der bestehende Editor erhält weiterhin dieselben lokalen State-Schlüssel.
+ */
+async function loadRfidCustomerState(){
+  const response = await fetch('/api/rfid/customer', { cache: 'no-store' });
+  if (!response.ok) throw new Error(`RFID HTTP ${response.status}`);
+  const payload = await response.json();
+  if (!payload || payload.ok === false) throw new Error((payload && payload.error) || 'RFID-Daten konnten nicht geladen werden.');
+  const now = Date.now();
+  window.latestState = window.latestState || {};
+  const target = window.latestState;
+  target['evcs.rfid.enabled'] = { value: payload.enabled === true, ts: now };
+  target['evcs.rfid.whitelistJson'] = { value: String(payload.whitelistJson || JSON.stringify(Array.isArray(payload.whitelist) ? payload.whitelist : [])), ts: now };
+  const learning = payload.learning && typeof payload.learning === 'object' ? payload.learning : {};
+  target['evcs.rfid.learning.active'] = { value: learning.active === true, ts: now };
+  target['evcs.rfid.learning.lastCaptured'] = { value: String(learning.lastCaptured || ''), ts: Number(learning.lastCapturedTs || now) || now };
+  target['evcs.rfid.learning.lastCapturedTs'] = { value: Number(learning.lastCapturedTs || 0) || 0, ts: now };
+  try { if (typeof state === 'object' && state) Object.assign(state, target); } catch (_e) {}
+  return payload;
+}
+try { window.__nwLoadRfidCustomerState = loadRfidCustomerState; } catch (_e) {}
+
+/**
  * Code-Teil: setupRfidWhitelistUi
  * Zweck: Bereitet Konfiguration/Eventbindung für diesen Bereich vor.
  * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -5398,8 +5450,7 @@ function setupRfidWhitelistUi(){
    */
   async function reload(){
     try {
-      const snap = await fetch('/api/state', { cache: 'no-store' }).then(r => r.json());
-      window.latestState = snap || {};
+      await loadRfidCustomerState();
       list = readWhitelistFromState();
       render();
       setMsg('Whitelist neu geladen.');
@@ -5512,6 +5563,25 @@ function setupRfidLearningUi(){
     const st = window.latestState || {};
     return st[key] ? st[key].value : undefined;
   }
+  let learningPollTimer = null;
+  let learningPollUntil = 0;
+  const stopLearningPoll = () => {
+    if (learningPollTimer) clearTimeout(learningPollTimer);
+    learningPollTimer = null;
+  };
+  const pollLearningState = async () => {
+    stopLearningPoll();
+    try { await loadRfidCustomerState(); } catch (_e) {}
+    applyUi();
+    const active = !!readStateVal('evcs.rfid.learning.active');
+    if (active && Date.now() < learningPollUntil) {
+      learningPollTimer = setTimeout(pollLearningState, 1000);
+    }
+  };
+  const startLearningPoll = () => {
+    learningPollUntil = Date.now() + 90 * 1000;
+    pollLearningState();
+  };
   /**
    * Code-Teil: applyUi
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -5547,7 +5617,10 @@ function setupRfidLearningUi(){
       const active = !!readStateVal('evcs.rfid.learning.active');
       setMsg('');
       await setLearningActive(!active);
-      // UI will update via SSE/render, but also apply immediately
+      // RFID-Rohdaten laufen nicht über SSE; während des Lernens wird deshalb
+      // gezielt der kleine RFID-Endpunkt abgefragt.
+      if (!active) startLearningPoll();
+      else stopLearningPoll();
       applyUi();
     });
   }
@@ -5580,6 +5653,7 @@ function setupRfidLearningUi(){
   window.__nwApplyRfidLearningUi = applyUi;
 
   applyUi();
+  loadRfidCustomerState().then(() => applyUi()).catch(() => {});
 }
 /**
  * Code-Teil: setupRfidBillingUi

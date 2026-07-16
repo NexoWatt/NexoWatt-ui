@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 626af08cb25b3aa08b66a1a76fc58e0ca2d44d2dd1aee0d5f14d59c42c766b10
+ * Original-Hash: d4b0dfd0e37a1d73fa6bf0f43b168c094dce15f2d0df487ebd896a746cc9ad0a
  */
 
 /**
@@ -71,9 +71,10 @@ const appTs = read('src-ts/runtime-executables/www/app.ts');
 const settingsHtml = read('www/settings.html');
 const mainTs = read('src-ts/runtime-executables/main.ts');
 const pkg = JSON.parse(read('package.json'));
-need(pkg.version === '0.8.59', 'package.json Version muss 0.8.59 sein.');
+const ioPkg = JSON.parse(read('io-package.json'));
+need(!!pkg.version && !!ioPkg.common && pkg.version === ioPkg.common.version, 'package.json und io-package.json muessen dieselbe Release-Version verwenden.');
 for (const src of [walletTs, walletJs]) {
-  need(src.includes('energyWallet.diagnostics.userWarning'), 'userWarning-State fehlt in EnergyWallet Runtime.');
+  need(src.includes('energyWallet.diagnostics.customerWarning'), 'customerWarning-State fehlt in EnergyWallet Runtime.');
   need(src.includes('energyWallet.diagnostics.installerWarning'), 'installerWarning-State fehlt in EnergyWallet Runtime.');
   need(src.includes('currentDynamicPriceAgeSec'), 'Alter des dynamischen Tarifpreises fehlt.');
   need(src.includes('currentDynamicPriceSource'), 'Quelle des dynamischen Tarifpreises fehlt.');

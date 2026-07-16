@@ -19,9 +19,10 @@ const appTs = read('src-ts/runtime-executables/www/app.ts');
 const settingsHtml = read('www/settings.html');
 const mainTs = read('src-ts/runtime-executables/main.ts');
 const pkg = JSON.parse(read('package.json'));
-need(pkg.version === '0.8.59', 'package.json Version muss 0.8.59 sein.');
+const ioPkg = JSON.parse(read('io-package.json'));
+need(!!pkg.version && !!ioPkg.common && pkg.version === ioPkg.common.version, 'package.json und io-package.json muessen dieselbe Release-Version verwenden.');
 for (const src of [walletTs, walletJs]) {
-  need(src.includes('energyWallet.diagnostics.userWarning'), 'userWarning-State fehlt in EnergyWallet Runtime.');
+  need(src.includes('energyWallet.diagnostics.customerWarning'), 'customerWarning-State fehlt in EnergyWallet Runtime.');
   need(src.includes('energyWallet.diagnostics.installerWarning'), 'installerWarning-State fehlt in EnergyWallet Runtime.');
   need(src.includes('currentDynamicPriceAgeSec'), 'Alter des dynamischen Tarifpreises fehlt.');
   need(src.includes('currentDynamicPriceSource'), 'Quelle des dynamischen Tarifpreises fehlt.');

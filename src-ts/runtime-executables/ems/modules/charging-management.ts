@@ -48,18 +48,7 @@ const { BaseModule } = require('./base');
 const { applySetpoint } = require('../consumers');
 const { ReasonCodes } = require('../reasons');
 
-/**
- * Code-Teil: chargingManagementTsRuntimeMirror
- *
- * Zweck:
- * Lädt den neuen TypeScript-Spiegel für EVCS-/Charging-Management-Vorbereitung.
- * Ab 0.7.123 übernimmt TypeScript produktiv die sicherheitsrelevanten Budget-Caps,
- * während Ladepunktverteilung und Setpoint-Schreiben weiterhin JavaScript bleiben.
- *
- * Zusammenhang:
- * Diese Brücke ist die Vorbereitung, um das sehr große charging-management.js später
- * in kleinere TypeScript-Helfer zu zerlegen.
- */
+/** Code-Teil: chargingManagementTsRuntimeMirror – Dokumentiert diesen Regelungs- oder Diagnosebaustein. */
 let chargingManagementTsRuntimeMirror = null;
 try {
     chargingManagementTsRuntimeMirror = require('../../lib/ts-mirrors/ems/charging-management/charging-management-runtime');
@@ -67,17 +56,7 @@ try {
     chargingManagementTsRuntimeMirror = null;
 }
 
-/**
- * Code-Teil: requireChargingControlTsMirror
- *
- * Zweck:
- * Lädt den TypeScript-Spiegel für den EVCS-/Charging-Management-Control-Shadow.
- *
- * Zusammenhang:
- * In 0.7.124 bleibt die produktive Ladelogik JavaScript. TypeScript bereitet den
- * Control-Shadow als rückfallfähigen Produktiv-Kandidaten vor und schreibt Diagnose
- * nach `tsControlShadowJson` sowie `tsControlProductivePrepJson`.
- */
+/** Code-Teil: requireChargingControlTsMirror – Dokumentiert diesen Regelungs- oder Diagnosebaustein. */
 function requireChargingControlTsMirror() {
     try {
         return require('../../lib/ts-mirrors/ems/charging-management/charging-control');
@@ -87,12 +66,7 @@ function requireChargingControlTsMirror() {
 }
 
 
-/**
- * Code-Teil: requireChargingAllocationTsMirror
- * Zweck: Lädt den TS-Shadow für Wallbox-Allocation. Der Spiegel berechnet in diesem
- * Kombi-Schritt noch keine ioBroker-Schreiboperationen, sondern baut den geprüften
- * Produktiv-Kandidaten für die spätere Verteilung.
- */
+/** Code-Teil: requireChargingAllocationTsMirror – Lädt den TS-Shadow für Wallbox-Allocation. Der Spiegel berechnet in diesem */
 function requireChargingAllocationTsMirror() {
     try {
         return require('../../lib/ts-mirrors/ems/charging-management/charging-allocation');
@@ -102,10 +76,7 @@ function requireChargingAllocationTsMirror() {
 }
 
 
-/**
- * Code-Teil: requireChargingPhaseSelectionTsMirror
- * Zweck: Lädt die TS-Entscheidungsschicht für AC-1p/3p-Auto-Phasenwahl im PV-Überschussladen.
- */
+/** Code-Teil: requireChargingPhaseSelectionTsMirror – Lädt die TS-Entscheidungsschicht für AC-1p/3p-Auto-Phasenwahl im PV-Überschussladen. */
 function requireChargingPhaseSelectionTsMirror() {
     try {
         return require('../../lib/ts-mirrors/ems/charging-management/charging-phase-selection');
@@ -114,11 +85,7 @@ function requireChargingPhaseSelectionTsMirror() {
     }
 }
 
-/**
- * Code-Teil: requireChargingWritePlanTsMirror
- * Zweck: Lädt den TS-Shadow für den späteren Setpoint-Write-Plan. JavaScript bleibt
- * Executor; TypeScript validiert in diesem Schritt nur die Schreibabsicht.
- */
+/** Code-Teil: requireChargingWritePlanTsMirror – Lädt den TS-Shadow für den späteren Setpoint-Write-Plan. JavaScript bleibt */
 function requireChargingWritePlanTsMirror() {
     try {
         return require('../../lib/ts-mirrors/ems/charging-management/charging-write-plan');
@@ -127,12 +94,7 @@ function requireChargingWritePlanTsMirror() {
     }
 }
 
-/**
- * Code-Teil: requireChargingNormalSourceTsMirror
- * Zweck: Lädt den TS-Lockdown für den EVCS-Normalpfad. Dieser Vertrag bündelt
- * Control, Budget-Caps, Allocation, Write-Plan und Executor als Freigabe-Gate
- * für den späteren JS-Abbau.
- */
+/** Code-Teil: requireChargingNormalSourceTsMirror – Lädt den TS-Lockdown für den EVCS-Normalpfad. Dieser Vertrag bündelt */
 function requireChargingNormalSourceTsMirror() {
     try {
         return require('../../lib/ts-mirrors/ems/charging-management/charging-normal-source');
@@ -147,33 +109,18 @@ try {
 } catch (_eChargingBudgetTsMirror) {
     chargingBudgetTsMirror = null;
 }
-/**
- * Code-Teil: toSafeIdPart
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+/** Code-Teil: toSafeIdPart – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
 function toSafeIdPart(input) {
     const s = String(input || '').trim();
     if (!s) return '';
     return s.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64);
 }
-/**
- * Code-Teil: num
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+/** Code-Teil: num – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
 function num(v, fallback = null) {
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
 }
-/**
- * Code-Teil: clamp
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+/** Code-Teil: clamp – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
 function clamp(n, min, max) {
     if (!Number.isFinite(n)) return n;
     if (Number.isFinite(min)) n = Math.max(min, n);
@@ -181,13 +128,7 @@ function clamp(n, min, max) {
     return n;
 }
 
-/**
- * Code-Teil: computePvManagedDemandIntentW
- * Zweck: Ermittelt den PV-Anteil eines aktiven Ladebedarfs unabhaengig von
- * kurzzeitigem Zaehler-/Hystereseversatz. PV-only reserviert den kompletten
- * Bedarf; Min+PV reserviert nur den Anteil oberhalb der konfigurierten
- * Mindestleistung. Normal-/Boost-Laden erzeugt keinen PV-Intent.
- */
+/** Code-Teil: computePvManagedDemandIntentW – Ermittelt den PV-Anteil eines aktiven Ladebedarfs unabhaengig von */
 function computePvManagedDemandIntentW(modeRaw, demandReserveW, minPowerW = 0) {
     const mode = String(modeRaw || '').trim().toLowerCase();
     const demandW = Math.max(0, Number(demandReserveW) || 0);
@@ -197,13 +138,7 @@ function computePvManagedDemandIntentW(modeRaw, demandReserveW, minPowerW = 0) {
     return 0;
 }
 
-/**
- * Code-Teil: computeEvcsPvBudgetReservationW
- * Zweck: Vereint tatsaechlich verwendeten PV-Anteil und aktiven PV-Ladeintent
- * zu einer stabilen zentralen EVCS-Reservierung. Die Reservierung wird immer
- * durch Gesamtbedarf und den kundenseitigen EVCS-Allocation-Cap begrenzt.
- * Ein flackerndes pvAvailable-Hysteresesignal darf sie nicht auf 0 setzen.
- */
+/** Code-Teil: computeEvcsPvBudgetReservationW – Vereint tatsaechlich verwendeten PV-Anteil und aktiven PV-Ladeintent */
 function computeEvcsPvBudgetReservationW({
     reserveW = 0,
     demandW = null,
@@ -250,6 +185,104 @@ function computeEvcsPvBudgetReservationW({
  * - Bei Min+PV wird nur der Anteil oberhalb der Mindest-/Netzgrundlast als PV
  *   reserviert; dadurch wird kein Netzbudget als vermeintlicher PV-Anteil gebucht.
  */
+
+/**
+ * Code-Teil: computeMinPvAllocationW
+ * Zweck: Berechnet den verbindlichen Min+PV-Zielwert aus zwei strikt getrennten
+ * Leistungstöpfen. Die technische Mindestleistung kommt aus dem normalen
+ * Gesamt-/Netzbudget; ausschließlich die Leistung oberhalb dieser Basis darf den
+ * zentralen PV-Grant verbrauchen.
+ *
+ * Dadurch gilt für Min+PV auch bei 0 W PV-Überschuss:
+ * - harte Anschluss-, Phasen-, §14a- und Stationslimits bleiben verbindlich,
+ * - ist die Mindestleistung innerhalb dieser Limits möglich, startet bzw. hält
+ *   der Ladepunkt seine Mindestladung,
+ * - fehlender PV-Überschuss reduziert nur die Zusatzleistung und stoppt nicht die
+ *   netzgestützte Mindestladung.
+ */
+function computeMinPvAllocationW({
+    minPowerW = 0,
+    technicalMinW = 0,
+    maxPowerW = 0,
+    totalAvailableW = Number.POSITIVE_INFINITY,
+    stationAvailableW = Number.POSITIVE_INFINITY,
+    pvAvailableW = 0,
+} = {}) {
+    const maxW = Math.max(0, Number(maxPowerW) || 0);
+    const configuredMinW = Math.max(0, Number(minPowerW) || 0);
+    const technicalW = Math.max(0, Number(technicalMinW) || 0);
+    const baseW = Math.max(0, Math.min(maxW, Math.max(configuredMinW, technicalW)));
+    const totalW = Number.isFinite(Number(totalAvailableW))
+        ? Math.max(0, Number(totalAvailableW))
+        : Number.POSITIVE_INFINITY;
+    const stationW = Number.isFinite(Number(stationAvailableW))
+        ? Math.max(0, Number(stationAvailableW))
+        : Number.POSITIVE_INFINITY;
+    const hardAvailableW = Math.max(0, Math.min(maxW, totalW, stationW));
+    const pvW = Math.max(0, Number(pvAvailableW) || 0);
+
+    if (!(maxW > 0) || !(hardAvailableW > 0)) {
+        return {
+            targetW: 0,
+            baseW,
+            pvExtraW: 0,
+            hardAvailableW,
+            reason: 'no-total-capacity',
+        };
+    }
+    if (baseW > 0 && hardAvailableW + 1e-6 < baseW) {
+        return {
+            targetW: 0,
+            baseW,
+            pvExtraW: 0,
+            hardAvailableW,
+            reason: 'below-minpv-base',
+        };
+    }
+
+    const baseTargetW = baseW > 0 ? baseW : 0;
+    const pvExtraW = Math.max(0, Math.min(pvW, hardAvailableW - baseTargetW));
+    const targetW = Math.max(0, Math.min(hardAvailableW, baseTargetW + pvExtraW));
+    return {
+        targetW,
+        baseW: baseTargetW,
+        pvExtraW,
+        hardAvailableW,
+        reason: targetW > 0
+            ? (pvExtraW > 0 ? 'minpv-base-plus-pv' : 'minpv-grid-base')
+            : 'no-pv-and-no-base',
+    };
+}
+
+
+/**
+ * Code-Teil: computeGoalPowerCapW
+ * Zweck: Uebersetzt die Zeit-/Zielladeleistung in einen technisch fahrbaren
+ * oberen Ladepunkt-Cap. Im Modus Min+PV darf ein positiver Ziel-Ladewunsch die
+ * netzgestuetzte Mindestleistung nicht unterbieten; sonst wuerde ein rechnerisch
+ * kleiner Durchschnittswert (z. B. 2 kW) nach der 6-A-Quantisierung zu 0 W und
+ * die gewollte unterbrechungsfreie Mindestladung stoppen.
+ *
+ * Harte Anschluss-, Phasen-, §14a-, Stations- und Wallbox-Caps werden bereits
+ * vor beziehungsweise nach diesem Ziel-Cap angewendet und bleiben verbindlich.
+ */
+function computeGoalPowerCapW({
+    mode = '',
+    desiredW = 0,
+    minPvBaseW = 0,
+    maxPowerW = Number.POSITIVE_INFINITY,
+} = {}) {
+    const normalizedMode = String(mode || '').trim().toLowerCase();
+    const maxW = Number.isFinite(Number(maxPowerW))
+        ? Math.max(0, Number(maxPowerW))
+        : Number.POSITIVE_INFINITY;
+    let capW = Math.max(0, Number(desiredW) || 0);
+    if (normalizedMode === 'minpv' && capW > 0) {
+        capW = Math.max(capW, Math.max(0, Number(minPvBaseW) || 0));
+    }
+    return Math.max(0, Math.min(maxW, capW));
+}
+
 function computePendingPvStartIntentW({
     mode = '',
     enabled = false,
@@ -310,7 +343,7 @@ function computePendingPvStartIntentW({
         ? Math.max(0, Number(stationRemainingW))
         : Number.POSITIVE_INFINITY;
     const pvAvailW = Math.max(0, Number(pvRemainingW) || 0);
-    if (maxW <= 0 || pvAvailW <= 0) {
+    if (maxW <= 0 || (isPvOnly && pvAvailW <= 0)) {
         return { intentW: 0, totalDemandW: 0, reason: 'no-capacity' };
     }
 
@@ -337,22 +370,27 @@ function computePendingPvStartIntentW({
         };
     }
 
-    // Min+PV benoetigt zunaechst seine Mindestleistung aus dem normalen
-    // Gesamtbudget. Nur die darueber hinaus moegliche Leistung ist PV-Intent.
-    if (minW > 0 && potentialTotalW < minW) {
+    // Min+PV benoetigt zunaechst seine technische Mindestleistung aus dem
+    // normalen Gesamtbudget. Fehlender PV-Ueberschuss darf nur die Zusatzleistung
+    // begrenzen, niemals die netzgestuetzte Mindestladung selbst blockieren.
+    const minPvBaseW = Math.max(0, Math.min(maxW, Math.max(minW, technicalW)));
+    if (minPvBaseW > 0 && potentialTotalW + 1e-6 < minPvBaseW) {
         return { intentW: 0, totalDemandW: 0, reason: 'below-minpv-base' };
     }
-    const desiredPvTotalW = Math.max(0, potentialTotalW - Math.min(minW, potentialTotalW));
+    const desiredPvTotalW = Math.max(0, potentialTotalW - Math.min(minPvBaseW, potentialTotalW));
     const intentGapW = Math.max(0, desiredPvTotalW - currentIntentW);
     const intentW = Math.max(0, Math.min(intentGapW, pvAvailW));
-    if (intentW <= 0) {
+    const missingBaseW = currentW >= minPvBaseW ? 0 : Math.max(0, minPvBaseW - currentW);
+    const totalDemandW = Math.max(0, missingBaseW + intentW);
+    if (totalDemandW <= 0) {
         return { intentW: 0, totalDemandW: 0, reason: 'covered' };
     }
-    const missingBaseW = currentW >= minW ? 0 : Math.max(0, minW - currentW);
     return {
         intentW,
-        totalDemandW: Math.max(0, missingBaseW + intentW),
-        reason: currentW >= thresholdW ? 'minpv-ramp-intent' : 'minpv-start-intent',
+        totalDemandW,
+        reason: currentW >= thresholdW
+            ? (intentW > 0 ? 'minpv-ramp-intent' : 'minpv-grid-base-hold-intent')
+            : (intentW > 0 ? 'minpv-start-intent' : 'minpv-grid-base-start-intent'),
     };
 }
 
@@ -430,26 +468,57 @@ function resolveChargingPvBudgetControl({
             ? Math.max(0, Number(allocation.evcsCapW))
             : allocationTotalW;
         const allocationLimitedW = Math.max(0, Math.min(allocationTotalW, allocationCapW));
-        const centralGrant = typeof rt.getPvGrant === 'function'
+
+        // Zwei zentrale PV-Grants sind absichtlich getrennt:
+        // - physicalGrantW: gesamtes aktuell physikalisch verfuegbares PV-Budget.
+        //   Dieses darf Min+PV fuer seine Zusatzleistung verwenden, weil seine
+        //   Mindestleistung bereits aus dem normalen Gesamt-/Netzbudget kommt.
+        // - priorityGrantW: kundenseitiger Speicher/E-Mobilitaets-Anteil. Dieser
+        //   begrenzt ausschliesslich reine PV-Ladepunkte.
+        // Beide Werte stammen aus derselben Core-Budget-Runtime; es entsteht kein
+        // lokales Parallelbudget im Lademanagement.
+        const physicalGrant = typeof rt.getPvGrant === 'function'
+            ? rt.getPvGrant({
+                key: 'evcs',
+                requestedW: allocationTotalW,
+                maxW: allocationTotalW,
+                applyEvcsAllocationCap: false,
+            })
+            : (typeof rt.grant === 'function'
+                ? rt.grant({
+                    key: 'evcs',
+                    requestedW: allocationTotalW,
+                    maxW: allocationTotalW,
+                    pvOnly: true,
+                    applyEvcsAllocationCap: false,
+                })
+                : null);
+        const physicalGrantW = physicalGrant && Number.isFinite(Number(physicalGrant.grantW))
+            ? Math.max(0, Math.min(allocationTotalW, Number(physicalGrant.grantW)))
+            : allocationTotalW;
+
+        const priorityGrant = typeof rt.getPvGrant === 'function'
             ? rt.getPvGrant({ key: 'evcs', requestedW: allocationLimitedW, maxW: allocationLimitedW })
             : (typeof rt.grant === 'function'
                 ? rt.grant({ key: 'evcs', requestedW: allocationLimitedW, maxW: allocationLimitedW, pvOnly: true })
                 : null);
-        const evcsCapW = centralGrant && Number.isFinite(Number(centralGrant.grantW))
-            ? Math.max(0, Math.min(allocationLimitedW, Number(centralGrant.grantW)))
-            : allocationLimitedW;
+        const evcsCapW = priorityGrant && Number.isFinite(Number(priorityGrant.grantW))
+            ? Math.max(0, Math.min(physicalGrantW, allocationLimitedW, Number(priorityGrant.grantW)))
+            : Math.max(0, Math.min(physicalGrantW, allocationLimitedW));
         return {
             authoritative: true,
             source: 'central-ems-budget',
             ageMs,
             rawW: Math.max(0, Number(pvGate.rawW) || 0),
-            totalW: allocationTotalW,
+            totalW: physicalGrantW,
             evcsCapW,
             allocation: allocation || {},
             localRawW: localRaw,
             localEffectiveW: localEffective,
             mismatchW: evcsCapW - localEffective,
             centralGrantW: evcsCapW,
+            physicalGrantW,
+            priorityGrantW: evcsCapW,
         };
     }
 
@@ -493,12 +562,7 @@ function resolveChargingPvBudgetControl({
         mismatchW: 0,
     };
 }
-/**
- * Code-Teil: toBool
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+/** Code-Teil: toBool – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
 function toBool(v) {
     if (v === null || v === undefined) return null;
     if (typeof v === 'boolean') return v;
@@ -524,12 +588,7 @@ function toBool(v) {
  * @param {number|null} [fallback=null]
  * @returns {number|null}
  */
-/**
- * Code-Teil: normalizePriceEurPerKwh
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+/** Code-Teil: normalizePriceEurPerKwh – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
 function normalizePriceEurPerKwh(v, fallback = null) {
     let n = (typeof v === 'number') ? v : num(v, fallback);
     if (!Number.isFinite(n)) return fallback;
@@ -554,12 +613,7 @@ function normalizePriceEurPerKwh(v, fallback = null) {
  * @param {any} raw
  * @returns {Array<{startMs:number,endMs:number,priceEurKwh:number}>}
  */
-/**
- * Code-Teil: parsePriceCurve
- * Zweck: Parst Rohdaten in ein sicheres internes Format.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+/** Code-Teil: parsePriceCurve – Parst Rohdaten in ein sicheres internes Format. */
 function parsePriceCurve(raw) {
     if (raw === null || raw === undefined) return [];
 
@@ -588,18 +642,8 @@ function parsePriceCurve(raw) {
 
     // Numeric array without timestamps → assume hourly from current full hour
     try {
-        /**
-         * Code-Teil: Arrow-Funktion `isNumLike`
-         * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-         */
-        /**
-         * Code-Teil: isNumLike
-         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-         */
+        /** Code-Teil: Arrow-Funktion `isNumLike` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
+        /** Code-Teil: isNumLike – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
         const isNumLike = (v) => {
             if (typeof v === 'number') return Number.isFinite(v);
             if (typeof v === 'string') {
@@ -715,12 +759,7 @@ function parsePriceCurve(raw) {
  * @param {number} ts
  * @returns {number}
  */
-/**
- * Code-Teil: quantizeTsTo15Min
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+/** Code-Teil: quantizeTsTo15Min – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
 function quantizeTsTo15Min(ts) {
     const n = Number(ts);
     if (!Number.isFinite(n) || n <= 0) return 0;
@@ -745,12 +784,7 @@ function quantizeTsTo15Min(ts) {
  * @param {number} nowMs
  * @returns {number}
  */
-/**
- * Code-Teil: nextOccurrenceSameClock
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+/** Code-Teil: nextOccurrenceSameClock – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
 function nextOccurrenceSameClock(deadlineTs, nowMs) {
     const n = Number(deadlineTs);
     const now = Number(nowMs);
@@ -772,12 +806,7 @@ function nextOccurrenceSameClock(deadlineTs, nowMs) {
         return n;
     }
 }
-/**
- * Code-Teil: floorToStep
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+/** Code-Teil: floorToStep – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
 function floorToStep(value, step) {
     const v = Number(value);
     const s = Number(step);
@@ -786,12 +815,7 @@ function floorToStep(value, step) {
     // Always round DOWN to avoid budget overshoot / limit violations
     return Math.floor(v / s) * s;
 }
-/**
- * Code-Teil: rampUp
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+/** Code-Teil: rampUp – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
 function rampUp(prevValue, targetValue, maxDeltaUp) {
     const t = Number(targetValue);
     const p = Number(prevValue);
@@ -802,12 +826,7 @@ function rampUp(prevValue, targetValue, maxDeltaUp) {
     if (t <= p) return t; // never limit ramp-down (safety)
     return (t > (p + d)) ? (p + d) : t;
 }
-/**
- * Code-Teil: choosePositiveMin
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+/** Code-Teil: choosePositiveMin – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
 function choosePositiveMin(...values) {
     let best = 0;
     for (const raw of values) {
@@ -817,12 +836,7 @@ function choosePositiveMin(...values) {
     }
     return best > 0 ? best : 0;
 }
-/**
- * Code-Teil: availabilityReason
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+/** Code-Teil: availabilityReason – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
 function availabilityReason(cfgEnabled, userEnabled, online) {
     if (!cfgEnabled) return ReasonCodes.DISABLED;
     if (!userEnabled) return ReasonCodes.CONTROL_DISABLED;
@@ -830,11 +844,7 @@ function availabilityReason(cfgEnabled, userEnabled, online) {
     return ReasonCodes.SKIPPED;
 }
 
-/**
- * Code-Teil: normalizeEvcsOnlineFlag
- * Zweck: Normalisiert echte Wallbox-Erreichbarkeit aus bool/number/string Datenpunkten.
- * Zusammenhang: EVCS Online-Gate und VIS-Zustand; explizite onlineId-Werte sind authoritative.
- */
+/** Code-Teil: normalizeEvcsOnlineFlag – Normalisiert echte Wallbox-Erreichbarkeit aus bool/number/string Datenpunkten. */
 function normalizeEvcsOnlineFlag(value, fallback = null) {
     if (value === true || value === false) return value;
     if (typeof value === 'number' && Number.isFinite(value)) return value !== 0;
@@ -846,34 +856,19 @@ function normalizeEvcsOnlineFlag(value, fallback = null) {
     }
     return fallback;
 }
-/**
- * Code-Teil: normalizeChargerType
- * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+/** Code-Teil: normalizeChargerType – Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit. */
 function normalizeChargerType(v) {
     const s = String(v || 'AC').trim().toUpperCase();
     return (s === 'DC') ? 'DC' : 'AC';
 }
-/**
- * Code-Teil: normalizeControlBasis
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+/** Code-Teil: normalizeControlBasis – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
 function normalizeControlBasis(v) {
     const s = String(v || 'auto').trim().toLowerCase();
     if (s === 'currenta' || s === 'a' || s === 'current') return 'currentA';
     if (s === 'powerw' || s === 'w' || s === 'power') return 'powerW';
     return 'auto';
 }
-/**
- * Code-Teil: normalizeWallboxModeOverride
- * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+/** Code-Teil: normalizeWallboxModeOverride – Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit. */
 function normalizeWallboxModeOverride(v) {
     const raw = (v === null || v === undefined) ? '' : String(v);
     const s = raw.trim().toLowerCase();
@@ -892,12 +887,7 @@ function normalizeWallboxModeOverride(v) {
     return 'auto';
 }
 
-/**
- * Code-Teil: Klasse `ChargingManagementModule`
- * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
- * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
- * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
- */
+/** Code-Teil: Klasse `ChargingManagementModule` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
 // Klassen-Kommentar: Klasse: ChargingManagementModule. Aufgabe: kapselt eine fachliche Teilaufgabe dieser Datei. Beim TypeScript-Umbau Eingaben, Rückgaben und Seiteneffekte typisieren. Zusammenhang: Wallbox-/EVCS-Lademanagement und Zielladen.
 /**
  * Klasse: ChargingManagementModule
@@ -906,12 +896,7 @@ function normalizeWallboxModeOverride(v) {
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 class ChargingManagementModule extends BaseModule {
-    /**
-     * Code-Teil: constructor
-     * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
-     * Zusammenhang: Gehört zu EMS-Modul (Regelungs-, Diagnose- oder Beratungslogik innerhalb der EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
-     * Wartung/TypeScript: Änderungen an Signatur oder Rückgabe können abhängige Aufrufer beeinflussen; Aufrufstellen mitprüfen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
-     */
+    /** Code-Teil: constructor – Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand. */
     constructor(adapter, dpRegistry) {
         super(adapter, dpRegistry);
         this._known = new Set(); // wallbox channels created
@@ -997,21 +982,7 @@ class ChargingManagementModule extends BaseModule {
     }
 
 
-    /**
-     * Code-Teil: _publishChargingControlTsShadow
-     *
-     * Zweck:
-     * Berechnet und veröffentlicht den TypeScript-Shadow-Plan für EVCS/Charging-Management.
-     *
-     * Zusammenhang:
-     * Die produktive EVCS-Ladelogik bleibt in 0.7.124 JavaScript. Diese Methode baut den
-     * typisierten Vergleichsstatus plus einen Produktiv-Kandidaten für Control-/Summary-
-     * Werte, damit die spätere Übernahme kontrolliert und rückfallfähig bleibt.
-     *
-     * Wichtig:
-     * Fehler im TS-Spiegel dürfen die Ladefunktion nicht abbrechen. Deshalb wird jeder
-     * Fehler in JSON-Diagnose geschrieben und der JS-Pfad bleibt führend.
-     */
+    /** Code-Teil: _publishChargingControlTsShadow – Dokumentiert diesen Regelungs- oder Diagnosebaustein. */
     async _publishChargingControlTsShadow(input) {
         const mirror = requireChargingControlTsMirror();
         let status;
@@ -1186,14 +1157,7 @@ class ChargingManagementModule extends BaseModule {
         return status;
     }
 
-    /**
-     * Code-Teil: _publishChargingAllocationTsShadow
-     *
-     * Zweck:
-     * Veröffentlicht den TypeScript-Shadow für Wallbox-Allocation plus Setpoint-Write-Plan.
-     * Das ist der beschleunigte Kombi-Schritt: Zielverteilung wird typisiert gespiegelt
-     * und produktiv vorbereitet, während JavaScript weiterhin die realen Setpoints schreibt.
-     */
+    /** Code-Teil: _publishChargingAllocationTsShadow – Dokumentiert diesen Regelungs- oder Diagnosebaustein. */
     async _publishChargingAllocationTsShadow(input) {
         const allocationMirror = requireChargingAllocationTsMirror();
         const writePlanMirror = requireChargingWritePlanTsMirror();
@@ -1548,11 +1512,7 @@ class ChargingManagementModule extends BaseModule {
         return { phasePlan, shadow, productivePrep, productiveDecision, normalSourceDecision, writePlan, writePlanProductivePrep, writePlanProductive };
     }
 
-    /**
-     * Code-Teil: _mapChargingWallboxesForTsAllocation
-     * Zweck: Normalisiert die aktuelle Runtime-Wallboxliste für den TypeScript-Allocation-/Write-Plan.
-     * Dadurch verwenden Normalpfad, Peak-Rampdown und Failsafe denselben TS-Vertrag.
-     */
+    /** Code-Teil: _mapChargingWallboxesForTsAllocation – Normalisiert die aktuelle Runtime-Wallboxliste für den TypeScript-Allocation-/Write-Plan. */
     _mapChargingWallboxesForTsAllocation(wbList) {
         return (Array.isArray(wbList) ? wbList : []).map(w => ({
             safe: w && w.safe,
@@ -1625,13 +1585,7 @@ class ChargingManagementModule extends BaseModule {
     }
 
 
-    /**
-     * Code-Teil: _publishChargingStationDiagnosticsFromAllocationPlan
-     * Zweck: Spiegelt Stationsverbrauch und Restleistung aus dem finalen TS-geprueften
-     * Write-Plan. Dadurch zeigen UI und Diagnose exakt denselben Plan, der danach auf
-     * die Ladepunkte geschrieben wird; alte Vorberechnungen koennen die Anzeige nicht
-     * mehr von den tatsaechlichen Stationslimits entkoppeln.
-     */
+    /** Code-Teil: _publishChargingStationDiagnosticsFromAllocationPlan – Spiegelt Stationsverbrauch und Restleistung aus dem finalen TS-geprueften */
     async _publishChargingStationDiagnosticsFromAllocationPlan(allocationState, wbList) {
         try {
             const normalDecision = allocationState && allocationState.normalSourceDecision;
@@ -1712,14 +1666,7 @@ class ChargingManagementModule extends BaseModule {
     }
 
 
-    /**
-     * Code-Teil: _buildChargingFinalAllocationMetrics
-     * Zweck: Leitet die zentrale EVCS-Reservierung ausschließlich aus dem finalen,
-     * budget-/PV-/stationsgeprüften Allocation-Plan ab. Dadurch sehen Speicher,
-     * Thermik und Heizstab exakt dieselben Ladepunktziele, die anschließend über
-     * den Write-Plan ausgeführt werden; vorgelagerte Rohziele können kein Budget
-     * mehr reservieren, das der finale Stations- oder Mindestleistungs-Guard verworfen hat.
-     */
+    /** Code-Teil: _buildChargingFinalAllocationMetrics – Leitet die zentrale EVCS-Reservierung ausschließlich aus dem finalen, */
     _buildChargingFinalAllocationMetrics(allocationState, wbList, activityThresholdW = 100) {
         try {
             const normalDecision = allocationState && allocationState.normalSourceDecision;
@@ -1799,10 +1746,7 @@ class ChargingManagementModule extends BaseModule {
         }
     }
 
-    /**
-     * Code-Teil: _publishChargingPhaseSelectionRuntimeStates
-     * Zweck: Übernimmt Hysterese-/Cooldown-Zustände aus der TS-Phasenwahl und veröffentlicht lesbare Diagnose pro Ladepunkt.
-     */
+    /** Code-Teil: _publishChargingPhaseSelectionRuntimeStates – Übernimmt Hysterese-/Cooldown-Zustände aus der TS-Phasenwahl und veröffentlicht lesbare Diagnose pro Ladepunkt. */
     async _publishChargingPhaseSelectionRuntimeStates(phasePlan, wbList) {
         const decisions = phasePlan && Array.isArray(phasePlan.wallboxes) ? phasePlan.wallboxes : [];
         const bySafe = new Map((Array.isArray(wbList) ? wbList : []).filter(w => w && w.safe).map(w => [String(w.safe), w]));
@@ -1831,12 +1775,7 @@ class ChargingManagementModule extends BaseModule {
         }
     }
 
-    /**
-     * Code-Teil: _publishChargingNormalSourceState
-     * Zweck: Veröffentlicht den EVCS-TypeScript-Normalquellen-Lockdown. Dieser Status
-     * fasst zusammen, ob Control, Budget-Caps, Allocation und Write-Plan gleichzeitig
-     * produktiv sind und JavaScript nur noch ioBroker-Executor bzw. harter Notfallback ist.
-     */
+    /** Code-Teil: _publishChargingNormalSourceState – Veröffentlicht den EVCS-TypeScript-Normalquellen-Lockdown. Dieser Status */
     async _publishChargingNormalSourceState(inputOrTsAllocationState, tsWritePlanProductive = null, tsWritePlanUsed = false, debugAlloc = [], context = 'normal', legacyFallbackReason = '', legacyDecisionTree = null) {
         const mirror = requireChargingNormalSourceTsMirror();
         let payload = null;
@@ -1951,13 +1890,7 @@ class ChargingManagementModule extends BaseModule {
         return payload;
     }
 
-    /**
-     * Code-Teil: _publishChargingEvcsJavascriptRemovalState
-     * Zweck: Veröffentlicht das finale TypeScript-Freigabe-Gate für den Abbau des
-     * alten EVCS-JavaScript-Entscheidungsbaums. Wichtig: Node/ioBroker führt am Ende
-     * weiterhin generiertes JavaScript aus; fachliche EVCS-Entscheidungen liegen bei
-     * grünem Gate aber vollständig in TypeScript.
-     */
+    /** Code-Teil: _publishChargingEvcsJavascriptRemovalState – Veröffentlicht das finale TypeScript-Freigabe-Gate für den Abbau des */
     async _publishChargingEvcsJavascriptRemovalState(normalSourcePayload, input = {}) {
         const mirror = requireChargingNormalSourceTsMirror();
         let payload = null;
@@ -2028,10 +1961,7 @@ class ChargingManagementModule extends BaseModule {
         return payload;
     }
 
-    /**
-     * Code-Teil: _publishChargingLegacyDecisionTreeState
-     * Zweck: Schreibt die kompakte EVCS-Handover-Diagnose für TS-Write-Plan, JS-Executor und JS-Fallback.
-     */
+    /** Code-Teil: _publishChargingLegacyDecisionTreeState – Schreibt die kompakte EVCS-Handover-Diagnose für TS-Write-Plan, JS-Executor und JS-Fallback. */
     async _publishChargingLegacyDecisionTreeState(tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, debugAlloc, context = 'normal', legacyFallbackReason = '') {
         const fallbackReason = tsWritePlanUsed ? '' : (legacyFallbackReason || (tsWritePlanProductive && tsWritePlanProductive.fallbackReason) || 'ts-write-plan-not-productive');
         const normalSourceDecision = tsAllocationState && tsAllocationState.normalSourceDecision ? tsAllocationState.normalSourceDecision : null;
@@ -2122,12 +2052,7 @@ class ChargingManagementModule extends BaseModule {
         return legacyDecisionTree;
     }
 
-    /**
-     * Code-Teil: _publishChargingTsNormalSourceState
-     * Zweck: Verdichtet den EVCS-Handover zu einem TS-Normalquellen-Status.
-     * Dadurch ist pro Tick sichtbar, ob Control/Budget/Allocation/Write-Plan
-     * produktiv aus TypeScript laufen und JavaScript nur noch Executor ist.
-     */
+    /** Code-Teil: _publishChargingTsNormalSourceState – Verdichtet den EVCS-Handover zu einem TS-Normalquellen-Status. */
     async _publishChargingTsNormalSourceState(context, tsAllocationState, tsWritePlanProductive, tsWritePlanUsed, legacyFallbackReason = '', safetyStop = false) {
         const mirror = requireChargingNormalSourceTsMirror();
         let payload = null;
@@ -2205,11 +2130,7 @@ class ChargingManagementModule extends BaseModule {
         return payload;
     }
 
-    /**
-     * Code-Teil: _executeChargingSetpointEntries
-     * Zweck: Führt einen bereits berechneten Setpoint-Plan aus. Die fachliche Zielentscheidung
-     * kommt im Normalfall aus TypeScript; diese Methode bleibt bewusst nur ioBroker-Executor.
-     */
+    /** Code-Teil: _executeChargingSetpointEntries – Führt einen bereits berechneten Setpoint-Plan aus. Die fachliche Zielentscheidung */
     async _executeChargingSetpointEntries(entries, wbList, debugAlloc, executorSource, fallbackReason = '') {
         const result = {
             source: executorSource || 'unknown',
@@ -2424,10 +2345,7 @@ class ChargingManagementModule extends BaseModule {
         return result;
     }
 
-    /**
-     * Code-Teil: _executeChargingTsSetpointPlan
-     * Zweck: Führt den produktiven TypeScript-Write-Plan über den JS/ioBroker-Executor aus.
-     */
+    /** Code-Teil: _executeChargingTsSetpointPlan – Führt den produktiven TypeScript-Write-Plan über den JS/ioBroker-Executor aus. */
     async _executeChargingTsSetpointPlan(writePlanProductive, wbList, debugAlloc) {
         const entries = writePlanProductive && writePlanProductive.productive && writePlanProductive.apply && Array.isArray(writePlanProductive.apply.entries)
             ? writePlanProductive.apply.entries
@@ -2437,11 +2355,7 @@ class ChargingManagementModule extends BaseModule {
         return !!(result && result.ok === true);
     }
 
-    /**
-     * Code-Teil: _executeChargingLegacySetpointFallback
-     * Zweck: Nutzt die bisherigen JS-Zielwerte nur noch als Fallback, wenn der TS-Write-Plan
-     * nicht produktiv freigegeben werden konnte.
-     */
+    /** Code-Teil: _executeChargingLegacySetpointFallback – Nutzt die bisherigen JS-Zielwerte nur noch als Fallback, wenn der TS-Write-Plan */
     async _executeChargingLegacySetpointFallback(wbList, debugAlloc, fallbackReason = 'ts-write-plan-fallback') {
         const bySafe = new Map();
         for (const w of Array.isArray(wbList) ? wbList : []) {
@@ -2479,18 +2393,8 @@ class ChargingManagementModule extends BaseModule {
      * @param {string} id
      * @returns {{deadband?:number,minIntervalMs?:number}}
      */
-    /**
-     * Code-Teil: Methode `_pubDefaults`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _pubDefaults
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+    /** Code-Teil: Methode `_pubDefaults` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
+    /** Code-Teil: _pubDefaults – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
     _pubDefaults(id) {
         const s = String(id || '');
         if (!s) return {};
@@ -2515,18 +2419,8 @@ class ChargingManagementModule extends BaseModule {
      * @param {number} sampleW
      * @returns {number} avgW
      */
-    /**
-     * Code-Teil: Methode `_pvSurplusAvgPush`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _pvSurplusAvgPush
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+    /** Code-Teil: Methode `_pvSurplusAvgPush` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
+    /** Code-Teil: _pvSurplusAvgPush – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
     _pvSurplusAvgPush(bucketKey, nowMs, sampleW) {
         const buckets = this._pvSurplusAvg || {};
         const bucket = buckets && Object.prototype.hasOwnProperty.call(buckets, bucketKey) ? buckets[bucketKey] : null;
@@ -2562,18 +2456,8 @@ class ChargingManagementModule extends BaseModule {
         return bucket.sumW / count;
     }
 
-    /**
-     * Code-Teil: Methode `_getAdapterNumberFromCache`
-     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _getAdapterNumberFromCache
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+    /** Code-Teil: Methode `_getAdapterNumberFromCache` – liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik. */
+    /** Code-Teil: _getAdapterNumberFromCache – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
     _getAdapterNumberFromCache(key, fallback = null) {
         const sid = String(key || '').trim();
         if (!sid) return fallback;
@@ -2608,18 +2492,8 @@ class ChargingManagementModule extends BaseModule {
      * @param {{deadband?:number,minIntervalMs?:number}} [opts]
      * @returns {Promise<true|null>}
      */
-    /**
-     * Code-Teil: Methode `_queueState`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _queueState
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+    /** Code-Teil: Methode `_queueState` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
+    /** Code-Teil: _queueState – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
     async _queueState(id, value, ack = true, opts = null) {
         const sid = String(id || '').trim();
         if (!sid) return null;
@@ -2674,18 +2548,8 @@ class ChargingManagementModule extends BaseModule {
      * @param {string} id
      * @returns {Promise<{val:any,ts:number,lc?:number,ack?:boolean}|null>}
      */
-    /**
-     * Code-Teil: Methode `_getStateCached`
-     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _getStateCached
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+    /** Code-Teil: Methode `_getStateCached` – liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik. */
+    /** Code-Teil: _getStateCached – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
     async _getStateCached(id) {
         const sid = String(id || '').trim();
         if (!sid) return null;
@@ -2738,18 +2602,8 @@ class ChargingManagementModule extends BaseModule {
         }
     }
 
-    /**
-     * Code-Teil: Methode `_setTimeout`
-     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _setTimeout
-     * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+    /** Code-Teil: Methode `_setTimeout` – schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen. */
+    /** Code-Teil: _setTimeout – Schreibt interne States oder veröffentlichte Runtime-Werte. */
     _setTimeout(fn, ms) {
         const a = this.adapter;
         if (!a || a._nwShuttingDown || typeof fn !== 'function') return null;
@@ -2761,12 +2615,7 @@ class ChargingManagementModule extends BaseModule {
             ? a._nwSetTimeout(guarded, ms)
             : ((typeof a.setTimeout === 'function') ? a.setTimeout(guarded, ms) : setTimeout(guarded, ms));
     }
-    /**
-     * Code-Teil: _clearTimeout
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+    /** Code-Teil: _clearTimeout – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
     _clearTimeout(timer) {
         if (!timer) return;
         const a = this.adapter;
@@ -2774,18 +2623,8 @@ class ChargingManagementModule extends BaseModule {
         else clearTimeout(timer);
     }
 
-    /**
-     * Code-Teil: Methode `_schedulePubFlush`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _schedulePubFlush
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+    /** Code-Teil: Methode `_schedulePubFlush` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
+    /** Code-Teil: _schedulePubFlush – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
     _schedulePubFlush() {
         if (!this.adapter || this.adapter._nwShuttingDown) {
             this._pubQueue.clear();
@@ -2804,18 +2643,8 @@ class ChargingManagementModule extends BaseModule {
         }, delay);
     }
 
-    /**
-     * Code-Teil: Methode `_flushPubQueue`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _flushPubQueue
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+    /** Code-Teil: Methode `_flushPubQueue` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
+    /** Code-Teil: _flushPubQueue – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
     async _flushPubQueue() {
         if (!this.adapter || this.adapter._nwShuttingDown) {
             this._pubQueue.clear();
@@ -2853,24 +2682,9 @@ class ChargingManagementModule extends BaseModule {
         }
     }
 
-    /**
-     * Code-Teil: Methode `_isEnabled`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _isEnabled
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    /**
-     * Code-Teil: stop
-     * Zweck: Leert die gebündelte Diagnose-/State-Publish-Queue beim Adapter-Unload.
-     * Zusammenhang: Die Queue arbeitet mit einem kurzen Timer und darf nach gesetztem
-     * Shutdown-Guard keinen weiteren Timerzyklus erzeugen.
-     */
+    /** Code-Teil: Methode `_isEnabled` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
+    /** Code-Teil: _isEnabled – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
+    /** Code-Teil: stop – Leert die gebündelte Diagnose-/State-Publish-Queue beim Adapter-Unload. */
     stop() {
         if (this._pubFlushTimer) {
             try { this._clearTimeout(this._pubFlushTimer); } catch (_e) {}
@@ -2905,18 +2719,8 @@ class ChargingManagementModule extends BaseModule {
         return false;
     }
 
-    /**
-     * Code-Teil: Methode `init`
-     * Zweck: initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: init
-     * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+    /** Code-Teil: Methode `init` – initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor. */
+    /** Code-Teil: init – Initialisiert diesen Bereich und verbindet abhängige Startlogik. */
     async init() {
         if (!this._isEnabled()) return;
 
@@ -2944,18 +2748,8 @@ class ChargingManagementModule extends BaseModule {
             native: {},
         });
 
-        /**
-         * Code-Teil: Arrow-Funktion `mk`
-         * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
-         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-         */
-        /**
-         * Code-Teil: mk
-         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-         */
+        /** Code-Teil: Arrow-Funktion `mk` – stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben. */
+        /** Code-Teil: mk – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
         const mk = async (id, name, type, role) => {
             await this.adapter.setObjectNotExistsAsync(id, {
                 type: 'state',
@@ -3059,7 +2853,10 @@ class ChargingManagementModule extends BaseModule {
 
         // Gate B: PV hysteresis diagnostics
         await mk('chargingManagement.control.pvCapRawW', 'PV surplus raw cap (W)', 'number', 'value.power');
-        await mk('chargingManagement.control.pvCapEffectiveW', 'PV cap effective (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvCapEffectiveW', 'Pure-PV customer-priority cap after hysteresis (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvPureCapW', 'Pure-PV customer-priority cap (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvPhysicalCapW', 'Physical PV cap for PV and Min+PV extra power (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvPriorityPurePvOnly', 'Customer PV priority applies to pure PV mode only', 'boolean', 'indicator');
         await mk('chargingManagement.control.pvAvailable', 'PV available (hysteresis)', 'boolean', 'indicator');
         await mk('chargingManagement.control.pvAllocationMode', 'PV surplus allocation mode', 'string', 'text');
         await mk('chargingManagement.control.pvAllocationEvcsSharePct', 'PV surplus EVCS share (%)', 'number', 'value.percent');
@@ -3134,18 +2931,8 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.debug.tsRuntimePrepJson', 'Charging Management TS runtime preparation/shadow (JSON)', 'string', 'json');
     }
 
-    /**
-     * Code-Teil: Methode `_ensureWallboxChannel`
-     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _ensureWallboxChannel
-     * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+    /** Code-Teil: Methode `_ensureWallboxChannel` – stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben. */
+    /** Code-Teil: _ensureWallboxChannel – Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit. */
     async _ensureWallboxChannel(key) {
         const safe = toSafeIdPart(key);
         const ch = `chargingManagement.wallboxes.${safe}`;
@@ -3163,12 +2950,7 @@ class ChargingManagementModule extends BaseModule {
             native: {},
         });
 
-        /**
-         * Code-Teil: Arrow-Funktion `mk`
-         * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
-         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-         */
+        /** Code-Teil: Arrow-Funktion `mk` – stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben. */
         const mk = async (id, name, type, role, write = false, extraCommon = null) => {
             const common = Object.assign({ name, type, role, read: true, write: !!write }, extraCommon || {});
             await this.adapter.setObjectNotExistsAsync(`${ch}.${id}`, {
@@ -3388,18 +3170,8 @@ class ChargingManagementModule extends BaseModule {
     }
 
 
-    /**
-     * Code-Teil: Methode `_ensureStationChannel`
-     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _ensureStationChannel
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+    /** Code-Teil: Methode `_ensureStationChannel` – stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben. */
+    /** Code-Teil: _ensureStationChannel – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
     async _ensureStationChannel(stationKey) {
         const safe = toSafeIdPart(stationKey);
         const ch = `chargingManagement.stations.${safe}`;
@@ -3417,18 +3189,8 @@ class ChargingManagementModule extends BaseModule {
             native: {},
         });
 
-        /**
-         * Code-Teil: Arrow-Funktion `mk`
-         * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
-         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-         */
-        /**
-         * Code-Teil: mk
-         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-         */
+        /** Code-Teil: Arrow-Funktion `mk` – stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben. */
+        /** Code-Teil: mk – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
         const mk = async (id, name, type, role) => {
             await this.adapter.setObjectNotExistsAsync(`${ch}.${id}`, {
                 type: 'state',
@@ -3456,18 +3218,8 @@ class ChargingManagementModule extends BaseModule {
     }
 
 
-    /**
-     * Code-Teil: Methode `_getPeakShavingActive`
-     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _getPeakShavingActive
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+    /** Code-Teil: Methode `_getPeakShavingActive` – liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik. */
+    /** Code-Teil: _getPeakShavingActive – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
     async _getPeakShavingActive() {
         // Prefer centralized snapshot (Phase 4.0)
         try {
@@ -3486,18 +3238,8 @@ class ChargingManagementModule extends BaseModule {
         }
     }
 
-    /**
-     * Code-Teil: Methode `_getPeakShavingBudgetW`
-     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _getPeakShavingBudgetW
-     * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+    /** Code-Teil: Methode `_getPeakShavingBudgetW` – liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik. */
+    /** Code-Teil: _getPeakShavingBudgetW – Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History. */
     async _getPeakShavingBudgetW() {
         // Prefer centralized snapshot (Phase 4.0)
         try {
@@ -3517,23 +3259,7 @@ class ChargingManagementModule extends BaseModule {
         }
     }
 
-    /**
-     * Code-Teil: _runChargingBudgetTsProductive
-     *
-     * Zweck:
-     * Berechnet die sicherheitsrelevanten EVCS-/Charging-Budget-Caps über TypeScript
-     * und übernimmt sie produktiv, wenn der JS/TS-Vergleich sauber ist.
-     *
-     * Zusammenhang:
-     * Dieser Schritt übernimmt nur Grid-Cap, Phasen-Cap, §14a-Cap und den effektiven
-     * Budgetmodus. Ladepunktverteilung, PV-/Min+PV-Logik und Setpoint-Schreiben bleiben
-     * weiterhin JavaScript.
-     *
-     * Sicherheitsregel:
-     * Wenn TypeScript fehlt, Fehler wirft oder vom JavaScript-Referenzwert abweicht,
-     * bleibt der bestehende JavaScript-Wert produktiv. `tsBudgetJson` speichert den
-     * Fallback-Grund für Debug und App-Center.
-     */
+    /** Code-Teil: _runChargingBudgetTsProductive – Dokumentiert diesen Regelungs- oder Diagnosebaustein. */
     async _runChargingBudgetTsProductive(input, jsRuntime) {
         let payload = null;
         try {
@@ -3572,11 +3298,7 @@ class ChargingManagementModule extends BaseModule {
         return payload;
     }
 
-    /**
-     * Code-Teil: _runChargingBudgetTsShadow
-     * Zweck: Kompatibilitäts-Wrapper für ältere interne Aufrufe. Neue Runtime nutzt
-     * `_runChargingBudgetTsProductive`, der bei sauberem Vergleich TS produktiv macht.
-     */
+    /** Code-Teil: _runChargingBudgetTsShadow – Kompatibilitäts-Wrapper für ältere interne Aufrufe. Neue Runtime nutzt */
     async _runChargingBudgetTsShadow(input, jsRuntime) {
         return this._runChargingBudgetTsProductive(input, jsRuntime);
     }
@@ -3586,18 +3308,8 @@ class ChargingManagementModule extends BaseModule {
      * - Mixed AC/DC operation via per-wallbox chargerType + controlBasis
      * - Budget distribution in W (supports DC fast chargers up to 1000 kW and beyond)
      */
-    /**
-     * Code-Teil: Methode `tick`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: tick
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+    /** Code-Teil: Methode `tick` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
+    /** Code-Teil: tick – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
     async tick() {
         if (!this._isEnabled()) return;
 
@@ -3846,18 +3558,8 @@ class ChargingManagementModule extends BaseModule {
         await this._queueState('chargingManagement.debug.sortedOrder', '', true);
         await this._queueState('chargingManagement.debug.allocations', '[]', true);
 
-        /**
-         * Code-Teil: Arrow-Funktion `publishEvPriorityCaps`
-         * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
-         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-         */
-        /**
-         * Code-Teil: publishEvPriorityCaps
-         * Zweck: Veröffentlicht berechnete Werte als State/API-Snapshot.
-         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-         */
+        /** Code-Teil: Arrow-Funktion `publishEvPriorityCaps` – schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen. */
+        /** Code-Teil: publishEvPriorityCaps – Veröffentlicht berechnete Werte als State/API-Snapshot. */
         const publishEvPriorityCaps = (patch) => {
             try {
                 const caps = (this.adapter && this.adapter._emsCaps && typeof this.adapter._emsCaps === 'object') ? this.adapter._emsCaps : {};
@@ -4445,18 +4147,8 @@ class ChargingManagementModule extends BaseModule {
             let vehiclePlugged = null;
             let vehiclePluggedSinceMs = 0;
 
-            /**
-             * Code-Teil: Arrow-Funktion `inferPlugFromStatus`
-             * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-             * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-             * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-             */
-            /**
-             * Code-Teil: inferPlugFromStatus
-             * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-             * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-             * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-             */
+            /** Code-Teil: Arrow-Funktion `inferPlugFromStatus` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
+            /** Code-Teil: inferPlugFromStatus – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
             const inferPlugFromStatus = (raw) => {
                 try {
                     if (raw === null || raw === undefined) return null;
@@ -4864,18 +4556,8 @@ class ChargingManagementModule extends BaseModule {
         /** @type {any|null} */
         let budgetDebug = null;
 
-        /**
-         * Code-Teil: Arrow-Funktion `getFirstDpNumber`
-         * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
-         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-         */
-        /**
-         * Code-Teil: getFirstDpNumber
-         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-         */
+        /** Code-Teil: Arrow-Funktion `getFirstDpNumber` – liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik. */
+        /** Code-Teil: getFirstDpNumber – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
         const getFirstDpNumber = (keys) => {
             if (!this.dp) return null;
             for (const k of keys) {
@@ -4892,18 +4574,8 @@ class ChargingManagementModule extends BaseModule {
          * @param {number} maxAgeMs
          * @returns {Promise<boolean>}
          */
-        /**
-         * Code-Teil: Arrow-Funktion `isStateStale`
-         * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-         */
-        /**
-         * Code-Teil: isStateStale
-         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-         */
+        /** Code-Teil: Arrow-Funktion `isStateStale` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
+        /** Code-Teil: isStateStale – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
         const isStateStale = async (id, maxAgeMs) => {
             try {
                 const st = await this._getStateCached(id);
@@ -5036,6 +4708,8 @@ class ChargingManagementModule extends BaseModule {
         // - boost: like normal, but preferred in allocation order
         let anyGridAllowedActive = false;
         let anyPvLimitedActive = false;
+        let anyPurePvActive = false;
+        let anyMinPvActive = false;
         let anyBoostActive = false;
 
         // -----------------------------------------------------------------
@@ -5154,18 +4828,8 @@ class ChargingManagementModule extends BaseModule {
          * @param {number} endMs
          * @returns {{allowedMs:number, coveredMs:number}}
          */
-        /**
-         * Code-Teil: Arrow-Funktion `computeAllowedAndCoverageMs`
-         * Zweck: berechnet abgeleitete Werte; Änderungen können Energiefluss/History/Regelungen beeinflussen.
-         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-         */
-        /**
-         * Code-Teil: computeAllowedAndCoverageMs
-         * Zweck: Berechnet abgeleitete Werte.
-         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-         */
+        /** Code-Teil: Arrow-Funktion `computeAllowedAndCoverageMs` – berechnet abgeleitete Werte; Änderungen können Energiefluss/History/Regelungen beeinflussen. */
+        /** Code-Teil: computeAllowedAndCoverageMs – Berechnet abgeleitete Werte. */
         const computeAllowedAndCoverageMs = (segments, startMs, endMs) => {
             let allowedMs = 0;
             let coveredMs = 0;
@@ -5188,18 +4852,8 @@ class ChargingManagementModule extends BaseModule {
          * @param {any} w wallbox entry
          * @returns {{override:boolean, reason:string}}
          */
-        /**
-         * Code-Teil: Arrow-Funktion `decideGoalTariffOverride`
-         * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-         */
-        /**
-         * Code-Teil: decideGoalTariffOverride
-         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-         */
+        /** Code-Teil: Arrow-Funktion `decideGoalTariffOverride` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
+        /** Code-Teil: decideGoalTariffOverride – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
         const decideGoalTariffOverride = (w) => {
             try {
                 if (!w || !w.goalActive) return { override: false, reason: '' };
@@ -5386,7 +5040,8 @@ class ChargingManagementModule extends BaseModule {
             w._boostTimeoutMinEffective = effBoostTimeoutMin;
 
             if (w.enabled && w.online) {
-                if (eff === 'pv' || eff === 'minpv') anyPvLimitedActive = true;
+                if (eff === 'pv') { anyPvLimitedActive = true; anyPurePvActive = true; }
+                if (eff === 'minpv') { anyPvLimitedActive = true; anyMinPvActive = true; }
                 if (eff === 'boost' || eff === 'minpv' || eff === 'normal') anyGridAllowedActive = true;
                 if (eff === 'boost') anyBoostActive = true;
             }
@@ -5406,22 +5061,16 @@ class ChargingManagementModule extends BaseModule {
             }
         }
 
-        /**
-         * Code-Teil: Arrow-Funktion `wallboxHasEvPriorityDemand`
-         * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-         */
-        /**
-         * Code-Teil: wallboxHasEvPriorityDemand
-         * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
-         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-         */
+        /** Code-Teil: Arrow-Funktion `wallboxHasEvPriorityDemand` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
+        /** Code-Teil: wallboxHasEvPriorityDemand – Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit. */
         const wallboxHasEvPriorityDemand = (w) => {
             if (!w || !w.enabled || !w.online) return false;
             const eff = String(w.effectiveMode || 'normal');
-            if (eff !== 'pv' && eff !== 'minpv') return false;
+            // Die Kundenprioritaet Speicher/E-Mobilitaet gilt ausschliesslich
+            // fuer reine PV-Ladung. Min+PV, Auto und Boost duerfen dadurch weder
+            // ihre netzgestuetzte Mindestleistung noch ihren normalen Gesamtgrant
+            // verlieren.
+            if (eff !== 'pv') return false;
             if (w.charging === true) return true;
             if (w.vehiclePlugged === true) return true;
             if (w.goalActive === true && w.vehiclePlugged !== false) return true;
@@ -5450,7 +5099,12 @@ class ChargingManagementModule extends BaseModule {
         const needPvDiagnostics = true;
 
         // PV surplus / cap (used for PV-limited wallboxes; and optionally to cap total budget)
+        // Zwei zentrale PV-Grenzen mit unterschiedlicher Bedeutung:
+        // - pvCapW: kundenseitig priorisierter Anteil fuer reine PV-Ladepunkte.
+        // - pvPhysicalCapW: physikalisch verfuegbarer PV-Rest fuer den Zusatzanteil
+        //   von Min+PV. Die netzgestuetzte Mindestleistung nutzt kein PV-Budget.
         let pvCapW = null;
+        let pvPhysicalCapW = null;
         let pvSurplusW = null;
         let gridW = null;
         let gridImportW = 0;
@@ -5460,6 +5114,8 @@ class ChargingManagementModule extends BaseModule {
         // Gate B: PV hysteresis diagnostics (defaults)
         let pvCapRawWState = 0;
         let pvCapEffectiveWState = 0;
+        let pvPureCapWState = 0;
+        let pvPhysicalCapWState = 0;
         let pvAvailableState = false;
         // Debug: PV surplus without EVCS (instant + smoothed)
         let pvSurplusNoEvRawWState = 0;
@@ -5528,7 +5184,18 @@ class ChargingManagementModule extends BaseModule {
                     if (effectiveMode === 'pv') {
                         pvEvcsPhysicalPvManagedW += a;
                     } else if (effectiveMode === 'minpv') {
-                        pvEvcsPhysicalPvManagedW += Math.max(0, a - Math.min(a, Math.max(0, Number(w.minPW) || 0)));
+                        // Min+PV-Grundlast kommt aus dem normalen Gesamt-/Netzbudget.
+                        // Nur der Anteil oberhalb der technischen Mindestleistung darf
+                        // das zentrale PV-Budget rekonstruieren bzw. reservieren.
+                        const minPvPhysicalBaseW = (w.controlBasis === 'currentA')
+                            ? Math.max(0, Number(w.minPW) || 0)
+                            : Math.max(
+                                Math.max(0, Number(w.minPW) || 0),
+                                (w.chargerType === 'AC' && Number(w.phases || 0) === 3)
+                                    ? Math.max(0, Number(acMinPower3pW) || 0)
+                                    : 0,
+                            );
+                        pvEvcsPhysicalPvManagedW += Math.max(0, a - Math.min(a, minPvPhysicalBaseW));
                     }
 
                     const prevCmd = (this._lastCmdTargetW && typeof this._lastCmdTargetW.get === 'function')
@@ -5598,8 +5265,8 @@ class ChargingManagementModule extends BaseModule {
                     || storageSourceNorm === 'idle'
                     || storageSourceNorm === 'fenecon';
 
-                // EV-Priorität: Wenn ein PV-/Min+PV-Ladepunkt Bedarf hat und der Speicher gerade
-                // PV-Überschuss aufnimmt, wird diese Leistung im EVCS-PV-Budget freigegeben.
+                // EV-Priorität gilt nur für reine PV-Ladepunkte. Wenn der Speicher gerade
+                // PV-Überschuss aufnimmt, wird diese Leistung im reinen EVCS-PV-Budget freigegeben.
                 // Der Speicher-Regler bekommt im selben Tick das Block-Flag und nimmt seine
                 // PV-Ladung zurück, sodass Wallboxen den Überschuss zuerst bekommen.
                 if (nvpNoImport && sourceLooksLikePvCharge) {
@@ -5607,18 +5274,8 @@ class ChargingManagementModule extends BaseModule {
                 }
             }
 
-            /**
-             * Code-Teil: Arrow-Funktion `pvDirectW`
-             * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-             * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-             * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-             */
-            /**
-             * Code-Teil: pvDirectW
-             * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-             * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-             * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-             */
+            /** Code-Teil: Arrow-Funktion `pvDirectW` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
+            /** Code-Teil: pvDirectW – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
             const pvDirectW = (() => {
                 const dpPv = getFirstDpNumber(['ps.pvW']);
                 if (typeof dpPv === 'number' && Number.isFinite(dpPv)) return Math.max(0, dpPv);
@@ -5632,18 +5289,8 @@ class ChargingManagementModule extends BaseModule {
                 return null;
             })();
 
-            /**
-             * Code-Teil: Arrow-Funktion `loadTotalDirectW`
-             * Zweck: lädt Daten aus API, State-Cache oder Konfiguration und stößt danach Rendering an.
-             * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-             * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-             */
-            /**
-             * Code-Teil: loadTotalDirectW
-             * Zweck: Lädt Daten aus API, States oder Konfiguration.
-             * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-             * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-             */
+            /** Code-Teil: Arrow-Funktion `loadTotalDirectW` – lädt Daten aus API, State-Cache oder Konfiguration und stößt danach Rendering an. */
+            /** Code-Teil: loadTotalDirectW – Lädt Daten aus API, States oder Konfiguration. */
             const loadTotalDirectW = (() => {
                 const loadDerived = this._getAdapterNumberFromCache('derived.core.building.loadTotalW', null);
                 if (typeof loadDerived === 'number' && Number.isFinite(loadDerived)) return Math.max(0, loadDerived);
@@ -5696,18 +5343,8 @@ class ChargingManagementModule extends BaseModule {
             // Therefore we use an asymmetric control value:
             // - rising edge: short rolling mean (avoids start/stop noise)
             // - falling edge: raw surplus immediately clamps the budget
-            /**
-             * Code-Teil: Arrow-Funktion `pvSurplusControlW`
-             * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-             * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-             * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-             */
-            /**
-             * Code-Teil: pvSurplusControlW
-             * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-             * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-             * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-             */
+            /** Code-Teil: Arrow-Funktion `pvSurplusControlW` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
+            /** Code-Teil: pvSurplusControlW – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
             const pvSurplusControlW = (() => {
                 const raw = (typeof pvSurplusNoEvW === 'number' && Number.isFinite(pvSurplusNoEvW)) ? pvSurplusNoEvW : 0;
                 const fast = (typeof pvSurplusFastW === 'number' && Number.isFinite(pvSurplusFastW)) ? pvSurplusFastW : raw;
@@ -5770,74 +5407,71 @@ class ChargingManagementModule extends BaseModule {
             const pvCapAllocatedW = pvBudgetCentralAuthoritative
                 ? pvBudgetCentralEvcsCapWState
                 : Math.max(0, pvCapBudgetLocalW);
+            const pvPhysicalAllocatedW = pvBudgetCentralAuthoritative
+                ? pvBudgetCentralTotalWState
+                : Math.max(0, pvCapBudgetLocalW);
             pvStartReadyBudgetW = pvCapAllocatedW;
             pvCapW = pvCapAllocatedW;
+            pvPhysicalCapW = pvPhysicalAllocatedW;
 
-            // -----------------------------------------------------------------
-            // Gate B: PV hysteresis / start-stop protection
-            // Prevent rapid start/stop when PV surplus is very low / fluctuating.
-            // For PV-only modes this is a START gate (no grid import intended).
-            // -----------------------------------------------------------------
+            // Pure PV charging keeps the existing start/stop hysteresis. Min+PV
+            // skips this gate: its base comes from the total/grid budget and only
+            // its extra power follows the physical PV remainder.
+            const purePvHysteresisActive = anyPurePvActive || capTotalBudgetByPv;
             const pvStartThresholdW = clamp(num(cfg.pvStartThresholdW, 800), 0, 1e12);
-            const pvStopThresholdW  = clamp(num(cfg.pvStopThresholdW, 200), 0, 1e12);
-            const pvStartDelayMs    = clamp(num(cfg.pvStartDelaySec, 10), 0, 3600) * 1000;
-            const pvStopDelayMs     = clamp(num(cfg.pvStopDelaySec, 30), 0, 3600) * 1000;
-            const pvAbortImportW    = clamp(num(cfg.pvAbortImportW, 600), 0, 1e12);
-
-            // Ensure stop threshold is not above start threshold (avoid inverted hysteresis)
+            const pvStopThresholdW = clamp(num(cfg.pvStopThresholdW, 200), 0, 1e12);
+            const pvStartDelayMs = clamp(num(cfg.pvStartDelaySec, 10), 0, 3600) * 1000;
+            const pvStopDelayMs = clamp(num(cfg.pvStopDelaySec, 30), 0, 3600) * 1000;
+            const pvAbortImportW = clamp(num(cfg.pvAbortImportW, 600), 0, 1e12);
             const startW = pvStartThresholdW;
-            const stopW  = Math.min(pvStopThresholdW, (startW > 0 ? startW : pvStopThresholdW));
-
+            const stopW = Math.min(pvStopThresholdW, startW > 0 ? startW : pvStopThresholdW);
             const pvStartSettleMs = clamp(num(cfg.pvStartSettleSec, 20), 0, 3600) * 1000;
-            const pvStartupHoldActive = (pvStartSettleMs > 0)
-                && wbList.some((w) => w && w.enabled && w.online
-                    && (w.effectiveMode === 'pv' || w.effectiveMode === 'minpv')
-                    && Number.isFinite(Number(w.pvStartupHoldUntilMs))
-                    && Number(w.pvStartupHoldUntilMs) > now);
+            const pvStartupHoldActive = purePvHysteresisActive && pvStartSettleMs > 0
+                && wbList.some((w) => w && w.enabled && w.online && w.effectiveMode === 'pv'
+                    && Number.isFinite(Number(w.pvStartupHoldUntilMs)) && Number(w.pvStartupHoldUntilMs) > now);
 
             gridImportW = (typeof gridW === 'number' && Number.isFinite(gridW)) ? Math.max(0, gridW) : 0;
-            // Wichtig: Den Stop-Gate nicht auf EV-eigenen Start-/Hochlauf-Import triggern.
-            // Während der Start-Einschwingzeit tolerieren wir kurze Übergänge, damit die Wallbox
-            // sauber am Fahrzeug ankommt und nicht sofort wieder auf 0 fällt.
             if (!(typeof gridImportNoEvW === 'number' && Number.isFinite(gridImportNoEvW))) {
                 gridImportNoEvW = (typeof gridW === 'number' && Number.isFinite(gridW))
                     ? Math.max(0, gridW - pvEvcsUsedW - storageChargeNowW + storageDischargeNowW)
                     : 0;
             }
-            const forcedBelow = !pvStartupHoldActive && (pvAbortImportW > 0 && gridImportNoEvW > pvAbortImportW);
-            const suppressStopGate = pvStartupHoldActive && pvCapAllocatedW > 0;
 
-            const above = (!forcedBelow) && ((startW > 0) ? (pvCapAllocatedW >= startW) : (pvCapAllocatedW > 0));
-            const below = !suppressStopGate && (forcedBelow || (pvCapAllocatedW <= stopW));
-
-            let pvAvail = !!this._pvAvailable;
-
-            if (above) {
-                if (!this._pvAboveSinceMs) this._pvAboveSinceMs = now;
-                this._pvBelowSinceMs = 0;
-                if (!pvAvail && (pvStartDelayMs <= 0 || (now - this._pvAboveSinceMs) >= pvStartDelayMs)) {
-                    pvAvail = true;
-                }
-            } else if (below) {
-                if (!this._pvBelowSinceMs) this._pvBelowSinceMs = now;
-                this._pvAboveSinceMs = 0;
-                if (pvAvail && (pvStopDelayMs <= 0 || (now - this._pvBelowSinceMs) >= pvStopDelayMs)) {
-                    pvAvail = false;
+            let pvAvail = purePvHysteresisActive ? !!this._pvAvailable : false;
+            if (purePvHysteresisActive) {
+                const forcedBelow = !pvStartupHoldActive && pvAbortImportW > 0 && gridImportNoEvW > pvAbortImportW;
+                const above = !forcedBelow && (startW > 0 ? pvCapAllocatedW >= startW : pvCapAllocatedW > 0);
+                const below = !(pvStartupHoldActive && pvCapAllocatedW > 0) && (forcedBelow || pvCapAllocatedW <= stopW);
+                if (above) {
+                    if (!this._pvAboveSinceMs) this._pvAboveSinceMs = now;
+                    this._pvBelowSinceMs = 0;
+                    if (!pvAvail && (pvStartDelayMs <= 0 || now - this._pvAboveSinceMs >= pvStartDelayMs)) pvAvail = true;
+                } else if (below) {
+                    if (!this._pvBelowSinceMs) this._pvBelowSinceMs = now;
+                    this._pvAboveSinceMs = 0;
+                    if (pvAvail && (pvStopDelayMs <= 0 || now - this._pvBelowSinceMs >= pvStopDelayMs)) pvAvail = false;
+                } else {
+                    this._pvAboveSinceMs = 0;
+                    this._pvBelowSinceMs = 0;
                 }
             } else {
-                // Between thresholds: keep current state, reset timers to require stable crossing again
                 this._pvAboveSinceMs = 0;
                 this._pvBelowSinceMs = 0;
             }
 
             this._pvAvailable = pvAvail;
-            pvCapW = pvAvail ? pvCapAllocatedW : 0;
+            pvCapW = purePvHysteresisActive && pvAvail ? pvCapAllocatedW : 0;
+            pvPhysicalCapW = Math.max(0, pvPhysicalAllocatedW);
 
             pvCapRawWState = pvBudgetCentralAuthoritative
                 ? Math.max(0, Number(pvBudgetControl.rawW) || 0)
                 : pvCapRawW;
             pvCapEffectiveWState = (typeof pvCapW === 'number' && Number.isFinite(pvCapW)) ? pvCapW : 0;
-            pvAvailableState = pvAvail;
+            pvPureCapWState = pvCapEffectiveWState;
+            pvPhysicalCapWState = (typeof pvPhysicalCapW === 'number' && Number.isFinite(pvPhysicalCapW))
+                ? Math.max(0, pvPhysicalCapW)
+                : 0;
+            pvAvailableState = pvAvail || (anyMinPvActive && pvPhysicalCapWState > 0);
 
         }
 
@@ -5847,6 +5481,8 @@ class ChargingManagementModule extends BaseModule {
             this._pvBelowSinceMs = 0;
             pvCapRawWState = 0;
             pvCapEffectiveWState = 0;
+            pvPureCapWState = 0;
+            pvPhysicalCapWState = 0;
             pvAvailableState = false;
             pvSurplusNoEvRawWState = 0;
             pvSurplusNoEvAvg5mWState = 0;
@@ -5857,12 +5493,16 @@ class ChargingManagementModule extends BaseModule {
             pvBudgetLocalEstimateWState = 0;
             pvBudgetMismatchWState = 0;
             pvBudgetCentralAuthoritative = false;
+            pvPhysicalCapW = null;
         }
 
         // Publish PV diagnostics (even if PV budgeting is not active)
         try {
             await this._queueState('chargingManagement.control.pvCapRawW', pvCapRawWState || 0, true);
             await this._queueState('chargingManagement.control.pvCapEffectiveW', pvCapEffectiveWState || 0, true);
+            await this._queueState('chargingManagement.control.pvPureCapW', pvPureCapWState || 0, true);
+            await this._queueState('chargingManagement.control.pvPhysicalCapW', pvPhysicalCapWState || 0, true);
+            await this._queueState('chargingManagement.control.pvPriorityPurePvOnly', true, true);
             await this._queueState('chargingManagement.control.pvAvailable', !!pvAvailableState, true);
             await this._queueState('chargingManagement.control.pvSurplusNoEvRawW', pvSurplusNoEvRawWState || 0, true);
             await this._queueState('chargingManagement.control.pvSurplusNoEvAvg5mW', pvSurplusNoEvAvg5mWState || 0, true);
@@ -5901,18 +5541,8 @@ class ChargingManagementModule extends BaseModule {
             if (typeof peak === 'number' && Number.isFinite(peak) && peak > 0) components.push({ k: 'peakShaving', w: peak });
 
             // Tariff cap (optional via globalDatapoints mapping)
-            /**
-             * Code-Teil: Arrow-Funktion `coreTariffW`
-             * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-             * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-             * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-             */
-            /**
-             * Code-Teil: coreTariffW
-             * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-             * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-             * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-             */
+            /** Code-Teil: Arrow-Funktion `coreTariffW` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
+            /** Code-Teil: coreTariffW – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
             const coreTariffW = (() => {
                 try {
                     const caps = (this.adapter && this.adapter._emsCaps && typeof this.adapter._emsCaps === 'object') ? this.adapter._emsCaps : null;
@@ -5993,6 +5623,9 @@ if (components.length) {
                 pvCapRawW: (typeof pvCapRawWState === 'number' && Number.isFinite(pvCapRawWState)) ? pvCapRawWState : null,
                 pvCapW: (typeof pvCapW === 'number' && Number.isFinite(pvCapW)) ? pvCapW : null,
                 pvCapEffectiveW: (typeof pvCapEffectiveWState === 'number' && Number.isFinite(pvCapEffectiveWState)) ? pvCapEffectiveWState : null,
+                pvPureCapW: (typeof pvPureCapWState === 'number' && Number.isFinite(pvPureCapWState)) ? pvPureCapWState : null,
+                pvPhysicalCapW: (typeof pvPhysicalCapWState === 'number' && Number.isFinite(pvPhysicalCapWState)) ? pvPhysicalCapWState : null,
+                pvPriorityPurePvOnly: true,
                 pvAvailable: !!pvAvailableState,
                 gridW: (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null,
                 gridImportNoEvW: (typeof gridImportNoEvW === 'number' && Number.isFinite(gridImportNoEvW)) ? gridImportNoEvW : null,
@@ -7341,8 +6974,20 @@ if (components.length) {
         let storageAssistRemainingW = Number.isFinite(storageAssistW) ? Math.max(0, storageAssistW) : 0;
         let usedW = 0;
 
-        // Shared PV budget (only relevant if at least one wallbox is PV-limited)
-        let pvRemainingW = (!needPvBudget || typeof pvCapW !== 'number' || !Number.isFinite(pvCapW)) ? Number.POSITIVE_INFINITY : Math.max(0, pvCapW);
+        // Zwei gemeinsame PV-Budgettoepfe mit klar getrenntem Zweck:
+        // - `pvPureRemainingW` ist der kundenseitig priorisierte EVCS-Anteil und
+        //   begrenzt ausschliesslich reine PV-Ladepunkte.
+        // - `pvPhysicalRemainingW` ist der gesamte physikalische PV-Rest. Dieser
+        //   versorgt reine PV-Ladepunkte ebenfalls, darf von Min+PV aber unabhaengig
+        //   von der Speicher/E-Mobilitaets-Priorisierung fuer die Zusatzleistung
+        //   oberhalb der netzgestuetzten Mindestladung genutzt werden.
+        // Beide Werte stammen aus demselben zentralen EMS-Budget-Snapshot.
+        let pvPureRemainingW = (!needPvBudget || typeof pvCapW !== 'number' || !Number.isFinite(pvCapW))
+            ? Number.POSITIVE_INFINITY
+            : Math.max(0, pvCapW);
+        let pvPhysicalRemainingW = (!needPvBudget || typeof pvPhysicalCapW !== 'number' || !Number.isFinite(pvPhysicalCapW))
+            ? Number.POSITIVE_INFINITY
+            : Math.max(0, pvPhysicalCapW);
         let pvUsedW = 0;
 
         let totalTargetPowerW = 0;
@@ -7354,30 +6999,22 @@ if (components.length) {
         // Budgetierung den EVCS-Anteil fuer einen Tick auf 0 setzen und der Speicher
         // nimmt anschliessend den kompletten PV-Ueberschuss.
         let evcsActiveDemandPvIntentW = 0;
+        let evcsActiveDemandPurePvIntentW = 0;
         let evcsActiveDemandWallboxes = 0;
         // Noch nicht physisch gestartete beziehungsweise erst hochregelnde
         // PV-Ladepunkte erhalten ihren Anteil als reinen PV-Intent. Dadurch bleibt
         // die Kundenprioritaet waehrend Start-Hysterese/EVSE-Suspend und Rampe
         // zentral reserviert, ohne ihn als bereits bezogene Netzlast zu verbuchen.
         let evcsPendingDemandPvIntentW = 0;
+        let evcsPendingDemandPurePvIntentW = 0;
         let evcsPendingDemandTotalW = 0;
         let evcsPendingDemandWallboxes = 0;
         let evcsPendingCentralTotalGrantW = null;
 
         // More specific budget limitation reason based on the active caps in this tick.
         // Used for per-connector diagnostics (without changing the underlying allocation math).
-        /**
-         * Code-Teil: Arrow-Funktion `pickBudgetReason`
-         * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-         */
-        /**
-         * Code-Teil: pickBudgetReason
-         * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
-         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-         */
+        /** Code-Teil: Arrow-Funktion `pickBudgetReason` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
+        /** Code-Teil: pickBudgetReason – Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History. */
         const pickBudgetReason = () => {
             if (para14aActive && para14aBinding) return ReasonCodes.LIMITED_BY_14A;
             if (gridCapBinding && phaseCapBinding) return ReasonCodes.LIMIT_POWER_AND_PHASE;
@@ -7408,6 +7045,16 @@ if (components.length) {
             const pvTechnicalMinW = (w.chargerType === 'AC' && Number(w.phases || 0) === 3)
                 ? Math.max(0, Math.max(num(w.minPW, 0), acMinPower3pW))
                 : Math.max(0, num(w.minPW, 0));
+            // Min+PV-Grundlast: Bei stromgeregelten AC-Wallboxen ist minPW bereits
+            // die exakte technische 6-A-Leistung. Bei leistungsgeregelten 3p-Geräten
+            // bleibt die konfigurierte 4,2-kW-Untergrenze verbindlich.
+            const minPvBaseW = Math.max(
+                0,
+                Math.min(
+                    Number.isFinite(Number(w.maxPW)) ? Number(w.maxPW) : Number.POSITIVE_INFINITY,
+                    w.controlBasis === 'currentA' ? num(w.minPW, 0) : Math.max(num(w.minPW, 0), pvTechnicalMinW),
+                ),
+            );
             const pvStartCommandA = (w.controlBasis === 'currentA' && w.setAKey)
                 ? Math.max(0, num(w.minA, 0))
                 : 0;
@@ -7438,7 +7085,18 @@ if (components.length) {
             const totalAvailW = Number.isFinite(remainingW)
                 ? Math.max(0, Math.min(remainingW, baseAvailW + storageExtraAvailW))
                 : Number.POSITIVE_INFINITY;
-            const pvAvailW = Number.isFinite(pvRemainingW) ? Math.max(0, pvRemainingW) : Number.POSITIVE_INFINITY;
+            // Reine PV-Ladung ist sowohl durch den priorisierten EVCS-Anteil als
+            // auch durch den physikalischen PV-Rest begrenzt. Min+PV verwendet fuer
+            // seine Zusatzleistung nur den physikalischen Rest; die Mindestleistung
+            // kommt aus dem normalen Gesamt-/Netzbudget.
+            const pvAvailW = isPvOnly
+                ? Math.min(
+                    Number.isFinite(pvPureRemainingW) ? Math.max(0, pvPureRemainingW) : Number.POSITIVE_INFINITY,
+                    Number.isFinite(pvPhysicalRemainingW) ? Math.max(0, pvPhysicalRemainingW) : Number.POSITIVE_INFINITY,
+                )
+                : (isMinPv
+                    ? (Number.isFinite(pvPhysicalRemainingW) ? Math.max(0, pvPhysicalRemainingW) : Number.POSITIVE_INFINITY)
+                    : Number.POSITIVE_INFINITY);
 
             // Stationsgruppe (gemeinsame Leistungsgrenze pro Station)
             const stationAvailW = (w.stationKey && stationRemainingW && stationRemainingW.has(w.stationKey))
@@ -7476,23 +7134,27 @@ if (components.length) {
                 targetW = 0;
                 targetA = 0;
             } else if (isMinPv) {
-                // min+pv: keep min from total budget (grid allowed), extra only from PV budget
-                const maxTotal = Math.min(totalAvailW, stationAvailW, w.maxPW);
-                minpvMaxTotal = maxTotal;
-                const minBase = (w.minPW > 0) ? w.minPW : 0;
-
-                if (!Number.isFinite(maxTotal) || maxTotal <= 0) {
-                    targetW = 0;
-                    reason = ReasonCodes.NO_BUDGET;
-                } else if (minBase > 0 && maxTotal < minBase) {
-                    targetW = 0;
-                    // If there is no budget at all, call it NO_BUDGET, otherwise BELOW_MIN
+                // Min+PV: Die technische Mindestleistung kommt immer aus dem normalen
+                // Gesamt-/Netzbudget. Nur die Leistung oberhalb dieser Basis verbraucht
+                // den zentralen PV-Grant. Ein PV-Grant von 0 W darf deshalb die
+                // Mindestladung nicht stoppen, solange die harten Anschluss-, Phasen-,
+                // §14a- und Stationslimits die Basis zulassen.
+                const minPvPlan = computeMinPvAllocationW({
+                    minPowerW: minPvBaseW,
+                    technicalMinW: minPvBaseW,
+                    maxPowerW: w.maxPW,
+                    totalAvailableW: totalAvailW,
+                    stationAvailableW: stationAvailW,
+                    pvAvailableW: pvAvailW,
+                });
+                minpvMaxTotal = minPvPlan.hardAvailableW;
+                targetW = minPvPlan.targetW;
+                if (targetW > 0) {
+                    reason = ReasonCodes.ALLOCATED;
+                } else if (minPvPlan.reason === 'below-minpv-base') {
                     reason = (totalAvailW <= 0) ? ReasonCodes.NO_BUDGET : ReasonCodes.BELOW_MIN;
                 } else {
-                    const baseW = minBase;
-                    const extraCap = Math.min(pvAvailW, Math.max(0, maxTotal - baseW));
-                    targetW = baseW + (Number.isFinite(extraCap) ? extraCap : 0);
-                    reason = ReasonCodes.ALLOCATED;
+                    reason = ReasonCodes.NO_BUDGET;
                 }
             } else if (!Number.isFinite(availW)) {
                 // Unlimited for this wallbox (budget-wise)
@@ -7588,8 +7250,15 @@ if (components.length) {
                 if (goalStrategy === 'smart' && isCheapNow && !isPvOnly) {
                     desired = Math.min(w.maxPW, desired * goalCheapBoostFactor);
                 }
+                desired = computeGoalPowerCapW({
+                    mode: effMode,
+                    desiredW: desired,
+                    minPvBaseW,
+                    maxPowerW: w.maxPW,
+                });
                 if (Number.isFinite(desired) && desired >= 0) {
                     // Nur begrenzen (nicht nach oben erzwingen) – PV-/Budget- und Stationslimits bleiben gültig.
+                    // Min+PV bleibt dabei mindestens auf seiner technischen/netzgestuetzten Basis.
                     if (targetW > desired + 1) {
                         targetW = desired;
                     }
@@ -7777,7 +7446,24 @@ if (components.length) {
 
             let cmdW = targetW;
             let cmdA = targetA;
-            const pvManagedStartNow = isPvManaged && !prevCmdWasActive && cmdW > 0 && w.enabled && w.online && w.vehiclePlugged !== false;
+
+            // Reaktionszeit beim Moduswechsel:
+            // - PV-only startet wie bisher direkt mit seiner technischen Mindeststufe.
+            // - Min+PV muss seine netzgestützte Mindestleistung ebenfalls sofort
+            //   erreichen, auch wenn ein alter kleiner Sollwert (z. B. 300 W) noch im
+            //   Cache steht. Erst die PV-Zusatzleistung oberhalb der Basis wird weich
+            //   hochgeregelt. Dadurch entsteht beim Wechsel auf Min+PV kein zusätzlicher
+            //   Null-/Rampenzyklus.
+            const minPvBaseStartNeeded = isMinPv
+                && minPvBaseW > 0
+                && cmdW >= minPvBaseW
+                && prevCmdWNorm + 1 < minPvBaseW;
+            const pvManagedStartNow = isPvManaged
+                && cmdW > 0
+                && w.enabled
+                && w.online
+                && w.vehiclePlugged !== false
+                && (!prevCmdWasActive || minPvBaseStartNeeded);
 
             if (w.controlBasis === 'currentA' && w.setAKey) {
                 cmdA = floorToStep(cmdA, wbStepA);
@@ -7785,7 +7471,14 @@ if (components.length) {
                 if (cmdA > 0 && w.minA > 0 && cmdA < w.minA) cmdA = 0;
 
                 if (pvManagedStartNow) {
-                    cmdA = clamp(Math.max(pvStartCommandA || w.minA || 0, w.minA || 0), 0, w.maxA);
+                    const minPvBaseA = (isMinPv && w.vFactor > 0)
+                        ? Math.max(0, minPvBaseW / w.vFactor)
+                        : 0;
+                    cmdA = clamp(
+                        Math.max(pvStartCommandA || w.minA || 0, w.minA || 0, minPvBaseA),
+                        0,
+                        w.maxA,
+                    );
                 } else {
                     cmdA = rampUp(prevCmdA, cmdA, wbMaxDeltaA);
                 }
@@ -7797,7 +7490,9 @@ if (components.length) {
                 if (cmdW > 0 && w.minPW > 0 && cmdW < w.minPW) cmdW = 0;
 
                 if (pvManagedStartNow) {
-                    const minStartW = Math.max(pvStartCommandW || w.minPW || 0, w.minPW || 0);
+                    const minStartW = isMinPv
+                        ? Math.max(minPvBaseW, w.minPW || 0)
+                        : Math.max(pvStartCommandW || w.minPW || 0, w.minPW || 0);
                     cmdW = clamp(minStartW, 0, w.maxPW);
                 } else {
                     cmdW = rampUp(prevCmdW, cmdW, wbMaxDeltaW);
@@ -7823,7 +7518,7 @@ if (components.length) {
                             evPriorityStarvedW += Math.max(0, w.maxPW - cmdW);
                         }
                     } else if (isMinPv) {
-                        const minBaseW = (w.minPW > 0) ? w.minPW : 0;
+                        const minBaseW = minPvBaseW;
                         const maxTotalW = (typeof minpvMaxTotal === 'number' && Number.isFinite(minpvMaxTotal)) ? Math.max(0, minpvMaxTotal) : 0;
                         const extraPossibleW = Math.max(0, Math.min(w.maxPW, maxTotalW) - Math.min(minBaseW, maxTotalW));
                         const extraDeliveredW = Math.max(0, cmdW - Math.min(minBaseW, cmdW));
@@ -7898,21 +7593,26 @@ if (components.length) {
                 }
             }
 
-            // Apply PV budget accounting (shared pool)
+            // Apply PV budget accounting. Reine PV-Ladung reduziert beide
+            // Toepfe; Min+PV reduziert nur den physikalischen PV-Rest oberhalb
+            // seiner netzgestuetzten Mindestleistung.
             let pvUsedThisW = 0;
-            if (Number.isFinite(pvRemainingW)) {
-                if (isPvOnly) {
-                    pvUsedThisW = cmdW;
-                } else if (isMinPv) {
-                    const base = (w.minPW > 0) ? Math.min(cmdW, w.minPW) : 0;
-                    pvUsedThisW = Math.max(0, cmdW - base);
-                } else {
-                    pvUsedThisW = 0;
+            if (isPvOnly) {
+                pvUsedThisW = Math.max(0, cmdW);
+                if (Number.isFinite(pvPureRemainingW)) {
+                    pvPureRemainingW = Math.max(0, pvPureRemainingW - pvUsedThisW);
                 }
-
-                pvRemainingW = Math.max(0, pvRemainingW - pvUsedThisW);
-                pvUsedW += pvUsedThisW;
+                if (Number.isFinite(pvPhysicalRemainingW)) {
+                    pvPhysicalRemainingW = Math.max(0, pvPhysicalRemainingW - pvUsedThisW);
+                }
+            } else if (isMinPv) {
+                const base = minPvBaseW > 0 ? Math.min(cmdW, minPvBaseW) : 0;
+                pvUsedThisW = Math.max(0, cmdW - base);
+                if (Number.isFinite(pvPhysicalRemainingW)) {
+                    pvPhysicalRemainingW = Math.max(0, pvPhysicalRemainingW - pvUsedThisW);
+                }
             }
+            pvUsedW += pvUsedThisW;
 
             totalTargetPowerW += cmdW;
             if (Number.isFinite(cmdA) && cmdA > 0) totalTargetCurrentA += cmdA;
@@ -7947,9 +7647,10 @@ if (components.length) {
                 // einzelnen Tick noch keinen pvUsedThisW liefern. Der zentrale EVCS-Cap
                 // begrenzt diesen Wert spaeter weiterhin strikt auf die Kundenvorgabe.
                 const demandPvActualThisW = Math.max(0, Math.min(demandReserveThisW, pvUsedThisW || 0));
-                const demandPvIntentThisW = computePvManagedDemandIntentW(effMode, demandReserveThisW, w.minPW);
+                const demandPvIntentThisW = computePvManagedDemandIntentW(effMode, demandReserveThisW, isMinPv ? minPvBaseW : w.minPW);
                 evcsActiveDemandPvReserveW += demandPvActualThisW;
                 evcsActiveDemandPvIntentW += demandPvIntentThisW;
+                if (isPvOnly) evcsActiveDemandPurePvIntentW += demandPvIntentThisW;
                 evcsActiveDemandWallboxes += 1;
             }
 
@@ -8127,7 +7828,9 @@ if (components.length) {
                 userStorageAssistEnabled: !!w.userStorageAssistEnabled,
                 effectiveStorageAssist: !!w.effectiveStorageAssist,
                 storageAssistBlockedReason: String(w.storageAssistBlockedReason || ''),
-                pvRemainingW: Number.isFinite(pvRemainingW) ? pvRemainingW : null,
+                pvRemainingW: Number.isFinite(pvAvailW) ? pvAvailW : null,
+                pvPureRemainingW: Number.isFinite(pvPureRemainingW) ? pvPureRemainingW : null,
+                pvPhysicalRemainingW: Number.isFinite(pvPhysicalRemainingW) ? pvPhysicalRemainingW : null,
                 applied,
                 applyStatus,
                 applyWrites,
@@ -8211,7 +7914,9 @@ if (components.length) {
                 activeDemand: false,
                 demandReserveW: 0,
                 pvUsedW: 0,
-                pvRemainingW: Number.isFinite(pvRemainingW) ? pvRemainingW : null,
+                pvRemainingW: Number.isFinite(pvPureRemainingW) ? pvPureRemainingW : null,
+                pvPureRemainingW: Number.isFinite(pvPureRemainingW) ? pvPureRemainingW : null,
+                pvPhysicalRemainingW: Number.isFinite(pvPhysicalRemainingW) ? pvPhysicalRemainingW : null,
                 applied,
                 applyStatus,
                 applyWrites,
@@ -8237,10 +7942,21 @@ if (components.length) {
          * reservieren koennen.
          */
         try {
-            const centralEvcsCapW = Math.max(0, Number(pvStartReadyBudgetW) || 0);
-            let pendingPvRemainingW = Math.max(
+            const centralPurePvCapW = Math.max(0, Number(pvStartReadyBudgetW) || 0);
+            const centralPhysicalPvCapW = Math.max(0, Number(pvPhysicalCapW) || 0);
+            let pendingPurePvRemainingW = Math.max(
                 0,
-                centralEvcsCapW - Math.min(centralEvcsCapW, Math.max(0, Number(evcsActiveDemandPvIntentW) || 0)),
+                centralPurePvCapW - Math.min(
+                    centralPurePvCapW,
+                    Math.max(0, Number(evcsActiveDemandPurePvIntentW) || 0),
+                ),
+            );
+            let pendingPhysicalPvRemainingW = Math.max(
+                0,
+                centralPhysicalPvCapW - Math.min(
+                    centralPhysicalPvCapW,
+                    Math.max(0, Number(evcsActiveDemandPvIntentW) || 0),
+                ),
             );
             const centralBudgetRuntime = this.adapter && this.adapter._emsBudget;
             const centralTotalGrant = centralBudgetRuntime && typeof centralBudgetRuntime.getTotalGrant === 'function'
@@ -8266,23 +7982,38 @@ if (components.length) {
             );
 
             for (const w of sorted) {
-                if (pendingPvRemainingW <= 0) break;
                 const row = allocationRows.get(String(w.safe || '')) || {};
                 const effMode = String(w.effectiveMode || row.effectiveMode || '').trim().toLowerCase();
                 if (effMode !== 'pv' && effMode !== 'minpv') continue;
+                // PV-only kann ohne PV-Grant keinen Start-Intent bilden. Min+PV darf
+                // dagegen seine Mindestleistung weiterhin aus dem Gesamtbudget anfordern,
+                // selbst wenn der PV-Rest bereits 0 W beträgt.
+                const pendingPvAvailableW = effMode === 'pv'
+                    ? Math.min(pendingPurePvRemainingW, pendingPhysicalPvRemainingW)
+                    : pendingPhysicalPvRemainingW;
+                if (effMode === 'pv' && pendingPvAvailableW <= 0) continue;
 
                 const actualNowW = (typeof w.actualPowerW === 'number' && Number.isFinite(w.actualPowerW))
                     ? Math.max(0, Math.abs(w.actualPowerW))
                     : 0;
                 const commandNowW = Math.max(0, Number(row.targetW) || 0);
                 const demandNowW = Math.max(0, Number(row.demandReserveW) || 0, actualNowW, commandNowW);
-                const activePvIntentW = computePvManagedDemandIntentW(effMode, demandNowW, w.minPW);
-                const stationAvailW = w.stationKey && pendingStationRemainingW.has(w.stationKey)
-                    ? Math.max(0, Number(pendingStationRemainingW.get(w.stationKey)) || 0)
-                    : Number.POSITIVE_INFINITY;
                 const technicalMinW = (w.chargerType === 'AC' && Number(w.phases || 0) === 3)
                     ? Math.max(0, Math.max(num(w.minPW, 0), acMinPower3pW))
                     : Math.max(0, num(w.minPW, 0));
+                const minPvBaseW = effMode === 'minpv'
+                    ? Math.max(
+                        0,
+                        Math.min(
+                            Number.isFinite(Number(w.maxPW)) ? Number(w.maxPW) : Number.POSITIVE_INFINITY,
+                            w.controlBasis === 'currentA' ? num(w.minPW, 0) : technicalMinW,
+                        ),
+                    )
+                    : Math.max(0, num(w.minPW, 0));
+                const activePvIntentW = computePvManagedDemandIntentW(effMode, demandNowW, minPvBaseW);
+                const stationAvailW = w.stationKey && pendingStationRemainingW.has(w.stationKey)
+                    ? Math.max(0, Number(pendingStationRemainingW.get(w.stationKey)) || 0)
+                    : Number.POSITIVE_INFINITY;
                 const startCooldownActive = effMode === 'pv'
                     && Number.isFinite(Number(w.pvStartCooldownUntilMs))
                     && Number(w.pvStartCooldownUntilMs) > now;
@@ -8300,26 +8031,31 @@ if (components.length) {
                     goalBlocked,
                     currentPowerW: demandNowW,
                     currentPvIntentW: activePvIntentW,
-                    minPowerW: w.minPW,
+                    minPowerW: minPvBaseW,
                     technicalMinW,
                     maxPowerW: w.maxPW,
                     totalRemainingW: pendingTotalRemainingW,
                     stationRemainingW: stationAvailW,
-                    pvRemainingW: pendingPvRemainingW,
+                    pvRemainingW: pendingPvAvailableW,
                     activityThresholdW,
                 });
                 const pendingIntentW = Math.max(0, Number(pending.intentW) || 0);
-                if (pendingIntentW <= 0) {
+                const pendingTotalDemandW = Math.max(pendingIntentW, Number(pending.totalDemandW) || 0);
+                if (pendingIntentW <= 0 && pendingTotalDemandW <= 0) {
                     row.pendingPvIntentW = 0;
+                    row.pendingPvIntentTotalDemandW = 0;
                     row.pendingPvIntentReason = String(pending.reason || '');
                     continue;
                 }
 
-                const pendingTotalDemandW = Math.max(pendingIntentW, Number(pending.totalDemandW) || 0);
                 evcsPendingDemandPvIntentW += pendingIntentW;
+                if (effMode === 'pv') evcsPendingDemandPurePvIntentW += pendingIntentW;
                 evcsPendingDemandTotalW += pendingTotalDemandW;
                 evcsPendingDemandWallboxes += 1;
-                pendingPvRemainingW = Math.max(0, pendingPvRemainingW - pendingIntentW);
+                pendingPhysicalPvRemainingW = Math.max(0, pendingPhysicalPvRemainingW - pendingIntentW);
+                if (effMode === 'pv') {
+                    pendingPurePvRemainingW = Math.max(0, pendingPurePvRemainingW - pendingIntentW);
+                }
                 if (Number.isFinite(pendingTotalRemainingW)) {
                     pendingTotalRemainingW = Math.max(0, pendingTotalRemainingW - pendingTotalDemandW);
                 }
@@ -8339,6 +8075,7 @@ if (components.length) {
             // Wallbox-Allokation nicht unterbrechen. Ohne Intent bleibt nur die
             // bereits aktive EVCS-PV-Reservierung bestehen.
             evcsPendingDemandPvIntentW = 0;
+            evcsPendingDemandPurePvIntentW = 0;
             evcsPendingDemandTotalW = 0;
             evcsPendingDemandWallboxes = 0;
         }
@@ -8388,6 +8125,17 @@ if (components.length) {
         }
 
         const tsWallboxesForAllocation = this._mapChargingWallboxesForTsAllocation(wbList);
+        // Phase selection uses the budget that matches each wallbox mode: pure PV
+        // gets the customer-priority cap, Min+PV gets the physical PV remainder,
+        // and Auto/Boost keep the normal total budget.
+        const phaseStablePhysicalPvW = Math.max(0, Math.min(
+            Number.isFinite(Number(pvPhysicalCapW)) ? Number(pvPhysicalCapW) : 0,
+            Number.isFinite(Number(pvSurplusNoEvAvg5mWState)) ? Number(pvSurplusNoEvAvg5mWState) : 0,
+        ));
+        const phaseStablePurePvW = Math.max(0, Math.min(
+            Number.isFinite(Number(pvCapW)) ? Number(pvCapW) : 0,
+            phaseStablePhysicalPvW,
+        ));
         const tsAllocationState = await this._publishChargingAllocationTsShadow({
             mode,
             budgetMode: effectiveBudgetMode,
@@ -8398,7 +8146,12 @@ if (components.length) {
             totalPowerW: totalFreshActualPowerW,
             totalTargetPowerW,
             totalTargetCurrentA,
-            pvAvailableW: pvCapW,
+            // Rueckwaertskompatibler Hauptwert ist das physikalische PV-Budget.
+            // Der typisierte Abschluss-Guard erhaelt zusaetzlich den kleineren
+            // kundenseitigen Anteil fuer reine PV-Ladepunkte.
+            pvAvailableW: pvPhysicalCapW,
+            pvPureAvailableW: pvCapW,
+            pvPhysicalAvailableW: pvPhysicalCapW,
             pvAvailable: pvAvailableState,
             gridCapEvcsW,
             gridCapBinding,
@@ -8423,10 +8176,14 @@ if (components.length) {
                 now,
                 mode,
                 budgetMode: effectiveBudgetMode,
-                pvAvailableW: pvCapW,
-                stablePvAvailableW: (typeof pvSurplusNoEvAvg5mWState === 'number' && Number.isFinite(pvSurplusNoEvAvg5mWState)) ? pvSurplusNoEvAvg5mWState : pvCapW,
+                pvAvailableW: pvPhysicalCapW,
+                pvPureAvailableW: pvCapW,
+                pvPhysicalAvailableW: pvPhysicalCapW,
+                stablePvAvailableW: phaseStablePhysicalPvW,
+                stablePvPureAvailableW: phaseStablePurePvW,
+                stablePvPhysicalAvailableW: phaseStablePhysicalPvW,
                 budgetW,
-                remainingW: Number.isFinite(budgetW) ? remainingW : pvCapW,
+                remainingW: Number.isFinite(budgetW) ? remainingW : budgetW,
                 staleMeter,
                 staleBudget,
                 phaseAutoEnabled,
@@ -8648,22 +8405,31 @@ if (components.length) {
             if (rt && typeof rt.reserve === 'function') {
                 const evcsActualW = Math.max(0, Math.round(Number(totalFreshActualPowerW || 0)));
                 const evcsReserveW = evcsControlReserveW;
-                const evcsAllocationCapW = Number.isFinite(Number(pvAllocationEvcsCapWState))
-                    ? Math.max(0, Number(pvAllocationEvcsCapWState))
-                    : evcsReserveW;
-                // Nicht an pvAvailableState koppeln: Dieses Hysterese-Signal darf den
-                // bereits aktiven/angeforderten EVCS-PV-Anteil nicht fuer einen einzelnen
-                // Tick freigeben. Der Allocation-Cap bleibt die harte Obergrenze.
+                const evcsPhysicalPvCapW = Number.isFinite(Number(pvPhysicalCapW))
+                    ? Math.max(0, Number(pvPhysicalCapW))
+                    : (Number.isFinite(Number(pvBudgetCentralTotalWState))
+                        ? Math.max(0, Number(pvBudgetCentralTotalWState))
+                        : Math.max(0, Number(pvAllocationEvcsCapWState) || 0));
+                // Nicht an pvAvailableState koppeln: Dieses Hysterese-Signal gilt
+                // nur fuer reine PV-Ladung. Min+PV darf seine Zusatzleistung aus dem
+                // physikalischen PV-Rest nutzen. Die reine PV-Prioritaet wurde bereits
+                // im finalen Ladepunktplan mit `pvPureAvailableW` begrenzt.
                 const centralGrantFn = typeof rt.getPvGrant === 'function'
                     ? rt.getPvGrant.bind(rt)
                     : (typeof rt.grant === 'function' ? rt.grant.bind(rt) : null);
                 const totalPvDemandW = Math.max(0, evcsControlTotalPvIntentW, evcsControlPvReserveW);
                 const centralGrant = centralGrantFn
-                    ? centralGrantFn({ key: 'evcs', requestedW: totalPvDemandW, maxW: evcsAllocationCapW, pvOnly: true })
+                    ? centralGrantFn({
+                        key: 'evcs',
+                        requestedW: totalPvDemandW,
+                        maxW: evcsPhysicalPvCapW,
+                        pvOnly: true,
+                        applyEvcsAllocationCap: false,
+                    })
                     : null;
                 const centralGrantW = centralGrant && Number.isFinite(Number(centralGrant.grantW))
                     ? Math.max(0, Number(centralGrant.grantW))
-                    : evcsAllocationCapW;
+                    : evcsPhysicalPvCapW;
                 const evcsPvReserveW = computeEvcsPvBudgetReservationW({
                     reserveW: evcsReserveW,
                     // Aktive Ladeleistung bleibt reale Gesamtlast. Ein noch nicht
@@ -8675,7 +8441,7 @@ if (components.length) {
                     actualPvW: evcsControlPvReserveW,
                     intentPvW: evcsControlPvIntentW,
                     pendingIntentPvW: evcsControlPendingPvIntentW,
-                    allocationCapW: Math.min(evcsAllocationCapW, centralGrantW),
+                    allocationCapW: Math.min(evcsPhysicalPvCapW, centralGrantW),
                 });
                 rt.reserve({
                     key: 'evcs',
@@ -8727,6 +8493,8 @@ if (components.length) {
 
 module.exports = {
     ChargingManagementModule,
+    computeMinPvAllocationW,
+    computeGoalPowerCapW,
     computePvManagedDemandIntentW,
     computePendingPvStartIntentW,
     computePendingPvStartTotalBudgetW,

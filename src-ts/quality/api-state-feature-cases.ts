@@ -93,9 +93,21 @@ export const featureVisibilityCases: readonly FeatureVisibilityCase[] = [
     expected: { hasEvcs: false, hasStorageFarm: false, hasSmartHome: false, hasWeather: false, hasAiAdvisor: false },
   },
   {
-    id: 'storagefarm-enabled-with-real-proof-is-visible',
-    descriptionDe: 'Speicherfarm wird sichtbar, wenn mindestens ein echter Farm-Speicher-DP vorhanden ist.',
+    id: 'storagefarm-enabled-with-one-real-proof-is-hidden',
+    descriptionDe: 'Speicherfarm bleibt bei nur einem echten Speicher unsichtbar; Einzel-Speicher laufen über die normale Speicherregelung.',
     input: { storageFarmEnabled: true, storageFarmProofs: [{ index: 1, socDp: 'battery.1.soc', hasAnyRealDatapoint: true }] },
+    expected: { hasEvcs: false, hasStorageFarm: false, hasSmartHome: false, hasWeather: false, hasAiAdvisor: false },
+  },
+  {
+    id: 'storagefarm-enabled-with-two-real-proofs-is-visible',
+    descriptionDe: 'Speicherfarm wird sichtbar, wenn mindestens zwei echte Farm-Speicher-DPs vorhanden sind.',
+    input: {
+      storageFarmEnabled: true,
+      storageFarmProofs: [
+        { index: 1, socDp: 'battery.1.soc', hasAnyRealDatapoint: true },
+        { index: 2, socDp: 'battery.2.soc', hasAnyRealDatapoint: true },
+      ],
+    },
     expected: { hasEvcs: false, hasStorageFarm: true, hasSmartHome: false, hasWeather: false, hasAiAdvisor: false },
   },
   {

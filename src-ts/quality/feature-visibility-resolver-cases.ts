@@ -46,9 +46,9 @@ export const featureVisibilityResolverCases: readonly FeatureVisibilityResolverC
     expected: { hasEvcs: false, hasStorageFarm: false, hasSmartHome: false, hasWeather: false, hasAiAdvisor: false },
   },
   {
-    id: 'speicherfarm-erst-mit-echtem-farm-speicher',
-    descriptionDe: 'Speicherfarm wird nur sichtbar, wenn Farm aktiv und ein echter Farm-Speicher-DP vorhanden ist.',
-    input: { storageFarmEnabled: true, storageFarmProofs: [{ index: 1, socDp: 'farm.0.soc', hasAnyRealDatapoint: false }] },
+    id: 'speicherfarm-erst-mit-zwei-echten-farm-speichern',
+    descriptionDe: 'Speicherfarm wird nur sichtbar, wenn Farm aktiv und mindestens zwei echte Farmspeicher vorhanden sind.',
+    input: { storageFarmEnabled: true, storageFarmProofs: [{ index: 1, socDp: 'farm.0.soc', hasAnyRealDatapoint: false }, { index: 2, signedPowerDp: 'farm.1.power', hasAnyRealDatapoint: false }] },
     expected: { hasEvcs: false, hasStorageFarm: true, hasSmartHome: false, hasWeather: false, hasAiAdvisor: false },
   },
   {
@@ -76,7 +76,7 @@ export const featureVisibilityResolverCases: readonly FeatureVisibilityResolverC
       evcsEnabled: true,
       evcsProofs: [{ index: 1, controlDp: 'evcs.0.enable', hasAnyRealDatapoint: false }],
       storageFarmEnabled: true,
-      storageFarmProofs: [{ index: 1, signedPowerDp: 'farm.0.power', hasAnyRealDatapoint: false }],
+      storageFarmProofs: [{ index: 1, signedPowerDp: 'farm.0.power', hasAnyRealDatapoint: false }, { index: 2, socDp: 'farm.1.soc', hasAnyRealDatapoint: false }],
       smartHomeEnabled: true,
       weatherEnabled: true,
       weatherHasData: true,

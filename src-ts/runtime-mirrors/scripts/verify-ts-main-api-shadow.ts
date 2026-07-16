@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 28fa98a6204f98238f2ee469e11a0c5fa5c5597f0d4d02c20a22069c97f5b564
+ * Original-Hash: ef4dd0865893c4e99c8b95962d0382829ca359f6b5f41d8219edcf8fc5f00bce
  */
 
 /**
@@ -102,7 +102,8 @@ need(main, '_nwRunApiSetTsShadowPlan', '/api/set Shadow-Funktion vorhanden');
 need(main, "this._nwRunApiStateTsShadowComparison('GET /api/state')", '/api/state ruft Shadow-Vergleich auf');
 need(main, 'this._nwRunApiSetTsShadowPlan(scope, key, value)', '/api/set ruft Shadow-Schreibplan auf');
 need(main, 'mainApiTsShadow', '/config zeigt API-Shadow-Diagnose');
-need(main, 'res.json(tsStates || this.stateCache)', '/api/state nutzt TS mit JS-Fallback');
+need(main, 'const source = tsStates || this.stateCache;', '/api/state nutzt TS mit JS-Fallback');
+need(main, 'installerAccess ? source : nwBuildPublicStateSnapshot(source, true)', '/api/state redigiert Kundenantworten');
 
 const helpers = require(path.join(root, 'lib/ts-mirrors/backend/main-runtime/main-runtime-helpers.js'));
 if (!helpers || typeof helpers.compareApiStateShadow !== 'function') fail('compareApiStateShadow wird nicht exportiert');
@@ -116,4 +117,4 @@ if (!setPlan || setPlan.ok !== true || !setPlan.normalized || setPlan.normalized
 const blocked = helpers.buildApiSetShadowPlan('settings', 'peakShavingEnabled', true);
 if (!blocked || blocked.blocked !== true) fail('buildApiSetShadowPlan blockiert peakShavingEnabled nicht');
 
-console.log('[ts-main-api-shadow] OK: /api/state nutzt TS-Fallback-Pfad und Shadow-Diagnose bleibt vorhanden.');
+console.log('[ts-main-api-shadow] OK: /api/state nutzt TS-Fallback-Pfad, redigierte Kundenantwort und erhaltene Shadow-Diagnose.');

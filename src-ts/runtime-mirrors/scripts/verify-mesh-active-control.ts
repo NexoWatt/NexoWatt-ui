@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 35fee3d571d0bd3143f8e5f1c507c0eefedd13abcaefc585791f81ad4b87a607
+ * Original-Hash: 607a3258f21db14617ca4fb290db7015f31501173a34bde8f0c10f20dcfa2c99
  */
 
 /**
@@ -99,7 +99,12 @@ for (const file of ['src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 
 must('src-ts/runtime-executables/www/ems-apps.ts', 'Aktiv: Local-First Commands ausgeben');
 must('www/ems-apps.js', 'Aktiv: Local-First Commands ausgeben');
 must('src-ts/runtime-executables/www/ems-apps.ts', "['off','diagnostic','field_test','active']");
-must('package.json', '"version": "0.8.59"');
-must('io-package.json', '0.8.52');
+const releasePkg = JSON.parse(read('package.json'));
+const releaseIo = JSON.parse(read('io-package.json'));
+if (!releasePkg.version || !releaseIo.common || releasePkg.version !== releaseIo.common.version) {
+  console.error(`Version mismatch: package.json=${releasePkg.version || ''}, io-package.json=${releaseIo.common && releaseIo.common.version || ''}`);
+  process.exit(1);
+}
+// Historical 0.8.52 feature marker is no longer tied to the current release-news window.
 
 console.log('OK: Mesh/Microgrid Aktivmodus gibt nur neutrale Local-First-/Grid-Last-Command-Intents aus und bleibt herstellerneutral.');

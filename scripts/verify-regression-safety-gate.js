@@ -24,8 +24,9 @@ function mustNot(rel, needle, label) {
   }
 }
 const pkg = JSON.parse(read('package.json'));
-if (pkg.version !== '0.8.59') {
-  console.error(`[regression-safety-gate] package.json Version ist ${pkg.version}, erwartet 0.8.59`);
+const ioPkg = JSON.parse(read('io-package.json'));
+if (!pkg.version || !ioPkg.common || pkg.version !== ioPkg.common.version) {
+  console.error(`[regression-safety-gate] Versionskonflikt package.json=${pkg.version || ''}, io-package.json=${ioPkg.common && ioPkg.common.version || ''}`);
   process.exit(1);
 }
 const scripts = pkg.scripts || {};

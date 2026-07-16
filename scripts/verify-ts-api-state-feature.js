@@ -33,7 +33,7 @@ const requiredAnchors = [
   [apiStateSource, "`0`, `false` und `''` bleiben gültige Werte"],
   [apiStateSource, 'Code-Teil: buildApiStateEnvelope'],
   [visibilitySource, 'Code-Teil: deriveFeatureVisibility'],
-  [visibilitySource, 'EVCS benötigt Aktivierung plus echten Ladepunktnachweis'],
+  [visibilitySource, 'EVCS zählt nur mit echtem Ladepunktnachweis'],
   [runtimeSource, 'Code-Teil: runApiStateCases'],
   [runtimeSource, 'Code-Teil: runFeatureVisibilityCases'],
 ];

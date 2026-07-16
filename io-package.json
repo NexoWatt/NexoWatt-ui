@@ -1,8 +1,20 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.101",
+    "version": "0.8.103",
     "news": {
+      "0.8.103": {
+        "de": "Version 0.8.103: Korrigiert Min+PV im zentralen Lademanagement: Die technische Mindestleistung wird unabhängig vom PV-Überschuss aus dem normalen Gesamt-/Netzbudget gehalten, während nur die Zusatzleistung den zentralen PV-Grant nutzt. Reines PV-Laden sowie Auto und Boost bleiben unverändert; Anschluss-, Phasen-, §14a- und Stationslimits bleiben verbindlich. Modus-, Freigabe-, Phasen- und Zieländerungen lösen nun einen debouncten sofortigen EMS-Regelzyklus aus.",
+        "en": "Version 0.8.103: Fixes Min+PV in central charging management: the technical minimum charging power is maintained from the normal total/grid budget independently of PV surplus, while only additional power consumes the central PV grant. Pure PV charging as well as Auto and Boost remain unchanged; grid, phase, §14a and station limits remain binding. Mode, enable, phase and charging-goal changes now trigger a debounced immediate EMS control cycle."
+      },
+      "0.8.102": {
+        "de": "Version 0.8.102: Härtet öffentliche API-, SSE-, Konfigurations- und Mesh-Zugriffe feldkompatibel ab, entfernt Geheimnisse und interne Datenpunktpfade aus Kundenantworten, ergänzt kontrollierte RFID-/E-Mail-Endpunkte, Login-Schutz und eine konfigurierbare Kunden-Zugriffspolicy. Die EMS-, Speicher-, Lade-, Stations-, Heizstab- und Farm-Regelalgorithmen bleiben fachlich unverändert; ein TypeScript-No-Growth-Gate verhindert zusätzliche untypisierte Runtime.",
+        "en": "Version 0.8.102: Hardens public API, SSE, configuration and mesh access with field-compatible defaults, removes secrets and internal datapoint paths from customer responses, and adds controlled RFID/email endpoints, login protection and a configurable customer access policy. EMS, storage, charging, station, heating-rod and farm control algorithms remain functionally unchanged; a TypeScript no-growth gate prevents additional untyped runtime."
+      },
+      "0.8.101": {
+        "de": "Version 0.8.101: Stellt Netto-Gesamtleistung, arithmetischen SoC-Mittelwert und gesamte PV-/WR-Leistung der Speicherfarm wieder zentral für Energiefluss, Historie und EMS bereit. Farm-Aktivierung und Doppelzählungsschutz wurden vereinheitlicht.",
+        "en": "Version 0.8.101: Restores storage-farm net total power, arithmetic average state of charge and complete PV/inverter power as canonical values for energy flow, history and EMS. Farm activation and duplicate-count protection were unified."
+      },
       "0.8.100": {
         "de": "Version 0.8.100: Stabilisiert das Lademanagement für mehrere Ladepunkte. Gesamt- und PV-Budget, technische Mindestleistung, Strom-/Leistungsschritte sowie Stationslimits werden unmittelbar vor dem Geräte-Schreibpfad nochmals verbindlich geprüft. Prioritäten, Boost, Ziel-Laden, laufende Sessions und Stations-Round-Robin bleiben erhalten; Stationsdiagnosen zeigen jetzt exakt den final geschriebenen Ladeplan.",
         "en": "Version 0.8.100: Stabilizes charging management for multiple charge points. Total and PV budgets, technical minimum power, current/power steps and station limits are now enforced again immediately before device setpoints are written. Priorities, boost, target charging, active sessions and station round-robin remain intact, while station diagnostics now reflect the exact final write plan."
@@ -18,18 +30,6 @@
       "0.8.93": {
         "de": "Version 0.8.93: Berechnet Speicher-Lade- und Entladesollwerte aus frischer Batterie-Istleistung plus aktueller NVP-Differenz. Alte Sollwerte werden ohne gueltiges Istfeedback nicht mehr hochintegriert; kontrollierter Aufbau, schnelle Ruecknahme und 0-W-Zwischenstufe beruhigen die Eigenverbrauchsregelung.",
         "en": "Version 0.8.93: Calculates storage charge and discharge targets from fresh actual battery power plus the current grid-connection-point error. Old targets are no longer accumulated without valid feedback; controlled ramp-up, fast release and a zero-watt transition stabilize self-consumption control."
-      },
-      "0.8.92": {
-        "de": "Version 0.8.92: Glättet die Speicher-Eigenverbrauchsoptimierung am NVP mit Zielband, Filterzeit und RAW-Schutz, damit der Energiefluss ruhiger läuft ohne echten Netzbezug/Export zu verschleppen. Die Gebäudeverbrauchsberechnung bevorzugt frische gemappte Verbrauchs-DPs und nutzt die Bilanz aus PV, NVP und Speicher als Fallback/Diagnose.",
-        "en": "Version 0.8.92: Smooths storage self-consumption control at the grid connection point with a target band, filter time and raw guard so the energy flow is calmer without delaying real import/export. Building load calculation now prefers fresh mapped consumption datapoints and uses the PV, grid and storage balance as fallback/diagnostics."
-      },
-      "0.8.91": {
-        "de": "Version 0.8.91: Korrigiert die Sichtbarkeit optionaler Kunden-Unterseiten. SmartHome und Speicherfarm erscheinen im Burger-Menü nur noch über /config.featureVisibility; alte Runtime-/Legacy-Flags können sie nicht mehr einblenden. Speicherfarm ist zusätzlich erst ab aktiver AppCenter-App und mindestens zwei echten Farm-Speichern sichtbar.",
-        "en": "Version 0.8.91: Fixes visibility of optional customer pages. SmartHome and storage farm are now shown in the burger menu only via /config.featureVisibility; stale runtime/legacy flags can no longer expose them. Storage farm additionally requires the active AppCenter app and at least two real farm storages."
-      },
-      "0.8.90": {
-        "de": "Version 0.8.90: Korrigiert den Wallbox-Speicherschutz herstellerübergreifend. Ladepunkte ohne Speicher-Mitnutzung verschieben jetzt das NVP-Ziel der Speicher-Eigenverbrauchsoptimierung, sodass der Speicher nur den Hausverbrauch ohne Wallbox abdeckt. Die Korrektur greift vor den Zielpfaden für signed/split-DPs, Sungrow, FENECON und E3/DC RSCP.",
-        "en": "Version 0.8.90: Fixes wallbox storage protection across manufacturer profiles. Charge points without storage assist now shift the storage self-consumption NVP target so the battery only covers house load excluding the wallbox. The correction is applied before the signed/split, Sungrow, FENECON and E3/DC RSCP target paths."
       }
     },
     "title": "NexoWatt UI",
@@ -341,7 +341,9 @@
       "installerGroups": "system.group.installer,system.group.eosInstaller,system.group.nexowattInstaller",
       "customerGroups": "system.group.user,system.group.eosUser,system.group.nexowattUser",
       "defaultRole": "none",
-      "trustedHeaderEnabled": false
+      "trustedHeaderEnabled": false,
+      "customerWritePolicy": "all",
+      "allowedOrigins": ""
     }
   },
   "instanceObjects": [

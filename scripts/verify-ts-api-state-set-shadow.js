@@ -37,7 +37,9 @@ contains('lib/ts-mirrors/backend/main-runtime/main-runtime-helpers.js', 'exports
 contains('lib/ts-mirrors/backend/main-runtime/main-runtime-helpers.js', 'exports.buildApiSetShadowPlan');
 contains('main.js', '_nwRunApiStateTsShadowComparison');
 contains('main.js', '_nwRunApiSetTsShadowPlan');
-contains('main.js', 'res.json(tsStates || this.stateCache);');
+contains('main.js', 'const source = tsStates || this.stateCache;');
+contains('main.js', 'nwBuildPublicStateSnapshot(source, true)');
+contains('main.js', 'installerAccess ? source : nwBuildPublicStateSnapshot(source, true)');
 
 const helper = require(path.join(root, 'lib/ts-mirrors/backend/main-runtime/main-runtime-helpers.js'));
 if (typeof helper.buildApiStateShadowSnapshot !== 'function') fail('buildApiStateShadowSnapshot wird nicht exportiert.');
@@ -56,4 +58,4 @@ if (!plan.normalized || plan.normalized.value !== false) fail('api-set Shadow-Pl
 const blocked = helper.buildApiSetShadowPlan('settings', 'peakShavingEnabled', false);
 if (blocked.blocked !== true) fail('peakShavingEnabled muss im Shadow-Plan als blocked markiert werden.');
 
-console.log('[verify-ts-api-state-set-shadow] OK: /api/state und /api/set TS-Shadow/Helfer sind kompatibel mit 0.7.100.');
+console.log('[verify-ts-api-state-set-shadow] OK: /api/state nutzt TS-Builder mit redigierter Kundenantwort und vollständiger Installerdiagnose; /api/set-Shadow bleibt kompatibel.');

@@ -71,7 +71,10 @@ export const customerFeatureVisibilityCases: {
   withEvcsAndFarm: {
     evcsProofs: [{ index: 1, measuredPowerDp: 'evcs.1.power', hasAnyRealDatapoint: true }],
     storageFarmEnabled: true,
-    storageFarmProofs: [{ index: 1, socDp: 'storageFarm.1.soc', hasAnyRealDatapoint: true }],
+    storageFarmProofs: [
+      { index: 1, socDp: 'storageFarm.1.soc', hasAnyRealDatapoint: true },
+      { index: 2, socDp: 'storageFarm.2.soc', hasAnyRealDatapoint: true },
+    ],
     smartHomeEnabled: true,
     weatherEnabled: true,
     weatherHasData: true,

@@ -113,7 +113,7 @@ export function buildCustomerFeatureDiagnostics(input: CustomerFeatureDiagnostic
       'storageFarm',
       v.hasStorageFarm,
       v.hasStorageFarm
-        ? 'Speicherfarm sichtbar: Farm aktiv und mindestens ein echter Farmspeicher ist nachgewiesen.'
+        ? 'Speicherfarm sichtbar: Farm aktiv und mindestens zwei echte Farmspeicher sind nachgewiesen.'
         : input.storageFarmEnabled === true && !farmProofs
           ? 'Speicherfarm ausgeblendet: Feature ist aktiv, aber es wurde kein echter Farmspeicher-Datenpunkt nachgewiesen.'
           : 'Speicherfarm ausgeblendet: keine aktive Speicherfarm für diese Kundenanlage.'

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: a884d8150f37fa1fd616d7a5b492f26e781f4aafc3949aafb824e95e305becce
+ * Original-Hash: 14b58382ded0bc04a1c129ca2ccd1479df6e478bce9a83f49ed1ee6cb7b21776
  */
 
 /**
@@ -100,7 +100,9 @@ contains('lib/ts-mirrors/backend/main-runtime/main-runtime-helpers.js', 'exports
 contains('lib/ts-mirrors/backend/main-runtime/main-runtime-helpers.js', 'exports.buildApiSetShadowPlan');
 contains('main.js', '_nwRunApiStateTsShadowComparison');
 contains('main.js', '_nwRunApiSetTsShadowPlan');
-contains('main.js', 'res.json(tsStates || this.stateCache);');
+contains('main.js', 'const source = tsStates || this.stateCache;');
+contains('main.js', 'nwBuildPublicStateSnapshot(source, true)');
+contains('main.js', 'installerAccess ? source : nwBuildPublicStateSnapshot(source, true)');
 
 const helper = require(path.join(root, 'lib/ts-mirrors/backend/main-runtime/main-runtime-helpers.js'));
 if (typeof helper.buildApiStateShadowSnapshot !== 'function') fail('buildApiStateShadowSnapshot wird nicht exportiert.');
@@ -119,4 +121,4 @@ if (!plan.normalized || plan.normalized.value !== false) fail('api-set Shadow-Pl
 const blocked = helper.buildApiSetShadowPlan('settings', 'peakShavingEnabled', false);
 if (blocked.blocked !== true) fail('peakShavingEnabled muss im Shadow-Plan als blocked markiert werden.');
 
-console.log('[verify-ts-api-state-set-shadow] OK: /api/state und /api/set TS-Shadow/Helfer sind kompatibel mit 0.7.100.');
+console.log('[verify-ts-api-state-set-shadow] OK: /api/state nutzt TS-Builder mit redigierter Kundenantwort und vollständiger Installerdiagnose; /api/set-Shadow bleibt kompatibel.');

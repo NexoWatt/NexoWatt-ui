@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2c7787258c3607de591f8581dcec4650475c0373142423cfcc4d70b5fc3eccb8
+ * Original-Hash: 32980fcf2eb8841034c1d9525ec465505d3e2909523d6edbf291a90273776d12
  */
 
 /**
@@ -67,7 +67,12 @@ function must(file, text){const s=read(file); if(!s.includes(text)){console.erro
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function mustNot(file, text){const s=read(file); if(s.includes(text)){console.error(`Forbidden in ${file}: ${text}`); process.exit(1);}}
-must('package.json','"version": "0.8.59"');
+const releasePkg = JSON.parse(read('package.json'));
+const releaseIo = JSON.parse(read('io-package.json'));
+if (!releasePkg.version || !releaseIo.common || releasePkg.version !== releaseIo.common.version) {
+  console.error(`Version mismatch: package.json=${releasePkg.version || ''}, io-package.json=${releaseIo.common && releaseIo.common.version || ''}`);
+  process.exit(1);
+}
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','this._zeroExportSinkRuntime');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','_zeroExportSinkAvailability');
 must('src-ts/runtime-executables/ems/modules/grid-constraints.ts','_classifyZeroExportSinkAck');

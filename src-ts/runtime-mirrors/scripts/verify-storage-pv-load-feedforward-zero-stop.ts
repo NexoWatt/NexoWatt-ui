@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: fd8d327d118132bf90648279a12ab8908469208d3d8c9969236c0c1e1337e88d
+ * Original-Hash: 6cd2823ffd202acb6f0361db560641994c268338450fe0861b16360c818a3061
  */
 
 /**
@@ -176,7 +176,10 @@ function makeAdapter({ profile = 'generic', coupling = 'ac', farm = false, state
       enableGridConstraints: false,
       datapoints,
       storageFarm: farm ? {
-        storages: [{ enabled: true, setSignedPowerId: 'farm.storage.1.setPowerW' }],
+        storages: [
+          { enabled: true, setSignedPowerId: 'farm.storage.1.setPowerW' },
+          { enabled: true, setSignedPowerId: 'farm.storage.2.setPowerW' },
+        ],
       } : {},
       storage: {
         controlMode: 'targetPower',
@@ -243,8 +246,8 @@ function makeAdapter({ profile = 'generic', coupling = 'ac', farm = false, state
   };
 
   if (farm) {
-    states.set('storageFarm.storagesOnline', { val: 1, ts: nowMs() });
-    states.set('storageFarm.storagesDispatchAvailable', { val: 1, ts: nowMs() });
+    states.set('storageFarm.storagesOnline', { val: 2, ts: nowMs() });
+    states.set('storageFarm.storagesDispatchAvailable', { val: 2, ts: nowMs() });
     states.set('storageFarm.totalSocOnline', { val: 60, ts: nowMs() });
   }
 

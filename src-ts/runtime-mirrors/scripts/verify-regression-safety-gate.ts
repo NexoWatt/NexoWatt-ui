@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: f0426b36b7be01d1b4401e7a99c8c413ff4b33766ffc82004c09dd1f2d94ca21
+ * Original-Hash: 8ccadbacb2bc74215a9b7422f62cdca1355b6088d30885e8e1bef99b95f8d1fe
  */
 
 /**
@@ -87,8 +87,9 @@ function mustNot(rel, needle, label) {
   }
 }
 const pkg = JSON.parse(read('package.json'));
-if (pkg.version !== '0.8.59') {
-  console.error(`[regression-safety-gate] package.json Version ist ${pkg.version}, erwartet 0.8.59`);
+const ioPkg = JSON.parse(read('io-package.json'));
+if (!pkg.version || !ioPkg.common || pkg.version !== ioPkg.common.version) {
+  console.error(`[regression-safety-gate] Versionskonflikt package.json=${pkg.version || ''}, io-package.json=${ioPkg.common && ioPkg.common.version || ''}`);
   process.exit(1);
 }
 const scripts = pkg.scripts || {};

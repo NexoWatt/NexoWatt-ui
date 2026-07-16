@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 38a9e98dc2a31e665a2ed2ad377ebcc915079f69c0b14f0a1fb2a0a5d0976d0a
+ * Original-Hash: 64150f90ce58caa9fb38aea4b5795f8e383b230cdbe0980570b9aeed3d8232bf
  */
 
 /**
@@ -72,7 +72,12 @@ function must(file, needle){ const s=read(file); if(!s.includes(needle)){ consol
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function mustNot(file, needle){ const s=read(file); if(s.includes(needle)){ console.error(`[mesh-target-groups] Forbidden in ${file}: ${needle}`); process.exit(1); } }
-must('package.json','"version": "0.8.59"');
+const releasePkg = JSON.parse(read('package.json'));
+const releaseIo = JSON.parse(read('io-package.json'));
+if (!releasePkg.version || !releaseIo.common || releasePkg.version !== releaseIo.common.version) {
+  console.error(`Version mismatch: package.json=${releasePkg.version || ''}, io-package.json=${releaseIo.common && releaseIo.common.version || ''}`);
+  process.exit(1);
+}
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts','nexowatt.mesh-microgrid-target-group-fairness.v1');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts','function normalizeTargetGroups');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts','function buildTargetGroupPlan');

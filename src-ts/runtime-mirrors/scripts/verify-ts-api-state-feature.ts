@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 8212d689a6ce404ac8094f5920b0a654f0862e3d9217259691bb0d762a54822a
+ * Original-Hash: e189b3369cc26fb8004805ce68c60484b2ae4508d3a8798c7d39d5b57a0427f2
  */
 
 /**
@@ -64,7 +64,7 @@ const requiredAnchors = [
   [apiStateSource, "`0`, `false` und `''` bleiben gültige Werte"],
   [apiStateSource, 'Code-Teil: buildApiStateEnvelope'],
   [visibilitySource, 'Code-Teil: deriveFeatureVisibility'],
-  [visibilitySource, 'EVCS benötigt Aktivierung plus echten Ladepunktnachweis'],
+  [visibilitySource, 'EVCS zählt nur mit echtem Ladepunktnachweis'],
   [runtimeSource, 'Code-Teil: runApiStateCases'],
   [runtimeSource, 'Code-Teil: runFeatureVisibilityCases'],
 ];

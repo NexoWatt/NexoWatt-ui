@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/frontend/feature-visibility-diagnostics.ts
- * Quell-Hash: sha256:b542d6b778908bddb3efe94a33fff1756e929d13741ae5d7aeff879acf34585b
+ * Quell-Hash: sha256:6e8fbb0cc9d748f871b78a71aa651d4314e715bdecdac471236465a287257f0c
  * Erzeugung: npm run sync:ts-frontend-mirrors
  *
  * Zweck:
@@ -85,7 +85,7 @@ export function buildCustomerFeatureDiagnostics(input) {
                 ? 'EVCS ausgeblendet: Feature ist zwar aktiv, aber es wurde kein echter Ladepunkt-Datenpunkt nachgewiesen.'
                 : 'EVCS ausgeblendet: keine aktive Wallbox-Konfiguration für diese Kundenanlage.'),
         diagnostic('storageFarm', v.hasStorageFarm, v.hasStorageFarm
-            ? 'Speicherfarm sichtbar: Farm aktiv und mindestens ein echter Farmspeicher ist nachgewiesen.'
+            ? 'Speicherfarm sichtbar: Farm aktiv und mindestens zwei echte Farmspeicher sind nachgewiesen.'
             : input.storageFarmEnabled === true && !farmProofs
                 ? 'Speicherfarm ausgeblendet: Feature ist aktiv, aber es wurde kein echter Farmspeicher-Datenpunkt nachgewiesen.'
                 : 'Speicherfarm ausgeblendet: keine aktive Speicherfarm für diese Kundenanlage.'),

@@ -254,6 +254,8 @@ function computeCentralBudgetGrant(runtime = {}, request = {}) {
         ? Math.max(0, requestedRawW)
         : Number.MAX_SAFE_INTEGER;
     const pvOnly = request && request.pvOnly === true;
+    // Pure PV charging uses the customer allocation cap; Min+PV may request the physical PV remainder for extra power.
+    const applyEvcsAllocationCap = !(request && request.applyEvcsAllocationCap === false);
     const key = String((request && (request.key || request.consumer || request.app)) || '').trim().toLowerCase();
     const remainingTotalRaw = Number(runtime && runtime.remainingTotalW);
     const remainingTotalW = Number.isFinite(remainingTotalRaw)
@@ -275,7 +277,7 @@ function computeCentralBudgetGrant(runtime = {}, request = {}) {
         && typeof runtime.gates.pvAllocation === 'object'
         ? runtime.gates.pvAllocation
         : null;
-    if (pvOnly && key === 'evcs' && allocation && Number.isFinite(Number(allocation.evcsCapW))) {
+    if (pvOnly && key === 'evcs' && applyEvcsAllocationCap && allocation && Number.isFinite(Number(allocation.evcsCapW))) {
         requestCapW = Math.min(requestCapW, Math.max(0, Number(allocation.evcsCapW)));
     }
 
@@ -294,6 +296,7 @@ function computeCentralBudgetGrant(runtime = {}, request = {}) {
         allocationEvcsCapW: allocation && Number.isFinite(Number(allocation.evcsCapW))
             ? roundW(Math.max(0, Number(allocation.evcsCapW)))
             : null,
+        allocationCapApplied: !!(pvOnly && key === 'evcs' && applyEvcsAllocationCap),
         pvOnly,
         key,
         source: 'central-ems-budget',

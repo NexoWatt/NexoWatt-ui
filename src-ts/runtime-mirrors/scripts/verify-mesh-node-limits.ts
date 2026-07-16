@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4c0b5041e80329200d855d0e5622ff41a2d0001a8f6c7151683beba6b3a21517
+ * Original-Hash: f0e7080d276d79184e19ee09ecbbd6eee21b385682298fa2aaa1add526d05139
  */
 
 /**
@@ -72,7 +72,12 @@ function must(file, text){ const s=read(file); if(!s.includes(text)){ console.er
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function mustNot(file, text){ const s=read(file); if(s.includes(text)){ console.error(`Forbidden in ${file}: ${text}`); process.exit(1); } }
-must('package.json', '"version": "0.8.59"');
+const releasePkg = JSON.parse(read('package.json'));
+const releaseIo = JSON.parse(read('io-package.json'));
+if (!releasePkg.version || !releaseIo.common || releasePkg.version !== releaseIo.common.version) {
+  console.error(`Version mismatch: package.json=${releasePkg.version || ''}, io-package.json=${releaseIo.common && releaseIo.common.version || ''}`);
+  process.exit(1);
+}
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'nexowatt.mesh-microgrid-target-group-fairness.v1');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'buildCommandLimitDiagnostics');
 must('src-ts/runtime-executables/ems/modules/mesh-microgrid.ts', 'maxImportW');

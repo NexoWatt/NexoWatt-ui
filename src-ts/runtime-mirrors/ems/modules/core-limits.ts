@@ -28,7 +28,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 6946481899f51568ef28aefa3566ab46a077d7ead6d2be58bb48b4611946b5b1
+ * Original-Hash: f1e9ebb85764c94ddbb21aecd6affacc192b3e88f0f5cc330219d88331767aed
  */
 
 /**
@@ -119,6 +119,11 @@ type CoreBudgetGrantRequest = {
     consumer?: string;
     app?: string;
     maxW?: number | null;
+    /**
+     * Reines PV-Laden nutzt den Kundenanteil. Min+PV darf für seine Zusatzleistung
+     * den physikalischen PV-Rest anfragen und setzt diesen Schalter deshalb auf false.
+     */
+    applyEvcsAllocationCap?: boolean;
 };
 
 type CoreBudgetGrantRuntime = {
@@ -233,6 +238,62 @@ function roundW(v, fallback = 0) {
 function isFiniteNumber(v) {
     return typeof v === 'number' && Number.isFinite(v);
 }
+
+/**
+ * Code-Teil: normalizePvSurplusPriority
+ * Zweck: Normalisiert die Kundenauswahl fuer die reine PV-Ueberschuss-Verteilung.
+ * Min+PV nutzt diese Prioritaet bewusst nicht fuer seine technische Mindestleistung.
+ */
+function normalizePvSurplusPriority(value: unknown) {
+    const mode = String(value || '').trim().toLowerCase();
+    if (mode === 'storage' || mode === 'speicher') return 'storage';
+    if (mode === 'emobility' || mode === 'e-mobility' || mode === 'evcs' || mode === 'wallbox') return 'emobility';
+    return 'both';
+}
+
+/**
+ * Code-Teil: buildPvSurplusAllocation
+ * Zweck: Teilt das physikalische PV-Budget fuer reines PV-Laden zwischen
+ * E-Mobilitaet und Speicher. Min+PV wird spaeter mit einem separaten physischen
+ * PV-Grant behandelt; seine Basisleistung stammt aus dem Gesamt-/Netzbudget.
+ */
+function buildPvSurplusAllocation(
+    totalW: unknown,
+    modeRaw: unknown,
+    evcsSharePctRaw: unknown,
+    options: CoreLimitsUnknownRecord = {},
+) {
+    const total = Math.max(0, Number(totalW) || 0);
+    const mode = normalizePvSurplusPriority(modeRaw);
+    const evcsSharePct = clamp(Number(evcsSharePctRaw), 0, 100, 50);
+    const storageEligible = options.storageEligible !== false;
+    const storageMaxChargeWRaw = Number(options.storageMaxChargeW);
+    const storageMaxChargeW = Number.isFinite(storageMaxChargeWRaw) && storageMaxChargeWRaw > 0
+        ? storageMaxChargeWRaw
+        : Number.POSITIVE_INFINITY;
+
+    let storageWantedW = 0;
+    let reason = '';
+    if (!storageEligible) reason = 'storage-not-eligible';
+    else if (mode === 'storage') { storageWantedW = total; reason = 'storage-first'; }
+    else if (mode === 'emobility') { storageWantedW = 0; reason = 'emobility-first'; }
+    else { storageWantedW = total * (1 - (evcsSharePct / 100)); reason = 'shared'; }
+
+    const storageGuaranteedW = storageEligible
+        ? Math.max(0, Math.min(total, storageWantedW, storageMaxChargeW))
+        : 0;
+    const evcsCapW = Math.max(0, total - storageGuaranteedW);
+    return {
+        mode,
+        evcsSharePct: Math.round(evcsSharePct),
+        totalW: roundW(total),
+        evcsCapW: roundW(evcsCapW),
+        storageGuaranteedW: roundW(storageGuaranteedW),
+        storageEligible,
+        storageMaxChargeW: Number.isFinite(storageMaxChargeW) ? roundW(storageMaxChargeW) : null,
+        reason,
+    };
+}
 /**
  * Code-Teil: computePvBudgetFlowRawW
  * Zweck: Rekonstruiert das physikalische PV-Budget aus dem signierten NVP,
@@ -266,6 +327,9 @@ function computeCentralBudgetGrant(runtime: CoreBudgetGrantRuntime = {}, request
         ? Math.max(0, requestedRawW)
         : Number.MAX_SAFE_INTEGER;
     const pvOnly = request && request.pvOnly === true;
+    // Nur reines PV-Laden wird vom Kundenanteil begrenzt. Min+PV fragt fuer
+    // seine Zusatzleistung den physikalischen PV-Rest desselben Core-Budgets ab.
+    const applyEvcsAllocationCap = !(request && request.applyEvcsAllocationCap === false);
     const key = String((request && (request.key || request.consumer || request.app)) || '').trim().toLowerCase();
     const remainingTotalRaw = Number(runtime && runtime.remainingTotalW);
     const remainingTotalW = Number.isFinite(remainingTotalRaw)
@@ -287,7 +351,7 @@ function computeCentralBudgetGrant(runtime: CoreBudgetGrantRuntime = {}, request
         && typeof runtime.gates.pvAllocation === 'object'
         ? runtime.gates.pvAllocation
         : null;
-    if (pvOnly && key === 'evcs' && allocation && Number.isFinite(Number(allocation.evcsCapW))) {
+    if (pvOnly && key === 'evcs' && applyEvcsAllocationCap && allocation && Number.isFinite(Number(allocation.evcsCapW))) {
         requestCapW = Math.min(requestCapW, Math.max(0, Number(allocation.evcsCapW)));
     }
 
@@ -306,6 +370,7 @@ function computeCentralBudgetGrant(runtime: CoreBudgetGrantRuntime = {}, request
         allocationEvcsCapW: allocation && Number.isFinite(Number(allocation.evcsCapW))
             ? roundW(Math.max(0, Number(allocation.evcsCapW)))
             : null,
+        allocationCapApplied: !!(pvOnly && key === 'evcs' && applyEvcsAllocationCap),
         pvOnly,
         key,
         source: 'central-ems-budget',
@@ -2188,6 +2253,8 @@ module.exports = {
     CoreLimitsModule,
     makeBudgetRuntime,
     computeCentralBudgetGrant,
+    normalizePvSurplusPriority,
+    buildPvSurplusAllocation,
     computePvBudgetFlowRawW,
     resolvePvBudgetPhysicalCapW,
 };

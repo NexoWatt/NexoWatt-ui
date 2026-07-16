@@ -35,6 +35,61 @@
         }
       }
     },
+    "sicherheit": {
+      "type": "panel",
+      "label": "Sicherheit",
+      "title": "Sicherheit",
+      "items": {
+        "__securityInfo": {
+          "type": "staticText",
+          "text": "Die Kundenoberfläche kann weiterhin ohne separates Frontend-Passwort bedient werden. Für Feldanlagen wird nach erfolgreichem Test die Begrenzung auf Anlagen-LAN/VPN empfohlen. 'Alle Netze' ist ausschließlich der feldkompatible Übergangsmodus für bestehende Installationen.",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "accessControl.customerWritePolicy": {
+          "type": "select",
+          "label": "Kunden-Schreibzugriffe erlauben",
+          "attr": "accessControl.customerWritePolicy",
+          "default": "all",
+          "help": "Alle Netze behält das bisherige Verhalten. LAN/VPN erlaubt Bedienung nur aus privaten/ lokalen Netzen. Anmeldung verlangt immer eine gültige NexoWatt-/ioBroker-Session.",
+          "options": [
+            {
+              "label": "Alle Netze (Legacy/Feldkompatibilität)",
+              "value": "all"
+            },
+            {
+              "label": "Nur Anlagen-LAN / VPN (empfohlen)",
+              "value": "lan"
+            },
+            {
+              "label": "Nur mit Anmeldung",
+              "value": "session"
+            }
+          ],
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "accessControl.allowedOrigins": {
+          "type": "text",
+          "label": "Zusätzlich erlaubte Browser-Origins",
+          "attr": "accessControl.allowedOrigins",
+          "default": "",
+          "help": "Optional, durch Komma oder Zeilenumbruch getrennt, z. B. https://ems.example.de. Leer lassen, wenn kein abgesicherter Reverse-Proxy verwendet wird.",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "__securityNetworkWarning": {
+          "type": "staticText",
+          "text": "Port 8188 nicht direkt ins Internet weiterleiten. Für Fernzugriff VPN oder einen abgesicherten HTTPS-Reverse-Proxy verwenden.",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        }
+      }
+    },
     "diagnose": {
       "type": "panel",
       "label": "Diagnose",

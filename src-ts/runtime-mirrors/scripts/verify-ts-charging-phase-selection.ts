@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c1b7883dc55048add1ac2b1bd12d84e6020c03ccd153db850a0db797c50982f6
+ * Original-Hash: 671552740e50dbc29e2abcf9f2e9ed02d10cc8ed19b47145fa920ab7657cf6e6
  */
 
 /**
@@ -105,6 +105,31 @@ need(down.wallboxes[0].targetPhaseCount === 1 && down.wallboxes[0].switchDirecti
 
 const stale = phase.buildChargingPhaseSelectionPlan({ now, stablePvAvailableW: 6000, staleMeter: true, wallboxes: [{ ...commonWb, highSinceMs: now - 999000 }] });
 need(stale.wallboxes[0].targetPhaseCount === 1 && stale.wallboxes[0].switchRequired === false, 'Stale Meter darf nicht auf 3p hochschalten.');
+
+// Die 80/20-Kundenpriorität darf nur reine PV-Ladepunkte bei der
+// 1p/3p-Entscheidung begrenzen. Min+PV sieht den physikalischen PV-Rest,
+// Auto/Boost das normale Gesamtbudget.
+const splitPhaseInput = {
+  now,
+  pvPureAvailableW: 2000,
+  pvPhysicalAvailableW: 6000,
+  stablePvPureAvailableW: 2000,
+  stablePvPhysicalAvailableW: 6000,
+  budgetW: 9000,
+  remainingW: 9000,
+};
+const purePhase = phase.buildChargingPhaseSelectionPlan({
+  ...splitPhaseInput, wallboxes: [{ ...commonWb, effectiveMode: 'pv', highSinceMs: now - 301000 }],
+});
+need(purePhase.wallboxes[0].targetPhaseCount === 1, 'Reines PV-Laden ignoriert den priorisierten Pure-PV-Cap bei der Phasenwahl.');
+const minPvPhase = phase.buildChargingPhaseSelectionPlan({
+  ...splitPhaseInput, wallboxes: [{ ...commonWb, effectiveMode: 'minpv', highSinceMs: now - 301000 }],
+});
+need(minPvPhase.wallboxes[0].targetPhaseCount === 3, 'Min+PV wird bei der Phasenwahl fälschlich vom reinen PV-Prioritätscap begrenzt.');
+const autoPhase = phase.buildChargingPhaseSelectionPlan({
+  ...splitPhaseInput, wallboxes: [{ ...commonWb, effectiveMode: 'auto', highSinceMs: now - 301000 }],
+});
+need(autoPhase.wallboxes[0].targetPhaseCount === 3, 'Auto wird bei der Phasenwahl fälschlich vom PV-Prioritätscap begrenzt.');
 
 const allocation = alloc.buildChargingAllocationShadowPlan({
   preferTsNativeAllocation: true, tsNormalSourceLock: true, budgetW: 5100, pvAvailableW: 5100, phasePlan: up,

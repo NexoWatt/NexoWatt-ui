@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 3ca958078e31bd60dd77e8776abcd793205ec76a40eabb01ffb966fe1e2c7bb1
+ * Original-Hash: 157e9221384626c58544091e3d623db67b1043b8f0e93a1556227331e6cf9e09
  */
 
 /**
@@ -81,7 +81,8 @@ for (const snippet of [
   '_nwBuildApiStateTsRuntimeResponse',
   '_nwTryApplyApiSetTsSettingsPlan',
   "const tsStates = this._nwBuildApiStateTsRuntimeResponse('GET /api/state')",
-  'res.json(tsStates || this.stateCache)',
+  'const source = tsStates || this.stateCache;',
+  'installerAccess ? source : nwBuildPublicStateSnapshot(source, true)',
   "source: 'ts-settings-plan'",
   'apiStateRuntime: this._nwApiStateTsRuntimeLast',
   'apiSetRuntime: this._nwApiSetTsRuntimeLast',
@@ -120,4 +121,4 @@ if (!stringPlan.ok || !stringPlan.plan || stringPlan.plan.value !== '12345') fai
 const numberPlan = apiSetMirror.buildMainSettingsWritePlan({ scope: 'settings', key: 'aiAdvisorEvTargetSocPct', value: '500' });
 if (!numberPlan.ok || !numberPlan.plan || numberPlan.plan.value !== 100) fail('/api/set TS-Plan begrenzt aiAdvisorEvTargetSocPct nicht korrekt.');
 
-console.log('[ts-main-api-productive] OK: /api/state und settings-/api/set TS-Produktivpfad geprüft.');
+console.log('[ts-main-api-productive] OK: /api/state nutzt TS-Produktivpfad mit redigierter Kundenantwort; settings-/api/set TS-Produktivpfad geprüft.');

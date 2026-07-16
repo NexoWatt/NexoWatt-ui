@@ -28,6 +28,7 @@ export interface ChargingPhaseWallboxInput {
   online?: unknown;
   vehiclePlugged?: unknown;
   charging?: unknown;
+  effectiveMode?: unknown;
   chargerType?: unknown;
   phaseMode?: unknown;
   phases?: unknown;
@@ -62,7 +63,11 @@ export interface ChargingPhaseSelectionInput {
   mode?: unknown;
   budgetMode?: unknown;
   pvAvailableW?: unknown;
+  pvPureAvailableW?: unknown;
+  pvPhysicalAvailableW?: unknown;
   stablePvAvailableW?: unknown;
+  stablePvPureAvailableW?: unknown;
+  stablePvPhysicalAvailableW?: unknown;
   budgetW?: unknown;
   remainingW?: unknown;
   staleMeter?: unknown;
@@ -83,6 +88,7 @@ export interface ChargingPhaseWallboxDecision {
   safe: string;
   name: string;
   chargerType: string;
+  effectiveMode: string;
   mode: ChargingPhaseMode;
   enabled: boolean;
   online: boolean;
@@ -224,11 +230,17 @@ function phaseValueFor(target: 1 | 3, value1p: unknown, value3p: unknown): numbe
   return target;
 }
 
-function effectiveStableBudgetW(input: ChargingPhaseSelectionInput): number {
-  const candidates = [input.stablePvAvailableW, input.pvAvailableW, input.remainingW, input.budgetW];
+/** Selects the stable budget that matches the wallbox charging mode. */
+function effectiveStableBudgetW(input: ChargingPhaseSelectionInput, effectiveMode = ''): number {
+  const mode = str(effectiveMode, '').toLowerCase();
+  const candidates = mode === 'pv'
+    ? [input.stablePvPureAvailableW, input.pvPureAvailableW, input.stablePvAvailableW, input.pvAvailableW]
+    : (mode === 'minpv'
+      ? [input.stablePvPhysicalAvailableW, input.pvPhysicalAvailableW, input.stablePvAvailableW, input.pvAvailableW]
+      : [input.remainingW, input.budgetW, input.stablePvPhysicalAvailableW, input.pvPhysicalAvailableW, input.stablePvAvailableW, input.pvAvailableW]);
   for (const candidate of candidates) {
     const n = finiteOrNull(candidate);
-    if (n !== null && n > 0) return Math.max(0, Math.round(n));
+    if (n !== null) return Math.max(0, Math.round(n));
   }
   return 0;
 }
@@ -249,7 +261,7 @@ function unique(values: string[]): string[] {
 export function buildChargingPhaseSelectionPlan(input: ChargingPhaseSelectionInput): ChargingPhaseSelectionPlan {
   const now = nonNegative(input.now, Date.now()) || Date.now();
   const phaseAutoEnabled = boolValue(input.phaseAutoEnabled, true);
-  const stableBudgetW = effectiveStableBudgetW(input);
+  const stableBudgetW = effectiveStableBudgetW(input, 'minpv');
   const globalUpW = nonNegative(input.switchUpThresholdW, 4800) || 4800;
   const globalDownW = nonNegative(input.switchDownThresholdW, 3700) || 3700;
   const globalUpMs = nonNegative(input.switchUpStableMs, 5 * 60 * 1000) || 5 * 60 * 1000;
@@ -278,6 +290,8 @@ export function buildChargingPhaseSelectionPlan(input: ChargingPhaseSelectionInp
     const online = boolValue(wb.online, false);
     const connected = boolValue(wb.vehiclePlugged, enabled || online);
     const charging = boolValue(wb.charging, false);
+    const effectiveMode = str(wb.effectiveMode, 'normal').toLowerCase();
+    const wallboxStableBudgetW = effectiveStableBudgetW(input, effectiveMode);
     const actualPowerW = nonNegative(wb.actualPowerW, 0);
     const voltageV = nonNegative(wb.voltageV, 230) || 230;
     const minA = finiteOrNull(wb.minA);
@@ -302,8 +316,8 @@ export function buildChargingPhaseSelectionPlan(input: ChargingPhaseSelectionInp
     const phaseSwitchKey = str(wb.phaseSwitchKey);
     const stopBefore = boolValue(wb.stopBeforePhaseSwitch, true);
     const onePhaseLine = str(wb.onePhaseLine, 'L1').toUpperCase();
-    let nextHighSinceMs = stableBudgetW >= upW ? (highSince > 0 ? highSince : now) : 0;
-    let nextLowSinceMs = stableBudgetW <= downW ? (lowSince > 0 ? lowSince : now) : 0;
+    let nextHighSinceMs = wallboxStableBudgetW >= upW ? (highSince > 0 ? highSince : now) : 0;
+    let nextLowSinceMs = wallboxStableBudgetW <= downW ? (lowSince > 0 ? lowSince : now) : 0;
     if (!phaseAutoEnabled || mode !== 'auto-pv' || chargerType !== 'ac') {
       nextHighSinceMs = 0;
       nextLowSinceMs = 0;
@@ -348,8 +362,8 @@ export function buildChargingPhaseSelectionPlan(input: ChargingPhaseSelectionInp
         reason = 'stable-low-pv-budget-downshift-to-1p';
       } else {
         target = current;
-        if (current === 1) reason = stableBudgetW >= upW ? 'waiting-for-3p-stability' : 'pv-budget-prefers-1p';
-        else reason = stableBudgetW <= downW ? 'waiting-for-1p-stability' : 'pv-budget-keeps-3p';
+        if (current === 1) reason = wallboxStableBudgetW >= upW ? 'waiting-for-3p-stability' : 'pv-budget-prefers-1p';
+        else reason = wallboxStableBudgetW <= downW ? 'waiting-for-1p-stability' : 'pv-budget-keeps-3p';
       }
     } else {
       reason = mode === 'fixed-1p' ? 'fixed-1p-configured' : 'fixed-3p-configured';
@@ -385,6 +399,7 @@ export function buildChargingPhaseSelectionPlan(input: ChargingPhaseSelectionInp
       safe,
       name,
       chargerType,
+      effectiveMode,
       mode,
       enabled,
       online,
@@ -412,7 +427,7 @@ export function buildChargingPhaseSelectionPlan(input: ChargingPhaseSelectionInp
       nextLowSinceMs,
       stableAbove3p,
       stableBelow1p,
-      stableBudgetW,
+      stableBudgetW: wallboxStableBudgetW,
       switchUpThresholdW: upW,
       switchDownThresholdW: downW,
       switchUpStableMs: upMs,

@@ -74,7 +74,7 @@ export function hasRealEvcsPresenceProof(proof: EvcsPresenceProof | undefined): 
  *
  * Zusammenhang:
  * Die Speicherfarm darf nur sichtbar werden, wenn der Installer sie aktiviert hat und
- * mindestens ein Farmspeicher echte SoC-/Leistungs-Datenpunkte besitzt.
+ * mindestens zwei Farmspeicher echte SoC-/Leistungs-Datenpunkte besitzen.
  */
 export function hasRealStorageFarmPresenceProof(proof: StorageFarmPresenceProof | undefined): boolean {
   if (!proof) return false;
@@ -99,7 +99,7 @@ export function hasRealStorageFarmPresenceProof(proof: StorageFarmPresenceProof 
  */
 export function deriveCustomerFeatureVisibility(input: FeatureVisibilityResolverInput): FeatureVisibilityState {
   const hasEvcs = input.evcsEnabled === true && (input.evcsProofs ?? []).some(hasRealEvcsPresenceProof);
-  const hasStorageFarm = input.storageFarmEnabled === true && (input.storageFarmProofs ?? []).some(hasRealStorageFarmPresenceProof);
+  const hasStorageFarm = input.storageFarmEnabled === true && (input.storageFarmProofs ?? []).filter(hasRealStorageFarmPresenceProof).length >= 2;
   const aiInstalled = input.aiAdvisorAppEnabled === true || input.aiAdvisorInstalled === true;
 
   return {
