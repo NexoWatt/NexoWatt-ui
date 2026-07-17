@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/thermal-control.ts
- * Quell-Hash: sha256:22ebcd4e22e908c4d6fb0b7a0865f8d42e1fef4c8492d0f1d9b9d4ce9ea04c9f
+ * Quell-Hash: sha256:8e200ca51f3ba96d2461cc5ff7186f51cc83a7d8a0d594bcc780a2dccc0bfe7e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -44,22 +44,12 @@
 
 const { BaseModule } = require('./base');
 const { applySetpoint } = require('../consumers');
-/**
- * Code-Teil: num
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
+const { ActuatorCommandContract } = require('../services/actuator-command-contract');
 function num(v, fallback = 0) {
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
 }
-/**
- * Code-Teil: clamp
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
 function clamp(v, minV, maxV) {
     const n = Number(v);
     if (!Number.isFinite(n)) return minV;
@@ -67,33 +57,15 @@ function clamp(v, minV, maxV) {
     if (Number.isFinite(maxV) && n > maxV) return maxV;
     return n;
 }
-/**
- * Code-Teil: safeSlot
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
 function safeSlot(slot) {
     const s = Math.round(Number(slot) || 0);
     if (s < 1) return 1;
     if (s > 10) return 10;
     return s;
 }
-/**
- * Code-Teil: nowMs
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
 function nowMs() {
     return Date.now();
 }
-/**
- * Code-Teil: normalizeType
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
 function normalizeType(raw) {
     const s = String(raw || '').trim().toLowerCase();
     if (!s) return 'power';
@@ -111,12 +83,6 @@ function normalizeType(raw) {
 
     return 'power';
 }
-/**
- * Code-Teil: normalizeProfile
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
 function normalizeProfile(raw, type) {
     const s = String(raw || '').trim().toLowerCase();
     if (type !== 'setpoint') return 'none';
@@ -124,12 +90,6 @@ function normalizeProfile(raw, type) {
     if (s === 'cooling' || s === 'cool' || s === 'kuehlen' || s === 'kühlen') return 'cooling';
     return 'heating';
 }
-/**
- * Code-Teil: defaultSetpointsForProfile
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
 function defaultSetpointsForProfile(profile) {
     if (profile === 'cooling') {
         return { on: 20, off: 24, boost: 18, unit: '°C' };
@@ -175,6 +135,7 @@ class ThermalControlModule extends BaseModule {
         this._stateCache = new Map();
         /** @type {Map<string, {on:boolean, lastOnMs:number, lastOffMs:number}>} */
         this._hyst = new Map();
+        this._actuatorContract = new ActuatorCommandContract();
     }
 
     /**
@@ -183,22 +144,10 @@ class ThermalControlModule extends BaseModule {
      * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
      * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
-    /**
-     * Code-Teil: _isEnabled
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    _isEnabled() {
+        _isEnabled() {
         return !!(this.adapter && this.adapter.config && this.adapter.config.enableThermalControl);
     }
-    /**
-     * Code-Teil: _getCfg
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    _getCfg() {
+        _getCfg() {
         const cfg = (this.adapter && this.adapter.config && this.adapter.config.thermal && typeof this.adapter.config.thermal === 'object')
             ? this.adapter.config.thermal
             : {};
@@ -211,13 +160,7 @@ class ThermalControlModule extends BaseModule {
      * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
      * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
-    /**
-     * Code-Teil: _getManualHoldMin
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    _getManualHoldMin() {
+        _getManualHoldMin() {
         const cfg = this._getCfg();
         return clamp(num(cfg.manualHoldMin, 20), 0, 24 * 60);
     }
@@ -242,24 +185,12 @@ class ThermalControlModule extends BaseModule {
      * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
      * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
-    /**
-     * Code-Teil: _getDatapoints
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    _getDatapoints() {
+        _getDatapoints() {
         return (this.adapter && this.adapter.config && this.adapter.config.datapoints && typeof this.adapter.config.datapoints === 'object')
             ? this.adapter.config.datapoints
             : {};
     }
-    /**
-     * Code-Teil: _getOverrides
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    _getOverrides() {
+        _getOverrides() {
         const a = this.adapter;
         if (!a) return {};
         if (!a._thermalOverrides || typeof a._thermalOverrides !== 'object') a._thermalOverrides = {};
@@ -292,13 +223,7 @@ class ThermalControlModule extends BaseModule {
      * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
      * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
-    /**
-     * Code-Teil: _buildDevicesFromConfig
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    _buildDevicesFromConfig() {
+        _buildDevicesFromConfig() {
         const cfg = this._getCfg();
         const list = Array.isArray(cfg.devices) ? cfg.devices : [];
 
@@ -372,6 +297,12 @@ class ThermalControlModule extends BaseModule {
                 ? clamp(num(r.boostPowerW, maxPowerW), 0, 1e12)
                 : null;
 
+            const requireReadback = r.requireReadback === true;
+            const readbackTimeoutSec = clamp(num(r.readbackTimeoutSec, 5), 0.25, 120);
+            const retryDelaySec = clamp(num(r.retryDelaySec, 3), 0.25, 120);
+            const maxRetries = clamp(num(r.maxRetries, 3), 0, 20);
+            const faultLockSec = clamp(num(r.faultLockSec, 60), 1, 24 * 60 * 60);
+
             out.push({
                 slot,
                 id: `c${slot}`,
@@ -394,6 +325,11 @@ class ThermalControlModule extends BaseModule {
                 autoOffSetpoint,
                 boostSetpoint,
                 estimatedPowerW,
+                requireReadback,
+                readbackTimeoutSec,
+                retryDelaySec,
+                maxRetries,
+                faultLockSec,
 
                 powerId,
                 switchWriteId,
@@ -472,13 +408,7 @@ class ThermalControlModule extends BaseModule {
          * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
          * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
          */
-        /**
-         * Code-Teil: ensureDefault
-         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-         */
-        const ensureDefault = async (id, val) => {
+                const ensureDefault = async (id, val) => {
             try {
                 const s = await this.adapter.getStateAsync(id);
                 if (!s || s.val === null || s.val === undefined) {
@@ -616,6 +546,14 @@ const mk = async (id, name, type, role, unit = undefined) => {
             await mk(`thermal.devices.${d.id}.applied`, 'Applied', 'boolean', 'indicator');
             await mk(`thermal.devices.${d.id}.status`, 'Status', 'string', 'text');
             await mk(`thermal.devices.${d.id}.measuredW`, 'Measured (W)', 'number', 'value.power', 'W');
+            await mk(`thermal.devices.${d.id}.owner`, 'Aktor-Owner', 'string', 'text');
+            await mk(`thermal.devices.${d.id}.writeAccepted`, 'Write akzeptiert', 'boolean', 'indicator');
+            await mk(`thermal.devices.${d.id}.readbackOk`, 'Readback bestätigt', 'boolean', 'indicator');
+            await mk(`thermal.devices.${d.id}.writePending`, 'Write/Readback ausstehend', 'boolean', 'indicator');
+            await mk(`thermal.devices.${d.id}.retryCount`, 'Write-Wiederholungen', 'number', 'value');
+            await mk(`thermal.devices.${d.id}.faultLocked`, 'Aktor-Fehlerverriegelung', 'boolean', 'indicator');
+            await mk(`thermal.devices.${d.id}.faultUntil`, 'Aktor-Fehlerverriegelung bis', 'number', 'value.time');
+            await mk(`thermal.devices.${d.id}.writeContractStatus`, 'Aktor-Vertragsstatus', 'string', 'text');
 
             // Overrides (written internally via API)
             await mk(`thermal.devices.${d.id}.boostActive`, 'Boost active', 'boolean', 'indicator');
@@ -669,13 +607,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
      * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
      * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
-    /**
-     * Code-Teil: _computePvAvailableW
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    _computePvAvailableW() {
+        _computePvAvailableW() {
         const cfg = this._getCfg();
         const staleTimeoutSec = clamp(num(cfg.staleTimeoutSec, 15), 1, 3600);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
@@ -758,13 +690,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
      * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
      * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
-    /**
-     * Code-Teil: _hysteresisOnOff
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    _hysteresisOnOff(id, desiredOn, minOnSec, minOffSec) {
+        _hysteresisOnOff(id, desiredOn, minOnSec, minOffSec) {
         const h = this._hyst.get(id) || { on: false, lastOnMs: 0, lastOffMs: 0, initialized: false };
         const now = nowMs();
 
@@ -810,13 +736,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
      * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
      * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
-    /**
-     * Code-Teil: _computeBandDesiredOn
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    _computeBandDesiredOn(id, availableW, startW, stopW) {
+        _computeBandDesiredOn(id, availableW, startW, stopW) {
         const h = this._hyst.get(id) || { on: false };
         const wasOn = !!h.on;
         const start = Math.max(0, Math.max(num(startW, 0), num(stopW, 0)));
@@ -851,19 +771,173 @@ const mk = async (id, name, type, role, unit = undefined) => {
         return { boostActive, boostUntil, manualActive, manualUntil };
     }
 
+    _deviceOwner(d, manual = false) {
+        return manual ? `manual.thermal.${d.id}` : `thermal.${d.id}`;
+    }
+
+    _deviceActuatorIds(d) {
+        const ids = [];
+        for (const key of [d.enableKey, d.setWKey, d.sg1Key, d.sg2Key]) {
+            try {
+                const entry = key && this.dp && this.dp.getEntry ? this.dp.getEntry(key) : null;
+                const id = String(entry && entry.objectId || '').trim();
+                if (id && !ids.includes(id)) ids.push(id);
+            } catch (_e) {}
+        }
+        return ids;
+    }
+
+    _deviceHasExclusiveAuthority(d, owner) {
+        if (String(owner || '').startsWith('manual.')) return true;
+        const matrix = this.adapter && this.adapter._stageAActuatorOwnerById;
+        const ids = this._deviceActuatorIds(d);
+        if (!ids.length || !matrix || typeof matrix !== 'object') return false;
+        return ids.every((id) => {
+            const row = matrix[id];
+            const activeOwners = Array.isArray(row && row.activeOwners)
+                ? row.activeOwners.map((value) => String(value || '').trim()).filter(Boolean)
+                : [];
+            return activeOwners.length === 1 && activeOwners[0] === owner;
+        });
+    }
+
+    _contractCfg(d, requireReadback = null) {
+        return {
+            requireReadback: requireReadback === null ? d.requireReadback === true : requireReadback === true,
+            ackTimeoutMs: Math.round(Math.max(250, num(d.readbackTimeoutSec, 5) * 1000)),
+            retryDelayMs: Math.round(Math.max(250, num(d.retryDelaySec, 3) * 1000)),
+            maxRetries: Math.max(0, Math.round(num(d.maxRetries, 3))),
+            faultLockMs: Math.round(Math.max(1000, num(d.faultLockSec, 60) * 1000)),
+        };
+    }
+
+    async _readEntryState(key) {
+        try {
+            const entry = key && this.dp && this.dp.getEntry ? this.dp.getEntry(key) : null;
+            const id = String(entry && entry.objectId || '').trim();
+            if (!id || !this.adapter || typeof this.adapter.getForeignStateAsync !== 'function') return null;
+            const state = await this.adapter.getForeignStateAsync(id);
+            return state && state.val !== undefined ? state.val : null;
+        } catch (_e) {
+            return null;
+        }
+    }
+
+    async _readThermalReadback(d, actType) {
+        if (actType === 'sgready') {
+            return {
+                sg1: await this._readEntryState(d.sg1Key),
+                sg2: await this._readEntryState(d.sg2Key),
+                enable: await this._readEntryState(d.enableKey),
+            };
+        }
+        if (actType === 'setpoint') {
+            return {
+                setpoint: await this._readEntryState(d.setWKey),
+                enable: await this._readEntryState(d.enableKey),
+            };
+        }
+        return {
+            targetW: await this._readEntryState(d.setWKey),
+            enable: await this._readEntryState(d.enableKey),
+        };
+    }
+
+    _thermalReadbackMatches(d, actType, target, actual) {
+        if (!actual || typeof actual !== 'object') return null;
+        const boolMatch = (value, expected) => value === null || value === undefined ? null : !!value === !!expected;
+        const numMatch = (value, expected) => {
+            if (expected === null || expected === undefined) return null;
+            const a = Number(value); const b = Number(expected);
+            if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+            return Math.abs(a - b) <= Math.max(1, Math.abs(b) * 0.01);
+        };
+        const results = [];
+        if (actType === 'sgready') {
+            const raw = String(target && target.state || 'off').trim().toLowerCase();
+            let sg1 = raw === 'on' || raw === 'boost' || raw === '1' || raw === '2';
+            let sg2 = raw === 'boost' || raw === 'block' || raw === '2' || raw === '3';
+            if (d.sgReadyAInvert) sg1 = !sg1;
+            if (d.sgReadyBInvert) sg2 = !sg2;
+            if (d.sg1Key) results.push(boolMatch(actual.sg1, sg1));
+            if (d.sg2Key) results.push(boolMatch(actual.sg2, sg2));
+            if (d.enableKey) results.push(boolMatch(actual.enable, raw !== 'off' && raw !== 'normal' && raw !== 'block'));
+        } else if (actType === 'setpoint') {
+            if (d.setWKey && target && target.setpoint !== undefined && target.setpoint !== null) results.push(numMatch(actual.setpoint, target.setpoint));
+            if (d.enableKey && target && target.enable !== undefined && target.enable !== null) results.push(boolMatch(actual.enable, target.enable));
+        } else {
+            if (d.setWKey) results.push(numMatch(actual.targetW, Math.max(0, Number(target && target.targetW) || 0)));
+            if (d.enableKey) results.push(boolMatch(actual.enable, Number(target && target.targetW) > 0));
+        }
+        const known = results.filter((value) => value !== null);
+        if (!known.length) return null;
+        return known.every((value) => value === true);
+    }
+
+    async _publishThermalContract(d, owner, result) {
+        await this._setStateIfChanged(`thermal.devices.${d.id}.owner`, owner);
+        await this._setStateIfChanged(`thermal.devices.${d.id}.writeAccepted`, !!result.accepted);
+        await this._setStateIfChanged(`thermal.devices.${d.id}.readbackOk`, result.readbackOk === true);
+        await this._setStateIfChanged(`thermal.devices.${d.id}.writePending`, !!result.pending);
+        await this._setStateIfChanged(`thermal.devices.${d.id}.retryCount`, Math.max(0, Math.round(Number(result.retryCount) || 0)));
+        await this._setStateIfChanged(`thermal.devices.${d.id}.faultLocked`, !!result.faultLocked);
+        await this._setStateIfChanged(`thermal.devices.${d.id}.faultUntil`, Math.max(0, Math.round(Number(result.faultUntil) || 0)));
+        await this._setStateIfChanged(`thermal.devices.${d.id}.writeContractStatus`, String(result.status || ''));
+    }
+
+    async _applyThermalCommand(d, actType, consumer, target, reason, options = {}) {
+        const manual = options.manual === true;
+        const owner = this._deviceOwner(d, manual);
+        const cfg = this._contractCfg(d, options.requireReadback === undefined ? null : options.requireReadback);
+        const key = `thermal:${d.id}`;
+        const now = Date.now();
+        const actualBefore = await this._readThermalReadback(d, actType);
+        const readbackBefore = this._thermalReadbackMatches(d, actType, target, actualBefore);
+        const confirmed = this._actuatorContract.confirmFromReadback(key, target, actualBefore, readbackBefore === true, now);
+        if (confirmed) {
+            await this._publishThermalContract(d, owner, confirmed);
+            return { applied: true, accepted: true, confirmed: true, readbackOk: true, status: confirmed.status, contract: confirmed };
+        }
+        const decision = this._actuatorContract.prepare(key, target, now, cfg);
+        if (!decision.allowed) {
+            const current = this._actuatorContract.result(key, now, decision.targetChanged);
+            await this._publishThermalContract(d, owner, current);
+            return { applied: false, accepted: false, confirmed: false, readbackOk: current.readbackOk, status: current.status, contract: current };
+        }
+        const enforceAuthority = this._deviceHasExclusiveAuthority(d, owner);
+        const writeRes = await withActuatorShadowContext(this.adapter, {
+            owner,
+            module: 'thermalControl',
+            priority: priorityForOwner(owner),
+            reason,
+            leaseMs: manual ? 5 * 60 * 1000 : 20000,
+            kind: manual ? 'manual-thermal' : 'thermal-control',
+            enforceAuthority,
+            releaseAuthority: options.releaseAuthority === true,
+        }, () => applySetpoint({ dp: this.dp, adapter: this.adapter }, consumer, target));
+        const accepted = !!(writeRes && writeRes.applied === true);
+        const actualAfter = await this._readThermalReadback(d, actType);
+        const readbackOk = this._thermalReadbackMatches(d, actType, target, actualAfter);
+        const contract = this._actuatorContract.complete(key, target, accepted, readbackOk, actualAfter, Date.now(), cfg);
+        await this._publishThermalContract(d, owner, contract);
+        return {
+            ...writeRes,
+            applied: contract.confirmed,
+            accepted,
+            confirmed: contract.confirmed,
+            readbackOk,
+            status: contract.status,
+            contract,
+        };
+    }
+
     /**
      * Code-Teil: Methode `tick`
      * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
      * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
      * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
-    /**
-     * Code-Teil: tick
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    async tick() {
+        async tick() {
         if (!this._isEnabled()) return;
 
         const now = nowMs();
@@ -923,13 +997,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
              * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
              * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
              */
-            /**
-             * Code-Teil: normMode
-             * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-             * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-             * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-             */
-            const normMode = (m) => {
+                        const normMode = (m) => {
                 const s = String(m || '').trim().toLowerCase();
                 if (!s || s === 'inherit' || s === 'system') return 'inherit';
                 if (s === 'auto' || s === 'pvauto' || s === 'pv' || s === 'pva') return 'pvAuto';
@@ -1013,7 +1081,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
                         : (typeof d.autoOnSetpoint === 'number' && Number.isFinite(d.autoOnSetpoint) ? d.autoOnSetpoint : null);
 
                     const consumer = { type: 'setpoint', key: d.id, name: d.name, setKey: d.setWKey, enableKey: d.enableKey };
-                    const res = await applySetpoint(ctx, consumer, { enable: true, setpoint: sp });
+                    const res = await this._applyThermalCommand(d, actType, consumer, { enable: true, setpoint: sp }, 'Thermik Boost Setpoint', { manual: true });
 
                     await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, (sp !== null && sp !== undefined && Number.isFinite(Number(sp))) ? Number(sp) : 0);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
@@ -1022,7 +1090,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
 
                     usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                         ? Math.max(0, measuredW)
-                        : Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500)));
+                        : (res.accepted ? Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500))) : 0);
                 } else if (actType === 'sgready') {
                     const consumer = {
                         type: 'sgready',
@@ -1034,7 +1102,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
                         invert1: !!d.sgReadyAInvert,
                         invert2: !!d.sgReadyBInvert,
                     };
-                    const res = await applySetpoint(ctx, consumer, { state: 'boost' });
+                    const res = await this._applyThermalCommand(d, actType, consumer, { state: 'boost' }, 'Thermik Boost SG-Ready', { manual: true });
 
                     await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 2);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
@@ -1043,18 +1111,18 @@ const mk = async (id, name, type, role, unit = undefined) => {
 
                     usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                         ? Math.max(0, measuredW)
-                        : Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500)));
+                        : (res.accepted ? Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500))) : 0);
                 } else {
                     const targetW = clamp(num(d.boostPowerW, d.maxPowerW), 0, num(d.maxPowerW, 0));
                     const consumer = { type: 'load', key: d.id, name: d.name, setWKey: d.setWKey, enableKey: d.enableKey };
-                    const res = await applySetpoint(ctx, consumer, { targetW });
+                    const res = await this._applyThermalCommand(d, actType, consumer, { targetW }, 'Thermik Boost Leistung', { manual: true });
 
                     await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, Math.round(targetW));
                     await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.status`, `boost_${String(res.status || '')}`);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.override`, 'boost');
 
-                    usedW = Math.max(0, Math.round(targetW));
+                    usedW = res.accepted ? Math.max(0, Math.round(targetW)) : 0;
                 }
 
                 appliedTotalW += Math.max(0, Math.round(usedW));
@@ -1084,7 +1152,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
                 if (actType === 'setpoint') {
                     const sp = (typeof d.autoOffSetpoint === 'number' && Number.isFinite(d.autoOffSetpoint)) ? d.autoOffSetpoint : null;
                     const consumer = { type: 'setpoint', key: d.id, name: d.name, setKey: d.setWKey, enableKey: d.enableKey };
-                    const res = await applySetpoint(ctx, consumer, { enable: false, setpoint: sp });
+                    const res = await this._applyThermalCommand(d, actType, consumer, { enable: false, setpoint: sp }, 'Thermik aus Setpoint', { manual: userMode !== 'inherit', releaseAuthority: true });
 
                     await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, (sp !== null && sp !== undefined && Number.isFinite(Number(sp))) ? Number(sp) : 0);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
@@ -1100,14 +1168,14 @@ const mk = async (id, name, type, role, unit = undefined) => {
                         invert1: !!d.sgReadyAInvert,
                         invert2: !!d.sgReadyBInvert,
                     };
-                    const res = await applySetpoint(ctx, consumer, { state: 'off' });
+                    const res = await this._applyThermalCommand(d, actType, consumer, { state: 'off' }, 'Thermik aus SG-Ready', { manual: userMode !== 'inherit', releaseAuthority: true });
 
                     await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 0);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.status`, `off_${String(res.status || '')}`);
                 } else {
                     const consumer = { type: 'load', key: d.id, name: d.name, setWKey: d.setWKey, enableKey: d.enableKey };
-                    const res = await applySetpoint(ctx, consumer, { targetW: 0 });
+                    const res = await this._applyThermalCommand(d, actType, consumer, { targetW: 0 }, 'Thermik aus Leistung', { manual: userMode !== 'inherit', releaseAuthority: true });
 
                     await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 0);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
@@ -1137,7 +1205,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
                 const spOff = (typeof d.autoOffSetpoint === 'number' && Number.isFinite(d.autoOffSetpoint)) ? d.autoOffSetpoint : null;
 
                 const consumer = { type: 'setpoint', key: d.id, name: d.name, setKey: d.setWKey, enableKey: d.enableKey };
-                const res = await applySetpoint(ctx, consumer, { enable: !!on, setpoint: on ? spOn : spOff });
+                const res = await this._applyThermalCommand(d, actType, consumer, { enable: !!on, setpoint: on ? spOn : spOff }, on ? 'Thermik PV-Auto ein' : 'Thermik PV-Auto aus', { releaseAuthority: !on });
 
                 const targetSp = on ? spOn : spOff;
                 await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, (targetSp !== null && targetSp !== undefined && Number.isFinite(Number(targetSp))) ? Number(targetSp) : 0);
@@ -1148,7 +1216,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
                 if (on) {
                     usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                         ? Math.max(0, measuredW)
-                        : Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500)));
+                        : (res.accepted ? Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500))) : 0);
                 } else {
                     usedW = 0;
                 }
@@ -1163,7 +1231,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
                     invert1: !!d.sgReadyAInvert,
                     invert2: !!d.sgReadyBInvert,
                 };
-                const res = await applySetpoint(ctx, consumer, { state: on ? 'on' : 'off' });
+                const res = await this._applyThermalCommand(d, actType, consumer, { state: on ? 'on' : 'off' }, on ? 'Thermik PV-Auto SG-Ready ein' : 'Thermik PV-Auto SG-Ready aus', { releaseAuthority: !on });
 
                 await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, on ? 1 : 0);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
@@ -1173,7 +1241,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
                 if (on) {
                     usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                         ? Math.max(0, measuredW)
-                        : Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500)));
+                        : (res.accepted ? Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500))) : 0);
                 } else {
                     usedW = 0;
                 }
@@ -1181,7 +1249,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
                 const desiredW = on ? Math.min(remainingW, Math.max(0, num(d.maxPowerW, 0))) : 0;
 
                 const consumer = { type: 'load', key: d.id, name: d.name, setWKey: d.setWKey, enableKey: d.enableKey };
-                const res = await applySetpoint(ctx, consumer, { targetW: desiredW });
+                const res = await this._applyThermalCommand(d, actType, consumer, { targetW: desiredW }, desiredW > 0 ? 'Thermik PV-Auto Leistung' : 'Thermik PV-Auto aus', { releaseAuthority: desiredW <= 0 });
 
                 await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, Math.round(desiredW));
                 await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
@@ -1190,7 +1258,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
 
                 usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                     ? Math.max(0, measuredW)
-                    : Math.max(0, Math.round(desiredW));
+                    : (res.accepted ? Math.max(0, Math.round(desiredW)) : 0);
             }
 
             appliedTotalW += Math.max(0, Math.round(usedW));

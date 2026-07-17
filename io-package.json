@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.112",
+    "version": "0.8.113",
     "news": {
+      "0.8.113": {
+        "de": "Version 0.8.113: Stufe C3.2 bindet Thermik und Heizstabsteuerung mit eindeutigen Aktor-Ownern, optionalem Readback, ACK-Timeout, begrenzten Wiederholungen und Fehlerverriegelung an den zentralen Arbiter an. Blockierte oder fehlgeschlagene Writes werden nicht mehr als umgesetzte Leistung im EMS-Budget reserviert. Die sichtbare LIVE-Energieflussanzeige aktualisiert jetzt alle 5 Sekunden; Backend-Messwerterfassung und Regelzyklen bleiben unverändert schnell.",
+        "en": "Version 0.8.113: Stage C3.2 connects thermal and heating-rod control to the central actuator arbiter with explicit owners, optional readback, ACK timeout, bounded retries and fault lockout. Blocked or failed writes are no longer reserved as applied power in the EMS budget. The visible LIVE energy-flow display now refreshes every 5 seconds while backend metering and control cycles remain unchanged."
+      },
       "0.8.112": {
         "de": "Version 0.8.112: Stufe C3.1 bindet Threshold-Regeln und manuelle Relaisbedienung an eindeutige Aktor-Owner und Leases an. Fehlgeschlagene oder blockierte Writes werden nicht mehr als ausgeführt verbucht; optionaler Readback und Startzustandsübernahme wurden ergänzt. Die feste PV-Überschuss-Aufteilung kann im Kundenbereich abgeschaltet werden; aktive Verbraucher reservieren dann nur ihren realen Bedarf und der Speicher erhält den gesamten ungenutzten PV-Rest im selben EMS-Zyklus.",
         "en": "Version 0.8.112: Stage C3.1 assigns explicit actuator owners and leases to threshold rules and manual relay control. Failed or blocked writes are no longer recorded as applied; optional readback and initial output-state adoption were added. The fixed PV-surplus split can be disabled in customer settings; active consumers then reserve only actual demand and the battery receives the complete unused PV remainder in the same EMS cycle."
@@ -26,10 +30,6 @@
       "0.8.107": {
         "de": "Version 0.8.107: Die normale Speicher-Eigenverbrauchsoptimierung bleibt bei Wallboxbetrieb standardmäßig aktiv. EVCS-Leistung wird nur noch bei ausdrücklich freigegebener und gewählter Schutzfunktion aus der Batterie-NVP-Regelung herausgenommen. Der same-cycle EMS-Policy-Snapshot verhindert zusätzlich, dass alte Schutzwerte die Entladung noch einen Regelzyklus blockieren. Manuelle Ladepunkt-DP-Zuordnungen im Admin bleiben unverändert.",
         "en": "Version 0.8.107: Normal storage self-consumption optimization now remains active by default while EV charging. EVCS load is excluded from battery NVP control only when storage protection is explicitly enabled and selected. A same-cycle EMS policy snapshot also prevents stale protection values from blocking discharge for another control cycle. Manual per-charge-point datapoint mappings remain unchanged."
-      },
-      "0.8.106": {
-        "de": "Version 0.8.106: Aktuelle nexowatt-devices-Wallboxprofile mit targetCurrentA/targetPowerW werden automatisch als steuerbar erkannt. Bestehende Mess-/Statuszuordnungen werden feldkompatibel um die real vorhandenen Steuer-DPs ergänzt, sodass berechnete EMS-Sollwerte wieder am Ladepunkt ankommen. Manuelle Installer-Zuordnungen bleiben unverändert.",
-        "en": "Version 0.8.106: Current nexowatt-devices wallbox profiles using targetCurrentA/targetPowerW are now detected as controllable. Existing measurement/status mappings are field-compatibly completed with real control datapoints so calculated EMS targets reach the charger again. Manual installer mappings remain unchanged."
       }
     },
     "title": "NexoWatt UI",

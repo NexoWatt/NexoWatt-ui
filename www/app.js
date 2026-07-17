@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/app.ts
- * Quell-Hash: sha256:05ab848bcd0584cdccf2ddb25f021d997db695f646b72cc55fee7f6b0a9ad8a3
+ * Quell-Hash: sha256:461442789f0f053aebfd0f16c8b901a2b5e262346f71f7f606f31dff613d342d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -462,7 +462,7 @@ function scheduleRender(force = false){
 // neu gerendert. Die Backend-Messung und sämtliche EMS-Regelkreise bleiben unverändert
 // schnell; gedrosselt wird ausschließlich die sichtbare LIVE-Darstellung, damit kurze
 // NVP-/Speicher-Messversätze nicht als hektisches Springen erscheinen.
-const LIVE_TELEMETRY_RENDER_INTERVAL_MS = 15000;
+const LIVE_TELEMETRY_RENDER_INTERVAL_MS = 5000;
 let _liveTelemetryRenderTimer = null;
 let _lastLiveTelemetryRenderTs = 0;
 

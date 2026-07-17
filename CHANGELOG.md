@@ -1,3 +1,14 @@
+## 0.8.113
+
+- Stufe C3.2: Thermik und Heizstabsteuerung verwenden eindeutige Aktor-Owner im zentralen Arbiter. Automatik und manuelle Bedienung sind getrennt und besitzen definierte Leases.
+- Thermik und Heizstab erhalten einen gemeinsamen Write-Vertrag mit optionalem Readback, ACK-Timeout, begrenzten Wiederholungen und zeitlicher Fehlerverriegelung. Ein geänderter Sollwert löst eine Verriegelung kontrolliert wieder.
+- Blockierte oder fehlgeschlagene Thermik-/Heizstab-Writes werden nicht mehr als umgesetzte Leistung im zentralen EMS-Budget reserviert. Gemessene Istleistung bleibt weiterhin autoritativ.
+- Heizstab-Stufenwrites werden je physischem Aktor zusammengefasst; doppelt verwendete virtuelle Stufen können denselben Relais-DP nicht mehr innerhalb eines Zyklus gegensätzlich beschreiben.
+- Neue kompakte Diagnose-States pro Gerät: Owner, Write akzeptiert, Readback, Pending, Wiederholungen, Fehlerverriegelung und Vertragsstatus. Der AppCenter-Status erhält keine zusätzliche große Karte.
+- LIVE-Energieflussanzeige von 15 auf 5 Sekunden verkürzt. Nur die sichtbare Darstellung ändert sich; Backend-Messwerterfassung, EMS-Budget und Regelzyklen bleiben unverändert.
+- Neue Regressionen `test:actuator-c3-thermal-heating` und `test:live-energy-flow-5s-cadence`.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v415` erhöht.
+
 ## 0.8.112
 
 - Stufe C3.1: Threshold-Regeln und manuelle Relaisbedienung verwenden eindeutige Aktor-Owner, Prioritäten und zeitlich begrenzte Leases im zentralen Arbiter.

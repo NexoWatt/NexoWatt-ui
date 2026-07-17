@@ -464,7 +464,7 @@ function scheduleRender(force = false){
 // neu gerendert. Die Backend-Messung und sämtliche EMS-Regelkreise bleiben unverändert
 // schnell; gedrosselt wird ausschließlich die sichtbare LIVE-Darstellung, damit kurze
 // NVP-/Speicher-Messversätze nicht als hektisches Springen erscheinen.
-const LIVE_TELEMETRY_RENDER_INTERVAL_MS = 15000;
+const LIVE_TELEMETRY_RENDER_INTERVAL_MS = 5000;
 let _liveTelemetryRenderTimer = null;
 let _lastLiveTelemetryRenderTs = 0;
 
