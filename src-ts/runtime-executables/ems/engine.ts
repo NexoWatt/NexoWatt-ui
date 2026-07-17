@@ -46,6 +46,8 @@
 
 const { DatapointRegistry } = require('./datapoints');
 const { ModuleManager } = require('./module-manager');
+const { applyStorageMeasurementOverrides } = require('./services/storage-override-bridge');
+const { buildNvpSnapshotFromRegistry } = require('./services/measurement-freshness');
 const {
   deriveChargingConnectorCapacityW,
   computeChargingInfrastructureCapacity,
@@ -116,6 +118,7 @@ class EmsEngine {
     this._gridPowerAvgW = null;
     /** @type {number} */
     this._gridPowerLastTs = 0;
+    this._gridPowerLastResolutionSource = '';
   }
 
   /**
@@ -354,6 +357,20 @@ class EmsEngine {
       },
       native: {},
     });
+
+    const freshnessStates = {
+      'ems.gridMeasurementFresh': { name: 'NVP-Messung frisch', type: 'boolean', role: 'indicator', def: false },
+      'ems.gridMeasurementStatus': { name: 'NVP-Messstatus', type: 'string', role: 'text', def: 'missing' },
+      'ems.gridMeasurementAgeMs': { name: 'NVP-Messwertalter', type: 'number', role: 'value.interval', unit: 'ms', def: -1 },
+      'ems.gridHeartbeatAgeMs': { name: 'NVP-Heartbeat-Alter', type: 'number', role: 'value.interval', unit: 'ms', def: -1 },
+      'ems.gridConnected': { name: 'NVP-Verbindung', type: 'boolean', role: 'indicator.connected', def: false },
+      'ems.gridNvpCoherent': { name: 'NVP zeitlich kohärent', type: 'boolean', role: 'indicator', def: false },
+      'ems.gridNvpSkewMs': { name: 'NVP Bezug/Einspeisung Zeitversatz', type: 'number', role: 'value.interval', unit: 'ms', def: -1 },
+      'ems.gridMeasurementReason': { name: 'NVP-Messwertgrund', type: 'string', role: 'text', def: '' },
+    };
+    for (const [id, common] of Object.entries(freshnessStates)) {
+      await a.setObjectNotExistsAsync(id, { type: 'state', common: { ...common, read: true, write: false }, native: {} });
+    }
 
     this._gridPowerId = `${a.namespace}.ems.gridPowerW`;
     this._gridPowerRawId = `${a.namespace}.ems.gridPowerRawW`;
@@ -890,40 +907,19 @@ class EmsEngine {
       // ignore
     }
 
-    // Bridge: reuse VIS datapoints for EMS modules to avoid double mapping in Admin UI
+    // Globale AppCenter-Speicher-DPs sind autoritative Messwert-Overrides. Der
+    // zentrale Bridge-Helfer übernimmt signed oder getrennte Istwerte in die
+    // interne Speicher-Konfiguration, ohne Hersteller-Sollwert-DPs anzutasten.
     try {
-      const socId = (typeof dps.storageSoc === 'string') ? dps.storageSoc.trim() : '';
-      if (socId) {
-        adapter.config.storage = adapter.config.storage || {};
-        adapter.config.storage.datapoints = adapter.config.storage.datapoints || {};
-        const cur = (typeof adapter.config.storage.datapoints.socObjectId === 'string') ? adapter.config.storage.datapoints.socObjectId.trim() : '';
-        if (!cur) adapter.config.storage.datapoints.socObjectId = socId;
-      }
-
-      const batPowerId = (typeof dps.batteryPower === 'string') ? dps.batteryPower.trim() : '';
-      if (batPowerId) {
-        adapter.config.storage = adapter.config.storage || {};
-        adapter.config.storage.datapoints = adapter.config.storage.datapoints || {};
-        const curBP = (typeof adapter.config.storage.datapoints.batteryPowerObjectId === 'string') ? adapter.config.storage.datapoints.batteryPowerObjectId.trim() : '';
-        if (!curBP) adapter.config.storage.datapoints.batteryPowerObjectId = batPowerId;
-
-        // Keep the embedded EMS sign convention in sync with the Energiefluss signed battery mapping.
-        // Convention after normalization: -W = charge, +W = discharge.
-        // If the user enabled the Batterie-Vorzeichen inversion in the flow settings and the
-        // storage module is using this VIS datapoint, apply the same inversion to st.batteryPowerW.
-        const usesVisBatteryPower = !curBP || curBP === batPowerId;
-        const invBat = !!(adapter.config && adapter.config.settings && adapter.config.settings.flowInvertBattery);
-        if (usesVisBatteryPower && adapter.config.storage.datapoints.batteryPowerInvert === undefined) {
-          adapter.config.storage.datapoints.batteryPowerInvert = invBat;
-        }
-      }
+      await applyStorageMeasurementOverrides(adapter, dps);
     } catch (_e) {
       // ignore
     }
 
     // NOTE on freshness:
-    // Real-world meters (and especially aliases) may not emit new state.ts values while the measurement is stable.
-    // We therefore enable the "alive prefix" heartbeat for grid metering inputs.
+    // Real-world meters and aliases may not rewrite a stable value. The device
+    // prefix is therefore observed as a bounded heartbeat, while the original
+    // measurement timestamp remains unchanged and separately diagnosable.
     if (gridBuyId) await this.dp.upsert({ key: 'vis.gridBuyW', objectId: gridBuyId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
     if (gridSellId) await this.dp.upsert({ key: 'vis.gridSellW', objectId: gridSellId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
 
@@ -937,18 +933,18 @@ class EmsEngine {
     // grid.powerW is intentionally the *filtered* value for stable regulation.
     // grid.powerRawW provides the raw signal for safety clamping and debugging.
     if (this._gridPowerId) {
-      // IMPORTANT: enable alive-prefix heartbeat here as well.
-      // Charging-management/peak-shaving use these generic keys, and real-world meters
-      // (especially ioBroker aliases) may not emit new timestamps while values are stable.
-      await this.dp.upsert({ key: 'grid.powerW', objectId: this._gridPowerId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
-      await this.dp.upsert({ key: 'ems.gridPowerW', objectId: this._gridPowerId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
+      // Internal canonical NVP states are refreshed only after the external
+      // measurement has passed the central freshness/coherence resolver.
+      await this.dp.upsert({ key: 'grid.powerW', objectId: this._gridPowerId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: false });
+      await this.dp.upsert({ key: 'ems.gridPowerW', objectId: this._gridPowerId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: false });
     }
     if (this._gridPowerRawId) {
-      await this.dp.upsert({ key: 'grid.powerRawW', objectId: this._gridPowerRawId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
-      await this.dp.upsert({ key: 'ems.gridPowerRawW', objectId: this._gridPowerRawId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
+      await this.dp.upsert({ key: 'grid.powerRawW', objectId: this._gridPowerRawId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: false });
+      await this.dp.upsert({ key: 'ems.gridPowerRawW', objectId: this._gridPowerRawId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: false });
     }
-    // Optional robust freshness: connected + watchdog/heartbeat
-    // If configured (or auto-derived), charging-management will use these instead of value-timestamp changes.
+    // Optional health inputs. connected=false invalidates the measurement;
+    // connected=true is not a freshness substitute. A watchdog/heartbeat may
+    // confirm an unchanged value only for the configured finite hold window.
     if (gridPointConnectedId) {
       await this.dp.upsert({ key: 'cm.gridConnected', objectId: gridPointConnectedId, dataType: 'boolean', direction: 'in', unit: '', useAliveForStale: false });
     }
@@ -1025,159 +1021,84 @@ class EmsEngine {
         // ignore
       }
 
-      // Derived / normalized net grid power (Import + / Export -)
-      // Source priority:
-      // 1) Direct NVP datapoint (datapoints.gridPointPower)
-      // 2) Derived from buy/sell (datapoints.gridBuyPower / datapoints.gridSellPower)
-      // Sign correction: settings.flowInvertGrid (VIS) is applied to EMS as well.
+      // Derived / normalized net grid power (Import + / Export -).
       try {
-      const invGrid = !!(this.adapter && this.adapter.config && this.adapter.config.settings && this.adapter.config.settings.flowInvertGrid);
+        const staleTimeoutSec = clampNumber(
+          this.adapter?.config?.chargingManagement?.staleTimeoutSec ??
+          this.adapter?.config?.storage?.staleTimeoutSec ??
+          this.adapter?.config?.peakShaving?.staleTimeoutSec ??
+          this.adapter?.config?.settings?.deviceStaleTimeoutSec ??
+          300,
+          1,
+          3600,
+          300,
+        );
+        const staleMs = Math.max(1000, Math.round(staleTimeoutSec * 1000));
+        const snapshot = buildNvpSnapshotFromRegistry({
+          registry: this.dp,
+          now: Date.now(),
+          invertGrid: !!this.adapter?.config?.settings?.flowInvertGrid,
+          staleMs,
+          maxSkewMs: clampNumber(this.adapter?.config?.diagnostics?.nvpMaxSkewMs, 250, 30000, 5000),
+          maxHeartbeatHoldMs: clampNumber(
+            this.adapter?.config?.diagnostics?.nvpMeasurementMaxHoldMs,
+            staleMs,
+            60 * 60 * 1000,
+            Math.max(staleMs * 3, 15 * 60 * 1000),
+          ),
+        });
+        this.adapter._nvpFreshnessSnapshot = snapshot;
 
-      // Stale timeout for metering input: reuse storage/peak defaults (fallback 15s).
-      // Goal: avoid "springing" at the NVP when buy/sell datapoints update asynchronously.
-      // IMPORTANT: Use the same staleness threshold as the charging management failsafe.
-      // If we treat the NVP signal as "stale" too early here, we stop publishing ems.gridPowerW,
-      // which then triggers a global "failsafe stale meter" and forces all setpoints to 0.
-      const staleTimeoutSec = clampNumber(
-        (this.adapter && this.adapter.config && this.adapter.config.chargingManagement && this.adapter.config.chargingManagement.staleTimeoutSec) ??
-        (this.adapter && this.adapter.config && this.adapter.config.storage && this.adapter.config.storage.staleTimeoutSec) ??
-        (this.adapter && this.adapter.config && this.adapter.config.peakShaving && this.adapter.config.peakShaving.staleTimeoutSec) ??
-        300,
-        1,
-        3600,
-        300
-      );
-      const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
-
-      let source = 'none';
-      let netW = null;
-
-      // Prefer direct net measurement if present and fresh
-      const netVal = this.dp.getNumber('vis.gridNetW', null);
-      const netFresh = (typeof netVal === 'number' && Number.isFinite(netVal) && !this.dp.isStale('vis.gridNetW', staleMs));
-
-      if (netFresh) {
-        netW = netVal;
-        if (invGrid) netW = -netW;
-        source = 'net';
-      } else {
-	        const hasBuy = !!this.dp.getEntry('vis.gridBuyW');
-	        const hasSell = !!this.dp.getEntry('vis.gridSellW');
-
-	        const rawBuyVal = hasBuy ? this.dp.getNumber('vis.gridBuyW', null) : null;
-	        const rawSellVal = hasSell ? this.dp.getNumber('vis.gridSellW', null) : null;
-
-	        const rawBuyFresh = (typeof rawBuyVal === 'number' && Number.isFinite(rawBuyVal) && !this.dp.isStale('vis.gridBuyW', staleMs));
-	        const rawSellFresh = (typeof rawSellVal === 'number' && Number.isFinite(rawSellVal) && !this.dp.isStale('vis.gridSellW', staleMs));
-
-	        // Map to Import/Export semantics (Import + / Export -).
-	        // If flowInvertGrid is enabled, buy/sell semantics are swapped.
-	        const hasImport = invGrid ? hasSell : hasBuy;
-	        const hasExport = invGrid ? hasBuy : hasSell;
-
-	        const importVal = invGrid ? rawSellVal : rawBuyVal;
-	        const exportVal = invGrid ? rawBuyVal : rawSellVal;
-
-	        const importFresh = invGrid ? rawSellFresh : rawBuyFresh;
-	        const exportFresh = invGrid ? rawBuyFresh : rawSellFresh;
-
-	        /**
-	         * Code-Teil: Arrow-Funktion `isFiniteNum`
-	         * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-	         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-	         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-	         */
-	        /** Code-Teil: isFiniteNum – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
-	        const isFiniteNum = (v) => (typeof v === 'number' && Number.isFinite(v));
-	        const impValid = isFiniteNum(importVal);
-	        const expValid = isFiniteNum(exportVal);
-
-	        // Handle asynchronous updates of buy/sell channels:
-	        // - We accept the combination if at least one of the channels is fresh.
-	        // - If only one channel is fresh and indicates a direction, we assume the opposite channel is 0
-	        //   (common behaviour of import/export meters).
-	        if (hasImport && hasExport) {
-	          if (importFresh || exportFresh) {
-	            let imp = impValid ? Number(importVal) : 0;
-	            let exp = expValid ? Number(exportVal) : 0;
-
-	            if (importFresh && !exportFresh && imp > 0) exp = 0;
-	            if (exportFresh && !importFresh && exp > 0) imp = 0;
-
-	            netW = imp - exp;
-	            source = invGrid
-	              ? ((importFresh && exportFresh) ? 'buy/sell(inv)' : 'buy/sell(partial inv)')
-	              : ((importFresh && exportFresh) ? 'buy/sell' : 'buy/sell(partial)');
-	          } else {
-	            netW = null;
-	            source = invGrid ? 'buy/sell(stale inv)' : 'buy/sell(stale)';
-	          }
-	        } else if (hasImport) {
-	          if (importFresh) {
-	            netW = (impValid ? Number(importVal) : 0);
-	            source = invGrid ? 'import-only(inv)' : 'import-only';
-	          } else {
-	            netW = null;
-	            source = invGrid ? 'import-only(stale inv)' : 'import-only(stale)';
-	          }
-	        } else if (hasExport) {
-	          if (exportFresh) {
-	            netW = -(expValid ? Number(exportVal) : 0);
-	            source = invGrid ? 'export-only(inv)' : 'export-only';
-	          } else {
-	            netW = null;
-	            source = invGrid ? 'export-only(stale inv)' : 'export-only(stale)';
-	          }
-	        } else {
-	          netW = null;
-	          source = 'none';
-	        }
-      }
-
-      // Publish source for diagnostics (helps identifying NVP issues)
-      try { await this.adapter.setStateAsync('ems.gridPowerSource', { val: source, ack: true }); } catch (_eSrc) {}
-
-      if (typeof netW === 'number' && Number.isFinite(netW) && this._gridPowerId && this._gridPowerRawId) {
-        const nowTs = Date.now();
-        const netRawRounded = Math.round(Number(netW));
-
-        // 1) Publish raw net power (diagnostics / safety clamp)
-        try {
-          await this.adapter.setStateAsync('ems.gridPowerRawW', { val: netRawRounded, ack: true });
-        } catch (_e) {}
-
-        // 2) Filtered/averaged net power for stable regulation
-        const psCfg = (this.adapter && this.adapter.config && this.adapter.config.peakShaving) ? this.adapter.config.peakShaving : {};
-        const useAvg = (psCfg.useAverage !== false); // default true
-        const tauSec = useAvg ? clampNumber(psCfg.smoothingSeconds, 1, 600, 10) : 0;
-        const dtSec = (this._gridPowerLastTs > 0) ? Math.max(0.05, Math.min(10, (nowTs - this._gridPowerLastTs) / 1000)) : (this._intervalMs / 1000);
-        this._gridPowerLastTs = nowTs;
-
-        if (!Number.isFinite(Number(this._gridPowerAvgW))) {
-          this._gridPowerAvgW = netRawRounded;
-        } else if (!useAvg || tauSec <= 0) {
-          this._gridPowerAvgW = netRawRounded;
-        } else {
-          const alpha = dtSec / (tauSec + dtSec);
-          this._gridPowerAvgW = Number(this._gridPowerAvgW) + alpha * (netRawRounded - Number(this._gridPowerAvgW));
+        const diagnosticWrites = [
+          ['ems.gridPowerSource', snapshot.source],
+          ['ems.gridMeasurementFresh', snapshot.usable],
+          ['ems.gridMeasurementStatus', snapshot.status],
+          ['ems.gridMeasurementAgeMs', snapshot.measurementAgeMs === null ? -1 : Math.round(snapshot.measurementAgeMs)],
+          ['ems.gridHeartbeatAgeMs', snapshot.heartbeatAgeMs === null ? -1 : Math.round(snapshot.heartbeatAgeMs)],
+          ['ems.gridConnected', snapshot.connected === true],
+          ['ems.gridNvpCoherent', snapshot.coherent],
+          ['ems.gridNvpSkewMs', snapshot.skewMs === null ? -1 : Math.round(snapshot.skewMs)],
+          ['ems.gridMeasurementReason', String(snapshot.reason || '')],
+        ];
+        for (const [id, value] of diagnosticWrites) {
+          try { await this.adapter.setStateAsync(id, { val: value, ack: true }); } catch (_error) {}
         }
 
-        const netAvgRounded = Math.round(Number(this._gridPowerAvgW));
+        const netW = snapshot.usable && Number.isFinite(Number(snapshot.netW)) ? Number(snapshot.netW) : null;
+        if (netW !== null && this._gridPowerId && this._gridPowerRawId) {
+          const nowTs = Date.now();
+          const netRawRounded = Math.round(netW);
+          try { await this.adapter.setStateAsync('ems.gridPowerRawW', { val: netRawRounded, ack: true }); } catch (_error) {}
 
-        try {
-          await this.adapter.setStateAsync('ems.gridPowerW', { val: netAvgRounded, ack: true });
-        } catch (_e) {}
-
-        // Update dp cache explicitly (own states might not be subscribed)
-        try {
-          if (typeof this.dp.handleStateChange === 'function') {
-            this.dp.handleStateChange(this._gridPowerRawId, { val: netRawRounded, ack: true, ts: nowTs });
-            this.dp.handleStateChange(this._gridPowerId, { val: netAvgRounded, ack: true, ts: nowTs });
+          const psCfg = this.adapter?.config?.peakShaving || {};
+          const useAvg = psCfg.useAverage !== false;
+          const tauSec = useAvg ? clampNumber(psCfg.smoothingSeconds, 1, 600, 10) : 0;
+          const dtSec = this._gridPowerLastTs > 0 ? Math.max(0.05, Math.min(10, (nowTs - this._gridPowerLastTs) / 1000)) : (this._intervalMs / 1000);
+          const sourceChanged = this._gridPowerLastResolutionSource && this._gridPowerLastResolutionSource !== snapshot.source;
+          this._gridPowerLastTs = nowTs;
+          this._gridPowerLastResolutionSource = snapshot.source;
+          if (!Number.isFinite(Number(this._gridPowerAvgW)) || sourceChanged || !useAvg || tauSec <= 0) {
+            this._gridPowerAvgW = netRawRounded;
+          } else {
+            const alpha = dtSec / (tauSec + dtSec);
+            this._gridPowerAvgW = Number(this._gridPowerAvgW) + alpha * (netRawRounded - Number(this._gridPowerAvgW));
           }
-        } catch (_e2) {}
-      }
-      } catch (_e) {
-        // ignore
+          const netAvgRounded = Math.round(Number(this._gridPowerAvgW));
+          try { await this.adapter.setStateAsync('ems.gridPowerW', { val: netAvgRounded, ack: true }); } catch (_error) {}
+          try {
+            if (typeof this.dp.handleStateChange === 'function') {
+              this.dp.handleStateChange(this._gridPowerRawId, { val: netRawRounded, ack: true, ts: nowTs, lc: nowTs });
+              this.dp.handleStateChange(this._gridPowerId, { val: netAvgRounded, ack: true, ts: nowTs, lc: nowTs });
+            }
+          } catch (_error) {}
+        }
+      } catch (error) {
+        try {
+          this.adapter._nvpFreshnessSnapshot = { ts: Date.now(), usable: false, fresh: false, coherent: false, degraded: false, connected: null, status: 'stale', source: 'resolver-error', reason: String(error?.message || error) };
+          await this.adapter.setStateAsync('ems.gridMeasurementFresh', { val: false, ack: true });
+          await this.adapter.setStateAsync('ems.gridMeasurementStatus', { val: 'stale', ack: true });
+          await this.adapter.setStateAsync('ems.gridMeasurementReason', { val: `resolver-error:${String(error?.message || error)}`.slice(0, 250), ack: true });
+        } catch (_error) {}
       }
 
       await this.mm.tick();

@@ -46,6 +46,7 @@
 'use strict';
 
 const { BaseModule } = require('./base');
+const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
 const { ReasonCodes } = require('../reasons');
 
 /**
@@ -789,6 +790,9 @@ class GridConstraintsModule extends BaseModule {
         const staleTimeoutSec = this._num(cfg.staleTimeoutSec, 15);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
 
+        const central = resolveCurrentNvpSnapshot(this.adapter && this.adapter._nvpFreshnessSnapshot, Date.now(), Math.max(staleMs, 10000));
+        if (central.current) return !central.usable;
+
         const dp = this.dp;
         if (!dp) return true;
 
@@ -814,6 +818,9 @@ class GridConstraintsModule extends BaseModule {
     _getGridW(cfg) {
         const staleTimeoutSec = this._num(cfg.staleTimeoutSec, 15);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
+
+        const central = resolveCurrentNvpSnapshot(this.adapter && this.adapter._nvpFreshnessSnapshot, Date.now(), Math.max(staleMs, 10000));
+        if (central.current) return central.usable ? central.netW : null;
 
         const dp = this.dp;
         if (!dp) return null;

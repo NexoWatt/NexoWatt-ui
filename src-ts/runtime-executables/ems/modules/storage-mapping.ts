@@ -1,45 +1,9 @@
 // @ts-nocheck
 /**
- * Executable TypeScript source: ems/modules/storage-mapping.js
- *
- * Zweck:
- * Diese Datei ist ab 0.7.131 die kanonische TypeScript-Quelle der produktiven
- * Adapter-/Frontend-Runtime-Datei `ems/modules/storage-mapping.js`.
- *
- * Build-Regel:
- * `npm run sync:ts-runtime-executables` erzeugt daraus die auslieferbare
- * JavaScript-Datei. Änderungen an der Runtime sollen hier vorgenommen werden;
- * die JS-Datei ist nur noch Build-Artefakt für Node.js/ioBroker bzw. den Browser.
- *
- * Sicherheit:
- * Der Inhalt basiert auf der bisher produktiven JavaScript-Runtime und bleibt
- * vorübergehend mit `@ts-nocheck` ausführbar. Fachliche TS-Helfer wie EVCS,
- * Energiefluss, Core-Limits und Heizstab bleiben die bereits typisierten Quellen.
- */
-
-/**
- * NexoWatt Detail-Kommentar (DE)
- * Zweck dieser Ergänzung:
- * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
- * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
- * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
- */
-
-/**
- * Datei: ems/modules/storage-mapping.js
- * Rolle im Projekt: Speicher-Mapping.
- * Zweck: Normalisiert Speicher-Datenpunkte für Einzel- und Mehrspeicheranlagen.
- * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
- * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
- */
-/**
- * NexoWatt Code-Kommentar (DE)
- * Zweck: Hilfsmodul für Speicher-Mapping und Speicherfarm-/Mehrspeicher-Zuordnung.
- * Zusammenhänge:
- * - Wird vom App-Center und Speicher-/EMS-Modulen verwendet.
- * - Muss normale Einzelanlagen und Speicherfarm sauber trennen.
- * Wartungshinweise:
- * - Farm-Werte dürfen normale Anlagen nicht beeinflussen, wenn keine Farm aktiv ist.
+ * Kanonische Runtime-Quelle für das herstellerunabhängige Speicher-Mapping.
+ * Registriert ausschließlich Mess- und Steuer-DPs; aktive Regelentscheidungen
+ * bleiben in storage-control. Explizite AppCenter-Overrides haben Vorrang vor
+ * Speicherfarm- und Bilanz-Fallbacks.
  */
 
 'use strict';
@@ -56,26 +20,7 @@ const { BaseModule } = require('./base');
  * Sie stellt nur sicher, dass die Zuordnung sauber vorhanden ist und später
  * herstellerunabhängig genutzt werden kann.
  */
-/**
- * Code-Teil: Klasse `SpeicherMappingModule`
- * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
- * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
- * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
- */
-// Klassen-Kommentar: Klasse: SpeicherMappingModule. Aufgabe: verarbeitet Konfiguration oder Datenpunkt-Mapping. Änderungen müssen mit App-Center, /config und den Modul-Resolvern konsistent bleiben. Zusammenhang: EMS-Modul mit eigener Regelungs-/Diagnoseaufgabe; wird durch ems/module-manager.js und ems/engine.js ausgeführt.
-/**
- * Klasse: SpeicherMappingModule
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
 class SpeicherMappingModule extends BaseModule {
-    /**
-     * Code-Teil: constructor
-     * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
-     * Zusammenhang: Gehört zu EMS-Modul (Regelungs-, Diagnose- oder Beratungslogik innerhalb der EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
-     * Wartung/TypeScript: Änderungen können LIVE-Energiefluss, aktuelle Werte und History beeinflussen; DP-Fallbacks nur mit Regressionstest ändern. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
-     */
     constructor(adapter, dpRegistry) {
         super(adapter, dpRegistry);
 
@@ -85,28 +30,10 @@ class SpeicherMappingModule extends BaseModule {
         this._lastOk = false;
     }
 
-    /**
-     * Code-Teil: Methode `init`
-     * Zweck: initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: init
-     * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     async init() {
         await this._ensureStates();
         await this._upsertFromConfig();
     }
-    /**
-     * Code-Teil: tick
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     async tick() {
         // Nur Diagnose: aktuellen SoC-Wert spiegeln (wenn vorhanden)
         const enabled = !!this.adapter.config.enableStorageControl;
@@ -140,18 +67,6 @@ class SpeicherMappingModule extends BaseModule {
         }
     }
 
-    /**
-     * Code-Teil: Methode `_ensureStates`
-     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _ensureStates
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     async _ensureStates() {
         const base = 'speicher';
         const defs = [
@@ -164,6 +79,9 @@ class SpeicherMappingModule extends BaseModule {
 
             { id: `${base}.mapping.socId`, name: 'SoC Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.istLeistungId`, name: 'Ist-Leistung Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.istLadeId`, name: 'Ist-Leistung Laden Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.istEntladeId`, name: 'Ist-Leistung Entladen Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.istLeistungQuelle`, name: 'Aufgelöste Ist-Leistungsquelle', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.dcPvId`, name: 'DC-/Hybrid-PV Leistungs-Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.sollLeistungId`, name: 'Sollleistung signed Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.sollLadeId`, name: 'Sollwert Laden Datenpunkt-ID', type: 'string', role: 'text', def: '' },
@@ -212,18 +130,6 @@ class SpeicherMappingModule extends BaseModule {
         }
     }
 
-    /**
-     * Code-Teil: Methode `_getCfg`
-     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _getCfg
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     _getCfg() {
         const storage = (this.adapter.config && this.adapter.config.storage) ? this.adapter.config.storage : {};
         const controlMode = (storage && typeof storage.controlMode === 'string') ? storage.controlMode : 'targetPower';
@@ -245,18 +151,6 @@ class SpeicherMappingModule extends BaseModule {
         return { controlMode, coupling, vendorProfile, dp, feneconGridControlEnabled, feneconAcMode, farmEnabled };
     }
 
-    /**
-     * Code-Teil: Methode `_upsertFromConfig`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _upsertFromConfig
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     async _upsertFromConfig() {
         if (!this.dp) return;
 
@@ -268,6 +162,11 @@ class SpeicherMappingModule extends BaseModule {
         const istId = String(dp.batteryPowerObjectId || '').trim();
         const istScale = Number.isFinite(Number(dp.batteryPowerScale)) ? Number(dp.batteryPowerScale) : 1;
         const istInv = !!dp.batteryPowerInvert;
+        const istChargeId = String(dp.batteryChargePowerObjectId || '').trim();
+        const istChargeScale = Number.isFinite(Number(dp.batteryChargePowerScale)) ? Number(dp.batteryChargePowerScale) : 1;
+        const istDischargeId = String(dp.batteryDischargePowerObjectId || '').trim();
+        const istDischargeScale = Number.isFinite(Number(dp.batteryDischargePowerScale)) ? Number(dp.batteryDischargePowerScale) : 1;
+        const istFeedbackSource = String(dp.batteryFeedbackSource || (istId ? 'storage-tab-signed' : ((istChargeId || istDischargeId) ? 'storage-tab-split' : ''))).trim();
 
         // Optionaler DC-/Hybrid-PV-Messwert fuer Einzel-Speicher.
         // Dieser Wert ist bewusst ein Eingang (PV-Erzeugung), kein Speicher-Sollwert.
@@ -324,6 +223,9 @@ class SpeicherMappingModule extends BaseModule {
         await this._setIfChanged('speicher.mapping.herstellerprofil', String(vendorProfile || 'generic'));
         await this._setIfChanged('speicher.mapping.socId', socId);
         await this._setIfChanged('speicher.mapping.istLeistungId', istId);
+        await this._setIfChanged('speicher.mapping.istLadeId', istChargeId);
+        await this._setIfChanged('speicher.mapping.istEntladeId', istDischargeId);
+        await this._setIfChanged('speicher.mapping.istLeistungQuelle', istFeedbackSource);
         await this._setIfChanged('speicher.mapping.dcPvId', dcPvId);
         await this._setIfChanged('speicher.mapping.sollLeistungId', sollId);
         await this._setIfChanged('speicher.mapping.sollLadeId', sollChargeId);
@@ -373,6 +275,40 @@ class SpeicherMappingModule extends BaseModule {
                 invert: istInv,
                 deadband: 0,
                 note: 'Optional'
+            });
+        }
+
+        // Getrennte positive Istwerte werden intern erst in storage-control zu
+        // einer signed Leistung zusammengeführt: +W Entladen, -W Laden.
+        if (istChargeId) {
+            await this.dp.upsert({
+                key: 'st.batteryChargePowerW',
+                name: 'Speicher Ist-Leistung Laden',
+                objectId: istChargeId,
+                dataType: 'number',
+                direction: 'in',
+                unit: 'W',
+                scale: istChargeScale,
+                offset: 0,
+                invert: false,
+                deadband: 0,
+                note: 'Positive Ladeleistung; AppCenter-Override oder Einzel-Speicher-Mapping'
+            });
+        }
+
+        if (istDischargeId) {
+            await this.dp.upsert({
+                key: 'st.batteryDischargePowerW',
+                name: 'Speicher Ist-Leistung Entladen',
+                objectId: istDischargeId,
+                dataType: 'number',
+                direction: 'in',
+                unit: 'W',
+                scale: istDischargeScale,
+                offset: 0,
+                invert: false,
+                deadband: 0,
+                note: 'Positive Entladeleistung; AppCenter-Override oder Einzel-Speicher-Mapping'
             });
         }
 

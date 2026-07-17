@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/grid-constraints.ts
- * Quell-Hash: sha256:151d5c7e4a5c4435eec6ba73bde324ebca22635564af2cc6b3a7728cc3fbde47
+ * Quell-Hash: sha256:80896eb1b390bfec943055b2a1cf74041e587c8cb49442e248db513bec6455a3
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -44,6 +44,7 @@
 'use strict';
 
 const { BaseModule } = require('./base');
+const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
 const { ReasonCodes } = require('../reasons');
 
 /**
@@ -787,6 +788,9 @@ class GridConstraintsModule extends BaseModule {
         const staleTimeoutSec = this._num(cfg.staleTimeoutSec, 15);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
 
+        const central = resolveCurrentNvpSnapshot(this.adapter && this.adapter._nvpFreshnessSnapshot, Date.now(), Math.max(staleMs, 10000));
+        if (central.current) return !central.usable;
+
         const dp = this.dp;
         if (!dp) return true;
 
@@ -812,6 +816,9 @@ class GridConstraintsModule extends BaseModule {
     _getGridW(cfg) {
         const staleTimeoutSec = this._num(cfg.staleTimeoutSec, 15);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
+
+        const central = resolveCurrentNvpSnapshot(this.adapter && this.adapter._nvpFreshnessSnapshot, Date.now(), Math.max(staleMs, 10000));
+        if (central.current) return central.usable ? central.netW : null;
 
         const dp = this.dp;
         if (!dp) return null;

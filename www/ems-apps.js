@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:8c509e7be543b9d01bd47e0b5d180df090b9206f4e0531d60e6530111213571d
+ * Quell-Hash: sha256:3eb0122216612199c6c103f6b53eae598d4df591d60ad768ce8ac91e46a3a19d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -13989,6 +13989,29 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       { label: 'Remaining', value: _fmtW(remW) },
       { label: 'Status', value: String(ctrl.status || '') },
     ], budgetKind));
+
+    // Kompakte EMS-Überwachung: Im Status-Reiter erscheinen nur die für
+    // Feldbetrieb und Fehlersuche wesentlichen Punkte. Die ausführlichen JSON-
+    // Diagnosen bleiben weiterhin in den internen States verfügbar.
+    const stageA = payload && payload.stageA && typeof payload.stageA === 'object' ? payload.stageA : null;
+    if (stageA) {
+      const storageOverride = stageA.storageOverride || {};
+      const nvp = stageA.nvp || {};
+      const stageKind = stageA.status === 'error' ? 'error' : (stageA.status === 'warn' ? 'warn' : 'ok');
+      const monitorRows = [
+        { label: 'EMS-Diagnose', value: String(stageA.status || 'wartet').toUpperCase() },
+        { label: 'NVP', value: `${String(nvp.status || (nvp.coherent ? 'ok' : 'prüfen')).toUpperCase()} · ${String(nvp.source || nvp.mode || 'missing')}` },
+        { label: 'Messwertalter', value: nvp.signedAgeMs == null && nvp.importAgeMs == null && nvp.exportAgeMs == null
+          ? '—'
+          : _fmtAge(Math.min(...[nvp.signedAgeMs, nvp.importAgeMs, nvp.exportAgeMs].filter((value) => Number.isFinite(Number(value))).map(Number))) },
+        { label: 'Aktive Aktorkonflikte', value: String(Number(stageA.concurrentControlPathsCount || 0)) },
+        { label: 'Speicherquelle', value: String(storageOverride.resolvedSource || storageOverride.mode || 'automatisch') },
+      ];
+      if (Number(stageA.measurementIssueCount || 0) > 0) {
+        monitorRows.push({ label: 'Messwert-Hinweise', value: String(Number(stageA.measurementIssueCount || 0)) });
+      }
+      els.chargingBudget.appendChild(mkCard('EMS Überwachung', monitorRows, stageKind));
+    }
 
     // Summary (optional)
     if (sum) {

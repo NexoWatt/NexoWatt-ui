@@ -1,3 +1,27 @@
+## 0.8.109
+
+- Zentrale NVP-Messwertfrische eingeführt: `connected=true`, tatsächliches Messwertalter und Heartbeat werden getrennt bewertet. Ein positives Connected-Signal kann einen eingefrorenen Leistungswert nicht mehr unbegrenzt als frisch markieren.
+- Heartbeat-Haltezeit begrenzt: Ein echtes Geräte-/Watchdog-Ereignis darf einen unveränderten Messwert nur innerhalb einer konfigurierbaren Maximalzeit bestätigen. Danach sperrt das EMS die NVP-abhängigen Leistungsbudgets sicher.
+- Getrennte NVP-Bezugs-/Einspeise-DPs zeitlich kohärent aufgelöst: Bei zu großem Zeitversatz wird nur der neuere Kanal verwendet und der alte Gegenkanal auf 0 W gesetzt; Phantom-Bezug beziehungsweise Phantom-Einspeisung werden dadurch verhindert.
+- Eine kanonische NVP-Quelle für zentrale Budgetierung, EVCS-Lastmanagement, Speicherregelung, Grid-Constraints, Peak-Shaving, LIVE-Energiefluss und Historie. Ein bekannter stale NVP darf in nachgelagerten Modulen nicht über alte Fallbackwerte wiederaufleben.
+- Energiefluss-/History-Fallback typisiert zentralisiert: LIVE und Historie folgen dem EMS-Frischestatus und nutzen bei alten Runtime-Ständen denselben Split-DP-Kohärenzschutz.
+- AppCenter-Status bewusst kompakt gehalten: Eine einzelne Karte „EMS Überwachung“ zeigt nur NVP-Zustand/-Quelle, Messwertalter, aktive Aktorkonflikte, Speicherquelle und relevante Problemanzahl.
+- TypeScript-Migration verbessert: Die neue Frische-, Kohärenz- und Anzeigeauflösung liegt in einer echten typisierten Runtime-Komponente; das `@ts-nocheck`-No-Growth-Gate bleibt eingehalten.
+- Neue Regression `test:measurement-freshness-stage-b` prüft Connected/Heartbeat/Messwert-Trennung, Split-NVP-Zeitversatz, stale Budget-Failsafe und gemeinsame Nutzung der kanonischen NVP-Quelle.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v411` erhöht.
+
+## 0.8.108
+
+- AppCenter-Speicher-Overrides wieder autoritativ: Explizit unter „Zuordnung“ konfigurierte SoC-, signed Leistungs- sowie getrennte Lade-/Entlade-Istwerte haben Vorrang vor Speicherfarm- und Bilanz-Fallbacks. Dies gilt ausdrücklich auch für Einzelanlagen ohne aktive Speicherfarm.
+- Speicherfarm-Spiegel bereinigt: Die Farm veröffentlicht nur noch kanonische `storageFarm.*`-Aggregate. Allgemeine Speicherwerte werden nur gespiegelt, wenn kein expliziter AppCenter-Override existiert; alte Farmwerte können dadurch Einzel-Speicher-Mappings nicht mehr überdecken.
+- Speicherregelung um Split-Istleistung erweitert: Positive Lade- und Entlade-Istwerte werden sicher zu `+W = Entladen / -W = Laden` zusammengeführt. Steuer-/Sollwert-DPs werden als Istfeedback abgewiesen, damit keine Sollwert-Rückkopplung entsteht.
+- Energiefluss und Historie verwenden dieselbe Quellenpriorität: AppCenter-Override vor Einzel-Speicher-Mapping, aktive Farm nur als Fallback, Bilanzableitung ausschließlich ohne konfigurierte Speicher-Messquelle.
+- Neue read-only „Stufe A“-Diagnose im AppCenter-Status: Aktor-Doppelbelegungen, gleichzeitig aktive Steuerpfade, getrenntes Messwert-/Connected-/Heartbeat-Alter, NVP-Import-/Export-Zeitversatz und die tatsächlich aufgelöste Speicherquelle werden angezeigt.
+- Stufe A verändert keine Geräte-Sollwerte. Sie schreibt ausschließlich unter `ems.diagnostics.stageA.*`; diese internen Diagnosen sind aus den öffentlichen Kunden-APIs ausgefiltert.
+- Runtime-Build erweitert: Explizit markierte, echt typisierte Runtime-Quellen werden kontrolliert mit TypeScript nach CommonJS transpiliert. Alle bisherigen JS-kompatiblen TS-Dateien bleiben textstabil; das bestehende `@ts-nocheck`-No-Growth-Gate bleibt grün.
+- Neue Regressionen `test:storage-appcenter-override-precedence` und `test:stage-a-diagnostics` prüfen Override-Vorrang, Split-Feedback, Farm-Abgrenzung, read-only Diagnose und NVP-Kohärenz.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v410` erhöht.
+
 ## 0.8.107
 
 - Speicher-Eigenverbrauch bei aktiven Ladepunkten korrigiert: Ohne im AppCenter freigegebene Kundenwahl bleibt die Wallboxlast Bestandteil des normalen NVP-Regelkreises. Der Speicher darf den Netzbezug damit wie jede andere Last ausregeln.

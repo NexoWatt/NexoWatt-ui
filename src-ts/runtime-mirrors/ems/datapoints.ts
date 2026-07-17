@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 3dc8f705b76a5b194e2d2c1d4a902c7f2c64cb623fa9b4cb827a74c3544c40b7
+ * Original-Hash: bede4ed205e2842748874bd16c2409e1ae25b536301760d9c59486fe44d40245
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/datapoints.ts
- * Quell-Hash: sha256:db71372e6239581262d608c8e9e8e9df4530b2ea23412baaacfd080d58752fc0
+ * Quell-Hash: sha256:2ef9a8cad199a3139a5da7bdfd89624e949c477fe59fd704bbda52a226bbb321
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -147,7 +147,7 @@ class DatapointRegistry {
         /** @type {Map<string, string>} */
         this.keyByObjectId = new Map();
 
-        /** @type {Map<string, {val:any, ts:number, ack:boolean}>} */
+        /** @type {Map<string, {val:any, ts:number, lc:number, receivedTs:number, ack:boolean}>} */
         this.cacheByObjectId = new Map();
 
         /** @type {Map<string, {val:any, ts:number}>} */
@@ -433,13 +433,13 @@ class DatapointRegistry {
             normalized.alivePrefix = normalized.alivePrefix || '';
         }
 
-        // Connection indicators for stale detection.
-        // Many meters/adapters write *only on value change*, so state.ts can get old even while the device is
-        // communicating fine. For NexoWatt device-adapter structures we can additionally use:
+        // Connection indicators are separate health signals. They may prove that
+        // the adapter/device is online, but they never refresh an old measurement.
+        // For NexoWatt device-adapter structures we can additionally use:
         //   <...devices.<deviceKey>.comm.connected> (per device)
         // and the standard ioBroker adapter flag:
         //   <adapter>.<instance>.info.connection
-        // If either indicates "connected", we treat the datapoint as alive and suppress false STALE_METER.
+        // A negative signal invalidates the source; a positive signal is diagnostic only.
         normalized.aliveConnectedId = '';
         normalized.infoConnectionId = '';
         try {
@@ -551,7 +551,7 @@ class DatapointRegistry {
                 const st = await this.adapter.getForeignStateAsync(srcObjectId);
                 // IMPORTANT: prime the cache for the *source* objectId (alias target),
                 // otherwise getAgeMs()/isStale() will treat it as missing until the first stateChange event.
-                if (st) this.handleStateChange(srcObjectId, st);
+                if (st) this.handleStateChange(srcObjectId, st, true);
             } catch (_e) {
                 // ignore (not all foreign states exist immediately)
             } finally {
@@ -560,8 +560,8 @@ class DatapointRegistry {
             }
         }
 
-        // Prime + subscribe connection indicators (best effort, idempotent)
-        // This allows staleness logic to rely on "connected" even if those states rarely change.
+        // Prime + subscribe connection indicators (best effort, idempotent).
+        // They are retained for diagnostics and explicit disconnect detection.
         try {
             const connIds = [];
             if (normalized.useAliveForStale) {
@@ -587,7 +587,7 @@ class DatapointRegistry {
                 if (needPrimeConn) {
                     try {
                         const st = await this.adapter.getForeignStateAsync(cid);
-                        if (st) this.handleStateChange(cid, st);
+                        if (st) this.handleStateChange(cid, st, true);
                     } catch (_e) {
                         // ignore
                     } finally {
@@ -599,12 +599,11 @@ class DatapointRegistry {
             // ignore
         }
 
-        // Initialize alive timestamp (best effort) when we have a value.
+        // Der Alive-Heartbeat wird nicht aus einem beim Start gelesenen Altwert
+        // initialisiert. Erst ein echtes StateChange-Ereignis darf ihn aktualisieren.
         try {
-            if (normalized.useAliveForStale && normalized.alivePrefix && this.cacheByObjectId.has(srcObjectId)) {
-                const c = this.cacheByObjectId.get(srcObjectId);
-                const ts = c && Number.isFinite(Number(c.ts)) ? Number(c.ts) : Date.now();
-                if (!this._alivePrefixTs.has(normalized.alivePrefix)) this._alivePrefixTs.set(normalized.alivePrefix, ts);
+            if (normalized.useAliveForStale && normalized.alivePrefix && !this._alivePrefixTs.has(normalized.alivePrefix)) {
+                this._alivePrefixTs.set(normalized.alivePrefix, 0);
             }
         } catch (_e) {}
     }
@@ -626,21 +625,32 @@ class DatapointRegistry {
      * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    handleStateChange(id, state) {
+    handleStateChange(id, state, prime = false) {
         if (!id) return;
         if (!state) {
             this.cacheByObjectId.delete(id);
             return;
         }
-        this.cacheByObjectId.set(id, { val: state.val, ts: state.ts || Date.now(), ack: !!state.ack });
+        const receivedTs = Date.now();
+        const stateTs = Number(state.ts);
+        const changeTs = Number(state.lc);
+        this.cacheByObjectId.set(id, {
+            val: state.val,
+            ts: Number.isFinite(stateTs) && stateTs > 0 ? stateTs : receivedTs,
+            lc: Number.isFinite(changeTs) && changeTs > 0 ? changeTs : (Number.isFinite(stateTs) && stateTs > 0 ? stateTs : receivedTs),
+            receivedTs,
+            ack: !!state.ack,
+        });
 
-        // Update alive prefixes (heartbeat) on *any* matching foreign state update.
+        // Nur echte StateChange-Ereignisse sind ein Kommunikations-Heartbeat.
+        // Ein beim Start gelesener Altwert darf die Quelle nicht künstlich frisch
+        // machen, sonst würde ein eingefrorener Datenpunkt nach jedem Neustart
+        // erneut als aktuelle Messung gelten.
         try {
-            if (this._alivePrefixTs && this._alivePrefixTs.size) {
-                const ts = state.ts || Date.now();
+            if (!prime && this._alivePrefixTs && this._alivePrefixTs.size) {
                 for (const p of this._alivePrefixTs.keys()) {
                     if (p && id.startsWith(p)) {
-                        this._alivePrefixTs.set(p, ts);
+                        this._alivePrefixTs.set(p, receivedTs);
                     }
                 }
             }
@@ -692,6 +702,53 @@ class DatapointRegistry {
         return c ? c.val : null;
     }
 
+    /** Liefert den originalen Messwert-Zeitstempel ohne Heartbeat-/Connected-Fallback. */
+    getMeasurementTimestampMs(key) {
+        const e = this.getEntry(key);
+        if (!e) return null;
+        const c = this.cacheByObjectId.get(e.srcObjectId || e.objectId);
+        const ts = c && Number.isFinite(Number(c.ts)) ? Number(c.ts) : null;
+        return ts && ts > 0 ? ts : null;
+    }
+
+    /** Alter des eigentlichen Messwertes; connected=true verändert diesen Wert nie. */
+    getMeasurementAgeMs(key) {
+        const ts = this.getMeasurementTimestampMs(key);
+        if (!ts) return Number.POSITIVE_INFINITY;
+        return Math.max(0, Date.now() - ts);
+    }
+
+    /** Alter seit dem letzten tatsächlich empfangenen StateChange-Ereignis. */
+    getReceivedAgeMs(key) {
+        const e = this.getEntry(key);
+        if (!e) return Number.POSITIVE_INFINITY;
+        const c = this.cacheByObjectId.get(e.srcObjectId || e.objectId);
+        const ts = c && Number.isFinite(Number(c.receivedTs)) ? Number(c.receivedTs) : null;
+        if (!ts) return Number.POSITIVE_INFINITY;
+        return Math.max(0, Date.now() - ts);
+    }
+
+    /**
+     * Verbindungsstatus als separates Diagnosesignal. Ein positives Ergebnis
+     * bestätigt nur die Kommunikation und macht keinen alten Messwert frisch.
+     */
+    getConnectionStatus(key) {
+        const e = this.getEntry(key);
+        if (!e) return null;
+        const connIds = [];
+        if (e.aliveConnectedId) connIds.push(String(e.aliveConnectedId));
+        if (e.infoConnectionId) connIds.push(String(e.infoConnectionId));
+        let seenTrue = false;
+        for (const cid of connIds) {
+            const cst = this.cacheByObjectId.get(cid);
+            if (!cst) continue;
+            const value = cst.val;
+            if (value === false || value === 0 || value === '0' || value === 'false') return false;
+            if (value === true || value === 1 || value === '1' || value === 'true') seenTrue = true;
+        }
+        return seenTrue ? true : null;
+    }
+
     /**
      * Age of the cached datapoint value in milliseconds.
      * If the datapoint is unknown or not cached yet, returns +Infinity.
@@ -735,28 +792,10 @@ class DatapointRegistry {
             // ignore
         }
 
-        // Additional "connected" override:
-        // If the underlying adapter/device reports a positive connection state, treat this input as alive.
-        // This is critical for sources that do not update state.ts while values are stable.
-        try {
-            if (e.useAliveForStale) {
-                const connIds = [];
-                if (e.aliveConnectedId) connIds.push(String(e.aliveConnectedId));
-                if (e.infoConnectionId) connIds.push(String(e.infoConnectionId));
-                for (const cid of connIds) {
-                    if (!cid) continue;
-                    const cst = this.cacheByObjectId.get(cid);
-                    const v = cst ? cst.val : null;
-                    const connected = (v === true || v === 1 || v === '1' || v === 'true');
-                    if (connected) {
-                        age = 0;
-                        break;
-                    }
-                }
-            }
-        } catch (_e) {
-            // ignore
-        }
+        // Connected ist absichtlich kein Frische-Ersatz. Ein dauerhaftes
+        // connected=true kann einen eingefrorenen Leistungswert nicht erkennen.
+        // Module können getConnectionStatus() zusätzlich als Health-Signal nutzen;
+        // die Frische stammt ausschließlich vom Messwert oder vom Heartbeat.
 
         return age;
     }
@@ -764,8 +803,8 @@ class DatapointRegistry {
     /**
      * Activity age based on the datapoint's derived alivePrefix heartbeat.
      *
-     * This intentionally ignores the "connected" override used in getAgeMs().
-     * It answers: "When did we last see ANY state update under the same device prefix?".
+     * Connected is intentionally ignored. This answers only:
+     * "When did we last see ANY state update under the same device prefix?".
      *
      * If no alivePrefix is known or no activity was observed yet, +Infinity is returned.
      *

@@ -135,6 +135,7 @@ const NwChannelDetector =
 
 // Embedded EMS engine (Charging Management from nexowatt-multiuse)
 const { EmsEngine } = require('./ems/engine');
+const { resolveNvpDisplay } = require('./ems/services/measurement-freshness');
 const nwCountryProfileService = require('./ems/services/country-profile-service');
 const nwFeatureFlagsService = require('./ems/services/feature-flags');
 const {
@@ -6008,17 +6009,28 @@ class NexoWattVis extends utils.Adapter {
         this.updateValue('storageFarm.storagesTotal', configured, now);
         this.updateValue('storageFarm.storagesStatusJson', JSON.stringify(statusRows), now);
 
-        // Im Farm-Modus sollen Energiefluss und Historie immer die konsolidierten
-        // Farmwerte sehen. Die generischen Keys bleiben als Kompatibilitätsbrücke für
-        // ältere Frontends erhalten; die zentrale Auflösung bevorzugt dennoch die
-        // expliziten storageFarm.*-States.
+        // Kompatibilitätsbrücke für alte Frontends: Farmwerte dürfen nur dann auf
+        // generische Speicher-Keys gespiegelt werden, wenn der Installer im AppCenter
+        // keinen ausdrücklichen Einzel-Speicher-Override gesetzt hat. So bleibt eine
+        // Kundenanlage ohne Farm und auch eine bewusst abweichende Messquelle autoritativ.
         try {
           const netCharge = totalPowerState < 0 ? Math.abs(totalPowerState) : 0;
           const netDischarge = totalPowerState > 0 ? totalPowerState : 0;
-          this.updateValue('storageSoc', totalSocState, now, { raw: false });
-          this.updateValue('storageChargePower', netCharge, now, { raw: false });
-          this.updateValue('storageDischargePower', netDischarge, now, { raw: false });
-          this.updateValue('batteryPower', totalPowerState, now, { raw: false });
+          const mapped = (this.config && this.config.datapoints && typeof this.config.datapoints === 'object')
+            ? this.config.datapoints
+            : {};
+          const hasSocOverride = !!String(mapped.storageSoc || '').trim();
+          const hasPowerOverride = !!(
+            String(mapped.batteryPower || '').trim()
+            || String(mapped.storageChargePower || '').trim()
+            || String(mapped.storageDischargePower || '').trim()
+          );
+          if (!hasSocOverride) this.updateValue('storageSoc', totalSocState, now, { raw: false });
+          if (!hasPowerOverride) {
+            this.updateValue('storageChargePower', netCharge, now, { raw: false });
+            this.updateValue('storageDischargePower', netDischarge, now, { raw: false });
+            this.updateValue('batteryPower', totalPowerState, now, { raw: false });
+          }
 
           // PV bleibt ausschließlich in storageFarm.totalPv*. Die zentrale
           // Energieflussauflösung führt Farm-PV und Anlagen-PV nachvollziehbar
@@ -9831,6 +9843,7 @@ async onReady() {
       const lower = key.toLowerCase();
       if (!key) return true;
       if (lower.startsWith('installer.') || lower.startsWith('diagnostics.') || lower.startsWith('license.')) return true;
+      if (lower.startsWith('ems.diagnostics.stagea.')) return true;
       if (lower.startsWith('meshMicrogrid.receiver.'.toLowerCase()) || lower.startsWith('meshMicrogrid.fieldTest.'.toLowerCase())) return true;
       if (lower === 'settings.weatherapikey' || lower === 'settings.email') return true;
       if (lower === 'evcs.rfid.whitelistjson' || lower === 'evcs.rfid.learning.lastcaptured' || lower === 'evcs.rfid.learning.lastcapturedts') return true;
@@ -14777,6 +14790,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           stations,
           control,
           summary,
+          stageA: this._stageADiagnostics || null,
         });
       } catch (e) {
         this.log.warn('Charging diagnostics API error: ' + e.message);
@@ -24911,7 +24925,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       ? this._nwResolveStorageFarmMetricsFromCache({ now })
       : null;
     const sfEnabled = !!(farmMetrics && farmMetrics.active);
-    if (sfEnabled) {
+    if (sfEnabled && !anyStorageMapped) {
       let signed = Number(farmMetrics.totalPowerW);
       if (Number.isFinite(signed)) {
         // storageFarm.totalPowerW ist bereits pro Speicher normalisiert und besitzt
@@ -26691,42 +26705,31 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const gridBuyMapped = this._nwHasMappedDatapoint('gridBuyPower');
     const gridSellMapped = this._nwHasMappedDatapoint('gridSellPower');
     const gridNetMapped = this._nwHasMappedDatapoint('gridPointPower');
-
-    // IMPORTANT:
-    // gridBuyPower/gridSellPower may exist as mirrored fallback values when only the
-    // signed NVP datapoint is configured. Those fallback cache values must not win
-    // over the currently mapped NVP override, otherwise the energy flow runs one
-    // cycle behind or keeps stale values from a previous mapping.
-    let gridBuyRaw = gridBuyMapped ? this._nwGetNumberFromCache('gridBuyPower') : null;
-    let gridSellRaw = gridSellMapped ? this._nwGetNumberFromCache('gridSellPower') : null;
-    const gridNetRaw = gridNetMapped ? this._nwGetNumberFromCache('gridPointPower') : null;
-
-    let src = 'missing';
-    if (gridNetRaw !== null) {
-      if (!gridBuyMapped || gridBuyRaw === null) gridBuyRaw = Math.max(0, gridNetRaw);
-      if (!gridSellMapped || gridSellRaw === null) gridSellRaw = Math.max(0, -gridNetRaw);
-      src = (!gridBuyMapped && !gridSellMapped) ? 'net' : ((gridBuyMapped && gridSellMapped) ? 'mapped' : 'mapped+net');
-    } else if (gridBuyMapped || gridSellMapped) {
-      src = 'mapped';
-    }
-
-    const gridBuyW = Math.max(0, Math.abs(gridBuyRaw ?? 0));
-    const gridSellW = Math.max(0, Math.abs(gridSellRaw ?? 0));
-    const hasGrid = (gridBuyRaw !== null || gridSellRaw !== null || gridNetRaw !== null || gridNetMapped);
-
-    return {
-      gridBuyRaw,
-      gridSellRaw,
-      gridNetRaw,
-      gridBuyW,
-      gridSellW,
-      hasGrid,
-      src,
+    const now = Date.now();
+    const maxAgeMs = this._nwLiveInputMaxAgeMs();
+    const canonicalRec = this.stateCache && this.stateCache['ems.gridMeasurementFresh'];
+    const canonicalAge = canonicalRec ? this._nwGetCacheAgeMs('ems.gridMeasurementFresh', now) : null;
+    const canonicalKnown = !!(canonicalRec && canonicalAge !== null && canonicalAge <= Math.max(maxAgeMs, 15000));
+    const readFresh = (key, mapped) => mapped ? this._nwGetNumberFromCacheFresh(key, maxAgeMs, null, now) : null;
+    return resolveNvpDisplay({
+      maxAgeMs,
+      canonicalKnown,
+      canonicalFresh: canonicalKnown && typeof canonicalRec.value === 'boolean' ? canonicalRec.value : null,
+      canonicalNetW: this._nwGetNumberFromCacheFresh('ems.gridPowerRawW', maxAgeMs, null, now),
+      canonicalSource: this.stateCache?.['ems.gridPowerSource']?.value,
+      canonicalStatus: this.stateCache?.['ems.gridMeasurementStatus']?.value,
+      gridNetRaw: readFresh('gridPointPower', gridNetMapped),
+      gridBuyRaw: readFresh('gridBuyPower', gridBuyMapped),
+      gridSellRaw: readFresh('gridSellPower', gridSellMapped),
+      gridBuyTs: this.stateCache?.gridBuyPower?.ts,
+      gridSellTs: this.stateCache?.gridSellPower?.ts,
+      maxSkewMs: this.config?.diagnostics?.nvpMaxSkewMs,
       gridBuyMapped,
       gridSellMapped,
       gridNetMapped,
-    };
+    });
   }
+
   /**
    * Code-Teil: _nwSetHistorieValue
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -26989,6 +26992,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
    */
   async updateHistorieExportStates(reason = 'timer') {
     const now = Date.now();
+    const historyDps = (this.config && this.config.datapoints && typeof this.config.datapoints === 'object') ? this.config.datapoints : {};
 
     const {
       gridBuyW,
@@ -27031,8 +27035,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       && String(this.config.storage.coupling || '').trim().toLowerCase() === 'dc');
 
     if (!pvTotalFromDerived && sfEnabled && typeof this._nwMergeStorageFarmPvWithBase === 'function') {
-      const dps = (this.config && this.config.datapoints && typeof this.config.datapoints === 'object') ? this.config.datapoints : {};
-      const baseSourceId = String(dps.pvPower || dps.productionTotal || '').trim();
+      const baseSourceId = String(historyDps.pvPower || historyDps.productionTotal || '').trim();
       const merged = this._nwMergeStorageFarmPvWithBase(pvTotal || 0, {
         now,
         metrics: farmMetricsHist,
@@ -27054,7 +27057,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
     // In StorageFarm mode the storageFlow resolver already prefers the aggregated farm
     // charge/discharge totals. Keep the farm SoC preference here for history/export.
-    if (sfEnabled) {
+    if (sfEnabled && !String(historyDps.storageSoc || '').trim()) {
       const socFarm = farmMetricsHist && Number.isFinite(Number(farmMetricsHist.soc))
         ? Number(farmMetricsHist.soc)
         : this._nwGetNumberFromCache('storageFarm.totalSoc');

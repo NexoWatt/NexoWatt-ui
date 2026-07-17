@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.107",
+    "version": "0.8.109",
     "news": {
+      "0.8.109": {
+        "de": "Version 0.8.109: Die NVP-Messwertfrische wird zentral und herstellerunabhängig bewertet. connected=true macht eingefrorene Leistungswerte nicht mehr frisch; ein echter Heartbeat darf unveränderte Messwerte nur innerhalb einer begrenzten Haltezeit bestätigen. Getrennte Bezugs-/Einspeise-DPs werden zeitlich kohärent aufgelöst, sodass ein alter Gegenkanal keine Phantomwerte erzeugt. Budgetierung, Lademanagement, Speicher, Netzconstraints, Peak-Shaving sowie Energiefluss/History verwenden dieselbe NVP-Quelle. Der AppCenter-Status bleibt bewusst auf eine kompakte EMS-Überwachungskarte begrenzt.",
+        "en": "Version 0.8.109: NVP measurement freshness is now evaluated centrally and independently of vendor profiles. connected=true no longer makes frozen power values fresh; a real heartbeat may confirm unchanged readings only for a bounded hold time. Separate import/export datapoints are resolved coherently in time so an old opposite channel cannot create phantom values. Budgeting, charging management, storage, grid constraints, peak shaving, and energy flow/history use the same NVP source. AppCenter status remains intentionally limited to one compact EMS monitoring card."
+      },
+      "0.8.108": {
+        "de": "Version 0.8.108: Explizite Speicher-Messwert-Overrides aus dem AppCenter haben wieder Vorrang vor Speicherfarm- und Bilanzwerten, auch bei Einzelanlagen. Getrennte Lade-/Entlade-Istwerte werden sicher zusammengeführt. Eine neue read-only Stufe-A-Diagnose zeigt Aktor-Doppelbelegungen, Messwertfrische, NVP-Zeitversatz und die tatsächlich verwendete Speicherquelle, ohne Hardware-Sollwerte zu verändern.",
+        "en": "Version 0.8.108: Explicit AppCenter storage measurement overrides again take precedence over storage-farm and balance values, including single-storage installations. Separate charge/discharge actual values are safely combined. A new read-only Stage-A diagnostic reports duplicate actuator mappings, measurement freshness, NVP timing skew and the resolved storage source without changing hardware setpoints."
+      },
       "0.8.107": {
         "de": "Version 0.8.107: Die normale Speicher-Eigenverbrauchsoptimierung bleibt bei Wallboxbetrieb standardmäßig aktiv. EVCS-Leistung wird nur noch bei ausdrücklich freigegebener und gewählter Schutzfunktion aus der Batterie-NVP-Regelung herausgenommen. Der same-cycle EMS-Policy-Snapshot verhindert zusätzlich, dass alte Schutzwerte die Entladung noch einen Regelzyklus blockieren. Manuelle Ladepunkt-DP-Zuordnungen im Admin bleiben unverändert.",
         "en": "Version 0.8.107: Normal storage self-consumption optimization now remains active by default while EV charging. EVCS load is excluded from battery NVP control only when storage protection is explicitly enabled and selected. A same-cycle EMS policy snapshot also prevents stale protection values from blocking discharge for another control cycle. Manual per-charge-point datapoint mappings remain unchanged."
@@ -22,14 +30,6 @@
       "0.8.103": {
         "de": "Version 0.8.103: Korrigiert Min+PV im zentralen Lademanagement: Die technische Mindestleistung wird unabhängig vom PV-Überschuss aus dem normalen Gesamt-/Netzbudget gehalten, während nur die Zusatzleistung den zentralen PV-Grant nutzt. Reines PV-Laden sowie Auto und Boost bleiben unverändert; Anschluss-, Phasen-, §14a- und Stationslimits bleiben verbindlich. Modus-, Freigabe-, Phasen- und Zieländerungen lösen nun einen debouncten sofortigen EMS-Regelzyklus aus.",
         "en": "Version 0.8.103: Fixes Min+PV in central charging management: the technical minimum charging power is maintained from the normal total/grid budget independently of PV surplus, while only additional power consumes the central PV grant. Pure PV charging as well as Auto and Boost remain unchanged; grid, phase, §14a and station limits remain binding. Mode, enable, phase and charging-goal changes now trigger a debounced immediate EMS control cycle."
-      },
-      "0.8.102": {
-        "de": "Version 0.8.102: Härtet öffentliche API-, SSE-, Konfigurations- und Mesh-Zugriffe feldkompatibel ab, entfernt Geheimnisse und interne Datenpunktpfade aus Kundenantworten, ergänzt kontrollierte RFID-/E-Mail-Endpunkte, Login-Schutz und eine konfigurierbare Kunden-Zugriffspolicy. Die EMS-, Speicher-, Lade-, Stations-, Heizstab- und Farm-Regelalgorithmen bleiben fachlich unverändert; ein TypeScript-No-Growth-Gate verhindert zusätzliche untypisierte Runtime.",
-        "en": "Version 0.8.102: Hardens public API, SSE, configuration and mesh access with field-compatible defaults, removes secrets and internal datapoint paths from customer responses, and adds controlled RFID/email endpoints, login protection and a configurable customer access policy. EMS, storage, charging, station, heating-rod and farm control algorithms remain functionally unchanged; a TypeScript no-growth gate prevents additional untyped runtime."
-      },
-      "0.8.101": {
-        "de": "Version 0.8.101: Stellt Netto-Gesamtleistung, arithmetischen SoC-Mittelwert und gesamte PV-/WR-Leistung der Speicherfarm wieder zentral für Energiefluss, Historie und EMS bereit. Farm-Aktivierung und Doppelzählungsschutz wurden vereinheitlicht.",
-        "en": "Version 0.8.101: Restores storage-farm net total power, arithmetic average state of charge and complete PV/inverter power as canonical values for energy flow, history and EMS. Farm activation and duplicate-count protection were unified."
       }
     },
     "title": "NexoWatt UI",

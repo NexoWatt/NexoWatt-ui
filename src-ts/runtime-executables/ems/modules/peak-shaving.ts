@@ -45,6 +45,7 @@
 'use strict';
 
 const { BaseModule } = require('./base');
+const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
 const { ReasonCodes, reasonToGerman } = require('../reasons');
 
 /**
@@ -1421,10 +1422,14 @@ class PeakShavingModule extends BaseModule {
         const wantsPhaseLimit = (phaseMode === 'info' || phaseMode === 'enforce') && typeof maxPhaseA === 'number' && maxPhaseA > 0;
         let staleMeter = false;
         const staleKeys = [];
+        const centralNvp = resolveCurrentNvpSnapshot(this.adapter && this.adapter._nvpFreshnessSnapshot, now, Math.max(staleMaxAgeMs, 10000));
+        const centralNvpCurrent = centralNvp.current;
         if (wantsPowerLimit || wantsPhaseLimit) {
             // Grid power is the primary safety signal
             if (wantsPowerLimit) {
-                if (!this.dp.getEntry('ps.gridPowerW')) staleKeys.push('ps.gridPowerW');
+                if (centralNvpCurrent) {
+                    if (!centralNvp.usable) staleKeys.push(`nvp:${centralNvp.status || 'stale'}`);
+                } else if (!this.dp.getEntry('ps.gridPowerW')) staleKeys.push('ps.gridPowerW');
                 else if (this.dp.isStale('ps.gridPowerW', staleMaxAgeMs)) staleKeys.push('ps.gridPowerW');
             }
             if (wantsPhaseLimit) {
@@ -1442,7 +1447,7 @@ class PeakShavingModule extends BaseModule {
         }
 
         // Measurements
-        const gridPowerRaw = this.dp.getNumber('ps.gridPowerW', null);
+        const gridPowerRaw = centralNvpCurrent ? (centralNvp.usable ? centralNvp.netW : null) : this.dp.getNumber('ps.gridPowerW', null);
         const l1Raw = this.dp.getNumber('ps.l1A', null);
         const l2Raw = this.dp.getNumber('ps.l2A', null);
         const l3Raw = this.dp.getNumber('ps.l3A', null);

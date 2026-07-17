@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2f277ef96bb292492b0828fe1a97e66781af269de59c34e80375eb0134b321bf
+ * Original-Hash: ef60a4938d37ffda9753afa17e0466dd9b09185328fd11583b7f1874145b6257
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:e2ac22c032089679b8418814722ed82f80870d3476cebfc025b654f8f932d90a
+ * Quell-Hash: sha256:06f16e713ff2795aacf599b394d73aea58553200926674aaa5d35e64501c6d2d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -74,6 +74,8 @@
 'use strict';
 
 const { BaseModule } = require('./base');
+const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
+const { resolveSplitBatteryFeedback } = require('../services/storage-override-bridge');
 
 
 /**
@@ -444,6 +446,9 @@ class SpeicherRegelungModule extends BaseModule {
     async tick() {
         const cfg = this._getCfg();
         const psCfg = this.adapter.config.peakShaving || {};
+        const feedbackSource = String(cfg.datapoints && cfg.datapoints.batteryFeedbackSource || '').trim();
+        const explicitAppCenterPowerOverride = feedbackSource.startsWith('appcenter-');
+        const explicitAppCenterSocOverride = String(cfg.datapoints && cfg.datapoints.socFeedbackSource || '').trim() === 'appcenter-flow-override';
 
         // Stale-Timeout einmal zentral berechnen (wird für VIS/Tarif und Messwerte genutzt)
         const staleMs = Math.max(1, Math.round(num(cfg.staleTimeoutSec, 15) * 1000));
@@ -680,25 +685,18 @@ class SpeicherRegelungModule extends BaseModule {
         // Wird weiter unten im Tarif-Block (want < 0) befüllt.
         let pvAwareTariff = null;
 
-        // grid.powerW is expected to be the *filtered* NVP (Import + / Export -)
-        // grid.powerRawW is the raw signal (if available). If not, fall back to ps.gridPowerW.
-        let gridW = this.dp ? this.dp.getNumberFresh('grid.powerW', staleMs, null) : null;
-        let gridRawW = this.dp ? this.dp.getNumberFresh('grid.powerRawW', staleMs, null) : null;
+        const centralNvp = resolveCurrentNvpSnapshot(this.adapter && this.adapter._nvpFreshnessSnapshot, now, Math.max(staleMs, 10000));
+        const centralNvpCurrent = centralNvp.current;
+        let gridW = centralNvpCurrent ? (centralNvp.usable ? centralNvp.netW : null) : (this.dp ? this.dp.getNumberFresh('grid.powerW', staleMs, null) : null);
+        let gridRawW = centralNvpCurrent ? (centralNvp.usable ? centralNvp.netW : null) : (this.dp ? this.dp.getNumberFresh('grid.powerRawW', staleMs, null) : null);
 
-        if (typeof gridRawW !== 'number' && this.dp) {
-            // raw fallback (manufacturer datapoint from Peak-Shaving config)
-            gridRawW = this.dp.getNumberFresh('ps.gridPowerW', staleMs, null);
-        }
-
-        if (typeof gridW !== 'number') {
-            // If we don't have the internal filtered NVP, try Peak-Shaving effective power (avg) as fallback.
-            const eff = await this._readOwnNumber('peakShaving.control.effectivePowerW');
-            if (typeof eff === 'number') gridW = eff;
-        }
-
-        if (typeof gridW !== 'number' && typeof gridRawW === 'number') {
-            // last-resort: use raw if no filtered signal exists
-            gridW = gridRawW;
+        if (!centralNvpCurrent) {
+            if (typeof gridRawW !== 'number' && this.dp) gridRawW = this.dp.getNumberFresh('ps.gridPowerW', staleMs, null);
+            if (typeof gridW !== 'number') {
+                const eff = await this._readOwnNumber('peakShaving.control.effectivePowerW');
+                if (typeof eff === 'number') gridW = eff;
+            }
+            if (typeof gridW !== 'number' && typeof gridRawW === 'number') gridW = gridRawW;
         }
 
         // Fuer die geschlossene NVP-Regelung brauchen wir nicht nur "irgendein"
@@ -706,21 +704,23 @@ class SpeicherRegelungModule extends BaseModule {
         // des RAW-Werts. Nur so koennen Batterie-Istleistung und NVP-Messung auf
         // zeitliche Plausibilitaet geprueft werden. Asynchrone Werte sind eine
         // Hauptursache fuer wechselnde Lade-/Entlade-Sollwerte.
-        const gridFilteredAge = this.dp && this.dp.getEntry('grid.powerW')
-            ? this.dp.getAgeMs('grid.powerW')
-            : null;
-        const gridRawAge = this.dp
-            ? (this.dp.getEntry('grid.powerRawW')
-                ? this.dp.getAgeMs('grid.powerRawW')
-                : (this.dp.getEntry('ps.gridPowerW') ? this.dp.getAgeMs('ps.gridPowerW') : null))
-            : null;
+        const gridFilteredAge = centralNvpCurrent
+            ? (Number.isFinite(Number(centralNvp.measurementAgeMs)) ? Number(centralNvp.measurementAgeMs) : Number.POSITIVE_INFINITY)
+            : (this.dp && this.dp.getEntry('grid.powerW') ? this.dp.getAgeMs('grid.powerW') : null);
+        const gridRawAge = centralNvpCurrent
+            ? gridFilteredAge
+            : (this.dp
+                ? (this.dp.getEntry('grid.powerRawW')
+                    ? this.dp.getAgeMs('grid.powerRawW')
+                    : (this.dp.getEntry('ps.gridPowerW') ? this.dp.getAgeMs('ps.gridPowerW') : null))
+                : null);
         const gridAge = (typeof gridFilteredAge === 'number') ? gridFilteredAge : gridRawAge;
 
         // SoC für Reserve (bei Speicherfarm: aggregierten SoC nutzen)
         let soc = this.dp ? this.dp.getNumberFresh('st.socPct', staleMs, null) : null;
         let socAge = this.dp ? this.dp.getAgeMs('st.socPct') : null;
 
-        if (farmEnabled) {
+        if (farmEnabled && !explicitAppCenterSocOverride) {
             try {
                 const stOnline = await this.adapter.getStateAsync('storageFarm.storagesOnline');
                 const stDispatch = await this.adapter.getStateAsync('storageFarm.storagesDispatchAvailable');
@@ -823,6 +823,28 @@ class SpeicherRegelungModule extends BaseModule {
             // ignore
         }
 
+        // AppCenter kann Lade- und Entlade-Istleistung getrennt zuordnen. Wenn
+        // kein vertrauenswürdiger signed Istwert vorliegt, bilden wir daraus
+        // dieselbe interne Konvention (+W Entladen, -W Laden). Sollwert-/CTRL-DPs
+        // werden vom Helfer ausdrücklich nicht als Messfeedback akzeptiert.
+        if (!battPowerTrusted) {
+            try {
+                const splitFeedback = resolveSplitBatteryFeedback(this.dp, cfg, staleMs);
+                if (splitFeedback) {
+                    battPowerObservedW = splitFeedback.observedW;
+                    battPowerAge = splitFeedback.ageMs;
+                    battPowerObjectId = splitFeedback.objectIds.join(' | ');
+                    battPowerFeedbackSource = splitFeedback.source;
+                    battPowerMappingTrusted = true;
+                    battPowerW = splitFeedback.trusted ? splitFeedback.observedW : null;
+                    battPowerTrusted = splitFeedback.trusted;
+                    battPowerInvalidReason = splitFeedback.reason;
+                }
+            } catch (_eSplitFeedback) {
+                // Ein optionaler Split-Istwert darf die Speicherregelung nicht stoppen.
+            }
+        }
+
         // Einzel-DC-/Hybrid-Speicher: optionaler separater PV-Erzeugungswert.
         // Dieser Messwert wird nur als Kontext/Diagnose genutzt; die Batterie-Sollwerte
         // bleiben weiterhin hart am NVP und an den Speichergrenzen begrenzt.
@@ -846,7 +868,7 @@ class SpeicherRegelungModule extends BaseModule {
         // Nettoleistung. Der strenge `battPowerW` bleibt weiterhin nur innerhalb
         // staleMs gueltig; der spaetere Feedback-Puffer entscheidet separat ueber
         // eine begrenzte Haltezeit fuer das geschlossene NVP-Balancing.
-        if (farmEnabled) {
+        if (farmEnabled && !explicitAppCenterPowerOverride) {
             try {
                 const stOnline = await this.adapter.getStateAsync('storageFarm.storagesOnline');
                 const stDispatch = await this.adapter.getStateAsync('storageFarm.storagesDispatchAvailable');
@@ -5244,6 +5266,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const storage = (this.adapter.config && this.adapter.config.storage) ? this.adapter.config.storage : {};
         return {
             controlMode: storage.controlMode,
+            datapoints: storage.datapoints && typeof storage.datapoints === 'object' ? storage.datapoints : {},
             // Einzel-Speicher-Typ aus dem App-Center. AC bleibt der Standard.
             // DC/Hybrid nutzt zusaetzlich den optionalen PV-Erzeugungs-DP st.dcPvPowerW,
             // damit FENECON-/0-Einspeise-Erkennung nicht den Batterie-Sollwert mit PV verwechselt.

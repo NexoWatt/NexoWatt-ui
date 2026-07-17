@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: f86febb0c871c95365ddc2ac23039838e7d44bc103b77a710df605b639d2fa31
+ * Original-Hash: 0b086f2d1a066bb180847f871e5b9747f25541d8e95895d6b1b08dde8fc43bfd
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/peak-shaving.ts
- * Quell-Hash: sha256:bf6115b5891aa99dd5ee420d05f0ca70c6bb3ff506e8c54d3630016e3dfd3494
+ * Quell-Hash: sha256:794182864f0c77aa1bb96f03b498168176d409192e6f9f6fe564a1dd62b304a6
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -74,6 +74,7 @@
 'use strict';
 
 const { BaseModule } = require('./base');
+const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
 const { ReasonCodes, reasonToGerman } = require('../reasons');
 
 /**
@@ -1450,10 +1451,14 @@ class PeakShavingModule extends BaseModule {
         const wantsPhaseLimit = (phaseMode === 'info' || phaseMode === 'enforce') && typeof maxPhaseA === 'number' && maxPhaseA > 0;
         let staleMeter = false;
         const staleKeys = [];
+        const centralNvp = resolveCurrentNvpSnapshot(this.adapter && this.adapter._nvpFreshnessSnapshot, now, Math.max(staleMaxAgeMs, 10000));
+        const centralNvpCurrent = centralNvp.current;
         if (wantsPowerLimit || wantsPhaseLimit) {
             // Grid power is the primary safety signal
             if (wantsPowerLimit) {
-                if (!this.dp.getEntry('ps.gridPowerW')) staleKeys.push('ps.gridPowerW');
+                if (centralNvpCurrent) {
+                    if (!centralNvp.usable) staleKeys.push(`nvp:${centralNvp.status || 'stale'}`);
+                } else if (!this.dp.getEntry('ps.gridPowerW')) staleKeys.push('ps.gridPowerW');
                 else if (this.dp.isStale('ps.gridPowerW', staleMaxAgeMs)) staleKeys.push('ps.gridPowerW');
             }
             if (wantsPhaseLimit) {
@@ -1471,7 +1476,7 @@ class PeakShavingModule extends BaseModule {
         }
 
         // Measurements
-        const gridPowerRaw = this.dp.getNumber('ps.gridPowerW', null);
+        const gridPowerRaw = centralNvpCurrent ? (centralNvp.usable ? centralNvp.netW : null) : this.dp.getNumber('ps.gridPowerW', null);
         const l1Raw = this.dp.getNumber('ps.l1A', null);
         const l2Raw = this.dp.getNumber('ps.l2A', null);
         const l3Raw = this.dp.getNumber('ps.l3A', null);

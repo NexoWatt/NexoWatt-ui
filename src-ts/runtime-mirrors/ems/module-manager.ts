@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e9d0da7ebdf5f483e7185d5047e51ea6f8ccd2f2de5453534a8c8310ee5f823e
+ * Original-Hash: 67e1b56890bf01804ee92be8807e0287fd1d4eab27567d1f6efeef1c2b17edbd
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:b2c220b6a9d0043b186b9d31962cdcd5d36801c0a3cde3fabf1414e08475c34a
+ * Quell-Hash: sha256:211613add65fcaea885be0b00b0fdcc1aae41f1842bb1e5215e689a7de9ec7a1
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -95,6 +95,7 @@ const { ChargeKioskModule } = require('./modules/charge-kiosk');
 const { EnergyLedgerModule } = require('./modules/energy-ledger');
 const { NlP1DsmrModule } = require('./modules/nl-p1-dsmr');
 const { MeshMicrogridModule } = require('./modules/mesh-microgrid');
+const { StageADiagnosticsModule } = require('./modules/stage-a-diagnostics');
 const featureFlags = require('./services/feature-flags');
 
 /**
@@ -476,10 +477,19 @@ class ModuleManager {
             enabledFn: () => this._licenseAllowsApp('multiuse') && !!this.adapter.config.enableMultiUse,
         });
 
+        // Stufe A ist eine rein lesende Feld-Diagnose. Sie läuft bewusst zuletzt,
+        // damit Mapping-, Owner- und Frischezustände aller Module im selben Tick
+        // vollständig sichtbar sind, ohne einen Hardware-Sollwert zu verändern.
+        this.modules.push({
+            key: 'stageADiagnostics',
+            instance: new StageADiagnosticsModule(this.adapter, this.dp),
+            enabledFn: () => true,
+        });
+
         // Init modules
         // Hinweis: Einige Module stellen UI-States bereit (z. B. EVCS), die auch dann
         // vorhanden sein sollen, wenn die Logik aktuell deaktiviert ist.
-        const alwaysInit = new Set(['chargingManagement', 'aiAdvisor', 'energyWallet']);
+        const alwaysInit = new Set(['chargingManagement', 'aiAdvisor', 'energyWallet', 'stageADiagnostics']);
         for (const m of this.modules) {
             const enabled = !!(m && typeof m.enabledFn === 'function' ? m.enabledFn() : false);
             m.enabled = enabled;

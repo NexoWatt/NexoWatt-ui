@@ -45,6 +45,7 @@
 'use strict';
 
 const { BaseModule } = require('./base');
+const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
 const { applySetpoint } = require('../consumers');
 const { ReasonCodes } = require('../reasons');
 const { computeChargingMinimumServicePlan } = require('../charging-budget-helpers');
@@ -6170,82 +6171,50 @@ if (components.length) {
             const gridKeys = ['cm.gridPowerW', 'grid.powerW', 'grid.powerRawW', 'ems.gridPowerW', 'ps.gridPowerW'];
             const configuredGridKeys = gridKeys.filter(k => !!this.dp.getEntry(k));
 
-            // Robust STALE_METER handling:
-            // If a connected DP + watchdog/heartbeat DP are configured, use them as the source of truth.
-            // This avoids false STALE_METER when the power value is stable (setStateChanged -> ts/lc not updated).
-            const connEntry = this.dp.getEntry('cm.gridConnected');
-            const wdEntry = this.dp.getEntry('cm.gridWatchdog');
-            const connId = connEntry?.srcObjectId;
-            const wdId = wdEntry?.srcObjectId;
-            const hasConn = !!connId;
-            const hasWd = !!wdId;
+            const centralNvp = resolveCurrentNvpSnapshot(this.adapter && this.adapter._nvpFreshnessSnapshot, Date.now(), Math.max(staleTimeoutMs, 10000));
+            if (centralNvp.current) {
+                staleMeter = !centralNvp.usable;
+            } else if (configuredGridKeys.length === 0) {
+                staleMeter = true;
+            } else {
+                const connEntry = this.dp.getEntry('cm.gridConnected');
+                const wdEntry = this.dp.getEntry('cm.gridWatchdog');
+                const connectedRaw = connEntry ? this.dp.getRaw('cm.gridConnected') : null;
+                const explicitlyDisconnected = connectedRaw === false || connectedRaw === 0 || connectedRaw === '0' || connectedRaw === 'false';
 
-            if (hasConn || hasWd) {
-                // Connected / Online DP
-                let connected = true;
-                if (hasConn) {
-                    const connRaw = this.dp.getRaw('cm.gridConnected');
-                    // Be permissive: treat missing/unknown as connected (we primarily rely on watchdog freshness).
-                    // Only explicit false/0 should force disconnect.
-                    const isFalse = (connRaw === false || connRaw === 0 || connRaw === 'false' || connRaw === '0');
-                    connected = !isFalse;
+                let measurementFresh = false;
+                let measurementPresent = false;
+                for (const key of configuredGridKeys) {
+                    const value = this.dp.getNumber(key, null);
+                    if (typeof value === 'number' && Number.isFinite(value)) measurementPresent = true;
+                    const age = typeof this.dp.getMeasurementAgeMs === 'function'
+                        ? this.dp.getMeasurementAgeMs(key)
+                        : this.dp.getAgeMs(key);
+                    if (Number.isFinite(age) && age <= staleTimeoutMs) measurementFresh = true;
                 }
 
-                // Watchdog / Heartbeat DP
-                let watchdogFresh = true;
-                if (hasWd) {
-                    // If the watchdog is a "lastSeenMs" timestamp we compute age from its *value*.
-                    // Otherwise we use the alivePrefix heartbeat age (ANY state update under the same device prefix).
-                    let watchdogAgeMs = Infinity;
-                    const nowMs = Date.now();
-
-                    const looksLikeLastSeen = /lastSeenMs$/i.test(String(wdId || ''));
-                    if (looksLikeLastSeen) {
+                let watchdogFresh = false;
+                if (wdEntry) {
+                    const wdId = String(wdEntry.srcObjectId || wdEntry.objectId || '');
+                    let watchdogAgeMs = Number.POSITIVE_INFINITY;
+                    if (/lastSeenMs$/i.test(wdId)) {
                         const lastSeenMs = this.dp.getNumber('cm.gridWatchdog', null);
-                        if (typeof lastSeenMs === 'number' && Number.isFinite(lastSeenMs) && lastSeenMs > 0) {
-                            watchdogAgeMs = Math.max(0, nowMs - lastSeenMs);
-                        }
+                        if (Number.isFinite(Number(lastSeenMs)) && Number(lastSeenMs) > 0) watchdogAgeMs = Math.max(0, Date.now() - Number(lastSeenMs));
                     } else {
-                        // Use getAgeMs (includes robust alias fallback). getAliveAgeMs can be Infinity for ioBroker alias
-                        // wrappers because alias objects may not emit state-change events under their own ID.
-                        watchdogAgeMs = this.dp.getAgeMs('cm.gridWatchdog');
-
-                        // As a last resort (e.g., state missing), fall back to alive-age if available.
-                        if (!Number.isFinite(watchdogAgeMs) && typeof this.dp.getAliveAgeMs === 'function') {
-                            const a = this.dp.getAliveAgeMs('cm.gridWatchdog');
-                            if (Number.isFinite(a)) watchdogAgeMs = a;
-                        }
+                        const ages = [];
+                        if (typeof this.dp.getMeasurementAgeMs === 'function') ages.push(this.dp.getMeasurementAgeMs('cm.gridWatchdog'));
+                        else ages.push(this.dp.getAgeMs('cm.gridWatchdog'));
+                        if (typeof this.dp.getAliveAgeMs === 'function') ages.push(this.dp.getAliveAgeMs('cm.gridWatchdog'));
+                        const finiteAges = ages.filter((age) => Number.isFinite(age));
+                        if (finiteAges.length) watchdogAgeMs = Math.min(...finiteAges);
                     }
-
                     watchdogFresh = Number.isFinite(watchdogAgeMs) && watchdogAgeMs <= staleTimeoutMs;
                 }
 
-                // Decision (STALE_METER):
-                // ✅ If an explicit CONNECTED/ONLINE dp is mapped (e.g. nexowatt-devices … aliases.r.online),
-                //    treat it as authoritative and *only* use it.
-                //    This prevents false STALE_METER when values are stable or written "on change".
-                //
-                // Otherwise (no connected dp):
-                // - If watchdog exists: require watchdogFresh
-                if (hasConn) {
-                    staleMeter = !connected;
-                } else if (hasWd) {
-                    staleMeter = !watchdogFresh;
-                } else {
-                    staleMeter = true;
-                }
-            } else if (configuredGridKeys.length === 0) {
-                // No grid power configured -> safe fallback.
-                staleMeter = true;
-            } else {
-                let anyFresh = false;
-                for (const k of configuredGridKeys) {
-                    if (!this.dp.isStale(k, staleTimeoutMs)) {
-                        anyFresh = true;
-                        break;
-                    }
-                }
-                staleMeter = !anyFresh;
+                // Ein Heartbeat darf einen unveränderten Messwert bestätigen, aber
+                // nur wenn überhaupt ein plausibler Messwert vorhanden ist. Ein
+                // positives Connected-Signal allein reicht ausdrücklich nicht.
+                staleMeter = explicitlyDisconnected || !(measurementFresh || (measurementPresent && watchdogFresh));
             }
 
             // Gate A: If a phase limit is configured, phase current metering must be present and fresh.

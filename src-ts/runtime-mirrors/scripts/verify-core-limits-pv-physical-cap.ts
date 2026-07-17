@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 44b9994f7a63d01bbccc342b181b594d871aaa37f3b9821d9f035c8340205c8a
+ * Original-Hash: fdb6867d5f0304d244db9f3165e0959af48a59e71584a70067755940e237ecc4
  */
 
 /**
@@ -105,7 +105,8 @@ must(ts, 'function resolvePvBudgetPhysicalCapW');
 must(ts, '_resolveDirectPvPower(maxAgeMs)');
 must(ts, "'derived.core.pv.totalW'");
 must(ts, 'const pvPhysicalResolution = resolvePvBudgetPhysicalCapW({');
-must(ts, 'const pvBudgetRawW = Math.min(pvBudgetFlowRawW, pvPhysicalCapW);');
+must(ts, 'const pvBudgetRawW = gridMeasurementUsable ? Math.min(pvBudgetFlowRawW, pvPhysicalCapW) : 0;');
+must(ts, 'const totalBudgetW = gridMeasurementUsable ? Math.max(0, Math.min(gridHeadroomW, highLevelCapW)) : 0;');
 must(ts, 'ems.budget.pvBudgetPhysicalCapW');
 must(ts, 'ems.budget.pvBudgetDirectSource');
 must(ts, 'const flexibleFlowMaxAgeMs = Math.max(staleMs * 3, 45000);');

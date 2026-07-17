@@ -1,0 +1,124 @@
+// @ts-nocheck
+/**
+ * TypeScript-Parallelspiegel: scripts/verify-stage-a-diagnostics.js
+ *
+ * Zweck:
+ * Diese Datei ist die TypeScript-Vorbereitung der bestehenden JavaScript-Runtime-Datei.
+ * Sie wird noch nicht produktiv ausgeführt. Die produktive Quelle bleibt vorerst:
+ * scripts/verify-stage-a-diagnostics.js
+ *
+ * Zusammenhang:
+ * Der Spiegel hilft uns, die JS-Datei später schrittweise zu typisieren, zu testen und
+ * kontrolliert auf TypeScript umzustellen. Änderungen an der Runtime müssen aktuell noch
+ * in der JS-Datei erfolgen und danach mit diesem Spiegel synchronisiert werden.
+ *
+ * Wichtig für die Migration:
+ * - Diese Datei enthält vorübergehend @ts-nocheck.
+ * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
+ * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
+ *
+ * Original-Hash: 1070b6f162f21f9377a398d0e8f8c365b74eec6f57a35b18438dced10c23429e
+ */
+
+/**
+ * Code-Teil: Runtime-Spiegel der kompletten Datei
+ *
+ * Zweck:
+ * Dieser Abschnitt enthält den ursprünglichen JavaScript-Code als TypeScript-Parallelkopie.
+ * Einzelne Funktionen werden später pro Modul weiter typisiert; Dateien ohne eigene
+ * Funktionsdeklarationen bleiben trotzdem über diesen Dateikommentar dokumentiert.
+ */
+
+'use strict';
+
+/**
+ * Regression 0.8.108: Stufe A ist read-only, erkennt Aktor-Doppelbelegungen,
+ * trennt Messwert-/Connected-/Heartbeat-Alter und meldet NVP-Zeitversatz.
+ */
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+
+const root = path.resolve(__dirname, '..');
+const stage = require(path.join(root, 'ems/modules/stage-a-diagnostics.js'));
+
+/**
+ * Code-Teil: read
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function read(rel) { return fs.readFileSync(path.join(root, rel), 'utf8'); }
+
+const config = {
+  enableChargingManagement: true,
+  enableThresholdControl: true,
+  enableStorageControl: true,
+  datapoints: {
+    gridBuyPower: 'meter.import',
+    gridSellPower: 'meter.export',
+    gridPointConnected: 'meter.connected',
+    gridPointWatchdog: 'meter.heartbeat',
+    batteryPower: 'battery.actual',
+  },
+  chargingManagement: { wallboxes: [{ enabled: true, setPowerWId: 'shared.actor' }] },
+  thresholdRules: [{ enabled: true, writeId: 'shared.actor' }],
+};
+const mappings = stage.collectActuatorMappings(config, []);
+const matrix = stage.buildOwnerMatrix(mappings);
+const shared = matrix.find((row) => row.objectId === 'shared.actor');
+assert.ok(shared && shared.duplicate, 'Doppelbelegung muss erkannt werden');
+assert.ok(shared.conflict, 'gleichzeitig aktive Besitzer müssen Konflikt sein');
+
+const now = Date.now();
+const states = new Map([
+  ['meter.import', { val: 500, ts: now - 1000, lc: now - 1000, ack: true }],
+  ['meter.export', { val: 0, ts: now - 9000, lc: now - 9000, ack: true }],
+  ['meter.connected', { val: true, ts: now - 100, lc: now - 100000, ack: true }],
+  ['meter.heartbeat', { val: 1, ts: now - 2000, lc: now - 2000, ack: true }],
+  ['battery.actual', { val: 1200, ts: now - 500, lc: now - 500, ack: true }],
+]);
+const writes = [];
+const adapter = {
+  config,
+  evcsList: [],
+  log: { warn() {}, debug() {}, info() {}, error() {} },
+  async setObjectNotExistsAsync(id) { assert.ok(id.startsWith('ems.diagnostics.stageA.'), `unerlaubtes Diagnoseobjekt: ${id}`); },
+  async setStateAsync(id, value) { writes.push({ id, value }); assert.ok(id.startsWith('ems.diagnostics.stageA.'), `unerlaubter Write: ${id}`); },
+  async getStateAsync() { return null; },
+  async getForeignStateAsync(id) { return states.get(id) || null; },
+  _nwGetStorageFarmRuntimeInfo() { return { active: false, configuredCount: 0 }; },
+  _nwResolveBatteryFlowFromCache() { return { src: 'batterySigned' }; },
+  _nvpFreshnessSnapshot: {
+    ts: now, mode: 'split', status: 'degraded', source: 'split-newer-import',
+    usable: true, coherent: false, connected: true, skewMs: 8000,
+    measurementAgeMs: 1000, heartbeatAgeMs: 2000, reason: 'split-skew>5000ms',
+  },
+};
+
+(async () => {
+  const mod = new stage.StageADiagnosticsModule(adapter, null);
+  await mod.init();
+  assert.ok(adapter._stageADiagnostics, 'Snapshot muss am Adapter bereitstehen');
+  assert.strictEqual(adapter._stageADiagnostics.nvp.mode, 'split');
+  assert.strictEqual(adapter._stageADiagnostics.nvp.coherent, false, '9-s-Zeitversatz muss inkohärent sein');
+  assert.ok(adapter._stageADiagnostics.concurrentControlPathsCount >= 1, 'aktiver Aktorkonflikt muss gezählt werden');
+  assert.ok(writes.length > 0, 'Diagnose muss eigene States schreiben');
+
+  const main = read('src-ts/runtime-executables/main.ts');
+  const ui = read('src-ts/runtime-executables/www/ems-apps.ts');
+  assert.ok(main.includes("lower.startsWith('ems.diagnostics.stagea.')"), 'öffentlicher Snapshot muss Stage-A-Objektpfade sperren');
+  assert.ok(main.includes('stageA: this._stageADiagnostics || null'), 'Installerdiagnose muss Stage-A-Snapshot liefern');
+  assert.ok(ui.includes('EMS Überwachung'), 'AppCenter muss die kompakte EMS-Überwachung anzeigen');
+  assert.ok(!ui.includes('Stufe A – Messwert-Frische'), 'Status-Reiter darf nicht mit separaten Detailkarten überladen werden');
+
+  console.log('[stage-a-diagnostics] OK: read-only Owner-/Frische-Diagnose ist aktiv, zentral aufgelöst und im AppCenter kompakt dargestellt.');
+})().catch((error) => {
+  console.error(error && error.stack ? error.stack : error);
+  process.exit(1);
+});

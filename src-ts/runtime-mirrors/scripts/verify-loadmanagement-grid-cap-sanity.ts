@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 002ba5da67e7929b960d79fc5d7f70923c46d6304c0ebd6ddd47e0da5d7eb925
+ * Original-Hash: 2f3e97e9d7c411eecd8e0ca82c1a6ebfc0271e2bd264d546db457c0d2cb9dcd1
  */
 
 /**
@@ -89,8 +89,10 @@ must(cm, 'gridLocalSupportW = Math.max(0, gridBaseLoadW - Math.max(0, gridBaseLo
 must(cm, 'gridCapEvcsW = clamp(gridImportLimitEffW - gridBaseLoadW, 0, gridImportLimitEffW);', 'EVCS Netz-Cap clamp <= Anschlusslimit');
 must(cm, "chargingManagement.control.gridBaseLoadRawW", 'raw state');
 must(cm, "chargingManagement.control.gridLocalSupportW", 'support state');
-must(core, 'const gridHeadroomRawW = gridLimitW > 0 ? Math.max(0, gridLimitW - gridImportW + flexUsedW) : Number.POSITIVE_INFINITY;', 'raw central headroom');
-must(core, 'const gridHeadroomW = gridLimitW > 0 ? Math.min(gridLimitW, gridHeadroomRawW) : Number.POSITIVE_INFINITY;', 'central grid headroom clamp');
+must(core, 'const gridHeadroomRawW = gridMeasurementUsable', 'NVP-frischegeführtes zentrales Headroom-Gate');
+must(core, 'gridLimitW > 0 ? Math.max(0, gridLimitW - gridImportW + flexUsedW) : Number.POSITIVE_INFINITY', 'raw central headroom');
+must(core, 'const gridHeadroomW = gridMeasurementUsable', 'NVP-frischegeführtes zentrales Cap');
+must(core, 'gridLimitW > 0 ? Math.min(gridLimitW, gridHeadroomRawW) : Number.POSITIVE_INFINITY', 'central grid headroom clamp');
 must(core, 'headroomRawW', 'central raw diagnostic');
 mustNot(cm, 'gridCapEvcsW = clamp(gridImportLimitEffW - gridBaseLoadW, 0, 1e12);', 'alte überhöhte EVCS-Cap Formel');
 mustNot(core, 'const gridHeadroomW = gridLimitW > 0 ? Math.max(0, gridLimitW - gridImportW + flexUsedW) : Number.POSITIVE_INFINITY;', 'alte zentrale Headroom-Formel');

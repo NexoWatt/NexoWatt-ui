@@ -66,6 +66,7 @@ const { ChargeKioskModule } = require('./modules/charge-kiosk');
 const { EnergyLedgerModule } = require('./modules/energy-ledger');
 const { NlP1DsmrModule } = require('./modules/nl-p1-dsmr');
 const { MeshMicrogridModule } = require('./modules/mesh-microgrid');
+const { StageADiagnosticsModule } = require('./modules/stage-a-diagnostics');
 const featureFlags = require('./services/feature-flags');
 
 /**
@@ -447,10 +448,19 @@ class ModuleManager {
             enabledFn: () => this._licenseAllowsApp('multiuse') && !!this.adapter.config.enableMultiUse,
         });
 
+        // Stufe A ist eine rein lesende Feld-Diagnose. Sie läuft bewusst zuletzt,
+        // damit Mapping-, Owner- und Frischezustände aller Module im selben Tick
+        // vollständig sichtbar sind, ohne einen Hardware-Sollwert zu verändern.
+        this.modules.push({
+            key: 'stageADiagnostics',
+            instance: new StageADiagnosticsModule(this.adapter, this.dp),
+            enabledFn: () => true,
+        });
+
         // Init modules
         // Hinweis: Einige Module stellen UI-States bereit (z. B. EVCS), die auch dann
         // vorhanden sein sollen, wenn die Logik aktuell deaktiviert ist.
-        const alwaysInit = new Set(['chargingManagement', 'aiAdvisor', 'energyWallet']);
+        const alwaysInit = new Set(['chargingManagement', 'aiAdvisor', 'energyWallet', 'stageADiagnostics']);
         for (const m of this.modules) {
             const enabled = !!(m && typeof m.enabledFn === 'function' ? m.enabledFn() : false);
             m.enabled = enabled;

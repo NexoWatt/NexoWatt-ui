@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/core-limits.ts
- * Quell-Hash: sha256:c50d8881ff38e8adaf18f309883e5475c6c593b5aa1f74e09ac8efca4f7f5dab
+ * Quell-Hash: sha256:faa6f7db5ed424f1173e15bd9ec3447e03f3ce23273e2b914ab29da4a32aac65
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -58,6 +58,7 @@
 
 
 const { BaseModule } = require('./base');
+const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
 
 
 /**
@@ -1413,14 +1414,29 @@ class CoreLimitsModule extends BaseModule {
          * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
          * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
          */
-        const gridW = (() => {
+        const centralNvp = resolveCurrentNvpSnapshot(this.adapter && this.adapter._nvpFreshnessSnapshot, now, Math.max(staleMs, 10000));
+        let gridW = centralNvp.usable ? centralNvp.netW : null;
+        let gridMeasurementUsable = centralNvp.usable;
+        let gridMeasurementStatus = centralNvp.current ? centralNvp.status : 'legacy-fallback';
+        let gridMeasurementSource = centralNvp.current ? centralNvp.source : 'legacy-fallback';
+        let gridMeasurementReason = centralNvp.current ? centralNvp.reason : '';
+        if (!centralNvp.current) {
             const dpVal = this._readDpNumberFresh(['grid.powerRawW', 'ems.gridPowerRawW', 'grid.powerW', 'ems.gridPowerW', 'ps.gridPowerW'], staleMs, null);
-            if (isFiniteNumber(dpVal)) return dpVal;
-            return this._readCacheNumber(['grid.powerRawW', 'ems.gridPowerRawW', 'grid.powerW', 'ems.gridPowerW', 'gridPower', 'gridPowerW'], 0) || 0;
-        })();
+            const cacheVal = isFiniteNumber(dpVal) ? dpVal : this._readCacheNumberFresh(['grid.powerRawW', 'ems.gridPowerRawW', 'grid.powerW', 'ems.gridPowerW', 'gridPower', 'gridPowerW'], staleMs, null);
+            if (isFiniteNumber(cacheVal)) {
+                gridW = Number(cacheVal);
+                gridMeasurementUsable = true;
+                gridMeasurementStatus = 'legacy-fresh';
+                gridMeasurementSource = 'legacy-fresh';
+            } else {
+                gridMeasurementStatus = 'stale';
+                gridMeasurementReason = 'no-fresh-canonical-nvp';
+            }
+        }
+        const gridControlW = gridMeasurementUsable && isFiniteNumber(gridW) ? Number(gridW) : 0;
 
-        const gridImportW = Math.max(0, gridW || 0);
-        const gridExportW = Math.max(0, -(gridW || 0));
+        const gridImportW = Math.max(0, gridControlW);
+        const gridExportW = Math.max(0, -gridControlW);
 
         /**
          * Code-Teil: Arrow-Funktion `pvPowerW`
@@ -1539,7 +1555,7 @@ class CoreLimitsModule extends BaseModule {
         // (`pvEvcsUsedW`) darf zum NVP zurückgerechnet werden.
         const pvFlexUsedW = Math.max(0, evcsPvUsedW + thermalUsedW + heatingRodUsedW);
         const pvBudgetFlowRawW = computePvBudgetFlowRawW({
-            gridW,
+            gridW: gridControlW,
             flexUsedW: pvFlexUsedW,
             storageChargeW,
             storageDischargeW,
@@ -1564,7 +1580,7 @@ class CoreLimitsModule extends BaseModule {
             this._lastTrustedPvPhysicalCapW = pvPhysicalCapW;
             this._lastTrustedPvPhysicalCapTs = now;
         }
-        const pvBudgetRawW = Math.min(pvBudgetFlowRawW, pvPhysicalCapW);
+        const pvBudgetRawW = gridMeasurementUsable ? Math.min(pvBudgetFlowRawW, pvPhysicalCapW) : 0;
         const pvBudgetClampedW = Math.max(0, pvBudgetFlowRawW - pvBudgetRawW);
         const pvReserveW = clamp(num(cmCfg.pvChargeReserveW, 500), 0, 1e12, 500) || 0;
         const pvBudgetEffectiveW = Math.max(0, pvBudgetRawW - pvReserveW);
@@ -1629,16 +1645,21 @@ class CoreLimitsModule extends BaseModule {
         // 0.8.61: Zentrales Gate A konservativ klemmen. Die alte Anzeigeformel
         // `gridLimit - Netz + flexible Lasten` ist als Rohdiagnose nützlich,
         // darf aber das wirksame Netzbudget nicht über das Anschlusslimit heben.
-        const gridHeadroomRawW = gridLimitW > 0 ? Math.max(0, gridLimitW - gridImportW + flexUsedW) : Number.POSITIVE_INFINITY;
-        const gridHeadroomW = gridLimitW > 0 ? Math.min(gridLimitW, gridHeadroomRawW) : Number.POSITIVE_INFINITY;
+        const gridHeadroomRawW = gridMeasurementUsable
+            ? (gridLimitW > 0 ? Math.max(0, gridLimitW - gridImportW + flexUsedW) : Number.POSITIVE_INFINITY)
+            : 0;
+        const gridHeadroomW = gridMeasurementUsable
+            ? (gridLimitW > 0 ? Math.min(gridLimitW, gridHeadroomRawW) : Number.POSITIVE_INFINITY)
+            : 0;
         const highLevelCapW = coreSnapshot && coreSnapshot.evcsHighLevel && isFiniteNumber(coreSnapshot.evcsHighLevel.capW)
             ? Math.max(0, Number(coreSnapshot.evcsHighLevel.capW))
             : Number.POSITIVE_INFINITY;
-        const totalBudgetW = Math.max(0, Math.min(gridHeadroomW, highLevelCapW));
+        const totalBudgetW = gridMeasurementUsable ? Math.max(0, Math.min(gridHeadroomW, highLevelCapW)) : 0;
 
         const bindings = [];
-        if (gridLimitW > 0 && Math.abs(totalBudgetW - gridHeadroomW) <= 1) bindings.push('grid');
-        if (Number.isFinite(highLevelCapW) && Math.abs(totalBudgetW - highLevelCapW) <= 1) bindings.push(coreSnapshot.evcsHighLevel.binding || 'highLevel');
+        if (!gridMeasurementUsable) bindings.push(`nvp_${gridMeasurementStatus || 'stale'}`);
+        if (gridMeasurementUsable && gridLimitW > 0 && Math.abs(totalBudgetW - gridHeadroomW) <= 1) bindings.push('grid');
+        if (gridMeasurementUsable && Number.isFinite(highLevelCapW) && Math.abs(totalBudgetW - highLevelCapW) <= 1) bindings.push(coreSnapshot.evcsHighLevel.binding || 'highLevel');
         if (!bindings.length) bindings.push('unlimited');
 
         // Gate D: PV forecast is an advisory gate. It is published centrally so apps
@@ -1670,7 +1691,12 @@ class CoreLimitsModule extends BaseModule {
             active: true,
             mode: 'central-background',
             raw: {
-                gridW: roundW(gridW),
+                gridW: roundW(gridControlW),
+                gridMeasurementUsable,
+                gridMeasurementStatus,
+                gridMeasurementSource,
+                gridMeasurementReason,
+                gridMeasurementAgeMs: centralNvp.current && isFiniteNumber(Number(centralNvp.measurementAgeMs)) ? roundW(Number(centralNvp.measurementAgeMs)) : null,
                 gridImportW: roundW(gridImportW),
                 gridExportW: roundW(gridExportW),
                 pvPowerW: roundW(pvPowerW),
@@ -1696,6 +1722,10 @@ class CoreLimitsModule extends BaseModule {
                     importLimitW: roundW(gridLimitW),
                     importW: roundW(gridImportW),
                     exportW: roundW(gridExportW),
+                    measurementUsable: gridMeasurementUsable,
+                    measurementStatus: gridMeasurementStatus,
+                    measurementSource: gridMeasurementSource,
+                    measurementReason: gridMeasurementReason,
                     headroomW: Number.isFinite(gridHeadroomW) ? roundW(gridHeadroomW) : null,
                     headroomRawW: Number.isFinite(gridHeadroomRawW) ? roundW(gridHeadroomRawW) : null,
                 },

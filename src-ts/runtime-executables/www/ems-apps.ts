@@ -13992,6 +13992,29 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       { label: 'Status', value: String(ctrl.status || '') },
     ], budgetKind));
 
+    // Kompakte EMS-Überwachung: Im Status-Reiter erscheinen nur die für
+    // Feldbetrieb und Fehlersuche wesentlichen Punkte. Die ausführlichen JSON-
+    // Diagnosen bleiben weiterhin in den internen States verfügbar.
+    const stageA = payload && payload.stageA && typeof payload.stageA === 'object' ? payload.stageA : null;
+    if (stageA) {
+      const storageOverride = stageA.storageOverride || {};
+      const nvp = stageA.nvp || {};
+      const stageKind = stageA.status === 'error' ? 'error' : (stageA.status === 'warn' ? 'warn' : 'ok');
+      const monitorRows = [
+        { label: 'EMS-Diagnose', value: String(stageA.status || 'wartet').toUpperCase() },
+        { label: 'NVP', value: `${String(nvp.status || (nvp.coherent ? 'ok' : 'prüfen')).toUpperCase()} · ${String(nvp.source || nvp.mode || 'missing')}` },
+        { label: 'Messwertalter', value: nvp.signedAgeMs == null && nvp.importAgeMs == null && nvp.exportAgeMs == null
+          ? '—'
+          : _fmtAge(Math.min(...[nvp.signedAgeMs, nvp.importAgeMs, nvp.exportAgeMs].filter((value) => Number.isFinite(Number(value))).map(Number))) },
+        { label: 'Aktive Aktorkonflikte', value: String(Number(stageA.concurrentControlPathsCount || 0)) },
+        { label: 'Speicherquelle', value: String(storageOverride.resolvedSource || storageOverride.mode || 'automatisch') },
+      ];
+      if (Number(stageA.measurementIssueCount || 0) > 0) {
+        monitorRows.push({ label: 'Messwert-Hinweise', value: String(Number(stageA.measurementIssueCount || 0)) });
+      }
+      els.chargingBudget.appendChild(mkCard('EMS Überwachung', monitorRows, stageKind));
+    }
+
     // Summary (optional)
     if (sum) {
       els.chargingBudget.appendChild(mkCard('Summary', [

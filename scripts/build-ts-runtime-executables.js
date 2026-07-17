@@ -18,6 +18,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const ts = require('typescript');
 
 const root = path.resolve(__dirname, '..');
 const sourceRoot = path.join(root, 'src-ts', 'runtime-executables');
@@ -87,6 +88,43 @@ function stripSourceOnlyHeader(text) {
   return { shebang, body: out.replace(/\s+$/g, '') + '\n' };
 }
 
+const RUNTIME_TRANSPILE_MARKER = '// @runtime-transpile';
+
+function formatDiagnostic(diagnostic) {
+  const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
+  if (!diagnostic.file || typeof diagnostic.start !== 'number') return message;
+  const position = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start);
+  const file = toPosix(path.relative(root, diagnostic.file.fileName));
+  return `${file}:${position.line + 1}:${position.character + 1} ${message}`;
+}
+
+/**
+ * Transpiliert ausschließlich explizit markierte Runtime-Quellen. Alle übrigen
+ * Dateien bleiben textstabil, damit die bestehenden Mirror-/Hash-Prüfungen ihre
+ * bisherige Aussagekraft behalten.
+ */
+function transpileMarkedRuntimeSource(sourceAbs, body) {
+  const input = normalizeNewlines(body).replace(/^\/\/ @runtime-transpile\n/, '');
+  const result = ts.transpileModule(input, {
+    fileName: sourceAbs,
+    reportDiagnostics: true,
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2020,
+      module: ts.ModuleKind.CommonJS,
+      removeComments: false,
+      sourceMap: false,
+      inlineSourceMap: false,
+      inlineSources: false,
+      newLine: ts.NewLineKind.LineFeed,
+    },
+  });
+  const errors = (result.diagnostics || []).filter((diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error);
+  if (errors.length) {
+    fail(`TypeScript-Transpilierung fehlgeschlagen für ${toPosix(path.relative(root, sourceAbs))}:\n${errors.map(formatDiagnostic).join('\n')}`);
+  }
+  return normalizeNewlines(result.outputText).replace(/\s+$/g, '') + '\n';
+}
+
 function generatedHeader(sourceRel, runtimeRel, sourceText) {
   return [
     '/**',
@@ -116,7 +154,11 @@ function normalizeBuiltOutput(sourceAbs) {
   const sourceText = readRequired(sourceAbs);
   const stripped = stripSourceOnlyHeader(sourceText);
   const header = generatedHeader(sourceRel, runtimeRel, sourceText);
-  return stripped.shebang + header + stripped.body;
+  const shouldTranspile = stripped.body.startsWith(`${RUNTIME_TRANSPILE_MARKER}\n`);
+  const body = shouldTranspile
+    ? transpileMarkedRuntimeSource(sourceAbs, stripped.body)
+    : stripped.body;
+  return stripped.shebang + header + body;
 }
 
 function buildExpectedOutputs() {
