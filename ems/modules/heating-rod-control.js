@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/heating-rod-control.ts
- * Quell-Hash: sha256:cbf6244962aa68f20658cd6ce8cb711cd123801324d592e5245a4f3c1387e87d
+ * Quell-Hash: sha256:d3558d4f024f3e05d60e6db24868ec9fcb333e44eb97d63053dc6c0abe50073b
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2669,7 +2669,8 @@ class HeatingRodControlModule extends BaseModule {
         if (entry.invert) raw = !raw;
 
         try {
-            await this.adapter.setForeignStateAsync(entry.objectId, raw, false);
+            const writeResult = await this.adapter.setForeignStateAsync(entry.objectId, raw, false);
+            if (writeResult && writeResult.__nexowattActuatorAuthorityBlocked === true) return false;
             if (this.dp.lastWriteByObjectId && typeof this.dp.lastWriteByObjectId.set === 'function') {
                 this.dp.lastWriteByObjectId.set(entry.objectId, { val: raw ? 1 : 0, ts: Date.now() });
             }

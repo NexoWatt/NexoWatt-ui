@@ -136,7 +136,7 @@ const NwChannelDetector =
 // Embedded EMS engine (Charging Management from nexowatt-multiuse)
 const { EmsEngine } = require('./ems/engine');
 const { resolveNvpDisplay } = require('./ems/services/measurement-freshness');
-const { buildHttpActuatorShadowContext, withActuatorShadowContext } = require('./ems/services/actuator-shadow-arbiter');
+const { buildHttpActuatorShadowContext, withActuatorShadowContext, isActuatorAuthorityBlockedResult } = require('./ems/services/actuator-shadow-arbiter');
 const nwCountryProfileService = require('./ems/services/country-profile-service');
 const nwFeatureFlagsService = require('./ems/services/feature-flags');
 const {
@@ -2376,6 +2376,7 @@ class NexoWattVis extends utils.Adapter {
       // Kundenseitige PV-Ueberschuss-Verteilung. Die Auswahl wirkt nur auf
       // PV-/Min+PV-Wallboxen und die Speicher-PV-Ladung im zentralen EMS-Budget;
       // Tarif- und Sicherheitsgates bleiben davon unabhaengig.
+      pvSurplusAllocationEnabled: { type: 'boolean', role: 'state', def: true },
       pvSurplusPriority: { type: 'string', role: 'text', def: 'both' },
       pvSurplusEvcsSharePct: { type: 'number', role: 'value.percent', def: 50 },
       storagePower: { type: 'number', role: 'value.power', def: 1000 },
@@ -9740,8 +9741,8 @@ async onReady() {
   async startServer() {
     const app = express();
 
-    // Stufe C1: Manuelle/API-Schreibanforderungen erhalten einen eindeutigen
-    // Shadow-Owner. AsyncLocalStorage reicht diesen Kontext bis zum realen
+    // Stufe C2: Manuelle/API-Schreibanforderungen erhalten einen eindeutigen
+    // Aktor-Owner. AsyncLocalStorage reicht diesen Kontext bis zum realen
     // setForeignStateAsync-Aufruf durch, ohne den Write zu verändern.
     app.use((req, _res, next) => {
       const context = buildHttpActuatorShadowContext(req && req.method, req && (req.path || req.url));
@@ -21223,6 +21224,16 @@ settingsConfig: {
           if (!writeId) return res.status(409).json({ ok: false, error: 'not_ready' });
 
           const invert = (typeof it.invert === 'boolean') ? !!it.invert : false;
+          const relayOwner = `manual.relay.r${idx}`;
+          const writeRelayValue = (rawValue, valueKind) => withActuatorShadowContext(this, {
+            owner: relayOwner,
+            module: 'relayControl',
+            priority: 750,
+            reason: `Manuelle Relaisbedienung r${idx}.${valueKind}`,
+            leaseMs: 5 * 60 * 1000,
+            kind: 'manual-relay',
+            enforceAuthority: true,
+          }, () => this.setForeignStateAsync(writeId, rawValue));
 
           if (prop === 'switch') {
             if (type !== 'boolean') return res.status(400).json({ ok: false, error: 'bad request' });
@@ -21231,7 +21242,8 @@ settingsConfig: {
             if (invert) b = !b;
 
             try {
-              await this.setForeignStateAsync(writeId, b);
+              const relayWriteResult = await writeRelayValue(b, 'switch');
+              if (isActuatorAuthorityBlockedResult(relayWriteResult)) return res.status(409).json({ ok: false, error: 'blocked_by_actuator_authority', blockedBy: relayWriteResult.blockedByOwner });
               try {
                 const base = `relay.controls.r${idx}`;
                 await this.setObjectNotExistsAsync('relay', { type: 'channel', common: { name: 'Relaissteuerung' }, native: {} });
@@ -21277,7 +21289,8 @@ settingsConfig: {
           if (invert) v = -v;
 
           try {
-            await this.setForeignStateAsync(writeId, v);
+            const relayWriteResult = await writeRelayValue(v, 'value');
+            if (isActuatorAuthorityBlockedResult(relayWriteResult)) return res.status(409).json({ ok: false, error: 'blocked_by_actuator_authority', blockedBy: relayWriteResult.blockedByOwner });
             try {
               const base = `relay.controls.r${idx}`;
               await this.setObjectNotExistsAsync('relay', { type: 'channel', common: { name: 'Relaissteuerung' }, native: {} });
@@ -23117,7 +23130,7 @@ return res.json(out);
       'aiAdvisorEvReadyBy','aiAdvisorEvTargetSocPct','aiAdvisorThermalReadyBy',
       'aiAdvisorPriorityStorage','aiAdvisorPriorityEvcs','aiAdvisorPriorityThermal','aiAdvisorPriorityHeatingRod','aiAdvisorPriorityGeneric',
       // Tariff/charging settings
-      'dynamicTariff','pvSurplusPriority','pvSurplusEvcsSharePct','storagePower','price','priority','tariffMode',
+      'dynamicTariff','pvSurplusAllocationEnabled','pvSurplusPriority','pvSurplusEvcsSharePct','storagePower','price','priority','tariffMode',
       // Energie-Wertkonto: kundenseitiger Schalter + Preise aus settings.html.
       'energyWalletEnabled','energyWalletShowPriceSource','energyWalletFixedImportEurPerKwh','energyWalletFeedInEurPerKwh','energyWalletEvcsValueEurPerKwh',
       // PV Saisonprofil (Quartale)

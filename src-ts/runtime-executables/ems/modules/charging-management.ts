@@ -2245,11 +2245,11 @@ class ChargingManagementModule extends BaseModule {
                                 writeResult = await this.dp.writeNumber(plannedSetpointKey, n, false);
                             } else {
                                 const dpEntry = this.dp.getEntry(plannedSetpointKey);
-                                await this.adapter.setForeignStateAsync(dpEntry.objectId, phaseValue, false);
-                                if (this.dp.lastWriteByObjectId && typeof this.dp.lastWriteByObjectId.set === 'function') {
+                                const directResult = await this.adapter.setForeignStateAsync(dpEntry.objectId, phaseValue, false);
+                                writeResult = !(directResult && directResult.__nexowattActuatorAuthorityBlocked === true);
+                                if (writeResult && this.dp.lastWriteByObjectId && typeof this.dp.lastWriteByObjectId.set === 'function') {
                                     this.dp.lastWriteByObjectId.set(dpEntry.objectId, { val: phaseValue, ts: Date.now() });
                                 }
-                                writeResult = true;
                             }
                         }
                         applied = writeResult !== false;
@@ -2443,7 +2443,6 @@ class ChargingManagementModule extends BaseModule {
      * @returns {{deadband?:number,minIntervalMs?:number}}
      */
     /** Code-Teil: Methode `_pubDefaults` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
-    /** Code-Teil: _pubDefaults – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
     _pubDefaults(id) {
         const s = String(id || '');
         if (!s) return {};
@@ -2469,7 +2468,6 @@ class ChargingManagementModule extends BaseModule {
      * @returns {number} avgW
      */
     /** Code-Teil: Methode `_pvSurplusAvgPush` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
-    /** Code-Teil: _pvSurplusAvgPush – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
     _pvSurplusAvgPush(bucketKey, nowMs, sampleW) {
         const buckets = this._pvSurplusAvg || {};
         const bucket = buckets && Object.prototype.hasOwnProperty.call(buckets, bucketKey) ? buckets[bucketKey] : null;
@@ -2506,7 +2504,6 @@ class ChargingManagementModule extends BaseModule {
     }
 
     /** Code-Teil: Methode `_getAdapterNumberFromCache` – liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik. */
-    /** Code-Teil: _getAdapterNumberFromCache – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
     _getAdapterNumberFromCache(key, fallback = null) {
         const sid = String(key || '').trim();
         if (!sid) return fallback;
@@ -2542,7 +2539,6 @@ class ChargingManagementModule extends BaseModule {
      * @returns {Promise<true|null>}
      */
     /** Code-Teil: Methode `_queueState` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
-    /** Code-Teil: _queueState – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
     async _queueState(id, value, ack = true, opts = null) {
         const sid = String(id || '').trim();
         if (!sid) return null;
@@ -2598,7 +2594,6 @@ class ChargingManagementModule extends BaseModule {
      * @returns {Promise<{val:any,ts:number,lc?:number,ack?:boolean}|null>}
      */
     /** Code-Teil: Methode `_getStateCached` – liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik. */
-    /** Code-Teil: _getStateCached – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
     async _getStateCached(id) {
         const sid = String(id || '').trim();
         if (!sid) return null;

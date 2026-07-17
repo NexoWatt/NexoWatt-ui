@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/core-limits.ts
- * Quell-Hash: sha256:faa6f7db5ed424f1173e15bd9ec3447e03f3ce23273e2b914ab29da4a32aac65
+ * Quell-Hash: sha256:c999bbf1baf0d74d024b39a639dca2e484245a546b2652ea20f6cc5bc9d7f19d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -58,6 +58,7 @@
 
 
 const { BaseModule } = require('./base');
+const { normalizePvSurplusPriority, buildPvSurplusAllocation } = require('../services/pv-surplus-allocation');
 const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
 
 
@@ -144,74 +145,6 @@ function roundW(v, fallback = 0) {
  */
 function isFiniteNumber(v) {
     return typeof v === 'number' && Number.isFinite(v);
-}
-
-/**
- * Code-Teil: normalizePvSurplusPriority
- * Zweck: Normalisiert die Kundenauswahl fuer die PV-Ueberschuss-Verteilung.
- * Zusammenhang: Die Auswahl wird in den Kunden-Einstellungen gespeichert und
- * vom zentralen EMS-Budget fuer Wallboxen und Speicher gemeinsam ausgewertet.
- */
-function normalizePvSurplusPriority(value) {
-    const mode = String(value || '').trim().toLowerCase();
-    if (mode === 'storage' || mode === 'speicher') return 'storage';
-    if (mode === 'emobility' || mode === 'e-mobility' || mode === 'evcs' || mode === 'wallbox') return 'emobility';
-    return 'both';
-}
-
-/**
- * Code-Teil: buildPvSurplusAllocation
- * Zweck: Teilt das physikalisch verfuegbare PV-Budget zwischen E-Mobilitaet und
- * Speicher auf, ohne ein zweites paralleles Regelsystem zu erzeugen.
- *
- * Semantik:
- * - Speicher zuerst: Der ladbare Speicheranteil wird reserviert; EVCS bekommt Rest.
- * - E-Mobilitaet zuerst: EVCS darf das volle Budget nutzen; Speicher bekommt Rest.
- * - Beide: EVCS bekommt den eingestellten Maximalanteil, Speicher den Rest. Nicht
- *   genutztes EVCS-Budget bleibt in der Runtime frei und kann im selben Tick vom
- *   nachgelagerten Speichermodul genutzt werden.
- */
-function buildPvSurplusAllocation(totalW, modeRaw, evcsSharePctRaw, options = {}) {
-    const total = Math.max(0, Number(totalW) || 0);
-    const mode = normalizePvSurplusPriority(modeRaw);
-    const evcsSharePct = clamp(Number(evcsSharePctRaw), 0, 100, 50);
-    const storageEligible = options.storageEligible !== false;
-    const storageMaxChargeWRaw = Number(options.storageMaxChargeW);
-    const storageMaxChargeW = Number.isFinite(storageMaxChargeWRaw) && storageMaxChargeWRaw > 0
-        ? storageMaxChargeWRaw
-        : Number.POSITIVE_INFINITY;
-
-    let storageWantedW = 0;
-    let reason = '';
-
-    if (!storageEligible) {
-        reason = 'storage-not-eligible';
-    } else if (mode === 'storage') {
-        storageWantedW = total;
-        reason = 'storage-first';
-    } else if (mode === 'emobility') {
-        storageWantedW = 0;
-        reason = 'emobility-first';
-    } else {
-        storageWantedW = total * (1 - (evcsSharePct / 100));
-        reason = 'shared';
-    }
-
-    const storageGuaranteedW = storageEligible
-        ? Math.max(0, Math.min(total, storageWantedW, storageMaxChargeW))
-        : 0;
-    const evcsCapW = Math.max(0, total - storageGuaranteedW);
-
-    return {
-        mode,
-        evcsSharePct: Math.round(evcsSharePct),
-        totalW: roundW(total),
-        evcsCapW: roundW(evcsCapW),
-        storageGuaranteedW: roundW(storageGuaranteedW),
-        storageEligible,
-        storageMaxChargeW: Number.isFinite(storageMaxChargeW) ? roundW(storageMaxChargeW) : null,
-        reason,
-    };
 }
 
 /**
@@ -922,6 +855,7 @@ class CoreLimitsModule extends BaseModule {
         // Kundenseitige PV-Ueberschuss-Prioritaet. Diese States zeigen transparent,
         // welcher Anteil des zentralen PV-Budgets in diesem Tick fuer E-Mobilitaet
         // freigegeben bzw. fuer den Speicher vorgehalten wird.
+        await mk('ems.budget.pvAllocationEnabled', 'Fixed PV surplus allocation enabled', 'boolean', 'indicator');
         await mk('ems.budget.pvAllocationMode', 'PV surplus allocation mode', 'string', 'text');
         await mk('ems.budget.pvAllocationEvcsSharePct', 'PV surplus EVCS share (%)', 'number', 'value.percent', '%');
         await mk('ems.budget.pvAllocationEvcsCapW', 'PV surplus EVCS cap (W)', 'number', 'value.power', 'W');
@@ -1628,11 +1562,14 @@ class CoreLimitsModule extends BaseModule {
         const storageMaxChargeForAllocationW = configuredStorageMaxChargeW > 0
             ? configuredStorageMaxChargeW
             : (farmAvailableChargeW > 0 ? farmAvailableChargeW : 0);
+        const allocationEnabledRaw = readCacheValue('settings.pvSurplusAllocationEnabled', true);
+        const allocationEnabled = !(allocationEnabledRaw === false || allocationEnabledRaw === 0 || String(allocationEnabledRaw).trim().toLowerCase() === 'false');
         const pvAllocationGate = buildPvSurplusAllocation(
             pvBudgetEffectiveW,
             readCacheValue('settings.pvSurplusPriority', 'both'),
             readCacheValue('settings.pvSurplusEvcsSharePct', 50),
             {
+                allocationEnabled,
                 storageEligible,
                 storageMaxChargeW: storageMaxChargeForAllocationW,
             },
@@ -2399,6 +2336,7 @@ class CoreLimitsModule extends BaseModule {
             const pvAllocation = (b.gates && b.gates.pvAllocation && typeof b.gates.pvAllocation === 'object')
                 ? b.gates.pvAllocation
                 : {};
+            await this.adapter.setStateAsync('ems.budget.pvAllocationEnabled', pvAllocation.allocationEnabled !== false, true);
             await this.adapter.setStateAsync('ems.budget.pvAllocationMode', String(pvAllocation.mode || 'both'), true);
             await this.adapter.setStateAsync('ems.budget.pvAllocationEvcsSharePct', roundW(pvAllocation.evcsSharePct), true);
             await this.adapter.setStateAsync('ems.budget.pvAllocationEvcsCapW', roundW(pvAllocation.evcsCapW), true);
@@ -2485,6 +2423,7 @@ class CoreLimitsModule extends BaseModule {
                 this.adapter.updateValue('ems.budget.remainingPvW', roundW(b.gates.pv.effectiveW), now);
                 this.adapter.updateValue('ems.budget.pvBudgetW', roundW(b.gates.pv.effectiveW), now);
                 this.adapter.updateValue('ems.budget.pvBudgetRawW', roundW(b.gates.pv.rawW), now);
+                this.adapter.updateValue('ems.budget.pvAllocationEnabled', pvAllocation.allocationEnabled !== false, now);
                 this.adapter.updateValue('ems.budget.pvAllocationMode', String(pvAllocation.mode || 'both'), now);
                 this.adapter.updateValue('ems.budget.pvAllocationEvcsSharePct', roundW(pvAllocation.evcsSharePct), now);
                 this.adapter.updateValue('ems.budget.pvAllocationEvcsCapW', roundW(pvAllocation.evcsCapW), now);

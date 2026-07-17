@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/threshold-control.ts
- * Quell-Hash: sha256:941c863df7ec73f844b29572f8f354d0c52ece4913504aae03c38aa5a80317a4
+ * Quell-Hash: sha256:f145a16cb15e6778b89fbaf77fb3507aeb9b6abeea9fa22b244007909e336a2d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -16,49 +16,30 @@
  * 3. npm run test:runtime-executables prüfen.
  */
 /**
- * NexoWatt Detail-Kommentar (DE)
- * Zweck dieser Ergänzung:
- * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
- * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
- * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ * Executable TypeScript source: ems/modules/threshold-control.js
+ *
+ * Zweck:
+ * Diese Datei ist ab 0.7.131 die kanonische TypeScript-Quelle der produktiven
+ * Adapter-/Frontend-Runtime-Datei `ems/modules/threshold-control.js`.
+ *
+ * Build-Regel:
+ * `npm run sync:ts-runtime-executables` erzeugt daraus die auslieferbare
+ * JavaScript-Datei. Änderungen an der Runtime sollen hier vorgenommen werden;
+ * die JS-Datei ist nur noch Build-Artefakt für Node.js/ioBroker bzw. den Browser.
+ *
+ * Sicherheit:
+ * Der Inhalt basiert auf der bisher produktiven JavaScript-Runtime und bleibt
+ * vorübergehend mit `@ts-nocheck` ausführbar. Fachliche TS-Helfer wie EVCS,
+ * Energiefluss, Core-Limits und Heizstab bleiben die bereits typisierten Quellen.
  */
-
-/**
- * Datei: ems/modules/threshold-control.js
- * Rolle im Projekt: Schwellwertsteuerung.
- * Zweck: Verarbeitet konfigurierbare Ein/Aus-Regeln auf Basis von Messwerten.
- * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
- * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
- */
-/**
- * NexoWatt Code-Kommentar (DE)
- * Zweck: Schwellwertsteuerung: generische Regeln, die bei Messwertgrenzen Ausgänge/States schalten können.
- * Zusammenhänge:
- * - Wird im App-Center konfiguriert und im LIVE-Schnellzugriff angezeigt.
- * - Kann optionale Verbraucher/Relais steuern.
- * Wartungshinweise:
- * - Regelbedingungen klar dokumentieren, weil falsche Schwellen reale Ausgänge schalten können.
- */
-
 'use strict';
 
 const { BaseModule } = require('./base');
-/**
- * Code-Teil: num
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
+const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
 function num(v, fallback = null) {
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
 }
-/**
- * Code-Teil: clamp
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
 function clamp(v, minV, maxV, fallback = null) {
     const n = num(v, fallback);
     if (n === null) return fallback;
@@ -66,12 +47,6 @@ function clamp(v, minV, maxV, fallback = null) {
     if (Number.isFinite(maxV) && n > maxV) return maxV;
     return n;
 }
-/**
- * Code-Teil: safeIndex
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
 function safeIndex(i) {
     const n = Math.round(Number(i) || 0);
     if (n < 1) return 1;
@@ -277,6 +252,7 @@ class ThresholdControlModule extends BaseModule {
                 userCanSetThreshold,
                 userCanSetMinOnSec,
                 userCanSetMinOffSec,
+                requireReadback: r.requireReadback === true,
             });
         }
 
@@ -299,6 +275,7 @@ class ThresholdControlModule extends BaseModule {
     _getRule(idx) {
         return this._rules.find(r => r && r.idx === idx) || null;
     }
+
     /**
      * Code-Teil: init
      * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
@@ -435,6 +412,8 @@ class ThresholdControlModule extends BaseModule {
             await mk(`threshold.rules.r${i}.status`, 'Status', 'string', 'text');
             await mk(`threshold.rules.r${i}.lastChange`, 'Letzte Umschaltung (ts)', 'number', 'value.time');
             await mk(`threshold.rules.r${i}.lastWriteOk`, 'Letzter Write OK', 'boolean', 'indicator');
+            await mk(`threshold.rules.r${i}.owner`, 'Aktor-Owner', 'string', 'text');
+            await mk(`threshold.rules.r${i}.readbackOk`, 'Readback bestätigt', 'boolean', 'indicator');
         }
 
         // Register user states (read) in dpRegistry for deterministic reads
@@ -482,6 +461,55 @@ class ThresholdControlModule extends BaseModule {
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
+    _ruleOwner(r, isManual) {
+        return isManual ? `manual.threshold.${r.id}` : `threshold.${r.id}`;
+    }
+
+    _ruleHasExclusiveAuthority(r, owner) {
+        if (String(owner || '').startsWith('manual.')) return true;
+        const matrix = this.adapter && this.adapter._stageAActuatorOwnerById;
+        const row = matrix && typeof matrix === 'object' ? matrix[r.outputId] : null;
+        const activeOwners = Array.isArray(row && row.activeOwners)
+            ? row.activeOwners.map((value) => String(value || '').trim()).filter(Boolean)
+            : [];
+        return activeOwners.length === 1 && activeOwners[0] === owner;
+    }
+
+    async _writeRuleOutput(r, want, isManual) {
+        const owner = this._ruleOwner(r, isManual);
+        const reason = `${r.name}: ${want ? 'on' : 'off'}`;
+        const enforceAuthority = this._ruleHasExclusiveAuthority(r, owner);
+        return withActuatorShadowContext(this.adapter, {
+            owner, module: 'thresholdControl', priority: priorityForOwner(owner),
+            reason, leaseMs: isManual ? 5 * 60 * 1000 : 20000,
+            kind: isManual ? 'manual-threshold' : 'threshold-rule', enforceAuthority,
+        }, async () => {
+            if (!this.dp) return false;
+            const outKey = `thr.${r.id}.out`;
+            return r.outType === 'boolean'
+                ? this.dp.writeBoolean(outKey, want ? !!r.onValue : !!r.offValue, false)
+                : this.dp.writeNumber(outKey, want ? Number(r.onValue) : Number(r.offValue), false);
+        });
+    }
+
+    async _readRuleOutput(r) {
+        if (!r || !r.outputId || !this.adapter || typeof this.adapter.getForeignStateAsync !== 'function') return null;
+        try {
+            const state = await this.adapter.getForeignStateAsync(r.outputId);
+            return state && state.val !== undefined ? state.val : null;
+        } catch (_error) {
+            return null;
+        }
+    }
+
+    _readbackMatches(r, want, value) {
+        if (value === null || value === undefined) return null;
+        const expected = want ? r.onValue : r.offValue;
+        if (r.outType === 'boolean') return !!value === !!expected;
+        const a = Number(value); const b = Number(expected);
+        return Number.isFinite(a) && Number.isFinite(b) ? Math.abs(a - b) <= Math.max(0.01, Math.abs(b) * 0.001) : false;
+    }
+
     async tick() {
         const enabled = this._isEnabled();
         const now = Date.now();
@@ -532,6 +560,7 @@ class ThresholdControlModule extends BaseModule {
             const effEnabled = !!(r.enabled && (isManual ? true : userEnabled));
             await this._setStateIfChanged(`threshold.rules.r${idx}.effectiveEnabled`, effEnabled);
 
+            await this._setStateIfChanged(`threshold.rules.r${idx}.owner`, this._ruleOwner(r, isManual));
             if (!effEnabled) {
                 await this._setStateIfChanged(`threshold.rules.r${idx}.status`, 'inactive');
                 // Do not force outputs; we only stop regulating.
@@ -555,7 +584,11 @@ class ThresholdControlModule extends BaseModule {
             }
 
             // State memory
-            const mem = this._hyst.get(id) || { active: false, lastOnMs: 0, lastOffMs: 0, lastChangeMs: 0 };
+            const mem = this._hyst.get(id) || { active: false, initialized: false, lastOnMs: 0, lastOffMs: 0, lastChangeMs: 0 };
+            const outputBefore = await this._readRuleOutput(r);
+            const onReadback = this._readbackMatches(r, true, outputBefore);
+            const offReadback = this._readbackMatches(r, false, outputBefore);
+            if (!mem.initialized && (onReadback === true || offReadback === true)) { mem.active = onReadback === true; mem.initialized = true; }
             let want = mem.active;
             let status = mem.active ? 'active' : 'inactive';
 
@@ -617,39 +650,28 @@ class ThresholdControlModule extends BaseModule {
                 }
             }
 
-            // Apply output if state changes
-            let wrote = null;
-            if (want !== mem.active) {
-                const outKey = `thr.${id}.out`;
-                if (this.dp) {
-                    try {
-                        if (r.outType === 'boolean') {
-                            const outVal = want ? !!r.onValue : !!r.offValue;
-                            wrote = await this.dp.writeBoolean(outKey, outVal, false);
-                        } else {
-                            const outVal = want ? Number(r.onValue) : Number(r.offValue);
-                            wrote = await this.dp.writeNumber(outKey, outVal, false);
-                        }
-                    } catch (_e) {
-                        wrote = false;
-                    }
-                } else {
-                    wrote = false;
+            let wrote = false;
+            try { wrote = await this._writeRuleOutput(r, want, isManual); } catch (_e) { wrote = false; }
+            const readbackAfter = await this._readRuleOutput(r);
+            const readbackOk = this._readbackMatches(r, want, readbackAfter);
+            const accepted = wrote === true || wrote === null;
+            const confirmed = readbackOk === true || (accepted && r.requireReadback !== true);
+
+            if (confirmed) {
+                if (want !== mem.active || !mem.initialized) {
+                    mem.active = want; mem.initialized = true; mem.lastChangeMs = now;
+                    if (want) mem.lastOnMs = now; else mem.lastOffMs = now;
+                    await this._setStateIfChanged(`threshold.rules.r${idx}.lastChange`, now);
                 }
-
-                // Update memory
-                mem.active = want;
-                mem.lastChangeMs = now;
-                if (want) mem.lastOnMs = now;
-                else mem.lastOffMs = now;
-                this._hyst.set(id, mem);
-
-                await this._setStateIfChanged(`threshold.rules.r${idx}.lastChange`, now);
-                await this._setStateIfChanged(`threshold.rules.r${idx}.lastWriteOk`, wrote === true || wrote === null);
+                status = isManual ? (want ? 'manual_on' : 'manual_off') : (want ? 'active' : 'inactive');
+            } else if (!accepted) {
+                status = 'write_blocked_or_failed';
             } else {
-                // keep memory
-                this._hyst.set(id, mem);
+                status = 'readback_pending';
             }
+            this._hyst.set(id, mem);
+            await this._setStateIfChanged(`threshold.rules.r${idx}.lastWriteOk`, accepted);
+            await this._setStateIfChanged(`threshold.rules.r${idx}.readbackOk`, readbackOk === true);
 
             await this._setStateIfChanged(`threshold.rules.r${idx}.active`, mem.active);
             await this._setStateIfChanged(`threshold.rules.r${idx}.status`, status);

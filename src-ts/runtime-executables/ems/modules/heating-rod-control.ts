@@ -2671,7 +2671,8 @@ class HeatingRodControlModule extends BaseModule {
         if (entry.invert) raw = !raw;
 
         try {
-            await this.adapter.setForeignStateAsync(entry.objectId, raw, false);
+            const writeResult = await this.adapter.setForeignStateAsync(entry.objectId, raw, false);
+            if (writeResult && writeResult.__nexowattActuatorAuthorityBlocked === true) return false;
             if (this.dp.lastWriteByObjectId && typeof this.dp.lastWriteByObjectId.set === 'function') {
                 this.dp.lastWriteByObjectId.set(entry.objectId, { val: raw ? 1 : 0, ts: Date.now() });
             }

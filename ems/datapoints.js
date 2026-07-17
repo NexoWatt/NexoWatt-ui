@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/datapoints.ts
- * Quell-Hash: sha256:2ef9a8cad199a3139a5da7bdfd89624e949c477fe59fd704bbda52a226bbb321
+ * Quell-Hash: sha256:60a615ee145e7ab0e4b8ed3ac721891640b7957c328e54b57faef51a87ba56c9
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -974,18 +974,6 @@ class DatapointRegistry {
      * @param {number} value
      * @param {boolean} [ack=false]
      */
-    /**
-     * Code-Teil: Methode `writeNumber`
-     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: writeNumber
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     async writeNumber(key, value, ack = false) {
         const e = this.getEntry(key);
         if (!e) return false;
@@ -1010,12 +998,18 @@ class DatapointRegistry {
             const maxAge = Number(e.maxWriteIntervalMs);
             const ageOk = Number.isFinite(maxAge) && maxAge > 0 && Number.isFinite(last.ts) && (Date.now() - last.ts) >= maxAge;
             if (!ageOk) {
+                const arbiter = this.adapter && this.adapter._actuatorShadowArbiter;
+                const blocked = arbiter && typeof arbiter.guardSkippedWrite === 'function'
+                    ? arbiter.guardSkippedWrite(e.objectId, raw, ack)
+                    : null;
+                if (blocked && blocked.__nexowattActuatorAuthorityBlocked === true) return false;
                 return null;
             }
         }
 
         try {
-            await this.adapter.setForeignStateAsync(e.objectId, raw, ack);
+            const writeResult = await this.adapter.setForeignStateAsync(e.objectId, raw, ack);
+            if (writeResult && writeResult.__nexowattActuatorAuthorityBlocked === true) return false;
             this.lastWriteByObjectId.set(e.objectId, { val: v, ts: Date.now() });
             return true;
         } catch (err) {
@@ -1029,18 +1023,6 @@ class DatapointRegistry {
      * @param {boolean} value
      * @param {boolean} [ack=false]
      */
-    /**
-     * Code-Teil: Methode `writeBoolean`
-     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: writeBoolean
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     async writeBoolean(key, value, ack = false) {
         const e = this.getEntry(key);
         if (!e) return false;
@@ -1052,11 +1034,17 @@ class DatapointRegistry {
         const last = this.lastWriteByObjectId.get(e.objectId);
         const phys = b ? 1 : 0;
         if (last && typeof last.val !== 'undefined' && Number.isFinite(last.val) && Number(last.val) === phys) {
+            const arbiter = this.adapter && this.adapter._actuatorShadowArbiter;
+            const blocked = arbiter && typeof arbiter.guardSkippedWrite === 'function'
+                ? arbiter.guardSkippedWrite(e.objectId, b, ack)
+                : null;
+            if (blocked && blocked.__nexowattActuatorAuthorityBlocked === true) return false;
             return null;
         }
 
         try {
-            await this.adapter.setForeignStateAsync(e.objectId, b, ack);
+            const writeResult = await this.adapter.setForeignStateAsync(e.objectId, b, ack);
+            if (writeResult && writeResult.__nexowattActuatorAuthorityBlocked === true) return false;
             this.lastWriteByObjectId.set(e.objectId, { val: b ? 1 : 0, ts: Date.now() });
             return true;
         } catch (err) {

@@ -19,7 +19,7 @@ function makeAdapter() {
   const calls = [];
   const adapter = {
     namespace: 'nexowatt-ui.0',
-    config: { diagnostics: { actuatorShadowConflictWindowMs: 15000 } },
+    config: { diagnostics: { actuatorShadowConflictWindowMs: 15000, actuatorArbiterMode: 'shadow' } },
     _stageAActuatorOwnerById: {
       'device.0.shared.setpoint': { owners: ['storage', 'peakShaving'], activeOwners: ['storage', 'peakShaving'] },
       'device.0.single.setpoint': { owners: ['storage'], activeOwners: ['storage'] },

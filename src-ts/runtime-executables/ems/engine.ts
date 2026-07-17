@@ -867,7 +867,7 @@ class EmsEngine {
       }
     }
 
-    // Stufe C1: read-only Shadow-Arbiter vor allen Modul-/DP-Schreibpfaden installieren.
+    // Stufe C2: zentralen Aktor-Arbiter vor allen Modul-/DP-Schreibpfaden installieren; Shadow bleibt als feldkompatibler Rückfall verfügbar.
     this._actuatorShadowArbiter = installActuatorShadowArbiter(adapter);
 
     // Datapoint registry (multiuse)

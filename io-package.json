@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.110",
+    "version": "0.8.112",
     "news": {
+      "0.8.112": {
+        "de": "Version 0.8.112: Stufe C3.1 bindet Threshold-Regeln und manuelle Relaisbedienung an eindeutige Aktor-Owner und Leases an. Fehlgeschlagene oder blockierte Writes werden nicht mehr als ausgeführt verbucht; optionaler Readback und Startzustandsübernahme wurden ergänzt. Die feste PV-Überschuss-Aufteilung kann im Kundenbereich abgeschaltet werden; aktive Verbraucher reservieren dann nur ihren realen Bedarf und der Speicher erhält den gesamten ungenutzten PV-Rest im selben EMS-Zyklus.",
+        "en": "Version 0.8.112: Stage C3.1 assigns explicit actuator owners and leases to threshold rules and manual relay control. Failed or blocked writes are no longer recorded as applied; optional readback and initial output-state adoption were added. The fixed PV-surplus split can be disabled in customer settings; active consumers then reserve only actual demand and the battery receives the complete unused PV remainder in the same EMS cycle."
+      },
+      "0.8.111": {
+        "de": "Version 0.8.111: Stufe C2 setzt sicherheitskritische Aktor-Steuerhoheit verbindlich durch. Not-/Failsafe, §14a/Netzbetreiber, Grid-/Anschlusslimits, Peak-Shaving und befristete manuelle Overrides können niedrigere widersprechende Hardware-Writes blockieren. Normale EMS-/Komfortpfade untereinander bleiben zunächst unverändert; AppCenter zeigt nur eine kompakte Arbiter-/Konfliktdiagnose. Ein Shadow-Rückfall bleibt im Admin verfügbar.",
+        "en": "Version 0.8.111: Stage C2 enforces safety-critical actuator authority. Emergency/failsafe, §14a/grid operator, grid/connection limits, peak shaving, and time-bounded manual overrides can block lower-priority conflicting hardware writes. Normal EMS/comfort paths remain unchanged for now; AppCenter only shows compact arbiter/conflict diagnostics. A shadow fallback remains available in Admin."
+      },
       "0.8.110": {
         "de": "Version 0.8.110: Stufe C1 führt einen zentralen read-only Aktor-Shadow-Arbiter ein. Externe Hardware-Schreibanforderungen werden mit Modul, Priorität, Grund und Gültigkeit beobachtet, aber nicht verändert oder blockiert. Konkurrierende Werte verschiedener Steuerpfade auf demselben DP werden in der bestehenden kompakten EMS-Überwachung zusammengeführt. Damit können §14a, Peak-Shaving, MultiUse, Speicher, EVCS, Thermik, Heizstab, Threshold, BHKW, Generator, NexoLogic und manuelle Bedienung zunächst risikofrei auf echte Schreibkonflikte geprüft werden.",
         "en": "Version 0.8.110: Stage C1 introduces a central read-only actuator shadow arbiter. External hardware write requests are observed with module, priority, reason, and validity, but are neither changed nor blocked. Conflicting values from different control paths targeting the same datapoint are merged into the existing compact EMS monitoring view. This enables safe detection of real write conflicts across §14a, peak shaving, MultiUse, storage, EVCS, thermal, heating rod, threshold, CHP, generator, NexoLogic, and manual control."
@@ -22,14 +30,6 @@
       "0.8.106": {
         "de": "Version 0.8.106: Aktuelle nexowatt-devices-Wallboxprofile mit targetCurrentA/targetPowerW werden automatisch als steuerbar erkannt. Bestehende Mess-/Statuszuordnungen werden feldkompatibel um die real vorhandenen Steuer-DPs ergänzt, sodass berechnete EMS-Sollwerte wieder am Ladepunkt ankommen. Manuelle Installer-Zuordnungen bleiben unverändert.",
         "en": "Version 0.8.106: Current nexowatt-devices wallbox profiles using targetCurrentA/targetPowerW are now detected as controllable. Existing measurement/status mappings are field-compatibly completed with real control datapoints so calculated EMS targets reach the charger again. Manual installer mappings remain unchanged."
-      },
-      "0.8.105": {
-        "de": "Version 0.8.105: Das EVCS-Gesamtbudget summiert wieder alle aktivierten, steuerbaren Ladepunkte statt nur einer 11-kW-Nennleistung. Stations-, NVP-, Phasen- und §14a-Grenzen bleiben verbindlich. Wenn das sichere Budget reicht, werden die technischen Mindestleistungen aller verbundenen Auto-, Boost- und Min+PV-Ladepunkte zuerst erhalten; Zusatzleistung wird danach nach Priorität verteilt.",
-        "en": "Version 0.8.105: The EVCS infrastructure budget once again sums all enabled controllable charge points instead of being limited to one 11 kW nominal value. Station, grid-connection, phase and §14a limits remain binding. When the safe budget is sufficient, the technical minimum of every connected Auto, Boost and Min+PV connector is preserved first; additional power is allocated afterwards by priority."
-      },
-      "0.8.104": {
-        "de": "Version 0.8.104: Nicht genutzte EVCS-PV-Anteile werden sofort an den Speicher freigegeben. Ein wartender reiner PV-Ladepunkt reserviert nur noch sein technisch fahrbares Startminimum; liegt der EVCS-Anteil darunter, entsteht keine Ghost-Reservierung. Min+PV reserviert vor dem Start nur seine netzgestützte Mindestleistung im Gesamtbudget und belegt PV erst bei realem/kommandiertem Laden. Harte Netz-, Phasen-, §14a- und Stationslimits bleiben unverändert verbindlich.",
-        "en": "Version 0.8.104: Unused EVCS PV shares are immediately released to storage. A waiting pure-PV connector now reserves only its technically drivable start minimum; if the EVCS share is below that minimum, no ghost reservation is created. Before start, Min+PV reserves only its grid-backed minimum in the total budget and consumes PV only once charging is actually commanded or active. Hard grid, phase, §14a and station limits remain fully binding."
       }
     },
     "title": "NexoWatt UI",
@@ -344,6 +344,11 @@
       "trustedHeaderEnabled": false,
       "customerWritePolicy": "all",
       "allowedOrigins": ""
+    },
+    "diagnostics": {
+      "actuatorArbiterMode": "enforce-safety",
+      "actuatorArbiterEnforcePriorityFloor": 750,
+      "actuatorArbiterBlockedLogIntervalMs": 60000
     }
   },
   "instanceObjects": [

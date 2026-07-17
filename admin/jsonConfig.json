@@ -97,7 +97,33 @@
       "items": {
         "__diagInfo": {
           "type": "staticText",
-          "text": "Diagnose-Einstellungen für Support/Fehlersuche. Diese Optionen beeinflussen ausschließlich Log/Status-Ausgaben und keine EMS-Regelparameter.",
+          "text": "Diagnose- und Schutzoptionen für Support und Feldbetrieb. Der Aktor-Arbiter kann ausschließlich sicherheitskritische Konflikte zwischen bereits vorhandenen Steuerpfaden blockieren; normale EMS-Regelparameter werden hier nicht verändert.",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "diagnostics.actuatorArbiterMode": {
+          "type": "select",
+          "label": "Aktor-Arbiter",
+          "attr": "diagnostics.actuatorArbiterMode",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "options": [
+            {
+              "label": "Sicherheitsprioritäten verbindlich (empfohlen)",
+              "value": "enforce-safety"
+            },
+            {
+              "label": "Nur beobachten / Shadow",
+              "value": "shadow"
+            }
+          ],
+          "default": "enforce-safety"
+        },
+        "__arbiterInfo": {
+          "type": "staticText",
+          "text": "Der Sicherheits-Arbiter setzt ausschließlich Not-/Netzbetreiber-, Peak-/Anschlusslimit- und befristete manuelle Prioritäten durch. Normale EMS- und Komfortmodule untereinander bleiben zunächst unverändert.",
           "xs": 12,
           "sm": 12,
           "md": 12

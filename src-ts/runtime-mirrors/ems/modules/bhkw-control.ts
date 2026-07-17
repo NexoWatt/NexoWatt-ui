@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c2271170fc978e661a614189ce682a63ed1027e223a5e537fad0afe1d47b1e64
+ * Original-Hash: 3550f3dfbe8fa33b14f2adcc9ebcd13bfe7564f4dce2a3a25162bd2894cc649b
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/bhkw-control.ts
- * Quell-Hash: sha256:5d5c7c06ddf1ec48413bbc84e9f68eaf6527365a94bf27c8b6a3f68507486b80
+ * Quell-Hash: sha256:386714f976061f6475dbcc42a2d00b9a8cc3b031b910bef8639ea271e2ef770a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -479,7 +479,8 @@ class BhkwControlModule extends BaseModule {
     async _pulseWrite(objectId, pulseMs) {
         if (!objectId || !this.adapter || this.adapter._nwShuttingDown) return false;
         try {
-            await this.adapter.setForeignStateAsync(objectId, true, false);
+            const writeResult = await this.adapter.setForeignStateAsync(objectId, true, false);
+            if (writeResult && writeResult.__nexowattActuatorAuthorityBlocked === true) return false;
 /**
  * Code-Teil: reset
  *
@@ -520,7 +521,8 @@ class BhkwControlModule extends BaseModule {
     async _levelWrite(objectId, value) {
         if (!objectId) return false;
         try {
-            await this.adapter.setForeignStateAsync(objectId, value, false);
+            const writeResult = await this.adapter.setForeignStateAsync(objectId, value, false);
+            if (writeResult && writeResult.__nexowattActuatorAuthorityBlocked === true) return false;
             return true;
         } catch (e) {
             this.adapter.log.warn(`BHKW write failed for '${objectId}': ${e?.message || e}`);

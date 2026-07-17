@@ -1743,6 +1743,7 @@ class PeakShavingModule extends BaseModule {
         // Actuation (Step 1.5)
         const actEnabled = !!cfg.actuationEnabled;
         const actuators = Array.isArray(cfg.actuators) ? cfg.actuators : [];
+        this.adapter._peakShavingAuthorityActive = !!(actEnabled && active && requiredReductionW > 0);
 
         // detect transitions to store/restore baselines
         if (active && !this._wasActive) {

@@ -93,6 +93,52 @@ const adapter = {
   assert.ok(ui.includes('Aktor-Konflikte'), 'AppCenter muss nur eine kompakte Konfliktzeile anzeigen');
   assert.ok(!ui.includes('Stufe A – Messwert-Frische'), 'Status-Reiter darf nicht mit separaten Detailkarten überladen werden');
 
+  // Ein durch C2 erfolgreich verhinderter Safety-Konflikt ist ein Schutzereignis,
+  // aber kein dauerhafter WARN-/Fehlerzustand der kompakten EMS-Überwachung.
+  const safeConfig = {
+    enableStorageControl: true,
+    datapoints: { gridPointPower: 'meter.signed', batteryPower: 'battery.actual' },
+  };
+  const safeStates = new Map([
+    ['meter.signed', { val: 0, ts: now - 500, lc: now - 500, ack: true }],
+    ['battery.actual', { val: 0, ts: now - 500, lc: now - 500, ack: true }],
+  ]);
+  const safeAdapter = {
+    config: safeConfig,
+    evcsList: [],
+    log: { warn() {}, debug() {}, info() {}, error() {} },
+    async setObjectNotExistsAsync() {},
+    async setStateAsync() {},
+    async getStateAsync() { return null; },
+    async getForeignStateAsync(id) { return safeStates.get(id) || null; },
+    _actuatorShadowArbiter: {
+      snapshot() {
+        return {
+          active: true, mode: 'enforce-safety', behaviorChanged: true,
+          requestsTotal: 2, recentWriteCount: 1, blockedWriteCount: 1,
+          activeAuthorityCount: 1, preventedConflictCount: 1, unresolvedConflictCount: 0,
+          preemptionsTotal: 0,
+          activeAuthorities: [{ targetId: 'device.safe', owner: 'para14a', priority: 950 }],
+          activeConflicts: [{ targetId: 'device.safe', owners: ['para14a', 'chargingManagement'], lastResolvedByArbiter: true }],
+          blockedWrites: [{ targetId: 'device.safe', owner: 'chargingManagement', blockedByOwner: 'para14a' }],
+          lastWrite: { targetId: 'device.safe', owner: 'para14a', value: 0 },
+        };
+      },
+    },
+    _nwGetStorageFarmRuntimeInfo() { return { active: false, configuredCount: 0 }; },
+    _nwResolveBatteryFlowFromCache() { return { src: 'batterySigned' }; },
+    _nvpFreshnessSnapshot: {
+      ts: now, mode: 'signed', status: 'ok', source: 'signed', usable: true,
+      coherent: true, connected: true, skewMs: 0, measurementAgeMs: 500,
+      heartbeatAgeMs: 500, reason: 'fresh-signed',
+    },
+  };
+  const safeMod = new stage.StageADiagnosticsModule(safeAdapter, null);
+  await safeMod.init();
+  assert.strictEqual(safeAdapter._stageADiagnostics.status, 'ok', 'Verhinderter Safety-Konflikt setzt die EMS-Überwachung unnötig auf WARN');
+  assert.strictEqual(safeAdapter._stageADiagnostics.activeActuatorConflictCount, 0, 'Verhinderter Safety-Konflikt wird als offener Aktorkonflikt gezählt');
+  assert.strictEqual(safeAdapter._stageADiagnostics.authorityPreventedConflictCount, 1, 'Verhinderter Safety-Konflikt fehlt in der internen Diagnose');
+
   console.log('[stage-a-diagnostics] OK: read-only Owner-/Frische-Diagnose ist aktiv, zentral aufgelöst und im AppCenter kompakt dargestellt.');
 })().catch((error) => {
   console.error(error && error.stack ? error.stack : error);

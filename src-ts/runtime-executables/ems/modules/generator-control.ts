@@ -450,7 +450,8 @@ class GeneratorControlModule extends BaseModule {
     async _pulseWrite(objectId, pulseMs) {
         if (!objectId || !this.adapter || this.adapter._nwShuttingDown) return false;
         try {
-            await this.adapter.setForeignStateAsync(objectId, true, false);
+            const writeResult = await this.adapter.setForeignStateAsync(objectId, true, false);
+            if (writeResult && writeResult.__nexowattActuatorAuthorityBlocked === true) return false;
             const reset = () => {
                 if (!this.adapter || this.adapter._nwShuttingDown) return;
                 this.adapter.setForeignStateAsync(objectId, false, false).catch(() => {});
@@ -480,7 +481,8 @@ class GeneratorControlModule extends BaseModule {
     async _levelWrite(objectId, value) {
         if (!objectId) return false;
         try {
-            await this.adapter.setForeignStateAsync(objectId, value, false);
+            const writeResult = await this.adapter.setForeignStateAsync(objectId, value, false);
+            if (writeResult && writeResult.__nexowattActuatorAuthorityBlocked === true) return false;
             return true;
         } catch (e) {
             this.adapter.log.warn(`Generator write failed for '${objectId}': ${e?.message || e}`);

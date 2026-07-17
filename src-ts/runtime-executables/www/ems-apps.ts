@@ -13999,6 +13999,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (stageA) {
       const storageOverride = stageA.storageOverride || {};
       const nvp = stageA.nvp || {};
+      const arbiter = stageA.actuatorArbiter || stageA.shadowArbiter || {};
+      const arbiterMode = String(arbiter.mode || 'shadow').toLowerCase();
+      const arbiterLabel = arbiterMode === 'enforce-safety' ? 'SCHUTZ AKTIV' : 'NUR BEOBACHTEN';
       const stageKind = stageA.status === 'error' ? 'error' : (stageA.status === 'warn' ? 'warn' : 'ok');
       const monitorRows = [
         { label: 'EMS-Diagnose', value: String(stageA.status || 'wartet').toUpperCase() },
@@ -14006,9 +14009,13 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         { label: 'Messwertalter', value: nvp.signedAgeMs == null && nvp.importAgeMs == null && nvp.exportAgeMs == null
           ? '—'
           : _fmtAge(Math.min(...[nvp.signedAgeMs, nvp.importAgeMs, nvp.exportAgeMs].filter((value) => Number.isFinite(Number(value))).map(Number))) },
+        { label: 'Aktor-Arbiter', value: arbiterLabel },
         { label: 'Aktor-Konflikte', value: String(Number(stageA.activeActuatorConflictCount ?? stageA.concurrentControlPathsCount ?? 0)) },
         { label: 'Speicherquelle', value: String(storageOverride.resolvedSource || storageOverride.mode || 'automatisch') },
       ];
+      if (Number(arbiter.blockedWriteCount ?? 0) > 0) {
+        monitorRows.push({ label: 'Blockierte Writes', value: String(Number(arbiter.blockedWriteCount ?? 0)) });
+      }
       if (Number(stageA.measurementIssueCount || 0) > 0) {
         monitorRows.push({ label: 'Messwert-Hinweise', value: String(Number(stageA.measurementIssueCount || 0)) });
       }

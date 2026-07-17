@@ -537,6 +537,12 @@
             Diese Priorität gilt ausschließlich für reines PV-Laden. Min+PV hält seine technische Mindestleistung aus dem zentralen Gesamt-/Netzbudget und nutzt nur für die Zusatzleistung den physikalisch verbleibenden PV-Überschuss. Auto, Boost, Zeit-/Zielladen sowie Anschluss-, Phasen-, §14a- und Stationslimits bleiben davon unberührt.
           </div>
 
+          <label class="row"><span>Feste Speicher-/E-Mobilitäts-Aufteilung</span>
+            <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_pvSurplusAllocationEnabled"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+            <input type="checkbox" class="nw-toggle-hidden" id="s_pvSurplusAllocationEnabled" data-scope="settings" data-key="pvSurplusAllocationEnabled" checked>
+          </label>
+
+          <div id="pvSurplusFixedAllocationBlock">
           <label class="row"><span>PV-Überschuss priorisieren</span>
             <select id="s_pvSurplusPriority" data-scope="settings" data-key="pvSurplusPriority" style="min-width:260px;max-width:100%;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.08);background:#a7c400;color:#000;">
               <option value="storage">Speicher zuerst</option>
@@ -548,9 +554,10 @@
           <label class="row" id="pvSurplusEvcsShareRow"><span>Max. Anteil E-Mobilität (%)</span>
             <input type="number" min="0" max="100" step="5" value="50" id="s_pvSurplusEvcsSharePct" data-scope="settings" data-key="pvSurplusEvcsSharePct">
           </label>
+          </div>
 
           <small style="opacity:.75;display:block;margin-top:8px">
-            Bei „Speicher &amp; E-Mobilität“ ist der Prozentwert nur der maximale Wallbox-Anteil. Reserviert wird ausschließlich reale Ladeleistung oder ein technisch vollständig fahrbares Startminimum. Ist kein Fahrzeug-/Ladebedarf vorhanden oder liegt der verfügbare Anteil unter der Mindestleistung, geht der komplette freie PV-Überschuss im selben EMS-Zyklus an den Speicher. Bei „E-Mobilität zuerst“ bekommt der Speicher den nach echten Wallbox-Reservierungen verbleibenden Rest.
+            Ist die feste Aufteilung ausgeschaltet, reservieren aktive Verbraucher nur ihren tatsächlich fahrbaren Bedarf; der Speicher erhält im selben EMS-Zyklus den kompletten ungenutzten PV-Rest. Bei „Speicher &amp; E-Mobilität“ ist der Prozentwert nur der maximale Wallbox-Anteil. Reserviert wird ausschließlich reale Ladeleistung oder ein technisch vollständig fahrbares Startminimum. Ist kein Fahrzeug-/Ladebedarf vorhanden oder liegt der verfügbare Anteil unter der Mindestleistung, geht der komplette freie PV-Überschuss im selben EMS-Zyklus an den Speicher. Bei „E-Mobilität zuerst“ bekommt der Speicher den nach echten Wallbox-Reservierungen verbleibenden Rest.
           </small>
         </div>
       </section>

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/peak-shaving.ts
- * Quell-Hash: sha256:794182864f0c77aa1bb96f03b498168176d409192e6f9f6fe564a1dd62b304a6
+ * Quell-Hash: sha256:2832fb1059099d5066e1e63e94395b05c1e1c86947bd4ca3c6c5adc62b07d426
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1741,6 +1741,7 @@ class PeakShavingModule extends BaseModule {
         // Actuation (Step 1.5)
         const actEnabled = !!cfg.actuationEnabled;
         const actuators = Array.isArray(cfg.actuators) ? cfg.actuators : [];
+        this.adapter._peakShavingAuthorityActive = !!(actEnabled && active && requiredReductionW > 0);
 
         // detect transitions to store/restore baselines
         if (active && !this._wasActive) {

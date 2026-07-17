@@ -4776,10 +4776,13 @@ function bindInputValue(el, stateKey) {
  * zentralen EMS-Budget in Core-Limits ausgewertet.
  */
 function updatePvSurplusSettingsUi(){
+  const enabled = document.getElementById('s_pvSurplusAllocationEnabled');
+  const block = document.getElementById('pvSurplusFixedAllocationBlock');
   const select = document.getElementById('s_pvSurplusPriority');
   const row = document.getElementById('pvSurplusEvcsShareRow');
-  if (!select || !row) return;
-  row.classList.toggle('hidden', String(select.value || 'both').trim().toLowerCase() !== 'both');
+  const fixed = !enabled || enabled.checked;
+  if (block) block.classList.toggle('hidden', !fixed);
+  if (select && row) row.classList.toggle('hidden', !fixed || String(select.value || 'both').trim().toLowerCase() !== 'both');
 }
 
 /**
@@ -4790,12 +4793,14 @@ function updatePvSurplusSettingsUi(){
  * Funktion veraendert ausschliesslich die Darstellung des Einstellungsreiters.
  */
 function setupPvSurplusSettingsUi(){
+  const enabled = document.getElementById('s_pvSurplusAllocationEnabled');
   const select = document.getElementById('s_pvSurplusPriority');
-  if (!select) return;
-  if (select.dataset.nwPvSurplusBound !== '1') {
+  if (!select && !enabled) return;
+  if (select && select.dataset.nwPvSurplusBound !== '1') {
     select.dataset.nwPvSurplusBound = '1';
     select.addEventListener('change', updatePvSurplusSettingsUi);
   }
+  if (enabled && enabled.dataset.nwPvSurplusBound !== '1') { enabled.dataset.nwPvSurplusBound = '1'; enabled.addEventListener('change', updatePvSurplusSettingsUi); }
   updatePvSurplusSettingsUi();
 }
 /**

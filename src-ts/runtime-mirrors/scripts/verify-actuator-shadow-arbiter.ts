@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 1c4d1af6ad72b926f1477af04085399578595b9db9011ef394823c804bc2147d
+ * Original-Hash: b9d4841954a7c07d0e6f42015ee8ec4c7c2c35c8cc652bc2f21437a8dae41571
  */
 
 /**
@@ -60,7 +60,7 @@ function makeAdapter() {
   const calls = [];
   const adapter = {
     namespace: 'nexowatt-ui.0',
-    config: { diagnostics: { actuatorShadowConflictWindowMs: 15000 } },
+    config: { diagnostics: { actuatorShadowConflictWindowMs: 15000, actuatorArbiterMode: 'shadow' } },
     _stageAActuatorOwnerById: {
       'device.0.shared.setpoint': { owners: ['storage', 'peakShaving'], activeOwners: ['storage', 'peakShaving'] },
       'device.0.single.setpoint': { owners: ['storage'], activeOwners: ['storage'] },

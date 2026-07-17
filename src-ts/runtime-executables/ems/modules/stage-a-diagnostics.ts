@@ -48,6 +48,8 @@ const ACTUATOR_FIELDS = new Set([
   'sgReadyAWriteId', 'sgReadyBWriteId', 'writeId', 'stageWriteId', 'setpointId',
   'enableId', 'startWriteId', 'stopWriteId', 'setWId', 'setAId', 'commandId',
   'outputId', 'relayWriteId', 'targetObjectId', 'lockWriteId', 'phaseSwitchId',
+  'pvFeedInLimitWId', 'pvLimitWId', 'pvLimitPctId', 'feedInLimitWId',
+  'limitWId', 'limitPctId',
 ]);
 const ACTUATOR_PATTERN = /(?:^|\.)(?:stage\d+WriteId|set[A-Z][A-Za-z0-9]*Id|target[A-Z][A-Za-z0-9]*(?:Id|ObjectId)|.*WriteId|runObjectId|enableId|startWriteId|stopWriteId|commandId|outputId|relayWriteId|lockWriteId|phaseSwitchId)$/;
 const INPUT_PATTERN = /(?:actual|meas|meter|powerId|socId|statusId|onlineId|connectedId|watchdogId|heartbeatId|faultId|availableId|temperatureId|currentId|voltageId|priceId|forecastId)$/i;
@@ -65,6 +67,7 @@ function ownerFromPath(path: string, row: AnyRecord | null): string {
   const raw = String(path || '');
   const lower = raw.toLowerCase();
   const rowId = text(row && (row.id || row.key));
+  const rowIndex = Number(row && (row.idx ?? row.index));
   if (lower.includes('chargingmanagement') || lower.includes('settingsconfig.evcslist') || lower.includes('evcslist')) {
     const match = raw.match(/(?:wallboxes|evcslist)\[(\d+)\]/i);
     const configured = Number(row && row.index);
@@ -75,7 +78,12 @@ function ownerFromPath(path: string, row: AnyRecord | null): string {
   if (lower.includes('storage')) return `storage.${rowId || raw}`;
   if (lower.includes('thermal')) return `thermal.${rowId || raw}`;
   if (lower.includes('heatingrod')) return `heatingRod.${rowId || raw}`;
-  if (lower.includes('threshold')) return `threshold.${rowId || raw}`;
+  if (lower.includes('threshold')) {
+    const match = raw.match(/rules\[(\d+)\]/i);
+    const index = Number.isFinite(rowIndex) && rowIndex > 0 ? Math.round(rowIndex) : (match ? Number(match[1]) + 1 : 0);
+    return index > 0 ? `threshold.r${index}` : `threshold.${rowId || raw}`;
+  }
+  if (lower.includes('gridconstraints')) return `gridConstraints.${rowId || raw}`;
   if (lower.includes('peakshaving')) return `peakShaving.${rowId || raw}`;
   if (lower.includes('para14a') || lower.includes('§14a')) return `para14a.${rowId || raw}`;
   if (lower.includes('bhkw')) return `bhkw.${rowId || raw}`;
@@ -83,7 +91,11 @@ function ownerFromPath(path: string, row: AnyRecord | null): string {
   if (lower.includes('multiuse')) return `multiUse.${rowId || raw}`;
   if (lower.includes('mesh')) return `mesh.${rowId || raw}`;
   if (lower.includes('nexologic')) return `nexoLogic.${rowId || raw}`;
-  if (lower.includes('relay')) return `relay.${rowId || raw}`;
+  if (lower.includes('relay')) {
+    const match = raw.match(/relays\[(\d+)\]/i);
+    const index = Number.isFinite(rowIndex) && rowIndex > 0 ? Math.round(rowIndex) : (match ? Number(match[1]) + 1 : 0);
+    return index > 0 ? `relay.r${index}` : `relay.${rowId || raw}`;
+  }
   return `config.${rowId || raw}`;
 }
 
@@ -107,7 +119,7 @@ function ownerIsActive(config: AnyRecord, owner: string, row: AnyRecord | null):
   if (lower.startsWith('multiuse.')) return config.enableMultiUse === true;
   if (lower.startsWith('mesh.')) return config.enableMeshMicrogrid === true;
   if (lower.startsWith('nexologic.')) return config.enableNexoLogic !== false;
-  if (lower.startsWith('relay.')) return config.enableRelayControl === true || config.enableThresholdControl === true;
+  if (lower.startsWith('relay.')) return config.enableRelayControl === true;
   return true;
 }
 
@@ -283,6 +295,13 @@ class StageADiagnosticsModule extends BaseModule {
       shadowWriteConflictCount: ['number', 'value', 'Aktive Schreibkonflikte'],
       shadowWriteConflictsJson: ['string', 'json', 'Aktive Schreibkonflikte JSON'],
       shadowLastWriteJson: ['string', 'json', 'Letzte beobachtete Schreibanforderung JSON'],
+      authorityActiveLeaseCount: ['number', 'value', 'Aktive Aktor-Steuerhoheiten'],
+      authorityBlockedWriteCount: ['number', 'value', 'Aktuell blockierte Schreibanforderungen'],
+      authorityPreventedConflictCount: ['number', 'value', 'Durch Arbiter verhinderte Konflikte'],
+      authorityUnresolvedConflictCount: ['number', 'value', 'Nicht aufgelöste Laufzeitkonflikte'],
+      authorityPreemptionCount: ['number', 'value', 'Prioritätsübernahmen des Aktor-Arbiters'],
+      authorityActiveJson: ['string', 'json', 'Aktive Aktor-Steuerhoheiten JSON'],
+      authorityBlockedWritesJson: ['string', 'json', 'Blockierte Schreibanforderungen JSON'],
       duplicateActuatorsJson: ['string', 'json', 'Mehrfachzuordnungen JSON'],
       ownerMatrixJson: ['string', 'json', 'Aktor-Owner-Matrix JSON'],
       concurrentControlPathsJson: ['string', 'json', 'Aktive Aktorkonflikte JSON'],
@@ -349,9 +368,11 @@ class StageADiagnosticsModule extends BaseModule {
       ? this.adapter._actuatorShadowArbiter.snapshot(now)
       : (this.adapter?._actuatorShadowSnapshot || { mode: 'shadow', active: false, activeConflictCount: 0, activeConflicts: [] });
     const shadowConflicts = Array.isArray(shadow.activeConflicts) ? shadow.activeConflicts : [];
+    const preventedShadowConflicts = shadowConflicts.filter((row: AnyRecord) => row?.lastResolvedByArbiter === true);
+    const unresolvedShadowConflicts = shadowConflicts.filter((row: AnyRecord) => row?.lastResolvedByArbiter !== true);
     const activeActuatorConflictCount = new Set([
       ...conflicts.map((row) => text(row.objectId)),
-      ...shadowConflicts.map((row: AnyRecord) => text(row?.objectId || row?.targetId)),
+      ...unresolvedShadowConflicts.map((row: AnyRecord) => text(row?.objectId || row?.targetId)),
     ].filter(Boolean)).size;
     const dps = config.datapoints && typeof config.datapoints === 'object' ? config.datapoints : {};
     const staleSec = Number(config.settings?.deviceStaleTimeoutSec);
@@ -406,7 +427,10 @@ class StageADiagnosticsModule extends BaseModule {
     const errors: string[] = [];
     if (duplicates.length) warnings.push(`${duplicates.length} Aktor-Doppelbelegung(en) erkannt.`);
     if (conflicts.length) errors.push(`${conflicts.length} statische Steuerkonflikt(e) erkannt.`);
-    if (shadowConflicts.length) errors.push(`${shadowConflicts.length} konkurrierende Laufzeit-Schreibpfad(e) erkannt.`);
+    if (unresolvedShadowConflicts.length) errors.push(`${unresolvedShadowConflicts.length} nicht aufgelöste Laufzeit-Schreibkonflikt(e) erkannt.`);
+    // Erfolgreich blockierte Safety-Konflikte sind ein Schutzereignis, aber kein
+    // Fehlerzustand der Anlage. Sie bleiben separat diagnostizierbar und ziehen
+    // die kompakte EMS-Überwachung nicht dauerhaft auf WARN.
     if (nvpMode === 'missing') errors.push('Kein NVP-Messdatenpunkt konfiguriert.');
     else if (centralNvp && centralNvp.usable !== true) errors.push(`NVP-Messung nicht nutzbar (${nvpStatus}).`);
     else if (!nvpCoherent) warnings.push(`NVP wird degradiert aber sicher aufgelöst (${nvpSource}).`);
@@ -430,7 +454,13 @@ class StageADiagnosticsModule extends BaseModule {
       concurrentControlPathsCount: conflicts.length,
       activeActuatorConflictCount,
       shadowArbiter: shadow,
+      actuatorArbiter: shadow,
       shadowWriteConflictCount: shadowConflicts.length,
+      authorityActiveLeaseCount: Math.max(0, Number(shadow.activeAuthorityCount) || 0),
+      authorityBlockedWriteCount: Math.max(0, Number(shadow.blockedWriteCount) || 0),
+      authorityPreventedConflictCount: Math.max(0, Number(shadow.preventedConflictCount) || 0),
+      authorityUnresolvedConflictCount: Math.max(0, Number(shadow.unresolvedConflictCount) || 0),
+      authorityPreemptionCount: Math.max(0, Number(shadow.preemptionsTotal) || 0),
       ownerMatrix,
       duplicates,
       conflicts,
@@ -474,6 +504,13 @@ class StageADiagnosticsModule extends BaseModule {
       this.setDiagnosticState('shadowWriteConflictCount', shadowConflicts.length),
       this.setDiagnosticState('shadowWriteConflictsJson', JSON.stringify(shadowConflicts)),
       this.setDiagnosticState('shadowLastWriteJson', JSON.stringify(shadow.lastWrite || null)),
+      this.setDiagnosticState('authorityActiveLeaseCount', Math.max(0, Number(shadow.activeAuthorityCount) || 0)),
+      this.setDiagnosticState('authorityBlockedWriteCount', Math.max(0, Number(shadow.blockedWriteCount) || 0)),
+      this.setDiagnosticState('authorityPreventedConflictCount', Math.max(0, Number(shadow.preventedConflictCount) || 0)),
+      this.setDiagnosticState('authorityUnresolvedConflictCount', Math.max(0, Number(shadow.unresolvedConflictCount) || 0)),
+      this.setDiagnosticState('authorityPreemptionCount', Math.max(0, Number(shadow.preemptionsTotal) || 0)),
+      this.setDiagnosticState('authorityActiveJson', JSON.stringify(shadow.activeAuthorities || [])),
+      this.setDiagnosticState('authorityBlockedWritesJson', JSON.stringify(shadow.blockedWrites || [])),
       this.setDiagnosticState('duplicateActuatorsJson', JSON.stringify(duplicates)),
       this.setDiagnosticState('ownerMatrixJson', JSON.stringify(ownerMatrix)),
       this.setDiagnosticState('concurrentControlPathsJson', JSON.stringify(conflicts)),
@@ -496,7 +533,7 @@ class StageADiagnosticsModule extends BaseModule {
       this.setDiagnosticState('errorsJson', JSON.stringify(errors)),
     ]);
 
-    const signature = JSON.stringify({ status, duplicates: duplicates.map((row) => row.objectId), conflicts: conflicts.map((row) => row.objectId), shadow: shadowConflicts.map((row: AnyRecord) => row.objectId), nvpStatus, nvpSource, nvpCoherent });
+    const signature = JSON.stringify({ status, duplicates: duplicates.map((row) => row.objectId), conflicts: conflicts.map((row) => row.objectId), shadow: shadowConflicts.map((row: AnyRecord) => [row.objectId, row.lastResolvedByArbiter]), blocked: Number(shadow.blockedWriteCount) || 0, nvpStatus, nvpSource, nvpCoherent });
     if (signature !== this._lastWarningSignature && status !== 'ok' && typeof this.adapter.log?.warn === 'function') {
       this._lastWarningSignature = signature;
       this.adapter.log.warn(`[Stufe A] ${summary}`);

@@ -18,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 8ba9695fc1acc27041a3ed5beb0b611fc7efe5e635a1d961d184620e050c25dd
+ * Original-Hash: 9fd2f806f40ad888b557f27c53cb9b5b8c314cd02c1cd47d6e1e80ca5b3395b2
  */
 
 /**
@@ -12074,6 +12074,36 @@ function collectAiAdvisorConfigFromUI(base) {
       { label: 'Remaining', value: _fmtW(remW) },
       { label: 'Status', value: String(ctrl.status || '') },
     ], budgetKind));
+
+    // Kompakte EMS-Überwachung: Im Status-Reiter erscheinen nur die für
+    // Feldbetrieb und Fehlersuche wesentlichen Punkte. Die ausführlichen JSON-
+    // Diagnosen bleiben weiterhin in den internen States verfügbar.
+    const stageA = payload && payload.stageA && typeof payload.stageA === 'object' ? payload.stageA : null;
+    if (stageA) {
+      const storageOverride = stageA.storageOverride || {};
+      const nvp = stageA.nvp || {};
+      const arbiter = stageA.actuatorArbiter || stageA.shadowArbiter || {};
+      const arbiterMode = String(arbiter.mode || 'shadow').toLowerCase();
+      const arbiterLabel = arbiterMode === 'enforce-safety' ? 'SCHUTZ AKTIV' : 'NUR BEOBACHTEN';
+      const stageKind = stageA.status === 'error' ? 'error' : (stageA.status === 'warn' ? 'warn' : 'ok');
+      const monitorRows = [
+        { label: 'EMS-Diagnose', value: String(stageA.status || 'wartet').toUpperCase() },
+        { label: 'NVP', value: `${String(nvp.status || (nvp.coherent ? 'ok' : 'prüfen')).toUpperCase()} · ${String(nvp.source || nvp.mode || 'missing')}` },
+        { label: 'Messwertalter', value: nvp.signedAgeMs == null && nvp.importAgeMs == null && nvp.exportAgeMs == null
+          ? '—'
+          : _fmtAge(Math.min(...[nvp.signedAgeMs, nvp.importAgeMs, nvp.exportAgeMs].filter((value) => Number.isFinite(Number(value))).map(Number))) },
+        { label: 'Aktor-Arbiter', value: arbiterLabel },
+        { label: 'Aktor-Konflikte', value: String(Number(stageA.activeActuatorConflictCount ?? stageA.concurrentControlPathsCount ?? 0)) },
+        { label: 'Speicherquelle', value: String(storageOverride.resolvedSource || storageOverride.mode || 'automatisch') },
+      ];
+      if (Number(stageA.arbiterBlockedWriteCount ?? arbiter.blockedWriteCount ?? 0) > 0) {
+        monitorRows.push({ label: 'Blockierte Writes', value: String(Number(stageA.arbiterBlockedWriteCount ?? arbiter.blockedWriteCount ?? 0)) });
+      }
+      if (Number(stageA.measurementIssueCount || 0) > 0) {
+        monitorRows.push({ label: 'Messwert-Hinweise', value: String(Number(stageA.measurementIssueCount || 0)) });
+      }
+      els.chargingBudget.appendChild(mkCard('EMS Überwachung', monitorRows, stageKind));
+    }
 
     // Summary (optional)
     if (sum) {

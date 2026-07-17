@@ -1,3 +1,30 @@
+## 0.8.112
+
+- Stufe C3.1: Threshold-Regeln und manuelle Relaisbedienung verwenden eindeutige Aktor-Owner, Prioritäten und zeitlich begrenzte Leases im zentralen Arbiter.
+- Threshold übernimmt beim Start einen vorhandenen realen Ausgangszustand, verbucht blockierte/fehlgeschlagene Writes nicht als aktiv und kann optional einen bestätigten Readback verlangen.
+- Manuelle Relais-API meldet eine Arbiter-Blockade als HTTP 409 statt einen nicht ausgeführten Befehl als Erfolg zu speichern.
+- Stufe-A-Owner-Matrix ordnet Threshold- und Relaiszeilen stabil über Regel-/Relaisindex zu.
+- Kundenoption „Feste Speicher-/E-Mobilitäts-Aufteilung“ ergänzt. Ausgeschaltet reservieren aktive Verbraucher nur reale beziehungsweise technisch fahrbare Nachfrage; der Speicher erhält den gesamten ungenutzten PV-Rest im selben zentralen EMS-Zyklus.
+- Die bestehende feste Speicher-/E-Mobilitäts-Priorisierung bleibt für Bestandsanlagen standardmäßig aktiviert und kann weiterhin als Speicher zuerst, E-Mobilität zuerst oder gemeinsam konfiguriert werden.
+- Neue Regressionen `test:actuator-c3-threshold-relay` und `test:pv-surplus-dynamic-storage-remainder`.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v414` erhöht.
+
+## 0.8.111
+
+- Stufe C2 aktiviert den zentralen Aktor-Arbiter für sicherheitskritische Steuerhoheit. Not-/Failsafe-Anforderungen, §14a/Netzbetreiber, Grid-Constraints, Peak-/Anschlusslimits und befristete manuelle Overrides können niedrigere widersprechende Hardware-Writes verbindlich blockieren.
+- Normale EMS- und Komfortmodule untereinander bleiben weiterhin im Shadow-Verhalten; die breite Migration von Threshold, Thermik, Heizstab, MultiUse und NexoLogic erfolgt erst in Stufe C3.
+- Safety-Leases aus zyklischen EMS-Modulen gelten innerhalb desselben Regelzyklus; manuelle/API-Overrides besitzen eine zeitlich begrenzte Lease. Höhere Safety-Prioritäten können niedrigere Owners übernehmen, identische sichere Refresh-Werte bleiben erlaubt.
+- Durchsetzung greift ausschließlich auf tatsächlich in Stufe A erkannten Hardware-Aktoren. Interne Adapter-States, Diagnosepfade und nicht gemappte Bridge-/Command-States werden nicht blockiert.
+- DatapointRegistry erkennt blockierte Writes und meldet sie als nicht angewendet, ohne den realen Hardwarepfad zu beschreiben.
+- Direkte Write-Pfade von Heizstab, BHKW, Generator und EVCS-Phasenumschaltung übernehmen blockierte Anforderungen ebenfalls nicht als erfolgreich; lokale Write-Caches, Puls-Reset-Timer und angenommene Phasen bleiben unverändert.
+- Idempotente/Deadband-Sollwerte erneuern die Safety-Steuerhoheit als reinen Intent, ohne unnötige Geräte-Writes. Dadurch kann ein unveränderter §14a-, Grid- oder Peak-Sollwert im selben EMS-Zyklus nicht von einem späteren Komfort-Write umgangen werden.
+- Direkte Sonderpfade für Phasenumschaltung, Heizstab-Force-Writes, BHKW und Generator übernehmen blockierte Arbiter-Writes nicht mehr als erfolgreich und aktualisieren weder lokalen Cache noch Folgeimpulse.
+- Peak-Shaving veröffentlicht seinen aktiven Authority-Status; Grid-Constraint-Aktoren werden vollständig in die Stufe-A-Owner-Matrix aufgenommen.
+- AppCenter bleibt kompakt: Die bestehende Karte „EMS Überwachung“ zeigt nur Arbiter-Modus, Konfliktanzahl und – nur bei Auftreten – blockierte Writes.
+- Feldkompatibler Rückfall bleibt über Admin → Diagnose → Aktor-Arbiter → „Nur beobachten / Shadow“ verfügbar.
+- Neue Regressionen `test:actuator-authority-arbiter`, `test:actuator-safety-arbiter` und `test:actuator-blocked-write-propagation` prüfen Priorität, Preemption, Deadband-Intent, Same-Cycle-Freigabe, direkte Modulpfade, manuelle Lease, Shadow-Fallback und Restore beim Shutdown.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v413` erhöht.
+
 ## 0.8.110
 
 - Stufe C1 umgesetzt: Ein zentraler read-only Aktor-Shadow-Arbiter beobachtet externe Hardware-Schreibanforderungen, ohne Werte, Reihenfolge oder Erfolg bestehender Writes zu verändern.

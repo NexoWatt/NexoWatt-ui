@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 46d626cb1c1d0e8c78de998fea5bbe84c72c04d638915f74e72254f4cfe637ae
+ * Original-Hash: c35a3f9212dc25c2d45010a66d6287b7bda70aada5df3bca4fe7c90d5d563631
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/generator-control.ts
- * Quell-Hash: sha256:84208946eee9731774300ea5192a31a0d55bb18245a8806feb060e8c4cd0a8b3
+ * Quell-Hash: sha256:1d3a5e7f9d7c4c4ee8705d3760c3506797d27b8e6e6d383034c7ac0ca405269f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -479,7 +479,8 @@ class GeneratorControlModule extends BaseModule {
     async _pulseWrite(objectId, pulseMs) {
         if (!objectId || !this.adapter || this.adapter._nwShuttingDown) return false;
         try {
-            await this.adapter.setForeignStateAsync(objectId, true, false);
+            const writeResult = await this.adapter.setForeignStateAsync(objectId, true, false);
+            if (writeResult && writeResult.__nexowattActuatorAuthorityBlocked === true) return false;
 /**
  * Code-Teil: reset
  *
@@ -520,7 +521,8 @@ class GeneratorControlModule extends BaseModule {
     async _levelWrite(objectId, value) {
         if (!objectId) return false;
         try {
-            await this.adapter.setForeignStateAsync(objectId, value, false);
+            const writeResult = await this.adapter.setForeignStateAsync(objectId, value, false);
+            if (writeResult && writeResult.__nexowattActuatorAuthorityBlocked === true) return false;
             return true;
         } catch (e) {
             this.adapter.log.warn(`Generator write failed for '${objectId}': ${e?.message || e}`);

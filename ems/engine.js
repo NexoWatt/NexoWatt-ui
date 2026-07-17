@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:78eefd5993a73f79a6f6339d938005206f876ba0bacc86340337e412d29665e1
+ * Quell-Hash: sha256:52ace1b571efbac5382bbfdd6ffc162aee174d79a91e0e1ebc85d024febb479e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -865,7 +865,7 @@ class EmsEngine {
       }
     }
 
-    // Stufe C1: read-only Shadow-Arbiter vor allen Modul-/DP-Schreibpfaden installieren.
+    // Stufe C2: zentralen Aktor-Arbiter vor allen Modul-/DP-Schreibpfaden installieren; Shadow bleibt als feldkompatibler Rückfall verfügbar.
     this._actuatorShadowArbiter = installActuatorShadowArbiter(adapter);
 
     // Datapoint registry (multiuse)

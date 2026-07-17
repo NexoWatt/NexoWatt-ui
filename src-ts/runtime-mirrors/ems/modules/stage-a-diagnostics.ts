@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 3fcae69d57773e4478b0f5cc4f6b80225832fb7587314dde6433cf79b27c7d49
+ * Original-Hash: 38c4f780cb9968fd9f9ea80893d6d865b85aa792bd3ad49b3a83ed96fde0f8e2
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/stage-a-diagnostics.ts
- * Quell-Hash: sha256:83c09b9dcf4e44615a6587c2fcf151857c4d20288e6b3a8fd17fda3861029cbf
+ * Quell-Hash: sha256:a810e1a59213613f6c852a8b7a82f113d10f4fc3c00f8bebc7362d566ac1e9ec
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -57,6 +57,8 @@ const ACTUATOR_FIELDS = new Set([
     'sgReadyAWriteId', 'sgReadyBWriteId', 'writeId', 'stageWriteId', 'setpointId',
     'enableId', 'startWriteId', 'stopWriteId', 'setWId', 'setAId', 'commandId',
     'outputId', 'relayWriteId', 'targetObjectId', 'lockWriteId', 'phaseSwitchId',
+    'pvFeedInLimitWId', 'pvLimitWId', 'pvLimitPctId', 'feedInLimitWId',
+    'limitWId', 'limitPctId',
 ]);
 const ACTUATOR_PATTERN = /(?:^|\.)(?:stage\d+WriteId|set[A-Z][A-Za-z0-9]*Id|target[A-Z][A-Za-z0-9]*(?:Id|ObjectId)|.*WriteId|runObjectId|enableId|startWriteId|stopWriteId|commandId|outputId|relayWriteId|lockWriteId|phaseSwitchId)$/;
 const INPUT_PATTERN = /(?:actual|meas|meter|powerId|socId|statusId|onlineId|connectedId|watchdogId|heartbeatId|faultId|availableId|temperatureId|currentId|voltageId|priceId|forecastId)$/i;
@@ -104,6 +106,7 @@ function ownerFromPath(path, row) {
     const raw = String(path || '');
     const lower = raw.toLowerCase();
     const rowId = text(row && (row.id || row.key));
+    const rowIndex = Number(row && (row.idx ?? row.index));
     if (lower.includes('chargingmanagement') || lower.includes('settingsconfig.evcslist') || lower.includes('evcslist')) {
         const match = raw.match(/(?:wallboxes|evcslist)\[(\d+)\]/i);
         const configured = Number(row && row.index);
@@ -118,8 +121,13 @@ function ownerFromPath(path, row) {
         return `thermal.${rowId || raw}`;
     if (lower.includes('heatingrod'))
         return `heatingRod.${rowId || raw}`;
-    if (lower.includes('threshold'))
-        return `threshold.${rowId || raw}`;
+    if (lower.includes('threshold')) {
+        const match = raw.match(/rules\[(\d+)\]/i);
+        const index = Number.isFinite(rowIndex) && rowIndex > 0 ? Math.round(rowIndex) : (match ? Number(match[1]) + 1 : 0);
+        return index > 0 ? `threshold.r${index}` : `threshold.${rowId || raw}`;
+    }
+    if (lower.includes('gridconstraints'))
+        return `gridConstraints.${rowId || raw}`;
     if (lower.includes('peakshaving'))
         return `peakShaving.${rowId || raw}`;
     if (lower.includes('para14a') || lower.includes('§14a'))
@@ -134,8 +142,11 @@ function ownerFromPath(path, row) {
         return `mesh.${rowId || raw}`;
     if (lower.includes('nexologic'))
         return `nexoLogic.${rowId || raw}`;
-    if (lower.includes('relay'))
-        return `relay.${rowId || raw}`;
+    if (lower.includes('relay')) {
+        const match = raw.match(/relays\[(\d+)\]/i);
+        const index = Number.isFinite(rowIndex) && rowIndex > 0 ? Math.round(rowIndex) : (match ? Number(match[1]) + 1 : 0);
+        return index > 0 ? `relay.r${index}` : `relay.${rowId || raw}`;
+    }
     return `config.${rowId || raw}`;
 }
 /**
@@ -183,7 +194,7 @@ function ownerIsActive(config, owner, row) {
     if (lower.startsWith('nexologic.'))
         return config.enableNexoLogic !== false;
     if (lower.startsWith('relay.'))
-        return config.enableRelayControl === true || config.enableThresholdControl === true;
+        return config.enableRelayControl === true;
     return true;
 }
 /**
@@ -439,6 +450,13 @@ class StageADiagnosticsModule extends BaseModule {
             shadowWriteConflictCount: ['number', 'value', 'Aktive Schreibkonflikte'],
             shadowWriteConflictsJson: ['string', 'json', 'Aktive Schreibkonflikte JSON'],
             shadowLastWriteJson: ['string', 'json', 'Letzte beobachtete Schreibanforderung JSON'],
+            authorityActiveLeaseCount: ['number', 'value', 'Aktive Aktor-Steuerhoheiten'],
+            authorityBlockedWriteCount: ['number', 'value', 'Aktuell blockierte Schreibanforderungen'],
+            authorityPreventedConflictCount: ['number', 'value', 'Durch Arbiter verhinderte Konflikte'],
+            authorityUnresolvedConflictCount: ['number', 'value', 'Nicht aufgelöste Laufzeitkonflikte'],
+            authorityPreemptionCount: ['number', 'value', 'Prioritätsübernahmen des Aktor-Arbiters'],
+            authorityActiveJson: ['string', 'json', 'Aktive Aktor-Steuerhoheiten JSON'],
+            authorityBlockedWritesJson: ['string', 'json', 'Blockierte Schreibanforderungen JSON'],
             duplicateActuatorsJson: ['string', 'json', 'Mehrfachzuordnungen JSON'],
             ownerMatrixJson: ['string', 'json', 'Aktor-Owner-Matrix JSON'],
             concurrentControlPathsJson: ['string', 'json', 'Aktive Aktorkonflikte JSON'],
@@ -507,9 +525,11 @@ class StageADiagnosticsModule extends BaseModule {
             ? this.adapter._actuatorShadowArbiter.snapshot(now)
             : (this.adapter?._actuatorShadowSnapshot || { mode: 'shadow', active: false, activeConflictCount: 0, activeConflicts: [] });
         const shadowConflicts = Array.isArray(shadow.activeConflicts) ? shadow.activeConflicts : [];
+        const preventedShadowConflicts = shadowConflicts.filter((row) => row?.lastResolvedByArbiter === true);
+        const unresolvedShadowConflicts = shadowConflicts.filter((row) => row?.lastResolvedByArbiter !== true);
         const activeActuatorConflictCount = new Set([
             ...conflicts.map((row) => text(row.objectId)),
-            ...shadowConflicts.map((row) => text(row?.objectId || row?.targetId)),
+            ...unresolvedShadowConflicts.map((row) => text(row?.objectId || row?.targetId)),
         ].filter(Boolean)).size;
         const dps = config.datapoints && typeof config.datapoints === 'object' ? config.datapoints : {};
         const staleSec = Number(config.settings?.deviceStaleTimeoutSec);
@@ -574,8 +594,11 @@ class StageADiagnosticsModule extends BaseModule {
             warnings.push(`${duplicates.length} Aktor-Doppelbelegung(en) erkannt.`);
         if (conflicts.length)
             errors.push(`${conflicts.length} statische Steuerkonflikt(e) erkannt.`);
-        if (shadowConflicts.length)
-            errors.push(`${shadowConflicts.length} konkurrierende Laufzeit-Schreibpfad(e) erkannt.`);
+        if (unresolvedShadowConflicts.length)
+            errors.push(`${unresolvedShadowConflicts.length} nicht aufgelöste Laufzeit-Schreibkonflikt(e) erkannt.`);
+        // Erfolgreich blockierte Safety-Konflikte sind ein Schutzereignis, aber kein
+        // Fehlerzustand der Anlage. Sie bleiben separat diagnostizierbar und ziehen
+        // die kompakte EMS-Überwachung nicht dauerhaft auf WARN.
         if (nvpMode === 'missing')
             errors.push('Kein NVP-Messdatenpunkt konfiguriert.');
         else if (centralNvp && centralNvp.usable !== true)
@@ -603,7 +626,13 @@ class StageADiagnosticsModule extends BaseModule {
             concurrentControlPathsCount: conflicts.length,
             activeActuatorConflictCount,
             shadowArbiter: shadow,
+            actuatorArbiter: shadow,
             shadowWriteConflictCount: shadowConflicts.length,
+            authorityActiveLeaseCount: Math.max(0, Number(shadow.activeAuthorityCount) || 0),
+            authorityBlockedWriteCount: Math.max(0, Number(shadow.blockedWriteCount) || 0),
+            authorityPreventedConflictCount: Math.max(0, Number(shadow.preventedConflictCount) || 0),
+            authorityUnresolvedConflictCount: Math.max(0, Number(shadow.unresolvedConflictCount) || 0),
+            authorityPreemptionCount: Math.max(0, Number(shadow.preemptionsTotal) || 0),
             ownerMatrix,
             duplicates,
             conflicts,
@@ -646,6 +675,13 @@ class StageADiagnosticsModule extends BaseModule {
             this.setDiagnosticState('shadowWriteConflictCount', shadowConflicts.length),
             this.setDiagnosticState('shadowWriteConflictsJson', JSON.stringify(shadowConflicts)),
             this.setDiagnosticState('shadowLastWriteJson', JSON.stringify(shadow.lastWrite || null)),
+            this.setDiagnosticState('authorityActiveLeaseCount', Math.max(0, Number(shadow.activeAuthorityCount) || 0)),
+            this.setDiagnosticState('authorityBlockedWriteCount', Math.max(0, Number(shadow.blockedWriteCount) || 0)),
+            this.setDiagnosticState('authorityPreventedConflictCount', Math.max(0, Number(shadow.preventedConflictCount) || 0)),
+            this.setDiagnosticState('authorityUnresolvedConflictCount', Math.max(0, Number(shadow.unresolvedConflictCount) || 0)),
+            this.setDiagnosticState('authorityPreemptionCount', Math.max(0, Number(shadow.preemptionsTotal) || 0)),
+            this.setDiagnosticState('authorityActiveJson', JSON.stringify(shadow.activeAuthorities || [])),
+            this.setDiagnosticState('authorityBlockedWritesJson', JSON.stringify(shadow.blockedWrites || [])),
             this.setDiagnosticState('duplicateActuatorsJson', JSON.stringify(duplicates)),
             this.setDiagnosticState('ownerMatrixJson', JSON.stringify(ownerMatrix)),
             this.setDiagnosticState('concurrentControlPathsJson', JSON.stringify(conflicts)),
@@ -667,7 +703,7 @@ class StageADiagnosticsModule extends BaseModule {
             this.setDiagnosticState('warningsJson', JSON.stringify(warnings)),
             this.setDiagnosticState('errorsJson', JSON.stringify(errors)),
         ]);
-        const signature = JSON.stringify({ status, duplicates: duplicates.map((row) => row.objectId), conflicts: conflicts.map((row) => row.objectId), shadow: shadowConflicts.map((row) => row.objectId), nvpStatus, nvpSource, nvpCoherent });
+        const signature = JSON.stringify({ status, duplicates: duplicates.map((row) => row.objectId), conflicts: conflicts.map((row) => row.objectId), shadow: shadowConflicts.map((row) => [row.objectId, row.lastResolvedByArbiter]), blocked: Number(shadow.blockedWriteCount) || 0, nvpStatus, nvpSource, nvpCoherent });
         if (signature !== this._lastWarningSignature && status !== 'ok' && typeof this.adapter.log?.warn === 'function') {
             this._lastWarningSignature = signature;
             this.adapter.log.warn(`[Stufe A] ${summary}`);

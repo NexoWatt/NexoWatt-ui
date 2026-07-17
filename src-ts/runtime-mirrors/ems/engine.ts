@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 9ad3e03ea93745dd785e5d881554d1689e05ca8d1e821b57c5ebe25e3dc6fc23
+ * Original-Hash: d006f67a5a82cfc708c515c4d64f217ae76dda2e667cbc20171056fbe54551c3
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:78eefd5993a73f79a6f6339d938005206f876ba0bacc86340337e412d29665e1
+ * Quell-Hash: sha256:52ace1b571efbac5382bbfdd6ffc162aee174d79a91e0e1ebc85d024febb479e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -918,7 +918,7 @@ class EmsEngine {
       }
     }
 
-    // Stufe C1: read-only Shadow-Arbiter vor allen Modul-/DP-Schreibpfaden installieren.
+    // Stufe C2: zentralen Aktor-Arbiter vor allen Modul-/DP-Schreibpfaden installieren; Shadow bleibt als feldkompatibler Rückfall verfügbar.
     this._actuatorShadowArbiter = installActuatorShadowArbiter(adapter);
 
     // Datapoint registry (multiuse)

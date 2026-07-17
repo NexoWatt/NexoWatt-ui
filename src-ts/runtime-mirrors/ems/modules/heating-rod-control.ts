@@ -30,7 +30,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b30d1665e3661e773337a54183992a1ddbea41941d3dc2c94566048e8193e2ae
+ * Original-Hash: 55dfe0bc2b11e7a8bee810b4a5f621a64b0ddfb2dd517b7451184c4c827012f2
  */
 
 /**
@@ -111,7 +111,7 @@ type HeatingRodAdapterLike = HeatingRodUnknownRecord & {
     setObjectNotExistsAsync?: (id: string, obj: HeatingRodUnknownRecord) => Promise<void>;
     extendObjectAsync?: (id: string, obj: HeatingRodUnknownRecord) => Promise<void>;
     setStateAsync?: (id: string, value: unknown, ack?: boolean) => Promise<void>;
-    setForeignStateAsync?: (id: string, value: unknown, ack?: boolean) => Promise<void>;
+    setForeignStateAsync?: (id: string, value: unknown, ack?: boolean) => Promise<unknown>;
     getStateAsync?: (id: string) => Promise<HeatingRodStateValue | null | undefined>;
     updateValue?: (id: string, value: unknown, context?: unknown) => unknown;
     _nwGetNumberFromCache?: (key: string, fallback?: unknown) => unknown;
@@ -2673,7 +2673,8 @@ class HeatingRodControlModule extends BaseModule {
         if (entry.invert) raw = !raw;
 
         try {
-            await this.adapter.setForeignStateAsync(entry.objectId, raw, false);
+            const writeResult = await this.adapter.setForeignStateAsync(entry.objectId, raw, false);
+            if (writeResult && typeof writeResult === 'object' && (writeResult as { __nexowattActuatorAuthorityBlocked?: boolean }).__nexowattActuatorAuthorityBlocked === true) return false;
             if (this.dp.lastWriteByObjectId && typeof this.dp.lastWriteByObjectId.set === 'function') {
                 this.dp.lastWriteByObjectId.set(entry.objectId, { val: raw ? 1 : 0, ts: Date.now() });
             }

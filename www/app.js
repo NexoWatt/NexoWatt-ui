@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/app.ts
- * Quell-Hash: sha256:5e263283d18556a2f51eac0aec77d06a4bab21e434311fb6048e586e9589b999
+ * Quell-Hash: sha256:05ab848bcd0584cdccf2ddb25f021d997db695f646b72cc55fee7f6b0a9ad8a3
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -4774,10 +4774,13 @@ function bindInputValue(el, stateKey) {
  * zentralen EMS-Budget in Core-Limits ausgewertet.
  */
 function updatePvSurplusSettingsUi(){
+  const enabled = document.getElementById('s_pvSurplusAllocationEnabled');
+  const block = document.getElementById('pvSurplusFixedAllocationBlock');
   const select = document.getElementById('s_pvSurplusPriority');
   const row = document.getElementById('pvSurplusEvcsShareRow');
-  if (!select || !row) return;
-  row.classList.toggle('hidden', String(select.value || 'both').trim().toLowerCase() !== 'both');
+  const fixed = !enabled || enabled.checked;
+  if (block) block.classList.toggle('hidden', !fixed);
+  if (select && row) row.classList.toggle('hidden', !fixed || String(select.value || 'both').trim().toLowerCase() !== 'both');
 }
 
 /**
@@ -4788,12 +4791,14 @@ function updatePvSurplusSettingsUi(){
  * Funktion veraendert ausschliesslich die Darstellung des Einstellungsreiters.
  */
 function setupPvSurplusSettingsUi(){
+  const enabled = document.getElementById('s_pvSurplusAllocationEnabled');
   const select = document.getElementById('s_pvSurplusPriority');
-  if (!select) return;
-  if (select.dataset.nwPvSurplusBound !== '1') {
+  if (!select && !enabled) return;
+  if (select && select.dataset.nwPvSurplusBound !== '1') {
     select.dataset.nwPvSurplusBound = '1';
     select.addEventListener('change', updatePvSurplusSettingsUi);
   }
+  if (enabled && enabled.dataset.nwPvSurplusBound !== '1') { enabled.dataset.nwPvSurplusBound = '1'; enabled.addEventListener('change', updatePvSurplusSettingsUi); }
   updatePvSurplusSettingsUi();
 }
 /**
