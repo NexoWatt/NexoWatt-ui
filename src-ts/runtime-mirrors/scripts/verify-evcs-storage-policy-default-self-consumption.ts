@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 7cde443bca0c39313969b0324dbbe024e71c4684b78d26fea7520bb1d77a99fb
+ * Original-Hash: f36445529a0a0fe43151cef241d6d4736681e8ebc7b1243662ace739a4b63007
  */
 
 /**
@@ -232,7 +232,7 @@ function makeAdapter({ runtimePolicy, stateProtectedLoadW = null } = {}) {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-async function runStorageTick({ runtimePolicy, stateProtectedLoadW = null }) {
+async function runStorageTick({ runtimePolicy, stateProtectedLoadW = null, lastTargetW = 0, lastSource = 'eigenverbrauch' }) {
   // 4,2 kW Bezug entsprechen hier praktisch einer laufenden Wallbox. Bei normaler
   // Eigenverbrauchsoptimierung soll der Speicher bis auf den 50-W-Zielbezug entladen.
   const dp = new FakeDp({
@@ -243,6 +243,8 @@ async function runStorageTick({ runtimePolicy, stateProtectedLoadW = null }) {
   });
   const adapter = makeAdapter({ runtimePolicy, stateProtectedLoadW });
   const module = new SpeicherRegelungModule(adapter, dp);
+  module._lastTargetW = lastTargetW;
+  module._lastSource = lastSource;
   await module.tick();
   return {
     targetW: dp.lastWrite(),
@@ -271,8 +273,19 @@ async function runStorageTick({ runtimePolicy, stateProtectedLoadW = null }) {
       source: 'charging-runtime',
     },
   });
-  assert.strictEqual(protectTick.targetW, 0, `explicit protect must leave EVCS load on the grid, got ${protectTick.targetW} W`);
+  assert.strictEqual(protectTick.targetW, null, `explicit protect without a running storage command must stay no-write instead of creating a needless 0-W command, got ${protectTick.targetW} W`);
   assert.strictEqual(protectTick.protectedLoadW, 4100, 'explicit protect load must reach storage control');
+
+  const protectActiveTick = await runStorageTick({
+    runtimePolicy: {
+      protectedLoadW: 4100,
+      protectedWallboxes: 1,
+      assistRequestedLoadW: 0,
+      source: 'charging-runtime',
+    },
+    lastTargetW: 4100,
+  });
+  assert.strictEqual(protectActiveTick.targetW, 0, 'explicit protect must stop a previously active discharge with one real 0-W command');
 
   const assistTick = await runStorageTick({
     runtimePolicy: {
@@ -297,8 +310,11 @@ async function runStorageTick({ runtimePolicy, stateProtectedLoadW = null }) {
   assert.strictEqual(staleStateIgnored.source, 'charging-tick-reset', 'same-cycle runtime policy source must be used');
 
   const stateFallbackProtect = await runStorageTick({ stateProtectedLoadW: 4100 });
-  assert.strictEqual(stateFallbackProtect.targetW, 0, 'state fallback must preserve explicit protection for old runtimes');
+  assert.strictEqual(stateFallbackProtect.targetW, null, 'state fallback without an active storage command must remain no-write');
   assert.strictEqual(stateFallbackProtect.source, 'state-fallback', 'fallback source diagnostic missing');
+
+  const stateFallbackActiveProtect = await runStorageTick({ stateProtectedLoadW: 4100, lastTargetW: 4100 });
+  assert.strictEqual(stateFallbackActiveProtect.targetW, 0, 'state fallback must stop an actually active discharge for old runtimes');
 
   console.log('[evcs-storage-policy-default-self-consumption] OK: normal, protect, assist and same-cycle stale-state handling are verified through the real storage tick.');
 })().catch((err) => {

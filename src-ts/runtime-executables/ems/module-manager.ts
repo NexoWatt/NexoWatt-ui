@@ -395,6 +395,15 @@ class ModuleManager {
             enabledFn: () => this._licenseAllowsApp('storage'),
         });
 
+        // MultiUse nutzt ausschließlich den nach EVCS und Speicher verbleibenden
+        // zentralen Gesamt-/PV-Grant. Es läuft deshalb vor Thermik und Heizstab;
+        // bestätigte MultiUse-Leistung wird im selben Tick zentral reserviert.
+        this.modules.push({
+            key: 'multiUse',
+            instance: new MultiUseModule(this.adapter, this.dp),
+            enabledFn: () => this._licenseAllowsApp('multiuse') && !!this.adapter.config.enableMultiUse,
+        });
+
         // Thermische Steuerung (Wärmepumpe/Klima)
         // Läuft NACH dem Lademanagement, damit PV‑Restbudget (pvCapEffective - EVCS used)
         // innerhalb des gleichen Ticks genutzt werden kann.
@@ -442,13 +451,6 @@ class ModuleManager {
             key: 'aiAdvisor',
             instance: new AiAdvisorModule(this.adapter, this.dp),
             enabledFn: () => this._licenseAllowsApp('aiAdvisor') && !!(this.adapter.config.enableAiAdvisor || this.adapter.config.enableAiOptimization),
-        });
-
-        // Multi use (future)
-        this.modules.push({
-            key: 'multiUse',
-            instance: new MultiUseModule(this.adapter, this.dp),
-            enabledFn: () => this._licenseAllowsApp('multiuse') && !!this.adapter.config.enableMultiUse,
         });
 
         // Stufe A ist eine rein lesende Feld-Diagnose. Sie läuft bewusst zuletzt,

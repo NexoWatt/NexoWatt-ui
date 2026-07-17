@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 45d2faaf99b49fa1ce5b95194ee6aebd5273eef9686942212a94d7fda94883aa
+ * Original-Hash: 4dabaca0da4a76ded825a69bb0b928c19ec77e58c0ba59b928e7edb1c2688ff3
  */
 
 /**
@@ -378,7 +378,7 @@ assert(storageSource.includes('central-grant-after-evcs'), 'Speicher muss den ze
 assert(storageSource.includes('Rekonstruktion aus Allocation-Prozenten waere ein Parallelbudget'), 'Lokale Speicher-Rekonstruktion muss ausdrücklich entfernt sein');
 assert(!storageSource.includes("pvBudgetResolution = 'allocation-reconciled'"), 'Speicher darf kein zweites Allocation-Budget rekonstruieren');
 assert(storageSource.includes('Finaler zentraler Gesamtbudget-Cap fuer Speicher-Netzladen'), 'Speicher-Netzladen muss den zentralen Gesamt-Grant verwenden');
-assert(storageSource.includes('reserveW: gridChargeSource ? totalBudgetStorageReservedW : 0'), 'Speicher-Netzladen muss Gesamtbudget fuer nachgelagerte Verbraucher reservieren');
+assert(storageSource.includes('reserveW: pvSource ? pvBudgetReservedW : (gridChargeSource ? totalBudgetStorageReservedW : 0)'), 'Speicher muss PV-Laden im PV-Budget und Netzladen im Gesamtbudget fuer nachgelagerte Verbraucher reservieren');
 assert(storageSource.includes("'central-stale-blocked'"), 'Speicher muss einen stalen zentralen Snapshot blockieren statt lokal zu rekonstruieren');
 
 const thermalSource = read('src-ts/runtime-executables/ems/modules/thermal-control.ts');

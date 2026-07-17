@@ -145,6 +145,7 @@ const {
   combineStorageFarmPv: nwCombineStorageFarmPv,
   normalizeFarmPower: nwNormalizeFarmPower,
 } = require('./ems/services/storage-farm-aggregation');
+const { physicalPvSourceKey: nwPhysicalPvSourceKey, dedupePvSourceRows: nwDedupePvSourceRows, applyPvCapacityPlausibility: nwApplyPvCapacityPlausibility } = require('./ems/services/pv-source-identity');
 const { resolveEvcsControlMapping } = require('./ems/evcs-control-mapping');
 
 // NexoLogic (node/graph) runtime engine
@@ -5790,53 +5791,37 @@ class NexoWattVis extends utils.Adapter {
           else availableDischargePowerUnbounded = true;
         }
 
-        // PV-/Wechselrichter-Leistung wird unabhängig vom Speicher-Heartbeat gelesen.
-        // Ein DC-/Hybrid-Speicher kann seine PV-Leistung aktualisieren, obwohl SoC oder
-        // Batterie-Istleistung langsamer kommen. Konfigurierte AC-/WR-DPs werden ebenfalls
-        // erfasst; nur die automatische r.pvPower-Suche bleibt auf DC/Hybrid beschränkt.
+        // PV-/WR-Leistung wird unabhaengig vom Speicher-Heartbeat gelesen. Alle
+        // Quellen werden gesammelt und spaeter nach physischem Wechselrichter dedupliziert.
         if (pvId) {
           const pvSourceId = String(pvId || '').trim();
+          const physicalKey = nwPhysicalPvSourceKey(pvSourceId) || pvSourceId.toLowerCase();
           status.pvSourceId = pvSourceId;
+          status.pvSourcePhysicalKey = physicalKey;
           status.pvSourceCoupling = pvCoupling;
+          if (seenPvSourceIds.has(physicalKey)) status.pvDuplicateSource = true;
+          seenPvSourceIds.add(physicalKey);
 
-          if (seenPvSourceIds.has(pvSourceId)) {
-            // Derselbe Wechselrichter darf nicht mehrfach summiert werden, wenn er bei
-            // mehreren Speichern derselben Farm zugeordnet ist.
-            status.pvDuplicateSource = true;
-          } else {
-            seenPvSourceIds.add(pvSourceId);
-            const stPv = await getState(pvSourceId);
-            const pvAgeMs = (stPv && typeof stPv.ts === 'number' && Number.isFinite(stPv.ts))
-              ? Math.max(0, now - Number(stPv.ts))
-              : null;
-            // Der zugeordnete Wechselrichter ist eine eigenständige Messquelle.
-            // Ein offline gemeldeter Speicher darf eine weiterhin frische PV-/WR-
-            // Leistung nicht aus der Farm- und Energiefluss-Summe entfernen.
-            const pvFresh = !!(stPv && stPv.val !== undefined && stPv.val !== null && (pvAgeMs === null || pvAgeMs <= staleMs));
-            const pvValue = pvFresh ? await readNumber(pvSourceId, 'power', { allowStale: false }) : NaN;
-            const pvAbs = Number.isFinite(pvValue) ? Math.max(0, Math.abs(pvValue)) : 0;
-
-            status.pvSourceOnline = !!pvFresh;
-            if (pvAgeMs !== null) status.pvSourceAgeSec = Math.floor(pvAgeMs / 1000);
-            if (pvFresh && Number.isFinite(pvValue)) status.pvPowerW = pvAbs;
-
-            const pvSourceInfo = {
-              id: pvSourceId,
-              coupling: pvCoupling,
-              online: !!pvFresh,
-              powerW: Math.round(pvAbs),
-              ageMs: pvAgeMs,
-              storage: status.name,
-              autoDetected: !!status.pvAutoId,
-            };
-            pvSourceRows.push(pvSourceInfo);
-
-            if (pvFresh && Number.isFinite(pvValue)) {
-              if (pvCoupling === 'dc') totalPvDc += pvAbs;
-              else if (pvCoupling === 'ac') totalPvAc += pvAbs;
-              else totalPvUnknown += pvAbs;
-            }
-          }
+          const stPv = await getState(pvSourceId);
+          const pvAgeMs = (stPv && typeof stPv.ts === 'number' && Number.isFinite(stPv.ts))
+            ? Math.max(0, now - Number(stPv.ts))
+            : null;
+          const pvFresh = !!(stPv && stPv.val !== undefined && stPv.val !== null && (pvAgeMs === null || pvAgeMs <= staleMs));
+          const pvValue = pvFresh ? await readNumber(pvSourceId, 'power', { allowStale: false }) : NaN;
+          const pvAbs = Number.isFinite(pvValue) ? Math.max(0, Math.abs(pvValue)) : 0;
+          status.pvSourceOnline = !!pvFresh;
+          if (pvAgeMs !== null) status.pvSourceAgeSec = Math.floor(pvAgeMs / 1000);
+          if (pvFresh && Number.isFinite(pvValue)) status.pvPowerW = pvAbs;
+          pvSourceRows.push({
+            id: pvSourceId,
+            physicalKey,
+            coupling: pvCoupling,
+            online: !!pvFresh,
+            powerW: Math.round(pvAbs),
+            ageMs: pvAgeMs,
+            storage: status.name,
+            autoDetected: !!status.pvAutoId,
+          });
         }
 
         // Only fresh-online storages contribute live power values to the farm totals.
@@ -5932,6 +5917,20 @@ class NexoWattVis extends utils.Adapter {
       const capacityWeightedSocOnline = nwCapacityWeightedMean(socWeightedEntriesOnline);
       const normalizedFarmPower = nwNormalizeFarmPower(totalCharge, totalDischarge);
       const totalPower = normalizedFarmPower.signedW;
+      const dedupedFarmPv = nwDedupePvSourceRows(pvSourceRows);
+      pvSourceRows.length = 0;
+      pvSourceRows.push(...dedupedFarmPv.rows);
+      totalPvAc = 0;
+      totalPvDc = 0;
+      totalPvUnknown = 0;
+      for (const row of pvSourceRows) {
+        if (!row || row.online !== true) continue;
+        const valueW = Math.max(0, Number(row.powerW) || 0);
+        const coupling = String(row.coupling || '').trim().toLowerCase();
+        if (coupling === 'dc') totalPvDc += valueW;
+        else if (coupling === 'ac') totalPvAc += valueW;
+        else totalPvUnknown += valueW;
+      }
       const totalPv = totalPvAc + totalPvDc + totalPvUnknown;
       const pvSourcesOnline = pvSourceRows.filter((row) => row && row.online === true).length;
       const socDegraded = (degraded > 0) || (socSourcesTotal > 0 && socSourcesOnline >= 0 && socSourcesOnline < socSourcesTotal) || (available < configured);
@@ -5966,7 +5965,7 @@ class NexoWattVis extends utils.Adapter {
       await this.setStateAsync('storageFarm.totalPvAcPowerW', { val: totalPvAcState, ack: true });
       await this.setStateAsync('storageFarm.totalPvDcPowerW', { val: totalPvDcState, ack: true });
       await this.setStateAsync('storageFarm.totalPvUnknownPowerW', { val: totalPvUnknownState, ack: true });
-      await this.setStateAsync('storageFarm.pvSourcesTotal', { val: seenPvSourceIds.size, ack: true });
+      await this.setStateAsync('storageFarm.pvSourcesTotal', { val: pvSourceRows.length, ack: true });
       await this.setStateAsync('storageFarm.pvSourcesOnline', { val: pvSourcesOnline, ack: true });
       await this.setStateAsync('storageFarm.pvSourcesJson', { val: pvSourcesJson, ack: true });
       await this.setStateAsync('storageFarm.storagesOnline', { val: available, ack: true });
@@ -6000,7 +5999,7 @@ class NexoWattVis extends utils.Adapter {
         this.updateValue('storageFarm.totalPvAcPowerW', totalPvAcState, now);
         this.updateValue('storageFarm.totalPvDcPowerW', totalPvDcState, now);
         this.updateValue('storageFarm.totalPvUnknownPowerW', totalPvUnknownState, now);
-        this.updateValue('storageFarm.pvSourcesTotal', seenPvSourceIds.size, now);
+        this.updateValue('storageFarm.pvSourcesTotal', pvSourceRows.length, now);
         this.updateValue('storageFarm.pvSourcesOnline', pvSourcesOnline, now);
         this.updateValue('storageFarm.pvSourcesJson', pvSourcesJson, now);
         this.updateValue('storageFarm.storagesOnline', available, now);
@@ -24717,6 +24716,29 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     };
   }
 
+  _nwConfiguredPvCapacityW() {
+    try {
+      const gc = this.config && this.config.gridConstraints && typeof this.config.gridConstraints === 'object'
+        ? this.config.gridConstraints
+        : {};
+      const unique = new Map();
+      const collect = (rows) => {
+        for (const row of (Array.isArray(rows) ? rows : [])) {
+          const kwp = Number(typeof row?.kwp === 'string' ? row.kwp.replace(',', '.') : row?.kwp);
+          if (!Number.isFinite(kwp) || kwp <= 0) continue;
+          const sourceId = String(row?.pvPowerReadId || '').trim();
+          const key = nwPhysicalPvSourceKey(sourceId) || String(row?.name || '').trim().toLowerCase() || `kwp:${kwp}`;
+          unique.set(key, Math.max(Number(unique.get(key)) || 0, kwp * 1000));
+        }
+      };
+      collect(gc.pvCurtailInvertersEvu);
+      collect(gc.pvCurtailInvertersZero);
+      return Array.from(unique.values()).reduce((sum, value) => sum + value, 0);
+    } catch (_e) {
+      return 0;
+    }
+  }
+
   /**
    * Code-Teil: _nwMergeStorageFarmPvWithBase
    * Zweck: Führt Anlagen-PV und Farm-/Wechselrichter-PV ohne Doppelzählung zusammen.
@@ -24743,19 +24765,21 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
 
     const baseSourceIds = new Set();
-    const singleBaseSourceId = String(opts.baseSourceId || '').trim();
-    if (singleBaseSourceId) baseSourceIds.add(singleBaseSourceId);
-    for (const sourceId of (Array.isArray(opts.baseSourceIds) ? opts.baseSourceIds : [])) {
+    const addBaseSource = (sourceId) => {
       const normalizedId = String(sourceId || '').trim();
-      if (normalizedId) baseSourceIds.add(normalizedId);
-    }
+      const physicalKey = nwPhysicalPvSourceKey(normalizedId) || normalizedId.toLowerCase();
+      if (physicalKey) baseSourceIds.add(physicalKey);
+    };
+    addBaseSource(opts.baseSourceId);
+    for (const sourceId of (Array.isArray(opts.baseSourceIds) ? opts.baseSourceIds : [])) addBaseSource(sourceId);
     const sources = Array.isArray(metrics.pvSources) ? metrics.pvSources : [];
     let overlapAcW = 0;
     let overlapDcW = 0;
     let overlapUnknownW = 0;
     if (baseSourceIds.size > 0) {
       for (const row of sources) {
-        if (!baseSourceIds.has(String(row && row.id || '').trim())) continue;
+        const rowKey = nwPhysicalPvSourceKey(row && row.id) || String(row && row.id || '').trim().toLowerCase();
+        if (!baseSourceIds.has(rowKey)) continue;
         const valueW = Math.max(0, Number(row && row.powerW) || 0);
         const coupling = String(row && row.coupling || '').trim().toLowerCase();
         if (coupling === 'dc') overlapDcW += valueW;
@@ -24783,18 +24807,25 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       overlapUnknownW,
       tolerance: 0.08,
     });
-    const totalW = Math.max(0, Number(combined.totalW) || 0);
-    const acW = Math.max(0, Number(combined.acW) || 0);
-    const dcW = Math.max(0, Number(combined.dcW) || 0);
+    const rawTotalW = Math.max(0, Number(combined.totalW) || 0);
+    const rawAcW = Math.max(0, Number(combined.acW) || 0);
+    const rawDcW = Math.max(0, Number(combined.dcW) || 0);
     const farmAddedW = Math.max(0, Number(combined.farmAddedW) || 0);
+    const capacityW = this._nwConfiguredPvCapacityW();
+    const plausibility = nwApplyPvCapacityPlausibility(rawTotalW, capacityW, 0.15);
+    const scale = rawTotalW > 0 ? plausibility.outputW / rawTotalW : 1;
     return {
-      totalW: Math.round(totalW),
-      acW: Math.round(acW),
-      dcW: Math.round(dcW),
-      farmAddedW: Math.round(farmAddedW),
+      totalW: Math.round(plausibility.outputW),
+      rawTotalW: Math.round(rawTotalW),
+      acW: Math.round(rawAcW * scale),
+      dcW: Math.round(rawDcW * scale),
+      farmAddedW: Math.round(Math.min(farmAddedW, plausibility.outputW)),
       farmFallbackUsed: !!combined.farmFallbackUsed,
       duplicateSuppressedW: Math.round(Math.max(0, Number(combined.duplicateSuppressedW) || 0)),
-      source: String(combined.source || (farmAddedW > 0 ? 'base+storage-farm' : (baseW > 0 ? 'base' : 'missing'))),
+      capacityLimitW: Math.round(plausibility.capacityLimitW),
+      plausibilityCapped: !!plausibility.capped,
+      plausibilitySuppressedW: Math.round(plausibility.suppressedW),
+      source: `${String(combined.source || (farmAddedW > 0 ? 'base+storage-farm' : (baseW > 0 ? 'base' : 'missing')))}${plausibility.capped ? '+capacity-cap' : ''}`,
       metrics,
     };
   }
@@ -26879,6 +26910,22 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       native: {},
     });
 
+    await this.setObjectNotExistsAsync('derived.core.pv.rawTotalW', {
+      type: 'state', common: { name: 'PV-Leistung roh vor Plausibilitaet (W)', type: 'number', role: 'value.power', unit: 'W', read: true, write: false }, native: {},
+    });
+    await this.setObjectNotExistsAsync('derived.core.pv.capacityLimitW', {
+      type: 'state', common: { name: 'PV-Plausibilitaetsgrenze (W)', type: 'number', role: 'value.power', unit: 'W', read: true, write: false }, native: {},
+    });
+    await this.setObjectNotExistsAsync('derived.core.pv.duplicateSuppressedW', {
+      type: 'state', common: { name: 'Unterdrueckte PV-Doppelzaehlung (W)', type: 'number', role: 'value.power', unit: 'W', read: true, write: false }, native: {},
+    });
+    await this.setObjectNotExistsAsync('derived.core.pv.plausibilityCapped', {
+      type: 'state', common: { name: 'PV-Plausibilitaetsgrenze aktiv', type: 'boolean', role: 'indicator', read: true, write: false }, native: {},
+    });
+    await this.setObjectNotExistsAsync('derived.core.pv.source', {
+      type: 'state', common: { name: 'PV-Gesamtquelle', type: 'string', role: 'text', read: true, write: false }, native: {},
+    });
+
     // Diagnose/Debug
     await this.setObjectNotExistsAsync('derived.core.building.quality', {
       type: 'state',
@@ -28143,7 +28190,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       // This enables PV total sum even for inverters that are not discovered via nexowatt-devices.
       try {
         const gc = this.config?.gridConstraints;
-        const seenPower = new Set(list.map((d) => d.powerId).filter(Boolean));
+        const seenPower = new Set(list.map((d) => nwPhysicalPvSourceKey(d.powerId) || String(d.powerId || '').toLowerCase()).filter(Boolean));
         /**
          * Code-Teil: addCfg
          * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -28156,8 +28203,9 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
             const inv = arr[i] || {};
             const pid = this._nwTrimId(inv.pvPowerReadId);
             if (!pid) continue;
-            if (seenPower.has(pid)) continue;
-            seenPower.add(pid);
+            const physicalKey = nwPhysicalPvSourceKey(pid) || pid.toLowerCase();
+            if (seenPower.has(physicalKey)) continue;
+            seenPower.add(physicalKey);
             list.push({ id: `cfg:${tag}:${i}`, name: String(inv.name || `PV ${tag} ${i + 1}`), powerId: pid, connectedId: null, offlineId: null });
           }
         };
@@ -28407,6 +28455,35 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     }
 
+    const pvRawTotalW = pvFarmMerge && Number.isFinite(Number(pvFarmMerge.rawTotalW))
+      ? Math.max(0, Number(pvFarmMerge.rawTotalW))
+      : Math.max(0, pvTotalW);
+    // Die Farm-Merge-Funktion hat ihre AC/DC-Anteile bereits genau einmal auf die
+    // konfigurierte Anlagenleistung plausibilisiert. Ein zweiter Scale-Schritt hier
+    // würde dieselben Werte nochmals verkleinern und die Historie gegenüber LIVE
+    // verschieben. Einzel-/Nicht-Farm-Anlagen werden dagegen an dieser Stelle einmal
+    // zentral begrenzt.
+    const pvPlausibility = pvFarmMerge
+      ? {
+        rawW: pvRawTotalW,
+        outputW: Math.max(0, Number(pvFarmMerge.totalW) || 0),
+        capacityLimitW: Math.max(0, Number(pvFarmMerge.capacityLimitW) || 0),
+        capped: pvFarmMerge.plausibilityCapped === true,
+        suppressedW: Math.max(0, Number(pvFarmMerge.plausibilitySuppressedW) || 0),
+      }
+      : nwApplyPvCapacityPlausibility(pvRawTotalW, this._nwConfiguredPvCapacityW(), 0.15);
+    if (!pvFarmMerge && pvPlausibility.capped) {
+      const scale = pvRawTotalW > 0 ? pvPlausibility.outputW / pvRawTotalW : 1;
+      pvAcW *= scale;
+      pvDcW *= scale;
+      pvTotalW = pvPlausibility.outputW;
+      pvSource = `${pvSource}+capacity-cap`;
+    }
+    const pvDuplicateSuppressedW = Math.max(0,
+      (Number(pvFarmMerge && pvFarmMerge.duplicateSuppressedW) || 0)
+      + (Number(pvPlausibility.suppressedW) || 0),
+    );
+
     // Total production = PV(total) + extra producers
     const productionW = pvTotalW + producerSumW;
 
@@ -28650,6 +28727,30 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       await this.setStateAsync('derived.core.pv.totalW', { val: pvTotalRound, ack: true });
     }
 
+    const pvRawTotalRound = Math.round(pvRawTotalW);
+    const pvCapacityLimitRound = Math.round(pvPlausibility.capacityLimitW);
+    const pvDuplicateSuppressedRound = Math.round(pvDuplicateSuppressedW);
+    if (this._derivedFlow?.last?.pvRawTotalW !== pvRawTotalRound) {
+      this._derivedFlow.last.pvRawTotalW = pvRawTotalRound;
+      await this.setStateAsync('derived.core.pv.rawTotalW', { val: pvRawTotalRound, ack: true });
+    }
+    if (this._derivedFlow?.last?.pvCapacityLimitW !== pvCapacityLimitRound) {
+      this._derivedFlow.last.pvCapacityLimitW = pvCapacityLimitRound;
+      await this.setStateAsync('derived.core.pv.capacityLimitW', { val: pvCapacityLimitRound, ack: true });
+    }
+    if (this._derivedFlow?.last?.pvDuplicateSuppressedW !== pvDuplicateSuppressedRound) {
+      this._derivedFlow.last.pvDuplicateSuppressedW = pvDuplicateSuppressedRound;
+      await this.setStateAsync('derived.core.pv.duplicateSuppressedW', { val: pvDuplicateSuppressedRound, ack: true });
+    }
+    if (this._derivedFlow?.last?.pvPlausibilityCapped !== pvPlausibility.capped) {
+      this._derivedFlow.last.pvPlausibilityCapped = pvPlausibility.capped;
+      await this.setStateAsync('derived.core.pv.plausibilityCapped', { val: !!pvPlausibility.capped, ack: true });
+    }
+    if (this._derivedFlow?.last?.pvSource !== pvSource) {
+      this._derivedFlow.last.pvSource = pvSource;
+      await this.setStateAsync('derived.core.pv.source', { val: pvSource, ack: true });
+    }
+
     // Die abgeleiteten Kernwerte werden zusätzlich in den API-/SSE-Cache gespiegelt.
     // Das Kundenfrontend verwendet dadurch exakt denselben kanonischen Energiefluss wie
     // Historie und EMS und muss Farm-PV/-Leistung nicht noch einmal lokal rekonstruieren.
@@ -28659,6 +28760,11 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     this.updateValue('derived.core.pv.acW', pvAcRound, ts, { raw: false });
     this.updateValue('derived.core.pv.dcW', pvDcRound, ts, { raw: false });
     this.updateValue('derived.core.pv.totalW', pvTotalRound, ts, { raw: false });
+    this.updateValue('derived.core.pv.rawTotalW', pvRawTotalRound, ts, { raw: false });
+    this.updateValue('derived.core.pv.capacityLimitW', pvCapacityLimitRound, ts, { raw: false });
+    this.updateValue('derived.core.pv.duplicateSuppressedW', pvDuplicateSuppressedRound, ts, { raw: false });
+    this.updateValue('derived.core.pv.plausibilityCapped', !!pvPlausibility.capped, ts, { raw: false });
+    this.updateValue('derived.core.pv.source', pvSource, ts, { raw: false });
 
     // --- Quality indicator ---
     let quality = 'ok';

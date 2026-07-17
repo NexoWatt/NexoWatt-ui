@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0dcf9dfe6913902429e3ccb303b9664eaf82143eddbd98f0733f13f9531ec47e
+ * Original-Hash: effc8025f728697fb9c208f0da2d53b057122bc40912c6d40e5925d50c173d4d
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:a56f6320bbb20b2a64e605cc22358de9d3684475fbbcc6cc1c7704326359225f
+ * Quell-Hash: sha256:eb188089ed373ddda778060a2c06417ff7d5efa4987cc8189e00e1024bb58521
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -435,6 +435,15 @@ class ModuleManager {
             enabledFn: () => this._licenseAllowsApp('storage'),
         });
 
+        // MultiUse nutzt ausschließlich den nach EVCS und Speicher verbleibenden
+        // zentralen Gesamt-/PV-Grant. Es läuft deshalb vor Thermik und Heizstab;
+        // bestätigte MultiUse-Leistung wird im selben Tick zentral reserviert.
+        this.modules.push({
+            key: 'multiUse',
+            instance: new MultiUseModule(this.adapter, this.dp),
+            enabledFn: () => this._licenseAllowsApp('multiuse') && !!this.adapter.config.enableMultiUse,
+        });
+
         // Thermische Steuerung (Wärmepumpe/Klima)
         // Läuft NACH dem Lademanagement, damit PV‑Restbudget (pvCapEffective - EVCS used)
         // innerhalb des gleichen Ticks genutzt werden kann.
@@ -482,13 +491,6 @@ class ModuleManager {
             key: 'aiAdvisor',
             instance: new AiAdvisorModule(this.adapter, this.dp),
             enabledFn: () => this._licenseAllowsApp('aiAdvisor') && !!(this.adapter.config.enableAiAdvisor || this.adapter.config.enableAiOptimization),
-        });
-
-        // Multi use (future)
-        this.modules.push({
-            key: 'multiUse',
-            instance: new MultiUseModule(this.adapter, this.dp),
-            enabledFn: () => this._licenseAllowsApp('multiuse') && !!this.adapter.config.enableMultiUse,
         });
 
         // Stufe A ist eine rein lesende Feld-Diagnose. Sie läuft bewusst zuletzt,

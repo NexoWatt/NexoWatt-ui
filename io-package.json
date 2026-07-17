@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.113",
+    "version": "0.8.114",
     "news": {
+      "0.8.114": {
+        "de": "Version 0.8.114: Speicher-0-W-Firewall herstellerübergreifend verschärft: Zielband, kurze Mess-/Budgetlücken und bestätigter PV-/Lastbedarf halten den aktiven Sollwert; 0 W bleibt echten SoC-, Safety-, Richtungswechsel- und bestätigten Budget-Stopps vorbehalten. Physische PV-/Wechselrichterquellen werden dedupliziert und gegen die konfigurierte Anlagenleistung plausibilisiert. MultiUse verwendet jetzt ausschließlich zentrale PV-/Gesamt-Grants, den Aktor-Arbiter sowie bestätigte Reservierungen statt eines lokalen Parallelbudgets.",
+        "en": "Version 0.8.114: Tightens the vendor-neutral storage zero-watt firewall: target-band operation, short measurement/budget gaps and confirmed PV/load demand keep the active setpoint; 0 W remains reserved for real SoC, safety, direction-change and confirmed budget stops. Physical PV/inverter sources are deduplicated and checked against configured plant capacity. MultiUse now exclusively uses central PV/total grants, the actuator arbiter and confirmed reservations instead of a local parallel budget."
+      },
       "0.8.113": {
         "de": "Version 0.8.113: Stufe C3.2 bindet Thermik und Heizstabsteuerung mit eindeutigen Aktor-Ownern, optionalem Readback, ACK-Timeout, begrenzten Wiederholungen und Fehlerverriegelung an den zentralen Arbiter an. Blockierte oder fehlgeschlagene Writes werden nicht mehr als umgesetzte Leistung im EMS-Budget reserviert. Die sichtbare LIVE-Energieflussanzeige aktualisiert jetzt alle 5 Sekunden; Backend-Messwerterfassung und Regelzyklen bleiben unverändert schnell.",
         "en": "Version 0.8.113: Stage C3.2 connects thermal and heating-rod control to the central actuator arbiter with explicit owners, optional readback, ACK timeout, bounded retries and fault lockout. Blocked or failed writes are no longer reserved as applied power in the EMS budget. The visible LIVE energy-flow display now refreshes every 5 seconds while backend metering and control cycles remain unchanged."
@@ -26,10 +30,6 @@
       "0.8.108": {
         "de": "Version 0.8.108: Explizite Speicher-Messwert-Overrides aus dem AppCenter haben wieder Vorrang vor Speicherfarm- und Bilanzwerten, auch bei Einzelanlagen. Getrennte Lade-/Entlade-Istwerte werden sicher zusammengeführt. Eine neue read-only Stufe-A-Diagnose zeigt Aktor-Doppelbelegungen, Messwertfrische, NVP-Zeitversatz und die tatsächlich verwendete Speicherquelle, ohne Hardware-Sollwerte zu verändern.",
         "en": "Version 0.8.108: Explicit AppCenter storage measurement overrides again take precedence over storage-farm and balance values, including single-storage installations. Separate charge/discharge actual values are safely combined. A new read-only Stage-A diagnostic reports duplicate actuator mappings, measurement freshness, NVP timing skew and the resolved storage source without changing hardware setpoints."
-      },
-      "0.8.107": {
-        "de": "Version 0.8.107: Die normale Speicher-Eigenverbrauchsoptimierung bleibt bei Wallboxbetrieb standardmäßig aktiv. EVCS-Leistung wird nur noch bei ausdrücklich freigegebener und gewählter Schutzfunktion aus der Batterie-NVP-Regelung herausgenommen. Der same-cycle EMS-Policy-Snapshot verhindert zusätzlich, dass alte Schutzwerte die Entladung noch einen Regelzyklus blockieren. Manuelle Ladepunkt-DP-Zuordnungen im Admin bleiben unverändert.",
-        "en": "Version 0.8.107: Normal storage self-consumption optimization now remains active by default while EV charging. EVCS load is excluded from battery NVP control only when storage protection is explicitly enabled and selected. A same-cycle EMS policy snapshot also prevents stale protection values from blocking discharge for another control cycle. Manual per-charge-point datapoint mappings remain unchanged."
       }
     },
     "title": "NexoWatt UI",

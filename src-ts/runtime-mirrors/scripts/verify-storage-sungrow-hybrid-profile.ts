@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4189c59eea9dd75452977cec22ff9561e2d559bbe5505a89f2e56290665e9816
+ * Original-Hash: 25763c359e238ef2a2c25614960bb382f2b35cb8328b59afb75a45dd1e51ad40
  */
 
 /**
@@ -283,6 +283,7 @@ function makeSharedPvBudget({ totalW = 10100, evcsCapW = 8080, evcsReservedW = 8
         storageGuaranteedW: Math.max(0, totalW - evcsCapW),
       },
     },
+    remainingTotalW: totalW,
     remainingPvW,
     consumers: {
       evcs: {
@@ -305,7 +306,9 @@ function makeSharedPvBudget({ totalW = 10100, evcsCapW = 8080, evcsReservedW = 8
     },
     reserve(req) {
       reservations.push({ ...req });
+      const reserveW = Math.max(0, Number(req && req.reserveW) || 0);
       const pvReserveW = Math.max(0, Number(req && req.pvReserveW) || 0);
+      this.remainingTotalW = Math.max(0, Number(this.remainingTotalW || 0) - reserveW);
       this.remainingPvW = Math.max(0, Number(this.remainingPvW || 0) - pvReserveW);
     },
   };
@@ -429,7 +432,9 @@ function makePersistentSungrowScenario() {
   assert.strictEqual(sharedPriority.adapter._states.get('speicher.regelung.pvBudgetPostVendorCapW').val, 2020, 'Diagnose muss den finalen 2,02-kW-Cap zeigen');
   assert(sharedPriority.adapter._states.get('speicher.regelung.sungrowHybridSchreibmodus').val.includes('pv-budget-capped'), 'Sungrow-Schreibmodus muss den finalen PV-Cap ausweisen');
   assert.strictEqual(sharedBudget.reservations.length, 1, 'Speicher muss nur den final begrenzten PV-Anteil reservieren');
+  assert.strictEqual(sharedBudget.reservations[0].reserveW, 2020, 'PV-Speicherladung muss auch das zentrale Gesamtbudget reduzieren');
   assert.strictEqual(sharedBudget.reservations[0].pvReserveW, 2020, 'Speicherreservierung darf nicht den EVCS-Anteil doppelt verwenden');
+  assert.strictEqual(sharedBudget.remainingTotalW, 8080, 'PV-Speicherladung muss nachfolgenden Verbrauchern im Gesamtbudget entzogen werden');
 
   // Bereits ueberladender Speicher im selben 80/20-Szenario: Der laufende
   // Batterie-Istwert darf die Hersteller-Neuberechnung nicht erneut auf mehrere
@@ -462,7 +467,8 @@ function makePersistentSungrowScenario() {
     battPowerW: 0,
     emsBudget: exhaustedBudget,
   });
-  assert.strictEqual(exhaustedPriority.dp.lastWrite('st.targetChargePowerW'), 0, 'Ein zentral erschoepftes PV-Budget darf lokal nicht neu rekonstruiert werden');
+  assert.strictEqual(exhaustedPriority.dp.lastWrite('st.targetChargePowerW'), null, 'Ein zentral erschoepftes PV-Budget darf lokal weder neu rekonstruiert noch als grundloser 0-W-Stop geschrieben werden');
+  assert(!exhaustedPriority.dp.writes.some((row) => (row.key === 'st.targetChargePowerW' || row.key === 'st.targetPowerW') && row.value === 0), 'Ohne vorher aktive Speicherladung bleibt ein erschoepftes Budget im No-Write-Leerlauf');
   assert.strictEqual(exhaustedPriority.adapter._states.get('speicher.regelung.pvBudgetResolution').val, 'central-grant-after-evcs', 'Diagnose muss den zentralen Grant als Quelle ausweisen');
   assert.strictEqual(exhaustedBudget.reservations.length, 0, 'Ohne zentralen Speicher-Grant darf kein PV-Anteil erneut reserviert werden');
 

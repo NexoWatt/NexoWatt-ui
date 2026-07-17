@@ -47,6 +47,7 @@
 const { BaseModule } = require('./base');
 const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
 const { resolveSplitBatteryFeedback } = require('../services/storage-override-bridge');
+const { decideStorageZeroWrite } = require('../services/storage-zero-write-policy');
 
 
 /**
@@ -365,6 +366,14 @@ class SpeicherRegelungModule extends BaseModule {
         // und Sungrow-Telemetrie duerfen keinen einzelnen 0-W-Stopp erzeugen.
         // Der Zeitstempel begrenzt den No-Write-Hold auf eine kurze Grace-Zeit.
         this._sungrowPvBudgetZeroSinceMs = 0;
+        // Herstellerunabhaengige Grace-Zeit fuer einen einzelnen zentralen
+        // PV-/Gesamtbudget-Zyklus mit 0 W. Innerhalb dieser Zeit bleibt ein
+        // aktiver Speicherbefehl per No-Write erhalten; 0 W bleibt ein echter Stop.
+        this._storageBudgetZeroSinceMs = 0;
+        // Herstellerunabhaengige Grace-Zeit fuer eine kurze NVP-/Telemetrieluecke.
+        // Innerhalb dieses Fensters bleibt ein aktiver Speicherbefehl erhalten;
+        // erst ein anhaltend unbrauchbarer Messwert fuehrt zum Sicherheitsstopp.
+        this._storageMeasurementGapSinceMs = 0;
 
         // E3/DC RSCP Sondermodus:
         // Der ioBroker.e3dc-rscp Adapter steuert den Speicher ueber zwei gekoppelte
@@ -536,6 +545,12 @@ class SpeicherRegelungModule extends BaseModule {
             await this._setIfChanged('speicher.regelung.totalBudgetStorageAvailableW', 0);
             await this._setIfChanged('speicher.regelung.totalBudgetStorageReservedW', 0);
             await this._setIfChanged('speicher.regelung.totalBudgetStorageCapped', false);
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallAction', 'inactive');
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallReason', '');
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallHeldW', 0);
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallExplicitStop', false);
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallBudgetZeroAgeMs', 0);
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallMeasurementGapAgeMs', 0);
 
             // Interne Sollwertprognose beim Deaktivieren verwerfen. Es wird dabei
             // bewusst nichts an den Speicher geschrieben; nur die lokale Regel-
@@ -545,6 +560,7 @@ class SpeicherRegelungModule extends BaseModule {
             this._lastTargetWriteMs = 0;
             this._lastSource = 'aus';
             this._sungrowPvBudgetZeroSinceMs = 0;
+            this._storageBudgetZeroSinceMs = 0;
 
             // Hybrid-/Gateway-Priorität: Bei deaktivierter Speicherregelung nicht zyklisch auf den
             // Batterie-Sollleistungs-DP schreiben. Dadurch kann das Gateway nach seinem Watchdog
@@ -1119,6 +1135,11 @@ class SpeicherRegelungModule extends BaseModule {
         // die Werte erneut auseinanderziehen und sichtbares Springen erzeugen.
         let storageNvpBalanceDiag = null;
         let storageNvpBalanceRampManaged = false;
+        // Wird ein vorher aktiver Entladebefehl durch einen expliziten
+        // EVCS-Speicherschutz vollstaendig unnoetig, ist 0 W ein echter
+        // Policy-Stop. Der Marker verhindert, dass die allgemeine NVP-Hold-
+        // Logik den alten Entladewert im neuen, verschobenen Zielband behaelt.
+        let evcsProtectedDischargeStop = false;
 
         // Zentrales PV-Budget fuer die gemeinsame Verteilung zwischen EVCS,
         // Speicher und nachgelagerten Verbrauchern. Das Lademanagement laeuft
@@ -2605,6 +2626,22 @@ if (targetW === 0 && selfDischargeEnabled) {
         feedForwardPlausibilityW: balanceFeedForwardPlausibilityW,
         stepW,
     });
+    const nonProtectedImportForStopW = Math.max(0, Number(nvpRawW) - evcsStorageProtectedLoadW);
+    const previousOrActualDischargeW = Math.max(
+        0,
+        Number(lastBalanceW) || 0,
+        Number(balance.baseW) || 0,
+    );
+    evcsProtectedDischargeStop = evcsStorageProtectedLoadW > 0
+        && previousOrActualDischargeW > 0
+        && nonProtectedImportForStopW <= (selfTargetGridW + deadbandW);
+    if (evcsProtectedDischargeStop) {
+        balance.targetW = 0;
+        balance.rawTargetW = 0;
+        balance.holdingLastCommand = false;
+        balance.heldTargetW = 0;
+        balance.mode = 'evcs-protection-explicit-stop';
+    }
     storageNvpBalanceDiag = { ...balance, policy: 'eigenverbrauch' };
     storageNvpBalanceRampManaged = storageNvpBalanceRampManaged || balance.rampManaged;
 
@@ -3235,26 +3272,22 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 ? Math.max(0, chargeDemandHardCapW)
                 : null;
             const preVendorSource = String(_reqQuelle || source || '').trim().toLowerCase();
-            const sungrowRecalculatesNvpTarget = !!(
-                sungrowHybridActive
-                && (
-                    preVendorSource === 'idle'
-                    || preVendorSource === 'eigenverbrauch'
-                    || preVendorSource === 'pv'
-                    || preVendorSource === 'sungrow-hybrid'
-                    || preVendorSource === 'sungrow-assist'
-                )
+            const nvpBalancerMayRecalculateCharge = !!(
+                storageNvpBalanceDiag
+                || isStorageBalanceSource(preVendorSource)
+                || isStorageBalanceSource(this._lastSource)
+                || sungrowHybridActive
             );
-            const deferEmptyChargeRequestToSungrow = _reqW >= 0
-                && sungrowRecalculatesNvpTarget
+            const deferEmptyChargeRequestToNvpBalancer = _reqW >= 0
+                && nvpBalancerMayRecalculateCharge
                 && capW === null;
 
-            if (_reqW >= 0 && !deferEmptyChargeRequestToSungrow) {
+            if (_reqW >= 0 && !deferEmptyChargeRequestToNvpBalancer) {
                 // Keine aktuelle Ladeanforderung: 0 W stoppt die Laderichtung sofort.
-                // Ausnahme Sungrow: Dessen finaler NVP-Sollwert wird erst nach diesem
-                // allgemeinen Dispatcher-Schritt berechnet. Ein vorlaeufiger 0-W-
-                // Request darf deshalb nicht als Lade-Cap 0 in den Herstellerpfad
-                // getragen werden; genau das erzeugte den Wechsel Laden -> 0 -> Laden.
+                // Ausnahme aller geschlossenen NVP-Regelpfade: Deren finaler Sollwert
+                // kann nach diesem Dispatcher-Schritt aus Istleistung + NVP-Differenz
+                // entstehen. Ein vorlaeufiger 0-W-Request darf deshalb nicht als
+                // harter Lade-Cap in den Hersteller-/Farm-/Generic-Pfad getragen werden.
                 capW = 0;
                 if (!chargeDemandHardCapReason) chargeDemandHardCapReason = 'Keine aktuelle Ladeanforderung';
             } else if (capW === null && _reqW < 0) {
@@ -3324,11 +3357,16 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             ? Number(this._lastTargetW)
             : 0;
         const stopReasonText = String(reason || '').toLowerCase();
+        const chargeCapReasonText = String(chargeDemandHardCapReason || '').toLowerCase();
+        const transientChargeCap = isDeferredSungrowChargeCapReason(chargeDemandHardCapReason)
+            || chargeCapReasonText.includes('keine aktuelle ladeanforderung')
+            || chargeCapReasonText.includes('zentrales pv-restbudget')
+            || chargeCapReasonText.includes('finales zentrales pv-restbudget');
         const chargeDirectionStopped = lastCommandBeforeVendorW < 0
             && typeof chargeDemandHardCapW === 'number'
             && Number.isFinite(chargeDemandHardCapW)
             && chargeDemandHardCapW <= 0
-            && !isDeferredSungrowChargeCapReason(chargeDemandHardCapReason);
+            && !transientChargeCap;
         const dischargeDirectionStopped = lastCommandBeforeVendorW > 0
             && typeof dischargeDemandHardCapW === 'number'
             && Number.isFinite(dischargeDemandHardCapW)
@@ -3350,6 +3388,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         let feneconWriteMode = '';
         let sungrowWriteMode = '';
         let sungrowNoWrite = false;
+        let storageZeroNoWrite = false;
+        let storageZeroWriteStatus = '';
+        let storageZeroWriteReason = '';
         let sungrowDiagPayload = null;
         // Herstellerprofile duerfen die technische Schreibweise aendern, aber
         // nicht die Herkunft des Budgets verschleiern. Fuer den finalen zentralen
@@ -3759,109 +3800,35 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 const rawVendorChargeW = Math.max(0, -rawVendorTargetW);
                 const vendorAlreadyLimitedByPvBudget = rawVendorChargeW > (pvCapW + Math.max(1, stepW));
 
-                // Sungrow-Feldschutz: Ein einzelner inkonsistenter Budget-Tick darf
-                // einen laufenden PV-Ladesollwert nicht mit 0 W stoppen. Das ist nur
-                // zulaessig, wenn die E-Mobilitaet bewusst allein priorisiert wird,
-                // realer Netzbezug gegen die Ladung spricht oder die Inkonsistenz
-                // laenger als die kurze Grace-Zeit besteht. Innerhalb der Grace-Zeit
-                // wird bewusst NICHT geschrieben; der zuletzt wirksame Sollwert bleibt
-                // im Sungrow-Regler aktiv, ohne dass NexoWatt ihn weiter hochintegriert.
-                const allocationModeNorm = String(pvBudgetAllocationMode || '').trim().toLowerCase();
-                const lastActiveTargetW = Number.isFinite(Number(this._lastTargetW)) ? Number(this._lastTargetW) : 0;
-                const lastWasNvpControl = isStorageBalanceSource(this._lastSource);
-                const nvpForHoldW = sungrowDiagPayload && Number.isFinite(Number(sungrowDiagPayload.nvpW))
-                    ? Number(sungrowDiagPayload.nvpW)
-                    : ((typeof nvpRawW === 'number' && Number.isFinite(nvpRawW)) ? Number(nvpRawW) : Number(gridW || 0));
-                const holdTargetNvpW = Math.max(0, num(cfg.sungrowTargetGridImportW, selfTargetGridW) + evcsStorageProtectedNvpTargetShiftW);
-                const holdDeadbandW = Math.max(50, num(cfg.sungrowPvBudgetHoldDeadbandW, Math.max(selfImportThresholdW, 100)));
-                const nvpSafeForChargeHold = nvpForHoldW <= (holdTargetNvpW + holdDeadbandW);
-                const feedForwardTargetW = storageNvpBalanceDiag && Number.isFinite(Number(storageNvpBalanceDiag.feedForwardTargetW))
-                    ? Number(storageNvpBalanceDiag.feedForwardTargetW)
-                    : null;
-                const feedForwardSupportsCharge = feedForwardTargetW !== null && feedForwardTargetW < -Math.max(1, stepW);
-                const measuredChargeSupportsHold = balanceBatteryTrusted && Number(balanceBatteryPowerW) < -Math.max(1, stepW);
-                const visibleExportSupportsHold = nvpForHoldW < -Math.max(1, holdDeadbandW);
-                const transientZeroEligible = sungrowHybridActive
-                    && pvCapW <= 0
-                    && requestedChargeW > 0
-                    && allocationModeNorm !== 'emobility'
-                    && lastActiveTargetW < 0
-                    && lastWasNvpControl
-                    && nvpSafeForChargeHold
-                    && (feedForwardSupportsCharge || measuredChargeSupportsHold || visibleExportSupportsHold);
+                if (requestedChargeW > pvCapW) {
+                    targetW = pvCapW > 0 ? -pvCapW : 0;
+                }
 
-                let handledByTransientNoWrite = false;
-                if (transientZeroEligible) {
-                    if (!this._sungrowPvBudgetZeroSinceMs) this._sungrowPvBudgetZeroSinceMs = now;
-                    const zeroForMs = Math.max(0, now - this._sungrowPvBudgetZeroSinceMs);
-                    const graceMs = Math.max(5000, Math.round(Math.max(0, num(cfg.sungrowPvBudgetLossGraceSec, 30)) * 1000));
-                    if (zeroForMs < graceMs) {
-                        targetW = lastActiveTargetW;
-                        source = 'sungrow-assist';
-                        reason = `Sungrow Hybrid ESS: PV-Budget kurzzeitig 0 W, NVP weiterhin plausibel – letzten Ladesollwert ${Math.round(lastActiveTargetW)} W ${Math.round(zeroForMs / 1000)} s ohne neuen Schreibzugriff halten`;
-                        sungrowWriteMode = 'no-write-hold-transient-pv-budget';
-                        sungrowNoWrite = true;
-                        pvBudgetPostVendorCapped = true;
-                        pvBudgetPostVendorNoWriteHold = true;
-                        pvBudgetPostVendorNoWriteReason = reason;
-                        handledByTransientNoWrite = true;
+                if (requestedChargeW > pvCapW || vendorAlreadyLimitedByPvBudget) {
+                    pvBudgetPostVendorCapped = true;
+                    reason = `${reason} (finales PV-Restbudget nach E-Mobilitaet ${Math.round(pvCapW)} W)`;
+                    if (sungrowHybridActive) {
+                        sungrowWriteMode = pvCapW > 0
+                            ? `${String(sungrowWriteMode || 'write-nvp-balance-charge').replace(/-pv-budget-capped$/, '')}-pv-budget-capped`
+                            : 'pending-zero-central-pv-budget';
                         this._sungrowHybridLastMode = sungrowWriteMode;
-                        if (storageNvpBalanceDiag && typeof storageNvpBalanceDiag === 'object') {
-                            storageNvpBalanceDiag = {
-                                ...storageNvpBalanceDiag,
-                                targetW: lastActiveTargetW,
-                                heldTargetW: lastActiveTargetW,
-                                holdingLastCommand: true,
-                                finalPvBudgetCapW: 0,
-                                finalPvBudgetCapped: true,
-                                finalPvBudgetNoWriteHold: true,
-                                finalPvBudgetNoWriteAgeMs: Math.round(zeroForMs),
-                                mode: 'sungrow-transient-pv-budget-no-write-hold',
-                            };
-                        }
-                    }
-                } else {
-                    this._sungrowPvBudgetZeroSinceMs = 0;
-                }
-
-                if (!handledByTransientNoWrite) {
-                    if (pvCapW > 0) this._sungrowPvBudgetZeroSinceMs = 0;
-                    if (requestedChargeW > pvCapW) {
-                        targetW = pvCapW > 0 ? -pvCapW : 0;
-                    }
-
-                    if (requestedChargeW > pvCapW || vendorAlreadyLimitedByPvBudget) {
-                        // Der Herstellerpfad kann den zentralen Cap bereits als vorgeschaltete
-                        // Hard-Cap uebernommen haben. Auch dann muss die Diagnose eindeutig
-                        // zeigen, dass nicht der volle Sungrow-NVP-Wunsch, sondern nur der
-                        // nach EVCS verbleibende PV-Anteil freigegeben wurde.
-                        pvBudgetPostVendorCapped = true;
-                        reason = `${reason} (finales PV-Restbudget nach E-Mobilitaet ${Math.round(pvCapW)} W)`;
-                        if (sungrowHybridActive) {
-                            sungrowWriteMode = pvCapW > 0
-                                ? `${String(sungrowWriteMode || 'write-nvp-balance-charge').replace(/-pv-budget-capped$/, '')}-pv-budget-capped`
-                                : 'write-stop-pv-budget-exhausted';
-                            this._sungrowHybridLastMode = sungrowWriteMode;
-                        }
-                    }
-                    chargeDemandHardCapW = (typeof chargeDemandHardCapW === 'number'
-                        && Number.isFinite(chargeDemandHardCapW)
-                        && !isDeferredSungrowChargeCapReason(chargeDemandHardCapReason))
-                        ? Math.min(Math.max(0, chargeDemandHardCapW), pvCapW)
-                        : pvCapW;
-                    chargeDemandHardCapReason = 'Finales zentrales PV-Restbudget nach E-Mobilitaet';
-                    if (storageNvpBalanceDiag && typeof storageNvpBalanceDiag === 'object') {
-                        storageNvpBalanceDiag = {
-                            ...storageNvpBalanceDiag,
-                            targetW,
-                            finalPvBudgetCapW: pvCapW,
-                            finalPvBudgetCapped: pvBudgetPostVendorCapped,
-                            finalPvBudgetNoWriteHold: false,
-                        };
                     }
                 }
-            } else if (!sungrowHybridActive || !isCentralPvChargeSource(source, targetW)) {
-                this._sungrowPvBudgetZeroSinceMs = 0;
+                chargeDemandHardCapW = (typeof chargeDemandHardCapW === 'number'
+                    && Number.isFinite(chargeDemandHardCapW)
+                    && !isDeferredSungrowChargeCapReason(chargeDemandHardCapReason))
+                    ? Math.min(Math.max(0, chargeDemandHardCapW), pvCapW)
+                    : pvCapW;
+                chargeDemandHardCapReason = 'Finales zentrales PV-Restbudget nach E-Mobilitaet';
+                if (storageNvpBalanceDiag && typeof storageNvpBalanceDiag === 'object') {
+                    storageNvpBalanceDiag = {
+                        ...storageNvpBalanceDiag,
+                        targetW,
+                        finalPvBudgetCapW: pvCapW,
+                        finalPvBudgetCapped: pvBudgetPostVendorCapped,
+                        finalPvBudgetNoWriteHold: false,
+                    };
+                }
             }
         } catch {
             // Die Budgetdiagnose darf den sicheren Speicher-Schreibpfad nicht abbrechen.
@@ -3916,49 +3883,195 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         }
 
         // ------------------------------------------------------------
-        // Sungrow 0-W-Firewall nach allen Policies und Budget-Caps
+        // Herstellerunabhaengige 0-W-Firewall nach allen Policies/Caps
         // ------------------------------------------------------------
-        // Ein 0-W-Schreiben ist bei Sungrow nur fuer einen ausdruecklichen Stop
-        // zulaessig. Alle normalen Leerlauf-/Messversatz-/Zielbandfaelle werden als
-        // No-Write behandelt, damit der zuletzt wirksame externe Sollwert bestehen
-        // bleibt. Der Schutz liegt bewusst nach dem finalen PV-Cap, weil auch dort
-        // ein vorlaeufig inkonsistentes Budget sonst einen 0-W-Puls erzeugen koennte.
-        if (sungrowHybridActive && targetW === 0 && !sungrowNoWrite) {
-            // Alle expliziten Stopmodi tragen denselben Prefix. Dadurch bleiben
-            // zentrale Schutzstopps und herstellerspezifische Stopps konsistent,
-            // ohne dass bei jeder neuen Sicherheitsbedingung eine zweite Liste
-            // gepflegt werden muss.
-            const explicitStop = String(sungrowWriteMode || '').startsWith('write-stop-');
-
-            if (!explicitStop) {
-                const lastActiveTargetW = Number.isFinite(Number(this._lastTargetW))
-                    ? Number(this._lastTargetW)
-                    : 0;
-                const lastWasNvpControl = isStorageBalanceSource(this._lastSource);
-
-                if (lastActiveTargetW !== 0 && lastWasNvpControl) {
-                    targetW = lastActiveTargetW;
-                    source = 'sungrow-assist';
-                    reason = `Sungrow Hybrid ESS: unbeabsichtigten 0-W-Zyklus unterdrueckt – letzten NVP-Sollwert ${Math.round(lastActiveTargetW)} W ohne neuen Schreibzugriff halten`;
-                    sungrowWriteMode = 'no-write-hold-last-command';
-                    sungrowNoWrite = true;
-                    storageNvpBalanceDiag = {
-                        ...(storageNvpBalanceDiag || {}),
-                        targetW: lastActiveTargetW,
-                        rawTargetW: lastActiveTargetW,
-                        holdingLastCommand: true,
-                        heldTargetW: lastActiveTargetW,
-                        mode: 'sungrow-zero-firewall-hold-last-command',
-                        policy: 'sungrow-hybrid',
-                    };
-                } else {
-                    reason = 'Sungrow Hybrid ESS: kein ausdruecklicher Stop – 0-W-Schreibzugriff unterdrueckt';
-                    source = 'sungrow-hybrid';
-                    sungrowWriteMode = 'no-write-zero-firewall-idle';
-                    sungrowNoWrite = true;
-                }
-                this._sungrowHybridLastMode = sungrowWriteMode;
+        // 0 W ist bei allen unterstuetzten Speicherprofilen ein echter Stop.
+        // Zielband, ein einzelner Budget-0-Tick oder eine kurze Messluecke duerfen
+        // deshalb keinen Laden -> 0 -> Laden-/Entladen-Puls erzeugen. Erst ein
+        // expliziter Schutzgrund oder eine physikalisch falsche Richtung darf 0 W
+        // an signed-, Split-, E3/DC- oder Farm-Sollwerte schreiben.
+        if (!feneconNoWrite && targetW === 0) {
+            const lastActiveTargetW = Number.isFinite(Number(this._lastTargetW))
+                ? Number(this._lastTargetW)
+                : 0;
+            const nvpMeasurementUsable = typeof nvpRawW === 'number'
+                && Number.isFinite(nvpRawW)
+                && (!centralNvpCurrent || centralNvp.usable === true);
+            const measurementGap = !nvpMeasurementUsable;
+            if (measurementGap && lastActiveTargetW !== 0) {
+                if (!this._storageMeasurementGapSinceMs) this._storageMeasurementGapSinceMs = now;
+            } else {
+                this._storageMeasurementGapSinceMs = 0;
             }
+            const measurementGapAgeMs = this._storageMeasurementGapSinceMs
+                ? Math.max(0, now - this._storageMeasurementGapSinceMs)
+                : 0;
+            const measurementGraceMs = Math.max(
+                5000,
+                Math.round(Math.max(0, num(cfg.zeroWriteMeasurementGraceSec, 30)) * 1000),
+            );
+
+            const previousSource = String(this._lastSource || '');
+            const previousWasPvCharge = lastActiveTargetW < 0 && (
+                isCentralPvChargeSource(previousSource, lastActiveTargetW)
+                || isStorageBalanceSource(previousSource)
+            );
+            const pvBudgetZero = previousWasPvCharge
+                && Math.max(0, Number(pvBudgetStorageAvailableW) || 0) <= 0;
+            if (pvBudgetZero) {
+                if (!this._storageBudgetZeroSinceMs) this._storageBudgetZeroSinceMs = now;
+            } else {
+                this._storageBudgetZeroSinceMs = 0;
+            }
+            const budgetZeroAgeMs = this._storageBudgetZeroSinceMs
+                ? Math.max(0, now - this._storageBudgetZeroSinceMs)
+                : 0;
+            const budgetGraceMs = Math.max(
+                5000,
+                Math.round(Math.max(0, num(cfg.zeroWriteBudgetGraceSec, 20)) * 1000),
+            );
+
+            const nvpTargetW = storageNvpBalanceDiag && Number.isFinite(Number(storageNvpBalanceDiag.nvpTargetW))
+                ? Number(storageNvpBalanceDiag.nvpTargetW)
+                : (previousSource === 'tarif'
+                    ? Math.max(0, num(cfg.tariffTargetGridImportW, selfTargetGridW))
+                    : Math.max(0, selfTargetGridW + evcsStorageProtectedNvpTargetShiftW));
+            const nvpDeadbandW = storageNvpBalanceDiag && Number.isFinite(Number(storageNvpBalanceDiag.deadbandW))
+                ? Math.max(20, Number(storageNvpBalanceDiag.deadbandW))
+                : Math.max(50, selfImportThresholdW, stepW);
+            const feedForwardTargetW = storageNvpBalanceDiag && Number.isFinite(Number(storageNvpBalanceDiag.feedForwardTargetW))
+                ? Number(storageNvpBalanceDiag.feedForwardTargetW)
+                : null;
+            const visibleExportSupportsCharge = nvpMeasurementUsable
+                && Number(nvpRawW) < (nvpTargetW - nvpDeadbandW);
+            const feedForwardSupportsCharge = feedForwardTargetW !== null && feedForwardTargetW < 0;
+            const allocationModeNorm = String(pvBudgetAllocationMode || '').trim().toLowerCase();
+            const budgetZeroConfirmed = pvBudgetZero
+                && !visibleExportSupportsCharge
+                && !feedForwardSupportsCharge
+                && (
+                    allocationModeNorm === 'emobility'
+                    || (pvBudgetEvcsReservedW > 0 && budgetZeroAgeMs >= budgetGraceMs)
+                );
+
+            const reasonLower = String(reason || '').toLowerCase();
+            const directionChange = reasonLower.includes('richtungswechsel')
+                || reasonLower.includes('anti-pingpong')
+                || String(sungrowWriteMode || '').includes('stop-before-reverse');
+            // Ein vorher aktiver Sollwert muss an den konfigurierten SoC-Grenzen
+            // ausdruecklich mit 0 W beendet werden. Im NVP-Zielband ist die normale
+            // Request-Quelle bereits idle; ohne diese direkte Grenzpruefung wuerde
+            // die 0-W-Firewall den alten Sollwert faelschlich weiterhalten.
+            const dischargeSocStop = lastActiveTargetW > 0
+                && typeof soc === 'number'
+                && soc <= Math.max(hardDischargeMinSoc, selfMinSoc);
+            const chargeSocStop = lastActiveTargetW < 0
+                && typeof soc === 'number'
+                && soc >= hardChargeMaxSoc;
+            const explicitStopReason = evcsProtectedDischargeStop
+                ? 'Entladen stoppen: ausdruecklicher EVCS-Speicherschutz deckt den geschuetzten Ladeanteil aus'
+                : (dischargeSocStop
+                    ? `Entladen stoppen: SoC <= ${Math.max(hardDischargeMinSoc, selfMinSoc)}%`
+                    : (chargeSocStop
+                        ? `Laden stoppen: SoC >= ${hardChargeMaxSoc}%`
+                        : String(reason || '')));
+            const explicitStop = sungrowUpstreamExplicitStop
+                || String(sungrowWriteMode || '').startsWith('write-stop-')
+                || source === 'aus'
+                || source === 'reserve'
+                || reserveActive
+                || chargeDirectionStopped
+                || dischargeDirectionStopped
+                || evcsProtectedDischargeStop
+                || dischargeSocStop
+                || chargeSocStop;
+
+            const zeroDecision = decideStorageZeroWrite({
+                targetW,
+                lastTargetW: lastActiveTargetW,
+                source,
+                reason: explicitStopReason,
+                explicitStop,
+                directionChange,
+                measurementUsable: nvpMeasurementUsable,
+                measurementGap,
+                measurementGapAgeMs,
+                measurementGraceMs,
+                budgetZero: pvBudgetZero,
+                budgetZeroConfirmed,
+                budgetZeroAgeMs,
+                budgetGraceMs,
+                nvpW: nvpMeasurementUsable ? nvpRawW : null,
+                nvpTargetW,
+                nvpDeadbandW,
+                feedForwardTargetW,
+                // Sungrow soll seinen letzten externen Wert ohne Refresh halten.
+                // Generic/Split/E3DC/Farm brauchen fuer ihren Watchdog dagegen den
+                // erneut geschriebenen gleichen Sollwert.
+                holdByNoWrite: sungrowHybridActive,
+            });
+
+            storageZeroWriteStatus = String(zeroDecision.status || '');
+            storageZeroWriteReason = String(zeroDecision.reason || reason || '');
+
+            if (zeroDecision.action === 'hold-write') {
+                targetW = Number(zeroDecision.outputW) || 0;
+                source = previousSource || source || 'eigenverbrauch';
+                reason = storageZeroWriteReason;
+                storageZeroNoWrite = false;
+            } else if (zeroDecision.action === 'hold-no-write' || zeroDecision.action === 'idle-no-write') {
+                targetW = Number(zeroDecision.outputW) || 0;
+                source = previousSource || source || (sungrowHybridActive ? 'sungrow-hybrid' : 'idle');
+                reason = storageZeroWriteReason;
+                storageZeroNoWrite = true;
+                if (sungrowHybridActive) {
+                    sungrowNoWrite = true;
+                    sungrowWriteMode = zeroDecision.action === 'idle-no-write'
+                        ? 'no-write-zero-firewall-idle'
+                        : 'no-write-hold-last-command';
+                    this._sungrowHybridLastMode = sungrowWriteMode;
+                }
+            } else if (zeroDecision.action === 'write-stop') {
+                targetW = 0;
+                reason = storageZeroWriteReason;
+                storageZeroNoWrite = false;
+                this._storageMeasurementGapSinceMs = 0;
+                this._storageBudgetZeroSinceMs = 0;
+            }
+
+            if ((zeroDecision.action === 'hold-write' || zeroDecision.action === 'hold-no-write') && targetW !== 0) {
+                storageNvpBalanceDiag = {
+                    ...(storageNvpBalanceDiag || {}),
+                    targetW,
+                    rawTargetW: targetW,
+                    holdingLastCommand: true,
+                    heldTargetW: targetW,
+                    mode: `zero-firewall-${storageZeroWriteStatus || 'hold'}`,
+                    policy: storageNvpBalanceDiag && storageNvpBalanceDiag.policy
+                        ? storageNvpBalanceDiag.policy
+                        : 'storage-zero-firewall',
+                };
+            }
+
+            pvBudgetPostVendorNoWriteHold = storageZeroNoWrite && targetW < 0;
+            pvBudgetPostVendorNoWriteReason = storageZeroNoWrite ? reason : '';
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallAction', storageZeroWriteStatus);
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallReason', storageZeroWriteReason);
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallHeldW', Math.round(Number(zeroDecision.holdW) || 0));
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallExplicitStop', !!zeroDecision.explicitStop);
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallBudgetZeroAgeMs', Math.round(budgetZeroAgeMs));
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallMeasurementGapAgeMs', Math.round(measurementGapAgeMs));
+        } else if (targetW !== 0) {
+            this._storageMeasurementGapSinceMs = 0;
+            this._storageBudgetZeroSinceMs = 0;
+            storageZeroWriteStatus = 'write-non-zero';
+            storageZeroWriteReason = String(reason || '');
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallAction', 'write-non-zero');
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallReason', '');
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallHeldW', 0);
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallExplicitStop', false);
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallBudgetZeroAgeMs', 0);
+            await this._setIfChanged('speicher.regelung.zeroWriteFirewallMeasurementGapAgeMs', 0);
         }
 
         if (sungrowDiagPayload) {
@@ -3984,17 +4097,20 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
         // Den finalen Speicher-Ladesollwert fuer nachgelagerte Verbraucher im
         // zentralen Budget reservieren:
-        // - PV-/NVP-Laden reduziert nur remainingPvW.
-        // - Tarif-/Reserve-/LSK-Netzladen reduziert remainingTotalW.
-        // FENECON-/Sungrow-No-Write reserviert bewusst nichts, da kein neuer
-        // externer NexoWatt-Sollwert ausgegeben wird.
+        // - PV-/NVP-Laden reduziert remainingTotalW UND remainingPvW, weil die
+        //   physisch belegte Ladeleistung nachfolgenden Verbrauchern weder als
+        //   Gesamt- noch als PV-Budget erneut zur Verfuegung stehen darf.
+        // - Tarif-/Reserve-/LSK-Netzladen reduziert nur remainingTotalW.
+        // FENECON-internes No-Write reserviert nichts. Ein durch die allgemeine
+        // 0-W-Firewall gehaltener externer Sollwert bleibt dagegen physikalisch aktiv
+        // und muss deshalb im zentralen Budget weiter reserviert werden.
         try {
             const budgetRuntime = this.adapter && this.adapter._emsBudget;
             const sourceForBudget = policySourceBeforeVendor || String(source || '');
             const pvSource = isCentralPvChargeSource(source, targetW)
                 || isCentralPvChargeSource(sourceForBudget, targetW);
             const gridChargeSource = isCentralGridChargeSource(sourceForBudget, targetW);
-            if (!feneconNoWrite && !sungrowNoWrite && budgetRuntime && typeof budgetRuntime.reserve === 'function' && targetW < 0 && (pvSource || gridChargeSource)) {
+            if (!feneconNoWrite && budgetRuntime && typeof budgetRuntime.reserve === 'function' && targetW < 0 && (pvSource || gridChargeSource)) {
                 const chargeW = Math.max(0, -Number(targetW));
                 const actualChargeW = balanceBatteryTrusted
                     ? Math.max(0, -Number(balanceBatteryPowerW || 0))
@@ -4020,7 +4136,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     priority: 150,
                     actualW: actualChargeW,
                     requestedW: chargeW,
-                    reserveW: gridChargeSource ? totalBudgetStorageReservedW : 0,
+                    reserveW: pvSource ? pvBudgetReservedW : (gridChargeSource ? totalBudgetStorageReservedW : 0),
                     pvReserveW: pvSource ? pvBudgetReservedW : 0,
                     pvOnly: pvSource,
                     mode: pvSource ? (pvBudgetAllocationMode || 'pv') : String(sourceForBudget || 'grid-charge'),
@@ -4237,8 +4353,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         if (feneconNoWrite) {
             await this._setNoWriteTargetDiag(targetW, reason, source, 'fenecon-fems:no-write');
             this._feneconHybridWasExternal = false;
-        } else if (sungrowNoWrite) {
-            await this._setHoldNoWriteTargetDiag(targetW, reason, source, 'sungrow-hybrid:no-write');
+        } else if (sungrowNoWrite || storageZeroNoWrite) {
+            await this._setHoldNoWriteTargetDiag(targetW, reason, source, storageZeroWriteStatus || (sungrowNoWrite ? 'sungrow-hybrid:no-write' : 'storage:no-write'));
         } else {
             await this._applyTargetW(targetW, reason, source);
             if (feneconHybridActive) this._feneconHybridWasExternal = true;
@@ -5211,6 +5327,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             balanceFeedForwardMaxAgeMs: storage.balanceFeedForwardMaxAgeMs,
             balanceFeedForwardMaxSkewMs: storage.balanceFeedForwardMaxSkewMs,
             balanceFeedForwardPlausibilityW: storage.balanceFeedForwardPlausibilityW,
+            zeroWriteBudgetGraceSec: storage.zeroWriteBudgetGraceSec,
+            zeroWriteMeasurementGraceSec: storage.zeroWriteMeasurementGraceSec,
             selfMaxChargeW: storage.selfMaxChargeW,
             selfMaxDischargeW: storage.selfMaxDischargeW,
             capacityKWh: storage.capacityKWh,
@@ -6456,6 +6574,12 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.balanceMessungSynchron', 'Batterie-/NVP-Messung zeitlich synchron', 'boolean', 'indicator', false);
         await mk('speicher.regelung.balanceModus', 'Speicher NVP-Balancing Modus', 'string', 'text', 'inactive');
         await mk('speicher.regelung.balanceLetztenSollwertGehalten', 'Letzten nicht-null NVP-Sollwert im Zielband gehalten', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.zeroWriteFirewallAction', '0-W-Firewall Aktion', 'string', 'text', 'inactive');
+        await mk('speicher.regelung.zeroWriteFirewallReason', '0-W-Firewall Grund', 'string', 'text', '');
+        await mk('speicher.regelung.zeroWriteFirewallHeldW', '0-W-Firewall gehaltener Sollwert (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.zeroWriteFirewallExplicitStop', '0-W-Firewall expliziter Stop', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.zeroWriteFirewallBudgetZeroAgeMs', '0-W-Firewall Budget-0 Alter (ms)', 'number', 'value.interval', 0);
+        await mk('speicher.regelung.zeroWriteFirewallMeasurementGapAgeMs', '0-W-Firewall Messluecken-Alter (ms)', 'number', 'value.interval', 0);
         await mk('speicher.regelung.balanceGehaltenSollW', 'Im NVP-Zielband gehaltener Speicher-Sollwert (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.balanceFeedForwardVerfuegbar', 'Direkter PV-/Last-Feed-forward verfügbar', 'boolean', 'indicator', false);
         await mk('speicher.regelung.balanceFeedForwardVerwendet', 'Direkter PV-/Last-Feed-forward verwendet', 'boolean', 'indicator', false);
@@ -6475,8 +6599,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.pvBudgetReservedW', 'Vom Speicher reserviertes PV-Budget (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.pvBudgetPostVendorCapW', 'Finaler PV-Budget-Cap nach Herstellerlogik (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.pvBudgetPostVendorCapped', 'Hersteller-Sollwert durch finales PV-Budget begrenzt', 'boolean', 'indicator', false);
-        await mk('speicher.regelung.pvBudgetPostVendorNoWriteHold', 'Sungrow hält bei kurzzeitigem PV-Budget 0 ohne Schreibzugriff', 'boolean', 'indicator', false);
-        await mk('speicher.regelung.pvBudgetPostVendorNoWriteReason', 'Grund für Sungrow PV-Budget No-Write/Hold', 'string', 'text', '');
+        await mk('speicher.regelung.pvBudgetPostVendorNoWriteHold', 'Speicher hält bei kurzzeitigem PV-Budget 0 ohne Schreibzugriff', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.pvBudgetPostVendorNoWriteReason', 'Grund für Speicher PV-Budget No-Write/Hold', 'string', 'text', '');
         await mk('speicher.regelung.pvBudgetRuntimeRemainingW', 'PV-Restbudget laut Runtime vor Speicher (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.pvBudgetAllocationDerivedW', 'Aus EVCS-Allocation abgeleitetes Speicher-PV-Budget (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.pvBudgetEvcsReservedW', 'Im zentralen Budget reservierter EVCS-PV-Anteil (W)', 'number', 'value.power', 0);

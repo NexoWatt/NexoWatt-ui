@@ -1,3 +1,12 @@
+## 0.8.114
+
+- Herstellerübergreifende Speicher-0-W-Firewall: Im NVP-Zielband, bei kurzen Messwertlücken, transientem zentralen 0-W-PV-Budget oder bestätigtem PV-/Last-Feed-forward bleibt der letzte wirksame Nicht-Null-Sollwert aktiv beziehungsweise Sungrow im No-Write-Hold.
+- `0 W` wird nur noch für echte Stopps geschrieben: SoC-Grenzen, Safety-/Freigabesperren, bestätigte vollständige Budgetbelegung, real physikalisch falsche Richtung und sichere Richtungswechsel. Ein aktiver EVCS-Speicherschutz stoppt eine zuvor laufende Entladung ausdrücklich, erzeugt im Leerlauf aber keinen unnötigen 0-W-Befehl.
+- Physische PV-/Wechselrichterquellen werden nach Device-/Wechselrichteridentität dedupliziert statt nur nach exakter Datenpunkt-ID. Eine konfigurierte Anlagenleistung begrenzt unplausible PV-Spitzen mit 15 % Messtoleranz; Rohwert und unterdrückte Doppelzählung bleiben diagnostizierbar.
+- MultiUse C3.3: Verbraucher verwenden ausschließlich zentrale PV-/Gesamt-Grants, reservieren nur akzeptierte beziehungsweise gemessene Leistung und laufen über eindeutige Aktor-Owner mit Readback-, Retry- und Fehlerverriegelungs-Vertrag. Das alte lokale Parallelbudget wurde entfernt.
+- Neue Regressionen `test:storage-zero-write-firewall-v2`, `test:pv-source-dedup-cap` und `test:multiuse-central-budget-c3`.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v416` erhöht.
+
 ## 0.8.113
 
 - Stufe C3.2: Thermik und Heizstabsteuerung verwenden eindeutige Aktor-Owner im zentralen Arbiter. Automatik und manuelle Bedienung sind getrennt und besitzen definierte Leases.

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 65bf9f2e5def1a076b87afb3926ba601420895a2f9b34eed0cb2a920a16dd113
+ * Original-Hash: afce4817b61cea3341cb0051627a0ac6854de348155c6d64723eeef41204d396
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/multi-use.ts
- * Quell-Hash: sha256:421c4cb52fe42560825afca99b087159200e0f252dd96cc0c5d20ba5ae0a068e
+ * Quell-Hash: sha256:b57e6c263ba366177b4b5afa0318ad99383d8a8a34f342338c753f005572fbca
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -46,940 +46,792 @@
  * 2. npm run sync:ts-runtime-executables ausführen.
  * 3. npm run test:runtime-executables prüfen.
  */
-/**
- * NexoWatt Detail-Kommentar (DE)
- * Zweck dieser Ergänzung:
- * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
- * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
- * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
- */
-
-/**
- * Datei: ems/modules/multi-use.js
- * Rolle im Projekt: Multi-Use-Logik.
- * Zweck: Koordiniert mehrere Nutzenpfade wie Peak, Eigenverbrauch und Speicherreserve.
- * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
- * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
- */
-/**
- * NexoWatt Code-Kommentar (DE)
- * Zweck: EMS-Regelungsmodul: verarbeitet Konfiguration, States und Budgets für eine bestimmte Energie-Funktion.
- * Zusammenhänge:
- * - Wird von ems/module-manager.js initialisiert und zyklisch getickt.
- * - main.js veröffentlicht die entstehenden States und APIs.
- * Wartungshinweise:
- * - Keine UI-spezifische Logik einbauen; Ausgabe über States/API bereitstellen.
- */
-
 'use strict';
 
+/**
+ * MultiUse verteilt Verbraucherwünsche ausschließlich innerhalb des zentralen
+ * EMS-Gesamt-/PV-Budgets. Lokale Tarif-/PV-Werte definieren nur den Bedarf;
+ * die finale Freigabe und Reservierung kommen aus adapter._emsBudget.
+ */
 const { BaseModule } = require('./base');
 const { applySetpoint } = require('../consumers');
 const { ReasonCodes, normalizeReason } = require('../reasons');
+const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
+const { ActuatorCommandContract } = require('../services/actuator-command-contract');
+
 /**
  * Code-Teil: num
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function num(v, dflt = 0) {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : dflt;
-}
-/**
- * Code-Teil: safeIdPart
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
-function safeIdPart(s) {
-    return String(s || '').trim().replace(/[^a-zA-Z0-9_-]/g, '_');
-}
-/**
- * Code-Teil: normalizeType
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
-function normalizeType(t) {
-    const s = String(t || '').trim().toLowerCase();
-    if (s === 'wallbox') return 'evcs';
-    return s;
-}
-/**
- * Code-Teil: normalizeControlBasis
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
-function normalizeControlBasis(b) {
-    const s = String(b || '').trim().toLowerCase();
-    if (s === 'a') return 'currentA';
-    if (s === 'w') return 'powerW';
-    if (s === 'current' || s === 'currenta') return 'currentA';
-    if (s === 'power' || s === 'powerw') return 'powerW';
-    if (s === 'none') return 'none';
-    return s || 'auto';
+function num(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
 }
 /**
  * Code-Teil: clamp
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function clamp(v, minV, maxV) {
-    const n = Number(v);
-    if (!Number.isFinite(n)) return minV;
-    if (n < minV) return minV;
-    if (n > maxV) return maxV;
-    return n;
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, num(value, min)));
+}
+/**
+ * Code-Teil: safeIdPart
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function safeIdPart(value) {
+  return String(value || '').trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+/**
+ * Code-Teil: normalizeType
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function normalizeType(value) {
+  const type = String(value || '').trim().toLowerCase();
+  return type === 'wallbox' ? 'evcs' : (type || 'load');
+}
+/**
+ * Code-Teil: normalizeBasis
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function normalizeBasis(value) {
+  const basis = String(value || '').trim().toLowerCase();
+  if (basis === 'a' || basis === 'current' || basis === 'currenta') return 'currentA';
+  if (basis === 'w' || basis === 'power' || basis === 'powerw') return 'powerW';
+  if (basis === 'none') return 'none';
+  return basis || 'auto';
 }
 /**
  * Code-Teil: floorToStep
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function floorToStep(v, step) {
-    const n = Number(v);
-    const s = Number(step);
-    if (!Number.isFinite(n)) return 0;
-    if (!Number.isFinite(s) || s <= 0) return n;
-    // Always round down to avoid overshoot
-    const k = Math.floor(n / s);
-    const out = k * s;
-    // avoid -0
-    return out > 0 ? out : 0;
+function floorToStep(value, step) {
+  const n = Math.max(0, num(value, 0));
+  const s = num(step, 0);
+  if (s <= 0) return n;
+  const output = Math.floor(n / s) * s;
+  return output > 0 ? output : 0;
 }
 /**
  * Code-Teil: wattsFromA
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function wattsFromA(amps, voltageV, phases) {
-    const a = Number(amps);
-    const v = Number(voltageV);
-    const p = Number(phases);
-    if (!Number.isFinite(a) || !Number.isFinite(v) || !Number.isFinite(p) || a <= 0) return 0;
-    return a * v * p;
+  return Math.max(0, num(amps, 0)) * Math.max(1, num(voltageV, 230)) * Math.max(1, num(phases, 3));
 }
 /**
  * Code-Teil: ampsFromW
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function ampsFromW(watts, voltageV, phases) {
-    const w = Number(watts);
-    const v = Number(voltageV);
-    const p = Number(phases);
-    if (!Number.isFinite(w) || !Number.isFinite(v) || !Number.isFinite(p) || w <= 0) return 0;
-    const denom = v * p;
-    if (denom <= 0) return 0;
-    return w / denom;
+  const denominator = Math.max(1, num(voltageV, 230) * Math.max(1, num(phases, 3)));
+  return Math.max(0, num(watts, 0)) / denominator;
 }
 /**
  * Code-Teil: stateAgeMs
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function stateAgeMs(st) {
-    if (!st) return Number.POSITIVE_INFINITY;
-    const ts = Number(st.ts);
-    const lc = Number(st.lc);
-    const t = Number.isFinite(lc) ? lc : (Number.isFinite(ts) ? ts : NaN);
-    if (!Number.isFinite(t) || t <= 0) return Number.POSITIVE_INFINITY;
-    const age = Date.now() - t;
-    return Number.isFinite(age) && age >= 0 ? age : Number.POSITIVE_INFINITY;
+function stateAgeMs(state, now = Date.now()) {
+  const ts = Number(state && (state.lc || state.ts));
+  return Number.isFinite(ts) && ts > 0 ? Math.max(0, now - ts) : Number.POSITIVE_INFINITY;
 }
 /**
- * Code-Teil: stateNum
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ * Code-Teil: normalizeBudgetMode
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function stateNum(st, dflt = null) {
-    const n = Number(st && st.val);
-    return Number.isFinite(n) ? n : dflt;
+function normalizeBudgetMode(modeRaw, sourceRaw) {
+  const mode = String(modeRaw || '').trim().toLowerCase();
+  if (['pv', 'solar', 'surplus', 'pvsurplus'].includes(mode)) return 'pv';
+  if (['total', 'grid', 'tariff', 'comfort', 'net'].includes(mode)) return 'total';
+  return String(sourceRaw || '').toUpperCase() === 'PV' ? 'pv' : 'total';
 }
 
 /**
- * MU7.1: Multi-Use Orchestrator Start
+ * Code-Teil: MultiUseModule
  *
- * Goal: MultiUse is no longer a stub:
- * - reads configured consumers
- * - exposes per-consumer command states (targetW/targetA)
- * - applies targets deterministically via unified applySetpoint()
- * - publishes results (applied/status/reason)
- */
-/**
- * Code-Teil: Klasse `MultiUseModule`
- * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
- * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
- * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
- */
-// Klassen-Kommentar: Klasse: MultiUseModule. Aufgabe: kapselt eine fachliche Teilaufgabe dieser Datei. Beim TypeScript-Umbau Eingaben, Rückgaben und Seiteneffekte typisieren. Zusammenhang: EMS-Modul mit eigener Regelungs-/Diagnoseaufgabe; wird durch ems/module-manager.js und ems/engine.js ausgeführt.
-/**
- * Klasse: MultiUseModule
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ * Zweck:
+ * Automatisch markierter Klasse-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 class MultiUseModule extends BaseModule {
-    /**
-     * Code-Teil: constructor
-     * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
-     * Zusammenhang: Gehört zu EMS-Modul (Regelungs-, Diagnose- oder Beratungslogik innerhalb der EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
-     * Wartung/TypeScript: Änderungen an Signatur oder Rückgabe können abhängige Aufrufer beeinflussen; Aufrufstellen mitprüfen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
-     */
-    constructor(adapter, dpRegistry) {
-        super(adapter, dpRegistry);
+  constructor(adapter, dpRegistry) {
+    super(adapter, dpRegistry);
+    this._consumers = [];
+    this._last = new Map();
+    this._stateCache = new Map();
+    this._actuatorContract = new ActuatorCommandContract();
+  }
 
-        /** @type {Array<any>} */
-        this._consumers = [];
-        /** @type {Map<string, {targetW:number,targetA:number,applied:boolean,status:string,reason:string}>} */
-        this._last = new Map();
-    
-        /** @type {Map<string, any>} */
-        this._stateCache = new Map();
-}
+  _isEnabled() {
+    return !!this.adapter?.config?.enableMultiUse;
+  }
+  _getCfg() {
+    const cfg = this.adapter?.config?.multiUse || {};
+    return cfg && typeof cfg === 'object' ? cfg : {};
+  }
+  _loadConsumersFromConfig() {
+    const rows = Array.isArray(this._getCfg().consumers) ? this._getCfg().consumers : [];
+    const usedIds = new Set();
+    this._consumers = rows.map((row, index) => {
+      const r = row || {};
+      const key = String(r.key || '').trim();
+      if (!key) return null;
+      const base = safeIdPart(key) || `consumer_${index + 1}`;
+      let id = base;
+      let suffix = 2;
+      while (usedIds.has(id)) id = `${base}_${suffix++}`;
+      usedIds.add(id);
+      return {
+        id,
+        key,
+        name: String(r.name || key),
+        type: normalizeType(r.type),
+        priority: num(r.priority, 100),
+        controlBasis: normalizeBasis(r.controlBasis),
+        setAId: String(r.setAId || r.setCurrentAId || '').trim(),
+        setWId: String(r.setWId || r.setPowerWId || '').trim(),
+        enableId: String(r.enableId || '').trim(),
+        setAKey: String(r.setAKey || '').trim(),
+        setWKey: String(r.setWKey || '').trim(),
+        enableKey: String(r.enableKey || '').trim(),
+        actualWId: String(r.actualWId || r.powerReadId || '').trim(),
+        actualWKey: String(r.actualWKey || '').trim(),
+        budgetMode: String(r.budgetMode || r.energySource || '').trim().toLowerCase(),
+        requireReadback: r.requireReadback === true,
+        readbackTimeoutSec: num(r.readbackTimeoutSec, 5),
+        retryDelaySec: num(r.retryDelaySec, 3),
+        maxRetries: num(r.maxRetries, 3),
+        faultLockSec: num(r.faultLockSec, 60),
+        defaultTargetW: num(r.defaultTargetW, 0),
+        defaultTargetA: num(r.defaultTargetA, 0),
+      };
+    }).filter(Boolean).sort((a, b) => num(a.priority, 100) - num(b.priority, 100) || String(a.key).localeCompare(String(b.key)));
+  }
 
-    /**
-     * Code-Teil: Methode `_isEnabled`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _isEnabled
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    _isEnabled() {
-        return !!this.adapter?.config?.enableMultiUse;
+  async _setStateIfChanged(id, value) {
+    const normalized = typeof value === 'number' && !Number.isFinite(value) ? null : value;
+    if (this._stateCache.get(id) === normalized) return;
+    this._stateCache.set(id, normalized);
+    await this.adapter.setStateAsync(id, normalized, true);
+  }
+
+  async _seedLastFromStates() {
+    for (const consumer of this._consumers) {
+      const base = `multiUse.consumers.${consumer.id}`;
+/**
+ * Code-Teil: read
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+      const read = (suffix) => this.adapter.getStateAsync(`${base}.${suffix}`).catch(() => null);
+      const [targetW, targetA, requestW, allocatedW, allocatedA, basis, applied, status, reason] = await Promise.all([
+        read('targetW'), read('targetA'), read('requestW'), read('allocatedW'), read('allocatedA'),
+        read('basis'), read('applied'), read('status'), read('reason'),
+      ]);
+      this._last.set(consumer.id, {
+        reqTargetW: num(targetW?.val, 0),
+        reqTargetA: num(targetA?.val, 0),
+        requestedW: num(requestW?.val, 0),
+        allocatedW: num(allocatedW?.val, 0),
+        allocatedA: num(allocatedA?.val, 0),
+        basis: String(basis?.val || consumer.controlBasis || 'auto'),
+        applied: !!applied?.val,
+        status: String(status?.val || ''),
+        reason: normalizeReason(reason?.val || ReasonCodes.OK),
+      });
     }
-    /**
-     * Code-Teil: _getCfg
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    _getCfg() {
-        const cfg = this.adapter?.config?.multiUse || {};
-        return cfg && typeof cfg === 'object' ? cfg : {};
-    }
+  }
 
-    /**
-     * Code-Teil: Methode `_loadConsumersFromConfig`
-     * Zweck: lädt Daten aus API, State-Cache oder Konfiguration und stößt danach Rendering an.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _loadConsumersFromConfig
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    _loadConsumersFromConfig() {
-        const cfg = this._getCfg();
-        const rows = Array.isArray(cfg.consumers) ? cfg.consumers : [];
-
-        /** @type {Array<any>} */
-        const consumers = [];
-
-        const usedIds = new Set();
-        for (let i = 0; i < rows.length; i++) {
-            const r = rows[i] || {};
-            const key = String(r.key || '').trim();
-            if (!key) continue;
-
-            const idBase = safeIdPart(key) || `consumer_${i + 1}`;
-            let id = idBase;
-            let n = 2;
-            while (usedIds.has(id)) {
-                id = `${idBase}_${n++}`;
-            }
-            usedIds.add(id);
-
-            const consumer = {
-                id, // safe id-part for state tree
-                key,
-                name: String(r.name || key),
-                type: normalizeType(r.type || 'load'),
-                priority: num(r.priority, 100),
-                controlBasis: normalizeControlBasis(r.controlBasis || 'auto'),
-                setAId: String(r.setAId || r.setCurrentAId || '').trim(),
-                setWId: String(r.setWId || r.setPowerWId || '').trim(),
-                enableId: String(r.enableId || '').trim(),
-                setAKey: String(r.setAKey || '').trim(),
-                setWKey: String(r.setWKey || '').trim(),
-                enableKey: String(r.enableKey || '').trim(),
-                defaultTargetW: num(r.defaultTargetW, 0),
-                defaultTargetA: num(r.defaultTargetA, 0),
-            };
-
-            consumers.push(consumer);
+  async init() {
+    if (!this._isEnabled()) return;
+    this._loadConsumersFromConfig();
+    for (const consumer of this._consumers) {
+      const baseKey = `mu.${consumer.id}`;
+      try {
+        if (consumer.setWId && !consumer.setWKey) {
+          await this.dp.upsert({ key: `${baseKey}.setW`, objectId: consumer.setWId, dataType: 'number', direction: 'out', unit: 'W' });
+          consumer.setWKey = `${baseKey}.setW`;
         }
-
-        // Deterministic order: priority asc, then key asc
-        consumers.sort((a, b) => {
-            const pa = num(a.priority, 100);
-            const pb = num(b.priority, 100);
-            if (pa !== pb) return pa - pb;
-            const ka = String(a.key || '');
-            const kb = String(b.key || '');
-            return ka.localeCompare(kb);
-        });
-
-        this._consumers = consumers;
+        if (consumer.setAId && !consumer.setAKey) {
+          await this.dp.upsert({ key: `${baseKey}.setA`, objectId: consumer.setAId, dataType: 'number', direction: 'out', unit: 'A' });
+          consumer.setAKey = `${baseKey}.setA`;
+        }
+        if (consumer.enableId && !consumer.enableKey) {
+          await this.dp.upsert({ key: `${baseKey}.enable`, objectId: consumer.enableId, dataType: 'boolean', direction: 'out', unit: '' });
+          consumer.enableKey = `${baseKey}.enable`;
+        }
+        if (consumer.actualWId && !consumer.actualWKey) {
+          await this.dp.upsert({ key: `${baseKey}.actualW`, objectId: consumer.actualWId, dataType: 'number', direction: 'in', unit: 'W' });
+          consumer.actualWKey = `${baseKey}.actualW`;
+        }
+      } catch (error) {
+        this.adapter.log.warn(`[multiUse] datapoint upsert failed for '${consumer.key}': ${error?.message || error}`);
+      }
     }
-
-
-    /**
-     * Code-Teil: Methode `_setStateIfChanged`
-     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _setStateIfChanged
-     * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    async _setStateIfChanged(id, val) {
-        const v = (typeof val === 'number' && !Number.isFinite(val)) ? null : val;
-        const prev = this._stateCache.get(id);
-        if (prev === v) return;
-        this._stateCache.set(id, v);
-        await this.adapter.setStateAsync(id, v, true);
+    const cfg = this._getCfg();
+    try {
+      if (cfg.externalLimitWId && !cfg.externalLimitWKey) await this.dp.upsert({ key: 'mu.externalLimitW', objectId: cfg.externalLimitWId, dataType: 'number', direction: 'in', unit: 'W' });
+      if (cfg.tariffBudgetWId && !cfg.tariffBudgetWKey) await this.dp.upsert({ key: 'mu.tariffBudgetW', objectId: cfg.tariffBudgetWId, dataType: 'number', direction: 'in', unit: 'W' });
+      if (cfg.pvBudgetWId && !cfg.pvBudgetWKey) await this.dp.upsert({ key: 'mu.pvBudgetW', objectId: cfg.pvBudgetWId, dataType: 'number', direction: 'in', unit: 'W' });
+    } catch (error) {
+      this.adapter.log.warn(`[multiUse] budget datapoint upsert failed: ${error?.message || error}`);
     }
 
-    /**
-     * Code-Teil: Methode `_seedLastFromStates`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _seedLastFromStates
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    async _seedLastFromStates() {
-        // Seed per-consumer last-result cache from existing states to reduce write churn after restart.
-        for (const c of this._consumers) {
-            const base = `multiUse.consumers.${c.id}`;
-            /**
-             * Code-Teil: read
-             * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
-             * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-             * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-             */
-            const read = async (id) => this.adapter.getStateAsync(id).catch(() => null);
+/**
+ * Code-Teil: mkChannel
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+    const mkChannel = (id, name, native = {}) => this.adapter.setObjectNotExistsAsync(id, { type: 'channel', common: { name }, native });
+/**
+ * Code-Teil: mkState
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+    const mkState = (id, name, type, role, def, unit = '') => this.adapter.setObjectNotExistsAsync(id, {
+      type: 'state', common: { name, type, role, read: true, write: false, def, ...(unit ? { unit } : {}) }, native: {},
+    });
+    await mkChannel('multiUse', 'Multi-Use');
+    await mkChannel('multiUse.control', 'Control');
+    await mkChannel('multiUse.summary', 'Summary');
+    await mkChannel('multiUse.consumers', 'Consumers');
+    for (const [suffix, name, type, role, def, unit] of [
+      ['active', 'Active', 'boolean', 'indicator.working', false],
+      ['status', 'Status', 'string', 'text', 'init'],
+      ['lastTickTs', 'Last tick', 'number', 'value.time', 0],
+      ['reason', 'Reason', 'string', 'text', ReasonCodes.OK],
+      ['requestW', 'Requested budget', 'number', 'value.power', 0, 'W'],
+      ['capW', 'Budget cap', 'number', 'value.power', 0, 'W'],
+      ['budgetW', 'Effective budget', 'number', 'value.power', 0, 'W'],
+      ['budgetSource', 'Budget source', 'string', 'text', 'NONE'],
+      ['capSources', 'Cap sources', 'string', 'text', ''],
+      ['reserveW', 'Reserve deducted', 'number', 'value.power', 0, 'W'],
+      ['centralBudgetActive', 'Central budget active', 'boolean', 'indicator', false],
+      ['centralGrantW', 'Central grant', 'number', 'value.power', 0, 'W'],
+      ['centralReservedW', 'Central reserved', 'number', 'value.power', 0, 'W'],
+      ['centralPvReservedW', 'Central PV reserved', 'number', 'value.power', 0, 'W'],
+      ['centralBudgetStatus', 'Central budget status', 'string', 'text', 'init'],
+    ]) await mkState(`multiUse.control.${suffix}`, name, type, role, def, unit);
+    await mkState('multiUse.summary.remainingBudgetW', 'Remaining budget', 'number', 'value.power', 0, 'W');
+    await mkState('multiUse.summary.consumerCount', 'Consumers configured', 'number', 'value', 0);
+    await mkState('multiUse.summary.appliedCount', 'Consumers applied', 'number', 'value', 0);
 
-            const stTargetW = await read(`${base}.targetW`);
-            const stTargetA = await read(`${base}.targetA`);
-            const stBasis = await read(`${base}.basis`);
-            const stReqW = await read(`${base}.requestW`);
-            const stAllocW = await read(`${base}.allocatedW`);
-            const stAllocA = await read(`${base}.allocatedA`);
-            const stApplied = await read(`${base}.applied`);
-            const stStatus = await read(`${base}.status`);
-            const stReason = await read(`${base}.reason`);
+    for (const consumer of this._consumers) {
+      const base = `multiUse.consumers.${consumer.id}`;
+      await mkChannel(base, consumer.name || consumer.key, { key: consumer.key, type: consumer.type });
+      for (const [suffix, name, type, role, def, unit, write] of [
+        ['key', 'Key', 'string', 'text', consumer.key],
+        ['type', 'Type', 'string', 'text', consumer.type],
+        ['priority', 'Priority', 'number', 'value', num(consumer.priority, 100)],
+        ['targetW', 'Target power', 'number', 'level.power', num(consumer.defaultTargetW, 0), 'W', true],
+        ['targetA', 'Target current', 'number', 'level.current', num(consumer.defaultTargetA, 0), 'A', true],
+        ['basis', 'Applied control basis', 'string', 'text', consumer.controlBasis],
+        ['requestW', 'Requested power', 'number', 'value.power', 0, 'W'],
+        ['allocatedW', 'Allocated power', 'number', 'value.power', 0, 'W'],
+        ['allocatedA', 'Allocated current', 'number', 'value.current', 0, 'A'],
+        ['applied', 'Applied', 'boolean', 'indicator', false],
+        ['status', 'Status', 'string', 'text', 'init'],
+        ['reason', 'Reason', 'string', 'text', ReasonCodes.OK],
+        ['lastAppliedTs', 'Last applied', 'number', 'value.time', 0],
+        ['owner', 'Actuator owner', 'string', 'text', ''],
+        ['budgetMode', 'Central budget', 'string', 'text', ''],
+        ['writeAccepted', 'Write accepted', 'boolean', 'indicator', false],
+        ['readbackOk', 'Readback OK', 'boolean', 'indicator', false],
+        ['writePending', 'Write pending', 'boolean', 'indicator', false],
+        ['retryCount', 'Retries', 'number', 'value', 0],
+        ['faultLocked', 'Fault locked', 'boolean', 'indicator', false],
+        ['writeContractStatus', 'Write contract status', 'string', 'text', ''],
+        ['reservedW', 'Central reserved power', 'number', 'value.power', 0, 'W'],
+      ]) {
+        await this.adapter.setObjectNotExistsAsync(`${base}.${suffix}`, {
+          type: 'state', common: { name, type, role, read: true, write: write === true, def, ...(unit ? { unit } : {}) }, native: {},
+        });
+      }
+    }
+    await this._setStateIfChanged('multiUse.summary.consumerCount', this._consumers.length);
+    await this._seedLastFromStates().catch(() => undefined);
+  }
 
-            const next = {
-                reqTargetW: num(stTargetW?.val, 0),
-                reqTargetA: num(stTargetA?.val, 0),
-                requestedW: num(stReqW?.val, 0),
-                allocatedW: num(stAllocW?.val, 0),
-                allocatedA: num(stAllocA?.val, 0),
-                basis: String(stBasis?.val || c.controlBasis || 'auto'),
-                applied: !!stApplied?.val,
-                status: String(stStatus?.val || ''),
-                reason: normalizeReason(stReason?.val || ReasonCodes.OK),
-            };
+  _consumerOwner(consumer) {
+    return `multiUse.${consumer.id}`;
+  }
+  _consumerActuatorIds(consumer) {
+    const ids = [];
+    for (const key of [consumer.setWKey, consumer.setAKey, consumer.enableKey]) {
+      try {
+        const id = String(key && this.dp?.getEntry?.(key)?.objectId || '').trim();
+        if (id && !ids.includes(id)) ids.push(id);
+      } catch (_error) {}
+    }
+    return ids;
+  }
+  _consumerHasExclusiveAuthority(consumer, owner) {
+    const matrix = this.adapter?._stageAActuatorOwnerById;
+    const ids = this._consumerActuatorIds(consumer);
+    if (!ids.length || !matrix || typeof matrix !== 'object') return false;
+    return ids.every((id) => {
+      const owners = Array.isArray(matrix[id]?.activeOwners) ? matrix[id].activeOwners.map((value) => String(value || '').trim()).filter(Boolean) : [];
+      return owners.length === 1 && owners[0] === owner;
+    });
+  }
+  _contractCfg(consumer) {
+    return {
+      requireReadback: consumer.requireReadback === true && !!consumer.actualWKey,
+      ackTimeoutMs: Math.max(250, Math.round(num(consumer.readbackTimeoutSec, 5) * 1000)),
+      retryDelayMs: Math.max(250, Math.round(num(consumer.retryDelaySec, 3) * 1000)),
+      maxRetries: Math.max(0, Math.round(num(consumer.maxRetries, 3))),
+      faultLockMs: Math.max(1000, Math.round(num(consumer.faultLockSec, 60) * 1000)),
+    };
+  }
+  _readActualW(consumer, staleMs) {
+    try {
+      if (!consumer.actualWKey || typeof this.dp?.getNumberFresh !== 'function') return null;
+      const value = this.dp.getNumberFresh(consumer.actualWKey, staleMs, null);
+      return Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : null;
+    } catch (_error) {
+      return null;
+    }
+  }
+  _basis(consumer) {
+    const configured = String(consumer.controlBasis || 'auto');
+    if (configured !== 'auto') return configured;
+    if (consumer.type === 'load' || consumer.setWKey) return 'powerW';
+    if (consumer.setAKey) return 'currentA';
+    return 'none';
+  }
+  async _publishContract(base, owner, budgetMode, reservedW, result) {
+    await this._setStateIfChanged(`${base}.owner`, owner);
+    await this._setStateIfChanged(`${base}.budgetMode`, budgetMode);
+    await this._setStateIfChanged(`${base}.reservedW`, Math.round(Math.max(0, num(reservedW, 0))));
+    await this._setStateIfChanged(`${base}.writeAccepted`, !!result.accepted);
+    await this._setStateIfChanged(`${base}.readbackOk`, result.readbackOk === true);
+    await this._setStateIfChanged(`${base}.writePending`, !!result.pending);
+    await this._setStateIfChanged(`${base}.retryCount`, Math.max(0, Math.round(num(result.retryCount, 0))));
+    await this._setStateIfChanged(`${base}.faultLocked`, !!result.faultLocked);
+    await this._setStateIfChanged(`${base}.writeContractStatus`, String(result.status || ''));
+  }
+  async _applyConsumerCommand(consumer, target, reason, staleMs) {
+    const owner = this._consumerOwner(consumer);
+    const key = `multiUse:${consumer.id}`;
+    const contractCfg = this._contractCfg(consumer);
+    const now = Date.now();
+    const requestedW = Math.max(0, num(target?.targetW, 0));
+    const actualBefore = this._readActualW(consumer, staleMs);
+    const toleranceW = Math.max(50, requestedW * 0.03);
+    const readbackBefore = actualBefore === null ? null : Math.abs(actualBefore - requestedW) <= toleranceW;
+    const confirmed = this._actuatorContract.confirmFromReadback(key, target, actualBefore, readbackBefore === true, now);
+    if (confirmed) return { applied: true, accepted: true, confirmed: true, readbackOk: true, status: confirmed.status, contract: confirmed, owner };
+    const decision = this._actuatorContract.prepare(key, target, now, contractCfg);
+    if (!decision.allowed) {
+      const current = this._actuatorContract.result(key, now, decision.targetChanged);
+      return { applied: false, accepted: false, confirmed: false, readbackOk: current.readbackOk, status: current.status, contract: current, owner };
+    }
+    const writeResult = await withActuatorShadowContext(this.adapter, {
+      owner,
+      module: 'multiUse',
+      priority: priorityForOwner(owner),
+      reason,
+      leaseMs: 20000,
+      kind: 'multiuse-consumer',
+      enforceAuthority: this._consumerHasExclusiveAuthority(consumer, owner),
+      releaseAuthority: requestedW <= 0,
+    }, () => applySetpoint({ adapter: this.adapter, dp: this.dp }, consumer, target));
+    const accepted = writeResult?.applied === true;
+    const actualAfter = this._readActualW(consumer, staleMs);
+    const readbackOk = actualAfter === null ? null : Math.abs(actualAfter - requestedW) <= toleranceW;
+    const contract = this._actuatorContract.complete(key, target, accepted, readbackOk, actualAfter, Date.now(), contractCfg);
+    return { ...writeResult, applied: contract.confirmed, accepted, confirmed: contract.confirmed, readbackOk, status: contract.status, contract, owner };
+  }
 
-            this._last.set(c.id, next);
+  _budgetDemand(cfg, staleMs) {
+    let source = 'CENTRAL';
+    let capW = Number.POSITIVE_INFINITY;
+    let tariffKey = String(cfg.tariffBudgetWKey || '').trim();
+    let pvKey = String(cfg.pvBudgetWKey || '').trim();
+    if (!tariffKey) {
+      const mode = String(cfg.tariffBudgetMode || 'vis').trim().toLowerCase();
+      tariffKey = ['vis', 'tarif', 'tariff'].includes(mode) ? 'cm.tariffBudgetW' : (['dp', 'datapoint'].includes(mode) ? 'mu.tariffBudgetW' : '');
+    }
+    if (!pvKey) {
+      const mode = String(cfg.pvBudgetMode || 'surplus').trim().toLowerCase();
+      pvKey = ['surplus', 'pv', 'pvsurplus'].includes(mode) ? 'cm.pvSurplusW' : (['dp', 'datapoint'].includes(mode) ? 'mu.pvBudgetW' : '');
+    }
+/**
+ * Code-Teil: fresh
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+    const fresh = (key) => {
+      if (!key || typeof this.dp?.getNumberFresh !== 'function') return null;
+      const value = this.dp.getNumberFresh(key, staleMs, null);
+      return Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : null;
+    };
+    const tariffW = fresh(tariffKey);
+    const pvW = fresh(pvKey);
+    if (tariffW !== null && tariffW > 0) {
+      source = 'TARIFF';
+      capW = tariffW;
+    } else if (pvW !== null && pvW > 0) {
+      source = 'PV';
+      capW = pvW;
+    } else if (Math.max(0, num(cfg.comfortBudgetW, 0)) > 0) {
+      source = 'COMFORT';
+      capW = Math.max(0, num(cfg.comfortBudgetW, 0));
+    }
+    return { source, capW };
+  }
+
+  _targetForConsumer(consumer, basis, targetW, targetA) {
+    const type = normalizeType(consumer.type);
+    if (type === 'setpoint') return { targetW, targetA, basis, setpoint: targetW, enable: targetW > 0 };
+    if (type === 'sgready' || type === 'sg-ready' || type === 'sg_ready') return { targetW, targetA, basis, state: targetW > 0 ? 'on' : 'off' };
+    return { targetW, targetA, basis };
+  }
+
+  async _hardCap(cfg, staleMs) {
+    let capW = Number.POSITIVE_INFINITY;
+    const sources = [];
+    let reason = ReasonCodes.OK;
+    const peakReason = String((await this.adapter.getStateAsync('peakShaving.control.reason').catch(() => null))?.val || '').trim();
+    if (peakReason === ReasonCodes.STALE_METER) {
+      capW = 0;
+      sources.push('NET_STALE');
+      reason = ReasonCodes.STALE_METER;
+    }
+    let externalKey = String(cfg.externalLimitWKey || '').trim();
+    if (!externalKey && cfg.externalLimitWId) externalKey = 'mu.externalLimitW';
+    if (externalKey && typeof this.dp?.isStale === 'function' && typeof this.dp?.getNumberFresh === 'function') {
+      if (this.dp.isStale(externalKey, staleMs)) {
+        capW = 0;
+        sources.push('EXTERNAL_STALE');
+        reason = ReasonCodes.STALE_METER;
+      } else {
+        const value = this.dp.getNumberFresh(externalKey, staleMs, null);
+        if (!Number.isFinite(value)) {
+          capW = 0;
+          sources.push('EXTERNAL_INVALID');
+          reason = ReasonCodes.STALE_METER;
+        } else {
+          capW = Math.min(capW, Math.max(0, value));
+          sources.push('EXTERNAL');
         }
+      }
+    }
+    const peakActive = !!(await this.adapter.getStateAsync('peakShaving.control.active').catch(() => null))?.val;
+    if (peakActive) {
+      const availableState = await this.adapter.getStateAsync('peakShaving.dynamic.availableForControlledW').catch(() => null);
+      const available = Number(availableState?.val);
+      if (!Number.isFinite(available) || stateAgeMs(availableState) > staleMs) {
+        capW = 0;
+        sources.push('PEAK_STALE');
+        reason = ReasonCodes.STALE_METER;
+      } else {
+        capW = Math.min(capW, Math.max(0, available));
+        sources.push('PEAK');
+      }
+    }
+    return { capW, sources, reason };
+  }
+
+  async tick() {
+    if (!this._isEnabled()) return;
+    const now = Date.now();
+    const cfg = this._getCfg();
+    const staleMs = clamp(num(cfg.staleTimeoutSec, 15), 1, 3600) * 1000;
+    const voltageV = clamp(num(cfg.voltageV, 230), 100, 260);
+    const phases = clamp(num(cfg.defaultPhases, 3), 1, 3);
+    const stepW = clamp(num(cfg.stepW, 0), 0, 5000);
+    const stepA = clamp(num(cfg.stepA, 0), 0, 100);
+    const reserveW = cfg.reserveEnabled ? clamp(num(cfg.reserveMinW, 0), 0, 100000) : 0;
+    const stopReleaseHoldMs = clamp(num(cfg.stopReleaseHoldSec, 5), 0, 60) * 1000;
+    const demand = this._budgetDemand(cfg, staleMs);
+    const hardCap = await this._hardCap(cfg, staleMs);
+    let localCapW = Math.min(demand.capW, hardCap.capW);
+    if (Number.isFinite(localCapW)) localCapW = Math.max(0, localCapW - reserveW);
+
+    const central = this.adapter?._emsBudget;
+    const centralReady = !!(central && typeof central.getPvGrant === 'function' && typeof central.getTotalGrant === 'function' && typeof central.reserve === 'function');
+    const plans = [];
+    let totalRequestedW = 0;
+    for (const consumer of this._consumers) {
+      const base = `multiUse.consumers.${consumer.id}`;
+      const [stateW, stateA] = await Promise.all([
+        this.adapter.getStateAsync(`${base}.targetW`).catch(() => null),
+        this.adapter.getStateAsync(`${base}.targetA`).catch(() => null),
+      ]);
+      const reqTargetW = Math.max(0, num(stateW?.val, 0));
+      const reqTargetA = Math.max(0, num(stateA?.val, 0));
+      const basis = this._basis(consumer);
+      const requestedW = Math.max(0, reqTargetW > 0 ? reqTargetW : wattsFromA(reqTargetA, voltageV, phases));
+      const budgetMode = normalizeBudgetMode(consumer.budgetMode, demand.source);
+      totalRequestedW += requestedW;
+      plans.push({ consumer, base, reqTargetW, reqTargetA, basis, requestedW, budgetMode });
     }
 
+    let localRemainingW = localCapW;
+    let centralGrantTotalW = 0;
+    let centralReservedW = 0;
+    let centralPvReservedW = 0;
+    let appliedCount = 0;
+    let controlReason = hardCap.reason;
+    const safetyStop = hardCap.reason === ReasonCodes.STALE_METER || !centralReady;
+    if (!centralReady && controlReason === ReasonCodes.OK) controlReason = ReasonCodes.NO_BUDGET;
 
-    /**
-     * Code-Teil: Methode `init`
-     * Zweck: initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: init
-     * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    async init() {
-        if (!this._isEnabled()) return;
+    for (const plan of plans) {
+      const { consumer, base, reqTargetW, reqTargetA, basis, requestedW, budgetMode } = plan;
+      const previous = this._last.get(consumer.id) || {};
+      const actualBefore = this._readActualW(consumer, staleMs);
+      let allocatedW = 0;
+      let allocatedA = 0;
+      let reason = ReasonCodes.OK;
+      let status = 'idle';
+      let result = { applied: false, accepted: false, confirmed: false, readbackOk: null, status: 'idle', contract: this._actuatorContract.result(`multiUse:${consumer.id}`, now), owner: this._consumerOwner(consumer) };
 
-        this._loadConsumersFromConfig();
-
-        // UX: Allow configuring consumers by State-ID (objectId) instead of manual datapoint keys.
-        // We derive stable internal keys from the consumer id and upsert them into the datapoint registry.
-        for (const c of this._consumers) {
-            const baseKey = `mu.${c.id}`;
-            try {
-                if (c.setWId && !c.setWKey) {
-                    await this.dp.upsert({ key: `${baseKey}.setW`, objectId: c.setWId, dataType: 'number', direction: 'out', unit: 'W' });
-                    c.setWKey = `${baseKey}.setW`;
-                }
-                if (c.setAId && !c.setAKey) {
-                    await this.dp.upsert({ key: `${baseKey}.setA`, objectId: c.setAId, dataType: 'number', direction: 'out', unit: 'A' });
-                    c.setAKey = `${baseKey}.setA`;
-                }
-                if (c.enableId && !c.enableKey) {
-                    await this.dp.upsert({ key: `${baseKey}.enable`, objectId: c.enableId, dataType: 'boolean', direction: 'out', unit: '' });
-                    c.enableKey = `${baseKey}.enable`;
-                }
-            } catch (e) {
-                this.adapter.log.warn(`[multiUse] datapoint upsert failed for consumer '${c.key}': ${e?.message || e}`);
-            }
+      if (!safetyStop && requestedW > 0 && basis !== 'none') {
+        const requestedWithinLocalW = Number.isFinite(localRemainingW) ? Math.min(requestedW, Math.max(0, localRemainingW)) : requestedW;
+        const grant = budgetMode === 'pv'
+          ? central.getPvGrant({ key: `multiUse:${consumer.id}`, app: 'multiUse', priority: consumer.priority, requestedW: requestedWithinLocalW, applyEvcsAllocationCap: false })
+          : central.getTotalGrant({ key: `multiUse:${consumer.id}`, app: 'multiUse', priority: consumer.priority, requestedW: requestedWithinLocalW });
+        const grantW = Math.max(0, Math.min(requestedWithinLocalW, num(grant?.grantW, 0)));
+        centralGrantTotalW += grantW;
+        if (basis === 'currentA') {
+          allocatedA = floorToStep(ampsFromW(grantW, voltageV, phases), stepA);
+          allocatedW = wattsFromA(allocatedA, voltageV, phases);
+        } else {
+          allocatedW = floorToStep(grantW, stepW);
         }
-
-        // Optional budget datapoints via State-ID (to avoid using the global datapoints table)
-        const cfg = this._getCfg();
-        try {
-            if (cfg && cfg.externalLimitWId && !cfg.externalLimitWKey) {
-                await this.dp.upsert({ key: 'mu.externalLimitW', objectId: cfg.externalLimitWId, dataType: 'number', direction: 'in', unit: 'W' });
-            }
-            if (cfg && cfg.tariffBudgetWId && !cfg.tariffBudgetWKey) {
-                await this.dp.upsert({ key: 'mu.tariffBudgetW', objectId: cfg.tariffBudgetWId, dataType: 'number', direction: 'in', unit: 'W' });
-            }
-            if (cfg && cfg.pvBudgetWId && !cfg.pvBudgetWKey) {
-                await this.dp.upsert({ key: 'mu.pvBudgetW', objectId: cfg.pvBudgetWId, dataType: 'number', direction: 'in', unit: 'W' });
-            }
-        } catch (e) {
-            this.adapter.log.warn(`[multiUse] budget datapoint upsert failed: ${e?.message || e}`);
+        if (allocatedW > 0) {
+          status = allocatedW + 0.5 < requestedW ? 'central-budget-limited' : 'central-budget-allocated';
+          reason = allocatedW + 0.5 < requestedW ? ReasonCodes.LIMITED_BY_BUDGET : ReasonCodes.ALLOCATED;
+        } else {
+          status = 'central-budget-zero';
+          reason = ReasonCodes.NO_BUDGET;
         }
+      } else if (safetyStop && requestedW > 0) {
+        status = centralReady ? 'failsafe-stale' : 'central-budget-missing';
+        reason = centralReady ? ReasonCodes.STALE_METER : ReasonCodes.NO_BUDGET;
+      } else if (basis === 'none') {
+        status = 'control-disabled';
+        reason = ReasonCodes.CONTROL_DISABLED;
+      } else {
+        status = 'target-zero';
+        reason = ReasonCodes.SKIPPED;
+      }
 
-        await this.adapter.setObjectNotExistsAsync('multiUse', {
-            type: 'channel',
-            common: { name: 'Multi-Use' },
-            native: {},
+      const previousReservedW = Math.max(0, num(previous.reservedW, num(previous.allocatedW, 0)));
+      const previouslyActive = Math.max(previousReservedW, num(actualBefore, 0)) > 1;
+      const previousStopAcceptedTs = Math.max(0, num(previous.stopAcceptedTs, 0));
+      const stopAlreadyAccepted = allocatedW <= 0 && previousStopAcceptedTs > 0;
+      if (allocatedW > 0 || (basis !== 'none' && previouslyActive && !stopAlreadyAccepted)) {
+        const target = this._targetForConsumer(consumer, basis, allocatedW, allocatedA);
+        result = await this._applyConsumerCommand(consumer, target, status, staleMs);
+      } else if (stopAlreadyAccepted) {
+        const contract = this._actuatorContract.result(`multiUse:${consumer.id}`, now);
+        result = { applied: true, accepted: true, confirmed: true, readbackOk: contract.readbackOk, status: 'stop-accepted-hold', contract, owner: this._consumerOwner(consumer) };
+      } else if (allocatedW <= 0) {
+        this._actuatorContract.release(`multiUse:${consumer.id}`);
+      }
+
+      const actualAfter = this._readActualW(consumer, staleMs);
+      const actualW = actualAfter !== null ? actualAfter : actualBefore;
+      const accepted = result.accepted === true || result.confirmed === true;
+      let stopAcceptedTs = allocatedW <= 0
+        ? (previousStopAcceptedTs || (accepted && previouslyActive ? now : 0))
+        : 0;
+      let reservedW = 0;
+      if (allocatedW > 0) {
+        reservedW = accepted
+          ? Math.max(allocatedW, actualW === null ? 0 : actualW)
+          : Math.max(previousReservedW, actualW === null ? 0 : actualW);
+      } else if (previouslyActive) {
+        if (actualW !== null) reservedW = Math.max(0, actualW);
+        else if (!accepted) reservedW = previousReservedW;
+        else if (stopAcceptedTs > 0 && now - stopAcceptedTs < stopReleaseHoldMs) reservedW = previousReservedW;
+        else stopAcceptedTs = 0;
+      }
+      if (Number.isFinite(localRemainingW)) localRemainingW = Math.max(0, localRemainingW - reservedW);
+      if (centralReady && reservedW > 0) {
+        central.reserve({
+          key: `multiUse:${consumer.id}`,
+          app: 'multiUse',
+          label: consumer.name,
+          priority: 250 + Math.max(0, num(consumer.priority, 100)),
+          requestedW,
+          // Jede physische Last belegt das Gesamtbudget. PV-Verbrauch reduziert
+          // zusaetzlich das zentrale PV-Restbudget.
+          reserveW: reservedW,
+          pvReserveW: budgetMode === 'pv' ? reservedW : 0,
+          actualW: actualW === null ? reservedW : actualW,
+          pvOnly: budgetMode === 'pv',
+          mode: budgetMode,
         });
+        centralReservedW += reservedW;
+        if (budgetMode === 'pv') centralPvReservedW += reservedW;
+      }
 
-        await this.adapter.setObjectNotExistsAsync('multiUse.control', {
-            type: 'channel',
-            common: { name: 'Control' },
-            native: {},
-        });
-
-        await this.adapter.setObjectNotExistsAsync('multiUse.summary', {
-            type: 'channel',
-            common: { name: 'Summary' },
-            native: {},
-        });
-
-        await this.adapter.setObjectNotExistsAsync('multiUse.consumers', {
-            type: 'channel',
-            common: { name: 'Consumers' },
-            native: {},
-        });
-
-        await this.adapter.setObjectNotExistsAsync('multiUse.control.active', {
-            type: 'state',
-            common: { name: 'Active', type: 'boolean', role: 'indicator.working', read: true, write: false, def: false },
-            native: {},
-        });
-
-        await this.adapter.setObjectNotExistsAsync('multiUse.control.status', {
-            type: 'state',
-            common: { name: 'Status', type: 'string', role: 'text', read: true, write: false, def: 'init' },
-            native: {},
-        });
-
-        await this.adapter.setObjectNotExistsAsync('multiUse.control.lastTickTs', {
-            type: 'state',
-            common: { name: 'Last tick (ts)', type: 'number', role: 'value.time', read: true, write: false, def: 0 },
-            native: {},
-        });
-
-
-        await this.adapter.setObjectNotExistsAsync('multiUse.control.reason', {
-            type: 'state',
-            common: { name: 'Reason', type: 'string', role: 'text', read: true, write: false, def: ReasonCodes.OK },
-            native: {},
-        });
-
-        await this.adapter.setObjectNotExistsAsync('multiUse.control.requestW', {
-            type: 'state',
-            common: { name: 'Requested budget (W)', type: 'number', role: 'value.power', unit: 'W', read: true, write: false, def: 0 },
-            native: {},
-        });
-
-        await this.adapter.setObjectNotExistsAsync('multiUse.control.capW', {
-            type: 'state',
-            common: { name: 'Budget cap (W)', type: 'number', role: 'value.power', unit: 'W', read: true, write: false, def: 0 },
-            native: {},
-        });
-
-        await this.adapter.setObjectNotExistsAsync('multiUse.control.budgetW', {
-            type: 'state',
-            common: { name: 'Effective budget (W)', type: 'number', role: 'value.power', unit: 'W', read: true, write: false, def: 0 },
-            native: {},
-        });
-
-        await this.adapter.setObjectNotExistsAsync('multiUse.control.budgetSource', {
-            type: 'state',
-            common: { name: 'Budget source', type: 'string', role: 'text', read: true, write: false, def: 'NONE' },
-            native: {},
-        });
-
-        await this.adapter.setObjectNotExistsAsync('multiUse.control.capSources', {
-            type: 'state',
-            common: { name: 'Cap sources', type: 'string', role: 'text', read: true, write: false, def: '' },
-            native: {},
-        });
-
-        await this.adapter.setObjectNotExistsAsync('multiUse.control.reserveW', {
-            type: 'state',
-            common: { name: 'Reserve deducted (W)', type: 'number', role: 'value.power', unit: 'W', read: true, write: false, def: 0 },
-            native: {},
-        });
-
-        await this.adapter.setObjectNotExistsAsync('multiUse.summary.remainingBudgetW', {
-            type: 'state',
-            common: { name: 'Remaining budget (W)', type: 'number', role: 'value.power', unit: 'W', read: true, write: false, def: 0 },
-            native: {},
-        });
-
-
-        await this.adapter.setObjectNotExistsAsync('multiUse.summary.consumerCount', {
-            type: 'state',
-            common: { name: 'Consumers configured', type: 'number', role: 'value', read: true, write: false, def: 0 },
-            native: {},
-        });
-
-        await this.adapter.setObjectNotExistsAsync('multiUse.summary.appliedCount', {
-            type: 'state',
-            common: { name: 'Consumers applied (this tick)', type: 'number', role: 'value', read: true, write: false, def: 0 },
-            native: {},
-        });
-
-        // Per-consumer command and status states
-        for (const c of this._consumers) {
-            const base = `multiUse.consumers.${c.id}`;
-
-            await this.adapter.setObjectNotExistsAsync(base, {
-                type: 'channel',
-                common: { name: c.name || c.key },
-                native: { key: c.key, type: c.type },
-            });
-
-            await this.adapter.setObjectNotExistsAsync(`${base}.key`, {
-                type: 'state',
-                common: { name: 'Key', type: 'string', role: 'text', read: true, write: false, def: c.key },
-                native: {},
-            });
-
-            await this.adapter.setObjectNotExistsAsync(`${base}.type`, {
-                type: 'state',
-                common: { name: 'Type', type: 'string', role: 'text', read: true, write: false, def: c.type },
-                native: {},
-            });
-
-            await this.adapter.setObjectNotExistsAsync(`${base}.priority`, {
-                type: 'state',
-                common: { name: 'Priority', type: 'number', role: 'value', read: true, write: false, def: num(c.priority, 100) },
-                native: {},
-            });
-
-            await this.adapter.setObjectNotExistsAsync(`${base}.targetW`, {
-                type: 'state',
-                common: { name: 'Target power (W)', type: 'number', role: 'level.power', unit: 'W', read: true, write: true, def: num(c.defaultTargetW, 0) },
-                native: {},
-            });
-
-            await this.adapter.setObjectNotExistsAsync(`${base}.targetA`, {
-                type: 'state',
-                common: { name: 'Target current (A)', type: 'number', role: 'level.current', unit: 'A', read: true, write: true, def: num(c.defaultTargetA, 0) },
-                native: {},
-            });
-
-
-            await this.adapter.setObjectNotExistsAsync(`${base}.basis`, {
-                type: 'state',
-                common: { name: 'Applied control basis', type: 'string', role: 'text', read: true, write: false, def: c.controlBasis },
-                native: {},
-            });
-
-            await this.adapter.setObjectNotExistsAsync(`${base}.requestW`, {
-                type: 'state',
-                common: { name: 'Requested power (W)', type: 'number', role: 'value.power', unit: 'W', read: true, write: false, def: 0 },
-                native: {},
-            });
-
-            await this.adapter.setObjectNotExistsAsync(`${base}.allocatedW`, {
-                type: 'state',
-                common: { name: 'Allocated power (W)', type: 'number', role: 'value.power', unit: 'W', read: true, write: false, def: 0 },
-                native: {},
-            });
-
-            await this.adapter.setObjectNotExistsAsync(`${base}.allocatedA`, {
-                type: 'state',
-                common: { name: 'Allocated current (A)', type: 'number', role: 'value.current', unit: 'A', read: true, write: false, def: 0 },
-                native: {},
-            });
-
-
-            await this.adapter.setObjectNotExistsAsync(`${base}.applied`, {
-                type: 'state',
-                common: { name: 'Applied', type: 'boolean', role: 'indicator', read: true, write: false, def: false },
-                native: {},
-            });
-
-            await this.adapter.setObjectNotExistsAsync(`${base}.status`, {
-                type: 'state',
-                common: { name: 'Status', type: 'string', role: 'text', read: true, write: false, def: 'init' },
-                native: {},
-            });
-
-            await this.adapter.setObjectNotExistsAsync(`${base}.reason`, {
-                type: 'state',
-                common: { name: 'Reason', type: 'string', role: 'text', read: true, write: false, def: ReasonCodes.OK },
-                native: {},
-            });
-
-            await this.adapter.setObjectNotExistsAsync(`${base}.lastAppliedTs`, {
-                type: 'state',
-                common: { name: 'Last applied (ts)', type: 'number', role: 'value.time', read: true, write: false, def: 0 },
-                native: {},
-            });
-        }
-
-        await this._setStateIfChanged('multiUse.summary.consumerCount', this._consumers.length);
-        await this._seedLastFromStates().catch(() => undefined);
+      if (accepted) appliedCount++;
+      const contract = result.contract || this._actuatorContract.result(`multiUse:${consumer.id}`, now);
+      await this._publishContract(base, result.owner || this._consumerOwner(consumer), budgetMode, reservedW, contract);
+      const mappedReason = String(result.status || '').includes('failed') || String(result.status || '').includes('fault')
+        ? ReasonCodes.UNKNOWN
+        : reason;
+      const next = {
+        reqTargetW,
+        reqTargetA,
+        requestedW: Math.round(requestedW),
+        allocatedW: Math.round(allocatedW),
+        allocatedA,
+        basis,
+        applied: !!result.confirmed || (result.accepted === true && consumer.requireReadback !== true),
+        writeAccepted: result.accepted === true,
+        reservedW: Math.round(reservedW),
+        stopAcceptedTs,
+        status: String(result.status || status),
+        reason: mappedReason,
+      };
+      this._last.set(consumer.id, next);
+      await this._setStateIfChanged(`${base}.basis`, basis);
+      await this._setStateIfChanged(`${base}.requestW`, next.requestedW);
+      await this._setStateIfChanged(`${base}.allocatedW`, next.allocatedW);
+      await this._setStateIfChanged(`${base}.allocatedA`, Number.isFinite(allocatedA) ? Number(allocatedA.toFixed(3)) : 0);
+      await this._setStateIfChanged(`${base}.applied`, next.applied);
+      await this._setStateIfChanged(`${base}.status`, next.status);
+      await this._setStateIfChanged(`${base}.reason`, next.reason);
+      await this._setStateIfChanged(`${base}.lastAppliedTs`, now);
     }
 
-    /**
-     * Code-Teil: Methode `tick`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: tick
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    async tick() {
-        if (!this._isEnabled()) return;
-
-        const now = Date.now();
-        const dp = this.dp;
-        const cfg = this.adapter.config.multiUse || {};
-        const ctx = { adapter: this.adapter, dp };
-
-        const staleTimeoutSec = clamp(num(cfg.staleTimeoutSec, 15), 1, 3600);
-        const staleTimeoutMs = staleTimeoutSec * 1000;
-
-        const voltageV = clamp(num(cfg.voltageV, 230), 100, 260);
-        const defaultPhases = clamp(num(cfg.defaultPhases, 3), 1, 3);
-
-        const stepW = clamp(num(cfg.stepW, 0), 0, 5000);
-        const stepA = clamp(num(cfg.stepA, 0), 0, 100);
-
-        const reserveEnabled = !!cfg.reserveEnabled;
-        const reserveMinW = clamp(num(cfg.reserveMinW, 0), 0, 100000);
-        const reserveW = reserveEnabled ? reserveMinW : 0;
-
-        // ---- Determine requested budget (lower precedence sources) ----
-        let requestW = 0;
-        let budgetSource = 'NONE';
-
-        // Budget sources can be selected by mode (VIS / PV-Surplus / datapoint) or by explicit key (expert).
-        let tariffKey = String(cfg.tariffBudgetWKey || '').trim();
-        let pvKey = String(cfg.pvBudgetWKey || '').trim();
-
-        if (!tariffKey) {
-            const mode = String(cfg.tariffBudgetMode || 'vis').trim().toLowerCase();
-            if (mode === 'vis' || mode === 'tarif' || mode === 'tariff') tariffKey = 'cm.tariffBudgetW';
-            else if (mode === 'dp' || mode === 'datapoint') tariffKey = 'mu.tariffBudgetW';
-            else tariffKey = '';
-        }
-
-        if (!pvKey) {
-            const mode = String(cfg.pvBudgetMode || 'surplus').trim().toLowerCase();
-            if (mode === 'surplus' || mode === 'pv' || mode === 'pvsurplus') pvKey = 'cm.pvSurplusW';
-            else if (mode === 'dp' || mode === 'datapoint') pvKey = 'mu.pvBudgetW';
-            else pvKey = '';
-        }
-
-        if (tariffKey && dp && typeof dp.getNumberFresh === 'function') {
-            const v = dp.getNumberFresh(tariffKey, staleTimeoutMs, null);
-            if (Number.isFinite(v)) {
-                requestW = Math.max(0, v);
-                budgetSource = 'TARIFF';
-            }
-        }
-
-        if (budgetSource === 'NONE' && pvKey && dp && typeof dp.getNumberFresh === 'function') {
-            const v = dp.getNumberFresh(pvKey, staleTimeoutMs, null);
-            if (Number.isFinite(v)) {
-                requestW = Math.max(0, v);
-                budgetSource = 'PV';
-            }
-        }
-
-        if (budgetSource === 'NONE') {
-            requestW = Math.max(0, num(cfg.comfortBudgetW, 0));
-            budgetSource = 'COMFORT';
-        }
-
-        // Reserve (always deducted to keep headroom for uncontrolled loads)
-        const requestAfterReserveW = Math.max(0, requestW - reserveW);
-
-        // ---- Apply higher-precedence caps (Netzschutz > external > peakshaving) ----
-        let capW = Number.POSITIVE_INFINITY;
-        /** @type {Array<string>} */
-        const capSources = [];
-
-        let controlReason = ReasonCodes.OK;
-
-        // Netzschutz: if PeakShaving reports STALE_METER we force budget to 0
-        const psReasonSt = await this.adapter.getStateAsync('peakShaving.control.reason').catch(() => null);
-        const psReason = String(psReasonSt?.val || '').trim();
-        if (psReason === ReasonCodes.STALE_METER) {
-            capW = 0;
-            capSources.push('NET_STALE');
-            controlReason = ReasonCodes.STALE_METER;
-        }
-
-        // External limit cap (strict: if configured but stale/invalid => failsafe)
-        let externalKey = String(cfg.externalLimitWKey || '').trim();
-        if (!externalKey && cfg.externalLimitWId) externalKey = 'mu.externalLimitW';
-        if (externalKey && dp && typeof dp.isStale === 'function' && typeof dp.getNumberFresh === 'function') {
-            const stale = dp.isStale(externalKey, staleTimeoutMs);
-            if (stale) {
-                capW = 0;
-                capSources.push('EXTERNAL_STALE');
-                controlReason = ReasonCodes.STALE_METER;
-            } else {
-                const ext = dp.getNumberFresh(externalKey, staleTimeoutMs, null);
-                if (!Number.isFinite(ext)) {
-                    capW = 0;
-                    capSources.push('EXTERNAL_INVALID');
-                    controlReason = ReasonCodes.STALE_METER;
-                } else {
-                    capW = Math.min(capW, Math.max(0, ext));
-                    capSources.push('EXTERNAL');
-                }
-            }
-        }
-
-        // PeakShaving cap (only when PS is active; prevents MU from "re-increasing" after PS reductions)
-        const psActiveSt = await this.adapter.getStateAsync('peakShaving.control.active').catch(() => null);
-        const psActive = !!psActiveSt?.val;
-        if (psActive) {
-            const availSt = await this.adapter.getStateAsync('peakShaving.dynamic.availableForControlledW').catch(() => null);
-            const age = stateAgeMs(availSt);
-            const avail = stateNum(availSt, null);
-            if (!(Number.isFinite(avail)) || age > staleTimeoutMs) {
-                capW = Math.min(capW, 0);
-                capSources.push('PEAK_SHAVING_STALE');
-            } else {
-                capW = Math.min(capW, Math.max(0, avail));
-                capSources.push('PEAK_SHAVING');
-            }
-        }
-
-        // Final effective budget
-        let budgetW = Math.min(requestAfterReserveW, capW);
-        if (!Number.isFinite(budgetW) || budgetW < 0) budgetW = 0;
-
-        if (controlReason === ReasonCodes.OK) {
-            if (requestAfterReserveW <= 0) controlReason = ReasonCodes.NO_BUDGET;
-            else if (budgetW + 0.0001 < requestAfterReserveW) controlReason = ReasonCodes.LIMITED_BY_BUDGET;
-            else controlReason = ReasonCodes.OK;
-        }
-
-        // Publish control states
-        await this._setStateIfChanged('multiUse.control.reason', controlReason);
-        await this._setStateIfChanged('multiUse.control.requestW', Math.round(requestAfterReserveW));
-        await this._setStateIfChanged('multiUse.control.capW', Number.isFinite(capW) ? Math.round(capW) : 0);
-        await this._setStateIfChanged('multiUse.control.budgetW', Math.round(budgetW));
-        await this._setStateIfChanged('multiUse.control.budgetSource', budgetSource);
-        await this._setStateIfChanged('multiUse.control.capSources', capSources.join(','));
-        await this._setStateIfChanged('multiUse.control.reserveW', Math.round(reserveW));
-
-        // ---- Allocate budget to consumers deterministically ----
-        let remainingW = budgetW;
-        let appliedCount = 0;
-        let totalRequestedW = 0;
-
-        for (const c of this._consumers) {
-            const base = `multiUse.consumers.${c.id}`;
-            const stW = await this.adapter.getStateAsync(`${base}.targetW`).catch(() => null);
-            const stA = await this.adapter.getStateAsync(`${base}.targetA`).catch(() => null);
-
-            const reqTargetW = num(stW?.val, 0);
-            const reqTargetA = num(stA?.val, 0);
-
-            const hasRequest = (reqTargetW > 0) || (reqTargetA > 0);
-
-            let reason = ReasonCodes.OK;
-            let status = 'skipped';
-            let applied = false;
-
-            // Determine consumer basis (auto resolves to available setpoint dp)
-            let basis = String(c.controlBasis || 'auto');
-            if (basis === 'auto') {
-                if (c.type === 'load') basis = 'powerW';
-                else if (c.setWKey) basis = 'powerW';
-                else if (c.setAKey) basis = 'currentA';
-                else basis = 'none';
-            }
-
-            // Requested in W (unified)
-            const requestedW = reqTargetW > 0 ? reqTargetW : wattsFromA(reqTargetA, voltageV, defaultPhases);
-            totalRequestedW += Math.max(0, requestedW);
-
-            // Allocation
-            let allocatedW = 0;
-            let allocatedA = 0;
-
-            if (!hasRequest) {
-                // A zero target means "off" – enforce by actively driving the consumer to 0.
-                allocatedW = 0;
-                allocatedA = 0;
-                reason = ReasonCodes.SKIPPED;
-                status = 'target_zero';
-
-                if (basis !== 'none') {
-                    const res = await applySetpoint(ctx, c, { targetW: 0, targetA: 0, basis });
-                    applied = !!res?.applied;
-                    status = String(res?.status || status);
-
-                    // Map actuator status to canonical reasons
-                    if (status === 'no_setpoint_dp') reason = ReasonCodes.NO_SETPOINT;
-                    else if (status === 'control_disabled') reason = ReasonCodes.SKIPPED;
-                    else if (status === 'write_failed' || status === 'applied_partial') reason = ReasonCodes.UNKNOWN;
-                    else if (status === 'unsupported_type') reason = ReasonCodes.SKIPPED;
-
-                    if (applied) appliedCount++;
-                } else {
-                    applied = false;
-                }
-            } else if (controlReason === ReasonCodes.STALE_METER) {
-                // Safety: always drive to 0 when our upstream safety signal is stale
-                allocatedW = 0;
-                allocatedA = 0;
-                reason = ReasonCodes.STALE_METER;
-                status = 'failsafe_stale';
-                const res = await applySetpoint(ctx, c, { targetW: 0, targetA: 0, basis });
-                applied = !!res?.applied;
-                status = String(res?.status || status);
-
-                // Map low-level actuator status to canonical reasons (transparency)
-                if (status === 'no_setpoint_dp') reason = ReasonCodes.NO_SETPOINT;
-                else if (status === 'control_disabled') reason = ReasonCodes.SKIPPED;
-                else if (status === 'write_failed' || status === 'applied_partial') reason = ReasonCodes.UNKNOWN;
-                    else if (status === 'unsupported_type') reason = ReasonCodes.SKIPPED;
-
-                if (applied) appliedCount++;
-            } else if (basis === 'none') {
-                reason = ReasonCodes.SKIPPED;
-                status = 'control_disabled';
-                applied = false;
-            } else {
-                // Budget allocation in W first
-                const wantW = Math.max(0, requestedW);
-                const takeW = Math.min(wantW, Math.max(0, remainingW));
-
-                if (basis === 'powerW') {
-                    allocatedW = floorToStep(takeW, stepW);
-                    allocatedA = 0;
-                    remainingW = Math.max(0, remainingW - allocatedW);
-                } else { // currentA
-                    // convert W->A, step, then back to W for remaining
-                    const rawA = ampsFromW(takeW, voltageV, defaultPhases);
-                    allocatedA = floorToStep(rawA, stepA);
-                    allocatedW = wattsFromA(allocatedA, voltageV, defaultPhases);
-                    remainingW = Math.max(0, remainingW - allocatedW);
-                }
-
-                // Determine reason
-                if (allocatedW <= 0.0001) {
-                    reason = ReasonCodes.NO_BUDGET;
-                    status = 'budget_zero';
-                } else if (allocatedW + 0.0001 < wantW) {
-                    reason = ReasonCodes.LIMITED_BY_BUDGET;
-                    status = 'allocated_limited';
-                } else {
-                    reason = ReasonCodes.ALLOCATED;
-                    status = 'allocated';
-                }
-
-                const res = await applySetpoint(ctx, c, { targetW: allocatedW, targetA: allocatedA, basis });
-                applied = !!res?.applied;
-                status = String(res?.status || status);
-
-                // Map low-level actuator status to canonical reasons (transparency)
-                if (status === 'no_setpoint_dp') reason = ReasonCodes.NO_SETPOINT;
-                else if (status === 'control_disabled') reason = ReasonCodes.SKIPPED;
-                else if (status === 'write_failed' || status === 'applied_partial') reason = ReasonCodes.UNKNOWN;
-                    else if (status === 'unsupported_type') reason = ReasonCodes.SKIPPED;
-
-                if (applied) appliedCount++;
-            }
-
-            // Write per-consumer result only if changed (reduce state spam)
-            const prev = this._last.get(c.id);
-            const next = { reqTargetW, reqTargetA, requestedW: Math.round(requestedW), allocatedW: Math.round(allocatedW), allocatedA, basis, applied, status, reason };
-            const changed = !prev
-                || prev.reqTargetW !== next.reqTargetW
-                || prev.reqTargetA !== next.reqTargetA
-                || prev.requestedW !== next.requestedW
-                || prev.allocatedW !== next.allocatedW
-                || prev.allocatedA !== next.allocatedA
-                || prev.basis !== next.basis
-                || prev.applied !== next.applied
-                || prev.status !== next.status
-                || prev.reason !== next.reason;
-
-            if (changed) {
-                this._last.set(c.id, next);
-                await this.adapter.setStateAsync(`${base}.basis`, basis, true);
-                await this.adapter.setStateAsync(`${base}.requestW`, next.requestedW, true);
-                await this.adapter.setStateAsync(`${base}.allocatedW`, next.allocatedW, true);
-                await this.adapter.setStateAsync(`${base}.allocatedA`, Number.isFinite(next.allocatedA) ? Number(next.allocatedA.toFixed(3)) : 0, true);
-                await this.adapter.setStateAsync(`${base}.applied`, applied, true);
-                await this.adapter.setStateAsync(`${base}.status`, status, true);
-                await this.adapter.setStateAsync(`${base}.reason`, reason, true);
-                await this.adapter.setStateAsync(`${base}.lastAppliedTs`, now, true);
-            }
-        }
-
-        const status = (this._consumers.length === 0)
-            ? 'no_consumers'
-            : ((controlReason === ReasonCodes.STALE_METER)
-                ? 'failsafe_stale_meter'
-                : (totalRequestedW > 0 ? 'ok' : 'idle'));
-
-        await this._setStateIfChanged('multiUse.control.active', (totalRequestedW > 0) || (controlReason === ReasonCodes.STALE_METER));
-        await this._setStateIfChanged('multiUse.control.status', status);
-        await this._setStateIfChanged('multiUse.control.lastTickTs', now);
-        await this._setStateIfChanged('multiUse.summary.appliedCount', appliedCount);
-        await this._setStateIfChanged('multiUse.summary.remainingBudgetW', Math.round(Math.max(0, remainingW)));
-
-        if (this.adapter?.log?.debug) {
-            this.adapter.log.debug(`[multiUse] tick consumers=${this._consumers.length} applied=${appliedCount} status=${status} budgetW=${Math.round(budgetW)} remainingW=${Math.round(remainingW)} reason=${controlReason}`);
-        }
-    }
+    const finalPeek = centralReady && typeof central.peek === 'function' ? central.peek() : null;
+    const centralRemainingW = demand.source === 'PV'
+      ? Math.max(0, num(finalPeek?.remainingPvW, 0))
+      : (finalPeek?.remainingTotalW === null ? Number.POSITIVE_INFINITY : Math.max(0, num(finalPeek?.remainingTotalW, 0)));
+    let remainingBudgetW = Math.min(localRemainingW, centralRemainingW);
+    if (!Number.isFinite(remainingBudgetW)) remainingBudgetW = 0;
+    const status = !this._consumers.length ? 'no_consumers'
+      : (safetyStop ? (centralReady ? 'failsafe-stale-meter' : 'central-budget-missing') : (totalRequestedW > 0 ? 'ok' : 'idle'));
+    const capSources = ['CENTRAL_EMS', ...hardCap.sources];
+    const initialCentralW = demand.source === 'PV'
+      ? Math.max(0, num(this.adapter?._emsBudget?.remainingPvW, 0) + centralPvReservedW)
+      : (Number.isFinite(num(this.adapter?._emsBudget?.remainingTotalW, Number.POSITIVE_INFINITY))
+          ? Math.max(0, num(this.adapter?._emsBudget?.remainingTotalW, 0) + centralReservedW)
+          : totalRequestedW);
+    let effectiveBudgetW = Math.min(localCapW, initialCentralW, totalRequestedW);
+    if (!Number.isFinite(effectiveBudgetW)) effectiveBudgetW = totalRequestedW;
+    await this._setStateIfChanged('multiUse.control.active', totalRequestedW > 0 || safetyStop);
+    await this._setStateIfChanged('multiUse.control.status', status);
+    await this._setStateIfChanged('multiUse.control.reason', controlReason);
+    await this._setStateIfChanged('multiUse.control.lastTickTs', now);
+    await this._setStateIfChanged('multiUse.control.requestW', Math.round(totalRequestedW));
+    await this._setStateIfChanged('multiUse.control.capW', Number.isFinite(localCapW) ? Math.round(localCapW) : 0);
+    await this._setStateIfChanged('multiUse.control.budgetW', Math.round(Math.max(0, effectiveBudgetW)));
+    await this._setStateIfChanged('multiUse.control.budgetSource', demand.source);
+    await this._setStateIfChanged('multiUse.control.capSources', capSources.join(','));
+    await this._setStateIfChanged('multiUse.control.reserveW', Math.round(reserveW));
+    await this._setStateIfChanged('multiUse.control.centralBudgetActive', centralReady);
+    await this._setStateIfChanged('multiUse.control.centralGrantW', Math.round(centralGrantTotalW));
+    await this._setStateIfChanged('multiUse.control.centralReservedW', Math.round(centralReservedW));
+    await this._setStateIfChanged('multiUse.control.centralPvReservedW', Math.round(centralPvReservedW));
+    await this._setStateIfChanged('multiUse.control.centralBudgetStatus', centralReady ? 'central-grant-reserve' : 'missing');
+    await this._setStateIfChanged('multiUse.summary.appliedCount', appliedCount);
+    await this._setStateIfChanged('multiUse.summary.remainingBudgetW', Math.round(Math.max(0, remainingBudgetW)));
+    if (this.adapter?.log?.debug) this.adapter.log.debug(`[multiUse] consumers=${this._consumers.length} requested=${Math.round(totalRequestedW)} applied=${appliedCount} central=${centralReady} reserved=${Math.round(centralReservedW)}W remaining=${Math.round(remainingBudgetW)}W`);
+  }
 }
 
 module.exports = { MultiUseModule };

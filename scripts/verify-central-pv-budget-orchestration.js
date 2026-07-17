@@ -337,7 +337,7 @@ assert(storageSource.includes('central-grant-after-evcs'), 'Speicher muss den ze
 assert(storageSource.includes('Rekonstruktion aus Allocation-Prozenten waere ein Parallelbudget'), 'Lokale Speicher-Rekonstruktion muss ausdrücklich entfernt sein');
 assert(!storageSource.includes("pvBudgetResolution = 'allocation-reconciled'"), 'Speicher darf kein zweites Allocation-Budget rekonstruieren');
 assert(storageSource.includes('Finaler zentraler Gesamtbudget-Cap fuer Speicher-Netzladen'), 'Speicher-Netzladen muss den zentralen Gesamt-Grant verwenden');
-assert(storageSource.includes('reserveW: gridChargeSource ? totalBudgetStorageReservedW : 0'), 'Speicher-Netzladen muss Gesamtbudget fuer nachgelagerte Verbraucher reservieren');
+assert(storageSource.includes('reserveW: pvSource ? pvBudgetReservedW : (gridChargeSource ? totalBudgetStorageReservedW : 0)'), 'Speicher muss PV-Laden im PV-Budget und Netzladen im Gesamtbudget fuer nachgelagerte Verbraucher reservieren');
 assert(storageSource.includes("'central-stale-blocked'"), 'Speicher muss einen stalen zentralen Snapshot blockieren statt lokal zu rekonstruieren');
 
 const thermalSource = read('src-ts/runtime-executables/ems/modules/thermal-control.ts');

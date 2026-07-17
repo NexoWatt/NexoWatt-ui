@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:a56f6320bbb20b2a64e605cc22358de9d3684475fbbcc6cc1c7704326359225f
+ * Quell-Hash: sha256:eb188089ed373ddda778060a2c06417ff7d5efa4987cc8189e00e1024bb58521
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -393,6 +393,15 @@ class ModuleManager {
             enabledFn: () => this._licenseAllowsApp('storage'),
         });
 
+        // MultiUse nutzt ausschließlich den nach EVCS und Speicher verbleibenden
+        // zentralen Gesamt-/PV-Grant. Es läuft deshalb vor Thermik und Heizstab;
+        // bestätigte MultiUse-Leistung wird im selben Tick zentral reserviert.
+        this.modules.push({
+            key: 'multiUse',
+            instance: new MultiUseModule(this.adapter, this.dp),
+            enabledFn: () => this._licenseAllowsApp('multiuse') && !!this.adapter.config.enableMultiUse,
+        });
+
         // Thermische Steuerung (Wärmepumpe/Klima)
         // Läuft NACH dem Lademanagement, damit PV‑Restbudget (pvCapEffective - EVCS used)
         // innerhalb des gleichen Ticks genutzt werden kann.
@@ -440,13 +449,6 @@ class ModuleManager {
             key: 'aiAdvisor',
             instance: new AiAdvisorModule(this.adapter, this.dp),
             enabledFn: () => this._licenseAllowsApp('aiAdvisor') && !!(this.adapter.config.enableAiAdvisor || this.adapter.config.enableAiOptimization),
-        });
-
-        // Multi use (future)
-        this.modules.push({
-            key: 'multiUse',
-            instance: new MultiUseModule(this.adapter, this.dp),
-            enabledFn: () => this._licenseAllowsApp('multiuse') && !!this.adapter.config.enableMultiUse,
         });
 
         // Stufe A ist eine rein lesende Feld-Diagnose. Sie läuft bewusst zuletzt,
