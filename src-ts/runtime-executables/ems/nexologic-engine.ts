@@ -43,6 +43,24 @@
 
 'use strict';
 
+const { withActuatorShadowContext, priorityForOwner } = require('./services/actuator-shadow-arbiter');
+
+/**
+ * NexoLogic-Schreibpfade laufen ereignis- und timergetrieben außerhalb des
+ * normalen EMS-Modulticks. Dieser Helfer gibt ihnen im Shadow-Arbiter dennoch
+ * einen eindeutigen Owner, ohne das bestehende Write-Verhalten zu verändern.
+ */
+function writeNexoLogicForeign(adapter, objectId, state, reason) {
+  return withActuatorShadowContext(adapter, {
+    owner: 'nexoLogic',
+    module: 'nexoLogic',
+    priority: priorityForOwner('nexoLogic'),
+    reason: String(reason || 'nexologic-write'),
+    leaseMs: 60000,
+    kind: 'nexologic',
+  }, () => adapter.setForeignStateAsync(objectId, state));
+}
+
 /**
  * NexoLogic – Node/Graph runtime engine.
  *
@@ -823,7 +841,7 @@ const NODE_TYPES = {
 
             internal.lastWrittenVal = pv;
             internal.lastWriteTs = Date.now();
-            adapter.setForeignStateAsync(dpId, { val: pv, ack: pa }).catch(() => {});
+            writeNexoLogicForeign(adapter, dpId, { val: pv, ack: pa }, 'node-write-throttled').catch(() => {});
           } catch (_e2) {}
         }, dueIn);
       };
@@ -852,7 +870,7 @@ const NODE_TYPES = {
           internal.lastWrittenVal = val;
           internal.lastWriteTs = now;
           try {
-            adapter.setForeignStateAsync(dpId, { val, ack }).catch(() => {});
+            writeNexoLogicForeign(adapter, dpId, { val, ack }, 'node-write').catch(() => {});
           } catch (_e) {}
         } else {
           // throttle: remember latest value and write when allowed
@@ -2227,11 +2245,11 @@ const NODE_TYPES = {
         else val = true;
 
         try {
-          adapter.setForeignStateAsync(dpId, { val, ack: false }).catch(() => {});
+          writeNexoLogicForeign(adapter, dpId, { val, ack: false }, 'scene-trigger').catch(() => {});
           if (pulseMs > 0) {
             setTimeout(() => {
               try {
-                adapter.setForeignStateAsync(dpId, { val: (val === true ? false : 0), ack: false }).catch(() => {});
+                writeNexoLogicForeign(adapter, dpId, { val: (val === true ? false : 0), ack: false }, 'scene-pulse-reset').catch(() => {});
               } catch (_e2) {}
             }, pulseMs);
           }

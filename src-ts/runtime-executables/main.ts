@@ -136,6 +136,7 @@ const NwChannelDetector =
 // Embedded EMS engine (Charging Management from nexowatt-multiuse)
 const { EmsEngine } = require('./ems/engine');
 const { resolveNvpDisplay } = require('./ems/services/measurement-freshness');
+const { buildHttpActuatorShadowContext, withActuatorShadowContext } = require('./ems/services/actuator-shadow-arbiter');
 const nwCountryProfileService = require('./ems/services/country-profile-service');
 const nwFeatureFlagsService = require('./ems/services/feature-flags');
 const {
@@ -9739,6 +9740,13 @@ async onReady() {
   async startServer() {
     const app = express();
 
+    // Stufe C1: Manuelle/API-Schreibanforderungen erhalten einen eindeutigen
+    // Shadow-Owner. AsyncLocalStorage reicht diesen Kontext bis zum realen
+    // setForeignStateAsync-Aufruf durch, ohne den Write zu verändern.
+    app.use((req, _res, next) => {
+      const context = buildHttpActuatorShadowContext(req && req.method, req && (req.path || req.url));
+      return withActuatorShadowContext(this, context, () => next());
+    });
     // -----------------------------------------------------------------------
     // Feldkompatible Web-/API-Härtung
     // -----------------------------------------------------------------------

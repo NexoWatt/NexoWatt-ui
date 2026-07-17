@@ -14006,7 +14006,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         { label: 'Messwertalter', value: nvp.signedAgeMs == null && nvp.importAgeMs == null && nvp.exportAgeMs == null
           ? '—'
           : _fmtAge(Math.min(...[nvp.signedAgeMs, nvp.importAgeMs, nvp.exportAgeMs].filter((value) => Number.isFinite(Number(value))).map(Number))) },
-        { label: 'Aktive Aktorkonflikte', value: String(Number(stageA.concurrentControlPathsCount || 0)) },
+        { label: 'Aktor-Konflikte', value: String(Number(stageA.activeActuatorConflictCount ?? stageA.concurrentControlPathsCount ?? 0)) },
         { label: 'Speicherquelle', value: String(storageOverride.resolvedSource || storageOverride.mode || 'automatisch') },
       ];
       if (Number(stageA.measurementIssueCount || 0) > 0) {

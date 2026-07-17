@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/stage-a-diagnostics.ts
- * Quell-Hash: sha256:a3d5f0ac37b68b1b307c09683d091eb50aca5e2147de0fd9cd2a909f6e653eb4
+ * Quell-Hash: sha256:83c09b9dcf4e44615a6587c2fcf151857c4d20288e6b3a8fd17fda3861029cbf
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -279,7 +279,14 @@ class StageADiagnosticsModule extends BaseModule {
             summary: ['string', 'text', 'Stufe-A-Zusammenfassung'],
             mappedActuatorCount: ['number', 'value', 'Erfasste Aktor-Mappings'],
             duplicateActuatorCount: ['number', 'value', 'Mehrfach zugeordnete Aktoren'],
-            concurrentControlPathsCount: ['number', 'value', 'Aktive Aktorkonflikte'],
+            concurrentControlPathsCount: ['number', 'value', 'Aktive statische Aktorkonflikte'],
+            activeActuatorConflictCount: ['number', 'value', 'Aktive Aktorkonflikte gesamt'],
+            shadowArbiterMode: ['string', 'text', 'Aktor-Shadow-Arbiter Modus'],
+            shadowObservedWriteCount: ['number', 'value', 'Beobachtete externe Schreibanforderungen'],
+            shadowRecentWriteCount: ['number', 'value', 'Aktuelle Schreibanforderungen im Konfliktfenster'],
+            shadowWriteConflictCount: ['number', 'value', 'Aktive Schreibkonflikte'],
+            shadowWriteConflictsJson: ['string', 'json', 'Aktive Schreibkonflikte JSON'],
+            shadowLastWriteJson: ['string', 'json', 'Letzte beobachtete Schreibanforderung JSON'],
             duplicateActuatorsJson: ['string', 'json', 'Mehrfachzuordnungen JSON'],
             ownerMatrixJson: ['string', 'json', 'Aktor-Owner-Matrix JSON'],
             concurrentControlPathsJson: ['string', 'json', 'Aktive Aktorkonflikte JSON'],
@@ -337,6 +344,21 @@ class StageADiagnosticsModule extends BaseModule {
         const ownerMatrix = buildOwnerMatrix(mappings);
         const duplicates = ownerMatrix.filter((row) => row.duplicate);
         const conflicts = ownerMatrix.filter((row) => row.conflict);
+        // Der Shadow-Arbiter verwendet diese Matrix ausschließlich zur Owner-Zuordnung
+        // für unscoped Runtime-/Timer-Writes. Sie verändert keine Priorität und keinen
+        // Hardwarewert.
+        this.adapter._stageAActuatorOwnerById = Object.fromEntries(ownerMatrix.map((row) => [row.objectId, {
+                owners: row.owners,
+                activeOwners: row.activeOwners,
+            }]));
+        const shadow = this.adapter?._actuatorShadowArbiter && typeof this.adapter._actuatorShadowArbiter.snapshot === 'function'
+            ? this.adapter._actuatorShadowArbiter.snapshot(now)
+            : (this.adapter?._actuatorShadowSnapshot || { mode: 'shadow', active: false, activeConflictCount: 0, activeConflicts: [] });
+        const shadowConflicts = Array.isArray(shadow.activeConflicts) ? shadow.activeConflicts : [];
+        const activeActuatorConflictCount = new Set([
+            ...conflicts.map((row) => text(row.objectId)),
+            ...shadowConflicts.map((row) => text(row?.objectId || row?.targetId)),
+        ].filter(Boolean)).size;
         const dps = config.datapoints && typeof config.datapoints === 'object' ? config.datapoints : {};
         const staleSec = Number(config.settings?.deviceStaleTimeoutSec);
         const staleMs = Math.max(5000, Number.isFinite(staleSec) && staleSec > 0 ? staleSec * 1000 : 60000);
@@ -388,7 +410,9 @@ class StageADiagnosticsModule extends BaseModule {
         if (duplicates.length)
             warnings.push(`${duplicates.length} Aktor-Doppelbelegung(en) erkannt.`);
         if (conflicts.length)
-            errors.push(`${conflicts.length} gleichzeitig aktive Steuerkonflikt(e) erkannt.`);
+            errors.push(`${conflicts.length} statische Steuerkonflikt(e) erkannt.`);
+        if (shadowConflicts.length)
+            errors.push(`${shadowConflicts.length} konkurrierende Laufzeit-Schreibpfad(e) erkannt.`);
         if (nvpMode === 'missing')
             errors.push('Kein NVP-Messdatenpunkt konfiguriert.');
         else if (centralNvp && centralNvp.usable !== true)
@@ -405,7 +429,7 @@ class StageADiagnosticsModule extends BaseModule {
         }
         const status = errors.length ? 'error' : (warnings.length ? 'warn' : 'ok');
         const measurementIssueCount = warnings.filter((entry) => /NVP|Heartbeat|connected/i.test(entry)).length + errors.filter((entry) => /NVP|Mess/i.test(entry)).length;
-        const summary = `${status.toUpperCase()} · NVP ${nvpStatus}/${nvpSource} · ${conflicts.length} Aktorkonflikt(e) · Speicher ${storageOverride.mode}`;
+        const summary = `${status.toUpperCase()} · NVP ${nvpStatus}/${nvpSource} · ${activeActuatorConflictCount} Aktorkonflikt(e) · Speicher ${storageOverride.mode}`;
         const snapshot = {
             ts: now,
             status,
@@ -414,6 +438,9 @@ class StageADiagnosticsModule extends BaseModule {
             uniqueActuatorCount: ownerMatrix.length,
             duplicateActuatorCount: duplicates.length,
             concurrentControlPathsCount: conflicts.length,
+            activeActuatorConflictCount,
+            shadowArbiter: shadow,
+            shadowWriteConflictCount: shadowConflicts.length,
             ownerMatrix,
             duplicates,
             conflicts,
@@ -449,6 +476,13 @@ class StageADiagnosticsModule extends BaseModule {
             this.setDiagnosticState('mappedActuatorCount', mappings.length),
             this.setDiagnosticState('duplicateActuatorCount', duplicates.length),
             this.setDiagnosticState('concurrentControlPathsCount', conflicts.length),
+            this.setDiagnosticState('activeActuatorConflictCount', activeActuatorConflictCount),
+            this.setDiagnosticState('shadowArbiterMode', text(shadow.mode) || 'shadow'),
+            this.setDiagnosticState('shadowObservedWriteCount', Math.max(0, Number(shadow.requestsTotal) || 0)),
+            this.setDiagnosticState('shadowRecentWriteCount', Math.max(0, Number(shadow.recentWriteCount) || 0)),
+            this.setDiagnosticState('shadowWriteConflictCount', shadowConflicts.length),
+            this.setDiagnosticState('shadowWriteConflictsJson', JSON.stringify(shadowConflicts)),
+            this.setDiagnosticState('shadowLastWriteJson', JSON.stringify(shadow.lastWrite || null)),
             this.setDiagnosticState('duplicateActuatorsJson', JSON.stringify(duplicates)),
             this.setDiagnosticState('ownerMatrixJson', JSON.stringify(ownerMatrix)),
             this.setDiagnosticState('concurrentControlPathsJson', JSON.stringify(conflicts)),
@@ -470,7 +504,7 @@ class StageADiagnosticsModule extends BaseModule {
             this.setDiagnosticState('warningsJson', JSON.stringify(warnings)),
             this.setDiagnosticState('errorsJson', JSON.stringify(errors)),
         ]);
-        const signature = JSON.stringify({ status, duplicates: duplicates.map((row) => row.objectId), conflicts: conflicts.map((row) => row.objectId), nvpStatus, nvpSource, nvpCoherent });
+        const signature = JSON.stringify({ status, duplicates: duplicates.map((row) => row.objectId), conflicts: conflicts.map((row) => row.objectId), shadow: shadowConflicts.map((row) => row.objectId), nvpStatus, nvpSource, nvpCoherent });
         if (signature !== this._lastWarningSignature && status !== 'ok' && typeof this.adapter.log?.warn === 'function') {
             this._lastWarningSignature = signature;
             this.adapter.log.warn(`[Stufe A] ${summary}`);

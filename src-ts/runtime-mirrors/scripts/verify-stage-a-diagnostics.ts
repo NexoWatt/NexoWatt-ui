@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 1070b6f162f21f9377a398d0e8f8c365b74eec6f57a35b18438dced10c23429e
+ * Original-Hash: 8c317f6bc32801087c35d43123b9a31f32051162d45f40f0ce6f85ceb827fb4f
  */
 
 /**
@@ -92,6 +92,20 @@ const adapter = {
   async setStateAsync(id, value) { writes.push({ id, value }); assert.ok(id.startsWith('ems.diagnostics.stageA.'), `unerlaubter Write: ${id}`); },
   async getStateAsync() { return null; },
   async getForeignStateAsync(id) { return states.get(id) || null; },
+  _actuatorShadowArbiter: {
+    snapshot() {
+      return {
+        active: true,
+        mode: 'shadow-read-only',
+        behaviorChanged: false,
+        requestsTotal: 2,
+        recentWriteCount: 2,
+        activeConflictCount: 1,
+        activeConflicts: [{ targetId: 'runtime.shared.actor', owners: ['storage', 'peakShaving'], values: [4200, 0] }],
+        lastWrite: { targetId: 'runtime.shared.actor', owner: 'peakShaving', value: 0 },
+      };
+    },
+  },
   _nwGetStorageFarmRuntimeInfo() { return { active: false, configuredCount: 0 }; },
   _nwResolveBatteryFlowFromCache() { return { src: 'batterySigned' }; },
   _nvpFreshnessSnapshot: {
@@ -107,7 +121,9 @@ const adapter = {
   assert.ok(adapter._stageADiagnostics, 'Snapshot muss am Adapter bereitstehen');
   assert.strictEqual(adapter._stageADiagnostics.nvp.mode, 'split');
   assert.strictEqual(adapter._stageADiagnostics.nvp.coherent, false, '9-s-Zeitversatz muss inkohärent sein');
-  assert.ok(adapter._stageADiagnostics.concurrentControlPathsCount >= 1, 'aktiver Aktorkonflikt muss gezählt werden');
+  assert.ok(adapter._stageADiagnostics.concurrentControlPathsCount >= 1, 'statischer Aktorkonflikt muss gezählt werden');
+  assert.strictEqual(adapter._stageADiagnostics.shadowWriteConflictCount, 1, 'Laufzeit-Schreibkonflikt muss gezählt werden');
+  assert.strictEqual(adapter._stageADiagnostics.activeActuatorConflictCount, 2, 'Statische und Laufzeitkonflikte müssen kompakt zusammengeführt werden');
   assert.ok(writes.length > 0, 'Diagnose muss eigene States schreiben');
 
   const main = read('src-ts/runtime-executables/main.ts');
@@ -115,6 +131,7 @@ const adapter = {
   assert.ok(main.includes("lower.startsWith('ems.diagnostics.stagea.')"), 'öffentlicher Snapshot muss Stage-A-Objektpfade sperren');
   assert.ok(main.includes('stageA: this._stageADiagnostics || null'), 'Installerdiagnose muss Stage-A-Snapshot liefern');
   assert.ok(ui.includes('EMS Überwachung'), 'AppCenter muss die kompakte EMS-Überwachung anzeigen');
+  assert.ok(ui.includes('Aktor-Konflikte'), 'AppCenter muss nur eine kompakte Konfliktzeile anzeigen');
   assert.ok(!ui.includes('Stufe A – Messwert-Frische'), 'Status-Reiter darf nicht mit separaten Detailkarten überladen werden');
 
   console.log('[stage-a-diagnostics] OK: read-only Owner-/Frische-Diagnose ist aktiv, zentral aufgelöst und im AppCenter kompakt dargestellt.');

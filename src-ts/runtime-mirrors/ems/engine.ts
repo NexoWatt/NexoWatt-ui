@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 289b8d87cee85bc36f2701194140d74efb92318cca6a9027cbb819ade9ef89b8
+ * Original-Hash: 9ad3e03ea93745dd785e5d881554d1689e05ca8d1e821b57c5ebe25e3dc6fc23
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:e8ac0430a38b703b1b1112305c69b2b59812d3f93eb672bfbe5d0506e145af27
+ * Quell-Hash: sha256:78eefd5993a73f79a6f6339d938005206f876ba0bacc86340337e412d29665e1
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -77,6 +77,7 @@ const { DatapointRegistry } = require('./datapoints');
 const { ModuleManager } = require('./module-manager');
 const { applyStorageMeasurementOverrides } = require('./services/storage-override-bridge');
 const { buildNvpSnapshotFromRegistry } = require('./services/measurement-freshness');
+const { installActuatorShadowArbiter } = require('./services/actuator-shadow-arbiter');
 const {
   deriveChargingConnectorCapacityW,
   computeChargingInfrastructureCapacity,
@@ -917,6 +918,9 @@ class EmsEngine {
       }
     }
 
+    // Stufe C1: read-only Shadow-Arbiter vor allen Modul-/DP-Schreibpfaden installieren.
+    this._actuatorShadowArbiter = installActuatorShadowArbiter(adapter);
+
     // Datapoint registry (multiuse)
     this.dp = new DatapointRegistry(adapter, []);
     await this.dp.init();
@@ -1208,6 +1212,7 @@ class EmsEngine {
     try {
       if (this.mm && typeof this.mm.stop === 'function') this.mm.stop();
     } catch (_e) {}
+    try { if (this._actuatorShadowArbiter && typeof this._actuatorShadowArbiter.uninstall === 'function') this._actuatorShadowArbiter.uninstall(); } catch (_e) {}
     this._tickRunning = false;
   }
 }

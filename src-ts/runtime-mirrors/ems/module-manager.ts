@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 67e1b56890bf01804ee92be8807e0287fd1d4eab27567d1f6efeef1c2b17edbd
+ * Original-Hash: 0dcf9dfe6913902429e3ccb303b9664eaf82143eddbd98f0733f13f9531ec47e
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:211613add65fcaea885be0b00b0fdcc1aae41f1842bb1e5215e689a7de9ec7a1
+ * Quell-Hash: sha256:a56f6320bbb20b2a64e605cc22358de9d3684475fbbcc6cc1c7704326359225f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -96,7 +96,21 @@ const { EnergyLedgerModule } = require('./modules/energy-ledger');
 const { NlP1DsmrModule } = require('./modules/nl-p1-dsmr');
 const { MeshMicrogridModule } = require('./modules/mesh-microgrid');
 const { StageADiagnosticsModule } = require('./modules/stage-a-diagnostics');
+const { withActuatorShadowContext, priorityForOwner } = require('./services/actuator-shadow-arbiter');
 const featureFlags = require('./services/feature-flags');
+
+/**
+ * Code-Teil: keyFromModule
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+const keyFromModule = (moduleRow) => String((moduleRow && moduleRow.key) || 'unknown');
 
 /**
  * Code-Teil: Klasse `ModuleManager`
@@ -497,7 +511,7 @@ class ModuleManager {
             if (!shouldInit) continue;
             if (typeof m.instance.init !== 'function') continue;
             try {
-                await m.instance.init();
+                await withActuatorShadowContext(this.adapter, { owner: keyFromModule(m), module: keyFromModule(m), priority: priorityForOwner(keyFromModule(m)), reason: 'module-init', cycleId: 'init', leaseMs: 15000 }, () => m.instance.init());
             } catch (e) {
                 this.adapter.log.warn(`Module '${m.key}' init error: ${e?.message || e}`);
             }
@@ -542,7 +556,7 @@ class ModuleManager {
             let ok = true;
             let errMsg = '';
             try {
-                await m.instance.tick();
+                await withActuatorShadowContext(this.adapter, { owner: key, module: key, priority: priorityForOwner(key), reason: 'module-tick', cycleId: this._tickCount, leaseMs: 15000 }, () => m.instance.tick());
             } catch (e) {
                 ok = false;
                 errMsg = String((e && e.message) ? e.message : e);

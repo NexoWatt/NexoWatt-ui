@@ -1,3 +1,14 @@
+## 0.8.110
+
+- Stufe C1 umgesetzt: Ein zentraler read-only Aktor-Shadow-Arbiter beobachtet externe Hardware-Schreibanforderungen, ohne Werte, Reihenfolge oder Erfolg bestehender Writes zu verändern.
+- Modul-, HTTP-/Kunden- und unscoped Timer-/Runtime-Writes werden mit Owner, Priorität, Grund, Lease, Zyklus und tatsächlich ausgeführtem Schreiber protokolliert.
+- Konkurrierende Werte verschiedener aktiver Owner auf demselben Hardware-DP werden als Laufzeit-Schreibkonflikt erkannt; identische Anforderungen gelten nicht als Konflikt.
+- Stufe-A-Mapping-Owner werden für zeitversetzte/unscoped Writes als sichere Owner-Inferenz genutzt.
+- AppCenter-Status bleibt kompakt: Die bestehende EMS-Überwachung zeigt nur die zusammengeführte Anzahl statischer und tatsächlicher Aktor-Schreibkonflikte; Detaildaten bleiben in internen Diagnose-States.
+- Shadow-Arbiter ist vollständig read-only und bildet nur die Grundlage für eine spätere verbindliche Steuerhoheit in Stufe C2.
+- Neue Regression `test:actuator-shadow-arbiter` beweist unveränderte Hardware-Werte, Owner-Kontext, Konflikterkennung, Fehlerweitergabe und Restore beim Shutdown.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v412` erhöht.
+
 ## 0.8.109
 
 - Zentrale NVP-Messwertfrische eingeführt: `connected=true`, tatsächliches Messwertalter und Heartbeat werden getrennt bewertet. Ein positives Connected-Signal kann einen eingefrorenen Leistungswert nicht mehr unbegrenzt als frisch markieren.

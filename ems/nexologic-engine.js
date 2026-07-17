@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/nexologic-engine.ts
- * Quell-Hash: sha256:f1f1269061a30876bcb24e658b7d7439b17181d9192b1d85eec51629a3ab71a2
+ * Quell-Hash: sha256:1e0546ca9d27fa591a749a8d6fc2dd4fc2011a83dca20141e4d54ee1455949ae
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -40,6 +40,24 @@
  */
 
 'use strict';
+
+const { withActuatorShadowContext, priorityForOwner } = require('./services/actuator-shadow-arbiter');
+
+/**
+ * NexoLogic-Schreibpfade laufen ereignis- und timergetrieben außerhalb des
+ * normalen EMS-Modulticks. Dieser Helfer gibt ihnen im Shadow-Arbiter dennoch
+ * einen eindeutigen Owner, ohne das bestehende Write-Verhalten zu verändern.
+ */
+function writeNexoLogicForeign(adapter, objectId, state, reason) {
+  return withActuatorShadowContext(adapter, {
+    owner: 'nexoLogic',
+    module: 'nexoLogic',
+    priority: priorityForOwner('nexoLogic'),
+    reason: String(reason || 'nexologic-write'),
+    leaseMs: 60000,
+    kind: 'nexologic',
+  }, () => adapter.setForeignStateAsync(objectId, state));
+}
 
 /**
  * NexoLogic – Node/Graph runtime engine.
@@ -821,7 +839,7 @@ const NODE_TYPES = {
 
             internal.lastWrittenVal = pv;
             internal.lastWriteTs = Date.now();
-            adapter.setForeignStateAsync(dpId, { val: pv, ack: pa }).catch(() => {});
+            writeNexoLogicForeign(adapter, dpId, { val: pv, ack: pa }, 'node-write-throttled').catch(() => {});
           } catch (_e2) {}
         }, dueIn);
       };
@@ -850,7 +868,7 @@ const NODE_TYPES = {
           internal.lastWrittenVal = val;
           internal.lastWriteTs = now;
           try {
-            adapter.setForeignStateAsync(dpId, { val, ack }).catch(() => {});
+            writeNexoLogicForeign(adapter, dpId, { val, ack }, 'node-write').catch(() => {});
           } catch (_e) {}
         } else {
           // throttle: remember latest value and write when allowed
@@ -2225,11 +2243,11 @@ const NODE_TYPES = {
         else val = true;
 
         try {
-          adapter.setForeignStateAsync(dpId, { val, ack: false }).catch(() => {});
+          writeNexoLogicForeign(adapter, dpId, { val, ack: false }, 'scene-trigger').catch(() => {});
           if (pulseMs > 0) {
             setTimeout(() => {
               try {
-                adapter.setForeignStateAsync(dpId, { val: (val === true ? false : 0), ack: false }).catch(() => {});
+                writeNexoLogicForeign(adapter, dpId, { val: (val === true ? false : 0), ack: false }, 'scene-pulse-reset').catch(() => {});
               } catch (_e2) {}
             }, pulseMs);
           }

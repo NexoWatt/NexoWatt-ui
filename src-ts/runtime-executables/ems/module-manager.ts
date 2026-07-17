@@ -67,7 +67,10 @@ const { EnergyLedgerModule } = require('./modules/energy-ledger');
 const { NlP1DsmrModule } = require('./modules/nl-p1-dsmr');
 const { MeshMicrogridModule } = require('./modules/mesh-microgrid');
 const { StageADiagnosticsModule } = require('./modules/stage-a-diagnostics');
+const { withActuatorShadowContext, priorityForOwner } = require('./services/actuator-shadow-arbiter');
 const featureFlags = require('./services/feature-flags');
+
+const keyFromModule = (moduleRow) => String((moduleRow && moduleRow.key) || 'unknown');
 
 /**
  * Code-Teil: Klasse `ModuleManager`
@@ -468,7 +471,7 @@ class ModuleManager {
             if (!shouldInit) continue;
             if (typeof m.instance.init !== 'function') continue;
             try {
-                await m.instance.init();
+                await withActuatorShadowContext(this.adapter, { owner: keyFromModule(m), module: keyFromModule(m), priority: priorityForOwner(keyFromModule(m)), reason: 'module-init', cycleId: 'init', leaseMs: 15000 }, () => m.instance.init());
             } catch (e) {
                 this.adapter.log.warn(`Module '${m.key}' init error: ${e?.message || e}`);
             }
@@ -513,7 +516,7 @@ class ModuleManager {
             let ok = true;
             let errMsg = '';
             try {
-                await m.instance.tick();
+                await withActuatorShadowContext(this.adapter, { owner: key, module: key, priority: priorityForOwner(key), reason: 'module-tick', cycleId: this._tickCount, leaseMs: 15000 }, () => m.instance.tick());
             } catch (e) {
                 ok = false;
                 errMsg = String((e && e.message) ? e.message : e);

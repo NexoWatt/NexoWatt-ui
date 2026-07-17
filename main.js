@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:9c274b0390eb0199bdc517f361e9337af3a11cb869feac3ca49d6cc1cfe434dd
+ * Quell-Hash: sha256:012a5f2bbda73fd9a6fae89bfa7ddc3f5cd186dce6c3537754f88859821dbfa7
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -134,6 +134,7 @@ const NwChannelDetector =
 // Embedded EMS engine (Charging Management from nexowatt-multiuse)
 const { EmsEngine } = require('./ems/engine');
 const { resolveNvpDisplay } = require('./ems/services/measurement-freshness');
+const { buildHttpActuatorShadowContext, withActuatorShadowContext } = require('./ems/services/actuator-shadow-arbiter');
 const nwCountryProfileService = require('./ems/services/country-profile-service');
 const nwFeatureFlagsService = require('./ems/services/feature-flags');
 const {
@@ -9737,6 +9738,13 @@ async onReady() {
   async startServer() {
     const app = express();
 
+    // Stufe C1: Manuelle/API-Schreibanforderungen erhalten einen eindeutigen
+    // Shadow-Owner. AsyncLocalStorage reicht diesen Kontext bis zum realen
+    // setForeignStateAsync-Aufruf durch, ohne den Write zu verändern.
+    app.use((req, _res, next) => {
+      const context = buildHttpActuatorShadowContext(req && req.method, req && (req.path || req.url));
+      return withActuatorShadowContext(this, context, () => next());
+    });
     // -----------------------------------------------------------------------
     // Feldkompatible Web-/API-Härtung
     // -----------------------------------------------------------------------
