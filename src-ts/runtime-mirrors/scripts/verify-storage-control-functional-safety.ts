@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 86f0a8f458f0dd935cf8fa8484c039283a6a9f47846306936dcb25c8cce05fed
+ * Original-Hash: 75f58e40ba094e36713b9d5c0cb465fabbc71fecaa7725b1331fbabb379d3b2d
  */
 
 /**
@@ -415,7 +415,8 @@ async function runScenario({ name, config, values, entries, stateCache, states, 
     assert.strictEqual(r.adapter.states['speicher.regelung.policyMode'].val, 'multiuse', `${r.name}: policyMode nicht multiuse`);
   }
 
-  // 7) Speicherfarm allein startet keine Logik; mit Speicherregelung verteilt sie nur den fertigen Sollwert.
+  // 7) Eine echte Speicherfarm startet die Basis-Eigenverbrauchsoptimierung selbst
+  // und verteilt den fertigen Sollwert. Ein paralleler Einzelzielpfad bleibt aus.
   {
     const farmCfg = baseConfig({
       enableStorageControl: false,
@@ -427,7 +428,7 @@ async function runScenario({ name, config, values, entries, stateCache, states, 
       ] },
     });
     const r = await runScenario({
-      name: 'Speicherfarm allein startet nicht',
+      name: 'Speicherfarm startet und verteilt Basisregelung',
       config: farmCfg,
       entries: baseEntries({ target: false, battery: false }),
       values: {
@@ -436,31 +437,12 @@ async function runScenario({ name, config, values, entries, stateCache, states, 
         'st.socPct': nowState(80),
       },
     });
-    assert.strictEqual(r.adapter.farmWrites.length, 0, `${r.name}: Farm darf ohne Speicherregelung/MultiUse nicht schreiben`);
-    assert.strictEqual(r.adapter.states['speicher.regelung.aktiv'].val, false, `${r.name}: aktiv muss false sein`);
-
-    const farmActiveCfg = baseConfig({
-      enableStorageControl: true,
-      enableStorageFarm: true,
-      emsApps: { apps: { storagefarm: { installed: true, enabled: true } } },
-      storageFarm: { storages: [
-        { enabled: true, setSignedPowerId: 'mock.farm.ess1.target' },
-        { enabled: true, setSignedPowerId: 'mock.farm.ess2.target' },
-      ] },
-    });
-    const r2 = await runScenario({
-      name: 'Speicherfarm verteilt fertigen Speicherregelungs-Sollwert',
-      config: farmActiveCfg,
-      entries: baseEntries({ target: false, battery: false }),
-      values: {
-        'grid.powerW': nowState(2000),
-        'grid.powerRawW': nowState(2000),
-        'st.socPct': nowState(80),
-      },
-    });
-    assert.strictEqual(r2.adapter.farmWrites.length, 1, `${r2.name}: Farm-Verteilung wurde nicht genutzt`);
-    assert(r2.adapter.farmWrites[0].w >= 1800 && r2.adapter.farmWrites[0].w <= 2200, `${r2.name}: Farm-Sollwert unplausibel ${r2.adapter.farmWrites[0].w} W`);
-    assert.strictEqual(r2.adapter.states['speicher.regelung.schreibStatus'].val, 'farm', `${r2.name}: Schreibstatus nicht farm`);
+    assert.strictEqual(r.adapter.states['speicher.regelung.aktiv'].val, true, `${r.name}: Farm-Autostart fehlt`);
+    assert.strictEqual(r.adapter.states['speicher.regelung.aktivAutoSpeicherfarm'].val, true, `${r.name}: Auto-Farm-Diagnose fehlt`);
+    assert.strictEqual(r.adapter.farmWrites.length, 1, `${r.name}: Farm-Verteilung wurde nicht genutzt`);
+    assert(r.adapter.farmWrites[0].w >= 1800 && r.adapter.farmWrites[0].w <= 2200, `${r.name}: Farm-Sollwert unplausibel ${r.adapter.farmWrites[0].w} W`);
+    assert.strictEqual(r.adapter.states['speicher.regelung.schreibStatus'].val, 'farm', `${r.name}: Schreibstatus nicht farm`);
+    assert.strictEqual(r.dp.writes.filter((row) => row.key === 'st.targetPowerW').length, 0, `${r.name}: Einzel-Speicherpfad darf parallel nicht schreiben`);
   }
 
   console.log('[storage-control-functional-safety] OK: Speicherregelung, MultiUse-Routing, Speicherfarm-Verteilung und Be-/Entlade-Caps funktional abgesichert.');

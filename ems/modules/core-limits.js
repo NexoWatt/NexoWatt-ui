@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/core-limits.ts
- * Quell-Hash: sha256:789f9f24c426f5c4f3563230789b03ddcda2c5acc4afb1badbc8140d622806a0
+ * Quell-Hash: sha256:146b19e1bc16ed35044603e4692d84dcb5468ba192082bfb0f40c601ae6ddd10
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1197,6 +1197,20 @@ class CoreLimitsModule extends BaseModule {
         await mk('ems.budget.phase3RuntimeFallback', 'TypeScript Core Phase-3 Fallback aktiv', 'boolean', 'indicator');
         await mk('ems.budget.phase3RuntimeRevision', 'TypeScript Core Phase-3 Revision', 'number', 'value');
         await mk('ems.budget.phase3RuntimeReason', 'TypeScript Core Phase-3 Statusgrund', 'string', 'text');
+
+        // §14a publication contract of the typed Core runtime. These objects must
+        // exist independently of whether the optional §14a app is currently active:
+        // the central budget publishes the neutral/inactive snapshot every cycle.
+        // Keeping the object catalog beside the other ems.budget states prevents
+        // ioBroker's "has no existing object" warning loop after an update.
+        await mk('ems.budget.para14aActive', '§14a central constraint active', 'boolean', 'indicator');
+        await mk('ems.budget.para14aMode', '§14a central constraint mode', 'string', 'text');
+        await mk('ems.budget.para14aEvcsCapW', '§14a EVCS cap in central budget (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.para14aTotalCapW', '§14a total controlled-load cap in central budget (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.para14aAppCapsJson', '§14a app-specific caps in central budget (JSON)', 'string', 'json');
+        await mk('ems.budget.para14aSignalFresh', '§14a signal fresh in central budget', 'boolean', 'indicator');
+        await mk('ems.budget.para14aSignalStatus', '§14a signal status in central budget', 'string', 'text');
+        await mk('ems.budget.para14aConstraintOnly', '§14a operates as central constraint only', 'boolean', 'indicator');
 
         // Gate D - PV Forecast. Advisory background gate for forecast-aware app decisions.
         // It does not write setpoints and does not change the instantaneous PV budget by itself.

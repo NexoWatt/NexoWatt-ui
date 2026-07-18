@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/charging-budget-helpers.ts
- * Quell-Hash: sha256:62bc8802e6d8ebaa86aade83dd5a12e02b9eebb679cd9028b4452214c28d7807
+ * Quell-Hash: sha256:061942f60fb4c5147077252e9895f8cbcea6646641dd900f0c293d2bb7c10353
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -187,10 +187,12 @@ function computeChargingMinimumServicePlan() {
     const safe = String(w.safe || '').trim();
     const mode = String(w.effectiveMode || w.userMode || 'normal').trim().toLowerCase();
     const goalBlocked = !!w.goalEnabled && (w.goalStatus === 'waiting_soc' || w.goalStatus === 'soc_stale');
+    const demandConfirmed = w.vehicleDemandConfirmed === true
+      || (w.vehicleDemandConfirmed === undefined && w.vehiclePlugged === true);
     const eligible = !!safe
       && w.enabled !== false
       && w.online !== false
-      && w.vehiclePlugged !== false
+      && demandConfirmed
       && String(w.controlBasis || 'none').trim().toLowerCase() !== 'none'
       && mode !== 'pv'
       && !goalBlocked;

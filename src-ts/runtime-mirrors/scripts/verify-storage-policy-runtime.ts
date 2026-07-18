@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: a7dd1d712576cb98b32366f9127bd903317bdefee9f978d1b822b86e538fa0a3
+ * Original-Hash: b6724c3541892ced8e12e3ab11dfccbba01a51f6b71276643078a0c286ae3789
  */
 
 /**
@@ -34,7 +34,7 @@
  * Dynamischer Regressionstest 0.8.81 fuer die Speicher-Grundlogik.
  * Dieser Test laeuft ohne Hardware mit Fake-Adapter/Fake-DP und prueft die
  * kritischen Feldfaelle: keine 71-kW-Entladung, MultiUse-Autostart,
- * Speicherfarm ohne Policy-Start und PV-Ladestopp bei RAW-Netzbezug.
+ * Speicherfarm als Basisregelung und PV-Ladestopp bei RAW-Netzbezug.
  */
 const assert = require('assert');
 const { SpeicherRegelungModule } = require('../ems/modules/storage-control.js');
@@ -278,7 +278,7 @@ async function testMultiUseStartsPolicy() {
 }
 
 /**
- * Code-Teil: testStorageFarmDoesNotStartPolicyAlone
+ * Code-Teil: testStorageFarmStartsAndDispatchesPolicy
  *
  * Zweck:
  * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
@@ -288,7 +288,7 @@ async function testMultiUseStartsPolicy() {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-async function testStorageFarmDoesNotStartPolicyAlone() {
+async function testStorageFarmStartsAndDispatchesPolicy() {
   const entries = { ...targetEntries };
   delete entries['st.targetPowerW'];
   const { dp, adapter } = await runTick({
@@ -297,7 +297,10 @@ async function testStorageFarmDoesNotStartPolicyAlone() {
       enableMultiUse: false,
       enableStorageFarm: true,
       installerConfig: {},
-      storageFarm: { storages: [{ enabled: true, setSignedPowerId: 'fake.storage1.ctrl.targetPowerW' }] },
+      storageFarm: { storages: [
+        { enabled: true, setSignedPowerId: 'fake.storage1.ctrl.targetPowerW' },
+        { enabled: true, setSignedPowerId: 'fake.storage2.ctrl.targetPowerW' },
+      ] },
       storage: baseStorage(),
       peakShaving: {},
     },
@@ -308,9 +311,11 @@ async function testStorageFarmDoesNotStartPolicyAlone() {
     },
     entries,
   });
-  assert.strictEqual(adapter.states.get('speicher.regelung.aktiv').val, false, 'Speicherfarm allein darf Regelung nicht starten');
-  assert.strictEqual(dp.writes.length, 0, 'Speicherfarm allein darf keinen Einzel-Sollwert schreiben');
-  assert.strictEqual(adapter.farmWrites.length, 0, 'Speicherfarm allein darf keinen Farm-Sollwert verteilen');
+  assert.strictEqual(adapter.states.get('speicher.regelung.aktiv').val, true, 'Aktive Farm muss die Basis-Eigenverbrauchsregelung starten');
+  assert.strictEqual(adapter.states.get('speicher.regelung.aktivAutoSpeicherfarm').val, true, 'Farm-Autostart Diagnose fehlt');
+  assert.strictEqual(dp.writes.length, 0, 'Aktive Farm darf keinen Einzel-Sollwertpfad verwenden');
+  assert.strictEqual(adapter.farmWrites.length, 1, 'Aktive Farm muss den zentralen Sollwert verteilen');
+  assert(adapter.farmWrites[0].w > 0 && adapter.farmWrites[0].w <= 3000, `Farm-Sollwert unplausibel: ${adapter.farmWrites[0].w} W`);
 }
 
 /**
@@ -351,7 +356,7 @@ async function testPvRawImportStopsOldCharge() {
 (async () => {
   await testNoRunawaySelfConsumption();
   await testMultiUseStartsPolicy();
-  await testStorageFarmDoesNotStartPolicyAlone();
+  await testStorageFarmStartsAndDispatchesPolicy();
   await testPvRawImportStopsOldCharge();
   console.log('[storage-policy-runtime] OK: Speicher-Policy-Router und Be-/Entlade-Schutz laufen in dynamischen Regressionen.');
 })().catch((err) => {

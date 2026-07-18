@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.121",
+    "version": "0.8.122",
     "news": {
+      "0.8.122": {
+        "de": "Version 0.8.122: Entfernt Phantom-EVCS-Reservierungen ohne bestätigten Fahrzeugbedarf, startet eine aktive Speicherfarm automatisch als Basis-Eigenverbrauchsregelung und stabilisiert die Farm-Verteilung über Hardware-IDs samt Status-Refresh. Zusätzlich werden alle typisierten §14a-Budgetobjekte vor dem ersten Write angelegt.",
+        "en": "Version 0.8.122: Removes phantom EVCS reservations without confirmed vehicle demand, automatically starts an active storage farm as the base self-consumption controller, and stabilizes farm dispatch via hardware IDs plus status refresh. It also creates all typed §14a budget objects before the first write."
+      },
       "0.8.121": {
         "de": "Version 0.8.121: Core-Limits TypeScript Phase 3 führt Snapshot, Reservierungen und Publikation über einen einzigen typisierten Laufzeitstand mit hartem Legacy-Fallback. Dynamisch aktivierte AppCenter-Module werden vor dem ersten Tick zuverlässig initialisiert. §14a legt alle Diagnose-States vor dem Schreiben an, hinterlässt beim Deaktivieren keine alten Caps und erzeugt bei inaktivem Signal keinen Missing-Object-Logspam mehr.",
         "en": "Version 0.8.121: Core-Limits TypeScript Phase 3 uses one typed runtime state for snapshot, reservations and publication with a strict legacy fallback. Dynamically enabled AppCenter modules are initialized before their first tick. §14a creates all diagnostic states before writes, clears stale caps on disable and no longer produces missing-object log spam while inactive."
@@ -26,10 +30,6 @@
       "0.8.116": {
         "de": "Version 0.8.116: BHKW und Generator auf den zentralen Aktorvertrag umgestellt. Frische SoC-/NVP-/Laufstatuswerte, Start-/Stop-Pulse, Zwei-Draht-Level und Run-Level, Readback/ACK-Timeout, begrenzte Wiederholungen, Fehlerverriegelung sowie rekonstruierte Mindestlauf- und Stillstandszeiten sind jetzt gemeinsam abgesichert.",
         "en": "Version 0.8.116: Migrates CHP and generator control to the central actuator contract. Fresh SoC/NVP/runtime feedback, start/stop pulses, dual-wire level and run-level profiles, readback/ACK timeout, bounded retries, fault lockout and reconstructed minimum run/off times are now handled consistently."
-      },
-      "0.8.115": {
-        "de": "Version 0.8.115: Stufe C3.4 bindet NexoLogic-Ausgänge an eindeutige Aktor-Owner, den zentralen Arbiter und optionale zentrale PV-/Gesamtbudgets an. Readback-Frische, ACK-Timeout, begrenzte Wiederholungen, Fehlerverriegelung und sichere Budgetreservierung bei blockierten Stopps wurden ergänzt. Direkte Alt-Ausgänge bleiben ohne aktivierte Budgetoption kompatibel.",
-        "en": "Version 0.8.115: Stage C3.4 connects NexoLogic outputs to unique actuator owners, the central arbiter and optional central PV/total budgets. Readback freshness, ACK timeouts, bounded retries, fault locking and safe budget reservation during blocked stop commands were added. Existing direct outputs remain compatible unless budgeting is explicitly enabled."
       }
     },
     "title": "NexoWatt UI",

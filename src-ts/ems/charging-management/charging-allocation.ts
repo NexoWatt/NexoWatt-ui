@@ -1230,7 +1230,9 @@ function normalizeWallboxPlan(
   const name = str(wallbox.name ?? (allocation ? allocation.name : null), safe);
   const enabled = boolValue(wallbox.enabled, boolValue(allocation ? allocation.enabled : undefined, false));
   const online = boolValue(wallbox.online, boolValue(allocation ? allocation.online : undefined, false));
-  const connected = boolValue(wallbox.vehiclePlugged, enabled || online);
+  // A missing vehicle/plug signal is fail-closed. Merely being configured or
+  // online must never create a charging target or reserve central EMS budget.
+  const connected = boolValue(wallbox.vehiclePlugged, false);
   const charging = boolValue(wallbox.charging, boolValue(allocation ? allocation.charging : undefined, false));
   const effectiveMode = str(allocation ? allocation.effectiveMode : undefined, str(wallbox.effectiveMode, str(wallbox.userMode, str(input.mode, 'unknown'))));
   const userMode = str(wallbox.userMode, str(allocation ? allocation.userMode : undefined, ''));

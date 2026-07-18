@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: ffbe483df5dfb9aeb191b307602463bccf7e8453079c4eceb21a72db371b2d2e
+ * Original-Hash: 06147ea082a93cba957877d83bf5c6f8247668e9c5c7ed05f5d7d7abbd71905c
  */
 
 /**
@@ -110,6 +110,7 @@ function powerWallbox(safe, options = {}) {
     enabled: true,
     online: true,
     vehiclePlugged: true,
+    vehicleDemandConfirmed: options.vehicleDemandConfirmed !== false,
     charging: options.charging === true,
     actualPowerW: Number(options.actualPowerW || 0),
     effectiveMode: options.mode || 'auto',
@@ -153,6 +154,7 @@ function currentWallbox(safe, options = {}) {
     enabled: true,
     online: true,
     vehiclePlugged: true,
+    vehicleDemandConfirmed: options.vehicleDemandConfirmed !== false,
     charging: options.charging === true,
     actualPowerW: Number(options.actualPowerW || 0),
     effectiveMode: options.mode || 'auto',
@@ -529,6 +531,7 @@ function runtimePlan(wallboxes, budgetW, pvAvailableW, options = {}) {
     enabled: true,
     online: true,
     vehiclePlugged: true,
+    vehicleDemandConfirmed: true,
     charging: true,
     effectiveMode: 'pv',
     userMode: 'pv',
@@ -596,6 +599,7 @@ function runtimePlan(wallboxes, budgetW, pvAvailableW, options = {}) {
     enabled: true,
     online: true,
     vehiclePlugged: true,
+    vehicleDemandConfirmed: true,
     charging: true,
     actualPowerW: 5000,
     controlBasis: 'currentA',

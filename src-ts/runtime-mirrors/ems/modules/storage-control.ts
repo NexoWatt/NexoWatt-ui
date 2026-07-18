@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: a4b03260231bf064207ee54ab732e13ecc8902c08fd58b9964d8a09a5f384172
+ * Original-Hash: 7c74623c3802cfc25ac6001694ea3831d7b38409a5001a0f7969a55d977bc0d9
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:be3bc87964200f7342d6914cc0de45b3f1bd10b8d03a4f0f30d87e4157e5fda0
+ * Quell-Hash: sha256:f25aa794b309c2e5bf4b4be7aa1a5bd5f521019a40acf6cdca51ecfca98e2bda
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -507,11 +507,11 @@ class SpeicherRegelungModule extends BaseModule {
         }
 
         // Policy-Router: Speicherregelung, MultiUse und Speicherfarm haben getrennte Rollen.
-        // - Speicherregelungs-App: startet die reine Eigenverbrauchsoptimierung als Basis.
-        // - MultiUse-App: startet/fuehrt zusaetzlich Reserve-, LSK- und SoC-Zonen.
-        // - Speicherfarm: verteilt nur den fertigen Sollwert und startet keine Regelung allein.
-        // Diese fruehe Erkennung verhindert, dass eine aktive MultiUse-Policy wegen eines
-        // fehlenden enableStorageControl-Hakens wirkungslos bleibt.
+        // - Einzel-Speicherregelung startet die Basis-Eigenverbrauchsoptimierung.
+        // - MultiUse erweitert diese Basis um Reserve-, Peak- und SoC-Zonen.
+        // - Eine aktiv konfigurierte Speicherfarm startet dieselbe Basisregelung und
+        //   verteilt den finalen Sollwert auf ihre Speicher. Dadurch benoetigt eine
+        //   echte Farm nicht zusaetzlich den Einzel-Speicher-App-Haken.
         const installerCfgForMultiUseEarly = (this.adapter && this.adapter.config && this.adapter.config.installerConfig && typeof this.adapter.config.installerConfig === 'object')
             ? this.adapter.config.installerConfig
             : {};
@@ -521,9 +521,26 @@ class SpeicherRegelungModule extends BaseModule {
         const multiUsePolicyConfiguredEarly = !!storageMultiUseCfgEarly;
         const multiUseAppPolicyActive = !!(this.adapter && this.adapter.config && this.adapter.config.enableMultiUse && storageMultiUseCfgEarly && storageMultiUseCfgEarly.enabled === true);
 
-        // Effektive Aktivierung bewusst nur ueber Speicherregelungs-App, Tarif-Automatik
-        // oder aktive MultiUse-Policy. Die Speicherfarm ist hier KEIN eigener Auto-Start.
-        const enabled = cfgEnabled || autoTarifEnabled || multiUseAppPolicyActive;
+        const farmRuntimeInfoEarly = (this.adapter && typeof this.adapter._nwGetStorageFarmRuntimeInfo === 'function')
+            ? this.adapter._nwGetStorageFarmRuntimeInfo()
+            : { active: this._isStorageFarmEnabled(), rows: [] };
+        const farmEnabledEarly = !!(farmRuntimeInfoEarly && farmRuntimeInfoEarly.active);
+        const farmCfgEarly = (this.adapter && this.adapter.config && this.adapter.config.storageFarm && typeof this.adapter.config.storageFarm === 'object')
+            ? this.adapter.config.storageFarm
+            : {};
+        const farmRowsEarly = Array.isArray(farmRuntimeInfoEarly && farmRuntimeInfoEarly.rows) && farmRuntimeInfoEarly.rows.length
+            ? farmRuntimeInfoEarly.rows
+            : (Array.isArray(farmCfgEarly.storages) ? farmCfgEarly.storages : []);
+        const farmAppPolicyActive = !!(farmEnabledEarly && farmRowsEarly.some((row) => row && row.enabled !== false && (
+            String(row.setSignedPowerId || '').trim()
+            || String(row.setChargePowerId || '').trim()
+            || String(row.setDischargePowerId || '').trim()
+        )));
+
+        // Eine echte Farm ist der Hardware-Verteilpfad der normalen Eigenverbrauchs-
+        // optimierung. Sie aktiviert deshalb die Basisregelung automatisch, waehrend
+        // MultiUse weiterhin nur die Policy/SoC-Zonen ergaenzt.
+        const enabled = cfgEnabled || autoTarifEnabled || multiUseAppPolicyActive || farmAppPolicyActive;
 
         // SoC-Hysterese optional aus Konfig lesen (falls später im Admin ergänzt).
         // Default bleibt 0.5 %-Punkte.
@@ -534,7 +551,7 @@ class SpeicherRegelungModule extends BaseModule {
         await this._setIfChanged('speicher.regelung.aktivKonfig', cfgEnabled);
         await this._setIfChanged('speicher.regelung.aktivAutoTarif', autoTarifEnabled);
         await this._setIfChanged('speicher.regelung.aktivAutoMultiUse', multiUseAppPolicyActive);
-        await this._setIfChanged('speicher.regelung.aktivAutoSpeicherfarm', false);
+        await this._setIfChanged('speicher.regelung.aktivAutoSpeicherfarm', farmAppPolicyActive);
 
         // Wenn effektiv deaktiviert: nur Diagnose aktualisieren – KEINE Setpoints schreiben.
         // (Wichtig, damit keine "0" als externe Vorgabe an ein Speichersystem gesendet wird.)
@@ -640,11 +657,11 @@ class SpeicherRegelungModule extends BaseModule {
 
         // Speicherfarm: wenn aktiv und Setpoint-DPs pro Speicher vorhanden sind,
         // erlauben wir die Regelung auch ohne klassische Sollleistungs-Zuordnung (st.targetPowerW).
-        const farmCfg = (this.adapter && this.adapter.config && this.adapter.config.storageFarm) ? this.adapter.config.storageFarm : {};
-        const farmEnabled = this._isStorageFarmEnabled();
-        const farmRows = Array.isArray(farmCfg.storages) ? farmCfg.storages : [];
-        // Speicherfarm ist ein Ziel-/Verteilpfad, kein eigener Regler-Start. Wenn die
-        // Speicherregelung aktiv ist, reicht ein Farm-Sollwert-DP als beschreibbares Ziel.
+        const farmCfg = farmCfgEarly;
+        const farmEnabled = farmEnabledEarly;
+        const farmRows = farmRowsEarly;
+        // Bei aktiver Farm reicht ein Farm-Sollwert-DP als beschreibbares Ziel. Die
+        // Basis-Eigenverbrauchsregelung wurde bereits oben automatisch aktiviert.
         const hasFarmSetpoints = farmEnabled && farmRows.some(r => r && r.enabled !== false && (String(r.setSignedPowerId||'').trim() || String(r.setChargePowerId||'').trim() || String(r.setDischargePowerId||'').trim()));
         await this._setIfChanged('speicher.regelung.aktivSpeicherfarm', !!hasFarmSetpoints);
 
@@ -6594,14 +6611,22 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const writeSucceeded = writeResult === true || farmApplied;
         const previousTargetW = Number.isFinite(Number(this._lastTargetW)) ? Number(this._lastTargetW) : null;
         const targetChanged = writeSucceeded && (previousTargetW === null || Math.abs(previousTargetW - w) >= 0.5);
-        this._lastTargetW = writeSucceeded ? w : 0;
+        // Bei einem fehlgeschlagenen oder vom Farm-Dispatcher abgelehnten Write
+        // bleibt der zuletzt tatsaechlich erfolgreiche Sollwert die beste Annahme
+        // fuer den realen Hardwarezustand. Ein Ruecksetzen auf 0 W wuerde im
+        // naechsten Tick einen falschen Leerlauf suggerieren und die NVP-Regelbasis
+        // zerstoeren. Nur ein erfolgreich geschriebener echter 0-W-Stopp setzt den
+        // Wert auf null.
+        if (writeSucceeded) this._lastTargetW = w;
         // Dieser Zeitstempel beschreibt die letzte echte SollwertAENDERUNG, nicht
         // jedes Watchdog-/Refresh-Schreiben desselben Werts. Nur so kann die
         // Istleistungsprognose erkennen, ob ein Messwert tatsaechlich noch vor dem
         // aktuellen Kommando lag. Wiederholtes Schreiben von z. B. 3000 W darf das
         // Einschwingfenster nicht in jedem Tick von vorn starten.
         if (writeSucceeded && targetChanged) this._lastTargetWriteMs = Date.now();
-        else if (!writeSucceeded) this._lastTargetWriteMs = 0;
+        // Auch der Zeitstempel der letzten erfolgreichen Sollwertaenderung bleibt
+        // bei einem Writefehler erhalten. Die Hardware kann den alten Wert weiterhin
+        // ausfuehren; deshalb darf die Feedback-/Hold-Logik ihn nicht vergessen.
         this._lastReason = String(reason || '');
         this._lastSource = String(source || '');
     }
@@ -6680,7 +6705,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.aktivAutoTarif', 'Auto-Aktivierung durch Tarif', 'boolean', 'indicator', false);
         await mk('speicher.regelung.aktivAutoMultiUse', 'Auto-Aktivierung durch MultiUse-Policy', 'boolean', 'indicator', false);
         await mk('speicher.regelung.aktivSpeicherfarm', 'Speicherfarm-Verteilpfad verfügbar', 'boolean', 'indicator', false);
-        await mk('speicher.regelung.aktivAutoSpeicherfarm', 'Auto-Aktivierung durch Speicherfarm (deaktiviert)', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.aktivAutoSpeicherfarm', 'Auto-Aktivierung durch Speicherfarm', 'boolean', 'indicator', false);
         await mk('speicher.regelung.herstellerprofil', 'Speicher-Herstellerprofil', 'string', 'text', 'generic');
         await mk('speicher.regelung.speicherKopplung', 'Speicher-Kopplung AC/DC', 'string', 'text', 'ac');
         await mk('speicher.regelung.dcPvPowerW', 'DC-/Hybrid-PV Erzeugungsleistung', 'number', 'value.power', 0);

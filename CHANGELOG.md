@@ -1,3 +1,14 @@
+## 0.8.122 - 2026-07-18
+
+- EVCS: Reserviert Gesamt- und PV-Budget nur noch bei bestätigtem Fahrzeugbedarf. `Available`, `Idle`, `Reserved`, `Offline`, stale Statuswerte und alte Sollwerte ohne Fahrzeugnachweis blockieren keinen Speicher mehr.
+- EVCS: Trennt die Kunden-/RFID-Freigabe `evcs.N.active` verbindlich vom Fahrzeugkontakt; frische Leistung oder frische Statuswerte wie `Charging`, `Preparing` und `SuspendedEVSE` bleiben gültige Bedarfsnachweise.
+- Speicherfarm: Eine installierte und aktive Farm mit beschreibbaren Setpoints startet automatisch die gemeinsame Eigenverbrauchs-Grundregelung; der separate Einzel-Speicher-App-Haken ist dafür nicht mehr erforderlich.
+- Speicherfarm: Dispatcher ordnet Konfiguration und Laufzeitstatus über stabile Hardware-IDs statt Array-Indizes zu und aktualisiert fehlende oder stale Farmstatuswerte vor dem ersten Write.
+- Speicherregelung: Ein transient fehlgeschlagener Farm-Write löscht den letzten erfolgreich geschriebenen Sollwert nicht mehr; Hardwarezustand und NVP-Regelbasis bleiben dadurch konsistent.
+- Core budget: Creates all typed §14a publication objects before the first state write and removes repeated `has no existing object` warnings for the inactive/neutral snapshot.
+- Regressionen: `test:evcs-confirmed-demand-reservation`, `test:storage-farm-auto-dispatch` und `test:storage-farm-dispatch-recovery` ergänzen die Feldszenarien.
+- Service-Worker-Cache auf `nexowatt-cache-v424` erhöht.
+
 ## 0.8.121 - 2026-07-18
 
 - Core-Limits TypeScript Phase 3: Snapshot, Reservierungen, Restbudgets und State-/Cache-Publikation nutzen einen gemeinsamen typisierten Laufzeitstand; Abweichungen fallen hart auf die bewährte JavaScript-Referenz zurück.

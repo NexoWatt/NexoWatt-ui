@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:8a7b0c4765fa18bfbf9ab0b4ce00a871d0099914afda29398c19a0108e8e74a2
+ * Quell-Hash: sha256:d9ce4a8517e4a78d0bb3ce20730e6feb9b88b081d3595f8c07912722c69ab5c1
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -5353,6 +5353,14 @@ class NexoWattVis extends utils.Adapter {
         const status = {
           name: String(row.name || '').trim() || `Speicher ${configured}`,
           group: String(row.group || '').trim(),
+          dispatchKey: this._sfGetStorageDispatchKey(row, configured - 1),
+          setSignedPowerId: String(row.setSignedPowerId || '').trim(),
+          setChargePowerId: String(row.setChargePowerId || '').trim(),
+          setDischargePowerId: String(row.setDischargePowerId || '').trim(),
+          signedPowerId: String(row.signedPowerId || '').trim(),
+          chargePowerId: String(row.chargePowerId || '').trim(),
+          dischargePowerId: String(row.dischargePowerId || '').trim(),
+          socId: String(row.socId || '').trim(),
           soc: null,
           chargePowerW: null,
           dischargePowerW: null,
@@ -6060,34 +6068,48 @@ class NexoWattVis extends utils.Adapter {
     const cfg = this.config || {};
     // Aggregation, Energiefluss und Sollwert-Dispatcher verwenden dieselbe
     // App-Center-Aktivierung. Legacy-Flags dürfen keinen Parallelzustand erzeugen.
-    const enabled = !!this._nwGetStorageFarmRuntimeInfo().active;
+    const runtimeInfo = this._nwGetStorageFarmRuntimeInfo();
+    const enabled = !!(runtimeInfo && runtimeInfo.active);
     const sf = (cfg.storageFarm && typeof cfg.storageFarm === 'object') ? cfg.storageFarm : {};
     const modeRaw = String(sf.mode || 'pool').toLowerCase().trim();
     const mode = (modeRaw === 'groups') ? 'groups' : 'pool';
-    const storagesIn = Array.isArray(sf.storages) ? sf.storages : [];
+    // Auf Feldanlagen kann die autoritative Farm-Konfiguration nach einem Update
+    // noch ausschließlich aus storageFarm.configJson stammen. Der Dispatcher muss
+    // dieselben Runtime-Zeilen wie Aggregation und UI verwenden und darf dann nicht
+    // mit `no_storages` aussteigen.
+    const storagesIn = Array.isArray(sf.storages) && sf.storages.length
+      ? sf.storages
+      : (Array.isArray(runtimeInfo && runtimeInfo.rows) ? runtimeInfo.rows : []);
     const groupsIn = Array.isArray(sf.groups) ? sf.groups : [];
 
     const storages = storagesIn
       .filter(r => r && typeof r === 'object')
-      .map(r => ({
-        enabled: !(r.enabled === false),
-        name: String(r.name || '').trim(),
-        socId: String(r.socId || '').trim(),
-        setChargePowerId: String(r.setChargePowerId || '').trim(),
-        setDischargePowerId: String(r.setDischargePowerId || '').trim(),
-        setSignedPowerId: String(r.setSignedPowerId || '').trim(),
-        invertSetSignedPowerSign: !!r.invertSetSignedPowerSign,
-        invertChargeSign: !!r.invertChargeSign,
-        invertDischargeSign: !!r.invertDischargeSign,
-        maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : null,
-        maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : null,
-        availableId: String(r.availableId || '').trim(),
-        faultId: String(r.faultId || '').trim(),
-        chargeAllowedId: String(r.chargeAllowedId || '').trim(),
-        dischargeAllowedId: String(r.dischargeAllowedId || '').trim(),
-        capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : null,
-        group: String(r.group || '').trim(),
-      }))
+      .map((r, index) => {
+        const storage = {
+          enabled: !(r.enabled === false),
+          name: String(r.name || '').trim(),
+          socId: String(r.socId || '').trim(),
+          signedPowerId: String(r.signedPowerId || '').trim(),
+          chargePowerId: String(r.chargePowerId || '').trim(),
+          dischargePowerId: String(r.dischargePowerId || '').trim(),
+          setChargePowerId: String(r.setChargePowerId || '').trim(),
+          setDischargePowerId: String(r.setDischargePowerId || '').trim(),
+          setSignedPowerId: String(r.setSignedPowerId || '').trim(),
+          invertSetSignedPowerSign: !!r.invertSetSignedPowerSign,
+          invertChargeSign: !!r.invertChargeSign,
+          invertDischargeSign: !!r.invertDischargeSign,
+          maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : null,
+          maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : null,
+          availableId: String(r.availableId || '').trim(),
+          faultId: String(r.faultId || '').trim(),
+          chargeAllowedId: String(r.chargeAllowedId || '').trim(),
+          dischargeAllowedId: String(r.dischargeAllowedId || '').trim(),
+          capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : null,
+          group: String(r.group || '').trim(),
+        };
+        storage.dispatchKey = this._sfGetStorageDispatchKey(storage, index);
+        return storage;
+      })
       .filter(r => r.enabled);
 
     const groups = groupsIn
@@ -6111,19 +6133,30 @@ class NexoWattVis extends utils.Adapter {
    */
   _sfGetStorageDispatchKey(storage, index = 0) {
     const s = (storage && typeof storage === 'object') ? storage : {};
-    const parts = [
-      String(s.setSignedPowerId || '').trim(),
-      String(s.setChargePowerId || '').trim(),
-      String(s.setDischargePowerId || '').trim(),
-      String(s.signedPowerId || '').trim(),
-      String(s.chargePowerId || '').trim(),
-      String(s.dischargePowerId || '').trim(),
-      String(s.socId || '').trim(),
-      String(s.name || '').trim(),
-      String(index),
-    ].filter(Boolean);
-    return parts.join('|');
+    const setSigned = String(s.setSignedPowerId || '').trim();
+    const setCharge = String(s.setChargePowerId || '').trim();
+    const setDischarge = String(s.setDischargePowerId || '').trim();
+    const signed = String(s.signedPowerId || '').trim();
+    const charge = String(s.chargePowerId || '').trim();
+    const discharge = String(s.dischargePowerId || '').trim();
+    const soc = String(s.socId || '').trim();
+    const available = String(s.availableId || '').trim();
+    const fault = String(s.faultId || '').trim();
+    const name = String(s.name || '').trim().toLowerCase();
+
+    // Setpoint-DPs sind die stabilste Hardware-Identitaet. Danach folgen die
+    // Istleistungs- und SoC-Pfade. Der Array-Index ist nur der allerletzte Legacy-
+    // Fallback und darf bei normal konfigurierten Farmen keine Zuordnung bestimmen.
+    if (setSigned) return `set-signed:${setSigned}`;
+    if (setCharge || setDischarge) return `set-split:${setCharge}|${setDischarge}`;
+    if (signed) return `actual-signed:${signed}`;
+    if (charge || discharge) return `actual-split:${charge}|${discharge}`;
+    if (soc) return `soc:${soc}`;
+    if (available || fault) return `health:${available}|${fault}`;
+    if (name) return `name:${name}`;
+    return `row:${Math.max(0, Number(index) || 0)}`;
   }
+
   /**
    * Code-Teil: _sfGetDischargeFloorSocPct
    * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
@@ -6296,12 +6329,41 @@ class NexoWattVis extends utils.Adapter {
     // intentionally based on this status and not on the static config alone: stale,
     // degraded, faulted or unavailable systems must be zeroed and excluded from dispatch.
     let status = [];
-    try {
-      const st = await this.getStateAsync('storageFarm.storagesStatusJson').catch(() => null);
-      const raw = (st && typeof st.val === 'string') ? st.val : '[]';
-      const parsed = raw ? JSON.parse(raw) : [];
-      status = Array.isArray(parsed) ? parsed : [];
-    } catch (_e) { status = []; }
+    let statusState = null;
+    const readFarmStatus = async () => {
+      try {
+        statusState = await this.getStateAsync('storageFarm.storagesStatusJson').catch(() => null);
+        const raw = (statusState && typeof statusState.val === 'string') ? statusState.val : '[]';
+        const parsed = raw ? JSON.parse(raw) : [];
+        status = Array.isArray(parsed) ? parsed : [];
+      } catch (_e) {
+        statusState = null;
+        status = [];
+      }
+    };
+    await readFarmStatus();
+
+    const farmIntervalMs = Math.max(1000, Number((this.config && this.config.storageFarm && this.config.storageFarm.schedulerIntervalMs) || 2000));
+    const statusTs = Number(statusState && statusState.ts);
+    const statusAgeMs = Number.isFinite(statusTs) && statusTs > 0 ? Math.max(0, now - statusTs) : Number.POSITIVE_INFINITY;
+    const statusNeedsRefresh = status.length < sf.storages.length || statusAgeMs > Math.max(10000, farmIntervalMs * 4);
+    if (statusNeedsRefresh && typeof this.updateStorageFarmDerived === 'function') {
+      try {
+        await this.updateStorageFarmDerived('dispatch-preflight');
+        await readFarmStatus();
+      } catch (_eRefresh) {
+        // Der nachfolgende Dispatcher liefert einen eindeutigen Diagnosegrund,
+        // statt stillschweigend auf Array-Indizes oder alte Werte zurueckzufallen.
+      }
+    }
+
+    const statusByKey = new Map();
+    for (let i = 0; i < status.length; i++) {
+      const row = status[i] && typeof status[i] === 'object' ? status[i] : null;
+      if (!row) continue;
+      const key = String(row.dispatchKey || this._sfGetStorageDispatchKey(row, i) || '').trim();
+      if (key && !statusByKey.has(key)) statusByKey.set(key, row);
+    }
     /**
      * Code-Teil: finiteLimitOrNull
      * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -6318,7 +6380,34 @@ class NexoWattVis extends utils.Adapter {
       return Math.round(n);
     };
     const storages = sf.storages.map((s, i) => {
-      const st = (status && status[i] && typeof status[i] === 'object') ? status[i] : {};
+      const dispatchKey = String(s.dispatchKey || this._sfGetStorageDispatchKey(s, i) || '').trim();
+      let st = dispatchKey && statusByKey.has(dispatchKey) ? statusByKey.get(dispatchKey) : null;
+      let statusMatch = st ? 'dispatch-key' : '';
+      if (!st) {
+        // Legacy-Fallback fuer alte Status-JSONs ohne dispatchKey. Er wird nur
+        // verwendet, wenn der Eintrag anhand eines echten Hardwarepfads oder Namens
+        // eindeutig passt; der nackte Array-Index ist kein regulaerer Dispatcher mehr.
+        const candidates = status.filter((row) => {
+          if (!row || typeof row !== 'object') return false;
+          const ids = [
+            ['setSignedPowerId', s.setSignedPowerId],
+            ['setChargePowerId', s.setChargePowerId],
+            ['setDischargePowerId', s.setDischargePowerId],
+            ['signedPowerId', s.signedPowerId],
+            ['chargePowerId', s.chargePowerId],
+            ['dischargePowerId', s.dischargePowerId],
+            ['socId', s.socId],
+          ];
+          if (ids.some(([key, value]) => String(value || '').trim() && String(row[key] || '').trim() === String(value || '').trim())) return true;
+          const name = String(s.name || '').trim().toLowerCase();
+          return !!name && String(row.name || '').trim().toLowerCase() === name;
+        });
+        if (candidates.length === 1) {
+          st = candidates[0];
+          statusMatch = 'legacy-hardware-match';
+        }
+      }
+      if (!st) st = {};
       const soc = (st && Number.isFinite(Number(st.soc))) ? Number(st.soc) : null;
       const online = (st && typeof st.online === 'boolean') ? st.online : false;
       const displayOnline = (st && typeof st.displayOnline === 'boolean') ? st.displayOnline : online;
@@ -6353,7 +6442,8 @@ class NexoWattVis extends utils.Adapter {
         maxDischargeW,
         chargePowerW,
         dischargePowerW,
-        _sfKey: this._sfGetStorageDispatchKey(s, i),
+        statusMatch: statusMatch || 'missing',
+        _sfKey: dispatchKey || this._sfGetStorageDispatchKey(s, i),
       };
     });
     /**
@@ -6672,6 +6762,7 @@ class NexoWattVis extends utils.Adapter {
         maxDischargeW: (s.maxDischargeW !== null && Number.isFinite(Number(s.maxDischargeW))) ? Number(s.maxDischargeW) : null,
         blockedReasons: direction === 'charge' ? (s.chargeBlockedReasons || []) : (direction === 'discharge' ? (s.dischargeBlockedReasons || []) : []),
         warnings: Array.isArray(s.dispatchWarnings) ? s.dispatchWarnings : [],
+        statusMatch: String(s.statusMatch || ''),
         actualChargeW: Number.isFinite(Number(s.chargePowerW)) ? Number(s.chargePowerW) : null,
         actualDischargeW: Number.isFinite(Number(s.dischargePowerW)) ? Number(s.dischargePowerW) : null,
         chargeW,
@@ -6740,6 +6831,7 @@ class NexoWattVis extends utils.Adapter {
           maxDischargeW: r.maxDischargeW,
           blockedReasons: r.blockedReasons,
           warnings: r.warnings,
+          statusMatch: r.statusMatch,
           soc: r.soc,
           actualChargeW: r.actualChargeW,
           actualDischargeW: r.actualDischargeW,
@@ -6759,7 +6851,13 @@ class NexoWattVis extends utils.Adapter {
       }
     } catch (_eLog) {}
 
-    return { applied: !!anyOkRelevant, direction, targetW: w, deliveredW: direction === 'charge' ? -deliveredAbsW : deliveredAbsW, unservedW: unservedAbsW, results };
+    const applied = !!anyOkRelevant;
+    let resultReason = applied ? 'ok' : 'no-write-accepted';
+    if (!applied && direction === 'charge' && eligibleForDispatch.length === 0) resultReason = 'no-charge-dispatchable-storage';
+    else if (!applied && direction === 'discharge' && eligibleForDispatch.length === 0) resultReason = 'no-discharge-dispatchable-storage';
+    else if (!applied && direction === 'idle' && storages.length === 0) resultReason = 'no-storage';
+    else if (!applied && storages.some((row) => row.statusMatch === 'missing')) resultReason = 'farm-status-missing';
+    return { applied, reason: resultReason, direction, targetW: w, deliveredW: direction === 'charge' ? -deliveredAbsW : deliveredAbsW, unservedW: unservedAbsW, results };
   }
   /**
    * Code-Teil: syncInstallerConfigToStates

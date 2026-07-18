@@ -170,10 +170,12 @@ function computeChargingMinimumServicePlan() {
     const safe = String(w.safe || '').trim();
     const mode = String(w.effectiveMode || w.userMode || 'normal').trim().toLowerCase();
     const goalBlocked = !!w.goalEnabled && (w.goalStatus === 'waiting_soc' || w.goalStatus === 'soc_stale');
+    const demandConfirmed = w.vehicleDemandConfirmed === true
+      || (w.vehicleDemandConfirmed === undefined && w.vehiclePlugged === true);
     const eligible = !!safe
       && w.enabled !== false
       && w.online !== false
-      && w.vehiclePlugged !== false
+      && demandConfirmed
       && String(w.controlBasis || 'none').trim().toLowerCase() !== 'none'
       && mode !== 'pv'
       && !goalBlocked;

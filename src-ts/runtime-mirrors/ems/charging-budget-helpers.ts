@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4d7f2f4ec56311f14621dc1569404067ff7115c09a627ac489decf2dce0420c9
+ * Original-Hash: eb68424955dbeb8c60793f8d4abcd31589fda3a11b045b53ad9e10757e49aad6
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/charging-budget-helpers.ts
- * Quell-Hash: sha256:62bc8802e6d8ebaa86aade83dd5a12e02b9eebb679cd9028b4452214c28d7807
+ * Quell-Hash: sha256:061942f60fb4c5147077252e9895f8cbcea6646641dd900f0c293d2bb7c10353
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -218,10 +218,12 @@ function computeChargingMinimumServicePlan() {
     const safe = String(w.safe || '').trim();
     const mode = String(w.effectiveMode || w.userMode || 'normal').trim().toLowerCase();
     const goalBlocked = !!w.goalEnabled && (w.goalStatus === 'waiting_soc' || w.goalStatus === 'soc_stale');
+    const demandConfirmed = w.vehicleDemandConfirmed === true
+      || (w.vehicleDemandConfirmed === undefined && w.vehiclePlugged === true);
     const eligible = !!safe
       && w.enabled !== false
       && w.online !== false
-      && w.vehiclePlugged !== false
+      && demandConfirmed
       && String(w.controlBasis || 'none').trim().toLowerCase() !== 'none'
       && mode !== 'pv'
       && !goalBlocked;
