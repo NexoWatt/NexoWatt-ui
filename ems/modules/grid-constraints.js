@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/grid-constraints.ts
- * Quell-Hash: sha256:80896eb1b390bfec943055b2a1cf74041e587c8cb49442e248db513bec6455a3
+ * Quell-Hash: sha256:d6054db91477bb5a6adf2f1b09e48c33308ec23f13d0c67b26eca60238c725aa
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -45,6 +45,7 @@
 
 const { BaseModule } = require('./base');
 const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
+const { isActuatorAuthorityBlockedResult } = require('../services/actuator-shadow-arbiter');
 const { ReasonCodes } = require('../reasons');
 
 /**
@@ -1649,8 +1650,21 @@ class GridConstraintsModule extends BaseModule {
             };
             try {
                 const json = JSON.stringify(envelope);
-                if (this.adapter && typeof this.adapter.setForeignStateAsync === 'function') await this.adapter.setForeignStateAsync(stateId, { val: json, ack: false });
-                else if (this.adapter && typeof this.adapter.setStateAsync === 'function') await this.adapter.setStateAsync(stateId, { val: json, ack: false });
+                let writeResult = null;
+                if (this.adapter && typeof this.adapter.setForeignStateAsync === 'function') writeResult = await this.adapter.setForeignStateAsync(stateId, { val: json, ack: false });
+                else if (this.adapter && typeof this.adapter.setStateAsync === 'function') writeResult = await this.adapter.setStateAsync(stateId, { val: json, ack: false });
+                if (isActuatorAuthorityBlockedResult(writeResult)) {
+                    result.blockedCount += 1;
+                    result.skippedCount += 1;
+                    result.results.push({
+                        stateId,
+                        sink: cmd.sink,
+                        status: 'blocked-by-actuator-authority',
+                        blockedByOwner: String(writeResult.blockedByOwner || ''),
+                        requestedPowerW: envelope.requestedPowerW,
+                    });
+                    continue;
+                }
                 result.writtenCount += 1;
                 const rt = this._zeroExportSinkRuntimeFor ? this._zeroExportSinkRuntimeFor(cmd.sink) : null;
                 if (rt) {
@@ -1678,7 +1692,9 @@ class GridConstraintsModule extends BaseModule {
                 result.results.push({ stateId, sink: cmd.sink, status: 'error', error: String(e && e.message ? e.message : e) });
             }
         }
-        result.status = result.failedCount ? (result.writtenCount ? 'partial-error' : 'error') : (result.writtenCount ? 'written' : (result.blockedCount ? 'blocked-by-availability' : 'no_targets'));
+        result.status = result.failedCount
+            ? (result.writtenCount ? 'partial-error' : 'error')
+            : (result.writtenCount ? (result.blockedCount ? 'partial-blocked' : 'written') : (result.blockedCount ? 'blocked' : 'no_targets'));
         return result;
     }
 

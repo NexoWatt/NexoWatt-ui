@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:d0b266d0805ea24bf0ab368ba81adae345768755928a0b8cc735e64ad36b3f6f
+ * Quell-Hash: sha256:d5893d3c97bfc6e7b876699a94392464239e8440c707a67d7325657385fd3902
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1140,30 +1140,67 @@
 
   function _normalizeRecoveredStorageFarmRow(row, index) {
     const r = row && typeof row === 'object' ? row : {};
+    const roots = [r, r.datapoints, r.dp, r.mapping].filter((root) => root && typeof root === 'object');
+    const textFrom = (...keys) => {
+      for (const key of keys) {
+        for (const root of roots) {
+          const value = root[key];
+          if (value === undefined || value === null) continue;
+          const txt = String(value).trim();
+          if (txt) return txt;
+        }
+      }
+      return '';
+    };
+    const numberFrom = (...keys) => {
+      for (const key of keys) {
+        for (const root of roots) {
+          const value = root[key];
+          if (value === undefined || value === null || value === '') continue;
+          const parsed = Number(String(value).replace(',', '.'));
+          if (Number.isFinite(parsed)) return parsed;
+        }
+      }
+      return '';
+    };
+    const boolFrom = (fallback, ...keys) => {
+      for (const key of keys) {
+        for (const root of roots) {
+          if (!Object.prototype.hasOwnProperty.call(root, key)) continue;
+          const value = root[key];
+          if (typeof value === 'boolean') return value;
+          const normalized = String(value).trim().toLowerCase();
+          if (value === 1 || normalized === '1' || normalized === 'true') return true;
+          if (value === 0 || normalized === '0' || normalized === 'false') return false;
+        }
+      }
+      return fallback;
+    };
+    const couplingRaw = textFrom('coupling', 'storageCoupling').toLowerCase();
     return {
-      enabled: r.enabled === false ? false : true,
-      name: String(r.name || '').trim() || `Speicher ${index + 1}`,
-      coupling: String(r.coupling || '').trim().toLowerCase() === 'dc' ? 'dc' : (String(r.coupling || '').trim().toLowerCase() === 'ac' ? 'ac' : ''),
-      socId: String(r.socId || '').trim(),
-      signedPowerId: String(r.signedPowerId || '').trim(),
-      chargePowerId: String(r.chargePowerId || '').trim(),
-      dischargePowerId: String(r.dischargePowerId || '').trim(),
-      pvPowerId: String(r.pvPowerId || '').trim(),
-      invertSignedPowerSign: !!r.invertSignedPowerSign,
-      invertChargeSign: !!r.invertChargeSign,
-      invertDischargeSign: !!r.invertDischargeSign,
-      setChargePowerId: String(r.setChargePowerId || '').trim(),
-      setDischargePowerId: String(r.setDischargePowerId || '').trim(),
-      setSignedPowerId: String(r.setSignedPowerId || '').trim(),
-      invertSetSignedPowerSign: !!r.invertSetSignedPowerSign,
-      maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : '',
-      maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : '',
-      availableId: String(r.availableId || '').trim(),
-      faultId: String(r.faultId || '').trim(),
-      chargeAllowedId: String(r.chargeAllowedId || '').trim(),
-      dischargeAllowedId: String(r.dischargeAllowedId || '').trim(),
-      capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : '',
-      group: String(r.group || '').trim(),
+      enabled: boolFrom(true, 'enabled', 'active'),
+      name: textFrom('name', 'label', 'title') || `Speicher ${index + 1}`,
+      coupling: couplingRaw === 'dc' ? 'dc' : (couplingRaw === 'ac' ? 'ac' : ''),
+      socId: textFrom('socId', 'socObjectId', 'socDp', 'storageSocId', 'storageSoc'),
+      signedPowerId: textFrom('signedPowerId', 'batteryPowerObjectId', 'signedPowerDp', 'powerObjectId', 'powerId', 'batteryPower'),
+      chargePowerId: textFrom('chargePowerId', 'batteryChargePowerObjectId', 'chargePowerDp', 'chargeDp', 'storageChargePower'),
+      dischargePowerId: textFrom('dischargePowerId', 'batteryDischargePowerObjectId', 'dischargePowerDp', 'dischargeDp', 'storageDischargePower'),
+      pvPowerId: textFrom('pvPowerId', 'pvPowerObjectId', 'pvPowerDp', 'storagePvPowerId'),
+      invertSignedPowerSign: boolFrom(false, 'invertSignedPowerSign', 'batteryPowerInvert', 'invertPowerSign'),
+      invertChargeSign: boolFrom(false, 'invertChargeSign', 'batteryChargePowerInvert'),
+      invertDischargeSign: boolFrom(false, 'invertDischargeSign', 'batteryDischargePowerInvert'),
+      setChargePowerId: textFrom('setChargePowerId', 'targetChargePowerObjectId', 'targetChargePowerId', 'setChargePowerDp', 'chargeSetpointId'),
+      setDischargePowerId: textFrom('setDischargePowerId', 'targetDischargePowerObjectId', 'targetDischargePowerId', 'setDischargePowerDp', 'dischargeSetpointId'),
+      setSignedPowerId: textFrom('setSignedPowerId', 'targetPowerObjectId', 'targetPowerId', 'setSignedPowerDp', 'powerSetpointId', 'setpointId', 'setPowerId'),
+      invertSetSignedPowerSign: boolFrom(false, 'invertSetSignedPowerSign', 'targetPowerInvert', 'invertSetpointSign'),
+      maxChargeW: numberFrom('maxChargeW', 'maxChargePowerW'),
+      maxDischargeW: numberFrom('maxDischargeW', 'maxDischargePowerW'),
+      availableId: textFrom('availableId', 'availableObjectId', 'availableDp', 'availabilityId'),
+      faultId: textFrom('faultId', 'faultObjectId', 'faultDp', 'errorId'),
+      chargeAllowedId: textFrom('chargeAllowedId', 'chargeAllowedObjectId', 'chargeAllowedDp', 'chargeEnableId'),
+      dischargeAllowedId: textFrom('dischargeAllowedId', 'dischargeAllowedObjectId', 'dischargeAllowedDp', 'dischargeEnableId'),
+      capacityKWh: numberFrom('capacityKWh', 'capacityKwh', 'batteryCapacityKWh'),
+      group: textFrom('group', 'groupName'),
     };
   }
 
@@ -8546,8 +8583,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
   /**
    * Code-Teil: getStorageVendorProfile
    * Zweck: Liest das ausgewaehlte Herstellerprofil im Speicher-Reiter.
-   * Zusammenhang: Das Profil bestimmt, ob FENECON-No-Write oder Sungrow-NVP-Assist
-   * aktiv wird; Generic bleibt die unveraenderte Eigenverbrauchsoptimierung.
+   * Zusammenhang: Das Profil aktiviert FENECON-Setpoint-Keepalive oder Sungrow-NVP-Assist;
+   * Generic bleibt die unveraenderte Eigenverbrauchsoptimierung.
    */
   function getStorageVendorProfile() {
     const v = (els.storageVendorProfile && els.storageVendorProfile.value) ? String(els.storageVendorProfile.value) : 'generic';
@@ -8634,7 +8671,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     sf.mode = (modeRaw === 'groups') ? 'groups' : 'pool';
 
     const sched = Number(sf.schedulerIntervalMs);
-    sf.schedulerIntervalMs = (Number.isFinite(sched) && sched >= 500) ? Math.round(sched) : 2000;
+    sf.schedulerIntervalMs = Number.isFinite(sched) ? Math.max(250, Math.min(1000, Math.round(sched))) : 1000;
 
     sf.storages = Array.isArray(sf.storages) ? sf.storages : [];
     sf.groups = Array.isArray(sf.groups) ? sf.groups : [];
@@ -8642,38 +8679,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const maxStor = 10;
     const storOut = [];
     for (let i = 0; i < Math.min(maxStor, sf.storages.length); i++) {
-      const r = sf.storages[i] || {};
-      const couplingRaw = String(r.coupling || '').trim().toLowerCase();
-      const coupling = (couplingRaw === 'dc') ? 'dc' : ((couplingRaw === 'ac') ? 'ac' : '');
-      storOut.push({
-        enabled: (r.enabled === false) ? false : true,
-        name: String(r.name || '').trim() || `Speicher ${i + 1}`,
-        coupling,
-        socId: String(r.socId || '').trim(),
-        // Istwerte (Messwerte): entweder Signed oder Laden/Entladen getrennt
-        signedPowerId: String(r.signedPowerId || '').trim(),
-        chargePowerId: String(r.chargePowerId || '').trim(),
-        dischargePowerId: String(r.dischargePowerId || '').trim(),
-        pvPowerId: String(r.pvPowerId || '').trim(),
-        invertSignedPowerSign: !!r.invertSignedPowerSign,
-        invertChargeSign: !!r.invertChargeSign,
-        invertDischargeSign: !!r.invertDischargeSign,
-        // Sollwerte (Setpoint): entweder Signed oder Laden/Entladen getrennt
-        setChargePowerId: String(r.setChargePowerId || '').trim(),
-        setDischargePowerId: String(r.setDischargePowerId || '').trim(),
-        setSignedPowerId: String(r.setSignedPowerId || '').trim(),
-        invertSetSignedPowerSign: !!r.invertSetSignedPowerSign,
-        // Feste Leistungsgrenzen / Freigaben je Speicher (herstellerneutral).
-        // Ab v0.6.258: Maximalleistungen sind direkte Eingaben, keine DP-Zuordnung.
-        maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : '',
-        maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : '',
-        availableId: String(r.availableId || '').trim(),
-        faultId: String(r.faultId || '').trim(),
-        chargeAllowedId: String(r.chargeAllowedId || '').trim(),
-        dischargeAllowedId: String(r.dischargeAllowedId || '').trim(),
-        capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : '',
-        group: String(r.group || '').trim(),
-      });
+      const r = _normalizeRecoveredStorageFarmRow(sf.storages[i] || {}, i);
+      storOut.push(r);
     }
     // If array is empty, keep it empty (no implicit storages)
     sf.storages = storOut;
@@ -8746,7 +8753,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       els.storageFarmSchedulerIntervalMs.onchange = () => {
         const n = Number(els.storageFarmSchedulerIntervalMs.value);
         const sf2 = _ensureStorageFarmCfg();
-        sf2.schedulerIntervalMs = (Number.isFinite(n) && n >= 500) ? Math.round(n) : 2000;
+        sf2.schedulerIntervalMs = Number.isFinite(n) ? Math.max(250, Math.min(1000, Math.round(n))) : 1000;
       };
     }
 
@@ -10843,11 +10850,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       els.storageFeneconAcMode.checked = feneconModeActive;
     }
     if (els.storageFeneconDayNoWrite) {
-      // FENECON-Sicherheitsdefault: Wenn der Modus aktiv ist und der neue Haken
-      // noch nicht existierte, ist Tagsueber-No-Write eingeschaltet. So wird eine
-      // vorhandene FEMS-0-Einspeise-/Speicherlogik nicht durch 0-W-Schreibzyklen
-      // oder kleine externe Eigenverbrauchs-Sollwerte blockiert.
-      els.storageFeneconDayNoWrite.checked = feneconModeActive && (stF.feneconDayNoWriteEnabled !== false);
+      // Legacy-No-Write ist ab 0.8.124 fest deaktiviert. Ein im AppCenter
+      // zugeordneter FENECON/OpenEMS-Sollwert muss den Gate-/Executor-Pfad nutzen
+      // und als Watchdog-Keepalive zyklisch erneuert werden.
+      els.storageFeneconDayNoWrite.checked = false;
+      els.storageFeneconDayNoWrite.disabled = true;
     }
     if (els.storageFeneconAssist) {
       // Der Assist bleibt optional, ist aber bei FENECON-Anlagen hilfreich, wenn
@@ -11942,7 +11949,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     // Scheduler
     const sched = Number(els.schedulerIntervalMs.value);
-    if (Number.isFinite(sched) && sched >= 250) patch.schedulerIntervalMs = Math.round(sched);
+    if (Number.isFinite(sched) && sched >= 250) {
+      patch.schedulerIntervalMs = Math.max(250, Math.min(1000, Math.round(sched)));
+    }
 
     // System-/Marktprofil (Installer only): Sprache bleibt systemgeführt, Land wird hier verwaltet.
     const countrySelect = document.getElementById('countryProfileCountry');
@@ -12294,10 +12303,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     patch.storage.feneconGridControlEnabled = patch.storage.vendorProfile === 'fenecon-openems';
     patch.storage.sungrowHybridEnabled = patch.storage.vendorProfile === 'sungrow-hybrid';
     patch.storage.e3dcRscpEnabled = patch.storage.vendorProfile === 'e3dc-rscp';
-    // FENECON/OpenEMS/FEMS: Der Herstellerprofil-Haken aktiviert den
-    // Gateway-Modus. Die Zusatz-Haken steuern, ob NexoWatt tagsueber gar nicht
-    // schreibt und ob ein zeitverzoegerter NVP-Assist erlaubt ist.
-    patch.storage.feneconDayNoWriteEnabled = !!(els.storageFeneconDayNoWrite && els.storageFeneconDayNoWrite.checked);
+    // FENECON/OpenEMS/FEMS: Legacy-No-Write bleibt bewusst deaktiviert. Der
+    // manuell zugeordnete Sollwert-DP wird nach allen Gates zyklisch erneuert.
+    patch.storage.feneconDayNoWriteEnabled = false;
     patch.storage.feneconAssistEnabled = !!(els.storageFeneconAssist && els.storageFeneconAssist.checked);
     // Sungrow Hybrid ESS nutzt ab 0.8.96 fest den gemeinsamen geschlossenen
     // NVP-Regelkreis. Die alten PV-Passthrough-/0-W-Schalter werden bewusst nicht
@@ -14652,7 +14660,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     /**
      * Code-Teil: _updateStorageVendorProfile
      * Zweck: Synchronisiert Herstellerprofil-Optionen direkt in currentConfig.
-     * Zusammenhang: FENECON/OpenEMS nutzt No-Write/Assist; Sungrow Hybrid nutzt
+     * Zusammenhang: FENECON/OpenEMS nutzt gegateten Watchdog-Refresh/Assist; Sungrow Hybrid nutzt
      * fest den gemeinsamen NVP-Regelkreis ohne alte PV-Deckungs-0-W-Sonderzweige.
      * TypeScript: DOM-Checkboxen spaeter als HTMLInputElement typisieren.
      */
@@ -14667,10 +14675,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       if (els.storageFeneconAcMode) els.storageFeneconAcMode.checked = profile === 'fenecon-openems';
       if (els.storageFeneconDayNoWrite) {
-        if (profile === 'fenecon-openems' && !els.storageFeneconDayNoWrite.checked && currentConfig.storage.feneconDayNoWriteEnabled === undefined) {
-          els.storageFeneconDayNoWrite.checked = true;
-        }
-        currentConfig.storage.feneconDayNoWriteEnabled = !!els.storageFeneconDayNoWrite.checked;
+        els.storageFeneconDayNoWrite.checked = false;
+        els.storageFeneconDayNoWrite.disabled = true;
+        currentConfig.storage.feneconDayNoWriteEnabled = false;
       }
       if (els.storageFeneconAssist) {
         if (profile === 'fenecon-openems' && !els.storageFeneconAssist.checked && currentConfig.storage.feneconAssistEnabled === undefined) {

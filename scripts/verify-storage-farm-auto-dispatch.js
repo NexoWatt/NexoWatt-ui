@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Regression 0.8.122: Eine echte Speicherfarm (App aktiv, >=2 Speicher,
+ * Regression 0.8.123: Eine echte Speicherfarm (App aktiv, >=2 Speicher,
  * beschreibbare Setpoints) startet die Basis-Eigenverbrauchsoptimierung selbst.
  * Der Farm-Dispatcher matched Statuszeilen ueber stabile Hardware-IDs und
  * aktualisiert einen fehlenden/veralteten Status vor dem ersten Write.
@@ -22,8 +22,10 @@ const storageFiles = [
 for (const file of storageFiles) {
   has(file, 'const enabled = cfgEnabled || autoTarifEnabled || multiUseAppPolicyActive || farmAppPolicyActive;', 'Farm-Autostart');
   has(file, "await this._setIfChanged('speicher.regelung.aktivAutoSpeicherfarm', farmAppPolicyActive);", 'Farm-Autostart Diagnose');
-  has(file, 'farmRowsEarly.some((row)', 'Farm-Setpoint-Pruefung');
-  has(file, "String(row.setSignedPowerId || '').trim()", 'Signed-Farm-Sollwert');
+  has(file, "typeof farmRuntimeInfoEarly.dispatchActive === 'boolean'", 'autoritativer Farm-Dispatchstatus');
+  has(file, 'farmRowsEarly.some((row)', 'Legacy-Fallback der Farm-Setpoint-Pruefung');
+  has(file, 'row.setSignedPowerId || row.targetPowerObjectId || row.targetPowerId', 'kompatibler Signed-Farm-Sollwert');
+  has(file, '_isStorageFarmDispatchEnabled()', 'beschreibbare Farm als Schreib-Gate');
 }
 
 const mainFiles = [

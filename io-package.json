@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.122",
+    "version": "0.8.124",
     "news": {
+      "0.8.124": {
+        "de": "Version 0.8.124: Stellt den herstellerunabhängigen AppCenter-Aktorvertrag wieder vollständig her. FENECON/OpenEMS-Sollwerte werden nach allen Gates zyklisch erneuert, Speicherfarm-Writes laufen spätestens sekündlich, alle Speicher-Ausgangsarten sind angebunden und Wallbox-Phasen-DPs erreichen wieder das Charging-Gate. Zusätzliche Regressionen sichern frei benannte Schreib-DPs aller Geräteklassen ab.",
+        "en": "Version 0.8.124: Fully restores the vendor-independent AppCenter actuator contract. FENECON/OpenEMS targets are refreshed cyclically after all gates, storage-farm writes run at least once per second, all storage output modes are connected, and wallbox phase datapoints reach the charging gate again. Additional regressions protect freely named write datapoints across device classes."
+      },
+      "0.8.123": {
+        "de": "Version 0.8.123: Stellt die manuell im AppCenter zugeordneten Speicher- und Speicherfarm-Datenpunkte nach der TypeScript-Umstellung wieder verbindlich her. AppCenter schlägt veraltete Runtime-Spiegel, reine Mess-Farmen blockieren keine Einzel-Sollwerte mehr, Legacy-Feldnamen werden sicher migriert und frei benannte Objektpfade bleiben zulässig.",
+        "en": "Version 0.8.123: Restores authoritative manually assigned AppCenter datapoints for single storage and storage farms after the TypeScript migration. AppCenter now overrides stale runtime mirrors, measurement-only farms no longer block single-storage targets, legacy fields migrate safely, and freely named object paths remain valid."
+      },
       "0.8.122": {
         "de": "Version 0.8.122: Entfernt Phantom-EVCS-Reservierungen ohne bestätigten Fahrzeugbedarf, startet eine aktive Speicherfarm automatisch als Basis-Eigenverbrauchsregelung und stabilisiert die Farm-Verteilung über Hardware-IDs samt Status-Refresh. Zusätzlich werden alle typisierten §14a-Budgetobjekte vor dem ersten Write angelegt.",
         "en": "Version 0.8.122: Removes phantom EVCS reservations without confirmed vehicle demand, automatically starts an active storage farm as the base self-consumption controller, and stabilizes farm dispatch via hardware IDs plus status refresh. It also creates all typed §14a budget objects before the first write."
@@ -22,14 +30,6 @@
       "0.8.118": {
         "de": "Version 0.8.118: §14a arbeitet als frischer zentraler Constraint statt als konkurrierender Hardware-Schreiber. EVCS, Speicher, Thermik und Heizstab erhalten app-spezifische Caps aus demselben EMS-Budget. Veraltete Netzbetreibersignale werden nach konfigurierbarer Fail-Safe-Policy behandelt; Legacy-Direktwrites bleiben nur als expliziter Migrationsmodus verfügbar.",
         "en": "Version 0.8.118: Section 14a now acts as a fresh central constraint instead of a competing hardware writer. EVCS, storage, thermal control and heating rods receive app-specific caps from the same EMS budget. Stale grid-operator signals follow a configurable fail-safe policy; legacy direct writes remain available only as an explicit migration mode."
-      },
-      "0.8.117": {
-        "de": "Version 0.8.117: MultiUse ist standardmäßig ausschließlich Speicher-Policy; Storage-Control bleibt einziger Batteriesollwert-Schreiber. Peak-Shaving verbucht nur bestätigte Aktorwirkung und hält fehlgeschlagene Restores offen. Dynamische Stundenpreise werden nach 90 Minuten stale; eine frische Day-Ahead-Kurve darf den aktuellen Slot ersetzen, stale Preise lösen kein Netzladen aus.",
-        "en": "Version 0.8.117: MultiUse is storage-policy-only by default and Storage-Control remains the sole battery setpoint writer. Peak shaving counts only confirmed actuator effects and keeps failed restores pending. Dynamic current prices become stale after 90 minutes; a fresh day-ahead curve may provide the current slot and stale prices cannot trigger grid charging."
-      },
-      "0.8.116": {
-        "de": "Version 0.8.116: BHKW und Generator auf den zentralen Aktorvertrag umgestellt. Frische SoC-/NVP-/Laufstatuswerte, Start-/Stop-Pulse, Zwei-Draht-Level und Run-Level, Readback/ACK-Timeout, begrenzte Wiederholungen, Fehlerverriegelung sowie rekonstruierte Mindestlauf- und Stillstandszeiten sind jetzt gemeinsam abgesichert.",
-        "en": "Version 0.8.116: Migrates CHP and generator control to the central actuator contract. Fresh SoC/NVP/runtime feedback, start/stop pulses, dual-wire level and run-level profiles, readback/ACK timeout, bounded retries, fault lockout and reconstructed minimum run/off times are now handled consistently."
       }
     },
     "title": "NexoWatt UI",

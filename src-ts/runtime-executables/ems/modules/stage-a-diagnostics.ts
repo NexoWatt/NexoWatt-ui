@@ -42,12 +42,35 @@ type StateInfo = {
 const ACTUATOR_FIELDS = new Set([
   'setCurrentAId', 'setPowerWId', 'enableWriteId', 'targetPowerObjectId',
   'targetChargePowerObjectId', 'targetDischargePowerObjectId', 'runObjectId',
+  // Speicher-/Farm-Legacy-Aliase: Alte Installationen duerfen nach der TS-
+  // Migration nicht aus der Owner-Matrix fallen, wenn nur der Alias belegt ist.
+  'targetPowerId', 'targetChargePowerId', 'targetDischargePowerId',
+  'setSignedPowerDp', 'setChargePowerDp', 'setDischargePowerDp',
+  'powerSetpointId', 'chargeSetpointId', 'dischargeSetpointId',
+  'maxChargeObjectId', 'maxDischargeObjectId', 'chargeEnableObjectId',
+  'dischargeEnableObjectId', 'reserveSocObjectId',
+  'maxChargeId', 'maxDischargeId', 'chargeEnableId', 'dischargeEnableId', 'reserveSocId',
   'setPowerModeObjectId', 'setPowerValueObjectId', 'powerLimitsUsedObjectId',
-  'maxChargePowerObjectId', 'maxDischargePowerObjectId', 'setSignedPowerId',
+  'maxChargePowerObjectId', 'maxDischargePowerObjectId',
+  'e3dcSetPowerModeObjectId', 'e3dcSetPowerValueObjectId',
+  'e3dcPowerLimitsUsedObjectId', 'e3dcMaxChargePowerObjectId',
+  'e3dcMaxDischargePowerObjectId', 'setSignedPowerId',
   'setChargePowerId', 'setDischargePowerId', 'switchWriteId', 'setpointWriteId',
-  'sgReadyAWriteId', 'sgReadyBWriteId', 'writeId', 'stageWriteId', 'setpointId',
-  'enableId', 'startWriteId', 'stopWriteId', 'runWriteId', 'setWId', 'setAId', 'commandId',
+  'sgReadyAWriteId', 'sgReadyBWriteId', 'sgReady1WriteId', 'sgReady2WriteId',
+  'writeId', 'writeObjectId', 'writeDp', 'dpWriteId',
+  'stageWriteId', 'setpointId', 'outputObjectId', 'commandObjectId', 'commandStateId',
+  'enableId', 'startWriteId', 'stopWriteId', 'runWriteId', 'startObjectId',
+  'stopObjectId', 'startId', 'stopId', 'setWId', 'setAId', 'setId', 'commandId',
   'outputId', 'relayWriteId', 'targetObjectId', 'lockWriteId', 'phaseSwitchId',
+  // Neutrale Command-States sind keine Roh-Hardwarebefehle, aber ebenfalls
+  // beschreibbare, manuell zugeordnete AppCenter-Ausgaenge und muessen deshalb
+  // dieselbe Authority-/Konflikt-Diagnose erhalten.
+  'commandStateDp', 'localCommandStateDp', 'receivedCommandStateDp',
+  'zeroExportStorageChargeCommandStateId', 'zeroExportChargingCommandStateId',
+  'zeroExportFlexLoadCommandStateId', 'zeroExportMeshCommandStateId',
+  'storageChargeCommandStateId', 'chargingCommandStateId',
+  'flexLoadCommandStateId', 'meshMicrogridCommandStateId',
+  'para14aEmsSetpointWId',
   'pvFeedInLimitWId', 'pvLimitWId', 'pvLimitPctId', 'feedInLimitWId',
   'limitWId', 'limitPctId',
 ]);
@@ -84,6 +107,7 @@ function ownerFromPath(path: string, row: AnyRecord | null): string {
     return index > 0 ? `threshold.r${index}` : `threshold.${rowId || raw}`;
   }
   if (lower.includes('gridconstraints')) return `gridConstraints.${rowId || raw}`;
+  if (lower.includes('chargekiosk')) return `chargeKiosk.${rowId || raw}`;
   if (lower.includes('peakshaving')) return `peakShaving.${rowId || raw}`;
   if (lower.includes('para14a') || lower.includes('§14a')) return `para14a.${rowId || raw}`;
   if (lower.includes('bhkw')) {
@@ -122,6 +146,7 @@ function ownerIsActive(config: AnyRecord, owner: string, row: AnyRecord | null):
   if (lower.startsWith('threshold.')) return config.enableThresholdControl === true;
   if (lower.startsWith('peakshaving.')) return config.enablePeakShaving === true || config.peakShaving?.enabled === true;
   if (lower.startsWith('para14a.')) return !!(config.installerConfig?.para14a || config.para14a?.enabled);
+  if (lower.startsWith('chargekiosk.')) return config.enableChargeKiosk === true || config.chargeKiosk?.enabled === true;
   if (lower.startsWith('bhkw.')) return config.enableBhkwControl === true;
   if (lower.startsWith('generator.')) return config.enableGeneratorControl === true;
   if (lower.startsWith('multiuse.')) return config.enableMultiUse === true;
@@ -164,7 +189,16 @@ function collectActuatorMappings(config: AnyRecord, evcsList: AnyRecord[] | unde
   visit(config, 'config', config, 0);
   (Array.isArray(evcsList) ? evcsList : []).forEach((row, index) => {
     const owner = `charging.lp${Number(row.index) > 0 ? Number(row.index) : index + 1}`;
-    for (const field of ['setCurrentAId', 'setPowerWId', 'enableWriteId']) {
+    // Auch die manuell zugeordneten Verriegelungs-/Phasen-Aktoren gehoeren in
+    // dieselbe Owner-Matrix. So laufen sie durch Authority-, Konflikt- und
+    // Sicherheitsdiagnosen und werden nicht beim normalisierten evcsList-Pfad
+    // uebersehen.
+    const evcsActuatorFields = ['setCurrentAId', 'setPowerWId', 'enableWriteId', 'lockWriteId', 'phaseSwitchId'];
+    // activeId ist normalerweise ein Status-/Read-DP. Nur wenn RFID aktiv ist und
+    // kein eigener lockWriteId existiert, wird er bewusst als Soft-Lock-Ausgang
+    // verwendet und muss dann ebenfalls in die Owner-Matrix.
+    if (text(row.rfidReadId) && !text(row.lockWriteId) && text(row.activeId)) evcsActuatorFields.push('activeId');
+    for (const field of evcsActuatorFields) {
       const id = text(row[field]);
       if (!looksLikeObjectId(id)) continue;
       const signature = `${id}|${owner}|${field}`;

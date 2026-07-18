@@ -18,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 854af585ce5233d35900923a81e1392125bd665269413cee932a77cc6b8e9a08
+ * Original-Hash: b966cca989f48abe8ca9a72c052d8d4ae33048e3cab37ebdb9a28bc8383de56f
  */
 
 /**
@@ -369,8 +369,13 @@ interface EmsAppsWindow extends Window {
     save: document.getElementById('nw-emsapps-save'),
     reload: document.getElementById('nw-emsapps-reload'),
     validate: document.getElementById('nw-emsapps-validate'),
+    backInstaller: document.getElementById('nw-emsapps-back-installer'),
 
     appsList: document.getElementById('appsList'),
+    systemProfileMount: document.getElementById('systemProfileMappingSlot'),
+    nlP1Mount: document.getElementById('nlP1MappingSlot'),
+    chargeKioskMount: document.getElementById('chargeKioskEvcsSlot'),
+    meshMicrogridMount: document.getElementById('meshMicrogridConfigSlot'),
     appsEmpty: document.getElementById('appsEmpty'),
     nwDevicesQuickSetup: document.getElementById('nwDevicesQuickSetup'),
 
@@ -405,7 +410,24 @@ interface EmsAppsWindow extends Window {
 
     storageControlMode: document.getElementById('storageControlMode'),
     storageCapacityKWh: document.getElementById('storageCapacityKWh'),
+    storageSelfTargetGridImportW: document.getElementById('storageSelfTargetGridImportW'),
+    storageSelfImportThresholdW: document.getElementById('storageSelfImportThresholdW'),
+    storageSelfNvpSmoothingSec: document.getElementById('storageSelfNvpSmoothingSec'),
+    storageSelfNvpRawGuardW: document.getElementById('storageSelfNvpRawGuardW'),
+    storageBalanceFeedbackHoldSec: document.getElementById('storageBalanceFeedbackHoldSec'),
+    storageCouplingMode: document.getElementById('storageCouplingMode'),
+    storageDcPvHintRow: document.getElementById('storageDcPvHintRow'),
+    storageVendorProfile: document.getElementById('storageVendorProfile'),
+    storageFeneconOptionsRow: document.getElementById('storageFeneconOptionsRow'),
     storageFeneconAcMode: document.getElementById('storageFeneconAcMode'),
+    storageFeneconDayNoWrite: document.getElementById('storageFeneconDayNoWrite'),
+    storageFeneconAssist: document.getElementById('storageFeneconAssist'),
+    storageSungrowOptionsRow: document.getElementById('storageSungrowOptionsRow'),
+    storageE3dcOptionsRow: document.getElementById('storageE3dcOptionsRow'),
+    storageE3dcRscpEnabled: document.getElementById('storageE3dcRscpEnabled'),
+    storageE3dcZeroMode: document.getElementById('storageE3dcZeroMode'),
+    storageE3dcAllowGridCharge: document.getElementById('storageE3dcAllowGridCharge'),
+    storageE3dcUsePowerLimits: document.getElementById('storageE3dcUsePowerLimits'),
 
     // Speicherfarm
     storageFarmMode: document.getElementById('storageFarmMode'),
@@ -435,6 +457,9 @@ interface EmsAppsWindow extends Window {
     // §14a
     para14aMode: document.getElementById('para14aMode'),
     para14aMinPerDeviceW: document.getElementById('para14aMinPerDeviceW'),
+    para14aSignalMaxAgeSec: document.getElementById('para14aSignalMaxAgeSec'),
+    para14aStalePolicy: document.getElementById('para14aStalePolicy'),
+    para14aLegacyDirectWritesEnabled: document.getElementById('para14aLegacyDirectWritesEnabled'),
     para14aActiveId: document.getElementById('para14aActiveId'),
     para14aEmsSetpointWId: document.getElementById('para14aEmsSetpointWId'),
     para14aConsumers: document.getElementById('para14aConsumers'),
@@ -649,22 +674,30 @@ interface EmsAppsWindow extends Window {
   }
 
   // Phase 2: App-Center (install + enable per capability)
+  // 0.8.37 App-Center-Schema: Diese Liste enthält nur Funktions-Apps.
+  // Marktprofile/P1-Mapping liegen im Tab „Zuordnung“, Stationsseiten im Tab „Ladepunkte“.
+  // Große Funktionsmodule wie Mesh/Microgrid dürfen im Apps-Reiter nur installiert/aktiviert
+  // werden; ihre Detailkonfiguration liegt in einem eigenen Reiter, der erst nach Installation
+  // eingeblendet wird. So bleibt die Startseite übersichtlich.
   const APP_CATALOG = [
-    { id: 'charging', label: 'Lademanagement', desc: 'PV-Überschussladen, Budget-Verteilung, Ladepunkte/Ports (AC/DC) + Stationsgruppen', mandatory: false },
-    { id: 'peak', label: 'Peak-Shaving', desc: 'Lastspitzenkappung / Import-Limit / Atypische HLZF', mandatory: false },
-    { id: 'storage', label: 'Speicherregelung', desc: 'Eigenverbrauch / Speicher-Setpoints (herstellerunabhängig)', mandatory: false },
-    { id: 'storagefarm', label: 'Speicherfarm', desc: 'Mehrere Speichersysteme als Pool/Gruppen', mandatory: false },
-    { id: 'thermal', label: 'Wärmepumpe & Klima', desc: 'PV-Überschuss-Steuerung für Wärmepumpe/Klima (Setpoint, On/Off oder SG-Ready) inkl. Schnellsteuerung', mandatory: false },
-    { id: 'heatingrod', label: 'Heizstab', desc: 'Native 1..12 Stufen Heizstab-Regelung über Relais / KNX-Aktoren', mandatory: false },
-    { id: 'bhkw', label: 'BHKW', desc: 'BHKW-Steuerung (Start/Stop, SoC-geführt) mit Schnellsteuerung', mandatory: false },
-    { id: 'generator', label: 'Generator', desc: 'Generator-Steuerung (Notstrom/Netzparallelbetrieb, SoC-geführt) mit Schnellsteuerung', mandatory: false },
-    { id: 'threshold', label: 'Schwellwertsteuerung', desc: 'Regeln (Wenn X > Y dann Schalten/Setzen) – optional mit Endkunden-Anpassung', mandatory: false },
-    { id: 'relay', label: 'Relaissteuerung', desc: 'Manuelle Relais / generische Ausgänge (optional endkundentauglich)', mandatory: false },
-    { id: 'grid', label: 'Netzlimits', desc: 'Netzrestriktionen (RLM/0‑Einspeisung/Import‑Limits)', mandatory: false },
-    { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung: PV, Wetter, Tarif, Speicher, Wallboxen und Lastspitzen als Vorschläge auf der LIVE‑Seite', mandatory: false },
-    { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', mandatory: true },
-    { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls genutzt)', mandatory: false },
-    { id: 'multiuse', label: 'MultiUse', desc: 'Speicher-Policy mit SoC-Zonen für Reserve, Lastspitzenkappung und Eigenverbrauch; Storage-Control bleibt einziger Batterieschreiber', mandatory: false }
+    { id: 'charging', label: 'Lademanagement', desc: 'PV-Überschussladen, Budget-Verteilung, Ladepunkte/Ports (AC/DC) + Stationsgruppen', mandatory: false, hems: true },
+    { id: 'peak', label: 'Peak-Shaving', desc: 'Lastspitzenkappung / Import-Limit / Atypische HLZF', mandatory: false, hems: false },
+    { id: 'storage', label: 'Speicherregelung', desc: 'Eigenverbrauch / Speicher-Setpoints (herstellerunabhängig)', mandatory: false, hems: true },
+    { id: 'storagefarm', label: 'Speicherfarm', desc: 'Mehrere Speichersysteme als Pool/Gruppen', mandatory: false, hems: false },
+    { id: 'thermal', label: 'Wärmepumpe & Klima', desc: 'PV-Überschuss-Steuerung für Wärmepumpe/Klima (Setpoint, On/Off oder SG-Ready) inkl. Schnellsteuerung', mandatory: false, hems: true },
+    { id: 'heatingrod', label: 'Heizstab', desc: 'Native 1..12 Stufen Heizstab-Regelung über Relais / KNX-Aktoren', mandatory: false, hems: true },
+    { id: 'bhkw', label: 'BHKW', desc: 'BHKW-Steuerung (Start/Stop, SoC-geführt) mit Schnellsteuerung', mandatory: false, hems: false },
+    { id: 'generator', label: 'Generator', desc: 'Generator-Steuerung (Notstrom/Netzparallelbetrieb, SoC-geführt) mit Schnellsteuerung', mandatory: false, hems: false },
+    { id: 'threshold', label: 'Schwellwertsteuerung', desc: 'Regeln (Wenn X > Y dann Schalten/Setzen) – optional mit Endkunden-Anpassung', mandatory: false, hems: true },
+    { id: 'relay', label: 'Relaissteuerung', desc: 'Manuelle Relais / generische Ausgänge (optional endkundentauglich)', mandatory: false, hems: true },
+    { id: 'grid', label: 'Netzlimits', desc: 'Netzrestriktionen (RLM/0‑Einspeisung/Import‑Limits)', mandatory: false, hems: false },
+    { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung: PV, Wetter, Tarif, Speicher, Wallboxen und Lastspitzen als Vorschläge auf der LIVE‑Seite', mandatory: false, hems: true },
+    { id: 'energyWallet', label: 'Energie-Wertkonto', desc: 'PV-Wert, Eigenverbrauchswert, Solar-Laden und Einspeisewert im Nutzerfrontend (Home + EOS)', mandatory: true, hems: true },
+    { id: 'energyLedger', label: 'Local kWh Ledger', desc: 'EOS: lokale kWh-Zuordnung als Grundlage für Betreiberwerte, Export, Nachbarschaft und Microgrid; read-only und schaltet keine Hardware', mandatory: false, hems: false },
+    { id: 'meshMicrogrid', label: 'EOS Mesh/Microgrid', desc: 'EOS: separates Datenmodell für lokale Energie-Knoten, Cluster, Local First / Grid Last und spätere Nachbarschaftsversorgung', mandatory: false, hems: false },
+    { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', mandatory: true, hems: true },
+    { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls genutzt)', mandatory: false, hems: true },
+    { id: 'multiuse', label: 'MultiUse', desc: 'Speicher-Policy mit SoC-Zonen für Reserve, Lastspitzenkappung und Eigenverbrauch; Storage-Control bleibt einziger Batterieschreiber', mandatory: false, hems: false }
   ];
 
 
@@ -1127,15 +1160,25 @@ interface EmsAppsWindow extends Window {
   const STORAGE_DP_FIELDS = [
     { key: 'socObjectId', label: 'SoC (%)', requiredModes: ['targetPower','limits','enableFlags'] },
     { key: 'batteryPowerObjectId', label: 'Ist-Leistung (W) (optional)', requiredModes: [] },
-    { key: 'targetPowerObjectId', label: 'Sollleistung (W)', requiredModes: ['targetPower'], hint: 'Bei FENECON‑Hybrid ist das der einzige beschreibbare Vorgabe‑DP für Be-/Entladung. SetGridActivePower wird nicht verwendet.' },
+    { key: 'dcPvPowerObjectId', label: 'DC-/Hybrid-PV Erzeugung (W)', requiredModes: [], showForCoupling: ['dc'], hint: 'Nur bei DC-/Hybrid-Speichern: Erzeugungsleistung des Hybrid-/PV-Wechselrichters. Dieser Wert ist eine Messung, kein Batterie-Sollwert, und hilft bei Forecast-/0-Einspeise-/FENECON-Erkennung.' },
+    { key: 'targetPowerObjectId', label: 'Sollleistung signed (W)', requiredModes: ['targetPower'], hint: 'Allgemeiner bidirektionaler Sollwert. NexoWatt-Konvention: +W = Entladen, -W = Laden. Wird genutzt, wenn keine getrennten Ziel-DPs gesetzt sind oder als Fallback fuer eine fehlende Split-Richtung.' },
+    { key: 'targetChargePowerObjectId', label: 'Sollwert Laden (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional: positiver Lade-Sollwert. Kann zusammen mit Entladen oder einzeln gemappt werden; bei Split wird die Gegenrichtung auf 0 gesetzt.' },
+    { key: 'targetDischargePowerObjectId', label: 'Sollwert Entladen (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional: positiver Entlade-Sollwert. Kann zusammen mit Laden oder einzeln gemappt werden; bei Split wird die Gegenrichtung auf 0 gesetzt.' },
+    { key: 'runObjectId', label: 'Run / externe Speicherregelung (bool)', requiredModes: ['targetPower'], hint: 'Optional: wird auf true gesetzt, wenn NexoWatt einen Lade-/Entlade-Sollwert vorgibt, und auf false bei 0 W. Hilfreich für externe Speicher-Controller oder Alias-Bridge-Datenpunkte.' },
     { key: 'maxChargeObjectId', label: 'Max Ladeleistung (W)', requiredModes: ['limits'] },
     { key: 'maxDischargeObjectId', label: 'Max Entladeleistung (W)', requiredModes: ['limits'] },
     { key: 'chargeEnableObjectId', label: 'Laden erlaubt (bool)', requiredModes: ['enableFlags'] },
     { key: 'dischargeEnableObjectId', label: 'Entladen erlaubt (bool)', requiredModes: ['enableFlags'] },
+    { key: 'e3dcSetPowerModeObjectId', label: 'E3/DC EMS.SET_POWER_MODE', requiredModes: ['targetPower'], showForVendor: ['e3dc-rscp'], hint: 'ioBroker.e3dc-rscp: Zahlenmodus 0=NORMAL, 1=IDLE, 2=DISCHARGE, 3=CHARGE, 4=GRID_CHARGE. Dieser DP ist zusammen mit SET_POWER_VALUE der bevorzugte E3/DC-Schreibpfad.' },
+    { key: 'e3dcSetPowerValueObjectId', label: 'E3/DC EMS.SET_POWER_VALUE (W)', requiredModes: ['targetPower'], showForVendor: ['e3dc-rscp'], hint: 'ioBroker.e3dc-rscp: positive Absolutleistung in Watt passend zum SET_POWER_MODE.' },
+    { key: 'e3dcPowerLimitsUsedObjectId', label: 'E3/DC EMS.POWER_LIMITS_USED (optional)', requiredModes: [], showForVendor: ['e3dc-rscp'], hint: 'Optional: wird nur geschrieben, wenn „PowerLimits automatisch setzen“ aktiv ist.' },
+    { key: 'e3dcMaxChargePowerObjectId', label: 'E3/DC EMS.MAX_CHARGE_POWER (optional)', requiredModes: [], showForVendor: ['e3dc-rscp'], hint: 'Optional: Ladeleistungsgrenze fuer E3/DC RSCP PowerLimits.' },
+    { key: 'e3dcMaxDischargePowerObjectId', label: 'E3/DC EMS.MAX_DISCHARGE_POWER (optional)', requiredModes: [], showForVendor: ['e3dc-rscp'], hint: 'Optional: Entladeleistungsgrenze fuer E3/DC RSCP PowerLimits.' },
     { key: 'reserveSocObjectId', label: 'Reserve-SoC (%) (optional)', requiredModes: [] }
   ];
 
   let currentConfig = null;
+  let currentLicenseInfo = { valid: false, edition: 'none', editionLabel: 'Keine Lizenz', maxWallboxes: 0, features: {} };
   let dpTargetInputId = null;
   let treePrefix = '';
 
@@ -1152,6 +1195,398 @@ interface EmsAppsWindow extends Window {
    * und schließt beim nächsten Poll wieder.
    */
   const shadowJsonDetailsOpen = new Set();
+
+
+  const HEMS_APP_IDS = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet']);
+  const HOME_LICENSE_FEATURES = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations','nlP1','nlP1Basic','p1Dsmr']);
+  const APP_LICENSE_FEATURES = Object.freeze({
+    charging: 'chargingManagement',
+    peak: 'peakShaving',
+    storage: 'storageControl',
+    storagefarm: 'storageFarm',
+    thermal: 'thermalControl',
+    heatingrod: 'heatingRodControl',
+    bhkw: 'bhkwControl',
+    generator: 'generatorControl',
+    threshold: 'thresholdControl',
+    relay: 'relayControl',
+    grid: 'gridConstraints',
+    aiAdvisor: 'aiAdvisor',
+    tariff: 'dynamicTariffs',
+    para14a: 'para14a',
+    multiuse: 'multiUse',
+    energyWallet: 'energyWallet',
+    chargeKiosk: 'chargeKiosk',
+    energyLedger: 'energyLedger',
+    nlP1: 'nlP1',
+    mesh: 'mesh',
+    microgrid: 'microgrid',
+    meshMicrogrid: 'meshMicrogrid',
+    nlSaldering: 'nlSaldering',
+    nlEnergyHub: 'nlEnergyHub',
+    aiAutopilot: 'aiAutopilot'
+  });
+
+  function _licenseEdition() {
+    const info = currentLicenseInfo && typeof currentLicenseInfo === 'object' ? currentLicenseInfo : {};
+    const e = String(info.edition || '').trim().toLowerCase();
+    if (e === 'eos') return 'eos';
+    if (e === 'hems' || e === 'home') return 'hems';
+    const label = String(info.editionLabel || info.message || info.msg || '').trim().toLowerCase();
+    if (info.eosFullAccess === true || /\beos\b/.test(label)) return 'eos';
+    if (/\bhems\b/.test(label)) return 'hems';
+    if ((info.valid === true || info.ok === true) && e !== 'none') return 'eos';
+    return 'none';
+  }
+
+  function _appLicenseFeature(appId) {
+    return APP_LICENSE_FEATURES[String(appId || '')] || String(appId || '');
+  }
+
+  function _isFeatureLicensed(feature) {
+    const ed = _licenseEdition();
+    if (ed === 'eos') return true;
+    if (ed !== 'hems') return false;
+    const features = currentLicenseInfo && currentLicenseInfo.features && typeof currentLicenseInfo.features === 'object' ? currentLicenseInfo.features : {};
+    const f = String(feature || '');
+    if (Object.prototype.hasOwnProperty.call(features, f)) return !!features[f];
+    return HOME_LICENSE_FEATURES.has(f);
+  }
+
+  function _isAppLicensed(appId) {
+    const ed = _licenseEdition();
+    if (ed === 'eos') return true;
+    if (ed === 'hems') return HEMS_APP_IDS.has(String(appId || '')) || _isFeatureLicensed(_appLicenseFeature(appId));
+    return false;
+  }
+
+  function _maxEvcsCount() {
+    const max = Number(currentLicenseInfo && currentLicenseInfo.maxWallboxes);
+    return Number.isFinite(max) && max > 0 ? Math.max(0, Math.min(50, Math.round(max))) : 50;
+  }
+
+  function _licenseLabel() {
+    const ed = _licenseEdition();
+    if (ed === 'eos') return 'EOS';
+    if (ed === 'hems') return 'Home';
+    return 'Keine Lizenz';
+  }
+
+  /**
+   * Code-Teil: normalizeLicenseInfo
+   * Zweck: Vereinheitlicht Lizenzdaten aus /api/installer/config und /api/license/info.
+   * Zusammenhang: Das App-Center darf nach einer aktivierten EOS-/Home-Lizenz nicht auf
+   * "Keine Lizenz" hängen bleiben, nur weil eine alte Konfigurationsantwort oder ein
+   * Browser-/Service-Worker-Cache noch keine Lizenzdaten enthielt.
+   */
+  function normalizeLicenseInfo(raw) {
+    const src = raw && typeof raw === 'object' ? raw : {};
+    const unwrap = (value) => {
+      if (value && typeof value === 'object') {
+        if (Object.prototype.hasOwnProperty.call(value, 'value')) return value.value;
+        if (Object.prototype.hasOwnProperty.call(value, 'val')) return value.val;
+      }
+      return value;
+    };
+    const asBool = (value) => {
+      const v = unwrap(value);
+      if (v === true) return true;
+      if (v === false || v === null || v === undefined) return false;
+      const t = String(v).trim().toLowerCase();
+      return t === 'true' || t === '1' || t === 'yes' || t === 'ja' || t === 'valid' || t === 'gültig';
+    };
+    const rawEdition = String(unwrap(src.edition) || '').trim().toLowerCase();
+    const labelHint = String(unwrap(src.editionLabel) || unwrap(src.message) || unwrap(src.msg) || '').trim().toLowerCase();
+    const keyHint = String(unwrap(src.licenseKey) || unwrap(src.licenseKeyMasked) || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    let edition = rawEdition === 'eos' ? 'eos' : (rawEdition === 'hems' ? 'hems' : 'none');
+    if (edition === 'none' && (src.eosFullAccess === true || asBool(src.eosFullAccess) || /\beos\b/.test(labelHint))) edition = 'eos';
+    if (edition === 'none' && /\bhems\b/.test(labelHint)) edition = 'hems';
+    if (edition === 'none' && /^NW1TH/.test(keyHint)) edition = 'hems';
+    if (edition === 'none' && /^(NW1E|NW1TE|NW1T|NW1)/.test(keyHint)) edition = 'eos';
+    // /api/license/info uses ok=true for transport success; the license itself is valid=true.
+    const valid = asBool(src.valid) || edition === 'eos' || edition === 'hems';
+    if (!valid) edition = 'none';
+    const label = edition === 'eos' ? 'EOS' : (edition === 'hems' ? 'Home' : 'Keine Lizenz');
+    let features = src.features && typeof src.features === 'object' ? src.features : {};
+    const featuresJsonRaw = unwrap(src.featuresJson);
+    if ((!features || !Object.keys(features).length) && typeof featuresJsonRaw === 'string' && featuresJsonRaw.trim()) {
+      try {
+        const parsed = JSON.parse(featuresJsonRaw);
+        if (parsed && typeof parsed === 'object') features = parsed.features && typeof parsed.features === 'object' ? parsed.features : parsed;
+      } catch (_e) {}
+    }
+    const maxWallboxesRaw = Number(unwrap(src.maxWallboxes));
+    return {
+      valid,
+      edition,
+      editionLabel: String(unwrap(src.editionLabel) || label),
+      type: String(unwrap(src.type) || (valid ? 'full' : 'none')),
+      message: String(unwrap(src.message) || unwrap(src.msg) || ''),
+      expiresAt: Number(unwrap(src.expiresAt) || 0),
+      daysRemaining: Number(unwrap(src.daysRemaining) || 0),
+      maxWallboxes: Number.isFinite(maxWallboxesRaw) ? Math.max(0, Math.round(maxWallboxesRaw)) : 0,
+      features: features || {},
+      eosFullAccess: edition === 'eos' || src.eosFullAccess === true || asBool(src.eosFullAccess)
+    };
+  }
+
+  function _licenseIsUsable(info) {
+    return !!(info && typeof info === 'object' && info.valid && (info.edition === 'eos' || info.edition === 'hems'));
+  }
+
+  function _inferLicenseFromSuccessfulInstallerGate(data, cfg) {
+    // /api/installer/config is registered behind the backend license gate. If this request
+    // succeeds but an older/stale config payload still lacks license metadata, keep the
+    // App-Center usable by treating the already-open gate as EOS. Backend module gates remain
+    // authoritative and still block if the license is actually invalid.
+    if (data && data.ok === true && cfg && typeof cfg === 'object') {
+      return normalizeLicenseInfo({ valid: true, edition: 'eos', editionLabel: 'EOS', message: 'Lizenz über Backend-Gate erkannt' });
+    }
+    return normalizeLicenseInfo(null);
+  }
+
+  async function fetchLicenseInfoFallback() {
+    try {
+      const data = await fetchJson('/api/license/info?t=' + Date.now(), { cache: 'no-store' });
+      return normalizeLicenseInfo(data);
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  async function fetchLicenseInfoFromStateFallback() {
+    try {
+      const data = await fetchJson('/api/state?t=' + Date.now(), { cache: 'no-store' });
+      const readVal = (key) => {
+        const rec = data && data[key];
+        return rec && Object.prototype.hasOwnProperty.call(rec, 'value') ? rec.value : undefined;
+      };
+      return normalizeLicenseInfo({
+        valid: readVal('license.valid'),
+        type: readVal('license.type') || 'none',
+        edition: readVal('license.edition') || 'none',
+        editionLabel: readVal('license.edition') || readVal('license.message') || '',
+        featuresJson: readVal('license.featuresJson') || '{}',
+        maxWallboxes: readVal('license.maxWallboxes'),
+        message: readVal('license.message') || '',
+        expiresAt: readVal('license.expiresAt') || 0,
+        daysRemaining: readVal('license.daysRemaining') || 0,
+      });
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  let _licenseLiveRefreshInFlight = false;
+  /**
+   * Code-Teil: hydrateStorageFarmConfigFromRuntimeState
+   * Zweck: Repariert/übernimmt Speicherfarm-Konfiguration aus Runtime-States, wenn
+   * die Admin-jsonConfig leer ist, die Runtime aber noch eine funktionierende Farm
+   * unter storageFarm.configJson hat.
+   *
+   * Warum nötig:
+   * Die Kunden-/Betreiberansicht liest die laufende Speicherfarm aus
+   * storageFarm.configJson. Wenn bei Migrationen oder App-Center-Änderungen
+   * currentConfig.storageFarm.storages leer ist, würde der Installer fälschlich
+   * „Noch keine Speicher“ anzeigen und beim Speichern die Admin-Konfiguration
+   * ohne Speicher zurückschreiben. Diese Funktion verhindert Datenverlust und
+   * macht bestehende Speicher wieder im Speicherfarm-Reiter sichtbar.
+   */
+  function _readApiStateValue(statePayload, key, fallback = undefined) {
+    try {
+      let rec = statePayload && statePayload[key];
+      // 0.8.57 Hotfix: Manche /api/state-Varianten liefern lokale States mit
+      // Namespace-Präfix. Für die Speicherfarm-Migration darf `storageFarm.configJson`
+      // deshalb auch als `nexowatt-ui.0.storageFarm.configJson` gefunden werden.
+      if (!rec && statePayload && typeof statePayload === 'object') {
+        const suffix = '.' + String(key || '');
+        const foundKey = Object.keys(statePayload).find((k) => k === key || String(k).endsWith(suffix));
+        if (foundKey) rec = statePayload[foundKey];
+      }
+      if (rec && Object.prototype.hasOwnProperty.call(rec, 'value')) return rec.value;
+      if (rec && Object.prototype.hasOwnProperty.call(rec, 'val')) return rec.val;
+    } catch (_e) {}
+    return fallback;
+  }
+
+  function _parseStorageFarmRuntimeList(raw) {
+    try {
+      if (Array.isArray(raw)) return raw;
+      const parsed = (raw && typeof raw === 'object') ? raw : JSON.parse(String(raw || '[]'));
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.storages)) return parsed.storages;
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.rows)) return parsed.rows;
+      return [];
+    } catch (_e) {
+      return [];
+    }
+  }
+
+  function _recoverStorageFarmRowsFromStatusRows(statusRows) {
+    const rows = Array.isArray(statusRows) ? statusRows : [];
+    return rows
+      .filter((row) => row && typeof row === 'object')
+      .map((row, index) => ({
+        enabled: true,
+        name: String(row.name || row.label || '').trim() || `Speicher ${index + 1}`,
+        group: String(row.group || '').trim(),
+        // Diese Runtime-Statusquelle kennt in der Regel keine DP-Zuordnungen.
+        // Darum werden leere editierbare Felder angelegt, damit der Installateur
+        // die Speicher direkt wieder anbinden kann, statt bei "Noch keine Speicher"
+        // festzuhängen.
+        socId: '', signedPowerId: '', chargePowerId: '', dischargePowerId: '', pvPowerId: '',
+        setChargePowerId: '', setDischargePowerId: '', setSignedPowerId: '',
+        capacityKWh: (row.capacityKWh !== undefined && row.capacityKWh !== null && row.capacityKWh !== '') ? Number(row.capacityKWh) : '',
+        maxChargeW: (row.maxChargeW !== undefined && row.maxChargeW !== null && row.maxChargeW !== '') ? Number(row.maxChargeW) : '',
+        maxDischargeW: (row.maxDischargeW !== undefined && row.maxDischargeW !== null && row.maxDischargeW !== '') ? Number(row.maxDischargeW) : '',
+        _runtimeStatusRecovered: true,
+      }));
+  }
+
+  function _normalizeRecoveredStorageFarmRow(row, index) {
+    const r = row && typeof row === 'object' ? row : {};
+    const roots = [r, r.datapoints, r.dp, r.mapping].filter((root) => root && typeof root === 'object');
+    const textFrom = (...keys) => {
+      for (const key of keys) {
+        for (const root of roots) {
+          const value = root[key];
+          if (value === undefined || value === null) continue;
+          const txt = String(value).trim();
+          if (txt) return txt;
+        }
+      }
+      return '';
+    };
+    const numberFrom = (...keys) => {
+      for (const key of keys) {
+        for (const root of roots) {
+          const value = root[key];
+          if (value === undefined || value === null || value === '') continue;
+          const parsed = Number(String(value).replace(',', '.'));
+          if (Number.isFinite(parsed)) return parsed;
+        }
+      }
+      return '';
+    };
+    const boolFrom = (fallback, ...keys) => {
+      for (const key of keys) {
+        for (const root of roots) {
+          if (!Object.prototype.hasOwnProperty.call(root, key)) continue;
+          const value = root[key];
+          if (typeof value === 'boolean') return value;
+          const normalized = String(value).trim().toLowerCase();
+          if (value === 1 || normalized === '1' || normalized === 'true') return true;
+          if (value === 0 || normalized === '0' || normalized === 'false') return false;
+        }
+      }
+      return fallback;
+    };
+    const couplingRaw = textFrom('coupling', 'storageCoupling').toLowerCase();
+    return {
+      enabled: boolFrom(true, 'enabled', 'active'),
+      name: textFrom('name', 'label', 'title') || `Speicher ${index + 1}`,
+      coupling: couplingRaw === 'dc' ? 'dc' : (couplingRaw === 'ac' ? 'ac' : ''),
+      socId: textFrom('socId', 'socObjectId', 'socDp', 'storageSocId', 'storageSoc'),
+      signedPowerId: textFrom('signedPowerId', 'batteryPowerObjectId', 'signedPowerDp', 'powerObjectId', 'powerId', 'batteryPower'),
+      chargePowerId: textFrom('chargePowerId', 'batteryChargePowerObjectId', 'chargePowerDp', 'chargeDp', 'storageChargePower'),
+      dischargePowerId: textFrom('dischargePowerId', 'batteryDischargePowerObjectId', 'dischargePowerDp', 'dischargeDp', 'storageDischargePower'),
+      pvPowerId: textFrom('pvPowerId', 'pvPowerObjectId', 'pvPowerDp', 'storagePvPowerId'),
+      invertSignedPowerSign: boolFrom(false, 'invertSignedPowerSign', 'batteryPowerInvert', 'invertPowerSign'),
+      invertChargeSign: boolFrom(false, 'invertChargeSign', 'batteryChargePowerInvert'),
+      invertDischargeSign: boolFrom(false, 'invertDischargeSign', 'batteryDischargePowerInvert'),
+      setChargePowerId: textFrom('setChargePowerId', 'targetChargePowerObjectId', 'targetChargePowerId', 'setChargePowerDp', 'chargeSetpointId'),
+      setDischargePowerId: textFrom('setDischargePowerId', 'targetDischargePowerObjectId', 'targetDischargePowerId', 'setDischargePowerDp', 'dischargeSetpointId'),
+      setSignedPowerId: textFrom('setSignedPowerId', 'targetPowerObjectId', 'targetPowerId', 'setSignedPowerDp', 'powerSetpointId', 'setpointId', 'setPowerId'),
+      invertSetSignedPowerSign: boolFrom(false, 'invertSetSignedPowerSign', 'targetPowerInvert', 'invertSetpointSign'),
+      maxChargeW: numberFrom('maxChargeW', 'maxChargePowerW'),
+      maxDischargeW: numberFrom('maxDischargeW', 'maxDischargePowerW'),
+      availableId: textFrom('availableId', 'availableObjectId', 'availableDp', 'availabilityId'),
+      faultId: textFrom('faultId', 'faultObjectId', 'faultDp', 'errorId'),
+      chargeAllowedId: textFrom('chargeAllowedId', 'chargeAllowedObjectId', 'chargeAllowedDp', 'chargeEnableId'),
+      dischargeAllowedId: textFrom('dischargeAllowedId', 'dischargeAllowedObjectId', 'dischargeAllowedDp', 'dischargeEnableId'),
+      capacityKWh: numberFrom('capacityKWh', 'capacityKwh', 'batteryCapacityKWh'),
+      group: textFrom('group', 'groupName'),
+    };
+  }
+
+  async function hydrateStorageFarmConfigFromRuntimeState(cfg) {
+    const root = cfg && typeof cfg === 'object' ? cfg : {};
+    const sf = root.storageFarm && typeof root.storageFarm === 'object' ? root.storageFarm : {};
+    if (Array.isArray(sf.storages) && sf.storages.length > 0) return root;
+    let statePayload = null;
+    try {
+      statePayload = await fetchJson('/api/state?t=' + Date.now(), { cache: 'no-store' });
+    } catch (_e) {
+      return root;
+    }
+    let runtimeRows = _parseStorageFarmRuntimeList(_readApiStateValue(statePayload, 'storageFarm.configJson', '[]'));
+    let fallbackSource = 'storageFarm.configJson';
+    if (!runtimeRows.length) {
+      // 0.8.58: Wenn configJson schon leer/kaputt ist, die laufende Farm aber in
+      // der Betreiberansicht noch Speicher zeigt, kommen die Namen aus
+      // storagesStatusJson. Daraus erzeugen wir editierbare Platzhalterzeilen,
+      // damit der Installateur die Speicher wieder anbinden kann.
+      const statusRows = _parseStorageFarmRuntimeList(_readApiStateValue(statePayload, 'storageFarm.storagesStatusJson', '[]'));
+      runtimeRows = _recoverStorageFarmRowsFromStatusRows(statusRows);
+      fallbackSource = 'storageFarm.storagesStatusJson';
+    }
+    if (!runtimeRows.length) {
+      const total = Number(_readApiStateValue(statePayload, 'storageFarm.storagesTotal', 0));
+      if (Number.isFinite(total) && total > 0) {
+        runtimeRows = Array.from({ length: Math.min(10, Math.max(1, Math.round(total))) }, (_x, i) => ({ enabled: true, name: `Speicher ${i + 1}`, _runtimeCountRecovered: true }));
+        fallbackSource = 'storageFarm.storagesTotal';
+      }
+    }
+    if (!runtimeRows.length) return root;
+
+    root.storageFarm = root.storageFarm && typeof root.storageFarm === 'object' ? root.storageFarm : {};
+    root.storageFarm.storages = runtimeRows.slice(0, 10).map(_normalizeRecoveredStorageFarmRow);
+    root.storageFarm._runtimeRecovered = true;
+    root.storageFarm.__runtimeStateFallbackSource = fallbackSource;
+    // Die Runtime-Hydration rettet nur vorhandene Speicherfarm-Zeilen für die Bearbeitung.
+    // Sie darf die App-Center-Schalter nicht selbst installieren oder aktivieren, sonst erscheint
+    // die Speicherfarm bei Einzel-Speicher-Anlagen wieder fälschlich im Kundenmenü.
+    const mode = String(_readApiStateValue(statePayload, 'storageFarm.mode', root.storageFarm.mode || 'pool') || 'pool').trim().toLowerCase();
+    root.storageFarm.mode = mode === 'groups' ? 'groups' : 'pool';
+
+    const runtimeGroups = _parseStorageFarmRuntimeList(_readApiStateValue(statePayload, 'storageFarm.groupsJson', '[]'));
+    if ((!Array.isArray(root.storageFarm.groups) || !root.storageFarm.groups.length) && runtimeGroups.length) {
+      root.storageFarm.groups = runtimeGroups.slice(0, 5).map((g, i) => ({
+        enabled: g && g.enabled === false ? false : true,
+        name: String(g && g.name || '').trim() || `Gruppe ${String.fromCharCode(65 + i)}`,
+        socMin: g && g.socMin !== undefined && g.socMin !== null && g.socMin !== '' ? Number(g.socMin) : '',
+        socMax: g && g.socMax !== undefined && g.socMax !== null && g.socMax !== '' ? Number(g.socMax) : '',
+        priority: g && g.priority !== undefined && g.priority !== null && g.priority !== '' ? Number(g.priority) : (100 + i),
+      }));
+    }
+    return root;
+  }
+
+  async function refreshLicenseForAppCenter(reason) {
+    if (_licenseLiveRefreshInFlight) return;
+    _licenseLiveRefreshInFlight = true;
+    try {
+      const before = JSON.stringify(currentLicenseInfo || {});
+      const liveLicense = await fetchLicenseInfoFallback();
+      const stateLicense = _licenseIsUsable(liveLicense) ? null : await fetchLicenseInfoFromStateFallback();
+      const nextLicense = _licenseIsUsable(liveLicense) ? liveLicense : (_licenseIsUsable(stateLicense) ? stateLicense : liveLicense || stateLicense);
+      if (!nextLicense) return;
+      currentConfig = currentConfig && typeof currentConfig === 'object' ? currentConfig : {};
+      currentConfig.license = nextLicense;
+      currentLicenseInfo = normalizeLicenseInfo(nextLicense);
+      const after = JSON.stringify(currentLicenseInfo || {});
+      if (before !== after) {
+        try { buildAppsUI(); } catch (_eBuildApps) {}
+        try { buildEvcsUI(); } catch (_eBuildEvcs) {}
+        try { scheduleValidation(200); } catch (_eValidation) {}
+        if (_licenseEdition() !== 'none') {
+          try { setStatus('Lizenz aktualisiert: ' + _licenseLabel() + '.', 'ok'); } catch (_eStatus) {}
+        }
+      }
+    } finally {
+      _licenseLiveRefreshInFlight = false;
+    }
+  }
 
   /**
    * Code-Teil: _decodeShadowDisplayText
@@ -1720,6 +2155,582 @@ function collectAiAdvisorConfigFromUI(base) {
     };
     return out;
   }
+
+  function _nwHtmlEscape(input) {
+    return String(input == null ? '' : input)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // 0.8.58 Hotfix: Die Speicherfarm-Master-Detail-Ansicht verwendete nach
+  // der TS-Migration versehentlich `htmlEscape`, obwohl die gemeinsame
+  // Escape-Funktion `_nwHtmlEscape` heißt. Sobald ein Speicher hinzugefügt oder
+  // aus Runtime-State wiederhergestellt wurde, brach buildStorageFarmUI() ab und
+  // der Reiter blieb leer. Alias bewusst lokal halten, damit alte Aufrufstellen
+  // stabil bleiben und später sauber typisiert ersetzt werden können.
+  const htmlEscape = _nwHtmlEscape;
+
+  function _nwSystemProfileCountry() {
+    const cp = currentConfig && currentConfig.countryProfile && typeof currentConfig.countryProfile === 'object' ? currentConfig.countryProfile : {};
+    const raw = String(cp.country || cp.profile || 'DE').trim().toUpperCase();
+    return raw === 'NL' ? 'NL' : 'DE';
+  }
+
+  function buildSystemProfileCard() {
+    const card = document.createElement('div');
+    card.className = 'nw-config-card nw-system-profile-card';
+    card.setAttribute('data-card', 'system-profile');
+
+    const cp = currentConfig && currentConfig.countryProfile && typeof currentConfig.countryProfile === 'object' ? currentConfig.countryProfile : {};
+    const locale = currentConfig && currentConfig.locale && typeof currentConfig.locale === 'object' ? currentConfig.locale : {};
+    const country = _nwSystemProfileCountry();
+    const lang = String((locale && (locale.language || locale.htmlLang)) || cp.effectiveLanguage || 'de').trim().toLowerCase() || 'de';
+    const source = String((locale && locale.source) || cp.languageSource || 'system.config.common.language');
+
+    card.innerHTML = `
+      <div class="nw-config-card__header">
+        <div>
+          <div class="nw-config-card__title">System &amp; Marktprofil</div>
+          <div class="nw-config-card__subtitle">Installer-Einstellung. Die UI-Sprache wird automatisch aus der ioBroker-Systemsprache übernommen.</div>
+        </div>
+      </div>
+      <div class="nw-config-card__body">
+        <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+          <label class="nw-config-field">
+            <span class="nw-config-label">Länderprofil</span>
+            <select class="nw-config-input" id="countryProfileCountry">
+              <option value="DE">Deutschland</option>
+              <option value="NL">Niederlande</option>
+            </select>
+            <small>Basis für Begriffe, NL/P1/Saldering und spätere Energy-Hub-Funktionen.</small>
+          </label>
+          <label class="nw-config-field">
+            <span class="nw-config-label">Sprache</span>
+            <input class="nw-config-input" id="countryProfileLanguageDisplay" type="text" readonly />
+            <small>Quelle: ioBroker <code>system.config.common.language</code>. Keine Kundeneinstellung im Frontend.</small>
+          </label>
+        </div>
+        <div class="nw-config-separator" style="margin:14px 0 10px;"></div>
+        <div class="nw-config-card__subtitle" style="margin-bottom:8px;">Energie-Wertkonto: Datenpunkt- und Länderbasis im Installerbereich; Kostenannahmen und An/Aus-Schalter liegen im Nutzerfrontend unten in den Einstellungen der Tarifseite.</div>
+        <div class="nw-config-empty" style="text-align:left;margin-bottom:10px;">
+          Der Betreiber kann dort festen Netzstrompreis, Einspeise-/Rücklieferwert und Solar-Ladepunktwert pflegen. Ist ein dynamischer Zeittarif aktiv, nutzt das Wertkonto automatisch den aktuellen Tarifpreis.
+        </div>
+        <div id="countryProfileHint" class="nw-config-empty" style="margin-top:10px;text-align:left;"></div>
+      </div>`;
+
+    const sel = card.querySelector('#countryProfileCountry');
+    const display = card.querySelector('#countryProfileLanguageDisplay');
+    const hint = card.querySelector('#countryProfileHint');
+    if (sel) {
+      sel.value = country;
+      sel.addEventListener('change', () => {
+        currentConfig.countryProfile = currentConfig.countryProfile || {};
+        currentConfig.countryProfile.country = String(sel.value || 'DE').toUpperCase() === 'NL' ? 'NL' : 'DE';
+        if (hint) hint.textContent = currentConfig.countryProfile.country === 'NL'
+          ? 'NL aktiv: Begriffe wie Teruglevering/Netafname und spätere P1-/Saldering-Module werden vorbereitet.'
+          : 'DE aktiv: Begriffe wie Einspeisung/Netzbezug und §14a-Module bleiben Standard.';
+      });
+    }
+    if (display) display.value = `${lang.toUpperCase()} (${source})`;
+    if (hint) hint.textContent = country === 'NL'
+      ? 'NL aktiv: Begriffe wie Teruglevering/Netafname und spätere P1-/Saldering-Module werden vorbereitet.'
+      : 'DE aktiv: Begriffe wie Einspeisung/Netzbezug und §14a-Module bleiben Standard.';
+    return card;
+  }
+
+
+  function buildNlP1Card() {
+    const card = document.createElement('div');
+    card.className = 'nw-config-card nw-nl-p1-card';
+    card.setAttribute('data-card', 'nl-p1-dsmr');
+    const country = _nwSystemProfileCountry();
+    const cfg = currentConfig && currentConfig.nlP1 && typeof currentConfig.nlP1 === 'object' ? currentConfig.nlP1 : {};
+    const dps = cfg.datapoints && typeof cfg.datapoints === 'object' ? cfg.datapoints : {};
+    const app = currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps && currentConfig.emsApps.apps.nlP1 ? currentConfig.emsApps.apps.nlP1 : null;
+    const enabled = cfg.enabled === true || !!(app && app.installed && app.enabled);
+    const disabledNote = country === 'NL'
+      ? 'NL aktiv: P1/DSMR-Datenpunkte können aus einem vorhandenen ioBroker-Adapter oder aus NexoWatt-Devices gemappt werden.'
+      : 'Länderprofil ist DE. P1/DSMR kann für Tests gemappt werden, läuft aber fachlich als NL-Modul.';
+    card.innerHTML = `
+      <div class="nw-config-card__header">
+        <div>
+          <div class="nw-config-card__title">NL P1/DSMR &amp; Teruglevering</div>
+          <div class="nw-config-card__subtitle">Installer-Mapping für Netafname/Teruglevering. Read-only, keine Einspeisebegrenzung und keine Hardwaresteuerung.</div>
+        </div>
+      </div>
+      <div class="nw-config-card__body">
+        <div class="nw-config-empty" style="text-align:left;margin-bottom:10px;">${_nwHtmlEscape(disabledNote)}</div>
+        <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:end;">
+          <label class="nw-config-field"><span class="nw-config-label">P1/DSMR aktiv</span><select class="nw-config-input" data-nlp1-field="enabled"><option value="false" ${enabled ? '' : 'selected'}>Aus</option><option value="true" ${enabled ? 'selected' : ''}>An</option></select><small>Kann automatisch laufen, wenn NL aktiv und Datenpunkte gemappt sind.</small></label>
+          <label class="nw-config-field"><span class="nw-config-label">Stale Timeout s</span><input class="nw-config-input" type="number" min="30" max="86400" step="1" data-nlp1-field="staleTimeoutSec" value="${Number.isFinite(Number(cfg.staleTimeoutSec)) ? Number(cfg.staleTimeoutSec) : 300}" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Teruglevering-Wert €/kWh</span><input class="nw-config-input" type="number" min="-5" max="5" step="0.0001" data-nlp1-field="returnValueEurPerKwh" value="${Number.isFinite(Number(cfg.returnValueEurPerKwh)) ? Number(cfg.returnValueEurPerKwh) : 0.08}" /><small>Fallback. Betreiberwert aus Frontend-Einstellungen hat Vorrang.</small></label>
+          <label class="nw-config-field"><span class="nw-config-label">Rücklieferkosten €/kWh</span><input class="nw-config-input" type="number" min="0" max="5" step="0.0001" data-nlp1-field="returnCostEurPerKwh" value="${Number.isFinite(Number(cfg.returnCostEurPerKwh)) ? Number(cfg.returnCostEurPerKwh) : 0}" /><small>Vorbereitung für Teruglevering-Kosten.</small></label>
+        </div>
+        <div class="nw-config-separator" style="margin:14px 0 10px;"></div>
+        <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;">
+          <label class="nw-config-field"><span class="nw-config-label">Importleistung / Netafname W</span><input class="nw-config-input" data-nlp1-dp="importPowerW" value="${_nwHtmlEscape(dps.importPowerW || '')}" placeholder="dsmr.0.power_delivered_w" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Exportleistung / Teruglevering W</span><input class="nw-config-input" data-nlp1-dp="exportPowerW" value="${_nwHtmlEscape(dps.exportPowerW || '')}" placeholder="dsmr.0.power_returned_w" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Signed Netzleistung optional</span><input class="nw-config-input" data-nlp1-dp="netPowerW" value="${_nwHtmlEscape(dps.netPowerW || '')}" placeholder="Import + / Rücklieferung -" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Importenergie kWh total</span><input class="nw-config-input" data-nlp1-dp="importEnergyKwh" value="${_nwHtmlEscape(dps.importEnergyKwh || '')}" placeholder="dsmr.0.energy_delivered_total" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Exportenergie kWh total</span><input class="nw-config-input" data-nlp1-dp="exportEnergyKwh" value="${_nwHtmlEscape(dps.exportEnergyKwh || '')}" placeholder="dsmr.0.energy_returned_total" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Gas m³ optional</span><input class="nw-config-input" data-nlp1-dp="gasM3" value="${_nwHtmlEscape(dps.gasM3 || '')}" placeholder="dsmr.0.gas_delivered_total" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Aktiver Tarif optional</span><input class="nw-config-input" data-nlp1-dp="activeTariff" value="${_nwHtmlEscape(dps.activeTariff || '')}" placeholder="dsmr.0.active_tariff" /></label>
+        </div>
+        <div class="nw-config-empty" style="text-align:left;margin-top:10px;">Hinweis: Einspeisebegrenzung/Nulleinspeisung wird nicht hier aktiviert. Dafür bleibt der Export Guard mit separater Installerfreigabe und maximaler Einspeiseleistung zuständig.</div>
+      </div>`;
+    return card;
+  }
+
+
+
+  function _chargeKioskHtmlEscape(input) {
+    return String(input == null ? '' : input)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function _chargeKioskStations() {
+    const ck = currentConfig && currentConfig.chargeKiosk && typeof currentConfig.chargeKiosk === 'object' ? currentConfig.chargeKiosk : {};
+    return Array.isArray(ck.stations) ? ck.stations : [];
+  }
+
+  function _chargeKioskToken() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let out = 'ST-';
+    try {
+      const bytes = new Uint8Array(8);
+      crypto.getRandomValues(bytes);
+      for (const b of bytes) out += alphabet[b % alphabet.length];
+    } catch (_e) {
+      out += Math.random().toString(36).slice(2, 10).toUpperCase();
+    }
+    return out.replace(/(.{3})(.{4})(.{4})/, '$1-$2-$3');
+  }
+
+  function _chargeKioskAssignedToText(v) {
+    const arr = Array.isArray(v) ? v : [];
+    return arr.map((x) => String(x || '').trim()).filter(Boolean).join(', ');
+  }
+
+  function buildChargeKioskCard() {
+    const card = document.createElement('div');
+    card.className = 'nw-config-card nw-charge-kiosk-card';
+    card.setAttribute('data-card', 'charge-kiosk');
+    const isEos = _licenseEdition() === 'eos';
+    const ck = currentConfig && currentConfig.chargeKiosk && typeof currentConfig.chargeKiosk === 'object' ? currentConfig.chargeKiosk : {};
+    const stations = _chargeKioskStations();
+    const rows = stations.map((row, idx) => {
+      const r = row && typeof row === 'object' ? row : {};
+      const id = String(r.id || `dc_station_${idx + 1}`).trim();
+      const name = String(r.name || `DC Ladestation ${idx + 1}`).trim();
+      const token = String(r.token || '').trim();
+      const type = String(r.type || 'dc').trim().toLowerCase() === 'ac' ? 'ac' : 'dc';
+      const assigned = _chargeKioskAssignedToText(r.assignedChargepoints || r.chargepoints || r.lps);
+      const modes = Array.isArray(r.allowedModes) ? r.allowedModes : ['solar', 'fast'];
+      const solar = modes.includes('solar');
+      const fast = modes.includes('fast');
+      const maintenance = r.maintenanceMode === true;
+      const watchdogTimeoutSec = Number.isFinite(Number(r.watchdogTimeoutSec)) ? Math.max(15, Math.min(600, Math.round(Number(r.watchdogTimeoutSec)))) : 45;
+      const layoutMode = ['single','dual','quad','auto'].includes(String(r.layoutMode || '').toLowerCase()) ? String(r.layoutMode || 'auto').toLowerCase() : 'auto';
+      const controlBridgeRaw = String(r.controlBridge || r.commandBridge || 'charging-management').trim().toLowerCase();
+      const controlBridge = ['charging-management','ems-intent','generic','readonly'].includes(controlBridgeRaw) ? controlBridgeRaw : 'charging-management';
+      const commandStateId = String(r.commandStateId || r.commandObjectId || '').trim();
+      const protocolHint = String(r.protocolHint || r.vendor || r.manufacturer || 'manufacturer-open').trim();
+      const url = token ? `/display/station/${encodeURIComponent(token)}` : '';
+      return `
+        <div class="nw-config-card__row nw-charge-kiosk-row" data-charge-kiosk-station-row="${idx}">
+          <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;align-items:end;">
+            <label class="nw-config-field"><span class="nw-config-label">Aktiv</span><select class="nw-config-input" data-ck-field="enabled"><option value="true" ${r.enabled !== false ? 'selected' : ''}>Ja</option><option value="false" ${r.enabled === false ? 'selected' : ''}>Nein</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Stations-ID</span><input class="nw-config-input" data-ck-field="id" value="${_chargeKioskHtmlEscape(id)}" placeholder="dc_station_01" /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Name am Display</span><input class="nw-config-input" data-ck-field="name" value="${_chargeKioskHtmlEscape(name)}" placeholder="DC Ladestation 01" /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Typ</span><select class="nw-config-input" data-ck-field="type"><option value="dc" ${type === 'dc' ? 'selected' : ''}>DC</option><option value="ac" ${type === 'ac' ? 'selected' : ''}>AC</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Steuerbrücke</span><select class="nw-config-input" data-ck-field="controlBridge"><option value="charging-management" ${controlBridge === 'charging-management' || controlBridge === 'ems-intent' ? 'selected' : ''}>Herstelleroffen über NexoWatt EMS</option><option value="generic" ${controlBridge === 'generic' ? 'selected' : ''}>Generischer JSON-Command-State</option><option value="readonly" ${controlBridge === 'readonly' ? 'selected' : ''}>Nur Anzeige</option></select><small>Kein OCPP-Zwang: OCPP, Modbus, MQTT, REST und Herstelleradapter laufen über LP-Mapping oder den optionalen Command-State.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Command-State optional</span><input class="nw-config-input" data-ck-field="commandStateId" value="${_chargeKioskHtmlEscape(commandStateId)}" placeholder="0_userdata.0.nexowatt.dc.command" /><small>Nur für generische Brücken. Platzhalter möglich: {stationId}, {lp}.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Protokoll-/Hersteller-Hinweis</span><input class="nw-config-input" data-ck-field="protocolHint" value="${_chargeKioskHtmlEscape(protocolHint)}" placeholder="OCPP / Modbus / MQTT / Herstelleradapter" /><small>Nur Hinweis/Diagnose. Die Display-Logik bleibt herstelleroffen.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Display-Token</span><input class="nw-config-input" data-ck-field="token" value="${_chargeKioskHtmlEscape(token)}" placeholder="ST-XXXX-XXXX" /></label>
+            <div class="nw-config-field"><span class="nw-config-label">Token</span><button type="button" class="nw-btn nw-btn-secondary" data-ck-generate-token="1">Neu erzeugen</button></div>
+          </div>
+          <div class="nw-config-grid" style="grid-template-columns:2fr 1fr 1fr;gap:10px;margin-top:10px;align-items:end;">
+            <label class="nw-config-field"><span class="nw-config-label">Zugeordnete LPs/Connectoren</span><input class="nw-config-input" data-ck-field="assignedChargepoints" value="${_chargeKioskHtmlEscape(assigned)}" placeholder="lp1, lp2" /><small>Nur diese LPs erscheinen auf dieser Stationsdisplay-Seite.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Solar laden</span><select class="nw-config-input" data-ck-field="solar"><option value="true" ${solar ? 'selected' : ''}>Erlaubt</option><option value="false" ${!solar ? 'selected' : ''}>Aus</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Schnell laden</span><select class="nw-config-input" data-ck-field="fast"><option value="true" ${fast ? 'selected' : ''}>Erlaubt</option><option value="false" ${!fast ? 'selected' : ''}>Aus</option></select></label>
+          </div>
+          <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:10px;align-items:end;">
+            <label class="nw-config-field"><span class="nw-config-label">Solarpreis €/kWh optional</span><input class="nw-config-input" type="number" step="0.0001" min="-1" max="5" data-ck-field="solarPriceEurPerKwh" value="${Number.isFinite(Number(r.solarPriceEurPerKwh)) ? Number(r.solarPriceEurPerKwh) : ''}" /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Schnellladepreis €/kWh optional</span><input class="nw-config-input" type="number" step="0.0001" min="-1" max="5" data-ck-field="fastPriceEurPerKwh" value="${Number.isFinite(Number(r.fastPriceEurPerKwh)) ? Number(r.fastPriceEurPerKwh) : ''}" /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Start/Stop am Display</span><select class="nw-config-input" data-ck-field="allowStartStop"><option value="true" ${r.allowStartStop !== false ? 'selected' : ''}>Erlaubt</option><option value="false" ${r.allowStartStop === false ? 'selected' : ''}>Nur Anzeige</option></select></label>
+          </div>
+          <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:10px;align-items:end;">
+            <label class="nw-config-field"><span class="nw-config-label">Wartungsmodus</span><select class="nw-config-input" data-ck-field="maintenanceMode"><option value="false" ${r.maintenanceMode === true ? '' : 'selected'}>Aus</option><option value="true" ${r.maintenanceMode === true ? 'selected' : ''}>An</option></select><small>Display zeigt Wartung und blockiert Start/Stop.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Watchdog Timeout s</span><input class="nw-config-input" type="number" step="1" min="15" max="600" data-ck-field="watchdogTimeoutSec" value="${Number.isFinite(Number(r.watchdogTimeoutSec)) ? Number(r.watchdogTimeoutSec) : 45}" /><small>Offline, wenn kein Heartbeat innerhalb dieser Zeit kommt.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Display Refresh s</span><input class="nw-config-input" type="number" step="1" min="1" max="30" data-ck-field="displayRefreshSec" value="${Number.isFinite(Number(r.displayRefreshSec)) ? Number(r.displayRefreshSec) : 3}" /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Layout</span><select class="nw-config-input" data-ck-field="layoutMode"><option value="auto" ${String(r.layoutMode || 'auto') === 'auto' ? 'selected' : ''}>Auto</option><option value="single" ${String(r.layoutMode || '') === 'single' ? 'selected' : ''}>1 Connector groß</option><option value="dual" ${String(r.layoutMode || '') === 'dual' ? 'selected' : ''}>2 Connectoren</option><option value="quad" ${String(r.layoutMode || '') === 'quad' ? 'selected' : ''}>4 Connectoren</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Sprachwahl am Display</span><select class="nw-config-input" data-ck-field="showLanguageSwitch"><option value="false" ${r.showLanguageSwitch === true ? '' : 'selected'}>Aus</option><option value="true" ${r.showLanguageSwitch === true ? 'selected' : ''}>DE/NL/EN anzeigen</option></select></label>
+          </div>
+          <div class="nw-config-card__subtitle" style="margin-top:10px;">Display-URL: <code>${_chargeKioskHtmlEscape(url || 'Token erzeugen und speichern')}</code></div>
+          <div style="display:flex;justify-content:flex-end;margin-top:8px;"><button type="button" class="nw-btn nw-btn-danger" data-ck-delete="1">Station entfernen</button></div>
+        </div>`;
+    }).join('');
+
+    card.innerHTML = `
+      <div class="nw-config-card__header">
+        <div>
+          <div class="nw-config-card__title">EOS DC Station Display</div>
+          <div class="nw-config-card__subtitle">Separate Vollbildseite pro DC-Ladestation. Das Nutzerdisplay sieht nur die hier zugeordneten LPs.</div>
+        </div>
+      </div>
+      <div class="nw-config-card__body">
+        ${isEos ? '' : '<div class="nw-config-empty" style="text-align:left;margin-bottom:10px;">Diese Funktion ist EOS-only. In Home bleibt die normale EVCS-Seite unverändert.</div>'}
+        <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:10px;">
+          <label class="nw-config-field"><span class="nw-config-label">DC Station Display aktiv</span><select class="nw-config-input" id="chargeKioskEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select><small>Route: <code>/display/station/&lt;token&gt;</code></small></label>
+        </div>
+        <div id="chargeKioskStations">${rows || '<div class="nw-config-empty" style="text-align:left;">Noch keine Display-Station angelegt.</div>'}</div>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px;"><button type="button" class="nw-btn" id="chargeKioskAddStation" ${isEos ? '' : 'disabled'}>DC-Station anlegen</button></div>
+      </div>`;
+
+    const enabledEl = card.querySelector('#chargeKioskEnabled');
+    if (enabledEl) enabledEl.value = ck.enabled === true ? 'true' : 'false';
+
+    card.querySelectorAll('[data-ck-generate-token]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const row = btn.closest('[data-charge-kiosk-station-row]');
+        const inp = row && row.querySelector('[data-ck-field="token"]');
+        if (inp) inp.value = _chargeKioskToken();
+      });
+    });
+    card.querySelectorAll('[data-ck-delete]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const row = btn.closest('[data-charge-kiosk-station-row]');
+        if (row) row.remove();
+      });
+    });
+    const add = card.querySelector('#chargeKioskAddStation');
+    if (add) add.addEventListener('click', () => {
+      currentConfig.chargeKiosk = currentConfig.chargeKiosk || {};
+      const list = Array.isArray(currentConfig.chargeKiosk.stations) ? currentConfig.chargeKiosk.stations.slice() : [];
+      const next = list.length + 1;
+      list.push({ id: `dc_station_${next}`, name: `DC Ladestation ${next}`, type: 'dc', token: _chargeKioskToken(), enabled: true, assignedChargepoints: [`lp${next}`], allowedModes: ['solar','fast'], showPrice: true, showSolarShare: true, allowStartStop: true, maintenanceMode: false, watchdogTimeoutSec: 45, displayRefreshSec: 3, layoutMode: 'auto', showLanguageSwitch: false, controlBridge: 'charging-management', protocolHint: 'manufacturer-open' });
+      currentConfig.chargeKiosk.stations = list;
+      try { initInstallerBackLink(); } catch (_e) {}
+
+  buildAppsUI();
+    });
+    return card;
+  }
+
+  function _meshHtmlEscape(input) {
+    return String(input === undefined || input === null ? '' : input)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function _meshNodes() {
+    const cfg = currentConfig && currentConfig.meshMicrogrid && typeof currentConfig.meshMicrogrid === 'object' ? currentConfig.meshMicrogrid : {};
+    return Array.isArray(cfg.nodes) ? cfg.nodes : [];
+  }
+
+  function _meshNodeRow(node, index) {
+    const n = node && typeof node === 'object' ? node : {};
+    const id = _meshHtmlEscape(n.id || `node_${index + 1}`);
+    const name = _meshHtmlEscape(n.name || `Energie-Knoten ${index + 1}`);
+    const type = _meshHtmlEscape(n.type || 'consumer');
+    const role = _meshHtmlEscape(n.role || 'consumer');
+    const priority = _meshHtmlEscape(n.priority || 100);
+    const powerDp = _meshHtmlEscape(n.powerDp || '');
+    const surplusPowerDp = _meshHtmlEscape(n.surplusPowerDp || '');
+    const demandPowerDp = _meshHtmlEscape(n.demandPowerDp || '');
+    const socDp = _meshHtmlEscape(n.socDp || '');
+    const gridImportPowerDp = _meshHtmlEscape(n.gridImportPowerDp || '');
+    const gridExportPowerDp = _meshHtmlEscape(n.gridExportPowerDp || '');
+    const minPowerW = _meshHtmlEscape(n.minPowerW || '');
+    const maxPowerW = _meshHtmlEscape(n.maxPowerW || '');
+    const maxImportW = _meshHtmlEscape(n.maxImportW || '');
+    const maxExportW = _meshHtmlEscape(n.maxExportW || '');
+    const maxChargeW = _meshHtmlEscape(n.maxChargeW || '');
+    const maxDischargeW = _meshHtmlEscape(n.maxDischargeW || '');
+    const maxLoadW = _meshHtmlEscape(n.maxLoadW || '');
+    const maxGenerationW = _meshHtmlEscape(n.maxGenerationW || '');
+    const targetGroupIds = _meshHtmlEscape(Array.isArray(n.targetGroupIds) ? n.targetGroupIds.join(',') : (n.targetGroupIds || n.targetGroups || ''));
+    const enabled = n.enabled !== false ? 'true' : 'false';
+    return `
+      <div class="nw-config-subcard" data-mesh-node-row>
+        <div class="nw-config-grid nw-config-grid--3">
+          <label class="nw-config-field"><span class="nw-config-label">Knoten-ID</span><input class="nw-config-input" data-mesh-field="id" value="${id}" placeholder="pv_dach_1" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Name</span><input class="nw-config-input" data-mesh-field="name" value="${name}" placeholder="PV Dach 1" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Aktiv</span><select class="nw-config-input" data-mesh-field="enabled"><option value="true" ${enabled === 'true' ? 'selected' : ''}>Ja</option><option value="false" ${enabled === 'false' ? 'selected' : ''}>Nein</option></select></label>
+          <label class="nw-config-field"><span class="nw-config-label">Typ</span><select class="nw-config-input" data-mesh-field="type">
+            ${['producer','consumer','storage','grid','chargepoint','thermal','generic'].map(v => `<option value="${v}" ${type === v ? 'selected' : ''}>${v}</option>`).join('')}
+          </select></label>
+          <label class="nw-config-field"><span class="nw-config-label">Rolle</span><select class="nw-config-input" data-mesh-field="role">
+            ${['producer','consumer','storage','grid'].map(v => `<option value="${v}" ${role === v ? 'selected' : ''}>${v}</option>`).join('')}
+          </select><small>Rolle entscheidet, wie Leistung im Cluster gezählt wird.</small></label>
+          <label class="nw-config-field"><span class="nw-config-label">Priorität</span><input class="nw-config-input" data-mesh-field="priority" value="${priority}" placeholder="100" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Signed Leistung W</span><input class="nw-config-input" data-mesh-field="powerDp" value="${powerDp}" placeholder="alias.0.pv.power" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Überschuss W optional</span><input class="nw-config-input" data-mesh-field="surplusPowerDp" value="${surplusPowerDp}" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Bedarf W optional</span><input class="nw-config-input" data-mesh-field="demandPowerDp" value="${demandPowerDp}" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">SoC % optional</span><input class="nw-config-input" data-mesh-field="socDp" value="${socDp}" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Grid Import W optional</span><input class="nw-config-input" data-mesh-field="gridImportPowerDp" value="${gridImportPowerDp}" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Grid Export W optional</span><input class="nw-config-input" data-mesh-field="gridExportPowerDp" value="${gridExportPowerDp}" /></label>
+        </div>
+        <div class="nw-config-grid nw-config-grid--4" style="margin-top:10px;">
+          <label class="nw-config-field"><span class="nw-config-label">Min. Leistung W</span><input class="nw-config-input" data-mesh-field="minPowerW" value="${minPowerW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Leistung W</span><input class="nw-config-input" data-mesh-field="maxPowerW" value="${maxPowerW}" placeholder="0 = kein Limit" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Import W</span><input class="nw-config-input" data-mesh-field="maxImportW" value="${maxImportW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Export W</span><input class="nw-config-input" data-mesh-field="maxExportW" value="${maxExportW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Laden W</span><input class="nw-config-input" data-mesh-field="maxChargeW" value="${maxChargeW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Entladen W</span><input class="nw-config-input" data-mesh-field="maxDischargeW" value="${maxDischargeW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Last W</span><input class="nw-config-input" data-mesh-field="maxLoadW" value="${maxLoadW}" placeholder="0" /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Max. Erzeugung W</span><input class="nw-config-input" data-mesh-field="maxGenerationW" value="${maxGenerationW}" placeholder="0" /></label>
+          <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Zielgruppen IDs optional</span><input class="nw-config-input" data-mesh-field="targetGroupIds" value="${targetGroupIds}" placeholder="lp_gruppe,speicher_gruppe" /><small>Optional: Knoten direkt Zielgruppen zuordnen. Alternativ Gruppen über memberNodeIds/memberTypes definieren.</small></label>
+        </div>
+      </div>`;
+  }
+
+  function buildMeshMicrogridCard() {
+    const isEos = _licenseEdition() === 'eos';
+    const cfg = currentConfig && currentConfig.meshMicrogrid && typeof currentConfig.meshMicrogrid === 'object' ? currentConfig.meshMicrogrid : {};
+    const rows = _meshNodes().map((node, idx) => _meshNodeRow(node, idx)).join('');
+    const localBridge = cfg.localBridge && typeof cfg.localBridge === 'object' ? cfg.localBridge : {};
+    const localBridgeMappingsJson = _meshHtmlEscape(JSON.stringify(Array.isArray(localBridge.mappings) ? localBridge.mappings : [], null, 2));
+    const targetGroupsJson = _meshHtmlEscape(JSON.stringify(Array.isArray(cfg.targetGroups) ? cfg.targetGroups : [], null, 2));
+    const card = document.createElement('div');
+    card.className = 'nw-config-card nw-mesh-microgrid-card';
+    card.innerHTML = `
+      <div class="nw-config-card__header"><div><div class="nw-config-card__title">EOS Mesh/Microgrid Datenmodell</div><div class="nw-config-card__subtitle">Separate EOS-App für lokale Energie-Knoten, Cluster, Local First / Grid Last und spätere Nachbarschaftsversorgung. 0.8.32 ist read-only und schreibt keine Hardware.</div></div></div>
+      <div class="nw-config-card__body">
+        ${isEos ? '' : '<div class="nw-config-empty" style="text-align:left;margin-bottom:10px;">Nur mit EOS-Lizenz verfügbar.</div>'}
+        <div class="nw-config-grid nw-config-grid--3">
+          <label class="nw-config-field"><span class="nw-config-label">Mesh/Microgrid aktiv</span><select class="nw-config-input" id="meshMicrogridEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select></label>
+          <label class="nw-config-field"><span class="nw-config-label">Modus</span><select class="nw-config-input" id="meshMicrogridMode" ${isEos ? '' : 'disabled'}><option value="diagnostic">Diagnose / read-only</option><option value="local_first">Local First vorbereitet</option><option value="grid_last">Grid Last vorbereitet</option><option value="off">Aus</option></select></label>
+          <label class="nw-config-field"><span class="nw-config-label">Grid-/Clusterlimit W optional</span><input class="nw-config-input" id="meshMicrogridGridLimitW" value="${_meshHtmlEscape(cfg.gridLimitW || '')}" placeholder="60000" ${isEos ? '' : 'disabled'} /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Cluster-ID</span><input class="nw-config-input" id="meshMicrogridClusterId" value="${_meshHtmlEscape(cfg.clusterId || 'cluster_01')}" ${isEos ? '' : 'disabled'} /></label>
+          <label class="nw-config-field"><span class="nw-config-label">Cluster-Name</span><input class="nw-config-input" id="meshMicrogridClusterName" value="${_meshHtmlEscape(cfg.clusterName || 'Lokaler Energieverbund')}" ${isEos ? '' : 'disabled'} /></label>
+        </div>
+        <div class="nw-config-subcard" style="margin-top:12px;">
+          <div class="nw-config-card__title">Feldtest-Steuerung & Tailscale Mesh</div>
+          <div class="nw-config-card__subtitle">Für den direkten Feldtest wird ein neutraler JSON-Command-State ausgegeben. NexoWatt schreibt weiterhin keine OCPP-/Modbus-/MQTT-/Hersteller-Rohdatenpunkte direkt; die nachgelagerte Bridge oder die zweite NexoWatt-Instanz im separaten Mesh-Tailscale setzt den Intent um.</div>
+          <div class="nw-config-grid nw-config-grid--3">
+            <label class="nw-config-field"><span class="nw-config-label">Steuermodus</span><select class="nw-config-input" id="meshMicrogridControlMode" ${isEos ? '' : 'disabled'}><option value="diagnostic">Nur Diagnose</option><option value="field_test">Feldtest: JSON-Command-State ausgeben</option><option value="active">Aktiv: Local-First Commands ausgeben</option><option value="off">Aus</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Installateurfreigabe Steuerung</span><select class="nw-config-input" id="meshMicrogridFieldApproved" ${isEos ? '' : 'disabled'}><option value="false">Nein</option><option value="true">Ja</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Max. Commands je Tick</span><input class="nw-config-input" id="meshMicrogridMaxCommandsPerTick" value="${_meshHtmlEscape(cfg.maxCommandsPerTick || 3)}" placeholder="3" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Neutraler Command-State</span><input class="nw-config-input" id="meshMicrogridCommandStateDp" value="${_meshHtmlEscape(cfg.commandStateDp || '')}" placeholder="0_userdata.0.nexowatt.mesh.command" ${isEos ? '' : 'disabled'} /><small>Hier wird ein JSON-Envelope geschrieben. Die Umsetzung übernimmt eine separate Bridge/Instanz.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Tailscale Mesh aktiv</span><select class="nw-config-input" id="meshMicrogridTailscaleEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Tailscale Profil</span><input class="nw-config-input" id="meshMicrogridTailscaleProfile" value="${_meshHtmlEscape((cfg.tailscale && cfg.tailscale.profile) || 'mesh-microgrid')}" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Lokale Mesh-Node-ID</span><input class="nw-config-input" id="meshMicrogridTailscaleLocalNodeId" value="${_meshHtmlEscape((cfg.tailscale && cfg.tailscale.localNodeId) || cfg.clusterId || 'local')}" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Peer-URLs im Mesh-Tailscale</span><textarea class="nw-config-input" id="meshMicrogridTailscalePeerUrls" rows="3" placeholder="http://100.x.y.z:8188
+http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.isArray(cfg.tailscale && cfg.tailscale.peerUrls) ? cfg.tailscale.peerUrls.join('\n') : ((cfg.tailscale && cfg.tailscale.peerUrls) || ''))}</textarea><small>Diese Verbindung ist getrennt von der Fernwartung. Hier nur die Mesh/Microgrid-Tailscale-IP/URL eintragen.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Peer Token optional</span><input class="nw-config-input" id="meshMicrogridTailscalePeerToken" value="${_meshHtmlEscape((cfg.tailscale && cfg.tailscale.peerToken) || '')}" ${isEos ? '' : 'disabled'} /></label>
+          </div>
+        </div>
+        <div class="nw-config-subcard" style="margin-top:12px;">
+          <div class="nw-config-card__title">Command Receiver / Peer-Handshake</div>
+          <div class="nw-config-card__subtitle">Empfängt neutrale Mesh-Kommandos von anderen NexoWatt-Instanzen über das separate Mesh-Tailscale. Der Receiver schreibt keine Hardware direkt, sondern nur den lokalen Empfangs-Command-State für eine nachgelagerte Bridge.</div>
+          <div class="nw-config-grid nw-config-grid--3">
+            <label class="nw-config-field"><span class="nw-config-label">Command Receiver aktiv</span><select class="nw-config-input" id="meshMicrogridReceiverEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Remote Commands akzeptieren</span><select class="nw-config-input" id="meshMicrogridReceiverAccept" ${isEos ? '' : 'disabled'}><option value="false">Nein</option><option value="true">Ja</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Cluster-ID prüfen</span><select class="nw-config-input" id="meshMicrogridReceiverRequireCluster" ${isEos ? '' : 'disabled'}><option value="true">Ja</option><option value="false">Nein</option></select></label>
+            <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Lokaler Empfangs-Command-State</span><input class="nw-config-input" id="meshMicrogridReceiverStateDp" value="${_meshHtmlEscape((cfg.receiver && (cfg.receiver.localCommandStateDp || cfg.receiver.receivedCommandStateDp)) || '')}" placeholder="0_userdata.0.nexowatt.mesh.receivedCommand" ${isEos ? '' : 'disabled'} /><small>Remote-Kommandos werden hier als neutraler JSON-Envelope geschrieben. Die lokale Bridge setzt sie hersteller-/protokollspezifisch um.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Receiver Token optional</span><input class="nw-config-input" id="meshMicrogridReceiverToken" value="${_meshHtmlEscape((cfg.receiver && cfg.receiver.peerToken) || '')}" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Replay TTL Sekunden</span><input class="nw-config-input" id="meshMicrogridReceiverReplayTtl" value="${_meshHtmlEscape((cfg.receiver && cfg.receiver.replayTtlSec) || 900)}" placeholder="900" ${isEos ? '' : 'disabled'} /></label>
+          </div>
+        </div>
+        <div class="nw-config-subcard" style="margin-top:12px;">
+          <div class="nw-config-card__title">Lokale Bridge-Zuordnung</div>
+          <div class="nw-config-card__subtitle">Ordnet neutrale Mesh-Command-Intents lokalen Ziel-Command-States zu. Das bleibt hersteller- und protokolloffen: Die lokale Bridge/Herstellerintegration setzt den JSON-Intent um; Mesh/Microgrid schreibt keine Geräte-Rohbefehle direkt.</div>
+          <div class="nw-config-grid nw-config-grid--3">
+            <label class="nw-config-field"><span class="nw-config-label">Lokale Bridge aktiv</span><select class="nw-config-input" id="meshMicrogridLocalBridgeEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Ausgabemodus</span><select class="nw-config-input" id="meshMicrogridLocalBridgeOutputMode" ${isEos ? '' : 'disabled'}><option value="global">Globaler Command-State</option><option value="mapped">Nur gemappte Ziel-States</option><option value="both">Global + gemappt</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Default Bridge Command-State</span><input class="nw-config-input" id="meshMicrogridLocalBridgeDefaultState" value="${_meshHtmlEscape(localBridge.defaultCommandStateDp || '')}" placeholder="0_userdata.0.nexowatt.mesh.bridge.command" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Default Bridge ACK-State optional</span><input class="nw-config-input" id="meshMicrogridLocalBridgeDefaultAckState" value="${_meshHtmlEscape(localBridge.defaultAckStateDp || '')}" placeholder="0_userdata.0.nexowatt.mesh.bridge.ack" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field"><span class="nw-config-label">Bridge-ACK auswerten</span><select class="nw-config-input" id="meshMicrogridLocalBridgeAckEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select><small>Nur Rückmeldungen lesen; keine Hardwaresteuerung.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">ACK als Gate erforderlich</span><select class="nw-config-input" id="meshMicrogridLocalBridgeAckRequired" ${isEos ? '' : 'disabled'}><option value="false">Nein, nur Diagnose</option><option value="true">Ja, Folge-Commands blockieren</option></select><small>Bei Timeout/Fehler/offenem ACK werden neue Commands zu diesem Ziel blockiert.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">ACK Timeout Sekunden</span><input class="nw-config-input" id="meshMicrogridLocalBridgeAckTimeoutSec" value="${_meshHtmlEscape(localBridge.ackTimeoutSec || 60)}" placeholder="60" ${isEos ? '' : 'disabled'} /></label>
+            <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Bridge-Zuordnungen JSON</span><textarea class="nw-config-input" id="meshMicrogridLocalBridgeMappingsJson" rows="6" ${isEos ? '' : 'disabled'}>${localBridgeMappingsJson}</textarea><small>Beispiel je Eintrag: { "id":"lp1_bridge", "nodeId":"lp1", "commandStateDp":"0_userdata.0.nexowatt.mesh.lp1.command", "ackStateDp":"0_userdata.0.nexowatt.mesh.lp1.ack", "type":"chargepoint", "maxPowerW":11000 }. ACK-/Status-States werden nur gelesen; keine ZIP/TGZ und keine Roh-Hardwarebefehle.</small></label>
+          </div>
+        </div>
+        <div class="nw-config-subcard" style="margin-top:12px;">
+          <div class="nw-config-card__title">Zielgruppen-Strategie</div>
+          <div class="nw-config-card__subtitle">Bündelt Ladepunkte, Speicher, Verbraucher und Erzeuger in Gruppen. Gruppenprioritäten und Gruppenlimits werden im CommandGuard bewertet. Die Ausgabe bleibt ein neutraler Command-Intent ohne direkten Hardwarewrite.</div>
+          <label class="nw-config-field nw-config-field--wide"><span class="nw-config-label">Zielgruppen JSON</span><textarea class="nw-config-input" id="meshMicrogridTargetGroupsJson" rows="7" ${isEos ? '' : 'disabled'}>${targetGroupsJson}</textarea><small>Beispiel: [{ "id":"lp_gruppe", "name":"Ladepunkte", "type":"chargepoint", "memberTypes":["chargepoint"], "priority":20, "maxPowerW":22000 }]. 0 = kein Limit.</small></label>
+        </div>
+        <div class="nw-config-card__subtitle" style="margin-top:10px;">Knoten: PV/Erzeuger, Verbraucher/Gebäude, Speicher, Netzpunkt, Ladepunktgruppen oder thermische Verbraucher. Technische Zuordnung bleibt im Installerbereich.</div>
+        <div id="meshMicrogridNodes">${rows || '<div class="nw-config-empty" style="text-align:left;">Noch keine Mesh-/Microgrid-Knoten angelegt.</div>'}</div>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px;"><button type="button" class="nw-btn" id="meshMicrogridAddNode" ${isEos ? '' : 'disabled'}>Knoten anlegen</button></div>
+      </div>`;
+    const enabled = card.querySelector('#meshMicrogridEnabled');
+    if (enabled) enabled.value = cfg.enabled === true ? 'true' : 'false';
+    const mode = card.querySelector('#meshMicrogridMode');
+    if (mode) mode.value = ['off','diagnostic','local_first','grid_last'].includes(String(cfg.mode || '')) ? String(cfg.mode) : 'diagnostic';
+    const controlMode = card.querySelector('#meshMicrogridControlMode');
+    if (controlMode) controlMode.value = ['off','diagnostic','field_test','active'].includes(String(cfg.controlMode || '')) ? String(cfg.controlMode) : 'diagnostic';
+    const approved = card.querySelector('#meshMicrogridFieldApproved');
+    if (approved) approved.value = cfg.fieldTestApproved === true || cfg.installerApproved === true ? 'true' : 'false';
+    const tsEnabled = card.querySelector('#meshMicrogridTailscaleEnabled');
+    if (tsEnabled) tsEnabled.value = cfg.tailscale && cfg.tailscale.enabled === true ? 'true' : 'false';
+    const rx = cfg.receiver && typeof cfg.receiver === 'object' ? cfg.receiver : {};
+    const receiverEnabled = card.querySelector('#meshMicrogridReceiverEnabled');
+    if (receiverEnabled) receiverEnabled.value = rx.enabled === true ? 'true' : 'false';
+    const receiverAccept = card.querySelector('#meshMicrogridReceiverAccept');
+    if (receiverAccept) receiverAccept.value = rx.acceptRemoteCommands === true ? 'true' : 'false';
+    const receiverRequire = card.querySelector('#meshMicrogridReceiverRequireCluster');
+    if (receiverRequire) receiverRequire.value = rx.requireClusterMatch === false ? 'false' : 'true';
+    const lbEnabled = card.querySelector('#meshMicrogridLocalBridgeEnabled');
+    if (lbEnabled) lbEnabled.value = localBridge.enabled === true ? 'true' : 'false';
+    const lbMode = card.querySelector('#meshMicrogridLocalBridgeOutputMode');
+    if (lbMode) lbMode.value = ['global','mapped','both'].includes(String(localBridge.outputMode || '')) ? String(localBridge.outputMode) : 'global';
+    const lbAckEnabled = card.querySelector('#meshMicrogridLocalBridgeAckEnabled');
+    if (lbAckEnabled) lbAckEnabled.value = localBridge.ackEnabled === true ? 'true' : 'false';
+    const lbAck = card.querySelector('#meshMicrogridLocalBridgeAckEnabled');
+    if (lbAck) lbAck.value = localBridge.ackEnabled === true ? 'true' : 'false';
+    const lbAckRequired = card.querySelector('#meshMicrogridLocalBridgeAckRequired');
+    if (lbAckRequired) lbAckRequired.value = localBridge.ackRequired === true ? 'true' : 'false';
+    const add = card.querySelector('#meshMicrogridAddNode');
+    if (add) add.addEventListener('click', () => {
+      currentConfig.meshMicrogrid = currentConfig.meshMicrogrid || {};
+      const list = Array.isArray(currentConfig.meshMicrogrid.nodes) ? currentConfig.meshMicrogrid.nodes.slice() : [];
+      const next = list.length + 1;
+      list.push({ id: `node_${next}`, name: `Energie-Knoten ${next}`, type: 'consumer', role: 'consumer', enabled: true, priority: 100, powerDp: '' });
+      currentConfig.meshMicrogrid.nodes = list;
+      try { buildAppsUI(); } catch (_e) {}
+    });
+    return card;
+  }
+
+  /**
+   * Code-Teil: buildAppCenterStructurePanels
+   * Zweck: Hält das App-Center-Schema sauber: Apps enthalten nur Funktionsmodule,
+   * Zuordnung enthält Markt-/Länder- und P1/DSMR-Mapping, Ladepunkte enthält die
+   * DC-Stationsdisplay-Konfiguration. Dadurch werden neue EOS-Module nicht ungeordnet
+   * vorne unter „Apps“ abgelegt.
+   * Zusammenhang: Die Karten schreiben weiterhin dieselben Config-Strukturen; nur die
+   * visuelle Platzierung wird fachlich sauber getrennt. Es entsteht keine doppelte Logik.
+   */
+  function buildAppCenterStructurePanels() {
+    const mount = (el, card) => {
+      if (!el) return;
+      el.innerHTML = '';
+      if (card) el.appendChild(card);
+    };
+
+    /**
+     * App-Center-Ordnungsregel ab 0.8.37:
+     * - Der Reiter „Apps“ ist nur der App-Katalog mit Installiert/Aktiv.
+     * - Länder-/P1-Konfiguration bleibt in „Zuordnung“.
+     * - DC-Stationsseiten bleiben in „Ladepunkte“.
+     * - Mesh/Microgrid bekommt einen eigenen Reiter und wird nur sichtbar,
+     *   wenn die Funktions-App installiert ist. Dadurch stehen im Apps-Reiter
+     *   keine tiefen Modul-Einstellungen mehr.
+     */
+    const isMeshInstalled = (() => {
+      const cb = document.getElementById('app_meshMicrogrid_installed');
+      if (cb) return !!cb.checked;
+      const app = currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps && currentConfig.emsApps.apps.meshMicrogrid
+        ? currentConfig.emsApps.apps.meshMicrogrid
+        : null;
+      return !!(app && app.installed);
+    })();
+
+    mount(els.systemProfileMount, buildSystemProfileCard());
+    mount(els.nlP1Mount, buildNlP1Card());
+    mount(els.chargeKioskMount, buildChargeKioskCard());
+    mount(els.meshMicrogridMount, isMeshInstalled ? buildMeshMicrogridCard() : null);
+  }
+
+  /**
+   * Code-Teil: setupInstallerBackButton
+   * Zweck: Der Installateur kann aus dem App-Center zurück auf den ioBroker-/EOS-Admin-Tab
+   * der Adapter-Instanz wechseln. Wichtig: Das App-Center läuft oft direkt auf dem
+   * Adapter-Port (z. B. 8188). Eine relative Route wie `tab.html` zeigt dort ins Leere,
+   * weil die zentrale Installer-Seite im Admin auf `/#tab-nexowatt-ui-<instanz>` liegt.
+   *
+   * URL-Regel ab 0.8.34:
+   * - Wenn ein Admin-Referrer existiert, wird dessen Origin verwendet.
+   * - Sonst wird die aktuelle Host-IP mit Admin-Port 8081 genutzt.
+   * - Die Instanz wird aus ?instance=, ?inst= oder aus dem ioBroker-Hash abgeleitet.
+   *
+   * Dadurch funktioniert „Zurück zum Installer“ sowohl vom direkten Adapter-Port als auch
+   * aus dem Admin-Tab zuverlässig und ohne Zugriff auf /tab.html am falschen Port.
+   */
+  function setupInstallerBackButton() {
+    const btn = els.backInstaller;
+    if (!btn || btn.__nwBackInstallerBound) return;
+    btn.__nwBackInstallerBound = true;
+
+    const parseQuery = () => {
+      try { return new URLSearchParams(window.location.search || ''); } catch (_e) { return new URLSearchParams(''); }
+    };
+
+    const detectInstance = () => {
+      const qs = parseQuery();
+      const raw = qs.get('instance') || qs.get('inst') || qs.get('adapterInstance') || '';
+      const n = Number(raw);
+      if (Number.isFinite(n) && n >= 0) return Math.round(n);
+
+      const hash = String(window.location.hash || '');
+      const m = hash.match(/tab-nexowatt-ui-(\d+)/i);
+      if (m && m[1]) return Math.max(0, Math.round(Number(m[1]) || 0));
+
+      return 0;
+    };
+
+    const detectAdminOrigin = () => {
+      const qs = parseQuery();
+      const queryOrigin = qs.get('adminOrigin') || qs.get('adminUrl') || '';
+      if (queryOrigin) {
+        try { return new URL(queryOrigin, window.location.href).origin; } catch (_e0) {}
+      }
+
+      // Wenn das App-Center direkt aus dem ioBroker-/EOS-Admin geöffnet wurde, ist
+      // der Referrer die beste Quelle für Protokoll, Host und individuellen Admin-Port.
+      // Wichtig: Referrer vom gleichen Adapter-Webserver-Port werden bewusst ignoriert,
+      // weil sie wieder auf 8188/#tab-... führen würden statt zurück zum Admin.
+      if (document.referrer) {
+        try {
+          const ref = new URL(document.referrer);
+          const currentOrigin = window.location.origin || '';
+          const looksLikeAdmin = (ref.origin !== currentOrigin) && (
+            /tab-nexowatt-ui-\d+/i.test(ref.hash || '') ||
+            String(ref.port || '') === '8081' ||
+            /admin/i.test(ref.pathname || '')
+          );
+          if (ref && ref.protocol && ref.hostname && looksLikeAdmin) return ref.origin;
+        } catch (_e1) {}
+      }
+
+      // Direkter Adapter-Port-Fall: gleiche IP/Hostname, aber Admin-Port. 0.0.0.0
+      // ist kein sinnvoller Browser-Zielhost und wird auf localhost normalisiert.
+      const proto = (window.location.protocol === 'https:') ? 'https:' : 'http:';
+      let host = window.location.hostname || '127.0.0.1';
+      if (host === '0.0.0.0') host = 'localhost';
+      const adminPort = qs.get('adminPort') || qs.get('ioBrokerAdminPort') || qs.get('port') || '8081';
+      return `${proto}//${host}:${adminPort}`;
+    };
+
+    const buildTarget = () => {
+      const instance = detectInstance();
+      return `${detectAdminOrigin()}/#tab-nexowatt-ui-${instance}`;
+    };
+
+    btn.setAttribute('href', buildTarget());
+    btn.addEventListener('click', (ev) => {
+      const target = buildTarget();
+      try {
+        ev.preventDefault();
+        window.top.location.href = target;
+      } catch (_e) {
+        window.location.href = target;
+      }
+    });
+  }
+
   /**
    * Code-Teil: buildAppsUI
    * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
@@ -1740,12 +2751,90 @@ function collectAiAdvisorConfigFromUI(base) {
       return a && typeof a === 'object' ? a : { installed: false, enabled: false };
     };
 
-    for (const app of APP_CATALOG) {
+    const licenseCard = document.createElement('div');
+    licenseCard.className = 'nw-config-card nw-license-edition-card';
+    const licenseLimit = _maxEvcsCount() < 50 ? ` · Lademanagement bis ${_maxEvcsCount()} Wallboxen` : ' · Vollzugriff';
+    licenseCard.innerHTML = `<div class="nw-config-card__header"><div><div class="nw-config-card__title">Lizenz: ${_licenseLabel()}</div><div class="nw-config-card__subtitle">${_licenseEdition() === 'eos' ? 'EOS ist die Vollversion mit allen Apps und künftigen Erweiterungen.' : 'Home zeigt nur die freigegebenen Basis-Apps.'}${licenseLimit}</div></div></div>`;
+    els.appsList.appendChild(licenseCard);
+    // 0.8.37: Reine Zuordnungs-/Stationskarten und große Modul-Konfigurationen
+    // werden fachlich passend in eigene Reiter gerendert. Der Apps-Reiter bleibt
+    // eine schlanke Liste echter Funktions-Apps mit Installiert/Aktiv-Schaltern.
+    buildAppCenterStructurePanels();
+
+    /**
+     * App-Center-Struktur ab 0.8.38:
+     * Der Apps-Reiter ist strikt ein Katalog. Er zeigt Installiert/Aktiv und höchstens
+     * Navigationshinweise zu den fachlich passenden Konfigurationsreitern. Alle
+     * echten Einstellungen bleiben in Zuordnung, Ladepunkte oder eigenen Modulreitern.
+     */
+    const appConfigTargets = {
+      charging: { tab: 'evcs', label: 'Ladepunkte konfigurieren' },
+      peak: { tab: 'peakconfig', label: 'Peak-Shaving konfigurieren' },
+      storage: { tab: 'storageconfig', label: 'Speicher konfigurieren' },
+      storagefarm: { tab: 'storagefarm', label: 'Speicherfarm konfigurieren' },
+      thermal: { tab: 'thermal', label: 'Thermik konfigurieren' },
+      heatingrod: { tab: 'heatingrod', label: 'Heizstab konfigurieren' },
+      bhkw: { tab: 'bhkw', label: 'BHKW konfigurieren' },
+      generator: { tab: 'generator', label: 'Generator konfigurieren' },
+      threshold: { tab: 'threshold', label: 'Schwellwerte konfigurieren' },
+      relay: { tab: 'relay', label: 'Relais konfigurieren' },
+      grid: { tab: 'grid', label: 'Netzlimits konfigurieren' },
+      aiAdvisor: { tab: 'aiadvisor', label: 'KI-Optimierung konfigurieren' },
+      tariff: { tab: 'mapping', label: 'Tarif-Zuordnung öffnen' },
+      para14a: { tab: 'para14a', label: '§14a konfigurieren' },
+      multiuse: { tab: 'multiuse', label: 'MultiUse konfigurieren' },
+      meshMicrogrid: { tab: 'meshmicrogrid', label: 'Mesh/Microgrid konfigurieren', operatorUrl: '/mesh/microgrid', operatorLabel: 'Betreiberansicht öffnen' },
+      energyLedger: { url: '/ledger/local-kwh', label: 'Betreiberansicht / Export öffnen' }
+    };
+
+    function appendAppConfigNavigation(body, app, st) {
+      const target = appConfigTargets[app.id];
+      if (!body || !target) return;
+      if (!app.mandatory && !st.installed) return;
+
+      const row = document.createElement('div');
+      row.className = 'nw-config-card__row nw-app-config-nav';
+      row.setAttribute('data-app-config-nav', app.id);
+
+      const btn = document.createElement(target.url ? 'a' : 'button');
+      btn.className = 'nw-btn nw-btn--small nw-app-config-nav__button';
+      btn.textContent = target.label || 'Konfiguration öffnen';
+      if (target.url) {
+        btn.setAttribute('href', target.url);
+        btn.setAttribute('target', '_blank');
+        btn.setAttribute('rel', 'noopener noreferrer');
+      } else {
+        btn.setAttribute('type', 'button');
+        btn.setAttribute('data-app-config-target', String(target.tab || ''));
+        btn.addEventListener('click', () => {
+          const tab = String(target.tab || '');
+          if (!tab) return;
+          const tabEl = document.querySelector(`.nw-tab[data-tab="${tab}"]`);
+          if (tabEl) tabEl.click();
+        });
+      }
+
+      row.appendChild(btn);
+      if (target.operatorUrl) {
+        const op = document.createElement('a');
+        op.className = 'nw-btn nw-btn--small nw-app-config-nav__button';
+        op.textContent = target.operatorLabel || 'Betreiberansicht öffnen';
+        op.setAttribute('href', target.operatorUrl); // href = '/mesh/microgrid'
+        op.setAttribute('target', '_blank');
+        op.setAttribute('rel', 'noopener noreferrer');
+        row.appendChild(op);
+      }
+      body.appendChild(row);
+    }
+
+    const visibleApps = APP_CATALOG.filter((app) => _isAppLicensed(app.id));
+    for (const app of visibleApps) {
       const st = getSt(app.id);
 
       const card = document.createElement('div');
       card.className = 'nw-config-card';
       card.setAttribute('data-app', app.id);
+      card.setAttribute('data-app-catalog-card', '1');
 
       const header = document.createElement('div');
       header.className = 'nw-config-card__header';
@@ -1767,9 +2856,10 @@ function collectAiAdvisorConfigFromUI(base) {
        * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
        * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
        */
-      const mkToggle = (id, label, checked, disabled, onLabel = 'An', offLabel = 'Aus') => {
+      const mkToggle = (id, label, checked, disabled, onLabel = 'An', offLabel = 'Aus', toggleKind = '') => {
         const wrap = document.createElement('div');
         wrap.className = 'nw-app-toggle-row';
+        if (toggleKind) wrap.setAttribute('data-toggle-kind', toggleKind);
         wrap.style.display = 'inline-flex';
         wrap.style.alignItems = 'center';
         wrap.style.gap = '8px';
@@ -1783,6 +2873,10 @@ function collectAiAdvisorConfigFromUI(base) {
         const grp = document.createElement('div');
         grp.className = 'nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle';
         grp.setAttribute('data-toggle-for', id);
+        if (toggleKind) {
+          grp.setAttribute('data-toggle-kind', toggleKind);
+          grp.classList.add(`nw-app-toggle--${toggleKind}`);
+        }
 
         const bOff = document.createElement('button');
         bOff.type = 'button';
@@ -1818,8 +2912,8 @@ function collectAiAdvisorConfigFromUI(base) {
       const idInstalled = `app_${app.id}_installed`;
       const idEnabled = `app_${app.id}_enabled`;
 
-      const tInstalled = mkToggle(idInstalled, 'Installiert', st.installed, app.mandatory, 'Ja', 'Nein');
-      const tEnabled = mkToggle(idEnabled, 'Aktiv', st.enabled, app.mandatory || !st.installed, 'An', 'Aus');
+      const tInstalled = mkToggle(idInstalled, 'Installiert', st.installed, app.mandatory, 'Ja', 'Nein', 'installed');
+      const tEnabled = mkToggle(idEnabled, 'Aktiv', st.enabled, app.mandatory || !st.installed, 'An', 'Aus', 'enabled');
 
       // Behaviour: if app is uninstalled, force enabled=false
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an tInstalled.inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
@@ -1834,7 +2928,10 @@ function collectAiAdvisorConfigFromUI(base) {
 
         try { if (window.nwSyncToggleButtons) window.nwSyncToggleButtons(tEnabled.inp.id); } catch (_e) {}
 
-        // Live UI: Mapping-Kacheln reagieren sofort auf Install/Uninstall
+        // Live UI: Zuordnungs-/Spezialreiter reagieren sofort auf Install/Uninstall.
+        // Mesh/Microgrid ist bewusst nicht mehr als Detailkarte im Apps-Reiter,
+        // sondern nur im eigenen Reiter vorhanden, sobald die App installiert ist.
+        try { buildAppCenterStructurePanels(); } catch (_e) {}
         try { applyAppDependentVisibility(); } catch (_e) {}
       });
 
@@ -1853,33 +2950,20 @@ function collectAiAdvisorConfigFromUI(base) {
       const body = document.createElement('div');
       body.className = 'nw-config-card__body';
 
-      // Optional quick hints
-      if (app.id === 'charging') {
-        const row = document.createElement('div');
-        row.className = 'nw-config-card__row';
-        row.textContent = 'Konfiguration: Reiter „Ladepunkte“. Datenpunkte: pro Ladepunkt.';
-        body.appendChild(row);
-      }
-      if (app.id === 'peak') {
-        const row = document.createElement('div');
-        row.className = 'nw-config-card__row';
-        row.textContent = 'Konfiguration: Reiter „Peak-Shaving“. Dort normale LSK, atypische HLZF und Hybrid-Modus einstellen.';
-        body.appendChild(row);
-      }
-      if (app.id === 'aiAdvisor') {
-        const row = document.createElement('div');
-        row.className = 'nw-config-card__row';
-        row.textContent = 'Konfiguration: Reiter „KI‑Optimierung“. Im UI‑Adapter nur beratend, keine automatischen Schaltbefehle.';
-        body.appendChild(row);
-      }
+      // 0.8.38 Strukturhärtung:
+      // Der Apps-Reiter ist strikt ein Katalog. Hier stehen nur
+      // Installiert/Aktiv und optional ein kompakter Sprung in den zuständigen
+      // Reiter oder die Betreiberansicht. Fachliche Einstellungen, Mappingfelder,
+      // Preise, Stationsseiten und Mesh-Knoten werden nie in dieser Karte gerendert.
+      appendAppConfigNavigation(body, app, st);
 
       card.appendChild(header);
-      card.appendChild(body);
+      if (body.childElementCount > 0) card.appendChild(body);
 
       els.appsList.appendChild(card);
     }
 
-    els.appsEmpty.style.display = APP_CATALOG.length ? 'none' : 'block';
+    els.appsEmpty.style.display = visibleApps.length ? 'none' : 'block';
   }
   /**
    * Code-Teil: setAppsFromConfig
@@ -1953,6 +3037,7 @@ function collectAiAdvisorConfigFromUI(base) {
 
     // Tabs: optional ein-/ausblenden (App-Center)
     const tabMap = [
+      { tab: 'storageconfig', app: 'storage' },
       { tab: 'peakconfig', app: 'peak' },
       { tab: 'aiadvisor', app: 'aiAdvisor' },
       { tab: 'thermal', app: 'thermal' },
@@ -1967,6 +3052,10 @@ function collectAiAdvisorConfigFromUI(base) {
       { tab: 'evcs', app: 'charging' },
       { tab: 'storagefarm', app: 'storagefarm' },
       { tab: 'multiuse', app: 'multiuse' },
+      // 0.8.37: Der separate Mesh/Microgrid-Reiter wird erst sichtbar, wenn
+      // die EOS-App installiert ist. Nicht installierte Module sollen nicht
+      // als leere Konfigurationsbereiche im App-Center auftauchen.
+      { tab: 'meshmicrogrid', app: 'meshMicrogrid' },
     ];
 
     for (const t of tabMap) {
@@ -3567,6 +4656,36 @@ function collectAiAdvisorConfigFromUI(base) {
     return t;
   }
   /**
+   * Code-Teil: _normalizeHeatingRodAutoMode
+   * Zweck: Normalisiert die Betriebsart hinter dem einen Frontend-Auto-Button der Heizstab-App.
+   * Zusammenhang: Das Dropdown speichert nur die Auto-Strategie; Kunden bedienen weiter `Auto`,
+   * während die Runtime entweder NVP-PV-Überschuss oder 0-W/Forecast nutzt.
+   * TypeScript: Beim späteren Umbau als Union-Typ `'pvSurplus' | 'zeroExportForecast'` führen.
+   */
+  function _normalizeHeatingRodAutoMode(raw) {
+    const s = String(raw || '').trim().toLowerCase();
+    if (s === 'zeroexportforecast' || s === 'zero-export-forecast' || s === 'zero_export_forecast'
+      || s === 'zeroexport' || s === 'zero-export' || s === 'zero_export'
+      || s === 'zerofeedin' || s === 'zero-feed-in' || s === 'zero_feed_in'
+      || s === 'zero' || s === '0w' || s === '0-w' || s === '0_w'
+      || s === '0einspeisung' || s === '0-einspeisung' || s === '0_einspeisung'
+      || s === 'zeroeinspeisung' || s === 'forecast') return 'zeroExportForecast';
+    return 'pvSurplus';
+  }
+
+  /**
+   * Code-Teil: _heatingRodAutoModeLabel
+   * Zweck: Liefert kurze, konsistente UI-Texte zur Heizstab-Betriebsart.
+   * Zusammenhang: Wird im AppCenter und in Status-/Hinweistexten genutzt; bei neuen
+   * Betriebsarten immer gemeinsam mit Runtime und Schnellsteuerung erweitern.
+   */
+  function _heatingRodAutoModeLabel(mode) {
+    return _normalizeHeatingRodAutoMode(mode) === 'zeroExportForecast'
+      ? '0-W-Einspeisung / Forecast'
+      : 'PV-Überschuss am NVP';
+  }
+
+  /**
    * Code-Teil: _ensureHeatingRodCfg
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
    * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -3585,6 +4704,13 @@ function collectAiAdvisorConfigFromUI(base) {
     h.minPvPowerW = Math.max(0, Math.round(Number.isFinite(hMinPvRaw) ? hMinPvRaw : 800));
     h.useBudgetGates = true;
     const legacyZeroForBudget = (h.zeroExport && typeof h.zeroExport === 'object') ? h.zeroExport : {};
+    // Das alte Detail-Flag `zeroExport.enabled` wird nur zur Migration verwendet.
+    // Danach steuert ausschließlich `h.autoMode`, welche Regelstrategie der normale
+    // Auto-Button nutzt; so gibt es keine zweite, widersprüchliche Aktivierung mehr.
+    const legacyZeroModeActive = !!(legacyZeroForBudget.enabled || legacyZeroForBudget.active);
+    h.autoMode = _normalizeHeatingRodAutoMode(
+      h.autoMode || h.automationMode || legacyZeroForBudget.autoMode || legacyZeroForBudget.mode || (legacyZeroModeActive ? 'zeroExportForecast' : 'pvSurplus')
+    );
     const legacyBudgetAliases = {
       maxGridImportW: ['maxGridImportW', 'gridImportTripW'],
       gridImportHoldSec: ['gridImportHoldSec', 'gridImportTripSec'],
@@ -3647,7 +4773,8 @@ function collectAiAdvisorConfigFromUI(base) {
       n = Math.max(min, Math.min(max, n));
       z[key] = integer ? Math.round(n) : n;
     };
-    z.enabled = (typeof z.enabled === 'boolean') ? !!z.enabled : false;
+    z.enabled = h.autoMode === 'zeroExportForecast';
+    z.autoMode = h.autoMode;
     zn('feedInLimitW', 1000, 0, 1000000);
     zn('feedInToleranceW', 150, 0, 100000);
     zn('targetExportBufferW', 100, 0, 100000);
@@ -3775,7 +4902,12 @@ function collectAiAdvisorConfigFromUI(base) {
     // Heizstab Speicher-Reserve snapped back to the default 1000 W).
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     inp.addEventListener('change', commit);
-    if (type !== 'checkbox') inp.addEventListener('input', commit);
+    // Installer-UX: Some controls trigger a structural re-render of their
+    // section (for example changing the heating-rod stage count). For normal
+    // text/number fields we still commit live, but callers can disable live
+    // input commits with opts.commitOnInput=false so typing inside deep forms
+    // never rebuilds the section and jumps the page to the top.
+    if (type !== 'checkbox' && opts.commitOnInput !== false) inp.addEventListener('input', commit);
     return inp;
   }
   /**
@@ -4060,7 +5192,7 @@ function collectAiAdvisorConfigFromUI(base) {
     els.thermalDevices.innerHTML = '';
 
     const modeOptions = [
-      { value: 'pvAuto', label: 'PV-Auto' },
+      { value: 'pvAuto', label: 'Auto' },
       { value: 'manual', label: 'Manuell' },
       { value: 'off', label: 'Aus' },
     ];
@@ -4171,6 +5303,47 @@ function collectAiAdvisorConfigFromUI(base) {
     });
   }
   /**
+   * Code-Teil: rebuildHeatingRodUIStable
+   * Zweck: Rendert die Heizstab-Konfiguration neu, ohne den Installateur beim
+   * Bearbeiten tiefer Felder an den Seitenanfang zu springen. Diese Funktion
+   * ist nur für echte Strukturänderungen gedacht (z. B. Stufenzahl oder DP-
+   * Auswahl). Reine Zahlenänderungen in Stufenfeldern dürfen nicht komplett
+   * neu rendern, weil sonst Fokus, Cursor und Scrollposition verloren gehen.
+   */
+  function rebuildHeatingRodUIStable(reason = '') {
+    let scrollX = 0;
+    let scrollY = 0;
+    let activeId = '';
+    let activeValue = null;
+    try {
+      scrollX = window.scrollX || 0;
+      scrollY = window.scrollY || 0;
+      const active = document && document.activeElement;
+      activeId = active && active.id ? String(active.id) : '';
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
+        activeValue = ('value' in active) ? active.value : null;
+      }
+    } catch (_e) {}
+
+    try { buildHeatingRodUI(); } catch (_e) {}
+
+    try {
+      requestAnimationFrame(() => {
+        try {
+          window.scrollTo(scrollX, scrollY);
+          if (activeId) {
+            const restored = document.getElementById(activeId);
+            if (restored && typeof restored.focus === 'function') {
+              restored.focus({ preventScroll: true });
+              if (activeValue !== null && 'value' in restored && restored.value === '') restored.value = activeValue;
+            }
+          }
+        } catch (_e2) {}
+      });
+    } catch (_e) {}
+  }
+
+  /**
    * Code-Teil: buildHeatingRodUI
    * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
    * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -4195,21 +5368,50 @@ function collectAiAdvisorConfigFromUI(base) {
     }
 
     const modeOptions = [
-      { value: 'pvAuto', label: 'PV-Auto' },
+      { value: 'pvAuto', label: 'Auto' },
       { value: 'manual', label: 'Manuell' },
       { value: 'off', label: 'Aus' },
     ];
     const stageCountOptions = Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}` }));
 
-    const grpAuto = _mkCfgGroup('PV-Auto – Budget & Speicher');
+    const grpMode = _mkCfgGroup('Betriebsart');
+    const modeInfo = document.createElement('div');
+    modeInfo.className = 'nw-config-field-hint';
+    modeInfo.style.flexBasis = '100%';
+    modeInfo.textContent = 'Diese Einstellung entscheidet, welche Regelstrategie der normale Auto-Button verwendet. Es wird bewusst kein zweiter Auto-Button erzeugt.';
+    grpMode.body.appendChild(modeInfo);
+    const autoModeSelect = _mkCfgSelect(cfg.autoMode || 'pvSurplus', [
+      { value: 'pvSurplus', label: 'PV-Überschuss am NVP' },
+      { value: 'zeroExportForecast', label: '0-W-Einspeisung / Forecast' },
+    ], (v) => {
+      cfg.autoMode = _normalizeHeatingRodAutoMode(v);
+      cfg.zeroExport = (cfg.zeroExport && typeof cfg.zeroExport === 'object') ? cfg.zeroExport : {};
+      cfg.zeroExport.enabled = cfg.autoMode === 'zeroExportForecast';
+      cfg.zeroExport.autoMode = cfg.autoMode;
+      rebuildHeatingRodUIStable('heatingrod-auto-mode');
+      setDirty();
+    }, { width: '260px' });
+    grpMode.body.appendChild(_mkCfgField('Automatik-Regelung', autoModeSelect, cfg.autoMode === 'zeroExportForecast'
+      ? 'Auto nutzt Forecast, Teststufen und Live-Netzpunkt-/Speicher-Schutz für Anlagen mit 0-W-Einspeisung.'
+      : 'Auto nutzt den gemessenen PV-Überschuss am Netzverknüpfungspunkt.'));
+    const modeStatus = document.createElement('div');
+    modeStatus.className = 'nw-config-field-hint';
+    modeStatus.style.flexBasis = '100%';
+    modeStatus.textContent = `Auto-Button verwendet aktuell: ${_heatingRodAutoModeLabel(cfg.autoMode)}`;
+    grpMode.body.appendChild(modeStatus);
+    els.heatingRodDevices.appendChild(grpMode.wrap);
+
+    const grpAuto = _mkCfgGroup('Auto – Budget & Speicher');
     const autoInfo = document.createElement('div');
     autoInfo.className = 'nw-config-field-hint';
     autoInfo.style.flexBasis = '100%';
-    autoInfo.textContent = 'Zentrale EMS-Budget-Gates lesen, PV/NVP-Überschuss verfolgen und eigene PV-Auto-Stufen halten. Externe KNX-/Relais-Schaltungen werden nur beobachtet.';
+    autoInfo.textContent = cfg.autoMode === 'zeroExportForecast'
+      ? 'Auto arbeitet im 0-W-/Forecast-Modus: Forecast gibt frei, Probe-Stufen testen PV-Nachregelung, Netzpunkt und Speicher schützen live.'
+      : 'Auto arbeitet im klassischen PV-Überschussmodus: Zentrale EMS-Budget-Gates lesen, NVP-Überschuss verfolgen und eigene Auto-Stufen halten. Externe KNX-/Relais-Schaltungen werden nur beobachtet.';
     grpAuto.body.appendChild(autoInfo);
     grpAuto.body.appendChild(_mkCfgField('Speicher-Reserve (W)', _mkHeatingRodNumberInput('storageReserveW', cfg.storageReserveW, (v) => { cfg.storageReserveW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Bleibt für Speicherladung frei, solange der Speicher unter dem Ziel-SoC liegt.'));
     grpAuto.body.appendChild(_mkCfgField('Reserve bis SoC (%)', _mkHeatingRodNumberInput('storageTargetSocPct', cfg.storageTargetSocPct, (v) => { cfg.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '130px' }), 'Ab diesem SoC darf der Heizstab den Überschuss ohne Speicherreserve nutzen.'));
-    grpAuto.body.appendChild(_mkCfgField('PV-Auto ab PV (W)', _mkHeatingRodNumberInput('minPvPowerW', cfg.minPvPowerW, (v) => { cfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Start-/Hochschaltgrenze. Unterhalb wird nicht neu zugeschaltet, laufende Auto-Stufen werden aber über Netz-/Speichergates stabil gehalten.'));
+    grpAuto.body.appendChild(_mkCfgField('Auto ab PV (W)', _mkHeatingRodNumberInput('minPvPowerW', cfg.minPvPowerW, (v) => { cfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Start-/Hochschaltgrenze. Unterhalb wird nicht neu zugeschaltet, laufende Auto-Stufen werden aber über Netz-/Speichergates stabil gehalten.'));
     grpAuto.body.appendChild(_mkCfgField('Sicherheitsreserve (W)', _mkHeatingRodNumberInput('budgetSafetyReserveW', cfg.budgetSafetyReserveW, (v) => { cfg.budgetSafetyReserveW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Abzug vom Heizstab-Budget gegen Messrauschen.'));
     els.heatingRodDevices.appendChild(grpAuto.wrap);
 
@@ -4234,13 +5436,17 @@ function collectAiAdvisorConfigFromUI(base) {
     els.heatingRodDevices.appendChild(grpProtect.wrap);
 
     const zeroCfg = cfg.zeroExport || {};
-    const grpZero = _mkCfgDetailsGroup('Erweitert: 0-/Minus-Einspeise-Testlast', !!zeroCfg.enabled);
+    const zeroModeActive = cfg.autoMode === 'zeroExportForecast';
+    zeroCfg.enabled = zeroModeActive;
+    zeroCfg.autoMode = cfg.autoMode;
+    const grpZero = _mkCfgDetailsGroup('Details: 0-W-Einspeisung / Forecast', zeroModeActive);
     const zeroInfo = document.createElement('div');
     zeroInfo.className = 'nw-config-field-hint';
     zeroInfo.style.flexBasis = '100%';
-    zeroInfo.textContent = 'Nur öffnen, wenn die Anlage bei 0-/Minus-Einspeisung PV abregelt und der Heizstab als Testlast vorsichtig PV-Nachregelung auslösen soll.';
+    zeroInfo.textContent = zeroModeActive
+      ? 'Diese Detailwerte konfigurieren die aktive 0-W-/Forecast-Betriebsart. Die Aktivierung erfolgt ausschließlich oben über „Betriebsart“.'
+      : 'Die Detailwerte bleiben gespeichert. Aktiv wird diese Logik erst, wenn oben als Betriebsart „0-W-Einspeisung / Forecast“ gewählt ist.';
     grpZero.body.appendChild(zeroInfo);
-    grpZero.body.appendChild(_mkCfgField('Testlast aktiv', _mkCfgToggle(!!zeroCfg.enabled, (v) => { zeroCfg.enabled = !!v; setDirty(); }), 'Nur Heizstab-PV-Auto; kein Eingriff in Ladepark oder Speicher.'));
     grpZero.body.appendChild(_mkCfgField('Erlaubte Einspeisung (W)', _mkCfgInput('number', zeroCfg.feedInLimitW, (v) => { zeroCfg.feedInLimitW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), '0 bei echter 0-Einspeisung, 1000 bei -1 kW Limit.'));
     grpZero.body.appendChild(_mkCfgField('Mindest-PV Testlast (W)', _mkCfgInput('number', zeroCfg.minPvPowerW, (v) => { zeroCfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Zusätzliche Freigabe für Testlasten.'));
     grpZero.body.appendChild(_mkCfgField('Forecast erforderlich', _mkCfgToggle(zeroCfg.requireForecast !== false, (v) => { zeroCfg.requireForecast = !!v; setDirty(); }), 'Forecast nur als Plausibilität; Netzpunkt entscheidet danach.'));
@@ -4321,12 +5527,12 @@ function collectAiAdvisorConfigFromUI(base) {
       right.appendChild(info);
 
       const grpBasic = _mkCfgGroup('Grunddaten');
-      grpBasic.body.appendChild(_mkCfgField('PV-Auto aktiv', _mkCfgToggle(dev.enabled, (v) => { dev.enabled = !!v; setDirty(); }), 'Aktiviert die native Heizstab-Regelung für diesen Slot.'));
+      grpBasic.body.appendChild(_mkCfgField('Auto aktiv', _mkCfgToggle(dev.enabled, (v) => { dev.enabled = !!v; setDirty(); }), 'Aktiviert die native Heizstab-Automatik für diesen Slot. Die Betriebsart kommt aus dem Dropdown oben.'));
       grpBasic.body.appendChild(_mkCfgField('Name (optional)', _mkCfgInput('text', dev.name || '', (v) => { dev.name = String(v || '').trim(); setDirty(); }, { width: '220px', placeholder: 'Anzeige-Name' }), 'Leer lassen = Name aus Energiefluss-Slot.'));
-      grpBasic.body.appendChild(_mkCfgField('Modus', _mkCfgSelect(dev.mode || 'pvAuto', modeOptions, (v) => { dev.mode = v; setDirty(); }, { width: '160px' }), 'PV-Auto = native Stufenregelung, Manuell = nur bilanzieren, Aus = alles aus.'));
+      grpBasic.body.appendChild(_mkCfgField('Modus', _mkCfgSelect(dev.mode || 'pvAuto', modeOptions, (v) => { dev.mode = v; setDirty(); }, { width: '160px' }), 'Auto = native Stufenregelung mit der oben gewählten Betriebsart; Manuell = nur bilanzieren; Aus = alles aus.'));
       grpBasic.body.appendChild(_mkCfgField('Priorität', _mkCfgInput('number', dev.priority, (v) => { dev.priority = _clampInt(v, 1, 999, 200 + slot); setDirty(); }, { min: 1, max: 999, step: 1, width: '110px' }), 'Kleinere Zahl = wird früher aus PV versorgt.'));
-      grpBasic.body.appendChild(_mkCfgField('Max. Leistung (W)', _mkCfgInput('number', dev.maxPowerW, (v) => { dev.maxPowerW = Math.max(0, Math.round(Number(v) || 0)); _syncHeatingRodDeviceStages(dev); buildHeatingRodUI(); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Gesamtleistung des Heizstabs / Verbunds.'));
-      grpBasic.body.appendChild(_mkCfgField('Stufen', _mkCfgSelect(String(dev.stageCount || 1), stageCountOptions, (v) => { dev.stageCount = _clampInt(v, 1, 12, 1); _syncHeatingRodDeviceStages(dev); buildHeatingRodUI(); setDirty(); }, { width: '110px' }), 'Anzahl nativer Heizstab-Stufen.'));
+      grpBasic.body.appendChild(_mkCfgField('Max. Leistung (W)', _mkCfgInput('number', dev.maxPowerW, (v) => { dev.maxPowerW = Math.max(0, Math.round(Number(v) || 0)); _syncHeatingRodDeviceStages(dev); rebuildHeatingRodUIStable('heatingrod-max-power'); setDirty(); }, { min: 0, step: 10, width: '150px', commitOnInput: false }), 'Gesamtleistung des Heizstabs / Verbunds.'));
+      grpBasic.body.appendChild(_mkCfgField('Stufen', _mkCfgSelect(String(dev.stageCount || 1), stageCountOptions, (v) => { dev.stageCount = _clampInt(v, 1, 12, 1); _syncHeatingRodDeviceStages(dev); rebuildHeatingRodUIStable('heatingrod-stage-count'); setDirty(); }, { width: '110px' }), 'Anzahl nativer Heizstab-Stufen.'));
       right.appendChild(grpBasic.wrap);
 
       const grpTiming = _mkCfgGroup('Timing');
@@ -4339,7 +5545,7 @@ function collectAiAdvisorConfigFromUI(base) {
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an resetBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       resetBtn.addEventListener('click', () => {
         _syncHeatingRodDeviceStages(dev, { resetAll: true });
-        buildHeatingRodUI();
+        rebuildHeatingRodUIStable('heatingrod-stage-reset');
         setDirty();
       });
       grpTiming.body.appendChild(_mkCfgField('Stufenhilfe', resetBtn, 'Verteilt die Gesamtleistung gleichmäßig über alle aktuell konfigurierten Stufen und setzt passende Default-Grenzen.'));
@@ -4419,26 +5625,38 @@ function collectAiAdvisorConfigFromUI(base) {
         label.appendChild(labelSub);
         sRow.appendChild(label);
 
-        sRow.appendChild(_mkCfgInput('number', stage.powerW, (v) => {
+        // Wichtig: Diese drei Stufenfelder dürfen beim Tippen nicht die komplette
+        // Heizstab-UI neu aufbauen. Ein Rebuild entfernt das aktive Eingabefeld
+        // aus dem DOM und der Browser springt in langen Installerseiten an den
+        // Anfang. Deshalb schreiben wir hier nur in die In-Memory-Konfiguration;
+        // Strukturänderungen bleiben auf Stufenzahl, Reset und DP-Auswahl begrenzt.
+        let offBelowInput = null;
+        const powerInput = _mkCfgInput('number', stage.powerW, (v) => {
           stage.powerW = Math.max(0, Math.round(Number(v) || 0));
           dev.maxPowerW = Math.max(0, (dev.stages || []).reduce((sum, it) => sum + Math.max(0, Math.round(Number(it.powerW) || 0)), 0));
-          buildHeatingRodUI();
           setDirty();
-        }, { min: 0, step: 10, width: '100%' }));
+        }, { min: 0, step: 10, width: '100%' });
+        sRow.appendChild(powerInput);
 
-        sRow.appendChild(_mkCfgInput('number', stage.onAboveW, (v) => {
+        const onAboveInput = _mkCfgInput('number', stage.onAboveW, (v) => {
           stage.onAboveW = Math.max(0, Math.round(Number(v) || 0));
-          if (stage.offBelowW > stage.onAboveW) stage.offBelowW = stage.onAboveW;
-          buildHeatingRodUI();
+          if (stage.offBelowW > stage.onAboveW) {
+            stage.offBelowW = stage.onAboveW;
+            if (offBelowInput) offBelowInput.value = String(stage.offBelowW);
+          }
           setDirty();
-        }, { min: 0, step: 10, width: '100%' }));
+        }, { min: 0, step: 10, width: '100%' });
+        sRow.appendChild(onAboveInput);
 
-        sRow.appendChild(_mkCfgInput('number', stage.offBelowW, (v) => {
+        offBelowInput = _mkCfgInput('number', stage.offBelowW, (v) => {
           stage.offBelowW = Math.max(0, Math.round(Number(v) || 0));
-          if (stage.offBelowW > stage.onAboveW) stage.offBelowW = stage.onAboveW;
-          buildHeatingRodUI();
+          if (stage.offBelowW > stage.onAboveW) {
+            stage.offBelowW = stage.onAboveW;
+            offBelowInput.value = String(stage.offBelowW);
+          }
           setDirty();
-        }, { min: 0, step: 10, width: '100%' }));
+        }, { min: 0, step: 10, width: '100%' });
+        sRow.appendChild(offBelowInput);
 
         stageWrap.appendChild(sRow);
 
@@ -4457,13 +5675,13 @@ function collectAiAdvisorConfigFromUI(base) {
 
         dpRow.appendChild(mkStageDpField(`Stufe ${s} Write (bool)`, `heatingrod_${slot}_stage${s}_w`, stage.writeId || '', (v) => {
           stage.writeId = String(v || '').trim();
-          buildHeatingRodUI();
+          rebuildHeatingRodUIStable('heatingrod-stage-write-dp');
           setDirty();
         }, 'Schalt-DP / KNX Write'));
 
         dpRow.appendChild(mkStageDpField(`Stufe ${s} Read (bool)`, `heatingrod_${slot}_stage${s}_r`, stage.readId || '', (v) => {
           stage.readId = String(v || '').trim();
-          buildHeatingRodUI();
+          rebuildHeatingRodUIStable('heatingrod-stage-read-dp');
           setDirty();
         }, 'Status-DP / KNX Read (optional)'));
 
@@ -6401,6 +7619,25 @@ function collectAiAdvisorConfigFromUI(base) {
 
     if (typeof gc.zeroExportEnabled !== 'boolean') gc.zeroExportEnabled = false;
 
+    // Einspeisebegrenzung/Export Guard: bewusst unter Netzlimits im Installer, nicht im Kundenfrontend.
+    // Das neue Freigabe-Flag schützt vor versehentlicher Aktivierung. Bestehende Anlagen mit
+    // bereits aktiver 0-Einspeisung bleiben kompatibel freigegeben.
+    if (typeof gc.zeroExportInstallerApproved !== 'boolean') gc.zeroExportInstallerApproved = !!gc.zeroExportEnabled;
+    const maxExport = Number(gc.zeroExportMaxExportW ?? gc.maxFeedInPowerW ?? gc.maxExportW ?? 0);
+    gc.zeroExportMaxExportW = (Number.isFinite(maxExport) && maxExport >= 0) ? Math.round(maxExport) : 0;
+    // 0.8.30: Diagnose/Testmodus schützt die Erstinbetriebnahme. Bei „diagnostic"
+    // berechnet der EMS-Kern alle Export-Guard-Werte, schreibt aber keine WR-Setpoints.
+    if (typeof gc.exportLimitRunMode !== 'string') gc.exportLimitRunMode = 'active';
+    if (!['diagnostic', 'active'].includes(String(gc.exportLimitRunMode))) gc.exportLimitRunMode = 'active';
+    // 0.8.51: Reihenfolge für echte 0‑Einspeisung. Verbrauch ist immer natürliche
+    // erste Senke, danach Speicher, Ladepunkte, flexible Verbraucher, Mesh/Microgrid
+    // und erst zuletzt WR-Abregelung. Optionale Command-States bleiben neutral und
+    // herstelleroffen; keine direkten Hardware-Rohbefehle im App-Center.
+    if (typeof gc.zeroExportStorageChargeCommandStateId !== 'string') gc.zeroExportStorageChargeCommandStateId = '';
+    if (typeof gc.zeroExportChargingCommandStateId !== 'string') gc.zeroExportChargingCommandStateId = '';
+    if (typeof gc.zeroExportFlexLoadCommandStateId !== 'string') gc.zeroExportFlexLoadCommandStateId = '';
+    if (typeof gc.zeroExportMeshCommandStateId !== 'string') gc.zeroExportMeshCommandStateId = '';
+
     // PV Abregelung (EVU Relais) – optional zusätzlich zur 0‑Einspeisung
     if (typeof gc.pvEvuEnabled !== 'boolean') gc.pvEvuEnabled = false;
     if (typeof gc.pvEvuRelay60Id !== 'string') gc.pvEvuRelay60Id = '';
@@ -6733,6 +7970,153 @@ function collectAiAdvisorConfigFromUI(base) {
       return h;
     };
 
+    /**
+     * Code-Teil: renderExportGuardRuntimeDiagnostics
+     * Zweck: Zeigt dem Installateur die aktuelle Export-Guard-Lage direkt im App-Center.
+     * Zusammenhang: Die Anzeige liest ausschließlich Runtime-States aus `/api/state`. Sie speichert keine
+     * Konfiguration und schreibt keine Hardware. Dadurch bleibt die Trennung sauber: Nutzerfrontend = Bedienung,
+     * Installerbereich = technische Diagnose/Zuordnung.
+     */
+    const renderExportGuardRuntimeDiagnostics = (target) => {
+      if (!target) return;
+      const box = document.createElement('div');
+      box.className = 'nw-help';
+      box.style.marginTop = '10px';
+      box.textContent = 'Export-Guard-Diagnose wird geladen …';
+      target.appendChild(box);
+
+      const fmtW = (v) => {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return '—';
+        if (Math.abs(n) >= 1000) return (n / 1000).toFixed(2) + ' kW';
+        return Math.round(n) + ' W';
+      };
+      const readVal = (data, key) => {
+        const rec = data && data[key];
+        return rec && typeof rec === 'object' && Object.prototype.hasOwnProperty.call(rec, 'value') ? rec.value : undefined;
+      };
+      const parseJson = (raw) => {
+        if (!raw) return null;
+        try { return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (_e) { return null; }
+      };
+      fetchJson('/api/state?t=' + Date.now(), { cache: 'no-store' })
+        .then((data) => {
+          const enabled = !!readVal(data, 'gridConstraints.exportLimit.enabled');
+          const approved = !!readVal(data, 'gridConstraints.exportLimit.installerApproved');
+          const runMode = String(readVal(data, 'gridConstraints.exportLimit.runMode') || gc.exportLimitRunMode || 'active');
+          const currentExport = readVal(data, 'gridConstraints.exportLimit.currentExportW');
+          const limit = readVal(data, 'gridConstraints.exportLimit.effectiveMaxFeedInW');
+          const over = readVal(data, 'gridConstraints.exportLimit.exportOverLimitW');
+          const remaining = readVal(data, 'gridConstraints.exportLimit.remainingFeedInW');
+          const usage = Number(readVal(data, 'gridConstraints.exportLimit.usagePercent'));
+          const curt = readVal(data, 'gridConstraints.exportLimit.estimatedCurtailmentW');
+          const status = String(readVal(data, 'gridConstraints.exportLimit.statusLabel') || '—');
+          const planned = String(readVal(data, 'gridConstraints.exportLimit.plannedAction') || '—');
+          const message = String(readVal(data, 'gridConstraints.exportLimit.installerMessage') || '');
+          const writeCapable = !!readVal(data, 'gridConstraints.exportLimit.writeCapable');
+          const writeWarning = String(readVal(data, 'gridConstraints.exportLimit.writeWarning') || '');
+          const negative = !!readVal(data, 'gridConstraints.exportLimit.negativePriceActive');
+          const negStrategy = String(readVal(data, 'gridConstraints.exportLimit.negativePriceStrategy') || '');
+          const checklist = parseJson(readVal(data, 'gridConstraints.exportLimit.installerChecklistJson')) || {};
+          const sinkPlan = parseJson(readVal(data, 'gridConstraints.exportLimit.sinkPriorityPlanJson')) || {};
+          const commissioning = parseJson(readVal(data, 'gridConstraints.exportLimit.commissioning.reportJson')) || {};
+          const commissioningChecklist = parseJson(readVal(data, 'gridConstraints.exportLimit.commissioning.checklistJson')) || {};
+          const nextSink = String(readVal(data, 'gridConstraints.exportLimit.nextSinkAction') || sinkPlan.nextAction || '—');
+
+          box.innerHTML = '';
+          const title = document.createElement('div');
+          title.style.fontWeight = '700';
+          title.style.marginBottom = '6px';
+          title.textContent = 'Export Guard Runtime-Diagnose';
+          box.appendChild(title);
+
+          const rows = [
+            ['Status', status],
+            ['Betriebsart', runMode === 'diagnostic' ? 'Diagnose/Testmodus – keine WR-Schreibbefehle' : 'Aktiv – WR-Schreibbefehle erlaubt'],
+            ['Installateurfreigabe', approved ? 'Ja' : 'Nein'],
+            ['Aktuelle Einspeisung', fmtW(currentExport)],
+            ['Erlaubtes Limit', fmtW(limit)],
+            ['Überschreitung', fmtW(over)],
+            ['Rest bis Limit', fmtW(remaining)],
+            ['Auslastung', Number.isFinite(usage) ? Math.round(usage) + ' %' : '—'],
+            ['Geschätzte Abregelung', fmtW(curt)],
+            ['Geplante Aktion', planned],
+            ['0‑Einspeise nächste Senke', nextSink],
+            ['WR-Schreibfähigkeit', writeCapable ? 'OK' : 'Fehlt / prüfen'],
+            ['Negative-Preis-Strategie', negative ? (negStrategy || 'aktiv') : 'nicht aktiv'],
+            ['Inbetriebnahme', commissioning.ready ? `Bereit (${commissioning.scorePercent || 0} %)` : `Prüfen (${commissioning.scorePercent || 0} %)`],
+          ];
+          const table = document.createElement('div');
+          table.style.display = 'grid';
+          table.style.gridTemplateColumns = 'minmax(150px, 1fr) minmax(180px, 2fr)';
+          table.style.gap = '4px 10px';
+          for (const [k, v] of rows) {
+            const a = document.createElement('div');
+            a.style.opacity = '.78';
+            a.textContent = k;
+            const b = document.createElement('div');
+            b.style.fontWeight = '600';
+            b.textContent = String(v || '—');
+            table.appendChild(a);
+            table.appendChild(b);
+          }
+          box.appendChild(table);
+          if (sinkPlan && Array.isArray(sinkPlan.steps)) {
+            const order = document.createElement('div');
+            order.className = 'nw-config-muted';
+            order.style.marginTop = '8px';
+            order.textContent = '0‑Einspeise-Reihenfolge: ' + sinkPlan.steps.map((x) => `${x.index}. ${x.label}${x.mapped ? '' : ' (nicht gemappt)'}`).join(' → ');
+            box.appendChild(order);
+          }
+
+          if (commissioningChecklist && Array.isArray(commissioningChecklist.items)) {
+            const wrap = document.createElement('div');
+            wrap.className = 'nw-config-muted';
+            wrap.style.marginTop = '10px';
+            const failed = commissioningChecklist.items.filter((i) => i.required && !i.ok).slice(0, 4);
+            const optional = commissioningChecklist.items.filter((i) => !i.required && !i.ok).slice(0, 3);
+            wrap.textContent = failed.length
+              ? '0‑Einspeise Checkliste offen: ' + failed.map((i) => i.label).join(' | ')
+              : (optional.length ? '0‑Einspeise Pflichtprüfung OK. Optionale Senken offen: ' + optional.map((i) => i.label).join(' | ') : '0‑Einspeise Inbetriebnahme-Checkliste OK.');
+            box.appendChild(wrap);
+          }
+
+          if (message) {
+            const m = document.createElement('div');
+            m.className = 'nw-config-muted';
+            m.style.marginTop = '8px';
+            m.textContent = message;
+            box.appendChild(m);
+          }
+          if (writeWarning) {
+            const w = document.createElement('div');
+            w.style.marginTop = '8px';
+            w.style.color = '#facc15';
+            w.textContent = 'Fehlende WR-Write-Datenpunkte: ' + writeWarning;
+            box.appendChild(w);
+          }
+          if (checklist && checklist.nextStep) {
+            const n = document.createElement('div');
+            n.className = 'nw-config-muted';
+            n.style.marginTop = '8px';
+            n.textContent = 'Nächster Schritt: ' + checklist.nextStep;
+            box.appendChild(n);
+          }
+          if (!writeCapable && pvEl) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'nw-config-btn nw-config-btn--ghost';
+            btn.style.marginTop = '8px';
+            btn.textContent = 'Zum WR-Mapping springen';
+            btn.addEventListener('click', () => { try { pvEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_e) {} });
+            box.appendChild(btn);
+          }
+        })
+        .catch(() => {
+          box.textContent = 'Export-Guard-Diagnose konnte nicht geladen werden. Adapter/API prüfen.';
+        });
+    };
+
     // Meter / Timeout
     if (meterEl) {
       const gridPowerId = String(gc.gridPowerId || '').trim();
@@ -6795,8 +8179,8 @@ function collectAiAdvisorConfigFromUI(base) {
       zeroEl.appendChild(mkSelect('Modus', 'gc_pvCurtailAppMode', curMode, [
         { v: 'off', t: 'Aus' },
         { v: 'evu', t: 'EVU‑Abregelung (Relais 60% / 30% / 0%)' },
-        { v: 'zero', t: '0‑Einspeisung (Regler am NVP)' },
-        { v: 'combined', t: 'Kombiniert (EVU + 0‑Einspeisung)' },
+        { v: 'zero', t: 'Einspeisebegrenzung / 0‑Einspeisung (Regler am NVP)' },
+        { v: 'combined', t: 'Kombiniert (EVU + Einspeisebegrenzung)' },
       ], (v) => {
         applyCurtailMode(v);
         buildGridConstraintsUI();
@@ -6811,14 +8195,29 @@ function collectAiAdvisorConfigFromUI(base) {
       }
 
       if (gc.zeroExportEnabled) {
+        zeroEl.appendChild(mkChk('Installateurfreigabe Einspeisebegrenzung', 'gc_zeroExportInstallerApproved', !!gc.zeroExportInstallerApproved, (b) => { gc.zeroExportInstallerApproved = b; }));
+        zeroEl.appendChild(mkSelect('Betriebsart Einspeisebegrenzung', 'gc_exportLimitRunMode', String(gc.exportLimitRunMode || 'active'), [
+          { v: 'diagnostic', t: 'Diagnose/Testmodus – nur berechnen, nicht schreiben' },
+          { v: 'active', t: 'Aktiv – WR-/PV-Setpoints schreiben' },
+        ], (v) => {
+          gc.exportLimitRunMode = (v === 'diagnostic') ? 'diagnostic' : 'active';
+        }));
+        zeroEl.appendChild(mkNum('Maximale Einspeiseleistung', 'gc_zeroExportMaxExportW', Number(gc.zeroExportMaxExportW || 0) || 0, (n) => { gc.zeroExportMaxExportW = Math.max(0, Math.round(n)); }, 'W', '0 = keine Einspeisung'));
         zeroEl.appendChild(mkNum('Bias', 'gc_zeroExportBiasW', Number(gc.zeroExportBiasW || 0) || 0, (n) => { gc.zeroExportBiasW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 50'));
         zeroEl.appendChild(mkNum('Deadband', 'gc_zeroExportDeadbandW', Number(gc.zeroExportDeadbandW || 0) || 0, (n) => { gc.zeroExportDeadbandW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 15'));
-        zeroEl.appendChild(mkHint('Bias/Deadband stabilisieren die Regelung (verhindern „Zittern“ um 0W).'));
+        zeroEl.appendChild(mkHint('0‑Einspeise-Reihenfolge: 1 Verbrauch zuerst (natürlich am Netzpunkt), 2 Speicher laden, 3 Ladepunkte, 4 flexible Verbraucher, 5 Mesh/Microgrid, 6 WR-Abregelung zuletzt.'));
+        zeroEl.appendChild(mkDpField('Speicher-Lade-Command-State optional', 'gc_zeroExportStorageChargeCommandStateId', gc.zeroExportStorageChargeCommandStateId || '', (v) => { gc.zeroExportStorageChargeCommandStateId = v; }, 'Neutraler JSON-Command-State, z.B. 0_userdata.0.nexowatt.zero.storage.command'));
+        zeroEl.appendChild(mkDpField('Ladepunkt-Command-State optional', 'gc_zeroExportChargingCommandStateId', gc.zeroExportChargingCommandStateId || '', (v) => { gc.zeroExportChargingCommandStateId = v; }, 'Neutraler JSON-Command-State für Wallbox/DC-Ladepunkte'));
+        zeroEl.appendChild(mkDpField('Flexible Verbraucher Command-State optional', 'gc_zeroExportFlexLoadCommandStateId', gc.zeroExportFlexLoadCommandStateId || '', (v) => { gc.zeroExportFlexLoadCommandStateId = v; }, 'Heizstab/Wärmepumpe/flexible Last – neutraler JSON-Command-State'));
+        zeroEl.appendChild(mkDpField('Mesh/Microgrid Command-State optional', 'gc_zeroExportMeshCommandStateId', gc.zeroExportMeshCommandStateId || '', (v) => { gc.zeroExportMeshCommandStateId = v; }, 'Optionaler Übergang in Mesh/Microgrid-Zielgruppen'));
+        zeroEl.appendChild(mkHint('Export Guard für DE/NL: 0 W bedeutet echte Nulleinspeisung; Werte >0 erlauben nur die vom Installateur freigegebene maximale Einspeiseleistung. Bias/Deadband stabilisieren die Regelung.'));
+        zeroEl.appendChild(mkHint('Empfehlung: neue Anlagen zuerst im Diagnose/Testmodus prüfen. Erst wenn NVP-Vorzeichen, Einspeiselimit und WR-Schreibfähigkeit plausibel sind, auf „Aktiv" stellen.'));
+        renderExportGuardRuntimeDiagnostics(zeroEl);
       } else {
-        zeroEl.appendChild(mkHint('0‑Einspeisung ist im aktuellen Modus deaktiviert.'));
+        zeroEl.appendChild(mkHint('Einspeisebegrenzung/0‑Einspeisung ist im aktuellen Modus deaktiviert.'));
       }
 
-      zeroEl.appendChild(mkHint('Die Regelung arbeitet am NVP‑Datenpunkt (Zuordnung → Allgemein → Netzpunkt) und nutzt das Vorzeichen (Import + / Export −).'));
+      zeroEl.appendChild(mkHint('Die Regelung arbeitet am NVP‑Datenpunkt (Zuordnung → Allgemein → Netzpunkt) und nutzt das Vorzeichen (Import + / Export −). Konfiguration nur durch den Installateur.'));
     }
 
     // Card 2: Wechselrichter‑Gruppen (pro WR)
@@ -7064,10 +8463,10 @@ function collectAiAdvisorConfigFromUI(base) {
 
       if (showZeroGroup) {
         mkInvGroup(
-          'Gruppe 2: 0‑Einspeisung (NVP‑Regler)',
+          'Gruppe 2: Einspeisebegrenzung / 0‑Einspeisung (NVP‑Regler)',
           gc.pvCurtailInvertersZero,
           'zero',
-          '0‑EINS',
+          'EXPORT',
           (curMode === 'off') ? 'Modus ist aktuell AUS – du kannst die Gruppe vorkonfigurieren.' : null
         );
       }
@@ -7092,7 +8491,7 @@ function collectAiAdvisorConfigFromUI(base) {
       legacyWrap.appendChild(mkDpField('PV‑Limit (%) (Write) (optional)', 'gc_legacy_pvPct', legacy.pvLimitPctId || '', (v) => { legacy.pvLimitPctId = v; scheduleValidation(200); }));
 
       pvEl.appendChild(legacyWrap);
-      pvEl.appendChild(mkHint('Auto wählt die beste Methode. Für 0‑Einspeisung muss mindestens ein passender Write‑Datenpunkt gesetzt sein.'));
+      pvEl.appendChild(mkHint('Auto wählt die beste Methode. Für Einspeisebegrenzung/0‑Einspeisung muss mindestens ein passender Write‑Datenpunkt gesetzt sein.'));
     }
   }
 
@@ -7101,6 +8500,7 @@ function collectAiAdvisorConfigFromUI(base) {
     { v: 'heatPump', t: 'Wärmepumpe' },
     { v: 'heatingRod', t: 'Heizstab' },
     { v: 'airCondition', t: 'Klima' },
+    { v: 'storage', t: 'Speicher (Laden)' },
     { v: 'custom', t: 'Sonstiger Verbraucher' }
   ];
 
@@ -7125,7 +8525,12 @@ function collectAiAdvisorConfigFromUI(base) {
     ic.para14aMode = (modeRaw === 'direct') ? 'direct' : 'ems';
 
     const min = Number(ic.para14aMinPerDeviceW);
-    ic.para14aMinPerDeviceW = (Number.isFinite(min) && min >= 0) ? Math.round(min) : 1000;
+    ic.para14aMinPerDeviceW = (Number.isFinite(min) && min >= 0) ? Math.round(min) : 4200;
+    const signalMaxAgeSec = Number(ic.para14aSignalMaxAgeSec);
+    ic.para14aSignalMaxAgeSec = (Number.isFinite(signalMaxAgeSec) && signalMaxAgeSec >= 1) ? Math.min(300, Math.round(signalMaxAgeSec)) : 30;
+    const stalePolicy = String(ic.para14aStalePolicy || 'hold-active').trim().toLowerCase();
+    ic.para14aStalePolicy = ['hold-active', 'force-active', 'release'].includes(stalePolicy) ? stalePolicy : 'hold-active';
+    ic.para14aLegacyDirectWritesEnabled = ic.para14aLegacyDirectWritesEnabled === true;
 
     ic.para14aActiveId = (typeof ic.para14aActiveId === 'string') ? ic.para14aActiveId.trim() : '';
     ic.para14aEmsSetpointWId = (typeof ic.para14aEmsSetpointWId === 'string') ? ic.para14aEmsSetpointWId.trim() : '';
@@ -7415,12 +8820,18 @@ function collectAiAdvisorConfigFromUI(base) {
 
     lock(els.para14aMode);
     lock(els.para14aMinPerDeviceW);
+    lock(els.para14aSignalMaxAgeSec);
+    lock(els.para14aStalePolicy);
+    lock(els.para14aLegacyDirectWritesEnabled);
     lock(els.para14aActiveId);
     lock(els.para14aEmsSetpointWId);
     lock(els.addPara14aConsumer);
 
     if (els.para14aMode) els.para14aMode.value = String(ic.para14aMode || 'ems');
-    if (els.para14aMinPerDeviceW) els.para14aMinPerDeviceW.value = String(Number.isFinite(Number(ic.para14aMinPerDeviceW)) ? Math.round(Number(ic.para14aMinPerDeviceW)) : 1000);
+    if (els.para14aMinPerDeviceW) els.para14aMinPerDeviceW.value = String(Number.isFinite(Number(ic.para14aMinPerDeviceW)) ? Math.round(Number(ic.para14aMinPerDeviceW)) : 4200);
+    if (els.para14aSignalMaxAgeSec) els.para14aSignalMaxAgeSec.value = String(ic.para14aSignalMaxAgeSec || 30);
+    if (els.para14aStalePolicy) els.para14aStalePolicy.value = String(ic.para14aStalePolicy || 'hold-active');
+    if (els.para14aLegacyDirectWritesEnabled) els.para14aLegacyDirectWritesEnabled.checked = ic.para14aLegacyDirectWritesEnabled === true;
     if (els.para14aActiveId) els.para14aActiveId.value = String(ic.para14aActiveId || '');
     if (els.para14aEmsSetpointWId) els.para14aEmsSetpointWId.value = String(ic.para14aEmsSetpointWId || '');
 
@@ -7447,6 +8858,67 @@ function collectAiAdvisorConfigFromUI(base) {
     const v = (els.storageControlMode && els.storageControlMode.value) ? String(els.storageControlMode.value) : 'targetPower';
     return (['targetPower','limits','enableFlags'].includes(v)) ? v : 'targetPower';
   }
+
+  /**
+   * Code-Teil: getStorageCoupling
+   * Zweck: Ermittelt den Einzel-Speicher-Typ fuer die Speicherregelungs-App.
+   * Zusammenhang: AC-Speicher werden wie getrennte Batterie-Wechselrichter bewertet;
+   * DC-/Hybrid-Speicher koennen PV und Batterie an einem Ausgang mischen und bekommen
+   * deshalb einen eigenen PV-Messdatenpunkt fuer saubere Zuordnung und Diagnose.
+   */
+  function getStorageCoupling() {
+    const v = (els.storageCouplingMode && els.storageCouplingMode.value) ? String(els.storageCouplingMode.value).trim().toLowerCase() : 'ac';
+    return v === 'dc' ? 'dc' : 'ac';
+  }
+
+  /**
+   * Code-Teil: normalizeStorageVendorProfile
+   * Zweck: Normalisiert die herstellerspezifische Speicher-Auswahl auf stabile Config-Werte.
+   * Zusammenhang: Herstellerprofile duerfen die Grundlogik nicht ersetzen, sondern nur
+   * den Schreibpfad und Sonderguards fuer Hybrid-/Gateway-Speicher anpassen.
+   */
+  function normalizeStorageVendorProfile(v) {
+    const s = String(v || '').trim().toLowerCase();
+    if (s === 'fenecon' || s === 'openems' || s === 'fems' || s === 'fenecon-openems') return 'fenecon-openems';
+    if (s === 'sungrow' || s === 'sungrow-ess' || s === 'sungrow-hybrid') return 'sungrow-hybrid';
+    if (s === 'e3dc' || s === 'e3/dc' || s === 'e3dc-rscp' || s === 'e3dc-rscp-iobroker') return 'e3dc-rscp';
+    return 'generic';
+  }
+
+  /**
+   * Code-Teil: getStorageVendorProfile
+   * Zweck: Liest das ausgewaehlte Herstellerprofil im Speicher-Reiter.
+   * Zusammenhang: Das Profil bestimmt, ob FENECON-No-Write oder Sungrow-NVP-Assist
+   * aktiv wird; Generic bleibt die unveraenderte Eigenverbrauchsoptimierung.
+   */
+  function getStorageVendorProfile() {
+    const v = (els.storageVendorProfile && els.storageVendorProfile.value) ? String(els.storageVendorProfile.value) : 'generic';
+    return normalizeStorageVendorProfile(v);
+  }
+
+  /**
+   * Code-Teil: updateStorageCouplingUi
+   * Zweck: Blendet DC-/Hybrid-Hinweise und die passenden Speicher-DP-Felder ein.
+   * Zusammenhang: Der Reiter „Speicher“ bleibt dadurch fuer Einzelanlagen uebersichtlich;
+   * DC-Sonderfelder erscheinen nur, wenn dieser Speichertyp wirklich gewaehlt wurde.
+   */
+  function updateStorageCouplingUi() {
+    const coupling = getStorageCoupling();
+    if (els.storageDcPvHintRow) els.storageDcPvHintRow.style.display = (coupling === 'dc') ? '' : 'none';
+  }
+
+  /**
+   * Code-Teil: updateStorageVendorProfileUi
+   * Zweck: Zeigt nur die Optionen des aktiven Herstellerprofils.
+   * Zusammenhang: FENECON/OpenEMS und Sungrow Hybrid nutzen unterschiedliche
+   * Schreibstrategien und duerfen nicht ueber denselben Haken vermischt werden.
+   */
+  function updateStorageVendorProfileUi() {
+    const profile = getStorageVendorProfile();
+    if (els.storageFeneconOptionsRow) els.storageFeneconOptionsRow.style.display = (profile === 'fenecon-openems') ? '' : 'none';
+    if (els.storageSungrowOptionsRow) els.storageSungrowOptionsRow.style.display = (profile === 'sungrow-hybrid') ? '' : 'none';
+    if (els.storageE3dcOptionsRow) els.storageE3dcOptionsRow.style.display = (profile === 'e3dc-rscp') ? '' : 'none';
+  }
   /**
    * Code-Teil: rebuildStorageTable
    * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
@@ -7455,7 +8927,13 @@ function collectAiAdvisorConfigFromUI(base) {
    */
   function rebuildStorageTable() {
     const mode = getStorageMode();
+    const coupling = getStorageCoupling();
+    const vendorProfile = getStorageVendorProfile();
+    updateStorageCouplingUi();
+    updateStorageVendorProfileUi();
     const fields = STORAGE_DP_FIELDS.filter(f => {
+      if (Array.isArray(f.showForCoupling) && f.showForCoupling.length && !f.showForCoupling.includes(coupling)) return false;
+      if (Array.isArray(f.showForVendor) && f.showForVendor.length && !f.showForVendor.includes(vendorProfile)) return false;
       if (!f.requiredModes || !f.requiredModes.length) return true;
       return f.requiredModes.includes(mode);
     });
@@ -7474,6 +8952,12 @@ function collectAiAdvisorConfigFromUI(base) {
       { idPrefix: 'st_' }
     );
   }
+  // 0.8.33: Master-Detail-Auswahl für die Speicherfarm.
+  // Bei mehreren Speichern darf das App-Center nicht alle Detailformulare
+  // untereinander rendern, weil der Installateur sonst sehr weit scrollen muss.
+  // Links wird die Speicherliste angezeigt, rechts nur der ausgewählte Speicher.
+  let _storageFarmSelectedIndex = 0;
+
   // ------------------------------
   // Speicherfarm (mehrere Speicher)
   // ------------------------------
@@ -7492,7 +8976,7 @@ function collectAiAdvisorConfigFromUI(base) {
     sf.mode = (modeRaw === 'groups') ? 'groups' : 'pool';
 
     const sched = Number(sf.schedulerIntervalMs);
-    sf.schedulerIntervalMs = (Number.isFinite(sched) && sched >= 500) ? Math.round(sched) : 2000;
+    sf.schedulerIntervalMs = Number.isFinite(sched) ? Math.max(250, Math.min(1000, Math.round(sched))) : 1000;
 
     sf.storages = Array.isArray(sf.storages) ? sf.storages : [];
     sf.groups = Array.isArray(sf.groups) ? sf.groups : [];
@@ -7500,38 +8984,8 @@ function collectAiAdvisorConfigFromUI(base) {
     const maxStor = 10;
     const storOut = [];
     for (let i = 0; i < Math.min(maxStor, sf.storages.length); i++) {
-      const r = sf.storages[i] || {};
-      const couplingRaw = String(r.coupling || '').trim().toLowerCase();
-      const coupling = (couplingRaw === 'dc') ? 'dc' : ((couplingRaw === 'ac') ? 'ac' : '');
-      storOut.push({
-        enabled: (r.enabled === false) ? false : true,
-        name: String(r.name || '').trim() || `Speicher ${i + 1}`,
-        coupling,
-        socId: String(r.socId || '').trim(),
-        // Istwerte (Messwerte): entweder Signed oder Laden/Entladen getrennt
-        signedPowerId: String(r.signedPowerId || '').trim(),
-        chargePowerId: String(r.chargePowerId || '').trim(),
-        dischargePowerId: String(r.dischargePowerId || '').trim(),
-        pvPowerId: String(r.pvPowerId || '').trim(),
-        invertSignedPowerSign: !!r.invertSignedPowerSign,
-        invertChargeSign: !!r.invertChargeSign,
-        invertDischargeSign: !!r.invertDischargeSign,
-        // Sollwerte (Setpoint): entweder Signed oder Laden/Entladen getrennt
-        setChargePowerId: String(r.setChargePowerId || '').trim(),
-        setDischargePowerId: String(r.setDischargePowerId || '').trim(),
-        setSignedPowerId: String(r.setSignedPowerId || '').trim(),
-        invertSetSignedPowerSign: !!r.invertSetSignedPowerSign,
-        // Feste Leistungsgrenzen / Freigaben je Speicher (herstellerneutral).
-        // Ab v0.6.258: Maximalleistungen sind direkte Eingaben, keine DP-Zuordnung.
-        maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : '',
-        maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : '',
-        availableId: String(r.availableId || '').trim(),
-        faultId: String(r.faultId || '').trim(),
-        chargeAllowedId: String(r.chargeAllowedId || '').trim(),
-        dischargeAllowedId: String(r.dischargeAllowedId || '').trim(),
-        capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : '',
-        group: String(r.group || '').trim(),
-      });
+      const r = _normalizeRecoveredStorageFarmRow(sf.storages[i] || {}, i);
+      storOut.push(r);
     }
     // If array is empty, keep it empty (no implicit storages)
     sf.storages = storOut;
@@ -7604,7 +9058,7 @@ function collectAiAdvisorConfigFromUI(base) {
       els.storageFarmSchedulerIntervalMs.onchange = () => {
         const n = Number(els.storageFarmSchedulerIntervalMs.value);
         const sf2 = _ensureStorageFarmCfg();
-        sf2.schedulerIntervalMs = (Number.isFinite(n) && n >= 500) ? Math.round(n) : 2000;
+        sf2.schedulerIntervalMs = Number.isFinite(n) ? Math.max(250, Math.min(1000, Math.round(n))) : 1000;
       };
     }
 
@@ -7849,117 +9303,154 @@ function collectAiAdvisorConfigFromUI(base) {
       return d;
     };
 
-    // Storages list
+    // Speicherfarm-Migrationsschutz: Wenn die App-Center-jsonConfig leer war,
+    // aber storageFarm.configJson noch funktionierende Speicher enthielt, wurden
+    // diese beim Laden wiederhergestellt. Sichtbar machen, damit der Installateur
+    // nach dem Speichern weiß, dass die Admin-Konfiguration wieder gefüllt wird.
+    if (sf._runtimeRecovered) {
+      const recovered = document.createElement('div');
+      recovered.className = 'nw-help';
+      recovered.textContent = `Speicherfarm-Konfiguration wurde aus dem Runtime-State ${sf.__runtimeStateFallbackSource || 'storageFarm.configJson'} wiederhergestellt. Bitte prüfen und speichern, damit die Admin-Konfiguration wieder vollständig ist. Die laufende Farm-Regelung wurde dadurch nicht geändert.`;
+      els.storageFarmStorages.appendChild(recovered);
+    }
+
+    // Storages list (0.8.33 Master-Detail)
+    // Wichtig: Bei mehreren Speichern wird nur noch der ausgewählte Speicher als
+    // Detailformular gerendert. Die linke Liste bleibt kurz und übersichtlich; damit
+    // muss der Installateur nicht bei 5–10 Speichern durch alle DP-Felder scrollen.
     if (!sf.storages || sf.storages.length === 0) {
+      _storageFarmSelectedIndex = 0;
       const empty = document.createElement('div');
       empty.className = 'nw-config-empty';
       empty.textContent = 'Noch keine Speicher hinzugefügt.';
       els.storageFarmStorages.appendChild(empty);
     } else {
+      if (!Number.isFinite(Number(_storageFarmSelectedIndex))) _storageFarmSelectedIndex = 0;
+      _storageFarmSelectedIndex = Math.max(0, Math.min(sf.storages.length - 1, Math.round(Number(_storageFarmSelectedIndex) || 0)));
+
+      const shell = document.createElement('div');
+      shell.className = 'nw-storagefarm-master-detail';
+
+      const list = document.createElement('div');
+      list.className = 'nw-storagefarm-storage-list';
+
+      const totalCapacity = sf.storages.reduce((sum, item) => {
+        const n = Number(item && item.capacityKWh);
+        return sum + (Number.isFinite(n) ? n : 0);
+      }, 0);
+      const listHead = document.createElement('div');
+      listHead.className = 'nw-config-empty';
+      listHead.style.textAlign = 'left';
+      listHead.style.margin = '0 0 8px 0';
+      listHead.textContent = `${sf.storages.length} Speicher${totalCapacity > 0 ? ` · ${totalCapacity.toFixed(1)} kWh` : ''}`;
+      list.appendChild(listHead);
+
       for (let i = 0; i < sf.storages.length; i++) {
-        const s = sf.storages[i] || {};
-        const idx = i + 1;
-
-        const card = document.createElement('div');
-        card.className = 'nw-config-item';
-        card.style.marginBottom = '10px';
-
-        const left = document.createElement('div');
-        left.className = 'nw-config-item__left';
-
-        const title = document.createElement('div');
-        title.className = 'nw-config-item__title';
-        title.textContent = `Speicher ${idx}`;
-
-        const sub = document.createElement('div');
-        sub.className = 'nw-config-item__subtitle';
-        const grp = String(s.group || '').trim();
-        const mp = (String(s.signedPowerId || '').trim() || String(s.chargePowerId || '').trim() || String(s.dischargePowerId || '').trim()) ? 'Istwert: gesetzt' : 'Istwert: fehlt';
-        const sp = (String(s.setSignedPowerId || '').trim() || String(s.setChargePowerId || '').trim() || String(s.setDischargePowerId || '').trim()) ? 'Sollwert: gesetzt' : 'Sollwert: fehlt';
-        const cpl = String(s.coupling || '').trim().toLowerCase();
-        const cplTxt = (cpl === 'dc') ? 'DC' : ((cpl === 'ac') ? 'AC' : 'Auto');
-        sub.textContent = (sf.mode === 'groups' ? (`Gruppe: ${grp || '—'} • `) : '') + `Kopplung: ${cplTxt} • ${mp} • ${sp}`;
-
-        left.appendChild(title);
-        left.appendChild(sub);
-
-        const right = document.createElement('div');
-        right.className = 'nw-config-item__right';
-        right.style.width = '100%';
-
-        const grid = document.createElement('div');
-        grid.className = 'nw-flow-ctrl-grid';
-        // Grunddaten
-        grid.appendChild(mkCheckField('Aktiv', `sf_${idx}_enabled`, s.enabled !== false, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].enabled = !!v; }));
-        grid.appendChild(mkTextField('Name', `sf_${idx}_name`, s.name, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].name = v; }, 'z.B. Batterie 1'));
-        grid.appendChild(mkNumField('Kapazität (kWh)', `sf_${idx}_cap`, s.capacityKWh, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].capacityKWh = v; }, 'optional'));
-        if (sf.mode === 'groups') {
-          grid.appendChild(mkTextField('Gruppe', `sf_${idx}_group`, s.group, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].group = v; }, 'z.B. Gruppe A'));
-        }
-
-        grid.appendChild(mkSelectField('Kopplung', `sf_${idx}_coupling`, s.coupling || '', [
-          { value: '', label: 'Auto/Unbekannt' },
-          { value: 'ac', label: 'AC' },
-          { value: 'dc', label: 'DC' },
-        ], (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].coupling = String(v || '').trim().toLowerCase(); }));
-
-        grid.appendChild(mkDpField('PV Leistung (W) (DC)', `sf_${idx}_pvPowerId`, s.pvPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].pvPowerId = v; }, 'nur DC (optional)'));
-
-        // Istwerte (Messwerte)
-        grid.appendChild(mkGridDivider('Istwerte (Messwerte)'));
-
-        grid.appendChild(mkCheckField('Vorzeichen Istleistung Signed invertieren', `sf_${idx}_invSigned`, !!s.invertSignedPowerSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertSignedPowerSign = !!v; }));
-        grid.appendChild(mkCheckField('Vorzeichen Ladeleistung invertieren', `sf_${idx}_invChg`, !!s.invertChargeSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertChargeSign = !!v; }));
-        grid.appendChild(mkCheckField('Vorzeichen Entladeleistung invertieren', `sf_${idx}_invDchg`, !!s.invertDischargeSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertDischargeSign = !!v; }));
-
-        grid.appendChild(mkDpField('SoC (%)', `sf_${idx}_socId`, s.socId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].socId = v; }, 'SoC‑Datenpunkt'));
-        grid.appendChild(mkDpField('Istleistung Signed (W)', `sf_${idx}_signedPowerId`, s.signedPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].signedPowerId = v; }, '(-) laden / (+) entladen'));
-        grid.appendChild(mkDpField('Ist Ladeleistung (W)', `sf_${idx}_chargePowerId`, s.chargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].chargePowerId = v; }, 'Messwert (optional)'));
-        grid.appendChild(mkDpField('Ist Entladeleistung (W)', `sf_${idx}_dischargePowerId`, s.dischargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].dischargePowerId = v; }, 'Messwert (optional)'));
-
-        // Sollwerte (Setpoint)
-        grid.appendChild(mkGridDivider('Sollwerte (Setpoint)'));
-
-        grid.appendChild(mkDpField('Sollwert Signed (W)', `sf_${idx}_setSignedPowerId`, s.setSignedPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].setSignedPowerId = v; }, '(-) laden / (+) entladen'));
-        grid.appendChild(mkCheckField('Vorzeichen Sollwert Signed invertieren', `sf_${idx}_invSetSigned`, !!s.invertSetSignedPowerSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertSetSignedPowerSign = !!v; }));
-        grid.appendChild(mkDpField('Sollwert Laden (W)', `sf_${idx}_setChargePowerId`, s.setChargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].setChargePowerId = v; }, 'nur Laden (optional)'));
-        grid.appendChild(mkDpField('Sollwert Entladen (W)', `sf_${idx}_setDischargePowerId`, s.setDischargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].setDischargePowerId = v; }, 'nur Entladen (optional)'));
-
-        // Feste Leistungsgrenzen
-        grid.appendChild(mkGridDivider('Feste Leistungsgrenzen (direkte Eingabe)'));
-        grid.appendChild(mkGridHelp('Diese Werte begrenzen die Farm-Verteilung pro Speicher. Leer = unbegrenzt, 0 W = diese Richtung sperren.'));
-        grid.appendChild(mkNumField('Max. Beladen (W)', `sf_${idx}_maxChargeW`, s.maxChargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxChargeW = v; }, 'leer = unbegrenzt, 0 = sperren'));
-        grid.appendChild(mkNumField('Max. Entladen (W)', `sf_${idx}_maxDischargeW`, s.maxDischargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxDischargeW = v; }, 'leer = unbegrenzt, 0 = sperren'));
-
-        // Verfügbarkeit & Freigaben
-        grid.appendChild(mkGridDivider('Verfügbarkeit & Freigaben'));
-        grid.appendChild(mkGridHelp('Freigabe-DPs sind optional. Leer = freigegeben. Nur zuordnen, wenn das Speichersystem einen echten Status-DP liefert.'));
-        grid.appendChild(mkDpField('Verfügbar / Freigabe', `sf_${idx}_availableId`, s.availableId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].availableId = v; }, 'true/1 = verfügbar, false/0 = gesperrt'));
-        grid.appendChild(mkDpField('Störung / Fehler', `sf_${idx}_faultId`, s.faultId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].faultId = v; }, 'true/1 = Störung'));
-        grid.appendChild(mkDpField('Ladefreigabe', `sf_${idx}_chargeAllowedId`, s.chargeAllowedId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].chargeAllowedId = v; }, 'true/1 = Laden erlaubt'));
-        grid.appendChild(mkDpField('Entladefreigabe', `sf_${idx}_dischargeAllowedId`, s.dischargeAllowedId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].dischargeAllowedId = v; }, 'true/1 = Entladen erlaubt'));
-
-        right.appendChild(grid);
-
-        const rm = document.createElement('button');
-        rm.type = 'button';
-        rm.className = 'nw-config-btn nw-config-btn--ghost';
-        rm.textContent = 'Entfernen';
-        rm.style.marginTop = '8px';
-        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an rm. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-        rm.addEventListener('click', () => {
-          const sf2 = _ensureStorageFarmCfg();
-          sf2.storages.splice(i, 1);
+        const st = sf.storages[i] || {};
+        const selected = i === _storageFarmSelectedIndex;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = selected ? 'nw-storagefarm-storage-pill active' : 'nw-storagefarm-storage-pill';
+        const cpl = String(st.coupling || '').trim().toUpperCase() || 'AUTO';
+        const grp = String(st.group || '').trim();
+        const hasIst = !!(String(st.socId || '').trim() || String(st.signedPowerId || '').trim() || String(st.chargePowerId || '').trim() || String(st.dischargePowerId || '').trim());
+        const hasSet = !!(String(st.setSignedPowerId || '').trim() || String(st.setChargePowerId || '').trim() || String(st.setDischargePowerId || '').trim());
+        btn.innerHTML = `
+          <span class="nw-storagefarm-storage-pill__name">${htmlEscape(String(st.name || '').trim() || `Speicher ${i + 1}`)}</span>
+          <span class="nw-storagefarm-storage-pill__meta">${st.enabled === false ? 'inaktiv' : 'aktiv'} · ${cpl}${sf.mode === 'groups' ? ` · ${htmlEscape(grp || 'ohne Gruppe')}` : ''}</span>
+          <span class="nw-storagefarm-storage-pill__meta">Ist: ${hasIst ? 'gesetzt' : 'fehlt'} · Soll: ${hasSet ? 'gesetzt' : 'fehlt'}</span>`;
+        btn.addEventListener('click', () => {
+          _storageFarmSelectedIndex = i;
           buildStorageFarmUI();
-          scheduleValidation(200);
         });
-
-        right.appendChild(rm);
-
-        card.appendChild(left);
-        card.appendChild(right);
-        els.storageFarmStorages.appendChild(card);
+        list.appendChild(btn);
       }
+
+      const detail = document.createElement('div');
+      detail.className = 'nw-storagefarm-storage-detail';
+
+      const i = _storageFarmSelectedIndex;
+      const s = sf.storages[i] || {};
+      const idx = i + 1;
+
+      const titleRow = document.createElement('div');
+      titleRow.className = 'nw-storagefarm-detail-head';
+      titleRow.innerHTML = `<div><b>${htmlEscape(String(s.name || '').trim() || `Speicher ${idx}`)}</b><div class="nw-config-help">Detailkonfiguration für Speicher ${idx}. Wechsel links den Speicher, ohne durch alle anderen Speicher zu scrollen.</div></div>`;
+      detail.appendChild(titleRow);
+
+      const grid = document.createElement('div');
+      grid.className = 'nw-flow-ctrl-grid nw-storagefarm-detail-grid';
+
+      // Grunddaten
+      grid.appendChild(mkCheckField('Aktiv', `sf_${idx}_enabled`, s.enabled !== false, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].enabled = !!v; buildStorageFarmUI(); }));
+      grid.appendChild(mkTextField('Name', `sf_${idx}_name`, s.name, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].name = v; }, 'z.B. Batterie 1'));
+      grid.appendChild(mkNumField('Kapazität (kWh)', `sf_${idx}_cap`, s.capacityKWh, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].capacityKWh = v; }, 'optional'));
+      if (sf.mode === 'groups') {
+        grid.appendChild(mkTextField('Gruppe', `sf_${idx}_group`, s.group, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].group = v; }, 'z.B. Gruppe A'));
+      }
+
+      grid.appendChild(mkSelectField('Kopplung', `sf_${idx}_coupling`, s.coupling || '', [
+        { value: '', label: 'Auto/Unbekannt' },
+        { value: 'ac', label: 'AC' },
+        { value: 'dc', label: 'DC' },
+      ], (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].coupling = String(v || '').trim().toLowerCase(); }));
+
+      grid.appendChild(mkDpField('PV-/WR-Leistung (W)', `sf_${idx}_pvPowerId`, s.pvPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].pvPowerId = v; }, 'optional · DC wird addiert, AC dient als Anlagen-PV-Fallback'));
+      grid.appendChild(mkGridHelp('PV-/WR-Leistung passend zur Kopplung zuordnen. Derselbe Wechselrichter-DP wird in der Farm nur einmal gezählt. Bei vorhandener Anlagen-PV werden AC-/unbekannte Farmwerte nicht doppelt addiert; DC-/Hybrid-PV wird nur ergänzt, wenn sie noch nicht enthalten ist.'));
+
+      // Istwerte (Messwerte)
+      grid.appendChild(mkGridDivider('Istwerte (Messwerte)'));
+
+      grid.appendChild(mkCheckField('Vorzeichen Istleistung Signed invertieren', `sf_${idx}_invSigned`, !!s.invertSignedPowerSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertSignedPowerSign = !!v; }));
+      grid.appendChild(mkCheckField('Vorzeichen Ladeleistung invertieren', `sf_${idx}_invChg`, !!s.invertChargeSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertChargeSign = !!v; }));
+      grid.appendChild(mkCheckField('Vorzeichen Entladeleistung invertieren', `sf_${idx}_invDchg`, !!s.invertDischargeSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertDischargeSign = !!v; }));
+
+      grid.appendChild(mkDpField('SoC (%)', `sf_${idx}_socId`, s.socId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].socId = v; }, 'SoC‑Datenpunkt'));
+      grid.appendChild(mkDpField('Istleistung Signed (W)', `sf_${idx}_signedPowerId`, s.signedPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].signedPowerId = v; }, '(-) laden / (+) entladen'));
+      grid.appendChild(mkDpField('Ist Ladeleistung (W)', `sf_${idx}_chargePowerId`, s.chargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].chargePowerId = v; }, 'Messwert (optional)'));
+      grid.appendChild(mkDpField('Ist Entladeleistung (W)', `sf_${idx}_dischargePowerId`, s.dischargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].dischargePowerId = v; }, 'Messwert (optional)'));
+
+      // Sollwerte (Setpoint)
+      grid.appendChild(mkGridDivider('Sollwerte (Setpoint)'));
+
+      grid.appendChild(mkDpField('Sollwert Signed (W)', `sf_${idx}_setSignedPowerId`, s.setSignedPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].setSignedPowerId = v; }, '(-) laden / (+) entladen'));
+      grid.appendChild(mkCheckField('Vorzeichen Sollwert Signed invertieren', `sf_${idx}_invSetSigned`, !!s.invertSetSignedPowerSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertSetSignedPowerSign = !!v; }));
+      grid.appendChild(mkDpField('Sollwert Laden (W)', `sf_${idx}_setChargePowerId`, s.setChargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].setChargePowerId = v; }, 'nur Laden (optional)'));
+      grid.appendChild(mkDpField('Sollwert Entladen (W)', `sf_${idx}_setDischargePowerId`, s.setDischargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].setDischargePowerId = v; }, 'nur Entladen (optional)'));
+
+      // Feste Leistungsgrenzen
+      grid.appendChild(mkGridDivider('Feste Leistungsgrenzen (direkte Eingabe)'));
+      grid.appendChild(mkGridHelp('Diese Werte begrenzen die Farm-Verteilung pro Speicher. Leer = unbegrenzt, 0 W = diese Richtung sperren.'));
+      grid.appendChild(mkNumField('Max. Beladen (W)', `sf_${idx}_maxChargeW`, s.maxChargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxChargeW = v; }, 'leer = unbegrenzt, 0 = sperren'));
+      grid.appendChild(mkNumField('Max. Entladen (W)', `sf_${idx}_maxDischargeW`, s.maxDischargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxDischargeW = v; }, 'leer = unbegrenzt, 0 = sperren'));
+
+      // Verfügbarkeit & Freigaben
+      grid.appendChild(mkGridDivider('Verfügbarkeit & Freigaben'));
+      grid.appendChild(mkGridHelp('Freigabe-DPs sind optional. Leer = freigegeben. Nur zuordnen, wenn das Speichersystem einen echten Status-DP liefert.'));
+      grid.appendChild(mkDpField('Verfügbar / Freigabe', `sf_${idx}_availableId`, s.availableId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].availableId = v; }, 'true/1 = verfügbar, false/0 = gesperrt'));
+      grid.appendChild(mkDpField('Störung / Fehler', `sf_${idx}_faultId`, s.faultId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].faultId = v; }, 'true/1 = Störung'));
+      grid.appendChild(mkDpField('Ladefreigabe', `sf_${idx}_chargeAllowedId`, s.chargeAllowedId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].chargeAllowedId = v; }, 'true/1 = Laden erlaubt'));
+      grid.appendChild(mkDpField('Entladefreigabe', `sf_${idx}_dischargeAllowedId`, s.dischargeAllowedId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].dischargeAllowedId = v; }, 'true/1 = Entladen erlaubt'));
+
+      detail.appendChild(grid);
+
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'nw-config-btn nw-config-btn--ghost';
+      rm.textContent = 'Ausgewählten Speicher entfernen';
+      rm.style.marginTop = '8px';
+      rm.addEventListener('click', () => {
+        const sf2 = _ensureStorageFarmCfg();
+        sf2.storages.splice(i, 1);
+        _storageFarmSelectedIndex = Math.max(0, Math.min(_storageFarmSelectedIndex, sf2.storages.length - 1));
+        buildStorageFarmUI();
+        scheduleValidation(200);
+      });
+      detail.appendChild(rm);
+
+      shell.appendChild(list);
+      shell.appendChild(detail);
+      els.storageFarmStorages.appendChild(shell);
     }
 
     if (els.storageFarmAddStorage) {
@@ -8398,6 +9889,7 @@ function collectAiAdvisorConfigFromUI(base) {
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   function _ensureEvcsList(count) {
+    count = _clampInt(count, 0, _maxEvcsCount(), 0);
     const sc = _ensureSettingsConfig();
     const list = Array.isArray(sc.evcsList) ? sc.evcsList : [];
     while (list.length < count) list.push({});
@@ -8413,7 +9905,7 @@ function collectAiAdvisorConfigFromUI(base) {
    */
   function _updateEvcsField(idx, field, value) {
     const sc = _ensureSettingsConfig();
-    const count = _clampInt(sc.evcsCount, 0, 50, 0);
+    const count = _clampInt(sc.evcsCount, 0, _maxEvcsCount(), 0);
     const list = _ensureEvcsList(count);
     const row = (list[idx - 1] && typeof list[idx - 1] === 'object') ? list[idx - 1] : {};
     row[field] = value;
@@ -8429,10 +9921,11 @@ function collectAiAdvisorConfigFromUI(base) {
   function buildEvcsUI() {
     if (!els.evcsList || !els.evcsCount) return;
     const sc = _ensureSettingsConfig();
-    const count = _clampInt(sc.evcsCount, 0, 50, 0);
+    const count = _clampInt(sc.evcsCount, 0, _maxEvcsCount(), 0);
     sc.evcsCount = count;
 
     els.evcsCount.value = String(count);
+    try { els.evcsCount.max = String(_maxEvcsCount()); } catch (_e) {}
     if (els.evcsMaxPowerKw) {
       const kw = (sc.evcsMaxPowerKw !== undefined && sc.evcsMaxPowerKw !== null) ? Number(sc.evcsMaxPowerKw) : 11;
       els.evcsMaxPowerKw.value = Number.isFinite(kw) ? String(kw) : '11';
@@ -8472,6 +9965,12 @@ function collectAiAdvisorConfigFromUI(base) {
       lab.textContent = label;
       const ctl = document.createElement('div');
       ctl.className = 'nw-config-field-control';
+      try {
+        if (controlEl && typeof controlEl.matches === 'function' && controlEl.matches('input[type="checkbox"]')) {
+          controlEl.classList.add('nw-config-checkbox');
+          ctl.classList.add('nw-config-field-control--checkbox');
+        }
+      } catch (_e) {}
       ctl.appendChild(controlEl);
       row.appendChild(lab);
       row.appendChild(ctl);
@@ -8671,8 +10170,8 @@ function collectAiAdvisorConfigFromUI(base) {
     const addPortToStation = (stationKey) => {
       const sk = normKey(stationKey);
       const sc2 = _ensureSettingsConfig();
-      const cur = _clampInt(sc2.evcsCount, 0, 50, 0);
-      if (cur >= 20) return;
+      const cur = _clampInt(sc2.evcsCount, 0, _maxEvcsCount(), 0);
+      if (cur >= Math.min(20, _maxEvcsCount())) return;
 
       const next = cur + 1;
       sc2.evcsCount = next;
@@ -8809,6 +10308,7 @@ function collectAiAdvisorConfigFromUI(base) {
       // Aktivierung/Regelung (Installateur)
       const enabledInp = document.createElement('input');
       enabledInp.type = 'checkbox';
+      enabledInp.className = 'nw-config-checkbox';
       enabledInp.checked = (rowCfg && rowCfg.enabled !== false);
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an enabledInp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       enabledInp.addEventListener('change', () => _updateEvcsField(i, 'enabled', !!enabledInp.checked));
@@ -8912,6 +10412,8 @@ function collectAiAdvisorConfigFromUI(base) {
       dpWrap.appendChild(mkRow('Sollleistung (W)', mkIo(`evcs_${i}_setPowerWId`, rowCfg.setPowerWId, v => _updateEvcsField(i, 'setPowerWId', v))));
       dpWrap.appendChild(mkRow('Enable (write)', mkIo(`evcs_${i}_enableWriteId`, rowCfg.enableWriteId, v => _updateEvcsField(i, 'enableWriteId', v))));
       dpWrap.appendChild(mkRow('Online (read)', mkIo(`evcs_${i}_onlineId`, rowCfg.onlineId, v => _updateEvcsField(i, 'onlineId', v))));
+      dpWrap.appendChild(mkRow('AC Phasenumschaltung (write)', mkIo(`evcs_${i}_phaseSwitchId`, rowCfg.phaseSwitchId, v => _updateEvcsField(i, 'phaseSwitchId', v))));
+      dpWrap.appendChild(mkRow('AC Phasenrückmeldung (read, optional)', mkIo(`evcs_${i}_phaseFeedbackId`, rowCfg.phaseFeedbackId, v => _updateEvcsField(i, 'phaseFeedbackId', v))));
 
       dpWrap.appendChild(mkRow('Lock (write)', mkIo(`evcs_${i}_lockWriteId`, rowCfg.lockWriteId, v => _updateEvcsField(i, 'lockWriteId', v))));
       dpWrap.appendChild(mkRow('RFID Reader', mkIo(`evcs_${i}_rfidReadId`, rowCfg.rfidReadId, v => _updateEvcsField(i, 'rfidReadId', v))));
@@ -8948,6 +10450,15 @@ function collectAiAdvisorConfigFromUI(base) {
       ctrlSel.addEventListener('change', () => _updateEvcsField(i, 'controlPreference', String(ctrlSel.value)));
       adv.appendChild(mkRow('Steuerung', ctrlSel));
 
+      // Speicher/Batterie: Installer gibt nur die Kundenbedienung frei.
+      // Die eigentliche Kundenwahl passiert später im LIVE-/EVCS-Frontend pro Ladepunkt.
+      const storageAssistAllowedInp = document.createElement('input');
+      storageAssistAllowedInp.type = 'checkbox';
+      storageAssistAllowedInp.className = 'nw-config-checkbox';
+      storageAssistAllowedInp.checked = !!(rowCfg && rowCfg.storageAssistCustomerAllowed === true);
+      storageAssistAllowedInp.addEventListener('change', () => _updateEvcsField(i, 'storageAssistCustomerAllowed', !!storageAssistAllowedInp.checked));
+      adv.appendChild(mkRow('Kunde darf Speicher-Mitnutzung bedienen', storageAssistAllowedInp));
+
       // Phasen
       const phasesSel = document.createElement('select');
       phasesSel.className = 'nw-config-input';
@@ -8958,7 +10469,58 @@ function collectAiAdvisorConfigFromUI(base) {
       }
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an phasesSel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       phasesSel.addEventListener('change', () => _updateEvcsField(i, 'phases', _clampInt(phasesSel.value, 1, 3, 3)));
-      adv.appendChild(mkRow('Phasen', phasesSel));
+      adv.appendChild(mkRow('Installierte AC-Phasen', phasesSel));
+
+      // AC 1p/3p PV-Automatik
+      const phaseModeSel = document.createElement('select');
+      phaseModeSel.className = 'nw-config-input';
+      phaseModeSel.innerHTML = '<option value="fixed-1p">Fest 1-phasig</option><option value="fixed-3p">Fest 3-phasig</option><option value="auto-pv">Auto PV 1p/3p</option>';
+      {
+        const pm = String((rowCfg && rowCfg.phaseMode) ? rowCfg.phaseMode : (Number(rowCfg.phases) === 1 ? 'fixed-1p' : 'fixed-3p')).trim().toLowerCase();
+        phaseModeSel.value = (pm === 'auto-pv' || pm === 'autopv' || pm === 'auto') ? 'auto-pv' : ((pm === 'fixed-1p' || pm === '1p') ? 'fixed-1p' : 'fixed-3p');
+      }
+      phaseModeSel.addEventListener('change', () => _updateEvcsField(i, 'phaseMode', String(phaseModeSel.value)));
+      adv.appendChild(mkRow('AC-Phasenmodus', phaseModeSel));
+
+      const stopBeforePhaseInp = document.createElement('input');
+      stopBeforePhaseInp.type = 'checkbox';
+      stopBeforePhaseInp.className = 'nw-config-checkbox';
+      stopBeforePhaseInp.checked = !(rowCfg && rowCfg.stopBeforePhaseSwitch === false);
+      stopBeforePhaseInp.addEventListener('change', () => _updateEvcsField(i, 'stopBeforePhaseSwitch', !!stopBeforePhaseInp.checked));
+      adv.appendChild(mkRow('Vor Phasenwechsel stoppen', stopBeforePhaseInp));
+
+      const mkSmallText = (field, placeholder) => {
+        const input = document.createElement('input');
+        input.className = 'nw-config-input';
+        input.type = 'text';
+        input.placeholder = placeholder || '';
+        input.value = rowCfg && rowCfg[field] !== undefined && rowCfg[field] !== null ? String(rowCfg[field]) : '';
+        input.addEventListener('change', () => _updateEvcsField(i, field, String(input.value || '').trim()));
+        return input;
+      };
+      adv.appendChild(mkRow('Wert für 1p', mkSmallText('phaseSwitchValue1p', '1')));
+      adv.appendChild(mkRow('Wert für 3p', mkSmallText('phaseSwitchValue3p', '3')));
+
+      const mkNumPhase = (field, placeholder, min, step, fallback) => {
+        const input = document.createElement('input');
+        input.className = 'nw-config-input';
+        input.type = 'number';
+        input.min = String(min || 0);
+        input.step = String(step || 1);
+        input.placeholder = String(placeholder || '');
+        input.value = (rowCfg && Number.isFinite(Number(rowCfg[field])) && Number(rowCfg[field]) > 0) ? String(Number(rowCfg[field])) : '';
+        input.addEventListener('change', () => {
+          const v = Number(input.value);
+          _updateEvcsField(i, field, (Number.isFinite(v) && v > 0) ? v : fallback);
+        });
+        return input;
+      };
+      adv.appendChild(mkRow('1p → 3p ab stabil W', mkNumPhase('phaseSwitchUpThresholdW', '4800', 0, 1, 4800)));
+      adv.appendChild(mkRow('3p → 1p unter W', mkNumPhase('phaseSwitchDownThresholdW', '3700', 0, 1, 3700)));
+      adv.appendChild(mkRow('Hoch-Stabilität (s)', mkNumPhase('phaseSwitchUpStableSec', '300', 0, 1, 300)));
+      adv.appendChild(mkRow('Runter-Stabilität (s)', mkNumPhase('phaseSwitchDownStableSec', '120', 0, 1, 120)));
+      adv.appendChild(mkRow('Cooldown (s)', mkNumPhase('phaseSwitchCooldownSec', '900', 0, 1, 900)));
+      adv.appendChild(mkRow('Wartezeit nach Wechsel (s)', mkNumPhase('phaseSwitchSettleSec', '30', 0, 1, 30)));
 
       // Spannung
       const vInput = document.createElement('input');
@@ -9049,6 +10611,7 @@ function collectAiAdvisorConfigFromUI(base) {
       // Boost
       const allowBoostInp = document.createElement('input');
       allowBoostInp.type = 'checkbox';
+      allowBoostInp.className = 'nw-config-checkbox';
       allowBoostInp.checked = (rowCfg && rowCfg.allowBoost !== false);
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an allowBoostInp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       allowBoostInp.addEventListener('change', () => _updateEvcsField(i, 'allowBoost', !!allowBoostInp.checked));
@@ -9345,7 +10908,7 @@ function collectAiAdvisorConfigFromUI(base) {
    */
   function collectSettingsConfigFromUI() {
     const out = deepMerge({}, (currentConfig && currentConfig.settingsConfig) ? currentConfig.settingsConfig : {});
-    const count = _clampInt(els.evcsCount ? els.evcsCount.value : out.evcsCount, 0, 50, 0);
+    const count = _clampInt(els.evcsCount ? els.evcsCount.value : out.evcsCount, 0, _maxEvcsCount(), 0);
     out.evcsCount = count;
 
     if (els.evcsMaxPowerKw) {
@@ -9368,8 +10931,15 @@ function collectAiAdvisorConfigFromUI(base) {
    */
   function applyConfigToUI(cfg) {
     currentConfig = cfg || {};
+    currentLicenseInfo = normalizeLicenseInfo(currentConfig.license);
 
     // Apps
+    // 0.8.7 Hotfix: Die App-Liste hängt von der Lizenzedition ab. Beim Seitenstart
+    // wurde buildAppsUI() noch mit "Keine Lizenz" gerendert; applyConfigToUI() setzte
+    // danach zwar currentLicenseInfo=EOS/HEMS, baute die Liste aber nicht neu. Dadurch
+    // blieb trotz gültiger EOS-Lizenz "Keine Apps verfügbar" stehen. Deshalb zuerst
+    // die lizenzabhängige App-Struktur neu erzeugen, danach die gespeicherten Toggles setzen.
+    try { buildAppsUI(); } catch (_eBuildApps) {}
     setAppsFromConfig(currentConfig);
 
     // Plant params
@@ -9547,17 +11117,67 @@ function collectAiAdvisorConfigFromUI(base) {
     // Storage
     const mode = (currentConfig.storage && typeof currentConfig.storage.controlMode === 'string') ? currentConfig.storage.controlMode : 'targetPower';
     els.storageControlMode.value = (['targetPower','limits','enableFlags'].includes(mode)) ? mode : 'targetPower';
+    if (els.storageCouplingMode) {
+      const couplingRaw = currentConfig.storage && typeof currentConfig.storage.coupling === 'string' ? currentConfig.storage.coupling.trim().toLowerCase() : 'ac';
+      els.storageCouplingMode.value = couplingRaw === 'dc' ? 'dc' : 'ac';
+    }
+    updateStorageCouplingUi();
 
     // Optional: Kapazität (kWh) – relevant für PV‑Forecast / Tarif‑Netzladeentscheidungen
     if (els.storageCapacityKWh) {
       const cap = Number(currentConfig.storage && currentConfig.storage.capacityKWh);
       els.storageCapacityKWh.value = (Number.isFinite(cap) && cap > 0) ? String(cap) : '';
     }
+    const stSelf = (currentConfig.storage && typeof currentConfig.storage === 'object') ? currentConfig.storage : {};
+    if (els.storageSelfTargetGridImportW) els.storageSelfTargetGridImportW.value = Number.isFinite(Number(stSelf.selfTargetGridImportW)) ? String(Math.round(Number(stSelf.selfTargetGridImportW))) : '50';
+    if (els.storageSelfImportThresholdW) els.storageSelfImportThresholdW.value = Number.isFinite(Number(stSelf.selfImportThresholdW)) ? String(Math.round(Number(stSelf.selfImportThresholdW))) : '50';
+    if (els.storageSelfNvpSmoothingSec) els.storageSelfNvpSmoothingSec.value = Number.isFinite(Number(stSelf.selfNvpSmoothingSec)) ? String(Math.round(Number(stSelf.selfNvpSmoothingSec))) : '8';
+    if (els.storageSelfNvpRawGuardW) els.storageSelfNvpRawGuardW.value = Number.isFinite(Number(stSelf.selfNvpRawGuardW)) ? String(Math.round(Number(stSelf.selfNvpRawGuardW))) : '100';
+    if (els.storageBalanceFeedbackHoldSec) {
+      const explicitHoldSec = Number(stSelf.balanceFeedbackHoldSec);
+      const legacyHoldSec = Number(stSelf.balanceFeedbackMaxAgeMs) / 1000;
+      const effectiveHoldSec = Number.isFinite(explicitHoldSec) && explicitHoldSec > 0
+        ? explicitHoldSec
+        : (Number.isFinite(legacyHoldSec) && legacyHoldSec > 0 ? Math.max(45, legacyHoldSec) : 45);
+      els.storageBalanceFeedbackHoldSec.value = String(Math.round(effectiveHoldSec));
+    }
+    const stF = (currentConfig.storage && typeof currentConfig.storage === 'object') ? currentConfig.storage : {};
+    const legacyFeneconModeActive = (typeof stF.feneconGridControlEnabled === 'boolean')
+      ? !!stF.feneconGridControlEnabled
+      : !!stF.feneconAcMode;
+    const vendorProfile = normalizeStorageVendorProfile(stF.vendorProfile || (legacyFeneconModeActive ? 'fenecon-openems' : (stF.sungrowHybridEnabled ? 'sungrow-hybrid' : (stF.e3dcRscpEnabled ? 'e3dc-rscp' : 'generic'))));
+    if (els.storageVendorProfile) els.storageVendorProfile.value = vendorProfile;
+    updateStorageVendorProfileUi();
+
+    const feneconModeActive = vendorProfile === 'fenecon-openems';
+    const e3dcModeActive = vendorProfile === 'e3dc-rscp';
     if (els.storageFeneconAcMode) {
-      const stF = (currentConfig.storage && typeof currentConfig.storage === 'object') ? currentConfig.storage : {};
-      els.storageFeneconAcMode.checked = (typeof stF.feneconGridControlEnabled === 'boolean')
-        ? !!stF.feneconGridControlEnabled
-        : !!stF.feneconAcMode;
+      els.storageFeneconAcMode.checked = feneconModeActive;
+    }
+    if (els.storageFeneconDayNoWrite) {
+      // Legacy-No-Write ist ab 0.8.124 fest deaktiviert. Ein im AppCenter
+      // zugeordneter FENECON/OpenEMS-Sollwert muss den Gate-/Executor-Pfad nutzen
+      // und als Watchdog-Keepalive zyklisch erneuert werden.
+      els.storageFeneconDayNoWrite.checked = false;
+      els.storageFeneconDayNoWrite.disabled = true;
+    }
+    if (els.storageFeneconAssist) {
+      // Der Assist bleibt optional, ist aber bei FENECON-Anlagen hilfreich, wenn
+      // trotz interner Freigabe und ausreichend SoC dauerhaft Netzbezug stehen bleibt.
+      els.storageFeneconAssist.checked = feneconModeActive && (stF.feneconAssistEnabled !== false);
+    }
+    if (els.storageE3dcRscpEnabled) {
+      els.storageE3dcRscpEnabled.checked = e3dcModeActive;
+    }
+    if (els.storageE3dcZeroMode) {
+      const zeroMode = String(stF.e3dcZeroMode || 'normal').trim().toLowerCase();
+      els.storageE3dcZeroMode.value = zeroMode === 'idle' ? 'idle' : 'normal';
+    }
+    if (els.storageE3dcAllowGridCharge) {
+      els.storageE3dcAllowGridCharge.checked = e3dcModeActive && stF.e3dcAllowGridCharge === true;
+    }
+    if (els.storageE3dcUsePowerLimits) {
+      els.storageE3dcUsePowerLimits.checked = e3dcModeActive && stF.e3dcUsePowerLimits === true;
     }
     rebuildStorageTable();
     try { buildStorageFarmUI(); } catch (_e) {}
@@ -9873,9 +11493,27 @@ function collectAiAdvisorConfigFromUI(base) {
     setIf('onlineId', _nwGetAlias(dev, 'comm.connected'));
 
     // Control (optional)
-    setIf('setCurrentAId', _nwGetAlias(dev, 'ctrl.currentLimitA'));
-    setIf('setPowerWId', _nwGetAlias(dev, 'ctrl.powerLimitW'));
-    setIf('enableWriteId', _nwGetAlias(dev, 'ctrl.run'));
+    // Feldkompatibilität: ältere Geräteprofile verwenden `currentLimitA` /
+    // `powerLimitW`, neuere NexoWatt-Devices-Profile dagegen häufig
+    // `targetCurrentA` / `targetPowerW`. Beide Varianten beschreiben denselben
+    // schreibbaren EMS-Sollwert und müssen bei der Schnell-Inbetriebnahme
+    // erkannt werden, damit ein vorhandener Ladepunkt nicht als "nicht
+    // steuerbar" im zentralen Budget erscheint.
+    setIf('setCurrentAId',
+      _nwGetAlias(dev, 'ctrl.targetCurrentA')
+      || _nwGetAlias(dev, 'ctrl.currentLimitA')
+      || _nwGetAlias(dev, 'ctrl.setCurrentA')
+      || (dev && dev.dp && dev.dp.ctrlCurrentLimitA));
+    setIf('setPowerWId',
+      _nwGetAlias(dev, 'ctrl.targetPowerW')
+      || _nwGetAlias(dev, 'ctrl.powerLimitW')
+      || _nwGetAlias(dev, 'ctrl.setPowerW')
+      || (dev && dev.dp && dev.dp.ctrlPowerLimitW));
+    setIf('enableWriteId',
+      _nwGetAlias(dev, 'ctrl.run')
+      || _nwGetAlias(dev, 'ctrl.enable')
+      || _nwGetAlias(dev, 'ctrl.enabled')
+      || (dev && dev.dp && dev.dp.ctrlRun));
 
     // Some devices expose "active" as status; we keep it optional
     // setIf('activeId', _nwGetAlias(dev, 'r.active'));
@@ -10514,8 +12152,27 @@ function collectAiAdvisorConfigFromUI(base) {
    */
   async function loadConfig() {
     setStatus('Lade Konfiguration…');
-    const data = await fetchJson('/api/installer/config');
-    applyConfigToUI(data.config || {});
+    const data = await fetchJson('/api/installer/config?t=' + Date.now(), { cache: 'no-store' });
+    const cfg = (data && data.config && typeof data.config === 'object') ? data.config : {};
+
+    // Runtime-Fallback: Die Lizenzseite nutzt /api/license/info und kann eine Lizenz sofort
+    // aktivieren. Das App-Center zieht denselben Endpoint zusätzlich, damit EOS/HEMS sofort
+    // sichtbar wird und nicht auf einer alten "Keine Lizenz"-Konfiguration hängen bleibt.
+    const configLicense = normalizeLicenseInfo(cfg.license || (data && data.license));
+    const liveLicense = await fetchLicenseInfoFallback();
+    const stateLicense = _licenseIsUsable(liveLicense) ? null : await fetchLicenseInfoFromStateFallback();
+    if (_licenseIsUsable(liveLicense)) {
+      cfg.license = liveLicense;
+    } else if (_licenseIsUsable(stateLicense)) {
+      cfg.license = stateLicense;
+    } else if (_licenseIsUsable(configLicense)) {
+      cfg.license = configLicense;
+    } else {
+      cfg.license = _inferLicenseFromSuccessfulInstallerGate(data, cfg);
+    }
+
+    await hydrateStorageFarmConfigFromRuntimeState(cfg);
+    applyConfigToUI(cfg);
     scheduleValidation(300);
     setStatus('Konfiguration geladen.', 'ok');
   }
@@ -10525,6 +12182,51 @@ function collectAiAdvisorConfigFromUI(base) {
    * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
+  /**
+   * Release Safety Gate 0.8.59.
+   *
+   * Verhindert, dass ein stale/fehlerhaft gerenderter App-Center-Screen
+   * produktive Kernbereiche leer überschreibt. Das ist bewusst Frontend-Schutz;
+   * das Backend hat zusätzlich eigene Guards für Speicherfarm-Runtime-Fallbacks.
+   *
+   * Wichtig:
+   * - keine fachliche Regelung
+   * - keine Hardwarewrites
+   * - nur Schutz des Save-Payloads
+   */
+  function applyReleaseSafetyGateToPatch(patch) {
+    const out = patch && typeof patch === 'object' ? patch : {};
+    const restoreArrayIfDangerouslyEmpty = (section, key, markerName) => {
+      try {
+        const src = currentConfig && currentConfig[section] && typeof currentConfig[section] === 'object' ? currentConfig[section] : null;
+        const dst = out[section] && typeof out[section] === 'object' ? out[section] : null;
+        if (!src || !dst) return;
+        const currentRows = Array.isArray(src[key]) ? src[key] : [];
+        const patchRows = Array.isArray(dst[key]) ? dst[key] : null;
+        const explicitDelete = dst.__allowEmpty === true || dst.__allowEmptyStorages === true || dst.__explicitDeleteAll === true;
+        if (currentRows.length > 0 && patchRows && patchRows.length === 0 && !explicitDelete) {
+          dst[key] = currentRows.slice();
+          dst.__releaseSafetyGate = true;
+          dst.__releaseSafetyGateReason = `${section}.${key} restored from currentConfig because App-Center payload was empty`;
+          try { console.warn(`[NexoWatt] ReleaseSafetyGate restored ${section}.${key} (${currentRows.length}) from currentConfig.`); } catch (_e) {}
+        }
+      } catch (_e) {}
+    };
+
+    // Kernbereiche, die nicht durch einen Renderfehler verschwinden dürfen.
+    restoreArrayIfDangerouslyEmpty('storageFarm', 'storages', 'storageFarm');
+    restoreArrayIfDangerouslyEmpty('storageFarm', 'groups', 'storageFarmGroups');
+    restoreArrayIfDangerouslyEmpty('chargeKiosk', 'stations', 'chargeKioskStations');
+    restoreArrayIfDangerouslyEmpty('meshMicrogrid', 'nodes', 'meshMicrogridNodes');
+    restoreArrayIfDangerouslyEmpty('meshMicrogrid', 'targetGroups', 'meshMicrogridTargetGroups');
+    restoreArrayIfDangerouslyEmpty('meshMicrogrid', 'localBridgeMappings', 'meshMicrogridLocalBridgeMappings');
+
+    // Strukturmarker für Release-/Regressionstests. Wird vom Backend ignoriert,
+    // hilft aber, Save-Payloads im Feld eindeutig zu diagnostizieren.
+    out.__releaseSafetyGateVersion = '0.8.59';
+    return out;
+  }
+
   function collectPatchFromUI() {
     const patch = {};
 
@@ -10534,6 +12236,17 @@ function collectAiAdvisorConfigFromUI(base) {
     for (const app of APP_CATALOG) {
       const i1 = document.getElementById(`app_${app.id}_installed`);
       const i2 = document.getElementById(`app_${app.id}_enabled`);
+      if (!_isAppLicensed(app.id)) {
+        patch.emsApps.apps[app.id] = { installed: false, enabled: false, licenseBlocked: true, requiredLicense: 'EOS' };
+        continue;
+      }
+      if (!i1 && !i2) {
+        const existing = currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps && currentConfig.emsApps.apps[app.id]
+          ? currentConfig.emsApps.apps[app.id]
+          : { installed: false, enabled: false };
+        patch.emsApps.apps[app.id] = deepMerge({}, existing);
+        continue;
+      }
       const installed = app.mandatory ? true : !!(i1 && i1.checked);
       const enabled = app.mandatory ? true : !!(i2 && i2.checked);
       patch.emsApps.apps[app.id] = { installed, enabled };
@@ -10541,7 +12254,245 @@ function collectAiAdvisorConfigFromUI(base) {
 
     // Scheduler
     const sched = Number(els.schedulerIntervalMs.value);
-    if (Number.isFinite(sched) && sched >= 250) patch.schedulerIntervalMs = Math.round(sched);
+    if (Number.isFinite(sched) && sched >= 250) {
+      patch.schedulerIntervalMs = Math.max(250, Math.min(1000, Math.round(sched)));
+    }
+
+    // System-/Marktprofil (Installer only): Sprache bleibt systemgeführt, Land wird hier verwaltet.
+    const countrySelect = document.getElementById('countryProfileCountry');
+    const countryRaw = countrySelect ? String(countrySelect.value || '').trim().toUpperCase() : _nwSystemProfileCountry();
+    patch.countryProfile = deepMerge({}, (currentConfig && currentConfig.countryProfile) ? currentConfig.countryProfile : {});
+    patch.countryProfile.country = countryRaw === 'NL' ? 'NL' : 'DE';
+    patch.countryProfile.languageMode = 'system';
+
+    patch.energyWallet = deepMerge({}, (currentConfig && currentConfig.energyWallet) ? currentConfig.energyWallet : {});
+    patch.energyWallet.enabled = true;
+    patch.energyWallet.showOnLive = true;
+    // Kosten-/Preisannahmen werden ab 0.8.20 nicht mehr im App-Center gespeichert.
+    // Sie sind kundennahe Betreiberwerte unter settings.energyWallet* im Frontend.
+    // Alte Config-Werte bleiben nur als Legacy-Fallback im EMS-Modul erhalten.
+
+
+    // Niederlande P1/DSMR (Installer only): reine Datenpunkt-Verknüpfung.
+    // Kosten-/Preisannahmen bleiben kundennahe Einstellungen; Export Guard bleibt separat.
+    const nlp1EnabledEl = document.querySelector('[data-nlp1-field="enabled"]');
+    const readNlP1 = (name) => {
+      const el = document.querySelector(`[data-nlp1-field="${name}"]`);
+      return el ? String(el.value || '').trim() : '';
+    };
+    const readNlP1Dp = (name) => {
+      const el = document.querySelector(`[data-nlp1-dp="${name}"]`);
+      return el ? String(el.value || '').trim() : '';
+    };
+    const nlp1Number = (name, fallback, min, max) => {
+      const n = Number(readNlP1(name));
+      if (!Number.isFinite(n)) return fallback;
+      return Math.max(min, Math.min(max, Math.round(n * 10000) / 10000));
+    };
+    patch.nlP1 = deepMerge({}, (currentConfig && currentConfig.nlP1) ? currentConfig.nlP1 : {});
+    const nlp1AppState = patch.emsApps && patch.emsApps.apps && patch.emsApps.apps.nlP1 ? patch.emsApps.apps.nlP1 : null;
+    patch.nlP1.enabled = nlp1EnabledEl ? nlp1EnabledEl.value === 'true' : !!(nlp1AppState && nlp1AppState.installed && nlp1AppState.enabled);
+    patch.nlP1.staleTimeoutSec = Math.max(30, Math.min(86400, Math.round(Number(readNlP1('staleTimeoutSec')) || Number(patch.nlP1.staleTimeoutSec) || 300)));
+    patch.nlP1.returnValueEurPerKwh = nlp1Number('returnValueEurPerKwh', Number(patch.nlP1.returnValueEurPerKwh) || 0.08, -5, 5);
+    patch.nlP1.returnCostEurPerKwh = nlp1Number('returnCostEurPerKwh', Number(patch.nlP1.returnCostEurPerKwh) || 0, 0, 5);
+    patch.nlP1.datapoints = {
+      importPowerW: readNlP1Dp('importPowerW'),
+      exportPowerW: readNlP1Dp('exportPowerW'),
+      netPowerW: readNlP1Dp('netPowerW'),
+      importEnergyKwh: readNlP1Dp('importEnergyKwh'),
+      exportEnergyKwh: readNlP1Dp('exportEnergyKwh'),
+      gasM3: readNlP1Dp('gasM3'),
+      activeTariff: readNlP1Dp('activeTariff'),
+    };
+
+    // EOS Local kWh Ledger (Installer only): Die Aktivierung folgt der EOS-App-Freigabe
+    // und bleibt eine read-only Grundlage. Das Nutzerfrontend bekommt keine technischen
+    // Ledger-Verknüpfungen; spätere Betreiber-/Exportseiten lesen nur fertige States.
+    patch.energyLedger = deepMerge({}, (currentConfig && currentConfig.energyLedger) ? currentConfig.energyLedger : {});
+    const ledgerAppState = patch.emsApps && patch.emsApps.apps && patch.emsApps.apps.energyLedger ? patch.emsApps.apps.energyLedger : null;
+    patch.energyLedger.enabled = !!(ledgerAppState && ledgerAppState.installed && ledgerAppState.enabled);
+    patch.energyLedger.source = 'chargeKiosk.lastSessionsByLpJson';
+    patch.energyLedger.recentEntryLimit = Number.isFinite(Number(patch.energyLedger.recentEntryLimit)) ? Number(patch.energyLedger.recentEntryLimit) : 200;
+    patch.energyLedger.processedSessionLimit = Number.isFinite(Number(patch.energyLedger.processedSessionLimit)) ? Number(patch.energyLedger.processedSessionLimit) : 2000;
+
+    // EOS Mesh/Microgrid (Installer only): eigenes separates App-Modul.
+    // In 0.8.32 wird ausschließlich das Knoten-/Cluster-Datenmodell gespeichert;
+    // es werden keine Hardware-Schreibpfade und keine Steuerstrategien aktiviert.
+    const meshAppState = patch.emsApps && patch.emsApps.apps && patch.emsApps.apps.meshMicrogrid ? patch.emsApps.apps.meshMicrogrid : null;
+    const meshEnabledEl = document.getElementById('meshMicrogridEnabled');
+    const meshModeEl = document.getElementById('meshMicrogridMode');
+    const meshGridLimitEl = document.getElementById('meshMicrogridGridLimitW');
+    const meshClusterIdEl = document.getElementById('meshMicrogridClusterId');
+    const meshClusterNameEl = document.getElementById('meshMicrogridClusterName');
+    const meshControlModeEl = document.getElementById('meshMicrogridControlMode');
+    const meshFieldApprovedEl = document.getElementById('meshMicrogridFieldApproved');
+    const meshCommandStateEl = document.getElementById('meshMicrogridCommandStateDp');
+    const meshMaxCommandsEl = document.getElementById('meshMicrogridMaxCommandsPerTick');
+    const meshTsEnabledEl = document.getElementById('meshMicrogridTailscaleEnabled');
+    const meshTsProfileEl = document.getElementById('meshMicrogridTailscaleProfile');
+    const meshTsLocalNodeEl = document.getElementById('meshMicrogridTailscaleLocalNodeId');
+    const meshTsPeerUrlsEl = document.getElementById('meshMicrogridTailscalePeerUrls');
+    const meshTsPeerTokenEl = document.getElementById('meshMicrogridTailscalePeerToken');
+    const meshReceiverEnabledEl = document.getElementById('meshMicrogridReceiverEnabled');
+    const meshReceiverAcceptEl = document.getElementById('meshMicrogridReceiverAccept');
+    const meshReceiverRequireClusterEl = document.getElementById('meshMicrogridReceiverRequireCluster');
+    const meshReceiverStateEl = document.getElementById('meshMicrogridReceiverStateDp');
+    const meshReceiverTokenEl = document.getElementById('meshMicrogridReceiverToken');
+    const meshReceiverReplayTtlEl = document.getElementById('meshMicrogridReceiverReplayTtl');
+    const meshLocalBridgeEnabledEl = document.getElementById('meshMicrogridLocalBridgeEnabled');
+    const meshLocalBridgeModeEl = document.getElementById('meshMicrogridLocalBridgeOutputMode');
+    const meshLocalBridgeDefaultStateEl = document.getElementById('meshMicrogridLocalBridgeDefaultState');
+    const meshLocalBridgeAckEnabledEl = document.getElementById('meshMicrogridLocalBridgeAckEnabled');
+    const meshLocalBridgeAckRequiredEl = document.getElementById('meshMicrogridLocalBridgeAckRequired');
+    const meshLocalBridgeDefaultAckStateEl = document.getElementById('meshMicrogridLocalBridgeDefaultAckState');
+    const meshLocalBridgeAckTimeoutEl = document.getElementById('meshMicrogridLocalBridgeAckTimeoutSec');
+    const meshLocalBridgeMappingsEl = document.getElementById('meshMicrogridLocalBridgeMappingsJson');
+    const meshTargetGroupsEl = document.getElementById('meshMicrogridTargetGroupsJson');
+    const meshRows = Array.from(document.querySelectorAll('[data-mesh-node-row]'));
+    const readMesh = (row, field) => {
+      const el = row && row.querySelector(`[data-mesh-field="${field}"]`);
+      return el ? String(el.value || '').trim() : '';
+    };
+    const safeMeshId = (value, fallback) => String(value || fallback || 'node').trim().toLowerCase().replace(/[^a-z0-9_\-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64) || fallback || 'node';
+    patch.meshMicrogrid = deepMerge({}, (currentConfig && currentConfig.meshMicrogrid) ? currentConfig.meshMicrogrid : {});
+    patch.meshMicrogrid.enabled = meshEnabledEl ? meshEnabledEl.value === 'true' : !!(meshAppState && meshAppState.installed && meshAppState.enabled);
+    patch.meshMicrogrid.mode = meshModeEl && ['off','diagnostic','local_first','grid_last'].includes(meshModeEl.value) ? meshModeEl.value : 'diagnostic';
+    patch.meshMicrogrid.clusterId = safeMeshId(meshClusterIdEl ? meshClusterIdEl.value : 'cluster_01', 'cluster_01');
+    patch.meshMicrogrid.clusterName = meshClusterNameEl ? String(meshClusterNameEl.value || 'Lokaler Energieverbund').trim() : 'Lokaler Energieverbund';
+    patch.meshMicrogrid.gridLimitW = Math.max(0, Math.round(Number(meshGridLimitEl ? meshGridLimitEl.value : 0) || 0));
+    patch.meshMicrogrid.controlMode = meshControlModeEl && ['off','diagnostic','field_test','active'].includes(meshControlModeEl.value) ? meshControlModeEl.value : 'diagnostic';
+    patch.meshMicrogrid.fieldTestApproved = meshFieldApprovedEl ? meshFieldApprovedEl.value === 'true' : false;
+    patch.meshMicrogrid.activeControlApproved = patch.meshMicrogrid.fieldTestApproved;
+    patch.meshMicrogrid.commandStateDp = meshCommandStateEl ? String(meshCommandStateEl.value || '').trim() : '';
+    patch.meshMicrogrid.maxCommandsPerTick = Math.max(1, Math.min(10, Math.round(Number(meshMaxCommandsEl ? meshMaxCommandsEl.value : 3) || 3)));
+    patch.meshMicrogrid.tailscale = patch.meshMicrogrid.tailscale && typeof patch.meshMicrogrid.tailscale === 'object' ? patch.meshMicrogrid.tailscale : {};
+    patch.meshMicrogrid.tailscale.enabled = meshTsEnabledEl ? meshTsEnabledEl.value === 'true' : false;
+    patch.meshMicrogrid.tailscale.profile = meshTsProfileEl ? String(meshTsProfileEl.value || 'mesh-microgrid').trim() : 'mesh-microgrid';
+    patch.meshMicrogrid.tailscale.localNodeId = safeMeshId(meshTsLocalNodeEl ? meshTsLocalNodeEl.value : patch.meshMicrogrid.clusterId, patch.meshMicrogrid.clusterId || 'local');
+    patch.meshMicrogrid.tailscale.peerUrls = String(meshTsPeerUrlsEl ? meshTsPeerUrlsEl.value || '' : '').split(/[\n,;]+/g).map((x) => x.trim()).filter(Boolean);
+    patch.meshMicrogrid.tailscale.peerToken = meshTsPeerTokenEl ? String(meshTsPeerTokenEl.value || '').trim() : '';
+    patch.meshMicrogrid.receiver = patch.meshMicrogrid.receiver && typeof patch.meshMicrogrid.receiver === 'object' ? patch.meshMicrogrid.receiver : {};
+    patch.meshMicrogrid.receiver.enabled = meshReceiverEnabledEl ? meshReceiverEnabledEl.value === 'true' : false;
+    patch.meshMicrogrid.receiver.acceptRemoteCommands = meshReceiverAcceptEl ? meshReceiverAcceptEl.value === 'true' : false;
+    patch.meshMicrogrid.receiver.requireClusterMatch = meshReceiverRequireClusterEl ? meshReceiverRequireClusterEl.value !== 'false' : true;
+    patch.meshMicrogrid.receiver.localCommandStateDp = meshReceiverStateEl ? String(meshReceiverStateEl.value || '').trim() : '';
+    patch.meshMicrogrid.receiver.peerToken = meshReceiverTokenEl ? String(meshReceiverTokenEl.value || '').trim() : '';
+    patch.meshMicrogrid.receiver.replayTtlSec = Math.max(30, Math.min(86400, Math.round(Number(meshReceiverReplayTtlEl ? meshReceiverReplayTtlEl.value : 900) || 900)));
+    patch.meshMicrogrid.localBridge = patch.meshMicrogrid.localBridge && typeof patch.meshMicrogrid.localBridge === 'object' ? patch.meshMicrogrid.localBridge : {};
+    patch.meshMicrogrid.localBridge.enabled = meshLocalBridgeEnabledEl ? meshLocalBridgeEnabledEl.value === 'true' : false;
+    patch.meshMicrogrid.localBridge.outputMode = meshLocalBridgeModeEl && ['global','mapped','both'].includes(meshLocalBridgeModeEl.value) ? meshLocalBridgeModeEl.value : 'global';
+    patch.meshMicrogrid.localBridge.defaultCommandStateDp = meshLocalBridgeDefaultStateEl ? String(meshLocalBridgeDefaultStateEl.value || '').trim() : '';
+    patch.meshMicrogrid.localBridge.ackEnabled = meshLocalBridgeAckEnabledEl ? meshLocalBridgeAckEnabledEl.value === 'true' : false;
+    patch.meshMicrogrid.localBridge.ackRequired = meshLocalBridgeAckRequiredEl ? meshLocalBridgeAckRequiredEl.value === 'true' : false;
+    patch.meshMicrogrid.localBridge.defaultAckStateDp = meshLocalBridgeDefaultAckStateEl ? String(meshLocalBridgeDefaultAckStateEl.value || '').trim() : '';
+    patch.meshMicrogrid.localBridge.ackTimeoutSec = Math.max(5, Math.min(86400, Math.round(Number(meshLocalBridgeAckTimeoutEl ? meshLocalBridgeAckTimeoutEl.value : 120) || 120)));
+    try {
+      const parsedBridgeMappings = meshLocalBridgeMappingsEl && String(meshLocalBridgeMappingsEl.value || '').trim() ? JSON.parse(String(meshLocalBridgeMappingsEl.value || '[]')) : [];
+      patch.meshMicrogrid.localBridge.mappings = Array.isArray(parsedBridgeMappings) ? parsedBridgeMappings : [];
+    } catch (_meshBridgeJsonError) {
+      patch.meshMicrogrid.localBridge.mappings = Array.isArray(patch.meshMicrogrid.localBridge.mappings) ? patch.meshMicrogrid.localBridge.mappings : [];
+    }
+    try {
+      const parsedTargetGroups = meshTargetGroupsEl && String(meshTargetGroupsEl.value || '').trim() ? JSON.parse(String(meshTargetGroupsEl.value || '[]')) : [];
+      patch.meshMicrogrid.targetGroups = Array.isArray(parsedTargetGroups) ? parsedTargetGroups : [];
+    } catch (_meshTargetGroupJsonError) {
+      patch.meshMicrogrid.targetGroups = Array.isArray(patch.meshMicrogrid.targetGroups) ? patch.meshMicrogrid.targetGroups : [];
+    }
+    const readMeshPowerLimit = (row, field) => {
+      const n = Number(readMesh(row, field));
+      return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
+    };
+    patch.meshMicrogrid.nodes = meshRows.map((row, idx) => {
+      const type = ['producer','consumer','storage','grid','chargepoint','thermal','generic'].includes(readMesh(row, 'type')) ? readMesh(row, 'type') : 'consumer';
+      const role = ['producer','consumer','storage','grid'].includes(readMesh(row, 'role')) ? readMesh(row, 'role') : (type === 'producer' ? 'producer' : (type === 'storage' ? 'storage' : (type === 'grid' ? 'grid' : 'consumer')));
+      return {
+        id: safeMeshId(readMesh(row, 'id'), `node_${idx + 1}`),
+        name: readMesh(row, 'name') || `Energie-Knoten ${idx + 1}`,
+        enabled: readMesh(row, 'enabled') !== 'false',
+        type,
+        role,
+        priority: Math.max(1, Math.min(999, Math.round(Number(readMesh(row, 'priority')) || 100))),
+        powerDp: readMesh(row, 'powerDp'),
+        surplusPowerDp: readMesh(row, 'surplusPowerDp'),
+        demandPowerDp: readMesh(row, 'demandPowerDp'),
+        socDp: readMesh(row, 'socDp'),
+        gridImportPowerDp: readMesh(row, 'gridImportPowerDp'),
+        gridExportPowerDp: readMesh(row, 'gridExportPowerDp'),
+        minPowerW: readMeshPowerLimit(row, 'minPowerW'),
+        maxPowerW: readMeshPowerLimit(row, 'maxPowerW'),
+        maxImportW: readMeshPowerLimit(row, 'maxImportW'),
+        maxExportW: readMeshPowerLimit(row, 'maxExportW'),
+        maxChargeW: readMeshPowerLimit(row, 'maxChargeW'),
+        maxDischargeW: readMeshPowerLimit(row, 'maxDischargeW'),
+        maxLoadW: readMeshPowerLimit(row, 'maxLoadW'),
+        maxGenerationW: readMeshPowerLimit(row, 'maxGenerationW'),
+        targetGroupIds: String(readMesh(row, 'targetGroupIds') || '').split(/[\n,;]+/g).map((x) => safeMeshId(x.trim(), '')).filter(Boolean),
+      };
+    });
+
+    // EOS DC Station Display / Charge Kiosk (Installer only).
+    // Das normale Nutzerfrontend bekommt keine Konfiguration; die Displayseite nutzt nur Token + zugeordnete LPs.
+    const ckEnabledEl = document.getElementById('chargeKioskEnabled');
+    const ckRows = Array.from(document.querySelectorAll('[data-charge-kiosk-station-row]'));
+    const splitLpList = (raw) => String(raw || '').split(/[;,\s]+/g).map((x) => x.trim()).filter(Boolean).map((x) => {
+      const m = x.toLowerCase().match(/^(?:lp|ladepunkt|connector|evcs)?\s*([0-9]+)$/i) || x.toLowerCase().match(/^lp([0-9]+)$/i);
+      return m ? `lp${Math.max(1, Math.round(Number(m[1]) || 1))}` : x.toLowerCase().replace(/[^a-z0-9_\-]+/g, '_');
+    }).filter((v, i, a) => v && a.indexOf(v) === i);
+    const readCk = (row, field) => {
+      const el = row && row.querySelector(`[data-ck-field="${field}"]`);
+      return el ? String(el.value || '').trim() : '';
+    };
+    const readCkPrice = (row, field) => {
+      const raw = readCk(row, field);
+      const n = Number(raw);
+      return Number.isFinite(n) ? Math.max(-1, Math.min(5, Math.round(n * 10000) / 10000)) : undefined;
+    };
+    const readCkInt = (row, field, fallback, min, max) => {
+      const n = Number(readCk(row, field));
+      if (!Number.isFinite(n)) return fallback;
+      return Math.max(min, Math.min(max, Math.round(n)));
+    };
+    patch.chargeKiosk = deepMerge({}, (currentConfig && currentConfig.chargeKiosk) ? currentConfig.chargeKiosk : {});
+    patch.chargeKiosk.enabled = ckEnabledEl ? ckEnabledEl.value === 'true' : !!patch.chargeKiosk.enabled;
+    patch.chargeKiosk.displayBasePath = '/display/station/';
+    patch.chargeKiosk.stations = ckRows.map((row, idx) => {
+      const modes = [];
+      if (readCk(row, 'solar') !== 'false') modes.push('solar');
+      if (readCk(row, 'fast') !== 'false') modes.push('fast');
+      const out = {
+        id: readCk(row, 'id') || `dc_station_${idx + 1}`,
+        name: readCk(row, 'name') || `DC Ladestation ${idx + 1}`,
+        type: readCk(row, 'type') === 'ac' ? 'ac' : 'dc',
+        token: readCk(row, 'token'),
+        enabled: readCk(row, 'enabled') !== 'false',
+        displayMode: 'station',
+        assignedChargepoints: splitLpList(readCk(row, 'assignedChargepoints')),
+        allowedModes: modes.length ? modes : ['solar', 'fast'],
+        showPrice: true,
+        showSolarShare: true,
+        allowStartStop: readCk(row, 'allowStartStop') !== 'false',
+        maintenanceMode: readCk(row, 'maintenanceMode') === 'true',
+        watchdogTimeoutSec: readCkInt(row, 'watchdogTimeoutSec', 45, 15, 600),
+        displayRefreshSec: readCkInt(row, 'displayRefreshSec', 3, 1, 30),
+        layoutMode: ['single','dual','quad','auto'].includes(readCk(row, 'layoutMode')) ? readCk(row, 'layoutMode') : 'auto',
+        showLanguageSwitch: readCk(row, 'showLanguageSwitch') === 'true',
+        controlBridge: ['charging-management','ems-intent','generic','readonly'].includes(readCk(row, 'controlBridge')) ? readCk(row, 'controlBridge') : 'charging-management',
+        commandStateId: readCk(row, 'commandStateId'),
+        // Steuerprofil bleibt herstelleroffen:
+        // - chargingManagement schreibt nur in die NexoWatt-/EMS-Abstraktion.
+        // - generic erzeugt zusätzlich ein JSON-Kommando für beliebige OCPP-/Modbus-/MQTT-/Herstelleradapter.
+        controlProfile: readCk(row, 'controlBridge') === 'generic' ? 'dual' : 'chargingManagement',
+        writeChargingManagementMirror: true,
+        protocolHint: readCk(row, 'protocolHint') || 'manufacturer-open',
+        languageMode: 'system',
+        theme: 'nexowatt-dark-touch',
+      };
+      const solarPrice = readCkPrice(row, 'solarPriceEurPerKwh');
+      const fastPrice = readCkPrice(row, 'fastPriceEurPerKwh');
+      if (solarPrice !== undefined) out.solarPriceEurPerKwh = solarPrice;
+      if (fastPrice !== undefined) out.fastPriceEurPerKwh = fastPrice;
+      return out;
+    });
 
     // Plant
     const gcp = Number(els.gridConnectionPower.value);
@@ -10554,6 +12505,9 @@ function collectAiAdvisorConfigFromUI(base) {
       const ic = _ensurePara14aCfg();
       patch.installerConfig.para14aMode = String(ic.para14aMode || 'ems');
       patch.installerConfig.para14aMinPerDeviceW = Math.round(Number(ic.para14aMinPerDeviceW) || 0);
+      patch.installerConfig.para14aSignalMaxAgeSec = Math.max(1, Math.round(Number(ic.para14aSignalMaxAgeSec) || 30));
+      patch.installerConfig.para14aStalePolicy = String(ic.para14aStalePolicy || 'hold-active');
+      patch.installerConfig.para14aLegacyDirectWritesEnabled = ic.para14aLegacyDirectWritesEnabled === true;
       patch.installerConfig.para14aActiveId = String(ic.para14aActiveId || '').trim();
       patch.installerConfig.para14aEmsSetpointWId = String(ic.para14aEmsSetpointWId || '').trim();
       patch.installerConfig.para14aConsumers = deepMerge([], Array.isArray(ic.para14aConsumers) ? ic.para14aConsumers : []);
@@ -10648,9 +12602,56 @@ function collectAiAdvisorConfigFromUI(base) {
     // Storage
     patch.storage = deepMerge({}, currentConfig.storage || {});
     patch.storage.controlMode = getStorageMode();
+    patch.storage.coupling = getStorageCoupling();
+    patch.storage.vendorProfile = getStorageVendorProfile();
     patch.storage.datapoints = deepMerge({}, (currentConfig.storage && currentConfig.storage.datapoints) ? currentConfig.storage.datapoints : {});
-    patch.storage.feneconGridControlEnabled = !!(els.storageFeneconAcMode && els.storageFeneconAcMode.checked);
-    // Der Haken bedeutet ab 0.6.255: FENECON-Hybrid/FEMS-Priorität.
+    patch.storage.feneconGridControlEnabled = patch.storage.vendorProfile === 'fenecon-openems';
+    patch.storage.sungrowHybridEnabled = patch.storage.vendorProfile === 'sungrow-hybrid';
+    patch.storage.e3dcRscpEnabled = patch.storage.vendorProfile === 'e3dc-rscp';
+    // FENECON/OpenEMS/FEMS: Legacy-No-Write bleibt bewusst deaktiviert. Der
+    // manuell zugeordnete Sollwert-DP wird nach allen Gates zyklisch erneuert.
+    patch.storage.feneconDayNoWriteEnabled = false;
+    patch.storage.feneconAssistEnabled = !!(els.storageFeneconAssist && els.storageFeneconAssist.checked);
+    // Sungrow Hybrid ESS nutzt ab 0.8.96 fest den gemeinsamen geschlossenen
+    // NVP-Regelkreis. Die alten PV-Passthrough-/0-W-Schalter werden bewusst nicht
+    // mehr gespeichert, weil zyklische 0-W-Freigaben den Speicher stoppen konnten.
+    delete patch.storage.sungrowPvPassthroughEnabled;
+    delete patch.storage.sungrowZeroOnPvCoverage;
+    delete patch.storage.sungrowDischargeOnlyOnGridImport;
+    // E3/DC RSCP: SET_POWER_MODE + SET_POWER_VALUE werden nur beim Herstellerprofil
+    // E3/DC sichtbar/gespeichert; die Grundlogik bleibt weiterhin reine NVP-/Budget-
+    // Eigenverbrauchsoptimierung.
+    patch.storage.e3dcZeroMode = (els.storageE3dcZeroMode && String(els.storageE3dcZeroMode.value).toLowerCase() === 'idle') ? 'idle' : 'normal';
+    patch.storage.e3dcAllowGridCharge = !!(els.storageE3dcAllowGridCharge && els.storageE3dcAllowGridCharge.checked);
+    patch.storage.e3dcUsePowerLimits = !!(els.storageE3dcUsePowerLimits && els.storageE3dcUsePowerLimits.checked);
+
+    // Eigenverbrauchsoptimierung / NVP-Regelung:
+    // Die Speicherregelung nutzt diese Werte als Zielband und glaettet nur die
+    // Fuehrungsgroesse, nicht die harten Schutzgrenzen. Dadurch wird das
+    // Hin-und-Her zwischen Bezug/Einspeisung im Energiefluss ruhiger, ohne dass
+    // echter groesserer Netzbezug oder Export verschleppt wird.
+    patch.storage.selfTargetGridImportW = _clampInt(
+      els.storageSelfTargetGridImportW ? els.storageSelfTargetGridImportW.value : patch.storage.selfTargetGridImportW,
+      0, 1000000, 50,
+    );
+    patch.storage.selfImportThresholdW = _clampInt(
+      els.storageSelfImportThresholdW ? els.storageSelfImportThresholdW.value : patch.storage.selfImportThresholdW,
+      0, 1000000, 50,
+    );
+    patch.storage.selfNvpSmoothingEnabled = true;
+    patch.storage.selfNvpSmoothingSec = _clampInt(
+      els.storageSelfNvpSmoothingSec ? els.storageSelfNvpSmoothingSec.value : patch.storage.selfNvpSmoothingSec,
+      0, 120, 8,
+    );
+    patch.storage.selfNvpRawGuardW = _clampInt(
+      els.storageSelfNvpRawGuardW ? els.storageSelfNvpRawGuardW.value : patch.storage.selfNvpRawGuardW,
+      50, 1000000, 100,
+    );
+    patch.storage.balanceFeedbackHoldSec = _clampInt(
+      els.storageBalanceFeedbackHoldSec ? els.storageBalanceFeedbackHoldSec.value : patch.storage.balanceFeedbackHoldSec,
+      1, 300, 45,
+    );
+    // Der Haken bedeutet ab 0.6.255: Hybrid-/Gateway-Priorität.
     // SetGridActivePower wird nicht mehr verwendet; ein eventuell vorhandener Legacy-DP wird entfernt.
     try {
       delete patch.storage.datapoints.feneconGridSetpointObjectId;
@@ -10658,7 +12659,7 @@ function collectAiAdvisorConfigFromUI(base) {
       delete patch.storage.datapoints.feneconGridSetpointScale;
       delete patch.storage.datapoints.feneconGridSetpointInvert;
     } catch (_e) {}
-    // Alte FENECON-AC-Direktlogik nicht mehr über den Haken aktivieren.
+    // Alte alte AC-Direktlogik nicht mehr über den Haken aktivieren.
     // Für SpeicherFarm-Altanlagen bleibt ein bereits vorhandenes feneconAcMode intern erhalten,
     // ansonsten wird es beim Speichern auf false gesetzt.
     const storageFarmEnabledForLegacy = !!(patch.emsApps && patch.emsApps.apps && patch.emsApps.apps.storagefarm && patch.emsApps.apps.storagefarm.enabled);
@@ -10666,13 +12667,16 @@ function collectAiAdvisorConfigFromUI(base) {
       ? !!(currentConfig.storage && currentConfig.storage.feneconAcMode)
       : false;
 
-    // Optional raw patch
+    // Optional raw patch. Auch Raw-Patches laufen jetzt durch das Release Safety Gate,
+    // damit ein Debug-/Installer-Payload nicht versehentlich produktive Kernlisten
+    // leert, solange kein expliziter Löschmarker gesetzt ist.
     const raw = String(els.rawPatch.value || '').trim();
+    let finalPatch = patch;
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
-          return deepMerge(patch, parsed);
+          finalPatch = deepMerge(patch, parsed);
         }
       } catch (e) {
         // ignore invalid JSON
@@ -10680,10 +12684,174 @@ function collectAiAdvisorConfigFromUI(base) {
     }
 
     // Keep installerConfig as single source of truth for installer-only features
-    patch.installerConfig = deepMerge({}, (currentConfig && currentConfig.installerConfig) ? currentConfig.installerConfig : {}, patch.installerConfig || {});
+    finalPatch.installerConfig = deepMerge({}, (currentConfig && currentConfig.installerConfig) ? currentConfig.installerConfig : {}, finalPatch.installerConfig || {});
 
-    return patch;
+    return applyReleaseSafetyGateToPatch(finalPatch);
   }
+  /**
+   * Code-Teil: _storageFarmStorageCount
+   * Zweck: Ermittelt, ob eine Speicherfarm-Konfiguration echte Speicher enthält.
+   * Regression-Schutz 0.8.59: Verhindert, dass ein App-Center-Save bekannte
+   * Speicherfarm-Konfigurationen versehentlich mit einer leeren Liste überschreibt.
+   */
+  function _storageFarmStorageCount(cfg) {
+    const sf = cfg && cfg.storageFarm && typeof cfg.storageFarm === 'object' ? cfg.storageFarm : {};
+    return Array.isArray(sf.storages) ? sf.storages.filter((s) => s && typeof s === 'object').length : 0;
+  }
+
+  /**
+   * Code-Teil: applyAppCenterRegressionSafetyGate
+   * Zweck: Letzter Schutz direkt vor dem Speichern der App-Center-Konfiguration.
+   * Dieser Guard ist bewusst klein und hart: Er darf keine neue Regelung bauen,
+   * sondern verhindert nur Regressionen, bei denen UI-/Hydration-Fehler kritische
+   * Konfigurationen leeren würden.
+   */
+  function applyAppCenterRegressionSafetyGate(patch) {
+    const p = patch && typeof patch === 'object' ? patch : {};
+    const beforeCount = _storageFarmStorageCount(currentConfig);
+    const afterCount = _storageFarmStorageCount(p);
+    const storagefarmApp = p.emsApps && p.emsApps.apps && p.emsApps.apps.storagefarm ? p.emsApps.apps.storagefarm : null;
+    const storagefarmExpected = beforeCount > 0 || (storagefarmApp && (storagefarmApp.installed || storagefarmApp.enabled));
+
+    if (storagefarmExpected && beforeCount > 0 && afterCount === 0) {
+      // Safety-Entscheidung: Bekannte Speicher werden nicht mit leerer UI-Liste
+      // überschrieben. Falls der Reiter einmal nicht rendert, bleibt die letzte
+      // bekannte Konfiguration erhalten und der Installateur verliert keine DP-
+      // Zuordnungen. Das ist ein Save-Guard, keine Speicherregelung.
+      p.storageFarm = deepMerge({}, (currentConfig && currentConfig.storageFarm) ? currentConfig.storageFarm : {});
+      p.storageFarm.__saveGuardRestored = true;
+      p.storageFarm.__saveGuardReason = 'storageFarm.storages would be emptied although existing storages are known';
+    }
+
+    const guarded = [];
+    if (beforeCount > 0 && _storageFarmStorageCount(p) > 0) guarded.push('storageFarm');
+    p.__appCenterRegressionSafetyGate = {
+      schema: 'nexowatt.appcenter-regression-safety-gate.v1',
+      ts: Date.now(),
+      guarded,
+      storageFarmBeforeCount: beforeCount,
+      storageFarmAfterCount: _storageFarmStorageCount(p),
+      storageFarmRestored: !!(p.storageFarm && p.storageFarm.__saveGuardRestored),
+      note: 'Save-Guard verhindert das Leeren bekannter Kernkonfigurationen. Keine Hardwaresteuerung.',
+    };
+    return p;
+  }
+
+
+  /**
+   * Code-Teil: Release-/Regression-Safety-Gate
+   * Zweck: verhindert, dass ein App-Center-Release durch UI-/Tab-/Hydration-
+   * Regressionen bestehende Kernkonfigurationen leer speichert.
+   *
+   * Hintergrund:
+   * Nach mehreren Mesh-/0-Einspeise-Erweiterungen darf ein neuer Bereich niemals
+   * Speicherfarm, Ladepunkte, DC-Stationen, NL/P1 oder Mesh-Konfiguration löschen,
+   * nur weil der passende Reiter nicht gerendert, ein DOM-Element fehlt oder eine
+   * Runtime-Hydration noch läuft. Dieses Gate arbeitet defensiv: wenn die bisherige
+   * Konfiguration Daten enthält, der neue Patch aber leer wäre, werden die alten
+   * Werte übernommen und im Report vermerkt. Bewusstes Löschen ganzer Kernbereiche
+   * muss später über eine separate, explizite Löschfunktion erfolgen.
+   */
+  function _sgArray(v) { return Array.isArray(v) ? v : []; }
+  function _sgObject(v) { return v && typeof v === 'object' ? v : {}; }
+  function _sgNonEmptyString(v) { return String(v == null ? '' : v).trim() !== ''; }
+  function _sgCountStorages(cfg) { return _sgArray(_sgObject(cfg.storageFarm).storages).length; }
+  function _sgCountGroups(cfg) { return _sgArray(_sgObject(cfg.storageFarm).groups).length; }
+  function _sgCountEvcs(cfg) {
+    const settings = _sgObject(cfg.settings);
+    return Math.max(Number(settings.evcsCount) || 0, _sgArray(settings.evcsList).length);
+  }
+  function _sgCountChargeKiosk(cfg) { return _sgArray(_sgObject(cfg.chargeKiosk).stations).length; }
+  function _sgCountMeshNodes(cfg) { return _sgArray(_sgObject(cfg.meshMicrogrid).nodes).length; }
+  function _sgCountMeshPeers(cfg) {
+    const mm = _sgObject(cfg.meshMicrogrid);
+    const tailscalePeers = _sgArray(_sgObject(mm.tailscale).peerUrls).length;
+    const meshLinkPeers = _sgArray(_sgObject(_sgObject(mm.meshLink).peers)).length;
+    return Math.max(tailscalePeers, meshLinkPeers);
+  }
+  function _sgCountNlP1Mappings(cfg) {
+    const dps = _sgObject(_sgObject(cfg.nlP1).datapoints);
+    return Object.keys(dps).filter(k => _sgNonEmptyString(dps[k])).length;
+  }
+  function _sgRestore(report, path, reason) {
+    report.restored.push({ path, reason });
+    report.changed = true;
+  }
+  function applyReleaseRegressionSafetyGate(patch) {
+    const report = { schema: 'nexowatt.appcenter-regression-safety-gate.v1', version: '0.8.59', changed: false, restored: [], warnings: [] };
+    const oldCfg = currentConfig && typeof currentConfig === 'object' ? currentConfig : {};
+    const next = patch && typeof patch === 'object' ? patch : {};
+
+    // Speicherfarm: darf nie durch einen leeren UI-Save verschwinden, wenn der
+    // aktuelle Config-/Runtime-Fallback Speicher kennt.
+    const oldStorages = _sgCountStorages(oldCfg);
+    const newStorages = _sgCountStorages(next);
+    if (oldStorages > 0 && newStorages === 0) {
+      next.storageFarm = deepMerge({}, _sgObject(oldCfg.storageFarm), _sgObject(next.storageFarm));
+      next.storageFarm.storages = _sgArray(_sgObject(oldCfg.storageFarm).storages).slice();
+      if (_sgCountGroups(oldCfg) > 0 && _sgCountGroups(next) === 0) next.storageFarm.groups = _sgArray(_sgObject(oldCfg.storageFarm).groups).slice();
+      next.storageFarm._releaseSafetyRestored = true;
+      _sgRestore(report, 'storageFarm.storages', `Bestehende Speicherfarm mit ${oldStorages} Speicher(n) vor leerem Save geschützt.`);
+    }
+
+    // Ladepunkte: verhindert Verlust der LP-Liste, wenn EVCS-Tab/DOM nicht korrekt
+    // gerendert wurde. Einzelne Änderungen bleiben möglich; nur kompletter Verlust
+    // wird abgefangen.
+    const oldEvcs = _sgCountEvcs(oldCfg);
+    const newEvcs = _sgCountEvcs(next);
+    if (oldEvcs > 0 && newEvcs === 0) {
+      next.settings = deepMerge({}, _sgObject(oldCfg.settings), _sgObject(next.settings));
+      next.settings.evcsCount = _sgObject(oldCfg.settings).evcsCount;
+      next.settings.evcsList = _sgArray(_sgObject(oldCfg.settings).evcsList).slice();
+      _sgRestore(report, 'settings.evcsList', `Bestehende Ladepunktliste mit ${oldEvcs} Eintrag/Einträgen vor leerem Save geschützt.`);
+    }
+
+    // DC-Station Display: Stationsseiten gehören zu Ladepunkte und dürfen bei
+    // App-Center-Umbauten nicht verschwinden.
+    const oldStations = _sgCountChargeKiosk(oldCfg);
+    const newStations = _sgCountChargeKiosk(next);
+    if (oldStations > 0 && newStations === 0) {
+      next.chargeKiosk = deepMerge({}, _sgObject(oldCfg.chargeKiosk), _sgObject(next.chargeKiosk));
+      next.chargeKiosk.stations = _sgArray(_sgObject(oldCfg.chargeKiosk).stations).slice();
+      _sgRestore(report, 'chargeKiosk.stations', `Bestehende DC-Station-Display-Konfiguration mit ${oldStations} Station(en) vor leerem Save geschützt.`);
+    }
+
+    // NL/P1: Zuordnungen liegen im Reiter Zuordnung. Wenn dort beim Speichern
+    // keine Felder gerendert wurden, dürfen vorhandene DSMR-/P1-Mappings nicht leer
+    // geschrieben werden.
+    const oldNlP1 = _sgCountNlP1Mappings(oldCfg);
+    const newNlP1 = _sgCountNlP1Mappings(next);
+    if (oldNlP1 > 0 && newNlP1 === 0) {
+      next.nlP1 = deepMerge({}, _sgObject(oldCfg.nlP1), _sgObject(next.nlP1));
+      next.nlP1.datapoints = deepMerge({}, _sgObject(_sgObject(oldCfg.nlP1).datapoints), _sgObject(_sgObject(next.nlP1).datapoints));
+      _sgRestore(report, 'nlP1.datapoints', `Bestehende NL/P1-Zuordnung mit ${oldNlP1} Mapping(s) vor leerem Save geschützt.`);
+    }
+
+    // Mesh/Microgrid: Detailkonfiguration liegt in eigenem Reiter. Nodes/Peers
+    // dürfen nicht verschwinden, nur weil ein anderes Modul gespeichert wurde.
+    const oldMeshNodes = _sgCountMeshNodes(oldCfg);
+    const newMeshNodes = _sgCountMeshNodes(next);
+    if (oldMeshNodes > 0 && newMeshNodes === 0) {
+      next.meshMicrogrid = deepMerge({}, _sgObject(oldCfg.meshMicrogrid), _sgObject(next.meshMicrogrid));
+      next.meshMicrogrid.nodes = _sgArray(_sgObject(oldCfg.meshMicrogrid).nodes).slice();
+      _sgRestore(report, 'meshMicrogrid.nodes', `Bestehende Mesh-Knoten mit ${oldMeshNodes} Eintrag/Einträgen vor leerem Save geschützt.`);
+    }
+    const oldMeshPeers = _sgCountMeshPeers(oldCfg);
+    const newMeshPeers = _sgCountMeshPeers(next);
+    if (oldMeshPeers > 0 && newMeshPeers === 0) {
+      next.meshMicrogrid = deepMerge({}, _sgObject(oldCfg.meshMicrogrid), _sgObject(next.meshMicrogrid));
+      if (_sgObject(oldCfg.meshMicrogrid).tailscale) next.meshMicrogrid.tailscale = deepMerge({}, _sgObject(_sgObject(oldCfg.meshMicrogrid).tailscale), _sgObject(_sgObject(next.meshMicrogrid).tailscale));
+      if (_sgObject(oldCfg.meshMicrogrid).meshLink) next.meshMicrogrid.meshLink = deepMerge({}, _sgObject(_sgObject(oldCfg.meshMicrogrid).meshLink), _sgObject(_sgObject(next.meshMicrogrid).meshLink));
+      _sgRestore(report, 'meshMicrogrid.peers', `Bestehende Mesh-Peer-Konfiguration mit ${oldMeshPeers} Peer(s) vor leerem Save geschützt.`);
+    }
+
+    if (report.changed) {
+      next._releaseSafetyGate = report;
+      report.warnings.push('Release-Safety-Gate hat kritische Bestandskonfigurationen vor einem leeren Save geschützt. Bitte betroffene Reiter prüfen und danach erneut speichern.');
+    }
+    return report;
+  }
+
   /**
    * Code-Teil: saveConfig
    * Zweck: Speichert Benutzereingaben oder Konfiguration.
@@ -10692,7 +12860,11 @@ function collectAiAdvisorConfigFromUI(base) {
    */
   async function saveConfig() {
     setStatus('Speichere…');
-    const patch = collectPatchFromUI();
+    const patch = applyAppCenterRegressionSafetyGate(collectPatchFromUI());
+    const safetyReport = applyReleaseRegressionSafetyGate(patch);
+    if (safetyReport && safetyReport.changed) {
+      setStatus('Release-Schutz hat bestehende Konfigurationen vor leerem Speichern geschützt. Bitte prüfen und erneut speichern.', 'warn');
+    }
     const payload = { patch, restartEms: true };
     const data = await fetchJson('/api/installer/config', { method: 'POST', body: JSON.stringify(payload) });
     applyConfigToUI(data.config || {});
@@ -11195,31 +13367,9 @@ function collectAiAdvisorConfigFromUI(base) {
   function _shadowDiffList(shadow) {
     if (!shadow || typeof shadow !== 'object') return [];
     const out = [];
-/**
- * Code-Teil: add
- *
- * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
     const add = (label, jsVal, tsVal, diff) => {
       out.push({ label: String(label || 'Wert'), js: jsVal, ts: tsVal, diff: diff !== undefined ? diff : '' });
     };
-/**
- * Code-Teil: readList
- *
- * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
     const readList = (arr, prefix) => {
       if (!Array.isArray(arr)) return;
       arr.forEach((m, idx) => {
@@ -11393,17 +13543,6 @@ function collectAiAdvisorConfigFromUI(base) {
           <small class="nw-muted">Nur Diagnose. Diese Anzeige verändert keine EMS-Werte.</small>
         </div>
       </div>`;
-/**
- * Code-Teil: close
- *
- * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
     const close = () => backdrop.remove();
     backdrop.addEventListener('click', (e) => {
       if (e.target === backdrop || e.target.closest('[data-shadow-json-close]')) close();
@@ -11431,12 +13570,13 @@ function collectAiAdvisorConfigFromUI(base) {
    *
    * Zusammenhang:
    * Diese UI-Funktion muss exakt zur Backend-Normalisierung in main.js passen.
-   * Falsche Werte werden bewusst auf `shadow` zurückgesetzt, weil Shadow der sichere
-   * Standard ist: JavaScript bleibt produktiv, TypeScript rechnet nur Diagnose.
+   * Falsche Werte werden ab 0.7.101 bewusst auf `ts` zurückgesetzt. TS ist der
+   * Standard-Kandidat, bleibt aber durch Backend-Gates abgesichert und fällt bei
+   * Blockern automatisch auf JavaScript zurück.
    */
   function _normalizeEnergyFlowTsModeUi(value) {
     const v = String(value || '').trim().toLowerCase();
-    return ['js', 'shadow', 'ts'].includes(v) ? v : 'shadow';
+    return ['js', 'shadow', 'ts'].includes(v) ? v : 'ts';
   }
 
   /**
@@ -11475,12 +13615,16 @@ function collectAiAdvisorConfigFromUI(base) {
    */
   function collectEnergyFlowTsMigrationFromUi(base) {
     const out = deepMerge({}, (base && typeof base === 'object') ? base : {});
-    out.energyFlowMode = _normalizeEnergyFlowTsModeUi(els.energyFlowTsMode ? els.energyFlowTsMode.value : out.energyFlowMode);
-    out.energyFlowProductionAllowed = !!(els.energyFlowTsProductionAllowed && els.energyFlowTsProductionAllowed.checked);
+    if (els.energyFlowTsMode) out.energyFlowMode = _normalizeEnergyFlowTsModeUi(els.energyFlowTsMode.value || out.energyFlowMode);
+    else out.energyFlowMode = _normalizeEnergyFlowTsModeUi(out.energyFlowMode || 'ts');
+    if (els.energyFlowTsProductionAllowed) out.energyFlowProductionAllowed = !!els.energyFlowTsProductionAllowed.checked;
+    else out.energyFlowProductionAllowed = out.energyFlowProductionAllowed !== false;
     const warmup = Math.round(Number(els.energyFlowTsWarmupTicks ? els.energyFlowTsWarmupTicks.value : out.energyFlowCandidateWarmupTicks));
     out.energyFlowCandidateWarmupTicks = Number.isFinite(warmup) ? Math.max(1, Math.min(30, warmup)) : 3;
-    out.energyFlowCandidateAutoFallback = !(els.energyFlowTsAutoFallback && els.energyFlowTsAutoFallback.checked === false);
-    out.energyFlowRequireStablePlantEvaluation = !(els.energyFlowTsRequireStablePlant && els.energyFlowTsRequireStablePlant.checked === false);
+    if (els.energyFlowTsAutoFallback) out.energyFlowCandidateAutoFallback = !(els.energyFlowTsAutoFallback.checked === false);
+    else out.energyFlowCandidateAutoFallback = out.energyFlowCandidateAutoFallback !== false;
+    if (els.energyFlowTsRequireStablePlant) out.energyFlowRequireStablePlantEvaluation = !(els.energyFlowTsRequireStablePlant.checked === false);
+    else out.energyFlowRequireStablePlantEvaluation = out.energyFlowRequireStablePlantEvaluation !== false;
     const plantSamples = Math.round(Number(els.energyFlowTsPlantMinSamples ? els.energyFlowTsPlantMinSamples.value : out.energyFlowPlantMinSamples));
     out.energyFlowPlantMinSamples = Number.isFinite(plantSamples) ? Math.max(1, Math.min(120, plantSamples)) : 5;
     const plantOk = Math.round(Number(els.energyFlowTsPlantMinOk ? els.energyFlowTsPlantMinOk.value : out.energyFlowPlantMinConsecutiveOk));
@@ -11590,6 +13734,91 @@ function collectAiAdvisorConfigFromUI(base) {
   }
 
   /**
+   * Code-Teil: _renderHeatingRodTsRuntimeEvaluationCard
+   *
+   * Zweck:
+   * Zeigt, ob der Heizstab auf echter Anlage stabil über TypeScript läuft oder ob
+   * JavaScript-Fallbacks auftreten.
+   *
+   * Zusammenhang:
+   * Die Daten kommen aus `heatingRod.summary.tsRuntimeEvaluationJson`. Diese Karte ist
+   * reine Diagnose und löst keine Heizstab-Schaltung aus.
+   */
+  function _renderHeatingRodTsRuntimeEvaluationCard(evaluation) {
+    if (!evaluation || typeof evaluation !== 'object') return null;
+    const escape = _shadowEscape;
+    const stable = evaluation.stable === true;
+    const fallbackCount = Number(evaluation.fallbackCount || 0);
+    const normalSource = evaluation.normalSource && typeof evaluation.normalSource === 'object' ? evaluation.normalSource : null;
+    const legacyRef = evaluation.legacyReference && typeof evaluation.legacyReference === 'object' ? evaluation.legacyReference : null;
+    const legacyCleanup = evaluation.legacyCleanup && typeof evaluation.legacyCleanup === 'object' ? evaluation.legacyCleanup : (normalSource && normalSource.legacyCleanup && typeof normalSource.legacyCleanup === 'object' ? normalSource.legacyCleanup : null);
+    const legacyRemoval = evaluation.legacyRemovalPlan && typeof evaluation.legacyRemovalPlan === 'object' ? evaluation.legacyRemovalPlan : (normalSource && normalSource.legacyRemovalPlan && typeof normalSource.legacyRemovalPlan === 'object' ? normalSource.legacyRemovalPlan : null);
+    const legacyDebugBridge = evaluation.legacyDebugBridge && typeof evaluation.legacyDebugBridge === 'object' ? evaluation.legacyDebugBridge : (legacyRemoval && legacyRemoval.legacyDebugBridge && typeof legacyRemoval.legacyDebugBridge === 'object' ? legacyRemoval.legacyDebugBridge : (normalSource && normalSource.legacyDebugBridge && typeof normalSource.legacyDebugBridge === 'object' ? normalSource.legacyDebugBridge : null));
+    const legacyPruned = evaluation.legacyPruned && typeof evaluation.legacyPruned === 'object' ? evaluation.legacyPruned : (legacyDebugBridge && legacyDebugBridge.legacyPruned && typeof legacyDebugBridge.legacyPruned === 'object' ? legacyDebugBridge.legacyPruned : (normalSource && normalSource.legacyPruned && typeof normalSource.legacyPruned === 'object' ? normalSource.legacyPruned : null));
+    const legacyRemovalCandidate = evaluation.legacyRemovalCandidate && typeof evaluation.legacyRemovalCandidate === 'object' ? evaluation.legacyRemovalCandidate : (legacyPruned && legacyPruned.legacyRemovalCandidate && typeof legacyPruned.legacyRemovalCandidate === 'object' ? legacyPruned.legacyRemovalCandidate : (normalSource && normalSource.legacyRemovalCandidate && typeof normalSource.legacyRemovalCandidate === 'object' ? normalSource.legacyRemovalCandidate : null));
+    const legacyFinalCleanup = evaluation.legacyFinalCleanup && typeof evaluation.legacyFinalCleanup === 'object' ? evaluation.legacyFinalCleanup : (legacyRemovalCandidate && legacyRemovalCandidate.legacyFinalCleanup && typeof legacyRemovalCandidate.legacyFinalCleanup === 'object' ? legacyRemovalCandidate.legacyFinalCleanup : (normalSource && normalSource.legacyFinalCleanup && typeof normalSource.legacyFinalCleanup === 'object' ? normalSource.legacyFinalCleanup : null));
+    const legacyNormalDiagnostics = evaluation.legacyNormalDiagnostics && typeof evaluation.legacyNormalDiagnostics === 'object' ? evaluation.legacyNormalDiagnostics : (legacyRemovalCandidate && legacyRemovalCandidate.legacyNormalDiagnostics && typeof legacyRemovalCandidate.legacyNormalDiagnostics === 'object' ? legacyRemovalCandidate.legacyNormalDiagnostics : (normalSource && normalSource.legacyNormalDiagnostics && typeof normalSource.legacyNormalDiagnostics === 'object' ? normalSource.legacyNormalDiagnostics : null));
+    const normalReady = !!(normalSource && normalSource.ready);
+    const kind = normalReady ? 'ok' : (stable ? 'ok' : (fallbackCount > 0 ? 'warn' : 'wait'));
+    const title = normalReady ? 'TS NORMAL' : (stable ? 'TS STABIL' : (fallbackCount > 0 ? 'FALLBACK PRÜFEN' : 'SAMMELT'));
+    const rows = [
+      ['Status', String(evaluation.status || 'waiting')],
+      ['Samples', String(Number(evaluation.sampleCount || 0))],
+      ['OK in Folge', String(Number(evaluation.consecutiveOk || 0))],
+      ['TS aktiv', String(Number(evaluation.activeCount || 0))],
+      ['JS-Fallback', String(fallbackCount)],
+      ['JS-Fallback-Modus', normalSource ? String(normalSource.jsFallbackMode || (normalReady ? 'hard-blockers-only' : 'normal-safety-fallback')) : String(evaluation.jsFallbackMode || 'wartet')],
+      ['JS-Pfad Rolle', normalSource ? String(normalSource.legacyJsPathRole || (normalReady ? 'emergency-fallback-only' : 'safety-reference')) : String(evaluation.legacyJsPathRole || 'wartet')],
+      ['JS-Referenz', legacyRef ? String(legacyRef.jsReferenceDecisionMode || legacyRef.legacyJsDecisionMode || 'diagnose') : (normalSource ? String(normalSource.jsReferenceDecisionMode || normalSource.jsReferenceMode || (normalReady ? 'diagnostic-only' : 'blocking-reference')) : String(evaluation.jsReferenceDecisionMode || 'wartet'))],
+      ['JS-Referenz Cleanup', legacyCleanup ? String(legacyCleanup.legacyJsReferenceCleanupStage || legacyCleanup.cleanupStage || 'wartet') : 'wartet'],
+      ['JS-Entfernung', legacyRemoval ? String(legacyRemoval.removalStage || legacyRemoval.status || 'wartet') : 'wartet'],
+      ['JS-Debug-Brücke', legacyDebugBridge ? String(legacyDebugBridge.status || legacyDebugBridge.cleanupStage || 'wartet') : 'wartet'],
+      ['JS-Debug Rolle', legacyDebugBridge ? String(legacyDebugBridge.legacyJsPathRole || 'wartet') : 'wartet'],
+      ['JS-Entscheidungseinfluss', legacyDebugBridge ? String(legacyDebugBridge.decisionImpact || 'wartet') : (legacyRef ? String(legacyRef.decisionImpact || 'wartet') : 'wartet')],
+      ['JS-Debug-Nutzlast', legacyDebugBridge ? String(legacyDebugBridge.bridgePayloadMode || legacyDebugBridge.diagnosticPayloadMode || 'wartet') : 'wartet'],
+      // Kompatibilitätsmarker für Migrationstests: JS-Pruning / JS-Details entfernt.
+      ['JS-Referenzdetails', legacyPruned ? String(legacyPruned.status || legacyPruned.cleanupStage || 'wartet') : 'wartet'],
+      ['JS-Details reduziert', legacyPruned ? ((legacyPruned.fullReferencePayloadRemoved || legacyPruned.duplicateReferenceDetailsRemoved) ? 'ja' : 'nein') : 'wartet'],
+      ['JS-Diagnosedaten', legacyPruned ? String(legacyPruned.diagnosticPayloadMode || 'wartet') : (legacyRef ? String(legacyRef.diagnosticPayloadMode || 'voll') : 'wartet')],
+      ['JS-Cleanup-Kandidat', legacyPruned ? (legacyPruned.ready ? 'pruned' : 'noch nicht') : (legacyDebugBridge ? (legacyDebugBridge.ready ? 'debug-only' : 'noch nicht') : (legacyCleanup ? (legacyCleanup.cleanupRemovalCandidate ? 'ja' : 'nein') : 'wartet'))],
+      ['JS-Entfernungskandidat', legacyRemovalCandidate ? (legacyRemovalCandidate.ready ? 'bereit' : String(legacyRemovalCandidate.status || 'wartet')) : 'wartet'],
+      ['JS-Entfernungsphase', legacyRemovalCandidate ? String(legacyRemovalCandidate.cleanupStage || legacyRemovalCandidate.status || 'wartet') : 'wartet'],
+      ['JS-Final-Cleanup', legacyFinalCleanup ? String(legacyFinalCleanup.status || 'wartet') : 'wartet'],
+      ['JS-Normaldiagnose', legacyFinalCleanup ? String(legacyFinalCleanup.normalDiagnosticsPayload || 'wartet') : 'wartet'],
+      ['JS-Normaldiagnose Status', legacyNormalDiagnostics ? String(legacyNormalDiagnostics.status || legacyNormalDiagnostics.cleanupStage || 'wartet') : 'wartet'],
+      ['JS-Normaldiagnose entfernt', legacyNormalDiagnostics ? (legacyNormalDiagnostics.normalDiagnosticsRemoved ? 'ja' : 'nein') : 'wartet'],
+      ['Harte Fallbacks', String(Number(evaluation.hardFallbackCount || 0))],
+      ['Mismatches', String(Number(evaluation.mismatchCount || 0))],
+      ['OK-Quote', `${Number(evaluation.okRatioPct || 0)} %`],
+      ['TS-Normalpfad', normalSource ? (normalReady ? 'aktiv vorbereitet' : String(normalSource.status || 'sammelt')) : 'wartet'],
+      ['TS-Normal Ticks', normalSource ? `${Number(normalSource.consecutiveTsTicks || 0)}/${Number(normalSource.minTsTicks || 8)}` : '--'],
+    ];
+    const reasons = Array.isArray(evaluation.fallbackReasons) ? evaluation.fallbackReasons.filter(Boolean).join(' · ') : '';
+    const card = document.createElement('div');
+    card.className = 'nw-config-card nw-shadow-readiness-card nw-heatingrod-ts-runtime-card';
+    card.innerHTML = `
+      <div class="nw-config-card__header">
+        <div class="nw-config-card__header-top">
+          <div class="nw-config-card__title">Heizstab TS‑Runtime-Auswertung</div>
+          <div class="nw-shadow-badge nw-shadow-badge--${kind}">${escape(title)}</div>
+        </div>
+        <div class="nw-config-card__subtitle">Echte Adapter-Ticks: TS aktiv, TS Normalpfad oder JS-Notfallback?</div>
+      </div>
+      <div class="nw-config-card__body">
+        <div class="nw-shadow-readiness-grid">
+          ${rows.map(([a,b]) => `<div class="nw-config-row nw-shadow-diff-row"><div class="nw-config-row__primary">${escape(a)}</div><div class="nw-config-row__status">${escape(b)}</div></div>`).join('')}
+        </div>
+        ${reasons ? `<div class="nw-config-help" style="margin-top:8px;line-height:1.35;">Fallback-Gründe: ${escape(reasons)}</div>` : ''}
+        <div class="nw-config-help" style="margin-top:8px;opacity:.82;line-height:1.35;">${escape(String(evaluation.nextAction || 'Heizstab-TS beobachten.'))}</div>
+        <button type="button" class="nw-config-btn nw-config-btn--ghost nw-shadow-json-button">JSON dauerhaft öffnen</button>
+      </div>
+    `;
+    const btn = card.querySelector('button.nw-shadow-json-button');
+    if (btn) btn.addEventListener('click', () => _openShadowJsonDialog('Heizstab TS-Runtime-Auswertung', evaluation));
+    return card;
+  }
+
+  /**
    * Code-Teil: _renderShadowReadinessCard
    *
    * Zweck:
@@ -11614,19 +13843,25 @@ function collectAiAdvisorConfigFromUI(base) {
    * Die Daten kommen aus `control.energyFlowTsActiveTest` der Diagnose-API. Diese Karte
    * ist nur Beobachtung und schaltet selbst nichts um.
    */
-  function _renderEnergyFlowTsActiveTestCard(activeTest) {
+  function _renderEnergyFlowTsActiveTestCard(activeTest, fixedSource) {
     if (!activeTest || typeof activeTest !== 'object') return null;
     const escape = _shadowEscape;
     const status = String(activeTest.status || 'collecting');
-    const kind = status === 'ts-active' ? 'ok' : (status === 'fallback-js' ? 'warn' : 'wait');
-    const label = status === 'ts-active' ? 'TS AKTIV' : (status === 'fallback-js' ? 'JS FALLBACK' : 'SAMMELT');
     const latest = activeTest.latest && typeof activeTest.latest === 'object' ? activeTest.latest : null;
+    const lastSource = latest ? String(latest.publishedSource || '') : '';
+    const kind = status === 'ts-active' ? 'ok' : (status === 'fallback-js' ? 'warn' : 'wait');
+    const label = lastSource === 'ts-normal'
+      ? 'TS NORMAL'
+      : (status === 'ts-active' ? 'TS AKTIV' : (status === 'fallback-js' ? 'JS FALLBACK' : 'SAMMELT'));
+    const fixed = fixedSource && typeof fixedSource === 'object' ? fixedSource : (latest && latest.fixedSourceState ? latest.fixedSourceState : null);
     const lines = [
       ['Samples', String(activeTest.sampleCount || 0)],
       ['TS genutzt', `${Number(activeTest.tsCount || 0)}× (${Number(activeTest.tsRatioPct || 0).toFixed(1)} %)`],
       ['JS/Fallback', String(activeTest.jsCount || 0)],
       ['TS in Folge', String(activeTest.consecutiveTs || 0)],
       ['JS in Folge', String(activeTest.consecutiveJs || 0)],
+      ['TS-Normalquelle', fixed ? (fixed.ready ? 'aktiv vorbereitet' : String(fixed.status || 'sammelt')) : 'wartet'],
+      ['TS-Fixed Ticks', fixed ? `${Number(fixed.consecutiveTsTicks || 0)}/${Number(fixed.minTsTicks || 12)}` : '--'],
       ['Letzte Quelle', latest ? String(latest.publishedSource || '--') : '--'],
       ['Letzter Grund', latest ? _decodeShadowDisplayText(String(latest.reason || '--')) : '--'],
     ];
@@ -11645,7 +13880,7 @@ function collectAiAdvisorConfigFromUI(base) {
           <div class="nw-config-card__title">Energiefluss TS‑Aktivtest</div>
           <div class="nw-shadow-badge nw-shadow-badge--${kind}">${label}</div>
         </div>
-        <div class="nw-config-card__subtitle">Beobachtung, ob der TS‑Kandidatenmodus wirklich als Quelle genutzt wurde</div>
+        <div class="nw-config-card__subtitle">Beobachtung, ob TypeScript bereits Normalquelle ist oder JS nur noch als Notfallback greift</div>
       </div>
       <div class="nw-config-card__body">
         <div class="nw-shadow-readiness-grid">
@@ -11653,7 +13888,7 @@ function collectAiAdvisorConfigFromUI(base) {
         </div>
         ${blockers.length ? `<details class="nw-shadow-json-details" open><summary>Letzte Blocker</summary><pre>${escape(blockers.join('\n'))}</pre></details>` : ''}
         ${recentText ? `<details class="nw-shadow-json-details"><summary>Letzte Aktivtest-Samples</summary><pre>${escape(recentText)}</pre></details>` : ''}
-        <div class="nw-config-help" style="margin-top:8px;opacity:.82;line-height:1.35;">${escape(activeTest.nextAction || 'Aktivtest weiter beobachten.')}</div>
+        <div class="nw-config-help" style="margin-top:8px;opacity:.82;line-height:1.35;">${escape((fixed && fixed.nextAction) || activeTest.nextAction || 'Aktivtest weiter beobachten.')}</div>
         <button type="button" class="nw-config-btn nw-config-btn--ghost nw-shadow-json-button" data-shadow-active-test-json>JSON dauerhaft öffnen</button>
       </div>
     `;
@@ -11662,17 +13897,6 @@ function collectAiAdvisorConfigFromUI(base) {
     return card;
   }
 
-/**
- * Code-Teil: _renderShadowReadinessCard
- *
- * Zweck:
- * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
   function _renderShadowReadinessCard(readiness) {
     if (!readiness || typeof readiness !== 'object') return null;
     const escape = _shadowEscape;
@@ -11758,8 +13982,13 @@ function collectAiAdvisorConfigFromUI(base) {
     const flowInputs = _parseShadowJson(ctrl.energyFlowInputsJson, null);
     const flowShadow = flowInputs && flowInputs.tsShadow ? flowInputs.tsShadow : null;
     const chargingControlPrep = _parseShadowJson(ctrl.tsControlProductiveJson, _parseShadowJson(ctrl.tsControlProductivePrepJson, _parseShadowJson(ctrl.tsControlShadowJson, null)));
-    const chargingAllocationPrep = _parseShadowJson(ctrl.tsAllocationProductivePrepJson, _parseShadowJson(ctrl.tsAllocationShadowJson, null));
-    const chargingWritePlanShadow = _parseShadowJson(ctrl.tsWritePlanShadowJson, null);
+    const chargingAllocationProductive = _parseShadowJson(ctrl.tsAllocationProductiveJson, _parseShadowJson(ctrl.tsAllocationProductivePrepJson, _parseShadowJson(ctrl.tsAllocationShadowJson, null)));
+    const chargingAllocationNormalSource = _parseShadowJson(ctrl.tsAllocationNormalSourceJson, chargingAllocationProductive);
+    const chargingWritePlanProductive = _parseShadowJson(ctrl.tsWritePlanProductiveJson, _parseShadowJson(ctrl.tsWritePlanProductivePrepJson, _parseShadowJson(ctrl.tsWritePlanShadowJson, null)));
+    const chargingLegacyDecision = _parseShadowJson(ctrl.tsLegacyDecisionTreeJson, null);
+    const chargingNormalSourceLockdown = _parseShadowJson(ctrl.tsNormalSourceLockdownJson, _parseShadowJson(ctrl.tsNormalSourceJson, chargingLegacyDecision && chargingLegacyDecision.normalSourceLockdown ? chargingLegacyDecision.normalSourceLockdown : null));
+    const chargingEvcsJsRemoval = _parseShadowJson(ctrl.tsEvcsJsRemovalJson, null);
+    const chargingAdapterRuntimeHandover = _parseShadowJson(ctrl.tsAdapterRuntimeHandoverJson, chargingEvcsJsRemoval);
     const chargingBudgetPrep = _parseShadowJson(ctrl.tsBudgetJson, null);
 
     /**
@@ -11781,24 +14010,35 @@ function collectAiAdvisorConfigFromUI(base) {
 
     const readinessCard = _renderShadowReadinessCard(readiness);
     if (readinessCard) els.shadowDiagnostics.appendChild(readinessCard);
+    const heatingRuntimeEvaluation = _parseShadowJson(ctrl.heatingRodTsRuntimeEvaluationJson, null);
+    const heatingRuntimeCard = _renderHeatingRodTsRuntimeEvaluationCard(heatingRuntimeEvaluation);
+    if (heatingRuntimeCard) els.shadowDiagnostics.appendChild(heatingRuntimeCard);
     const plantEvaluationCard = _renderShadowPlantEvaluationCard(ctrl.tsShadowPlantEvaluation || ctrl.tsShadowRealPlantEvaluation);
     if (plantEvaluationCard) els.shadowDiagnostics.appendChild(plantEvaluationCard);
-    const activeTestCard = _renderEnergyFlowTsActiveTestCard(ctrl.energyFlowTsActiveTest);
+    const fixedSourceState = _parseShadowJson(ctrl.energyFlowTsFixedSourceJson, ctrl.energyFlowTsFixedSourceState || (flowInputs && flowInputs.tsFixedSource ? flowInputs.tsFixedSource : null));
+    const activeTestCard = _renderEnergyFlowTsActiveTestCard(ctrl.energyFlowTsActiveTest, fixedSourceState);
     if (activeTestCard) els.shadowDiagnostics.appendChild(activeTestCard);
     try { renderEnergyFlowTsModeStatus(ctrl.tsShadowReadiness); } catch (_e) {}
 
     const hint = document.createElement('div');
     hint.className = 'nw-config-help nw-shadow-diagnostics-hint';
-    hint.textContent = 'Hinweis: Shadow-Abweichung bedeutet nicht automatisch Adapterfehler. Die JavaScript-Runtime bleibt produktiv; TypeScript dient hier nur zur Migrationsprüfung.';
+    hint.textContent = 'Hinweis: Shadow-Abweichung bedeutet nicht automatisch Adapterfehler. Bei produktiv übernommenen Bereichen ist TypeScript die Entscheidungsquelle; JavaScript bleibt dort Executor/Fallback. Node/ioBroker führt technisch weiter JavaScript-Artefakte aus; fachliche Normalpfade werden über die TS-Freigaben abgebaut.';
     els.shadowDiagnostics.appendChild(hint);
 
     const cards = [
       { title: 'TS‑Shadow: Core‑Limits', subtitle: 'PV‑Budget, Netzbudget, Speicherreserve, Restbudget', shadow: coreShadow },
       { title: 'TS‑Shadow: Heizstab', subtitle: 'Zielstufe, Zielleistung, Budgetgrund, Speicherreserve', shadow: heatingShadow },
       { title: 'TS‑Shadow: Energiefluss', subtitle: 'Speicher, Netz, PV, Gebäude-Verbrauch', shadow: flowShadow },
-      { title: 'TS‑Produktiv: EVCS Control', subtitle: 'Control‑Status, Budget, Sichtbarkeit, Summary – JS‑Fallback aktiv', shadow: chargingControlPrep },
-      { title: 'TS‑Prep: EVCS Allocation', subtitle: 'Wallbox‑Zielverteilung als produktiver Kandidat; JS schreibt noch', shadow: chargingAllocationPrep },
-      { title: 'TS‑Shadow: EVCS Write‑Plan', subtitle: 'Setpoint‑Schreibplan ohne ioBroker‑I/O', shadow: chargingWritePlanShadow },
+      { title: 'TS‑Produktiv: EVCS Control', subtitle: 'Control‑Status, Budget, Sichtbarkeit, Gates – ohne Setpoint‑Schreiben', shadow: chargingControlPrep },
+      // Kompatibilitätsmarker für ältere Checks: TS‑Prep: EVCS Allocation / TS‑Shadow: EVCS Write‑Plan
+      { title: 'TS‑Produktiv: EVCS Allocation', subtitle: 'Wallbox‑Zielverteilung produktiv über TS; JS bleibt Fallback/Executor', shadow: chargingAllocationProductive },
+      { title: 'TS‑Normalquelle: EVCS Allocation', subtitle: 'TS ist Normalquelle; JS‑Vergleich nur Diagnose, JS nur harter Fallback/Executor', shadow: chargingAllocationNormalSource },
+      { title: 'TS‑Produktiv: EVCS Write‑Plan', subtitle: 'Setpoint‑Schreibplan produktiv; ioBroker‑Executor bleibt JS', shadow: chargingWritePlanProductive },
+      { title: 'TS‑Cleanup: EVCS JS Executor/Fallback', subtitle: 'Alter JS‑Entscheidungsbaum ist nur noch Executor/Fallback statt Normalquelle', shadow: chargingLegacyDecision },
+      { title: 'TS‑Härtung: EVCS Safety‑Handover', subtitle: 'Stale‑Meter‑Stopps und Peak‑Rampdown laufen als TS‑0‑Setpoint‑Vertrag', shadow: chargingLegacyDecision },
+      { title: 'TS‑Lockdown: EVCS Normalquelle', subtitle: 'JS‑Allocation ist aus dem Normalpfad entfernt; nur Executor und harte Fallbacks bleiben', shadow: chargingNormalSourceLockdown },
+      { title: 'TS‑Finale: EVCS JS‑Abbau bereit', subtitle: 'TypeScript besitzt Control, Budget, Allocation und Write‑Plan; JS bleibt Runtime‑Grenze/Executor', shadow: chargingEvcsJsRemoval },
+      { title: 'TS‑Runtime: Adapter Handover', subtitle: 'Adapter ist auf TS‑Quelle vorbereitet; Node/ioBroker führt weiter generierte JS‑Artefakte aus', shadow: chargingAdapterRuntimeHandover },
       { title: 'TS‑Produktiv: EVCS Budget‑Caps', subtitle: 'Grid‑/Phasen‑/§14a‑Caps mit JS‑Fallback', shadow: chargingBudgetPrep },
     ];
 
@@ -11990,8 +14230,11 @@ function collectAiAdvisorConfigFromUI(base) {
       { label: 'Netzlimit (cfg)', value: _fmtW(n(ctrl.gridImportLimitW)) },
       { label: 'Netzlimit (eff)', value: _fmtW(n(ctrl.gridImportLimitEffW)) },
       { label: 'Netz (W)', value: _fmtW(n(ctrl.gridImportW)) },
-      { label: 'Grundlast (est.)', value: _fmtW(n(ctrl.gridBaseLoadW)) },
-      { label: 'EVCS Cap (Netz)', value: _fmtW(n(ctrl.gridCapEvcsW)) },
+      { label: 'Grundlast (wirksam)', value: _fmtW(n(ctrl.gridBaseLoadW)) },
+      { label: 'Lokale Deckung', value: _fmtW(n(ctrl.gridLocalSupportW)) },
+      { label: 'EVCS Ist für Netz-Gate', value: _fmtW(n(ctrl.gridEvcsActualForCapW)) },
+      { label: 'Reservierung ignoriert', value: _fmtW(n(ctrl.gridEvcsReserveIgnoredForCapW)) },
+      { label: 'EVCS Cap (Netz sicher)', value: _fmtW(n(ctrl.gridCapEvcsW)) },
       { label: 'Binding', value: _fmtBool(gridBind, 'JA', 'NEIN') },
     ], gridBind ? 'warn' : 'ok');
 
@@ -12090,7 +14333,10 @@ function collectAiAdvisorConfigFromUI(base) {
           .map((c) => {
             const reserveW = n(c.usedW ?? c.reserveW ?? c.requestedW);
             const pvReserveW = n(c.pvUsedW ?? c.pvReserveW ?? (c.pvOnly ? reserveW : 0));
-            const actualW = n(c.actualW ?? c.usedW ?? c.reserveW ?? c.requestedW);
+            // 0.8.64: In der Prioritäten-Kachel darf 'Ist' nicht aus Reserve/Setpoint
+            // rekonstruiert werden. Wenn kein echter Istwert kommt, bleibt Ist = 0;
+            // Reserve und PV-Reserve werden separat angezeigt.
+            const actualW = n(c.actualW ?? c.actualPowerW ?? c.measuredW ?? 0);
             return Object.assign({}, c, { reserveW, pvReserveW, actualW });
           })
           // Nur echte aktive/relevante Reservierungen als Zeile anzeigen.
@@ -12191,8 +14437,8 @@ function collectAiAdvisorConfigFromUI(base) {
         { label: 'Aktor-Konflikte', value: String(Number(stageA.activeActuatorConflictCount ?? stageA.concurrentControlPathsCount ?? 0)) },
         { label: 'Speicherquelle', value: String(storageOverride.resolvedSource || storageOverride.mode || 'automatisch') },
       ];
-      if (Number(stageA.arbiterBlockedWriteCount ?? arbiter.blockedWriteCount ?? 0) > 0) {
-        monitorRows.push({ label: 'Blockierte Writes', value: String(Number(stageA.arbiterBlockedWriteCount ?? arbiter.blockedWriteCount ?? 0)) });
+      if (Number(arbiter.blockedWriteCount ?? 0) > 0) {
+        monitorRows.push({ label: 'Blockierte Writes', value: String(Number(arbiter.blockedWriteCount ?? 0)) });
       }
       if (Number(stageA.measurementIssueCount || 0) > 0) {
         monitorRows.push({ label: 'Messwert-Hinweise', value: String(Number(stageA.measurementIssueCount || 0)) });
@@ -12203,8 +14449,10 @@ function collectAiAdvisorConfigFromUI(base) {
     // Summary (optional)
     if (sum) {
       els.chargingBudget.appendChild(mkCard('Summary', [
-        { label: 'EVCS Ist', value: _fmtW(n(sum.totalPowerW)) },
-        { label: 'EVCS Soll', value: _fmtW(n(sum.totalTargetPowerW)) },
+        { label: 'EVCS Ist', value: _fmtW(n(ctrl.actualW ?? ctrl.gridEvcsActualForCapW ?? sum.totalPowerW ?? 0)) },
+        { label: 'EVCS Reserviert', value: _fmtW(n(sum.totalReservedPowerW ?? ctrl.reserveW ?? 0)) },
+        { label: 'EVCS Soll', value: _fmtW(n(sum.totalTargetPowerW ?? ctrl.usedW ?? 0)) },
+        { label: 'Ist-Quelle', value: 'frischer Messwert / Grid-Gate' },
         { label: 'Online Ports', value: (sum.onlineWallboxes != null) ? String(sum.onlineWallboxes) : '--' },
       ], ''));
     }
@@ -12219,7 +14467,7 @@ function collectAiAdvisorConfigFromUI(base) {
     if (_activeTab !== 'status') return;
     const data = await fetchJson('/api/ems/charging/diagnostics');
     renderChargingBudget(data || {});
-    renderShadowDiagnostics(data || {});
+    // TS-Migrationsdiagnosen bleiben intern über die API verfügbar, werden ab 0.8.3 aber nicht mehr sichtbar im App-Center gerendert.
     renderChargingDiag(data || {});
     renderStationsDiag(data || {});
   }
@@ -12499,6 +14747,103 @@ function collectAiAdvisorConfigFromUI(base) {
     treePrefix = parts.join('.');
   }
 
+
+  /**
+   * Code-Teil: getInstallerAdminUrl
+   * Zweck: Baut die Rücksprung-URL vom per Adapter-Port geöffneten App-Center zurück
+   * in den ioBroker-/NexoWatt-EOS-Admin-Tab. Der App-Center-Server läuft typischerweise
+   * auf dem Adapter-Port (z. B. 8188), während der Installer-Tab im Admin-Port läuft
+   * (typisch 8081). Ein statischer Link auf `/adapter/nexowatt-ui/tab.html` wäre im
+   * Adapter-Port falsch und führt zu „Datei /tab.html konnte nicht abgerufen werden“.
+   *
+   * Priorität:
+   * 1. explizite Query (`adminUrl`, `nwAdminUrl`) für Sonderinstallationen,
+   * 2. expliziter Query-Port (`adminPort`, `nwAdminPort`),
+   * 3. Referrer aus dem ioBroker-Admin,
+   * 4. Default-Fallback auf gleichen Host mit Admin-Port 8081.
+   *
+   * Wartung: Dieser Helper ist bewusst nur Navigation. Er ändert keine Konfiguration
+   * und gehört deshalb in die App-Center-Frontend-Logik, nicht in EMS-Module.
+   */
+  function getInstallerAdminUrl() {
+    const adminHash = '#tab-nexowatt-ui-0';
+    const win = window || {};
+    const loc = win.location || {};
+    let params = null;
+
+    try {
+      params = new URLSearchParams(loc.search || '');
+    } catch (_e) {
+      params = null;
+    }
+
+    const explicitUrl = params ? (params.get('adminUrl') || params.get('nwAdminUrl')) : '';
+    if (explicitUrl) {
+      try {
+        return new URL(explicitUrl, loc.href || undefined).toString();
+      } catch (_e) {
+        return String(explicitUrl);
+      }
+    }
+
+    const protocol = loc.protocol || 'http:';
+    const hostname = loc.hostname || 'localhost';
+    const explicitPort = params ? (params.get('adminPort') || params.get('nwAdminPort')) : '';
+    if (explicitPort && /^\d{2,5}$/.test(String(explicitPort))) {
+      return `${protocol}//${hostname}:${String(explicitPort)}/${adminHash}`;
+    }
+
+    try {
+      const ref = document.referrer ? new URL(document.referrer) : null;
+      if (ref) {
+        if (ref.hash && ref.hash.indexOf('tab-nexowatt-ui-') >= 0) {
+          return `${ref.origin}/${ref.hash}`;
+        }
+        const refLooksLikeAdmin =
+          ref.pathname.includes('/adapter/nexowatt-ui/tab.html') ||
+          ref.pathname.includes('/admin/') ||
+          (ref.port && ref.port !== loc.port);
+        if (refLooksLikeAdmin) {
+          return `${ref.origin}/${adminHash}`;
+        }
+      }
+    } catch (_e) {
+      // Referrer ist optional; falls er fehlt oder vom Browser gekürzt wurde, nutzen wir unten den Fallback.
+    }
+
+    const currentPort = String(loc.port || '');
+    const adminPort = currentPort && currentPort !== '8081' ? '8081' : (currentPort || '8081');
+    return `${protocol}//${hostname}:${adminPort}/${adminHash}`;
+  }
+
+  /**
+   * Code-Teil: initInstallerBackLink
+   * Zweck: Verbindet den Button „Zurück zum Installer“ mit dem echten Admin-Tab
+   * `/#tab-nexowatt-ui-0`. Dadurch bleibt der Rückweg auch dann korrekt, wenn das
+   * App-Center über den Adapter-Port geöffnet wurde. Die Navigation wird explizit
+   * über `window.top` versucht, damit sie auch aus eingebetteten Admin-/Tab-Kontexten
+   * sauber ausbricht.
+   */
+  function initInstallerBackLink() {
+    const link = els.backInstaller;
+    if (!link) return;
+    const target = getInstallerAdminUrl();
+    link.setAttribute('href', target);
+    link.setAttribute('title', 'Zurück zum NexoWatt-Installer im Admin-Tab');
+    try { link.dataset.target = target; } catch (_e) {}
+
+    if (link.dataset.bound === '1') return;
+    link.dataset.bound = '1';
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      try {
+        window.top.location.href = target;
+      } catch (_e) {
+        window.location.href = target;
+      }
+    });
+  }
+
   // --- Wire up ---
 
   buildAppsUI();
@@ -12526,6 +14871,26 @@ function collectAiAdvisorConfigFromUI(base) {
     });
   }
 
+  if (els.storageCouplingMode) {
+    /**
+     * Code-Teil: _updateStorageCoupling
+     * Zweck: Speichert den AC/DC-Speichertyp direkt in currentConfig und baut die
+     * sichtbare DP-Liste neu auf.
+     * Zusammenhang: Bei DC-/Hybrid-Speichern wird der PV-Erzeugungs-DP sichtbar;
+     * bei AC-Speichern bleibt die Einzel-Speicher-Konfiguration schlank.
+     */
+    const _updateStorageCoupling = () => {
+      currentConfig = currentConfig || {};
+      currentConfig.storage = currentConfig.storage || {};
+      currentConfig.storage.coupling = getStorageCoupling();
+      updateStorageCouplingUi();
+      rebuildStorageTable();
+      scheduleValidation(200);
+    };
+    els.storageCouplingMode.addEventListener('change', _updateStorageCoupling);
+    els.storageCouplingMode.addEventListener('input', _updateStorageCoupling);
+  }
+
   if (els.storageCapacityKWh) {
     /**
      * Code-Teil: _update
@@ -12549,22 +14914,112 @@ function collectAiAdvisorConfigFromUI(base) {
     els.storageCapacityKWh.addEventListener('input', _update);
   }
 
-  if (els.storageFeneconAcMode) {
+  {
     /**
-     * Code-Teil: _update
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     * Code-Teil: _updateStorageSelfNvpControl
+     * Zweck: Synchronisiert Zielband und Filterparameter der Einzel-Speicher-
+     * Eigenverbrauchsoptimierung direkt in currentConfig.
+     * Zusammenhang: Die Runtime regelt weiterhin auf NVP, nutzt aber einen
+     * geglaetteten Fuehrungswert mit RAW-Schutz, damit Speicher nicht sichtbar
+     * zwischen Bezug und Einspeisung pendeln.
      */
-    const _update = () => {
+    const _updateStorageSelfNvpControl = () => {
       currentConfig = currentConfig || {};
       currentConfig.storage = currentConfig.storage || {};
-      currentConfig.storage.feneconGridControlEnabled = !!els.storageFeneconAcMode.checked;
+      currentConfig.storage.selfTargetGridImportW = _clampInt(
+        els.storageSelfTargetGridImportW ? els.storageSelfTargetGridImportW.value : currentConfig.storage.selfTargetGridImportW,
+        0, 1000000, 50,
+      );
+      currentConfig.storage.selfImportThresholdW = _clampInt(
+        els.storageSelfImportThresholdW ? els.storageSelfImportThresholdW.value : currentConfig.storage.selfImportThresholdW,
+        0, 1000000, 50,
+      );
+      currentConfig.storage.selfNvpSmoothingEnabled = true;
+      currentConfig.storage.selfNvpSmoothingSec = _clampInt(
+        els.storageSelfNvpSmoothingSec ? els.storageSelfNvpSmoothingSec.value : currentConfig.storage.selfNvpSmoothingSec,
+        0, 120, 8,
+      );
+      currentConfig.storage.selfNvpRawGuardW = _clampInt(
+        els.storageSelfNvpRawGuardW ? els.storageSelfNvpRawGuardW.value : currentConfig.storage.selfNvpRawGuardW,
+        50, 1000000, 100,
+      );
+      currentConfig.storage.balanceFeedbackHoldSec = _clampInt(
+        els.storageBalanceFeedbackHoldSec ? els.storageBalanceFeedbackHoldSec.value : currentConfig.storage.balanceFeedbackHoldSec,
+        1, 300, 45,
+      );
+      scheduleValidation(200);
     };
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.storageFeneconAcMode. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    els.storageFeneconAcMode.addEventListener('change', _update);
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an els.storageFeneconAcMode. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    els.storageFeneconAcMode.addEventListener('input', _update);
+    [
+      els.storageSelfTargetGridImportW,
+      els.storageSelfImportThresholdW,
+      els.storageSelfNvpSmoothingSec,
+      els.storageSelfNvpRawGuardW,
+      els.storageBalanceFeedbackHoldSec,
+    ].filter(Boolean).forEach((el) => {
+      el.addEventListener('change', _updateStorageSelfNvpControl);
+      el.addEventListener('input', _updateStorageSelfNvpControl);
+    });
+  }
+
+  {
+    /**
+     * Code-Teil: _updateStorageVendorProfile
+     * Zweck: Synchronisiert Herstellerprofil-Optionen direkt in currentConfig.
+     * Zusammenhang: FENECON/OpenEMS nutzt gegateten Watchdog-Refresh/Assist; Sungrow Hybrid nutzt
+     * fest den gemeinsamen NVP-Regelkreis ohne alte PV-Deckungs-0-W-Sonderzweige.
+     * TypeScript: DOM-Checkboxen spaeter als HTMLInputElement typisieren.
+     */
+    const _updateStorageVendorProfile = () => {
+      currentConfig = currentConfig || {};
+      currentConfig.storage = currentConfig.storage || {};
+      const profile = getStorageVendorProfile();
+      currentConfig.storage.vendorProfile = profile;
+      currentConfig.storage.feneconGridControlEnabled = profile === 'fenecon-openems';
+      currentConfig.storage.sungrowHybridEnabled = profile === 'sungrow-hybrid';
+      currentConfig.storage.e3dcRscpEnabled = profile === 'e3dc-rscp';
+
+      if (els.storageFeneconAcMode) els.storageFeneconAcMode.checked = profile === 'fenecon-openems';
+      if (els.storageFeneconDayNoWrite) {
+        els.storageFeneconDayNoWrite.checked = false;
+        els.storageFeneconDayNoWrite.disabled = true;
+        currentConfig.storage.feneconDayNoWriteEnabled = false;
+      }
+      if (els.storageFeneconAssist) {
+        if (profile === 'fenecon-openems' && !els.storageFeneconAssist.checked && currentConfig.storage.feneconAssistEnabled === undefined) {
+          els.storageFeneconAssist.checked = true;
+        }
+        currentConfig.storage.feneconAssistEnabled = !!els.storageFeneconAssist.checked;
+      }
+
+
+      if (els.storageE3dcRscpEnabled) {
+        els.storageE3dcRscpEnabled.checked = profile === 'e3dc-rscp';
+      }
+      if (els.storageE3dcZeroMode) {
+        const zeroMode = String(els.storageE3dcZeroMode.value || currentConfig.storage.e3dcZeroMode || 'normal').trim().toLowerCase();
+        els.storageE3dcZeroMode.value = zeroMode === 'idle' ? 'idle' : 'normal';
+        currentConfig.storage.e3dcZeroMode = els.storageE3dcZeroMode.value;
+      }
+      if (els.storageE3dcAllowGridCharge) {
+        currentConfig.storage.e3dcAllowGridCharge = !!els.storageE3dcAllowGridCharge.checked;
+      }
+      if (els.storageE3dcUsePowerLimits) {
+        currentConfig.storage.e3dcUsePowerLimits = !!els.storageE3dcUsePowerLimits.checked;
+      }
+      updateStorageVendorProfileUi();
+      scheduleValidation(200);
+    };
+
+    if (els.storageVendorProfile) {
+      els.storageVendorProfile.addEventListener('change', _updateStorageVendorProfile);
+      els.storageVendorProfile.addEventListener('input', _updateStorageVendorProfile);
+    }
+    [els.storageFeneconAcMode, els.storageFeneconDayNoWrite, els.storageFeneconAssist, els.storageE3dcRscpEnabled, els.storageE3dcZeroMode, els.storageE3dcAllowGridCharge, els.storageE3dcUsePowerLimits]
+      .filter(Boolean)
+      .forEach((el) => {
+        el.addEventListener('change', _updateStorageVendorProfile);
+        el.addEventListener('input', _updateStorageVendorProfile);
+      });
   }
 
 
@@ -12748,6 +15203,27 @@ function collectAiAdvisorConfigFromUI(base) {
     });
   }
 
+  if (els.para14aSignalMaxAgeSec) {
+    els.para14aSignalMaxAgeSec.addEventListener('change', () => {
+      const ic = _ensurePara14aCfg();
+      const value = Number(els.para14aSignalMaxAgeSec.value);
+      ic.para14aSignalMaxAgeSec = Number.isFinite(value) ? Math.max(1, Math.min(300, Math.round(value))) : 30;
+    });
+  }
+  if (els.para14aStalePolicy) {
+    els.para14aStalePolicy.addEventListener('change', () => {
+      const ic = _ensurePara14aCfg();
+      const value = String(els.para14aStalePolicy.value || 'hold-active');
+      ic.para14aStalePolicy = ['hold-active', 'force-active', 'release'].includes(value) ? value : 'hold-active';
+    });
+  }
+  if (els.para14aLegacyDirectWritesEnabled) {
+    els.para14aLegacyDirectWritesEnabled.addEventListener('change', () => {
+      const ic = _ensurePara14aCfg();
+      ic.para14aLegacyDirectWritesEnabled = els.para14aLegacyDirectWritesEnabled.checked === true;
+    });
+  }
+
   if (els.para14aActiveId) {
     els.para14aActiveId.dataset.dpInput = '1';
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.para14aActiveId. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
@@ -12794,7 +15270,7 @@ function collectAiAdvisorConfigFromUI(base) {
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.evcsCount. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.evcsCount.addEventListener('change', () => {
       const sc = _ensureSettingsConfig();
-      sc.evcsCount = _clampInt(els.evcsCount.value, 0, 50, 0);
+      sc.evcsCount = _clampInt(els.evcsCount.value, 0, _maxEvcsCount(), 0);
       buildEvcsUI();
     });
   }
@@ -13114,8 +15590,52 @@ if (els.ocppAutoDetect) {
   if (els.dpRootBtn) els.dpRootBtn.addEventListener('click', () => { treePrefix = ''; refreshTree().catch(() => {}); });
   if (els.dpUpBtn) els.dpUpBtn.addEventListener('click', () => { upOne(); refreshTree().catch(() => {}); });
 
-  // Initial load
-  loadConfig().catch(e => setStatus('Laden fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
-  backupRefreshInfo().catch(() => {});
+  /**
+   * App-Center hart gegen unberechtigte Einsicht schützen.
+   * Hintergrund: Das App-Center enthält technische Zuordnung, Netzlimits und
+   * Modulkonfiguration. Es darf nicht ausreichen, nachträglich einzelne Buttons
+   * zu sperren. Ohne Admin-/Installer-Rolle wird kein Config-Load gestartet und
+   * der Seiteninhalt bleibt durch auth.ts ersetzt/gesperrt.
+   */
+  async function requireAppCenterAccessBeforeLoad() {
+    try {
+      if (window.NW_AUTH && typeof window.NW_AUTH.requireCapability === 'function') {
+        return await window.NW_AUTH.requireCapability('appcenter.open', {
+          pageName: 'App-Center',
+          requiredRole: 'Admin oder Installer',
+        });
+      }
+      const r = await fetch('/api/session/me?t=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' });
+      const j = r && r.ok ? await r.json() : null;
+      const caps = j && Array.isArray(j.capabilities) ? j.capabilities : [];
+      return !!(j && j.authed && (caps.includes('*') || caps.includes('appcenter.open')));
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  // Initial load: erst nach Rollenprüfung. Dadurch kann „Abbrechen“ im Login
+  // nicht mehr die App-Center-Werte im Hintergrund sichtbar machen.
+  setupInstallerBackButton();
+  requireAppCenterAccessBeforeLoad().then((allowed) => {
+    if (!allowed) {
+      try { setStatus('App-Center gesperrt: Anmeldung als Admin oder Installer erforderlich.', 'error'); } catch (_e) {}
+      return;
+    }
+    loadConfig().catch(e => setStatus('Laden fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
+    backupRefreshInfo().catch(() => {});
+
+    // 0.8.7: Wenn die Lizenz in einem anderen Admin-Tab aktiviert wird, soll das bereits offene
+    // App-Center automatisch von "Keine Lizenz" auf EOS/Home umschalten und die Apps wieder anzeigen.
+    window.addEventListener('focus', () => { refreshLicenseForAppCenter('focus').catch(() => {}); });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) refreshLicenseForAppCenter('visible').catch(() => {});
+    });
+    window.setInterval(() => {
+      if (_licenseEdition() === 'none') refreshLicenseForAppCenter('poll').catch(() => {});
+    }, 5000);
+  }).catch(() => {
+    try { setStatus('App-Center gesperrt: Anmeldung als Admin oder Installer erforderlich.', 'error'); } catch (_e) {}
+  });
 
 })();

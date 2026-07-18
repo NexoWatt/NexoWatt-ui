@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:d9ce4a8517e4a78d0bb3ce20730e6feb9b88b081d3595f8c07912722c69ab5c1
+ * Quell-Hash: sha256:5c9b897f3bf03a819138ce0c415c54dc6a35b1050eacc18faa49c7bb3752bc64
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -604,12 +604,17 @@ class NexoWattVis extends utils.Adapter {
       const mapped = map[String(key || '')];
       const mappedId = (typeof mapped === 'string' && mapped.trim()) ? mapped.trim() : '';
       if (mappedId) {
-        await this.setForeignStateAsync(mappedId, plan.value);
+        const mappedWriteResult = await this.setForeignStateAsync(mappedId, plan.value);
+        if (isActuatorAuthorityBlockedResult(mappedWriteResult)) {
+          const blockedBy = String(mappedWriteResult.blockedByOwner || '');
+          this._nwApiSetTsRuntimeLast = { ts: Date.now(), used: true, handled: true, ok: false, scope, key, plan, mappedId, reason: 'blocked_by_actuator_authority', blockedBy };
+          return { handled: true, ok: false, reason: 'blocked_by_actuator_authority', blockedBy, plan, mappedId };
+        }
       } else {
         await this.setStateAsync(plan.stateId, { val: plan.value, ack: !!plan.ack });
       }
       try { this.updateValue(plan.stateId, plan.value, Date.now()); } catch (_eUpd) {}
-      this._nwApiSetTsRuntimeLast = { ts: Date.now(), used: true, handled: true, scope, key, plan, mappedId: mappedId || '' };
+      this._nwApiSetTsRuntimeLast = { ts: Date.now(), used: true, handled: true, ok: true, scope, key, plan, mappedId: mappedId || '' };
       return { handled: true, ok: true, plan, mappedId };
     } catch (e) {
       this._nwApiSetTsRuntimeLast = { ts: Date.now(), used: false, handled: false, scope, key, reason: 'ts-exception', error: e && e.message ? e.message : String(e) };
@@ -3502,6 +3507,21 @@ class NexoWattVis extends utils.Adapter {
       }
     }
 
+    // Speicher-DP-Migration: Manuelle AppCenter-Zuordnungen bleiben auch dann
+    // wirksam, wenn ältere Installer-Patches direkte/alte Feldnamen enthalten.
+    try {
+      const storageBefore = JSON.stringify(out.storage || {});
+      out.storage = this._nwIsPlainObject(out.storage) ? out.storage : {};
+      out.storage.datapoints = this._nwNormalizeStorageDatapointsConfig(out.storage, out.datapoints);
+      if (storageBefore !== JSON.stringify(out.storage || {})) changed = true;
+
+      if (this._nwIsPlainObject(out.storageFarm) && Array.isArray(out.storageFarm.storages)) {
+        const farmBefore = JSON.stringify(out.storageFarm.storages);
+        out.storageFarm.storages = this._nwNormalizeStorageFarmRows(out.storageFarm.storages);
+        if (farmBefore !== JSON.stringify(out.storageFarm.storages)) changed = true;
+      }
+    } catch (_eStorageDpMigration) {}
+
     // Normalize emsApps (canonical structure)
     try {
       const mergedForApps = Object.assign({}, base, out);
@@ -4720,7 +4740,154 @@ class NexoWattVis extends utils.Adapter {
     return { ok: true };
   }
 
+  /**
+   * Normalisiert die frei zugeordneten Einzel-Speicher-DPs aus aktuellen und
+   * älteren Installer-Strukturen. Die aktuelle storage.datapoints-Struktur hat
+   * immer Vorrang; Fallbacks werden nur für leere Felder übernommen.
+   */
+  _nwNormalizeStorageDatapointsConfig(storageIn, globalDatapointsIn) {
+    const storage = storageIn && typeof storageIn === 'object' && !Array.isArray(storageIn) ? storageIn : {};
+    const current = storage.datapoints && typeof storage.datapoints === 'object' && !Array.isArray(storage.datapoints)
+      ? storage.datapoints
+      : {};
+    const globalDps = globalDatapointsIn && typeof globalDatapointsIn === 'object' && !Array.isArray(globalDatapointsIn)
+      ? globalDatapointsIn
+      : {};
+    const roots = [current, storage];
+    const textFrom = (keys, globalKeys = []) => {
+      for (const root of roots) {
+        for (const key of keys) {
+          const value = root[key];
+          if (value === undefined || value === null) continue;
+          const text = String(value).trim();
+          if (text) return text;
+        }
+      }
+      for (const key of globalKeys) {
+        const value = globalDps[key];
+        if (value === undefined || value === null) continue;
+        const text = String(value).trim();
+        if (text) return text;
+      }
+      return '';
+    };
+    const out = { ...current };
+    const assignText = (canonical, aliases, globalKeys = []) => {
+      const value = textFrom([canonical, ...aliases], globalKeys);
+      if (value) out[canonical] = value;
+      else if (out[canonical] === undefined || out[canonical] === null) out[canonical] = '';
+    };
+
+    assignText('socObjectId', ['socId', 'socDp', 'storageSocId'], ['storageSoc']);
+    assignText('batteryPowerObjectId', ['signedPowerId', 'powerObjectId', 'powerId'], ['batteryPower']);
+    assignText('batteryChargePowerObjectId', ['chargePowerId', 'chargePowerDp'], ['storageChargePower']);
+    assignText('batteryDischargePowerObjectId', ['dischargePowerId', 'dischargePowerDp'], ['storageDischargePower']);
+    assignText('dcPvPowerObjectId', ['pvPowerId', 'pvPowerObjectId', 'pvPowerDp'], ['storagePvPower']);
+    assignText('targetPowerObjectId', ['setSignedPowerId', 'targetPowerId', 'powerSetpointId', 'setpointId', 'setPowerId']);
+    assignText('targetChargePowerObjectId', ['setChargePowerId', 'targetChargePowerId', 'chargeSetpointId']);
+    assignText('targetDischargePowerObjectId', ['setDischargePowerId', 'targetDischargePowerId', 'dischargeSetpointId']);
+    assignText('runObjectId', ['runId', 'enableObjectId', 'controlEnableId']);
+    assignText('maxChargeObjectId', ['maxChargeId', 'maxChargePowerObjectId']);
+    assignText('maxDischargeObjectId', ['maxDischargeId', 'maxDischargePowerObjectId']);
+    assignText('chargeEnableObjectId', ['chargeAllowedId', 'chargeEnableId']);
+    assignText('dischargeEnableObjectId', ['dischargeAllowedId', 'dischargeEnableId']);
+    assignText('reserveSocObjectId', ['reserveSocId']);
+    return out;
+  }
+
   // Speicherfarm (mehrere Speichersysteme als Pool/Gruppe)
+  /**
+   * Normalisiert eine manuell im AppCenter zugeordnete Speicherfarm-Zeile.
+   *
+   * Die aktuellen Feldnamen bleiben immer führend. Ältere Installer-/Runtime-
+   * Spiegel werden ausschließlich als Fallback gelesen, damit die TS-Umstellung
+   * bestehende freie ioBroker-DP-Zuordnungen nicht entkoppelt. Es findet bewusst
+   * keine Hersteller- oder Objektpfad-Erkennung statt.
+   */
+  _nwNormalizeStorageFarmRow(row, index = 0) {
+    const r = row && typeof row === 'object' && !Array.isArray(row) ? row : {};
+    const nested = [
+      r,
+      (r.datapoints && typeof r.datapoints === 'object') ? r.datapoints : null,
+      (r.dp && typeof r.dp === 'object') ? r.dp : null,
+      (r.mapping && typeof r.mapping === 'object') ? r.mapping : null,
+    ].filter(Boolean);
+    const textFrom = (...keys) => {
+      // Feldname vor Container: Ein heutiges kanonisches Feld gewinnt auch dann,
+      // wenn ein alter Alias noch parallel in einer anderen Migrationsebene liegt.
+      for (const key of keys) {
+        for (const root of nested) {
+          const value = root[key];
+          if (value === undefined || value === null) continue;
+          const text = String(value).trim();
+          if (text) return text;
+        }
+      }
+      return '';
+    };
+    const numberOrNull = (...keys) => {
+      for (const key of keys) {
+        for (const root of nested) {
+          const value = root[key];
+          if (value === undefined || value === null || value === '') continue;
+          const n = Number(String(value).replace(',', '.'));
+          if (Number.isFinite(n)) return n;
+        }
+      }
+      return null;
+    };
+    const boolFrom = (fallback, ...keys) => {
+      for (const key of keys) {
+        for (const root of nested) {
+          if (!Object.prototype.hasOwnProperty.call(root, key)) continue;
+          const value = root[key];
+          if (typeof value === 'boolean') return value;
+          if (value === 1 || value === '1' || String(value).trim().toLowerCase() === 'true') return true;
+          if (value === 0 || value === '0' || String(value).trim().toLowerCase() === 'false') return false;
+        }
+      }
+      return fallback;
+    };
+
+    const couplingRaw = textFrom('coupling', 'storageCoupling').toLowerCase();
+    const coupling = couplingRaw === 'dc' ? 'dc' : (couplingRaw === 'ac' ? 'ac' : '');
+    return {
+      ...r,
+      enabled: boolFrom(true, 'enabled', 'active'),
+      name: textFrom('name', 'label', 'title') || `Speicher ${Math.max(1, Number(index) + 1)}`,
+      coupling,
+      // Messwerte
+      socId: textFrom('socId', 'socObjectId', 'socDp', 'storageSocId', 'storageSoc'),
+      signedPowerId: textFrom('signedPowerId', 'batteryPowerObjectId', 'signedPowerDp', 'powerObjectId', 'powerId', 'batteryPower'),
+      chargePowerId: textFrom('chargePowerId', 'batteryChargePowerObjectId', 'chargePowerDp', 'chargeDp', 'storageChargePower'),
+      dischargePowerId: textFrom('dischargePowerId', 'batteryDischargePowerObjectId', 'dischargePowerDp', 'dischargeDp', 'storageDischargePower'),
+      pvPowerId: textFrom('pvPowerId', 'pvPowerObjectId', 'pvPowerDp', 'storagePvPowerId'),
+      invertSignedPowerSign: boolFrom(false, 'invertSignedPowerSign', 'batteryPowerInvert', 'invertPowerSign'),
+      invertChargeSign: boolFrom(false, 'invertChargeSign', 'batteryChargePowerInvert'),
+      invertDischargeSign: boolFrom(false, 'invertDischargeSign', 'batteryDischargePowerInvert'),
+      // Schreibziele
+      setSignedPowerId: textFrom('setSignedPowerId', 'targetPowerObjectId', 'targetPowerId', 'setSignedPowerDp', 'powerSetpointId', 'setpointId', 'setPowerId'),
+      setChargePowerId: textFrom('setChargePowerId', 'targetChargePowerObjectId', 'targetChargePowerId', 'setChargePowerDp', 'chargeSetpointId'),
+      setDischargePowerId: textFrom('setDischargePowerId', 'targetDischargePowerObjectId', 'targetDischargePowerId', 'setDischargePowerDp', 'dischargeSetpointId'),
+      invertSetSignedPowerSign: boolFrom(false, 'invertSetSignedPowerSign', 'targetPowerInvert', 'invertSetpointSign'),
+      // Grenzen / optionale Signale
+      maxChargeW: numberOrNull('maxChargeW', 'maxChargePowerW'),
+      maxDischargeW: numberOrNull('maxDischargeW', 'maxDischargePowerW'),
+      availableId: textFrom('availableId', 'availableObjectId', 'availableDp', 'availabilityId'),
+      faultId: textFrom('faultId', 'faultObjectId', 'faultDp', 'errorId'),
+      chargeAllowedId: textFrom('chargeAllowedId', 'chargeAllowedObjectId', 'chargeAllowedDp', 'chargeEnableId'),
+      dischargeAllowedId: textFrom('dischargeAllowedId', 'dischargeAllowedObjectId', 'dischargeAllowedDp', 'dischargeEnableId'),
+      capacityKWh: numberOrNull('capacityKWh', 'capacityKwh', 'batteryCapacityKWh'),
+      group: textFrom('group', 'groupName'),
+    };
+  }
+
+  _nwNormalizeStorageFarmRows(rows) {
+    return (Array.isArray(rows) ? rows : [])
+      .filter((row) => row && typeof row === 'object' && !Array.isArray(row))
+      .map((row, index) => this._nwNormalizeStorageFarmRow(row, index));
+  }
+
   /**
    * Code-Teil: _nwStorageFarmRowHasRealDatapoint
    * Zweck: Erkennt eine echte Speicherzeile unabhängig davon, ob der Hersteller
@@ -4728,7 +4895,7 @@ class NexoWattVis extends utils.Adapter {
    * PV-/Wechselrichter-DP reicht bewusst nicht aus, weil er keinen Speicher bildet.
    */
   _nwStorageFarmRowHasRealDatapoint(row) {
-    const r = row && typeof row === 'object' ? row : null;
+    const r = this._nwNormalizeStorageFarmRow(row);
     if (!r || r.enabled === false) return false;
     return [
       'socId', 'chargePowerId', 'dischargePowerId', 'signedPowerId',
@@ -4738,38 +4905,49 @@ class NexoWattVis extends utils.Adapter {
   }
 
   /**
+   * Code-Teil: _nwStorageFarmRowHasWritableDatapoint
+   * Zweck: Trennt reine Farm-Aggregation von einer tatsächlich beschreibbaren
+   * Farm. Mess-/Status-DPs dürfen den manuell gemappten Einzel-Speicherpfad nicht
+   * übernehmen, wenn kein Farm-Sollwert zugeordnet ist.
+   */
+  _nwStorageFarmRowHasWritableDatapoint(row) {
+    const r = this._nwNormalizeStorageFarmRow(row);
+    if (!r || r.enabled === false) return false;
+    return ['setChargePowerId', 'setDischargePowerId', 'setSignedPowerId']
+      .some((key) => String(r[key] || '').trim());
+  }
+
+  /**
    * Code-Teil: _nwGetStorageFarmRuntimeInfo
    * Zweck: Liefert eine einzige, autoritative Aktiv-/Konfigurationsbewertung für
    * Speicherfarm-Aggregation, Energiefluss, Scheduler und Kunden-Feature-Gates.
-   * Zusammenhang: App-Center ist führend. Legacy-enableStorageFarm bleibt nur dann
-   * kompatibel, wenn noch kein expliziter App-Center-Eintrag existiert.
+   * Zusammenhang: App-Center ist führend. Der Runtime-State wird nur als echte
+   * Migration benutzt, wenn im AppCenter überhaupt keine reale Zeile vorhanden ist.
    */
   _nwGetStorageFarmRuntimeInfo() {
     try {
       const cfg = this.config || {};
       const sf = (cfg.storageFarm && typeof cfg.storageFarm === 'object') ? cfg.storageFarm : {};
-      let rows = Array.isArray(sf.storages) ? sf.storages : [];
+      let rows = this._nwNormalizeStorageFarmRows(sf.storages);
       let configuredRows = rows.filter((row) => this._nwStorageFarmRowHasRealDatapoint(row));
       let rowsSource = 'config';
 
-      // Feldmigration: Bei älteren Installationen kann die produktive Farmtabelle noch
-      // ausschließlich in storageFarm.configJson liegen, obwohl der AppCenter-Eintrag
-      // korrekt installiert/aktiv ist. Dieser Runtime-Fallback stellt nur die Zeilen
-      // wieder her; er aktiviert die App niemals selbst.
-      if (configuredRows.length < 2) {
+      // Nur eine vollständig leere AppCenter-Tabelle darf aus dem Runtime-Spiegel
+      // rekonstruiert werden. Bereits eine manuell konfigurierte Zeile beweist, dass
+      // AppCenter die aktuelle Quelle ist; ein alter State darf sie nicht überstimmen.
+      if (configuredRows.length === 0) {
         try {
           const rec = this.stateCache && this.stateCache['storageFarm.configJson'];
           const rawRuntime = rec ? rec.value : null;
           const parsedRuntime = typeof rawRuntime === 'string'
             ? JSON.parse(rawRuntime || '[]')
             : rawRuntime;
-          if (Array.isArray(parsedRuntime)) {
-            const runtimeConfiguredRows = parsedRuntime.filter((row) => this._nwStorageFarmRowHasRealDatapoint(row));
-            if (runtimeConfiguredRows.length > configuredRows.length) {
-              rows = parsedRuntime;
-              configuredRows = runtimeConfiguredRows;
-              rowsSource = 'runtime-state';
-            }
+          const runtimeRows = this._nwNormalizeStorageFarmRows(parsedRuntime);
+          const runtimeConfiguredRows = runtimeRows.filter((row) => this._nwStorageFarmRowHasRealDatapoint(row));
+          if (runtimeConfiguredRows.length > 0) {
+            rows = runtimeRows;
+            configuredRows = runtimeConfiguredRows;
+            rowsSource = 'runtime-state-migration';
           }
         } catch (_eRuntimeRows) {}
       }
@@ -4786,26 +4964,37 @@ class NexoWattVis extends utils.Adapter {
       // Eine Farm ist erst ab zwei real konfigurierten Speichern fachlich aktiv.
       const configuredCount = configuredRows.length;
       const enabledByConfig = appRecordPresent ? appCenterActive : legacyActive;
+      const active = !!(enabledByConfig && configuredCount >= 2);
+      const writableRows = configuredRows.filter((row) => this._nwStorageFarmRowHasWritableDatapoint(row));
+      const writableCount = writableRows.length;
       return {
-        active: !!(enabledByConfig && configuredCount >= 2),
+        active,
+        // Ein Schreibpfad ist nur aktiv, wenn mindestens ein manuell zugeordnetes
+        // Farm-Ziel existiert. Reine Mess-/Statuszeilen kapern niemals den Einzelpfad.
+        dispatchActive: !!(active && writableCount > 0),
         appCenterActive,
         legacyActive,
         appRecordPresent,
         configuredCount,
         configuredRows,
+        writableCount,
+        writableRows,
         rows,
         rowsSource,
       };
     } catch (_e) {
       return {
         active: false,
+        dispatchActive: false,
         appCenterActive: false,
         legacyActive: false,
         appRecordPresent: false,
         configuredCount: 0,
         configuredRows: [],
+        writableCount: 0,
+        writableRows: [],
         rows: [],
-        rowsSource: 'missing',
+        rowsSource: 'error',
       };
     }
   }
@@ -4978,38 +5167,11 @@ class NexoWattVis extends utils.Adapter {
       const modeRaw = String(adminSf.mode || 'pool').toLowerCase().trim();
       const mode = (modeRaw === 'groups') ? 'groups' : 'pool';
 
-      // Tabellenzeilen aus Admin
-      const rows = Array.isArray(adminSf.storages) ? adminSf.storages : [];
-      const normalized = rows
-        .filter(r => r && typeof r === 'object')
-        .map(r => ({
-          enabled: !(r.enabled === false),
-          name: String(r.name || '').trim(),
-          coupling: String(r.coupling || '').trim().toLowerCase(),
-          socId: String(r.socId || '').trim(),
-          chargePowerId: String(r.chargePowerId || '').trim(),
-          invertChargeSign: !!r.invertChargeSign,
-          dischargePowerId: String(r.dischargePowerId || '').trim(),
-          pvPowerId: String(r.pvPowerId || '').trim(),
-          invertDischargeSign: !!r.invertDischargeSign,
-          signedPowerId: String(r.signedPowerId || '').trim(),
-          invertSignedPowerSign: !!r.invertSignedPowerSign,
-          setChargePowerId: String(r.setChargePowerId || '').trim(),
-          setDischargePowerId: String(r.setDischargePowerId || '').trim(),
-          setSignedPowerId: String(r.setSignedPowerId || '').trim(),
-          invertSetSignedPowerSign: !!r.invertSetSignedPowerSign,
-          // Herstellerneutrale Farm-Sicherheits- und Leistungsgrenzen.
-          // Statische Werte begrenzen die Verteilung unabhängig vom angebundenen System.
-          // Ab v0.6.258 bewusst nur direkte Eingaben: keine dynamischen Max-Leistungs-DP als harte Grenze.
-          maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : null,
-          maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : null,
-          availableId: String(r.availableId || '').trim(),
-          faultId: String(r.faultId || '').trim(),
-          chargeAllowedId: String(r.chargeAllowedId || '').trim(),
-          dischargeAllowedId: String(r.dischargeAllowedId || '').trim(),
-          capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : null,
-          group: String(r.group || '').trim(),
-        }));
+      // Exakt dieselben normalisierten Zeilen wie Aggregation und Dispatcher spiegeln.
+      // AppCenter bleibt führend; nur bei vollständig leerer Tabelle liefert runtimeInfo
+      // einen einmaligen Migrations-Fallback aus storageFarm.configJson.
+      const rows = Array.isArray(runtimeInfo && runtimeInfo.rows) ? runtimeInfo.rows : rowsRaw;
+      const normalized = this._nwNormalizeStorageFarmRows(rows);
 
       // Nur überschreiben, wenn Admin etwas geliefert hat ODER wenn State noch leer ist (Migration/First Run)
       let shouldWriteList = normalized.length > 0;
@@ -5067,15 +5229,11 @@ class NexoWattVis extends utils.Adapter {
         : { active: !!cfg.enableStorageFarm };
       if (!runtimeInfo.active) return;
 
-      const stCfg = await this.getStateAsync('storageFarm.configJson');
-      const raw = (stCfg && typeof stCfg.val === 'string') ? stCfg.val : '[]';
-      let list = [];
-      try { list = raw ? JSON.parse(raw) : []; } catch (_e) { list = []; }
-      if (!Array.isArray(list)) list = [];
-      // Nach Updates oder einer frischen Aktivierung kann der State-Spiegel einen Tick
-      // hinter der Admin-Konfiguration liegen. In diesem Fall direkt mit den bereits
-      // autoritativ geprüften Farm-Zeilen weiterrechnen, statt 0 W zu veröffentlichen.
-      if (!list.length && Array.isArray(runtimeInfo.rows)) list = runtimeInfo.rows.slice();
+      // Eine einzige Quelle der Wahrheit: Die bereits normalisierten AppCenter-Zeilen
+      // aus runtimeInfo. storageFarm.configJson ist nur ein Spiegel/Migrations-Fallback
+      // innerhalb von _nwGetStorageFarmRuntimeInfo und darf die aktuelle Zuordnung nicht
+      // erneut überstimmen oder in anderer Reihenfolge auswerten.
+      const list = this._nwNormalizeStorageFarmRows(runtimeInfo.rows);
 
       // --- Offline/Stale detection -------------------------------------------------
       // If a device adapter (e.g. nexowatt-devices / modbus) hangs, ioBroker keeps the
@@ -5400,23 +5558,21 @@ class NexoWattVis extends utils.Adapter {
         // die NVP-Regelung sieht dann eine künstlich hohe Batterie-Istleistung
         // und kann bis zu absurden Sollwerten hochintegrieren.
         const targetPowerIds = [setSignedPowerId, setChargePowerId, setDischargePowerId].filter(Boolean);
-        const looksLikeSetpointPowerId = (id) => {
+        // Hersteller-/Objektpfad-offen: Ein manuell zugeordneter Istwert wird nur
+        // dann verworfen, wenn er exakt dasselbe ioBroker-Objekt wie ein zugeordneter
+        // Sollwert verwendet. Namen wie `.ctrl.` oder `setpoint` sind kein Beweis und
+        // dürfen legitime Fremd-DPs nicht blockieren.
+        const isMappedSetpointPowerId = (id) => {
           const sid = String(id || '').trim();
-          if (!sid) return false;
-          const lower = sid.toLowerCase();
-          return targetPowerIds.includes(sid) ||
-            lower.includes('.aliases.ctrl.') ||
-            lower.includes('.ctrl.') ||
-            lower.includes('powersetpoint') ||
-            lower.includes('setpoint');
+          return !!sid && targetPowerIds.includes(sid);
         };
-        const signedFeedbackUsable = !!signedId && !looksLikeSetpointPowerId(signedId);
-        const chargeFeedbackUsable = !!chgId && !looksLikeSetpointPowerId(chgId);
-        const dischargeFeedbackUsable = !!dchgId && !looksLikeSetpointPowerId(dchgId);
+        const signedFeedbackUsable = !!signedId && !isMappedSetpointPowerId(signedId);
+        const chargeFeedbackUsable = !!chgId && !isMappedSetpointPowerId(chgId);
+        const dischargeFeedbackUsable = !!dchgId && !isMappedSetpointPowerId(dchgId);
         const ignoredPowerFeedback = [];
-        if (signedId && !signedFeedbackUsable) ignoredPowerFeedback.push('signedPowerId wirkt wie Sollwert-DP');
-        if (chgId && !chargeFeedbackUsable) ignoredPowerFeedback.push('chargePowerId wirkt wie Sollwert-DP');
-        if (dchgId && !dischargeFeedbackUsable) ignoredPowerFeedback.push('dischargePowerId wirkt wie Sollwert-DP');
+        if (signedId && !signedFeedbackUsable) ignoredPowerFeedback.push('signedPowerId ist identisch mit einem Sollwert-DP');
+        if (chgId && !chargeFeedbackUsable) ignoredPowerFeedback.push('chargePowerId ist identisch mit einem Sollwert-DP');
+        if (dchgId && !dischargeFeedbackUsable) ignoredPowerFeedback.push('dischargePowerId ist identisch mit einem Sollwert-DP');
         if (ignoredPowerFeedback.length) status.powerFeedbackIgnoredReason = ignoredPowerFeedback.join('; ');
 
         const powerSourceKey = signedFeedbackUsable
@@ -5666,14 +5822,14 @@ class NexoWattVis extends utils.Adapter {
         else if (isDegraded) dispatchWarnings.push(stateReason || 'degraded');
 
         if (availState.configured) {
-          if (availState.missing) baseBlocked.push('available_missing');
-          else if (availState.invalid) baseBlocked.push('available_invalid');
+          if (availState.missing) dispatchWarnings.push('available_missing_ignored');
+          else if (availState.invalid) dispatchWarnings.push('available_invalid_ignored');
           else if (availState.value === false) baseBlocked.push('available_false');
           else if (!availState.fresh) dispatchWarnings.push('available_stale_using_last');
         }
         if (faultState.configured) {
-          if (faultState.missing) baseBlocked.push('fault_missing');
-          else if (faultState.invalid) baseBlocked.push('fault_invalid');
+          if (faultState.missing) dispatchWarnings.push('fault_missing_ignored');
+          else if (faultState.invalid) dispatchWarnings.push('fault_invalid_ignored');
           else if (faultState.value === true) baseBlocked.push('fault_active');
           else if (!faultState.fresh) dispatchWarnings.push('fault_stale_using_last');
         }
@@ -5681,8 +5837,8 @@ class NexoWattVis extends utils.Adapter {
         const chargeBlocked = baseBlocked.slice();
         if (!hasChargeSetpoint) chargeBlocked.push('charge_setpoint_missing');
         if (chargeAllowedState.configured) {
-          if (chargeAllowedState.missing) chargeBlocked.push('charge_allowed_missing');
-          else if (chargeAllowedState.invalid) chargeBlocked.push('charge_allowed_invalid');
+          if (chargeAllowedState.missing) dispatchWarnings.push('charge_allowed_missing_ignored');
+          else if (chargeAllowedState.invalid) dispatchWarnings.push('charge_allowed_invalid_ignored');
           else if (chargeAllowedState.value === false) chargeBlocked.push('charge_not_allowed');
           else if (!chargeAllowedState.fresh) dispatchWarnings.push('charge_allowed_stale_using_last');
         }
@@ -5691,8 +5847,8 @@ class NexoWattVis extends utils.Adapter {
         const dischargeBlocked = baseBlocked.slice();
         if (!hasDischargeSetpoint) dischargeBlocked.push('discharge_setpoint_missing');
         if (dischargeAllowedState.configured) {
-          if (dischargeAllowedState.missing) dischargeBlocked.push('discharge_allowed_missing');
-          else if (dischargeAllowedState.invalid) dischargeBlocked.push('discharge_allowed_invalid');
+          if (dischargeAllowedState.missing) dispatchWarnings.push('discharge_allowed_missing_ignored');
+          else if (dischargeAllowedState.invalid) dispatchWarnings.push('discharge_allowed_invalid_ignored');
           else if (dischargeAllowedState.value === false) dischargeBlocked.push('discharge_not_allowed');
           else if (!dischargeAllowedState.fresh) dispatchWarnings.push('discharge_allowed_stale_using_last');
         }
@@ -6070,46 +6226,20 @@ class NexoWattVis extends utils.Adapter {
     // App-Center-Aktivierung. Legacy-Flags dürfen keinen Parallelzustand erzeugen.
     const runtimeInfo = this._nwGetStorageFarmRuntimeInfo();
     const enabled = !!(runtimeInfo && runtimeInfo.active);
+    const dispatchEnabled = !!(runtimeInfo && runtimeInfo.dispatchActive);
     const sf = (cfg.storageFarm && typeof cfg.storageFarm === 'object') ? cfg.storageFarm : {};
     const modeRaw = String(sf.mode || 'pool').toLowerCase().trim();
     const mode = (modeRaw === 'groups') ? 'groups' : 'pool';
-    // Auf Feldanlagen kann die autoritative Farm-Konfiguration nach einem Update
-    // noch ausschließlich aus storageFarm.configJson stammen. Der Dispatcher muss
-    // dieselben Runtime-Zeilen wie Aggregation und UI verwenden und darf dann nicht
-    // mit `no_storages` aussteigen.
-    const storagesIn = Array.isArray(sf.storages) && sf.storages.length
-      ? sf.storages
-      : (Array.isArray(runtimeInfo && runtimeInfo.rows) ? runtimeInfo.rows : []);
+    // Aggregation und Dispatcher verwenden exakt dieselbe, zentral aufgelöste
+    // AppCenter-/Migrationsquelle. Keine zweite Auswahl anhand von Array-Längen.
+    const storagesIn = Array.isArray(runtimeInfo && runtimeInfo.rows) ? runtimeInfo.rows : [];
     const groupsIn = Array.isArray(sf.groups) ? sf.groups : [];
 
-    const storages = storagesIn
-      .filter(r => r && typeof r === 'object')
-      .map((r, index) => {
-        const storage = {
-          enabled: !(r.enabled === false),
-          name: String(r.name || '').trim(),
-          socId: String(r.socId || '').trim(),
-          signedPowerId: String(r.signedPowerId || '').trim(),
-          chargePowerId: String(r.chargePowerId || '').trim(),
-          dischargePowerId: String(r.dischargePowerId || '').trim(),
-          setChargePowerId: String(r.setChargePowerId || '').trim(),
-          setDischargePowerId: String(r.setDischargePowerId || '').trim(),
-          setSignedPowerId: String(r.setSignedPowerId || '').trim(),
-          invertSetSignedPowerSign: !!r.invertSetSignedPowerSign,
-          invertChargeSign: !!r.invertChargeSign,
-          invertDischargeSign: !!r.invertDischargeSign,
-          maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : null,
-          maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : null,
-          availableId: String(r.availableId || '').trim(),
-          faultId: String(r.faultId || '').trim(),
-          chargeAllowedId: String(r.chargeAllowedId || '').trim(),
-          dischargeAllowedId: String(r.dischargeAllowedId || '').trim(),
-          capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : null,
-          group: String(r.group || '').trim(),
-        };
-        storage.dispatchKey = this._sfGetStorageDispatchKey(storage, index);
-        return storage;
-      })
+    const storages = this._nwNormalizeStorageFarmRows(storagesIn)
+      .map((storage, index) => ({
+        ...storage,
+        dispatchKey: this._sfGetStorageDispatchKey(storage, index),
+      }))
       .filter(r => r.enabled);
 
     const groups = groupsIn
@@ -6123,7 +6253,7 @@ class NexoWattVis extends utils.Adapter {
       }))
       .filter(g => g.enabled && g.name);
 
-    return { enabled, mode, storages, groups };
+    return { enabled, dispatchEnabled, mode, storages, groups };
   }
   /**
    * Code-Teil: _sfGetStorageDispatchKey
@@ -6287,7 +6417,10 @@ class NexoWattVis extends utils.Adapter {
     }
 
     const now = Date.now();
-    const keepaliveMs = 5000;
+    // Externe Speichercontroller/FENECON-Watchdogs muessen auch bei unveraendertem
+    // Sollwert regelmaessig bestaetigt werden. 900 ms stellt bei einem 1-s-EMS-Tick
+    // sicher, dass jedes Intervall einen echten Write ausloest.
+    const keepaliveMs = 900;
 
     const lastVal = this._sfLastSetpoints.get(objectId);
     const lastTs = this._sfLastSetpointsTs.get(objectId) || 0;
@@ -6301,7 +6434,17 @@ class NexoWattVis extends utils.Adapter {
     }
 
     try {
-      await this.setForeignStateAsync(objectId, value, false);
+      const writeResult = await this.setForeignStateAsync(objectId, value, false);
+      if (isActuatorAuthorityBlockedResult(writeResult)) {
+        return {
+          ok: false,
+          skipped: false,
+          changed: false,
+          blocked: true,
+          reason: 'blocked_by_actuator_authority',
+          blockedByOwner: String(writeResult.blockedByOwner || ''),
+        };
+      }
       this._sfLastSetpoints.set(objectId, value);
       this._sfLastSetpointsTs.set(objectId, now);
       return { ok: true, skipped: false, changed: true, same, keepalive: same && age >= keepaliveMs };
@@ -6318,6 +6461,7 @@ class NexoWattVis extends utils.Adapter {
     const sf = this._sfGetNormalizedFarmConfig();
     if (!sf.enabled) return { applied: false, reason: 'disabled' };
     if (!sf.storages || sf.storages.length === 0) return { applied: false, reason: 'no_storages' };
+    if (!sf.dispatchEnabled) return { applied: false, reason: 'no_setpoint_dps' };
 
     const direction = (w < 0) ? 'charge' : ((w > 0) ? 'discharge' : 'idle');
     const absW = Math.abs(w);
@@ -6343,7 +6487,7 @@ class NexoWattVis extends utils.Adapter {
     };
     await readFarmStatus();
 
-    const farmIntervalMs = Math.max(1000, Number((this.config && this.config.storageFarm && this.config.storageFarm.schedulerIntervalMs) || 2000));
+    const farmIntervalMs = Math.max(250, Math.min(1000, Number((this.config && this.config.storageFarm && this.config.storageFarm.schedulerIntervalMs) || 1000)));
     const statusTs = Number(statusState && statusState.ts);
     const statusAgeMs = Number.isFinite(statusTs) && statusTs > 0 ? Math.max(0, now - statusTs) : Number.POSITIVE_INFINITY;
     const statusNeedsRefresh = status.length < sf.storages.length || statusAgeMs > Math.max(10000, farmIntervalMs * 4);
@@ -6820,25 +6964,32 @@ class NexoWattVis extends utils.Adapter {
           const v = sumLimitW(storages.filter(s => s.dischargeDispatchAvailable === true), 'discharge');
           return Number.isFinite(v) ? Math.round(v) : null;
         })(),
-        results: results.map(r => ({
-          name: r.name || '',
-          state: r.state || '',
-          online: r.online,
-          dispatchAvailable: r.dispatchAvailable,
-          chargeDispatchAvailable: r.chargeDispatchAvailable,
-          dischargeDispatchAvailable: r.dischargeDispatchAvailable,
-          maxChargeW: r.maxChargeW,
-          maxDischargeW: r.maxDischargeW,
-          blockedReasons: r.blockedReasons,
-          warnings: r.warnings,
-          statusMatch: r.statusMatch,
-          soc: r.soc,
-          actualChargeW: r.actualChargeW,
-          actualDischargeW: r.actualDischargeW,
-          chargeW: r.chargeW,
-          dischargeW: r.dischargeW,
-          ok: r.ok,
-        })),
+        results: results.map(r => {
+          const writeRows = Object.values(r.writes || {}).filter(Boolean);
+          const authorityBlocks = writeRows.filter(wr => wr && wr.blocked === true);
+          return {
+            name: r.name || '',
+            state: r.state || '',
+            online: r.online,
+            dispatchAvailable: r.dispatchAvailable,
+            chargeDispatchAvailable: r.chargeDispatchAvailable,
+            dischargeDispatchAvailable: r.dischargeDispatchAvailable,
+            maxChargeW: r.maxChargeW,
+            maxDischargeW: r.maxDischargeW,
+            blockedReasons: r.blockedReasons,
+            warnings: r.warnings,
+            statusMatch: r.statusMatch,
+            soc: r.soc,
+            actualChargeW: r.actualChargeW,
+            actualDischargeW: r.actualDischargeW,
+            chargeW: r.chargeW,
+            dischargeW: r.dischargeW,
+            ok: r.ok,
+            authorityBlocked: authorityBlocks.length > 0,
+            blockedByOwners: Array.from(new Set(authorityBlocks.map(wr => String(wr.blockedByOwner || '')).filter(Boolean))),
+            writes: r.writes,
+          };
+        }),
       };
       const json = JSON.stringify(diag);
       await this.setStateAsync('storageFarm.lastDispatchJson', { val: json, ack: true });
@@ -6852,12 +7003,25 @@ class NexoWattVis extends utils.Adapter {
     } catch (_eLog) {}
 
     const applied = !!anyOkRelevant;
+    const authorityBlockedWrites = results.flatMap((row) => Object.values(row.writes || {}))
+      .filter((wr) => wr && wr.blocked === true);
     let resultReason = applied ? 'ok' : 'no-write-accepted';
-    if (!applied && direction === 'charge' && eligibleForDispatch.length === 0) resultReason = 'no-charge-dispatchable-storage';
+    if (!applied && authorityBlockedWrites.length > 0) resultReason = 'blocked-by-actuator-authority';
+    else if (!applied && direction === 'charge' && eligibleForDispatch.length === 0) resultReason = 'no-charge-dispatchable-storage';
     else if (!applied && direction === 'discharge' && eligibleForDispatch.length === 0) resultReason = 'no-discharge-dispatchable-storage';
     else if (!applied && direction === 'idle' && storages.length === 0) resultReason = 'no-storage';
     else if (!applied && storages.some((row) => row.statusMatch === 'missing')) resultReason = 'farm-status-missing';
-    return { applied, reason: resultReason, direction, targetW: w, deliveredW: direction === 'charge' ? -deliveredAbsW : deliveredAbsW, unservedW: unservedAbsW, results };
+    return {
+      applied,
+      reason: resultReason,
+      direction,
+      targetW: w,
+      deliveredW: direction === 'charge' ? -deliveredAbsW : deliveredAbsW,
+      unservedW: unservedAbsW,
+      authorityBlockedCount: authorityBlockedWrites.length,
+      blockedByOwners: Array.from(new Set(authorityBlockedWrites.map((wr) => String(wr.blockedByOwner || '')).filter(Boolean))),
+      results,
+    };
   }
   /**
    * Code-Teil: syncInstallerConfigToStates
@@ -9282,7 +9446,7 @@ async migrateNativeConfig() {
       setNumber('peakShaving.releaseDelaySeconds', 5);
 
       // Farm update interval
-      setNumber('storageFarm.schedulerIntervalMs', 2000);
+      setNumber('storageFarm.schedulerIntervalMs', 1000);
 
       // Global scheduler tick
       setNumber('schedulerIntervalMs', 1000);
@@ -9539,7 +9703,7 @@ async onReady() {
         const sfEnabled = !!(typeof this._nwGetStorageFarmRuntimeInfo === 'function' && this._nwGetStorageFarmRuntimeInfo().active);
         const sfCfg = (this.config && this.config.storageFarm) || {};
         const intervalRaw = Number(sfCfg.schedulerIntervalMs);
-        const interval = Number.isFinite(intervalRaw) ? Math.max(250, Math.min(60000, Math.round(intervalRaw))) : 2000;
+        const interval = Number.isFinite(intervalRaw) ? Math.max(250, Math.min(1000, Math.round(intervalRaw))) : 1000;
 
         if (this._nwStorageFarmTimer) { try { this._nwClearInterval(this._nwStorageFarmTimer); } catch (_e) {} this._nwStorageFarmTimer = null; }
 
@@ -12891,33 +13055,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         }
         if (!storages.length) return out;
 
-        const normalized = storages
-          .filter(r => r && typeof r === 'object')
-          .map((r, i) => ({
-            enabled: r.enabled === false ? false : true,
-            name: String(r.name || '').trim() || `Speicher ${i + 1}`,
-            coupling: String(r.coupling || '').trim().toLowerCase(),
-            socId: String(r.socId || '').trim(),
-            signedPowerId: String(r.signedPowerId || '').trim(),
-            chargePowerId: String(r.chargePowerId || '').trim(),
-            dischargePowerId: String(r.dischargePowerId || '').trim(),
-            pvPowerId: String(r.pvPowerId || '').trim(),
-            invertSignedPowerSign: !!r.invertSignedPowerSign,
-            invertChargeSign: !!r.invertChargeSign,
-            invertDischargeSign: !!r.invertDischargeSign,
-            setChargePowerId: String(r.setChargePowerId || '').trim(),
-            setDischargePowerId: String(r.setDischargePowerId || '').trim(),
-            setSignedPowerId: String(r.setSignedPowerId || '').trim(),
-            invertSetSignedPowerSign: !!r.invertSetSignedPowerSign,
-            maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : '',
-            maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : '',
-            availableId: String(r.availableId || '').trim(),
-            faultId: String(r.faultId || '').trim(),
-            chargeAllowedId: String(r.chargeAllowedId || '').trim(),
-            dischargeAllowedId: String(r.dischargeAllowedId || '').trim(),
-            capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : '',
-            group: String(r.group || '').trim(),
-          }));
+        const normalized = this._nwNormalizeStorageFarmRows(storages).map((r) => ({
+          ...r,
+          maxChargeW: r.maxChargeW === null ? '' : r.maxChargeW,
+          maxDischargeW: r.maxDischargeW === null ? '' : r.maxDischargeW,
+          capacityKWh: r.capacityKWh === null ? '' : r.capacityKWh,
+        }));
         if (!normalized.length) return out;
 
         sf.storages = normalized;
@@ -13252,8 +13395,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           const enabledSf = !!this._nwGetStorageFarmRuntimeInfo().active;
           const sfCfg = (this.config && this.config.storageFarm && typeof this.config.storageFarm === 'object') ? this.config.storageFarm : {};
           const interval = (sfCfg.schedulerIntervalMs !== undefined && sfCfg.schedulerIntervalMs !== null && Number.isFinite(Number(sfCfg.schedulerIntervalMs)))
-            ? Math.max(500, Math.round(Number(sfCfg.schedulerIntervalMs)))
-            : 2000;
+            ? Math.max(250, Math.min(1000, Math.round(Number(sfCfg.schedulerIntervalMs))))
+            : 1000;
 
           if (enabledSf) {
             await this.updateStorageFarmDerived('config-save');
@@ -18112,7 +18255,10 @@ const _nwDisplayWriteCommandState = async (station, lpKey, intent) => {
   // diesen JSON-Intent auswerten. Wir nutzen bewusst setForeignStateAsync, damit der
   // Ziel-State nicht im Namespace des UI-Adapters liegen muss.
   if (typeof this.setForeignStateAsync === 'function') {
-    await this.setForeignStateAsync(id, { val: payload, ack });
+    const commandWriteResult = await this.setForeignStateAsync(id, { val: payload, ack });
+    if (isActuatorAuthorityBlockedResult(commandWriteResult)) {
+      return { written: false, blocked: true, reason: 'blocked_by_actuator_authority', blockedBy: commandWriteResult.blockedByOwner || '', stateId: id, ack };
+    }
   } else {
     await this.setStateAsync(id, { val: payload, ack });
   }
@@ -18298,7 +18444,13 @@ const _nwDisplayExecuteStationCommand = async (station, lpKey, action, mode, ext
       }
       writes.push({ type: 'commandState', skipped: true, reason: 'missing-command-state-id' });
     } else {
-      await this.setForeignStateAsync(commandStateId, { val: JSON.stringify(commandPayload), ack: !!(station && station.commandStateAck) });
+      const commandWriteResult = await this.setForeignStateAsync(commandStateId, { val: JSON.stringify(commandPayload), ack: !!(station && station.commandStateAck) });
+      if (isActuatorAuthorityBlockedResult(commandWriteResult)) {
+        const err = new Error('Command-State wurde vom zentralen Aktor-Gate blockiert.');
+        err.code = 'blocked_by_actuator_authority';
+        err.blockedBy = commandWriteResult.blockedByOwner || '';
+        throw err;
+      }
       writes.push({ type: 'commandState', id: commandStateId, ack: !!(station && station.commandStateAck) });
     }
   }
@@ -19067,19 +19219,30 @@ app.post('/api/mesh/command/receive', async (req, res) => {
     let localWriteError = '';
     try {
       const json = JSON.stringify(localEnvelope);
-      if (typeof this.setForeignStateAsync === 'function') await this.setForeignStateAsync(cfg.localCommandStateDp, { val: json, ack: false });
-      else if (typeof this.setStateAsync === 'function') await this.setStateAsync(cfg.localCommandStateDp, { val: json, ack: false });
-      localWriteStatus = 'written';
+      if (typeof this.setForeignStateAsync === 'function') {
+        const localWriteResult = await this.setForeignStateAsync(cfg.localCommandStateDp, { val: json, ack: false });
+        if (isActuatorAuthorityBlockedResult(localWriteResult)) {
+          localWriteStatus = 'blocked-by-actuator-authority';
+          localWriteError = String(localWriteResult.blockedByOwner || '');
+        } else {
+          localWriteStatus = 'written';
+        }
+      } else if (typeof this.setStateAsync === 'function') {
+        await this.setStateAsync(cfg.localCommandStateDp, { val: json, ack: false });
+        localWriteStatus = 'written';
+      }
     } catch (e) {
       localWriteStatus = 'error';
       localWriteError = String(e && e.message ? e.message : e);
     }
     const newProcessed = activeProcessed.concat(acceptedCommands.map(cmd => ({ key: cmd.receiverKey, id: cmd.commandId, senderNodeId, ts: now }))).slice(-cfg.processedLimit);
     const ack = {
-      ok: localWriteStatus !== 'error',
+      ok: localWriteStatus === 'written',
       schema: 'nexowatt.mesh-command-ack.v1',
       generatedAt: now,
-      status: localWriteStatus === 'error' ? 'failed_local_write' : 'accepted',
+      status: localWriteStatus === 'error'
+        ? 'failed_local_write'
+        : (localWriteStatus === 'blocked-by-actuator-authority' ? 'blocked_by_actuator_authority' : 'accepted'),
       receiverNodeId: localEnvelope.receiverNodeId,
       senderNodeId,
       clusterId,
@@ -20814,7 +20977,10 @@ settingsConfig: {
             const mapped2 = map2[key];
             const id2 = (typeof mapped2 === 'string' && mapped2.trim()) ? mapped2.trim() : '';
             if (id2) {
-              await this.setForeignStateAsync(id2, forced);
+              const forcedWriteResult = await this.setForeignStateAsync(id2, forced);
+              if (isActuatorAuthorityBlockedResult(forcedWriteResult)) {
+                return res.status(409).json({ ok: false, error: 'blocked_by_actuator_authority', blockedBy: forcedWriteResult.blockedByOwner || '' });
+              }
             } else {
               const localId2 = `settings.${key}`;
               await this.setStateAsync(localId2, { val: forced, ack: false });
@@ -20831,6 +20997,9 @@ settingsConfig: {
         // Komplexe Scopes und unbekannte Settings fallen weiter auf die alte JS-Route zurück.
         const tsSettingsWrite = await this._nwTryApplyApiSetTsSettingsPlan(scope, key, value);
         if (tsSettingsWrite && tsSettingsWrite.handled) {
+          if (tsSettingsWrite.ok === false) {
+            return res.status(409).json({ ok: false, error: tsSettingsWrite.reason || 'write_failed', blockedBy: tsSettingsWrite.blockedBy || '' });
+          }
           return res.json({ ok: true, source: 'ts-settings-plan' });
         }
 
@@ -21669,9 +21838,14 @@ settingsConfig: {
             }
 
             const writes = [];
+            const blocked = [];
             for (const [objectId, g] of grouped.entries()) {
               const raw = g.invert ? !g.physicalOn : !!g.physicalOn;
-              await this.setForeignStateAsync(objectId, raw, false);
+              const stageWriteResult = await this.setForeignStateAsync(objectId, raw, false);
+              if (isActuatorAuthorityBlockedResult(stageWriteResult)) {
+                blocked.push({ id: objectId, blockedBy: stageWriteResult.blockedByOwner || '' });
+                continue;
+              }
               writes.push({ id: objectId, value: raw });
               try {
                 if (emsDp && emsDp.lastWriteByObjectId && typeof emsDp.lastWriteByObjectId.set === 'function') {
@@ -21682,7 +21856,7 @@ settingsConfig: {
                 }
               } catch (_e) {}
             }
-            return { targetStage, writes: writes.length };
+            return { ok: blocked.length === 0, targetStage, writes: writes.length, blocked };
           };
 
           // Boost override – local runtime override, no direct foreign DP.
@@ -21809,6 +21983,9 @@ settingsConfig: {
               if (directStage !== null) {
                 try {
                   directWrite = await writeHeatingRodStagesOnce(resolveHeatingRodDev(), directStage);
+                  if (directWrite && directWrite.ok === false) {
+                    return res.status(409).json({ ok: false, error: 'blocked_by_actuator_authority', blocked: directWrite.blocked || [] });
+                  }
                 } catch (e) {
                   return res.status(409).json({ ok: false, error: 'write_failed', message: e && e.message ? e.message : String(e) });
                 }
@@ -21926,16 +22103,24 @@ settingsConfig: {
             const aVal = sgAInv ? !wantOn : wantOn;
             const bVal = sgBInv ? !false : false;
             if (!sgAW && !sgBW) return res.status(400).json({ ok: false, error: 'unmapped' });
-            if (sgAW) await this.setForeignStateAsync(sgAW, aVal);
-            if (sgBW) await this.setForeignStateAsync(sgBW, bVal);
-            if (swW) await this.setForeignStateAsync(swW, wantOn);
+            const sgWrites = [];
+            if (sgAW) sgWrites.push({ id: sgAW, result: await this.setForeignStateAsync(sgAW, aVal) });
+            if (sgBW) sgWrites.push({ id: sgBW, result: await this.setForeignStateAsync(sgBW, bVal) });
+            if (swW) sgWrites.push({ id: swW, result: await this.setForeignStateAsync(swW, wantOn) });
+            const sgBlocked = sgWrites.filter((row) => isActuatorAuthorityBlockedResult(row.result));
+            if (sgBlocked.length) {
+              return res.status(409).json({ ok: false, error: 'blocked_by_actuator_authority', blocked: sgBlocked.map((row) => ({ id: row.id, blockedBy: row.result.blockedByOwner || '' })) });
+            }
             return res.json({ ok: true });
           }
 
           const id = prop === 'switch' ? swW : spW;
           if (!id) return res.status(400).json({ ok: false, error: 'unmapped' });
 
-          await this.setForeignStateAsync(id, v);
+          const quickControlWriteResult = await this.setForeignStateAsync(id, v);
+          if (isActuatorAuthorityBlockedResult(quickControlWriteResult)) {
+            return res.status(409).json({ ok: false, error: 'blocked_by_actuator_authority', blockedBy: quickControlWriteResult.blockedByOwner || '' });
+          }
           return res.json({ ok: true });
         }
 
@@ -21957,7 +22142,10 @@ settingsConfig: {
         const mapped = map[key];
         const id = (typeof mapped === 'string' && mapped.trim()) ? mapped.trim() : '';
         if (id) {
-          await this.setForeignStateAsync(id, value);
+          const mappedWriteResult = await this.setForeignStateAsync(id, value);
+          if (isActuatorAuthorityBlockedResult(mappedWriteResult)) {
+            return res.status(409).json({ ok: false, error: 'blocked_by_actuator_authority', blockedBy: mappedWriteResult.blockedByOwner || '' });
+          }
         } else {
           const localId = (scope === 'installer' ? 'installer.'+key : 'settings.'+key);
           await this.setStateAsync(localId, { val: value, ack: false });
@@ -27621,8 +27809,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         const idx = this._rfidApplyOnlyIndex;
         this._rfidApplyOnlyIndex = null;
         try {
-          if (idx) this.applyRfidPolicyForIndex(idx, this._rfidApplyReason);
-          else this.applyRfidPolicyAll(this._rfidApplyReason);
+          const task = idx
+            ? this.applyRfidPolicyForIndex(idx, this._rfidApplyReason)
+            : this.applyRfidPolicyAll(this._rfidApplyReason);
+          Promise.resolve(task).catch((e) => this.log.debug('RFID policy apply failed: ' + (e && e.message ? e.message : e)));
         } catch (e) {
           this.log.debug('RFID policy apply failed: ' + e.message);
         }
@@ -27635,14 +27825,14 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
    * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
-  applyRfidPolicyAll(reason) {
+  async applyRfidPolicyAll(reason) {
     this.refreshRfidWhitelistFromCache();
     const enabled = this.isRfidEnabled();
     if (!Array.isArray(this.evcsList)) return;
 
     for (const wb of this.evcsList) {
       if (!wb || !wb.index) continue;
-      this.applyRfidPolicyForIndex(wb.index, reason, enabled);
+      await this.applyRfidPolicyForIndex(wb.index, reason, enabled);
     }
   }
   /**
@@ -27651,7 +27841,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
    * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
-  applyRfidPolicyForIndex(index, reason, enabledOverride) {
+  async applyRfidPolicyForIndex(index, reason, enabledOverride) {
     const idx = Number(index) || 0;
     if (!idx) return;
 
@@ -27707,16 +27897,52 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         enforced = true;
         const cur = this.stateCache[`evcs.${idx}.lock`] ? !!this.stateCache[`evcs.${idx}.lock`].value : undefined;
         if (prev.lockWanted !== want || (cur !== undefined && cur !== want)) {
-          this.setForeignStateAsync(wb.lockWriteId, want).catch(e => this.log.debug(`[EVCS RFID] lockWriteId failed: ${e.message}`));
-          prev.lockWanted = want;
+          try {
+            const rfidWriteResult = await withActuatorShadowContext(this, {
+              owner: `charging.lp${idx}`,
+              module: 'rfidAccess',
+              priority: 600,
+              reason: `RFID-${authorized ? 'Freigabe' : 'Sperre'} Wallbox lp${idx}`,
+              leaseMs: 15000,
+              kind: 'charging-rfid-lock',
+              enforceAuthority: true,
+              releaseAuthority: authorized,
+            }, () => this.setForeignStateAsync(wb.lockWriteId, want));
+            if (isActuatorAuthorityBlockedResult(rfidWriteResult)) {
+              this.log.debug(`[EVCS RFID] lockWriteId durch ${rfidWriteResult.blockedByOwner || 'Aktor-Authority'} blockiert`);
+            } else {
+              prev.lockWanted = want;
+            }
+          } catch (e) {
+            this.log.debug(`[EVCS RFID] lockWriteId failed: ${e && e.message ? e.message : e}`);
+          }
         }
       } else if (wb.activeId) {
         const want = !!authorized; // enable/disable charging (soft lock)
         enforced = true;
         const cur = this.stateCache[`evcs.${idx}.active`] ? !!this.stateCache[`evcs.${idx}.active`].value : undefined;
         if (prev.activeWanted !== want || (cur !== undefined && cur !== want)) {
-          this.setForeignStateAsync(wb.activeId, want).catch(e => this.log.debug(`[EVCS RFID] activeId failed: ${e.message}`));
-          prev.activeWanted = want;
+          try {
+            const rfidWriteResult = await withActuatorShadowContext(this, {
+              owner: `charging.lp${idx}`,
+              module: 'rfidAccess',
+              priority: 600,
+              reason: `RFID-${authorized ? 'Freigabe' : 'Sperre'} Wallbox lp${idx}`,
+              leaseMs: 15000,
+              kind: 'charging-rfid-enable',
+              enforceAuthority: true,
+              // Freigabe beendet die RFID-Sperr-Lease; eine aktive Sperre bleibt
+              // dagegen verbindlich, bis ein autorisierter Tag erkannt wird.
+              releaseAuthority: authorized,
+            }, () => this.setForeignStateAsync(wb.activeId, want));
+            if (isActuatorAuthorityBlockedResult(rfidWriteResult)) {
+              this.log.debug(`[EVCS RFID] activeId durch ${rfidWriteResult.blockedByOwner || 'Aktor-Authority'} blockiert`);
+            } else {
+              prev.activeWanted = want;
+            }
+          } catch (e) {
+            this.log.debug(`[EVCS RFID] activeId failed: ${e && e.message ? e.message : e}`);
+          }
         }
       }
     }

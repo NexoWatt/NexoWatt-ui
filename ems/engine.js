@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:52ace1b571efbac5382bbfdd6ffc162aee174d79a91e0e1ebc85d024febb479e
+ * Quell-Hash: sha256:0f523e5d840fd059ba0030859815c1946ebdec11e5a2b666e167b6e903d08add
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -524,6 +524,23 @@ class EmsEngine {
       const allowBoost = (wb.allowBoost !== false);
       const boostTimeoutMin = (Number.isFinite(Number(wb.boostTimeoutMin)) && Number(wb.boostTimeoutMin) > 0) ? Number(wb.boostTimeoutMin) : 0;
 
+      // Manuell im AppCenter zugeordnete Phasenumschaltung und Speicherfreigabe.
+      // Diese Felder duerfen beim TS-Uebergang main.evcsList -> Charging-Config
+      // nicht verloren gehen; der nachgelagerte Aktor-Arbiter bleibt das Gate.
+      const phaseMode = String(wb.phaseMode || (phases === 1 ? 'fixed-1p' : 'fixed-3p')).trim();
+      const phaseSwitchId = String(wb.phaseSwitchId || '').trim();
+      const phaseFeedbackId = String(wb.phaseFeedbackId || '').trim();
+      const phaseSwitchValue1p = (wb.phaseSwitchValue1p !== undefined && wb.phaseSwitchValue1p !== null && String(wb.phaseSwitchValue1p).trim() !== '') ? wb.phaseSwitchValue1p : 1;
+      const phaseSwitchValue3p = (wb.phaseSwitchValue3p !== undefined && wb.phaseSwitchValue3p !== null && String(wb.phaseSwitchValue3p).trim() !== '') ? wb.phaseSwitchValue3p : 3;
+      const stopBeforePhaseSwitch = wb.stopBeforePhaseSwitch !== false;
+      const phaseSwitchUpThresholdW = Number.isFinite(Number(wb.phaseSwitchUpThresholdW)) ? Number(wb.phaseSwitchUpThresholdW) : 4800;
+      const phaseSwitchDownThresholdW = Number.isFinite(Number(wb.phaseSwitchDownThresholdW)) ? Number(wb.phaseSwitchDownThresholdW) : 3700;
+      const phaseSwitchUpStableSec = Number.isFinite(Number(wb.phaseSwitchUpStableSec)) ? Number(wb.phaseSwitchUpStableSec) : 300;
+      const phaseSwitchDownStableSec = Number.isFinite(Number(wb.phaseSwitchDownStableSec)) ? Number(wb.phaseSwitchDownStableSec) : 120;
+      const phaseSwitchCooldownSec = Number.isFinite(Number(wb.phaseSwitchCooldownSec)) ? Number(wb.phaseSwitchCooldownSec) : 900;
+      const phaseSwitchSettleSec = Number.isFinite(Number(wb.phaseSwitchSettleSec)) ? Number(wb.phaseSwitchSettleSec) : 30;
+      const storageAssistCustomerAllowed = wb.storageAssistCustomerAllowed === true;
+
       // Aktivierung & Priorität (Installateur-Konfiguration)
       const enabled = (wb && typeof wb.enabled === 'boolean') ? !!wb.enabled : true;
       const prioRaw = Number(wb && wb.priority !== undefined ? wb.priority : NaN);
@@ -566,6 +583,19 @@ class EmsEngine {
         ...(enableId ? { enableId } : {}),
         ...(onlineId ? { onlineId } : {}),
         ...(statusId ? { statusId } : {}),
+        ...(phaseSwitchId ? { phaseSwitchId } : {}),
+        ...(phaseFeedbackId ? { phaseFeedbackId } : {}),
+        phaseMode,
+        phaseSwitchValue1p,
+        phaseSwitchValue3p,
+        stopBeforePhaseSwitch,
+        phaseSwitchUpThresholdW,
+        phaseSwitchDownThresholdW,
+        phaseSwitchUpStableSec,
+        phaseSwitchDownStableSec,
+        phaseSwitchCooldownSec,
+        phaseSwitchSettleSec,
+        storageAssistCustomerAllowed,
 
         // admin default for runtime user mode
         userModeDefault,
@@ -840,7 +870,9 @@ class EmsEngine {
 
     // Scheduler interval from config (Admin UI / jsonConfig)
     const cfgInterval = adapter.config && adapter.config.schedulerIntervalMs;
-    this._intervalMs = clampNumber(cfgInterval, 250, 10000, 1000);
+    // Aktor- und Speicher-Watchdogs muessen spaetestens sekündlich erneuert werden.
+    // Eine langsamere Alt-Konfiguration wird deshalb sicher auf 1000 ms begrenzt.
+    this._intervalMs = clampNumber(cfgInterval, 250, 1000, 1000);
 
     const { anyControl, chargingCfg } = this._buildChargingConfig();
 

@@ -1036,12 +1036,19 @@ class DatapointRegistry {
         const last = this.lastWriteByObjectId.get(e.objectId);
         const phys = b ? 1 : 0;
         if (last && typeof last.val !== 'undefined' && Number.isFinite(last.val) && Number(last.val) === phys) {
-            const arbiter = this.adapter && this.adapter._actuatorShadowArbiter;
-            const blocked = arbiter && typeof arbiter.guardSkippedWrite === 'function'
-                ? arbiter.guardSkippedWrite(e.objectId, b, ack)
-                : null;
-            if (blocked && blocked.__nexowattActuatorAuthorityBlocked === true) return false;
-            return null;
+            // Externe Controller koennen auch boolesche Freigaben per Watchdog
+            // verwerfen. Wie bei Zahlen-DPs darf ein konfiguriertes Refresh-Intervall
+            // deshalb den idempotenten Skip aufheben.
+            const maxAge = Number(e.maxWriteIntervalMs);
+            const refreshDue = Number.isFinite(maxAge) && maxAge > 0 && Number.isFinite(last.ts) && (Date.now() - last.ts) >= maxAge;
+            if (!refreshDue) {
+                const arbiter = this.adapter && this.adapter._actuatorShadowArbiter;
+                const blocked = arbiter && typeof arbiter.guardSkippedWrite === 'function'
+                    ? arbiter.guardSkippedWrite(e.objectId, b, ack)
+                    : null;
+                if (blocked && blocked.__nexowattActuatorAuthorityBlocked === true) return false;
+                return null;
+            }
         }
 
         try {

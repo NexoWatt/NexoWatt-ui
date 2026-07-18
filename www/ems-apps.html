@@ -708,7 +708,7 @@
           <div class="nw-config-field-row">
             <div class="nw-config-field-label">Scheduler-Intervall (ms)</div>
             <div class="nw-config-field-control">
-              <input id="schedulerIntervalMs" class="nw-config-input" type="number" min="250" step="50" placeholder="1000"/>
+              <input id="schedulerIntervalMs" class="nw-config-input" type="number" min="250" max="1000" step="50" placeholder="1000"/>
             </div>
           </div>
         </div>
@@ -880,15 +880,15 @@
                 <span>FENECON-/OpenEMS-/FEMS-Modus aktivieren</span>
               </label>
               <label class="nw-config-checklabel" for="storageFeneconDayNoWrite">
-                <input id="storageFeneconDayNoWrite" class="nw-config-checkbox" type="checkbox" />
-                <span>Tagsüber keine externe Speicheranforderung senden</span>
+                <input id="storageFeneconDayNoWrite" class="nw-config-checkbox" type="checkbox" disabled />
+                <span>Legacy-No-Write deaktiviert – externe Vorgabe wird zyklisch erneuert</span>
               </label>
               <label class="nw-config-checklabel" for="storageFeneconAssist">
                 <input id="storageFeneconAssist" class="nw-config-checkbox" type="checkbox" />
                 <span>NexoWatt-Assist bei dauerhaftem Netzbezug erlauben</span>
               </label>
               <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
-                Für FENECON/OpenEMS/FEMS mit eigener 0‑Einspeise-/PV-/Speicherlogik: Im Tages-/PV-Betrieb schreibt NexoWatt <b>keine</b> externe Batterie-Vorgabe, damit das lokale Gateway nach seinem Watchdog wieder selbst regelt. Der Assist greift nur zeitverzögert und NVP-begrenzt ein, wenn trotz SoC dauerhaft Netzbezug stehen bleibt. MultiUse, Tarif- und Peak-Shaving-Anforderungen bleiben priorisiert.
+                Für FENECON/OpenEMS/FEMS wird der nach NVP-, SoC-, Budget-, MultiUse- und Sicherheitsregeln begrenzte Sollwert über den <b>manuell zugeordneten AppCenter-DP</b> zyklisch erneuert. Dadurch bleibt die externe Vorgabe aktiv und der Geräte-Watchdog läuft nicht aus. Der Assist greift weiterhin nur zeitverzögert und NVP-begrenzt ein. MultiUse, Tarif- und Peak-Shaving-Anforderungen bleiben priorisiert.
               </div>
             </div>
           </div>
@@ -970,7 +970,7 @@
                 <div class="nw-config-item__subtitle">Intervall für Status-/SoC-Aggregation (min. 500 ms).</div>
               </div>
               <div class="nw-config-item__right">
-                <input id="storageFarmSchedulerIntervalMs" type="number" class="nw-config-input" placeholder="2000" />
+                <input id="storageFarmSchedulerIntervalMs" type="number" class="nw-config-input" min="250" max="1000" step="50" placeholder="1000" />
               </div>
             </div>
 

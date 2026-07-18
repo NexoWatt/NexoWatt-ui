@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: f0460e436b105be8ecb3a4f9a84f4f5ce37e41dbd585a815357c8ee230553a21
+ * Original-Hash: fd68125e11558e9a94552d588657719e0f8bd7e3032fd921481147980955e450
  */
 
 /**
@@ -31,16 +31,16 @@
 
 'use strict';
 /**
- * Runtime-Regression 0.8.82: FENECON/OpenEMS/FEMS Tages-No-Write.
+ * Runtime-Regression 0.8.124: FENECON/OpenEMS/FEMS AppCenter-Keepalive.
  *
  * Zweck:
- * - Im FENECON-Tages-/PV-Betrieb darf NexoWatt keinen 0-W- oder Kleinsollwert
- *   permanent auf den Speicher schreiben. Nur so kann der FEMS/OpenEMS-Watchdog
- *   die externe Vorgabe auslaufen lassen und die interne 0-Einspeise-/Speicherlogik
- *   wieder selbst regeln.
- * - Der optionale NexoWatt-Assist darf erst bei dauerhaftem Netzbezug schreiben
- *   und muss hart am aktuellen NVP-Bedarf begrenzt bleiben. Die Gebäudelast darf
- *   dafür nicht blind als Entladesollwert verwendet werden.
+ * - Ein manuell im AppCenter zugeordneter Speicher-Sollwert darf durch das
+ *   FENECON-Herstellerprofil niemals auf No-Write gesetzt werden.
+ * - Der nach NVP-, SoC-, Budget-, MultiUse- und Sicherheitsgates begrenzte
+ *   Sollwert muss auch im Tages-/PV-Betrieb zyklisch geschrieben werden.
+ * - Der optionale Assist bleibt hart am aktuellen NVP-Bedarf begrenzt.
+ * - Bei fehlendem NVP wird ein sicherer 0-W-Sollwert geschrieben, nicht der
+ *   externe Geräte-Watchdog absichtlich auslaufen gelassen.
  */
 const assert = require('assert');
 const { SpeicherRegelungModule } = require('../ems/modules/storage-control');
@@ -223,38 +223,51 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, l
 }
 
 (async () => {
-  // Tages-/PV-Betrieb mit aktivem FENECON-No-Write und ohne Assist:
-  // Trotz Netzbezug darf kein externer 0-W- oder Eigenverbrauchs-Sollwert geschrieben werden.
-  const noWrite = await runTick({
+  // Selbst eine aus einer Altversion migrierte No-Write-Konfiguration darf den
+  // manuell zugeordneten Ziel-DP nicht mehr abkoppeln.
+  const legacyNoWrite = await runTick({
     gridW: 650,
     gridRawW: 650,
-    extraConfig: { storage: { feneconAssistEnabled: false } },
+    extraConfig: { storage: { feneconAssistEnabled: false, feneconDayNoWriteEnabled: true } },
   });
-  assert.strictEqual(noWrite.dp.writesFor('st.targetPowerW').length, 0, `FENECON-No-Write hat trotzdem auf den Ziel-DP geschrieben: ${JSON.stringify(noWrite.dp.writes)}`);
-  assert.strictEqual(noWrite.adapter._states.get('speicher.regelung.feneconHybridSchreibmodus').val, 'no-write', 'FENECON-Schreibmodus muss no-write sein');
-  assert.strictEqual(noWrite.adapter._states.get('speicher.regelung.schreibStatus').val, 'fenecon-fems:no-write', 'Schreibstatus muss No-Write diagnostizieren');
+  assert.strictEqual(legacyNoWrite.dp.writesFor('st.targetPowerW').length, 1, `FENECON muss den AppCenter-Ziel-DP schreiben: ${JSON.stringify(legacyNoWrite.dp.writes)}`);
+  assert.notStrictEqual(legacyNoWrite.adapter._states.get('speicher.regelung.feneconHybridSchreibmodus').val, 'no-write', 'FENECON-Schreibmodus darf nicht mehr no-write sein');
+  assert.strictEqual(legacyNoWrite.adapter._states.get('speicher.regelung.schreibOk').val, true, 'Der gegatete FENECON-Schreibpfad muss erfolgreich sein');
+  assert(!String(legacyNoWrite.adapter._states.get('speicher.regelung.schreibStatus').val).includes('no-write'), 'Schreibstatus darf keinen FENECON-No-Write melden');
 
-  // Auch mit aktiver Speicherfarm darf der FENECON-No-Write den Farm-Schreibpfad
-  // nicht durch die Hintertuer mit 0 W oder Eigenverbrauchsleistung refreshen.
-  const farmNoWrite = await runTick({
+  // Ein unveränderter 0-W-Sollwert wird in jedem Tick erneut geschrieben. Das ist
+  // der Watchdog-Keepalive, der in der realen Anlage als frische externe Vorgabe
+  // sichtbar sein muss.
+  const keepalive = await runTick({
+    gridW: 50,
+    gridRawW: 50,
+    extraConfig: { storage: { feneconAssistEnabled: false, feneconDayNoWriteEnabled: true } },
+  });
+  await keepalive.mod.tick();
+  assert.strictEqual(keepalive.dp.writesFor('st.targetPowerW').length, 2, `Unveränderter FENECON-Sollwert muss pro Tick erneuert werden: ${JSON.stringify(keepalive.dp.writes)}`);
+  assert.strictEqual(keepalive.dp.writesFor('st.targetPowerW')[0].value, 0, 'Erster Keepalive muss 0 W schreiben');
+  assert.strictEqual(keepalive.dp.writesFor('st.targetPowerW')[1].value, 0, 'Zweiter Keepalive muss 0 W erneut schreiben');
+
+  // Auch die Speicherfarm muss den zentral gegateten Sollwert erhalten; der
+  // Herstellerpfad darf die Farm-Verteilung nicht mehr unterdrücken.
+  const farmWrite = await runTick({
     gridW: 900,
     gridRawW: 900,
     extraConfig: {
       root: { enableStorageFarm: true },
       storageFarm: {
-        // Eine aktive Speicherfarm benötigt mindestens zwei echte Speicherzeilen.
         storages: [
-          { enabled: true, setSignedPowerId: 'fenecon.target.1' },
-          { enabled: true, setSignedPowerId: 'fenecon.target.2' },
+          { enabled: true, setSignedPowerId: 'vendor.free.target.1' },
+          { enabled: true, setSignedPowerId: 'another.adapter.target.2' },
         ],
       },
-      storage: { feneconAssistEnabled: false },
+      storage: { feneconAssistEnabled: false, feneconDayNoWriteEnabled: true },
     },
   });
-  assert.strictEqual(farmNoWrite.adapter._farmWrites.length, 0, `FENECON-No-Write darf auch bei Speicherfarm nicht verteilen: ${JSON.stringify(farmNoWrite.adapter._farmWrites)}`);
+  assert.strictEqual(farmWrite.adapter._farmWrites.length, 1, `FENECON muss genau einen gegateten Farm-Sollwert verteilen: ${JSON.stringify(farmWrite.adapter._farmWrites)}`);
 
-  // Assist mit 0s Testverzögerung für den Regressionstest:
-  // Bei dauerhaftem Netzbezug darf NexoWatt schreiben, aber nur NVP-begrenzt.
+  // Assist mit 0s Testverzögerung: Bei dauerhaftem Netzbezug darf NexoWatt
+  // schreiben, aber nur NVP-begrenzt.
   const assist = await runTick({
     gridW: 1700,
     gridRawW: 1700,
@@ -268,8 +281,8 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, l
       },
     },
   });
-  assert(assist.targetW > 0, `FENECON-Assist sollte bei dauerhaftem Netzbezug eine kleine Entladung schreiben: ${assist.targetW}`);
-  assert(assist.targetW <= 1800, `FENECON-Assist darf nur am NVP-Bedarf begrenzt schreiben, nicht an Gebäudelast/alten Werten: ${assist.targetW}`);
+  assert(assist.targetW > 0, `FENECON-Assist sollte bei dauerhaftem Netzbezug eine Entladung schreiben: ${assist.targetW}`);
+  assert(assist.targetW <= 1800, `FENECON-Assist darf nur am NVP-Bedarf begrenzt schreiben: ${assist.targetW}`);
   assert.strictEqual(assist.adapter._states.get('speicher.regelung.feneconHybridAssistAktiv').val, true, 'Assist-Diagnose muss aktiv sein');
   assert.strictEqual(assist.adapter._states.get('speicher.regelung.feneconHybridSchreibmodus').val, 'write-assist-on-demand', 'Assist muss als bedarfsgerechter Schreibmodus markiert sein');
 
@@ -279,10 +292,9 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, l
     extraConfig: {
       root: { enableStorageFarm: true },
       storageFarm: {
-        // Eine aktive Speicherfarm benötigt mindestens zwei echte Speicherzeilen.
         storages: [
-          { enabled: true, setSignedPowerId: 'fenecon.target.1' },
-          { enabled: true, setSignedPowerId: 'fenecon.target.2' },
+          { enabled: true, setSignedPowerId: 'vendor.free.target.1' },
+          { enabled: true, setSignedPowerId: 'another.adapter.target.2' },
         ],
       },
       storage: {
@@ -297,23 +309,17 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, l
   assert.strictEqual(farmAssist.adapter._farmWrites.length, 1, 'FENECON-Assist muss bei Speicherfarm genau einen Farm-Sollwert verteilen');
   assert(farmAssist.adapter._farmWrites[0].w > 0 && farmAssist.adapter._farmWrites[0].w <= 1800, `Farm-Assist muss NVP-begrenzt bleiben: ${JSON.stringify(farmAssist.adapter._farmWrites)}`);
 
-  // Ohne Tages-No-Write darf der FENECON-Sondermodus weiterhin wie eine normale
-  // externe Regelung arbeiten. Damit ist der neue Haken wirklich steuernd und kein Zwang.
-  const externalAllowed = await runTick({
-    gridW: 650,
-    gridRawW: 650,
-    extraConfig: {
-      storage: {
-        feneconDayNoWriteEnabled: false,
-        feneconAssistEnabled: false,
-        feneconDayClockFallbackEnabled: false,
-        feneconPvPassthroughThresholdW: 100000,
-      },
-    },
+  // Fehlender/veralteter NVP ist ein Sicherheitsfall: Der zugeordnete Ziel-DP
+  // bekommt einen echten 0-W-Stopp und bleibt nicht unbeschrieben.
+  const noGrid = await runTick({
+    gridW: undefined,
+    gridRawW: undefined,
+    extraConfig: { storage: { feneconAssistEnabled: false, feneconDayNoWriteEnabled: true } },
   });
-  assert(externalAllowed.targetW !== null, 'Bei deaktiviertem Tages-No-Write muss der externe Standard-Schreibpfad weiter möglich sein');
+  assert.strictEqual(noGrid.dp.lastWrite('st.targetPowerW'), 0, `Fehlender NVP muss 0 W auf den AppCenter-Ziel-DP schreiben: ${JSON.stringify(noGrid.dp.writes)}`);
+  assert.strictEqual(noGrid.adapter._states.get('speicher.regelung.feneconHybridSchreibmodus').val, 'write-safety-zero', 'Fehlender NVP muss als sicherer Schreibstopp diagnostiziert werden');
 
-  console.log('[storage-fenecon-day-no-write] OK: FENECON Tages-No-Write pausiert externe Vorgaben; Assist schreibt nur NVP-begrenzt.');
+  console.log('[storage-fenecon-day-no-write] OK: FENECON-AppCenter-Sollwert bleibt gegatet, wird pro Tick erneuert und schreibt bei fehlendem NVP sicher 0 W.');
 })().catch((err) => {
   console.error('[storage-fenecon-day-no-write] ERROR:', err && err.stack ? err.stack : err);
   process.exit(1);

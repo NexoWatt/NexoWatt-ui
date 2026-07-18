@@ -15,9 +15,11 @@ const phaseSrc = read('src-ts/ems/charging-management/charging-phase-selection.t
 const allocationSrc = read('src-ts/ems/charging-management/charging-allocation.ts');
 const writeSrc = read('src-ts/ems/charging-management/charging-write-plan.ts');
 const runtimeSrc = read('src-ts/runtime-executables/ems/modules/charging-management.ts');
+const engineSrc = read('src-ts/runtime-executables/ems/engine.ts');
 const uiSrc = read('src-ts/runtime-executables/www/ems-apps.ts');
 const mainSrc = read('src-ts/runtime-executables/main.ts');
 const runtimeJs = read('ems/modules/charging-management.js');
+const engineJs = read('ems/engine.js');
 const uiJs = read('www/ems-apps.js');
 
 need(phaseSrc.includes('buildChargingPhaseSelectionPlan'), 'TS-Phasenwahl-Helfer fehlt.');
@@ -33,6 +35,50 @@ need(runtimeJs.includes('requireChargingPhaseSelectionTsMirror'), 'Generiertes R
 need(uiSrc.includes('AC-Phasenmodus') && uiSrc.includes('Auto PV 1p/3p'), 'App-Center enthält Phasenmodus nicht.');
 need(uiJs.includes('AC-Phasenmodus') && uiJs.includes('Auto PV 1p/3p'), 'Generiertes App-Center-JS ist nicht synchron.');
 need(mainSrc.includes('phaseSwitchId') && mainSrc.includes('phaseSwitchUpThresholdW'), 'Main-Settings-Sync übernimmt Phasenfelder nicht.');
+for (const field of ['phaseMode', 'phaseSwitchId', 'phaseFeedbackId', 'phaseSwitchValue1p', 'phaseSwitchValue3p', 'stopBeforePhaseSwitch', 'phaseSwitchUpThresholdW', 'phaseSwitchDownThresholdW', 'phaseSwitchUpStableSec', 'phaseSwitchDownStableSec', 'phaseSwitchCooldownSec', 'phaseSwitchSettleSec', 'storageAssistCustomerAllowed']) {
+  need(engineSrc.includes(field), `TS-Engine verliert AppCenter-Feld ${field}.`);
+  need(engineJs.includes(field), `Generierte Engine verliert AppCenter-Feld ${field}.`);
+}
+
+// Ende-zu-Ende-Brücke main.evcsList -> EmsEngine._buildChargingConfig:
+// Beliebige, manuell zugeordnete ioBroker-IDs müssen unverändert an das
+// Charging-Management weitergegeben werden.
+const { EmsEngine } = require(path.join(root, 'ems/engine'));
+const bridgeEngine = new EmsEngine({
+  config: { settingsConfig: { evcsMaxPowerKw: 22 }, datapoints: {} },
+  evcsList: [{
+    index: 1,
+    enabled: true,
+    name: 'freie Wallbox',
+    setCurrentAId: 'custom.vendor.free.ctrl.current',
+    setPowerWId: 'another.adapter.7.manual.power',
+    enableWriteId: 'logic.0.wallbox.enable',
+    phaseMode: 'auto-pv',
+    phaseSwitchId: 'modbus.99.holding.phase.command',
+    phaseFeedbackId: 'mqtt.0/site/wb/phaseFeedback',
+    phaseSwitchValue1p: 'ONE_PHASE',
+    phaseSwitchValue3p: 'THREE_PHASES',
+    stopBeforePhaseSwitch: true,
+    phaseSwitchUpThresholdW: 5100,
+    phaseSwitchDownThresholdW: 3300,
+    phaseSwitchUpStableSec: 77,
+    phaseSwitchDownStableSec: 55,
+    phaseSwitchCooldownSec: 444,
+    phaseSwitchSettleSec: 12,
+    storageAssistCustomerAllowed: true,
+  }],
+});
+const bridgeCfg = bridgeEngine._buildChargingConfig();
+need(bridgeCfg && bridgeCfg.chargingCfg && bridgeCfg.chargingCfg.wallboxes && bridgeCfg.chargingCfg.wallboxes.length === 1, 'Engine-Brücke erzeugt keinen Ladepunkt.');
+const bridged = bridgeCfg.chargingCfg.wallboxes[0];
+need(bridged.setCurrentAId === 'custom.vendor.free.ctrl.current', 'Freier Sollstrom-DP wird verändert/verloren.');
+need(bridged.setPowerWId === 'another.adapter.7.manual.power', 'Freier Sollleistungs-DP wird verändert/verloren.');
+need(bridged.enableId === 'logic.0.wallbox.enable', 'Freier Enable-DP wird verändert/verloren.');
+need(bridged.phaseSwitchId === 'modbus.99.holding.phase.command', 'Freier Phasen-Schreib-DP wird verändert/verloren.');
+need(bridged.phaseFeedbackId === 'mqtt.0/site/wb/phaseFeedback', 'Phasen-Feedback-DP wird verändert/verloren.');
+need(bridged.phaseSwitchValue1p === 'ONE_PHASE' && bridged.phaseSwitchValue3p === 'THREE_PHASES', 'Herstellerspezifische Phasenwerte werden verändert/verloren.');
+need(bridged.phaseSwitchUpThresholdW === 5100 && bridged.phaseSwitchDownThresholdW === 3300, 'Phasen-Schwellen werden nicht übernommen.');
+need(bridged.storageAssistCustomerAllowed === true, 'Kundenfreigabe Speicher-Assist wird nicht übernommen.');
 
 const phase = require(path.join(root, 'lib/ts-mirrors/ems/charging-management/charging-phase-selection'));
 const alloc = require(path.join(root, 'lib/ts-mirrors/ems/charging-management/charging-allocation'));

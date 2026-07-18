@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 9fc72a98bdfecb5f034f1547fef127205e37fd62a1446b23b5560ee6d50861a0
+ * Original-Hash: e3d2c46332fcb5f9b7ab03a976df594a04776219936d909bc7fe8e654c37665b
  */
 
 /**
@@ -140,6 +140,13 @@ class FakeRegistry {
     'st.targetChargePowerW': { objectId: 'device.aliases.ctrl.chargePowerW', val: 3000, ageMs: 100 },
   }), { datapoints: {} }, 15000);
   assert.strictEqual(rejected, null, 'Steuer-/Sollwert-DP darf nie Istfeedback werden');
+
+  const freeNamedFeedback = bridge.resolveSplitBatteryFeedback(new FakeRegistry({
+    'st.batteryChargePowerW': { objectId: 'vendor.free.ctrl.actualChargePower', val: 1700, ageMs: 100 },
+    'st.targetChargePowerW': { objectId: 'vendor.free.command.chargeTarget', val: 0, ageMs: 100 },
+  }), { datapoints: {} }, 15000);
+  assert.ok(freeNamedFeedback && freeNamedFeedback.trusted, 'frei benannter .ctrl.-Istwert muss zulässig bleiben');
+  assert.strictEqual(freeNamedFeedback.observedW, -1700);
 
   const main = read('src-ts/runtime-executables/main.ts');
   const engine = read('src-ts/runtime-executables/ems/engine.ts');

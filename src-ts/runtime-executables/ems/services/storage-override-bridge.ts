@@ -130,18 +130,10 @@ function objectIdOf(entry: RegistryEntry): string {
   return text(entry?.objectId);
 }
 
-function looksLikeControlObjectId(objectId: string): boolean {
-  const lower = objectId.toLowerCase();
-  return lower.includes('.aliases.ctrl.')
-    || lower.includes('.ctrl.')
-    || lower.includes('setpoint')
-    || lower.includes('targetpower')
-    || lower.includes('targetcurrent');
-}
-
 /**
  * Bildet aus positiven Split-Istwerten die interne signed Speicherleistung:
- * +W = Entladen, -W = Laden. Ein Sollwert-/CTRL-DP wird nicht als Feedback akzeptiert.
+ * +W = Entladen, -W = Laden. Nur ein exakt identisch als Sollwert gemapptes
+ * Objekt wird als Feedback verworfen; freie Objektpfade/Namen bleiben zulässig.
  */
 function resolveSplitBatteryFeedback(registry: RegistryLike | null | undefined, storageConfig: AnyRecord, staleMs: number): SplitBatteryFeedback | null {
   if (!registry) return null;
@@ -162,7 +154,7 @@ function resolveSplitBatteryFeedback(registry: RegistryLike | null | undefined, 
   for (const row of rows) {
     const objectId = objectIdOf(row.entry);
     if (!objectId || row.value === null || !Number.isFinite(Number(row.value))) continue;
-    if (targetIds.includes(objectId) || looksLikeControlObjectId(objectId)) continue;
+    if (targetIds.includes(objectId)) continue;
     objectIds.push(objectId);
     const magnitude = Math.max(0, Math.abs(finite(row.value, 0)));
     if (row.role === 'charge') chargeW = magnitude;

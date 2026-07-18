@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 7c74623c3802cfc25ac6001694ea3831d7b38409a5001a0f7969a55d977bc0d9
+ * Original-Hash: b31919659808cb78949733511c672970c69a1fa9ab51a39aff84b8457a5fb8e7
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:f25aa794b309c2e5bf4b4be7aa1a5bd5f521019a40acf6cdca51ecfca98e2bda
+ * Quell-Hash: sha256:771e4ed48ef448fe76a0b11fad5f30a3093df30aee98e200ee0cd678cc603f8c
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -263,8 +263,8 @@ function hystBelow(prev, x, onBelow, offAbove) {
  * - LSK: separate Limits für Be-/Entladung (maxChargeW/maxDischargeW) möglich
  *
  * Hinweis:
- * - In dieser Stufe wird aktiv nur im Modus "Sollleistung (W)" geschrieben (st.targetPowerW).
- * - Andere Steuerungsarten bleiben zunächst Diagnose/Zuordnung (werden später erweitert).
+ * - Alle drei AppCenter-Steuerungsarten schreiben produktiv: Sollleistung, Leistungsgrenzen und Freigabe-Flags.
+ * - Manuell zugeordnete Objekt-IDs bleiben herstellerunabhaengig und laufen durch dieselben zentralen Gates.
  */
 /**
  * Code-Teil: Klasse `SpeicherRegelungModule`
@@ -297,6 +297,8 @@ class SpeicherRegelungModule extends BaseModule {
         this._lastReason = '';
         /** @type {string} */
         this._lastSource = '';
+        /** @type {number|null} Final wirksame SoC-Untergrenze fuer optionale Reserve-DPs. */
+        this._effectiveReserveSocPct = null;
 
         // Herstellerunabhaengiger Batterie-Istwert-Puffer fuer das geschlossene
         // NVP-Balancing. Viele Speicher/Adapter aktualisieren NVP und Batterie-
@@ -360,14 +362,12 @@ class SpeicherRegelungModule extends BaseModule {
         this._tariffDischargeAllowed = true;
         this._tariffDischargeAllowedTrueSinceMs = 0;
 
-        // Hybrid-/Gateway-Priorität Sondermodus.
-        // Ab 0.6.255 wird nicht mehr SetGridActivePower genutzt, weil dieser DP auf
-        // manchen Gateway-/EMS-Systemen nicht beschreibbar ist. Stattdessen gilt:
-        // - bei interner interner PV >= Schwellwert: keine externe Vorgabe, Gateway regelt selbst
-        // - bei zusätzlicher externer PV: nur PV-Überschuss als Lade-Setpoint vorgeben
-        // - bei wenig/keiner PV: normale NexoWatt-Regelung (Tarif/LSK/Reserve) über den
-        //   vorhandenen Batterie-Sollleistungs-DP; dieser wird in jedem Tick erneuert
-        //   und bleibt damit innerhalb des 10s-Watchdogs.
+        // Hybrid-/Gateway-Profil. SetGridActivePower wird nicht verwendet, weil
+        // dieser DP auf manchen Gateway-/EMS-Systemen nicht beschreibbar ist. Die
+        // zentrale Zielbildung (NVP, SoC, Budget, Tarif, Reserve und EVCS) bleibt
+        // führend und wird über den manuell im AppCenter zugeordneten Batterie-
+        // Ausgang in jedem Tick erneuert. Zusätzliche PV kann den Lade-Sollwert
+        // begrenzen, darf den Gate-/Executor-Pfad aber nie auf No-Write setzen.
         this._feneconGridLastWriteMs = 0;
         this._feneconGridLastSetpointW = null;
         this._feneconGridWasActive = false;
@@ -375,11 +375,9 @@ class SpeicherRegelungModule extends BaseModule {
         this._feneconHybridWasExternal = false;
         this._feneconHybridLastMode = '';
 
-        // FENECON/OpenEMS-Assist-Zustand:
-        // Wenn die interne FEMS-Regelung tagsueber freigegeben ist, schreibt
-        // NexoWatt normalerweise gar keinen Batterie-Sollwert. Diese Timer merken
-        // nur, ob trotz dieser Freigabe dauerhaft Netzbezug stehen bleibt; erst
-        // dann darf ein begrenzter Assist-Sollwert geschrieben werden.
+        // FENECON/OpenEMS-Assist-Zustand: Die Timer bestimmen, ob ein begrenzter
+        // NVP-Assist-Sollwert erforderlich ist. Unabhängig vom Assist-Modus bleibt
+        // der manuell zugeordnete Ausgang watchdog-sicher im zyklischen Schreibpfad.
         this._feneconAssistImportSinceMs = 0;
         this._feneconAssistReleaseSinceMs = 0;
         this._feneconAssistActive = false;
@@ -531,11 +529,13 @@ class SpeicherRegelungModule extends BaseModule {
         const farmRowsEarly = Array.isArray(farmRuntimeInfoEarly && farmRuntimeInfoEarly.rows) && farmRuntimeInfoEarly.rows.length
             ? farmRuntimeInfoEarly.rows
             : (Array.isArray(farmCfgEarly.storages) ? farmCfgEarly.storages : []);
-        const farmAppPolicyActive = !!(farmEnabledEarly && farmRowsEarly.some((row) => row && row.enabled !== false && (
-            String(row.setSignedPowerId || '').trim()
-            || String(row.setChargePowerId || '').trim()
-            || String(row.setDischargePowerId || '').trim()
-        )));
+        const farmAppPolicyActive = (farmRuntimeInfoEarly && typeof farmRuntimeInfoEarly.dispatchActive === 'boolean')
+            ? !!farmRuntimeInfoEarly.dispatchActive
+            : !!(farmEnabledEarly && farmRowsEarly.some((row) => row && row.enabled !== false && (
+                String(row.setSignedPowerId || row.targetPowerObjectId || row.targetPowerId || '').trim()
+                || String(row.setChargePowerId || row.targetChargePowerObjectId || row.targetChargePowerId || '').trim()
+                || String(row.setDischargePowerId || row.targetDischargePowerObjectId || row.targetDischargePowerId || '').trim()
+            )));
 
         // Eine echte Farm ist der Hardware-Verteilpfad der normalen Eigenverbrauchs-
         // optimierung. Sie aktiviert deshalb die Basisregelung automatisch, waehrend
@@ -662,52 +662,69 @@ class SpeicherRegelungModule extends BaseModule {
         const farmRows = farmRowsEarly;
         // Bei aktiver Farm reicht ein Farm-Sollwert-DP als beschreibbares Ziel. Die
         // Basis-Eigenverbrauchsregelung wurde bereits oben automatisch aktiviert.
-        const hasFarmSetpoints = farmEnabled && farmRows.some(r => r && r.enabled !== false && (String(r.setSignedPowerId||'').trim() || String(r.setChargePowerId||'').trim() || String(r.setDischargePowerId||'').trim()));
+        const hasFarmSetpoints = (farmRuntimeInfoEarly && typeof farmRuntimeInfoEarly.dispatchActive === 'boolean')
+            ? !!farmRuntimeInfoEarly.dispatchActive
+            : farmEnabled && farmRows.some(r => r && r.enabled !== false && (
+                String(r.setSignedPowerId || r.targetPowerObjectId || r.targetPowerId || '').trim()
+                || String(r.setChargePowerId || r.targetChargePowerObjectId || r.targetChargePowerId || '').trim()
+                || String(r.setDischargePowerId || r.targetDischargePowerObjectId || r.targetDischargePowerId || '').trim()
+            ));
         await this._setIfChanged('speicher.regelung.aktivSpeicherfarm', !!hasFarmSetpoints);
 
         const hasSignedTarget = this.dp ? !!this.dp.getEntry('st.targetPowerW') : false;
         const hasChargeTarget = this.dp ? !!this.dp.getEntry('st.targetChargePowerW') : false;
         const hasDischargeTarget = this.dp ? !!this.dp.getEntry('st.targetDischargePowerW') : false;
-        // Herstellerprofile koennen entweder einen bidirektionalen signed-Sollwert
-        // oder getrennte Lade-/Entlade-DPs anbieten. Fuer Feldanlagen darf auch ein
-        // einzelner Split-DP als gueltiger Zielpfad gelten; die fehlende Richtung wird
-        // spaeter in _applyTargetW sauber gesperrt bzw. auf signed fallback gesetzt.
+        const hasMaxChargeTarget = this.dp ? !!this.dp.getEntry('st.maxChargeW') : false;
+        const hasMaxDischargeTarget = this.dp ? !!this.dp.getEntry('st.maxDischargeW') : false;
+        const hasChargeEnableTarget = this.dp ? !!this.dp.getEntry('st.chargeEnable') : false;
+        const hasDischargeEnableTarget = this.dp ? !!this.dp.getEntry('st.dischargeEnable') : false;
+        // Herstellerprofile koennen entweder einen bidirektionalen signed-Sollwert,
+        // getrennte Lade-/Entlade-DPs, Leistungsgrenzen oder Richtungsfreigaben anbieten.
+        // Jeder im AppCenter gewaehlte Modus bleibt herstellerunabhaengig; einzelne
+        // Richtungen duerfen fehlen und werden dann nur fuer diese Richtung gesperrt.
         const hasSplitTarget = hasChargeTarget || hasDischargeTarget;
+        const hasLimitTarget = hasMaxChargeTarget || hasMaxDischargeTarget;
+        const hasEnableTarget = hasChargeEnableTarget || hasDischargeEnableTarget;
         const storageVendorProfile = this._getStorageVendorProfile(cfg);
         const e3dcRscpConfigured = this._isE3dcRscpControlConfigured(cfg);
         const hasE3dcSetPowerTarget = e3dcRscpConfigured && this.dp
             ? !!(this.dp.getEntry('st.e3dcSetPowerMode') && this.dp.getEntry('st.e3dcSetPowerValueW'))
             : false;
-        const hasTarget = hasSignedTarget || hasSplitTarget || hasE3dcSetPowerTarget;
+        const supportedControlMode = controlMode === 'targetPower' || controlMode === 'limits' || controlMode === 'enableFlags';
+        const hasTarget = controlMode === 'limits'
+            ? hasLimitTarget
+            : (controlMode === 'enableFlags' ? hasEnableTarget : (hasSignedTarget || hasSplitTarget || hasE3dcSetPowerTarget));
         const feneconHybridConfigured = this._isFeneconHybridControlConfigured(cfg);
         const sungrowHybridConfigured = this._isSungrowHybridControlConfigured(cfg);
-        // FENECON/OpenEMS ist kein Speicherfarm-Blocker mehr:
-        // Der No-Write-Entscheid liegt vor _applyTargetW(). Bei Tages-/PV-Pass-through
-        // wird dadurch weder ein Einzel-Sollwert noch ein Farm-Sollwert geschrieben.
-        // Bei uebergeordneten Policies (MultiUse/Peak/Tarif/Reserve) oder Assist darf
-        // die Speicherfarm den erzeugten Zielwert weiter wie gewohnt verteilen.
+        // Herstellerprofile duerfen die Regelstrategie ergaenzen, aber einen manuell
+        // zugeordneten AppCenter-Schreibpfad nicht deaktivieren. Einzel- und Farmziele
+        // werden deshalb immer erst nach allen zentralen Gates/Sicherheitsgrenzen bedient.
         const feneconHybridActive = !!feneconHybridConfigured;
         const sungrowHybridActive = !!sungrowHybridConfigured;
         await this._setIfChanged('speicher.regelung.herstellerprofil', storageVendorProfile);
         const feneconHybridBlockedByFarm = false;
 
-        if (controlMode !== 'targetPower') {
+        if (!supportedControlMode) {
+            const unsupportedReason = `Steuerungsart nicht unterstützt: ${controlMode}`;
             await this._setIfChanged('speicher.regelung.requestW', 0);
             await this._setIfChanged('speicher.regelung.requestQuelle', 'aus');
-            await this._setIfChanged('speicher.regelung.requestGrund', 'Steuerungsart nicht unterstützt (nur Sollleistung)');
-            await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({ ts: Date.now(), reqW: 0, reason: 'Steuerungsart nicht unterstützt (nur Sollleistung)', src: 'aus' }));
-
-            await this._applyTargetW(0, 'Steuerungsart nicht unterstützt (nur Sollleistung)', 'aus');
+            await this._setIfChanged('speicher.regelung.requestGrund', unsupportedReason);
+            await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({ ts: Date.now(), reqW: 0, reason: unsupportedReason, src: 'aus' }));
+            await this._applyTargetW(0, unsupportedReason, 'aus');
             return;
         }
 
         if (!hasTarget && !hasFarmSetpoints) {
+            const missingTargetReason = controlMode === 'limits'
+                ? 'Leistungsgrenzen-Datenpunkt fehlt: Max Laden und/oder Max Entladen'
+                : (controlMode === 'enableFlags'
+                    ? 'Freigabe-Datenpunkt fehlt: Laden erlaubt und/oder Entladen erlaubt'
+                    : 'Sollleistung-Datenpunkt fehlt: signed Ziel, getrennte Lade-/Entlade-Sollwerte oder E3/DC SET_POWER_MODE + SET_POWER_VALUE');
             await this._setIfChanged('speicher.regelung.requestW', 0);
             await this._setIfChanged('speicher.regelung.requestQuelle', 'aus');
-            await this._setIfChanged('speicher.regelung.requestGrund', 'Sollleistung-Datenpunkt fehlt: signed Ziel, getrennte Lade-/Entlade-Sollwerte oder E3/DC SET_POWER_MODE + SET_POWER_VALUE');
-            await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({ ts: Date.now(), reqW: 0, reason: 'Sollleistung-Datenpunkt fehlt: signed Ziel, getrennte Lade-/Entlade-Sollwerte oder E3/DC SET_POWER_MODE + SET_POWER_VALUE', src: 'aus' }));
-
-            await this._applyTargetW(0, 'Sollleistung-Datenpunkt fehlt: signed Ziel oder getrennte Lade-/Entlade-Sollwerte', 'aus');
+            await this._setIfChanged('speicher.regelung.requestGrund', missingTargetReason);
+            await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({ ts: Date.now(), reqW: 0, reason: missingTargetReason, src: 'aus' }));
+            await this._applyTargetW(0, missingTargetReason, 'aus');
             return;
         }
 
@@ -825,32 +842,21 @@ class SpeicherRegelungModule extends BaseModule {
                 .map(e => e && e.objectId ? String(e.objectId) : '')
                 .filter(Boolean);
 
-            // Wichtig für herstellerneutrale Speicher: Die Ist-Leistung darf niemals ein
-            // Schreib-/Sollwert-DP sein. Bei Split-Systemen sind chargePowerW,
-            // dischargePowerW und powerSetpointW typischerweise ctrl-/Setpoint-DPs.
-            // Wenn ein solcher DP als Ist-Leistung gemappt wird, liest die Regelung ihre
-            // eigene Vorgabe zurück und integriert hoch. Genau dadurch entstehen Feldfehler
-            // wie 2 kW Netzbezug, aber 10 kW Entlade-Sollwert.
+            // Wichtig für herstellerneutrale Speicher: Die Ist-Leistung darf niemals
+            // exakt dasselbe Objekt wie ein zugeordneter Schreib-/Sollwert-DP sein.
+            // Objektpfade und Namen sind dagegen vollständig frei: `.ctrl.`, `setpoint`,
+            // `chargePowerW` oder `dischargePowerW` können bei Fremdadaptern legitime
+            // Messwerte bezeichnen und dürfen eine manuelle AppCenter-Zuordnung nicht
+            // pauschal entwerten.
             const sameAsWriteTarget = !!(battObj && targetObjs.some(t => t === battObj));
-            const battObjLower = battObj.toLowerCase();
-            const looksLikeControlDp = !!battObj && (
-                battObjLower.includes('.aliases.ctrl.') ||
-                battObjLower.includes('.ctrl.') ||
-                battObjLower.includes('powersetpoint') ||
-                battObjLower.includes('setpoint') ||
-                battObjLower.includes('chargepowerw') ||
-                battObjLower.includes('dischargepowerw')
-            );
 
-            if (sameAsWriteTarget || looksLikeControlDp) {
+            if (sameAsWriteTarget) {
                 battPowerObservedW = null;
                 battPowerW = null;
                 battPowerAge = null;
                 battPowerMappingTrusted = false;
                 battPowerTrusted = false;
-                battPowerInvalidReason = sameAsWriteTarget
-                    ? 'Ist-Leistung verweist auf einen Sollwert-Datenpunkt (Mapping-Fehler)'
-                    : 'Ist-Leistung wirkt wie ein Steuer-/Setpoint-Datenpunkt und wird nicht für Balancing genutzt';
+                battPowerInvalidReason = 'Ist-Leistung verweist auf denselben Datenpunkt wie ein Sollwert (Mapping-Fehler)';
             }
         } catch {
             // ignore
@@ -858,8 +864,8 @@ class SpeicherRegelungModule extends BaseModule {
 
         // AppCenter kann Lade- und Entlade-Istleistung getrennt zuordnen. Wenn
         // kein vertrauenswürdiger signed Istwert vorliegt, bilden wir daraus
-        // dieselbe interne Konvention (+W Entladen, -W Laden). Sollwert-/CTRL-DPs
-        // werden vom Helfer ausdrücklich nicht als Messfeedback akzeptiert.
+        // dieselbe interne Konvention (+W Entladen, -W Laden). Nur exakt identisch
+        // als Sollwert gemappte Objekte werden vom Helfer als Messfeedback abgewiesen.
         if (!battPowerTrusted) {
             try {
                 const splitFeedback = resolveSplitBatteryFeedback(this.dp, cfg, staleMs);
@@ -964,7 +970,7 @@ class SpeicherRegelungModule extends BaseModule {
         // Profil haelt deshalb waehrend einer begrenzten Grace-Zeit den letzten
         // erfolgreichen Nicht-Null-Befehl ohne neuen Schreibzugriff. Erst ein
         // anhaltender Messausfall wird als ausdruecklicher Sicherheitsstopp mit
-        // 0 W behandelt. FENECON bleibt weiterhin im bestehenden No-Write-Modus.
+        // 0 W behandelt. FENECON bleibt im normalen zyklischen Ausgangspfad.
         if (typeof gridW !== 'number') {
             const lastTargetW = Number.isFinite(Number(this._lastTargetW)) ? Number(this._lastTargetW) : 0;
             const lastSource = String(this._lastSource || '');
@@ -1049,16 +1055,21 @@ class SpeicherRegelungModule extends BaseModule {
             await this._setIfChanged('speicher.regelung.requestGrund', 'Netzleistung fehlt oder zu alt');
             await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({ ts: now, reqW: 0, reason: 'Netzleistung fehlt oder zu alt', src: 'aus' }));
 
+            // Ein fehlender/veralteter NVP ist ein echter Sicherheitsfall. Auch beim
+            // FENECON-/OpenEMS-Profil muss deshalb ein sicherer 0-W-Sollwert ueber den
+            // manuell zugeordneten AppCenter-DP geschrieben und zyklisch erneuert werden.
+            // Ein Herstellerprofil darf den allgemeinen Sicherheitsgate-/Executor-Pfad
+            // niemals umgehen.
+            await this._applyTargetW(0, 'Netzleistung fehlt oder zu alt', 'aus');
             if (feneconHybridActive) {
-                await this._setNoWriteTargetDiag(0, 'Hybrid-/Gateway-Prioritaet: Netzleistung fehlt – lokales Gateway regelt selbst, keine externe Vorgabe', 'fenecon-fems', 'fenecon-fems:no-grid-no-write');
                 await this._setFeneconHybridDiag({
                     active: true,
-                    mode: 'fems-pass-through',
-                    reason: 'Netzleistung fehlt oder zu alt',
-                    writeMode: 'no-write',
+                    mode: 'external-control-safety-zero',
+                    reason: 'Netzleistung fehlt oder zu alt – sicherer 0-W-Sollwert wird ueber den AppCenter-DP erneuert',
+                    writeMode: 'write-safety-zero',
+                    targetW: 0,
                 });
-            } else {
-                await this._applyTargetW(0, 'Netzleistung fehlt oder zu alt', 'aus');
+                this._feneconHybridWasExternal = true;
             }
             await this._setIfChanged('speicher.regelung.netzLeistungW', null);
             await this._setIfChanged('speicher.regelung.netzAlterMs', typeof gridAge === 'number' ? Math.round(gridAge) : null);
@@ -1807,8 +1818,8 @@ if (typeof soc === 'number') {
         // Praxis: ein kleiner Bezug (z. B. 50–150 W) ist oft stabiler als exakt 0 W
         // (Messrauschen, Totzeiten, Geräte-Rampen).
         // Standard-Eigenverbrauch bleibt herstellerunabhängig bei kleinem Ziel-Import.
-        // Hybrid-/Gateway-Priorität entscheidet später pro Tick: Gateway-No-Write, Zusatz-PV-Laden
-        // oder normale externe Vorgabe bei wenig/keiner interner PV.
+        // Hybrid-/Gateway-Priorität entscheidet später pro Tick über Zusatz-PV-Cap, Assist
+        // und Schreibdiagnose; der AppCenter-Ausgang bleibt dabei immer gekoppelt.
         // Zielwert/Deadband sind Tuningwerte der Eigenverbrauchsregelung und
         // dürfen auch ohne MultiUse genutzt werden. Sie bilden keine SoC-Zonen.
         const selfTargetGridW = Math.max(0, num(cfg.selfTargetGridImportW, 50));
@@ -3452,7 +3463,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             || stopReasonText.includes('richtungswechsel')
         );
 
-        let feneconNoWrite = false;
+        const feneconNoWrite = false; // Legacy-Diagnosefeld; produktiver FENECON-Pfad schreibt immer.
         let feneconWriteMode = '';
         let sungrowWriteMode = '';
         let sungrowNoWrite = false;
@@ -3470,11 +3481,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             const mode = String(ctx.mode || '');
 
             if (mode === 'fems-pass-through' || mode === 'fems-assist') {
-                // FENECON/OpenEMS/FEMS Tagesbetrieb:
-                // Grundsatz: keine externe Batterie-Vorgabe schreiben, damit der FEMS-
-                // Watchdog auslaufen kann und das lokale Gateway die 0-Einspeisung/
-                // Eigenverbrauchsregelung selbst fuehrt. Externe Schreibzugriffe bleiben
-                // nur fuer echte uebergeordnete Anforderungen erlaubt.
+                // FENECON/OpenEMS/FEMS darf die fachliche Zielbildung beeinflussen, aber
+                // den manuell im AppCenter zugeordneten Batterie-Sollwert nicht mehr auf
+                // No-Write setzen. Der finale, bereits durch NVP-, SoC-, Budget- und
+                // Sicherheits-Gates begrenzte Sollwert wird in jedem EMS-Tick erneuert.
                 const srcNorm = String(source || '').toLowerCase();
                 const isCriticalExternalRequest = targetW !== 0 && (
                     srcNorm === 'lastspitze' ||
@@ -3487,7 +3497,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
                 if (isCriticalExternalRequest) {
                     feneconWriteMode = 'write-critical-policy';
-                    reason = String(reason || 'externe Speicheranforderung') + ' · FENECON/OpenEMS: uebergeordnete Policy darf schreiben';
+                    reason = String(reason || 'externe Speicheranforderung') + ' · FENECON/OpenEMS: zentral gegatete Vorgabe wird zyklisch geschrieben';
                 } else if (isAssistRequest) {
                     // Assist immer am aktuellen NVP-Bedarf begrenzen. Wir geben nicht die
                     // Gebaeudelast an FENECON weiter, weil am Hybrid-AC-Ausgang PV und Batterie
@@ -3498,28 +3508,22 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     const assistBufferW = Math.max(0, num(cfg.feneconAssistBufferW, 150));
                     const assistCapW = Math.max(0, Math.max(0, nvpNowW) - targetImportW + assistBufferW);
                     targetW = Math.min(Math.max(0, targetW), assistCapW);
+                    source = 'fenecon-assist';
                     if (targetW > 0) {
-                        source = 'fenecon-assist';
                         reason = `FENECON/OpenEMS Assist: Entladung ${Math.round(targetW)} W gegen dauerhaften Netzbezug (NVP ${Math.round(nvpNowW)} W)`;
                         feneconWriteMode = 'write-assist-on-demand';
                     } else {
-                        targetW = 0;
-                        source = 'fenecon-fems';
-                        reason = 'FENECON/OpenEMS Assist: NVP-Cap 0 W – keine externe Vorgabe';
-                        feneconNoWrite = true;
-                        feneconWriteMode = 'no-write';
+                        reason = 'FENECON/OpenEMS Assist: NVP-Cap 0 W – externer 0-W-Stop wird zyklisch bestätigt';
+                        feneconWriteMode = 'write-assist-zero';
                     }
                 } else {
-                    targetW = 0;
-                    source = 'fenecon-fems';
-                    reason = ctx.reason || 'FENECON/OpenEMS: Tages-/PV-Betrieb – lokales Gateway regelt selbst, keine externe Vorgabe';
-                    feneconNoWrite = true;
-                    feneconWriteMode = 'no-write';
+                    feneconWriteMode = 'write-appcenter-gated';
+                    reason = String(reason || ctx.reason || 'FENECON/OpenEMS: zentraler Speicher-Sollwert') + ' · AppCenter-Ziel aktiv, sekündlicher Watchdog-Refresh';
                 }
             } else if (mode === 'external-pv-charge-only') {
-                // Zusätzliche PV ist aktiv: Nur PV-Überschuss-Ladung darf extern vorgegeben
-                // werden. Tarif-/Entlade-/Peak-Setpoints werden während interner PV nicht
-                // gegen die Gateway-Hybridregelung gefahren.
+                // Zusatz-PV bleibt als fachlicher Lade-Cap erhalten. Andere zentrale
+                // Policies werden nicht mehr durch einen Hersteller-No-Write verschluckt,
+                // sondern ebenfalls über den manuell zugeordneten Ziel-DP ausgegeben.
                 if (targetW < 0 && source === 'pv') {
                     const extraCapW = Math.max(0, Number(ctx.additionalPvW) || 0);
                     const absTarget = Math.abs(targetW);
@@ -3528,26 +3532,20 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     source = 'fenecon-extra-pv';
                     feneconWriteMode = 'write-extra-pv-charge';
                 } else {
-                    targetW = 0;
-                    source = 'fenecon-fems';
-                    reason = ctx.reason || 'Hybrid-/Gateway-Priorität: interne PV aktiv – nur Zusatz-PV-Laden erlaubt, sonst Gateway';
-                    feneconNoWrite = true;
-                    feneconWriteMode = 'no-write';
+                    feneconWriteMode = 'write-appcenter-gated';
+                    reason = String(reason || ctx.reason || 'FENECON/OpenEMS: zentraler Speicher-Sollwert') + ' · AppCenter-Ziel aktiv, sekündlicher Watchdog-Refresh';
                 }
             } else if (mode === 'external-control-low-pv') {
-                // Wenig/keine interner PV: NexoWatt darf normal regeln. Der Sollwert
-                // wird unten per _applyTargetW in jedem Tick erneuert und bleibt damit
-                // innerhalb des 10s-Watchdogs.
                 feneconWriteMode = 'write-low-pv';
             } else {
-                feneconWriteMode = 'standard';
+                feneconWriteMode = 'write-appcenter-gated';
             }
 
             await this._setFeneconHybridDiag({
                 active: true,
-                mode: mode || (feneconNoWrite ? 'fems-pass-through' : 'external-control-low-pv'),
+                mode: mode || 'external-control-low-pv',
                 reason,
-                writeMode: feneconWriteMode || (feneconNoWrite ? 'no-write' : 'write'),
+                writeMode: feneconWriteMode || 'write-appcenter-gated',
                 targetW,
                 pvW: ctx.pvW,
                 additionalPvW: ctx.additionalPvW,
@@ -4091,7 +4089,21 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 targetW = Number(zeroDecision.outputW) || 0;
                 source = previousSource || source || (sungrowHybridActive ? 'sungrow-hybrid' : 'idle');
                 reason = storageZeroWriteReason;
-                storageZeroNoWrite = true;
+
+                // FENECON/OpenEMS wertet die externe Batterie-Vorgabe nur solange
+                // aus, wie der zugeordnete Schreib-DP zyklisch erneuert wird. Ein
+                // fachlich korrekter Leerlauf von 0 W darf deshalb nicht von der
+                // herstellerunabhaengigen 0-W-Firewall in No-Write verwandelt werden.
+                // Der 0-W-Wert bleibt ein echter, bereits gegateter Stop/Keepalive.
+                if (feneconHybridActive && zeroDecision.action === 'idle-no-write') {
+                    storageZeroNoWrite = false;
+                    storageZeroWriteStatus = 'write-fenecon-idle-keepalive';
+                    storageZeroWriteReason = String(reason || 'FENECON/OpenEMS: 0-W-Keepalive ueber AppCenter-DP');
+                    reason = storageZeroWriteReason;
+                    feneconWriteMode = feneconWriteMode || 'write-appcenter-gated';
+                } else {
+                    storageZeroNoWrite = true;
+                }
                 if (sungrowHybridActive) {
                     sungrowNoWrite = true;
                     sungrowWriteMode = zeroDecision.action === 'idle-no-write'
@@ -4169,9 +4181,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         //   physisch belegte Ladeleistung nachfolgenden Verbrauchern weder als
         //   Gesamt- noch als PV-Budget erneut zur Verfuegung stehen darf.
         // - Tarif-/Reserve-/LSK-Netzladen reduziert nur remainingTotalW.
-        // FENECON-internes No-Write reserviert nichts. Ein durch die allgemeine
-        // 0-W-Firewall gehaltener externer Sollwert bleibt dagegen physikalisch aktiv
-        // und muss deshalb im zentralen Budget weiter reserviert werden.
+        // Ein durch die allgemeine 0-W-Firewall gehaltener externer Sollwert bleibt
+        // physikalisch aktiv und muss deshalb im zentralen Budget weiter reserviert
+        // werden. FENECON verwendet ebenfalls stets den externen, gegateten Pfad.
         try {
             const budgetRuntime = this.adapter && this.adapter._emsBudget;
             const sourceForBudget = policySourceBeforeVendor || String(source || '');
@@ -4229,6 +4241,14 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await this._setIfChanged('speicher.regelung.totalBudgetStorageAvailableW', Math.round(totalBudgetStorageAvailableW));
         await this._setIfChanged('speicher.regelung.totalBudgetStorageReservedW', Math.round(totalBudgetStorageReservedW));
         await this._setIfChanged('speicher.regelung.totalBudgetStorageCapped', !!totalBudgetStorageCapped);
+
+        // Die optionale Reserve-SoC-Ausgabe erhaelt dieselbe final wirksame
+        // Entlade-Untergrenze, die auch die zentrale Sicherheitslogik verwendet.
+        this._effectiveReserveSocPct = clamp(
+            Number.isFinite(Number(hardDischargeMinSoc)) ? Number(hardDischargeMinSoc) : reserveMin,
+            0,
+            100,
+        );
 
         // ------------------------------------------------------------
         // Phase 2: Dispatcher-Diagnose-Zustände schreiben
@@ -4357,7 +4377,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     assistActive: !!(feneconHybridCtx && feneconHybridCtx.assistActive),
                     assistImportThresholdW: (feneconHybridCtx && Number.isFinite(Number(feneconHybridCtx.assistImportThresholdW))) ? Math.round(Number(feneconHybridCtx.assistImportThresholdW)) : null,
                     reason: feneconHybridCtx && feneconHybridCtx.reason ? String(feneconHybridCtx.reason) : '',
-                    watchdogSec: 60,
+                    watchdogSec: 1,
                     setGridActivePowerUsed: false,
                 } : {
                     hybridMode: false,
@@ -4418,10 +4438,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         };
         await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify(_diag));
 
-        if (feneconNoWrite) {
-            await this._setNoWriteTargetDiag(targetW, reason, source, 'fenecon-fems:no-write');
-            this._feneconHybridWasExternal = false;
-        } else if (sungrowNoWrite || storageZeroNoWrite) {
+        if (sungrowNoWrite || storageZeroNoWrite) {
             await this._setHoldNoWriteTargetDiag(targetW, reason, source, storageZeroWriteStatus || (sungrowNoWrite ? 'sungrow-hybrid:no-write' : 'storage:no-write'));
         } else {
             await this._applyTargetW(targetW, reason, source);
@@ -5436,7 +5453,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
             selfDischargeEnabled: storage.selfDischargeEnabled,
             // Herstellerprofile: generisch bleibt die normale Eigenverbrauchslogik,
-            // FENECON/OpenEMS nutzt No-Write/Assist. Sungrow nutzt ab 0.8.96 denselben
+            // FENECON/OpenEMS nutzt gegateten Watchdog-Refresh/Assist. Sungrow nutzt ab 0.8.96 denselben
             // geschlossenen NVP-Regelkreis wie Generic/E3DC/Farm; alte PV-Deckungs-
             // Nullkommandos werden nicht mehr ausgewertet.
             vendorProfile: storage.vendorProfile,
@@ -5459,10 +5476,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             // Haken, bedeutet ab 0.6.255 aber: Hybrid-/Gateway-Priorität-Gateway-Priorität.
             feneconAcMode: storage.feneconAcMode,
             feneconGridControlEnabled: storage.feneconGridControlEnabled,
-            // FENECON/OpenEMS/FEMS: separater Installer-Haken fuer den neuen
-            // Tagsueber-No-Write-Betrieb. Wenn nicht gesetzt, bleibt der
-            // sichere Default bei aktivem FENECON-Modus: keine externe Vorgabe
-            // im PV-/Tagbetrieb, damit FEMS den Speicher selbst fuehren kann.
+            // FENECON/OpenEMS/FEMS Legacy-Feld: wird ab 0.8.124 nur noch fuer
+            // Migration/Diagnose gelesen. Der technische No-Write-Pfad ist fest
+            // deaktiviert; die externe Vorgabe bleibt an den AppCenter-DP gekoppelt.
             feneconDayNoWriteEnabled: storage.feneconDayNoWriteEnabled,
             feneconAssistEnabled: storage.feneconAssistEnabled,
             feneconDayClockFallbackEnabled: storage.feneconDayClockFallbackEnabled,
@@ -5572,6 +5588,39 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 : (rootCfg.enableStorageFarm === true);
 
             return !!(enabledByConfig && configuredCount >= 2);
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Nur eine tatsächlich beschreibbare Farm darf den Einzel-Speicher-Schreibpfad
+     * übernehmen. Reine Mess-/SoC-/Statuszeilen bleiben für Aggregation aktiv,
+     * blockieren aber niemals die manuell zugeordneten st.*-Ziel-DPs.
+     */
+    _isStorageFarmDispatchEnabled() {
+        try {
+            if (this.adapter && typeof this.adapter._nwGetStorageFarmRuntimeInfo === 'function') {
+                const info = this.adapter._nwGetStorageFarmRuntimeInfo();
+                if (info && typeof info.dispatchActive === 'boolean') return info.dispatchActive;
+                if (!info || !info.active) return false;
+                const rows = Array.isArray(info.rows) ? info.rows : [];
+                return rows.some((row) => row && row.enabled !== false && (
+                    String(row.setSignedPowerId || row.targetPowerObjectId || row.targetPowerId || '').trim()
+                    || String(row.setChargePowerId || row.targetChargePowerObjectId || row.targetChargePowerId || '').trim()
+                    || String(row.setDischargePowerId || row.targetDischargePowerObjectId || row.targetDischargePowerId || '').trim()
+                ));
+            }
+
+            if (!this._isStorageFarmEnabled()) return false;
+            const rootCfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
+            const sf = (rootCfg.storageFarm && typeof rootCfg.storageFarm === 'object') ? rootCfg.storageFarm : {};
+            const rows = Array.isArray(sf.storages) ? sf.storages : [];
+            return rows.some((row) => row && row.enabled !== false && (
+                String(row.setSignedPowerId || row.targetPowerObjectId || row.targetPowerId || '').trim()
+                || String(row.setChargePowerId || row.targetChargePowerObjectId || row.targetChargePowerId || '').trim()
+                || String(row.setDischargePowerId || row.targetDischargePowerObjectId || row.targetDischargePowerId || '').trim()
+            ));
         } catch {
             return false;
         }
@@ -6015,7 +6064,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         /**
          * Code-Teil: readOwnFreshNumber
          * Zweck: Liest eigene Diagnose-/Forecaststates frisch aus dem Adapter.
-         * Damit kann der FENECON-No-Write-Modus auch dann tagsueber greifen,
+         * Damit bleibt die FENECON-Tages-/PV-Erkennung auch dann verfügbar,
          * wenn der Kunden-Gateway-AC-Ausgang nicht als klassische PV gemappt ist.
          */
         const readOwnFreshNumber = async (id) => {
@@ -6072,9 +6121,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const exportW = (typeof nvpW === 'number') ? Math.max(0, -nvpW) : 0;
         const importW = (typeof nvpW === 'number') ? Math.max(0, nvpW) : 0;
 
-        // Forecast-Erkennung: der Forecast ist keine direkte Vorgabe, sondern nur
-        // eine Tages-/PV-Freigabe fuer den No-Write-Modus. So kann FEMS selbst regeln,
-        // obwohl NexoWatt bei 0-Einspeisung aktuell 0 W PV am NVP sieht.
+        // Forecast-Erkennung: Der Forecast ist keine direkte Vorgabe, sondern nur
+        // ein Kontextsignal für Tages-/PV-Erkennung und den begrenzten Assist-Modus.
+        // Der manuell zugeordnete Ausgang wird davon nicht getrennt.
         let forecastMaxW = 0;
         let forecastSource = 'missing';
         try {
@@ -6103,10 +6152,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const forecastActive = forecastMaxW >= forecastThresholdW;
         const additionalPvActive = additionalPvW >= additionalThresholdW;
 
-        // Uhr-Fallback: In FENECON-Anlagen kann die PV in NexoWatt absichtlich 0 W sein,
-        // weil der AC-Hybrid-Ausgang PV+Batterie zusammenfuehrt. Damit tagsueber trotzdem
-        // keine externe Vorgabe den FEMS-Normalbetrieb festhaelt, gibt es einen einfachen
-        // Tagesfenster-Fallback. Er kann in Expertenconfig deaktiviert werden.
+        // Uhr-Fallback: In FENECON-Anlagen kann die PV in NexoWatt 0 W erscheinen,
+        // weil der AC-Hybrid-Ausgang PV und Batterie zusammenführt. Das Tagesfenster
+        // dient nur der Modus-/Assist-Erkennung; der externe AppCenter-Ausgang bleibt
+        // weiterhin zyklisch aktiv. Der Fallback kann in Expertenconfig deaktiviert werden.
         const clockFallbackEnabled = cfg.feneconDayClockFallbackEnabled !== false;
         const dayStartHour = clamp(num(cfg.feneconDayStartHour, 7), 0, 23);
         const dayEndHour = clamp(num(cfg.feneconDayEndHour, 20), 1, 24);
@@ -6115,20 +6164,25 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             ? (hour >= dayStartHour && hour < dayEndHour)
             : (hour >= dayStartHour || hour < dayEndHour));
 
-        const dayNoWriteEnabled = cfg.feneconDayNoWriteEnabled !== false;
+        // Legacy-Migration: Aeltere Konfigurationen konnten den FENECON-Ziel-DP im
+        // Tagesbetrieb absichtlich auf No-Write setzen. Das ist fuer externe
+        // FEMS/OpenEMS-Vorgaben nicht watchdog-sicher und trennt den manuell
+        // zugeordneten AppCenter-DP vom Gate-/Executor-Pfad. Der Wert wird nur noch
+        // diagnostisch mitgefuehrt; technisch ist No-Write fest deaktiviert.
+        const legacyDayNoWriteRequested = cfg.feneconDayNoWriteEnabled === true;
+        const dayNoWriteEnabled = false;
         const dayOrPvActive = !!(internalPvActive || forecastActive || clockDayActive);
 
-        // Assist-Regler: Nur wenn FEMS trotz internem Tagesbetrieb dauerhaft Netzbezug
-        // stehen laesst, darf NexoWatt kurzzeitig mit einem kleinen NVP-begrenzten
-        // Entlade-Sollwert helfen. Ohne diese Verzögerung wuerden wir den Gateway-Modus
-        // wieder dauerhaft mit externen Schreibzugriffen blockieren.
+        // Assist-Regler: Nur wenn im Tagesbetrieb dauerhaft Netzbezug stehen bleibt,
+        // wird der ohnehin aktive externe Zielpfad auf einen kleinen, NVP-begrenzten
+        // Entlade-Sollwert umgestellt. Die Verzögerung verhindert unnötige Eingriffe.
         const assistEnabled = cfg.feneconAssistEnabled !== false;
         const assistThresholdW = Math.max(0, num(cfg.feneconAssistImportThresholdW, 800));
         const assistDelayMs = Math.max(0, num(cfg.feneconAssistDelaySec, 60)) * 1000;
         const releaseImportW = Math.max(0, num(cfg.feneconAssistReleaseImportW, 200));
         const releaseDelayMs = Math.max(0, num(cfg.feneconAssistReleaseDelaySec, 90)) * 1000;
 
-        if (!dayNoWriteEnabled || !assistEnabled || !dayOrPvActive) {
+        if (!assistEnabled || !dayOrPvActive) {
             this._feneconAssistImportSinceMs = 0;
             this._feneconAssistReleaseSinceMs = 0;
             this._feneconAssistActive = false;
@@ -6160,24 +6214,24 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         let writeMode = 'write-low-pv';
         let reason = 'FENECON/OpenEMS: kein PV-/Tagbetrieb erkannt – NexoWatt-Regelung aktiv';
 
-        if (dayNoWriteEnabled && dayOrPvActive) {
+        if (dayOrPvActive) {
             if (this._feneconAssistActive) {
                 mode = 'fems-assist';
                 writeMode = 'write-assist-on-demand';
-                reason = 'FENECON/OpenEMS: Tagesbetrieb intern freigegeben, Assist wegen dauerhaftem Netzbezug aktiv';
+                reason = 'FENECON/OpenEMS: Tagesbetrieb erkannt, NVP-begrenzter Assist aktiv; AppCenter-Sollwert wird zyklisch geschrieben';
             } else {
-                mode = 'fems-pass-through';
-                writeMode = 'no-write';
-                reason = 'FENECON/OpenEMS: Tages-/PV-Betrieb – keine externe Speicheranforderung, FEMS regelt selbst';
+                mode = 'external-control-keepalive';
+                writeMode = 'write-appcenter-gated';
+                reason = 'FENECON/OpenEMS: Tages-/PV-Betrieb – gegateter Sollwert wird ueber den AppCenter-DP zyklisch erneuert';
             }
         } else if (internalPvActive && additionalPvActive) {
             mode = 'external-pv-charge-only';
             writeMode = 'write-extra-pv-charge';
             reason = 'Hybrid-/Gateway-Priorität: interne PV aktiv, Zusatz-PV erkannt (' + Math.round(additionalPvW) + ' W) – nur Zusatz-PV-Laden extern';
         } else if (internalPvActive) {
-            mode = 'fems-pass-through';
-            writeMode = 'no-write';
-            reason = 'Hybrid-/Gateway-Priorität: PV >= ' + Math.round(thresholdW) + ' W – lokales Gateway regelt selbst, keine externe Vorgabe';
+            mode = 'external-control-keepalive';
+            writeMode = 'write-appcenter-gated';
+            reason = 'Hybrid-/Gateway-Priorität: PV >= ' + Math.round(thresholdW) + ' W – gegateter Sollwert wird zyklisch erneuert';
         }
 
         return {
@@ -6201,6 +6255,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             forecastActive,
             clockDayActive,
             dayNoWriteEnabled,
+            legacyDayNoWriteRequested,
             dayOrPvActive,
             assistEnabled,
             assistActive: !!this._feneconAssistActive,
@@ -6253,7 +6308,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         // fälschlich eine SetGridActivePower-Nutzung anzeigen.
         await this._setIfChanged('speicher.regelung.feneconGridAktiv', false);
         await this._setIfChanged('speicher.regelung.feneconGridQuelle', 'deprecated');
-        await this._setIfChanged('speicher.regelung.feneconGridGrund', active ? 'ab 0.6.255 nicht genutzt – Hybrid-/Gateway-Priorität nutzt den Sollleistungs-DP bzw. No-Write/lokale Regelung' : reason);
+        await this._setIfChanged('speicher.regelung.feneconGridGrund', active ? 'ab 0.6.255 nicht genutzt – externe Vorgabe laeuft ueber den manuell zugeordneten Sollleistungs-DP mit Gate-/Watchdog-Refresh' : reason);
         await this._setIfChanged('speicher.regelung.feneconGridSchreibOk', false);
         await this._setIfChanged('speicher.regelung.feneconGridSchreibStatus', 'deprecated');
     }
@@ -6409,22 +6464,40 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      */
     async _applyTargetW(targetW, reason, source) {
         const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
+        const cfg = this._getCfg();
+        const controlModeRaw = String(cfg.controlMode || 'targetPower');
+        const controlMode = ['targetPower', 'limits', 'enableFlags'].includes(controlModeRaw) ? controlModeRaw : 'targetPower';
 
-        const signedEntry = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.targetPowerW') : null;
-        const chargeEntry = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.targetChargePowerW') : null;
-        const dischargeEntry = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.targetDischargePowerW') : null;
-        const runEntry = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.run') : null;
+/**
+ * Code-Teil: getEntry
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const getEntry = (key) => (this.dp && this.dp.getEntry) ? this.dp.getEntry(key) : null;
+        const signedEntry = getEntry('st.targetPowerW');
+        const chargeEntry = getEntry('st.targetChargePowerW');
+        const dischargeEntry = getEntry('st.targetDischargePowerW');
+        const runEntry = getEntry('st.run');
+        const maxChargeEntry = getEntry('st.maxChargeW');
+        const maxDischargeEntry = getEntry('st.maxDischargeW');
+        const chargeEnableEntry = getEntry('st.chargeEnable');
+        const dischargeEnableEntry = getEntry('st.dischargeEnable');
+        const reserveSocEntry = getEntry('st.reserveSocPct');
 
         // E3/DC RSCP-Profil: Der ioBroker.e3dc-rscp Adapter schreibt aktive
-        // Speicherleistung nicht ueber einen signed W-DP, sondern ueber das gekoppelte
-        // Tupel EMS.SET_POWER_MODE + EMS.SET_POWER_VALUE. Diese beiden Datenpunkte
-        // werden nur genutzt, wenn das E3/DC-Herstellerprofil im AppCenter aktiv ist;
-        // alle generischen Speicher bleiben auf signed/split Zielpfaden.
-        const cfg = this._getCfg();
+        // Speicherleistung ueber das gekoppelte Tupel SET_POWER_MODE + SET_POWER_VALUE.
         const storageVendorProfile = this._getStorageVendorProfile(cfg);
-        const e3dcModeEntry = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.e3dcSetPowerMode') : null;
-        const e3dcValueEntry = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.e3dcSetPowerValueW') : null;
-        const e3dcTargetConfigured = storageVendorProfile === 'e3dc-rscp' && !!(e3dcModeEntry && e3dcValueEntry);
+        const e3dcModeEntry = getEntry('st.e3dcSetPowerMode');
+        const e3dcValueEntry = getEntry('st.e3dcSetPowerValueW');
+        const e3dcTargetConfigured = controlMode === 'targetPower'
+            && storageVendorProfile === 'e3dc-rscp'
+            && !!(e3dcModeEntry && e3dcValueEntry);
 
 /**
  * Code-Teil: objectIdOf
@@ -6455,13 +6528,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             return !!(aa && bb && aa === bb);
         };
 
-        // Zielpfad-Regel:
-        // - Signed-DP bleibt der bidirektionale Standard (+W=Entladen, -W=Laden).
-        // - Getrennte Lade-/Entlade-DPs koennen einzeln oder zusammen gemappt werden.
-        // - Sind Signed und Split vorhanden, werden die Split-DPs synchron genullt/gesetzt
-        //   und der Signed-DP bleibt als bidirektionaler Hauptpfad konsistent.
-        // - Wenn ein Split-DP versehentlich auf dasselbe Objekt wie der Signed-DP zeigt,
-        //   schreibt NexoWatt diesen Split-DP nicht nochmal mit anderer Vorzeichenlogik.
+        // Signed und Split duerfen in alten Migrationen auf demselben Objekt liegen.
+        // Dann wird der Split-Alias nicht doppelt mit abweichender Vorzeichenlogik beschrieben.
         const chargeSameAsSigned = sameObject(chargeEntry, signedEntry);
         const dischargeSameAsSigned = sameObject(dischargeEntry, signedEntry);
         const canWriteChargeSplit = !!(chargeEntry && !chargeSameAsSigned);
@@ -6469,34 +6537,89 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const hasAnySplitTarget = !!(chargeEntry || dischargeEntry);
         const hasAnyWritableSplit = !!(canWriteChargeSplit || canWriteDischargeSplit);
         const hasSignedTarget = !!signedEntry;
-        const genericDirectionSupported = w === 0 || hasSignedTarget || (w < 0 ? canWriteChargeSplit : canWriteDischargeSplit);
-        const directionSupported = e3dcTargetConfigured ? true : genericDirectionSupported;
-        const genericTargetMode = hasSignedTarget && hasAnySplitTarget
-            ? 'signed+split-targetPower'
-            : (hasAnySplitTarget
-                ? (canWriteChargeSplit && canWriteDischargeSplit
-                    ? 'split-charge-discharge'
-                    : (canWriteChargeSplit ? 'split-charge-only' : (canWriteDischargeSplit ? 'split-discharge-only' : 'split-unwritable')))
-                : (hasSignedTarget ? 'signed-targetPower' : 'none'));
-        const targetMode = e3dcTargetConfigured ? 'e3dc-rscp-set-power' : genericTargetMode;
+
+        let directionSupported = false;
+        let targetMode = 'none';
+        if (controlMode === 'limits') {
+            directionSupported = w === 0 || (w < 0 ? !!maxChargeEntry : !!maxDischargeEntry);
+            targetMode = maxChargeEntry && maxDischargeEntry
+                ? 'limits-charge-discharge'
+                : (maxChargeEntry ? 'limits-charge-only' : (maxDischargeEntry ? 'limits-discharge-only' : 'limits-none'));
+        } else if (controlMode === 'enableFlags') {
+            directionSupported = w === 0 || (w < 0 ? !!chargeEnableEntry : !!dischargeEnableEntry);
+            targetMode = chargeEnableEntry && dischargeEnableEntry
+                ? 'enable-flags-charge-discharge'
+                : (chargeEnableEntry ? 'enable-flags-charge-only' : (dischargeEnableEntry ? 'enable-flags-discharge-only' : 'enable-flags-none'));
+        } else {
+            const genericDirectionSupported = w === 0 || hasSignedTarget || (w < 0 ? canWriteChargeSplit : canWriteDischargeSplit);
+            directionSupported = e3dcTargetConfigured ? true : genericDirectionSupported;
+            const genericTargetMode = hasSignedTarget && hasAnySplitTarget
+                ? 'signed+split-targetPower'
+                : (hasAnySplitTarget
+                    ? (canWriteChargeSplit && canWriteDischargeSplit
+                        ? 'split-charge-discharge'
+                        : (canWriteChargeSplit ? 'split-charge-only' : (canWriteDischargeSplit ? 'split-discharge-only' : 'split-unwritable')))
+                    : (hasSignedTarget ? 'signed-targetPower' : 'none'));
+            targetMode = e3dcTargetConfigured ? 'e3dc-rscp-set-power' : genericTargetMode;
+        }
 
         await this._setIfChanged('speicher.regelung.targetMode', targetMode);
         await this._setIfChanged('speicher.regelung.targetObjId', signedEntry && signedEntry.objectId ? String(signedEntry.objectId) : '');
         await this._setIfChanged('speicher.regelung.splitTargetObjIds', JSON.stringify({
             charge: chargeEntry && chargeEntry.objectId ? String(chargeEntry.objectId) : '',
             discharge: dischargeEntry && dischargeEntry.objectId ? String(dischargeEntry.objectId) : '',
+            maxCharge: maxChargeEntry && maxChargeEntry.objectId ? String(maxChargeEntry.objectId) : '',
+            maxDischarge: maxDischargeEntry && maxDischargeEntry.objectId ? String(maxDischargeEntry.objectId) : '',
+            chargeEnable: chargeEnableEntry && chargeEnableEntry.objectId ? String(chargeEnableEntry.objectId) : '',
+            dischargeEnable: dischargeEnableEntry && dischargeEnableEntry.objectId ? String(dischargeEnableEntry.objectId) : '',
+            reserveSoc: reserveSocEntry && reserveSocEntry.objectId ? String(reserveSocEntry.objectId) : '',
             chargeSkippedBecauseSignedSameObject: !!chargeSameAsSigned,
             dischargeSkippedBecauseSignedSameObject: !!dischargeSameAsSigned,
         }));
         await this._setIfChanged('speicher.regelung.runObjId', runEntry && runEntry.objectId ? String(runEntry.objectId) : '');
 
-        // Wenn Speicherfarm aktiv ist, bleibt die Farm-Verteilung der führende Pfad.
-        // Split-/Signed-Einzelpfade werden nur genutzt, wenn keine Farm aktiv ist oder
-        // der Betreiber den alten Einzelziel-Fallback ausdrücklich freigibt.
+        // Doppelte manuelle Zuordnungen fuer unterschiedliche Ausgangsfunktionen
+        // koennen gegensaetzliche Rohwerte erzeugen. Solche echten Objektkonflikte
+        // werden als Sicherheitsfehler blockiert; freie Hersteller-/Adapterpfade
+        // werden dagegen niemals gefiltert.
+        const activeOutputEntries = [];
+        if (controlMode === 'targetPower') {
+            if (e3dcTargetConfigured) {
+                activeOutputEntries.push(['e3dcMode', e3dcModeEntry], ['e3dcValue', e3dcValueEntry]);
+            } else {
+                if (signedEntry) activeOutputEntries.push(['signed', signedEntry]);
+                if (canWriteChargeSplit) activeOutputEntries.push(['charge', chargeEntry]);
+                if (canWriteDischargeSplit) activeOutputEntries.push(['discharge', dischargeEntry]);
+            }
+        } else if (controlMode === 'limits') {
+            if (maxChargeEntry) activeOutputEntries.push(['maxCharge', maxChargeEntry]);
+            if (maxDischargeEntry) activeOutputEntries.push(['maxDischarge', maxDischargeEntry]);
+        } else if (controlMode === 'enableFlags') {
+            if (chargeEnableEntry) activeOutputEntries.push(['chargeEnable', chargeEnableEntry]);
+            if (dischargeEnableEntry) activeOutputEntries.push(['dischargeEnable', dischargeEnableEntry]);
+        }
+        if (runEntry) activeOutputEntries.push(['run', runEntry]);
+        if (reserveSocEntry) activeOutputEntries.push(['reserveSoc', reserveSocEntry]);
+
+        const outputsByObjectId = new Map();
+        const outputConflicts = [];
+        for (const [key, entry] of activeOutputEntries) {
+            const id = objectIdOf(entry);
+            if (!id) continue;
+            if (!outputsByObjectId.has(id)) {
+                outputsByObjectId.set(id, key);
+                continue;
+            }
+            outputConflicts.push({ objectId: id, first: outputsByObjectId.get(id), second: key });
+        }
+        await this._setIfChanged('speicher.regelung.outputMappingConflictJson', outputConflicts.length ? JSON.stringify(outputConflicts) : '');
+
+        // Nur eine beschreibbare Speicherfarm bleibt der führende Setpoint-Pfad.
+        // Eine reine Mess-Farm darf den Einzelpfad nicht kapern.
         let writeResult = null;
         let farmApplied = false;
         let farmReason = '';
-        const farmEnabledForWrite = this._isStorageFarmEnabled();
+        const farmEnabledForWrite = this._isStorageFarmDispatchEnabled();
         const farmCfgForWrite = (this.adapter && this.adapter.config && this.adapter.config.storageFarm) ? this.adapter.config.storageFarm : {};
         const allowSingleTargetFallback = farmEnabledForWrite && (farmCfgForWrite.allowSingleTargetFallback === true || farmCfgForWrite.allowSingleTargetFallback === 'true');
 
@@ -6514,17 +6637,39 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
         const mayUseSingleTarget = !farmEnabledForWrite || allowSingleTargetFallback;
         const writeResults = [];
+        let primarySucceeded = false;
+        let primaryWroteAny = false;
+        let primaryDetail = null;
 
         if (!farmApplied) {
             if (!mayUseSingleTarget) {
                 writeResult = false;
                 await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
                 await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
-            } else if (e3dcTargetConfigured) {
+            } else if (outputConflicts.length) {
+                writeResult = false;
+                await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+                await this._setIfChanged('speicher.regelung.lastWriteSplitJson', JSON.stringify({ mode: targetMode, conflicts: outputConflicts }));
+
+                // Ein Mapping-Konflikt darf keine alte externe Freigabe aktiv lassen.
+                // Ist der Run-DP selbst nicht Teil des Konflikts, wird er sicher auf
+                // false gesetzt; ein kollidierender Run-DP wird bewusst nicht beschrieben.
+                const conflictingIds = new Set(outputConflicts.map((item) => String(item && item.objectId || '').trim()).filter(Boolean));
+                if (runEntry && !conflictingIds.has(objectIdOf(runEntry)) && this.dp && typeof this.dp.writeBoolean === 'function') {
+                    try {
+                        const runResult = await this.dp.writeBoolean('st.run', false, false);
+                        writeResults.push(runResult);
+                    } catch (_e) {
+                        writeResults.push(false);
+                    }
+                }
+            } else if (controlMode === 'targetPower' && e3dcTargetConfigured) {
                 const e3dcResult = await this._writeE3dcRscpTargetW(w, reason, source, cfg);
-                writeResult = e3dcResult && e3dcResult.ok === true;
+                primarySucceeded = !!(e3dcResult && e3dcResult.ok === true);
+                primaryWroteAny = true;
+                writeResult = primarySucceeded;
                 await this._setIfChanged('speicher.regelung.lastWriteRaw', e3dcResult ? Math.round(Number(e3dcResult.valueW) || 0) : null);
-                await this._setIfChanged('speicher.regelung.lastWriteSplitJson', e3dcResult ? JSON.stringify({
+                primaryDetail = e3dcResult ? {
                     profile: 'e3dc-rscp',
                     modeCode: e3dcResult.modeCode,
                     modeName: e3dcResult.modeName,
@@ -6532,30 +6677,43 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     gridCharge: !!e3dcResult.gridCharge,
                     powerLimitsUsed: !!e3dcResult.powerLimitsUsed,
                     writes: e3dcResult.writes || [],
-                }) : null);
+                } : null;
+            } else if (controlMode === 'limits') {
+                const chargeW = directionSupported && w < 0 ? Math.abs(w) : 0;
+                const dischargeW = directionSupported && w > 0 ? w : 0;
+                if (maxChargeEntry) {
+                    try { writeResults.push(await this.dp.writeNumber('st.maxChargeW', chargeW, false)); primaryWroteAny = true; } catch (_e) { writeResults.push(false); }
+                }
+                if (maxDischargeEntry) {
+                    try { writeResults.push(await this.dp.writeNumber('st.maxDischargeW', dischargeW, false)); primaryWroteAny = true; } catch (_e) { writeResults.push(false); }
+                }
+                primarySucceeded = !!(directionSupported && primaryWroteAny && !writeResults.some(r => r === false));
+                writeResult = primarySucceeded;
+                await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+                primaryDetail = { mode: targetMode, chargeW: maxChargeEntry ? chargeW : null, dischargeW: maxDischargeEntry ? dischargeW : null, directionSupported };
+            } else if (controlMode === 'enableFlags') {
+                const chargeEnabled = !!(directionSupported && w < 0);
+                const dischargeEnabled = !!(directionSupported && w > 0);
+                if (chargeEnableEntry) {
+                    try { writeResults.push(await this.dp.writeBoolean('st.chargeEnable', chargeEnabled, false)); primaryWroteAny = true; } catch (_e) { writeResults.push(false); }
+                }
+                if (dischargeEnableEntry) {
+                    try { writeResults.push(await this.dp.writeBoolean('st.dischargeEnable', dischargeEnabled, false)); primaryWroteAny = true; } catch (_e) { writeResults.push(false); }
+                }
+                primarySucceeded = !!(directionSupported && primaryWroteAny && !writeResults.some(r => r === false));
+                writeResult = primarySucceeded;
+                await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+                primaryDetail = { mode: targetMode, chargeEnabled: chargeEnableEntry ? chargeEnabled : null, dischargeEnabled: dischargeEnableEntry ? dischargeEnabled : null, directionSupported };
             } else if (hasSignedTarget || hasAnySplitTarget) {
                 const chargeW = directionSupported && w < 0 ? Math.abs(w) : 0;
                 const dischargeW = directionSupported && w > 0 ? w : 0;
-                const runActive = directionSupported && w !== 0;
-                let wroteAnyTarget = false;
 
                 if (canWriteChargeSplit) {
-                    try { writeResults.push(await this.dp.writeNumber('st.targetChargePowerW', chargeW, false)); wroteAnyTarget = true; } catch (_e) { writeResults.push(false); }
+                    try { writeResults.push(await this.dp.writeNumber('st.targetChargePowerW', chargeW, false)); primaryWroteAny = true; } catch (_e) { writeResults.push(false); }
                 }
                 if (canWriteDischargeSplit) {
-                    try { writeResults.push(await this.dp.writeNumber('st.targetDischargePowerW', dischargeW, false)); wroteAnyTarget = true; } catch (_e) { writeResults.push(false); }
+                    try { writeResults.push(await this.dp.writeNumber('st.targetDischargePowerW', dischargeW, false)); primaryWroteAny = true; } catch (_e) { writeResults.push(false); }
                 }
-
-                await this._setIfChanged('speicher.regelung.lastWriteSplitJson', hasAnySplitTarget ? JSON.stringify({
-                    chargeW: canWriteChargeSplit ? chargeW : null,
-                    dischargeW: canWriteDischargeSplit ? dischargeW : null,
-                    run: runActive,
-                    mode: targetMode,
-                    signedAlsoWritten: !!hasSignedTarget,
-                    directionSupported,
-                    chargeSkippedBecauseSignedSameObject: !!chargeSameAsSigned,
-                    dischargeSkippedBecauseSignedSameObject: !!dischargeSameAsSigned,
-                }) : null);
 
                 if (hasSignedTarget) {
                     try {
@@ -6570,37 +6728,90 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     } catch {
                         await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
                     }
-
-                    try { writeResults.push(await this.dp.writeNumber('st.targetPowerW', w, false)); wroteAnyTarget = true; } catch (_e) { writeResults.push(false); }
+                    try { writeResults.push(await this.dp.writeNumber('st.targetPowerW', w, false)); primaryWroteAny = true; } catch (_e) { writeResults.push(false); }
                 } else {
                     await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
                 }
 
-                if (runEntry && this.dp && typeof this.dp.writeBoolean === 'function') {
-                    try { writeResults.push(await this.dp.writeBoolean('st.run', runActive, false)); } catch (_e) { writeResults.push(false); }
-                }
-
-                const failed = writeResults.some(r => r === false);
-                writeResult = (!directionSupported || !wroteAnyTarget || failed) ? false : true;
+                primarySucceeded = !!(directionSupported && primaryWroteAny && !writeResults.some(r => r === false));
+                writeResult = primarySucceeded;
+                primaryDetail = {
+                    chargeW: canWriteChargeSplit ? chargeW : null,
+                    dischargeW: canWriteDischargeSplit ? dischargeW : null,
+                    mode: targetMode,
+                    signedAlsoWritten: !!hasSignedTarget,
+                    directionSupported,
+                    chargeSkippedBecauseSignedSameObject: !!chargeSameAsSigned,
+                    dischargeSkippedBecauseSignedSameObject: !!dischargeSameAsSigned,
+                };
             } else {
                 await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
-                await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
+                primaryDetail = { mode: targetMode, directionSupported: false, reason: 'kein beschreibbarer Ziel-DP' };
                 writeResult = false;
             }
+
+            // Run/Enable folgt dem tatsaechlich erfolgreichen Hauptpfad. Bei einem
+            // Fehler wird sicher false geschrieben, damit kein Controller mit einer
+            // Freigabe ohne gueltigen Sollwert weiterlaeuft.
+            if (runEntry && this.dp && typeof this.dp.writeBoolean === 'function') {
+                const runActive = primarySucceeded && w !== 0;
+                try {
+                    const runResult = await this.dp.writeBoolean('st.run', runActive, false);
+                    writeResults.push(runResult);
+                    if (runResult === false) writeResult = false;
+                } catch (_e) {
+                    writeResults.push(false);
+                    writeResult = false;
+                }
+                primaryDetail = { ...(primaryDetail || {}), run: runActive };
+            }
+
+            // Der Reserve-DP wird aus exakt derselben wirksamen SoC-Untergrenze
+            // gespeist wie das interne Entlade-Gate. Damit bleibt die externe
+            // Controller-Sicherheit mit der NexoWatt-Policy synchron.
+            if (reserveSocEntry && this.dp && typeof this.dp.writeNumber === 'function') {
+                const reserveSocPct = clamp(
+                    Number.isFinite(Number(this._effectiveReserveSocPct))
+                        ? Number(this._effectiveReserveSocPct)
+                        : num(cfg.reserveMinSocPct, 20),
+                    0,
+                    100,
+                );
+                try {
+                    const reserveResult = await this.dp.writeNumber('st.reserveSocPct', reserveSocPct, false);
+                    writeResults.push(reserveResult);
+                    if (reserveResult === false) writeResult = false;
+                } catch (_e) {
+                    writeResults.push(false);
+                    writeResult = false;
+                }
+                primaryDetail = { ...(primaryDetail || {}), reserveSocPct };
+            }
+
+            await this._setIfChanged('speicher.regelung.lastWriteSplitJson', primaryDetail ? JSON.stringify(primaryDetail) : null);
         } else {
-            // Bei Speicherfarm werden Setpoints pro Speicher geschrieben.
+            // Bei Speicherfarm werden die im AppCenter je Speicher zugeordneten
+            // Setpoints geschrieben; globale Einzelziele bleiben bewusst exklusiv.
             await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
             await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
         }
 
-        // Diagnose-Zustände schreiben
         await this._setIfChanged('speicher.regelung.sollW', w);
         await this._setIfChanged('speicher.regelung.quelle', String(source || ''));
         await this._setIfChanged('speicher.regelung.grund', String(reason || ''));
         await this._setIfChanged('speicher.regelung.schreibOk', writeResult === true);
-        const singleStatus = writeResult === true
-            ? (e3dcTargetConfigured ? 'e3dc-rscp-geschrieben' : (hasSignedTarget && hasAnyWritableSplit ? 'signed+split-geschrieben' : (hasAnyWritableSplit ? 'split-geschrieben' : 'geschrieben')))
-            : (!directionSupported ? 'zielrichtung-nicht-gemappt' : 'nicht möglich');
+
+        let singleStatus = 'nicht möglich';
+        if (outputConflicts.length) singleStatus = 'dp-zuordnung-konflikt';
+        else if (!directionSupported) singleStatus = 'zielrichtung-nicht-gemappt';
+        else if (writeResult === true) {
+            if (e3dcTargetConfigured) singleStatus = 'e3dc-rscp-geschrieben';
+            else if (controlMode === 'limits') singleStatus = 'leistungsgrenzen-geschrieben';
+            else if (controlMode === 'enableFlags') singleStatus = 'freigabe-flags-geschrieben';
+            else if (hasSignedTarget && hasAnyWritableSplit) singleStatus = 'signed+split-geschrieben';
+            else if (hasAnyWritableSplit) singleStatus = 'split-geschrieben';
+            else singleStatus = 'geschrieben';
+        }
         const writeStatus = farmApplied
             ? 'farm'
             : (farmEnabledForWrite && !allowSingleTargetFallback
@@ -6611,38 +6822,12 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const writeSucceeded = writeResult === true || farmApplied;
         const previousTargetW = Number.isFinite(Number(this._lastTargetW)) ? Number(this._lastTargetW) : null;
         const targetChanged = writeSucceeded && (previousTargetW === null || Math.abs(previousTargetW - w) >= 0.5);
-        // Bei einem fehlgeschlagenen oder vom Farm-Dispatcher abgelehnten Write
-        // bleibt der zuletzt tatsaechlich erfolgreiche Sollwert die beste Annahme
-        // fuer den realen Hardwarezustand. Ein Ruecksetzen auf 0 W wuerde im
-        // naechsten Tick einen falschen Leerlauf suggerieren und die NVP-Regelbasis
-        // zerstoeren. Nur ein erfolgreich geschriebener echter 0-W-Stopp setzt den
-        // Wert auf null.
         if (writeSucceeded) this._lastTargetW = w;
-        // Dieser Zeitstempel beschreibt die letzte echte SollwertAENDERUNG, nicht
-        // jedes Watchdog-/Refresh-Schreiben desselben Werts. Nur so kann die
-        // Istleistungsprognose erkennen, ob ein Messwert tatsaechlich noch vor dem
-        // aktuellen Kommando lag. Wiederholtes Schreiben von z. B. 3000 W darf das
-        // Einschwingfenster nicht in jedem Tick von vorn starten.
         if (writeSucceeded && targetChanged) this._lastTargetWriteMs = Date.now();
-        // Auch der Zeitstempel der letzten erfolgreichen Sollwertaenderung bleibt
-        // bei einem Writefehler erhalten. Die Hardware kann den alten Wert weiterhin
-        // ausfuehren; deshalb darf die Feedback-/Hold-Logik ihn nicht vergessen.
         this._lastReason = String(reason || '');
         this._lastSource = String(source || '');
     }
 
-    /**
-     * Code-Teil: Methode `_upsertInputsFromConfig`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _upsertInputsFromConfig
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     async _upsertInputsFromConfig() {
         if (!this.dp || typeof this.dp.upsert !== 'function') return;
 
@@ -6725,7 +6910,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.schreibOk', 'Schreiben OK', 'boolean', 'indicator', false);
         await mk('speicher.regelung.targetObjId', 'Sollleistung signed Ziel-Datenpunkt (Objekt-ID)', 'string', 'text', '');
         await mk('speicher.regelung.targetMode', 'Speicher Zielpfad', 'string', 'text', '');
-        await mk('speicher.regelung.splitTargetObjIds', 'Split-Sollwert Datenpunkte (JSON)', 'string', 'text', '');
+        await mk('speicher.regelung.splitTargetObjIds', 'Alle Speicher-Ausgangsdatenpunkte (JSON)', 'string', 'text', '');
+        await mk('speicher.regelung.outputMappingConflictJson', 'Konflikte in manuellen Speicher-Ausgangszuordnungen (JSON)', 'string', 'text', '');
         await mk('speicher.regelung.runObjId', 'Run/Externe-Regelung Datenpunkt (Objekt-ID)', 'string', 'text', '');
         await mk('speicher.regelung.lastWriteRaw', 'Letzter Rohwert (signed Setpoint)', 'number', 'value');
         await mk('speicher.regelung.lastWriteSplitJson', 'Letzter Split-Sollwert (JSON)', 'string', 'text', '');
@@ -6766,7 +6952,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.feneconHybridNvpW', 'Hybrid-/Gateway-Priorität Netzpunktleistung', 'number', 'value.power', null);
         await mk('speicher.regelung.feneconHybridForecastW', 'FENECON/OpenEMS Forecast-/Tagesleistung', 'number', 'value.power', 0);
         await mk('speicher.regelung.feneconHybridForecastQuelle', 'FENECON/OpenEMS Forecast-/Tagesquelle', 'string', 'text', '');
-        await mk('speicher.regelung.feneconHybridTagAktiv', 'FENECON/OpenEMS Tag-/PV-No-Write aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.feneconHybridTagAktiv', 'FENECON/OpenEMS Tag-/PV-Erkennung aktiv', 'boolean', 'indicator', false);
         await mk('speicher.regelung.feneconHybridAssistAktiv', 'FENECON/OpenEMS Assist aktiv', 'boolean', 'indicator', false);
         await mk('speicher.regelung.feneconHybridAssistSchwelleW', 'FENECON/OpenEMS Assist Netzbezugsschwelle', 'number', 'value.power', 800);
 

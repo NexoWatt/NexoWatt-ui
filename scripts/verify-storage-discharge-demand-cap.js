@@ -56,7 +56,9 @@ for (const file of [
   'main.js',
 ]) {
   must(file, 'Feldschutz 0.8.79: Ist-Leistungs-DPs der Speicherfarm dürfen niemals', 'Farm-Istwertschutz');
-  must(file, 'const looksLikeSetpointPowerId = (id) => {', 'Setpoint-Erkennung bleibt JS-kompatibel');
+  must(file, 'const isMappedSetpointPowerId = (id) => {', 'Feedback-Schutz vergleicht mit den tatsächlich zugeordneten Sollwert-DPs');
+  must(file, 'return !!sid && targetPowerIds.includes(sid);', 'nur exakt identische Feedback-/Sollwert-Objekte werden verworfen');
+  mustNot(file, 'const looksLikeSetpointPowerId = (id) => {', 'Objektpfad-/Namensheuristik darf frei zugeordnete Hersteller-DPs nicht blockieren');
   must(file, 'status.powerFeedbackIgnoredReason = ignoredPowerFeedback.join', 'Diagnose ignorierter Istwerte');
   mustNot(file, 'id: unknown', 'Runtime-TS darf keine TypeScript-Annotation in JS spiegeln');
 }

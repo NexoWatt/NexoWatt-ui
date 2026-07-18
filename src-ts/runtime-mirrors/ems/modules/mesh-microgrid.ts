@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b18064784c6202483badbc9f078ef818932d4b9ac1bf0b297d82bee84128aa3b
+ * Original-Hash: a9625309ff2b2461e76855de026f61ba54b4d8f523bcc190e87146934f85a1dc
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/mesh-microgrid.ts
- * Quell-Hash: sha256:eb05e7f57b25f20b875fa858911f32afccce60c37d83c8b977f24fb2e292c2d0
+ * Quell-Hash: sha256:c81e0684171ed1639d1e023e01233bb6bee11e3ef7092a51acc8bb0415c77bd3
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -49,6 +49,7 @@
 'use strict';
 
 const { BaseModule } = require('./base');
+const { isActuatorAuthorityBlockedResult } = require('../services/actuator-shadow-arbiter');
 
 const MODULE_VERSION = 'nexowatt.mesh-microgrid-target-group-fairness.v1';
 // Backward-compatible schema marker for 0.8.49 tests: nexowatt.mesh-microgrid-target-groups.v1
@@ -2772,9 +2773,14 @@ class MeshMicrogridModule extends BaseModule {
       };
       try {
         const json = JSON.stringify(bridgeEnvelope);
-        if (typeof a.setForeignStateAsync === 'function') await a.setForeignStateAsync(dp, { val: json, ack: false });
+        let bridgeWriteResult = null;
+        if (typeof a.setForeignStateAsync === 'function') bridgeWriteResult = await a.setForeignStateAsync(dp, { val: json, ack: false });
         else if (typeof a.setStateAsync === 'function') await a.setStateAsync(dp, { val: json, ack: false });
-        bridgeWrites.push({ commandStateDp: dp, status: 'written', commandCount: commandList.length, ts: Date.now(), mappingIds: commandList.map(c => c.mappingId).filter(Boolean), commandIds: commandList.map(c => c.commandId).filter(Boolean) });
+        if (isActuatorAuthorityBlockedResult(bridgeWriteResult)) {
+          bridgeWrites.push({ commandStateDp: dp, status: 'blocked-by-actuator-authority', commandCount: commandList.length, ts: Date.now(), mappingIds: commandList.map(c => c.mappingId).filter(Boolean), commandIds: commandList.map(c => c.commandId).filter(Boolean), blockedByOwner: String(bridgeWriteResult.blockedByOwner || '') });
+        } else {
+          bridgeWrites.push({ commandStateDp: dp, status: 'written', commandCount: commandList.length, ts: Date.now(), mappingIds: commandList.map(c => c.mappingId).filter(Boolean), commandIds: commandList.map(c => c.commandId).filter(Boolean) });
+        }
       } catch (e) {
         bridgeWrites.push({ commandStateDp: dp, status: 'error', commandCount: commandList.length, ts: Date.now(), mappingIds: commandList.map(c => c.mappingId).filter(Boolean), commandIds: commandList.map(c => c.commandId).filter(Boolean), error: String(e && e.message ? e.message : e) });
       }
@@ -2958,9 +2964,18 @@ class MeshMicrogridModule extends BaseModule {
     try {
       const json = JSON.stringify(envelope);
       if (hasGlobalCommandState) {
-        if (typeof a.setForeignStateAsync === 'function') await a.setForeignStateAsync(control.commandStateDp, { val: json, ack: false });
-        else if (typeof a.setStateAsync === 'function') await a.setStateAsync(control.commandStateDp, { val: json, ack: false });
-        localStatus = 'written';
+        if (typeof a.setForeignStateAsync === 'function') {
+          const localWriteResult = await a.setForeignStateAsync(control.commandStateDp, { val: json, ack: false });
+          if (isActuatorAuthorityBlockedResult(localWriteResult)) {
+            localStatus = 'blocked-by-actuator-authority';
+            localError = String(localWriteResult.blockedByOwner || '');
+          } else {
+            localStatus = 'written';
+          }
+        } else if (typeof a.setStateAsync === 'function') {
+          await a.setStateAsync(control.commandStateDp, { val: json, ack: false });
+          localStatus = 'written';
+        }
       }
     } catch (e) {
       localStatus = 'error';
@@ -2971,11 +2986,21 @@ class MeshMicrogridModule extends BaseModule {
     const bridgeWrites = hasMappedBridge ? await this._writeLocalBridgeCommands(envelope, localBridge, control, ackGate) : [];
 
     const peerDispatch = await this._sendFieldCommandsToPeers(envelope);
-    this._lastCommandHash = hash;
-    this._lastCommandWriteTs = Date.now();
     const bridgeWriteErrors = bridgeWrites.filter(w => w.status === 'error');
-    const bridgeWriteBlocks = bridgeWrites.filter(w => w.status === 'blocked-by-ack-gate');
-    const effectiveStatus = localStatus === 'error' || bridgeWriteErrors.length ? 'error' : (bridgeWriteBlocks.length && !bridgeWrites.some(w => w.status === 'written') ? 'blocked-by-ack-gate' : 'written');
+    const bridgeAckBlocks = bridgeWrites.filter(w => w.status === 'blocked-by-ack-gate');
+    const bridgeAuthorityBlocks = bridgeWrites.filter(w => w.status === 'blocked-by-actuator-authority');
+    const anyAuthorityBlock = localStatus === 'blocked-by-actuator-authority' || bridgeAuthorityBlocks.length > 0;
+    const anySuccessfulLocalWrite = localStatus === 'written' || bridgeWrites.some(w => w.status === 'written');
+    const effectiveStatus = localStatus === 'error' || bridgeWriteErrors.length
+      ? 'error'
+      : (anyAuthorityBlock
+        ? (anySuccessfulLocalWrite ? 'partial-blocked-by-actuator-authority' : 'blocked-by-actuator-authority')
+        : (bridgeAckBlocks.length && !bridgeWrites.some(w => w.status === 'written') ? 'blocked-by-ack-gate' : 'written'));
+    // Ein vom zentralen Gate abgewiesener Command wird nicht gecacht. Dadurch kann
+    // derselbe unveraenderte Intent nach Aufhebung der Sperre im naechsten Tick erneut
+    // geschrieben werden, statt faelschlich als "unchanged" zu verschwinden.
+    if (!anyAuthorityBlock && effectiveStatus !== 'error') this._lastCommandHash = hash;
+    this._lastCommandWriteTs = Date.now();
     const historyRow = this._rememberCommandHistory({ status: effectiveStatus, localStatus, localError, commandCount: envelope.commands.length, commandStateDp: control.commandStateDp, localBridge, bridgeWrites, peerDispatch });
     this._lastCommandResult = { ts: this._lastCommandWriteTs, status: effectiveStatus, localStatus, localError, commandCount: envelope.commands.length, commandStateDp: control.commandStateDp, envelope, localBridge, bridgeWrites, peerDispatch, historyRow };
   }

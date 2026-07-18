@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0f3fae317c8089244764c1ac6eaf32583004c44e5aaafad42eb6629b260050ff
+ * Original-Hash: f8d01920bf39d1704abd4bad43f623ca5db9da9185b07a57ee7bb85e926fef1f
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/storage-override-bridge.ts
- * Quell-Hash: sha256:1ee190118d1c07f5b42ed144429b4d4adf3230d5ec9cd40fb31c63d07bb73799
+ * Quell-Hash: sha256:b98968c6920c08768a1fe848d9cc244775d94be08cf0a64887db04445d0a9b38
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -172,27 +172,9 @@ function objectIdOf(entry) {
     return text(entry?.objectId);
 }
 /**
- * Code-Teil: looksLikeControlObjectId
- *
- * Zweck:
- * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-function looksLikeControlObjectId(objectId) {
-    const lower = objectId.toLowerCase();
-    return lower.includes('.aliases.ctrl.')
-        || lower.includes('.ctrl.')
-        || lower.includes('setpoint')
-        || lower.includes('targetpower')
-        || lower.includes('targetcurrent');
-}
-/**
  * Bildet aus positiven Split-Istwerten die interne signed Speicherleistung:
- * +W = Entladen, -W = Laden. Ein Sollwert-/CTRL-DP wird nicht als Feedback akzeptiert.
+ * +W = Entladen, -W = Laden. Nur ein exakt identisch als Sollwert gemapptes
+ * Objekt wird als Feedback verworfen; freie Objektpfade/Namen bleiben zulässig.
  */
 function resolveSplitBatteryFeedback(registry, storageConfig, staleMs) {
     if (!registry)
@@ -214,7 +196,7 @@ function resolveSplitBatteryFeedback(registry, storageConfig, staleMs) {
         const objectId = objectIdOf(row.entry);
         if (!objectId || row.value === null || !Number.isFinite(Number(row.value)))
             continue;
-        if (targetIds.includes(objectId) || looksLikeControlObjectId(objectId))
+        if (targetIds.includes(objectId))
             continue;
         objectIds.push(objectId);
         const magnitude = Math.max(0, Math.abs(finite(row.value, 0)));

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2bd324298550379f09e6643003e8cee710316bb3a20567fbba6517ded53839ff
+ * Original-Hash: d4e314539c6d2a1054c6d99356af12b18eea3a007865e4945570db8aafe99b15
  */
 
 /**
@@ -47,6 +47,7 @@ const now = Date.now();
 const internal = new Map();
 const foreign = new Map();
 const writes = [];
+const writeAttempts = [];
 
 /**
  * Code-Teil: AdapterStub
@@ -66,6 +67,7 @@ class AdapterStub extends EventEmitter {
     this.namespace = `${this.name}.0`;
     this.config = {};
     this.stateCache = {};
+    this.blockedForeignIds = new Set();
     this.log = { debug() {}, info() {}, warn() {}, error() {}, silly() {} };
   }
   async setObjectNotExistsAsync() {}
@@ -83,9 +85,19 @@ class AdapterStub extends EventEmitter {
     return { type: 'state', common: { unit, write: sid.endsWith('.set') }, native: {} };
   }
   async setForeignStateAsync(id, value) {
+    const sid = String(id);
     const val = value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, 'val') ? value.val : value;
-    writes.push({ id: String(id), val: Number(val) });
-    foreign.set(String(id), { val, ack: false, ts: Date.now(), lc: Date.now() });
+    writeAttempts.push({ id: sid, val: Number(val), blocked: this.blockedForeignIds.has(sid) });
+    if (this.blockedForeignIds.has(sid)) {
+      return {
+        __nexowattActuatorAuthorityBlocked: true,
+        objectId: sid,
+        requestedOwner: 'storageFarm.test',
+        blockedByOwner: 'safety.test-owner',
+      };
+    }
+    writes.push({ id: sid, val: Number(val) });
+    foreign.set(sid, { val, ack: false, ts: Date.now(), lc: Date.now() });
     return undefined;
   }
   setTimeout(fn, ms) { return setTimeout(fn, ms); }
@@ -198,6 +210,26 @@ Module._load = function patchedLoad(request, parent, isMain) {
     assert.strictEqual(result.applied, true, `Preflight-Refresh muss Farm-Dispatch wiederherstellen: ${result.reason}`);
     assert.ok(result.results.every((row) => row.statusMatch !== 'missing'), 'nach Refresh darf kein Farmstatus fehlen');
     assert.strictEqual(Math.round(Math.abs(result.deliveredW)), 3000);
+
+    // Ein zentraler Safety-/Authority-Block darf niemals als erfolgreicher
+    // Hardware-Write oder als aktualisierter Keepalive-Cache gelten.
+    adapter.blockedForeignIds = new Set(['farm.a.set', 'farm.b.set']);
+    adapter._sfLastSetpoints.clear();
+    adapter._sfLastSetpointsTs.clear();
+    writes.length = 0;
+    writeAttempts.length = 0;
+    result = await adapter.applyStorageFarmTargetW(-2000, { source: 'pv' });
+    assert.strictEqual(result.applied, false, 'Authority-blockierte Farmwrites duerfen nicht als angewendet gelten');
+    assert.strictEqual(result.reason, 'blocked-by-actuator-authority');
+    assert.strictEqual(result.authorityBlockedCount, 2);
+    assert.deepStrictEqual(result.blockedByOwners, ['safety.test-owner']);
+    assert.strictEqual(writes.length, 0, 'Blockierte Farmwrites duerfen die simulierte Hardware nicht erreichen');
+    assert.strictEqual(writeAttempts.filter((row) => row.blocked).length, 2, 'Beide Farm-Ausgaenge muessen durch den Gate-Pfad laufen');
+    assert.strictEqual(adapter._sfLastSetpoints.size, 0, 'Blockierte Writes duerfen den Keepalive-Cache nicht fortschreiben');
+    assert.ok(result.results.every((row) => Object.values(row.writes || {}).some((wr) => wr && wr.blocked === true)));
+    const blockedDiag = JSON.parse(String((internal.get('storageFarm.lastDispatchJson') || {}).val || '{}'));
+    assert.ok(blockedDiag.results.every((row) => row.authorityBlocked === true), 'Diagnose muss den Gate-Block pro Speicher sichtbar machen');
+    assert.ok(blockedDiag.results.every((row) => Array.isArray(row.blockedByOwners) && row.blockedByOwners.includes('safety.test-owner')));
 
     // Der Speicherregler muss die aktive Farm als Basis-Eigenverbrauchspfad
     // automatisch starten, ohne den Einzel-Speicher-App-Haken zu benoetigen.

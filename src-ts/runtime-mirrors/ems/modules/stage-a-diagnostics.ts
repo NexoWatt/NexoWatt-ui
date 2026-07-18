@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 02c6f3f009530927561903c12aafc4aba2797a59ceb820b1c10636dc8cab0a9c
+ * Original-Hash: 5d583bf6fd75003e0c86b73a1cc3a2449d855f13997ba07fcabb01e2166320e4
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/stage-a-diagnostics.ts
- * Quell-Hash: sha256:a820008cb3ffe796345bc75fd2a5ee7def65d6d29601ff874b38ffe726b69b8d
+ * Quell-Hash: sha256:2c81fa0e5769e3f7d5e44869ea6cc5dd0dd0212127cc4b584d44dd66f45c1a91
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -51,12 +51,35 @@ const { BaseModule } = require('./base');
 const ACTUATOR_FIELDS = new Set([
     'setCurrentAId', 'setPowerWId', 'enableWriteId', 'targetPowerObjectId',
     'targetChargePowerObjectId', 'targetDischargePowerObjectId', 'runObjectId',
+    // Speicher-/Farm-Legacy-Aliase: Alte Installationen duerfen nach der TS-
+    // Migration nicht aus der Owner-Matrix fallen, wenn nur der Alias belegt ist.
+    'targetPowerId', 'targetChargePowerId', 'targetDischargePowerId',
+    'setSignedPowerDp', 'setChargePowerDp', 'setDischargePowerDp',
+    'powerSetpointId', 'chargeSetpointId', 'dischargeSetpointId',
+    'maxChargeObjectId', 'maxDischargeObjectId', 'chargeEnableObjectId',
+    'dischargeEnableObjectId', 'reserveSocObjectId',
+    'maxChargeId', 'maxDischargeId', 'chargeEnableId', 'dischargeEnableId', 'reserveSocId',
     'setPowerModeObjectId', 'setPowerValueObjectId', 'powerLimitsUsedObjectId',
-    'maxChargePowerObjectId', 'maxDischargePowerObjectId', 'setSignedPowerId',
+    'maxChargePowerObjectId', 'maxDischargePowerObjectId',
+    'e3dcSetPowerModeObjectId', 'e3dcSetPowerValueObjectId',
+    'e3dcPowerLimitsUsedObjectId', 'e3dcMaxChargePowerObjectId',
+    'e3dcMaxDischargePowerObjectId', 'setSignedPowerId',
     'setChargePowerId', 'setDischargePowerId', 'switchWriteId', 'setpointWriteId',
-    'sgReadyAWriteId', 'sgReadyBWriteId', 'writeId', 'stageWriteId', 'setpointId',
-    'enableId', 'startWriteId', 'stopWriteId', 'runWriteId', 'setWId', 'setAId', 'commandId',
+    'sgReadyAWriteId', 'sgReadyBWriteId', 'sgReady1WriteId', 'sgReady2WriteId',
+    'writeId', 'writeObjectId', 'writeDp', 'dpWriteId',
+    'stageWriteId', 'setpointId', 'outputObjectId', 'commandObjectId', 'commandStateId',
+    'enableId', 'startWriteId', 'stopWriteId', 'runWriteId', 'startObjectId',
+    'stopObjectId', 'startId', 'stopId', 'setWId', 'setAId', 'setId', 'commandId',
     'outputId', 'relayWriteId', 'targetObjectId', 'lockWriteId', 'phaseSwitchId',
+    // Neutrale Command-States sind keine Roh-Hardwarebefehle, aber ebenfalls
+    // beschreibbare, manuell zugeordnete AppCenter-Ausgaenge und muessen deshalb
+    // dieselbe Authority-/Konflikt-Diagnose erhalten.
+    'commandStateDp', 'localCommandStateDp', 'receivedCommandStateDp',
+    'zeroExportStorageChargeCommandStateId', 'zeroExportChargingCommandStateId',
+    'zeroExportFlexLoadCommandStateId', 'zeroExportMeshCommandStateId',
+    'storageChargeCommandStateId', 'chargingCommandStateId',
+    'flexLoadCommandStateId', 'meshMicrogridCommandStateId',
+    'para14aEmsSetpointWId',
     'pvFeedInLimitWId', 'pvLimitWId', 'pvLimitPctId', 'feedInLimitWId',
     'limitWId', 'limitPctId',
 ]);
@@ -128,6 +151,8 @@ function ownerFromPath(path, row) {
     }
     if (lower.includes('gridconstraints'))
         return `gridConstraints.${rowId || raw}`;
+    if (lower.includes('chargekiosk'))
+        return `chargeKiosk.${rowId || raw}`;
     if (lower.includes('peakshaving'))
         return `peakShaving.${rowId || raw}`;
     if (lower.includes('para14a') || lower.includes('§14a'))
@@ -189,6 +214,8 @@ function ownerIsActive(config, owner, row) {
         return config.enablePeakShaving === true || config.peakShaving?.enabled === true;
     if (lower.startsWith('para14a.'))
         return !!(config.installerConfig?.para14a || config.para14a?.enabled);
+    if (lower.startsWith('chargekiosk.'))
+        return config.enableChargeKiosk === true || config.chargeKiosk?.enabled === true;
     if (lower.startsWith('bhkw.'))
         return config.enableBhkwControl === true;
     if (lower.startsWith('generator.'))
@@ -275,7 +302,17 @@ function collectActuatorMappings(config, evcsList) {
     visit(config, 'config', config, 0);
     (Array.isArray(evcsList) ? evcsList : []).forEach((row, index) => {
         const owner = `charging.lp${Number(row.index) > 0 ? Number(row.index) : index + 1}`;
-        for (const field of ['setCurrentAId', 'setPowerWId', 'enableWriteId']) {
+        // Auch die manuell zugeordneten Verriegelungs-/Phasen-Aktoren gehoeren in
+        // dieselbe Owner-Matrix. So laufen sie durch Authority-, Konflikt- und
+        // Sicherheitsdiagnosen und werden nicht beim normalisierten evcsList-Pfad
+        // uebersehen.
+        const evcsActuatorFields = ['setCurrentAId', 'setPowerWId', 'enableWriteId', 'lockWriteId', 'phaseSwitchId'];
+        // activeId ist normalerweise ein Status-/Read-DP. Nur wenn RFID aktiv ist und
+        // kein eigener lockWriteId existiert, wird er bewusst als Soft-Lock-Ausgang
+        // verwendet und muss dann ebenfalls in die Owner-Matrix.
+        if (text(row.rfidReadId) && !text(row.lockWriteId) && text(row.activeId))
+            evcsActuatorFields.push('activeId');
+        for (const field of evcsActuatorFields) {
             const id = text(row[field]);
             if (!looksLikeObjectId(id))
                 continue;

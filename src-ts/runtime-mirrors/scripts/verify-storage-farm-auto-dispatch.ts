@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2691e498fb75a1a4e1466215c2529abd4a7175a32e79968b571f482abdc575b4
+ * Original-Hash: be53700bd773182ff0e7325a702a2c17223edd2a197378c8b4a0ead2ad2453a9
  */
 
 /**
@@ -32,7 +32,7 @@
 'use strict';
 
 /**
- * Regression 0.8.122: Eine echte Speicherfarm (App aktiv, >=2 Speicher,
+ * Regression 0.8.123: Eine echte Speicherfarm (App aktiv, >=2 Speicher,
  * beschreibbare Setpoints) startet die Basis-Eigenverbrauchsoptimierung selbst.
  * Der Farm-Dispatcher matched Statuszeilen ueber stabile Hardware-IDs und
  * aktualisiert einen fehlenden/veralteten Status vor dem ersten Write.
@@ -74,8 +74,10 @@ const storageFiles = [
 for (const file of storageFiles) {
   has(file, 'const enabled = cfgEnabled || autoTarifEnabled || multiUseAppPolicyActive || farmAppPolicyActive;', 'Farm-Autostart');
   has(file, "await this._setIfChanged('speicher.regelung.aktivAutoSpeicherfarm', farmAppPolicyActive);", 'Farm-Autostart Diagnose');
-  has(file, 'farmRowsEarly.some((row)', 'Farm-Setpoint-Pruefung');
-  has(file, "String(row.setSignedPowerId || '').trim()", 'Signed-Farm-Sollwert');
+  has(file, "typeof farmRuntimeInfoEarly.dispatchActive === 'boolean'", 'autoritativer Farm-Dispatchstatus');
+  has(file, 'farmRowsEarly.some((row)', 'Legacy-Fallback der Farm-Setpoint-Pruefung');
+  has(file, 'row.setSignedPowerId || row.targetPowerObjectId || row.targetPowerId', 'kompatibler Signed-Farm-Sollwert');
+  has(file, '_isStorageFarmDispatchEnabled()', 'beschreibbare Farm als Schreib-Gate');
 }
 
 const mainFiles = [

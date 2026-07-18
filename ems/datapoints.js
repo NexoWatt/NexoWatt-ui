@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/datapoints.ts
- * Quell-Hash: sha256:60a615ee145e7ab0e4b8ed3ac721891640b7957c328e54b57faef51a87ba56c9
+ * Quell-Hash: sha256:eea240718cd9febb168821b5976900f6306bd7bafc3a9d9b3f90c1947995a4c3
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1034,12 +1034,19 @@ class DatapointRegistry {
         const last = this.lastWriteByObjectId.get(e.objectId);
         const phys = b ? 1 : 0;
         if (last && typeof last.val !== 'undefined' && Number.isFinite(last.val) && Number(last.val) === phys) {
-            const arbiter = this.adapter && this.adapter._actuatorShadowArbiter;
-            const blocked = arbiter && typeof arbiter.guardSkippedWrite === 'function'
-                ? arbiter.guardSkippedWrite(e.objectId, b, ack)
-                : null;
-            if (blocked && blocked.__nexowattActuatorAuthorityBlocked === true) return false;
-            return null;
+            // Externe Controller koennen auch boolesche Freigaben per Watchdog
+            // verwerfen. Wie bei Zahlen-DPs darf ein konfiguriertes Refresh-Intervall
+            // deshalb den idempotenten Skip aufheben.
+            const maxAge = Number(e.maxWriteIntervalMs);
+            const refreshDue = Number.isFinite(maxAge) && maxAge > 0 && Number.isFinite(last.ts) && (Date.now() - last.ts) >= maxAge;
+            if (!refreshDue) {
+                const arbiter = this.adapter && this.adapter._actuatorShadowArbiter;
+                const blocked = arbiter && typeof arbiter.guardSkippedWrite === 'function'
+                    ? arbiter.guardSkippedWrite(e.objectId, b, ack)
+                    : null;
+                if (blocked && blocked.__nexowattActuatorAuthorityBlocked === true) return false;
+                return null;
+            }
         }
 
         try {

@@ -1,3 +1,25 @@
+## 0.8.124 - 2026-07-18
+
+- Herstellerunabhängiger AppCenter-Aktorvertrag: Manuell zugeordnete beschreibbare ioBroker-Objekt-IDs bleiben unverändert die autoritative Quelle. Es gibt keine Hersteller-, Adapter- oder Objektpfad-Whitelist; nur echte Doppelbelegungen und aktive Sicherheits-/Authority-Gates dürfen einen Write blockieren.
+- FENECON/OpenEMS: Der frühere Tages-/PV-`No-Write`-Zweig ist entfernt. Der nach NVP-, SoC-, Budget-, Tarif-, Reserve-, EVCS- und Safety-Gates berechnete Sollwert wird zyklisch an den manuell zugeordneten DP übergeben; bei fehlendem NVP wird sicher `0 W` geschrieben, statt den externen Watchdog auslaufen zu lassen.
+- Speicher-Ausgänge: `targetPower`, getrennte Lade-/Entlade-Sollwerte, Leistungsgrenzen, Lade-/Entladefreigaben, Run/Externe-Regelung und Reserve-SoC verwenden denselben finalen Sicherheitswert. Bewusst einseitige Mappings bleiben nutzbar; kollidierende Funktionen auf exakt demselben Objekt werden sicher diagnostiziert und gesperrt.
+- Speicherfarm: Dispatcher- und EMS-Takt sind auf höchstens `1000 ms` begrenzt. Unveränderte Sollwerte werden nach `900 ms` erneut geschrieben, damit externe Vorgaben und Hardware-Watchdogs nicht auslaufen.
+- Wallboxen: Sollstrom, Sollleistung, Enable sowie Phasenumschalt-DP, Phasenfeedback, herstellerspezifische 1p/3p-Werte, Stabilitätszeiten und Speicher-Assist-Freigabe werden vollständig vom AppCenter bis zum Charging-Gate weitergereicht.
+- Geräte-Gates geprüft: Thermik/Wärmepumpe, Heizstab, Schwellwert-/Relaisausgänge, NexoLogic, Peak-Shaving, BHKW, Generator, Netz-/Wechselrichter-Gates, §14a, Charge-Kiosk und Mesh-Command-States bleiben an Owner-, Konflikt-, Readback-, Retry- und Safety-Verträge gekoppelt. §14a bleibt standardmäßig ein zentraler Constraint; direkte Verbraucher-Writes sind weiterhin nur im ausdrücklich aktivierten Legacy-Migrationsmodus zulässig.
+- Regressionen: Der Geräte-Gate-Vertrag prüft 47 repräsentative Brücken; ein zusätzlicher Laufzeitvertrag inventarisiert 60 frei benannte AppCenter-Ausgänge und prüft Keepalive sowie Blockade-Propagation. Ergänzt sind Ende-zu-Ende-Prüfungen für FENECON-Keepalive, alle Speicher-Ausgangsmodi, Farm-1-s-Takt und Wallbox-Phasenbrücke.
+- Service-Worker-Cache auf `nexowatt-cache-v426` erhöht.
+
+## 0.8.123 - 2026-07-18
+
+- Speicher/AppCenter: Manuell je Gerät zugeordnete Datenpunkte sind wieder die autoritative Quelle für Messwerte und Sollwerte; feste Objektpfade oder Hersteller-Namensmuster werden nicht vorausgesetzt.
+- Speicherfarm: Aktuelle AppCenter-Zeilen schlagen veraltete `storageFarm.configJson`-Spiegel. Der Runtime-State wird aus der gültigen Zuordnung repariert, statt alte Schreibziele nach einem Update oder Downgrade erneut zu aktivieren.
+- Schreibpfad: Eine Farm mit reinen Mess-/Status-Datenpunkten übernimmt den Sollwertpfad nicht mehr. Der Einzel-Speicher schreibt weiterhin auf sein manuell zugeordnetes Ziel; nur eine tatsächlich beschreibbare Farm übernimmt die Verteilung.
+- Migration: Kanonische, direkte, verschachtelte und ältere Feldnamen aus der Zeit vor der TypeScript-Umstellung werden zentral normalisiert; aktuelle Felder haben Vorrang und String-Boolean-Werte werden korrekt ausgewertet.
+- Farm-Freigaben: Fehlende oder ungültige optionale Freigabe-/Stör-Datenpunkte erzeugen Diagnosewarnungen, blockieren den Dispatch aber nicht. Explizite Sperren und Störmeldungen bleiben als Sicherheitsstopp wirksam.
+- Rückkopplungsschutz: Frei benannte Istwert-Datenpunkte wie `.ctrl.`, `setpoint`, `chargePowerW` oder `dischargePowerW` bleiben zulässig; ausgeschlossen wird ausschließlich die exakte Wiederverwendung eines zugeordneten Schreibziel-Objekts als Istwert.
+- Regressionen: Neuer echter Runtime-Test `test:storage-manual-dp-routing` für AppCenter-Priorität, Farm-Recovery, Legacy-Migration sowie frei benannte Einzel-/Farm-Datenpunkte.
+- Service-Worker-Cache auf `nexowatt-cache-v425` erhöht.
+
 ## 0.8.122 - 2026-07-18
 
 - EVCS: Reserviert Gesamt- und PV-Budget nur noch bei bestätigtem Fahrzeugbedarf. `Available`, `Idle`, `Reserved`, `Offline`, stale Statuswerte und alte Sollwerte ohne Fahrzeugnachweis blockieren keinen Speicher mehr.

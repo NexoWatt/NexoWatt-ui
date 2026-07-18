@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-mapping.ts
- * Quell-Hash: sha256:ae97c58034b2c4224e2a77a4fa69ac8658dffe8e3ae1b84326bdb9b97df8553e
+ * Quell-Hash: sha256:a7e7ae50160b518fdd1f77aa85442bc8164c8bdfb71f61b710e4831114de263c
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -160,10 +160,96 @@ class SpeicherMappingModule extends BaseModule {
             return 'generic';
         };
         const vendorProfile = normalizeVendorProfile(storage.vendorProfile);
-        const dp = (storage && storage.datapoints && typeof storage.datapoints === 'object') ? storage.datapoints : {};
+        const currentDp = (storage && storage.datapoints && typeof storage.datapoints === 'object') ? storage.datapoints : {};
+        const globalDp = (this.adapter.config && this.adapter.config.datapoints && typeof this.adapter.config.datapoints === 'object')
+            ? this.adapter.config.datapoints
+            : {};
+        const dp = { ...currentDp };
+        const text = (value) => value === undefined || value === null ? '' : String(value).trim();
+        const pickText = (canonical, aliases = [], globalAliases = []) => {
+            const candidates = [currentDp[canonical], ...aliases.map((key) => currentDp[key]), storage[canonical], ...aliases.map((key) => storage[key]), ...globalAliases.map((key) => globalDp[key])];
+            for (const value of candidates) {
+                const normalized = text(value);
+                if (normalized) return normalized;
+            }
+            return '';
+        };
+        const assignText = (canonical, aliases = [], globalAliases = []) => {
+            dp[canonical] = pickText(canonical, aliases, globalAliases);
+        };
+        const inherit = (canonical, aliases = []) => {
+            if (dp[canonical] !== undefined && dp[canonical] !== null && dp[canonical] !== '') return;
+            for (const key of [canonical, ...aliases]) {
+                if (storage[key] !== undefined && storage[key] !== null && storage[key] !== '') {
+                    dp[canonical] = storage[key];
+                    return;
+                }
+            }
+        };
+        const boolValue = (value, fallback = false) => {
+            if (typeof value === 'boolean') return value;
+            const normalized = String(value === undefined || value === null ? '' : value).trim().toLowerCase();
+            if (value === 1 || normalized === '1' || normalized === 'true') return true;
+            if (value === 0 || normalized === '0' || normalized === 'false') return false;
+            return fallback;
+        };
+
+        // Aktuelle AppCenter-Namen führen. Direkte/ältere Feldnamen werden nur als
+        // Fallback übernommen, damit eine TS-Migration keine manuelle Zuordnung verliert.
+        assignText('socObjectId', ['socId', 'socDp', 'storageSocId'], ['storageSoc']);
+        assignText('batteryPowerObjectId', ['signedPowerId', 'powerObjectId', 'powerId'], ['batteryPower']);
+        assignText('batteryChargePowerObjectId', ['chargePowerId', 'chargePowerDp'], ['storageChargePower']);
+        assignText('batteryDischargePowerObjectId', ['dischargePowerId', 'dischargePowerDp'], ['storageDischargePower']);
+        assignText('dcPvPowerObjectId', ['pvPowerId', 'pvPowerObjectId', 'pvPowerDp'], ['storagePvPower']);
+        assignText('targetPowerObjectId', ['setSignedPowerId', 'targetPowerId', 'powerSetpointId', 'setpointId', 'setPowerId']);
+        assignText('targetChargePowerObjectId', ['setChargePowerId', 'targetChargePowerId', 'chargeSetpointId']);
+        assignText('targetDischargePowerObjectId', ['setDischargePowerId', 'targetDischargePowerId', 'dischargeSetpointId']);
+        assignText('runObjectId', ['runId', 'enableObjectId', 'controlEnableId']);
+        assignText('maxChargeObjectId', ['maxChargeId', 'maxChargePowerObjectId']);
+        assignText('maxDischargeObjectId', ['maxDischargeId', 'maxDischargePowerObjectId']);
+        assignText('chargeEnableObjectId', ['chargeAllowedId', 'chargeEnableId']);
+        assignText('dischargeEnableObjectId', ['dischargeAllowedId', 'dischargeEnableId']);
+        assignText('reserveSocObjectId', ['reserveSocId']);
+        assignText('e3dcSetPowerModeObjectId', ['e3dcSetPowerModeId']);
+        assignText('e3dcSetPowerValueObjectId', ['e3dcSetPowerValueId']);
+        assignText('e3dcPowerLimitsUsedObjectId', ['e3dcPowerLimitsUsedId']);
+        assignText('e3dcMaxChargePowerObjectId', ['e3dcMaxChargePowerId']);
+        assignText('e3dcMaxDischargePowerObjectId', ['e3dcMaxDischargePowerId']);
+
+        for (const [canonical, aliases] of [
+            ['socScale', []],
+            ['batteryPowerScale', ['powerScale']], ['batteryPowerInvert', ['invertSignedPowerSign']],
+            ['batteryChargePowerScale', ['chargePowerScale']], ['batteryDischargePowerScale', ['dischargePowerScale']],
+            ['batteryFeedbackSource', []],
+            ['dcPvPowerScale', ['pvPowerScale']], ['dcPvPowerInvert', ['pvPowerInvert']],
+            ['targetPowerScale', ['setSignedPowerScale']], ['targetPowerInvert', ['invertSetSignedPowerSign']],
+            ['targetChargePowerScale', ['setChargePowerScale']], ['targetChargePowerInvert', ['invertSetChargePowerSign']],
+            ['targetDischargePowerScale', ['setDischargePowerScale']], ['targetDischargePowerInvert', ['invertSetDischargePowerSign']],
+            ['runInvert', []],
+        ]) inherit(canonical, aliases);
+        for (const key of [
+            'batteryPowerInvert', 'dcPvPowerInvert', 'targetPowerInvert',
+            'targetChargePowerInvert', 'targetDischargePowerInvert', 'runInvert',
+        ]) {
+            dp[key] = boolValue(dp[key], false);
+        }
+
         const feneconGridControlEnabled = storage.feneconGridControlEnabled;
         const feneconAcMode = storage.feneconAcMode;
-        const farmEnabled = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
+        let farmEnabled = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
+        try {
+            if (this.adapter && typeof this.adapter._nwGetStorageFarmRuntimeInfo === 'function') {
+                const farmInfo = this.adapter._nwGetStorageFarmRuntimeInfo();
+                // Nur eine tatsächlich beschreibbare Farm ersetzt den Einzel-Speicher-
+                // Zielpfad. Reine Mess-/Status-Farmen dürfen auch die Mappingprüfung
+                // (z. B. FENECON-Hybrid) nicht als vermeintlicher Aktor umgehen.
+                farmEnabled = (farmInfo && typeof farmInfo.dispatchActive === 'boolean')
+                    ? farmInfo.dispatchActive
+                    : !!(farmInfo && farmInfo.active);
+            }
+        } catch {
+            // Legacy-Fallback bleibt erhalten.
+        }
         return { controlMode, coupling, vendorProfile, dp, feneconGridControlEnabled, feneconAcMode, farmEnabled };
     }
 
@@ -402,7 +488,8 @@ class SpeicherMappingModule extends BaseModule {
                 dataType: 'boolean',
                 direction: 'out',
                 invert: runInv,
-                note: 'Optional; true bei aktiver NexoWatt-Sollwertvorgabe, false bei 0 W'
+                maxWriteIntervalMs: 900,
+                note: 'Optional; true bei aktiver NexoWatt-Sollwertvorgabe, false bei 0 W; sekündlicher Watchdog-Refresh'
             });
         }
 
@@ -437,7 +524,8 @@ class SpeicherMappingModule extends BaseModule {
                 objectId: chargeEnId,
                 dataType: 'boolean',
                 direction: 'out',
-                note: 'Schreiben'
+                maxWriteIntervalMs: 900,
+                note: 'Schreiben; sekündlicher Watchdog-Refresh'
             });
         }
 
@@ -448,7 +536,8 @@ class SpeicherMappingModule extends BaseModule {
                 objectId: dischargeEnId,
                 dataType: 'boolean',
                 direction: 'out',
-                note: 'Schreiben'
+                maxWriteIntervalMs: 900,
+                note: 'Schreiben; sekündlicher Watchdog-Refresh'
             });
         }
 
@@ -553,11 +642,11 @@ class SpeicherMappingModule extends BaseModule {
                 missing.push('Sollleistung signed oder Sollwert Laden/Entladen');
             }
         } else if (String(controlMode) === 'limits') {
-            if (!maxChargeId) missing.push('Max Ladeleistung (W)');
-            if (!maxDischargeId) missing.push('Max Entladeleistung (W)');
+            // Ein einzelner Richtungs-DP ist eine gültige, bewusst einseitige
+            // Zuordnung. Die nicht gemappte Richtung wird im Regler sicher gesperrt.
+            if (!maxChargeId && !maxDischargeId) missing.push('Max Ladeleistung und/oder Max Entladeleistung (W)');
         } else if (String(controlMode) === 'enableFlags') {
-            if (!chargeEnId) missing.push('Laden erlaubt');
-            if (!dischargeEnId) missing.push('Entladen erlaubt');
+            if (!chargeEnId && !dischargeEnId) missing.push('Laden erlaubt und/oder Entladen erlaubt');
         }
 
         const ok = missing.length === 0;
