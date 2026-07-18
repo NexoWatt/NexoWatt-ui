@@ -390,6 +390,41 @@ export interface CoreRuntimePublicationPlan {
   consumerKeys: string[];
 }
 
+/** Phase 3: ein einziger typisierter Laufzeitvertrag fuer Snapshot, Reservierungen und Publikation. */
+export interface CoreRuntimePhase3State {
+  ok: true;
+  source: 'ts-core-runtime-phase3';
+  contractVersion: 'core-runtime-phase3';
+  snapshot: CoreRuntimeBudgetSnapshot | Record<string, unknown>;
+  reservationState: CoreRuntimeReservationState;
+  revision: number;
+  lastReservation: CoreRuntimeReservationResult | null;
+}
+
+export interface CoreRuntimePhase3ReservationResult {
+  ok: true;
+  source: 'ts-core-runtime-phase3-reservation';
+  runtime: CoreRuntimePhase3State;
+  reservation: CoreRuntimeReservationResult;
+}
+
+export interface CoreRuntimePhase3SequenceResult {
+  ok: true;
+  source: 'ts-core-runtime-phase3-sequence';
+  runtime: CoreRuntimePhase3State;
+  sequence: CoreRuntimeReservationSequenceResult;
+}
+
+export interface CoreRuntimePhase3PublicationInput extends Omit<CoreRuntimePublicationInput, 'snapshot' | 'runtime' | 'tsReservation'> {
+  runtime?: CoreRuntimePhase3State | null;
+}
+
+export interface CoreRuntimePhase3PublicationPlan extends Omit<CoreRuntimePublicationPlan, 'source' | 'contractVersion'> {
+  source: 'ts-core-runtime-publication-v3';
+  contractVersion: 'core-runtime-publication-v3';
+  runtimeRevision: number;
+}
+
 function finiteOrNull(value: unknown): number | null {
   if (value === null || value === undefined) return null;
   if (typeof value === 'string' && value.trim() === '') return null;
@@ -1093,6 +1128,116 @@ export function applyCoreRuntimeReservationSequence(
     entries,
     state,
     flexUsedW: calculateCoreRuntimeFlexUsedW(state.consumers, state.order),
+  };
+}
+
+/** Erstellt den kanonischen Phase-3-Laufzeitstand aus genau einem Budget-Snapshot. */
+export function createCoreRuntimePhase3State(
+  snapshot: CoreRuntimeBudgetSnapshot | Record<string, unknown> | null | undefined,
+): CoreRuntimePhase3State {
+  const root = snapshot && typeof snapshot === 'object'
+    ? snapshot as CoreRuntimeBudgetSnapshot | Record<string, unknown>
+    : {};
+  return {
+    ok: true,
+    source: 'ts-core-runtime-phase3',
+    contractVersion: 'core-runtime-phase3',
+    snapshot: root,
+    reservationState: createCoreRuntimeReservationState(root),
+    revision: 0,
+    lastReservation: null,
+  };
+}
+
+/** Wendet genau eine Reservierung auf den kanonischen Phase-3-Stand an. */
+export function applyCoreRuntimePhase3Reservation(
+  runtime: CoreRuntimePhase3State,
+  request: CoreRuntimeReservationRequest = {},
+  tsInput?: unknown,
+): CoreRuntimePhase3ReservationResult {
+  const base = runtime && runtime.ok === true
+    ? runtime
+    : createCoreRuntimePhase3State(null);
+  const reservation = applyCoreRuntimeReservation(base.reservationState, request, tsInput);
+  return {
+    ok: true,
+    source: 'ts-core-runtime-phase3-reservation',
+    reservation,
+    runtime: {
+      ...base,
+      reservationState: reservation.state,
+      revision: Math.max(0, Math.floor(finiteOrNull(base.revision) ?? 0)) + 1,
+      lastReservation: reservation,
+    },
+  };
+}
+
+/** Fuehrt eine geordnete Reservierungsfolge auf demselben Phase-3-Stand aus. */
+export function applyCoreRuntimePhase3Sequence(
+  runtime: CoreRuntimePhase3State,
+  requests: readonly CoreRuntimeReservationRequest[] = [],
+  tsInput?: unknown,
+): CoreRuntimePhase3SequenceResult {
+  const base = runtime && runtime.ok === true
+    ? runtime
+    : createCoreRuntimePhase3State(null);
+  const sequence = applyCoreRuntimeReservationSequence(base.reservationState, requests, tsInput);
+  return {
+    ok: true,
+    source: 'ts-core-runtime-phase3-sequence',
+    sequence,
+    runtime: {
+      ...base,
+      reservationState: sequence.state,
+      revision: Math.max(0, Math.floor(finiteOrNull(base.revision) ?? 0)) + Math.max(1, requests.length),
+      // Die Sequenz selbst ist die kanonische Wahrheit. Für die Diagnose bleibt
+      // die letzte Einzelreservierung erhalten; es wird kein künstlicher 0-W-Consumer
+      // in den Laufzeitstand eingefügt.
+      lastReservation: base.lastReservation,
+    },
+  };
+}
+
+/**
+ * Baut State- und Cache-Publikation aus demselben typisierten Laufzeitstand, der
+ * zuvor die Grants und Reservierungen gefuehrt hat. Damit existiert keine zweite
+ * unabhaengige Restbudgetreferenz mehr.
+ */
+export function buildCoreRuntimePhase3PublicationPlan(
+  input: CoreRuntimePhase3PublicationInput = {},
+): CoreRuntimePhase3PublicationPlan {
+  const runtime = input.runtime && input.runtime.ok === true
+    ? input.runtime
+    : createCoreRuntimePhase3State(null);
+  const plan = buildCoreRuntimePublicationPlan({
+    ...input,
+    snapshot: runtime.snapshot,
+    runtime: runtime.reservationState,
+    tsReservation: runtime.lastReservation as unknown as Record<string, unknown> | null,
+  });
+  const states = {
+    ...plan.states,
+    'ems.budget.phase3RuntimeMode': 'typed-core-runtime-v3',
+    'ems.budget.phase3RuntimeFallback': false,
+    'ems.budget.phase3RuntimeRevision': runtime.revision,
+    'ems.budget.phase3RuntimeReason': 'single-typed-runtime-state',
+    'ems.budget.phase2PublicationMode': 'typed-core-runtime-publication-v3',
+  };
+  const cache = {
+    ...plan.cache,
+    'ems.budget.phase3RuntimeMode': states['ems.budget.phase3RuntimeMode'],
+    'ems.budget.phase3RuntimeFallback': states['ems.budget.phase3RuntimeFallback'],
+    'ems.budget.phase3RuntimeRevision': states['ems.budget.phase3RuntimeRevision'],
+    'ems.budget.phase3RuntimeReason': states['ems.budget.phase3RuntimeReason'],
+    'ems.budget.phase2PublicationMode': states['ems.budget.phase2PublicationMode'],
+  };
+  return {
+    ...plan,
+    source: 'ts-core-runtime-publication-v3',
+    contractVersion: 'core-runtime-publication-v3',
+    runtimeRevision: runtime.revision,
+    states,
+    cache,
   };
 }
 

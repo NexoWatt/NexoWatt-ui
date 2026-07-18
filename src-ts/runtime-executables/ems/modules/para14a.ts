@@ -164,6 +164,7 @@ class Para14aModule extends BaseModule {
         this._stateCache = new Map();
         this._activeDpKey = '';
         this._emsSetpointDpKey = '';
+        this._initialized = false;
         this._signalMemory = { lastFreshActive: null, lastFreshTs: null };
         this._audit = {
             historyInstance: '',
@@ -981,6 +982,7 @@ class Para14aModule extends BaseModule {
         }
 
         await this._setupAuditHistory();
+        this._initialized = true;
     }
 
     /**
@@ -1058,6 +1060,46 @@ class Para14aModule extends BaseModule {
      * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
     /**
+     * Wird aufgerufen, wenn die §14a-App im AppCenter deaktiviert wird. Die letzte
+     * aktive Begrenzung darf dann nicht im zentralen Budget weiterleben.
+     */
+    async deactivate() {
+        this.adapter._para14a = {
+            enabled: false,
+            active: false,
+            mode: '',
+            source: 'module-disabled',
+            totalCapW: null,
+            evcsTotalCapW: null,
+            appCapsW: {},
+            evcsCapsBySafe: {},
+            signalFresh: false,
+            signalStale: false,
+            signalAgeMs: null,
+            signalStatus: 'module-disabled',
+            stalePolicy: '',
+            legacyDirectWritesEnabled: false,
+        };
+        this._signalMemory = { lastFreshActive: null, lastFreshTs: null };
+        if (this._initialized === true) {
+            await this._setStateIfChanged('para14a.active', false);
+            await this._setStateIfChanged('para14a.signalFresh', false);
+            await this._setStateIfChanged('para14a.signalAgeMs', null);
+            await this._setStateIfChanged('para14a.signalStatus', 'module-disabled');
+            await this._setStateIfChanged('para14a.evcsTotalCapW', 0);
+            await this._setStateIfChanged('para14a.totalCapW', 0);
+            await this._setStateIfChanged('para14a.storageChargeCapW', 0);
+            await this._setStateIfChanged('para14a.thermalCapW', 0);
+            await this._setStateIfChanged('para14a.heatingRodCapW', 0);
+            await this._setStateIfChanged('para14a.airConditionCapW', 0);
+            await this._setStateIfChanged('para14a.constraintOnly', true);
+        }
+        // Bei einer erneuten Aktivierung werden aktuelle Konfiguration und Mappings
+        // vollständig neu eingelesen.
+        this._initialized = false;
+    }
+
+    /**
      * Code-Teil: tick
      * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -1065,6 +1107,10 @@ class Para14aModule extends BaseModule {
      */
     async tick() {
         if (!this.adapter) return;
+        // AppCenter kann §14a zur Laufzeit aktivieren. Bevor der erste Tick States
+        // schreibt, muessen deren ioBroker-Objekte und DP-Mappings existieren.
+        if (this._initialized !== true) await this.init();
+        if (this._initialized !== true) return;
         const cfg = this._getCfg();
         const signal = this._readActiveSignal();
         const modeRaw = String(cfg.para14aMode || cfg.para14aControlMode || 'direct').trim().toLowerCase();

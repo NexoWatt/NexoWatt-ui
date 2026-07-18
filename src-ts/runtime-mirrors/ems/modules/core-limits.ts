@@ -28,7 +28,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 7e0e2fe50bdf1dd5a335eb039aa0b17f10968af1dc219460b70652536506cab3
+ * Original-Hash: d129190d9deb6b78952a7492bb3e85b76e1cb9b1a73a9de8d2eb758e7a8e280b
  */
 
 /**
@@ -172,6 +172,16 @@ const { BaseModule } = require('./base');
 function requireCoreBudgetTsMirror() {
     try {
         return require('../../lib/ts-mirrors/ems/core-limits/core-budget');
+    } catch (_e) {
+        return null;
+    }
+}
+
+
+/** Lädt die typisierte, seiteneffektfreie Core-Runtime. */
+function requireCoreRuntimeTsMirror() {
+    try {
+        return require('../../lib/ts-mirrors/ems/core-limits/core-runtime');
     } catch (_e) {
         return null;
     }
@@ -377,6 +387,13 @@ function computeCentralBudgetGrant(runtime: CoreBudgetGrantRuntime = {}, request
     };
 }
 
+/**
+ * Legacy-Referenzname fuer den kontrollierten TS/JS-Paritaetsvergleich.
+ * Der typisierte Spiegel verwendet dieselbe reine Grant-Funktion.
+ */
+function legacyComputeCentralBudgetGrant(runtime: CoreBudgetGrantRuntime = {}, request: CoreBudgetGrantRequest = {}) {
+    return computeCentralBudgetGrant(runtime, request);
+}
 
 /**
  * Code-Teil: resolvePvBudgetPhysicalCapW
@@ -560,15 +577,89 @@ function makeBudgetRuntime(adapter, snapshot) {
     const totalEff = (totalEffRaw === null || totalEffRaw === undefined) ? Number.POSITIVE_INFINITY : Number(totalEffRaw);
     const pvEff = snapshot && snapshot.gates && snapshot.gates.pv ? snapshot.gates.pv.effectiveW : 0;
 
+    let typedInitialState = null;
+    let typedInitialError = '';
+    try {
+        const mirror = requireCoreRuntimeTsMirror();
+        const createState = mirror && typeof mirror.createCoreRuntimeReservationState === 'function'
+            ? mirror.createCoreRuntimeReservationState
+            : null;
+        if (createState) typedInitialState = createState(snapshot || {});
+    } catch (e) {
+        typedInitialError = e && e.message ? e.message : String(e);
+    }
+    const legacyInitialTotalW = Number.isFinite(totalEff) ? Math.max(0, totalEff) : Number.POSITIVE_INFINITY;
+    const legacyInitialPvW = Math.max(0, Number(pvEff) || 0);
+    const typedInitialTotalRaw = typedInitialState ? typedInitialState.remainingTotalW : undefined;
+    const typedInitialTotalW = typedInitialTotalRaw === null
+        ? Number.POSITIVE_INFINITY
+        : Number(typedInitialTotalRaw);
+    const typedInitialPvW = typedInitialState ? Number(typedInitialState.remainingPvW) : NaN;
+    const typedInitialOk = !!(
+        typedInitialState
+        && !typedInitialError
+        && ((Number.isFinite(legacyInitialTotalW) && Number.isFinite(typedInitialTotalW) && Math.abs(legacyInitialTotalW - typedInitialTotalW) <= 1)
+            || (!Number.isFinite(legacyInitialTotalW) && !Number.isFinite(typedInitialTotalW)))
+        && Number.isFinite(typedInitialPvW)
+        && Math.abs(legacyInitialPvW - typedInitialPvW) <= 1
+    );
+
+    let typedPhase3Runtime = null;
+    let typedPhase3Error = '';
+    if (typedInitialOk) {
+        try {
+            const mirror = requireCoreRuntimeTsMirror();
+            const createPhase3 = mirror && typeof mirror.createCoreRuntimePhase3State === 'function'
+                ? mirror.createCoreRuntimePhase3State
+                : null;
+            if (createPhase3) {
+                const candidate = createPhase3(snapshot || {});
+                const state = candidate && candidate.reservationState;
+                const totalRaw = state ? state.remainingTotalW : undefined;
+                const totalW = totalRaw === null ? Number.POSITIVE_INFINITY : Number(totalRaw);
+                const pvW = state ? Number(state.remainingPvW) : NaN;
+                const parity = candidate && candidate.ok === true
+                    && ((Number.isFinite(legacyInitialTotalW) && Number.isFinite(totalW) && Math.abs(legacyInitialTotalW - totalW) <= 1)
+                        || (!Number.isFinite(legacyInitialTotalW) && !Number.isFinite(totalW)))
+                    && Number.isFinite(pvW)
+                    && Math.abs(legacyInitialPvW - pvW) <= 1;
+                if (parity) typedPhase3Runtime = candidate;
+                else typedPhase3Error = 'phase3-initial-state-mismatch';
+            } else typedPhase3Error = 'phase3-runtime-unavailable';
+        } catch (e) {
+            typedPhase3Error = e && e.message ? e.message : String(e);
+        }
+    } else typedPhase3Error = typedInitialError || 'phase2-initial-state-unavailable';
+
     const rt = {
         ts,
-        version: 1,
-        gates: snapshot.gates || {},
+        version: 3,
+        gates: typedInitialOk && typedInitialState && typedInitialState.gates
+            ? typedInitialState.gates
+            : (snapshot.gates || {}),
         raw: snapshot.raw || {},
-        remainingTotalW: Number.isFinite(totalEff) ? Math.max(0, totalEff) : Number.POSITIVE_INFINITY,
-        remainingPvW: Math.max(0, Number(pvEff) || 0),
+        remainingTotalW: typedInitialOk ? typedInitialTotalW : legacyInitialTotalW,
+        remainingPvW: typedInitialOk ? Math.max(0, typedInitialPvW) : legacyInitialPvW,
         consumers: {},
         order: [],
+        sequence: 0,
+        phase2: {
+            active: typedInitialOk,
+            fallback: !typedInitialOk,
+            source: typedInitialOk ? 'ts-core-runtime-input-v2' : 'legacy-js-runtime',
+            reason: typedInitialOk ? 'typed-initial-state-parity-ok' : (typedInitialError || 'typed-initial-state-unavailable-or-mismatch'),
+        },
+        phase3Runtime: typedPhase3Runtime,
+        phase3: {
+            active: !!typedPhase3Runtime,
+            fallback: !typedPhase3Runtime,
+            source: typedPhase3Runtime ? 'ts-core-runtime-phase3' : 'legacy-js-runtime',
+            reason: typedPhase3Runtime ? 'single-typed-runtime-state' : (typedPhase3Error || 'phase3-runtime-unavailable'),
+            revision: typedPhase3Runtime ? Number(typedPhase3Runtime.revision) || 0 : 0,
+        },
+        // 0.7.106: Letzter TS-Shadow für Consumer-Reservierungen.
+        // Zweck: makeBudgetRuntime.reserve später aus TypeScript übernehmen, ohne die produktive Reservierung sofort zu riskieren.
+        tsReservationLast: null,
 
         /**
          * Code-Teil: grant
@@ -641,7 +732,7 @@ function makeBudgetRuntime(adapter, snapshot) {
              */
             const jsRemainingTotalBefore = Number.isFinite(this.remainingTotalW) ? this.remainingTotalW : Number.POSITIVE_INFINITY;
             const jsRemainingPvBefore = Math.max(0, this.remainingPvW);
-            const jsGrant = computeCentralBudgetGrant(this, {
+            const jsGrant = legacyComputeCentralBudgetGrant(this, {
                 ...r,
                 requestedW,
             });
@@ -678,16 +769,27 @@ function makeBudgetRuntime(adapter, snapshot) {
              * oder Abweichungen bleibt JS als Sicherheitsfallback aktiv.
              */
             let tsReservationResult = null;
+            let tsPhase3Result = null;
             let tsReservationError = '';
             try {
-                const mirror = requireCoreBudgetTsMirror();
-                const compute = mirror && typeof mirror.computeCoreBudgetReservation === 'function' ? mirror.computeCoreBudgetReservation : null;
-                if (compute) {
-                    tsReservationResult = compute({
-                        remainingTotalW: this.remainingTotalW,
+                const mirror = requireCoreRuntimeTsMirror();
+                const computeV3 = mirror && typeof mirror.applyCoreRuntimePhase3Reservation === 'function'
+                    ? mirror.applyCoreRuntimePhase3Reservation
+                    : null;
+                const computeV2 = mirror && typeof mirror.applyCoreRuntimeReservation === 'function'
+                    ? mirror.applyCoreRuntimeReservation
+                    : null;
+                if (computeV3 && this.phase3Runtime && this.phase3 && this.phase3.fallback !== true) {
+                    tsPhase3Result = computeV3(this.phase3Runtime, r, Date.now());
+                    tsReservationResult = tsPhase3Result && tsPhase3Result.reservation;
+                } else if (computeV2) {
+                    tsReservationResult = computeV2({
+                        remainingTotalW: Number.isFinite(this.remainingTotalW) ? this.remainingTotalW : null,
                         remainingPvW: this.remainingPvW,
+                        gates: this.gates,
                         consumers: this.consumers,
                         order: this.order,
+                        sequence: this.sequence,
                     }, r, Date.now());
                 }
             } catch (e) {
@@ -704,7 +806,14 @@ function makeBudgetRuntime(adapter, snapshot) {
                 compareShadowWatt('entry.remainingTotalW', jsEntry.remainingTotalW, tsEntry.remainingTotalW),
                 compareShadowWatt('entry.remainingPvW', jsEntry.remainingPvW, tsEntry.remainingPvW),
             ].filter(Boolean) : [];
-            const tsOk = !!(tsReservationResult && tsReservationResult.ok && tsEntry && !tsReservationError && mismatches.length === 0);
+            const tsOk = !!(
+                tsReservationResult
+                && tsReservationResult.ok
+                && tsReservationResult.source === 'ts-core-runtime-reservation-v2'
+                && tsEntry
+                && !tsReservationError
+                && mismatches.length === 0
+            );
             const fallbackReason = tsOk
                 ? ''
                 : (tsReservationError || (!tsEntry ? 'missing-ts-entry' : (mismatches.length ? 'ts-js-mismatch' : 'ts-result-not-ok')));
@@ -740,19 +849,38 @@ function makeBudgetRuntime(adapter, snapshot) {
                 this.order = Array.isArray(tsReservationResult.order) ? Array.from(tsReservationResult.order) : this.order.slice();
                 if (!this.order.includes(key)) this.order.push(key);
                 this.consumers[key] = entry;
+                this.sequence = tsReservationResult.state && Number.isFinite(Number(tsReservationResult.state.sequence))
+                    ? Math.max(0, Math.round(Number(tsReservationResult.state.sequence)))
+                    : Math.max(0, Number(this.sequence) || 0) + 1;
                 flexUsedW = Math.max(0, Number(tsReservationResult.flexUsedW) || 0);
+                if (tsPhase3Result && tsPhase3Result.ok === true && tsPhase3Result.runtime) {
+                    this.phase3Runtime = tsPhase3Result.runtime;
+                    this.phase3.active = true;
+                    this.phase3.fallback = false;
+                    this.phase3.source = 'ts-core-runtime-phase3';
+                    this.phase3.reason = 'phase3-reservation-parity-ok';
+                    this.phase3.revision = Math.max(0, Number(tsPhase3Result.runtime.revision) || 0);
+                }
             } else {
                 this.remainingTotalW = jsNextRemainingTotalW;
                 this.remainingPvW = jsNextRemainingPvW;
                 this.consumers[key] = entry;
                 if (!this.order.includes(key)) this.order.push(key);
+                this.sequence = Math.max(0, Number(this.sequence) || 0) + 1;
                 const liveConsumersForFlex = this.order.map(k => this.consumers[k] || null).filter(Boolean);
                 flexUsedW = liveConsumersForFlex.reduce((sum, c) => sum + Math.max(0, Number(c.usedW ?? c.reserveW) || 0), 0);
+                if (tsPhase3Result || (this.phase3 && this.phase3.active)) {
+                    this.phase3Runtime = null;
+                    this.phase3.active = false;
+                    this.phase3.fallback = true;
+                    this.phase3.source = 'legacy-js-runtime';
+                    this.phase3.reason = fallbackReason || 'phase3-reservation-fallback';
+                }
             }
 
             this.tsReservationLast = {
                 ts: Date.now(),
-                source: 'ts-core-reservation-productive',
+                source: tsPhase3Result ? 'ts-core-runtime-phase3-reservation' : 'ts-core-runtime-reservation-v2',
                 available: !!tsEntry,
                 ok: tsOk,
                 productive: tsOk,
@@ -818,6 +946,71 @@ function makeBudgetRuntime(adapter, snapshot) {
         },
 
         /**
+         * Code-Teil: reserveSequence
+         * Zweck: Führt mehrere zentrale Grants/Reservierungen deterministisch in
+         * der übergebenen Reihenfolge aus. Die normale EMS-Engine reserviert
+         * weiterhin Modul für Modul; Tests und künftige Orchestratoren können damit
+         * dieselbe Reihenfolge als atomaren Rechenplan prüfen.
+         */
+        reserveSequence(requests) {
+            const list = Array.isArray(requests) ? requests : [];
+            try {
+                const mirror = requireCoreRuntimeTsMirror();
+                const runV3 = mirror && typeof mirror.applyCoreRuntimePhase3Sequence === 'function'
+                    ? mirror.applyCoreRuntimePhase3Sequence
+                    : null;
+                const runV2 = mirror && typeof mirror.applyCoreRuntimeReservationSequence === 'function'
+                    ? mirror.applyCoreRuntimeReservationSequence
+                    : null;
+                let result = null;
+                let phase3 = null;
+                if (runV3 && this.phase3Runtime && this.phase3 && this.phase3.fallback !== true) {
+                    phase3 = runV3(this.phase3Runtime, list, Date.now());
+                    result = phase3 && phase3.sequence;
+                } else if (runV2) {
+                    result = runV2({
+                        remainingTotalW: Number.isFinite(this.remainingTotalW) ? this.remainingTotalW : null,
+                        remainingPvW: this.remainingPvW,
+                        gates: this.gates,
+                        consumers: this.consumers,
+                        order: this.order,
+                        sequence: this.sequence,
+                    }, list, Date.now());
+                }
+                if (!result || !result.ok || result.source !== 'ts-core-runtime-sequence-v2' || !result.state) {
+                    return list.map(req => this.reserve(req));
+                }
+                this.remainingTotalW = result.state.remainingTotalW === null
+                    ? Number.POSITIVE_INFINITY
+                    : Math.max(0, Number(result.state.remainingTotalW) || 0);
+                this.remainingPvW = Math.max(0, Number(result.state.remainingPvW) || 0);
+                this.consumers = result.state.consumers && typeof result.state.consumers === 'object'
+                    ? result.state.consumers
+                    : this.consumers;
+                this.order = Array.isArray(result.state.order) ? Array.from(result.state.order) : this.order;
+                this.sequence = Math.max(0, Math.round(Number(result.state.sequence) || 0));
+                if (phase3 && phase3.runtime) {
+                    this.phase3Runtime = phase3.runtime;
+                    this.phase3.active = true;
+                    this.phase3.fallback = false;
+                    this.phase3.source = 'ts-core-runtime-phase3';
+                    this.phase3.reason = 'phase3-sequence-ok';
+                    this.phase3.revision = Math.max(0, Number(phase3.runtime.revision) || 0);
+                }
+                return Array.isArray(result.entries) ? result.entries : [];
+            } catch (_e) {
+                if (this.phase3) {
+                    this.phase3Runtime = null;
+                    this.phase3.active = false;
+                    this.phase3.fallback = true;
+                    this.phase3.source = 'legacy-js-runtime';
+                    this.phase3.reason = 'phase3-sequence-error';
+                }
+                return list.map(req => this.reserve(req));
+            }
+        },
+
+        /**
          * Code-Teil: Methode `peek`
          * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
          * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
@@ -838,6 +1031,9 @@ function makeBudgetRuntime(adapter, snapshot) {
                 remainingPvW: roundW(this.remainingPvW),
                 consumers: this.consumers,
                 order: this.order.slice(),
+                sequence: Math.max(0, Math.round(Number(this.sequence) || 0)),
+                phase2: this.phase2,
+                phase3: this.phase3,
             };
         },
     };
@@ -1015,6 +1211,17 @@ class CoreLimitsModule extends BaseModule {
         await mk('ems.budget.snapshot', 'Budget snapshot (JSON)', 'string', 'text');
         await mk('ems.budget.tsShadowJson', 'TypeScript Core-Budget Shadow-Vergleich (JSON)', 'string', 'json');
         await mk('ems.budget.tsProductiveJson', 'TypeScript Core-Budget Produktivstatus (JSON)', 'string', 'json');
+        await mk('ems.budget.tsReservationJson', 'TypeScript Consumer-Reservierung Shadow-Vergleich (JSON)', 'string', 'json');
+        await mk('ems.budget.tsCoreRuntimeMode', 'TypeScript Core-Runtime Modus', 'string', 'text');
+        await mk('ems.budget.tsCoreRuntimeFallback', 'TypeScript Core-Runtime Fallback aktiv', 'boolean', 'indicator');
+        await mk('ems.budget.tsCoreRuntimeMismatchCount', 'TypeScript Core-Runtime Abweichungen', 'number', 'value');
+        await mk('ems.budget.tsCoreRuntimeJson', 'TypeScript Core-Runtime Produktivstatus (JSON)', 'string', 'json');
+        await mk('ems.budget.tsRestGatesJson', 'TypeScript Forecast-/Tarif-/Peak-Gates produktiv/Fallback (JSON)', 'string', 'json');
+        await mk('ems.budget.phase2PublicationMode', 'TypeScript Core-Runtime Publikationsmodus', 'string', 'text');
+        await mk('ems.budget.phase3RuntimeMode', 'TypeScript Core Phase-3 Laufzeitmodus', 'string', 'text');
+        await mk('ems.budget.phase3RuntimeFallback', 'TypeScript Core Phase-3 Fallback aktiv', 'boolean', 'indicator');
+        await mk('ems.budget.phase3RuntimeRevision', 'TypeScript Core Phase-3 Revision', 'number', 'value');
+        await mk('ems.budget.phase3RuntimeReason', 'TypeScript Core Phase-3 Statusgrund', 'string', 'text');
 
         // Gate D - PV Forecast. Advisory background gate for forecast-aware app decisions.
         // It does not write setpoints and does not change the instantaneous PV budget by itself.
@@ -1453,6 +1660,113 @@ class CoreLimitsModule extends BaseModule {
             status,
             source: pf ? 'forecast.pv' : '',
         };
+    }
+
+    /**
+     * Code-Teil: _publishCoreRuntimeBudgetPlan
+     * Zweck: Veröffentlicht Budget-Snapshot, Restbudgets und Verbraucherstände
+     * produktiv aus dem typisierten Phase-2-Plan. Bei fehlendem Spiegel oder
+     * inkonsistenten Kernwerten bleibt der bestehende JS-Publikationspfad aktiv.
+     */
+    async _publishCoreRuntimeBudgetPlan(now, budgetSnapshot, budgetRuntime, coreTsShadow, coreRestGatesTsShadow) {
+        const markFallback = (reason) => {
+            if (budgetRuntime && budgetRuntime.phase2 && typeof budgetRuntime.phase2 === 'object') {
+                budgetRuntime.phase2.publication = 'legacy-js-publication';
+                budgetRuntime.phase2.publicationFallback = true;
+                budgetRuntime.phase2.publicationReason = String(reason || 'typed-publication-unavailable');
+            }
+            if (budgetRuntime && budgetRuntime.phase3 && typeof budgetRuntime.phase3 === 'object') {
+                budgetRuntime.phase3.fallback = true;
+                budgetRuntime.phase3.active = false;
+                budgetRuntime.phase3.source = 'legacy-js-runtime';
+                budgetRuntime.phase3.reason = String(reason || 'typed-publication-unavailable');
+            }
+            return false;
+        };
+        try {
+            const mirror = requireCoreRuntimeTsMirror();
+            const buildV3 = mirror && typeof mirror.buildCoreRuntimePhase3PublicationPlan === 'function'
+                ? mirror.buildCoreRuntimePhase3PublicationPlan
+                : null;
+            const buildV2 = mirror && typeof mirror.buildCoreRuntimePublicationPlan === 'function'
+                ? mirror.buildCoreRuntimePublicationPlan
+                : null;
+            if (!buildV3 && !buildV2) return markFallback('typed-publication-unavailable');
+
+            const b = budgetSnapshot && typeof budgetSnapshot === 'object' ? budgetSnapshot : {};
+            const coreRuntimeStatus = (b.tsCoreRuntime && typeof b.tsCoreRuntime === 'object')
+                ? b.tsCoreRuntime
+                : ((this._coreRuntimeTsLast && typeof this._coreRuntimeTsLast === 'object') ? this._coreRuntimeTsLast : {});
+            const sharedPublicationInput = {
+                tsRestGates: b.tsRestGatesProductive || b.tsRestGatesShadow || coreRestGatesTsShadow || null,
+                tsShadow: b.tsShadow || coreTsShadow || null,
+                tsProductive: b.tsProductive || null,
+                coreRuntimeStatus,
+            };
+            const usePhase3 = !!(buildV3 && budgetRuntime && budgetRuntime.phase3Runtime && budgetRuntime.phase3 && budgetRuntime.phase3.fallback !== true);
+            const plan = usePhase3
+                ? buildV3({ ...sharedPublicationInput, runtime: budgetRuntime.phase3Runtime })
+                : buildV2({
+                    ...sharedPublicationInput,
+                    snapshot: b,
+                    runtime: budgetRuntime ? {
+                        remainingTotalW: Number.isFinite(budgetRuntime.remainingTotalW) ? budgetRuntime.remainingTotalW : null,
+                        remainingPvW: budgetRuntime.remainingPvW,
+                        gates: budgetRuntime.gates,
+                        consumers: budgetRuntime.consumers,
+                        order: budgetRuntime.order,
+                        sequence: budgetRuntime.sequence,
+                    } : null,
+                    tsReservation: (budgetRuntime && budgetRuntime.tsReservationLast) || null,
+                });
+            const validSource = plan && (plan.source === 'ts-core-runtime-publication-v3' || plan.source === 'ts-core-runtime-publication-v2');
+            if (!plan || plan.ok !== true || !validSource) return markFallback('typed-publication-invalid');
+            const states = plan.states && typeof plan.states === 'object' ? plan.states : null;
+            if (!states) return markFallback('typed-publication-states-missing');
+
+            const expectedTotalW = b.gates && b.gates.total && b.gates.total.effectiveW !== null
+                ? roundW(b.gates.total.effectiveW)
+                : 0;
+            const expectedPvW = b.gates && b.gates.pv ? roundW(b.gates.pv.effectiveW) : 0;
+            const expectedGridW = b.raw ? roundW(b.raw.gridW) : 0;
+            const expectedRemainingTotalW = budgetRuntime && Number.isFinite(budgetRuntime.remainingTotalW)
+                ? roundW(budgetRuntime.remainingTotalW)
+                : 0;
+            const expectedRemainingPvW = budgetRuntime ? roundW(budgetRuntime.remainingPvW) : expectedPvW;
+            const critical = [
+                ['ems.budget.totalBudgetW', expectedTotalW],
+                ['ems.budget.pvBudgetW', expectedPvW],
+                ['ems.budget.gridW', expectedGridW],
+                ['ems.budget.remainingTotalW', expectedRemainingTotalW],
+                ['ems.budget.remainingPvW', expectedRemainingPvW],
+            ];
+            for (const [id, expected] of critical) {
+                const actual = Number(states[id]);
+                if (!Number.isFinite(actual) || Math.abs(actual - Number(expected)) > 1) {
+                    return markFallback(`typed-publication-mismatch:${id}`);
+                }
+            }
+
+            for (const [id, value] of Object.entries(states)) {
+                await this.adapter.setStateAsync(id, value, true);
+            }
+            if (this.adapter && typeof this.adapter.updateValue === 'function') {
+                const cache = plan.cache && typeof plan.cache === 'object' ? plan.cache : {};
+                for (const [id, value] of Object.entries(cache)) this.adapter.updateValue(id, value, now);
+            }
+            if (budgetRuntime && budgetRuntime.phase2 && typeof budgetRuntime.phase2 === 'object') {
+                budgetRuntime.phase2.publication = String(plan.source || 'typed-core-runtime-publication-v2');
+                budgetRuntime.phase2.publicationFallback = false;
+            }
+            if (budgetRuntime && budgetRuntime.phase3 && typeof budgetRuntime.phase3 === 'object') {
+                budgetRuntime.phase3.publication = String(plan.source || '');
+                budgetRuntime.phase3.publicationFallback = false;
+                budgetRuntime.phase3.revision = Math.max(0, Number(plan.runtimeRevision ?? budgetRuntime.phase3.revision) || 0);
+            }
+            return true;
+        } catch (_e) {
+            return markFallback(_e && _e.message ? _e.message : 'typed-publication-error');
+        }
     }
 
     /**

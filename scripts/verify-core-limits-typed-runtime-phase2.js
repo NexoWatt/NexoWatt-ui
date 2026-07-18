@@ -173,13 +173,13 @@ for (const [id, value] of Object.entries(plan.states)) {
 }
 
 const runtimeBudget = runtime.makeBudgetRuntime(null, snapshot);
-assert.strictEqual(runtimeBudget.version, 2);
+assert.strictEqual(runtimeBudget.version, 3);
 assert.strictEqual(runtimeBudget.phase2.active, true);
 const runtimeEntry = runtimeBudget.reserve({
   key: 'evcs', requestedW: 10000, reserveW: 6000, pvReserveW: 6000, actualW: 5500, pvOnly: true, priority: 100,
 });
 assert.strictEqual(runtimeEntry.grantW, 6000);
-assert.strictEqual(runtimeBudget.tsReservationLast.source, 'ts-core-runtime-reservation-v2');
+assert.ok(['ts-core-runtime-reservation-v2', 'ts-core-runtime-phase3-reservation'].includes(runtimeBudget.tsReservationLast.source));
 assert.strictEqual(runtimeBudget.tsReservationLast.fallback, false);
 assert.strictEqual(runtimeBudget.remainingTotalW, 6000);
 assert.strictEqual(runtimeBudget.remainingPvW, 6500);
@@ -196,16 +196,19 @@ const adapter = {
 const core = new runtime.CoreLimitsModule(adapter, { getNumberFresh() { return null; } });
 const publicationOk = await core._publishCoreRuntimeBudgetPlan(3000, snapshot, runtimeBudget, { available: true }, { active: true });
 assert.strictEqual(publicationOk, true);
-assert.strictEqual(written.get('ems.budget.phase2PublicationMode'), 'typed-core-runtime-publication-v2');
+assert.strictEqual(written.get('ems.budget.phase2PublicationMode'), 'typed-core-runtime-publication-v3');
 assert.strictEqual(written.get('ems.budget.remainingTotalW'), 6000);
 assert.strictEqual(written.get('ems.budget.remainingPvW'), 6500);
 assert.strictEqual(cached.get('ems.budget.remainingPvW'), 6500);
 assert.strictEqual(runtimeBudget.phase2.publicationFallback, false);
 
 const originalPlanBuilder = mirror.buildCoreRuntimePublicationPlan;
+const originalPlanBuilderV3 = mirror.buildCoreRuntimePhase3PublicationPlan;
 mirror.buildCoreRuntimePublicationPlan = null;
+mirror.buildCoreRuntimePhase3PublicationPlan = null;
 const fallbackOk = await core._publishCoreRuntimeBudgetPlan(3001, snapshot, runtimeBudget, {}, {});
 mirror.buildCoreRuntimePublicationPlan = originalPlanBuilder;
+mirror.buildCoreRuntimePhase3PublicationPlan = originalPlanBuilderV3;
 assert.strictEqual(fallbackOk, false, 'fehlender TS-Publikationsvertrag muss den Legacy-Pfad aktivieren');
 assert.strictEqual(runtimeBudget.phase2.publicationFallback, true);
 

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c2a43c1bd78144c901510007837a6ffd2ce01bf5e83e9d6d2452f87f2354ac0b
+ * Original-Hash: 6b4565313eecd98b08822c48b1051d9366bbaeac44e4900e4625583876ce5d99
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:c519522b2fa6e8d16c8d74c552f413c5dbfcd8426b219444edbf6d8fa68a65fb
+ * Quell-Hash: sha256:67462bfedc0fd18f8015273689700331eafdbf3a40937fec1d6210f4341f438f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -141,6 +141,11 @@ class ModuleManager {
         this._lastDiagLogMs = 0;
         this._lastDiagWriteMs = 0;
         this._tickCount = 0;
+
+        // Dynamische AppCenter-Umschaltungen duerfen ein Modul nicht ticken, bevor
+        // dessen States und Datenpunkt-Mappings initialisiert wurden. Der Lifecycle
+        // wird deshalb pro Modulzeile nachgefuehrt und bei Bedarf lazy gestartet.
+        this._moduleInitRetryMs = 30000;
 
         // Last tick diagnostics (always captured, even if diagnostics are disabled)
         /**
@@ -257,6 +262,70 @@ class ModuleManager {
         }
         if (!maxLen || !Number.isFinite(maxLen) || maxLen < 1000) maxLen = 20000;
         return s.length > maxLen ? (s.slice(0, maxLen) + '...') : s;
+    }
+
+    /**
+     * Initialisiert ein Modul genau einmal, bevor dessen erster Regel-Tick laeuft.
+     * AppCenter-Aenderungen koennen enabledFn zur Laufzeit von false auf true setzen;
+     * ohne diesen Guard wuerde das Modul States schreiben, deren Objekte nie angelegt
+     * wurden. Fehlgeschlagene Initialisierungen werden begrenzt erneut versucht.
+     */
+    async _ensureModuleInitialized(moduleRow, reason = 'module-init', cycleId = 'init') {
+        const m = moduleRow || null;
+        if (!m || !m.instance) return false;
+        if (m.initialized === true) return true;
+        const now = Date.now();
+        if (Number.isFinite(Number(m.initRetryAfterMs)) && now < Number(m.initRetryAfterMs)) return false;
+        if (typeof m.instance.init !== 'function') {
+            m.initialized = true;
+            return true;
+        }
+        try {
+            const initContext = {
+                owner: keyFromModule(m),
+                module: keyFromModule(m),
+                priority: priorityForOwner(keyFromModule(m)),
+                reason: 'module-init',
+                cycleId,
+                leaseMs: 15000,
+            };
+            if (reason && reason !== 'module-init') initContext.reason = String(reason);
+            await withActuatorShadowContext(this.adapter, initContext, () => m.instance.init());
+            m.initialized = true;
+            m.initRetryAfterMs = 0;
+            m.initError = '';
+            return true;
+        } catch (e) {
+            const err = String((e && e.message) ? e.message : e);
+            m.initialized = false;
+            m.initRetryAfterMs = now + Math.max(1000, Number(this._moduleInitRetryMs) || 30000);
+            if (m.initError !== err) this.adapter.log.warn(`Module '${keyFromModule(m)}' init error: ${err}`);
+            m.initError = err;
+            return false;
+        }
+    }
+
+    /** Beendet einen zur Laufzeit deaktivierten AppCenter-Pfad genau einmal. */
+    async _deactivateModule(moduleRow, cycleId = 'disabled') {
+        const m = moduleRow || null;
+        if (!m || !m.instance || m.lastEnabled !== true) return;
+        try {
+            if (typeof m.instance.deactivate === 'function') {
+                await withActuatorShadowContext(this.adapter, {
+                    owner: keyFromModule(m),
+                    module: keyFromModule(m),
+                    priority: priorityForOwner(keyFromModule(m)),
+                    reason: 'module-disabled',
+                    cycleId,
+                    leaseMs: 5000,
+                }, () => m.instance.deactivate());
+            }
+        } catch (e) {
+            this.adapter.log.warn(`Module '${keyFromModule(m)}' deactivate error: ${String((e && e.message) ? e.message : e)}`);
+        }
+        // Bei einer spaeteren Reaktivierung werden Konfiguration und DP-Mappings neu
+        // eingelesen. Always-init-Module bleiben dagegen initialisiert.
+        if (m.alwaysInit !== true) m.initialized = false;
     }
 
     /**
@@ -519,14 +588,11 @@ class ModuleManager {
         for (const m of this.modules) {
             const enabled = !!(m && typeof m.enabledFn === 'function' ? m.enabledFn() : false);
             m.enabled = enabled;
-            const shouldInit = enabled || alwaysInit.has(m.key);
+            m.lastEnabled = enabled;
+            m.alwaysInit = alwaysInit.has(m.key);
+            const shouldInit = enabled || m.alwaysInit;
             if (!shouldInit) continue;
-            if (typeof m.instance.init !== 'function') continue;
-            try {
-                await withActuatorShadowContext(this.adapter, { owner: keyFromModule(m), module: keyFromModule(m), priority: priorityForOwner(keyFromModule(m)), reason: 'module-init', cycleId: 'init', leaseMs: 15000 }, () => m.instance.init());
-            } catch (e) {
-                this.adapter.log.warn(`Module '${m.key}' init error: ${e?.message || e}`);
-            }
+            await this._ensureModuleInitialized(m, 'module-init', 'init');
         }
     }
 
@@ -559,8 +625,20 @@ class ModuleManager {
             if (!this.adapter || this.adapter._nwShuttingDown) break;
             const enabled = !!(m && typeof m.enabledFn === 'function' && m.enabledFn());
             const key = String((m && m.key) || 'unknown');
-            if (!enabled || !m || !m.instance || typeof m.instance.tick !== 'function') {
+            if (!enabled) {
+                await this._deactivateModule(m, this._tickCount);
+                if (m) m.lastEnabled = false;
                 results.push({ key, enabled: false, ok: true, ms: 0 });
+                continue;
+            }
+            if (!m || !m.instance || typeof m.instance.tick !== 'function') {
+                results.push({ key, enabled: false, ok: true, ms: 0 });
+                continue;
+            }
+            const initialized = await this._ensureModuleInitialized(m, 'module-lazy-init', this._tickCount);
+            m.lastEnabled = true;
+            if (!initialized) {
+                results.push({ key, enabled: true, ok: false, ms: 0, error: String(m.initError || 'module-init-pending') });
                 continue;
             }
 

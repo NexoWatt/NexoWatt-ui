@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/core-limits.ts
- * Quell-Hash: sha256:d129ac494e6bb0400cbdc641bc04f19df2b5f560ae37b5467a705464912ed214
+ * Quell-Hash: sha256:789f9f24c426f5c4f3563230789b03ddcda2c5acc4afb1badbc8140d622806a0
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -559,9 +559,36 @@ function makeBudgetRuntime(adapter, snapshot) {
         && Math.abs(legacyInitialPvW - typedInitialPvW) <= 1
     );
 
+    let typedPhase3Runtime = null;
+    let typedPhase3Error = '';
+    if (typedInitialOk) {
+        try {
+            const mirror = requireCoreRuntimeTsMirror();
+            const createPhase3 = mirror && typeof mirror.createCoreRuntimePhase3State === 'function'
+                ? mirror.createCoreRuntimePhase3State
+                : null;
+            if (createPhase3) {
+                const candidate = createPhase3(snapshot || {});
+                const state = candidate && candidate.reservationState;
+                const totalRaw = state ? state.remainingTotalW : undefined;
+                const totalW = totalRaw === null ? Number.POSITIVE_INFINITY : Number(totalRaw);
+                const pvW = state ? Number(state.remainingPvW) : NaN;
+                const parity = candidate && candidate.ok === true
+                    && ((Number.isFinite(legacyInitialTotalW) && Number.isFinite(totalW) && Math.abs(legacyInitialTotalW - totalW) <= 1)
+                        || (!Number.isFinite(legacyInitialTotalW) && !Number.isFinite(totalW)))
+                    && Number.isFinite(pvW)
+                    && Math.abs(legacyInitialPvW - pvW) <= 1;
+                if (parity) typedPhase3Runtime = candidate;
+                else typedPhase3Error = 'phase3-initial-state-mismatch';
+            } else typedPhase3Error = 'phase3-runtime-unavailable';
+        } catch (e) {
+            typedPhase3Error = e && e.message ? e.message : String(e);
+        }
+    } else typedPhase3Error = typedInitialError || 'phase2-initial-state-unavailable';
+
     const rt = {
         ts,
-        version: 2,
+        version: 3,
         gates: typedInitialOk && typedInitialState && typedInitialState.gates
             ? typedInitialState.gates
             : (snapshot.gates || {}),
@@ -576,6 +603,14 @@ function makeBudgetRuntime(adapter, snapshot) {
             fallback: !typedInitialOk,
             source: typedInitialOk ? 'ts-core-runtime-input-v2' : 'legacy-js-runtime',
             reason: typedInitialOk ? 'typed-initial-state-parity-ok' : (typedInitialError || 'typed-initial-state-unavailable-or-mismatch'),
+        },
+        phase3Runtime: typedPhase3Runtime,
+        phase3: {
+            active: !!typedPhase3Runtime,
+            fallback: !typedPhase3Runtime,
+            source: typedPhase3Runtime ? 'ts-core-runtime-phase3' : 'legacy-js-runtime',
+            reason: typedPhase3Runtime ? 'single-typed-runtime-state' : (typedPhase3Error || 'phase3-runtime-unavailable'),
+            revision: typedPhase3Runtime ? Number(typedPhase3Runtime.revision) || 0 : 0,
         },
         // 0.7.106: Letzter TS-Shadow für Consumer-Reservierungen.
         // Zweck: makeBudgetRuntime.reserve später aus TypeScript übernehmen, ohne die produktive Reservierung sofort zu riskieren.
@@ -689,14 +724,21 @@ function makeBudgetRuntime(adapter, snapshot) {
              * oder Abweichungen bleibt JS als Sicherheitsfallback aktiv.
              */
             let tsReservationResult = null;
+            let tsPhase3Result = null;
             let tsReservationError = '';
             try {
                 const mirror = requireCoreRuntimeTsMirror();
-                const compute = mirror && typeof mirror.applyCoreRuntimeReservation === 'function'
+                const computeV3 = mirror && typeof mirror.applyCoreRuntimePhase3Reservation === 'function'
+                    ? mirror.applyCoreRuntimePhase3Reservation
+                    : null;
+                const computeV2 = mirror && typeof mirror.applyCoreRuntimeReservation === 'function'
                     ? mirror.applyCoreRuntimeReservation
                     : null;
-                if (compute) {
-                    tsReservationResult = compute({
+                if (computeV3 && this.phase3Runtime && this.phase3 && this.phase3.fallback !== true) {
+                    tsPhase3Result = computeV3(this.phase3Runtime, r, Date.now());
+                    tsReservationResult = tsPhase3Result && tsPhase3Result.reservation;
+                } else if (computeV2) {
+                    tsReservationResult = computeV2({
                         remainingTotalW: Number.isFinite(this.remainingTotalW) ? this.remainingTotalW : null,
                         remainingPvW: this.remainingPvW,
                         gates: this.gates,
@@ -766,6 +808,14 @@ function makeBudgetRuntime(adapter, snapshot) {
                     ? Math.max(0, Math.round(Number(tsReservationResult.state.sequence)))
                     : Math.max(0, Number(this.sequence) || 0) + 1;
                 flexUsedW = Math.max(0, Number(tsReservationResult.flexUsedW) || 0);
+                if (tsPhase3Result && tsPhase3Result.ok === true && tsPhase3Result.runtime) {
+                    this.phase3Runtime = tsPhase3Result.runtime;
+                    this.phase3.active = true;
+                    this.phase3.fallback = false;
+                    this.phase3.source = 'ts-core-runtime-phase3';
+                    this.phase3.reason = 'phase3-reservation-parity-ok';
+                    this.phase3.revision = Math.max(0, Number(tsPhase3Result.runtime.revision) || 0);
+                }
             } else {
                 this.remainingTotalW = jsNextRemainingTotalW;
                 this.remainingPvW = jsNextRemainingPvW;
@@ -774,11 +824,18 @@ function makeBudgetRuntime(adapter, snapshot) {
                 this.sequence = Math.max(0, Number(this.sequence) || 0) + 1;
                 const liveConsumersForFlex = this.order.map(k => this.consumers[k] || null).filter(Boolean);
                 flexUsedW = liveConsumersForFlex.reduce((sum, c) => sum + Math.max(0, Number(c.usedW ?? c.reserveW) || 0), 0);
+                if (tsPhase3Result || (this.phase3 && this.phase3.active)) {
+                    this.phase3Runtime = null;
+                    this.phase3.active = false;
+                    this.phase3.fallback = true;
+                    this.phase3.source = 'legacy-js-runtime';
+                    this.phase3.reason = fallbackReason || 'phase3-reservation-fallback';
+                }
             }
 
             this.tsReservationLast = {
                 ts: Date.now(),
-                source: 'ts-core-runtime-reservation-v2',
+                source: tsPhase3Result ? 'ts-core-runtime-phase3-reservation' : 'ts-core-runtime-reservation-v2',
                 available: !!tsEntry,
                 ok: tsOk,
                 productive: tsOk,
@@ -854,18 +911,27 @@ function makeBudgetRuntime(adapter, snapshot) {
             const list = Array.isArray(requests) ? requests : [];
             try {
                 const mirror = requireCoreRuntimeTsMirror();
-                const run = mirror && typeof mirror.applyCoreRuntimeReservationSequence === 'function'
+                const runV3 = mirror && typeof mirror.applyCoreRuntimePhase3Sequence === 'function'
+                    ? mirror.applyCoreRuntimePhase3Sequence
+                    : null;
+                const runV2 = mirror && typeof mirror.applyCoreRuntimeReservationSequence === 'function'
                     ? mirror.applyCoreRuntimeReservationSequence
                     : null;
-                if (!run) return list.map(req => this.reserve(req));
-                const result = run({
-                    remainingTotalW: Number.isFinite(this.remainingTotalW) ? this.remainingTotalW : null,
-                    remainingPvW: this.remainingPvW,
-                    gates: this.gates,
-                    consumers: this.consumers,
-                    order: this.order,
-                    sequence: this.sequence,
-                }, list, Date.now());
+                let result = null;
+                let phase3 = null;
+                if (runV3 && this.phase3Runtime && this.phase3 && this.phase3.fallback !== true) {
+                    phase3 = runV3(this.phase3Runtime, list, Date.now());
+                    result = phase3 && phase3.sequence;
+                } else if (runV2) {
+                    result = runV2({
+                        remainingTotalW: Number.isFinite(this.remainingTotalW) ? this.remainingTotalW : null,
+                        remainingPvW: this.remainingPvW,
+                        gates: this.gates,
+                        consumers: this.consumers,
+                        order: this.order,
+                        sequence: this.sequence,
+                    }, list, Date.now());
+                }
                 if (!result || !result.ok || result.source !== 'ts-core-runtime-sequence-v2' || !result.state) {
                     return list.map(req => this.reserve(req));
                 }
@@ -878,8 +944,23 @@ function makeBudgetRuntime(adapter, snapshot) {
                     : this.consumers;
                 this.order = Array.isArray(result.state.order) ? Array.from(result.state.order) : this.order;
                 this.sequence = Math.max(0, Math.round(Number(result.state.sequence) || 0));
+                if (phase3 && phase3.runtime) {
+                    this.phase3Runtime = phase3.runtime;
+                    this.phase3.active = true;
+                    this.phase3.fallback = false;
+                    this.phase3.source = 'ts-core-runtime-phase3';
+                    this.phase3.reason = 'phase3-sequence-ok';
+                    this.phase3.revision = Math.max(0, Number(phase3.runtime.revision) || 0);
+                }
                 return Array.isArray(result.entries) ? result.entries : [];
             } catch (_e) {
+                if (this.phase3) {
+                    this.phase3Runtime = null;
+                    this.phase3.active = false;
+                    this.phase3.fallback = true;
+                    this.phase3.source = 'legacy-js-runtime';
+                    this.phase3.reason = 'phase3-sequence-error';
+                }
                 return list.map(req => this.reserve(req));
             }
         },
@@ -907,6 +988,7 @@ function makeBudgetRuntime(adapter, snapshot) {
                 order: this.order.slice(),
                 sequence: Math.max(0, Math.round(Number(this.sequence) || 0)),
                 phase2: this.phase2,
+                phase3: this.phase3,
             };
         },
     };
@@ -1110,7 +1192,11 @@ class CoreLimitsModule extends BaseModule {
         await mk('ems.budget.tsCoreRuntimeMismatchCount', 'TypeScript Core-Runtime Abweichungen', 'number', 'value');
         await mk('ems.budget.tsCoreRuntimeJson', 'TypeScript Core-Runtime Produktivstatus (JSON)', 'string', 'json');
         await mk('ems.budget.tsRestGatesJson', 'TypeScript Forecast-/Tarif-/Peak-Gates produktiv/Fallback (JSON)', 'string', 'json');
-        await mk('ems.budget.phase2PublicationMode', 'TypeScript Core-Runtime Phase-2 Publikationsmodus', 'string', 'text');
+        await mk('ems.budget.phase2PublicationMode', 'TypeScript Core-Runtime Publikationsmodus', 'string', 'text');
+        await mk('ems.budget.phase3RuntimeMode', 'TypeScript Core Phase-3 Laufzeitmodus', 'string', 'text');
+        await mk('ems.budget.phase3RuntimeFallback', 'TypeScript Core Phase-3 Fallback aktiv', 'boolean', 'indicator');
+        await mk('ems.budget.phase3RuntimeRevision', 'TypeScript Core Phase-3 Revision', 'number', 'value');
+        await mk('ems.budget.phase3RuntimeReason', 'TypeScript Core Phase-3 Statusgrund', 'string', 'text');
 
         // Gate D - PV Forecast. Advisory background gate for forecast-aware app decisions.
         // It does not write setpoints and does not change the instantaneous PV budget by itself.
@@ -1564,36 +1650,52 @@ class CoreLimitsModule extends BaseModule {
                 budgetRuntime.phase2.publicationFallback = true;
                 budgetRuntime.phase2.publicationReason = String(reason || 'typed-publication-unavailable');
             }
+            if (budgetRuntime && budgetRuntime.phase3 && typeof budgetRuntime.phase3 === 'object') {
+                budgetRuntime.phase3.fallback = true;
+                budgetRuntime.phase3.active = false;
+                budgetRuntime.phase3.source = 'legacy-js-runtime';
+                budgetRuntime.phase3.reason = String(reason || 'typed-publication-unavailable');
+            }
             return false;
         };
         try {
             const mirror = requireCoreRuntimeTsMirror();
-            const build = mirror && typeof mirror.buildCoreRuntimePublicationPlan === 'function'
+            const buildV3 = mirror && typeof mirror.buildCoreRuntimePhase3PublicationPlan === 'function'
+                ? mirror.buildCoreRuntimePhase3PublicationPlan
+                : null;
+            const buildV2 = mirror && typeof mirror.buildCoreRuntimePublicationPlan === 'function'
                 ? mirror.buildCoreRuntimePublicationPlan
                 : null;
-            if (!build) return markFallback('typed-publication-unavailable');
+            if (!buildV3 && !buildV2) return markFallback('typed-publication-unavailable');
 
             const b = budgetSnapshot && typeof budgetSnapshot === 'object' ? budgetSnapshot : {};
             const coreRuntimeStatus = (b.tsCoreRuntime && typeof b.tsCoreRuntime === 'object')
                 ? b.tsCoreRuntime
                 : ((this._coreRuntimeTsLast && typeof this._coreRuntimeTsLast === 'object') ? this._coreRuntimeTsLast : {});
-            const plan = build({
-                snapshot: b,
-                runtime: budgetRuntime ? {
-                    remainingTotalW: Number.isFinite(budgetRuntime.remainingTotalW) ? budgetRuntime.remainingTotalW : null,
-                    remainingPvW: budgetRuntime.remainingPvW,
-                    gates: budgetRuntime.gates,
-                    consumers: budgetRuntime.consumers,
-                    order: budgetRuntime.order,
-                    sequence: budgetRuntime.sequence,
-                } : null,
-                tsReservation: (budgetRuntime && budgetRuntime.tsReservationLast) || null,
+            const sharedPublicationInput = {
                 tsRestGates: b.tsRestGatesProductive || b.tsRestGatesShadow || coreRestGatesTsShadow || null,
                 tsShadow: b.tsShadow || coreTsShadow || null,
                 tsProductive: b.tsProductive || null,
                 coreRuntimeStatus,
-            });
-            if (!plan || plan.ok !== true || plan.source !== 'ts-core-runtime-publication-v2') return markFallback('typed-publication-invalid');
+            };
+            const usePhase3 = !!(buildV3 && budgetRuntime && budgetRuntime.phase3Runtime && budgetRuntime.phase3 && budgetRuntime.phase3.fallback !== true);
+            const plan = usePhase3
+                ? buildV3({ ...sharedPublicationInput, runtime: budgetRuntime.phase3Runtime })
+                : buildV2({
+                    ...sharedPublicationInput,
+                    snapshot: b,
+                    runtime: budgetRuntime ? {
+                        remainingTotalW: Number.isFinite(budgetRuntime.remainingTotalW) ? budgetRuntime.remainingTotalW : null,
+                        remainingPvW: budgetRuntime.remainingPvW,
+                        gates: budgetRuntime.gates,
+                        consumers: budgetRuntime.consumers,
+                        order: budgetRuntime.order,
+                        sequence: budgetRuntime.sequence,
+                    } : null,
+                    tsReservation: (budgetRuntime && budgetRuntime.tsReservationLast) || null,
+                });
+            const validSource = plan && (plan.source === 'ts-core-runtime-publication-v3' || plan.source === 'ts-core-runtime-publication-v2');
+            if (!plan || plan.ok !== true || !validSource) return markFallback('typed-publication-invalid');
             const states = plan.states && typeof plan.states === 'object' ? plan.states : null;
             if (!states) return markFallback('typed-publication-states-missing');
 
@@ -1628,8 +1730,13 @@ class CoreLimitsModule extends BaseModule {
                 for (const [id, value] of Object.entries(cache)) this.adapter.updateValue(id, value, now);
             }
             if (budgetRuntime && budgetRuntime.phase2 && typeof budgetRuntime.phase2 === 'object') {
-                budgetRuntime.phase2.publication = 'typed-core-runtime-publication-v2';
+                budgetRuntime.phase2.publication = String(plan.source || 'typed-core-runtime-publication-v2');
                 budgetRuntime.phase2.publicationFallback = false;
+            }
+            if (budgetRuntime && budgetRuntime.phase3 && typeof budgetRuntime.phase3 === 'object') {
+                budgetRuntime.phase3.publication = String(plan.source || '');
+                budgetRuntime.phase3.publicationFallback = false;
+                budgetRuntime.phase3.revision = Math.max(0, Number(plan.runtimeRevision ?? budgetRuntime.phase3.revision) || 0);
             }
             return true;
         } catch (_e) {
@@ -2801,6 +2908,13 @@ class CoreLimitsModule extends BaseModule {
             await this.adapter.setStateAsync('ems.budget.tsCoreRuntimeFallback', coreRuntimeStatus.fallback === true, true);
             await this.adapter.setStateAsync('ems.budget.tsCoreRuntimeMismatchCount', Math.max(0, Math.round(Number(coreRuntimeStatus.mismatchCount) || 0)), true);
             await this.adapter.setStateAsync('ems.budget.tsCoreRuntimeJson', JSON.stringify(coreRuntimeStatus || {}), true);
+            const phase3Status = (budgetRuntime && budgetRuntime.phase3 && typeof budgetRuntime.phase3 === 'object')
+                ? budgetRuntime.phase3
+                : { active: false, fallback: true, reason: 'legacy-js-publication', revision: 0 };
+            await this.adapter.setStateAsync('ems.budget.phase3RuntimeMode', phase3Status.active === true ? 'typed-core-runtime-v3' : 'legacy-js-fallback', true);
+            await this.adapter.setStateAsync('ems.budget.phase3RuntimeFallback', phase3Status.fallback !== false, true);
+            await this.adapter.setStateAsync('ems.budget.phase3RuntimeRevision', Math.max(0, Math.round(Number(phase3Status.revision) || 0)), true);
+            await this.adapter.setStateAsync('ems.budget.phase3RuntimeReason', String(phase3Status.reason || 'legacy-js-publication'), true);
             await this.adapter.setStateAsync('ems.budget.totalBudgetW', b.gates.total.effectiveW === null ? 0 : roundW(b.gates.total.effectiveW), true);
             await this.adapter.setStateAsync('ems.budget.remainingTotalW', b.gates.total.effectiveW === null ? 0 : roundW(b.gates.total.effectiveW), true);
             await this.adapter.setStateAsync('ems.budget.pvBudgetRawW', roundW(b.gates.pv.rawW), true);
@@ -2929,6 +3043,13 @@ class CoreLimitsModule extends BaseModule {
                 this.adapter.updateValue('ems.budget.tsCoreRuntimeFallback', coreRuntimeStatus.fallback === true, now);
                 this.adapter.updateValue('ems.budget.tsCoreRuntimeMismatchCount', Math.max(0, Math.round(Number(coreRuntimeStatus.mismatchCount) || 0)), now);
                 this.adapter.updateValue('ems.budget.tsCoreRuntimeJson', JSON.stringify(coreRuntimeStatus || {}), now);
+                const phase3Status = (budgetRuntime && budgetRuntime.phase3 && typeof budgetRuntime.phase3 === 'object')
+                    ? budgetRuntime.phase3
+                    : { active: false, fallback: true, reason: 'legacy-js-publication', revision: 0 };
+                this.adapter.updateValue('ems.budget.phase3RuntimeMode', phase3Status.active === true ? 'typed-core-runtime-v3' : 'legacy-js-fallback', now);
+                this.adapter.updateValue('ems.budget.phase3RuntimeFallback', phase3Status.fallback !== false, now);
+                this.adapter.updateValue('ems.budget.phase3RuntimeRevision', Math.max(0, Math.round(Number(phase3Status.revision) || 0)), now);
+                this.adapter.updateValue('ems.budget.phase3RuntimeReason', String(phase3Status.reason || 'legacy-js-publication'), now);
                 this.adapter.updateValue('ems.budget.tsRestGatesJson', JSON.stringify(b.tsRestGatesProductive || b.tsRestGatesShadow || coreRestGatesTsShadow || {}), now);
                 if (b.gates && b.gates.forecast) {
                     this.adapter.updateValue('ems.budget.forecast.nowW', roundW(b.gates.forecast.nowW), now);

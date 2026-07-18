@@ -1,3 +1,10 @@
+## 0.8.121 - 2026-07-18
+
+- Core-Limits TypeScript Phase 3: Snapshot, Reservierungen, Restbudgets und State-/Cache-Publikation nutzen einen gemeinsamen typisierten Laufzeitstand; Abweichungen fallen hart auf die bewährte JavaScript-Referenz zurück.
+- Dynamischer Modul-Lifecycle: AppCenter-Module werden bei Aktivierung ohne Adapterneustart vor dem ersten Tick initialisiert und bei Deaktivierung sauber zurückgesetzt.
+- §14a: Missing-Object-Logspam behoben; Diagnoseobjekte werden vor jedem Write sichergestellt und alte §14a-Caps werden beim Deaktivieren neutralisiert.
+- Service-Worker-Cache auf `nexowatt-cache-v423` erhöht.
+
 ## 0.8.120 - 2026-07-18
 
 - TypeScript Core-Limits Phase 2: bereits aufgelöste Messwerte werden über einen normalisierten, typisierten Quellenvertrag an den zentralen Core übergeben. `0 W`, `null`, stale/usable und Quellenangaben bleiben eindeutig getrennt.
