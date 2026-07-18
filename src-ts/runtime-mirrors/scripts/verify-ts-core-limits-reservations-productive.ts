@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e4e69e968ff83844ed80328312e11a791e262474638e8aa49b3eba978ca64ee9
+ * Original-Hash: 664e9d9731214a8b9854f53a1749720a4d19de6ab2a263ffc6479e44eb8d8a0d
  */
 
 /**
@@ -35,9 +35,9 @@
  * Datei: scripts/verify-ts-core-limits-reservations-productive.js
  *
  * Zweck:
- * Prüft den 0.7.107-Schritt: `makeBudgetRuntime.reserve` nutzt den TypeScript-Helfer
- * produktiv für Consumer-Reservierungen und behält JavaScript als Fallback bei
- * Fehlern/Abweichungen.
+ * Prüft, dass `makeBudgetRuntime.reserve()` die Phase-2-TypeScript-Runtime
+ * produktiv übernimmt und bei Fehlern beziehungsweise Paritätsabweichungen exakt
+ * auf die bisherige JavaScript-Referenz zurückfällt.
  */
 const fs = require('fs');
 const path = require('path');
@@ -81,7 +81,7 @@ function must(text, marker, label) { if (!text.includes(marker)) fail(`${label} 
 
 const core = read('ems/modules/core-limits.js');
 must(core, 'productiveTsReservationCommit', 'produktiver TS-Commit-Kommentar');
-must(core, "source: 'ts-core-reservation-productive'", 'produktive TS-Reservation-Quelle');
+must(core, "source: 'ts-core-runtime-reservation-v2'", 'produktive Phase-2-Reservation-Quelle');
 must(core, 'fallbackReason', 'Fallback-Grund wird gespeichert');
 must(core, 'this.remainingTotalW = tsReservationResult.nextRemainingTotalW', 'TS-Restbudget wird produktiv übernommen');
 must(core, 'this.consumers = (tsReservationResult.consumers', 'TS-Consumer-Liste wird produktiv übernommen');
@@ -90,15 +90,24 @@ must(core, 'ts-js-mismatch', 'JS-Fallback bei Abweichung vorhanden');
 must(core, 'ems.budget.tsReservationJson', 'Diagnose-State bleibt vorhanden');
 must(core, 'Diagnose-/State-Schreibfehler dürfen Budgetreservierungen nicht abbrechen', 'Schreibfehler blockieren Reserve nicht');
 
-const ts = read('src-ts/ems/core-limits/core-budget.ts');
-must(ts, 'Ab 0.7.107 wird das Ergebnis produktiv', 'TS-Quelle dokumentiert produktive Nutzung');
-const mirror = require(path.join(root, 'lib/ts-mirrors/ems/core-limits/core-budget.js'));
-if (!mirror || typeof mirror.computeCoreBudgetReservation !== 'function') fail('TS-Mirror exportiert computeCoreBudgetReservation nicht.');
-const result = mirror.computeCoreBudgetReservation({ remainingTotalW: 5000, remainingPvW: 2000, consumers: {}, order: [] }, { key: 'heatingRod', requestedW: 3000, reserveW: 3000, pvReserveW: 1500, pvOnly: false, actualW: 2800 }, 456);
+const ts = read('src-ts/ems/core-limits/core-runtime.ts');
+must(ts, 'Wendet eine Verbraucherreservierung auf den zentralen Laufzeitstand an', 'Phase-2-Quelle dokumentiert produktive Reservierung');
+must(ts, 'ts-core-runtime-reservation-v2', 'Phase-2-Vertragskennung');
+
+const mirror = require(path.join(root, 'lib/ts-mirrors/ems/core-limits/core-runtime.js'));
+if (!mirror || typeof mirror.applyCoreRuntimeReservation !== 'function') {
+  fail('TS-Core-Runtime-Spiegel exportiert applyCoreRuntimeReservation nicht.');
+}
+const result = mirror.applyCoreRuntimeReservation(
+  { remainingTotalW: 5000, remainingPvW: 2000, gates: {}, consumers: {}, order: [], sequence: 0 },
+  { key: 'heatingRod', requestedW: 3000, reserveW: 3000, pvReserveW: 1500, pvOnly: false, actualW: 2800 },
+  456,
+);
 if (!result || !result.ok || !result.entry) fail('TS-Reservierung liefert kein gültiges Ergebnis.');
 if (result.entry.grantW !== 3000) fail(`grantW falsch: ${result.entry.grantW}`);
 if (result.nextRemainingTotalW !== 2000) fail(`nextRemainingTotalW falsch: ${result.nextRemainingTotalW}`);
 if (result.nextRemainingPvW !== 500) fail(`nextRemainingPvW falsch: ${result.nextRemainingPvW}`);
 if (result.consumers.heatingRod.entry) fail('Consumer-Struktur ist unerwartet verschachtelt.');
 if (!result.consumers.heatingRod || result.consumers.heatingRod.usedW !== 3000) fail('Consumer-Eintrag fehlt oder usedW ist falsch.');
-console.log('[ts-core-limits-reservations-productive] OK: Core-Limits Consumer-Reservierungen laufen produktiv über TS mit JS-Fallback.');
+if (result.state.sequence !== 1) fail(`Produktive Sequenz falsch: ${result.state.sequence}.`);
+console.log('[ts-core-limits-reservations-productive] OK: Core-Limits Consumer-Reservierungen laufen produktiv über Phase 2 mit JS-Paritätsfallback.');

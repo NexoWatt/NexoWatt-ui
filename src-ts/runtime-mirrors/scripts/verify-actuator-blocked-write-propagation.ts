@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 3ac75af2931abe1f3ac7bb7318effb60cf039ba5fcbfd1323a1f22cb3a7ee618
+ * Original-Hash: 04d27fea6d98475a704b87dd1474e41136cee8e545cc1d0a1d08a34a4bc5c6d4
  */
 
 /**
@@ -119,8 +119,8 @@ async function acquireManual(adapter, targetId, value) {
 
   // BHKW/Generator: blockierter Level- oder Puls-Write darf keinen Erfolg bzw. Reset-Timer erzeugen.
   for (const [name, ModuleClass, owner] of [
-    ['BHKW', BhkwControlModule, 'bhkwControl'],
-    ['Generator', GeneratorControlModule, 'generatorControl'],
+    ['BHKW', BhkwControlModule, 'bhkw.b1'],
+    ['Generator', GeneratorControlModule, 'generator.g1'],
   ]) {
     const levelTarget = `device.0.${owner}.level`;
     const pulseTarget = `device.0.${owner}.pulse`;
@@ -129,16 +129,24 @@ async function acquireManual(adapter, targetId, value) {
       [pulseTarget]: ['manual.ems', owner],
     });
     const module = new ModuleClass(adapter, null);
+    const baseDevice = {
+      id: owner.endsWith('b1') ? 'b1' : 'g1',
+      commandProfile: 'run-level',
+      startWriteId: '', stopWriteId: '', runWriteId: levelTarget,
+      pulseMs: 500, ownerLeaseMs: 30000,
+    };
     await acquireManual(adapter, levelTarget, false);
     const beforeLevel = adapter.calls.length;
-    const levelOk = await withActuatorShadowContext(adapter, { owner, cycleId: 1 }, () => module._levelWrite(levelTarget, true));
-    assert.strictEqual(levelOk, false, `${name}: blockierter Level-Write gilt als erfolgreich`);
+    const levelResult = await module.writeDesired(baseDevice, true, owner, 'test-level', false);
+    assert.strictEqual(levelResult.accepted, false, `${name}: blockierter Level-Write gilt als erfolgreich`);
+    assert.strictEqual(levelResult.blocked, true, `${name}: Level-Write wurde nicht als Arbiter-Blockade erkannt`);
     assert.strictEqual(adapter.calls.length, beforeLevel, `${name}: blockierter Level-Write erreichte Hardware`);
 
     await acquireManual(adapter, pulseTarget, false);
     const beforePulse = adapter.calls.length;
-    const pulseOk = await withActuatorShadowContext(adapter, { owner, cycleId: 1 }, () => module._pulseWrite(pulseTarget, 500));
-    assert.strictEqual(pulseOk, false, `${name}: blockierter Puls gilt als erfolgreich`);
+    const pulseResult = await module.pulseWrite({ ...baseDevice, commandProfile: 'pulse' }, pulseTarget, owner, 'test-pulse', false);
+    assert.strictEqual(pulseResult.accepted, false, `${name}: blockierter Puls gilt als erfolgreich`);
+    assert.strictEqual(pulseResult.blocked, true, `${name}: Puls wurde nicht als Arbiter-Blockade erkannt`);
     assert.strictEqual(adapter.calls.length, beforePulse, `${name}: blockierter Puls erreichte Hardware`);
     assert.strictEqual(adapter.timers.length, 0, `${name}: blockierter Puls erzeugte trotzdem einen Reset-Timer`);
   }

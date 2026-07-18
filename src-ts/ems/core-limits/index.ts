@@ -3,3 +3,5 @@
  * Zweck: Exportpunkt für TypeScript-Vorbereitung der zentralen EMS-Budgets.
  */
 export * from './core-budget';
+
+export * from './core-runtime';

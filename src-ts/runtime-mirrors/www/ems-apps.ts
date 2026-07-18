@@ -18,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 9fd2f806f40ad888b557f27c53cb9b5b8c314cd02c1cd47d6e1e80ca5b3395b2
+ * Original-Hash: 854af585ce5233d35900923a81e1392125bd665269413cee932a77cc6b8e9a08
  */
 
 /**
@@ -664,7 +664,7 @@ interface EmsAppsWindow extends Window {
     { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung: PV, Wetter, Tarif, Speicher, Wallboxen und Lastspitzen als Vorschläge auf der LIVE‑Seite', mandatory: false },
     { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', mandatory: true },
     { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls genutzt)', mandatory: false },
-    { id: 'multiuse', label: 'MultiUse', desc: 'Speicher Multi‑Use (SoC‑Zonen: Notstrom/LSK/Eigenverbrauch)', mandatory: false }
+    { id: 'multiuse', label: 'MultiUse', desc: 'Speicher-Policy mit SoC-Zonen für Reserve, Lastspitzenkappung und Eigenverbrauch; Storage-Control bleibt einziger Batterieschreiber', mandatory: false }
   ];
 
 
@@ -4545,17 +4545,30 @@ function collectAiAdvisorConfigFromUI(base) {
 
       startWriteId: '',
       stopWriteId: '',
+      runWriteId: '',
       runningReadId: '',
       powerReadId: '',
+      powerScale: 1,
 
       socStartPct: 25,
       socStopPct: 60,
       minRunMin: 10,
       minOffMin: 5,
       maxAgeSec: 30,
+      socMaxAgeSec: 60,
+      gridMaxAgeSec: 15,
 
       commandType: 'pulse',
       pulseMs: 800,
+      requireReadback: true,
+      commandTimeoutSec: 60,
+      retryDelaySec: 15,
+      maxRetries: 2,
+      faultLockSec: 300,
+      requireGridImportForAutoStart: false,
+      gridImportStartW: 500,
+      stopOnGridExportW: 0,
+      runningPowerThresholdW: 100,
     });
 
     for (let i = 0; i < b.devices.length; i++) {
@@ -4573,17 +4586,31 @@ function collectAiAdvisorConfigFromUI(base) {
 
       d.startWriteId = String(it.startWriteId || it.startObjectId || it.startId || '').trim();
       d.stopWriteId = String(it.stopWriteId || it.stopObjectId || it.stopId || '').trim();
+      d.runWriteId = String(it.runWriteId || it.runObjectId || it.enableWriteId || it.enableId || '').trim();
       d.runningReadId = String(it.runningReadId || it.runningObjectId || it.runningId || '').trim();
       d.powerReadId = String(it.powerReadId || it.powerObjectId || it.powerId || '').trim();
+      d.powerScale = Number.isFinite(Number(it.powerScale)) ? Number(it.powerScale) : d.powerScale;
 
       d.socStartPct = Number.isFinite(Number(it.socStartPct)) ? Number(it.socStartPct) : d.socStartPct;
       d.socStopPct = Number.isFinite(Number(it.socStopPct)) ? Number(it.socStopPct) : d.socStopPct;
       d.minRunMin = Number.isFinite(Number(it.minRunMin)) ? Number(it.minRunMin) : d.minRunMin;
       d.minOffMin = Number.isFinite(Number(it.minOffMin)) ? Number(it.minOffMin) : d.minOffMin;
       d.maxAgeSec = Number.isFinite(Number(it.maxAgeSec)) ? Number(it.maxAgeSec) : d.maxAgeSec;
+      d.socMaxAgeSec = Number.isFinite(Number(it.socMaxAgeSec)) ? Number(it.socMaxAgeSec) : d.socMaxAgeSec;
+      d.gridMaxAgeSec = Number.isFinite(Number(it.gridMaxAgeSec)) ? Number(it.gridMaxAgeSec) : d.gridMaxAgeSec;
 
-      d.commandType = (String(it.commandType || '').trim().toLowerCase() === 'level') ? 'level' : 'pulse';
+      const commandTypeRaw = String(it.commandProfile || it.commandType || '').trim().toLowerCase();
+      d.commandType = ['runlevel', 'run-level', 'run'].includes(commandTypeRaw) ? 'runLevel' : (['level', 'duallevel', 'dual-level'].includes(commandTypeRaw) ? 'level' : 'pulse');
       d.pulseMs = Number.isFinite(Number(it.pulseMs)) ? Number(it.pulseMs) : d.pulseMs;
+      d.requireReadback = (typeof it.requireReadback === 'boolean') ? !!it.requireReadback : !!(d.runningReadId || d.powerReadId);
+      d.commandTimeoutSec = Number.isFinite(Number(it.commandTimeoutSec ?? it.readbackTimeoutSec)) ? Number(it.commandTimeoutSec ?? it.readbackTimeoutSec) : d.commandTimeoutSec;
+      d.retryDelaySec = Number.isFinite(Number(it.retryDelaySec)) ? Number(it.retryDelaySec) : d.retryDelaySec;
+      d.maxRetries = Number.isFinite(Number(it.maxRetries)) ? Number(it.maxRetries) : d.maxRetries;
+      d.faultLockSec = Number.isFinite(Number(it.faultLockSec)) ? Number(it.faultLockSec) : d.faultLockSec;
+      d.requireGridImportForAutoStart = (typeof it.requireGridImportForAutoStart === 'boolean') ? !!it.requireGridImportForAutoStart : d.requireGridImportForAutoStart;
+      d.gridImportStartW = Number.isFinite(Number(it.gridImportStartW ?? it.minGridImportWForStart)) ? Number(it.gridImportStartW ?? it.minGridImportWForStart) : d.gridImportStartW;
+      d.stopOnGridExportW = Number.isFinite(Number(it.stopOnGridExportW)) ? Number(it.stopOnGridExportW) : d.stopOnGridExportW;
+      d.runningPowerThresholdW = Number.isFinite(Number(it.runningPowerThresholdW)) ? Number(it.runningPowerThresholdW) : d.runningPowerThresholdW;
 
       // A "placeholder" slot is an additional device entry (idx>1) with no IO‑Broker IDs configured.
       // Earlier hotfixes pre-created multiple empty slots which confused customers.
@@ -4593,6 +4620,7 @@ function collectAiAdvisorConfigFromUI(base) {
         !d.enabled &&
         !d.startWriteId &&
         !d.stopWriteId &&
+        !d.runWriteId &&
         !d.runningReadId &&
         !d.powerReadId &&
         (d.name === `BHKW ${idx}` || !String(d.name || '').trim())
@@ -4821,12 +4849,18 @@ function collectAiAdvisorConfigFromUI(base) {
       body.appendChild(mkFieldRow('Optionen', opts));
 
       // Datapoints (mit Picker)
-      body.appendChild(mkFieldRow('Start (Write)', _mkDpWrap(`bhkw_b${dev.idx}_startWriteId`, dev.startWriteId, 'Write‑Datenpunkt', (v) => { dev.startWriteId = v; })));
-      body.appendChild(mkFieldRow('Stop (Write)', _mkDpWrap(`bhkw_b${dev.idx}_stopWriteId`, dev.stopWriteId, 'Write‑Datenpunkt', (v) => { dev.stopWriteId = v; })));
-      body.appendChild(mkFieldRow('Laufstatus (Read, optional)', _mkDpWrap(`bhkw_b${dev.idx}_runningReadId`, dev.runningReadId, 'Read‑Datenpunkt', (v) => { dev.runningReadId = v; }),
-        'Empfohlen für saubere Auto‑Logik und Statusanzeige.'));
+      body.appendChild(mkFieldRow('Start (Write)', _mkDpWrap(`bhkw_b${dev.idx}_startWriteId`, dev.startWriteId, 'Write‑Datenpunkt', (v) => { dev.startWriteId = v; }),
+        'Für Pulse oder 2-Draht-Level.'));
+      body.appendChild(mkFieldRow('Stop (Write)', _mkDpWrap(`bhkw_b${dev.idx}_stopWriteId`, dev.stopWriteId, 'Write‑Datenpunkt', (v) => { dev.stopWriteId = v; }),
+        'Für Pulse oder 2-Draht-Level.'));
+      body.appendChild(mkFieldRow('Run / Enable (Write)', _mkDpWrap(`bhkw_b${dev.idx}_runWriteId`, dev.runWriteId, 'Single-Run-Datenpunkt', (v) => { dev.runWriteId = v; }),
+        'Nur beim Profil „Ein Run-Level“: TRUE = Start, FALSE = Stop.'));
+      body.appendChild(mkFieldRow('Laufstatus (Read)', _mkDpWrap(`bhkw_b${dev.idx}_runningReadId`, dev.runningReadId, 'Read‑Datenpunkt', (v) => { dev.runningReadId = v; }),
+        'Für Auto-Betrieb und bestätigte Start/Stop-Kommandos dringend empfohlen.'));
       body.appendChild(mkFieldRow('Leistung (W) (Read)', _mkDpWrap(`bhkw_b${dev.idx}_powerReadId`, dev.powerReadId, 'Read‑Datenpunkt (W/kW)', (v) => { dev.powerReadId = v; }),
         'Erforderlich für die Anzeige im Energiefluss (BHKW als Erzeuger).'));
+      body.appendChild(mkFieldRow('Leistungsfaktor', mkNumInput(dev.powerScale, (v) => { dev.powerScale = v; }),
+        '1 bei Watt, 1000 wenn der gelesene Datenpunkt kW liefert.'));
 
       // Advanced (ausklappbar)
       const adv = document.createElement('div');
@@ -4836,13 +4870,27 @@ function collectAiAdvisorConfigFromUI(base) {
       adv.appendChild(mkFieldRow('SoC Stop‑Schwelle (%)', mkNumInput(dev.socStopPct, (v) => { dev.socStopPct = v; }), 'Auto‑Stop wenn SoC >= Stop‑Schwelle.'));
       adv.appendChild(mkFieldRow('Mindestlaufzeit (min)', mkNumInput(dev.minRunMin, (v) => { dev.minRunMin = v; })));
       adv.appendChild(mkFieldRow('Mindeststillstand (min)', mkNumInput(dev.minOffMin, (v) => { dev.minOffMin = v; })));
-      adv.appendChild(mkFieldRow('Max. Datenalter (s)', mkNumInput(dev.maxAgeSec, (v) => { dev.maxAgeSec = v; }),
-        'Wenn Laufstatus/Leistung älter ist → keine Auto‑Aktion.'));
-      adv.appendChild(mkFieldRow('Befehlstyp', mkSelect(dev.commandType, [
-        { value: 'pulse', label: 'Pulse (TRUE → FALSE)' },
-        { value: 'level', label: 'Level (TRUE)' },
-      ], (v) => { dev.commandType = (v === 'level') ? 'level' : 'pulse'; })));
+      adv.appendChild(mkFieldRow('Max. Status-/Leistungsalter (s)', mkNumInput(dev.maxAgeSec, (v) => { dev.maxAgeSec = v; }),
+        'Ältere Laufstatus-/Leistungswerte lösen keine Auto-Aktion aus.'));
+      adv.appendChild(mkFieldRow('Max. SoC-Alter (s)', mkNumInput(dev.socMaxAgeSec, (v) => { dev.socMaxAgeSec = v; })));
+      adv.appendChild(mkFieldRow('Befehlsprofil', mkSelect(dev.commandType, [
+        { value: 'pulse', label: 'Start-/Stop-Pulse' },
+        { value: 'level', label: '2-Draht-Level (Start/Stop)' },
+        { value: 'runLevel', label: 'Ein Run-Level (TRUE/FALSE)' },
+      ], (v) => { dev.commandType = (v === 'runLevel') ? 'runLevel' : (v === 'level' ? 'level' : 'pulse'); })));
       adv.appendChild(mkFieldRow('Pulse‑Dauer (ms)', mkNumInput(dev.pulseMs, (v) => { dev.pulseMs = v; })));
+      adv.appendChild(mkFieldRow('Readback erforderlich', mkCheckbox(dev.requireReadback, 'Start/Stop erst nach Laufstatus bestätigen', (v) => { dev.requireReadback = v; })));
+      adv.appendChild(mkFieldRow('Befehls-/Readback-Timeout (s)', mkNumInput(dev.commandTimeoutSec, (v) => { dev.commandTimeoutSec = v; })));
+      adv.appendChild(mkFieldRow('Wiederholungsabstand (s)', mkNumInput(dev.retryDelaySec, (v) => { dev.retryDelaySec = v; })));
+      adv.appendChild(mkFieldRow('Max. Wiederholungen', mkNumInput(dev.maxRetries, (v) => { dev.maxRetries = v; })));
+      adv.appendChild(mkFieldRow('Fehlerverriegelung (s)', mkNumInput(dev.faultLockSec, (v) => { dev.faultLockSec = v; })));
+      adv.appendChild(mkFieldRow('NVP-Startfreigabe', mkCheckbox(dev.requireGridImportForAutoStart, 'Auto-Start nur bei frischem Netzbezug', (v) => { dev.requireGridImportForAutoStart = v; })));
+      adv.appendChild(mkFieldRow('NVP-Startschwelle (W)', mkNumInput(dev.gridImportStartW, (v) => { dev.gridImportStartW = v; })));
+      adv.appendChild(mkFieldRow('Stop bei Einspeisung ab (W)', mkNumInput(dev.stopOnGridExportW, (v) => { dev.stopOnGridExportW = v; }),
+        '0 = deaktiviert. Ein Auto-Stop erfolgt erst nach der Mindestlaufzeit.'));
+      adv.appendChild(mkFieldRow('Max. NVP-Alter (s)', mkNumInput(dev.gridMaxAgeSec, (v) => { dev.gridMaxAgeSec = v; })));
+      adv.appendChild(mkFieldRow('Lauf-Erkennung ab Leistung (W)', mkNumInput(dev.runningPowerThresholdW, (v) => { dev.runningPowerThresholdW = v; }),
+        'Fallback, wenn kein separater Laufstatus vorhanden ist.'));
       body.appendChild(adv);
 
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an advBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
@@ -4905,17 +4953,30 @@ function collectAiAdvisorConfigFromUI(base) {
 
       startWriteId: '',
       stopWriteId: '',
+      runWriteId: '',
       runningReadId: '',
       powerReadId: '',
+      powerScale: 1,
 
       socStartPct: 25,
       socStopPct: 60,
       minRunMin: 10,
       minOffMin: 5,
       maxAgeSec: 30,
+      socMaxAgeSec: 60,
+      gridMaxAgeSec: 15,
 
       commandType: 'pulse',
       pulseMs: 800,
+      requireReadback: true,
+      commandTimeoutSec: 60,
+      retryDelaySec: 15,
+      maxRetries: 2,
+      faultLockSec: 300,
+      requireGridImportForAutoStart: false,
+      gridImportStartW: 500,
+      stopOnGridExportW: 0,
+      runningPowerThresholdW: 100,
     });
 
     for (let i = 0; i < g.devices.length; i++) {
@@ -4933,21 +4994,35 @@ function collectAiAdvisorConfigFromUI(base) {
 
       d.startWriteId = String(it.startWriteId || it.startObjectId || it.startId || '').trim();
       d.stopWriteId = String(it.stopWriteId || it.stopObjectId || it.stopId || '').trim();
+      d.runWriteId = String(it.runWriteId || it.runObjectId || it.enableWriteId || it.enableId || '').trim();
       d.runningReadId = String(it.runningReadId || it.runningObjectId || it.runningId || '').trim();
       d.powerReadId = String(it.powerReadId || it.powerObjectId || it.powerId || '').trim();
+      d.powerScale = Number.isFinite(Number(it.powerScale)) ? Number(it.powerScale) : d.powerScale;
 
       d.socStartPct = Number.isFinite(Number(it.socStartPct)) ? Number(it.socStartPct) : d.socStartPct;
       d.socStopPct = Number.isFinite(Number(it.socStopPct)) ? Number(it.socStopPct) : d.socStopPct;
       d.minRunMin = Number.isFinite(Number(it.minRunMin)) ? Number(it.minRunMin) : d.minRunMin;
       d.minOffMin = Number.isFinite(Number(it.minOffMin)) ? Number(it.minOffMin) : d.minOffMin;
       d.maxAgeSec = Number.isFinite(Number(it.maxAgeSec)) ? Number(it.maxAgeSec) : d.maxAgeSec;
+      d.socMaxAgeSec = Number.isFinite(Number(it.socMaxAgeSec)) ? Number(it.socMaxAgeSec) : d.socMaxAgeSec;
+      d.gridMaxAgeSec = Number.isFinite(Number(it.gridMaxAgeSec)) ? Number(it.gridMaxAgeSec) : d.gridMaxAgeSec;
 
-      d.commandType = (String(it.commandType || '').trim().toLowerCase() === 'level') ? 'level' : 'pulse';
+      const commandTypeRaw = String(it.commandProfile || it.commandType || '').trim().toLowerCase();
+      d.commandType = ['runlevel', 'run-level', 'run'].includes(commandTypeRaw) ? 'runLevel' : (['level', 'duallevel', 'dual-level'].includes(commandTypeRaw) ? 'level' : 'pulse');
       d.pulseMs = Number.isFinite(Number(it.pulseMs)) ? Number(it.pulseMs) : d.pulseMs;
+      d.requireReadback = (typeof it.requireReadback === 'boolean') ? !!it.requireReadback : !!(d.runningReadId || d.powerReadId);
+      d.commandTimeoutSec = Number.isFinite(Number(it.commandTimeoutSec ?? it.readbackTimeoutSec)) ? Number(it.commandTimeoutSec ?? it.readbackTimeoutSec) : d.commandTimeoutSec;
+      d.retryDelaySec = Number.isFinite(Number(it.retryDelaySec)) ? Number(it.retryDelaySec) : d.retryDelaySec;
+      d.maxRetries = Number.isFinite(Number(it.maxRetries)) ? Number(it.maxRetries) : d.maxRetries;
+      d.faultLockSec = Number.isFinite(Number(it.faultLockSec)) ? Number(it.faultLockSec) : d.faultLockSec;
+      d.requireGridImportForAutoStart = (typeof it.requireGridImportForAutoStart === 'boolean') ? !!it.requireGridImportForAutoStart : d.requireGridImportForAutoStart;
+      d.gridImportStartW = Number.isFinite(Number(it.gridImportStartW ?? it.minGridImportWForStart)) ? Number(it.gridImportStartW ?? it.minGridImportWForStart) : d.gridImportStartW;
+      d.stopOnGridExportW = Number.isFinite(Number(it.stopOnGridExportW)) ? Number(it.stopOnGridExportW) : d.stopOnGridExportW;
+      d.runningPowerThresholdW = Number.isFinite(Number(it.runningPowerThresholdW)) ? Number(it.runningPowerThresholdW) : d.runningPowerThresholdW;
 
       // Consider "unused" extra slots as placeholders. Keep only idx=1 by default
       // to avoid confusing customers.
-      const hasAnyId = !!(d.startWriteId || d.stopWriteId || d.runningReadId || d.powerReadId);
+      const hasAnyId = !!(d.startWriteId || d.stopWriteId || d.runWriteId || d.runningReadId || d.powerReadId);
       const isPlaceholder = (!d.enabled && !hasAnyId && (d.name === `Generator ${idx}` || !d.name));
 
       // Clean up legacy placeholders (older hotfixes pre-created 5 empty slots).
@@ -5172,12 +5247,18 @@ function collectAiAdvisorConfigFromUI(base) {
       opts.appendChild(mkCheckbox(dev.userCanControl, 'Endkunde darf bedienen', (v) => { dev.userCanControl = v; }));
       body.appendChild(mkFieldRow('Optionen', opts));
 
-      body.appendChild(mkFieldRow('Start (Write)', _mkDpWrap(`gen_g${dev.idx}_startWriteId`, dev.startWriteId, 'Write‑Datenpunkt', (v) => { dev.startWriteId = v; })));
-      body.appendChild(mkFieldRow('Stop (Write)', _mkDpWrap(`gen_g${dev.idx}_stopWriteId`, dev.stopWriteId, 'Write‑Datenpunkt', (v) => { dev.stopWriteId = v; })));
-      body.appendChild(mkFieldRow('Laufstatus (Read, optional)', _mkDpWrap(`gen_g${dev.idx}_runningReadId`, dev.runningReadId, 'Read‑Datenpunkt', (v) => { dev.runningReadId = v; }),
-        'Empfohlen für saubere Auto‑Logik und Statusanzeige.'));
+      body.appendChild(mkFieldRow('Start (Write)', _mkDpWrap(`gen_g${dev.idx}_startWriteId`, dev.startWriteId, 'Write‑Datenpunkt', (v) => { dev.startWriteId = v; }),
+        'Für Pulse oder 2-Draht-Level.'));
+      body.appendChild(mkFieldRow('Stop (Write)', _mkDpWrap(`gen_g${dev.idx}_stopWriteId`, dev.stopWriteId, 'Write‑Datenpunkt', (v) => { dev.stopWriteId = v; }),
+        'Für Pulse oder 2-Draht-Level.'));
+      body.appendChild(mkFieldRow('Run / Enable (Write)', _mkDpWrap(`gen_g${dev.idx}_runWriteId`, dev.runWriteId, 'Single-Run-Datenpunkt', (v) => { dev.runWriteId = v; }),
+        'Nur beim Profil „Ein Run-Level“: TRUE = Start, FALSE = Stop.'));
+      body.appendChild(mkFieldRow('Laufstatus (Read)', _mkDpWrap(`gen_g${dev.idx}_runningReadId`, dev.runningReadId, 'Read‑Datenpunkt', (v) => { dev.runningReadId = v; }),
+        'Für Auto-Betrieb und bestätigte Start/Stop-Kommandos dringend empfohlen.'));
       body.appendChild(mkFieldRow('Leistung (W) (Read)', _mkDpWrap(`gen_g${dev.idx}_powerReadId`, dev.powerReadId, 'Read‑Datenpunkt (W/kW)', (v) => { dev.powerReadId = v; }),
         'Erforderlich für die Anzeige im Energiefluss (Generator als Erzeuger).'));
+      body.appendChild(mkFieldRow('Leistungsfaktor', mkNumInput(dev.powerScale, (v) => { dev.powerScale = v; }),
+        '1 bei Watt, 1000 wenn der gelesene Datenpunkt kW liefert.'));
 
       const adv = document.createElement('div');
       adv.style.display = 'none';
@@ -5186,13 +5267,27 @@ function collectAiAdvisorConfigFromUI(base) {
       adv.appendChild(mkFieldRow('SoC Stop‑Schwelle (%)', mkNumInput(dev.socStopPct, (v) => { dev.socStopPct = v; }), 'Auto‑Stop wenn SoC >= Stop‑Schwelle.'));
       adv.appendChild(mkFieldRow('Mindestlaufzeit (min)', mkNumInput(dev.minRunMin, (v) => { dev.minRunMin = v; })));
       adv.appendChild(mkFieldRow('Mindeststillstand (min)', mkNumInput(dev.minOffMin, (v) => { dev.minOffMin = v; })));
-      adv.appendChild(mkFieldRow('Max. Datenalter (s)', mkNumInput(dev.maxAgeSec, (v) => { dev.maxAgeSec = v; }),
-        'Wenn Laufstatus/Leistung älter ist → keine Auto‑Aktion.'));
-      adv.appendChild(mkFieldRow('Befehlstyp', mkSelect(dev.commandType, [
-        { value: 'pulse', label: 'Pulse (TRUE → FALSE)' },
-        { value: 'level', label: 'Level (TRUE)' },
-      ], (v) => { dev.commandType = (v === 'level') ? 'level' : 'pulse'; })));
+      adv.appendChild(mkFieldRow('Max. Status-/Leistungsalter (s)', mkNumInput(dev.maxAgeSec, (v) => { dev.maxAgeSec = v; }),
+        'Ältere Laufstatus-/Leistungswerte lösen keine Auto-Aktion aus.'));
+      adv.appendChild(mkFieldRow('Max. SoC-Alter (s)', mkNumInput(dev.socMaxAgeSec, (v) => { dev.socMaxAgeSec = v; })));
+      adv.appendChild(mkFieldRow('Befehlsprofil', mkSelect(dev.commandType, [
+        { value: 'pulse', label: 'Start-/Stop-Pulse' },
+        { value: 'level', label: '2-Draht-Level (Start/Stop)' },
+        { value: 'runLevel', label: 'Ein Run-Level (TRUE/FALSE)' },
+      ], (v) => { dev.commandType = (v === 'runLevel') ? 'runLevel' : (v === 'level' ? 'level' : 'pulse'); })));
       adv.appendChild(mkFieldRow('Pulse‑Dauer (ms)', mkNumInput(dev.pulseMs, (v) => { dev.pulseMs = v; })));
+      adv.appendChild(mkFieldRow('Readback erforderlich', mkCheckbox(dev.requireReadback, 'Start/Stop erst nach Laufstatus bestätigen', (v) => { dev.requireReadback = v; })));
+      adv.appendChild(mkFieldRow('Befehls-/Readback-Timeout (s)', mkNumInput(dev.commandTimeoutSec, (v) => { dev.commandTimeoutSec = v; })));
+      adv.appendChild(mkFieldRow('Wiederholungsabstand (s)', mkNumInput(dev.retryDelaySec, (v) => { dev.retryDelaySec = v; })));
+      adv.appendChild(mkFieldRow('Max. Wiederholungen', mkNumInput(dev.maxRetries, (v) => { dev.maxRetries = v; })));
+      adv.appendChild(mkFieldRow('Fehlerverriegelung (s)', mkNumInput(dev.faultLockSec, (v) => { dev.faultLockSec = v; })));
+      adv.appendChild(mkFieldRow('NVP-Startfreigabe', mkCheckbox(dev.requireGridImportForAutoStart, 'Auto-Start nur bei frischem Netzbezug', (v) => { dev.requireGridImportForAutoStart = v; })));
+      adv.appendChild(mkFieldRow('NVP-Startschwelle (W)', mkNumInput(dev.gridImportStartW, (v) => { dev.gridImportStartW = v; })));
+      adv.appendChild(mkFieldRow('Stop bei Einspeisung ab (W)', mkNumInput(dev.stopOnGridExportW, (v) => { dev.stopOnGridExportW = v; }),
+        '0 = deaktiviert. Ein Auto-Stop erfolgt erst nach der Mindestlaufzeit.'));
+      adv.appendChild(mkFieldRow('Max. NVP-Alter (s)', mkNumInput(dev.gridMaxAgeSec, (v) => { dev.gridMaxAgeSec = v; })));
+      adv.appendChild(mkFieldRow('Lauf-Erkennung ab Leistung (W)', mkNumInput(dev.runningPowerThresholdW, (v) => { dev.runningPowerThresholdW = v; }),
+        'Fallback, wenn kein separater Laufstatus vorhanden ist.'));
       body.appendChild(adv);
 
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an advBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.

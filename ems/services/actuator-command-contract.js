@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/actuator-command-contract.ts
- * Quell-Hash: sha256:cfcd559e868a2c2e1b2e43bef4f336b2db5f7c6e463228b79e73cdbd027d49b9
+ * Quell-Hash: sha256:722f746a060895176f5825c734fc40341b75c193627718535dfa0842efea1dbd
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -130,6 +130,24 @@ class ActuatorCommandContract {
                 state.status = state.pending ? 'readback-pending' : 'write-failed-retry';
             }
         }
+        return this.result(key, now, false);
+    }
+    defer(keyRaw, requested, nowRaw, delayMsRaw, statusRaw = 'deferred') {
+        const key = String(keyRaw || '').trim();
+        const now = Number.isFinite(Number(nowRaw)) ? Number(nowRaw) : Date.now();
+        const delayMs = Math.max(250, Math.min(120000, Number(delayMsRaw) || 1000));
+        const fp = stable(requested);
+        let state = this.states.get(key);
+        if (!state || state.fingerprint !== fp) {
+            this.prepare(key, requested, now, {});
+            state = this.states.get(key);
+        }
+        state.requested = requested;
+        state.accepted = false;
+        state.confirmed = false;
+        state.pending = false;
+        state.nextAttemptTs = now + delayMs;
+        state.status = String(statusRaw || 'deferred');
         return this.result(key, now, false);
     }
     confirmFromReadback(keyRaw, requested, actual, matches, nowRaw) {

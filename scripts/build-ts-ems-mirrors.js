@@ -41,6 +41,12 @@ const mirrorSpecs = [
     purpose: 'Core-Limits-/EMS-Budget-Spiegel für spätere Shadow-Vergleiche',
   },
   {
+    sourceRel: 'src-ts/ems/core-limits/core-runtime.ts',
+    builtRel: 'build-ts/ems-mirrors/ems/core-limits/core-runtime.js',
+    mirrorRel: 'lib/ts-mirrors/ems/core-limits/core-runtime.js',
+    purpose: 'Typisierte produktive Core-Runtime für PV, Grants, Headroom und Budget-Snapshots',
+  },
+  {
     sourceRel: 'src-ts/ems/heating-rod/heating-rod-decision.ts',
     builtRel: 'build-ts/ems-mirrors/ems/heating-rod/heating-rod-decision.js',
     mirrorRel: 'lib/ts-mirrors/ems/heating-rod/heating-rod-decision.js',
@@ -99,6 +105,12 @@ const mirrorSpecs = [
     builtRel: 'build-ts/ems-mirrors/ems/charging-management/charging-budget.js',
     mirrorRel: 'lib/ts-mirrors/ems/charging-management/charging-budget.js',
     purpose: 'Charging-Management-/EVCS-Budget-Caps für Shadow-Vergleich und spätere produktive TS-Übernahme',
+  },
+  {
+    sourceRel: 'src-ts/ems/para14a/para14a-constraint.ts',
+    builtRel: 'build-ts/ems-mirrors/ems/para14a/para14a-constraint.js',
+    mirrorRel: 'lib/ts-mirrors/ems/para14a/para14a-constraint.js',
+    purpose: '§14a-Signalfrische und zentrale Constraint-Verteilung ohne direkte Hardware-Writes',
   },
 ];
 

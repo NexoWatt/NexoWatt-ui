@@ -43,23 +43,7 @@
 
 'use strict';
 
-const { withActuatorShadowContext, priorityForOwner } = require('./services/actuator-shadow-arbiter');
-
-/**
- * NexoLogic-Schreibpfade laufen ereignis- und timergetrieben außerhalb des
- * normalen EMS-Modulticks. Dieser Helfer gibt ihnen im Shadow-Arbiter dennoch
- * einen eindeutigen Owner, ohne das bestehende Write-Verhalten zu verändern.
- */
-function writeNexoLogicForeign(adapter, objectId, state, reason) {
-  return withActuatorShadowContext(adapter, {
-    owner: 'nexoLogic',
-    module: 'nexoLogic',
-    priority: priorityForOwner('nexoLogic'),
-    reason: String(reason || 'nexologic-write'),
-    leaseMs: 60000,
-    kind: 'nexologic',
-  }, () => adapter.setForeignStateAsync(objectId, state));
-}
+const { NexoLogicOutputController } = require('./services/nexologic-output-controller');
 
 /**
  * NexoLogic – Node/Graph runtime engine.
@@ -99,6 +83,7 @@ class NexoLogicEngine {
     this._subscribed = new Set();
     this._dpToInputs = new Map(); // dpId -> array of { runner, nodeId }
     this._stopped = false;
+    this.outputController = null;
   }
 
   /**
@@ -131,6 +116,9 @@ class NexoLogicEngine {
     this._subscribed.clear();
     this._dpToInputs.clear();
     this.runners = [];
+    try { if (this.outputController && typeof this.outputController.stop === 'function') await this.outputController.stop(); } catch (_e3) {}
+    if (this.adapter && this.adapter._nexoLogicOutputController === this.outputController) this.adapter._nexoLogicOutputController = null;
+    this.outputController = null;
   }
 
   /**
@@ -153,9 +141,19 @@ class NexoLogicEngine {
     const cfg = (config && typeof config === 'object') ? config : {};
     const graphs = Array.isArray(cfg.graphs) ? cfg.graphs : [];
 
+    this.outputController = new NexoLogicOutputController(this.adapter);
+    this.adapter._nexoLogicOutputController = this.outputController;
     this.runners = graphs
       .filter(g => g && typeof g === 'object' && (g.enabled !== false))
-      .map(g => new GraphRunner(this.adapter, g));
+      .map(g => new GraphRunner(this.adapter, g, this.outputController));
+
+    // Outputs zuerst registrieren, damit Owner/Readback/Vertragsdiagnosen bereits
+    // vor der ersten Graph-Auswertung vorhanden sind.
+    for (const runner of this.runners) {
+      for (const output of runner.getOutputDefinitions()) {
+        try { await this.outputController.registerOutput(output); } catch (_eOutput) {}
+      }
+    }
 
     // Build dp subscriptions and prime initial values
     for (const runner of this.runners) {
@@ -186,6 +184,17 @@ class NexoLogicEngine {
       // One initial evaluation pass so constants propagate + timer nodes arm themselves.
       try { runner.evaluateAll(); } catch (_eEval) {}
     }
+  }
+
+  getBudgetIntents() {
+    return this.outputController && typeof this.outputController.getBudgetIntents === 'function'
+      ? this.outputController.getBudgetIntents()
+      : [];
+  }
+
+  async applyBudgetGrant(key, grantW) {
+    if (!this.outputController || typeof this.outputController.applyBudgetGrant !== 'function') return null;
+    return this.outputController.applyBudgetGrant(key, grantW);
   }
 
   /**
@@ -245,9 +254,10 @@ class GraphRunner {
    * Zusammenhang: Gehört zu EMS-Kern (Modulsteuerung, Datenpunktdefinitionen und zentrale EMS-Ausführung) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
    * Wartung/TypeScript: Änderungen an Signatur oder Rückgabe können abhängige Aufrufer beeinflussen; Aufrufstellen mitprüfen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
    */
-  constructor(adapter, graph) {
+  constructor(adapter, graph, outputController) {
     this.adapter = adapter;
     this.graph = graph;
+    this.outputController = outputController || null;
     this.id = String(graph.id || 'main');
     this.nodes = new Map(); // nodeId -> node
     this.links = Array.isArray(graph.links) ? graph.links : [];
@@ -369,6 +379,74 @@ class GraphRunner {
    */
   getDpInputs() {
     return this._dpInputNodes.slice();
+  }
+
+  _resolveSceneDpId(node) {
+    const params = node && node.params && typeof node.params === 'object' ? node.params : {};
+    const sceneId = String(params.sceneId || '').trim();
+    const fallbackDp = String(params.dpId || '').trim();
+    try {
+      if (sceneId && typeof this.adapter.getSmartHomeConfig === 'function') {
+        const shc = this.adapter.getSmartHomeConfig();
+        const devs = Array.isArray(shc && shc.devices) ? shc.devices : [];
+        const dev = devs.find((row) => row && row.type === 'scene' && row.id === sceneId);
+        const sw = dev && dev.io && dev.io.switch ? dev.io.switch : null;
+        const resolved = sw ? String(sw.writeId || sw.readId || '').trim() : '';
+        if (resolved) return resolved;
+      }
+    } catch (_e) {}
+    try {
+      const dps = this.adapter && this.adapter.config && this.adapter.config.smartHome && this.adapter.config.smartHome.datapoints;
+      if (sceneId && dps && dps[sceneId]) return String(dps[sceneId] || '').trim();
+    } catch (_e2) {}
+    return fallbackDp;
+  }
+
+  getOutputDefinitions() {
+    const out = [];
+    for (const node of this.nodes.values()) {
+      if (!node || !node.enabled) continue;
+      let targetId = '';
+      let kind = '';
+      if (node.type === 'dp_out') {
+        targetId = String(node.params && node.params.dpId || '').trim();
+        kind = 'nexologic-output';
+      } else if (node.type === 'scene_trigger') {
+        targetId = this._resolveSceneDpId(node);
+        kind = 'nexologic-scene';
+      }
+      if (!targetId) continue;
+      out.push({
+        graphId: this.id,
+        graphName: String(this.graph && this.graph.name || this.id),
+        nodeId: node.id,
+        nodeLabel: String(node.label || node.id),
+        targetId,
+        ack: node.type === 'dp_out' ? toBool(node.params && node.params.ack) : false,
+        params: node.params || {},
+        reason: kind,
+        kind,
+      });
+    }
+    return out;
+  }
+
+  _requestOutput(nodeId, targetId, value, ack, reason, kind, params) {
+    const meta = {
+      graphId: this.id,
+      graphName: String(this.graph && this.graph.name || this.id),
+      nodeId: String(nodeId || 'node'),
+      targetId: String(targetId || '').trim(),
+      ack: ack === true,
+      params: params && typeof params === 'object' ? params : {},
+      reason: String(reason || 'nexologic-write'),
+      kind: String(kind || 'nexologic'),
+    };
+    if (!meta.targetId) return Promise.resolve(null);
+    if (this.outputController && typeof this.outputController.request === 'function') {
+      return this.outputController.request(meta, value);
+    }
+    return this.adapter.setForeignStateAsync(meta.targetId, { val: value, ack: meta.ack });
   }
   /**
    * Code-Teil: setDpInputValue
@@ -787,7 +865,7 @@ const NODE_TYPES = {
   dp_out: {
     inputs: ['in'],
     outputs: [],
-    compute: ({ in: inp, params, internal, adapter }) => {
+    compute: ({ in: inp, params, internal, runner, nodeId }) => {
       const dpId = String(params.dpId || '').trim();
       if (!dpId) return { out: {}, internal };
 
@@ -796,11 +874,11 @@ const NODE_TYPES = {
       const val = inp.in;
 
       const now = Date.now();
-      const lastWrittenVal = internal.lastWrittenVal;
-      const lastWriteTs = Number.isFinite(internal.lastWriteTs) ? internal.lastWriteTs : 0;
+      const lastRequestedVal = internal.lastRequestedVal;
+      const lastRequestTs = Number.isFinite(internal.lastRequestTs) ? internal.lastRequestTs : 0;
 
-      const changed = !isEqual(lastWrittenVal, val);
-      const intervalOk = (minIntervalMs <= 0) ? true : ((now - lastWriteTs) >= minIntervalMs);
+      const changed = !isEqual(lastRequestedVal, val);
+      const intervalOk = (minIntervalMs <= 0) ? true : ((now - lastRequestTs) >= minIntervalMs);
 
       // If the value is back to the already-written one: cancel any pending write.
       if (!changed && internal.t) {
@@ -828,7 +906,7 @@ const NODE_TYPES = {
         internal.pendingVal = val;
         internal.pendingAck = ack;
 
-        const dueIn = Math.max(5, (lastWriteTs + minIntervalMs) - now);
+        const dueIn = Math.max(5, (lastRequestTs + minIntervalMs) - now);
 
         if (internal.t) { try { clearTimeout(internal.t); } catch (_e) {} }
         internal.t = setTimeout(() => {
@@ -839,9 +917,9 @@ const NODE_TYPES = {
             internal.pendingAck = undefined;
             internal.t = null;
 
-            internal.lastWrittenVal = pv;
-            internal.lastWriteTs = Date.now();
-            writeNexoLogicForeign(adapter, dpId, { val: pv, ack: pa }, 'node-write-throttled').catch(() => {});
+            internal.lastRequestedVal = pv;
+            internal.lastRequestTs = Date.now();
+            runner._requestOutput(nodeId, dpId, pv, pa, 'node-write-throttled', 'nexologic-output', params).catch(() => {});
           } catch (_e2) {}
         }, dueIn);
       };
@@ -867,10 +945,10 @@ const NODE_TYPES = {
           internal.pendingVal = undefined;
           internal.pendingAck = undefined;
 
-          internal.lastWrittenVal = val;
-          internal.lastWriteTs = now;
+          internal.lastRequestedVal = val;
+          internal.lastRequestTs = now;
           try {
-            writeNexoLogicForeign(adapter, dpId, { val, ack }, 'node-write').catch(() => {});
+            runner._requestOutput(nodeId, dpId, val, ack, 'node-write', 'nexologic-output', params).catch(() => {});
           } catch (_e) {}
         } else {
           // throttle: remember latest value and write when allowed
@@ -2166,7 +2244,7 @@ const NODE_TYPES = {
   scene_trigger: {
     inputs: ['trig'],
     outputs: ['out'],
-    compute: ({ in: inp, params, internal, adapter }) => {
+    compute: ({ in: inp, params, internal, runner, nodeId }) => {
       const trig = toBool(inp.trig);
       const prev = toBool(internal.prev || false);
       const edge = String(params.edge || 'rising').toLowerCase();
@@ -2182,45 +2260,7 @@ const NODE_TYPES = {
       const pulseMs = Math.max(0, Math.min(10_000, Math.round(toNum(params.pulseMs, 0))));
       const payload = String(params.payload || 'true').toLowerCase();
 
-      /**
-       * Code-Teil: Arrow-Funktion `resolveSceneDpId`
-       * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
-       * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-       */
-      /**
-       * Code-Teil: resolveSceneDpId
-       * Zweck: Wählt die richtige Datenquelle/Fallback-Logik aus.
-       * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-       */
-      const resolveSceneDpId = () => {
-        // 1) SmartHomeConfig devices
-        try {
-          if (sceneId && typeof adapter.getSmartHomeConfig === 'function') {
-            const shc = adapter.getSmartHomeConfig();
-            const devs = Array.isArray(shc && shc.devices) ? shc.devices : [];
-            const dev = devs.find(d => d && d.type === 'scene' && d.id === sceneId);
-            if (dev && dev.io && dev.io.switch) {
-              const sw = dev.io.switch || {};
-              return String(sw.writeId || sw.readId || '').trim();
-            }
-          }
-        } catch (_e) {}
-
-        // 2) Legacy smartHome.datapoints.scene*
-        try {
-          if (sceneId && adapter.config && adapter.config.smartHome && adapter.config.smartHome.datapoints) {
-            const dps = adapter.config.smartHome.datapoints;
-            if (dps[sceneId]) return String(dps[sceneId] || '').trim();
-          }
-        } catch (_e2) {}
-
-        // 3) fallback dpId param
-        return fallbackDp;
-      };
-
-      const dpId = resolveSceneDpId();
+      const dpId = runner._resolveSceneDpId({ params });
 
       /**
        * Code-Teil: Arrow-Funktion `sideEffect`
@@ -2245,14 +2285,14 @@ const NODE_TYPES = {
         else val = true;
 
         try {
-          writeNexoLogicForeign(adapter, dpId, { val, ack: false }, 'scene-trigger').catch(() => {});
-          if (pulseMs > 0) {
-            setTimeout(() => {
-              try {
-                writeNexoLogicForeign(adapter, dpId, { val: (val === true ? false : 0), ack: false }, 'scene-pulse-reset').catch(() => {});
-              } catch (_e2) {}
+          runner._requestOutput(nodeId, dpId, val, false, 'scene-trigger', 'nexologic-scene', params).then((result) => {
+            if (pulseMs <= 0 || !result || result.accepted !== true) return;
+            if (internal.t2) { try { clearTimeout(internal.t2); } catch (_eTimer) {} }
+            internal.t2 = setTimeout(() => {
+              internal.t2 = null;
+              runner._requestOutput(nodeId, dpId, (val === true ? false : 0), false, 'scene-pulse-reset', 'nexologic-scene', { ...params, releaseOnIdle: true }).catch(() => {});
             }, pulseMs);
-          }
+          }).catch(() => {});
         } catch (_e) {}
       };
 

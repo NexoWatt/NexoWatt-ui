@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/stage-a-diagnostics.ts
- * Quell-Hash: sha256:a810e1a59213613f6c852a8b7a82f113d10f4fc3c00f8bebc7362d566ac1e9ec
+ * Quell-Hash: sha256:a820008cb3ffe796345bc75fd2a5ee7def65d6d29601ff874b38ffe726b69b8d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -24,7 +24,7 @@ const ACTUATOR_FIELDS = new Set([
     'maxChargePowerObjectId', 'maxDischargePowerObjectId', 'setSignedPowerId',
     'setChargePowerId', 'setDischargePowerId', 'switchWriteId', 'setpointWriteId',
     'sgReadyAWriteId', 'sgReadyBWriteId', 'writeId', 'stageWriteId', 'setpointId',
-    'enableId', 'startWriteId', 'stopWriteId', 'setWId', 'setAId', 'commandId',
+    'enableId', 'startWriteId', 'stopWriteId', 'runWriteId', 'setWId', 'setAId', 'commandId',
     'outputId', 'relayWriteId', 'targetObjectId', 'lockWriteId', 'phaseSwitchId',
     'pvFeedInLimitWId', 'pvLimitWId', 'pvLimitPctId', 'feedInLimitWId',
     'limitWId', 'limitPctId',
@@ -68,10 +68,16 @@ function ownerFromPath(path, row) {
         return `peakShaving.${rowId || raw}`;
     if (lower.includes('para14a') || lower.includes('§14a'))
         return `para14a.${rowId || raw}`;
-    if (lower.includes('bhkw'))
-        return `bhkw.${rowId || raw}`;
-    if (lower.includes('generator'))
-        return `generator.${rowId || raw}`;
+    if (lower.includes('bhkw')) {
+        const match = raw.match(/devices\[(\d+)\]/i);
+        const index = Number.isFinite(rowIndex) && rowIndex > 0 ? Math.round(rowIndex) : (match ? Number(match[1]) + 1 : 0);
+        return index > 0 ? `bhkw.b${index}` : `bhkw.${rowId || raw}`;
+    }
+    if (lower.includes('generator')) {
+        const match = raw.match(/devices\[(\d+)\]/i);
+        const index = Number.isFinite(rowIndex) && rowIndex > 0 ? Math.round(rowIndex) : (match ? Number(match[1]) + 1 : 0);
+        return index > 0 ? `generator.g${index}` : `generator.${rowId || raw}`;
+    }
     if (lower.includes('multiuse'))
         return `multiUse.${rowId || raw}`;
     if (lower.includes('mesh'))
@@ -171,6 +177,52 @@ function collectActuatorMappings(config, evcsList) {
             seen.add(signature);
             rows.push({ objectId: id, owner, path: `evcsList[${index}]`, field, active: row.enabled !== false && config.enableChargingManagement !== false });
         }
+    });
+    // C3.4: NexoLogic-Ausgangsknoten besitzen einen stabilen Owner pro Graph/Node.
+    // Nur echte dp_out-/scene_trigger-Ziele werden aufgenommen; dp_in bleibt Messwert.
+    const logicGraphs = Array.isArray(config.logicEditor?.graphs) ? config.logicEditor.graphs : [];
+    const safe = (value, fallback) => text(value).replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80) || fallback;
+    const resolveSceneTarget = (params) => {
+        const fallback = text(params?.dpId);
+        const sceneId = text(params?.sceneId);
+        if (sceneId) {
+            const devices = Array.isArray(config.smartHomeConfig?.devices) ? config.smartHomeConfig.devices : [];
+            const scene = devices.find((row) => row && row.type === 'scene' && text(row.id) === sceneId);
+            const target = text(scene?.io?.switch?.writeId || scene?.io?.switch?.readId);
+            if (target)
+                return target;
+            const legacy = text(config.smartHome?.datapoints?.[sceneId]);
+            if (legacy)
+                return legacy;
+        }
+        return fallback;
+    };
+    logicGraphs.forEach((graph, graphIndex) => {
+        if (!graph || graph.enabled === false)
+            return;
+        const graphId = safe(graph.id, `g${graphIndex + 1}`);
+        const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+        nodes.forEach((node, nodeIndex) => {
+            if (!node || node.enabled === false)
+                return;
+            const type = text(node.type);
+            if (type !== 'dp_out' && type !== 'scene_trigger')
+                return;
+            const params = node.params && typeof node.params === 'object' ? node.params : {};
+            if (type === 'dp_out' && ['true', '1', 'yes', 'on'].includes(text(params.ack).toLowerCase()))
+                return;
+            const id = type === 'scene_trigger' ? resolveSceneTarget(params) : text(params.dpId);
+            if (!looksLikeObjectId(id))
+                return;
+            const nodeId = safe(node.id, `n${nodeIndex + 1}`);
+            const owner = `nexoLogic.${graphId}.${nodeId}`;
+            const field = type === 'scene_trigger' ? 'sceneTargetId' : 'dpId';
+            const signature = `${id}|${owner}|${field}`;
+            if (seen.has(signature))
+                return;
+            seen.add(signature);
+            rows.push({ objectId: id, owner, path: `config.logicEditor.graphs[${graphIndex}].nodes[${nodeIndex}]`, field, active: config.enableNexoLogic !== false });
+        });
     });
     return rows;
 }

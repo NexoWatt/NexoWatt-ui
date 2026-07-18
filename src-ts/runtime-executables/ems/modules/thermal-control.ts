@@ -944,20 +944,6 @@ const mk = async (id, name, type, role, unit = undefined) => {
 
         const now = nowMs();
 
-        // If §14a is active, avoid competing writes.
-        try {
-            const p14a = (this.adapter && this.adapter._para14a && typeof this.adapter._para14a === 'object') ? this.adapter._para14a : null;
-            if (p14a && p14a.active) {
-                this.adapter._thermalBudgetUsedW = 0;
-                await this._setStateIfChanged('thermal.summary.status', 'paused_by_14a');
-                await this._setStateIfChanged('thermal.summary.budgetUsedW', 0);
-                await this._setStateIfChanged('thermal.summary.lastUpdate', now);
-                return;
-            }
-        } catch (_e) {
-            // ignore
-        }
-
         const pv = this._computePvAvailableW();
         let remainingW = Math.max(0, num(pv.availableW, 0));
 

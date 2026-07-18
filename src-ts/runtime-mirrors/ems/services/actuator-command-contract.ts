@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 177e315105b3987620e717c0d89219662c7370b0328b17e1154581e9f09cc758
+ * Original-Hash: ba3a9127e806c2517acd6ebd649c896b4e2c2ce99acfb0665f119596c712cdcf
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/actuator-command-contract.ts
- * Quell-Hash: sha256:cfcd559e868a2c2e1b2e43bef4f336b2db5f7c6e463228b79e73cdbd027d49b9
+ * Quell-Hash: sha256:722f746a060895176f5825c734fc40341b75c193627718535dfa0842efea1dbd
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -205,6 +205,24 @@ class ActuatorCommandContract {
                 state.status = state.pending ? 'readback-pending' : 'write-failed-retry';
             }
         }
+        return this.result(key, now, false);
+    }
+    defer(keyRaw, requested, nowRaw, delayMsRaw, statusRaw = 'deferred') {
+        const key = String(keyRaw || '').trim();
+        const now = Number.isFinite(Number(nowRaw)) ? Number(nowRaw) : Date.now();
+        const delayMs = Math.max(250, Math.min(120000, Number(delayMsRaw) || 1000));
+        const fp = stable(requested);
+        let state = this.states.get(key);
+        if (!state || state.fingerprint !== fp) {
+            this.prepare(key, requested, now, {});
+            state = this.states.get(key);
+        }
+        state.requested = requested;
+        state.accepted = false;
+        state.confirmed = false;
+        state.pending = false;
+        state.nextAttemptTs = now + delayMs;
+        state.status = String(statusRaw || 'deferred');
         return this.result(key, now, false);
     }
     confirmFromReadback(keyRaw, requested, actual, matches, nowRaw) {

@@ -4076,18 +4076,6 @@ class HeatingRodControlModule extends BaseModule {
 
         const now = nowMs();
 
-        try {
-            const p14a = (this.adapter && this.adapter._para14a && typeof this.adapter._para14a === 'object') ? this.adapter._para14a : null;
-            if (p14a && p14a.active) {
-                await this._setStateIfChanged('heatingRod.summary.status', 'paused_by_14a');
-                await this._setStateIfChanged('heatingRod.summary.lastUpdate', now);
-                this.adapter._heatingRodBudgetUsedW = 0;
-                return;
-            }
-        } catch (_e) {
-            // ignore
-        }
-
         const staleTimeoutSec = clamp(num(this._getCfg().staleTimeoutSec, 15), 1, 3600);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
 

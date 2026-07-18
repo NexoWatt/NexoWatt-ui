@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/core-limits.ts
- * Quell-Hash: sha256:c999bbf1baf0d74d024b39a639dca2e484245a546b2652ea20f6cc5bc9d7f19d
+ * Quell-Hash: sha256:d129ac494e6bb0400cbdc641bc04f19df2b5f560ae37b5467a705464912ed214
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -60,6 +60,12 @@
 const { BaseModule } = require('./base');
 const { normalizePvSurplusPriority, buildPvSurplusAllocation } = require('../services/pv-surplus-allocation');
 const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
+let resolvePara14aAppCap = () => null;
+try {
+    ({ resolvePara14aAppCap } = require('../../lib/ts-mirrors/ems/para14a/para14a-constraint'));
+} catch (_ePara14aMirror) {
+    // Older runtime/package fallback: no app-specific §14a cap.
+}
 
 
 /**
@@ -80,6 +86,20 @@ const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness
 function requireCoreBudgetTsMirror() {
     try {
         return require('../../lib/ts-mirrors/ems/core-limits/core-budget');
+    } catch (_e) {
+        return null;
+    }
+}
+
+/**
+ * Code-Teil: requireCoreRuntimeTsMirror
+ * Zweck: Lädt die typisierte, seiteneffektfreie Core-Runtime für PV-, Grant-
+ * und Budget-Snapshot-Berechnungen. Die große Adapter-/ioBroker-Datei bleibt
+ * zunächst I/O-Hülle und harter Fallback.
+ */
+function requireCoreRuntimeTsMirror() {
+    try {
+        return require('../../lib/ts-mirrors/ems/core-limits/core-runtime');
     } catch (_e) {
         return null;
     }
@@ -160,7 +180,7 @@ function isFiniteNumber(v) {
  * - storageChargeW > 0: Speicher nimmt Leistung auf
  * - storageDischargeW > 0: Speicher gibt Leistung ab
  */
-function computePvBudgetFlowRawW({ gridW = 0, flexUsedW = 0, storageChargeW = 0, storageDischargeW = 0 } = {}) {
+function legacyComputePvBudgetFlowRawW({ gridW = 0, flexUsedW = 0, storageChargeW = 0, storageDischargeW = 0 } = {}) {
     const signedGridW = Number.isFinite(Number(gridW)) ? Number(gridW) : 0;
     const flexW = Math.max(0, Number(flexUsedW) || 0);
     const chargeW = Math.max(0, Number(storageChargeW) || 0);
@@ -180,7 +200,7 @@ function computePvBudgetFlowRawW({ gridW = 0, flexUsedW = 0, storageChargeW = 0,
  * - Ein unendliches Gesamtbudget bleibt zulässig; das PV-Budget bleibt immer
  *   eine endliche physikalische Größe.
  */
-function computeCentralBudgetGrant(runtime = {}, request = {}) {
+function legacyComputeCentralBudgetGrant(runtime = {}, request = {}) {
     const requestedRawW = Number(request && request.requestedW);
     const requestedW = Number.isFinite(requestedRawW)
         ? Math.max(0, requestedRawW)
@@ -213,6 +233,16 @@ function computeCentralBudgetGrant(runtime = {}, request = {}) {
         requestCapW = Math.min(requestCapW, Math.max(0, Number(allocation.evcsCapW)));
     }
 
+    const para14aGate = runtime && runtime.gates && runtime.gates.para14a && typeof runtime.gates.para14a === 'object'
+        ? runtime.gates.para14a
+        : null;
+    const para14aCapW = para14aGate && para14aGate.active === true
+        ? resolvePara14aAppCap(para14aGate.appCapsW, key, request && request.app)
+        : null;
+    if (para14aCapW !== null && para14aCapW !== undefined && Number.isFinite(Number(para14aCapW))) {
+        requestCapW = Math.min(requestCapW, Math.max(0, Number(para14aCapW)));
+    }
+
     const availableW = pvOnly
         ? Math.min(remainingTotalW, remainingPvW, requestCapW)
         : Math.min(remainingTotalW, requestCapW);
@@ -229,6 +259,8 @@ function computeCentralBudgetGrant(runtime = {}, request = {}) {
             ? roundW(Math.max(0, Number(allocation.evcsCapW)))
             : null,
         allocationCapApplied: !!(pvOnly && key === 'evcs' && applyEvcsAllocationCap),
+        para14aCapW: para14aCapW !== null && para14aCapW !== undefined && Number.isFinite(Number(para14aCapW)) ? roundW(Math.max(0, Number(para14aCapW))) : null,
+        para14aCapApplied: para14aCapW !== null && para14aCapW !== undefined && Number.isFinite(Number(para14aCapW)),
         pvOnly,
         key,
         source: 'central-ems-budget',
@@ -256,7 +288,7 @@ function computeCentralBudgetGrant(runtime = {}, request = {}) {
  *   aktiv ist und kein deutlicher Netzbezug besteht.
  * - Ohne irgendeinen physikalischen Beleg bleibt die Obergrenze 0 W.
  */
-function resolvePvBudgetPhysicalCapW({
+function legacyResolvePvBudgetPhysicalCapW({
     measuredPvW = 0,
     measuredPvFresh = false,
     flowRawW = 0,
@@ -339,6 +371,88 @@ function resolvePvBudgetPhysicalCapW({
         held: false,
     };
 }
+
+/**
+ * Code-Teil: computePvBudgetFlowRawW
+ * Zweck: Nutzt die typisierte Core-Runtime produktiv. Die bisherige Rechnung
+ * bleibt als harter Fallback aktiv, falls Spiegel oder Ergebnis ungültig sind.
+ */
+function computePvBudgetFlowRawW(input = {}) {
+    const legacy = legacyComputePvBudgetFlowRawW(input);
+    try {
+        const mirror = requireCoreRuntimeTsMirror();
+        const compute = mirror && typeof mirror.computeCorePvBudgetFlowRawW === 'function'
+            ? mirror.computeCorePvBudgetFlowRawW
+            : null;
+        if (!compute) return legacy;
+        const typed = Number(compute(input));
+        if (!Number.isFinite(typed) || typed < 0 || Math.abs(typed - legacy) > 1) return legacy;
+        return typed;
+    } catch (_e) {
+        return legacy;
+    }
+}
+
+/**
+ * Code-Teil: computeCentralBudgetGrant
+ * Zweck: Produktive typisierte Grant-Berechnung mit exakter JS-Fallback-Parität.
+ * Verbraucher dürfen bei einer TS-Abweichung nie mehr Leistung erhalten als der
+ * bewährte Legacy-Pfad erlaubt.
+ */
+function computeCentralBudgetGrant(runtime = {}, request = {}) {
+    const legacy = legacyComputeCentralBudgetGrant(runtime, request);
+    try {
+        const mirror = requireCoreRuntimeTsMirror();
+        const compute = mirror && typeof mirror.computeCoreCentralBudgetGrant === 'function'
+            ? mirror.computeCoreCentralBudgetGrant
+            : null;
+        if (!compute) return legacy;
+        const typed = compute(runtime, request);
+        if (!typed || typeof typed !== 'object') return legacy;
+        const fields = ['grantW', 'availableW', 'remainingTotalW', 'remainingPvW', 'allocationEvcsCapW', 'para14aCapW'];
+        for (const field of fields) {
+            const a = legacy[field];
+            const b = typed[field];
+            const aNull = a === null || a === undefined;
+            const bNull = b === null || b === undefined;
+            if (aNull !== bNull) return legacy;
+            if (!aNull && (!Number.isFinite(Number(b)) || Math.abs(Number(a) - Number(b)) > 1)) return legacy;
+        }
+        if (!!legacy.pvOnly !== !!typed.pvOnly || String(legacy.key || '') !== String(typed.key || '')) return legacy;
+        return {
+            ...typed,
+            source: 'ts-core-runtime-grant',
+        };
+    } catch (_e) {
+        return legacy;
+    }
+}
+
+/**
+ * Code-Teil: resolvePvBudgetPhysicalCapW
+ * Zweck: Produktive typisierte PV-Plausibilisierung mit Legacy-Fallback. Damit
+ * bleiben Export-Fallback, Trusted-Hold und Null-PV-Schutz exakt kompatibel.
+ */
+function resolvePvBudgetPhysicalCapW(input = {}) {
+    const legacy = legacyResolvePvBudgetPhysicalCapW(input);
+    try {
+        const mirror = requireCoreRuntimeTsMirror();
+        const compute = mirror && typeof mirror.resolveCorePvBudgetPhysicalCap === 'function'
+            ? mirror.resolveCorePvBudgetPhysicalCap
+            : null;
+        if (!compute) return legacy;
+        const typed = compute(input);
+        if (!typed || typeof typed !== 'object') return legacy;
+        if (!Number.isFinite(Number(typed.capW)) || Number(typed.capW) < 0) return legacy;
+        if (Math.abs(Number(typed.capW) - Number(legacy.capW)) > 1) return legacy;
+        if (String(typed.source || '') !== String(legacy.source || '')) return legacy;
+        if (!!typed.trusted !== !!legacy.trusted || !!typed.held !== !!legacy.held) return legacy;
+        return typed;
+    } catch (_e) {
+        return legacy;
+    }
+}
+
 /**
  * Code-Teil: isPeakShavingRuntimeEnabled
  * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -418,15 +532,51 @@ function makeBudgetRuntime(adapter, snapshot) {
     const totalEff = (totalEffRaw === null || totalEffRaw === undefined) ? Number.POSITIVE_INFINITY : Number(totalEffRaw);
     const pvEff = snapshot && snapshot.gates && snapshot.gates.pv ? snapshot.gates.pv.effectiveW : 0;
 
+    let typedInitialState = null;
+    let typedInitialError = '';
+    try {
+        const mirror = requireCoreRuntimeTsMirror();
+        const createState = mirror && typeof mirror.createCoreRuntimeReservationState === 'function'
+            ? mirror.createCoreRuntimeReservationState
+            : null;
+        if (createState) typedInitialState = createState(snapshot || {});
+    } catch (e) {
+        typedInitialError = e && e.message ? e.message : String(e);
+    }
+    const legacyInitialTotalW = Number.isFinite(totalEff) ? Math.max(0, totalEff) : Number.POSITIVE_INFINITY;
+    const legacyInitialPvW = Math.max(0, Number(pvEff) || 0);
+    const typedInitialTotalRaw = typedInitialState ? typedInitialState.remainingTotalW : undefined;
+    const typedInitialTotalW = typedInitialTotalRaw === null
+        ? Number.POSITIVE_INFINITY
+        : Number(typedInitialTotalRaw);
+    const typedInitialPvW = typedInitialState ? Number(typedInitialState.remainingPvW) : NaN;
+    const typedInitialOk = !!(
+        typedInitialState
+        && !typedInitialError
+        && ((Number.isFinite(legacyInitialTotalW) && Number.isFinite(typedInitialTotalW) && Math.abs(legacyInitialTotalW - typedInitialTotalW) <= 1)
+            || (!Number.isFinite(legacyInitialTotalW) && !Number.isFinite(typedInitialTotalW)))
+        && Number.isFinite(typedInitialPvW)
+        && Math.abs(legacyInitialPvW - typedInitialPvW) <= 1
+    );
+
     const rt = {
         ts,
-        version: 1,
-        gates: snapshot.gates || {},
+        version: 2,
+        gates: typedInitialOk && typedInitialState && typedInitialState.gates
+            ? typedInitialState.gates
+            : (snapshot.gates || {}),
         raw: snapshot.raw || {},
-        remainingTotalW: Number.isFinite(totalEff) ? Math.max(0, totalEff) : Number.POSITIVE_INFINITY,
-        remainingPvW: Math.max(0, Number(pvEff) || 0),
+        remainingTotalW: typedInitialOk ? typedInitialTotalW : legacyInitialTotalW,
+        remainingPvW: typedInitialOk ? Math.max(0, typedInitialPvW) : legacyInitialPvW,
         consumers: {},
         order: [],
+        sequence: 0,
+        phase2: {
+            active: typedInitialOk,
+            fallback: !typedInitialOk,
+            source: typedInitialOk ? 'ts-core-runtime-input-v2' : 'legacy-js-runtime',
+            reason: typedInitialOk ? 'typed-initial-state-parity-ok' : (typedInitialError || 'typed-initial-state-unavailable-or-mismatch'),
+        },
         // 0.7.106: Letzter TS-Shadow für Consumer-Reservierungen.
         // Zweck: makeBudgetRuntime.reserve später aus TypeScript übernehmen, ohne die produktive Reservierung sofort zu riskieren.
         tsReservationLast: null,
@@ -502,7 +652,7 @@ function makeBudgetRuntime(adapter, snapshot) {
              */
             const jsRemainingTotalBefore = Number.isFinite(this.remainingTotalW) ? this.remainingTotalW : Number.POSITIVE_INFINITY;
             const jsRemainingPvBefore = Math.max(0, this.remainingPvW);
-            const jsGrant = computeCentralBudgetGrant(this, {
+            const jsGrant = legacyComputeCentralBudgetGrant(this, {
                 ...r,
                 requestedW,
             });
@@ -541,14 +691,18 @@ function makeBudgetRuntime(adapter, snapshot) {
             let tsReservationResult = null;
             let tsReservationError = '';
             try {
-                const mirror = requireCoreBudgetTsMirror();
-                const compute = mirror && typeof mirror.computeCoreBudgetReservation === 'function' ? mirror.computeCoreBudgetReservation : null;
+                const mirror = requireCoreRuntimeTsMirror();
+                const compute = mirror && typeof mirror.applyCoreRuntimeReservation === 'function'
+                    ? mirror.applyCoreRuntimeReservation
+                    : null;
                 if (compute) {
                     tsReservationResult = compute({
-                        remainingTotalW: this.remainingTotalW,
+                        remainingTotalW: Number.isFinite(this.remainingTotalW) ? this.remainingTotalW : null,
                         remainingPvW: this.remainingPvW,
+                        gates: this.gates,
                         consumers: this.consumers,
                         order: this.order,
+                        sequence: this.sequence,
                     }, r, Date.now());
                 }
             } catch (e) {
@@ -565,7 +719,14 @@ function makeBudgetRuntime(adapter, snapshot) {
                 compareShadowWatt('entry.remainingTotalW', jsEntry.remainingTotalW, tsEntry.remainingTotalW),
                 compareShadowWatt('entry.remainingPvW', jsEntry.remainingPvW, tsEntry.remainingPvW),
             ].filter(Boolean) : [];
-            const tsOk = !!(tsReservationResult && tsReservationResult.ok && tsEntry && !tsReservationError && mismatches.length === 0);
+            const tsOk = !!(
+                tsReservationResult
+                && tsReservationResult.ok
+                && tsReservationResult.source === 'ts-core-runtime-reservation-v2'
+                && tsEntry
+                && !tsReservationError
+                && mismatches.length === 0
+            );
             const fallbackReason = tsOk
                 ? ''
                 : (tsReservationError || (!tsEntry ? 'missing-ts-entry' : (mismatches.length ? 'ts-js-mismatch' : 'ts-result-not-ok')));
@@ -601,19 +762,23 @@ function makeBudgetRuntime(adapter, snapshot) {
                 this.order = Array.isArray(tsReservationResult.order) ? Array.from(tsReservationResult.order) : this.order.slice();
                 if (!this.order.includes(key)) this.order.push(key);
                 this.consumers[key] = entry;
+                this.sequence = tsReservationResult.state && Number.isFinite(Number(tsReservationResult.state.sequence))
+                    ? Math.max(0, Math.round(Number(tsReservationResult.state.sequence)))
+                    : Math.max(0, Number(this.sequence) || 0) + 1;
                 flexUsedW = Math.max(0, Number(tsReservationResult.flexUsedW) || 0);
             } else {
                 this.remainingTotalW = jsNextRemainingTotalW;
                 this.remainingPvW = jsNextRemainingPvW;
                 this.consumers[key] = entry;
                 if (!this.order.includes(key)) this.order.push(key);
+                this.sequence = Math.max(0, Number(this.sequence) || 0) + 1;
                 const liveConsumersForFlex = this.order.map(k => this.consumers[k] || null).filter(Boolean);
                 flexUsedW = liveConsumersForFlex.reduce((sum, c) => sum + Math.max(0, Number(c.usedW ?? c.reserveW) || 0), 0);
             }
 
             this.tsReservationLast = {
                 ts: Date.now(),
-                source: 'ts-core-reservation-productive',
+                source: 'ts-core-runtime-reservation-v2',
                 available: !!tsEntry,
                 ok: tsOk,
                 productive: tsOk,
@@ -679,6 +844,47 @@ function makeBudgetRuntime(adapter, snapshot) {
         },
 
         /**
+         * Code-Teil: reserveSequence
+         * Zweck: Führt mehrere zentrale Grants/Reservierungen deterministisch in
+         * der übergebenen Reihenfolge aus. Die normale EMS-Engine reserviert
+         * weiterhin Modul für Modul; Tests und künftige Orchestratoren können damit
+         * dieselbe Reihenfolge als atomaren Rechenplan prüfen.
+         */
+        reserveSequence(requests) {
+            const list = Array.isArray(requests) ? requests : [];
+            try {
+                const mirror = requireCoreRuntimeTsMirror();
+                const run = mirror && typeof mirror.applyCoreRuntimeReservationSequence === 'function'
+                    ? mirror.applyCoreRuntimeReservationSequence
+                    : null;
+                if (!run) return list.map(req => this.reserve(req));
+                const result = run({
+                    remainingTotalW: Number.isFinite(this.remainingTotalW) ? this.remainingTotalW : null,
+                    remainingPvW: this.remainingPvW,
+                    gates: this.gates,
+                    consumers: this.consumers,
+                    order: this.order,
+                    sequence: this.sequence,
+                }, list, Date.now());
+                if (!result || !result.ok || result.source !== 'ts-core-runtime-sequence-v2' || !result.state) {
+                    return list.map(req => this.reserve(req));
+                }
+                this.remainingTotalW = result.state.remainingTotalW === null
+                    ? Number.POSITIVE_INFINITY
+                    : Math.max(0, Number(result.state.remainingTotalW) || 0);
+                this.remainingPvW = Math.max(0, Number(result.state.remainingPvW) || 0);
+                this.consumers = result.state.consumers && typeof result.state.consumers === 'object'
+                    ? result.state.consumers
+                    : this.consumers;
+                this.order = Array.isArray(result.state.order) ? Array.from(result.state.order) : this.order;
+                this.sequence = Math.max(0, Math.round(Number(result.state.sequence) || 0));
+                return Array.isArray(result.entries) ? result.entries : [];
+            } catch (_e) {
+                return list.map(req => this.reserve(req));
+            }
+        },
+
+        /**
          * Code-Teil: Methode `peek`
          * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
          * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
@@ -699,6 +905,8 @@ function makeBudgetRuntime(adapter, snapshot) {
                 remainingPvW: roundW(this.remainingPvW),
                 consumers: this.consumers,
                 order: this.order.slice(),
+                sequence: Math.max(0, Math.round(Number(this.sequence) || 0)),
+                phase2: this.phase2,
             };
         },
     };
@@ -746,6 +954,11 @@ class CoreLimitsModule extends BaseModule {
         // aktive PV-Senke und ohne plausiblen NVP keinen neuen Überschuss.
         this._lastTrustedPvPhysicalCapW = 0;
         this._lastTrustedPvPhysicalCapTs = 0;
+        // Diagnose des neuen typisierten Core-Runtime-Snapshots. Die Runtime-
+        // I/O-Hülle bleibt vorerst JavaScript-kompatibel; die fachliche Budget-
+        // Berechnung läuft produktiv über TypeScript mit harter Legacy-Fallback-
+        // Parität.
+        this._coreRuntimeTsLast = null;
     }
     /**
      * Code-Teil: init
@@ -836,6 +1049,14 @@ class CoreLimitsModule extends BaseModule {
         await mk('ems.core.para14aActive', '§14a active', 'boolean', 'indicator');
         await mk('ems.core.para14aMode', '§14a mode', 'string', 'text');
         await mk('ems.core.para14aEvcsCapW', '§14a EVCS cap (W)', 'number', 'value.power', 'W');
+        await mk('ems.core.para14aTotalCapW', '§14a total controlled-load cap (W)', 'number', 'value.power', 'W');
+        await mk('ems.core.para14aSignalFresh', '§14a signal fresh', 'boolean', 'indicator');
+        await mk('ems.core.para14aSignalStatus', '§14a signal status', 'string', 'text');
+        await mk('ems.core.para14aStorageCapW', '§14a storage charge cap (W)', 'number', 'value.power', 'W');
+        await mk('ems.core.para14aThermalCapW', '§14a thermal cap (W)', 'number', 'value.power', 'W');
+        await mk('ems.core.para14aHeatingRodCapW', '§14a heating rod cap (W)', 'number', 'value.power', 'W');
+        await mk('ems.core.controlledHighLevelCapW', 'Controlled-load high level cap (W)', 'number', 'value.power', 'W');
+        await mk('ems.core.controlledHighLevelBinding', 'Controlled-load high level binding sources', 'string', 'text');
 
         // Result (high-level)
         await mk('ems.core.evcsHighLevelCapW', 'EVCS high level cap (W) (min of peak/tariff/14a)', 'number', 'value.power', 'W');
@@ -884,7 +1105,12 @@ class CoreLimitsModule extends BaseModule {
         await mk('ems.budget.tsShadowJson', 'TypeScript Core-Budget Shadow-Vergleich (JSON)', 'string', 'json');
         await mk('ems.budget.tsProductiveJson', 'TypeScript Core-Budget Produktivstatus (JSON)', 'string', 'json');
         await mk('ems.budget.tsReservationJson', 'TypeScript Consumer-Reservierung Shadow-Vergleich (JSON)', 'string', 'json');
+        await mk('ems.budget.tsCoreRuntimeMode', 'TypeScript Core-Runtime Modus', 'string', 'text');
+        await mk('ems.budget.tsCoreRuntimeFallback', 'TypeScript Core-Runtime Fallback aktiv', 'boolean', 'indicator');
+        await mk('ems.budget.tsCoreRuntimeMismatchCount', 'TypeScript Core-Runtime Abweichungen', 'number', 'value');
+        await mk('ems.budget.tsCoreRuntimeJson', 'TypeScript Core-Runtime Produktivstatus (JSON)', 'string', 'json');
         await mk('ems.budget.tsRestGatesJson', 'TypeScript Forecast-/Tarif-/Peak-Gates produktiv/Fallback (JSON)', 'string', 'json');
+        await mk('ems.budget.phase2PublicationMode', 'TypeScript Core-Runtime Phase-2 Publikationsmodus', 'string', 'text');
 
         // Gate D - PV Forecast. Advisory background gate for forecast-aware app decisions.
         // It does not write setpoints and does not change the instantaneous PV budget by itself.
@@ -1326,6 +1552,92 @@ class CoreLimitsModule extends BaseModule {
     }
 
     /**
+     * Code-Teil: _publishCoreRuntimeBudgetPlan
+     * Zweck: Veröffentlicht Budget-Snapshot, Restbudgets und Verbraucherstände
+     * produktiv aus dem typisierten Phase-2-Plan. Bei fehlendem Spiegel oder
+     * inkonsistenten Kernwerten bleibt der bestehende JS-Publikationspfad aktiv.
+     */
+    async _publishCoreRuntimeBudgetPlan(now, budgetSnapshot, budgetRuntime, coreTsShadow, coreRestGatesTsShadow) {
+        const markFallback = (reason) => {
+            if (budgetRuntime && budgetRuntime.phase2 && typeof budgetRuntime.phase2 === 'object') {
+                budgetRuntime.phase2.publication = 'legacy-js-publication';
+                budgetRuntime.phase2.publicationFallback = true;
+                budgetRuntime.phase2.publicationReason = String(reason || 'typed-publication-unavailable');
+            }
+            return false;
+        };
+        try {
+            const mirror = requireCoreRuntimeTsMirror();
+            const build = mirror && typeof mirror.buildCoreRuntimePublicationPlan === 'function'
+                ? mirror.buildCoreRuntimePublicationPlan
+                : null;
+            if (!build) return markFallback('typed-publication-unavailable');
+
+            const b = budgetSnapshot && typeof budgetSnapshot === 'object' ? budgetSnapshot : {};
+            const coreRuntimeStatus = (b.tsCoreRuntime && typeof b.tsCoreRuntime === 'object')
+                ? b.tsCoreRuntime
+                : ((this._coreRuntimeTsLast && typeof this._coreRuntimeTsLast === 'object') ? this._coreRuntimeTsLast : {});
+            const plan = build({
+                snapshot: b,
+                runtime: budgetRuntime ? {
+                    remainingTotalW: Number.isFinite(budgetRuntime.remainingTotalW) ? budgetRuntime.remainingTotalW : null,
+                    remainingPvW: budgetRuntime.remainingPvW,
+                    gates: budgetRuntime.gates,
+                    consumers: budgetRuntime.consumers,
+                    order: budgetRuntime.order,
+                    sequence: budgetRuntime.sequence,
+                } : null,
+                tsReservation: (budgetRuntime && budgetRuntime.tsReservationLast) || null,
+                tsRestGates: b.tsRestGatesProductive || b.tsRestGatesShadow || coreRestGatesTsShadow || null,
+                tsShadow: b.tsShadow || coreTsShadow || null,
+                tsProductive: b.tsProductive || null,
+                coreRuntimeStatus,
+            });
+            if (!plan || plan.ok !== true || plan.source !== 'ts-core-runtime-publication-v2') return markFallback('typed-publication-invalid');
+            const states = plan.states && typeof plan.states === 'object' ? plan.states : null;
+            if (!states) return markFallback('typed-publication-states-missing');
+
+            const expectedTotalW = b.gates && b.gates.total && b.gates.total.effectiveW !== null
+                ? roundW(b.gates.total.effectiveW)
+                : 0;
+            const expectedPvW = b.gates && b.gates.pv ? roundW(b.gates.pv.effectiveW) : 0;
+            const expectedGridW = b.raw ? roundW(b.raw.gridW) : 0;
+            const expectedRemainingTotalW = budgetRuntime && Number.isFinite(budgetRuntime.remainingTotalW)
+                ? roundW(budgetRuntime.remainingTotalW)
+                : 0;
+            const expectedRemainingPvW = budgetRuntime ? roundW(budgetRuntime.remainingPvW) : expectedPvW;
+            const critical = [
+                ['ems.budget.totalBudgetW', expectedTotalW],
+                ['ems.budget.pvBudgetW', expectedPvW],
+                ['ems.budget.gridW', expectedGridW],
+                ['ems.budget.remainingTotalW', expectedRemainingTotalW],
+                ['ems.budget.remainingPvW', expectedRemainingPvW],
+            ];
+            for (const [id, expected] of critical) {
+                const actual = Number(states[id]);
+                if (!Number.isFinite(actual) || Math.abs(actual - Number(expected)) > 1) {
+                    return markFallback(`typed-publication-mismatch:${id}`);
+                }
+            }
+
+            for (const [id, value] of Object.entries(states)) {
+                await this.adapter.setStateAsync(id, value, true);
+            }
+            if (this.adapter && typeof this.adapter.updateValue === 'function') {
+                const cache = plan.cache && typeof plan.cache === 'object' ? plan.cache : {};
+                for (const [id, value] of Object.entries(cache)) this.adapter.updateValue(id, value, now);
+            }
+            if (budgetRuntime && budgetRuntime.phase2 && typeof budgetRuntime.phase2 === 'object') {
+                budgetRuntime.phase2.publication = 'typed-core-runtime-publication-v2';
+                budgetRuntime.phase2.publicationFallback = false;
+            }
+            return true;
+        } catch (_e) {
+            return markFallback(_e && _e.message ? _e.message : 'typed-publication-error');
+        }
+    }
+
+    /**
      * Code-Teil: Methode `_makeBudgetSnapshot`
      * Zweck: baut aus Rohdaten eine strukturierte Konfiguration, Liste oder Empfehlung.
      * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
@@ -1495,6 +1807,7 @@ class CoreLimitsModule extends BaseModule {
             storageDischargeW,
         });
         const activePvSinkW = Math.max(0, pvFlexUsedW + storageChargeW);
+        const previousTrustedPvPhysicalCapW = this._lastTrustedPvPhysicalCapW;
         const lastTrustedAgeMs = this._lastTrustedPvPhysicalCapTs > 0
             ? Math.max(0, now - this._lastTrustedPvPhysicalCapTs)
             : null;
@@ -1505,7 +1818,7 @@ class CoreLimitsModule extends BaseModule {
             gridExportW,
             gridImportW,
             activePvSinkW,
-            lastTrustedW: this._lastTrustedPvPhysicalCapW,
+            lastTrustedW: previousTrustedPvPhysicalCapW,
             lastTrustedAgeMs,
             holdMs: Math.max(30000, pvSourceMaxAgeMs),
         });
@@ -1588,15 +1901,15 @@ class CoreLimitsModule extends BaseModule {
         const gridHeadroomW = gridMeasurementUsable
             ? (gridLimitW > 0 ? Math.min(gridLimitW, gridHeadroomRawW) : Number.POSITIVE_INFINITY)
             : 0;
-        const highLevelCapW = coreSnapshot && coreSnapshot.evcsHighLevel && isFiniteNumber(coreSnapshot.evcsHighLevel.capW)
-            ? Math.max(0, Number(coreSnapshot.evcsHighLevel.capW))
+        const highLevelCapW = coreSnapshot && coreSnapshot.controlledHighLevel && isFiniteNumber(coreSnapshot.controlledHighLevel.capW)
+            ? Math.max(0, Number(coreSnapshot.controlledHighLevel.capW))
             : Number.POSITIVE_INFINITY;
         const totalBudgetW = gridMeasurementUsable ? Math.max(0, Math.min(gridHeadroomW, highLevelCapW)) : 0;
 
         const bindings = [];
         if (!gridMeasurementUsable) bindings.push(`nvp_${gridMeasurementStatus || 'stale'}`);
         if (gridMeasurementUsable && gridLimitW > 0 && Math.abs(totalBudgetW - gridHeadroomW) <= 1) bindings.push('grid');
-        if (gridMeasurementUsable && Number.isFinite(highLevelCapW) && Math.abs(totalBudgetW - highLevelCapW) <= 1) bindings.push(coreSnapshot.evcsHighLevel.binding || 'highLevel');
+        if (gridMeasurementUsable && Number.isFinite(highLevelCapW) && Math.abs(totalBudgetW - highLevelCapW) <= 1) bindings.push(coreSnapshot.controlledHighLevel.binding || 'highLevel');
         if (!bindings.length) bindings.push('unlimited');
 
         // Gate D: PV forecast is an advisory gate. It is published centrally so apps
@@ -1623,7 +1936,7 @@ class CoreLimitsModule extends BaseModule {
             status: String(tSrc.status || (tSrc.gridImportPreferred ? 'grid_import_preferred' : (tSrc.active ? 'active' : 'inactive'))),
         };
 
-        return {
+        const legacySnapshot = {
             ts: now,
             active: true,
             mode: 'central-background',
@@ -1687,6 +2000,9 @@ class CoreLimitsModule extends BaseModule {
                 pvAllocation: pvAllocationGate,
                 forecast: forecastGate,
                 tariff: tariffGate,
+                para14a: coreSnapshot && coreSnapshot.para14a && typeof coreSnapshot.para14a === 'object'
+                    ? { ...coreSnapshot.para14a }
+                    : { active: false, appCapsW: {} },
                 total: {
                     effectiveW: Number.isFinite(totalBudgetW) ? roundW(totalBudgetW) : null,
                     binding: bindings.join('+'),
@@ -1706,6 +2022,132 @@ class CoreLimitsModule extends BaseModule {
                 return out;
             })(),
         };
+
+        const typedInput = {
+            ts: now,
+            grid: {
+                netW: gridControlW,
+                usable: gridMeasurementUsable,
+                status: gridMeasurementStatus,
+                source: gridMeasurementSource,
+                reason: gridMeasurementReason,
+                measurementAgeMs: centralNvp.current && isFiniteNumber(Number(centralNvp.measurementAgeMs))
+                    ? Number(centralNvp.measurementAgeMs)
+                    : null,
+                importLimitW: gridLimitW,
+                highLevelCapW,
+                highLevelBinding: coreSnapshot && coreSnapshot.controlledHighLevel
+                    ? coreSnapshot.controlledHighLevel.binding
+                    : '',
+            },
+            pv: {
+                measuredW: pvPowerW,
+                measuredFresh: pvPowerInfo.fresh === true,
+                measuredSource: String(pvPowerInfo.source || ''),
+                reserveW: pvReserveW,
+                lastTrustedW: previousTrustedPvPhysicalCapW,
+                lastTrustedAgeMs,
+                holdMs: Math.max(30000, pvSourceMaxAgeMs),
+                exportEvidenceThresholdW: 250,
+                importToleranceW: 250,
+            },
+            storage: {
+                chargeW: storageChargeW,
+                dischargeW: storageDischargeW,
+                eligible: storageEligible,
+                maxChargeW: storageMaxChargeForAllocationW,
+                socPct: storageSocPct,
+                maxSocPct: storageMaxSocPct,
+            },
+            consumers: {
+                evcsUsedW,
+                evcsPvUsedW,
+                thermalUsedW,
+                heatingRodUsedW,
+            },
+            allocation: {
+                enabled: allocationEnabled,
+                mode: readCacheValue('settings.pvSurplusPriority', 'both'),
+                evcsSharePct: readCacheValue('settings.pvSurplusEvcsSharePct', 50),
+            },
+            forecast: forecastGate,
+            tariff: tariffGate,
+            para14a: coreSnapshot && coreSnapshot.para14a && typeof coreSnapshot.para14a === 'object'
+                ? { ...coreSnapshot.para14a }
+                : { active: false, appCapsW: {} },
+        };
+
+        return this._applyCoreRuntimeTsSnapshot(legacySnapshot, typedInput);
+    }
+
+    /**
+     * Code-Teil: _applyCoreRuntimeTsSnapshot
+     * Zweck: Übernimmt den vollständig typisierten zentralen Budget-Snapshot,
+     * wenn er mit der bewährten Legacy-Rechnung übereinstimmt. Bei fehlendem
+     * Spiegel, Runtimefehler oder Abweichung bleibt die Legacy-Hülle aktiv.
+     */
+    _applyCoreRuntimeTsSnapshot(legacySnapshot, typedInput) {
+        const fallback = (reason, extra = {}) => {
+            const status = {
+                ts: Date.now(),
+                active: false,
+                productive: false,
+                fallback: true,
+                mode: 'legacy-js-fallback',
+                reason,
+                mismatchCount: Array.isArray(extra.mismatches) ? extra.mismatches.length : 0,
+                ...extra,
+            };
+            this._coreRuntimeTsLast = status;
+            try { legacySnapshot.tsCoreRuntime = status; } catch (_e) {}
+            return legacySnapshot;
+        };
+
+        try {
+            const mirror = requireCoreRuntimeTsMirror();
+            const build = mirror && typeof mirror.buildCoreRuntimeBudgetSnapshot === 'function'
+                ? mirror.buildCoreRuntimeBudgetSnapshot
+                : null;
+            const prepare = mirror && typeof mirror.prepareCoreRuntimeSnapshotInput === 'function'
+                ? mirror.prepareCoreRuntimeSnapshotInput
+                : null;
+            const compare = mirror && typeof mirror.compareCoreRuntimeBudgetSnapshots === 'function'
+                ? mirror.compareCoreRuntimeBudgetSnapshots
+                : null;
+            if (!build || !prepare || !compare) return fallback('typed-core-runtime-unavailable');
+
+            const prepared = prepare(typedInput || {});
+            if (!prepared || prepared.ok !== true || !prepared.input) return fallback('typed-core-input-invalid');
+            const typedSnapshot = build(prepared.input);
+            if (!typedSnapshot || typeof typedSnapshot !== 'object') return fallback('typed-core-runtime-empty');
+            const mismatches = compare(legacySnapshot, typedSnapshot, 1);
+            if (Array.isArray(mismatches) && mismatches.length) {
+                return fallback('typed-core-runtime-mismatch', { mismatches: mismatches.slice(0, 20) });
+            }
+
+            const status = {
+                ts: Date.now(),
+                active: true,
+                productive: true,
+                fallback: false,
+                mode: 'typed-core-runtime',
+                reason: 'parity-ok',
+                mismatchCount: 0,
+                contractVersion: typedSnapshot.typedRuntime && typedSnapshot.typedRuntime.contractVersion
+                    ? String(typedSnapshot.typedRuntime.contractVersion)
+                    : 'core-runtime-v2',
+                inputContractVersion: prepared.contractVersion || 'core-runtime-input-v2',
+                inputSource: prepared.source || 'ts-core-runtime-input-v2',
+                inputDiagnostics: prepared.diagnostics || {},
+            };
+            typedSnapshot.tsCoreRuntime = status;
+            this._coreRuntimeTsLast = status;
+            return typedSnapshot;
+        } catch (e) {
+            return fallback('typed-core-runtime-error', {
+                error: e && e.message ? e.message : String(e),
+            });
+        }
     }
 
     /**
@@ -1876,6 +2318,7 @@ class CoreLimitsModule extends BaseModule {
                 peak: coreSnapshot && coreSnapshot.peak ? coreSnapshot.peak : {},
                 para14a: coreSnapshot && coreSnapshot.para14a ? coreSnapshot.para14a : {},
                 evcsHighLevel: coreSnapshot && coreSnapshot.evcsHighLevel ? coreSnapshot.evcsHighLevel : {},
+                controlledHighLevel: coreSnapshot && coreSnapshot.controlledHighLevel ? coreSnapshot.controlledHighLevel : {},
                 grid: coreSnapshot && coreSnapshot.grid ? coreSnapshot.grid : {},
             };
             const tsResult = build({ ...js, ts: now });
@@ -1896,12 +2339,15 @@ class CoreLimitsModule extends BaseModule {
                 ['peak.budgetW', js.peak.budgetW, ts.peak && ts.peak.budgetW, 1],
                 ['para14a.active', js.para14a.active, ts.para14a && ts.para14a.active, 0],
                 ['para14a.evcsCapW', js.para14a.evcsCapW, ts.para14a && ts.para14a.evcsCapW, 1],
+                ['para14a.totalCapW', js.para14a.totalCapW, ts.para14a && ts.para14a.totalCapW, 1],
+                ['controlledHighLevel.capW', js.controlledHighLevel.capW, ts.controlledHighLevel && ts.controlledHighLevel.capW, 1],
+                ['controlledHighLevel.binding', js.controlledHighLevel.binding, ts.controlledHighLevel && ts.controlledHighLevel.binding, 0],
                 ['evcsHighLevel.capW', js.evcsHighLevel.capW, ts.evcsHighLevel && ts.evcsHighLevel.capW, 1],
                 ['evcsHighLevel.binding', js.evcsHighLevel.binding, ts.evcsHighLevel && ts.evcsHighLevel.binding, 0],
                 ['grid.gridImportLimitW_effective', js.grid.gridImportLimitW_effective, ts.grid && ts.grid.gridImportLimitW_effective, 1],
                 ['grid.gridImportLimitW_source', js.grid.gridImportLimitW_source, ts.grid && ts.grid.gridImportLimitW_source, 0],
             ].forEach(([field, jsValue, tsValue, tolerance]) => compareValue(mismatches, field, jsValue, tsValue, tolerance));
-            return { source: 'ts-core-rest-gates-shadow', available: true, ok: mismatches.length === 0, productive: false, reason: mismatches.length ? 'ts-rest-gates-mismatch' : 'shadow-ok', comparedFields: 18, mismatchCount: mismatches.length, mismatches: mismatches.slice(0, 12), js, tsGates: ts, tsResult, ts: now };
+            return { source: 'ts-core-rest-gates-shadow', available: true, ok: mismatches.length === 0, productive: false, reason: mismatches.length ? 'ts-rest-gates-mismatch' : 'shadow-ok', comparedFields: 21, mismatchCount: mismatches.length, mismatches: mismatches.slice(0, 12), js, tsGates: ts, tsResult, ts: now };
         } catch (e) {
             return { source: 'ts-core-rest-gates-shadow', available: true, ok: false, productive: false, reason: 'ts-runtime-error', error: e && e.message ? e.message : String(e), mismatches: [], ts: now };
         }
@@ -1949,7 +2395,7 @@ class CoreLimitsModule extends BaseModule {
 
         const tsGates = restShadow.tsGates || (restShadow.tsResult && restShadow.tsResult.gates) || null;
         if (!tsGates || typeof tsGates !== 'object') return fallback('missing-ts-rest-gates', { shadow: restShadow });
-        const required = ['forecast', 'tariff', 'peak', 'para14a', 'evcsHighLevel', 'grid'];
+        const required = ['forecast', 'tariff', 'peak', 'para14a', 'evcsHighLevel', 'controlledHighLevel', 'grid'];
         for (const key of required) {
             if (!tsGates[key] || typeof tsGates[key] !== 'object') return fallback('missing-ts-rest-gate-' + key, { shadow: restShadow });
         }
@@ -1961,6 +2407,7 @@ class CoreLimitsModule extends BaseModule {
             tariff: { ...((fallbackCore && fallbackCore.tariff) || {}), ...(tsGates.tariff || {}), source: 'ts-core-rest-gates' },
             para14a: { ...((fallbackCore && fallbackCore.para14a) || {}), ...(tsGates.para14a || {}), source: 'ts-core-rest-gates' },
             evcsHighLevel: { ...((fallbackCore && fallbackCore.evcsHighLevel) || {}), ...(tsGates.evcsHighLevel || {}), source: 'ts-core-rest-gates' },
+            controlledHighLevel: { ...((fallbackCore && fallbackCore.controlledHighLevel) || {}), ...(tsGates.controlledHighLevel || {}), source: 'ts-core-rest-gates' },
         };
         const nextBudget = {
             ...fallbackBudget,
@@ -1985,6 +2432,7 @@ class CoreLimitsModule extends BaseModule {
                 'grid',
                 'para14a',
                 'evcsHighLevel',
+                'controlledHighLevel',
             ],
             tsGates,
             shadow: restShadow,
@@ -2162,47 +2610,38 @@ class CoreLimitsModule extends BaseModule {
         const tariffStatus = await readStateString(this.adapter, 'tarif.negativpreisStatus', '');
 
         const p14a = (this.adapter && this.adapter._para14a && typeof this.adapter._para14a === 'object') ? this.adapter._para14a : null;
+        const para14aActive = !!(p14a && p14a.active === true);
+        const para14aMode = para14aActive ? String(p14a.mode || '') : '';
+        const para14aEvcsCapW = para14aActive && Number.isFinite(Number(p14a && p14a.evcsTotalCapW))
+            ? Math.max(0, Number(p14a.evcsTotalCapW))
+            : null;
+        const para14aTotalCapW = para14aActive && Number.isFinite(Number(p14a && p14a.totalCapW))
+            ? Math.max(0, Number(p14a.totalCapW))
+            : null;
+        const para14aAppCapsW = para14aActive && p14a && p14a.appCapsW && typeof p14a.appCapsW === 'object'
+            ? { ...p14a.appCapsW }
+            : {};
+        const para14aSignalFresh = !!(p14a && p14a.signalFresh === true);
+        const para14aSignalStatus = String((p14a && p14a.signalStatus) || '');
 
-        let para14aActive = false;
-        let para14aMode = '';
-        let para14aEvcsCapW = null;
+        const evcsComponents = [];
+        if (typeof peakBudgetW === 'number') evcsComponents.push({ k: 'peak', w: peakBudgetW });
+        if (typeof tariffBudgetW === 'number') evcsComponents.push({ k: 'tariff', w: tariffBudgetW });
+        if (typeof para14aEvcsCapW === 'number') evcsComponents.push({ k: '14a', w: para14aEvcsCapW });
+        const controlledComponents = [];
+        if (typeof peakBudgetW === 'number') controlledComponents.push({ k: 'peak', w: peakBudgetW });
+        if (typeof para14aTotalCapW === 'number') controlledComponents.push({ k: '14a', w: para14aTotalCapW });
 
-        if (p14a && typeof p14a === 'object') {
-            para14aActive = !!p14a.active;
-            para14aMode = para14aActive ? String(p14a.mode || '') : '';
-            const cap = (para14aActive && typeof p14a.evcsTotalCapW === 'number' && Number.isFinite(p14a.evcsTotalCapW) && p14a.evcsTotalCapW > 0)
-                ? p14a.evcsTotalCapW
-                : null;
-            para14aEvcsCapW = (typeof cap === 'number') ? cap : null;
-        } else {
-            const a = await readStateBool(this.adapter, 'para14a.active', false);
-            para14aActive = !!a;
-            para14aMode = para14aActive ? await readStateString(this.adapter, 'para14a.mode', '') : '';
-            const raw = await readStateNumber(this.adapter, 'para14a.evcsTotalCapW', null);
-            para14aEvcsCapW = (para14aActive && typeof raw === 'number' && Number.isFinite(raw) && raw > 0) ? raw : null;
-        }
-
-        const components = [];
-        if (typeof peakBudgetW === 'number') components.push({ k: 'peak', w: peakBudgetW });
-        if (typeof tariffBudgetW === 'number') components.push({ k: 'tariff', w: tariffBudgetW });
-        if (typeof para14aEvcsCapW === 'number') components.push({ k: '14a', w: para14aEvcsCapW });
-
-        let evcsHighLevelCapW = null;
-        let binding = '';
-        if (components.length) {
-            let minW = Number.POSITIVE_INFINITY;
-            for (const c of components) {
-                const w = Number(c.w);
-                if (Number.isFinite(w)) minW = Math.min(minW, w);
-            }
-            evcsHighLevelCapW = Number.isFinite(minW) ? Math.max(0, minW) : null;
-
-            const eps = 0.001;
-            binding = components
-                .filter(c => Number.isFinite(Number(c.w)) && Math.abs(Number(c.w) - Number(evcsHighLevelCapW)) <= eps)
-                .map(c => c.k)
-                .join('+');
-        }
+        const minComponent = (components) => {
+            if (!components.length) return { capW: null, binding: '' };
+            const finite = components.filter((component) => Number.isFinite(Number(component.w)));
+            if (!finite.length) return { capW: null, binding: '' };
+            const capW = Math.max(0, Math.min(...finite.map((component) => Number(component.w))));
+            const binding = finite.filter((component) => Math.abs(Number(component.w) - capW) <= 0.001).map((component) => component.k).join('+');
+            return { capW, binding };
+        };
+        const evcsHighLevel = minComponent(evcsComponents);
+        const controlledHighLevel = minComponent(controlledComponents);
 
         let snapshot = {
             ts: now,
@@ -2238,14 +2677,17 @@ class CoreLimitsModule extends BaseModule {
                 status: tariffStatus || (tariffGridImportPreferred ? 'active_grid_import_preferred' : (tariffNegativeActive ? 'negative_detected' : 'inactive')),
             },
             para14a: {
-                active: !!para14aActive,
+                active: para14aActive,
                 mode: para14aMode,
-                evcsCapW: (typeof para14aEvcsCapW === 'number') ? para14aEvcsCapW : null,
+                evcsCapW: para14aEvcsCapW,
+                totalCapW: para14aTotalCapW,
+                appCapsW: para14aAppCapsW,
+                signalFresh: para14aSignalFresh,
+                signalStatus: para14aSignalStatus,
+                constraintOnly: !!(p14a && p14a.constraintOnly === true),
             },
-            evcsHighLevel: {
-                capW: (typeof evcsHighLevelCapW === 'number') ? evcsHighLevelCapW : null,
-                binding,
-            },
+            evcsHighLevel,
+            controlledHighLevel,
         };
 
         let budgetSnapshot = this._makeBudgetSnapshot(now, snapshot);
@@ -2321,13 +2763,44 @@ class CoreLimitsModule extends BaseModule {
 
             await this.adapter.setStateAsync('ems.core.evcsHighLevelCapW', Math.round(Number(effectiveCoreEvcsHighLevel.capW || 0)), true);
             await this.adapter.setStateAsync('ems.core.evcsHighLevelBinding', String(effectiveCoreEvcsHighLevel.binding || ''), true);
+            const effectiveControlled = snapshot && snapshot.controlledHighLevel && typeof snapshot.controlledHighLevel === 'object' ? snapshot.controlledHighLevel : {};
+            const effectiveP14a = snapshot && snapshot.para14a && typeof snapshot.para14a === 'object' ? snapshot.para14a : {};
+            const effectiveP14aApps = effectiveP14a.appCapsW && typeof effectiveP14a.appCapsW === 'object' ? effectiveP14a.appCapsW : {};
+            await this.adapter.setStateAsync('ems.core.para14aTotalCapW', Math.round(Number(effectiveP14a.totalCapW || 0)), true);
+            await this.adapter.setStateAsync('ems.core.para14aSignalFresh', effectiveP14a.signalFresh === true, true);
+            await this.adapter.setStateAsync('ems.core.para14aSignalStatus', String(effectiveP14a.signalStatus || ''), true);
+            await this.adapter.setStateAsync('ems.core.para14aStorageCapW', Math.round(Number(effectiveP14aApps.storage || 0)), true);
+            await this.adapter.setStateAsync('ems.core.para14aThermalCapW', Math.round(Number(effectiveP14aApps.thermal || 0)), true);
+            await this.adapter.setStateAsync('ems.core.para14aHeatingRodCapW', Math.round(Number(effectiveP14aApps.heatingRod || 0)), true);
+            await this.adapter.setStateAsync('ems.core.controlledHighLevelCapW', Math.round(Number(effectiveControlled.capW || 0)), true);
+            await this.adapter.setStateAsync('ems.core.controlledHighLevelBinding', String(effectiveControlled.binding || ''), true);
             await this.adapter.setStateAsync('ems.core.snapshot', JSON.stringify(snapshot), true);
 
             const b = budgetSnapshot;
+            const typedBudgetPublished = await this._publishCoreRuntimeBudgetPlan(
+                now,
+                b,
+                budgetRuntime,
+                coreTsShadow,
+                coreRestGatesTsShadow,
+            );
+            if (!typedBudgetPublished) {
+            const coreRuntimeStatus = (b && b.tsCoreRuntime && typeof b.tsCoreRuntime === 'object')
+                ? b.tsCoreRuntime
+                : ((this._coreRuntimeTsLast && typeof this._coreRuntimeTsLast === 'object') ? this._coreRuntimeTsLast : {});
+            const sourceParts = [];
+            if (coreRuntimeStatus.active === true) sourceParts.push('ts-core-runtime');
+            if (b.tsProductive && b.tsProductive.active) sourceParts.push('ts-core-budget');
+            if (b.tsRestGatesProductive && b.tsRestGatesProductive.active) sourceParts.push('rest-gates');
+            if (!sourceParts.length) sourceParts.push('js-runtime');
             await this.adapter.setStateAsync('ems.budget.lastUpdate', now, true);
             await this.adapter.setStateAsync('ems.budget.active', true, true);
             await this.adapter.setStateAsync('ems.budget.mode', b.mode || 'central-background', true);
-            await this.adapter.setStateAsync('ems.budget.source', (b.tsRestGatesProductive && b.tsRestGatesProductive.active) ? 'ts-core-budget+rest-gates' : ((b.tsProductive && b.tsProductive.active) ? 'ts-core-budget' : 'js-runtime'), true);
+            await this.adapter.setStateAsync('ems.budget.source', sourceParts.join('+'), true);
+            await this.adapter.setStateAsync('ems.budget.tsCoreRuntimeMode', String(coreRuntimeStatus.mode || 'legacy-js-fallback'), true);
+            await this.adapter.setStateAsync('ems.budget.tsCoreRuntimeFallback', coreRuntimeStatus.fallback === true, true);
+            await this.adapter.setStateAsync('ems.budget.tsCoreRuntimeMismatchCount', Math.max(0, Math.round(Number(coreRuntimeStatus.mismatchCount) || 0)), true);
+            await this.adapter.setStateAsync('ems.budget.tsCoreRuntimeJson', JSON.stringify(coreRuntimeStatus || {}), true);
             await this.adapter.setStateAsync('ems.budget.totalBudgetW', b.gates.total.effectiveW === null ? 0 : roundW(b.gates.total.effectiveW), true);
             await this.adapter.setStateAsync('ems.budget.remainingTotalW', b.gates.total.effectiveW === null ? 0 : roundW(b.gates.total.effectiveW), true);
             await this.adapter.setStateAsync('ems.budget.pvBudgetRawW', roundW(b.gates.pv.rawW), true);
@@ -2449,6 +2922,13 @@ class CoreLimitsModule extends BaseModule {
                 this.adapter.updateValue('ems.budget.flexUsedW', roundW(b.raw.flexUsedW), now);
                 this.adapter.updateValue('ems.budget.consumersJson', JSON.stringify(consumersInit), now);
                 this.adapter.updateValue('ems.budget.tsReservationJson', JSON.stringify((budgetRuntime && budgetRuntime.tsReservationLast) || {}), now);
+                const coreRuntimeStatus = (b && b.tsCoreRuntime && typeof b.tsCoreRuntime === 'object')
+                    ? b.tsCoreRuntime
+                    : ((this._coreRuntimeTsLast && typeof this._coreRuntimeTsLast === 'object') ? this._coreRuntimeTsLast : {});
+                this.adapter.updateValue('ems.budget.tsCoreRuntimeMode', String(coreRuntimeStatus.mode || 'legacy-js-fallback'), now);
+                this.adapter.updateValue('ems.budget.tsCoreRuntimeFallback', coreRuntimeStatus.fallback === true, now);
+                this.adapter.updateValue('ems.budget.tsCoreRuntimeMismatchCount', Math.max(0, Math.round(Number(coreRuntimeStatus.mismatchCount) || 0)), now);
+                this.adapter.updateValue('ems.budget.tsCoreRuntimeJson', JSON.stringify(coreRuntimeStatus || {}), now);
                 this.adapter.updateValue('ems.budget.tsRestGatesJson', JSON.stringify(b.tsRestGatesProductive || b.tsRestGatesShadow || coreRestGatesTsShadow || {}), now);
                 if (b.gates && b.gates.forecast) {
                     this.adapter.updateValue('ems.budget.forecast.nowW', roundW(b.gates.forecast.nowW), now);
@@ -2462,6 +2942,11 @@ class CoreLimitsModule extends BaseModule {
                     this.adapter.updateValue('ems.budget.tariff.currentPriceEurKwh', b.gates.tariff.currentPriceEurKwh, now);
                     this.adapter.updateValue('ems.budget.tariff.status', String(b.gates.tariff.status || ''), now);
                 }
+            }
+            await this.adapter.setStateAsync('ems.budget.phase2PublicationMode', 'legacy-js-publication', true);
+            if (this.adapter && typeof this.adapter.updateValue === 'function') {
+                this.adapter.updateValue('ems.budget.phase2PublicationMode', 'legacy-js-publication', now);
+            }
             }
         } catch {
             // ignore

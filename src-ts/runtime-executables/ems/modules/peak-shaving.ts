@@ -47,6 +47,8 @@
 const { BaseModule } = require('./base');
 const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
 const { ReasonCodes, reasonToGerman } = require('../reasons');
+const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
+const { ActuatorCommandContract } = require('../services/actuator-command-contract');
 
 /**
  * Code-Teil: Klasse `SlidingWindow`
@@ -406,6 +408,8 @@ class PeakShavingModule extends BaseModule {
         /** @type {Map<string, {mode:string, phases:number, baseline:number|null, baselineEnabled:boolean|null}>} */
         this._baselines = new Map();
         this._wasActive = false;
+        this._restorePending = false;
+        this._actuatorContract = new ActuatorCommandContract();
 
         // Atypische Nachkontrolle: laufende Jahres-/HLZF-Maxima werden über States persistiert.
         this._atypicalReviewLoaded = false;
@@ -491,6 +495,13 @@ class PeakShavingModule extends BaseModule {
         await mk('peakShaving.control.overW', 'Over limit (W)', 'number', 'value.power');
         await mk('peakShaving.control.requiredReductionW', 'Required reduction (W)', 'number', 'value.power');
         await mk('peakShaving.control.requiredReductionA', 'Required reduction (A)', 'number', 'value.current');
+        await mk('peakShaving.control.requestedActuatorReductionW', 'Requested actuator reduction (W)', 'number', 'value.power');
+        await mk('peakShaving.control.acceptedActuatorReductionW', 'Accepted actuator reduction (W)', 'number', 'value.power');
+        await mk('peakShaving.control.confirmedActuatorReductionW', 'Confirmed actuator reduction (W)', 'number', 'value.power');
+        await mk('peakShaving.control.unmetActuatorReductionW', 'Unmet actuator reduction (W)', 'number', 'value.power');
+        await mk('peakShaving.control.actuatorWritePendingCount', 'Pending actuator writes', 'number', 'value');
+        await mk('peakShaving.control.actuatorFaultCount', 'Fault locked actuators', 'number', 'value');
+        await mk('peakShaving.control.restorePending', 'Actuator restore pending', 'boolean', 'indicator');
         await mk('peakShaving.control.phaseViolation', 'Phase violation', 'boolean', 'indicator');
         await mk('peakShaving.control.worstPhase', 'Worst phase', 'string', 'text');
         await mk('peakShaving.control.worstPhaseOverA', 'Worst phase over (A)', 'number', 'value.current');
@@ -1743,18 +1754,48 @@ class PeakShavingModule extends BaseModule {
         // Actuation (Step 1.5)
         const actEnabled = !!cfg.actuationEnabled;
         const actuators = Array.isArray(cfg.actuators) ? cfg.actuators : [];
-        this.adapter._peakShavingAuthorityActive = !!(actEnabled && active && requiredReductionW > 0);
+        this.adapter._peakShavingAuthorityActive = !!(actEnabled && ((active && requiredReductionW > 0) || this._restorePending));
 
-        // detect transitions to store/restore baselines
+        // New activation starts with a fresh baseline snapshot. A pending restore
+        // is retried until the real actuator state is confirmed or the contract
+        // enters its bounded fault lock.
         if (active && !this._wasActive) {
             this._baselines.clear();
+            this._restorePending = false;
         }
 
+        let actuatorResult = {
+            requestedReductionW: active ? requiredReductionW : 0,
+            acceptedReductionW: 0,
+            confirmedReductionW: 0,
+            unmetReductionW: active ? requiredReductionW : 0,
+            pendingCount: 0,
+            faultCount: 0,
+        };
         if (actEnabled && active && requiredReductionW > 0) {
-            await this._applyActuators(actuators, requiredReductionW, voltageV);
-        } else if (this._wasActive && !active) {
-            await this._restoreActuators(actuators);
+            actuatorResult = await this._applyActuators(actuators, requiredReductionW, voltageV);
+        } else if (actEnabled && !active && (this._wasActive || this._restorePending || this._baselines.size > 0)) {
+            const restore = await this._restoreActuators(actuators);
+            this._restorePending = !restore.complete;
+            actuatorResult.pendingCount = restore.pendingCount;
+            actuatorResult.faultCount = restore.faultCount;
+        } else if (!actEnabled) {
+            this._restorePending = false;
         }
+        // Restore authority must remain visible in the same cycle in which the
+        // restore is still pending. Otherwise a later comfort module could write
+        // against a not-yet-restored actuator before the next EMS tick.
+        this.adapter._peakShavingAuthorityActive = !!(actEnabled && (
+            (active && requiredReductionW > 0) || this._restorePending || this._baselines.size > 0
+        ));
+
+        await this.adapter.setStateAsync('peakShaving.control.requestedActuatorReductionW', Math.round(Math.max(0, actuatorResult.requestedReductionW || 0)), true);
+        await this.adapter.setStateAsync('peakShaving.control.acceptedActuatorReductionW', Math.round(Math.max(0, actuatorResult.acceptedReductionW || 0)), true);
+        await this.adapter.setStateAsync('peakShaving.control.confirmedActuatorReductionW', Math.round(Math.max(0, actuatorResult.confirmedReductionW || 0)), true);
+        await this.adapter.setStateAsync('peakShaving.control.unmetActuatorReductionW', Math.round(Math.max(0, actuatorResult.unmetReductionW || 0)), true);
+        await this.adapter.setStateAsync('peakShaving.control.actuatorWritePendingCount', Math.max(0, Math.round(actuatorResult.pendingCount || 0)), true);
+        await this.adapter.setStateAsync('peakShaving.control.actuatorFaultCount', Math.max(0, Math.round(actuatorResult.faultCount || 0)), true);
+        await this.adapter.setStateAsync('peakShaving.control.restorePending', !!this._restorePending, true);
 
 
         // MU6.1: diagnostics logging (compact)
@@ -1811,10 +1852,203 @@ class PeakShavingModule extends BaseModule {
             });
         };
         await mk('target', 'Target (W/A)', 'number', 'value');
+        await mk('owner', 'Actuator owner', 'string', 'text');
+        await mk('requestedReductionW', 'Requested reduction (W)', 'number', 'value.power');
+        await mk('acceptedReductionW', 'Accepted reduction (W)', 'number', 'value.power');
+        await mk('confirmedReductionW', 'Confirmed reduction (W)', 'number', 'value.power');
         await mk('appliedReductionW', 'Applied reduction (W)', 'number', 'value.power');
+        await mk('writeAccepted', 'Write accepted', 'boolean', 'indicator');
+        await mk('readbackOk', 'Readback confirmed', 'boolean', 'indicator');
+        await mk('writePending', 'Write pending', 'boolean', 'indicator');
+        await mk('retryCount', 'Retries', 'number', 'value');
+        await mk('faultLocked', 'Fault locked', 'boolean', 'indicator');
+        await mk('writeContractStatus', 'Write contract status', 'string', 'text');
+        await mk('restorePending', 'Restore pending', 'boolean', 'indicator');
         await mk('status', 'Status', 'string', 'text');
         await mk('lastWrite', 'Last write', 'number', 'value.time');
         return ch;
+    }
+
+    _actuatorOwner(safeId) {
+        return `peakShaving.${safeId}`;
+    }
+
+    _actuatorIds(a, safeId) {
+        const ids = [];
+        for (const key of [`ps.act.${safeId}.setpoint`, `ps.act.${safeId}.enable`]) {
+            try {
+                const id = String(this.dp && this.dp.getEntry && this.dp.getEntry(key)?.objectId || '').trim();
+                if (id && !ids.includes(id)) ids.push(id);
+            } catch (_e) {}
+        }
+        if (a.readbackId && !ids.includes(a.readbackId)) ids.push(a.readbackId);
+        return ids;
+    }
+
+    _actuatorHasExclusiveAuthority(a, safeId, owner) {
+        const matrix = this.adapter && this.adapter._stageAActuatorOwnerById;
+        const ids = this._actuatorIds(a, safeId).filter((id) => id !== a.readbackId);
+        if (!ids.length || !matrix || typeof matrix !== 'object') return false;
+        return ids.every((id) => {
+            const row = matrix[id];
+            const activeOwners = Array.isArray(row && row.activeOwners)
+                ? row.activeOwners.map((value) => String(value || '').trim()).filter(Boolean)
+                : [];
+            return activeOwners.length === 1 && activeOwners[0] === owner;
+        });
+    }
+
+    _actuatorContractCfg(a) {
+        return {
+            requireReadback: a.requireReadback === true && !!a.readbackKey,
+            ackTimeoutMs: Math.max(250, Math.round(num(a.readbackTimeoutSec, 5) * 1000)),
+            retryDelayMs: Math.max(250, Math.round(num(a.retryDelaySec, 3) * 1000)),
+            maxRetries: Math.max(0, Math.round(num(a.maxRetries, 3))),
+            faultLockMs: Math.max(1000, Math.round(num(a.faultLockSec, 60) * 1000)),
+        };
+    }
+
+    _readActuatorReadback(a, safeId) {
+        try {
+            const staleMs = Math.max(250, Math.round(num(a.readbackMaxAgeSec, 15) * 1000));
+            if (a.readbackKey) {
+                if (a.mode === 'onOff') {
+                    const value = this.dp.getBoolean(a.readbackKey, null);
+                    const age = this.dp.getAgeMs ? this.dp.getAgeMs(a.readbackKey) : null;
+                    return (value === null || (Number.isFinite(age) && age > staleMs)) ? null : !!value;
+                }
+                const value = this.dp.getNumberFresh(a.readbackKey, staleMs, null);
+                return Number.isFinite(Number(value)) ? Number(value) : null;
+            }
+            if (a.mode === 'onOff' && a.measurePowerId) {
+                const value = this.dp.getNumberFresh(`ps.act.${safeId}.measureW`, staleMs, null);
+                return Number.isFinite(Number(value)) ? Number(value) : null;
+            }
+        } catch (_e) {}
+        return null;
+    }
+
+    _actuatorReadbackMatches(a, requested, actual) {
+        if (actual === null || actual === undefined) return null;
+        if (a.mode === 'onOff') {
+            const expectedEnabled = requested && requested.enable === true;
+            if (typeof actual === 'boolean') return actual === expectedEnabled;
+            const n = Number(actual);
+            if (!Number.isFinite(n)) return null;
+            const toleranceW = Math.max(10, num(a.readbackTolerance, 100));
+            return expectedEnabled ? n > toleranceW : n <= toleranceW;
+        }
+        const expected = Number(requested && requested.target);
+        const value = Number(actual);
+        if (!Number.isFinite(expected) || !Number.isFinite(value)) return null;
+        const tolerance = Math.max(0.01, num(a.readbackTolerance, a.mode === 'limitA' ? 0.25 : Math.max(50, Math.abs(expected) * 0.03)));
+        return Math.abs(value - expected) <= tolerance;
+    }
+
+    async _publishActuatorContract(ch, owner, requestedReductionW, acceptedReductionW, confirmedReductionW, contract, restorePending = false) {
+        await this.adapter.setStateAsync(`${ch}.owner`, owner, true);
+        await this.adapter.setStateAsync(`${ch}.requestedReductionW`, Math.round(Math.max(0, num(requestedReductionW, 0))), true);
+        await this.adapter.setStateAsync(`${ch}.acceptedReductionW`, Math.round(Math.max(0, num(acceptedReductionW, 0))), true);
+        await this.adapter.setStateAsync(`${ch}.confirmedReductionW`, Math.round(Math.max(0, num(confirmedReductionW, 0))), true);
+        await this.adapter.setStateAsync(`${ch}.appliedReductionW`, Math.round(Math.max(0, num(confirmedReductionW, 0))), true);
+        await this.adapter.setStateAsync(`${ch}.writeAccepted`, !!contract.accepted, true);
+        await this.adapter.setStateAsync(`${ch}.readbackOk`, contract.readbackOk === true, true);
+        await this.adapter.setStateAsync(`${ch}.writePending`, !!contract.pending, true);
+        await this.adapter.setStateAsync(`${ch}.retryCount`, Math.max(0, Math.round(num(contract.retryCount, 0))), true);
+        await this.adapter.setStateAsync(`${ch}.faultLocked`, !!contract.faultLocked, true);
+        await this.adapter.setStateAsync(`${ch}.writeContractStatus`, String(contract.status || ''), true);
+        await this.adapter.setStateAsync(`${ch}.restorePending`, !!restorePending, true);
+    }
+
+    async _writeActuatorCommand(a, safeId, ch, requested, reason, releaseAuthority = false) {
+        const owner = this._actuatorOwner(safeId);
+        const key = `peakShaving:${safeId}`;
+        const cfg = this._actuatorContractCfg(a);
+        const now = Date.now();
+        const actualBefore = this._readActuatorReadback(a, safeId);
+        const readbackBefore = this._actuatorReadbackMatches(a, requested, actualBefore);
+        const confirmed = this._actuatorContract.confirmFromReadback(key, requested, actualBefore, readbackBefore === true, now);
+        if (confirmed) return { accepted: true, confirmed: true, contract: confirmed, owner, actual: actualBefore };
+
+        const decision = this._actuatorContract.prepare(key, requested, now, cfg);
+        if (!decision.allowed) {
+            return { accepted: false, confirmed: false, contract: this._actuatorContract.result(key, now, decision.targetChanged), owner, actual: actualBefore };
+        }
+
+        const enforceAuthority = this._actuatorHasExclusiveAuthority(a, safeId, owner);
+        const writeResult = await withActuatorShadowContext(this.adapter, {
+            owner,
+            module: 'peakShaving',
+            priority: priorityForOwner(owner),
+            reason,
+            leaseMs: 20000,
+            kind: 'peak-shaving-actuator',
+            enforceAuthority,
+            releaseAuthority,
+        }, async () => {
+            const results = [];
+            if (a.mode === 'onOff') {
+                if (a.enableId) results.push(await this.dp.writeBoolean(`ps.act.${safeId}.enable`, requested.enable === true, false));
+            } else {
+                if (a.setpointId) results.push(await this.dp.writeNumber(`ps.act.${safeId}.setpoint`, requested.target, false));
+                if (a.enableId) results.push(await this.dp.writeBoolean(`ps.act.${safeId}.enable`, requested.enable === true, false));
+            }
+            return results.length > 0 && results.every((value) => value !== false);
+        });
+        const accepted = writeResult === true;
+        const actualAfter = this._readActuatorReadback(a, safeId);
+        const readbackOk = this._actuatorReadbackMatches(a, requested, actualAfter);
+        const contract = this._actuatorContract.complete(key, requested, accepted, readbackOk, actualAfter, Date.now(), cfg);
+        return { accepted, confirmed: contract.confirmed, contract, owner, actual: actualAfter };
+    }
+
+    _normalizeActuators(actuators) {
+        return (Array.isArray(actuators) ? actuators : [])
+            .filter((row) => row && row.enabled !== false)
+            .map((row) => ({
+                id: String(row.id || '').trim(),
+                name: String(row.name || ''),
+                mode: String(row.mode || 'limitW'),
+                phases: Number(row.phases || 3),
+                priority: Number(row.priority || 999),
+                measurePowerId: String(row.measurePowerId || '').trim(),
+                setpointId: String(row.setpointId || '').trim(),
+                enableId: String(row.enableId || '').trim(),
+                readbackId: String(row.readbackId || row.actualId || '').trim(),
+                readbackScale: Number.isFinite(Number(row.readbackScale)) ? Number(row.readbackScale) : 1,
+                readbackInvert: row.readbackInvert === true,
+                requireReadback: row.requireReadback === true,
+                readbackTolerance: num(row.readbackTolerance, null),
+                readbackMaxAgeSec: num(row.readbackMaxAgeSec, 15),
+                readbackTimeoutSec: num(row.readbackTimeoutSec, 5),
+                retryDelaySec: num(row.retryDelaySec, 3),
+                maxRetries: num(row.maxRetries, 3),
+                faultLockSec: num(row.faultLockSec, 60),
+                min: num(row.min, null),
+                max: num(row.max, null),
+            }))
+            .filter((row) => row.id && (row.setpointId || row.enableId))
+            .sort((a, b) => (a.priority - b.priority) || a.id.localeCompare(b.id));
+    }
+
+    async _prepareActuatorDatapoints(a, safeId) {
+        if (a.measurePowerId) await this.dp.upsert({ key: `ps.act.${safeId}.measureW`, objectId: a.measurePowerId, dataType: 'number', direction: 'in', unit: 'W' });
+        if (a.setpointId) await this.dp.upsert({ key: `ps.act.${safeId}.setpoint`, objectId: a.setpointId, dataType: 'number', direction: 'out' });
+        if (a.enableId) await this.dp.upsert({ key: `ps.act.${safeId}.enable`, objectId: a.enableId, dataType: 'boolean', direction: 'out' });
+        if (a.readbackId) {
+            await this.dp.upsert({
+                key: `ps.act.${safeId}.readback`,
+                objectId: a.readbackId,
+                dataType: a.mode === 'onOff' ? 'boolean' : 'number',
+                direction: 'in',
+                scale: a.readbackScale,
+                invert: a.readbackInvert,
+                unit: a.mode === 'limitA' ? 'A' : (a.mode === 'limitW' ? 'W' : ''),
+            });
+            a.readbackKey = `ps.act.${safeId}.readback`;
+        } else {
+            a.readbackKey = '';
+        }
     }
 
     /**
@@ -1830,131 +2064,101 @@ class PeakShavingModule extends BaseModule {
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     async _applyActuators(actuators, requestedReductionW, voltageV) {
-        let remainingW = requestedReductionW;
-
-        // stable ordering: enabled, then priority ascending
-        const list = actuators
-            .filter(a => a && a.enabled !== false)
-            .map(a => ({
-                id: String(a.id || '').trim(),
-                name: a.name || '',
-                mode: String(a.mode || 'limitW'),
-                phases: Number(a.phases || 3),
-                priority: Number(a.priority || 999),
-                measurePowerId: String(a.measurePowerId || '').trim(),
-                setpointId: String(a.setpointId || '').trim(),
-                enableId: String(a.enableId || '').trim(),
-                min: num(a.min, null),
-                max: num(a.max, null),
-            }))
-            .filter(a => a.id && (a.setpointId || a.enableId))
-            .sort((x, y) => (x.priority - y.priority) || x.id.localeCompare(y.id));
+        let remainingW = Math.max(0, num(requestedReductionW, 0));
+        let acceptedReductionW = 0;
+        let confirmedReductionW = 0;
+        let pendingCount = 0;
+        let faultCount = 0;
+        const list = this._normalizeActuators(actuators);
 
         for (const a of list) {
             if (remainingW <= 0) break;
             const safeId = a.id.toLowerCase().replace(/[^a-z0-9_]+/g, '_').slice(0, 64);
             const ch = await this._ensureActuatorChannel(safeId);
+            await this._prepareActuatorDatapoints(a, safeId);
 
-            // Upsert datapoints
-            if (a.measurePowerId) await this.dp.upsert({ key: `ps.act.${safeId}.measureW`, objectId: a.measurePowerId, dataType: 'number', direction: 'in', unit: 'W' });
-            if (a.setpointId) await this.dp.upsert({ key: `ps.act.${safeId}.setpoint`, objectId: a.setpointId, dataType: 'number', direction: 'out' });
-            if (a.enableId) await this.dp.upsert({ key: `ps.act.${safeId}.enable`, objectId: a.enableId, dataType: 'boolean', direction: 'out' });
-
-            const phases = (a.phases === 1 ? 1 : 3);
-            const vFactor = voltageV * phases;
-
-            // Baseline capture (once per activation)
+            const phases = a.phases === 1 ? 1 : 3;
+            const vFactor = Math.max(1, voltageV * phases);
             let baseline = null;
             let baselineEnabled = null;
-
             const mem = this._baselines.get(safeId);
             if (mem) {
                 baseline = mem.baseline;
                 baselineEnabled = mem.baselineEnabled;
             } else {
-                // baseline from measured power, else from current setpoint, else from configured max
                 if (a.mode === 'limitW') {
-                    const meas = a.measurePowerId ? this.dp.getNumber(`ps.act.${safeId}.measureW`, null) : null;
-                    const curSet = a.setpointId ? this.dp.getNumber(`ps.act.${safeId}.setpoint`, null) : null;
-                    baseline = typeof meas === 'number' ? meas : (typeof curSet === 'number' ? curSet : (typeof a.max === 'number' ? a.max : null));
+                    const measured = a.measurePowerId ? this.dp.getNumber(`ps.act.${safeId}.measureW`, null) : null;
+                    const currentSetpoint = a.setpointId ? this.dp.getNumber(`ps.act.${safeId}.setpoint`, null) : null;
+                    baseline = typeof measured === 'number' ? measured : (typeof currentSetpoint === 'number' ? currentSetpoint : (typeof a.max === 'number' ? a.max : null));
                 } else if (a.mode === 'limitA') {
-                    const curSet = a.setpointId ? this.dp.getNumber(`ps.act.${safeId}.setpoint`, null) : null;
-                    baseline = typeof curSet === 'number' ? curSet : (typeof a.max === 'number' ? a.max : null);
-                } else if (a.mode === 'onOff') {
-                    baseline = null;
+                    const currentSetpoint = a.setpointId ? this.dp.getNumber(`ps.act.${safeId}.setpoint`, null) : null;
+                    baseline = typeof currentSetpoint === 'number' ? currentSetpoint : (typeof a.max === 'number' ? a.max : null);
                 }
-
                 baselineEnabled = a.enableId ? this.dp.getBoolean(`ps.act.${safeId}.enable`, null) : null;
                 this._baselines.set(safeId, { mode: a.mode, phases, baseline, baselineEnabled });
             }
 
+            let requestedForActuatorW = 0;
+            let requested = null;
+            let targetValue = 0;
             if (a.mode === 'onOff') {
-                // if we can cover a chunk of remaining, disable the load
-                const measW = a.measurePowerId ? this.dp.getNumber(`ps.act.${safeId}.measureW`, null) : null;
-                const assumedW = typeof measW === 'number' && measW > 0 ? measW : (typeof a.max === 'number' ? a.max : 0);
-                if (assumedW > 0 && remainingW >= assumedW * 0.5) {
-                    if (a.enableId) await this.dp.writeBoolean(`ps.act.${safeId}.enable`, false, false);
-                    await this.adapter.setStateAsync(`${ch}.target`, 0, true);
-                    await this.adapter.setStateAsync(`${ch}.appliedReductionW`, assumedW, true);
-                    await this.adapter.setStateAsync(`${ch}.status`, 'disabled', true);
-                    await this.adapter.setStateAsync(`${ch}.lastWrite`, Date.now(), true);
-                    remainingW -= assumedW;
-                } else {
+                const measuredW = a.measurePowerId ? this.dp.getNumber(`ps.act.${safeId}.measureW`, null) : null;
+                const assumedW = typeof measuredW === 'number' && measuredW > 0 ? measuredW : (typeof a.max === 'number' ? a.max : 0);
+                if (!(assumedW > 0 && remainingW >= assumedW * 0.5 && a.enableId)) {
                     await this.adapter.setStateAsync(`${ch}.status`, 'skipped', true);
+                    continue;
                 }
-                continue;
-            }
-
-            if (typeof baseline !== 'number' || !Number.isFinite(baseline)) {
+                requestedForActuatorW = Math.min(remainingW, assumedW);
+                requested = { enable: false };
+                targetValue = 0;
+            } else if (typeof baseline !== 'number' || !Number.isFinite(baseline)) {
                 await this.adapter.setStateAsync(`${ch}.status`, 'no_baseline', true);
                 continue;
-            }
-
-            if (a.mode === 'limitW') {
+            } else if (a.mode === 'limitW') {
                 const minW = typeof a.min === 'number' ? a.min : 0;
                 const maxW = typeof a.max === 'number' ? a.max : baseline;
                 const baseW = clamp(baseline, minW, maxW);
                 const reducibleW = Math.max(0, baseW - minW);
-                const useW = Math.min(remainingW, reducibleW);
-                const targetW = baseW - useW;
-
-                if (a.setpointId) await this.dp.writeNumber(`ps.act.${safeId}.setpoint`, targetW, false);
-                if (a.enableId) await this.dp.writeBoolean(`ps.act.${safeId}.enable`, targetW > 0, false);
-
-                await this.adapter.setStateAsync(`${ch}.target`, targetW, true);
-                await this.adapter.setStateAsync(`${ch}.appliedReductionW`, useW, true);
-                await this.adapter.setStateAsync(`${ch}.status`, 'limited', true);
-                await this.adapter.setStateAsync(`${ch}.lastWrite`, Date.now(), true);
-
-                remainingW -= useW;
-                continue;
-            }
-
-            if (a.mode === 'limitA') {
+                requestedForActuatorW = Math.min(remainingW, reducibleW);
+                targetValue = baseW - requestedForActuatorW;
+                requested = { target: targetValue, enable: targetValue > 0 };
+            } else if (a.mode === 'limitA') {
                 const minA = typeof a.min === 'number' ? a.min : 0;
                 const maxA = typeof a.max === 'number' ? a.max : baseline;
                 const baseA = clamp(baseline, minA, maxA);
-
-                const reducibleA = Math.max(0, baseA - minA);
-                const reducibleW = reducibleA * vFactor;
-                const useW = Math.min(remainingW, reducibleW);
-                const useA = useW / vFactor;
-                const targetA = baseA - useA;
-
-                if (a.setpointId) await this.dp.writeNumber(`ps.act.${safeId}.setpoint`, targetA, false);
-                if (a.enableId) await this.dp.writeBoolean(`ps.act.${safeId}.enable`, targetA > 0, false);
-
-                await this.adapter.setStateAsync(`${ch}.target`, targetA, true);
-                await this.adapter.setStateAsync(`${ch}.appliedReductionW`, useW, true);
-                await this.adapter.setStateAsync(`${ch}.status`, 'limited', true);
-                await this.adapter.setStateAsync(`${ch}.lastWrite`, Date.now(), true);
-
-                remainingW -= useW;
+                const reducibleW = Math.max(0, (baseA - minA) * vFactor);
+                requestedForActuatorW = Math.min(remainingW, reducibleW);
+                targetValue = baseA - (requestedForActuatorW / vFactor);
+                requested = { target: targetValue, enable: targetValue > 0 };
+            } else {
+                await this.adapter.setStateAsync(`${ch}.status`, 'unsupported_mode', true);
                 continue;
             }
 
-            await this.adapter.setStateAsync(`${ch}.status`, 'unsupported_mode', true);
+            if (!(requestedForActuatorW > 0) || !requested) continue;
+            const result = await this._writeActuatorCommand(a, safeId, ch, requested, 'peak-reduction', false);
+            const acceptedW = result.accepted ? requestedForActuatorW : 0;
+            const confirmedW = result.confirmed ? requestedForActuatorW : 0;
+            acceptedReductionW += acceptedW;
+            confirmedReductionW += confirmedW;
+            remainingW = Math.max(0, remainingW - confirmedW);
+            if (result.contract.pending) pendingCount += 1;
+            if (result.contract.faultLocked) faultCount += 1;
+
+            await this.adapter.setStateAsync(`${ch}.target`, targetValue, true);
+            await this.adapter.setStateAsync(`${ch}.status`, result.confirmed ? (a.mode === 'onOff' ? 'disabled-confirmed' : 'limited-confirmed') : String(result.contract.status || 'pending'), true);
+            if (result.accepted) await this.adapter.setStateAsync(`${ch}.lastWrite`, Date.now(), true);
+            await this._publishActuatorContract(ch, result.owner, requestedForActuatorW, acceptedW, confirmedW, result.contract, false);
         }
+
+        return {
+            requestedReductionW: Math.max(0, num(requestedReductionW, 0)),
+            acceptedReductionW,
+            confirmedReductionW,
+            unmetReductionW: Math.max(0, num(requestedReductionW, 0) - confirmedReductionW),
+            pendingCount,
+            faultCount,
+        };
     }
 
     /**
@@ -1970,33 +2174,61 @@ class PeakShavingModule extends BaseModule {
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     async _restoreActuators(actuators) {
-        const list = (Array.isArray(actuators) ? actuators : [])
-            .filter(a => a && a.enabled !== false)
-            .map(a => ({
-                id: String(a.id || '').trim(),
-                mode: String(a.mode || 'limitW'),
-                setpointId: String(a.setpointId || '').trim(),
-                enableId: String(a.enableId || '').trim(),
-            }))
-            .filter(a => a.id && (a.setpointId || a.enableId));
+        const list = this._normalizeActuators(actuators);
+        let pendingCount = 0;
+        let faultCount = 0;
+        const restored = [];
 
         for (const a of list) {
             const safeId = a.id.toLowerCase().replace(/[^a-z0-9_]+/g, '_').slice(0, 64);
             const mem = this._baselines.get(safeId);
             if (!mem) continue;
+            const ch = await this._ensureActuatorChannel(safeId);
+            await this._prepareActuatorDatapoints(a, safeId);
 
-            if (a.setpointId) await this.dp.upsert({ key: `ps.act.${safeId}.setpoint`, objectId: a.setpointId, dataType: 'number', direction: 'out' });
-            if (a.enableId) await this.dp.upsert({ key: `ps.act.${safeId}.enable`, objectId: a.enableId, dataType: 'boolean', direction: 'out' });
+            let requested = null;
+            let targetValue = 0;
+            if (a.mode === 'onOff') {
+                if (typeof mem.baselineEnabled !== 'boolean' || !a.enableId) {
+                    restored.push(safeId);
+                    this._actuatorContract.release(`peakShaving:${safeId}`);
+                    continue;
+                }
+                requested = { enable: mem.baselineEnabled };
+                targetValue = mem.baselineEnabled ? 1 : 0;
+            } else if (typeof mem.baseline === 'number' && Number.isFinite(mem.baseline)) {
+                requested = { target: mem.baseline, enable: typeof mem.baselineEnabled === 'boolean' ? mem.baselineEnabled : mem.baseline > 0 };
+                targetValue = mem.baseline;
+            } else if (typeof mem.baselineEnabled === 'boolean' && a.enableId) {
+                requested = { target: 0, enable: mem.baselineEnabled };
+                targetValue = mem.baselineEnabled ? 1 : 0;
+            }
 
-            if (typeof mem.baseline === 'number' && Number.isFinite(mem.baseline) && a.setpointId) {
-                await this.dp.writeNumber(`ps.act.${safeId}.setpoint`, mem.baseline, false);
+            if (!requested) {
+                restored.push(safeId);
+                this._actuatorContract.release(`peakShaving:${safeId}`);
+                continue;
             }
-            if (a.enableId && typeof mem.baselineEnabled === 'boolean') {
-                await this.dp.writeBoolean(`ps.act.${safeId}.enable`, mem.baselineEnabled, false);
+
+            const result = await this._writeActuatorCommand(a, safeId, ch, requested, 'peak-restore', true);
+            const restoreComplete = result.confirmed || (result.accepted && a.requireReadback !== true);
+            if (restoreComplete) {
+                restored.push(safeId);
+                this._actuatorContract.release(`peakShaving:${safeId}`);
+            } else {
+                if (result.contract.pending) pendingCount += 1;
+                if (result.contract.faultLocked) faultCount += 1;
             }
+            await this.adapter.setStateAsync(`${ch}.target`, targetValue, true);
+            await this.adapter.setStateAsync(`${ch}.status`, restoreComplete ? 'restored' : String(result.contract.status || 'restore-pending'), true);
+            if (result.accepted) await this.adapter.setStateAsync(`${ch}.lastWrite`, Date.now(), true);
+            await this._publishActuatorContract(ch, result.owner, 0, 0, 0, result.contract, !restoreComplete);
         }
-        this._baselines.clear();
+
+        for (const safeId of restored) this._baselines.delete(safeId);
+        return { complete: this._baselines.size === 0, pendingCount, faultCount };
     }
+
 }
 
 module.exports = { PeakShavingModule };

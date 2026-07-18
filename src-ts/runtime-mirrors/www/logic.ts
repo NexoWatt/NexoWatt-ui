@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: d7f8a9d437bcfa780f9f8e95ea0c8bd531fc1df8a7526737eadb7af3f10def9f
+ * Original-Hash: 5058226e396c8b8da892d6e9a414a7a2348e297944c2aa9c4c874df8c156eb73
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/logic.ts
- * Quell-Hash: sha256:3f3d49c8de007bbc3c5934a067e6fba5a239435fe168c09e3eacd4e468dfdf53
+ * Quell-Hash: sha256:2ec20276a7202edb195f00e2955d99fb32731f7f65f21e9f83e86b0fa6405b79
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1050,8 +1050,18 @@ function nwBuildLogicLibrary() {
         ] },
         { key: 'pulseMs', label: 'Rücksetzen (ms)', kind: 'number', placeholder: '0' },
         { key: 'dpId', label: 'Fallback DP', kind: 'dp', placeholder: 'optional' },
+        { key: 'readbackId', label: 'Readback DP', kind: 'dp', placeholder: 'optional' },
+        { key: 'requireReadback', label: 'Readback erforderlich', kind: 'select', options: [
+          { value: 'false', label: 'Nein' }, { value: 'true', label: 'Ja' },
+        ] },
+        { key: 'readbackMaxAgeMs', label: 'Max. Readback-Alter (ms)', kind: 'number', placeholder: '15000' },
+        { key: 'ackTimeoutMs', label: 'Readback-Timeout (ms)', kind: 'number', placeholder: '5000' },
+        { key: 'retryDelayMs', label: 'Wiederholung nach (ms)', kind: 'number', placeholder: '3000' },
+        { key: 'maxRetries', label: 'Max. Wiederholungen', kind: 'number', placeholder: '0' },
+        { key: 'faultLockMs', label: 'Fehlerverriegelung (ms)', kind: 'number', placeholder: '60000' },
+        { key: 'leaseMs', label: 'Aktor-Lease (ms)', kind: 'number', placeholder: '60000' },
       ],
-      defaults: { sceneId: '', edge: 'rising', payload: 'true', pulseMs: 0, dpId: '' },
+      defaults: { sceneId: '', edge: 'rising', payload: 'true', pulseMs: 0, dpId: '', readbackId: '', requireReadback: 'false', readbackMaxAgeMs: 15000, ackTimeoutMs: 5000, retryDelayMs: 3000, maxRetries: 0, faultLockMs: 60000, leaseMs: 60000, autoRetry: 'false' },
     },
 
     // --- Output
@@ -1069,8 +1079,33 @@ function nwBuildLogicLibrary() {
           { value: 'true', label: 'ack=true (nur spiegeln)' },
         ] },
         { key: 'minIntervalMs', label: 'Min. Schreibabstand (ms)', kind: 'number', placeholder: '100' },
+        { key: 'readbackId', label: 'Readback DP', kind: 'dp', placeholder: 'optional; sonst Ziel-DP' },
+        { key: 'requireReadback', label: 'Readback erforderlich', kind: 'select', options: [
+          { value: 'false', label: 'Nein' }, { value: 'true', label: 'Ja' },
+        ] },
+        { key: 'readbackTolerance', label: 'Readback-Toleranz', kind: 'number', placeholder: '1' },
+        { key: 'readbackMaxAgeMs', label: 'Max. Readback-Alter (ms)', kind: 'number', placeholder: '15000' },
+        { key: 'ackTimeoutMs', label: 'ACK-/Readback-Timeout (ms)', kind: 'number', placeholder: '5000' },
+        { key: 'retryDelayMs', label: 'Wiederholung nach (ms)', kind: 'number', placeholder: '3000' },
+        { key: 'maxRetries', label: 'Max. Wiederholungen', kind: 'number', placeholder: '3' },
+        { key: 'faultLockMs', label: 'Fehlerverriegelung (ms)', kind: 'number', placeholder: '60000' },
+        { key: 'leaseMs', label: 'Aktor-Lease (ms)', kind: 'number', placeholder: '60000' },
+        { key: 'releaseOnIdle', label: 'Bei 0/false an Automatik zurückgeben', kind: 'select', options: [
+          { value: 'true', label: 'Ja' }, { value: 'false', label: 'Nein' },
+        ] },
+        { key: 'budgetMode', label: 'Zentrales EMS-Budget', kind: 'select', options: [
+          { value: 'none', label: 'Kein Budget / normaler DP' },
+          { value: 'pv', label: 'PV-Grant' },
+          { value: 'total', label: 'Gesamt-/Netz-Grant' },
+        ] },
+        { key: 'budgetPowerW', label: 'Budget-Leistung (W)', kind: 'number', placeholder: '0 = numerischen Eingang verwenden' },
+        { key: 'budgetAction', label: 'Bei zu wenig Budget', kind: 'select', options: [
+          { value: 'gate', label: 'Aus/0 bis voller Bedarf verfügbar' },
+          { value: 'clamp', label: 'Numerischen Leistungswert begrenzen' },
+        ] },
+        { key: 'budgetPriority', label: 'Budget-Priorität', kind: 'number', placeholder: '900' },
       ],
-      defaults: { dpId: '', ack: 'false', minIntervalMs: 100 },
+      defaults: { dpId: '', ack: 'false', minIntervalMs: 100, readbackId: '', requireReadback: 'false', readbackTolerance: 1, readbackMaxAgeMs: 15000, ackTimeoutMs: 5000, retryDelayMs: 3000, maxRetries: 3, faultLockMs: 60000, leaseMs: 60000, releaseOnIdle: 'true', budgetMode: 'none', budgetPowerW: 0, budgetAction: 'gate', budgetPriority: 900, autoRetry: 'true' },
     },
   ];
 

@@ -1,3 +1,60 @@
+## 0.8.120 - 2026-07-18
+
+- TypeScript Core-Limits Phase 2: bereits aufgelöste Messwerte werden über einen normalisierten, typisierten Quellenvertrag an den zentralen Core übergeben. `0 W`, `null`, stale/usable und Quellenangaben bleiben eindeutig getrennt.
+- Verbraucher-Grants und Reservierungen laufen jetzt über dieselbe typisierte Core-Runtime einschließlich Kunden-PV-Aufteilung und §14a-App-Caps. Restbudgets, Verbraucherreihenfolge und Reservierungsdiagnose werden deterministisch fortgeschrieben.
+- Neue typisierte Sequenz-API für EVCS, Speicher, Thermik und Heizstab; die bestehende Modulreihenfolge bleibt unverändert.
+- Budget-State- und Cache-Publikation wird aus einem typisierten Publikationsplan erzeugt. Bei fehlendem Spiegel oder Feldabweichung übernimmt automatisch der bisherige JavaScript-Publikationspfad.
+- Fehlerkorrektur im Zahlenvertrag: `null`, `undefined`, leere Strings und Booleanwerte werden nicht mehr versehentlich als numerische `0` interpretiert.
+- Neue Regression `test:core-limits-typed-runtime-phase2` mit produktivem Publikationspfad, erzwungenem Fallback und 50.000 randomisierten Reservierungssequenzen.
+- Service-Worker-Cache auf `nexowatt-cache-v422` erhöht.
+
+## 0.8.119 - 2026-07-18
+
+- Echte TypeScript-Typisierung des zentralen EMS-Kerns, Phase 1: neue streng typisierte, seiteneffektfreie `core-runtime` für NVP-, PV-, Headroom-, zentrale Grant- und Budget-Snapshot-Berechnungen.
+- Produktiver Core-Limits-Pfad übernimmt den typisierten Snapshot nur nach vollständiger Feldparität zur bewährten Legacy-Rechnung; bei Spiegel-, Laufzeit- oder Ergebnisabweichungen bleibt automatisch der JavaScript-Fallback aktiv.
+- Zentrale §14a-App-Caps und die Kunden-PV-Aufteilung werden im typisierten Grant-Vertrag berücksichtigt.
+- Neue interne Diagnose `ems.budget.tsCoreRuntime*` zeigt produktive Übernahme, Fallback und Abweichungen, ohne den normalen AppCenter-Status zu überladen.
+- Neue Regression `test:core-limits-typed-runtime-phase1` mit produktivem Modulpfad, erzwungenem Fallback und 50.000 randomisierten Budget-/Grant-Invarianten.
+- Service-Worker-Cache auf `nexowatt-cache-v421` erhöht.
+
+## 0.8.118 - 2026-07-17
+
+- §14a als zentraler Constraint: EVCS, Speicherladung, Thermik und Heizstab erhalten app-spezifische Leistungs-Caps aus dem gemeinsamen EMS-Budget; die Fachmodule bleiben alleinige Hardware-Schreiber.
+- §14a-Aktivsignal wird auf Messwertalter geprüft. Standard-Policy `hold-active` hält eine zuletzt aktive Begrenzung fail-safe; optional stehen `force-active` und der nicht empfohlene Migrationsmodus `release` zur Verfügung.
+- Ein stale externer EMS-Setpoint wird nicht weiterverwendet; die interne §14a-Mindestformel übernimmt sicher.
+- Thermik und Heizstab pausieren bei §14a nicht mehr vollständig, sondern regeln innerhalb ihrer zentral zugeteilten Grants weiter.
+- Legacy-Direktwrites auf §14a-Verbraucher sind standardmäßig deaktiviert und nur noch als ausdrücklich aktivierter Migrationsmodus verfügbar.
+- Neue Regression `test:para14a-central-constraint`; Service-Worker-Cache auf `nexowatt-cache-v420` erhöht.
+
+## 0.8.117 - 2026-07-17
+
+- MultiUse fachlich bereinigt: Standardbetrieb ist ausschließlich Speicher-Policy für Reserve-, Lastspitzen- und Eigenverbrauchs-SoC-Zonen; `storage-control` bleibt einziger Batteriesollwert-Schreiber. Alte flexible MultiUse-Verbraucher sind nur noch über `multiUse.legacyFlexibleConsumersEnabled=true` als expliziter Migrationsmodus aktiv.
+- Peak-Shaving-Aktoren verwenden den zentralen Aktorvertrag mit optionalem Readback, ACK-Timeout, begrenzten Wiederholungen und Fehlerverriegelung. Nur bestätigte Reduktionen gelten als umgesetzt; fehlgeschlagene Restores behalten Baseline und Steuerhoheit.
+- Dynamischer Tarif gehärtet: aktueller Stundenpreis standardmäßig maximal 90 Minuten gültig, Durchschnitt und Day-Ahead-Kurve maximal 36 Stunden. Eine frische Kurve darf den aktuellen Slot ersetzen; stale Preise lösen weder Negativpreis- noch Netzladebetrieb aus, die Eigenverbrauchsoptimierung bleibt aktiv.
+- MultiUse-, Peak- und Tarif-Regressionsprüfungen ergänzt.
+- Service-Worker-Cache auf `nexowatt-cache-v419` erhöht.
+
+## 0.8.116 - 2026-07-17
+
+- C3.5: BHKW und Generator verwenden einen gemeinsamen, typisierten Aktorvertrag mit eindeutigen Ownern.
+- Unterstützt Start-/Stop-Pulse, getrennte Start-/Stop-Level und einen einzelnen Run-/Enable-Datenpunkt.
+- Laufstatus kann über einen direkten Readback oder ersatzweise aus einer frischen Erzeugerleistung abgeleitet werden.
+- SoC, NVP und Betriebsrückmeldung werden vor automatischen Start-/Stop-Entscheidungen auf Frische geprüft.
+- Mindestlauf- und Mindeststillstandszeiten werden nach einem Adapterneustart aus dem realen Readback-Zeitstempel rekonstruiert.
+- Hardwarewrites erhalten Readback-/ACK-Timeout, begrenzte Wiederholungen und zeitliche Fehlerverriegelung.
+- BHKW und Generator reservieren kein Verbrauchsbudget; ihre reale Erzeugung wirkt über NVP und Energiefluss in das zentrale EMS zurück.
+- Service-Worker-Cache auf `nexowatt-cache-v418` erhöht.
+
+## 0.8.115
+
+- Stufe C3.4: NexoLogic-Ausgänge erhalten eindeutige Aktor-Owner pro Graph und Node und laufen über den zentralen Aktor-Arbiter. Sicherheits-, §14a-, Grid-, Peak- und manuelle Leases können widersprechende NexoLogic-Writes verbindlich blockieren.
+- `dp_out` und `scene_trigger` verwenden einen gemeinsamen Write-Vertrag mit optionalem frischem Readback, ACK-Timeout, begrenzten Wiederholungen, Fehlerverriegelung und sauberer Aktorfreigabe.
+- NexoLogic-Ausgänge können optional zentrale PV- oder Gesamt-Grants anfordern. Nicht budgetierte Bestandsausgänge bleiben unverändert ereignisgetrieben; budgetierte Ausgänge schreiben erst nach zentraler Freigabe und reservieren nur akzeptierte beziehungsweise frisch gemessene Leistung.
+- Bei blockierten oder fehlgeschlagenen Aus-Befehlen bleibt eine noch real aktive NexoLogic-Last im zentralen Budget reserviert, bis der Stopp bestätigt ist. Stale Readbacks können einen Hardware-Write nicht fälschlich bestätigen.
+- Stufe A erkennt `dp_out`- und Szenen-Aktoren mit stabilen Ownern `nexoLogic.<graph>.<node>`. Die NexoLogic-Oberfläche ergänzt Readback-, Lease-, Retry- und optionale Budgetparameter ohne neue große AppCenter-Statuskarten.
+- Neue Regression `test:actuator-c3-nexologic`.
+- Cache: Service-Worker-Cache auf `nexowatt-cache-v417` erhöht.
+
 ## 0.8.114
 
 - Herstellerübergreifende Speicher-0-W-Firewall: Im NVP-Zielband, bei kurzen Messwertlücken, transientem zentralen 0-W-PV-Budget oder bestätigtem PV-/Last-Feed-forward bleibt der letzte wirksame Nicht-Null-Sollwert aktiv beziehungsweise Sungrow im No-Write-Hold.

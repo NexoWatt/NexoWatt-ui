@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: afce4817b61cea3341cb0051627a0ac6854de348155c6d64723eeef41204d396
+ * Original-Hash: 2447791caca7ae0fc77a7f12b748bf8d99c18d78d2922b73b3d1d3b8a18c9598
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/multi-use.ts
- * Quell-Hash: sha256:b57e6c263ba366177b4b5afa0318ad99383d8a8a34f342338c753f005572fbca
+ * Quell-Hash: sha256:639c49fd3a92373a86e027c7a660a35fa8731a0c34dbb7ab54e7b18a40110d88
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -49,9 +49,14 @@
 'use strict';
 
 /**
- * MultiUse verteilt Verbraucherwünsche ausschließlich innerhalb des zentralen
- * EMS-Gesamt-/PV-Budgets. Lokale Tarif-/PV-Werte definieren nur den Bedarf;
- * die finale Freigabe und Reservierung kommen aus adapter._emsBudget.
+ * MultiUse ist fachlich die Speicher-Policy fuer SoC-Zonen (Reserve,
+ * Lastspitzenkappung und Eigenverbrauch). Der einzige Batteriesollwert-Schreiber
+ * bleibt storage-control.
+ *
+ * Ein alter, nicht mehr im AppCenter angebotener Verbraucherbereich bleibt nur
+ * als explizit aktivierbarer Legacy-Kompatibilitaetsmodus erhalten. Ohne den
+ * Schalter `multiUse.legacyFlexibleConsumersEnabled=true` schreibt dieses Modul
+ * keinerlei Verbraucher- oder Speicher-Hardwarewerte und reserviert kein Budget.
  */
 const { BaseModule } = require('./base');
 const { applySetpoint } = require('../consumers');
@@ -233,6 +238,7 @@ class MultiUseModule extends BaseModule {
     this._last = new Map();
     this._stateCache = new Map();
     this._actuatorContract = new ActuatorCommandContract();
+    this._warnedLegacyConsumers = false;
   }
 
   _isEnabled() {
@@ -241,6 +247,55 @@ class MultiUseModule extends BaseModule {
   _getCfg() {
     const cfg = this.adapter?.config?.multiUse || {};
     return cfg && typeof cfg === 'object' ? cfg : {};
+  }
+  _legacyConsumersEnabled() {
+    return this._getCfg().legacyFlexibleConsumersEnabled === true;
+  }
+  _storagePolicyCfg() {
+    const installer = this.adapter?.config?.installerConfig;
+    const policy = installer && typeof installer.storageMultiUse === 'object' ? installer.storageMultiUse : null;
+    return policy && typeof policy === 'object' ? policy : null;
+  }
+  _policySnapshot() {
+    const policy = this._storagePolicyCfg();
+    const active = !!(this._isEnabled() && policy && policy.enabled === true);
+    const storage = this.adapter?.config?.storage || {};
+    return {
+      active,
+      mode: active ? 'storage-policy' : 'inactive',
+      hardwareWriter: 'storage-control',
+      reserveEnabled: !!(active && storage.reserveEnabled),
+      reserveMinSocPct: active ? num(storage.reserveMinSocPct, 0) : 0,
+      reserveTargetSocPct: active ? num(storage.reserveTargetSocPct, 0) : 0,
+      peakEnabled: !!(active && storage.lskEnabled !== false && storage.lskDischargeEnabled !== false),
+      lskMinSocPct: active ? num(storage.lskMinSocPct, 0) : 0,
+      lskMaxSocPct: active ? num(storage.lskMaxSocPct, 0) : 0,
+      selfEnabled: !!(active && storage.selfDischargeEnabled !== false),
+      selfMinSocPct: active ? num(storage.selfMinSocPct, 0) : 0,
+      selfMaxSocPct: active ? num(storage.selfMaxSocPct, 100) : 100,
+      legacyConsumersConfigured: this._consumers.length,
+      legacyConsumersEnabled: this._legacyConsumersEnabled(),
+    };
+  }
+  async _publishPolicyStates(now = Date.now()) {
+    const snapshot = this._policySnapshot();
+    await this._setStateIfChanged('multiUse.policy.active', snapshot.active);
+    await this._setStateIfChanged('multiUse.policy.mode', snapshot.mode);
+    await this._setStateIfChanged('multiUse.policy.hardwareWriter', snapshot.hardwareWriter);
+    await this._setStateIfChanged('multiUse.policy.reserveEnabled', snapshot.reserveEnabled);
+    await this._setStateIfChanged('multiUse.policy.reserveMinSocPct', snapshot.reserveMinSocPct);
+    await this._setStateIfChanged('multiUse.policy.reserveTargetSocPct', snapshot.reserveTargetSocPct);
+    await this._setStateIfChanged('multiUse.policy.peakEnabled', snapshot.peakEnabled);
+    await this._setStateIfChanged('multiUse.policy.lskMinSocPct', snapshot.lskMinSocPct);
+    await this._setStateIfChanged('multiUse.policy.lskMaxSocPct', snapshot.lskMaxSocPct);
+    await this._setStateIfChanged('multiUse.policy.selfEnabled', snapshot.selfEnabled);
+    await this._setStateIfChanged('multiUse.policy.selfMinSocPct', snapshot.selfMinSocPct);
+    await this._setStateIfChanged('multiUse.policy.selfMaxSocPct', snapshot.selfMaxSocPct);
+    await this._setStateIfChanged('multiUse.policy.legacyConsumersConfigured', snapshot.legacyConsumersConfigured);
+    await this._setStateIfChanged('multiUse.policy.legacyConsumersEnabled', snapshot.legacyConsumersEnabled);
+    await this._setStateIfChanged('multiUse.policy.legacyConsumersIgnored', snapshot.legacyConsumersConfigured > 0 && !snapshot.legacyConsumersEnabled);
+    await this._setStateIfChanged('multiUse.policy.lastUpdate', now);
+    return snapshot;
   }
   _loadConsumersFromConfig() {
     const rows = Array.isArray(this._getCfg().consumers) ? this._getCfg().consumers : [];
@@ -289,7 +344,7 @@ class MultiUseModule extends BaseModule {
   }
 
   async _seedLastFromStates() {
-    for (const consumer of this._consumers) {
+    for (const consumer of (legacyConsumersEnabled ? this._consumers : [])) {
       const base = `multiUse.consumers.${consumer.id}`;
 /**
  * Code-Teil: read
@@ -324,7 +379,8 @@ class MultiUseModule extends BaseModule {
   async init() {
     if (!this._isEnabled()) return;
     this._loadConsumersFromConfig();
-    for (const consumer of this._consumers) {
+    const legacyConsumersEnabled = this._legacyConsumersEnabled();
+    for (const consumer of (legacyConsumersEnabled ? this._consumers : [])) {
       const baseKey = `mu.${consumer.id}`;
       try {
         if (consumer.setWId && !consumer.setWKey) {
@@ -348,12 +404,14 @@ class MultiUseModule extends BaseModule {
       }
     }
     const cfg = this._getCfg();
-    try {
-      if (cfg.externalLimitWId && !cfg.externalLimitWKey) await this.dp.upsert({ key: 'mu.externalLimitW', objectId: cfg.externalLimitWId, dataType: 'number', direction: 'in', unit: 'W' });
-      if (cfg.tariffBudgetWId && !cfg.tariffBudgetWKey) await this.dp.upsert({ key: 'mu.tariffBudgetW', objectId: cfg.tariffBudgetWId, dataType: 'number', direction: 'in', unit: 'W' });
-      if (cfg.pvBudgetWId && !cfg.pvBudgetWKey) await this.dp.upsert({ key: 'mu.pvBudgetW', objectId: cfg.pvBudgetWId, dataType: 'number', direction: 'in', unit: 'W' });
-    } catch (error) {
-      this.adapter.log.warn(`[multiUse] budget datapoint upsert failed: ${error?.message || error}`);
+    if (legacyConsumersEnabled) {
+      try {
+        if (cfg.externalLimitWId && !cfg.externalLimitWKey) await this.dp.upsert({ key: 'mu.externalLimitW', objectId: cfg.externalLimitWId, dataType: 'number', direction: 'in', unit: 'W' });
+        if (cfg.tariffBudgetWId && !cfg.tariffBudgetWKey) await this.dp.upsert({ key: 'mu.tariffBudgetW', objectId: cfg.tariffBudgetWId, dataType: 'number', direction: 'in', unit: 'W' });
+        if (cfg.pvBudgetWId && !cfg.pvBudgetWKey) await this.dp.upsert({ key: 'mu.pvBudgetW', objectId: cfg.pvBudgetWId, dataType: 'number', direction: 'in', unit: 'W' });
+      } catch (error) {
+        this.adapter.log.warn(`[multiUse] legacy budget datapoint upsert failed: ${error?.message || error}`);
+      }
     }
 
 /**
@@ -384,8 +442,27 @@ class MultiUseModule extends BaseModule {
     });
     await mkChannel('multiUse', 'Multi-Use');
     await mkChannel('multiUse.control', 'Control');
+    await mkChannel('multiUse.policy', 'Storage Policy');
     await mkChannel('multiUse.summary', 'Summary');
-    await mkChannel('multiUse.consumers', 'Consumers');
+    await mkChannel('multiUse.consumers', 'Legacy Flexible Consumers');
+    for (const [suffix, name, type, role, def, unit] of [
+      ['active', 'Storage policy active', 'boolean', 'indicator.working', false],
+      ['mode', 'Policy mode', 'string', 'text', 'inactive'],
+      ['hardwareWriter', 'Battery hardware writer', 'string', 'text', 'storage-control'],
+      ['reserveEnabled', 'Reserve zone enabled', 'boolean', 'indicator', false],
+      ['reserveMinSocPct', 'Reserve minimum SoC', 'number', 'value.battery', 0, '%'],
+      ['reserveTargetSocPct', 'Reserve target SoC', 'number', 'value.battery', 0, '%'],
+      ['peakEnabled', 'Peak-shaving zone enabled', 'boolean', 'indicator', false],
+      ['lskMinSocPct', 'Peak zone minimum SoC', 'number', 'value.battery', 0, '%'],
+      ['lskMaxSocPct', 'Peak zone maximum SoC', 'number', 'value.battery', 0, '%'],
+      ['selfEnabled', 'Self-consumption zone enabled', 'boolean', 'indicator', false],
+      ['selfMinSocPct', 'Self-consumption minimum SoC', 'number', 'value.battery', 0, '%'],
+      ['selfMaxSocPct', 'Self-consumption maximum SoC', 'number', 'value.battery', 100, '%'],
+      ['legacyConsumersConfigured', 'Legacy consumers configured', 'number', 'value', 0],
+      ['legacyConsumersEnabled', 'Legacy consumers explicitly enabled', 'boolean', 'indicator', false],
+      ['legacyConsumersIgnored', 'Legacy consumers ignored', 'boolean', 'indicator', false],
+      ['lastUpdate', 'Policy update', 'number', 'value.time', 0],
+    ]) await mkState(`multiUse.policy.${suffix}`, name, type, role, def, unit);
     for (const [suffix, name, type, role, def, unit] of [
       ['active', 'Active', 'boolean', 'indicator.working', false],
       ['status', 'Status', 'string', 'text', 'init'],
@@ -439,8 +516,13 @@ class MultiUseModule extends BaseModule {
         });
       }
     }
-    await this._setStateIfChanged('multiUse.summary.consumerCount', this._consumers.length);
-    await this._seedLastFromStates().catch(() => undefined);
+    await this._setStateIfChanged('multiUse.summary.consumerCount', legacyConsumersEnabled ? this._consumers.length : 0);
+    await this._publishPolicyStates(Date.now());
+    if (legacyConsumersEnabled) await this._seedLastFromStates().catch(() => undefined);
+    else if (this._consumers.length > 0 && !this._warnedLegacyConsumers) {
+      this._warnedLegacyConsumers = true;
+      this.adapter.log.warn(`[multiUse] ${this._consumers.length} legacy flexible consumer(s) configured but ignored. MultiUse is storage-policy-only; set multiUse.legacyFlexibleConsumersEnabled=true only for temporary migration.`);
+    }
   }
 
   _consumerOwner(consumer) {
@@ -633,6 +715,28 @@ class MultiUseModule extends BaseModule {
   async tick() {
     if (!this._isEnabled()) return;
     const now = Date.now();
+    const policy = await this._publishPolicyStates(now);
+    if (!this._legacyConsumersEnabled()) {
+      await this._setStateIfChanged('multiUse.control.active', policy.active);
+      await this._setStateIfChanged('multiUse.control.status', policy.active ? 'storage-policy-only' : 'inactive');
+      await this._setStateIfChanged('multiUse.control.reason', policy.active ? ReasonCodes.OK : ReasonCodes.SKIPPED);
+      await this._setStateIfChanged('multiUse.control.lastTickTs', now);
+      await this._setStateIfChanged('multiUse.control.requestW', 0);
+      await this._setStateIfChanged('multiUse.control.capW', 0);
+      await this._setStateIfChanged('multiUse.control.budgetW', 0);
+      await this._setStateIfChanged('multiUse.control.budgetSource', 'STORAGE_POLICY');
+      await this._setStateIfChanged('multiUse.control.capSources', 'STORAGE_CONTROL');
+      await this._setStateIfChanged('multiUse.control.reserveW', 0);
+      await this._setStateIfChanged('multiUse.control.centralBudgetActive', false);
+      await this._setStateIfChanged('multiUse.control.centralGrantW', 0);
+      await this._setStateIfChanged('multiUse.control.centralReservedW', 0);
+      await this._setStateIfChanged('multiUse.control.centralPvReservedW', 0);
+      await this._setStateIfChanged('multiUse.control.centralBudgetStatus', 'not-required-storage-policy');
+      await this._setStateIfChanged('multiUse.summary.consumerCount', 0);
+      await this._setStateIfChanged('multiUse.summary.appliedCount', 0);
+      await this._setStateIfChanged('multiUse.summary.remainingBudgetW', 0);
+      return;
+    }
     const cfg = this._getCfg();
     const staleMs = clamp(num(cfg.staleTimeoutSec, 15), 1, 3600) * 1000;
     const voltageV = clamp(num(cfg.voltageV, 230), 100, 260);

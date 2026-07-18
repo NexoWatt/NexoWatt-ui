@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: eac872a795770d159a19c1fdfb32557a7ab82e35cef8e69062dc81470c7fca83
+ * Original-Hash: 7359d7888841a85cc3d9faecb4d3af14e44fbd95dc0a99af616fe0df463e8424
  */
 
 /**
@@ -69,6 +69,12 @@ const mirrorSpecs = [
     builtRel: 'build-ts/ems-mirrors/ems/core-limits/core-budget.js',
     mirrorRel: 'lib/ts-mirrors/ems/core-limits/core-budget.js',
     purpose: 'Core-Limits-/EMS-Budget-Spiegel für spätere Shadow-Vergleiche',
+  },
+  {
+    sourceRel: 'src-ts/ems/core-limits/core-runtime.ts',
+    builtRel: 'build-ts/ems-mirrors/ems/core-limits/core-runtime.js',
+    mirrorRel: 'lib/ts-mirrors/ems/core-limits/core-runtime.js',
+    purpose: 'Typisierte produktive Core-Runtime für PV, Grants, Headroom und Budget-Snapshots',
   },
   {
     sourceRel: 'src-ts/ems/heating-rod/heating-rod-decision.ts',
@@ -129,6 +135,12 @@ const mirrorSpecs = [
     builtRel: 'build-ts/ems-mirrors/ems/charging-management/charging-budget.js',
     mirrorRel: 'lib/ts-mirrors/ems/charging-management/charging-budget.js',
     purpose: 'Charging-Management-/EVCS-Budget-Caps für Shadow-Vergleich und spätere produktive TS-Übernahme',
+  },
+  {
+    sourceRel: 'src-ts/ems/para14a/para14a-constraint.ts',
+    builtRel: 'build-ts/ems-mirrors/ems/para14a/para14a-constraint.js',
+    mirrorRel: 'lib/ts-mirrors/ems/para14a/para14a-constraint.js',
+    purpose: '§14a-Signalfrische und zentrale Constraint-Verteilung ohne direkte Hardware-Writes',
   },
 ];
 

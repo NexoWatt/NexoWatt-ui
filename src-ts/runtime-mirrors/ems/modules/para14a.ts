@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 590d723176ce032ae3593c0f28756b131837fdf22f83857ba74a484fa06e9465
+ * Original-Hash: c31aa3d8bdcbc5e4a19f9b8c6f0a973c03b35edb45b765d936269b3eb1c4cb59
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/para14a.ts
- * Quell-Hash: sha256:39dc11d13bd17bed1320d274b8cb98c97a834f33406dbc97a376d81e81058f8c
+ * Quell-Hash: sha256:d6712deb0d8c563f532fbeadd37aab5ee4c33d6f6d0be8b425cec9619c8db480
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -75,6 +75,7 @@
 
 const { BaseModule } = require('./base');
 const { applySetpoint } = require('../consumers');
+const { resolvePara14aSignal, buildPara14aConstraintSnapshot } = require('../../lib/ts-mirrors/ems/para14a/para14a-constraint');
 /**
  * Code-Teil: num
  * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -192,6 +193,7 @@ class Para14aModule extends BaseModule {
         this._stateCache = new Map();
         this._activeDpKey = '';
         this._emsSetpointDpKey = '';
+        this._signalMemory = { lastFreshActive: null, lastFreshTs: null };
         this._audit = {
             historyInstance: '',
             historyReady: false,
@@ -847,7 +849,10 @@ class Para14aModule extends BaseModule {
             const setWId = String(r.setPowerWId || r.setWId || '').trim();
             const enableId = String(r.enableId || r.enableWriteId || '').trim();
 
-            if (!setWId && !enableId) continue;
+            // Bekannte Fachmodule duerfen als reine Constraint-Zeile ohne eigenen
+            // Hardware-DP konfiguriert werden. Nur ein Custom-Verbraucher benoetigt
+            // weiterhin einen expliziten Legacy-Ziel-DP.
+            if (!setWId && !enableId && type === 'custom') continue;
 
             const baseId = safeIdPart(r.key || name || `${type}_${i + 1}`) || `c${i + 1}`;
             let id = baseId;
@@ -935,6 +940,19 @@ class Para14aModule extends BaseModule {
         await mk('para14a.pMinW', 'Mindestleistung gesamt Pmin,14a (W)', 'number', 'value.power', false, 'W');
         await mk('para14a.emsSetpointW', 'Sollwert EMS (W) (optional)', 'number', 'value.power', false, 'W');
         await mk('para14a.evcsTotalCapW', 'EVCS Gesamtlimit (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.totalCapW', '§14a Gesamtlimit (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.storageChargeCapW', '§14a Speicher-Ladegrenze (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.thermalCapW', '§14a Thermik-Limit (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.heatingRodCapW', '§14a Heizstab-Limit (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.airConditionCapW', '§14a Klima-Limit (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.customCapW', '§14a Legacy-/Custom-Limit (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.signalFresh', '§14a Signal frisch', 'boolean', 'indicator', false);
+        await mk('para14a.signalAgeMs', '§14a Signalalter (ms)', 'number', 'value.interval', false, 'ms');
+        await mk('para14a.signalStatus', '§14a Signalstatus', 'string', 'text', false);
+        await mk('para14a.stalePolicy', '§14a Stale-Policy', 'string', 'text', false);
+        await mk('para14a.constraintOnly', '§14a als zentraler Constraint', 'boolean', 'indicator', false);
+        await mk('para14a.legacyDirectWritesEnabled', 'Legacy-Direktwrites aktiv', 'boolean', 'indicator', false);
+        await mk('para14a.unmanagedConsumerCount', 'Nicht zentral angebundene §14a-Verbraucher', 'number', 'value', false);
         await mk('para14a.debug', 'Debug (JSON)', 'string', 'text', false);
         await this._initAuditLoggingStates(mk);
 
@@ -1008,31 +1026,29 @@ class Para14aModule extends BaseModule {
      */
     _readActiveSignal() {
         const cfg = this._getCfg();
-
-        // Feature must be enabled.
-        if (!cfg.para14a) return { active: false, source: 'disabled' };
-
-        // If a dedicated activation datapoint is mapped, it takes precedence.
-        if (this._activeDpKey && this.dp) {
-            const raw = this.dp.getRaw(this._activeDpKey);
-            if (raw === null || raw === undefined) return { active: false, source: 'dp_missing' };
-            if (typeof raw === 'boolean') return { active: raw, source: 'dp' };
-            if (typeof raw === 'number') return { active: raw !== 0, source: 'dp' };
-            if (typeof raw === 'string') {
-                const s = raw.trim().toLowerCase();
-                if (s === '' || s === '0' || s === 'false' || s === 'off' || s === 'inactive') return { active: false, source: 'dp' };
-                if (s === '1' || s === 'true' || s === 'on' || s === 'active') return { active: true, source: 'dp' };
-            }
-            // fallback: truthy
-            return { active: !!raw, source: 'dp' };
+        const maxAgeMs = Math.max(1000, Math.round(num(cfg.para14aSignalMaxAgeSec, 30) * 1000));
+        const mapped = !!(this._activeDpKey && this.dp);
+        const rawValue = mapped ? this.dp.getRaw(this._activeDpKey, null) : null;
+        const ageMs = mapped && typeof this.dp.getAgeMs === 'function' ? this.dp.getAgeMs(this._activeDpKey) : null;
+        const resolution = resolvePara14aSignal({
+            enabled: !!cfg.para14a,
+            mapped,
+            rawValue,
+            ageMs,
+            maxAgeMs,
+            assumeActiveWithoutSignal: cfg.para14aAssumeActiveWithoutSignal === true,
+            stalePolicy: cfg.para14aStalePolicy || 'hold-active',
+            lastFreshActive: this._signalMemory.lastFreshActive,
+            lastFreshTs: this._signalMemory.lastFreshTs,
+            nowMs: Date.now(),
+        });
+        if (resolution.fresh) {
+            this._signalMemory.lastFreshActive = resolution.lastFreshActive;
+            this._signalMemory.lastFreshTs = resolution.lastFreshTs;
         }
-
-        // No activation DP configured.
-        // Default: assume inactive (no limitation) because we cannot know if the Netzbetreiber
-        // is currently limiting. Optional fallback can force always-on behaviour.
-        const assumeActive = !!cfg.para14aAssumeActiveWithoutSignal;
-        return { active: assumeActive, source: assumeActive ? 'config' : 'no_signal' };
+        return resolution;
     }
+
 
     /**
      * Code-Teil: Methode `_computeDistribution`
@@ -1077,275 +1093,130 @@ class Para14aModule extends BaseModule {
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     async tick() {
-        // Always keep adapter._para14a up to date, so other modules can safely read it.
         if (!this.adapter) return;
-
         const cfg = this._getCfg();
-        const { active, source } = this._readActiveSignal();
-
+        const signal = this._readActiveSignal();
         const modeRaw = String(cfg.para14aMode || cfg.para14aControlMode || 'direct').trim().toLowerCase();
         const mode = (modeRaw === 'ems' || modeRaw === 'formula') ? 'ems' : 'direct';
-
         const minPerDeviceW = clamp(num(cfg.para14aMinPerDeviceW, 4200), 0, 1e12);
+        const signalMaxAgeMs = Math.max(1000, Math.round(num(cfg.para14aSignalMaxAgeSec, 30) * 1000));
+        const setpointMaxAgeMs = Math.max(1000, Math.round(num(cfg.para14aSetpointMaxAgeSec, cfg.para14aSignalMaxAgeSec || 30) * 1000));
+        const legacyDirectWritesEnabled = cfg.para14aLegacyDirectWritesEnabled === true;
 
-        // EVCS are always part of §14a (Fallgruppe 2.4.1.a)
         const evcsList = Array.isArray(this.adapter.evcsList) ? this.adapter.evcsList : [];
-        const controllableEvcs = evcsList.filter(wb => wb && (String(wb.setCurrentAId || '').trim() || String(wb.setPowerWId || '').trim()));
-        const evcsCount = controllableEvcs.length;
-
-        // Additional consumers from table
-        const hpRows = this._loads.filter(l => l.type === 'heatPump' || l.type === 'heatingRod');
-        const klimaRows = this._loads.filter(l => l.type === 'airCondition');
-        const hasWP = hpRows.length > 0;
-        const hasKlima = klimaRows.length > 0;
-        const pSumWP = hpRows.reduce((s, r) => s + num(r.installedPowerW, 0), 0);
-        const pSumKlima = klimaRows.reduce((s, r) => s + num(r.installedPowerW, 0), 0);
-
-        // Optional external EMS setpoint (W)
-        const externalTotalSetpointW = (active && mode === 'ems' && this._emsSetpointDpKey && this.dp)
-            ? this.dp.getNumber(this._emsSetpointDpKey, null)
+        const controllableEvcs = evcsList.filter((wb) => wb && (String(wb.setCurrentAId || '').trim() || String(wb.setPowerWId || '').trim()));
+        const evcs = controllableEvcs.map((wb) => ({
+            safe: safeIdPart(wb.key || wb.name || wb.index || ''),
+            maxPowerW: Math.max(0, num(wb.maxPowerW || wb.maxPower || wb.ratedPowerW, 0)),
+        }));
+        const consumers = this._loads.map((load) => ({
+            id: load.id,
+            type: load.type,
+            controlType: load.controlType,
+            installedPowerW: load.installedPowerW,
+            priority: load.priority,
+            setWId: load.setWId,
+            enableId: load.enableId,
+        }));
+        const externalTotalSetpointW = signal.active && mode === 'ems' && this._emsSetpointDpKey && this.dp
+            ? this.dp.getNumberFresh(this._emsSetpointDpKey, setpointMaxAgeMs, null)
             : null;
-
-        const dist = this._computeDistribution({
+        const constraint = buildPara14aConstraintSnapshot({
+            active: signal.active,
+            source: signal.source,
             mode,
             minPerDeviceW,
-            evcsCount,
-            hasWP,
-            hasKlima,
-            pSumWP,
-            pSumKlima,
             externalTotalSetpointW,
+            evcs,
+            consumers,
         });
 
-        // Determine which group is primary (for EMS distribution)
-        let primaryGroup = null;
-        if (mode === 'ems') {
-            const big = (pSumWP > 11000) || (pSumKlima > 11000);
-            if (big) {
-                primaryGroup = (0.4 * pSumWP >= 0.4 * pSumKlima) ? (hasWP ? 'wp' : (hasKlima ? 'klima' : 'evcs')) : (hasKlima ? 'klima' : (hasWP ? 'wp' : 'evcs'));
-            } else {
-                // Prefer heat pump for comfort, then climate, then EVCS
-                primaryGroup = hasWP ? 'wp' : (hasKlima ? 'klima' : 'evcs');
-            }
-        }
-
-        // Build EVCS caps
-        /** @type {Record<string, number>} */
-        const evcsCapsBySafe = {};
-        let evcsTotalCapW = 0;
-
-        if (active) {
-            if (mode === 'direct') {
-                // Direktansteuerung: 4,2kW je Verbraucher
-                for (const wb of controllableEvcs) {
-                    const safe = safeIdPart(wb.key || wb.name || wb.index || '');
-                    const capW = minPerDeviceW > 0 ? minPerDeviceW : 0;
-                    evcsCapsBySafe[safe] = capW;
-                    evcsTotalCapW += capW;
-                }
-            } else {
-                // EMS: allocate primaryW once, secondaryW for the remaining steuVE
-                // EVCS are counted individually.
-                const caps = [];
-                for (let i = 0; i < controllableEvcs.length; i++) {
-                    caps.push(dist.secondaryW);
-                }
-                // If EVCS is the primary group, promote the first EVCS to primaryW.
-                if (primaryGroup === 'evcs' && caps.length) caps[0] = dist.primaryW;
-                for (let i = 0; i < controllableEvcs.length; i++) {
-                    const wb = controllableEvcs[i];
-                    const safe = safeIdPart(wb.key || wb.name || wb.index || '');
-                    const capW = clamp(num(caps[i], 0), 0, 1e12);
-                    evcsCapsBySafe[safe] = capW;
-                    evcsTotalCapW += capW;
-                }
-            }
-        }
-
-        // Persist adapter-wide snapshot for other modules (Charging-Management)
         this.adapter._para14a = {
             enabled: !!cfg.para14a,
-            active: !!active,
-            source,
-            mode,
-            minPerDeviceW,
-            nSteuVE: dist.nSteuVE,
-            gzf: dist.gzf,
-            pMinW: dist.pMinW,
-            totalBudgetW: dist.totalBudgetW,
-            emsSetpointW: (typeof externalTotalSetpointW === 'number' && Number.isFinite(externalTotalSetpointW)) ? externalTotalSetpointW : 0,
-            evcsCapsBySafe,
-            evcsTotalCapW,
+            ...constraint,
+            signalFresh: signal.fresh,
+            signalStale: signal.stale,
+            signalAgeMs: signal.ageMs,
+            signalStatus: signal.reason,
+            stalePolicy: signal.stalePolicy,
+            signalMaxAgeMs,
+            legacyDirectWritesEnabled,
+            emsSetpointW: Number.isFinite(Number(externalTotalSetpointW)) ? Number(externalTotalSetpointW) : 0,
+            totalBudgetW: constraint.totalCapW,
         };
 
-        // Publish states
-        await this._setStateIfChanged('para14a.active', !!active);
-        await this._setStateIfChanged('para14a.mode', mode);
-        await this._setStateIfChanged('para14a.controlSource', String(source || ''));
+        await this._setStateIfChanged('para14a.active', constraint.active);
+        await this._setStateIfChanged('para14a.mode', constraint.mode);
+        await this._setStateIfChanged('para14a.controlSource', String(signal.source || ''));
         await this._setStateIfChanged('para14a.minPerDeviceW', Math.round(minPerDeviceW));
-        await this._setStateIfChanged('para14a.nSteuVE', dist.nSteuVE);
-        await this._setStateIfChanged('para14a.gzf', dist.gzf);
-        await this._setStateIfChanged('para14a.pMinW', Math.round(dist.pMinW));
+        await this._setStateIfChanged('para14a.nSteuVE', constraint.nSteuVE);
+        await this._setStateIfChanged('para14a.gzf', constraint.gzf);
+        await this._setStateIfChanged('para14a.pMinW', constraint.pMinW);
         await this._setStateIfChanged('para14a.emsSetpointW', Math.round(num(externalTotalSetpointW, 0)));
-        await this._setStateIfChanged('para14a.evcsTotalCapW', Math.round(evcsTotalCapW));
+        await this._setStateIfChanged('para14a.evcsTotalCapW', Math.round(num(constraint.evcsTotalCapW, 0)));
+        await this._setStateIfChanged('para14a.totalCapW', Math.round(num(constraint.totalCapW, 0)));
+        await this._setStateIfChanged('para14a.storageChargeCapW', Math.round(num(constraint.appCapsW.storage, 0)));
+        await this._setStateIfChanged('para14a.thermalCapW', Math.round(num(constraint.appCapsW.thermal, 0)));
+        await this._setStateIfChanged('para14a.heatingRodCapW', Math.round(num(constraint.appCapsW.heatingRod, 0)));
+        await this._setStateIfChanged('para14a.airConditionCapW', Math.round(num(constraint.appCapsW.airCondition, 0)));
+        await this._setStateIfChanged('para14a.customCapW', Math.round(num(constraint.appCapsW.custom, 0)));
+        await this._setStateIfChanged('para14a.signalFresh', signal.fresh);
+        await this._setStateIfChanged('para14a.signalAgeMs', signal.ageMs === null ? null : Math.round(signal.ageMs));
+        await this._setStateIfChanged('para14a.signalStatus', signal.reason);
+        await this._setStateIfChanged('para14a.stalePolicy', signal.stalePolicy);
+        await this._setStateIfChanged('para14a.constraintOnly', !legacyDirectWritesEnabled);
+        await this._setStateIfChanged('para14a.legacyDirectWritesEnabled', legacyDirectWritesEnabled);
+        await this._setStateIfChanged('para14a.unmanagedConsumerCount', constraint.unmanagedConsumerCount);
 
-        // For non-EVCS consumers: write targets only when §14a is active; when inactive, restore to installed power (if provided).
-        const debug = {
-            active,
-            source,
-            mode,
-            primaryGroup,
-            evcsCount,
-            hasWP,
-            hasKlima,
-            pSumWP,
-            pSumKlima,
-            dist,
-        };
-
-        const consumerAudit = {
-            appliedCount: 0,
-            failedCount: 0,
-            skippedCount: 0,
-            writeFailedCount: 0,
-            failedConsumers: [],
-        };
-
-        // Group budgets for EMS mode
-        let wpGroupBudgetW = 0;
-        let klimaGroupBudgetW = 0;
-
-        if (active && mode === 'ems') {
-            // First determine how many non-EVCS groups we have and their default budgets
-            const nonEvcsBudgets = [];
-            if (hasWP) nonEvcsBudgets.push({ group: 'wp', budgetW: dist.secondaryW });
-            if (hasKlima) nonEvcsBudgets.push({ group: 'klima', budgetW: dist.secondaryW });
-
-            // Promote primary group if it is not EVCS
-            if (primaryGroup === 'wp') {
-                const e = nonEvcsBudgets.find(x => x.group === 'wp');
-                if (e) e.budgetW = dist.primaryW;
-            } else if (primaryGroup === 'klima') {
-                const e = nonEvcsBudgets.find(x => x.group === 'klima');
-                if (e) e.budgetW = dist.primaryW;
-            }
-
-            // Assign budgets
-            wpGroupBudgetW = (nonEvcsBudgets.find(x => x.group === 'wp')?.budgetW) || 0;
-            klimaGroupBudgetW = (nonEvcsBudgets.find(x => x.group === 'klima')?.budgetW) || 0;
-        }
-
-        // Direct-mode group budgets (Wärmepumpe/Klima > 11kW): use scaling factor * sum of connected power.
-        // This follows the BNetzA minimum power rule for Fallgruppe 2.4.1.b / 2.4.1.c.
-        const scalingFactor = 0.4;
-        const wpGroupDirectW = (active && mode === 'direct' && pSumWP > 11000) ? Math.round(Math.max(minPerDeviceW, pSumWP * scalingFactor)) : Math.round(minPerDeviceW);
-        const klimaGroupDirectW = (active && mode === 'direct' && pSumKlima > 11000) ? Math.round(Math.max(minPerDeviceW, pSumKlima * scalingFactor)) : Math.round(minPerDeviceW);
-
-        for (const l of this._loads) {
-            const base = `para14a.consumers.${l.id}`;
-            await this._setStateIfChanged(`${base}.type`, l.type);
-
-            // Determine target
-            let targetW = 0;
-
-            if (!active) {
-                // restore
-                if (l.controlType === 'limitW' && l.installedPowerW > 0) {
-                    targetW = l.installedPowerW;
-                } else {
-                    // If we cannot restore deterministically, we do not write.
-                    targetW = NaN;
-                }
-            } else if (mode === 'direct') {
-                if (l.type === 'heatPump' || l.type === 'heatingRod') targetW = wpGroupDirectW;
-                else if (l.type === 'airCondition') targetW = klimaGroupDirectW;
-                else targetW = minPerDeviceW;
-            } else {
-                // EMS distribution
-                if (l.type === 'heatPump' || l.type === 'heatingRod') targetW = wpGroupBudgetW;
-                else if (l.type === 'airCondition') targetW = klimaGroupBudgetW;
-                else targetW = dist.secondaryW;
-            }
-
-            // Clamp to installed
-            if (active && l.installedPowerW > 0 && Number.isFinite(targetW)) {
-                targetW = Math.min(targetW, l.installedPowerW);
-            }
-
-            // If this is a grouped category, distribute budget proportionally across group members.
-            let perDeviceTargetW = targetW;
-            if (active && (mode === 'ems' || mode === 'direct')) {
-                if (l.type === 'heatPump' || l.type === 'heatingRod') {
-                    const sum = hpRows.reduce((s, r) => s + (r.installedPowerW > 0 ? r.installedPowerW : 0), 0);
-                    if (hpRows.length > 1 && sum > 0 && l.installedPowerW > 0) {
-                        perDeviceTargetW = targetW * (l.installedPowerW / sum);
-                    } else if (hpRows.length > 1) {
-                        perDeviceTargetW = targetW / hpRows.length;
-                    }
-                } else if (l.type === 'airCondition') {
-                    const sum = klimaRows.reduce((s, r) => s + (r.installedPowerW > 0 ? r.installedPowerW : 0), 0);
-                    if (klimaRows.length > 1 && sum > 0 && l.installedPowerW > 0) {
-                        perDeviceTargetW = targetW * (l.installedPowerW / sum);
-                    } else if (klimaRows.length > 1) {
-                        perDeviceTargetW = targetW / klimaRows.length;
-                    }
-                }
-            }
-
-            if (!Number.isFinite(perDeviceTargetW)) {
-                // Skip writing (unknown restore)
+        const consumerAudit = { appliedCount: 0, failedCount: 0, skippedCount: 0, writeFailedCount: 0, failedConsumers: [] };
+        for (const load of this._loads) {
+            const base = `para14a.consumers.${load.id}`;
+            const targetW = constraint.targetCapsById[load.setWId] ?? constraint.targetCapsById[load.enableId] ?? 0;
+            await this._setStateIfChanged(`${base}.type`, load.type);
+            await this._setStateIfChanged(`${base}.targetW`, Math.round(num(targetW, 0)));
+            if (!legacyDirectWritesEnabled) {
                 consumerAudit.skippedCount += 1;
-                await this._setStateIfChanged(`${base}.targetW`, 0);
                 await this._setStateIfChanged(`${base}.applied`, false);
-                await this._setStateIfChanged(`${base}.status`, 'skipped');
+                await this._setStateIfChanged(`${base}.status`, 'constraint-only');
                 continue;
             }
 
-            // Write
-            const ctx = { dp: this.dp, adapter: this.adapter };
-            const consumer = {
-                type: 'load',
-                key: l.id,
-                name: l.name,
-                setWKey: l.setWKey,
-                enableKey: l.enableKey,
-            };
-
-            // onOff mode: interpret targetW > 0 => enabled, 0 => disabled
-            const effectiveTargetW = (l.controlType === 'onOff') ? (active ? 0 : 1) : perDeviceTargetW;
-
-            const res = await applySetpoint(ctx, consumer, { targetW: Math.round(effectiveTargetW) });
-            const resStatus = String(res.status || '');
-            if (res.applied && resStatus !== 'skipped') {
-                consumerAudit.appliedCount += 1;
-            } else if (!res.applied) {
-                consumerAudit.failedCount += 1;
-                if (resStatus === 'write_failed' || resStatus === 'applied_partial') consumerAudit.writeFailedCount += 1;
-                if (consumerAudit.failedConsumers.length < 10) consumerAudit.failedConsumers.push(l.name || l.id);
+            let writeTarget = Number(targetW);
+            if (!constraint.active) {
+                writeTarget = load.controlType === 'limitW' && load.installedPowerW > 0 ? load.installedPowerW : Number.NaN;
             }
-            await this._setStateIfChanged(`${base}.targetW`, Math.round(perDeviceTargetW > 0 ? perDeviceTargetW : 0));
-            await this._setStateIfChanged(`${base}.applied`, !!res.applied);
-            await this._setStateIfChanged(`${base}.status`, resStatus);
+            if (!Number.isFinite(writeTarget)) {
+                consumerAudit.skippedCount += 1;
+                await this._setStateIfChanged(`${base}.applied`, false);
+                await this._setStateIfChanged(`${base}.status`, 'legacy-restore-unknown');
+                continue;
+            }
+            const consumer = { type: 'load', key: load.id, name: load.name, setWKey: load.setWKey, enableKey: load.enableKey };
+            const effectiveTargetW = load.controlType === 'onOff' ? (constraint.active ? 0 : 1) : writeTarget;
+            const result = await applySetpoint({ dp: this.dp, adapter: this.adapter }, consumer, { targetW: Math.round(effectiveTargetW) });
+            const status = String(result.status || '');
+            if (result.applied && status !== 'skipped') consumerAudit.appliedCount += 1;
+            else {
+                consumerAudit.failedCount += 1;
+                if (status === 'write_failed' || status === 'applied_partial') consumerAudit.writeFailedCount += 1;
+                if (consumerAudit.failedConsumers.length < 10) consumerAudit.failedConsumers.push(load.name || load.id);
+            }
+            await this._setStateIfChanged(`${base}.applied`, !!result.applied);
+            await this._setStateIfChanged(`${base}.status`, status);
         }
 
-        debug.consumerAudit = Object.assign({}, consumerAudit);
-
-        try {
-            await this._setStateIfChanged('para14a.debug', JSON.stringify(debug));
-        } catch {
-            // ignore
-        }
-
+        const debug = { constraint, signal, legacyDirectWritesEnabled, consumerAudit };
+        await this._setStateIfChanged('para14a.debug', JSON.stringify(debug));
         const auditSnapshot = this._buildAuditSnapshot({
-            active,
-            source,
-            mode,
-            requestedTotalBudgetW: dist.totalBudgetW,
-            effectiveEvcsCapW: evcsTotalCapW,
+            active: constraint.active,
+            source: signal.source,
+            mode: constraint.mode,
+            requestedTotalBudgetW: num(constraint.totalCapW, 0),
+            effectiveEvcsCapW: num(constraint.evcsTotalCapW, 0),
             minPerDeviceW,
-            pMinW: dist.pMinW,
-            nSteuVE: dist.nSteuVE,
-            evcsCount,
+            pMinW: constraint.pMinW,
+            nSteuVE: constraint.nSteuVE,
+            evcsCount: evcs.length,
             evPowerW: this._getAdapterNumberFromCache('evcs.totalPowerW', 0),
             gridPowerW: this._getAdapterNumberFromCache('ems.gridPowerW', 0),
             consumerAppliedCount: consumerAudit.appliedCount,
@@ -1356,6 +1227,7 @@ class Para14aModule extends BaseModule {
         });
         await this._handleAuditLogging(auditSnapshot);
     }
+
 }
 
 module.exports = { Para14aModule };

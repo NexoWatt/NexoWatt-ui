@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: cc4026630df834cb41c3edffda956bde9cf7de28661df662914ce4bfa19dc0a3
+ * Original-Hash: a3fc713a163481c0143b6200ce617a19db61d8e5fa67a95dd6fc2be7d482df5d
  */
 
 /**
@@ -56,6 +56,11 @@ const mirrorSpecs = [
     sourceRel: 'src-ts/ems/core-limits/core-budget.ts',
     mirrorRel: 'lib/ts-mirrors/ems/core-limits/core-budget.js',
     exports: ['isStorageReserveActive', 'calculatePvBudgetGate', 'calculateGridBudgetGate', 'buildCoreBudgetSnapshot', 'computeCoreBudgetReservation', 'buildCoreBudgetConsumersList', 'calculateCoreBudgetFlexUsedW'],
+  },
+  {
+    sourceRel: 'src-ts/ems/core-limits/core-runtime.ts',
+    mirrorRel: 'lib/ts-mirrors/ems/core-limits/core-runtime.js',
+    exports: ['computeCorePvBudgetFlowRawW', 'resolveCorePvBudgetPhysicalCap', 'normalizeCorePvAllocationMode', 'buildCorePvAllocation', 'computeCoreCentralBudgetGrant', 'buildCoreRuntimeBudgetSnapshot', 'compareCoreRuntimeBudgetSnapshots'],
   },
   {
     sourceRel: 'src-ts/ems/heating-rod/heating-rod-decision.ts',
@@ -122,7 +127,7 @@ function verifyRuntimeExports(spec) {
     if (mod.clampNumber(120, 0, 100) !== 100) fail('number Spiegel muss Werte begrenzen.');
   }
 
-  if (spec.mirrorRel.includes('core-limits')) {
+  if (spec.mirrorRel.endsWith('/core-budget.js')) {
     const snap = mod.buildCoreBudgetSnapshot({
       ts: 1,
       pvSurplusW: 5000,
@@ -144,6 +149,29 @@ function verifyRuntimeExports(spec) {
     if (!reservation || !reservation.entry || reservation.entry.grantW !== 2000) fail('core-reservation Spiegel muss PV-only Grant auf PV-Restbudget begrenzen.');
     if (reservation.nextRemainingTotalW !== 500 || reservation.nextRemainingPvW !== 500) fail('core-reservation Spiegel muss Restbudgets korrekt reduzieren.');
     if (reservation.flexUsedW !== 2500) fail('core-reservation Spiegel muss flexUsedW aus usedW berechnen.');
+  }
+
+  if (spec.mirrorRel.endsWith('/core-runtime.js')) {
+    const flowW = mod.computeCorePvBudgetFlowRawW({ gridW: -3000, flexUsedW: 1000, storageChargeW: 2000 });
+    if (flowW !== 6000) fail(`core-runtime Spiegel erwartet PV-Flow 6000 W, ist ${flowW}.`);
+    const allocation = mod.buildCorePvAllocation({ totalW: 10000, mode: 'both', evcsSharePct: 80, storageEligible: true });
+    if (allocation.evcsCapW !== 8000 || allocation.storageGuaranteedW !== 2000) fail('core-runtime Spiegel muss 80/20-PV-Aufteilung korrekt berechnen.');
+    const grant = mod.computeCoreCentralBudgetGrant({
+      remainingTotalW: 10000,
+      remainingPvW: 9000,
+      gates: { pvAllocation: { mode: 'both', evcsCapW: 8000 } },
+    }, { key: 'evcs', requestedW: 10000, pvOnly: true });
+    if (grant.grantW !== 8000 || grant.source !== 'ts-core-runtime-grant') fail('core-runtime Spiegel muss zentralen EVCS-Grant begrenzen.');
+    const snapshot = mod.buildCoreRuntimeBudgetSnapshot({
+      ts: 1,
+      grid: { netW: -5000, usable: true, status: 'ok', source: 'signed', importLimitW: 40000 },
+      pv: { measuredW: 12000, measuredFresh: true, reserveW: 500 },
+      storage: { chargeW: 2000, dischargeW: 0, eligible: true, maxChargeW: 10000, socPct: 50, maxSocPct: 100 },
+      consumers: { evcsUsedW: 3000, evcsPvUsedW: 3000 },
+      allocation: { enabled: true, mode: 'both', evcsSharePct: 50 },
+    });
+    if (!snapshot.typedRuntime || snapshot.typedRuntime.productive !== true) fail('core-runtime Spiegel muss produktiven typisierten Snapshot markieren.');
+    if (snapshot.gates.pv.effectiveW !== 9500) fail(`core-runtime Spiegel erwartet PV effektiv 9500 W, ist ${snapshot.gates.pv.effectiveW}.`);
   }
 
   if (spec.mirrorRel.includes('heating-rod')) {
@@ -186,6 +214,7 @@ function main() {
     if (!scripts[name]) fail(`package.json scripts.${name} fehlt.`);
   }
   requireContains('tsconfig.ems-mirrors.json', 'src-ts/ems/core-limits/core-budget.ts');
+  requireContains('tsconfig.ems-mirrors.json', 'src-ts/ems/core-limits/core-runtime.ts');
   requireContains('scripts/build-ts-ems-mirrors.js', 'Code-Teil: checkMirrorIsCurrent');
   requireContains('scripts/build-ts-ems-mirrors.js', 'Code-Teil: writeRuntimeMirror');
 

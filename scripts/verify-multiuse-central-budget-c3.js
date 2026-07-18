@@ -46,6 +46,7 @@ function makeAdapter() {
     config: {
       enableMultiUse: true,
       multiUse: {
+        legacyFlexibleConsumersEnabled: true,
         pvBudgetMode: 'dp',
         pvBudgetWId: 'plant.pvDemand',
         comfortBudgetW: 0,

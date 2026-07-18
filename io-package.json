@@ -1,35 +1,35 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.114",
+    "version": "0.8.120",
     "news": {
+      "0.8.120": {
+        "de": "Version 0.8.120: TypeScript Core-Limits Phase 2 typisiert die Messwert-/Quellenübergabe, zentrale Grant-/Reservierungsreihenfolge, Restbudgetmutation und Budget-State-Publikation. Der produktive Pfad wird nur bei Feldparität verwendet; bei Abweichung bleibt der bisherige JavaScript-Fallback aktiv.",
+        "en": "Version 0.8.120: TypeScript Core-Limits Phase 2 types measurement/source handover, central grant/reservation sequencing, remaining-budget mutation and budget state publication. The productive path is used only with field parity; otherwise the existing JavaScript fallback remains active."
+      },
+      "0.8.119": {
+        "de": "Version 0.8.119: Phase 1 der echten TypeScript-Typisierung des zentralen EMS-Kerns. NVP-, PV-, Budget-, Grant-, §14a- und Headroom-Berechnungen laufen produktiv über einen streng typisierten, seiteneffektfreien Core-Runtime-Vertrag. Die bewährte JavaScript-Rechnung bleibt als harter Fallback aktiv und wird vor jeder Übernahme auf Feldparität geprüft.",
+        "en": "Version 0.8.119: Phase 1 of genuine TypeScript typing for the central EMS core. NVP, PV, budget, grant, §14a and headroom calculations now run productively through a strictly typed, side-effect-free core runtime contract. The proven JavaScript calculation remains as a hard fallback and is checked for field parity before takeover."
+      },
+      "0.8.118": {
+        "de": "Version 0.8.118: §14a arbeitet als frischer zentraler Constraint statt als konkurrierender Hardware-Schreiber. EVCS, Speicher, Thermik und Heizstab erhalten app-spezifische Caps aus demselben EMS-Budget. Veraltete Netzbetreibersignale werden nach konfigurierbarer Fail-Safe-Policy behandelt; Legacy-Direktwrites bleiben nur als expliziter Migrationsmodus verfügbar.",
+        "en": "Version 0.8.118: Section 14a now acts as a fresh central constraint instead of a competing hardware writer. EVCS, storage, thermal control and heating rods receive app-specific caps from the same EMS budget. Stale grid-operator signals follow a configurable fail-safe policy; legacy direct writes remain available only as an explicit migration mode."
+      },
+      "0.8.117": {
+        "de": "Version 0.8.117: MultiUse ist standardmäßig ausschließlich Speicher-Policy; Storage-Control bleibt einziger Batteriesollwert-Schreiber. Peak-Shaving verbucht nur bestätigte Aktorwirkung und hält fehlgeschlagene Restores offen. Dynamische Stundenpreise werden nach 90 Minuten stale; eine frische Day-Ahead-Kurve darf den aktuellen Slot ersetzen, stale Preise lösen kein Netzladen aus.",
+        "en": "Version 0.8.117: MultiUse is storage-policy-only by default and Storage-Control remains the sole battery setpoint writer. Peak shaving counts only confirmed actuator effects and keeps failed restores pending. Dynamic current prices become stale after 90 minutes; a fresh day-ahead curve may provide the current slot and stale prices cannot trigger grid charging."
+      },
+      "0.8.116": {
+        "de": "Version 0.8.116: BHKW und Generator auf den zentralen Aktorvertrag umgestellt. Frische SoC-/NVP-/Laufstatuswerte, Start-/Stop-Pulse, Zwei-Draht-Level und Run-Level, Readback/ACK-Timeout, begrenzte Wiederholungen, Fehlerverriegelung sowie rekonstruierte Mindestlauf- und Stillstandszeiten sind jetzt gemeinsam abgesichert.",
+        "en": "Version 0.8.116: Migrates CHP and generator control to the central actuator contract. Fresh SoC/NVP/runtime feedback, start/stop pulses, dual-wire level and run-level profiles, readback/ACK timeout, bounded retries, fault lockout and reconstructed minimum run/off times are now handled consistently."
+      },
+      "0.8.115": {
+        "de": "Version 0.8.115: Stufe C3.4 bindet NexoLogic-Ausgänge an eindeutige Aktor-Owner, den zentralen Arbiter und optionale zentrale PV-/Gesamtbudgets an. Readback-Frische, ACK-Timeout, begrenzte Wiederholungen, Fehlerverriegelung und sichere Budgetreservierung bei blockierten Stopps wurden ergänzt. Direkte Alt-Ausgänge bleiben ohne aktivierte Budgetoption kompatibel.",
+        "en": "Version 0.8.115: Stage C3.4 connects NexoLogic outputs to unique actuator owners, the central arbiter and optional central PV/total budgets. Readback freshness, ACK timeouts, bounded retries, fault locking and safe budget reservation during blocked stop commands were added. Existing direct outputs remain compatible unless budgeting is explicitly enabled."
+      },
       "0.8.114": {
         "de": "Version 0.8.114: Speicher-0-W-Firewall herstellerübergreifend verschärft: Zielband, kurze Mess-/Budgetlücken und bestätigter PV-/Lastbedarf halten den aktiven Sollwert; 0 W bleibt echten SoC-, Safety-, Richtungswechsel- und bestätigten Budget-Stopps vorbehalten. Physische PV-/Wechselrichterquellen werden dedupliziert und gegen die konfigurierte Anlagenleistung plausibilisiert. MultiUse verwendet jetzt ausschließlich zentrale PV-/Gesamt-Grants, den Aktor-Arbiter sowie bestätigte Reservierungen statt eines lokalen Parallelbudgets.",
         "en": "Version 0.8.114: Tightens the vendor-neutral storage zero-watt firewall: target-band operation, short measurement/budget gaps and confirmed PV/load demand keep the active setpoint; 0 W remains reserved for real SoC, safety, direction-change and confirmed budget stops. Physical PV/inverter sources are deduplicated and checked against configured plant capacity. MultiUse now exclusively uses central PV/total grants, the actuator arbiter and confirmed reservations instead of a local parallel budget."
-      },
-      "0.8.113": {
-        "de": "Version 0.8.113: Stufe C3.2 bindet Thermik und Heizstabsteuerung mit eindeutigen Aktor-Ownern, optionalem Readback, ACK-Timeout, begrenzten Wiederholungen und Fehlerverriegelung an den zentralen Arbiter an. Blockierte oder fehlgeschlagene Writes werden nicht mehr als umgesetzte Leistung im EMS-Budget reserviert. Die sichtbare LIVE-Energieflussanzeige aktualisiert jetzt alle 5 Sekunden; Backend-Messwerterfassung und Regelzyklen bleiben unverändert schnell.",
-        "en": "Version 0.8.113: Stage C3.2 connects thermal and heating-rod control to the central actuator arbiter with explicit owners, optional readback, ACK timeout, bounded retries and fault lockout. Blocked or failed writes are no longer reserved as applied power in the EMS budget. The visible LIVE energy-flow display now refreshes every 5 seconds while backend metering and control cycles remain unchanged."
-      },
-      "0.8.112": {
-        "de": "Version 0.8.112: Stufe C3.1 bindet Threshold-Regeln und manuelle Relaisbedienung an eindeutige Aktor-Owner und Leases an. Fehlgeschlagene oder blockierte Writes werden nicht mehr als ausgeführt verbucht; optionaler Readback und Startzustandsübernahme wurden ergänzt. Die feste PV-Überschuss-Aufteilung kann im Kundenbereich abgeschaltet werden; aktive Verbraucher reservieren dann nur ihren realen Bedarf und der Speicher erhält den gesamten ungenutzten PV-Rest im selben EMS-Zyklus.",
-        "en": "Version 0.8.112: Stage C3.1 assigns explicit actuator owners and leases to threshold rules and manual relay control. Failed or blocked writes are no longer recorded as applied; optional readback and initial output-state adoption were added. The fixed PV-surplus split can be disabled in customer settings; active consumers then reserve only actual demand and the battery receives the complete unused PV remainder in the same EMS cycle."
-      },
-      "0.8.111": {
-        "de": "Version 0.8.111: Stufe C2 setzt sicherheitskritische Aktor-Steuerhoheit verbindlich durch. Not-/Failsafe, §14a/Netzbetreiber, Grid-/Anschlusslimits, Peak-Shaving und befristete manuelle Overrides können niedrigere widersprechende Hardware-Writes blockieren. Normale EMS-/Komfortpfade untereinander bleiben zunächst unverändert; AppCenter zeigt nur eine kompakte Arbiter-/Konfliktdiagnose. Ein Shadow-Rückfall bleibt im Admin verfügbar.",
-        "en": "Version 0.8.111: Stage C2 enforces safety-critical actuator authority. Emergency/failsafe, §14a/grid operator, grid/connection limits, peak shaving, and time-bounded manual overrides can block lower-priority conflicting hardware writes. Normal EMS/comfort paths remain unchanged for now; AppCenter only shows compact arbiter/conflict diagnostics. A shadow fallback remains available in Admin."
-      },
-      "0.8.110": {
-        "de": "Version 0.8.110: Stufe C1 führt einen zentralen read-only Aktor-Shadow-Arbiter ein. Externe Hardware-Schreibanforderungen werden mit Modul, Priorität, Grund und Gültigkeit beobachtet, aber nicht verändert oder blockiert. Konkurrierende Werte verschiedener Steuerpfade auf demselben DP werden in der bestehenden kompakten EMS-Überwachung zusammengeführt. Damit können §14a, Peak-Shaving, MultiUse, Speicher, EVCS, Thermik, Heizstab, Threshold, BHKW, Generator, NexoLogic und manuelle Bedienung zunächst risikofrei auf echte Schreibkonflikte geprüft werden.",
-        "en": "Version 0.8.110: Stage C1 introduces a central read-only actuator shadow arbiter. External hardware write requests are observed with module, priority, reason, and validity, but are neither changed nor blocked. Conflicting values from different control paths targeting the same datapoint are merged into the existing compact EMS monitoring view. This enables safe detection of real write conflicts across §14a, peak shaving, MultiUse, storage, EVCS, thermal, heating rod, threshold, CHP, generator, NexoLogic, and manual control."
-      },
-      "0.8.109": {
-        "de": "Version 0.8.109: Die NVP-Messwertfrische wird zentral und herstellerunabhängig bewertet. connected=true macht eingefrorene Leistungswerte nicht mehr frisch; ein echter Heartbeat darf unveränderte Messwerte nur innerhalb einer begrenzten Haltezeit bestätigen. Getrennte Bezugs-/Einspeise-DPs werden zeitlich kohärent aufgelöst, sodass ein alter Gegenkanal keine Phantomwerte erzeugt. Budgetierung, Lademanagement, Speicher, Netzconstraints, Peak-Shaving sowie Energiefluss/History verwenden dieselbe NVP-Quelle. Der AppCenter-Status bleibt bewusst auf eine kompakte EMS-Überwachungskarte begrenzt.",
-        "en": "Version 0.8.109: NVP measurement freshness is now evaluated centrally and independently of vendor profiles. connected=true no longer makes frozen power values fresh; a real heartbeat may confirm unchanged readings only for a bounded hold time. Separate import/export datapoints are resolved coherently in time so an old opposite channel cannot create phantom values. Budgeting, charging management, storage, grid constraints, peak shaving, and energy flow/history use the same NVP source. AppCenter status remains intentionally limited to one compact EMS monitoring card."
-      },
-      "0.8.108": {
-        "de": "Version 0.8.108: Explizite Speicher-Messwert-Overrides aus dem AppCenter haben wieder Vorrang vor Speicherfarm- und Bilanzwerten, auch bei Einzelanlagen. Getrennte Lade-/Entlade-Istwerte werden sicher zusammengeführt. Eine neue read-only Stufe-A-Diagnose zeigt Aktor-Doppelbelegungen, Messwertfrische, NVP-Zeitversatz und die tatsächlich verwendete Speicherquelle, ohne Hardware-Sollwerte zu verändern.",
-        "en": "Version 0.8.108: Explicit AppCenter storage measurement overrides again take precedence over storage-farm and balance values, including single-storage installations. Separate charge/discharge actual values are safely combined. A new read-only Stage-A diagnostic reports duplicate actuator mappings, measurement freshness, NVP timing skew and the resolved storage source without changing hardware setpoints."
       }
     },
     "title": "NexoWatt UI",

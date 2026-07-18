@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4c9e7ff1566f859d9889f3244bbcdc80f3cc3c8836134d447e2d7ceb2c218f43
+ * Original-Hash: c2cc0fec06fe13a229f35c7e3b94982f37106f855598add14dcded3705186385
  */
 
 /**
@@ -109,6 +109,7 @@ function makeAdapter() {
     config: {
       enableMultiUse: true,
       multiUse: {
+        legacyFlexibleConsumersEnabled: true,
         pvBudgetMode: 'dp',
         pvBudgetWId: 'plant.pvDemand',
         comfortBudgetW: 0,

@@ -21,7 +21,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: 77e37640d99e6b11893803c49f4882337bf3b7ddc673610f69a24485e8abeb20
+ * Original-Hash: 155f94c8c15c12848c7707b44d70b007dab7251a2cbd8885074b023062edae71
  */
 
 /**
@@ -16448,14 +16448,18 @@ settingsConfig: {
               const name = String(it.name || '').trim() || `BHKW ${idx}`;
               const enabled = (typeof it.enabled === 'boolean') ? !!it.enabled : true;
               const showInLive = (typeof it.showInLive === 'boolean') ? !!it.showInLive : true;
-              const userCanControl = true;
+              const userCanControl = (typeof it.userCanControl === 'boolean') ? !!it.userCanControl : true;
 
               const startId = String(it.startWriteId || it.startObjectId || it.startId || '').trim();
               const stopId = String(it.stopWriteId || it.stopObjectId || it.stopId || '').trim();
+              const runWriteId = String(it.runWriteId || it.runObjectId || it.enableWriteId || it.enableId || '').trim();
               const runId = String(it.runningReadId || it.runningObjectId || it.runningId || '').trim();
               const pwrId = String(it.powerReadId || it.powerObjectId || it.powerId || '').trim();
+              const profileRaw = String(it.commandType || it.commandProfile || '').trim().toLowerCase();
+              const inferredRunLevel = !profileRaw && !!runWriteId && !(startId && stopId);
+              const commandProfile = (inferredRunLevel || ['runlevel', 'run-level', 'run'].includes(profileRaw)) ? 'runLevel' : (['level', 'duallevel', 'dual-level'].includes(profileRaw) ? 'dualLevel' : 'pulse');
 
-              const configured = !!(startId && stopId);
+              const configured = commandProfile === 'runLevel' ? !!(runWriteId || startId) : !!(startId && stopId);
 
               out.push({
                 idx,
@@ -16464,6 +16468,7 @@ settingsConfig: {
                 showInLive,
                 userCanControl,
                 configured,
+                commandProfile,
                 hasRunning: !!runId,
                 hasPower: !!pwrId
               });
@@ -16490,16 +16495,20 @@ settingsConfig: {
               const name = String(it.name || '').trim() || `Generator ${idx}`;
               const enabled = (typeof it.enabled === 'boolean') ? !!it.enabled : true;
               const showInLive = (typeof it.showInLive === 'boolean') ? !!it.showInLive : true;
-              const userCanControl = true;
+              const userCanControl = (typeof it.userCanControl === 'boolean') ? !!it.userCanControl : true;
 
               const startId = String(it.startWriteId || it.startObjectId || it.startId || '').trim();
               const stopId = String(it.stopWriteId || it.stopObjectId || it.stopId || '').trim();
+              const runWriteId = String(it.runWriteId || it.runObjectId || it.enableWriteId || it.enableId || '').trim();
               const runId = String(it.runningReadId || it.runningObjectId || it.runningId || '').trim();
               const pwrId = String(it.powerReadId || it.powerObjectId || it.powerId || '').trim();
+              const profileRaw = String(it.commandType || it.commandProfile || '').trim().toLowerCase();
+              const inferredRunLevel = !profileRaw && !!runWriteId && !(startId && stopId);
+              const commandProfile = (inferredRunLevel || ['runlevel', 'run-level', 'run'].includes(profileRaw)) ? 'runLevel' : (['level', 'duallevel', 'dual-level'].includes(profileRaw) ? 'dualLevel' : 'pulse');
 
-              const configured = !!(startId && stopId);
+              const configured = commandProfile === 'runLevel' ? !!(runWriteId || startId) : !!(startId && stopId);
 
-              out.push({ idx, name, enabled, showInLive, userCanControl, configured, hasRunning: !!runId, hasPower: !!pwrId });
+              out.push({ idx, name, enabled, showInLive, userCanControl, configured, commandProfile, hasRunning: !!runId, hasPower: !!pwrId });
             }
             out.sort((a, b) => a.idx - b.idx);
             return out;
@@ -18746,16 +18755,20 @@ return res.json(out);
 
           const enabled = (typeof it.enabled === 'boolean') ? !!it.enabled : false;
           const showInLive = (typeof it.showInLive === 'boolean') ? !!it.showInLive : true;
-          const userCanControl = true;
+          const userCanControl = (typeof it.userCanControl === 'boolean') ? !!it.userCanControl : true;
 
           const name = String(it.name || '').trim() || `BHKW ${idx}`;
 
           const startId = String(it.startWriteId || it.startObjectId || it.startId || '').trim();
           const stopId = String(it.stopWriteId || it.stopObjectId || it.stopId || '').trim();
+          const runWriteId = String(it.runWriteId || it.runObjectId || it.enableWriteId || it.enableId || '').trim();
           const runId = String(it.runningReadId || it.runningObjectId || it.runningId || '').trim();
           const pwrId = String(it.powerReadId || it.powerObjectId || it.powerId || '').trim();
-
-          const configured = !!(startId && stopId);
+          const commandType = String(it.commandType || it.commandProfile || '').trim().toLowerCase();
+          const inferredRunLevel = !commandType && !!runWriteId && !(startId && stopId);
+          const configured = (inferredRunLevel || ['runlevel', 'run-level', 'run'].includes(commandType))
+            ? !!(runWriteId || (startId && startId === stopId))
+            : !!(startId && stopId);
 
           let running = null;
           let powerW = null;
@@ -18777,7 +18790,7 @@ return res.json(out);
             idx, name,
             enabled, showInLive, userCanControl,
             configured,
-            hasRunning: !!runId, hasPower: !!pwrId,
+            hasRunning: !!(runId || pwrId), hasPower: !!pwrId,
             running: (running === null || running === undefined) ? null : !!running,
             powerW: (powerW === null || powerW === undefined) ? null : Number(powerW),
             socPct: (socPct === null || socPct === undefined) ? null : Number(socPct),
@@ -18815,16 +18828,20 @@ return res.json(out);
 
           const enabled = (typeof it.enabled === 'boolean') ? !!it.enabled : false;
           const showInLive = (typeof it.showInLive === 'boolean') ? !!it.showInLive : true;
-          const userCanControl = true;
+          const userCanControl = (typeof it.userCanControl === 'boolean') ? !!it.userCanControl : true;
 
           const name = String(it.name || '').trim() || `Generator ${idx}`;
 
           const startId = String(it.startWriteId || it.startObjectId || it.startId || '').trim();
           const stopId = String(it.stopWriteId || it.stopObjectId || it.stopId || '').trim();
+          const runWriteId = String(it.runWriteId || it.runObjectId || it.enableWriteId || it.enableId || '').trim();
           const runId = String(it.runningReadId || it.runningObjectId || it.runningId || '').trim();
           const pwrId = String(it.powerReadId || it.powerObjectId || it.powerId || '').trim();
-
-          const configured = !!(startId && stopId);
+          const commandType = String(it.commandType || it.commandProfile || '').trim().toLowerCase();
+          const inferredRunLevel = !commandType && !!runWriteId && !(startId && stopId);
+          const configured = (inferredRunLevel || ['runlevel', 'run-level', 'run'].includes(commandType))
+            ? !!(runWriteId || (startId && startId === stopId))
+            : !!(startId && stopId);
 
           let running = null;
           let powerW = null;
@@ -18846,7 +18863,7 @@ return res.json(out);
             idx, name,
             enabled, showInLive, userCanControl,
             configured,
-            hasRunning: !!runId, hasPower: !!pwrId,
+            hasRunning: !!(runId || pwrId), hasPower: !!pwrId,
             running: (running === null || running === undefined) ? null : !!running,
             powerW: (powerW === null || powerW === undefined) ? null : Number(powerW),
             socPct: (socPct === null || socPct === undefined) ? null : Number(socPct),

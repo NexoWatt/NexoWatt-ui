@@ -161,6 +161,25 @@ export class ActuatorCommandContract {
     return this.result(key, now, false);
   }
 
+  defer(keyRaw: unknown, requested: unknown, nowRaw: unknown, delayMsRaw: unknown, statusRaw: unknown = 'deferred'): ActuatorContractResult {
+    const key = String(keyRaw || '').trim();
+    const now = Number.isFinite(Number(nowRaw)) ? Number(nowRaw) : Date.now();
+    const delayMs = Math.max(250, Math.min(120000, Number(delayMsRaw) || 1000));
+    const fp = stable(requested);
+    let state = this.states.get(key);
+    if (!state || state.fingerprint !== fp) {
+      this.prepare(key, requested, now, {});
+      state = this.states.get(key)!;
+    }
+    state.requested = requested;
+    state.accepted = false;
+    state.confirmed = false;
+    state.pending = false;
+    state.nextAttemptTs = now + delayMs;
+    state.status = String(statusRaw || 'deferred');
+    return this.result(key, now, false);
+  }
+
   confirmFromReadback(keyRaw: unknown, requested: unknown, actual: unknown, matches: boolean, nowRaw: unknown): ActuatorContractResult | null {
     const key = String(keyRaw || '').trim();
     const now = Number.isFinite(Number(nowRaw)) ? Number(nowRaw) : Date.now();

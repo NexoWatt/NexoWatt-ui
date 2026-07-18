@@ -194,6 +194,7 @@ export interface CoreRestGatesShadowInput {
   peak?: Record<string, unknown> | null;
   para14a?: Record<string, unknown> | null;
   evcsHighLevel?: Record<string, unknown> | null;
+  controlledHighLevel?: Record<string, unknown> | null;
   grid?: Record<string, unknown> | null;
   ts?: unknown;
 }
@@ -209,6 +210,7 @@ export interface CoreRestGatesShadowResult {
     peak: Record<string, unknown>;
     para14a: Record<string, unknown>;
     evcsHighLevel: Record<string, unknown>;
+    controlledHighLevel: Record<string, unknown>;
     grid: Record<string, unknown>;
   };
 }
@@ -324,6 +326,7 @@ export function buildCorePeakTariffGridGates(input: CoreRestGatesShadowInput): R
   const peak: Record<string, unknown> = input && input.peak && typeof input.peak === 'object' ? input.peak : {};
   const para14a: Record<string, unknown> = input && input.para14a && typeof input.para14a === 'object' ? input.para14a : {};
   const evcsHighLevel: Record<string, unknown> = input && input.evcsHighLevel && typeof input.evcsHighLevel === 'object' ? input.evcsHighLevel : {};
+  const controlledHighLevel: Record<string, unknown> = input && input.controlledHighLevel && typeof input.controlledHighLevel === 'object' ? input.controlledHighLevel : {};
   const grid: Record<string, unknown> = input && input.grid && typeof input.grid === 'object' ? input.grid : {};
   const tariff = buildCoreTariffGate(input && input.tariff ? input.tariff : null);
   return {
@@ -336,10 +339,19 @@ export function buildCorePeakTariffGridGates(input: CoreRestGatesShadowInput): R
       active: restBool(para14a.active, false),
       mode: restString(para14a.mode, ''),
       evcsCapW: restNumberOrNull(para14a.evcsCapW) === null ? null : restWatt(para14a.evcsCapW),
+      totalCapW: restNumberOrNull(para14a.totalCapW) === null ? null : restWatt(para14a.totalCapW),
+      appCapsW: para14a.appCapsW && typeof para14a.appCapsW === 'object' ? { ...(para14a.appCapsW as Record<string, unknown>) } : {},
+      signalFresh: restBool(para14a.signalFresh, false),
+      signalStatus: restString(para14a.signalStatus, ''),
+      constraintOnly: restBool(para14a.constraintOnly, false),
     },
     evcsHighLevel: {
       capW: restNumberOrNull(evcsHighLevel.capW) === null ? null : restWatt(evcsHighLevel.capW),
       binding: restString(evcsHighLevel.binding, ''),
+    },
+    controlledHighLevel: {
+      capW: restNumberOrNull(controlledHighLevel.capW) === null ? null : restWatt(controlledHighLevel.capW),
+      binding: restString(controlledHighLevel.binding, ''),
     },
     grid: {
       gridConnectionLimitW_cfg: restWatt(grid.gridConnectionLimitW_cfg),
@@ -377,6 +389,7 @@ export function buildCoreRestGatesShadow(input: CoreRestGatesShadowInput): CoreR
       peak: (peakGrid.peak || {}) as Record<string, unknown>,
       para14a: (peakGrid.para14a || {}) as Record<string, unknown>,
       evcsHighLevel: (peakGrid.evcsHighLevel || {}) as Record<string, unknown>,
+      controlledHighLevel: (peakGrid.controlledHighLevel || {}) as Record<string, unknown>,
       grid: (peakGrid.grid || {}) as Record<string, unknown>,
     },
   };

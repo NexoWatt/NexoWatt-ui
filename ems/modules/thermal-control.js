@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/thermal-control.ts
- * Quell-Hash: sha256:8e200ca51f3ba96d2461cc5ff7186f51cc83a7d8a0d594bcc780a2dccc0bfe7e
+ * Quell-Hash: sha256:7fba8c4385a986b1fb8dbd43f7e74176c594902a9c5274e2360d1a6700e25fe6
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -941,20 +941,6 @@ const mk = async (id, name, type, role, unit = undefined) => {
         if (!this._isEnabled()) return;
 
         const now = nowMs();
-
-        // If §14a is active, avoid competing writes.
-        try {
-            const p14a = (this.adapter && this.adapter._para14a && typeof this.adapter._para14a === 'object') ? this.adapter._para14a : null;
-            if (p14a && p14a.active) {
-                this.adapter._thermalBudgetUsedW = 0;
-                await this._setStateIfChanged('thermal.summary.status', 'paused_by_14a');
-                await this._setStateIfChanged('thermal.summary.budgetUsedW', 0);
-                await this._setStateIfChanged('thermal.summary.lastUpdate', now);
-                return;
-            }
-        } catch (_e) {
-            // ignore
-        }
 
         const pv = this._computePvAvailableW();
         let remainingW = Math.max(0, num(pv.availableW, 0));

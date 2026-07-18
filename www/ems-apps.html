@@ -1564,7 +1564,7 @@
           <div class="nw-config-item">
             <div class="nw-config-item__left">
               <div class="nw-config-item__title">Modus</div>
-              <div class="nw-config-item__subtitle">„EMS“: Setpoint wird an das interne Lademanagement übergeben. „Direkt“: Verbraucher werden direkt begrenzt.</div>
+              <div class="nw-config-item__subtitle">„EMS“: externer Gesamt-Setpoint wird zentral verteilt. „Direkt“: §14a-Mindestformel wird zentral berechnet. Hardware schreibt weiterhin nur das zuständige Fachmodul.</div>
             </div>
             <div class="nw-config-item__right">
               <select id="para14aMode" class="nw-config-input">
@@ -1581,6 +1581,40 @@
             </div>
             <div class="nw-config-item__right">
               <input id="para14aMinPerDeviceW" class="nw-config-input" type="number" min="0" step="1" placeholder="z.B. 1000"/>
+            </div>
+          </div>
+
+          <div class="nw-config-item">
+            <div class="nw-config-item__left">
+              <div class="nw-config-item__title">Maximales Alter Aktiv-Signal (s)</div>
+              <div class="nw-config-item__subtitle">Nach Ablauf gilt die unten gewählte sichere Stale-Policy.</div>
+            </div>
+            <div class="nw-config-item__right">
+              <input id="para14aSignalMaxAgeSec" class="nw-config-input" type="number" min="1" max="300" step="1" value="30"/>
+            </div>
+          </div>
+
+          <div class="nw-config-item">
+            <div class="nw-config-item__left">
+              <div class="nw-config-item__title">Verhalten bei veraltetem Signal</div>
+              <div class="nw-config-item__subtitle">Empfohlen: eine zuletzt aktive Begrenzung halten; eine alte Freigabe aktiviert keine Begrenzung neu.</div>
+            </div>
+            <div class="nw-config-item__right">
+              <select id="para14aStalePolicy" class="nw-config-input">
+                <option value="hold-active">Letzte aktive Begrenzung halten</option>
+                <option value="force-active">Bei stale sicher begrenzen</option>
+                <option value="release">Bei stale freigeben (nicht empfohlen)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="nw-config-item">
+            <div class="nw-config-item__left">
+              <div class="nw-config-item__title">Legacy-Direktwrites</div>
+              <div class="nw-config-item__subtitle">Nur für Altanlagen. Standardmäßig AUS: §14a veröffentlicht zentrale Constraints; EVCS, Speicher, Thermik und Heizstab bleiben alleinige Hardware-Schreiber.</div>
+            </div>
+            <div class="nw-config-item__right">
+              <label class="nw-config-checklabel"><input id="para14aLegacyDirectWritesEnabled" type="checkbox"/> Alt-Direktwrites aktivieren</label>
             </div>
           </div>
 
@@ -1621,7 +1655,7 @@
 
       <div class="nw-card">
         <div class="nw-card__title">Steuerbare Verbraucher</div>
-        <div class="nw-card__subtitle">Optional: zusätzliche Verbraucher (z.B. Wärmepumpe, Heizstab, Klima). Werden bei Aktivierung dynamisch verteilt (Priorität + Mindestleistung).</div>
+        <div class="nw-card__subtitle">Zuordnung der steuerbaren Verbraucher für die zentrale §14a-Cap-Berechnung. Standardmäßig werden diese DPs hier nicht direkt beschrieben.</div>
 
         <div id="para14aConsumers" class="nw-config-list"></div>
 

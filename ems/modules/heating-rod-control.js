@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/heating-rod-control.ts
- * Quell-Hash: sha256:91cebc584bd14555c4645d87a9a46b4cb1849bb4a442f055e01f7035acdc39de
+ * Quell-Hash: sha256:fbd5423d2fc98e70e082326232b430b9bf09f386ee7192f869122256da7b1de6
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -4073,18 +4073,6 @@ class HeatingRodControlModule extends BaseModule {
         if (!this._isEnabled()) return;
 
         const now = nowMs();
-
-        try {
-            const p14a = (this.adapter && this.adapter._para14a && typeof this.adapter._para14a === 'object') ? this.adapter._para14a : null;
-            if (p14a && p14a.active) {
-                await this._setStateIfChanged('heatingRod.summary.status', 'paused_by_14a');
-                await this._setStateIfChanged('heatingRod.summary.lastUpdate', now);
-                this.adapter._heatingRodBudgetUsedW = 0;
-                return;
-            }
-        } catch (_e) {
-            // ignore
-        }
 
         const staleTimeoutSec = clamp(num(this._getCfg().staleTimeoutSec, 15), 1, 3600);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));

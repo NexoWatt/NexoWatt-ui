@@ -154,6 +154,9 @@
     // §14a
     para14aMode: document.getElementById('para14aMode'),
     para14aMinPerDeviceW: document.getElementById('para14aMinPerDeviceW'),
+    para14aSignalMaxAgeSec: document.getElementById('para14aSignalMaxAgeSec'),
+    para14aStalePolicy: document.getElementById('para14aStalePolicy'),
+    para14aLegacyDirectWritesEnabled: document.getElementById('para14aLegacyDirectWritesEnabled'),
     para14aActiveId: document.getElementById('para14aActiveId'),
     para14aEmsSetpointWId: document.getElementById('para14aEmsSetpointWId'),
     para14aConsumers: document.getElementById('para14aConsumers'),
@@ -391,7 +394,7 @@
     { id: 'meshMicrogrid', label: 'EOS Mesh/Microgrid', desc: 'EOS: separates Datenmodell für lokale Energie-Knoten, Cluster, Local First / Grid Last und spätere Nachbarschaftsversorgung', mandatory: false, hems: false },
     { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', mandatory: true, hems: true },
     { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls genutzt)', mandatory: false, hems: true },
-    { id: 'multiuse', label: 'MultiUse', desc: 'Speicher Multi‑Use (SoC‑Zonen: Notstrom/LSK/Eigenverbrauch)', mandatory: false, hems: false }
+    { id: 'multiuse', label: 'MultiUse', desc: 'Speicher-Policy mit SoC-Zonen für Reserve, Lastspitzenkappung und Eigenverbrauch; Storage-Control bleibt einziger Batterieschreiber', mandatory: false, hems: false }
   ];
 
 
@@ -5420,17 +5423,30 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       startWriteId: '',
       stopWriteId: '',
+      runWriteId: '',
       runningReadId: '',
       powerReadId: '',
+      powerScale: 1,
 
       socStartPct: 25,
       socStopPct: 60,
       minRunMin: 10,
       minOffMin: 5,
       maxAgeSec: 30,
+      socMaxAgeSec: 60,
+      gridMaxAgeSec: 15,
 
       commandType: 'pulse',
       pulseMs: 800,
+      requireReadback: true,
+      commandTimeoutSec: 60,
+      retryDelaySec: 15,
+      maxRetries: 2,
+      faultLockSec: 300,
+      requireGridImportForAutoStart: false,
+      gridImportStartW: 500,
+      stopOnGridExportW: 0,
+      runningPowerThresholdW: 100,
     });
 
     for (let i = 0; i < b.devices.length; i++) {
@@ -5448,17 +5464,31 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       d.startWriteId = String(it.startWriteId || it.startObjectId || it.startId || '').trim();
       d.stopWriteId = String(it.stopWriteId || it.stopObjectId || it.stopId || '').trim();
+      d.runWriteId = String(it.runWriteId || it.runObjectId || it.enableWriteId || it.enableId || '').trim();
       d.runningReadId = String(it.runningReadId || it.runningObjectId || it.runningId || '').trim();
       d.powerReadId = String(it.powerReadId || it.powerObjectId || it.powerId || '').trim();
+      d.powerScale = Number.isFinite(Number(it.powerScale)) ? Number(it.powerScale) : d.powerScale;
 
       d.socStartPct = Number.isFinite(Number(it.socStartPct)) ? Number(it.socStartPct) : d.socStartPct;
       d.socStopPct = Number.isFinite(Number(it.socStopPct)) ? Number(it.socStopPct) : d.socStopPct;
       d.minRunMin = Number.isFinite(Number(it.minRunMin)) ? Number(it.minRunMin) : d.minRunMin;
       d.minOffMin = Number.isFinite(Number(it.minOffMin)) ? Number(it.minOffMin) : d.minOffMin;
       d.maxAgeSec = Number.isFinite(Number(it.maxAgeSec)) ? Number(it.maxAgeSec) : d.maxAgeSec;
+      d.socMaxAgeSec = Number.isFinite(Number(it.socMaxAgeSec)) ? Number(it.socMaxAgeSec) : d.socMaxAgeSec;
+      d.gridMaxAgeSec = Number.isFinite(Number(it.gridMaxAgeSec)) ? Number(it.gridMaxAgeSec) : d.gridMaxAgeSec;
 
-      d.commandType = (String(it.commandType || '').trim().toLowerCase() === 'level') ? 'level' : 'pulse';
+      const commandTypeRaw = String(it.commandProfile || it.commandType || '').trim().toLowerCase();
+      d.commandType = ['runlevel', 'run-level', 'run'].includes(commandTypeRaw) ? 'runLevel' : (['level', 'duallevel', 'dual-level'].includes(commandTypeRaw) ? 'level' : 'pulse');
       d.pulseMs = Number.isFinite(Number(it.pulseMs)) ? Number(it.pulseMs) : d.pulseMs;
+      d.requireReadback = (typeof it.requireReadback === 'boolean') ? !!it.requireReadback : !!(d.runningReadId || d.powerReadId);
+      d.commandTimeoutSec = Number.isFinite(Number(it.commandTimeoutSec ?? it.readbackTimeoutSec)) ? Number(it.commandTimeoutSec ?? it.readbackTimeoutSec) : d.commandTimeoutSec;
+      d.retryDelaySec = Number.isFinite(Number(it.retryDelaySec)) ? Number(it.retryDelaySec) : d.retryDelaySec;
+      d.maxRetries = Number.isFinite(Number(it.maxRetries)) ? Number(it.maxRetries) : d.maxRetries;
+      d.faultLockSec = Number.isFinite(Number(it.faultLockSec)) ? Number(it.faultLockSec) : d.faultLockSec;
+      d.requireGridImportForAutoStart = (typeof it.requireGridImportForAutoStart === 'boolean') ? !!it.requireGridImportForAutoStart : d.requireGridImportForAutoStart;
+      d.gridImportStartW = Number.isFinite(Number(it.gridImportStartW ?? it.minGridImportWForStart)) ? Number(it.gridImportStartW ?? it.minGridImportWForStart) : d.gridImportStartW;
+      d.stopOnGridExportW = Number.isFinite(Number(it.stopOnGridExportW)) ? Number(it.stopOnGridExportW) : d.stopOnGridExportW;
+      d.runningPowerThresholdW = Number.isFinite(Number(it.runningPowerThresholdW)) ? Number(it.runningPowerThresholdW) : d.runningPowerThresholdW;
 
       // A "placeholder" slot is an additional device entry (idx>1) with no IO‑Broker IDs configured.
       // Earlier hotfixes pre-created multiple empty slots which confused customers.
@@ -5468,6 +5498,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         !d.enabled &&
         !d.startWriteId &&
         !d.stopWriteId &&
+        !d.runWriteId &&
         !d.runningReadId &&
         !d.powerReadId &&
         (d.name === `BHKW ${idx}` || !String(d.name || '').trim())
@@ -5696,12 +5727,18 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       body.appendChild(mkFieldRow('Optionen', opts));
 
       // Datapoints (mit Picker)
-      body.appendChild(mkFieldRow('Start (Write)', _mkDpWrap(`bhkw_b${dev.idx}_startWriteId`, dev.startWriteId, 'Write‑Datenpunkt', (v) => { dev.startWriteId = v; })));
-      body.appendChild(mkFieldRow('Stop (Write)', _mkDpWrap(`bhkw_b${dev.idx}_stopWriteId`, dev.stopWriteId, 'Write‑Datenpunkt', (v) => { dev.stopWriteId = v; })));
-      body.appendChild(mkFieldRow('Laufstatus (Read, optional)', _mkDpWrap(`bhkw_b${dev.idx}_runningReadId`, dev.runningReadId, 'Read‑Datenpunkt', (v) => { dev.runningReadId = v; }),
-        'Empfohlen für saubere Auto‑Logik und Statusanzeige.'));
+      body.appendChild(mkFieldRow('Start (Write)', _mkDpWrap(`bhkw_b${dev.idx}_startWriteId`, dev.startWriteId, 'Write‑Datenpunkt', (v) => { dev.startWriteId = v; }),
+        'Für Pulse oder 2-Draht-Level.'));
+      body.appendChild(mkFieldRow('Stop (Write)', _mkDpWrap(`bhkw_b${dev.idx}_stopWriteId`, dev.stopWriteId, 'Write‑Datenpunkt', (v) => { dev.stopWriteId = v; }),
+        'Für Pulse oder 2-Draht-Level.'));
+      body.appendChild(mkFieldRow('Run / Enable (Write)', _mkDpWrap(`bhkw_b${dev.idx}_runWriteId`, dev.runWriteId, 'Single-Run-Datenpunkt', (v) => { dev.runWriteId = v; }),
+        'Nur beim Profil „Ein Run-Level“: TRUE = Start, FALSE = Stop.'));
+      body.appendChild(mkFieldRow('Laufstatus (Read)', _mkDpWrap(`bhkw_b${dev.idx}_runningReadId`, dev.runningReadId, 'Read‑Datenpunkt', (v) => { dev.runningReadId = v; }),
+        'Für Auto-Betrieb und bestätigte Start/Stop-Kommandos dringend empfohlen.'));
       body.appendChild(mkFieldRow('Leistung (W) (Read)', _mkDpWrap(`bhkw_b${dev.idx}_powerReadId`, dev.powerReadId, 'Read‑Datenpunkt (W/kW)', (v) => { dev.powerReadId = v; }),
         'Erforderlich für die Anzeige im Energiefluss (BHKW als Erzeuger).'));
+      body.appendChild(mkFieldRow('Leistungsfaktor', mkNumInput(dev.powerScale, (v) => { dev.powerScale = v; }),
+        '1 bei Watt, 1000 wenn der gelesene Datenpunkt kW liefert.'));
 
       // Advanced (ausklappbar)
       const adv = document.createElement('div');
@@ -5711,13 +5748,27 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       adv.appendChild(mkFieldRow('SoC Stop‑Schwelle (%)', mkNumInput(dev.socStopPct, (v) => { dev.socStopPct = v; }), 'Auto‑Stop wenn SoC >= Stop‑Schwelle.'));
       adv.appendChild(mkFieldRow('Mindestlaufzeit (min)', mkNumInput(dev.minRunMin, (v) => { dev.minRunMin = v; })));
       adv.appendChild(mkFieldRow('Mindeststillstand (min)', mkNumInput(dev.minOffMin, (v) => { dev.minOffMin = v; })));
-      adv.appendChild(mkFieldRow('Max. Datenalter (s)', mkNumInput(dev.maxAgeSec, (v) => { dev.maxAgeSec = v; }),
-        'Wenn Laufstatus/Leistung älter ist → keine Auto‑Aktion.'));
-      adv.appendChild(mkFieldRow('Befehlstyp', mkSelect(dev.commandType, [
-        { value: 'pulse', label: 'Pulse (TRUE → FALSE)' },
-        { value: 'level', label: 'Level (TRUE)' },
-      ], (v) => { dev.commandType = (v === 'level') ? 'level' : 'pulse'; })));
+      adv.appendChild(mkFieldRow('Max. Status-/Leistungsalter (s)', mkNumInput(dev.maxAgeSec, (v) => { dev.maxAgeSec = v; }),
+        'Ältere Laufstatus-/Leistungswerte lösen keine Auto-Aktion aus.'));
+      adv.appendChild(mkFieldRow('Max. SoC-Alter (s)', mkNumInput(dev.socMaxAgeSec, (v) => { dev.socMaxAgeSec = v; })));
+      adv.appendChild(mkFieldRow('Befehlsprofil', mkSelect(dev.commandType, [
+        { value: 'pulse', label: 'Start-/Stop-Pulse' },
+        { value: 'level', label: '2-Draht-Level (Start/Stop)' },
+        { value: 'runLevel', label: 'Ein Run-Level (TRUE/FALSE)' },
+      ], (v) => { dev.commandType = (v === 'runLevel') ? 'runLevel' : (v === 'level' ? 'level' : 'pulse'); })));
       adv.appendChild(mkFieldRow('Pulse‑Dauer (ms)', mkNumInput(dev.pulseMs, (v) => { dev.pulseMs = v; })));
+      adv.appendChild(mkFieldRow('Readback erforderlich', mkCheckbox(dev.requireReadback, 'Start/Stop erst nach Laufstatus bestätigen', (v) => { dev.requireReadback = v; })));
+      adv.appendChild(mkFieldRow('Befehls-/Readback-Timeout (s)', mkNumInput(dev.commandTimeoutSec, (v) => { dev.commandTimeoutSec = v; })));
+      adv.appendChild(mkFieldRow('Wiederholungsabstand (s)', mkNumInput(dev.retryDelaySec, (v) => { dev.retryDelaySec = v; })));
+      adv.appendChild(mkFieldRow('Max. Wiederholungen', mkNumInput(dev.maxRetries, (v) => { dev.maxRetries = v; })));
+      adv.appendChild(mkFieldRow('Fehlerverriegelung (s)', mkNumInput(dev.faultLockSec, (v) => { dev.faultLockSec = v; })));
+      adv.appendChild(mkFieldRow('NVP-Startfreigabe', mkCheckbox(dev.requireGridImportForAutoStart, 'Auto-Start nur bei frischem Netzbezug', (v) => { dev.requireGridImportForAutoStart = v; })));
+      adv.appendChild(mkFieldRow('NVP-Startschwelle (W)', mkNumInput(dev.gridImportStartW, (v) => { dev.gridImportStartW = v; })));
+      adv.appendChild(mkFieldRow('Stop bei Einspeisung ab (W)', mkNumInput(dev.stopOnGridExportW, (v) => { dev.stopOnGridExportW = v; }),
+        '0 = deaktiviert. Ein Auto-Stop erfolgt erst nach der Mindestlaufzeit.'));
+      adv.appendChild(mkFieldRow('Max. NVP-Alter (s)', mkNumInput(dev.gridMaxAgeSec, (v) => { dev.gridMaxAgeSec = v; })));
+      adv.appendChild(mkFieldRow('Lauf-Erkennung ab Leistung (W)', mkNumInput(dev.runningPowerThresholdW, (v) => { dev.runningPowerThresholdW = v; }),
+        'Fallback, wenn kein separater Laufstatus vorhanden ist.'));
       body.appendChild(adv);
 
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an advBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
@@ -5780,17 +5831,30 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       startWriteId: '',
       stopWriteId: '',
+      runWriteId: '',
       runningReadId: '',
       powerReadId: '',
+      powerScale: 1,
 
       socStartPct: 25,
       socStopPct: 60,
       minRunMin: 10,
       minOffMin: 5,
       maxAgeSec: 30,
+      socMaxAgeSec: 60,
+      gridMaxAgeSec: 15,
 
       commandType: 'pulse',
       pulseMs: 800,
+      requireReadback: true,
+      commandTimeoutSec: 60,
+      retryDelaySec: 15,
+      maxRetries: 2,
+      faultLockSec: 300,
+      requireGridImportForAutoStart: false,
+      gridImportStartW: 500,
+      stopOnGridExportW: 0,
+      runningPowerThresholdW: 100,
     });
 
     for (let i = 0; i < g.devices.length; i++) {
@@ -5808,21 +5872,35 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       d.startWriteId = String(it.startWriteId || it.startObjectId || it.startId || '').trim();
       d.stopWriteId = String(it.stopWriteId || it.stopObjectId || it.stopId || '').trim();
+      d.runWriteId = String(it.runWriteId || it.runObjectId || it.enableWriteId || it.enableId || '').trim();
       d.runningReadId = String(it.runningReadId || it.runningObjectId || it.runningId || '').trim();
       d.powerReadId = String(it.powerReadId || it.powerObjectId || it.powerId || '').trim();
+      d.powerScale = Number.isFinite(Number(it.powerScale)) ? Number(it.powerScale) : d.powerScale;
 
       d.socStartPct = Number.isFinite(Number(it.socStartPct)) ? Number(it.socStartPct) : d.socStartPct;
       d.socStopPct = Number.isFinite(Number(it.socStopPct)) ? Number(it.socStopPct) : d.socStopPct;
       d.minRunMin = Number.isFinite(Number(it.minRunMin)) ? Number(it.minRunMin) : d.minRunMin;
       d.minOffMin = Number.isFinite(Number(it.minOffMin)) ? Number(it.minOffMin) : d.minOffMin;
       d.maxAgeSec = Number.isFinite(Number(it.maxAgeSec)) ? Number(it.maxAgeSec) : d.maxAgeSec;
+      d.socMaxAgeSec = Number.isFinite(Number(it.socMaxAgeSec)) ? Number(it.socMaxAgeSec) : d.socMaxAgeSec;
+      d.gridMaxAgeSec = Number.isFinite(Number(it.gridMaxAgeSec)) ? Number(it.gridMaxAgeSec) : d.gridMaxAgeSec;
 
-      d.commandType = (String(it.commandType || '').trim().toLowerCase() === 'level') ? 'level' : 'pulse';
+      const commandTypeRaw = String(it.commandProfile || it.commandType || '').trim().toLowerCase();
+      d.commandType = ['runlevel', 'run-level', 'run'].includes(commandTypeRaw) ? 'runLevel' : (['level', 'duallevel', 'dual-level'].includes(commandTypeRaw) ? 'level' : 'pulse');
       d.pulseMs = Number.isFinite(Number(it.pulseMs)) ? Number(it.pulseMs) : d.pulseMs;
+      d.requireReadback = (typeof it.requireReadback === 'boolean') ? !!it.requireReadback : !!(d.runningReadId || d.powerReadId);
+      d.commandTimeoutSec = Number.isFinite(Number(it.commandTimeoutSec ?? it.readbackTimeoutSec)) ? Number(it.commandTimeoutSec ?? it.readbackTimeoutSec) : d.commandTimeoutSec;
+      d.retryDelaySec = Number.isFinite(Number(it.retryDelaySec)) ? Number(it.retryDelaySec) : d.retryDelaySec;
+      d.maxRetries = Number.isFinite(Number(it.maxRetries)) ? Number(it.maxRetries) : d.maxRetries;
+      d.faultLockSec = Number.isFinite(Number(it.faultLockSec)) ? Number(it.faultLockSec) : d.faultLockSec;
+      d.requireGridImportForAutoStart = (typeof it.requireGridImportForAutoStart === 'boolean') ? !!it.requireGridImportForAutoStart : d.requireGridImportForAutoStart;
+      d.gridImportStartW = Number.isFinite(Number(it.gridImportStartW ?? it.minGridImportWForStart)) ? Number(it.gridImportStartW ?? it.minGridImportWForStart) : d.gridImportStartW;
+      d.stopOnGridExportW = Number.isFinite(Number(it.stopOnGridExportW)) ? Number(it.stopOnGridExportW) : d.stopOnGridExportW;
+      d.runningPowerThresholdW = Number.isFinite(Number(it.runningPowerThresholdW)) ? Number(it.runningPowerThresholdW) : d.runningPowerThresholdW;
 
       // Consider "unused" extra slots as placeholders. Keep only idx=1 by default
       // to avoid confusing customers.
-      const hasAnyId = !!(d.startWriteId || d.stopWriteId || d.runningReadId || d.powerReadId);
+      const hasAnyId = !!(d.startWriteId || d.stopWriteId || d.runWriteId || d.runningReadId || d.powerReadId);
       const isPlaceholder = (!d.enabled && !hasAnyId && (d.name === `Generator ${idx}` || !d.name));
 
       // Clean up legacy placeholders (older hotfixes pre-created 5 empty slots).
@@ -6047,12 +6125,18 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       opts.appendChild(mkCheckbox(dev.userCanControl, 'Endkunde darf bedienen', (v) => { dev.userCanControl = v; }));
       body.appendChild(mkFieldRow('Optionen', opts));
 
-      body.appendChild(mkFieldRow('Start (Write)', _mkDpWrap(`gen_g${dev.idx}_startWriteId`, dev.startWriteId, 'Write‑Datenpunkt', (v) => { dev.startWriteId = v; })));
-      body.appendChild(mkFieldRow('Stop (Write)', _mkDpWrap(`gen_g${dev.idx}_stopWriteId`, dev.stopWriteId, 'Write‑Datenpunkt', (v) => { dev.stopWriteId = v; })));
-      body.appendChild(mkFieldRow('Laufstatus (Read, optional)', _mkDpWrap(`gen_g${dev.idx}_runningReadId`, dev.runningReadId, 'Read‑Datenpunkt', (v) => { dev.runningReadId = v; }),
-        'Empfohlen für saubere Auto‑Logik und Statusanzeige.'));
+      body.appendChild(mkFieldRow('Start (Write)', _mkDpWrap(`gen_g${dev.idx}_startWriteId`, dev.startWriteId, 'Write‑Datenpunkt', (v) => { dev.startWriteId = v; }),
+        'Für Pulse oder 2-Draht-Level.'));
+      body.appendChild(mkFieldRow('Stop (Write)', _mkDpWrap(`gen_g${dev.idx}_stopWriteId`, dev.stopWriteId, 'Write‑Datenpunkt', (v) => { dev.stopWriteId = v; }),
+        'Für Pulse oder 2-Draht-Level.'));
+      body.appendChild(mkFieldRow('Run / Enable (Write)', _mkDpWrap(`gen_g${dev.idx}_runWriteId`, dev.runWriteId, 'Single-Run-Datenpunkt', (v) => { dev.runWriteId = v; }),
+        'Nur beim Profil „Ein Run-Level“: TRUE = Start, FALSE = Stop.'));
+      body.appendChild(mkFieldRow('Laufstatus (Read)', _mkDpWrap(`gen_g${dev.idx}_runningReadId`, dev.runningReadId, 'Read‑Datenpunkt', (v) => { dev.runningReadId = v; }),
+        'Für Auto-Betrieb und bestätigte Start/Stop-Kommandos dringend empfohlen.'));
       body.appendChild(mkFieldRow('Leistung (W) (Read)', _mkDpWrap(`gen_g${dev.idx}_powerReadId`, dev.powerReadId, 'Read‑Datenpunkt (W/kW)', (v) => { dev.powerReadId = v; }),
         'Erforderlich für die Anzeige im Energiefluss (Generator als Erzeuger).'));
+      body.appendChild(mkFieldRow('Leistungsfaktor', mkNumInput(dev.powerScale, (v) => { dev.powerScale = v; }),
+        '1 bei Watt, 1000 wenn der gelesene Datenpunkt kW liefert.'));
 
       const adv = document.createElement('div');
       adv.style.display = 'none';
@@ -6061,13 +6145,27 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       adv.appendChild(mkFieldRow('SoC Stop‑Schwelle (%)', mkNumInput(dev.socStopPct, (v) => { dev.socStopPct = v; }), 'Auto‑Stop wenn SoC >= Stop‑Schwelle.'));
       adv.appendChild(mkFieldRow('Mindestlaufzeit (min)', mkNumInput(dev.minRunMin, (v) => { dev.minRunMin = v; })));
       adv.appendChild(mkFieldRow('Mindeststillstand (min)', mkNumInput(dev.minOffMin, (v) => { dev.minOffMin = v; })));
-      adv.appendChild(mkFieldRow('Max. Datenalter (s)', mkNumInput(dev.maxAgeSec, (v) => { dev.maxAgeSec = v; }),
-        'Wenn Laufstatus/Leistung älter ist → keine Auto‑Aktion.'));
-      adv.appendChild(mkFieldRow('Befehlstyp', mkSelect(dev.commandType, [
-        { value: 'pulse', label: 'Pulse (TRUE → FALSE)' },
-        { value: 'level', label: 'Level (TRUE)' },
-      ], (v) => { dev.commandType = (v === 'level') ? 'level' : 'pulse'; })));
+      adv.appendChild(mkFieldRow('Max. Status-/Leistungsalter (s)', mkNumInput(dev.maxAgeSec, (v) => { dev.maxAgeSec = v; }),
+        'Ältere Laufstatus-/Leistungswerte lösen keine Auto-Aktion aus.'));
+      adv.appendChild(mkFieldRow('Max. SoC-Alter (s)', mkNumInput(dev.socMaxAgeSec, (v) => { dev.socMaxAgeSec = v; })));
+      adv.appendChild(mkFieldRow('Befehlsprofil', mkSelect(dev.commandType, [
+        { value: 'pulse', label: 'Start-/Stop-Pulse' },
+        { value: 'level', label: '2-Draht-Level (Start/Stop)' },
+        { value: 'runLevel', label: 'Ein Run-Level (TRUE/FALSE)' },
+      ], (v) => { dev.commandType = (v === 'runLevel') ? 'runLevel' : (v === 'level' ? 'level' : 'pulse'); })));
       adv.appendChild(mkFieldRow('Pulse‑Dauer (ms)', mkNumInput(dev.pulseMs, (v) => { dev.pulseMs = v; })));
+      adv.appendChild(mkFieldRow('Readback erforderlich', mkCheckbox(dev.requireReadback, 'Start/Stop erst nach Laufstatus bestätigen', (v) => { dev.requireReadback = v; })));
+      adv.appendChild(mkFieldRow('Befehls-/Readback-Timeout (s)', mkNumInput(dev.commandTimeoutSec, (v) => { dev.commandTimeoutSec = v; })));
+      adv.appendChild(mkFieldRow('Wiederholungsabstand (s)', mkNumInput(dev.retryDelaySec, (v) => { dev.retryDelaySec = v; })));
+      adv.appendChild(mkFieldRow('Max. Wiederholungen', mkNumInput(dev.maxRetries, (v) => { dev.maxRetries = v; })));
+      adv.appendChild(mkFieldRow('Fehlerverriegelung (s)', mkNumInput(dev.faultLockSec, (v) => { dev.faultLockSec = v; })));
+      adv.appendChild(mkFieldRow('NVP-Startfreigabe', mkCheckbox(dev.requireGridImportForAutoStart, 'Auto-Start nur bei frischem Netzbezug', (v) => { dev.requireGridImportForAutoStart = v; })));
+      adv.appendChild(mkFieldRow('NVP-Startschwelle (W)', mkNumInput(dev.gridImportStartW, (v) => { dev.gridImportStartW = v; })));
+      adv.appendChild(mkFieldRow('Stop bei Einspeisung ab (W)', mkNumInput(dev.stopOnGridExportW, (v) => { dev.stopOnGridExportW = v; }),
+        '0 = deaktiviert. Ein Auto-Stop erfolgt erst nach der Mindestlaufzeit.'));
+      adv.appendChild(mkFieldRow('Max. NVP-Alter (s)', mkNumInput(dev.gridMaxAgeSec, (v) => { dev.gridMaxAgeSec = v; })));
+      adv.appendChild(mkFieldRow('Lauf-Erkennung ab Leistung (W)', mkNumInput(dev.runningPowerThresholdW, (v) => { dev.runningPowerThresholdW = v; }),
+        'Fallback, wenn kein separater Laufstatus vorhanden ist.'));
       body.appendChild(adv);
 
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an advBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
@@ -8062,6 +8160,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     { v: 'heatPump', t: 'Wärmepumpe' },
     { v: 'heatingRod', t: 'Heizstab' },
     { v: 'airCondition', t: 'Klima' },
+    { v: 'storage', t: 'Speicher (Laden)' },
     { v: 'custom', t: 'Sonstiger Verbraucher' }
   ];
 
@@ -8086,7 +8185,12 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     ic.para14aMode = (modeRaw === 'direct') ? 'direct' : 'ems';
 
     const min = Number(ic.para14aMinPerDeviceW);
-    ic.para14aMinPerDeviceW = (Number.isFinite(min) && min >= 0) ? Math.round(min) : 1000;
+    ic.para14aMinPerDeviceW = (Number.isFinite(min) && min >= 0) ? Math.round(min) : 4200;
+    const signalMaxAgeSec = Number(ic.para14aSignalMaxAgeSec);
+    ic.para14aSignalMaxAgeSec = (Number.isFinite(signalMaxAgeSec) && signalMaxAgeSec >= 1) ? Math.min(300, Math.round(signalMaxAgeSec)) : 30;
+    const stalePolicy = String(ic.para14aStalePolicy || 'hold-active').trim().toLowerCase();
+    ic.para14aStalePolicy = ['hold-active', 'force-active', 'release'].includes(stalePolicy) ? stalePolicy : 'hold-active';
+    ic.para14aLegacyDirectWritesEnabled = ic.para14aLegacyDirectWritesEnabled === true;
 
     ic.para14aActiveId = (typeof ic.para14aActiveId === 'string') ? ic.para14aActiveId.trim() : '';
     ic.para14aEmsSetpointWId = (typeof ic.para14aEmsSetpointWId === 'string') ? ic.para14aEmsSetpointWId.trim() : '';
@@ -8376,12 +8480,18 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     lock(els.para14aMode);
     lock(els.para14aMinPerDeviceW);
+    lock(els.para14aSignalMaxAgeSec);
+    lock(els.para14aStalePolicy);
+    lock(els.para14aLegacyDirectWritesEnabled);
     lock(els.para14aActiveId);
     lock(els.para14aEmsSetpointWId);
     lock(els.addPara14aConsumer);
 
     if (els.para14aMode) els.para14aMode.value = String(ic.para14aMode || 'ems');
-    if (els.para14aMinPerDeviceW) els.para14aMinPerDeviceW.value = String(Number.isFinite(Number(ic.para14aMinPerDeviceW)) ? Math.round(Number(ic.para14aMinPerDeviceW)) : 1000);
+    if (els.para14aMinPerDeviceW) els.para14aMinPerDeviceW.value = String(Number.isFinite(Number(ic.para14aMinPerDeviceW)) ? Math.round(Number(ic.para14aMinPerDeviceW)) : 4200);
+    if (els.para14aSignalMaxAgeSec) els.para14aSignalMaxAgeSec.value = String(ic.para14aSignalMaxAgeSec || 30);
+    if (els.para14aStalePolicy) els.para14aStalePolicy.value = String(ic.para14aStalePolicy || 'hold-active');
+    if (els.para14aLegacyDirectWritesEnabled) els.para14aLegacyDirectWritesEnabled.checked = ic.para14aLegacyDirectWritesEnabled === true;
     if (els.para14aActiveId) els.para14aActiveId.value = String(ic.para14aActiveId || '');
     if (els.para14aEmsSetpointWId) els.para14aEmsSetpointWId.value = String(ic.para14aEmsSetpointWId || '');
 
@@ -12083,6 +12193,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       const ic = _ensurePara14aCfg();
       patch.installerConfig.para14aMode = String(ic.para14aMode || 'ems');
       patch.installerConfig.para14aMinPerDeviceW = Math.round(Number(ic.para14aMinPerDeviceW) || 0);
+      patch.installerConfig.para14aSignalMaxAgeSec = Math.max(1, Math.round(Number(ic.para14aSignalMaxAgeSec) || 30));
+      patch.installerConfig.para14aStalePolicy = String(ic.para14aStalePolicy || 'hold-active');
+      patch.installerConfig.para14aLegacyDirectWritesEnabled = ic.para14aLegacyDirectWritesEnabled === true;
       patch.installerConfig.para14aActiveId = String(ic.para14aActiveId || '').trim();
       patch.installerConfig.para14aEmsSetpointWId = String(ic.para14aEmsSetpointWId || '').trim();
       patch.installerConfig.para14aConsumers = deepMerge([], Array.isArray(ic.para14aConsumers) ? ic.para14aConsumers : []);
@@ -14777,6 +14890,27 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       const ic = _ensurePara14aCfg();
       const n = Number(els.para14aMinPerDeviceW.value);
       ic.para14aMinPerDeviceW = (Number.isFinite(n) && n >= 0) ? Math.round(n) : 1000;
+    });
+  }
+
+  if (els.para14aSignalMaxAgeSec) {
+    els.para14aSignalMaxAgeSec.addEventListener('change', () => {
+      const ic = _ensurePara14aCfg();
+      const value = Number(els.para14aSignalMaxAgeSec.value);
+      ic.para14aSignalMaxAgeSec = Number.isFinite(value) ? Math.max(1, Math.min(300, Math.round(value))) : 30;
+    });
+  }
+  if (els.para14aStalePolicy) {
+    els.para14aStalePolicy.addEventListener('change', () => {
+      const ic = _ensurePara14aCfg();
+      const value = String(els.para14aStalePolicy.value || 'hold-active');
+      ic.para14aStalePolicy = ['hold-active', 'force-active', 'release'].includes(value) ? value : 'hold-active';
+    });
+  }
+  if (els.para14aLegacyDirectWritesEnabled) {
+    els.para14aLegacyDirectWritesEnabled.addEventListener('change', () => {
+      const ic = _ensurePara14aCfg();
+      ic.para14aLegacyDirectWritesEnabled = els.para14aLegacyDirectWritesEnabled.checked === true;
     });
   }
 

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 6e657b5679ff0c41d12ff7b8b2c7a941ae345f89ed004e2dd424fff6e0544c1a
+ * Original-Hash: 0f611b0ef10664995dc286b76037b908cdb9b031fa08149769100e4bff9d481d
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/thermal-control.ts
- * Quell-Hash: sha256:8e200ca51f3ba96d2461cc5ff7186f51cc83a7d8a0d594bcc780a2dccc0bfe7e
+ * Quell-Hash: sha256:7fba8c4385a986b1fb8dbd43f7e74176c594902a9c5274e2360d1a6700e25fe6
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1071,20 +1071,6 @@ const mk = async (id, name, type, role, unit = undefined) => {
         if (!this._isEnabled()) return;
 
         const now = nowMs();
-
-        // If §14a is active, avoid competing writes.
-        try {
-            const p14a = (this.adapter && this.adapter._para14a && typeof this.adapter._para14a === 'object') ? this.adapter._para14a : null;
-            if (p14a && p14a.active) {
-                this.adapter._thermalBudgetUsedW = 0;
-                await this._setStateIfChanged('thermal.summary.status', 'paused_by_14a');
-                await this._setStateIfChanged('thermal.summary.budgetUsedW', 0);
-                await this._setStateIfChanged('thermal.summary.lastUpdate', now);
-                return;
-            }
-        } catch (_e) {
-            // ignore
-        }
 
         const pv = this._computePvAvailableW();
         let remainingW = Math.max(0, num(pv.availableW, 0));

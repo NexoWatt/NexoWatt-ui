@@ -56,6 +56,7 @@ const { Para14aModule } = require('./modules/para14a');
 const { CoreLimitsModule } = require('./modules/core-limits');
 const { ThermalControlModule } = require('./modules/thermal-control');
 const { HeatingRodControlModule } = require('./modules/heating-rod-control');
+const { NexoLogicBudgetModule } = require('./modules/nexologic-budget');
 const { BhkwControlModule } = require('./modules/bhkw-control');
 const { GeneratorControlModule } = require('./modules/generator-control');
 const { ThresholdControlModule } = require('./modules/threshold-control');
@@ -420,6 +421,15 @@ class ModuleManager {
             key: 'heatingRodControl',
             instance: new HeatingRodControlModule(this.adapter, this.dp),
             enabledFn: () => this._licenseAllowsApp('heatingrod') && !!this.adapter.config.enableHeatingRodControl,
+        });
+
+        // C3.4: Budgetierte NexoLogic-Ausgaenge nutzen ausschließlich den nach
+        // EVCS, Speicher, MultiUse, Thermik und Heizstab verbleibenden zentralen
+        // Grant. Nicht budgetierte Alt-Ausgaenge bleiben ereignisgetrieben.
+        this.modules.push({
+            key: 'nexoLogicBudget',
+            instance: new NexoLogicBudgetModule(this.adapter, this.dp),
+            enabledFn: () => this.adapter?.config?.enableNexoLogic !== false,
         });
 
         // BHKW Steuerung (Start/Stop, SoC-geführt)

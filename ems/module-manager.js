@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:eb188089ed373ddda778060a2c06417ff7d5efa4987cc8189e00e1024bb58521
+ * Quell-Hash: sha256:c519522b2fa6e8d16c8d74c552f413c5dbfcd8426b219444edbf6d8fa68a65fb
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -54,6 +54,7 @@ const { Para14aModule } = require('./modules/para14a');
 const { CoreLimitsModule } = require('./modules/core-limits');
 const { ThermalControlModule } = require('./modules/thermal-control');
 const { HeatingRodControlModule } = require('./modules/heating-rod-control');
+const { NexoLogicBudgetModule } = require('./modules/nexologic-budget');
 const { BhkwControlModule } = require('./modules/bhkw-control');
 const { GeneratorControlModule } = require('./modules/generator-control');
 const { ThresholdControlModule } = require('./modules/threshold-control');
@@ -418,6 +419,15 @@ class ModuleManager {
             key: 'heatingRodControl',
             instance: new HeatingRodControlModule(this.adapter, this.dp),
             enabledFn: () => this._licenseAllowsApp('heatingrod') && !!this.adapter.config.enableHeatingRodControl,
+        });
+
+        // C3.4: Budgetierte NexoLogic-Ausgaenge nutzen ausschließlich den nach
+        // EVCS, Speicher, MultiUse, Thermik und Heizstab verbleibenden zentralen
+        // Grant. Nicht budgetierte Alt-Ausgaenge bleiben ereignisgetrieben.
+        this.modules.push({
+            key: 'nexoLogicBudget',
+            instance: new NexoLogicBudgetModule(this.adapter, this.dp),
+            enabledFn: () => this.adapter?.config?.enableNexoLogic !== false,
         });
 
         // BHKW Steuerung (Start/Stop, SoC-geführt)
