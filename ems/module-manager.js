@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:e87c6835a9e72d25adfe14aa66bff7f136f25c2321ece00460194152d138f9b9
+ * Quell-Hash: sha256:8538e14fc1987018b8d1f611e7fb08b2ea8027b5591d2495fd620971bce898fd
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -45,6 +45,7 @@
 const { SpeicherMappingModule } = require('./modules/storage-mapping');
 const { SpeicherRegelungModule } = require('./modules/storage-control');
 const { GridConstraintsModule } = require('./modules/grid-constraints');
+const { NvpCoordinatorModule } = require('./modules/nvp-coordinator');
 const { PeakShavingModule } = require('./modules/peak-shaving');
 const { TarifVisModule } = require('./modules/tarif-vis');
 const { TariffStatusModule } = require('./modules/tariff-status');
@@ -314,10 +315,15 @@ class ModuleManager {
             enabledFn: () => true,
         });
 
-        // Grid constraints (RLM / Nulleinspeisung)
+        // Grid constraints (RLM / Nulleinspeisung). Im zentralen EMS wird die
+        // dynamische PV-/WR-Regelung bewusst in zwei Phasen geteilt: Planung
+        // vor den Aktoren, Rest-Einspeisung nach dem Speicher/Farm-Sollwert.
+        const gridConstraintsModule = new GridConstraintsModule(this.adapter, this.dp);
+        gridConstraintsModule.setDeferredDynamicPv(true);
+        this._gridConstraintsModule = gridConstraintsModule;
         this.modules.push({
             key: 'gridConstraints',
-            instance: new GridConstraintsModule(this.adapter, this.dp),
+            instance: gridConstraintsModule,
             enabledFn: () => this._licenseAllowsApp('grid') && !!this.adapter.config.enableGridConstraints,
         });
 
@@ -464,6 +470,21 @@ class ModuleManager {
             enabledFn: () => this._licenseAllowsApp('storage'),
         });
 
+        // Gemeinsame NVP-Steuerhoheit: Der Speicher/Farm-Writer hat seinen
+        // finalen Sollwert bereits veröffentlicht. Erst danach wird die noch
+        // verbleibende Einspeisung an die PV-/WR-Regelung übergeben. Dieses
+        // Diagnose-/Koordinationsmodul besitzt keinen zweiten Speicherwriter.
+        this.modules.push({
+            key: 'nvpCoordinator',
+            instance: new NvpCoordinatorModule(
+                this.adapter,
+                this.dp,
+                gridConstraintsModule,
+                () => this._licenseAllowsApp('grid') && !!this.adapter.config.enableGridConstraints,
+            ),
+            enabledFn: () => true,
+        });
+
         // Tarif-Statusfinalisierung läuft bewusst NACH der zentralen Speicherregelung.
         // Erst hier stehen finaler Sollwert, Gate-/Write-Ergebnis und Readback bereit.
         // Das Modul schreibt keine Hardware und besitzt daher keine zweite Steuerhoheit.
@@ -552,7 +573,7 @@ class ModuleManager {
         // Init modules
         // Hinweis: Einige Module stellen UI-States bereit (z. B. EVCS), die auch dann
         // vorhanden sein sollen, wenn die Logik aktuell deaktiviert ist.
-        const alwaysInit = new Set(['chargingManagement', 'aiAdvisor', 'energyWallet', 'stageADiagnostics']);
+        const alwaysInit = new Set(['chargingManagement', 'nvpCoordinator', 'aiAdvisor', 'energyWallet', 'stageADiagnostics']);
         for (const m of this.modules) {
             const enabled = !!(m && typeof m.enabledFn === 'function' ? m.enabledFn() : false);
             m.enabled = enabled;

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/grid-constraints.ts
- * Quell-Hash: sha256:d6054db91477bb5a6adf2f1b09e48c33308ec23f13d0c67b26eca60238c725aa
+ * Quell-Hash: sha256:22f7cadd567be878acbff2efc968609955b37b0f95777ad0046f7e2e0183591c
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -109,20 +109,25 @@ class GridConstraintsModule extends BaseModule {
         // Fehlern ohne Verzögerung auf die nächste Senke bzw. WR-Abregelung fällt.
         this._zeroExportSinkRuntime = {};
         this._zeroExportSinkAckHistory = {};
+
+        // Der ModuleManager kann die dynamische PV-/WR-Regelung bewusst bis
+        // nach der Speicherregelung verschieben. Direkte Instanzen und ältere
+        // Tests behalten dagegen das bisherige Verhalten (`tick()` führt beide
+        // Phasen aus), solange dieses Flag nicht gesetzt wird.
+        this._deferDynamicPv = false;
+        this._lastPlanningContext = null;
+        this._lastDynamicResult = null;
     }
 
     /**
-     * Code-Teil: Methode `_isEnabled`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     * Aktiviert die zweiphasige Ausführung im zentralen EMS:
+     * 1. Netz-/RLM-Planung vor den Verbrauchern,
+     * 2. dynamische PV-Abregelung nach dem Speicher-Sollwert.
      */
-    /**
-     * Code-Teil: _isEnabled
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
+    setDeferredDynamicPv(enabled) {
+        this._deferDynamicPv = enabled === true;
+    }
+
     _isEnabled() {
         return !!this.adapter.config.enableGridConstraints;
     }
@@ -221,18 +226,6 @@ class GridConstraintsModule extends BaseModule {
         return { maxFeedInPowerW, baseBiasW, biasW, deadbandW, targetGridW };
     }
 
-    /**
-     * Code-Teil: Methode `_num`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _num
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     _num(v, dflt = 0) {
         const n = Number(v);
         return Number.isFinite(n) ? n : dflt;
@@ -249,18 +242,6 @@ class GridConstraintsModule extends BaseModule {
         return Math.min(Math.max(n, minV), maxV);
     }
 
-    /**
-     * Code-Teil: Methode `_isTariffGridImportPreferred`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _isTariffGridImportPreferred
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     async _isTariffGridImportPreferred() {
         try {
             const tv = (this.adapter && this.adapter._tarifVis) ? this.adapter._tarifVis : null;
@@ -272,18 +253,6 @@ class GridConstraintsModule extends BaseModule {
         }
     }
 
-    /**
-     * Code-Teil: Methode `init`
-     * Zweck: initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: init
-     * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     async init() {
         if (!this._isEnabled()) return;
 
@@ -338,6 +307,8 @@ class GridConstraintsModule extends BaseModule {
         await mk('gridConstraints.zeroExport.targetImportBiasW', 'Target import bias (W)', 'number', 'value.power');
         await mk('gridConstraints.zeroExport.deadbandW', 'Deadband (W)', 'number', 'value.power');
         await mk('gridConstraints.zeroExport.exportW', 'Current export (W)', 'number', 'value.power');
+        await mk('gridConstraints.zeroExport.controlGridW', 'NVP used for coordinated PV control (+ import / - export)', 'number', 'value.power');
+        await mk('gridConstraints.zeroExport.controlExportW', 'Residual export used for coordinated PV control (W)', 'number', 'value.power');
         await mk('gridConstraints.zeroExport.action', 'Action', 'string', 'text');
         await mk('gridConstraints.zeroExport.installerApproved', 'Installer approved export limit', 'boolean', 'indicator');
         await mk('gridConstraints.zeroExport.maxFeedInPowerW', 'Max allowed feed-in power (W)', 'number', 'value.power');
@@ -352,6 +323,8 @@ class GridConstraintsModule extends BaseModule {
         await mk('gridConstraints.exportLimit.configuredMaxFeedInW', 'Configured max feed-in (W)', 'number', 'value.power');
         await mk('gridConstraints.exportLimit.effectiveMaxFeedInW', 'Effective max feed-in (W)', 'number', 'value.power');
         await mk('gridConstraints.exportLimit.currentExportW', 'Current export (W)', 'number', 'value.power');
+        await mk('gridConstraints.exportLimit.controlExportW', 'Residual export after coordinated storage response (W)', 'number', 'value.power');
+        await mk('gridConstraints.exportLimit.controlOverLimitW', 'Residual export above limit after coordinated storage response (W)', 'number', 'value.power');
         await mk('gridConstraints.exportLimit.remainingFeedInW', 'Remaining allowed feed-in (W)', 'number', 'value.power');
         await mk('gridConstraints.exportLimit.exportOverLimitW', 'Export above limit (W)', 'number', 'value.power');
         await mk('gridConstraints.exportLimit.usagePercent', 'Export limit usage (%)', 'number', 'value.percent');
@@ -509,18 +482,6 @@ class GridConstraintsModule extends BaseModule {
         await upsertInvList(cfg.pvCurtailInvertersZero, 'pv.zero');
     }
 
-    /**
-     * Code-Teil: Methode `_resolveCurtailMode`
-     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _resolveCurtailMode
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     _resolveCurtailMode(cfg) {
         const mode = String(cfg.pvCurtailMode || 'auto');
         if (mode && mode !== 'auto') return mode;
@@ -531,18 +492,6 @@ class GridConstraintsModule extends BaseModule {
         return 'off';
     }
 
-    /**
-     * Code-Teil: Methode `_normalizeInvList`
-     * Zweck: normalisiert Eingaben/Anzeigeformate und schützt gegen ungültige Werte.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _normalizeInvList
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     _normalizeInvList(list) {
         const arr = Array.isArray(list) ? list : [];
         const out = [];
@@ -561,18 +510,6 @@ class GridConstraintsModule extends BaseModule {
         return out;
     }
 
-    /**
-     * Code-Teil: Methode `_sumRatedW`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _sumRatedW
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     _sumRatedW(invList) {
         return (Array.isArray(invList) ? invList : []).reduce((sum, it) => sum + (Number(it?.ratedW) || 0), 0);
     }
@@ -597,18 +534,6 @@ class GridConstraintsModule extends BaseModule {
         return { pct, r60, r30, r0 };
     }
 
-    /**
-     * Code-Teil: Methode `_tickPvEvu`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _tickPvEvu
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     async _tickPvEvu(nowMs, cfg) {
         const enabled = !!cfg.pvEvuEnabled;
         const inv = this._normalizeInvList(cfg.pvCurtailInvertersEvu);
@@ -640,22 +565,16 @@ class GridConstraintsModule extends BaseModule {
         return { enabled: true, stagePct };
     }
 
-    /**
-     * Code-Teil: Methode `_tickZeroExportGroup`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _tickZeroExportGroup
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    async _tickZeroExportGroup(nowMs, gridW, cfg, gridStale) {
+    async _tickZeroExportGroup(nowMs, gridW, cfg, gridStale, control = {}) {
         const enabled = !!cfg.zeroExportEnabled;
         const approved = this._isExportLimitInstallerApproved(cfg);
         const inv = this._normalizeInvList(cfg.pvCurtailInvertersZero);
+        const rawGridW = Number.isFinite(Number(control && control.rawGridW))
+            ? Number(control.rawGridW)
+            : Number(gridW || 0);
+        const controlGridW = Number.isFinite(Number(control && control.controlGridW))
+            ? Number(control.controlGridW)
+            : Number(gridW || 0);
 
         const tariffGridImportPreferred = await this._isTariffGridImportPreferred();
         const { maxFeedInPowerW, biasW, deadbandW, targetGridW } = this._buildExportLimitTarget(cfg, tariffGridImportPreferred);
@@ -669,8 +588,11 @@ class GridConstraintsModule extends BaseModule {
         await this.adapter.setStateAsync('gridConstraints.zeroExport.targetImportBiasW', Math.round(biasW), true);
         await this.adapter.setStateAsync('gridConstraints.zeroExport.deadbandW', Math.round(deadbandW), true);
 
-        const exportW = Math.max(0, -(Number(gridW) || 0));
+        const exportW = Math.max(0, -rawGridW);
+        const controlExportW = Math.max(0, -controlGridW);
         await this.adapter.setStateAsync('gridConstraints.zeroExport.exportW', Math.round(exportW), true);
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.controlGridW', Math.round(controlGridW), true);
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.controlExportW', Math.round(controlExportW), true);
 
         // Mark mode to make it obvious in status/debug
         await this.adapter.setStateAsync('gridConstraints.pvCurtail.mode', 'group', true);
@@ -719,15 +641,17 @@ class GridConstraintsModule extends BaseModule {
         }
 
         // Closed-loop based on grid power error
-        const errorW = targetGridW - Number(gridW || 0); // positive => exporting above installer limit or too low import
+        const errorW = targetGridW - controlGridW; // positive => verbleibende Einspeisung oberhalb des Installateur-Limits
         if (Math.abs(errorW) <= deadbandW) {
             await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'within_deadband', true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', false, true);
-            return { enabled: true, biasW, deadbandW, exportW };
+            return { enabled: true, biasW, deadbandW, exportW, controlExportW, rawGridW, controlGridW, errorW, action: 'within_deadband', applied: false, setpointW: this._pv.limitW, setpointPct: this._pv.limitPct, mode: 'group' };
         }
 
         const fastTripW = Math.max(0, this._num(cfg.pvCurtailFastTripExportW, 500));
-        const fastTrip = exportW >= fastTripW;
+        const hardRawGuardW = Math.max(0, this._num(control && control.hardRawGuardW, this._num(cfg.nvpCoordinatorHardRawExportW, 0)));
+        const fastTrip = (fastTripW > 0 && controlExportW >= fastTripW)
+            || (hardRawGuardW > 0 && exportW >= hardRawGuardW);
 
         const maxDeltaW = Math.max(0, this._num(cfg.pvCurtailMaxDeltaWPerTick, 8000));
         if (typeof this._pv.limitW !== 'number' || !Number.isFinite(this._pv.limitW) || this._pv.limitW > ratedSumW) {
@@ -735,10 +659,13 @@ class GridConstraintsModule extends BaseModule {
         }
 
         const prev = this._pv.limitW;
-        const rawNext = fastTrip ? 0 : this._clamp(prev - errorW, 0, ratedSumW);
+        const releaseToFull = controlGridW > (targetGridW + deadbandW);
+        const rawNext = releaseToFull
+            ? ratedSumW
+            : (fastTrip ? 0 : this._clamp(prev - errorW, 0, ratedSumW));
 
         let next = rawNext;
-        const effMaxDelta = fastTrip ? Math.max(maxDeltaW, Math.abs(prev - rawNext)) : maxDeltaW;
+        const effMaxDelta = (fastTrip || releaseToFull) ? Math.max(maxDeltaW, Math.abs(prev - rawNext)) : maxDeltaW;
         if (effMaxDelta > 0) {
             const d = rawNext - prev;
             if (Math.abs(d) > effMaxDelta) next = prev + Math.sign(d) * effMaxDelta;
@@ -765,26 +692,17 @@ class GridConstraintsModule extends BaseModule {
             applied = applied || (ok1 === true || ok1 === null) || (ok2 === true || ok2 === null) || (ok3 === true || ok3 === null);
         }
 
-        await this.adapter.setStateAsync('gridConstraints.zeroExport.action', tariffGridImportPreferred ? (fastTrip ? 'tariff_negative_group_fast' : 'tariff_negative_group') : (fastTrip ? 'group_fast' : 'group'), true);
+        const action = releaseToFull
+            ? 'group_release'
+            : (tariffGridImportPreferred ? (fastTrip ? 'tariff_negative_group_fast' : 'tariff_negative_group') : (fastTrip ? 'group_fast' : 'group'));
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.action', action, true);
         await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', applied, true);
         await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointW', Math.round(next), true);
         await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointPct', Math.round(pct * 10) / 10, true);
 
-        return { enabled: true, biasW, deadbandW, exportW };
+        return { enabled: true, biasW, deadbandW, exportW, controlExportW, rawGridW, controlGridW, errorW, action, applied, setpointW: Math.round(next), setpointPct: Math.round(pct * 10) / 10, mode: 'group' };
     }
 
-    /**
-     * Code-Teil: Methode `_isStaleGrid`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _isStaleGrid
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     _isStaleGrid(cfg) {
         const staleTimeoutSec = this._num(cfg.staleTimeoutSec, 15);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
@@ -802,18 +720,6 @@ class GridConstraintsModule extends BaseModule {
         return !!(staleFiltered && staleFallback);
     }
 
-    /**
-     * Code-Teil: Methode `_getGridW`
-     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _getGridW
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     _getGridW(cfg) {
         const staleTimeoutSec = this._num(cfg.staleTimeoutSec, 15);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
@@ -837,18 +743,6 @@ class GridConstraintsModule extends BaseModule {
         return (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null;
     }
 
-    /**
-     * Code-Teil: Methode `_tickRlm`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _tickRlm
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     async _tickRlm(nowMs, gridW, cfg) {
         const enabled = !!cfg.rlmEnabled;
         const aligned = cfg.rlmAligned !== false;
@@ -909,21 +803,15 @@ class GridConstraintsModule extends BaseModule {
         return { enabled: true, capNowW, avgW, limitW };
     }
 
-    /**
-     * Code-Teil: Methode `_tickZeroExport`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _tickZeroExport
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    async _tickZeroExport(nowMs, gridW, cfg, gridStale) {
+    async _tickZeroExport(nowMs, gridW, cfg, gridStale, control = {}) {
         const enabled = !!cfg.zeroExportEnabled;
         const approved = this._isExportLimitInstallerApproved(cfg);
+        const rawGridW = Number.isFinite(Number(control && control.rawGridW))
+            ? Number(control.rawGridW)
+            : Number(gridW || 0);
+        const controlGridW = Number.isFinite(Number(control && control.controlGridW))
+            ? Number(control.controlGridW)
+            : Number(gridW || 0);
 
         const tariffGridImportPreferred = await this._isTariffGridImportPreferred();
         const { maxFeedInPowerW, biasW, deadbandW, targetGridW } = this._buildExportLimitTarget(cfg, tariffGridImportPreferred);
@@ -937,8 +825,11 @@ class GridConstraintsModule extends BaseModule {
         await this.adapter.setStateAsync('gridConstraints.zeroExport.targetImportBiasW', Math.round(biasW), true);
         await this.adapter.setStateAsync('gridConstraints.zeroExport.deadbandW', Math.round(deadbandW), true);
 
-        const exportW = Math.max(0, -(Number(gridW) || 0));
+        const exportW = Math.max(0, -rawGridW);
+        const controlExportW = Math.max(0, -controlGridW);
         await this.adapter.setStateAsync('gridConstraints.zeroExport.exportW', Math.round(exportW), true);
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.controlGridW', Math.round(controlGridW), true);
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.controlExportW', Math.round(controlExportW), true);
 
         if (!enabled) {
             await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'off', true);
@@ -984,16 +875,18 @@ class GridConstraintsModule extends BaseModule {
         }
 
         // limit by PV power (W/%): closed-loop based on grid power error
-        const errorW = targetGridW - Number(gridW || 0); // positive => exporting above installer limit or too low import
+        const errorW = targetGridW - controlGridW; // positive => verbleibende Einspeisung oberhalb des Installateur-Limits
 
         if (Math.abs(errorW) <= deadbandW) {
             await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'within_deadband', true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', false, true);
-            return { enabled: true, biasW, deadbandW, exportW };
+            return { enabled: true, biasW, deadbandW, exportW, controlExportW, rawGridW, controlGridW, errorW, action: 'within_deadband', applied: false, setpointW: this._pv.limitW, setpointPct: this._pv.limitPct, mode: modeResolved };
         }
 
         const fastTripW = Math.max(0, this._num(cfg.pvCurtailFastTripExportW, 500));
-        const fastTrip = exportW >= fastTripW;
+        const hardRawGuardW = Math.max(0, this._num(control && control.hardRawGuardW, this._num(cfg.nvpCoordinatorHardRawExportW, 0)));
+        const fastTrip = (fastTripW > 0 && controlExportW >= fastTripW)
+            || (hardRawGuardW > 0 && exportW >= hardRawGuardW);
 
         if (modeResolved === 'pvLimitW') {
             const maxDeltaW = Math.max(0, this._num(cfg.pvCurtailMaxDeltaWPerTick, 8000));
@@ -1005,10 +898,13 @@ class GridConstraintsModule extends BaseModule {
             }
 
             const prev = this._pv.limitW;
-            const rawNext = this._clamp(prev - errorW, 0, maxW);
+            const releaseToFull = controlGridW > (targetGridW + deadbandW);
+            const rawNext = releaseToFull
+                ? maxW
+                : (fastTrip ? 0 : this._clamp(prev - errorW, 0, maxW));
 
             let next = rawNext;
-            const effMaxDelta = fastTrip ? Math.max(maxDeltaW, Math.abs(prev - rawNext)) : maxDeltaW;
+            const effMaxDelta = (fastTrip || releaseToFull) ? Math.max(maxDeltaW, Math.abs(prev - rawNext)) : maxDeltaW;
             if (effMaxDelta > 0) {
                 const d = rawNext - prev;
                 if (Math.abs(d) > effMaxDelta) next = prev + Math.sign(d) * effMaxDelta;
@@ -1019,12 +915,15 @@ class GridConstraintsModule extends BaseModule {
 
             const ok = await this.dp.writeNumber('pv.limitW', next, false);
 
-            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', tariffGridImportPreferred ? (fastTrip ? 'tariff_negative_pvLimitW_fast' : 'tariff_negative_pvLimitW') : (fastTrip ? 'pvLimitW_fast' : 'pvLimitW'), true);
+            const action = releaseToFull
+                ? 'pvLimitW_release'
+                : (tariffGridImportPreferred ? (fastTrip ? 'tariff_negative_pvLimitW_fast' : 'tariff_negative_pvLimitW') : (fastTrip ? 'pvLimitW_fast' : 'pvLimitW'));
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', action, true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', ok === true || ok === null, true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointW', Math.round(next), true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointPct', 0, true);
 
-            return { enabled: true, biasW, deadbandW, exportW };
+            return { enabled: true, biasW, deadbandW, exportW, controlExportW, rawGridW, controlGridW, errorW, action, applied: ok === true || ok === null, setpointW: Math.round(next), setpointPct: 0, mode: modeResolved };
         }
 
         if (modeResolved === 'pvLimitPct') {
@@ -1042,10 +941,13 @@ class GridConstraintsModule extends BaseModule {
 
             const prev = this._pv.limitPct;
             const deltaPct = (errorW / ratedW) * 100;
-            const rawNext = this._clamp(prev - deltaPct, 0, 100);
+            const releaseToFull = controlGridW > (targetGridW + deadbandW);
+            const rawNext = releaseToFull
+                ? 100
+                : (fastTrip ? 0 : this._clamp(prev - deltaPct, 0, 100));
 
             let next = rawNext;
-            const effMaxDeltaPct = fastTrip ? Math.max(maxDeltaPct, Math.abs(prev - rawNext)) : maxDeltaPct;
+            const effMaxDeltaPct = (fastTrip || releaseToFull) ? Math.max(maxDeltaPct, Math.abs(prev - rawNext)) : maxDeltaPct;
             if (effMaxDeltaPct > 0) {
                 const d = rawNext - prev;
                 if (Math.abs(d) > effMaxDeltaPct) next = prev + Math.sign(d) * effMaxDeltaPct;
@@ -1056,12 +958,15 @@ class GridConstraintsModule extends BaseModule {
 
             const ok = await this.dp.writeNumber('pv.limitPct', next, false);
 
-            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', tariffGridImportPreferred ? (fastTrip ? 'tariff_negative_pvLimitPct_fast' : 'tariff_negative_pvLimitPct') : (fastTrip ? 'pvLimitPct_fast' : 'pvLimitPct'), true);
+            const action = releaseToFull
+                ? 'pvLimitPct_release'
+                : (tariffGridImportPreferred ? (fastTrip ? 'tariff_negative_pvLimitPct_fast' : 'tariff_negative_pvLimitPct') : (fastTrip ? 'pvLimitPct_fast' : 'pvLimitPct'));
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', action, true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', ok === true || ok === null, true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointW', 0, true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointPct', Math.round(next * 10) / 10, true);
 
-            return { enabled: true, biasW, deadbandW, exportW };
+            return { enabled: true, biasW, deadbandW, exportW, controlExportW, rawGridW, controlGridW, errorW, action, applied: ok === true || ok === null, setpointW: 0, setpointPct: Math.round(next * 10) / 10, mode: modeResolved };
         }
 
         await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'unknown_mode', true);
@@ -1823,38 +1728,66 @@ class GridConstraintsModule extends BaseModule {
      * Zusammenhang: Die Werte werden aus der bestehenden Grid-Constraints-Regelung abgeleitet. Dadurch gibt es
      * keine zweite Einspeisebegrenzung und keine doppelte Abregelungslogik.
      */
-    async _publishExportLimitStates(cfg, enabled, approved, maxFeedInPowerW, biasW, gridW, exportW, action, modeResolved, negativePriceActive, runModeOverride = null) {
+    async _publishExportLimitStates(cfg, enabled, approved, maxFeedInPowerW, biasW, gridW, exportW, action, modeResolved, negativePriceActive, runModeOverride = null, coordination = null) {
         const set = async (id, val) => { try { await this.adapter.setStateAsync(id, val, true); } catch (_e) {} };
         const effectiveMaxW = Math.max(0, Math.round(Number(maxFeedInPowerW) || 0));
         const currentExportW = Math.max(0, Math.round(Number(exportW) || 0));
+        const coordinated = !!(coordination && coordination.coordinated === true);
+        const controlExportW = coordination && Number.isFinite(Number(coordination.controlExportW))
+            ? Math.max(0, Math.round(Number(coordination.controlExportW)))
+            : currentExportW;
         const targetGridW = Math.round((Number(biasW) || 0) - effectiveMaxW);
         const remainingW = Math.max(0, effectiveMaxW - currentExportW);
         const overLimitW = Math.max(0, currentExportW - effectiveMaxW);
+        const controlOverLimitW = Math.max(0, controlExportW - effectiveMaxW);
         const usagePercent = effectiveMaxW > 0 ? Math.round((currentExportW / effectiveMaxW) * 100) : (currentExportW > 0 ? 999 : 0);
         const mode = modeResolved || 'off';
         const runMode = runModeOverride || this._getExportLimitRunMode(cfg);
         const diagnosticOnly = enabled && runMode === 'diagnostic';
         const write = this._exportWriteDiagnostics(cfg, mode);
-        const estimateW = this._estimateCurtailmentW(cfg, mode, overLimitW);
-        let sinkPriority = this._zeroExportSinkPriorityPlan(cfg, overLimitW, currentExportW, estimateW);
+        const estimateW = this._estimateCurtailmentW(cfg, mode, coordinated ? controlOverLimitW : overLimitW);
+        let sinkPriority = this._zeroExportSinkPriorityPlan(
+            cfg,
+            coordinated ? controlOverLimitW : overLimitW,
+            coordinated ? controlExportW : currentExportW,
+            estimateW,
+        );
         const sinkAckSummary = await this._updateZeroExportSinkAcks(cfg || {}, sinkPriority);
         let sinkAvailability = await this._zeroExportSinkAvailability(cfg, sinkPriority);
         sinkPriority = this._applyZeroExportAvailabilityToPlan(sinkPriority, sinkAvailability);
         sinkAvailability = await this._zeroExportSinkAvailability(cfg, sinkPriority);
-        const sinkCommandReady = !!(sinkPriority && sinkPriority.commandEnvelope && Array.isArray(sinkPriority.commandEnvelope.commands) && sinkPriority.commandEnvelope.commands.length);
-        const requiredW = enabled && approved ? overLimitW : 0;
+        const sinkCommandReadyRaw = !!(sinkPriority && sinkPriority.commandEnvelope && Array.isArray(sinkPriority.commandEnvelope.commands) && sinkPriority.commandEnvelope.commands.length);
+        // Im zentral koordinierten EMS haben Speicher, EVCS und flexible Lasten
+        // ihre Sollwerte bereits über ihre eigenen Policy-/Safety-Gates erhalten.
+        // Hier darf deshalb keine zweite neutrale Senken-Schreibstrecke starten.
+        const sinkCommandReady = !coordinated && sinkCommandReadyRaw;
+        const requiredW = enabled && approved ? (coordinated ? controlOverLimitW : overLimitW) : 0;
         const plannedAction = !enabled
             ? 'off'
             : !approved
                 ? 'awaiting_installer_approval'
                 : diagnosticOnly
                     ? (sinkCommandReady ? `would_dispatch_sink_${sinkPriority.nextAction}_${Math.max(0, Math.round(requiredW))}W` : `would_limit_${Math.max(0, Math.round(requiredW))}W`)
-                    : sinkCommandReady
+                        : sinkCommandReady
                         ? `dispatch_sink_${sinkPriority.nextAction}`
                         : !write.writable
                             ? 'mapping_required'
                             : String(action || 'active');
-        const statusLabel = !enabled ? 'off' : !approved ? 'awaiting_installer_approval' : diagnosticOnly ? 'diagnostic_only' : sinkCommandReady ? 'sink_priority_command_ready' : !write.writable ? 'missing_wr_write_datapoints' : overLimitW > 0 ? 'export_above_limit' : negativePriceActive ? 'negative_price_guard_active' : 'within_limit';
+        const statusLabel = !enabled
+            ? 'off'
+            : !approved
+                ? 'awaiting_installer_approval'
+                : diagnosticOnly
+                    ? 'diagnostic_only'
+                    : sinkCommandReady
+                        ? 'sink_priority_command_ready'
+                        : !write.writable
+                            ? 'missing_wr_write_datapoints'
+                            : requiredW > 0
+                                ? (coordinated ? 'residual_export_above_limit' : 'export_above_limit')
+                                : negativePriceActive
+                                    ? 'negative_price_guard_active'
+                                    : 'within_limit';
         const negativeStrategy = negativePriceActive ? `negative_price_import_bias_${Math.max(0, Math.round(Number(biasW) || 0))}W` : 'normal_export_limit';
         const warning = write.writable ? '' : write.missing.join(' | ');
         const installerMessage = !enabled
@@ -1877,6 +1810,9 @@ class GridConstraintsModule extends BaseModule {
             meterFresh: typeof gridW === 'number' && Number.isFinite(gridW),
             writeCapable: !!write.writable,
             currentExportW,
+            controlExportW,
+            controlOverLimitW,
+            coordinated,
             effectiveMaxFeedInW: effectiveMaxW,
             exportOverLimitW: overLimitW,
             plannedAction,
@@ -1894,6 +1830,9 @@ class GridConstraintsModule extends BaseModule {
             configuredMaxFeedInW: effectiveMaxW,
             effectiveMaxFeedInW: effectiveMaxW,
             currentExportW,
+            controlExportW,
+            controlOverLimitW,
+            coordinated,
             remainingFeedInW: remainingW,
             exportOverLimitW: overLimitW,
             usagePercent,
@@ -1922,7 +1861,7 @@ class GridConstraintsModule extends BaseModule {
         };
         const sinkWriteResult = enabled && approved && !diagnosticOnly && sinkCommandReady
             ? await this._writeZeroExportSinkCommands(sinkPriority, { exportOverLimitW: overLimitW, currentExportW, maxFeedInW: effectiveMaxW, sinkAvailability })
-            : { schema: 'nexowatt.zero-export-sink-command-write-result.v1', ts: Date.now(), status: diagnosticOnly ? 'diagnostic_only' : (sinkCommandReady ? 'blocked_not_allowed' : 'no_commands'), commandCount: sinkPriority && sinkPriority.commandEnvelope && Array.isArray(sinkPriority.commandEnvelope.commands) ? sinkPriority.commandEnvelope.commands.length : 0, writtenCount: 0, failedCount: 0, results: [], directHardwareWrite: false, neutralCommandOnly: true };
+            : { schema: 'nexowatt.zero-export-sink-command-write-result.v1', ts: Date.now(), status: coordinated ? 'handled_by_central_ems' : (diagnosticOnly ? 'diagnostic_only' : (sinkCommandReady ? 'blocked_not_allowed' : 'no_commands')), commandCount: sinkPriority && sinkPriority.commandEnvelope && Array.isArray(sinkPriority.commandEnvelope.commands) ? sinkPriority.commandEnvelope.commands.length : 0, writtenCount: 0, failedCount: 0, results: [], directHardwareWrite: false, neutralCommandOnly: true };
         summary.zeroExportSinkCommandWrite = sinkWriteResult;
         checklist.zeroExportSinkCommandWrite = sinkWriteResult;
         const commissioning = this._buildZeroExportCommissioningAssistant(cfg, {
@@ -1949,6 +1888,8 @@ class GridConstraintsModule extends BaseModule {
         await set('gridConstraints.exportLimit.configuredMaxFeedInW', effectiveMaxW);
         await set('gridConstraints.exportLimit.effectiveMaxFeedInW', effectiveMaxW);
         await set('gridConstraints.exportLimit.currentExportW', currentExportW);
+        await set('gridConstraints.exportLimit.controlExportW', controlExportW);
+        await set('gridConstraints.exportLimit.controlOverLimitW', controlOverLimitW);
         await set('gridConstraints.exportLimit.remainingFeedInW', remainingW);
         await set('gridConstraints.exportLimit.exportOverLimitW', overLimitW);
         await set('gridConstraints.exportLimit.usagePercent', usagePercent);
@@ -2025,18 +1966,6 @@ class GridConstraintsModule extends BaseModule {
         await set('gridConstraints.pvCurtail.estimatedCurtailmentW', estimateW);
     }
 
-    /**
-     * Code-Teil: Methode `_getRatedPvW`
-     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _getRatedPvW
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     _getRatedPvW(cfg) {
         const explicit = this._num(cfg.pvRatedPowerW, 0);
         if (explicit > 0) return explicit;
@@ -2045,18 +1974,6 @@ class GridConstraintsModule extends BaseModule {
         return this._num(v, 0);
     }
 
-    /**
-     * Code-Teil: Methode `_applyCurtailFailsafe`
-     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: _applyCurtailFailsafe
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     async _applyCurtailFailsafe(cfg, modeResolved) {
         try {
             if (modeResolved === 'feedInLimitW') {
@@ -2085,63 +2002,111 @@ class GridConstraintsModule extends BaseModule {
         return false;
     }
 
-    /**
-     * Code-Teil: Methode `tick`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: tick
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    async tick() {
-        if (!this._isEnabled()) return;
+    async tickPlanning() {
+        if (!this._isEnabled()) return null;
 
         const cfg = this._cfg();
         const nowMs = Date.now();
 
-        // grid power
+        // Gemeinsamer, kanonischer NVP. Diese Phase läuft vor Speicher/Verbrauchern
+        // und veröffentlicht ausschließlich Netzgrenzen sowie statische EVU-Vorgaben.
         const gridStale = this._isStaleGrid(cfg);
         const gridW = this._getGridW(cfg);
 
         let status = 'ok';
         let reason = ReasonCodes.OK || 'OK';
-
         if (gridStale || !(typeof gridW === 'number' && Number.isFinite(gridW))) {
             status = 'stale_meter';
             reason = ReasonCodes.STALE_METER || 'STALE_METER';
         }
 
-        // RLM tick (works only with valid/stable grid)
         let rlm = { enabled: false, capNowW: null };
         if (!gridStale && (typeof gridW === 'number' && Number.isFinite(gridW))) {
             rlm = await this._tickRlm(nowMs, gridW, cfg);
         } else {
-            // still update disabled/limit states
             await this._tickRlm(nowMs, 0, { ...cfg, rlmEnabled: !!cfg.rlmEnabled });
         }
 
-        // PV-Abregelung: EVU-Relais (statisch) & 0-Einspeisung (dynamisch)
-        // EVU stage works independent of gridW freshness.
+        // Netzbetreiber-/EVU-Stufen sind harte statische Vorgaben und bleiben
+        // unabhängig vom nachgelagerten Speicher-/PV-Koordinator aktiv.
         await this._tickPvEvu(nowMs, cfg);
 
-        const gridWNum = (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : 0;
+        const instLimitW = this._num(this.adapter.config.installerConfig?.gridConnectionPower, 0);
+        const legacyLimitW = this._num(this.adapter.config.peakShaving?.maxPowerW, 0);
+        const connectionLimitW = (typeof instLimitW === 'number' && Number.isFinite(instLimitW) && instLimitW > 0)
+            ? instLimitW
+            : legacyLimitW;
+        let maxImportFinal = connectionLimitW > 0 ? connectionLimitW : 0;
+        if (cfg.rlmEnabled && rlm && typeof rlm.capNowW === 'number' && Number.isFinite(rlm.capNowW) && rlm.capNowW > 0) {
+            maxImportFinal = maxImportFinal > 0 ? Math.min(maxImportFinal, rlm.capNowW) : rlm.capNowW;
+        }
+        await this.adapter.setStateAsync('gridConstraints.control.maxImportW_final', Math.round(maxImportFinal || 0), true);
+
+        const exportTarget = this._buildExportLimitTarget(cfg, false);
+        const minImportTargetW = cfg.zeroExportEnabled ? Math.round(Math.max(0, exportTarget.biasW)) : 0;
+        await this.adapter.setStateAsync('gridConstraints.control.minImportTargetW', minImportTargetW, true);
+        await this.adapter.setStateAsync('gridConstraints.control.status', status, true);
+        await this.adapter.setStateAsync('gridConstraints.control.reason', reason, true);
+        await this.adapter.setStateAsync('gridConstraints.control.lastUpdate', nowMs, true);
+
+        this._lastPlanningContext = {
+            ts: nowMs,
+            cfg,
+            gridStale,
+            gridW: (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null,
+            status,
+            reason,
+            rlm,
+            maxImportFinal,
+            minImportTargetW,
+        };
+        return this._lastPlanningContext;
+    }
+
+    /**
+     * Zweite Regelphase: Erst nachdem Speicher/Farm ihren finalen Sollwert und
+     * das Write-Ergebnis veröffentlicht haben, darf die PV-/WR-Regelung den
+     * verbleibenden NVP-Export bearbeiten. `controlGridW` ist dabei bereits um
+     * die noch ausstehende Speicherreaktion bereinigt; Diagnosewerte bleiben
+     * stets auf dem echten RAW-NVP.
+     */
+    async tickPostStorage(coordinator = null) {
+        if (!this._isEnabled()) return null;
+
+        const cfg = this._cfg();
+        const nowMs = Date.now();
+        const planned = this._lastPlanningContext && (nowMs - Number(this._lastPlanningContext.ts || 0)) <= 10000
+            ? this._lastPlanningContext
+            : null;
+        const coordinatorRaw = coordinator && Number.isFinite(Number(coordinator.rawNvpW))
+            ? Number(coordinator.rawNvpW)
+            : null;
+        const fallbackRaw = planned && Number.isFinite(Number(planned.gridW))
+            ? Number(planned.gridW)
+            : this._getGridW(cfg);
+        const rawGridW = coordinatorRaw !== null
+            ? coordinatorRaw
+            : ((typeof fallbackRaw === 'number' && Number.isFinite(fallbackRaw)) ? fallbackRaw : 0);
+        const controlGridW = coordinator && Number.isFinite(Number(coordinator.pvControlNvpW))
+            ? Number(coordinator.pvControlNvpW)
+            : rawGridW;
+        const gridStale = coordinator && typeof coordinator.nvpUsable === 'boolean'
+            ? !coordinator.nvpUsable
+            : (planned ? !!planned.gridStale : this._isStaleGrid(cfg));
+        const hardRawGuardW = coordinator && Number.isFinite(Number(coordinator.hardRawGuardW))
+            ? Math.max(0, Number(coordinator.hardRawGuardW))
+            : 0;
+
         const hasZeroGroup = Array.isArray(cfg.pvCurtailInvertersZero) && cfg.pvCurtailInvertersZero.length > 0;
         const exportGuardDiagnosticOnly = this._isExportLimitDiagnosticMode(cfg);
+        const control = { rawGridW, controlGridW, hardRawGuardW };
 
-        // Zero export tick (may work even if grid stale via failsafe).
-        // Sicherheitsregel 0.8.30: Im Diagnose/Testmodus wird die komplette Export-Guard-Planung
-        // veröffentlicht, aber die bestehende WR-/PV-Schreiblogik wird bewusst nicht aufgerufen.
-        // Dadurch kann der Installateur Messrichtung, Limit und geplante Aktion prüfen, bevor echte
-        // Setpoints auf Herstelleradapter/OCPP/Modbus/MQTT/REST-Brücken geschrieben werden.
         let ze = { enabled: !!cfg.zeroExportEnabled, diagnosticOnly: exportGuardDiagnosticOnly };
         if (cfg.zeroExportEnabled && exportGuardDiagnosticOnly) {
             const tariffGridImportPreferredForDiag = await this._isTariffGridImportPreferred();
             const targetForDiag = this._buildExportLimitTarget(cfg, tariffGridImportPreferredForDiag);
-            const exportWForDiag = Math.max(0, -Number(gridWNum || 0));
+            const exportWForDiag = Math.max(0, -rawGridW);
+            const controlExportWForDiag = Math.max(0, -controlGridW);
             await this.adapter.setStateAsync('gridConstraints.zeroExport.enabled', true, true);
             await this.adapter.setStateAsync('gridConstraints.zeroExport.installerApproved', !!this._isExportLimitInstallerApproved(cfg), true);
             await this.adapter.setStateAsync('gridConstraints.zeroExport.maxFeedInPowerW', Math.round(targetForDiag.maxFeedInPowerW), true);
@@ -2150,17 +2115,29 @@ class GridConstraintsModule extends BaseModule {
             await this.adapter.setStateAsync('gridConstraints.zeroExport.targetImportBiasW', Math.round(targetForDiag.biasW), true);
             await this.adapter.setStateAsync('gridConstraints.zeroExport.deadbandW', Math.round(targetForDiag.deadbandW), true);
             await this.adapter.setStateAsync('gridConstraints.zeroExport.exportW', Math.round(exportWForDiag), true);
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.controlGridW', Math.round(controlGridW), true);
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.controlExportW', Math.round(controlExportWForDiag), true);
             await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'diagnostic_only', true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', false, true);
+            ze = {
+                enabled: true,
+                diagnosticOnly: true,
+                rawGridW,
+                controlGridW,
+                exportW: exportWForDiag,
+                controlExportW: controlExportWForDiag,
+                action: 'diagnostic_only',
+                applied: false,
+                mode: hasZeroGroup ? 'group' : this._resolveCurtailMode(cfg),
+            };
         } else {
             ze = hasZeroGroup
-                ? await this._tickZeroExportGroup(nowMs, gridWNum, cfg, gridStale)
-                : await this._tickZeroExport(nowMs, gridWNum, cfg, gridStale);
+                ? await this._tickZeroExportGroup(nowMs, controlGridW, cfg, gridStale, control)
+                : await this._tickZeroExport(nowMs, controlGridW, cfg, gridStale, control);
         }
 
-        // Export Guard Diagnose: zeigt aktuelle Einspeisung, erlaubtes Limit, Abregelungsbedarf,
-        // negative-Preis-Strategie und WR-Schreibfähigkeit an. Die eigentliche Regelung bleibt die
-        // bestehende zeroExport/PV-Curtail-Logik, damit keine doppelte Regelstrecke entsteht.
+        // Export-Guard-Diagnose verwendet weiterhin ausschließlich den echten
+        // Messwert. Der prognostizierte Rest-NVP steuert nur den Aktor.
         const tariffGridImportPreferred = await this._isTariffGridImportPreferred();
         const exportTargetDiag = this._buildExportLimitTarget(cfg, tariffGridImportPreferred);
         let zeroAction = '';
@@ -2175,44 +2152,33 @@ class GridConstraintsModule extends BaseModule {
             this._isExportLimitInstallerApproved(cfg),
             exportTargetDiag.maxFeedInPowerW,
             exportTargetDiag.biasW,
-            gridWNum,
-            Math.max(0, -Number(gridWNum || 0)),
+            rawGridW,
+            Math.max(0, -rawGridW),
             zeroAction,
             modeResolvedDiag,
             tariffGridImportPreferred,
-            this._getExportLimitRunMode(cfg)
+            this._getExportLimitRunMode(cfg),
+            {
+                coordinated: true,
+                controlExportW: Math.max(0, -controlGridW),
+            }
         );
 
-        // Compute final "max import" cap: min(connectionLimit, rlmCapNow)
-        // Prefer central plant parameter "Netzanschlussleistung" (installerConfig.gridConnectionPower).
-        // Fallback to legacy peakShaving.maxPowerW for backwards compatibility.
-        const instLimitW = this._num(this.adapter.config.installerConfig?.gridConnectionPower, 0);
-        const legacyLimitW = this._num(this.adapter.config.peakShaving?.maxPowerW, 0);
-        const connectionLimitW = (typeof instLimitW === 'number' && Number.isFinite(instLimitW) && instLimitW > 0)
-            ? instLimitW
-            : legacyLimitW;
-        let maxImportFinal = 0;
+        this._lastDynamicResult = {
+            ts: nowMs,
+            rawGridW: Math.round(rawGridW),
+            controlGridW: Math.round(controlGridW),
+            gridStale,
+            ...ze,
+            action: String((ze && ze.action) || zeroAction || ''),
+            mode: String((ze && ze.mode) || modeResolvedDiag || ''),
+        };
+        return this._lastDynamicResult;
+    }
 
-        if (connectionLimitW > 0) {
-            maxImportFinal = connectionLimitW;
-        } else {
-            maxImportFinal = 0;
-        }
-
-        if (cfg.rlmEnabled && rlm && typeof rlm.capNowW === 'number' && Number.isFinite(rlm.capNowW) && rlm.capNowW > 0) {
-            maxImportFinal = maxImportFinal > 0 ? Math.min(maxImportFinal, rlm.capNowW) : rlm.capNowW;
-        }
-
-        // If no caps configured, set to 0 (means "unknown" here; peak shaving still uses its own)
-        await this.adapter.setStateAsync('gridConstraints.control.maxImportW_final', Math.round(maxImportFinal || 0), true);
-
-        const exportTarget = this._buildExportLimitTarget(cfg, false);
-        const minImportTargetW = (cfg.zeroExportEnabled ? Math.round(Math.max(0, exportTarget.biasW)) : 0);
-        await this.adapter.setStateAsync('gridConstraints.control.minImportTargetW', minImportTargetW, true);
-
-        await this.adapter.setStateAsync('gridConstraints.control.status', status, true);
-        await this.adapter.setStateAsync('gridConstraints.control.reason', reason, true);
-        await this.adapter.setStateAsync('gridConstraints.control.lastUpdate', nowMs, true);
+    async tick() {
+        await this.tickPlanning();
+        if (!this._deferDynamicPv) await this.tickPostStorage();
     }
 }
 

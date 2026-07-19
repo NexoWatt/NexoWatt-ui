@@ -18,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b966cca989f48abe8ca9a72c052d8d4ae33048e3cab37ebdb9a28bc8383de56f
+ * Original-Hash: 0bf29755ce2ee39a4e71e0d278c758b5dc76928975b5cfdfd0b5b945ebec1af3
  */
 
 /**
@@ -581,6 +581,7 @@ interface EmsAppsWindow extends Window {
 
     // Status
     emsStatus: document.getElementById('emsStatus'),
+    refreshNvpCoordinator: document.getElementById('refreshNvpCoordinator'),
     chargingDiag: document.getElementById('chargingDiag'),
     refreshChargingDiag: document.getElementById('refreshChargingDiag'),
     stationsDiag: document.getElementById('stationsDiag'),
@@ -13064,6 +13065,12 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
    * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
+  /**
+   * Code-Teil: _asBool
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _asBool(v) {
     if (typeof v === 'boolean') return v;
     if (typeof v === 'number') return v !== 0;
@@ -14481,6 +14488,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (_activeTab !== 'status') return;
     const data = await fetchJson('/api/ems/status');
     renderEmsStatus(data || {});
+    try { window.NexoWattNvpDiagnostics?.render(data || {}); } catch (_e) {}
   }
   /**
    * Code-Teil: startStatusPolling
@@ -15496,6 +15504,13 @@ if (els.ocppAutoDetect) {
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.backupRestore. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.backupRestore.addEventListener('click', () => {
       backupRestoreFromUserdata().catch(() => {});
+    });
+  }
+
+  if (els.refreshNvpCoordinator) {
+    // Ereignis-Kommentar: Aktualisiert die ausführliche NVP-/Speicher-/PV-Diagnose und das Stabilitätslog.
+    els.refreshNvpCoordinator.addEventListener('click', () => {
+      refreshEmsStatus().catch(() => {});
     });
   }
 

@@ -14493,6 +14493,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         const mm = engine && engine.mm ? engine.mm : null;
         const lastTickDiag = mm && mm.lastTickDiag ? mm.lastTickDiag : null;
+        const nvpCoordinator = this._nvpCoordinatorSnapshot && typeof this._nvpCoordinatorSnapshot === 'object'
+          ? this._nvpCoordinatorSnapshot
+          : null;
+        const tariffStatus = this._tariffStatus && typeof this._tariffStatus === 'object'
+          ? this._tariffStatus
+          : null;
 
         res.json({
           ok: true,
@@ -14502,6 +14508,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
             initError: (this._nwEmsInitError && String(this._nwEmsInitError)) ? String(this._nwEmsInitError) : '',
           },
           lastTickDiag,
+          nvpCoordinator,
+          tariffStatus,
         });
       } catch (e) {
         this.log.warn('EMS status API error: ' + e.message);

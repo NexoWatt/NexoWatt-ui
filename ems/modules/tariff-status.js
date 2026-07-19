@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/tariff-status.ts
- * Quell-Hash: sha256:4ba68fea96e804ac13859e64a85b6ab82b3d357bfb7e1fb1e0a6b1a203fb2c9f
+ * Quell-Hash: sha256:4bc63ec24458530bb12b4e20cfb286b363450550ac6be810a1d8c1e9df90972f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -18,10 +18,11 @@
 /**
  * Executable TypeScript source: ems/modules/tariff-status.js
  *
- * Finalisiert die sichtbare Tarif-/Speicherstatuskette erst nach der zentralen
- * Speicherregelung. Dadurch beschreibt `tarif.statusText` nicht mehr nur den
- * Tarifwunsch, sondern den tatsächlich freigegebenen Sollwert, das Write-Ergebnis
- * und – sofern frisch vorhanden – die reale Speicherleistung.
+ * Finalisiert die Tarif-/Speicherstatuskette erst nach der zentralen
+ * Speicherregelung. `tarif.statusText` bleibt für den LIVE-Energiefluss bewusst
+ * kompakt wie vor RC3. Die vollständige Kette aus Absicht, Resolver, Gate,
+ * Hardware-Write und Readback liegt getrennt in `tarif.detailStatusText` und
+ * `tarif.statusJson` für die Einstellungs-/Diagnoseansicht.
  */
 'use strict';
 const { BaseModule } = require('./base');
@@ -378,6 +379,29 @@ const buildEffectiveStorageText = (result, context = {}) => {
     }
     return `Stopp/Warten (0 W) angefordert – Istwert ${result.actualW === null ? '—' : `${result.actualW} W`} noch nicht gestoppt${detail}${farmSuffix}`;
 };
+/** Kompakter, aber weiterhin wahrheitsgetreuer Text für die LIVE-Infozeile. */
+const buildCompactStorageText = (result) => {
+    switch (result.status) {
+        case 'charging': return 'Speicher lädt';
+        case 'discharging': return 'Speicher entlädt';
+        case 'charge-requested': return 'Speicher-Laden angefordert';
+        case 'discharge-requested': return 'Speicher-Entladen angefordert';
+        case 'waiting': return 'Speicher wartet';
+        case 'stop-requested': return 'Speicher-Stopp angefordert';
+        case 'stop-not-reached': return 'Speicher-Stopp noch nicht bestätigt';
+        case 'mismatch': return 'Speicher-Rückmeldung abweichend';
+        case 'blocked': return 'Speicher gesperrt';
+        case 'write-failed': return 'Speicher-Schreiben fehlgeschlagen';
+        case 'hold': return 'Speicher hält Vorgabe';
+        case 'no-writer': return 'Kein Speicher-Ausgang';
+        default: return '';
+    }
+};
+const buildCompactEvcsText = (tariff = {}) => {
+    return boolValue(tariff.gridChargeAllowed, true)
+        ? 'EVCS Netzladen freigegeben'
+        : 'EVCS Netzladen gesperrt (PV möglich)';
+};
 class TariffStatusModule extends BaseModule {
     constructor(adapter, dpRegistry) {
         super(adapter, dpRegistry);
@@ -399,7 +423,8 @@ class TariffStatusModule extends BaseModule {
                 native: {},
             });
         };
-        await mk('tarif.statusText', 'Tarif Status – tatsächliche Steuerkette', 'string', 'text');
+        await mk('tarif.statusText', 'Tarif Status – kompakte LIVE-Info', 'string', 'text');
+        await mk('tarif.detailStatusText', 'Tarif Status – vollständige Steuerkette', 'string', 'text');
         await mk('tarif.intentStatusText', 'Tarif Absicht – vor Resolver/Gates', 'string', 'text');
         await mk('tarif.intentSnapshotAgeMs', 'Alter des Tarif-Policy-Snapshots (ms)', 'number', 'value.interval');
         await mk('tarif.intentSnapshotFresh', 'Tarif-Policy-Snapshot frisch', 'boolean', 'indicator');
@@ -572,7 +597,9 @@ class TariffStatusModule extends BaseModule {
                 requestReason,
                 topologyReason,
             });
-            const statusText = active ? `${baseText}: ${intentPart} → ${effectivePart}` : '';
+            const detailStatusText = active ? `${baseText}: ${intentPart} → ${effectivePart}` : '';
+            const compactParts = [buildCompactStorageText(result), buildCompactEvcsText(tariff)].filter(Boolean);
+            const statusText = active ? `${baseText}: ${compactParts.join(' + ')}` : '';
             await this._setIfChanged('tarif.intentStatusText', intentStatusText || (active ? `${baseText}: ${intentPart}` : ''));
             await this._setIfChanged('tarif.intentSnapshotAgeMs', tariffSnapshotAgeMs);
             await this._setIfChanged('tarif.intentSnapshotFresh', tariffSnapshotFresh);
@@ -598,6 +625,7 @@ class TariffStatusModule extends BaseModule {
             await this._setIfChanged('tarif.speicherFarmDeliveredW', farmDeliveredW);
             await this._setIfChanged('tarif.speicherFarmUnservedW', farmUnservedW);
             await this._setIfChanged('tarif.statusText', statusText);
+            await this._setIfChanged('tarif.detailStatusText', detailStatusText);
             const statusJson = {
                 ts: now,
                 active,
@@ -658,6 +686,7 @@ class TariffStatusModule extends BaseModule {
                 effective: {
                     status: result.status,
                     statusText,
+                    detailStatusText,
                 },
             };
             await this._setIfChanged('tarif.statusJson', JSON.stringify(statusJson));
@@ -688,4 +717,5 @@ module.exports = {
     classifyTariffStorageStatus,
     buildTariffBaseText,
     buildIntentReason,
+    buildCompactStorageText,
 };

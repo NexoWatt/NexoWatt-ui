@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:530bc6761ef0225f9350a590221a6163e4582c73b7d6d15d3e4793f35b4e26da
+ * Quell-Hash: sha256:d0459ee0985fa91a637b431178a6834ff9af0b6b46df0447be1a11e13749638e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -14491,6 +14491,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         const mm = engine && engine.mm ? engine.mm : null;
         const lastTickDiag = mm && mm.lastTickDiag ? mm.lastTickDiag : null;
+        const nvpCoordinator = this._nvpCoordinatorSnapshot && typeof this._nvpCoordinatorSnapshot === 'object'
+          ? this._nvpCoordinatorSnapshot
+          : null;
+        const tariffStatus = this._tariffStatus && typeof this._tariffStatus === 'object'
+          ? this._tariffStatus
+          : null;
 
         res.json({
           ok: true,
@@ -14500,6 +14506,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
             initError: (this._nwEmsInitError && String(this._nwEmsInitError)) ? String(this._nwEmsInitError) : '',
           },
           lastTickDiag,
+          nvpCoordinator,
+          tariffStatus,
         });
       } catch (e) {
         this.log.warn('EMS status API error: ' + e.message);

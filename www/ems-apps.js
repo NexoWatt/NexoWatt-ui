@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:d5893d3c97bfc6e7b876699a94392464239e8440c707a67d7325657385fd3902
+ * Quell-Hash: sha256:23e1f1a756021baae60df5c1706573f099d2dcfbe0f7415451dc0194594a721e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -276,6 +276,7 @@
 
     // Status
     emsStatus: document.getElementById('emsStatus'),
+    refreshNvpCoordinator: document.getElementById('refreshNvpCoordinator'),
     chargingDiag: document.getElementById('chargingDiag'),
     refreshChargingDiag: document.getElementById('refreshChargingDiag'),
     stationsDiag: document.getElementById('stationsDiag'),
@@ -12753,12 +12754,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       els.emsStatus.appendChild(mkItem(r.key || 'module', '', right, ok ? 'ok' : 'error'));
     }
   }
-  /**
-   * Code-Teil: _asBool
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
+
   function _asBool(v) {
     if (typeof v === 'boolean') return v;
     if (typeof v === 'number') return v !== 0;
@@ -14176,6 +14172,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (_activeTab !== 'status') return;
     const data = await fetchJson('/api/ems/status');
     renderEmsStatus(data || {});
+    try { window.NexoWattNvpDiagnostics?.render(data || {}); } catch (_e) {}
   }
   /**
    * Code-Teil: startStatusPolling
@@ -15198,6 +15195,12 @@ if (els.ocppAutoDetect) {
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.refreshChargingDiag. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.refreshChargingDiag.addEventListener('click', () => {
       refreshChargingDiag().catch(() => {});
+    });
+  }
+
+  if (els.refreshNvpCoordinator) {
+    els.refreshNvpCoordinator.addEventListener('click', () => {
+      refreshEmsStatus().catch(() => {});
     });
   }
 

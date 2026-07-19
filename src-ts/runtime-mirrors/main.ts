@@ -21,7 +21,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: e69ce944dee9f5c2ddaabfeff683312a2faae83e0a23762fe09c4364ceb5d144
+ * Original-Hash: 90754c9c021fec8c2cd5aaf7870464327f94a9eca801c0069c7daf68b774437d
  */
 
 /**
@@ -14824,6 +14824,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         const mm = engine && engine.mm ? engine.mm : null;
         const lastTickDiag = mm && mm.lastTickDiag ? mm.lastTickDiag : null;
+        const nvpCoordinator = this._nvpCoordinatorSnapshot && typeof this._nvpCoordinatorSnapshot === 'object'
+          ? this._nvpCoordinatorSnapshot
+          : null;
+        const tariffStatus = this._tariffStatus && typeof this._tariffStatus === 'object'
+          ? this._tariffStatus
+          : null;
 
         res.json({
           ok: true,
@@ -14833,6 +14839,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
             initError: (this._nwEmsInitError && String(this._nwEmsInitError)) ? String(this._nwEmsInitError) : '',
           },
           lastTickDiag,
+          nvpCoordinator,
+          tariffStatus,
         });
       } catch (e) {
         this.log.warn('EMS status API error: ' + e.message);

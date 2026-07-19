@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.127",
+    "version": "0.8.128",
     "news": {
+      "0.8.128": {
+        "de": "Version 0.8.128 RC4: Ein zentraler NVP-Koordinator lässt Speicher oder Speicherfarm zuerst regeln und übergibt nur die belastbar verbleibende Einspeisung an die PV-/WR-Begrenzung. Blockierte, fehlgeschlagene oder nicht reagierende Speicherbefehle werden nicht optimistisch verrechnet. Die LIVE-Tarifzeile ist wieder kompakt; vollständige NVP-, Speicher-, PV-, Gate- und Stabilitätsdetails stehen unter AppCenter → Status samt Ringlog. Direkte Richtungswechsel, exklusive Farm-/Einzel-Steuerhoheit und frei zugeordnete AppCenter-DPs bleiben unverändert.",
+        "en": "Version 0.8.128 RC4: A central NVP coordinator lets either single storage or the storage farm regulate first and passes only the reliably remaining export to PV/inverter curtailment. Blocked, failed or non-responsive storage commands are not credited optimistically. The LIVE tariff line is compact again; full NVP, storage, PV, gate and stability details are available under AppCenter → Status with a ring log. Direct direction changes, exclusive farm/single-storage authority and freely assigned AppCenter datapoints remain unchanged."
+      },
       "0.8.127": {
         "de": "Version 0.8.127 RC3: Die Tarifansicht trennt Tarifabsicht, finalen Speicher-Sollwert, Gate-/Write-Ergebnis, Farm-Dispatch und Istwert-Rückmeldung. Laden oder Entladen wird nur noch bei frischem, vertrauenswürdigem Readback bestätigt; angeforderte, wartende, blockierte, fehlgeschlagene, teilweise erfüllte oder veraltete Zustände werden ausdrücklich ausgewiesen. Die exklusive Farm-/Einzel-Steuerhoheit, direkte Richtungswechsel und manuell zugeordnete AppCenter-DPs bleiben unverändert.",
         "en": "Version 0.8.127 RC3: The tariff view separates tariff intent, final storage target, gate/write result, farm dispatch and measured feedback. Charging or discharging is confirmed only with fresh trusted readback; requested, waiting, blocked, failed, partially delivered or stale states are shown explicitly. Exclusive farm/single-storage authority, direct direction changes and manually assigned AppCenter datapoints remain unchanged."
@@ -26,10 +30,6 @@
       "0.8.122": {
         "de": "Version 0.8.122: Entfernt Phantom-EVCS-Reservierungen ohne bestätigten Fahrzeugbedarf, startet eine aktive Speicherfarm automatisch als Basis-Eigenverbrauchsregelung und stabilisiert die Farm-Verteilung über Hardware-IDs samt Status-Refresh. Zusätzlich werden alle typisierten §14a-Budgetobjekte vor dem ersten Write angelegt.",
         "en": "Version 0.8.122: Removes phantom EVCS reservations without confirmed vehicle demand, automatically starts an active storage farm as the base self-consumption controller, and stabilizes farm dispatch via hardware IDs plus status refresh. It also creates all typed §14a budget objects before the first write."
-      },
-      "0.8.121": {
-        "de": "Version 0.8.121: Core-Limits TypeScript Phase 3 führt Snapshot, Reservierungen und Publikation über einen einzigen typisierten Laufzeitstand mit hartem Legacy-Fallback. Dynamisch aktivierte AppCenter-Module werden vor dem ersten Tick zuverlässig initialisiert. §14a legt alle Diagnose-States vor dem Schreiben an, hinterlässt beim Deaktivieren keine alten Caps und erzeugt bei inaktivem Signal keinen Missing-Object-Logspam mehr.",
-        "en": "Version 0.8.121: Core-Limits TypeScript Phase 3 uses one typed runtime state for snapshot, reservations and publication with a strict legacy fallback. Dynamically enabled AppCenter modules are initialized before their first tick. §14a creates all diagnostic states before writes, clears stale caps on disable and no longer produces missing-object log spam while inactive."
       }
     },
     "title": "NexoWatt UI",

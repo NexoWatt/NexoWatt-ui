@@ -1,3 +1,14 @@
+## 0.8.128 - 2026-07-19
+
+- EMS-Stabilisierungsbaustein 4 (RC4): Neuer zentraler `NvpCoordinatorModule` ordnet die NVP-Regelung in einem festen Ablauf. Speicher oder Speicherfarm erhalten zuerst genau einen finalen Sollwert; die dynamische PV-/WR-Regelung verarbeitet anschließend ausschließlich die nach einer belastbaren Speicherreaktion verbleibende Einspeisung.
+- Physikalische Restwertrechnung: `NVP_prognose = NVP_ist - (Speicher_soll - Speicher_ist)`. Eine noch ausstehende Speicherreaktion wird nur bei frischem, vertrauenswürdigem Istwert sowie akzeptiertem Write und nur innerhalb einer begrenzten Reaktionszeit berücksichtigt. Blockierte, fehlgeschlagene oder dauerhaft wirkungslose Speicherbefehle werden nicht optimistisch von der PV-Regelung abgezogen.
+- Grid-Constraints laufen im zentralen EMS zweiphasig: RLM, Netzgrenzen und statische EVU-Vorgaben vor den Aktoren; Nulleinspeisung beziehungsweise Exportbegrenzung nach dem Speicher. Bei Netzbezug werden dynamische PV-Limits gelöst, bei Einspeisung wird nur der Rest begrenzt. Lizenz-, App-, Installer-, Owner-, Authority- und Safety-Gates bleiben wirksam; der Koordinator erzeugt keinen zweiten Speicherwriter.
+- Speichergrundregeln bleiben unverändert: Laden ↔ Entladen erfolgt direkt ohne 0-W-Zwischenrunde. `0 W` bleibt echten Stop-, Warte-, Sperr- und Sicherheitsentscheidungen vorbehalten. Farm und Einzelspeicher bleiben exklusiv, manuell zugeordnete AppCenter-DPs bleiben die tatsächlichen herstellerunabhängigen Hardwareziele.
+- LIVE-Energiefluss: Ausschließlich die Tarif-Infozeile ist wieder kompakt wie vor RC3; Wattwerte, Resolverkette, Gate-, Farm- und Readback-Details werden dort nicht mehr ausgeschrieben. Die Energieflussknoten, Leistungen, Linien, Farben, Animationen und Aktualisierung bleiben unverändert.
+- Neue Einstellungsdiagnose unter AppCenter → Status zeigt NVP-Ist/Ziel/Toleranz, Messquelle und Alter, Speicher-/Farm-Ist und -Soll, Write-/Readback-Status, prognostizierten Rest-NVP, PV-/WR-Aktion sowie die kompakte und vollständige Tarifkette. `ems.nvpCoordinator.logJson` führt einen begrenzten Ringpuffer für Stabilität, Pendeln, Reaktionszeiten, Gates und PV-Eingriffe.
+- Neue Regressionen prüfen den Feldfall `+1011 W` NVP, `-73 W` Speicher-Ist und `+888 W` Soll mit prognostizierten `+50 W`, Speicher-vor-PV-Restverteilung, Reaktionstimeout, blockierte Writes, direkte Richtungswechsel, Lizenz-/App-Gates sowie die Trennung zwischen kompakter LIVE-Zeile und ausführlicher Einstellungsdiagnose.
+- Service-Worker-Cache auf `nexowatt-cache-v430` erhöht.
+
 ## 0.8.127 - 2026-07-19
 
 - EMS-Stabilisierungsbaustein 3 (RC3): Tarifabsicht, zentraler Speicher-Resolver, Safety-/Authority-Gates, Hardware-Write, Farm-Dispatch und Istwert-Readback werden als getrennte Stufen ausgewiesen. Die Tarifansicht übernimmt nicht mehr ihre eigene Strategieabsicht als vermeintlich ausgeführten Speicherzustand.

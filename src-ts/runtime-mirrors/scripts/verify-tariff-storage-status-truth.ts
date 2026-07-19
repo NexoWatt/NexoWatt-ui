@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 75da4cef87e714b3620c0bd42cdc2d7ef548e5119397a44cf7725cb86a963dc8
+ * Original-Hash: 032ca8bac7f7b9df450505a9550baca1ef0e75ed23fabd4d17c13a3dd92e346f
  */
 
 /**
@@ -34,8 +34,9 @@
 /**
  * Regression 0.8.127: Tarifabsicht, finaler Speicher-Sollwert, Gate-/Write-
  * Ergebnis und Istwert-Rückmeldung müssen getrennt sichtbar bleiben.
- * `tarif.statusText` darf Laden/Entladen nur bei frischer bestätigender
- * Istleistung behaupten.
+ * `tarif.statusText` bleibt kompakt für den LIVE-Energiefluss. Die vollständige
+ * Kette steht in `tarif.detailStatusText`. Beide dürfen Laden/Entladen nur bei
+ * frischer bestätigender Istleistung behaupten.
  */
 
 const assert = require('assert');
@@ -198,9 +199,12 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
     assert.strictEqual(adapter.value('tarif.speicherFinalW'), 900);
     assert.strictEqual(adapter.value('tarif.speicherReadbackW'), 870);
     assert.strictEqual(adapter.value('tarif.speicherReadbackStatus'), 'confirmed-discharging');
-    assert.match(adapter.value('tarif.statusText'), /Speicher entlädt 870 W/);
-    assert.match(adapter.value('tarif.statusText'), /Tarifwunsch Entladen 3000 W/);
-    assert.match(adapter.value('tarif.statusText'), /Soll 900 W; Richtung bestätigt/);
+    assert.match(adapter.value('tarif.statusText'), /Speicher entlädt/);
+    assert.match(adapter.value('tarif.statusText'), /EVCS Netzladen freigegeben/);
+    assert.doesNotMatch(adapter.value('tarif.statusText'), /870 W|Tarifwunsch|Quelle|Farm-Dispatch/);
+    assert.match(adapter.value('tarif.detailStatusText'), /Speicher entlädt 870 W/);
+    assert.match(adapter.value('tarif.detailStatusText'), /Tarifwunsch Entladen 3000 W/);
+    assert.match(adapter.value('tarif.detailStatusText'), /Soll 900 W; Richtung bestätigt/);
   }
 
   // 2) Gegenläufiger Istwert innerhalb der Einschwingzeit ist nur eine Anforderung.
@@ -208,7 +212,8 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
     const { adapter } = await runScenario({ storage: { actualW: -450, actualTrusted: true } });
     assert.strictEqual(adapter.value('tarif.speicherStatus'), 'discharge-requested');
     assert.strictEqual(adapter.value('tarif.speicherReadbackStatus'), 'pending-discharging');
-    assert.match(adapter.value('tarif.statusText'), /Entladen 900 W angefordert/);
+    assert.match(adapter.value('tarif.statusText'), /Speicher-Entladen angefordert/);
+    assert.match(adapter.value('tarif.detailStatusText'), /Entladen 900 W angefordert/);
     assert.doesNotMatch(adapter.value('tarif.statusText'), /Speicher entlädt/);
   }
 
@@ -217,7 +222,8 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
     const { adapter } = await runScenario({ storage: { actualW: -450, actualTrusted: true }, ageTargetMs: 30000 });
     assert.strictEqual(adapter.value('tarif.speicherStatus'), 'mismatch');
     assert.strictEqual(adapter.value('tarif.speicherReadbackStatus'), 'opposite-direction');
-    assert.match(adapter.value('tarif.statusText'), /bestätigt die Richtung nicht/);
+    assert.match(adapter.value('tarif.statusText'), /Speicher-Rückmeldung abweichend/);
+    assert.match(adapter.value('tarif.detailStatusText'), /bestätigt die Richtung nicht/);
     assert.doesNotMatch(adapter.value('tarif.statusText'), /Speicher entlädt/);
   }
 
@@ -240,7 +246,8 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
     });
     assert.strictEqual(adapter.value('tarif.speicherStatus'), 'charging');
     assert.strictEqual(adapter.value('tarif.speicherReadbackStatus'), 'confirmed-charging');
-    assert.match(adapter.value('tarif.statusText'), /Speicher lädt 1420 W/);
+    assert.match(adapter.value('tarif.statusText'), /Speicher lädt/);
+    assert.match(adapter.value('tarif.detailStatusText'), /Speicher lädt 1420 W/);
   }
 
   // 5) 0 W ist ein echter Warte-/Stoppzustand und keine Lade-/Entladeaussage.
@@ -264,8 +271,9 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
     });
     assert.strictEqual(adapter.value('tarif.speicherStatus'), 'waiting');
     assert.strictEqual(adapter.value('tarif.speicherReadbackStatus'), 'confirmed-stop');
-    assert.match(adapter.value('tarif.statusText'), /Speicher wartet\/ruht \(0 W bestätigt/);
-    assert.match(adapter.value('tarif.statusText'), /SoC-Maximum erreicht/);
+    assert.match(adapter.value('tarif.statusText'), /Speicher wartet/);
+    assert.match(adapter.value('tarif.detailStatusText'), /Speicher wartet\/ruht \(0 W bestätigt/);
+    assert.match(adapter.value('tarif.detailStatusText'), /SoC-Maximum erreicht/);
     assert.doesNotMatch(adapter.value('tarif.statusText'), /Speicher lädt|Speicher entlädt/);
   }
 
@@ -289,7 +297,8 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
     });
     assert.strictEqual(adapter.value('tarif.speicherGateStatus'), 'blocked');
     assert.strictEqual(adapter.value('tarif.speicherStatus'), 'blocked');
-    assert.match(adapter.value('tarif.statusText'), /Speicherbefehl blockiert/);
+    assert.match(adapter.value('tarif.statusText'), /Speicher gesperrt/);
+    assert.match(adapter.value('tarif.detailStatusText'), /Speicherbefehl blockiert/);
     assert.doesNotMatch(adapter.value('tarif.statusText'), /Speicher entlädt/);
   }
 
@@ -315,7 +324,8 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
     assert.strictEqual(adapter.value('tarif.speicherStatus'), 'discharging');
     assert.strictEqual(adapter.value('tarif.speicherFarmDeliveredW'), 600);
     assert.strictEqual(adapter.value('tarif.speicherFarmUnservedW'), 300);
-    assert.match(adapter.value('tarif.statusText'), /Farm-Dispatch 600 W von 900 W, offen 300 W/);
+    assert.doesNotMatch(adapter.value('tarif.statusText'), /Farm-Dispatch|600 W|900 W|300 W/);
+    assert.match(adapter.value('tarif.detailStatusText'), /Farm-Dispatch 600 W von 900 W, offen 300 W/);
   }
 
   // 8) Stale Tarifabsicht darf eine unabhängige Eigenverbrauchsreaktion nicht als Tarifaktion ausgeben.
@@ -336,10 +346,12 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
         finalReason: 'NVP-Netzbezug ausgleichen',
       },
     });
-    assert.match(adapter.value('tarif.statusText'), /Tarifwunsch Warten/);
-    assert.match(adapter.value('tarif.statusText'), /Tarifdaten sind zu alt/);
-    assert.match(adapter.value('tarif.statusText'), /Speicher entlädt 920 W/);
-    assert.match(adapter.value('tarif.statusText'), /Quelle eigenverbrauch/);
+    assert.match(adapter.value('tarif.statusText'), /Speicher entlädt/);
+    assert.doesNotMatch(adapter.value('tarif.statusText'), /Tarifwunsch|Tarifdaten sind zu alt|920 W|Quelle/);
+    assert.match(adapter.value('tarif.detailStatusText'), /Tarifwunsch Warten/);
+    assert.match(adapter.value('tarif.detailStatusText'), /Tarifdaten sind zu alt/);
+    assert.match(adapter.value('tarif.detailStatusText'), /Speicher entlädt 920 W/);
+    assert.match(adapter.value('tarif.detailStatusText'), /Quelle eigenverbrauch/);
   }
 
   // 9) Ohne frische Rückmeldung bleibt es bei einer angeforderten Aktion.
@@ -347,7 +359,8 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
     const { adapter } = await runScenario({ storage: { actualW: null, actualAgeMs: null, actualTrusted: false } });
     assert.strictEqual(adapter.value('tarif.speicherStatus'), 'discharge-requested');
     assert.strictEqual(adapter.value('tarif.speicherReadbackFresh'), false);
-    assert.match(adapter.value('tarif.statusText'), /keine frische Istwert-Rückmeldung/);
+    assert.match(adapter.value('tarif.statusText'), /Speicher-Entladen angefordert/);
+    assert.match(adapter.value('tarif.detailStatusText'), /keine frische Istwert-Rückmeldung/);
     assert.doesNotMatch(adapter.value('tarif.statusText'), /Speicher entlädt/);
   }
 
@@ -361,7 +374,8 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
     assert.strictEqual(adapter.value('tarif.speicherIntentW'), 0);
     assert.strictEqual(adapter.value('tarif.speicherIntentStatus'), 'stale');
     assert.match(adapter.value('tarif.statusText'), /Tarifstatus veraltet/);
-    assert.match(adapter.value('tarif.statusText'), /Speicher entlädt 860 W/);
+    assert.match(adapter.value('tarif.statusText'), /Speicher entlädt/);
+    assert.match(adapter.value('tarif.detailStatusText'), /Speicher entlädt 860 W/);
     assert.doesNotMatch(adapter.value('tarif.statusText'), /Tarifwunsch Laden 5000 W/);
   }
 
@@ -380,7 +394,8 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
     assert.strictEqual(adapter.value('tarif.speicherGateStatus'), 'write-failed');
     assert.strictEqual(adapter.value('tarif.speicherStatus'), 'write-failed');
     assert.strictEqual(adapter.value('tarif.speicherCommandEffective'), false);
-    assert.match(adapter.value('tarif.statusText'), /Speicherbefehl nicht geschrieben/);
+    assert.match(adapter.value('tarif.statusText'), /Speicher-Schreiben fehlgeschlagen/);
+    assert.match(adapter.value('tarif.detailStatusText'), /Speicherbefehl nicht geschrieben/);
     assert.doesNotMatch(adapter.value('tarif.statusText'), /Speicher entlädt/);
   }
 
@@ -398,6 +413,7 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
     assert.strictEqual(adapter.value('tarif.speicherFarmDeliveredW'), null);
     assert.strictEqual(adapter.value('tarif.speicherFarmUnservedW'), null);
     assert.doesNotMatch(adapter.value('tarif.statusText'), /Farm-Dispatch/);
+    assert.doesNotMatch(adapter.value('tarif.detailStatusText'), /Farm-Dispatch/);
   }
 
   // 15) Architekturvertrag: TarifVis schreibt nur die Absicht; Finalizer kommt nach StorageControl.

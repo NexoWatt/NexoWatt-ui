@@ -1767,6 +1767,27 @@
       <div id="emsStatus" class="nw-config-list"></div>
     </section>
 
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">NVP-, Speicher- &amp; PV-Regelung</h2>
+        <div class="nw-config-row__actions">
+          <button id="refreshNvpCoordinator" type="button" class="nw-config-btn nw-config-btn--ghost">Aktualisieren</button>
+        </div>
+      </div>
+      <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
+        Vollständige Regelkette für Netzverknüpfungspunkt, Speicher/Farm und verbleibende PV-Abregelung. Diese Diagnose verändert die LIVE-Energieflussdarstellung nicht.
+      </div>
+      <div id="nvpCoordinatorStatus" class="nw-config-grid"></div>
+
+      <div class="nw-config-section__head" style="margin-top:14px;">
+        <h3 class="nw-config-section__title" style="font-size:0.95rem;">Stabilitätslog</h3>
+      </div>
+      <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
+        Begrenzter Ringpuffer der letzten Regelzustände. Damit lassen sich Pendeln, verzögerte Speicherreaktionen, Gates und PV-Eingriffe nachvollziehen.
+      </div>
+      <div id="nvpCoordinatorLog" class="nw-config-list"></div>
+    </section>
+
     
     <section class="nw-config-section">
       <div class="nw-config-section__head">
@@ -1874,6 +1895,7 @@
 </main>
 
 <script src="/static/nw-shell.js"></script>
+<script src="/static/ems-apps-nvp-diagnostics.js"></script>
 <script src="/static/ems-apps.js"></script>
 
 
