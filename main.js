@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:a1a28473ded6109f6c92db7c7ce8d1427f763b0a5232f54e94e2c8ec909b642a
+ * Quell-Hash: sha256:530bc6761ef0225f9350a590221a6163e4582c73b7d6d15d3e4793f35b4e26da
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -23574,7 +23574,13 @@ return res.json(out);
     // "Datenpunkte" gemappt wurden. Daher wird im Subscribe-Loop unten auf die lokalen
     // Adapter-States (namespace + key) zurückgefallen.
     const localUiKeys = [
-      'tarif.statusText',
+      'tarif.statusText', 'tarif.intentStatusText', 'tarif.intentSnapshotAgeMs', 'tarif.intentSnapshotFresh', 'tarif.statusJson',
+      'tarif.speicherIntentW', 'tarif.speicherIntentStatus', 'tarif.speicherIntentGrund',
+      'tarif.speicherRequestW', 'tarif.speicherRequestQuelle', 'tarif.speicherRequestGrund',
+      'tarif.speicherFinalW', 'tarif.speicherFinalQuelle', 'tarif.speicherFinalGrund', 'tarif.speicherTopologie',
+      'tarif.speicherGateStatus', 'tarif.speicherWriteOk', 'tarif.speicherCommandEffective', 'tarif.speicherWriteStatus',
+      'tarif.speicherReadbackW', 'tarif.speicherReadbackAgeMs', 'tarif.speicherReadbackFresh', 'tarif.speicherReadbackStatus',
+      'tarif.speicherStatus', 'tarif.speicherFarmDeliveredW', 'tarif.speicherFarmUnservedW',
       'tarif.state',
       'tarif.preisAktuellEurProKwh',
       'tarif.netFeeEnabled',

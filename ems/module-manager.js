@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:311435f7cfe01dd6861cdb53c210e7ebe6d466a87db19e2a7cbc621b59ba1892
+ * Quell-Hash: sha256:e87c6835a9e72d25adfe14aa66bff7f136f25c2321ece00460194152d138f9b9
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -47,6 +47,7 @@ const { SpeicherRegelungModule } = require('./modules/storage-control');
 const { GridConstraintsModule } = require('./modules/grid-constraints');
 const { PeakShavingModule } = require('./modules/peak-shaving');
 const { TarifVisModule } = require('./modules/tarif-vis');
+const { TariffStatusModule } = require('./modules/tariff-status');
 const { PvForecastModule } = require('./modules/pv-forecast');
 const { ChargingManagementModule } = require('./modules/charging-management');
 const { MultiUseModule } = require('./modules/multi-use');
@@ -461,6 +462,15 @@ class ModuleManager {
             key: 'speicherRegelung',
             instance: new SpeicherRegelungModule(this.adapter, this.dp),
             enabledFn: () => this._licenseAllowsApp('storage'),
+        });
+
+        // Tarif-Statusfinalisierung läuft bewusst NACH der zentralen Speicherregelung.
+        // Erst hier stehen finaler Sollwert, Gate-/Write-Ergebnis und Readback bereit.
+        // Das Modul schreibt keine Hardware und besitzt daher keine zweite Steuerhoheit.
+        this.modules.push({
+            key: 'tariffStatus',
+            instance: new TariffStatusModule(this.adapter, this.dp),
+            enabledFn: () => true,
         });
 
         // MultiUse nutzt ausschließlich den nach EVCS und Speicher verbleibenden

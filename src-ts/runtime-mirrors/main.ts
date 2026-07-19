@@ -21,7 +21,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: 07133775c200b33d40ab031960e6cdf113c545ceb7c7e43857d25c850adf9686
+ * Original-Hash: e69ce944dee9f5c2ddaabfeff683312a2faae83e0a23762fe09c4364ceb5d144
  */
 
 /**
@@ -23862,7 +23862,13 @@ return res.json(out);
     // "Datenpunkte" gemappt wurden. Daher wird im Subscribe-Loop unten auf die lokalen
     // Adapter-States (namespace + key) zurückgefallen.
     const localUiKeys = [
-      'tarif.statusText',
+      'tarif.statusText', 'tarif.intentStatusText', 'tarif.intentSnapshotAgeMs', 'tarif.intentSnapshotFresh', 'tarif.statusJson',
+      'tarif.speicherIntentW', 'tarif.speicherIntentStatus', 'tarif.speicherIntentGrund',
+      'tarif.speicherRequestW', 'tarif.speicherRequestQuelle', 'tarif.speicherRequestGrund',
+      'tarif.speicherFinalW', 'tarif.speicherFinalQuelle', 'tarif.speicherFinalGrund', 'tarif.speicherTopologie',
+      'tarif.speicherGateStatus', 'tarif.speicherWriteOk', 'tarif.speicherCommandEffective', 'tarif.speicherWriteStatus',
+      'tarif.speicherReadbackW', 'tarif.speicherReadbackAgeMs', 'tarif.speicherReadbackFresh', 'tarif.speicherReadbackStatus',
+      'tarif.speicherStatus', 'tarif.speicherFarmDeliveredW', 'tarif.speicherFarmUnservedW',
       'tarif.state',
       'tarif.preisAktuellEurProKwh',
       'tarif.netFeeEnabled',

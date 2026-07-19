@@ -49,6 +49,7 @@ const { SpeicherRegelungModule } = require('./modules/storage-control');
 const { GridConstraintsModule } = require('./modules/grid-constraints');
 const { PeakShavingModule } = require('./modules/peak-shaving');
 const { TarifVisModule } = require('./modules/tarif-vis');
+const { TariffStatusModule } = require('./modules/tariff-status');
 const { PvForecastModule } = require('./modules/pv-forecast');
 const { ChargingManagementModule } = require('./modules/charging-management');
 const { MultiUseModule } = require('./modules/multi-use');
@@ -463,6 +464,15 @@ class ModuleManager {
             key: 'speicherRegelung',
             instance: new SpeicherRegelungModule(this.adapter, this.dp),
             enabledFn: () => this._licenseAllowsApp('storage'),
+        });
+
+        // Tarif-Statusfinalisierung läuft bewusst NACH der zentralen Speicherregelung.
+        // Erst hier stehen finaler Sollwert, Gate-/Write-Ergebnis und Readback bereit.
+        // Das Modul schreibt keine Hardware und besitzt daher keine zweite Steuerhoheit.
+        this.modules.push({
+            key: 'tariffStatus',
+            instance: new TariffStatusModule(this.adapter, this.dp),
+            enabledFn: () => true,
         });
 
         // MultiUse nutzt ausschließlich den nach EVCS und Speicher verbleibenden

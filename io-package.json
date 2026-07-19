@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.126",
+    "version": "0.8.127",
     "news": {
+      "0.8.127": {
+        "de": "Version 0.8.127 RC3: Die Tarifansicht trennt Tarifabsicht, finalen Speicher-Sollwert, Gate-/Write-Ergebnis, Farm-Dispatch und Istwert-Rückmeldung. Laden oder Entladen wird nur noch bei frischem, vertrauenswürdigem Readback bestätigt; angeforderte, wartende, blockierte, fehlgeschlagene, teilweise erfüllte oder veraltete Zustände werden ausdrücklich ausgewiesen. Die exklusive Farm-/Einzel-Steuerhoheit, direkte Richtungswechsel und manuell zugeordnete AppCenter-DPs bleiben unverändert.",
+        "en": "Version 0.8.127 RC3: The tariff view separates tariff intent, final storage target, gate/write result, farm dispatch and measured feedback. Charging or discharging is confirmed only with fresh trusted readback; requested, waiting, blocked, failed, partially delivered or stale states are shown explicitly. Exclusive farm/single-storage authority, direct direction changes and manually assigned AppCenter datapoints remain unchanged."
+      },
       "0.8.126": {
         "de": "Version 0.8.126 RC2: Eine zentrale Speicher-Steuerhoheit wählt exklusiv Einzel-Speicher oder Speicherfarm. MultiUse bleibt reine Policy und arbeitet mit beiden Topologien, ohne die Einzelregelung verdeckt zu aktivieren. Core-Budget, Tarif-SoC, EVCS, Thermik, BHKW/Generator, AI und Energiefluss verwenden dieselbe Topologie; manuelle AppCenter-DPs und alle Safety-Gates bleiben verbindlich. Richtungswechsel erfolgen weiterhin direkt ohne 0-W-Zwischenrunde.",
         "en": "Version 0.8.126 RC2: A central storage authority exclusively selects either single storage or the storage farm. MultiUse remains policy-only and works with both topologies without secretly enabling the single-storage controller. Core budget, tariff SoC, EVCS, thermal control, prime movers, AI and energy flow use the same topology; manual AppCenter datapoints and all safety gates remain authoritative. Direction changes remain direct without an intermediate zero-watt cycle."
@@ -26,10 +30,6 @@
       "0.8.121": {
         "de": "Version 0.8.121: Core-Limits TypeScript Phase 3 führt Snapshot, Reservierungen und Publikation über einen einzigen typisierten Laufzeitstand mit hartem Legacy-Fallback. Dynamisch aktivierte AppCenter-Module werden vor dem ersten Tick zuverlässig initialisiert. §14a legt alle Diagnose-States vor dem Schreiben an, hinterlässt beim Deaktivieren keine alten Caps und erzeugt bei inaktivem Signal keinen Missing-Object-Logspam mehr.",
         "en": "Version 0.8.121: Core-Limits TypeScript Phase 3 uses one typed runtime state for snapshot, reservations and publication with a strict legacy fallback. Dynamically enabled AppCenter modules are initialized before their first tick. §14a creates all diagnostic states before writes, clears stale caps on disable and no longer produces missing-object log spam while inactive."
-      },
-      "0.8.120": {
-        "de": "Version 0.8.120: TypeScript Core-Limits Phase 2 typisiert die Messwert-/Quellenübergabe, zentrale Grant-/Reservierungsreihenfolge, Restbudgetmutation und Budget-State-Publikation. Der produktive Pfad wird nur bei Feldparität verwendet; bei Abweichung bleibt der bisherige JavaScript-Fallback aktiv.",
-        "en": "Version 0.8.120: TypeScript Core-Limits Phase 2 types measurement/source handover, central grant/reservation sequencing, remaining-budget mutation and budget state publication. The productive path is used only with field parity; otherwise the existing JavaScript fallback remains active."
       }
     },
     "title": "NexoWatt UI",

@@ -1,3 +1,14 @@
+## 0.8.127 - 2026-07-19
+
+- EMS-Stabilisierungsbaustein 3 (RC3): Tarifabsicht, zentraler Speicher-Resolver, Safety-/Authority-Gates, Hardware-Write, Farm-Dispatch und Istwert-Readback werden als getrennte Stufen ausgewiesen. Die Tarifansicht übernimmt nicht mehr ihre eigene Strategieabsicht als vermeintlich ausgeführten Speicherzustand.
+- Neue nachgelagerte `TariffStatusModule`-Auswertung läuft erst nach der Speicherregelung und besitzt keine Schreibhoheit. `Speicher lädt` oder `Speicher entlädt` wird nur noch bei frischem, vertrauenswürdigem Istwert mit passender Richtung gemeldet; andernfalls zeigt der Status ausdrücklich `angefordert`, `wartet`, `blockiert`, `Schreibfehler`, `Rückmeldung fehlt/veraltet` oder einen Richtungswiderspruch.
+- Tarifstatus-Freshness: Ein alter `_tarifVis`-Snapshot darf keine veraltete Tarifabsicht weiter anzeigen. Tarifwunsch und tatsächlich wirksamer Speicherbefehl bleiben auch dann getrennt, wenn Eigenverbrauch, MultiUse, Peak-Shaving oder eine Sicherheitsgrenze den finalen Sollwert verändert.
+- Speicherfarm-Diagnose: Nur ein frischer Farm-Dispatch, der zum aktuellen finalen Sollwert gehört, wird als Bestätigung ausgewertet. Gelieferte und nicht bediente Farmleistung sowie Authority-Sperren werden sichtbar, ohne eine alte Verteilung als aktuellen Erfolg auszugeben.
+- Neue Diagnose-States unter `tarif.*` veröffentlichen Intent, Resolver-Request, finalen Sollwert, Topologie, Gate-/Write-Ergebnis, Readback-Freshness, Farm-Teilerfüllung und den vollständigen Statusvertrag als JSON. Sie sind über die bestehende State-API/SSE verfügbar.
+- Manuelle AppCenter-DP-Zuordnungen, der exklusive Farm-/Einzelwriter aus 0.8.126 und der direkte Richtungswechsel aus 0.8.125 bleiben unverändert. Das neue Modul führt keine Hardware-Writes aus und umgeht keine Owner-, Authority-, §14a-, Netz-, Geräte- oder Safety-Gates.
+- Neue Regression `test:tariff-storage-status-truth` prüft bestätigtes Laden/Entladen, Readback-Verzögerung und -Ausfall, Richtungswiderspruch, 0-W-Wartezustand, Gate-Sperre, Write-Fehler, Farm-Teilerfüllung, veraltete Tarif-Snapshots und die Modulreihenfolge nach der Speicherregelung.
+- Service-Worker-Cache auf `nexowatt-cache-v429` erhöht.
+
 ## 0.8.126 - 2026-07-19
 
 - EMS-Stabilisierungsbaustein 2 (RC2): Eine zentrale Speicher-Steuerhoheit wählt pro Regelzyklus exakt eine Ausgangstopologie `farm`, `single` oder `none`. Eine aktive beschreibbare Farm hat Vorrang; eine reine Mess-Farm verdrängt den Einzelspeicher nicht. Bei Farmfehlern gibt es keinen versteckten Parallel- oder Einzel-Fallback.

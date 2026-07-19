@@ -23576,7 +23576,13 @@ return res.json(out);
     // "Datenpunkte" gemappt wurden. Daher wird im Subscribe-Loop unten auf die lokalen
     // Adapter-States (namespace + key) zurückgefallen.
     const localUiKeys = [
-      'tarif.statusText',
+      'tarif.statusText', 'tarif.intentStatusText', 'tarif.intentSnapshotAgeMs', 'tarif.intentSnapshotFresh', 'tarif.statusJson',
+      'tarif.speicherIntentW', 'tarif.speicherIntentStatus', 'tarif.speicherIntentGrund',
+      'tarif.speicherRequestW', 'tarif.speicherRequestQuelle', 'tarif.speicherRequestGrund',
+      'tarif.speicherFinalW', 'tarif.speicherFinalQuelle', 'tarif.speicherFinalGrund', 'tarif.speicherTopologie',
+      'tarif.speicherGateStatus', 'tarif.speicherWriteOk', 'tarif.speicherCommandEffective', 'tarif.speicherWriteStatus',
+      'tarif.speicherReadbackW', 'tarif.speicherReadbackAgeMs', 'tarif.speicherReadbackFresh', 'tarif.speicherReadbackStatus',
+      'tarif.speicherStatus', 'tarif.speicherFarmDeliveredW', 'tarif.speicherFarmUnservedW',
       'tarif.state',
       'tarif.preisAktuellEurProKwh',
       'tarif.netFeeEnabled',

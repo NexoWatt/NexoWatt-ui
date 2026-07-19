@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/tarif-vis.ts
- * Quell-Hash: sha256:870cc85327b1fc3eeb3db2ba9c1c8d90b6d2e24e2f20c7f35be4c6e0784cef4d
+ * Quell-Hash: sha256:ad01bdaabe9cef3039bbf94f4e4925bbe3d936a2695745ce4ec295e6a96ece24
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -163,7 +163,11 @@ class TarifVisModule extends BaseModule {
         await mk('tarif.speicherSollW', 'Tarif Sollleistung Speicher (W, berechnet)', 'number', 'value.power');
         await mk('tarif.netzLadenErlaubt', 'Netzladung erlaubt (Tarif-Logik)', 'boolean', 'indicator');
         await mk('tarif.entladenErlaubt', 'Entladen erlaubt (Tarif-Logik)', 'boolean', 'indicator');
-        await mk('tarif.statusText', 'Tarif Status (VIS)', 'string', 'text');
+        await mk('tarif.statusText', 'Tarif Status – tatsächliche Steuerkette', 'string', 'text');
+        await mk('tarif.intentStatusText', 'Tarif Absicht – vor Resolver/Gates', 'string', 'text');
+        await mk('tarif.speicherIntentW', 'Tarif Speicher-Absicht (W)', 'number', 'value.power');
+        await mk('tarif.speicherIntentStatus', 'Tarif Speicher-Absicht Status', 'string', 'text');
+        await mk('tarif.speicherIntentGrund', 'Tarif Speicher-Absicht Grund', 'string', 'text');
         await mk('tarif.netFeeEnabled', 'Zeitvariables Netzentgelt aktiv (VIS)', 'boolean', 'indicator');
         await mk('tarif.netFeeMode', 'Netzentgelt Modus (NT/Standard/HT)', 'string', 'text');
 
@@ -1599,113 +1603,88 @@ class TarifVisModule extends BaseModule {
             await this._setIfChanged('tarif.negativpreisStatus', gridImportPreferred ? 'active_grid_import_preferred' : (nextNegativeFromIso ? 'scheduled' : 'inactive'));
 
             
-// Kurz-Status für die VIS (Live-Ansicht)
-// Ziel: Kunde sieht sofort, ob Tarif gerade Laden/Entladen triggert.
-let statusText = '';
-const netFeeOverlayUi = !!(netFeeActive && (netFeeMode === 'NT' || netFeeMode === 'HT'));
+// Tarif-Absicht für Diagnose und nachgelagerte Statusfinalisierung.
+// Wichtig: Dieses frühe Modul kennt weder den finalen Resolver-Sollwert noch
+// Gate-, Write- oder Readback-Ergebnis. Deshalb darf es nicht mehr behaupten,
+// der Speicher lade oder entlade bereits tatsächlich.
+let intentStatusText = '';
+let storageIntentStatus = 'inactive';
+let storageIntentReason = 'Tarif und zeitvariables Netzentgelt sind aus';
+const intentDirection = Number.isFinite(speicherSollW)
+  ? (speicherSollW < 0 ? 'charge' : (speicherSollW > 0 ? 'discharge' : 'idle'))
+  : 'idle';
 
 if (aktivEff || netFeeActive) {
   const priceCurTxt = (preisAktuellOk && Number.isFinite(preisAktuell))
     ? `${preisAktuell.toFixed(3)} €/kWh`
     : '—';
-
-  const storageCharging = Number.isFinite(speicherSollW) && speicherSollW < 0;
-  const storageDischarging = Number.isFinite(speicherSollW) && speicherSollW > 0;
-
-  // Human readable state text (avoid ReferenceError if state is not mapped)
   const tarifStateTxt = (tarifState === 'guenstig')
     ? 'günstig'
-    : (tarifState === 'neutral')
+    : (tarifState === 'neutral'
       ? 'neutral'
-      : (tarifState === 'teuer')
+      : (tarifState === 'teuer'
         ? 'teuer'
-        : (tarifState === 'aus')
-          ? 'aus'
-          : 'unbekannt';
-
-  // Make tariff mode instantly visible (Manuell/Automatik)
-  const modeTxt = (modusInt === 2) ? 'Automatik' : (modusInt === 1) ? 'Manuell' : '';
+        : (tarifState === 'aus' ? 'aus' : 'unbekannt')));
+  const modeTxt = (modusInt === 2) ? 'Automatik' : (modusInt === 1 ? 'Manuell' : '');
   const baseTarif = aktivEff
     ? (modeTxt
-        ? `Tarif ${modeTxt} ${tarifStateTxt} (${priceCurTxt})`
-        : `Tarif ${tarifStateTxt} (${priceCurTxt})`)
+      ? `Tarif ${modeTxt} ${tarifStateTxt} (${priceCurTxt})`
+      : `Tarif ${tarifStateTxt} (${priceCurTxt})`)
     : 'Tarif aus';
-
-  // Zeitvariables Netzentgelt (HT/NT) als Overlay:
-  // - NT: EVCS freigegeben + Speicher darf (netto) laden
-  // - HT: Speicher läuft in Eigenverbrauchsoptimierung, EVCS Netzladen gesperrt (PV möglich)
-  // - Standard (ST): keine Sperre/Erzwingung → dynamischer Tarif wie bisher
   const base = netFeeActive ? `Netzentgelt ${netFeeMode} | ${baseTarif}` : baseTarif;
+  const parts = [];
 
-  if (gridImportPreferred) {
-    const parts = [];
-    parts.push('Negativpreis aktiv');
-    if (storageCharging) parts.push('Speicher Netzladen');
-    else if (storageFullHold) parts.push('Speicher voll (ruht)');
-    parts.push('EVCS/Verbraucher Netzbezug freigegeben');
-    parts.push('Speicherentladung gesperrt');
-    statusText = `${base}: ${parts.join(' + ')}`;
-  } else if (netFeeOverlayUi) {
-    if (netFeeMode === 'NT') {
-      const parts = [];
-      if (storageCharging) parts.push('Speicher lädt');
-      else if (storageFullHold) parts.push('Speicher voll (ruht)');
-      else parts.push('Speicher: kein Netzladen');
-      parts.push('EVCS freigegeben');
-      statusText = `${base}: ${parts.join(' + ')}`;
-    } else {
-      // HT
-      const parts = [];
-      parts.push('Speicher: Eigenverbrauch');
-      parts.push('EVCS Netzladen gesperrt (PV möglich)');
-      statusText = `${base}: ${parts.join(' + ')}`;
-    }
-  } else if (tarifState === 'guenstig') {
-    if (prioritaet === 1) {
-      if (storageCharging) {
-        statusText = `${base}: Speicher lädt`;
-      } else if (storageFullHold) {
-        statusText = `${base}: Speicher voll – ruht`;
-      } else if (storageChargeBlockedByTime) {
-        // Tagsüber: kein Speicher-Netzladen (Policy) → normaler Eigenverbrauchsmodus.
-        statusText = `${base}: Eigenverbrauchsoptimierung aktiv (tagsüber)`;
-      } else {
-        statusText = `${base}: keine Speicher-Ladung`;
-      }
-    } else if (prioritaet === 3) {
-      statusText = gridChargeAllowed ? `${base}: EVCS freigegeben` : `${base}: EVCS gesperrt`;
-    } else {
-      const parts = [];
-      if (storageCharging) parts.push('Speicher lädt');
-      else if (storageFullHold) parts.push('Speicher voll (ruht)');
-      else if (storageChargeBlockedByTime) parts.push('Eigenverbrauchsoptimierung aktiv (tagsüber)');
-      parts.push(gridChargeAllowed ? 'EVCS freigegeben' : 'EVCS gesperrt');
-      statusText = `${base}: ${parts.join(' + ')}`;
-    }
-  } else if (tarifState === 'teuer') {
-    if (prioritaet === 1) {
-      statusText = storageDischarging ? `${base}: Speicher entlädt` : `${base}: keine Speicher-Entladung`;
-    } else if (prioritaet === 3) {
-      statusText = `${base}: EVCS Netzladen gesperrt (PV möglich)`;
-    } else {
-      const parts = [];
-      if (storageDischarging) parts.push('Speicher entlädt');
-      parts.push('EVCS Netzladen gesperrt (PV möglich)');
-      statusText = `${base}: ${parts.join(' + ')}`;
-    }
+  if (intentDirection === 'charge') {
+    storageIntentStatus = 'charge';
+    storageIntentReason = gridImportPreferred
+      ? 'Negativpreis aktiv – Speicher-Netzladen gewünscht'
+      : (netFeeMode === 'NT'
+        ? 'NT – Speicherladen gewünscht'
+        : 'Tarif-/Netzentgelt-Policy fordert Laden');
+    parts.push(`Tarifwunsch Speicher laden (${Math.abs(Math.round(speicherSollW))} W)`);
+  } else if (intentDirection === 'discharge') {
+    storageIntentStatus = 'discharge';
+    storageIntentReason = (tarifState === 'teuer')
+      ? 'Teurer Tarif – Speicherentladung gewünscht'
+      : 'Tarif-/Netzentgelt-Policy fordert Entladen';
+    parts.push(`Tarifwunsch Speicher entladen (${Math.abs(Math.round(speicherSollW))} W)`);
   } else {
-    // neutral / unbekannt / sonstiges
-    statusText = storageDischarging
-      ? `${base}: Speicher entlädt`
-      : `${base}: normal`;
+    storageIntentStatus = 'wait';
+    if (dynamicTariffStale && aktivEff && !netFeeActive) {
+      storageIntentReason = 'Tarifdaten sind zu alt – keine neue Tarifaktion';
+    } else if (!storageWriterAvailable) {
+      storageIntentReason = String(storageAuthority.reason || 'Kein beschreibbarer Speicher-Ausgang');
+    } else if (storageFullHold) {
+      storageIntentReason = 'SoC-Ladeziel erreicht';
+    } else if (storageChargeBlockedByTime) {
+      storageIntentReason = storageChargeWindowLabel
+        ? `Speicher-Netzladen außerhalb des Zeitfensters (${storageChargeWindowLabel})`
+        : 'Speicher-Netzladen außerhalb des Zeitfensters';
+    } else if (netFeeMode === 'HT') {
+      storageIntentReason = 'HT – Eigenverbrauch und Entladung bleiben freigegeben';
+    } else if (gridImportPreferred) {
+      storageIntentReason = 'Negativpreis aktiv – Speicher wartet';
+    } else {
+      storageIntentReason = 'Tarif-/Netzentgelt-Policy fordert Warten';
+    }
+    parts.push(`Tarifwunsch Speicher warten (${storageIntentReason})`);
   }
+
+  parts.push(gridChargeAllowed ? 'EVCS Netzladen freigegeben' : 'EVCS Netzladen gesperrt (PV möglich)');
+  if (!dischargeAllowed) parts.push('Speicherentladung durch Tarif-Policy gesperrt');
+  if (!storageWriterAvailable) parts.push(`kein beschreibbarer Speicher-Ausgang (${String(storageAuthority.reason || 'unbekannt')})`);
+  intentStatusText = `${base}: ${parts.join(' + ')}`;
 }
 
-await this._setIfChanged('tarif.statusText', statusText);
+await this._setIfChanged('tarif.intentStatusText', intentStatusText);
+await this._setIfChanged('tarif.speicherIntentW', Number.isFinite(speicherSollW) ? Math.round(speicherSollW) : 0);
+await this._setIfChanged('tarif.speicherIntentStatus', storageIntentStatus);
+await this._setIfChanged('tarif.speicherIntentGrund', storageIntentReason);
             await this._setIfChanged('tarif.ladeparkLimitW', limitW);
 
             // Für andere Module (synchron) bereithalten
             this.adapter._tarifVis = {
+                ts: Date.now(),
                 // "aktiv" bedeutet: dieses Modul liefert eine wirksame Policy (Tarif ODER Netzentgelt).
                 // Der dynamische Tarif selbst kann separat über "tarifAktiv" geprüft werden.
                 aktiv: !!(aktivEff || netFeeEff),
@@ -1747,6 +1726,9 @@ await this._setIfChanged('tarif.statusText', statusText);
                 priceDataStatus,
                 dynamicTariffStale,
                 speicherSollW,
+                intentStatusText,
+                storageIntentStatus,
+                storageIntentReason,
                 // SoC-aware charging (cheap window)
                 storageSocPct,
                 socStartChargePct,
