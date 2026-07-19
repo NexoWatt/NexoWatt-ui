@@ -4,7 +4,7 @@
  * Regressionstest 0.8.81: Speicherregelung, MultiUse und Speicherfarm bleiben sauber getrennt.
  * - Speicherregelung aktiv => reine Eigenverbrauchsoptimierung.
  * - MultiUse aktiv => fuehrt SoC-Zonen, Reserve, LSK/Peak-Shaving und Komfortkopplungen.
- * - Speicherfarm aktiv => startet die Basis-Eigenverbrauchsoptimierung und verteilt den fertigen Sollwert.
+ * - Beschreibbare Speicherfarm => wird als exklusive Hardwaretopologie ausgewählt.
  * - 0-W-Limits in der Farm bleiben bewusste Richtungssperren; leer bleibt unbegrenzt.
  */
 const fs = require('fs');
@@ -34,10 +34,12 @@ for (const file of [
   'src-ts/runtime-mirrors/ems/modules/storage-control.ts',
   'ems/modules/storage-control.js',
 ]) {
-  must(file, 'const enabled = cfgEnabled || autoTarifEnabled || multiUseAppPolicyActive || farmAppPolicyActive;', 'Farm startet die Basis-Eigenverbrauchsoptimierung');
-  must(file, 'Eine aktiv konfigurierte Speicherfarm startet dieselbe Basisregelung', 'Speicherfarm-Kommentar Rollenverteilung');
+  must(file, 'const enabled = !!storageAuthorityEarly.writerActive;', 'zentrale Speicher-Steuerhoheit aktiviert genau einen Writer');
+  must(file, 'Tarif, MultiUse, Peak-Shaving und Eigenverbrauch sind ausschliesslich', 'Policies aktivieren keinen Hardwarewriter');
+  must(file, "const farmEnabledEarly = storageAuthorityEarly.selectedTopology === 'farm';", 'Farm wird exklusiv über die Topologie ausgewählt');
   must(file, "await this._setIfChanged('speicher.regelung.aktivAutoMultiUse', multiUseAppPolicyActive);", 'MultiUse Auto-Diagnose');
-  must(file, "await this._setIfChanged('speicher.regelung.aktivAutoSpeicherfarm', farmAppPolicyActive);", 'Farm-Autostart Diagnose');
+  must(file, "await this._setIfChanged('speicher.regelung.aktivAutoSpeicherfarm', farmAppPolicyActive);", 'Farm-Dispatch Diagnose');
+  must(file, "await this._setIfChanged('speicher.regelung.topologie', String(storageAuthorityEarly.selectedTopology || 'none'));", 'Topologie-Diagnose');
   must(file, 'const storageOnlyPolicyActive = !multiUsePolicyActive;', 'Storage-only Policy-Schicht');
   must(file, 'const multiUseOwnsZones = !!multiUsePolicyActive;', 'SoC-Zonen gehoeren MultiUse');
   must(file, 'const reserveEnabled = multiUseOwnsZones && !!cfg.reserveEnabled;', 'Reserve nur MultiUse');
@@ -54,6 +56,8 @@ for (const file of [
 ]) {
   must(file, 'if (!nativeObj.enableMultiUse || mu.enabled !== true)', 'MultiUse wirkt nur bei aktiver App und Policy');
   must(file, 'st.multiUsePolicyActive = true;', 'aktive MultiUse-Policy wird markiert');
+  mustNot(file, 'nativeObj.enableStorageControl = true;', 'MultiUse darf die Speicherregelungs-App nicht heimlich aktivieren');
+  must(file, '_nwGetStorageControlAuthority()', 'zentrale Speicher-Steuerhoheit');
   must(file, 'Reserve/LSK gelten nur, wenn MultiUse aktiv führt', 'Farm-Floor folgt Rollenmodell');
   must(file, 'const reserveEnabled = multiUsePolicyActive && !!storageCfg.reserveEnabled;', 'Farm-Reserve nur MultiUse');
   must(file, 'const lskEnabled = !!(multiUsePolicyActive && storageCfg.lskDischargeEnabled !== false && storageCfg.lskEnabled !== false);', 'Farm-LSK nur MultiUse');
@@ -66,4 +70,4 @@ must('src-ts/runtime-executables/main.ts', 'if (Number.isFinite(v) && v >= 0) re
 must('src-ts/runtime-executables/www/ems-apps.ts', 'Leer = unbegrenzt, 0 W = diese Richtung sperren', 'UI-Hinweis fuer 0-W-Sperre');
 must('www/ems-apps.js', 'Leer = unbegrenzt, 0 W = diese Richtung sperren', 'Runtime-UI-Hinweis fuer 0-W-Sperre');
 
-console.log('[storage-control-app-separation] OK: Einzel-Speicher, MultiUse, Speicherfarm-Basisregelung und 0-W-Limits sind sauber getrennt.');
+console.log('[storage-control-app-separation] OK: Policies, Einzel-Speicher, Speicherfarm und 0-W-Limits sind über eine exklusive Steuerhoheit getrennt.');

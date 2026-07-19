@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e96bda7114da58f3a598084c5e92182987b494557d28bb57437dd20d1883fc25
+ * Original-Hash: 08402aa0dad81f442ee2dc29cbf1ee766bb49c14f322e54095662d6fa2642243
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-mapping.ts
- * Quell-Hash: sha256:a7e7ae50160b518fdd1f77aa85442bc8164c8bdfb71f61b710e4831114de263c
+ * Quell-Hash: sha256:27f79e527013c988e406ae5b4a6e2aacd95d55ac593882822c926704ddaffbc7
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -82,8 +82,14 @@ class SpeicherMappingModule extends BaseModule {
         await this._upsertFromConfig();
     }
     async tick() {
-        // Nur Diagnose: aktuellen SoC-Wert spiegeln (wenn vorhanden)
-        const enabled = !!this.adapter.config.enableStorageControl;
+        // Nur Diagnose: Einzel-Mapping ist genau dann der aktive Ausgang, wenn
+        // die zentrale Speicher-Steuerhoheit `single` ausgewaehlt hat. Die DPs
+        // bleiben trotzdem registriert, damit ein spaeterer Topologiewechsel ohne
+        // Verlust der manuellen AppCenter-Zuordnung moeglich ist.
+        const authority = (this.adapter && typeof this.adapter._nwGetStorageControlAuthority === 'function')
+            ? this.adapter._nwGetStorageControlAuthority()
+            : { selectedTopology: this.adapter.config.enableStorageControl === true ? 'single' : 'none' };
+        const enabled = String(authority.selectedTopology || 'none') === 'single';
 
         await this._setIfChanged('speicher.mapping.aktiv', enabled);
 
@@ -333,16 +339,20 @@ class SpeicherMappingModule extends BaseModule {
 
         const feneconGridControlEnabled = storage.feneconGridControlEnabled;
         const feneconAcMode = storage.feneconAcMode;
-        let farmEnabled = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
+        let farmEnabled = false;
         try {
-            if (this.adapter && typeof this.adapter._nwGetStorageFarmRuntimeInfo === 'function') {
+            if (this.adapter && typeof this.adapter._nwGetStorageControlAuthority === 'function') {
+                const authority = this.adapter._nwGetStorageControlAuthority();
+                farmEnabled = String(authority && authority.selectedTopology || 'none') === 'farm';
+            } else if (this.adapter && typeof this.adapter._nwGetStorageFarmRuntimeInfo === 'function') {
                 const farmInfo = this.adapter._nwGetStorageFarmRuntimeInfo();
-                // Nur eine tatsächlich beschreibbare Farm ersetzt den Einzel-Speicher-
-                // Zielpfad. Reine Mess-/Status-Farmen dürfen auch die Mappingprüfung
-                // (z. B. FENECON-Hybrid) nicht als vermeintlicher Aktor umgehen.
+                // Alt-Runtime-Fallback: Nur eine tatsächlich beschreibbare Farm ersetzt
+                // den Einzel-Speicher-Zielpfad. Reine Mess-/Status-Farmen nicht.
                 farmEnabled = (farmInfo && typeof farmInfo.dispatchActive === 'boolean')
                     ? farmInfo.dispatchActive
-                    : !!(farmInfo && farmInfo.active);
+                    : false;
+            } else {
+                farmEnabled = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
             }
         } catch {
             // Legacy-Fallback bleibt erhalten.

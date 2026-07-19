@@ -35,8 +35,14 @@ class SpeicherMappingModule extends BaseModule {
         await this._upsertFromConfig();
     }
     async tick() {
-        // Nur Diagnose: aktuellen SoC-Wert spiegeln (wenn vorhanden)
-        const enabled = !!this.adapter.config.enableStorageControl;
+        // Nur Diagnose: Einzel-Mapping ist genau dann der aktive Ausgang, wenn
+        // die zentrale Speicher-Steuerhoheit `single` ausgewaehlt hat. Die DPs
+        // bleiben trotzdem registriert, damit ein spaeterer Topologiewechsel ohne
+        // Verlust der manuellen AppCenter-Zuordnung moeglich ist.
+        const authority = (this.adapter && typeof this.adapter._nwGetStorageControlAuthority === 'function')
+            ? this.adapter._nwGetStorageControlAuthority()
+            : { selectedTopology: this.adapter.config.enableStorageControl === true ? 'single' : 'none' };
+        const enabled = String(authority.selectedTopology || 'none') === 'single';
 
         await this._setIfChanged('speicher.mapping.aktiv', enabled);
 
@@ -220,16 +226,20 @@ class SpeicherMappingModule extends BaseModule {
 
         const feneconGridControlEnabled = storage.feneconGridControlEnabled;
         const feneconAcMode = storage.feneconAcMode;
-        let farmEnabled = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
+        let farmEnabled = false;
         try {
-            if (this.adapter && typeof this.adapter._nwGetStorageFarmRuntimeInfo === 'function') {
+            if (this.adapter && typeof this.adapter._nwGetStorageControlAuthority === 'function') {
+                const authority = this.adapter._nwGetStorageControlAuthority();
+                farmEnabled = String(authority && authority.selectedTopology || 'none') === 'farm';
+            } else if (this.adapter && typeof this.adapter._nwGetStorageFarmRuntimeInfo === 'function') {
                 const farmInfo = this.adapter._nwGetStorageFarmRuntimeInfo();
-                // Nur eine tatsächlich beschreibbare Farm ersetzt den Einzel-Speicher-
-                // Zielpfad. Reine Mess-/Status-Farmen dürfen auch die Mappingprüfung
-                // (z. B. FENECON-Hybrid) nicht als vermeintlicher Aktor umgehen.
+                // Alt-Runtime-Fallback: Nur eine tatsächlich beschreibbare Farm ersetzt
+                // den Einzel-Speicher-Zielpfad. Reine Mess-/Status-Farmen nicht.
                 farmEnabled = (farmInfo && typeof farmInfo.dispatchActive === 'boolean')
                     ? farmInfo.dispatchActive
-                    : !!(farmInfo && farmInfo.active);
+                    : false;
+            } else {
+                farmEnabled = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
             }
         } catch {
             // Legacy-Fallback bleibt erhalten.

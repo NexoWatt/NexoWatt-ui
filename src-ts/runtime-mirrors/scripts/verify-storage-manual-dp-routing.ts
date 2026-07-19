@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 7c5f71a440fd51842f5591e40107bddbe07c3bd57f4c7e914fd78b36cc2998fc
+ * Original-Hash: 30482cecd474f429845c0cfd70d0bd70bddfd65a6216ce7237166d0169139020
  */
 
 /**
@@ -328,6 +328,7 @@ async function verifySingleStorageFallback() {
   let farmCalls = 0;
   const adapter = {
     config: {
+      enableStorageControl: true,
       storage: {
         controlMode: 'targetPower',
         // Direkte Altstruktur muss weiterhin exakt in st.* registriert werden.

@@ -190,13 +190,14 @@ Module._load = function patchedLoad(request, parent, isMain) {
     assert.ok(blockedDiag.results.every((row) => row.authorityBlocked === true), 'Diagnose muss den Gate-Block pro Speicher sichtbar machen');
     assert.ok(blockedDiag.results.every((row) => Array.isArray(row.blockedByOwners) && row.blockedByOwners.includes('safety.test-owner')));
 
-    // Der Speicherregler muss die aktive Farm als Basis-Eigenverbrauchspfad
-    // automatisch starten, ohne den Einzel-Speicher-App-Haken zu benoetigen.
+    // Der Speicherregler muss die aktive Farm als exklusive Schreibtopologie
+    // auswählen, ohne den Einzel-Speicher-App-Haken zu benoetigen.
     const storageSource = require('fs').readFileSync(path.join(__dirname, '..', 'src-ts/runtime-executables/ems/modules/storage-control.ts'), 'utf8');
-    assert.ok(storageSource.includes('const enabled = cfgEnabled || autoTarifEnabled || multiUseAppPolicyActive || farmAppPolicyActive;'));
+    assert.ok(storageSource.includes('const enabled = !!storageAuthorityEarly.writerActive;'));
+    assert.ok(storageSource.includes("const farmEnabledEarly = storageAuthorityEarly.selectedTopology === 'farm';"));
     assert.ok(storageSource.includes("aktivAutoSpeicherfarm', farmAppPolicyActive"));
 
-    console.log('[storage-farm-dispatch-recovery] OK: Farm-Autostart, Status-Refresh, direkter Richtungswechsel und stabile Hardwarezuordnung schreiben die zugeordneten Sollwerte.');
+    console.log('[storage-farm-dispatch-recovery] OK: Farm-Steuerhoheit, Status-Refresh, direkter Richtungswechsel und stabile Hardwarezuordnung schreiben die zugeordneten Sollwerte.');
   } finally {
     Module._load = originalLoad;
   }

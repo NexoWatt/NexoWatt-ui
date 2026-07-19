@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/multi-use.ts
- * Quell-Hash: sha256:639c49fd3a92373a86e027c7a660a35fa8731a0c34dbb7ab54e7b18a40110d88
+ * Quell-Hash: sha256:c5e332af1ba16116fc779687079b960e6ee169225250e0d43a515cfa1cfcec2d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -192,6 +192,7 @@ class MultiUseModule extends BaseModule {
   }
 
   async _seedLastFromStates() {
+    const legacyConsumersEnabled = this._legacyConsumersEnabled();
     for (const consumer of (legacyConsumersEnabled ? this._consumers : [])) {
       const base = `multiUse.consumers.${consumer.id}`;
       const read = (suffix) => this.adapter.getStateAsync(`${base}.${suffix}`).catch(() => null);

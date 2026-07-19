@@ -5246,6 +5246,8 @@ class ChargingManagementModule extends BaseModule {
         const evPriorityRequested = !!(feneconEvPriorityActive && evPriorityWallboxes.length > 0);
         let evPriorityStorageYieldW = 0;
         let evPriorityStorageSource = '';
+        let storageFlowTopology = 'none';
+        let storageFlowMeasurementSource = '';
         let evPriorityLimitedWallboxes = 0;
         let evPriorityStarvedW = 0;
         let evPriorityPendingW = 0;
@@ -5398,13 +5400,54 @@ class ChargingManagementModule extends BaseModule {
                 // ignore
             }
 
-            const battSignedW = getFirstDpNumber(['st.batteryPowerW', 'ps.batteryW']);
-            const storageChargeNowW = (typeof battSignedW === 'number' && Number.isFinite(battSignedW))
-                ? Math.max(0, -battSignedW)
-                : 0;
-            const storageDischargeNowW = (typeof battSignedW === 'number' && Number.isFinite(battSignedW))
-                ? Math.max(0, battSignedW)
-                : 0;
+            // EV-Prioritaet und PV-Rekonstruktion muessen dieselbe zentrale
+            // Speichertopologie wie Speicherregler und Core-Budget verwenden.
+            // Ein Peak-Shaving- oder alter Einzel-DP darf bei ausgewaehlter Farm
+            // keine vermeintliche Speicherladung erzeugen.
+            const storageAuthority = (this.adapter && typeof this.adapter._nwGetStorageControlAuthority === 'function')
+                ? this.adapter._nwGetStorageControlAuthority()
+                : {
+                    selectedTopology: (this.adapter && this.adapter.config && this.adapter.config.enableStorageControl === true) ? 'single' : 'none',
+                    writerActive: !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageControl === true),
+                    reason: 'charging-management-legacy-fallback',
+                };
+            storageFlowTopology = String(storageAuthority.selectedTopology || 'none');
+            const storageFlowMaxAgeMs = Math.max(15000, clamp(num(cfg.centralBudgetMaxAgeSec, 30), 5, 120) * 1000);
+            let storageChargeNowW = 0;
+            let storageDischargeNowW = 0;
+            let centralStorageFlowUsed = false;
+            try {
+                const flow = (this.adapter && typeof this.adapter._nwResolveBatteryFlowFromCache === 'function')
+                    ? this.adapter._nwResolveBatteryFlowFromCache({ maxAgeMs: storageFlowMaxAgeMs, deadbandW: 25 })
+                    : null;
+                if (flow && typeof flow === 'object') {
+                    centralStorageFlowUsed = true;
+                    storageChargeNowW = Math.max(0, Number(flow.chargeW) || 0);
+                    storageDischargeNowW = Math.max(0, Number(flow.dischargeW) || 0);
+                    storageFlowMeasurementSource = String(flow.src || 'central-storage-flow');
+                }
+            } catch {
+                centralStorageFlowUsed = false;
+            }
+
+            if (!centralStorageFlowUsed && storageFlowTopology === 'farm') {
+                storageChargeNowW = Math.max(0, Number(this._getAdapterNumberFromCache('storageFarm.totalChargePowerW', 0)) || 0);
+                storageDischargeNowW = Math.max(0, Number(this._getAdapterNumberFromCache('storageFarm.totalDischargePowerW', 0)) || 0);
+                storageFlowMeasurementSource = 'storage-farm-fallback';
+            } else if (!centralStorageFlowUsed && storageFlowTopology === 'single') {
+                storageChargeNowW = Math.max(0, Number(this._getAdapterNumberFromCache('storageChargePower', 0)) || 0);
+                storageDischargeNowW = Math.max(0, Number(this._getAdapterNumberFromCache('storageDischargePower', 0)) || 0);
+                const battSignedW = getFirstDpNumber(['st.batteryPowerW']);
+                if (typeof battSignedW === 'number' && Number.isFinite(battSignedW)) {
+                    storageChargeNowW = battSignedW < -25 ? Math.max(storageChargeNowW, -battSignedW) : storageChargeNowW;
+                    storageDischargeNowW = battSignedW > 25 ? Math.max(storageDischargeNowW, battSignedW) : storageDischargeNowW;
+                    if (battSignedW < -25) storageDischargeNowW = 0;
+                    if (battSignedW > 25) storageChargeNowW = 0;
+                }
+                storageFlowMeasurementSource = 'single-storage-fallback';
+            } else if (!centralStorageFlowUsed) {
+                storageFlowMeasurementSource = 'storage-none';
+            }
 
             if (evPriorityRequested && storageChargeNowW > 0) {
                 try {
@@ -5807,6 +5850,8 @@ if (components.length) {
                 pvBudgetLocalEstimateW: Math.round(Number(pvBudgetLocalEstimateWState) || 0),
                 pvBudgetMismatchW: Math.round(Number(pvBudgetMismatchWState) || 0),
                 evPriorityStorageYieldW: Math.round(evPriorityStorageYieldW || 0),
+                storageFlowTopology: String(storageFlowTopology || 'none'),
+                storageFlowMeasurementSource: String(storageFlowMeasurementSource || ''),
                 components,
             };
         } else if (budgetMode === 'static') {

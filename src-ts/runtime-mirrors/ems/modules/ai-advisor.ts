@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: f3588d9ed9f44677e37280658bc83eadfc6f0fab1894f3b9f29a4cce1571eb12
+ * Original-Hash: c5d982da8f191fe2abbf5df2e132159bf62726d660ef9e4029dcf1fb53f57bee
  */
 
 /**
@@ -107,6 +107,8 @@ type AiAdvisorAdapterLike = {
     getStateAsync?: (id: string) => Promise<AiAdvisorStateValue | null | undefined>;
     subscribeStatesAsync?: (pattern: string) => Promise<unknown>;
     updateValue?: (id: string, value: unknown, ts?: number) => void;
+    _nwGetStorageControlAuthority?: () => AiAdvisorUnknownRecord;
+    _nwGetStorageFarmRuntimeInfo?: () => AiAdvisorUnknownRecord;
 };
 
 type AiAdvisorDpRegistryLike = {
@@ -232,6 +234,9 @@ type AiAdvisorStorageSocInfo = {
     value: number | null;
     source: string;
     farmActive: boolean;
+    topology?: 'single' | 'farm' | 'none' | string;
+    writerActive?: boolean;
+    authorityReason?: string;
 };
 
 
@@ -1151,17 +1156,32 @@ class AiAdvisorModule extends BaseModule {
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    async _isStorageFarmActive() {
+    _getStorageControlAuthority() {
         try {
+            if (this.adapter && typeof this.adapter._nwGetStorageControlAuthority === 'function') {
+                const authority = this.adapter._nwGetStorageControlAuthority();
+                if (authority && typeof authority === 'object') return authority;
+            }
             const cfg = (this.adapter && this.adapter.config && typeof this.adapter.config === 'object') ? this.adapter.config : {};
-            const rows = configuredStorageFarmRows(this.adapter);
-            if (cfg.enableStorageFarm === true && rows.length > 0) return true;
-            const enabled = await this._readBool(['storageFarm.enabled'], false);
-            const total = await this._readNumber(['storageFarm.storagesTotal'], 0);
-            return enabled === true && Number.isFinite(Number(total)) && Number(total) > 0;
+            const farm = (this.adapter && typeof this.adapter._nwGetStorageFarmRuntimeInfo === 'function')
+                ? this.adapter._nwGetStorageFarmRuntimeInfo()
+                : null;
+            const farmDispatchActive = !!(farm && farm.dispatchActive);
+            const singleActive = cfg.enableStorageControl === true;
+            const selectedTopology = farmDispatchActive ? 'farm' : (singleActive ? 'single' : 'none');
+            return {
+                selectedTopology,
+                writerActive: selectedTopology !== 'none',
+                reason: farmDispatchActive ? 'writable-farm-active' : (singleActive ? 'single-active' : 'no-active-storage-output'),
+            };
         } catch (_e) {
-            return false;
+            return { selectedTopology: 'none', writerActive: false, reason: 'authority-error' };
         }
+    }
+
+    async _isStorageFarmActive() {
+        const authority = this._getStorageControlAuthority();
+        return String(authority.selectedTopology || 'none') === 'farm';
     }
 
     /**
@@ -1229,18 +1249,56 @@ class AiAdvisorModule extends BaseModule {
             return { value: null, source: '' };
         };
 
-        const farmActive = await this._isStorageFarmActive();
-        const regular = await readFirst(regularCandidates);
+        const authority = this._getStorageControlAuthority();
+        const storageTopology = String(authority.selectedTopology || 'none');
+        const farmActive = storageTopology === 'farm';
         if (farmActive) {
             const socSourcesTotal = await this._readNumber(['storageFarm.socSourcesTotal'], 0);
             const socSourcesOnline = await this._readNumber(['storageFarm.socSourcesOnline'], 0);
             const farm = await readFirst(Number(socSourcesOnline) > 0 ? farmCandidatesOnlineFirst : farmCandidatesTotalFirst);
-            // Farm-Summen nur verwenden, wenn die Farm wirklich aktiv ist UND mindestens eine echte
-            // SoC-Quelle vorhanden ist. Sonst würde der Defaultwert storageFarm.totalSoc=0 den realen
-            // Einzel-Speicher-SoC überdecken. Genau das führte zur falschen KI-Meldung „Speicher liegt bei 0 %“.
-            if (farm.value !== null && Number(socSourcesTotal) > 0) return { value: farm.value, source: farm.source, farmActive };
+            // Bei ausgewaehlter Farm darf ein fehlender Farm-SoC nicht durch einen
+            // alten Einzel-Speicherwert kaschiert werden. Die Beratung meldet die
+            // Quelle dann explizit als unbekannt/degradiert.
+            if (farm.value !== null && Number(socSourcesTotal) > 0) {
+                return {
+                    value: farm.value,
+                    source: farm.source,
+                    farmActive: true,
+                    topology: storageTopology,
+                    writerActive: !!authority.writerActive,
+                    authorityReason: String(authority.reason || ''),
+                };
+            }
+            return {
+                value: null,
+                source: 'storageFarm:no-soc-source',
+                farmActive: true,
+                topology: storageTopology,
+                writerActive: !!authority.writerActive,
+                authorityReason: String(authority.reason || ''),
+            };
         }
-        return { value: regular.value, source: regular.source || (farmActive ? 'storageFarm:no-soc-source' : ''), farmActive };
+
+        if (storageTopology === 'single') {
+            const regular = await readFirst(regularCandidates);
+            return {
+                value: regular.value,
+                source: regular.source,
+                farmActive: false,
+                topology: storageTopology,
+                writerActive: !!authority.writerActive,
+                authorityReason: String(authority.reason || ''),
+            };
+        }
+
+        return {
+            value: null,
+            source: 'storage:none',
+            farmActive: false,
+            topology: 'none',
+            writerActive: false,
+            authorityReason: String(authority.reason || ''),
+        };
     }
 
     /**
@@ -1392,10 +1450,22 @@ class AiAdvisorModule extends BaseModule {
 
         const storageSocInfo: any = await this._readStorageSocPct((this._cfg && this._cfg().staleTimeoutSec) || 300);
         const storageSocPct = storageSocInfo.value;
-        const storageFarmActive = !!storageSocInfo.farmActive;
+        const storageTopology = String(storageSocInfo.topology || 'none');
+        const storageFarmActive = storageTopology === 'farm';
         const storageSocSource = storageSocInfo.source || '';
-        const storageChargeW = await this._readNumber(storageFarmActive ? ['storageFarm.totalChargePowerW', 'ems.budget.storageChargeW', 'storageChargePower'] : ['ems.budget.storageChargeW', 'storageChargePower', 'storageFarm.totalChargePowerW'], 0);
-        const storageDischargeW = await this._readNumber(storageFarmActive ? ['storageFarm.totalDischargePowerW', 'ems.budget.storageDischargeW', 'storageDischargePower'] : ['ems.budget.storageDischargeW', 'storageDischargePower', 'storageFarm.totalDischargePowerW'], 0);
+        // Beratung und Tagesplanung duerfen keine Leistungswerte der nicht
+        // ausgewaehlten Speichertopologie einmischen. Das zentrale Budget bleibt
+        // als kompatibler, bereits topologieaufgeloester Fallback zulaessig.
+        const storageChargeW = storageTopology === 'farm'
+            ? await this._readNumber(['storageFarm.totalChargePowerW', 'ems.budget.storageChargeW'], 0)
+            : (storageTopology === 'single'
+                ? await this._readNumber(['storageChargePower', 'ems.budget.storageChargeW'], 0)
+                : 0);
+        const storageDischargeW = storageTopology === 'farm'
+            ? await this._readNumber(['storageFarm.totalDischargePowerW', 'ems.budget.storageDischargeW'], 0)
+            : (storageTopology === 'single'
+                ? await this._readNumber(['storageDischargePower', 'ems.budget.storageDischargeW'], 0)
+                : 0);
 
         let evcsUsedW = await this._readNumber(['chargingManagement.control.usedW', 'evcs.totalPowerW', 'consumptionEvcs'], 0);
         const thermalUsedW = await this._readNumber(['thermal.summary.budgetUsedW'], 0);

@@ -28,7 +28,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 7b21ff621ab482a3e99c77dcca10778ff7deaa3659fa080523c18867d59f3768
+ * Original-Hash: 113f22118a3fb93497e098ae79bdf5cfd1c40b554e3753152c715633bcb9fe13
  */
 
 /**
@@ -87,6 +87,7 @@ type CoreLimitsAdapterLike = CoreLimitsUnknownRecord & {
     setStateAsync?: (id: string, value: unknown, ack?: boolean) => Promise<void>;
     getStateAsync?: (id: string) => Promise<CoreLimitsStateValue | null | undefined>;
     updateValue?: (id: string, value: unknown, context?: unknown) => unknown;
+    _nwGetStorageControlAuthority?: () => CoreLimitsUnknownRecord;
     log?: { debug?: (msg: string) => void; warn?: (msg: string) => void; error?: (msg: string) => void; info?: (msg: string) => void };
 };
 
@@ -1820,10 +1821,27 @@ class CoreLimitsModule extends BaseModule {
         const pvPowerInfo = this._resolveDirectPvPower(pvSourceMaxAgeMs);
         const pvPowerW = Math.max(0, Number(pvPowerInfo.powerW) || 0);
 
-        // Speicherleistung wird zentral wie im Energiefluss aufgelöst:
-        // - getrennte Lade-/Entlade-DPs bleiben vollständig gültig
-        // - signed Batterie-DP bleibt gültig (- = Laden, + = Entladen; invertierbar)
-        // - nur wenn keine frische Messquelle vorhanden ist, wird rechnerisch über die Bilanz abgeleitet
+        // Eine einzige Speichertopologie ist fuer Messung, Budget und Hardwareausgang
+        // autoritativ. Auch der Kompatibilitaets-Fallback darf Farm- und Einzelwerte
+        // niemals mischen.
+        const fallbackFarmInfo = (this.adapter && typeof this.adapter._nwGetStorageFarmRuntimeInfo === 'function')
+            ? this.adapter._nwGetStorageFarmRuntimeInfo()
+            : null;
+        const fallbackFarmDispatchActive = !!(fallbackFarmInfo && fallbackFarmInfo.dispatchActive);
+        const fallbackSingleActive = cfg.enableStorageControl === true;
+        const storageAuthority = (this.adapter && typeof this.adapter._nwGetStorageControlAuthority === 'function')
+            ? this.adapter._nwGetStorageControlAuthority()
+            : {
+                selectedTopology: fallbackFarmDispatchActive ? 'farm' : (fallbackSingleActive ? 'single' : 'none'),
+                writerActive: fallbackFarmDispatchActive || fallbackSingleActive,
+                reason: fallbackFarmDispatchActive
+                    ? 'legacy-writable-farm-active'
+                    : (fallbackSingleActive ? 'legacy-single-active' : 'no-active-storage-output'),
+            };
+        const storageTopology = String(storageAuthority.selectedTopology || 'none');
+        const storageControlEnabled = !!storageAuthority.writerActive;
+
+        // Speicherleistung wird zentral wie im Energiefluss aufgelöst.
         let storageChargeW = 0;
         let storageDischargeW = 0;
         let usedCentralStorageFlow = false;
@@ -1838,16 +1856,16 @@ class CoreLimitsModule extends BaseModule {
             }
         } catch (_eFlow) {}
 
-        if (!usedCentralStorageFlow) {
-            // Fallback für sehr alte Laufzeiten ohne zentralen Resolver. Keine Plausibilitäts-
-            // Unterdrückung hier: gemappte Split-DPs sind autoritativ.
-            storageChargeW = Math.max(0, this._readCacheNumberMax(['storageFarm.totalChargePowerW', 'storageChargePower'], 0) || 0);
-            storageDischargeW = Math.max(0, this._readCacheNumberMax(['storageFarm.totalDischargePowerW', 'storageDischargePower'], 0) || 0);
+        if (!usedCentralStorageFlow && storageTopology === 'farm') {
+            storageChargeW = Math.max(0, this._readCacheNumberMax(['storageFarm.totalChargePowerW'], 0) || 0);
+            storageDischargeW = Math.max(0, this._readCacheNumberMax(['storageFarm.totalDischargePowerW'], 0) || 0);
+        } else if (!usedCentralStorageFlow && storageTopology === 'single') {
+            storageChargeW = Math.max(0, this._readCacheNumberMax(['storageChargePower'], 0) || 0);
+            storageDischargeW = Math.max(0, this._readCacheNumberMax(['storageDischargePower'], 0) || 0);
             const batteryPowerW = this._readCacheNumber(['batteryPower'], null);
             if (isFiniteNumber(batteryPowerW)) {
                 const flowBatteryMapped = !!(cfg.datapoints && String(cfg.datapoints.batteryPower || '').trim());
-                const farmActive = !!this._readCacheNumber(['storageFarm.enabled'], 0);
-                const invBattery = flowBatteryMapped && !farmActive && !!(cfg.settings && cfg.settings.flowInvertBattery);
+                const invBattery = flowBatteryMapped && !!(cfg.settings && cfg.settings.flowInvertBattery);
                 const signed = Math.round(invBattery ? -batteryPowerW : batteryPowerW);
                 if (signed < -25) {
                     storageChargeW = Math.max(storageChargeW, Math.abs(signed));
@@ -2023,6 +2041,9 @@ class CoreLimitsModule extends BaseModule {
                 storage: {
                     chargeW: roundW(storageChargeW),
                     dischargeW: roundW(storageDischargeW),
+                    topology: storageTopology,
+                    writerActive: storageControlEnabled,
+                    authorityReason: String(storageAuthority.reason || ''),
                 },
                 forecast: forecastGate,
                 tariff: tariffGate,

@@ -176,6 +176,7 @@ class MultiUseModule extends BaseModule {
   }
 
   async _seedLastFromStates() {
+    const legacyConsumersEnabled = this._legacyConsumersEnabled();
     for (const consumer of (legacyConsumersEnabled ? this._consumers : [])) {
       const base = `multiUse.consumers.${consumer.id}`;
       const read = (suffix) => this.adapter.getStateAsync(`${base}.${suffix}`).catch(() => null);

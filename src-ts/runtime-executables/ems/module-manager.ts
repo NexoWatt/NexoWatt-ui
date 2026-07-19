@@ -455,13 +455,13 @@ class ModuleManager {
 
         // Speicher-Regelung (Sollleistung/Reserve/PV/Lastspitze)
         // Läuft NACH dem Lademanagement, damit EVCS-StorageAssist im gleichen Tick berücksichtigt wird.
+        // Das Modul bleibt unter der Speicherlizenz initialisiert, damit ein Wechsel zwischen
+        // Einzelspeicher und Speicherfarm sowie Policy-/Diagnosewerte ohne Modul-Neustart
+        // konsistent bleiben. Hardware schreibt es ausschließlich, wenn die zentrale
+        // Speicher-Autorität genau eine beschreibbare Topologie ausgewählt hat.
         this.modules.push({
             key: 'speicherRegelung',
             instance: new SpeicherRegelungModule(this.adapter, this.dp),
-            // Wichtig: Die Speicherregelung muss auch dann laufen können, wenn der Installateur
-            // das Modul nicht explizit aktiviert hat, der Endkunde aber den dynamischen Tarif
-            // (VIS) nutzt. Die eigentliche Schreiblogik entscheidet im Modul selbst, ob
-            // tatsächlich Setpoints geschrieben werden (Failsafe).
             enabledFn: () => this._licenseAllowsApp('storage'),
         });
 

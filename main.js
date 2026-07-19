@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:5c9b897f3bf03a819138ce0c415c54dc6a35b1050eacc18faa49c7bb3752bc64
+ * Quell-Hash: sha256:a1a28473ded6109f6c92db7c7ce8d1427f763b0a5232f54e94e2c8ec909b642a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -3843,12 +3843,11 @@ class NexoWattVis extends utils.Adapter {
         return nativeObj;
       }
 
-      // Only apply when the MultiUse app itself is enabled.
-      // If MultiUse is enabled, storage-control must be active, otherwise the SoC zones have no effect.
-      // We therefore implicitly enable storage-control at runtime when MultiUse is active.
-      if (!nativeObj.enableStorageControl) {
-        nativeObj.enableStorageControl = true;
-      }
+      // MultiUse ist eine reine Speicher-Policy. Die App darf niemals heimlich
+      // einen Hardware-Schreibpfad aktivieren oder die im AppCenter sichtbare
+      // Installation der Einzel-Speicherregelung veraendern. Ob der finale
+      // Sollwert an einen Einzelspeicher oder an die Speicherfarm geht, entscheidet
+      // ausschliesslich die zentrale Speicher-Steuerhoheit.
       st.multiUsePolicyActive = true;
       st.multiUsePolicyApplied = true;
       /**
@@ -5005,6 +5004,102 @@ class NexoWattVis extends utils.Adapter {
    * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
+  /**
+   * Liefert die zentrale und ausschliessliche Steuerhoheit fuer Speicher-Ausgaenge.
+   *
+   * Fachlicher Vertrag:
+   * - MultiUse, Tarif, Peak-Shaving und Eigenverbrauch liefern nur Policies.
+   * - Genau eine Hardware-Topologie darf schreiben: `single`, `farm` oder `none`.
+   * - Eine beschreibbare Farm gewinnt deterministisch gegen den Einzelpfad.
+   * - Eine reine Mess-/Status-Farm darf den Einzelpfad nicht verdraengen.
+   * - Ein Farmfehler fuehrt niemals zu einem heimlichen Einzel-Fallback.
+   * - AppCenter ist autoritativ; Legacy-Flags gelten nur ohne AppCenter-Datensatz.
+   */
+  _nwGetStorageControlAuthority() {
+    try {
+      const cfg = this.config || {};
+      const appsRoot = (cfg.emsApps && typeof cfg.emsApps === 'object') ? cfg.emsApps : {};
+      const apps = (appsRoot.apps && typeof appsRoot.apps === 'object') ? appsRoot.apps : {};
+      const singleApp = (apps.storage && typeof apps.storage === 'object') ? apps.storage : null;
+      const singleAppRecordPresent = !!singleApp;
+      const singleAppCenterActive = !!(singleApp && singleApp.installed === true && singleApp.enabled === true);
+      const singleLegacyActive = cfg.enableStorageControl === true;
+      const singleAppActive = singleAppRecordPresent ? singleAppCenterActive : singleLegacyActive;
+
+      const farm = (typeof this._nwGetStorageFarmRuntimeInfo === 'function')
+        ? this._nwGetStorageFarmRuntimeInfo()
+        : {
+          active: cfg.enableStorageFarm === true,
+          dispatchActive: false,
+          configuredCount: 0,
+          writableCount: 0,
+          rows: [],
+        };
+      const farmAggregationActive = !!(farm && farm.active);
+      const farmDispatchActive = !!(farm && farm.dispatchActive);
+
+      let selectedTopology = 'none';
+      let reason = 'no-active-storage-output';
+      if (farmDispatchActive) {
+        selectedTopology = 'farm';
+        reason = singleAppActive ? 'writable-farm-precedes-single' : 'writable-farm-active';
+      } else if (singleAppActive) {
+        selectedTopology = 'single';
+        reason = farmAggregationActive ? 'single-active-farm-read-only' : 'single-active';
+      } else if (farmAggregationActive) {
+        reason = 'farm-read-only-no-writer';
+      }
+
+      const installerCfg = (cfg.installerConfig && typeof cfg.installerConfig === 'object')
+        ? cfg.installerConfig
+        : {};
+      const multiUseCfg = (installerCfg.storageMultiUse && typeof installerCfg.storageMultiUse === 'object')
+        ? installerCfg.storageMultiUse
+        : null;
+      const multiUsePolicyActive = !!(
+        cfg.enableMultiUse === true
+        && multiUseCfg
+        && multiUseCfg.enabled === true
+      );
+
+      return {
+        selectedTopology,
+        writerActive: selectedTopology !== 'none',
+        reason,
+        singleAppRecordPresent,
+        singleAppCenterActive,
+        singleLegacyActive,
+        singleAppActive,
+        singleSuppressedByFarm: selectedTopology === 'farm' && singleAppActive,
+        farmAggregationActive,
+        farmDispatchActive,
+        farm,
+        multiUsePolicyActive,
+      };
+    } catch (_e) {
+      return {
+        selectedTopology: 'none',
+        writerActive: false,
+        reason: 'authority-error',
+        singleAppRecordPresent: false,
+        singleAppCenterActive: false,
+        singleLegacyActive: false,
+        singleAppActive: false,
+        singleSuppressedByFarm: false,
+        farmAggregationActive: false,
+        farmDispatchActive: false,
+        farm: {
+          active: false,
+          dispatchActive: false,
+          configuredCount: 0,
+          writableCount: 0,
+          rows: [],
+        },
+        multiUsePolicyActive: false,
+      };
+    }
+  }
+
   async ensureStorageFarmStates() {
     await this.setObjectNotExistsAsync('storageFarm', {
       type: 'channel',
@@ -25167,6 +25262,11 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const anyStorageMapped = chargeMapped || dischargeMapped || batteryMapped;
     const sameChargeDischargeId = !!(chargeMapped && dischargeMapped && idOf('storageChargePower') === idOf('storageDischargePower'));
     const inv = this._nwIsBatterySignInverted();
+    const storageAuthority = (typeof this._nwGetStorageControlAuthority === 'function')
+      ? this._nwGetStorageControlAuthority()
+      : { selectedTopology: 'none', farmAggregationActive: false };
+    const selectedStorageTopology = String(storageAuthority.selectedTopology || 'none');
+    const farmSelectedForControl = selectedStorageTopology === 'farm';
 
     // Wichtig: Gemappte Kern-DPs werden als Quelle der Wahrheit behandelt, auch wenn
     // sich der Wert lange nicht geändert hat. Viele ioBroker-Adapter aktualisieren bei
@@ -25230,7 +25330,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const fromBalance = () => {
       try {
         const balanceDeadbandW = Math.max(180, deadbandW);
-        if (this._nwStorageFarmIsActiveFromCache && this._nwStorageFarmIsActiveFromCache()) return null;
+        if (farmSelectedForControl) return null;
 
         const soc = this._nwGetNumberFromCache('storageSoc');
         if (!Number.isFinite(Number(soc))) return null;
@@ -25294,8 +25394,8 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       ? this._nwResolveStorageFarmMetricsFromCache({ now })
       : null;
     const sfEnabled = !!(farmMetrics && farmMetrics.active);
-    if (sfEnabled && !anyStorageMapped) {
-      let signed = Number(farmMetrics.totalPowerW);
+    if (farmSelectedForControl) {
+      let signed = farmMetrics ? Number(farmMetrics.totalPowerW) : NaN;
       if (Number.isFinite(signed)) {
         // storageFarm.totalPowerW ist bereits pro Speicher normalisiert und besitzt
         // eine feste Konvention (+ Entladen / - Laden). Das globale Einzel-Speicher-
@@ -25321,6 +25421,24 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
           },
         };
       }
+
+      // Die Farm ist die exklusive Mess- und Schreibtopologie. Fehlt ihr
+      // Aggregat, darf kein alter Einzel-Speicher-DP als stiller Ersatz erscheinen.
+      return {
+        chargeW: 0,
+        dischargeW: 0,
+        signedW: 0,
+        src: sfEnabled ? 'storageFarm-missing-power' : 'storageFarm-unavailable',
+        inverted: false,
+        fromSigned: true,
+        derived: false,
+        mirror: true,
+        staleMs: {
+          farmPower: this._nwGetCacheAgeMs('storageFarm.totalPowerW', now),
+          farmCharge: this._nwGetCacheAgeMs('storageFarm.totalChargePowerW', now),
+          farmDischarge: this._nwGetCacheAgeMs('storageFarm.totalDischargePowerW', now),
+        },
+      };
     }
 
     const batterySigned = batteryMapped ? readMapped('batteryPower', true, true) : null;
@@ -27388,10 +27506,16 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const pvW = this._nwGetNumberFromCache('pvPower') ?? this._nwGetNumberFromCache('productionTotal');
     const loadDerivedW = this._nwGetNumberFromCacheFresh('derived.core.building.loadTotalW', historyCoreMaxAgeMs, null, now);
     const loadW = Number.isFinite(Number(loadDerivedW)) ? Number(loadDerivedW) : this._nwGetNumberFromCache('consumptionTotal');
+    const storageAuthorityHist = (typeof this._nwGetStorageControlAuthority === 'function')
+      ? this._nwGetStorageControlAuthority()
+      : { selectedTopology: 'none', writerActive: false };
+    const selectedStorageTopologyHist = String(storageAuthorityHist.selectedTopology || 'none');
     const storageFlowHist = this._nwResolveBatteryFlowFromCache({ now });
     let chgW = Number(storageFlowHist.chargeW);
     let dchgW = Number(storageFlowHist.dischargeW);
-    let soc = this._nwGetNumberFromCache('storageSoc');
+    let soc = selectedStorageTopologyHist === 'single'
+      ? this._nwGetNumberFromCache('storageSoc')
+      : null;
     const evW = this._nwGetNumberFromCache('evcs.totalPowerW');
 
     const gridBuy = Number.isFinite(gridBuyW) ? Math.max(0, gridBuyW) : 0;
@@ -27413,9 +27537,8 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       ? this._nwResolveStorageFarmMetricsFromCache({ now })
       : null;
     const sfEnabled = !!(farmMetricsHist && farmMetricsHist.active);
-    const singleStorageDcEnabled = !!(this.config
-      && this.config.enableStorageControl
-      && !sfEnabled
+    const singleStorageDcEnabled = !!(selectedStorageTopologyHist === 'single'
+      && this.config
       && this.config.storage
       && String(this.config.storage.coupling || '').trim().toLowerCase() === 'dc');
 
@@ -27440,13 +27563,18 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     }
 
-    // In StorageFarm mode the storageFlow resolver already prefers the aggregated farm
-    // charge/discharge totals. Keep the farm SoC preference here for history/export.
-    if (sfEnabled && !String(historyDps.storageSoc || '').trim()) {
+    // Historie, Policy und Writer verwenden dieselbe ausgewaehlte Topologie.
+    // Bei ausgewaehlter Farm darf kein alter Einzel-SoC als stiller Ersatz dienen.
+    if (selectedStorageTopologyHist === 'farm') {
       const socFarm = farmMetricsHist && Number.isFinite(Number(farmMetricsHist.soc))
         ? Number(farmMetricsHist.soc)
+        : this._nwGetNumberFromCache('storageFarm.totalSocOnline');
+      const socFarmFallback = Number.isFinite(Number(socFarm))
+        ? Number(socFarm)
         : this._nwGetNumberFromCache('storageFarm.totalSoc');
-      if (Number.isFinite(Number(socFarm))) soc = Number(socFarm);
+      soc = Number.isFinite(Number(socFarmFallback)) ? Number(socFarmFallback) : null;
+    } else if (selectedStorageTopologyHist !== 'single') {
+      soc = null;
     }
 
     let loadTotal = Number.isFinite(loadW) ? Math.max(0, loadW) : null;
@@ -28762,9 +28890,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       ? this._nwResolveStorageFarmMetricsFromCache({ now: ts })
       : null;
     const sfEnabled = !!(farmMetrics && farmMetrics.active);
-    const singleStorageDcEnabled = !!(this.config
-      && this.config.enableStorageControl
-      && !sfEnabled
+    const storageAuthorityLive = (typeof this._nwGetStorageControlAuthority === 'function')
+      ? this._nwGetStorageControlAuthority()
+      : { selectedTopology: 'none', writerActive: false, reason: 'authority-unavailable' };
+    const selectedStorageTopologyLive = String(storageAuthorityLive.selectedTopology || 'none');
+    const singleStorageDcEnabled = !!(selectedStorageTopologyLive === 'single'
+      && this.config
       && this.config.storage
       && String(this.config.storage.coupling || '').trim().toLowerCase() === 'dc');
     let pvDcW = 0;
@@ -29168,7 +29299,16 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
               farmUnknownW: farmMetrics ? farmMetrics.pvUnknownW : 0,
             } : null,
           },
-          storage: { chargeW: publishChargeRound, dischargeW: publishDischargeRound, runtimeChargeW: Math.round(chargeW), runtimeDischargeW: Math.round(dischargeW), src: storageSrc },
+          storage: {
+            chargeW: publishChargeRound,
+            dischargeW: publishDischargeRound,
+            runtimeChargeW: Math.round(chargeW),
+            runtimeDischargeW: Math.round(dischargeW),
+            src: storageSrc,
+            topology: selectedStorageTopologyLive,
+            writerActive: storageAuthorityLive.writerActive === true,
+            authorityReason: String(storageAuthorityLive.reason || ''),
+          },
           extraProductionW: Math.round(producerSumW),
           consumersW: Math.round(consumersW),
           evW: Math.round(evW),

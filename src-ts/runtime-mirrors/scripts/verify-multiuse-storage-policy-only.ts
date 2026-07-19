@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 8f5f9a1755e190d6c0f16663770fce4b0cade4cbbeae17a5fbbb5c6cf8447145
+ * Original-Hash: 5058b2ba7366b8651e42a84795d4e3d05e4ed69101b63e29aa52f72c91b7dbe8
  */
 
 /**
@@ -117,6 +117,16 @@ function makeAdapter() {
   assert.strictEqual(adapter._states.get('multiUse.control.status').val, 'storage-policy-only');
   assert.strictEqual(adapter._states.get('multiUse.control.centralReservedW').val, 0);
   assert.strictEqual(adapter._states.get('multiUse.summary.consumerCount').val, 0);
+
+  // Der explizite Legacy-Migrationsmodus muss seine vorhandenen Zustände sauber
+  // einlesen können. Er bleibt standardmäßig aus und ist kein Speicherwriter.
+  const legacyAdapter = makeAdapter();
+  legacyAdapter.config.multiUse.legacyFlexibleConsumersEnabled = true;
+  legacyAdapter._states.set('multiUse.consumers.legacy.targetW', { val: 1234, ts: Date.now(), lc: Date.now() });
+  const legacyModule = new MultiUseModule(legacyAdapter, new FakeDp());
+  legacyModule._loadConsumersFromConfig();
+  await legacyModule._seedLastFromStates();
+  assert.strictEqual(legacyModule._last.get('legacy').reqTargetW, 1234, 'Legacy-Migrationszustand wird nicht eingelesen');
 
   console.log('[multiuse-storage-policy-only] OK: MultiUse veröffentlicht ausschließlich SoC-Policy; storage-control bleibt einziger Batterieschreiber.');
 })().catch((error) => {

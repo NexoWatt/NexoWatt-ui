@@ -58,7 +58,17 @@
 
 ## Baustein 2 – Steuerhoheit und App-Abhängigkeiten
 
-**Vorgeschlagener Umfang – vor Umsetzung freigabepflichtig**
+**Status: umgesetzt in 0.8.126 RC2; Feldabnahme offen**
+
+### Umgesetzte Steuerhoheit
+
+- Pro Regelzyklus wird genau eine Topologie `farm`, `single` oder `none` ausgewählt.
+- Eine aktive Farm übernimmt nur dann, wenn sie mindestens einen beschreibbaren Sollwert-DP besitzt.
+- Eine read-only Farm blockiert die Einzel-Speicherregelung nicht.
+- Ein Farmfehler führt nicht zu einem versteckten Wechsel auf den Einzelwriter.
+- MultiUse liefert Policy/SoC-Zonen, aktiviert aber keine andere App und schreibt keine Hardware.
+- Core-Budget, Tarif-SoC, Charging, Thermik/Heizstab, BHKW/Generator, AI, Energiefluss und Mapping verwenden dieselbe Topologie.
+- Die vollständige Tarif-Statuswahrheit bleibt Baustein 3 und ist in RC2 noch nicht abgeschlossen.
 
 ### Zielarchitektur
 

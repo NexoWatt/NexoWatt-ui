@@ -131,16 +131,25 @@ function ownerFromPath(path: string, row: AnyRecord | null): string {
   return `config.${rowId || raw}`;
 }
 
-function ownerIsActive(config: AnyRecord, owner: string, row: AnyRecord | null): boolean {
+function ownerIsActive(config: AnyRecord, owner: string, row: AnyRecord | null, storageAuthority: AnyRecord | null = null): boolean {
   const lower = owner.toLowerCase();
   if (row && row.enabled === false) return false;
   if (lower.startsWith('charging.')) return config.enableChargingManagement !== false;
   if (lower.startsWith('storagefarm.')) {
+    if (storageAuthority && typeof storageAuthority === 'object') {
+      return String(storageAuthority.selectedTopology || 'none') === 'farm';
+    }
     const apps = config.emsApps?.apps || {};
     const app = apps.storagefarm || apps.storageFarm;
     return !!(app && app.installed === true && app.enabled === true);
   }
-  if (lower.startsWith('storage.')) return config.enableStorageControl === true || config.enableMultiUse === true;
+  if (lower.startsWith('storage.')) {
+    if (storageAuthority && typeof storageAuthority === 'object') {
+      return String(storageAuthority.selectedTopology || 'none') === 'single';
+    }
+    // MultiUse ist nur Policy und niemals ein eigener Speicher-Hardwarewriter.
+    return config.enableStorageControl === true;
+  }
   if (lower.startsWith('thermal.')) return config.enableThermalControl === true;
   if (lower.startsWith('heatingrod.')) return config.enableHeatingRodControl === true;
   if (lower.startsWith('threshold.')) return config.enableThresholdControl === true;
@@ -156,7 +165,7 @@ function ownerIsActive(config: AnyRecord, owner: string, row: AnyRecord | null):
   return true;
 }
 
-function collectActuatorMappings(config: AnyRecord, evcsList: AnyRecord[] | undefined): MappingRow[] {
+function collectActuatorMappings(config: AnyRecord, evcsList: AnyRecord[] | undefined, storageAuthority: AnyRecord | null = null): MappingRow[] {
   const rows: MappingRow[] = [];
   const seen = new Set<string>();
   const add = (objectId: unknown, path: string, field: string, row: AnyRecord | null): void => {
@@ -166,7 +175,7 @@ function collectActuatorMappings(config: AnyRecord, evcsList: AnyRecord[] | unde
     const signature = `${id}|${owner}|${field}`;
     if (seen.has(signature)) return;
     seen.add(signature);
-    rows.push({ objectId: id, owner, path, field, active: ownerIsActive(config, owner, row) });
+    rows.push({ objectId: id, owner, path, field, active: ownerIsActive(config, owner, row, storageAuthority) });
   };
   const visit = (value: unknown, path: string, parent: AnyRecord | null, depth: number): void => {
     if (depth > 12 || value === null || value === undefined) return;
@@ -434,7 +443,10 @@ class StageADiagnosticsModule extends BaseModule {
     this._lastRunMs = now;
 
     const config = this.adapter.config && typeof this.adapter.config === 'object' ? this.adapter.config : {};
-    const mappings = collectActuatorMappings(config, this.adapter.evcsList);
+    const storageAuthority = (typeof this.adapter._nwGetStorageControlAuthority === 'function')
+      ? this.adapter._nwGetStorageControlAuthority()
+      : null;
+    const mappings = collectActuatorMappings(config, this.adapter.evcsList, storageAuthority);
     const ownerMatrix = buildOwnerMatrix(mappings);
     const duplicates = ownerMatrix.filter((row) => row.duplicate);
     const conflicts = ownerMatrix.filter((row) => row.conflict);

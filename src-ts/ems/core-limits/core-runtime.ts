@@ -161,6 +161,9 @@ export interface CoreRuntimeStorageInput {
   maxChargeW?: unknown;
   socPct?: unknown;
   maxSocPct?: unknown;
+  topology?: unknown;
+  writerActive?: unknown;
+  authorityReason?: unknown;
 }
 
 export interface CoreRuntimeConsumerInput {
@@ -254,6 +257,9 @@ export interface CoreRuntimeBudgetSnapshot {
     storage: {
       chargeW: number;
       dischargeW: number;
+      topology: string;
+      writerActive: boolean;
+      authorityReason: string;
     };
     pvAllocation: CoreRuntimePvAllocation;
     forecast: Record<string, unknown>;
@@ -306,6 +312,9 @@ export interface CoreRuntimePreparedSnapshotInput {
     pvSource: string;
     storageChargeW: number;
     storageDischargeW: number;
+    storageTopology: string;
+    storageWriterActive: boolean;
+    storageAuthorityReason: string;
     consumerCount: number;
   };
 }
@@ -530,6 +539,9 @@ export function prepareCoreRuntimeSnapshotInput(
       maxChargeW: finiteOrNull(storageRaw.maxChargeW),
       socPct: finiteOrNull(storageRaw.socPct),
       maxSocPct: finiteOrNull(storageRaw.maxSocPct),
+      topology: text(storageRaw.topology, 'none'),
+      writerActive: bool(storageRaw.writerActive, false),
+      authorityReason: text(storageRaw.authorityReason),
     },
     consumers: {
       evcsUsedW: consumerValues[0],
@@ -563,6 +575,9 @@ export function prepareCoreRuntimeSnapshotInput(
       pvSource,
       storageChargeW: round(storageChargeW),
       storageDischargeW: round(storageDischargeW),
+      storageTopology: text(storageRaw.topology, 'none'),
+      storageWriterActive: bool(storageRaw.writerActive, false),
+      storageAuthorityReason: text(storageRaw.authorityReason),
       consumerCount: consumerValues.filter((value) => value > 0).length,
     },
   };
@@ -911,6 +926,9 @@ export function buildCoreRuntimeBudgetSnapshot(rawInput: CoreRuntimeSnapshotInpu
       storage: {
         chargeW: round(storageChargeW),
         dischargeW: round(storageDischargeW),
+        topology: text(storage.topology, 'none'),
+        writerActive: bool(storage.writerActive, false),
+        authorityReason: text(storage.authorityReason),
       },
       pvAllocation,
       forecast: input.forecast && typeof input.forecast === 'object' ? { ...input.forecast } : {},
@@ -1539,6 +1557,7 @@ export function compareCoreRuntimeBudgetSnapshots(
     'gates.pv.physicalHeld',
     'gates.pvAllocation.allocationEnabled',
     'gates.pvAllocation.storageEligible',
+    'gates.storage.writerActive',
   ]) compareBool(path);
 
   for (const path of [
@@ -1555,6 +1574,8 @@ export function compareCoreRuntimeBudgetSnapshots(
     'gates.pv.clampReason',
     'gates.pvAllocation.mode',
     'gates.pvAllocation.reason',
+    'gates.storage.topology',
+    'gates.storage.authorityReason',
     'gates.total.binding',
   ]) compareText(path);
 

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2b8b5772f6ee8d41e85c87db1b384070528f193eec29c76276280360cff3a962
+ * Original-Hash: d0ab08f72c7ec84868d9668bdfe58b70eae73ad42e9a6970893b743e7b6b81e2
  */
 
 /**
@@ -64,7 +64,7 @@ const {
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 class FakeAdapter {
-  constructor({ kind = 'bhkw', devices = [], soc = 20, nvpW = 1000 } = {}) {
+  constructor({ kind = 'bhkw', devices = [], soc = 20, nvpW = 1000, topology = 'single', farmSoc = null, farmSocAgeMs = 0 } = {}) {
     this.namespace = 'nexowatt-ui.0';
     this.config = {
       diagnostics: { actuatorArbiterMode: 'enforce-safety' },
@@ -74,6 +74,15 @@ class FakeAdapter {
     };
     this.local = new Map();
     this.foreign = new Map();
+    this.storageTopology = topology;
+    this.storageAuthorityReason = topology === 'farm'
+      ? 'writable-farm-active'
+      : (topology === 'single' ? 'single-active' : 'no-active-storage-output');
+    if (farmSoc !== null && farmSoc !== undefined) {
+      const now = Date.now();
+      this.local.set('storageFarm.totalSocOnline', { val: farmSoc, ack: true, ts: now - farmSocAgeMs, lc: now - farmSocAgeMs });
+      this.local.set('storageFarm.totalSoc', { val: farmSoc, ack: true, ts: now - farmSocAgeMs, lc: now - farmSocAgeMs });
+    }
     this.objects = new Map();
     this.writes = [];
     this.timers = [];
@@ -111,7 +120,17 @@ class FakeAdapter {
   updateValue() {}
   _nwGetCacheAgeMs(key) { return key === 'storageSoc' ? 0 : null; }
   _nwGetNumberFromCacheFresh(key, maxAge, fallback) { return key === 'storageSoc' ? this.soc : fallback; }
-  _nwGetStorageFarmRuntimeInfo() { return { active: true, configuredCount: 2 }; }
+  _nwGetStorageFarmRuntimeInfo() {
+    const active = this.storageTopology === 'farm';
+    return { active, dispatchActive: active, configuredCount: active ? 2 : 0, writableCount: active ? 2 : 0 };
+  }
+  _nwGetStorageControlAuthority() {
+    return {
+      selectedTopology: this.storageTopology,
+      writerActive: this.storageTopology !== 'none',
+      reason: this.storageAuthorityReason,
+    };
+  }
   _nwSetTimeout(fn, ms) { const timer = { fn, ms }; this.timers.push(timer); return timer; }
   _nwClearTimeout(timer) { this.timers = this.timers.filter((row) => row !== timer); }
 }
@@ -190,7 +209,15 @@ function device(overrides = {}) {
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 async function makeModule(kind, row, options = {}) {
-  const adapter = new FakeAdapter({ kind, devices: [row], soc: options.soc ?? 20, nvpW: options.nvpW ?? 1000 });
+  const adapter = new FakeAdapter({
+    kind,
+    devices: [row],
+    soc: options.soc ?? 20,
+    nvpW: options.nvpW ?? 1000,
+    topology: options.topology ?? 'single',
+    farmSoc: options.farmSoc ?? null,
+    farmSocAgeMs: options.farmSocAgeMs ?? 0,
+  });
   adapter.foreign.set('device.running', state(options.running ?? false, { changeAgeMs: options.runningSinceMs ?? 0 }));
   adapter.foreign.set('device.power', state(options.powerW ?? 0));
   adapter.local.set(`${kind}.user.${kind === 'bhkw' ? 'b1' : 'g1'}.mode`, state(options.mode || 'auto'));
@@ -333,7 +360,38 @@ async function makeModule(kind, row, options = {}) {
     assert.strictEqual(adapter.local.get('generator.devices.g1.writeContractStatus').val, 'blocked-by-authority');
   }
 
-  // 8) Stufe A kennt die stabilen Owner und Run-Write-Felder; keine doppelte Altimplementierung bleibt.
+  // 8) Abhaengige Erzeuger verwenden ausschliesslich den SoC der zentral
+  // ausgewaehlten Speichertopologie. Ein alter Einzel-SoC darf eine Farm nicht
+  // zum Start zwingen und ein fehlender Farm-SoC darf nicht kaschiert werden.
+  {
+    const row = device({ commandType: 'runLevel', startWriteId: '', stopWriteId: '', runWriteId: 'device.run' });
+    const { adapter, module } = await makeModule('bhkw', row, {
+      topology: 'farm',
+      farmSoc: 70,
+      soc: 20,
+      running: false,
+    });
+    await module.tick();
+    assert(!adapter.writes.some((write) => write.id === 'device.run' && write.value === true), 'Farm-SoC 70 % muss alten Einzel-SoC 20 % ueberstimmen');
+    assert.strictEqual(adapter.local.get('bhkw.devices.b1.socSource').val, 'storage-farm-online');
+    assert.strictEqual(adapter.local.get('bhkw.devices.b1.socPct').val, 70);
+  }
+
+  {
+    const row = device({ commandType: 'runLevel', startWriteId: '', stopWriteId: '', runWriteId: 'device.run' });
+    const { adapter, module } = await makeModule('generator', row, {
+      topology: 'farm',
+      farmSoc: null,
+      soc: 20,
+      running: false,
+    });
+    await module.tick();
+    assert(!adapter.writes.some((write) => write.id === 'device.run' && write.value === true), 'Fehlender Farm-SoC darf nicht auf Einzel-SoC zurueckfallen');
+    assert.strictEqual(adapter.local.get('generator.devices.g1.reason').val, 'auto:stale_soc');
+    assert(String(adapter.local.get('generator.devices.g1.socSource').val).startsWith('storage-farm-missing:'));
+  }
+
+  // 9) Stufe A kennt die stabilen Owner und Run-Write-Felder; keine doppelte Altimplementierung bleibt.
   const stageA = fs.readFileSync(path.join(__dirname, '../src-ts/runtime-executables/ems/modules/stage-a-diagnostics.ts'), 'utf8');
   const source = fs.readFileSync(path.join(__dirname, '../src-ts/runtime-executables/ems/modules/prime-mover-control.ts'), 'utf8');
   const ui = fs.readFileSync(path.join(__dirname, '../src-ts/runtime-executables/www/ems-apps.ts'), 'utf8');

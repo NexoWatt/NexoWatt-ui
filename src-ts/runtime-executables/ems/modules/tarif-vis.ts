@@ -844,6 +844,43 @@ class TarifVisModule extends BaseModule {
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
+    /**
+     * Liest die zentrale Speicher-Steuerhoheit. TarifVis liefert nur eine Policy und
+     * darf ohne aktiven AppCenter-Ausgang keinen Speicherbefehl erzeugen.
+     */
+    _getStorageControlAuthority() {
+        try {
+            if (this.adapter && typeof this.adapter._nwGetStorageControlAuthority === 'function') {
+                const authority = this.adapter._nwGetStorageControlAuthority();
+                if (authority && typeof authority === 'object') return authority;
+            }
+            const cfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
+            const farm = (this.adapter && typeof this.adapter._nwGetStorageFarmRuntimeInfo === 'function')
+                ? this.adapter._nwGetStorageFarmRuntimeInfo()
+                : null;
+            const farmDispatchActive = !!(farm && farm.dispatchActive);
+            const singleActive = cfg.enableStorageControl === true;
+            const selectedTopology = farmDispatchActive ? 'farm' : (singleActive ? 'single' : 'none');
+            return {
+                selectedTopology,
+                writerActive: selectedTopology !== 'none',
+                reason: farmDispatchActive ? 'writable-farm-active' : (singleActive ? 'single-active' : 'no-active-storage-output'),
+                farmDispatchActive,
+                farmAggregationActive: !!(farm && farm.active),
+                singleAppActive: singleActive,
+            };
+        } catch {
+            return {
+                selectedTopology: 'none',
+                writerActive: false,
+                reason: 'authority-error',
+                farmDispatchActive: false,
+                farmAggregationActive: false,
+                singleAppActive: false,
+            };
+        }
+    }
+
     async tick() {
         // VIS-Einstellungen sind Konfigurationswerte und müssen dauerhaft gültig bleiben.
         // Wenn diese nach kurzer Zeit als "stale" gelten, fällt die Logik auf Fallbacks zurück
@@ -855,6 +892,9 @@ class TarifVisModule extends BaseModule {
         // Ein eingefrorener günstiger/negativer Stundenpreis darf niemals über viele
         // Stunden Netzladen oder einen Negativpreismodus freigeben.
         const tariffCfg = (this.adapter && this.adapter.config && this.adapter.config.tariff) ? this.adapter.config.tariff : {};
+        const storageAuthority = this._getStorageControlAuthority();
+        const storageTopology = String(storageAuthority.selectedTopology || 'none');
+        const storageWriterAvailable = !!storageAuthority.writerActive;
         const currentPriceMaxAgeMs = this._clamp(this._num(tariffCfg.currentPriceMaxAgeMin, 90), 15, 360) * 60 * 1000;
         const averagePriceMaxAgeMs = this._clamp(this._num(tariffCfg.averagePriceMaxAgeHours, 36), 1, 72) * 60 * 60 * 1000;
         const curveMaxAgeMs = this._clamp(this._num(tariffCfg.curveMaxAgeHours, 36), 1, 72) * 60 * 60 * 1000;
@@ -1262,44 +1302,38 @@ class TarifVisModule extends BaseModule {
             const allowStorageCheapEff = gridImportPreferred ? true : allowStorageCheap;
             const allowEvcsCheapEff = gridImportPreferred ? true : allowEvcsCheap;
 
-            // Speicher-SoC (optional)
-            //
-            // Wichtig (Speicherfarm): In Farm-Setups ist st.socPct häufig nur auf einen Einzel-Speicher
-            // gemappt. Für die Tarif-SoC-Hysterese ("Speicher voll → ruht") müssen wir jedoch den
-            // aggregierten Farm-SoC verwenden, sonst wird bereits bei einem vollen Einzel-Speicher
-            // fälschlicherweise "voll" erkannt.
-            //
-            // Daher: Wenn Speicherfarm aktiv ist und ein Farm-SoC verfügbar/fresh ist,
-            // bevorzugen wir storageFarm.totalSocOnline (fallback: totalSoc).
-            let socRaw = this.dp ? this.dp.getNumber('st.socPct', null) : null;
-            if (this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm) {
+            // Speicher-SoC der exklusiv ausgewaehlten Schreibtopologie. Tarif und
+            // Speicherregelung muessen dieselbe Quelle verwenden; bei einer Farm gibt
+            // es deshalb keinen stillen Rueckfall auf `st.socPct` eines Einzelspeichers.
+            let socRaw = storageTopology === 'single' && this.dp
+                ? this.dp.getNumber('st.socPct', null)
+                : null;
+            if (storageTopology === 'farm') {
                 const now = Date.now();
                 const staleMs = 120000;
                 try {
                     const stOnline = await this.adapter.getStateAsync('storageFarm.storagesOnline');
+                    const stDispatch = await this.adapter.getStateAsync('storageFarm.storagesDispatchAvailable');
                     const onlineN = stOnline && stOnline.val !== undefined && stOnline.val !== null ? Number(stOnline.val) : NaN;
+                    const dispatchN = stDispatch && stDispatch.val !== undefined && stDispatch.val !== null ? Number(stDispatch.val) : NaN;
                     const hasOnline = Number.isFinite(onlineN) && onlineN > 0;
+                    const hasDispatchable = Number.isFinite(dispatchN) && dispatchN > 0;
 
-                    if (hasOnline) {
-                        // Prefer SoC of ONLINE storages (best reflects what the farm can actually do)
-                        const stSocOnline = await this.adapter.getStateAsync('storageFarm.totalSocOnline');
-                        const vOnline = stSocOnline && stSocOnline.val !== undefined && stSocOnline.val !== null ? Number(stSocOnline.val) : NaN;
-                        const ageOnline = (stSocOnline && typeof stSocOnline.ts === 'number') ? (now - Number(stSocOnline.ts)) : null;
-
-                        if (Number.isFinite(vOnline) && (ageOnline === null || ageOnline <= staleMs)) {
-                            socRaw = vOnline;
-                        } else {
-                            // Fallback: totalSoc across all configured storages
-                            const stSoc = await this.adapter.getStateAsync('storageFarm.totalSoc');
-                            const v = stSoc && stSoc.val !== undefined && stSoc.val !== null ? Number(stSoc.val) : NaN;
-                            const age = (stSoc && typeof stSoc.ts === 'number') ? (now - Number(stSoc.ts)) : null;
-                            if (Number.isFinite(v) && (age === null || age <= staleMs)) {
-                                socRaw = v;
-                            }
+                    if (hasOnline || hasDispatchable) {
+                        let stSoc = hasOnline
+                            ? await this.adapter.getStateAsync('storageFarm.totalSocOnline')
+                            : null;
+                        let value = stSoc && stSoc.val !== undefined && stSoc.val !== null ? Number(stSoc.val) : NaN;
+                        let age = stSoc && typeof stSoc.ts === 'number' ? (now - Number(stSoc.ts)) : null;
+                        if (!Number.isFinite(value)) {
+                            stSoc = await this.adapter.getStateAsync('storageFarm.totalSoc');
+                            value = stSoc && stSoc.val !== undefined && stSoc.val !== null ? Number(stSoc.val) : NaN;
+                            age = stSoc && typeof stSoc.ts === 'number' ? (now - Number(stSoc.ts)) : null;
                         }
+                        if (Number.isFinite(value) && (age === null || age <= staleMs)) socRaw = value;
                     }
                 } catch (_e) {
-                    // ignore
+                    // Fehlender Farm-SoC bleibt unbekannt; kein Einzel-Fallback.
                 }
             }
 
@@ -1327,7 +1361,7 @@ class TarifVisModule extends BaseModule {
 
             // Speichersteuerung ist aktiv, wenn entweder der dynamische Tarif ODER das zeitvariable
             // Netzentgelt aktiv ist. (Netzentgelt darf unabhängig vom Tarif wirken.)
-            if ((aktivEff || netFeeEff) && storagePowerAbsW > 0) {
+            if (storageWriterAvailable && (aktivEff || netFeeEff) && storagePowerAbsW > 0) {
                 // gewünschtes Verhalten:
                 // - günstig/NT : Speicher laden (nur wenn SoC <= Start), bis SoC >= Stop, dann ruhen (0 W)
                 // - außerhalb NT (Zeit-Netzentgelt): keine Tarif-Vorgabe (Eigenverbrauchsoptimierung übernimmt)
@@ -1704,6 +1738,9 @@ await this._setIfChanged('tarif.statusText', statusText);
                 // VIS-Konfiguration (für Auto-Enable anderer Module)
                 speicherLeistungW: (typeof storageW === 'number' && Number.isFinite(storageW)) ? storageW : 0,
                 speicherLeistungAbsW: (typeof storagePowerAbsW === 'number' && Number.isFinite(storagePowerAbsW)) ? storagePowerAbsW : 0,
+                storageTopology,
+                storageWriterAvailable,
+                storageAuthorityReason: String(storageAuthority.reason || ''),
                 currentPriceFresh: !!preisAktuellOk,
                 currentPriceAgeMs: Number.isFinite(Number(effectiveCurrentPriceAgeMs)) ? Math.round(Number(effectiveCurrentPriceAgeMs)) : null,
                 currentPriceSource: preisAktuellSource,

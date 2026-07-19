@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:1475e2e7f4a7bef9ad57c3a360e01914f9b10bbb1d7fcf89717a4840ef771724
+ * Quell-Hash: sha256:f150d02ff2e1e163343f92c06e511883c9a1c3f7eb8d4ab8b9fcba093976ee1f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -428,12 +428,12 @@ class SpeicherRegelungModule extends BaseModule {
         // Stale-Timeout einmal zentral berechnen (wird für VIS/Tarif und Messwerte genutzt)
         const staleMs = Math.max(1, Math.round(num(cfg.staleTimeoutSec, 15) * 1000));
 
-        // Effektiv-Enable:
-        // - Installateur kann die Speicherregelung explizit aktivieren.
-        // - Zusätzlich wird die Regelung automatisch aktiv, sobald der Endkunde
-        //   den dynamischen Tarif in der VIS aktiviert und eine Speicherleistung
-        //   hinterlegt hat (damit "Manuell" sofort wirkt).
-        const cfgEnabled = !!this.adapter.config.enableStorageControl;
+        // Zentrale Speicher-Steuerhoheit:
+        // Tarif, MultiUse, Peak-Shaving und Eigenverbrauch sind ausschliesslich
+        // Policies. Sie duerfen niemals selbst einen Hardware-Schreibpfad erzeugen.
+        // Genau eine im AppCenter aktive Topologie (`single` oder `farm`) fuehrt.
+        const storageAuthorityEarly = this._getStorageControlAuthority();
+        const cfgEnabled = !!storageAuthorityEarly.singleAppActive;
         let autoTarifEnabled = false;
         try {
             // Prefer the already freshness-validated snapshot from the Tarif-Modul.
@@ -472,12 +472,9 @@ class SpeicherRegelungModule extends BaseModule {
             autoTarifEnabled = false;
         }
 
-        // Policy-Router: Speicherregelung, MultiUse und Speicherfarm haben getrennte Rollen.
-        // - Einzel-Speicherregelung startet die Basis-Eigenverbrauchsoptimierung.
-        // - MultiUse erweitert diese Basis um Reserve-, Peak- und SoC-Zonen.
-        // - Eine aktiv konfigurierte Speicherfarm startet dieselbe Basisregelung und
-        //   verteilt den finalen Sollwert auf ihre Speicher. Dadurch benoetigt eine
-        //   echte Farm nicht zusaetzlich den Einzel-Speicher-App-Haken.
+        // Policy-Router: MultiUse erweitert die SoC-/Reserve-Policy, aktiviert aber
+        // weder die Einzelregelung noch die Farm. Die Topologie kommt ausschliesslich
+        // aus der zentralen AppCenter-Steuerhoheit.
         const installerCfgForMultiUseEarly = (this.adapter && this.adapter.config && this.adapter.config.installerConfig && typeof this.adapter.config.installerConfig === 'object')
             ? this.adapter.config.installerConfig
             : {};
@@ -485,30 +482,23 @@ class SpeicherRegelungModule extends BaseModule {
             ? installerCfgForMultiUseEarly.storageMultiUse
             : null;
         const multiUsePolicyConfiguredEarly = !!storageMultiUseCfgEarly;
-        const multiUseAppPolicyActive = !!(this.adapter && this.adapter.config && this.adapter.config.enableMultiUse && storageMultiUseCfgEarly && storageMultiUseCfgEarly.enabled === true);
+        const multiUseAppPolicyActive = !!storageAuthorityEarly.multiUsePolicyActive;
 
-        const farmRuntimeInfoEarly = (this.adapter && typeof this.adapter._nwGetStorageFarmRuntimeInfo === 'function')
-            ? this.adapter._nwGetStorageFarmRuntimeInfo()
-            : { active: this._isStorageFarmEnabled(), rows: [] };
-        const farmEnabledEarly = !!(farmRuntimeInfoEarly && farmRuntimeInfoEarly.active);
+        const farmRuntimeInfoEarly = (storageAuthorityEarly.farm && typeof storageAuthorityEarly.farm === 'object')
+            ? storageAuthorityEarly.farm
+            : ((this.adapter && typeof this.adapter._nwGetStorageFarmRuntimeInfo === 'function')
+                ? this.adapter._nwGetStorageFarmRuntimeInfo()
+                : { active: this._isStorageFarmEnabled(), dispatchActive: false, rows: [] });
+        const farmAggregationEnabledEarly = !!storageAuthorityEarly.farmAggregationActive;
+        const farmEnabledEarly = storageAuthorityEarly.selectedTopology === 'farm';
         const farmCfgEarly = (this.adapter && this.adapter.config && this.adapter.config.storageFarm && typeof this.adapter.config.storageFarm === 'object')
             ? this.adapter.config.storageFarm
             : {};
         const farmRowsEarly = Array.isArray(farmRuntimeInfoEarly && farmRuntimeInfoEarly.rows) && farmRuntimeInfoEarly.rows.length
             ? farmRuntimeInfoEarly.rows
             : (Array.isArray(farmCfgEarly.storages) ? farmCfgEarly.storages : []);
-        const farmAppPolicyActive = (farmRuntimeInfoEarly && typeof farmRuntimeInfoEarly.dispatchActive === 'boolean')
-            ? !!farmRuntimeInfoEarly.dispatchActive
-            : !!(farmEnabledEarly && farmRowsEarly.some((row) => row && row.enabled !== false && (
-                String(row.setSignedPowerId || row.targetPowerObjectId || row.targetPowerId || '').trim()
-                || String(row.setChargePowerId || row.targetChargePowerObjectId || row.targetChargePowerId || '').trim()
-                || String(row.setDischargePowerId || row.targetDischargePowerObjectId || row.targetDischargePowerId || '').trim()
-            )));
-
-        // Eine echte Farm ist der Hardware-Verteilpfad der normalen Eigenverbrauchs-
-        // optimierung. Sie aktiviert deshalb die Basisregelung automatisch, waehrend
-        // MultiUse weiterhin nur die Policy/SoC-Zonen ergaenzt.
-        const enabled = cfgEnabled || autoTarifEnabled || multiUseAppPolicyActive || farmAppPolicyActive;
+        const farmAppPolicyActive = !!storageAuthorityEarly.farmDispatchActive;
+        const enabled = !!storageAuthorityEarly.writerActive;
 
         // SoC-Hysterese optional aus Konfig lesen (falls später im Admin ergänzt).
         // Default bleibt 0.5 %-Punkte.
@@ -520,6 +510,19 @@ class SpeicherRegelungModule extends BaseModule {
         await this._setIfChanged('speicher.regelung.aktivAutoTarif', autoTarifEnabled);
         await this._setIfChanged('speicher.regelung.aktivAutoMultiUse', multiUseAppPolicyActive);
         await this._setIfChanged('speicher.regelung.aktivAutoSpeicherfarm', farmAppPolicyActive);
+        await this._setIfChanged('speicher.regelung.topologie', String(storageAuthorityEarly.selectedTopology || 'none'));
+        await this._setIfChanged('speicher.regelung.topologieGrund', String(storageAuthorityEarly.reason || ''));
+        await this._setIfChanged('speicher.regelung.topologieJson', JSON.stringify({
+            selectedTopology: storageAuthorityEarly.selectedTopology || 'none',
+            writerActive: !!storageAuthorityEarly.writerActive,
+            singleAppActive: !!storageAuthorityEarly.singleAppActive,
+            singleSuppressedByFarm: !!storageAuthorityEarly.singleSuppressedByFarm,
+            farmAggregationActive: !!farmAggregationEnabledEarly,
+            farmDispatchActive: !!storageAuthorityEarly.farmDispatchActive,
+            multiUsePolicyActive: !!multiUseAppPolicyActive,
+            tariffPolicyActive: !!autoTarifEnabled,
+            reason: String(storageAuthorityEarly.reason || ''),
+        }));
 
         // Wenn effektiv deaktiviert: nur Diagnose aktualisieren – KEINE Setpoints schreiben.
         // (Wichtig, damit keine "0" als externe Vorgabe an ein Speichersystem gesendet wird.)
@@ -623,20 +626,13 @@ class SpeicherRegelungModule extends BaseModule {
         // Mindestvoraussetzungen / Sonderpfade
         const controlMode = String(cfg.controlMode || 'targetPower');
 
-        // Speicherfarm: wenn aktiv und Setpoint-DPs pro Speicher vorhanden sind,
-        // erlauben wir die Regelung auch ohne klassische Sollleistungs-Zuordnung (st.targetPowerW).
+        // Nur die von der zentralen Steuerhoheit ausgewaehlte Farm ist ein
+        // beschreibbarer Ausgang. Eine aktive reine Mess-Farm bleibt fuer Anzeige und
+        // Aggregation erhalten, beeinflusst aber weder Messbasis noch Writer.
         const farmCfg = farmCfgEarly;
         const farmEnabled = farmEnabledEarly;
         const farmRows = farmRowsEarly;
-        // Bei aktiver Farm reicht ein Farm-Sollwert-DP als beschreibbares Ziel. Die
-        // Basis-Eigenverbrauchsregelung wurde bereits oben automatisch aktiviert.
-        const hasFarmSetpoints = (farmRuntimeInfoEarly && typeof farmRuntimeInfoEarly.dispatchActive === 'boolean')
-            ? !!farmRuntimeInfoEarly.dispatchActive
-            : farmEnabled && farmRows.some(r => r && r.enabled !== false && (
-                String(r.setSignedPowerId || r.targetPowerObjectId || r.targetPowerId || '').trim()
-                || String(r.setChargePowerId || r.targetChargePowerObjectId || r.targetChargePowerId || '').trim()
-                || String(r.setDischargePowerId || r.targetDischargePowerObjectId || r.targetDischargePowerId || '').trim()
-            ));
+        const hasFarmSetpoints = storageAuthorityEarly.selectedTopology === 'farm';
         await this._setIfChanged('speicher.regelung.aktivSpeicherfarm', !!hasFarmSetpoints);
 
         const hasSignedTarget = this.dp ? !!this.dp.getEntry('st.targetPowerW') : false;
@@ -654,7 +650,8 @@ class SpeicherRegelungModule extends BaseModule {
         const hasLimitTarget = hasMaxChargeTarget || hasMaxDischargeTarget;
         const hasEnableTarget = hasChargeEnableTarget || hasDischargeEnableTarget;
         const storageVendorProfile = this._getStorageVendorProfile(cfg);
-        const e3dcRscpConfigured = this._isE3dcRscpControlConfigured(cfg);
+        const e3dcRscpProfileConfigured = this._isE3dcRscpControlConfigured(cfg);
+        const e3dcRscpConfigured = !!(e3dcRscpProfileConfigured && !hasFarmSetpoints);
         const hasE3dcSetPowerTarget = e3dcRscpConfigured && this.dp
             ? !!(this.dp.getEntry('st.e3dcSetPowerMode') && this.dp.getEntry('st.e3dcSetPowerValueW'))
             : false;
@@ -664,13 +661,14 @@ class SpeicherRegelungModule extends BaseModule {
             : (controlMode === 'enableFlags' ? hasEnableTarget : (hasSignedTarget || hasSplitTarget || hasE3dcSetPowerTarget));
         const feneconHybridConfigured = this._isFeneconHybridControlConfigured(cfg);
         const sungrowHybridConfigured = this._isSungrowHybridControlConfigured(cfg);
-        // Herstellerprofile duerfen die Regelstrategie ergaenzen, aber einen manuell
-        // zugeordneten AppCenter-Schreibpfad nicht deaktivieren. Einzel- und Farmziele
-        // werden deshalb immer erst nach allen zentralen Gates/Sicherheitsgrenzen bedient.
-        const feneconHybridActive = !!feneconHybridConfigured;
-        const sungrowHybridActive = !!sungrowHybridConfigured;
-        await this._setIfChanged('speicher.regelung.herstellerprofil', storageVendorProfile);
-        const feneconHybridBlockedByFarm = false;
+        // Herstellerprofile gelten ausschliesslich fuer den ausgewaehlten Einzelpfad.
+        // In einer Farm bleiben die pro Speicher manuell zugeordneten DPs fuehrend;
+        // ein globales Herstellerprofil darf den gemeinsamen Farm-Sollwert nicht
+        // umdeuten oder einen parallelen Einzel-Writer aktivieren.
+        const feneconHybridBlockedByFarm = !!hasFarmSetpoints;
+        const feneconHybridActive = !!(feneconHybridConfigured && !hasFarmSetpoints);
+        const sungrowHybridActive = !!(sungrowHybridConfigured && !hasFarmSetpoints);
+        await this._setIfChanged('speicher.regelung.herstellerprofil', hasFarmSetpoints ? 'storage-farm' : storageVendorProfile);
 
         if (!supportedControlMode) {
             const unsupportedReason = `Steuerungsart nicht unterstützt: ${controlMode}`;
@@ -734,11 +732,12 @@ class SpeicherRegelungModule extends BaseModule {
                 : null);
         const gridAge = (typeof gridFilteredAge === 'number') ? gridFilteredAge : gridRawAge;
 
-        // SoC für Reserve (bei Speicherfarm: aggregierten SoC nutzen)
-        let soc = this.dp ? this.dp.getNumberFresh('st.socPct', staleMs, null) : null;
-        let socAge = this.dp ? this.dp.getAgeMs('st.socPct') : null;
+        // SoC fuer Reserve: Die ausgewaehlte Topologie ist exklusiv. Bei Farm-
+        // Steuerung gibt es keinen stillen Rueckfall auf einen alten Einzel-SoC.
+        let soc = farmEnabled ? null : (this.dp ? this.dp.getNumberFresh('st.socPct', staleMs, null) : null);
+        let socAge = farmEnabled ? null : (this.dp ? this.dp.getAgeMs('st.socPct') : null);
 
-        if (farmEnabled && !explicitAppCenterSocOverride) {
+        if (farmEnabled) {
             try {
                 const stOnline = await this.adapter.getStateAsync('storageFarm.storagesOnline');
                 const stDispatch = await this.adapter.getStateAsync('storageFarm.storagesDispatchAvailable');
@@ -784,12 +783,12 @@ class SpeicherRegelungModule extends BaseModule {
         // Dieser darf spaeter ueber einen begrenzten, herstellerunabhaengigen
         // Feedback-Puffer gehalten werden, ohne stale Werte pauschal fuer alle
         // Sicherheitsentscheidungen freizugeben.
-        let battPowerObservedW = this.dp ? this.dp.getNumber('st.batteryPowerW', null) : null;
-        let battPowerAge = this.dp ? (this.dp.getEntry('st.batteryPowerW') ? this.dp.getAgeMs('st.batteryPowerW') : null) : null;
+        let battPowerObservedW = farmEnabled ? null : (this.dp ? this.dp.getNumber('st.batteryPowerW', null) : null);
+        let battPowerAge = farmEnabled ? null : (this.dp ? (this.dp.getEntry('st.batteryPowerW') ? this.dp.getAgeMs('st.batteryPowerW') : null) : null);
         let battPowerInvalidReason = '';
         let battPowerObjectId = '';
-        let battPowerFeedbackSource = 'single-storage';
-        let battPowerMappingTrusted = !!(this.dp && this.dp.getEntry && this.dp.getEntry('st.batteryPowerW'));
+        let battPowerFeedbackSource = farmEnabled ? 'storage-farm' : 'single-storage';
+        let battPowerMappingTrusted = !farmEnabled && !!(this.dp && this.dp.getEntry && this.dp.getEntry('st.batteryPowerW'));
         const battPowerAgeKnown = typeof battPowerAge === 'number' && Number.isFinite(battPowerAge);
         let battPowerW = battPowerMappingTrusted
             && typeof battPowerObservedW === 'number'
@@ -799,7 +798,7 @@ class SpeicherRegelungModule extends BaseModule {
             : null;
         let battPowerTrusted = (typeof battPowerW === 'number' && Number.isFinite(battPowerW));
 
-        try {
+        if (!farmEnabled) try {
             const eBatt = this.dp ? this.dp.getEntry('st.batteryPowerW') : null;
             const eTarget = this.dp ? this.dp.getEntry('st.targetPowerW') : null;
             const eChargeTarget = this.dp ? this.dp.getEntry('st.targetChargePowerW') : null;
@@ -834,7 +833,7 @@ class SpeicherRegelungModule extends BaseModule {
         // kein vertrauenswürdiger signed Istwert vorliegt, bilden wir daraus
         // dieselbe interne Konvention (+W Entladen, -W Laden). Nur exakt identisch
         // als Sollwert gemappte Objekte werden vom Helfer als Messfeedback abgewiesen.
-        if (!battPowerTrusted) {
+        if (!farmEnabled && !battPowerTrusted) {
             try {
                 const splitFeedback = resolveSplitBatteryFeedback(this.dp, cfg, staleMs);
                 if (splitFeedback) {
@@ -875,7 +874,7 @@ class SpeicherRegelungModule extends BaseModule {
         // Nettoleistung. Der strenge `battPowerW` bleibt weiterhin nur innerhalb
         // staleMs gueltig; der spaetere Feedback-Puffer entscheidet separat ueber
         // eine begrenzte Haltezeit fuer das geschlossene NVP-Balancing.
-        if (farmEnabled && !explicitAppCenterPowerOverride) {
+        if (farmEnabled) {
             try {
                 const stOnline = await this.adapter.getStateAsync('storageFarm.storagesOnline');
                 const stDispatch = await this.adapter.getStateAsync('storageFarm.storagesDispatchAvailable');
@@ -2120,7 +2119,7 @@ if (typeof soc === 'number') {
 						      let capKWhEstimated = false;
 						      try {
 						        const farmCfg2 = (this.adapter && this.adapter.config && this.adapter.config.storageFarm) ? this.adapter.config.storageFarm : null;
-						        const farmEnabledForCapacity = this._isStorageFarmEnabled();
+						        const farmEnabledForCapacity = this._getStorageControlAuthority().selectedTopology === 'farm';
 						        if (farmEnabledForCapacity && farmCfg2 && Array.isArray(farmCfg2.storages)) {
 						          let sum = 0;
 						          for (const s of farmCfg2.storages) {
@@ -5341,6 +5340,81 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      * Dadurch greifen Regelung, Kapazitätsberechnung und Schreibverteilung nicht
      * versehentlich auf eine alte oder nur teilweise konfigurierte Farm zurück.
      */
+    /**
+     * Lokaler Zugriff auf die zentrale Speicher-Steuerhoheit. Der Adapterkern ist
+     * autoritativ; der Fallback dient nur isolierten Modultests und Alt-Runtimes.
+     */
+    _getStorageControlAuthority() {
+        try {
+            if (this.adapter && typeof this.adapter._nwGetStorageControlAuthority === 'function') {
+                const authority = this.adapter._nwGetStorageControlAuthority();
+                if (authority && typeof authority === 'object') return authority;
+            }
+
+            const rootCfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
+            const appsRoot = (rootCfg.emsApps && typeof rootCfg.emsApps === 'object') ? rootCfg.emsApps : {};
+            const apps = (appsRoot.apps && typeof appsRoot.apps === 'object') ? appsRoot.apps : {};
+            const singleApp = (apps.storage && typeof apps.storage === 'object') ? apps.storage : null;
+            const singleAppActive = singleApp
+                ? (singleApp.installed === true && singleApp.enabled === true)
+                : (rootCfg.enableStorageControl === true);
+
+            const farm = (this.adapter && typeof this.adapter._nwGetStorageFarmRuntimeInfo === 'function')
+                ? this.adapter._nwGetStorageFarmRuntimeInfo()
+                : null;
+            const farmAggregationActive = farm
+                ? !!farm.active
+                : this._isStorageFarmEnabled();
+            let farmDispatchActive = farm && typeof farm.dispatchActive === 'boolean'
+                ? !!farm.dispatchActive
+                : false;
+            if (!farm && farmAggregationActive) {
+                const sf = (rootCfg.storageFarm && typeof rootCfg.storageFarm === 'object') ? rootCfg.storageFarm : {};
+                const rows = Array.isArray(sf.storages) ? sf.storages : [];
+                farmDispatchActive = rows.some((row) => row && row.enabled !== false && (
+                    String(row.setSignedPowerId || row.targetPowerObjectId || row.targetPowerId || '').trim()
+                    || String(row.setChargePowerId || row.targetChargePowerObjectId || row.targetChargePowerId || '').trim()
+                    || String(row.setDischargePowerId || row.targetDischargePowerObjectId || row.targetDischargePowerId || '').trim()
+                ));
+            }
+
+            const selectedTopology = farmDispatchActive ? 'farm' : (singleAppActive ? 'single' : 'none');
+            const installerCfg = (rootCfg.installerConfig && typeof rootCfg.installerConfig === 'object')
+                ? rootCfg.installerConfig
+                : {};
+            const multiUseCfg = (installerCfg.storageMultiUse && typeof installerCfg.storageMultiUse === 'object')
+                ? installerCfg.storageMultiUse
+                : null;
+            return {
+                selectedTopology,
+                writerActive: selectedTopology !== 'none',
+                reason: farmDispatchActive
+                    ? (singleAppActive ? 'writable-farm-precedes-single' : 'writable-farm-active')
+                    : (singleAppActive
+                        ? (farmAggregationActive ? 'single-active-farm-read-only' : 'single-active')
+                        : (farmAggregationActive ? 'farm-read-only-no-writer' : 'no-active-storage-output')),
+                singleAppActive: !!singleAppActive,
+                singleSuppressedByFarm: selectedTopology === 'farm' && !!singleAppActive,
+                farmAggregationActive: !!farmAggregationActive,
+                farmDispatchActive: !!farmDispatchActive,
+                farm: farm || { active: !!farmAggregationActive, dispatchActive: !!farmDispatchActive, rows: [] },
+                multiUsePolicyActive: !!(rootCfg.enableMultiUse === true && multiUseCfg && multiUseCfg.enabled === true),
+            };
+        } catch {
+            return {
+                selectedTopology: 'none',
+                writerActive: false,
+                reason: 'authority-error',
+                singleAppActive: false,
+                singleSuppressedByFarm: false,
+                farmAggregationActive: false,
+                farmDispatchActive: false,
+                farm: { active: false, dispatchActive: false, rows: [] },
+                multiUsePolicyActive: false,
+            };
+        }
+    }
+
     _isStorageFarmEnabled() {
         try {
             // Der Adapterkern besitzt die autoritative AppCenter-/Zeilenbewertung.
@@ -5385,31 +5459,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      * blockieren aber niemals die manuell zugeordneten st.*-Ziel-DPs.
      */
     _isStorageFarmDispatchEnabled() {
-        try {
-            if (this.adapter && typeof this.adapter._nwGetStorageFarmRuntimeInfo === 'function') {
-                const info = this.adapter._nwGetStorageFarmRuntimeInfo();
-                if (info && typeof info.dispatchActive === 'boolean') return info.dispatchActive;
-                if (!info || !info.active) return false;
-                const rows = Array.isArray(info.rows) ? info.rows : [];
-                return rows.some((row) => row && row.enabled !== false && (
-                    String(row.setSignedPowerId || row.targetPowerObjectId || row.targetPowerId || '').trim()
-                    || String(row.setChargePowerId || row.targetChargePowerObjectId || row.targetChargePowerId || '').trim()
-                    || String(row.setDischargePowerId || row.targetDischargePowerObjectId || row.targetDischargePowerId || '').trim()
-                ));
-            }
-
-            if (!this._isStorageFarmEnabled()) return false;
-            const rootCfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
-            const sf = (rootCfg.storageFarm && typeof rootCfg.storageFarm === 'object') ? rootCfg.storageFarm : {};
-            const rows = Array.isArray(sf.storages) ? sf.storages : [];
-            return rows.some((row) => row && row.enabled !== false && (
-                String(row.setSignedPowerId || row.targetPowerObjectId || row.targetPowerId || '').trim()
-                || String(row.setChargePowerId || row.targetChargePowerObjectId || row.targetChargePowerId || '').trim()
-                || String(row.setDischargePowerId || row.targetDischargePowerObjectId || row.targetDischargePowerId || '').trim()
-            ));
-        } catch {
-            return false;
-        }
+        return this._getStorageControlAuthority().selectedTopology === 'farm';
     }
 
     _getStorageVendorProfile(cfg = {}) {
@@ -6196,6 +6246,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     async _applyTargetW(targetW, reason, source) {
         const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
         const cfg = this._getCfg();
+        const storageAuthority = this._getStorageControlAuthority();
+        const selectedTopology = String(storageAuthority.selectedTopology || 'none');
         const controlModeRaw = String(cfg.controlMode || 'targetPower');
         const controlMode = ['targetPower', 'limits', 'enableFlags'].includes(controlModeRaw) ? controlModeRaw : 'targetPower';
 
@@ -6215,7 +6267,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const storageVendorProfile = this._getStorageVendorProfile(cfg);
         const e3dcModeEntry = getEntry('st.e3dcSetPowerMode');
         const e3dcValueEntry = getEntry('st.e3dcSetPowerValueW');
-        const e3dcTargetConfigured = controlMode === 'targetPower'
+        const e3dcTargetConfigured = selectedTopology === 'single'
+            && controlMode === 'targetPower'
             && storageVendorProfile === 'e3dc-rscp'
             && !!(e3dcModeEntry && e3dcValueEntry);
 
@@ -6261,6 +6314,14 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             targetMode = e3dcTargetConfigured ? 'e3dc-rscp-set-power' : genericTargetMode;
         }
 
+        if (selectedTopology === 'farm') {
+            directionSupported = true;
+            targetMode = 'storage-farm';
+        } else if (selectedTopology === 'none') {
+            directionSupported = false;
+            targetMode = 'none';
+        }
+
         await this._setIfChanged('speicher.regelung.targetMode', targetMode);
         await this._setIfChanged('speicher.regelung.targetObjId', signedEntry && signedEntry.objectId ? String(signedEntry.objectId) : '');
         await this._setIfChanged('speicher.regelung.splitTargetObjIds', JSON.stringify({
@@ -6281,7 +6342,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         // werden als Sicherheitsfehler blockiert; freie Hersteller-/Adapterpfade
         // werden dagegen niemals gefiltert.
         const activeOutputEntries = [];
-        if (controlMode === 'targetPower') {
+        if (selectedTopology === 'single' && controlMode === 'targetPower') {
             if (e3dcTargetConfigured) {
                 activeOutputEntries.push(['e3dcMode', e3dcModeEntry], ['e3dcValue', e3dcValueEntry]);
             } else {
@@ -6289,15 +6350,15 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 if (canWriteChargeSplit) activeOutputEntries.push(['charge', chargeEntry]);
                 if (canWriteDischargeSplit) activeOutputEntries.push(['discharge', dischargeEntry]);
             }
-        } else if (controlMode === 'limits') {
+        } else if (selectedTopology === 'single' && controlMode === 'limits') {
             if (maxChargeEntry) activeOutputEntries.push(['maxCharge', maxChargeEntry]);
             if (maxDischargeEntry) activeOutputEntries.push(['maxDischarge', maxDischargeEntry]);
-        } else if (controlMode === 'enableFlags') {
+        } else if (selectedTopology === 'single' && controlMode === 'enableFlags') {
             if (chargeEnableEntry) activeOutputEntries.push(['chargeEnable', chargeEnableEntry]);
             if (dischargeEnableEntry) activeOutputEntries.push(['dischargeEnable', dischargeEnableEntry]);
         }
-        if (runEntry) activeOutputEntries.push(['run', runEntry]);
-        if (reserveSocEntry) activeOutputEntries.push(['reserveSoc', reserveSocEntry]);
+        if (selectedTopology === 'single' && runEntry) activeOutputEntries.push(['run', runEntry]);
+        if (selectedTopology === 'single' && reserveSocEntry) activeOutputEntries.push(['reserveSoc', reserveSocEntry]);
 
         const outputsByObjectId = new Map();
         const outputConflicts = [];
@@ -6312,28 +6373,31 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         }
         await this._setIfChanged('speicher.regelung.outputMappingConflictJson', outputConflicts.length ? JSON.stringify(outputConflicts) : '');
 
-        // Nur eine beschreibbare Speicherfarm bleibt der führende Setpoint-Pfad.
-        // Eine reine Mess-Farm darf den Einzelpfad nicht kapern.
+        // Exklusive Hardware-Topologie: Farm und Einzelpfad duerfen niemals im
+        // selben Regelzyklus konkurrieren. Ein Farmfehler bleibt ein Farmfehler und
+        // aktiviert keinen versteckten Einzel-Fallback.
         let writeResult = null;
         let farmApplied = false;
         let farmReason = '';
-        const farmEnabledForWrite = this._isStorageFarmDispatchEnabled();
-        const farmCfgForWrite = (this.adapter && this.adapter.config && this.adapter.config.storageFarm) ? this.adapter.config.storageFarm : {};
-        const allowSingleTargetFallback = farmEnabledForWrite && (farmCfgForWrite.allowSingleTargetFallback === true || farmCfgForWrite.allowSingleTargetFallback === 'true');
+        const farmEnabledForWrite = selectedTopology === 'farm';
+        const mayUseSingleTarget = selectedTopology === 'single';
 
         try {
             if (farmEnabledForWrite && this.adapter && typeof this.adapter.applyStorageFarmTargetW === 'function') {
-                const res = await this.adapter.applyStorageFarmTargetW(w, { source, reason });
+                const res = await this.adapter.applyStorageFarmTargetW(w, { source, reason, topology: 'farm' });
                 farmApplied = !!(res && res.applied);
                 farmReason = res && res.reason ? String(res.reason) : '';
-                if (farmApplied) writeResult = true;
+                writeResult = farmApplied;
+            } else if (farmEnabledForWrite) {
+                farmReason = 'farm-dispatcher-missing';
+                writeResult = false;
             }
         } catch (eFarm) {
             farmApplied = false;
             farmReason = eFarm && eFarm.message ? String(eFarm.message) : 'exception';
+            writeResult = false;
         }
 
-        const mayUseSingleTarget = !farmEnabledForWrite || allowSingleTargetFallback;
         const writeResults = [];
         let primarySucceeded = false;
         let primaryWroteAny = false;
@@ -6343,7 +6407,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             if (!mayUseSingleTarget) {
                 writeResult = false;
                 await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
-                await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
+                await this._setIfChanged('speicher.regelung.lastWriteSplitJson', JSON.stringify({
+                    topology: selectedTopology,
+                    reason: farmEnabledForWrite ? (farmReason || 'farm-dispatch-failed') : 'no-active-storage-output',
+                }));
             } else if (outputConflicts.length) {
                 writeResult = false;
                 await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
@@ -6512,9 +6579,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         }
         const writeStatus = farmApplied
             ? 'farm'
-            : (farmEnabledForWrite && !allowSingleTargetFallback
+            : (farmEnabledForWrite
                 ? ('farm-nicht-moeglich' + (farmReason ? ':' + farmReason : ''))
-                : ((writeResult === null) ? 'unverändert' : singleStatus));
+                : (selectedTopology === 'none'
+                    ? 'kein-aktiver-speicher-ausgang'
+                    : ((writeResult === null) ? 'unverändert' : singleStatus)));
         await this._setIfChanged('speicher.regelung.schreibStatus', writeStatus);
 
         const writeSucceeded = writeResult === true || farmApplied;
@@ -6585,10 +6654,13 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
         await mk('speicher.regelung.aktiv', 'Speicher-Regelung aktiv (effektiv)', 'boolean', 'indicator', false);
         await mk('speicher.regelung.aktivKonfig', 'Speicher-Regelung aktiv (Konfiguration)', 'boolean', 'indicator', false);
-        await mk('speicher.regelung.aktivAutoTarif', 'Auto-Aktivierung durch Tarif', 'boolean', 'indicator', false);
-        await mk('speicher.regelung.aktivAutoMultiUse', 'Auto-Aktivierung durch MultiUse-Policy', 'boolean', 'indicator', false);
-        await mk('speicher.regelung.aktivSpeicherfarm', 'Speicherfarm-Verteilpfad verfügbar', 'boolean', 'indicator', false);
-        await mk('speicher.regelung.aktivAutoSpeicherfarm', 'Auto-Aktivierung durch Speicherfarm', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.aktivAutoTarif', 'Tarif-Policy aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.aktivAutoMultiUse', 'MultiUse-Policy aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.aktivSpeicherfarm', 'Speicherfarm als Schreibtopologie ausgewählt', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.aktivAutoSpeicherfarm', 'Beschreibbare Speicherfarm aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.topologie', 'Aktive Speicher-Schreibtopologie', 'string', 'text', 'none');
+        await mk('speicher.regelung.topologieGrund', 'Grund der Speicher-Schreibtopologie', 'string', 'text', '');
+        await mk('speicher.regelung.topologieJson', 'Speicher-Steuerhoheit (JSON)', 'string', 'json', '');
         await mk('speicher.regelung.herstellerprofil', 'Speicher-Herstellerprofil', 'string', 'text', 'generic');
         await mk('speicher.regelung.speicherKopplung', 'Speicher-Kopplung AC/DC', 'string', 'text', 'ac');
         await mk('speicher.regelung.dcPvPowerW', 'DC-/Hybrid-PV Erzeugungsleistung', 'number', 'value.power', 0);

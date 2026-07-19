@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 5d583bf6fd75003e0c86b73a1cc3a2449d855f13997ba07fcabb01e2166320e4
+ * Original-Hash: 577f75a990fb5e99549a024a123f17195d869f8502102fbaf5e763e5172b85bb
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/stage-a-diagnostics.ts
- * Quell-Hash: sha256:2c81fa0e5769e3f7d5e44869ea6cc5dd0dd0212127cc4b584d44dd66f45c1a91
+ * Quell-Hash: sha256:4447ec4ef2ee32b74174cfbb00934cb05ccc1294408fdbe5bba4b2d6342e5072
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -191,19 +191,27 @@ function ownerFromPath(path, row) {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function ownerIsActive(config, owner, row) {
+function ownerIsActive(config, owner, row, storageAuthority = null) {
     const lower = owner.toLowerCase();
     if (row && row.enabled === false)
         return false;
     if (lower.startsWith('charging.'))
         return config.enableChargingManagement !== false;
     if (lower.startsWith('storagefarm.')) {
+        if (storageAuthority && typeof storageAuthority === 'object') {
+            return String(storageAuthority.selectedTopology || 'none') === 'farm';
+        }
         const apps = config.emsApps?.apps || {};
         const app = apps.storagefarm || apps.storageFarm;
         return !!(app && app.installed === true && app.enabled === true);
     }
-    if (lower.startsWith('storage.'))
-        return config.enableStorageControl === true || config.enableMultiUse === true;
+    if (lower.startsWith('storage.')) {
+        if (storageAuthority && typeof storageAuthority === 'object') {
+            return String(storageAuthority.selectedTopology || 'none') === 'single';
+        }
+        // MultiUse ist nur Policy und niemals ein eigener Speicher-Hardwarewriter.
+        return config.enableStorageControl === true;
+    }
     if (lower.startsWith('thermal.'))
         return config.enableThermalControl === true;
     if (lower.startsWith('heatingrod.'))
@@ -241,7 +249,7 @@ function ownerIsActive(config, owner, row) {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function collectActuatorMappings(config, evcsList) {
+function collectActuatorMappings(config, evcsList, storageAuthority = null) {
     const rows = [];
     const seen = new Set();
 /**
@@ -264,7 +272,7 @@ function collectActuatorMappings(config, evcsList) {
         if (seen.has(signature))
             return;
         seen.add(signature);
-        rows.push({ objectId: id, owner, path, field, active: ownerIsActive(config, owner, row) });
+        rows.push({ objectId: id, owner, path, field, active: ownerIsActive(config, owner, row, storageAuthority) });
     };
 /**
  * Code-Teil: visit
@@ -621,7 +629,10 @@ class StageADiagnosticsModule extends BaseModule {
             return;
         this._lastRunMs = now;
         const config = this.adapter.config && typeof this.adapter.config === 'object' ? this.adapter.config : {};
-        const mappings = collectActuatorMappings(config, this.adapter.evcsList);
+        const storageAuthority = (typeof this.adapter._nwGetStorageControlAuthority === 'function')
+            ? this.adapter._nwGetStorageControlAuthority()
+            : null;
+        const mappings = collectActuatorMappings(config, this.adapter.evcsList, storageAuthority);
         const ownerMatrix = buildOwnerMatrix(mappings);
         const duplicates = ownerMatrix.filter((row) => row.duplicate);
         const conflicts = ownerMatrix.filter((row) => row.conflict);

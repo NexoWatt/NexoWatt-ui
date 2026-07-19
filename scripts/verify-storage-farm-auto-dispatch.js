@@ -2,8 +2,8 @@
 'use strict';
 
 /**
- * Regression 0.8.123: Eine echte Speicherfarm (App aktiv, >=2 Speicher,
- * beschreibbare Setpoints) startet die Basis-Eigenverbrauchsoptimierung selbst.
+ * Regression 0.8.126: Eine echte Speicherfarm (App aktiv, >=2 Speicher,
+ * beschreibbare Setpoints) wird als exklusive Schreibtopologie ausgewählt.
  * Der Farm-Dispatcher matched Statuszeilen ueber stabile Hardware-IDs und
  * aktualisiert einen fehlenden/veralteten Status vor dem ersten Write.
  */
@@ -20,11 +20,11 @@ const storageFiles = [
   'ems/modules/storage-control.js',
 ];
 for (const file of storageFiles) {
-  has(file, 'const enabled = cfgEnabled || autoTarifEnabled || multiUseAppPolicyActive || farmAppPolicyActive;', 'Farm-Autostart');
+  has(file, 'const enabled = !!storageAuthorityEarly.writerActive;', 'zentrale Writer-Aktivierung');
+  has(file, "const farmEnabledEarly = storageAuthorityEarly.selectedTopology === 'farm';", 'exklusive Farm-Topologie');
   has(file, "await this._setIfChanged('speicher.regelung.aktivAutoSpeicherfarm', farmAppPolicyActive);", 'Farm-Autostart Diagnose');
-  has(file, "typeof farmRuntimeInfoEarly.dispatchActive === 'boolean'", 'autoritativer Farm-Dispatchstatus');
-  has(file, 'farmRowsEarly.some((row)', 'Legacy-Fallback der Farm-Setpoint-Pruefung');
-  has(file, 'row.setSignedPowerId || row.targetPowerObjectId || row.targetPowerId', 'kompatibler Signed-Farm-Sollwert');
+  has(file, 'const farmAppPolicyActive = !!storageAuthorityEarly.farmDispatchActive;', 'autoritativer Farm-Dispatchstatus');
+  has(file, "const hasFarmSetpoints = storageAuthorityEarly.selectedTopology === 'farm';", 'Farm-Setpoint-Gate folgt Topologie');
   has(file, '_isStorageFarmDispatchEnabled()', 'beschreibbare Farm als Schreib-Gate');
 }
 
@@ -43,4 +43,4 @@ for (const file of mainFiles) {
   has(file, "resultReason = 'farm-status-missing'", 'eindeutiger Fehlergrund bei fehlendem Farmstatus');
 }
 
-console.log('[storage-farm-auto-dispatch] OK: Farm startet die Basisregelung, aktualisiert Status und matched Speicher stabil nach Hardware-ID.');
+console.log('[storage-farm-auto-dispatch] OK: Farm wird exklusiv ausgewählt, aktualisiert Status und matched Speicher stabil nach Hardware-ID.');

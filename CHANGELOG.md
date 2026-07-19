@@ -1,3 +1,14 @@
+## 0.8.126 - 2026-07-19
+
+- EMS-Stabilisierungsbaustein 2 (RC2): Eine zentrale Speicher-Steuerhoheit wählt pro Regelzyklus exakt eine Ausgangstopologie `farm`, `single` oder `none`. Eine aktive beschreibbare Farm hat Vorrang; eine reine Mess-Farm verdrängt den Einzelspeicher nicht. Bei Farmfehlern gibt es keinen versteckten Parallel- oder Einzel-Fallback.
+- MultiUse ist wieder reine Policy: SoC-Zonen, Reserven und Strategie werden an denselben zentralen Speicherresolver geliefert, ohne die Einzel-Speicher-App verdeckt zu aktivieren. MultiUse funktioniert damit sowohl mit Einzelspeicher als auch mit Speicherfarm.
+- Der direkte Lade-/Entlade-Richtungswechsel aus 0.8.125 bleibt verbindlich: kein `0 W` als Umschaltmechanismus und keine Rampe in der alten Richtung. `0 W` bleibt echten Stop-, Warte-, Sperr- und Sicherheitszuständen vorbehalten.
+- App-Abhängigkeiten vereinheitlicht: Core-Budget/PV-Rekonstruktion, Tarif-SoC, EVCS-PV-Budget, Heizstab/Thermik-Reserve, BHKW/Generator, AI-Advisor, Energiefluss, Storage-Mapping und Stage-A-Diagnose verwenden dieselbe ausgewählte Speichertopologie und mischen keine alten Farm-/Einzelwerte.
+- Manuelle AppCenter-DPs bleiben herstellerunabhängig und autoritativ. Der ausgewählte Writer führt den finalen Wert weiterhin über Owner-, Authority-, Konflikt-, §14a-, Netz-, Geräte- und Safety-Gates zum exakt zugeordneten Objekt.
+- Der typisierte Core-Runtime-Snapshot veröffentlicht zusätzlich Speichertopologie, Writer-Aktivität und Authority-Grund; Legacy- und TS-Snapshot werden auch für diese Felder auf Parität geprüft.
+- Neue Regression `test:storage-topology-authority` prüft AppCenter-Priorität, MultiUse mit beiden Topologien, read-only Farm, fehlenden Farm-Fallback, Topologiewechsel, Messquellen und Core-Budget. Abhängige Speicher-, Farm-, Tarif-, Charging-, Thermik- und Prime-Mover-Szenarien wurden erweitert.
+- Service-Worker-Cache auf `nexowatt-cache-v428` erhöht.
+
 ## 0.8.125 - 2026-07-18
 
 - Erster begrenzter EMS-Stabilisierungsbaustein (RC1): Lade-/Entlade-Richtungswechsel werden in der Einzel-Speicherregelung und in der Speicherfarm direkt mit dem neuen Sollwert ausgegeben. Die bisherige `zero-before-reverse`-Runde und die zeitbasierte Vorzeichensperre sind entfernt.

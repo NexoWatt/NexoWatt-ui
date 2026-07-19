@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2447791caca7ae0fc77a7f12b748bf8d99c18d78d2922b73b3d1d3b8a18c9598
+ * Original-Hash: 1f9126747488003f85cafa3254cb73ec401f9c702da3502d8df4e2ace7482a7f
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/multi-use.ts
- * Quell-Hash: sha256:639c49fd3a92373a86e027c7a660a35fa8731a0c34dbb7ab54e7b18a40110d88
+ * Quell-Hash: sha256:c5e332af1ba16116fc779687079b960e6ee169225250e0d43a515cfa1cfcec2d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -344,6 +344,7 @@ class MultiUseModule extends BaseModule {
   }
 
   async _seedLastFromStates() {
+    const legacyConsumersEnabled = this._legacyConsumersEnabled();
     for (const consumer of (legacyConsumersEnabled ? this._consumers : [])) {
       const base = `multiUse.consumers.${consumer.id}`;
 /**

@@ -382,29 +382,79 @@ export class PrimeMoverControlModule extends BaseModule {
   private async socSnapshot(maxAgeMs: number): Promise<SocSnapshot> {
     const now = Date.now();
     const config = this.adapter?.config || {};
-    const overrideId = text(config.datapoints?.storageSoc);
-    if (overrideId) {
+    const farmInfo = this.adapter?._nwGetStorageFarmRuntimeInfo?.();
+    const fallbackFarmDispatchActive = !!farmInfo?.dispatchActive;
+    const fallbackSingleActive = config.enableStorageControl === true;
+    const authority = (typeof this.adapter?._nwGetStorageControlAuthority === 'function')
+      ? this.adapter._nwGetStorageControlAuthority()
+      : {
+        selectedTopology: fallbackFarmDispatchActive ? 'farm' : (fallbackSingleActive ? 'single' : 'none'),
+        reason: fallbackFarmDispatchActive
+          ? 'legacy-writable-farm-active'
+          : (fallbackSingleActive ? 'legacy-single-active' : 'no-active-storage-output'),
+      };
+    const topology = text(authority?.selectedTopology || 'none').toLowerCase();
+
+    if (topology === 'farm') {
+      // BHKW und Generator muessen dieselbe Farm-Sicht wie Speicherregler,
+      // Tarife und Core-Budget verwenden. Ein alter Einzel-SoC darf einen
+      // fehlenden oder veralteten Farm-SoC niemals kaschieren.
+      let firstPresent: SocSnapshot | null = null;
+      const candidates = [
+        { id: 'storageFarm.totalSocOnline', source: 'storage-farm-online' },
+        { id: 'storageFarm.totalSoc', source: 'storage-farm-total' },
+      ];
+      for (const candidate of candidates) {
+        const state = await this.adapter.getStateAsync(candidate.id).catch(() => null);
+        if (!state) continue;
+        const ts = stateTimestamp(state, 'ts');
+        const ageMs = ts === null ? null : Math.max(0, now - ts);
+        const parsed = finiteNumberOrNull(state.val);
+        const value = parsed !== null && parsed >= 0 && parsed <= 100 ? parsed : null;
+        const snapshot: SocSnapshot = {
+          configured: true,
+          fresh: value !== null && ageMs !== null && ageMs <= maxAgeMs,
+          value,
+          ageMs,
+          source: candidate.source,
+        };
+        if (snapshot.fresh) return snapshot;
+        if (!firstPresent) firstPresent = snapshot;
+      }
+      return firstPresent || {
+        configured: true,
+        fresh: false,
+        value: null,
+        ageMs: null,
+        source: `storage-farm-missing:${text(authority?.reason || 'unknown')}`,
+      };
+    }
+
+    if (topology === 'single') {
+      const overrideId = text(config.datapoints?.storageSoc);
+      if (overrideId) {
+        const age = Number(this.adapter?._nwGetCacheAgeMs?.('storageSoc', now));
+        const value = finiteNumberOrNull(this.adapter?._nwGetNumberFromCacheFresh?.('storageSoc', maxAgeMs, null, now));
+        return { configured: true, fresh: value !== null, value, ageMs: Number.isFinite(age) ? age : null, source: 'appcenter-override' };
+      }
+      const singleId = text(config.storage?.datapoints?.socObjectId);
+      if (singleId) {
+        const age = Number(this.dp?.getAgeMs?.('st.socPct'));
+        const value = finiteNumberOrNull(this.dp?.getNumberFresh?.('st.socPct', maxAgeMs, null));
+        return { configured: true, fresh: value !== null, value, ageMs: Number.isFinite(age) ? age : null, source: 'single-storage' };
+      }
       const age = Number(this.adapter?._nwGetCacheAgeMs?.('storageSoc', now));
       const value = finiteNumberOrNull(this.adapter?._nwGetNumberFromCacheFresh?.('storageSoc', maxAgeMs, null, now));
-      return { configured: true, fresh: value !== null, value, ageMs: Number.isFinite(age) ? age : null, source: 'appcenter-override' };
+      return { configured: false, fresh: value !== null, value, ageMs: Number.isFinite(age) ? age : null, source: value !== null ? 'automatic-single' : 'single-missing' };
     }
-    const singleId = text(config.storage?.datapoints?.socObjectId);
-    if (singleId) {
-      const age = Number(this.dp?.getAgeMs?.('st.socPct'));
-      const value = finiteNumberOrNull(this.dp?.getNumberFresh?.('st.socPct', maxAgeMs, null));
-      return { configured: true, fresh: value !== null, value, ageMs: Number.isFinite(age) ? age : null, source: 'single-storage' };
-    }
-    const farmInfo = this.adapter?._nwGetStorageFarmRuntimeInfo?.();
-    if (farmInfo?.active && Number(farmInfo.configuredCount || 0) >= 2) {
-      const farmState = await this.adapter.getStateAsync('storageFarm.totalSoc').catch(() => null);
-      const ts = stateTimestamp(farmState, 'ts');
-      const age = ts === null ? null : Math.max(0, now - ts);
-      const value = finiteNumberOrNull(farmState?.val);
-      return { configured: true, fresh: value !== null && age !== null && age <= maxAgeMs, value, ageMs: age, source: 'storage-farm' };
-    }
-    const age = Number(this.adapter?._nwGetCacheAgeMs?.('storageSoc', now));
-    const value = finiteNumberOrNull(this.adapter?._nwGetNumberFromCacheFresh?.('storageSoc', maxAgeMs, null, now));
-    return { configured: false, fresh: value !== null, value, ageMs: Number.isFinite(age) ? age : null, source: value !== null ? 'automatic' : 'missing' };
+
+    return {
+      configured: false,
+      fresh: false,
+      value: null,
+      ageMs: null,
+      source: `storage-none:${text(authority?.reason || 'no-active-storage-output')}`,
+    };
   }
 
   private nvpSnapshot(device: PrimeMoverDevice): AnyRecord {

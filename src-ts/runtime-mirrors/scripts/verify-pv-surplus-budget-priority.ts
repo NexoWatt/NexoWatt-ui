@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 400a864eac54c88234c628dd90ac061cc23758107ae1c87bbce2086dc58c6fcf
+ * Original-Hash: c16fb58c27564847cccf35c971a94c3c5a78864a010f4a88570cc492b648e223
  */
 
 /**
@@ -257,6 +257,9 @@ assert(chargingSource.includes('(-gridW) + pvEvcsUsedW + storageChargeNowW - sto
 assert(chargingSource.includes('resolveChargingPvBudgetControl'), 'Wallbox-Regelung muss das zentrale Budget als autoritative Quelle aufloesen');
 assert(chargingSource.includes('getPvGrant'), 'Wallbox-Regelung muss den zentralen EVCS-PV-Grant verwenden');
 assert(chargingSource.includes('pvCapAllocatedW'), 'Wallbox-PV-Cap muss durch die Kundenauswahl begrenzt werden');
+assert(chargingSource.includes("typeof this.adapter._nwGetStorageControlAuthority === 'function'"), 'Wallbox-PV-Rekonstruktion muss die zentrale Speichertopologie verwenden');
+assert(chargingSource.includes("this.adapter._nwResolveBatteryFlowFromCache({ maxAgeMs: storageFlowMaxAgeMs, deadbandW: 25 })"), 'Wallbox-PV-Rekonstruktion muss den zentralen Speicherfluss verwenden');
+assert(!chargingSource.includes("getFirstDpNumber(['st.batteryPowerW', 'ps.batteryW'])"), 'Peak-Shaving-DP darf nicht mehr als topologieblinder Speicherfallback dienen');
 
 const storageSource = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/ems/modules/storage-control.ts'), 'utf8');
 assert(storageSource.includes("key: 'storage'"), 'Speicher muss seinen PV-Anteil zentral reservieren');

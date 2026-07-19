@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 6b4565313eecd98b08822c48b1051d9366bbaeac44e4900e4625583876ce5d99
+ * Original-Hash: fd88a630ce4e1677a1818f2baae28ed44729a5265c6f9b30dedd3a12cfa978b8
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:67462bfedc0fd18f8015273689700331eafdbf3a40937fec1d6210f4341f438f
+ * Quell-Hash: sha256:311435f7cfe01dd6861cdb53c210e7ebe6d466a87db19e2a7cbc621b59ba1892
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -495,13 +495,13 @@ class ModuleManager {
 
         // Speicher-Regelung (Sollleistung/Reserve/PV/Lastspitze)
         // Läuft NACH dem Lademanagement, damit EVCS-StorageAssist im gleichen Tick berücksichtigt wird.
+        // Das Modul bleibt unter der Speicherlizenz initialisiert, damit ein Wechsel zwischen
+        // Einzelspeicher und Speicherfarm sowie Policy-/Diagnosewerte ohne Modul-Neustart
+        // konsistent bleiben. Hardware schreibt es ausschließlich, wenn die zentrale
+        // Speicher-Autorität genau eine beschreibbare Topologie ausgewählt hat.
         this.modules.push({
             key: 'speicherRegelung',
             instance: new SpeicherRegelungModule(this.adapter, this.dp),
-            // Wichtig: Die Speicherregelung muss auch dann laufen können, wenn der Installateur
-            // das Modul nicht explizit aktiviert hat, der Endkunde aber den dynamischen Tarif
-            // (VIS) nutzt. Die eigentliche Schreiblogik entscheidet im Modul selbst, ob
-            // tatsächlich Setpoints geschrieben werden (Failsafe).
             enabledFn: () => this._licenseAllowsApp('storage'),
         });
 

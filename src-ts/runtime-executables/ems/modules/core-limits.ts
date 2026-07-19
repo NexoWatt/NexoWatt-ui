@@ -1826,10 +1826,31 @@ class CoreLimitsModule extends BaseModule {
         const pvPowerInfo = this._resolveDirectPvPower(pvSourceMaxAgeMs);
         const pvPowerW = Math.max(0, Number(pvPowerInfo.powerW) || 0);
 
+        // Eine einzige Speichertopologie ist fuer Messung, Budget und Hardwareausgang
+        // autoritativ. Auch der Kompatibilitaets-Fallback darf Farm- und Einzelwerte
+        // niemals mischen, weil sonst eine alte Messung der nicht ausgewaehlten
+        // Topologie ein fiktives PV-/Leistungsbudget erzeugen kann.
+        const fallbackFarmInfo = (this.adapter && typeof this.adapter._nwGetStorageFarmRuntimeInfo === 'function')
+            ? this.adapter._nwGetStorageFarmRuntimeInfo()
+            : null;
+        const fallbackFarmDispatchActive = !!(fallbackFarmInfo && fallbackFarmInfo.dispatchActive);
+        const fallbackSingleActive = cfg.enableStorageControl === true;
+        const storageAuthority = (this.adapter && typeof this.adapter._nwGetStorageControlAuthority === 'function')
+            ? this.adapter._nwGetStorageControlAuthority()
+            : {
+                selectedTopology: fallbackFarmDispatchActive ? 'farm' : (fallbackSingleActive ? 'single' : 'none'),
+                writerActive: fallbackFarmDispatchActive || fallbackSingleActive,
+                reason: fallbackFarmDispatchActive
+                    ? 'legacy-writable-farm-active'
+                    : (fallbackSingleActive ? 'legacy-single-active' : 'no-active-storage-output'),
+            };
+        const storageTopology = String(storageAuthority.selectedTopology || 'none');
+        const storageControlEnabled = !!storageAuthority.writerActive;
+
         // Speicherleistung wird zentral wie im Energiefluss aufgelöst:
         // - getrennte Lade-/Entlade-DPs bleiben vollständig gültig
         // - signed Batterie-DP bleibt gültig (- = Laden, + = Entladen; invertierbar)
-        // - nur wenn keine frische Messquelle vorhanden ist, wird rechnerisch über die Bilanz abgeleitet
+        // - die nicht ausgewaehlte Topologie ist in jedem Fall ausgeschlossen
         let storageChargeW = 0;
         let storageDischargeW = 0;
         let usedCentralStorageFlow = false;
@@ -1844,16 +1865,19 @@ class CoreLimitsModule extends BaseModule {
             }
         } catch (_eFlow) {}
 
-        if (!usedCentralStorageFlow) {
-            // Fallback für sehr alte Laufzeiten ohne zentralen Resolver. Keine Plausibilitäts-
-            // Unterdrückung hier: gemappte Split-DPs sind autoritativ.
-            storageChargeW = Math.max(0, this._readCacheNumberMax(['storageFarm.totalChargePowerW', 'storageChargePower'], 0) || 0);
-            storageDischargeW = Math.max(0, this._readCacheNumberMax(['storageFarm.totalDischargePowerW', 'storageDischargePower'], 0) || 0);
+        if (!usedCentralStorageFlow && storageTopology === 'farm') {
+            // Kompatibilitaets-Fallback fuer Laufzeiten ohne zentralen Resolver:
+            // bei ausgewaehlter Farm sind ausschliesslich Farmaggregate zulaessig.
+            storageChargeW = Math.max(0, this._readCacheNumberMax(['storageFarm.totalChargePowerW'], 0) || 0);
+            storageDischargeW = Math.max(0, this._readCacheNumberMax(['storageFarm.totalDischargePowerW'], 0) || 0);
+        } else if (!usedCentralStorageFlow && storageTopology === 'single') {
+            // Beim Einzelpfad duerfen keine alten Farmwerte in das Budget einfließen.
+            storageChargeW = Math.max(0, this._readCacheNumberMax(['storageChargePower'], 0) || 0);
+            storageDischargeW = Math.max(0, this._readCacheNumberMax(['storageDischargePower'], 0) || 0);
             const batteryPowerW = this._readCacheNumber(['batteryPower'], null);
             if (isFiniteNumber(batteryPowerW)) {
                 const flowBatteryMapped = !!(cfg.datapoints && String(cfg.datapoints.batteryPower || '').trim());
-                const farmActive = !!this._readCacheNumber(['storageFarm.enabled'], 0);
-                const invBattery = flowBatteryMapped && !farmActive && !!(cfg.settings && cfg.settings.flowInvertBattery);
+                const invBattery = flowBatteryMapped && !!(cfg.settings && cfg.settings.flowInvertBattery);
                 const signed = Math.round(invBattery ? -batteryPowerW : batteryPowerW);
                 if (signed < -25) {
                     storageChargeW = Math.max(storageChargeW, Math.abs(signed));
@@ -1974,15 +1998,17 @@ class CoreLimitsModule extends BaseModule {
             }
         };
         const storageCfg = (cfg.storage && typeof cfg.storage === 'object') ? cfg.storage : {};
-        const multiUseCfg = (storageCfg.multiUse && typeof storageCfg.multiUse === 'object') ? storageCfg.multiUse : {};
-        const storageControlEnabled = cfg.enableStorageControl === true
-            || (cfg.enableMultiUse === true && multiUseCfg.enabled === true);
-        const storageSocPct = this._readCacheNumber([
-            'speicher.regelung.socPct',
-            'storageFarm.totalSocOnline',
-            'storageFarm.totalSoc',
-            'storageSoc',
-        ], null);
+        const storageSocPct = storageTopology === 'farm'
+            ? this._readCacheNumber([
+                'storageFarm.totalSocOnline',
+                'storageFarm.totalSoc',
+            ], null)
+            : (storageTopology === 'single'
+                ? this._readCacheNumber([
+                    'speicher.regelung.socPct',
+                    'storageSoc',
+                ], null)
+                : null);
         const storageMaxSocPct = clamp(num(storageCfg.selfMaxSocPct, 100), 0, 100, 100);
         const storageEligible = !!(
             storageControlEnabled
@@ -1994,10 +2020,12 @@ class CoreLimitsModule extends BaseModule {
             num(storageCfg.selfMaxChargeW, 0) || 0,
             num(storageCfg.maxChargeW, 0) || 0,
         );
-        const farmAvailableChargeW = Math.max(0, this._readCacheNumber(['storageFarm.availableChargePowerW'], 0) || 0);
+        const farmAvailableChargeW = storageTopology === 'farm'
+            ? Math.max(0, this._readCacheNumber(['storageFarm.availableChargePowerW'], 0) || 0)
+            : 0;
         const storageMaxChargeForAllocationW = configuredStorageMaxChargeW > 0
             ? configuredStorageMaxChargeW
-            : (farmAvailableChargeW > 0 ? farmAvailableChargeW : 0);
+            : (storageTopology === 'farm' && farmAvailableChargeW > 0 ? farmAvailableChargeW : 0);
         const allocationEnabledRaw = readCacheValue('settings.pvSurplusAllocationEnabled', true);
         const allocationEnabled = !(allocationEnabledRaw === false || allocationEnabledRaw === 0 || String(allocationEnabledRaw).trim().toLowerCase() === 'false');
         const pvAllocationGate = buildPvSurplusAllocation(
@@ -2119,6 +2147,9 @@ class CoreLimitsModule extends BaseModule {
                 storage: {
                     chargeW: roundW(storageChargeW),
                     dischargeW: roundW(storageDischargeW),
+                    topology: storageTopology,
+                    writerActive: storageControlEnabled,
+                    authorityReason: String(storageAuthority.reason || ''),
                 },
                 pvAllocation: pvAllocationGate,
                 forecast: forecastGate,
@@ -2181,6 +2212,9 @@ class CoreLimitsModule extends BaseModule {
                 maxChargeW: storageMaxChargeForAllocationW,
                 socPct: storageSocPct,
                 maxSocPct: storageMaxSocPct,
+                topology: storageTopology,
+                writerActive: storageControlEnabled,
+                authorityReason: String(storageAuthority.reason || ''),
             },
             consumers: {
                 evcsUsedW,

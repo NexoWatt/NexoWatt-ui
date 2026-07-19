@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/heating-rod-control.ts
- * Quell-Hash: sha256:fbd5423d2fc98e70e082326232b430b9bf09f386ee7192f869122256da7b1de6
+ * Quell-Hash: sha256:10519d3e5fc5f426aace7c4fd25e35e7084edb923d54a6c9d7eb07ec0d590bfb
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -930,6 +930,15 @@ class HeatingRodControlModule extends BaseModule {
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     _readStorageSnapshot(staleMs) {
+        const rootCfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
+        const storageAuthority = (this.adapter && typeof this.adapter._nwGetStorageControlAuthority === 'function')
+            ? this.adapter._nwGetStorageControlAuthority()
+            : {
+                selectedTopology: rootCfg.enableStorageControl === true ? 'single' : 'none',
+                writerActive: rootCfg.enableStorageControl === true,
+                reason: rootCfg.enableStorageControl === true ? 'single-active' : 'no-active-storage-output',
+            };
+        const storageTopology = String(storageAuthority.selectedTopology || 'none');
         let chargeW = 0;
         let dischargeW = 0;
         let usedCentralStorageFlow = false;
@@ -945,45 +954,49 @@ class HeatingRodControlModule extends BaseModule {
         } catch (_eFlow) {}
 
         if (!usedCentralStorageFlow) {
-            // Fallback für ältere Laufzeiten: Split-DPs und signed DP bleiben wie bisher erlaubt.
-            chargeW = Math.max(0, num(this._readNumberMaxAny([
-                'storageFarm.totalChargePowerW',
-                'storageChargePower'
-            ], staleMs, null), 0));
+            // Fallback fuer Alt-Runtimes bleibt strikt topologiebezogen. Eine Farm
+            // darf nie auf Einzelwerte zurueckfallen und umgekehrt.
+            if (storageTopology === 'farm') {
+                chargeW = Math.max(0, num(this._readNumberAny(['storageFarm.totalChargePowerW'], staleMs, null), 0));
+                dischargeW = Math.max(0, num(this._readNumberAny(['storageFarm.totalDischargePowerW'], staleMs, null), 0));
+            } else if (storageTopology === 'single') {
+                chargeW = Math.max(0, num(this._readNumberAny(['storageChargePower'], staleMs, null), 0));
+                dischargeW = Math.max(0, num(this._readNumberAny(['storageDischargePower'], staleMs, null), 0));
 
-            dischargeW = Math.max(0, num(this._readNumberMaxAny([
-                'storageFarm.totalDischargePowerW',
-                'storageDischargePower'
-            ], staleMs, null), 0));
-
-            const batteryPowerW = this._readNumberAny(['batteryPower'], staleMs, null);
-            if (typeof batteryPowerW === 'number' && Number.isFinite(batteryPowerW)) {
-                const cfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
-                const flowBatteryMapped = !!(cfg.datapoints && String(cfg.datapoints.batteryPower || '').trim());
-                const farmActive = !!this._readCacheNumber('storageFarm.enabled', 0);
-                const invBattery = flowBatteryMapped && !farmActive && !!(cfg.settings && cfg.settings.flowInvertBattery);
-                const signedW = Math.round(invBattery ? -batteryPowerW : batteryPowerW);
-                const noiseW = 25;
-                if (signedW < -noiseW) {
-                    chargeW = Math.max(chargeW, Math.abs(signedW));
-                    dischargeW = 0;
-                } else if (signedW > noiseW) {
-                    dischargeW = Math.max(dischargeW, signedW);
-                    chargeW = 0;
+                const batteryPowerW = this._readNumberAny(['batteryPower'], staleMs, null);
+                if (typeof batteryPowerW === 'number' && Number.isFinite(batteryPowerW)) {
+                    const flowBatteryMapped = !!(rootCfg.datapoints && String(rootCfg.datapoints.batteryPower || '').trim());
+                    const invBattery = flowBatteryMapped && !!(rootCfg.settings && rootCfg.settings.flowInvertBattery);
+                    const signedW = Math.round(invBattery ? -batteryPowerW : batteryPowerW);
+                    const noiseW = 25;
+                    if (signedW < -noiseW) {
+                        chargeW = Math.max(chargeW, Math.abs(signedW));
+                        dischargeW = 0;
+                    } else if (signedW > noiseW) {
+                        dischargeW = Math.max(dischargeW, signedW);
+                        chargeW = 0;
+                    }
                 }
             }
         }
 
-        const socPct = this._readNumberAny([
-            'storageFarm.totalSoc',
-            'storageFarm.medianSoc',
-            'storageSoc'
-        ], staleMs, null);
+        const socPct = storageTopology === 'farm'
+            ? this._readNumberAny([
+                'storageFarm.totalSocOnline',
+                'storageFarm.totalSoc',
+                'storageFarm.medianSoc',
+            ], staleMs, null)
+            : (storageTopology === 'single'
+                ? this._readNumberAny(['storageSoc'], staleMs, null)
+                : null);
 
         return {
             chargeW: Math.round(chargeW),
             dischargeW: Math.round(dischargeW),
             socPct: (typeof socPct === 'number' && Number.isFinite(socPct)) ? socPct : null,
+            topology: storageTopology,
+            writerActive: !!storageAuthority.writerActive,
+            authorityReason: String(storageAuthority.reason || ''),
         };
     }
 
@@ -1033,7 +1046,7 @@ class HeatingRodControlModule extends BaseModule {
         const storageKnown = storage.chargeW > 0
             || storage.dischargeW > 0
             || (typeof storage.socPct === 'number' && Number.isFinite(storage.socPct))
-            || !!(this.adapter && this.adapter.config && (this.adapter.config.enableStorageControl || this.adapter.config.enableStorageFarm));
+            || storage.writerActive === true;
         const storageReserveW = (storageKnown && !(typeof storage.socPct === 'number' && storage.socPct >= storageTargetSocPct))
             ? storageReserveCfgW
             : 0;

@@ -232,6 +232,7 @@ async function verifySingleStorageFallback() {
   let farmCalls = 0;
   const adapter = {
     config: {
+      enableStorageControl: true,
       storage: {
         controlMode: 'targetPower',
         // Direkte Altstruktur muss weiterhin exakt in st.* registriert werden.
