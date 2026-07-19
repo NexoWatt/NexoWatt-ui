@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:f150d02ff2e1e163343f92c06e511883c9a1c3f7eb8d4ab8b9fcba093976ee1f
+ * Quell-Hash: sha256:23a121d8a1b8d6873cdb5b01faff319fd78db136d88a56bfb012d48eea18725e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -4332,7 +4332,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         if (sungrowNoWrite || storageZeroNoWrite) {
             await this._setHoldNoWriteTargetDiag(targetW, reason, source, storageZeroWriteStatus || (sungrowNoWrite ? 'sungrow-hybrid:no-write' : 'storage:no-write'));
         } else {
-            await this._applyTargetW(targetW, reason, source);
+            await this._applyTargetW(targetW, reason, source, { evcsAssistReqW });
             if (feneconHybridActive) this._feneconHybridWasExternal = true;
         }
 
@@ -6117,6 +6117,14 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
         await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
         await this._setIfChanged('speicher.regelung.sollW', visibleW);
+        await this._setIfChanged('speicher.regelung.acceptedSollW', lastSuccessfulW);
+        await this._setIfChanged('speicher.regelung.commandEffective', false);
+        await this._setIfChanged('speicher.regelung.requestSatisfied', false);
+        await this._setIfChanged('speicher.regelung.partiallyAccepted', false);
+        await this._setIfChanged('speicher.regelung.evcsAssistAcceptedW', 0);
+        await this._setIfChanged('speicher.regelung.evcsAssistAcceptedTs', Date.now());
+        await this._setIfChanged('speicher.regelung.evcsAssistAcceptedTopology', '');
+        await this._setIfChanged('speicher.regelung.evcsAssistAcceptedSource', '');
         await this._setIfChanged('speicher.regelung.quelle', String(source || this._lastSource || ''));
         await this._setIfChanged('speicher.regelung.grund', String(reason || 'No-Write: letzten Sollwert halten'));
         await this._setIfChanged('speicher.regelung.schreibOk', false);
@@ -6150,6 +6158,14 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
         await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
         await this._setIfChanged('speicher.regelung.sollW', w);
+        await this._setIfChanged('speicher.regelung.acceptedSollW', 0);
+        await this._setIfChanged('speicher.regelung.commandEffective', false);
+        await this._setIfChanged('speicher.regelung.requestSatisfied', false);
+        await this._setIfChanged('speicher.regelung.partiallyAccepted', false);
+        await this._setIfChanged('speicher.regelung.evcsAssistAcceptedW', 0);
+        await this._setIfChanged('speicher.regelung.evcsAssistAcceptedTs', Date.now());
+        await this._setIfChanged('speicher.regelung.evcsAssistAcceptedTopology', '');
+        await this._setIfChanged('speicher.regelung.evcsAssistAcceptedSource', '');
         await this._setIfChanged('speicher.regelung.quelle', String(source || ''));
         await this._setIfChanged('speicher.regelung.grund', String(reason || ''));
         await this._setIfChanged('speicher.regelung.schreibOk', false);
@@ -6243,7 +6259,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    async _applyTargetW(targetW, reason, source) {
+    async _applyTargetW(targetW, reason, source, options = {}) {
+        const evcsAssistReqW = Number.isFinite(Number(options && options.evcsAssistReqW))
+            ? Math.max(0, Math.round(Number(options.evcsAssistReqW)))
+            : 0;
         const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
         const cfg = this._getCfg();
         const storageAuthority = this._getStorageControlAuthority();
@@ -6378,23 +6397,57 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         // aktiviert keinen versteckten Einzel-Fallback.
         let writeResult = null;
         let farmApplied = false;
+        let farmCommandEffective = false;
+        let farmWriteOk = false;
+        let farmRequestSatisfied = false;
+        let farmPartiallyAccepted = false;
         let farmReason = '';
+        let farmStatus = '';
+        let farmRequestedW = w;
+        let farmPlannedW = 0;
+        let farmAcceptedW = 0;
+        let farmFailedW = 0;
+        let farmUnservedW = 0;
+        let farmDispatchResult = null;
         const farmEnabledForWrite = selectedTopology === 'farm';
         const mayUseSingleTarget = selectedTopology === 'single';
 
         try {
             if (farmEnabledForWrite && this.adapter && typeof this.adapter.applyStorageFarmTargetW === 'function') {
                 const res = await this.adapter.applyStorageFarmTargetW(w, { source, reason, topology: 'farm' });
+                farmDispatchResult = res && typeof res === 'object' ? res : null;
                 farmApplied = !!(res && res.applied);
+                farmCommandEffective = !!(res && (res.commandEffective === true || res.applied === true));
+                farmWriteOk = !!(res && res.writeOk === true);
+                farmRequestSatisfied = !!(res && res.requestSatisfied === true);
+                farmPartiallyAccepted = !!(res && res.partiallyAccepted === true);
                 farmReason = res && res.reason ? String(res.reason) : '';
-                writeResult = farmApplied;
+                farmStatus = res && res.status ? String(res.status) : farmReason;
+                farmRequestedW = Number.isFinite(Number(res && res.requestedW)) ? Math.round(Number(res.requestedW)) : w;
+                farmPlannedW = Number.isFinite(Number(res && res.plannedDeliveredW)) ? Math.round(Number(res.plannedDeliveredW)) : 0;
+                farmAcceptedW = Number.isFinite(Number(res && res.acceptedDeliveredW))
+                    ? Math.round(Number(res.acceptedDeliveredW))
+                    : (Number.isFinite(Number(res && res.deliveredW)) ? Math.round(Number(res.deliveredW)) : 0);
+                farmFailedW = Number.isFinite(Number(res && res.failedW)) ? Math.round(Number(res.failedW)) : 0;
+                farmUnservedW = Number.isFinite(Number(res && res.unservedW)) ? Math.round(Number(res.unservedW)) : 0;
+                writeResult = farmWriteOk;
             } else if (farmEnabledForWrite) {
                 farmReason = 'farm-dispatcher-missing';
+                farmStatus = 'farm-dispatcher-missing';
+                farmCommandEffective = false;
+                farmWriteOk = false;
+                farmRequestSatisfied = false;
+                farmPartiallyAccepted = false;
                 writeResult = false;
             }
         } catch (eFarm) {
             farmApplied = false;
+            farmCommandEffective = false;
+            farmWriteOk = false;
+            farmRequestSatisfied = false;
+            farmPartiallyAccepted = false;
             farmReason = eFarm && eFarm.message ? String(eFarm.message) : 'exception';
+            farmStatus = 'farm-exception';
             writeResult = false;
         }
 
@@ -6561,7 +6614,33 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
         }
 
+        const acceptedTargetW = farmEnabledForWrite
+            ? farmAcceptedW
+            : (writeResult === true ? w : 0);
+        const commandEffective = farmEnabledForWrite ? farmCommandEffective : writeResult === true;
+        const requestSatisfied = farmEnabledForWrite ? farmRequestSatisfied : writeResult === true;
+        const partiallyAccepted = farmEnabledForWrite ? farmPartiallyAccepted : false;
+        const evcsAssistAcceptedW = source === 'evcs' && commandEffective && acceptedTargetW > 0
+            ? Math.round(Math.min(Math.max(0, Number(evcsAssistReqW) || 0), acceptedTargetW))
+            : 0;
+        const commandTs = Date.now();
         await this._setIfChanged('speicher.regelung.sollW', w);
+        await this._setIfChanged('speicher.regelung.acceptedSollW', acceptedTargetW);
+        await this._setIfChanged('speicher.regelung.commandEffective', commandEffective);
+        await this._setIfChanged('speicher.regelung.requestSatisfied', requestSatisfied);
+        await this._setIfChanged('speicher.regelung.partiallyAccepted', partiallyAccepted);
+        await this._setIfChanged('speicher.regelung.evcsAssistRequestW', Math.max(0, Math.round(Number(evcsAssistReqW) || 0)));
+        await this._setIfChanged('speicher.regelung.evcsAssistAcceptedW', evcsAssistAcceptedW);
+        await this._setIfChanged('speicher.regelung.evcsAssistAcceptedTs', commandTs);
+        await this._setIfChanged('speicher.regelung.evcsAssistAcceptedTopology', evcsAssistAcceptedW > 0 ? selectedTopology : '');
+        await this._setIfChanged('speicher.regelung.evcsAssistAcceptedSource', evcsAssistAcceptedW > 0 ? 'evcs' : '');
+        await this._setIfChanged('speicher.regelung.farmRequestedW', farmEnabledForWrite ? farmRequestedW : null);
+        await this._setIfChanged('speicher.regelung.farmPlannedW', farmEnabledForWrite ? farmPlannedW : null);
+        await this._setIfChanged('speicher.regelung.farmAcceptedW', farmEnabledForWrite ? farmAcceptedW : null);
+        await this._setIfChanged('speicher.regelung.farmFailedW', farmEnabledForWrite ? farmFailedW : null);
+        await this._setIfChanged('speicher.regelung.farmUnservedW', farmEnabledForWrite ? farmUnservedW : null);
+        await this._setIfChanged('speicher.regelung.farmStatus', farmEnabledForWrite ? String(farmStatus || farmReason || '') : '');
+        await this._setIfChanged('speicher.regelung.farmDispatchJson', farmEnabledForWrite && farmDispatchResult ? JSON.stringify(farmDispatchResult) : '');
         await this._setIfChanged('speicher.regelung.quelle', String(source || ''));
         await this._setIfChanged('speicher.regelung.grund', String(reason || ''));
         await this._setIfChanged('speicher.regelung.schreibOk', writeResult === true);
@@ -6577,20 +6656,19 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             else if (hasAnyWritableSplit) singleStatus = 'split-geschrieben';
             else singleStatus = 'geschrieben';
         }
-        const writeStatus = farmApplied
-            ? 'farm'
-            : (farmEnabledForWrite
-                ? ('farm-nicht-moeglich' + (farmReason ? ':' + farmReason : ''))
-                : (selectedTopology === 'none'
-                    ? 'kein-aktiver-speicher-ausgang'
-                    : ((writeResult === null) ? 'unverändert' : singleStatus)));
+        const writeStatus = farmEnabledForWrite
+            ? (farmStatus || (farmApplied ? 'farm' : ('farm-nicht-moeglich' + (farmReason ? ':' + farmReason : ''))))
+            : (selectedTopology === 'none'
+                ? 'kein-aktiver-speicher-ausgang'
+                : ((writeResult === null) ? 'unverändert' : singleStatus));
         await this._setIfChanged('speicher.regelung.schreibStatus', writeStatus);
 
-        const writeSucceeded = writeResult === true || farmApplied;
+        const writeSucceeded = writeResult === true;
+        const effectiveWrittenTargetW = acceptedTargetW;
         const previousTargetW = Number.isFinite(Number(this._lastTargetW)) ? Number(this._lastTargetW) : null;
-        const targetChanged = writeSucceeded && (previousTargetW === null || Math.abs(previousTargetW - w) >= 0.5);
-        if (writeSucceeded) this._lastTargetW = w;
-        if (writeSucceeded && targetChanged) this._lastTargetWriteMs = Date.now();
+        const targetChanged = commandEffective && (previousTargetW === null || Math.abs(previousTargetW - effectiveWrittenTargetW) >= 0.5);
+        if (commandEffective) this._lastTargetW = effectiveWrittenTargetW;
+        if (commandEffective && targetChanged) this._lastTargetWriteMs = commandTs;
         this._lastReason = String(reason || '');
         this._lastSource = String(source || '');
     }
@@ -6673,7 +6751,23 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.requestGrund', 'Request Grund', 'string', 'text', '');
         await mk('speicher.regelung.dispatcherJson', 'Dispatcher Details (JSON)', 'string', 'text', '');
 
-        await mk('speicher.regelung.sollW', 'Sollleistung Speicher (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.sollW', 'Angeforderte Sollleistung Speicher (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.acceptedSollW', 'Von Hardware akzeptierte Speicher-Sollleistung (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.commandEffective', 'Mindestens ein wirksamer Speicherbefehl akzeptiert', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.requestSatisfied', 'Speicheranforderung vollständig akzeptiert', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.partiallyAccepted', 'Speicheranforderung nur teilweise akzeptiert', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.evcsAssistRequestW', 'EVCS angeforderte stationäre Speicherunterstützung (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.evcsAssistAcceptedW', 'Für EVCS tatsächlich akzeptierte Speicherentladung (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.evcsAssistAcceptedTs', 'Zeitpunkt der akzeptierten EVCS-Speicherunterstützung', 'number', 'value.time', 0);
+        await mk('speicher.regelung.evcsAssistAcceptedTopology', 'Topologie der akzeptierten EVCS-Speicherunterstützung', 'string', 'text', '');
+        await mk('speicher.regelung.evcsAssistAcceptedSource', 'Quelle der akzeptierten EVCS-Speicherunterstützung', 'string', 'text', '');
+        await mk('speicher.regelung.farmRequestedW', 'Farm angefordert (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.farmPlannedW', 'Farm geplant verteilt (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.farmAcceptedW', 'Farm von Writes akzeptiert (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.farmFailedW', 'Farm wegen Write-Fehlern ausgefallen (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.farmUnservedW', 'Farm nicht verteilbarer Rest (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.farmStatus', 'Farm Dispatch-Status', 'string', 'text', '');
+        await mk('speicher.regelung.farmDispatchJson', 'Farm Dispatch-Ergebnis (JSON)', 'string', 'json', '');
         await mk('speicher.regelung.quelle', 'Quelle', 'string', 'text', '');
         await mk('speicher.regelung.grund', 'Grund', 'string', 'text', '');
         await mk('speicher.regelung.schreibStatus', 'Schreibstatus', 'string', 'text', '');

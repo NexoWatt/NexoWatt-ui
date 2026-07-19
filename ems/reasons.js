@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/reasons.ts
- * Quell-Hash: sha256:4ef78afd9c5c75bda7a5598e8ca3f31eb935ff97de6965cc286bdf9a795cac14
+ * Quell-Hash: sha256:7333add37d22e60161c05921406a11d4aefdba852891330cbb98f00c9519f423
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -89,6 +89,8 @@ const ReasonCodes = Object.freeze({
     CONTROL_DISABLED: 'CONTROL_DISABLED',
     DISABLED: 'DISABLED',
     OFFLINE: 'OFFLINE',
+    FAULTED: 'FAULTED',
+    UNAVAILABLE: 'UNAVAILABLE',
     SKIPPED: 'SKIPPED',
 });
 
@@ -137,6 +139,8 @@ function normalizeReason(input) {
     if (up === 'CONTROL_DISABLED' || up === 'CONTROL-DISABLED' || up === 'CONTROL_DISABLED_BY_USER') return ReasonCodes.CONTROL_DISABLED;
     if (up === 'DISABLED') return ReasonCodes.DISABLED;
     if (up === 'OFFLINE') return ReasonCodes.OFFLINE;
+    if (up === 'FAULTED' || up === 'FAULT' || up === 'ERROR') return ReasonCodes.FAULTED;
+    if (up === 'UNAVAILABLE' || up === 'OUT_OF_SERVICE' || up === 'OUT-OF-SERVICE' || up === 'INOPERATIVE') return ReasonCodes.UNAVAILABLE;
     if (up === 'SKIPPED') return ReasonCodes.SKIPPED;
 
     // If it's already one of our codes, keep it
@@ -173,6 +177,8 @@ const ReasonTextDe = Object.freeze({
     [ReasonCodes.CONTROL_DISABLED]: 'Regelung aus',
     [ReasonCodes.DISABLED]: 'Deaktiviert',
     [ReasonCodes.OFFLINE]: 'Offline',
+    [ReasonCodes.FAULTED]: 'Störung',
+    [ReasonCodes.UNAVAILABLE]: 'Nicht verfügbar',
     [ReasonCodes.SKIPPED]: 'Übersprungen',
 });
 

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/prime-mover-control.ts
- * Quell-Hash: sha256:effb38d0ba4a9a764f30e0e5ae0efd5bdbe2ed2b514fc6dc4b3f0ff58d80016c
+ * Quell-Hash: sha256:b635511d23a31ea60636b68b5b1edffaa3de24df7171a53a430082a7e45ada42
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -22,6 +22,7 @@ const { BaseModule } = require('./base');
 const { withActuatorShadowContext, priorityForOwner, isActuatorAuthorityBlockedResult, } = require('../services/actuator-shadow-arbiter');
 const { ActuatorCommandContract } = require('../services/actuator-command-contract');
 const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
+const { recordAcceptedActuatorTransition } = require('../services/accepted-power-effects');
 function numberOr(value, fallback) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
@@ -515,6 +516,17 @@ class PrimeMoverControlModule extends BaseModule {
         const result = this.actuatorContract.complete(key, desiredRunning, attempt.accepted, readbackOk, after.value, Date.now(), config);
         await this.publishContract(device, owner, command, result, after);
         if (attempt.accepted) {
+            // BHKW/Generator haben ohne Nennleistungsmodell keine sichere sofortige
+            // Leistungsprognose. Der finale PV-Aktor wartet deshalb bei einem frisch
+            // akzeptierten Start/Stop mindestens auf den nächsten NVP-Messzyklus,
+            // statt im selben Tick gegen einen noch nicht reagierten Erzeuger zu regeln.
+            recordAcceptedActuatorTransition(this.adapter, {
+                key: `${this.root()}:${device.id}`,
+                accepted: true,
+                kind: 'generation',
+                source: this.spec.moduleName,
+                reason: `${reason}:${command}`,
+            });
             runtime.lastCmdMs = Date.now();
             runtime.lastCmd = command;
             await this.setIfChanged(`${this.deviceBase(device)}.lastCommand`, command);

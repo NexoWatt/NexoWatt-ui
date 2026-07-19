@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 84da67bfec59729b425ee429cbe297b14fe04093bd4abb139905d25613a68ddd
+ * Original-Hash: 10a833cbfb115181d938bfb64b641d8320ce9c77bb1038099089209ce1faa822
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/nvp-coordinator.ts
- * Quell-Hash: sha256:56392a3ea5ce2dfc39447033463e20e2d6e161fe114895880d6e9020fb2581f4
+ * Quell-Hash: sha256:1f8628007e460c89cb7091080991c768bea469168b57660e41fd5da5f4cd585c
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -50,6 +50,7 @@
 const { BaseModule } = require('./base');
 const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
 const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
+const { getAcceptedPowerEffectSnapshot } = require('../services/accepted-power-effects');
 /**
  * Code-Teil: finiteOrNull
  *
@@ -185,7 +186,16 @@ function buildNvpCoordinatorSnapshot(input = {}) {
     ]);
     const hold = !noWriter && !blocked && containsAny(writeStatusLower, ['no-write', 'hold']);
     const retained = !noWriter && !blocked && writeStatusLower === 'unverändert';
-    const storageWriteAccepted = !noWriter && !blocked && !hold && (boolValue(input.storageWriteOk, false) || retained);
+    const partial = !noWriter && !blocked && (boolValue(input.storagePartiallyAccepted, false)
+        || containsAny(writeStatusLower, ['farm-partial', 'partial']));
+    const commandEffective = boolValue(input.storageCommandEffective, false);
+    const writeOk = boolValue(input.storageWriteOk, false);
+    const storageWriteAccepted = !noWriter && !blocked && !hold && (commandEffective
+        || writeOk
+        || retained);
+    const storageWriteFullyAccepted = storageWriteAccepted && !partial && (writeOk
+        || retained
+        || boolValue(input.storageRequestSatisfied, false));
     const writeFailed = !noWriter && !blocked && !hold && !storageWriteAccepted;
     const storageActualFresh = storageActualW !== null
         && storageActualTrusted
@@ -202,9 +212,18 @@ function buildNvpCoordinatorSnapshot(input = {}) {
         && storageTargetW !== null
         && storageWriteAccepted
         && responseWithinGrace;
-    const projectedNvpW = rawNvpW === null
+    const acceptedFlexibleNetLoadDeltaW = Math.round(finiteOrNull(input.acceptedFlexibleNetLoadDeltaW) ?? 0);
+    const acceptedFlexibleLoadDeltaW = Math.round(finiteOrNull(input.acceptedFlexibleLoadDeltaW) ?? 0);
+    const acceptedFlexibleGenerationDeltaW = Math.round(finiteOrNull(input.acceptedFlexibleGenerationDeltaW) ?? 0);
+    const acceptedFlexibleCreditedCount = Math.max(0, Math.round(finiteOrNull(input.acceptedFlexibleCreditedCount) ?? 0));
+    const acceptedFlexibleUncertainCount = Math.max(0, Math.round(finiteOrNull(input.acceptedFlexibleUncertainCount) ?? 0));
+    const acceptedFlexibleEffects = Array.isArray(input.acceptedFlexibleEffects) ? input.acceptedFlexibleEffects.slice(0, 100) : [];
+    const projectedAfterStorageW = rawNvpW === null
         ? null
         : Math.round(rawNvpW - (storageCommandCredited ? (storagePendingDeltaW || 0) : 0));
+    const projectedNvpW = projectedAfterStorageW === null
+        ? null
+        : Math.round(projectedAfterStorageW + acceptedFlexibleNetLoadDeltaW);
     const pvControlNvpW = projectedNvpW;
     const nvpErrorW = rawNvpW === null ? null : Math.round(rawNvpW - nvpTargetW);
     const projectedErrorW = projectedNvpW === null ? null : Math.round(projectedNvpW - nvpTargetW);
@@ -215,6 +234,10 @@ function buildNvpCoordinatorSnapshot(input = {}) {
     if (!nvpUsable) {
         status = 'stale';
         reason = 'NVP-Messwert fehlt, ist veraltet oder nicht verbunden';
+    }
+    else if (acceptedFlexibleUncertainCount > 0) {
+        status = 'waiting-flexible-actuator';
+        reason = 'Akzeptierter Aktorwechsel ohne sichere Leistungsprognose – PV wartet auf frischen NVP';
     }
     else if (noWriter) {
         status = withinBand ? 'stable' : 'observing';
@@ -227,6 +250,10 @@ function buildNvpCoordinatorSnapshot(input = {}) {
     else if (writeFailed) {
         status = 'storage-write-failed';
         reason = storageWriteStatus || 'Speicherbefehl wurde nicht erfolgreich geschrieben';
+    }
+    else if (partial) {
+        status = storageCommandCredited && storageResponsePending ? 'waiting-storage-response-partial' : 'storage-partial';
+        reason = storageWriteStatus || 'Speicherfarm hat nur einen Teil der Anforderung akzeptiert';
     }
     else if (hold) {
         status = 'storage-hold';
@@ -268,8 +295,15 @@ function buildNvpCoordinatorSnapshot(input = {}) {
         storageActualTrusted,
         storageActualFresh,
         storageTargetW,
-        storageWriteOk: boolValue(input.storageWriteOk, false),
+        storageWriteOk: writeOk,
+        storageCommandEffective: commandEffective,
         storageWriteAccepted,
+        storageWriteFullyAccepted,
+        storagePartial: partial,
+        storagePartiallyAccepted: partial && storageWriteAccepted,
+        storageRequestSatisfied: boolValue(input.storageRequestSatisfied, false),
+        storageFailedW: roundedOrNull(input.storageFailedW),
+        storageUnservedW: roundedOrNull(input.storageUnservedW),
         storageWriteStatus,
         storageNoWriter: noWriter,
         storageBlocked: blocked,
@@ -281,6 +315,13 @@ function buildNvpCoordinatorSnapshot(input = {}) {
         storageResponseGraceMs: responseGraceMs,
         storageResponseDeadbandW: responseDeadbandW,
         storageCommandCredited,
+        acceptedFlexibleNetLoadDeltaW,
+        acceptedFlexibleLoadDeltaW,
+        acceptedFlexibleGenerationDeltaW,
+        acceptedFlexibleCreditedCount,
+        acceptedFlexibleUncertainCount,
+        acceptedFlexibleEffects,
+        projectedAfterStorageW,
         projectedNvpW,
         pvControlNvpW,
         withinBand,
@@ -352,13 +393,26 @@ class NvpCoordinatorModule extends BaseModule {
         await mk('ems.nvpCoordinator.nvpErrorW', 'NVP-Regelfehler', 'number', 'value.power');
         await mk('ems.nvpCoordinator.storageTopology', 'Ausgewählte Speichertopologie', 'string', 'text');
         await mk('ems.nvpCoordinator.storageActualW', 'Speicher/Farm Istleistung', 'number', 'value.power');
-        await mk('ems.nvpCoordinator.storageTargetW', 'Speicher/Farm Sollleistung', 'number', 'value.power');
-        await mk('ems.nvpCoordinator.storageWriteOk', 'Speicher-Write erfolgreich', 'boolean', 'indicator');
+        await mk('ems.nvpCoordinator.storageRequestedTargetW', 'Speicher/Farm angeforderte Sollleistung', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.storageTargetW', 'Speicher/Farm von Writes akzeptierte Sollleistung', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.storageWriteOk', 'Speicher-Write vollständig erfolgreich', 'boolean', 'indicator');
+        await mk('ems.nvpCoordinator.storageWriteAccepted', 'Mindestens ein wirksamer Speicherbefehl akzeptiert', 'boolean', 'indicator');
+        await mk('ems.nvpCoordinator.storageWriteFullyAccepted', 'Speicheranforderung vollständig akzeptiert', 'boolean', 'indicator');
+        await mk('ems.nvpCoordinator.storagePartiallyAccepted', 'Speicherfarm teilweise akzeptiert', 'boolean', 'indicator');
+        await mk('ems.nvpCoordinator.storageFailedW', 'Speicherleistung wegen Write-Fehlern ausgefallen', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.storageUnservedW', 'Speicherleistung wegen Grenzen nicht verteilbar', 'number', 'value.power');
         await mk('ems.nvpCoordinator.storageWriteStatus', 'Speicher-Write Status', 'string', 'text');
         await mk('ems.nvpCoordinator.storageTargetAgeMs', 'Alter der ausstehenden Speicherreaktion', 'number', 'value.interval');
         await mk('ems.nvpCoordinator.storageCommandCredited', 'Speicherreaktion im NVP vorweggenommen', 'boolean', 'indicator');
         await mk('ems.nvpCoordinator.storagePendingDeltaW', 'Noch ausstehende Speicherleistungsänderung', 'number', 'value.power');
-        await mk('ems.nvpCoordinator.projectedNvpW', 'Prognostizierter NVP nach Speicherreaktion', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.flexibleNetLoadDeltaW', 'Im selben Zyklus akzeptierte Netto-Laständerung', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.flexibleLoadDeltaW', 'Im selben Zyklus akzeptierte Laständerung', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.flexibleGenerationDeltaW', 'Im selben Zyklus akzeptierte Erzeugungsänderung', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.flexibleCreditedCount', 'Sicher prognostizierte Aktoränderungen', 'number', 'value');
+        await mk('ems.nvpCoordinator.flexibleUncertainCount', 'Akzeptierte Aktorwechsel ohne sichere Leistungsprognose', 'number', 'value');
+        await mk('ems.nvpCoordinator.flexibleEffectsJson', 'Akzeptierte Aktorwirkungen im aktuellen EMS-Zyklus', 'string', 'json');
+        await mk('ems.nvpCoordinator.projectedAfterStorageW', 'Prognostizierter NVP nach Speicherreaktion', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.projectedNvpW', 'Prognostizierter NVP nach allen akzeptierten Aktoränderungen', 'number', 'value.power');
         await mk('ems.nvpCoordinator.pvControlNvpW', 'NVP für nachgelagerte PV-Regelung', 'number', 'value.power');
         await mk('ems.nvpCoordinator.pvAction', 'PV-/WR-Aktion', 'string', 'text');
         await mk('ems.nvpCoordinator.pvMode', 'PV-/WR-Regelmodus', 'string', 'text');
@@ -441,12 +495,9 @@ class NvpCoordinatorModule extends BaseModule {
             'off', 'disabled', 'within_deadband', 'diagnostic_only', 'awaiting_installer_approval',
             'pvLimitW_release', 'pvLimitPct_release', 'group_release',
         ].includes(pvAction);
-        if (snapshot.nvpUsable && snapshot.withinBand) {
-            next.status = 'stable';
-            next.reason = 'NVP liegt im Zielband';
-            next.stable = true;
-        }
-        else if (snapshot.status === 'observing' && (pvActiveAction || pvApplied)) {
+        // Fehler-, Warte- und Teilzustände werden niemals durch eine zufällig
+        // momentan im Band liegende NVP-Messung als "stable" überschrieben.
+        if (snapshot.status === 'observing' && (pvActiveAction || pvApplied)) {
             next.status = 'correcting-pv';
             next.reason = 'PV-/WR-Regelung bearbeitet die verbleibende Einspeisung';
             next.stable = false;
@@ -463,8 +514,15 @@ class NvpCoordinatorModule extends BaseModule {
         const ids = [
             'speicher.regelung.topologie',
             'speicher.regelung.sollW',
+            'speicher.regelung.acceptedSollW',
+            'speicher.regelung.commandEffective',
             'speicher.regelung.schreibOk',
             'speicher.regelung.schreibStatus',
+            'speicher.regelung.requestSatisfied',
+            'speicher.regelung.partiallyAccepted',
+            'speicher.regelung.farmStatus',
+            'speicher.regelung.farmFailedW',
+            'speicher.regelung.farmUnservedW',
             'speicher.regelung.batteryPowerFeedbackMeasuredW',
             'speicher.regelung.batteryPowerFeedbackAgeMs',
             'speicher.regelung.batteryPowerBalanceTrusted',
@@ -475,20 +533,29 @@ class NvpCoordinatorModule extends BaseModule {
         ];
         const states = await this._readStates(ids);
         const topology = cleanText(states['speicher.regelung.topologie'] || 'none', 40).toLowerCase();
-        const targetW = roundedOrNull(states['speicher.regelung.sollW']);
+        const requestedTargetW = roundedOrNull(states['speicher.regelung.sollW']);
+        const acceptedTargetW = roundedOrNull(states['speicher.regelung.acceptedSollW']);
         let actualW = roundedOrNull(states['speicher.regelung.batteryPowerFeedbackMeasuredW']);
         if (actualW === null && topology === 'farm')
             actualW = roundedOrNull(states['storageFarm.totalPowerW']);
         const writeStatus = cleanText(states['speicher.regelung.schreibStatus'] || '', 260);
         const writeOk = boolValue(states['speicher.regelung.schreibOk'], false);
+        const commandEffective = boolValue(states['speicher.regelung.commandEffective'], false);
         const writeStatusLower = writeStatus.toLowerCase();
         const retained = writeStatusLower === 'unverändert';
         const blocked = containsAny(writeStatusLower, ['blockiert', 'blocked', 'authority', 'konflikt', 'gesperrt', 'nicht-moeglich', 'nicht möglich', 'nicht moeglich']);
         const hold = containsAny(writeStatusLower, ['no-write', 'hold']);
-        const acceptedForResponse = topology !== 'none' && !blocked && !hold && (writeOk || retained);
+        const acceptedForResponse = topology !== 'none' && !blocked && !hold && (commandEffective || writeOk || retained);
+        // Fuer die NVP-Vorwegnahme zaehlt ausschliesslich die von den Hardware-Writes
+        // akzeptierte Leistung. Nur fuer einen alten, aber nachweislich akzeptierten
+        // Runtime-Zustand ohne acceptedSollW darf der Request als Migrationsfallback dienen.
+        const targetW = acceptedTargetW !== null
+            ? acceptedTargetW
+            : (acceptedForResponse ? requestedTargetW : 0);
         const responseAgeMs = this._responseAge(now, topology, targetW, actualW, acceptedForResponse, cfg);
         const nvpTargetFromState = finiteOrNull(states['speicher.regelung.selfTargetGridImportW']);
         const deadbandFromState = finiteOrNull(states['speicher.regelung.selfDeadbandW']);
+        const acceptedEffects = getAcceptedPowerEffectSnapshot(this.adapter);
         let snapshot = buildNvpCoordinatorSnapshot({
             now,
             nvpUsable: nvp.usable === true,
@@ -504,12 +571,25 @@ class NvpCoordinatorModule extends BaseModule {
                 || boolValue(states['speicher.regelung.batteryPowerTrusted'], false),
             storageTargetW: targetW,
             storageWriteOk: writeOk,
+            storageCommandEffective: commandEffective,
             storageWriteStatus: writeStatus,
+            storagePartiallyAccepted: boolValue(states['speicher.regelung.partiallyAccepted'], false),
+            storageRequestSatisfied: boolValue(states['speicher.regelung.requestSatisfied'], false),
+            storageFailedW: roundedOrNull(states['speicher.regelung.farmFailedW']),
+            storageUnservedW: roundedOrNull(states['speicher.regelung.farmUnservedW']),
             responseAgeMs,
             responseGraceMs: cfg.responseGraceMs,
             responseDeadbandW: cfg.responseDeadbandW,
             actualMaxAgeMs: cfg.actualMaxAgeMs,
+            acceptedFlexibleNetLoadDeltaW: acceptedEffects.netLoadDeltaW,
+            acceptedFlexibleLoadDeltaW: acceptedEffects.loadDeltaW,
+            acceptedFlexibleGenerationDeltaW: acceptedEffects.generationDeltaW,
+            acceptedFlexibleCreditedCount: acceptedEffects.creditedEffectCount,
+            acceptedFlexibleUncertainCount: acceptedEffects.uncertainEffectCount,
+            acceptedFlexibleEffects: acceptedEffects.entries,
         });
+        snapshot.storageRequestedTargetW = requestedTargetW;
+        snapshot.storageAcceptedTargetW = targetW;
         let pvResult = null;
         const gridConstraints = this.gridConstraints;
         let gridRuntimeEnabled = true;
@@ -521,7 +601,19 @@ class NvpCoordinatorModule extends BaseModule {
                 gridRuntimeEnabled = false;
             }
         }
-        if (gridRuntimeEnabled && gridConstraints && typeof gridConstraints.tickPostStorage === 'function') {
+        const hardRawGuardTriggered = snapshot.nvpUsable
+            && cfg.hardRawGuardW > 0
+            && snapshot.rawNvpW !== null
+            && snapshot.rawNvpW <= -cfg.hardRawGuardW;
+        if (snapshot.acceptedFlexibleUncertainCount > 0 && !hardRawGuardTriggered) {
+            pvResult = {
+                action: 'deferred-flexible-actuator',
+                applied: false,
+                mode: 'wait-next-nvp',
+                reason: 'accepted-unknown-power-transition',
+            };
+        }
+        else if (gridRuntimeEnabled && gridConstraints && typeof gridConstraints.tickPostStorage === 'function') {
             this._cycle += 1;
             try {
                 pvResult = await withActuatorShadowContext(this.adapter, {
@@ -533,7 +625,7 @@ class NvpCoordinatorModule extends BaseModule {
                     leaseMs: 15000,
                 }, () => gridConstraints.tickPostStorage({
                     rawNvpW: snapshot.rawNvpW,
-                    pvControlNvpW: snapshot.pvControlNvpW,
+                    pvControlNvpW: hardRawGuardTriggered ? snapshot.rawNvpW : snapshot.pvControlNvpW,
                     nvpUsable: snapshot.nvpUsable,
                     hardRawGuardW: cfg.hardRawGuardW,
                 }));
@@ -586,8 +678,19 @@ class NvpCoordinatorModule extends BaseModule {
                 storageActualW: snapshot.storageActualW,
                 storageTargetW: snapshot.storageTargetW,
                 storageWriteOk: snapshot.storageWriteOk,
+                storageWriteAccepted: snapshot.storageWriteAccepted,
+                storageWriteFullyAccepted: snapshot.storageWriteFullyAccepted,
+                storagePartiallyAccepted: snapshot.storagePartiallyAccepted,
+                storageFailedW: snapshot.storageFailedW,
+                storageUnservedW: snapshot.storageUnservedW,
                 storageWriteStatus: snapshot.storageWriteStatus,
                 storageCredited: snapshot.storageCommandCredited,
+                flexibleNetLoadDeltaW: snapshot.acceptedFlexibleNetLoadDeltaW,
+                flexibleLoadDeltaW: snapshot.acceptedFlexibleLoadDeltaW,
+                flexibleGenerationDeltaW: snapshot.acceptedFlexibleGenerationDeltaW,
+                flexibleCreditedCount: snapshot.acceptedFlexibleCreditedCount,
+                flexibleUncertainCount: snapshot.acceptedFlexibleUncertainCount,
+                projectedAfterStorageW: snapshot.projectedAfterStorageW,
                 projectedNvpW: snapshot.projectedNvpW,
                 pvControlNvpW: snapshot.pvControlNvpW,
                 pvAction: snapshot.pv.action,
@@ -613,12 +716,25 @@ class NvpCoordinatorModule extends BaseModule {
         await this._setIfChanged('ems.nvpCoordinator.nvpErrorW', snapshot.nvpErrorW);
         await this._setIfChanged('ems.nvpCoordinator.storageTopology', snapshot.topology);
         await this._setIfChanged('ems.nvpCoordinator.storageActualW', snapshot.storageActualW);
+        await this._setIfChanged('ems.nvpCoordinator.storageRequestedTargetW', snapshot.storageRequestedTargetW);
         await this._setIfChanged('ems.nvpCoordinator.storageTargetW', snapshot.storageTargetW);
         await this._setIfChanged('ems.nvpCoordinator.storageWriteOk', snapshot.storageWriteOk);
+        await this._setIfChanged('ems.nvpCoordinator.storageWriteAccepted', snapshot.storageWriteAccepted);
+        await this._setIfChanged('ems.nvpCoordinator.storageWriteFullyAccepted', snapshot.storageWriteFullyAccepted);
+        await this._setIfChanged('ems.nvpCoordinator.storagePartiallyAccepted', snapshot.storagePartiallyAccepted);
+        await this._setIfChanged('ems.nvpCoordinator.storageFailedW', snapshot.storageFailedW);
+        await this._setIfChanged('ems.nvpCoordinator.storageUnservedW', snapshot.storageUnservedW);
         await this._setIfChanged('ems.nvpCoordinator.storageWriteStatus', snapshot.storageWriteStatus);
         await this._setIfChanged('ems.nvpCoordinator.storageTargetAgeMs', snapshot.storageResponseAgeMs);
         await this._setIfChanged('ems.nvpCoordinator.storageCommandCredited', snapshot.storageCommandCredited);
         await this._setIfChanged('ems.nvpCoordinator.storagePendingDeltaW', snapshot.storagePendingDeltaW);
+        await this._setIfChanged('ems.nvpCoordinator.flexibleNetLoadDeltaW', snapshot.acceptedFlexibleNetLoadDeltaW);
+        await this._setIfChanged('ems.nvpCoordinator.flexibleLoadDeltaW', snapshot.acceptedFlexibleLoadDeltaW);
+        await this._setIfChanged('ems.nvpCoordinator.flexibleGenerationDeltaW', snapshot.acceptedFlexibleGenerationDeltaW);
+        await this._setIfChanged('ems.nvpCoordinator.flexibleCreditedCount', snapshot.acceptedFlexibleCreditedCount);
+        await this._setIfChanged('ems.nvpCoordinator.flexibleUncertainCount', snapshot.acceptedFlexibleUncertainCount);
+        await this._setIfChanged('ems.nvpCoordinator.flexibleEffectsJson', JSON.stringify(snapshot.acceptedFlexibleEffects || []));
+        await this._setIfChanged('ems.nvpCoordinator.projectedAfterStorageW', snapshot.projectedAfterStorageW);
         await this._setIfChanged('ems.nvpCoordinator.projectedNvpW', snapshot.projectedNvpW);
         await this._setIfChanged('ems.nvpCoordinator.pvControlNvpW', snapshot.pvControlNvpW);
         await this._setIfChanged('ems.nvpCoordinator.pvAction', snapshot.pv.action);

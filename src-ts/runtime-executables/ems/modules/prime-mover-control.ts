@@ -25,6 +25,7 @@ const {
 } = require('../services/actuator-shadow-arbiter');
 const { ActuatorCommandContract }: { ActuatorCommandContract: new () => ActuatorContract } = require('../services/actuator-command-contract');
 const { resolveCurrentNvpSnapshot }: { resolveCurrentNvpSnapshot: (snapshot: unknown, now: number, maxAgeMs: number) => AnyRecord } = require('../services/measurement-freshness');
+const { recordAcceptedActuatorTransition }: { recordAcceptedActuatorTransition: (adapter: AnyRecord, input: AnyRecord) => AnyRecord | null } = require('../services/accepted-power-effects');
 
 type AnyRecord = Record<string, any>;
 type PrimeMoverKind = 'bhkw' | 'generator';
@@ -621,6 +622,17 @@ export class PrimeMoverControlModule extends BaseModule {
     const result = this.actuatorContract.complete(key, desiredRunning, attempt.accepted, readbackOk, after.value, Date.now(), config);
     await this.publishContract(device, owner, command, result, after);
     if (attempt.accepted) {
+      // BHKW/Generator haben ohne Nennleistungsmodell keine sichere sofortige
+      // Leistungsprognose. Der finale PV-Aktor wartet deshalb bei einem frisch
+      // akzeptierten Start/Stop mindestens auf den nächsten NVP-Messzyklus,
+      // statt im selben Tick gegen einen noch nicht reagierten Erzeuger zu regeln.
+      recordAcceptedActuatorTransition(this.adapter, {
+        key: `${this.root()}:${device.id}`,
+        accepted: true,
+        kind: 'generation',
+        source: this.spec.moduleName,
+        reason: `${reason}:${command}`,
+      });
       runtime.lastCmdMs = Date.now();
       runtime.lastCmd = command;
       await this.setIfChanged(`${this.deviceBase(device)}.lastCommand`, command);

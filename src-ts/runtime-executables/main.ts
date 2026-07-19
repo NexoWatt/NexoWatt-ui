@@ -6971,7 +6971,9 @@ class NexoWattVis extends utils.Adapter {
       }
     }
 
-    let anyOkRelevant = false;
+    // Baustein 5A: Planung und tatsaechlich akzeptierte Hardwareleistung
+    // strikt trennen. Ein einzelner erfolgreicher Teil-Write darf nicht mehr die
+    // gesamte Farmvorgabe als ausgefuehrt markieren.
     const results = [];
     for (const s of storages) {
       const alloc = (direction === 'idle') ? 0 : (allocMap.get(s) || 0);
@@ -7016,28 +7018,61 @@ class NexoWattVis extends utils.Adapter {
         const wr = await this._sfWriteIfChanged(s.setSignedPowerId, outSignedW);
         r.writes.signed = wr;
         if (!wr.ok) r.ok = false;
-        if (wr.ok) anyOkRelevant = true;
       }
 
       if (s.setChargePowerId) {
         const wr = await this._sfWriteIfChanged(s.setChargePowerId, outChargeW);
         r.writes.charge = wr;
         if (!wr.ok) r.ok = false;
-        if (direction === 'charge' && wr.ok) anyOkRelevant = true;
-        if (direction === 'idle' && wr.ok) anyOkRelevant = true;
       }
 
       if (s.setDischargePowerId) {
         const wr = await this._sfWriteIfChanged(s.setDischargePowerId, outDischargeW);
         r.writes.discharge = wr;
         if (!wr.ok) r.ok = false;
-        if (direction === 'discharge' && wr.ok) anyOkRelevant = true;
-        if (direction === 'idle' && wr.ok) anyOkRelevant = true;
       }
 
-      this._sfRememberDispatchSnapshot(s, direction, alloc);
+      const configuredWrites = Object.values(r.writes || {}).filter(Boolean);
+      const commandRequired = configuredWrites.length > 0;
+      const commandAccepted = commandRequired ? configuredWrites.every((wr) => wr && wr.ok === true) : null;
+      const signedAllocatedW = direction === 'charge' ? -Math.abs(alloc) : (direction === 'discharge' ? Math.abs(alloc) : 0);
+      r.commandRequired = commandRequired;
+      r.commandAccepted = commandAccepted;
+      r.acceptedW = commandAccepted === true ? signedAllocatedW : 0;
+      r.failedW = (commandRequired && commandAccepted !== true && direction !== 'idle') ? signedAllocatedW : 0;
+      r.stopAccepted = direction === 'idle' && commandRequired ? commandAccepted === true : null;
+
+      // Nur ein wirklich vollstaendig akzeptierter Befehl darf als letzter
+      // Dispatch dieses Speichers gelten. So wird bei Split-DPs kein halber
+      // Richtungsbefehl als erfolgreich zwischengespeichert.
+      if (commandAccepted === true) this._sfRememberDispatchSnapshot(s, direction, alloc);
       results.push(r);
     }
+
+    const plannedSignedW = direction === 'charge' ? -deliveredAbsW : deliveredAbsW;
+    const acceptedSignedW = results.reduce((sum, row) => sum + (Number.isFinite(Number(row.acceptedW)) ? Number(row.acceptedW) : 0), 0);
+    const acceptedAbsW = Math.abs(Math.round(acceptedSignedW));
+    const failedAbsW = direction === 'idle'
+      ? 0
+      : Math.max(0, Math.round(deliveredAbsW - acceptedAbsW));
+    const failedSignedW = failedAbsW > 0
+      ? (direction === 'charge' ? -failedAbsW : failedAbsW)
+      : 0;
+    const unservedSignedW = unservedAbsW > 0
+      ? (direction === 'charge' ? -unservedAbsW : unservedAbsW)
+      : 0;
+    const commandRows = results.filter((row) => row.commandRequired === true);
+    const allConfiguredWritesAccepted = commandRows.length > 0 && commandRows.every((row) => row.commandAccepted === true);
+    const failedCommandCount = commandRows.filter((row) => row.commandAccepted !== true).length;
+    const anyAcceptedPower = direction === 'idle' ? allConfiguredWritesAccepted : acceptedAbsW > 0;
+    const requestSatisfied = direction === 'idle'
+      ? allConfiguredWritesAccepted
+      : (allConfiguredWritesAccepted && failedAbsW === 0 && unservedAbsW === 0);
+    let dispatchStatus = 'farm';
+    if (direction === 'idle') dispatchStatus = allConfiguredWritesAccepted ? 'farm-stop' : 'farm-stop-failed';
+    else if (!allConfiguredWritesAccepted && acceptedAbsW > 0) dispatchStatus = 'farm-partial';
+    else if (!allConfiguredWritesAccepted) dispatchStatus = 'farm-write-failed';
+    else if (unservedAbsW > 0) dispatchStatus = 'farm-limited';
 
     try {
       const diag = {
@@ -7045,8 +7080,17 @@ class NexoWattVis extends utils.Adapter {
         mode: sf.mode,
         direction,
         targetW: w,
-        deliveredW: direction === 'charge' ? -deliveredAbsW : deliveredAbsW,
-        unservedW: unservedAbsW,
+        requestedW: w,
+        plannedDeliveredW: plannedSignedW,
+        deliveredW: Math.round(acceptedSignedW),
+        acceptedDeliveredW: Math.round(acceptedSignedW),
+        failedW: failedSignedW,
+        unservedW: unservedSignedW,
+        writeOk: allConfiguredWritesAccepted,
+        commandEffective: anyAcceptedPower,
+        failedCommandCount,
+        requestSatisfied,
+        status: dispatchStatus,
         source: src,
         dischargeFloorSocPct: (direction === 'discharge') ? dischargeFloorSoc : null,
         onlineStorages: storages.filter(s => s.online === true).length,
@@ -7082,6 +7126,11 @@ class NexoWattVis extends utils.Adapter {
             chargeW: r.chargeW,
             dischargeW: r.dischargeW,
             ok: r.ok,
+            commandRequired: r.commandRequired === true,
+            commandAccepted: r.commandAccepted === true,
+            acceptedW: Number.isFinite(Number(r.acceptedW)) ? Math.round(Number(r.acceptedW)) : 0,
+            failedW: Number.isFinite(Number(r.failedW)) ? Math.round(Number(r.failedW)) : 0,
+            stopAccepted: r.stopAccepted,
             authorityBlocked: authorityBlocks.length > 0,
             blockedByOwners: Array.from(new Set(authorityBlocks.map(wr => String(wr.blockedByOwner || '')).filter(Boolean))),
             writes: r.writes,
@@ -7095,14 +7144,17 @@ class NexoWattVis extends utils.Adapter {
 
     try {
       if (this.log && typeof this.log.debug === 'function') {
-        this.log.debug(`[storageFarm] apply targetW=${w} dir=${direction} delivered=${direction === 'charge' ? -deliveredAbsW : deliveredAbsW}W unserved=${unservedAbsW}W storages=${storages.length} src=${src}`);
+        this.log.debug(`[storageFarm] apply targetW=${w} dir=${direction} planned=${plannedSignedW}W accepted=${Math.round(acceptedSignedW)}W failed=${failedSignedW}W unserved=${unservedSignedW}W status=${dispatchStatus} storages=${storages.length} src=${src}`);
       }
     } catch (_eLog) {}
 
-    const applied = !!anyOkRelevant;
+    const applied = !!anyAcceptedPower;
     const authorityBlockedWrites = results.flatMap((row) => Object.values(row.writes || {}))
       .filter((wr) => wr && wr.blocked === true);
-    let resultReason = applied ? 'ok' : 'no-write-accepted';
+    let resultReason = allConfiguredWritesAccepted ? dispatchStatus : 'no-write-accepted';
+    if (!allConfiguredWritesAccepted && acceptedAbsW > 0) resultReason = 'farm-partial';
+    else if (!allConfiguredWritesAccepted) resultReason = 'farm-write-failed';
+    else if (unservedAbsW > 0) resultReason = 'farm-limited';
     if (!applied && authorityBlockedWrites.length > 0) resultReason = 'blocked-by-actuator-authority';
     else if (!applied && direction === 'charge' && eligibleForDispatch.length === 0) resultReason = 'no-charge-dispatchable-storage';
     else if (!applied && direction === 'discharge' && eligibleForDispatch.length === 0) resultReason = 'no-discharge-dispatchable-storage';
@@ -7110,11 +7162,21 @@ class NexoWattVis extends utils.Adapter {
     else if (!applied && storages.some((row) => row.statusMatch === 'missing')) resultReason = 'farm-status-missing';
     return {
       applied,
+      commandEffective: anyAcceptedPower,
+      writeOk: allConfiguredWritesAccepted,
+      failedCommandCount,
+      requestSatisfied,
+      partiallyAccepted: !allConfiguredWritesAccepted && acceptedAbsW > 0,
+      status: dispatchStatus,
       reason: resultReason,
       direction,
       targetW: w,
-      deliveredW: direction === 'charge' ? -deliveredAbsW : deliveredAbsW,
-      unservedW: unservedAbsW,
+      requestedW: w,
+      plannedDeliveredW: plannedSignedW,
+      deliveredW: Math.round(acceptedSignedW),
+      acceptedDeliveredW: Math.round(acceptedSignedW),
+      failedW: failedSignedW,
+      unservedW: unservedSignedW,
       authorityBlockedCount: authorityBlockedWrites.length,
       blockedByOwners: Array.from(new Set(authorityBlockedWrites.map((wr) => String(wr.blockedByOwner || '')).filter(Boolean))),
       results,
@@ -14234,9 +14296,9 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         // Heuristics for ioBroker OCPP adapter:
         // - If a station has connectors 1..N, connector 0 is typically "Main" and should NOT create
-        //   an extra Ladepunkt. However, connector 0 often contains useful station-level states
-        //   (online/availability). We therefore propagate missing IDs from connector 0 to the
-        //   numbered connectors and then drop connector 0 if numbered connectors exist.
+        //   an extra Ladepunkt. Connector 0 may provide a shared station-online signal, but its
+        //   connector status must never be inherited by connector 1..N. Faulted/Preparing/Charging
+        //   remain connector-specific truths.
         try {
           const byStation = {};
           for (const c of connectors) {
@@ -14245,17 +14307,18 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
             byStation[key].push(c);
           }
 
-          // Propagate station-level IDs
+          // Propagate only true station-level IDs. `statusId` is deliberately
+          // excluded because connector 0 is not the operating status of connector 1..N.
           for (const arr of Object.values(byStation)) {
             const c0 = (arr || []).find(x => Number(x && x.connectorNo) === 0);
             if (!c0 || !c0.ids) continue;
             for (const cx of (arr || [])) {
               if (!cx || Number(cx.connectorNo) <= 0) continue;
               cx.ids = (cx.ids && typeof cx.ids === 'object') ? cx.ids : {};
+              // Connector 0 darf ausschließlich die Stations-Erreichbarkeit liefern.
+              // Enable-/Active-/Status-DPs sind connectorbezogene Aktorwahrheiten und
+              // werden niemals auf Connector 1..N vererbt.
               if (!cx.ids.onlineId && c0.ids.onlineId) cx.ids.onlineId = c0.ids.onlineId;
-              if (!cx.ids.enableWriteId && c0.ids.enableWriteId) cx.ids.enableWriteId = c0.ids.enableWriteId;
-              if (!cx.ids.statusId && c0.ids.statusId) cx.ids.statusId = c0.ids.statusId;
-              if (!cx.ids.activeId && c0.ids.activeId) cx.ids.activeId = c0.ids.activeId;
             }
           }
 
@@ -14738,6 +14801,22 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
               meterAgeMs: await getOwn(`${base}.meterAgeMs`),
               statusStale: await getOwn(`${base}.statusStale`),
               statusAgeMs: await getOwn(`${base}.statusAgeMs`),
+              statusRaw: await getOwn(`${base}.statusRaw`),
+              statusEffective: await getOwn(`${base}.statusEffective`),
+              statusClass: await getOwn(`${base}.statusClass`),
+              statusSourceId: await getOwn(`${base}.statusSourceId`),
+              statusSourceConnectorNo: await getOwn(`${base}.statusSourceConnectorNo`),
+              statusConnectorMismatch: await getOwn(`${base}.statusConnectorMismatch`),
+              statusSharedAcrossConnectors: await getOwn(`${base}.statusSharedAcrossConnectors`),
+              statusScope: await getOwn(`${base}.statusScope`),
+              statusIgnoredReason: await getOwn(`${base}.statusIgnoredReason`),
+              statusFresh: await getOwn(`${base}.statusFresh`),
+              faultActive: await getOwn(`${base}.faultActive`),
+              faultReason: await getOwn(`${base}.faultReason`),
+              unavailableActive: await getOwn(`${base}.unavailableActive`),
+              unavailableReason: await getOwn(`${base}.unavailableReason`),
+              operationalBlocked: await getOwn(`${base}.operationalBlocked`),
+              onlineSource: await getOwn(`${base}.onlineSource`),
               actualPowerW: await getOwn(`${base}.actualPowerW`),
               targetPowerW: await getOwn(`${base}.targetPowerW`),
               targetCurrentA: await getOwn(`${base}.targetCurrentA`),
@@ -18135,14 +18214,21 @@ const _nwDisplayBuildPayload = (station) => {
       const charging = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.charging`, powerW > 100), powerW > 100);
       const online = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.online`, true), true);
       const meterStale = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.meterStale`, false), false);
-      const rawStatus = String(_nwDisplayStateVal(`evcs.${idx}.status`, '') || _nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.applyStatus`, '') || '').trim();
-      const rawLower = rawStatus.toLowerCase();
+      const rawStatus = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.statusRaw`, _nwDisplayStateVal(`evcs.${idx}.status`, '')) || '').trim();
+      const effectiveStatus = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.statusEffective`, '') || '').trim();
+      const faultActive = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.faultActive`, false), false);
+      const faultReason = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.faultReason`, '') || '').trim();
+      const unavailableActive = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.unavailableActive`, false), false);
+      const unavailableReason = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.unavailableReason`, '') || '').trim();
+      const operationalBlocked = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.operationalBlocked`, faultActive || unavailableActive), faultActive || unavailableActive);
+      const statusClass = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.statusClass`, '') || '').trim().toLowerCase();
       let status = 'available';
-      let statusDetail = rawStatus;
-      if (!online || meterStale) { status = 'unavailable'; statusDetail = meterStale ? 'Messwert stale' : 'LP offline'; }
-      else if (rawLower.includes('fault') || rawLower.includes('error') || rawLower.includes('störung')) { status = 'error'; statusDetail = rawStatus || 'Störung'; }
-      else if (charging || powerW > 100) status = 'charging';
-      else if (plugged) status = 'plugged';
+      let statusDetail = effectiveStatus;
+      if (!online || meterStale || statusClass === 'offline') { status = 'offline'; statusDetail = meterStale ? 'Messwert veraltet' : 'LP offline'; }
+      else if (faultActive) { status = 'error'; statusDetail = faultReason || effectiveStatus || 'Störung'; }
+      else if (unavailableActive) { status = 'unavailable'; statusDetail = unavailableReason || effectiveStatus || 'Nicht verfügbar'; }
+      else if (charging || powerW > 100 || statusClass === 'charging') status = 'charging';
+      else if (plugged || statusClass === 'plugged') status = 'plugged';
       const userMode = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.userMode`, 'auto') || 'auto').toLowerCase();
       const mode = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.effectiveMode`, userMode) || 'auto').toLowerCase();
       const userEnabled = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.userEnabled`, true), true);
@@ -18191,6 +18277,13 @@ const _nwDisplayBuildPayload = (station) => {
         status,
         statusDetail,
         rawStatus,
+        effectiveStatus,
+        statusClass,
+        faultActive,
+        faultReason,
+        unavailableActive,
+        unavailableReason,
+        operationalBlocked,
         online,
         plugged,
         charging,

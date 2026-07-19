@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/multi-use.ts
- * Quell-Hash: sha256:c5e332af1ba16116fc779687079b960e6ee169225250e0d43a515cfa1cfcec2d
+ * Quell-Hash: sha256:64fea13474221adb0cdc2a20a367b59295d6670c155d7742a784f873bc53e605
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -32,6 +32,7 @@ const { applySetpoint } = require('../consumers');
 const { ReasonCodes, normalizeReason } = require('../reasons');
 const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
 const { ActuatorCommandContract } = require('../services/actuator-command-contract');
+const { recordAcceptedPowerTarget } = require('../services/accepted-power-effects');
 
 function num(value, fallback = 0) {
   const n = Number(value);
@@ -409,11 +410,11 @@ class MultiUseModule extends BaseModule {
     const toleranceW = Math.max(50, requestedW * 0.03);
     const readbackBefore = actualBefore === null ? null : Math.abs(actualBefore - requestedW) <= toleranceW;
     const confirmed = this._actuatorContract.confirmFromReadback(key, target, actualBefore, readbackBefore === true, now);
-    if (confirmed) return { applied: true, accepted: true, confirmed: true, readbackOk: true, status: confirmed.status, contract: confirmed, owner };
+    if (confirmed) return { applied: true, accepted: true, writeAccepted: false, confirmed: true, readbackOk: true, status: confirmed.status, contract: confirmed, owner };
     const decision = this._actuatorContract.prepare(key, target, now, contractCfg);
     if (!decision.allowed) {
       const current = this._actuatorContract.result(key, now, decision.targetChanged);
-      return { applied: false, accepted: false, confirmed: false, readbackOk: current.readbackOk, status: current.status, contract: current, owner };
+      return { applied: false, accepted: false, writeAccepted: false, confirmed: false, readbackOk: current.readbackOk, status: current.status, contract: current, owner };
     }
     const writeResult = await withActuatorShadowContext(this.adapter, {
       owner,
@@ -429,7 +430,7 @@ class MultiUseModule extends BaseModule {
     const actualAfter = this._readActualW(consumer, staleMs);
     const readbackOk = actualAfter === null ? null : Math.abs(actualAfter - requestedW) <= toleranceW;
     const contract = this._actuatorContract.complete(key, target, accepted, readbackOk, actualAfter, Date.now(), contractCfg);
-    return { ...writeResult, applied: contract.confirmed, accepted, confirmed: contract.confirmed, readbackOk, status: contract.status, contract, owner };
+    return { ...writeResult, applied: contract.confirmed, accepted, writeAccepted: accepted, confirmed: contract.confirmed, readbackOk, status: contract.status, contract, owner };
   }
 
   _budgetDemand(cfg, staleMs) {
@@ -633,9 +634,22 @@ class MultiUseModule extends BaseModule {
         result = await this._applyConsumerCommand(consumer, target, status, staleMs);
       } else if (stopAlreadyAccepted) {
         const contract = this._actuatorContract.result(`multiUse:${consumer.id}`, now);
-        result = { applied: true, accepted: true, confirmed: true, readbackOk: contract.readbackOk, status: 'stop-accepted-hold', contract, owner: this._consumerOwner(consumer) };
+        result = { applied: true, accepted: true, writeAccepted: false, confirmed: true, readbackOk: contract.readbackOk, status: 'stop-accepted-hold', contract, owner: this._consumerOwner(consumer) };
       } else if (allocatedW <= 0) {
         this._actuatorContract.release(`multiUse:${consumer.id}`);
+      }
+
+      if (result.writeAccepted === true) {
+        recordAcceptedPowerTarget(this.adapter, {
+          key: `multiUse:${consumer.id}`,
+          targetW: Math.round(allocatedW),
+          baselineW: actualBefore,
+          accepted: true,
+          uncertain: actualBefore === null,
+          kind: 'load',
+          source: 'multiUse',
+          reason: String(result.status || status),
+        });
       }
 
       const actualAfter = this._readActualW(consumer, staleMs);

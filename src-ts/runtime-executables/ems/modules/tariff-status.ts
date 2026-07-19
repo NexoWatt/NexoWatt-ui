@@ -155,11 +155,16 @@ function classifyTariffStorageStatus(input: AnyRecord = {}) {
   const intentW = roundedOrNull(input.intentW) ?? 0;
   const requestW = roundedOrNull(input.requestW) ?? 0;
   const finalW = roundedOrNull(input.finalW) ?? 0;
+  const acceptedW = roundedOrNull(input.acceptedW);
   const topology = cleanText(input.topology || 'none', 40).toLowerCase() || 'none';
   const topologyReason = cleanText(input.topologyReason || '', 180);
   const writeStatus = cleanText(input.writeStatus || '', 220);
   const writeStatusLower = writeStatus.toLowerCase();
   const writeOk = boolValue(input.writeOk, false);
+  const commandEffective = boolValue(input.commandEffective, false);
+  const requestSatisfied = boolValue(input.requestSatisfied, false);
+  const partiallyAccepted = boolValue(input.partiallyAccepted, false)
+    || containsAny(writeStatusLower, ['farm-partial', 'partial']);
   const actualW = roundedOrNull(input.actualW);
   const actualAgeMs = roundedOrNull(input.actualAgeMs);
   const actualTrusted = boolValue(input.actualTrusted, false);
@@ -167,7 +172,13 @@ function classifyTariffStorageStatus(input: AnyRecord = {}) {
   const readbackGraceMs = clamp(Math.round(Number(input.readbackGraceMs) || 20000), 0, 300000);
   const readbackMaxAgeMs = clamp(Math.round(Number(input.readbackMaxAgeMs) || 30000), 1000, 600000);
   const targetAgeMs = Math.max(0, Math.round(Number(input.targetAgeMs) || 0));
-  const finalDirection = directionOf(finalW, 0);
+  // `finalW` ist die fachlich angeforderte Leistung nach Policy/Safety. Für
+  // Readback und Status zählt dagegen ausschließlich die durch den Writer
+  // akzeptierte Leistung. Bei einer teilweisen Farmausführung darf ein
+  // angeforderter 900-W-Befehl mit nur 400 W akzeptierter Leistung niemals als
+  // vollständige 900-W-Wirkung erscheinen.
+  const effectiveTargetW = commandEffective && acceptedW !== null ? acceptedW : finalW;
+  const finalDirection = directionOf(effectiveTargetW, 0);
   const actualDirection = directionOf(actualW, readbackDeadbandW);
   const intentDirection = directionOf(intentW, 0);
 
@@ -189,7 +200,7 @@ function classifyTariffStorageStatus(input: AnyRecord = {}) {
   );
   const hold = !noWriter && !blocked && containsAny(writeStatusLower, ['no-write', 'hold']);
   const retained = !noWriter && !blocked && writeStatusLower === 'unverändert';
-  const writeAccepted = !noWriter && !blocked && !hold && (writeOk || retained);
+  const writeAccepted = !noWriter && !blocked && !hold && (commandEffective || writeOk || retained);
   const writeFailed = !noWriter && !blocked && !hold && !writeAccepted;
 
   const feedbackFresh = actualW !== null
@@ -222,6 +233,7 @@ function classifyTariffStorageStatus(input: AnyRecord = {}) {
   else if (blocked) gateStatus = 'blocked';
   else if (hold) gateStatus = 'hold';
   else if (writeFailed) gateStatus = 'write-failed';
+  else if (partiallyAccepted || !requestSatisfied) gateStatus = 'partial';
 
   let status = 'inactive';
   if (active) {
@@ -243,12 +255,19 @@ function classifyTariffStorageStatus(input: AnyRecord = {}) {
   }
 
   const farmTargetW = roundedOrNull(input.farmTargetW);
+  const farmPlannedW = roundedOrNull(input.farmPlannedW);
   const farmDeliveredW = roundedOrNull(input.farmDeliveredW);
+  const farmFailedW = roundedOrNull(input.farmFailedW);
   const farmUnservedW = roundedOrNull(input.farmUnservedW);
   const farmPartial = topology === 'farm'
-    && farmTargetW !== null
-    && farmDeliveredW !== null
-    && Math.abs(farmTargetW - farmDeliveredW) > Math.max(1, readbackDeadbandW);
+    && (
+      partiallyAccepted
+      || (farmTargetW !== null
+        && farmDeliveredW !== null
+        && Math.abs(farmTargetW - farmDeliveredW) > Math.max(1, readbackDeadbandW))
+      || (farmFailedW !== null && Math.abs(farmFailedW) > 0)
+      || (farmUnservedW !== null && Math.abs(farmUnservedW) > 0)
+    );
 
   return {
     active,
@@ -256,10 +275,15 @@ function classifyTariffStorageStatus(input: AnyRecord = {}) {
     intentDirection,
     requestW,
     finalW,
+    acceptedW,
+    effectiveTargetW,
     finalDirection,
     topology,
     topologyReason,
     writeOk,
+    commandEffective,
+    requestSatisfied,
+    partiallyAccepted,
     writeStatus,
     writeAccepted,
     writeFailed,
@@ -276,7 +300,9 @@ function classifyTariffStorageStatus(input: AnyRecord = {}) {
     targetAgeMs,
     status,
     farmTargetW,
+    farmPlannedW,
     farmDeliveredW,
+    farmFailedW,
     farmUnservedW,
     farmPartial,
   };
@@ -304,33 +330,39 @@ const buildEffectiveStorageText = (result: ReturnType<typeof classifyTariffStora
   }
 
   const farmSuffix = result.topology === 'farm' && result.farmTargetW !== null && result.farmDeliveredW !== null
-    ? `; Farm-Dispatch ${formatPower(result.farmDeliveredW)} von ${formatPower(result.farmTargetW)}${result.farmUnservedW ? `, offen ${formatPower(result.farmUnservedW)}` : ''}`
+    ? `; Farm angefordert ${formatPower(result.farmTargetW)}${result.farmPlannedW !== null ? `, geplant ${formatPower(result.farmPlannedW)}` : ''}, akzeptiert ${formatPower(result.farmDeliveredW)}${result.farmFailedW ? `, Write-Fehler ${formatPower(result.farmFailedW)}` : ''}${result.farmUnservedW ? `, nicht verteilbar ${formatPower(result.farmUnservedW)}` : ''}`
+    : '';
+
+  const requestedVsAccepted = result.writeAccepted
+    && result.acceptedW !== null
+    && Math.abs(result.finalW - result.acceptedW) > Math.max(1, result.readbackDeadbandW)
+    ? `; angefordert ${formatPower(result.finalW)}, akzeptiert ${formatPower(result.acceptedW)}`
     : '';
 
   if (result.finalDirection === 'charge') {
     if (result.readbackStatus === 'confirmed-charging') {
-      return `Speicher lädt ${formatPower(result.actualW)} (Soll ${formatPower(result.finalW)}; Richtung bestätigt${detail})${farmSuffix}`;
+      return `Speicher lädt ${formatPower(result.actualW)} (wirksames Soll ${formatPower(result.effectiveTargetW)}; Richtung bestätigt${requestedVsAccepted}${detail})${farmSuffix}`;
     }
     if (result.readbackStatus === 'no-fresh-feedback') {
-      return `Laden ${formatPower(result.finalW)} angefordert – keine frische Istwert-Rückmeldung${detail}${farmSuffix}`;
+      return `Laden ${formatPower(result.effectiveTargetW)} wirksam – keine frische Istwert-Rückmeldung${requestedVsAccepted}${detail}${farmSuffix}`;
     }
     if (result.readbackStatus === 'pending-charging') {
-      return `Laden ${formatPower(result.finalW)} angefordert – Rückmeldung ausstehend${detail}${farmSuffix}`;
+      return `Laden ${formatPower(result.effectiveTargetW)} wirksam – Rückmeldung ausstehend${requestedVsAccepted}${detail}${farmSuffix}`;
     }
-    return `Laden ${formatPower(result.finalW)} angefordert – Istwert ${result.actualW === null ? '—' : `${result.actualW} W`} bestätigt die Richtung nicht${detail}${farmSuffix}`;
+    return `Laden ${formatPower(result.effectiveTargetW)} wirksam – Istwert ${result.actualW === null ? '—' : `${result.actualW} W`} bestätigt die Richtung nicht${requestedVsAccepted}${detail}${farmSuffix}`;
   }
 
   if (result.finalDirection === 'discharge') {
     if (result.readbackStatus === 'confirmed-discharging') {
-      return `Speicher entlädt ${formatPower(result.actualW)} (Soll ${formatPower(result.finalW)}; Richtung bestätigt${detail})${farmSuffix}`;
+      return `Speicher entlädt ${formatPower(result.actualW)} (wirksames Soll ${formatPower(result.effectiveTargetW)}; Richtung bestätigt${requestedVsAccepted}${detail})${farmSuffix}`;
     }
     if (result.readbackStatus === 'no-fresh-feedback') {
-      return `Entladen ${formatPower(result.finalW)} angefordert – keine frische Istwert-Rückmeldung${detail}${farmSuffix}`;
+      return `Entladen ${formatPower(result.effectiveTargetW)} wirksam – keine frische Istwert-Rückmeldung${requestedVsAccepted}${detail}${farmSuffix}`;
     }
     if (result.readbackStatus === 'pending-discharging') {
-      return `Entladen ${formatPower(result.finalW)} angefordert – Rückmeldung ausstehend${detail}${farmSuffix}`;
+      return `Entladen ${formatPower(result.effectiveTargetW)} wirksam – Rückmeldung ausstehend${requestedVsAccepted}${detail}${farmSuffix}`;
     }
-    return `Entladen ${formatPower(result.finalW)} angefordert – Istwert ${result.actualW === null ? '—' : `${result.actualW} W`} bestätigt die Richtung nicht${detail}${farmSuffix}`;
+    return `Entladen ${formatPower(result.effectiveTargetW)} wirksam – Istwert ${result.actualW === null ? '—' : `${result.actualW} W`} bestätigt die Richtung nicht${requestedVsAccepted}${detail}${farmSuffix}`;
   }
 
   if (result.readbackStatus === 'confirmed-stop') {
@@ -411,12 +443,15 @@ class TariffStatusModule extends BaseModule {
     await mk('tarif.speicherRequestQuelle', 'Speicher Request Quelle', 'string', 'text');
     await mk('tarif.speicherRequestGrund', 'Speicher Request Grund', 'string', 'text');
     await mk('tarif.speicherFinalW', 'Wirksamer Speicher-Sollwert (W)', 'number', 'value.power');
+    await mk('tarif.speicherAcceptedW', 'Vom Hardwarewriter akzeptierter Speicher-Sollwert (W)', 'number', 'value.power');
     await mk('tarif.speicherFinalQuelle', 'Wirksamer Speicher-Sollwert Quelle', 'string', 'text');
     await mk('tarif.speicherFinalGrund', 'Wirksamer Speicher-Sollwert Grund', 'string', 'text');
     await mk('tarif.speicherTopologie', 'Wirksame Speicher-Topologie', 'string', 'text');
     await mk('tarif.speicherGateStatus', 'Speicher Gate-/Write-Klassifikation', 'string', 'text');
     await mk('tarif.speicherWriteOk', 'Speicher Write erfolgreich', 'boolean', 'indicator');
     await mk('tarif.speicherCommandEffective', 'Speicherbefehl wirksam/weiter gültig', 'boolean', 'indicator');
+    await mk('tarif.speicherRequestSatisfied', 'Speicheranforderung vollständig akzeptiert', 'boolean', 'indicator');
+    await mk('tarif.speicherPartiallyAccepted', 'Speicheranforderung teilweise akzeptiert', 'boolean', 'indicator');
     await mk('tarif.speicherWriteStatus', 'Speicher Write Rohstatus', 'string', 'text');
     await mk('tarif.speicherReadbackW', 'Speicher Istleistung für Status (W)', 'number', 'value.power');
     await mk('tarif.speicherReadbackAgeMs', 'Alter Speicher-Istleistung (ms)', 'number', 'value.interval');
@@ -424,6 +459,8 @@ class TariffStatusModule extends BaseModule {
     await mk('tarif.speicherReadbackStatus', 'Speicher Readback Status', 'string', 'text');
     await mk('tarif.speicherStatus', 'Tatsächlicher Tarif-Speicherstatus', 'string', 'text');
     await mk('tarif.speicherFarmDeliveredW', 'Farm tatsächlich verteilter Sollwert (W)', 'number', 'value.power');
+    await mk('tarif.speicherFarmPlannedW', 'Farm geplant verteilter Sollwert (W)', 'number', 'value.power');
+    await mk('tarif.speicherFarmFailedW', 'Farm wegen Write-Fehler nicht akzeptierte Leistung (W)', 'number', 'value.power');
     await mk('tarif.speicherFarmUnservedW', 'Farm nicht verteilbarer Rest (W)', 'number', 'value.power');
     await mk('tarif.statusJson', 'Tarif-/Speicher-Steuerkette (JSON)', 'string', 'json');
   }
@@ -469,10 +506,20 @@ class TariffStatusModule extends BaseModule {
         'speicher.regelung.requestQuelle',
         'speicher.regelung.requestGrund',
         'speicher.regelung.sollW',
+        'speicher.regelung.acceptedSollW',
         'speicher.regelung.quelle',
         'speicher.regelung.grund',
         'speicher.regelung.schreibOk',
+        'speicher.regelung.commandEffective',
+        'speicher.regelung.requestSatisfied',
+        'speicher.regelung.partiallyAccepted',
         'speicher.regelung.schreibStatus',
+        'speicher.regelung.farmRequestedW',
+        'speicher.regelung.farmPlannedW',
+        'speicher.regelung.farmAcceptedW',
+        'speicher.regelung.farmFailedW',
+        'speicher.regelung.farmUnservedW',
+        'speicher.regelung.farmStatus',
         'speicher.regelung.batteryPowerFeedbackMeasuredW',
         'speicher.regelung.batteryPowerFeedbackAgeMs',
         'speicher.regelung.batteryPowerBalanceTrusted',
@@ -505,9 +552,13 @@ class TariffStatusModule extends BaseModule {
       const requestSource = cleanText(states['speicher.regelung.requestQuelle'] || '', 100);
       const requestReason = cleanText(states['speicher.regelung.requestGrund'] || '', 260);
       const finalW = roundedOrNull(states['speicher.regelung.sollW']) ?? 0;
+      const acceptedW = roundedOrNull(states['speicher.regelung.acceptedSollW']);
       const finalSource = cleanText(states['speicher.regelung.quelle'] || '', 100);
       const finalReason = cleanText(states['speicher.regelung.grund'] || '', 260);
       const writeOk = boolValue(states['speicher.regelung.schreibOk'], false);
+      const commandEffective = boolValue(states['speicher.regelung.commandEffective'], false);
+      const requestSatisfied = boolValue(states['speicher.regelung.requestSatisfied'], false);
+      const partiallyAccepted = boolValue(states['speicher.regelung.partiallyAccepted'], false);
       const writeStatus = cleanText(states['speicher.regelung.schreibStatus'] || '', 240);
       const zeroAction = cleanText(states['speicher.regelung.zeroWriteFirewallAction'] || '', 100);
       const zeroReason = cleanText(states['speicher.regelung.zeroWriteFirewallReason'] || '', 220);
@@ -525,26 +576,43 @@ class TariffStatusModule extends BaseModule {
       const farmDispatchFresh = topology === 'farm'
         && farmDispatchAgeMs !== null
         && farmDispatchAgeMs <= Math.max(5000, Math.min(30000, statusCfg.readbackMaxAgeMs));
-      const rawFarmTargetW = roundedOrNull(farmDispatch && farmDispatch.targetW);
+      const farmRequestedStateW = roundedOrNull(states['speicher.regelung.farmRequestedW']);
+      const farmPlannedStateW = roundedOrNull(states['speicher.regelung.farmPlannedW']);
+      const farmAcceptedStateW = roundedOrNull(states['speicher.regelung.farmAcceptedW']);
+      const farmFailedStateW = roundedOrNull(states['speicher.regelung.farmFailedW']);
+      const farmUnservedStateW = roundedOrNull(states['speicher.regelung.farmUnservedW']);
+      const farmStatus = cleanText(states['speicher.regelung.farmStatus'] || '', 120);
+      const rawFarmTargetW = farmRequestedStateW ?? roundedOrNull(farmDispatch && (farmDispatch.requestedW ?? farmDispatch.targetW));
       const farmDispatchMatchesTarget = farmDispatchFresh
         && rawFarmTargetW !== null
         && Math.abs(rawFarmTargetW - finalW) <= 1;
       const farmTargetW = farmDispatchMatchesTarget ? rawFarmTargetW : null;
-      const farmDeliveredW = farmDispatchMatchesTarget ? roundedOrNull(farmDispatch && farmDispatch.deliveredW) : null;
-      const farmUnservedW = farmDispatchMatchesTarget ? roundedOrNull(farmDispatch && farmDispatch.unservedW) : null;
+      const farmPlannedW = farmDispatchMatchesTarget
+        ? (farmPlannedStateW ?? roundedOrNull(farmDispatch && farmDispatch.plannedDeliveredW))
+        : null;
+      const farmDeliveredW = farmDispatchMatchesTarget
+        ? (farmAcceptedStateW ?? roundedOrNull(farmDispatch && (farmDispatch.acceptedDeliveredW ?? farmDispatch.deliveredW)))
+        : null;
+      const farmFailedW = farmDispatchMatchesTarget
+        ? (farmFailedStateW ?? roundedOrNull(farmDispatch && farmDispatch.failedW))
+        : null;
+      const farmUnservedW = farmDispatchMatchesTarget
+        ? (farmUnservedStateW ?? roundedOrNull(farmDispatch && farmDispatch.unservedW))
+        : null;
       const farmAuthorityBlocked = !!(farmDispatchMatchesTarget
         && Array.isArray(farmDispatch.results)
         && farmDispatch.results.some((row: AnyRecord) => row && row.authorityBlocked === true));
 
       const writeStatusLower = writeStatus.toLowerCase();
-      const commandPhase = writeOk || writeStatusLower === 'unverändert'
+      const commandPhase = commandEffective || writeOk || writeStatusLower === 'unverändert'
         ? 'effective'
         : (containsAny(writeStatusLower, ['no-write', 'hold'])
           ? 'hold'
           : (containsAny(writeStatusLower, ['blockiert', 'blocked', 'authority', 'konflikt', 'nicht-moeglich', 'nicht möglich', 'nicht moeglich', 'gesperrt'])
             ? 'blocked'
             : 'not-effective'));
-      const targetSignature = `${topology}|${directionOf(finalW, 0)}|${commandPhase}`;
+      const statusTargetW = commandEffective && acceptedW !== null ? acceptedW : finalW;
+      const targetSignature = `${topology}|${directionOf(statusTargetW, 0)}|${Math.round(statusTargetW)}|${commandPhase}|${partiallyAccepted ? 'partial' : 'full'}`;
       if (targetSignature !== this._lastTargetSignature || !this._targetSinceMs) {
         this._lastTargetSignature = targetSignature;
         this._targetSinceMs = now;
@@ -556,16 +624,22 @@ class TariffStatusModule extends BaseModule {
         intentW,
         requestW,
         finalW,
+        acceptedW,
         topology,
         topologyReason,
         writeOk,
+        commandEffective,
+        requestSatisfied,
+        partiallyAccepted,
         writeStatus,
         actualW,
         actualAgeMs,
         actualTrusted,
         targetAgeMs,
         farmTargetW,
+        farmPlannedW,
         farmDeliveredW,
+        farmFailedW,
         farmUnservedW,
         farmAuthorityBlocked,
         ...statusCfg,
@@ -594,12 +668,15 @@ class TariffStatusModule extends BaseModule {
       await this._setIfChanged('tarif.speicherRequestQuelle', requestSource);
       await this._setIfChanged('tarif.speicherRequestGrund', requestReason);
       await this._setIfChanged('tarif.speicherFinalW', finalW);
+      await this._setIfChanged('tarif.speicherAcceptedW', acceptedW);
       await this._setIfChanged('tarif.speicherFinalQuelle', finalSource);
       await this._setIfChanged('tarif.speicherFinalGrund', finalReason);
       await this._setIfChanged('tarif.speicherTopologie', topology);
       await this._setIfChanged('tarif.speicherGateStatus', result.gateStatus);
       await this._setIfChanged('tarif.speicherWriteOk', writeOk);
       await this._setIfChanged('tarif.speicherCommandEffective', result.writeAccepted);
+      await this._setIfChanged('tarif.speicherRequestSatisfied', requestSatisfied);
+      await this._setIfChanged('tarif.speicherPartiallyAccepted', partiallyAccepted);
       await this._setIfChanged('tarif.speicherWriteStatus', writeStatus);
       await this._setIfChanged('tarif.speicherReadbackW', actualW);
       await this._setIfChanged('tarif.speicherReadbackAgeMs', actualAgeMs);
@@ -607,6 +684,8 @@ class TariffStatusModule extends BaseModule {
       await this._setIfChanged('tarif.speicherReadbackStatus', result.readbackStatus);
       await this._setIfChanged('tarif.speicherStatus', result.status);
       await this._setIfChanged('tarif.speicherFarmDeliveredW', farmDeliveredW);
+      await this._setIfChanged('tarif.speicherFarmPlannedW', farmPlannedW);
+      await this._setIfChanged('tarif.speicherFarmFailedW', farmFailedW);
       await this._setIfChanged('tarif.speicherFarmUnservedW', farmUnservedW);
       await this._setIfChanged('tarif.statusText', statusText);
       await this._setIfChanged('tarif.detailStatusText', detailStatusText);
@@ -630,6 +709,8 @@ class TariffStatusModule extends BaseModule {
           requestSource,
           requestReason,
           finalW,
+          acceptedW,
+          effectiveTargetW: result.effectiveTargetW,
           finalSource,
           finalReason,
           topology,
@@ -644,6 +725,8 @@ class TariffStatusModule extends BaseModule {
         write: {
           ok: writeOk,
           commandEffective: result.writeAccepted,
+          requestSatisfied,
+          partiallyAccepted,
           status: writeStatus,
         },
         farm: topology === 'farm' ? {
@@ -652,9 +735,13 @@ class TariffStatusModule extends BaseModule {
           dispatchFresh: farmDispatchFresh,
           matchesFinalTarget: farmDispatchMatchesTarget,
           targetW: farmTargetW,
+          plannedW: farmPlannedW,
           deliveredW: farmDeliveredW,
+          acceptedW: farmDeliveredW,
+          failedW: farmFailedW,
           unservedW: farmUnservedW,
           partial: result.farmPartial,
+          status: farmStatus,
           authorityBlocked: farmAuthorityBlocked,
         } : null,
         readback: {

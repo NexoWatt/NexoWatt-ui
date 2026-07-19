@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/thermal-control.ts
- * Quell-Hash: sha256:7fba8c4385a986b1fb8dbd43f7e74176c594902a9c5274e2360d1a6700e25fe6
+ * Quell-Hash: sha256:fa77b6355a4eec49a503ae95d83022596935134f2c3161008f5a62c34675062e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -46,6 +46,7 @@ const { BaseModule } = require('./base');
 const { applySetpoint } = require('../consumers');
 const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
 const { ActuatorCommandContract } = require('../services/actuator-command-contract');
+const { recordAcceptedPowerTarget } = require('../services/accepted-power-effects');
 function num(v, fallback = 0) {
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
@@ -896,13 +897,13 @@ const mk = async (id, name, type, role, unit = undefined) => {
         const confirmed = this._actuatorContract.confirmFromReadback(key, target, actualBefore, readbackBefore === true, now);
         if (confirmed) {
             await this._publishThermalContract(d, owner, confirmed);
-            return { applied: true, accepted: true, confirmed: true, readbackOk: true, status: confirmed.status, contract: confirmed };
+            return { applied: true, accepted: true, writeAccepted: false, confirmed: true, readbackOk: true, status: confirmed.status, contract: confirmed };
         }
         const decision = this._actuatorContract.prepare(key, target, now, cfg);
         if (!decision.allowed) {
             const current = this._actuatorContract.result(key, now, decision.targetChanged);
             await this._publishThermalContract(d, owner, current);
-            return { applied: false, accepted: false, confirmed: false, readbackOk: current.readbackOk, status: current.status, contract: current };
+            return { applied: false, accepted: false, writeAccepted: false, confirmed: false, readbackOk: current.readbackOk, status: current.status, contract: current };
         }
         const enforceAuthority = this._deviceHasExclusiveAuthority(d, owner);
         const writeRes = await withActuatorShadowContext(this.adapter, {
@@ -924,11 +925,29 @@ const mk = async (id, name, type, role, unit = undefined) => {
             ...writeRes,
             applied: contract.confirmed,
             accepted,
+            writeAccepted: accepted,
             confirmed: contract.confirmed,
             readbackOk,
             status: contract.status,
             contract,
         };
+    }
+
+    _recordAcceptedThermalEffect(d, result, measuredW, targetLoadW, reason) {
+        if (!result || result.writeAccepted !== true) return;
+        const baselineW = (typeof measuredW === 'number' && Number.isFinite(measuredW))
+            ? Math.max(0, measuredW)
+            : null;
+        recordAcceptedPowerTarget(this.adapter, {
+            key: `thermal:${d.id}`,
+            targetW: Math.max(0, Math.round(Number(targetLoadW) || 0)),
+            baselineW,
+            accepted: true,
+            uncertain: baselineW === null,
+            kind: 'load',
+            source: 'thermalControl',
+            reason: String(reason || result.status || ''),
+        });
     }
 
     /**
@@ -1068,6 +1087,8 @@ const mk = async (id, name, type, role, unit = undefined) => {
 
                     const consumer = { type: 'setpoint', key: d.id, name: d.name, setKey: d.setWKey, enableKey: d.enableKey };
                     const res = await this._applyThermalCommand(d, actType, consumer, { enable: true, setpoint: sp }, 'Thermik Boost Setpoint', { manual: true });
+                    const commandedLoadW = Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500)));
+                    this._recordAcceptedThermalEffect(d, res, measuredW, commandedLoadW, 'Thermik Boost Setpoint');
 
                     await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, (sp !== null && sp !== undefined && Number.isFinite(Number(sp))) ? Number(sp) : 0);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
@@ -1089,6 +1110,8 @@ const mk = async (id, name, type, role, unit = undefined) => {
                         invert2: !!d.sgReadyBInvert,
                     };
                     const res = await this._applyThermalCommand(d, actType, consumer, { state: 'boost' }, 'Thermik Boost SG-Ready', { manual: true });
+                    const commandedLoadW = Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500)));
+                    this._recordAcceptedThermalEffect(d, res, measuredW, commandedLoadW, 'Thermik Boost SG-Ready');
 
                     await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 2);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
@@ -1102,6 +1125,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
                     const targetW = clamp(num(d.boostPowerW, d.maxPowerW), 0, num(d.maxPowerW, 0));
                     const consumer = { type: 'load', key: d.id, name: d.name, setWKey: d.setWKey, enableKey: d.enableKey };
                     const res = await this._applyThermalCommand(d, actType, consumer, { targetW }, 'Thermik Boost Leistung', { manual: true });
+                    this._recordAcceptedThermalEffect(d, res, measuredW, targetW, 'Thermik Boost Leistung');
 
                     await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, Math.round(targetW));
                     await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
@@ -1139,6 +1163,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
                     const sp = (typeof d.autoOffSetpoint === 'number' && Number.isFinite(d.autoOffSetpoint)) ? d.autoOffSetpoint : null;
                     const consumer = { type: 'setpoint', key: d.id, name: d.name, setKey: d.setWKey, enableKey: d.enableKey };
                     const res = await this._applyThermalCommand(d, actType, consumer, { enable: false, setpoint: sp }, 'Thermik aus Setpoint', { manual: userMode !== 'inherit', releaseAuthority: true });
+                    this._recordAcceptedThermalEffect(d, res, measuredW, 0, 'Thermik aus Setpoint');
 
                     await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, (sp !== null && sp !== undefined && Number.isFinite(Number(sp))) ? Number(sp) : 0);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
@@ -1155,6 +1180,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
                         invert2: !!d.sgReadyBInvert,
                     };
                     const res = await this._applyThermalCommand(d, actType, consumer, { state: 'off' }, 'Thermik aus SG-Ready', { manual: userMode !== 'inherit', releaseAuthority: true });
+                    this._recordAcceptedThermalEffect(d, res, measuredW, 0, 'Thermik aus SG-Ready');
 
                     await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 0);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
@@ -1162,6 +1188,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
                 } else {
                     const consumer = { type: 'load', key: d.id, name: d.name, setWKey: d.setWKey, enableKey: d.enableKey };
                     const res = await this._applyThermalCommand(d, actType, consumer, { targetW: 0 }, 'Thermik aus Leistung', { manual: userMode !== 'inherit', releaseAuthority: true });
+                    this._recordAcceptedThermalEffect(d, res, measuredW, 0, 'Thermik aus Leistung');
 
                     await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 0);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
@@ -1192,6 +1219,8 @@ const mk = async (id, name, type, role, unit = undefined) => {
 
                 const consumer = { type: 'setpoint', key: d.id, name: d.name, setKey: d.setWKey, enableKey: d.enableKey };
                 const res = await this._applyThermalCommand(d, actType, consumer, { enable: !!on, setpoint: on ? spOn : spOff }, on ? 'Thermik PV-Auto ein' : 'Thermik PV-Auto aus', { releaseAuthority: !on });
+                const commandedLoadW = on ? Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500))) : 0;
+                this._recordAcceptedThermalEffect(d, res, measuredW, commandedLoadW, on ? 'Thermik PV-Auto ein' : 'Thermik PV-Auto aus');
 
                 const targetSp = on ? spOn : spOff;
                 await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, (targetSp !== null && targetSp !== undefined && Number.isFinite(Number(targetSp))) ? Number(targetSp) : 0);
@@ -1218,6 +1247,8 @@ const mk = async (id, name, type, role, unit = undefined) => {
                     invert2: !!d.sgReadyBInvert,
                 };
                 const res = await this._applyThermalCommand(d, actType, consumer, { state: on ? 'on' : 'off' }, on ? 'Thermik PV-Auto SG-Ready ein' : 'Thermik PV-Auto SG-Ready aus', { releaseAuthority: !on });
+                const commandedLoadW = on ? Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500))) : 0;
+                this._recordAcceptedThermalEffect(d, res, measuredW, commandedLoadW, on ? 'Thermik PV-Auto SG-Ready ein' : 'Thermik PV-Auto SG-Ready aus');
 
                 await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, on ? 1 : 0);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
@@ -1236,6 +1267,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
 
                 const consumer = { type: 'load', key: d.id, name: d.name, setWKey: d.setWKey, enableKey: d.enableKey };
                 const res = await this._applyThermalCommand(d, actType, consumer, { targetW: desiredW }, desiredW > 0 ? 'Thermik PV-Auto Leistung' : 'Thermik PV-Auto aus', { releaseAuthority: desiredW <= 0 });
+                this._recordAcceptedThermalEffect(d, res, measuredW, desiredW, desiredW > 0 ? 'Thermik PV-Auto Leistung' : 'Thermik PV-Auto aus');
 
                 await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, Math.round(desiredW));
                 await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);

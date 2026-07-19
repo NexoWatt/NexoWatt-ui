@@ -143,6 +143,55 @@ const base = {
   assert.strictEqual(dischargeToCharge.storageTargetW, -400);
 }
 
+// 8) Farm fordert +900 W, Hardware akzeptiert nur +400 W: NVP darf nur +400 W vorwegnehmen.
+{
+  const result = buildNvpCoordinatorSnapshot({
+    ...base,
+    rawNvpW: 900,
+    topology: 'farm',
+    storageActualW: 0,
+    storageTargetW: 400,
+    storageCommandEffective: true,
+    storageWriteOk: false,
+    storagePartiallyAccepted: true,
+    storageRequestSatisfied: false,
+    storageWriteStatus: 'farm-partial',
+    storageFailedW: 500,
+  });
+  assert.strictEqual(result.projectedNvpW, 500);
+  assert.strictEqual(result.storagePartiallyAccepted, true);
+  assert.strictEqual(result.status, 'waiting-storage-response-partial');
+}
+
+// 9) Erfolgreich akzeptierte flexible Last-/Erzeugeränderungen verändern nur den finalen Rest.
+{
+  const result = buildNvpCoordinatorSnapshot({
+    ...base,
+    rawNvpW: -2000,
+    storageActualW: 0,
+    storageTargetW: -1400,
+    acceptedFlexibleNetLoadDeltaW: 400,
+    acceptedFlexibleLoadDeltaW: 700,
+    acceptedFlexibleGenerationDeltaW: 300,
+    acceptedFlexibleCreditedCount: 2,
+  });
+  assert.strictEqual(result.projectedAfterStorageW, -600);
+  assert.strictEqual(result.projectedNvpW, -200);
+  assert.strictEqual(result.acceptedFlexibleNetLoadDeltaW, 400);
+}
+
+// 10) Unbekannte, aber akzeptierte Aktorumschaltung: PV wartet auf den nächsten frischen NVP.
+{
+  const result = buildNvpCoordinatorSnapshot({
+    ...base,
+    rawNvpW: -1200,
+    storageActualW: 0,
+    storageTargetW: 0,
+    acceptedFlexibleUncertainCount: 1,
+  });
+  assert.strictEqual(result.status, 'waiting-flexible-actuator');
+}
+
 class FakeAdapter {
   constructor() {
     this.config = {
@@ -178,11 +227,15 @@ class FakeAdapter {
   value(id) { const state = this._states.get(String(id)); return state ? state.val : undefined; }
 }
 
-// 8) Modul-Integration: GridConstraints erhält exakt den prognostizierten Rest-NVP.
+// 11) Modul-Integration: GridConstraints erhält exakt den prognostizierten Rest-NVP.
 (async () => {
   const adapter = new FakeAdapter();
   adapter.put('speicher.regelung.topologie', 'farm');
   adapter.put('speicher.regelung.sollW', 888);
+  adapter.put('speicher.regelung.acceptedSollW', 888);
+  adapter.put('speicher.regelung.commandEffective', true);
+  adapter.put('speicher.regelung.requestSatisfied', true);
+  adapter.put('speicher.regelung.partiallyAccepted', false);
   adapter.put('speicher.regelung.schreibOk', true);
   adapter.put('speicher.regelung.schreibStatus', 'farm');
   adapter.put('speicher.regelung.batteryPowerFeedbackMeasuredW', -73);
@@ -219,7 +272,7 @@ class FakeAdapter {
   assert(Array.isArray(adapter._nvpCoordinatorSnapshot.log));
   assert(adapter._nvpCoordinatorSnapshot.log.length >= 1);
 
-  // 9) Lizenz-/App-Gate darf durch den nachgelagerten Direktaufruf nicht umgangen werden.
+  // 12) Lizenz-/App-Gate darf durch den nachgelagerten Direktaufruf nicht umgangen werden.
   let disabledCalls = 0;
   const disabledGrid = {
     async tickPostStorage() {
@@ -231,16 +284,35 @@ class FakeAdapter {
   await disabledModule.tick();
   assert.strictEqual(disabledCalls, 0, 'Deaktivierte oder nicht lizenzierte Grid-Regelung darf keinen PV-Writepfad ausführen');
 
-  // 10) Architekturvertrag: Planung < Speicher < Koordinator < Tarifstatus.
+  // 13) Architekturvertrag: Planung < Speicher < Koordinator < Tarifstatus.
   const root = path.resolve(__dirname, '..');
   const managerSource = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/ems/module-manager.ts'), 'utf8');
   const gridSource = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/ems/modules/grid-constraints.ts'), 'utf8');
   const gridIndex = managerSource.indexOf("key: 'gridConstraints'");
+  const chargingIndex = managerSource.indexOf("key: 'chargingManagement'");
   const storageIndex = managerSource.indexOf("key: 'speicherRegelung'");
+  const multiUseIndex = managerSource.indexOf("key: 'multiUse'");
+  const thermalIndex = managerSource.indexOf("key: 'thermalControl'");
+  const heatingIndex = managerSource.indexOf("key: 'heatingRodControl'");
+  const nexoLogicIndex = managerSource.indexOf("key: 'nexoLogicBudget'");
+  const bhkwIndex = managerSource.indexOf("key: 'bhkwControl'");
+  const generatorIndex = managerSource.indexOf("key: 'generatorControl'");
+  const thresholdIndex = managerSource.indexOf("key: 'thresholdControl'");
   const coordinatorIndex = managerSource.indexOf("key: 'nvpCoordinator'");
   const tariffIndex = managerSource.indexOf("key: 'tariffStatus'");
-  assert(gridIndex >= 0 && storageIndex > gridIndex && coordinatorIndex > storageIndex && tariffIndex > coordinatorIndex,
-    'Reihenfolge muss Grid-Planung → Speicher → NVP-Koordinator → Tarifstatus sein');
+  assert(gridIndex >= 0
+    && chargingIndex > gridIndex
+    && storageIndex > chargingIndex
+    && multiUseIndex > storageIndex
+    && thermalIndex > multiUseIndex
+    && heatingIndex > thermalIndex
+    && nexoLogicIndex > heatingIndex
+    && bhkwIndex > nexoLogicIndex
+    && generatorIndex > bhkwIndex
+    && thresholdIndex > generatorIndex
+    && coordinatorIndex > thresholdIndex
+    && tariffIndex > coordinatorIndex,
+  'Reihenfolge muss Grid-Planung → EVCS → Speicher → flexible Aktoren/Erzeuger → finaler NVP/PV-Koordinator → Tarifstatus sein');
   assert(managerSource.includes('gridConstraintsModule.setDeferredDynamicPv(true)'), 'Dynamische PV-Regelung muss bis nach dem Speicher verschoben werden');
   assert(managerSource.includes("() => this._licenseAllowsApp('grid') && !!this.adapter.config.enableGridConstraints"), 'Nachgelagerte PV-Regelung muss dasselbe Lizenz-/App-Gate wie GridConstraints verwenden');
   assert(gridSource.includes("status: coordinated ? 'handled_by_central_ems'"), 'Koordinierter Export-Guard darf keine zweite Senken-Schreibstrecke starten');

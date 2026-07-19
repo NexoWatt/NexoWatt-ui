@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:8538e14fc1987018b8d1f611e7fb08b2ea8027b5591d2495fd620971bce898fd
+ * Quell-Hash: sha256:536bf40e724abe99fe34603ec64b9198ec3227fb637a93260e891e3b69f5b671
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -69,6 +69,7 @@ const { NlP1DsmrModule } = require('./modules/nl-p1-dsmr');
 const { MeshMicrogridModule } = require('./modules/mesh-microgrid');
 const { StageADiagnosticsModule } = require('./modules/stage-a-diagnostics');
 const { withActuatorShadowContext, priorityForOwner } = require('./services/actuator-shadow-arbiter');
+const { beginAcceptedPowerEffectCycle } = require('./services/accepted-power-effects');
 const featureFlags = require('./services/feature-flags');
 
 const keyFromModule = (moduleRow) => String((moduleRow && moduleRow.key) || 'unknown');
@@ -470,30 +471,6 @@ class ModuleManager {
             enabledFn: () => this._licenseAllowsApp('storage'),
         });
 
-        // Gemeinsame NVP-Steuerhoheit: Der Speicher/Farm-Writer hat seinen
-        // finalen Sollwert bereits veröffentlicht. Erst danach wird die noch
-        // verbleibende Einspeisung an die PV-/WR-Regelung übergeben. Dieses
-        // Diagnose-/Koordinationsmodul besitzt keinen zweiten Speicherwriter.
-        this.modules.push({
-            key: 'nvpCoordinator',
-            instance: new NvpCoordinatorModule(
-                this.adapter,
-                this.dp,
-                gridConstraintsModule,
-                () => this._licenseAllowsApp('grid') && !!this.adapter.config.enableGridConstraints,
-            ),
-            enabledFn: () => true,
-        });
-
-        // Tarif-Statusfinalisierung läuft bewusst NACH der zentralen Speicherregelung.
-        // Erst hier stehen finaler Sollwert, Gate-/Write-Ergebnis und Readback bereit.
-        // Das Modul schreibt keine Hardware und besitzt daher keine zweite Steuerhoheit.
-        this.modules.push({
-            key: 'tariffStatus',
-            instance: new TariffStatusModule(this.adapter, this.dp),
-            enabledFn: () => true,
-        });
-
         // MultiUse nutzt ausschließlich den nach EVCS und Speicher verbleibenden
         // zentralen Gesamt-/PV-Grant. Es läuft deshalb vor Thermik und Heizstab;
         // bestätigte MultiUse-Leistung wird im selben Tick zentral reserviert.
@@ -552,6 +529,30 @@ class ModuleManager {
         });
 
 
+        // Baustein 5C: PV-/WR-Regelung ist der letzte physische NVP-Aktor.
+        // Speicher/Farm, Wallboxen, MultiUse, Thermik, Heizstab, NexoLogic und
+        // lokale Erzeuger haben vorher ihre akzeptierten Änderungen in das
+        // Same-cycle-Ledger eingetragen. Die PV bearbeitet ausschließlich den Rest.
+        this.modules.push({
+            key: 'nvpCoordinator',
+            instance: new NvpCoordinatorModule(
+                this.adapter,
+                this.dp,
+                gridConstraintsModule,
+                () => this._licenseAllowsApp('grid') && !!this.adapter.config.enableGridConstraints,
+            ),
+            enabledFn: () => true,
+        });
+
+        // Die sichtbare Tarifwahrheit wird erst nach Speicher-, Verbraucher-,
+        // Erzeuger- und finaler PV-Entscheidung aufgebaut.
+        this.modules.push({
+            key: 'tariffStatus',
+            instance: new TariffStatusModule(this.adapter, this.dp),
+            enabledFn: () => true,
+        });
+
+
 
         // KI‑Energieberater / KI‑Optimierung (advisory only)
         // Runs late in the tick so it can read the fresh budget/tariff/peak/storage snapshots.
@@ -604,6 +605,7 @@ class ModuleManager {
         const now = Date.now();
         const t0 = now;
         this._tickCount = (this._tickCount || 0) + 1;
+        beginAcceptedPowerEffectCycle(this.adapter, this._tickCount, now);
 
         /** @type {Array<{key: string, enabled: boolean, ok: boolean, ms: number, error?: string}>} */
         const results = [];

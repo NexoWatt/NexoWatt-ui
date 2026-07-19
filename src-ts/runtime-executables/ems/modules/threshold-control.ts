@@ -20,6 +20,7 @@
 
 const { BaseModule } = require('./base');
 const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
+const { recordAcceptedActuatorTransition } = require('../services/accepted-power-effects');
 function num(v, fallback = null) {
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
@@ -635,11 +636,30 @@ class ThresholdControlModule extends BaseModule {
             }
 
             let wrote = false;
+            const effectiveBefore = onReadback === true ? true : (offReadback === true ? false : !!mem.active);
+            const commandChanged = want !== effectiveBefore;
             try { wrote = await this._writeRuleOutput(r, want, isManual); } catch (_e) { wrote = false; }
             const readbackAfter = await this._readRuleOutput(r);
             const readbackOk = this._readbackMatches(r, want, readbackAfter);
             const accepted = wrote === true || wrote === null;
             const confirmed = readbackOk === true || (accepted && r.requireReadback !== true);
+
+            // Schwellwertausgänge besitzen kein belastbares Leistungsmodell. Ein neu
+            // akzeptierter Zustandswechsel wird deshalb als unsichere Laständerung
+            // markiert. Die finale PV-/WR-Regelung wartet dann auf den nächsten
+            // frischen NVP-Wert, statt im selben Zyklus gegen einen alten Messwert zu
+            // regeln. Ein deduplizierter Write (`null`) ist keine neue physische
+            // Änderung und wird nicht erneut verbucht.
+            if (wrote === true && commandChanged) {
+                recordAcceptedActuatorTransition(this.adapter, {
+                    key: `threshold:${r.id}`,
+                    accepted: true,
+                    commandChanged: true,
+                    kind: 'load',
+                    source: 'thresholdControl',
+                    reason: `${r.name}: ${want ? 'on' : 'off'}`,
+                });
+            }
 
             if (confirmed) {
                 if (want !== mem.active || !mem.initialized) {

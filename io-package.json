@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.128",
+    "version": "0.8.129",
     "news": {
+      "0.8.129": {
+        "de": "Version 0.8.129 RC5: Farm-Dispatch, NVP-Koordinator und Tarifstatus rechnen nur noch mit tatsächlich akzeptierter Speicherleistung; teilweise oder fehlgeschlagene Writes bleiben sichtbar. Flexible Verbraucher und lokale Erzeuger melden erfolgreiche Same-Cycle-Leistungsänderungen, bevor die PV-/WR-Regelung den verbleibenden Export bearbeitet. EVCS trennt Fahrzeug-SoC vom stationären Speicher-SoC, verwendet nur bestätigte Speicherunterstützung und härtet OCPP-Status ab: Connector 0 liefert keinen Connectorstatus mehr, Faulted/Unavailable bleiben erreichbar aber gesperrt, und nur frische connectorrichtige Statuswerte dürfen blockieren.",
+        "en": "Version 0.8.129 RC5: Farm dispatch, the NVP coordinator and tariff status now account only for storage power actually accepted by hardware; partial or failed writes remain explicit. Flexible loads and local generators report successful same-cycle power changes before PV/inverter control handles the remaining export. EVCS separates vehicle SoC from stationary-storage SoC, uses only confirmed storage assistance, and hardens OCPP status handling: connector 0 no longer supplies connector status, Faulted/Unavailable stay reachable but blocked, and only fresh connector-correct status may block."
+      },
       "0.8.128": {
         "de": "Version 0.8.128 RC4: Ein zentraler NVP-Koordinator lässt Speicher oder Speicherfarm zuerst regeln und übergibt nur die belastbar verbleibende Einspeisung an die PV-/WR-Begrenzung. Blockierte, fehlgeschlagene oder nicht reagierende Speicherbefehle werden nicht optimistisch verrechnet. Die LIVE-Tarifzeile ist wieder kompakt; vollständige NVP-, Speicher-, PV-, Gate- und Stabilitätsdetails stehen unter AppCenter → Status samt Ringlog. Direkte Richtungswechsel, exklusive Farm-/Einzel-Steuerhoheit und frei zugeordnete AppCenter-DPs bleiben unverändert.",
         "en": "Version 0.8.128 RC4: A central NVP coordinator lets either single storage or the storage farm regulate first and passes only the reliably remaining export to PV/inverter curtailment. Blocked, failed or non-responsive storage commands are not credited optimistically. The LIVE tariff line is compact again; full NVP, storage, PV, gate and stability details are available under AppCenter → Status with a ring log. Direct direction changes, exclusive farm/single-storage authority and freely assigned AppCenter datapoints remain unchanged."
@@ -26,10 +30,6 @@
       "0.8.123": {
         "de": "Version 0.8.123: Stellt die manuell im AppCenter zugeordneten Speicher- und Speicherfarm-Datenpunkte nach der TypeScript-Umstellung wieder verbindlich her. AppCenter schlägt veraltete Runtime-Spiegel, reine Mess-Farmen blockieren keine Einzel-Sollwerte mehr, Legacy-Feldnamen werden sicher migriert und frei benannte Objektpfade bleiben zulässig.",
         "en": "Version 0.8.123: Restores authoritative manually assigned AppCenter datapoints for single storage and storage farms after the TypeScript migration. AppCenter now overrides stale runtime mirrors, measurement-only farms no longer block single-storage targets, legacy fields migrate safely, and freely named object paths remain valid."
-      },
-      "0.8.122": {
-        "de": "Version 0.8.122: Entfernt Phantom-EVCS-Reservierungen ohne bestätigten Fahrzeugbedarf, startet eine aktive Speicherfarm automatisch als Basis-Eigenverbrauchsregelung und stabilisiert die Farm-Verteilung über Hardware-IDs samt Status-Refresh. Zusätzlich werden alle typisierten §14a-Budgetobjekte vor dem ersten Write angelegt.",
-        "en": "Version 0.8.122: Removes phantom EVCS reservations without confirmed vehicle demand, automatically starts an active storage farm as the base self-consumption controller, and stabilizes farm dispatch via hardware IDs plus status refresh. It also creates all typed §14a budget objects before the first write."
       }
     },
     "title": "NexoWatt UI",

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/heating-rod-control.ts
- * Quell-Hash: sha256:10519d3e5fc5f426aace7c4fd25e35e7084edb923d54a6c9d7eb07ec0d590bfb
+ * Quell-Hash: sha256:5dbb4c9479f9a90ffa22719ce1f2d94f3d87b46c65aad58aa74e99e0c948a13c
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -60,6 +60,7 @@
 const { BaseModule } = require('./base');
 const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
 const { ActuatorCommandContract } = require('../services/actuator-command-contract');
+const { recordAcceptedPowerTarget, recordAcceptedActuatorTransition } = require('../services/accepted-power-effects');
 
 
 /**
@@ -2555,7 +2556,7 @@ class HeatingRodControlModule extends BaseModule {
      */
     async _applyStageState(d, targetStage, feedback, options = {}) {
         if (!d.wiredStages || d.wiredStages < 1) {
-            return { applied: false, status: 'no_stage_write_dp' };
+            return { applied: false, accepted: false, writeAccepted: false, writePartial: false, status: 'no_stage_write_dp' };
         }
 
         const effectiveStage = Math.max(0, Math.min(Math.round(Number(targetStage) || 0), d.wiredStages));
@@ -2570,14 +2571,14 @@ class HeatingRodControlModule extends BaseModule {
             const confirmed = this._actuatorContract.confirmFromReadback(contractKey, effectiveStage, feedback.currentStage, true, now);
             if (confirmed) {
                 await this._publishHeatingContract(d, owner, confirmed);
-                return { applied: true, accepted: true, status: confirmed.status, targetStage: effectiveStage, readbackOk: true, contract: confirmed };
+                return { applied: true, accepted: true, writeAccepted: false, writePartial: false, status: confirmed.status, targetStage: effectiveStage, readbackOk: true, contract: confirmed };
             }
         }
         const decision = this._actuatorContract.prepare(contractKey, effectiveStage, now, contractCfg);
         if (!decision.allowed) {
             const current = this._actuatorContract.result(contractKey, now, decision.targetChanged);
             await this._publishHeatingContract(d, owner, current);
-            return { applied: false, accepted: false, status: current.status, targetStage: effectiveStage, readbackOk: current.readbackOk, contract: current };
+            return { applied: false, accepted: false, writeAccepted: false, writePartial: false, status: current.status, targetStage: effectiveStage, readbackOk: current.readbackOk, contract: current };
         }
         const forceAllWrites = !!(options && options.force);
         let anyTrue = false;
@@ -2634,7 +2635,34 @@ class HeatingRodControlModule extends BaseModule {
         const readbackOk = feedbackAfter && feedbackAfter.anyKnown ? Number(feedbackAfter.currentStage) === effectiveStage : null;
         const contract = this._actuatorContract.complete(contractKey, effectiveStage, accepted, readbackOk, feedbackAfter && feedbackAfter.currentStage, Date.now(), contractCfg);
         await this._publishHeatingContract(d, owner, contract);
-        return { applied: contract.confirmed, accepted, status: contract.status || status, targetStage: effectiveStage, readbackOk, contract };
+        return { applied: contract.confirmed, accepted, writeAccepted: anyTrue, writePartial: anyTrue && anyFalse, status: contract.status || status, targetStage: effectiveStage, readbackOk, contract };
+    }
+
+    _recordAcceptedHeatingEffect(d, result, baselineW, targetW, reason) {
+        if (!result || result.writeAccepted !== true) return;
+        if (result.writePartial === true) {
+            recordAcceptedActuatorTransition(this.adapter, {
+                key: `heatingRod:${d.id}`,
+                accepted: true,
+                kind: 'load',
+                source: 'heatingRodControl',
+                reason: `${String(reason || result.status || '')}:partial`,
+            });
+            return;
+        }
+        const baseline = (typeof baselineW === 'number' && Number.isFinite(baselineW))
+            ? Math.max(0, baselineW)
+            : null;
+        recordAcceptedPowerTarget(this.adapter, {
+            key: `heatingRod:${d.id}`,
+            targetW: Math.max(0, Math.round(Number(targetW) || 0)),
+            baselineW: baseline,
+            accepted: true,
+            uncertain: baseline === null,
+            kind: 'load',
+            source: 'heatingRodControl',
+            reason: String(reason || result.status || ''),
+        });
     }
 
     /**
@@ -4237,6 +4265,10 @@ class HeatingRodControlModule extends BaseModule {
                 if (res.accepted) this._setStageCtlTarget(d.id, requestedStage, observedStage);
                 this._markAutoOwnership(d, res.accepted && requestedStage > 0, appliedStage, 'boost');
                 const targetW = this._sumStagePower(d, requestedStage);
+                const baselineW = (typeof measuredW === 'number' && Number.isFinite(measuredW))
+                    ? Math.max(0, measuredW)
+                    : Math.max(0, feedback.appliedPowerW || this._sumStagePower(d, observedStage));
+                this._recordAcceptedHeatingEffect(d, res, baselineW, targetW, 'Heizstab Boost');
                 const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                     ? Math.max(0, measuredW)
                     : (res.accepted ? targetW : Math.max(0, feedback.appliedPowerW));
@@ -4261,6 +4293,10 @@ class HeatingRodControlModule extends BaseModule {
                 if (res.accepted) this._setStageCtlTarget(d.id, requestedStage, observedStage);
                 this._markAutoOwnership(d, false, appliedStage, 'manual_mode');
                 const targetW = this._sumStagePower(d, requestedStage);
+                const baselineW = (typeof measuredW === 'number' && Number.isFinite(measuredW))
+                    ? Math.max(0, measuredW)
+                    : Math.max(0, feedback.appliedPowerW || this._sumStagePower(d, observedStage));
+                this._recordAcceptedHeatingEffect(d, res, baselineW, targetW, 'Heizstab manuelle Stufe');
                 const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                     ? Math.max(0, measuredW)
                     : (res.accepted ? targetW : Math.max(0, feedback.appliedPowerW));
@@ -4316,6 +4352,10 @@ class HeatingRodControlModule extends BaseModule {
 
             if (baseMode === 'off') {
                 const res = await this._applyStageState(d, 0, feedback, { force: true, manual: userMode !== 'inherit', reason: 'Heizstab aus' });
+                const baselineW = (typeof measuredW === 'number' && Number.isFinite(measuredW))
+                    ? Math.max(0, measuredW)
+                    : Math.max(0, feedback.appliedPowerW || this._sumStagePower(d, observedStage));
+                this._recordAcceptedHeatingEffect(d, res, baselineW, 0, 'Heizstab aus');
                 this._setStageCtlTarget(d.id, 0, observedStage);
                 this._markAutoOwnership(d, false, 0, 'off');
                 const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
@@ -4485,6 +4525,10 @@ class HeatingRodControlModule extends BaseModule {
             if (res.accepted) this._setStageCtlTarget(d.id, requestedStage, observedStage);
             this._markAutoOwnership(d, res.accepted && requestedStage > 0, appliedStage, zeroExportStrategyActive ? 'zeroExportForecast' : 'pvAuto');
             const targetW = this._sumStagePowerModel(d, requestedStage, observedStage, measuredW);
+            const baselineW = (typeof measuredW === 'number' && Number.isFinite(measuredW))
+                ? Math.max(0, measuredW)
+                : Math.max(0, feedback.appliedPowerW || this._sumStagePowerModel(d, observedStage, observedStage, measuredW));
+            this._recordAcceptedHeatingEffect(d, res, baselineW, targetW, zeroExportStrategyActive ? 'Heizstab 0-Einspeisung' : 'Heizstab PV-Auto');
             const measuredUsedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                 ? Math.max(0, measuredW)
                 : 0;

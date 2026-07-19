@@ -12,6 +12,7 @@ declare const require: (id: string) => any;
 declare const module: { exports: unknown };
 
 const { BaseModule } = require('./base');
+const { recordAcceptedActuatorTransition } = require('../services/accepted-power-effects');
 
 type AnyRecord = Record<string, any>;
 
@@ -100,6 +101,15 @@ export class NexoLogicBudgetModule extends BaseModule {
       grantedW += grantW;
       const result = engine && typeof engine.applyBudgetGrant === 'function' ? await engine.applyBudgetGrant(intent.key, releasePending ? 0 : grantW) : null;
       const usedW = Math.max(0, num(result?.budgetReservedW, 0));
+      if (result?.writeAccepted === true) {
+        recordAcceptedActuatorTransition(this.adapter, {
+          key: `nexoLogic:${text(intent.key)}`,
+          accepted: true,
+          kind: 'load',
+          source: 'nexoLogicBudget',
+          reason: text(result?.status || grantSource),
+        });
+      }
       reservedW += usedW;
       if (result && (result.status === 'authority-blocked' || result.faultLocked || (grantW <= 0 && reqW > 0))) blockedCount += 1;
       if (centralReady && usedW > 0) {

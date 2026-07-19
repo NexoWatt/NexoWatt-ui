@@ -325,7 +325,7 @@ async function verifyExclusiveWriters() {
   assert.strictEqual(adapter._farmCalls.length, 1);
   assert.deepStrictEqual(dp.writes, [], 'Farmfehler darf keinen Einzel-Fallback auslösen');
   assert.strictEqual((adapter._states.get('speicher.regelung.schreibOk') || {}).val, false);
-  assert(String((adapter._states.get('speicher.regelung.schreibStatus') || {}).val).includes('farm-nicht-moeglich'));
+  assert.strictEqual((adapter._states.get('speicher.regelung.schreibStatus') || {}).val, 'blocked-by-safety-gate');
 
   // Ohne Topologie wird selbst bei vorhandener DP-Zuordnung nicht geschrieben.
   authority = {

@@ -608,42 +608,104 @@ function _evcsBoolOrNull(value) {
   if (typeof value === 'number' && Number.isFinite(value)) return value !== 0;
   const s = String(value ?? '').trim().toLowerCase();
   if (!s) return null;
-  if (['true', '1', 'on', 'yes', 'ja', 'online', 'connected', 'available'].includes(s)) return true;
-  if (['false', '0', 'off', 'no', 'nein', 'offline', 'disconnected', 'unavailable'].includes(s)) return false;
+  if (['true', '1', 'on', 'yes', 'ja', 'online', 'connected', 'available', 'reachable', 'ready'].includes(s)) return true;
+  if (['false', '0', 'off', 'no', 'nein', 'offline', 'disconnected', 'unreachable'].includes(s)) return false;
+  // Faulted/Unavailable sind Betriebszustände, keine belastbaren Online-Werte.
   return null;
 }
 
-function _tileStateClass({ powerW, reason, active, regEnabled, online, status }) {
+/** Liefert ausschließlich die vom EMS bestätigte Connector-Wahrheit für die UI. */
+function _resolveEvcsDisplayStatus({
+  hasEms = false,
+  rawStatus = '',
+  effectiveStatus = '',
+  statusClass = '',
+  statusFresh = false,
+  statusIgnoredReason = '',
+  faultActive = false,
+  unavailableActive = false,
+  online = null,
+  reason = '',
+} = {}) {
+  const onlineState = _evcsBoolOrNull(online);
+  const r = String(reason ?? '').trim().toUpperCase();
+  const cls = String(statusClass ?? '').trim().toLowerCase();
+  const raw = String(rawStatus ?? '').trim();
+  const effective = String(effectiveStatus ?? '').trim();
+  const ignored = String(statusIgnoredReason ?? '').trim();
+
+  if (onlineState === false || r === 'OFFLINE' || cls === 'offline') {
+    return { text: 'Offline', status: 'offline', confirmed: true, diagnostic: raw };
+  }
+  if (faultActive === true || r === 'FAULTED' || cls === 'faulted') {
+    return { text: effective || 'Störung', status: 'faulted', confirmed: true, diagnostic: raw };
+  }
+  if (unavailableActive === true || r === 'UNAVAILABLE' || cls === 'unavailable') {
+    return { text: effective || 'Nicht verfügbar', status: 'unavailable', confirmed: true, diagnostic: raw };
+  }
+  if (hasEms) {
+    if (statusFresh === true && effective) {
+      return { text: effective, status: cls || 'status', confirmed: true, diagnostic: raw };
+    }
+    if (raw && (ignored || cls === 'stale' || cls.startsWith('ignored-'))) {
+      return {
+        text: cls === 'stale' ? 'Status veraltet' : 'Status nicht bestätigt',
+        status: 'unconfirmed',
+        confirmed: false,
+        diagnostic: raw,
+      };
+    }
+    if (r === 'DISABLED') return { text: 'Deaktiviert', status: 'disabled', confirmed: true, diagnostic: raw };
+    if (r === 'CONTROL_DISABLED') return { text: 'Regelung aus', status: 'disabled', confirmed: true, diagnostic: raw };
+    if (r && r !== 'SKIPPED') return { text: r, status: 'status', confirmed: true, diagnostic: raw };
+    return { text: '--', status: 'unknown', confirmed: false, diagnostic: raw };
+  }
+  return { text: raw || '--', status: raw ? raw.toLowerCase() : 'unknown', confirmed: !!raw, diagnostic: raw };
+}
+
+function _tileStateClass({ powerW, reason, regEnabled, online, statusClass, faultActive, unavailableActive }) {
   const p = Number(powerW);
   const r = String(reason ?? '').trim().toUpperCase();
-  const st = String(status ?? '').trim().toLowerCase();
+  const cls = String(statusClass ?? '').trim().toLowerCase();
   const onlineState = _evcsBoolOrNull(online);
-  const offlineByStatus = st === 'offline' || st === 'unavailable' || st === 'disconnected' || st === 'faulted' || st === 'error';
 
-  // Online/idle darf nicht wie offline wirken: `active=false` bedeutet bei mehreren EVCS-Adaptern
-  // nur „kein Fahrzeug lädt / kein aktiver Ladevorgang“, nicht „Wallbox offline“.
-  if (onlineState === false || r === 'OFFLINE' || offlineByStatus) return 'nw-tile--state-disabled nw-tile--state-offline';
-  if (r === 'NO_SETPOINT' || r === 'STALE_METER') return 'nw-tile--state-warning';
+  // Faulted/Unavailable bedeutet erreichbar, aber betrieblich blockiert – nicht offline.
+  if (onlineState === false || r === 'OFFLINE' || cls === 'offline') return 'nw-tile--state-disabled nw-tile--state-offline';
+  if (faultActive === true || unavailableActive === true || r === 'FAULTED' || r === 'UNAVAILABLE' || cls === 'faulted' || cls === 'unavailable') return 'nw-tile--state-warning';
+  if (r === 'NO_SETPOINT' || r === 'STALE_METER' || cls === 'stale' || cls.startsWith('ignored-')) return 'nw-tile--state-warning';
   if (regEnabled === false) return 'nw-tile--state-disabled';
   if (isFinite(p) && Math.abs(p) >= 80) return 'nw-tile--state-on';
   return 'nw-tile--state-off';
 }
-/**
- * Code-Teil: _shortStatusText
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
- */
-function _shortStatusText(status, reason, online) {
-  const onlineState = _evcsBoolOrNull(online);
-  const r = String(reason ?? '').trim().toUpperCase();
-  if (onlineState === false || r === 'OFFLINE') return 'Offline';
-  if (r === 'DISABLED') return 'Deaktiviert';
-  if (r === 'CONTROL_DISABLED') return 'Regelung aus';
-  const st = String(status ?? '').trim();
-  if (st) return st;
-  if (r) return r;
-  return '--';
+
+function _shortStatusText(statusInfo, reason, online) {
+  const info = statusInfo && typeof statusInfo === 'object'
+    ? statusInfo
+    : _resolveEvcsDisplayStatus({ rawStatus: statusInfo, reason, online });
+  return String(info.text || '--');
+}
+
+
+function _evcsStatusInfoForIndex(i, hasEms = _hasEms()) {
+  const cm = `chargingManagement.wallboxes.lp${i}`;
+  const localOnline = d(`evcs.${i}.online`);
+  const emsOnline = hasEms ? d(`${cm}.online`) : null;
+  const online = (_evcsBoolOrNull(localOnline) !== null) ? localOnline : emsOnline;
+  const rawStatus = hasEms
+    ? String(d(`${cm}.statusRaw`) ?? '').trim()
+    : String(d(`evcs.${i}.status`) ?? '').trim();
+  return _resolveEvcsDisplayStatus({
+    hasEms,
+    rawStatus: rawStatus || String(d(`evcs.${i}.status`) ?? '').trim(),
+    effectiveStatus: hasEms ? String(d(`${cm}.statusEffective`) ?? '').trim() : '',
+    statusClass: hasEms ? String(d(`${cm}.statusClass`) ?? '').trim() : '',
+    statusFresh: hasEms ? _evcsBoolOrNull(d(`${cm}.statusFresh`)) === true : !!rawStatus,
+    statusIgnoredReason: hasEms ? String(d(`${cm}.statusIgnoredReason`) ?? '').trim() : '',
+    faultActive: hasEms ? _evcsBoolOrNull(d(`${cm}.faultActive`)) === true : false,
+    unavailableActive: hasEms ? _evcsBoolOrNull(d(`${cm}.unavailableActive`)) === true : false,
+    online,
+    reason: hasEms ? d(`${cm}.reason`) : '',
+  });
 }
 
 // --- Modal -------------------------------------------------------------------
@@ -672,14 +734,14 @@ function openEvcsModal(idx) {
 
   const p = d(`evcs.${i}.powerW`);
   const soc = d(`evcs.${i}.vehicleSoc`);
-  const st = d(`evcs.${i}.status`);
+  const statusInfo = _evcsStatusInfoForIndex(i, _hasEms());
 
   title.textContent = name;
   if (sub) {
     const parts = [];
     parts.push('Leistung: ' + fmtW(p));
     if (soc != null) parts.push('SoC: ' + fmtPct(soc));
-    if (st != null) parts.push(String(st));
+    if (statusInfo && statusInfo.text && statusInfo.text !== '--') parts.push(String(statusInfo.text));
     sub.textContent = parts.join(' • ');
   }
 
@@ -758,6 +820,19 @@ function buildEvcsModalBodyHtml(i) {
   const emsEffectiveStorageAssist = d(`${cm}.effectiveStorageAssist`);
   const emsStorageAssistReason = String(d(`${cm}.storageAssistBlockedReason`) || '');
   const emsBatteryContributionW = Number(d(`${cm}.batteryContributionW`) ?? 0);
+  const emsStatusRaw = String(d(`${cm}.statusRaw`) ?? '').trim();
+  const emsStatusEffective = String(d(`${cm}.statusEffective`) ?? '').trim();
+  const emsStatusClass = String(d(`${cm}.statusClass`) ?? '').trim();
+  const emsStatusFresh = _evcsBoolOrNull(d(`${cm}.statusFresh`)) === true;
+  const emsStatusIgnoredReason = String(d(`${cm}.statusIgnoredReason`) ?? '').trim();
+  const emsStatusSourceId = String(d(`${cm}.statusSourceId`) ?? '').trim();
+  const emsStatusAgeMs = Number(d(`${cm}.statusAgeMs`) ?? 0);
+  const emsStatusStale = _evcsBoolOrNull(d(`${cm}.statusStale`)) === true;
+  const emsFaultActive = _evcsBoolOrNull(d(`${cm}.faultActive`)) === true;
+  const emsFaultReason = String(d(`${cm}.faultReason`) ?? '').trim();
+  const emsUnavailableActive = _evcsBoolOrNull(d(`${cm}.unavailableActive`)) === true;
+  const emsUnavailableReason = String(d(`${cm}.unavailableReason`) ?? '').trim();
+  const emsOnline = d(`${cm}.online`);
 
   const regAvail = hasEms && (emsRegEnabled !== null && emsRegEnabled !== undefined);
   const regOn = regAvail ? !!emsRegEnabled : true;
@@ -836,6 +911,34 @@ function buildEvcsModalBodyHtml(i) {
   const st = d(`evcs.${i}.status`);
   const active = d(`evcs.${i}.active`);
   const soc = d(`evcs.${i}.vehicleSoc`);
+  const rawStatusText = emsStatusRaw || String(st ?? '').trim();
+  const localOnline = d(`evcs.${i}.online`);
+  const effectiveOnline = (_evcsBoolOrNull(localOnline) !== null) ? localOnline : emsOnline;
+  const modalStatusInfo = _resolveEvcsDisplayStatus({
+    hasEms,
+    rawStatus: rawStatusText,
+    effectiveStatus: emsStatusEffective,
+    statusClass: emsStatusClass,
+    statusFresh: emsStatusFresh,
+    statusIgnoredReason: emsStatusIgnoredReason,
+    faultActive: emsFaultActive,
+    unavailableActive: emsUnavailableActive,
+    online: effectiveOnline,
+    reason: emsReason,
+  });
+  const statusDisplayText = modalStatusInfo.text || '--';
+  const statusAgeText = Number.isFinite(emsStatusAgeMs) && emsStatusAgeMs > 0
+    ? (emsStatusAgeMs < 60000 ? `${Math.ceil(emsStatusAgeMs / 1000)} s` : `${Math.ceil(emsStatusAgeMs / 60000)} min`)
+    : '';
+  let statusTruthHint = '';
+  if (emsFaultActive) {
+    statusTruthHint = `Die erreichbare Wallbox bzw. das angebundene Backend meldet aktuell eine Störung${emsFaultReason ? ` (${emsFaultReason})` : ''}.`;
+  } else if (emsUnavailableActive) {
+    statusTruthHint = `Der erreichbare Connector meldet aktuell „nicht verfügbar“${emsUnavailableReason ? ` (${emsUnavailableReason})` : ''}.`;
+  } else if ((emsStatusStale || emsStatusIgnoredReason) && rawStatusText) {
+    const why = emsStatusIgnoredReason ? ` Grund: ${emsStatusIgnoredReason}.` : '';
+    statusTruthHint = `Der Rohstatus „${rawStatusText}“ ist${statusAgeText ? ` seit ${statusAgeText}` : ''} nicht als aktueller, connectorbezogener Status bestätigt.${why}`;
+  }
 
   const ct = String(emsChargerType ?? m.chargerType ?? '').toUpperCase();
   const ctBadge = (ct === 'DC' || ct === 'AC') ? ct : '';
@@ -893,8 +996,9 @@ function buildEvcsModalBodyHtml(i) {
         </div>` : ''}
 
         <div style="display:flex; justify-content:space-between; gap:12px;">
-          <span>Status</span><strong>${esc(st ?? '--')}</strong>
+          <span>Status</span><strong>${esc(statusDisplayText)}</strong>
         </div>
+        ${statusTruthHint ? `<div class="muted" style="font-size:12px; line-height:1.35; padding:7px 9px; border:1px solid rgba(255,180,70,.24); border-radius:8px;">${esc(statusTruthHint)}${emsStatusSourceId ? `<br><span style="opacity:.75">Quelle: ${esc(emsStatusSourceId)}</span>` : ''}</div>` : ''}
         ${soc != null ? `<div style="display:flex; justify-content:space-between; gap:12px;">
           <span>Fahrzeug SoC</span><strong>${fmtPct(soc)}</strong>
         </div>` : ''}
@@ -1110,6 +1214,9 @@ function render() {
 
     const regEnabled = hasEms ? d(`${cm}.userEnabled`) : null;
     const emsReason = hasEms ? d(`${cm}.reason`) : null;
+    const emsStatusClass = hasEms ? String(d(`${cm}.statusClass`) ?? '').trim() : '';
+    const emsFaultActive = hasEms ? _evcsBoolOrNull(d(`${cm}.faultActive`)) === true : false;
+    const emsUnavailableActive = hasEms ? _evcsBoolOrNull(d(`${cm}.unavailableActive`)) === true : false;
 
     const emsUserMode = hasEms ? d(`${cm}.userMode`) : null;
     const emsChargerType = hasEms ? d(`${cm}.chargerType`) : null;
@@ -1117,9 +1224,19 @@ function render() {
     const ctBadge = (ct === 'DC' || ct === 'AC') ? ct : '';
 
     const badge = ctBadge || _modeBadge(emsUserMode) || 'EV';
-    const statusTxt = _shortStatusText(status, emsReason, online);
+    const statusInfo = _evcsStatusInfoForIndex(i, hasEms);
+    const statusTxt = _shortStatusText(statusInfo, emsReason, online);
 
-    const tileCls = _tileStateClass({ powerW, reason: emsReason, active, regEnabled, online, status });
+    const tileCls = _tileStateClass({
+      powerW,
+      reason: emsReason,
+      active,
+      regEnabled,
+      online,
+      statusClass: emsStatusClass || statusInfo.status,
+      faultActive: emsFaultActive,
+      unavailableActive: emsUnavailableActive,
+    });
 
     const socTxt = (soc != null) ? ('SoC ' + fmtPct(soc)) : 'SoC --';
     const modeTxt = hasEms ? (_modeBadge(emsUserMode) || 'AUTO') : '—';
@@ -1162,12 +1279,12 @@ function render() {
         const i = _modalOpenIdx;
         const p = d(`evcs.${i}.powerW`);
         const soc = d(`evcs.${i}.vehicleSoc`);
-        const st = d(`evcs.${i}.status`);
+        const statusInfo = _evcsStatusInfoForIndex(i, hasEms);
         if (sub) {
           const parts = [];
           parts.push('Leistung: ' + fmtW(p));
           if (soc != null) parts.push('SoC: ' + fmtPct(soc));
-          if (st != null) parts.push(String(st));
+          if (statusInfo && statusInfo.text && statusInfo.text !== '--') parts.push(String(statusInfo.text));
           sub.textContent = parts.join(' • ');
         }
       } catch (_e) {}

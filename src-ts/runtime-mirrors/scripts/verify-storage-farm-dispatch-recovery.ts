@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c291ca58a66098a708255480f717a3d103b9c0585f778115729cc6854d7b80b5
+ * Original-Hash: 81cf312fdfa8ff65c872e4caaaf5bccb9ce839a98fd514e7fa1f98d866bd572c
  */
 
 /**
@@ -196,7 +196,10 @@ Module._load = function patchedLoad(request, parent, isMain) {
     writes.length = 0;
     let result = await adapter.applyStorageFarmTargetW(-5000, { source: 'pv' });
     assert.strictEqual(result.applied, true, `Farm-Dispatch muss schreiben: ${result.reason}`);
-    assert.strictEqual(result.reason, 'ok');
+    assert.strictEqual(result.reason, 'farm');
+    assert.strictEqual(result.status, 'farm');
+    assert.strictEqual(result.writeOk, true);
+    assert.strictEqual(result.requestSatisfied, true);
     const byId = new Map(writes.map((row) => [row.id, row.val]));
     assert.strictEqual(byId.get('farm.a.set'), -1000, 'Farm A muss durch ihr eigenes 1-kW-Limit begrenzt werden');
     assert.strictEqual(byId.get('farm.b.set'), -4000, 'Farm B muss den verbleibenden 4-kW-Anteil erhalten');
@@ -221,6 +224,27 @@ Module._load = function patchedLoad(request, parent, isMain) {
     assert.strictEqual(result.applied, true, `Preflight-Refresh muss Farm-Dispatch wiederherstellen: ${result.reason}`);
     assert.ok(result.results.every((row) => row.statusMatch !== 'missing'), 'nach Refresh darf kein Farmstatus fehlen');
     assert.strictEqual(Math.round(Math.abs(result.deliveredW)), 3000);
+
+    // Teilfehler: Nur die wirklich akzeptierte Leistung darf als Farmwirkung
+    // veröffentlicht werden. Der fehlgeschlagene Anteil bleibt separat sichtbar.
+    adapter.blockedForeignIds = new Set(['farm.b.set']);
+    adapter._sfLastSetpoints.clear();
+    adapter._sfLastSetpointsTs.clear();
+    writes.length = 0;
+    writeAttempts.length = 0;
+    result = await adapter.applyStorageFarmTargetW(3000, { source: 'eigenverbrauch' });
+    assert.strictEqual(result.applied, true, 'Ein akzeptierter Teilwrite muss als teilweise wirksam sichtbar bleiben');
+    assert.strictEqual(result.commandEffective, true);
+    assert.strictEqual(result.writeOk, false);
+    assert.strictEqual(result.requestSatisfied, false);
+    assert.strictEqual(result.partiallyAccepted, true);
+    assert.strictEqual(result.reason, 'farm-partial');
+    assert.strictEqual(result.status, 'farm-partial');
+    assert.strictEqual(result.requestedW, 3000);
+    assert.strictEqual(result.plannedDeliveredW, 3000);
+    assert.ok(result.acceptedDeliveredW > 0 && result.acceptedDeliveredW < result.plannedDeliveredW, `Akzeptierter Teil muss zwischen 0 und Planung liegen: ${JSON.stringify(result)}`);
+    assert.strictEqual(result.failedW, result.plannedDeliveredW - result.acceptedDeliveredW);
+    assert.strictEqual(result.unservedW, 0);
 
     // Ein zentraler Safety-/Authority-Block darf niemals als erfolgreicher
     // Hardware-Write oder als aktualisierter Keepalive-Cache gelten.

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: ca7aa425891a987f3a596bc0474835f7cd44c55a3d0afb9e38f2d04c6961c56c
+ * Original-Hash: 7d7d39a10761df84ff691c244b3861f87cc8e5ea0f9ed1d9e7b8b41d3821e7d5
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:b309e58b1bec45d0e41615fa6c7dcfe86e4f0a850f5b9429ae50e6feaa6efec1
+ * Quell-Hash: sha256:249adf9eaa2539d36e92b57c4814b981beeee85d2528e01b62dfc0b4c6c20e14
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -78,6 +78,7 @@ const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness
 const { applySetpoint } = require('../consumers');
 const { ReasonCodes } = require('../reasons');
 const { computeChargingMinimumServicePlan } = require('../charging-budget-helpers');
+const { recordAcceptedPowerTarget } = require('../services/accepted-power-effects');
 
 /** Code-Teil: chargingManagementTsRuntimeMirror – Dokumentiert diesen Regelungs- oder Diagnosebaustein. */
 let chargingManagementTsRuntimeMirror = null;
@@ -1041,11 +1042,13 @@ function choosePositiveMin(...values) {
     }
     return best > 0 ? best : 0;
 }
-/** Code-Teil: availabilityReason – Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen. */
-function availabilityReason(cfgEnabled, userEnabled, online) {
+/** Code-Teil: availabilityReason – trennt Erreichbarkeit von einem frischen Betriebsfehler. */
+function availabilityReason(cfgEnabled, userEnabled, online, faultActive = false, unavailableActive = false) {
     if (!cfgEnabled) return ReasonCodes.DISABLED;
     if (!userEnabled) return ReasonCodes.CONTROL_DISABLED;
     if (!online) return ReasonCodes.OFFLINE;
+    if (faultActive) return ReasonCodes.FAULTED;
+    if (unavailableActive) return ReasonCodes.UNAVAILABLE;
     return ReasonCodes.SKIPPED;
 }
 
@@ -1057,9 +1060,152 @@ function normalizeEvcsOnlineFlag(value, fallback = null) {
         const s = value.trim().toLowerCase();
         if (!s) return fallback;
         if (['true', '1', 'on', 'yes', 'ja', 'online', 'connected', 'available', 'reachable', 'ready'].includes(s)) return true;
-        if (['false', '0', 'off', 'no', 'nein', 'offline', 'disconnected', 'unavailable', 'unreachable', 'faulted', 'error'].includes(s)) return false;
+        if (['false', '0', 'off', 'no', 'nein', 'offline', 'disconnected', 'unreachable'].includes(s)) return false;
+        // OCPP `Faulted` / `Unavailable` sind Betriebszustaende eines erreichbaren
+        // Connectors und keine belastbare Aussage ueber die Netzwerk-Erreichbarkeit.
+        // Diese Werte werden separat ueber operationalBlocked/statusEffective bewertet.
+        if (['unavailable', 'faulted', 'fault', 'error', 'failed', 'outofservice', 'inoperative'].includes(s.replace(/[^a-z0-9]+/g, ''))) return fallback;
     }
     return fallback;
+}
+
+/** Statuswerte stabil normalisieren, ohne `Unavailable` als `Available` zu missdeuten. */
+function normalizeEvcsStatusToken(value) {
+    return String(value ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/ä/g, 'ae')
+        .replace(/ö/g, 'oe')
+        .replace(/ü/g, 'ue')
+        .replace(/ß/g, 'ss')
+        .replace(/[^a-z0-9]+/g, '');
+}
+
+/**
+ * Frischen, connectorbezogenen Wallboxstatus fachlich klassifizieren.
+ * `Faulted` und `Unavailable` bestaetigen Erreichbarkeit, blockieren aber positive
+ * Ladesollwerte. Nur echte Offline-Werte gelten als nicht erreichbar.
+ */
+function classifyEvcsConnectorStatus(value, fresh = true) {
+    const raw = (value === null || value === undefined) ? '' : String(value).trim();
+    const token = normalizeEvcsStatusToken(raw);
+    const result = {
+        raw,
+        token,
+        fresh: !!fresh,
+        statusClass: 'unknown',
+        reachable: null,
+        faultActive: false,
+        unavailableActive: false,
+        operationalBlocked: false,
+    };
+    if (!raw || !fresh) return result;
+
+    const offlineTokens = new Set(['offline', 'disconnected', 'unreachable', 'notconnected']);
+    const faultTokens = new Set(['faulted', 'fault', 'error', 'failed', 'failure', 'stoerung']);
+    const unavailableTokens = new Set(['unavailable', 'outofservice', 'inoperative', 'notavailable']);
+    const chargingTokens = new Set(['charging']);
+    const pluggedTokens = new Set(['preparing', 'plugged', 'occupied', 'suspendedevse', 'suspendedev', 'finishing', 'reserved']);
+    const availableTokens = new Set(['available', 'ready', 'idle', 'connected', 'starting', 'stopping']);
+
+    if (offlineTokens.has(token)) {
+        result.statusClass = 'offline';
+        result.reachable = false;
+        return result;
+    }
+    if (faultTokens.has(token) || token.startsWith('faulted') || token.startsWith('error')) {
+        result.statusClass = 'faulted';
+        result.reachable = true;
+        result.faultActive = true;
+        result.operationalBlocked = true;
+        return result;
+    }
+    if (unavailableTokens.has(token) || token.startsWith('unavailable') || token.startsWith('outofservice')) {
+        result.statusClass = 'unavailable';
+        result.reachable = true;
+        result.unavailableActive = true;
+        result.operationalBlocked = true;
+        return result;
+    }
+    if (chargingTokens.has(token)) result.statusClass = 'charging';
+    else if (pluggedTokens.has(token)) result.statusClass = 'plugged';
+    else if (availableTokens.has(token)) result.statusClass = 'available';
+    else result.statusClass = 'status';
+    result.reachable = true;
+    return result;
+}
+
+/**
+ * Frische OCPP-/Wallbox-Statuswerte bestaetigen grundsaetzlich, dass die Gegenstelle
+ * erreichbar ist. Nur ausdrueckliche Offline-/Disconnect-Werte gelten als offline.
+ */
+function normalizeEvcsStatusReachability(value, fallback = null) {
+    const classified = classifyEvcsConnectorStatus(value, true);
+    return classified.reachable === null ? fallback : classified.reachable;
+}
+
+/** OCPP-Connectornummer aus typischen ioBroker-Objektpfaden ableiten. */
+function inferOcppConnectorNoFromObjectId(objectId) {
+    const id = String(objectId || '').trim();
+    if (!id) return null;
+    const parts = id.split('.');
+    // Standard: ocpp.<instance>.<station>.<connector>....
+    if (parts.length >= 4 && parts[0].toLowerCase() === 'ocpp' && /^\d+$/.test(parts[1]) && /^\d+$/.test(parts[3])) {
+        return Number(parts[3]);
+    }
+    // Alternative Adapterstrukturen: ...connector.<n>... / ...connectors.<n>...
+    for (let i = 0; i < parts.length - 1; i++) {
+        const token = String(parts[i] || '').toLowerCase();
+        if ((token === 'connector' || token === 'connectors' || token === 'port') && /^\d+$/.test(parts[i + 1])) {
+            return Number(parts[i + 1]);
+        }
+    }
+    return null;
+}
+
+/**
+ * EVCS darf eine stationaere Speicherunterstuetzung erst als zusaetzliches
+ * Ladebudget verwenden, nachdem genau dieser Speicherbefehl vom aktiven Writer
+ * akzeptiert wurde. Der Request bleibt davon getrennt und wird im vorherigen
+ * EMS-Schritt an die Speicherregelung uebergeben.
+ */
+function resolveAcceptedStorageAssistBudget(input = {}) {
+    const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
+    const requestedW = Math.max(0, Number.isFinite(Number(input.requestedW)) ? Number(input.requestedW) : 0);
+    const acceptedWRaw = Math.max(0, Number.isFinite(Number(input.acceptedW)) ? Number(input.acceptedW) : 0);
+    const acceptedTs = Number.isFinite(Number(input.acceptedTs)) ? Number(input.acceptedTs) : 0;
+    const maxAgeMs = Math.max(500, Number.isFinite(Number(input.maxAgeMs)) ? Number(input.maxAgeMs) : 5000);
+    const ageMs = acceptedTs > 0 ? Math.max(0, now - acceptedTs) : null;
+    const requestedTopology = String(input.requestedTopology || 'none').trim().toLowerCase();
+    const acceptedTopology = String(input.acceptedTopology || '').trim().toLowerCase();
+    const acceptedSource = String(input.acceptedSource || '').trim().toLowerCase();
+    const commandEffective = input.commandEffective === true;
+    const fresh = ageMs !== null && ageMs <= maxAgeMs;
+    const topologyMatches = requestedTopology !== 'none' && acceptedTopology === requestedTopology;
+    const sourceMatches = acceptedSource === 'evcs' || acceptedSource.startsWith('evcs:');
+
+    let status = 'accepted';
+    if (!(requestedW > 0)) status = 'no-request';
+    else if (!commandEffective) status = 'storage-command-not-effective';
+    else if (!fresh) status = acceptedTs > 0 ? 'accepted-command-stale' : 'no-accepted-command';
+    else if (!topologyMatches) status = 'storage-topology-mismatch';
+    else if (!sourceMatches) status = 'storage-source-mismatch';
+    else if (!(acceptedWRaw > 0)) status = 'accepted-zero';
+
+    const valid = status === 'accepted';
+    return {
+        requestedW: Math.round(requestedW),
+        acceptedW: valid ? Math.round(Math.min(requestedW, acceptedWRaw)) : 0,
+        acceptedRawW: Math.round(acceptedWRaw),
+        acceptedTs,
+        ageMs,
+        fresh,
+        commandEffective,
+        topologyMatches,
+        sourceMatches,
+        status,
+        valid,
+    };
 }
 /** Code-Teil: normalizeChargerType – Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit. */
 function normalizeChargerType(v) {
@@ -2387,17 +2533,28 @@ class ChargingManagementModule extends BaseModule {
             }
             const targetWNum = Number(entry.targetPowerW ?? entry.targetW ?? 0);
             const targetANum = Number(entry.targetCurrentA ?? entry.targetA ?? 0);
-            const targetW = Number.isFinite(targetWNum) && targetWNum > 0 ? Math.round(targetWNum) : 0;
-            const targetA = Number.isFinite(targetANum) && targetANum > 0 ? Number(targetANum) : 0;
+            const requestedTargetW = Number.isFinite(targetWNum) && targetWNum > 0 ? Math.round(targetWNum) : 0;
+            const requestedTargetA = Number.isFinite(targetANum) && targetANum > 0 ? Number(targetANum) : 0;
+            const positiveCommandBlocked = (requestedTargetW > 0 || requestedTargetA > 0) && w.controlAvailable !== true;
+            const targetW = positiveCommandBlocked ? 0 : requestedTargetW;
+            const targetA = positiveCommandBlocked ? 0 : requestedTargetA;
             const rawEntryBasis = String(entry.basis || entry.controlBasis || w.controlBasis || '').trim().toLowerCase();
             const plannedBasis = (rawEntryBasis === 'current' || rawEntryBasis === 'currenta' || rawEntryBasis === 'current_a' || rawEntryBasis === 'a' || rawEntryBasis === 'amp' || rawEntryBasis === 'amps')
                 ? 'currentA'
                 : ((rawEntryBasis === 'power' || rawEntryBasis === 'powerw' || rawEntryBasis === 'w' || rawEntryBasis === 'watt' || rawEntryBasis === 'watts') ? 'powerW' : (w.controlBasis || 'auto'));
             const plannedSetpointKey = String(entry.setpointKey || '').trim();
-            const shouldWrite = !!(entry.writeRequired !== false && !entry.blocked);
             const isPhaseSwitchEntry = String(entry.type || '').trim() === 'phaseSwitch' || rawEntryBasis === 'phase' || rawEntryBasis === 'phasemode';
+            const baseWriteRequired = !!(entry.writeRequired !== false && !entry.blocked);
+            const safeStopAllowed = !!(w.online && (!w.userEnabled || w.operationalBlocked || w.enabled || w.cfgEnabled));
+            const shouldWrite = !!(
+                baseWriteRequired
+                && w.online
+                && (isPhaseSwitchEntry ? w.controlAvailable === true : (w.controlAvailable === true || (targetW <= 0 && targetA <= 0 && safeStopAllowed)))
+            );
             let applied = false;
-            let applyStatus = shouldWrite ? 'planned' : (entry && entry.reason ? String(entry.reason) : 'skipped');
+            let applyStatus = positiveCommandBlocked
+                ? (w.faultActive ? 'fault-safe-stop' : (w.unavailableActive ? 'unavailable-safe-stop' : 'blocked-safe-stop'))
+                : (shouldWrite ? 'planned' : (entry && entry.reason ? String(entry.reason) : 'skipped'));
             let applyWrites = null;
             if (isPhaseSwitchEntry) {
                 const phaseValue = entry ? entry.targetValue : undefined;
@@ -2508,9 +2665,34 @@ class ChargingManagementModule extends BaseModule {
             } catch {
                 try { await this._queueState(`${w.ch}.applyWrites`, '', true); } catch { /* ignore */ }
             }
+            if (!isPhaseSwitchEntry) {
+                const measuredBaselineW = (!w.meterStale && Number.isFinite(Number(w.actualPowerW)))
+                    ? Math.max(0, Number(w.actualPowerW))
+                    : null;
+                const previousCommandW = this._lastCmdTargetW && typeof this._lastCmdTargetW.get === 'function'
+                    ? Number(this._lastCmdTargetW.get(w.safe))
+                    : NaN;
+                const commandChanged = Number.isFinite(previousCommandW)
+                    ? Math.abs(previousCommandW - targetW) >= 0.5
+                    : (measuredBaselineW === null || Math.abs(measuredBaselineW - targetW) >= 0.5);
+                recordAcceptedPowerTarget(this.adapter, {
+                    key: `evcs:${w.safe}`,
+                    targetW,
+                    baselineW: measuredBaselineW,
+                    baselineFresh: measuredBaselineW !== null,
+                    accepted: applied,
+                    commandChanged,
+                    kind: 'load',
+                    source: 'chargingManagement',
+                    reason: String(entry.reason || applyStatus || ''),
+                });
+            }
             try {
-                if (this._lastCmdTargetW && typeof this._lastCmdTargetW.set === 'function') this._lastCmdTargetW.set(w.safe, targetW);
-                if (this._lastCmdTargetA && typeof this._lastCmdTargetA.set === 'function') this._lastCmdTargetA.set(w.safe, targetA);
+                // Der Command-Cache folgt nur einem akzeptierten Leistungswrite.
+                // Fehlgeschlagene Writes duerfen weder die NVP-Prognose noch die
+                // naechste Rampenbasis als ausgefuehrt erscheinen lassen.
+                if (applied && this._lastCmdTargetW && typeof this._lastCmdTargetW.set === 'function') this._lastCmdTargetW.set(w.safe, targetW);
+                if (applied && this._lastCmdTargetA && typeof this._lastCmdTargetA.set === 'function') this._lastCmdTargetA.set(w.safe, targetA);
             } catch {
                 // ignore runtime cache errors
             }
@@ -2538,6 +2720,8 @@ class ChargingManagementModule extends BaseModule {
             }
             result.entries.push({
                 safe,
+                requestedTargetW,
+                requestedTargetA,
                 targetW,
                 targetA,
                 basis: isPhaseSwitchEntry ? 'phase' : plannedBasis,
@@ -2592,11 +2776,18 @@ class ChargingManagementModule extends BaseModule {
             const targetW = Number(item.targetPowerW ?? item.targetW ?? 0);
             const targetA = Number(item.targetCurrentA ?? item.targetA ?? 0);
             const hasSetpoint = !!(w.setAKey || w.setWKey);
-            const shouldWrite = hasSetpoint && !!w.online && (!!w.enabled || (!!w.cfgEnabled && !w.userEnabled) || targetW > 0 || targetA > 0);
+            const positiveCommandBlocked = (Number(targetW) > 0 || Number(targetA) > 0) && w.controlAvailable !== true;
+            const safeTargetW = positiveCommandBlocked ? 0 : (Number.isFinite(targetW) && targetW > 0 ? targetW : 0);
+            const safeTargetA = positiveCommandBlocked ? 0 : (Number.isFinite(targetA) && targetA > 0 ? targetA : 0);
+            const shouldWrite = hasSetpoint && !!w.online && (
+                !!w.controlAvailable
+                || (!!w.cfgEnabled && !w.userEnabled)
+                || !!w.operationalBlocked
+            );
             entries.push({
                 safe,
-                targetPowerW: Number.isFinite(targetW) && targetW > 0 ? targetW : 0,
-                targetCurrentA: Number.isFinite(targetA) && targetA > 0 ? targetA : 0,
+                targetPowerW: safeTargetW,
+                targetCurrentA: safeTargetA,
                 basis: w.controlBasis === 'currentA' ? 'current' : 'power',
                 setpointKey: w.controlBasis === 'currentA' ? (w.setAKey || '') : (w.setWKey || ''),
                 writeRequired: shouldWrite,
@@ -3148,9 +3339,24 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.para14aBinding', '§14a binding', 'boolean', 'indicator');
 
         // Gate C: Speicher-Unterstützung (Transparenz)
-        await mk('chargingManagement.control.storageAssistActive', 'Storage assist active', 'boolean', 'indicator');
-        await mk('chargingManagement.control.storageAssistW', 'Storage assist (W)', 'number', 'value.power');
-        await mk('chargingManagement.control.storageAssistSoCPct', 'Storage SoC (%)', 'number', 'value.percent');
+        await mk('chargingManagement.control.storageAssistActive', 'Storage assist policy active', 'boolean', 'indicator');
+        await mk('chargingManagement.control.storageAssistW', 'Requested stationary storage assist (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.storageAssistRequestedW', 'Requested stationary storage assist (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.storageAssistAcceptedW', 'Actually accepted stationary storage assist budget (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.storageAssistAcceptedRawW', 'Raw accepted stationary storage discharge command (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.storageAssistAcceptedTs', 'Accepted stationary storage assist timestamp', 'number', 'value.time');
+        await mk('chargingManagement.control.storageAssistAcceptedAgeMs', 'Accepted stationary storage assist age (ms)', 'number', 'value.interval');
+        await mk('chargingManagement.control.storageAssistAcceptedFresh', 'Accepted stationary storage assist fresh', 'boolean', 'indicator');
+        await mk('chargingManagement.control.storageAssistAcceptedStatus', 'Accepted stationary storage assist status', 'string', 'text');
+        await mk('chargingManagement.control.storageAssistSoCPct', 'Stationary storage SoC (%)', 'number', 'value.percent');
+        await mk('chargingManagement.control.storageAssistTopology', 'Selected stationary storage topology', 'string', 'text');
+        await mk('chargingManagement.control.storageAssistSocSource', 'Stationary storage SoC source', 'string', 'text');
+        await mk('chargingManagement.control.storageAssistSocAgeMs', 'Stationary storage SoC age (ms)', 'number', 'value.interval');
+        await mk('chargingManagement.control.storageAssistSocFresh', 'Stationary storage SoC fresh', 'boolean', 'indicator');
+        await mk('chargingManagement.control.storageAssistAvailableDischargeW', 'Available stationary storage discharge power (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.storageAssistPowerSource', 'Stationary storage discharge source', 'string', 'text');
+        await mk('chargingManagement.control.storageAssistPowerAgeMs', 'Stationary storage discharge value age (ms)', 'number', 'value.interval');
+        await mk('chargingManagement.control.storageAssistPowerFresh', 'Stationary storage discharge value fresh', 'boolean', 'indicator');
         await mk('chargingManagement.control.storageProtectedLoadW', 'EVCS load protected from storage (W)', 'number', 'value.power');
         await mk('chargingManagement.control.storageProtectedWallboxes', 'EVCS wallboxes protected from storage', 'number', 'value');
         await mk('chargingManagement.control.storageProtectedLoadTs', 'EVCS storage-protection timestamp', 'number', 'value.time');
@@ -3405,6 +3611,22 @@ class ChargingManagementModule extends BaseModule {
         await mk('meterStale', 'Meter stale', 'boolean', 'indicator');
         await mk('statusAgeMs', 'Status age (ms)', 'number', 'value');
         await mk('statusStale', 'Status stale', 'boolean', 'indicator');
+        await mk('statusRaw', 'Raw status from assigned AppCenter datapoint', 'string', 'text');
+        await mk('statusSourceId', 'Assigned AppCenter status datapoint', 'string', 'text');
+        await mk('statusSourceConnectorNo', 'Connector number inferred from status datapoint', 'number', 'value');
+        await mk('statusConnectorMismatch', 'Status datapoint belongs to another connector', 'boolean', 'indicator');
+        await mk('statusSharedAcrossConnectors', 'Same status datapoint assigned to multiple connectors', 'boolean', 'indicator');
+        await mk('statusScope', 'Status datapoint scope', 'string', 'text');
+        await mk('statusIgnoredReason', 'Reason why the assigned status is ignored', 'string', 'text');
+        await mk('statusFresh', 'Status value fresh', 'boolean', 'indicator');
+        await mk('statusEffective', 'Effective fresh connector status', 'string', 'text');
+        await mk('statusClass', 'Normalized connector status class', 'string', 'text');
+        await mk('onlineSource', 'Source used for wallbox reachability', 'string', 'text');
+        await mk('faultActive', 'Current fresh wallbox fault', 'boolean', 'indicator');
+        await mk('faultReason', 'Wallbox fault/status detail', 'string', 'text');
+        await mk('unavailableActive', 'Current fresh connector unavailable state', 'boolean', 'indicator');
+        await mk('unavailableReason', 'Connector unavailable/status detail', 'string', 'text');
+        await mk('operationalBlocked', 'Fresh connector state blocks positive charging setpoints', 'boolean', 'indicator');
 
         this._known.add(ch);
         return ch;
@@ -3847,6 +4069,20 @@ class ChargingManagementModule extends BaseModule {
             ]);
         } catch { /* diagnostics only */ }
 
+        // A connector status is connector-specific. If the same manually assigned
+        // AppCenter status datapoint is reused for multiple numbered connectors, it
+        // is treated as station/shared diagnostics only and must not fault or enable
+        // any single connector.
+        const statusConnectorUsage = new Map();
+        for (let configIndex = 0; configIndex < wallboxes.length; configIndex++) {
+            const configWallbox = wallboxes[configIndex] || {};
+            const statusObjectId = String(configWallbox.statusId || '').trim();
+            const configuredConnectorNo = clamp(num(configWallbox.connectorNo, 0), 0, 9999);
+            if (!statusObjectId || configuredConnectorNo <= 0) continue;
+            if (!statusConnectorUsage.has(statusObjectId)) statusConnectorUsage.set(statusObjectId, new Set());
+            statusConnectorUsage.get(statusObjectId).add(`${String(configWallbox.stationKey || '').trim()}|${configuredConnectorNo}|${String(configWallbox.key || configIndex)}`);
+        }
+
         for (let wbIndex = 0; wbIndex < wallboxes.length; wbIndex++) {
             const wb = wallboxes[wbIndex];
             const key = String(wb.key || '').trim();
@@ -4056,18 +4292,8 @@ class ChargingManagementModule extends BaseModule {
             // Read measurements (cache-based)
             const pW = (actualPowerWId && this.dp) ? this.dp.getNumber(`cm.wb.${safe}.pW`, null) : null;
             const iA = (actualCurrentAId && this.dp) ? this.dp.getNumber(`cm.wb.${safe}.iA`, null) : null;
-
-            // Online detection: an explicit onlineId is authoritative; statusId is only fallback.
-            // This keeps display status texts such as "Available" separate from reachability.
             const onlineRaw = (onlineId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.onlineRaw`) : null;
             const statusRaw = (statusId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.st`) : null;
-            let online = enabled;
-            if (onlineId) {
-                online = normalizeEvcsOnlineFlag(onlineRaw, false);
-            } else if (statusId) {
-                online = normalizeEvcsOnlineFlag(statusRaw, false);
-                if (online === null) online = true;
-            }
 
 /**
  * Code-Teil: normalizePhaseFeedbackRuntime
@@ -4120,9 +4346,97 @@ class ChargingManagementModule extends BaseModule {
                 statusStale = !(Number.isFinite(age)) ? true : (age > wbStatusStaleTimeoutMs);
             }
 
-            const staleAny = !!(meterStale || statusStale);
+/**
+ * Code-Teil: statusRawText
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+            const statusRawText = (() => {
+                if (statusRaw === null || statusRaw === undefined) return '';
+                if (typeof statusRaw === 'string') return statusRaw.trim();
+                try { return JSON.stringify(statusRaw); } catch { return String(statusRaw); }
+            })();
+            const statusSourceConnectorNo = inferOcppConnectorNoFromObjectId(statusId);
+            const statusConnectorMismatch = !!(
+                statusId
+                && connectorNo > 0
+                && statusSourceConnectorNo !== null
+                && Number(statusSourceConnectorNo) !== Number(connectorNo)
+            );
+            const statusSharedAcrossConnectors = !!(
+                statusId
+                && connectorNo > 0
+                && statusConnectorUsage.has(statusId)
+                && statusConnectorUsage.get(statusId).size > 1
+            );
+            const statusScope = statusSharedAcrossConnectors
+                ? 'station-shared'
+                : (statusSourceConnectorNo !== null
+                    ? `connector-${statusSourceConnectorNo}`
+                    : (connectorNo > 0 ? `connector-${connectorNo}-assigned` : 'station-or-unknown'));
+            if (statusConnectorMismatch) mappingIssues.push('status_connector_mismatch');
+            if (statusSharedAcrossConnectors) mappingIssues.push('status_shared_across_connectors');
+            const statusIgnoredReason = statusConnectorMismatch
+                ? `status-dp-connector-${statusSourceConnectorNo}-for-connector-${connectorNo}`
+                : (statusSharedAcrossConnectors
+                    ? `status-dp-shared-by-${statusConnectorUsage.get(statusId).size}-connectors`
+                    : (statusStale && statusId ? 'status-stale' : ''));
+            const statusFresh = !!(statusId && !statusStale && !statusConnectorMismatch && !statusSharedAcrossConnectors && statusRawText);
+            const classifiedStatus = classifyEvcsConnectorStatus(statusRawText, statusFresh);
+            const faultActive = !!classifiedStatus.faultActive;
+            const unavailableActive = !!classifiedStatus.unavailableActive;
+            const operationalBlocked = !!classifiedStatus.operationalBlocked;
+            const rawStatusClass = classifyEvcsConnectorStatus(statusRawText, true);
+            const faultReason = faultActive
+                ? statusRawText
+                : (rawStatusClass.faultActive && statusIgnoredReason ? `${statusIgnoredReason}:${statusRawText}` : '');
+            const unavailableReason = unavailableActive
+                ? statusRawText
+                : (rawStatusClass.unavailableActive && statusIgnoredReason ? `${statusIgnoredReason}:${statusRawText}` : '');
 
-            // Note: staleness flags are diagnostics only. Online/offline is derived from the status value.
+            let statusClass = classifiedStatus.statusClass;
+            if (!statusFresh && statusRawText) statusClass = statusConnectorMismatch
+                ? 'ignored-connector-mismatch'
+                : (statusSharedAcrossConnectors ? 'ignored-station-shared' : 'stale');
+            const statusEffective = statusFresh ? statusRawText : '';
+
+            // Erreichbarkeit und Betriebsstoerung sind getrennte Wahrheiten:
+            // - ein expliziter Online-DP ist autoritativ;
+            // - ein frischer Connectorstatus bestaetigt Erreichbarkeit, auch bei Faulted;
+            // - ein Connector-0-Status darf fuer Connector 1..N weder online noch faulted liefern.
+            let online = enabled;
+            let onlineSource = 'config-fallback';
+            if (onlineId) {
+                const explicitOnline = normalizeEvcsOnlineFlag(onlineRaw, null);
+                if (explicitOnline === null) {
+                    online = statusFresh ? normalizeEvcsStatusReachability(statusRaw, enabled) : enabled;
+                    onlineSource = statusFresh ? 'status-fallback-after-unknown-online-dp' : 'config-fallback-after-unknown-online-dp';
+                } else {
+                    online = explicitOnline;
+                    onlineSource = 'online-dp';
+                }
+            } else if (statusFresh) {
+                online = normalizeEvcsStatusReachability(statusRaw, true);
+                onlineSource = 'fresh-connector-status';
+            } else if (actualPowerWId && !meterStale) {
+                online = true;
+                onlineSource = 'fresh-power-meter';
+            }
+
+            const controlAvailable = !!(enabled && online && !operationalBlocked);
+            // Ein optionaler, veralteter oder absichtlich ignorierter Status-DP ist
+            // Diagnose, aber kein Messwert-Failsafe. Nur ein veralteter Pflicht-
+            // Leistungswert darf den allgemeinen STALE_METER-Pfad auslösen.
+            const staleAny = !!meterStale;
+
+            // Der Rohstatus bleibt Diagnose. Nur ein frischer, connectorrichtig
+            // zugeordneter Fault darf als aktuelle Störung blockieren.
 
             // Publish diagnostics (UI)
             try {
@@ -4133,6 +4447,22 @@ class ChargingManagementModule extends BaseModule {
                 await this._queueState(`${ch}.meterStale`, !!meterStale, true);
                 await this._queueState(`${ch}.statusAgeMs`, statusAgeMs, true);
                 await this._queueState(`${ch}.statusStale`, !!statusStale, true);
+                await this._queueState(`${ch}.statusRaw`, statusRawText, true);
+                await this._queueState(`${ch}.statusSourceId`, statusId, true);
+                await this._queueState(`${ch}.statusSourceConnectorNo`, statusSourceConnectorNo === null ? -1 : Number(statusSourceConnectorNo), true);
+                await this._queueState(`${ch}.statusConnectorMismatch`, statusConnectorMismatch, true);
+                await this._queueState(`${ch}.statusSharedAcrossConnectors`, statusSharedAcrossConnectors, true);
+                await this._queueState(`${ch}.statusScope`, statusScope, true);
+                await this._queueState(`${ch}.statusIgnoredReason`, statusIgnoredReason, true);
+                await this._queueState(`${ch}.statusFresh`, statusFresh, true);
+                await this._queueState(`${ch}.statusEffective`, statusEffective, true);
+                await this._queueState(`${ch}.statusClass`, statusClass, true);
+                await this._queueState(`${ch}.onlineSource`, onlineSource, true);
+                await this._queueState(`${ch}.faultActive`, faultActive, true);
+                await this._queueState(`${ch}.faultReason`, faultReason, true);
+                await this._queueState(`${ch}.unavailableActive`, unavailableActive, true);
+                await this._queueState(`${ch}.unavailableReason`, unavailableReason, true);
+                await this._queueState(`${ch}.operationalBlocked`, operationalBlocked, true);
             } catch {
                 // ignore
             }
@@ -4426,10 +4756,10 @@ class ChargingManagementModule extends BaseModule {
 
             // Prefer the dedicated EVCS/OCPP status when it is available. A stale
             // status is diagnostic only and cannot reserve energy.
-            let statusForPlug = statusRaw;
-            let statusForPlugSource = 'wb.status';
-            let statusForPlugFresh = !!statusId && !statusStale;
-            if (Number.isFinite(evcsIndex) && evcsIndex > 0) {
+            let statusForPlug = statusEffective;
+            let statusForPlugSource = statusFresh ? 'wb.status-effective' : '';
+            let statusForPlugFresh = statusFresh;
+            if (!statusId && Number.isFinite(evcsIndex) && evcsIndex > 0) {
                 try {
                     const stS = await this._getStateCached(`evcs.${Math.round(evcsIndex)}.status`);
                     const vS = stS ? stS.val : null;
@@ -4675,11 +5005,28 @@ class ChargingManagementModule extends BaseModule {
                 userEnabled,
                 enabled,
                 online,
+                controlAvailable,
+                onlineSource,
                 staleAny,
                 meterStale,
                 meterAgeMs,
                 statusStale,
                 statusAgeMs,
+                statusRaw: statusRawText,
+                statusSourceId: statusId,
+                statusSourceConnectorNo,
+                statusConnectorMismatch,
+                statusSharedAcrossConnectors,
+                statusScope,
+                statusIgnoredReason,
+                statusFresh,
+                statusEffective,
+                statusClass,
+                faultActive,
+                faultReason,
+                unavailableActive,
+                unavailableReason,
+                operationalBlocked,
                 hasSetpoint,
                 mappingIssues,
                 charging: isCharging,
@@ -4961,7 +5308,7 @@ class ChargingManagementModule extends BaseModule {
         const goalForecastReserveMs = Math.round(goalForecastReserveMin * 60 * 1000);
 
         if (forcePvSurplusOnly && !pvSurplusOnlyCfg && goalTariffOverrideMode === 'forecast') {
-            const anyGoal = wbList.some((w) => w && w.enabled && w.online && w.goalActive && Number.isFinite(Number(w.goalFinishTs)) && Number(w.goalFinishTs) > now);
+            const anyGoal = wbList.some((w) => w && w.controlAvailable && w.goalActive && Number.isFinite(Number(w.goalFinishTs)) && Number(w.goalFinishTs) > now);
             if (anyGoal) {
                 const maxGoalFinishTs = wbList.reduce((m, w) => {
                     const ts = (w && w.goalActive) ? Number(w.goalFinishTs) : NaN;
@@ -5187,7 +5534,7 @@ class ChargingManagementModule extends BaseModule {
             let forcePvForW = forcePvSurplusOnly;
             let goalTariffOverrideActive = false;
             let goalTariffOverrideReason = '';
-            if (forcePvForW && !pvSurplusOnlyCfg && w.enabled && w.online && w.goalActive) {
+            if (forcePvForW && !pvSurplusOnlyCfg && w.controlAvailable && w.goalActive) {
                 if (goalTariffOverrideMode === 'always') {
                     forcePvForW = false;
                     goalTariffOverrideActive = true;
@@ -5275,7 +5622,7 @@ class ChargingManagementModule extends BaseModule {
             w._boostNotAllowed = boostNotAllowed;
             w._boostTimeoutMinEffective = effBoostTimeoutMin;
 
-            if (w.enabled && w.online) {
+            if (w.controlAvailable) {
                 if (eff === 'pv') { anyPvLimitedActive = true; anyPurePvActive = true; }
                 if (eff === 'minpv') { anyPvLimitedActive = true; anyMinPvActive = true; }
                 if (eff === 'boost' || eff === 'minpv' || eff === 'normal') anyGridAllowedActive = true;
@@ -5300,7 +5647,7 @@ class ChargingManagementModule extends BaseModule {
         /** Code-Teil: Arrow-Funktion `wallboxHasEvPriorityDemand` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
         /** Code-Teil: wallboxHasEvPriorityDemand – Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit. */
         const wallboxHasEvPriorityDemand = (w) => {
-            if (!w || !w.enabled || !w.online) return false;
+            if (!w || !w.controlAvailable) return false;
             const eff = String(w.effectiveMode || 'normal');
             // Die Kundenprioritaet Speicher/E-Mobilitaet gilt ausschliesslich
             // fuer reine PV-Ladung. Min+PV, Auto und Boost duerfen dadurch weder
@@ -5706,7 +6053,7 @@ class ChargingManagementModule extends BaseModule {
             const stopW = Math.min(pvStopThresholdW, startW > 0 ? startW : pvStopThresholdW);
             const pvStartSettleMs = clamp(num(cfg.pvStartSettleSec, 20), 0, 3600) * 1000;
             const pvStartupHoldActive = purePvHysteresisActive && pvStartSettleMs > 0
-                && wbList.some((w) => w && w.enabled && w.online && w.effectiveMode === 'pv'
+                && wbList.some((w) => w && w.controlAvailable && w.effectiveMode === 'pv'
                     && Number.isFinite(Number(w.pvStartupHoldUntilMs)) && Number(w.pvStartupHoldUntilMs) > now);
 
             gridImportW = (typeof gridW === 'number' && Number.isFinite(gridW)) ? Math.max(0, gridW) : 0;
@@ -6260,8 +6607,92 @@ if (components.length) {
         // Gate C: Speicher-Unterstützung (optional)
         // Ziel: Bei hohem Speicher-SoC kann zusätzliche Ladeleistung durch Batterie-Entladung bereitgestellt werden,
         // ohne den Netzanschluss (Import-Limit) zu überlasten. Die Entladung wird über das Storage-Control-Modul umgesetzt.
-        let storageSoC = getFirstDpNumber(['st.socPct']);
-        let storageAssistW = 0;
+        // Fahrzeug-SoC und stationaerer Speicher-SoC bleiben strikt getrennt.
+        // Dieser Block nutzt den stationaeren SoC ausschliesslich fuer die optionale
+        // Speicherunterstuetzung der EVCS. Ziel-/Zeitladen liest weiterhin nur den
+        // Fahrzeug-SoC des jeweiligen Ladepunkts.
+        let storageTopology = 'none';
+        let storageSoC = null;
+        let storageSocSource = '';
+        let storageSocAgeMs = null;
+        let storageSocFresh = false;
+        let storageAvailableDischargeW = 0;
+        let storagePowerSource = '';
+        let storagePowerAgeMs = null;
+        let storagePowerFresh = false;
+        const storageAssistFreshMs = Math.max(5000, Number(staleTimeoutMs) || 15000);
+
+        try {
+            const topologyState = await this._getStateCached('speicher.regelung.topologie');
+            storageTopology = String(topologyState && topologyState.val || 'none').trim().toLowerCase();
+            if (!['farm', 'single'].includes(storageTopology)) storageTopology = 'none';
+
+            if (storageTopology === 'farm') {
+                const socState = await this._getStateCached('storageFarm.totalSocOnline');
+                const powerState = await this._getStateCached('storageFarm.availableDischargePowerW');
+                const socValue = socState ? Number(socState.val) : NaN;
+                const powerUnlimited = !!(powerState && powerState.val === null);
+                const powerValue = powerState && !powerUnlimited ? Number(powerState.val) : NaN;
+                storageSocAgeMs = socState && Number.isFinite(Number(socState.ts)) ? Math.max(0, now - Number(socState.ts)) : null;
+                storagePowerAgeMs = powerState && Number.isFinite(Number(powerState.ts)) ? Math.max(0, now - Number(powerState.ts)) : null;
+                storageSocFresh = Number.isFinite(socValue) && storageSocAgeMs !== null && storageSocAgeMs <= storageAssistFreshMs;
+                storagePowerFresh = (powerUnlimited || (Number.isFinite(powerValue) && powerValue >= 0))
+                    && storagePowerAgeMs !== null
+                    && storagePowerAgeMs <= storageAssistFreshMs;
+                storageSoC = storageSocFresh ? socValue : null;
+                // `null` ist im Farmvertrag kein fehlender Wert, sondern bedeutet
+                // "kein festes Farm-Limit". Intern bleibt das unlimitiert; die
+                // explizite EVCS-Speicherassistenzgrenze begrenzt weiterhin hart.
+                storageAvailableDischargeW = storagePowerFresh
+                    ? (powerUnlimited ? Number.POSITIVE_INFINITY : Math.max(0, powerValue))
+                    : 0;
+                storageSocSource = 'storageFarm.totalSocOnline';
+                storagePowerSource = powerUnlimited
+                    ? 'storageFarm.availableDischargePowerW:unlimited'
+                    : 'storageFarm.availableDischargePowerW';
+            } else if (storageTopology === 'single') {
+                const socValue = getFirstDpNumber(['st.socPct']);
+                const socAge = (this.dp && typeof this.dp.getAgeMs === 'function') ? this.dp.getAgeMs('st.socPct') : null;
+                storageSocAgeMs = Number.isFinite(Number(socAge)) ? Math.max(0, Math.round(Number(socAge))) : null;
+                storageSocFresh = Number.isFinite(Number(socValue)) && (storageSocAgeMs === null || storageSocAgeMs <= storageAssistFreshMs);
+                storageSoC = storageSocFresh ? Number(socValue) : null;
+
+                const limitState = await this._getStateCached('speicher.regelung.maxDischargeW');
+                const stateLimitW = limitState ? Number(limitState.val) : NaN;
+                const stateLimitAgeMs = limitState && Number.isFinite(Number(limitState.ts)) ? Math.max(0, now - Number(limitState.ts)) : null;
+                const storageCfg = this.adapter && this.adapter.config && this.adapter.config.storageControl && typeof this.adapter.config.storageControl === 'object'
+                    ? this.adapter.config.storageControl
+                    : (this.adapter && this.adapter.config && this.adapter.config.storage && typeof this.adapter.config.storage === 'object'
+                        ? this.adapter.config.storage
+                        : {});
+                const cfgLimitW = Math.max(0, num(storageCfg.maxDischargeW, 0));
+                const hasFreshStateLimit = Number.isFinite(stateLimitW)
+                    && stateLimitW >= 0
+                    && (stateLimitAgeMs === null || stateLimitAgeMs <= storageAssistFreshMs);
+                const selectedLimitW = hasFreshStateLimit ? stateLimitW : cfgLimitW;
+
+                // Im Speicherregler bedeutet 0 bewusst "kein Software-Clamp".
+                // Die EVCS-Unterstuetzung bleibt dennoch durch
+                // storageAssistMaxDischargeW hart begrenzt.
+                storageAvailableDischargeW = selectedLimitW > 0 ? selectedLimitW : Number.POSITIVE_INFINITY;
+                storagePowerFresh = hasFreshStateLimit || cfgLimitW >= 0;
+                storagePowerAgeMs = hasFreshStateLimit ? stateLimitAgeMs : 0;
+                storageSocSource = 'st.socPct';
+                storagePowerSource = hasFreshStateLimit
+                    ? 'speicher.regelung.maxDischargeW'
+                    : (cfgLimitW > 0 ? 'config.storageControl.maxDischargeW' : 'single-storage:unlimited');
+            }
+        } catch (_eTopology) {
+            storageTopology = 'none';
+            storageSoC = null;
+            storageSocFresh = false;
+            storagePowerFresh = false;
+            storageAvailableDischargeW = 0;
+        }
+
+        let storageAssistW = 0; // Request an die Speicherregelung; kein EVCS-Budget vor Write-Akzeptanz.
+        let storageAssistAcceptedW = 0;
+        let storageAssistAcceptedDiag = resolveAcceptedStorageAssistBudget({ requestedW: 0 });
         let storageAssistActive = false;
         let storagePolicyGlobalBlocker = '';
         const budgetBeforeStorageAssistW = Number.isFinite(budgetW) ? Math.max(0, budgetW) : budgetW;
@@ -6273,10 +6704,13 @@ if (components.length) {
             const stopSoc = clamp(num(cfg.storageAssistStopSocPct, 40), 0, 100);
 
             const maxW_cfg = num(cfg.storageAssistMaxDischargeW, 0);
-            const maxW_storage = num(this.adapter && this.adapter.config && this.adapter.config.storage && this.adapter.config.storage.maxDischargeW, 0);
-            const maxW = (Number.isFinite(maxW_cfg) && maxW_cfg > 0) ? maxW_cfg : (Number.isFinite(maxW_storage) ? maxW_storage : 0);
+            const topologyAvailableUnlimited = storageAvailableDischargeW === Number.POSITIVE_INFINITY;
+            const topologyAvailableW = Number.isFinite(Number(storageAvailableDischargeW)) ? Math.max(0, Number(storageAvailableDischargeW)) : 0;
+            const maxW = (Number.isFinite(maxW_cfg) && maxW_cfg > 0)
+                ? (topologyAvailableUnlimited ? maxW_cfg : (topologyAvailableW > 0 ? Math.min(maxW_cfg, topologyAvailableW) : 0))
+                : topologyAvailableW;
 
-            const storageAssistWallboxes = wbList.filter(w => w && w.enabled && w.online && w.storageAssistRequested === true);
+            const storageAssistWallboxes = wbList.filter(w => w && w.controlAvailable && w.storageAssistRequested === true);
             const anyStorageAssistRequested = storageAssistWallboxes.length > 0;
             const anyStorageBoostActive = storageAssistWallboxes.some(w => String(w.effectiveMode || '').toLowerCase() === 'boost');
             const anyGridAllowedStorageActive = storageAssistWallboxes.some(w => ['normal', 'boost', 'minpv'].includes(String(w.effectiveMode || '').toLowerCase()));
@@ -6286,6 +6720,9 @@ if (components.length) {
             else if (!saEnabled) storagePolicyGlobalBlocker = 'storage-assist-disabled';
             else if (!allowByMode) storagePolicyGlobalBlocker = 'mode-not-allowed';
             else if (!anyGridAllowedStorageActive) storagePolicyGlobalBlocker = 'mode-pv-only';
+            else if (storageTopology === 'none') storagePolicyGlobalBlocker = 'no-stationary-storage-topology';
+            else if (!storageSocFresh) storagePolicyGlobalBlocker = 'stationary-storage-soc-stale';
+            else if (!storagePowerFresh) storagePolicyGlobalBlocker = 'stationary-storage-discharge-cap-stale';
             else if (!dischargeAllowed) storagePolicyGlobalBlocker = 'discharge-not-allowed';
             else if (pausedByPeakShaving) storagePolicyGlobalBlocker = 'paused-by-peak-shaving';
             else if (!(maxW > 0)) storagePolicyGlobalBlocker = 'no-storage-discharge-limit';
@@ -6293,11 +6730,11 @@ if (components.length) {
             else storagePolicyGlobalBlocker = '';
 
             if (!storagePolicyGlobalBlocker) {
-                // Hysterese: Start/Stop-Schwellen vermeiden Flattern
+                // Hysterese: Start/Stop-Schwellen vermeiden Flattern.
                 if (this._storageAssistActive) {
                     if (storageSoC <= stopSoc) this._storageAssistActive = false;
-                } else {
-                    if (storageSoC >= startSoc) this._storageAssistActive = true;
+                } else if (storageSoC >= startSoc) {
+                    this._storageAssistActive = true;
                 }
             } else {
                 this._storageAssistActive = false;
@@ -6308,41 +6745,63 @@ if (components.length) {
                 storagePolicyGlobalBlocker = storageSoC < startSoc ? 'storage-soc-low' : 'storage-assist-idle';
             }
 
-            // Nur sinnvoll, wenn das Budget aktuell durch Netz/Phase gedeckelt ist
+            // Request nur bilden, wenn Netz-/Phasenlimit tatsaechlich bindet. Er
+            // wird im folgenden Speicher-Tick durch Policy, SoC und Gates geprueft.
             if (storageAssistActive && (gridCapBinding || phaseCapBinding) && maxW > 0) {
                 const desiredExtra = Number.isFinite(budgetBeforeGridCaps) ? Math.max(0, budgetBeforeGridCaps - budgetW) : maxW;
                 storageAssistW = clamp(Math.min(maxW, desiredExtra), 0, maxW);
-
-                // Budget anheben: zusätzliche Leistung wird aus dem Speicher bereitgestellt (Storage-Control setzt Entladung)
-                if (storageAssistW > 0 && Number.isFinite(budgetW)) {
-                    budgetW = budgetW + storageAssistW;
-                    if (!String(effectiveBudgetMode || '').includes('storageAssist')) {
-                        effectiveBudgetMode = `${effectiveBudgetMode}+storageAssist`;
-                    }
-                } else if (!storagePolicyGlobalBlocker) {
-                    storagePolicyGlobalBlocker = 'no-storage-budget-needed';
-                }
+                if (!(storageAssistW > 0) && !storagePolicyGlobalBlocker) storagePolicyGlobalBlocker = 'no-storage-budget-needed';
             } else if (storageAssistActive && !(gridCapBinding || phaseCapBinding) && !storagePolicyGlobalBlocker) {
                 storagePolicyGlobalBlocker = 'no-grid-or-phase-cap';
             }
 
+            // Das EVCS-Budget wird ausschliesslich mit einer frischen, vom aktiven
+            // Speicherwriter akzeptierten EVCS-Entladung erhoeht. Der erste Tick
+            // stellt nur den Request; fruehestens im Folgetick entsteht Zusatzbudget.
+            const acceptedWState = await this._getStateCached('speicher.regelung.evcsAssistAcceptedW');
+            const acceptedTsState = await this._getStateCached('speicher.regelung.evcsAssistAcceptedTs');
+            const acceptedTopologyState = await this._getStateCached('speicher.regelung.evcsAssistAcceptedTopology');
+            const acceptedSourceState = await this._getStateCached('speicher.regelung.evcsAssistAcceptedSource');
+            const commandEffectiveState = await this._getStateCached('speicher.regelung.commandEffective');
+            storageAssistAcceptedDiag = resolveAcceptedStorageAssistBudget({
+                now,
+                requestedW: storageAssistW,
+                acceptedW: acceptedWState ? acceptedWState.val : 0,
+                acceptedTs: acceptedTsState ? acceptedTsState.val : 0,
+                acceptedTopology: acceptedTopologyState ? acceptedTopologyState.val : '',
+                acceptedSource: acceptedSourceState ? acceptedSourceState.val : '',
+                requestedTopology: storageTopology,
+                commandEffective: commandEffectiveState && commandEffectiveState.val === true,
+                maxAgeMs: storageAssistFreshMs,
+            });
+            storageAssistAcceptedW = storageAssistAcceptedDiag.acceptedW;
+
+            if (storageAssistAcceptedW > 0 && Number.isFinite(budgetW)) {
+                budgetW += storageAssistAcceptedW;
+                if (!String(effectiveBudgetMode || '').includes('storageAssistAccepted')) {
+                    effectiveBudgetMode = `${effectiveBudgetMode}+storageAssistAccepted`;
+                }
+            } else if (storageAssistW > 0 && !storagePolicyGlobalBlocker) {
+                storagePolicyGlobalBlocker = storageAssistAcceptedDiag.status;
+            }
         } catch (_e) {
-            // ignore
             this._storageAssistActive = false;
             storageAssistW = 0;
+            storageAssistAcceptedW = 0;
             storageAssistActive = false;
             storagePolicyGlobalBlocker = 'runtime-error';
+            storageAssistAcceptedDiag = resolveAcceptedStorageAssistBudget({ requestedW: 0, now });
         }
 
         try {
             for (const w of wbList) {
-                const effectiveStorageAssist = !!(storageAssistActive && storageAssistW > 0 && w.storageAssistRequested === true);
+                const effectiveStorageAssist = !!(storageAssistAcceptedW > 0 && w.storageAssistRequested === true);
                 let storageReason = '';
                 if (!w.storageAssistCustomerAllowed) storageReason = 'normal-self-consumption';
                 else if (w.storageProtectionRequested) storageReason = 'storage-protected';
                 else if (!w.userStorageAssistEnabled) storageReason = 'normal-self-consumption';
-                else if (effectiveStorageAssist) storageReason = 'allowed';
-                else storageReason = storagePolicyGlobalBlocker || 'not-active';
+                else if (effectiveStorageAssist) storageReason = 'accepted';
+                else storageReason = storagePolicyGlobalBlocker || storageAssistAcceptedDiag.status || 'not-active';
                 w.effectiveStorageAssist = effectiveStorageAssist;
                 w.storageAssistBlockedReason = storageReason;
                 w.batteryContributionW = 0;
@@ -6357,11 +6816,31 @@ if (components.length) {
         // Finaler Same-cycle Stand; persistente States darunter bleiben Diagnose/Fallback.
         publishEvStoragePolicyCaps({ protectedLoadW: Math.max(0, Math.round(Number(storageProtectedLoadW || 0))), protectedWallboxes: Math.max(0, Math.round(Number(storageProtectedWallboxes || 0))), assistRequestedLoadW: Math.max(0, Math.round(Number(storageAssistRequestedLoadW || 0))), source: 'charging-runtime' });
 
-        // Publish diagnostics for UI
+        // Publish diagnostics for UI. `storageAssistW` bleibt der Request an die
+        // Speicherregelung; nur `storageAssistAcceptedW` darf das Ladebudget erhoehen.
         try {
-            await this._queueState('chargingManagement.control.storageAssistSoCPct', Number.isFinite(storageSoC) ? storageSoC : 0, true);
+            await this._queueState('chargingManagement.control.storageAssistSoCPct', Number.isFinite(storageSoC) ? storageSoC : null, true);
+            await this._queueState('chargingManagement.control.storageAssistTopology', storageTopology, true);
+            await this._queueState('chargingManagement.control.storageAssistSocSource', storageSocSource, true);
+            await this._queueState('chargingManagement.control.storageAssistSocAgeMs', storageSocAgeMs, true);
+            await this._queueState('chargingManagement.control.storageAssistSocFresh', !!storageSocFresh, true);
+            await this._queueState(
+                'chargingManagement.control.storageAssistAvailableDischargeW',
+                storageAvailableDischargeW === Number.POSITIVE_INFINITY ? null : Math.max(0, Math.round(Number(storageAvailableDischargeW) || 0)),
+                true,
+            );
+            await this._queueState('chargingManagement.control.storageAssistPowerSource', storagePowerSource, true);
+            await this._queueState('chargingManagement.control.storageAssistPowerAgeMs', storagePowerAgeMs, true);
+            await this._queueState('chargingManagement.control.storageAssistPowerFresh', !!storagePowerFresh, true);
             await this._queueState('chargingManagement.control.storageAssistActive', !!storageAssistActive, true);
-            await this._queueState('chargingManagement.control.storageAssistW', Number.isFinite(storageAssistW) ? storageAssistW : 0, true);
+            await this._queueState('chargingManagement.control.storageAssistW', Math.round(storageAssistW), true);
+            await this._queueState('chargingManagement.control.storageAssistRequestedW', Math.round(storageAssistW), true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedW', Math.round(storageAssistAcceptedW), true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedRawW', Math.round(storageAssistAcceptedDiag.acceptedRawW || 0), true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedTs', Math.round(storageAssistAcceptedDiag.acceptedTs || 0), true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedAgeMs', storageAssistAcceptedDiag.ageMs, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedFresh', !!storageAssistAcceptedDiag.fresh, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedStatus', String(storageAssistAcceptedDiag.status || ''), true);
             await this._queueState('chargingManagement.control.storageProtectedLoadW', Math.max(0, Math.round(Number(storageProtectedLoadW || 0))), true);
             await this._queueState('chargingManagement.control.storageProtectedWallboxes', Math.max(0, Math.round(Number(storageProtectedWallboxes || 0))), true);
             await this._queueState('chargingManagement.control.storageProtectedLoadTs', now, true);
@@ -6577,6 +7056,13 @@ if (components.length) {
             this._storageAssistActive = false;
             await this._queueState('chargingManagement.control.storageAssistActive', false, true);
             await this._queueState('chargingManagement.control.storageAssistW', 0, true);
+            await this._queueState('chargingManagement.control.storageAssistRequestedW', 0, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedW', 0, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedRawW', 0, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedTs', now, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedAgeMs', 0, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedFresh', false, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedStatus', 'failsafe-disabled', true);
 
             await this._queueState('chargingManagement.debug.sortedOrder', wbList.map(w => w.safe).join(','), true);
 
@@ -6594,7 +7080,7 @@ if (components.length) {
                 /** @type {any|null} */
                 let applyWrites = null;
 
-                if (w.online && (w.enabled || (!!w.cfgEnabled && !w.userEnabled))) {
+                if (w.online && (w.controlAvailable || (!!w.cfgEnabled && !w.userEnabled) || w.operationalBlocked)) {
                     // 0.7.127: Failsafe setzt den sicheren Zielwert nur noch als
                     // Executor-/Fallback-Plan. Der einzige EVCS-Setpoint-Schreiber bleibt
                     // _executeChargingSetpointEntries.
@@ -6602,7 +7088,7 @@ if (components.length) {
                     const reasonToSet = (!!w.cfgEnabled && !w.userEnabled) ? ReasonCodes.CONTROL_DISABLED : reason;
                     await this._queueState(`${w.ch}.reason`, reasonToSet, true);
                 } else {
-                    await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online), true);
+                    await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive), true);
                 }
 
                 await this._queueState(`${w.ch}.targetCurrentA`, 0, true);
@@ -6638,7 +7124,7 @@ if (components.length) {
                     applied,
                     applyStatus,
                     applyWrites,
-                    reason: (w.online && (w.enabled || (!!w.cfgEnabled && !w.userEnabled))) ? ((!!w.cfgEnabled && !w.userEnabled) ? ReasonCodes.CONTROL_DISABLED : reason) : (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online)),
+                    reason: (w.online && (w.controlAvailable || (!!w.cfgEnabled && !w.userEnabled) || w.operationalBlocked)) ? ((!!w.cfgEnabled && !w.userEnabled) ? ReasonCodes.CONTROL_DISABLED : reason) : (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive)),
                 });
             }
 
@@ -6794,6 +7280,21 @@ if (components.length) {
         await this._queueState('chargingManagement.control.pausedByPeakShaving', pausedByPeakShaving, true);
 
         if (mode === 'off') {
+            // Ein ausgeschaltetes Lademanagement darf keinen alten
+            // Speicherunterstützungs-Request im Folgemodul stehen lassen.
+            this._storageAssistActive = false;
+            storageAssistActive = false;
+            storageAssistW = 0;
+            storageAssistAcceptedW = 0;
+            await this._queueState('chargingManagement.control.storageAssistActive', false, true);
+            await this._queueState('chargingManagement.control.storageAssistW', 0, true);
+            await this._queueState('chargingManagement.control.storageAssistRequestedW', 0, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedW', 0, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedRawW', 0, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedTs', now, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedAgeMs', 0, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedFresh', false, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedStatus', 'control-off', true);
             await this._queueState('chargingManagement.control.status', 'off', true);
             await this._queueState('chargingManagement.control.budgetW', Number.isFinite(budgetW) ? budgetW : 0, true);
             await this._queueState('chargingManagement.control.usedW', 0, true);
@@ -6820,9 +7321,7 @@ if (components.length) {
                 }
             }
 
-            await this._publishChargingControlTsShadow({ mode, budgetMode: effectiveBudgetMode, status: 'failsafe_stale_meter', active: true, budgetW: 0, usedW: 0, remainingW: 0, totalPowerW: totalFreshActualPowerW, totalTargetPowerW: 0, totalTargetCurrentA: 0, wallboxCount: wbList.length, onlineWallboxes: onlineCount, connectedCount: wbList.filter(w => w && w.vehiclePlugged === true).length, pausedByPeakShaving: false, staleMeter, staleBudget, gridImportLimitW, gridImportLimitEffW, gridImportW, gridCapEvcsW, gridCapBinding, phaseCapEvcsW, phaseCapBinding, para14aActive, para14aCapEvcsW: para14aTotalCapW, para14aBinding, storageAssistActive: false, storageAssistW: 0 });
-
-            const tsControlOffState = await this._publishChargingControlTsShadow({ mode, budgetMode: effectiveBudgetMode, status: 'off', active: false, budgetW: Number.isFinite(budgetW) ? budgetW : 0, usedW: 0, remainingW: Number.isFinite(budgetW) ? budgetW : 0, totalPowerW: totalFreshActualPowerW, totalTargetPowerW: 0, totalTargetCurrentA: 0, wallboxCount: wbList.length, onlineWallboxes: onlineCount, connectedCount: wbList.filter(w => w && w.vehiclePlugged === true).length, pausedByPeakShaving, staleMeter, staleBudget, gridImportLimitW, gridImportLimitEffW, gridImportW, gridCapEvcsW, gridCapBinding, phaseCapEvcsW, phaseCapBinding, para14aActive, para14aCapEvcsW: para14aTotalCapW, para14aBinding, storageAssistActive, storageAssistW });
+            const tsControlOffState = await this._publishChargingControlTsShadow({ mode, budgetMode: effectiveBudgetMode, status: 'off', active: false, budgetW: Number.isFinite(budgetW) ? budgetW : 0, usedW: 0, remainingW: Number.isFinite(budgetW) ? budgetW : 0, totalPowerW: totalFreshActualPowerW, totalTargetPowerW: 0, totalTargetCurrentA: 0, wallboxCount: wbList.length, onlineWallboxes: onlineCount, connectedCount: wbList.filter(w => w && w.vehiclePlugged === true).length, pausedByPeakShaving, staleMeter, staleBudget, gridImportLimitW, gridImportLimitEffW, gridImportW, gridCapEvcsW, gridCapBinding, phaseCapEvcsW, phaseCapBinding, para14aActive, para14aCapEvcsW: para14aTotalCapW, para14aBinding, storageAssistActive: false, storageAssistW: 0 });
             await this._publishChargingNormalSourceState({
                 context: 'mode-off',
                 mode,
@@ -6910,6 +7409,13 @@ if (components.length) {
             this._storageAssistActive = false;
             await this._queueState('chargingManagement.control.storageAssistActive', false, true);
             await this._queueState('chargingManagement.control.storageAssistW', 0, true);
+            await this._queueState('chargingManagement.control.storageAssistRequestedW', 0, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedW', 0, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedRawW', 0, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedTs', now, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedAgeMs', 0, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedFresh', false, true);
+            await this._queueState('chargingManagement.control.storageAssistAcceptedStatus', 'peak-shaving-paused', true);
 
                 await this._queueState('chargingManagement.debug.sortedOrder', wbList.map(w => w.safe).join(','), true);
 
@@ -6927,14 +7433,14 @@ if (components.length) {
                     /** @type {any|null} */
                     let applyWrites = null;
 
-                    if (w.enabled && w.online) {
+                    if (w.controlAvailable) {
                         // 0.7.127: Peak-Shaving-Rampdown läuft nicht mehr als eigener
                         // JS-Schreibblock, sondern als Safety-Fallback-Plan über den
                         // zentralen Executor.
                         applyStatus = 'planned_by_js_safety_executor';
                         await this._queueState(`${w.ch}.reason`, reason, true);
                     } else {
-                        await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online), true);
+                        await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive), true);
                     }
 
                     await this._queueState(`${w.ch}.targetCurrentA`, 0, true);
@@ -6958,11 +7464,19 @@ if (components.length) {
                         chargingSinceMs: w.chargingSinceMs || 0,
                         online: !!w.online,
                         enabled: !!w.enabled,
+                        controlAvailable: !!w.controlAvailable,
+                        onlineSource: String(w.onlineSource || ''),
+                        statusClass: String(w.statusClass || ''),
+                        statusEffective: String(w.statusEffective || ''),
+                        faultActive: !!w.faultActive,
+                        unavailableActive: !!w.unavailableActive,
+                        operationalBlocked: !!w.operationalBlocked,
+                        faultReason: String(w.faultReason || ''),
                         targetW,
                         targetA,
                         applied,
                         status: applyStatus,
-                        reason: (w.enabled && w.online) ? reason : (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online)),
+                        reason: w.controlAvailable ? reason : (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive)),
                     });
 
                     // totals stay 0
@@ -7056,7 +7570,7 @@ if (components.length) {
 
         // Priority distribution in W across mixed AC/DC chargers
         const sorted = wbList
-            .filter(w => w.enabled && w.online)
+            .filter(w => w.controlAvailable)
             .sort((a, b) => {
                 // Boosted wallboxes first (explicit user choice)
                 const ab = a.effectiveMode === 'boost' ? 1 : 0;
@@ -7244,7 +7758,7 @@ if (components.length) {
 
         let remainingW = budgetW;
         let nonStorageRemainingW = Number.isFinite(budgetBeforeStorageAssistW) ? Math.max(0, budgetBeforeStorageAssistW) : remainingW;
-        let storageAssistRemainingW = Number.isFinite(storageAssistW) ? Math.max(0, storageAssistW) : 0;
+        let storageAssistRemainingW = Number.isFinite(storageAssistAcceptedW) ? Math.max(0, storageAssistAcceptedW) : 0;
         let usedW = 0;
 
         // Zwei gemeinsame PV-Budgettoepfe mit klar getrenntem Zweck:
@@ -7577,6 +8091,15 @@ if (components.length) {
                 reason = ReasonCodes.NO_VEHICLE;
             }
 
+            // Ein frischer, connectorrichtig zugeordneter Fault ist ein echter
+            // Aktor-Stopp. Erreichbarkeit bleibt separat online=true, damit ein
+            // sicherer 0-W-Write weiterhin möglich ist.
+            if (!w.controlAvailable) {
+                targetW = 0;
+                targetA = 0;
+                reason = availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive);
+            }
+
             // PV-only Start / Ramp / Stop state machine
             // Goal:
             // - do not start a 3-phase session until the technical minimum is stably available
@@ -7595,7 +8118,7 @@ if (components.length) {
                 const holdBudgetW = Math.max(0, Math.min(fairTotalAvailW, fairStationAvailW, Number.isFinite(w.maxPW) ? w.maxPW : Number.POSITIVE_INFINITY));
                 let startReadySince = this._pvStartReadySinceMs.get(startReadyKey) || 0;
                 let belowMinSince = this._pvBelowMinSinceMs.get(startReadyKey) || 0;
-                const canTrackPvRun = w.vehicleDemandConfirmed === true && w.enabled && w.online && w.controlBasis !== 'none';
+                const canTrackPvRun = w.vehicleDemandConfirmed === true && w.controlAvailable && w.controlBasis !== 'none';
 
                 if (!canTrackPvRun) {
                     this._pvStartReadySinceMs.delete(startReadyKey);
@@ -7963,9 +8486,10 @@ if (components.length) {
             // diese JS-Werte dienen nur noch als Executor-Fallback.
             applyStatus = 'planned_by_ts_write_plan';
 
-            // MU6.11: Remember last commanded setpoints for ramp limiting
-            this._lastCmdTargetW.set(w.safe, cmdW);
-            this._lastCmdTargetA.set(w.safe, cmdA);
+            // Command-Caches werden ausschliesslich im zentralen Write-Executor
+            // nach einem akzeptierten Hardware-Write aktualisiert. Ein geplanter,
+            // aber fehlgeschlagener Sollwert darf weder Rampenbasis noch NVP-
+            // Prognose als ausgefuehrt erscheinen lassen.
 
             // If a PV-only start attempt collapses before the wallbox reports real power,
             // wait briefly before trying again. This prevents repeated short start pulses
@@ -7979,8 +8503,7 @@ if (components.length) {
                     && cmdW < activityThresholdW
                     && actualNowW < activityThresholdW
                     && w.charging !== true
-                    && w.enabled
-                    && w.online
+                    && w.controlAvailable
                     && w.vehicleDemandConfirmed === true
                     && (reason === ReasonCodes.NO_PV_SURPLUS || reason === ReasonCodes.BELOW_MIN || limiter === 'pv')) {
                     this._pvStartCooldownUntilMs.set(w.safe, now + pvStartRetryCooldownMs);
@@ -7988,7 +8511,7 @@ if (components.length) {
                     this._pvBelowMinSinceMs.delete(w.safe);
                     this._pvStartupUntilMs.delete(w.safe);
                     this._pvMinRunUntilMs.delete(w.safe);
-                } else if (!isPvOnly || w.vehicleDemandConfirmed !== true || !w.enabled || !w.online) {
+                } else if (!isPvOnly || w.vehicleDemandConfirmed !== true || !w.controlAvailable) {
                     this._pvStartCooldownUntilMs.delete(w.safe);
                 }
             } catch {
@@ -8003,8 +8526,7 @@ if (components.length) {
                 const pvStartSettleMs = clamp(num(cfg.pvStartSettleSec, 20), 0, 3600) * 1000;
                 const cmdStartsNow = isPvManaged
                     && pvStartSettleMs >= 0
-                    && w.enabled
-                    && w.online
+                    && w.controlAvailable
                     && w.vehicleDemandConfirmed === true
                     && !prevCmdWasActive
                     && cmdW >= activityThresholdW;
@@ -8017,7 +8539,7 @@ if (components.length) {
                     this._pvStartReadySinceMs.delete(w.safe);
                     this._pvBelowMinSinceMs.delete(w.safe);
                 } else if (actualNowW >= activityThresholdW || cmdW < activityThresholdW || w.vehicleDemandConfirmed !== true
-                    || !w.enabled || !w.online || !isPvManaged) {
+                    || !w.controlAvailable || !isPvManaged) {
                     this._pvStartupUntilMs.delete(w.safe);
                     if (cmdW < activityThresholdW || !isPvOnly) this._pvMinRunUntilMs.delete(w.safe);
                     if (cmdW < activityThresholdW) this._pvBelowMinSinceMs.delete(w.safe);
@@ -8095,6 +8617,15 @@ if (components.length) {
                 chargingSinceMs: w.chargingSinceMs || 0,
                 online: !!w.online,
                 enabled: !!w.enabled,
+                controlAvailable: !!w.controlAvailable,
+                onlineSource: String(w.onlineSource || ''),
+                statusClass: String(w.statusClass || ''),
+                statusEffective: String(w.statusEffective || ''),
+                faultActive: !!w.faultActive,
+                faultReason: String(w.faultReason || ''),
+                unavailableActive: !!w.unavailableActive,
+                unavailableReason: String(w.unavailableReason || ''),
+                operationalBlocked: !!w.operationalBlocked,
                 connected: w.vehiclePlugged === true,
                 vehicleDemandConfirmed: w.vehicleDemandConfirmed === true,
                 vehicleDemandSource: String(w.vehicleDemandSource || ''),
@@ -8150,7 +8681,7 @@ if (components.length) {
         // Automatic EMS control must not toggle the wallbox enable/freigabe during normal
         // regulation, because many EVCS/vehicles react badly to repeated enable flapping.
         for (const w of wbList) {
-            if (w.enabled && w.online) continue;
+            if (w.controlAvailable) continue;
 
             let applied = false;
             let applyStatus = 'skipped';
@@ -8158,7 +8689,7 @@ if (components.length) {
             let applyWrites = null;
 
             // Regelung AUS (user): force a safe stop while staying online
-            if (!!w.cfgEnabled && !!w.online && !w.userEnabled) {
+            if (!!w.cfgEnabled && !!w.online && (!w.userEnabled || w.operationalBlocked)) {
                 // TS-Migration 0.7.126: Auch der sichere 0-Wert bei kundenseitig
                 // deaktivierter Regelung wird im Normalpfad vom produktiven TS-Write-Plan
                 // ausgeführt. JS bleibt Executor/Fallback, schreibt hier aber nicht doppelt.
@@ -8178,7 +8709,7 @@ if (components.length) {
             } else {
                 await this._queueState(`${w.ch}.applyWrites`, '', true);
             }
-            const offReason = availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online);
+            const offReason = availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive);
             await this._queueState(`${w.ch}.reason`, offReason, true);
             debugAlloc.push({
                 safe: w.safe,
@@ -8189,6 +8720,15 @@ if (components.length) {
                 chargingSinceMs: w.chargingSinceMs || 0,
                 online: !!w.online,
                 enabled: !!w.enabled,
+                controlAvailable: !!w.controlAvailable,
+                onlineSource: String(w.onlineSource || ''),
+                statusClass: String(w.statusClass || ''),
+                statusEffective: String(w.statusEffective || ''),
+                faultActive: !!w.faultActive,
+                faultReason: String(w.faultReason || ''),
+                unavailableActive: !!w.unavailableActive,
+                unavailableReason: String(w.unavailableReason || ''),
+                operationalBlocked: !!w.operationalBlocked,
                 connected: w.vehiclePlugged === true,
                 vehicleDemandConfirmed: w.vehicleDemandConfirmed === true,
                 vehicleDemandSource: String(w.vehicleDemandSource || ''),
@@ -8229,7 +8769,7 @@ if (components.length) {
                 setAKey: w.setAKey || '',
                 setWKey: w.setWKey || '',
                 enableKey: w.enableKey || '',
-                writeRequired: !!((w.setAKey || w.setWKey) && !!w.online && (!!w.cfgEnabled && !w.userEnabled)),
+                writeRequired: !!((w.setAKey || w.setWKey) && !!w.online && !!w.cfgEnabled && (!w.userEnabled || w.operationalBlocked)),
             });
         }
 
@@ -8814,4 +9354,10 @@ module.exports = {
     computeEvcsPvBudgetReservationW,
     resolveChargingPvBudgetControl,
     resolveEvcsStoragePolicy,
+    normalizeEvcsOnlineFlag,
+    normalizeEvcsStatusReachability,
+    normalizeEvcsStatusToken,
+    classifyEvcsConnectorStatus,
+    inferOcppConnectorNoFromObjectId,
+    resolveAcceptedStorageAssistBudget,
 };

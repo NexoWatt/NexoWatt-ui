@@ -78,10 +78,20 @@ function putStorageChain(adapter, values = {}) {
     finalSource: 'eigenverbrauch',
     finalReason: 'NVP-Zielwert',
     writeOk: true,
+    commandEffective: true,
+    requestSatisfied: true,
+    partiallyAccepted: false,
+    acceptedW: 900,
     writeStatus: 'geschrieben',
     actualW: 870,
     actualAgeMs: 500,
     actualTrusted: true,
+    farmRequestedW: null,
+    farmPlannedW: null,
+    farmAcceptedW: null,
+    farmFailedW: null,
+    farmUnservedW: null,
+    farmStatus: '',
     farmDispatch: null,
   };
   const v = { ...defaults, ...values };
@@ -92,9 +102,13 @@ function putStorageChain(adapter, values = {}) {
   adapter.put('speicher.regelung.requestQuelle', v.requestSource);
   adapter.put('speicher.regelung.requestGrund', v.requestReason);
   adapter.put('speicher.regelung.sollW', v.finalW);
+  adapter.put('speicher.regelung.acceptedSollW', Object.prototype.hasOwnProperty.call(values, 'acceptedW') ? v.acceptedW : v.finalW);
   adapter.put('speicher.regelung.quelle', v.finalSource);
   adapter.put('speicher.regelung.grund', v.finalReason);
   adapter.put('speicher.regelung.schreibOk', v.writeOk);
+  adapter.put('speicher.regelung.commandEffective', Object.prototype.hasOwnProperty.call(values, 'commandEffective') ? v.commandEffective : (v.writeOk || v.writeStatus === 'unverändert'));
+  adapter.put('speicher.regelung.requestSatisfied', Object.prototype.hasOwnProperty.call(values, 'requestSatisfied') ? v.requestSatisfied : (v.writeOk || v.writeStatus === 'unverändert'));
+  adapter.put('speicher.regelung.partiallyAccepted', Object.prototype.hasOwnProperty.call(values, 'partiallyAccepted') ? v.partiallyAccepted : false);
   adapter.put('speicher.regelung.schreibStatus', v.writeStatus);
   adapter.put('speicher.regelung.batteryPowerFeedbackMeasuredW', v.actualW);
   adapter.put('speicher.regelung.batteryPowerFeedbackAgeMs', v.actualAgeMs);
@@ -103,6 +117,15 @@ function putStorageChain(adapter, values = {}) {
   adapter.put('speicher.regelung.zeroWriteFirewallAction', 'pass');
   adapter.put('speicher.regelung.zeroWriteFirewallReason', 'non-zero');
   adapter.put('speicher.regelung.zeroWriteFirewallExplicitStop', v.finalW === 0);
+  if (v.topology === 'farm') {
+    const dispatch = v.farmDispatch || {};
+    adapter.put('speicher.regelung.farmRequestedW', v.farmRequestedW ?? dispatch.requestedW ?? dispatch.targetW ?? v.finalW);
+    adapter.put('speicher.regelung.farmPlannedW', v.farmPlannedW ?? dispatch.plannedDeliveredW ?? dispatch.deliveredW ?? null);
+    adapter.put('speicher.regelung.farmAcceptedW', v.farmAcceptedW ?? dispatch.acceptedDeliveredW ?? dispatch.deliveredW ?? null);
+    adapter.put('speicher.regelung.farmFailedW', v.farmFailedW ?? dispatch.failedW ?? 0);
+    adapter.put('speicher.regelung.farmUnservedW', v.farmUnservedW ?? dispatch.unservedW ?? 0);
+    adapter.put('speicher.regelung.farmStatus', v.farmStatus || v.writeStatus || 'farm');
+  }
   if (v.farmDispatch) adapter.put('storageFarm.lastDispatchJson', JSON.stringify({ ts: Date.now(), ...v.farmDispatch }));
 }
 
@@ -114,14 +137,18 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
   if (ageTargetMs > 0) {
     const topology = storage.topology || 'single';
     const finalW = Object.prototype.hasOwnProperty.call(storage, 'finalW') ? storage.finalW : 900;
+    const acceptedW = Object.prototype.hasOwnProperty.call(storage, 'acceptedW') ? storage.acceptedW : finalW;
     const writeOk = Object.prototype.hasOwnProperty.call(storage, 'writeOk') ? storage.writeOk : true;
+    const commandEffective = Object.prototype.hasOwnProperty.call(storage, 'commandEffective') ? storage.commandEffective : writeOk;
+    const partiallyAccepted = Object.prototype.hasOwnProperty.call(storage, 'partiallyAccepted') ? storage.partiallyAccepted : false;
     const writeStatus = storage.writeStatus || 'geschrieben';
     const lower = String(writeStatus || '').toLowerCase();
-    const phase = writeOk || lower === 'unverändert'
+    const phase = commandEffective || writeOk || lower === 'unverändert'
       ? 'effective'
-      : ((lower.includes('no-write') || lower.includes('hold')) ? 'hold' : 'not-effective');
-    const direction = finalW < 0 ? 'charge' : (finalW > 0 ? 'discharge' : 'idle');
-    module._lastTargetSignature = `${topology}|${direction}|${phase}`;
+      : ((lower.includes('no-write') || lower.includes('hold')) ? 'hold' : (lower.includes('blocked') || lower.includes('blockiert') || lower.includes('authority') ? 'blocked' : 'not-effective'));
+    const statusTargetW = commandEffective && acceptedW !== null ? acceptedW : finalW;
+    const direction = statusTargetW < 0 ? 'charge' : (statusTargetW > 0 ? 'discharge' : 'idle');
+    module._lastTargetSignature = `${topology}|${direction}|${Math.round(statusTargetW)}|${phase}|${partiallyAccepted ? 'partial' : 'full'}`;
     module._targetSinceMs = Date.now() - ageTargetMs;
   }
   await module.tick();
@@ -150,7 +177,7 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
     assert.strictEqual(adapter.value('tarif.speicherStatus'), 'discharge-requested');
     assert.strictEqual(adapter.value('tarif.speicherReadbackStatus'), 'pending-discharging');
     assert.match(adapter.value('tarif.statusText'), /Speicher-Entladen angefordert/);
-    assert.match(adapter.value('tarif.detailStatusText'), /Entladen 900 W angefordert/);
+    assert.match(adapter.value('tarif.detailStatusText'), /Entladen 900 W wirksam – Rückmeldung ausstehend/);
     assert.doesNotMatch(adapter.value('tarif.statusText'), /Speicher entlädt/);
   }
 
@@ -220,6 +247,10 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
       storage: {
         topology: 'farm',
         topologyReason: 'farm-active',
+        acceptedW: 0,
+        commandEffective: false,
+        requestSatisfied: false,
+        partiallyAccepted: false,
         writeOk: false,
         writeStatus: 'farm-nicht-moeglich:blocked-by-actuator-authority',
         actualW: 0,
@@ -246,23 +277,44 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
         topology: 'farm',
         topologyReason: 'farm-active',
         finalW: 900,
+        acceptedW: 600,
+        commandEffective: true,
+        requestSatisfied: false,
+        partiallyAccepted: true,
         actualW: 560,
         actualTrusted: true,
-        writeOk: true,
-        writeStatus: 'farm',
+        writeOk: false,
+        writeStatus: 'farm-partial',
+        farmRequestedW: 900,
+        farmPlannedW: 900,
+        farmAcceptedW: 600,
+        farmFailedW: 0,
+        farmUnservedW: 300,
+        farmStatus: 'farm-partial',
         farmDispatch: {
+          requestedW: 900,
           targetW: 900,
+          plannedDeliveredW: 900,
+          acceptedDeliveredW: 600,
           deliveredW: 600,
+          failedW: 0,
           unservedW: 300,
           results: [{ authorityBlocked: false }],
         },
       },
     });
     assert.strictEqual(adapter.value('tarif.speicherStatus'), 'discharging');
+    assert.strictEqual(adapter.value('tarif.speicherAcceptedW'), 600);
+    assert.strictEqual(adapter.value('tarif.speicherGateStatus'), 'partial');
+    assert.strictEqual(adapter.value('tarif.speicherPartiallyAccepted'), true);
+    assert.strictEqual(adapter.value('tarif.speicherRequestSatisfied'), false);
+    assert.strictEqual(adapter.value('tarif.speicherFarmPlannedW'), 900);
     assert.strictEqual(adapter.value('tarif.speicherFarmDeliveredW'), 600);
+    assert.strictEqual(adapter.value('tarif.speicherFarmFailedW'), 0);
     assert.strictEqual(adapter.value('tarif.speicherFarmUnservedW'), 300);
     assert.doesNotMatch(adapter.value('tarif.statusText'), /Farm-Dispatch|600 W|900 W|300 W/);
-    assert.match(adapter.value('tarif.detailStatusText'), /Farm-Dispatch 600 W von 900 W, offen 300 W/);
+    assert.match(adapter.value('tarif.detailStatusText'), /angefordert 900 W, akzeptiert 600 W/);
+    assert.match(adapter.value('tarif.detailStatusText'), /Farm angefordert 900 W, geplant 900 W, akzeptiert 600 W, nicht verteilbar 300 W/);
   }
 
   // 8) Stale Tarifabsicht darf eine unabhängige Eigenverbrauchsreaktion nicht als Tarifaktion ausgeben.
@@ -327,7 +379,7 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
 
   // 12) Ein echter Write-Fehler hat Vorrang vor einem noch laufenden alten Istwert.
   {
-    const { adapter } = await runScenario({ storage: { writeOk: false, writeStatus: 'io-write-fehler', actualW: 870, actualTrusted: true } });
+    const { adapter } = await runScenario({ storage: { acceptedW: 0, commandEffective: false, requestSatisfied: false, writeOk: false, writeStatus: 'io-write-fehler', actualW: 870, actualTrusted: true } });
     assert.strictEqual(adapter.value('tarif.speicherGateStatus'), 'write-failed');
     assert.strictEqual(adapter.value('tarif.speicherStatus'), 'write-failed');
     assert.strictEqual(adapter.value('tarif.speicherCommandEffective'), false);
@@ -338,7 +390,7 @@ async function runScenario({ tariff = {}, storage = {}, ageTargetMs = 0 } = {}) 
 
   // 13) `unverändert` hält einen bereits wirksamen Befehl und ist kein Write-Fehler.
   {
-    const { adapter } = await runScenario({ storage: { writeOk: false, writeStatus: 'unverändert', actualW: 860, actualTrusted: true } });
+    const { adapter } = await runScenario({ storage: { acceptedW: 900, commandEffective: true, requestSatisfied: true, writeOk: false, writeStatus: 'unverändert', actualW: 860, actualTrusted: true } });
     assert.strictEqual(adapter.value('tarif.speicherGateStatus'), 'accepted');
     assert.strictEqual(adapter.value('tarif.speicherCommandEffective'), true);
     assert.strictEqual(adapter.value('tarif.speicherStatus'), 'discharging');

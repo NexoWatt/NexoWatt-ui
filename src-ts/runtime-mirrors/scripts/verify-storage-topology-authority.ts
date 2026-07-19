@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: d396ccb6504942e98ee391b23def7aa54c16b067bace4a53f99146bdb22c3e28
+ * Original-Hash: 46114448e402fd7c305a421fb8e53ea5d550a26ba84a4d157d9ac26e35c1b5a7
  */
 
 /**
@@ -487,7 +487,7 @@ async function verifyExclusiveWriters() {
   assert.strictEqual(adapter._farmCalls.length, 1);
   assert.deepStrictEqual(dp.writes, [], 'Farmfehler darf keinen Einzel-Fallback auslösen');
   assert.strictEqual((adapter._states.get('speicher.regelung.schreibOk') || {}).val, false);
-  assert(String((adapter._states.get('speicher.regelung.schreibStatus') || {}).val).includes('farm-nicht-moeglich'));
+  assert.strictEqual((adapter._states.get('speicher.regelung.schreibStatus') || {}).val, 'blocked-by-safety-gate');
 
   // Ohne Topologie wird selbst bei vorhandener DP-Zuordnung nicht geschrieben.
   authority = {

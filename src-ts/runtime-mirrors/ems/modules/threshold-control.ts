@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2202c2af8a21c79399c0d5b106c1aeb6267c120a3a11796e7c974b0447029219
+ * Original-Hash: 204c32bfed178fb5ad20e759379901257db9f2ab1144da01bbec3ca8c74d95f6
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/threshold-control.ts
- * Quell-Hash: sha256:f145a16cb15e6778b89fbaf77fb3507aeb9b6abeea9fa22b244007909e336a2d
+ * Quell-Hash: sha256:78d8fdd6cc040c6153995c3a9cab9f9504b4f9acdd4933ee167b05d840965595
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -67,6 +67,7 @@
 
 const { BaseModule } = require('./base');
 const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
+const { recordAcceptedActuatorTransition } = require('../services/accepted-power-effects');
 /**
  * Code-Teil: num
  *
@@ -715,11 +716,30 @@ class ThresholdControlModule extends BaseModule {
             }
 
             let wrote = false;
+            const effectiveBefore = onReadback === true ? true : (offReadback === true ? false : !!mem.active);
+            const commandChanged = want !== effectiveBefore;
             try { wrote = await this._writeRuleOutput(r, want, isManual); } catch (_e) { wrote = false; }
             const readbackAfter = await this._readRuleOutput(r);
             const readbackOk = this._readbackMatches(r, want, readbackAfter);
             const accepted = wrote === true || wrote === null;
             const confirmed = readbackOk === true || (accepted && r.requireReadback !== true);
+
+            // Schwellwertausgänge besitzen kein belastbares Leistungsmodell. Ein neu
+            // akzeptierter Zustandswechsel wird deshalb als unsichere Laständerung
+            // markiert. Die finale PV-/WR-Regelung wartet dann auf den nächsten
+            // frischen NVP-Wert, statt im selben Zyklus gegen einen alten Messwert zu
+            // regeln. Ein deduplizierter Write (`null`) ist keine neue physische
+            // Änderung und wird nicht erneut verbucht.
+            if (wrote === true && commandChanged) {
+                recordAcceptedActuatorTransition(this.adapter, {
+                    key: `threshold:${r.id}`,
+                    accepted: true,
+                    commandChanged: true,
+                    kind: 'load',
+                    source: 'thresholdControl',
+                    reason: `${r.name}: ${want ? 'on' : 'off'}`,
+                });
+            }
 
             if (confirmed) {
                 if (want !== mem.active || !mem.initialized) {

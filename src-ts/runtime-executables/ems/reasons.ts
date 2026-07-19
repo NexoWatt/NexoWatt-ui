@@ -91,6 +91,8 @@ const ReasonCodes = Object.freeze({
     CONTROL_DISABLED: 'CONTROL_DISABLED',
     DISABLED: 'DISABLED',
     OFFLINE: 'OFFLINE',
+    FAULTED: 'FAULTED',
+    UNAVAILABLE: 'UNAVAILABLE',
     SKIPPED: 'SKIPPED',
 });
 
@@ -139,6 +141,8 @@ function normalizeReason(input) {
     if (up === 'CONTROL_DISABLED' || up === 'CONTROL-DISABLED' || up === 'CONTROL_DISABLED_BY_USER') return ReasonCodes.CONTROL_DISABLED;
     if (up === 'DISABLED') return ReasonCodes.DISABLED;
     if (up === 'OFFLINE') return ReasonCodes.OFFLINE;
+    if (up === 'FAULTED' || up === 'FAULT' || up === 'ERROR') return ReasonCodes.FAULTED;
+    if (up === 'UNAVAILABLE' || up === 'OUT_OF_SERVICE' || up === 'OUT-OF-SERVICE' || up === 'INOPERATIVE') return ReasonCodes.UNAVAILABLE;
     if (up === 'SKIPPED') return ReasonCodes.SKIPPED;
 
     // If it's already one of our codes, keep it
@@ -175,6 +179,8 @@ const ReasonTextDe = Object.freeze({
     [ReasonCodes.CONTROL_DISABLED]: 'Regelung aus',
     [ReasonCodes.DISABLED]: 'Deaktiviert',
     [ReasonCodes.OFFLINE]: 'Offline',
+    [ReasonCodes.FAULTED]: 'Störung',
+    [ReasonCodes.UNAVAILABLE]: 'Nicht verfügbar',
     [ReasonCodes.SKIPPED]: 'Übersprungen',
 });
 

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/nexologic-budget.ts
- * Quell-Hash: sha256:c62e8d7e70098cbb3000df9711215ab2756a63be38e24d00e415a200dc26302b
+ * Quell-Hash: sha256:60c6943b0c164ec2e9c4e81ba04e87bcfb2f87abae9b78709c9b2781f732c5b3
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -19,6 +19,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.NexoLogicBudgetModule = void 0;
 const { BaseModule } = require('./base');
+const { recordAcceptedActuatorTransition } = require('../services/accepted-power-effects');
 function text(value) {
     return String(value === undefined || value === null ? '' : value).trim();
 }
@@ -98,6 +99,15 @@ class NexoLogicBudgetModule extends BaseModule {
             grantedW += grantW;
             const result = engine && typeof engine.applyBudgetGrant === 'function' ? await engine.applyBudgetGrant(intent.key, releasePending ? 0 : grantW) : null;
             const usedW = Math.max(0, num(result?.budgetReservedW, 0));
+            if (result?.writeAccepted === true) {
+                recordAcceptedActuatorTransition(this.adapter, {
+                    key: `nexoLogic:${text(intent.key)}`,
+                    accepted: true,
+                    kind: 'load',
+                    source: 'nexoLogicBudget',
+                    reason: text(result?.status || grantSource),
+                });
+            }
             reservedW += usedW;
             if (result && (result.status === 'authority-blocked' || result.faultLocked || (grantW <= 0 && reqW > 0)))
                 blockedCount += 1;
