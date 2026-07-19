@@ -1,6 +1,6 @@
 {
   "schema": "nexowatt.ts-nocheck-budget.v1",
-  "generatedForVersion": "0.8.124",
+  "generatedForVersion": "0.8.125",
   "uncheckedFileCount": 58,
   "maxUncheckedLines": 141051,
   "files": [

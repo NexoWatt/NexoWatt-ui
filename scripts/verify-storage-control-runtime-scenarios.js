@@ -7,7 +7,8 @@
  * - Eigenverbrauch darf einen alten sehr hohen Entlade-Sollwert nicht weiterführen.
  * - Vertrauenswürdige Batterie-Istleistung muss stabile Eigenverbrauchsregelung erlauben.
  * - Ein am NVP-Ziel wirksamer Sollwert bleibt aktiv; 0 W bleibt ein expliziter Stop.
- * - Bei echtem Netzbezug, SoC-/Messwertschutz oder Richtungswechsel darf weiterhin sofort gestoppt werden.
+ * - Bei echtem Stop-/Wartebedarf sowie SoC-/Messwertschutz darf weiterhin sofort 0 W geschrieben werden.
+ * - Richtungswechsel werden dagegen direkt ohne 0-W-Zwischenrunde ausgegeben.
  *
  * Dieser Test instanziiert das echte Storage-Modul mit einem kleinen ioBroker-/DP-Stub,
  * damit nicht nur Textmuster, sondern der produktive Tick-Pfad geprüft wird.

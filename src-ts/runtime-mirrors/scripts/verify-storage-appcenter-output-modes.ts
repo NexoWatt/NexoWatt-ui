@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 00aa93767b45e41720a80ae80815e8575526f5809ec6ab3725de107e0f9ce490
+ * Original-Hash: c771430a066e6aeeba49c366eef5d8ff728212deb687601d9f89070d08f228ac
  */
 
 /**
@@ -180,6 +180,18 @@ async function verifyTargetPowerAllOutputs() {
     'javascript.0.storage.externalControl',
     'openems.0.edge.controller.reserveSoc',
   ]) assert(writtenIds.has(id), `frei benannter AppCenter-DP wurde verändert oder ausgelassen: ${id}`);
+
+  // Direkter Richtungswechsel im produktiven Einzel-Speicher-Writer: Der neue
+  // positive Sollwert wird im unmittelbar folgenden Aufruf geschrieben. Bei
+  // Split-DPs wird die inaktive Richtung im selben Tick auf 0 gesetzt; das ist
+  // keine separate 0-W-Runde und der signed Gesamt-Sollwert bleibt non-zero.
+  dp.clear();
+  await mod._applyTargetW(1207, 'direct charge-to-discharge', 'eigenverbrauch');
+  assert.strictEqual(dp.last('st.targetPowerW').value, 1207, 'signed DP muss den Entladesollwert direkt ohne 0-W-Zwischenrunde erhalten');
+  assert.strictEqual(dp.last('st.targetChargePowerW').value, 0, 'inaktiver Split-Lade-DP muss im selben Tick auf 0 gesetzt werden');
+  assert.strictEqual(dp.last('st.targetDischargePowerW').value, 1207, 'aktiver Split-Entlade-DP muss im selben Tick den vollen Sollwert erhalten');
+  assert.strictEqual(dp.last('st.run').value, true, 'Run darf beim direkten Richtungswechsel nicht auf false fallen');
+  assert.strictEqual(dp.writes.some((row) => row.key === 'st.targetPowerW' && row.value === 0), false, 'signed DP darf keine 0-W-Zwischenrunde erhalten');
 }
 
 /**

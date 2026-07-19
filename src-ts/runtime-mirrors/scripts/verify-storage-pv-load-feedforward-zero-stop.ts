@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 6cd2823ffd202acb6f0361db560641994c268338450fe0861b16360c818a3061
+ * Original-Hash: 4457aa5f99407a7397515e20966b0e68fb56416e2f3887726304f859443c512d
  */
 
 /**
@@ -43,8 +43,9 @@
  *     Soll = direkte Last - direkte PV - NVP-Ziel.
  * - Ein aus PV + NVP + Speicher abgeleiteter Gebaeudeverbrauch ist als
  *   Feed-forward verboten, weil er einen zirkulaeren Regelpfad erzeugen wuerde.
- * - Im NVP-Zielband bleibt ein aktiver Nicht-Null-Sollwert erhalten; 0 W bleibt
- *   ein expliziter Stop bzw. ein sicherer Zwischenschritt beim Richtungswechsel.
+ * - Im NVP-Zielband bleibt ein aktiver Nicht-Null-Sollwert erhalten. 0 W bleibt
+ *   einem echten Stop-/Warte- oder Sicherheitszustand vorbehalten; ein
+ *   Richtungswechsel wird direkt ohne 0-W-Zwischenrunde geschrieben.
  */
 
 const assert = require('assert');

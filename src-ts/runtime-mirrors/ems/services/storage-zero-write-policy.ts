@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 086b7c2c0d210da0e59aca3752a35ad63e52bad1b99d0c514aea119f53545256
+ * Original-Hash: de2425705c7557d8487ef7519041a2110cf551840e35526e1c8296aea5682553
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/storage-zero-write-policy.ts
- * Quell-Hash: sha256:df18e1abd6ad80b2a8257a9ad9b5e01d7b7762cc85a9dcc5d252c854b52db279
+ * Quell-Hash: sha256:d80f0a72247dff03123aba5cee1aa4dc7ca312bae25708b7acea30672dea5524
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -110,8 +110,6 @@ function reasonImpliesExplicitStop(reasonRaw, sourceRaw) {
         'explizit blockiert',
         'gesperrt',
         'sicherer 0-w',
-        'richtungswechsel',
-        'anti-pingpong',
         'manuell stopp',
         'manual stop',
         'write-stop-',
@@ -163,7 +161,6 @@ function decideStorageZeroWrite(input = {}) {
         };
     }
     const explicitStop = input.explicitStop === true
-        || input.directionChange === true
         || reasonImpliesExplicitStop(reason, source);
     if (explicitStop) {
         return {

@@ -1,3 +1,13 @@
+## 0.8.125 - 2026-07-18
+
+- Erster begrenzter EMS-Stabilisierungsbaustein (RC1): Lade-/Entlade-Richtungswechsel werden in der Einzel-Speicherregelung und in der Speicherfarm direkt mit dem neuen Sollwert ausgegeben. Die bisherige `zero-before-reverse`-Runde und die zeitbasierte Vorzeichensperre sind entfernt.
+- Die allgemeine Sollwert-Rampe darf bei einem echten Vorzeichenwechsel weder `0 W` noch noch einmal die alte Richtung ausgeben. SoC-, Reserve-, Tarif-, Budget-, §14a-, Geräte- und Authority-Gates bleiben nachgelagert wirksam und dürfen bei einem tatsächlichen Stop-/Warte-/Sicherheitszustand weiterhin `0 W` anordnen.
+- Signed-, Split-, Limits-, Enable-Flag- und E3/DC-Writer übernehmen den finalen Wert im selben Regelzyklus. Bei getrennten Lade-/Entlade-DPs wird nur die inaktive Richtung im selben Tick auf `0` gesetzt; es entsteht keine separate 0-W-Regelrunde.
+- Speicherfarm: Ein negativer Gesamt-Sollwert kann im unmittelbar folgenden Dispatcher-Aufruf direkt in einen positiven Gesamt-Sollwert wechseln; die manuell zugeordneten AppCenter-DPs bleiben die Hardwareziele.
+- Neue Pflichtregressionen prüfen den realen Feldfall `-35 W` Batterie-Ist bei `+1092 W` NVP, beide Richtungswechsel, einen Tarifwechsel von `+3000 W` auf `-4000 W`, Single-Signed/Split sowie Farm-Dispatch ohne 0-W-Zwischenrunde. SoC-Stopps bleiben echte 0-W-Befehle.
+- Dokumentierter Wiederherstellungsplan `docs/STABILISIERUNGSPLAN_BIS_2026-07-19_ABEND.md`. MultiUse-/Tarif-/Status-Abhängigkeiten sind ausdrücklich noch nicht Bestandteil dieses begrenzten RC und werden erst nach separatem Änderungsvorschlag und Freigabe bearbeitet.
+- Service-Worker-Cache auf `nexowatt-cache-v427` erhöht.
+
 ## 0.8.124 - 2026-07-18
 
 - Herstellerunabhängiger AppCenter-Aktorvertrag: Manuell zugeordnete beschreibbare ioBroker-Objekt-IDs bleiben unverändert die autoritative Quelle. Es gibt keine Hersteller-, Adapter- oder Objektpfad-Whitelist; nur echte Doppelbelegungen und aktive Sicherheits-/Authority-Gates dürfen einen Write blockieren.

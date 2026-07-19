@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: ff17e9491a6e8fb53022b39f705e6e472d370567faf8e242cfcc6fa391733148
+ * Original-Hash: 474b5e8c31f24c1d99911de53bbedce9523f0e1ceae3a7bd103cfb9c7a3439d2
  */
 
 /**
@@ -40,7 +40,7 @@
  * Zusaetzlich prueft der Test:
  * - kontrollierter Leistungsaufbau statt Sollwert-Spruengen,
  * - schnelle Ruecknahme bei Lastabwurf/Wolken,
- * - Richtungswechsel immer zuerst ueber 0 W,
+ * - Richtungswechsel ohne 0-W-Zwischenrunde direkt zum Speicher,
  * - RAW-NVP bei frischer oder begrenzt gehaltener Batterie-Istleistung,
  * - asynchrone Batterie-/NVP-Zeitstempel ohne Sollwert-Absturz,
  * - sicherer Fallback ohne Hochintegration alter Entlade-Sollwerte,
@@ -236,6 +236,7 @@ async function runTick({
   lastTargetW = 0,
   lastSource = 'eigenverbrauch',
   storagePatch = {},
+  tarifVis = null,
 }) {
   const dp = new FakeDp({
     'grid.powerW': entry(gridW, 'grid.filtered', gridAgeMs),
@@ -245,6 +246,7 @@ async function runTick({
     'st.targetPowerW': entry(0, 'battery.target'),
   });
   const adapter = makeAdapter(storagePatch);
+  if (tarifVis && typeof tarifVis === 'object') adapter._tarifVis = tarifVis;
   const mod = new SpeicherRegelungModule(adapter, dp);
   mod._lastTargetW = lastTargetW;
   mod._lastSource = lastSource;
@@ -310,14 +312,14 @@ async function runTick({
   assert.strictEqual(Math.round(release.targetW), 350, 'Export muss laufende Entladung um die Differenz reduzieren');
   assert(release.mode.includes('fast-release'), 'Ruecknahme in Richtung 0 muss schnell erfolgen');
 
-  const reverseToZero = buildBalance(mod, {
+  const reverseDirect = buildBalance(mod, {
     rawNvpW: -1200,
     fallbackNvpW: -1200,
     batteryPowerW: 1000,
     lastTargetW: 1000,
   });
-  assert.strictEqual(reverseToZero.targetW, 0, 'direkter Wechsel Entladen -> Laden muss zuerst 0 W schreiben');
-  assert(reverseToZero.mode.includes('zero-before-reverse'), 'Richtungswechsel muss diagnostiziert werden');
+  assert.strictEqual(reverseDirect.targetW, -250, 'Entladen -> Laden muss den neuen negativen Sollwert direkt schreiben');
+  assert(reverseDirect.mode.includes('direct-reverse'), 'direkter Richtungswechsel muss diagnostiziert werden');
 
   const charge = buildBalance(mod, {
     rawNvpW: -1000,
@@ -328,13 +330,28 @@ async function runTick({
   assert.strictEqual(Math.round(charge.rawTargetW), -3050, 'Laderohziel muss -2000 W Ist plus -1050 W NVP-Differenz sein');
   assert.strictEqual(Math.round(charge.targetW), -3050, 'Ladekorrektur innerhalb 1500 W muss voll uebernommen werden');
 
-  const stopChargeBeforeDischarge = buildBalance(mod, {
+  const directChargeToDischarge = buildBalance(mod, {
     rawNvpW: 2500,
     fallbackNvpW: 2500,
     batteryPowerW: -2000,
     lastTargetW: -2000,
   });
-  assert.strictEqual(stopChargeBeforeDischarge.targetW, 0, 'Laden -> Entladen muss zuerst ueber 0 W gehen');
+  assert.strictEqual(directChargeToDischarge.targetW, 450, 'Laden -> Entladen muss den neuen positiven Sollwert direkt schreiben');
+  assert(directChargeToDischarge.mode.includes('direct-reverse'), 'Laden -> Entladen braucht den direkten Diagnosemodus');
+
+  // Feldfall 18.07.2026: Der Speicher misst noch -35 W Laden, waehrend am
+  // Netzanschlusspunkt 1092 W Bezug anliegen. Der neue Entladesollwert darf
+  // nicht auf 0 W geklemmt werden.
+  const fieldReverse = buildBalance(mod, {
+    rawNvpW: 1092,
+    fallbackNvpW: 1092,
+    batteryPowerW: -35,
+    batteryMeasuredW: -35,
+    lastTargetW: -35,
+  });
+  assert.strictEqual(fieldReverse.rawTargetW, 1007, 'Feldfall muss -35 W Ist + 1042 W NVP-Fehler ergeben');
+  assert.strictEqual(fieldReverse.targetW, 1007, 'Feldfall muss direkt auf Entladen wechseln, nicht auf 0 W');
+  assert(fieldReverse.mode.includes('direct-reverse'), 'Feldfall muss als direkter Richtungswechsel sichtbar sein');
 
   const stale = buildBalance(mod, {
     rawNvpW: 2600,
@@ -428,7 +445,36 @@ async function runTick({
     battPowerW: 1000,
     lastTargetW: 1000,
   });
-  assert.strictEqual(tickReverse.targetW, 0, `Richtungswechsel muss im produktiven Tick zuerst 0 W schreiben: ${tickReverse.targetW}`);
+  assert.strictEqual(tickReverse.targetW, -250, `Richtungswechsel muss im produktiven Tick direkt Laden schreiben: ${tickReverse.targetW}`);
+
+  const fieldTick = await runTick({
+    gridW: 1092,
+    battPowerW: -35,
+    lastTargetW: -35,
+    lastSource: 'pv',
+  });
+  assert.strictEqual(fieldTick.targetW, 1007, `Feldfall darf im produktiven Tick nicht auf 0 W klemmen: ${fieldTick.targetW}`);
+
+  // Nicht nur der NVP-Helfer, sondern auch die allgemeine Dispatcher-Rampe
+  // muss einen echten Richtungswechsel direkt durchlassen. Dieser Tariffall
+  // wechselt von 3 kW Entladen unmittelbar auf 4 kW Netzladen. Ohne den globalen
+  // Bypass wuerde die Standardrampe faelschlich noch +2,5 kW weiter entladen.
+  const tariffChargeReverse = await runTick({
+    gridW: 1000,
+    battPowerW: 3000,
+    lastTargetW: 3000,
+    lastSource: 'eigenverbrauch',
+    storagePatch: { pvEnabled: false },
+    tarifVis: {
+      aktiv: true,
+      state: 'cheap',
+      speicherSollW: -4000,
+      negativeActive: true,
+      gridImportPreferred: true,
+      netzbezugBevorzugt: true,
+    },
+  });
+  assert.strictEqual(tariffChargeReverse.targetW, -4000, `Tarif-Richtungswechsel muss direkt Netzladen schreiben: ${tariffChargeReverse.targetW}`);
 
   const holdChargeTick = await runTick({
     gridW: 50,
@@ -470,7 +516,7 @@ async function runTick({
   });
   assert.strictEqual(dischargeSocStop.targetW, 0, 'Min-SoC bleibt ein ausdruecklicher Entlade-Stop mit 0 W');
 
-  console.log('[storage-actual-power-nvp-balance] OK: Istleistung plus NVP-Differenz regelt stabil; im Zielband bleibt der letzte nicht-null Sollwert aktiv, waehrend Schutzgrenzen weiterhin 0 W stoppen.');
+  console.log('[storage-actual-power-nvp-balance] OK: Istleistung plus NVP-Differenz regelt stabil; Richtungswechsel werden direkt geschrieben, Schutz- und Wartezustaende bleiben echte 0-W-Stopps.');
 })().catch((err) => {
   console.error('[storage-actual-power-nvp-balance] ERROR:', err && err.stack ? err.stack : err);
   process.exit(1);

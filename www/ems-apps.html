@@ -896,7 +896,7 @@
             <div class="nw-config-field-label">Sungrow Hybrid ESS</div>
             <div class="nw-config-field-control nw-config-field-control--stack">
               <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
-                Für Sungrow SH/RS/RT/MG-Hybrid-ESS verwendet NexoWatt einen geschlossenen NVP-Regelkreis: <b>neuer Sollwert = aktuelle Speicher-Istleistung + aktuelle NVP-Differenz</b>. Direkte PV-Erzeugung und ein direkt gemessener Gebäudeverbrauch dienen nur als unabhängiger Feed-forward bzw. Plausibilitätsprüfung, damit zeitversetzte Speicherwerte nicht zu 0-W- oder Sollwertsprüngen führen. PV wird nicht zusätzlich auf die NVP-Gleichung addiert. <b>0 W bleibt ausschließlich ein echter Stop-Befehl</b> bei Schutzgrenze oder sicherem Richtungswechsel.
+                Für Sungrow SH/RS/RT/MG-Hybrid-ESS verwendet NexoWatt einen geschlossenen NVP-Regelkreis: <b>neuer Sollwert = aktuelle Speicher-Istleistung + aktuelle NVP-Differenz</b>. Direkte PV-Erzeugung und ein direkt gemessener Gebäudeverbrauch dienen nur als unabhängiger Feed-forward bzw. Plausibilitätsprüfung, damit zeitversetzte Speicherwerte nicht zu 0-W- oder Sollwertsprüngen führen. PV wird nicht zusätzlich auf die NVP-Gleichung addiert. <b>0 W bleibt ausschließlich einem echten Stop-, Warte- oder Sicherheitszustand vorbehalten.</b> Lade-/Entlade-Richtungswechsel werden direkt ohne 0-W-Zwischenrunde an den Speicher geschrieben.
               </div>
             </div>
           </div>

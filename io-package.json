@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.124",
+    "version": "0.8.125",
     "news": {
+      "0.8.125": {
+        "de": "Version 0.8.125 RC1: Erster begrenzter Stabilisierungsfix. Lade-/Entlade-Richtungswechsel werden in Einzel-Speicher und Speicherfarm direkt ohne 0-W-Zwischenrunde geschrieben; die allgemeine Rampe darf dabei auch nicht mehr in der alten Richtung weiterfahren. 0 W bleibt echten Stop-, Warte- und Sicherheitszuständen vorbehalten. MultiUse-/Tarif-/Status-Abhängigkeiten sind noch nicht Teil dieses RC.",
+        "en": "Version 0.8.125 RC1: First narrowly scoped stabilization fix. Charge/discharge direction changes are written directly for single storage and storage farms without a zero-watt intermediate cycle, and the general ramp may no longer continue in the old direction. Zero watts remains reserved for genuine stop, wait, and safety states. MultiUse/tariff/status dependency work is not part of this RC yet."
+      },
       "0.8.124": {
         "de": "Version 0.8.124: Stellt den herstellerunabhängigen AppCenter-Aktorvertrag wieder vollständig her. FENECON/OpenEMS-Sollwerte werden nach allen Gates zyklisch erneuert, Speicherfarm-Writes laufen spätestens sekündlich, alle Speicher-Ausgangsarten sind angebunden und Wallbox-Phasen-DPs erreichen wieder das Charging-Gate. Zusätzliche Regressionen sichern frei benannte Schreib-DPs aller Geräteklassen ab.",
         "en": "Version 0.8.124: Fully restores the vendor-independent AppCenter actuator contract. FENECON/OpenEMS targets are refreshed cyclically after all gates, storage-farm writes run at least once per second, all storage output modes are connected, and wallbox phase datapoints reach the charging gate again. Additional regressions protect freely named write datapoints across device classes."
@@ -26,10 +30,6 @@
       "0.8.119": {
         "de": "Version 0.8.119: Phase 1 der echten TypeScript-Typisierung des zentralen EMS-Kerns. NVP-, PV-, Budget-, Grant-, §14a- und Headroom-Berechnungen laufen produktiv über einen streng typisierten, seiteneffektfreien Core-Runtime-Vertrag. Die bewährte JavaScript-Rechnung bleibt als harter Fallback aktiv und wird vor jeder Übernahme auf Feldparität geprüft.",
         "en": "Version 0.8.119: Phase 1 of genuine TypeScript typing for the central EMS core. NVP, PV, budget, grant, §14a and headroom calculations now run productively through a strictly typed, side-effect-free core runtime contract. The proven JavaScript calculation remains as a hard fallback and is checked for field parity before takeover."
-      },
-      "0.8.118": {
-        "de": "Version 0.8.118: §14a arbeitet als frischer zentraler Constraint statt als konkurrierender Hardware-Schreiber. EVCS, Speicher, Thermik und Heizstab erhalten app-spezifische Caps aus demselben EMS-Budget. Veraltete Netzbetreibersignale werden nach konfigurierbarer Fail-Safe-Policy behandelt; Legacy-Direktwrites bleiben nur als expliziter Migrationsmodus verfügbar.",
-        "en": "Version 0.8.118: Section 14a now acts as a fresh central constraint instead of a competing hardware writer. EVCS, storage, thermal control and heating rods receive app-specific caps from the same EMS budget. Stale grid-operator signals follow a configurable fail-safe policy; legacy direct writes remain available only as an explicit migration mode."
       }
     },
     "title": "NexoWatt UI",

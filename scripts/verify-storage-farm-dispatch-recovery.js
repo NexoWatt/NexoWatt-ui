@@ -150,6 +150,17 @@ Module._load = function patchedLoad(request, parent, isMain) {
     assert.strictEqual(byId.get('farm.b.set'), -4000, 'Farm B muss den verbleibenden 4-kW-Anteil erhalten');
     assert.ok(result.results.every((row) => row.statusMatch === 'dispatch-key'), 'Status muss ueber stabile Keys zugeordnet sein');
 
+    // Direkter Richtungswechsel: Auf eine laufende Beladung folgt im naechsten
+    // Dispatcher-Aufruf sofort die Entladevorgabe. Es darf keine zusaetzliche
+    // Farm-Runde mit 0 W dazwischen erzeugt werden.
+    writes.length = 0;
+    result = await adapter.applyStorageFarmTargetW(3000, { source: 'eigenverbrauch' });
+    assert.strictEqual(result.applied, true, `Direkter Farm-Richtungswechsel muss schreiben: ${result.reason}`);
+    const reverseWrites = writes.filter((row) => row.id === 'farm.a.set' || row.id === 'farm.b.set');
+    assert.strictEqual(reverseWrites.length, 2, 'Direkter Farm-Richtungswechsel muss genau beide zugeordneten Signed-DPs schreiben');
+    assert.ok(reverseWrites.every((row) => row.val > 0), `Farm darf beim Richtungswechsel keinen 0-W-Zwischenschritt senden: ${JSON.stringify(reverseWrites)}`);
+    assert.strictEqual(reverseWrites.reduce((sum, row) => sum + row.val, 0), 3000, 'Farm muss den positiven Gesamt-Sollwert vollstaendig verteilen');
+
     // Leerer/veralteter Status darf keinen dauerhaften No-Write erzeugen. Der
     // Dispatcher muss die Aggregation einmal aktualisieren und danach verteilen.
     internal.set('storageFarm.storagesStatusJson', { val: '[]', ack: true, ts: Date.now() - 60000, lc: Date.now() - 60000 });
@@ -185,7 +196,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
     assert.ok(storageSource.includes('const enabled = cfgEnabled || autoTarifEnabled || multiUseAppPolicyActive || farmAppPolicyActive;'));
     assert.ok(storageSource.includes("aktivAutoSpeicherfarm', farmAppPolicyActive"));
 
-    console.log('[storage-farm-dispatch-recovery] OK: Farm-Autostart, Status-Refresh und stabile Hardwarezuordnung schreiben wieder Sollwerte.');
+    console.log('[storage-farm-dispatch-recovery] OK: Farm-Autostart, Status-Refresh, direkter Richtungswechsel und stabile Hardwarezuordnung schreiben die zugeordneten Sollwerte.');
   } finally {
     Module._load = originalLoad;
   }

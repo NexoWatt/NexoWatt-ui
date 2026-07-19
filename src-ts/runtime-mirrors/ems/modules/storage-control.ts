@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b31919659808cb78949733511c672970c69a1fa9ab51a39aff84b8457a5fb8e7
+ * Original-Hash: a2077839f57d17172eed52705d16ad395cd7cd1553118baf78d93b889075d379
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:771e4ed48ef448fe76a0b11fad5f30a3093df30aee98e200ee0cd678cc603f8c
+ * Quell-Hash: sha256:1475e2e7f4a7bef9ad57c3a360e01914f9b10bbb1d7fcf89717a4840ef771724
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -315,13 +315,11 @@ class SpeicherRegelungModule extends BaseModule {
             sampleTs: 0,
         };
 
-        // --- Anti-Oszillation / Anti-PingPong (Charge <-> Discharge) ---
-        // Hintergrund: Wenn mehrere Logiken (LSK/Peak, Eigenverbrauch, PV-Überschuss, Reserve)
-        // sehr schnell auf wechselnde NVP-Werte reagieren, kann der Sollwert (Charge/Discharge)
-        // in kurzen Abständen das Vorzeichen wechseln. Das sieht als „Springen“ aus und erzeugt
-        // unnötige Zyklen/Stress.
-        // Strategie: Vorzeichenwechsel nur über „0“ und optional mit kurzer Sperrzeit.
-        this._signLockUntilMs = 0;
+        // --- Anti-Flattern um 0 W ---
+        // Richtungswechsel werden bewusst direkt an den jeweils zugeordneten
+        // Speicher-/Farm-Ausgang weitergegeben. Die Speichersysteme führen ihren
+        // internen Stopp beim Wechsel selbst aus; NexoWatt erzeugt dafür weder eine
+        // 0-W-Zwischenrunde noch eine zeitbasierte Vorzeichensperre.
 
         // Zeitpunkt, wann zuletzt Peak/LSK aktiv entladen hat (für „Refill“/Nachladen-Delay)
         this._lastPeakActiveMs = 0;
@@ -385,7 +383,8 @@ class SpeicherRegelungModule extends BaseModule {
         // Sungrow Hybrid ESS Sondermodus:
         // Der SH/RS/RT/MG-Hybrid wird im externen NexoWatt-Betrieb als geschlossener
         // NVP-Regelkreis gefuehrt. 0 W ist dabei ausschliesslich ein bewusster Stop-
-        // oder Richtungswechselbefehl. Kurze NVP-Aussetzer duerfen keinen laufenden
+        // oder Wartebefehl. Richtungswechsel werden direkt geschrieben. Kurze
+        // NVP-Aussetzer duerfen keinen laufenden
         // Lade-/Entladesollwert durch ein zyklisches 0-W-Schreiben unterbrechen.
         this._sungrowHybridLastMode = '';
         this._sungrowNvpMissingSinceMs = 0;
@@ -1261,8 +1260,9 @@ class SpeicherRegelungModule extends BaseModule {
          * Sungrow-Herstellerberechnung entstehen. Diese Caps duerfen den spaeteren
          * geschlossenen NVP-Regelkreis nicht auf 0 W klemmen; der autoritative
          * EVCS-/Speicher-PV-Cap wird nach der Herstellerlogik erneut angewendet.
-         * Echte Schutzstopps wie SoC, Reserve, Tarif, EV-Prioritaet oder
-         * Richtungswechsel werden hier bewusst nicht als aufschiebbar markiert.
+         * Echte Schutzstopps wie SoC, Reserve, Tarif oder EV-Prioritaet werden
+         * hier bewusst nicht als aufschiebbar markiert. Richtungswechsel sind
+         * dagegen direkte Sollwertwechsel und kein 0-W-Schutzstopp.
          */
         const isDeferredSungrowChargeCapReason = (capReason) => {
             const text = String(capReason || '').trim().toLowerCase();
@@ -2018,7 +2018,7 @@ if (typeof soc === 'number') {
                     source = 'lastspitze';
                     hardDischargeMinSoc = Math.max(hardDischargeMinSoc, lskMinSoc);
 
-                    // Merken: Peak war aktiv (für Refill/Anti-PingPong)
+                    // Merken: Peak war aktiv (fuer den verzögerten LSK-Refill).
                     this._lastPeakActiveMs = now;
                 }
             }
@@ -3175,26 +3175,16 @@ if (targetW === 0 && selfDischargeEnabled) {
         }
         const _stepW = targetW;
 
-        // Anti-PingPong (Laden <-> Entladen) / Anti-Flattern um 0
-        // Ziel: Kleine Schwingungen und harte Richtungswechsel vermeiden, ohne die
-        // Lastspitzenkappung (Sicherheitsfunktion) zu blockieren.
+        // Anti-Flattern um 0 W
+        // Ziel: Kleine Messwertschwingungen unterhalb der wirksamen Aufloesung
+        // unterdruecken. Ein echter Richtungswechsel wird dagegen ohne 0-W-
+        // Zwischenrunde direkt an Einzel-Speicher oder Speicherfarm weitergegeben.
         {
-            // WICHTIG (Bug-Fix): Die Peak-Shaving Hysterese darf nicht pauschal als
-            // "Zero-Band" für alle Speicher-Policies wirken.
-            //
-            // Sonst passiert genau das beobachtete Verhalten:
-            // - peakShaving.hysteresisW ist häufig 500 W (Default)
-            // - Eigenverbrauch will z. B. 350–450 W entladen
-            // - Anti-Flattern setzt alles < 500 W auf 0 W => Speicher bleibt aus
-            //
-            // Daher: Peak-Hysterese nur für peak-bezogene Quellen (LSK/Refill).
+            // WICHTIG: Die Peak-Shaving-Hysterese darf nicht pauschal als Zero-Band
+            // fuer alle Speicher-Policies wirken. Sonst wuerden kleine, aber reale
+            // Eigenverbrauchs-Sollwerte ungewollt als Wartezustand auf 0 W gesetzt.
             const psRelevant = (source === 'lastspitze' || source === 'lastspitze_refill');
             const psHystW = psRelevant ? Math.max(0, num(psCfg.hysteresisW, 0)) : 0;
-            // NVP-Balancing gilt bidirektional. Die alte Erkennung betrachtete nur
-            // positive Entladung; kleine negative Lade-Sollwerte konnten deshalb vom
-            // allgemeinen 100-W-Deadband auf 0 W gesetzt werden. Da 0 W am Speicher
-            // ein echter Stop ist, bekommt jeder aktive NVP-Regelpfad dasselbe feine
-            // 20-W-Band – unabhaengig von Hersteller und Richtung.
             const isNvpBalancing = !!(
                 targetW !== 0
                 && (
@@ -3212,24 +3202,13 @@ if (targetW === 0 && selfDischargeEnabled) {
                 ? Math.max(psHystW, 20)
                 : Math.max(psHystW, stepW, 100);
 
-            // Optional: Expert-Parameter. Wenn nicht gesetzt, Default 5s.
-            const cfgHoldSec = Math.max(0, num(cfg.modeHoldSec, 0));
-            const baseHoldMs = cfgHoldSec > 0 ? (cfgHoldSec * 1000) : 5000;
-            const relHoldMs = Math.max(0, num(psCfg.releaseDelaySec, 0)) * 1000;
-            const holdMs = Math.max(2000, Math.min(15000, Math.max(baseHoldMs, relHoldMs)));
-
+            // Lastspitzenkappung ist eine Sicherheitsfunktion und darf nicht von
+            // einem allgemeinen Kleinsignal-Deadband blockiert werden.
             const emergencyDischarge = (source === 'lastspitze') && (targetW > 0);
 
-            if (emergencyDischarge) {
-                // Sicherheitsfall: Lock aufheben, damit wir garantiert entladen können.
-                this._signLockUntilMs = 0;
-                this._signLockReason = '';
-            } else {
+            if (!emergencyDischarge) {
                 // Ein im NVP-Zielband bewusst gehaltener Lade-/Entladesollwert darf
                 // nicht durch das allgemeine Anti-Flatter-Deadband auf 0 W fallen.
-                // 0 W ist bei den Speicherprofilen ein echter Stop-Befehl. Schutz-
-                // und Richtungswechselbedingungen setzen targetW bereits vorher
-                // explizit auf 0 und bleiben deshalb voll wirksam.
                 const heldTargetW = storageNvpBalanceDiag && Number.isFinite(Number(storageNvpBalanceDiag.heldTargetW))
                     ? Number(storageNvpBalanceDiag.heldTargetW)
                     : 0;
@@ -3246,44 +3225,14 @@ if (targetW === 0 && selfDischargeEnabled) {
                     )
                 );
 
-                // Kleine neue Zielwerte um 0 => 0 (Anti-Flattern). Ein bereits
-                // wirksamer, gehaltener NVP-Sollwert ist hiervon ausgenommen.
+                // Nur ein wirklich kleiner neuer Sollwert wird als bewusster
+                // Wartezustand auf 0 W gesetzt. Vorzeichenwechsel oberhalb dieses
+                // Bands bleiben unveraendert und werden im selben Tick geschrieben.
                 if (!preserveHeldNvpCommand && Math.abs(targetW) < zeroBandW) {
                     targetW = 0;
-                    // Diagnose: Der Sollwert wurde bewusst auf 0 gesetzt.
-                    // (ohne Änderung wäre für den Betreiber nicht ersichtlich, warum keine Entladung/Ladung stattfindet)
                     if (source && source !== 'idle') {
-                        reason = `${reason || 'Regelung'} (Deadband < ${Math.round(zeroBandW)} W)`;
+                        reason = `${reason || 'Regelung'} (Warten: Deadband < ${Math.round(zeroBandW)} W)`;
                         source = 'idle';
-                    }
-                }
-
-                // Wenn gerade eine Sperrzeit aktiv ist: Zielwert auf 0 zwingen
-                if (this._signLockUntilMs && (now < this._signLockUntilMs)) {
-                    if (targetW !== 0) {
-                        targetW = 0;
-                        if (!reason) {
-                            reason = this._signLockReason || 'Anti-PingPong aktiv (Sperrzeit)';
-                        }
-                        if (!source) {
-                            source = 'idle';
-                        }
-                    }
-                } else {
-                    // Neue Richtungsumkehr erkennen
-                    const prevW = (typeof this._lastTargetW === 'number') ? this._lastTargetW : 0;
-                    const signFlip = (prevW !== 0) && (targetW !== 0)
-                        && (Math.sign(prevW) !== Math.sign(targetW))
-                        && (Math.abs(prevW) >= zeroBandW) && (Math.abs(targetW) >= zeroBandW);
-
-                    if (signFlip) {
-                        this._signLockUntilMs = now + holdMs;
-                        this._signLockReason = 'Anti-PingPong: Richtungswechsel -> erst auf 0 gehen';
-                        targetW = 0;
-                        reason = this._signLockReason;
-                        source = 'idle';
-                    } else {
-                        this._signLockReason = '';
                     }
                 }
             }
@@ -3297,12 +3246,23 @@ if (targetW === 0 && selfDischargeEnabled) {
 const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(this._lastTargetW)) ? this._lastTargetW : 0;
 {
     const d = targetW - _prevRampW;
+    const directDirectionChange = _prevRampW !== 0
+        && targetW !== 0
+        && Math.sign(_prevRampW) !== Math.sign(targetW);
 
+    // Verbindliche EMS-Regel: Bei einem Lade-/Entlade-Richtungswechsel wird der
+    // neue Sollwert im selben Tick direkt ausgegeben. Die Speichersysteme fuehren
+    // ihren internen Stopp selbst aus. Weder die allgemeine Rampe noch eine
+    // herstellerspezifische Rampe darf eine 0-W-Zwischenrunde oder ein Weiterfahren
+    // in der alten Richtung erzeugen. Nachgelagerte SoC-, Budget- und Safety-Caps
+    // bleiben voll wirksam.
+    if (directDirectionChange) {
+        // Bewusst keine Rampenbegrenzung.
     // Istleistungsbasiertes NVP-Balancing hat seine Korrektur bereits relativ zur
     // realen Batterie-Leistung begrenzt. Eine zweite Rampe gegen den alten Sollwert
     // wuerde die physikalische Basis wieder verfälschen und ist genau die Ursache
     // fuer wechselnde Sollwerte bei zeitversetzten Speicherreaktionen.
-    if (storageNvpBalanceRampManaged) {
+    } else if (storageNvpBalanceRampManaged) {
         // Keine zweite Rampe. Sicherheits-Caps und SoC-Grenzen folgen weiterhin.
     // Lade-Sicherheitsrücknahme: Wenn ein Speicher im letzten Tick geladen hat
     // (negativer Sollwert) und die aktuelle Policy weniger laden oder auf 0 gehen will,
@@ -3459,8 +3419,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             || stopReasonText.includes('blockiert')
             || stopReasonText.includes('gesperrt')
             || stopReasonText.includes('sicherer 0-w')
-            || stopReasonText.includes('anti-pingpong')
-            || stopReasonText.includes('richtungswechsel')
         );
 
         const feneconNoWrite = false; // Legacy-Diagnosefeld; produktiver FENECON-Pfad schreibt immer.
@@ -3590,8 +3548,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             // Sungrow nutzt denselben geschlossenen Regelkreis wie alle anderen
             // Speicherprofile. Alte Sonderzweige, die bei PV-Deckung, kleinem Import
             // oder erreichtem NVP-Ziel zyklisch 0 W geschrieben haben, sind bewusst
-            // entfernt. 0 W bleibt ausschliesslich ein echter Stop-Befehl, z. B. bei
-            // SoC-Grenze, fehlender NVP-Messung oder sicherem Richtungswechsel.
+            // entfernt. 0 W bleibt ausschliesslich ein echter Stop-/Wartebefehl,
+            // z. B. bei SoC-Grenze oder fehlender NVP-Messung. Richtungswechsel
+            // werden ohne Zwischenstopp direkt an den Speicher geschrieben.
             const nvpControlForBalanceW = (selfNvpStabilizer && typeof selfNvpStabilizer.controlW === 'number' && Number.isFinite(selfNvpStabilizer.controlW))
                 ? Number(selfNvpStabilizer.controlW)
                 : nvpNowW;
@@ -3636,8 +3595,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
             sungrowWriteMode = 'standard-policy';
             if (sungrowUpstreamExplicitStop) {
-                // SoC-, Reserve-, Demand-Cap- und Richtungswechselstopps kommen aus
-                // der gemeinsamen Grundlogik und bleiben fuer Sungrow verbindlich.
+                // SoC-, Reserve- und Demand-Cap-Stopps kommen aus der gemeinsamen
+                // Grundlogik und bleiben fuer Sungrow verbindlich.
                 // Dieser Modus beginnt absichtlich mit `write-stop-`, damit die
                 // finale 0-W-Firewall ihn als legitimen Stop erkennt.
                 sungrowWriteMode = 'write-stop-upstream-safety';
@@ -3758,21 +3717,12 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                         ? 'Sungrow direkter PV-/Last-Feed-forward-Cap'
                         : 'Sungrow NVP-Balancing-Lade-Cap';
                 } else {
-                    const explicitZeroBeforeReverse = String(sungrowBalance.mode || '').includes('zero-before-reverse');
                     const lastActiveTargetW = Number.isFinite(Number(this._lastTargetW))
                         ? Number(this._lastTargetW)
                         : 0;
                     const lastWasNvpControl = isStorageBalanceSource(this._lastSource);
 
-                    if (explicitZeroBeforeReverse) {
-                        // Ein Vorzeichenwechsel braucht weiterhin genau einen echten
-                        // 0-W-Zwischenschritt. Das ist ein bewusster Stop und kein
-                        // normaler Leerlauf der NVP-Regelung.
-                        targetW = 0;
-                        source = 'sungrow-hybrid';
-                        reason = 'Sungrow Hybrid ESS: sicherer 0-W-Zwischenschritt vor Richtungswechsel';
-                        sungrowWriteMode = 'write-stop-before-reverse';
-                    } else if (lastActiveTargetW !== 0 && lastWasNvpControl) {
+                    if (lastActiveTargetW !== 0 && lastWasNvpControl) {
                         // Defensive Rueckfallebene: Falls der Herstellerpfad trotz
                         // laufendem geschlossenen Regelkreis kurzzeitig kein neues
                         // Ziel erzeugt, bleibt der letzte wirksame Nicht-Null-Befehl
@@ -4020,10 +3970,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     || (pvBudgetEvcsReservedW > 0 && budgetZeroAgeMs >= budgetGraceMs)
                 );
 
-            const reasonLower = String(reason || '').toLowerCase();
-            const directionChange = reasonLower.includes('richtungswechsel')
-                || reasonLower.includes('anti-pingpong')
-                || String(sungrowWriteMode || '').includes('stop-before-reverse');
             // Ein vorher aktiver Sollwert muss an den konfigurierten SoC-Grenzen
             // ausdruecklich mit 0 W beendet werden. Im NVP-Zielband ist die normale
             // Request-Quelle bereits idle; ohne diese direkte Grenzpruefung wuerde
@@ -4058,7 +4004,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 source,
                 reason: explicitStopReason,
                 explicitStop,
-                directionChange,
                 measurementUsable: nvpMeasurementUsable,
                 measurementGap,
                 measurementGapAgeMs,
@@ -5047,8 +4992,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      * - Mehr Leistung wird mit der konfigurierten Delta-Grenze aufgebaut.
      * - Leistung in Richtung 0 darf schneller zurueckgenommen werden, damit bei
      *   Wolken/Lastabwurf kein unnoetiger Netzbezug oder Export stehen bleibt.
-     * - Ein Richtungswechsel geht zuerst auf 0; die bestehende Anti-PingPong-
-     *   Sperre entscheidet danach ueber Laden bzw. Entladen.
+     * - Ein Richtungswechsel wird ohne 0-W-Zwischenrunde direkt ausgegeben.
+     *   Der Speicher fuehrt den internen Stopp beim Wechsel selbst aus.
      * - Ohne vertrauenswuerdige Istleistung wird ein alter positiver Entlade-
      *   Sollwert niemals hochintegriert (Schutz gegen den frueheren 71-kW-Fehler).
      */
@@ -5235,10 +5180,13 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 && desired !== 0
                 && Math.sign(anchor) !== Math.sign(desired);
             if (crossesDirection) {
+                // Der Speichercontroller uebernimmt seinen internen Stopp beim
+                // Richtungswechsel. NexoWatt schreibt den neuen Sollwert deshalb
+                // direkt und erzeugt keine 0-W-Zwischenrunde.
                 return {
-                    targetW: 0,
-                    appliedCorrectionW: -anchor,
-                    mode: `${modePrefix}-zero-before-reverse`,
+                    targetW: desired,
+                    appliedCorrectionW: desired - anchor,
+                    mode: `${modePrefix}-direct-reverse`,
                 };
             }
 
@@ -5269,7 +5217,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             // ein echter STOP-Befehl. Hat der letzte nicht-null Sollwert den NVP bereits
             // ins Zielband gebracht, wird genau dieser Sollwert weiter geschrieben.
             // Eine 0-W-Vorgabe erfolgt erst durch eine ausdrueckliche Schutz-/Stop-
-            // Bedingung (SoC, Deaktivierung, Richtungswechsel, fehlende Messung usw.).
+            // Bedingung (SoC, Deaktivierung, fehlende Messung usw.).
             // Das Halten erhoeht den Sollwert niemals und kann daher den frueheren
             // Hochintegrationsfehler nicht wieder einfuehren.
             if (holdLastNonZeroInDeadband && lastTargetAllowed && Math.abs(lastTargetW) > 0) {
@@ -5329,11 +5277,12 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 && Math.abs(rawTargetW) < Math.abs(baseW);
 
             if (crossesDirection) {
-                // Keine direkte Lade-/Entlade-Umkehr in einem Tick. Der Dispatcher
-                // bekommt 0 W und kann danach die vorhandene Anti-PingPong-Zeit nutzen.
-                targetW = 0;
-                appliedCorrectionW = -baseW;
-                mode = `${mode}-zero-before-reverse`;
+                // Direkter Lade-/Entladewechsel: Die Speichersysteme stoppen intern
+                // beim Wechsel. Sicherheits-Caps, SoC-Grenzen und Hardware-Gates
+                // bleiben nachgelagert voll wirksam.
+                targetW = rawTargetW;
+                appliedCorrectionW = correctionW;
+                mode = `${mode}-direct-reverse`;
             } else if (reducesMagnitude) {
                 // Leistung zuruecknehmen darf schneller erfolgen als Leistung aufbauen.
                 // Dadurch wird bei Lastabwurf/Wolken nicht weiter gegen den NVP gefahren.

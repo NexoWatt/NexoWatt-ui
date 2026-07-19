@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 5b6c6e7c86ba42b52581b8fb5b18a5dbcced0c1cb66ece989b4a91f1aa40eef0
+ * Original-Hash: 6c0538feed53d2fd1e4e313b36143192817c1e7d3d09ef7025c94aa03fc62280
  */
 
 /**
@@ -37,7 +37,8 @@
  * - Eigenverbrauch darf einen alten sehr hohen Entlade-Sollwert nicht weiterführen.
  * - Vertrauenswürdige Batterie-Istleistung muss stabile Eigenverbrauchsregelung erlauben.
  * - Ein am NVP-Ziel wirksamer Sollwert bleibt aktiv; 0 W bleibt ein expliziter Stop.
- * - Bei echtem Netzbezug, SoC-/Messwertschutz oder Richtungswechsel darf weiterhin sofort gestoppt werden.
+ * - Bei echtem Stop-/Wartebedarf sowie SoC-/Messwertschutz darf weiterhin sofort 0 W geschrieben werden.
+ * - Richtungswechsel werden dagegen direkt ohne 0-W-Zwischenrunde ausgegeben.
  *
  * Dieser Test instanziiert das echte Storage-Modul mit einem kleinen ioBroker-/DP-Stub,
  * damit nicht nur Textmuster, sondern der produktive Tick-Pfad geprüft wird.

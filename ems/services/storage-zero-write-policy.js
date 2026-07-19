@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/storage-zero-write-policy.ts
- * Quell-Hash: sha256:df18e1abd6ad80b2a8257a9ad9b5e01d7b7762cc85a9dcc5d252c854b52db279
+ * Quell-Hash: sha256:d80f0a72247dff03123aba5cee1aa4dc7ca312bae25708b7acea30672dea5524
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -46,8 +46,6 @@ function reasonImpliesExplicitStop(reasonRaw, sourceRaw) {
         'explizit blockiert',
         'gesperrt',
         'sicherer 0-w',
-        'richtungswechsel',
-        'anti-pingpong',
         'manuell stopp',
         'manual stop',
         'write-stop-',
@@ -88,7 +86,6 @@ function decideStorageZeroWrite(input = {}) {
         };
     }
     const explicitStop = input.explicitStop === true
-        || input.directionChange === true
         || reasonImpliesExplicitStop(reason, source);
     if (explicitStop) {
         return {

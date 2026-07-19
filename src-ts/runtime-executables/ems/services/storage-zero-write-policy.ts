@@ -28,7 +28,6 @@ export type StorageZeroWriteInput = {
   source?: unknown;
   reason?: unknown;
   explicitStop?: boolean;
-  directionChange?: boolean;
   measurementUsable?: boolean;
   measurementGap?: boolean;
   measurementGapAgeMs?: unknown;
@@ -81,8 +80,6 @@ function reasonImpliesExplicitStop(reasonRaw: unknown, sourceRaw: unknown): bool
     'explizit blockiert',
     'gesperrt',
     'sicherer 0-w',
-    'richtungswechsel',
-    'anti-pingpong',
     'manuell stopp',
     'manual stop',
     'write-stop-',
@@ -127,7 +124,6 @@ export function decideStorageZeroWrite(input: StorageZeroWriteInput = {}): Stora
   }
 
   const explicitStop = input.explicitStop === true
-    || input.directionChange === true
     || reasonImpliesExplicitStop(reason, source);
   if (explicitStop) {
     return {
