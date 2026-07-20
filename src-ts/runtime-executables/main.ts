@@ -7297,6 +7297,9 @@ class NexoWattVis extends utils.Adapter {
 
 
     // derive evcs list (names) from config; keep it stable and only as long as explicitly configured
+    const configuredActiveEvcsCount = Array.from({ length: evcsCount }, (_unused, index) => rawList[index] || {})
+      .filter((row) => row && row.enabled !== false).length;
+    const globalStorageAssistCustomerAllowed = configuredActiveEvcsCount >= 2 && cfg.evcsGlobalStorageAssistCustomerAllowed === true;
     const evcsList = [];
     for (let i = 0; i < evcsCount; i++) {
       let row = rawList[i] || {};
@@ -7394,9 +7397,13 @@ class NexoWattVis extends utils.Adapter {
       const phaseSwitchDownStableSec = (row && row.phaseSwitchDownStableSec !== undefined && row.phaseSwitchDownStableSec !== null && String(row.phaseSwitchDownStableSec).trim() !== '' && Number.isFinite(Number(row.phaseSwitchDownStableSec))) ? Number(row.phaseSwitchDownStableSec) : 120;
       const phaseSwitchCooldownSec = (row && row.phaseSwitchCooldownSec !== undefined && row.phaseSwitchCooldownSec !== null && String(row.phaseSwitchCooldownSec).trim() !== '' && Number.isFinite(Number(row.phaseSwitchCooldownSec))) ? Number(row.phaseSwitchCooldownSec) : 900;
       const phaseSwitchSettleSec = (row && row.phaseSwitchSettleSec !== undefined && row.phaseSwitchSettleSec !== null && String(row.phaseSwitchSettleSec).trim() !== '' && Number.isFinite(Number(row.phaseSwitchSettleSec))) ? Number(row.phaseSwitchSettleSec) : 30;
-      // Installer-Freigabe: Nur wenn aktiv, darf der Kunde im Frontend Speicher-Mitnutzung für diesen Ladepunkt wählen.
-      const storageAssistCustomerAllowed = (row && row.storageAssistCustomerAllowed !== undefined && row.storageAssistCustomerAllowed !== null) ? !!row.storageAssistCustomerAllowed : false;
-evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec, storageAssistCustomerAllowed, controlMappingAutoResolved, controlMappingAutoResolvedCurrent, controlMappingAutoResolvedPower, controlMappingAutoResolvedEnable });
+      // Installer-Freigabe: Im Multi-Lademanagement kann der Installateur einen
+      // gemeinsamen Kundenschalter freigeben. Dann gilt die Freigabe für alle aktiven
+      // Ladepunkte und Einzel-LP-Schalter werden im Kundenfrontend ausgeblendet.
+      const storageAssistCustomerAllowed = globalStorageAssistCustomerAllowed
+        || ((row && row.storageAssistCustomerAllowed !== undefined && row.storageAssistCustomerAllowed !== null) ? !!row.storageAssistCustomerAllowed : false);
+      const storageAssistControlScope = globalStorageAssistCustomerAllowed ? 'global' : 'per-lp';
+      evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec, storageAssistCustomerAllowed, storageAssistControlScope, controlMappingAutoResolved, controlMappingAutoResolvedCurrent, controlMappingAutoResolvedPower, controlMappingAutoResolvedEnable });
     }
     this.evcsList = evcsList;
     // Stationsgruppen (für DC-Stationen mit mehreren Ladepunkten)
@@ -17687,14 +17694,62 @@ const _nwDisplayLayoutMode = (raw, connectorCount) => {
   if (n <= 2) return 'dual';
   return 'quad';
 };
+const _nwActiveEvcsControlRows = () => {
+  const rows = Array.isArray(this.evcsList) ? this.evcsList : [];
+  return rows
+    .filter((row) => row && row.enabled !== false)
+    .map((row, index) => ({
+      row,
+      index: Math.max(1, Math.round(Number(row.index) || index + 1)),
+    }));
+};
+const _nwDisplayGlobalStorageAssistControlEnabled = () => {
+  const settings = this.config && this.config.settingsConfig && typeof this.config.settingsConfig === 'object'
+    ? this.config.settingsConfig
+    : {};
+  return settings.evcsGlobalStorageAssistCustomerAllowed === true && _nwActiveEvcsControlRows().length >= 2;
+};
 const _nwDisplayStationConfig = () => {
   const cfg = this.config && this.config.chargeKiosk && typeof this.config.chargeKiosk === 'object' ? this.config.chargeKiosk : {};
   const rows = Array.isArray(cfg.stations) ? cfg.stations : [];
+  const settings = this.config && this.config.settingsConfig && typeof this.config.settingsConfig === 'object' ? this.config.settingsConfig : {};
+  const configuredEvcs = Array.isArray(settings.evcsList) ? settings.evcsList : [];
+  const runtimeEvcs = Array.isArray(this.evcsList) ? this.evcsList : [];
+  const portsByStation = new Map();
+  const count = Math.max(configuredEvcs.length, runtimeEvcs.length);
+  for (let index = 0; index < count; index += 1) {
+    const configured = configuredEvcs[index] && typeof configuredEvcs[index] === 'object' ? configuredEvcs[index] : {};
+    const runtime = runtimeEvcs[index] && typeof runtimeEvcs[index] === 'object' ? runtimeEvcs[index] : {};
+    if (configured.enabled === false || runtime.enabled === false) continue;
+    const stationKey = String(runtime.stationKey || configured.stationKey || '').trim();
+    if (!stationKey) continue;
+    const lp = _nwDisplayNormalizeLpKey(`lp${Math.max(1, Math.round(Number(runtime.index) || index + 1))}`);
+    if (!lp) continue;
+    if (!portsByStation.has(stationKey)) portsByStation.set(stationKey, []);
+    portsByStation.get(stationKey).push({
+      lp,
+      connectorNo: Math.max(0, Math.round(Number(runtime.connectorNo ?? configured.connectorNo) || 0)),
+      index: Math.max(1, Math.round(Number(runtime.index) || index + 1)),
+    });
+  }
+  for (const ports of portsByStation.values()) {
+    ports.sort((a, b) => (a.connectorNo || 999) - (b.connectorNo || 999) || a.index - b.index);
+  }
+
   return rows.map((row, idx) => {
     const r = row && typeof row === 'object' ? row : {};
-    const assignedRaw = Array.isArray(r.assignedChargepoints) ? r.assignedChargepoints : (Array.isArray(r.chargepoints) ? r.chargepoints : (Array.isArray(r.lps) ? r.lps : []));
-    const assigned = assignedRaw.map(_nwDisplayNormalizeLpKey).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
-    const id = _nwDisplaySafeId(r.id || r.key || r.stationId || `dc_station_${idx + 1}`);
+    const manualRaw = Array.isArray(r.assignedChargepoints) ? r.assignedChargepoints : (Array.isArray(r.chargepoints) ? r.chargepoints : (Array.isArray(r.lps) ? r.lps : []));
+    const manual = manualRaw.map(_nwDisplayNormalizeLpKey).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+    const stationKey = String(r.stationKey || r.infrastructureStationKey || '').trim();
+    const assignmentMode = String(r.assignmentMode || r.assignmentSource || (stationKey ? 'station' : 'manual')).trim().toLowerCase() === 'manual' ? 'manual' : 'station';
+    const automatic = stationKey && portsByStation.has(stationKey) ? portsByStation.get(stationKey).map((entry) => entry.lp) : [];
+    let assigned = assignmentMode === 'station' ? automatic : manual;
+    let assignmentSource = assignmentMode === 'station' ? 'station' : 'manual';
+    if (assignmentMode === 'station' && assigned.length === 0 && manual.length > 0) {
+      assigned = manual;
+      assignmentSource = 'station-fallback-manual';
+    }
+    const id = _nwDisplaySafeId(r.id || r.key || r.stationId || stationKey || `dc_station_${idx + 1}`);
     const typeRaw = String(r.type || r.stationType || 'dc').trim().toLowerCase();
     return {
       id,
@@ -17702,40 +17757,27 @@ const _nwDisplayStationConfig = () => {
       type: typeRaw === 'ac' ? 'ac' : 'dc',
       token: String(r.token || r.displayToken || '').trim(),
       enabled: r.enabled !== false,
+      stationKey,
+      assignmentMode,
+      assignmentSource,
       assignedChargepoints: assigned,
       allowedModes: _nwDisplayNormalizeModes(r.allowedModes || r.modes || ['solar', 'fast']),
       showPrice: r.showPrice !== false,
       showSolarShare: r.showSolarShare !== false,
       allowStartStop: r.allowStartStop !== false,
       maintenanceMode: _nwDisplayBool(r.maintenanceMode ?? r.maintenance ?? r.serviceMode, false),
-      // Kompatibilitaet: 0.8.18 speicherte teils heartbeatTimeoutSec/displayLayout.
-      // 0.8.19 liest beide Varianten, damit bestehende Stationen nicht umkonfiguriert werden muessen.
       watchdogTimeoutSec: _nwDisplayClamp(r.watchdogTimeoutSec ?? r.heartbeatTimeoutSec ?? r.displayTimeoutSec, 15, 600, 45),
       displayRefreshSec: _nwDisplayClamp(r.displayRefreshSec, 1, 30, 3),
       layoutMode: _nwDisplayLayoutMode(r.layoutMode ?? r.displayLayout, assigned.length),
       showLanguageSwitch: _nwDisplayBool(r.showLanguageSwitch, false),
       languageMode: String(r.languageMode || r.defaultLanguage || 'system'),
       theme: String(r.theme || 'nexowatt-dark-touch'),
-      // Herstellerneutrale Steuerbrücke:
-      // Das Display ist bewusst NICHT auf OCPP verdrahtet. Es schreibt nur einen
-      // kanonischen Lade-Intent in die NexoWatt/EMS-Schicht. Ob dahinter OCPP,
-      // Modbus, MQTT, Hersteller-API oder ein eigener Geräteadapter arbeitet,
-      // entscheidet das vorhandene Lade-/Gerätemapping des Installateurs.
       controlBridge: ['charging-management','ems-intent','ems','generic','readonly'].includes(String(r.controlBridge || r.commandBridge || 'charging-management').trim().toLowerCase()) ? String(r.controlBridge || r.commandBridge || 'charging-management').trim().toLowerCase() : 'charging-management',
       protocolHint: String(r.protocolHint || r.vendor || r.manufacturer || 'manufacturer-open').trim().slice(0, 80) || 'manufacturer-open',
       priceEurPerKwh: Number.isFinite(Number(r.priceEurPerKwh)) ? Number(r.priceEurPerKwh) : null,
       solarPriceEurPerKwh: Number.isFinite(Number(r.solarPriceEurPerKwh)) ? Number(r.solarPriceEurPerKwh) : null,
       fastPriceEurPerKwh: Number.isFinite(Number(r.fastPriceEurPerKwh)) ? Number(r.fastPriceEurPerKwh) : null,
-
-      // 0.8.19: Herstellerneutrales Steuerprofil fuer DC-Displays.
-      // Standard bleibt bewusst das NexoWatt-Charging-Management, weil dort die
-      // herstellerunabhaengige Write-Plan-/Safety-Schicht sitzt. Optional kann ein
-      // frei mappbarer JSON-Command-State genutzt werden, den ein OCPP-, Modbus-,
-      // MQTT-, REST- oder Herstelleradapter auswertet. Damit bleibt die Displaylogik
-      // nicht an OCPP oder einen konkreten Ladestationshersteller gekoppelt.
       controlProfile: String(r.controlProfile || r.controlBackend || (String(r.controlBridge || r.commandBridge || '').trim().toLowerCase() === 'generic' ? 'commandState' : 'chargingManagement')).trim(),
-      // Optionaler herstelleroffener JSON-Command-State. Platzhalter {stationId} und {lp}
-      // erlauben pro Station/Connector unterschiedliche Ziel-DPs ohne OCPP-Festverdrahtung.
       commandStateId: String(r.commandStateId || r.commandObjectId || '').trim(),
       commandStateAck: _nwDisplayBool(r.commandStateAck, false),
       writeChargingManagementMirror: r.writeChargingManagementMirror !== false,
@@ -18200,6 +18242,7 @@ const _nwDisplayBuildPayload = (station) => {
   const pvAvailable = _nwDisplayBool(_nwDisplayStateVal('chargingManagement.control.pvAvailable', false), false);
   const pvSurplusW = Math.max(0, _nwDisplayNum(_nwDisplayStateVal('chargingManagement.control.pvSurplusNoEvRawW', _nwDisplayStateVal('chargingManagement.control.pvCapRawW', 0)), 0));
   const stationAssigned = Array.isArray(station.assignedChargepoints) ? station.assignedChargepoints : [];
+  const globalStorageAssistControl = _nwDisplayGlobalStorageAssistControlEnabled();
   const list = Array.isArray(this.evcsList) ? this.evcsList : [];
   const assignedSet = new Set(stationAssigned);
   const persistedLastByLpForPayload = _nwDisplayReadStationJsonState(station && station.id, 'lastSessionsByLpJson', {});
@@ -18241,7 +18284,7 @@ const _nwDisplayBuildPayload = (station) => {
       const userPhaseMode = String(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.userPhaseMode`, _nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.phaseMode`, isAc ? 'auto-pv' : 'fixed-1p')) || '').trim();
       const currentPhase = Number(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.currentPhases`, _nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.currentPhaseCount`, 0)) || 0);
       const targetPhase = Number(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.targetPhases`, _nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.targetPhaseCount`, 0)) || 0);
-      const storageAssistCustomerAllowed = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.storageAssistCustomerAllowed`, wb.storageAssistCustomerAllowed !== false), wb.storageAssistCustomerAllowed !== false);
+      const storageAssistCustomerAllowed = globalStorageAssistControl || _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.storageAssistCustomerAllowed`, wb.storageAssistCustomerAllowed !== false), wb.storageAssistCustomerAllowed !== false);
       const userStorageAssistEnabled = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.userStorageAssistEnabled`, false), false);
       const goalEnabled = _nwDisplayBool(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.goalEnabled`, false), false);
       const goalTargetSocPct = _nwDisplayClamp(_nwDisplayStateVal(`chargingManagement.wallboxes.${safe}.goalTargetSocPct`, 100), 0, 100, 100);
@@ -18319,6 +18362,7 @@ const _nwDisplayBuildPayload = (station) => {
           currentPhase: Number.isFinite(currentPhase) ? currentPhase : 0,
           targetPhase: Number.isFinite(targetPhase) ? targetPhase : 0,
           storageAssistCustomerAllowed,
+          storageAssistControlScope: globalStorageAssistControl ? 'global' : 'per-lp',
           userStorageAssistEnabled,
           goalEnabled,
           goalTargetSocPct,
@@ -18349,6 +18393,10 @@ const _nwDisplayBuildPayload = (station) => {
       id: station.id,
       name: station.name,
       type: station.type,
+      stationKey: station.stationKey || '',
+      assignmentMode: station.assignmentMode || 'manual',
+      assignmentSource: station.assignmentSource || station.assignmentMode || 'manual',
+      globalStorageAssistControl,
       theme: station.theme,
       showPrice: !!station.showPrice,
       showSolarShare: !!station.showSolarShare,
@@ -18386,6 +18434,7 @@ const _nwDisplayBuildPayload = (station) => {
       heartbeatIntervalMs: 10000,
       watchdogTimeoutSec: runtime.timeoutSec,
       showLanguageSwitch: !!station.showLanguageSwitch,
+      globalStorageAssistControl,
       connectionState: runtime.displayOnline ? 'online' : 'offline',
     },
     operator,
@@ -18589,6 +18638,11 @@ const _nwDisplayExecuteStationCommand = async (station, lpKey, action, mode, ext
     return { bridge: profile, protocolHint: commandPayload.protocolHint, target: 'chargingManagement', writes, directHardwareWrite: false, manufacturerOpen: true };
   }
   if (action === 'set-storage') {
+    if (_nwDisplayGlobalStorageAssistControlEnabled()) {
+      const err = new Error('Der Speicherschutz wird im Multi-Lademanagement zentral auf der EVCS-Seite gesteuert.');
+      err.code = 'global_storage_control_required';
+      throw err;
+    }
     const useStorage = _nwDisplayBool(extra && extra.value, false);
     writes.push({ type: 'chargingManagement', result: await _nwDisplaySetWallboxControl(lp, 'userStorageAssistEnabled', useStorage) });
     return { bridge: profile, protocolHint: commandPayload.protocolHint, target: 'chargingManagement', writes, directHardwareWrite: false, manufacturerOpen: true };
@@ -19690,6 +19744,9 @@ app.post('/api/display/station/:token/command', async (req, res) => {
     const allowedActions = ['start', 'stop', 'set-mode', 'set-enabled', 'set-phase', 'set-storage', 'set-goal'];
     if (!allowedActions.includes(action)) return res.status(400).json({ ok: false, error: 'bad_action' });
     if (action === 'start' && !station.allowedModes.includes(mode)) return res.status(403).json({ ok: false, error: 'mode_not_allowed' });
+    if (action === 'set-storage' && _nwDisplayGlobalStorageAssistControlEnabled()) {
+      return res.status(409).json({ ok: false, error: 'global_storage_control_required', message: 'Der Speicherschutz wird zentral auf der EVCS-Seite gesteuert.' });
+    }
 
     const commandTs = Date.now();
     await _nwDisplayWriteStationState(station.id, 'lastTouch', commandTs, true);
@@ -19942,6 +19999,9 @@ app.get('/config', async (req, res) => {
         : 'js-fallback';
       const evcsAvailableEffective = !!featureVisibilityEffective.hasEvcs;
       const evcsCountForConfigEffective = evcsAvailableEffective ? evcsCountForConfig : 0;
+      const evcsActiveCountForConfigEffective = evcsAvailableEffective
+        ? evcsListForConfig.slice(0, evcsCountForConfigEffective).filter((row) => row && row.enabled !== false).length
+        : 0;
       const storageFarmAvailableEffective = !!featureVisibilityEffective.hasStorageFarm;
       const smartHomeEnabledEffective = !!featureVisibilityEffective.hasSmartHome;
       const aiAdvisorEnabledEffective = !!featureVisibilityEffective.hasAiAdvisor;
@@ -20285,7 +20345,9 @@ settingsConfig: {
           evcsConfiguredCount: evcsConfiguredCount,
           evcsAvailable: evcsAvailableEffective,
           evcsMaxPowerKw: (cfg && cfg.settingsConfig && Number(cfg.settingsConfig.evcsMaxPowerKw)) || 11,
-          evcsList: evcsAvailableEffective ? evcsListForConfig : []
+          evcsGlobalStorageAssistCustomerAllowed: !!(cfg && cfg.settingsConfig && cfg.settingsConfig.evcsGlobalStorageAssistCustomerAllowed === true && evcsActiveCountForConfigEffective >= 2),
+          evcsList: evcsAvailableEffective ? evcsListForConfig : [],
+          stationGroups: (cfg && cfg.settingsConfig && Array.isArray(cfg.settingsConfig.stationGroups)) ? cfg.settingsConfig.stationGroups : []
         },
         smartHome: smartHomeForConfig,
         smartHomeEnabled: smartHomeEnabledEffective,
@@ -21225,6 +21287,48 @@ settingsConfig: {
         // - regEnabled: Regelung an/aus (Automatik)
         if (scope === 'ems') {
           const k = String(key || '');
+
+          // Multi-Lademanagement: Ein gemeinsamer Kundenschalter setzt den
+          // Speicherschutz konsistent für alle aktiven Ladepunkte. Die Bedienung
+          // existiert nur nach ausdrücklicher Installerfreigabe im AppCenter.
+          if (/^(?:evcs\.)?(?:global|all)\.(?:storageAssist|storageAssistEnabled|userStorageAssistEnabled)$/i.test(k)) {
+            const settings = this.config && this.config.settingsConfig && typeof this.config.settingsConfig === 'object'
+              ? this.config.settingsConfig
+              : {};
+            const active = _nwActiveEvcsControlRows();
+            const installerAllowed = settings.evcsGlobalStorageAssistCustomerAllowed === true && active.length >= 2;
+            if (!installerAllowed) return res.status(403).json({ ok: false, error: 'global_storage_assist_locked' });
+            const enabled = !!value;
+            const updated = [];
+            const previous = [];
+            try {
+              for (const entry of active) {
+                const id = `chargingManagement.wallboxes.lp${entry.index}.userStorageAssistEnabled`;
+                const cached = this.stateCache && this.stateCache[id];
+                previous.push({ id, value: cached && Object.prototype.hasOwnProperty.call(cached, 'value') ? !!cached.value : false });
+                await this.setStateAsync(id, enabled, false);
+                try { this.updateValue(id, enabled, Date.now()); } catch (_e) {}
+                updated.push(`lp${entry.index}`);
+              }
+              this._nwRequestImmediateEmsTick('api:evcs-global-storage-assist');
+              return res.json({ ok: true, scope: 'global', enabled, updated });
+            } catch (_e) {
+              const rolledBack = [];
+              const rollbackFailed = [];
+              for (const entry of previous) {
+                if (!updated.includes(String(entry.id).match(/lp\d+/i)?.[0] || '')) continue;
+                try {
+                  await this.setStateAsync(entry.id, entry.value, false);
+                  try { this.updateValue(entry.id, entry.value, Date.now()); } catch (_eUpdate) {}
+                  rolledBack.push(String(entry.id).match(/lp\d+/i)?.[0] || entry.id);
+                } catch (_eRollback) {
+                  rollbackFailed.push(String(entry.id).match(/lp\d+/i)?.[0] || entry.id);
+                }
+              }
+              return res.status(409).json({ ok: false, error: 'global_storage_assist_partial_write', updated, rolledBack, rollbackFailed });
+            }
+          }
+
           let safe = '';
           let prop = '';
 
@@ -21314,6 +21418,13 @@ settingsConfig: {
               : [];
             const cfgRow = idx > 0 ? (rawList[idx - 1] || null) : null;
             const runtimeRow = idx > 0 && Array.isArray(this.evcsList) ? (this.evcsList[idx - 1] || null) : null;
+            const settings = this.config && this.config.settingsConfig && typeof this.config.settingsConfig === 'object'
+              ? this.config.settingsConfig
+              : {};
+            const globalControl = settings.evcsGlobalStorageAssistCustomerAllowed === true && _nwActiveEvcsControlRows().length >= 2;
+            if (globalControl) {
+              return res.status(409).json({ ok: false, error: 'storage_assist_global_control_required' });
+            }
             const installerAllowed = !!((cfgRow && cfgRow.storageAssistCustomerAllowed === true)
               || (runtimeRow && runtimeRow.storageAssistCustomerAllowed === true));
             if (!installerAllowed) {

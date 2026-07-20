@@ -130,3 +130,60 @@ button,input{font:inherit;}
   text-decoration: none;
   color: var(--nw-text);
 }
+
+
+/* 0.8.132: Stationsseiten mit beliebig vielen Ports.
+   Die Haupt-EVCS-Seite bleibt unverändert; nur das separate Stationsdisplay
+   passt Kartengröße und Spaltenzahl an verfügbare Displayfläche und Portzahl an. */
+.nw-connectors--count-many,
+.nw-connectors--layout-compact {
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 14px;
+}
+.nw-connectors--count-many .nw-connector-card,
+.nw-connectors--layout-compact .nw-connector-card {
+  min-height: 320px;
+  padding: 18px;
+  border-radius: 24px;
+  gap: 12px;
+}
+.nw-connectors--count-many .nw-connector-name,
+.nw-connectors--layout-compact .nw-connector-name {
+  font-size: clamp(24px, 2.8vw, 38px);
+}
+.nw-connectors--count-many .nw-power-main strong,
+.nw-connectors--layout-compact .nw-power-main strong {
+  font-size: clamp(40px, 4.8vw, 68px);
+}
+.nw-control-row--notice small {
+  grid-column: 2;
+  margin: 0;
+  border: 1px solid rgba(0, 230, 118, .18);
+  background: rgba(0, 230, 118, .08);
+  border-radius: 12px;
+  padding: 9px 10px;
+}
+@media (min-width: 900px) and (max-height: 760px) {
+  .nw-display-shell { padding: 14px; gap: 12px; }
+  .nw-display-header { gap: 12px; }
+  .nw-display-title h1 { font-size: clamp(30px, 4.1vw, 52px); }
+  .nw-display-pill { min-height: 40px; padding: 8px 12px; }
+  .nw-connector-grid { gap: 12px; }
+  .nw-connector-card { padding: 16px; gap: 10px; min-height: 300px; }
+  .nw-lp-controls { padding: 10px; gap: 8px; }
+  .nw-control-btn { min-height: 40px; }
+}
+@media (max-width: 900px) and (orientation: portrait) {
+  .nw-connectors--count-2,
+  .nw-connectors--count-3,
+  .nw-connectors--count-4,
+  .nw-connectors--count-many,
+  .nw-connectors--layout-dual,
+  .nw-connectors--layout-quad,
+  .nw-connectors--layout-compact { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .nw-display-shell { padding: 10px; }
+  .nw-connector-card { padding: 14px; border-radius: 20px; }
+  .nw-control-row--notice small { grid-column: 1; }
+}

@@ -90,6 +90,7 @@
       useStorage: 'Mitnutzen',
       goal: 'Ziel-Laden',
       goalOn: 'Ziel aktiv',
+      storageCentral: 'Speicherschutz wird zentral auf der EVCS-Seite für alle Ladepunkte gesteuert.',
     },
     nl: {
       loading: 'Verbinding met laadstation wordt opgebouwd …',
@@ -148,6 +149,7 @@
       useStorage: 'Meenemen',
       goal: 'Doelladen',
       goalOn: 'Doel actief',
+      storageCentral: 'Accubescherming wordt centraal op de EVCS-pagina voor alle laadpunten geregeld.',
     },
     en: {
       loading: 'Connecting to charging station …',
@@ -206,6 +208,7 @@
       useStorage: 'Use',
       goal: 'Target charge',
       goalOn: 'Target active',
+      storageCentral: 'Storage protection is controlled centrally for all chargepoints on the EVCS page.',
     },
   };
 
@@ -441,8 +444,10 @@
     const site = payload.site || {};
     const display = payload.display || {};
     const connectors = Array.isArray(payload.connectors) ? payload.connectors : [];
-    const countClass = 'nw-connectors--count-' + Math.max(1, Math.min(4, connectors.length || 1));
-    const layoutClass = 'nw-connectors--layout-' + escapeHtml(site.layoutMode || station.layoutMode || 'auto');
+    const connectorCount = Math.max(1, connectors.length || 1);
+    const countBucket = connectorCount >= 5 ? 'many' : String(connectorCount);
+    const countClass = 'nw-connectors--count-' + countBucket;
+    const layoutClass = 'nw-connectors--layout-' + escapeHtml(site.layoutMode || station.layoutMode || (connectorCount >= 5 ? 'compact' : 'auto'));
     app.innerHTML = `
       <header class="nw-display-header">
         <div class="nw-display-title">
@@ -508,6 +513,7 @@
     const userMode = String(ctl.userMode || c.userMode || c.mode || 'auto').toLowerCase();
     const userEnabled = ctl.userEnabled !== false;
     const storageAllowed = ctl.storageAssistCustomerAllowed !== false;
+    const globalStorageControl = station && station.globalStorageAssistControl === true || String(ctl.storageAssistControlScope || '').toLowerCase() === 'global';
     const storageOn = ctl.userStorageAssistEnabled === true;
     const goalOn = ctl.goalEnabled === true;
     const phaseSupported = !!(c && c.isAc && ctl.phaseSwitchSupported);
@@ -542,13 +548,16 @@
         </div>
         <small>${escapeHtml((ctl.currentPhase ? `aktuell ${ctl.currentPhase}p` : '') + (ctl.targetPhase ? ` → Ziel ${ctl.targetPhase}p` : ''))}</small>
       </div>` : ''}
-      <div class="nw-control-row">
+      ${globalStorageControl ? `<div class="nw-control-row nw-control-row--notice">
+        <span>${escapeHtml(t('storage'))}</span>
+        <small>${escapeHtml(t('storageCentral'))}</small>
+      </div>` : `<div class="nw-control-row">
         <span>${escapeHtml(t('storage'))}</span>
         <div class="nw-control-buttons nw-control-buttons--2">
           ${controlButton(lp, 'set-storage', '', t('protect'), !storageOn, disabled || !storageAllowed, 'data-value="false"')}
           ${controlButton(lp, 'set-storage', '', t('useStorage'), storageOn, disabled || !storageAllowed, 'data-value="true"')}
         </div>
-      </div>
+      </div>`}
       <div class="nw-control-row">
         <span>${escapeHtml(t('goal'))}</span>
         <div class="nw-control-buttons nw-control-buttons--2">

@@ -1,3 +1,14 @@
+## 0.8.132 - 2026-07-20
+
+- Multi-Lademanagement: Neue installerfreigegebene globale Kundenbedienung „Speicher schützen / Speicher mitnutzen“ unter AppCenter → Ladepunkte. Bei mindestens zwei aktiven Ladepunkten setzt der Schalter auf der normalen EVCS-Seite den Speicherschutz konsistent für alle aktiven Ladepunkte; ohne Freigabehaken bleibt die bisherige Bedienung pro Ladepunkt erhalten.
+- Serverseitige Konsistenzsperre: Ist die globale Bedienung aktiv, werden widersprüchliche Einzel-Ladepunkt-Schreibwege abgewiesen. Stationsdisplays zeigen dann nur einen kompakten Hinweis auf die zentrale EVCS-Bedienung und bieten keinen eigenen Speicher-Override an.
+- Stationsseiten werden jetzt mit einer bestehenden Ladeinfrastruktur-Station verknüpft. Im automatischen Modus erscheinen sämtliche aktiven Ladepunkte/Connectoren mit demselben `stationKey`, sortiert nach Connectornummer; bestehende manuelle `lp1, lp2`-Zuordnungen bleiben als Legacy-/Expertenmodus erhalten.
+- Die normale EVCS-Seite bleibt die Gesamtübersicht über alle Ladepunkte. Jede separate Stationsseite zeigt ausschließlich die Ladepunkte ihrer zugeordneten Station und kann dadurch DC-Stationen mit zwei, drei, vier oder mehr Ladepunkten vollständig bedienen.
+- Responsive Stationsdisplay-Layouts für Hochformat, Querformat, geringe Displayhöhe sowie fünf und mehr Connectoren ergänzt. Hintergrund, allgemeines Stationsdesign und die bestehende EVCS-Hauptansicht wurden nicht neu gestaltet.
+- Neue Release-Regression `test:evcs-global-storage-station-pages` prüft Installerfreigabe, globalen Multi-LP-Write, Einzel-LP-Sperre, Stationsgruppen-Ableitung, Connectorreihenfolge, Legacy-Fallback und responsive Multi-Port-Darstellung.
+- TypeScript-Migrationskontrolle: keine zusätzliche `@ts-nocheck`-Datei (weiterhin 58); der offen ausgewiesene Zeilenrahmen steigt für globale EVCS-Bedienung und Stationsseiten von 142.775 auf 143.115 Zeilen.
+- Service-Worker-Cache auf `nexowatt-cache-v435` erhöht.
+
 ## 0.8.131 - 2026-07-20
 
 - EVCS-Bereitschaftsstatus gehärtet: `Available`, `Ready` und `Idle` gelten als stabile, ereignisbasierte Ruhezustände. Ein unveränderter Zeitstempel darf diese Zustände nicht mehr als „Status veraltet“ markieren.

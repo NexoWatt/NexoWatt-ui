@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0be8a8f816198d4ac8e48210e6325a89a4b9710876e94d4ad7273a010b772504
+ * Original-Hash: 5f90d7b4cce323125b28b7c01f5856da13c2225941de587ecf8bb8a13ea4a7c3
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/dc-station-display.ts
- * Quell-Hash: sha256:64d42dc32a90ddad436f2ba2c6930bafb040585e6fe89044eb035a5cc47858cb
+ * Quell-Hash: sha256:5238e5d2624cd36f3fcc5f4a37038c86cfdd3b01bdd56ad24d6bc8612b5d3079
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -137,6 +137,7 @@
       useStorage: 'Mitnutzen',
       goal: 'Ziel-Laden',
       goalOn: 'Ziel aktiv',
+      storageCentral: 'Speicherschutz wird zentral auf der EVCS-Seite für alle Ladepunkte gesteuert.',
     },
     nl: {
       loading: 'Verbinding met laadstation wordt opgebouwd …',
@@ -195,6 +196,7 @@
       useStorage: 'Meenemen',
       goal: 'Doelladen',
       goalOn: 'Doel actief',
+      storageCentral: 'Accubescherming wordt centraal op de EVCS-pagina voor alle laadpunten geregeld.',
     },
     en: {
       loading: 'Connecting to charging station …',
@@ -253,6 +255,7 @@
       useStorage: 'Use',
       goal: 'Target charge',
       goalOn: 'Target active',
+      storageCentral: 'Storage protection is controlled centrally for all chargepoints on the EVCS page.',
     },
   };
 
@@ -741,8 +744,10 @@
     const site = payload.site || {};
     const display = payload.display || {};
     const connectors = Array.isArray(payload.connectors) ? payload.connectors : [];
-    const countClass = 'nw-connectors--count-' + Math.max(1, Math.min(4, connectors.length || 1));
-    const layoutClass = 'nw-connectors--layout-' + escapeHtml(site.layoutMode || station.layoutMode || 'auto');
+    const connectorCount = Math.max(1, connectors.length || 1);
+    const countBucket = connectorCount >= 5 ? 'many' : String(connectorCount);
+    const countClass = 'nw-connectors--count-' + countBucket;
+    const layoutClass = 'nw-connectors--layout-' + escapeHtml(site.layoutMode || station.layoutMode || (connectorCount >= 5 ? 'compact' : 'auto'));
     app.innerHTML = `
       <header class="nw-display-header">
         <div class="nw-display-title">
@@ -841,6 +846,7 @@
     const userMode = String(ctl.userMode || c.userMode || c.mode || 'auto').toLowerCase();
     const userEnabled = ctl.userEnabled !== false;
     const storageAllowed = ctl.storageAssistCustomerAllowed !== false;
+    const globalStorageControl = station && station.globalStorageAssistControl === true || String(ctl.storageAssistControlScope || '').toLowerCase() === 'global';
     const storageOn = ctl.userStorageAssistEnabled === true;
     const goalOn = ctl.goalEnabled === true;
     const phaseSupported = !!(c && c.isAc && ctl.phaseSwitchSupported);
@@ -875,13 +881,16 @@
         </div>
         <small>${escapeHtml((ctl.currentPhase ? `aktuell ${ctl.currentPhase}p` : '') + (ctl.targetPhase ? ` → Ziel ${ctl.targetPhase}p` : ''))}</small>
       </div>` : ''}
-      <div class="nw-control-row">
+      ${globalStorageControl ? `<div class="nw-control-row nw-control-row--notice">
+        <span>${escapeHtml(t('storage'))}</span>
+        <small>${escapeHtml(t('storageCentral'))}</small>
+      </div>` : `<div class="nw-control-row">
         <span>${escapeHtml(t('storage'))}</span>
         <div class="nw-control-buttons nw-control-buttons--2">
           ${controlButton(lp, 'set-storage', '', t('protect'), !storageOn, disabled || !storageAllowed, 'data-value="false"')}
           ${controlButton(lp, 'set-storage', '', t('useStorage'), storageOn, disabled || !storageAllowed, 'data-value="true"')}
         </div>
-      </div>
+      </div>`}
       <div class="nw-control-row">
         <span>${escapeHtml(t('goal'))}</span>
         <div class="nw-control-buttons nw-control-buttons--2">

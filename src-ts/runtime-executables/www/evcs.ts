@@ -451,6 +451,47 @@ function evcsStorageAssistCustomerAllowed(index) {
   return !!(row && row.storageAssistCustomerAllowed === true);
 }
 
+function evcsGlobalStorageAssistCustomerAllowed() {
+  const sc = cfg && cfg.settingsConfig && typeof cfg.settingsConfig === 'object' ? cfg.settingsConfig : {};
+  return sc.evcsGlobalStorageAssistCustomerAllowed === true && evcsGlobalStorageAssistIndices().length >= 2;
+}
+
+function evcsGlobalStorageAssistIndices() {
+  const rows = Array.isArray(_evcsMeta) ? _evcsMeta : [];
+  const out = [];
+  for (let index = 1; index <= _evcsCount; index += 1) {
+    const row = rows[index - 1] || {};
+    if (row.enabled === false) continue;
+    out.push(index);
+  }
+  return out;
+}
+
+function renderEvcsGlobalStorageAssistControl() {
+  const wrap = document.getElementById('evcsGlobalStorageAssist');
+  if (!wrap) return;
+  const allowed = evcsGlobalStorageAssistCustomerAllowed();
+  wrap.classList.toggle('hidden', !allowed);
+  if (!allowed) return;
+
+  const indices = evcsGlobalStorageAssistIndices();
+  const values = indices.map((index) => !!d(`chargingManagement.wallboxes.lp${index}.userStorageAssistEnabled`));
+  const allEnabled = values.length > 0 && values.every(Boolean);
+  const allProtected = values.length === 0 || values.every((value) => !value);
+  const mixed = !allEnabled && !allProtected;
+  wrap.querySelectorAll('button[data-global-storage-assist]').forEach((button) => {
+    const enabled = String(button.getAttribute('data-global-storage-assist')) === 'true';
+    button.classList.toggle('active', !mixed && (enabled ? allEnabled : allProtected));
+    button.classList.toggle('nw-evcs-mixed', mixed);
+  });
+  const hint = document.getElementById('evcsGlobalStorageAssistHint');
+  if (hint) {
+    hint.textContent = mixed
+      ? `Uneinheitlicher Altstand bei ${indices.length} Ladepunkten – bitte zentral neu wählen.`
+      : `${indices.length} aktive Ladepunkte · ${allEnabled ? 'Speicher-Mitnutzung freigegeben' : 'Speicher geschützt'}`;
+  }
+}
+
 function storageAssistLabel(enabled) {
   return enabled ? 'Speicher mitnutzen' : 'Speicher schützen';
 }
@@ -960,6 +1001,7 @@ function buildEvcsModalBodyHtml(i) {
   else if (emsPhaseCooldownMs > 0) phaseHintTxt = `Cooldown aktiv: ${Math.ceil(emsPhaseCooldownMs / 1000)} s`;
   else phaseHintTxt = phaseModeValue === 'auto-pv' ? 'Auto PV schaltet 1p/3p nach Überschuss, Hysterese und Cooldown.' : 'Fester AC-Phasenmodus aktiv.';
 
+  const globalStorageAssistControl = evcsGlobalStorageAssistCustomerAllowed();
   const storageAssistAllowed = hasEms && (evcsStorageAssistCustomerAllowed(i) || emsStorageAssistCustomerAllowed === true);
   const storageAssistEnabled = !!emsUserStorageAssistEnabled;
   const storageAssistEffective = !!emsEffectiveStorageAssist;
@@ -1069,7 +1111,7 @@ function buildEvcsModalBodyHtml(i) {
           </div>
         ` : ''}
 
-        ${storageAssistAllowed ? `
+        ${storageAssistAllowed && !globalStorageAssistControl ? `
           <div style="margin-top:4px; padding-top:10px; border-top:1px solid rgba(255,255,255,.06);">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
               <span>Speicher</span>
@@ -1082,6 +1124,13 @@ function buildEvcsModalBodyHtml(i) {
                 <div class="muted" style="font-size:12px; opacity:.85; text-align:right; max-width:320px;">${esc(storageAssistHint)}</div>
               </div>
             </div>
+          </div>
+        ` : ''}
+
+        ${storageAssistAllowed && globalStorageAssistControl ? `
+          <div style="margin-top:4px; padding-top:10px; border-top:1px solid rgba(255,255,255,.06); display:flex;justify-content:space-between;gap:12px;">
+            <span>Speicher</span>
+            <strong>${esc(storageAssistLabel(storageAssistEnabled))} · zentral für alle Ladepunkte</strong>
           </div>
         ` : ''}
 
@@ -1164,6 +1213,7 @@ function render() {
 
   _evcsCount = count;
   _evcsMeta = meta;
+  renderEvcsGlobalStorageAssistControl();
 
   _boostQueueRank = _computeBoostQueueRank(count);
 
@@ -1349,6 +1399,40 @@ function bindControls() {
   const list = document.getElementById('evcsList');
   const modal = document.getElementById('evcsModal');
   const closeBtn = document.getElementById('evcsModalClose');
+  const globalStorageAssist = document.getElementById('evcsGlobalStorageAssist');
+
+  if (globalStorageAssist && !globalStorageAssist.dataset.nwBound) {
+    globalStorageAssist.dataset.nwBound = '1';
+    globalStorageAssist.addEventListener('click', async (event) => {
+      const button = event && event.target && event.target.closest
+        ? event.target.closest('button[data-global-storage-assist]')
+        : null;
+      if (!button || !evcsGlobalStorageAssistCustomerAllowed()) return;
+      const enabled = String(button.getAttribute('data-global-storage-assist')) === 'true';
+      const indices = evcsGlobalStorageAssistIndices();
+      try {
+        for (const index of indices) {
+          const key = `chargingManagement.wallboxes.lp${index}.userStorageAssistEnabled`;
+          _setPendingWrite(key, enabled, 3500);
+          state[key] = { value: enabled, ts: Date.now() };
+        }
+        renderEvcsGlobalStorageAssistControl();
+        scheduleRender();
+        const response = await fetch('/api/set', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope: 'ems', key: 'evcs.global.storageAssistEnabled', value: enabled })
+        });
+        if (!response.ok) throw new Error('global_storage_assist_write_failed');
+      } catch (_e) {
+        for (const index of indices) {
+          _clearPendingWrite(`chargingManagement.wallboxes.lp${index}.userStorageAssistEnabled`);
+        }
+        try { state = await fetch('/api/state', { cache: 'no-store' }).then((response) => response.json()); } catch (_e2) {}
+        scheduleRender();
+      }
+    });
+  }
 
   if (list) {
     // With many EVCS tiles the UI may re-render frequently (SSE). A click can be

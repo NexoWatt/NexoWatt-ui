@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.131",
+    "version": "0.8.132",
     "news": {
+      "0.8.132": {
+        "de": "Version 0.8.132 RC8: Das Multi-Lademanagement erhält nach Installerfreigabe im AppCenter einen gemeinsamen Kundenschalter „Speicher schützen / Speicher mitnutzen“ für alle aktiven Ladepunkte. Einzelne Ladepunkte können diesen globalen Zustand nicht widersprüchlich überschreiben. Separate Stationsseiten werden mit einer vorhandenen Ladeinfrastruktur-Station verknüpft und zeigen automatisch alle aktiven Connectoren dieser Station in responsiven Layouts; die normale EVCS-Seite bleibt die Übersicht über alle Ladepunkte.",
+        "en": "Version 0.8.132 RC8: After installer approval in AppCenter, multi-charging management provides one shared customer control to protect or use stationary storage for all active chargepoints. Individual chargepoints cannot override that global state inconsistently. Separate station pages are linked to an existing charging-infrastructure station and automatically show all active connectors of that station in responsive layouts; the regular EVCS page remains the overview of all chargepoints."
+      },
       "0.8.131": {
         "de": "Version 0.8.131 RC7: OCPP-/Wallbox-Bereitschaftszustände Available, Ready und Idle bleiben auch bei unverändertem, altem Zeitstempel gültig. Ereignisbasierte Adapter müssen einen ruhenden Bereitschaftsstatus nicht zyklisch neu schreiben; die EVCS-Ansicht zeigt deshalb nicht mehr irreführend „Status veraltet“. Transiente und sicherheitsrelevante Zustände wie Charging, Preparing, Faulted, Unavailable und Offline bleiben weiterhin freshness-pflichtig. Es wurden keine zusätzlichen Karten oder sichtbaren Diagnosezeilen ergänzt.",
         "en": "Version 0.8.131 RC7: OCPP/wallbox ready states Available, Ready and Idle remain valid even when their unchanged timestamp is old. Event-driven adapters do not need to rewrite an idle readiness state periodically, so the EVCS view no longer shows a misleading “status stale” warning. Transient and safety-relevant states such as Charging, Preparing, Faulted, Unavailable and Offline still require freshness. No additional cards or visible diagnostic rows were added."
@@ -26,10 +30,6 @@
       "0.8.126": {
         "de": "Version 0.8.126 RC2: Eine zentrale Speicher-Steuerhoheit wählt exklusiv Einzel-Speicher oder Speicherfarm. MultiUse bleibt reine Policy und arbeitet mit beiden Topologien, ohne die Einzelregelung verdeckt zu aktivieren. Core-Budget, Tarif-SoC, EVCS, Thermik, BHKW/Generator, AI und Energiefluss verwenden dieselbe Topologie; manuelle AppCenter-DPs und alle Safety-Gates bleiben verbindlich. Richtungswechsel erfolgen weiterhin direkt ohne 0-W-Zwischenrunde.",
         "en": "Version 0.8.126 RC2: A central storage authority exclusively selects either single storage or the storage farm. MultiUse remains policy-only and works with both topologies without secretly enabling the single-storage controller. Core budget, tariff SoC, EVCS, thermal control, prime movers, AI and energy flow use the same topology; manual AppCenter datapoints and all safety gates remain authoritative. Direction changes remain direct without an intermediate zero-watt cycle."
-      },
-      "0.8.125": {
-        "de": "Version 0.8.125 RC1: Erster begrenzter Stabilisierungsfix. Lade-/Entlade-Richtungswechsel werden in Einzel-Speicher und Speicherfarm direkt ohne 0-W-Zwischenrunde geschrieben; die allgemeine Rampe darf dabei auch nicht mehr in der alten Richtung weiterfahren. 0 W bleibt echten Stop-, Warte- und Sicherheitszuständen vorbehalten. MultiUse-/Tarif-/Status-Abhängigkeiten sind noch nicht Teil dieses RC.",
-        "en": "Version 0.8.125 RC1: First narrowly scoped stabilization fix. Charge/discharge direction changes are written directly for single storage and storage farms without a zero-watt intermediate cycle, and the general ramp may no longer continue in the old direction. Zero watts remains reserved for genuine stop, wait, and safety states. MultiUse/tariff/status dependency work is not part of this RC yet."
       }
     },
     "title": "NexoWatt UI",

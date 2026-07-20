@@ -18,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0bf29755ce2ee39a4e71e0d278c758b5dc76928975b5cfdfd0b5b945ebec1af3
+ * Original-Hash: 135ae222f9d1ba46c47f9a937b4e382989d736d872c07ea365b8e750d4951c0d
  */
 
 /**
@@ -572,6 +572,7 @@ interface EmsAppsWindow extends Window {
     // EVCS / Stations
     evcsCount: document.getElementById('evcsCount'),
     evcsMaxPowerKw: document.getElementById('evcsMaxPowerKw'),
+    evcsGlobalStorageAssistCustomerAllowed: document.getElementById('evcsGlobalStorageAssistCustomerAllowed'),
     cmGoalStrategy: document.getElementById('cmGoalStrategy'),
     evcsList: document.getElementById('evcsList'),
     stationGroups: document.getElementById('stationGroups'),
@@ -2319,6 +2320,55 @@ function collectAiAdvisorConfigFromUI(base) {
     return arr.map((x) => String(x || '').trim()).filter(Boolean).join(', ');
   }
 
+  function _chargeKioskStationCatalog() {
+    const sc = currentConfig && currentConfig.settingsConfig && typeof currentConfig.settingsConfig === 'object'
+      ? currentConfig.settingsConfig
+      : {};
+    const groups = Array.isArray(sc.stationGroups) ? sc.stationGroups : [];
+    const evcs = Array.isArray(sc.evcsList) ? sc.evcsList : [];
+    const byKey = new Map();
+    const ensure = (rawKey) => {
+      const key = String(rawKey || '').trim();
+      if (!key) return null;
+      if (!byKey.has(key)) byKey.set(key, { stationKey: key, name: '', chargepoints: [] });
+      return byKey.get(key);
+    };
+    groups.forEach((group) => {
+      const item = ensure(group && group.stationKey);
+      if (item && group && String(group.name || '').trim()) item.name = String(group.name || '').trim();
+    });
+    evcs.forEach((row, index) => {
+      if (!row || row.enabled === false) return;
+      const item = ensure(row.stationKey);
+      if (!item) return;
+      item.chargepoints.push({
+        lp: `lp${index + 1}`,
+        connectorNo: Math.max(0, Math.round(Number(row.connectorNo) || 0)),
+        name: String(row.name || `Ladepunkt ${index + 1}`).trim(),
+      });
+    });
+    return Array.from(byKey.values()).map((item) => {
+      item.chargepoints.sort((a, b) => (a.connectorNo || 999) - (b.connectorNo || 999) || String(a.lp).localeCompare(String(b.lp)));
+      return item;
+    }).sort((a, b) => String(a.name || a.stationKey).localeCompare(String(b.name || b.stationKey), 'de'));
+  }
+
+  function _chargeKioskAssignedForStation(stationKey) {
+    const key = String(stationKey || '').trim();
+    const item = _chargeKioskStationCatalog().find((entry) => entry.stationKey === key);
+    return item ? item.chargepoints.map((entry) => entry.lp) : [];
+  }
+
+  function _chargeKioskStationOptionsHtml(selectedKey) {
+    const selected = String(selectedKey || '').trim();
+    const options = ['<option value="">Keine Stationsgruppe verknüpft</option>'];
+    _chargeKioskStationCatalog().forEach((item) => {
+      const label = `${item.name || item.stationKey} · ${item.chargepoints.length} Port${item.chargepoints.length === 1 ? '' : 's'} · ${item.stationKey}`;
+      options.push(`<option value="${_chargeKioskHtmlEscape(item.stationKey)}" ${selected === item.stationKey ? 'selected' : ''}>${_chargeKioskHtmlEscape(label)}</option>`);
+    });
+    return options.join('');
+  }
+
   function buildChargeKioskCard() {
     const card = document.createElement('div');
     card.className = 'nw-config-card nw-charge-kiosk-card';
@@ -2333,6 +2383,10 @@ function collectAiAdvisorConfigFromUI(base) {
       const token = String(r.token || '').trim();
       const type = String(r.type || 'dc').trim().toLowerCase() === 'ac' ? 'ac' : 'dc';
       const assigned = _chargeKioskAssignedToText(r.assignedChargepoints || r.chargepoints || r.lps);
+      const stationKey = String(r.stationKey || r.infrastructureStationKey || '').trim();
+      const assignmentMode = String(r.assignmentMode || r.assignmentSource || (stationKey ? 'station' : 'manual')).trim().toLowerCase() === 'manual' ? 'manual' : 'station';
+      const autoAssigned = _chargeKioskAssignedForStation(stationKey);
+      const autoAssignedText = _chargeKioskAssignedToText(autoAssigned);
       const modes = Array.isArray(r.allowedModes) ? r.allowedModes : ['solar', 'fast'];
       const solar = modes.includes('solar');
       const fast = modes.includes('fast');
@@ -2357,8 +2411,13 @@ function collectAiAdvisorConfigFromUI(base) {
             <label class="nw-config-field"><span class="nw-config-label">Display-Token</span><input class="nw-config-input" data-ck-field="token" value="${_chargeKioskHtmlEscape(token)}" placeholder="ST-XXXX-XXXX" /></label>
             <div class="nw-config-field"><span class="nw-config-label">Token</span><button type="button" class="nw-btn nw-btn-secondary" data-ck-generate-token="1">Neu erzeugen</button></div>
           </div>
+          <div class="nw-config-grid" style="grid-template-columns:minmax(240px,1.5fr) minmax(180px,.8fr) minmax(260px,1.7fr);gap:10px;margin-top:10px;align-items:end;">
+            <label class="nw-config-field"><span class="nw-config-label">Ladeinfrastruktur-Station</span><select class="nw-config-input" data-ck-field="stationKey">${_chargeKioskStationOptionsHtml(stationKey)}</select><small>Verknüpft die Displayseite mit der vorhandenen Station unter „Stationen &amp; Ports“.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Port-Zuordnung</span><select class="nw-config-input" data-ck-field="assignmentMode"><option value="station" ${assignmentMode === 'station' ? 'selected' : ''}>Automatisch aus Station</option><option value="manual" ${assignmentMode === 'manual' ? 'selected' : ''}>Manuell (Experte/Legacy)</option></select></label>
+            <div class="nw-config-field" data-ck-auto-assignment><span class="nw-config-label">Erkannte Ladepunkte</span><div class="nw-config-empty" style="text-align:left;padding:10px 12px;min-height:42px;" data-ck-auto-preview>${_chargeKioskHtmlEscape(autoAssignedText || (stationKey ? 'Keine aktiven Ports in dieser Station' : 'Bitte Station auswählen'))}</div><small>Alle aktiven Ladepunkte mit demselben Stations-Key erscheinen automatisch auf dieser Stationsseite.</small></div>
+          </div>
           <div class="nw-config-grid" style="grid-template-columns:2fr 1fr 1fr;gap:10px;margin-top:10px;align-items:end;">
-            <label class="nw-config-field"><span class="nw-config-label">Zugeordnete LPs/Connectoren</span><input class="nw-config-input" data-ck-field="assignedChargepoints" value="${_chargeKioskHtmlEscape(assigned)}" placeholder="lp1, lp2" /><small>Nur diese LPs erscheinen auf dieser Stationsdisplay-Seite.</small></label>
+            <label class="nw-config-field" data-ck-manual-assignment ${assignmentMode === 'manual' ? '' : 'hidden'}><span class="nw-config-label">Manuelle LPs/Connectoren</span><input class="nw-config-input" data-ck-field="assignedChargepoints" value="${_chargeKioskHtmlEscape(assigned)}" placeholder="lp1, lp2" /><small>Nur im manuellen Legacy-/Expertenmodus verwendet.</small></label>
             <label class="nw-config-field"><span class="nw-config-label">Solar laden</span><select class="nw-config-input" data-ck-field="solar"><option value="true" ${solar ? 'selected' : ''}>Erlaubt</option><option value="false" ${!solar ? 'selected' : ''}>Aus</option></select></label>
             <label class="nw-config-field"><span class="nw-config-label">Schnell laden</span><select class="nw-config-input" data-ck-field="fast"><option value="true" ${fast ? 'selected' : ''}>Erlaubt</option><option value="false" ${!fast ? 'selected' : ''}>Aus</option></select></label>
           </div>
@@ -2371,7 +2430,7 @@ function collectAiAdvisorConfigFromUI(base) {
             <label class="nw-config-field"><span class="nw-config-label">Wartungsmodus</span><select class="nw-config-input" data-ck-field="maintenanceMode"><option value="false" ${r.maintenanceMode === true ? '' : 'selected'}>Aus</option><option value="true" ${r.maintenanceMode === true ? 'selected' : ''}>An</option></select><small>Display zeigt Wartung und blockiert Start/Stop.</small></label>
             <label class="nw-config-field"><span class="nw-config-label">Watchdog Timeout s</span><input class="nw-config-input" type="number" step="1" min="15" max="600" data-ck-field="watchdogTimeoutSec" value="${Number.isFinite(Number(r.watchdogTimeoutSec)) ? Number(r.watchdogTimeoutSec) : 45}" /><small>Offline, wenn kein Heartbeat innerhalb dieser Zeit kommt.</small></label>
             <label class="nw-config-field"><span class="nw-config-label">Display Refresh s</span><input class="nw-config-input" type="number" step="1" min="1" max="30" data-ck-field="displayRefreshSec" value="${Number.isFinite(Number(r.displayRefreshSec)) ? Number(r.displayRefreshSec) : 3}" /></label>
-            <label class="nw-config-field"><span class="nw-config-label">Layout</span><select class="nw-config-input" data-ck-field="layoutMode"><option value="auto" ${String(r.layoutMode || 'auto') === 'auto' ? 'selected' : ''}>Auto</option><option value="single" ${String(r.layoutMode || '') === 'single' ? 'selected' : ''}>1 Connector groß</option><option value="dual" ${String(r.layoutMode || '') === 'dual' ? 'selected' : ''}>2 Connectoren</option><option value="quad" ${String(r.layoutMode || '') === 'quad' ? 'selected' : ''}>4 Connectoren</option></select></label>
+            <label class="nw-config-field"><span class="nw-config-label">Layout</span><select class="nw-config-input" data-ck-field="layoutMode"><option value="auto" ${String(r.layoutMode || 'auto') === 'auto' ? 'selected' : ''}>Auto</option><option value="single" ${String(r.layoutMode || '') === 'single' ? 'selected' : ''}>1 Connector groß</option><option value="dual" ${String(r.layoutMode || '') === 'dual' ? 'selected' : ''}>2 Connectoren</option><option value="quad" ${String(r.layoutMode || '') === 'quad' ? 'selected' : ''}>3–4 Connectoren</option><option value="compact" ${String(r.layoutMode || '') === 'compact' ? 'selected' : ''}>5+ Connectoren kompakt</option></select></label>
             <label class="nw-config-field"><span class="nw-config-label">Sprachwahl am Display</span><select class="nw-config-input" data-ck-field="showLanguageSwitch"><option value="false" ${r.showLanguageSwitch === true ? '' : 'selected'}>Aus</option><option value="true" ${r.showLanguageSwitch === true ? 'selected' : ''}>DE/NL/EN anzeigen</option></select></label>
           </div>
           <div class="nw-config-card__subtitle" style="margin-top:10px;">Display-URL: <code>${_chargeKioskHtmlEscape(url || 'Token erzeugen und speichern')}</code></div>
@@ -2382,17 +2441,17 @@ function collectAiAdvisorConfigFromUI(base) {
     card.innerHTML = `
       <div class="nw-config-card__header">
         <div>
-          <div class="nw-config-card__title">EOS DC Station Display</div>
-          <div class="nw-config-card__subtitle">Separate Vollbildseite pro DC-Ladestation. Das Nutzerdisplay sieht nur die hier zugeordneten LPs.</div>
+          <div class="nw-config-card__title">EOS Ladestations-Display</div>
+          <div class="nw-config-card__subtitle">Separate Vollbildseite pro Station. Bei Stationsverknüpfung erscheinen automatisch alle Ladepunkte/Ports dieser Station.</div>
         </div>
       </div>
       <div class="nw-config-card__body">
         ${isEos ? '' : '<div class="nw-config-empty" style="text-align:left;margin-bottom:10px;">Diese Funktion ist EOS-only. In Home bleibt die normale EVCS-Seite unverändert.</div>'}
         <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:10px;">
-          <label class="nw-config-field"><span class="nw-config-label">DC Station Display aktiv</span><select class="nw-config-input" id="chargeKioskEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select><small>Route: <code>/display/station/&lt;token&gt;</code></small></label>
+          <label class="nw-config-field"><span class="nw-config-label">Stationsdisplay aktiv</span><select class="nw-config-input" id="chargeKioskEnabled" ${isEos ? '' : 'disabled'}><option value="false">Aus</option><option value="true">An</option></select><small>Route: <code>/display/station/&lt;token&gt;</code></small></label>
         </div>
         <div id="chargeKioskStations">${rows || '<div class="nw-config-empty" style="text-align:left;">Noch keine Display-Station angelegt.</div>'}</div>
-        <div style="display:flex;justify-content:flex-end;margin-top:12px;"><button type="button" class="nw-btn" id="chargeKioskAddStation" ${isEos ? '' : 'disabled'}>DC-Station anlegen</button></div>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px;"><button type="button" class="nw-btn" id="chargeKioskAddStation" ${isEos ? '' : 'disabled'}>Stationsseite anlegen</button></div>
       </div>`;
 
     const enabledEl = card.querySelector('#chargeKioskEnabled');
@@ -2405,6 +2464,28 @@ function collectAiAdvisorConfigFromUI(base) {
         if (inp) inp.value = _chargeKioskToken();
       });
     });
+    const refreshChargeKioskAssignmentRow = (row) => {
+      if (!row) return;
+      const stationSelect = row.querySelector('[data-ck-field="stationKey"]');
+      const modeSelect = row.querySelector('[data-ck-field="assignmentMode"]');
+      const manualWrap = row.querySelector('[data-ck-manual-assignment]');
+      const preview = row.querySelector('[data-ck-auto-preview]');
+      const stationKey = stationSelect ? String(stationSelect.value || '').trim() : '';
+      const assignmentMode = modeSelect && modeSelect.value === 'manual' ? 'manual' : 'station';
+      const automatic = _chargeKioskAssignedForStation(stationKey);
+      if (manualWrap) manualWrap.hidden = assignmentMode !== 'manual';
+      if (preview) preview.textContent = automatic.length
+        ? _chargeKioskAssignedToText(automatic)
+        : (stationKey ? 'Keine aktiven Ports in dieser Station' : 'Bitte Station auswählen');
+    };
+    card.querySelectorAll('[data-charge-kiosk-station-row]').forEach((row) => {
+      const stationSelect = row.querySelector('[data-ck-field="stationKey"]');
+      const modeSelect = row.querySelector('[data-ck-field="assignmentMode"]');
+      if (stationSelect) stationSelect.addEventListener('change', () => refreshChargeKioskAssignmentRow(row));
+      if (modeSelect) modeSelect.addEventListener('change', () => refreshChargeKioskAssignmentRow(row));
+      refreshChargeKioskAssignmentRow(row);
+    });
+
     card.querySelectorAll('[data-ck-delete]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const row = btn.closest('[data-charge-kiosk-station-row]');
@@ -2416,7 +2497,30 @@ function collectAiAdvisorConfigFromUI(base) {
       currentConfig.chargeKiosk = currentConfig.chargeKiosk || {};
       const list = Array.isArray(currentConfig.chargeKiosk.stations) ? currentConfig.chargeKiosk.stations.slice() : [];
       const next = list.length + 1;
-      list.push({ id: `dc_station_${next}`, name: `DC Ladestation ${next}`, type: 'dc', token: _chargeKioskToken(), enabled: true, assignedChargepoints: [`lp${next}`], allowedModes: ['solar','fast'], showPrice: true, showSolarShare: true, allowStartStop: true, maintenanceMode: false, watchdogTimeoutSec: 45, displayRefreshSec: 3, layoutMode: 'auto', showLanguageSwitch: false, controlBridge: 'charging-management', protocolHint: 'manufacturer-open' });
+      const usedStationKeys = new Set(list.map((entry) => String(entry && entry.stationKey || '').trim()).filter(Boolean));
+      const catalog = _chargeKioskStationCatalog();
+      const linked = catalog.find((entry) => !usedStationKeys.has(entry.stationKey)) || null;
+      list.push({
+        id: linked ? linked.stationKey : `dc_station_${next}`,
+        name: linked ? (linked.name || linked.stationKey) : `DC Ladestation ${next}`,
+        type: 'dc',
+        token: _chargeKioskToken(),
+        enabled: true,
+        stationKey: linked ? linked.stationKey : '',
+        assignmentMode: linked ? 'station' : 'manual',
+        assignedChargepoints: linked ? linked.chargepoints.map((entry) => entry.lp) : [],
+        allowedModes: ['solar','fast'],
+        showPrice: true,
+        showSolarShare: true,
+        allowStartStop: true,
+        maintenanceMode: false,
+        watchdogTimeoutSec: 45,
+        displayRefreshSec: 3,
+        layoutMode: 'auto',
+        showLanguageSwitch: false,
+        controlBridge: 'charging-management',
+        protocolHint: 'manufacturer-open'
+      });
       currentConfig.chargeKiosk.stations = list;
       try { initInstallerBackLink(); } catch (_e) {}
 
@@ -9931,8 +10035,16 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       const kw = (sc.evcsMaxPowerKw !== undefined && sc.evcsMaxPowerKw !== null) ? Number(sc.evcsMaxPowerKw) : 11;
       els.evcsMaxPowerKw.value = Number.isFinite(kw) ? String(kw) : '11';
     }
-
     const list = _ensureEvcsList(count);
+    const activeCount = list.filter((row) => row && row.enabled !== false).length;
+    if (els.evcsGlobalStorageAssistCustomerAllowed) {
+      els.evcsGlobalStorageAssistCustomerAllowed.checked = sc.evcsGlobalStorageAssistCustomerAllowed === true && activeCount >= 2;
+      els.evcsGlobalStorageAssistCustomerAllowed.disabled = activeCount < 2;
+      els.evcsGlobalStorageAssistCustomerAllowed.title = activeCount < 2
+        ? 'Der globale Speicherschutz ist erst ab zwei aktiven Ladepunkten verfügbar.'
+        : 'Ein gemeinsamer Kundenschalter steuert den Speicherschutz aller aktiven Ladepunkte.';
+    }
+
     sc.stationGroups = Array.isArray(sc.stationGroups) ? sc.stationGroups : [];
 
     els.evcsList.innerHTML = '';
@@ -10456,9 +10568,14 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       const storageAssistAllowedInp = document.createElement('input');
       storageAssistAllowedInp.type = 'checkbox';
       storageAssistAllowedInp.className = 'nw-config-checkbox';
-      storageAssistAllowedInp.checked = !!(rowCfg && rowCfg.storageAssistCustomerAllowed === true);
+      const globalStorageAssistControl = sc.evcsGlobalStorageAssistCustomerAllowed === true && activeCount >= 2;
+      storageAssistAllowedInp.checked = globalStorageAssistControl || !!(rowCfg && rowCfg.storageAssistCustomerAllowed === true);
+      storageAssistAllowedInp.disabled = globalStorageAssistControl;
+      storageAssistAllowedInp.title = globalStorageAssistControl
+        ? 'Im Multi-Lademanagement zentral für alle Ladepunkte freigegeben.'
+        : 'Freigabe ausschließlich für diesen Ladepunkt.';
       storageAssistAllowedInp.addEventListener('change', () => _updateEvcsField(i, 'storageAssistCustomerAllowed', !!storageAssistAllowedInp.checked));
-      adv.appendChild(mkRow('Kunde darf Speicher-Mitnutzung bedienen', storageAssistAllowedInp));
+      adv.appendChild(mkRow(globalStorageAssistControl ? 'Speicher-Mitnutzung: global freigegeben' : 'Kunde darf Speicher-Mitnutzung bedienen', storageAssistAllowedInp));
 
       // Phasen
       const phasesSel = document.createElement('select');
@@ -10916,9 +11033,12 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       const kw = Number(els.evcsMaxPowerKw.value);
       out.evcsMaxPowerKw = Number.isFinite(kw) ? kw : (Number.isFinite(Number(out.evcsMaxPowerKw)) ? Number(out.evcsMaxPowerKw) : 11);
     }
-
     // evcsList is maintained live via _updateEvcsField. Still ensure correct length.
     out.evcsList = _ensureEvcsList(count);
+    if (els.evcsGlobalStorageAssistCustomerAllowed) {
+      const activeCount = out.evcsList.filter((row) => row && row.enabled !== false).length;
+      out.evcsGlobalStorageAssistCustomerAllowed = activeCount >= 2 && !!els.evcsGlobalStorageAssistCustomerAllowed.checked;
+    }
 
     // stationGroups maintained live
     out.stationGroups = Array.isArray(_ensureSettingsConfig().stationGroups) ? _ensureSettingsConfig().stationGroups : [];
@@ -12460,14 +12580,20 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       const modes = [];
       if (readCk(row, 'solar') !== 'false') modes.push('solar');
       if (readCk(row, 'fast') !== 'false') modes.push('fast');
+      const stationKey = readCk(row, 'stationKey');
+      const assignmentMode = readCk(row, 'assignmentMode') === 'manual' ? 'manual' : 'station';
+      const manualChargepoints = splitLpList(readCk(row, 'assignedChargepoints'));
+      const automaticChargepoints = stationKey ? _chargeKioskAssignedForStation(stationKey) : [];
       const out = {
-        id: readCk(row, 'id') || `dc_station_${idx + 1}`,
+        id: readCk(row, 'id') || stationKey || `dc_station_${idx + 1}`,
         name: readCk(row, 'name') || `DC Ladestation ${idx + 1}`,
         type: readCk(row, 'type') === 'ac' ? 'ac' : 'dc',
         token: readCk(row, 'token'),
         enabled: readCk(row, 'enabled') !== 'false',
         displayMode: 'station',
-        assignedChargepoints: splitLpList(readCk(row, 'assignedChargepoints')),
+        stationKey,
+        assignmentMode,
+        assignedChargepoints: assignmentMode === 'station' ? automaticChargepoints : manualChargepoints,
         allowedModes: modes.length ? modes : ['solar', 'fast'],
         showPrice: true,
         showSolarShare: true,
@@ -12475,7 +12601,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         maintenanceMode: readCk(row, 'maintenanceMode') === 'true',
         watchdogTimeoutSec: readCkInt(row, 'watchdogTimeoutSec', 45, 15, 600),
         displayRefreshSec: readCkInt(row, 'displayRefreshSec', 3, 1, 30),
-        layoutMode: ['single','dual','quad','auto'].includes(readCk(row, 'layoutMode')) ? readCk(row, 'layoutMode') : 'auto',
+        layoutMode: ['single','dual','quad','compact','auto'].includes(readCk(row, 'layoutMode')) ? readCk(row, 'layoutMode') : 'auto',
         showLanguageSwitch: readCk(row, 'showLanguageSwitch') === 'true',
         controlBridge: ['charging-management','ems-intent','generic','readonly'].includes(readCk(row, 'controlBridge')) ? readCk(row, 'controlBridge') : 'charging-management',
         commandStateId: readCk(row, 'commandStateId'),
@@ -15288,6 +15414,16 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       const sc = _ensureSettingsConfig();
       const kw = Number(els.evcsMaxPowerKw.value);
       sc.evcsMaxPowerKw = Number.isFinite(kw) ? kw : (Number.isFinite(Number(sc.evcsMaxPowerKw)) ? Number(sc.evcsMaxPowerKw) : 11);
+    });
+  }
+
+  if (els.evcsGlobalStorageAssistCustomerAllowed) {
+    els.evcsGlobalStorageAssistCustomerAllowed.addEventListener('change', () => {
+      const sc = _ensureSettingsConfig();
+      const count = _clampInt(sc.evcsCount, 0, _maxEvcsCount(), 0);
+      const activeCount = _ensureEvcsList(count).filter((row) => row && row.enabled !== false).length;
+      sc.evcsGlobalStorageAssistCustomerAllowed = activeCount >= 2 && !!els.evcsGlobalStorageAssistCustomerAllowed.checked;
+      buildEvcsUI();
     });
   }
 

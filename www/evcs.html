@@ -69,7 +69,19 @@
       <h2>Lademanagement</h2>
       <p class="nw-page-hero__subtitle">Ladepunkte, RFID-Sessions und Schnellsteuerung im neuen NexoWatt Design – auch touchfreundlich auf Smartphone und Tablet.</p>
     </div>
-    <div class="nw-page-hero__actions">
+    <div class="nw-page-hero__actions" style="display:flex;align-items:stretch;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+      <div id="evcsGlobalStorageAssist" class="hidden" style="min-width:min(100%,360px);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:10px 12px;background:rgba(255,255,255,.05);">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div>
+            <strong>Speicher für E-Mobilität</strong>
+            <div id="evcsGlobalStorageAssistHint" class="muted" style="font-size:12px;margin-top:2px;">Gilt für alle aktiven Ladepunkte</div>
+          </div>
+          <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2" role="group" aria-label="Globaler Speicherschutz">
+            <button type="button" data-global-storage-assist="false">Schützen</button>
+            <button type="button" data-global-storage-assist="true">Mitnutzen</button>
+          </div>
+        </div>
+      </div>
       <a class="btn sm" href="evcs-report.html">EVCS Bericht</a>
     </div>
   </section>
