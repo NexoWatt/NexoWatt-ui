@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 45420a1c97f7d61694093b898eb1eec11d26ab3334ef34ff7e146a91e8fc49db
+ * Original-Hash: 2ca25868c77ea3083e1c839d99b93205b890ceeaeec198cc5988b60b32a0571a
  */
 
 /**
@@ -37,6 +37,8 @@ const path = require('path');
 const {
   normalizeEvcsOnlineFlag,
   normalizeEvcsStatusReachability,
+  isPersistentEvcsReadyStatus,
+  resolveEvcsStatusAgePolicy,
   classifyEvcsConnectorStatus,
   inferOcppConnectorNoFromObjectId,
   resolveAcceptedStorageAssistBudget,
@@ -72,6 +74,33 @@ const {
   const staleFault = classifyEvcsConnectorStatus('Faulted', false);
   assert.strictEqual(staleFault.faultActive, false);
   assert.strictEqual(staleFault.operationalBlocked, false);
+}
+
+// OCPP Available ist ein stabiler Bereitschaftszustand. Eventbasierte Adapter
+// duerfen den Zeitstempel bis zum naechsten Zustandswechsel unveraendert lassen,
+// ohne dass die Kundenansicht dadurch "Status veraltet" meldet.
+{
+  assert.strictEqual(isPersistentEvcsReadyStatus('Available'), true);
+  assert.strictEqual(isPersistentEvcsReadyStatus('Ready'), true);
+  assert.strictEqual(isPersistentEvcsReadyStatus('Idle'), true);
+  for (const transient of ['Preparing', 'Charging', 'SuspendedEV', 'Unavailable', 'Faulted', 'Offline']) {
+    assert.strictEqual(isPersistentEvcsReadyStatus(transient), false, `${transient} darf nicht zeitlos gueltig sein`);
+  }
+
+  const oldAvailable = resolveEvcsStatusAgePolicy('Available', 3922 * 60 * 1000, 300 * 1000);
+  assert.strictEqual(oldAvailable.ageExceeded, true);
+  assert.strictEqual(oldAvailable.persistentReady, true);
+  assert.strictEqual(oldAvailable.stale, false, 'Alter Available-State muss als stabile Bereitschaft gelten');
+
+  const oldCharging = resolveEvcsStatusAgePolicy('Charging', 10 * 60 * 1000, 300 * 1000);
+  assert.strictEqual(oldCharging.persistentReady, false);
+  assert.strictEqual(oldCharging.stale, true, 'Alter Charging-State muss weiterhin stale sein');
+
+  const oldFaulted = resolveEvcsStatusAgePolicy('Faulted', 10 * 60 * 1000, 300 * 1000);
+  assert.strictEqual(oldFaulted.stale, true, 'Alter Faulted-State darf nicht dauerhaft blockieren');
+
+  assert.strictEqual(resolveEvcsStatusAgePolicy('Charging', null, 300 * 1000).stale, true, 'Fehlendes Alter darf Charging nicht als frisch behandeln');
+  assert.strictEqual(resolveEvcsStatusAgePolicy('Available', null, 300 * 1000).stale, false, 'Available bleibt auch ohne zyklischen Zeitstempel ein stabiler Bereitschaftsstatus');
 }
 
 assert.strictEqual(inferOcppConnectorNoFromObjectId('ocpp.0.stationA.0.status'), 0);
@@ -147,6 +176,8 @@ assert(!/cx\.ids\.(statusId|enableWriteId|activeId)\s*=/.test(propagationBlock),
 assert(chargingSource.includes("await mk('unavailableActive'"), 'Unavailable-Diagnose-State fehlt');
 assert(chargingSource.includes("await mk('operationalBlocked'"), 'Operational-Block-State fehlt');
 assert(chargingSource.includes('const statusFresh = !!(statusId && !statusStale && !statusConnectorMismatch && !statusSharedAcrossConnectors'), 'Nur frischer connectorrichtiger Status darf wirken');
+assert(chargingSource.includes('const statusAgePolicy = resolveEvcsStatusAgePolicy(statusRawText, statusAgeRawMs, wbStatusStaleTimeoutMs);'), 'Zentrale Altersregel fuer EVCS-Status fehlt');
+assert(chargingSource.includes('const statusStale = !!(statusId && statusAgePolicy.stale);'), 'Persistentes Available darf nicht pauschal stale werden');
 assert(!chargingSource.includes("status: 'failsafe_stale_meter', active: true, budgetW: 0, usedW: 0, remainingW: 0"), 'Mode-off darf keinen falschen Failsafe-Shadow veröffentlichen');
 
 assert(frontendSource.includes('statusEffective'), 'EVCS-UI muss den bestätigten Status lesen');

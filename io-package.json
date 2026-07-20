@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.130",
+    "version": "0.8.131",
     "news": {
+      "0.8.131": {
+        "de": "Version 0.8.131 RC7: OCPP-/Wallbox-Bereitschaftszustände Available, Ready und Idle bleiben auch bei unverändertem, altem Zeitstempel gültig. Ereignisbasierte Adapter müssen einen ruhenden Bereitschaftsstatus nicht zyklisch neu schreiben; die EVCS-Ansicht zeigt deshalb nicht mehr irreführend „Status veraltet“. Transiente und sicherheitsrelevante Zustände wie Charging, Preparing, Faulted, Unavailable und Offline bleiben weiterhin freshness-pflichtig. Es wurden keine zusätzlichen Karten oder sichtbaren Diagnosezeilen ergänzt.",
+        "en": "Version 0.8.131 RC7: OCPP/wallbox ready states Available, Ready and Idle remain valid even when their unchanged timestamp is old. Event-driven adapters do not need to rewrite an idle readiness state periodically, so the EVCS view no longer shows a misleading “status stale” warning. Transient and safety-relevant states such as Charging, Preparing, Faulted, Unavailable and Offline still require freshness. No additional cards or visible diagnostic rows were added."
+      },
       "0.8.130": {
         "de": "Version 0.8.130 RC6: Die Speicher-NVP-Regelung behandelt langsame und asynchrone Telemetrie jetzt mit getrenntem Messwert- und Kommandoanker. Derselbe NVP-Fehler wird bei unverändertem Speicher-Istwert nicht mehr zyklisch aufaddiert; der Sungrow-Feldfall bleibt bei 2.476 W statt auf 4.476 W hochzulaufen. Materielle akzeptierte Sollwertänderungen starten das adaptive Reaktionsfenster neu. Die AppCenter-Statusseite bleibt kompakt; zusätzliche Details stehen nur in JSON-Diagnose und Stabilitätslog.",
         "en": "Version 0.8.130 RC6: Storage NVP control now handles slow and asynchronous telemetry with separate measurement and command anchors. The same NVP error is no longer added repeatedly while the measured storage power is unchanged; the Sungrow field case remains at 2,476 W instead of rising to 4,476 W. Material accepted target changes restart the adaptive response window. The AppCenter status page stays compact; additional details are available only in JSON diagnostics and the stability log."
@@ -26,10 +30,6 @@
       "0.8.125": {
         "de": "Version 0.8.125 RC1: Erster begrenzter Stabilisierungsfix. Lade-/Entlade-Richtungswechsel werden in Einzel-Speicher und Speicherfarm direkt ohne 0-W-Zwischenrunde geschrieben; die allgemeine Rampe darf dabei auch nicht mehr in der alten Richtung weiterfahren. 0 W bleibt echten Stop-, Warte- und Sicherheitszuständen vorbehalten. MultiUse-/Tarif-/Status-Abhängigkeiten sind noch nicht Teil dieses RC.",
         "en": "Version 0.8.125 RC1: First narrowly scoped stabilization fix. Charge/discharge direction changes are written directly for single storage and storage farms without a zero-watt intermediate cycle, and the general ramp may no longer continue in the old direction. Zero watts remains reserved for genuine stop, wait, and safety states. MultiUse/tariff/status dependency work is not part of this RC yet."
-      },
-      "0.8.124": {
-        "de": "Version 0.8.124: Stellt den herstellerunabhängigen AppCenter-Aktorvertrag wieder vollständig her. FENECON/OpenEMS-Sollwerte werden nach allen Gates zyklisch erneuert, Speicherfarm-Writes laufen spätestens sekündlich, alle Speicher-Ausgangsarten sind angebunden und Wallbox-Phasen-DPs erreichen wieder das Charging-Gate. Zusätzliche Regressionen sichern frei benannte Schreib-DPs aller Geräteklassen ab.",
-        "en": "Version 0.8.124: Fully restores the vendor-independent AppCenter actuator contract. FENECON/OpenEMS targets are refreshed cyclically after all gates, storage-farm writes run at least once per second, all storage output modes are connected, and wallbox phase datapoints reach the charging gate again. Additional regressions protect freely named write datapoints across device classes."
       }
     },
     "title": "NexoWatt UI",

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:249adf9eaa2539d36e92b57c4814b981beeee85d2528e01b62dfc0b4c6c20e14
+ * Quell-Hash: sha256:223bb6b607bbea7bbac00827cbc77605469890d4c75b183b8fa696ddef820edd
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1037,6 +1037,36 @@ function normalizeEvcsStatusToken(value) {
         .replace(/ü/g, 'ue')
         .replace(/ß/g, 'ss')
         .replace(/[^a-z0-9]+/g, '');
+}
+
+/**
+ * OCPP `Available` sowie die herstelleroffenen Synonyme `Ready` und `Idle`
+ * sind stabile Bereitschaftszustaende. Ereignisbasierte Adapter aktualisieren
+ * deren Zeitstempel oft erst beim naechsten Zustandswechsel. Ein hohes Alter
+ * allein darf deshalb weder die UI mit "Status veraltet" warnen noch den
+ * Ladepunkt als unbestaetigt behandeln.
+ *
+ * Transiente oder sicherheitsrelevante Stati wie Charging, Preparing,
+ * Unavailable, Faulted und Offline bleiben weiterhin freshness-pflichtig.
+ */
+function isPersistentEvcsReadyStatus(value) {
+    const token = normalizeEvcsStatusToken(value);
+    return token === 'available' || token === 'ready' || token === 'idle';
+}
+
+/** Zentrale Altersregel fuer connectorbezogene EVCS-Stati. */
+function resolveEvcsStatusAgePolicy(value, ageMs, maxAgeMs) {
+    const ageKnown = typeof ageMs === 'number' && Number.isFinite(ageMs) && ageMs >= 0;
+    const age = ageKnown ? ageMs : Number.NaN;
+    const limit = Math.max(1000, Number.isFinite(Number(maxAgeMs)) ? Number(maxAgeMs) : 1000);
+    const ageExceeded = !ageKnown || age > limit;
+    const persistentReady = isPersistentEvcsReadyStatus(value);
+    return {
+        ageMs: ageKnown ? Math.round(age) : 0,
+        ageExceeded,
+        persistentReady,
+        stale: ageExceeded && !persistentReady,
+    };
 }
 
 /**
@@ -4263,12 +4293,9 @@ class ChargingManagementModule extends BaseModule {
                 meterStale = !(Number.isFinite(age)) ? true : (age > wbMeterStaleTimeoutMs);
             }
 
-            let statusAgeMs = 0;
-            let statusStale = false;
+            let statusAgeRawMs = null;
             if (statusId && this.dp && typeof this.dp.getAgeMs === 'function') {
-                const age = this.dp.getAgeMs(`cm.wb.${safe}.st`);
-                statusAgeMs = (Number.isFinite(age) && age >= 0) ? Math.round(age) : 0;
-                statusStale = !(Number.isFinite(age)) ? true : (age > wbStatusStaleTimeoutMs);
+                statusAgeRawMs = this.dp.getAgeMs(`cm.wb.${safe}.st`);
             }
 
             const statusRawText = (() => {
@@ -4276,6 +4303,12 @@ class ChargingManagementModule extends BaseModule {
                 if (typeof statusRaw === 'string') return statusRaw.trim();
                 try { return JSON.stringify(statusRaw); } catch { return String(statusRaw); }
             })();
+            const statusAgePolicy = resolveEvcsStatusAgePolicy(statusRawText, statusAgeRawMs, wbStatusStaleTimeoutMs);
+            const statusAgeMs = statusAgePolicy.ageMs;
+            // `Available`/`Ready`/`Idle` bleiben als stabile Bereitschaft gueltig,
+            // auch wenn ein eventbasierter Adapter den unveraenderten State nicht
+            // zyklisch neu schreibt. Alle anderen Stati behalten den Timeout.
+            const statusStale = !!(statusId && statusAgePolicy.stale);
             const statusSourceConnectorNo = inferOcppConnectorNoFromObjectId(statusId);
             const statusConnectorMismatch = !!(
                 statusId
@@ -9271,6 +9304,8 @@ module.exports = {
     normalizeEvcsOnlineFlag,
     normalizeEvcsStatusReachability,
     normalizeEvcsStatusToken,
+    isPersistentEvcsReadyStatus,
+    resolveEvcsStatusAgePolicy,
     classifyEvcsConnectorStatus,
     inferOcppConnectorNoFromObjectId,
     resolveAcceptedStorageAssistBudget,

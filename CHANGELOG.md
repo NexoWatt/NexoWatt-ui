@@ -1,3 +1,12 @@
+## 0.8.131 - 2026-07-20
+
+- EVCS-Bereitschaftsstatus gehärtet: `Available`, `Ready` und `Idle` gelten als stabile, ereignisbasierte Ruhezustände. Ein unveränderter Zeitstempel darf diese Zustände nicht mehr als „Status veraltet“ markieren.
+- Transiente und sicherheitsrelevante Zustände bleiben unverändert freshness-pflichtig: unter anderem `Preparing`, `Charging`, `SuspendedEV`, `Faulted`, `Unavailable` und `Offline`. Alte Fehler- oder Ladezustände werden weiterhin nicht als aktuelle Wahrheit übernommen.
+- Die EVCS-Kundenansicht zeigt bei einem lange unveränderten `Available` wieder schlicht die Einsatzbereitschaft. Es wurden keine neuen Karten, Detailfelder oder sichtbaren Diagnosezeilen ergänzt; Alter und Rohquelle bleiben in den bestehenden Diagnose-States verfügbar.
+- Regression `test:evcs-status-hardening` erweitert: Der reale Feldfall mit einem 3922 Minuten alten `Available`-Status bleibt gültig, während gleich alte `Charging`- und `Faulted`-Werte weiterhin als stale gelten.
+- TypeScript-Migrationskontrolle: keine zusätzliche `@ts-nocheck`-Datei (weiterhin 58); der offen ausgewiesene Zeilenrahmen steigt für die zentrale EVCS-Altersregel von 142.740 auf 142.775 Zeilen.
+- Service-Worker-Cache auf `nexowatt-cache-v434` erhöht.
+
 ## 0.8.130 - 2026-07-19
 
 - EMS-Stabilisierungsbaustein 6 (RC6): Die NVP-Speicherregelung verwendet bei asynchroner oder langsamer Speichertelemetrie einen unveränderlichen echten Messwertanker und einen getrennten, erst nach akzeptiertem Hardware-Write aktivierten Kommandoanker. Derselbe NVP-Fehler kann dadurch bei unverändertem Speicher-Istwert nicht mehr in jedem Regelzyklus erneut auf den Sollwert addiert werden.
