@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.132",
+    "version": "0.8.133",
     "news": {
+      "0.8.133": {
+        "de": "Version 0.8.133 RC9: Der EVCS-Modus „Speicher schützen“ arbeitet jetzt asymmetrisch und physikalisch am NVP. Der Speicher darf weiterhin Haus-/sonstige Lasten ohne E-Mobilität ausgleichen, lädt aber nur bei echtem Gesamtüberschuss nach Gebäude und EVCS. Alte Lade- oder Entladebefehle werden bei wegfallender Grundlage mit einem echten 0-W-Stop beendet; Tarif-/Netzladeziele und Herstellerprofile können den Schutz nicht mehr umgehen. AppCenter-Status bleibt kompakt, Details stehen in den vorhandenen JSON- und Stabilitätslogs.",
+        "en": "Version 0.8.133 RC9: The EVCS “protect storage” mode now works asymmetrically and physically at the grid connection point. Storage may still cover building/other demand excluding e-mobility, but it may charge only from a real total surplus after building and EVCS demand. Previous charge or discharge commands are stopped with a real 0 W command when their basis disappears; tariff/grid-charging targets and vendor profiles can no longer bypass protection. AppCenter status stays compact, with details in the existing JSON and stability logs."
+      },
       "0.8.132": {
         "de": "Version 0.8.132 RC8: Das Multi-Lademanagement erhält nach Installerfreigabe im AppCenter einen gemeinsamen Kundenschalter „Speicher schützen / Speicher mitnutzen“ für alle aktiven Ladepunkte. Einzelne Ladepunkte können diesen globalen Zustand nicht widersprüchlich überschreiben. Separate Stationsseiten werden mit einer vorhandenen Ladeinfrastruktur-Station verknüpft und zeigen automatisch alle aktiven Connectoren dieser Station in responsiven Layouts; die normale EVCS-Seite bleibt die Übersicht über alle Ladepunkte.",
         "en": "Version 0.8.132 RC8: After installer approval in AppCenter, multi-charging management provides one shared customer control to protect or use stationary storage for all active chargepoints. Individual chargepoints cannot override that global state inconsistently. Separate station pages are linked to an existing charging-infrastructure station and automatically show all active connectors of that station in responsive layouts; the regular EVCS page remains the overview of all chargepoints."
@@ -26,10 +30,6 @@
       "0.8.127": {
         "de": "Version 0.8.127 RC3: Die Tarifansicht trennt Tarifabsicht, finalen Speicher-Sollwert, Gate-/Write-Ergebnis, Farm-Dispatch und Istwert-Rückmeldung. Laden oder Entladen wird nur noch bei frischem, vertrauenswürdigem Readback bestätigt; angeforderte, wartende, blockierte, fehlgeschlagene, teilweise erfüllte oder veraltete Zustände werden ausdrücklich ausgewiesen. Die exklusive Farm-/Einzel-Steuerhoheit, direkte Richtungswechsel und manuell zugeordnete AppCenter-DPs bleiben unverändert.",
         "en": "Version 0.8.127 RC3: The tariff view separates tariff intent, final storage target, gate/write result, farm dispatch and measured feedback. Charging or discharging is confirmed only with fresh trusted readback; requested, waiting, blocked, failed, partially delivered or stale states are shown explicitly. Exclusive farm/single-storage authority, direct direction changes and manually assigned AppCenter datapoints remain unchanged."
-      },
-      "0.8.126": {
-        "de": "Version 0.8.126 RC2: Eine zentrale Speicher-Steuerhoheit wählt exklusiv Einzel-Speicher oder Speicherfarm. MultiUse bleibt reine Policy und arbeitet mit beiden Topologien, ohne die Einzelregelung verdeckt zu aktivieren. Core-Budget, Tarif-SoC, EVCS, Thermik, BHKW/Generator, AI und Energiefluss verwenden dieselbe Topologie; manuelle AppCenter-DPs und alle Safety-Gates bleiben verbindlich. Richtungswechsel erfolgen weiterhin direkt ohne 0-W-Zwischenrunde.",
-        "en": "Version 0.8.126 RC2: A central storage authority exclusively selects either single storage or the storage farm. MultiUse remains policy-only and works with both topologies without secretly enabling the single-storage controller. Core budget, tariff SoC, EVCS, thermal control, prime movers, AI and energy flow use the same topology; manual AppCenter datapoints and all safety gates remain authoritative. Direction changes remain direct without an intermediate zero-watt cycle."
       }
     },
     "title": "NexoWatt UI",

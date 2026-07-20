@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: f36445529a0a0fe43151cef241d6d4736681e8ebc7b1243662ace739a4b63007
+ * Original-Hash: 93c2842ff5385c0d186afcf1f5980dd0a24cd9ea06d7b6a7da49972cc1e04434
  */
 
 /**
@@ -173,7 +173,7 @@ class FakeDp {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function makeAdapter({ runtimePolicy, stateProtectedLoadW = null } = {}) {
+function makeAdapter({ runtimePolicy, stateProtectedLoadW = null, storagePatch = {} } = {}) {
   const states = new Map();
   if (stateProtectedLoadW !== null) {
     states.set('chargingManagement.control.storageProtectedLoadW', { val: stateProtectedLoadW, ts: nowMs() });
@@ -199,6 +199,7 @@ function makeAdapter({ runtimePolicy, stateProtectedLoadW = null } = {}) {
         selfImportThresholdW: 50,
         selfMinSocPct: 20,
         selfMaxSocPct: 100,
+        ...storagePatch,
       },
     },
     _emsCaps: runtimePolicy ? {
@@ -232,16 +233,29 @@ function makeAdapter({ runtimePolicy, stateProtectedLoadW = null } = {}) {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-async function runStorageTick({ runtimePolicy, stateProtectedLoadW = null, lastTargetW = 0, lastSource = 'eigenverbrauch' }) {
-  // 4,2 kW Bezug entsprechen hier praktisch einer laufenden Wallbox. Bei normaler
-  // Eigenverbrauchsoptimierung soll der Speicher bis auf den 50-W-Zielbezug entladen.
-  const dp = new FakeDp({
-    'grid.powerW': entry(4200, 'grid.filtered'),
-    'grid.powerRawW': entry(4200, 'grid.raw'),
-    'st.socPct': entry(80, 'battery.soc'),
+async function runStorageTick({
+  runtimePolicy,
+  stateProtectedLoadW = null,
+  lastTargetW = 0,
+  lastSource = 'eigenverbrauch',
+  gridW = 4200,
+  battPowerW = null,
+  socPct = 80,
+  storagePatch = {},
+}) {
+  // 4,2 kW Bezug entsprechen im Basisszenario praktisch einer laufenden Wallbox.
+  // Fuer Baustein 7 koennen NVP und Speicher-Istleistung explizit gesetzt werden.
+  const entries = {
+    'grid.powerW': entry(gridW, 'grid.filtered'),
+    'grid.powerRawW': entry(gridW, 'grid.raw'),
+    'st.socPct': entry(socPct, 'battery.soc'),
     'st.targetPowerW': entry(0, 'battery.target'),
-  });
-  const adapter = makeAdapter({ runtimePolicy, stateProtectedLoadW });
+  };
+  if (battPowerW !== null && battPowerW !== undefined) {
+    entries['st.batteryPowerW'] = entry(battPowerW, 'battery.actualPower');
+  }
+  const dp = new FakeDp(entries);
+  const adapter = makeAdapter({ runtimePolicy, stateProtectedLoadW, storagePatch });
   const module = new SpeicherRegelungModule(adapter, dp);
   module._lastTargetW = lastTargetW;
   module._lastSource = lastSource;
@@ -250,6 +264,10 @@ async function runStorageTick({ runtimePolicy, stateProtectedLoadW = null, lastT
     targetW: dp.lastWrite(),
     source: adapter._testStates.get('speicher.regelung.evcsSpeicherSchutzQuelle')?.val,
     protectedLoadW: adapter._testStates.get('speicher.regelung.evcsSpeicherSchutzLastW')?.val,
+    protectionAction: adapter._testStates.get('speicher.regelung.evcsSpeicherSchutzAktion')?.val,
+    protectionJson: adapter._testStates.get('speicher.regelung.evcsSpeicherSchutzJson')?.val,
+    zeroAction: adapter._testStates.get('speicher.regelung.zeroWriteFirewallAction')?.val,
+    zeroExplicitStop: adapter._testStates.get('speicher.regelung.zeroWriteFirewallExplicitStop')?.val,
   };
 }
 
@@ -284,8 +302,104 @@ async function runStorageTick({ runtimePolicy, stateProtectedLoadW = null, lastT
       source: 'charging-runtime',
     },
     lastTargetW: 4100,
+    battPowerW: 4100,
+    gridW: 50,
   });
   assert.strictEqual(protectActiveTick.targetW, 0, 'explicit protect must stop a previously active discharge with one real 0-W command');
+
+
+  // Baustein 7 / Kundenfall 20.07.2026: Die Wallbox ist geschuetzt, am NVP
+  // besteht Netzbezug und der Speicher laedt noch aus einem alten Befehl. Ohne
+  // echten Gesamtueberschuss muss ein ausdruecklicher 0-W-Stop geschrieben werden.
+  const customerStop = await runStorageTick({
+    runtimePolicy: {
+      protectedLoadW: 3580,
+      protectedWallboxes: 4,
+      assistRequestedLoadW: 0,
+      source: 'charging-runtime-global-protect',
+    },
+    gridW: 3200,
+    battPowerW: -2300,
+    lastTargetW: -1869,
+    lastSource: 'pv',
+  });
+  assert.strictEqual(customerStop.targetW, 0, `Kundenfall muss laufende Netzladung stoppen, got ${customerStop.targetW} W`);
+  assert(String(customerStop.protectionAction || '').includes('stop') && String(customerStop.protectionAction || '').includes('charge'), `Kundenfall braucht eindeutigen Lade-Stop, action=${customerStop.protectionAction}`);
+  assert.strictEqual(customerStop.zeroExplicitStop, true, '0-W-Firewall muss den Schutzstop als explizit erkennen');
+  assert(String(customerStop.zeroAction || '').includes('write'), `0-W-Stop muss geschrieben werden, action=${customerStop.zeroAction}`);
+
+  // Der Hausverbrauch darf weiterhin durch den Speicher gedeckt werden; die
+  // geschuetzte EVCS-Leistung bleibt dagegen am NVP sichtbar.
+  const houseStart = await runStorageTick({
+    runtimePolicy: {
+      protectedLoadW: 3000,
+      protectedWallboxes: 1,
+      assistRequestedLoadW: 0,
+      source: 'charging-runtime-protect',
+    },
+    gridW: 5000,
+    battPowerW: 0,
+  });
+  assert.strictEqual(houseStart.targetW, 1950, `Hausdefizit ohne EVCS muss 1950 W Entladung ergeben, got ${houseStart.targetW}`);
+
+  const houseStable = await runStorageTick({
+    runtimePolicy: {
+      protectedLoadW: 3000,
+      protectedWallboxes: 1,
+      assistRequestedLoadW: 0,
+      source: 'charging-runtime-protect',
+    },
+    gridW: 3050,
+    battPowerW: 1950,
+    lastTargetW: 1950,
+  });
+  assert.strictEqual(houseStable.targetW, 1950, `laufender Hausausgleich darf nicht auf 0 W pulsen, got ${houseStable.targetW}`);
+
+  // Laden ist nur bei realem Gesamtexport zulaessig und bleibt im NVP-Zielband stabil.
+  const realSurplus = await runStorageTick({
+    runtimePolicy: {
+      protectedLoadW: 3000,
+      protectedWallboxes: 1,
+      assistRequestedLoadW: 0,
+      source: 'charging-runtime-protect',
+    },
+    gridW: -400,
+    battPowerW: 0,
+    lastSource: 'pv',
+  });
+  assert.strictEqual(realSurplus.targetW, -450, `realer Export muss ca. 450 W Ladung erlauben, got ${realSurplus.targetW}`);
+
+  const chargeStable = await runStorageTick({
+    runtimePolicy: {
+      protectedLoadW: 3000,
+      protectedWallboxes: 1,
+      assistRequestedLoadW: 0,
+      source: 'charging-runtime-protect',
+    },
+    gridW: 50,
+    battPowerW: -450,
+    lastTargetW: -450,
+    lastSource: 'pv',
+  });
+  assert.strictEqual(chargeStable.targetW, -450, `laufende PV-Ueberschussladung muss im Zielband stabil bleiben, got ${chargeStable.targetW}`);
+
+  // PV deckt Haus und EVCS bereits; ein noch laufender Entladebefehl darf
+  // nicht weiter Export erzeugen, nur weil die normale Regelung bereits einen
+  // (hier nicht erlaubten) Ladewechsel anfordern wuerde.
+  const stopOldDischarge = await runStorageTick({
+    runtimePolicy: {
+      protectedLoadW: 3580,
+      protectedWallboxes: 1,
+      assistRequestedLoadW: 0,
+      source: 'charging-runtime-protect',
+    },
+    gridW: -2250,
+    battPowerW: 2300,
+    lastTargetW: 2300,
+    lastSource: 'eigenverbrauch',
+  });
+  assert.strictEqual(stopOldDischarge.targetW, 0, `ueberfluessige Entladung muss mit 0 W gestoppt werden, got ${stopOldDischarge.targetW}`);
+  assert.strictEqual(stopOldDischarge.zeroExplicitStop, true, 'Entlade-Stop muss die 0-W-Firewall passieren');
 
   const assistTick = await runStorageTick({
     runtimePolicy: {
@@ -313,10 +427,15 @@ async function runStorageTick({ runtimePolicy, stateProtectedLoadW = null, lastT
   assert.strictEqual(stateFallbackProtect.targetW, null, 'state fallback without an active storage command must remain no-write');
   assert.strictEqual(stateFallbackProtect.source, 'state-fallback', 'fallback source diagnostic missing');
 
-  const stateFallbackActiveProtect = await runStorageTick({ stateProtectedLoadW: 4100, lastTargetW: 4100 });
+  const stateFallbackActiveProtect = await runStorageTick({
+    stateProtectedLoadW: 4100,
+    lastTargetW: 4100,
+    battPowerW: 4100,
+    gridW: 50,
+  });
   assert.strictEqual(stateFallbackActiveProtect.targetW, 0, 'state fallback must stop an actually active discharge for old runtimes');
 
-  console.log('[evcs-storage-policy-default-self-consumption] OK: normal, protect, assist and same-cycle stale-state handling are verified through the real storage tick.');
+  console.log('[evcs-storage-policy-default-self-consumption] OK: normal/protect/assist plus asymmetrischer Hauslast-, Ueberschuss- und 0-W-Schutzstop sind durch den realen Speicher-Tick verifiziert.');
 })().catch((err) => {
   console.error('[evcs-storage-policy-default-self-consumption] ERROR:', err && err.stack ? err.stack : err);
   process.exit(1);

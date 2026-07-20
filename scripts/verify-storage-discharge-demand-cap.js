@@ -35,7 +35,8 @@ for (const file of [
   must(file, 'WICHTIGER Feldfix 0.8.81: Abgeleitete Gebäudelasten', 'Tarif-Kommentar gegen Gebaeudelast-Cap');
   must(file, 'WICHTIGER Feldfix 0.8.81: Der letzte eigene Sollwert und derived.loadTotalW', 'Eigenverbrauch-Kommentar gegen Sollwert-/Gebaeudelast-Cap');
   must(file, '_buildActualAwareNvpBalance', 'gemeinsamer Istleistungs-NVP-Balancing-Helfer');
-  must(file, "baseSource = batteryFeedbackSource || 'battery-actual';", 'Balancing nutzt ausschließlich aufgelöstes physisches Batterie-Feedback als Istleistungsbasis');
+  must(file, "const effectiveBatteryPowerW = feedbackCandidateUsed", 'Balancing nutzt den aufgeloesten physischen/Async-Messanker als Istleistungsbasis');
+  must(file, "baseSource = asyncFeedback && asyncFeedback.active === true", 'Balancing diagnostiziert den getrennten Async-Kommandoanker');
   must(file, 'rawTargetW = baseW + correctionW;', 'Balancing addiert NVP-Differenz zur Istleistung');
     must(file, 'const measuredDemandCapW = Math.max(0, protectedTariffImportW + measuredDischargeNowW + protectedTariffMarginW);', 'Demand-Cap aus NVP plus echter Batterie-Istleistung und EVCS-Schutz');
   must(file, "'Tarif-NVP-Demand-Cap (konservativ ohne Batterie-Istleistung)'", 'Tarif-NVP-Cap Diagnose ohne Feedback');

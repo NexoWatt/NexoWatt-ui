@@ -147,7 +147,19 @@ function makeAdapter(extraConfig = {}, stateCache = {}) {
   };
 }
 
-async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, pvW = 0, loadW = 0, extraConfig = {}, emsBudget = null }) {
+async function runTick({
+  gridW,
+  gridRawW = gridW,
+  soc = 77,
+  battPowerW = null,
+  pvW = 0,
+  loadW = 0,
+  extraConfig = {},
+  emsBudget = null,
+  runtimePolicy = null,
+  lastTargetW = 0,
+  lastSource = 'sungrow-assist',
+}) {
   const entries = {
     'grid.powerW': makeEntry(gridW, 'grid.filtered'),
     'grid.powerRawW': makeEntry(gridRawW, 'grid.raw'),
@@ -168,7 +180,17 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, p
   const dp = new FakeDp(entries);
   const adapter = makeAdapter(extraConfig, stateCache);
   if (emsBudget) adapter._emsBudget = emsBudget;
+  if (runtimePolicy) {
+    adapter._emsCaps = {
+      evcsStoragePolicy: {
+        ...runtimePolicy,
+        ts: nowMs(),
+      },
+    };
+  }
   const mod = new SpeicherRegelungModule(adapter, dp);
+  mod._lastTargetW = lastTargetW;
+  mod._lastSource = lastSource;
   await mod.tick();
   return { dp, adapter, mod };
 }
@@ -267,6 +289,61 @@ function makePersistentSungrowScenario() {
   assert.strictEqual(pvCoveredImport.dp.lastWrite('st.run'), true, 'Sungrow NVP-Balancing muss Run/extern aktivieren');
   assert.strictEqual(pvCoveredImport.adapter._states.get('speicher.regelung.sungrowHybridPvDecktLast').val, true, 'Diagnose muss PV-deckt-Last anzeigen');
   assert.strictEqual(pvCoveredImport.adapter._states.get('speicher.regelung.sungrowHybridSchreibmodus').val, 'write-nvp-balance-charge', 'Schreibmodus muss NVP-Balancing Laden anzeigen');
+
+  // Baustein 7 / realer Sungrow-Kundenfall: Speicher-Schutz aktiv, EVCS laedt,
+  // NVP importiert und der Speicher folgt noch einem alten Ladebefehl. Der gemeinsame
+  // finale Schutzpfad muss beide Split-Sollwerte auf 0 setzen; kein Hersteller-Hold.
+  const protectedCustomer = await runTick({
+    gridW: 3200,
+    gridRawW: 3200,
+    pvW: 6400,
+    loadW: 7180,
+    battPowerW: -2300,
+    lastTargetW: -1869,
+    lastSource: 'sungrow-assist',
+    runtimePolicy: {
+      protectedLoadW: 3580,
+      protectedWallboxes: 4,
+      assistRequestedLoadW: 0,
+      source: 'charging-runtime-global-protect',
+    },
+  });
+  assert.strictEqual(protectedCustomer.dp.lastWrite('st.targetChargePowerW'), 0, 'Sungrow muss alte Ladung ohne Gesamtueberschuss explizit stoppen');
+  assert.strictEqual(protectedCustomer.dp.lastWrite('st.targetDischargePowerW'), 0, 'Sungrow-Schutzstop darf keine Gegenrichtung starten');
+  assert.strictEqual(protectedCustomer.adapter._states.get('speicher.regelung.zeroWriteFirewallExplicitStop').val, true, 'Sungrow-Kundenfall muss die 0-W-Firewall passieren');
+  assert(String(protectedCustomer.adapter._states.get('speicher.regelung.sungrowHybridSchreibmodus').val).includes('write-stop'), 'Sungrow-Diagnose muss echten EVCS-Schutzstop zeigen');
+
+  // Trotz geschuetzter Wallbox darf Sungrow den Haus-/sonstigen Bedarf ausgleichen.
+  const protectedHouse = await runTick({
+    gridW: 5000,
+    gridRawW: 5000,
+    pvW: 6400,
+    loadW: 11400,
+    battPowerW: 0,
+    runtimePolicy: {
+      protectedLoadW: 3000,
+      protectedWallboxes: 1,
+      assistRequestedLoadW: 0,
+      source: 'charging-runtime-protect',
+    },
+  });
+  assert.strictEqual(protectedHouse.dp.lastWrite('st.targetDischargePowerW'), 1950, 'Sungrow darf nur das 1,95-kW-Hausdefizit entladen');
+
+  // Nur realer Export darf unter Speicherschutz laden.
+  const protectedSurplus = await runTick({
+    gridW: -400,
+    gridRawW: -400,
+    pvW: 9000,
+    loadW: 8600,
+    battPowerW: 0,
+    runtimePolicy: {
+      protectedLoadW: 3000,
+      protectedWallboxes: 1,
+      assistRequestedLoadW: 0,
+      source: 'charging-runtime-protect',
+    },
+  });
+  assert.strictEqual(protectedSurplus.dp.lastWrite('st.targetChargePowerW'), 450, 'Sungrow darf nur den realen 450-W-Gesamtueberschuss laden');
 
   // Rest-Netzbezug trotz laufender Entladung: Ziel ist nicht nur der neue Import,
   // sondern aktuelle Batterie-Istentladung + aktuelle NVP-Abweichung.

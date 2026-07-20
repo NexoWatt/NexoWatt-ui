@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: bb352e06434e3323fcbab31f51fb692c9d3a31d127a548fc58cf303baa6fd792
+ * Original-Hash: 7c09103f597d6f59ceb94f5587882b6c816969119f4ecf59054cbfe91267d7f9
  */
 
 /**
@@ -78,7 +78,7 @@ for (const file of [
   must(file, 'let chargeDemandHardCapW = null;', 'Lade-Cap Laufzeitvariable');
   must(file, '0 W heißt dabei bewusst: diese Richtung jetzt stoppen.', '0-W-Stop-Kommentar');
   must(file, "'Tarif-Netzlade-Headroom-Cap'", 'Tarif-Netzlade-Cap');
-  must(file, 'const pvTargetImportW = selfTargetGridW + evcsStorageProtectedNvpTargetShiftW + extraBias;', 'PV-Cap beruecksichtigt den konfigurierten NVP-Zielbezug');
+  must(file, 'const pvTargetImportW = selfTargetGridW + extraBias;', 'PV-Cap nutzt das unverfaelschte NVP-Ziel ohne symmetrischen EVCS-Offset');
   must(file, 'const exportCtrlCapW = Math.max(0, currentChargeForBalancingW + exportCtrlW + pvTargetImportW);', 'PV-Cap nutzt laufende Ladung plus geglaetteten Exportwunsch');
   must(file, 'const exportRawCapW = exportRawW > 0', 'PV-Cap RAW-Export nutzt laufende Ladung plus aktuellen NVP-Export');
   must(file, 'const requestedChargeW = Math.max(0, -Number(pvBalance.targetW || 0));', 'PV-Ladewunsch stammt aus Istleistung plus NVP-Differenz');

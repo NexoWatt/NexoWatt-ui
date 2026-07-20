@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 6604ad2cd5c0cfdcd512765b75ab24a8551968d04d886cedc7b0d18c469db6a8
+ * Original-Hash: c767ec8b78411ede6e5862e5232e15e8c5fc7b7bd41cab3058804a4abf43a1ee
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:8118300ea64271985dce3a6d85836a6a78fad737dfc5487440b5deea3d7c3cf9
+ * Quell-Hash: sha256:024404aaf37f05558145f64d7d2ffe6cea58eb38cf6e6d8435eea3d7c38e3d03
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -78,6 +78,211 @@ const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness
 const { resolveSplitBatteryFeedback } = require('../services/storage-override-bridge');
 const { decideStorageZeroWrite } = require('../services/storage-zero-write-policy');
 const { estimateAsyncStorageFeedback } = require('../services/storage-async-feedback-anchor');
+
+/**
+ * EVCS-Speicherschutz als asymmetrische physikalische Schranke.
+ *
+ * Vorzeichen:
+ * - NVP +W = Netzbezug, -W = Einspeisung
+ * - Speicher +W = Entladen, -W = Laden
+ *
+ * Der geschuetzte EVCS-Anteil wird nur aus der Entladeanforderung entfernt.
+ * Laden bleibt ausschliesslich aus dem tatsaechlichen Gesamtueberschuss erlaubt.
+ * Dadurch kann der Speicher weiterhin den Hausverbrauch ausgleichen, versorgt aber
+ * weder die geschuetzte E-Mobilitaet noch laedt er parallel aus dem Netz.
+ */
+function resolveEvcsProtectedStorageTarget(input = {}) {
+/**
+ * Code-Teil: finite
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+    const finite = (v) => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
+    const requestedW = finite(input.requestedTargetW) ? Number(input.requestedTargetW) : 0;
+    const lastTargetW = finite(input.lastTargetW) ? Number(input.lastTargetW) : 0;
+    const protectedLoadW = Math.max(0, finite(input.protectedEvcsLoadW) ? Number(input.protectedEvcsLoadW) : 0);
+    const nvpW = finite(input.nvpW) ? Number(input.nvpW) : null;
+    const targetNvpW = finite(input.targetNvpW) ? Number(input.targetNvpW) : 0;
+    const storageActualKnown = finite(input.storageActualW);
+    const storageActualW = storageActualKnown ? Number(input.storageActualW) : 0;
+    const deadbandW = Math.max(0, finite(input.deadbandW) ? Number(input.deadbandW) : 50);
+    const activeThresholdW = deadbandW;
+    const actualChargeActive = storageActualKnown && storageActualW < -activeThresholdW;
+    const actualDischargeActive = storageActualKnown && storageActualW > activeThresholdW;
+
+    if (protectedLoadW <= 0) {
+        return {
+            active: false,
+            requestedW,
+            targetW: requestedW,
+            lastTargetW,
+            protectedLoadW: 0,
+            nvpW,
+            targetNvpW,
+            storageActualW: storageActualKnown ? storageActualW : null,
+            storageActualKnown,
+            totalDesiredW: null,
+            houseDesiredW: null,
+            chargeAllowanceW: null,
+            dischargeAllowanceW: null,
+            explicitStop: false,
+            chargeStop: false,
+            dischargeStop: false,
+            chargeFromSurplus: false,
+            action: 'inactive',
+            reason: '',
+        };
+    }
+
+    if (nvpW === null) {
+        const explicitStop = lastTargetW !== 0 || actualChargeActive || actualDischargeActive;
+        return {
+            active: true,
+            requestedW,
+            targetW: 0,
+            lastTargetW,
+            protectedLoadW,
+            nvpW: null,
+            targetNvpW,
+            storageActualW: storageActualKnown ? storageActualW : null,
+            storageActualKnown,
+            totalDesiredW: null,
+            houseDesiredW: null,
+            chargeAllowanceW: 0,
+            dischargeAllowanceW: 0,
+            explicitStop,
+            chargeStop: explicitStop && (lastTargetW < 0 || actualChargeActive),
+            dischargeStop: explicitStop && (lastTargetW > 0 || actualDischargeActive),
+            chargeFromSurplus: false,
+            action: explicitStop ? 'stop-missing-nvp' : 'idle-missing-nvp',
+            reason: 'EVCS-Speicherschutz: NVP-Messwert fehlt – Speicher sicher stoppen',
+        };
+    }
+
+    // Physikalische Last hinter dem NVP ohne Speicherwirkung:
+    // D = NVP + Speicher-Ist. Daraus entstehen zwei getrennte Ziele:
+    // - Gesamtziel: Laden nur bei echtem Gesamtueberschuss.
+    // - Hausziel: Entladen nur fuer den Anteil ohne geschuetzte EVCS-Leistung.
+    // Ohne frischen beziehungsweise vom Async-Feedback-Anker bestaetigten
+    // Speicher-Istwert darf ein alter Sollwert die EVCS-Last nicht als Hausbedarf
+    // erscheinen lassen. Fuer die Ladefreigabe wird ein alter positiver Entladebefehl
+    // jedoch konservativ beruecksichtigt, damit dessen Export nicht faelschlich als
+    // PV-Ueberschuss interpretiert und unmittelbar in Netzladen umgedreht wird.
+    const chargeBasisStorageW = storageActualKnown ? storageActualW : Math.max(0, lastTargetW);
+    const dischargeBasisStorageW = storageActualKnown ? storageActualW : 0;
+    const totalDesiredW = chargeBasisStorageW + nvpW - targetNvpW;
+    const houseDesiredW = dischargeBasisStorageW + nvpW - targetNvpW - protectedLoadW;
+    const chargeAllowanceW = Math.max(0, -totalDesiredW);
+    const dischargeAllowanceW = Math.max(0, houseDesiredW);
+    const actionThresholdW = activeThresholdW;
+
+    let targetW = requestedW;
+    let action = 'pass';
+    let chargeStop = false;
+    let dischargeStop = false;
+    let chargeFromSurplus = false;
+
+    const commandEpsilonW = 1;
+    const lastChargeCommandW = lastTargetW < -commandEpsilonW ? Math.abs(lastTargetW) : 0;
+    const lastDischargeCommandW = lastTargetW > commandEpsilonW ? lastTargetW : 0;
+
+    if (requestedW < 0) {
+        const allowedChargeW = chargeAllowanceW > actionThresholdW ? chargeAllowanceW : 0;
+        targetW = allowedChargeW > 0 ? -Math.min(Math.abs(requestedW), allowedChargeW) : 0;
+        chargeFromSurplus = targetW < 0;
+        // Ein nur intern berechneter, aber noch nie geschriebener Lade-Request braucht
+        // keinen 0-W-Write. Ein echter Stop ist nur bei aktivem letzten Kommando oder
+        // physisch sichtbarer Ladung erforderlich.
+        if (targetW === 0) {
+            chargeStop = lastChargeCommandW > 0 || actualChargeActive;
+            dischargeStop = lastDischargeCommandW > 0 || actualDischargeActive;
+        }
+        action = chargeStop
+            ? 'stop-charge-no-surplus'
+            : (dischargeStop
+                ? 'stop-discharge-before-blocked-charge'
+                : (targetW === 0
+                    ? 'suppress-charge-no-surplus'
+                    : (Math.abs(targetW - requestedW) > 0.5 ? 'cap-charge-to-surplus' : 'allow-charge-from-surplus')));
+    } else if (requestedW > 0) {
+        const allowedDischargeW = dischargeAllowanceW > actionThresholdW ? dischargeAllowanceW : 0;
+        targetW = allowedDischargeW > 0 ? Math.min(requestedW, allowedDischargeW) : 0;
+        if (targetW === 0) {
+            chargeStop = lastChargeCommandW > 0 || actualChargeActive;
+            dischargeStop = lastDischargeCommandW > 0 || actualDischargeActive;
+        }
+        action = dischargeStop
+            ? 'stop-discharge-evcs-only'
+            : (chargeStop
+                ? 'stop-charge-before-blocked-discharge'
+                : (targetW === 0
+                    ? 'suppress-discharge-evcs-only'
+                    : (Math.abs(targetW - requestedW) > 0.5 ? 'cap-discharge-to-house' : 'allow-house-discharge')));
+    } else if (lastChargeCommandW > 0) {
+        const allowedChargeW = chargeAllowanceW > actionThresholdW ? chargeAllowanceW : 0;
+        targetW = allowedChargeW > 0 ? -Math.min(lastChargeCommandW, allowedChargeW) : 0;
+        chargeFromSurplus = targetW < 0;
+        chargeStop = targetW === 0;
+        action = chargeStop
+            ? 'stop-held-charge-no-surplus'
+            : (Math.abs(targetW - lastTargetW) > 0.5 ? 'cap-held-charge-to-surplus' : 'hold-charge-from-surplus');
+    } else if (lastDischargeCommandW > 0) {
+        const allowedDischargeW = dischargeAllowanceW > actionThresholdW ? dischargeAllowanceW : 0;
+        targetW = allowedDischargeW > 0 ? Math.min(lastDischargeCommandW, allowedDischargeW) : 0;
+        dischargeStop = targetW === 0;
+        action = dischargeStop
+            ? 'stop-held-discharge-evcs-only'
+            : (Math.abs(targetW - lastTargetW) > 0.5 ? 'cap-held-discharge-to-house' : 'hold-house-discharge');
+    } else {
+        targetW = 0;
+        chargeStop = actualChargeActive && chargeAllowanceW <= actionThresholdW;
+        dischargeStop = actualDischargeActive && dischargeAllowanceW <= actionThresholdW;
+        if (chargeStop) action = 'stop-untracked-charge-no-surplus';
+        else if (dischargeStop) action = 'stop-untracked-discharge-evcs-only';
+        else action = 'idle-no-active-command';
+    }
+
+    const explicitStop = chargeStop || dischargeStop;
+    const reason = chargeStop
+        ? 'EVCS-Speicherschutz: Laden stoppen – kein tatsaechlicher Gesamtueberschuss am NVP'
+        : (dischargeStop
+            ? 'EVCS-Speicherschutz: Entladen stoppen – nur geschuetzte E-Mobilitaet verursacht den Bedarf'
+            : (targetW < 0
+                ? 'EVCS-Speicherschutz: Laden nur aus tatsaechlichem Gesamtueberschuss'
+                : (targetW > 0
+                    ? 'EVCS-Speicherschutz: Entladen nur fuer Haus-/sonstigen Verbrauch ohne E-Mobilitaet'
+                    : 'EVCS-Speicherschutz: Speicher wartet')));
+
+    return {
+        active: true,
+        requestedW,
+        targetW,
+        lastTargetW,
+        protectedLoadW,
+        nvpW,
+        targetNvpW,
+        storageActualW: storageActualKnown ? storageActualW : null,
+        storageActualKnown,
+        chargeBasisStorageW,
+        dischargeBasisStorageW,
+        totalDesiredW,
+        houseDesiredW,
+        chargeAllowanceW,
+        dischargeAllowanceW,
+        explicitStop,
+        chargeStop,
+        dischargeStop,
+        chargeFromSurplus,
+        action,
+        reason,
+    };
+}
 
 
 /**
@@ -1254,11 +1459,13 @@ class SpeicherRegelungModule extends BaseModule {
         // die Werte erneut auseinanderziehen und sichtbares Springen erzeugen.
         let storageNvpBalanceDiag = null;
         let storageNvpBalanceRampManaged = false;
-        // Wird ein vorher aktiver Entladebefehl durch einen expliziten
-        // EVCS-Speicherschutz vollstaendig unnoetig, ist 0 W ein echter
-        // Policy-Stop. Der Marker verhindert, dass die allgemeine NVP-Hold-
-        // Logik den alten Entladewert im neuen, verschobenen Zielband behaelt.
+        // Finale asymmetrische EVCS-Schutzmarker. 0 W ist nur dann ein
+        // ausdruecklicher Policy-Stop, wenn eine zuvor aktive Lade-/Entladerichtung
+        // wegen fehlendem Gesamtueberschuss bzw. reinem EVCS-Bedarf beendet werden muss.
+        let evcsProtectedChargeStop = false;
         let evcsProtectedDischargeStop = false;
+        let evcsProtectionChargeFromSurplus = false;
+        let evcsProtectionDiag = null;
 
         // Zentrales PV-Budget fuer die gemeinsame Verteilung zwischen EVCS,
         // Speicher und nachgelagerten Verbrauchern. Das Lademanagement laeuft
@@ -1439,12 +1646,12 @@ class SpeicherRegelungModule extends BaseModule {
 
         // EVCS-Speicher-Schutz:
         // Die Wallbox-Steuerung veroeffentlicht die aktuelle Ladeleistung der Ladepunkte,
-        // bei denen "Speicher schuetzen" aktiv ist. Diese Leistung darf von der
-        // Speicher-Eigenverbrauchsoptimierung nicht am NVP weggeregelt werden. Wir
-        // verschieben deshalb das NVP-Ziel herstellerneutral um diese EVCS-Leistung.
-        // Dadurch greift der Schutz auch bei Sungrow/FENECON/E3DC-Herstellerprofilen
-        // und bei getrennten Lade-/Entlade-Sollwerten, weil die Korrektur vor dem
-        // jeweiligen Hersteller-Schreibpfad erfolgt.
+        // bei denen "Speicher schuetzen" aktiv ist. Diese Leistung darf nicht aus dem
+        // stationaeren Speicher versorgt werden. Das normale NVP-Ziel bleibt unveraendert:
+        // - Entladen wird spaeter auf Haus-/sonstigen Bedarf ohne EVCS begrenzt.
+        // - Laden bleibt nur aus einem realen Gesamtueberschuss am NVP erlaubt.
+        // Die finale Schranke liegt nach allen Herstellerprofilen und wirkt deshalb
+        // identisch fuer Sungrow, FENECON, E3/DC, Signed- und Split-Sollwerte.
         const protectedEvcsMaxAgeMs = Math.max(staleMs * 3, 60000);
         const sharedCaps = (this.adapter && this.adapter._emsCaps && typeof this.adapter._emsCaps === 'object') ? this.adapter._emsCaps : null;
         const runtimeEvcsStoragePolicy = (sharedCaps && sharedCaps.evcsStoragePolicy && typeof sharedCaps.evcsStoragePolicy === 'object') ? sharedCaps.evcsStoragePolicy : null;
@@ -1461,7 +1668,11 @@ class SpeicherRegelungModule extends BaseModule {
         const evcsStorageProtectedWallboxes = Math.max(0, Math.round(Number(protectedBoxesRaw) || 0));
         const evcsStorageAssistRequestedLoadW = Math.max(0, Number(assistRaw) || 0);
         const evcsStoragePolicySource = runtimePolicyFresh ? String(runtimeEvcsStoragePolicy.source || 'ems-runtime') : 'state-fallback';
-        const evcsStorageProtectedNvpTargetShiftW = evcsStorageProtectedLoadW;
+        // Seit Baustein 7 wird die EVCS-Leistung nicht mehr als symmetrischer
+        // NVP-Zieloffset verwendet. Ein solcher Offset erlaubte bei Teildeckung der
+        // Wallbox faelschlich Speicherladung aus dem Netz. Die Schutzwirkung wird
+        // spaeter asymmetrisch auf den finalen Sollwert angewendet.
+        const evcsStorageProtectedNvpTargetShiftW = 0;
         const importRawWithoutProtectedEvcsW = Math.max(0, importRawW - evcsStorageProtectedLoadW);
 
         await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzLastW', Math.round(evcsStorageProtectedLoadW));
@@ -1918,7 +2129,7 @@ if (typeof soc === 'number') {
             selfNvpBaseW,
             now,
             cfg,
-            selfTargetGridW + evcsStorageProtectedNvpTargetShiftW,
+            selfTargetGridW,
             selfImportThresholdW,
         );
         await this._setIfChanged('speicher.regelung.selfNvpRawW', Number.isFinite(Number(selfNvpStabilizer.rawW)) ? Math.round(Number(selfNvpStabilizer.rawW)) : null);
@@ -2538,7 +2749,7 @@ if (typeof soc === 'number') {
 						reason = 'Tarif: Entladen blockiert (SoC-Min erreicht)';
 						source = 'tarif';
 					} else {
-						const targetImportW = Math.max(0, num(cfg.tariffTargetGridImportW, selfTargetGridW) + evcsStorageProtectedNvpTargetShiftW);
+						const targetImportW = Math.max(0, num(cfg.tariffTargetGridImportW, selfTargetGridW));
 						const deadbandW = Math.max(0, num(cfg.tariffImportThresholdW, selfImportThresholdW));
 
 						// Tarif-Entladung regelt am NVP.
@@ -2692,7 +2903,7 @@ if (targetW === 0 && selfDischargeEnabled) {
             : ((battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW))
                 ? Math.max(0, battPowerW)
                 : 0);
-        const feneconTargetNvpW = selfTargetGridW + evcsStorageProtectedNvpTargetShiftW;
+        const feneconTargetNvpW = selfTargetGridW;
         const feneconErrW = (typeof feneconNvpW === 'number') ? (feneconNvpW - feneconTargetNvpW) : 0;
         const feneconLoadLimitW = acLoadW > 0
             ? acLoadW
@@ -2754,7 +2965,7 @@ if (targetW === 0 && selfDischargeEnabled) {
     // Sollwert-Spikes/Überschwinger erzeugt.
     // Stabilität kommt hier aus Deadband + Schrittweite/Rampe im Dispatcher.
     const nvpRawW = (typeof gridRawW === 'number') ? gridRawW : gridW;      // roh (Fallback)
-    const desiredNvpW = selfTargetGridW + evcsStorageProtectedNvpTargetShiftW; // kleiner Haus-Import plus geschuetzte EVCS-Last
+    const desiredNvpW = selfTargetGridW; // Laden folgt Gesamtueberschuss; EVCS-Schutz wirkt asymmetrisch im finalen Gate
     const deadbandW = Math.max(0, selfImportThresholdW); // Start-/Stop-Schwelle gegen Flattern
     const nvpCtrlW = (selfNvpStabilizer && typeof selfNvpStabilizer.controlW === 'number' && Number.isFinite(selfNvpStabilizer.controlW))
         ? selfNvpStabilizer.controlW
@@ -2811,22 +3022,9 @@ if (targetW === 0 && selfDischargeEnabled) {
         feedForwardPlausibilityW: balanceFeedForwardPlausibilityW,
         stepW,
     });
-    const nonProtectedImportForStopW = Math.max(0, Number(nvpRawW) - evcsStorageProtectedLoadW);
-    const previousOrActualDischargeW = Math.max(
-        0,
-        Number(lastBalanceW) || 0,
-        Number(balance.baseW) || 0,
-    );
-    evcsProtectedDischargeStop = evcsStorageProtectedLoadW > 0
-        && previousOrActualDischargeW > 0
-        && nonProtectedImportForStopW <= (selfTargetGridW + deadbandW);
-    if (evcsProtectedDischargeStop) {
-        balance.targetW = 0;
-        balance.rawTargetW = 0;
-        balance.holdingLastCommand = false;
-        balance.heldTargetW = 0;
-        balance.mode = 'evcs-protection-explicit-stop';
-    }
+    // Die asymmetrische EVCS-Schutzschranke wird nach allen Herstellerprofilen
+    // auf den finalen Sollwert angewendet. Dadurch bleibt laufender Hausausgleich
+    // stabil und wird nicht mehr durch eine vorzeitige 0-W-Entladepruefung gepulst.
     storageNvpBalanceDiag = { ...balance, policy: 'eigenverbrauch' };
     storageNvpBalanceRampManaged = storageNvpBalanceRampManaged || balance.rampManaged;
 
@@ -3004,7 +3202,7 @@ if (targetW === 0 && selfDischargeEnabled) {
                 // tatsächlich Export zeigt; bei RAW=0/Import darf er keinen Netzbezug
                 // in die Batterie ziehen.
                 const lastBalanceWForCharge = getLastStorageBalanceTargetW();
-                const pvTargetNvpW = selfTargetGridW + evcsStorageProtectedNvpTargetShiftW + extraBias;
+                const pvTargetNvpW = selfTargetGridW + extraBias;
                 const pvFeedForward = buildStorageFeedForward(pvTargetNvpW);
                 const pvBalance = this._buildActualAwareNvpBalance({
                     rawNvpW: nvpRawW,
@@ -3067,7 +3265,7 @@ if (targetW === 0 && selfDischargeEnabled) {
                 // Der RAW-Cap bleibt als harte Anschlussgrenze bestehen, damit ein
                 // alter Ladesollwert bei wegfallendem Export nicht nachlaufen kann.
                 const requestedChargeW = Math.max(0, -Number(pvBalance.targetW || 0));
-                const pvTargetImportW = selfTargetGridW + evcsStorageProtectedNvpTargetShiftW + extraBias;
+                const pvTargetImportW = selfTargetGridW + extraBias;
                 const exportCtrlCapW = Math.max(0, currentChargeForBalancingW + exportCtrlW + pvTargetImportW);
                 const exportRawCapW = exportRawW > 0
                     ? Math.max(0, currentChargeForBalancingW + exportRawW + pvTargetImportW)
@@ -3633,7 +3831,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         if (sungrowHybridActive) {
             const ctx = sungrowHybridCtx || {};
             const srcNorm = String(source || '').toLowerCase();
-            const targetImportW = Math.max(0, num(cfg.sungrowTargetGridImportW, selfTargetGridW) + evcsStorageProtectedNvpTargetShiftW);
+            const targetImportW = Math.max(0, num(cfg.sungrowTargetGridImportW, selfTargetGridW));
             const assistBufferW = Math.max(0, num(cfg.sungrowAssistBufferW, 150));
             const nvpDeadbandW = Math.max(0, Number(ctx.dischargeThresholdW) || selfImportThresholdW || 100);
             const nvpNowW = (typeof ctx.nvpW === 'number' && Number.isFinite(ctx.nvpW))
@@ -3899,6 +4097,123 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         }
 
         // ------------------------------------------------------------
+        // Finale asymmetrische EVCS-Speicherschutzschranke
+        // ------------------------------------------------------------
+        // "Speicher schuetzen" bedeutet:
+        // - Entladen nur fuer Haus-/sonstige Last ohne geschuetzte E-Mobilitaet.
+        // - Laden nur aus dem tatsaechlichen Gesamtueberschuss nach Haus UND EVCS.
+        // Die Schranke liegt nach allen Herstellerprofilen, damit Sungrow, FENECON,
+        // E3/DC, Signed-/Split-DP und Farm exakt dieselbe physikalische Regel erhalten.
+        if (evcsStorageProtectedLoadW > 0) {
+            const lastActiveTargetW = Number.isFinite(Number(this._lastTargetW))
+                ? Number(this._lastTargetW)
+                : 0;
+            const protectionNvpW = (typeof nvpRawW === 'number' && Number.isFinite(nvpRawW))
+                ? Number(nvpRawW)
+                : ((typeof gridW === 'number' && Number.isFinite(gridW)) ? Number(gridW) : null);
+            // Speicherschutz darf niemals ein Tarif-/Netzlade-Ziel als Ladefreigabe
+            // uebernehmen. Fuer die Frage "echter Gesamtueberschuss?" gilt immer das
+            // normale kleine Eigenverbrauchsziel am NVP.
+            const protectionTargetNvpW = Math.max(0, selfTargetGridW);
+            // Zum Freigeben von Speicherladung darf nur ein frischer physischer
+            // Istwert dienen. Ein ueber die Async-Haltezeit fortgeschriebener alter
+            // negativer Wert koennte sonst trotz fehlendem Export Netzladen erlauben.
+            // Bei fehlendem Feedback darf ein alter negativer Ladebefehl nie als
+            // Ueberschussnachweis dienen; positive Entladung verhindert nur konservativ Netzladen.
+            const feedbackHeldForProtection = !!(
+                (storageNvpBalanceDiag && storageNvpBalanceDiag.batteryFeedbackHeld === true)
+                || (storageBalanceFeedback && storageBalanceFeedback.held === true)
+            );
+            const diagActualW = storageNvpBalanceDiag
+                && storageNvpBalanceDiag.feedbackUsed === true
+                && !feedbackHeldForProtection
+                && Number.isFinite(Number(storageNvpBalanceDiag.actualBatteryW))
+                ? Number(storageNvpBalanceDiag.actualBatteryW)
+                : null;
+            const protectionStorageActualW = diagActualW !== null
+                ? diagActualW
+                : (!feedbackHeldForProtection && balanceBatteryTrusted && Number.isFinite(Number(balanceBatteryPowerW))
+                    ? Number(balanceBatteryPowerW)
+                    : (!feedbackHeldForProtection && battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW)
+                        ? Number(battPowerW)
+                        : null));
+
+            const requestedBeforeProtectionW = Number(targetW) || 0;
+            evcsProtectionDiag = resolveEvcsProtectedStorageTarget({
+                requestedTargetW: requestedBeforeProtectionW,
+                lastTargetW: lastActiveTargetW,
+                protectedEvcsLoadW: evcsStorageProtectedLoadW,
+                nvpW: protectionNvpW,
+                targetNvpW: protectionTargetNvpW,
+                storageActualW: protectionStorageActualW,
+                // Der Schutz verwendet das NVP-Toleranzband, nicht die Leistungsrampe.
+                // maxDelta/stepW kann mehrere hundert Watt betragen und wuerde sonst
+                // kleine, aber reale PV-Ueberschuesse unnoetig unterdruecken.
+                deadbandW: Math.max(20, selfImportThresholdW),
+            });
+            targetW = Number(evcsProtectionDiag.targetW) || 0;
+            evcsProtectedChargeStop = evcsProtectionDiag.chargeStop === true;
+            evcsProtectedDischargeStop = evcsProtectionDiag.dischargeStop === true;
+            evcsProtectionChargeFromSurplus = evcsProtectionDiag.chargeFromSurplus === true;
+
+            if (targetW < 0) {
+                // Unter Speicherschutz ist jede verbleibende Beladung physikalisch
+                // PV-/NVP-Ueberschussladung, auch wenn eine Tarif-/Reserve-Policy den
+                // urspruenglichen Wunsch erzeugt hat. So greifen PV-Budget und Diagnose
+                // korrekt und Netzladen bleibt ausgeschlossen.
+                source = 'pv';
+                reason = String(evcsProtectionDiag.reason || reason || 'EVCS-Speicherschutz: PV-Ueberschuss laden');
+                const capW = Math.max(0, -targetW);
+                chargeDemandHardCapW = (typeof chargeDemandHardCapW === 'number' && Number.isFinite(chargeDemandHardCapW))
+                    ? Math.min(Math.max(0, chargeDemandHardCapW), capW)
+                    : capW;
+                chargeDemandHardCapReason = 'EVCS-Speicherschutz: nur tatsaechlicher Gesamtueberschuss';
+            } else if (targetW > 0) {
+                reason = String(evcsProtectionDiag.reason || reason || 'EVCS-Speicherschutz: Hausverbrauch ausgleichen');
+                const capW = Math.max(0, targetW);
+                dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number' && Number.isFinite(dischargeDemandHardCapW))
+                    ? Math.min(Math.max(0, dischargeDemandHardCapW), capW)
+                    : capW;
+                dischargeDemandHardCapReason = 'EVCS-Speicherschutz: Entladung ohne E-Mobilitaet';
+            } else if (evcsProtectionDiag.explicitStop === true) {
+                source = 'evcs-protection';
+                reason = String(evcsProtectionDiag.reason || 'EVCS-Speicherschutz: Speicher stoppen');
+                if (evcsProtectedChargeStop) {
+                    chargeDemandHardCapW = 0;
+                    chargeDemandHardCapReason = 'EVCS-Speicherschutz: kein Gesamtueberschuss';
+                }
+                if (evcsProtectedDischargeStop) {
+                    dischargeDemandHardCapW = 0;
+                    dischargeDemandHardCapReason = 'EVCS-Speicherschutz: nur EVCS-Bedarf';
+                }
+                if (sungrowHybridActive) {
+                    sungrowNoWrite = false;
+                    sungrowWriteMode = 'write-stop-evcs-protection';
+                    this._sungrowHybridLastMode = sungrowWriteMode;
+                }
+            }
+
+            if (storageNvpBalanceDiag && typeof storageNvpBalanceDiag === 'object') {
+                storageNvpBalanceDiag = {
+                    ...storageNvpBalanceDiag,
+                    targetW,
+                    evcsProtection: evcsProtectionDiag,
+                    mode: evcsProtectionDiag.explicitStop === true
+                        ? `evcs-protection-${String(evcsProtectionDiag.action || 'stop')}`
+                        : String(storageNvpBalanceDiag.mode || ''),
+                };
+            }
+        }
+
+        await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzAktiv', evcsStorageProtectedLoadW > 0);
+        await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzAktion', evcsProtectionDiag ? String(evcsProtectionDiag.action || '') : 'inactive');
+        await this._setIfChanged('speicher.regelung.evcsSpeicherSchutzJson', JSON.stringify(evcsProtectionDiag || {
+            active: false,
+            protectedLoadW: Math.round(evcsStorageProtectedLoadW || 0),
+            targetW: Number(targetW) || 0,
+        }));
+
+        // ------------------------------------------------------------
         // Finaler zentraler PV-Budget-Cap NACH allen Herstellerprofilen
         // ------------------------------------------------------------
         // Sungrow berechnet seinen geschlossenen NVP-Sollwert erst nach dem
@@ -3975,7 +4290,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         try {
             const budgetRuntime = this.adapter && this.adapter._emsBudget;
             const sourceForBudget = policySourceBeforeVendor || String(source || '');
-            const gridChargeSource = isCentralGridChargeSource(sourceForBudget, targetW);
+            const gridChargeSource = !evcsProtectionChargeFromSurplus && isCentralGridChargeSource(sourceForBudget, targetW);
             if (!feneconNoWrite && !sungrowNoWrite && budgetRuntime && targetW < 0 && gridChargeSource) {
                 const requestedChargeW = Math.max(0, -Number(targetW));
                 const totalGrant = typeof budgetRuntime.getTotalGrant === 'function'
@@ -4066,7 +4381,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 ? Number(storageNvpBalanceDiag.nvpTargetW)
                 : (previousSource === 'tarif'
                     ? Math.max(0, num(cfg.tariffTargetGridImportW, selfTargetGridW))
-                    : Math.max(0, selfTargetGridW + evcsStorageProtectedNvpTargetShiftW));
+                    : Math.max(0, selfTargetGridW));
             const nvpDeadbandW = storageNvpBalanceDiag && Number.isFinite(Number(storageNvpBalanceDiag.deadbandW))
                 ? Math.max(20, Number(storageNvpBalanceDiag.deadbandW))
                 : Math.max(50, selfImportThresholdW, stepW);
@@ -4095,13 +4410,15 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             const chargeSocStop = lastActiveTargetW < 0
                 && typeof soc === 'number'
                 && soc >= hardChargeMaxSoc;
-            const explicitStopReason = evcsProtectedDischargeStop
-                ? 'Entladen stoppen: ausdruecklicher EVCS-Speicherschutz deckt den geschuetzten Ladeanteil aus'
-                : (dischargeSocStop
+            const explicitStopReason = evcsProtectedChargeStop
+                ? 'Laden stoppen: EVCS-Speicherschutz – kein tatsaechlicher Gesamtueberschuss am NVP'
+                : (evcsProtectedDischargeStop
+                    ? 'Entladen stoppen: EVCS-Speicherschutz – nur geschuetzte E-Mobilitaet verursacht den Bedarf'
+                    : (dischargeSocStop
                     ? `Entladen stoppen: SoC <= ${Math.max(hardDischargeMinSoc, selfMinSoc)}%`
                     : (chargeSocStop
                         ? `Laden stoppen: SoC >= ${hardChargeMaxSoc}%`
-                        : String(reason || '')));
+                        : String(reason || ''))));
             const explicitStop = sungrowUpstreamExplicitStop
                 || String(sungrowWriteMode || '').startsWith('write-stop-')
                 || source === 'aus'
@@ -4109,6 +4426,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 || reserveActive
                 || chargeDirectionStopped
                 || dischargeDirectionStopped
+                || evcsProtectedChargeStop
                 || evcsProtectedDischargeStop
                 || dischargeSocStop
                 || chargeSocStop;
@@ -4246,7 +4564,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         // werden. FENECON verwendet ebenfalls stets den externen, gegateten Pfad.
         try {
             const budgetRuntime = this.adapter && this.adapter._emsBudget;
-            const sourceForBudget = policySourceBeforeVendor || String(source || '');
+            const sourceForBudget = evcsProtectionChargeFromSurplus ? 'pv' : (policySourceBeforeVendor || String(source || ''));
             const pvSource = isCentralPvChargeSource(source, targetW)
                 || isCentralPvChargeSource(sourceForBudget, targetW);
             const gridChargeSource = isCentralGridChargeSource(sourceForBudget, targetW);
@@ -4402,7 +4720,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     storageProtectedLoadW: Math.round(evcsStorageProtectedLoadW || 0),
                     storageProtectedWallboxes: Math.round(evcsStorageProtectedWallboxes || 0),
                     storageAssistRequestedLoadW: Math.round(evcsStorageAssistRequestedLoadW || 0),
-                    nvpTargetOffsetW: Math.round(evcsStorageProtectedNvpTargetShiftW || 0),
+                    nvpTargetOffsetW: 0,
+                    protection: evcsProtectionDiag,
                 },
                 evPriority: evPriorityCaps ? {
                     active: !!(feneconAcMode && evPriorityCaps.active),
@@ -7546,7 +7865,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.evcsSpeicherSchutzLastW', 'EVCS-Leistung mit Speicher-Schutz (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.evcsSpeicherSchutzWallboxen', 'Wallboxen mit Speicher-Schutz', 'number', 'value', 0);
         await mk('speicher.regelung.evcsSpeicherMitnutzungLastW', 'EVCS-Leistung mit Speicher-Mitnutzung (W)', 'number', 'value.power', 0);
-        await mk('speicher.regelung.evcsSpeicherSchutzNvpZielOffsetW', 'NVP-Zieloffset durch EVCS-Speicher-Schutz (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.evcsSpeicherSchutzNvpZielOffsetW', 'Legacy NVP-Zieloffset durch EVCS-Speicher-Schutz (W, ab 0.8.133 immer 0)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.evcsSpeicherSchutzAktiv', 'Asymmetrischer EVCS-Speicherschutz aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.evcsSpeicherSchutzAktion', 'Asymmetrischer EVCS-Speicherschutz Aktion', 'string', 'text', '');
+        await mk('speicher.regelung.evcsSpeicherSchutzJson', 'Asymmetrischer EVCS-Speicherschutz Diagnose', 'string', 'json', '');
         await mk('speicher.regelung.evcsSpeicherSchutzQuelle', 'Quelle der EVCS-Speicher-Policy', 'string', 'text', '');
 
         // Sungrow-Hybrid-Diagnoseobjekte vor dem ersten zyklischen Schreiben anlegen.
@@ -7744,4 +8066,4 @@ function clamp(n, min, max) {
     return n;
 }
 
-module.exports = { SpeicherRegelungModule };
+module.exports = { SpeicherRegelungModule, resolveEvcsProtectedStorageTarget };

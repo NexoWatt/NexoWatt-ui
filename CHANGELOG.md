@@ -1,3 +1,15 @@
+## 0.8.133 - 2026-07-20
+
+- EVCS-Speicherschutz (Baustein 7) physikalisch asymmetrisch korrigiert: Geschützte Ladepunkte dürfen nicht aus dem stationären Speicher versorgt werden. Der Speicher entlädt weiterhin ausschließlich für Haus-/sonstige Lasten ohne E-Mobilität und lädt nur aus einem tatsächlich vorhandenen Gesamtüberschuss am Netzverknüpfungspunkt.
+- Der frühere symmetrische EVCS-NVP-Zieloffset ist neutralisiert. Dadurch kann eine teilweise durch PV versorgte Wallbox keinen künstlichen Lade-Headroom mehr erzeugen und weder Eigenverbrauchs-, Tarif- noch Herstellerlogik dürfen den Speicher parallel aus dem Netz laden.
+- Laufende falsche Richtungen werden sauber beendet: Eine alte Speicherladung wird bei fehlendem Gesamtüberschuss mit einem expliziten 0-W-Stop zurückgesetzt; eine nicht mehr benötigte Entladung wird ebenfalls gestoppt, wenn PV Gebäude und EVCS bereits deckt. Ohne aktiven vorherigen Speicherbefehl wird kein unnötiger 0-W-Write erzeugt.
+- Hausausgleich bleibt erhalten: Der erlaubte Entladeanteil wird aus NVP, bestätigter Speicher-Istleistung, kleinem NVP-Ziel und geschützter EVCS-Leistung berechnet. Fehlt bestätigtes Speicherfeedback, wird ein alter negativer Ladebefehl niemals als Überschussnachweis verwendet; ein positiver akzeptierter Entladebefehl fließt nur konservativ in die Überschussprüfung ein, damit eine noch nicht bestätigte Entladewirkung nicht unmittelbar als Freigabe zum Netzladen fehlgedeutet wird.
+- Die finale Schutzschranke liegt nach Sungrow-, FENECON- und E3/DC-Profilen und vor Budget, 0-W-Firewall und Hardwarewriter. Sie gilt damit identisch für Einzelspeicher, Speicherfarm, Signed- und getrennte Lade-/Entlade-DPs sowie alle frei im AppCenter zugeordneten Hardwareziele.
+- Keine Erweiterung der AppCenter-Statusseite. Die vorhandenen Diagnose-States und JSON-/Stabilitätslogs zeigen Schutzaktion, geschützte Last, erlaubte Lade-/Entladeleistung und Stopgrund.
+- Neue und erweiterte Regressionen prüfen den Kundenfall `NVP +3.200 W / Speicher -2.300 W / EVCS 3.580 W`, Hauslastausgleich, stabilen Überschussbetrieb, Tarif-Netzladeblockade, fehlendes Feedback, Richtungsstopp und die 0-W-Firewall.
+- TypeScript-Migrationskontrolle: keine zusätzliche `@ts-nocheck`-Datei (weiterhin 58); der offen ausgewiesene Zeilenrahmen steigt für die zentrale EVCS-Speicherschutzschranke und Regressionen von 143.115 auf 143.426 Zeilen.
+- Service-Worker-Cache auf `nexowatt-cache-v436` erhöht.
+
 ## 0.8.132 - 2026-07-20
 
 - Multi-Lademanagement: Neue installerfreigegebene globale Kundenbedienung „Speicher schützen / Speicher mitnutzen“ unter AppCenter → Ladepunkte. Bei mindestens zwei aktiven Ladepunkten setzt der Schalter auf der normalen EVCS-Seite den Speicherschutz konsistent für alle aktiven Ladepunkte; ohne Freigabehaken bleibt die bisherige Bedienung pro Ladepunkt erhalten.
