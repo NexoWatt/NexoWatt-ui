@@ -20,6 +20,7 @@ type RegistryLike = {
   getEntry: (key: string) => RegistryEntry;
   getNumber: (key: string, fallback: number | null) => number | null;
   getAgeMs: (key: string) => number | null;
+  getMeasurementTimestampMs?: (key: string) => number | null;
 };
 
 type StorageOverrideBridgeResult = {
@@ -34,6 +35,8 @@ type SplitBatteryFeedback = {
   trusted: boolean;
   observedW: number;
   ageMs: number | null;
+  sampleTs: number | null;
+  sampleKey: string;
   objectIds: string[];
   source: string;
   reason: string;
@@ -143,14 +146,34 @@ function resolveSplitBatteryFeedback(registry: RegistryLike | null | undefined, 
     registry.getEntry('st.targetDischargePowerW'),
   ].map(objectIdOf).filter(Boolean);
   const rows = [
-    { role: 'charge', entry: registry.getEntry('st.batteryChargePowerW'), value: registry.getNumber('st.batteryChargePowerW', null), ageMs: registry.getAgeMs('st.batteryChargePowerW') },
-    { role: 'discharge', entry: registry.getEntry('st.batteryDischargePowerW'), value: registry.getNumber('st.batteryDischargePowerW', null), ageMs: registry.getAgeMs('st.batteryDischargePowerW') },
+    {
+      key: 'st.batteryChargePowerW',
+      role: 'charge',
+      entry: registry.getEntry('st.batteryChargePowerW'),
+      value: registry.getNumber('st.batteryChargePowerW', null),
+      ageMs: registry.getAgeMs('st.batteryChargePowerW'),
+      sampleTs: typeof registry.getMeasurementTimestampMs === 'function'
+        ? registry.getMeasurementTimestampMs('st.batteryChargePowerW')
+        : null,
+    },
+    {
+      key: 'st.batteryDischargePowerW',
+      role: 'discharge',
+      entry: registry.getEntry('st.batteryDischargePowerW'),
+      value: registry.getNumber('st.batteryDischargePowerW', null),
+      ageMs: registry.getAgeMs('st.batteryDischargePowerW'),
+      sampleTs: typeof registry.getMeasurementTimestampMs === 'function'
+        ? registry.getMeasurementTimestampMs('st.batteryDischargePowerW')
+        : null,
+    },
   ];
 
   let chargeW = 0;
   let dischargeW = 0;
   let oldestAgeMs: number | null = null;
+  let newestSampleTs: number | null = null;
   const objectIds: string[] = [];
+  const sampleParts: string[] = [];
   for (const row of rows) {
     const objectId = objectIdOf(row.entry);
     if (!objectId || row.value === null || !Number.isFinite(Number(row.value))) continue;
@@ -161,6 +184,13 @@ function resolveSplitBatteryFeedback(registry: RegistryLike | null | undefined, 
     else dischargeW = magnitude;
     if (typeof row.ageMs === 'number' && Number.isFinite(row.ageMs)) {
       oldestAgeMs = oldestAgeMs === null ? row.ageMs : Math.max(oldestAgeMs, row.ageMs);
+    }
+    const rowSampleTs = Number(row.sampleTs);
+    if (Number.isFinite(rowSampleTs) && rowSampleTs > 0) {
+      newestSampleTs = newestSampleTs === null ? rowSampleTs : Math.max(newestSampleTs, rowSampleTs);
+      sampleParts.push(`${row.role}:${objectId}@${Math.round(rowSampleTs)}`);
+    } else {
+      sampleParts.push(`${row.role}:${objectId}@age:${Number.isFinite(Number(row.ageMs)) ? Math.round(Number(row.ageMs)) : 'unknown'}`);
     }
   }
   if (!objectIds.length) return null;
@@ -178,6 +208,8 @@ function resolveSplitBatteryFeedback(registry: RegistryLike | null | undefined, 
     trusted,
     observedW: dischargeW - chargeW,
     ageMs: oldestAgeMs,
+    sampleTs: newestSampleTs,
+    sampleKey: sampleParts.join('|'),
     objectIds,
     source: text(datapointConfig.batteryFeedbackSource) || 'single-storage-split',
     reason: trusted ? 'Split-Istleistung aus AppCenter/Einzel-Speicher' : 'Split-Istleistung vorhanden, aber veraltet',

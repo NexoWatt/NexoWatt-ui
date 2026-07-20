@@ -29,6 +29,11 @@ class FakeDp {
     this.writes = [];
   }
   getEntry(key) { return this.entries[key] || null; }
+  getMeasurementTimestampMs(key) {
+    const rec = this.entries[key];
+    return rec && typeof rec.ts === 'number' && Number.isFinite(rec.ts) ? rec.ts : null;
+  }
+
   getAgeMs(key) {
     const rec = this.entries[key];
     if (!rec || typeof rec.ts !== 'number') return null;
@@ -173,6 +178,76 @@ async function runTick({
     lastTargetW: 1000,
   });
   assert.strictEqual(Math.round(follow.targetW), 1000, '900 W Ist + 100 W Restfehler muss 1000 W ergeben');
+
+  // Kundenfall 19.07.2026 (Sungrow/asynchrone Telemetrie): Derselbe echte
+  // Batterie-Messwert darf bei unveraendertem NVP exakt einmal als Regelanker
+  // dienen. Der zuletzt geschriebene Sollwert darf nicht als neue Istleistung
+  // zurueckgefuehrt werden (2,48 -> 2,95 -> 3,43 -> 4,48 kW).
+  {
+    const anchorMod = new SpeicherRegelungModule(makeAdapter(), new FakeDp());
+    let now = 1_000_000;
+    let lastTargetW = 0;
+    let lastWriteMs = 0;
+    const runAnchorCycle = (nvpW, measuredW, measuredAgeMs) => {
+      const feedback = anchorMod._resolveBatteryBalanceFeedback({
+        nowMs: now,
+        measuredW,
+        measuredAgeMs,
+        mappingTrusted: true,
+        objectId: 'customer.sungrow.actualPowerW',
+        source: 'single-storage',
+        freshAgeMs: 8000,
+        holdAgeMs: 45000,
+        lastTargetW,
+        lastTargetWriteMs: lastWriteMs,
+        lastTargetAllowed: true,
+        maxPredictionDeltaW: 2000,
+        zeroToleranceW: 100,
+      });
+      const balance = anchorMod._buildActualAwareNvpBalance({
+        rawNvpW: nvpW,
+        fallbackNvpW: nvpW,
+        nvpAgeMs: 0,
+        targetNvpW: 50,
+        deadbandW: 30,
+        batteryPowerW: feedback.feedbackW,
+        batteryMeasuredW: feedback.measuredW,
+        batteryAgeMs: feedback.sampleAgeMs,
+        batteryPowerTrusted: true,
+        batteryFeedbackSource: feedback.source,
+        batteryFeedbackHeld: feedback.held,
+        batteryFeedbackPredicted: feedback.predicted,
+        batteryFeedbackPredictionDeltaW: feedback.predictionDeltaW,
+        lastTargetW,
+        lastTargetAllowed: true,
+        maxDischargeCorrectionW: 1000,
+        maxChargeCorrectionW: 1500,
+        feedbackMaxAgeMs: 45000,
+        nvpFeedbackMaxAgeMs: 8000,
+        stepW: 1,
+      });
+      lastTargetW = Math.round(balance.targetW);
+      lastWriteMs = now;
+      now += 1000;
+      return { feedback, balance };
+    };
+
+    for (let i = 0; i < 10; i += 1) {
+      const cycle = runAnchorCycle(526, 2000, i * 1000);
+      assert.strictEqual(Math.round(cycle.balance.targetW), 2476, `unveraenderter Kundenfall darf nicht hochintegrieren (Tick ${i + 1})`);
+      assert.strictEqual(cycle.feedback.feedbackW, 2000, 'der echte 2-kW-Messwert muss unveraenderlicher Regelanker bleiben');
+      assert.strictEqual(cycle.feedback.predicted, false, 'Sollwertprognose in die Batterie-Istleistung ist deaktiviert');
+    }
+
+    const changedNvp = runAnchorCycle(726, 2000, 10000);
+    assert.strictEqual(Math.round(changedNvp.balance.targetW), 2676, 'NVP-Aenderung muss absolut zum gleichen Messanker nachgefuehrt werden');
+    const changedNvpRepeat = runAnchorCycle(726, 2000, 11000);
+    assert.strictEqual(Math.round(changedNvpRepeat.balance.targetW), 2676, 'auch der neue NVP-Fehler darf nicht mehrfach addiert werden');
+
+    const newActual = runAnchorCycle(180, 2350, 0);
+    assert.strictEqual(Math.round(newActual.balance.targetW), 2480, 'erst ein neuer echter Istwert darf den Regelanker neu setzen');
+    assert.strictEqual(newActual.feedback.sampleUpdated, true, 'neuer Batterie-Zeitstempel muss als neuer Messanker erkannt werden');
+  }
 
   const stable = buildBalance(mod, {
     rawNvpW: 50,

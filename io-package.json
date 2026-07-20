@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.129",
+    "version": "0.8.130",
     "news": {
+      "0.8.130": {
+        "de": "Version 0.8.130 RC6: Die Speicher-NVP-Regelung behandelt langsame und asynchrone Telemetrie jetzt mit getrenntem Messwert- und Kommandoanker. Derselbe NVP-Fehler wird bei unverändertem Speicher-Istwert nicht mehr zyklisch aufaddiert; der Sungrow-Feldfall bleibt bei 2.476 W statt auf 4.476 W hochzulaufen. Materielle akzeptierte Sollwertänderungen starten das adaptive Reaktionsfenster neu. Die AppCenter-Statusseite bleibt kompakt; zusätzliche Details stehen nur in JSON-Diagnose und Stabilitätslog.",
+        "en": "Version 0.8.130 RC6: Storage NVP control now handles slow and asynchronous telemetry with separate measurement and command anchors. The same NVP error is no longer added repeatedly while the measured storage power is unchanged; the Sungrow field case remains at 2,476 W instead of rising to 4,476 W. Material accepted target changes restart the adaptive response window. The AppCenter status page stays compact; additional details are available only in JSON diagnostics and the stability log."
+      },
       "0.8.129": {
         "de": "Version 0.8.129 RC5: Farm-Dispatch, NVP-Koordinator und Tarifstatus rechnen nur noch mit tatsächlich akzeptierter Speicherleistung; teilweise oder fehlgeschlagene Writes bleiben sichtbar. Flexible Verbraucher und lokale Erzeuger melden erfolgreiche Same-Cycle-Leistungsänderungen, bevor die PV-/WR-Regelung den verbleibenden Export bearbeitet. EVCS trennt Fahrzeug-SoC vom stationären Speicher-SoC, verwendet nur bestätigte Speicherunterstützung und härtet OCPP-Status ab: Connector 0 liefert keinen Connectorstatus mehr, Faulted/Unavailable bleiben erreichbar aber gesperrt, und nur frische connectorrichtige Statuswerte dürfen blockieren.",
         "en": "Version 0.8.129 RC5: Farm dispatch, the NVP coordinator and tariff status now account only for storage power actually accepted by hardware; partial or failed writes remain explicit. Flexible loads and local generators report successful same-cycle power changes before PV/inverter control handles the remaining export. EVCS separates vehicle SoC from stationary-storage SoC, uses only confirmed storage assistance, and hardens OCPP status handling: connector 0 no longer supplies connector status, Faulted/Unavailable stay reachable but blocked, and only fresh connector-correct status may block."
@@ -26,10 +30,6 @@
       "0.8.124": {
         "de": "Version 0.8.124: Stellt den herstellerunabhängigen AppCenter-Aktorvertrag wieder vollständig her. FENECON/OpenEMS-Sollwerte werden nach allen Gates zyklisch erneuert, Speicherfarm-Writes laufen spätestens sekündlich, alle Speicher-Ausgangsarten sind angebunden und Wallbox-Phasen-DPs erreichen wieder das Charging-Gate. Zusätzliche Regressionen sichern frei benannte Schreib-DPs aller Geräteklassen ab.",
         "en": "Version 0.8.124: Fully restores the vendor-independent AppCenter actuator contract. FENECON/OpenEMS targets are refreshed cyclically after all gates, storage-farm writes run at least once per second, all storage output modes are connected, and wallbox phase datapoints reach the charging gate again. Additional regressions protect freely named write datapoints across device classes."
-      },
-      "0.8.123": {
-        "de": "Version 0.8.123: Stellt die manuell im AppCenter zugeordneten Speicher- und Speicherfarm-Datenpunkte nach der TypeScript-Umstellung wieder verbindlich her. AppCenter schlägt veraltete Runtime-Spiegel, reine Mess-Farmen blockieren keine Einzel-Sollwerte mehr, Legacy-Feldnamen werden sicher migriert und frei benannte Objektpfade bleiben zulässig.",
-        "en": "Version 0.8.123: Restores authoritative manually assigned AppCenter datapoints for single storage and storage farms after the TypeScript migration. AppCenter now overrides stale runtime mirrors, measurement-only farms no longer block single-storage targets, legacy fields migrate safely, and freely named object paths remain valid."
       }
     },
     "title": "NexoWatt UI",

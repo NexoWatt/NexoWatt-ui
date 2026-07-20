@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b0b347b7541aa7801daee7ada209e3a6bf03dd719b62fb7dd96bf3ab595b2183
+ * Original-Hash: a9cf06cb1a4dfdc5e2e63ba6d8516ce19c686e5bfe98238c4961bc9bd523f441
  */
 
 /**
@@ -303,6 +303,44 @@ class FakeAdapter {
 
   const module = new NvpCoordinatorModule(adapter, null, fakeGrid, () => true);
   await module.init();
+
+  // 11a) Reaktionszeit gehoert immer zum aktuell akzeptierten Befehl. Eine
+  // materielle Sollwertaenderung in derselben Richtung startet das Fenster neu.
+  // Gleichzeitig wird die Grace-Zeit aus der beobachteten Telemetrieperiode
+  // verlaengert, ohne das konfigurierte Maximum zu ueberschreiten.
+  {
+    const responseModule = new NvpCoordinatorModule(adapter, null, null, () => false);
+    const responseCfg = {
+      ...responseModule._config(),
+      responseGraceMs: 5000,
+      responseGraceMaxMs: 30000,
+      responseTelemetryFactor: 2.5,
+      responseTargetChangeW: 150,
+      responseDeadbandW: 150,
+      responseProgressW: 50,
+    };
+    const first = responseModule._responseState(100000, 'single', 1000, 0, 100000, true, responseCfg);
+    assert.strictEqual(first.ageMs, 0);
+    const aged = responseModule._responseState(104000, 'single', 1000, 0, 100000, true, responseCfg);
+    assert.strictEqual(aged.ageMs, 4000, 'unveraenderter Befehl muss sein Reaktionsalter behalten');
+
+    const changed = responseModule._responseState(104100, 'single', 1500, 0, 100000, true, responseCfg);
+    assert.strictEqual(changed.ageMs, 0, 'materielle Sollwertaenderung in gleicher Richtung muss das Reaktionsfenster neu starten');
+    assert.strictEqual(changed.responseTargetChanged, true);
+
+    const progressed = responseModule._responseState(105000, 'single', 1500, 200, 105000, true, responseCfg);
+    assert.strictEqual(progressed.progressDetected, true, 'neuer Istwert in Sollrichtung muss als Reaktion erkannt werden');
+    assert.strictEqual(progressed.telemetryIntervalMs, 5000, 'beobachtete Speicher-Telemetrieperiode muss gelernt werden');
+    assert(progressed.effectiveGraceMs >= 13000 && progressed.effectiveGraceMs <= 14000, `adaptive Grace erwartet, erhalten ${progressed.effectiveGraceMs}`);
+
+    const withinAdaptiveGrace = responseModule._responseState(111000, 'single', 1500, 200, 105000, true, responseCfg);
+    assert.strictEqual(withinAdaptiveGrace.ageMs, 6000);
+    assert(withinAdaptiveGrace.ageMs < withinAdaptiveGrace.effectiveGraceMs, '5-s-Telemetrie darf nach 6 s noch keinen Timeout erzeugen');
+
+    const afterAdaptiveGrace = responseModule._responseState(119000, 'single', 1500, 200, 105000, true, responseCfg);
+    assert(afterAdaptiveGrace.ageMs > afterAdaptiveGrace.effectiveGraceMs, 'nach Ablauf der adaptiven Grace muss ein echter Timeout moeglich sein');
+  }
+
   await module.tick();
 
   assert(postInput, 'PV-Nachregelung muss aufgerufen werden');

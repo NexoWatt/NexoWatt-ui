@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Regression 0.8.95: Herstellerunabhaengiger Speicher-Istwert-Puffer.
+ * Regression 0.8.130: Herstellerunabhaengiger Speicher-Istwert-Anker.
  *
  * Reale Speicher melden NVP und Batterie-Istleistung oft asynchron. Der Test
  * bildet deshalb einen 20 Sekunden alten Batterie-Istwert bei sekundenaktuellem
- * NVP ab und prueft, dass die Sollleistung nicht zwischen wenigen hundert Watt
- * und mehreren Kilowatt springt.
+ * NVP ab und prueft, dass derselbe Messwert nicht durch den zuletzt geschriebenen
+ * Sollwert hochintegriert wird. Ein unveraenderter NVP muss einen unveraenderten
+ * Sollwert ergeben. Eine NVP-Aenderung wird gegen den zuletzt akzeptierten
+ * Kommando-Anker genau einmal in erwartete Speicherreaktion und externe
+ * Last-/PV-Aenderung aufgeteilt.
  *
  * Abgedeckte Schreibpfade:
  * - Generic signed Sollwert
@@ -31,6 +34,11 @@ class MutableDp {
   }
 
   getEntry(key) { return this.entries[key] || null; }
+
+  getMeasurementTimestampMs(key) {
+    const rec = this.entries[key];
+    return rec && typeof rec.ts === 'number' && Number.isFinite(rec.ts) ? rec.ts : null;
+  }
 
   getAgeMs(key) {
     const rec = this.entries[key];
@@ -115,6 +123,8 @@ function makeAdapter({ profile = 'generic', farm = false } = {}) {
         vendorProfile: profile,
         staleTimeoutSec: 15,
         balanceFeedbackHoldSec: 45,
+        // Legacy-Konfiguration bleibt lesbar, wird seit 0.8.130 aber nicht mehr
+        // als Sollwert->Istwert-Rueckkopplung verwendet.
         balanceFeedbackPredictionSteps: 4,
         maxDeltaWPerTick: 500,
         pvMaxDeltaWPerTick: 500,
@@ -150,7 +160,20 @@ function makeAdapter({ profile = 'generic', farm = false } = {}) {
     },
     async applyStorageFarmTargetW(value, meta) {
       farmWrites.push({ value: Number(value), meta, ts: nowMs() });
-      return { applied: true, reason: 'test-farm' };
+      return {
+        applied: true,
+        commandEffective: true,
+        writeOk: true,
+        requestSatisfied: true,
+        partiallyAccepted: false,
+        requestedW: Number(value),
+        plannedDeliveredW: Number(value),
+        acceptedDeliveredW: Number(value),
+        failedW: 0,
+        unservedW: 0,
+        status: 'farm',
+        reason: 'test-farm',
+      };
     },
     _states: states,
     _farmWrites: farmWrites,
@@ -212,16 +235,8 @@ async function runPersistentDischargeProfile({ name, profile = 'generic', target
   const dp = makeDp({ targetMode, profile, includeActual: !farm });
   const mod = new SpeicherRegelungModule(adapter, dp);
 
-  if (process.env.DEBUG_STORAGE_ASYNC === '1') {
-    console.log(name, 'module refs', mod.adapter === adapter, mod.dp === dp, mod.adapter, mod.dp);
-    console.log(name, 'entries', dp.getEntry('st.batteryPowerW'), dp.getEntry('st.targetPowerW'), dp.getEntry('st.targetChargePowerW'), dp.getEntry('st.targetDischargePowerW'));
-  }
-
   await mod.tick();
   const first = getWrittenTarget({ profile, targetMode, dp, adapter });
-  if (process.env.DEBUG_STORAGE_ASYNC === '1') {
-    console.log(name, 'first', first, Object.fromEntries([...adapter._states.entries()].filter(([k]) => k.includes('balance') || k.includes('batteryPower')).map(([k,v]) => [k, v.val])));
-  }
   assert(first >= 8800 && first <= 9000, `${name}: erster Sollwert muss Ist 8,4 kW + begrenzte NVP-Korrektur sein: ${first}`);
 
   // Batterie-Istwert bleibt absichtlich 20 s alt. Nur der NVP wird aktualisiert.
@@ -229,18 +244,38 @@ async function runPersistentDischargeProfile({ name, profile = 'generic', target
   dp.setValue('grid.powerRawW', 300);
   await mod.tick();
   const second = getWrittenTarget({ profile, targetMode, dp, adapter });
-  assert(second >= 9000 && second <= 9300, `${name}: asynchroner Istwert darf Sollwert nicht auf 300 W abwerfen: ${second}`);
+  assert(second >= first && second <= (first + 300), `${name}: NVP-Bewegung darf den Sollwert nur einmal und begrenzt nachfuehren (${first} -> ${second})`);
+
+  // Derselbe reale Batterie-Messwert und derselbe NVP duerfen ueber beliebig
+  // viele EMS-Ticks keinen begrenzten Integrator bilden.
+  for (let i = 0; i < 8; i += 1) {
+    await mod.tick();
+    const repeated = getWrittenTarget({ profile, targetMode, dp, adapter });
+    assert.strictEqual(repeated, second, `${name}: unveraenderte Messwerte muessen den Sollwert halten (Tick ${i + 1})`);
+  }
 
   dp.setValue('grid.powerW', 50);
   dp.setValue('grid.powerRawW', 50);
   await mod.tick();
   const held = getWrittenTarget({ profile, targetMode, dp, adapter });
-  assert(held >= 9000, `${name}: im NVP-Zielband muss der aktive Nicht-Null-Sollwert gehalten werden: ${held}`);
+  assert(held >= 8400 && held <= second, `${name}: im NVP-Zielband muss ein plausibler Nicht-Null-Haltewert bestehen bleiben (${second} -> ${held})`);
+  for (let i = 0; i < 4; i += 1) {
+    await mod.tick();
+    assert.strictEqual(getWrittenTarget({ profile, targetMode, dp, adapter }), held, `${name}: Zielband-Haltewert muss stabil bleiben (Tick ${i + 1})`);
+  }
 
   const modeState = adapter._states.get('speicher.regelung.batteryPowerFeedbackMode');
-  assert(modeState && String(modeState.val).includes('battery-held'), `${name}: Diagnose muss gehaltenes Batterie-Feedback melden`);
+  assert(modeState && String(modeState.val).includes('battery-held-anchor'), `${name}: Diagnose muss den gehaltenen echten Messanker melden`);
   const predictedState = adapter._states.get('speicher.regelung.batteryPowerFeedbackPredicted');
-  assert(predictedState && predictedState.val === true, `${name}: begrenzte Sollwertprognose muss nach dem ersten Tick aktiv sein`);
+  assert(predictedState && predictedState.val === false, `${name}: Sollwert darf nicht als Batterie-Istleistung prognostiziert werden`);
+  const predictionDeltaState = adapter._states.get('speicher.regelung.batteryPowerFeedbackPredictionDeltaW');
+  assert(predictionDeltaState && predictionDeltaState.val === 0, `${name}: Legacy-Prognosedelta muss 0 W bleiben`);
+  const asyncAnchorState = adapter._states.get('speicher.regelung.balanceAsyncAnchorAktiv');
+  assert(asyncAnchorState && asyncAnchorState.val === true, `${name}: der akzeptierte Kommando-Anker muss fuer asynchrone Telemetrie aktiv sein`);
+  const asyncDiagState = adapter._states.get('speicher.regelung.balanceAsyncJson');
+  const asyncDiag = asyncDiagState ? JSON.parse(String(asyncDiagState.val || '{}')) : {};
+  assert(asyncDiag.active === true, `${name}: Async-Diagnose muss den aktiven Anker melden`);
+  assert(Math.abs(Number(asyncDiag.estimatedActualW) - Number(second)) <= 300, `${name}: geschaetzte Istleistung muss plausibel zum stabilen Sollwert bleiben`);
 
   if (profile === 'e3dc-rscp') {
     assert.strictEqual(dp.lastWrite('st.e3dcSetPowerMode'), 2, `${name}: E3/DC muss DISCHARGE-Modus schreiben`);
@@ -271,13 +306,18 @@ async function runChargeSequence() {
   dp.setValue('grid.powerRawW', -300);
   await mod.tick();
   const second = dp.lastWrite('st.targetPowerW');
-  assert(second <= -3600 && second >= -3900, `Generic Laden: asynchroner Istwert darf nicht auf -300 W abfallen: ${second}`);
+  assert(second <= -3700 && second >= -3800, `Generic Laden: erwartete Speicherreaktion plus verbleibender Export muss ca. -3,75 kW ergeben: ${second}`);
+
+  for (let i = 0; i < 8; i += 1) {
+    await mod.tick();
+    assert.strictEqual(dp.lastWrite('st.targetPowerW'), second, `Generic Laden: unveraenderte Messwerte duerfen nicht hochintegrieren (Tick ${i + 1})`);
+  }
 
   dp.setValue('grid.powerW', 50);
   dp.setValue('grid.powerRawW', 50);
   await mod.tick();
   const held = dp.lastWrite('st.targetPowerW');
-  assert(held <= -3600, `Generic Laden: im Zielband muss die laufende Beladung gehalten werden: ${held}`);
+  assert.strictEqual(held, second, `Generic Laden: im Zielband muss die laufende Beladung gehalten werden: ${held}`);
 }
 
 async function runNoFeedbackSafety() {
@@ -297,6 +337,70 @@ async function runNoFeedbackSafety() {
   assert(feedback && feedback.val === false, 'Ohne Batterie-Istwert muss der Feedback-Puffer inaktiv bleiben');
 }
 
+async function runExactSungrowCustomerCase() {
+  const adapter = makeAdapter({ profile: 'sungrow-hybrid', farm: false });
+  const sampleTs = nowMs() - 2000;
+  const dp = new MutableDp({
+    'grid.powerW': { val: 526, objectId: 'grid.filtered', ts: nowMs() },
+    'grid.powerRawW': { val: 526, objectId: 'grid.raw', ts: nowMs() },
+    'st.socPct': { val: 80, objectId: 'battery.soc', ts: nowMs() },
+    'st.batteryPowerW': { val: 2000, objectId: 'sungrow.actualPower', ts: sampleTs },
+    'st.targetChargePowerW': entry(0, 'sungrow.ctrl.chargePowerW'),
+    'st.targetDischargePowerW': entry(0, 'sungrow.ctrl.dischargePowerW'),
+    'st.run': entry(false, 'sungrow.ctrl.run'),
+  });
+  const mod = new SpeicherRegelungModule(adapter, dp);
+
+  const identicalTargets = [];
+  for (let i = 0; i < 10; i += 1) {
+    // NVP bleibt frisch, die Sungrow-Batterietelemetrie behaelt absichtlich exakt
+    // denselben Wert und Zeitstempel wie im Kundenfall.
+    dp.setValue('grid.powerW', 526);
+    dp.setValue('grid.powerRawW', 526);
+    dp.entries['st.batteryPowerW'].ts = sampleTs;
+    await mod.tick();
+    identicalTargets.push(dp.lastWrite('st.targetDischargePowerW'));
+    if (i === 0) {
+      const firstInterval = adapter._states.get('speicher.regelung.batteryPowerFeedbackSampleIntervalMs');
+      const firstCadence = adapter._states.get('speicher.regelung.batteryPowerFeedbackCadenceMs');
+      assert(firstInterval && firstInterval.val === null, 'Erstes Speicher-Sample darf kein kuenstliches Epoch-Intervall erzeugen');
+      assert(firstCadence && firstCadence.val === null, 'Erstes Speicher-Sample darf noch keine Telemetrieperiode vortaeuschen');
+    }
+  }
+  identicalTargets.forEach((value, index) => {
+    assert.strictEqual(value, 2476, `Sungrow Kundenfall: Tick ${index + 1} muss bei 2.476 W bleiben, erhalten ${value}`);
+  });
+  assert(Math.max(...identicalTargets) < 2500, `Sungrow Kundenfall darf niemals auf 4.476 W hochlaufen: ${identicalTargets.join(', ')}`);
+
+  // Eine echte neue Last am NVP wird genau einmal nachgefuehrt.
+  dp.setValue('grid.powerW', 726);
+  dp.setValue('grid.powerRawW', 726);
+  dp.entries['st.batteryPowerW'].ts = sampleTs;
+  await mod.tick();
+  assert.strictEqual(dp.lastWrite('st.targetDischargePowerW'), 2676, 'Sungrow Kundenfall: +200 W neue NVP-Last muss den akzeptierten Sollwert genau einmal auf 2.676 W anheben');
+  await mod.tick();
+  assert.strictEqual(dp.lastWrite('st.targetDischargePowerW'), 2676, 'Sungrow Kundenfall: unveraenderte Last darf den Sollwert nicht erneut anheben');
+
+  // Sinkt der NVP durch die erwartete Speicherreaktion auf das Ziel, bleibt der
+  // akzeptierte Sollwert bestehen, obwohl der echte Batterie-Istwert noch alt ist.
+  dp.setValue('grid.powerW', 50);
+  dp.setValue('grid.powerRawW', 50);
+  dp.entries['st.batteryPowerW'].ts = sampleTs;
+  await mod.tick();
+  assert.strictEqual(dp.lastWrite('st.targetDischargePowerW'), 2676, 'Sungrow Kundenfall: NVP-Reaktion darf den akzeptierten Sollwert nicht durch einen doppelten Generic-Cap zurueckpendeln lassen');
+
+  // Erst eine neue physische Speicherprobe setzt den Messanker neu.
+  dp.entries['st.batteryPowerW'] = { val: 2500, objectId: 'sungrow.actualPower', ts: nowMs() };
+  dp.setValue('grid.powerW', 180);
+  dp.setValue('grid.powerRawW', 180);
+  await mod.tick();
+  assert.strictEqual(dp.lastWrite('st.targetDischargePowerW'), 2630, 'Sungrow Kundenfall: neue Istprobe 2.500 W + 130 W NVP-Fehler muss 2.630 W ergeben');
+  const learnedInterval = adapter._states.get('speicher.regelung.batteryPowerFeedbackSampleIntervalMs');
+  const learnedCadence = adapter._states.get('speicher.regelung.batteryPowerFeedbackCadenceMs');
+  assert(learnedInterval && Number(learnedInterval.val) >= 1500, `Zweites reales Sample muss ein plausibles Intervall liefern: ${learnedInterval && learnedInterval.val}`);
+  assert(learnedCadence && Number(learnedCadence.val) >= 1500, `Zweites reales Sample muss die Telemetrieperiode anlernen: ${learnedCadence && learnedCadence.val}`);
+}
+
 (async () => {
   await runPersistentDischargeProfile({ name: 'Generic signed', profile: 'generic', targetMode: 'signed' });
   await runPersistentDischargeProfile({ name: 'Generic split', profile: 'generic', targetMode: 'split' });
@@ -304,9 +408,10 @@ async function runNoFeedbackSafety() {
   await runPersistentDischargeProfile({ name: 'E3/DC RSCP', profile: 'e3dc-rscp', targetMode: 'e3dc' });
   await runPersistentDischargeProfile({ name: 'Speicherfarm', profile: 'generic', targetMode: 'signed', farm: true });
   await runChargeSequence();
+  await runExactSungrowCustomerCase();
   await runNoFeedbackSafety();
 
-  console.log('[storage-async-feedback-all-profiles] OK: Asynchrone Batterie-/NVP-Telemetrie bleibt bei signed, split, Sungrow, E3/DC und Speicherfarm stabil; ohne echten Istwert bleibt der Hochintegrationsschutz aktiv.');
+  console.log('[storage-async-feedback-all-profiles] OK: Async-Telemetrie nutzt Mess- und Kommando-Anker ohne Sollwertintegration; Sungrow, signed, split, E3/DC und Farm bleiben stabil.');
 })().catch((err) => {
   console.error('[storage-async-feedback-all-profiles] ERROR:', err && err.stack ? err.stack : err);
   process.exit(1);

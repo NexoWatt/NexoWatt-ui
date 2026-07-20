@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/nvp-coordinator.ts
- * Quell-Hash: sha256:1f8628007e460c89cb7091080991c768bea469168b57660e41fd5da5f4cd585c
+ * Quell-Hash: sha256:958e40ce00a0816520a786dc86c220dff2e231e7498b438770eacb2b26a4a501
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -241,7 +241,11 @@ class NvpCoordinatorModule extends BaseModule {
         this.gridEnabledFn = typeof gridEnabledFn === 'function' ? gridEnabledFn : null;
         this._targetDirection = 0;
         this._responseSinceMs = 0;
+        this._responseTargetW = null;
+        this._responseTopology = '';
         this._lastActualW = null;
+        this._lastActualSampleTs = 0;
+        this._storageTelemetryIntervalMs = null;
         this._lastProgressMs = 0;
         this._lastLogMs = 0;
         this._lastLogSignature = '';
@@ -312,9 +316,14 @@ class NvpCoordinatorModule extends BaseModule {
             ? root.storageControl
             : (root.storage && typeof root.storage === 'object' ? root.storage : {});
         const staleSec = finiteOrNull(storage.staleTimeoutSec) ?? 30;
+        const responseGraceMs = clamp(Math.round((finiteOrNull(cfg.storageResponseGraceSec) ?? 10) * 1000), 0, 300000);
+        const responseDeadbandW = clamp(Math.round(finiteOrNull(cfg.storageResponseDeadbandW) ?? 150), 0, 10000);
         return {
-            responseGraceMs: clamp(Math.round((finiteOrNull(cfg.storageResponseGraceSec) ?? 5) * 1000), 0, 300000),
-            responseDeadbandW: clamp(Math.round(finiteOrNull(cfg.storageResponseDeadbandW) ?? 150), 0, 10000),
+            responseGraceMs,
+            responseGraceMaxMs: clamp(Math.round((finiteOrNull(cfg.storageResponseGraceMaxSec) ?? 30) * 1000), responseGraceMs, 300000),
+            responseTelemetryFactor: clamp(finiteOrNull(cfg.storageResponseTelemetryFactor) ?? 2.5, 1, 10),
+            responseTargetChangeW: clamp(Math.round(finiteOrNull(cfg.storageResponseTargetChangeW) ?? Math.max(50, responseDeadbandW)), 1, 10000),
+            responseDeadbandW,
             responseProgressW: clamp(Math.round(finiteOrNull(cfg.storageResponseProgressW) ?? 50), 10, 5000),
             actualMaxAgeMs: clamp(Math.round((finiteOrNull(cfg.storageActualMaxAgeSec) ?? staleSec) * 1000), 1000, 600000),
             nvpMaxAgeMs: clamp(Math.round((finiteOrNull(cfg.nvpMaxAgeSec) ?? Math.max(staleSec, 10)) * 1000), 1000, 600000),
@@ -338,35 +347,93 @@ class NvpCoordinatorModule extends BaseModule {
         }));
         return out;
     }
-    _responseAge(now, topology, targetW, actualW, writeAccepted, cfg) {
+    _responseState(now, topology, targetW, actualW, actualSampleTs, writeAccepted, cfg) {
         const direction = targetW === null ? 0 : (targetW > 0 ? 1 : (targetW < 0 ? -1 : 0));
         const pendingDelta = targetW !== null && actualW !== null ? targetW - actualW : 0;
         const pending = targetW !== null && actualW !== null && Math.abs(pendingDelta) > cfg.responseDeadbandW;
-        if (!writeAccepted || topology === 'none' || !pending) {
+        const sampleTs = actualSampleTs !== null && Number.isFinite(Number(actualSampleTs))
+            ? Math.max(0, Number(actualSampleTs))
+            : 0;
+        let actualSampleUpdated = false;
+        if (sampleTs > 0 && sampleTs > this._lastActualSampleTs + 25) {
+            if (this._lastActualSampleTs > 0) {
+                const intervalMs = sampleTs - this._lastActualSampleTs;
+                if (intervalMs >= 250 && intervalMs <= 300000) {
+                    this._storageTelemetryIntervalMs = this._storageTelemetryIntervalMs === null
+                        ? intervalMs
+                        : Math.round((this._storageTelemetryIntervalMs * 0.7) + (intervalMs * 0.3));
+                }
+            }
+            this._lastActualSampleTs = sampleTs;
+            actualSampleUpdated = true;
+        }
+        const telemetryGraceMs = this._storageTelemetryIntervalMs === null
+            ? cfg.responseGraceMs
+            : Math.round((this._storageTelemetryIntervalMs * cfg.responseTelemetryFactor) + 1000);
+        const effectiveGraceMs = clamp(Math.max(cfg.responseGraceMs, telemetryGraceMs), cfg.responseGraceMs, cfg.responseGraceMaxMs);
+        const responseTargetChanged = targetW !== null && (this._responseTargetW === null
+            || topology !== this._responseTopology
+            || direction !== this._targetDirection
+            || Math.abs(targetW - this._responseTargetW) >= cfg.responseTargetChangeW);
+        const clearResponse = () => {
             this._responseSinceMs = 0;
+            this._responseTargetW = targetW;
+            this._responseTopology = topology;
             this._targetDirection = direction;
             this._lastActualW = actualW;
             this._lastProgressMs = now;
-            return 0;
-        }
-        if (!this._responseSinceMs || direction !== this._targetDirection) {
+            return {
+                ageMs: 0,
+                effectiveGraceMs,
+                telemetryIntervalMs: this._storageTelemetryIntervalMs,
+                actualSampleTs: sampleTs || null,
+                actualSampleUpdated,
+                responseTargetW: targetW,
+                responseTargetChanged,
+                progressDetected: false,
+            };
+        };
+        if (!writeAccepted || topology === 'none' || !pending)
+            return clearResponse();
+        if (!this._responseSinceMs || responseTargetChanged) {
             this._responseSinceMs = now;
+            this._responseTargetW = targetW;
+            this._responseTopology = topology;
             this._lastProgressMs = now;
             this._targetDirection = direction;
             this._lastActualW = actualW;
-            return 0;
+            return {
+                ageMs: 0,
+                effectiveGraceMs,
+                telemetryIntervalMs: this._storageTelemetryIntervalMs,
+                actualSampleTs: sampleTs || null,
+                actualSampleUpdated,
+                responseTargetW: targetW,
+                responseTargetChanged: true,
+                progressDetected: false,
+            };
         }
-        if (actualW !== null && this._lastActualW !== null) {
-            const movedW = actualW - this._lastActualW;
-            const movingTowardTarget = Math.abs(movedW) >= cfg.responseProgressW
-                && Math.sign(movedW) === Math.sign(pendingDelta);
-            if (movingTowardTarget) {
+        let progressDetected = false;
+        if (actualSampleUpdated && actualW !== null && this._lastActualW !== null && targetW !== null) {
+            const previousDistanceW = Math.abs(targetW - this._lastActualW);
+            const currentDistanceW = Math.abs(targetW - actualW);
+            progressDetected = previousDistanceW - currentDistanceW >= cfg.responseProgressW;
+            if (progressDetected) {
                 this._responseSinceMs = now;
                 this._lastProgressMs = now;
             }
         }
         this._lastActualW = actualW;
-        return Math.max(0, now - this._responseSinceMs);
+        return {
+            ageMs: Math.max(0, now - this._responseSinceMs),
+            effectiveGraceMs,
+            telemetryIntervalMs: this._storageTelemetryIntervalMs,
+            actualSampleTs: sampleTs || null,
+            actualSampleUpdated,
+            responseTargetW: this._responseTargetW,
+            responseTargetChanged: false,
+            progressDetected,
+        };
     }
     _finalizeStatus(snapshot, pv) {
         const next = { ...snapshot };
@@ -406,8 +473,18 @@ class NvpCoordinatorModule extends BaseModule {
             'speicher.regelung.farmUnservedW',
             'speicher.regelung.batteryPowerFeedbackMeasuredW',
             'speicher.regelung.batteryPowerFeedbackAgeMs',
+            'speicher.regelung.batteryPowerFeedbackSampleTs',
+            'speicher.regelung.batteryPowerFeedbackSampleUpdated',
+            'speicher.regelung.batteryPowerFeedbackMode',
+            'speicher.regelung.batteryPowerIgnoredReason',
             'speicher.regelung.batteryPowerBalanceTrusted',
             'speicher.regelung.batteryPowerTrusted',
+            'speicher.regelung.commandAcceptedTs',
+            'speicher.regelung.commandAcceptedTargetW',
+            'speicher.regelung.commandAcceptedSource',
+            'speicher.regelung.targetObjId',
+            'speicher.regelung.lastWriteRaw',
+            'speicher.regelung.lastWriteSplitJson',
             'speicher.regelung.selfTargetGridImportW',
             'speicher.regelung.selfDeadbandW',
             'storageFarm.totalPowerW',
@@ -433,7 +510,8 @@ class NvpCoordinatorModule extends BaseModule {
         const targetW = acceptedTargetW !== null
             ? acceptedTargetW
             : (acceptedForResponse ? requestedTargetW : 0);
-        const responseAgeMs = this._responseAge(now, topology, targetW, actualW, acceptedForResponse, cfg);
+        const actualSampleTs = roundedOrNull(states['speicher.regelung.batteryPowerFeedbackSampleTs']);
+        const response = this._responseState(now, topology, targetW, actualW, actualSampleTs, acceptedForResponse, cfg);
         const nvpTargetFromState = finiteOrNull(states['speicher.regelung.selfTargetGridImportW']);
         const deadbandFromState = finiteOrNull(states['speicher.regelung.selfDeadbandW']);
         const acceptedEffects = getAcceptedPowerEffectSnapshot(this.adapter);
@@ -458,8 +536,8 @@ class NvpCoordinatorModule extends BaseModule {
             storageRequestSatisfied: boolValue(states['speicher.regelung.requestSatisfied'], false),
             storageFailedW: roundedOrNull(states['speicher.regelung.farmFailedW']),
             storageUnservedW: roundedOrNull(states['speicher.regelung.farmUnservedW']),
-            responseAgeMs,
-            responseGraceMs: cfg.responseGraceMs,
+            responseAgeMs: response.ageMs,
+            responseGraceMs: response.effectiveGraceMs,
             responseDeadbandW: cfg.responseDeadbandW,
             actualMaxAgeMs: cfg.actualMaxAgeMs,
             acceptedFlexibleNetLoadDeltaW: acceptedEffects.netLoadDeltaW,
@@ -471,6 +549,22 @@ class NvpCoordinatorModule extends BaseModule {
         });
         snapshot.storageRequestedTargetW = requestedTargetW;
         snapshot.storageAcceptedTargetW = targetW;
+        snapshot.storageActualSampleTs = response.actualSampleTs;
+        snapshot.storageActualSampleUpdated = response.actualSampleUpdated;
+        snapshot.storageTelemetryIntervalMs = roundedOrNull(response.telemetryIntervalMs);
+        snapshot.storageResponseGraceBaseMs = cfg.responseGraceMs;
+        snapshot.storageResponseGraceEffectiveMs = response.effectiveGraceMs;
+        snapshot.storageResponseTargetW = roundedOrNull(response.responseTargetW);
+        snapshot.storageResponseTargetChanged = response.responseTargetChanged === true;
+        snapshot.storageResponseProgressDetected = response.progressDetected === true;
+        snapshot.storageFeedbackMode = cleanText(states['speicher.regelung.batteryPowerFeedbackMode'] || '', 120);
+        snapshot.storageFeedbackIgnoredReason = cleanText(states['speicher.regelung.batteryPowerIgnoredReason'] || '', 220);
+        snapshot.storageCommandAcceptedTs = roundedOrNull(states['speicher.regelung.commandAcceptedTs']);
+        snapshot.storageCommandAcceptedTargetW = roundedOrNull(states['speicher.regelung.commandAcceptedTargetW']);
+        snapshot.storageCommandAcceptedSource = cleanText(states['speicher.regelung.commandAcceptedSource'] || '', 120);
+        snapshot.storageTargetObjectId = cleanText(states['speicher.regelung.targetObjId'] || '', 260);
+        snapshot.storageLastWriteRaw = roundedOrNull(states['speicher.regelung.lastWriteRaw']);
+        snapshot.storageLastWriteSplitJson = cleanText(states['speicher.regelung.lastWriteSplitJson'] || '', 2000);
         let pvResult = null;
         const gridConstraints = this.gridConstraints;
         let gridRuntimeEnabled = true;
@@ -557,7 +651,26 @@ class NvpCoordinatorModule extends BaseModule {
                 errorW: snapshot.nvpErrorW,
                 topology: snapshot.topology,
                 storageActualW: snapshot.storageActualW,
+                storageActualAgeMs: snapshot.storageActualAgeMs,
+                storageActualSampleTs: snapshot.storageActualSampleTs,
+                storageActualSampleUpdated: snapshot.storageActualSampleUpdated,
+                storageTelemetryIntervalMs: snapshot.storageTelemetryIntervalMs,
+                storageFeedbackMode: snapshot.storageFeedbackMode,
+                storageFeedbackIgnoredReason: snapshot.storageFeedbackIgnoredReason,
+                storageRequestedTargetW: snapshot.storageRequestedTargetW,
                 storageTargetW: snapshot.storageTargetW,
+                storageResponseTargetW: snapshot.storageResponseTargetW,
+                storageResponseTargetChanged: snapshot.storageResponseTargetChanged,
+                storageResponseProgressDetected: snapshot.storageResponseProgressDetected,
+                storageResponseAgeMs: snapshot.storageResponseAgeMs,
+                storageResponseGraceBaseMs: snapshot.storageResponseGraceBaseMs,
+                storageResponseGraceEffectiveMs: snapshot.storageResponseGraceEffectiveMs,
+                storageCommandAcceptedTs: snapshot.storageCommandAcceptedTs,
+                storageCommandAcceptedTargetW: snapshot.storageCommandAcceptedTargetW,
+                storageCommandAcceptedSource: snapshot.storageCommandAcceptedSource,
+                storageTargetObjectId: snapshot.storageTargetObjectId,
+                storageLastWriteRaw: snapshot.storageLastWriteRaw,
+                storageLastWriteSplitJson: snapshot.storageLastWriteSplitJson,
                 storageWriteOk: snapshot.storageWriteOk,
                 storageWriteAccepted: snapshot.storageWriteAccepted,
                 storageWriteFullyAccepted: snapshot.storageWriteFullyAccepted,

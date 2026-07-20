@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-/** Regression 0.8.128: Detaildiagnose gehört in Einstellungen/Status; LIVE-Energiefluss bleibt kompakt. */
+/** Regression 0.8.130: Detaildiagnose bleibt kompakt; neue Async-Felder gehören nur in JSON/Ringlog. */
 
 const assert = require('assert');
 const fs = require('fs');
@@ -33,4 +33,19 @@ assert(tariff.includes('const compactParts = [buildCompactStorageText(result), b
 assert(!liveApp.includes('nvpCoordinatorStatus'), 'NVP-Detailkarten dürfen nicht in der LIVE-Energieflussansicht landen');
 assert(!liveApp.includes('nvpCoordinatorLog'), 'Stabilitätslog darf nicht in der LIVE-Energieflussansicht landen');
 
-console.log('[nvp-coordinator-diagnostics-ui] OK: kompakte Tarifzeile im LIVE-Bild, vollständige NVP-/Speicher-/PV-Kette und Ringlog nur unter Einstellungen/Status.');
+// Baustein 6 erweitert statusJson/logJson, darf die ohnehin umfangreiche
+// Statusseite aber nicht um weitere Karten oder Einzelzeilen aufblaehen.
+const storageCardMatch = diagnosticsUi.match(/makeCard\('Speicher \/ Speicherfarm', \[([\s\S]*?)\], snap\.storageBlocked/);
+assert(storageCardMatch, 'Bestehende kompakte Speicher-Diagnosekarte muss erhalten bleiben');
+assert.strictEqual((storageCardMatch[1].match(/\{ label:/g) || []).length, 6, 'Speicherkarte darf durch Async-Interna keine weiteren sichtbaren Zeilen erhalten');
+for (const hiddenAsyncField of [
+  'storageTelemetryIntervalMs',
+  'storageResponseEffectiveGraceMs',
+  'storageActualSampleTs',
+  'storageAcceptedCommandTs',
+  'storageAcceptedCommandTargetW',
+]) {
+  assert(!diagnosticsUi.includes(hiddenAsyncField), `${hiddenAsyncField} gehoert in statusJson/logJson und nicht als weitere sichtbare Statuszeile in die UI`);
+}
+
+console.log('[nvp-coordinator-diagnostics-ui] OK: LIVE-Zeile und Statusseite bleiben kompakt; Async-Details liegen ausschließlich in statusJson/logJson.');

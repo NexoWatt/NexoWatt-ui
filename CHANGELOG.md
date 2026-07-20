@@ -1,3 +1,16 @@
+## 0.8.130 - 2026-07-19
+
+- EMS-Stabilisierungsbaustein 6 (RC6): Die NVP-Speicherregelung verwendet bei asynchroner oder langsamer Speichertelemetrie einen unveränderlichen echten Messwertanker und einen getrennten, erst nach akzeptiertem Hardware-Write aktivierten Kommandoanker. Derselbe NVP-Fehler kann dadurch bei unverändertem Speicher-Istwert nicht mehr in jedem Regelzyklus erneut auf den Sollwert addiert werden.
+- Sungrow-Feldfall als Pflichtregression: Bei `NVP +526 W`, Ziel `+50 W` und Speicher-Ist `+2000 W` bleibt der Sollwert über mindestens zehn identische Zyklen bei `+2476 W` und läuft nicht mehr auf `+4476 W` hoch. Eine Änderung des NVP wird nur einmal als Fehlerdifferenz nachgeführt; ein neuer realer Speicher-Istwert verankert die Berechnung anschließend neu.
+- Asynchrones Feedback für Signed-, Split-, Sungrow-, E3/DC- und Speicherfarm-Ausgänge vereinheitlicht. Getrennte Lade-/Entlade-Istwerte liefern jetzt einen gemeinsamen Sample-Zeitstempel beziehungsweise Sample-Schlüssel, damit nur eine tatsächlich neue Hardwaremessung als neue Regelbasis gilt.
+- Sungrow-NVP-Pfad gehärtet: Reine NVP-/Feed-forward-Entlade-Caps dürfen einen korrekt gehaltenen asynchronen Zielwert nicht in nachgelagerten Vorprüfungen erneut verkürzen. SoC-, Reserve-, Tarif-, EVCS-, Peak-Shaving-, Geräte-, Authority- und Safety-Grenzen bleiben vollständig bindend.
+- NVP-Reaktionsdiagnose an den tatsächlich akzeptierten Befehl gekoppelt: Materielle Sollwertänderungen in derselben Richtung starten das Reaktionsfenster neu; Fortschritt wird nur bei einem neuen realen Istwertsample bewertet. Das Basisfenster beträgt 10 Sekunden und wird anhand der beobachteten Speichertelemetrie begrenzt bis maximal 30 Sekunden angepasst.
+- Neue Diagnosewerte veröffentlichen Messwertzeitpunkt und -takt, akzeptierten Kommandozeitpunkt/-sollwert/-quelle sowie den asynchronen Regelanker in `speicher.regelung.balanceAsyncJson`, `ems.nvpCoordinator.statusJson` und `ems.nvpCoordinator.logJson`.
+- AppCenter → Status bleibt bewusst kompakt: keine zusätzlichen Karten oder sichtbaren Detailzeilen. Die neuen Async-, Telemetrie- und Kommandoinformationen stehen ausschließlich in den vorhandenen JSON-Diagnosen und im begrenzten Stabilitätslog zur Verfügung.
+- Neue Release-Regression `test:storage-async-feedback-all-profiles` sowie erweiterte Speicher-, NVP- und Diagnoseprüfungen sichern langsame/veraltete Telemetrie, NVP-Änderungen ohne neues Istwertsample, neue reale Samples, direkte Richtungswechsel und die unveränderte kompakte Statusansicht ab.
+- TypeScript-Migrationskontrolle: Es wurde keine weitere Runtime-Datei mit `@ts-nocheck` versehen (weiterhin 58 Dateien). Der explizite Zeilenrahmen wurde für die zusätzlichen Messanker-, Kommandoanker- und Diagnosestrukturen von 142.370 auf 142.740 Zeilen angehoben; die technische Schuld bleibt damit offen ausgewiesen.
+- Service-Worker-Cache auf `nexowatt-cache-v433` erhöht.
+
 ## 0.8.129 - 2026-07-19
 
 - EMS-Stabilisierungsbaustein 5 (RC5): Speicherfarm-Dispatch trennt angeforderte, geplant verteilte, vom Hardwarewriter akzeptierte, fehlgeschlagene und nicht verteilbare Leistung. Ein teilweise erfolgreicher Farm-Write wird als `farm-partial` mit `schreibOk=false` ausgewiesen; NVP-Koordinator, Tarifdiagnose und nachgelagerte Budgets rechnen ausschließlich mit der tatsächlich akzeptierten Farmleistung.
