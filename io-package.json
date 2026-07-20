@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.133",
+    "version": "0.8.134",
     "news": {
+      "0.8.134": {
+        "de": "Version 0.8.134 RC10: Die Speicher-Kommandokette verwendet pro Speicher genau eine exklusive Sollwertfamilie. Vollständige getrennte Lade-/Entlade-DPs gewinnen vor einem zusätzlichen Signed-DP; alternative Befehlswege werden neutralisiert. Direkte Richtungswechsel schreiben im selben Zyklus zuerst die inaktive Richtung auf 0 W und danach den neuen Sollwert. Ein Kommando gilt erst nach Readback der zugeordneten DPs als akzeptiert; Abweichungen werden nicht mehr als wirksame Speicherleistung für NVP, EVCS oder Farm gewertet. Die AppCenter-Statusseite bleibt kompakt, Details stehen in JSON-Diagnosen und Stabilitätslog.",
+        "en": "Version 0.8.134 RC10: The storage command chain now uses exactly one exclusive target family per storage unit. Complete separate charge/discharge datapoints take precedence over an additional signed datapoint, while alternative command paths are neutralized. Direct direction changes set the inactive direction to 0 W and then write the new target in the same cycle. A command is accepted only after readback of the assigned datapoints; mismatches are no longer treated as effective storage power for NVP, EVCS or farm control. The AppCenter status page remains compact, with details in JSON diagnostics and the stability log."
+      },
       "0.8.133": {
         "de": "Version 0.8.133 RC9: Der EVCS-Modus „Speicher schützen“ arbeitet jetzt asymmetrisch und physikalisch am NVP. Der Speicher darf weiterhin Haus-/sonstige Lasten ohne E-Mobilität ausgleichen, lädt aber nur bei echtem Gesamtüberschuss nach Gebäude und EVCS. Alte Lade- oder Entladebefehle werden bei wegfallender Grundlage mit einem echten 0-W-Stop beendet; Tarif-/Netzladeziele und Herstellerprofile können den Schutz nicht mehr umgehen. AppCenter-Status bleibt kompakt, Details stehen in den vorhandenen JSON- und Stabilitätslogs.",
         "en": "Version 0.8.133 RC9: The EVCS “protect storage” mode now works asymmetrically and physically at the grid connection point. Storage may still cover building/other demand excluding e-mobility, but it may charge only from a real total surplus after building and EVCS demand. Previous charge or discharge commands are stopped with a real 0 W command when their basis disappears; tariff/grid-charging targets and vendor profiles can no longer bypass protection. AppCenter status stays compact, with details in the existing JSON and stability logs."
@@ -26,10 +30,6 @@
       "0.8.128": {
         "de": "Version 0.8.128 RC4: Ein zentraler NVP-Koordinator lässt Speicher oder Speicherfarm zuerst regeln und übergibt nur die belastbar verbleibende Einspeisung an die PV-/WR-Begrenzung. Blockierte, fehlgeschlagene oder nicht reagierende Speicherbefehle werden nicht optimistisch verrechnet. Die LIVE-Tarifzeile ist wieder kompakt; vollständige NVP-, Speicher-, PV-, Gate- und Stabilitätsdetails stehen unter AppCenter → Status samt Ringlog. Direkte Richtungswechsel, exklusive Farm-/Einzel-Steuerhoheit und frei zugeordnete AppCenter-DPs bleiben unverändert.",
         "en": "Version 0.8.128 RC4: A central NVP coordinator lets either single storage or the storage farm regulate first and passes only the reliably remaining export to PV/inverter curtailment. Blocked, failed or non-responsive storage commands are not credited optimistically. The LIVE tariff line is compact again; full NVP, storage, PV, gate and stability details are available under AppCenter → Status with a ring log. Direct direction changes, exclusive farm/single-storage authority and freely assigned AppCenter datapoints remain unchanged."
-      },
-      "0.8.127": {
-        "de": "Version 0.8.127 RC3: Die Tarifansicht trennt Tarifabsicht, finalen Speicher-Sollwert, Gate-/Write-Ergebnis, Farm-Dispatch und Istwert-Rückmeldung. Laden oder Entladen wird nur noch bei frischem, vertrauenswürdigem Readback bestätigt; angeforderte, wartende, blockierte, fehlgeschlagene, teilweise erfüllte oder veraltete Zustände werden ausdrücklich ausgewiesen. Die exklusive Farm-/Einzel-Steuerhoheit, direkte Richtungswechsel und manuell zugeordnete AppCenter-DPs bleiben unverändert.",
-        "en": "Version 0.8.127 RC3: The tariff view separates tariff intent, final storage target, gate/write result, farm dispatch and measured feedback. Charging or discharging is confirmed only with fresh trusted readback; requested, waiting, blocked, failed, partially delivered or stale states are shown explicitly. Exclusive farm/single-storage authority, direct direction changes and manually assigned AppCenter datapoints remain unchanged."
       }
     },
     "title": "NexoWatt UI",

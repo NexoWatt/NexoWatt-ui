@@ -39,7 +39,7 @@ function makeAdapter() {
   const states = new Map();
   const objects = new Map();
   return {
-    config: { enableStorageFarm: false, storageFarm: {}, storage: {} },
+    config: { enableStorageControl: true, enableStorageFarm: false, storageFarm: {}, storage: {} },
     log: { warn() {}, info() {}, debug() {}, error() {} },
     async setObjectNotExistsAsync(id, obj) { objects.set(id, obj); },
     async setStateAsync(id, val) { states.set(id, { val, ts: nowMs() }); },

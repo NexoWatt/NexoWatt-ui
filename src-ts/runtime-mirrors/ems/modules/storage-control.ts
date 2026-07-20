@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c767ec8b78411ede6e5862e5232e15e8c5fc7b7bd41cab3058804a4abf43a1ee
+ * Original-Hash: cf4012dd3e4ea14309322ee3273cc5642b0ef36cf62e8d29fc375fbe360c587f
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:024404aaf37f05558145f64d7d2ffe6cea58eb38cf6e6d8435eea3d7c38e3d03
+ * Quell-Hash: sha256:6094e42caeea541ab44291920a719885d603e1445eb9eab00f96a17c5930cc3f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -533,6 +533,11 @@ class SpeicherRegelungModule extends BaseModule {
         // NVP-Fehler in jedem EMS-Takt erneut auf den Sollwert zu addieren.
         this._asyncBalanceCommand = null;
         this._pendingAsyncBalanceCommand = null;
+
+        // Exklusive Speicher-Kommandofamilie. Signed-, Split- und herstellerspezifische
+        // Sollwertpfade sind Alternativen und duerfen niemals parallel denselben
+        // Speicher steuern. Der Marker dient nur der sicheren Uebergabe/Neutralisierung.
+        this._lastStorageCommandFamily = '';
 
         // --- Anti-Flattern um 0 W ---
         // Richtungswechsel werden bewusst direkt an den jeweils zugeordneten
@@ -6529,7 +6534,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
  */
         const writeNumber = async (key, value) => {
             try {
-                const res = await this.dp.writeNumber(key, value, false);
+                const res = await this._writeStorageCommandNumber(key, value);
                 writes.push({ key, value, result: res });
                 if (res === false) ok = false;
                 return res;
@@ -6552,7 +6557,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
  */
         const writeBoolean = async (key, value) => {
             try {
-                const res = await this.dp.writeBoolean(key, value, false);
+                const res = await this._writeStorageCommandBoolean(key, value);
                 writes.push({ key, value: !!value, result: res });
                 if (res === false) ok = false;
                 return res;
@@ -7088,6 +7093,250 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         };
     }
 
+
+    /**
+     * Berechnet den Rohwert, den der DatapointRegistry-Writer fuer einen
+     * physischen Speicherbefehl tatsaechlich auf den Fremd-DP schreibt.
+     */
+    _storageCommandExpectedRaw(entry, physicalValue, type = 'number') {
+        if (!entry) return null;
+        if (type === 'boolean') {
+            const physical = !!physicalValue;
+            return { physical, raw: entry.invert ? !physical : physical };
+        }
+
+        let physical = Number(physicalValue);
+        if (!Number.isFinite(physical)) return null;
+        if (typeof entry.min === 'number' && Number.isFinite(entry.min)) physical = Math.max(entry.min, physical);
+        if (typeof entry.max === 'number' && Number.isFinite(entry.max)) physical = Math.min(entry.max, physical);
+
+        const scale = Number.isFinite(Number(entry.scale)) && Number(entry.scale) !== 0 ? Number(entry.scale) : 1;
+        const offset = Number.isFinite(Number(entry.offset)) ? Number(entry.offset) : 0;
+        let raw = (physical - offset) / scale;
+        if (entry.invert) raw = -raw;
+        if (Number.isFinite(Number(entry.unitScale)) && Number(entry.unitScale) !== 0 && Number(entry.unitScale) !== 1) {
+            raw /= Number(entry.unitScale);
+        }
+        return { physical, raw };
+    }
+
+    _storageCommandBoolean(raw) {
+        if (raw === true || raw === 1 || raw === '1') return true;
+        if (raw === false || raw === 0 || raw === '0') return false;
+        const text = String(raw === null || raw === undefined ? '' : raw).trim().toLowerCase();
+        if (['true', 'on', 'enabled', 'yes', 'ja'].includes(text)) return true;
+        if (['false', 'off', 'disabled', 'no', 'nein'].includes(text)) return false;
+        return null;
+    }
+
+    async _readStorageCommandRaw(key, entry) {
+        const objectId = entry && entry.objectId ? String(entry.objectId).trim() : '';
+        if (!objectId) return { supported: false, objectId: '', raw: null, reason: 'no-object-id' };
+
+        if (this.adapter && typeof this.adapter.getForeignStateAsync === 'function') {
+            try {
+                const state = await this.adapter.getForeignStateAsync(objectId);
+                if (!state || !Object.prototype.hasOwnProperty.call(state, 'val')) {
+                    return { supported: true, objectId, raw: null, reason: 'state-missing', ts: null, ack: null };
+                }
+                return {
+                    supported: true,
+                    objectId,
+                    raw: state.val,
+                    reason: '',
+                    ts: Number.isFinite(Number(state.ts)) ? Number(state.ts) : null,
+                    ack: typeof state.ack === 'boolean' ? state.ack : null,
+                };
+            } catch (error) {
+                return {
+                    supported: true,
+                    objectId,
+                    raw: null,
+                    reason: `read-error:${error && error.message ? error.message : String(error)}`,
+                    ts: null,
+                    ack: null,
+                };
+            }
+        }
+
+        if (this.dp && typeof this.dp.getRaw === 'function') {
+            try {
+                const raw = this.dp.getRaw(key);
+                if (raw === null || raw === undefined) return { supported: false, objectId, raw: null, reason: 'cache-unavailable' };
+                return { supported: true, objectId, raw, reason: '', ts: null, ack: null };
+            } catch (_error) {
+                return { supported: false, objectId, raw: null, reason: 'cache-read-error' };
+            }
+        }
+
+        return { supported: false, objectId, raw: null, reason: 'readback-not-supported' };
+    }
+
+    async _verifyStorageCommandDatapoints(expectations = [], options = {}) {
+        const attempts = Math.max(1, Math.min(3, Number(options.attempts) || 2));
+        const delayMs = Math.max(0, Math.min(100, Number(options.delayMs) || 20));
+        const unique = new Map();
+        for (const expectation of Array.isArray(expectations) ? expectations : []) {
+            if (!expectation || !expectation.entry) continue;
+            const objectId = String(expectation.entry.objectId || '').trim();
+            if (!objectId) continue;
+            unique.set(objectId, { ...expectation, objectId });
+        }
+        const items = Array.from(unique.values());
+        if (!items.length) return { supported: false, ok: true, status: 'no-command-dps', rows: [], attempts: 0 };
+
+        let finalRows = [];
+        for (let attempt = 1; attempt <= attempts; attempt++) {
+            finalRows = [];
+            for (const item of items) {
+                const type = item.type === 'boolean' ? 'boolean' : 'number';
+                const expected = this._storageCommandExpectedRaw(item.entry, item.value, type);
+                const current = await this._readStorageCommandRaw(item.key, item.entry);
+                let ok = false;
+                let actual = current.raw;
+                let reason = current.reason || '';
+
+                if (!current.supported) {
+                    reason = reason || 'readback-not-supported';
+                } else if (!expected) {
+                    reason = 'invalid-expectation';
+                } else if (type === 'boolean') {
+                    const actualBool = this._storageCommandBoolean(actual);
+                    ok = actualBool !== null && actualBool === expected.raw;
+                    if (!ok && !reason) reason = 'boolean-mismatch';
+                } else {
+                    const actualNumber = typeof actual === 'number'
+                        ? actual
+                        : Number(String(actual === null || actual === undefined ? '' : actual).trim().replace(',', '.'));
+                    const expectedNumber = Number(expected.raw);
+                    const tolerance = Math.max(0.000001, Math.abs(expectedNumber) * 0.000001);
+                    ok = Number.isFinite(actualNumber) && Number.isFinite(expectedNumber)
+                        && Math.abs(actualNumber - expectedNumber) <= tolerance;
+                    if (!ok && !reason) reason = Number.isFinite(actualNumber) ? 'number-mismatch' : 'value-missing';
+                    actual = Number.isFinite(actualNumber) ? actualNumber : current.raw;
+                }
+
+                finalRows.push({
+                    key: String(item.key || ''),
+                    objectId: item.objectId,
+                    type,
+                    role: String(item.role || ''),
+                    expectedPhysical: expected ? expected.physical : null,
+                    expectedRaw: expected ? expected.raw : null,
+                    actualRaw: actual,
+                    supported: current.supported === true,
+                    ok,
+                    reason,
+                    ts: current.ts || null,
+                    ack: current.ack,
+                });
+            }
+
+            const supportedRows = finalRows.filter((row) => row.supported);
+            const supportedMismatches = supportedRows.filter((row) => !row.ok);
+            if (!supportedMismatches.length) {
+                const unsupportedRows = finalRows.filter((row) => !row.supported);
+                return {
+                    supported: supportedRows.length > 0,
+                    ok: true,
+                    status: supportedRows.length === 0
+                        ? 'unavailable'
+                        : (unsupportedRows.length ? 'partial-confirmed' : 'confirmed'),
+                    rows: finalRows,
+                    attempts: attempt,
+                };
+            }
+            if (attempt < attempts && delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+
+        const supportedRows = finalRows.filter((row) => row.supported);
+        const unsupportedRows = finalRows.filter((row) => !row.supported);
+        return {
+            supported: supportedRows.length > 0,
+            ok: supportedRows.every((row) => row.ok),
+            status: unsupportedRows.length ? 'partial-mismatch' : 'mismatch',
+            rows: finalRows,
+            attempts,
+        };
+    }
+
+    _clearStorageCommandWriteCache(entry) {
+        const objectId = entry && entry.objectId ? String(entry.objectId).trim() : '';
+        if (!objectId || !this.dp || !(this.dp.lastWriteByObjectId instanceof Map)) return;
+        this.dp.lastWriteByObjectId.delete(objectId);
+    }
+
+    async _writeStorageCommandNumber(key, value, options = {}) {
+        const entry = this.dp && typeof this.dp.getEntry === 'function' ? this.dp.getEntry(key) : null;
+        if (!entry || !this.dp || typeof this.dp.writeNumber !== 'function') return false;
+        if (options.force === true) {
+            this._clearStorageCommandWriteCache(entry);
+        } else {
+            const pre = await this._verifyStorageCommandDatapoints([{ key, entry, type: 'number', value }], { attempts: 1, delayMs: 0 });
+            if (pre.supported && !pre.ok) this._clearStorageCommandWriteCache(entry);
+        }
+        return this.dp.writeNumber(key, value, false);
+    }
+
+    async _writeStorageCommandBoolean(key, value, options = {}) {
+        const entry = this.dp && typeof this.dp.getEntry === 'function' ? this.dp.getEntry(key) : null;
+        if (!entry || !this.dp || typeof this.dp.writeBoolean !== 'function') return false;
+        if (options.force === true) {
+            this._clearStorageCommandWriteCache(entry);
+        } else {
+            const pre = await this._verifyStorageCommandDatapoints([{ key, entry, type: 'boolean', value }], { attempts: 1, delayMs: 0 });
+            if (pre.supported && !pre.ok) this._clearStorageCommandWriteCache(entry);
+        }
+        return this.dp.writeBoolean(key, value, false);
+    }
+
+    async _ensureStorageAlternativeTargetsNeutral(entries = [], options = {}) {
+        const unique = new Map();
+        for (const item of Array.isArray(entries) ? entries : []) {
+            if (!item || !item.entry) continue;
+            const objectId = String(item.entry.objectId || '').trim();
+            if (!objectId || unique.has(objectId)) continue;
+            unique.set(objectId, item);
+        }
+        const items = Array.from(unique.values());
+        if (!items.length) return { ok: true, status: 'none', rows: [] };
+
+        const familyChanged = options.familyChanged === true;
+        const rows = [];
+        let ok = true;
+        for (const item of items) {
+            const expectation = { key: item.key, entry: item.entry, type: 'number', value: 0 };
+            const before = await this._verifyStorageCommandDatapoints([expectation], { attempts: 1, delayMs: 0 });
+            if (before.supported && before.ok) {
+                rows.push({ key: item.key, objectId: item.entry.objectId, action: 'already-neutral', readback: before });
+                continue;
+            }
+            if (!before.supported && !familyChanged) {
+                rows.push({ key: item.key, objectId: item.entry.objectId, action: 'unverified-unchanged', readback: before });
+                continue;
+            }
+
+            let writeResult = false;
+            try {
+                writeResult = await this._writeStorageCommandNumber(item.key, 0, { force: true });
+            } catch (_error) {
+                writeResult = false;
+            }
+            const after = await this._verifyStorageCommandDatapoints([expectation], { attempts: 2, delayMs: 20 });
+            const rowOk = writeResult !== false && (!after.supported || after.ok);
+            if (!rowOk) ok = false;
+            rows.push({
+                key: item.key,
+                objectId: item.entry.objectId,
+                action: 'neutralize',
+                writeResult,
+                ok: rowOk,
+                readback: after,
+            });
+        }
+        return { ok, status: ok ? 'neutral' : 'release-failed', rows };
+    }
+
     /**
      * Code-Teil: Methode `_applyTargetW`
      * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
@@ -7172,61 +7421,89 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             return !!(aa && bb && aa === bb);
         };
 
-        // Signed und Split duerfen in alten Migrationen auf demselben Objekt liegen.
-        // Dann wird der Split-Alias nicht doppelt mit abweichender Vorzeichenlogik beschrieben.
+        // Signed-, Split- und herstellerspezifische Sollwertpfade sind alternative
+        // Kommandofamilien. Eine vollstaendige Split-Zuordnung gewinnt vor Signed,
+        // weil sie den bei Sungrow und vielen Fremdadaptern eindeutigen Lade-/Entlade-
+        // Handshake erlaubt. Ein nur teilweise gemappter Split-Pfad wird nur genutzt,
+        // wenn kein vollwertiger Signed-DP vorhanden ist.
         const chargeSameAsSigned = sameObject(chargeEntry, signedEntry);
         const dischargeSameAsSigned = sameObject(dischargeEntry, signedEntry);
         const canWriteChargeSplit = !!(chargeEntry && !chargeSameAsSigned);
         const canWriteDischargeSplit = !!(dischargeEntry && !dischargeSameAsSigned);
+        const splitPairConflict = !!(canWriteChargeSplit && canWriteDischargeSplit && sameObject(chargeEntry, dischargeEntry));
+        const hasCompleteSplitTarget = !!(canWriteChargeSplit && canWriteDischargeSplit && !splitPairConflict);
         const hasAnySplitTarget = !!(chargeEntry || dischargeEntry);
-        const hasAnyWritableSplit = !!(canWriteChargeSplit || canWriteDischargeSplit);
+        const hasAnyWritableSplit = !!((canWriteChargeSplit || canWriteDischargeSplit) && !splitPairConflict);
         const hasSignedTarget = !!signedEntry;
 
+        let commandFamily = 'none';
         let directionSupported = false;
         let targetMode = 'none';
         if (controlMode === 'limits') {
+            commandFamily = 'limits';
             directionSupported = w === 0 || (w < 0 ? !!maxChargeEntry : !!maxDischargeEntry);
             targetMode = maxChargeEntry && maxDischargeEntry
                 ? 'limits-charge-discharge'
                 : (maxChargeEntry ? 'limits-charge-only' : (maxDischargeEntry ? 'limits-discharge-only' : 'limits-none'));
         } else if (controlMode === 'enableFlags') {
+            commandFamily = 'enable-flags';
             directionSupported = w === 0 || (w < 0 ? !!chargeEnableEntry : !!dischargeEnableEntry);
             targetMode = chargeEnableEntry && dischargeEnableEntry
                 ? 'enable-flags-charge-discharge'
                 : (chargeEnableEntry ? 'enable-flags-charge-only' : (dischargeEnableEntry ? 'enable-flags-discharge-only' : 'enable-flags-none'));
-        } else {
-            const genericDirectionSupported = w === 0 || hasSignedTarget || (w < 0 ? canWriteChargeSplit : canWriteDischargeSplit);
-            directionSupported = e3dcTargetConfigured ? true : genericDirectionSupported;
-            const genericTargetMode = hasSignedTarget && hasAnySplitTarget
-                ? 'signed+split-targetPower'
-                : (hasAnySplitTarget
-                    ? (canWriteChargeSplit && canWriteDischargeSplit
-                        ? 'split-charge-discharge'
-                        : (canWriteChargeSplit ? 'split-charge-only' : (canWriteDischargeSplit ? 'split-discharge-only' : 'split-unwritable')))
-                    : (hasSignedTarget ? 'signed-targetPower' : 'none'));
-            targetMode = e3dcTargetConfigured ? 'e3dc-rscp-set-power' : genericTargetMode;
+        } else if (e3dcTargetConfigured) {
+            commandFamily = 'e3dc-rscp';
+            directionSupported = true;
+            targetMode = 'e3dc-rscp-set-power';
+        } else if (hasCompleteSplitTarget) {
+            commandFamily = 'split';
+            directionSupported = true;
+            targetMode = 'split-charge-discharge';
+        } else if (hasSignedTarget) {
+            commandFamily = 'signed';
+            directionSupported = true;
+            targetMode = 'signed-targetPower';
+        } else if (hasAnyWritableSplit) {
+            commandFamily = 'split';
+            directionSupported = w === 0 || (w < 0 ? canWriteChargeSplit : canWriteDischargeSplit);
+            targetMode = canWriteChargeSplit
+                ? (canWriteDischargeSplit ? 'split-charge-discharge' : 'split-charge-only')
+                : (canWriteDischargeSplit ? 'split-discharge-only' : 'split-unwritable');
         }
 
         if (selectedTopology === 'farm') {
+            commandFamily = 'storage-farm';
             directionSupported = true;
             targetMode = 'storage-farm';
         } else if (selectedTopology === 'none') {
+            commandFamily = 'none';
             directionSupported = false;
             targetMode = 'none';
         }
 
+        const selectedTargetObjId = commandFamily === 'signed'
+            ? objectIdOf(signedEntry)
+            : (commandFamily === 'split'
+                ? (w < 0 ? objectIdOf(chargeEntry) : (w > 0 ? objectIdOf(dischargeEntry) : (objectIdOf(chargeEntry) || objectIdOf(dischargeEntry))))
+                : (commandFamily === 'e3dc-rscp' ? objectIdOf(e3dcValueEntry) : ''));
         await this._setIfChanged('speicher.regelung.targetMode', targetMode);
-        await this._setIfChanged('speicher.regelung.targetObjId', signedEntry && signedEntry.objectId ? String(signedEntry.objectId) : '');
+        await this._setIfChanged('speicher.regelung.commandFamily', commandFamily);
+        await this._setIfChanged('speicher.regelung.targetObjId', selectedTargetObjId);
         await this._setIfChanged('speicher.regelung.splitTargetObjIds', JSON.stringify({
-            charge: chargeEntry && chargeEntry.objectId ? String(chargeEntry.objectId) : '',
-            discharge: dischargeEntry && dischargeEntry.objectId ? String(dischargeEntry.objectId) : '',
-            maxCharge: maxChargeEntry && maxChargeEntry.objectId ? String(maxChargeEntry.objectId) : '',
-            maxDischarge: maxDischargeEntry && maxDischargeEntry.objectId ? String(maxDischargeEntry.objectId) : '',
-            chargeEnable: chargeEnableEntry && chargeEnableEntry.objectId ? String(chargeEnableEntry.objectId) : '',
-            dischargeEnable: dischargeEnableEntry && dischargeEnableEntry.objectId ? String(dischargeEnableEntry.objectId) : '',
-            reserveSoc: reserveSocEntry && reserveSocEntry.objectId ? String(reserveSocEntry.objectId) : '',
+            selectedFamily: commandFamily,
+            signed: objectIdOf(signedEntry),
+            charge: objectIdOf(chargeEntry),
+            discharge: objectIdOf(dischargeEntry),
+            maxCharge: objectIdOf(maxChargeEntry),
+            maxDischarge: objectIdOf(maxDischargeEntry),
+            chargeEnable: objectIdOf(chargeEnableEntry),
+            dischargeEnable: objectIdOf(dischargeEnableEntry),
+            reserveSoc: objectIdOf(reserveSocEntry),
+            signedIgnoredBecauseCompleteSplit: commandFamily === 'split' && !!signedEntry,
+            splitIgnoredBecauseSignedSelected: commandFamily === 'signed' && hasAnySplitTarget,
             chargeSkippedBecauseSignedSameObject: !!chargeSameAsSigned,
             dischargeSkippedBecauseSignedSameObject: !!dischargeSameAsSigned,
+            splitPairConflict,
         }));
         await this._setIfChanged('speicher.regelung.runObjId', runEntry && runEntry.objectId ? String(runEntry.objectId) : '');
 
@@ -7235,23 +7512,75 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         // werden als Sicherheitsfehler blockiert; freie Hersteller-/Adapterpfade
         // werden dagegen niemals gefiltert.
         const activeOutputEntries = [];
+        const selectedTargetObjectIds = new Set();
+/**
+ * Code-Teil: addActiveOutput
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const addActiveOutput = (key, entry, allowAlternativeAlias = false) => {
+            if (!entry) return;
+            activeOutputEntries.push([key, entry]);
+            const id = objectIdOf(entry);
+            if (id && allowAlternativeAlias) selectedTargetObjectIds.add(id);
+        };
         if (selectedTopology === 'single' && controlMode === 'targetPower') {
-            if (e3dcTargetConfigured) {
-                activeOutputEntries.push(['e3dcMode', e3dcModeEntry], ['e3dcValue', e3dcValueEntry]);
-            } else {
-                if (signedEntry) activeOutputEntries.push(['signed', signedEntry]);
-                if (canWriteChargeSplit) activeOutputEntries.push(['charge', chargeEntry]);
-                if (canWriteDischargeSplit) activeOutputEntries.push(['discharge', dischargeEntry]);
+            if (commandFamily === 'e3dc-rscp') {
+                addActiveOutput('e3dcMode', e3dcModeEntry, true);
+                addActiveOutput('e3dcValue', e3dcValueEntry, true);
+            } else if (commandFamily === 'signed') {
+                addActiveOutput('signed', signedEntry, true);
+            } else if (commandFamily === 'split') {
+                if (canWriteChargeSplit) addActiveOutput('charge', chargeEntry, true);
+                if (canWriteDischargeSplit) addActiveOutput('discharge', dischargeEntry, true);
             }
         } else if (selectedTopology === 'single' && controlMode === 'limits') {
-            if (maxChargeEntry) activeOutputEntries.push(['maxCharge', maxChargeEntry]);
-            if (maxDischargeEntry) activeOutputEntries.push(['maxDischarge', maxDischargeEntry]);
+            addActiveOutput('maxCharge', maxChargeEntry);
+            addActiveOutput('maxDischarge', maxDischargeEntry);
         } else if (selectedTopology === 'single' && controlMode === 'enableFlags') {
-            if (chargeEnableEntry) activeOutputEntries.push(['chargeEnable', chargeEnableEntry]);
-            if (dischargeEnableEntry) activeOutputEntries.push(['dischargeEnable', dischargeEnableEntry]);
+            addActiveOutput('chargeEnable', chargeEnableEntry);
+            addActiveOutput('dischargeEnable', dischargeEnableEntry);
         }
         if (selectedTopology === 'single' && runEntry) activeOutputEntries.push(['run', runEntry]);
         if (selectedTopology === 'single' && reserveSocEntry) activeOutputEntries.push(['reserveSoc', reserveSocEntry]);
+
+        // Alle nicht ausgewaehlten Sollwertfamilien werden vor dem aktiven
+        // Befehl neutralisiert. So kann ein alter Signed-, Split- oder E3/DC-
+        // Auftrag den aktuell ausgewaehlten Hardwarepfad nicht uebersteuern.
+        const ignoredAlternativeTargetEntries = [];
+/**
+ * Code-Teil: addIgnoredAlternative
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const addIgnoredAlternative = (key, entry, family) => {
+            const id = objectIdOf(entry);
+            if (!id || selectedTargetObjectIds.has(id)) return;
+            ignoredAlternativeTargetEntries.push({ key, entry, family });
+        };
+        if (selectedTopology === 'single') {
+            if (commandFamily !== 'signed') addIgnoredAlternative('st.targetPowerW', signedEntry, 'signed');
+            if (commandFamily !== 'split') {
+                addIgnoredAlternative('st.targetChargePowerW', chargeEntry, 'split-charge');
+                addIgnoredAlternative('st.targetDischargePowerW', dischargeEntry, 'split-discharge');
+            }
+            if (commandFamily !== 'e3dc-rscp') {
+                addIgnoredAlternative('st.e3dcSetPowerMode', e3dcModeEntry, 'e3dc-mode');
+                addIgnoredAlternative('st.e3dcSetPowerValueW', e3dcValueEntry, 'e3dc-value');
+            }
+        }
 
         const outputsByObjectId = new Map();
         const outputConflicts = [];
@@ -7264,7 +7593,32 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             }
             outputConflicts.push({ objectId: id, first: outputsByObjectId.get(id), second: key });
         }
+        for (const item of ignoredAlternativeTargetEntries) {
+            const id = objectIdOf(item && item.entry);
+            if (!id || !outputsByObjectId.has(id)) continue;
+            outputConflicts.push({
+                objectId: id,
+                first: outputsByObjectId.get(id),
+                second: `ignored-${String(item.family || 'target')}`,
+                reason: 'alternative-target-shares-active-control-object',
+            });
+        }
+        if (selectedTopology === 'single'
+            && controlMode === 'targetPower'
+            && splitPairConflict
+            && !hasSignedTarget
+            && !e3dcTargetConfigured) {
+            outputConflicts.push({
+                objectId: objectIdOf(chargeEntry),
+                first: 'charge',
+                second: 'discharge',
+                reason: 'split-charge-discharge-same-object',
+            });
+        }
         await this._setIfChanged('speicher.regelung.outputMappingConflictJson', outputConflicts.length ? JSON.stringify(outputConflicts) : '');
+        const conflictingOutputIds = new Set(
+            outputConflicts.map((item) => String(item && item.objectId || '').trim()).filter(Boolean),
+        );
 
         // Exklusive Hardware-Topologie: Farm und Einzelpfad duerfen niemals im
         // selben Regelzyklus konkurrieren. Ein Farmfehler bleibt ein Farmfehler und
@@ -7326,43 +7680,166 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         }
 
         const writeResults = [];
+        const commandExpectations = [];
+        let commandReadback = { supported: false, ok: true, status: 'not-run', rows: [], attempts: 0 };
+        let commandFailureStatus = '';
+        let alternativeRelease = { ok: true, status: 'not-required', rows: [] };
         let primarySucceeded = false;
         let primaryWroteAny = false;
         let primaryDetail = null;
 
-        if (!farmApplied) {
-            if (!mayUseSingleTarget) {
-                writeResult = false;
-                await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
-                await this._setIfChanged('speicher.regelung.lastWriteSplitJson', JSON.stringify({
-                    topology: selectedTopology,
-                    reason: farmEnabledForWrite ? (farmReason || 'farm-dispatch-failed') : 'no-active-storage-output',
-                }));
-            } else if (outputConflicts.length) {
-                writeResult = false;
-                await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
-                await this._setIfChanged('speicher.regelung.lastWriteSplitJson', JSON.stringify({ mode: targetMode, conflicts: outputConflicts }));
+/**
+ * Code-Teil: addCommandExpectation
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const addCommandExpectation = (key, entry, type, value, role = 'command') => {
+            if (!entry || !objectIdOf(entry)) return;
+            commandExpectations.push({ key, entry, type, value, role });
+        };
+/**
+ * Code-Teil: writeCommandNumber
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const writeCommandNumber = async (key, value, options = {}) => {
+            const entry = getEntry(key);
+            if (!entry) return false;
+            let result = false;
+            try {
+                result = await this._writeStorageCommandNumber(key, value, { force: options.force === true });
+            } catch (_error) {
+                result = false;
+            }
+            writeResults.push(result);
+            if (options.primary !== false) primaryWroteAny = true;
+            addCommandExpectation(key, entry, 'number', value, String(options.role || 'command'));
+            return result;
+        };
+/**
+ * Code-Teil: writeCommandBoolean
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const writeCommandBoolean = async (key, value, options = {}) => {
+            const entry = getEntry(key);
+            if (!entry) return false;
+            let result = false;
+            try {
+                result = await this._writeStorageCommandBoolean(key, value, { force: options.force === true });
+            } catch (_error) {
+                result = false;
+            }
+            writeResults.push(result);
+            if (options.primary !== false) primaryWroteAny = true;
+            addCommandExpectation(key, entry, 'boolean', !!value, String(options.role || 'command'));
+            return result;
+        };
+/**
+ * Code-Teil: classifyCommandReadbackFailure
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const classifyCommandReadbackFailure = (rows = []) => {
+            const mismatches = (Array.isArray(rows) ? rows : []).filter((row) => row && row.supported && !row.ok);
+            if (mismatches.some((row) => String(row.role || '').startsWith('split-'))) return 'direction-handover-failed';
+            if (mismatches.some((row) => String(row.role || '') === 'signed-target')) return 'signed-command-mismatch';
+            if (mismatches.some((row) => String(row.role || '').startsWith('e3dc-'))) return 'e3dc-command-mismatch';
+            if (mismatches.some((row) => String(row.role || '') === 'run')) return 'run-command-mismatch';
+            if (mismatches.some((row) => String(row.role || '') === 'reserve')) return 'reserve-command-mismatch';
+            return 'command-dp-mismatch';
+        };
 
-                // Ein Mapping-Konflikt darf keine alte externe Freigabe aktiv lassen.
-                // Ist der Run-DP selbst nicht Teil des Konflikts, wird er sicher auf
-                // false gesetzt; ein kollidierender Run-DP wird bewusst nicht beschrieben.
-                const conflictingIds = new Set(outputConflicts.map((item) => String(item && item.objectId || '').trim()).filter(Boolean));
-                if (runEntry && !conflictingIds.has(objectIdOf(runEntry)) && this.dp && typeof this.dp.writeBoolean === 'function') {
-                    try {
-                        const runResult = await this.dp.writeBoolean('st.run', false, false);
-                        writeResults.push(runResult);
-                    } catch (_e) {
-                        writeResults.push(false);
-                    }
-                }
-            } else if (controlMode === 'targetPower' && e3dcTargetConfigured) {
+        if (farmEnabledForWrite) {
+            // Der Farm-Dispatcher besitzt in dieser Topologie exklusiv die
+            // Hardwarehoheit. Seine pro Speicher ermittelten Readbacks werden
+            // unveraendert als gemeinsame Diagnose gespiegelt.
+            const farmReadbackSupported = !!(farmDispatchResult && farmDispatchResult.commandDpReadbackSupported === true);
+            const farmReadbackOk = farmDispatchResult && typeof farmDispatchResult.commandDpReadbackOk === 'boolean'
+                ? farmDispatchResult.commandDpReadbackOk
+                : (farmReadbackSupported ? farmWriteOk : true);
+            commandReadback = {
+                supported: farmReadbackSupported,
+                ok: farmReadbackOk,
+                status: String((farmDispatchResult && farmDispatchResult.commandDpReadbackStatus) || (farmReadbackSupported ? (farmReadbackOk ? 'confirmed' : 'mismatch') : 'farm-dispatch')),
+                rows: farmDispatchResult && Array.isArray(farmDispatchResult.commandDpReadbackRows)
+                    ? farmDispatchResult.commandDpReadbackRows
+                    : [],
+                attempts: 0,
+            };
+            await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+            await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
+        } else if (!mayUseSingleTarget) {
+            writeResult = false;
+            commandFailureStatus = 'kein-aktiver-speicher-ausgang';
+            await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+            primaryDetail = { topology: selectedTopology, reason: commandFailureStatus };
+        } else {
+            const familyChanged = this._lastStorageCommandFamily !== commandFamily;
+            if (!outputConflicts.length) {
+                alternativeRelease = await this._ensureStorageAlternativeTargetsNeutral(
+                    ignoredAlternativeTargetEntries,
+                    { familyChanged },
+                );
+            }
+
+            if (outputConflicts.length) {
+                writeResult = false;
+                commandFailureStatus = 'dp-zuordnung-konflikt';
+                await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+                primaryDetail = { mode: targetMode, family: commandFamily, conflicts: outputConflicts };
+            } else if (!alternativeRelease.ok) {
+                writeResult = false;
+                commandFailureStatus = 'alternative-command-release-failed';
+                await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+                primaryDetail = {
+                    mode: targetMode,
+                    family: commandFamily,
+                    directionSupported,
+                    alternativeRelease,
+                };
+            } else if (controlMode === 'targetPower' && commandFamily === 'e3dc-rscp') {
                 const e3dcResult = await this._writeE3dcRscpTargetW(w, reason, source, cfg);
                 primarySucceeded = !!(e3dcResult && e3dcResult.ok === true);
                 primaryWroteAny = true;
                 writeResult = primarySucceeded;
                 await this._setIfChanged('speicher.regelung.lastWriteRaw', e3dcResult ? Math.round(Number(e3dcResult.valueW) || 0) : null);
+                for (const row of (e3dcResult && Array.isArray(e3dcResult.writes) ? e3dcResult.writes : [])) {
+                    const entry = getEntry(row.key);
+                    const type = row.key === 'st.e3dcPowerLimitsUsed' ? 'boolean' : 'number';
+                    const role = row.key === 'st.e3dcSetPowerMode' || row.key === 'st.e3dcSetPowerValueW'
+                        ? 'e3dc-target'
+                        : 'e3dc-limit';
+                    addCommandExpectation(row.key, entry, type, row.value, role);
+                    writeResults.push(row.result);
+                }
                 primaryDetail = e3dcResult ? {
                     profile: 'e3dc-rscp',
+                    family: commandFamily,
                     modeCode: e3dcResult.modeCode,
                     modeName: e3dcResult.modeName,
                     valueW: e3dcResult.valueW,
@@ -7373,95 +7850,104 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             } else if (controlMode === 'limits') {
                 const chargeW = directionSupported && w < 0 ? Math.abs(w) : 0;
                 const dischargeW = directionSupported && w > 0 ? w : 0;
-                if (maxChargeEntry) {
-                    try { writeResults.push(await this.dp.writeNumber('st.maxChargeW', chargeW, false)); primaryWroteAny = true; } catch (_e) { writeResults.push(false); }
-                }
-                if (maxDischargeEntry) {
-                    try { writeResults.push(await this.dp.writeNumber('st.maxDischargeW', dischargeW, false)); primaryWroteAny = true; } catch (_e) { writeResults.push(false); }
-                }
-                primarySucceeded = !!(directionSupported && primaryWroteAny && !writeResults.some(r => r === false));
+                if (maxChargeEntry) await writeCommandNumber('st.maxChargeW', chargeW, { role: 'limit-charge' });
+                if (maxDischargeEntry) await writeCommandNumber('st.maxDischargeW', dischargeW, { role: 'limit-discharge' });
+                primarySucceeded = !!(directionSupported && primaryWroteAny && !writeResults.some((r) => r === false));
                 writeResult = primarySucceeded;
                 await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
-                primaryDetail = { mode: targetMode, chargeW: maxChargeEntry ? chargeW : null, dischargeW: maxDischargeEntry ? dischargeW : null, directionSupported };
+                primaryDetail = {
+                    family: commandFamily,
+                    mode: targetMode,
+                    chargeW: maxChargeEntry ? chargeW : null,
+                    dischargeW: maxDischargeEntry ? dischargeW : null,
+                    directionSupported,
+                };
             } else if (controlMode === 'enableFlags') {
                 const chargeEnabled = !!(directionSupported && w < 0);
                 const dischargeEnabled = !!(directionSupported && w > 0);
-                if (chargeEnableEntry) {
-                    try { writeResults.push(await this.dp.writeBoolean('st.chargeEnable', chargeEnabled, false)); primaryWroteAny = true; } catch (_e) { writeResults.push(false); }
-                }
-                if (dischargeEnableEntry) {
-                    try { writeResults.push(await this.dp.writeBoolean('st.dischargeEnable', dischargeEnabled, false)); primaryWroteAny = true; } catch (_e) { writeResults.push(false); }
-                }
-                primarySucceeded = !!(directionSupported && primaryWroteAny && !writeResults.some(r => r === false));
+                if (chargeEnableEntry) await writeCommandBoolean('st.chargeEnable', chargeEnabled, { role: 'enable-charge' });
+                if (dischargeEnableEntry) await writeCommandBoolean('st.dischargeEnable', dischargeEnabled, { role: 'enable-discharge' });
+                primarySucceeded = !!(directionSupported && primaryWroteAny && !writeResults.some((r) => r === false));
                 writeResult = primarySucceeded;
                 await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
-                primaryDetail = { mode: targetMode, chargeEnabled: chargeEnableEntry ? chargeEnabled : null, dischargeEnabled: dischargeEnableEntry ? dischargeEnabled : null, directionSupported };
-            } else if (hasSignedTarget || hasAnySplitTarget) {
+                primaryDetail = {
+                    family: commandFamily,
+                    mode: targetMode,
+                    chargeEnabled: chargeEnableEntry ? chargeEnabled : null,
+                    dischargeEnabled: dischargeEnableEntry ? dischargeEnabled : null,
+                    directionSupported,
+                };
+            } else if (controlMode === 'targetPower' && commandFamily === 'split') {
                 const chargeW = directionSupported && w < 0 ? Math.abs(w) : 0;
                 const dischargeW = directionSupported && w > 0 ? w : 0;
 
-                if (canWriteChargeSplit) {
-                    try { writeResults.push(await this.dp.writeNumber('st.targetChargePowerW', chargeW, false)); primaryWroteAny = true; } catch (_e) { writeResults.push(false); }
-                }
-                if (canWriteDischargeSplit) {
-                    try { writeResults.push(await this.dp.writeNumber('st.targetDischargePowerW', dischargeW, false)); primaryWroteAny = true; } catch (_e) { writeResults.push(false); }
-                }
-
-                if (hasSignedTarget) {
-                    try {
-                        const e = signedEntry;
-                        const scale = (e && Number.isFinite(Number(e.scale)) && Number(e.scale) !== 0) ? Number(e.scale) : 1;
-                        const offset = (e && Number.isFinite(Number(e.offset))) ? Number(e.offset) : 0;
-                        let raw = (w - offset) / scale;
-                        if (e && e.invert) raw = -raw;
-                        if (e && Number.isFinite(Number(e.min))) raw = Math.max(Number(e.min), raw);
-                        if (e && Number.isFinite(Number(e.max))) raw = Math.min(Number(e.max), raw);
-                        await this._setIfChanged('speicher.regelung.lastWriteRaw', Math.round(raw));
-                    } catch {
-                        await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
-                    }
-                    try { writeResults.push(await this.dp.writeNumber('st.targetPowerW', w, false)); primaryWroteAny = true; } catch (_e) { writeResults.push(false); }
+                // Direkter Richtungswechsel ohne eigene 0-W-Regelrunde: Zuerst
+                // wird im selben Write-Plan die alte Richtung neutralisiert,
+                // unmittelbar danach erhaelt die neue Richtung ihren Sollwert.
+                if (w > 0) {
+                    if (canWriteChargeSplit) await writeCommandNumber('st.targetChargePowerW', 0, { role: 'split-inactive-charge', force: true });
+                    if (canWriteDischargeSplit) await writeCommandNumber('st.targetDischargePowerW', dischargeW, { role: 'split-active-discharge', force: true });
+                } else if (w < 0) {
+                    if (canWriteDischargeSplit) await writeCommandNumber('st.targetDischargePowerW', 0, { role: 'split-inactive-discharge', force: true });
+                    if (canWriteChargeSplit) await writeCommandNumber('st.targetChargePowerW', chargeW, { role: 'split-active-charge', force: true });
                 } else {
-                    await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+                    if (canWriteChargeSplit) await writeCommandNumber('st.targetChargePowerW', 0, { role: 'split-stop-charge', force: true });
+                    if (canWriteDischargeSplit) await writeCommandNumber('st.targetDischargePowerW', 0, { role: 'split-stop-discharge', force: true });
                 }
 
-                primarySucceeded = !!(directionSupported && primaryWroteAny && !writeResults.some(r => r === false));
+                primarySucceeded = !!(directionSupported && primaryWroteAny && !writeResults.some((r) => r === false));
                 writeResult = primarySucceeded;
+                await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
                 primaryDetail = {
+                    family: commandFamily,
+                    mode: targetMode,
                     chargeW: canWriteChargeSplit ? chargeW : null,
                     dischargeW: canWriteDischargeSplit ? dischargeW : null,
-                    mode: targetMode,
-                    signedAlsoWritten: !!hasSignedTarget,
                     directionSupported,
-                    chargeSkippedBecauseSignedSameObject: !!chargeSameAsSigned,
-                    dischargeSkippedBecauseSignedSameObject: !!dischargeSameAsSigned,
+                    writeOrder: w > 0
+                        ? ['charge=0', 'discharge=target']
+                        : (w < 0 ? ['discharge=0', 'charge=target'] : ['charge=0', 'discharge=0']),
+                };
+            } else if (controlMode === 'targetPower' && commandFamily === 'signed') {
+                await writeCommandNumber('st.targetPowerW', w, { role: 'signed-target', force: true });
+                primarySucceeded = !!(directionSupported && primaryWroteAny && !writeResults.some((r) => r === false));
+                writeResult = primarySucceeded;
+                const expectedRaw = this._storageCommandExpectedRaw(signedEntry, w, 'number');
+                await this._setIfChanged('speicher.regelung.lastWriteRaw', expectedRaw ? Math.round(Number(expectedRaw.raw) || 0) : null);
+                primaryDetail = {
+                    family: commandFamily,
+                    mode: targetMode,
+                    signedW: w,
+                    signedRaw: expectedRaw ? expectedRaw.raw : null,
+                    directionSupported,
                 };
             } else {
                 await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
-                primaryDetail = { mode: targetMode, directionSupported: false, reason: 'kein beschreibbarer Ziel-DP' };
+                primaryDetail = {
+                    family: commandFamily,
+                    mode: targetMode,
+                    directionSupported: false,
+                    reason: splitPairConflict ? 'split-charge-discharge-same-object' : 'kein beschreibbarer Ziel-DP',
+                };
+                commandFailureStatus = splitPairConflict ? 'dp-zuordnung-konflikt' : 'zielrichtung-nicht-gemappt';
                 writeResult = false;
             }
 
-            // Run/Enable folgt dem tatsaechlich erfolgreichen Hauptpfad. Bei einem
-            // Fehler wird sicher false geschrieben, damit kein Controller mit einer
-            // Freigabe ohne gueltigen Sollwert weiterlaeuft.
-            if (runEntry && this.dp && typeof this.dp.writeBoolean === 'function') {
-                const runActive = primarySucceeded && w !== 0;
-                try {
-                    const runResult = await this.dp.writeBoolean('st.run', runActive, false);
-                    writeResults.push(runResult);
-                    if (runResult === false) writeResult = false;
-                } catch (_e) {
-                    writeResults.push(false);
-                    writeResult = false;
-                }
+            // Run/Enable folgt dem tatsaechlich erfolgreichen Hauptpfad. Ein
+            // Fehler setzt den Controller sicher auf false; der Wert wird wie
+            // alle Sollwert-DPs anschliessend per Readback bestaetigt.
+            if (runEntry && !conflictingOutputIds.has(objectIdOf(runEntry))) {
+                const runActive = primarySucceeded && writeResult !== false && w !== 0;
+                const runResult = await writeCommandBoolean('st.run', runActive, { role: 'run', primary: false, force: !runActive });
+                if (runResult === false) writeResult = false;
                 primaryDetail = { ...(primaryDetail || {}), run: runActive };
+            } else if (runEntry) {
+                primaryDetail = { ...(primaryDetail || {}), run: null, runSkipped: 'mapping-conflict' };
             }
 
             // Der Reserve-DP wird aus exakt derselben wirksamen SoC-Untergrenze
-            // gespeist wie das interne Entlade-Gate. Damit bleibt die externe
-            // Controller-Sicherheit mit der NexoWatt-Policy synchron.
-            if (reserveSocEntry && this.dp && typeof this.dp.writeNumber === 'function') {
+            // gespeist wie das interne Entlade-Gate.
+            if (reserveSocEntry && !conflictingOutputIds.has(objectIdOf(reserveSocEntry))) {
                 const reserveSocPct = clamp(
                     Number.isFinite(Number(this._effectiveReserveSocPct))
                         ? Number(this._effectiveReserveSocPct)
@@ -7469,24 +7955,68 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     0,
                     100,
                 );
-                try {
-                    const reserveResult = await this.dp.writeNumber('st.reserveSocPct', reserveSocPct, false);
-                    writeResults.push(reserveResult);
-                    if (reserveResult === false) writeResult = false;
-                } catch (_e) {
-                    writeResults.push(false);
-                    writeResult = false;
-                }
+                const reserveResult = await writeCommandNumber('st.reserveSocPct', reserveSocPct, { role: 'reserve', primary: false });
+                if (reserveResult === false) writeResult = false;
                 primaryDetail = { ...(primaryDetail || {}), reserveSocPct };
+            } else if (reserveSocEntry) {
+                primaryDetail = { ...(primaryDetail || {}), reserveSocPct: null, reserveSkipped: 'mapping-conflict' };
             }
 
-            await this._setIfChanged('speicher.regelung.lastWriteSplitJson', primaryDetail ? JSON.stringify(primaryDetail) : null);
-        } else {
-            // Bei Speicherfarm werden die im AppCenter je Speicher zugeordneten
-            // Setpoints geschrieben; globale Einzelziele bleiben bewusst exklusiv.
-            await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
-            await this._setIfChanged('speicher.regelung.lastWriteSplitJson', null);
+            commandReadback = await this._verifyStorageCommandDatapoints(commandExpectations, { attempts: 3, delayMs: 30 });
+            if (commandReadback.supported && !commandReadback.ok) {
+                const rawStatus = commandReadback.status;
+                commandFailureStatus = classifyCommandReadbackFailure(commandReadback.rows);
+                commandReadback = { ...commandReadback, rawStatus, status: commandFailureStatus };
+                writeResult = false;
+                primarySucceeded = false;
+                for (const row of commandReadback.rows || []) {
+                    if (!row || row.ok || !row.key) continue;
+                    this._clearStorageCommandWriteCache(getEntry(row.key));
+                }
+
+                // Ein Sollwert-Readbackfehler darf keine laufende externe
+                // Freigabe hinterlassen. Run wird best effort sofort geloest.
+                if (runEntry) {
+                    const safeRunResult = await this._writeStorageCommandBoolean('st.run', false, { force: true });
+                    const safeRunReadback = await this._verifyStorageCommandDatapoints(
+                        [{ key: 'st.run', entry: runEntry, type: 'boolean', value: false, role: 'run-safe-release' }],
+                        { attempts: 2, delayMs: 20 },
+                    );
+                    commandReadback.safeRunRelease = { result: safeRunResult, readback: safeRunReadback };
+                }
+            } else if (!commandReadback.supported) {
+                commandReadback = { ...commandReadback, status: 'unavailable' };
+            }
+
+            if (!alternativeRelease.ok && !commandFailureStatus) commandFailureStatus = 'alternative-command-release-failed';
+            primaryDetail = {
+                ...(primaryDetail || {}),
+                family: commandFamily,
+                ignoredAlternatives: ignoredAlternativeTargetEntries.map((item) => ({
+                    family: item.family,
+                    key: item.key,
+                    objectId: objectIdOf(item.entry),
+                })),
+                alternativeRelease,
+                commandReadback,
+            };
+            await this._setIfChanged('speicher.regelung.lastWriteSplitJson', JSON.stringify(primaryDetail));
         }
+
+        await this._setIfChanged('speicher.regelung.commandDpReadbackAvailable', commandReadback.supported === true);
+        await this._setIfChanged(
+            'speicher.regelung.commandDpReadbackOk',
+            commandReadback.supported === true ? commandReadback.ok === true : null,
+        );
+        await this._setIfChanged('speicher.regelung.commandDpReadbackStatus', String(commandReadback.status || ''));
+        await this._setIfChanged('speicher.regelung.commandDpReadbackJson', JSON.stringify({
+            topology: selectedTopology,
+            family: commandFamily,
+            targetW: w,
+            failureStatus: commandFailureStatus,
+            alternativeRelease,
+            readback: commandReadback,
+        }));
 
         const acceptedTargetW = farmEnabledForWrite
             ? farmAcceptedW
@@ -7525,14 +8055,15 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         }
 
         let singleStatus = 'nicht möglich';
-        if (outputConflicts.length) singleStatus = 'dp-zuordnung-konflikt';
+        if (commandFailureStatus) singleStatus = commandFailureStatus;
+        else if (outputConflicts.length) singleStatus = 'dp-zuordnung-konflikt';
         else if (!directionSupported) singleStatus = 'zielrichtung-nicht-gemappt';
         else if (writeResult === true) {
-            if (e3dcTargetConfigured) singleStatus = 'e3dc-rscp-geschrieben';
-            else if (controlMode === 'limits') singleStatus = 'leistungsgrenzen-geschrieben';
-            else if (controlMode === 'enableFlags') singleStatus = 'freigabe-flags-geschrieben';
-            else if (hasSignedTarget && hasAnyWritableSplit) singleStatus = 'signed+split-geschrieben';
-            else if (hasAnyWritableSplit) singleStatus = 'split-geschrieben';
+            if (commandFamily === 'e3dc-rscp') singleStatus = 'e3dc-rscp-geschrieben';
+            else if (commandFamily === 'limits') singleStatus = 'leistungsgrenzen-geschrieben';
+            else if (commandFamily === 'enable-flags') singleStatus = 'freigabe-flags-geschrieben';
+            else if (commandFamily === 'split') singleStatus = 'split-geschrieben';
+            else if (commandFamily === 'signed') singleStatus = 'signed-geschrieben';
             else singleStatus = 'geschrieben';
         }
         const writeStatus = farmEnabledForWrite
@@ -7600,6 +8131,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         if (commandEffective && targetChanged) this._lastTargetWriteMs = commandTs;
         this._lastReason = String(reason || '');
         this._lastSource = String(source || '');
+        this._lastStorageCommandFamily = commandFamily;
     }
 
     async _upsertInputsFromConfig() {
@@ -7710,7 +8242,12 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.outputMappingConflictJson', 'Konflikte in manuellen Speicher-Ausgangszuordnungen (JSON)', 'string', 'text', '');
         await mk('speicher.regelung.runObjId', 'Run/Externe-Regelung Datenpunkt (Objekt-ID)', 'string', 'text', '');
         await mk('speicher.regelung.lastWriteRaw', 'Letzter Rohwert (signed Setpoint)', 'number', 'value');
-        await mk('speicher.regelung.lastWriteSplitJson', 'Letzter Split-Sollwert (JSON)', 'string', 'text', '');
+        await mk('speicher.regelung.lastWriteSplitJson', 'Letzter Speicher-Kommandoplan (JSON)', 'string', 'json', '');
+        await mk('speicher.regelung.commandFamily', 'Exklusive Speicher-Kommandofamilie', 'string', 'text', 'none');
+        await mk('speicher.regelung.commandDpReadbackAvailable', 'Kommandodatenpunkt-Readback verfügbar', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.commandDpReadbackOk', 'Kommandodatenpunkte bestätigt', 'boolean', 'indicator', null);
+        await mk('speicher.regelung.commandDpReadbackStatus', 'Kommandodatenpunkt-Readback Status', 'string', 'text', '');
+        await mk('speicher.regelung.commandDpReadbackJson', 'Kommandodatenpunkt-Readback (JSON)', 'string', 'json', '');
         await mk('speicher.regelung.batteryPowerTrusted', 'Direkter Batterie-Istwert innerhalb staleTimeout', 'boolean', 'indicator', false);
         await mk('speicher.regelung.batteryPowerIgnoredReason', 'Ignorierte Ist-Leistung Grund', 'string', 'text', '');
         await mk('speicher.regelung.batteryPowerBalanceTrusted', 'Ist-Leistung/Puffer für NVP-Balancing verwendbar', 'boolean', 'indicator', false);

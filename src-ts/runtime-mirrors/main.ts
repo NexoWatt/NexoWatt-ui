@@ -21,7 +21,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: 22279574af20bbd7a14808d53b92e1a3d5ed8dfe8a5beb1083d43a0aa0d438f0
+ * Original-Hash: 0c33d6346f6e20f59b132bda79d916db2ec209abde1982d38214728658597928
  */
 
 /**
@@ -6846,39 +6846,106 @@ class NexoWattVis extends utils.Adapter {
     });
   }
   /**
-   * Code-Teil: _sfWriteIfChanged
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   * Liest einen Farm-Kommandodatenpunkt nach dem Write zurueck. Das bestaetigt
+   * nicht die physische Batteriereaktion, aber sehr wohl, dass ioBroker und der
+   * nachgelagerte Adapter exakt den erwarteten Kommandowert halten.
    */
-  async _sfWriteIfChanged(objectId, value) {
-    // Writes a setpoint only when it changed OR a keepalive interval has elapsed.
-    // Returns an object so callers can reliably detect success/failure.
+  async _sfReadbackNumber(objectId, expectedValue, options = {}) {
+    const id = String(objectId || '').trim();
+    if (!id || typeof this.getForeignStateAsync !== 'function') {
+      return { supported: false, ok: true, status: 'unavailable', objectId: id, expected: expectedValue, actual: null, attempts: 0 };
+    }
+    const attempts = Math.max(1, Math.min(3, Number(options.attempts) || 3));
+    const delayMs = Math.max(0, Math.min(100, Number(options.delayMs) || 30));
+    const expected = Number(expectedValue);
+    let last = null;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const state = await this.getForeignStateAsync(id);
+        const raw = state && Object.prototype.hasOwnProperty.call(state, 'val') ? state.val : null;
+        const actual = typeof raw === 'number'
+          ? raw
+          : Number(String(raw === null || raw === undefined ? '' : raw).trim().replace(',', '.'));
+        const tolerance = Math.max(0.000001, Math.abs(expected) * 0.000001);
+        const ok = Number.isFinite(actual) && Number.isFinite(expected) && Math.abs(actual - expected) <= tolerance;
+        last = {
+          supported: true,
+          ok,
+          status: ok ? 'confirmed' : (Number.isFinite(actual) ? 'mismatch' : 'value-missing'),
+          objectId: id,
+          expected,
+          actual: Number.isFinite(actual) ? actual : raw,
+          ts: state && Number.isFinite(Number(state.ts)) ? Number(state.ts) : null,
+          ack: state && typeof state.ack === 'boolean' ? state.ack : null,
+          attempts: attempt,
+        };
+        if (ok) return last;
+      } catch (error) {
+        last = {
+          supported: true,
+          ok: false,
+          status: 'read-error',
+          objectId: id,
+          expected,
+          actual: null,
+          error: error && error.message ? String(error.message) : String(error),
+          attempts: attempt,
+        };
+      }
+      if (attempt < attempts && delayMs > 0) {
+        await new Promise((resolve) => {
+          if (typeof this.setTimeout === 'function') this.setTimeout(resolve, delayMs);
+          else setTimeout(resolve, delayMs);
+        });
+      }
+    }
+    return last || { supported: true, ok: false, status: 'value-missing', objectId: id, expected, actual: null, attempts };
+  }
 
+  /**
+   * Code-Teil: _sfWriteIfChanged
+   * Zweck: Schreibt Farm-Sollwerte mit Keepalive und bestaetigt den konkreten
+   * Kommandodatenpunkt. Ein erfolgreich aufgeloestes setForeignStateAsync allein
+   * gilt nicht mehr als akzeptierter Speicherbefehl, wenn der State danach einen
+   * anderen Wert enthaelt.
+   */
+  async _sfWriteIfChanged(objectId, value, options = {}) {
     if (!objectId) {
       return { ok: false, skipped: true, changed: false, reason: 'no_objectId' };
     }
-
-    // Only allow finite numbers; everything else is a skip (safety).
     if (typeof value !== 'number' || !Number.isFinite(value)) {
       return { ok: false, skipped: true, changed: false, reason: 'invalid_value' };
     }
 
     const now = Date.now();
-    // Externe Speichercontroller/FENECON-Watchdogs muessen auch bei unveraendertem
-    // Sollwert regelmaessig bestaetigt werden. 900 ms stellt bei einem 1-s-EMS-Tick
-    // sicher, dass jedes Intervall einen echten Write ausloest.
+    const keepaliveEnabled = options.keepalive !== false;
+    // Farm-Kommandos muessen spaetestens nach 900 ms erneuert werden. Ein
+    // Aufrufer darf das Intervall nur weiter verkuerzen, niemals verlaengern.
     const keepaliveMs = 900;
-
+    const requestedKeepaliveMs = Number(options.keepaliveMs);
+    const effectiveKeepaliveMs = Number.isFinite(requestedKeepaliveMs)
+      ? Math.max(250, Math.min(keepaliveMs, requestedKeepaliveMs))
+      : keepaliveMs;
     const lastVal = this._sfLastSetpoints.get(objectId);
     const lastTs = this._sfLastSetpointsTs.get(objectId) || 0;
-
-    const same = (lastVal === value);
+    const same = lastVal === value;
     const age = now - lastTs;
 
-    // Skip when unchanged and not stale
-    if (same && age < keepaliveMs) {
-      return { ok: true, skipped: true, changed: false, same: true };
+    if (same && (!keepaliveEnabled || age < effectiveKeepaliveMs)) {
+      const current = await this._sfReadbackNumber(objectId, value, { attempts: 1, delayMs: 0 });
+      if (!current.supported || current.ok) {
+        return {
+          ok: true,
+          skipped: true,
+          changed: false,
+          same: true,
+          readback: current,
+          readbackSupported: current.supported === true,
+          readbackOk: current.supported === true ? current.ok === true : null,
+        };
+      }
+      // Der Cache sagt "gleich", der echte Kommandostate aber nicht. In diesem
+      // Fall muss trotz Deadband/Keepalive sofort neu geschrieben werden.
     }
 
     try {
@@ -6893,9 +6960,34 @@ class NexoWattVis extends utils.Adapter {
           blockedByOwner: String(writeResult.blockedByOwner || ''),
         };
       }
+
+      const readback = await this._sfReadbackNumber(objectId, value, { attempts: 3, delayMs: 30 });
+      if (readback.supported && !readback.ok) {
+        this._sfLastSetpoints.delete(objectId);
+        this._sfLastSetpointsTs.delete(objectId);
+        return {
+          ok: false,
+          skipped: false,
+          changed: false,
+          reason: 'command_dp_mismatch',
+          readback,
+          readbackSupported: true,
+          readbackOk: false,
+        };
+      }
+
       this._sfLastSetpoints.set(objectId, value);
       this._sfLastSetpointsTs.set(objectId, now);
-      return { ok: true, skipped: false, changed: true, same, keepalive: same && age >= keepaliveMs };
+      return {
+        ok: true,
+        skipped: false,
+        changed: true,
+        same,
+        keepalive: keepaliveEnabled && same && age >= effectiveKeepaliveMs,
+        readback,
+        readbackSupported: readback.supported === true,
+        readbackOk: readback.supported === true ? readback.ok === true : null,
+      };
     } catch (e) {
       const msg = (e && e.message) ? e.message : String(e);
       if (this.log && typeof this.log.warn === 'function') {
@@ -7322,7 +7414,9 @@ class NexoWattVis extends utils.Adapter {
       }
     }
 
-    let anyOkRelevant = false;
+    // Baustein 8: Pro Speicher darf genau eine Sollwert-Kommandofamilie
+    // aktiv sein. Vollstaendige Split-DPs gewinnen vor Signed; alternative
+    // Familien werden kontrolliert neutralisiert und per State-Readback bestaetigt.
     const results = [];
     for (const s of storages) {
       const alloc = (direction === 'idle') ? 0 : (allocMap.get(s) || 0);
@@ -7331,16 +7425,22 @@ class NexoWattVis extends utils.Adapter {
 
       const outChargeW = s.invertChargeSign ? -chargeW : chargeW;
       const outDischargeW = s.invertDischargeSign ? -dischargeW : dischargeW;
+      let outSignedW = direction === 'charge' ? -Math.abs(chargeW) : (direction === 'discharge' ? Math.abs(dischargeW) : 0);
+      if (s.invertSetSignedPowerSign) outSignedW = -outSignedW;
 
-      let outSignedW = 0;
-      if (s.setSignedPowerId) {
-        // Signed-Setpoint-Konvention: Standard = Laden negativ / Entladen positiv.
-        // Bei Systemen mit umgekehrter Konvention kann separat der Signed-Sollwert invertiert werden.
-        if (direction === 'charge') outSignedW = -Math.abs(chargeW);
-        else if (direction === 'discharge') outSignedW = +Math.abs(dischargeW);
-        else outSignedW = 0;
-        if (s.invertSetSignedPowerSign) outSignedW = -outSignedW;
-      }
+      const signedId = String(s.setSignedPowerId || '').trim();
+      const chargeId = String(s.setChargePowerId || '').trim();
+      const dischargeId = String(s.setDischargePowerId || '').trim();
+      const splitPairConflict = !!(chargeId && dischargeId && chargeId === dischargeId);
+      const completeSplit = !!(chargeId && dischargeId && !splitPairConflict);
+      const anySplit = !!(chargeId || dischargeId);
+      let commandFamily = 'none';
+      if (completeSplit) commandFamily = 'split';
+      else if (signedId) commandFamily = 'signed';
+      else if (anySplit && !splitPairConflict) commandFamily = 'split';
+      const directionSupported = direction === 'idle'
+        || commandFamily === 'signed'
+        || (commandFamily === 'split' && (direction === 'charge' ? !!chargeId : !!dischargeId));
 
       const r = {
         name: s.name || '',
@@ -7359,36 +7459,141 @@ class NexoWattVis extends utils.Adapter {
         actualDischargeW: Number.isFinite(Number(s.dischargePowerW)) ? Number(s.dischargePowerW) : null,
         chargeW,
         dischargeW,
+        commandFamily,
+        directionSupported,
+        splitPairConflict,
+        ignoredAlternatives: [],
         ok: true,
         writes: {},
       };
 
-      if (s.setSignedPowerId) {
-        const wr = await this._sfWriteIfChanged(s.setSignedPowerId, outSignedW);
-        r.writes.signed = wr;
-        if (!wr.ok) r.ok = false;
-        if (wr.ok) anyOkRelevant = true;
+      const selectedIds = new Set();
+      if (commandFamily === 'signed' && signedId) selectedIds.add(signedId);
+      if (commandFamily === 'split') {
+        if (chargeId) selectedIds.add(chargeId);
+        if (dischargeId) selectedIds.add(dischargeId);
       }
 
-      if (s.setChargePowerId) {
-        const wr = await this._sfWriteIfChanged(s.setChargePowerId, outChargeW);
-        r.writes.charge = wr;
+      const releaseRows = [];
+      const releaseOnce = async (key, id) => {
+        const objectId = String(id || '').trim();
+        if (!objectId || selectedIds.has(objectId) || releaseRows.some((row) => row.objectId === objectId)) return;
+        const wr = await this._sfWriteIfChanged(objectId, 0, { keepalive: false });
+        r.writes[key] = wr;
+        r.ignoredAlternatives.push({ key, objectId });
+        releaseRows.push({ key, objectId, wr });
         if (!wr.ok) r.ok = false;
-        if (direction === 'charge' && wr.ok) anyOkRelevant = true;
-        if (direction === 'idle' && wr.ok) anyOkRelevant = true;
+      };
+
+      if (commandFamily !== 'signed') await releaseOnce('releaseSigned', signedId);
+      if (commandFamily !== 'split') {
+        await releaseOnce('releaseCharge', chargeId);
+        await releaseOnce('releaseDischarge', dischargeId);
       }
 
-      if (s.setDischargePowerId) {
-        const wr = await this._sfWriteIfChanged(s.setDischargePowerId, outDischargeW);
-        r.writes.discharge = wr;
+      const selectedWrites = [];
+      const writeSelected = async (key, id, value) => {
+        const objectId = String(id || '').trim();
+        if (!objectId) return;
+        const wr = await this._sfWriteIfChanged(objectId, value, { keepalive: true });
+        r.writes[key] = wr;
+        selectedWrites.push(wr);
         if (!wr.ok) r.ok = false;
-        if (direction === 'discharge' && wr.ok) anyOkRelevant = true;
-        if (direction === 'idle' && wr.ok) anyOkRelevant = true;
+      };
+
+      if (splitPairConflict && !signedId) {
+        r.writes.conflict = {
+          ok: false,
+          skipped: true,
+          changed: false,
+          reason: 'split_charge_discharge_same_object',
+          objectId: chargeId,
+        };
+        r.ok = false;
+      } else if (commandFamily === 'signed') {
+        await writeSelected('signed', signedId, outSignedW);
+      } else if (commandFamily === 'split') {
+        // Gleicher EMS-Tick, aber sichere Reihenfolge: inaktive Richtung zuerst
+        // auf 0, danach aktive Richtung mit dem neuen Betrag.
+        if (direction === 'discharge') {
+          await writeSelected('charge', chargeId, 0);
+          await writeSelected('discharge', dischargeId, outDischargeW);
+        } else if (direction === 'charge') {
+          await writeSelected('discharge', dischargeId, 0);
+          await writeSelected('charge', chargeId, outChargeW);
+        } else {
+          await writeSelected('charge', chargeId, 0);
+          await writeSelected('discharge', dischargeId, 0);
+        }
       }
 
-      this._sfRememberDispatchSnapshot(s, direction, alloc);
+      const releaseAccepted = releaseRows.every((row) => row.wr && row.wr.ok === true);
+      const commandRequired = selectedWrites.length > 0 || releaseRows.length > 0 || !!r.writes.conflict;
+      const selectedAccepted = selectedWrites.length > 0 && selectedWrites.every((wr) => wr && wr.ok === true);
+      const commandAccepted = commandRequired
+        && directionSupported
+        && !r.writes.conflict
+        && releaseAccepted
+        && selectedAccepted;
+      const signedAllocatedW = direction === 'charge' ? -Math.abs(alloc) : (direction === 'discharge' ? Math.abs(alloc) : 0);
+      r.commandRequired = commandRequired;
+      r.commandAccepted = commandAccepted;
+      r.releaseAccepted = releaseAccepted;
+      r.selectedAccepted = selectedAccepted;
+      r.acceptedW = commandAccepted === true ? signedAllocatedW : 0;
+      r.failedW = (commandRequired && commandAccepted !== true && direction !== 'idle') ? signedAllocatedW : 0;
+      r.stopAccepted = direction === 'idle' && commandRequired ? commandAccepted === true : null;
+
+      if (commandAccepted === true) this._sfRememberDispatchSnapshot(s, direction, alloc);
       results.push(r);
     }
+
+    const plannedSignedW = direction === 'charge' ? -deliveredAbsW : deliveredAbsW;
+    const acceptedSignedW = results.reduce((sum, row) => sum + (Number.isFinite(Number(row.acceptedW)) ? Number(row.acceptedW) : 0), 0);
+    const acceptedAbsW = Math.abs(Math.round(acceptedSignedW));
+    const failedAbsW = direction === 'idle'
+      ? 0
+      : Math.max(0, Math.round(deliveredAbsW - acceptedAbsW));
+    const failedSignedW = failedAbsW > 0
+      ? (direction === 'charge' ? -failedAbsW : failedAbsW)
+      : 0;
+    const unservedSignedW = unservedAbsW > 0
+      ? (direction === 'charge' ? -unservedAbsW : unservedAbsW)
+      : 0;
+    const commandRows = results.filter((row) => row.commandRequired === true);
+    const allConfiguredWritesAccepted = commandRows.length > 0 && commandRows.every((row) => row.commandAccepted === true);
+    const failedCommandCount = commandRows.filter((row) => row.commandAccepted !== true).length;
+    const commandDpReadbackRows = results.flatMap((row) => Object.entries(row.writes || {}).map(([key, wr]) => {
+      const readback = wr && wr.readback && typeof wr.readback === 'object' ? wr.readback : null;
+      return {
+        storage: row.name || '',
+        family: row.commandFamily || 'none',
+        key,
+        objectId: readback ? String(readback.objectId || '') : '',
+        expected: readback && Number.isFinite(Number(readback.expected)) ? Number(readback.expected) : null,
+        actual: readback && Number.isFinite(Number(readback.actual)) ? Number(readback.actual) : (readback ? readback.actual : null),
+        supported: !!(wr && wr.readbackSupported === true),
+        ok: wr && typeof wr.readbackOk === 'boolean' ? wr.readbackOk : null,
+        status: readback ? String(readback.status || '') : String((wr && wr.reason) || ''),
+      };
+    }));
+    const supportedCommandDpReadbacks = commandDpReadbackRows.filter((row) => row.supported);
+    const commandDpReadbackSupported = supportedCommandDpReadbacks.length > 0;
+    const commandDpReadbackOk = commandDpReadbackSupported
+      ? supportedCommandDpReadbacks.every((row) => row.ok === true)
+      : true;
+    const commandDpReadbackStatus = commandDpReadbackSupported
+      ? (commandDpReadbackOk ? 'confirmed' : 'command-dp-mismatch')
+      : 'unavailable';
+    const anyAcceptedPower = direction === 'idle' ? allConfiguredWritesAccepted : acceptedAbsW > 0;
+    const requestSatisfied = direction === 'idle'
+      ? allConfiguredWritesAccepted
+      : (allConfiguredWritesAccepted && failedAbsW === 0 && unservedAbsW === 0);
+    let dispatchStatus = 'farm';
+    if (direction === 'idle') dispatchStatus = allConfiguredWritesAccepted ? 'farm-stop' : 'farm-stop-failed';
+    else if (!allConfiguredWritesAccepted && acceptedAbsW > 0) dispatchStatus = 'farm-partial';
+    else if (!allConfiguredWritesAccepted) dispatchStatus = 'farm-write-failed';
+    else if (unservedAbsW > 0) dispatchStatus = 'farm-limited';
 
     try {
       const diag = {
@@ -7396,8 +7601,21 @@ class NexoWattVis extends utils.Adapter {
         mode: sf.mode,
         direction,
         targetW: w,
-        deliveredW: direction === 'charge' ? -deliveredAbsW : deliveredAbsW,
-        unservedW: unservedAbsW,
+        requestedW: w,
+        plannedDeliveredW: plannedSignedW,
+        deliveredW: Math.round(acceptedSignedW),
+        acceptedDeliveredW: Math.round(acceptedSignedW),
+        failedW: failedSignedW,
+        unservedW: unservedSignedW,
+        writeOk: allConfiguredWritesAccepted,
+        commandEffective: anyAcceptedPower,
+        failedCommandCount,
+        commandDpReadbackSupported,
+        commandDpReadbackOk,
+        commandDpReadbackStatus,
+        commandDpReadbackRows,
+        requestSatisfied,
+        status: dispatchStatus,
         source: src,
         dischargeFloorSocPct: (direction === 'discharge') ? dischargeFloorSoc : null,
         onlineStorages: storages.filter(s => s.online === true).length,
@@ -7412,25 +7630,43 @@ class NexoWattVis extends utils.Adapter {
           const v = sumLimitW(storages.filter(s => s.dischargeDispatchAvailable === true), 'discharge');
           return Number.isFinite(v) ? Math.round(v) : null;
         })(),
-        results: results.map(r => ({
-          name: r.name || '',
-          state: r.state || '',
-          online: r.online,
-          dispatchAvailable: r.dispatchAvailable,
-          chargeDispatchAvailable: r.chargeDispatchAvailable,
-          dischargeDispatchAvailable: r.dischargeDispatchAvailable,
-          maxChargeW: r.maxChargeW,
-          maxDischargeW: r.maxDischargeW,
-          blockedReasons: r.blockedReasons,
-          warnings: r.warnings,
-          statusMatch: r.statusMatch,
-          soc: r.soc,
-          actualChargeW: r.actualChargeW,
-          actualDischargeW: r.actualDischargeW,
-          chargeW: r.chargeW,
-          dischargeW: r.dischargeW,
-          ok: r.ok,
-        })),
+        results: results.map(r => {
+          const writeRows = Object.values(r.writes || {}).filter(Boolean);
+          const authorityBlocks = writeRows.filter(wr => wr && wr.blocked === true);
+          return {
+            name: r.name || '',
+            state: r.state || '',
+            online: r.online,
+            dispatchAvailable: r.dispatchAvailable,
+            chargeDispatchAvailable: r.chargeDispatchAvailable,
+            dischargeDispatchAvailable: r.dischargeDispatchAvailable,
+            maxChargeW: r.maxChargeW,
+            maxDischargeW: r.maxDischargeW,
+            blockedReasons: r.blockedReasons,
+            warnings: r.warnings,
+            statusMatch: r.statusMatch,
+            soc: r.soc,
+            actualChargeW: r.actualChargeW,
+            actualDischargeW: r.actualDischargeW,
+            chargeW: r.chargeW,
+            dischargeW: r.dischargeW,
+            commandFamily: r.commandFamily || 'none',
+            directionSupported: r.directionSupported === true,
+            splitPairConflict: r.splitPairConflict === true,
+            ignoredAlternatives: Array.isArray(r.ignoredAlternatives) ? r.ignoredAlternatives : [],
+            releaseAccepted: r.releaseAccepted === true,
+            selectedAccepted: r.selectedAccepted === true,
+            ok: r.ok,
+            commandRequired: r.commandRequired === true,
+            commandAccepted: r.commandAccepted === true,
+            acceptedW: Number.isFinite(Number(r.acceptedW)) ? Math.round(Number(r.acceptedW)) : 0,
+            failedW: Number.isFinite(Number(r.failedW)) ? Math.round(Number(r.failedW)) : 0,
+            stopAccepted: r.stopAccepted,
+            authorityBlocked: authorityBlocks.length > 0,
+            blockedByOwners: Array.from(new Set(authorityBlocks.map(wr => String(wr.blockedByOwner || '')).filter(Boolean))),
+            writes: r.writes,
+          };
+        }),
       };
       const json = JSON.stringify(diag);
       await this.setStateAsync('storageFarm.lastDispatchJson', { val: json, ack: true });
@@ -7439,17 +7675,47 @@ class NexoWattVis extends utils.Adapter {
 
     try {
       if (this.log && typeof this.log.debug === 'function') {
-        this.log.debug(`[storageFarm] apply targetW=${w} dir=${direction} delivered=${direction === 'charge' ? -deliveredAbsW : deliveredAbsW}W unserved=${unservedAbsW}W storages=${storages.length} src=${src}`);
+        this.log.debug(`[storageFarm] apply targetW=${w} dir=${direction} planned=${plannedSignedW}W accepted=${Math.round(acceptedSignedW)}W failed=${failedSignedW}W unserved=${unservedSignedW}W status=${dispatchStatus} storages=${storages.length} src=${src}`);
       }
     } catch (_eLog) {}
 
-    const applied = !!anyOkRelevant;
-    let resultReason = applied ? 'ok' : 'no-write-accepted';
-    if (!applied && direction === 'charge' && eligibleForDispatch.length === 0) resultReason = 'no-charge-dispatchable-storage';
+    const applied = !!anyAcceptedPower;
+    const authorityBlockedWrites = results.flatMap((row) => Object.values(row.writes || {}))
+      .filter((wr) => wr && wr.blocked === true);
+    let resultReason = allConfiguredWritesAccepted ? dispatchStatus : 'no-write-accepted';
+    if (!allConfiguredWritesAccepted && acceptedAbsW > 0) resultReason = 'farm-partial';
+    else if (!allConfiguredWritesAccepted) resultReason = 'farm-write-failed';
+    else if (unservedAbsW > 0) resultReason = 'farm-limited';
+    if (!applied && authorityBlockedWrites.length > 0) resultReason = 'blocked-by-actuator-authority';
+    else if (!applied && direction === 'charge' && eligibleForDispatch.length === 0) resultReason = 'no-charge-dispatchable-storage';
     else if (!applied && direction === 'discharge' && eligibleForDispatch.length === 0) resultReason = 'no-discharge-dispatchable-storage';
     else if (!applied && direction === 'idle' && storages.length === 0) resultReason = 'no-storage';
     else if (!applied && storages.some((row) => row.statusMatch === 'missing')) resultReason = 'farm-status-missing';
-    return { applied, reason: resultReason, direction, targetW: w, deliveredW: direction === 'charge' ? -deliveredAbsW : deliveredAbsW, unservedW: unservedAbsW, results };
+    return {
+      applied,
+      commandEffective: anyAcceptedPower,
+      writeOk: allConfiguredWritesAccepted,
+      failedCommandCount,
+      commandDpReadbackSupported,
+      commandDpReadbackOk,
+      commandDpReadbackStatus,
+      commandDpReadbackRows,
+      requestSatisfied,
+      partiallyAccepted: !allConfiguredWritesAccepted && acceptedAbsW > 0,
+      status: dispatchStatus,
+      reason: resultReason,
+      direction,
+      targetW: w,
+      requestedW: w,
+      plannedDeliveredW: plannedSignedW,
+      deliveredW: Math.round(acceptedSignedW),
+      acceptedDeliveredW: Math.round(acceptedSignedW),
+      failedW: failedSignedW,
+      unservedW: unservedSignedW,
+      authorityBlockedCount: authorityBlockedWrites.length,
+      blockedByOwners: Array.from(new Set(authorityBlockedWrites.map((wr) => String(wr.blockedByOwner || '')).filter(Boolean))),
+      results,
+    };
   }
   /**
    * Code-Teil: syncInstallerConfigToStates

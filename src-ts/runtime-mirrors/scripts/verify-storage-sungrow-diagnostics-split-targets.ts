@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 6f2f7959655365728cd3158cd2c79ef0c1bfeb7f3cd11e69cb74d94a6d43dff4
+ * Original-Hash: ef541bf91a80bd7ec36e654c727722a64ade47326cd9bf4db82d8bf016c3ad97
  */
 
 /**
@@ -102,7 +102,7 @@ function makeAdapter() {
   const states = new Map();
   const objects = new Map();
   return {
-    config: { enableStorageFarm: false, storageFarm: {}, storage: {} },
+    config: { enableStorageControl: true, enableStorageFarm: false, storageFarm: {}, storage: {} },
     log: { warn() {}, info() {}, debug() {}, error() {} },
     async setObjectNotExistsAsync(id, obj) { objects.set(id, obj); },
     async setStateAsync(id, val) { states.set(id, { val, ts: nowMs() }); },

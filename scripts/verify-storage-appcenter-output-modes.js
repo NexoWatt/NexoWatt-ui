@@ -20,18 +20,34 @@ class FakeDp {
   constructor(entries = {}) {
     this.entries = new Map(Object.entries(entries));
     this.writes = [];
+    this.rawByObjectId = new Map();
+    this.lastWriteByObjectId = new Map();
   }
   getEntry(key) { return this.entries.get(key) || null; }
+  getRaw(key) {
+    const entry = this.getEntry(key);
+    return entry ? this.rawByObjectId.get(entry.objectId) : null;
+  }
   async writeNumber(key, value) {
     const entry = this.getEntry(key);
     if (!entry) return false;
-    this.writes.push({ key, objectId: entry.objectId, value: Number(value), type: 'number' });
+    const physical = Number(value);
+    let raw = (physical - Number(entry.offset || 0)) / (Number(entry.scale || 1) || 1);
+    if (entry.invert) raw = -raw;
+    if (Number.isFinite(Number(entry.unitScale)) && Number(entry.unitScale) !== 0 && Number(entry.unitScale) !== 1) raw /= Number(entry.unitScale);
+    this.rawByObjectId.set(entry.objectId, raw);
+    this.lastWriteByObjectId.set(entry.objectId, { val: physical, ts: Date.now() });
+    this.writes.push({ key, objectId: entry.objectId, value: physical, raw, type: 'number' });
     return true;
   }
   async writeBoolean(key, value) {
     const entry = this.getEntry(key);
     if (!entry) return false;
-    this.writes.push({ key, objectId: entry.objectId, value: !!value, type: 'boolean' });
+    const physical = !!value;
+    const raw = entry.invert ? !physical : physical;
+    this.rawByObjectId.set(entry.objectId, raw);
+    this.lastWriteByObjectId.set(entry.objectId, { val: physical ? 1 : 0, ts: Date.now() });
+    this.writes.push({ key, objectId: entry.objectId, value: physical, raw, type: 'boolean' });
     return true;
   }
   last(key) {
@@ -75,17 +91,23 @@ async function verifyTargetPowerAllOutputs() {
     'st.run': entry('javascript.0.storage.externalControl'),
     'st.reserveSocPct': entry('openems.0.edge.controller.reserveSoc'),
   });
+  // Simuliere einen alten Signed-Auftrag, der beim Wechsel auf die vollstaendige
+  // Split-Familie zuerst neutralisiert werden muss.
+  dp.rawByObjectId.set('custom.vendor.ctrl.signedTarget', -1869);
   const mod = new SpeicherRegelungModule(adapter, dp);
   mod._effectiveReserveSocPct = 27;
 
   await mod._applyTargetW(-803, 'final gated charge', 'pv');
-  assert.strictEqual(dp.last('st.targetPowerW').value, -803, 'signed AppCenter-DP erhält den finalen Lade-Sollwert nicht');
+  assert.strictEqual(dp.last('st.targetPowerW').value, 0, 'nicht ausgewaehlter Signed-DP muss neutralisiert werden');
   assert.strictEqual(dp.last('st.targetChargePowerW').value, 803, 'getrennter Lade-DP wird nicht bedient');
   assert.strictEqual(dp.last('st.targetDischargePowerW').value, 0, 'Gegenrichtung muss sicher auf 0 W gesetzt werden');
   assert.strictEqual(dp.last('st.run').value, true, 'Run-DP folgt dem erfolgreichen gegateten Hauptpfad nicht');
   assert.strictEqual(dp.last('st.reserveSocPct').value, 27, 'Reserve-DP ist nicht mit derselben SoC-Sicherheitsgrenze gekoppelt');
-  assert.strictEqual(state(adapter, 'speicher.regelung.schreibStatus'), 'signed+split-geschrieben');
+  assert.strictEqual(state(adapter, 'speicher.regelung.commandFamily'), 'split');
+  assert.strictEqual(state(adapter, 'speicher.regelung.targetMode'), 'split-charge-discharge');
+  assert.strictEqual(state(adapter, 'speicher.regelung.schreibStatus'), 'split-geschrieben');
   assert.strictEqual(state(adapter, 'speicher.regelung.schreibOk'), true);
+  assert.strictEqual(state(adapter, 'speicher.regelung.commandDpReadbackStatus'), 'confirmed');
 
   const writtenIds = new Set(dp.writes.map((row) => row.objectId));
   for (const id of [
@@ -96,17 +118,31 @@ async function verifyTargetPowerAllOutputs() {
     'openems.0.edge.controller.reserveSoc',
   ]) assert(writtenIds.has(id), `frei benannter AppCenter-DP wurde verändert oder ausgelassen: ${id}`);
 
-  // Direkter Richtungswechsel im produktiven Einzel-Speicher-Writer: Der neue
-  // positive Sollwert wird im unmittelbar folgenden Aufruf geschrieben. Bei
-  // Split-DPs wird die inaktive Richtung im selben Tick auf 0 gesetzt; das ist
-  // keine separate 0-W-Runde und der signed Gesamt-Sollwert bleibt non-zero.
   dp.clear();
   await mod._applyTargetW(1207, 'direct charge-to-discharge', 'eigenverbrauch');
-  assert.strictEqual(dp.last('st.targetPowerW').value, 1207, 'signed DP muss den Entladesollwert direkt ohne 0-W-Zwischenrunde erhalten');
-  assert.strictEqual(dp.last('st.targetChargePowerW').value, 0, 'inaktiver Split-Lade-DP muss im selben Tick auf 0 gesetzt werden');
-  assert.strictEqual(dp.last('st.targetDischargePowerW').value, 1207, 'aktiver Split-Entlade-DP muss im selben Tick den vollen Sollwert erhalten');
+  const splitWrites = dp.writes.filter((row) => row.key === 'st.targetChargePowerW' || row.key === 'st.targetDischargePowerW');
+  assert.deepStrictEqual(
+    splitWrites.map((row) => [row.key, row.value]),
+    [['st.targetChargePowerW', 0], ['st.targetDischargePowerW', 1207]],
+    'direkter Richtungswechsel muss im selben Tick zuerst die alte Richtung nullen und danach die neue setzen',
+  );
+  assert.strictEqual(dp.writes.some((row) => row.key === 'st.targetPowerW' && row.value !== 0), false, 'ignorierter Signed-DP darf keinen aktiven Sollwert erhalten');
   assert.strictEqual(dp.last('st.run').value, true, 'Run darf beim direkten Richtungswechsel nicht auf false fallen');
-  assert.strictEqual(dp.writes.some((row) => row.key === 'st.targetPowerW' && row.value === 0), false, 'signed DP darf keine 0-W-Zwischenrunde erhalten');
+}
+
+async function verifySignedOnlyOutput() {
+  const adapter = makeAdapter({ controlMode: 'targetPower' });
+  const dp = new FakeDp({
+    'st.targetPowerW': entry('free.vendor.signed.only', { invert: true }),
+    'st.run': entry('free.vendor.signed.run'),
+  });
+  const mod = new SpeicherRegelungModule(adapter, dp);
+  await mod._applyTargetW(1200, 'signed only discharge', 'eigenverbrauch');
+  assert.strictEqual(dp.last('st.targetPowerW').value, 1200);
+  assert.strictEqual(dp.last('st.targetPowerW').raw, -1200, 'Signed-Invertierung muss im Readbackvertrag berücksichtigt werden');
+  assert.strictEqual(state(adapter, 'speicher.regelung.commandFamily'), 'signed');
+  assert.strictEqual(state(adapter, 'speicher.regelung.schreibStatus'), 'signed-geschrieben');
+  assert.strictEqual(state(adapter, 'speicher.regelung.commandDpReadbackStatus'), 'confirmed');
 }
 
 async function verifyLimitsMode() {
@@ -207,6 +243,7 @@ async function verifyOneDirectionAndConflictSafety() {
 
 (async () => {
   await verifyTargetPowerAllOutputs();
+  await verifySignedOnlyOutput();
   await verifyLimitsMode();
   await verifyEnableFlagsMode();
   await verifyOneDirectionAndConflictSafety();
