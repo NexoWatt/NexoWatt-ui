@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 92c27db6f18f348b025ecb7361b5a701183a8e907d2bfca77bad570c2d56fab9
+ * Original-Hash: c14914757bc3735176e72c9f30088d5b49de3ec1724e00a45e69a363d23364d1
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/measurement-freshness.ts
- * Quell-Hash: sha256:ac56a8da72f5c3e49bb7bac445036314827d90f9ac6805a50c4f7edf1601f9d2
+ * Quell-Hash: sha256:cb1447695aaeae150a3ac9dd55031634d2bafbfa1d1fbe8fb49bea6ea780be35
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -47,6 +47,7 @@
  * 3. npm run test:runtime-executables prüfen.
  */
 'use strict';
+const { normalizeOpposingPowerFlows } = require('./power-flow-coherence');
 /**
  * Code-Teil: finiteOrNull
  *
@@ -401,10 +402,22 @@ function resolveNvpDisplay(input) {
             src = 'split-export-only';
         }
     }
-    const gridBuyW = Math.max(0, Math.abs(gridBuyRaw ?? 0));
-    const gridSellW = Math.max(0, Math.abs(gridSellRaw ?? 0));
     const hasGrid = gridNetRaw !== null || gridBuyRaw !== null || gridSellRaw !== null;
-    return { gridBuyRaw, gridSellRaw, gridNetRaw: gridNetRaw !== null ? gridNetRaw : (hasGrid ? gridBuyW - gridSellW : null), gridBuyW, gridSellW, hasGrid, src, ...mapped };
+    const rawBuyForNetW = Math.max(0, Math.abs(gridBuyRaw ?? 0));
+    const rawSellForNetW = Math.max(0, Math.abs(gridSellRaw ?? 0));
+    const coherent = gridNetRaw !== null
+        ? normalizeOpposingPowerFlows(Math.max(0, gridNetRaw), Math.max(0, -gridNetRaw), 0)
+        : normalizeOpposingPowerFlows(rawBuyForNetW, rawSellForNetW, 0);
+    return {
+        gridBuyRaw,
+        gridSellRaw,
+        gridNetRaw: hasGrid ? coherent.signedW : null,
+        gridBuyW: coherent.positiveW,
+        gridSellW: coherent.negativeW,
+        hasGrid,
+        src: coherent.conflict ? `${src}:netted` : src,
+        ...mapped,
+    };
 }
 /** Bewertet, ob ein bereits erzeugter NVP-Snapshot noch für diesen Tick gilt. */
 function resolveCurrentNvpSnapshot(snapshot, now, maxAgeMs) {
@@ -486,19 +499,20 @@ function resolveNvpMeasurement(input) {
     const measurementAgeMs = ages.length ? Math.min(...ages) : null;
     if (importFresh && exportFresh) {
         if (skewMs === null || skewMs <= maxSkewMs) {
+            const coherentFlow = normalizeOpposingPowerFlows(importW, exportW, 0);
             return {
                 usable: true,
                 coherent: true,
                 degraded: false,
                 mode: 'split',
-                source: 'split-coherent',
+                source: coherentFlow.conflict ? 'split-coherent-netted' : 'split-coherent',
                 status: 'ok',
-                netW: importW - exportW,
-                importW,
-                exportW,
+                netW: coherentFlow.signedW,
+                importW: coherentFlow.positiveW,
+                exportW: coherentFlow.negativeW,
                 skewMs,
                 measurementAgeMs,
-                reason: 'split-coherent',
+                reason: coherentFlow.conflict ? 'split-coherent-opposing-values-netted' : 'split-coherent',
             };
         }
         const useImport = importTs !== null && exportTs !== null ? importTs >= exportTs : (channelAge(imp) ?? Infinity) <= (channelAge(exp) ?? Infinity);

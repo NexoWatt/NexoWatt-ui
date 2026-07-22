@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:e376c2ccd9beed958630676f8ecad23ff0c7e747553feb48d5e393b54403a579
+ * Quell-Hash: sha256:bd550832c435ed7c938112372dc15b47766d0d3df711c7c8bf774a5ec47cc82a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -856,7 +856,7 @@
 
   const STORAGE_DP_FIELDS = [
     { key: 'socObjectId', label: 'SoC (%)', requiredModes: ['targetPower','limits','enableFlags'] },
-    { key: 'batteryPowerObjectId', label: 'Ist-Leistung (W) (optional)', requiredModes: [] },
+    { key: 'batteryPowerObjectId', label: 'Ist-Leistung (W) – für sichere Entladung erforderlich', requiredModes: [], hint: 'Für automatische Entladung und das harte Anti-Export-Gate muss dieser signed Messwert frisch sein (+W = Entladen, -W = Laden). Ohne gültigen Wert stoppt NexoWatt die Entladung fail-safe mit 0 W.' },
     { key: 'dcPvPowerObjectId', label: 'DC-/Hybrid-PV Erzeugung (W)', requiredModes: [], showForCoupling: ['dc'], hint: 'Nur bei DC-/Hybrid-Speichern: Erzeugungsleistung des Hybrid-/PV-Wechselrichters. Dieser Wert ist eine Messung, kein Batterie-Sollwert, und hilft bei Forecast-/0-Einspeise-/FENECON-Erkennung.' },
     { key: 'targetPowerObjectId', label: 'Sollleistung signed (W)', requiredModes: ['targetPower'], hint: 'Allgemeiner bidirektionaler Sollwert. NexoWatt-Konvention: +W = Entladen, -W = Laden. Wird genutzt, wenn keine getrennten Ziel-DPs gesetzt sind oder als Fallback fuer eine fehlende Split-Richtung.' },
     { key: 'targetChargePowerObjectId', label: 'Sollwert Laden (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional: positiver Lade-Sollwert. Kann zusammen mit Entladen oder einzeln gemappt werden; bei Split wird die Gegenrichtung auf 0 gesetzt.' },
@@ -892,7 +892,6 @@
    * und schließt beim nächsten Poll wieder.
    */
   const shadowJsonDetailsOpen = new Set();
-
 
   const HEMS_APP_IDS = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet']);
   const HOME_LICENSE_FEATURES = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations','nlP1','nlP1Basic','p1Dsmr']);
@@ -3389,6 +3388,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       input.placeholder = field.placeholder || '';
       input.value = valueOrEmpty(getter(field.key));
       input.id = inputId;
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+      input.title = String(input.value || '').trim();
+      input.scrollLeft = 0;
       fieldInputs.set(field.key, input);
 
       const btn = document.createElement('button');
@@ -3493,11 +3496,34 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         }
       };
 
+      const commitDpValue = () => {
+        const normalized = String(input.value || '').trim();
+        setter(field.key, normalized);
+        input.title = normalized;
+        return normalized;
+      };
+
       input.dataset.dpInput = '1';
-      // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-      input.addEventListener('input', () => { updateMeta(); refreshAllMeta(); });
-      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-      input.addEventListener('change', () => { setter(field.key, input.value.trim()); updateMeta(); refreshAllMeta(); scheduleValidation(200); });
+      // Bereits beim Tippen/Einfügen in das lokale Config-Modell übernehmen.
+      // Dadurch kann ein Tabwechsel oder Re-Render nicht mehr den alten bzw.
+      // verkürzten DP-Wert zurück in das Feld schreiben.
+      input.addEventListener('input', () => {
+        commitDpValue();
+        updateMeta();
+        refreshAllMeta();
+        scheduleValidation(350);
+      });
+      // Der DP-Picker löst `change` aus; auch dieser Pfad schreibt die vollständige ID.
+      input.addEventListener('change', () => {
+        commitDpValue();
+        updateMeta();
+        refreshAllMeta();
+        scheduleValidation(200);
+      });
+      input.addEventListener('blur', () => {
+        commitDpValue();
+        input.scrollLeft = 0;
+      });
 
       metaUpdaters.push(updateMeta);
       updateMeta();
@@ -9200,6 +9226,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       // Istwerte (Messwerte)
       grid.appendChild(mkGridDivider('Istwerte (Messwerte)'));
+      grid.appendChild(mkGridHelp('Für sichere automatische Entladung muss je Speicher mindestens ein frischer Istleistungsweg vorhanden sein: Signed oder getrennt Laden/Entladen. Ohne belastbares physisches Feedback stoppt das Anti-Export-Gate die Entladung fail-safe mit 0 W.'));
 
       grid.appendChild(mkCheckField('Vorzeichen Istleistung Signed invertieren', `sf_${idx}_invSigned`, !!s.invertSignedPowerSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertSignedPowerSign = !!v; }));
       grid.appendChild(mkCheckField('Vorzeichen Ladeleistung invertieren', `sf_${idx}_invChg`, !!s.invertChargeSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertChargeSign = !!v; }));
@@ -12675,6 +12702,18 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
   }
 
   /**
+   * Übernimmt vor jedem Save alle sichtbaren DP-Eingaben in `currentConfig`.
+   * Das schützt auch vor Browser-Autofill oder programmgesteuerten Änderungen,
+   * die kein normales `input`-Ereignis ausgelöst haben.
+   */
+  function flushDpInputsToConfig() {
+    const inputs = Array.from(document.querySelectorAll('[data-dp-input="1"]'));
+    for (const input of inputs) {
+      try { input.dispatchEvent(new Event('change', { bubbles: true })); } catch (_e) {}
+    }
+  }
+
+  /**
    * Code-Teil: saveConfig
    * Zweck: Speichert Benutzereingaben oder Konfiguration.
    * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -12682,6 +12721,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
    */
   async function saveConfig() {
     setStatus('Speichere…');
+    flushDpInputsToConfig();
     const patch = applyAppCenterRegressionSafetyGate(collectPatchFromUI());
     const safetyReport = applyReleaseRegressionSafetyGate(patch);
     if (safetyReport && safetyReport.changed) {

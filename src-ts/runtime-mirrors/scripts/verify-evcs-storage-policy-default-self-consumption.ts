@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 93c2842ff5385c0d186afcf1f5980dd0a24cd9ea06d7b6a7da49972cc1e04434
+ * Original-Hash: 6ab86826ed354cef9085356401356141d010df077bafa9796767566683d88067
  */
 
 /**
@@ -273,6 +273,7 @@ async function runStorageTick({
 
 (async () => {
   const normalTick = await runStorageTick({
+    battPowerW: 0,
     runtimePolicy: {
       protectedLoadW: 0,
       protectedWallboxes: 0,
@@ -402,6 +403,7 @@ async function runStorageTick({
   assert.strictEqual(stopOldDischarge.zeroExplicitStop, true, 'Entlade-Stop muss die 0-W-Firewall passieren');
 
   const assistTick = await runStorageTick({
+    battPowerW: 0,
     runtimePolicy: {
       protectedLoadW: 0,
       protectedWallboxes: 0,
@@ -412,6 +414,7 @@ async function runStorageTick({
   assert(assistTick.targetW >= 4000, `assist mode must not protect EVCS load from normal discharge, got ${assistTick.targetW} W`);
 
   const staleStateIgnored = await runStorageTick({
+    battPowerW: 0,
     runtimePolicy: {
       protectedLoadW: 0,
       protectedWallboxes: 0,

@@ -9,6 +9,11 @@
 'use strict';
 
 const { BaseModule } = require('./base');
+const {
+    normalizeStorageDatapointsConfig,
+    buildStorageMeasurementFallbackFromGlobal,
+    mergeStorageMeasurementFallback,
+} = require('../services/storage-datapoint-config');
 
 /**
  * Speicher-Datenpunkt-Zuordnung (Installateur)
@@ -150,22 +155,21 @@ class SpeicherMappingModule extends BaseModule {
             return 'generic';
         };
         const vendorProfile = normalizeVendorProfile(storage.vendorProfile);
-        const currentDp = (storage && storage.datapoints && typeof storage.datapoints === 'object') ? storage.datapoints : {};
-        const globalDp = (this.adapter.config && this.adapter.config.datapoints && typeof this.adapter.config.datapoints === 'object')
-            ? this.adapter.config.datapoints
-            : {};
-        const dp = { ...currentDp };
-        const text = (value) => value === undefined || value === null ? '' : String(value).trim();
-        const pickText = (canonical, aliases = [], globalAliases = []) => {
-            const candidates = [currentDp[canonical], ...aliases.map((key) => currentDp[key]), storage[canonical], ...aliases.map((key) => storage[key]), ...globalAliases.map((key) => globalDp[key])];
-            for (const value of candidates) {
-                const normalized = text(value);
-                if (normalized) return normalized;
-            }
-            return '';
-        };
-        const assignText = (canonical, aliases = [], globalAliases = []) => {
-            dp[canonical] = pickText(canonical, aliases, globalAliases);
+        // Dauerhafte Speicherzuordnung und globales Energiefluss-Mapping bleiben
+        // strikt getrennt. Die globale Messquelle wird nur über den privaten,
+        // nicht persistierbaren Runtime-Fallback ergänzt.
+        const localDp = normalizeStorageDatapointsConfig(storage);
+        const runtimeFallback = (this.adapter && this.adapter._nwStorageMeasurementFallback
+            && typeof this.adapter._nwStorageMeasurementFallback === 'object')
+            ? this.adapter._nwStorageMeasurementFallback
+            : buildStorageMeasurementFallbackFromGlobal(this.adapter && this.adapter.config ? this.adapter.config : {});
+        const dp = mergeStorageMeasurementFallback({ ...storage, datapoints: localDp }, runtimeFallback);
+        const boolValue = (value, fallback = false) => {
+            if (typeof value === 'boolean') return value;
+            const normalized = String(value === undefined || value === null ? '' : value).trim().toLowerCase();
+            if (value === 1 || normalized === '1' || normalized === 'true') return true;
+            if (value === 0 || normalized === '0' || normalized === 'false') return false;
+            return fallback;
         };
         const inherit = (canonical, aliases = []) => {
             if (dp[canonical] !== undefined && dp[canonical] !== null && dp[canonical] !== '') return;
@@ -176,35 +180,6 @@ class SpeicherMappingModule extends BaseModule {
                 }
             }
         };
-        const boolValue = (value, fallback = false) => {
-            if (typeof value === 'boolean') return value;
-            const normalized = String(value === undefined || value === null ? '' : value).trim().toLowerCase();
-            if (value === 1 || normalized === '1' || normalized === 'true') return true;
-            if (value === 0 || normalized === '0' || normalized === 'false') return false;
-            return fallback;
-        };
-
-        // Aktuelle AppCenter-Namen führen. Direkte/ältere Feldnamen werden nur als
-        // Fallback übernommen, damit eine TS-Migration keine manuelle Zuordnung verliert.
-        assignText('socObjectId', ['socId', 'socDp', 'storageSocId'], ['storageSoc']);
-        assignText('batteryPowerObjectId', ['signedPowerId', 'powerObjectId', 'powerId'], ['batteryPower']);
-        assignText('batteryChargePowerObjectId', ['chargePowerId', 'chargePowerDp'], ['storageChargePower']);
-        assignText('batteryDischargePowerObjectId', ['dischargePowerId', 'dischargePowerDp'], ['storageDischargePower']);
-        assignText('dcPvPowerObjectId', ['pvPowerId', 'pvPowerObjectId', 'pvPowerDp'], ['storagePvPower']);
-        assignText('targetPowerObjectId', ['setSignedPowerId', 'targetPowerId', 'powerSetpointId', 'setpointId', 'setPowerId']);
-        assignText('targetChargePowerObjectId', ['setChargePowerId', 'targetChargePowerId', 'chargeSetpointId']);
-        assignText('targetDischargePowerObjectId', ['setDischargePowerId', 'targetDischargePowerId', 'dischargeSetpointId']);
-        assignText('runObjectId', ['runId', 'enableObjectId', 'controlEnableId']);
-        assignText('maxChargeObjectId', ['maxChargeId', 'maxChargePowerObjectId']);
-        assignText('maxDischargeObjectId', ['maxDischargeId', 'maxDischargePowerObjectId']);
-        assignText('chargeEnableObjectId', ['chargeAllowedId', 'chargeEnableId']);
-        assignText('dischargeEnableObjectId', ['dischargeAllowedId', 'dischargeEnableId']);
-        assignText('reserveSocObjectId', ['reserveSocId']);
-        assignText('e3dcSetPowerModeObjectId', ['e3dcSetPowerModeId']);
-        assignText('e3dcSetPowerValueObjectId', ['e3dcSetPowerValueId']);
-        assignText('e3dcPowerLimitsUsedObjectId', ['e3dcPowerLimitsUsedId']);
-        assignText('e3dcMaxChargePowerObjectId', ['e3dcMaxChargePowerId']);
-        assignText('e3dcMaxDischargePowerObjectId', ['e3dcMaxDischargePowerId']);
 
         for (const [canonical, aliases] of [
             ['socScale', []],

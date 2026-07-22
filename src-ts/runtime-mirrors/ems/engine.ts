@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 76867e0fbd1dedf3ab21d9f24e1168415b0b5e237a9911ea2f3389f7fa9e322d
+ * Original-Hash: 1ca18a96b538bb9e2f251458255d91fabe208194b21c69e080f37417a185da47
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:0f523e5d840fd059ba0030859815c1946ebdec11e5a2b666e167b6e903d08add
+ * Quell-Hash: sha256:02576c2cda0ebeb61c23d8fe7cc387510eb0a898ed509c5a27767753405eabce
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -994,9 +994,9 @@ class EmsEngine {
       // ignore
     }
 
-    // Globale AppCenter-Speicher-DPs sind autoritative Messwert-Overrides. Der
-    // zentrale Bridge-Helfer übernimmt signed oder getrennte Istwerte in die
-    // interne Speicher-Konfiguration, ohne Hersteller-Sollwert-DPs anzutasten.
+    // Globale Energiefluss-Speicher-DPs sind ausschließlich Runtime-Fallbacks.
+    // Der Bridge-Helfer hält sie außerhalb der persistierten Speicher-Konfiguration;
+    // manuelle Zuordnungen im Speicher-Reiter bleiben immer autoritativ.
     try {
       await applyStorageMeasurementOverrides(adapter, dps);
     } catch (_e) {

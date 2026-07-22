@@ -10,10 +10,17 @@
 
 declare const module: { exports: unknown };
 
+const {
+  normalizeStorageDatapointsConfig,
+  buildStorageMeasurementFallbackFromGlobal,
+  mergeStorageMeasurementFallback,
+} = require('./storage-datapoint-config');
+
 type AnyRecord = Record<string, any>;
 type AdapterLike = {
   config?: AnyRecord;
   getForeignObjectAsync?: (id: string) => Promise<AnyRecord | null>;
+  _nwStorageMeasurementFallback?: AnyRecord;
 };
 type RegistryEntry = { objectId?: string } | null | undefined;
 type RegistryLike = {
@@ -74,58 +81,67 @@ async function resolvePowerScale(adapter: AdapterLike, key: string, objectId: st
 }
 
 /**
- * Übernimmt globale AppCenter-Overrides als autoritative Speicher-Messquelle.
- * Hersteller-Sollwert-, Enable- und Run-DPs bleiben unverändert.
+ * Bereitet globale AppCenter-Messwerte ausschließlich als privaten Runtime-
+ * Fallback vor. Die dauerhaft gespeicherte `storage.datapoints`-Zuordnung wird
+ * niemals verändert. Dadurch kann ein kurzer Energieflusswert wie `r` nach einem
+ * EMS-Neustart nicht mehr in das Speicherformular zurücklaufen.
  */
 async function applyStorageMeasurementOverrides(adapter: AdapterLike, datapoints: AnyRecord): Promise<StorageOverrideBridgeResult> {
-  const config = adapter.config || (adapter.config = {});
-  const storage = config.storage && typeof config.storage === 'object' ? config.storage : (config.storage = {});
-  const target = storage.datapoints && typeof storage.datapoints === 'object'
-    ? storage.datapoints as AnyRecord
-    : (storage.datapoints = {});
-  const settings = config.settings && typeof config.settings === 'object' ? config.settings : {};
-  const invert = settings.flowInvertBattery === true;
+  const config = adapter.config && typeof adapter.config === 'object' ? adapter.config : {};
+  const storage = config.storage && typeof config.storage === 'object' ? config.storage : {};
+  const local = normalizeStorageDatapointsConfig(storage);
+  const fallbackWrapper = buildStorageMeasurementFallbackFromGlobal({
+    ...config,
+    datapoints: datapoints && typeof datapoints === 'object' ? datapoints : {},
+  });
+  const fallback = fallbackWrapper.datapoints && typeof fallbackWrapper.datapoints === 'object'
+    ? fallbackWrapper.datapoints as AnyRecord
+    : {};
 
-  const socId = text(datapoints.storageSoc);
-  const signedId = text(datapoints.batteryPower);
-  const chargeId = text(datapoints.storageChargePower);
-  const dischargeId = text(datapoints.storageDischargePower);
-  const sameSplitId = !!(chargeId && dischargeId && chargeId === dischargeId);
-
-  if (socId) {
-    target.socObjectId = socId;
-    target.socFeedbackSource = 'appcenter-flow-override';
-  }
+  // Explizite W/kW-Schalter bleiben führend. Wenn keine feste Einheit gesetzt
+  // wurde, kann die Bridge die Objekt-Metadaten asynchron auswerten.
+  const signedId = text(fallback.batteryPowerObjectId);
+  const chargeId = text(fallback.batteryChargePowerObjectId);
+  const dischargeId = text(fallback.batteryDischargePowerObjectId);
+  const dcPvId = text(fallback.dcPvPowerObjectId);
   if (signedId) {
-    target.batteryPowerObjectId = signedId;
-    target.batteryPowerScale = await resolvePowerScale(adapter, 'batteryPower', signedId);
-    target.batteryPowerInvert = invert;
-    target.batteryChargePowerObjectId = '';
-    target.batteryDischargePowerObjectId = '';
-    target.batteryFeedbackSource = 'appcenter-signed-override';
-  } else if (sameSplitId) {
-    target.batteryPowerObjectId = chargeId;
-    target.batteryPowerScale = await resolvePowerScale(adapter, 'storageChargePower', chargeId);
-    target.batteryPowerInvert = invert;
-    target.batteryChargePowerObjectId = '';
-    target.batteryDischargePowerObjectId = '';
-    target.batteryFeedbackSource = 'appcenter-same-split-signed';
-  } else if (chargeId || dischargeId) {
-    target.batteryPowerObjectId = '';
-    target.batteryChargePowerObjectId = chargeId;
-    target.batteryDischargePowerObjectId = dischargeId;
-    target.batteryChargePowerScale = chargeId ? await resolvePowerScale(adapter, 'storageChargePower', chargeId) : 1;
-    target.batteryDischargePowerScale = dischargeId ? await resolvePowerScale(adapter, 'storageDischargePower', dischargeId) : 1;
-    target.batterySplitInvert = invert;
-    target.batteryFeedbackSource = 'appcenter-split-override';
+    fallback.batteryPowerScale = await resolvePowerScale(
+      adapter,
+      text(fallback.batteryFeedbackSource) === 'appcenter-same-split-fallback' ? 'storageChargePower' : 'batteryPower',
+      signedId,
+    );
+  }
+  if (chargeId) fallback.batteryChargePowerScale = await resolvePowerScale(adapter, 'storageChargePower', chargeId);
+  if (dischargeId) fallback.batteryDischargePowerScale = await resolvePowerScale(adapter, 'storageDischargePower', dischargeId);
+  if (dcPvId) fallback.dcPvPowerScale = await resolvePowerScale(adapter, 'storagePvPower', dcPvId);
+
+  // Nur dieser private Runtime-Snapshot darf von Mapping/Regelung als Fallback
+  // gelesen werden. Er ist absichtlich nicht Teil von adapter.config und damit
+  // weder persistierbar noch über /api/installer/config sichtbar.
+  adapter._nwStorageMeasurementFallback = {
+    schema: 'nexowatt.storage-measurement-fallback.v1',
+    ts: Date.now(),
+    datapoints: { ...fallback },
+    source: text(fallback.batteryFeedbackSource) || text(fallback.socFeedbackSource) || '',
+  };
+
+  const effective = mergeStorageMeasurementFallback({ ...storage, datapoints: local }, adapter._nwStorageMeasurementFallback);
+  const effectiveSignedId = text(effective.batteryPowerObjectId);
+  const effectiveChargeId = text(effective.batteryChargePowerObjectId);
+  const effectiveDischargeId = text(effective.batteryDischargePowerObjectId);
+  let source = text(effective.batteryFeedbackSource);
+  if (!source) {
+    if (effectiveSignedId) source = 'storage-tab-signed';
+    else if (effectiveChargeId || effectiveDischargeId) source = 'storage-tab-split';
+    else source = 'storage-tab';
   }
 
   return {
-    source: text(target.batteryFeedbackSource) || 'storage-tab',
-    socId: text(target.socObjectId),
-    signedPowerId: text(target.batteryPowerObjectId),
-    chargePowerId: text(target.batteryChargePowerObjectId),
-    dischargePowerId: text(target.batteryDischargePowerObjectId),
+    source,
+    socId: text(effective.socObjectId),
+    signedPowerId: effectiveSignedId,
+    chargePowerId: effectiveChargeId,
+    dischargePowerId: effectiveDischargeId,
   };
 }
 

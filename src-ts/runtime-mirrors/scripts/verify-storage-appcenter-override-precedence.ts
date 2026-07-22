@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e3d2c46332fcb5f9b7ab03a976df594a04776219936d909bc7fe8e654c37665b
+ * Original-Hash: 3509e7baaddc562c2454766c42eeac8bf5baadf9e665e10a309fee6f2299f283
  */
 
 /**
@@ -32,9 +32,9 @@
 'use strict';
 
 /**
- * Regression 0.8.108: Explizite AppCenter-Speicher-Messwerte bleiben vor
- * Speicherfarm- und Bilanz-Fallbacks autoritativ. Signed und getrennte
- * Lade-/Entlade-Istwerte werden in die interne Speicherregelung übernommen.
+ * Regression 0.8.135: Explizite Speicher-Reiter-Messwerte bleiben vor globalen
+ * Energiefluss-Fallbacks autoritativ. Globale signed/split Werte dürfen weiterhin
+ * zur Laufzeit einspringen, aber niemals adapter.config mutieren.
  */
 const assert = require('assert');
 const fs = require('fs');
@@ -42,6 +42,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const bridge = require(path.join(root, 'ems/services/storage-override-bridge.js'));
+const { SpeicherMappingModule } = require(path.join(root, 'ems/modules/storage-mapping.js'));
 
 /**
  * Code-Teil: read
@@ -69,9 +70,9 @@ function read(rel) {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-async function adapterWith(units = {}, settings = {}) {
+async function adapterWith(units = {}, settings = {}, storageDatapoints = {}) {
   return {
-    config: { settings, storage: { datapoints: {} } },
+    config: { settings, storage: { datapoints: { ...storageDatapoints } }, datapoints: {} },
     async getForeignObjectAsync(id) {
       return units[id] ? { common: { unit: units[id] } } : null;
     },
@@ -104,34 +105,56 @@ class FakeRegistry {
 }
 
 (async () => {
-  let adapter = await adapterWith({ 'meter.signed': 'kW' });
+  // Manuelle Speicher-Zuordnung gewinnt und bleibt unverändert.
+  let adapter = await adapterWith(
+    { 'meter.global.signed': 'kW' },
+    {},
+    { socObjectId: 'storage.manual.soc', batteryPowerObjectId: 'storage.manual.actual' },
+  );
+  const before = JSON.stringify(adapter.config);
   let result = await bridge.applyStorageMeasurementOverrides(adapter, {
+    storageSoc: 'meter.global.soc',
+    batteryPower: 'meter.global.signed',
+    storageChargePower: 'meter.global.charge',
+    storageDischargePower: 'meter.global.discharge',
+  });
+  assert.strictEqual(JSON.stringify(adapter.config), before, 'Bridge darf persistierte Config nicht verändern');
+  assert.strictEqual(result.source, 'storage-tab-signed');
+  assert.strictEqual(result.socId, 'storage.manual.soc');
+  assert.strictEqual(result.signedPowerId, 'storage.manual.actual');
+  assert.strictEqual(new SpeicherMappingModule(adapter, null)._getCfg().dp.batteryPowerObjectId, 'storage.manual.actual');
+
+  // Ohne manuelle Leistung bleibt signed global als Runtime-Fallback nutzbar.
+  adapter = await adapterWith({ 'meter.signed': 'kW' });
+  result = await bridge.applyStorageMeasurementOverrides(adapter, {
     storageSoc: 'meter.soc',
     batteryPower: 'meter.signed',
     storageChargePower: 'meter.charge',
     storageDischargePower: 'meter.discharge',
   });
-  assert.strictEqual(result.source, 'appcenter-signed-override');
-  assert.strictEqual(adapter.config.storage.datapoints.socObjectId, 'meter.soc');
-  assert.strictEqual(adapter.config.storage.datapoints.batteryPowerObjectId, 'meter.signed');
-  assert.strictEqual(adapter.config.storage.datapoints.batteryPowerScale, 1000);
-  assert.strictEqual(adapter.config.storage.datapoints.batteryChargePowerObjectId, '');
+  assert.strictEqual(result.source, 'appcenter-signed-fallback');
+  assert.strictEqual(result.socId, 'meter.soc');
+  assert.strictEqual(result.signedPowerId, 'meter.signed');
+  assert.strictEqual(adapter._nwStorageMeasurementFallback.datapoints.batteryPowerScale, 1000);
+  assert.deepStrictEqual(adapter.config.storage.datapoints, {});
 
+  // Split-Fallback bleibt möglich und korrekt skaliert.
   adapter = await adapterWith({ 'meter.charge': 'W', 'meter.discharge': 'kW' });
   result = await bridge.applyStorageMeasurementOverrides(adapter, {
     storageChargePower: 'meter.charge',
     storageDischargePower: 'meter.discharge',
   });
-  assert.strictEqual(result.source, 'appcenter-split-override');
-  assert.strictEqual(adapter.config.storage.datapoints.batteryChargePowerObjectId, 'meter.charge');
-  assert.strictEqual(adapter.config.storage.datapoints.batteryDischargePowerObjectId, 'meter.discharge');
-  assert.strictEqual(adapter.config.storage.datapoints.batteryDischargePowerScale, 1000);
+  assert.strictEqual(result.source, 'appcenter-split-fallback');
+  assert.strictEqual(result.chargePowerId, 'meter.charge');
+  assert.strictEqual(result.dischargePowerId, 'meter.discharge');
+  assert.strictEqual(adapter._nwStorageMeasurementFallback.datapoints.batteryDischargePowerScale, 1000);
+  assert.deepStrictEqual(adapter.config.storage.datapoints, {});
 
   const split = bridge.resolveSplitBatteryFeedback(new FakeRegistry({
     'st.batteryChargePowerW': { objectId: 'meter.charge', val: 2900, ageMs: 100 },
     'st.batteryDischargePowerW': { objectId: 'meter.discharge', val: 400, ageMs: 120 },
     'st.targetPowerW': { objectId: 'ctrl.target', val: 0, ageMs: 0 },
-  }), { datapoints: { batteryFeedbackSource: 'appcenter-split-override' } }, 15000);
+  }), { datapoints: { batteryFeedbackSource: 'appcenter-split-fallback' } }, 15000);
   assert.ok(split && split.trusted, 'Split-Istleistung muss vertrauenswürdig sein');
   assert.strictEqual(split.observedW, -2500, 'Entladen minus Laden muss signed Feedback ergeben');
 
@@ -151,14 +174,13 @@ class FakeRegistry {
   const main = read('src-ts/runtime-executables/main.ts');
   const engine = read('src-ts/runtime-executables/ems/engine.ts');
   const storage = read('src-ts/runtime-executables/ems/modules/storage-control.ts');
-  assert.ok(engine.includes('applyStorageMeasurementOverrides(adapter, dps)'), 'Engine muss AppCenter-Override-Bridge aufrufen');
-  assert.ok(main.includes('if (sfEnabled && !anyStorageMapped)'), 'Farm darf nur ohne explizites Power-Mapping führen');
-  assert.ok(main.includes("if (sfEnabled && !String(historyDps.storageSoc || '').trim())"), 'Farm-SoC darf AppCenter-SoC nicht überschreiben');
-  assert.ok(main.includes('if (!hasPowerOverride)'), 'Farm-Kompatibilitätsspiegel muss Power-Overrides respektieren');
-  assert.ok(storage.includes('explicitAppCenterPowerOverride'), 'Speicherregelung muss AppCenter-Istwert vor Farm halten');
+  assert.ok(engine.includes('applyStorageMeasurementOverrides(adapter, dps)'), 'Engine muss Runtime-Fallback-Bridge aufrufen');
+  assert.ok(engine.includes('manuelle Zuordnungen im Speicher-Reiter bleiben immer autoritativ'), 'Engine-Vertrag muss die Speicher-Reiter-Priorität dokumentieren');
+  assert.ok(main.includes('return nwNormalizeStorageDatapointsConfig(storageIn);'), 'Persistenznormalisierung muss globale Fallbacks ausschließen');
+  assert.ok(storage.includes('mergeStorageMeasurementFallback(storage, runtimeFallback)'), 'Speicherregelung muss runtime-only Fallback sauber ergänzen');
   assert.ok(storage.includes('resolveSplitBatteryFeedback'), 'Speicherregelung muss Split-Istwerte nutzen');
 
-  console.log('[storage-appcenter-override-precedence] OK: AppCenter-Speicherwerte bleiben autoritativ; signed/split Feedback ist farm- und setpoint-sicher.');
+  console.log('[storage-appcenter-override-precedence] OK: Speicher-Reiter bleibt autoritativ; globale signed/split Werte sind ausschließlich Runtime-Fallbacks.');
 })().catch((error) => {
   console.error(error && error.stack ? error.stack : error);
   process.exit(1);

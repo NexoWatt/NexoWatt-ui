@@ -472,8 +472,8 @@ async function runTick({
     lastTargetW: 2500,
     lastSource: 'eigenverbrauch',
   });
-  assert.strictEqual(holdDischargeTick.targetW, 2500, `NVP-Ziel darf laufende Entladung nicht mit 0 W stoppen: ${holdDischargeTick.targetW}`);
-  assert.strictEqual(holdDischargeTick.adapter._states.get('speicher.regelung.balanceGehaltenSollW').val, 2500, 'gehaltener Entladesollwert muss sichtbar sein');
+  assert.strictEqual(holdDischargeTick.targetW, 0, `Frischer NVP am Ziel und physische Speicher-Istleistung 0 W lassen keinen sicheren Entlade-Headroom: ${holdDischargeTick.targetW}`);
+  assert.strictEqual(holdDischargeTick.adapter._states.get('speicher.regelung.antiExportAktion').val, 'stop-no-safe-headroom', 'Anti-Export-Stopp muss sichtbar sein');
 
   const chargeSocStop = await runTick({
     gridW: 50,

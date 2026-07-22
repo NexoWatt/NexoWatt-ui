@@ -18,6 +18,8 @@
 
 declare const module: { exports: unknown };
 
+const { normalizeOpposingPowerFlows } = require('./power-flow-coherence');
+
 type OptionalNumber = number | null | undefined;
 
 type FreshnessInput = {
@@ -372,10 +374,22 @@ function resolveNvpDisplay(input: NvpDisplayInput): NvpDisplayResult {
     else if (gridBuyRaw !== null) { gridSellRaw = 0; src = 'split-import-only'; }
     else { gridBuyRaw = 0; src = 'split-export-only'; }
   }
-  const gridBuyW = Math.max(0, Math.abs(gridBuyRaw ?? 0));
-  const gridSellW = Math.max(0, Math.abs(gridSellRaw ?? 0));
   const hasGrid = gridNetRaw !== null || gridBuyRaw !== null || gridSellRaw !== null;
-  return { gridBuyRaw, gridSellRaw, gridNetRaw: gridNetRaw !== null ? gridNetRaw : (hasGrid ? gridBuyW - gridSellW : null), gridBuyW, gridSellW, hasGrid, src, ...mapped };
+  const rawBuyForNetW = Math.max(0, Math.abs(gridBuyRaw ?? 0));
+  const rawSellForNetW = Math.max(0, Math.abs(gridSellRaw ?? 0));
+  const coherent = gridNetRaw !== null
+    ? normalizeOpposingPowerFlows(Math.max(0, gridNetRaw), Math.max(0, -gridNetRaw), 0)
+    : normalizeOpposingPowerFlows(rawBuyForNetW, rawSellForNetW, 0);
+  return {
+    gridBuyRaw,
+    gridSellRaw,
+    gridNetRaw: hasGrid ? coherent.signedW : null,
+    gridBuyW: coherent.positiveW,
+    gridSellW: coherent.negativeW,
+    hasGrid,
+    src: coherent.conflict ? `${src}:netted` : src,
+    ...mapped,
+  };
 }
 
 /** Bewertet, ob ein bereits erzeugter NVP-Snapshot noch für diesen Tick gilt. */
@@ -462,19 +476,20 @@ function resolveNvpMeasurement(input: NvpResolutionInput): NvpResolution {
 
   if (importFresh && exportFresh) {
     if (skewMs === null || skewMs <= maxSkewMs) {
+      const coherentFlow = normalizeOpposingPowerFlows(importW, exportW, 0);
       return {
         usable: true,
         coherent: true,
         degraded: false,
         mode: 'split',
-        source: 'split-coherent',
+        source: coherentFlow.conflict ? 'split-coherent-netted' : 'split-coherent',
         status: 'ok',
-        netW: importW - exportW,
-        importW,
-        exportW,
+        netW: coherentFlow.signedW,
+        importW: coherentFlow.positiveW,
+        exportW: coherentFlow.negativeW,
         skewMs,
         measurementAgeMs,
-        reason: 'split-coherent',
+        reason: coherentFlow.conflict ? 'split-coherent-opposing-values-netted' : 'split-coherent',
       };
     }
 

@@ -943,9 +943,9 @@ class EmsEngine {
       // ignore
     }
 
-    // Globale AppCenter-Speicher-DPs sind autoritative Messwert-Overrides. Der
-    // zentrale Bridge-Helfer übernimmt signed oder getrennte Istwerte in die
-    // interne Speicher-Konfiguration, ohne Hersteller-Sollwert-DPs anzutasten.
+    // Globale Energiefluss-Speicher-DPs sind ausschließlich Runtime-Fallbacks.
+    // Der Bridge-Helfer hält sie außerhalb der persistierten Speicher-Konfiguration;
+    // manuelle Zuordnungen im Speicher-Reiter bleiben immer autoritativ.
     try {
       await applyStorageMeasurementOverrides(adapter, dps);
     } catch (_e) {

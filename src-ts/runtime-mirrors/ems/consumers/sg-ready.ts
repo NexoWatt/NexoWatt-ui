@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 148cd634389674207f2c6cea8ba352dc62a3ad0c92a060412beece578d5cf913
+ * Original-Hash: c13c1d8c2184c74d789830fe6cf747af38cd47c299f7b1aa4045e2123de441e6
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/consumers/sg-ready.ts
- * Quell-Hash: sha256:7de8b525bf1cdb28aa21bb288ef4724ffe7e674519d655b39f47e98df531bbc4
+ * Quell-Hash: sha256:d9e958304e67cde097025f4febf05acdca386ecdbdd31c3119fe287a4f4a6bb5
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -46,145 +46,92 @@
  * 2. npm run sync:ts-runtime-executables ausführen.
  * 3. npm run test:runtime-executables prüfen.
  */
-/**
- * NexoWatt Detail-Kommentar (DE)
- * Zweck dieser Ergänzung:
- * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
- * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
- * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
- */
-
-/**
- * Datei: ems/consumers/sg-ready.js
- * Rolle im Projekt: EMS-Verbraucheradapter.
- * Zweck: Kapselt einen regelbaren Verbraucher und übersetzt EMS-Freigaben in konkrete Zustände/Setpoints.
- * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
- * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
- */
-/**
- * NexoWatt Code-Kommentar (DE)
- * Zweck: Consumer-Adapter der EMS-Schicht: kapselt eine Verbraucher-/Setpoint-/Schaltlogik für EMS-Module.
- * Zusammenhänge:
- * - Wird von ems/modules/* genutzt, um reale oder simulierte Verbraucher anzusprechen.
- * Wartungshinweise:
- * - DP-Einheiten und Invertierungen müssen zur Installer-Konfiguration passen.
- */
-
 'use strict';
-
 /**
- * SG-Ready consumer actuation (two digital outputs).
+ * Code-Teil: mappedKey
  *
- * Consumer:
- * {
- *   type: 'sgready',
- *   key: string,
- *   name: string,
- *   sg1Key?: string,      // DP-registry key (write)
- *   sg2Key?: string,      // DP-registry key (write)
- *   enableKey?: string,   // optional enable DP (write)
- *   invert1?: boolean,
- *   invert2?: boolean
- * }
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
  *
- * Target:
- * {
- *   state?: 'off'|'on'|'boost'|'normal'|'block'
- * }
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-
+function mappedKey(value) {
+    return typeof value === 'string' ? value.trim() : '';
+}
 /**
- * Default SG-Ready state mapping:
- * - off/normal:  sg1=false, sg2=false
- * - on:          sg1=true,  sg2=false
- * - boost:       sg1=true,  sg2=true
- * - block:       sg1=false, sg2=true
+ * Code-Teil: normalizeState
  *
- * Note: Real installations may wire/invert relays differently.
- * Use invert1/invert2 to adapt to active-low relays.
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-
+function normalizeState(value) {
+    const raw = String(value ?? 'off').trim().toLowerCase();
+    if (!raw || raw === '0' || raw === 'normal')
+        return 'off';
+    if (raw === 'on' || raw === '1')
+        return 'on';
+    if (raw === 'boost' || raw === '2')
+        return 'boost';
+    if (raw === 'block' || raw === 'blocked' || raw === '3')
+        return 'block';
+    return 'off';
+}
 /**
- * @param {{dp:any, adapter:any}} ctx
- * @param {any} consumer
- * @param {{state?:string}} target
- */
-/**
- * Code-Teil: applySgReady
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
- * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ * Applies a single SG-Ready state without bypassing mapped output checks.
  */
 async function applySgReady(ctx, consumer, target) {
-    const adapter = ctx && ctx.adapter;
-    const dp = ctx && ctx.dp;
-
-    const sg1Key = consumer && consumer.sg1Key;
-    const sg2Key = consumer && consumer.sg2Key;
-    const enableKey = consumer && consumer.enableKey;
-
-    const has1 = !!(sg1Key && dp && dp.getEntry && dp.getEntry(sg1Key));
-    const has2 = !!(sg2Key && dp && dp.getEntry && dp.getEntry(sg2Key));
-    const hasEn = !!(enableKey && dp && dp.getEntry && dp.getEntry(enableKey));
-
-    if (!has1 && !has2 && !hasEn) {
+    const adapter = ctx?.adapter ?? null;
+    const dp = ctx?.dp ?? null;
+    const sg1Key = mappedKey(consumer?.sg1Key);
+    const sg2Key = mappedKey(consumer?.sg2Key);
+    const enableKey = mappedKey(consumer?.enableKey);
+    const has1 = !!(sg1Key && dp?.getEntry?.(sg1Key));
+    const has2 = !!(sg2Key && dp?.getEntry?.(sg2Key));
+    const hasEnable = !!(enableKey && dp?.getEntry?.(enableKey));
+    if (!has1 && !has2 && !hasEnable) {
         return { applied: false, status: 'no_sgready_dp', writes: { sg1: null, sg2: null, enable: null } };
     }
-
-    const raw = String(target && target.state || 'off').trim().toLowerCase();
-    const state = (!raw || raw === '0') ? 'off'
-        : (raw === 'normal') ? 'off'
-        : (raw === 'on' || raw === '1') ? 'on'
-        : (raw === 'boost' || raw === '2') ? 'boost'
-        : (raw === 'block' || raw === 'blocked' || raw === '3') ? 'block'
-        : 'off';
-
-    /** @type {boolean} */
-    let sg1 = false;
-    /** @type {boolean} */
-    let sg2 = false;
-
-    if (state === 'on') { sg1 = true; sg2 = false; }
-    else if (state === 'boost') { sg1 = true; sg2 = true; }
-    else if (state === 'block') { sg1 = false; sg2 = true; }
-
-    const enable = (state !== 'off' && state !== 'normal' && state !== 'block');
-
-    const inv1 = !!(consumer && consumer.invert1);
-    const inv2 = !!(consumer && consumer.invert2);
-    if (inv1) sg1 = !sg1;
-    if (inv2) sg2 = !sg2;
-
-    /** @type {true|false|null} */
+    const state = normalizeState(target?.state);
+    let sg1 = state === 'on' || state === 'boost';
+    let sg2 = state === 'boost' || state === 'block';
+    const enable = state === 'on' || state === 'boost';
+    if (consumer?.invert1)
+        sg1 = !sg1;
+    if (consumer?.invert2)
+        sg2 = !sg2;
     let wrote1 = null;
-    /** @type {true|false|null} */
     let wrote2 = null;
-
-    /** @type {true|false|null} */
-    let wroteEn = null;
-
-    if (has1) wrote1 = await dp.writeBoolean(sg1Key, !!sg1, false);
-    if (has2) wrote2 = await dp.writeBoolean(sg2Key, !!sg2, false);
-    if (enableKey) {
-        if (!hasEn) wroteEn = false;
-        else wroteEn = await dp.writeBoolean(enableKey, !!enable, false);
-    }
-    const results = [wrote1, wrote2, wroteEn].filter(v => v !== null && v !== undefined);
-    const anyFalse = results.some(v => v === false);
-    const anyTrue = results.some(v => v === true);
-    const applied = !anyFalse;
-
-    let status = 'unchanged';
-    if (anyFalse && anyTrue) status = 'applied_partial';
-    else if (anyFalse) status = 'write_failed';
-    else if (anyTrue) status = 'applied';
-
-    if (adapter && adapter.log && typeof adapter.log.debug === 'function') {
-        const k = String(consumer && consumer.key || '');
-        adapter.log.debug(`[consumer:sgready] apply '${k}' state=${state} wrote1=${wrote1} wrote2=${wrote2} wroteEn=${wroteEn} status=${status}`);
-    }
-
-    return { applied, status, writes: { sg1: wrote1, sg2: wrote2, enable: wroteEn }, state };
+    let wroteEnable = null;
+    if (has1 && dp)
+        wrote1 = await dp.writeBoolean(sg1Key, sg1, false);
+    if (has2 && dp)
+        wrote2 = await dp.writeBoolean(sg2Key, sg2, false);
+    if (enableKey)
+        wroteEnable = hasEnable && dp ? await dp.writeBoolean(enableKey, enable, false) : false;
+    const results = [wrote1, wrote2, wroteEnable].filter((value) => value !== null);
+    const anyFalse = results.some((value) => value === false);
+    const anyTrue = results.some((value) => value === true);
+    const status = anyFalse && anyTrue
+        ? 'applied_partial'
+        : anyFalse
+            ? 'write_failed'
+            : anyTrue
+                ? 'applied'
+                : 'unchanged';
+    adapter?.log?.debug?.(`[consumer:sgready] apply '${String(consumer?.key ?? '')}' state=${state} wrote1=${wrote1} wrote2=${wrote2} wroteEn=${wroteEnable} status=${status}`);
+    return {
+        applied: !anyFalse,
+        status,
+        writes: { sg1: wrote1, sg2: wrote2, enable: wroteEnable },
+        state,
+    };
 }
-
 module.exports = { applySgReady };

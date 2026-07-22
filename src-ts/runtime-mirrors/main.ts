@@ -21,7 +21,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: 0c33d6346f6e20f59b132bda79d916db2ec209abde1982d38214728658597928
+ * Original-Hash: 9da512090bd067d026548e87c0cf16849ed6774900fe2e40177fc7d94da56ecd
  */
 
 /**
@@ -492,6 +492,7 @@ const NwChannelDetector =
 // Embedded EMS engine (Charging Management from nexowatt-multiuse)
 const { EmsEngine } = require('./ems/engine');
 const { resolveNvpDisplay } = require('./ems/services/measurement-freshness');
+const { normalizeOpposingPowerFlows } = require('./ems/services/power-flow-coherence');
 const { buildHttpActuatorShadowContext, withActuatorShadowContext, isActuatorAuthorityBlockedResult } = require('./ems/services/actuator-shadow-arbiter');
 const nwCountryProfileService = require('./ems/services/country-profile-service');
 const nwFeatureFlagsService = require('./ems/services/feature-flags');
@@ -503,6 +504,7 @@ const {
 } = require('./ems/services/storage-farm-aggregation');
 const { physicalPvSourceKey: nwPhysicalPvSourceKey, dedupePvSourceRows: nwDedupePvSourceRows, applyPvCapacityPlausibility: nwApplyPvCapacityPlausibility } = require('./ems/services/pv-source-identity');
 const { resolveEvcsControlMapping } = require('./ems/evcs-control-mapping');
+const { normalizeStorageDatapointsConfig: nwNormalizeStorageDatapointsConfig } = require('./ems/services/storage-datapoint-config');
 
 // NexoLogic (node/graph) runtime engine
 const { NexoLogicEngine } = require('./ems/nexologic-engine');
@@ -5097,54 +5099,11 @@ class NexoWattVis extends utils.Adapter {
    * älteren Installer-Strukturen. Die aktuelle storage.datapoints-Struktur hat
    * immer Vorrang; Fallbacks werden nur für leere Felder übernommen.
    */
-  _nwNormalizeStorageDatapointsConfig(storageIn, globalDatapointsIn) {
-    const storage = storageIn && typeof storageIn === 'object' && !Array.isArray(storageIn) ? storageIn : {};
-    const current = storage.datapoints && typeof storage.datapoints === 'object' && !Array.isArray(storage.datapoints)
-      ? storage.datapoints
-      : {};
-    const globalDps = globalDatapointsIn && typeof globalDatapointsIn === 'object' && !Array.isArray(globalDatapointsIn)
-      ? globalDatapointsIn
-      : {};
-    const roots = [current, storage];
-    const textFrom = (keys, globalKeys = []) => {
-      for (const root of roots) {
-        for (const key of keys) {
-          const value = root[key];
-          if (value === undefined || value === null) continue;
-          const text = String(value).trim();
-          if (text) return text;
-        }
-      }
-      for (const key of globalKeys) {
-        const value = globalDps[key];
-        if (value === undefined || value === null) continue;
-        const text = String(value).trim();
-        if (text) return text;
-      }
-      return '';
-    };
-    const out = { ...current };
-    const assignText = (canonical, aliases, globalKeys = []) => {
-      const value = textFrom([canonical, ...aliases], globalKeys);
-      if (value) out[canonical] = value;
-      else if (out[canonical] === undefined || out[canonical] === null) out[canonical] = '';
-    };
-
-    assignText('socObjectId', ['socId', 'socDp', 'storageSocId'], ['storageSoc']);
-    assignText('batteryPowerObjectId', ['signedPowerId', 'powerObjectId', 'powerId'], ['batteryPower']);
-    assignText('batteryChargePowerObjectId', ['chargePowerId', 'chargePowerDp'], ['storageChargePower']);
-    assignText('batteryDischargePowerObjectId', ['dischargePowerId', 'dischargePowerDp'], ['storageDischargePower']);
-    assignText('dcPvPowerObjectId', ['pvPowerId', 'pvPowerObjectId', 'pvPowerDp'], ['storagePvPower']);
-    assignText('targetPowerObjectId', ['setSignedPowerId', 'targetPowerId', 'powerSetpointId', 'setpointId', 'setPowerId']);
-    assignText('targetChargePowerObjectId', ['setChargePowerId', 'targetChargePowerId', 'chargeSetpointId']);
-    assignText('targetDischargePowerObjectId', ['setDischargePowerId', 'targetDischargePowerId', 'dischargeSetpointId']);
-    assignText('runObjectId', ['runId', 'enableObjectId', 'controlEnableId']);
-    assignText('maxChargeObjectId', ['maxChargeId', 'maxChargePowerObjectId']);
-    assignText('maxDischargeObjectId', ['maxDischargeId', 'maxDischargePowerObjectId']);
-    assignText('chargeEnableObjectId', ['chargeAllowedId', 'chargeEnableId']);
-    assignText('dischargeEnableObjectId', ['dischargeAllowedId', 'dischargeEnableId']);
-    assignText('reserveSocObjectId', ['reserveSocId']);
-    return out;
+  _nwNormalizeStorageDatapointsConfig(storageIn, _globalDatapointsIn) {
+    // `storage.datapoints` ist die persistierte, manuelle Quelle. Das allgemeine
+    // Energiefluss-Mapping wird ausschließlich zur Laufzeit in der EMS-Bridge
+    // ergänzt und darf hier niemals in den Installer-Patch zurückfließen.
+    return nwNormalizeStorageDatapointsConfig(storageIn);
   }
 
   // Speicherfarm (mehrere Speichersysteme als Pool/Gruppe)
@@ -13691,6 +13650,33 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         aiOptimization: (n.aiOptimization && typeof n.aiOptimization === 'object') ? n.aiOptimization : {},
       };
     };
+
+    /**
+     * Liefert die im Installer-State persistierte AppCenter-Konfiguration als
+     * Source of Truth. Runtime-Mutationen und Messwert-Fallbacks dürfen dadurch
+     * niemals als manuelle DP-Zuordnung an den Browser zurückgegeben werden.
+     */
+    const _nwPickPersistedInstallerConfig = () => {
+      const runtimePicked = _nwPickInstallerConfig(this.config || {});
+      const patch = (this._nwInstallerConfigPatch && typeof this._nwInstallerConfigPatch === 'object')
+        ? this._nwInstallerConfigPatch
+        : {};
+      const out = runtimePicked && typeof runtimePicked === 'object' ? runtimePicked : {};
+      const runtimeOnly = new Set(['version', 'port', 'license', 'locale', 'regressionSafety']);
+      const clone = (value) => {
+        if (this._nwDeepClone && typeof this._nwDeepClone === 'function') {
+          try { return this._nwDeepClone(value); } catch (_eClone) {}
+        }
+        try { return JSON.parse(JSON.stringify(value)); } catch (_eJson) { return value; }
+      };
+      for (const key of Object.keys(patch)) {
+        if (runtimeOnly.has(key) || !Object.prototype.hasOwnProperty.call(out, key)) continue;
+        out[key] = clone(patch[key]);
+      }
+      out.emsApps = _nwNormalizeEmsApps(Object.assign({}, this.config || {}, patch));
+      return out;
+    };
+
     /**
      * Code-Teil: _nwHydrateStorageFarmConfigFromRuntimeStates
      * Zweck: Stellt sicher, dass die App-Center-Konfiguration der Speicherfarm
@@ -13969,7 +13955,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         // system.adapter.<instance>.native. Persisting to native triggers an ioBroker instance restart
         // and breaks the UI with "Failed to fetch" + SSE disconnects.
         const nativeObj = (this.config && typeof this.config === 'object') ? this.config : {};
-        const cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickInstallerConfig(nativeObj));
+        const cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickPersistedInstallerConfig());
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
         cfgOut.locale = this._nwBuildLocaleInfo();
         cfgOut.countryProfile = Object.assign({}, cfgOut.countryProfile || {}, this._nwBuildCountryProfileInfo());
@@ -14110,7 +14096,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         }
 
         try { await this._nwInitLicense(); } catch (e) { try { this.log.warn('License refresh after installer config save failed: ' + (e && e.message ? e.message : e)); } catch (_eLog) {} }
-        const cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickInstallerConfig(this.config || {}));
+        const cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickPersistedInstallerConfig());
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
         cfgOut.locale = this._nwBuildLocaleInfo();
         cfgOut.countryProfile = Object.assign({}, cfgOut.countryProfile || {}, this._nwBuildCountryProfileInfo());
@@ -14299,7 +14285,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           await _nwRestartEms();
         }
 
-        res.json({ ok: true, imported: true, restarted: !!restartEms, config: _nwPickInstallerConfig(this.config || {}) });
+        res.json({ ok: true, imported: true, restarted: !!restartEms, config: _nwPickPersistedInstallerConfig() });
       } catch (e) {
         const msg = (e && e.message) ? String(e.message) : 'internal error';
         res.status(500).json({ ok: false, error: msg });

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 08402aa0dad81f442ee2dc29cbf1ee766bb49c14f322e54095662d6fa2642243
+ * Original-Hash: 0d31f6506449b33cfd0766b4ef4d0c670797c3878f59adf60db23705788fbb35
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-mapping.ts
- * Quell-Hash: sha256:27f79e527013c988e406ae5b4a6e2aacd95d55ac593882822c926704ddaffbc7
+ * Quell-Hash: sha256:c5b917e50cf53a9ad37038659fb9b1a8307f4b7e2f37ea7a683e7463c5705a80
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -56,6 +56,11 @@
 'use strict';
 
 const { BaseModule } = require('./base');
+const {
+    normalizeStorageDatapointsConfig,
+    buildStorageMeasurementFallbackFromGlobal,
+    mergeStorageMeasurementFallback,
+} = require('../services/storage-datapoint-config');
 
 /**
  * Speicher-Datenpunkt-Zuordnung (Installateur)
@@ -208,13 +213,17 @@ class SpeicherMappingModule extends BaseModule {
             return 'generic';
         };
         const vendorProfile = normalizeVendorProfile(storage.vendorProfile);
-        const currentDp = (storage && storage.datapoints && typeof storage.datapoints === 'object') ? storage.datapoints : {};
-        const globalDp = (this.adapter.config && this.adapter.config.datapoints && typeof this.adapter.config.datapoints === 'object')
-            ? this.adapter.config.datapoints
-            : {};
-        const dp = { ...currentDp };
+        // Dauerhafte Speicherzuordnung und globales Energiefluss-Mapping bleiben
+        // strikt getrennt. Die globale Messquelle wird nur über den privaten,
+        // nicht persistierbaren Runtime-Fallback ergänzt.
+        const localDp = normalizeStorageDatapointsConfig(storage);
+        const runtimeFallback = (this.adapter && this.adapter._nwStorageMeasurementFallback
+            && typeof this.adapter._nwStorageMeasurementFallback === 'object')
+            ? this.adapter._nwStorageMeasurementFallback
+            : buildStorageMeasurementFallbackFromGlobal(this.adapter && this.adapter.config ? this.adapter.config : {});
+        const dp = mergeStorageMeasurementFallback({ ...storage, datapoints: localDp }, runtimeFallback);
 /**
- * Code-Teil: text
+ * Code-Teil: boolValue
  *
  * Zweck:
  * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
@@ -224,39 +233,12 @@ class SpeicherMappingModule extends BaseModule {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-        const text = (value) => value === undefined || value === null ? '' : String(value).trim();
-/**
- * Code-Teil: pickText
- *
- * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-        const pickText = (canonical, aliases = [], globalAliases = []) => {
-            const candidates = [currentDp[canonical], ...aliases.map((key) => currentDp[key]), storage[canonical], ...aliases.map((key) => storage[key]), ...globalAliases.map((key) => globalDp[key])];
-            for (const value of candidates) {
-                const normalized = text(value);
-                if (normalized) return normalized;
-            }
-            return '';
-        };
-/**
- * Code-Teil: assignText
- *
- * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-        const assignText = (canonical, aliases = [], globalAliases = []) => {
-            dp[canonical] = pickText(canonical, aliases, globalAliases);
+        const boolValue = (value, fallback = false) => {
+            if (typeof value === 'boolean') return value;
+            const normalized = String(value === undefined || value === null ? '' : value).trim().toLowerCase();
+            if (value === 1 || normalized === '1' || normalized === 'true') return true;
+            if (value === 0 || normalized === '0' || normalized === 'false') return false;
+            return fallback;
         };
 /**
  * Code-Teil: inherit
@@ -278,46 +260,6 @@ class SpeicherMappingModule extends BaseModule {
                 }
             }
         };
-/**
- * Code-Teil: boolValue
- *
- * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-        const boolValue = (value, fallback = false) => {
-            if (typeof value === 'boolean') return value;
-            const normalized = String(value === undefined || value === null ? '' : value).trim().toLowerCase();
-            if (value === 1 || normalized === '1' || normalized === 'true') return true;
-            if (value === 0 || normalized === '0' || normalized === 'false') return false;
-            return fallback;
-        };
-
-        // Aktuelle AppCenter-Namen führen. Direkte/ältere Feldnamen werden nur als
-        // Fallback übernommen, damit eine TS-Migration keine manuelle Zuordnung verliert.
-        assignText('socObjectId', ['socId', 'socDp', 'storageSocId'], ['storageSoc']);
-        assignText('batteryPowerObjectId', ['signedPowerId', 'powerObjectId', 'powerId'], ['batteryPower']);
-        assignText('batteryChargePowerObjectId', ['chargePowerId', 'chargePowerDp'], ['storageChargePower']);
-        assignText('batteryDischargePowerObjectId', ['dischargePowerId', 'dischargePowerDp'], ['storageDischargePower']);
-        assignText('dcPvPowerObjectId', ['pvPowerId', 'pvPowerObjectId', 'pvPowerDp'], ['storagePvPower']);
-        assignText('targetPowerObjectId', ['setSignedPowerId', 'targetPowerId', 'powerSetpointId', 'setpointId', 'setPowerId']);
-        assignText('targetChargePowerObjectId', ['setChargePowerId', 'targetChargePowerId', 'chargeSetpointId']);
-        assignText('targetDischargePowerObjectId', ['setDischargePowerId', 'targetDischargePowerId', 'dischargeSetpointId']);
-        assignText('runObjectId', ['runId', 'enableObjectId', 'controlEnableId']);
-        assignText('maxChargeObjectId', ['maxChargeId', 'maxChargePowerObjectId']);
-        assignText('maxDischargeObjectId', ['maxDischargeId', 'maxDischargePowerObjectId']);
-        assignText('chargeEnableObjectId', ['chargeAllowedId', 'chargeEnableId']);
-        assignText('dischargeEnableObjectId', ['dischargeAllowedId', 'dischargeEnableId']);
-        assignText('reserveSocObjectId', ['reserveSocId']);
-        assignText('e3dcSetPowerModeObjectId', ['e3dcSetPowerModeId']);
-        assignText('e3dcSetPowerValueObjectId', ['e3dcSetPowerValueId']);
-        assignText('e3dcPowerLimitsUsedObjectId', ['e3dcPowerLimitsUsedId']);
-        assignText('e3dcMaxChargePowerObjectId', ['e3dcMaxChargePowerId']);
-        assignText('e3dcMaxDischargePowerObjectId', ['e3dcMaxDischargePowerId']);
 
         for (const [canonical, aliases] of [
             ['socScale', []],

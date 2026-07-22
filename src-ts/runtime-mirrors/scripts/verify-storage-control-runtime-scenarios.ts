@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 6c0538feed53d2fd1e4e313b36143192817c1e7d3d09ef7025c94aa03fc62280
+ * Original-Hash: e515b1ac46a6ffb8025bb791e5a442c00e8edb85351692652477d4c2e7bc8bee
  */
 
 /**
@@ -208,26 +208,39 @@ async function runTick({ gridW, gridRawW = gridW, soc = 80, battPowerW = null, l
 }
 
 (async () => {
-  // Kritischer Feldfall: alter hoher Entlade-Sollwert + nur ca. 2,6 kW Import.
-  // Ergebnis muss hart im Bereich des echten Netzbedarfs bleiben.
+  // Sicherheitskritischer Feldfall: alter hoher Entlade-Sollwert, aber keine
+  // vertrauenswuerdige Speicher-Istleistung. Ohne diesen physikalischen Anker
+  // kann der sichere NVP-Headroom nicht bestimmt werden; Entladen muss daher
+  // explizit gestoppt werden, statt einen alten Befehl fortzufuehren.
   const high = await runTick({ gridW: 2600, gridRawW: 2600, battPowerW: null, lastTargetW: 71600, lastSource: 'eigenverbrauch' });
-  assert(high.targetW <= 3000, `alter Entlade-Sollwert wurde nicht hart gecappt: ${high.targetW}`);
-  assert(high.targetW >= 2000, `Eigenverbrauch sollte bei 2,6 kW Import weiter sinnvoll entladen: ${high.targetW}`);
+  assert.strictEqual(high.targetW, 0, `feedbackloser alter Entlade-Sollwert muss sicher gestoppt werden: ${high.targetW}`);
+  assert.strictEqual(
+    (await high.adapter.getStateAsync('speicher.regelung.antiExportAktion'))?.val,
+    'stop-missing-storage-feedback',
+    'Anti-Export-Diagnose muss fehlende Speicher-Istleistung eindeutig melden',
+  );
 
   // Mit echter Batterie-Istleistung darf die Regelung den Speicher stabil nahe Hauslast halten.
   const stable = await runTick({ gridW: 120, gridRawW: 120, battPowerW: 3000, lastTargetW: 3000, lastSource: 'eigenverbrauch' });
   assert(stable.targetW >= 2800 && stable.targetW <= 3400, `vertrauenswürdiges Batteriefeedback hält nicht stabil: ${stable.targetW}`);
 
-  // Ohne Batterie-Istleistung bleibt der letzte nicht-null Sollwert aktiv, wenn der
-  // frische NVP bereits im Zielband liegt. Der NVP ist hier der physikalische Beleg,
-  // dass die laufende Vorgabe gerade passt; 0 W würde den Speicher ungewollt stoppen.
+  // Auch im NVP-Zielband darf ein positiver Entladebefehl ohne frische
+  // Speicher-Istleistung nicht gehalten werden. Der NVP allein beweist nicht,
+  // welche reale Speicherwirkung noch aktiv ist.
   const boundedHold = await runTick({ gridW: 80, gridRawW: 80, battPowerW: null, lastTargetW: 3000, lastSource: 'eigenverbrauch' });
-  assert.strictEqual(boundedHold.targetW, 3000, `feedbackloser Deadband-Sollwert muss aktiv bleiben: ${boundedHold.targetW}`);
+  assert.strictEqual(boundedHold.targetW, 0, `feedbackloser Deadband-Entladebefehl muss sicher gestoppt werden: ${boundedHold.targetW}`);
+  assert.strictEqual(
+    (await boundedHold.adapter.getStateAsync('speicher.regelung.antiExportAktion'))?.val,
+    'stop-missing-storage-feedback',
+  );
 
-  // Auch ein größerer laufender Sollwert wird im Zielband nicht allein aufgrund seiner
-  // Höhe verworfen. Sobald der NVP abweicht, greifen weiterhin Differenzregelung und Caps.
+  // Dasselbe gilt fuer groessere alte Entladevorgaben: ohne Messanker kein Hold.
   const largeBalancedHold = await runTick({ gridW: 80, gridRawW: 80, battPowerW: null, lastTargetW: 8000, lastSource: 'eigenverbrauch' });
-  assert.strictEqual(largeBalancedHold.targetW, 8000, `wirksamer Deadband-Sollwert wurde fälschlich gestoppt: ${largeBalancedHold.targetW}`);
+  assert.strictEqual(largeBalancedHold.targetW, 0, `grosser feedbackloser Entladebefehl muss sicher gestoppt werden: ${largeBalancedHold.targetW}`);
+  assert.strictEqual(
+    (await largeBalancedHold.adapter.getStateAsync('speicher.regelung.antiExportAktion'))?.val,
+    'stop-missing-storage-feedback',
+  );
 
   // PV-Überschuss-Laden wird auf den aktuellen RAW-Export begrenzt.
   const pv = await runTick({ gridW: -5000, gridRawW: -5000, battPowerW: null, lastTargetW: 0, lastSource: 'idle', extraConfig: { storage: { pvMaxDeltaWPerTick: 10000 } } });
@@ -242,7 +255,7 @@ async function runTick({ gridW, gridRawW = gridW, soc = 80, battPowerW = null, l
   const stopChargeOnImport = await runTick({ gridW: 1000, gridRawW: 1000, battPowerW: null, lastTargetW: -10000, lastSource: 'pv' });
   assert.strictEqual(stopChargeOnImport.targetW, 0, `Netzbezug muss feedbacklose PV-Ladung sicher stoppen: ${stopChargeOnImport.targetW}`);
 
-  console.log('[storage-control-runtime-scenarios] OK: Speicher-Eigenverbrauch, NVP-Hold, Demand-Caps und explizite Stopbedingungen laufen durch echte Tick-Szenarien.');
+  console.log('[storage-control-runtime-scenarios] OK: Speicher-Eigenverbrauch, Anti-Export-Fail-Safe, Demand-Caps und explizite Stopbedingungen laufen durch echte Tick-Szenarien.');
 })().catch((err) => {
   console.error('[storage-control-runtime-scenarios] ERROR:', err && err.stack ? err.stack : err);
   process.exit(1);

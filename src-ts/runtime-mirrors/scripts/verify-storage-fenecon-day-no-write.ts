@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: fd68125e11558e9a94552d588657719e0f8bd7e3032fd921481147980955e450
+ * Original-Hash: 722ebfe3007697c16a37031b3e92159909b6622952454f0800caedad3ac841cc
  */
 
 /**
@@ -215,6 +215,12 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, l
   if (battPowerW !== null) entries['st.batteryPowerW'] = makeEntry(battPowerW, 'battery.actualPower');
   const dp = new FakeDp(entries);
   const adapter = makeAdapter(extraConfig);
+  if (extraConfig && extraConfig.root && extraConfig.root.enableStorageFarm === true && battPowerW !== null) {
+    const ts = nowMs();
+    adapter._states.set('storageFarm.storagesOnline', { val: 1, ts });
+    adapter._states.set('storageFarm.storagesDispatchAvailable', { val: 1, ts });
+    adapter._states.set('storageFarm.totalPowerW', { val: Number(battPowerW), ts });
+  }
   const mod = new SpeicherRegelungModule(adapter, dp);
   if (lastTargetW !== null) mod._lastTargetW = lastTargetW;
   mod._lastSource = lastSource;
@@ -271,6 +277,7 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, l
   const assist = await runTick({
     gridW: 1700,
     gridRawW: 1700,
+    battPowerW: 0,
     extraConfig: {
       storage: {
         feneconAssistEnabled: true,
@@ -289,6 +296,7 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, l
   const farmAssist = await runTick({
     gridW: 1700,
     gridRawW: 1700,
+    battPowerW: 0,
     extraConfig: {
       root: { enableStorageFarm: true },
       storageFarm: {
