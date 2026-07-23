@@ -239,7 +239,7 @@ async function testInactiveMultiUseCannotBlockStandaloneAtNineteenPercent() {
   assert.strictEqual(adapter.states.get('speicher.regelung.selfMinSocPct').val, 10);
   assert.strictEqual(adapter.states.get('speicher.regelung.selfTargetGridImportW').val, 50);
   assert(String(adapter.states.get('speicher.regelung.selfSocPolicySource').val || '').startsWith('standalone-default'), 'Standalone-Defaultquelle muss aktiv sein');
-  assert(adapter.states.get('speicher.regelung.requestW').val >= 1450, 'NVP-Regelfehler muss als Entlade-Request ankommen');
+  assert.strictEqual(adapter.states.get('speicher.regelung.requestW').val, 1440, 'NVP-Regelfehler muss bis zur oberen 100-W-Bandkante als Entlade-Request ankommen');
   assert(/NVP-Balancing entladen/.test(String(adapter.states.get('speicher.regelung.requestGrund').val)));
 }
 

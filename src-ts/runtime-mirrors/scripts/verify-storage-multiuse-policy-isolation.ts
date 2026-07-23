@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 8ba035ef2565eb82202abbde5b4a8387c39bf637168c579fcc0b4daf5a209345
+ * Original-Hash: aa0fd46c8d50ebb8bd9ba44de1e4a61126720a156b9c812d2ca8dfd4d028e466
  */
 
 /**
@@ -41,7 +41,7 @@
  * - SoC 19 %
  * - alter MultiUse-Spiegel selfMinSocPct=20 %
  * - MultiUse deaktiviert
- * Erwartung: Standalone-Minimum 10 %, Sollwert ca. +1.490 W Entladen.
+ * Erwartung: Standalone-Minimum 10 %, Sollwert +1.440 W bis zur oberen Bandkante (100 W).
  */
 
 const assert = require('assert');
@@ -331,12 +331,65 @@ async function runStorageTick({ multiUseActive, soc = 19, gridW = 1540 }) {
   assert.strictEqual(activePolicy.mode, 'multiuse');
   assert.strictEqual(activePolicy.self.minSocPct, 20, 'aktive MultiUse-Policy muss direkt aus installerConfig stammen');
 
+  const activePolicyWithLegacyNvp = resolveStorageOperatingPolicy({
+    storageConfig: {
+      standaloneSelfTargetGridImportW: 0,
+      standaloneSelfImportThresholdW: 50,
+      standaloneSelfMinSocPct: 8,
+      standaloneSelfMaxSocPct: 95,
+    },
+    storageFarmConfig: {
+      selfTargetGridImportW: 25,
+      selfImportThresholdW: 40,
+    },
+    selectedTopology: 'single',
+    multiUseConfig: {
+      enabled: true,
+      selfEnabled: true,
+      selfMinSocPct: 20,
+      selfMaxSocPct: 100,
+      // Legacy-Felder duerfen keine zweite NVP-Abstimmung mehr bilden.
+      selfTargetGridImportW: 900,
+      selfImportThresholdW: 900,
+    },
+    multiUseActive: true,
+  });
+  assert.strictEqual(activePolicyWithLegacyNvp.self.targetGridImportW, 0);
+  assert.strictEqual(activePolicyWithLegacyNvp.self.importThresholdW, 50);
+  assert.strictEqual(activePolicyWithLegacyNvp.nvpTuning.topology, 'single');
+  assert.strictEqual(activePolicyWithLegacyNvp.nvpTuning.multiUseTuningIgnored, true);
+
+  const activeFarmPolicy = resolveStorageOperatingPolicy({
+    storageConfig: {
+      standaloneSelfTargetGridImportW: 500,
+      standaloneSelfImportThresholdW: 500,
+    },
+    storageFarmConfig: {
+      selfTargetGridImportW: 25,
+      selfImportThresholdW: 40,
+    },
+    selectedTopology: 'farm',
+    multiUseConfig: {
+      enabled: true,
+      selfEnabled: true,
+      selfMinSocPct: 20,
+      selfMaxSocPct: 100,
+      selfTargetGridImportW: 900,
+      selfImportThresholdW: 900,
+    },
+    multiUseActive: true,
+  });
+  assert.strictEqual(activeFarmPolicy.self.targetGridImportW, 25);
+  assert.strictEqual(activeFarmPolicy.self.importThresholdW, 40);
+  assert.strictEqual(activeFarmPolicy.nvpTuning.topology, 'farm');
+  assert.strictEqual(activeFarmPolicy.nvpTuning.source, 'storageFarm');
+
   const inactiveTick = await runStorageTick({ multiUseActive: false });
   assert.strictEqual(inactiveTick.state('speicher.regelung.selfMinSocPct'), 10);
   assert.strictEqual(inactiveTick.state('speicher.regelung.selfSocPolicySource'), 'standalone-default-after-multiuse');
-  assert.strictEqual(inactiveTick.state('speicher.regelung.requestW'), 1490);
-  assert.strictEqual(inactiveTick.state('speicher.regelung.sollW'), 1490);
-  assert.strictEqual(inactiveTick.dp.lastNumberWrite('st.targetPowerW'), 1490);
+  assert.strictEqual(inactiveTick.state('speicher.regelung.requestW'), 1440);
+  assert.strictEqual(inactiveTick.state('speicher.regelung.sollW'), 1440);
+  assert.strictEqual(inactiveTick.dp.lastNumberWrite('st.targetPowerW'), 1440);
   assert.match(String(inactiveTick.state('speicher.regelung.requestGrund') || ''), /NVP-Balancing entladen/);
 
   const activeTick = await runStorageTick({ multiUseActive: true });
@@ -379,7 +432,7 @@ async function runStorageTick({ multiUseActive, soc = 19, gridW = 1540 }) {
     assert(!applyBlock.includes(forbidden), `MultiUse wird weiterhin nach storage.* gespiegelt: ${forbidden}`);
   }
 
-  console.log('[storage-multiuse-policy-isolation] OK: deaktiviertes MultiUse ist neutral; 19 % SoC entlädt bei 1,54 kW NVP-Bezug, aktive 20-%-Policy blockiert transparent.');
+  console.log('[storage-multiuse-policy-isolation] OK: deaktiviertes MultiUse ist neutral; NVP-Ziel/Hysterese stammen nur aus der aktiven Speicher-Topologie und die SoC-Policy bleibt transparent.');
 })().catch((error) => {
   console.error('[storage-multiuse-policy-isolation] ERROR:', error && error.stack ? error.stack : error);
   process.exit(1);

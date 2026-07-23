@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.138",
+    "version": "0.8.139",
     "news": {
+      "0.8.139": {
+        "de": "Version 0.8.139 RC15: Die Eigenverbrauchsregelung verwendet jetzt genau eine NVP-Zielmitte/Hysterese je aktiver Speicher-Topologie. Einzelspeicher liest die Speicher-App, die Farm ihre eigenen Werte; MultiUse übernimmt diese Abstimmung und besitzt keinen zweiten NVP-Regler. Außerhalb des Zielbands wird nur bis zur nächsten Bandkante korrigiert, sodass bei Ziel 0 W, ±50 W und -65 W Einspeisung exakt 15 W geladen werden. Home und Pro behalten 1-W-Sollwertauflösung unabhängig von der Nennleistung; Pro skaliert weiterhin nur Dynamik und Prognose. Kleine Korrekturen bleiben bis zum Signed-, Split- oder Farmwriter erhalten.",
+        "en": "Version 0.8.139 RC15: Self-consumption control now has exactly one NVP target centre/hysteresis owner per active storage topology. Single storage reads the storage app, the farm reads its own values, and MultiUse inherits that tuning instead of owning a second NVP controller. Outside the band, control moves only to the nearest band edge, so target 0 W, ±50 W and -65 W export produces an exact 15 W charge command. Home and Pro retain 1 W command resolution regardless of rated power; Pro still scales dynamics and prediction only. Small corrections are preserved through signed, split and farm writers."
+      },
       "0.8.138": {
         "de": "Version 0.8.138 RC14: Die Speicher-SoC-Policy ist jetzt zwischen Standalone-Eigenverbrauch, aktivem MultiUse und Speicherfarm sauber getrennt. Ein vorhandener, aber deaktivierter MultiUse-Datensatz kann keine versteckte 20-%-Untergrenze mehr erzwingen. Einzelregelung, Farm, Core-Budget und Diagnose verwenden denselben seiteneffektfreien Resolver; MultiUse-Werte werden nicht mehr in storage.* gespiegelt. Policy-Sperren zeigen einen eindeutigen Grund, und der NVP-Koordinator meldet bei 0 W wegen SoC-/Reservegrenze nicht mehr fälschlich eine aktive Speicherregelung. AppCenter und Stabilitätsansicht bleiben kompakt.",
         "en": "Version 0.8.138 RC14: Storage SoC policy is now cleanly separated between standalone self-consumption, active MultiUse and storage-farm operation. A present but disabled MultiUse record can no longer enforce a hidden 20% floor. Single-storage control, farm dispatch, core budgeting and diagnostics use the same side-effect-free resolver, and MultiUse values are no longer mirrored into storage.*. Policy blocks expose an explicit reason, while the NVP coordinator no longer reports active storage correction when a 0 W target is caused by an SoC or reserve limit. AppCenter and stability views remain compact."
@@ -26,10 +30,6 @@
       "0.8.133": {
         "de": "Version 0.8.133 RC9: Der EVCS-Modus „Speicher schützen“ arbeitet jetzt asymmetrisch und physikalisch am NVP. Der Speicher darf weiterhin Haus-/sonstige Lasten ohne E-Mobilität ausgleichen, lädt aber nur bei echtem Gesamtüberschuss nach Gebäude und EVCS. Alte Lade- oder Entladebefehle werden bei wegfallender Grundlage mit einem echten 0-W-Stop beendet; Tarif-/Netzladeziele und Herstellerprofile können den Schutz nicht mehr umgehen. AppCenter-Status bleibt kompakt, Details stehen in den vorhandenen JSON- und Stabilitätslogs.",
         "en": "Version 0.8.133 RC9: The EVCS “protect storage” mode now works asymmetrically and physically at the grid connection point. Storage may still cover building/other demand excluding e-mobility, but it may charge only from a real total surplus after building and EVCS demand. Previous charge or discharge commands are stopped with a real 0 W command when their basis disappears; tariff/grid-charging targets and vendor profiles can no longer bypass protection. AppCenter status stays compact, with details in the existing JSON and stability logs."
-      },
-      "0.8.132": {
-        "de": "Version 0.8.132 RC8: Das Multi-Lademanagement erhält nach Installerfreigabe im AppCenter einen gemeinsamen Kundenschalter „Speicher schützen / Speicher mitnutzen“ für alle aktiven Ladepunkte. Einzelne Ladepunkte können diesen globalen Zustand nicht widersprüchlich überschreiben. Separate Stationsseiten werden mit einer vorhandenen Ladeinfrastruktur-Station verknüpft und zeigen automatisch alle aktiven Connectoren dieser Station in responsiven Layouts; die normale EVCS-Seite bleibt die Übersicht über alle Ladepunkte.",
-        "en": "Version 0.8.132 RC8: After installer approval in AppCenter, multi-charging management provides one shared customer control to protect or use stationary storage for all active chargepoints. Individual chargepoints cannot override that global state inconsistently. Separate station pages are linked to an existing charging-infrastructure station and automatically show all active connectors of that station in responsive layouts; the regular EVCS page remains the overview of all chargepoints."
       }
     },
     "title": "NexoWatt UI",

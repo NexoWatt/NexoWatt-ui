@@ -31,7 +31,9 @@ for (const file of [
   must(file, 'const reserveEnabled = storageOperatingPolicy.reserve.enabled === true;', 'Reserve aus Resolver');
   must(file, 'const lskEnabledCfg = storageOperatingPolicy.lsk.enabled === true;', 'LSK aus Resolver');
   must(file, 'const selfMinSoc = clamp(num(storageOperatingPolicy.self.minSocPct, 10)', 'Standalone-Min-SoC aus Resolver');
-  must(file, 'const selfTargetGridW = Math.max(0, num(storageOperatingPolicy.self.targetGridImportW, 50));', 'NVP-Ziel aus derselben Policy');
+  must(file, 'const selfTargetGridW = activeStorageNvpTargetW;', 'NVP-Ziel aus der aktiven Topologie-Policy');
+  must(file, 'const selfImportThresholdW = activeStorageNvpHysteresisW;', 'NVP-Hysterese aus der aktiven Topologie-Policy');
+  must(file, "await this._setIfChanged('speicher.regelung.selfNvpTuningTopology'", 'Topologie-Quellendiagnose');
   must(file, 'Eigenverbrauch: Entladen blockiert (SoC', 'expliziter SoC-Sperrgrund');
   must(file, "await this._setIfChanged('speicher.regelung.policySource'", 'Policy-Quellendiagnose');
   mustNot(file, '(multiUseOwnsZones || !multiUsePolicyConfigured) ? cfg.selfMinSocPct', 'alter versteckter MultiUse-Fallback');

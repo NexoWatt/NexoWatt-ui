@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/core-limits.ts
- * Quell-Hash: sha256:a261e270f4e3be954b0e136eebf6bbd651c0ddc52cc6e57bbf424a32a36b893e
+ * Quell-Hash: sha256:1af9501b8239ab1974048fcd55980bd5e19fb09ec1955d0c1b193729631f7cc5
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2017,6 +2017,8 @@ class CoreLimitsModule extends BaseModule {
             storageConfig: storageCfg,
             multiUseConfig: storageMultiUseCfg,
             multiUseActive: storageMultiUseActive,
+            storageFarmConfig: (cfg.storageFarm && typeof cfg.storageFarm === 'object') ? cfg.storageFarm : {},
+            selectedTopology: storageTopology,
             standaloneDefaultEnabled: true,
             standaloneDefaultMinSocPct: 10,
             standaloneDefaultMaxSocPct: 100,

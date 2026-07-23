@@ -5,7 +5,7 @@
  * stabilem Halten des letzten nicht-null Sollwerts im NVP-Zielband.
  *
  * Geprueft wird die zentrale Regelgleichung fuer Laden und Entladen:
- *   Soll = Batterie-Ist + (NVP-Ist - NVP-Ziel)
+ *   Soll = Batterie-Ist + (NVP-Ist - naechste Zielbandkante)
  *
  * Zusaetzlich prueft der Test:
  * - kontrollierter Leistungsaufbau statt Sollwert-Spruengen,
@@ -168,7 +168,7 @@ async function runTick({
 
   const discharge = buildBalance(mod);
   assert.strictEqual(discharge.feedbackUsed, true, 'frische Batterie-Istleistung muss verwendet werden');
-  assert.strictEqual(Math.round(discharge.rawTargetW), 1150, 'Rohziel muss Ist 500 W + NVP-Differenz 650 W sein');
+  assert.strictEqual(Math.round(discharge.rawTargetW), 1100, 'Rohziel muss Ist 500 W + 600 W Fehler bis zur oberen Bandkante sein');
   assert.strictEqual(Math.round(discharge.targetW), 1000, 'Entladeaufbau muss auf +500 W Korrektur begrenzt werden');
 
   const follow = buildBalance(mod, {
@@ -177,12 +177,12 @@ async function runTick({
     batteryPowerW: 900,
     lastTargetW: 1000,
   });
-  assert.strictEqual(Math.round(follow.targetW), 1000, '900 W Ist + 100 W Restfehler muss 1000 W ergeben');
+  assert.strictEqual(Math.round(follow.targetW), 950, '900 W Ist + 50 W Restfehler bis zur oberen Bandkante muss 950 W ergeben');
 
   // Kundenfall 19.07.2026 (Sungrow/asynchrone Telemetrie): Derselbe echte
   // Batterie-Messwert darf bei unveraendertem NVP exakt einmal als Regelanker
   // dienen. Der zuletzt geschriebene Sollwert darf nicht als neue Istleistung
-  // zurueckgefuehrt werden (2,48 -> 2,95 -> 3,43 -> 4,48 kW).
+  // zurueckgefuehrt werden (2,45 -> 2,95 -> 3,43 -> 4,45 kW).
   {
     const anchorMod = new SpeicherRegelungModule(makeAdapter(), new FakeDp());
     let now = 1_000_000;
@@ -234,18 +234,18 @@ async function runTick({
 
     for (let i = 0; i < 10; i += 1) {
       const cycle = runAnchorCycle(526, 2000, i * 1000);
-      assert.strictEqual(Math.round(cycle.balance.targetW), 2476, `unveraenderter Kundenfall darf nicht hochintegrieren (Tick ${i + 1})`);
+      assert.strictEqual(Math.round(cycle.balance.targetW), 2446, `unveraenderter Kundenfall darf nicht hochintegrieren (Tick ${i + 1})`);
       assert.strictEqual(cycle.feedback.feedbackW, 2000, 'der echte 2-kW-Messwert muss unveraenderlicher Regelanker bleiben');
       assert.strictEqual(cycle.feedback.predicted, false, 'Sollwertprognose in die Batterie-Istleistung ist deaktiviert');
     }
 
     const changedNvp = runAnchorCycle(726, 2000, 10000);
-    assert.strictEqual(Math.round(changedNvp.balance.targetW), 2676, 'NVP-Aenderung muss absolut zum gleichen Messanker nachgefuehrt werden');
+    assert.strictEqual(Math.round(changedNvp.balance.targetW), 2646, 'NVP-Aenderung muss absolut zum gleichen Messanker nachgefuehrt werden');
     const changedNvpRepeat = runAnchorCycle(726, 2000, 11000);
-    assert.strictEqual(Math.round(changedNvpRepeat.balance.targetW), 2676, 'auch der neue NVP-Fehler darf nicht mehrfach addiert werden');
+    assert.strictEqual(Math.round(changedNvpRepeat.balance.targetW), 2646, 'auch der neue NVP-Fehler darf nicht mehrfach addiert werden');
 
     const newActual = runAnchorCycle(180, 2350, 0);
-    assert.strictEqual(Math.round(newActual.balance.targetW), 2480, 'erst ein neuer echter Istwert darf den Regelanker neu setzen');
+    assert.strictEqual(Math.round(newActual.balance.targetW), 2450, 'erst ein neuer echter Istwert darf den Regelanker neu setzen');
     assert.strictEqual(newActual.feedback.sampleUpdated, true, 'neuer Batterie-Zeitstempel muss als neuer Messanker erkannt werden');
   }
 
@@ -288,7 +288,7 @@ async function runTick({
     batteryPowerW: 1000,
     lastTargetW: 1000,
   });
-  assert.strictEqual(Math.round(release.targetW), 350, 'Export muss laufende Entladung um die Differenz reduzieren');
+  assert.strictEqual(Math.round(release.targetW), 400, 'Export muss laufende Entladung bis zur unteren Bandkante reduzieren');
   assert(release.mode.includes('fast-release'), 'Ruecknahme in Richtung 0 muss schnell erfolgen');
 
   const reverseDirect = buildBalance(mod, {
@@ -297,7 +297,7 @@ async function runTick({
     batteryPowerW: 1000,
     lastTargetW: 1000,
   });
-  assert.strictEqual(reverseDirect.targetW, -250, 'Entladen -> Laden muss den neuen negativen Sollwert direkt schreiben');
+  assert.strictEqual(reverseDirect.targetW, -200, 'Entladen -> Laden muss den neuen negativen Sollwert bis zur unteren Bandkante direkt schreiben');
   assert(reverseDirect.mode.includes('direct-reverse'), 'direkter Richtungswechsel muss diagnostiziert werden');
 
   const charge = buildBalance(mod, {
@@ -306,8 +306,8 @@ async function runTick({
     batteryPowerW: -2000,
     lastTargetW: -2000,
   });
-  assert.strictEqual(Math.round(charge.rawTargetW), -3050, 'Laderohziel muss -2000 W Ist plus -1050 W NVP-Differenz sein');
-  assert.strictEqual(Math.round(charge.targetW), -3050, 'Ladekorrektur innerhalb 1500 W muss voll uebernommen werden');
+  assert.strictEqual(Math.round(charge.rawTargetW), -3000, 'Laderohziel muss -2000 W Ist plus -1000 W Fehler bis zur unteren Bandkante sein');
+  assert.strictEqual(Math.round(charge.targetW), -3000, 'Ladekorrektur innerhalb 1500 W muss bis zur unteren Bandkante voll uebernommen werden');
 
   const directChargeToDischarge = buildBalance(mod, {
     rawNvpW: 2500,
@@ -315,7 +315,7 @@ async function runTick({
     batteryPowerW: -2000,
     lastTargetW: -2000,
   });
-  assert.strictEqual(directChargeToDischarge.targetW, 450, 'Laden -> Entladen muss den neuen positiven Sollwert direkt schreiben');
+  assert.strictEqual(directChargeToDischarge.targetW, 400, 'Laden -> Entladen muss den neuen positiven Sollwert bis zur oberen Bandkante direkt schreiben');
   assert(directChargeToDischarge.mode.includes('direct-reverse'), 'Laden -> Entladen braucht den direkten Diagnosemodus');
 
   // Feldfall 18.07.2026: Der Speicher misst noch -35 W Laden, waehrend am
@@ -328,8 +328,8 @@ async function runTick({
     batteryMeasuredW: -35,
     lastTargetW: -35,
   });
-  assert.strictEqual(fieldReverse.rawTargetW, 1007, 'Feldfall muss -35 W Ist + 1042 W NVP-Fehler ergeben');
-  assert.strictEqual(fieldReverse.targetW, 1007, 'Feldfall muss direkt auf Entladen wechseln, nicht auf 0 W');
+  assert.strictEqual(fieldReverse.rawTargetW, 957, 'Feldfall muss -35 W Ist + 992 W Fehler bis zur oberen Bandkante ergeben');
+  assert.strictEqual(fieldReverse.targetW, 957, 'Feldfall muss direkt auf Entladen bis zur Bandkante wechseln, nicht auf 0 W');
   assert(fieldReverse.mode.includes('direct-reverse'), 'Feldfall muss als direkter Richtungswechsel sichtbar sein');
 
   const stale = buildBalance(mod, {
@@ -351,7 +351,7 @@ async function runTick({
     lastTargetW: -71600,
   });
   assert.strictEqual(staleCharge.feedbackUsed, false, 'alte Lade-Istleistung darf nicht verwendet werden');
-  assert.strictEqual(Math.round(staleCharge.targetW), -1050, 'ohne Istfeedback darf nur die aktuelle Exportdifferenz gelten');
+  assert.strictEqual(Math.round(staleCharge.targetW), -1000, 'ohne Istfeedback darf nur die aktuelle Exportdifferenz bis zur unteren Bandkante gelten');
   assert.strictEqual(staleCharge.baseW, 0, 'alter negativer Ladesollwert darf nicht als Istleistung hochintegriert werden');
   assert.strictEqual(staleCharge.mode, 'fallback-direct-export', 'sicherer Lade-Fallback muss diagnostiziert werden');
 
@@ -388,7 +388,7 @@ async function runTick({
   assert.strictEqual(alignmentOptIn.feedbackUsed, false, 'explizit angeforderte Zeitgleichheit muss weiterhin als Experten-Sicherheitsoption funktionieren');
 
   // Produktiver Tick: Ein alter 5-kW-Sollwert darf den neuen, aus 500 W Ist +
-  // 650 W NVP-Fehler (auf 500 W Korrektur begrenzt) berechneten Wert nicht durch
+  // 600 W Fehler bis zur oberen Bandkante (auf 500 W Korrektur begrenzt) nicht durch
   // eine zweite Sollwert-Rampe wieder nach oben ziehen.
   const tick = await runTick({
     gridW: 700,
@@ -397,7 +397,11 @@ async function runTick({
   });
   assert.strictEqual(tick.targetW, 1000, `produktiver Tick muss auf Istleistung statt altem Sollwert basieren: ${tick.targetW}`);
   assert.strictEqual(tick.adapter._states.get('speicher.regelung.balanceFeedbackVerwendet').val, true, 'Diagnose muss verwendetes Istfeedback anzeigen');
-  assert.strictEqual(tick.adapter._states.get('speicher.regelung.balanceNvpFehlerW').val, 650, 'Diagnose muss die NVP-Differenz anzeigen');
+  assert.strictEqual(tick.adapter._states.get('speicher.regelung.balanceNvpFehlerW').val, 650, 'Diagnose muss den Fehler zur Zielmitte anzeigen');
+  assert.strictEqual(tick.adapter._states.get('speicher.regelung.balanceNvpBandFehlerW').val, 600, 'Diagnose muss den wirksamen Fehler zur oberen Bandkante anzeigen');
+  assert.strictEqual(tick.adapter._states.get('speicher.regelung.balanceNvpAktivZielW').val, 100, 'aktive Zielbandkante muss sichtbar sein');
+  assert.strictEqual(tick.adapter._states.get('speicher.regelung.balanceNvpBandUnterW').val, 0);
+  assert.strictEqual(tick.adapter._states.get('speicher.regelung.balanceNvpBandOberW').val, 100);
   assert.strictEqual(tick.adapter._states.get('speicher.regelung.balanceIstLeistungW').val, 500, 'Diagnose muss die Istleistung anzeigen');
 
   const staleTick = await runTick({
@@ -417,14 +421,14 @@ async function runTick({
     lastTargetW: -500,
     lastSource: 'pv',
   });
-  assert.strictEqual(tickCharge.targetW, -3050, `Lade-Tick muss Istleistung plus NVP-Differenz schreiben: ${tickCharge.targetW}`);
+  assert.strictEqual(tickCharge.targetW, -3000, `Lade-Tick muss Istleistung plus Bandkantenfehler schreiben: ${tickCharge.targetW}`);
 
   const tickReverse = await runTick({
     gridW: -1200,
     battPowerW: 1000,
     lastTargetW: 1000,
   });
-  assert.strictEqual(tickReverse.targetW, -250, `Richtungswechsel muss im produktiven Tick direkt Laden schreiben: ${tickReverse.targetW}`);
+  assert.strictEqual(tickReverse.targetW, -200, `Richtungswechsel muss im produktiven Tick direkt bis zur unteren Bandkante Laden schreiben: ${tickReverse.targetW}`);
 
   const fieldTick = await runTick({
     gridW: 1092,
@@ -432,7 +436,7 @@ async function runTick({
     lastTargetW: -35,
     lastSource: 'pv',
   });
-  assert.strictEqual(fieldTick.targetW, 1007, `Feldfall darf im produktiven Tick nicht auf 0 W klemmen: ${fieldTick.targetW}`);
+  assert.strictEqual(fieldTick.targetW, 957, `Feldfall darf im produktiven Tick nicht auf 0 W klemmen: ${fieldTick.targetW}`);
 
   // Nicht nur der NVP-Helfer, sondern auch die allgemeine Dispatcher-Rampe
   // muss einen echten Richtungswechsel direkt durchlassen. Dieser Tariffall
@@ -495,7 +499,7 @@ async function runTick({
   });
   assert.strictEqual(dischargeSocStop.targetW, 0, 'Min-SoC bleibt ein ausdruecklicher Entlade-Stop mit 0 W');
 
-  console.log('[storage-actual-power-nvp-balance] OK: Istleistung plus NVP-Differenz regelt stabil; Richtungswechsel werden direkt geschrieben, Schutz- und Wartezustaende bleiben echte 0-W-Stopps.');
+  console.log('[storage-actual-power-nvp-balance] OK: Istleistung plus Fehler zur naechsten NVP-Bandkante regelt stabil; Richtungswechsel werden direkt geschrieben, Schutz- und Wartezustaende bleiben echte 0-W-Stopps.');
 })().catch((err) => {
   console.error('[storage-actual-power-nvp-balance] ERROR:', err && err.stack ? err.stack : err);
   process.exit(1);

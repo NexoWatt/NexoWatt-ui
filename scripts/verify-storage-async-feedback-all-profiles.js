@@ -368,18 +368,18 @@ async function runExactSungrowCustomerCase() {
     }
   }
   identicalTargets.forEach((value, index) => {
-    assert.strictEqual(value, 2476, `Sungrow Kundenfall: Tick ${index + 1} muss bei 2.476 W bleiben, erhalten ${value}`);
+    assert.strictEqual(value, 2426, `Sungrow Kundenfall: Tick ${index + 1} muss bei 2.426 W bis zur oberen Bandkante bleiben, erhalten ${value}`);
   });
-  assert(Math.max(...identicalTargets) < 2500, `Sungrow Kundenfall darf niemals auf 4.476 W hochlaufen: ${identicalTargets.join(', ')}`);
+  assert(Math.max(...identicalTargets) < 2500, `Sungrow Kundenfall darf niemals auf 4.426 W hochlaufen: ${identicalTargets.join(', ')}`);
 
   // Eine echte neue Last am NVP wird genau einmal nachgefuehrt.
   dp.setValue('grid.powerW', 726);
   dp.setValue('grid.powerRawW', 726);
   dp.entries['st.batteryPowerW'].ts = sampleTs;
   await mod.tick();
-  assert.strictEqual(dp.lastWrite('st.targetDischargePowerW'), 2676, 'Sungrow Kundenfall: +200 W neue NVP-Last muss den akzeptierten Sollwert genau einmal auf 2.676 W anheben');
+  assert.strictEqual(dp.lastWrite('st.targetDischargePowerW'), 2626, 'Sungrow Kundenfall: +200 W neue NVP-Last muss den akzeptierten Sollwert genau einmal auf 2.626 W anheben');
   await mod.tick();
-  assert.strictEqual(dp.lastWrite('st.targetDischargePowerW'), 2676, 'Sungrow Kundenfall: unveraenderte Last darf den Sollwert nicht erneut anheben');
+  assert.strictEqual(dp.lastWrite('st.targetDischargePowerW'), 2626, 'Sungrow Kundenfall: unveraenderte Last darf den Sollwert nicht erneut anheben');
 
   // Sinkt der NVP durch die erwartete Speicherreaktion auf das Ziel, bleibt der
   // akzeptierte Sollwert bestehen, obwohl der echte Batterie-Istwert noch alt ist.
@@ -387,14 +387,14 @@ async function runExactSungrowCustomerCase() {
   dp.setValue('grid.powerRawW', 50);
   dp.entries['st.batteryPowerW'].ts = sampleTs;
   await mod.tick();
-  assert.strictEqual(dp.lastWrite('st.targetDischargePowerW'), 2676, 'Sungrow Kundenfall: NVP-Reaktion darf den akzeptierten Sollwert nicht durch einen doppelten Generic-Cap zurueckpendeln lassen');
+  assert.strictEqual(dp.lastWrite('st.targetDischargePowerW'), 2626, 'Sungrow Kundenfall: NVP-Reaktion darf den akzeptierten Sollwert nicht durch einen doppelten Generic-Cap zurueckpendeln lassen');
 
   // Erst eine neue physische Speicherprobe setzt den Messanker neu.
   dp.entries['st.batteryPowerW'] = { val: 2500, objectId: 'sungrow.actualPower', ts: nowMs() };
   dp.setValue('grid.powerW', 180);
   dp.setValue('grid.powerRawW', 180);
   await mod.tick();
-  assert.strictEqual(dp.lastWrite('st.targetDischargePowerW'), 2630, 'Sungrow Kundenfall: neue Istprobe 2.500 W + 130 W NVP-Fehler muss 2.630 W ergeben');
+  assert.strictEqual(dp.lastWrite('st.targetDischargePowerW'), 2580, 'Sungrow Kundenfall: neue Istprobe 2.500 W + 80 W Bandkantenfehler muss 2.580 W ergeben');
   const learnedInterval = adapter._states.get('speicher.regelung.batteryPowerFeedbackSampleIntervalMs');
   const learnedCadence = adapter._states.get('speicher.regelung.batteryPowerFeedbackCadenceMs');
   assert(learnedInterval && Number(learnedInterval.val) >= 1500, `Zweites reales Sample muss ein plausibles Intervall liefern: ${learnedInterval && learnedInterval.val}`);

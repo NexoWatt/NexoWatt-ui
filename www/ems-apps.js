@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:711f2ccd2c152b83afa5bef22f66bb69055f3c0d122d58566ffad893e049b285
+ * Quell-Hash: sha256:e91e0409e9e269a829999299f12eb91d81baeb559667678d0868fff7f3bdd043
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -129,6 +129,8 @@
     // Speicherfarm
     storageFarmMode: document.getElementById('storageFarmMode'),
     storageFarmSchedulerIntervalMs: document.getElementById('storageFarmSchedulerIntervalMs'),
+    storageFarmSelfTargetGridImportW: document.getElementById('storageFarmSelfTargetGridImportW'),
+    storageFarmSelfImportThresholdW: document.getElementById('storageFarmSelfImportThresholdW'),
     storageFarmStorages: document.getElementById('storageFarmStorages'),
     storageFarmAddStorage: document.getElementById('storageFarmAddStorage'),
     storageFarmGroupsCard: document.getElementById('storageFarmGroupsCard'),
@@ -147,8 +149,6 @@
     muSelfEnabled: document.getElementById('muSelfEnabled'),
     muSelfMinSoc: document.getElementById('muSelfMinSoc'),
     muSelfMaxSoc: document.getElementById('muSelfMaxSoc'),
-    muSelfTargetGridW: document.getElementById('muSelfTargetGridW'),
-    muSelfDeadbandW: document.getElementById('muSelfDeadbandW'),
     muStorageSummary: document.getElementById('muStorageSummary'),
 
     // §14a
@@ -8880,6 +8880,19 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const sched = Number(sf.schedulerIntervalMs);
     sf.schedulerIntervalMs = Number.isFinite(sched) ? Math.max(250, Math.min(1000, Math.round(sched))) : 1000;
 
+    // Die Farm besitzt eine eigene NVP-Abstimmung. Bei bestehenden Anlagen
+    // werden fehlende Werte einmalig aus der bisherigen Einzel-Speicher-App
+    // uebernommen, damit das Verhalten beim Update stabil bleibt.
+    const singleStorageCfg = (currentConfig.storage && typeof currentConfig.storage === 'object') ? currentConfig.storage : {};
+    const singleTargetRaw = singleStorageCfg.standaloneSelfTargetGridImportW !== undefined
+      ? singleStorageCfg.standaloneSelfTargetGridImportW
+      : singleStorageCfg.selfTargetGridImportW;
+    const singleDeadbandRaw = singleStorageCfg.standaloneSelfImportThresholdW !== undefined
+      ? singleStorageCfg.standaloneSelfImportThresholdW
+      : singleStorageCfg.selfImportThresholdW;
+    sf.selfTargetGridImportW = _clampInt(sf.selfTargetGridImportW, 0, 1000000, _clampInt(singleTargetRaw, 0, 1000000, 50));
+    sf.selfImportThresholdW = _clampInt(sf.selfImportThresholdW, 0, 1000000, _clampInt(singleDeadbandRaw, 0, 1000000, 50));
+
     sf.storages = Array.isArray(sf.storages) ? sf.storages : [];
     sf.groups = Array.isArray(sf.groups) ? sf.groups : [];
 
@@ -8962,6 +8975,22 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         const sf2 = _ensureStorageFarmCfg();
         sf2.schedulerIntervalMs = Number.isFinite(n) ? Math.max(250, Math.min(1000, Math.round(n))) : 1000;
       };
+    }
+    if (els.storageFarmSelfTargetGridImportW) {
+      els.storageFarmSelfTargetGridImportW.value = numOrEmpty(sf.selfTargetGridImportW);
+      els.storageFarmSelfTargetGridImportW.oninput = () => {
+        const sf2 = _ensureStorageFarmCfg();
+        sf2.selfTargetGridImportW = _clampInt(els.storageFarmSelfTargetGridImportW.value, 0, 1000000, 50);
+      };
+      els.storageFarmSelfTargetGridImportW.onchange = els.storageFarmSelfTargetGridImportW.oninput;
+    }
+    if (els.storageFarmSelfImportThresholdW) {
+      els.storageFarmSelfImportThresholdW.value = numOrEmpty(sf.selfImportThresholdW);
+      els.storageFarmSelfImportThresholdW.oninput = () => {
+        const sf2 = _ensureStorageFarmCfg();
+        sf2.selfImportThresholdW = _clampInt(els.storageFarmSelfImportThresholdW.value, 0, 1000000, 50);
+      };
+      els.storageFarmSelfImportThresholdW.onchange = els.storageFarmSelfImportThresholdW.oninput;
     }
 
     if (els.storageFarmGroupsCard) {
@@ -9523,10 +9552,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     mu.selfMinSocPct = _clampInt(mu.selfMinSocPct, selfBaseMin, 100, selfBaseMin);
     mu.selfMaxSocPct = _clampInt(mu.selfMaxSocPct, mu.selfMinSocPct, 100, selfTo);
 
-    // Eigenverbrauch: NVP‑Regelung (Ziel‑Import + Deadband)
-    // Default ab Phase 6.4: Ziel 50 W Import, Deadband ±50 W.
-    mu.selfTargetGridImportW = _clampInt(mu.selfTargetGridImportW, 0, 1000000, 50);
-    mu.selfImportThresholdW = _clampInt(mu.selfImportThresholdW, 0, 1000000, 50);
+    // Legacy-NVP-Felder bleiben zur Rueckwaertskompatibilitaet unangetastet,
+    // werden aber weder angezeigt noch gespeichert oder von der Runtime genutzt.
+    // Die aktive Speicher-/Farm-App ist alleiniger Besitzer der NVP-Abstimmung.
 
     // Legacy-Felder beibehalten (Anzeige/Kompatibilität), aber normalisieren
     mu.reserveToSocPct = reserveTo;
@@ -9560,15 +9588,12 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const selfMin = _clampInt(mu.selfMinSocPct, selfBaseMin, 100, selfBaseMin);
     const selfMax = _clampInt(mu.selfMaxSocPct, selfMin, 100, 100);
 
-    const selfTargetW = _clampInt(mu.selfTargetGridImportW, 0, 1000000, 50);
-    const selfDeadbandW = _clampInt(mu.selfImportThresholdW, 0, 1000000, 50);
-
     const lines = [
       `Zonen: Reserve 0–${reserveMin} %, LSK ${lskMin}–${lskMax} %, Eigenverbrauch ${selfMin}–${selfMax} %`,
       `reserveEnabled = ${reserveOn ? 'true' : 'false'}  | reserveMinSocPct = ${reserveMin}  | reserveTargetSocPct = ${reserveTarget}`,
       `lskEnabled = ${peakOn ? 'true' : 'false'}  | lskMinSocPct = ${lskMin}  | lskMaxSocPct = ${lskMax}`,
       `selfDischargeEnabled = ${selfOn ? 'true' : 'false'}  | selfMinSocPct = ${selfMin}  | selfMaxSocPct = ${selfMax}`,
-      `selfTargetGridImportW = ${selfTargetW} W  | selfDeadbandW = ±${selfDeadbandW} W`,
+      'NVP-Zielmitte/Hysterese: wird aus der aktiven App Speicher oder Speicherfarm übernommen',
     ];
 
     els.muStorageSummary.innerHTML = '';
@@ -9616,8 +9641,6 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       if (els.muSelfEnabled) els.muSelfEnabled.disabled = d;
       if (els.muSelfMinSoc) els.muSelfMinSoc.disabled = d;
       if (els.muSelfMaxSoc) els.muSelfMaxSoc.disabled = d;
-      if (els.muSelfTargetGridW) els.muSelfTargetGridW.disabled = d;
-      if (els.muSelfDeadbandW) els.muSelfDeadbandW.disabled = d;
     };
 
     setDisabled(!a.installed);
@@ -9649,8 +9672,6 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       if (els.muSelfEnabled) els.muSelfEnabled.checked = (mu2.selfEnabled !== false);
       if (els.muSelfMinSoc) els.muSelfMinSoc.value = numOrEmpty(mu2.selfMinSocPct);
       if (els.muSelfMaxSoc) els.muSelfMaxSoc.value = numOrEmpty(mu2.selfMaxSocPct);
-      if (els.muSelfTargetGridW) els.muSelfTargetGridW.value = numOrEmpty(mu2.selfTargetGridImportW);
-      if (els.muSelfDeadbandW) els.muSelfDeadbandW.value = numOrEmpty(mu2.selfImportThresholdW);
 
       _renderStorageMultiUseSummary(mu2);
     };
@@ -9689,18 +9710,12 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       const selfMin = _clampInt(els.muSelfMinSoc ? els.muSelfMinSoc.value : mu2.selfMinSocPct, selfBaseMin, 100, selfBaseMin);
       const selfMax = _clampInt(els.muSelfMaxSoc ? els.muSelfMaxSoc.value : mu2.selfMaxSocPct, selfMin, 100, 100);
 
-      // NVP‑Regelung (Eigenverbrauch)
-      const selfTargetW = _clampInt(els.muSelfTargetGridW ? els.muSelfTargetGridW.value : mu2.selfTargetGridImportW, 0, 1000000, 50);
-      const selfDeadbandW = _clampInt(els.muSelfDeadbandW ? els.muSelfDeadbandW.value : mu2.selfImportThresholdW, 0, 1000000, 50);
-
       mu2.reserveMinSocPct = reserveMin;
       mu2.reserveTargetSocPct = reserveTarget;
       mu2.lskMinSocPct = lskMin;
       mu2.lskMaxSocPct = lskMax;
       mu2.selfMinSocPct = selfMin;
       mu2.selfMaxSocPct = selfMax;
-      mu2.selfTargetGridImportW = selfTargetW;
-      mu2.selfImportThresholdW = selfDeadbandW;
 
       // Legacy fields keep a meaningful approximation
       mu2.reserveToSocPct = reserveMin;
@@ -9714,8 +9729,6 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       if (els.muLskMaxSoc) els.muLskMaxSoc.value = numOrEmpty(lskMax);
       if (els.muSelfMinSoc) els.muSelfMinSoc.value = numOrEmpty(selfMin);
       if (els.muSelfMaxSoc) els.muSelfMaxSoc.value = numOrEmpty(selfMax);
-      if (els.muSelfTargetGridW) els.muSelfTargetGridW.value = numOrEmpty(selfTargetW);
-      if (els.muSelfDeadbandW) els.muSelfDeadbandW.value = numOrEmpty(selfDeadbandW);
 
       _renderStorageMultiUseSummary(mu2);
       scheduleValidation(200);
@@ -9732,8 +9745,6 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (els.muSelfEnabled) els.muSelfEnabled.onchange = syncFromUiToCfg;
     if (els.muSelfMinSoc) els.muSelfMinSoc.onchange = syncFromUiToCfg;
     if (els.muSelfMaxSoc) els.muSelfMaxSoc.onchange = syncFromUiToCfg;
-    if (els.muSelfTargetGridW) els.muSelfTargetGridW.onchange = syncFromUiToCfg;
-    if (els.muSelfDeadbandW) els.muSelfDeadbandW.onchange = syncFromUiToCfg;
 
     syncFromCfgToUi();
 
@@ -12544,8 +12555,25 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // KI‑Energieberater / KI‑Optimierung
     patch.aiAdvisor = collectAiAdvisorConfigFromUI(currentConfig.aiAdvisor || {});
 
-    // Speicherfarm
+    // Speicherfarm: Zielmitte/Hysterese gehoeren ausschliesslich zur
+    // Farm-App. MultiUse uebernimmt diese Werte nur als Policy und besitzt
+    // keine eigene NVP-Abstimmung. Auch wenn der Farm-Reiter beim Speichern
+    // nicht aktiv ist, werden die aktuell gepufferten Werte normalisiert.
     patch.storageFarm = deepMerge({}, currentConfig.storageFarm || {});
+    const storageFarmSingleFallbackTarget = (currentConfig.storage && currentConfig.storage.standaloneSelfTargetGridImportW !== undefined)
+      ? currentConfig.storage.standaloneSelfTargetGridImportW
+      : (currentConfig.storage && currentConfig.storage.selfTargetGridImportW);
+    const storageFarmSingleFallbackHysteresis = (currentConfig.storage && currentConfig.storage.standaloneSelfImportThresholdW !== undefined)
+      ? currentConfig.storage.standaloneSelfImportThresholdW
+      : (currentConfig.storage && currentConfig.storage.selfImportThresholdW);
+    patch.storageFarm.selfTargetGridImportW = _clampInt(
+      els.storageFarmSelfTargetGridImportW ? els.storageFarmSelfTargetGridImportW.value : patch.storageFarm.selfTargetGridImportW,
+      0, 1000000, _clampInt(storageFarmSingleFallbackTarget, 0, 1000000, 50),
+    );
+    patch.storageFarm.selfImportThresholdW = _clampInt(
+      els.storageFarmSelfImportThresholdW ? els.storageFarmSelfImportThresholdW.value : patch.storageFarm.selfImportThresholdW,
+      0, 1000000, _clampInt(storageFarmSingleFallbackHysteresis, 0, 1000000, 50),
+    );
 
     // Storage
     patch.storage = deepMerge({}, currentConfig.storage || {});

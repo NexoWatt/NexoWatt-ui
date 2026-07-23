@@ -169,8 +169,10 @@ function nicePowerStepW(raw) {
  *
  * Pro (technische Edition `eos`):
  * - kein Lizenz-Hardcap
- * - bei hinterlegter Nennleistung skalieren Step, Rampe, Async-Prognose und
- *   Energiefluss-Plausibilität proportional; explizite Expertenwerte gewinnen
+ * - bei hinterlegter Nennleistung skalieren Rampe, Async-Prognose und
+ *   Energiefluss-Plausibilität proportional; die Sollwertauflösung bleibt 1 W,
+ *   damit auch Industrieanlagen kleine NVP-Korrekturen exakt ausführen können.
+ *   Explizite Expertenwerte gewinnen
  *   später weiterhin gegen diese Defaults.
  */
 function storagePerformanceProfile(edition, ratedPowerW = 0) {
@@ -190,7 +192,7 @@ function storagePerformanceProfile(edition, ratedPowerW = 0) {
       configuredRatedPowerW,
       effectiveRatedPowerW,
       maxCommandW: HOME_STORAGE_POWER_LIMIT_W,
-      defaultStepW: 50,
+      defaultStepW: 1,
       defaultMaxDeltaWPerTick: 500,
       defaultPvMaxDeltaWPerTick: 1_500,
       defaultBalancePredictionMaxW: 10_000,
@@ -200,9 +202,10 @@ function storagePerformanceProfile(edition, ratedPowerW = 0) {
 
   if (ed === 'eos') {
     const effectiveRatedPowerW = configuredRatedPowerW;
-    const defaultStepW = effectiveRatedPowerW > 0
-      ? Math.max(50, Math.round(effectiveRatedPowerW * 0.001))
-      : 50;
+    // Die Nennleistung skaliert die Dynamik, niemals die Befehlsauflösung.
+    // Ein 500-kW-Speicher muss am NVP weiterhin 15 W oder 150 W nachregeln
+    // können, sofern sein Geräteprofil diese Auflösung unterstützt.
+    const defaultStepW = 1;
     const defaultMaxDeltaWPerTick = effectiveRatedPowerW > 0
       ? Math.max(500, Math.round(effectiveRatedPowerW * 0.05))
       : 500;
@@ -241,7 +244,7 @@ function storagePerformanceProfile(edition, ratedPowerW = 0) {
     configuredRatedPowerW,
     effectiveRatedPowerW: 0,
     maxCommandW: 0,
-    defaultStepW: 50,
+    defaultStepW: 1,
     defaultMaxDeltaWPerTick: 500,
     defaultPvMaxDeltaWPerTick: 1_500,
     defaultBalancePredictionMaxW: 10_000,

@@ -6377,10 +6377,15 @@ class NexoWattVis extends utils.Adapter {
     // Speicherfarm und Einzelregelung verwenden exakt dieselbe zentrale Policy.
     // Ein deaktiviertes MultiUse darf weder Reserve/LSK noch einen alten 20-%-
     // Eigenverbrauchs-Floor in die Farmverteilung einschleusen.
+    const storageAuthority = (typeof this._nwGetStorageControlAuthority === 'function')
+      ? this._nwGetStorageControlAuthority()
+      : { selectedTopology: 'single' };
     const storageOperatingPolicy = resolveStorageOperatingPolicy({
       storageConfig: storageCfg,
       multiUseConfig: mu,
       multiUseActive: multiUsePolicyActive,
+      storageFarmConfig: (this.config && this.config.storageFarm && typeof this.config.storageFarm === 'object') ? this.config.storageFarm : {},
+      selectedTopology: storageAuthority.selectedTopology,
       standaloneDefaultEnabled: true,
       standaloneDefaultMinSocPct: 10,
       standaloneDefaultMaxSocPct: 100,

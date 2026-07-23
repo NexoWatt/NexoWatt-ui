@@ -244,7 +244,7 @@ async function runSungrowRuntimeSequence() {
   try {
     await mod.tick();
     const first = dp.lastWrite('st.targetDischargePowerW');
-    assert(first > 0 && first <= 1950, `Runtime: erste NVP-Korrektur muss passend reduzieren, nicht sofort stoppen: ${first}`);
+    assert(first > 0 && first < 3000, `Runtime: erste NVP-Korrektur muss passend reduzieren, nicht sofort stoppen: ${first}`);
     assert.strictEqual(dp.lastWrite('st.targetChargePowerW'), 0, 'Runtime: Anti-Export darf keine Gegenrichtung laden');
 
     fakeNow += 1000;

@@ -2019,6 +2019,8 @@ class CoreLimitsModule extends BaseModule {
             storageConfig: storageCfg,
             multiUseConfig: storageMultiUseCfg,
             multiUseActive: storageMultiUseActive,
+            storageFarmConfig: (cfg.storageFarm && typeof cfg.storageFarm === 'object') ? cfg.storageFarm : {},
+            selectedTopology: storageTopology,
             standaloneDefaultEnabled: true,
             standaloneDefaultMinSocPct: 10,
             standaloneDefaultMaxSocPct: 100,

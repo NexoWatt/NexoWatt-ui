@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2548943fcb756ee60d86cc810349dc87a17f223162af4f804519cbea73eea71b
+ * Original-Hash: 92889493e2d962868e4dcb6e9913c1bd54cbe3d616e45f857d43e8e6579da554
  */
 
 /**
@@ -357,7 +357,7 @@ async function testInactiveMultiUseCannotBlockStandaloneAtNineteenPercent() {
   assert.strictEqual(adapter.states.get('speicher.regelung.selfMinSocPct').val, 10);
   assert.strictEqual(adapter.states.get('speicher.regelung.selfTargetGridImportW').val, 50);
   assert(String(adapter.states.get('speicher.regelung.selfSocPolicySource').val || '').startsWith('standalone-default'), 'Standalone-Defaultquelle muss aktiv sein');
-  assert(adapter.states.get('speicher.regelung.requestW').val >= 1450, 'NVP-Regelfehler muss als Entlade-Request ankommen');
+  assert.strictEqual(adapter.states.get('speicher.regelung.requestW').val, 1440, 'NVP-Regelfehler muss bis zur oberen 100-W-Bandkante als Entlade-Request ankommen');
   assert(/NVP-Balancing entladen/.test(String(adapter.states.get('speicher.regelung.requestGrund').val)));
 }
 

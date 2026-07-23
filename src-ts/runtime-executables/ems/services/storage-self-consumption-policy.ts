@@ -26,6 +26,8 @@ type StoragePolicyInput = {
   storageConfig?: AnyRecord | null;
   multiUseConfig?: AnyRecord | null;
   multiUseActive?: boolean;
+  storageFarmConfig?: AnyRecord | null;
+  selectedTopology?: 'single' | 'farm' | 'none' | string;
   standaloneDefaultEnabled?: boolean;
   standaloneDefaultMinSocPct?: number;
   standaloneDefaultMaxSocPct?: number;
@@ -74,7 +76,172 @@ function firstBoolean(values: unknown[], fallback: boolean): boolean {
   return fallback;
 }
 
-function normalizeMultiUsePolicy(multiUse: AnyRecord, defaults: AnyRecord) {
+function normalizeStorageTopology(value: unknown): 'single' | 'farm' | 'none' {
+  const topology = String(value || '').trim().toLowerCase();
+  if (topology === 'farm') return 'farm';
+  if (topology === 'none') return 'none';
+  return 'single';
+}
+
+/**
+ * Loest einen signierten NVP-Wert gegen genau ein Zielband auf.
+ *
+ * Beispiel: Zielmitte 0 W, Hysterese +/-50 W, NVP -65 W
+ * -> aktive Bandkante -50 W, Regelfehler -15 W.
+ *
+ * Diese Funktion ist die einzige fachliche Definition der NVP-Hysterese fuer
+ * Einzelspeicher, Speicherfarm, MultiUse-Diagnose, Herstellerprofile und den
+ * nachgelagerten NVP-Koordinator. Dadurch koennen keine unterschiedlichen
+ * Totbaender oder Zieldefinitionen zwischen den Apps entstehen.
+ */
+function resolveNvpBandTarget(nvpValue: unknown, targetValue: unknown = 0, hysteresisValue: unknown = 0) {
+  const nvpW = finiteOrNull(nvpValue);
+  const targetNvpW = finiteOrNull(targetValue) ?? 0;
+  const hysteresisW = Math.max(0, finiteOrNull(hysteresisValue) ?? 0);
+  const lowerBandW = targetNvpW - hysteresisW;
+  const upperBandW = targetNvpW + hysteresisW;
+
+  if (nvpW === null) {
+    return {
+      nvpW: null,
+      targetNvpW,
+      hysteresisW,
+      lowerBandW,
+      upperBandW,
+      activeTargetNvpW: targetNvpW,
+      centerErrorW: 0,
+      bandErrorW: 0,
+      outsideBand: false,
+      side: 'unknown',
+    };
+  }
+
+  let activeTargetNvpW = targetNvpW;
+  let bandErrorW = 0;
+  let side = 'inside';
+  if (nvpW < lowerBandW) {
+    activeTargetNvpW = lowerBandW;
+    bandErrorW = nvpW - lowerBandW;
+    side = 'below';
+  } else if (nvpW > upperBandW) {
+    activeTargetNvpW = upperBandW;
+    bandErrorW = nvpW - upperBandW;
+    side = 'above';
+  }
+
+  return {
+    nvpW,
+    targetNvpW,
+    hysteresisW,
+    lowerBandW,
+    upperBandW,
+    activeTargetNvpW,
+    centerErrorW: nvpW - targetNvpW,
+    bandErrorW,
+    outsideBand: bandErrorW !== 0,
+    side,
+  };
+}
+
+/**
+ * Liefert genau eine NVP-Abstimmung fuer die aktuell ausgewaehlte
+ * Speicher-Topologie.
+ *
+ * Fachlicher Vertrag:
+ * - Die Einzel-Speicher-App besitzt ihre Zielmitte/Hysterese unter `storage.*`.
+ * - Die Speicherfarm besitzt ihre Zielmitte/Hysterese unter `storageFarm.*`.
+ * - MultiUse liefert ausschliesslich SoC-/Reserve-/LSK-Zonen und darf niemals
+ *   eine zweite NVP-Hysterese ueberlagern.
+ * - Bei einer bestehenden Farm ohne eigene Werte wird einmalig der bisherige
+ *   Einzel-Speicher-Wert als migrationssicherer Fallback verwendet. Sobald die
+ *   Farm-Werte gespeichert sind, sind sie autoritativ.
+ */
+function resolveStorageNvpTuning(input: StoragePolicyInput = {}) {
+  const storage = isRecord(input.storageConfig) ? input.storageConfig : {};
+  const farm = isRecord(input.storageFarmConfig) ? input.storageFarmConfig : {};
+  const topology = normalizeStorageTopology(input.selectedTopology);
+  const defaultTargetGridImportW = Math.max(0, firstFinite([
+    input.standaloneDefaultTargetGridImportW,
+  ], 50));
+  const defaultImportThresholdW = Math.max(0, firstFinite([
+    input.standaloneDefaultImportThresholdW,
+  ], 50));
+
+  const multiUsePolicySourceMarker = String(storage.multiUsePolicySource || '').trim().toLowerCase();
+  const previouslyMirroredByMultiUse = boolOrNull(storage.multiUsePolicyApplied) === true
+    || multiUsePolicySourceMarker === 'installerconfig.storagemultiuse'
+    || multiUsePolicySourceMarker.includes('multiuse-applied');
+
+  const standaloneTarget = finiteOrNull(storage.standaloneSelfTargetGridImportW);
+  const standaloneDeadband = finiteOrNull(storage.standaloneSelfImportThresholdW);
+  const legacyTarget = finiteOrNull(storage.selfTargetGridImportW);
+  const legacyDeadband = finiteOrNull(storage.selfImportThresholdW);
+  const useLegacyStandaloneTarget = standaloneTarget === null && !previouslyMirroredByMultiUse;
+  const useLegacyStandaloneDeadband = standaloneDeadband === null && !previouslyMirroredByMultiUse;
+
+  const singleTargetGridImportW = Math.max(0,
+    standaloneTarget !== null
+      ? standaloneTarget
+      : (useLegacyStandaloneTarget && legacyTarget !== null ? legacyTarget : defaultTargetGridImportW));
+  const singleImportThresholdW = Math.max(0,
+    standaloneDeadband !== null
+      ? standaloneDeadband
+      : (useLegacyStandaloneDeadband && legacyDeadband !== null ? legacyDeadband : defaultImportThresholdW));
+  const singleSource = standaloneTarget !== null || standaloneDeadband !== null
+    ? 'storage.standaloneSelf'
+    : ((useLegacyStandaloneTarget && legacyTarget !== null) || (useLegacyStandaloneDeadband && legacyDeadband !== null)
+      ? 'storage.self-legacy'
+      : (previouslyMirroredByMultiUse ? 'storage.default-after-multiuse' : 'storage.default'));
+
+  const farmTarget = finiteOrNull(
+    farm.selfTargetGridImportW !== undefined ? farm.selfTargetGridImportW : farm.nvpTargetGridImportW,
+  );
+  const farmDeadband = finiteOrNull(
+    farm.selfImportThresholdW !== undefined ? farm.selfImportThresholdW : farm.nvpDeadbandW,
+  );
+  const farmOwnTarget = farmTarget !== null;
+  const farmOwnDeadband = farmDeadband !== null;
+  const farmTargetGridImportW = Math.max(0, farmOwnTarget ? farmTarget : singleTargetGridImportW);
+  const farmImportThresholdW = Math.max(0, farmOwnDeadband ? farmDeadband : singleImportThresholdW);
+
+  const selectedIsFarm = topology === 'farm';
+  const targetGridImportW = selectedIsFarm ? farmTargetGridImportW : singleTargetGridImportW;
+  const importThresholdW = selectedIsFarm ? farmImportThresholdW : singleImportThresholdW;
+  const source = selectedIsFarm
+    ? ((farmOwnTarget && farmOwnDeadband)
+      ? 'storageFarm'
+      : ((farmOwnTarget || farmOwnDeadband) ? 'storageFarm+storage-fallback' : 'storageFarm.legacy-storage-fallback'))
+    : singleSource;
+
+  const multiUse = isRecord(input.multiUseConfig) ? input.multiUseConfig : null;
+  const ignoredMultiUseTargetW = multiUse ? finiteOrNull(multiUse.selfTargetGridImportW) : null;
+  const ignoredMultiUseDeadbandW = multiUse ? finiteOrNull(multiUse.selfImportThresholdW) : null;
+
+  return {
+    topology,
+    source,
+    targetGridImportW,
+    importThresholdW,
+    single: {
+      targetGridImportW: singleTargetGridImportW,
+      importThresholdW: singleImportThresholdW,
+      source: singleSource,
+    },
+    farm: {
+      targetGridImportW: farmTargetGridImportW,
+      importThresholdW: farmImportThresholdW,
+      source: (farmOwnTarget || farmOwnDeadband) ? 'storageFarm' : 'storageFarm.legacy-storage-fallback',
+      ownTargetConfigured: farmOwnTarget,
+      ownDeadbandConfigured: farmOwnDeadband,
+      fallbackFromSingle: !(farmOwnTarget && farmOwnDeadband),
+    },
+    multiUseTuningIgnored: ignoredMultiUseTargetW !== null || ignoredMultiUseDeadbandW !== null,
+    ignoredMultiUseTargetW,
+    ignoredMultiUseDeadbandW,
+  };
+}
+
+function normalizeMultiUsePolicy(multiUse: AnyRecord, defaults: AnyRecord, nvpTuning: AnyRecord) {
   const reserveEnabled = firstBoolean([multiUse.reserveEnabled], true);
   const peakEnabled = firstBoolean([multiUse.peakEnabled], true);
   const selfEnabled = firstBoolean([multiUse.selfEnabled], true);
@@ -132,12 +299,11 @@ function normalizeMultiUsePolicy(multiUse: AnyRecord, defaults: AnyRecord) {
       enabled: selfEnabled,
       minSocPct: selfMinSocPct,
       maxSocPct: selfMaxSocPct,
-      targetGridImportW: Math.max(0, firstFinite([
-        multiUse.selfTargetGridImportW,
-      ], defaults.targetGridImportW)),
-      importThresholdW: Math.max(0, firstFinite([
-        multiUse.selfImportThresholdW,
-      ], defaults.importThresholdW)),
+      // MultiUse erweitert nur die SoC-/Reserve-Policy. Zielmitte und
+      // Hysterese stammen immer aus der aktuell aktiven Speicher-App.
+      targetGridImportW: Math.max(0, Number(nvpTuning.targetGridImportW) || 0),
+      importThresholdW: Math.max(0, Number(nvpTuning.importThresholdW) || 0),
+      nvpTuningSource: String(nvpTuning.source || ''),
     },
   };
 }
@@ -164,8 +330,12 @@ function resolveStorageSocPolicy(input: StoragePolicyInput = {}) {
     targetGridImportW: defaultTargetGridImportW,
     importThresholdW: defaultImportThresholdW,
   };
+  const nvpTuning = resolveStorageNvpTuning(input);
 
-  if (multiUseActive && multiUse) return normalizeMultiUsePolicy(multiUse, defaults);
+  if (multiUseActive && multiUse) {
+    const policy = normalizeMultiUsePolicy(multiUse, defaults, nvpTuning);
+    return { ...policy, nvpTuning };
+  }
 
   // Nur ein nachweislich frueher *aktives* MultiUse darf storage.self* als
   // historisch gespiegelt markieren. Eine reine Schema-/Versionsmarke oder ein
@@ -229,14 +399,10 @@ function resolveStorageSocPolicy(input: StoragePolicyInput = {}) {
     selfMinSocPct,
     100,
   );
-  const targetGridImportW = Math.max(0,
-    standaloneTarget !== null
-      ? standaloneTarget
-      : (useLegacyStandaloneTuning && legacyTarget !== null ? legacyTarget : defaultTargetGridImportW));
-  const importThresholdW = Math.max(0,
-    standaloneDeadband !== null
-      ? standaloneDeadband
-      : (useLegacyStandaloneTuning && legacyDeadband !== null ? legacyDeadband : defaultImportThresholdW));
+  // NVP-Ziel und Hysterese werden getrennt von der SoC-Policy aufgeloest.
+  // Dadurch kann MultiUse diese Werte weder aktiv noch als Altlast ueberlagern.
+  const targetGridImportW = Math.max(0, Number(nvpTuning.targetGridImportW) || 0);
+  const importThresholdW = Math.max(0, Number(nvpTuning.importThresholdW) || 0);
 
   let source = 'standalone-default';
   if (hasStandaloneSocSnapshot) source = 'storage.standaloneSelf';
@@ -261,6 +427,7 @@ function resolveStorageSocPolicy(input: StoragePolicyInput = {}) {
     standaloneSnapshotAvailable: hasStandaloneSnapshot,
     standaloneSocSnapshotAvailable: hasStandaloneSocSnapshot,
     standaloneTuningSnapshotAvailable: hasStandaloneTuningSnapshot,
+    nvpTuning,
     reserve: {
       enabled: false,
       minSocPct: 0,
@@ -279,6 +446,7 @@ function resolveStorageSocPolicy(input: StoragePolicyInput = {}) {
       maxSocPct: selfMaxSocPct,
       targetGridImportW,
       importThresholdW,
+      nvpTuningSource: String(nvpTuning.source || ''),
     },
   };
 }
@@ -296,4 +464,6 @@ module.exports = {
   resolveStorageSocPolicy,
   resolveStorageSelfConsumptionPolicy,
   resolveStorageOperatingPolicy,
+  resolveStorageNvpTuning,
+  resolveNvpBandTarget,
 };

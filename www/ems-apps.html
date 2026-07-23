@@ -865,12 +865,12 @@
             <div class="nw-config-field-control nw-config-field-control--stack">
               <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap:8px;">
                 <label class="nw-config-help" style="display:flex; flex-direction:column; gap:4px; opacity:0.95;">
-                  Zielbezug (W)
-                  <input id="storageSelfTargetGridImportW" class="nw-config-input" type="number" min="0" step="10" placeholder="50" />
+                  Zielmitte (W)
+                  <input id="storageSelfTargetGridImportW" class="nw-config-input" type="number" min="0" step="1" placeholder="50" />
                 </label>
                 <label class="nw-config-help" style="display:flex; flex-direction:column; gap:4px; opacity:0.95;">
-                  Deadband (W)
-                  <input id="storageSelfImportThresholdW" class="nw-config-input" type="number" min="0" step="10" placeholder="50" />
+                  Hysterese (±W)
+                  <input id="storageSelfImportThresholdW" class="nw-config-input" type="number" min="0" step="1" placeholder="50" />
                 </label>
                 <label class="nw-config-help" style="display:flex; flex-direction:column; gap:4px; opacity:0.95;">
                   Glättung (s)
@@ -886,7 +886,7 @@
                 </label>
               </div>
               <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
-                Zielbezug + Deadband beruhigen die Speicherregelung am NVP. Die Glättung reduziert Springen zwischen Bezug und Einspeisung; der RAW-Guard greift sofort, wenn der echte NVP deutlich außerhalb des Zielbandes liegt. <b>Istwert halten</b> überbrückt langsame/asynchrone Batterie-Telemetrie herstellerübergreifend, während der NVP weiterhin frisch sein muss. Ein aktiver Nicht-Null-Sollwert bleibt im Zielband erhalten; <b>0 W bleibt ausschließlich ein Stop-Befehl</b>. Standardziel bleibt ca. 50 W, damit der Restbezug normalerweise unter 100 W bleibt.
+                Zielmitte + Hysterese definieren das NVP-Zielband. Die Glättung reduziert Springen zwischen Bezug und Einspeisung; der RAW-Guard greift sofort, wenn der echte NVP deutlich außerhalb des Zielbandes liegt. <b>Istwert halten</b> überbrückt langsame/asynchrone Batterie-Telemetrie herstellerübergreifend, während der NVP weiterhin frisch sein muss. Ein aktiver Nicht-Null-Sollwert bleibt im Zielband erhalten; <b>0 W bleibt ausschließlich ein Stop-Befehl</b>. Für eine Regelung auf ±50 W um 0 bitte Zielmitte <b>0 W</b> und Hysterese <b>50 W</b> setzen. Der Regler fährt nur bis zur nächsten Bandkante und hält den wirksamen Sollwert dort.
               </div>
             </div>
           </div>
@@ -989,6 +989,21 @@
               </div>
               <div class="nw-config-item__right">
                 <input id="storageFarmSchedulerIntervalMs" type="number" class="nw-config-input" min="250" max="1000" step="50" placeholder="1000" />
+              </div>
+            </div>
+
+            <div class="nw-config-item">
+              <div class="nw-config-item__left">
+                <div class="nw-config-item__title">NVP-Regelung Eigenverbrauch</div>
+                <div class="nw-config-item__subtitle">Eigene Zielmitte und Hysterese der Farm. MultiUse übernimmt diese Werte nur als SoC-Policy und besitzt keine zweite NVP-Regelung.</div>
+              </div>
+              <div class="nw-config-item__right" style="gap:10px;display:flex;align-items:center;flex-wrap:wrap;">
+                <span style="opacity:.85;font-size:.78rem;">Ziel</span>
+                <input id="storageFarmSelfTargetGridImportW" type="number" class="nw-config-input" style="width:110px;" min="0" max="1000000" step="1" placeholder="0" />
+                <span style="opacity:.85;font-size:.78rem;">W</span>
+                <span style="opacity:.85;font-size:.78rem;">±</span>
+                <input id="storageFarmSelfImportThresholdW" type="number" class="nw-config-input" style="width:110px;" min="0" max="1000000" step="1" placeholder="50" />
+                <span style="opacity:.85;font-size:.78rem;">W</span>
               </div>
             </div>
 
@@ -1122,15 +1137,10 @@
             <div class="nw-config-item">
               <div class="nw-config-item__left">
                 <div class="nw-config-item__title">NVP‑Regelung (Eigenverbrauch)</div>
-                <div class="nw-config-item__subtitle">Ziel‑Netzbezug am Netzverknüpfungspunkt (NVP) + Toleranzband (±W) für saubere Regelung ohne Flattern.</div>
+                <div class="nw-config-item__subtitle">MultiUse besitzt keine eigene NVP-Hysterese. Zielmitte und Hysterese werden immer direkt aus der aktiven App <b>Speicher</b> oder <b>Speicherfarm</b> übernommen.</div>
               </div>
-              <div class="nw-config-item__right" style="gap:10px;display:flex;align-items:center;flex-wrap:wrap;">
-                <span style="opacity:.85;font-size:.78rem;">Ziel</span>
-                <input id="muSelfTargetGridW" type="number" class="nw-config-input" style="width:110px;" min="0" max="100000" step="10" placeholder="50" />
-                <span style="opacity:.85;font-size:.78rem;">W</span>
-                <span style="opacity:.85;font-size:.78rem;">±</span>
-                <input id="muSelfDeadbandW" type="number" class="nw-config-input" style="width:110px;" min="0" max="100000" step="10" placeholder="50" />
-                <span style="opacity:.85;font-size:.78rem;">W</span>
+              <div class="nw-config-item__right">
+                <span class="nw-config-badge nw-config-badge--idle">aktive Speichertopologie</span>
               </div>
             </div>
 

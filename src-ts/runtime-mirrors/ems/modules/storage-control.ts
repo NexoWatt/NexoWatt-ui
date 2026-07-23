@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: d5182192aef91d42a94fd1f84e52b60a796a7d16ee0e9e6b27dc5252b9accae2
+ * Original-Hash: 948d6394dbbe3083cf0ade593a407a97307c8b221dc8b5b29b79ab94cfbaa766
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:ead0feb1e73d78f77315b2db06373e6a70a362be18c2f5954da51ea66d99d9c8
+ * Quell-Hash: sha256:f4ff6298c9cd797f7dbc8beea7ba72e13ef6b1e9fb000e7b13cfbede67604ee6
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -78,7 +78,10 @@ const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness
 const { resolveSplitBatteryFeedback } = require('../services/storage-override-bridge');
 const { decideStorageZeroWrite } = require('../services/storage-zero-write-policy');
 const { estimateAsyncStorageFeedback } = require('../services/storage-async-feedback-anchor');
-const { resolveStorageOperatingPolicy } = require('../services/storage-self-consumption-policy');
+const {
+    resolveStorageOperatingPolicy,
+    resolveNvpBandTarget,
+} = require('../services/storage-self-consumption-policy');
 const storageFeatureFlags = require('../services/feature-flags');
 const {
     buildStorageMeasurementFallbackFromGlobal,
@@ -154,7 +157,7 @@ function resolveStorageLicensePowerProfile(adapter, cfg = {}, farmRows = [], sel
         configuredRatedPowerW: ratedPowerW,
         effectiveRatedPowerW: ratedPowerW,
         maxCommandW: edition === 'hems' ? 50000 : 0,
-        defaultStepW: 50,
+        defaultStepW: 1,
         defaultMaxDeltaWPerTick: 500,
         defaultPvMaxDeltaWPerTick: 1500,
         defaultBalancePredictionMaxW: 10000,
@@ -717,24 +720,13 @@ function resolveStorageAntiExportTarget(input = {}) {
 
 
 /**
- * Code-Teil: Klasse `RollingWindow`
- * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
- * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
- * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
  */
-// Klassen-Kommentar: Klasse: RollingWindow. Aufgabe: kapselt eine fachliche Teilaufgabe dieser Datei. Beim TypeScript-Umbau Eingaben, Rückgaben und Seiteneffekte typisieren. Zusammenhang: EMS-Modul mit eigener Regelungs-/Diagnoseaufgabe; wird durch ems/module-manager.js und ems/engine.js ausgeführt.
 /**
  * Klasse: RollingWindow
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 class RollingWindow {
     /**
-     * Code-Teil: constructor
-     * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
-     * Zusammenhang: Gehört zu EMS-Modul (Regelungs-, Diagnose- oder Beratungslogik innerhalb der EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
-     * Wartung/TypeScript: Änderungen können LIVE-Energiefluss, aktuelle Werte und History beeinflussen; DP-Fallbacks nur mit Regressionstest ändern. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
      */
     constructor(maxSeconds) {
         this.maxSeconds = Math.max(1, Number(maxSeconds) || 120);
@@ -744,15 +736,8 @@ class RollingWindow {
     }
 
     /**
-     * Code-Teil: Methode `setMaxSeconds`
-     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
     /**
-     * Code-Teil: setMaxSeconds
-     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     setMaxSeconds(maxSeconds) {
@@ -765,15 +750,8 @@ class RollingWindow {
     }
 
     /**
-     * Code-Teil: Methode `_purge`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
     /**
-     * Code-Teil: _purge
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     _purge(nowMs) {
@@ -786,15 +764,8 @@ class RollingWindow {
     }
 
     /**
-     * Code-Teil: Methode `push`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
     /**
-     * Code-Teil: push
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     push(v, nowMs) {
@@ -807,15 +778,8 @@ class RollingWindow {
     }
 
     /**
-     * Code-Teil: Methode `mean`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
     /**
-     * Code-Teil: mean
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     mean() {
@@ -823,9 +787,6 @@ class RollingWindow {
         return this.sum / this.samples.length;
     }
     /**
-     * Code-Teil: count
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     count() {
@@ -845,9 +806,6 @@ class RollingWindow {
  * @returns {boolean}
  */
 /**
- * Code-Teil: hystAbove
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 function hystAbove(prev, x, offBelow, onAbove) {
@@ -869,9 +827,6 @@ function hystAbove(prev, x, offBelow, onAbove) {
  * @returns {boolean}
  */
 /**
- * Code-Teil: hystBelow
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 function hystBelow(prev, x, onBelow, offAbove) {
@@ -904,24 +859,13 @@ function hystBelow(prev, x, onBelow, offAbove) {
  * - Manuell zugeordnete Objekt-IDs bleiben herstellerunabhaengig und laufen durch dieselben zentralen Gates.
  */
 /**
- * Code-Teil: Klasse `SpeicherRegelungModule`
- * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
- * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
- * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
  */
-// Klassen-Kommentar: Klasse: SpeicherRegelungModule. Aufgabe: kapselt eine fachliche Teilaufgabe dieser Datei. Beim TypeScript-Umbau Eingaben, Rückgaben und Seiteneffekte typisieren. Zusammenhang: EMS-Modul mit eigener Regelungs-/Diagnoseaufgabe; wird durch ems/module-manager.js und ems/engine.js ausgeführt.
 /**
  * Klasse: SpeicherRegelungModule
- * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
- * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 class SpeicherRegelungModule extends BaseModule {
     /**
-     * Code-Teil: constructor
-     * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
-     * Zusammenhang: Gehört zu EMS-Modul (Regelungs-, Diagnose- oder Beratungslogik innerhalb der EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
-     * Wartung/TypeScript: Änderungen können LIVE-Energiefluss, aktuelle Werte und History beeinflussen; DP-Fallbacks nur mit Regressionstest ändern. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
      */
     constructor(adapter, dpRegistry) {
         super(adapter, dpRegistry);
@@ -1095,15 +1039,8 @@ class SpeicherRegelungModule extends BaseModule {
     }
 
     /**
-     * Code-Teil: Methode `init`
-     * Zweck: initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
     /**
-     * Code-Teil: init
-     * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     async init() {
@@ -1114,15 +1051,8 @@ class SpeicherRegelungModule extends BaseModule {
     }
 
     /**
-     * Code-Teil: Methode `tick`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
     /**
-     * Code-Teil: tick
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     async tick() {
@@ -1213,6 +1143,33 @@ class SpeicherRegelungModule extends BaseModule {
             storageAuthorityEarly.selectedTopology,
         );
         const storageLicenseHardLimitW = Math.max(0, Number(storageLicensePowerProfile.maxCommandW || 0));
+
+        // Eine einzige NVP-Abstimmung pro aktiver Speicher-Topologie.
+        // MultiUse erweitert ausschliesslich SoC-/Reserve-/LSK-Zonen und darf
+        // weder fuer den Einzelspeicher noch fuer die Farm ein zweites Zielband
+        // einbringen. Der Resolver wird bewusst bereits vor Herstellerprofilen
+        // aufgebaut, damit auch Sungrow/FENECON und Feed-forward dieselbe
+        // Zielmitte/Hysterese verwenden wie der finale Hardwarewriter.
+        const storageOperatingPolicy = resolveStorageOperatingPolicy({
+            storageConfig: cfg,
+            multiUseConfig: storageMultiUseCfgEarly,
+            multiUseActive: multiUseAppPolicyActive,
+            storageFarmConfig: farmCfgEarly,
+            selectedTopology: storageAuthorityEarly.selectedTopology,
+            standaloneDefaultEnabled: true,
+            standaloneDefaultMinSocPct: 10,
+            standaloneDefaultMaxSocPct: 100,
+            standaloneDefaultTargetGridImportW: 50,
+            standaloneDefaultImportThresholdW: 50,
+        });
+        const activeStorageNvpTargetW = Math.max(
+            0,
+            num(storageOperatingPolicy.self && storageOperatingPolicy.self.targetGridImportW, 50),
+        );
+        const activeStorageNvpHysteresisW = Math.max(
+            0,
+            num(storageOperatingPolicy.self && storageOperatingPolicy.self.importThresholdW, 50),
+        );
 
         // SoC-Hysterese optional aus Konfig lesen (falls später im Admin ergänzt).
         // Default bleibt 0.5 %-Punkte.
@@ -1996,8 +1953,6 @@ class SpeicherRegelungModule extends BaseModule {
         };
 
         /**
-         * Code-Teil: isCentralGridChargeSource
-         * Zweck: Kennzeichnet Speicher-Ladeanforderungen, die bewusst aus dem
          * Netz-/Gesamtbudget kommen. Diese Pfade muessen nach der EVCS-
          * Reservierung denselben zentralen Gesamt-Grant verwenden und ihre
          * Leistung fuer Thermik/Heizstab reservieren.
@@ -2020,8 +1975,6 @@ class SpeicherRegelungModule extends BaseModule {
         };
 
         /**
-         * Code-Teil: isDeferredSungrowChargeCapReason
-         * Zweck: Kennzeichnet vorlaeufige PV-/NVP-Caps, die vor der eigentlichen
          * Sungrow-Herstellerberechnung entstehen. Diese Caps duerfen den spaeteren
          * geschlossenen NVP-Regelkreis nicht auf 0 W klemmen; der autoritative
          * EVCS-/Speicher-PV-Cap wird nach der Herstellerlogik erneut angewendet.
@@ -2063,12 +2016,9 @@ class SpeicherRegelungModule extends BaseModule {
         };
 
         /**
-         * Code-Teil: resolveStoragePvBudgetW
-         * Zweck: Ermittelt das fuer den Speicher verfuegbare PV-Budget nach der
          * EVCS-Reservierung. Die zentrale Runtime ist die einzige autoritative
          * Quelle; Prozentwerte aus dem Allocation-Gate werden hier nicht nochmals
          * zu einem zweiten Speicherbudget rekonstruiert.
-         * Zusammenhang: EVCS wird im EMS vor dem Speicher reserviert. Dadurch ist
          * der Grant bereits exakt der Rest, den der Speicher in diesem Tick nutzen
          * darf. Alte Laufzeiten ohne Grant-API verwenden nur remainingPvW als
          * Kompatibilitaetsfallback.
@@ -2224,10 +2174,6 @@ class SpeicherRegelungModule extends BaseModule {
         // 3) derived.loadRestW + EV + Verbraucher-Slots
         // 4) Fallback aus aktuellem Netzimport + laufender Speicher-Entladung
         /**
-         * Code-Teil: Arrow-Funktion `readCacheNumber`
-         * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
-         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
          */
         const readCacheNumber = (key, fallback = null) => {
             const sid = String(key || '').trim();
@@ -2274,15 +2220,8 @@ class SpeicherRegelungModule extends BaseModule {
 
         let feneconAcLoadMemo = null;
         /**
-         * Code-Teil: Arrow-Funktion `getFeneconAcLoadTargetW`
-         * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
-         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
          */
         /**
-         * Code-Teil: getFeneconAcLoadTargetW
-         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
          * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
          */
         const getFeneconAcLoadTargetW = () => {
@@ -2334,6 +2273,8 @@ class SpeicherRegelungModule extends BaseModule {
                 gridW,
                 gridRawW,
                 gridAgeMs: (typeof gridRawAge === 'number') ? gridRawAge : gridAge,
+                targetGridImportW: activeStorageNvpTargetW,
+                importThresholdW: activeStorageNvpHysteresisW,
                 protectedEvcsLoadW: evcsStorageProtectedLoadW,
                 coupling: storageCoupling,
                 dcPvPowerW,
@@ -2531,20 +2472,10 @@ if (typeof soc === 'number') {
         const ignoreStaleMultiUsePolicy = !!(multiUsePolicyConfigured && !multiUsePolicyActive);
         const storageOnlyPolicyActive = !multiUsePolicyActive;
 
-        // Ein gemeinsamer Resolver liefert die wirksamen SoC-Zonen fuer alle
-        // Speicherpfade. MultiUse fuehrt nur bei aktivierter App; ein lediglich
-        // vorhandener/deaktivierter Datensatz darf keine alten 20-%-/Reserve-
-        // Werte mehr in die normale Eigenverbrauchsregelung einschleusen.
-        const storageOperatingPolicy = resolveStorageOperatingPolicy({
-            storageConfig: cfg,
-            multiUseConfig: storageMultiUseCfg,
-            multiUseActive: multiUsePolicyActive,
-            standaloneDefaultEnabled: true,
-            standaloneDefaultMinSocPct: 10,
-            standaloneDefaultMaxSocPct: 100,
-            standaloneDefaultTargetGridImportW: 50,
-            standaloneDefaultImportThresholdW: 50,
-        });
+        // Der gemeinsame Resolver wurde bereits vor den Herstellerprofilen
+        // aufgebaut. Hier werden daraus nur noch die SoC-/Reserve-Zonen gelesen.
+        // Dadurch arbeiten Einzel-Speicher, Farm und alle Herstellerpfade mit
+        // exakt derselben Topologie- und NVP-Policy.
         const multiUseOwnsZones = storageOperatingPolicy.mode === 'multiuse';
 
         // Notstrom-Reserve und LSK sind reine MultiUse-Zonen. Ohne aktives
@@ -2590,11 +2521,11 @@ if (typeof soc === 'number') {
         const evPriorityBlockStorageCharge = false;
         const evPriorityStarvedW = 0;
 
-        // Zielwert und Deadband stammen aus derselben Policy wie die SoC-Grenzen.
-        // Dadurch kann ein deaktiviertes MultiUse weder SoC noch NVP-Zielwerte
-        // unsichtbar in der Standalone-Regelung hinterlassen.
-        const selfTargetGridW = Math.max(0, num(storageOperatingPolicy.self.targetGridImportW, 50));
-        const selfImportThresholdW = Math.max(0, num(storageOperatingPolicy.self.importThresholdW, 50));
+        // Zielmitte und Hysterese gehoeren ausschliesslich zur aktiven
+        // Speicher-Topologie. MultiUse erweitert nur SoC-/Reserve-Zonen und darf
+        // keine zweite NVP-Abstimmung ueberlagern.
+        const selfTargetGridW = activeStorageNvpTargetW;
+        const selfImportThresholdW = activeStorageNvpHysteresisW;
 
         // NVP-Stabilisator: Fuehrungsgroesse fuer die Eigenverbrauchsregelung.
         // Die RAW-Messung bleibt fuer harte Caps/Schutzlogik erhalten, aber der
@@ -2623,6 +2554,9 @@ if (typeof soc === 'number') {
         await this._setIfChanged('speicher.regelung.selfSocPolicyJson', JSON.stringify(storageOperatingPolicy));
         await this._setIfChanged('speicher.regelung.selfTargetGridImportW', selfTargetGridW);
         await this._setIfChanged('speicher.regelung.selfImportThresholdW', selfImportThresholdW);
+        await this._setIfChanged('speicher.regelung.selfNvpTuningTopology', String(storageOperatingPolicy.nvpTuning && storageOperatingPolicy.nvpTuning.topology || storageAuthorityEarly.selectedTopology || 'none'));
+        await this._setIfChanged('speicher.regelung.selfNvpTuningSource', String(storageOperatingPolicy.nvpTuning && storageOperatingPolicy.nvpTuning.source || storageOperatingPolicy.self.nvpTuningSource || ''));
+        await this._setIfChanged('speicher.regelung.selfNvpTuningJson', JSON.stringify(storageOperatingPolicy.nvpTuning || {}));
         await this._setIfChanged('speicher.regelung.selfEntladenAktiviert', !!selfDischargeEnabled);
         await this._setIfChanged('speicher.regelung.lskPolicyAktiv', !!lskEnabledCfg);
         await this._setIfChanged('speicher.regelung.lskEntladenAktiviert', !!lskDischargeEnabledCfg);
@@ -2647,7 +2581,7 @@ if (typeof soc === 'number') {
         const configuredStepW = Number(cfg.stepW);
         const stepW = Number.isFinite(configuredStepW)
             ? Math.max(0, configuredStepW)
-            : Math.max(0, Number(storageLicensePowerProfile.defaultStepW || 50));
+            : Math.max(0, Number(storageLicensePowerProfile.defaultStepW || 1));
         const configuredMaxDeltaW = Number(cfg.maxDeltaWPerTick);
         const maxDelta = Number.isFinite(configuredMaxDeltaW)
             ? Math.max(0, configuredMaxDeltaW)
@@ -3406,17 +3340,29 @@ if (targetW === 0 && selfDischargeEnabled) {
                 ? Math.max(0, battPowerW)
                 : 0);
         const feneconTargetNvpW = selfTargetGridW;
-        const feneconErrW = (typeof feneconNvpW === 'number') ? (feneconNvpW - feneconTargetNvpW) : 0;
+        const feneconNvpBand = resolveNvpBandTarget(feneconNvpW, feneconTargetNvpW, selfImportThresholdW);
+        const feneconLowerBandW = feneconNvpBand.lowerBandW;
+        const feneconUpperBandW = feneconNvpBand.upperBandW;
+        const feneconActiveTargetW = feneconNvpBand.outsideBand
+            ? feneconNvpBand.activeTargetNvpW
+            : null;
+        const feneconErrW = feneconNvpBand.bandErrorW;
         const feneconLoadLimitW = acLoadW > 0
             ? acLoadW
             : Math.max(0, importRawW + currentDischargeW);
 
-        let nextSetW = currentDischargeW + feneconErrW;
+        // Innerhalb des Zielbandes bleibt ein bereits wirksamer Befehl erhalten.
+        // Ausserhalb wird nur bis zur naechsten Bandkante korrigiert, nicht bis
+        // zur Zielmitte. So verwendet auch der Gateway-/FENECON-Pfad exakt die
+        // gleiche Hysterese wie Einzel-Speicher und Farm.
+        let nextSetW = feneconActiveTargetW === null
+            ? (lastWasFenecon ? currentDischargeW : 0)
+            : (currentDischargeW + feneconErrW);
 
         // Nicht aus dem Stand auf Messrauschen reagieren. Wenn die Gateway-Regelung
         // bereits aktiv war, darf sie aber weiter fein nachregeln bzw. bei Export
         // schnell zurückfahren.
-        if (!lastWasFenecon && feneconErrW < selfImportThresholdW) {
+        if (!lastWasFenecon && feneconActiveTargetW === null) {
             nextSetW = 0;
         }
 
@@ -3443,8 +3389,8 @@ if (targetW === 0 && selfDischargeEnabled) {
             } else if (!socOk) {
                 reason = `Gateway AC: NVP-Balancing blockiert (SoC <= ${selfMinSoc}%)`;
                 source = 'reserve';
-            } else if (typeof feneconNvpW === 'number' && feneconNvpW <= selfTargetGridW) {
-                reason = `Gateway AC: keine Entladung nötig (NVP ${Math.round(feneconNvpW)} W <= Ziel ${Math.round(feneconTargetNvpW)} W inkl. EVCS-Schutz)`;
+            } else if (typeof feneconNvpW === 'number' && feneconNvpW <= feneconUpperBandW) {
+                reason = `Gateway AC: keine Entladung nötig (NVP ${Math.round(feneconNvpW)} W im/unter Zielband ${Math.round(feneconLowerBandW)}..${Math.round(feneconUpperBandW)} W inkl. EVCS-Schutz)`;
                 source = 'idle';
             }
         }
@@ -3621,10 +3567,10 @@ if (targetW === 0 && selfDischargeEnabled) {
 
     const allow = (!reserveActive && !reserveChargeWanted && socOk);
 
-    // Aktivierung: Nur wenn Import oberhalb der Schwelle liegt ODER wir bereits aktiv waren
-    // (Integrator hält den Sollwert dann stabil und passt ihn nach oben/unten an).
-    const importNowW = Math.max(0, Number.isFinite(Number(balance.nvpW)) ? Number(balance.nvpW) : 0);
-    const startCond = (importNowW >= deadbandW) || lastWasSelf;
+    // Aktivierung: Nur wenn der NVP die obere Bandkante ueberschreitet ODER
+    // die Eigenverbrauchsregelung bereits aktiv war. Zielmitte und Hysterese
+    // werden damit genau einmal durch den zentralen Band-Resolver bewertet.
+    const startCond = (Number(balance.nvpBandErrorW) > 0) || lastWasSelf;
 
     if (allow && nextSignedW < 0) {
         const maxChargeBySocW = (typeof soc === 'number' && soc >= selfMaxSoc) ? 0 : selfMaxChargeEff;
@@ -3632,7 +3578,7 @@ if (targetW === 0 && selfDischargeEnabled) {
         hardChargeMaxSoc = Math.max(hardChargeMaxSoc, selfMaxSoc);
         if (chargeW > 0) {
             targetW = -chargeW;
-            reason = `Eigenverbrauch: NVP-Balancing laden (${Math.round(chargeW)} W, Ist ${Math.round(Number(balance.baseW) || 0)} W, Differenz ${Math.round(Number(balance.nvpErrorW) || 0)} W)`;
+            reason = `Eigenverbrauch: NVP-Balancing laden (${Math.round(chargeW)} W, Ist ${Math.round(Number(balance.baseW) || 0)} W, Banddifferenz ${Math.round(Number(balance.nvpBandErrorW) || 0)} W)`;
             source = 'pv';
         } else if ((source === 'idle' || reason === 'Keine Aktion') && Math.abs(nextSignedW) > 0) {
             reason = (typeof soc === 'number' && soc >= selfMaxSoc)
@@ -3642,7 +3588,7 @@ if (targetW === 0 && selfDischargeEnabled) {
         }
     } else if (allow && startCond && nextSetW > 0) {
         targetW = nextSetW;
-        reason = `Eigenverbrauch: NVP-Balancing entladen (${Math.round(targetW)} W, Ist ${Math.round(Number(balance.baseW) || 0)} W, Differenz ${Math.round(Number(balance.nvpErrorW) || 0)} W)`;
+        reason = `Eigenverbrauch: NVP-Balancing entladen (${Math.round(targetW)} W, Ist ${Math.round(Number(balance.baseW) || 0)} W, Banddifferenz ${Math.round(Number(balance.nvpBandErrorW) || 0)} W)`;
         source = 'eigenverbrauch';
         hardDischargeMinSoc = Math.max(hardDischargeMinSoc, selfMinSoc);
     } else if (!allow && (source === 'idle' || reason === 'Keine Aktion')) {
@@ -3809,8 +3755,8 @@ if (targetW === 0 && !selfDischargeEnabled && (source === 'idle' || reason === '
                 chargeDemandHardCapReason = zeEnabled ? 'Nulleinspeisung-NVP-Lade-Cap (aktuelle Ladung+Export)' : 'PV-NVP-Lade-Cap (aktuelle Ladung+Export)';
                 targetW = -pvRawChargeCapW;
                 reason = zeEnabled
-                    ? `Nulleinspeisung: Ist ${Math.round(Number(pvBalance.baseW) || 0)} W plus NVP-Differenz ${Math.round(Number(pvBalance.nvpErrorW) || 0)} W`
-                    : `Eigenverbrauch PV-Laden: Ist ${Math.round(Number(pvBalance.baseW) || 0)} W plus NVP-Differenz ${Math.round(Number(pvBalance.nvpErrorW) || 0)} W`;
+                    ? `Nulleinspeisung: Ist ${Math.round(Number(pvBalance.baseW) || 0)} W plus NVP-Banddifferenz ${Math.round(Number(pvBalance.nvpBandErrorW) || 0)} W`
+                    : `Eigenverbrauch PV-Laden: Ist ${Math.round(Number(pvBalance.baseW) || 0)} W plus NVP-Banddifferenz ${Math.round(Number(pvBalance.nvpBandErrorW) || 0)} W`;
                 source = 'pv';
             }
         }
@@ -4039,8 +3985,12 @@ if (targetW === 0 && !selfDischargeEnabled && (source === 'idle' || reason === '
                     || source === 'sungrow-assist'
                 )
             );
+            // Die eigentliche NVP-Hysterese wurde bereits oberhalb angewendet.
+            // Eine zweite 20-/100-W-Nullzone wuerde reale Kleinkorrekturen (z. B.
+            // 15 W bis zur Bandkante) verschlucken. Fuer NVP-Balancing bleibt nur
+            // die physische 1-W-Aufloesung; andere Policies behalten ihr Deadband.
             const zeroBandW = isNvpBalancing
-                ? Math.max(psHystW, 20)
+                ? Math.max(psHystW, 1)
                 : Math.max(psHystW, stepW, 100);
 
             // Lastspitzenkappung ist eine Sicherheitsfunktion und darf nicht von
@@ -4369,9 +4319,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         if (sungrowHybridActive) {
             const ctx = sungrowHybridCtx || {};
             const srcNorm = String(source || '').toLowerCase();
-            const targetImportW = Math.max(0, num(cfg.sungrowTargetGridImportW, selfTargetGridW));
+            const targetImportW = selfTargetGridW;
             const assistBufferW = Math.max(0, num(cfg.sungrowAssistBufferW, 150));
-            const nvpDeadbandW = Math.max(0, Number(ctx.dischargeThresholdW) || selfImportThresholdW || 100);
+            const nvpDeadbandW = selfImportThresholdW;
             const nvpNowW = (typeof ctx.nvpW === 'number' && Number.isFinite(ctx.nvpW))
                 ? Number(ctx.nvpW)
                 : ((typeof gridRawW === 'number' && Number.isFinite(gridRawW)) ? Number(gridRawW) : Number(gridW || 0));
@@ -4687,7 +4637,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 // Der Schutz verwendet das NVP-Toleranzband, nicht die Leistungsrampe.
                 // maxDelta/stepW kann mehrere hundert Watt betragen und wuerde sonst
                 // kleine, aber reale PV-Ueberschuesse unnoetig unterdruecken.
-                deadbandW: Math.max(20, selfImportThresholdW),
+                deadbandW: Math.max(0, selfImportThresholdW),
             });
             targetW = Number(evcsProtectionDiag.targetW) || 0;
             evcsProtectedChargeStop = evcsProtectionDiag.chargeStop === true;
@@ -4937,7 +4887,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 nvpW: antiExportNvpUsable ? Number(nvpRawW) : null,
                 nvpSampleTs: antiExportNvpSampleTs,
                 targetNvpW: antiExportTargetNvpW,
-                deadbandW: Math.max(20, selfImportThresholdW),
+                deadbandW: Math.max(0, selfImportThresholdW),
                 graceMs: antiExportGraceMs,
                 now,
                 state: this._storageAntiExportState,
@@ -5044,8 +4994,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     ? Math.max(0, num(cfg.tariffTargetGridImportW, selfTargetGridW))
                     : Math.max(0, selfTargetGridW));
             const nvpDeadbandW = storageNvpBalanceDiag && Number.isFinite(Number(storageNvpBalanceDiag.deadbandW))
-                ? Math.max(20, Number(storageNvpBalanceDiag.deadbandW))
-                : Math.max(50, selfImportThresholdW, stepW);
+                ? Math.max(0, Number(storageNvpBalanceDiag.deadbandW))
+                : Math.max(0, selfImportThresholdW);
             const feedForwardTargetW = storageNvpBalanceDiag && Number.isFinite(Number(storageNvpBalanceDiag.feedForwardTargetW))
                 ? Number(storageNvpBalanceDiag.feedForwardTargetW)
                 : null;
@@ -5629,22 +5579,12 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     }
 
     /**
-     * Code-Teil: Methode `_getCfg`
-     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
     /**
-     * Code-Teil: _getCfg
-     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     /**
-     * Code-Teil: _buildSelfNvpControlSignal
-     * Zweck: Erzeugt fuer die Speicher-Eigenverbrauchsoptimierung einen ruhigen
      * NVP-Fuehrungswert, ohne die harten RAW-Schutzgrenzen zu verlieren.
-     * Zusammenhang: Der Energieflussmonitor zeigte bei manchen Speichern ein
      * Pendeln zwischen kleinem Netzbezug und Einspeisung. Ursache sind schnelle
      * Messwertspruenge am NVP plus Speicher-/Gateway-Latenzen. Die Regelung nutzt
      * deshalb einen gleitend gefilterten NVP-Wert, reagiert aber bei deutlichem
@@ -5696,8 +5636,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     }
 
     /**
-     * Code-Teil: _resolveBatteryBalanceFeedback
-     * Zweck: Liefert fuer alle Speicher-Hersteller eine stabile Batterie-
      * Istleistungsbasis, auch wenn Batterie- und NVP-Telemetrie asynchron kommen.
      *
      * Hintergrund:
@@ -5935,8 +5873,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     }
 
     /**
-     * Code-Teil: _buildIndependentPvLoadFeedForward
-     * Zweck: Ermittelt einen absoluten Speicher-Sollwert aus direkt gemessener
      * PV-Erzeugung und direkt gemessenem Gebaeudeverbrauch. Dieser Wert ist nur
      * eine unabhaengige Ersatz-/Plausibilitaetsgroesse fuer den NVP-Regelkreis.
      *
@@ -6240,14 +6176,13 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     }
 
     /**
-     * Code-Teil: _buildActualAwareNvpBalance
-     * Zweck: Berechnet den naechsten bidirektionalen Speicher-Sollwert aus der
      * echten Batterie-Istleistung und der aktuellen Abweichung am NVP.
      *
      * Physikalische Regelgleichung (NexoWatt-Vorzeichen):
      *   Batterie +W = Entladen, -W = Laden
      *   NVP      +W = Netzbezug, -W = Einspeisung
-     *   Sollwert     = Batterie-Ist + (NVP-Ist - NVP-Ziel)
+     *   aktives Ziel = naechste Bandkante ausserhalb der Hysterese
+     *   Sollwert     = Batterie-Ist + (NVP-Ist - aktives Ziel)
      *
      * Damit wird die aktuell bereits wirksame Lade-/Entladeleistung nicht bei
      * jedem Tick "vergessen". Beispiel: Speicher laedt 2,9 kW und am NVP sind
@@ -6331,6 +6266,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const measurementSkewMs = (batteryAgeMs !== null && nvpAgeMs !== null)
             ? Math.abs(batteryAgeMs - nvpAgeMs)
             : null;
+        const configuredNvpBand = resolveNvpBandTarget(rawNvpW, targetNvpW, deadbandW);
+        const lowerBandW = configuredNvpBand.lowerBandW;
+        const upperBandW = configuredNvpBand.upperBandW;
 
         const batteryFresh = !!(
             ctx.batteryPowerTrusted === true
@@ -6345,6 +6283,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const measurementsAligned = !feedbackRequireAligned || measurementSkewMs === null || measurementSkewMs <= feedbackMaxSkewMs;
         const feedbackCandidateUsed = !!(batteryFresh && nvpFreshForFeedback && measurementsAligned);
         const nvpW = (feedbackCandidateUsed || feedForwardUsable) ? rawNvpW : fallbackNvpW;
+        const effectiveNvpBand = resolveNvpBandTarget(nvpW, targetNvpW, deadbandW);
+        const activeTargetNvpW = effectiveNvpBand.activeTargetNvpW;
+        const nvpBandErrorW = effectiveNvpBand.bandErrorW;
         const asyncFeedback = estimateAsyncStorageFeedback({
             anchor: this._asyncBalanceCommand,
             feedbackKey: batteryFeedbackKey,
@@ -6352,7 +6293,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             sampleW: batteryMeasuredW,
             controlKey: balanceControlKey,
             nvpW,
-            nvpTargetW: targetNvpW,
+            nvpTargetW: activeTargetNvpW,
             lastTargetW,
             lastTargetAllowed,
             targetToleranceW: Math.max(2, stepW),
@@ -6386,7 +6327,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 actualBatteryW: null,
                 nvpW: null,
                 nvpTargetW: targetNvpW,
+                nvpBandLowerW: lowerBandW,
+                nvpBandUpperW: upperBandW,
+                nvpActiveTargetW: targetNvpW,
                 nvpErrorW: 0,
+                nvpBandErrorW: 0,
                 correctionW: 0,
                 appliedCorrectionW: 0,
                 feedbackUsed: false,
@@ -6439,8 +6384,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             };
         }
 
-        const nvpErrorW = nvpW - targetNvpW;
-        const outsideDeadband = Math.abs(nvpErrorW) > deadbandW;
+        const nvpErrorW = effectiveNvpBand.centerErrorW;
+        const outsideDeadband = effectiveNvpBand.outsideBand;
         let baseW = 0;
         let baseSource = 'zero-safe-fallback';
 
@@ -6457,8 +6402,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             // ausbleibender Speicherreaktion erneut eine Sollwert-Rueckkopplung
             // erzeugen. Fuer den Leistungsaufbau gilt im Fallback ausschliesslich
             // die aktuell sichtbare NVP-Abweichung.
-            const mayUseLastTargetForRelease = (lastTargetW > 0 && nvpErrorW < 0)
-                || (lastTargetW < 0 && nvpErrorW > 0);
+            const mayUseLastTargetForRelease = (lastTargetW > 0 && nvpBandErrorW < 0)
+                || (lastTargetW < 0 && nvpBandErrorW > 0);
             if (mayUseLastTargetForRelease) {
                 baseW = lastTargetW;
                 baseSource = 'last-target-release-only';
@@ -6482,7 +6427,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
          * letzten Sollwert addiert. Der letzte Sollwert dient nur als Rampenanker.
          */
         const applyFeedForwardTarget = (desiredW, modePrefix) => {
-            const desired = Number(desiredW) || 0;
+            // Feed-forward wird urspruenglich auf die Zielmitte berechnet. Fuer
+            // eine echte Hysterese regeln wir nur bis zur naechsten Bandkante.
+            const centerDesired = Number(desiredW) || 0;
+            const desired = centerDesired + (targetNvpW - activeTargetNvpW);
             const anchor = lastTargetAllowed && Number.isFinite(lastTargetW) ? lastTargetW : 0;
             const crossesDirection = anchor !== 0
                 && desired !== 0
@@ -6574,7 +6522,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             mode = ff.mode;
             feedForwardUsed = true;
         } else {
-            correctionW = nvpErrorW;
+            correctionW = nvpBandErrorW;
             rawTargetW = baseW + correctionW;
 
             // Bei einem aktiven asynchronen Kommando-Anker ist `baseW` bereits
@@ -6642,7 +6590,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             actualBatteryW: feedbackUsed ? effectiveBatteryPowerW : null,
             nvpW,
             nvpTargetW: targetNvpW,
+            nvpBandLowerW: lowerBandW,
+            nvpBandUpperW: upperBandW,
+            nvpActiveTargetW: activeTargetNvpW,
             nvpErrorW,
+            nvpBandErrorW,
             correctionW,
             appliedCorrectionW,
             feedbackUsed,
@@ -6863,10 +6815,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     }
 
     /**
-     * Code-Teil: Methode `_isFeneconHybridControlConfigured`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
     /**
      * Prüft die Speicherfarm mit derselben AppCenter-Regel wie Adapterkern und UI.
@@ -7032,10 +6980,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
     // Legacy-Alias für ältere interne Aufrufe.
     /**
-     * Code-Teil: Methode `_isFeneconGridControlConfigured`
-     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
     _isFeneconGridControlConfigured(cfg = {}) {
         return this._isFeneconHybridControlConfigured(cfg);
@@ -7046,6 +6990,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         gridW = null,
         gridRawW = null,
         gridAgeMs = null,
+        targetGridImportW = null,
+        importThresholdW = null,
         protectedEvcsLoadW = 0,
         coupling = 'ac',
         dcPvPowerW = null,
@@ -7053,8 +6999,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     } = {}) {
         const thresholdW = Math.max(0, num(cfg.sungrowPvThresholdW, 300));
         const loadCoverReserveW = Math.max(0, num(cfg.sungrowLoadCoverReserveW, 300));
-        const dischargeThresholdW = Math.max(0, num(cfg.sungrowImportThresholdW, num(cfg.selfImportThresholdW, 100)));
-        const targetGridImportW = Math.max(0, num(cfg.sungrowTargetGridImportW, num(cfg.selfTargetGridImportW, 100)));
+        // Sungrow besitzt keine zweite NVP-Abstimmung. Herstellerprofile
+        // duerfen die Schreibweise aendern, aber Zielmitte/Hysterese stammen
+        // ausschliesslich aus der aktuell aktiven Speicher- oder Farm-App.
+        const dischargeThresholdW = Math.max(0, num(importThresholdW, 50));
+        const effectiveTargetGridImportW = Math.max(0, num(targetGridImportW, 50));
         const nvpW = (typeof gridRawW === 'number' && Number.isFinite(gridRawW))
             ? Number(gridRawW)
             : ((typeof gridW === 'number' && Number.isFinite(gridW)) ? Number(gridW) : null);
@@ -7070,7 +7019,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             maxSkewMs: Math.max(0, num(cfg.balanceFeedForwardMaxSkewMs, 15000)),
             rawNvpW: nvpW,
             nvpAgeMs: gridAgeMs,
-            targetNvpW: targetGridImportW,
+            targetNvpW: effectiveTargetGridImportW,
             protectedEvcsLoadW,
             coupling,
             dcPvPowerW,
@@ -7105,8 +7054,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             loadKnown,
             pvActive,
             pvCoversLoad,
-            targetGridImportW,
+            targetGridImportW: effectiveTargetGridImportW,
+            effectiveTargetGridImportW,
             dischargeThresholdW,
+            legacyNvpTuningIgnored: Number.isFinite(Number(cfg.sungrowTargetGridImportW))
+                || Number.isFinite(Number(cfg.sungrowImportThresholdW)),
             nvpW,
             importW,
             exportW,
@@ -7115,8 +7067,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     }
 
     /**
-     * Code-Teil: _setStorageNvpBalanceDiag
-     * Zweck: Schreibt die herstellerunabhaengige Diagnose der geschlossenen
      * Speicher-NVP-Regelung. Damit ist im Feld sichtbar, ob die Vorgabe aus
      * Batterie-Istleistung plus NVP-Differenz entstanden ist oder ob wegen
      * alter/asynchroner Messwerte ein konservativer Fallback aktiv war.
@@ -7147,6 +7097,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await this._setIfChanged('speicher.regelung.balanceNvpAlterMs', active ? n(ctx.nvpAgeMs) : null);
         await this._setIfChanged('speicher.regelung.balanceNvpZielW', active ? n(ctx.nvpTargetW, 0) : 0);
         await this._setIfChanged('speicher.regelung.balanceNvpFehlerW', active ? n(ctx.nvpErrorW, 0) : 0);
+        await this._setIfChanged('speicher.regelung.balanceNvpBandUnterW', active ? n(ctx.nvpBandLowerW, 0) : 0);
+        await this._setIfChanged('speicher.regelung.balanceNvpBandOberW', active ? n(ctx.nvpBandUpperW, 0) : 0);
+        await this._setIfChanged('speicher.regelung.balanceNvpAktivZielW', active ? n(ctx.nvpActiveTargetW, 0) : 0);
+        await this._setIfChanged('speicher.regelung.balanceNvpBandFehlerW', active ? n(ctx.nvpBandErrorW, 0) : 0);
         await this._setIfChanged('speicher.regelung.balanceBasisQuelle', active ? String(ctx.baseSource || '') : '');
         await this._setIfChanged('speicher.regelung.balanceRohSollW', active ? n(ctx.rawTargetW, 0) : 0);
         await this._setIfChanged('speicher.regelung.balanceKorrekturW', active ? n(ctx.correctionW, 0) : 0);
@@ -7204,9 +7158,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     }
 
     /**
-     * Code-Teil: Methode `_setSungrowHybridDiag`
-     * Zweck: schreibt Diagnosewerte fuer das Sungrow-Herstellerprofil.
-     * Zusammenhang: Macht im Feld sichtbar, ob NexoWatt externe Vorgaben auf 0
      * setzt, weil PV die Last deckt, oder ob ein NVP-begrenzter Assist aktiv ist.
      */
     async _setSungrowHybridDiag(ctx = {}) {
@@ -7246,9 +7197,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     }
 
     /**
-     * Code-Teil: _isE3dcGridChargeSource
-     * Zweck: Erkennt, ob ein negativer Speicher-Sollwert wirklich Netzladen bedeutet.
-     * Zusammenhang: E3/DC unterscheidet bei SET_POWER_MODE zwischen CHARGE und
      * GRID_CHARGE. Standard-PV-Laden bleibt CHARGE; GRID_CHARGE wird nur fuer
      * Tarif-/Reserve-/LSK-Nachladung verwendet und muss im Herstellerprofil erlaubt sein.
      */
@@ -7266,10 +7214,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     }
 
     /**
-     * Code-Teil: _writeE3dcRscpTargetW
-     * Zweck: Uebersetzt die NexoWatt-Konvention (+W Entladen, -W Laden) in die
      * ioBroker.e3dc-rscp-Datenpunkte EMS.SET_POWER_MODE und EMS.SET_POWER_VALUE.
-     * Zusammenhang: Der e3dc-rscp Adapter reagiert auf Aenderungen beider States;
      * deshalb schreibt NexoWatt den Modus zuerst und danach den Leistungswert. So
      * wird bei Richtungswechseln nicht kurz die alte Richtung mit neuem Wert gesendet.
      */
@@ -7375,8 +7320,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     }
 
     /**
-     * Code-Teil: _setE3dcRscpDiag
-     * Zweck: Spiegeln des E3/DC-Schreibpfads in eigene Diagnose-States, damit keine
      * ioBroker-Warnungen durch fehlende Objekte entstehen und der Installateur sieht,
      * welches SET_POWER-Tupel zuletzt geschrieben wurde.
      */
@@ -7414,8 +7357,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const now = Date.now();
 
         /**
-         * Code-Teil: readCache
-         * Zweck: Liest frische Fremd-/Mappingwerte fuer die FENECON-Erkennung.
          * Wichtig: Dieser Pfad darf keine Sollwerte schreiben; er entscheidet nur,
          * ob FEMS/OpenEMS intern regeln darf oder ob NexoWatt einen Assist braucht.
          */
@@ -7448,8 +7389,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
         const candidates = [];
         /**
-         * Code-Teil: pushCandidate
-         * Zweck: Sammle moegliche PV-/Hybrid-AC-Leistungen. Bei FENECON sieht
          * NexoWatt haeufig nur den AC-Ausgang aus PV+Batterie; deshalb ist die
          * Erkennung bewusst breit, die eigentliche Leistungsregelung bleibt aber
          * spaeter hart am NVP begrenzt.
@@ -7459,8 +7398,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             if (Number.isFinite(n)) candidates.push({ w: Math.max(0, Math.abs(n)), source });
         };
         /**
-         * Code-Teil: readOwnFreshNumber
-         * Zweck: Liest eigene Diagnose-/Forecaststates frisch aus dem Adapter.
          * Damit bleibt die FENECON-Tages-/PV-Erkennung auch dann verfügbar,
          * wenn der Kunden-Gateway-AC-Ausgang nicht als klassische PV gemappt ist.
          */
@@ -7668,10 +7605,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     }
 
     /**
-     * Code-Teil: Methode `_setFeneconHybridDiag`
-     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
     async _setFeneconHybridDiag(ctx = {}) {
         const active = !!ctx.active;
@@ -7679,8 +7612,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const reason = String(ctx.reason || '');
         const writeMode = String(ctx.writeMode || '');
         /**
-         * Code-Teil: n
-         * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
          * Zusammenhang: Gehört zu EMS-Modul (Regelungs-, Diagnose- oder Beratungslogik innerhalb der EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
          * Wartung/TypeScript: Änderungen können LIVE-Energiefluss, aktuelle Werte und History beeinflussen; DP-Fallbacks nur mit Regressionstest ändern. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
          */
@@ -9111,7 +9042,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.selfSocPolicySource', 'Eigenverbrauch SoC-Policy Quelle', 'string', 'text', '');
         await mk('speicher.regelung.selfSocPolicyJson', 'Eigenverbrauch SoC-Policy Diagnose (JSON)', 'string', 'json', '');
         await mk('speicher.regelung.selfTargetGridImportW', 'Eigenverbrauch Ziel-Netzbezug (W)', 'number', 'value.power', 0);
-        await mk('speicher.regelung.selfImportThresholdW', 'Eigenverbrauch Deadband (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.selfImportThresholdW', 'Eigenverbrauch Hysterese (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.selfNvpTuningTopology', 'NVP tuning topology', 'string', 'text', '');
+        await mk('speicher.regelung.selfNvpTuningSource', 'NVP tuning source', 'string', 'text', '');
+        await mk('speicher.regelung.selfNvpTuningJson', 'NVP tuning details (JSON)', 'string', 'json', '{}');
         await mk('speicher.regelung.selfNvpRawW', 'Eigenverbrauch NVP RAW (W)', 'number', 'value.power', null);
         await mk('speicher.regelung.selfNvpFilteredW', 'Eigenverbrauch NVP gefiltert (W)', 'number', 'value.power', null);
         await mk('speicher.regelung.selfNvpControlW', 'Eigenverbrauch NVP Fuehrungswert (W)', 'number', 'value.power', null);
@@ -9126,6 +9060,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.balanceNvpAlterMs', 'NVP Alter im Speicher-Balancing (ms)', 'number', 'value.interval', null);
         await mk('speicher.regelung.balanceNvpZielW', 'Speicher NVP-Balancing Ziel (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.balanceNvpFehlerW', 'Speicher NVP-Balancing Differenz (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.balanceNvpBandUnterW', 'Speicher NVP-Balancing untere Bandkante (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.balanceNvpBandOberW', 'Speicher NVP-Balancing obere Bandkante (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.balanceNvpAktivZielW', 'Speicher NVP-Balancing aktive Bandkante (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.balanceNvpBandFehlerW', 'Speicher NVP-Balancing Fehler zur Bandkante (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.balanceBasisQuelle', 'Speicher NVP-Balancing Basisquelle', 'string', 'text', '');
         await mk('speicher.regelung.balanceRohSollW', 'Speicher NVP-Balancing Roh-Sollwert (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.balanceKorrekturW', 'Speicher NVP-Balancing Roh-Korrektur (W)', 'number', 'value.power', 0);
@@ -9393,4 +9331,5 @@ module.exports = {
     deriveStorageRatedPowerW,
     resolveStorageLicensePowerProfile,
     applyStorageLicensePowerLimit,
+    resolveNvpBandTarget,
 };

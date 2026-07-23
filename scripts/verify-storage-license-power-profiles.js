@@ -6,7 +6,8 @@
  * - Home begrenzt den finalen Speicherbefehl auf 50 kW.
  * - Pro bleibt lizenzseitig frei skalierbar.
  * - Eine Pro-Nennleistung skaliert Regelrampen, Async-Prognose und
- *   Energiefluss-Plausibilität, ohne selbst ein Hardware-Sollwert zu sein.
+ *   Energiefluss-Plausibilität, ohne die 1-W-Sollwertauflösung zu vergrobern
+ *   oder selbst ein Hardware-Sollwert zu sein.
  * - Backend, Runtime und AppCenter verwenden dasselbe Profil.
  */
 const assert = require('assert');
@@ -29,7 +30,7 @@ const home = flags.storagePerformanceProfile('hems', 500000);
 assert.strictEqual(home.id, 'home');
 assert.strictEqual(home.maxCommandW, 50000);
 assert.strictEqual(home.effectiveRatedPowerW, 50000, 'Home-Nennleistung muss auf 50 kW begrenzt werden');
-assert.strictEqual(home.defaultStepW, 50);
+assert.strictEqual(home.defaultStepW, 1, 'Home muss kleine NVP-Korrekturen mit 1 W Aufloesung zulassen');
 assert.strictEqual(home.defaultMaxDeltaWPerTick, 500);
 assert.strictEqual(home.defaultPvMaxDeltaWPerTick, 1500);
 assert.strictEqual(home.defaultBalancePredictionMaxW, 10000);
@@ -41,11 +42,15 @@ assert.strictEqual(pro.maxCommandW, 0, '0 bedeutet: kein Lizenz-Hardcap');
 assert.strictEqual(pro.unrestricted, true);
 assert.strictEqual(pro.industrial, true);
 assert.strictEqual(pro.effectiveRatedPowerW, 500000);
-assert.strictEqual(pro.defaultStepW, 500);
+assert.strictEqual(pro.defaultStepW, 1, 'Pro-Nennleistung darf die Sollwertaufloesung nicht vergrobern');
 assert.strictEqual(pro.defaultMaxDeltaWPerTick, 25000);
 assert.strictEqual(pro.defaultPvMaxDeltaWPerTick, 50000);
 assert.strictEqual(pro.defaultBalancePredictionMaxW, 125000);
 assert.strictEqual(pro.energyFlowPlausibilityMaxW, 2000000);
+
+const pro62 = flags.storagePerformanceProfile('pro', 62000);
+assert.strictEqual(pro62.defaultStepW, 1, '62-kW-Profil darf keinen 62-W-Raster erzeugen');
+assert.strictEqual(pro62.defaultMaxDeltaWPerTick, 3100, '62-kW-Profil skaliert nur die Dynamik');
 
 const homeDischarge = storage.applyStorageLicensePowerLimit(120000, home);
 assert.deepStrictEqual(
@@ -174,7 +179,7 @@ class LicenseRuntimeDp {
   }
 }
 
-async function runLicenseProfileTick({ edition, ratedPowerW, gridW }) {
+async function runLicenseProfileTick({ edition, ratedPowerW, gridW, targetGridImportW = 50, importThresholdW = 50, stepW }) {
   const states = new Map();
   const adapter = {
     _nwLicenseOk: true,
@@ -189,12 +194,12 @@ async function runLicenseProfileTick({ edition, ratedPowerW, gridW }) {
         controlMode: 'targetPower',
         ratedPowerW,
         staleTimeoutSec: 15,
-        stepW: 1,
+        ...(stepW !== undefined ? { stepW } : {}),
         maxDeltaWPerTick: 200000,
         pvMaxDeltaWPerTick: 200000,
         pvEnabled: false,
-        selfTargetGridImportW: 50,
-        selfImportThresholdW: 50,
+        standaloneSelfTargetGridImportW: targetGridImportW,
+        standaloneSelfImportThresholdW: importThresholdW,
         selfMinSocPct: 20,
         selfMaxSocPct: 100,
       },
@@ -240,9 +245,23 @@ async function runLicenseProfileTick({ edition, ratedPowerW, gridW }) {
   assert.strictEqual(homeChargeTick.getState('speicher.regelung.licensePowerLimited'), true);
 
   const proDischargeTick = await runLicenseProfileTick({ edition: 'pro', ratedPowerW: 500000, gridW: 120000 });
-  assert.strictEqual(proDischargeTick.dp.lastWrite('st.targetPowerW'), 119950, 'Pro darf den physikalischen NVP-Headroom oberhalb 50 kW nutzen');
+  assert.strictEqual(proDischargeTick.dp.lastWrite('st.targetPowerW'), 119900, 'Pro darf den physikalischen NVP-Headroom oberhalb 50 kW bis zur oberen Hysteresekante nutzen');
   assert.strictEqual(proDischargeTick.getState('speicher.regelung.licensePowerProfile'), 'pro');
   assert.strictEqual(proDischargeTick.getState('speicher.regelung.licensePowerLimited'), false);
+
+  const proPreciseChargeTick = await runLicenseProfileTick({
+    edition: 'pro',
+    ratedPowerW: 62000,
+    gridW: -65,
+    targetGridImportW: 0,
+    importThresholdW: 50,
+  });
+  assert.strictEqual(
+    proPreciseChargeTick.dp.lastWrite('st.targetPowerW'),
+    -15,
+    '62-kW-Pro-Speicher muss eine 15-W-Korrektur ohne 62-W-Raster schreiben',
+  );
+  assert.strictEqual(proPreciseChargeTick.getState('speicher.regelung.stepW'), 1);
 
   console.log('[storage-license-power-profiles] OK: Home 50 kW, Pro frei skalierbar und Industrie-Defaults sind bis zum realen Runtime-Write geprüft.');
 })().catch((err) => {

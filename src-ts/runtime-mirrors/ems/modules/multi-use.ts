@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 96d894876bf96cc5c6325a01130f227a270b90f515f9e482ce0ac4b4bc35388d
+ * Original-Hash: 4cacf632ec21c7a0bb19917c0657263b28e705ea60326bfd93d76189d331549f
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/multi-use.ts
- * Quell-Hash: sha256:02e33a18d307c7e9a1bab66d27e7965b14ea4d5c79cc598025cb51f9c3166e14
+ * Quell-Hash: sha256:a0909abb6fe1d3d571e43a3541daaf5a747abff91bd362e12d0fc13e6d46f78e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -262,10 +262,15 @@ class MultiUseModule extends BaseModule {
     const policyConfig = this._storagePolicyCfg();
     const active = !!(this._isEnabled() && policyConfig && policyConfig.enabled === true);
     const storage = this.adapter?.config?.storage || {};
+    const authority = this.adapter && typeof this.adapter._nwGetStorageControlAuthority === 'function'
+      ? this.adapter._nwGetStorageControlAuthority()
+      : { selectedTopology: this.adapter?.config?.enableStorageFarm ? 'farm' : 'single' };
     const policy = resolveStorageOperatingPolicy({
       storageConfig: storage,
       multiUseConfig: policyConfig,
       multiUseActive: active,
+      storageFarmConfig: this.adapter?.config?.storageFarm || {},
+      selectedTopology: authority && authority.selectedTopology ? authority.selectedTopology : 'single',
       standaloneDefaultEnabled: true,
       standaloneDefaultMinSocPct: 10,
       standaloneDefaultMaxSocPct: 100,
@@ -285,9 +290,14 @@ class MultiUseModule extends BaseModule {
       selfEnabled: !!(active && policy.self.enabled),
       selfMinSocPct: active ? num(policy.self.minSocPct, 0) : 0,
       selfMaxSocPct: active ? num(policy.self.maxSocPct, 100) : 100,
-      selfTargetGridImportW: active ? num(policy.self.targetGridImportW, 50) : 50,
-      selfImportThresholdW: active ? num(policy.self.importThresholdW, 50) : 50,
+      // Auch die Diagnose von MultiUse zeigt immer die Abstimmung der aktuell
+      // ausgewaehlten Speicher-Topologie. MultiUse besitzt selbst keine zweite
+      // NVP-Regelung, unabhaengig davon, ob seine SoC-Zonen gerade aktiv sind.
+      selfTargetGridImportW: num(policy.self.targetGridImportW, 50),
+      selfImportThresholdW: num(policy.self.importThresholdW, 50),
       policySource: String(policy.source || ''),
+      nvpTuningSource: String(policy.nvpTuning && policy.nvpTuning.source || policy.self.nvpTuningSource || ''),
+      nvpTuningTopology: String(policy.nvpTuning && policy.nvpTuning.topology || authority && authority.selectedTopology || ''),
       legacyConsumersConfigured: this._consumers.length,
       legacyConsumersEnabled: this._legacyConsumersEnabled(),
     };
@@ -308,6 +318,8 @@ class MultiUseModule extends BaseModule {
     await this._setStateIfChanged('multiUse.policy.selfMaxSocPct', snapshot.selfMaxSocPct);
     await this._setStateIfChanged('multiUse.policy.selfTargetGridImportW', snapshot.selfTargetGridImportW);
     await this._setStateIfChanged('multiUse.policy.selfImportThresholdW', snapshot.selfImportThresholdW);
+    await this._setStateIfChanged('multiUse.policy.nvpTuningSource', snapshot.nvpTuningSource);
+    await this._setStateIfChanged('multiUse.policy.nvpTuningTopology', snapshot.nvpTuningTopology);
     await this._setStateIfChanged('multiUse.policy.source', snapshot.policySource);
     await this._setStateIfChanged('multiUse.policy.legacyConsumersConfigured', snapshot.legacyConsumersConfigured);
     await this._setStateIfChanged('multiUse.policy.legacyConsumersEnabled', snapshot.legacyConsumersEnabled);
@@ -478,7 +490,9 @@ class MultiUseModule extends BaseModule {
       ['selfMinSocPct', 'Self-consumption minimum SoC', 'number', 'value.battery', 0, '%'],
       ['selfMaxSocPct', 'Self-consumption maximum SoC', 'number', 'value.battery', 100, '%'],
       ['selfTargetGridImportW', 'Self-consumption target grid import', 'number', 'value.power', 50, 'W'],
-      ['selfImportThresholdW', 'Self-consumption NVP deadband', 'number', 'value.power', 50, 'W'],
+      ['selfImportThresholdW', 'Self-consumption NVP hysteresis', 'number', 'value.power', 50, 'W'],
+      ['nvpTuningSource', 'NVP tuning source', 'string', 'text', '', undefined],
+      ['nvpTuningTopology', 'NVP tuning topology', 'string', 'text', '', undefined],
       ['source', 'Policy source', 'string', 'text', ''],
       ['legacyConsumersConfigured', 'Legacy consumers configured', 'number', 'value', 0],
       ['legacyConsumersEnabled', 'Legacy consumers explicitly enabled', 'boolean', 'indicator', false],

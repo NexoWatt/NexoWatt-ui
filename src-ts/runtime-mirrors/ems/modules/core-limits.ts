@@ -28,7 +28,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 259ea4f2c80341154ffe4eb20ef345ca95da251d84aa7cf0f35cb1f280fbfca2
+ * Original-Hash: 08bcb4cdc8547018fe1132468934513aa812743d5ea43aacaf0adc3a419e5330
  */
 
 /**
@@ -162,7 +162,7 @@ const { resolveStorageOperatingPolicy } = require('../services/storage-self-cons
  * Zusammenhang: Einzel-Speicher, Speicherfarm und PV-Budget muessen dieselbe
  * aktive MultiUse- bzw. Standalone-Policy verwenden.
  */
-function resolveCoreStorageOperatingPolicy(cfg: CoreLimitsUnknownRecord = {}): CoreLimitsUnknownRecord {
+function resolveCoreStorageOperatingPolicy(cfg: CoreLimitsUnknownRecord = {}, selectedTopology: string = 'single'): CoreLimitsUnknownRecord {
     const storageCfg = (cfg.storage && typeof cfg.storage === 'object') ? cfg.storage : {};
     const installerCfg = (cfg.installerConfig && typeof cfg.installerConfig === 'object') ? cfg.installerConfig : {};
     const storageMultiUseCfg = (installerCfg.storageMultiUse && typeof installerCfg.storageMultiUse === 'object')
@@ -173,6 +173,8 @@ function resolveCoreStorageOperatingPolicy(cfg: CoreLimitsUnknownRecord = {}): C
         storageConfig: storageCfg,
         multiUseConfig: storageMultiUseCfg,
         multiUseActive: storageMultiUseActive,
+        storageFarmConfig: (cfg.storageFarm && typeof cfg.storageFarm === 'object') ? cfg.storageFarm : {},
+        selectedTopology,
         standaloneDefaultEnabled: true,
         standaloneDefaultMinSocPct: 10,
         standaloneDefaultMaxSocPct: 100,

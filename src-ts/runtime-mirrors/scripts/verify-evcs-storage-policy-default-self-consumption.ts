@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 93c2842ff5385c0d186afcf1f5980dd0a24cd9ea06d7b6a7da49972cc1e04434
+ * Original-Hash: 18b818c03f4e6d5edf19c14f96c952e1ca00f3fe1f56b656701e50a8ded8193d
  */
 
 /**
@@ -367,7 +367,7 @@ async function runStorageTick({
     battPowerW: 0,
     lastSource: 'pv',
   });
-  assert.strictEqual(realSurplus.targetW, -450, `realer Export muss ca. 450 W Ladung erlauben, got ${realSurplus.targetW}`);
+  assert.strictEqual(realSurplus.targetW, -400, `realer Export muss bis zur unteren Bandkante 0 W genau 400 W Ladung erlauben, got ${realSurplus.targetW}`);
 
   const chargeStable = await runStorageTick({
     runtimePolicy: {

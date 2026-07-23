@@ -1,3 +1,15 @@
+## 0.8.139 - 2026-07-23
+
+- NVP-Zielmitte und Hysterese besitzen jetzt genau einen Owner je aktiver Speicher-Topologie: `single` liest ausschließlich **AppCenter → Speicher**, `farm` ausschließlich **AppCenter → Speicherfarm**. MultiUse liefert weiter SoC-, Reserve- und LSK-Policy, übernimmt aber immer die NVP-Abstimmung der ausgewählten Topologie und kann keine zweite Hysterese mehr überlagern.
+- Echte Bandregelung statt Regelung zur Zielmitte: Außerhalb des Zielbands wird nur bis zur nächstgelegenen Bandkante korrigiert. Beispiel `Ziel 0 W / Hysterese ±50 W / NVP -65 W` ergibt exakt `-15 W` Ladeanforderung; innerhalb `-50…+50 W` wird kein neuer Korrekturbefehl erzeugt.
+- Sollwertauflösung von der Speicher-Nennleistung entkoppelt. Home und Pro verwenden standardmäßig 1-W-Auflösung; die Pro-Nennleistung skaliert weiterhin Rampen, PV-Dynamik, Async-Prognose und Plausibilitätsrahmen. Ein 62-kW- oder 500-kW-Speicher wird damit nicht mehr auf 62-W- beziehungsweise 500-W-Kommandos gerastert.
+- Verdeckte zweite Nullzonen aus Eigenverbrauchs-, EVCS-Schutz-, Anti-Export-, Sungrow- und 0-W-Firewall-Pfaden entfernt beziehungsweise auf die technische 1-W-Auflösung zurückgeführt. Kleine physikalisch notwendige Korrekturen bleiben dadurch bis zum tatsächlichen AppCenter-Hardwarewriter erhalten.
+- Speicherfarm erhält eigene AppCenter-Felder für NVP-Zielmitte und Hysterese. Bestehende Farmkonfigurationen ohne eigene Werte übernehmen migrationssicher zunächst die bisherige Speicher-Abstimmung; nach dem Speichern sind die Farmwerte autoritativ.
+- Gemeinsamer NVP-Bandresolver wird von Einzel-Speicher, Speicherfarm, FENECON-, Sungrow-/Generic-Pfaden, MultiUse-Policy und NVP-Koordinator verwendet. Diagnose trennt Abweichung zur Zielmitte von der tatsächlich regelwirksamen Abweichung zur Bandkante, ohne neue sichtbare Statuskarten hinzuzufügen.
+- Neue Regression `test:storage-nvp-topology-hysteresis` prüft 15-W-Korrekturen über Signed-, Sungrow-Split- und Farmwriter, Farm-/Single-Ownership, MultiUse-Vererbung, Pro-62-kW-Auflösung und die identische Banddefinition im NVP-Koordinator. Bestehende Speicher-, Async-, Anti-Export-, FENECON-, EVCS-, Farm- und Kommandoreadback-Regressionen wurden auf die Bandkanten-Semantik umgestellt.
+- TypeScript-Migrationskontrolle: keine zusätzliche `@ts-nocheck`-Datei (weiterhin 58); der offen ausgewiesene Bestand sinkt trotz Topologieauflösung, Banddiagnose und AppCenter-Verkabelung von 145.217 auf 145.208 Zeilen.
+- Service-Worker-Cache auf `nexowatt-cache-v442` erhöht.
+
 ## 0.8.138 - 2026-07-22
 
 - Speicher-SoC-Policy zentralisiert: Einzel-Speicherregelung, Speicherfarm, MultiUse-Diagnose und Core-PV-Budget verwenden denselben seiteneffektfreien Resolver. Nur ein tatsächlich aktives MultiUse (`enableMultiUse=true` und `installerConfig.storageMultiUse.enabled=true`) darf Reserve-, LSK- und Eigenverbrauchszonen vorgeben.

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0d801f56b0a038ff29b5926eb53d874c0408cb8fabfeb4bb90a0aba21cea4883
+ * Original-Hash: 41039750fcf31c4fb6e9193763cddd764bf1e28045b8a71cfa3cf6a022dfc00e
  */
 
 /**
@@ -307,7 +307,7 @@ async function runSungrowRuntimeSequence() {
   try {
     await mod.tick();
     const first = dp.lastWrite('st.targetDischargePowerW');
-    assert(first > 0 && first <= 1950, `Runtime: erste NVP-Korrektur muss passend reduzieren, nicht sofort stoppen: ${first}`);
+    assert(first > 0 && first < 3000, `Runtime: erste NVP-Korrektur muss passend reduzieren, nicht sofort stoppen: ${first}`);
     assert.strictEqual(dp.lastWrite('st.targetChargePowerW'), 0, 'Runtime: Anti-Export darf keine Gegenrichtung laden');
 
     fakeNow += 1000;

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/nvp-coordinator.ts
- * Quell-Hash: sha256:fb25fcc0dc11994ed7dbcfd66a51db75541cf3cd36168d3e6a67b1a988389e89
+ * Quell-Hash: sha256:e72a456847757d314b283da5f448dee5eddcec9b095d5c7cc83eaa04bf3bde8d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -20,6 +20,7 @@ const { BaseModule } = require('./base');
 const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
 const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
 const { getAcceptedPowerEffectSnapshot } = require('../services/accepted-power-effects');
+const { resolveStorageOperatingPolicy, resolveNvpBandTarget, } = require('../services/storage-self-consumption-policy');
 const finiteOrNull = (value) => {
     if (value === null || value === undefined)
         return null;
@@ -70,7 +71,7 @@ function buildNvpCoordinatorSnapshot(input = {}) {
     const rawNvpW = roundedOrNull(input.rawNvpW);
     const nvpUsable = boolValue(input.nvpUsable, false) && rawNvpW !== null;
     const nvpTargetW = Math.max(0, Math.round(finiteOrNull(input.nvpTargetW) ?? 50));
-    const deadbandW = clamp(Math.round(finiteOrNull(input.deadbandW) ?? 30), 0, 5000);
+    const deadbandW = clamp(Math.round(finiteOrNull(input.deadbandW) ?? 30), 0, 1000000);
     const topology = cleanText(input.topology || 'none', 40).toLowerCase() || 'none';
     const storageActualW = roundedOrNull(input.storageActualW);
     const storageTargetW = roundedOrNull(input.storageTargetW);
@@ -135,10 +136,17 @@ function buildNvpCoordinatorSnapshot(input = {}) {
         ? null
         : Math.round(projectedAfterStorageW + acceptedFlexibleNetLoadDeltaW);
     const pvControlNvpW = projectedNvpW;
-    const nvpErrorW = rawNvpW === null ? null : Math.round(rawNvpW - nvpTargetW);
-    const projectedErrorW = projectedNvpW === null ? null : Math.round(projectedNvpW - nvpTargetW);
-    const withinBand = rawNvpW !== null && Math.abs(rawNvpW - nvpTargetW) <= deadbandW;
-    const projectedWithinBand = projectedNvpW !== null && Math.abs(projectedNvpW - nvpTargetW) <= deadbandW;
+    const nvpBand = resolveNvpBandTarget(rawNvpW, nvpTargetW, deadbandW);
+    const projectedBand = resolveNvpBandTarget(projectedNvpW, nvpTargetW, deadbandW);
+    const nvpCenterErrorW = rawNvpW === null ? null : Math.round(nvpBand.centerErrorW);
+    // `nvpErrorW` ist der tatsaechlich handlungsrelevante Fehler bis zur
+    // naechsten Hysteresegrenze. Der Fehler zur Zielmitte bleibt separat
+    // diagnostizierbar, darf aber keinen zweiten Regler bilden.
+    const nvpErrorW = rawNvpW === null ? null : Math.round(nvpBand.bandErrorW);
+    const projectedCenterErrorW = projectedNvpW === null ? null : Math.round(projectedBand.centerErrorW);
+    const projectedErrorW = projectedNvpW === null ? null : Math.round(projectedBand.bandErrorW);
+    const withinBand = rawNvpW !== null && !nvpBand.outsideBand;
+    const projectedWithinBand = projectedNvpW !== null && !projectedBand.outsideBand;
     let status = 'observing';
     let reason = 'NVP wird beobachtet';
     if (!nvpUsable) {
@@ -211,7 +219,12 @@ function buildNvpCoordinatorSnapshot(input = {}) {
         rawNvpW,
         nvpTargetW,
         deadbandW,
+        nvpBandLowerW: Math.round(nvpBand.lowerBandW),
+        nvpBandUpperW: Math.round(nvpBand.upperBandW),
+        nvpActiveTargetW: Math.round(nvpBand.activeTargetNvpW),
+        nvpCenterErrorW,
         nvpErrorW,
+        projectedCenterErrorW,
         projectedErrorW,
         topology,
         storageActualW,
@@ -302,7 +315,15 @@ class NvpCoordinatorModule extends BaseModule {
         await mk('ems.nvpCoordinator.nvpRawW', 'NVP RAW (+ Bezug / - Einspeisung)', 'number', 'value.power');
         await mk('ems.nvpCoordinator.nvpTargetW', 'NVP-Zielbezug', 'number', 'value.power');
         await mk('ems.nvpCoordinator.deadbandW', 'NVP-Toleranzband', 'number', 'value.power');
-        await mk('ems.nvpCoordinator.nvpErrorW', 'NVP-Regelfehler', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.nvpTuningSource', 'NVP-Abstimmung Quelle', 'string', 'text');
+        await mk('ems.nvpCoordinator.nvpTuningTopology', 'NVP-Abstimmung Speichertopologie', 'string', 'text');
+        await mk('ems.nvpCoordinator.nvpBandLowerW', 'NVP untere Hysteresegrenze', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.nvpBandUpperW', 'NVP obere Hysteresegrenze', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.nvpActiveTargetW', 'NVP aktive Hysteresegrenze', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.nvpCenterErrorW', 'NVP-Abweichung zur Zielmitte', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.nvpErrorW', 'NVP-Regelfehler zur Hysteresegrenze', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.projectedCenterErrorW', 'Prognose-Abweichung zur Zielmitte', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.projectedErrorW', 'Prognose-Regelfehler zur Hysteresegrenze', 'number', 'value.power');
         await mk('ems.nvpCoordinator.storageTopology', 'Ausgewählte Speichertopologie', 'string', 'text');
         await mk('ems.nvpCoordinator.storageActualW', 'Speicher/Farm Istleistung', 'number', 'value.power');
         await mk('ems.nvpCoordinator.storageRequestedTargetW', 'Speicher/Farm angeforderte Sollleistung', 'number', 'value.power');
@@ -345,6 +366,22 @@ class NvpCoordinatorModule extends BaseModule {
         const storage = root.storageControl && typeof root.storageControl === 'object'
             ? root.storageControl
             : (root.storage && typeof root.storage === 'object' ? root.storage : {});
+        const authority = this.adapter && typeof this.adapter._nwGetStorageControlAuthority === 'function'
+            ? this.adapter._nwGetStorageControlAuthority()
+            : { selectedTopology: root.enableStorageFarm === true ? 'farm' : 'single' };
+        const installer = root.installerConfig && typeof root.installerConfig === 'object' ? root.installerConfig : {};
+        const multiUse = installer.storageMultiUse && typeof installer.storageMultiUse === 'object'
+            ? installer.storageMultiUse
+            : null;
+        const operatingPolicy = resolveStorageOperatingPolicy({
+            storageConfig: storage,
+            storageFarmConfig: root.storageFarm && typeof root.storageFarm === 'object' ? root.storageFarm : {},
+            selectedTopology: authority && authority.selectedTopology ? authority.selectedTopology : 'single',
+            multiUseConfig: multiUse,
+            multiUseActive: root.enableMultiUse === true && !!multiUse && multiUse.enabled === true,
+            standaloneDefaultTargetGridImportW: 50,
+            standaloneDefaultImportThresholdW: 50,
+        });
         const staleSec = finiteOrNull(storage.staleTimeoutSec) ?? 30;
         const responseGraceMs = clamp(Math.round((finiteOrNull(cfg.storageResponseGraceSec) ?? 10) * 1000), 0, 300000);
         const responseDeadbandW = clamp(Math.round(finiteOrNull(cfg.storageResponseDeadbandW) ?? 150), 0, 10000);
@@ -357,8 +394,10 @@ class NvpCoordinatorModule extends BaseModule {
             responseProgressW: clamp(Math.round(finiteOrNull(cfg.storageResponseProgressW) ?? 50), 10, 5000),
             actualMaxAgeMs: clamp(Math.round((finiteOrNull(cfg.storageActualMaxAgeSec) ?? staleSec) * 1000), 1000, 600000),
             nvpMaxAgeMs: clamp(Math.round((finiteOrNull(cfg.nvpMaxAgeSec) ?? Math.max(staleSec, 10)) * 1000), 1000, 600000),
-            targetW: Math.max(0, Math.round(finiteOrNull(storage.selfTargetGridImportW) ?? 50)),
-            deadbandW: clamp(Math.round(finiteOrNull(storage.selfDeadbandW) ?? 30), 0, 5000),
+            targetW: Math.max(0, Math.round(finiteOrNull(operatingPolicy?.self?.targetGridImportW) ?? 50)),
+            deadbandW: clamp(Math.round(finiteOrNull(operatingPolicy?.self?.importThresholdW) ?? 50), 0, 1000000),
+            nvpTuningSource: cleanText(operatingPolicy?.nvpTuning?.source || operatingPolicy?.self?.nvpTuningSource || '', 120),
+            nvpTuningTopology: cleanText(operatingPolicy?.nvpTuning?.topology || authority?.selectedTopology || '', 40),
             hardRawGuardW: Math.max(0, Math.round(finiteOrNull(cfg.hardRawExportW) ?? 0)),
             logIntervalMs: clamp(Math.round((finiteOrNull(cfg.logIntervalSec) ?? 5) * 1000), 1000, 60000),
             logMaxEntries: clamp(Math.round(finiteOrNull(cfg.logMaxEntries) ?? 180), 20, 1000),
@@ -524,6 +563,8 @@ class NvpCoordinatorModule extends BaseModule {
             'speicher.regelung.selfTargetGridImportW',
             'speicher.regelung.selfImportThresholdW',
             'speicher.regelung.selfDeadbandW',
+            'speicher.regelung.selfNvpTuningSource',
+            'speicher.regelung.selfNvpTuningTopology',
             'storageFarm.totalPowerW',
         ];
         const states = await this._readStates(ids);
@@ -609,6 +650,8 @@ class NvpCoordinatorModule extends BaseModule {
         snapshot.storageTargetObjectId = cleanText(states['speicher.regelung.targetObjId'] || '', 260);
         snapshot.storageLastWriteRaw = roundedOrNull(states['speicher.regelung.lastWriteRaw']);
         snapshot.storageLastWriteSplitJson = cleanText(states['speicher.regelung.lastWriteSplitJson'] || '', 2000);
+        snapshot.nvpTuningSource = cleanText(states['speicher.regelung.selfNvpTuningSource'] || cfg.nvpTuningSource || '', 120);
+        snapshot.nvpTuningTopology = cleanText(states['speicher.regelung.selfNvpTuningTopology'] || cfg.nvpTuningTopology || topology, 40);
         let pvResult = null;
         const gridConstraints = this.gridConstraints;
         let gridRuntimeEnabled = true;
@@ -692,7 +735,14 @@ class NvpCoordinatorModule extends BaseModule {
                 reason: snapshot.reason,
                 nvpW: snapshot.rawNvpW,
                 targetW: snapshot.nvpTargetW,
+                deadbandW: snapshot.deadbandW,
+                bandLowerW: snapshot.nvpBandLowerW,
+                bandUpperW: snapshot.nvpBandUpperW,
+                activeTargetW: snapshot.nvpActiveTargetW,
+                centerErrorW: snapshot.nvpCenterErrorW,
                 errorW: snapshot.nvpErrorW,
+                nvpTuningSource: snapshot.nvpTuningSource,
+                nvpTuningTopology: snapshot.nvpTuningTopology,
                 topology: snapshot.topology,
                 storageActualW: snapshot.storageActualW,
                 storageActualAgeMs: snapshot.storageActualAgeMs,
@@ -757,7 +807,15 @@ class NvpCoordinatorModule extends BaseModule {
         await this._setIfChanged('ems.nvpCoordinator.nvpRawW', snapshot.rawNvpW);
         await this._setIfChanged('ems.nvpCoordinator.nvpTargetW', snapshot.nvpTargetW);
         await this._setIfChanged('ems.nvpCoordinator.deadbandW', snapshot.deadbandW);
+        await this._setIfChanged('ems.nvpCoordinator.nvpTuningSource', snapshot.nvpTuningSource);
+        await this._setIfChanged('ems.nvpCoordinator.nvpTuningTopology', snapshot.nvpTuningTopology);
+        await this._setIfChanged('ems.nvpCoordinator.nvpBandLowerW', snapshot.nvpBandLowerW);
+        await this._setIfChanged('ems.nvpCoordinator.nvpBandUpperW', snapshot.nvpBandUpperW);
+        await this._setIfChanged('ems.nvpCoordinator.nvpActiveTargetW', snapshot.nvpActiveTargetW);
+        await this._setIfChanged('ems.nvpCoordinator.nvpCenterErrorW', snapshot.nvpCenterErrorW);
         await this._setIfChanged('ems.nvpCoordinator.nvpErrorW', snapshot.nvpErrorW);
+        await this._setIfChanged('ems.nvpCoordinator.projectedCenterErrorW', snapshot.projectedCenterErrorW);
+        await this._setIfChanged('ems.nvpCoordinator.projectedErrorW', snapshot.projectedErrorW);
         await this._setIfChanged('ems.nvpCoordinator.storageTopology', snapshot.topology);
         await this._setIfChanged('ems.nvpCoordinator.storageActualW', snapshot.storageActualW);
         await this._setIfChanged('ems.nvpCoordinator.storageRequestedTargetW', snapshot.storageRequestedTargetW);

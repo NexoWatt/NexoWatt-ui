@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: d24e1e8765e4500644e82c6738431011921dae11d34c64c62f3a0922dcabcddd
+ * Original-Hash: cc8ffdb8e7e589230766000b826610fadeab0ae0298dfef477e5343c8472e31c
  */
 
 /**
@@ -450,7 +450,7 @@ function makePersistentSungrowScenario() {
       source: 'charging-runtime-protect',
     },
   });
-  assert.strictEqual(protectedSurplus.dp.lastWrite('st.targetChargePowerW'), 450, 'Sungrow darf nur den realen 450-W-Gesamtueberschuss laden');
+  assert.strictEqual(protectedSurplus.dp.lastWrite('st.targetChargePowerW'), 400, 'Sungrow darf nur bis zur unteren 0-W-Bandkante aus realem Export laden');
 
   // Rest-Netzbezug trotz laufender Entladung: Ziel ist nicht nur der neue Import,
   // sondern aktuelle Batterie-Istentladung + aktuelle NVP-Abweichung.
@@ -473,7 +473,7 @@ function makePersistentSungrowScenario() {
   const lowSocStop = await runTick({ gridW: 2300, gridRawW: 2300, pvW: 100, loadW: 5500, battPowerW: 500, soc: 10 });
   assert.strictEqual(lowSocStop.dp.lastWrite('st.targetChargePowerW'), 0, 'SoC-Schutz darf keine Ladung anfordern');
   assert.strictEqual(lowSocStop.dp.lastWrite('st.targetDischargePowerW'), 0, 'SoC-Schutz muss die Entladung mit 0 W stoppen');
-  assert.strictEqual(lowSocStop.adapter._states.get('speicher.regelung.sungrowHybridSchreibmodus').val, 'write-stop-discharge-limit', 'Gemeinsamer SoC-/Reserve-Stopp muss als expliziter Sungrow-Stop erhalten bleiben');
+  assert.strictEqual(lowSocStop.adapter._states.get('speicher.regelung.sungrowHybridSchreibmodus').val, 'write-stop-upstream-safety', 'Gemeinsamer SoC-/Reserve-Stopp muss als expliziter Sungrow-Stop erhalten bleiben');
 
   // Rest-Export trotz laufender Ladung: die alte Ladeleistung und der aktuelle
   // NVP-Export werden addiert, damit 2,9 kW Ladung + 2,9 kW Export zu ca. 5,85 kW werden.

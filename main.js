@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:b06784847cb1f2e5d1fbe44e84bec56e7d515f3f6f77fd96ddfd72a92e3ed147
+ * Quell-Hash: sha256:a9563363d322444d9cdab387e555f44996abe31f3014b4e9680be5b59414ec88
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -6375,10 +6375,15 @@ class NexoWattVis extends utils.Adapter {
     // Speicherfarm und Einzelregelung verwenden exakt dieselbe zentrale Policy.
     // Ein deaktiviertes MultiUse darf weder Reserve/LSK noch einen alten 20-%-
     // Eigenverbrauchs-Floor in die Farmverteilung einschleusen.
+    const storageAuthority = (typeof this._nwGetStorageControlAuthority === 'function')
+      ? this._nwGetStorageControlAuthority()
+      : { selectedTopology: 'single' };
     const storageOperatingPolicy = resolveStorageOperatingPolicy({
       storageConfig: storageCfg,
       multiUseConfig: mu,
       multiUseActive: multiUsePolicyActive,
+      storageFarmConfig: (this.config && this.config.storageFarm && typeof this.config.storageFarm === 'object') ? this.config.storageFarm : {},
+      selectedTopology: storageAuthority.selectedTopology,
       standaloneDefaultEnabled: true,
       standaloneDefaultMinSocPct: 10,
       standaloneDefaultMaxSocPct: 100,
