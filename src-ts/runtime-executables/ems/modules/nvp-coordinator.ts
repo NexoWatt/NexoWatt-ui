@@ -43,9 +43,15 @@ type CoordinatorInput = {
   storageActualAgeMs?: number | null;
   storageActualTrusted?: boolean;
   storageTargetW?: number | null;
+  storageRequestW?: number | null;
+  storageRequestSource?: string;
+  storageRequestReason?: string;
   storageWriteOk?: boolean;
   storageCommandEffective?: boolean;
   storageWriteStatus?: string;
+  storagePolicyBlocked?: boolean;
+  storagePolicyBlockReason?: string;
+  storagePolicySource?: string;
   storagePartiallyAccepted?: boolean;
   storageRequestSatisfied?: boolean;
   storageFailedW?: number | null;
@@ -116,6 +122,9 @@ function buildNvpCoordinatorSnapshot(input: CoordinatorInput = {}) {
   const topology = cleanText(input.topology || 'none', 40).toLowerCase() || 'none';
   const storageActualW = roundedOrNull(input.storageActualW);
   const storageTargetW = roundedOrNull(input.storageTargetW);
+  const storageRequestW = roundedOrNull(input.storageRequestW);
+  const storageRequestSource = cleanText(input.storageRequestSource || '', 120);
+  const storageRequestReason = cleanText(input.storageRequestReason || '', 320);
   const storageActualAgeMs = roundedOrNull(input.storageActualAgeMs);
   const storageActualTrusted = boolValue(input.storageActualTrusted, false);
   const actualMaxAgeMs = clamp(Math.round(finiteOrNull(input.actualMaxAgeMs) ?? 30000), 1000, 600000);
@@ -124,6 +133,9 @@ function buildNvpCoordinatorSnapshot(input: CoordinatorInput = {}) {
   const responseAgeMs = Math.max(0, Math.round(finiteOrNull(input.responseAgeMs) ?? 0));
   const storageWriteStatus = cleanText(input.storageWriteStatus || '', 260);
   const writeStatusLower = storageWriteStatus.toLowerCase();
+  const storagePolicyBlocked = boolValue(input.storagePolicyBlocked, false);
+  const storagePolicyBlockReason = cleanText(input.storagePolicyBlockReason || '', 320);
+  const storagePolicySource = cleanText(input.storagePolicySource || '', 120);
 
   const noWriter = topology === 'none'
     || containsAny(writeStatusLower, ['deaktiviert', 'kein-aktiver-speicher-ausgang', 'kein aktiver speicher-ausgang']);
@@ -161,6 +173,7 @@ function buildNvpCoordinatorSnapshot(input: CoordinatorInput = {}) {
   const responseWithinGrace = !storageResponsePending || responseAgeMs <= responseGraceMs;
   const storageCommandCredited = nvpUsable
     && topology !== 'none'
+    && !storagePolicyBlocked
     && storageActualFresh
     && storageTargetW !== null
     && storageWriteAccepted
@@ -195,6 +208,9 @@ function buildNvpCoordinatorSnapshot(input: CoordinatorInput = {}) {
   } else if (noWriter) {
     status = withinBand ? 'stable' : 'observing';
     reason = withinBand ? 'NVP liegt ohne aktiven Speicherwriter im Zielband' : 'Kein aktiver Speicherwriter; PV-Regelung sieht den echten NVP';
+  } else if (storagePolicyBlocked) {
+    status = 'storage-policy-blocked';
+    reason = storagePolicyBlockReason || 'Speicheraktion ist durch die wirksame Policy gesperrt';
   } else if (blocked) {
     status = 'storage-blocked';
     reason = storageWriteStatus || 'Speicherbefehl wurde durch ein Gate blockiert';
@@ -216,9 +232,18 @@ function buildNvpCoordinatorSnapshot(input: CoordinatorInput = {}) {
   } else if (withinBand) {
     status = 'stable';
     reason = 'NVP liegt im Zielband';
+  } else if (storageWriteAccepted && storageTargetW === 0) {
+    const policyLimited = containsAny(`${storageRequestSource} ${storageRequestReason}`, [
+      'soc', 'reserve', 'min-so', 'max-so', 'gesperrt', 'blockiert', 'warten',
+      'stop', 'freigabe', 'limit', 'schutz', 'deaktiviert',
+    ]);
+    status = policyLimited ? 'storage-policy-limited' : 'storage-idle';
+    reason = storageRequestReason
+      || storageWriteStatus
+      || (policyLimited ? 'Speicherregelung ist durch eine aktive Policy begrenzt' : 'Speicher-Sollwert ist 0 W');
   } else if (storageWriteAccepted) {
     status = 'correcting-storage';
-    reason = 'Speicher/Farm regelt den NVP';
+    reason = storageRequestReason || 'Speicher/Farm regelt den NVP';
   }
 
   return {
@@ -241,6 +266,9 @@ function buildNvpCoordinatorSnapshot(input: CoordinatorInput = {}) {
     storageActualTrusted,
     storageActualFresh,
     storageTargetW,
+    storageRequestW,
+    storageRequestSource,
+    storageRequestReason,
     storageWriteOk: writeOk,
     storageCommandEffective: commandEffective,
     storageWriteAccepted,
@@ -251,6 +279,9 @@ function buildNvpCoordinatorSnapshot(input: CoordinatorInput = {}) {
     storageFailedW: roundedOrNull(input.storageFailedW),
     storageUnservedW: roundedOrNull(input.storageUnservedW),
     storageWriteStatus,
+    storagePolicyBlocked,
+    storagePolicyBlockReason,
+    storagePolicySource,
     storageNoWriter: noWriter,
     storageBlocked: blocked,
     storageHold: hold,
@@ -356,6 +387,9 @@ class NvpCoordinatorModule extends BaseModule {
     await mk('ems.nvpCoordinator.storageFailedW', 'Speicherleistung wegen Write-Fehlern ausgefallen', 'number', 'value.power');
     await mk('ems.nvpCoordinator.storageUnservedW', 'Speicherleistung wegen Grenzen nicht verteilbar', 'number', 'value.power');
     await mk('ems.nvpCoordinator.storageWriteStatus', 'Speicher-Write Status', 'string', 'text');
+    await mk('ems.nvpCoordinator.storagePolicyBlocked', 'Speicheraktion durch Policy blockiert', 'boolean', 'indicator');
+    await mk('ems.nvpCoordinator.storagePolicyBlockReason', 'Grund der Speicher-Policy-Sperre', 'string', 'text');
+    await mk('ems.nvpCoordinator.storagePolicySource', 'Quelle der wirksamen Speicher-Policy', 'string', 'text');
     await mk('ems.nvpCoordinator.storageTargetAgeMs', 'Alter der ausstehenden Speicherreaktion', 'number', 'value.interval');
     await mk('ems.nvpCoordinator.storageCommandCredited', 'Speicherreaktion im NVP vorweggenommen', 'boolean', 'indicator');
     await mk('ems.nvpCoordinator.storagePendingDeltaW', 'Noch ausstehende Speicherleistungsänderung', 'number', 'value.power');
@@ -568,11 +602,17 @@ class NvpCoordinatorModule extends BaseModule {
 
     const ids = [
       'speicher.regelung.topologie',
+      'speicher.regelung.requestW',
+      'speicher.regelung.requestQuelle',
+      'speicher.regelung.requestGrund',
       'speicher.regelung.sollW',
       'speicher.regelung.acceptedSollW',
       'speicher.regelung.commandEffective',
       'speicher.regelung.schreibOk',
       'speicher.regelung.schreibStatus',
+      'speicher.regelung.policyBlocked',
+      'speicher.regelung.policyBlockReason',
+      'speicher.regelung.policySource',
       'speicher.regelung.requestSatisfied',
       'speicher.regelung.partiallyAccepted',
       'speicher.regelung.farmStatus',
@@ -593,6 +633,7 @@ class NvpCoordinatorModule extends BaseModule {
       'speicher.regelung.lastWriteRaw',
       'speicher.regelung.lastWriteSplitJson',
       'speicher.regelung.selfTargetGridImportW',
+      'speicher.regelung.selfImportThresholdW',
       'speicher.regelung.selfDeadbandW',
       'storageFarm.totalPowerW',
     ] as const;
@@ -620,7 +661,8 @@ class NvpCoordinatorModule extends BaseModule {
     const actualSampleTs = roundedOrNull(states['speicher.regelung.batteryPowerFeedbackSampleTs']);
     const response = this._responseState(now, topology, targetW, actualW, actualSampleTs, acceptedForResponse, cfg);
     const nvpTargetFromState = finiteOrNull(states['speicher.regelung.selfTargetGridImportW']);
-    const deadbandFromState = finiteOrNull(states['speicher.regelung.selfDeadbandW']);
+    const deadbandFromState = finiteOrNull(states['speicher.regelung.selfImportThresholdW'])
+      ?? finiteOrNull(states['speicher.regelung.selfDeadbandW']);
     const acceptedEffects = getAcceptedPowerEffectSnapshot(this.adapter);
 
     let snapshot: AnyRecord = buildNvpCoordinatorSnapshot({
@@ -637,9 +679,15 @@ class NvpCoordinatorModule extends BaseModule {
       storageActualTrusted: boolValue(states['speicher.regelung.batteryPowerBalanceTrusted'], false)
         || boolValue(states['speicher.regelung.batteryPowerTrusted'], false),
       storageTargetW: targetW,
+      storageRequestW: roundedOrNull(states['speicher.regelung.requestW']),
+      storageRequestSource: cleanText(states['speicher.regelung.requestQuelle'] || '', 120),
+      storageRequestReason: cleanText(states['speicher.regelung.requestGrund'] || '', 320),
       storageWriteOk: writeOk,
       storageCommandEffective: commandEffective,
       storageWriteStatus: writeStatus,
+      storagePolicyBlocked: boolValue(states['speicher.regelung.policyBlocked'], false),
+      storagePolicyBlockReason: cleanText(states['speicher.regelung.policyBlockReason'] || '', 320),
+      storagePolicySource: cleanText(states['speicher.regelung.policySource'] || '', 120),
       storagePartiallyAccepted: boolValue(states['speicher.regelung.partiallyAccepted'], false),
       storageRequestSatisfied: boolValue(states['speicher.regelung.requestSatisfied'], false),
       storageFailedW: roundedOrNull(states['speicher.regelung.farmFailedW']),
@@ -767,6 +815,9 @@ class NvpCoordinatorModule extends BaseModule {
         storageFeedbackMode: snapshot.storageFeedbackMode,
         storageFeedbackIgnoredReason: snapshot.storageFeedbackIgnoredReason,
         storageRequestedTargetW: snapshot.storageRequestedTargetW,
+        storageRequestW: snapshot.storageRequestW,
+        storageRequestSource: snapshot.storageRequestSource,
+        storageRequestReason: snapshot.storageRequestReason,
         storageTargetW: snapshot.storageTargetW,
         storageResponseTargetW: snapshot.storageResponseTargetW,
         storageResponseTargetChanged: snapshot.storageResponseTargetChanged,
@@ -787,6 +838,9 @@ class NvpCoordinatorModule extends BaseModule {
         storageFailedW: snapshot.storageFailedW,
         storageUnservedW: snapshot.storageUnservedW,
         storageWriteStatus: snapshot.storageWriteStatus,
+        storagePolicyBlocked: snapshot.storagePolicyBlocked,
+        storagePolicyBlockReason: snapshot.storagePolicyBlockReason,
+        storagePolicySource: snapshot.storagePolicySource,
         storageCredited: snapshot.storageCommandCredited,
         flexibleNetLoadDeltaW: snapshot.acceptedFlexibleNetLoadDeltaW,
         flexibleLoadDeltaW: snapshot.acceptedFlexibleLoadDeltaW,
@@ -829,6 +883,9 @@ class NvpCoordinatorModule extends BaseModule {
     await this._setIfChanged('ems.nvpCoordinator.storageFailedW', snapshot.storageFailedW);
     await this._setIfChanged('ems.nvpCoordinator.storageUnservedW', snapshot.storageUnservedW);
     await this._setIfChanged('ems.nvpCoordinator.storageWriteStatus', snapshot.storageWriteStatus);
+    await this._setIfChanged('ems.nvpCoordinator.storagePolicyBlocked', snapshot.storagePolicyBlocked);
+    await this._setIfChanged('ems.nvpCoordinator.storagePolicyBlockReason', snapshot.storagePolicyBlockReason);
+    await this._setIfChanged('ems.nvpCoordinator.storagePolicySource', snapshot.storagePolicySource);
     await this._setIfChanged('ems.nvpCoordinator.storageTargetAgeMs', snapshot.storageResponseAgeMs);
     await this._setIfChanged('ems.nvpCoordinator.storageCommandCredited', snapshot.storageCommandCredited);
     await this._setIfChanged('ems.nvpCoordinator.storagePendingDeltaW', snapshot.storagePendingDeltaW);

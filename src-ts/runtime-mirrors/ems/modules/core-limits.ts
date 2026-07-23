@@ -28,7 +28,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 113f22118a3fb93497e098ae79bdf5cfd1c40b554e3753152c715633bcb9fe13
+ * Original-Hash: 259ea4f2c80341154ffe4eb20ef345ca95da251d84aa7cf0f35cb1f280fbfca2
  */
 
 /**
@@ -153,6 +153,34 @@ type CoreBudgetGrantRuntime = {
 
 
 const { BaseModule } = require('./base');
+const { resolveStorageOperatingPolicy } = require('../services/storage-self-consumption-policy');
+
+/**
+ * Code-Teil: resolveCoreStorageOperatingPolicy
+ * Zweck: Spiegelt die produktive zentrale Speicher-Policy-Aufloesung fuer das
+ * Core-Budget, ohne MultiUse-Zonen in `storage.*` zu kopieren.
+ * Zusammenhang: Einzel-Speicher, Speicherfarm und PV-Budget muessen dieselbe
+ * aktive MultiUse- bzw. Standalone-Policy verwenden.
+ */
+function resolveCoreStorageOperatingPolicy(cfg: CoreLimitsUnknownRecord = {}): CoreLimitsUnknownRecord {
+    const storageCfg = (cfg.storage && typeof cfg.storage === 'object') ? cfg.storage : {};
+    const installerCfg = (cfg.installerConfig && typeof cfg.installerConfig === 'object') ? cfg.installerConfig : {};
+    const storageMultiUseCfg = (installerCfg.storageMultiUse && typeof installerCfg.storageMultiUse === 'object')
+        ? installerCfg.storageMultiUse
+        : null;
+    const storageMultiUseActive = !!(cfg.enableMultiUse === true && storageMultiUseCfg && storageMultiUseCfg.enabled === true);
+    const storageOperatingPolicy = resolveStorageOperatingPolicy({
+        storageConfig: storageCfg,
+        multiUseConfig: storageMultiUseCfg,
+        multiUseActive: storageMultiUseActive,
+        standaloneDefaultEnabled: true,
+        standaloneDefaultMinSocPct: 10,
+        standaloneDefaultMaxSocPct: 100,
+        standaloneDefaultTargetGridImportW: 50,
+        standaloneDefaultImportThresholdW: 50,
+    });
+    return storageOperatingPolicy;
+}
 
 
 /**

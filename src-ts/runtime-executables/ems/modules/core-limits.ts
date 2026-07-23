@@ -62,6 +62,7 @@
 const { BaseModule } = require('./base');
 const { normalizePvSurplusPriority, buildPvSurplusAllocation } = require('../services/pv-surplus-allocation');
 const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
+const { resolveStorageOperatingPolicy } = require('../services/storage-self-consumption-policy');
 let resolvePara14aAppCap = () => null;
 try {
     ({ resolvePara14aAppCap } = require('../../lib/ts-mirrors/ems/para14a/para14a-constraint'));
@@ -2009,7 +2010,22 @@ class CoreLimitsModule extends BaseModule {
                     'storageSoc',
                 ], null)
                 : null);
-        const storageMaxSocPct = clamp(num(storageCfg.selfMaxSocPct, 100), 0, 100, 100);
+        const installerCfg = (cfg.installerConfig && typeof cfg.installerConfig === 'object') ? cfg.installerConfig : {};
+        const storageMultiUseCfg = (installerCfg.storageMultiUse && typeof installerCfg.storageMultiUse === 'object')
+            ? installerCfg.storageMultiUse
+            : null;
+        const storageMultiUseActive = !!(cfg.enableMultiUse === true && storageMultiUseCfg && storageMultiUseCfg.enabled === true);
+        const storageOperatingPolicy = resolveStorageOperatingPolicy({
+            storageConfig: storageCfg,
+            multiUseConfig: storageMultiUseCfg,
+            multiUseActive: storageMultiUseActive,
+            standaloneDefaultEnabled: true,
+            standaloneDefaultMinSocPct: 10,
+            standaloneDefaultMaxSocPct: 100,
+            standaloneDefaultTargetGridImportW: 50,
+            standaloneDefaultImportThresholdW: 50,
+        });
+        const storageMaxSocPct = clamp(num(storageOperatingPolicy.self.maxSocPct, 100), 0, 100, 100);
         const storageEligible = !!(
             storageControlEnabled
             && storageCfg.pvEnabled !== false

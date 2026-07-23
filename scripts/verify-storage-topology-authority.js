@@ -176,6 +176,31 @@ async function verifyAuthorityAndMeasurement() {
   assert.strictEqual(authority.singleLegacyActive, true);
   assert.strictEqual(authority.singleAppCenterActive, false);
 
+  // Getrennte Lade-/Entlade-Istwerte duerfen in LIVE und History niemals
+  // gleichzeitig als zwei physische Fluesse erscheinen. Bei einem kurzzeitig
+  // ueberlappenden Adapter-Readback wird deshalb nur der Nettofluss ausgegeben;
+  // die Bruttowerte bleiben fuer die Diagnose erhalten.
+  adapter.config = {
+    enableStorageControl: true,
+    enableStorageFarm: false,
+    emsApps: { apps: { storage: appState(true, true), storagefarm: appState(false, false) } },
+    datapoints: {
+      storageChargePower: 'storage.charge.actual',
+      storageDischargePower: 'storage.discharge.actual',
+    },
+    storage: { coupling: 'ac', targetPowerObjectId: 'single.manual.target' },
+    storageFarm: { storages: [] },
+  };
+  setCache(adapter, 'storageChargePower', 2000);
+  setCache(adapter, 'storageDischargePower', 3000);
+  let splitFlow = adapter._nwResolveBatteryFlowFromCache({ now: Date.now() });
+  assert.strictEqual(splitFlow.signedW, 1000, 'Split-Istwerte muessen als Nettoentladung aufgeloest werden');
+  assert.strictEqual(splitFlow.chargeW, 0, 'History darf bei Nettoentladung keine gleichzeitige Ladung zeigen');
+  assert.strictEqual(splitFlow.dischargeW, 1000, 'History muss nur die Nettoentladung zeigen');
+  assert.strictEqual(splitFlow.grossChargeW, 2000, 'Bruttoladung muss fuer Diagnose erhalten bleiben');
+  assert.strictEqual(splitFlow.grossDischargeW, 3000, 'Bruttoentladung muss fuer Diagnose erhalten bleiben');
+  assert.strictEqual(splitFlow.splitConflictNormalized, true, 'Diagnose muss die physikalische Normalisierung markieren');
+
   // Mess-/Status-Farm ist aktiv, aber nicht beschreibbar: Einzelpfad bleibt Writer.
   adapter.config = {
     enableStorageControl: true,

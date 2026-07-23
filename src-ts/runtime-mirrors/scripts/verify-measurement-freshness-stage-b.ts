@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 7f106911a02bbd7c25f1904bb9ff56f33bb0b2991f9fc0d6145b1d94b2fec14b
+ * Original-Hash: 683fa9941eccd9b4af94bc6ad51348b3abb19ec7f09ef12d1f1473b553e74aa8
  */
 
 /**
@@ -147,6 +147,25 @@ const adapter = {
     gridNetMapped: true,
   });
   assert.strictEqual(display.hasGrid, false, 'bekannt staler kanonischer NVP darf im Energiefluss nicht durch alte Fallbacks wiederaufleben');
+
+  const normalizedSplitDisplay = resolveNvpDisplay({
+    maxAgeMs: 15000,
+    canonicalKnown: false,
+    canonicalFresh: null,
+    canonicalNetW: null,
+    gridNetRaw: null,
+    gridBuyRaw: 3000,
+    gridSellRaw: 1000,
+    gridBuyTs: Date.now(),
+    gridSellTs: Date.now(),
+    gridBuyMapped: true,
+    gridSellMapped: true,
+    gridNetMapped: false,
+  });
+  assert.strictEqual(normalizedSplitDisplay.gridNetRaw, 2000, 'gleichzeitige Split-Kanaele muessen als signierter Nettofluss aufgeloest werden');
+  assert.strictEqual(normalizedSplitDisplay.gridBuyW, 2000, 'History/LIVE darf nur den Netto-Netzbezug darstellen');
+  assert.strictEqual(normalizedSplitDisplay.gridSellW, 0, 'History/LIVE darf nicht gleichzeitig Einspeisung darstellen');
+  assert(String(normalizedSplitDisplay.src).includes('net-normalized'), 'Diagnose muss die Split-Normalisierung ausweisen');
 
   const engine = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/ems/engine.ts'), 'utf8');
   const charging = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/ems/modules/charging-management.ts'), 'utf8');

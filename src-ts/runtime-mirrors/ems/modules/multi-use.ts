@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 54b96432593e113217ff04788bf7b2a19948a4827bf86fa0fe12389121eabc88
+ * Original-Hash: 96d894876bf96cc5c6325a01130f227a270b90f515f9e482ce0ac4b4bc35388d
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/multi-use.ts
- * Quell-Hash: sha256:64fea13474221adb0cdc2a20a367b59295d6670c155d7742a784f873bc53e605
+ * Quell-Hash: sha256:02e33a18d307c7e9a1bab66d27e7965b14ea4d5c79cc598025cb51f9c3166e14
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -64,6 +64,7 @@ const { ReasonCodes, normalizeReason } = require('../reasons');
 const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
 const { ActuatorCommandContract } = require('../services/actuator-command-contract');
 const { recordAcceptedPowerTarget } = require('../services/accepted-power-effects');
+const { resolveStorageOperatingPolicy } = require('../services/storage-self-consumption-policy');
 
 /**
  * Code-Teil: num
@@ -258,22 +259,35 @@ class MultiUseModule extends BaseModule {
     return policy && typeof policy === 'object' ? policy : null;
   }
   _policySnapshot() {
-    const policy = this._storagePolicyCfg();
-    const active = !!(this._isEnabled() && policy && policy.enabled === true);
+    const policyConfig = this._storagePolicyCfg();
+    const active = !!(this._isEnabled() && policyConfig && policyConfig.enabled === true);
     const storage = this.adapter?.config?.storage || {};
+    const policy = resolveStorageOperatingPolicy({
+      storageConfig: storage,
+      multiUseConfig: policyConfig,
+      multiUseActive: active,
+      standaloneDefaultEnabled: true,
+      standaloneDefaultMinSocPct: 10,
+      standaloneDefaultMaxSocPct: 100,
+      standaloneDefaultTargetGridImportW: 50,
+      standaloneDefaultImportThresholdW: 50,
+    });
     return {
       active,
       mode: active ? 'storage-policy' : 'inactive',
       hardwareWriter: 'storage-control',
-      reserveEnabled: !!(active && storage.reserveEnabled),
-      reserveMinSocPct: active ? num(storage.reserveMinSocPct, 0) : 0,
-      reserveTargetSocPct: active ? num(storage.reserveTargetSocPct, 0) : 0,
-      peakEnabled: !!(active && storage.lskEnabled !== false && storage.lskDischargeEnabled !== false),
-      lskMinSocPct: active ? num(storage.lskMinSocPct, 0) : 0,
-      lskMaxSocPct: active ? num(storage.lskMaxSocPct, 0) : 0,
-      selfEnabled: !!(active && storage.selfDischargeEnabled !== false),
-      selfMinSocPct: active ? num(storage.selfMinSocPct, 0) : 0,
-      selfMaxSocPct: active ? num(storage.selfMaxSocPct, 100) : 100,
+      reserveEnabled: !!(active && policy.reserve.enabled),
+      reserveMinSocPct: active ? num(policy.reserve.minSocPct, 0) : 0,
+      reserveTargetSocPct: active ? num(policy.reserve.targetSocPct, 0) : 0,
+      peakEnabled: !!(active && policy.lsk.enabled && policy.lsk.dischargeEnabled),
+      lskMinSocPct: active ? num(policy.lsk.minSocPct, 0) : 0,
+      lskMaxSocPct: active ? num(policy.lsk.maxSocPct, 0) : 0,
+      selfEnabled: !!(active && policy.self.enabled),
+      selfMinSocPct: active ? num(policy.self.minSocPct, 0) : 0,
+      selfMaxSocPct: active ? num(policy.self.maxSocPct, 100) : 100,
+      selfTargetGridImportW: active ? num(policy.self.targetGridImportW, 50) : 50,
+      selfImportThresholdW: active ? num(policy.self.importThresholdW, 50) : 50,
+      policySource: String(policy.source || ''),
       legacyConsumersConfigured: this._consumers.length,
       legacyConsumersEnabled: this._legacyConsumersEnabled(),
     };
@@ -292,6 +306,9 @@ class MultiUseModule extends BaseModule {
     await this._setStateIfChanged('multiUse.policy.selfEnabled', snapshot.selfEnabled);
     await this._setStateIfChanged('multiUse.policy.selfMinSocPct', snapshot.selfMinSocPct);
     await this._setStateIfChanged('multiUse.policy.selfMaxSocPct', snapshot.selfMaxSocPct);
+    await this._setStateIfChanged('multiUse.policy.selfTargetGridImportW', snapshot.selfTargetGridImportW);
+    await this._setStateIfChanged('multiUse.policy.selfImportThresholdW', snapshot.selfImportThresholdW);
+    await this._setStateIfChanged('multiUse.policy.source', snapshot.policySource);
     await this._setStateIfChanged('multiUse.policy.legacyConsumersConfigured', snapshot.legacyConsumersConfigured);
     await this._setStateIfChanged('multiUse.policy.legacyConsumersEnabled', snapshot.legacyConsumersEnabled);
     await this._setStateIfChanged('multiUse.policy.legacyConsumersIgnored', snapshot.legacyConsumersConfigured > 0 && !snapshot.legacyConsumersEnabled);
@@ -460,6 +477,9 @@ class MultiUseModule extends BaseModule {
       ['selfEnabled', 'Self-consumption zone enabled', 'boolean', 'indicator', false],
       ['selfMinSocPct', 'Self-consumption minimum SoC', 'number', 'value.battery', 0, '%'],
       ['selfMaxSocPct', 'Self-consumption maximum SoC', 'number', 'value.battery', 100, '%'],
+      ['selfTargetGridImportW', 'Self-consumption target grid import', 'number', 'value.power', 50, 'W'],
+      ['selfImportThresholdW', 'Self-consumption NVP deadband', 'number', 'value.power', 50, 'W'],
+      ['source', 'Policy source', 'string', 'text', ''],
       ['legacyConsumersConfigured', 'Legacy consumers configured', 'number', 'value', 0],
       ['legacyConsumersEnabled', 'Legacy consumers explicitly enabled', 'boolean', 'indicator', false],
       ['legacyConsumersIgnored', 'Legacy consumers ignored', 'boolean', 'indicator', false],

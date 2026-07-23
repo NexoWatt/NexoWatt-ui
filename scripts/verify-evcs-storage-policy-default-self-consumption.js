@@ -188,7 +188,6 @@ async function runStorageTick({
 
 (async () => {
   const normalTick = await runStorageTick({
-    battPowerW: 0,
     runtimePolicy: {
       protectedLoadW: 0,
       protectedWallboxes: 0,
@@ -318,7 +317,6 @@ async function runStorageTick({
   assert.strictEqual(stopOldDischarge.zeroExplicitStop, true, 'Entlade-Stop muss die 0-W-Firewall passieren');
 
   const assistTick = await runStorageTick({
-    battPowerW: 0,
     runtimePolicy: {
       protectedLoadW: 0,
       protectedWallboxes: 0,
@@ -329,7 +327,6 @@ async function runStorageTick({
   assert(assistTick.targetW >= 4000, `assist mode must not protect EVCS load from normal discharge, got ${assistTick.targetW} W`);
 
   const staleStateIgnored = await runStorageTick({
-    battPowerW: 0,
     runtimePolicy: {
       protectedLoadW: 0,
       protectedWallboxes: 0,

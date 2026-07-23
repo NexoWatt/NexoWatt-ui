@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b6724c3541892ced8e12e3ab11dfccbba01a51f6b71276643078a0c286ae3789
+ * Original-Hash: 2548943fcb756ee60d86cc810349dc87a17f223162af4f804519cbea73eea71b
  */
 
 /**
@@ -31,9 +31,9 @@
 
 'use strict';
 /**
- * Dynamischer Regressionstest 0.8.81 fuer die Speicher-Grundlogik.
+ * Dynamischer Regressionstest 0.8.138 fuer die Speicher-Grundlogik.
  * Dieser Test laeuft ohne Hardware mit Fake-Adapter/Fake-DP und prueft die
- * kritischen Feldfaelle: keine 71-kW-Entladung, MultiUse-Autostart,
+ * kritischen Feldfaelle: keine 71-kW-Entladung, MultiUse-/Writer-Trennung,
  * Speicherfarm als Basisregelung und PV-Ladestopp bei RAW-Netzbezug.
  */
 const assert = require('assert');
@@ -208,7 +208,7 @@ async function runTick({ config, values, entries = targetEntries, lastTargetW = 
 }
 
 /**
- * Code-Teil: testNoRunawaySelfConsumption
+ * Code-Teil: testExplicitStandaloneDisableStopsImmediately
  *
  * Zweck:
  * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
@@ -218,14 +218,19 @@ async function runTick({ config, values, entries = targetEntries, lastTargetW = 
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-async function testNoRunawaySelfConsumption() {
+async function testExplicitStandaloneDisableStopsImmediately() {
   const { dp, adapter } = await runTick({
     config: {
       enableStorageControl: true,
       enableMultiUse: false,
       enableStorageFarm: false,
       installerConfig: { storageMultiUse: { enabled: false } },
-      storage: baseStorage({ selfDischargeEnabled: false }),
+      storage: baseStorage({
+        selfDischargeEnabled: false,
+        standaloneSelfDischargeEnabled: false,
+        standaloneSelfMinSocPct: 10,
+        standaloneSelfMaxSocPct: 100,
+      }),
       peakShaving: {},
     },
     values: {
@@ -237,16 +242,17 @@ async function testNoRunawaySelfConsumption() {
     lastSource: 'eigenverbrauch',
   });
   const write = dp.writes.find(w => w.key === 'st.targetPowerW');
-  assert(write, 'Eigenverbrauch muss einen Sollwert schreiben');
-  assert(write.val > 0, `Eigenverbrauch muss bei Netzbezug entladen, bekam ${write.val}`);
-  assert(write.val <= 3000, `Entladung darf bei 2,6 kW NVP-Import nicht weglaufen, bekam ${write.val}`);
+  assert(write, 'Explizit deaktivierte Eigenverbrauchs-Entladung muss einen Stop schreiben');
+  assert.strictEqual(write.val, 0, `Policy-Stopp darf alten 71,6-kW-Befehl nicht ueber die Rampe halten: ${write.val}`);
   assert.strictEqual(adapter.states.get('speicher.regelung.policyMode').val, 'eigenverbrauch');
   assert.strictEqual(adapter.states.get('speicher.regelung.multiUsePolicyIgnored').val, true);
+  assert.strictEqual(adapter.states.get('speicher.regelung.policyBlocked').val, true);
+  assert.match(String(adapter.states.get('speicher.regelung.policyBlockReason').val || ''), /durch Policy deaktiviert/);
   assert.strictEqual(adapter.states.get('speicher.regelung.schreibOk').val, true);
 }
 
 /**
- * Code-Teil: testMultiUseStartsPolicy
+ * Code-Teil: testMultiUseAppliesPolicyToActiveWriter
  *
  * Zweck:
  * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
@@ -256,10 +262,10 @@ async function testNoRunawaySelfConsumption() {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-async function testMultiUseStartsPolicy() {
+async function testMultiUseAppliesPolicyToActiveWriter() {
   const { adapter } = await runTick({
     config: {
-      enableStorageControl: false,
+      enableStorageControl: true,
       enableMultiUse: true,
       enableStorageFarm: false,
       installerConfig: { storageMultiUse: { enabled: true } },
@@ -272,9 +278,123 @@ async function testMultiUseStartsPolicy() {
       'st.socPct': 60,
     },
   });
-  assert.strictEqual(adapter.states.get('speicher.regelung.aktiv').val, true, 'MultiUse muss Speicherregelung aktivieren');
+  assert.strictEqual(adapter.states.get('speicher.regelung.aktiv').val, true, 'Aktiver Speicherwriter muss laufen');
   assert.strictEqual(adapter.states.get('speicher.regelung.aktivAutoMultiUse').val, true, 'MultiUse-Auto-Diagnose fehlt');
   assert.strictEqual(adapter.states.get('speicher.regelung.policyMode').val, 'multiuse');
+}
+
+/**
+ * Code-Teil: testMultiUseDoesNotActivateHardwareWriter
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+async function testMultiUseDoesNotActivateHardwareWriter() {
+  const { adapter, dp } = await runTick({
+    config: {
+      enableStorageControl: false,
+      enableMultiUse: true,
+      enableStorageFarm: false,
+      installerConfig: { storageMultiUse: { enabled: true } },
+      storage: baseStorage({ selfDischargeEnabled: true }),
+      peakShaving: {},
+    },
+    values: {
+      'grid.powerW': 1500,
+      'grid.powerRawW': 1500,
+      'st.socPct': 60,
+    },
+  });
+  assert.strictEqual(adapter.states.get('speicher.regelung.aktiv').val, false, 'MultiUse darf keinen Hardwarewriter heimlich aktivieren');
+  assert.strictEqual(adapter.states.get('speicher.regelung.aktivAutoMultiUse').val, true, 'MultiUse-Policy muss diagnostisch aktiv bleiben');
+  assert.strictEqual(dp.writes.length, 0, 'Ohne Single-/Farm-Writer darf MultiUse keinen Speicher-DP schreiben');
+}
+
+/**
+ * Code-Teil: testInactiveMultiUseCannotBlockStandaloneAtNineteenPercent
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+async function testInactiveMultiUseCannotBlockStandaloneAtNineteenPercent() {
+  const { adapter, dp } = await runTick({
+    config: {
+      enableStorageControl: true,
+      enableMultiUse: false,
+      enableStorageFarm: false,
+      installerConfig: {
+        storageMultiUse: {
+          enabled: false, reserveEnabled: true, peakEnabled: true, selfEnabled: true,
+          reserveMinSocPct: 10, lskMaxSocPct: 20, selfMinSocPct: 20, selfMaxSocPct: 100,
+          selfTargetGridImportW: 500, selfImportThresholdW: 300,
+        },
+      },
+      storage: baseStorage({
+        selfDischargeEnabled: true, selfMinSocPct: 20, selfMaxSocPct: 100,
+        selfTargetGridImportW: 500, selfImportThresholdW: 300,
+        multiUsePolicyApplied: true, multiUsePolicyActive: false,
+      }),
+      peakShaving: {},
+    },
+    values: {
+      'grid.powerW': 1540,
+      'grid.powerRawW': 1540,
+      'st.socPct': 19,
+    },
+  });
+  const write = dp.writes.find(w => w.key === 'st.targetPowerW');
+  assert(write && write.val > 0, `Inaktives MultiUse darf 19 % SoC nicht mit versteckten 20 % blockieren: ${write && write.val}`);
+  assert.strictEqual(adapter.states.get('speicher.regelung.selfMinSocPct').val, 10);
+  assert.strictEqual(adapter.states.get('speicher.regelung.selfTargetGridImportW').val, 50);
+  assert(String(adapter.states.get('speicher.regelung.selfSocPolicySource').val || '').startsWith('standalone-default'), 'Standalone-Defaultquelle muss aktiv sein');
+  assert(adapter.states.get('speicher.regelung.requestW').val >= 1450, 'NVP-Regelfehler muss als Entlade-Request ankommen');
+  assert(/NVP-Balancing entladen/.test(String(adapter.states.get('speicher.regelung.requestGrund').val)));
+}
+
+/**
+ * Code-Teil: testActiveMultiUseSocFloorIsExplicit
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+async function testActiveMultiUseSocFloorIsExplicit() {
+  const { adapter, dp } = await runTick({
+    config: {
+      enableStorageControl: true,
+      enableMultiUse: true,
+      enableStorageFarm: false,
+      installerConfig: { storageMultiUse: {
+        enabled: true, reserveEnabled: false, peakEnabled: false, selfEnabled: true,
+        selfMinSocPct: 20, selfMaxSocPct: 100, selfTargetGridImportW: 50, selfImportThresholdW: 50,
+      } },
+      storage: baseStorage({ selfDischargeEnabled: true }),
+      peakShaving: {},
+    },
+    values: {
+      'grid.powerW': 1540,
+      'grid.powerRawW': 1540,
+      'st.socPct': 19,
+    },
+  });
+  const write = dp.writes.find(w => w.key === 'st.targetPowerW');
+  assert(write && write.val === 0, 'Aktives MultiUse mit 20-%-Floor muss bei 19 % bewusst stoppen');
+  assert.strictEqual(adapter.states.get('speicher.regelung.selfMinSocPct').val, 20);
+  assert(/SoC 19% <= Min-SoC 20%/.test(String(adapter.states.get('speicher.regelung.requestGrund').val)), 'SoC-Sperrgrund muss explizit sein');
 }
 
 /**
@@ -354,8 +474,11 @@ async function testPvRawImportStopsOldCharge() {
 }
 
 (async () => {
-  await testNoRunawaySelfConsumption();
-  await testMultiUseStartsPolicy();
+  await testExplicitStandaloneDisableStopsImmediately();
+  await testMultiUseAppliesPolicyToActiveWriter();
+  await testMultiUseDoesNotActivateHardwareWriter();
+  await testInactiveMultiUseCannotBlockStandaloneAtNineteenPercent();
+  await testActiveMultiUseSocFloorIsExplicit();
   await testStorageFarmStartsAndDispatchesPolicy();
   await testPvRawImportStopsOldCharge();
   console.log('[storage-policy-runtime] OK: Speicher-Policy-Router und Be-/Entlade-Schutz laufen in dynamischen Regressionen.');

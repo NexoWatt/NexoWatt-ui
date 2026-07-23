@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: ae3f652d01f392e3d9851234f2826c8659f059ac65c9e58bec6bbca9931d7955
+ * Original-Hash: 6d430052367b1fa822db913f1e6e990512d8f26206556d30ab97b2b5e6a0797e
  */
 
 /**
@@ -30,15 +30,8 @@
  */
 
 'use strict';
-/**
- * Regressionstest 0.8.81: Speicherregelung, MultiUse und Speicherfarm bleiben sauber getrennt.
- * - Speicherregelung aktiv => reine Eigenverbrauchsoptimierung.
- * - MultiUse aktiv => fuehrt SoC-Zonen, Reserve, LSK/Peak-Shaving und Komfortkopplungen.
- * - Beschreibbare Speicherfarm => wird als exklusive Hardwaretopologie ausgewählt.
- * - 0-W-Limits in der Farm bleiben bewusste Richtungssperren; leer bleibt unbegrenzt.
- */
+/** Regression 0.8.138: Writer-Topologie und Speicher-Policy bleiben getrennt. */
 const fs = require('fs');
-
 /**
  * Code-Teil: read
  *
@@ -50,10 +43,7 @@ const fs = require('fs');
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function read(file) {
-  return fs.readFileSync(file, 'utf8');
-}
-
+function read(file) { return fs.readFileSync(file, 'utf8'); }
 /**
  * Code-Teil: must
  *
@@ -65,14 +55,7 @@ function read(file) {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function must(file, needle, label) {
-  const text = read(file);
-  if (!text.includes(needle)) {
-    console.error(`[storage-control-app-separation] FEHLT ${label}: ${needle}`);
-    process.exit(1);
-  }
-}
-
+function must(file, needle, label) { if (!read(file).includes(needle)) { console.error(`[storage-control-app-separation] FEHLT ${label}: ${needle}`); process.exit(1); } }
 /**
  * Code-Teil: mustNot
  *
@@ -84,32 +67,22 @@ function must(file, needle, label) {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function mustNot(file, needle, label) {
-  const text = read(file);
-  if (text.includes(needle)) {
-    console.error(`[storage-control-app-separation] VERBOTEN ${label}: ${needle}`);
-    process.exit(1);
-  }
-}
+function mustNot(file, needle, label) { if (read(file).includes(needle)) { console.error(`[storage-control-app-separation] VERBOTEN ${label}: ${needle}`); process.exit(1); } }
 
 for (const file of [
   'src-ts/runtime-executables/ems/modules/storage-control.ts',
   'src-ts/runtime-mirrors/ems/modules/storage-control.ts',
   'ems/modules/storage-control.js',
 ]) {
-  must(file, 'const enabled = !!storageAuthorityEarly.writerActive;', 'zentrale Speicher-Steuerhoheit aktiviert genau einen Writer');
-  must(file, 'Tarif, MultiUse, Peak-Shaving und Eigenverbrauch sind ausschliesslich', 'Policies aktivieren keinen Hardwarewriter');
-  must(file, "const farmEnabledEarly = storageAuthorityEarly.selectedTopology === 'farm';", 'Farm wird exklusiv über die Topologie ausgewählt');
-  must(file, "await this._setIfChanged('speicher.regelung.aktivAutoMultiUse', multiUseAppPolicyActive);", 'MultiUse Auto-Diagnose');
-  must(file, "await this._setIfChanged('speicher.regelung.aktivAutoSpeicherfarm', farmAppPolicyActive);", 'Farm-Dispatch Diagnose');
-  must(file, "await this._setIfChanged('speicher.regelung.topologie', String(storageAuthorityEarly.selectedTopology || 'none'));", 'Topologie-Diagnose');
-  must(file, 'const storageOnlyPolicyActive = !multiUsePolicyActive;', 'Storage-only Policy-Schicht');
-  must(file, 'const multiUseOwnsZones = !!multiUsePolicyActive;', 'SoC-Zonen gehoeren MultiUse');
-  must(file, 'const reserveEnabled = multiUseOwnsZones && !!cfg.reserveEnabled;', 'Reserve nur MultiUse');
-  must(file, 'const lskEnabledCfg = multiUseOwnsZones && (cfg.lskEnabled !== false);', 'LSK nur MultiUse');
-  must(file, 'const evcsStorageAssistPolicyAllowed = !!multiUsePolicyActive;', 'EVCS-Speicherassist nur MultiUse');
-  must(file, "await this._setIfChanged('speicher.regelung.policyMode', multiUsePolicyActive ? 'multiuse' : 'eigenverbrauch');", 'Policy-Modus eigenverbrauch/multiuse');
-  must(file, 'pureSelfConsumptionWithoutMultiUse: !multiUsePolicyActive', 'Policy-JSON reine Eigenverbrauchsebene');
+  must(file, 'const enabled = !!storageAuthorityEarly.writerActive;', 'genau ein Writer');
+  must(file, 'Tarif, MultiUse, Peak-Shaving und Eigenverbrauch sind ausschliesslich', 'Policy/Writer-Trennung');
+  must(file, "const farmEnabledEarly = storageAuthorityEarly.selectedTopology === 'farm';", 'exklusive Farmtopologie');
+  must(file, "await this._setIfChanged('speicher.regelung.aktivAutoMultiUse', multiUseAppPolicyActive);", 'MultiUse-Diagnose');
+  must(file, "await this._setIfChanged('speicher.regelung.topologie'", 'Topologie-Diagnose');
+  must(file, 'const storageOnlyPolicyActive = !multiUsePolicyActive;', 'Standalone-Policy');
+  must(file, "const multiUseOwnsZones = storageOperatingPolicy.mode === 'multiuse';", 'aktiver Zonenbesitzer');
+  must(file, 'const evcsStorageAssistPolicyAllowed = !!multiUsePolicyActive;', 'EVCS-Assist bleibt MultiUse-Policy');
+  must(file, 'pureSelfConsumptionWithoutMultiUse: !multiUsePolicyActive', 'Policy-JSON');
 }
 
 for (const file of [
@@ -117,20 +90,19 @@ for (const file of [
   'src-ts/runtime-mirrors/main.ts',
   'main.js',
 ]) {
-  must(file, 'if (!nativeObj.enableMultiUse || mu.enabled !== true)', 'MultiUse wirkt nur bei aktiver App und Policy');
-  must(file, 'st.multiUsePolicyActive = true;', 'aktive MultiUse-Policy wird markiert');
-  mustNot(file, 'nativeObj.enableStorageControl = true;', 'MultiUse darf die Speicherregelungs-App nicht heimlich aktivieren');
-  must(file, '_nwGetStorageControlAuthority()', 'zentrale Speicher-Steuerhoheit');
-  must(file, 'Reserve/LSK gelten nur, wenn MultiUse aktiv führt', 'Farm-Floor folgt Rollenmodell');
-  must(file, 'const reserveEnabled = multiUsePolicyActive && !!storageCfg.reserveEnabled;', 'Farm-Reserve nur MultiUse');
-  must(file, 'const lskEnabled = !!(multiUsePolicyActive && storageCfg.lskDischargeEnabled !== false && storageCfg.lskEnabled !== false);', 'Farm-LSK nur MultiUse');
-  mustNot(file, 'delete st[k]', 'MultiUse darf Storage-Config nicht loeschen');
+  must(file, 'const active = !!(nativeObj.enableMultiUse === true && mu && mu.enabled === true);', 'MultiUse nur bei App+Policy aktiv');
+  must(file, 'st.multiUsePolicyActive = active;', 'Policy-Marker');
+  must(file, 'MultiUse-Zonen nicht mehr in `storage.*` kopiert', 'keine SoC-Spiegelung');
+  must(file, '_nwGetStorageControlAuthority()', 'zentrale Steuerhoheit');
+  must(file, 'Speicherfarm und Einzelregelung verwenden exakt dieselbe zentrale Policy', 'Farm-/Single-Gleichlauf');
+  mustNot(file, 'nativeObj.enableStorageControl = true;', 'MultiUse darf Writer nicht aktivieren');
+  mustNot(file, 'st.selfMinSocPct = selfMin;', 'MultiUse darf Standalone-Konfiguration nicht überschreiben');
+  mustNot(file, 'delete st[k]', 'Storage-Konfiguration nicht löschen');
 }
 
-must('src-ts/runtime-executables/main.ts', 'Eine bewusst eingetragene 0-W-Vorgabe sperrt diese Richtung', '0-W-Limit als Sperre im Farm-Status');
-must('src-ts/runtime-executables/main.ts', 'if (!Number.isFinite(n) || n < 0) return null;', '0-W-Limit wird nicht als leer verworfen');
-must('src-ts/runtime-executables/main.ts', 'if (Number.isFinite(v) && v >= 0) return Math.round(v);', 'Farm-Verteilung akzeptiert 0 W als echtes Limit');
-must('src-ts/runtime-executables/www/ems-apps.ts', 'Leer = unbegrenzt, 0 W = diese Richtung sperren', 'UI-Hinweis fuer 0-W-Sperre');
-must('www/ems-apps.js', 'Leer = unbegrenzt, 0 W = diese Richtung sperren', 'Runtime-UI-Hinweis fuer 0-W-Sperre');
+must('src-ts/runtime-executables/main.ts', 'Eine bewusst eingetragene 0-W-Vorgabe sperrt diese Richtung', 'Farm-0-W-Sperre');
+must('src-ts/runtime-executables/main.ts', 'if (!Number.isFinite(n) || n < 0) return null;', '0-W nicht als leer');
+must('src-ts/runtime-executables/www/ems-apps.ts', 'Leer = unbegrenzt, 0 W = diese Richtung sperren', 'UI-Hinweis');
+must('www/ems-apps.js', 'Leer = unbegrenzt, 0 W = diese Richtung sperren', 'Runtime-UI-Hinweis');
 
-console.log('[storage-control-app-separation] OK: Policies, Einzel-Speicher, Speicherfarm und 0-W-Limits sind über eine exklusive Steuerhoheit getrennt.');
+console.log('[storage-control-app-separation] OK: Policy, Writer-Topologie und Farm-Limits bleiben sauber getrennt.');

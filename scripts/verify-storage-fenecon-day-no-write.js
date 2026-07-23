@@ -130,12 +130,6 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, l
   if (battPowerW !== null) entries['st.batteryPowerW'] = makeEntry(battPowerW, 'battery.actualPower');
   const dp = new FakeDp(entries);
   const adapter = makeAdapter(extraConfig);
-  if (extraConfig && extraConfig.root && extraConfig.root.enableStorageFarm === true && battPowerW !== null) {
-    const ts = nowMs();
-    adapter._states.set('storageFarm.storagesOnline', { val: 1, ts });
-    adapter._states.set('storageFarm.storagesDispatchAvailable', { val: 1, ts });
-    adapter._states.set('storageFarm.totalPowerW', { val: Number(battPowerW), ts });
-  }
   const mod = new SpeicherRegelungModule(adapter, dp);
   if (lastTargetW !== null) mod._lastTargetW = lastTargetW;
   mod._lastSource = lastSource;
@@ -192,7 +186,6 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, l
   const assist = await runTick({
     gridW: 1700,
     gridRawW: 1700,
-    battPowerW: 0,
     extraConfig: {
       storage: {
         feneconAssistEnabled: true,
@@ -211,7 +204,6 @@ async function runTick({ gridW, gridRawW = gridW, soc = 77, battPowerW = null, l
   const farmAssist = await runTick({
     gridW: 1700,
     gridRawW: 1700,
-    battPowerW: 0,
     extraConfig: {
       root: { enableStorageFarm: true },
       storageFarm: {

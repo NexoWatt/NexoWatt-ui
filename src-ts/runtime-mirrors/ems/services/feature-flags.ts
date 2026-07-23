@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 51d49e7d7d209c4c6a3d6fc117614fba2ea03ba2d209e1aabd20aa51010ea4ce
+ * Original-Hash: b2e83de57e76c7500feefdc54213063bd2020957a998f052be0b0e7096e42678
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/feature-flags.ts
- * Quell-Hash: sha256:a4c08822ff03715f1f1ac1a362e1868bb230633db1ce99494b83b7b677a11e51
+ * Quell-Hash: sha256:f3f5b6f0c3f43ad95edcbaa9a0339e805e4a03f2f231e7225cb337e499ca8dd7
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -50,10 +50,10 @@
  * Executable TypeScript source: ems/services/feature-flags.js
  *
  * Zweck:
- * Zentrale Home/EOS-Feature-Matrix. HEMS bleibt als technischer Legacy-Name
- * für die Home-Lizenz kompatibel. Ab 0.8.15 gehört das Energie-Wertkonto zur
- * Home-Basis und zur EOS-Basis; Betreiber-, Abrechnungs-, Kiosk-, Mesh- und
- * Microgrid-Funktionen bleiben EOS-only.
+ * Zentrale Home/Pro-Feature- und Leistungs-Matrix. `eos` bleibt als technischer
+ * Legacy-Name und Lizenzschlüssel-Edition kompatibel; im Produkt wird diese
+ * Vollausstattung als Pro-Profil behandelt. HEMS bleibt der technische Alias
+ * für die Home-Lizenz.
  */
 'use strict';
 
@@ -154,6 +154,15 @@ const EOS_ONLY_FEATURES = new Set([
   'aiAutopilot',
 ]);
 
+// Home ist für Einfamilien-/Kleingewerbeanlagen ausgelegt. Die Grenze gilt
+// als Lizenz-Hardcap für den finalen Speicherbefehl; Geräte-, SoC-, NVP- und
+// Safety-Grenzen können darunter weiterhin enger begrenzen.
+const HOME_STORAGE_POWER_LIMIT_W = 50_000;
+
+// Numerischer Schutz für Konfigurationswerte. Das ist keine Produkt- oder
+// Lizenzgrenze, sondern verhindert nur unendliche/ungültige JS-Zahlen.
+const STORAGE_PROFILE_NUMERIC_MAX_W = 1_000_000_000_000;
+
 /**
  * Code-Teil: normalizeEdition
  *
@@ -167,7 +176,7 @@ const EOS_ONLY_FEATURES = new Set([
  */
 function normalizeEdition(raw) {
   const e = String(raw || '').trim().toLowerCase();
-  if (e === 'eos') return 'eos';
+  if (e === 'eos' || e === 'pro') return 'eos';
   if (e === 'home' || e === 'hems') return 'hems';
   return 'none';
 }
@@ -185,9 +194,176 @@ function normalizeEdition(raw) {
  */
 function editionLabel(edition) {
   const ed = normalizeEdition(edition);
-  if (ed === 'eos') return 'EOS';
+  if (ed === 'eos') return 'Pro';
   if (ed === 'hems') return 'Home';
   return 'Keine Lizenz';
+}
+
+/**
+ * Code-Teil: productProfileId
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function productProfileId(edition) {
+  const ed = normalizeEdition(edition);
+  if (ed === 'eos') return 'pro';
+  if (ed === 'hems') return 'home';
+  return 'none';
+}
+
+/**
+ * Code-Teil: finitePositivePowerW
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function finitePositivePowerW(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(STORAGE_PROFILE_NUMERIC_MAX_W, Math.round(n));
+}
+
+/**
+ * Code-Teil: nicePowerStepW
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nicePowerStepW(raw) {
+  const n = finitePositivePowerW(raw);
+  if (n <= 0) return 0;
+  const exponent = Math.pow(10, Math.floor(Math.log10(n)));
+  const candidates = [1, 2, 5, 10].map((factor) => factor * exponent);
+  let best = candidates[0];
+  let bestDistance = Math.abs(n - best);
+  for (const candidate of candidates.slice(1)) {
+    const distance = Math.abs(n - candidate);
+    if (distance < bestDistance) {
+      best = candidate;
+      bestDistance = distance;
+    }
+  }
+  return Math.max(1, Math.round(best));
+}
+
+/**
+ * Liefert das lizenzabhängige Speicher-Leistungsprofil.
+ *
+ * Home:
+ * - finaler Lade-/Entladebefehl maximal 50 kW
+ * - konservative Haushalts-Defaults bleiben erhalten
+ *
+ * Pro (technische Edition `eos`):
+ * - kein Lizenz-Hardcap
+ * - bei hinterlegter Nennleistung skalieren Step, Rampe, Async-Prognose und
+ *   Energiefluss-Plausibilität proportional; explizite Expertenwerte gewinnen
+ *   später weiterhin gegen diese Defaults.
+ */
+function storagePerformanceProfile(edition, ratedPowerW = 0) {
+  const ed = normalizeEdition(edition);
+  const configuredRatedPowerW = finitePositivePowerW(ratedPowerW);
+
+  if (ed === 'hems') {
+    const effectiveRatedPowerW = configuredRatedPowerW > 0
+      ? Math.min(configuredRatedPowerW, HOME_STORAGE_POWER_LIMIT_W)
+      : 0;
+    return Object.freeze({
+      edition: 'hems',
+      id: 'home',
+      label: 'Home',
+      industrial: false,
+      unrestricted: false,
+      configuredRatedPowerW,
+      effectiveRatedPowerW,
+      maxCommandW: HOME_STORAGE_POWER_LIMIT_W,
+      defaultStepW: 50,
+      defaultMaxDeltaWPerTick: 500,
+      defaultPvMaxDeltaWPerTick: 1_500,
+      defaultBalancePredictionMaxW: 10_000,
+      energyFlowPlausibilityMaxW: 1_000_000,
+    });
+  }
+
+  if (ed === 'eos') {
+    const effectiveRatedPowerW = configuredRatedPowerW;
+    const defaultStepW = effectiveRatedPowerW > 0
+      ? Math.max(50, Math.round(effectiveRatedPowerW * 0.001))
+      : 50;
+    const defaultMaxDeltaWPerTick = effectiveRatedPowerW > 0
+      ? Math.max(500, Math.round(effectiveRatedPowerW * 0.05))
+      : 500;
+    const defaultPvMaxDeltaWPerTick = effectiveRatedPowerW > 0
+      ? Math.max(1_500, Math.round(effectiveRatedPowerW * 0.10))
+      : 1_500;
+    const defaultBalancePredictionMaxW = effectiveRatedPowerW > 0
+      ? Math.max(10_000, Math.round(effectiveRatedPowerW * 0.25))
+      : 10_000;
+    const energyFlowPlausibilityMaxW = effectiveRatedPowerW > 0
+      ? Math.max(1_000_000, Math.round(effectiveRatedPowerW * 4))
+      : 100_000_000;
+    return Object.freeze({
+      edition: 'eos',
+      id: 'pro',
+      label: 'Pro',
+      industrial: true,
+      unrestricted: true,
+      configuredRatedPowerW,
+      effectiveRatedPowerW,
+      maxCommandW: 0,
+      defaultStepW,
+      defaultMaxDeltaWPerTick,
+      defaultPvMaxDeltaWPerTick,
+      defaultBalancePredictionMaxW,
+      energyFlowPlausibilityMaxW,
+    });
+  }
+
+  return Object.freeze({
+    edition: 'none',
+    id: 'none',
+    label: 'Keine Lizenz',
+    industrial: false,
+    unrestricted: false,
+    configuredRatedPowerW,
+    effectiveRatedPowerW: 0,
+    maxCommandW: 0,
+    defaultStepW: 50,
+    defaultMaxDeltaWPerTick: 500,
+    defaultPvMaxDeltaWPerTick: 1_500,
+    defaultBalancePredictionMaxW: 10_000,
+    energyFlowPlausibilityMaxW: 1_000_000,
+  });
+}
+
+/**
+ * Code-Teil: maxStoragePowerW
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function maxStoragePowerW(edition) {
+  return storagePerformanceProfile(edition, 0).maxCommandW;
 }
 
 /**
@@ -376,8 +552,13 @@ module.exports = {
   APP_FEATURE_MAP,
   HOME_FEATURES,
   EOS_ONLY_FEATURES,
+  HOME_STORAGE_POWER_LIMIT_W,
+  STORAGE_PROFILE_NUMERIC_MAX_W,
   normalizeEdition,
   editionLabel,
+  productProfileId,
+  storagePerformanceProfile,
+  maxStoragePowerW,
   allKnownFeatures,
   buildFeatureMap,
   appFeature,

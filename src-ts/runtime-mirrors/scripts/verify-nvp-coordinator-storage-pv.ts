@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: a9cf06cb1a4dfdc5e2e63ba6d8516ce19c686e5bfe98238c4961bc9bd523f441
+ * Original-Hash: 0df59833f7f64472444bc47b7f38e745f9aad644a93e0ce0bf694ed94106a01b
  */
 
 /**
@@ -193,7 +193,42 @@ const base = {
   assert.strictEqual(result.status, 'waiting-storage-response-partial');
 }
 
-// 9) Erfolgreich akzeptierte flexible Last-/Erzeugeränderungen verändern nur den finalen Rest.
+// 9) Policy-Sperre: 0-W-Sollwert darf nicht als aktive NVP-Korrektur erscheinen.
+{
+  const result = buildNvpCoordinatorSnapshot({
+    ...base,
+    rawNvpW: 1540,
+    storageActualW: 0,
+    storageTargetW: 0,
+    storageRequestW: 0,
+    storageRequestSource: 'eigenverbrauch',
+    storageRequestReason: 'Eigenverbrauch: Entladen blockiert (SoC 19% <= Min-SoC 20%, Policy installerConfig.storageMultiUse)',
+    storagePolicyBlocked: true,
+    storagePolicyBlockReason: 'Eigenverbrauch: Entladen blockiert (SoC 19% <= Min-SoC 20%, Policy installerConfig.storageMultiUse)',
+    storagePolicySource: 'installerConfig.storageMultiUse',
+  });
+  assert.strictEqual(result.status, 'storage-policy-blocked');
+  assert.match(result.reason, /SoC 19% <= Min-SoC 20%/);
+  assert.strictEqual(result.storageCommandCredited, false);
+  assert.strictEqual(result.projectedNvpW, 1540);
+}
+
+// 10) Neutraler 0-W-Sollwert ohne Policy-Sperre ist idle, nicht "correcting-storage".
+{
+  const result = buildNvpCoordinatorSnapshot({
+    ...base,
+    rawNvpW: 1540,
+    storageActualW: 0,
+    storageTargetW: 0,
+    storageRequestW: 0,
+    storageRequestSource: 'idle',
+    storageRequestReason: 'Keine Aktion',
+  });
+  assert.strictEqual(result.status, 'storage-idle');
+  assert.notStrictEqual(result.status, 'correcting-storage');
+}
+
+// 11) Erfolgreich akzeptierte flexible Last-/Erzeugeränderungen verändern nur den finalen Rest.
 {
   const result = buildNvpCoordinatorSnapshot({
     ...base,
@@ -210,7 +245,7 @@ const base = {
   assert.strictEqual(result.acceptedFlexibleNetLoadDeltaW, 400);
 }
 
-// 10) Unbekannte, aber akzeptierte Aktorumschaltung: PV wartet auf den nächsten frischen NVP.
+// 12) Unbekannte, aber akzeptierte Aktorumschaltung: PV wartet auf den nächsten frischen NVP.
 {
   const result = buildNvpCoordinatorSnapshot({
     ...base,
@@ -268,7 +303,7 @@ class FakeAdapter {
   value(id) { const state = this._states.get(String(id)); return state ? state.val : undefined; }
 }
 
-// 11) Modul-Integration: GridConstraints erhält exakt den prognostizierten Rest-NVP.
+// 13) Modul-Integration: GridConstraints erhält exakt den prognostizierten Rest-NVP.
 (async () => {
   const adapter = new FakeAdapter();
   adapter.put('speicher.regelung.topologie', 'farm');
@@ -351,7 +386,7 @@ class FakeAdapter {
   assert(Array.isArray(adapter._nvpCoordinatorSnapshot.log));
   assert(adapter._nvpCoordinatorSnapshot.log.length >= 1);
 
-  // 12) Lizenz-/App-Gate darf durch den nachgelagerten Direktaufruf nicht umgangen werden.
+  // 14) Lizenz-/App-Gate darf durch den nachgelagerten Direktaufruf nicht umgangen werden.
   let disabledCalls = 0;
   const disabledGrid = {
     async tickPostStorage() {
@@ -363,7 +398,7 @@ class FakeAdapter {
   await disabledModule.tick();
   assert.strictEqual(disabledCalls, 0, 'Deaktivierte oder nicht lizenzierte Grid-Regelung darf keinen PV-Writepfad ausführen');
 
-  // 13) Architekturvertrag: Planung < Speicher < Koordinator < Tarifstatus.
+  // 15) Architekturvertrag: Planung < Speicher < Koordinator < Tarifstatus.
   const root = path.resolve(__dirname, '..');
   const managerSource = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/ems/module-manager.ts'), 'utf8');
   const gridSource = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/ems/modules/grid-constraints.ts'), 'utf8');

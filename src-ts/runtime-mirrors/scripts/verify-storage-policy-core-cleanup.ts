@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 086355d36037ee0035065d6522e2c08dfc6c25a067aff4172e0cb648e8e43193
+ * Original-Hash: 1d13362625b9099d10d2bd84e5ace30a26dc15ec5425228b2275256c893cc92a
  */
 
 /**
@@ -31,14 +31,11 @@
 
 'use strict';
 /**
- * Regressionstest 0.8.81: Kern-Policy der Speicherlogik.
- * Zielbild:
- * - Speicherregelung ohne MultiUse = Eigenverbrauchsoptimierung.
- * - MultiUse aktiv = führende Policy für Reserve, LSK und SoC-Zonen.
- * - Speicherfarm = Verteilung/Schreiben des fertigen Sollwertes.
+ * Regression 0.8.138: Alle Speicherpfade verwenden denselben, seiteneffektfreien
+ * Policy-Resolver. Ein deaktiviertes MultiUse darf keine Reserve-/LSK-/SoC-Zone
+ * oder versteckte NVP-Parameter in die Standalone-Regelung einschleusen.
  */
 const fs = require('fs');
-
 /**
  * Code-Teil: read
  *
@@ -50,9 +47,7 @@ const fs = require('fs');
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function read(file) {
-  return fs.readFileSync(file, 'utf8');
-}
+function read(file) { return fs.readFileSync(file, 'utf8'); }
 /**
  * Code-Teil: must
  *
@@ -65,8 +60,7 @@ function read(file) {
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function must(file, needle, label) {
-  const text = read(file);
-  if (!text.includes(needle)) {
+  if (!read(file).includes(needle)) {
     console.error(`[storage-policy-core-cleanup] FEHLT ${label}: ${needle}`);
     process.exit(1);
   }
@@ -83,8 +77,7 @@ function must(file, needle, label) {
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function mustNot(file, needle, label) {
-  const text = read(file);
-  if (text.includes(needle)) {
+  if (read(file).includes(needle)) {
     console.error(`[storage-policy-core-cleanup] VERBOTEN ${label}: ${needle}`);
     process.exit(1);
   }
@@ -95,16 +88,16 @@ for (const file of [
   'src-ts/runtime-mirrors/ems/modules/storage-control.ts',
   'ems/modules/storage-control.js',
 ]) {
-  must(file, 'const multiUseOwnsZones = !!multiUsePolicyActive;', 'MultiUse führt SoC-Zonen nur aktiv');
-  must(file, 'const reserveEnabled = multiUseOwnsZones && !!cfg.reserveEnabled;', 'Reserve nur aktive MultiUse-Zone');
-  must(file, 'const lskEnabledCfg = multiUseOwnsZones && (cfg.lskEnabled !== false);', 'LSK nur aktive MultiUse-Zone');
-  must(file, 'const lskDischargeEnabledCfg = !!(lskEnabledCfg && cfg.lskDischargeEnabled !== false);', 'LSK-Entladefreigabe getrennt');
-  must(file, 'const lskChargeEnabledCfg = !!(lskEnabledCfg && cfg.lskChargeEnabled !== false);', 'LSK-Ladefreigabe getrennt');
-  must(file, 'if (peakEnabled && lskDischargeEnabledCfg) {', 'Peak-Shaving-Entladung nur bei MultiUse-LSK');
-  must(file, 'lskChargeEnabledCfg &&', 'LSK-Refill nur bei MultiUse-LSK-Ladefreigabe');
-  must(file, 'const selfTargetGridW = Math.max(0, num(cfg.selfTargetGridImportW, 50));', 'Eigenverbrauchs-Zielwert bleibt Basis-Policy');
-  must(file, "await this._setIfChanged('speicher.regelung.lskPolicyAktiv', !!lskEnabledCfg);", 'LSK-Diagnose');
-  must(file, "await this._setIfChanged('speicher.regelung.policyMode', multiUsePolicyActive ? 'multiuse' : 'eigenverbrauch');", 'Policy-Modus eigenverbrauch/multiuse');
+  must(file, "require('../services/storage-self-consumption-policy')", 'zentraler Policy-Service');
+  must(file, 'const storageOperatingPolicy = resolveStorageOperatingPolicy({', 'einheitliche Policy-Auflösung');
+  must(file, "const multiUseOwnsZones = storageOperatingPolicy.mode === 'multiuse';", 'MultiUse führt nur im aktiven Modus');
+  must(file, 'const reserveEnabled = storageOperatingPolicy.reserve.enabled === true;', 'Reserve aus Resolver');
+  must(file, 'const lskEnabledCfg = storageOperatingPolicy.lsk.enabled === true;', 'LSK aus Resolver');
+  must(file, 'const selfMinSoc = clamp(num(storageOperatingPolicy.self.minSocPct, 10)', 'Standalone-Min-SoC aus Resolver');
+  must(file, 'const selfTargetGridW = Math.max(0, num(storageOperatingPolicy.self.targetGridImportW, 50));', 'NVP-Ziel aus derselben Policy');
+  must(file, 'Eigenverbrauch: Entladen blockiert (SoC', 'expliziter SoC-Sperrgrund');
+  must(file, "await this._setIfChanged('speicher.regelung.policySource'", 'Policy-Quellendiagnose');
+  mustNot(file, '(multiUseOwnsZones || !multiUsePolicyConfigured) ? cfg.selfMinSocPct', 'alter versteckter MultiUse-Fallback');
 }
 
 for (const file of [
@@ -112,10 +105,22 @@ for (const file of [
   'src-ts/runtime-mirrors/main.ts',
   'main.js',
 ]) {
-  must(file, 'Speicherfarm verteilt nur den fertigen Zielwert', 'Farm-Floor-Kommentar');
-  must(file, 'const reserveEnabled = multiUsePolicyActive && !!storageCfg.reserveEnabled;', 'Farm-Reserve-Floor nur MultiUse');
-  must(file, 'const lskEnabled = !!(multiUsePolicyActive && storageCfg.lskDischargeEnabled !== false && storageCfg.lskEnabled !== false);', 'Farm-LSK-Floor nur MultiUse');
-  mustNot(file, 'const ignoreInactiveMultiUseZones =', 'alte Farm-Floor-Umschaltung entfernt');
+  must(file, "require('./ems/services/storage-self-consumption-policy')", 'Policy-Service im Adapterkern');
+  must(file, 'MultiUse-Zonen nicht mehr in `storage.*` kopiert', 'keine Runtime-Spiegelung');
+  must(file, 'const storageOperatingPolicy = resolveStorageOperatingPolicy({', 'Farm nutzt identische Policy');
+  must(file, 'const selfFloor = storageOperatingPolicy.self.enabled === true', 'Farm-Eigenverbrauchs-Floor aus Resolver');
+  mustNot(file, 'st.selfMinSocPct = selfMin;', 'MultiUse darf Standalone-SoC nicht überschreiben');
+  mustNot(file, 'const selfMinRaw = Number((multiUsePolicyActive || !mu)', 'alter 20-Prozent-Fallback entfernt');
 }
 
-console.log('[storage-policy-core-cleanup] OK: Speicher-Basislogik, MultiUse-Policy und Speicherfarm-Verteilung sind sauber geschichtet.');
+for (const file of [
+  'src-ts/runtime-executables/ems/services/storage-self-consumption-policy.ts',
+  'src-ts/runtime-mirrors/ems/services/storage-self-consumption-policy.ts',
+  'ems/services/storage-self-consumption-policy.js',
+]) {
+  must(file, 'function resolveStorageOperatingPolicy', 'zentraler Resolver');
+  must(file, "let source = 'standalone-default'", 'sicherer Standalone-Default');
+  must(file, 'staleMultiUseIgnored', 'Diagnose für ignorierte Altwerte');
+}
+
+console.log('[storage-policy-core-cleanup] OK: Standalone, MultiUse und Farm verwenden eine gemeinsame, seiteneffektfreie Speicher-Policy.');

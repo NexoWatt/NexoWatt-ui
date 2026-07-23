@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2c4953ef36def043324f0fc05830888e925467609e71288c24c3905ad82174df
+ * Original-Hash: a9b50c08496a85b1c315da3dca03728a24ae5fab0a5ea7d1dd5d2c3468e773dd
  */
 
 /**
@@ -579,8 +579,8 @@ async function runTick({
     lastTargetW: 2500,
     lastSource: 'eigenverbrauch',
   });
-  assert.strictEqual(holdDischargeTick.targetW, 0, `Frischer NVP am Ziel und physische Speicher-Istleistung 0 W lassen keinen sicheren Entlade-Headroom: ${holdDischargeTick.targetW}`);
-  assert.strictEqual(holdDischargeTick.adapter._states.get('speicher.regelung.antiExportAktion').val, 'stop-no-safe-headroom', 'Anti-Export-Stopp muss sichtbar sein');
+  assert.strictEqual(holdDischargeTick.targetW, 2500, `NVP-Ziel darf laufende Entladung nicht mit 0 W stoppen: ${holdDischargeTick.targetW}`);
+  assert.strictEqual(holdDischargeTick.adapter._states.get('speicher.regelung.balanceGehaltenSollW').val, 2500, 'gehaltener Entladesollwert muss sichtbar sein');
 
   const chargeSocStop = await runTick({
     gridW: 50,

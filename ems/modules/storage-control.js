@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:6d75d35b780c55818298e9178f45efa382acaa42ee244bef0948934aca9bb438
+ * Quell-Hash: sha256:ead0feb1e73d78f77315b2db06373e6a70a362be18c2f5954da51ea66d99d9c8
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -47,11 +47,107 @@ const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness
 const { resolveSplitBatteryFeedback } = require('../services/storage-override-bridge');
 const { decideStorageZeroWrite } = require('../services/storage-zero-write-policy');
 const { estimateAsyncStorageFeedback } = require('../services/storage-async-feedback-anchor');
-const { resolveStorageAntiExportTarget } = require('../services/storage-anti-export-guard');
+const { resolveStorageOperatingPolicy } = require('../services/storage-self-consumption-policy');
+const storageFeatureFlags = require('../services/feature-flags');
 const {
     buildStorageMeasurementFallbackFromGlobal,
     mergeStorageMeasurementFallback,
 } = require('../services/storage-datapoint-config');
+
+/**
+ * Ermittelt die interne Lizenzedition. `eos` bleibt der Legacy-/Key-Name für
+ * das Pro-Profil. Isolierte Modultests ohne Lizenzobjekt laufen weiterhin mit
+ * Pro-Fallback; im echten Adapter verhindert der ModuleManager einen Tick ohne
+ * gültige Lizenz.
+ */
+function resolveStorageLicenseEdition(adapter) {
+    const info = adapter && adapter._nwLicenseInfo && typeof adapter._nwLicenseInfo === 'object'
+        ? adapter._nwLicenseInfo
+        : {};
+    const raw = String(info.edition || '').trim();
+    if (info.ok === true || (adapter && adapter._nwLicenseOk === true) || raw) {
+        try { return storageFeatureFlags.normalizeEdition(raw || 'eos'); } catch (_e) {}
+        const e = raw.toLowerCase();
+        return (e === 'hems' || e === 'home') ? 'hems' : 'eos';
+    }
+    return 'eos';
+}
+
+/**
+ * Die Nennleistung ist ein Skalierungsanker, kein zusätzlicher Gerätebefehl.
+ * Einzel-Speicher verwenden `storage.ratedPowerW`; bei einer Farm wird – falls
+ * kein expliziter Gesamtwert gesetzt ist – die Summe der je Speicher bekannten
+ * Lade-/Entladegrenzen verwendet.
+ */
+function deriveStorageRatedPowerW(cfg = {}, farmRows = [], selectedTopology = 'single') {
+    const explicit = Number(cfg && cfg.ratedPowerW);
+    if (Number.isFinite(explicit) && explicit > 0) return Math.round(explicit);
+    if (String(selectedTopology || '') !== 'farm' || !Array.isArray(farmRows)) return 0;
+    return Math.round(farmRows.reduce((sum, row) => {
+        if (!row || row.enabled === false) return sum;
+        const chargeW = Number(row.maxChargeW);
+        const dischargeW = Number(row.maxDischargeW);
+        const rowRatedW = Math.max(
+            Number.isFinite(chargeW) && chargeW > 0 ? chargeW : 0,
+            Number.isFinite(dischargeW) && dischargeW > 0 ? dischargeW : 0,
+        );
+        return sum + rowRatedW;
+    }, 0));
+}
+
+function resolveStorageLicensePowerProfile(adapter, cfg = {}, farmRows = [], selectedTopology = 'single') {
+    const edition = resolveStorageLicenseEdition(adapter);
+    const ratedPowerW = deriveStorageRatedPowerW(cfg, farmRows, selectedTopology);
+    try {
+        if (storageFeatureFlags && typeof storageFeatureFlags.storagePerformanceProfile === 'function') {
+            return storageFeatureFlags.storagePerformanceProfile(edition, ratedPowerW);
+        }
+    } catch (_e) {}
+    return {
+        edition,
+        id: edition === 'hems' ? 'home' : 'pro',
+        label: edition === 'hems' ? 'Home' : 'Pro',
+        industrial: edition === 'eos',
+        unrestricted: edition === 'eos',
+        configuredRatedPowerW: ratedPowerW,
+        effectiveRatedPowerW: ratedPowerW,
+        maxCommandW: edition === 'hems' ? 50000 : 0,
+        defaultStepW: 50,
+        defaultMaxDeltaWPerTick: 500,
+        defaultPvMaxDeltaWPerTick: 1500,
+        defaultBalancePredictionMaxW: 10000,
+        energyFlowPlausibilityMaxW: edition === 'eos' ? 100000000 : 1000000,
+    };
+}
+
+/**
+ * Finale Lizenzschranke. `maxCommandW = 0` bedeutet im Pro-Profil ausdrücklich
+ * unbegrenzt durch die Lizenz. Geräte-, NVP-, SoC-, Farm- und Safety-Grenzen
+ * wirken unabhängig davon weiterhin.
+ */
+function applyStorageLicensePowerLimit(targetW, profile = {}) {
+    const requestedW = Number.isFinite(Number(targetW)) ? Number(targetW) : 0;
+    const hardLimitW = Math.max(0, Number(profile && profile.maxCommandW || 0));
+    if (hardLimitW <= 0) {
+        return {
+            requestedW,
+            targetW: requestedW,
+            limited: false,
+            limitW: 0,
+            profile: String(profile && profile.id || 'pro'),
+            label: String(profile && profile.label || 'Pro'),
+        };
+    }
+    const limitedTargetW = Math.max(-hardLimitW, Math.min(hardLimitW, requestedW));
+    return {
+        requestedW,
+        targetW: limitedTargetW,
+        limited: Math.abs(limitedTargetW - requestedW) > 0.5,
+        limitW: hardLimitW,
+        profile: String(profile && profile.id || 'home'),
+        label: String(profile && profile.label || 'Home'),
+    };
+}
 
 /**
  * EVCS-Speicherschutz als asymmetrische physikalische Schranke.
@@ -244,6 +340,303 @@ function resolveEvcsProtectedStorageTarget(input = {}) {
         chargeFromSurplus,
         action,
         reason,
+    };
+}
+
+/**
+ * Finale herstellerunabhaengige Anti-Export-Regel fuer positive Speicherentladung.
+ *
+ * Der Regler fuehrt keinen pauschalen Sofort-Stopp aus. Ein frischer NVP-Wert
+ * begrenzt die Entladung proportional auf die physikalisch noch benoetigte
+ * Leistung. Unterschreitet der NVP das Ziel, wird der Sollwert innerhalb einer
+ * kurzen Grace-Zeit (Standard 2 s) gleitend abgesenkt. Bleibt die Einspeisung
+ * danach bestehen, darf jede neue NVP-Probe den bereits akzeptierten Befehl um
+ * genau die neue NVP-Abweichung weiter reduzieren. Derselbe Messwert wird nicht
+ * mehrfach integriert.
+ *
+ * Vorzeichen:
+ * - NVP +W = Netzbezug, -W = Einspeisung
+ * - Speicher +W = Entladen, -W = Laden
+ */
+function resolveStorageAntiExportTarget(input = {}) {
+    const finite = (value) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+    const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+    const requestedW = finite(input.requestedTargetW) ? Number(input.requestedTargetW) : 0;
+    const requestedDischargeW = Math.max(0, requestedW);
+    const commandAnchorW = Math.max(0, finite(input.commandAnchorW) ? Number(input.commandAnchorW) : 0);
+    const storageActualKnown = finite(input.storageActualW);
+    const storageActualW = storageActualKnown ? Number(input.storageActualW) : null;
+    const nvpW = finite(input.nvpW) ? Number(input.nvpW) : null;
+    const targetNvpW = finite(input.targetNvpW) ? Number(input.targetNvpW) : 0;
+    const deadbandW = Math.max(0, finite(input.deadbandW) ? Number(input.deadbandW) : 50);
+    const now = finite(input.now) ? Number(input.now) : Date.now();
+    const graceMs = Math.max(500, Math.min(10000, finite(input.graceMs) ? Number(input.graceMs) : 2000));
+    const nvpSampleTs = finite(input.nvpSampleTs) && Number(input.nvpSampleTs) > 0 ? Number(input.nvpSampleTs) : 0;
+    const epsilonW = Math.max(0.5, finite(input.epsilonW) ? Number(input.epsilonW) : 1);
+    const previous = input.state && typeof input.state === 'object' ? input.state : {};
+    const resetState = { activeSinceMs: 0, lastProcessedNvpSampleTs: 0, lastOutputW: 0 };
+
+    if (requestedDischargeW <= epsilonW) {
+        return {
+            active: false,
+            requestedW,
+            targetW: requestedW,
+            status: 'inactive-no-discharge',
+            reason: '',
+            nvpW,
+            targetNvpW,
+            deadbandW,
+            graceMs,
+            exportActive: false,
+            belowTarget: false,
+            explicitStop: false,
+            capped: false,
+            capW: null,
+            physicalBaseW: storageActualKnown ? storageActualW : commandAnchorW,
+            storageActualW,
+            storageActualKnown,
+            commandAnchorW,
+            activeAgeMs: 0,
+            nvpSampleTs,
+            sampleRatchetApplied: false,
+            nextState: resetState,
+        };
+    }
+
+    if (nvpW === null) {
+        return {
+            active: false,
+            requestedW,
+            targetW: requestedW,
+            status: 'inactive-missing-nvp',
+            reason: 'NVP-Anti-Export: kein frischer signierter NVP-Wert',
+            nvpW: null,
+            targetNvpW,
+            deadbandW,
+            graceMs,
+            exportActive: false,
+            belowTarget: false,
+            explicitStop: false,
+            capped: false,
+            capW: null,
+            physicalBaseW: storageActualKnown ? storageActualW : commandAnchorW,
+            storageActualW,
+            storageActualKnown,
+            commandAnchorW,
+            activeAgeMs: 0,
+            nvpSampleTs,
+            sampleRatchetApplied: false,
+            nextState: resetState,
+        };
+    }
+
+    const nvpErrorW = nvpW - targetNvpW;
+    const physicalBaseKnown = storageActualKnown || commandAnchorW > epsilonW;
+    const physicalBaseW = storageActualKnown ? Number(storageActualW) : commandAnchorW;
+    const physicalCapW = physicalBaseKnown ? Math.max(0, physicalBaseW + nvpErrorW) : null;
+    const proportionalTargetW = physicalCapW === null
+        ? requestedDischargeW
+        : Math.min(requestedDischargeW, physicalCapW);
+    const belowTarget = nvpW < targetNvpW;
+    const exportActive = nvpW < (targetNvpW - deadbandW);
+
+    // Ohne frischen Istwert und ohne bereits akzeptierten Entladebefehl ist bei
+    // vorhandenem Netzbezug kein belastbarer physikalischer Ausgangspunkt fuer
+    // einen Vorab-Cap vorhanden. Die vorgelagerte NVP-Regelung darf dann ihren
+    // ersten absoluten Sollwert setzen. Sobald der Befehl akzeptiert ist, dient
+    // er im Folgetick als Kommandoanker. Bei bestehender Einspeisung gilt diese
+    // Ausnahme bewusst nicht: Dort darf ohne sicheren Anker keine neue Entladung
+    // gestartet werden.
+    if (!belowTarget && !physicalBaseKnown) {
+        return {
+            active: false,
+            requestedW,
+            targetW: requestedW,
+            status: 'pass-no-physical-anchor',
+            reason: '',
+            nvpW,
+            targetNvpW,
+            nvpErrorW,
+            deadbandW,
+            graceMs,
+            exportActive: false,
+            belowTarget: false,
+            explicitStop: false,
+            capped: false,
+            capW: null,
+            proportionalTargetW: requestedW,
+            physicalBaseW: null,
+            storageActualW,
+            storageActualKnown,
+            commandAnchorW,
+            activeAgeMs: 0,
+            nvpSampleTs,
+            sampleRatchetApplied: false,
+            nextState: resetState,
+        };
+    }
+
+    // Besteht bereits Einspeisung und gibt es weder einen frischen Istwert noch
+    // einen zuvor akzeptierten Entladebefehl, darf kein neuer Entladevorgang
+    // gestartet werden. Das ist kein Abbruch einer laufenden Regelung, sondern
+    // verhindert einen neuen, physikalisch nicht begruendbaren Exportbefehl.
+    if (belowTarget && !physicalBaseKnown) {
+        return {
+            active: true,
+            requestedW,
+            targetW: 0,
+            status: 'block-new-discharge-without-anchor',
+            reason: `NVP-Anti-Export: keine neue Entladung ohne Ist-/Kommandoanker bei NVP ${Math.round(nvpW)} W`,
+            nvpW,
+            targetNvpW,
+            nvpErrorW,
+            deadbandW,
+            graceMs,
+            exportActive,
+            belowTarget: true,
+            explicitStop: false,
+            capped: true,
+            capW: 0,
+            proportionalTargetW: 0,
+            physicalBaseW: null,
+            storageActualW,
+            storageActualKnown,
+            commandAnchorW,
+            activeAgeMs: 0,
+            nvpSampleTs,
+            sampleRatchetApplied: false,
+            nextState: resetState,
+        };
+    }
+
+    if (!belowTarget) {
+        const targetW = Math.max(0, proportionalTargetW);
+        const capped = targetW + epsilonW < requestedDischargeW;
+        return {
+            active: capped,
+            requestedW,
+            targetW,
+            status: capped ? 'cap-to-nvp-headroom' : 'pass',
+            reason: capped
+                ? `NVP-Anti-Export: Entladung auf ${Math.round(targetW)} W begrenzt (NVP ${Math.round(nvpW)} W, Ziel ${Math.round(targetNvpW)} W)`
+                : '',
+            nvpW,
+            targetNvpW,
+            nvpErrorW,
+            deadbandW,
+            graceMs,
+            exportActive: false,
+            belowTarget: false,
+            explicitStop: false,
+            capped,
+            capW: physicalCapW,
+            proportionalTargetW,
+            physicalBaseW,
+            storageActualW,
+            storageActualKnown,
+            commandAnchorW,
+            activeAgeMs: 0,
+            nvpSampleTs,
+            sampleRatchetApplied: false,
+            nextState: resetState,
+        };
+    }
+
+    const previousSinceMs = finite(previous.activeSinceMs) && Number(previous.activeSinceMs) > 0
+        ? Number(previous.activeSinceMs)
+        : now;
+    const activeSinceMs = Math.min(previousSinceMs, now);
+    const activeAgeMs = Math.max(0, now - activeSinceMs);
+    const previousOutputW = finite(previous.lastOutputW) ? Math.max(0, Number(previous.lastOutputW)) : null;
+    let lastProcessedNvpSampleTs = finite(previous.lastProcessedNvpSampleTs)
+        ? Math.max(0, Number(previous.lastProcessedNvpSampleTs))
+        : 0;
+    if (!lastProcessedNvpSampleTs && nvpSampleTs > 0) lastProcessedNvpSampleTs = nvpSampleTs;
+
+    // Der Startwert darf den aktuellen Request nie vergroessern. Innerhalb der
+    // 2-s-Grace wird gleitend vom zuletzt akzeptierten Befehl zum physikalischen
+    // NVP-Cap gefahren. Mindestens 25 % der Korrektur greifen sofort; dadurch
+    // wird nicht zwei Sekunden blind weiter entladen, aber auch kein pauschaler
+    // Sofort-Stopp erzeugt.
+    const startW = Math.min(
+        requestedDischargeW,
+        commandAnchorW > epsilonW
+            ? commandAnchorW
+            : (previousOutputW !== null && previousOutputW > epsilonW ? previousOutputW : requestedDischargeW),
+    );
+    let targetW = proportionalTargetW;
+    let sampleRatchetApplied = false;
+    let ratchetCapW = null;
+
+    if (activeAgeMs < graceMs) {
+        const progress = clamp01(Math.max(0.25, activeAgeMs / graceMs));
+        const endW = Math.min(startW, proportionalTargetW);
+        targetW = Math.max(0, startW + ((endW - startW) * progress));
+    } else {
+        // Nach der Grace darf derselbe NVP-Messwert nicht in jedem EMS-Tick erneut
+        // abgezogen werden. Nur eine neue Messprobe darf den akzeptierten Befehl
+        // weiter absenken. Zwischen zwei Proben wird der letzte Anti-Export-Wert
+        // gehalten beziehungsweise durch einen frischeren physischen Cap reduziert.
+        let sustainedCapW = proportionalTargetW;
+        if (previousOutputW !== null) sustainedCapW = Math.min(sustainedCapW, previousOutputW);
+        const newNvpSample = nvpSampleTs > 0 && nvpSampleTs !== lastProcessedNvpSampleTs;
+        if (newNvpSample) {
+            const ratchetBaseW = commandAnchorW > epsilonW
+                ? commandAnchorW
+                : (previousOutputW !== null ? previousOutputW : requestedDischargeW);
+            ratchetCapW = Math.max(0, ratchetBaseW + nvpErrorW);
+            sustainedCapW = Math.min(sustainedCapW, ratchetCapW);
+            lastProcessedNvpSampleTs = nvpSampleTs;
+            sampleRatchetApplied = true;
+        }
+        targetW = Math.max(0, Math.min(requestedDischargeW, sustainedCapW));
+    }
+
+    if (targetW < epsilonW) targetW = 0;
+    const explicitStop = activeAgeMs >= graceMs && targetW === 0;
+    const capped = targetW + epsilonW < requestedDischargeW;
+    const status = explicitStop
+        ? 'stop-after-grace'
+        : (activeAgeMs < graceMs
+            ? (exportActive ? 'ramp-down-export-grace' : 'ramp-down-below-target-grace')
+            : (sampleRatchetApplied
+                ? 'ramp-down-new-nvp-sample'
+                : (exportActive ? 'hold-ramp-export' : 'hold-ramp-below-target')));
+    const reason = explicitStop
+        ? `NVP-Anti-Export: Entladung nach ${Math.round(activeAgeMs)} ms unter Ziel/Einspeisung auf 0 W reduziert`
+        : `NVP-Anti-Export: Entladung proportional auf ${Math.round(targetW)} W reduziert (NVP ${Math.round(nvpW)} W, Ziel ${Math.round(targetNvpW)} W, aktiv ${Math.round(activeAgeMs)} ms)`;
+
+    return {
+        active: true,
+        requestedW,
+        targetW,
+        status,
+        reason,
+        nvpW,
+        targetNvpW,
+        nvpErrorW,
+        deadbandW,
+        graceMs,
+        exportActive,
+        belowTarget,
+        explicitStop,
+        capped,
+        capW: physicalCapW,
+        proportionalTargetW,
+        ratchetCapW,
+        physicalBaseW,
+        storageActualW,
+        storageActualKnown,
+        commandAnchorW,
+        activeSinceMs,
+        activeAgeMs,
+        nvpSampleTs,
+        sampleRatchetApplied,
+        nextState: {
+            activeSinceMs,
+            lastProcessedNvpSampleTs,
+            lastOutputW: targetW,
+        },
     };
 }
 
@@ -502,6 +895,17 @@ class SpeicherRegelungModule extends BaseModule {
         // Speicher steuern. Der Marker dient nur der sicheren Uebergabe/Neutralisierung.
         this._lastStorageCommandFamily = '';
 
+        // Finale Anti-Export-Regelung fuer Speicherentladung. Der Zustand merkt
+        // ausschliesslich den Beginn einer NVP-Unterschreitung, die zuletzt bereits
+        // verarbeitete NVP-Probe und den letzten proportional reduzierten Sollwert.
+        // Dadurch kann nach der 2-s-Grace jede neue Messprobe genau einmal weiter
+        // abregeln, ohne denselben Exportwert in jedem EMS-Tick zu integrieren.
+        this._storageAntiExportState = {
+            activeSinceMs: 0,
+            lastProcessedNvpSampleTs: 0,
+            lastOutputW: 0,
+        };
+
         // --- Anti-Flattern um 0 W ---
         // Richtungswechsel werden bewusst direkt an den jeweils zugeordneten
         // Speicher-/Farm-Ausgang weitergegeben. Die Speichersysteme führen ihren
@@ -587,6 +991,16 @@ class SpeicherRegelungModule extends BaseModule {
         // Innerhalb dieses Fensters bleibt ein aktiver Speicherbefehl erhalten;
         // erst ein anhaltend unbrauchbarer Messwert fuehrt zum Sicherheitsstopp.
         this._storageMeasurementGapSinceMs = 0;
+
+        // Finale Anti-Export-Sicherung fuer Speicherentladung. Ein kurzer
+        // Ueberschwinger wird nicht hart auf 0 W gestoppt, sondern innerhalb der
+        // konfigurierten Grace-Zeit (Default 2 s) auf einen NVP-kompatiblen
+        // Entladesollwert heruntergefuehrt. Die Zustandsmarker sorgen dafuer, dass
+        // Hold-/Feed-forward-Pfade den Cap nicht im naechsten Tick wieder aufheben.
+        this._storageAntiExportSinceMs = 0;
+        this._storageAntiExportReleaseSinceMs = 0;
+        this._storageAntiExportStartTargetW = 0;
+        this._storageAntiExportLastTargetW = 0;
 
         // E3/DC RSCP Sondermodus:
         // Der ioBroker.e3dc-rscp Adapter steuert den Speicher ueber zwei gekoppelte
@@ -717,6 +1131,13 @@ class SpeicherRegelungModule extends BaseModule {
             : (Array.isArray(farmCfgEarly.storages) ? farmCfgEarly.storages : []);
         const farmAppPolicyActive = !!storageAuthorityEarly.farmDispatchActive;
         const enabled = !!storageAuthorityEarly.writerActive;
+        const storageLicensePowerProfile = resolveStorageLicensePowerProfile(
+            this.adapter,
+            cfg,
+            farmRowsEarly,
+            storageAuthorityEarly.selectedTopology,
+        );
+        const storageLicenseHardLimitW = Math.max(0, Number(storageLicensePowerProfile.maxCommandW || 0));
 
         // SoC-Hysterese optional aus Konfig lesen (falls später im Admin ergänzt).
         // Default bleibt 0.5 %-Punkte.
@@ -741,6 +1162,9 @@ class SpeicherRegelungModule extends BaseModule {
             tariffPolicyActive: !!autoTarifEnabled,
             reason: String(storageAuthorityEarly.reason || ''),
         }));
+        await this._setIfChanged('speicher.regelung.licensePowerProfile', String(storageLicensePowerProfile.id || 'none'));
+        await this._setIfChanged('speicher.regelung.licensePowerLimitW', storageLicenseHardLimitW > 0 ? Math.round(storageLicenseHardLimitW) : 0);
+        await this._setIfChanged('speicher.regelung.ratedPowerW', Math.round(Number(storageLicensePowerProfile.configuredRatedPowerW || 0)));
 
         // Wenn effektiv deaktiviert: nur Diagnose aktualisieren – KEINE Setpoints schreiben.
         // (Wichtig, damit keine "0" als externe Vorgabe an ein Speichersystem gesendet wird.)
@@ -749,6 +1173,9 @@ class SpeicherRegelungModule extends BaseModule {
             await this._setIfChanged('speicher.regelung.grund', 'Deaktiviert');
             await this._setIfChanged('speicher.regelung.schreibStatus', 'deaktiviert');
             await this._setIfChanged('speicher.regelung.schreibOk', false);
+            await this._setIfChanged('speicher.regelung.policyBlocked', false);
+            await this._setIfChanged('speicher.regelung.policyBlockReason', '');
+            await this._setIfChanged('speicher.regelung.policySource', 'inactive');
             await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
             await this._setIfChanged('speicher.regelung.commandAcceptedTs', null);
             await this._setIfChanged('speicher.regelung.commandAcceptedTargetW', null);
@@ -793,6 +1220,19 @@ class SpeicherRegelungModule extends BaseModule {
             await this._setIfChanged('speicher.regelung.zeroWriteFirewallExplicitStop', false);
             await this._setIfChanged('speicher.regelung.zeroWriteFirewallBudgetZeroAgeMs', 0);
             await this._setIfChanged('speicher.regelung.zeroWriteFirewallMeasurementGapAgeMs', 0);
+            await this._setIfChanged('speicher.regelung.antiExportStatus', 'inactive');
+            await this._setIfChanged('speicher.regelung.antiExportJson', JSON.stringify({ active: false, status: 'inactive' }));
+            await this._setIfChanged('speicher.regelung.licensePowerLimited', false);
+            await this._setIfChanged('speicher.regelung.licensePowerJson', JSON.stringify({
+                ts: Date.now(),
+                active: false,
+                profile: String(storageLicensePowerProfile.id || 'none'),
+                label: String(storageLicensePowerProfile.label || ''),
+                configuredRatedPowerW: Math.round(Number(storageLicensePowerProfile.configuredRatedPowerW || 0)),
+                maxCommandW: Math.round(Number(storageLicensePowerProfile.maxCommandW || 0)),
+                limited: false,
+            }));
+            this._storageAntiExportState = { activeSinceMs: 0, lastProcessedNvpSampleTs: 0, lastOutputW: 0 };
 
             // Interne Sollwertprognose beim Deaktivieren verwerfen. Es wird dabei
             // bewusst nichts an den Speicher geschrieben; nur die lokale Regel-
@@ -805,6 +1245,10 @@ class SpeicherRegelungModule extends BaseModule {
             this._pendingAsyncBalanceCommand = null;
             this._sungrowPvBudgetZeroSinceMs = 0;
             this._storageBudgetZeroSinceMs = 0;
+            this._storageAntiExportSinceMs = 0;
+            this._storageAntiExportReleaseSinceMs = 0;
+            this._storageAntiExportStartTargetW = 0;
+            this._storageAntiExportLastTargetW = 0;
 
             // Hybrid-/Gateway-Priorität: Bei deaktivierter Speicherregelung nicht zyklisch auf den
             // Batterie-Sollleistungs-DP schreiben. Dadurch kann das Gateway nach seinem Watchdog
@@ -1194,12 +1638,12 @@ class SpeicherRegelungModule extends BaseModule {
         await this._setIfChanged('speicher.regelung.batteryPowerTrusted', !!battPowerTrusted);
         await this._setIfChanged('speicher.regelung.batteryPowerIgnoredReason', String(battPowerInvalidReason || ''));
 
-        // Fehlt die NVP-Messung, darf ein positiver Entladebefehl niemals blind
-        // weiterlaufen: Ohne frischen signierten NVP kann eine Netzeinspeisung nicht
-        // ausgeschlossen werden. Sungrow darf waehrend der kurzen Grace-Zeit daher
-        // nur einen Lade-/Leerlaufbefehl halten; aktive Entladung wird sofort mit
-        // einem ausdruecklichen 0-W-Sicherheitsstopp beendet. FENECON bleibt im
-        // normalen zyklischen Ausgangspfad.
+        // Fehlt die NVP-Messung, darf ein kurzer Telemetrie-Aussetzer bei Sungrow
+        // keinen laufenden externen Sollwert durch ein 0-W-Schreiben stoppen. Das
+        // Profil haelt deshalb waehrend einer begrenzten Grace-Zeit den letzten
+        // erfolgreichen Nicht-Null-Befehl ohne neuen Schreibzugriff. Erst ein
+        // anhaltender Messausfall wird als ausdruecklicher Sicherheitsstopp mit
+        // 0 W behandelt. FENECON bleibt im normalen zyklischen Ausgangspfad.
         if (typeof gridW !== 'number') {
             const lastTargetW = Number.isFinite(Number(this._lastTargetW)) ? Number(this._lastTargetW) : 0;
             const lastSource = String(this._lastSource || '');
@@ -1210,7 +1654,7 @@ class SpeicherRegelungModule extends BaseModule {
                 const missingForMs = Math.max(0, now - this._sungrowNvpMissingSinceMs);
                 const graceActive = missingForMs < sungrowNvpLossGraceMs;
 
-                if (graceActive && lastTargetW <= 0) {
+                if (graceActive) {
                     const heldW = lastTargetW !== 0 ? lastTargetW : 0;
                     const heldSource = lastSource || 'sungrow-hybrid';
                     const heldReason = lastTargetW !== 0
@@ -1270,32 +1714,14 @@ class SpeicherRegelungModule extends BaseModule {
                         sungrowHybrid: true,
                         nvpMissingForMs: Math.round(missingForMs),
                     }));
-                    await this._setIfChanged('speicher.regelung.antiExportAktiv', false);
-                    await this._setIfChanged('speicher.regelung.antiExportAktion', 'inactive');
-                    await this._setIfChanged('speicher.regelung.antiExportCapW', 0);
-                    await this._setIfChanged('speicher.regelung.antiExportPrognoseNvpW', null);
-                    await this._setIfChanged('speicher.regelung.antiExportJson', JSON.stringify({
-                        ts: now,
-                        active: false,
-                        action: 'inactive',
-                        reason: heldReason,
-                        nvpUsable: false,
-                        heldTargetW: Math.round(heldW),
-                    }));
                     return;
                 }
 
-                const missingNvpStopMode = lastTargetW > 0
-                    ? 'write-stop-no-grid-discharge'
-                    : 'write-stop-no-grid-after-grace';
-                const missingNvpStopReason = lastTargetW > 0
-                    ? `Sungrow Hybrid ESS: positiver Entladebefehl ${Math.round(lastTargetW)} W ohne frischen NVP – sofortiger Anti-Export-Stopp`
-                    : `Sungrow Hybrid ESS: NVP seit ${Math.round(missingForMs / 1000)} s nicht verfuegbar – Sicherheitsstopp`;
                 await this._setSungrowHybridDiag({
                     active: true,
                     mode: 'nvp-missing-safety-stop',
-                    reason: missingNvpStopReason,
-                    writeMode: missingNvpStopMode,
+                    reason: `Sungrow Hybrid ESS: NVP seit ${Math.round(missingForMs / 1000)} s nicht verfuegbar – Sicherheitsstopp`,
+                    writeMode: 'write-stop-no-grid-after-grace',
                     targetW: 0,
                 });
             }
@@ -1311,21 +1737,6 @@ class SpeicherRegelungModule extends BaseModule {
             // Ein Herstellerprofil darf den allgemeinen Sicherheitsgate-/Executor-Pfad
             // niemals umgehen.
             await this._applyTargetW(0, 'Netzleistung fehlt oder zu alt', 'aus');
-            const missingNvpWasDischarging = lastTargetW > 0;
-            await this._setIfChanged('speicher.regelung.antiExportAktiv', missingNvpWasDischarging);
-            await this._setIfChanged('speicher.regelung.antiExportAktion', missingNvpWasDischarging ? 'stop-missing-nvp' : 'inactive');
-            await this._setIfChanged('speicher.regelung.antiExportCapW', 0);
-            await this._setIfChanged('speicher.regelung.antiExportPrognoseNvpW', null);
-            await this._setIfChanged('speicher.regelung.antiExportJson', JSON.stringify({
-                ts: now,
-                active: missingNvpWasDischarging,
-                action: missingNvpWasDischarging ? 'stop-missing-nvp' : 'inactive',
-                requestedW: Math.round(lastTargetW),
-                targetW: 0,
-                explicitStop: missingNvpWasDischarging,
-                nvpUsable: false,
-                reason: 'Netzleistung fehlt oder zu alt',
-            }));
             if (feneconHybridActive) {
                 await this._setFeneconHybridDiag({
                     active: true,
@@ -1436,6 +1847,8 @@ class SpeicherRegelungModule extends BaseModule {
         let hardChargeMaxSoc = 100;
         let reason = 'Keine Aktion';
         let source = 'idle';
+        let storagePolicyBlocked = false;
+        let storagePolicyBlockReason = '';
 
         // Harte Entlade-Demand-Cap für NVP-basierte Eigenverbrauchs-/Tarifregelung.
         // Hintergrund: Die Rampe darf einen zuvor korrekt begrenzten Sollwert nicht wieder
@@ -1468,11 +1881,11 @@ class SpeicherRegelungModule extends BaseModule {
         let evcsProtectionChargeFromSurplus = false;
         let evcsProtectionDiag = null;
 
-        // Letzte herstellerunabhaengige Sicherheitsstufe vor dem Writer.
-        // Ein positiver Entladebefehl darf den NVP weder durch Feed-forward noch
-        // durch gehaltene Herstellerkommandos in die Einspeisung druecken.
-        let antiExportExplicitStop = false;
-        let antiExportDiag = null;
+        // Finale proportionale Anti-Export-Diagnose. Sie greift nur fuer positive
+        // Entladebefehle und liegt nach allen Hersteller-/Budgetentscheidungen.
+        // Ein 0-W-Stop wird erst nach der konfigurierten Grace-Zeit explizit.
+        let storageAntiExportDiag = null;
+        let storageAntiExportExplicitStop = false;
 
         // Zentrales PV-Budget fuer die gemeinsame Verteilung zwischen EVCS,
         // Speicher und nachgelagerten Verbrauchern. Das Lademanagement laeuft
@@ -2009,12 +2422,11 @@ if (typeof soc === 'number') {
         // ------------------------------------------------------------
         // Gate E: Multiuse-Speicherstrategie (SoC-Zonen)
         // ------------------------------------------------------------
-        // MultiUse schreibt seine SoC-Zonen in storage.* und darf nur führen,
-        // wenn die MultiUse-App wirklich aktiv ist. Ist MultiUse deaktiviert, läuft
-        // die Speicherregelungs-App wieder mit der normalen Eigenverbrauchslogik.
-        // Alte MultiUse-Werte wie selfDischargeEnabled=false dürfen dann keine
-        // dauerhafte 0-W-Sperre mehr verursachen; echte 0-W-Sollwerte auf den
-        // Ziel-DPs bleiben davon unberührt und stoppen den Speicher weiterhin.
+        // MultiUse liefert seine SoC-Zonen seit 0.8.138 direkt aus
+        // installerConfig.storageMultiUse und darf nur fuehren, wenn die App
+        // wirklich aktiv ist. Es werden keine Zonen mehr nach storage.* gespiegelt.
+        // Ist MultiUse deaktiviert, laeuft die normale Eigenverbrauchs-Policy;
+        // alte MultiUse-Werte duerfen dann keine dauerhafte 0-W-Sperre erzeugen.
         const installerCfgForMultiUse = installerCfgForMultiUseEarly;
         const storageMultiUseCfg = storageMultiUseCfgEarly;
         const multiUsePolicyConfigured = !!multiUsePolicyConfiguredEarly;
@@ -2022,21 +2434,28 @@ if (typeof soc === 'number') {
         const ignoreStaleMultiUsePolicy = !!(multiUsePolicyConfigured && !multiUsePolicyActive);
         const storageOnlyPolicyActive = !multiUsePolicyActive;
 
-        // Rollenmodell Speicherregelung:
-        // Ohne aktive MultiUse-App ist die Speicherregelungs-App bewusst eine
-        // reine Eigenverbrauchsoptimierung: PV-Überschuss laden und Netzbezug
-        // am NVP reduzieren. SoC-Zonen für Notstrom/Reserve und LSK gehören
-        // erst zur aktiven MultiUse-Policy, damit alte MultiUse-Werte die
-        // normale Speicherregelung nicht versteckt sperren oder verschieben.
-        const multiUseOwnsZones = !!multiUsePolicyActive;
+        // Ein gemeinsamer Resolver liefert die wirksamen SoC-Zonen fuer alle
+        // Speicherpfade. MultiUse fuehrt nur bei aktivierter App; ein lediglich
+        // vorhandener/deaktivierter Datensatz darf keine alten 20-%-/Reserve-
+        // Werte mehr in die normale Eigenverbrauchsregelung einschleusen.
+        const storageOperatingPolicy = resolveStorageOperatingPolicy({
+            storageConfig: cfg,
+            multiUseConfig: storageMultiUseCfg,
+            multiUseActive: multiUsePolicyActive,
+            standaloneDefaultEnabled: true,
+            standaloneDefaultMinSocPct: 10,
+            standaloneDefaultMaxSocPct: 100,
+            standaloneDefaultTargetGridImportW: 50,
+            standaloneDefaultImportThresholdW: 50,
+        });
+        const multiUseOwnsZones = storageOperatingPolicy.mode === 'multiuse';
 
-        // Notstrom-Reserve: harte Untergrenze nur als aktive MultiUse-Zone.
-        // Die reine Eigenverbrauchsoptimierung nutzt unten selfMinSoc als
-        // Sicherheits-Minimum, aber keine separate Reserve-/Refill-Policy.
-        const reserveEnabled = multiUseOwnsZones && !!cfg.reserveEnabled;
-        const reserveMin = clamp(num(multiUseOwnsZones ? cfg.reserveMinSocPct : undefined, 20), 0, 100);
-        const reserveTarget = clamp(num(multiUseOwnsZones ? cfg.reserveTargetSocPct : undefined, reserveMin), 0, 100);
-
+        // Notstrom-Reserve und LSK sind reine MultiUse-Zonen. Ohne aktives
+        // MultiUse bleiben sie aus; die eigenstaendige Speicherregelung nutzt
+        // ausschliesslich ihre Eigenverbrauchs-Min-/Max-SoC-Werte.
+        const reserveEnabled = storageOperatingPolicy.reserve.enabled === true;
+        const reserveMin = clamp(num(storageOperatingPolicy.reserve.minSocPct, 0), 0, 100);
+        const reserveTarget = clamp(num(storageOperatingPolicy.reserve.targetSocPct, reserveMin), reserveMin, 100);
         const reserveActive = reserveEnabled && (typeof soc === 'number') && (soc <= reserveMin);
 
         // Reserve-Aufladung mit SoC-Hysterese, damit bei Erreichen des Ziel-SoC
@@ -2053,55 +2472,32 @@ if (typeof soc === 'number') {
         await this._setIfChanged('speicher.regelung.reserveMinSocPct', reserveMin);
         await this._setIfChanged('speicher.regelung.reserveZielSocPct', reserveTarget);
 
-        // LSK/Peak-Shaving über den Speicher ist eine MultiUse-Funktion.
-        // Ohne MultiUse bleibt die Speicher-App bei reiner Eigenverbrauchslogik;
-        // Peak-Shaving kann dann nicht heimlich über alte SoC-Zonen eingreifen.
-        const lskEnabledCfg = multiUseOwnsZones && (cfg.lskEnabled !== false);
-        // Richtungs-Freigaben getrennt halten: Entladen kappt Peaks, Laden füllt die
-        // LSK-Zone wieder auf. Beide dürfen nur wirken, wenn MultiUse die Policy führt.
-        const lskDischargeEnabledCfg = !!(lskEnabledCfg && cfg.lskDischargeEnabled !== false);
-        const lskChargeEnabledCfg = !!(lskEnabledCfg && cfg.lskChargeEnabled !== false);
-        const lskMinSoc = clamp(num(multiUseOwnsZones ? cfg.lskMinSocPct : undefined, reserveMin), 0, 100);
-        const lskMaxSoc = clamp(num(multiUseOwnsZones ? cfg.lskMaxSocPct : undefined, 100), 0, 100);
+        const lskEnabledCfg = storageOperatingPolicy.lsk.enabled === true;
+        const lskDischargeEnabledCfg = storageOperatingPolicy.lsk.dischargeEnabled === true;
+        const lskChargeEnabledCfg = storageOperatingPolicy.lsk.chargeEnabled === true;
+        const lskMinSoc = clamp(num(storageOperatingPolicy.lsk.minSocPct, reserveMin), 0, 100);
+        const lskMaxSoc = clamp(num(storageOperatingPolicy.lsk.maxSocPct, 100), lskMinSoc, 100);
 
         // Eigenverbrauch (Entladen optional)
-        // Hybrid-/Gateway-Priorität ab 0.6.255:
-        // Der Haken aktiviert keine permanente externe AC-Lastfolger-Logik mehr.
-        // Bei interner interner PV >= Schwellwert lassen wir Gateway selbst regeln.
-        // Bei wenig/keiner PV darf NexoWatt wieder über den normalen Sollleistungs-DP
-        // arbeiten, damit dynamische Tariflogik, Reserve und LSK nutzbar bleiben.
+        // Hybrid-/Gateway-Prioritaet ab 0.6.255: Der Haken aktiviert keine
+        // permanente externe AC-Lastfolger-Logik mehr.
         const feneconAcModeConfigured = !!feneconHybridConfigured;
-        // Nur aktive MultiUse-Policies dürfen selfDischargeEnabled=false als harte Sperre setzen.
-        // Ist MultiUse deaktiviert, wird ein alter gespeicherter false-Wert ignoriert, damit die
-        // normale Eigenverbrauchsregelung bei SoC + Netzbezug weiter arbeiten kann.
-        const hasStoredSelfFlag = (cfg.selfDischargeEnabled === true || cfg.selfDischargeEnabled === false);
-        const hasExplicitSelfFlag = hasStoredSelfFlag && (!multiUsePolicyConfigured || multiUseOwnsZones);
         const feneconAcMode = false;
-        // Farm-Verhalten bewusst unverändert lassen: ältere Farm-Setups, die den alten
-        // Haken nur als implizite Eigenverbrauchs-Freigabe genutzt haben, behalten diesen
-        // Fallback. Die neue Hybrid-/Gateway-Priorität-Policy selbst wirkt in der Farm nicht.
-        const farmSelfDischargeFallback = !!(farmEnabled && cfg.feneconAcMode === true && !hasExplicitSelfFlag);
-        const feneconLowPvSelfDischargeFallback = !!(feneconHybridActive && !hasExplicitSelfFlag);
-        // Alte Gateway-EV-Prioritäts-/PV-Block-Caps werden durch den neuen Modus nicht
-        // mehr aktiviert. Flexible Verbraucher bleiben in der bestehenden Standardlogik.
+
+        const selfDischargeEnabled = storageOperatingPolicy.self.enabled === true;
+        const selfMinSoc = clamp(num(storageOperatingPolicy.self.minSocPct, 10), 0, 100);
+        const selfMaxSoc = clamp(num(storageOperatingPolicy.self.maxSocPct, 100), selfMinSoc, 100);
+
+        // Alte Gateway-EV-Prioritaets-/PV-Block-Caps werden durch den neuen Modus
+        // nicht mehr aktiviert. Flexible Verbraucher bleiben in der Standardlogik.
         const evPriorityBlockStorageCharge = false;
         const evPriorityStarvedW = 0;
-        const genericSelfDischargeDefault = true;
-        const selfDischargeEnabled = hasExplicitSelfFlag
-            ? (cfg.selfDischargeEnabled === true)
-            : (farmSelfDischargeFallback || feneconLowPvSelfDischargeFallback || genericSelfDischargeDefault);
-        const selfMinSoc = clamp(num((multiUseOwnsZones || !multiUsePolicyConfigured) ? cfg.selfMinSocPct : undefined, reserveMin), 0, 100);
-        const selfMaxSoc = clamp(num((multiUseOwnsZones || !multiUsePolicyConfigured) ? cfg.selfMaxSocPct : undefined, 100), 0, 100);
-        // Eigenverbrauchs-Optimierung: Ziel-Netzbezug am NVP.
-        // Praxis: ein kleiner Bezug (z. B. 50–150 W) ist oft stabiler als exakt 0 W
-        // (Messrauschen, Totzeiten, Geräte-Rampen).
-        // Standard-Eigenverbrauch bleibt herstellerunabhängig bei kleinem Ziel-Import.
-        // Hybrid-/Gateway-Priorität entscheidet später pro Tick über Zusatz-PV-Cap, Assist
-        // und Schreibdiagnose; der AppCenter-Ausgang bleibt dabei immer gekoppelt.
-        // Zielwert/Deadband sind Tuningwerte der Eigenverbrauchsregelung und
-        // dürfen auch ohne MultiUse genutzt werden. Sie bilden keine SoC-Zonen.
-        const selfTargetGridW = Math.max(0, num(cfg.selfTargetGridImportW, 50));
-        const selfImportThresholdW = Math.max(0, num(cfg.selfImportThresholdW, 50));
+
+        // Zielwert und Deadband stammen aus derselben Policy wie die SoC-Grenzen.
+        // Dadurch kann ein deaktiviertes MultiUse weder SoC noch NVP-Zielwerte
+        // unsichtbar in der Standalone-Regelung hinterlassen.
+        const selfTargetGridW = Math.max(0, num(storageOperatingPolicy.self.targetGridImportW, 50));
+        const selfImportThresholdW = Math.max(0, num(storageOperatingPolicy.self.importThresholdW, 50));
 
         // NVP-Stabilisator: Fuehrungsgroesse fuer die Eigenverbrauchsregelung.
         // Die RAW-Messung bleibt fuer harte Caps/Schutzlogik erhalten, aber der
@@ -2126,6 +2522,8 @@ if (typeof soc === 'number') {
         await this._setIfChanged('speicher.regelung.lskMaxSocPct', lskMaxSoc);
         await this._setIfChanged('speicher.regelung.selfMinSocPct', selfMinSoc);
         await this._setIfChanged('speicher.regelung.selfMaxSocPct', selfMaxSoc);
+        await this._setIfChanged('speicher.regelung.selfSocPolicySource', String(storageOperatingPolicy.source || 'standalone-default'));
+        await this._setIfChanged('speicher.regelung.selfSocPolicyJson', JSON.stringify(storageOperatingPolicy));
         await this._setIfChanged('speicher.regelung.selfTargetGridImportW', selfTargetGridW);
         await this._setIfChanged('speicher.regelung.selfImportThresholdW', selfImportThresholdW);
         await this._setIfChanged('speicher.regelung.selfEntladenAktiviert', !!selfDischargeEnabled);
@@ -2139,14 +2537,28 @@ if (typeof soc === 'number') {
 
         // Grenzen / Glättung
         // maxChargeW/maxDischargeW sind *optionale* Software-Clamps.
-        // 0 => unbegrenzt (kein Clamp). Viele Speicher regeln/limitieren intern ohnehin.
+        // 0 => unbegrenzt (kein Geräte-Clamp). Die Home-Lizenz besitzt trotzdem
+        // einen finalen 50-kW-Hardcap; Pro bleibt lizenzseitig frei skalierbar.
         const maxChargeLimitW_cfg = Math.max(0, num(cfg.maxChargeW, 0));        // Laden: negativ (Betrag)
         const maxDischargeLimitW_cfg = Math.max(0, num(cfg.maxDischargeW, 0));  // Entladen: positiv
         const maxChargeW = (maxChargeLimitW_cfg > 0) ? maxChargeLimitW_cfg : Number.POSITIVE_INFINITY;
         const maxDischargeW = (maxDischargeLimitW_cfg > 0) ? maxDischargeLimitW_cfg : Number.POSITIVE_INFINITY;
-        const stepW = Math.max(0, num(cfg.stepW, 50));
-        const maxDelta = Math.max(0, num(cfg.maxDeltaWPerTick, 500));
-        const pvMaxDeltaCfg = Math.max(0, num(cfg.pvMaxDeltaWPerTick, 1500)); // 0 => nutzt globale Rampe
+
+        // Nicht gesetzte Expertenwerte werden lizenz- und nennleistungsabhängig
+        // vorbelegt. Ein expliziter Wert – einschließlich 0 zum Abschalten einer
+        // Rampe/Quantisierung – bleibt autoritativ.
+        const configuredStepW = Number(cfg.stepW);
+        const stepW = Number.isFinite(configuredStepW)
+            ? Math.max(0, configuredStepW)
+            : Math.max(0, Number(storageLicensePowerProfile.defaultStepW || 50));
+        const configuredMaxDeltaW = Number(cfg.maxDeltaWPerTick);
+        const maxDelta = Number.isFinite(configuredMaxDeltaW)
+            ? Math.max(0, configuredMaxDeltaW)
+            : Math.max(0, Number(storageLicensePowerProfile.defaultMaxDeltaWPerTick || 500));
+        const configuredPvMaxDeltaW = Number(cfg.pvMaxDeltaWPerTick);
+        const pvMaxDeltaCfg = Number.isFinite(configuredPvMaxDeltaW)
+            ? Math.max(0, configuredPvMaxDeltaW)
+            : Math.max(0, Number(storageLicensePowerProfile.defaultPvMaxDeltaWPerTick || 1500)); // 0 => nutzt globale Rampe
 
         // Herstellerunabhaengiger Istwert-Puffer fuer das geschlossene NVP-
         // Balancing. Der normale staleTimeout bleibt fuer Schutzpfade unveraendert;
@@ -2157,14 +2569,22 @@ if (typeof soc === 'number') {
         const balanceFeedbackHoldSec = clamp(num(cfg.balanceFeedbackHoldSec, 45), 1, 300);
         const balanceFeedbackHoldMs = Math.max(balanceFeedbackFreshMs, balanceFeedbackHoldSec * 1000);
         const balanceFeedbackPredictionSteps = clamp(num(cfg.balanceFeedbackPredictionSteps, 4), 0, 20);
+        const profilePredictionDefaultW = Math.max(
+            0,
+            Number(storageLicensePowerProfile.defaultBalancePredictionMaxW || 10000),
+        );
         const derivedPredictionLimitW = Math.max(
             500,
-            Math.min(10000, (maxDelta > 0 ? maxDelta : 500) * balanceFeedbackPredictionSteps),
+            profilePredictionDefaultW,
+            (maxDelta > 0 ? maxDelta : Number(storageLicensePowerProfile.defaultMaxDeltaWPerTick || 500)) * balanceFeedbackPredictionSteps,
         );
-        const balanceFeedbackPredictionMaxW = Math.max(
-            0,
-            num(cfg.balanceFeedbackPredictionMaxW, derivedPredictionLimitW),
-        );
+        const configuredPredictionMaxW = Number(cfg.balanceFeedbackPredictionMaxW);
+        const balanceFeedbackPredictionMaxWUncapped = Number.isFinite(configuredPredictionMaxW)
+            ? Math.max(0, configuredPredictionMaxW)
+            : derivedPredictionLimitW;
+        const balanceFeedbackPredictionMaxW = storageLicenseHardLimitW > 0
+            ? Math.min(balanceFeedbackPredictionMaxWUncapped, storageLicenseHardLimitW)
+            : balanceFeedbackPredictionMaxWUncapped;
         const storageBalanceFeedback = this._resolveBatteryBalanceFeedback({
             nowMs: now,
             measuredW: battPowerObservedW,
@@ -2935,6 +3355,8 @@ if (targetW === 0 && selfDischargeEnabled) {
         if (source === 'idle' || reason === 'Keine Aktion') {
             reason = 'Tarif: günstig – Eigenverbrauchs-Entladung gesperrt';
             source = 'tarif';
+            storagePolicyBlocked = true;
+            storagePolicyBlockReason = reason;
         }
     } else {
     // Wichtig: Bei Eigenverbrauchs-Entladung regeln wir auf den NVP.
@@ -3123,10 +3545,40 @@ if (targetW === 0 && selfDischargeEnabled) {
         }
     } else if (allow && startCond && nextSetW > 0) {
         targetW = nextSetW;
-            reason = `Eigenverbrauch: NVP-Balancing entladen (${Math.round(targetW)} W, Ist ${Math.round(Number(balance.baseW) || 0)} W, Differenz ${Math.round(Number(balance.nvpErrorW) || 0)} W)`;
+        reason = `Eigenverbrauch: NVP-Balancing entladen (${Math.round(targetW)} W, Ist ${Math.round(Number(balance.baseW) || 0)} W, Differenz ${Math.round(Number(balance.nvpErrorW) || 0)} W)`;
         source = 'eigenverbrauch';
         hardDischargeMinSoc = Math.max(hardDischargeMinSoc, selfMinSoc);
+    } else if (!allow && (source === 'idle' || reason === 'Keine Aktion')) {
+        if (reserveActive) {
+            reason = `Eigenverbrauch: Entladen blockiert (Reserve-SoC <= ${reserveMin}%)`;
+            source = 'reserve';
+        } else if (reserveChargeWanted) {
+            reason = `Eigenverbrauch: Entladen blockiert (Reserve wird bis ${reserveTarget}% aufgefuellt)`;
+            source = 'reserve';
+        } else if (!socOk && typeof soc === 'number') {
+            reason = `Eigenverbrauch: Entladen blockiert (SoC ${Math.round(soc * 10) / 10}% <= Min-SoC ${selfMinSoc}%, Policy ${String(storageOperatingPolicy.source || 'unbekannt')})`;
+            source = 'eigenverbrauch';
+        }
+        if (reason !== 'Keine Aktion') {
+            storagePolicyBlocked = true;
+            storagePolicyBlockReason = reason;
+        }
     }
+    }
+}
+
+// Eine deaktivierte Eigenverbrauchszone ist eine bewusste Policy-Sperre. Sie
+// darf bei aktuellem Netzbezug weder als "Keine Aktion" noch spaeter im
+// NVP-Koordinator als vermeintlich aktive Korrektur erscheinen.
+if (targetW === 0 && !selfDischargeEnabled && (source === 'idle' || reason === 'Keine Aktion')) {
+    const policyNvpW = (typeof gridRawW === 'number' && Number.isFinite(gridRawW))
+        ? gridRawW
+        : ((typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null);
+    if (typeof policyNvpW === 'number' && policyNvpW > (selfTargetGridW + selfImportThresholdW)) {
+        reason = `Eigenverbrauch: Entladen durch Policy deaktiviert (${String(storageOperatingPolicy.source || 'unbekannt')})`;
+        source = 'policy';
+        storagePolicyBlocked = true;
+        storagePolicyBlockReason = reason;
     }
 }
 
@@ -3541,6 +3993,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     const directDirectionChange = _prevRampW !== 0
         && targetW !== 0
         && Math.sign(_prevRampW) !== Math.sign(targetW);
+    const policyStop = storagePolicyBlocked === true && targetW === 0;
 
     // Verbindliche EMS-Regel: Bei einem Lade-/Entlade-Richtungswechsel wird der
     // neue Sollwert im selben Tick direkt ausgegeben. Die Speichersysteme fuehren
@@ -3548,7 +4001,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     // herstellerspezifische Rampe darf eine 0-W-Zwischenrunde oder ein Weiterfahren
     // in der alten Richtung erzeugen. Nachgelagerte SoC-, Budget- und Safety-Caps
     // bleiben voll wirksam.
-    if (directDirectionChange) {
+    if (policyStop) {
+        // Eine aktive SoC-/Reserve-/Freigabe-Policy ist ein echter Stopp. Ein alter
+        // Lade- oder Entladebefehl darf nicht ueber die Standardrampe weiterlaufen.
+    } else if (directDirectionChange) {
         // Bewusst keine Rampenbegrenzung.
     // Istleistungsbasiertes NVP-Balancing hat seine Korrektur bereits relativ zur
     // realen Batterie-Leistung begrenzt. Eine zweite Rampe gegen den alten Sollwert
@@ -4314,103 +4770,126 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         }
 
         // ------------------------------------------------------------
-        // Finales herstellerunabhaengiges Anti-Export-Gate
+        // Finale proportionale Speicher-Anti-Export-Regelung
         // ------------------------------------------------------------
-        // Diese Schranke liegt bewusst NACH allen Tarif-, MultiUse-, EVCS-, Budget-
-        // und Herstellerentscheidungen, aber VOR 0-W-Firewall und Hardwarewriter.
-        // Ein frischer signierter NVP ist autoritativ: bestaetigte Einspeisung oder
-        // fehlender NVP beendet jede positive Speicherentladung sofort. Bei noch
-        // vorhandenem Netzbezug wird die Entladung auf den physikalisch sicheren
-        // Headroom bis zum kleinen NVP-Zielbezug begrenzt.
+        // Diese Schranke ist herstellerunabhaengig und liegt nach allen
+        // Strategie-, Budget- und Vendorpfaden. Sie fuehrt keinen pauschalen
+        // Sofort-Stopp aus: Unterschreitet der frische signierte NVP das Ziel,
+        // wird die Entladung innerhalb einer kurzen Grace-Zeit proportional
+        // reduziert. Erst wenn nach der Grace rechnerisch keine Entladung mehr
+        // zulaessig ist, wird 0 W als echter Sicherheitsstopp geschrieben.
         {
             const antiExportNvpUsable = typeof nvpRawW === 'number'
                 && Number.isFinite(nvpRawW)
-                && (!centralNvpCurrent || centralNvp.usable === true);
-            // Fuer die harte Sicherheitsgrenze ist ausschliesslich der frische,
-            // physisch gemessene Speicher-Istwert zulaessig. Ein gehaltenes oder
-            // prognostiziertes Feedback kann die aktuelle Grundlast ueberschaetzen
-            // und dadurch beim spaeteren Ansprechen des Speichers Export erzeugen.
-            const antiExportActualTrusted = battPowerTrusted === true
-                && typeof battPowerW === 'number'
-                && Number.isFinite(battPowerW);
-            const antiExportActualW = antiExportActualTrusted ? Number(battPowerW) : null;
-            const antiExportRequestedW = Number(targetW) || 0;
-            const antiExportSourceBeforeGate = String(source || '');
-            const antiExportReasonBeforeGate = String(reason || '');
-            antiExportDiag = resolveStorageAntiExportTarget({
-                requestedTargetW: antiExportRequestedW,
-                nvpW: antiExportNvpUsable ? Number(nvpRawW) : null,
-                nvpUsable: antiExportNvpUsable,
-                nvpTargetW: Math.max(0, selfTargetGridW),
-                nvpDeadbandW: Math.max(50, selfImportThresholdW),
-                storageActualW: antiExportActualW,
-                storageActualTrusted: antiExportActualTrusted,
-                commandEpsilonW: 1,
-            });
-
-            if (antiExportRequestedW > 0 && antiExportDiag.active === true) {
-                targetW = Number(antiExportDiag.targetW) || 0;
-                antiExportExplicitStop = antiExportDiag.explicitStop === true;
-
-                if (antiExportExplicitStop) {
-                    source = 'anti-export';
-                    reason = String(antiExportDiag.reason || 'Anti-Export: Speicherentladung sicher stoppen');
-                    dischargeDemandHardCapW = 0;
-                    dischargeDemandHardCapReason = reason;
-
-                    // Kein Hersteller-No-Write und kein Hold darf einen alten
-                    // Entladebefehl unter einer Anti-Export-Bedingung weiterfahren.
-                    sungrowNoWrite = false;
-                    if (sungrowHybridActive) {
-                        sungrowWriteMode = 'write-stop-anti-export';
-                        this._sungrowHybridLastMode = sungrowWriteMode;
-                    }
-                    if (feneconHybridActive) {
-                        feneconWriteMode = 'write-stop-anti-export';
-                    }
-                } else if (antiExportDiag.capped === true) {
-                    const capW = Math.max(0, Number(antiExportDiag.safeDischargeCapW) || 0);
-                    dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number' && Number.isFinite(dischargeDemandHardCapW))
-                        ? Math.min(Math.max(0, dischargeDemandHardCapW), capW)
-                        : capW;
-                    dischargeDemandHardCapReason = String(antiExportDiag.reason || 'Anti-Export: Entladung auf NVP-Headroom begrenzt');
-                    reason = `${String(reason || 'Speicherentladung')} · ${dischargeDemandHardCapReason}`;
-                    if (sungrowHybridActive) {
-                        sungrowNoWrite = false;
-                        sungrowWriteMode = 'write-anti-export-capped-discharge';
-                        this._sungrowHybridLastMode = sungrowWriteMode;
-                    }
+                && (!centralNvpCurrent || centralNvp.usable === true)
+                && (!(typeof gridRawAge === 'number' && Number.isFinite(gridRawAge)) || gridRawAge <= staleMs);
+            let antiExportNvpSampleTs = 0;
+            try {
+                const canonicalSnapshot = this.adapter && this.adapter._nvpFreshnessSnapshot
+                    && typeof this.adapter._nvpFreshnessSnapshot === 'object'
+                    ? this.adapter._nvpFreshnessSnapshot
+                    : null;
+                const snapshotTs = canonicalSnapshot && Number.isFinite(Number(canonicalSnapshot.ts))
+                    ? Number(canonicalSnapshot.ts)
+                    : null;
+                const snapshotMeasurementAgeMs = centralNvpCurrent && Number.isFinite(Number(centralNvp.measurementAgeMs))
+                    ? Math.max(0, Number(centralNvp.measurementAgeMs))
+                    : null;
+                if (snapshotTs !== null && snapshotMeasurementAgeMs !== null) {
+                    antiExportNvpSampleTs = Math.max(1, Math.round(snapshotTs - snapshotMeasurementAgeMs));
+                } else if (typeof gridRawAge === 'number' && Number.isFinite(gridRawAge)) {
+                    antiExportNvpSampleTs = Math.max(1, Math.round(now - Math.max(0, gridRawAge)));
                 }
-
-                storageNvpBalanceDiag = {
-                    ...(storageNvpBalanceDiag || {}),
-                    targetW,
-                    antiExportActive: true,
-                    antiExportAction: antiExportDiag.action,
-                    antiExportRequestedW: antiExportDiag.requestedW,
-                    antiExportTargetW: antiExportDiag.targetW,
-                    antiExportSafeDischargeCapW: antiExportDiag.safeDischargeCapW,
-                    antiExportPredictedNvpW: antiExportDiag.predictedNvpW,
-                    antiExportNvpW: antiExportDiag.nvpW,
-                    antiExportNvpTargetW: antiExportDiag.nvpTargetW,
-                    antiExportExplicitStop,
-                };
+            } catch {
+                antiExportNvpSampleTs = 0;
             }
 
-            await this._setIfChanged('speicher.regelung.antiExportAktiv', antiExportDiag.active === true);
-            await this._setIfChanged('speicher.regelung.antiExportAktion', String(antiExportDiag.action || 'inactive'));
-            await this._setIfChanged('speicher.regelung.antiExportCapW', Math.round(Number(antiExportDiag.safeDischargeCapW) || 0));
-            await this._setIfChanged('speicher.regelung.antiExportPrognoseNvpW', Number.isFinite(Number(antiExportDiag.predictedNvpW))
-                ? Math.round(Number(antiExportDiag.predictedNvpW))
-                : null);
-            await this._setIfChanged('speicher.regelung.antiExportJson', JSON.stringify({
-                ts: now,
-                ...antiExportDiag,
-                sourceBeforeGate: antiExportSourceBeforeGate,
-                reasonBeforeGate: antiExportReasonBeforeGate,
-                sourceAfterGate: String(source || ''),
-                reasonAfterGate: String(reason || ''),
-            }));
+            const antiExportFeedbackHeld = !!(
+                (storageBalanceFeedback && storageBalanceFeedback.held === true)
+                || (storageNvpBalanceDiag && storageNvpBalanceDiag.batteryFeedbackHeld === true)
+            );
+            const antiExportStorageActualW = !antiExportFeedbackHeld
+                && storageNvpBalanceDiag
+                && storageNvpBalanceDiag.feedbackUsed === true
+                && Number.isFinite(Number(storageNvpBalanceDiag.actualBatteryW))
+                ? Number(storageNvpBalanceDiag.actualBatteryW)
+                : (!antiExportFeedbackHeld && balanceBatteryTrusted && Number.isFinite(Number(balanceBatteryPowerW))
+                    ? Number(balanceBatteryPowerW)
+                    : (!antiExportFeedbackHeld && battPowerTrusted && Number.isFinite(Number(battPowerW))
+                        ? Number(battPowerW)
+                        : null));
+            const antiExportGraceMs = Math.max(
+                500,
+                Math.min(10000, Math.round(num(cfg.antiExportGraceSec, 2) * 1000)),
+            );
+            const antiExportTargetNvpW = Math.max(0, selfTargetGridW);
+            const targetBeforeAntiExportW = Number(targetW) || 0;
+            const lastAcceptedDischargeW = Number.isFinite(Number(this._lastTargetW))
+                ? Math.max(0, Number(this._lastTargetW))
+                : 0;
+            const heldDischargeAnchorW = balanceBatteryTrusted && Number.isFinite(Number(balanceBatteryPowerW))
+                ? Math.max(0, Number(balanceBatteryPowerW))
+                : 0;
+            const antiExportCommandAnchorW = lastAcceptedDischargeW > 0
+                ? lastAcceptedDischargeW
+                : heldDischargeAnchorW;
+            storageAntiExportDiag = resolveStorageAntiExportTarget({
+                requestedTargetW: targetBeforeAntiExportW,
+                commandAnchorW: antiExportCommandAnchorW,
+                storageActualW: antiExportStorageActualW,
+                nvpW: antiExportNvpUsable ? Number(nvpRawW) : null,
+                nvpSampleTs: antiExportNvpSampleTs,
+                targetNvpW: antiExportTargetNvpW,
+                deadbandW: Math.max(20, selfImportThresholdW),
+                graceMs: antiExportGraceMs,
+                now,
+                state: this._storageAntiExportState,
+                epsilonW: Math.max(1, stepW > 0 ? Math.min(stepW, 20) : 1),
+            });
+            this._storageAntiExportState = storageAntiExportDiag && storageAntiExportDiag.nextState
+                ? storageAntiExportDiag.nextState
+                : { activeSinceMs: 0, lastProcessedNvpSampleTs: 0, lastOutputW: 0 };
+            storageAntiExportExplicitStop = !!(storageAntiExportDiag && storageAntiExportDiag.explicitStop === true);
+
+            const antiExportTargetW = storageAntiExportDiag && Number.isFinite(Number(storageAntiExportDiag.targetW))
+                ? Number(storageAntiExportDiag.targetW)
+                : targetBeforeAntiExportW;
+            if (targetBeforeAntiExportW > 0 && antiExportTargetW + 0.5 < targetBeforeAntiExportW) {
+                targetW = Math.max(0, antiExportTargetW);
+                const capW = Math.max(0, targetW);
+                dischargeDemandHardCapW = (typeof dischargeDemandHardCapW === 'number' && Number.isFinite(dischargeDemandHardCapW))
+                    ? Math.min(Math.max(0, dischargeDemandHardCapW), capW)
+                    : capW;
+                dischargeDemandHardCapReason = storageAntiExportExplicitStop
+                    ? 'NVP-Anti-Export: Stop nach Grace'
+                    : 'NVP-Anti-Export: proportionale Entladebegrenzung';
+                reason = String(storageAntiExportDiag.reason || reason || 'NVP-Anti-Export: Entladung begrenzt');
+                if (storageAntiExportExplicitStop) source = 'anti-export';
+
+                // Sungrow darf unter aktiver Anti-Export-Korrektur weder den alten
+                // Entladebefehl per No-Write halten noch einen Feed-forward-Wert
+                // erneut einsetzen. Der reduzierte Wert wird explizit geschrieben.
+                if (sungrowHybridActive) {
+                    sungrowNoWrite = false;
+                    sungrowWriteMode = storageAntiExportExplicitStop
+                        ? 'write-stop-anti-export-after-grace'
+                        : 'write-anti-export-ramp-down';
+                    this._sungrowHybridLastMode = sungrowWriteMode;
+                }
+            }
+
+            if (storageNvpBalanceDiag && typeof storageNvpBalanceDiag === 'object') {
+                storageNvpBalanceDiag = {
+                    ...storageNvpBalanceDiag,
+                    targetW: Number(targetW) || 0,
+                    antiExport: storageAntiExportDiag,
+                    mode: storageAntiExportDiag && storageAntiExportDiag.active === true
+                        ? `anti-export-${String(storageAntiExportDiag.status || 'active')}`
+                        : String(storageNvpBalanceDiag.mode || ''),
+                };
+            }
+            await this._setIfChanged('speicher.regelung.antiExportStatus', storageAntiExportDiag ? String(storageAntiExportDiag.status || '') : 'inactive');
+            await this._setIfChanged('speicher.regelung.antiExportJson', JSON.stringify(storageAntiExportDiag || { active: false, status: 'inactive' }));
         }
 
         // ------------------------------------------------------------
@@ -4495,18 +4974,21 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             const chargeSocStop = lastActiveTargetW < 0
                 && typeof soc === 'number'
                 && soc >= hardChargeMaxSoc;
-            const explicitStopReason = antiExportExplicitStop
-                ? String((antiExportDiag && antiExportDiag.reason) || reason || 'Anti-Export: Speicherentladung stoppen')
-                : (evcsProtectedChargeStop
+            const explicitStopReason = storagePolicyBlocked
+                ? String(storagePolicyBlockReason || reason || 'Speicheraktion durch Policy gestoppt')
+                : (storageAntiExportExplicitStop
+                    ? 'Entladen stoppen: NVP-Anti-Export nach 2-s-Grace – rechnerisch keine Entladung mehr zulaessig'
+                    : (evcsProtectedChargeStop
                     ? 'Laden stoppen: EVCS-Speicherschutz – kein tatsaechlicher Gesamtueberschuss am NVP'
                     : (evcsProtectedDischargeStop
                         ? 'Entladen stoppen: EVCS-Speicherschutz – nur geschuetzte E-Mobilitaet verursacht den Bedarf'
                         : (dischargeSocStop
-                            ? `Entladen stoppen: SoC <= ${Math.max(hardDischargeMinSoc, selfMinSoc)}%`
-                            : (chargeSocStop
-                                ? `Laden stoppen: SoC >= ${hardChargeMaxSoc}%`
-                                : String(reason || '')))));
-            const explicitStop = antiExportExplicitStop
+                        ? `Entladen stoppen: SoC <= ${Math.max(hardDischargeMinSoc, selfMinSoc)}%`
+                        : (chargeSocStop
+                            ? `Laden stoppen: SoC >= ${hardChargeMaxSoc}%`
+                            : String(reason || ''))))));
+            const explicitStop = storagePolicyBlocked
+                || storageAntiExportExplicitStop
                 || sungrowUpstreamExplicitStop
                 || String(sungrowWriteMode || '').startsWith('write-stop-')
                 || source === 'aus'
@@ -4620,6 +5102,77 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             await this._setIfChanged('speicher.regelung.zeroWriteFirewallMeasurementGapAgeMs', 0);
         }
 
+        // Lizenz-Leistungsprofil als letzte produktweite Schranke vor Budget,
+        // Farmverteilung und Hardwarewriter. Damit können Hold-/No-Write-Pfade
+        // keinen älteren Befehl oberhalb der Home-Grenze weiterführen. Pro besitzt
+        // bewusst keinen Lizenz-Hardcap; dort begrenzen ausschließlich Anlage,
+        // NVP, Geräte, SoC und Safety-Gates.
+        const storageLicensePowerDecision = applyStorageLicensePowerLimit(targetW, storageLicensePowerProfile);
+        const storageLicensePowerLimited = storageLicensePowerDecision.limited === true;
+        if (storageLicensePowerLimited) {
+            const targetBeforeLicenseLimitW = Number(targetW) || 0;
+            targetW = Number(storageLicensePowerDecision.targetW) || 0;
+            const licenseReason = `${String(storageLicensePowerProfile.label || 'Home')}-Lizenzprofil: Speicherleistung auf ${Math.round(storageLicensePowerDecision.limitW)} W begrenzt`;
+            reason = reason ? `${licenseReason} · ${reason}` : licenseReason;
+
+            // Ein bereits aktiver höherer Sollwert muss ausdrücklich auf die
+            // Lizenzgrenze zurückgeschrieben werden; No-Write/Hold ist hier nicht
+            // zulässig.
+            storageZeroNoWrite = false;
+            sungrowNoWrite = false;
+            if (sungrowHybridActive) {
+                sungrowWriteMode = 'write-license-power-cap';
+                this._sungrowHybridLastMode = sungrowWriteMode;
+            }
+
+            if (targetW > 0) {
+                dischargeDemandHardCapW = Math.min(
+                    Number.isFinite(Number(dischargeDemandHardCapW)) && Number(dischargeDemandHardCapW) > 0
+                        ? Number(dischargeDemandHardCapW)
+                        : Number.POSITIVE_INFINITY,
+                    Number(storageLicensePowerDecision.limitW),
+                );
+                dischargeDemandHardCapReason = licenseReason;
+            } else if (targetW < 0) {
+                chargeDemandHardCapW = Math.min(
+                    Number.isFinite(Number(chargeDemandHardCapW)) && Number(chargeDemandHardCapW) > 0
+                        ? Number(chargeDemandHardCapW)
+                        : Number.POSITIVE_INFINITY,
+                    Number(storageLicensePowerDecision.limitW),
+                );
+                chargeDemandHardCapReason = licenseReason;
+            }
+
+            storageNvpBalanceDiag = {
+                ...(storageNvpBalanceDiag || {}),
+                targetW,
+                licensePowerLimited: true,
+                licensePowerRequestedW: targetBeforeLicenseLimitW,
+                licensePowerLimitW: Number(storageLicensePowerDecision.limitW),
+                licensePowerProfile: String(storageLicensePowerProfile.id || 'home'),
+            };
+        }
+        await this._setIfChanged('speicher.regelung.licensePowerLimited', storageLicensePowerLimited);
+        await this._setIfChanged('speicher.regelung.licensePowerJson', JSON.stringify({
+            ts: now,
+            edition: String(storageLicensePowerProfile.edition || ''),
+            profile: String(storageLicensePowerProfile.id || 'none'),
+            label: String(storageLicensePowerProfile.label || ''),
+            industrial: storageLicensePowerProfile.industrial === true,
+            unrestricted: storageLicensePowerProfile.unrestricted === true,
+            configuredRatedPowerW: Math.round(Number(storageLicensePowerProfile.configuredRatedPowerW || 0)),
+            effectiveRatedPowerW: Math.round(Number(storageLicensePowerProfile.effectiveRatedPowerW || 0)),
+            maxCommandW: Math.round(Number(storageLicensePowerProfile.maxCommandW || 0)),
+            defaultStepW: Math.round(Number(storageLicensePowerProfile.defaultStepW || 0)),
+            defaultMaxDeltaWPerTick: Math.round(Number(storageLicensePowerProfile.defaultMaxDeltaWPerTick || 0)),
+            defaultPvMaxDeltaWPerTick: Math.round(Number(storageLicensePowerProfile.defaultPvMaxDeltaWPerTick || 0)),
+            defaultBalancePredictionMaxW: Math.round(Number(storageLicensePowerProfile.defaultBalancePredictionMaxW || 0)),
+            requestedW: Math.round(Number(storageLicensePowerDecision.requestedW || 0)),
+            finalW: Math.round(Number(targetW || 0)),
+            limited: storageLicensePowerLimited,
+            reason: storageLicensePowerLimited ? String(reason || '') : '',
+        }));
+
         if (sungrowDiagPayload) {
             sungrowDiagPayload = {
                 ...sungrowDiagPayload,
@@ -4720,6 +5273,24 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         // Phase 2: Dispatcher-Diagnose-Zustände schreiben
         // ------------------------------------------------------------
         const _finalW = targetW;
+
+        // Letzte Konsistenzpruefung: Auch nach nachgelagerten Caps/Hersteller-
+        // Profilen bleibt ein echter Policy-Stopp eindeutig diagnostizierbar.
+        if (!storagePolicyBlocked && Number(targetW) === 0) {
+            const finalReasonLower = String(reason || '').toLowerCase();
+            const finalSource = String(source || '').toLowerCase();
+            if (
+                ['reserve', 'policy'].includes(finalSource)
+                || (finalSource === 'tarif' && /gesperrt|blockiert|warte/.test(finalReasonLower))
+                || /entladen blockiert|entladung gesperrt|durch policy deaktiviert/.test(finalReasonLower)
+            ) {
+                storagePolicyBlocked = true;
+                storagePolicyBlockReason = String(reason || 'Speicher-Entladung durch Policy gesperrt');
+            }
+        }
+        await this._setIfChanged('speicher.regelung.policyBlocked', !!storagePolicyBlocked);
+        await this._setIfChanged('speicher.regelung.policyBlockReason', storagePolicyBlocked ? String(storagePolicyBlockReason || reason || '') : '');
+        await this._setIfChanged('speicher.regelung.policySource', String(storageOperatingPolicy.source || ''));
 
         await this._setIfChanged('speicher.regelung.requestW', Number.isFinite(Number(_reqW)) ? Math.round(Number(_reqW)) : 0);
         await this._setIfChanged('speicher.regelung.requestQuelle', String(_reqQuelle || ''));
@@ -4863,6 +5434,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     autoTariffActive: !!autoTarifEnabled,
                     multiUseActive: !!multiUsePolicyActive,
                     inactiveMultiUseZonesIgnored: !!ignoreStaleMultiUsePolicy,
+                    selfSocPolicy: storageOperatingPolicy,
+                    blocked: !!storagePolicyBlocked,
+                    blockReason: storagePolicyBlocked ? String(storagePolicyBlockReason || reason || '') : '',
+                    policySource: String(storageOperatingPolicy.source || ''),
                     pureSelfConsumptionWithoutMultiUse: !multiUsePolicyActive,
                     storageFarmDistribution: !!hasFarmSetpoints,
                     storageFarmAutoStart: false,
@@ -5955,6 +6530,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             socHystPct: storage.socHystPct,
             modeHoldSec: storage.modeHoldSec,
             tariffPermissionHoldSec: storage.tariffPermissionHoldSec,
+            ratedPowerW: storage.ratedPowerW,
             maxChargeW: storage.maxChargeW,
             maxDischargeW: storage.maxDischargeW,
             stepW: storage.stepW,
@@ -5981,6 +6557,15 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
 
             selfDischargeEnabled: storage.selfDischargeEnabled,
+            // Getrennte Standalone-Snapshot-Felder verhindern, dass eine spaeter
+            // deaktivierte MultiUse-Policy ihre frueheren SoC-Zonen weiterverwendet.
+            standaloneSelfDischargeEnabled: storage.standaloneSelfDischargeEnabled,
+            standaloneSelfMinSocPct: storage.standaloneSelfMinSocPct,
+            standaloneSelfMaxSocPct: storage.standaloneSelfMaxSocPct,
+            standaloneSelfTargetGridImportW: storage.standaloneSelfTargetGridImportW,
+            standaloneSelfImportThresholdW: storage.standaloneSelfImportThresholdW,
+            multiUsePolicyApplied: storage.multiUsePolicyApplied,
+            multiUsePolicyActive: storage.multiUsePolicyActive,
             // Herstellerprofile: generisch bleibt die normale Eigenverbrauchslogik,
             // FENECON/OpenEMS nutzt gegateten Watchdog-Refresh/Assist. Sungrow nutzt ab 0.8.96 denselben
             // geschlossenen NVP-Regelkreis wie Generic/E3DC/Farm; alte PV-Deckungs-
@@ -8024,6 +8609,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.topologie', 'Aktive Speicher-Schreibtopologie', 'string', 'text', 'none');
         await mk('speicher.regelung.topologieGrund', 'Grund der Speicher-Schreibtopologie', 'string', 'text', '');
         await mk('speicher.regelung.topologieJson', 'Speicher-Steuerhoheit (JSON)', 'string', 'json', '');
+        await mk('speicher.regelung.licensePowerProfile', 'Lizenz-Leistungsprofil Speicher', 'string', 'text', 'none');
+        await mk('speicher.regelung.licensePowerLimitW', 'Lizenz-Hardcap Speicherleistung (W, 0 = frei)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.ratedPowerW', 'Konfigurierte Speicher-Nennleistung (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.licensePowerLimited', 'Speicherleistung durch Lizenzprofil begrenzt', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.licensePowerJson', 'Lizenz-Leistungsprofil Speicher (JSON)', 'string', 'json', '');
         await mk('speicher.regelung.herstellerprofil', 'Speicher-Herstellerprofil', 'string', 'text', 'generic');
         await mk('speicher.regelung.speicherKopplung', 'Speicher-Kopplung AC/DC', 'string', 'text', 'ac');
         await mk('speicher.regelung.dcPvPowerW', 'DC-/Hybrid-PV Erzeugungsleistung', 'number', 'value.power', 0);
@@ -8089,6 +8679,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.batteryPowerFeedbackHoldMs', 'Konfigurierte Istwert-Haltezeit (ms)', 'number', 'value.interval', 45000);
         await mk('speicher.regelung.dischargeDemandCapW', 'Entlade-Demand-Cap nach Netzbezug (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.dischargeDemandCapReason', 'Entlade-Demand-Cap Grund', 'string', 'text', '');
+        await mk('speicher.regelung.antiExportStatus', 'Speicher Anti-Export Status', 'string', 'text', 'inactive');
+        await mk('speicher.regelung.antiExportJson', 'Speicher Anti-Export Diagnose (JSON)', 'string', 'json', '');
         await mk('speicher.regelung.chargeDemandCapW', 'Lade-Demand-Cap nach Headroom/PV (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.chargeDemandCapReason', 'Lade-Demand-Cap Grund', 'string', 'text', '');
 
@@ -8130,6 +8722,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.tarifPvHeadroomKWh', 'Tarif PV‑Reserve: erwartbare PV-Ladung (kWh)', 'number', 'value.energy', null);
 
         await mk('speicher.regelung.policyJson', 'Policy/Audit (JSON)', 'string', 'text', '');
+        await mk('speicher.regelung.policyBlocked', 'Speicheraktion durch Policy blockiert', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.policyBlockReason', 'Grund der Speicher-Policy-Sperre', 'string', 'text', '');
+        await mk('speicher.regelung.policySource', 'Wirksame Speicher-Policy-Quelle', 'string', 'text', '');
 
         await mk('speicher.regelung.importLimitW', 'Netzbezug-Limit effektiv (W)', 'number', 'value.power');
         await mk('speicher.regelung.importLimitQuelle', 'Netzbezug-Limit Quelle', 'string', 'text');
@@ -8152,6 +8747,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.lskLadenAktiviert', 'LSK-Laden aktiviert', 'boolean', 'indicator', false);
         await mk('speicher.regelung.selfMinSocPct', 'Eigenverbrauch Min-SoC (%)', 'number', 'value', 0);
         await mk('speicher.regelung.selfMaxSocPct', 'Eigenverbrauch Max-SoC (%)', 'number', 'value', 0);
+        await mk('speicher.regelung.selfSocPolicySource', 'Eigenverbrauch SoC-Policy Quelle', 'string', 'text', '');
+        await mk('speicher.regelung.selfSocPolicyJson', 'Eigenverbrauch SoC-Policy Diagnose (JSON)', 'string', 'json', '');
         await mk('speicher.regelung.selfTargetGridImportW', 'Eigenverbrauch Ziel-Netzbezug (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.selfImportThresholdW', 'Eigenverbrauch Deadband (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.selfNvpRawW', 'Eigenverbrauch NVP RAW (W)', 'number', 'value.power', null);
@@ -8231,14 +8828,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.evcsSpeicherSchutzAktion', 'Asymmetrischer EVCS-Speicherschutz Aktion', 'string', 'text', '');
         await mk('speicher.regelung.evcsSpeicherSchutzJson', 'Asymmetrischer EVCS-Speicherschutz Diagnose', 'string', 'json', '');
         await mk('speicher.regelung.evcsSpeicherSchutzQuelle', 'Quelle der EVCS-Speicher-Policy', 'string', 'text', '');
-
-        // Kompakte Maschinen-/Logdiagnose fuer die letzte Anti-Export-Schranke.
-        // Diese States werden nicht als neue AppCenter-Karte dargestellt.
-        await mk('speicher.regelung.antiExportAktiv', 'Anti-Export-Sicherheitsgate aktiv', 'boolean', 'indicator', false);
-        await mk('speicher.regelung.antiExportAktion', 'Anti-Export-Aktion', 'string', 'text', 'inactive');
-        await mk('speicher.regelung.antiExportCapW', 'Sicherer Entlade-Headroom am NVP (W)', 'number', 'value.power', 0);
-        await mk('speicher.regelung.antiExportPrognoseNvpW', 'Prognostizierter NVP nach Anti-Export-Gate (W)', 'number', 'value.power', null);
-        await mk('speicher.regelung.antiExportJson', 'Anti-Export-Diagnose', 'string', 'json', '');
 
         // Sungrow-Hybrid-Diagnoseobjekte vor dem ersten zyklischen Schreiben anlegen.
         // Zusätzlich sichert _setIfChanged fehlende Runtime-States ab, falls ein Update
@@ -8435,4 +9024,12 @@ function clamp(n, min, max) {
     return n;
 }
 
-module.exports = { SpeicherRegelungModule, resolveEvcsProtectedStorageTarget };
+module.exports = {
+    SpeicherRegelungModule,
+    resolveEvcsProtectedStorageTarget,
+    resolveStorageAntiExportTarget,
+    resolveStorageLicenseEdition,
+    deriveStorageRatedPowerW,
+    resolveStorageLicensePowerProfile,
+    applyStorageLicensePowerLimit,
+};

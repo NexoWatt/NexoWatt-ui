@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/measurement-freshness.ts
- * Quell-Hash: sha256:cb1447695aaeae150a3ac9dd55031634d2bafbfa1d1fbe8fb49bea6ea780be35
+ * Quell-Hash: sha256:24a3d3b4273bfa6b72edb0fd052a6a3f32b319816082d57625abbf59dad7073e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -16,7 +16,6 @@
  * 3. npm run test:runtime-executables prüfen.
  */
 'use strict';
-const { normalizeOpposingPowerFlows } = require('./power-flow-coherence');
 function finiteOrNull(value) {
     if (value === null || value === undefined || value === '' || typeof value === 'boolean')
         return null;
@@ -239,20 +238,22 @@ function resolveNvpDisplay(input) {
             src = 'split-export-only';
         }
     }
+    const rawBuyW = Math.max(0, Math.abs(gridBuyRaw ?? 0));
+    const rawSellW = Math.max(0, Math.abs(gridSellRaw ?? 0));
     const hasGrid = gridNetRaw !== null || gridBuyRaw !== null || gridSellRaw !== null;
-    const rawBuyForNetW = Math.max(0, Math.abs(gridBuyRaw ?? 0));
-    const rawSellForNetW = Math.max(0, Math.abs(gridSellRaw ?? 0));
-    const coherent = gridNetRaw !== null
-        ? normalizeOpposingPowerFlows(Math.max(0, gridNetRaw), Math.max(0, -gridNetRaw), 0)
-        : normalizeOpposingPowerFlows(rawBuyForNetW, rawSellForNetW, 0);
+    const resolvedNetW = gridNetRaw !== null ? gridNetRaw : (hasGrid ? rawBuyW - rawSellW : null);
+    const gridBuyW = resolvedNetW === null ? 0 : Math.max(0, resolvedNetW);
+    const gridSellW = resolvedNetW === null ? 0 : Math.max(0, -resolvedNetW);
+    if (rawBuyW > 0 && rawSellW > 0)
+        src = `${src}-net-normalized`;
     return {
         gridBuyRaw,
         gridSellRaw,
-        gridNetRaw: hasGrid ? coherent.signedW : null,
-        gridBuyW: coherent.positiveW,
-        gridSellW: coherent.negativeW,
+        gridNetRaw: resolvedNetW,
+        gridBuyW,
+        gridSellW,
         hasGrid,
-        src: coherent.conflict ? `${src}:netted` : src,
+        src,
         ...mapped,
     };
 }
@@ -336,20 +337,19 @@ function resolveNvpMeasurement(input) {
     const measurementAgeMs = ages.length ? Math.min(...ages) : null;
     if (importFresh && exportFresh) {
         if (skewMs === null || skewMs <= maxSkewMs) {
-            const coherentFlow = normalizeOpposingPowerFlows(importW, exportW, 0);
             return {
                 usable: true,
                 coherent: true,
                 degraded: false,
                 mode: 'split',
-                source: coherentFlow.conflict ? 'split-coherent-netted' : 'split-coherent',
+                source: 'split-coherent',
                 status: 'ok',
-                netW: coherentFlow.signedW,
-                importW: coherentFlow.positiveW,
-                exportW: coherentFlow.negativeW,
+                netW: importW - exportW,
+                importW,
+                exportW,
                 skewMs,
                 measurementAgeMs,
-                reason: coherentFlow.conflict ? 'split-coherent-opposing-values-netted' : 'split-coherent',
+                reason: 'split-coherent',
             };
         }
         const useImport = importTs !== null && exportTs !== null ? importTs >= exportTs : (channelAge(imp) ?? Infinity) <= (channelAge(exp) ?? Infinity);

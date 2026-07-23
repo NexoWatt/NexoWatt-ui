@@ -8,6 +8,7 @@
  * lesen Istwerte; sie schreiben keine Hardware-Sollwerte.
  */
 
+declare const require: any;
 declare const module: { exports: unknown };
 
 const {

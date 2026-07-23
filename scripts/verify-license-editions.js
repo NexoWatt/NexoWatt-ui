@@ -2,10 +2,10 @@
 'use strict';
 
 /**
- * Prüft das Lizenzmodell ab 0.8.59:
- * - EOS = Vollversion
- * - HEMS = kleiner freigegebener Funktionsumfang
- * - alte NW1/NW1T-Schlüssel bleiben EOS-kompatibel
+ * Prüft das Lizenzmodell ab 0.8.137:
+ * - Pro = sichtbares Vollprodukt (interner Legacy-Key `eos`)
+ * - Home = kleiner freigegebener Funktionsumfang
+ * - alte NW1/NW1T-Schlüssel bleiben Pro/EOS-kompatibel
  * - TypeScript-Migrationsdiagnosen sind aus der sichtbaren App-Center-UI entfernt
  */
 const fs = require('fs');
@@ -34,6 +34,7 @@ need(main.includes('chargingManagement') && main.includes('heatingRodControl') &
 need(main.includes('energyWallet') && main.includes('energyWalletPro'), 'main.js: Energie-Wertkonto muss Home/EOS-Feature sein.');
 need(main.includes('_nwLicenseMaxWallboxes') && main.includes('if (edition === \'hems\') return 3'), 'main.js: HEMS-Wallboxlimit 3 fehlt.');
 need(main.includes('license.edition') && main.includes('license.featuresJson') && main.includes('license.maxWallboxes'), 'main.js: Lizenz-States für Edition/Features/Wallboxlimit fehlen.');
+need(main.includes('license.storagePowerProfile') && main.includes('license.maxStoragePowerW'), 'main.js: Home/Pro-Speicherleistungs-States fehlen.');
 need(main.includes('_nwApplyLicenseLimitsToInstallerPatch'), 'main.js: Backend-Gate für Installer-Patches fehlt.');
 need(main.includes('cfgOut.license = this._nwBuildLicenseFeatureInfo()'), 'main.js: Installer-API liefert Lizenzinfo nicht aus.');
 need(main.includes('sendNoStore(res)') && main.includes('Refresh the runtime license cache here'), 'main.js: Installer-API muss Lizenzcache refreshen und no-store liefern.');
@@ -45,6 +46,9 @@ need(moduleManager.includes("key: 'peakShaving'") && moduleManager.includes("thi
 need(moduleManager.includes("key: 'chargingManagement'") && moduleManager.includes("this._licenseAllowsApp('charging')"), 'ems/module-manager.js: Lademanagement-Gate fehlt.');
 need(app.includes('HEMS_APP_IDS'), 'www/ems-apps.js: HEMS-App-Whitelist fehlt.');
 need(app.includes('Lizenz: ${_licenseLabel()}'), 'www/ems-apps.js: Lizenzkarte im App-Center fehlt.');
+need(app.includes("if (ed === 'eos') return 'Pro'"), 'www/ems-apps.js: Vollprodukt muss sichtbar als Pro bezeichnet werden.');
+need(app.includes("Home · max. 50 kW") && app.includes("Pro · frei skalierbar"), 'www/ems-apps.js: Home/Pro-Speicherleistungsprofil fehlt.');
+need(html.includes('storageRatedPowerKW') && html.includes('storageLicensePowerProfile'), 'www/ems-apps.html: Speicher-Nennleistung und Lizenzprofil fehlen.');
 need(app.includes('fetchLicenseInfoFallback') && app.includes('/api/license/info?t='), 'www/ems-apps.js: No-Cache-Lizenzfallback aus /api/license/info fehlt.');
 need(main.includes('const featureInfo = this._nwBuildLicenseFeatureInfo()') && main.includes('eosFullAccess: !!featureInfo.eosFullAccess'), 'main.js: /api/license/info muss konsistente Feature-/EOS-Daten aus einem FeatureInfo-Snapshot liefern.');
 need(app.includes('_inferLicenseFromSuccessfulInstallerGate') && app.includes('Lizenz über Backend-Gate erkannt'), 'www/ems-apps.js: App-Center-Gate-Fallback für gültige Runtime-Lizenz fehlt.');
@@ -67,4 +71,4 @@ if (errors.length) {
   errors.forEach((e) => console.error(' - ' + e));
   process.exit(1);
 }
-console.log('[license-editions] OK: EOS/HEMS-Lizenzmodell und UI-Cleanup sind verdrahtet.');
+console.log('[license-editions] OK: Home/Pro-Lizenzmodell (intern HEMS/EOS) und Speicherleistungsprofile sind verdrahtet.');

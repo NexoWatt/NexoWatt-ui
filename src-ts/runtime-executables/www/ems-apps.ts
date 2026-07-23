@@ -107,6 +107,8 @@
 
     storageControlMode: document.getElementById('storageControlMode'),
     storageCapacityKWh: document.getElementById('storageCapacityKWh'),
+    storageLicensePowerProfile: document.getElementById('storageLicensePowerProfile'),
+    storageRatedPowerKW: document.getElementById('storageRatedPowerKW'),
     storageSelfTargetGridImportW: document.getElementById('storageSelfTargetGridImportW'),
     storageSelfImportThresholdW: document.getElementById('storageSelfImportThresholdW'),
     storageSelfNvpSmoothingSec: document.getElementById('storageSelfNvpSmoothingSec'),
@@ -858,7 +860,7 @@
 
   const STORAGE_DP_FIELDS = [
     { key: 'socObjectId', label: 'SoC (%)', requiredModes: ['targetPower','limits','enableFlags'] },
-    { key: 'batteryPowerObjectId', label: 'Ist-Leistung (W) – für sichere Entladung erforderlich', requiredModes: [], hint: 'Für automatische Entladung und das harte Anti-Export-Gate muss dieser signed Messwert frisch sein (+W = Entladen, -W = Laden). Ohne gültigen Wert stoppt NexoWatt die Entladung fail-safe mit 0 W.' },
+    { key: 'batteryPowerObjectId', label: 'Ist-Leistung (W) (optional)', requiredModes: [] },
     { key: 'dcPvPowerObjectId', label: 'DC-/Hybrid-PV Erzeugung (W)', requiredModes: [], showForCoupling: ['dc'], hint: 'Nur bei DC-/Hybrid-Speichern: Erzeugungsleistung des Hybrid-/PV-Wechselrichters. Dieser Wert ist eine Messung, kein Batterie-Sollwert, und hilft bei Forecast-/0-Einspeise-/FENECON-Erkennung.' },
     { key: 'targetPowerObjectId', label: 'Sollleistung signed (W)', requiredModes: ['targetPower'], hint: 'Allgemeiner bidirektionaler Sollwert. NexoWatt-Konvention: +W = Entladen, -W = Laden. Wird genutzt, wenn keine getrennten Ziel-DPs gesetzt sind oder als Fallback fuer eine fehlende Split-Richtung.' },
     { key: 'targetChargePowerObjectId', label: 'Sollwert Laden (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional: positiver Lade-Sollwert. Kann zusammen mit Entladen oder einzeln gemappt werden; bei Split wird die Gegenrichtung auf 0 gesetzt.' },
@@ -877,7 +879,7 @@
   ];
 
   let currentConfig = null;
-  let currentLicenseInfo = { valid: false, edition: 'none', editionLabel: 'Keine Lizenz', maxWallboxes: 0, features: {} };
+  let currentLicenseInfo = { valid: false, edition: 'none', editionLabel: 'Keine Lizenz', maxWallboxes: 0, storagePowerProfile: { id: 'none', label: 'Keine Lizenz', maxCommandW: 0 }, maxStoragePowerW: 0, features: {} };
   let dpTargetInputId = null;
   let treePrefix = '';
 
@@ -894,6 +896,7 @@
    * und schließt beim nächsten Poll wieder.
    */
   const shadowJsonDetailsOpen = new Set();
+
 
   const HEMS_APP_IDS = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet']);
   const HOME_LICENSE_FEATURES = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations','nlP1','nlP1Basic','p1Dsmr']);
@@ -928,11 +931,11 @@
   function _licenseEdition() {
     const info = currentLicenseInfo && typeof currentLicenseInfo === 'object' ? currentLicenseInfo : {};
     const e = String(info.edition || '').trim().toLowerCase();
-    if (e === 'eos') return 'eos';
+    if (e === 'eos' || e === 'pro') return 'eos';
     if (e === 'hems' || e === 'home') return 'hems';
     const label = String(info.editionLabel || info.message || info.msg || '').trim().toLowerCase();
-    if (info.eosFullAccess === true || /\beos\b/.test(label)) return 'eos';
-    if (/\bhems\b/.test(label)) return 'hems';
+    if (info.eosFullAccess === true || info.proFullAccess === true || /\b(eos|pro)\b/.test(label)) return 'eos';
+    if (/\b(hems|home)\b/.test(label)) return 'hems';
     if ((info.valid === true || info.ok === true) && e !== 'none') return 'eos';
     return 'none';
   }
@@ -965,9 +968,57 @@
 
   function _licenseLabel() {
     const ed = _licenseEdition();
-    if (ed === 'eos') return 'EOS';
+    if (ed === 'eos') return 'Pro';
     if (ed === 'hems') return 'Home';
     return 'Keine Lizenz';
+  }
+
+  function _storagePowerProfileInfo() {
+    const ed = _licenseEdition();
+    const raw = currentLicenseInfo && currentLicenseInfo.storagePowerProfile && typeof currentLicenseInfo.storagePowerProfile === 'object'
+      ? currentLicenseInfo.storagePowerProfile
+      : {};
+    const maxStoragePowerWRaw = Number(currentLicenseInfo && currentLicenseInfo.maxStoragePowerW);
+    const maxCommandWRaw = Number(raw.maxCommandW);
+    const maxCommandW = Number.isFinite(maxCommandWRaw) && maxCommandWRaw >= 0
+      ? maxCommandWRaw
+      : (Number.isFinite(maxStoragePowerWRaw) && maxStoragePowerWRaw >= 0 ? maxStoragePowerWRaw : (ed === 'hems' ? 50000 : 0));
+    return {
+      edition: ed,
+      id: String(raw.id || (ed === 'eos' ? 'pro' : (ed === 'hems' ? 'home' : 'none'))),
+      label: String(raw.label || (ed === 'eos' ? 'Pro' : (ed === 'hems' ? 'Home' : 'Keine Lizenz'))),
+      unrestricted: raw.unrestricted === true || ed === 'eos',
+      industrial: raw.industrial === true || ed === 'eos',
+      maxCommandW: Math.max(0, Number(maxCommandW) || 0),
+    };
+  }
+
+  function updateStorageLicensePowerUi() {
+    const profile = _storagePowerProfileInfo();
+    if (els.storageLicensePowerProfile) {
+      if (profile.id === 'home') {
+        els.storageLicensePowerProfile.value = 'Home · max. 50 kW';
+      } else if (profile.id === 'pro') {
+        els.storageLicensePowerProfile.value = 'Pro · frei skalierbar';
+      } else {
+        els.storageLicensePowerProfile.value = 'Keine gültige Lizenz';
+      }
+      els.storageLicensePowerProfile.title = profile.id === 'home'
+        ? 'Home: finaler Lade- und Entladebefehl maximal 50 kW.'
+        : (profile.id === 'pro'
+          ? 'Pro: keine Lizenz-Leistungsgrenze; Anlagen- und Sicherheitsgrenzen bleiben aktiv.'
+          : 'Ohne gültige Lizenz ist die Speichersteuerung nicht freigegeben.');
+    }
+    if (els.storageRatedPowerKW) {
+      if (profile.id === 'home') {
+        els.storageRatedPowerKW.max = '50';
+        const current = Number(els.storageRatedPowerKW.value);
+        if (Number.isFinite(current) && current > 50) els.storageRatedPowerKW.value = '50';
+      } else {
+        els.storageRatedPowerKW.removeAttribute('max');
+      }
+      els.storageRatedPowerKW.disabled = profile.id === 'none';
+    }
   }
 
   /**
@@ -996,15 +1047,15 @@
     const rawEdition = String(unwrap(src.edition) || '').trim().toLowerCase();
     const labelHint = String(unwrap(src.editionLabel) || unwrap(src.message) || unwrap(src.msg) || '').trim().toLowerCase();
     const keyHint = String(unwrap(src.licenseKey) || unwrap(src.licenseKeyMasked) || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    let edition = rawEdition === 'eos' ? 'eos' : (rawEdition === 'hems' ? 'hems' : 'none');
-    if (edition === 'none' && (src.eosFullAccess === true || asBool(src.eosFullAccess) || /\beos\b/.test(labelHint))) edition = 'eos';
-    if (edition === 'none' && /\bhems\b/.test(labelHint)) edition = 'hems';
+    let edition = (rawEdition === 'eos' || rawEdition === 'pro') ? 'eos' : ((rawEdition === 'hems' || rawEdition === 'home') ? 'hems' : 'none');
+    if (edition === 'none' && (src.eosFullAccess === true || asBool(src.eosFullAccess) || src.proFullAccess === true || asBool(src.proFullAccess) || /\b(eos|pro)\b/.test(labelHint))) edition = 'eos';
+    if (edition === 'none' && /\b(hems|home)\b/.test(labelHint)) edition = 'hems';
     if (edition === 'none' && /^NW1TH/.test(keyHint)) edition = 'hems';
     if (edition === 'none' && /^(NW1E|NW1TE|NW1T|NW1)/.test(keyHint)) edition = 'eos';
     // /api/license/info uses ok=true for transport success; the license itself is valid=true.
     const valid = asBool(src.valid) || edition === 'eos' || edition === 'hems';
     if (!valid) edition = 'none';
-    const label = edition === 'eos' ? 'EOS' : (edition === 'hems' ? 'Home' : 'Keine Lizenz');
+    const label = edition === 'eos' ? 'Pro' : (edition === 'hems' ? 'Home' : 'Keine Lizenz');
     let features = src.features && typeof src.features === 'object' ? src.features : {};
     const featuresJsonRaw = unwrap(src.featuresJson);
     if ((!features || !Object.keys(features).length) && typeof featuresJsonRaw === 'string' && featuresJsonRaw.trim()) {
@@ -1014,6 +1065,21 @@
       } catch (_e) {}
     }
     const maxWallboxesRaw = Number(unwrap(src.maxWallboxes));
+    const rawStorageProfile = src.storagePowerProfile && typeof src.storagePowerProfile === 'object'
+      ? src.storagePowerProfile
+      : {};
+    const maxStoragePowerWRaw = Number(unwrap(src.maxStoragePowerW));
+    const profileMaxCommandWRaw = Number(unwrap(rawStorageProfile.maxCommandW));
+    const storagePowerProfile = {
+      edition,
+      id: String(unwrap(rawStorageProfile.id) || (edition === 'eos' ? 'pro' : (edition === 'hems' ? 'home' : 'none'))),
+      label: String(unwrap(rawStorageProfile.label) || label),
+      industrial: asBool(rawStorageProfile.industrial) || edition === 'eos',
+      unrestricted: asBool(rawStorageProfile.unrestricted) || edition === 'eos',
+      maxCommandW: Number.isFinite(profileMaxCommandWRaw)
+        ? Math.max(0, Math.round(profileMaxCommandWRaw))
+        : (Number.isFinite(maxStoragePowerWRaw) ? Math.max(0, Math.round(maxStoragePowerWRaw)) : (edition === 'hems' ? 50000 : 0)),
+    };
     return {
       valid,
       edition,
@@ -1023,8 +1089,11 @@
       expiresAt: Number(unwrap(src.expiresAt) || 0),
       daysRemaining: Number(unwrap(src.daysRemaining) || 0),
       maxWallboxes: Number.isFinite(maxWallboxesRaw) ? Math.max(0, Math.round(maxWallboxesRaw)) : 0,
+      maxStoragePowerW: storagePowerProfile.maxCommandW,
+      storagePowerProfile,
       features: features || {},
-      eosFullAccess: edition === 'eos' || src.eosFullAccess === true || asBool(src.eosFullAccess)
+      eosFullAccess: edition === 'eos' || src.eosFullAccess === true || asBool(src.eosFullAccess),
+      proFullAccess: edition === 'eos' || src.proFullAccess === true || asBool(src.proFullAccess)
     };
   }
 
@@ -1038,7 +1107,7 @@
     // App-Center usable by treating the already-open gate as EOS. Backend module gates remain
     // authoritative and still block if the license is actually invalid.
     if (data && data.ok === true && cfg && typeof cfg === 'object') {
-      return normalizeLicenseInfo({ valid: true, edition: 'eos', editionLabel: 'EOS', message: 'Lizenz über Backend-Gate erkannt' });
+      return normalizeLicenseInfo({ valid: true, edition: 'eos', editionLabel: 'Pro', message: 'Lizenz über Backend-Gate erkannt' });
     }
     return normalizeLicenseInfo(null);
   }
@@ -1066,6 +1135,12 @@
         editionLabel: readVal('license.edition') || readVal('license.message') || '',
         featuresJson: readVal('license.featuresJson') || '{}',
         maxWallboxes: readVal('license.maxWallboxes'),
+        storagePowerProfile: {
+          id: readVal('license.storagePowerProfile') || '',
+          label: String(readVal('license.storagePowerProfile') || '').toLowerCase() === 'pro' ? 'Pro' : (String(readVal('license.storagePowerProfile') || '').toLowerCase() === 'home' ? 'Home' : ''),
+          maxCommandW: readVal('license.maxStoragePowerW'),
+        },
+        maxStoragePowerW: readVal('license.maxStoragePowerW'),
         message: readVal('license.message') || '',
         expiresAt: readVal('license.expiresAt') || 0,
         daysRemaining: readVal('license.daysRemaining') || 0,
@@ -1276,6 +1351,7 @@
       if (before !== after) {
         try { buildAppsUI(); } catch (_eBuildApps) {}
         try { buildEvcsUI(); } catch (_eBuildEvcs) {}
+        try { updateStorageLicensePowerUi(); } catch (_eStorageLicenseUi) {}
         try { scheduleValidation(200); } catch (_eValidation) {}
         if (_licenseEdition() !== 'none') {
           try { setStatus('Lizenz aktualisiert: ' + _licenseLabel() + '.', 'ok'); } catch (_eStatus) {}
@@ -2555,7 +2631,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const licenseCard = document.createElement('div');
     licenseCard.className = 'nw-config-card nw-license-edition-card';
     const licenseLimit = _maxEvcsCount() < 50 ? ` · Lademanagement bis ${_maxEvcsCount()} Wallboxen` : ' · Vollzugriff';
-    licenseCard.innerHTML = `<div class="nw-config-card__header"><div><div class="nw-config-card__title">Lizenz: ${_licenseLabel()}</div><div class="nw-config-card__subtitle">${_licenseEdition() === 'eos' ? 'EOS ist die Vollversion mit allen Apps und künftigen Erweiterungen.' : 'Home zeigt nur die freigegebenen Basis-Apps.'}${licenseLimit}</div></div></div>`;
+    licenseCard.innerHTML = `<div class="nw-config-card__header"><div><div class="nw-config-card__title">Lizenz: ${_licenseLabel()}</div><div class="nw-config-card__subtitle">${_licenseEdition() === 'eos' ? 'Pro ist die Vollversion mit allen Apps, Industrie-Skalierung und künftigen Erweiterungen.' : 'Home zeigt die freigegebenen Basis-Apps mit bis zu 50 kW Speicherleistung.'}${licenseLimit}</div></div></div>`;
     els.appsList.appendChild(licenseCard);
     // 0.8.37: Reine Zuordnungs-/Stationskarten und große Modul-Konfigurationen
     // werden fachlich passend in eigene Reiter gerendert. Der Apps-Reiter bleibt
@@ -9228,7 +9304,6 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       // Istwerte (Messwerte)
       grid.appendChild(mkGridDivider('Istwerte (Messwerte)'));
-      grid.appendChild(mkGridHelp('Für sichere automatische Entladung muss je Speicher mindestens ein frischer Istleistungsweg vorhanden sein: Signed oder getrennt Laden/Entladen. Ohne belastbares physisches Feedback stoppt das Anti-Export-Gate die Entladung fail-safe mit 0 W.'));
 
       grid.appendChild(mkCheckField('Vorzeichen Istleistung Signed invertieren', `sf_${idx}_invSigned`, !!s.invertSignedPowerSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertSignedPowerSign = !!v; }));
       grid.appendChild(mkCheckField('Vorzeichen Ladeleistung invertieren', `sf_${idx}_invChg`, !!s.invertChargeSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertChargeSign = !!v; }));
@@ -10973,9 +11048,33 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       const cap = Number(currentConfig.storage && currentConfig.storage.capacityKWh);
       els.storageCapacityKWh.value = (Number.isFinite(cap) && cap > 0) ? String(cap) : '';
     }
+    if (els.storageRatedPowerKW) {
+      const ratedW = Number(currentConfig.storage && currentConfig.storage.ratedPowerW);
+      els.storageRatedPowerKW.value = (Number.isFinite(ratedW) && ratedW > 0)
+        ? String(Math.round((ratedW / 1000) * 10) / 10)
+        : '';
+    }
+    updateStorageLicensePowerUi();
     const stSelf = (currentConfig.storage && typeof currentConfig.storage === 'object') ? currentConfig.storage : {};
-    if (els.storageSelfTargetGridImportW) els.storageSelfTargetGridImportW.value = Number.isFinite(Number(stSelf.selfTargetGridImportW)) ? String(Math.round(Number(stSelf.selfTargetGridImportW))) : '50';
-    if (els.storageSelfImportThresholdW) els.storageSelfImportThresholdW.value = Number.isFinite(Number(stSelf.selfImportThresholdW)) ? String(Math.round(Number(stSelf.selfImportThresholdW))) : '50';
+    const stSelfSourceMarker = String(stSelf.multiUsePolicySource || '').trim().toLowerCase();
+    const stSelfAppliedMarker = stSelf.multiUsePolicyApplied === true
+      || stSelf.multiUsePolicyApplied === 1
+      || String(stSelf.multiUsePolicyApplied || '').trim().toLowerCase() === 'true';
+    const stSelfWasMultiUseMirrored = stSelfAppliedMarker
+      || stSelfSourceMarker === 'installerconfig.storagemultiuse'
+      || stSelfSourceMarker.includes('multiuse-applied');
+    if (els.storageSelfTargetGridImportW) {
+      const standaloneTargetW = stSelf.standaloneSelfTargetGridImportW !== undefined
+        ? stSelf.standaloneSelfTargetGridImportW
+        : (!stSelfWasMultiUseMirrored ? stSelf.selfTargetGridImportW : 50);
+      els.storageSelfTargetGridImportW.value = Number.isFinite(Number(standaloneTargetW)) ? String(Math.round(Number(standaloneTargetW))) : '50';
+    }
+    if (els.storageSelfImportThresholdW) {
+      const standaloneDeadbandW = stSelf.standaloneSelfImportThresholdW !== undefined
+        ? stSelf.standaloneSelfImportThresholdW
+        : (!stSelfWasMultiUseMirrored ? stSelf.selfImportThresholdW : 50);
+      els.storageSelfImportThresholdW.value = Number.isFinite(Number(standaloneDeadbandW)) ? String(Math.round(Number(standaloneDeadbandW))) : '50';
+    }
     if (els.storageSelfNvpSmoothingSec) els.storageSelfNvpSmoothingSec.value = Number.isFinite(Number(stSelf.selfNvpSmoothingSec)) ? String(Math.round(Number(stSelf.selfNvpSmoothingSec))) : '8';
     if (els.storageSelfNvpRawGuardW) els.storageSelfNvpRawGuardW.value = Number.isFinite(Number(stSelf.selfNvpRawGuardW)) ? String(Math.round(Number(stSelf.selfNvpRawGuardW))) : '100';
     if (els.storageBalanceFeedbackHoldSec) {
@@ -12082,7 +12181,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       const i1 = document.getElementById(`app_${app.id}_installed`);
       const i2 = document.getElementById(`app_${app.id}_enabled`);
       if (!_isAppLicensed(app.id)) {
-        patch.emsApps.apps[app.id] = { installed: false, enabled: false, licenseBlocked: true, requiredLicense: 'EOS' };
+        patch.emsApps.apps[app.id] = { installed: false, enabled: false, licenseBlocked: true, requiredLicense: 'Pro' };
         continue;
       }
       if (!i1 && !i2) {
@@ -12456,6 +12555,16 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     patch.storage.coupling = getStorageCoupling();
     patch.storage.vendorProfile = getStorageVendorProfile();
     patch.storage.datapoints = deepMerge({}, (currentConfig.storage && currentConfig.storage.datapoints) ? currentConfig.storage.datapoints : {});
+    const storagePowerProfile = _storagePowerProfileInfo();
+    const storageRatedPowerKwRaw = Number(els.storageRatedPowerKW ? els.storageRatedPowerKW.value : (Number(patch.storage.ratedPowerW) / 1000));
+    if (Number.isFinite(storageRatedPowerKwRaw) && storageRatedPowerKwRaw > 0) {
+      const storageRatedPowerKw = storagePowerProfile.id === 'home'
+        ? Math.min(storageRatedPowerKwRaw, 50)
+        : storageRatedPowerKwRaw;
+      patch.storage.ratedPowerW = Math.round(storageRatedPowerKw * 1000);
+    } else {
+      delete patch.storage.ratedPowerW;
+    }
     patch.storage.feneconGridControlEnabled = patch.storage.vendorProfile === 'fenecon-openems';
     patch.storage.sungrowHybridEnabled = patch.storage.vendorProfile === 'sungrow-hybrid';
     patch.storage.e3dcRscpEnabled = patch.storage.vendorProfile === 'e3dc-rscp';
@@ -12482,13 +12591,18 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // Hin-und-Her zwischen Bezug/Einspeisung im Energiefluss ruhiger, ohne dass
     // echter groesserer Netzbezug oder Export verschleppt wird.
     patch.storage.selfTargetGridImportW = _clampInt(
-      els.storageSelfTargetGridImportW ? els.storageSelfTargetGridImportW.value : patch.storage.selfTargetGridImportW,
+      els.storageSelfTargetGridImportW ? els.storageSelfTargetGridImportW.value : patch.storage.standaloneSelfTargetGridImportW,
       0, 1000000, 50,
     );
     patch.storage.selfImportThresholdW = _clampInt(
-      els.storageSelfImportThresholdW ? els.storageSelfImportThresholdW.value : patch.storage.selfImportThresholdW,
+      els.storageSelfImportThresholdW ? els.storageSelfImportThresholdW.value : patch.storage.standaloneSelfImportThresholdW,
       0, 1000000, 50,
     );
+    // Die Speicher-Seite konfiguriert die Standalone-Eigenverbrauchsregelung.
+    // MultiUse besitzt eigene Werte in installerConfig.storageMultiUse und darf
+    // diese Felder beim Aktivieren/Deaktivieren nicht mehr ueberlagern.
+    patch.storage.standaloneSelfTargetGridImportW = patch.storage.selfTargetGridImportW;
+    patch.storage.standaloneSelfImportThresholdW = patch.storage.selfImportThresholdW;
     patch.storage.selfNvpSmoothingEnabled = true;
     patch.storage.selfNvpSmoothingSec = _clampInt(
       els.storageSelfNvpSmoothingSec ? els.storageSelfNvpSmoothingSec.value : patch.storage.selfNvpSmoothingSec,
@@ -14774,6 +14888,33 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     els.storageCapacityKWh.addEventListener('input', _update);
   }
 
+  if (els.storageRatedPowerKW) {
+    /**
+     * Code-Teil: _updateStorageRatedPower
+     * Zweck: Speichert den lizenzabhängigen Skalierungsanker der Speicherleistung.
+     * Zusammenhang: Home wird auf 50 kW begrenzt; Pro bleibt frei skalierbar.
+     * Der Wert ist kein Hardware-Sollwert und ersetzt keine Geräte-/Safety-Grenze.
+     */
+    const _updateStorageRatedPower = () => {
+      currentConfig = currentConfig || {};
+      currentConfig.storage = currentConfig.storage || {};
+      const profile = _storagePowerProfileInfo();
+      const rawKw = Number(els.storageRatedPowerKW.value);
+      if (Number.isFinite(rawKw) && rawKw > 0) {
+        const effectiveKw = profile.id === 'home' ? Math.min(rawKw, 50) : rawKw;
+        const roundedKw = Math.round(effectiveKw * 10) / 10;
+        currentConfig.storage.ratedPowerW = Math.round(roundedKw * 1000);
+        if (Math.abs(rawKw - roundedKw) > 0.0001) els.storageRatedPowerKW.value = String(roundedKw);
+      } else {
+        delete currentConfig.storage.ratedPowerW;
+      }
+      updateStorageLicensePowerUi();
+      scheduleValidation(200);
+    };
+    els.storageRatedPowerKW.addEventListener('change', _updateStorageRatedPower);
+    els.storageRatedPowerKW.addEventListener('input', _updateStorageRatedPower);
+  }
+
   {
     /**
      * Code-Teil: _updateStorageSelfNvpControl
@@ -14787,13 +14928,15 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       currentConfig = currentConfig || {};
       currentConfig.storage = currentConfig.storage || {};
       currentConfig.storage.selfTargetGridImportW = _clampInt(
-        els.storageSelfTargetGridImportW ? els.storageSelfTargetGridImportW.value : currentConfig.storage.selfTargetGridImportW,
+        els.storageSelfTargetGridImportW ? els.storageSelfTargetGridImportW.value : currentConfig.storage.standaloneSelfTargetGridImportW,
         0, 1000000, 50,
       );
       currentConfig.storage.selfImportThresholdW = _clampInt(
-        els.storageSelfImportThresholdW ? els.storageSelfImportThresholdW.value : currentConfig.storage.selfImportThresholdW,
+        els.storageSelfImportThresholdW ? els.storageSelfImportThresholdW.value : currentConfig.storage.standaloneSelfImportThresholdW,
         0, 1000000, 50,
       );
+      currentConfig.storage.standaloneSelfTargetGridImportW = currentConfig.storage.selfTargetGridImportW;
+      currentConfig.storage.standaloneSelfImportThresholdW = currentConfig.storage.selfImportThresholdW;
       currentConfig.storage.selfNvpSmoothingEnabled = true;
       currentConfig.storage.selfNvpSmoothingSec = _clampInt(
         els.storageSelfNvpSmoothingSec ? els.storageSelfNvpSmoothingSec.value : currentConfig.storage.selfNvpSmoothingSec,

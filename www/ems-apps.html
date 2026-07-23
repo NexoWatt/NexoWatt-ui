@@ -842,6 +842,24 @@
               </div>
             </div>
           </div>
+          <div class="nw-config-field-row" id="storageLicensePowerRow">
+            <div class="nw-config-field-label">Lizenz &amp; Speicherleistung</div>
+            <div class="nw-config-field-control nw-config-field-control--stack">
+              <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:8px;">
+                <label class="nw-config-help" style="display:flex; flex-direction:column; gap:4px; opacity:0.95;">
+                  Lizenz-Leistungsprofil
+                  <input id="storageLicensePowerProfile" class="nw-config-input" type="text" value="–" readonly />
+                </label>
+                <label class="nw-config-help" style="display:flex; flex-direction:column; gap:4px; opacity:0.95;">
+                  Speicher-Nennleistung (kW)
+                  <input id="storageRatedPowerKW" class="nw-config-input" type="number" min="0" step="0.1" placeholder="z.B. 500" />
+                </label>
+              </div>
+              <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
+                <b>Home</b> begrenzt den finalen Speicherbefehl auf 50&nbsp;kW. <b>Pro</b> ist lizenzseitig frei skalierbar und nutzt die Nennleistung nur zur passenden Skalierung von Rampen, Prognose und Plausibilitätsprüfung. Geräte-, SoC-, NVP- und Safety-Grenzen bleiben immer vorrangig.
+              </div>
+            </div>
+          </div>
           <div class="nw-config-field-row">
             <div class="nw-config-field-label">NVP-Regelung Eigenverbrauch</div>
             <div class="nw-config-field-control nw-config-field-control--stack">
@@ -1032,7 +1050,7 @@
             <div class="nw-config-item">
               <div class="nw-config-item__left">
                 <div class="nw-config-item__title">MultiUse aktiv</div>
-                <div class="nw-config-item__subtitle">Übernimmt die Werte automatisch in „Speicherregelung“ (Priorität: Reserve → LSK → Eigenverbrauch).</div>
+                <div class="nw-config-item__subtitle">Wirkt bei aktivem MultiUse als zentrale Speicher-Policy (Priorität: Reserve → LSK → Eigenverbrauch). Die Hardware schreibt weiterhin ausschließlich die Speicherregelung.</div>
               </div>
               <div class="nw-config-item__right">
                 <label style="display:inline-flex;align-items:center;gap:8px;">
@@ -1126,7 +1144,7 @@
         <div class="nw-config-card">
           <div class="nw-config-card__header">
             <div class="nw-config-card__title">Übernommene Parameter</div>
-            <div class="nw-config-card__subtitle">Diese Werte werden beim Speichern in die Speicherregelung geschrieben</div>
+            <div class="nw-config-card__subtitle">Diese Werte wirken nur bei aktivem MultiUse und werden nicht in die Standalone-Speicherwerte kopiert</div>
           </div>
           <div class="nw-config-card__body">
             <div id="muStorageSummary" class="nw-config-list"></div>

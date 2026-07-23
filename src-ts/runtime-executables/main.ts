@@ -136,8 +136,8 @@ const NwChannelDetector =
 // Embedded EMS engine (Charging Management from nexowatt-multiuse)
 const { EmsEngine } = require('./ems/engine');
 const { resolveNvpDisplay } = require('./ems/services/measurement-freshness');
-const { normalizeOpposingPowerFlows } = require('./ems/services/power-flow-coherence');
 const { buildHttpActuatorShadowContext, withActuatorShadowContext, isActuatorAuthorityBlockedResult } = require('./ems/services/actuator-shadow-arbiter');
+const { resolveStorageOperatingPolicy } = require('./ems/services/storage-self-consumption-policy');
 const nwCountryProfileService = require('./ems/services/country-profile-service');
 const nwFeatureFlagsService = require('./ems/services/feature-flags');
 const {
@@ -1644,6 +1644,8 @@ class NexoWattVis extends utils.Adapter {
       edition: { type: 'string', role: 'text', def: 'none' },
       featuresJson: { type: 'string', role: 'json', def: '{}' },
       maxWallboxes: { type: 'number', role: 'value', def: 0 },
+      storagePowerProfile: { type: 'string', role: 'text', def: 'none' },
+      maxStoragePowerW: { type: 'number', role: 'value.power', def: 0 },
       message: { type: 'string', role: 'text', def: '' },
       expiresAt: { type: 'number', role: 'value.time', def: 0 },
       daysRemaining: { type: 'number', role: 'value', def: 0 },
@@ -1880,7 +1882,7 @@ class NexoWattVis extends utils.Adapter {
    */
   _nwNormalizeLicenseEdition(edition) {
     const e = String(edition || '').trim().toLowerCase();
-    if (e === 'eos') return 'eos';
+    if (e === 'eos' || e === 'pro') return 'eos';
     if (e === 'hems' || e === 'home') return 'hems';
     return 'none';
   }
@@ -2036,7 +2038,17 @@ class NexoWattVis extends utils.Adapter {
     let edition = this._nwCurrentLicenseEdition();
     if (valid && edition === 'none') edition = 'eos';
     const features = this._nwLicenseFeaturesForEdition(edition);
-    const editionLabel = (nwFeatureFlagsService && typeof nwFeatureFlagsService.editionLabel === 'function') ? nwFeatureFlagsService.editionLabel(edition) : (edition === 'eos' ? 'EOS' : (edition === 'hems' ? 'Home' : 'Keine Lizenz'));
+    const editionLabel = (nwFeatureFlagsService && typeof nwFeatureFlagsService.editionLabel === 'function') ? nwFeatureFlagsService.editionLabel(edition) : (edition === 'eos' ? 'Pro' : (edition === 'hems' ? 'Home' : 'Keine Lizenz'));
+    const storagePowerProfile = (nwFeatureFlagsService && typeof nwFeatureFlagsService.storagePerformanceProfile === 'function')
+      ? nwFeatureFlagsService.storagePerformanceProfile(edition, 0)
+      : {
+          edition,
+          id: edition === 'eos' ? 'pro' : (edition === 'hems' ? 'home' : 'none'),
+          label: edition === 'eos' ? 'Pro' : (edition === 'hems' ? 'Home' : 'Keine Lizenz'),
+          maxCommandW: edition === 'hems' ? 50000 : 0,
+          unrestricted: edition === 'eos',
+          industrial: edition === 'eos',
+        };
     return {
       valid,
       type: String(info.type || (valid ? 'full' : 'none')),
@@ -2046,10 +2058,13 @@ class NexoWattVis extends utils.Adapter {
       expiresAt: Number(info.expiresAt || 0),
       daysRemaining: Number(info.daysRemaining || 0),
       maxWallboxes: this._nwLicenseMaxWallboxes(),
+      storagePowerProfile,
+      maxStoragePowerW: Number(storagePowerProfile.maxCommandW || 0),
       features,
       hemsIncludedApps: (nwFeatureFlagsService && typeof nwFeatureFlagsService.homeIncludedApps === 'function') ? nwFeatureFlagsService.homeIncludedApps() : ['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet'],
       homeIncludedApps: (nwFeatureFlagsService && typeof nwFeatureFlagsService.homeIncludedApps === 'function') ? nwFeatureFlagsService.homeIncludedApps() : ['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet'],
-      eosFullAccess: edition === 'eos'
+      eosFullAccess: edition === 'eos',
+      proFullAccess: edition === 'eos'
     };
   }
 
@@ -2059,9 +2074,9 @@ class NexoWattVis extends utils.Adapter {
     out.apps = (out.apps && typeof out.apps === 'object') ? out.apps : {};
     for (const appId of Object.keys(out.apps)) {
       if (!this._nwLicenseAllowsAppId(appId)) {
-        out.apps[appId] = Object.assign({}, out.apps[appId] || {}, { installed: false, enabled: false, licenseBlocked: true, requiredLicense: 'EOS' });
+        out.apps[appId] = Object.assign({}, out.apps[appId] || {}, { installed: false, enabled: false, licenseBlocked: true, requiredLicense: 'Pro' });
       } else {
-        out.apps[appId] = Object.assign({}, out.apps[appId] || {}, { licenseBlocked: false, requiredLicense: this._nwCurrentLicenseEdition() === 'hems' ? 'Home' : 'EOS' });
+        out.apps[appId] = Object.assign({}, out.apps[appId] || {}, { licenseBlocked: false, requiredLicense: this._nwCurrentLicenseEdition() === 'hems' ? 'Home' : 'Pro' });
       }
     }
     return out;
@@ -2089,6 +2104,39 @@ class NexoWattVis extends utils.Adapter {
             return row;
           });
         }
+      }
+    } catch (_e) {}
+    try {
+      const edition = this._nwCurrentLicenseEdition();
+      const profile = (nwFeatureFlagsService && typeof nwFeatureFlagsService.storagePerformanceProfile === 'function')
+        ? nwFeatureFlagsService.storagePerformanceProfile(edition, p.storage && p.storage.ratedPowerW)
+        : { id: edition === 'hems' ? 'home' : 'pro', maxCommandW: edition === 'hems' ? 50000 : 0 };
+      const hardLimitW = Math.max(0, Number(profile.maxCommandW || 0));
+      if (p.storage && typeof p.storage === 'object') {
+        const normalizePositiveW = (value) => {
+          const n = Number(value);
+          if (!Number.isFinite(n) || n <= 0) return value;
+          return Math.round(hardLimitW > 0 ? Math.min(n, hardLimitW) : n);
+        };
+        p.storage.ratedPowerW = normalizePositiveW(p.storage.ratedPowerW);
+        p.storage.maxChargeW = normalizePositiveW(p.storage.maxChargeW);
+        p.storage.maxDischargeW = normalizePositiveW(p.storage.maxDischargeW);
+        p.storage.selfMaxChargeW = normalizePositiveW(p.storage.selfMaxChargeW);
+        p.storage.selfMaxDischargeW = normalizePositiveW(p.storage.selfMaxDischargeW);
+        p.storage.lskMaxChargeW = normalizePositiveW(p.storage.lskMaxChargeW);
+        p.storage.lskMaxDischargeW = normalizePositiveW(p.storage.lskMaxDischargeW);
+      }
+      // Speicherfarm ist Pro-only. Der zusätzliche Cap verhindert trotzdem, dass
+      // ein alter/legacy Patch bei Home die Leistungsgrenze umgehen kann.
+      if (hardLimitW > 0 && p.storageFarm && typeof p.storageFarm === 'object' && Array.isArray(p.storageFarm.storages)) {
+        p.storageFarm.storages = p.storageFarm.storages.map((entry) => {
+          const row = entry && typeof entry === 'object' ? Object.assign({}, entry) : {};
+          for (const key of ['maxChargeW', 'maxDischargeW']) {
+            const n = Number(row[key]);
+            if (Number.isFinite(n) && n > hardLimitW) row[key] = hardLimitW;
+          }
+          return row;
+        });
       }
     } catch (_e) {}
     return p;
@@ -2224,13 +2272,17 @@ class NexoWattVis extends utils.Adapter {
     const expiresAt = startTs + days * dayMs;
     const remainingMs = expiresAt - now;
     const daysRemaining = Math.max(0, Math.ceil(remainingMs / dayMs));
+    const trialEdition = parsed.edition || 'eos';
+    const trialEditionLabel = (nwFeatureFlagsService && typeof nwFeatureFlagsService.editionLabel === 'function')
+      ? nwFeatureFlagsService.editionLabel(trialEdition)
+      : (trialEdition === 'hems' ? 'Home' : 'Pro');
 
     if (remainingMs > 0) {
       return {
         ok: true,
         type: 'trial',
-        edition: parsed.edition || 'eos',
-        msg: `${(parsed.edition || 'eos').toUpperCase()} Testlizenz aktiv – noch ${daysRemaining} Tag${daysRemaining === 1 ? '' : 'e'}`,
+        edition: trialEdition,
+        msg: `${trialEditionLabel} Testlizenz aktiv – noch ${daysRemaining} Tag${daysRemaining === 1 ? '' : 'e'}`,
         expiresAt,
         daysRemaining,
       };
@@ -2239,8 +2291,8 @@ class NexoWattVis extends utils.Adapter {
     return {
       ok: false,
       type: 'trial',
-      edition: parsed.edition || 'eos',
-      msg: `${(parsed.edition || 'eos').toUpperCase()} Testlizenz abgelaufen`,
+      edition: trialEdition,
+      msg: `${trialEditionLabel} Testlizenz abgelaufen`,
       expiresAt,
       daysRemaining: 0,
     };
@@ -2262,7 +2314,11 @@ class NexoWattVis extends utils.Adapter {
     const full = this._nwResolveFullLicense(u, k);
     if (full && full.ok) {
       await this._nwClearTrialState();
-      return { ok: true, type: 'full', edition: full.edition || 'eos', legacy: !!full.legacy, msg: `${String(full.edition || 'eos').toUpperCase()} Lizenz gültig` };
+      const fullEdition = full.edition || 'eos';
+      const fullEditionLabel = (nwFeatureFlagsService && typeof nwFeatureFlagsService.editionLabel === 'function')
+        ? nwFeatureFlagsService.editionLabel(fullEdition)
+        : (fullEdition === 'hems' ? 'Home' : 'Pro');
+      return { ok: true, type: 'full', edition: fullEdition, legacy: !!full.legacy, msg: `${fullEditionLabel} Lizenz gültig` };
     }
 
     // 2) Test-Lizenz
@@ -2308,6 +2364,8 @@ class NexoWattVis extends utils.Adapter {
     try { await this.setStateAsync('license.edition', { val: licenseFeatures.edition || 'none', ack: true }); } catch (_e) {}
     try { await this.setStateAsync('license.featuresJson', { val: JSON.stringify(licenseFeatures), ack: true }); } catch (_e) {}
     try { await this.setStateAsync('license.maxWallboxes', { val: Number(licenseFeatures.maxWallboxes || 0), ack: true }); } catch (_e) {}
+    try { await this.setStateAsync('license.storagePowerProfile', { val: String(licenseFeatures.storagePowerProfile && licenseFeatures.storagePowerProfile.id || 'none'), ack: true }); } catch (_e) {}
+    try { await this.setStateAsync('license.maxStoragePowerW', { val: Number(licenseFeatures.maxStoragePowerW || 0), ack: true }); } catch (_e) {}
     try { await this.setStateAsync('license.message', { val: info.msg || '', ack: true }); } catch (_e) {}
     try { await this.setStateAsync('license.expiresAt', { val: info.expiresAt || 0, ack: true }); } catch (_e) {}
     try { await this.setStateAsync('license.daysRemaining', { val: info.daysRemaining || 0, ack: true }); } catch (_e) {}
@@ -3804,22 +3862,13 @@ class NexoWattVis extends utils.Adapter {
    */
 
   /**
-   * Installer-only MultiUse policy for storage: derive SoC zone parameters for
-   * Notstrom-Reserve, Lastspitzenkappung (LSK) and Eigenverbrauch (Entladung).
+   * Installer-only MultiUse policy marker.
    *
-   * This intentionally only writes the *zone thresholds + enable flags* into
-   * nativeObj.storage to keep the rest of the storage-control tuning untouched.
-   *
-   * Expected installerConfig format:
-   *   installerConfig.storageMultiUse = {
-   *     enabled: true|false,
-   *     reserveEnabled: true|false,
-   *     reserveToSocPct: 10,
-   *     peakEnabled: true|false,
-   *     peakToSocPct: 50,
-   *     selfEnabled: true|false,
-   *     selfToSocPct: 100
-   *   }
+   * Ab 0.8.138 werden die MultiUse-Zonen nicht mehr in `storage.*` kopiert.
+   * Alle abhängigen Module lesen installerConfig.storageMultiUse über denselben
+   * Policy-Resolver. Dadurch können deaktivierte MultiUse-Werte keine versteckte
+   * 20-%-SoC-Sperre oder alte NVP-Parameter in der normalen Speicherregelung
+   * hinterlassen.
    */
   /**
    * Code-Teil: nwApplyStorageMultiUsePolicy
@@ -3831,105 +3880,73 @@ class NexoWattVis extends utils.Adapter {
     try {
       if (!nativeObj || typeof nativeObj !== 'object') return nativeObj;
 
-      const ic = (nativeObj.installerConfig && typeof nativeObj.installerConfig === 'object') ? nativeObj.installerConfig : null;
-      const mu = (ic && typeof ic.storageMultiUse === 'object') ? ic.storageMultiUse : null;
-      if (!mu) return nativeObj;
-
-      nativeObj.storage = (nativeObj.storage && typeof nativeObj.storage === 'object') ? nativeObj.storage : {};
+      nativeObj.storage = (nativeObj.storage && typeof nativeObj.storage === 'object' && !Array.isArray(nativeObj.storage))
+        ? nativeObj.storage
+        : {};
       const st = nativeObj.storage;
+      const ic = (nativeObj.installerConfig && typeof nativeObj.installerConfig === 'object' && !Array.isArray(nativeObj.installerConfig))
+        ? nativeObj.installerConfig
+        : null;
+      const mu = (ic && ic.storageMultiUse && typeof ic.storageMultiUse === 'object' && !Array.isArray(ic.storageMultiUse))
+        ? ic.storageMultiUse
+        : null;
+      const active = !!(nativeObj.enableMultiUse === true && mu && mu.enabled === true);
+      const multiUseWasApplied = st.multiUsePolicyApplied === true
+        || st.multiUsePolicyApplied === 1
+        || String(st.multiUsePolicyApplied || '').trim().toLowerCase() === 'true';
 
-      // MultiUse darf nur führen, wenn sowohl die App als auch die Speicher-MultiUse-Policy
-      // aktiv sind. Bei deaktiviertem MultiUse löschen wir keine normalen Speicherwerte,
-      // sondern markieren nur den Zustand. Die Speicherregelung nutzt dann wieder ihre
-      // normale Eigenverbrauchsoptimierung und ignoriert alte MultiUse-Zonen im Tick.
-      if (!nativeObj.enableMultiUse || mu.enabled !== true) {
-        st.multiUsePolicyActive = false;
-        return nativeObj;
-      }
-
-      // MultiUse ist eine reine Speicher-Policy. Die App darf niemals heimlich
-      // einen Hardware-Schreibpfad aktivieren oder die im AppCenter sichtbare
-      // Installation der Einzel-Speicherregelung veraendern. Ob der finale
-      // Sollwert an einen Einzelspeicher oder an die Speicherfarm geht, entscheidet
-      // ausschliesslich die zentrale Speicher-Steuerhoheit.
-      st.multiUsePolicyActive = true;
-      st.multiUsePolicyApplied = true;
-      /**
-       * Code-Teil: clampInt
-       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-       */
-      const clampInt = (v, min, max, def) => {
-        const n = Number.parseInt(v, 10);
-        if (Number.isFinite(n)) return Math.min(max, Math.max(min, n));
-        return def;
+      const finiteOrNull = (value) => {
+        if (value === null || value === undefined || value === '') return null;
+        const n = Number(value);
+        return Number.isFinite(n) ? n : null;
+      };
+      const clampNumber = (value, min, max, fallback) => {
+        const n = finiteOrNull(value);
+        return Math.min(max, Math.max(min, n === null ? fallback : n));
       };
 
-      const reserveEnabled = (mu.reserveEnabled !== false);
-      const peakEnabled = (mu.peakEnabled !== false);
-      const selfEnabled = (mu.selfEnabled !== false);
+      // Beim ersten Aktivieren einer neuen MultiUse-Policy wird die bis dahin
+      // eigenstaendige Speicher-Policy einmal separat gesichert. Ab dann darf
+      // MultiUse seine Werte nicht mehr in storage.self*/reserve*/lsk* spiegeln.
+      // Alte Installationen tragen bereits `multiUsePolicyApplied=true`; deren
+      // storage.self*-Werte koennen deshalb historisch gespiegelt sein und werden
+      // bewusst nicht nachtraeglich als Standalone-Wahrheit uebernommen.
+      if (active && !multiUseWasApplied) {
+        // Die normale Speicher-App besitzt im AppCenter keine eigene SoC-Zonen-
+        // Konfiguration. Deshalb werden historisch vermischte storage.selfMin/
+        // selfMax-Werte nicht als Standalone-Wahrheit konserviert. Standalone
+        // startet nach dem Abschalten von MultiUse sicher bei 10..100 %.
+        if (st.standaloneSelfDischargeEnabled === undefined) st.standaloneSelfDischargeEnabled = true;
+        if (st.standaloneSelfMinSocPct === undefined) st.standaloneSelfMinSocPct = 10;
+        if (st.standaloneSelfMaxSocPct === undefined) st.standaloneSelfMaxSocPct = 100;
+        // Zielimport und Deadband sind dagegen echte, sichtbare Tuningwerte der
+        // normalen NVP-Regelung und werden getrennt bewahrt.
+        if (st.standaloneSelfTargetGridImportW === undefined) {
+          st.standaloneSelfTargetGridImportW = clampNumber(st.selfTargetGridImportW, 0, 1000000, 50);
+        }
+        if (st.standaloneSelfImportThresholdW === undefined) {
+          st.standaloneSelfImportThresholdW = clampNumber(st.selfImportThresholdW, 0, 1000000, 50);
+        }
+      }
 
-      // Neue MultiUse-Parameter: min/max pro Bereich (Reserve/LSK/Eigenverbrauch).
-      // Für ältere Configs werden weiterhin reserveTo/peakTo/selfTo unterstützt.
-      const legacyReserveTo = clampInt(mu.reserveToSocPct, 0, 99, 10);
-      const legacyPeakTo = clampInt(mu.peakToSocPct, legacyReserveTo, 100, 50);
-      const legacySelfTo = clampInt(mu.selfToSocPct, legacyPeakTo, 100, 100);
-
-      const reserveMin = clampInt(mu.reserveMinSocPct, 0, 100, legacyReserveTo);
-      const reserveTarget = clampInt(mu.reserveTargetSocPct, reserveMin, 100, reserveMin);
-
-      // Baseline-Minimum for down-stream zones:
-      // - If Reserve is disabled, it must not constrain other zones.
-      const reserveBaseMin = reserveEnabled ? reserveMin : 0;
-
-      const lskMin = clampInt(mu.lskMinSocPct, reserveBaseMin, 100, reserveBaseMin);
-      const lskMax = clampInt(mu.lskMaxSocPct, lskMin, 100, legacyPeakTo);
-
-      // Eigenverbrauch-Minimum:
-      // - If LSK is enabled, Eigenverbrauch starts above LSK-Max (disjoint zones).
-      // - If LSK is disabled, Eigenverbrauch may start already at Reserve-Min (or 0 if Reserve disabled).
-      const selfBaseMin = peakEnabled ? lskMax : reserveBaseMin;
-      const selfMin = clampInt(mu.selfMinSocPct, selfBaseMin, 100, selfBaseMin);
-      const selfMax = clampInt(mu.selfMaxSocPct, selfMin, 100, legacySelfTo);
-
-      // Notstrom / Reserve: blocks discharge below reserveMin. Optionaler Refill bis reserveTarget.
-      st.reserveEnabled = reserveEnabled;
-      st.reserveMinSocPct = reserveMin;
-      st.reserveTargetSocPct = reserveTarget;
-
-      // Peak shaving / LSK: SoC Band lskMin..lskMax
-      st.lskEnabled = peakEnabled;
-      st.lskDischargeEnabled = peakEnabled;
-      st.lskChargeEnabled = peakEnabled;
-      st.lskMinSocPct = lskMin;
-      st.lskMaxSocPct = lskMax;
-
-      // Eigenverbrauch: Entladung nur oberhalb selfMin (bis selfMax)
-      st.selfDischargeEnabled = selfEnabled;
-      st.selfMinSocPct = selfMin;
-      st.selfMaxSocPct = selfMax;
-
-      // Eigenverbrauch: NVP‑Regelung (Ziel‑Import + Deadband)
-      //
-      // Wichtig: Diese Parameter werden bewusst über das App‑Center (installer.configJson)
-      // konfiguriert und NICHT über die ioBroker‑Instanz‑Einstellungen.
-      // Damit bleiben EMS‑Setups portabel und können später ohne native‑Config übernommen werden.
-      const selfTargetGridW = clampInt(mu.selfTargetGridImportW, 0, 1000000, 50);
-      const selfDeadbandW = clampInt(mu.selfImportThresholdW, 0, 1000000, 50);
-      st.selfTargetGridImportW = selfTargetGridW;
-      st.selfImportThresholdW = selfDeadbandW;
+      st.multiUsePolicyActive = active;
+      st.multiUsePolicySource = active
+        ? 'installerConfig.storageMultiUse'
+        : (mu ? 'standalone-storage-policy;inactive-multiuse-ignored' : 'standalone-storage-policy');
+      if (active || multiUseWasApplied) st.multiUsePolicyVersion = 2;
+      if (active) st.multiUsePolicyApplied = true;
 
       return nativeObj;
     } catch (e) {
       try {
-        this.log && this.log.warn && this.log.warn(`[multiuse] Failed to apply storage MultiUse policy: ${e?.message || e}`);
+        this.log && this.log.warn && this.log.warn(`[multiuse] Failed to prepare storage MultiUse policy: ${e?.message || e}`);
       } catch (_e) {
         // ignore
       }
       return nativeObj;
     }
   }
+
   /**
    * Code-Teil: loadInstallerConfigFromState
    * Zweck: Lädt Daten aus API, States oder Konfiguration.
@@ -4534,6 +4551,7 @@ class NexoWattVis extends utils.Adapter {
       // Storage mapping for the Storage-Control module
       storage: {
         controlMode: 'targetPower',
+        ratedPowerW: Math.round(Math.max(storageMaxChKw, storageMaxDisKw) * 1000),
         datapoints: {
           socObjectId: `${inst}.storage.soc_pct`,
           batteryPowerObjectId: `${inst}.storage.power_kw`,
@@ -6356,25 +6374,28 @@ class NexoWattVis extends utils.Adapter {
     const ic = (this.config && this.config.installerConfig && typeof this.config.installerConfig === 'object') ? this.config.installerConfig : {};
     const mu = (ic.storageMultiUse && typeof ic.storageMultiUse === 'object') ? ic.storageMultiUse : null;
     const multiUsePolicyActive = !!(this.config && this.config.enableMultiUse && mu && mu.enabled === true);
-    // Speicherfarm verteilt nur den fertigen Zielwert. SoC-Floors dürfen deshalb
-    // keine eigene Policy starten: Reserve/LSK gelten nur, wenn MultiUse aktiv führt.
-    // Ist MultiUse deaktiviert, ignoriert die Farm alte MultiUse-Zonen und nutzt für
-    // Eigenverbrauch/Tarif nur den Eigenverbrauchs-Min-SoC der Speicherregelung.
-    const reserveEnabled = multiUsePolicyActive && !!storageCfg.reserveEnabled;
-    const reserveMin = Number(multiUsePolicyActive ? storageCfg.reserveMinSocPct : NaN);
-    const reserveFloor = (reserveEnabled && Number.isFinite(reserveMin)) ? reserveMin : 0;
-
-    const farmEnabled = !!(typeof this._nwGetStorageFarmRuntimeInfo === 'function' && this._nwGetStorageFarmRuntimeInfo().active);
-    const hasStoredSelfFlag = (storageCfg.selfDischargeEnabled === true || storageCfg.selfDischargeEnabled === false);
-    const hasEffectiveSelfFlag = hasStoredSelfFlag && (!mu || multiUsePolicyActive);
-    const feneconFarmFallback = !!(farmEnabled && storageCfg.feneconAcMode === true && !hasEffectiveSelfFlag);
-    const selfEnabled = hasEffectiveSelfFlag ? storageCfg.selfDischargeEnabled === true : (feneconFarmFallback || true);
-    const selfMinRaw = Number((multiUsePolicyActive || !mu) ? storageCfg.selfMinSocPct : 20);
-    const selfFloor = (selfEnabled && Number.isFinite(selfMinRaw)) ? Math.max(0, Math.min(100, selfMinRaw)) : 0;
-
-    const lskEnabled = !!(multiUsePolicyActive && storageCfg.lskDischargeEnabled !== false && storageCfg.lskEnabled !== false);
-    const lskMin = Number(multiUsePolicyActive ? storageCfg.lskMinSocPct : NaN);
-    const lskFloor = (lskEnabled && Number.isFinite(lskMin)) ? lskMin : 0;
+    // Speicherfarm und Einzelregelung verwenden exakt dieselbe zentrale Policy.
+    // Ein deaktiviertes MultiUse darf weder Reserve/LSK noch einen alten 20-%-
+    // Eigenverbrauchs-Floor in die Farmverteilung einschleusen.
+    const storageOperatingPolicy = resolveStorageOperatingPolicy({
+      storageConfig: storageCfg,
+      multiUseConfig: mu,
+      multiUseActive: multiUsePolicyActive,
+      standaloneDefaultEnabled: true,
+      standaloneDefaultMinSocPct: 10,
+      standaloneDefaultMaxSocPct: 100,
+      standaloneDefaultTargetGridImportW: 50,
+      standaloneDefaultImportThresholdW: 50,
+    });
+    const reserveFloor = storageOperatingPolicy.reserve.enabled === true
+      ? Math.max(0, Math.min(100, Number(storageOperatingPolicy.reserve.minSocPct) || 0))
+      : 0;
+    const selfFloor = storageOperatingPolicy.self.enabled === true
+      ? Math.max(0, Math.min(100, Number(storageOperatingPolicy.self.minSocPct) || 0))
+      : 0;
+    const lskFloor = storageOperatingPolicy.lsk.dischargeEnabled === true
+      ? Math.max(0, Math.min(100, Number(storageOperatingPolicy.lsk.minSocPct) || 0))
+      : 0;
 
     if (src === 'eigenverbrauch' || src === 'evcs' || src === 'tarif') return Math.max(0, Math.min(100, Math.max(reserveFloor, selfFloor)));
     if (src === 'lastspitze') return Math.max(0, Math.min(100, Math.max(reserveFloor, lskFloor)));
@@ -10591,7 +10612,7 @@ async onReady() {
         return res.status(access && access.role !== 'none' ? 403 : 401).json({
           ok: false,
           error: access && access.role !== 'none' ? 'forbidden' : 'unauthorized',
-          message: 'Lizenzverwaltung ist nur für EOS/Admin-Benutzer freigegeben.',
+          message: 'Lizenzverwaltung ist nur für Pro/Admin-Benutzer freigegeben.',
         });
       }
       const maskedLicenseKey = currentLicenseKey
@@ -10606,8 +10627,11 @@ async onReady() {
         edition: String(featureInfo.edition || 'none'),
         editionLabel: String(featureInfo.editionLabel || ''),
         maxWallboxes: Number(featureInfo.maxWallboxes || 0),
+        storagePowerProfile: featureInfo.storagePowerProfile || {},
+        maxStoragePowerW: Number(featureInfo.maxStoragePowerW || 0),
         features: featureInfo.features || {},
         eosFullAccess: !!featureInfo.eosFullAccess,
+        proFullAccess: !!featureInfo.proFullAccess,
         message: String(info.msg || ''),
         expiresAt: Number(info.expiresAt || 0),
         daysRemaining: Number(info.daysRemaining || 0),
@@ -10637,7 +10661,7 @@ async onReady() {
             return res.status(access && access.role !== 'none' ? 403 : 401).json({
               ok: false,
               error: access && access.role !== 'none' ? 'forbidden' : 'unauthorized',
-              message: 'Lizenzverwaltung ist nur für EOS/Admin-Benutzer freigegeben.',
+              message: 'Lizenzverwaltung ist nur für Pro/Admin-Benutzer freigegeben.',
             });
           }
         }
@@ -10679,7 +10703,10 @@ async onReady() {
           edition: String(this._nwBuildLicenseFeatureInfo().edition || 'none'),
           editionLabel: String(this._nwBuildLicenseFeatureInfo().editionLabel || ''),
           maxWallboxes: Number(this._nwBuildLicenseFeatureInfo().maxWallboxes || 0),
+          storagePowerProfile: this._nwBuildLicenseFeatureInfo().storagePowerProfile || {},
+          maxStoragePowerW: Number(this._nwBuildLicenseFeatureInfo().maxStoragePowerW || 0),
           features: this._nwBuildLicenseFeatureInfo().features || {},
+          proFullAccess: !!this._nwBuildLicenseFeatureInfo().proFullAccess,
           message: this._nwLicenseOk
             ? 'Lizenz gespeichert und aktiviert ✅'
             : `Lizenz gespeichert, aber noch ungültig: ${String(info.msg || 'unbekannter Fehler')}`,
@@ -25851,15 +25878,20 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       if (c <= deadbandW) c = 0;
       if (d <= deadbandW) d = 0;
       if (inv) { const t = c; c = d; d = t; }
-      const coherent = normalizeOpposingPowerFlows(d, c, deadbandW);
+      const grossChargeW = Math.max(0, c);
+      const grossDischargeW = Math.max(0, d);
+      const signedW = grossDischargeW - grossChargeW;
+      const normalizedChargeW = signedW < 0 ? Math.abs(signedW) : 0;
+      const normalizedDischargeW = signedW > 0 ? signedW : 0;
+      const splitConflictNormalized = grossChargeW > deadbandW && grossDischargeW > deadbandW;
       return {
-        chargeW: Math.round(coherent.negativeW),
-        dischargeW: Math.round(coherent.positiveW),
-        signedW: Math.round(coherent.signedW),
-        grossChargeW: Math.round(coherent.rawNegativeW),
-        grossDischargeW: Math.round(coherent.rawPositiveW),
-        opposingFlowConflict: coherent.conflict,
-        src: `${inv ? 'chargeDischarge(inv)' : 'chargeDischarge'}${coherent.conflict ? ':netted' : ''}`,
+        chargeW: Math.round(normalizedChargeW),
+        dischargeW: Math.round(normalizedDischargeW),
+        signedW: Math.round(signedW),
+        grossChargeW: Math.round(grossChargeW),
+        grossDischargeW: Math.round(grossDischargeW),
+        splitConflictNormalized,
+        src: `${inv ? 'chargeDischarge(inv)' : 'chargeDischarge'}${splitConflictNormalized ? '-net-normalized' : ''}`,
         inverted: inv,
         fromSigned: false,
         derived: false,
@@ -26031,6 +26063,32 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       return { ok: false, blockers: ['TS-Kandidatenwerte fehlen.'], warnings, values: {} };
     }
 
+    let storageRatedPowerW = Number(this.config && this.config.storage && this.config.storage.ratedPowerW);
+    if (!Number.isFinite(storageRatedPowerW) || storageRatedPowerW <= 0) {
+      storageRatedPowerW = 0;
+      try {
+        const farmRows = this.config && this.config.storageFarm && Array.isArray(this.config.storageFarm.storages)
+          ? this.config.storageFarm.storages
+          : [];
+        storageRatedPowerW = farmRows.reduce((sum, row) => {
+          if (!row || row.enabled === false) return sum;
+          const maxChargeW = Number(row.maxChargeW);
+          const maxDischargeW = Number(row.maxDischargeW);
+          const rowRatedW = Math.max(
+            Number.isFinite(maxChargeW) && maxChargeW > 0 ? maxChargeW : 0,
+            Number.isFinite(maxDischargeW) && maxDischargeW > 0 ? maxDischargeW : 0,
+          );
+          return sum + rowRatedW;
+        }, 0);
+      } catch (_e) {
+        storageRatedPowerW = 0;
+      }
+    }
+    const storagePowerProfile = (nwFeatureFlagsService && typeof nwFeatureFlagsService.storagePerformanceProfile === 'function')
+      ? nwFeatureFlagsService.storagePerformanceProfile(this._nwCurrentLicenseEdition(), storageRatedPowerW)
+      : { energyFlowPlausibilityMaxW: 1000000 };
+    const candidatePowerMaxW = Math.max(1000000, Number(storagePowerProfile.energyFlowPlausibilityMaxW || 1000000));
+
     const required = [
       ['gridBuyW', 'Netzbezug'],
       ['gridSellW', 'Netzeinspeisung'],
@@ -26046,7 +26104,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         continue;
       }
       if (n < 0) blockers.push(`${label} ist negativ (${n} W).`);
-      if (Math.abs(n) > 1000000) blockers.push(`${label} ist unrealistisch groß (${n} W).`);
+      if (Math.abs(n) > candidatePowerMaxW) blockers.push(`${label} ist für das ${String(storagePowerProfile.label || 'Lizenz')}-Leistungsprofil unrealistisch groß (${n} W > ${candidatePowerMaxW} W).`);
       normalized[key] = Math.round(n);
     }
 

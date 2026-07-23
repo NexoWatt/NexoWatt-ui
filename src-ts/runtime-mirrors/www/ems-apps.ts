@@ -18,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: ee085d3688d54738d73c0e6924d0df59cd1411d4dad4da5dd61d874727a7177b
+ * Original-Hash: c6248001a432326bab6abff91b66b73a0425d89563453e21f0e6002b4207a934
  */
 
 /**
@@ -1161,7 +1161,7 @@ interface EmsAppsWindow extends Window {
 
   const STORAGE_DP_FIELDS = [
     { key: 'socObjectId', label: 'SoC (%)', requiredModes: ['targetPower','limits','enableFlags'] },
-    { key: 'batteryPowerObjectId', label: 'Ist-Leistung (W) – für sichere Entladung erforderlich', requiredModes: [], hint: 'Für automatische Entladung und das harte Anti-Export-Gate muss dieser signed Messwert frisch sein (+W = Entladen, -W = Laden). Ohne gültigen Wert stoppt NexoWatt die Entladung fail-safe mit 0 W.' },
+    { key: 'batteryPowerObjectId', label: 'Ist-Leistung (W) (optional)', requiredModes: [] },
     { key: 'dcPvPowerObjectId', label: 'DC-/Hybrid-PV Erzeugung (W)', requiredModes: [], showForCoupling: ['dc'], hint: 'Nur bei DC-/Hybrid-Speichern: Erzeugungsleistung des Hybrid-/PV-Wechselrichters. Dieser Wert ist eine Messung, kein Batterie-Sollwert, und hilft bei Forecast-/0-Einspeise-/FENECON-Erkennung.' },
     { key: 'targetPowerObjectId', label: 'Sollleistung signed (W)', requiredModes: ['targetPower'], hint: 'Allgemeiner bidirektionaler Sollwert. NexoWatt-Konvention: +W = Entladen, -W = Laden. Wird genutzt, wenn keine getrennten Ziel-DPs gesetzt sind oder als Fallback fuer eine fehlende Split-Richtung.' },
     { key: 'targetChargePowerObjectId', label: 'Sollwert Laden (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional: positiver Lade-Sollwert. Kann zusammen mit Entladen oder einzeln gemappt werden; bei Split wird die Gegenrichtung auf 0 gesetzt.' },
@@ -9532,7 +9532,6 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       // Istwerte (Messwerte)
       grid.appendChild(mkGridDivider('Istwerte (Messwerte)'));
-      grid.appendChild(mkGridHelp('Für sichere automatische Entladung muss je Speicher mindestens ein frischer Istleistungsweg vorhanden sein: Signed oder getrennt Laden/Entladen. Ohne belastbares physisches Feedback stoppt das Anti-Export-Gate die Entladung fail-safe mit 0 W.'));
 
       grid.appendChild(mkCheckField('Vorzeichen Istleistung Signed invertieren', `sf_${idx}_invSigned`, !!s.invertSignedPowerSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertSignedPowerSign = !!v; }));
       grid.appendChild(mkCheckField('Vorzeichen Ladeleistung invertieren', `sf_${idx}_invChg`, !!s.invertChargeSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertChargeSign = !!v; }));
@@ -11278,8 +11277,25 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       els.storageCapacityKWh.value = (Number.isFinite(cap) && cap > 0) ? String(cap) : '';
     }
     const stSelf = (currentConfig.storage && typeof currentConfig.storage === 'object') ? currentConfig.storage : {};
-    if (els.storageSelfTargetGridImportW) els.storageSelfTargetGridImportW.value = Number.isFinite(Number(stSelf.selfTargetGridImportW)) ? String(Math.round(Number(stSelf.selfTargetGridImportW))) : '50';
-    if (els.storageSelfImportThresholdW) els.storageSelfImportThresholdW.value = Number.isFinite(Number(stSelf.selfImportThresholdW)) ? String(Math.round(Number(stSelf.selfImportThresholdW))) : '50';
+    const stSelfSourceMarker = String(stSelf.multiUsePolicySource || '').trim().toLowerCase();
+    const stSelfAppliedMarker = stSelf.multiUsePolicyApplied === true
+      || stSelf.multiUsePolicyApplied === 1
+      || String(stSelf.multiUsePolicyApplied || '').trim().toLowerCase() === 'true';
+    const stSelfWasMultiUseMirrored = stSelfAppliedMarker
+      || stSelfSourceMarker === 'installerconfig.storagemultiuse'
+      || stSelfSourceMarker.includes('multiuse-applied');
+    if (els.storageSelfTargetGridImportW) {
+      const standaloneTargetW = stSelf.standaloneSelfTargetGridImportW !== undefined
+        ? stSelf.standaloneSelfTargetGridImportW
+        : (!stSelfWasMultiUseMirrored ? stSelf.selfTargetGridImportW : 50);
+      els.storageSelfTargetGridImportW.value = Number.isFinite(Number(standaloneTargetW)) ? String(Math.round(Number(standaloneTargetW))) : '50';
+    }
+    if (els.storageSelfImportThresholdW) {
+      const standaloneDeadbandW = stSelf.standaloneSelfImportThresholdW !== undefined
+        ? stSelf.standaloneSelfImportThresholdW
+        : (!stSelfWasMultiUseMirrored ? stSelf.selfImportThresholdW : 50);
+      els.storageSelfImportThresholdW.value = Number.isFinite(Number(standaloneDeadbandW)) ? String(Math.round(Number(standaloneDeadbandW))) : '50';
+    }
     if (els.storageSelfNvpSmoothingSec) els.storageSelfNvpSmoothingSec.value = Number.isFinite(Number(stSelf.selfNvpSmoothingSec)) ? String(Math.round(Number(stSelf.selfNvpSmoothingSec))) : '8';
     if (els.storageSelfNvpRawGuardW) els.storageSelfNvpRawGuardW.value = Number.isFinite(Number(stSelf.selfNvpRawGuardW)) ? String(Math.round(Number(stSelf.selfNvpRawGuardW))) : '100';
     if (els.storageBalanceFeedbackHoldSec) {
@@ -12786,13 +12802,16 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // Hin-und-Her zwischen Bezug/Einspeisung im Energiefluss ruhiger, ohne dass
     // echter groesserer Netzbezug oder Export verschleppt wird.
     patch.storage.selfTargetGridImportW = _clampInt(
-      els.storageSelfTargetGridImportW ? els.storageSelfTargetGridImportW.value : patch.storage.selfTargetGridImportW,
+      els.storageSelfTargetGridImportW ? els.storageSelfTargetGridImportW.value : patch.storage.standaloneSelfTargetGridImportW,
       0, 1000000, 50,
     );
     patch.storage.selfImportThresholdW = _clampInt(
-      els.storageSelfImportThresholdW ? els.storageSelfImportThresholdW.value : patch.storage.selfImportThresholdW,
+      els.storageSelfImportThresholdW ? els.storageSelfImportThresholdW.value : patch.storage.standaloneSelfImportThresholdW,
       0, 1000000, 50,
     );
+    // Standalone-NVP-Werte bleiben von MultiUse getrennt.
+    patch.storage.standaloneSelfTargetGridImportW = patch.storage.selfTargetGridImportW;
+    patch.storage.standaloneSelfImportThresholdW = patch.storage.selfImportThresholdW;
     patch.storage.selfNvpSmoothingEnabled = true;
     patch.storage.selfNvpSmoothingSec = _clampInt(
       els.storageSelfNvpSmoothingSec ? els.storageSelfNvpSmoothingSec.value : patch.storage.selfNvpSmoothingSec,
@@ -15102,13 +15121,15 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       currentConfig = currentConfig || {};
       currentConfig.storage = currentConfig.storage || {};
       currentConfig.storage.selfTargetGridImportW = _clampInt(
-        els.storageSelfTargetGridImportW ? els.storageSelfTargetGridImportW.value : currentConfig.storage.selfTargetGridImportW,
+        els.storageSelfTargetGridImportW ? els.storageSelfTargetGridImportW.value : currentConfig.storage.standaloneSelfTargetGridImportW,
         0, 1000000, 50,
       );
       currentConfig.storage.selfImportThresholdW = _clampInt(
-        els.storageSelfImportThresholdW ? els.storageSelfImportThresholdW.value : currentConfig.storage.selfImportThresholdW,
+        els.storageSelfImportThresholdW ? els.storageSelfImportThresholdW.value : currentConfig.storage.standaloneSelfImportThresholdW,
         0, 1000000, 50,
       );
+      currentConfig.storage.standaloneSelfTargetGridImportW = currentConfig.storage.selfTargetGridImportW;
+      currentConfig.storage.standaloneSelfImportThresholdW = currentConfig.storage.selfImportThresholdW;
       currentConfig.storage.selfNvpSmoothingEnabled = true;
       currentConfig.storage.selfNvpSmoothingSec = _clampInt(
         els.storageSelfNvpSmoothingSec ? els.storageSelfNvpSmoothingSec.value : currentConfig.storage.selfNvpSmoothingSec,
