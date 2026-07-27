@@ -1,8 +1,8 @@
 {
   "schema": "nexowatt.ts-nocheck-budget.v1",
-  "generatedForVersion": "0.8.141",
+  "generatedForVersion": "0.8.142",
   "uncheckedFileCount": 58,
-  "maxUncheckedLines": 145340,
+  "maxUncheckedLines": 145433,
   "files": [
     "src-ts/runtime-executables/ems/consumers/evcs.ts",
     "src-ts/runtime-executables/ems/consumers/generic-load.ts",

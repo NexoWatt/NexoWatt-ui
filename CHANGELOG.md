@@ -1,3 +1,14 @@
+## 0.8.142 - 2026-07-27
+
+- Speicher-Messwert und Speicher-Schreibhoheit getrennt: Ein unter **Energiefluss** manuell zugeordneter `storageSoc` wird jetzt auch bei deaktivierter Speicherregelung und ohne aktive Speicherfarm nach `historie.core.storage.socPct` geschrieben. Damit lassen sich Speicher mit eigener 0-Einspeise-/Eigenverbrauchsregelung ausschließlich anzeigen und dennoch vollständig historisieren.
+- `storageSoc` in den fokussierten Live-Refreshplan aufgenommen, damit externe Anzeige-/Historien-DPs unabhängig vom Lifecycle der Regel-App zeitnah aktualisiert werden. Ein aktiver Farm-/Einzelwriter bleibt nur Fallback, wenn kein gültiger expliziter SoC-Override vorhanden ist.
+- Heizstab-Energiefluss auf echte Messwertautorität umgestellt: Der im Energiefluss zugeordnete Verbraucher-Leistungs-DP gewinnt vor internen `measuredW`, `appliedW`, `targetW` und nominalen Stufenleistungen. Ein gültiger Wert von **0 W** wird nicht mehr als „fehlend“ behandelt.
+- Heizstab-Runtime trennt beobachtete Istleistung von Kommando-/Budgetreservierung. Frische 0-W-Messungen dürfen nicht durch Relais-/Stufenmodelle überschrieben werden; bestätigte EMS-Stufen reservieren trotzdem sofort ihren Zielwert, damit das zentrale PV-Budget nicht doppelt an EVCS, Thermik oder weitere Verbraucher vergeben wird.
+- Zentrale Budgetdiagnose veröffentlicht `actualW` aus der beobachteten Heizstableistung auch bei exakt 0 W, während `reserveW`/`budgetUsedW` den bestätigten Aktorbedarf abbilden. Manuelle/externe Heizstableistung bleibt gewöhnliche Hauslast und wird nicht nochmals als EMS-Budget reserviert.
+- Neue Regression `test:energy-flow-measurement-authority` führt SoC-Historisierung ohne Speicherwriter, Heizstab-Messwertpriorität einschließlich 0 W, Stufen-Fallback bei fehlender Messung und die einfache zentrale Budgetzählung aus.
+- TypeScript-Migrationskontrolle: keine zusätzliche `@ts-nocheck`-Datei (weiterhin 58); der ausgewiesene offene Runtime-Rahmen wird für die Messwert-/Historienentkopplung transparent von 145.340 auf 145.433 Zeilen aktualisiert.
+- Service-Worker-Cache auf `nexowatt-cache-v445` erhöht.
+
 ## 0.8.141 - 2026-07-27
 
 - Kundenfreigabe der Ladestation von Connector-/Fahrzeugstatus und EMS-Regelung getrennt. Der neue persistente State `chargingManagement.wallboxes.<lp>.userStationEnabled` ist die einzige Kundenentscheidung für **Ladestation An/Aus**; `activeId` bleibt ein reiner Read-Status und wird von der Schnellsteuerung nicht mehr beschrieben.

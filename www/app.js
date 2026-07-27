@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/app.ts
- * Quell-Hash: sha256:2188ed73012c179dbac4832d8a167f4dba078a74600c8739da6d897e6ac12673
+ * Quell-Hash: sha256:17ce5adf0de6cb3cc7b05f93965b62a79e1215f2ebcd1aeec9661a181b7368ff
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2692,10 +2692,14 @@ function resolveHeatingRodFlowPower(it, d, fallbackRaw){
   const target = readN(`heatingRod.devices.c${idx}.targetW`);
   const maxPower = readN(`heatingRod.devices.c${idx}.maxPowerW`);
   let valueW = NaN;
-  if (Number.isFinite(measured) && measured > 0) valueW = measured;
+
+  // Der im Energiefluss manuell zugeordnete Verbraucher-DP ist die primaere
+  // Anzeigequelle. Insbesondere ist ein gueltiger Messwert 0 W eine echte
+  // Messung und darf nicht durch nominale Stufen-/Sollleistungen ersetzt werden.
+  if (Number.isFinite(fallbackRaw)) valueW = Math.abs(fallbackRaw);
+  else if (Number.isFinite(measured)) valueW = Math.abs(measured);
   else if (Number.isFinite(applied) && applied > 0) valueW = applied;
   else if (Number.isFinite(target) && target > 0) valueW = target;
-  else if (Number.isFinite(fallbackRaw)) valueW = Math.abs(fallbackRaw);
   else valueW = 0;
 
   return {
@@ -2812,7 +2816,10 @@ if (flowExtras && Array.isArray(flowExtras.special)) {
   // Verbraucher
   if (flowExtras && Array.isArray(flowExtras.consumers)) {
     for (const it of flowExtras.consumers) {
-      const rawBase = Number(d(it.stateKey)) || 0;
+      const rawCandidate = d(it.stateKey);
+      const rawBase = (rawCandidate === null || rawCandidate === undefined || rawCandidate === '')
+        ? NaN
+        : Number(rawCandidate);
       if (isHeatingRodFlowItem(it)) {
         const rodPower = resolveHeatingRodFlowPower(it, d, rawBase);
         const abs = stabilizeFlowAbs(`extra:consumer:heatingRod:c${it.idx || it.stateKey || it.lineId || it.nodeId}`, Math.abs(rodPower.valueW));

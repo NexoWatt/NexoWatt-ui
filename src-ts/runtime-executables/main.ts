@@ -23820,7 +23820,8 @@ return res.json(out);
         'consumptionEvcs',
         'storageChargePower',
         'storageDischargePower',
-        'batteryPower'
+        'batteryPower',
+        'storageSoc'
       ];
       for (const key of flowKeys) add(dps[key], key);
     } catch (_e) {}
@@ -28028,9 +28029,24 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const storageFlowHist = this._nwResolveBatteryFlowFromCache({ now });
     let chgW = Number(storageFlowHist.chargeW);
     let dchgW = Number(storageFlowHist.dischargeW);
-    let soc = selectedStorageTopologyHist === 'single'
+    // Mess-/Anzeigehoheit und Speicher-Schreibhoheit sind bewusst getrennt:
+    // Ein im Energiefluss manuell zugeordneter SoC-DP muss auch dann in die
+    // Historie gelangen, wenn NexoWatt den Speicher nur visualisiert und die
+    // Speicherregelung/Farm nicht aktiv ist (z. B. herstellereigene 0-Einspeisung).
+    const explicitStorageSocMapped = !!String(historyDps.storageSoc || '').trim();
+    const explicitStorageSocValue = explicitStorageSocMapped
       ? this._nwGetNumberFromCache('storageSoc')
       : null;
+    const explicitStorageSocValid = explicitStorageSocMapped
+      && explicitStorageSocValue !== null
+      && explicitStorageSocValue !== undefined
+      && explicitStorageSocValue !== ''
+      && Number.isFinite(Number(explicitStorageSocValue));
+    let soc = explicitStorageSocValid
+      ? Math.max(0, Math.min(100, Number(explicitStorageSocValue)))
+      : (selectedStorageTopologyHist === 'single'
+        ? this._nwGetNumberFromCache('storageSoc')
+        : null);
     const evW = this._nwGetNumberFromCache('evcs.totalPowerW');
 
     const gridBuy = Number.isFinite(gridBuyW) ? Math.max(0, gridBuyW) : 0;
@@ -28078,18 +28094,23 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     }
 
-    // Historie, Policy und Writer verwenden dieselbe ausgewaehlte Topologie.
-    // Bei ausgewaehlter Farm darf kein alter Einzel-SoC als stiller Ersatz dienen.
-    if (selectedStorageTopologyHist === 'farm') {
-      const socFarm = farmMetricsHist && Number.isFinite(Number(farmMetricsHist.soc))
-        ? Number(farmMetricsHist.soc)
-        : this._nwGetNumberFromCache('storageFarm.totalSocOnline');
-      const socFarmFallback = Number.isFinite(Number(socFarm))
-        ? Number(socFarm)
-        : this._nwGetNumberFromCache('storageFarm.totalSoc');
-      soc = Number.isFinite(Number(socFarmFallback)) ? Number(socFarmFallback) : null;
-    } else if (selectedStorageTopologyHist !== 'single') {
-      soc = null;
+    // Ohne expliziten Energiefluss-Override folgt die Historie weiterhin der
+    // aktiven Speichertopologie. Ein vorhandener, gueltiger Override bleibt aber
+    // autoritativ und wird nicht durch Writer-/App-Lifecycle auf null gesetzt.
+    if (!explicitStorageSocValid) {
+      if (selectedStorageTopologyHist === 'farm') {
+        const socFarm = farmMetricsHist && Number.isFinite(Number(farmMetricsHist.soc))
+          ? Number(farmMetricsHist.soc)
+          : this._nwGetNumberFromCache('storageFarm.totalSocOnline');
+        const socFarmFallback = Number.isFinite(Number(socFarm))
+          ? Number(socFarm)
+          : this._nwGetNumberFromCache('storageFarm.totalSoc');
+        soc = Number.isFinite(Number(socFarmFallback))
+          ? Math.max(0, Math.min(100, Number(socFarmFallback)))
+          : null;
+      } else if (selectedStorageTopologyHist !== 'single') {
+        soc = null;
+      }
     }
 
     let loadTotal = Number.isFinite(loadW) ? Math.max(0, loadW) : null;

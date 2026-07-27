@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/heating-rod-control.ts
- * Quell-Hash: sha256:5dbb4c9479f9a90ffa22719ce1f2d94f3d87b46c65aad58aa74e99e0c948a13c
+ * Quell-Hash: sha256:fa7df9a1a4c5abf34caa5af40df9938e558c337336b39e1c460b25e0cf1582bc
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1868,6 +1868,34 @@ class HeatingRodControlModule extends BaseModule {
         return (typeof v === 'number' && Number.isFinite(v)) ? v : null;
     }
 
+
+    /**
+     * Code-Teil: _hasMeasuredPowerW
+     * Zweck: Trennt einen gueltigen Messwert (auch exakt 0 W) von einem fehlenden
+     * Messwert. Diese Unterscheidung verhindert, dass Stufen-Nennleistungen eine
+     * reale 0-W-Messung im Energiefluss oder in der Budgetdiagnose ueberlagern.
+     */
+    _hasMeasuredPowerW(measuredW) {
+        return typeof measuredW === 'number' && Number.isFinite(measuredW);
+    }
+
+    /**
+     * Code-Teil: _resolveObservedPowerW
+     * Zweck: Liefert die beste beobachtete Heizstableistung. Ein frischer,
+     * manuell zugeordneter Leistungs-DP ist immer autoritativ, einschliesslich
+     * 0 W. Nur wenn dieser fehlt, darf Stufen-Readback bzw. ein Modell-Fallback
+     * verwendet werden. Kommando-/Budgetreservierung bleibt davon getrennt.
+     */
+    _resolveObservedPowerW(d, measuredW, feedback = null, fallbackW = 0) {
+        if (this._hasMeasuredPowerW(measuredW)) {
+            return this._capDevicePower(d, Math.max(0, Number(measuredW)));
+        }
+        if (feedback && feedback.anyKnown) {
+            return this._capDevicePower(d, Math.max(0, Number(feedback.appliedPowerW) || 0));
+        }
+        return this._capDevicePower(d, Math.max(0, Number(fallbackW) || 0));
+    }
+
     /**
      * Code-Teil: Methode `_readStageFeedback`
      * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
@@ -2828,9 +2856,12 @@ class HeatingRodControlModule extends BaseModule {
      * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
         async _observeManualExternal(d, observedStage, measuredW, feedback, status = 'external_manual_knx_observed') {
-        const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
-            ? Math.max(0, measuredW)
-            : Math.max(0, feedback && feedback.appliedPowerW ? feedback.appliedPowerW : 0);
+        const usedW = this._resolveObservedPowerW(
+            d,
+            measuredW,
+            feedback,
+            this._sumStagePower(d, observedStage),
+        );
         this._setStageCtlTarget(d.id, observedStage, observedStage);
         this._markAutoOwnership(d, false, observedStage, 'external_manual');
         await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, observedStage);
@@ -4126,11 +4157,14 @@ class HeatingRodControlModule extends BaseModule {
                 const measuredW = this._readMeasuredW(d, staleMs);
                 const feedback = this._readStageFeedback(d, staleMs);
                 const observedStagePre = feedback && feedback.anyKnown ? feedback.currentStage : (this._stageCtl.get(d.id)?.targetStage || 0);
-                let usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
-                    ? Math.max(0, measuredW)
-                    : Math.max(0, feedback && feedback.appliedPowerW ? feedback.appliedPowerW : 0);
+                const measuredKnown = this._hasMeasuredPowerW(measuredW);
+                const feedbackKnown = !!(feedback && feedback.anyKnown);
+                let usedW = this._resolveObservedPowerW(d, measuredW, feedback, 0);
                 const own = this._getAutoOwnership(d, observedStagePre, measuredW, feedback);
-                if (own.autoOwned && usedW <= 50) {
+                // Nur wenn weder Leistungs-DP noch Stufen-Readback eine Messung
+                // liefern, darf fuer einen EMS-eigenen Aktor das Stufenmodell als
+                // Schaetzung dienen. Eine frische 0-W-Messung bleibt 0 W.
+                if (!measuredKnown && !feedbackKnown && own.autoOwned && usedW <= 50) {
                     usedW = this._sumStagePowerModel(d, Math.max(0, own.target || observedStagePre), observedStagePre, measuredW);
                 }
                 currentHeatingRodW += usedW;
@@ -4244,9 +4278,12 @@ class HeatingRodControlModule extends BaseModule {
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.effectiveMode`, String(effectiveMode));
 
             if (d.consumerType !== 'heatingRod') {
-                const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
-                    ? Math.max(0, measuredW)
-                    : Math.max(0, feedback.appliedPowerW);
+                const usedW = this._resolveObservedPowerW(
+                    d,
+                    measuredW,
+                    feedback,
+                    this._sumStagePower(d, observedStage),
+                );
                 remainingW = Math.max(0, remainingW - usedW);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, 0);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, 0);
@@ -4269,9 +4306,13 @@ class HeatingRodControlModule extends BaseModule {
                     ? Math.max(0, measuredW)
                     : Math.max(0, feedback.appliedPowerW || this._sumStagePower(d, observedStage));
                 this._recordAcceptedHeatingEffect(d, res, baselineW, targetW, 'Heizstab Boost');
-                const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
-                    ? Math.max(0, measuredW)
-                    : (res.accepted ? targetW : Math.max(0, feedback.appliedPowerW));
+                const observedW = this._resolveObservedPowerW(
+                    d,
+                    measuredW,
+                    feedback,
+                    this._sumStagePower(d, observedStage),
+                );
+                const usedW = Math.max(observedW, res.accepted ? targetW : 0);
 
                 appliedTotalW += Math.round(res.accepted ? targetW : this._sumStagePower(d, appliedStage));
                 budgetUsedW += Math.round(usedW);
@@ -4297,9 +4338,13 @@ class HeatingRodControlModule extends BaseModule {
                     ? Math.max(0, measuredW)
                     : Math.max(0, feedback.appliedPowerW || this._sumStagePower(d, observedStage));
                 this._recordAcceptedHeatingEffect(d, res, baselineW, targetW, 'Heizstab manuelle Stufe');
-                const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
-                    ? Math.max(0, measuredW)
-                    : (res.accepted ? targetW : Math.max(0, feedback.appliedPowerW));
+                const observedW = this._resolveObservedPowerW(
+                    d,
+                    measuredW,
+                    feedback,
+                    this._sumStagePower(d, observedStage),
+                );
+                const usedW = Math.max(observedW, res.accepted ? targetW : 0);
                 const level = Math.min(3, Math.max(1, Math.round(Number(String(baseMode).replace('manual', '')) || 1)));
 
                 appliedTotalW += Math.round(res.accepted ? targetW : this._sumStagePower(d, appliedStage));
@@ -4318,9 +4363,12 @@ class HeatingRodControlModule extends BaseModule {
             // manual stage buttons above. We only observe/balance so manual heat is not
             // immediately overwritten by the EMS tick.
             if (!userEnabled && pvModeRequested) {
-                const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
-                    ? Math.max(0, measuredW)
-                    : Math.max(0, feedback.appliedPowerW);
+                const usedW = this._resolveObservedPowerW(
+                    d,
+                    measuredW,
+                    feedback,
+                    this._sumStagePower(d, observedStage),
+                );
                 remainingW = Math.max(0, remainingW - usedW);
                 appliedTotalW += Math.round(usedW);
                 this._setStageCtlTarget(d.id, observedStage, observedStage);
@@ -4335,9 +4383,12 @@ class HeatingRodControlModule extends BaseModule {
 
             // Installer config: manual = only observe/balance, no writes. Useful for diagnostics / external logic.
             if (baseMode === 'manual') {
-                const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
-                    ? Math.max(0, measuredW)
-                    : Math.max(0, feedback.appliedPowerW);
+                const usedW = this._resolveObservedPowerW(
+                    d,
+                    measuredW,
+                    feedback,
+                    this._sumStagePower(d, observedStage),
+                );
                 remainingW = Math.max(0, remainingW - usedW);
                 appliedTotalW += Math.round(usedW);
                 this._setStageCtlTarget(d.id, observedStage, observedStage);
@@ -4358,9 +4409,12 @@ class HeatingRodControlModule extends BaseModule {
                 this._recordAcceptedHeatingEffect(d, res, baselineW, 0, 'Heizstab aus');
                 this._setStageCtlTarget(d.id, 0, observedStage);
                 this._markAutoOwnership(d, false, 0, 'off');
-                const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
-                    ? Math.max(0, measuredW)
-                    : Math.max(0, feedback.appliedPowerW);
+                const usedW = this._resolveObservedPowerW(
+                    d,
+                    measuredW,
+                    feedback,
+                    this._sumStagePower(d, observedStage),
+                );
                 remainingW = Math.max(0, remainingW - usedW);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, 0);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, 0);
@@ -4374,9 +4428,12 @@ class HeatingRodControlModule extends BaseModule {
             // This is intentionally not an OFF command, so the customer can still switch
             // the physical Heizstab manually outside PV automation.
             if (!d.enabled && pvModeRequested) {
-                const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
-                    ? Math.max(0, measuredW)
-                    : Math.max(0, feedback.appliedPowerW);
+                const usedW = this._resolveObservedPowerW(
+                    d,
+                    measuredW,
+                    feedback,
+                    this._sumStagePower(d, observedStage),
+                );
                 remainingW = Math.max(0, remainingW - usedW);
                 appliedTotalW += Math.round(usedW);
                 this._setStageCtlTarget(d.id, observedStage, observedStage);
@@ -4395,9 +4452,12 @@ class HeatingRodControlModule extends BaseModule {
             const pvMinBlocksStepUp = !!(pvAutomationActive && !pvBase.tariffGridImportPreferred && !pvAutomationAllowedByMin);
 
             if (d.wiredStages < 1) {
-                const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
-                    ? Math.max(0, measuredW)
-                    : Math.max(0, feedback.appliedPowerW);
+                const usedW = this._resolveObservedPowerW(
+                    d,
+                    measuredW,
+                    feedback,
+                    this._sumStagePower(d, observedStage),
+                );
                 remainingW = Math.max(0, remainingW - usedW);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, 0);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, 0);
@@ -4529,15 +4589,17 @@ class HeatingRodControlModule extends BaseModule {
                 ? Math.max(0, measuredW)
                 : Math.max(0, feedback.appliedPowerW || this._sumStagePowerModel(d, observedStage, observedStage, measuredW));
             this._recordAcceptedHeatingEffect(d, res, baselineW, targetW, zeroExportStrategyActive ? 'Heizstab 0-Einspeisung' : 'Heizstab PV-Auto');
-            const measuredUsedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
-                ? Math.max(0, measuredW)
-                : 0;
-            // For EMS-owned PV-Auto stages reserve the commanded target immediately.
-            // The physical meter can lag one or more cycles behind the relay write;
-            // reserving only the old measured 1 kW would let the central budget look
-            // like the heater is still on stage 1 and can prevent clean follow-up
-            // decisions/diagnostics while the step-up is already commanded.
-            const usedW = Math.max(measuredUsedW, res.accepted ? targetW : Math.max(0, feedback.appliedPowerW));
+            const observedUsedW = this._resolveObservedPowerW(
+                d,
+                measuredW,
+                feedback,
+                this._sumStagePowerModel(d, observedStage, observedStage, measuredW),
+            );
+            // Fuer EMS-eigene PV-Auto-Stufen wird ein bestaetigter Zielwert sofort
+            // als Budget reserviert, damit andere Verbraucher denselben PV-Rest nicht
+            // doppelt erhalten. Die sichtbare/diagnostische Istleistung bleibt jedoch
+            // der manuell zugeordnete Messwert (auch 0 W).
+            const usedW = Math.max(observedUsedW, res.accepted ? targetW : 0);
 
             appliedTotalW += Math.round(res.accepted ? targetW : this._sumStagePowerModel(d, appliedStage, observedStage, measuredW));
             budgetUsedW += Math.round(usedW);
@@ -4699,7 +4761,10 @@ class HeatingRodControlModule extends BaseModule {
                     requestedW: used,
                     reserveW: used,
                     pvReserveW: tariffImportPreferred ? 0 : used,
-                    actualW: Math.max(0, Math.round(currentHeatingRodW || appliedTotalW || used || 0)),
+                    // Istleistung und Reservierung bleiben getrennt: 0 W aus dem
+                    // zugeordneten Mess-DP ist ein gueltiger Istwert und darf nicht
+                    // durch Stufen-/Sollleistung ersetzt werden.
+                    actualW: Math.max(0, Math.round(Number.isFinite(Number(currentHeatingRodW)) ? Number(currentHeatingRodW) : 0)),
                     pvOnly: !tariffImportPreferred,
                     // Budget-Diagnose: bei gleichem Frontend-Auto-Button sichtbar machen,
                     // ob der Heizstab gerade klassisch nach NVP-Überschuss oder per
