@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 66fb8560638526f566e0f2e163121cc6d45dbedefe3f9cccb07ab83219696b12
+ * Original-Hash: 6f44697d785408dbc5776225fe5a48129e5d23c5f987ccc07e764c522f433567
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/evcs-control-mapping.ts
- * Quell-Hash: sha256:7d0b286f2a1eb87084b06d566940da66e98943883b7da3384e42d942063128bc
+ * Quell-Hash: sha256:c098a9adb23aa6db3bcec0fe9c5bc0276bc8e2f6b637365484cae121c5c4ccf7
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -175,6 +175,9 @@ async function resolveEvcsControlMapping() {
         source.statusId,
         source.onlineId,
         source.activeId,
+        source.vehicleConnectedId,
+        source.chargeDemandId,
+        source.heartbeatId,
         source.energyTotalId,
         source.lockWriteId,
         source.rfidReadId,

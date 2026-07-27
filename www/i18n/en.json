@@ -3,11 +3,28 @@
     "language": "en",
     "locale": "en-GB",
     "name": "English",
-    "version": 1
+    "version": 3
   },
   "messages": {},
   "text": {
-    "Fahrzeug/Ladevorgang aktiv (lesen, optional)": "Vehicle/charging session active (read-only, optional)"
+    "Fahrzeug/Ladevorgang aktiv (lesen, optional)": "Vehicle/charging session active (read-only, optional)",
+    "Status / CP-Zustand (lesen, optional)": "Status / CP state (read-only, optional)",
+    "Fahrzeug verbunden (lesen, optional)": "Vehicle connected (read-only, optional)",
+    "Ladebedarf / Ladebereit (lesen, optional)": "Charge demand / ready to charge (read-only, optional)",
+    "Heartbeat / LastSeen (lesen, optional)": "Heartbeat / last seen (read-only, optional)",
+    "Legacy: Fahrzeug/Ladevorgang aktiv (nur lesen, keine Reservierungsquelle)": "Legacy: vehicle/charging session active (read-only, not a reservation source)",
+    "Ladebedarf / Herstellerstatus (optional)": "Charge demand / vendor status (optional)",
+    "Fahrzeug verbunden: TRUE-Werte": "Vehicle connected: TRUE values",
+    "Fahrzeug verbunden: FALSE-Werte": "Vehicle connected: FALSE values",
+    "Ladebedarf: TRUE-Werte": "Charge demand: TRUE values",
+    "Ladebedarf: FALSE-Werte": "Charge demand: FALSE values",
+    "Status: Ladebereit / lädt": "Status: ready to charge / charging",
+    "Status: verbunden, kein Bedarf": "Status: connected, no demand",
+    "Status: nicht verbunden": "Status: disconnected",
+    "Status: Fahrzeug pausiert / kein Bedarf": "Status: vehicle paused / no demand",
+    "Mehrere Werte mit Komma, Semikolon oder Zeilenumbruch trennen. *Text* erlaubt Teiltreffer.": "Separate multiple values with commas, semicolons or line breaks. *Text* allows substring matches.",
+    "Priorität: reale Leistung → expliziter Ladebedarf → Fahrzeugkontakt → normalisierter Status. „Available“ allein reserviert keine Ladeleistung.": "Priority: actual power → explicit charge demand → vehicle connection → normalised status. “Available” alone does not reserve charging power.",
+    "Fahrzeug/Ladevorgang aktiv (lesen, optional) · Legacy, keine Reservierungsquelle": "Vehicle/charging session active (read-only, optional) · legacy, not a reservation source"
   },
   "patterns": []
 }

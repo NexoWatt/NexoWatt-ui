@@ -171,6 +171,327 @@ function computeEvcsPvBudgetReservationW({
     return Math.max(0, Math.min(totalDemandW, capW, pvDemandW));
 }
 
+
+/** Freie Herstellerwerte aus AppCenter in stabile Vergleichstokens zerlegen. */
+function parseEvcsSemanticValues(raw) {
+    if (raw === null || raw === undefined) return [];
+    let values = raw;
+    if (typeof raw === 'string') {
+        const text = raw.trim();
+        if (!text) return [];
+        if ((text.startsWith('[') && text.endsWith(']')) || (text.startsWith('{') && text.endsWith('}'))) {
+            try {
+                const parsed = JSON.parse(text);
+                values = Array.isArray(parsed) ? parsed : Object.values(parsed || {});
+            } catch {
+                values = text.split(/[\n,;|]+/g);
+            }
+        } else {
+            values = text.split(/[\n,;|]+/g);
+        }
+    }
+    if (!Array.isArray(values)) values = [values];
+    return values
+        .map((value) => String(value ?? '').trim())
+        .filter(Boolean)
+        .map((value) => ({
+            raw: value,
+            token: normalizeEvcsStatusToken(value.replace(/^\*|\*$/g, '')),
+            startsWildcard: value.startsWith('*'),
+            endsWildcard: value.endsWith('*'),
+        }))
+        .filter((entry) => entry.token);
+}
+
+/** Einen beliebigen booleschen/enumartigen Herstellerwert anhand freier AppCenter-Wertelisten auswerten. */
+function resolveEvcsSemanticFlag(value, trueValuesRaw = '', falseValuesRaw = '') {
+    if (value === null || value === undefined || String(value).trim() === '') {
+        return { known: false, value: null, source: 'missing', token: '' };
+    }
+    const token = normalizeEvcsStatusToken(value);
+    const matches = (entries) => entries.some((entry) => {
+        if (!entry || !entry.token) return false;
+        if (entry.startsWildcard && entry.endsWildcard) return token.includes(entry.token);
+        if (entry.startsWildcard) return token.endsWith(entry.token);
+        if (entry.endsWildcard) return token.startsWith(entry.token);
+        return token === entry.token;
+    });
+    const falseEntries = parseEvcsSemanticValues(falseValuesRaw);
+    if (matches(falseEntries)) return { known: true, value: false, source: 'configured-false-value', token };
+    const trueEntries = parseEvcsSemanticValues(trueValuesRaw);
+    if (matches(trueEntries)) return { known: true, value: true, source: 'configured-true-value', token };
+    const bool = toBool(value);
+    if (bool !== null) return { known: true, value: bool, source: 'boolean-normalization', token };
+    return { known: false, value: null, source: 'unmapped-value', token };
+}
+
+/** Freie Status-Mappinglisten gegen einen Rohstatus prüfen. */
+function matchesEvcsSemanticStatus(value, mappingRaw) {
+    const token = normalizeEvcsStatusToken(value);
+    if (!token) return false;
+    return parseEvcsSemanticValues(mappingRaw).some((entry) => {
+        if (entry.startsWildcard && entry.endsWildcard) return token.includes(entry.token);
+        if (entry.startsWildcard) return token.endsWith(entry.token);
+        if (entry.endsWildcard) return token.startsWith(entry.token);
+        return token === entry.token;
+    });
+}
+
+/**
+ * Herstellerunabhängige semantische EVCS-Zwischenschicht.
+ * Sie bildet OCPP-, CP-/IEC- sowie frei konfigurierte Herstellerwerte auf
+ * einen stabilen Fahrzeug-/Ladebedarfszustand ab.
+ */
+function classifyUniversalEvcsVehicleStatus({
+    status = '',
+    statusFresh = false,
+    statusDemandValues = '',
+    statusReadyValues = '',
+    statusConnectedValues = '',
+    statusDisconnectedValues = '',
+    statusNoDemandValues = '',
+} = {}) {
+    const raw = String(status ?? '').trim();
+    const token = normalizeEvcsStatusToken(raw);
+    const result = {
+        raw,
+        token,
+        fresh: !!statusFresh,
+        state: 'unknown',
+        plugged: false,
+        demandConfirmed: false,
+        source: statusFresh ? 'fresh-status' : 'stale-or-missing-status',
+        reason: statusFresh ? 'status-not-classified' : 'no-fresh-status',
+    };
+    if (!raw || !statusFresh) return result;
+
+    const includesAny = (...needles) => needles.some((needle) => token.includes(needle));
+    const startsAny = (...prefixes) => prefixes.some((prefix) => token === prefix || token.startsWith(prefix));
+
+    // Bekannte Sicherheits-/Erreichbarkeitszustände sind hard fail-safe und
+    // dürfen auch durch ein zu breit gewähltes Installer-Wildcard-Mapping nicht
+    // als Ladebedarf umgedeutet werden. Freie Herstellerwerte bleiben darunter
+    // vollständig autoritativ.
+    if (includesAny('offline', 'unreachable', 'notreachable', 'communicationlost', 'connectionlost')) {
+        return { ...result, state: 'offline', reason: `status-${token}-offline` };
+    }
+    if (token === 'disconnected' || includesAny('notconnected', 'vehiclenotconnected', 'evnotconnected')) {
+        return { ...result, state: 'disconnected', reason: `status-${token}-disconnected` };
+    }
+    const explicitlyHealthy = includesAny('noerror', 'nofault', 'faultfree', 'oknostoerung');
+    if (!explicitlyHealthy && includesAny('faulted', 'fault', 'error', 'failed', 'failure', 'stoerung')) {
+        return { ...result, state: 'faulted', reason: `status-${token}-faulted` };
+    }
+    if (includesAny('unavailable', 'outofservice', 'inoperative', 'notavailable')) {
+        return { ...result, state: 'unavailable', reason: `status-${token}-unavailable` };
+    }
+
+    // Installer-Mapping erlaubt beliebige Hersteller-/Enumwerte. Innerhalb der
+    // frei konfigurierbaren Klassen gilt die sichere Reihenfolge: getrennt vor
+    // Ladebedarf, danach kein Bedarf und zuletzt nur verbunden.
+    if (matchesEvcsSemanticStatus(raw, statusDisconnectedValues)) {
+        return { ...result, state: 'disconnected', reason: 'configured-status-disconnected' };
+    }
+    const effectiveStatusDemandValues = String(statusDemandValues || statusReadyValues || '');
+    if (matchesEvcsSemanticStatus(raw, effectiveStatusDemandValues)) {
+        return { ...result, state: 'ready_to_charge', plugged: true, demandConfirmed: true, reason: 'configured-status-ready' };
+    }
+    if (matchesEvcsSemanticStatus(raw, statusNoDemandValues)) {
+        return { ...result, state: 'paused_by_vehicle', plugged: true, reason: 'configured-status-no-demand' };
+    }
+    if (matchesEvcsSemanticStatus(raw, statusConnectedValues)) {
+        return { ...result, state: 'connected', plugged: true, reason: 'configured-status-connected' };
+    }
+
+    // Standard-OCPP.
+    if (token.includes('suspendedevse')) {
+        return { ...result, state: 'paused_by_evse', plugged: true, demandConfirmed: true, reason: 'suspended-evse-waits-for-ems' };
+    }
+    if (token.includes('suspendedev') && !token.includes('suspendedevse')) {
+        return { ...result, state: 'paused_by_vehicle', plugged: true, reason: 'vehicle-not-requesting' };
+    }
+    if (token.includes('charging')) {
+        return { ...result, state: 'charging', plugged: true, demandConfirmed: true, reason: `status-${token}` };
+    }
+    if (token.includes('preparing')) {
+        return { ...result, state: 'ready_to_charge', plugged: true, demandConfirmed: true, reason: `status-${token}` };
+    }
+    if (token.includes('finishing')) {
+        return { ...result, state: 'finishing', plugged: true, reason: `status-${token}-no-demand` };
+    }
+    if (token.includes('occupied')) {
+        return { ...result, state: 'connected', plugged: true, reason: `status-${token}-no-demand` };
+    }
+    if (token.includes('reserved')) {
+        return { ...result, state: 'reserved', reason: 'status-reserved-no-vehicle' };
+    }
+
+    // IEC 61851 / ABL eMH1 und herstellerübliche Texte.
+    const ablReady = startsAny('b2', 'c1', 'c2', 'd1', 'd2')
+        || includesAny(
+            'permissiontocharge', 'hasthepermissiontocharge', 'allowedtocharge',
+            'authorisedtocharge', 'authorizedtocharge', 'readytocharge',
+            'chargepermission', 'chargingpermission', 'ladefreigabe',
+            'fahrzeugdarfladen', 'toestemmingomteladen', 'klaaromteladen',
+        );
+    if (ablReady) {
+        const chargingState = startsAny('c1', 'c2', 'd1', 'd2');
+        return {
+            ...result,
+            state: chargingState ? 'charging' : 'ready_to_charge',
+            plugged: true,
+            demandConfirmed: true,
+            source: 'vendor-status-normalizer',
+            reason: startsAny('b2') ? 'abl-b2-permission' : `vendor-status-${token}-ready`,
+        };
+    }
+    if (startsAny('a1', 'a2') || includesAny('noevconnected', 'novehicle', 'keinfahrzeug', 'geenautoverbonden')) {
+        return { ...result, state: 'disconnected', source: 'vendor-status-normalizer', reason: `vendor-status-${token}-disconnected` };
+    }
+    if (startsAny('b1') || includesAny('evconnected', 'vehicleconnected', 'carconnected', 'fahrzeugverbunden', 'autoverbonden')) {
+        return { ...result, state: 'connected', plugged: true, source: 'vendor-status-normalizer', reason: `vendor-status-${token}-connected` };
+    }
+
+    // Allgemeine, bewusst konservative Fallbacks. Plain `Ready` bleibt wie
+    // OCPP `Available` frei/verfügbar; nur `ready to charge` bestätigt Bedarf.
+    if (['available', 'idle', 'unplugged', 'free', 'ready'].includes(token)) {
+        return { ...result, state: 'disconnected', reason: `status-${token}-not-connected` };
+    }
+    if (['plugged', 'connected', 'starting', 'stopping'].includes(token)) {
+        return { ...result, state: 'connected', plugged: true, reason: `status-${token}-no-demand` };
+    }
+    return result;
+}
+
+/** Eventbasierte Fahrzeugzustände dürfen bei frischem Geräte-Heartbeat bestehen bleiben. */
+function isPersistentEvcsVehicleState(state) {
+    return new Set([
+        'disconnected', 'connected', 'ready_to_charge',
+        'paused_by_evse', 'paused_by_vehicle', 'finishing', 'reserved',
+    ]).has(String(state || ''));
+}
+
+/**
+ * Alle verfügbaren Beweise zusammenführen. Frische reale Leistung ist
+ * autoritativ; danach folgen Sicherheitsstatus, expliziter Ladebedarf,
+ * expliziter Fahrzeugkontakt und schließlich der normalisierte Status.
+ */
+function resolveUniversalEvcsVehicleDemand({
+    actualPowerW = 0,
+    activityThresholdW = 100,
+    status = '',
+    statusFresh = false,
+    explicitConnected = null,
+    explicitConnectedKnown = false,
+    explicitDemand = null,
+    explicitDemandKnown = false,
+    statusDemandValues = '',
+    statusReadyValues = '',
+    statusConnectedValues = '',
+    statusDisconnectedValues = '',
+    statusNoDemandValues = '',
+} = {}) {
+    const thresholdW = Math.max(1, Number(activityThresholdW) || 100);
+    const actualW = Math.max(0, Number(actualPowerW) || 0);
+    const classified = classifyUniversalEvcsVehicleStatus({
+        status,
+        statusFresh,
+        statusDemandValues,
+        statusReadyValues,
+        statusConnectedValues,
+        statusDisconnectedValues,
+        statusNoDemandValues,
+    });
+
+    if (actualW >= thresholdW) {
+        return {
+            plugged: true,
+            demandConfirmed: true,
+            state: 'charging',
+            source: 'fresh-power',
+            reason: 'fresh-power-flow',
+            normalizedStatus: classified.token,
+        };
+    }
+
+    if (['offline', 'faulted', 'unavailable'].includes(classified.state)) {
+        return {
+            plugged: false,
+            demandConfirmed: false,
+            state: classified.state,
+            source: classified.source,
+            reason: classified.reason,
+            normalizedStatus: classified.token,
+        };
+    }
+
+    if (explicitConnectedKnown && explicitConnected === false) {
+        return {
+            plugged: false,
+            demandConfirmed: false,
+            state: 'disconnected',
+            source: 'explicit-connected-dp',
+            reason: 'explicit-unplugged',
+            normalizedStatus: classified.token,
+        };
+    }
+
+    if (explicitDemandKnown) {
+        if (explicitDemand === true) {
+            return {
+                plugged: true,
+                demandConfirmed: true,
+                state: 'ready_to_charge',
+                source: 'explicit-demand-dp',
+                reason: 'explicit-charge-demand',
+                normalizedStatus: classified.token,
+            };
+        }
+        const connected = explicitConnectedKnown
+            ? explicitConnected === true
+            : classified.plugged === true;
+        return {
+            plugged: connected,
+            demandConfirmed: false,
+            state: connected ? 'connected' : 'disconnected',
+            source: 'explicit-demand-dp',
+            reason: connected ? 'explicit-no-charge-demand' : 'explicit-no-demand-no-vehicle',
+            normalizedStatus: classified.token,
+        };
+    }
+
+    if (classified.state !== 'unknown') {
+        return {
+            plugged: classified.plugged === true,
+            demandConfirmed: classified.demandConfirmed === true,
+            state: classified.state,
+            source: classified.source,
+            reason: classified.reason,
+            normalizedStatus: classified.token,
+        };
+    }
+
+    if (explicitConnectedKnown && explicitConnected === true) {
+        return {
+            plugged: true,
+            demandConfirmed: false,
+            state: 'connected',
+            source: 'explicit-connected-dp',
+            reason: 'explicit-connected-no-demand-proof',
+            normalizedStatus: classified.token,
+        };
+    }
+
+    return {
+        plugged: false,
+        demandConfirmed: false,
+        state: 'unknown',
+        source: statusFresh ? 'status-unknown' : 'stale-or-missing-status',
+        reason: statusFresh ? 'status-not-classified' : 'no-fresh-vehicle-proof',
+        normalizedStatus: classified.token,
+    };
+}
+
 /**
  * Code-Teil: resolveConfirmedEvcsVehicleDemand
  * Zweck: Trennt den physischen Anschlusszustand von einem tatsaechlich
@@ -193,107 +514,19 @@ function resolveConfirmedEvcsVehicleDemand({
     explicitPlug = null,
     explicitPlugKnown = false,
 } = {}) {
-    const thresholdW = Math.max(1, Number(activityThresholdW) || 100);
-    const actualW = Math.max(0, Number(actualPowerW) || 0);
-    const normalized = String(status || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
-
-    if (actualW >= thresholdW) {
-        return {
-            plugged: true,
-            demandConfirmed: true,
-            source: 'fresh-power',
-            reason: 'fresh-power-flow',
-            normalizedStatus: normalized,
-        };
-    }
-
-    if (statusFresh && normalized) {
-        const suspendedEvse = normalized.includes('suspendedevse');
-        const suspendedEv = normalized.includes('suspendedev') && !suspendedEvse;
-        const demandStatus = suspendedEvse
-            || normalized.includes('charging')
-            || normalized.includes('preparing');
-        if (demandStatus) {
-            return {
-                plugged: true,
-                demandConfirmed: true,
-                source: 'fresh-status',
-                reason: suspendedEvse ? 'suspended-evse-waits-for-ems' : `status-${normalized}`,
-                normalizedStatus: normalized,
-            };
-        }
-
-        const connectedWithoutDemand = suspendedEv
-            || normalized.includes('finishing')
-            || normalized.includes('occupied');
-        if (connectedWithoutDemand) {
-            return {
-                plugged: true,
-                demandConfirmed: false,
-                source: 'fresh-status',
-                reason: suspendedEv ? 'vehicle-not-requesting' : `status-${normalized}-no-demand`,
-                normalizedStatus: normalized,
-            };
-        }
-
-        if (normalized.includes('reserved')) {
-            return {
-                plugged: false,
-                demandConfirmed: false,
-                source: 'fresh-status',
-                reason: 'status-reserved-no-vehicle',
-                normalizedStatus: normalized,
-            };
-        }
-
-        const notConnectedStatus = normalized.includes('available')
-            || normalized.includes('idle')
-            || normalized.includes('unplugged')
-            || normalized.includes('notconnected')
-            || normalized.includes('disconnected')
-            || normalized.includes('free')
-            || normalized.includes('ready')
-            || normalized.includes('reserved')
-            || normalized.includes('faulted')
-            || normalized.includes('unavailable')
-            || normalized.includes('offline');
-        if (notConnectedStatus) {
-            return {
-                plugged: false,
-                demandConfirmed: false,
-                source: 'fresh-status',
-                reason: `status-${normalized}-not-connected`,
-                normalizedStatus: normalized,
-            };
-        }
-    }
-
-    if (explicitPlugKnown && explicitPlug === true) {
-        return {
-            plugged: true,
-            demandConfirmed: true,
-            source: 'explicit-plug-dp',
-            reason: 'explicit-plug-confirmed',
-            normalizedStatus: normalized,
-        };
-    }
-    if (explicitPlugKnown && explicitPlug === false) {
-        return {
-            plugged: false,
-            demandConfirmed: false,
-            source: 'explicit-plug-dp',
-            reason: 'explicit-unplugged',
-            normalizedStatus: normalized,
-        };
-    }
-
-    return {
-        plugged: false,
-        demandConfirmed: false,
-        source: statusFresh ? 'status-unknown' : 'stale-or-missing-status',
-        reason: statusFresh ? 'status-not-classified' : 'no-fresh-vehicle-proof',
-        normalizedStatus: normalized,
-    };
+    // Legacy-Vertrag: Ein alter expliziter Plug-DP bedeutete bisher gleichzeitig
+    // „Fahrzeug vorhanden“ und „Ladebedarf“. Neue Runtime-Aufrufer nutzen die
+    // getrennten vehicleConnected-/chargeDemand-DPs über den universellen Resolver.
+    return resolveUniversalEvcsVehicleDemand({
+        actualPowerW,
+        activityThresholdW,
+        status,
+        statusFresh,
+        explicitConnected: explicitPlug,
+        explicitConnectedKnown: explicitPlugKnown,
+        explicitDemand: explicitPlug,
+        explicitDemandKnown: explicitPlugKnown,
+    });
 }
 
 /**
@@ -423,6 +656,7 @@ function computePendingPvStartIntentW({
     connected = false,
     controlBasis = 'none',
     status = '',
+    normalizedVehicleState = '',
     startCooldownActive = false,
     goalBlocked = false,
     currentPowerW = 0,
@@ -447,19 +681,34 @@ function computePendingPvStartIntentW({
     // selbst keine Energie anfordert. `SuspendedEVSE` darf reservieren, weil die
     // Wallbox typischerweise auf EMS-Leistung wartet. `SuspendedEV` darf dagegen
     // keinen PV-Anteil fuer ein gerade nicht ladewilliges Fahrzeug blockieren.
-    const normalizedStatus = String(status || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
-    const suspendedByEvse = normalizedStatus.includes('suspendedevse');
-    const suspendedByVehicle = normalizedStatus.includes('suspendedev') && !suspendedByEvse;
-    if (suspendedByVehicle) {
-        return { intentW: 0, totalDemandW: 0, reason: 'vehicle-not-requesting' };
-    }
-    const statusCanRequestPower = !normalizedStatus
-        || suspendedByEvse
-        || normalizedStatus.includes('preparing')
-        || normalizedStatus.includes('occupied')
-        || normalizedStatus.includes('charging');
-    if (!statusCanRequestPower) {
-        return { intentW: 0, totalDemandW: 0, reason: 'status-not-requesting' };
+    const normalizedState = String(normalizedVehicleState || '').trim().toLowerCase();
+    if (normalizedState) {
+        if (['paused_by_vehicle', 'finishing', 'connected', 'disconnected', 'faulted', 'offline', 'unavailable', 'reserved'].includes(normalizedState)) {
+            return { intentW: 0, totalDemandW: 0, reason: normalizedState === 'paused_by_vehicle' ? 'vehicle-not-requesting' : 'status-not-requesting' };
+        }
+        if (!['ready_to_charge', 'charging', 'paused_by_evse'].includes(normalizedState)) {
+            return { intentW: 0, totalDemandW: 0, reason: 'status-not-requesting' };
+        }
+    } else {
+        // Legacy-Fallback für ältere Aufrufer ohne semantischen Zustand.
+        const normalizedStatus = String(status || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+        const suspendedByEvse = normalizedStatus.includes('suspendedevse');
+        const suspendedByVehicle = normalizedStatus.includes('suspendedev') && !suspendedByEvse;
+        if (suspendedByVehicle) {
+            return { intentW: 0, totalDemandW: 0, reason: 'vehicle-not-requesting' };
+        }
+        const statusCanRequestPower = !normalizedStatus
+            || suspendedByEvse
+            || normalizedStatus.includes('preparing')
+            || normalizedStatus.includes('occupied')
+            || normalizedStatus.includes('charging')
+            || normalizedStatus.includes('permissiontocharge')
+            || normalizedStatus.startsWith('b2')
+            || normalizedStatus.startsWith('c1')
+            || normalizedStatus.startsWith('c2');
+        if (!statusCanRequestPower) {
+            return { intentW: 0, totalDemandW: 0, reason: 'status-not-requesting' };
+        }
     }
 
     const maxW = Math.max(0, Number(maxPowerW) || 0);
@@ -1303,6 +1552,7 @@ class ChargingManagementModule extends BaseModule {
         this._pvBelowMinSinceMs = new Map(); // safeKey -> ms since a running PV-only session is continuously below the technical minimum
         this._pvMinRunUntilMs = new Map(); // safeKey -> ms until a freshly started PV-only session should be kept stable
         this._pvStartCooldownUntilMs = new Map(); // safeKey -> ms until a failed PV-only start may be retried
+        this._pvStartAttemptSinceMs = new Map(); // safeKey -> ms since a PV start command waits for measurable vehicle current
         // TS-Migration 0.7.124: letzter EVCS-/Charging-Control-Shadow und Produktiv-Kandidat.
         this._chargingControlTsShadowLast = null;
         this._chargingControlTsProductivePrepLast = null;
@@ -3494,6 +3744,18 @@ class ChargingManagementModule extends BaseModule {
         await mk('vehicleDemandConfirmed', 'Fahrzeug fordert EMS-Leistung an', 'boolean', 'indicator');
         await mk('vehicleDemandSource', 'Ladebedarf bestätigt (Quelle)', 'string', 'text');
         await mk('vehicleDemandReason', 'Ladebedarf bestätigt (Grund)', 'string', 'text');
+        await mk('vehicleStateNormalized', 'Normalisierter Fahrzeug-/Ladezustand', 'string', 'text');
+        await mk('vehicleConnectedRaw', 'Fahrzeug verbunden Rohwert', 'string', 'text');
+        await mk('vehicleConnectedKnown', 'Fahrzeug verbunden Wert erkannt', 'boolean', 'indicator');
+        await mk('vehicleConnectedAgeMs', 'Fahrzeug verbunden Alter (ms)', 'number', 'value.time');
+        await mk('vehicleConnectedFresh', 'Fahrzeug verbunden Wert gültig', 'boolean', 'indicator');
+        await mk('vehicleConnectedSourceId', 'Fahrzeug verbunden Datenpunkt', 'string', 'text');
+        await mk('chargeDemandRaw', 'Ladebedarf Rohwert', 'string', 'text');
+        await mk('chargeDemandKnown', 'Ladebedarf Wert erkannt', 'boolean', 'indicator');
+        await mk('chargeDemandAgeMs', 'Ladebedarf Alter (ms)', 'number', 'value.time');
+        await mk('chargeDemandFresh', 'Ladebedarf Wert gültig', 'boolean', 'indicator');
+        await mk('chargeDemandSourceId', 'Ladebedarf Datenpunkt', 'string', 'text');
+        await mk('pvStartReservationW', 'PV-Startreservierung (W)', 'number', 'value.power');
         await mk('goalSocAvailable', 'Fahrzeug-SoC verfügbar', 'boolean', 'indicator');
 
 
@@ -3624,6 +3886,12 @@ class ChargingManagementModule extends BaseModule {
         await mk('statusScope', 'Status datapoint scope', 'string', 'text');
         await mk('statusIgnoredReason', 'Reason why the assigned status is ignored', 'string', 'text');
         await mk('statusFresh', 'Status value fresh', 'boolean', 'indicator');
+        await mk('statusFreshReason', 'Status freshness reason', 'string', 'text');
+        await mk('heartbeatSourceId', 'Heartbeat datapoint', 'string', 'text');
+        await mk('heartbeatRaw', 'Heartbeat / LastSeen raw value', 'string', 'text');
+        await mk('heartbeatAgeMs', 'Heartbeat age (ms)', 'number', 'value.time');
+        await mk('heartbeatFresh', 'Heartbeat fresh', 'boolean', 'indicator');
+        await mk('vehicleLivenessFresh', 'Vehicle-state liveness confirmed', 'boolean', 'indicator');
         await mk('statusEffective', 'Effective fresh connector status', 'string', 'text');
         await mk('statusClass', 'Normalized connector status class', 'string', 'text');
         await mk('onlineSource', 'Source used for wallbox reachability', 'string', 'text');
@@ -3982,6 +4250,8 @@ class ChargingManagementModule extends BaseModule {
         const pvMinRunMs = clamp(num(cfg.pvMinRunSec, 45), 0, 3600) * 1000;
         const pvRunDeficitToleranceW = clamp(num(cfg.pvRunDeficitToleranceW, 600), 0, 1e12);
         const pvStartRetryCooldownMs = clamp(num(cfg.pvStartRetryCooldownSec, num(cfg.pvRestartCooldownSec, 180)), 0, 3600) * 1000;
+        const pvStartResponseTimeoutMs = clamp(num(cfg.pvStartResponseTimeoutSec, 15), 3, 300) * 1000;
+        const wbHeartbeatStaleTimeoutMs = clamp(num(cfg.wallboxHeartbeatStaleTimeoutSec, 90), 5, 3600) * 1000;
         const pvRampUpAperTick = clamp(num(cfg.pvRampUpAperTick, 0.5), 0, 1e6);
         const pvRampUpWPerTick = clamp(num(cfg.pvRampUpWPerTick, 350), 0, 1e12);
 
@@ -4277,6 +4547,9 @@ class ChargingManagementModule extends BaseModule {
             const enableId = String(wb.enableId || '').trim();
             const onlineId = String(wb.onlineId || '').trim();
             const statusId = String(wb.statusId || '').trim();
+            const vehicleConnectedId = String(wb.vehicleConnectedId || '').trim();
+            const chargeDemandId = String(wb.chargeDemandId || '').trim();
+            const heartbeatId = String(wb.heartbeatId || '').trim();
 
             // phase measurement IDs (optional)
             const l1Id = String(wb.phaseL1AId || '').trim();
@@ -4294,6 +4567,9 @@ class ChargingManagementModule extends BaseModule {
                 if (enableId) await this.dp.upsert({ key: `cm.wb.${safe}.en`, objectId: enableId, dataType: 'boolean', direction: 'out' });
                 if (onlineId) await this.dp.upsert({ key: `cm.wb.${safe}.onlineRaw`, objectId: onlineId, dataType: 'mixed', direction: 'in' });
                 if (statusId) await this.dp.upsert({ key: `cm.wb.${safe}.st`, objectId: statusId, dataType: 'mixed', direction: 'in' });
+                if (vehicleConnectedId) await this.dp.upsert({ key: `cm.wb.${safe}.vehicleConnectedRaw`, objectId: vehicleConnectedId, dataType: 'mixed', direction: 'in' });
+                if (chargeDemandId) await this.dp.upsert({ key: `cm.wb.${safe}.chargeDemandRaw`, objectId: chargeDemandId, dataType: 'mixed', direction: 'in' });
+                if (heartbeatId) await this.dp.upsert({ key: `cm.wb.${safe}.heartbeatRaw`, objectId: heartbeatId, dataType: 'mixed', direction: 'in' });
                 if (phaseSwitchId) await this.dp.upsert({ key: `cm.wb.${safe}.phaseSet`, objectId: phaseSwitchId, dataType: 'mixed', direction: 'out' });
                 if (phaseFeedbackId) await this.dp.upsert({ key: `cm.wb.${safe}.phaseFb`, objectId: phaseFeedbackId, dataType: 'mixed', direction: 'in' });
 
@@ -4307,6 +4583,9 @@ class ChargingManagementModule extends BaseModule {
             const iA = (actualCurrentAId && this.dp) ? this.dp.getNumber(`cm.wb.${safe}.iA`, null) : null;
             const onlineRaw = (onlineId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.onlineRaw`) : null;
             const statusRaw = (statusId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.st`) : null;
+            const vehicleConnectedRaw = (vehicleConnectedId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.vehicleConnectedRaw`) : null;
+            const chargeDemandRaw = (chargeDemandId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.chargeDemandRaw`) : null;
+            const heartbeatRaw = (heartbeatId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.heartbeatRaw`) : null;
 
             const normalizePhaseFeedbackRuntime = (value) => {
                 const raw = String(value ?? '').trim().toLowerCase();
@@ -4330,7 +4609,7 @@ class ChargingManagementModule extends BaseModule {
             const mappingIssues = [];
             if (!hasSetpoint) mappingIssues.push('no_setpoint');
             if (!actualPowerWId) mappingIssues.push('no_power_meter');
-            if (!statusId) mappingIssues.push('no_status_dp');
+            if (!statusId && !vehicleConnectedId && !chargeDemandId) mappingIssues.push('no_vehicle_state_mapping');
 
             let meterAgeMs = 0;
             let meterStale = false;
@@ -4339,6 +4618,53 @@ class ChargingManagementModule extends BaseModule {
                 meterAgeMs = (Number.isFinite(age) && age >= 0) ? Math.round(age) : 0;
                 meterStale = !(Number.isFinite(age)) ? true : (age > wbMeterStaleTimeoutMs);
             }
+
+            let onlineAgeMs = null;
+            if (onlineId && this.dp && typeof this.dp.getAgeMs === 'function') {
+                const age = this.dp.getAgeMs(`cm.wb.${safe}.onlineRaw`);
+                onlineAgeMs = Number.isFinite(age) && age >= 0 ? Math.round(age) : null;
+            }
+            let heartbeatAgeMs = null;
+            if (heartbeatId && this.dp && typeof this.dp.getAgeMs === 'function') {
+                const age = this.dp.getAgeMs(`cm.wb.${safe}.heartbeatRaw`);
+                heartbeatAgeMs = Number.isFinite(age) && age >= 0 ? Math.round(age) : null;
+            }
+            const explicitOnlineFlag = onlineId ? normalizeEvcsOnlineFlag(onlineRaw, null) : null;
+            const heartbeatFresh = heartbeatId
+                ? (heartbeatAgeMs !== null && heartbeatAgeMs <= wbHeartbeatStaleTimeoutMs)
+                : false;
+            const onlineSignalFresh = onlineId
+                ? (explicitOnlineFlag === true && onlineAgeMs !== null && onlineAgeMs <= wbHeartbeatStaleTimeoutMs)
+                : false;
+            // Eventbasierte Hersteller-/CP-Zustände werden oft nur bei einer Änderung
+            // geschrieben. Ein frischer Heartbeat, Online-DP oder Leistungsmesswert
+            // bestätigt deshalb die Gerätekommunikation. Ob ein alter Rohstatus damit
+            // weiter gültig bleibt, entscheidet unten zusätzlich die sichere Liste
+            // persistenter Fahrzeugzustände; Faulted/Offline/Charging werden niemals
+            // allein durch diese Liveness-Bestätigung wiederbelebt.
+            const freshPowerMeterLiveness = !!(
+                actualPowerWId
+                && !meterStale
+                && typeof pW === 'number'
+                && Number.isFinite(pW)
+            );
+            const vehicleLivenessFresh = heartbeatFresh || onlineSignalFresh || freshPowerMeterLiveness;
+
+            const semanticAge = (key) => {
+                if (!this.dp || typeof this.dp.getAgeMs !== 'function') return null;
+                const age = this.dp.getAgeMs(key);
+                return Number.isFinite(age) && age >= 0 ? Math.round(age) : null;
+            };
+            const vehicleConnectedAgeMs = vehicleConnectedId ? semanticAge(`cm.wb.${safe}.vehicleConnectedRaw`) : null;
+            const chargeDemandAgeMs = chargeDemandId ? semanticAge(`cm.wb.${safe}.chargeDemandRaw`) : null;
+            const vehicleConnectedFresh = !!(vehicleConnectedId && (
+                (vehicleConnectedAgeMs !== null && vehicleConnectedAgeMs <= wbStatusStaleTimeoutMs)
+                || vehicleLivenessFresh
+            ));
+            const chargeDemandFresh = !!(chargeDemandId && (
+                (chargeDemandAgeMs !== null && chargeDemandAgeMs <= wbStatusStaleTimeoutMs)
+                || vehicleLivenessFresh
+            ));
 
             let statusAgeRawMs = null;
             if (statusId && this.dp && typeof this.dp.getAgeMs === 'function') {
@@ -4352,9 +4678,11 @@ class ChargingManagementModule extends BaseModule {
             })();
             const statusAgePolicy = resolveEvcsStatusAgePolicy(statusRawText, statusAgeRawMs, wbStatusStaleTimeoutMs);
             const statusAgeMs = statusAgePolicy.ageMs;
-            // `Available`/`Ready`/`Idle` bleiben als stabile Bereitschaft gueltig,
-            // auch wenn ein eventbasierter Adapter den unveraenderten State nicht
-            // zyklisch neu schreibt. Alle anderen Stati behalten den Timeout.
+            // `Available`/`Ready`/`Idle` bleiben als stabile Bereitschaft gueltig.
+            // Hersteller-/CP-Zustaende wie ABL B2 duerfen bei frischem Heartbeat
+            // ebenfalls weiter als Fahrzeugbeweis gelten. Sicherheitszustaende
+            // (Faulted/Unavailable/Offline/Charging) werden dagegen niemals nur
+            // wegen eines Heartbeats als aktuell behandelt.
             const statusStale = !!(statusId && statusAgePolicy.stale);
             const statusSourceConnectorNo = inferOcppConnectorNoFromObjectId(statusId);
             const statusConnectorMismatch = !!(
@@ -4376,13 +4704,38 @@ class ChargingManagementModule extends BaseModule {
                     : (connectorNo > 0 ? `connector-${connectorNo}-assigned` : 'station-or-unknown'));
             if (statusConnectorMismatch) mappingIssues.push('status_connector_mismatch');
             if (statusSharedAcrossConnectors) mappingIssues.push('status_shared_across_connectors');
-            const statusIgnoredReason = statusConnectorMismatch
+            const statusIgnoredReasonBase = statusConnectorMismatch
                 ? `status-dp-connector-${statusSourceConnectorNo}-for-connector-${connectorNo}`
                 : (statusSharedAcrossConnectors
                     ? `status-dp-shared-by-${statusConnectorUsage.get(statusId).size}-connectors`
-                    : (statusStale && statusId ? 'status-stale' : ''));
-            const statusFresh = !!(statusId && !statusStale && !statusConnectorMismatch && !statusSharedAcrossConnectors && statusRawText);
-            const classifiedStatus = classifyEvcsConnectorStatus(statusRawText, statusFresh);
+                    : '');
+            const statusTimestampFresh = !!(statusId && !statusStale && !statusConnectorMismatch && !statusSharedAcrossConnectors && statusRawText);
+            const semanticPreview = classifyUniversalEvcsVehicleStatus({
+                status: statusRawText,
+                statusFresh: true,
+                statusDemandValues: wb.statusDemandValues || wb.statusReadyValues || '',
+                statusConnectedValues: wb.statusConnectedValues || '',
+                statusDisconnectedValues: wb.statusDisconnectedValues || '',
+                statusNoDemandValues: wb.statusNoDemandValues || '',
+            });
+            const statusHeldByLiveness = !!(
+                statusId
+                && statusRawText
+                && !statusConnectorMismatch
+                && !statusSharedAcrossConnectors
+                && statusStale
+                && vehicleLivenessFresh
+                && isPersistentEvcsVehicleState(semanticPreview.state)
+            );
+            const statusFresh = statusTimestampFresh || statusHeldByLiveness;
+            const statusIgnoredReason = statusIgnoredReasonBase
+                || (!statusFresh && statusId && statusRawText ? 'status-stale' : '');
+            const statusFreshReason = statusFresh
+                ? (statusTimestampFresh ? 'status-timestamp-fresh' : 'status-held-by-fresh-device-liveness')
+                : (statusIgnoredReason || 'status-missing');
+            // Safety classification only trusts the timestamp/persistent OCPP-ready
+            // policy. A stale fault/charging state is never revived by heartbeat.
+            const classifiedStatus = classifyEvcsConnectorStatus(statusRawText, statusTimestampFresh || statusAgePolicy.persistentReady);
             const faultActive = !!classifiedStatus.faultActive;
             const unavailableActive = !!classifiedStatus.unavailableActive;
             const operationalBlocked = !!classifiedStatus.operationalBlocked;
@@ -4410,7 +4763,7 @@ class ChargingManagementModule extends BaseModule {
             let online = cfgEnabled;
             let onlineSource = 'config-fallback';
             if (onlineId) {
-                const explicitOnline = normalizeEvcsOnlineFlag(onlineRaw, null);
+                const explicitOnline = explicitOnlineFlag;
                 if (explicitOnline === null) {
                     online = statusFresh ? normalizeEvcsStatusReachability(statusRaw, cfgEnabled) : cfgEnabled;
                     onlineSource = statusFresh ? 'status-fallback-after-unknown-online-dp' : 'config-fallback-after-unknown-online-dp';
@@ -4452,6 +4805,12 @@ class ChargingManagementModule extends BaseModule {
                 await this._queueState(`${ch}.statusScope`, statusScope, true);
                 await this._queueState(`${ch}.statusIgnoredReason`, statusIgnoredReason, true);
                 await this._queueState(`${ch}.statusFresh`, statusFresh, true);
+                await this._queueState(`${ch}.statusFreshReason`, statusFreshReason, true);
+                await this._queueState(`${ch}.heartbeatSourceId`, heartbeatId, true);
+                await this._queueState(`${ch}.heartbeatRaw`, heartbeatRaw === null || heartbeatRaw === undefined ? '' : String(heartbeatRaw), true);
+                await this._queueState(`${ch}.heartbeatAgeMs`, heartbeatAgeMs === null ? 0 : heartbeatAgeMs, true);
+                await this._queueState(`${ch}.heartbeatFresh`, heartbeatFresh, true);
+                await this._queueState(`${ch}.vehicleLivenessFresh`, vehicleLivenessFresh, true);
                 await this._queueState(`${ch}.statusEffective`, statusEffective, true);
                 await this._queueState(`${ch}.statusClass`, statusClass, true);
                 await this._queueState(`${ch}.onlineSource`, onlineSource, true);
@@ -4747,11 +5106,9 @@ class ChargingManagementModule extends BaseModule {
             let vehicleDemandReason = '';
 
             // `evcs.N.active` ist die Kunden-/RFID-Freigabe der Wallbox und kein
-            // Fahrzeugkontakt. Dieser State wurde frueher irrtuemlich als Plug-Signal
-            // interpretiert und konnte dadurch auch ohne Fahrzeug mehrere kW Budget
-            // reservieren. Bis ein eigener vehicleConnected-DP im Mapping existiert,
-            // wird Ladebedarf ausschließlich aus frischer Leistung und frischem
-            // Wallbox-/OCPP-Status abgeleitet.
+            // Fahrzeugkontakt. Fahrzeug und Ladebedarf kommen ausschließlich aus
+            // den neuen semantischen DPs, frischer Leistung oder normalisiertem
+            // Connector-/Herstellerstatus.
 
             // Prefer the dedicated EVCS/OCPP status when it is available. A stale
             // status is diagnostic only and cannot reserve energy.
@@ -4767,25 +5124,57 @@ class ChargingManagementModule extends BaseModule {
                         statusForPlugSource = 'evcs.status';
                         const tsS = Number(stS && stS.ts);
                         const ageS = Number.isFinite(tsS) && tsS > 0 ? Math.max(0, now - tsS) : Number.POSITIVE_INFINITY;
-                        statusForPlugFresh = ageS <= wbStatusStaleTimeoutMs;
+                        const fallbackAgePolicy = resolveEvcsStatusAgePolicy(vS, ageS, wbStatusStaleTimeoutMs);
+                        const fallbackSemantic = classifyUniversalEvcsVehicleStatus({
+                            status: vS,
+                            statusFresh: true,
+                            statusDemandValues: wb.statusDemandValues || wb.statusReadyValues || '',
+                            statusConnectedValues: wb.statusConnectedValues || '',
+                            statusDisconnectedValues: wb.statusDisconnectedValues || '',
+                            statusNoDemandValues: wb.statusNoDemandValues || '',
+                        });
+                        statusForPlugFresh = !fallbackAgePolicy.stale
+                            || (vehicleLivenessFresh && isPersistentEvcsVehicleState(fallbackSemantic.state));
                     }
                 } catch {
                     // keep mapped status fallback
                 }
             }
 
-            const vehicleDemand = resolveConfirmedEvcsVehicleDemand({
+            const connectedFlag = vehicleConnectedFresh
+                ? resolveEvcsSemanticFlag(
+                    vehicleConnectedRaw,
+                    wb.vehicleConnectedTrueValues || '',
+                    wb.vehicleConnectedFalseValues || '',
+                )
+                : { known: false, value: null, source: vehicleConnectedId ? 'stale-semantic-dp' : 'missing', token: '' };
+            const demandFlag = chargeDemandFresh
+                ? resolveEvcsSemanticFlag(
+                    chargeDemandRaw,
+                    wb.chargeDemandTrueValues || '',
+                    wb.chargeDemandFalseValues || '',
+                )
+                : { known: false, value: null, source: chargeDemandId ? 'stale-semantic-dp' : 'missing', token: '' };
+            const vehicleDemand = resolveUniversalEvcsVehicleDemand({
                 actualPowerW: (!meterStale && online && enabled) ? Math.abs(pWNum) : 0,
                 activityThresholdW,
                 status: statusForPlug,
                 statusFresh: statusForPlugFresh,
-                explicitPlug: null,
-                explicitPlugKnown: false,
+                explicitConnected: connectedFlag.value,
+                explicitConnectedKnown: connectedFlag.known,
+                explicitDemand: demandFlag.value,
+                explicitDemandKnown: demandFlag.known,
+                statusDemandValues: wb.statusDemandValues || wb.statusReadyValues || '',
+                statusReadyValues: wb.statusReadyValues || '',
+                statusConnectedValues: wb.statusConnectedValues || '',
+                statusDisconnectedValues: wb.statusDisconnectedValues || '',
+                statusNoDemandValues: wb.statusNoDemandValues || '',
             });
             vehiclePlugged = vehicleDemand.plugged;
             vehicleDemandConfirmed = vehicleDemand.demandConfirmed === true;
             vehicleDemandSource = String(vehicleDemand.source || '');
             vehicleDemandReason = String(vehicleDemand.reason || '');
+            const vehicleStateNormalized = String(vehicleDemand.state || 'unknown');
             // Track plug transitions (used for SoC freshness gating)
             if (vehiclePlugged === true || vehiclePlugged === false) {
                 const prev = this._vehiclePluggedPrev.get(safe);
@@ -4815,6 +5204,7 @@ class ChargingManagementModule extends BaseModule {
                 this._pvBelowMinSinceMs.delete(safe);
                 this._pvMinRunUntilMs.delete(safe);
                 this._pvStartCooldownUntilMs.delete(safe);
+                this._pvStartAttemptSinceMs.delete(safe);
                 pvStartupHoldUntilMs = 0;
                 pvMinRunUntilMs = 0;
                 pvStartCooldownUntilMs = 0;
@@ -4839,6 +5229,17 @@ class ChargingManagementModule extends BaseModule {
                 await this._queueState(`${ch}.vehicleDemandConfirmed`, vehicleDemandConfirmed, true);
                 await this._queueState(`${ch}.vehicleDemandSource`, vehicleDemandSource, true);
                 await this._queueState(`${ch}.vehicleDemandReason`, vehicleDemandReason, true);
+                await this._queueState(`${ch}.vehicleStateNormalized`, vehicleStateNormalized, true);
+                await this._queueState(`${ch}.vehicleConnectedRaw`, vehicleConnectedRaw === null || vehicleConnectedRaw === undefined ? '' : String(vehicleConnectedRaw), true);
+                await this._queueState(`${ch}.vehicleConnectedKnown`, connectedFlag.known === true, true);
+                await this._queueState(`${ch}.vehicleConnectedAgeMs`, vehicleConnectedAgeMs === null ? 0 : vehicleConnectedAgeMs, true);
+                await this._queueState(`${ch}.vehicleConnectedFresh`, vehicleConnectedFresh, true);
+                await this._queueState(`${ch}.chargeDemandRaw`, chargeDemandRaw === null || chargeDemandRaw === undefined ? '' : String(chargeDemandRaw), true);
+                await this._queueState(`${ch}.chargeDemandKnown`, demandFlag.known === true, true);
+                await this._queueState(`${ch}.chargeDemandAgeMs`, chargeDemandAgeMs === null ? 0 : chargeDemandAgeMs, true);
+                await this._queueState(`${ch}.chargeDemandFresh`, chargeDemandFresh, true);
+                await this._queueState(`${ch}.vehicleConnectedSourceId`, vehicleConnectedId, true);
+                await this._queueState(`${ch}.chargeDemandSourceId`, chargeDemandId, true);
             } catch {
                 // ignore
             }
@@ -5042,6 +5443,14 @@ class ChargingManagementModule extends BaseModule {
                 vehicleDemandConfirmed,
                 vehicleDemandSource,
                 vehicleDemandReason,
+                vehicleStateNormalized,
+                vehicleConnectedId,
+                vehicleConnectedFresh,
+                vehicleConnectedAgeMs,
+                chargeDemandId,
+                chargeDemandFresh,
+                chargeDemandAgeMs,
+                heartbeatId,
                 connectorStatus: String(statusForPlug || ''),
                 connectorStatusSource: String(statusForPlugSource || ''),
                 goalEnabled,
@@ -7270,6 +7679,7 @@ if (components.length) {
                     this._lastCmdTargetW.delete(safeKey);
                     this._lastCmdTargetA.delete(safeKey);
                     this._boostSinceMs.delete(safeKey);
+                    this._pvStartAttemptSinceMs.delete(safeKey);
                 }
             }
 
@@ -7321,6 +7731,7 @@ if (components.length) {
                     this._lastCmdTargetW.delete(safeKey);
                     this._lastCmdTargetA.delete(safeKey);
                     this._boostSinceMs.delete(safeKey);
+                    this._pvStartAttemptSinceMs.delete(safeKey);
                 }
             }
 
@@ -8374,6 +8785,49 @@ if (components.length) {
                 // ignore
             }
 
+            // Universeller PV-Startprobe-Vertrag: Ein normalisierter
+            // ready_to_charge-Zustand reserviert zunächst nur die technische
+            // Mindestleistung. Nimmt das Fahrzeug diese trotz kommandiertem Start
+            // innerhalb des Antwortfensters nicht an, wird die Reservierung sofort
+            // wieder freigegeben und erst nach dem Cooldown erneut versucht.
+            try {
+                const actualNowForProbeW = Math.max(0, Number(w.actualPowerW) || 0);
+                const cmdProbeW = Math.max(0, Number(cmdW) || 0);
+                const startAttemptSince = Number(this._pvStartAttemptSinceMs.get(w.safe)) || 0;
+                const technicalProbeMinW = Math.max(activityThresholdW, Number(w.minPW) || 0);
+                const startResponseState = ['ready_to_charge', 'paused_by_evse', 'charging'].includes(String(w.vehicleStateNormalized || ''));
+                const waitingForVehicleResponse = isPvOnly
+                    && startResponseState
+                    && w.vehicleDemandConfirmed === true
+                    && w.controlAvailable
+                    && prevCmdWasActive
+                    && cmdProbeW >= technicalProbeMinW
+                    && actualNowForProbeW < activityThresholdW;
+
+                if (waitingForVehicleResponse) {
+                    if (!(startAttemptSince > 0)) {
+                        this._pvStartAttemptSinceMs.set(w.safe, now);
+                    } else if (pvStartResponseTimeoutMs > 0 && (now - startAttemptSince) >= pvStartResponseTimeoutMs) {
+                        targetW = 0;
+                        targetA = 0;
+                        cmdW = 0;
+                        cmdA = 0;
+                        reason = ReasonCodes.NO_VEHICLE;
+                        limiter = 'vehicle-start-no-response';
+                        this._pvStartCooldownUntilMs.set(w.safe, now + pvStartRetryCooldownMs);
+                        this._pvStartAttemptSinceMs.delete(w.safe);
+                        this._pvStartReadySinceMs.delete(w.safe);
+                        this._pvBelowMinSinceMs.delete(w.safe);
+                        this._pvStartupUntilMs.delete(w.safe);
+                        this._pvMinRunUntilMs.delete(w.safe);
+                    }
+                } else if (actualNowForProbeW >= activityThresholdW || !isPvOnly || w.vehicleDemandConfirmed !== true || !w.controlAvailable || cmdProbeW <= 0) {
+                    this._pvStartAttemptSinceMs.delete(w.safe);
+                }
+            } catch {
+                // Diagnose-/Startprobe darf die Regelung nicht stoppen.
+            }
+
             // Station diagnostics: sum commanded power per station
             if (_sk) {
                 stationTargetSumW.set(_sk, (stationTargetSumW.get(_sk) || 0) + cmdW);
@@ -8833,6 +9287,7 @@ if (components.length) {
 
             for (const w of sorted) {
                 const row = allocationRows.get(String(w.safe || '')) || {};
+                try { await this._queueState(`${w.ch}.pvStartReservationW`, 0, true); } catch { /* diagnostic only */ }
                 const effMode = String(w.effectiveMode || row.effectiveMode || '').trim().toLowerCase();
                 if (effMode !== 'pv' && effMode !== 'minpv') continue;
                 // PV-only kann ohne PV-Grant keinen Start-Intent bilden. Min+PV darf
@@ -8877,6 +9332,7 @@ if (components.length) {
                     connected: w.vehicleDemandConfirmed === true,
                     controlBasis: w.controlBasis,
                     status: w.connectorStatus,
+                    normalizedVehicleState: w.vehicleStateNormalized,
                     startCooldownActive,
                     goalBlocked,
                     currentPowerW: demandNowW,
@@ -8895,6 +9351,7 @@ if (components.length) {
                     row.pendingPvIntentW = 0;
                     row.pendingPvIntentTotalDemandW = 0;
                     row.pendingPvIntentReason = String(pending.reason || '');
+                    try { await this._queueState(`${w.ch}.pvStartReservationW`, 0, true); } catch { /* diagnostic only */ }
                     continue;
                 }
 
@@ -8919,6 +9376,7 @@ if (components.length) {
                 row.pendingPvIntentW = Math.round(pendingIntentW);
                 row.pendingPvIntentTotalDemandW = Math.round(pendingTotalDemandW);
                 row.pendingPvIntentReason = String(pending.reason || '');
+                try { await this._queueState(`${w.ch}.pvStartReservationW`, Math.round(pendingIntentW), true); } catch { /* diagnostic only */ }
             }
         } catch (_ePendingPvIntent) {
             // Sicherheitsfallback: Ein Diagnose-/Intentfehler darf die produktive
@@ -9340,6 +9798,7 @@ if (components.length) {
                     this._lastCmdTargetW.delete(safeKey);
                     this._lastCmdTargetA.delete(safeKey);
                     this._boostSinceMs.delete(safeKey);
+                    this._pvStartAttemptSinceMs.delete(safeKey);
                 }
             }
 
@@ -9353,6 +9812,12 @@ if (components.length) {
 module.exports = {
     ChargingManagementModule,
     resolveConfirmedEvcsVehicleDemand,
+    resolveUniversalEvcsVehicleDemand,
+    classifyUniversalEvcsVehicleStatus,
+    resolveEvcsSemanticFlag,
+    parseEvcsSemanticValues,
+    matchesEvcsSemanticStatus,
+    isPersistentEvcsVehicleState,
     computeMinPvAllocationW,
     computeGoalPowerCapW,
     computeChargingMinimumServicePlan,

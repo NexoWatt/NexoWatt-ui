@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: fff1adaa310943a9b81822deabdfaf7aa616ad1812bb593e0cb4a263db9d4ec0
+ * Original-Hash: 2fb27dea87e6d4eda3ce0c5519b424370da75aa3c4a62d773f1196f0290ec6ae
  */
 
 /**
@@ -32,7 +32,7 @@
 'use strict';
 
 /**
- * Regression 0.8.122: Ladepunkte ohne bestaetigten Fahrzeugbedarf duerfen
+ * Regression 0.8.143: Ladepunkte ohne bestaetigten Fahrzeugbedarf duerfen
  * weder Gesamt- noch PV-Budget reservieren. Alte Sollwerte, stale Stati und
  * OCPP `Reserved` muessen fail-closed behandelt werden.
  */
@@ -47,6 +47,10 @@ const budgetHelpers = require(path.join(root, 'ems/charging-budget-helpers.js'))
 
 const {
   resolveConfirmedEvcsVehicleDemand,
+  resolveUniversalEvcsVehicleDemand,
+  classifyUniversalEvcsVehicleStatus,
+  resolveEvcsSemanticFlag,
+  isPersistentEvcsVehicleState,
   computePendingPvStartIntentW,
 } = charging;
 const { computeChargingMinimumServicePlan } = budgetHelpers;
@@ -100,6 +104,96 @@ out = demand({ status: 'Occupied', statusFresh: true });
 assert.strictEqual(out.plugged, true);
 assert.strictEqual(out.demandConfirmed, false);
 
+
+// Herstellerunabhängige Normalisierung: ABL eMH1/IEC-61851-Zustände müssen
+// ohne herstellerspezifischen Umbau im EMS erkannt werden.
+out = resolveUniversalEvcsVehicleDemand({
+  status: 'B2 EV has the permission to charge',
+  statusFresh: true,
+  activityThresholdW: 100,
+});
+assert.strictEqual(out.state, 'ready_to_charge');
+assert.strictEqual(out.plugged, true);
+assert.strictEqual(out.demandConfirmed, true);
+assert.strictEqual(out.reason, 'abl-b2-permission');
+
+out = resolveUniversalEvcsVehicleDemand({ status: 'B1 EV connected', statusFresh: true });
+assert.strictEqual(out.state, 'connected');
+assert.strictEqual(out.plugged, true);
+assert.strictEqual(out.demandConfirmed, false);
+
+out = resolveUniversalEvcsVehicleDemand({ status: 'C2 charging', statusFresh: true });
+assert.strictEqual(out.state, 'charging');
+assert.strictEqual(out.demandConfirmed, true);
+
+out = resolveUniversalEvcsVehicleDemand({ status: 'Available', statusFresh: true });
+assert.strictEqual(out.state, 'disconnected');
+assert.strictEqual(out.demandConfirmed, false);
+
+out = resolveUniversalEvcsVehicleDemand({ status: 'Faulted', statusFresh: true, statusDemandValues: '*' });
+assert.strictEqual(out.state, 'faulted');
+assert.strictEqual(out.demandConfirmed, false);
+
+// Beliebige Hersteller-/Enumwerte lassen sich im AppCenter semantisch abbilden.
+out = resolveUniversalEvcsVehicleDemand({
+  status: 'STATE_47',
+  statusFresh: true,
+  statusDemandValues: 'STATE_47; READY_VENDOR_X',
+});
+assert.strictEqual(out.state, 'ready_to_charge');
+assert.strictEqual(out.demandConfirmed, true);
+assert.strictEqual(out.reason, 'configured-status-ready');
+
+out = resolveUniversalEvcsVehicleDemand({
+  status: 'CAR_PRESENT_WAIT',
+  statusFresh: true,
+  statusConnectedValues: '*PRESENT*',
+});
+assert.strictEqual(out.state, 'connected');
+assert.strictEqual(out.plugged, true);
+assert.strictEqual(out.demandConfirmed, false);
+
+// Explizite semantische DPs sind autoritativ und vom Legacy-activeId getrennt.
+out = resolveUniversalEvcsVehicleDemand({
+  explicitConnected: true,
+  explicitConnectedKnown: true,
+  explicitDemand: false,
+  explicitDemandKnown: true,
+});
+assert.strictEqual(out.plugged, true);
+assert.strictEqual(out.demandConfirmed, false);
+
+out = resolveUniversalEvcsVehicleDemand({
+  explicitConnected: true,
+  explicitConnectedKnown: true,
+  explicitDemand: true,
+  explicitDemandKnown: true,
+});
+assert.strictEqual(out.demandConfirmed, true);
+assert.strictEqual(out.source, 'explicit-demand-dp');
+
+out = resolveUniversalEvcsVehicleDemand({
+  explicitConnected: false,
+  explicitConnectedKnown: true,
+  explicitDemand: true,
+  explicitDemandKnown: true,
+});
+assert.strictEqual(out.plugged, false, 'explizit nicht verbunden muss widersprüchlichen Demand sicher blockieren');
+assert.strictEqual(out.demandConfirmed, false);
+
+let semantic = resolveEvcsSemanticFlag('2', '1,2,3', '0');
+assert.deepStrictEqual({ known: semantic.known, value: semantic.value }, { known: true, value: true });
+semantic = resolveEvcsSemanticFlag('NO_DEMAND', 'YES', '*NO_DEMAND*');
+assert.deepStrictEqual({ known: semantic.known, value: semantic.value }, { known: true, value: false });
+
+const classifiedB2 = classifyUniversalEvcsVehicleStatus({
+  status: 'B2 EV has the permission to charge',
+  statusFresh: true,
+});
+assert.strictEqual(isPersistentEvcsVehicleState(classifiedB2.state), true, 'B2 darf bei frischem Geräte-Heartbeat eventbasiert gültig bleiben');
+assert.strictEqual(isPersistentEvcsVehicleState('faulted'), false, 'ein alter Fault darf nicht durch Heartbeat wiederbelebt werden');
+assert.strictEqual(isPersistentEvcsVehicleState('charging'), false, 'ein alter Charging-Text darf nicht als aktuelle Leistung gelten');
+
 // Stale Stati erzeugen ohne frischen expliziten Plug-DP keinen Bedarf.
 out = demand({ status: 'SuspendedEVSE', statusFresh: false });
 assert.strictEqual(out.demandConfirmed, false);
@@ -150,6 +244,27 @@ intent = computePendingPvStartIntentW({
 });
 assert.strictEqual(intent.intentW, 4140);
 
+const ablDemand = resolveUniversalEvcsVehicleDemand({
+  status: 'B2 EV has the permission to charge',
+  statusFresh: true,
+});
+intent = computePendingPvStartIntentW({
+  enabled: true,
+  online: true,
+  connected: ablDemand.demandConfirmed,
+  mode: 'pv',
+  controlBasis: 'currentA',
+  status: 'B2 EV has the permission to charge',
+  normalizedVehicleState: ablDemand.state,
+  minPowerW: 4140,
+  technicalMinW: 4140,
+  maxPowerW: 11000,
+  totalRemainingW: 11000,
+  stationRemainingW: 11000,
+  pvRemainingW: 11000,
+});
+assert.strictEqual(intent.intentW, 4140, 'ABL B2 muss die technische PV-Startleistung reservieren');
+
 // Mindestleistungs-Plan: Ein physisch als verbunden dargestellter Ladepunkt
 // wird ausgeschlossen, sobald die neue Bedarfsdiagnose FALSE meldet.
 const plan = computeChargingMinimumServicePlan({
@@ -176,6 +291,14 @@ assert.strictEqual(plan.minimumBySafe.get('real'), 4140);
 const source = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/ems/modules/charging-management.ts'), 'utf8');
 for (const needle of [
   'resolveConfirmedEvcsVehicleDemand',
+  'resolveUniversalEvcsVehicleDemand',
+  'classifyUniversalEvcsVehicleStatus',
+  'abl-b2-permission',
+  'vehicleConnectedId',
+  'chargeDemandId',
+  'statusDemandValues',
+  'pvStartResponseTimeoutMs',
+  'vehicle-start-no-response',
   'vehicleDemandConfirmed = vehicleDemand.demandConfirmed === true',
   'w.vehicleDemandConfirmed === true',
   'const demandReserveThisW = activeChargingDemand ?',
@@ -189,4 +312,21 @@ assert.ok(!source.includes("this._getStateCached(`evcs.${Math.round(evcsIndex)}.
 const allocationSource = fs.readFileSync(path.join(root, 'src-ts/ems/charging-management/charging-allocation.ts'), 'utf8');
 assert.ok(allocationSource.includes('const connected = boolValue(wallbox.vehiclePlugged, false);'), 'TS-Allocator muss einen fehlenden Plug-Nachweis fail-closed behandeln');
 
-console.log('[evcs-confirmed-demand-reservation] OK: Ladepunkte ohne bestaetigten Fahrzeugbedarf reservieren weder Gesamt- noch PV-Budget.');
+
+const mainSource = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/main.ts'), 'utf8');
+for (const needle of ['vehicleConnectedId', 'chargeDemandId', 'heartbeatId', 'statusDemandValues']) {
+  assert.ok(mainSource.includes(needle), `main.ts muss ${needle} bis zur Runtime durchreichen`);
+}
+const appCenterSource = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/www/ems-apps.ts'), 'utf8');
+for (const needle of [
+  'Fahrzeug verbunden (lesen, optional)',
+  'Ladebedarf / Ladebereit (lesen, optional)',
+  'Ladebedarf / Herstellerstatus (optional)',
+  'statusDemandValues',
+  'r.vehicleConnected',
+  'r.chargeDemand',
+]) {
+  assert.ok(appCenterSource.includes(needle), `AppCenter-Universalität fehlt: ${needle}`);
+}
+
+console.log('[evcs-confirmed-demand-reservation] OK: Universelle Herstellerstatus-, Semantic-DP- und PV-Startreservierungslogik ist abgesichert.');

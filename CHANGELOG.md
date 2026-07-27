@@ -1,3 +1,15 @@
+## 0.8.143 - 2026-07-27
+
+- Universelle EVCS-Statusnormalisierung eingeführt: OCPP-, IEC-61851-/Control-Pilot- und bekannte Herstellerzustände werden auf die einheitlichen Zustände `disconnected`, `connected`, `ready_to_charge`, `charging`, `paused_by_evse`, `paused_by_vehicle`, `finishing`, `faulted` und `offline` abgebildet.
+- ABL eMH1 wird ohne Sonderlogik in der PV-Regelung erkannt: `B2 EV has the permission to charge` bestätigt jetzt einen ladebereiten Fahrzeugbedarf und reserviert ausschließlich die technische PV-Startleistung; `B1` bleibt „verbunden ohne Bedarf“, `C1/C2/D1/D2` werden als Ladebedarf erkannt.
+- Herstellerunabhängige AppCenter-Zuordnung ergänzt: optionale DPs für „Fahrzeug verbunden“, „Ladebedarf/Ladebereit“ und „Heartbeat/LastSeen“ sowie frei konfigurierbare TRUE-/FALSE- und Rohstatus-Wertelisten. Unbekannte Hersteller lassen sich dadurch ohne Änderung der zentralen Lade- oder Budgetlogik semantisch anbinden.
+- `Available`, `Idle` und ein freier Connector reservieren weiterhin keine Leistung. Frische reale Ladeleistung und explizite Ladebedarfs-DPs bleiben autoritativ; widersprüchliche Signale werden fail-safe behandelt.
+- Ereignisbasierte Bereitschaftszustände dürfen bei frischem Online-/Heartbeat-/Messsignal gültig bleiben, auch wenn der Status-DP nur bei Zustandswechseln schreibt. Veraltete `Faulted`-, `Offline`- oder `Charging`-Texte werden dadurch nicht wiederbelebt.
+- Reine PV-Startreservierung gehärtet: Nimmt ein ladebereites Fahrzeug die angebotene technische Mindestleistung innerhalb des konfigurierbaren Antwortfensters nicht an, wird die Reservierung freigegeben und erst nach einem Cooldown erneut versucht. Ein volles oder schlafendes Fahrzeug blockiert damit kein PV-Budget dauerhaft.
+- Diagnose um normalisierten Fahrzeugzustand, Beweisquelle, Roh-/Freshness-Werte und PV-Startreservierung erweitert, ohne die sichtbare AppCenter-Statusseite mit neuen Karten aufzublähen.
+- Regressionen für ABL B2/B1/C2, OCPP-Status, freie Hersteller-Mappings, explizite semantische DPs, Heartbeat-Persistenz, `Available` ohne Reservierung und PV-Startleistung ergänzt.
+- TypeScript-Migrationskontrolle: keine zusätzliche `@ts-nocheck`-Datei (weiterhin 58); der offene Runtime-Rahmen wird für Statusnormalisierung, AppCenter-Mappings und Startprobe transparent von 145.433 auf 146.017 Zeilen aktualisiert.
+
 ## 0.8.142 - 2026-07-27
 
 - Speicher-Messwert und Speicher-Schreibhoheit getrennt: Ein unter **Energiefluss** manuell zugeordneter `storageSoc` wird jetzt auch bei deaktivierter Speicherregelung und ohne aktive Speicherfarm nach `historie.core.storage.socPct` geschrieben. Damit lassen sich Speicher mit eigener 0-Einspeise-/Eigenverbrauchsregelung ausschließlich anzeigen und dennoch vollständig historisieren.

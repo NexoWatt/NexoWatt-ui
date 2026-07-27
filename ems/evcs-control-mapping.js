@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/evcs-control-mapping.ts
- * Quell-Hash: sha256:7d0b286f2a1eb87084b06d566940da66e98943883b7da3384e42d942063128bc
+ * Quell-Hash: sha256:c098a9adb23aa6db3bcec0fe9c5bc0276bc8e2f6b637365484cae121c5c4ccf7
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -144,6 +144,9 @@ async function resolveEvcsControlMapping() {
         source.statusId,
         source.onlineId,
         source.activeId,
+        source.vehicleConnectedId,
+        source.chargeDemandId,
+        source.heartbeatId,
         source.energyTotalId,
         source.lockWriteId,
         source.rfidReadId,

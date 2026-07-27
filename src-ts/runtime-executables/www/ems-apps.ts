@@ -1650,7 +1650,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
       // Basic capability hints (heuristic by input-id)
       const expectWrite = /setCurrentAId|setPowerWId|enableWriteId|lockWriteId|WriteId/i.test(inp.id);
-      const expectRead = /powerId|energyTotalId|statusId|activeId|onlineId|rfidReadId|budgetPowerId|gridPowerId|pvSurplusPowerId|ReadId/i.test(inp.id);
+      const expectRead = /powerId|energyTotalId|statusId|activeId|vehicleConnectedId|chargeDemandId|heartbeatId|onlineId|rfidReadId|budgetPowerId|gridPowerId|pvSurplusPowerId|ReadId/i.test(inp.id);
 
       if (expectWrite && info.common && info.common.write === false) {
         _setBadge(inp.id, 'warn', 'read-only');
@@ -10327,9 +10327,12 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       dpWrap.appendChild(mkRow('Leistung (W)', mkIo(`evcs_${i}_powerId`, rowCfg.powerId, v => _updateEvcsField(i, 'powerId', v))));
       dpWrap.appendChild(mkRow('Energie (kWh)', mkIo(`evcs_${i}_energyTotalId`, rowCfg.energyTotalId, v => _updateEvcsField(i, 'energyTotalId', v))));
-      dpWrap.appendChild(mkRow('Status (optional)', mkIo(`evcs_${i}_statusId`, rowCfg.statusId, v => _updateEvcsField(i, 'statusId', v))));
+      dpWrap.appendChild(mkRow('Status / CP-Zustand (lesen, optional)', mkIo(`evcs_${i}_statusId`, rowCfg.statusId, v => _updateEvcsField(i, 'statusId', v))));
+      dpWrap.appendChild(mkRow('Fahrzeug verbunden (lesen, optional)', mkIo(`evcs_${i}_vehicleConnectedId`, rowCfg.vehicleConnectedId, v => _updateEvcsField(i, 'vehicleConnectedId', v))));
+      dpWrap.appendChild(mkRow('Ladebedarf / Ladebereit (lesen, optional)', mkIo(`evcs_${i}_chargeDemandId`, rowCfg.chargeDemandId, v => _updateEvcsField(i, 'chargeDemandId', v))));
+      dpWrap.appendChild(mkRow('Heartbeat / LastSeen (lesen, optional)', mkIo(`evcs_${i}_heartbeatId`, rowCfg.heartbeatId, v => _updateEvcsField(i, 'heartbeatId', v))));
       dpWrap.appendChild(mkRow('Fahrzeug‑SoC (%) (optional)', mkIo(`evcs_${i}_vehicleSocId`, rowCfg.vehicleSocId, v => _updateEvcsField(i, 'vehicleSocId', v))));
-      dpWrap.appendChild(mkRow('Fahrzeug/Ladevorgang aktiv (lesen, optional)', mkIo(`evcs_${i}_activeId`, rowCfg.activeId, v => _updateEvcsField(i, 'activeId', v))));
+      dpWrap.appendChild(mkRow('Fahrzeug/Ladevorgang aktiv (lesen, optional) · Legacy, keine Reservierungsquelle', mkIo(`evcs_${i}_activeId`, rowCfg.activeId, v => _updateEvcsField(i, 'activeId', v))));
 
       dpWrap.appendChild(mkRow('Sollstrom (A)', mkIo(`evcs_${i}_setCurrentAId`, rowCfg.setCurrentAId, v => _updateEvcsField(i, 'setCurrentAId', v))));
       dpWrap.appendChild(mkRow('Sollleistung (W)', mkIo(`evcs_${i}_setPowerWId`, rowCfg.setPowerWId, v => _updateEvcsField(i, 'setPowerWId', v))));
@@ -10343,6 +10346,47 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       dpDetails.appendChild(dpWrap);
       body.appendChild(dpDetails);
+
+      // Herstellerunabhängige Ladebedarfserkennung. Die Felder sind optional:
+      // bekannte OCPP-/IEC-/ABL-Zustände werden automatisch normalisiert, bei
+      // unbekannten Herstellern kann der Installer die Rohwerte frei zuordnen.
+      const demandDetails = document.createElement('details');
+      demandDetails.style.marginTop = '8px';
+      const demandSummary = document.createElement('summary');
+      demandSummary.textContent = 'Ladebedarf / Herstellerstatus (optional)';
+      demandSummary.style.cursor = 'pointer';
+      demandSummary.style.userSelect = 'none';
+      demandDetails.appendChild(demandSummary);
+      const demandWrap = document.createElement('div');
+      demandWrap.style.marginTop = '10px';
+      demandWrap.style.display = 'grid';
+      demandWrap.style.gap = '10px';
+
+      const mkSemanticInput = (field, placeholder) => {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'nw-config-input';
+        input.value = valueOrEmpty(rowCfg[field]);
+        input.placeholder = placeholder;
+        input.title = 'Mehrere Werte mit Komma, Semikolon oder Zeilenumbruch trennen. *Text* erlaubt Teiltreffer.';
+        input.addEventListener('input', () => _updateEvcsField(i, field, String(input.value || '')));
+        return input;
+      };
+
+      demandWrap.appendChild(mkRow('Fahrzeug verbunden: TRUE-Werte', mkSemanticInput('vehicleConnectedTrueValues', 'z.B. true, 1, connected')));
+      demandWrap.appendChild(mkRow('Fahrzeug verbunden: FALSE-Werte', mkSemanticInput('vehicleConnectedFalseValues', 'z.B. false, 0, disconnected')));
+      demandWrap.appendChild(mkRow('Ladebedarf: TRUE-Werte', mkSemanticInput('chargeDemandTrueValues', 'z.B. true, 1, demand')));
+      demandWrap.appendChild(mkRow('Ladebedarf: FALSE-Werte', mkSemanticInput('chargeDemandFalseValues', 'z.B. false, 0, no-demand')));
+      demandWrap.appendChild(mkRow('Status: Ladebereit / lädt', mkSemanticInput('statusDemandValues', 'z.B. B2, C2, ready-to-charge')));
+      demandWrap.appendChild(mkRow('Status: verbunden, kein Bedarf', mkSemanticInput('statusConnectedValues', 'z.B. B1, connected')));
+      demandWrap.appendChild(mkRow('Status: nicht verbunden', mkSemanticInput('statusDisconnectedValues', 'z.B. A1, available')));
+      demandWrap.appendChild(mkRow('Status: Fahrzeug pausiert / kein Bedarf', mkSemanticInput('statusNoDemandValues', 'z.B. SuspendedEV, full')));
+      const demandHint = document.createElement('div');
+      demandHint.className = 'nw-muted';
+      demandHint.textContent = 'Priorität: reale Leistung → expliziter Ladebedarf → Fahrzeugkontakt → normalisierter Status. „Available“ allein reserviert keine Ladeleistung.';
+      demandWrap.appendChild(demandHint);
+      demandDetails.appendChild(demandWrap);
+      body.appendChild(demandDetails);
 
       // Erweitert (optional, aber hilfreich für stabile Regelung)
       const details = document.createElement('details');
@@ -11229,7 +11273,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     }
 
     // Mappings (fill)
-    for (const k of ['powerId','energyTotalId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId']) {
+    for (const k of ['powerId','energyTotalId','statusId','activeId','vehicleConnectedId','chargeDemandId','heartbeatId','onlineId','setCurrentAId','setPowerWId','enableWriteId']) {
       if (ids[k]) setField(k, ids[k]);
     }
 
@@ -11444,7 +11488,26 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // Datapoints (prefer aliases)
     setIf('powerId', _nwGetAlias(dev, 'r.power'));
     setIf('energyTotalId', _nwGetAlias(dev, 'r.energyTotal'));
-    setIf('statusId', _nwGetAlias(dev, 'r.statusCode'));
+    setIf('statusId',
+      _nwGetAlias(dev, 'r.statusCode')
+      || _nwGetAlias(dev, 'r.evcsState')
+      || _nwGetAlias(dev, 'r.cpState')
+      || _nwGetAlias(dev, 'r.statusText')
+      || _nwGetAlias(dev, 'r.status'));
+    setIf('vehicleConnectedId',
+      _nwGetAlias(dev, 'r.vehicleConnected')
+      || _nwGetAlias(dev, 'r.plugged')
+      || _nwGetAlias(dev, 'r.evConnected')
+      || _nwGetAlias(dev, 'r.cpConnected'));
+    setIf('chargeDemandId',
+      _nwGetAlias(dev, 'r.chargeDemand')
+      || _nwGetAlias(dev, 'r.vehicleDemand')
+      || _nwGetAlias(dev, 'r.readyToCharge')
+      || _nwGetAlias(dev, 'r.chargingRequested'));
+    setIf('heartbeatId',
+      _nwGetAlias(dev, 'r.heartbeat')
+      || _nwGetAlias(dev, 'comm.heartbeat')
+      || _nwGetAlias(dev, 'comm.lastSeenMs'));
     setIf('onlineId', _nwGetAlias(dev, 'comm.connected'));
 
     // Control (optional)

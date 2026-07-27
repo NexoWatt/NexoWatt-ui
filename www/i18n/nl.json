@@ -3,7 +3,7 @@
     "language": "nl",
     "locale": "nl-NL",
     "name": "Nederlands",
-    "version": 2
+    "version": 4
   },
   "messages": {
     "common.loading": "Laden…",
@@ -576,7 +576,24 @@
     "Deutsch (de)": "Duits (de)",
     "Nederlands (nl)": "Nederlands (nl)",
     "English (en)": "Engels (en)",
-    "Fahrzeug/Ladevorgang aktiv (lesen, optional)": "Voertuig/laadsessie actief (alleen lezen, optioneel)"
+    "Fahrzeug/Ladevorgang aktiv (lesen, optional)": "Voertuig/laadsessie actief (alleen lezen, optioneel)",
+    "Status / CP-Zustand (lesen, optional)": "Status / CP-toestand (alleen lezen, optioneel)",
+    "Fahrzeug verbunden (lesen, optional)": "Voertuig aangesloten (alleen lezen, optioneel)",
+    "Ladebedarf / Ladebereit (lesen, optional)": "Laadvraag / laadklaar (alleen lezen, optioneel)",
+    "Heartbeat / LastSeen (lesen, optional)": "Heartbeat / laatst gezien (alleen lezen, optioneel)",
+    "Legacy: Fahrzeug/Ladevorgang aktiv (nur lesen, keine Reservierungsquelle)": "Legacy: voertuig/laadsessie actief (alleen lezen, geen reserveringsbron)",
+    "Ladebedarf / Herstellerstatus (optional)": "Laadvraag / fabrikantstatus (optioneel)",
+    "Fahrzeug verbunden: TRUE-Werte": "Voertuig aangesloten: TRUE-waarden",
+    "Fahrzeug verbunden: FALSE-Werte": "Voertuig aangesloten: FALSE-waarden",
+    "Ladebedarf: TRUE-Werte": "Laadvraag: TRUE-waarden",
+    "Ladebedarf: FALSE-Werte": "Laadvraag: FALSE-waarden",
+    "Status: Ladebereit / lädt": "Status: laadklaar / laadt",
+    "Status: verbunden, kein Bedarf": "Status: aangesloten, geen laadvraag",
+    "Status: nicht verbunden": "Status: niet aangesloten",
+    "Status: Fahrzeug pausiert / kein Bedarf": "Status: voertuig gepauzeerd / geen laadvraag",
+    "Mehrere Werte mit Komma, Semikolon oder Zeilenumbruch trennen. *Text* erlaubt Teiltreffer.": "Scheid meerdere waarden met komma, puntkomma of regeleinde. *Tekst* staat deelovereenkomsten toe.",
+    "Priorität: reale Leistung → expliziter Ladebedarf → Fahrzeugkontakt → normalisierter Status. „Available“ allein reserviert keine Ladeleistung.": "Prioriteit: werkelijk vermogen → expliciete laadvraag → voertuigcontact → genormaliseerde status. Alleen „Available“ reserveert geen laadvermogen.",
+    "Fahrzeug/Ladevorgang aktiv (lesen, optional) · Legacy, keine Reservierungsquelle": "Voertuig/laadsessie actief (alleen lezen, optioneel) · legacy, geen reserveringsbron"
   },
   "patterns": [
     {

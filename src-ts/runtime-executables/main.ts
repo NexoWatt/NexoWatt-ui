@@ -7508,6 +7508,18 @@ class NexoWattVis extends utils.Adapter {
       const energyTotalId = (row && typeof row.energyTotalId === 'string' && row.energyTotalId.trim()) ? row.energyTotalId.trim() : '';
       const statusId = (row && typeof row.statusId === 'string' && row.statusId.trim()) ? row.statusId.trim() : '';
       const activeId = (row && typeof row.activeId === 'string' && row.activeId.trim()) ? row.activeId.trim() : '';
+      const vehicleConnectedId = (row && typeof row.vehicleConnectedId === 'string' && row.vehicleConnectedId.trim()) ? row.vehicleConnectedId.trim() : '';
+      const chargeDemandId = (row && typeof row.chargeDemandId === 'string' && row.chargeDemandId.trim()) ? row.chargeDemandId.trim() : '';
+      const heartbeatId = (row && typeof row.heartbeatId === 'string' && row.heartbeatId.trim()) ? row.heartbeatId.trim() : '';
+      const vehicleConnectedTrueValues = (row && typeof row.vehicleConnectedTrueValues === 'string') ? row.vehicleConnectedTrueValues.trim() : '';
+      const vehicleConnectedFalseValues = (row && typeof row.vehicleConnectedFalseValues === 'string') ? row.vehicleConnectedFalseValues.trim() : '';
+      const chargeDemandTrueValues = (row && typeof row.chargeDemandTrueValues === 'string') ? row.chargeDemandTrueValues.trim() : '';
+      const chargeDemandFalseValues = (row && typeof row.chargeDemandFalseValues === 'string') ? row.chargeDemandFalseValues.trim() : '';
+      const statusDemandValues = (row && typeof row.statusDemandValues === 'string') ? row.statusDemandValues.trim() : ((row && typeof row.statusReadyValues === 'string') ? row.statusReadyValues.trim() : '');
+      const statusReadyValues = statusDemandValues; // legacy/internal compatibility
+      const statusConnectedValues = (row && typeof row.statusConnectedValues === 'string') ? row.statusConnectedValues.trim() : '';
+      const statusDisconnectedValues = (row && typeof row.statusDisconnectedValues === 'string') ? row.statusDisconnectedValues.trim() : '';
+      const statusNoDemandValues = (row && typeof row.statusNoDemandValues === 'string') ? row.statusNoDemandValues.trim() : '';
       const modeIdRaw = (row && typeof row.modeId === 'string' && row.modeId.trim()) ? row.modeId.trim() : '';
       // Interner Standard: pro Ladepunkt existiert immer ein eigener Modus-State.
       // Damit muss im Admin keine Modus-DP-Zuordnung gepflegt werden.
@@ -7572,7 +7584,7 @@ class NexoWattVis extends utils.Adapter {
       const storageAssistCustomerAllowed = globalStorageAssistCustomerAllowed
         || ((row && row.storageAssistCustomerAllowed !== undefined && row.storageAssistCustomerAllowed !== null) ? !!row.storageAssistCustomerAllowed : false);
       const storageAssistControlScope = globalStorageAssistCustomerAllowed ? 'global' : 'per-lp';
-      evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec, storageAssistCustomerAllowed, storageAssistControlScope, controlMappingAutoResolved, controlMappingAutoResolvedCurrent, controlMappingAutoResolvedPower, controlMappingAutoResolvedEnable });
+      evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, statusId, activeId, vehicleConnectedId, chargeDemandId, heartbeatId, vehicleConnectedTrueValues, vehicleConnectedFalseValues, chargeDemandTrueValues, chargeDemandFalseValues, statusDemandValues, statusReadyValues, statusConnectedValues, statusDisconnectedValues, statusNoDemandValues, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec, storageAssistCustomerAllowed, storageAssistControlScope, controlMappingAutoResolved, controlMappingAutoResolvedCurrent, controlMappingAutoResolvedPower, controlMappingAutoResolvedEnable });
     }
     this.evcsList = evcsList;
     // Stationsgruppen (für DC-Stationen mit mehreren Ladepunkten)
@@ -8168,7 +8180,7 @@ class NexoWattVis extends utils.Adapter {
     if (!Array.isArray(this.evcsList)) return;
 
     for (const wb of this.evcsList) {
-      const ids = [wb.powerId, wb.energyTotalId, wb.statusId, wb.onlineId, wb.activeId, wb.modeId, wb.lockWriteId, wb.rfidReadId, wb.vehicleSocId].filter(Boolean);
+      const ids = [wb.powerId, wb.energyTotalId, wb.statusId, wb.onlineId, wb.activeId, wb.vehicleConnectedId, wb.chargeDemandId, wb.heartbeatId, wb.modeId, wb.lockWriteId, wb.rfidReadId, wb.vehicleSocId].filter(Boolean);
       for (const id of ids) {
         try {
           await this.subscribeForeignStatesAsync(id);
@@ -10327,6 +10339,13 @@ async onReady() {
       await primeKey(`${base}.boostUntil`);
       await primeKey(`${base}.boostTimeoutMin`);
       await primeKey(`${base}.connectorNo`);
+      await primeKey(`${base}.vehicleStateNormalized`);
+      await primeKey(`${base}.vehiclePlugged`);
+      await primeKey(`${base}.vehicleDemandConfirmed`);
+      await primeKey(`${base}.vehicleDemandSource`);
+      await primeKey(`${base}.vehicleDemandReason`);
+      await primeKey(`${base}.heartbeatFresh`);
+      await primeKey(`${base}.heartbeatAgeMs`);
     }
 
     // Stations: subscribe wildcard; values will stream in once computed.
@@ -14923,6 +14942,9 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           addId(wb.energyTotalId);
           addId(wb.statusId);
           addId(wb.activeId);
+          addId(wb.vehicleConnectedId);
+          addId(wb.chargeDemandId);
+          addId(wb.heartbeatId);
           addId(wb.setCurrentAId);
           addId(wb.setPowerWId);
           addId(wb.enableWriteId);
@@ -15000,6 +15022,9 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
               energyTotalId: wb.energyTotalId || '',
               statusId: wb.statusId || '',
               activeId: wb.activeId || '',
+              vehicleConnectedId: wb.vehicleConnectedId || '',
+              chargeDemandId: wb.chargeDemandId || '',
+              heartbeatId: wb.heartbeatId || '',
               setCurrentAId: wb.setCurrentAId || '',
               setPowerWId: wb.setPowerWId || '',
               enableWriteId: wb.enableWriteId || '',
@@ -15026,6 +15051,15 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
               statusScope: await getOwn(`${base}.statusScope`),
               statusIgnoredReason: await getOwn(`${base}.statusIgnoredReason`),
               statusFresh: await getOwn(`${base}.statusFresh`),
+              statusFreshReason: await getOwn(`${base}.statusFreshReason`),
+              heartbeatFresh: await getOwn(`${base}.heartbeatFresh`),
+              heartbeatAgeMs: await getOwn(`${base}.heartbeatAgeMs`),
+              vehicleLivenessFresh: await getOwn(`${base}.vehicleLivenessFresh`),
+              vehicleStateNormalized: await getOwn(`${base}.vehicleStateNormalized`),
+              vehiclePlugged: await getOwn(`${base}.vehiclePlugged`),
+              vehicleDemandConfirmed: await getOwn(`${base}.vehicleDemandConfirmed`),
+              vehicleDemandSource: await getOwn(`${base}.vehicleDemandSource`),
+              vehicleDemandReason: await getOwn(`${base}.vehicleDemandReason`),
               faultActive: await getOwn(`${base}.faultActive`),
               faultReason: await getOwn(`${base}.faultReason`),
               unavailableActive: await getOwn(`${base}.unavailableActive`),
@@ -20002,7 +20036,7 @@ app.get('/config', async (req, res) => {
       const datapointFlags = Object.fromEntries(Object.entries(datapoints).map(([k, v]) => [k, !!String(v == null ? '' : v).trim()]));
 
       const evcsMappedFields = [
-        'powerId', 'energyTotalId', 'energySessionId', 'statusId', 'activeId', 'onlineId',
+        'powerId', 'energyTotalId', 'energySessionId', 'statusId', 'activeId', 'vehicleConnectedId', 'chargeDemandId', 'heartbeatId', 'onlineId',
         'setCurrentAId', 'setPowerWId', 'enableWriteId', 'lockWriteId', 'phaseSwitchId', 'rfidReadId',
         'vehicleSocId'
       ];

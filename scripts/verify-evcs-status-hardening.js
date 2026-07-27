@@ -145,7 +145,10 @@ assert(!/cx\.ids\.(statusId|enableWriteId|activeId)\s*=/.test(propagationBlock),
 
 assert(chargingSource.includes("await mk('unavailableActive'"), 'Unavailable-Diagnose-State fehlt');
 assert(chargingSource.includes("await mk('operationalBlocked'"), 'Operational-Block-State fehlt');
-assert(chargingSource.includes('const statusFresh = !!(statusId && !statusStale && !statusConnectorMismatch && !statusSharedAcrossConnectors'), 'Nur frischer connectorrichtiger Status darf wirken');
+assert(chargingSource.includes('const statusTimestampFresh = !!(statusId && !statusStale && !statusConnectorMismatch && !statusSharedAcrossConnectors'), 'Nur zeitlich frischer connectorrichtiger Status darf direkt wirken');
+assert(chargingSource.includes('const statusHeldByLiveness = !!('), 'Eventbasierte Bereitschaft muss bei frischem Geräte-Heartbeat gehalten werden können');
+assert(chargingSource.includes('&& isPersistentEvcsVehicleState(semanticPreview.state)'), 'Nur persistente, nicht sicherheitskritische Fahrzeugzustände dürfen durch Heartbeat gehalten werden');
+assert(chargingSource.includes('const statusFresh = statusTimestampFresh || statusHeldByLiveness;'), 'Finale Statusfreigabe muss Timestamp oder sichere Liveness verwenden');
 assert(chargingSource.includes('const statusAgePolicy = resolveEvcsStatusAgePolicy(statusRawText, statusAgeRawMs, wbStatusStaleTimeoutMs);'), 'Zentrale Altersregel fuer EVCS-Status fehlt');
 assert(chargingSource.includes('const statusStale = !!(statusId && statusAgePolicy.stale);'), 'Persistentes Available darf nicht pauschal stale werden');
 assert(!chargingSource.includes("status: 'failsafe_stale_meter', active: true, budgetW: 0, usedW: 0, remainingW: 0"), 'Mode-off darf keinen falschen Failsafe-Shadow veröffentlichen');

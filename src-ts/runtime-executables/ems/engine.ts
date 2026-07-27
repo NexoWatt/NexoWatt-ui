@@ -488,6 +488,17 @@ class EmsEngine {
       // Online detection: prefer explicit online dp (bool), keep statusId as display/status fallback.
       const onlineId = (wb.onlineId || '').trim();
       const statusId = (wb.statusId || '').trim();
+      const vehicleConnectedId = (wb.vehicleConnectedId || '').trim();
+      const chargeDemandId = (wb.chargeDemandId || '').trim();
+      const heartbeatId = (wb.heartbeatId || '').trim();
+      const vehicleConnectedTrueValues = String(wb.vehicleConnectedTrueValues || '').trim();
+      const vehicleConnectedFalseValues = String(wb.vehicleConnectedFalseValues || '').trim();
+      const chargeDemandTrueValues = String(wb.chargeDemandTrueValues || '').trim();
+      const chargeDemandFalseValues = String(wb.chargeDemandFalseValues || '').trim();
+      const statusDemandValues = String(wb.statusDemandValues || wb.statusReadyValues || '').trim();
+      const statusConnectedValues = String(wb.statusConnectedValues || '').trim();
+      const statusDisconnectedValues = String(wb.statusDisconnectedValues || '').trim();
+      const statusNoDemandValues = String(wb.statusNoDemandValues || '').trim();
 
       // Enable DP (optional)
       const enableId = (wb.enableWriteId || '').trim();
@@ -585,6 +596,17 @@ class EmsEngine {
         ...(enableId ? { enableId } : {}),
         ...(onlineId ? { onlineId } : {}),
         ...(statusId ? { statusId } : {}),
+        ...(vehicleConnectedId ? { vehicleConnectedId } : {}),
+        ...(chargeDemandId ? { chargeDemandId } : {}),
+        ...(heartbeatId ? { heartbeatId } : {}),
+        ...(vehicleConnectedTrueValues ? { vehicleConnectedTrueValues } : {}),
+        ...(vehicleConnectedFalseValues ? { vehicleConnectedFalseValues } : {}),
+        ...(chargeDemandTrueValues ? { chargeDemandTrueValues } : {}),
+        ...(chargeDemandFalseValues ? { chargeDemandFalseValues } : {}),
+        ...(statusDemandValues ? { statusDemandValues } : {}),
+        ...(statusConnectedValues ? { statusConnectedValues } : {}),
+        ...(statusDisconnectedValues ? { statusDisconnectedValues } : {}),
+        ...(statusNoDemandValues ? { statusNoDemandValues } : {}),
         ...(phaseSwitchId ? { phaseSwitchId } : {}),
         ...(phaseFeedbackId ? { phaseFeedbackId } : {}),
         phaseMode,
