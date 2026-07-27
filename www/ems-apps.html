@@ -28,6 +28,7 @@
   <meta name="apple-mobile-web-app-title" content="NexoWatt">
   <script src="/static/admin-guard.js" data-nw-admin-page="ems-apps"></script>
   <script src="/static/auth.js"></script>
+  <script src="/static/nw-i18n.js" defer></script>
 </head>
 <!-- NexoWatt Detail-Kommentar (DE) -->
 <!-- Installer/App-Center. Eingabe-IDs werden von www/ems-apps.js gelesen und in die Adapter-Konfiguration geschrieben. -->
@@ -121,7 +122,7 @@
       <button type="button" class="nw-tab" data-tab="relay" style="display:none;">Relais</button>
       <button type="button" class="nw-tab" data-tab="grid" style="display:none;">Netzlimits</button>
       <button type="button" class="nw-tab" data-tab="evupv" style="display:none;">EVU / PV Regelung</button>
-      <button type="button" class="nw-tab" data-tab="para14a" style="display:none;">§14a</button>
+      <button type="button" class="nw-tab" data-tab="para14a" data-nw-market="DE" style="display:none;">§14a</button>
       <button type="button" class="nw-tab" data-tab="evcs" style="display:none;">Ladepunkte</button>
       <button type="button" class="nw-tab" data-tab="status">Status</button>
     </div>
@@ -1578,7 +1579,7 @@
 
   </div>
 
-<div id="nw-tabpanel-para14a" data-tabpanel="para14a" style="display:none;">
+<div id="nw-tabpanel-para14a" data-tabpanel="para14a" data-nw-market="DE" style="display:none;">
     <h2>§14a Steuerung</h2>
     <div class="nw-subtitle">Konfiguration für netzseitige Leistungsbegrenzung (steuerbare Verbrauchseinrichtungen). Diese Funktion ist Netzschutz und wird nicht durch Endkunden bedient.</div>
 

@@ -66,7 +66,7 @@
    * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
-  function fmtDate(iso){ return iso || ''; }
+  function fmtDate(iso){ return iso || ''; } const nwReportLocaleTag = () => { const lang = String((window.NexoWattI18n && window.NexoWattI18n.localeTag && window.NexoWattI18n.localeTag()) || document.documentElement.lang || navigator.language || 'de').toLowerCase(); return lang.startsWith('nl') ? 'nl-NL' : (lang.startsWith('en') ? 'en-GB' : 'de-DE'); };
 
   // Numeric formatting for UI + PDF (German locale, fixed decimals, tabular numbers in CSS).
   const _nfCache = new Map();
@@ -77,10 +77,10 @@
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   function _getNf(d){
-    const key = String(d);
+    const key = nwReportLocaleTag() + ':' + String(d);
     let nf = _nfCache.get(key);
     if (!nf){
-      nf = new Intl.NumberFormat('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+      nf = new Intl.NumberFormat(nwReportLocaleTag(), { minimumFractionDigits: d, maximumFractionDigits: d });
       _nfCache.set(key, nf);
     }
     return nf;

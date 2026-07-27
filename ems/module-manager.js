@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:536bf40e724abe99fe34603ec64b9198ec3227fb637a93260e891e3b69f5b671
+ * Quell-Hash: sha256:e1d748ace429ba618de4d6b0c8da92b84619779e50310a124c2cb1becb9d3907
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -340,7 +340,7 @@ class ModuleManager {
         this.modules.push({
             key: 'para14a',
             instance: new Para14aModule(this.adapter, this.dp),
-            enabledFn: () => this._licenseAllowsApp('para14a') && !!(this.adapter?.config?.installerConfig?.para14a),
+            enabledFn: () => this._licenseAllowsApp('para14a') && require('./services/country-profile-service').getConfiguredCountryProfile(this.adapter?.config || {}).supportsParagraph14a === true && !!(this.adapter?.config?.installerConfig?.para14a),
         });
 
         // Tarif (VIS) – stellt Ladepark-Deckel bereit

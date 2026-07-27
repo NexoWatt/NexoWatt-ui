@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:223bb6b607bbea7bbac00827cbc77605469890d4c75b183b8fa696ddef820edd
+ * Quell-Hash: sha256:0fd13160a513c2ddca44ebc291a1efbb3032dbb7f9a411c84012d9e3fd7ada36
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1001,8 +1001,8 @@ function choosePositiveMin(...values) {
     return best > 0 ? best : 0;
 }
 /** Code-Teil: availabilityReason – trennt Erreichbarkeit von einem frischen Betriebsfehler. */
-function availabilityReason(cfgEnabled, userEnabled, online, faultActive = false, unavailableActive = false) {
-    if (!cfgEnabled) return ReasonCodes.DISABLED;
+function availabilityReason(cfgEnabled, userStationEnabled, userEnabled, online, faultActive = false, unavailableActive = false) {
+    if (!cfgEnabled || !userStationEnabled) return ReasonCodes.DISABLED;
     if (!userEnabled) return ReasonCodes.CONTROL_DISABLED;
     if (!online) return ReasonCodes.OFFLINE;
     if (faultActive) return ReasonCodes.FAULTED;
@@ -1868,6 +1868,8 @@ class ChargingManagementModule extends BaseModule {
             enabled: !!(w && w.enabled),
             online: !!(w && w.online),
             cfgEnabled: !!(w && w.cfgEnabled),
+            userStationEnabled: !!(w && w.userStationEnabled),
+            stationEnabled: !!(w && w.stationEnabled),
             userEnabled: !!(w && w.userEnabled),
             // Der produktive Allocation-Pfad bekommt ausschließlich bestaetigten
             // Ladebedarf. Der physische Anschlusszustand bleibt separat fuer UI/SoC.
@@ -2533,7 +2535,7 @@ class ChargingManagementModule extends BaseModule {
             const plannedSetpointKey = String(entry.setpointKey || '').trim();
             const isPhaseSwitchEntry = String(entry.type || '').trim() === 'phaseSwitch' || rawEntryBasis === 'phase' || rawEntryBasis === 'phasemode';
             const baseWriteRequired = !!(entry.writeRequired !== false && !entry.blocked);
-            const safeStopAllowed = !!(w.online && (!w.userEnabled || w.operationalBlocked || w.enabled || w.cfgEnabled));
+            const safeStopAllowed = !!(w.online && (!w.userStationEnabled || !w.userEnabled || w.operationalBlocked || w.enabled || w.cfgEnabled));
             const shouldWrite = !!(
                 baseWriteRequired
                 && w.online
@@ -2616,10 +2618,17 @@ class ChargingManagementModule extends BaseModule {
                         setAKey: plannedBasis === 'currentA' && plannedSetpointKey ? plannedSetpointKey : (consumerBase.setAKey || w.setAKey || ''),
                         setWKey: plannedBasis === 'powerW' && plannedSetpointKey ? plannedSetpointKey : (consumerBase.setWKey || w.setWKey || ''),
                     };
+                    const setpointTarget = { targetW, targetA, basis: plannedBasis };
+                    // Die Hardware-Freigabe folgt ausschliesslich der ausdruecklichen
+                    // Kunden-/Sicherheitsfreigabe und niemals dem PV-Sollwert. 0 W im
+                    // PV-Modus bedeutet dadurch "Warten bei aktiver Wallbox".
+                    if (w.enableKey) {
+                        setpointTarget.enable = !!w.cfgEnabled && !!w.userStationEnabled && !w.operationalBlocked;
+                    }
                     const res = await applySetpoint(
                         { adapter: this.adapter, dp: this.dp },
                         consumer,
-                        { targetW, targetA, basis: plannedBasis },
+                        setpointTarget,
                     );
                     applied = !!res?.applied;
                     applyStatus = String(res?.status || (applied ? 'applied' : 'write_failed'));
@@ -2769,7 +2778,7 @@ class ChargingManagementModule extends BaseModule {
             const safeTargetA = positiveCommandBlocked ? 0 : (Number.isFinite(targetA) && targetA > 0 ? targetA : 0);
             const shouldWrite = hasSetpoint && !!w.online && (
                 !!w.controlAvailable
-                || (!!w.cfgEnabled && !w.userEnabled)
+                || (!!w.cfgEnabled && (!w.userStationEnabled || !w.userEnabled))
                 || !!w.operationalBlocked
             );
             entries.push({
@@ -3382,6 +3391,9 @@ class ChargingManagementModule extends BaseModule {
         await mk('name', 'Name', 'string', 'text');
         // Enabled flags
         await mk('cfgEnabled', 'Config enabled', 'boolean', 'indicator');
+        await mk('userStationEnabled', 'Ladestation freigegeben (User)', 'boolean', 'switch.enable', true, { def: true, states: { true: 'An', false: 'Gesperrt' } });
+        await mk('stationEnabled', 'Ladestation freigegeben (effektiv)', 'boolean', 'indicator');
+        await mk('stationEnableControlAvailable', 'Ladestation-Freigabe schreibbar', 'boolean', 'indicator');
         await mk('userEnabled', 'Regelung aktiv (User)', 'boolean', 'switch.enable', true, { def: true, states: { true: 'Aktiv', false: 'Aus' } });
         await mk('enabled', 'Enabled (effective)', 'boolean', 'indicator');
         await mk('online', 'Online', 'boolean', 'indicator');
@@ -3449,6 +3461,20 @@ class ChargingManagementModule extends BaseModule {
             const cur = st ? st.val : null;
             if (cur === null || cur === undefined || String(cur).trim() === '') {
                 await this.adapter.setStateAsync(`${ch}.userEnabled`, true, true);
+            }
+        } catch {
+            // ignore
+        }
+
+        // Die Ladestationsfreigabe ist bewusst von der EMS-Regelungsfreigabe
+        // getrennt. PV-Warten (Sollwert 0) darf die Wallbox nicht als kundenseitig
+        // ausgeschaltet darstellen. Nur eine ausdrueckliche Kundenaktion setzt
+        // userStationEnabled=false.
+        try {
+            const st = await this.adapter.getStateAsync(`${ch}.userStationEnabled`);
+            const cur = st ? st.val : null;
+            if (cur === null || cur === undefined || String(cur).trim() === '') {
+                await this.adapter.setStateAsync(`${ch}.userStationEnabled`, true, true);
             }
         } catch {
             // ignore
@@ -4112,6 +4138,24 @@ class ChargingManagementModule extends BaseModule {
 
             const cfgEnabled = wb.enabled !== false;
 
+            // Kundenseitige Ladestationsfreigabe. Sie ist nicht mit der
+            // EMS-Regelungsfreigabe (`userEnabled`) identisch: Im PV-Modus darf
+            // ein Sollwert von 0 W nur "Warten" bedeuten. Die Wallbox bleibt
+            // freigegeben, bis der Kunde sie ausdruecklich sperrt.
+            let userStationEnabled = true;
+            try {
+                const stStation = await this._getStateCached(`${ch}.userStationEnabled`);
+                const curStation = stStation ? stStation.val : null;
+                if (curStation === null || curStation === undefined || String(curStation).trim() === '') {
+                    try { await this._queueState(`${ch}.userStationEnabled`, true, true); } catch { /* ignore */ }
+                    userStationEnabled = true;
+                } else {
+                    userStationEnabled = toBool(curStation) !== false;
+                }
+            } catch {
+                userStationEnabled = true;
+            }
+
             // Runtime: end-customer can disable EMS regulation per charge point
             let userEnabled = true;
             try {
@@ -4121,13 +4165,14 @@ class ChargingManagementModule extends BaseModule {
                     try { await this._queueState(`${ch}.userEnabled`, true, true); } catch { /* ignore */ }
                     userEnabled = true;
                 } else {
-                    userEnabled = !!curEn;
+                    userEnabled = toBool(curEn) !== false;
                 }
             } catch {
                 userEnabled = true;
             }
 
-            const enabled = cfgEnabled && userEnabled;
+            const stationEnabled = cfgEnabled && userStationEnabled;
+            const enabled = stationEnabled && userEnabled;
 
 
             // Ladepunkt-Metadaten (Stationsgruppe / Connector)
@@ -4357,12 +4402,15 @@ class ChargingManagementModule extends BaseModule {
             // - ein expliziter Online-DP ist autoritativ;
             // - ein frischer Connectorstatus bestaetigt Erreichbarkeit, auch bei Faulted;
             // - ein Connector-0-Status darf fuer Connector 1..N weder online noch faulted liefern.
-            let online = enabled;
+            // Erreichbarkeit hängt nicht von Kundenfreigabe oder EMS-Regelung ab.
+            // Sonst könnte ein `userStationEnabled=false` den Ladepunkt künstlich
+            // offline machen und genau den Disable-Befehl an `enableWriteId` verhindern.
+            let online = cfgEnabled;
             let onlineSource = 'config-fallback';
             if (onlineId) {
                 const explicitOnline = normalizeEvcsOnlineFlag(onlineRaw, null);
                 if (explicitOnline === null) {
-                    online = statusFresh ? normalizeEvcsStatusReachability(statusRaw, enabled) : enabled;
+                    online = statusFresh ? normalizeEvcsStatusReachability(statusRaw, cfgEnabled) : cfgEnabled;
                     onlineSource = statusFresh ? 'status-fallback-after-unknown-online-dp' : 'config-fallback-after-unknown-online-dp';
                 } else {
                     online = explicitOnline;
@@ -4588,6 +4636,8 @@ class ChargingManagementModule extends BaseModule {
 
             await this._queueState(`${ch}.name`, String(wb.name || key), true);
             await this._queueState(`${ch}.cfgEnabled`, cfgEnabled, true);
+            await this._queueState(`${ch}.stationEnabled`, stationEnabled, true);
+            await this._queueState(`${ch}.stationEnableControlAvailable`, !!enableId, true);
             await this._queueState(`${ch}.enabled`, enabled, true);
             await this._queueState(`${ch}.online`, online, true);
             await this._queueState(`${ch}.priority`, priority, true);
@@ -4949,6 +4999,8 @@ class ChargingManagementModule extends BaseModule {
                 ch,
                 name: String(wb.name || key),
                 cfgEnabled,
+                userStationEnabled,
+                stationEnabled,
                 userEnabled,
                 enabled,
                 online,
@@ -7027,15 +7079,15 @@ if (components.length) {
                 /** @type {any|null} */
                 let applyWrites = null;
 
-                if (w.online && (w.controlAvailable || (!!w.cfgEnabled && !w.userEnabled) || w.operationalBlocked)) {
+                if (w.online && (w.controlAvailable || (!!w.cfgEnabled && (!w.userStationEnabled || !w.userEnabled)) || w.operationalBlocked)) {
                     // 0.7.127: Failsafe setzt den sicheren Zielwert nur noch als
                     // Executor-/Fallback-Plan. Der einzige EVCS-Setpoint-Schreiber bleibt
                     // _executeChargingSetpointEntries.
                     applyStatus = 'planned_by_js_safety_executor';
-                    const reasonToSet = (!!w.cfgEnabled && !w.userEnabled) ? ReasonCodes.CONTROL_DISABLED : reason;
+                    const reasonToSet = (!!w.cfgEnabled && !w.userStationEnabled) ? ReasonCodes.DISABLED : ((!!w.cfgEnabled && !w.userEnabled) ? ReasonCodes.CONTROL_DISABLED : reason);
                     await this._queueState(`${w.ch}.reason`, reasonToSet, true);
                 } else {
-                    await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive), true);
+                    await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive), true);
                 }
 
                 await this._queueState(`${w.ch}.targetCurrentA`, 0, true);
@@ -7059,6 +7111,8 @@ if (components.length) {
                     charging: !!w.charging,
                     chargingSinceMs: w.chargingSinceMs || 0,
                     online: !!w.online,
+                    userStationEnabled: !!w.userStationEnabled,
+                    stationEnabled: !!w.stationEnabled,
                     enabled: !!w.enabled,
                     priority: w.priority,
                     controlBasis: w.controlBasis,
@@ -7071,7 +7125,7 @@ if (components.length) {
                     applied,
                     applyStatus,
                     applyWrites,
-                    reason: (w.online && (w.controlAvailable || (!!w.cfgEnabled && !w.userEnabled) || w.operationalBlocked)) ? ((!!w.cfgEnabled && !w.userEnabled) ? ReasonCodes.CONTROL_DISABLED : reason) : (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive)),
+                    reason: (w.online && (w.controlAvailable || (!!w.cfgEnabled && (!w.userStationEnabled || !w.userEnabled)) || w.operationalBlocked)) ? ((!!w.cfgEnabled && !w.userStationEnabled) ? ReasonCodes.DISABLED : ((!!w.cfgEnabled && !w.userEnabled) ? ReasonCodes.CONTROL_DISABLED : reason)) : (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive)),
                 });
             }
 
@@ -7387,7 +7441,7 @@ if (components.length) {
                         applyStatus = 'planned_by_js_safety_executor';
                         await this._queueState(`${w.ch}.reason`, reason, true);
                     } else {
-                        await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive), true);
+                        await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive), true);
                     }
 
                     await this._queueState(`${w.ch}.targetCurrentA`, 0, true);
@@ -7410,6 +7464,8 @@ if (components.length) {
                         charging: !!w.charging,
                         chargingSinceMs: w.chargingSinceMs || 0,
                         online: !!w.online,
+                        userStationEnabled: !!w.userStationEnabled,
+                        stationEnabled: !!w.stationEnabled,
                         enabled: !!w.enabled,
                         controlAvailable: !!w.controlAvailable,
                         onlineSource: String(w.onlineSource || ''),
@@ -7423,7 +7479,7 @@ if (components.length) {
                         targetA,
                         applied,
                         status: applyStatus,
-                        reason: w.controlAvailable ? reason : (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive)),
+                        reason: w.controlAvailable ? reason : (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive)),
                     });
 
                     // totals stay 0
@@ -8044,7 +8100,7 @@ if (components.length) {
             if (!w.controlAvailable) {
                 targetW = 0;
                 targetA = 0;
-                reason = availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive);
+                reason = availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive);
             }
 
             // PV-only Start / Ramp / Stop state machine
@@ -8563,6 +8619,8 @@ if (components.length) {
                 charging: !!w.charging,
                 chargingSinceMs: w.chargingSinceMs || 0,
                 online: !!w.online,
+                userStationEnabled: !!w.userStationEnabled,
+                stationEnabled: !!w.stationEnabled,
                 enabled: !!w.enabled,
                 controlAvailable: !!w.controlAvailable,
                 onlineSource: String(w.onlineSource || ''),
@@ -8622,11 +8680,10 @@ if (components.length) {
             });
         }
 
-        // wallboxes that are disabled/offline: expose targets as 0
-        // Special case: if the installer enabled the chargepoint, but the end-customer
-        // switched off the EMS regulation (userEnabled=false), we actively write a 0-setpoint.
-        // Automatic EMS control must not toggle the wallbox enable/freigabe during normal
-        // regulation, because many EVCS/vehicles react badly to repeated enable flapping.
+        // Wallboxes without positive control availability expose targets as 0.
+        // - userEnabled=false: EMS-Regelung aus, Station bleibt hardwareseitig freigegeben.
+        // - userStationEnabled=false: Kunde sperrt die Station, Setpoint 0 und Enable=false.
+        // - PV-Warten: controlAvailable bleibt wahr, Setpoint 0 und Enable=true.
         for (const w of wbList) {
             if (w.controlAvailable) continue;
 
@@ -8635,8 +8692,8 @@ if (components.length) {
             /** @type {any|null} */
             let applyWrites = null;
 
-            // Regelung AUS (user): force a safe stop while staying online
-            if (!!w.cfgEnabled && !!w.online && (!w.userEnabled || w.operationalBlocked)) {
+            // Regelung AUS, Kunden-Sperre oder frischer Betriebsfehler: sicheren 0-Sollwert planen.
+            if (!!w.cfgEnabled && !!w.online && (!w.userStationEnabled || !w.userEnabled || w.operationalBlocked)) {
                 // TS-Migration 0.7.126: Auch der sichere 0-Wert bei kundenseitig
                 // deaktivierter Regelung wird im Normalpfad vom produktiven TS-Write-Plan
                 // ausgeführt. JS bleibt Executor/Fallback, schreibt hier aber nicht doppelt.
@@ -8656,7 +8713,7 @@ if (components.length) {
             } else {
                 await this._queueState(`${w.ch}.applyWrites`, '', true);
             }
-            const offReason = availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive);
+            const offReason = availabilityReason(!!w.cfgEnabled, !!w.userStationEnabled, !!w.userEnabled, !!w.online, !!w.faultActive, !!w.unavailableActive);
             await this._queueState(`${w.ch}.reason`, offReason, true);
             debugAlloc.push({
                 safe: w.safe,
@@ -8666,6 +8723,8 @@ if (components.length) {
                 charging: !!w.charging,
                 chargingSinceMs: w.chargingSinceMs || 0,
                 online: !!w.online,
+                userStationEnabled: !!w.userStationEnabled,
+                stationEnabled: !!w.stationEnabled,
                 enabled: !!w.enabled,
                 controlAvailable: !!w.controlAvailable,
                 onlineSource: String(w.onlineSource || ''),
@@ -8716,7 +8775,7 @@ if (components.length) {
                 setAKey: w.setAKey || '',
                 setWKey: w.setWKey || '',
                 enableKey: w.enableKey || '',
-                writeRequired: !!((w.setAKey || w.setWKey) && !!w.online && !!w.cfgEnabled && (!w.userEnabled || w.operationalBlocked)),
+                writeRequired: !!((w.setAKey || w.setWKey || w.enableKey) && !!w.online && !!w.cfgEnabled && (!w.userStationEnabled || !w.userEnabled || w.operationalBlocked)),
             });
         }
 

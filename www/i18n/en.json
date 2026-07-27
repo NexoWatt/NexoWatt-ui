@@ -1,0 +1,13 @@
+{
+  "meta": {
+    "language": "en",
+    "locale": "en-GB",
+    "name": "English",
+    "version": 1
+  },
+  "messages": {},
+  "text": {
+    "Fahrzeug/Ladevorgang aktiv (lesen, optional)": "Vehicle/charging session active (read-only, optional)"
+  },
+  "patterns": []
+}

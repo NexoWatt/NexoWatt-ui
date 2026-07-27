@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 378de91e861a0b913f53a8e63505cb16eeefc314d34d785b073c2c3d6785cae4
+ * Original-Hash: ae4d21ed9012f76447c2ca95443c0ac4c8840379c8c8435a1494e13c227315c8
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/rfid-report.ts
- * Quell-Hash: sha256:751538626b84ca5aebd30bda1c47d52e227caaaf35c63f5d1d734db0f27eea08
+ * Quell-Hash: sha256:275d139fff94bd61002f65bf5b12f6eed4c4a098835cd2feffd1a29344b19bd7
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -93,9 +93,20 @@
   const btnCsvSessions = document.getElementById('csvSessionsBtn');
   const btnPrint = document.getElementById('printBtn');
 
-  const nfKwh = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-  const nfKw = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const nfInt = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
+/**
+ * Code-Teil: nwReportLocaleTag
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+  const nwReportLocaleTag = () => { const lang = String((window.NexoWattI18n && window.NexoWattI18n.localeTag && window.NexoWattI18n.localeTag()) || document.documentElement.lang || navigator.language || 'de').toLowerCase(); return lang.startsWith('nl') ? 'nl-NL' : (lang.startsWith('en') ? 'en-GB' : 'de-DE'); }; const nfKwh = { format: (value) => new Intl.NumberFormat(nwReportLocaleTag(), { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(value) };
+  const nfKw = { format: (value) => new Intl.NumberFormat(nwReportLocaleTag(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value) };
+  const nfInt = { format: (value) => new Intl.NumberFormat(nwReportLocaleTag(), { maximumFractionDigits: 0 }).format(value) };
   /**
    * Code-Teil: fmtDateRange
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -107,8 +118,8 @@
     const t = Number(toMs);
     const df = Number.isFinite(f) ? new Date(f) : null;
     const dt = Number.isFinite(t) ? new Date(t) : null;
-    const sF = df ? df.toLocaleDateString('de-DE') : '--';
-    const sT = dt ? dt.toLocaleDateString('de-DE') : '--';
+    const sF = df ? df.toLocaleDateString(nwReportLocaleTag()) : '--';
+    const sT = dt ? dt.toLocaleDateString(nwReportLocaleTag()) : '--';
     return sF + ' – ' + sT;
   }
   /**

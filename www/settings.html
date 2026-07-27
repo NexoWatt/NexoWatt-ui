@@ -21,6 +21,7 @@
   <title>NexoWatt – Einstellungen</title>
   <link rel="manifest" href="./manifest.webmanifest"/>
   <link rel="stylesheet" href="/static/styles.css"/>
+  <script src="/static/nw-i18n.js" defer></script>
 </head>
 <!-- NexoWatt Detail-Kommentar (DE) -->
 <!-- Kundeneinstellungen. data-scope/data-key-Felder werden generisch von www/app.js an /api/set gebunden und in main.js als States geführt. -->
@@ -94,7 +95,7 @@
           <span class="nw-settings-nav__title">RFID</span>
           <small>Whitelist, Lernen, Abrechnung</small>
         </button>
-        <button class="nw-settings-nav__item" type="button" data-settings-page-target="log">
+        <button class="nw-settings-nav__item" type="button" data-settings-page-target="log" data-nw-market="DE">
           <span class="nw-settings-nav__title">Log / §14a</span>
           <small>Nachweis, Historie, Ereignisse</small>
         </button>
@@ -661,7 +662,7 @@
     </div>
   </section>
 
-      <section class="card nw-settings-page hidden" data-settings-panel="log">
+      <section class="card nw-settings-page hidden" data-settings-panel="log" data-nw-market="DE">
         <div class="card-header"><span>Log / Nachweis</span></div>
         <div class="form">
           <div class="nw-settings-note nw-settings-note--actionbar">

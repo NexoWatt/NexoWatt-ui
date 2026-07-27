@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e1831a0e6b0d49618e6b36f3c22dbe21554408214e5ceffd4edddc54e6d4a4df
+ * Original-Hash: caffa274406e098cbbb115c490ef370c8bad7801e2093a79f9cd87f22ec09c37
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/country-profile.ts
- * Quell-Hash: sha256:b3b6944036492cea0c1063970586a72acdc08535c597590d52fce05dc3a45e86
+ * Quell-Hash: sha256:5bbce605d3ebb8f7e7cc9ffac73a52a07be77312035db340c488e45009e18021
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -84,7 +84,7 @@ class CountryProfileModule extends BaseModule {
 
   async tick() {
     const now = Date.now();
-    if ((now - this._lastWriteTs) < 30000) return;
+    if ((now - this._lastWriteTs) < 5000) return;
     await this._publish('tick', false);
   }
 

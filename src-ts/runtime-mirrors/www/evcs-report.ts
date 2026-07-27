@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 79a19f0c792e82f9b39bb3079e60b4f024c34f42cf0cccf35ca9a8f49dafeaaa
+ * Original-Hash: 9eca6655df900bcf8d6a05db2e3a98891c4a9251c14464f6bc0ff09116dd31d9
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/evcs-report.ts
- * Quell-Hash: sha256:7490874fb9fd48547ecbbe9b4c689baf6f7a6c9bb4da1da5b9fbea417d79a76b
+ * Quell-Hash: sha256:ebd6ea75ed4325e7c975c7a231438899f82838facdc49c1ffbc226904f43cab6
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -95,7 +95,7 @@
    * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
-  function fmtDate(iso){ return iso || ''; }
+  function fmtDate(iso){ return iso || ''; } const nwReportLocaleTag = () => { const lang = String((window.NexoWattI18n && window.NexoWattI18n.localeTag && window.NexoWattI18n.localeTag()) || document.documentElement.lang || navigator.language || 'de').toLowerCase(); return lang.startsWith('nl') ? 'nl-NL' : (lang.startsWith('en') ? 'en-GB' : 'de-DE'); };
 
   // Numeric formatting for UI + PDF (German locale, fixed decimals, tabular numbers in CSS).
   const _nfCache = new Map();
@@ -106,10 +106,10 @@
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   function _getNf(d){
-    const key = String(d);
+    const key = nwReportLocaleTag() + ':' + String(d);
     let nf = _nfCache.get(key);
     if (!nf){
-      nf = new Intl.NumberFormat('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+      nf = new Intl.NumberFormat(nwReportLocaleTag(), { minimumFractionDigits: d, maximumFractionDigits: d });
       _nfCache.set(key, nf);
     }
     return nf;

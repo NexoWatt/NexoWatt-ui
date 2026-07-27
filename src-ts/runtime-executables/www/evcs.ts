@@ -829,10 +829,13 @@ function buildEvcsModalBodyHtml(i) {
   const name = m.name || ('Ladepunkt ' + i);
   const note = m.note || '';
 
-  const canActive = !!m.activeId;
-
   const hasEms = _hasEms();
   const cm = `chargingManagement.wallboxes.lp${i}`;
+  const emsStationEnabledRaw = hasEms ? d(`${cm}.userStationEnabled`) : null;
+  const stationEnabled = hasEms
+    ? (_evcsBoolOrNull(emsStationEnabledRaw) ?? true)
+    : (_evcsBoolOrNull(d(`evcs.${i}.active`)) ?? false);
+  const canActive = hasEms || !!m.activeId;
 
   const emsUserMode = d(`${cm}.userMode`);
   const emsEffectiveMode = d(`${cm}.effectiveMode`);
@@ -950,7 +953,6 @@ function buildEvcsModalBodyHtml(i) {
   const day = d(`evcs.${i}.energyDayKwh`);
   const tot = d(`evcs.${i}.energyTotalKwh`);
   const st = d(`evcs.${i}.status`);
-  const active = d(`evcs.${i}.active`);
   const soc = d(`evcs.${i}.vehicleSoc`);
   const rawStatusText = emsStatusRaw || String(st ?? '').trim();
   const localOnline = d(`evcs.${i}.online`);
@@ -1057,14 +1059,14 @@ function buildEvcsModalBodyHtml(i) {
         </div>` : ''}
 
         <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding-top:6px; border-top:1px solid rgba(255,255,255,.06);">
-          <span>Aktiv</span>
+          <span>Ladestation</span>
           ${canActive ? `
             <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="evcsActive_${i}" title="Ladepunkt aktivieren/deaktivieren">
-              <button type="button" data-value="false" class="${active ? '' : 'active'}">Aus</button>
-              <button type="button" data-value="true" class="${active ? 'active' : ''}">An</button>
+              <button type="button" data-value="false" class="${stationEnabled ? '' : 'active'}">Aus</button>
+              <button type="button" data-value="true" class="${stationEnabled ? 'active' : ''}">An</button>
             </div>
-            <input type="checkbox" class="nw-toggle-hidden" id="evcsActive_${i}" data-evcs-active="${i}" ${active ? 'checked' : ''}>
-          ` : `<strong>${active == null ? '--' : (active ? 'Ja' : 'Nein')}</strong>`}
+            <input type="checkbox" class="nw-toggle-hidden" id="evcsActive_${i}" data-evcs-active="${i}" ${stationEnabled ? 'checked' : ''}>
+          ` : `<strong>${stationEnabled ? 'Ja' : 'Nein'}</strong>`}
         </div>
 
         ${regAvail ? `<div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
@@ -1612,15 +1614,23 @@ function bindControls() {
     if (t.matches('input[type="checkbox"][data-evcs-active]')) {
       const idx = Number(t.getAttribute('data-evcs-active'));
 
-      // Optimistisch im UI aktualisieren
-      try { state[`evcs.${idx}.active`] = { value: !!t.checked, ts: Date.now() }; } catch (_e) {}
+      const hasEms = _hasEms();
+      const stationKey = `chargingManagement.wallboxes.lp${idx}.userStationEnabled`;
+
+      // Optimistisch im UI aktualisieren. activeId remains read-only connector/session status.
+      try {
+        if (hasEms) state[stationKey] = { value: !!t.checked, ts: Date.now() };
+        else state[`evcs.${idx}.active`] = { value: !!t.checked, ts: Date.now() };
+      } catch (_e) {}
       scheduleRender();
 
       try {
         await fetch('/api/set', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scope: 'evcs', key: `${idx}.active`, value: !!t.checked })
+          body: JSON.stringify(hasEms
+            ? { scope: 'ems', key: `evcs.${idx}.stationEnabled`, value: !!t.checked }
+            : { scope: 'evcs', key: `${idx}.active`, value: !!t.checked })
         });
       } catch (_e) {}
       return;

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/country-profile.ts
- * Quell-Hash: sha256:b3b6944036492cea0c1063970586a72acdc08535c597590d52fce05dc3a45e86
+ * Quell-Hash: sha256:5bbce605d3ebb8f7e7cc9ffac73a52a07be77312035db340c488e45009e18021
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -42,7 +42,7 @@ class CountryProfileModule extends BaseModule {
 
   async tick() {
     const now = Date.now();
-    if ((now - this._lastWriteTs) < 30000) return;
+    if ((now - this._lastWriteTs) < 5000) return;
     await this._publish('tick', false);
   }
 

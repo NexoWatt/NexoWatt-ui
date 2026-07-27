@@ -1,3 +1,23 @@
+## 0.8.141 - 2026-07-27
+
+- Kundenfreigabe der Ladestation von Connector-/Fahrzeugstatus und EMS-Regelung getrennt. Der neue persistente State `chargingManagement.wallboxes.<lp>.userStationEnabled` ist die einzige Kundenentscheidung für **Ladestation An/Aus**; `activeId` bleibt ein reiner Read-Status und wird von der Schnellsteuerung nicht mehr beschrieben.
+- PV- und Min+PV-Modus mit fehlendem Überschuss bedeuten jetzt verbindlich **Warten**: Sollleistung 0 W, Sollstrom 0 A und Hardware-Enable bleibt `true`. Die Wallbox kann bei erneutem Überschuss ohne manuelles Wiedereinschalten starten.
+- Nur ein ausdrückliches Kunden-Aus oder eine frische Betriebs-/Sicherheitssperre setzt den Hardware-Enable-DP auf `false`; das Abschalten der EMS-Regelung setzt nur den Sollwert auf 0 und lässt die Station für manuelle Nutzung freigegeben.
+- Einzel-Wallboxdialog und Multi-Ladepunktansicht verwenden dieselbe Stationsfreigabe. Legacy-Aufrufe `evcs.<n>.active` werden bei aktivem Lademanagement serverseitig auf die neue Kundenfreigabe migriert und dürfen nicht mehr auf den gelesenen `activeId` schreiben.
+- Produktiver EVCS-Writer übergibt die Stationsfreigabe explizit an `enableWriteId`. Safe-Stop-, Failsafe- und TS-Fallback-Pfade berücksichtigen eine echte Kundensperre, ohne PV-Wartezustände als Deaktivierung zu behandeln. Online-/Erreichbarkeitsstatus bleibt von der Kundenfreigabe getrennt, damit ein Disable-Befehl auch bei gesperrter Station zuverlässig ausgeführt wird.
+- AppCenter-Bezeichnung von `activeId` auf **Fahrzeug/Ladevorgang aktiv (lesen, optional)** präzisiert; frei zugeordnete Run-/Enable-DPs bleiben unverändert autoritativ.
+- Neue Regression `test:evcs-station-permission` führt 0-A-PV-Warten mit `enable=true`, aktive Ladung und eine ausdrückliche Kundensperre mit `enable=false` bis zum Consumer-/DP-Writer aus.
+- Service-Worker-Cache auf `nexowatt-cache-v444` erhöht; DE/NL-Systemsprache aus RC16 bleibt vollständig erhalten.
+
+## 0.8.140 - 2026-07-27
+
+- Zentrale DE/NL-I18N-Runtime eingeführt. Der UI-Adapter liest die ioBroker-/EOS-Systemsprache aus `system.config.common.language` und übernimmt Änderungen ohne Adapterneustart über `/api/locale`, DOM-Liveübersetzung und ein Sprachwechsel-Event.
+- Deutsche und niederländische Benutzeroberfläche bleiben vom Länderprofil getrennt. Das NL-Marktprofil aktiviert P1/DSMR und blendet/deaktiviert die ausschließlich deutsche §14a-Funktion, während ein deutschsprachiger Installateur weiterhin eine NL-Anlage konfigurieren kann.
+- LIVE-Dashboard, Energiefluss, EVCS, History, Speicherfarm, SmartHome, NexoLogic, Einstellungen sowie die Kernnavigation des AppCenters erhalten einen zentralen niederländischen Textkatalog. Dynamisch erzeugte Texte, Tooltips, Platzhalter und neu eingefügte DOM-Inhalte werden ebenfalls nachübersetzt.
+- Zahlen-, Preis-, Datums- und Uhrzeitformatierung in LIVE und den wichtigsten Berichten verwendet jetzt dynamisch `de-DE`, `nl-NL` oder `en-GB` statt fest verdrahtetem `de-DE`.
+- Service Worker liefert die Sprachruntime und DE/NL/EN-Kataloge offline aus; Cache auf `nexowatt-cache-v443` erhöht.
+- Neue Regression `test:system-language-i18n` prüft Locale-API, Kataloge, HTML-Einbindung, Markttrennung, NL-P1/DSMR, §14a-Marktgating und dynamische Locale-Formatierung.
+
 ## 0.8.139 - 2026-07-23
 
 - NVP-Zielmitte und Hysterese besitzen jetzt genau einen Owner je aktiver Speicher-Topologie: `single` liest ausschließlich **AppCenter → Speicher**, `farm` ausschließlich **AppCenter → Speicherfarm**. MultiUse liefert weiter SoC-, Reserve- und LSK-Policy, übernimmt aber immer die NVP-Abstimmung der ausgewählten Topologie und kann keine zweite Hysterese mehr überlagern.

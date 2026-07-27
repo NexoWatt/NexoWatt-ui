@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: d6d5c4ecef476ddb47444b14bc5efad08de9425d1bfa34ff53630f0251dc45fa
+ * Original-Hash: 074ada1c4cac64e82081566bac6b2915276ca5efc033b8b9e143879bf60f2249
  */
 
 /**
@@ -693,7 +693,7 @@ function scheduleRender(force = false){
 // neu gerendert. Die Backend-Messung und sämtliche EMS-Regelkreise bleiben unverändert
 // schnell; gedrosselt wird ausschließlich die sichtbare LIVE-Darstellung, damit kurze
 // NVP-/Speicher-Messversätze nicht als hektisches Springen erscheinen.
-const LIVE_TELEMETRY_RENDER_INTERVAL_MS = 15000;
+const LIVE_TELEMETRY_RENDER_INTERVAL_MS = 5000;
 let _liveTelemetryRenderTimer = null;
 let _lastLiveTelemetryRenderTs = 0;
 
@@ -738,6 +738,8 @@ document.addEventListener('visibilitychange', () => {
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 function formatPower(v) {
+  const ts = nxTryTsDashboardFormat('formatDashboardPower', v, units.power);
+  if (ts !== null) return ts;
   if (v === undefined || v === null || isNaN(v)) return '--';
   const n = Number(v);
   // If configured for kW, convert automatically from W
@@ -755,6 +757,8 @@ function formatPower(v) {
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 function formatEnergyKwh(v){
+  const ts = nxTryTsDashboardFormat('formatDashboardEnergyKwh', v);
+  if (ts !== null) return ts;
   if (v === undefined || v === null || isNaN(v)) return '--';
   const n = Number(v);
   if (!isFinite(n)) return '--';
@@ -763,6 +767,13 @@ function formatEnergyKwh(v){
   if (abs >= 1000) return (n/1000).toFixed(2) + ' MWh';
   return n.toFixed(2) + ' kWh';
 }
+
+function formatCurrencyEur(v){
+  if (v === undefined || v === null || isNaN(v)) return '--';
+  const n = Number(v);
+  if (!isFinite(n)) return '--';
+  return n.toFixed(2).replace('.', ',') + ' €';
+}
 /**
  * Code-Teil: formatPowerSigned
  * Zweck: Formatiert Daten für Anzeige oder Logs.
@@ -770,6 +781,8 @@ function formatEnergyKwh(v){
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 function formatPowerSigned(v){
+  const ts = nxTryTsDashboardFormat('formatDashboardPowerSigned', v, units.power);
+  if (ts !== null) return ts;
   if (v === undefined || v === null || isNaN(v)) return '--';
   const n = Number(v);
   const sign = n>0?'+':(n<0?'-':'');
@@ -784,10 +797,12 @@ function formatPowerSigned(v){
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 function formatFlowPower(v, decimals){
+  const d = (decimals === undefined || decimals === null || isNaN(decimals)) ? FLOW_UI_STABILITY.decimals : Number(decimals);
+  const ts = nxTryTsDashboardFormat('formatDashboardFlowPower', v, d);
+  if (ts !== null) return ts;
   // Energy-flow monitor: always show power values in kW (input is expected in W)
   if (v === undefined || v === null || isNaN(v)) return '--';
   const n = Number(v);
-  const d = (decimals === undefined || decimals === null || isNaN(decimals)) ? FLOW_UI_STABILITY.decimals : Number(decimals);
   return (n / 1000).toFixed(d) + ' kW';
 }
 /**
@@ -1660,7 +1675,7 @@ function _fmtNumLocal(v, digits=1){
   const n = Number(v);
   const d = (digits === undefined || digits === null || isNaN(digits)) ? 1 : Number(digits);
   try {
-    return n.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+    return n.toLocaleString(nwUiLocaleTag(), { minimumFractionDigits: d, maximumFractionDigits: d });
   } catch (_e) {
     return n.toFixed(d).replace('.', ',');
   }
@@ -1841,15 +1856,74 @@ function nwEvcsCountFromConfig(inputCfg) {
  * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
+function nwOptionalFeatureFromConfig(inputCfg, key, fallback) {
+  const c = inputCfg || window.__nwCfg || {};
+  try {
+    const fv = (c.featureVisibility && typeof c.featureVisibility === 'object') ? c.featureVisibility : null;
+    if (fv && typeof fv[key] === 'boolean') return fv[key] === true;
+  } catch (_e) {}
+  return !!fallback;
+}
+function nwSmartHomeFeatureFromConfig(inputCfg) {
+  const c = inputCfg || window.__nwCfg || {};
+  return nwOptionalFeatureFromConfig(c, 'hasSmartHome', !!(c && c.smartHome && c.smartHome.enabled));
+}
+function nwStorageFarmAppCenterActiveFromConfig(inputCfg) {
+  const c = inputCfg || window.__nwCfg || {};
+  try {
+    const appsRoot = (c.emsApps && typeof c.emsApps === 'object') ? c.emsApps : {};
+    const apps = (appsRoot.apps && typeof appsRoot.apps === 'object') ? appsRoot.apps : {};
+    const app = (apps.storagefarm && typeof apps.storagefarm === 'object')
+      ? apps.storagefarm
+      : ((apps.storageFarm && typeof apps.storageFarm === 'object') ? apps.storageFarm : null);
+    if (!app) return false;
+    return app.installed === true && app.enabled === true;
+  } catch (_e) {
+    return false;
+  }
+}
+function nwStorageFarmHasRealRowsFromConfig(inputCfg) {
+  const c = inputCfg || window.__nwCfg || {};
+  try {
+    const sf = (c.storageFarm && typeof c.storageFarm === 'object') ? c.storageFarm : {};
+    const rows = Array.isArray(sf.storages) ? sf.storages : [];
+    const realCount = rows.filter((row) => {
+      const r = row && typeof row === 'object' ? row : null;
+      if (!r || r.enabled === false) return false;
+      return [
+        'socId','socDp','chargePowerId','chargeDp','dischargePowerId','dischargeDp',
+        'signedPowerId','signedPowerDp','powerId','setChargePowerId','setDischargePowerId',
+        'setSignedPowerId','availableId','faultId','chargeAllowedId','dischargeAllowedId',
+      ].some((key) => String(r[key] || '').trim());
+    }).length;
+    return realCount >= 2;
+  } catch (_e) {
+    return false;
+  }
+}
 function nwStorageFarmFeatureFromConfig(inputCfg, stateSnapshot) {
   const c = inputCfg || window.__nwCfg || {};
-  if (typeof c.storageFarmEnabled === 'boolean') return c.storageFarmEnabled;
-  if (c.ems && typeof c.ems.storageFarmEnabled === 'boolean') return c.ems.storageFarmEnabled;
+
+  // `/config.featureVisibility` ist bereits serverseitig gegen AppCenter installed +
+  // enabled und mindestens zwei echte Farm-Zeilen geprüft. Die Kundenantwort enthält
+  // aus Sicherheitsgründen nicht zwingend die vollständigen Farm-DPs; deshalb darf das
+  // Frontend die autoritative Freigabe nicht nochmals an versteckten Zeilen ablehnen.
+  if (c.featureVisibility && typeof c.featureVisibility.hasStorageFarm === 'boolean') {
+    return c.featureVisibility.hasStorageFarm === true;
+  }
+  if (c.storageFarmSummary && typeof c.storageFarmSummary.active === 'boolean') {
+    return c.storageFarmSummary.active === true;
+  }
+
+  // Kompatibilitätsfallback für ältere Backends ohne featureVisibility.
+  const appCenterActive = nwStorageFarmAppCenterActiveFromConfig(c);
+  if (!appCenterActive) return false;
+  if (nwStorageFarmHasRealRowsFromConfig(c)) return true;
   try {
     const st = stateSnapshot || window.latestState || state || {};
     const enabled = nwAsBool(st['storageFarm.enabled'] && st['storageFarm.enabled'].value, false);
     const total = Number(st['storageFarm.storagesTotal'] && st['storageFarm.storagesTotal'].value);
-    return enabled && Number.isFinite(total) && total > 0;
+    return enabled && Number.isFinite(total) && total >= 2;
   } catch (_e) {
     return false;
   }
@@ -1932,7 +2006,7 @@ function nwBuildTsFeatureVisibilityInput(inputCfg, stateSnapshot) {
     evcsProofs,
     storageFarmEnabled: nwStorageFarmFeatureFromConfig(c, st),
     storageFarmProofs,
-    smartHomeEnabled: !!(c && c.smartHome && c.smartHome.enabled),
+    smartHomeEnabled: nwSmartHomeFeatureFromConfig(c),
     weatherEnabled: nwAsBool(st['settings.weatherEnabled'] && st['settings.weatherEnabled'].value, !!(c && c.settings && c.settings.weatherEnabled)),
     weatherHasData: (weatherTemp !== undefined && weatherTemp !== null && weatherTemp !== '') || !!String(weatherText || '').trim(),
     aiAdvisorInstalled: nwAsBool(aiEnabled, !!(c && c.aiAdvisor && c.aiAdvisor.enabled !== false)),
@@ -2024,7 +2098,7 @@ function nwApplyCustomerFeatureVisibility(inputCfg, stateSnapshot) {
     nwRunTsFeatureVisibilityShadowCheck(c, stateSnapshot, {
       hasEvcs: evcsAvailable,
       hasStorageFarm: storageFarmAvailable,
-      hasSmartHome: !!(c && c.smartHome && c.smartHome.enabled),
+      hasSmartHome: nwSmartHomeFeatureFromConfig(c),
       hasWeather: true,
       hasAiAdvisor: true,
     });
@@ -3374,15 +3448,35 @@ function getNormalizedBatteryFlow() {
 
   const sfEnabled = nwStorageFarmFeatureFromConfig(window.__nwCfg || {}, state || window.latestState || {});
   if (sfEnabled) {
+    const signedFarm = getStableFlowNumber('storageFarm.totalPowerW');
+    if (signedFarm !== null) {
+      // Die Farm ist im Backend bereits pro Speicher auf +Entladen/-Laden normalisiert.
+      // Ein globales Einzel-Speicher-Invert würde den Gesamtfluss hier doppelt drehen.
+      let signed = Number(signedFarm);
+      if (!Number.isFinite(signed)) signed = 0;
+      if (Math.abs(signed) <= deadbandW) signed = 0;
+      return {
+        chargeW: signed < 0 ? Math.abs(signed) : 0,
+        dischargeW: signed > 0 ? signed : 0,
+        signedW: signed,
+        src: 'storageFarmNet',
+        inverted: false,
+        fromSigned: true,
+        derived: false,
+      };
+    }
+
+    // Rückwärtskompatibilität für alte Adapterstände ohne totalPowerW. Auch diese
+    // Brutto-States sind bereits in der Farmzeile normalisiert und werden nicht erneut
+    // mit settings.flowInvertBattery vertauscht.
     const fc = getStableFlowNumber('storageFarm.totalChargePowerW');
     const fd = getStableFlowNumber('storageFarm.totalDischargePowerW');
     if (fc !== null || fd !== null) {
       let c = Math.max(0, Math.abs(Number(fc || 0)));
       let d = Math.max(0, Math.abs(Number(fd || 0)));
-      if (inv) { const t = c; c = d; d = t; }
       if (c <= deadbandW) c = 0;
       if (d <= deadbandW) d = 0;
-      return { chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'storageFarm(inv)' : 'storageFarm', inverted: inv, fromSigned: false, derived: false };
+      return { chargeW: c, dischargeW: d, signedW: d - c, src: 'storageFarmGross', inverted: false, fromSigned: false, derived: false };
     }
   }
 
@@ -3413,6 +3507,39 @@ function getNormalizedBatteryFlow() {
 
   return { chargeW: 0, dischargeW: 0, signedW: 0, src: anyStorageMapped ? 'mapped-missing' : 'missing', inverted: inv, fromSigned: false, derived: false };
 }
+
+/**
+ * Code-Teil: getCanonicalPvPowerW
+ * Zweck: Nutzt bevorzugt den vom Backend zusammengeführten PV-Gesamtwert. Nur für
+ * ältere Backends wird Anlagen-PV mit der Farm-PV lokal und konservativ verbunden.
+ * AC-Farmwerte sind bei vorhandener Anlagen-PV ein Fallback; DC-/Hybrid-PV darf
+ * addiert werden, solange sie nicht offensichtlich bereits enthalten ist.
+ */
+function getCanonicalPvPowerW(readValue) {
+  const d = typeof readValue === 'function' ? readValue : ((key) => state[key]?.value);
+  const derived = Number(d('derived.core.pv.totalW'));
+  if (Number.isFinite(derived) && derived >= 0) return derived;
+
+  let base = Number(d('pvPower') ?? d('productionTotal') ?? 0);
+  if (!Number.isFinite(base)) base = 0;
+  const baseAbs = Math.abs(base);
+  if (!nwStorageFarmFeatureFromConfig(window.__nwCfg || {}, state || window.latestState || {})) return baseAbs;
+
+  const farmTotal = Math.max(0, Math.abs(Number(d('storageFarm.totalPvPowerW')) || 0));
+  const farmAc = Math.max(0, Math.abs(Number(d('storageFarm.totalPvAcPowerW')) || 0));
+  const farmDc = Math.max(0, Math.abs(Number(d('storageFarm.totalPvDcPowerW')) || 0));
+  const farmUnknown = Math.max(0, Math.abs(Number(d('storageFarm.totalPvUnknownPowerW')) || 0));
+  const farmAcLike = farmAc + farmUnknown;
+  if (baseAbs <= 0) return farmTotal;
+  if (farmTotal <= 0) return baseAbs;
+
+  // Kompatibilitätsfallback für alte Backends: AC-/WR-Summen und Anlagen-PV sind
+  // alternative Sichten auf dieselbe Erzeugung, reine DC-/Hybrid-PV wird nur bei
+  // eindeutig zusätzlichem Anteil addiert. Neue Backends liefern ohnehin derived.*.
+  if (farmAcLike > 0) return Math.max(baseAbs, farmTotal);
+  const relDiff = Math.abs(baseAbs - farmDc) / Math.max(1, farmDc);
+  return (baseAbs >= farmDc || relDiff < 0.05) ? baseAbs : (baseAbs + farmDc);
+}
 // Abschnitt: Haupt-Renderlauf des LIVE-Dashboards. Alle DOM-Werte für Energiefluss, KPIs, KI-Berater und Schnellzugriffe werden hier aktualisiert.
 /**
  * Code-Teil: render
@@ -3432,28 +3559,10 @@ function render() {
 
   // Top ring values: map PV, Grid, Load, Bat flows to percent of max for visualization
   const sfEnabled = nwStorageFarmFeatureFromConfig(window.__nwCfg || {}, s || state || {});
-  const pvMapped = isMappedDatapoint('pvPower') || isMappedDatapoint('productionTotal');
 
-  // PV (W): primary from mapped PV datapoint; fallback to productionTotal if used as power DP.
-  let pv = d('pvPower') ?? d('productionTotal');
-  pv = (pv == null || isNaN(Number(pv))) ? 0 : Number(pv);
-
-  // Speicherfarm (DC‑PV): im Farm‑Modus zur PV‑Erzeugung addieren (oder ersetzen, wenn kein PV‑DP gemappt ist).
-  if (sfEnabled) {
-    const pvFarmRaw = d('storageFarm.totalPvPowerW');
-    const pvFarm = (pvFarmRaw == null || isNaN(Number(pvFarmRaw))) ? 0 : Number(pvFarmRaw);
-    if (pvFarm > 0) {
-      if (!pvMapped || pv === 0) {
-        pv = pvFarm;
-      } else {
-        const sign = pv < 0 ? -1 : 1;
-        const pvAbs = Math.abs(pv);
-        const relDiff = Math.abs(pvAbs - pvFarm) / Math.max(1, pvFarm);
-        if (relDiff < 0.05) pv = sign * pvFarm;
-        else pv = pv + (sign * pvFarm);
-      }
-    }
-  }
+  // Der sichtbare PV-Wert kommt aus dem zentralen Backend-Energiefluss. Damit zeigen
+  // LIVE, Historie und EMS dieselbe Farm-/Wechselrichter-Gesamtleistung.
+  let pv = getCanonicalPvPowerW(d);
 
   const load = d('consumptionTotal');
   const { buy, sell } = getGridImportExport(d);
@@ -3534,6 +3643,9 @@ function render() {
   setText('productionTotal', formatPower(d('productionTotal') ?? pv ?? 0));
   const gfN = coerceNumber(d('gridFrequency'));
   setText('gridFrequency', gfN != null ? gfN.toFixed(2) + ' Hz' : '--');
+
+  // Energie-Wertkonto wird über updateEnergyWalletLiveUi() als Nutzerkarte gerendert.
+
 
   const evcsAvailableNow = nwEvcsFeatureFromConfig();
   setText('consumptionEvcs', evcsAvailableNow ? formatPower(d('consumptionEvcs') ?? 0) : '');
@@ -3699,6 +3811,14 @@ async function bootstrap() {
     cfg = await cfgRes.json();
     units = cfg.units || units;
 
+    // ioBroker-Systemsprache übernehmen: Backend liefert /config.locale aus system.config.common.language.
+    try {
+      const loc = cfg && cfg.locale && typeof cfg.locale === 'object' ? cfg.locale : {};
+      const lang = String(loc.htmlLang || loc.language || '').trim().toLowerCase();
+      if (lang) document.documentElement.setAttribute('lang', lang);
+      window.__nwLocale = loc || {};
+    } catch (_e) {}
+
     // Global config snapshot for UI helpers
     try { window.__nwCfg = cfg || {}; } catch(_e) { window.__nwCfg = {}; }
     // EMS-App Installations-/Aktiv-Status (nur Flags) – steuert dynamische Sichtbarkeit in der VIS
@@ -3724,7 +3844,7 @@ async function bootstrap() {
       if (l) l.classList.toggle('hidden', !(evcsAvailable && c >= 2));
       const t = document.getElementById('tabEvcs');
       if (t) t.classList.toggle('hidden', !(evcsAvailable && c >= 2));
-      const sh = !!(cfg.smartHome && cfg.smartHome.enabled);
+      const sh = nwSmartHomeFeatureFromConfig(cfg);
       window.__nwSmartHomeEnabled = sh;
       const sl = document.getElementById('menuSmartHomeLink');
       if (sl) sl.classList.toggle('hidden', !sh);
@@ -3817,7 +3937,7 @@ const applyConfigSnapshot = (nextCfg) => {
     if (tabEvcs) tabEvcs.classList.toggle('hidden', !showEvcsPage);
 
     // SmartHome enabled flag is part of cfg.smartHome
-    window.__nwSmartHomeEnabled = !!(cfg && cfg.smartHome && cfg.smartHome.enabled);
+    window.__nwSmartHomeEnabled = nwSmartHomeFeatureFromConfig(cfg);
     const menuSmartHomeLink = document.getElementById('menuSmartHomeLink');
     const tabSmartHome = document.getElementById('tabSmartHome');
     if (menuSmartHomeLink) menuSmartHomeLink.classList.toggle('hidden', !window.__nwSmartHomeEnabled);
@@ -3878,6 +3998,10 @@ const refreshConfig = async () => {
   } catch(e){}
 
   window.latestState = state;
+  // RFID-Whitelist und Lerncode liegen aus Datenschutzgründen nicht mehr im
+  // globalen /api/state-Snapshot. Sie werden nur für die Kunden-Einstellseite
+  // über den kontrollierten RFID-Endpunkt nachgeladen.
+  try { await loadRfidCustomerState(); } catch (_e) {}
   _lastLiveTelemetryRenderTs = Date.now();
   scheduleRender(true);
 
@@ -3944,6 +4068,17 @@ function initMenu(){
   const btn = document.getElementById('menuBtn');
   const menu = document.getElementById('menuDropdown');
   if (!btn || !menu) return;
+
+  // Burger-Menü-Härtung 0.8.21:
+  // LIVE/Settings bindet das Menü fachlich selbst. Die globale `nw-shell.ts` ist
+  // auf vielen Seiten zusätzlich geladen und nutzt einen Capture-Fallback. Diese
+  // Markierung verhindert, dass app.js denselben Button mehrfach bindet oder mit
+  // der Shell doppelt toggelt.
+  if (btn.dataset.nwAppMenu === '1') return;
+  if (btn.dataset.nwShellBound === '1' && btn.dataset.nwMenuBound !== 'app') return;
+  btn.dataset.nwAppMenu = '1';
+  btn.dataset.nwMenuBound = 'app';
+  btn.dataset.nwShellBound = '1';
   /**
    * Code-Teil: open
    * Zweck: Öffnet Dialoge/Seiten/Popovers.
@@ -3959,7 +4094,7 @@ function initMenu(){
    */
   const close = ()=> menu.classList.add('hidden');
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-  btn.addEventListener('click', (e)=>{ e.stopPropagation(); open(); });
+  btn.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); open(); });
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menu. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   menu.addEventListener('click', (e)=> e.stopPropagation());
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
@@ -4352,6 +4487,15 @@ function initSettingsPanel(){
     if (weatherUsageInput.value !== mode) weatherUsageInput.value = mode;
 
     const keyVal = (weatherApiKey && String(weatherApiKey.value || '').trim()) || '';
+    const stateNow = window.latestState || {};
+    const cfgNow = window.__nwCfg || SERVER_CFG || {};
+    const keyConfigured = !!(
+      (stateNow['settings.weatherApiKeyConfigured'] && stateNow['settings.weatherApiKeyConfigured'].value === true) ||
+      (cfgNow.settings && cfgNow.settings.weatherApiKeyConfigured === true)
+    );
+    if (weatherApiKey && keyConfigured && !keyVal) {
+      weatherApiKey.placeholder = 'Gespeichert – nur zum Ändern neu eingeben';
+    }
 
     if (weatherBtns) {
       [...weatherBtns.querySelectorAll('button')].forEach(btn => {
@@ -4364,7 +4508,7 @@ function initSettingsPanel(){
     if (weatherHintCommercial) weatherHintCommercial.style.display = isCommercial ? 'block' : 'none';
     if (weatherApiRow) weatherApiRow.style.display = isCommercial ? 'block' : 'none';
 
-    const missing = isCommercial && !keyVal;
+    const missing = isCommercial && !keyVal && !keyConfigured;
     if (weatherApiMissing) weatherApiMissing.style.display = missing ? 'block' : 'none';
   };
 
@@ -4447,6 +4591,20 @@ function initSettingsPanel(){
   }
   if (weatherUsageInput) weatherUsageInput.addEventListener('change', updateWeatherModeUi);
   if (weatherApiKey) weatherApiKey.addEventListener('input', updateWeatherModeUi);
+
+  // Geheimnisse werden vom Backend nicht mehr im Klartext ausgeliefert. Die
+  // Platzhalter bestätigen eine bestehende Konfiguration, ohne sie preiszugeben.
+  try {
+    const emailInput = document.getElementById('s_email');
+    const stNow = window.latestState || {};
+    const cfgNow = window.__nwCfg || SERVER_CFG || {};
+    const masked = String(
+      (stNow['settings.emailMasked'] && stNow['settings.emailMasked'].value) ||
+      (cfgNow.settings && cfgNow.settings.emailMasked) ||
+      ''
+    ).trim();
+    if (emailInput && masked && !String(emailInput.value || '').trim()) emailInput.placeholder = `Gespeichert: ${masked}`;
+  } catch (_e) {}
 
   // Test-Mail für Benachrichtigungen
   const notifyTestBtn = document.getElementById('notifyTestBtn');
@@ -4675,6 +4833,7 @@ function bindToggleButtonGroups(){
 
 // Ereignis-Kommentar: Bindet das UI-Ereignis 'DOMContentLoaded' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
 window.addEventListener('DOMContentLoaded', ()=> {
+  nwNormalizeBrandHeader();
   bootstrap();
   initMenu();
   initSettingsPanel();
@@ -4822,6 +4981,9 @@ function bindInputValue(el, stateKey) {
       if (scope === 'settings' && key === 'aiAdvisorEnabled') {
         try { updateAiAdvisorLiveUi(); } catch (_e) {}
       }
+      if (scope === 'settings' && key === 'pvSurplusPriority') {
+        try { updatePvSurplusSettingsUi(); } catch (_e) {}
+      }
     } catch (_e) {}
 
     try {
@@ -4832,6 +4994,43 @@ function bindInputValue(el, stateKey) {
       });
     } catch (e) { /* ignore */ }
   });
+}
+
+/**
+ * Code-Teil: updatePvSurplusSettingsUi
+ * Zweck: Zeigt den prozentualen EVCS-Anteil nur bei der gemeinsamen
+ * PV-Ueberschuss-Verteilung an. Speicher- oder E-Mobilitaets-Prioritaet
+ * benoetigen keinen zusaetzlichen Prozentwert.
+ * Zusammenhang: Die Werte werden als settings.* States gespeichert und vom
+ * zentralen EMS-Budget in Core-Limits ausgewertet.
+ */
+function updatePvSurplusSettingsUi(){
+  const enabled = document.getElementById('s_pvSurplusAllocationEnabled');
+  const block = document.getElementById('pvSurplusFixedAllocationBlock');
+  const select = document.getElementById('s_pvSurplusPriority');
+  const row = document.getElementById('pvSurplusEvcsShareRow');
+  const fixed = !enabled || enabled.checked;
+  if (block) block.classList.toggle('hidden', !fixed);
+  if (select && row) row.classList.toggle('hidden', !fixed || String(select.value || 'both').trim().toLowerCase() !== 'both');
+}
+
+/**
+ * Code-Teil: setupPvSurplusSettingsUi
+ * Zweck: Bindet die lokale Sichtbarkeitslogik einmalig und aktualisiert sie
+ * nach dem Laden der gespeicherten Kundeneinstellung.
+ * Zusammenhang: bindInputValue schreibt weiterhin ueber /api/set; diese
+ * Funktion veraendert ausschliesslich die Darstellung des Einstellungsreiters.
+ */
+function setupPvSurplusSettingsUi(){
+  const enabled = document.getElementById('s_pvSurplusAllocationEnabled');
+  const select = document.getElementById('s_pvSurplusPriority');
+  if (!select && !enabled) return;
+  if (select && select.dataset.nwPvSurplusBound !== '1') {
+    select.dataset.nwPvSurplusBound = '1';
+    select.addEventListener('change', updatePvSurplusSettingsUi);
+  }
+  if (enabled && enabled.dataset.nwPvSurplusBound !== '1') { enabled.dataset.nwPvSurplusBound = '1'; enabled.addEventListener('change', updatePvSurplusSettingsUi); }
+  updatePvSurplusSettingsUi();
 }
 /**
  * Code-Teil: initSettingsPageTabs
@@ -4950,7 +5149,7 @@ function _nwSettingsCount(value){
 function _nwSettingsTs(value){
   const num = Number(value);
   if (!Number.isFinite(num) || num <= 0) return '—';
-  try { return new Date(num).toLocaleString('de-DE'); } catch (_e) { return '—'; }
+  try { return new Date(num).toLocaleString(nwUiLocaleTag()); } catch (_e) { return '—'; }
 }
 /**
  * Code-Teil: _nwSettingsPower
@@ -5122,6 +5321,7 @@ function setupSettingsReportButtons(){
 function setupSettings(){
   document.querySelectorAll('[data-scope="settings"]').forEach(el=> bindInputValue(el, 'settings.'+el.dataset.key));
   document.querySelectorAll('[data-scope="rfid"]').forEach(el=> bindInputValue(el, 'evcs.rfid.'+el.dataset.key));
+  try { setupPvSurplusSettingsUi(); } catch (e) {}
   try { setupRfidWhitelistUi(); } catch (e) {}
   try { setupRfidLearningUi(); } catch (e) {}
   try { setupRfidBillingUi(); } catch (e) {}
@@ -5311,6 +5511,31 @@ function initStorageFarmPanel(){
   storageFarmApply();
 }
 /**
+ * Code-Teil: loadRfidCustomerState
+ * Zweck: Lädt Whitelist und Lernstatus über den datensparsamen RFID-Endpunkt.
+ * Zusammenhang: Die Rohdaten werden bewusst nicht über /api/state oder SSE verteilt;
+ * der bestehende Editor erhält weiterhin dieselben lokalen State-Schlüssel.
+ */
+async function loadRfidCustomerState(){
+  const response = await fetch('/api/rfid/customer', { cache: 'no-store' });
+  if (!response.ok) throw new Error(`RFID HTTP ${response.status}`);
+  const payload = await response.json();
+  if (!payload || payload.ok === false) throw new Error((payload && payload.error) || 'RFID-Daten konnten nicht geladen werden.');
+  const now = Date.now();
+  window.latestState = window.latestState || {};
+  const target = window.latestState;
+  target['evcs.rfid.enabled'] = { value: payload.enabled === true, ts: now };
+  target['evcs.rfid.whitelistJson'] = { value: String(payload.whitelistJson || JSON.stringify(Array.isArray(payload.whitelist) ? payload.whitelist : [])), ts: now };
+  const learning = payload.learning && typeof payload.learning === 'object' ? payload.learning : {};
+  target['evcs.rfid.learning.active'] = { value: learning.active === true, ts: now };
+  target['evcs.rfid.learning.lastCaptured'] = { value: String(learning.lastCaptured || ''), ts: Number(learning.lastCapturedTs || now) || now };
+  target['evcs.rfid.learning.lastCapturedTs'] = { value: Number(learning.lastCapturedTs || 0) || 0, ts: now };
+  try { if (typeof state === 'object' && state) Object.assign(state, target); } catch (_e) {}
+  return payload;
+}
+try { window.__nwLoadRfidCustomerState = loadRfidCustomerState; } catch (_e) {}
+
+/**
  * Code-Teil: setupRfidWhitelistUi
  * Zweck: Bereitet Konfiguration/Eventbindung für diesen Bereich vor.
  * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -5461,8 +5686,7 @@ function setupRfidWhitelistUi(){
    */
   async function reload(){
     try {
-      const snap = await fetch('/api/state', { cache: 'no-store' }).then(r => r.json());
-      window.latestState = snap || {};
+      await loadRfidCustomerState();
       list = readWhitelistFromState();
       render();
       setMsg('Whitelist neu geladen.');
@@ -5575,6 +5799,25 @@ function setupRfidLearningUi(){
     const st = window.latestState || {};
     return st[key] ? st[key].value : undefined;
   }
+  let learningPollTimer = null;
+  let learningPollUntil = 0;
+  const stopLearningPoll = () => {
+    if (learningPollTimer) clearTimeout(learningPollTimer);
+    learningPollTimer = null;
+  };
+  const pollLearningState = async () => {
+    stopLearningPoll();
+    try { await loadRfidCustomerState(); } catch (_e) {}
+    applyUi();
+    const active = !!readStateVal('evcs.rfid.learning.active');
+    if (active && Date.now() < learningPollUntil) {
+      learningPollTimer = setTimeout(pollLearningState, 1000);
+    }
+  };
+  const startLearningPoll = () => {
+    learningPollUntil = Date.now() + 90 * 1000;
+    pollLearningState();
+  };
   /**
    * Code-Teil: applyUi
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -5591,7 +5834,7 @@ function setupRfidLearningUi(){
       const t = (last != null && String(last).trim()) ? String(last).trim() : '--';
       lastText.textContent = t;
       if (t !== '--' && ts) {
-        try{ lastText.title = new Date(Number(ts)).toLocaleString('de-DE'); }catch(_e){}
+        try{ lastText.title = new Date(Number(ts)).toLocaleString(nwUiLocaleTag()); }catch(_e){}
       }
     }
     if (active) {
@@ -5610,7 +5853,10 @@ function setupRfidLearningUi(){
       const active = !!readStateVal('evcs.rfid.learning.active');
       setMsg('');
       await setLearningActive(!active);
-      // UI will update via SSE/render, but also apply immediately
+      // RFID-Rohdaten laufen nicht über SSE; während des Lernens wird deshalb
+      // gezielt der kleine RFID-Endpunkt abgefragt.
+      if (!active) startLearningPoll();
+      else stopLearningPoll();
       applyUi();
     });
   }
@@ -5643,6 +5889,7 @@ function setupRfidLearningUi(){
   window.__nwApplyRfidLearningUi = applyUi;
 
   applyUi();
+  loadRfidCustomerState().then(() => applyUi()).catch(() => {});
 }
 /**
  * Code-Teil: setupRfidBillingUi
@@ -8469,7 +8716,7 @@ function _labelThermalMode(mode){
   const k = m.toLowerCase();
   if (!m) return '—';
   if (k === 'inherit') return 'Auto';
-  if (k === 'pvauto') return 'PV‑Auto';
+  if (k === 'pvauto') return 'Auto';
   if (k === 'sgready') return 'SG‑Ready';
   if (k === 'manual') return 'Manuell';
   if (k === 'manual1') return 'Stufe 1';
@@ -8628,30 +8875,10 @@ function updateEnergyWeb() {
 
   // Raw datapoints (1:1)
   const sfEnabled = nwStorageFarmFeatureFromConfig(window.__nwCfg || {}, s || state || {});
-  const pvMapped = isMappedDatapoint('pvPower') || isMappedDatapoint('productionTotal');
 
-  // PV (W): primary from mapped PV datapoint; fallback to productionTotal if used as power DP.
-  let pv = +(d('pvPower') ?? d('productionTotal') ?? 0);
-  if (!Number.isFinite(pv)) pv = 0;
-
-  // Speicherfarm (DC‑PV): im Farm‑Modus zur PV‑Erzeugung addieren (oder ersetzen, wenn kein PV‑DP gemappt ist).
-  if (sfEnabled) {
-    const pvFarm = +(d('storageFarm.totalPvPowerW') ?? 0);
-    if (Number.isFinite(pvFarm) && pvFarm > 0) {
-      if (!pvMapped || pv === 0) {
-        pv = pvFarm;
-      } else {
-        // Keep sign-consistency (some adapters use negative PV generation)
-        const sign = pv < 0 ? -1 : 1;
-        const pvAbs = Math.abs(pv);
-        const relDiff = Math.abs(pvAbs - pvFarm) / Math.max(1, pvFarm);
-
-        // Avoid obvious double counting if pvPower already equals the farm sum
-        if (relDiff < 0.05) pv = sign * pvFarm;
-        else pv = pv + (sign * pvFarm);
-      }
-    }
-  }
+  // Backend-konsolidierte Anlagen-/Farm-PV verwenden; lokaler Fallback nur für
+  // ältere Adapterstände ohne derived.core.pv.totalW.
+  let pv = getCanonicalPvPowerW(d);
   let { buy, sell } = getGridImportExport(d);
   let load = +(d('consumptionTotal') ?? 0);
   let c2 = +(d('evcs.totalPowerW') ?? d('consumptionEvcs') ?? 0); // Wallbox (sum)
@@ -9005,6 +9232,152 @@ function _nwAiAdvisorCategoryLabel(c) {
  * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
+
+function _nwEnergyWalletStateValue(key, fallback) {
+  try {
+    const entry = state && Object.prototype.hasOwnProperty.call(state, key) ? state[key] : null;
+    if (entry && typeof entry === 'object' && Object.prototype.hasOwnProperty.call(entry, 'value')) return entry.value;
+    if (entry !== undefined && entry !== null) return entry;
+  } catch (_e) {}
+  return fallback;
+}
+
+function _nwEnergyWalletNum(key, fallback = 0) {
+  const n = Number(_nwEnergyWalletStateValue(key, fallback));
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function _nwEnergyWalletMoney(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '0,00 €';
+  try { return n.toLocaleString(nwUiLocaleTag(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; } catch (_e) { return n.toFixed(2).replace('.', ',') + ' €'; }
+}
+
+
+function _nwEnergyWalletKwh(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '0,000 kWh';
+  try { return n.toLocaleString(nwUiLocaleTag(), { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' kWh'; } catch (_e) { return n.toFixed(3).replace('.', ',') + ' kWh'; }
+}
+
+function _nwEnergyWalletPricePerKwh(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '';
+  try { return n.toLocaleString(nwUiLocaleTag(), { minimumFractionDigits: 3, maximumFractionDigits: 4 }) + ' €/kWh'; } catch (_e) { return n.toFixed(3).replace('.', ',') + ' €/kWh'; }
+}
+
+function _nwEnergyWalletAgeLabel(seconds) {
+  const sec = Math.max(0, Math.round(Number(seconds) || 0));
+  if (sec < 60) return `${sec}s alt`;
+  const min = Math.round(sec / 60);
+  if (min < 120) return `${min}min alt`;
+  const h = Math.round(min / 60);
+  return `${h}h alt`;
+}
+
+function _nwEnergyWalletEnsureExtendedUi(card) {
+  try {
+    if (!card || document.getElementById('energyWalletPeriodGrid')) return;
+    const period = document.createElement('div');
+    period.className = 'nw-energy-wallet-periods';
+    period.id = 'energyWalletPeriodGrid';
+    period.innerHTML = `
+      <div><strong id="energyWalletMonthValue">0,00 €</strong><span>Monat</span></div>
+      <div><strong id="energyWalletYearValue">0,00 €</strong><span>Jahr</span></div>
+      <div><strong id="energyWalletQualityValue">0 %</strong><span>Datenqualität</span></div>
+    `;
+    card.appendChild(period);
+
+    const exportGuard = document.createElement('div');
+    exportGuard.className = 'nw-energy-wallet-periods nw-energy-wallet-exportguard hidden';
+    exportGuard.id = 'energyWalletExportGuardGrid';
+    exportGuard.innerHTML = `
+      <div><strong id="energyWalletCurtailedValue">0,00 €</strong><span>Abregelung</span></div>
+      <div><strong id="energyWalletUnusedPvValue">0,00 €</strong><span>nicht lokal genutzt</span></div>
+      <div><strong id="energyWalletCurtailedKwh">0,000 kWh</strong><span>abgeregelt</span></div>
+    `;
+    card.appendChild(exportGuard);
+
+    const price = document.createElement('div');
+    price.className = 'nw-energy-wallet-price-source hidden';
+    price.id = 'energyWalletPriceSourceText';
+    price.textContent = '';
+    card.appendChild(price);
+
+    const warn = document.createElement('div');
+    warn.className = 'nw-energy-wallet-warning hidden';
+    warn.id = 'energyWalletWarningText';
+    warn.textContent = '';
+    card.appendChild(warn);
+  } catch (_e) {}
+}
+
+function updateEnergyWalletLiveUi() {
+  const card = document.getElementById('energyWalletLiveCard');
+  if (!card) return;
+  _nwEnergyWalletEnsureExtendedUi(card);
+  const walletCfg = window.__nwCfg && window.__nwCfg.energyWallet && typeof window.__nwCfg.energyWallet === 'object' ? window.__nwCfg.energyWallet : {};
+  const enabled = walletCfg.showOnLive !== false && (_nwEnergyWalletStateValue('energyWallet.enabled', false) === true || String(_nwEnergyWalletStateValue('energyWallet.enabled', '')).toLowerCase() === 'true');
+  const value = _nwEnergyWalletNum('energyWallet.today.valueEur', 0);
+  const monthValue = _nwEnergyWalletNum('energyWallet.month.valueEur', 0);
+  const yearValue = _nwEnergyWalletNum('energyWallet.year.valueEur', 0);
+  const pvKwh = _nwEnergyWalletNum('energyWallet.today.pvKwh', 0);
+  const status = String(_nwEnergyWalletStateValue('energyWallet.diagnostics.status', _nwEnergyWalletStateValue('energyWallet.status', '')) || '').toLowerCase();
+  const hasData = enabled && (pvKwh > 0.001 || value > 0.001 || monthValue > 0.001 || yearValue > 0.001 || status === 'warn');
+  card.classList.toggle('hidden', !hasData);
+  if (!hasData) return;
+
+  const setText = (id, text) => { try { const el = document.getElementById(id); if (el) el.textContent = text; } catch (_e) {} };
+  const pct = _nwEnergyWalletNum('energyWallet.today.localUsePercent', 0);
+  const quality = _nwEnergyWalletNum('energyWallet.diagnostics.dataQualityPercent', 0);
+  const warning = String(_nwEnergyWalletStateValue('energyWallet.diagnostics.customerWarning', _nwEnergyWalletStateValue('energyWallet.diagnostics.warning', '')) || '');
+  const showPriceSource = String(_nwEnergyWalletStateValue('settings.energyWalletShowPriceSource', 'false')).toLowerCase() === 'true'
+    || _nwEnergyWalletStateValue('settings.energyWalletShowPriceSource', false) === true;
+  const priceSource = String(_nwEnergyWalletStateValue('energyWallet.configuredPrices.priceSource', '') || '');
+  const priceSourceLabel = String(_nwEnergyWalletStateValue('energyWallet.configuredPrices.priceSourceLabel', '') || priceSource || 'Preisquelle');
+  const activePrice = _nwEnergyWalletNum('energyWallet.configuredPrices.gridImportEurPerKwh', 0);
+  const dynAge = _nwEnergyWalletNum('energyWallet.configuredPrices.currentDynamicPriceAgeSec', 0);
+  const dynSource = String(_nwEnergyWalletStateValue('energyWallet.configuredPrices.currentDynamicPriceSource', '') || '');
+  setText('energyWalletTodayValue', _nwEnergyWalletMoney(value));
+  setText('energyWalletLocalUseBadge', `${Math.round(pct)} % lokal`);
+  setText('energyWalletExplanation', String(_nwEnergyWalletStateValue('energyWallet.explanation', '') || 'Deine Anlage erzeugt heute messbaren Energiewert.'));
+  setText('energyWalletAvoidedGrid', _nwEnergyWalletMoney(_nwEnergyWalletNum('energyWallet.today.avoidedGridCostEur', 0)));
+  setText('energyWalletFeedIn', _nwEnergyWalletMoney(_nwEnergyWalletNum('energyWallet.today.feedInValueEur', 0)));
+  setText('energyWalletStorage', _nwEnergyWalletMoney(_nwEnergyWalletNum('energyWallet.today.storageValueEur', 0)));
+  setText('energyWalletEvcs', _nwEnergyWalletMoney(_nwEnergyWalletNum('energyWallet.today.evcsValueEur', 0)));
+  setText('energyWalletMonthValue', _nwEnergyWalletMoney(monthValue));
+  setText('energyWalletYearValue', _nwEnergyWalletMoney(yearValue));
+  setText('energyWalletQualityValue', `${Math.round(quality)} %`);
+  const curtailedKwh = _nwEnergyWalletNum('energyWallet.today.curtailedKwh', 0);
+  const curtailedValue = _nwEnergyWalletNum('energyWallet.today.curtailedValueEur', 0);
+  const unusedValue = _nwEnergyWalletNum('energyWallet.today.unusedPvValueEur', 0);
+  setText('energyWalletCurtailedValue', _nwEnergyWalletMoney(curtailedValue));
+  setText('energyWalletUnusedPvValue', _nwEnergyWalletMoney(unusedValue));
+  setText('energyWalletCurtailedKwh', _nwEnergyWalletKwh(curtailedKwh));
+  try {
+    const eg = document.getElementById('energyWalletExportGuardGrid');
+    if (eg) eg.classList.toggle('hidden', !(curtailedKwh > 0.0001 || curtailedValue > 0.001 || unusedValue > 0.001));
+  } catch (_e) {}
+  try {
+    const priceEl = document.getElementById('energyWalletPriceSourceText');
+    if (priceEl) {
+      let txt = `Preisquelle: ${priceSourceLabel}`;
+      if (activePrice) txt += ` · ${_nwEnergyWalletPricePerKwh(activePrice)}`;
+      if (priceSource === 'dynamicTariff' && dynAge >= 0) txt += ` · ${_nwEnergyWalletAgeLabel(dynAge)}`;
+      if (priceSource === 'dynamicTariff' && dynSource) txt += ` · ${dynSource}`;
+      priceEl.textContent = txt;
+      priceEl.classList.toggle('hidden', !showPriceSource);
+    }
+  } catch (_e) {}
+  try {
+    const warnEl = document.getElementById('energyWalletWarningText');
+    if (warnEl) {
+      warnEl.textContent = warning;
+      warnEl.classList.toggle('hidden', !(warning && (status === 'warn' || status === 'waiting-data')));
+    }
+  } catch (_e) {}
+}
+
 function _nwAiAdvisorParseSuggestions() {
   const raw = _nwAiAdvisorStateValue('aiAdvisor.suggestionsJson', '[]');
   try {
@@ -9116,7 +9489,7 @@ function updateAiAdvisorLiveUi() {
 
 // Patch render to also update energy web
 const _renderOld = render;
-render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } try{ updateEnergyWeb(); }catch(e){ console.warn('energy web', e); } try{ updateAiAdvisorLiveUi(); }catch(e){ console.warn('ai advisor', e); } }
+render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } try{ updateEnergyWeb(); }catch(e){ console.warn('energy web', e); } try{ updateAiAdvisorLiveUi(); }catch(e){ console.warn('ai advisor', e); } try{ updateEnergyWalletLiveUi(); }catch(e){ console.warn('energy wallet', e); } }
 
   // open history page via header tab
   const hbtn = document.getElementById('historyTabBtn');
@@ -9200,6 +9573,14 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
   const goalKwh = qs('evcsGoalKwh');
   const goalStatus = qs('evcsGoalStatus');
   const goalHint = qs('evcsGoalHint');
+  const phaseRow = qs('evcsPhaseRow');
+  const phaseButtons = qs('evcsPhaseButtons');
+  const phaseStatus = qs('evcsPhaseStatus');
+  const phaseHint = qs('evcsPhaseHint');
+  const storageAssistRow = qs('evcsStorageAssistRow');
+  const storageAssistButtons = qs('evcsStorageAssistButtons');
+  const storageAssistStatus = qs('evcsStorageAssistStatus');
+  const storageAssistHint = qs('evcsStorageAssistHint');
 
   // Unified /api/set helper for the EVCS modal (single wallbox)
   /**
@@ -9232,9 +9613,11 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
   bindGoalLock(goalKwh, 15000);
 
 
-  // Prefer per-wallbox datapoints (evcs.1.*) for single-EVCS modal, fallback to legacy settings.*
+  // Per-wallbox mode remains backward compatible. The customer station permission is
+  // deliberately separate from evcs.1.active: activeId is a connector/session status,
+  // not the durable customer enable/disable decision.
   let hasPerBoxMode = false;
-  let hasPerBoxActive = false;
+  let hasStationPermissionState = false;
 
   // EMS present? (chargingManagement states exist)
   let modalHasEms = false;
@@ -9247,6 +9630,10 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
 
   let pendingReg = null;
   let pendingRegUntil = 0;
+  let pendingPhaseMode = null;
+  let pendingPhaseModeUntil = 0;
+  let pendingStorageAssist = null;
+  let pendingStorageAssistUntil = 0;
   let pendingGoalEnabled = null;
   let pendingGoalEnabledUntil = 0;
   let pendingGoalSoc = null;
@@ -9328,6 +9715,80 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
     if (s === 'min+pv') return 'minpv';
     if (s === 'auto' || s === 'boost' || s === 'minpv' || s === 'pv') return s;
     return 'auto';
+  }
+  /**
+   * Code-Teil: normalizeEvcsPhaseMode
+   * Zweck: normalisiert den AC-Phasenmodus für die LIVE-Schnellsteuerung.
+   * Zusammenhang: Teil der EVCS-TS-Phasenumschaltung; schreibt nur den User-Override, die Safety-Sequenz bleibt im Backend.
+   */
+  function normalizeEvcsPhaseMode(raw){
+    const s = String(raw ?? '').trim().toLowerCase().replace(/_/g, '-');
+    const compact = s.replace(/[^a-z0-9]+/g, '');
+    if (compact === 'autopv' || compact === 'pvauto' || compact === 'auto13' || compact === 'auto1p3p' || compact === 'auto') return 'auto-pv';
+    if (compact === 'fixed1p' || compact === '1p' || compact === 'onephase' || compact === 'fixed1') return 'fixed-1p';
+    if (compact === 'fixed3p' || compact === '3p' || compact === 'threephase' || compact === 'fixed3') return 'fixed-3p';
+    return 'auto-pv';
+  }
+
+  function phaseModeLabel(mode){
+    const m = normalizeEvcsPhaseMode(mode);
+    if (m === 'fixed-1p') return 'Fest 1p';
+    if (m === 'fixed-3p') return 'Fest 3p';
+    return 'Auto PV';
+  }
+
+  /**
+   * Code-Teil: evcsConfigRow
+   * Zweck: liest die Ladepunkt-Konfiguration aus /config, damit die LIVE-UI
+   *        Phasenbedienung sofort nach einer DP-Zuordnung anzeigen kann.
+   * Zusammenhang: Backend-States wie phaseSwitchSupported können erst nach dem nächsten
+   *        EMS-Tick im /api/state-Snapshot auftauchen. Die Sichtbarkeitsregel soll aber
+   *        direkt an der Haupt-DP-Zuordnung hängen: DP vorhanden => Bedienung sichtbar.
+   */
+  function evcsConfigRow(index){
+    try{
+      const cfg = window.__nwCfg || {};
+      const sc = cfg && cfg.settingsConfig ? cfg.settingsConfig : {};
+      const list = Array.isArray(sc.evcsList) ? sc.evcsList : [];
+      return (list[Math.max(0, Math.round(Number(index) || 1) - 1)] || {});
+    }catch(_e){
+      return {};
+    }
+  }
+
+  function evcsPhaseSwitchDpAssigned(index){
+    const row = evcsConfigRow(index);
+    return !!String((row && (row.phaseSwitchId || row.phaseSwitchKey || row.phaseModeWriteId)) || '').trim();
+  }
+
+  function evcsStorageAssistCustomerAllowed(index){
+    const row = evcsConfigRow(index);
+    return !!(row && row.storageAssistCustomerAllowed === true);
+  }
+
+  function applyStorageAssistUi(enabled){
+    if (!storageAssistButtons) return;
+    const want = !!enabled;
+    const btns = storageAssistButtons.querySelectorAll('button[data-storage-assist]');
+    btns.forEach(b => {
+      const raw = String(b.getAttribute('data-storage-assist') || 'false').trim().toLowerCase();
+      const val = raw === 'true' || raw === '1' || raw === 'yes';
+      b.classList.toggle('active', val === want);
+    });
+  }
+
+  function evcsConfiguredPhaseMode(index, fallbackPhases){
+    const row = evcsConfigRow(index);
+    const raw = row && row.phaseMode;
+    if (raw !== undefined && raw !== null && String(raw).trim() !== '') return normalizeEvcsPhaseMode(raw);
+    return Number(fallbackPhases) === 1 ? 'fixed-1p' : 'fixed-3p';
+  }
+
+  function applyPhaseModeUi(mode){
+    if (!phaseButtons) return;
+    const m = normalizeEvcsPhaseMode(mode);
+    const btns = phaseButtons.querySelectorAll('button[data-phase-mode]');
+    btns.forEach(b => b.classList.toggle('active', normalizeEvcsPhaseMode(b.getAttribute('data-phase-mode') || 'auto-pv') === m));
   }
   /**
    * Code-Teil: legacyNumToMode
@@ -9464,8 +9925,8 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
       pendingActiveUntil = Date.now() + 2500;
       try { scheduleRender(); } catch(_e) {}
 
-      const scope = hasPerBoxActive ? 'evcs' : 'settings';
-      const key = hasPerBoxActive ? '1.active' : 'evcsActive';
+      const scope = modalHasEms ? 'ems' : 'settings';
+      const key = modalHasEms ? 'evcs.1.stationEnabled' : 'evcsActive';
       try{
         await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope, key, value: desired})});
       }catch(e){}
@@ -9599,6 +10060,47 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
     });
   }
 
+
+  if (phaseButtons){
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an phaseButtons. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
+    phaseButtons.addEventListener('click', async (e)=>{
+      const b = e.target && e.target.closest ? e.target.closest('button[data-phase-mode]') : null;
+      if (!b || b.disabled) return;
+      const desired = normalizeEvcsPhaseMode(b.getAttribute('data-phase-mode') || 'auto-pv');
+      pendingPhaseMode = desired;
+      pendingPhaseModeUntil = Date.now() + 3000;
+      applyPhaseModeUi(desired);
+      try { scheduleRender(); } catch(_e) {}
+      try{
+        await apiSet('ems', 'evcs.1.phaseMode', desired);
+      }catch(_e){
+        pendingPhaseMode = null;
+        pendingPhaseModeUntil = 0;
+        try { scheduleRender(); } catch(_e2) {}
+      }
+    });
+  }
+
+  if (storageAssistButtons){
+    storageAssistButtons.addEventListener('click', async (e)=>{
+      const b = e.target && e.target.closest ? e.target.closest('button[data-storage-assist]') : null;
+      if (!b || b.disabled) return;
+      const raw = String(b.getAttribute('data-storage-assist') || 'false').trim().toLowerCase();
+      const desired = raw === 'true' || raw === '1' || raw === 'yes';
+      pendingStorageAssist = desired;
+      pendingStorageAssistUntil = Date.now() + 3000;
+      applyStorageAssistUi(desired);
+      try { scheduleRender(); } catch(_e) {}
+      try{
+        await apiSet('ems', 'evcs.1.storageAssistEnabled', desired);
+      }catch(_e){
+        pendingStorageAssist = null;
+        pendingStorageAssistUntil = 0;
+        try { scheduleRender(); } catch(_e2) {}
+      }
+    });
+  }
+
   // Update values from state inside global render()
   window.__evcsApply = function(d, s){
     const p = d('evcs.totalPowerW') ?? d('consumptionEvcs') ?? 0;
@@ -9620,10 +10122,13 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
     if (regRow) regRow.style.display = regAvail ? '' : 'none';
 
 
-    const evcsActive = d('evcs.1.active');
+    const stationPermission = d('chargingManagement.wallboxes.lp1.userStationEnabled');
     const settingsActive = s && s['settings.evcsActive'] ? s['settings.evcsActive'].value : null;
-    hasPerBoxActive = evcsActive != null;
-    const activeVal = (evcsActive != null) ? evcsActive : ((settingsActive != null) ? settingsActive : false);
+    hasStationPermissionState = stationPermission !== null && stationPermission !== undefined;
+    // EMS default is deliberately enabled. PV mode with 0 W means waiting, not disabled.
+    const activeVal = modalHasEms
+      ? (hasStationPermissionState ? nwAsBool(stationPermission, true) : true)
+      : ((settingsActive != null) ? nwAsBool(settingsActive, true) : true);
 
     // Mode source: EMS userMode (preferred) or legacy EVCS mode
     let modeStrFromState = 'boost';
@@ -9713,6 +10218,99 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
     } else {
       if (regStatus) regStatus.textContent = '—';
       if (regHint) regHint.textContent = '—';
+    }
+
+    // AC-Phasenmodus (1p/3p/Auto PV) – LIVE-Schnellsteuerung
+    if (phaseRow != null){
+      const chargerType = String(d('chargingManagement.wallboxes.lp1.chargerType') ?? '').trim().toUpperCase();
+      const configuredPhases = Number(d('chargingManagement.wallboxes.lp1.phases') ?? 0);
+      const supported = d('chargingManagement.wallboxes.lp1.phaseSwitchSupported');
+      const hasPhaseSwitchDp = evcsPhaseSwitchDpAssigned(1) || supported === true;
+      const phaseStateExists = d('chargingManagement.wallboxes.lp1.phaseMode') != null || d('chargingManagement.wallboxes.lp1.userPhaseMode') != null;
+      const isAc = hasPhaseSwitchDp || chargerType === 'AC' || (!!hasEms && configuredPhases > 1) || (!!hasEms && phaseStateExists);
+      // Bedienregel: Keine Haupt-DP-Zuordnung = keine Bedienung. Nicht deaktiviert anzeigen,
+      // sondern komplett ausblenden, damit die Nutzer-UI nur konfigurierte Funktionen zeigt.
+      // Wichtig: Sichtbarkeit hängt an der Installer-DP-Zuordnung aus /config, nicht nur
+      // an phaseSwitchSupported aus /api/state. Dadurch erscheinen die drei Buttons direkt
+      // nach DP-Zuordnung/Neustart und nicht erst nach einem späteren EMS-Diagnose-Tick.
+      phaseRow.style.display = (!!hasEms && isAc && hasPhaseSwitchDp) ? '' : 'none';
+
+      if (!!hasEms && isAc && hasPhaseSwitchDp){
+        const stMode = d('chargingManagement.wallboxes.lp1.userPhaseMode') ?? d('chargingManagement.wallboxes.lp1.phaseMode') ?? evcsConfiguredPhaseMode(1, configuredPhases);
+        const phaseMode = (pendingPhaseMode !== null && now < pendingPhaseModeUntil) ? pendingPhaseMode : normalizeEvcsPhaseMode(stMode);
+        const effectivePhaseMode = normalizeEvcsPhaseMode(d('chargingManagement.wallboxes.lp1.phaseMode') ?? phaseMode);
+        const currentPhase = Number(d('chargingManagement.wallboxes.lp1.currentPhaseCount') ?? configuredPhases ?? 0);
+        const targetPhase = Number(d('chargingManagement.wallboxes.lp1.targetPhaseCount') ?? d('chargingManagement.wallboxes.lp1.currentPhaseCount') ?? configuredPhases ?? 0);
+        const switchState = String(d('chargingManagement.wallboxes.lp1.phaseSwitchState') ?? '').trim();
+        const reason = String(d('chargingManagement.wallboxes.lp1.phaseSwitchReason') ?? '').trim();
+        const cooldownMs = Number(d('chargingManagement.wallboxes.lp1.phaseCooldownRemainingMs') ?? 0);
+
+        if (phaseButtons != null){
+          const btns = phaseButtons.querySelectorAll('button[data-phase-mode]');
+          btns.forEach(b => {
+            b.disabled = false;
+            b.style.opacity = 1;
+          });
+          if (pendingPhaseMode !== null){
+            if (normalizeEvcsPhaseMode(stMode) === pendingPhaseMode){
+              pendingPhaseMode = null;
+              pendingPhaseModeUntil = 0;
+            } else if (now < pendingPhaseModeUntil){
+              applyPhaseModeUi(pendingPhaseMode);
+            } else {
+              pendingPhaseMode = null;
+              pendingPhaseModeUntil = 0;
+              applyPhaseModeUi(phaseMode);
+            }
+          } else {
+            applyPhaseModeUi(phaseMode);
+          }
+        }
+
+        if (phaseStatus != null){
+          const curTxt = (currentPhase === 1 || currentPhase === 3) ? `${currentPhase}p` : '—';
+          const targetTxt = (targetPhase === 1 || targetPhase === 3) ? `${targetPhase}p` : '—';
+          phaseStatus.textContent = `${phaseModeLabel(phaseMode)} · aktuell ${curTxt} → Ziel ${targetTxt}`;
+        }
+        if (phaseHint != null){
+          let txt = '';
+          if (switchState && switchState !== 'idle') txt = `Umschaltung: ${switchState}${reason ? ' · ' + reason : ''}`;
+          else if (cooldownMs > 0) txt = `Cooldown aktiv: ${Math.ceil(cooldownMs / 1000)} s`;
+          else txt = effectivePhaseMode === 'auto-pv' ? 'Auto PV schaltet 1p/3p nach Überschuss, Hysterese und Cooldown.' : 'Fester AC-Phasenmodus aktiv.';
+          phaseHint.textContent = txt;
+        }
+      }
+    }
+
+    // Speicher-Mitnutzung: Installer-Freigabe pro Ladepunkt steuert Sichtbarkeit.
+    if (storageAssistRow != null){
+      const allowed = evcsStorageAssistCustomerAllowed(1) || d('chargingManagement.wallboxes.lp1.storageAssistCustomerAllowed') === true;
+      storageAssistRow.style.display = (!!hasEms && allowed) ? '' : 'none';
+      if (!!hasEms && allowed){
+        const userEnabledState = !!d('chargingManagement.wallboxes.lp1.userStorageAssistEnabled');
+        const effective = !!d('chargingManagement.wallboxes.lp1.effectiveStorageAssist');
+        const reason = String(d('chargingManagement.wallboxes.lp1.storageAssistBlockedReason') || '').trim();
+        const batteryW = Number(d('chargingManagement.wallboxes.lp1.batteryContributionW') ?? 0);
+        const val = (pendingStorageAssist !== null && now < pendingStorageAssistUntil) ? !!pendingStorageAssist : userEnabledState;
+        if (pendingStorageAssist !== null){
+          if (!!userEnabledState === !!pendingStorageAssist){
+            pendingStorageAssist = null;
+            pendingStorageAssistUntil = 0;
+          } else if (now >= pendingStorageAssistUntil){
+            pendingStorageAssist = null;
+            pendingStorageAssistUntil = 0;
+          }
+        }
+        applyStorageAssistUi(val);
+        if (storageAssistStatus != null){
+          storageAssistStatus.textContent = val ? 'Speicher mitnutzen' : 'Speicher schützen';
+        }
+        if (storageAssistHint != null){
+          if (!val) storageAssistHint.textContent = 'Der Speicher wird für diesen Ladepunkt geschützt.';
+          else if (effective) storageAssistHint.textContent = `Speicher darf unterstützen${batteryW > 0 ? ' · Anteil ' + Math.round(batteryW) + ' W' : ''}.`;
+          else storageAssistHint.textContent = reason ? `Freigegeben, aktuell nicht aktiv: ${reason}` : 'Freigegeben, aktuell nicht aktiv.';
+        }
+      }
     }
 
     // EMS: Ziel-Laden (Depot-/Deadline-Laden)
@@ -9973,7 +10571,7 @@ function openFlowQc(kind, idx){
     const s = String(m || '').trim();
     const k = s.toLowerCase();
     if (k === 'inherit' || k === 'system') return 'System';
-    if (k === 'pvauto' || k === 'auto' || k === 'pv') return 'Auto (PV)';
+    if (k === 'pvauto' || k === 'auto' || k === 'pv') return 'Auto';
     if (k === 'manual' || k === 'manuell') return 'Manuell';
     if (k === 'manual1') return 'Stufe 1';
     if (k === 'manual2') return 'Stufe 2';
@@ -10193,8 +10791,8 @@ function openFlowQc(kind, idx){
         if (regHint) {
           regHint.textContent = isRod
             ? (uEn
-                ? 'PV-Regelung aktiv. Manuelle Stufen und Boost bleiben zusätzlich verfügbar.'
-                : 'PV-Regelung aus. Der Adapter greift nicht automatisch ein; Stufen, Boost und Aus bleiben händisch verfügbar.')
+                ? `Regelung aktiv. Auto nutzt: ${String(ctl.autoModeLabel || 'PV-Überschuss')}. Manuelle Stufen und Boost bleiben zusätzlich verfügbar.`
+                : 'Regelung aus. Der Adapter greift nicht automatisch ein; Stufen, Boost und Aus bleiben händisch verfügbar.')
             : (uEn
                 ? 'Automatik aktiv. Manuelle Bedienung bleibt möglich.'
                 : 'Regelung deaktiviert – manuelle Bedienung bleibt möglich.');
@@ -10210,13 +10808,16 @@ function openFlowQc(kind, idx){
             const maxPowerInfo = Number(ctl.maxPowerW || 0) > 0 ? ` • max. ${formatPower(Number(ctl.maxPowerW || 0))}` : '';
             const dupInfo = Array.isArray(ctl.duplicateWriteIds) && ctl.duplicateWriteIds.length ? ' • DP doppelt' : '';
             const stageInfo = stageMax > 0 ? ` • ${Number(ctl.currentStage || 0)}/${stageMax} Stufen${maxPowerInfo}${dupInfo}` : maxPowerInfo;
+            const autoModeLabel = String(ctl.autoModeLabel || 'PV-Überschuss');
+            const zeroReason = (String(ctl.autoMode || '') === 'zeroExportForecast' && ctl.zeroExportReason) ? ` · ${String(ctl.zeroExportReason)}` : '';
+            const strategyInfo = ` • Auto-Betriebsart: ${autoModeLabel}${zeroReason}`;
             const backMode = (rawUserMode && rawUserMode !== 'inherit') ? rawUserMode : (String(ctl.cfgMode || 'pvAuto'));
             if (ctl.boostActive) {
-              modeHint.textContent = `Boost aktiv (${Number(ctl.boostRemainingMin || 0)} min) – danach ${modeLabel(backMode)}${stageInfo}`;
+              modeHint.textContent = `Boost aktiv (${Number(ctl.boostRemainingMin || 0)} min) – danach ${modeLabel(backMode)}${stageInfo}${strategyInfo}`;
             } else if (rawUserMode === 'inherit') {
-              modeHint.textContent = `System: ${modeLabel(ctl.cfgMode)} (aktiv: ${modeLabel(effMode)})${stageInfo}`;
+              modeHint.textContent = `System: ${modeLabel(ctl.cfgMode)} (aktiv: ${modeLabel(effMode)})${stageInfo}${strategyInfo}`;
             } else {
-              modeHint.textContent = `Aktiv: ${modeLabel(effMode)}${stageInfo}`;
+              modeHint.textContent = `Aktiv: ${modeLabel(effMode)}${stageInfo}${strategyInfo}`;
             }
           } else {
             if (String(rawUserMode || '').toLowerCase() === 'inherit') {
@@ -10449,7 +11050,7 @@ function openFlowQc(kind, idx){
       if (modeHint) modeHint.textContent = '';
       if (qc.controlKind === 'heatingRod') {
         renderModeButtons([
-          { value: 'pvAuto', label: 'Auto (PV)' },
+          { value: 'pvAuto', label: 'Auto' },
           { value: 'manual1', label: 'Stufe 1' },
           { value: 'manual2', label: 'Stufe 2' },
           { value: 'manual3', label: 'Stufe 3' },
@@ -10457,7 +11058,7 @@ function openFlowQc(kind, idx){
         ], 'pvAuto');
       } else {
         renderModeButtons([
-          { value: 'pvAuto', label: 'Auto (PV)' },
+          { value: 'pvAuto', label: 'Auto' },
           { value: 'manual', label: 'Manuell' },
           { value: 'off', label: 'Aus' },
           { value: 'inherit', label: 'System' },

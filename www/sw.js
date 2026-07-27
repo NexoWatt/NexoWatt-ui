@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/sw.ts
- * Quell-Hash: sha256:f0e6fbbea9479981bdf56859a7ae5521521733db42b7eeaa1a12848c054803af
+ * Quell-Hash: sha256:7ccc5fdaa91a4b880df536cd7f72ce3805eb1449fa7215ba4f7ac56b09b10d0a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -42,7 +42,7 @@
 
 // Increment cache name on releases so browser updates JS/HTML reliably.
 // NOTE: Keep this monotonic to force SW updates on hotfixes.
-const CACHE_NAME = 'nexowatt-cache-v442';
+const CACHE_NAME = 'nexowatt-cache-v444';
 
 const OFFLINE_URLS = [
   './',
@@ -56,7 +56,7 @@ const OFFLINE_URLS = [
   'energy-ledger.js',
   'mesh-microgrid.html',
   'mesh-microgrid.js',
-  'admin-guard.js',
+  'admin-guard.js', 'nw-i18n.js', 'i18n/de.json', 'i18n/nl.json', 'i18n/en.json',
   'assets/icons/nexowatt-192.png',
   'assets/icons/nexowatt-512.png'
 ];
@@ -92,7 +92,7 @@ self.addEventListener('fetch', (event) => {
   // Do not intercept Server-Sent Events streams (keeps them stable)
   if (url.pathname === '/events' || url.pathname.startsWith('/events')) return;
 
-  const isCode = url.pathname.endsWith('.js') || url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname === '/index.html';
+  const isCode = url.pathname.endsWith('.js') || url.pathname.endsWith('.json') || url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname === '/index.html';
   const isApi = url.pathname.startsWith('/api/') || url.pathname.startsWith('/state') || url.pathname.startsWith('/sse') || url.pathname === '/config';
 
   if (isCode) {

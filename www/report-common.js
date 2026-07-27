@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/report-common.ts
- * Quell-Hash: sha256:a62e375e41a2454afabb3b6f0b9ae8a6fbfbdbb099db33a5ea0c1f33bb1d7dd3
+ * Quell-Hash: sha256:f6d98a9d888911de5db5221eddaec85230d6a52730eb1fe0b122b5fc41dacf72
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -49,7 +49,7 @@
    */
   function el(id){ return document.getElementById(id); }
 
-  const nfCache = new Map();
+  const nwReportLocaleTag = () => { const lang = String((window.NexoWattI18n && window.NexoWattI18n.localeTag && window.NexoWattI18n.localeTag()) || document.documentElement.lang || navigator.language || 'de').toLowerCase(); return lang.startsWith('nl') ? 'nl-NL' : (lang.startsWith('en') ? 'en-GB' : 'de-DE'); }; const nfCache = new Map();
   /**
    * Code-Teil: getNf
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -57,10 +57,10 @@
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   function getNf(decimals){
-    const key = String(decimals);
+    const key = nwReportLocaleTag() + ':' + String(decimals);
     let nf = nfCache.get(key);
     if (!nf){
-      nf = new Intl.NumberFormat('de-DE', {
+      nf = new Intl.NumberFormat(nwReportLocaleTag(), {
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals,
       });
@@ -163,7 +163,7 @@
   function fmtDateTime(ms, fallback = '—'){
     const ts = Number(ms);
     if (!Number.isFinite(ts) || ts <= 0) return fallback;
-    try { return new Date(ts).toLocaleString('de-DE'); } catch (_e) { return fallback; }
+    try { return new Date(ts).toLocaleString(nwReportLocaleTag()); } catch (_e) { return fallback; }
   }
   /**
    * Code-Teil: fmtDate
@@ -174,7 +174,7 @@
   function fmtDate(ms, fallback = '—'){
     const ts = Number(ms);
     if (!Number.isFinite(ts) || ts <= 0) return fallback;
-    try { return new Date(ts).toLocaleDateString('de-DE'); } catch (_e) { return fallback; }
+    try { return new Date(ts).toLocaleDateString(nwReportLocaleTag()); } catch (_e) { return fallback; }
   }
   /**
    * Code-Teil: fmtTime
@@ -185,7 +185,7 @@
   function fmtTime(ms, fallback = '—'){
     const ts = Number(ms);
     if (!Number.isFinite(ts) || ts <= 0) return fallback;
-    try { return new Date(ts).toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit' }); } catch (_e) { return fallback; }
+    try { return new Date(ts).toLocaleTimeString(nwReportLocaleTag(), { hour:'2-digit', minute:'2-digit' }); } catch (_e) { return fallback; }
   }
   /**
    * Code-Teil: setUrlParams

@@ -64,9 +64,9 @@
   const btnCsvSessions = document.getElementById('csvSessionsBtn');
   const btnPrint = document.getElementById('printBtn');
 
-  const nfKwh = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-  const nfKw = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const nfInt = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
+  const nwReportLocaleTag = () => { const lang = String((window.NexoWattI18n && window.NexoWattI18n.localeTag && window.NexoWattI18n.localeTag()) || document.documentElement.lang || navigator.language || 'de').toLowerCase(); return lang.startsWith('nl') ? 'nl-NL' : (lang.startsWith('en') ? 'en-GB' : 'de-DE'); }; const nfKwh = { format: (value) => new Intl.NumberFormat(nwReportLocaleTag(), { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(value) };
+  const nfKw = { format: (value) => new Intl.NumberFormat(nwReportLocaleTag(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value) };
+  const nfInt = { format: (value) => new Intl.NumberFormat(nwReportLocaleTag(), { maximumFractionDigits: 0 }).format(value) };
   /**
    * Code-Teil: fmtDateRange
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -78,8 +78,8 @@
     const t = Number(toMs);
     const df = Number.isFinite(f) ? new Date(f) : null;
     const dt = Number.isFinite(t) ? new Date(t) : null;
-    const sF = df ? df.toLocaleDateString('de-DE') : '--';
-    const sT = dt ? dt.toLocaleDateString('de-DE') : '--';
+    const sF = df ? df.toLocaleDateString(nwReportLocaleTag()) : '--';
+    const sT = dt ? dt.toLocaleDateString(nwReportLocaleTag()) : '--';
     return sF + ' – ' + sT;
   }
   /**

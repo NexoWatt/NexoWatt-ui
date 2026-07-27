@@ -44,7 +44,7 @@
 
 // Increment cache name on releases so browser updates JS/HTML reliably.
 // NOTE: Keep this monotonic to force SW updates on hotfixes.
-const CACHE_NAME = 'nexowatt-cache-v442';
+const CACHE_NAME = 'nexowatt-cache-v444';
 
 const OFFLINE_URLS = [
   './',
@@ -58,7 +58,7 @@ const OFFLINE_URLS = [
   'energy-ledger.js',
   'mesh-microgrid.html',
   'mesh-microgrid.js',
-  'admin-guard.js',
+  'admin-guard.js', 'nw-i18n.js', 'i18n/de.json', 'i18n/nl.json', 'i18n/en.json',
   'assets/icons/nexowatt-192.png',
   'assets/icons/nexowatt-512.png'
 ];
@@ -94,7 +94,7 @@ self.addEventListener('fetch', (event) => {
   // Do not intercept Server-Sent Events streams (keeps them stable)
   if (url.pathname === '/events' || url.pathname.startsWith('/events')) return;
 
-  const isCode = url.pathname.endsWith('.js') || url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname === '/index.html';
+  const isCode = url.pathname.endsWith('.js') || url.pathname.endsWith('.json') || url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname === '/index.html';
   const isApi = url.pathname.startsWith('/api/') || url.pathname.startsWith('/state') || url.pathname.startsWith('/sse') || url.pathname === '/config';
 
   if (isCode) {

@@ -342,7 +342,7 @@ class ModuleManager {
         this.modules.push({
             key: 'para14a',
             instance: new Para14aModule(this.adapter, this.dp),
-            enabledFn: () => this._licenseAllowsApp('para14a') && !!(this.adapter?.config?.installerConfig?.para14a),
+            enabledFn: () => this._licenseAllowsApp('para14a') && require('./services/country-profile-service').getConfiguredCountryProfile(this.adapter?.config || {}).supportsParagraph14a === true && !!(this.adapter?.config?.installerConfig?.para14a),
         });
 
         // Tarif (VIS) – stellt Ladepark-Deckel bereit

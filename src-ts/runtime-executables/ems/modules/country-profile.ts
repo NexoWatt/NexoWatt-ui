@@ -26,7 +26,7 @@ class CountryProfileModule extends BaseModule {
 
   async tick() {
     const now = Date.now();
-    if ((now - this._lastWriteTs) < 30000) return;
+    if ((now - this._lastWriteTs) < 5000) return;
     await this._publish('tick', false);
   }
 

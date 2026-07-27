@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:a9563363d322444d9cdab387e555f44996abe31f3014b4e9680be5b59414ec88
+ * Quell-Hash: sha256:cea518e25c0e60fc05b846fa7ad6254970c7b06efdccedc83b373a3e415d2d73
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -136,7 +136,7 @@ const { EmsEngine } = require('./ems/engine');
 const { resolveNvpDisplay } = require('./ems/services/measurement-freshness');
 const { buildHttpActuatorShadowContext, withActuatorShadowContext, isActuatorAuthorityBlockedResult } = require('./ems/services/actuator-shadow-arbiter');
 const { resolveStorageOperatingPolicy } = require('./ems/services/storage-self-consumption-policy');
-const nwCountryProfileService = require('./ems/services/country-profile-service');
+const nwCountryProfileService = require('./ems/services/country-profile-service'); const nwLocaleApiService = require('./ems/services/locale-api-service');
 const nwFeatureFlagsService = require('./ems/services/feature-flags');
 const {
   arithmeticMean: nwArithmeticMean,
@@ -10286,6 +10286,12 @@ async onReady() {
     for (let i = 1; i <= evcsCount; i++) {
       const base = `chargingManagement.wallboxes.lp${i}`;
       await primeKey(`${base}.userMode`);
+      await primeKey(`${base}.userStationEnabled`);
+      await primeKey(`${base}.stationEnabled`);
+      await primeKey(`${base}.stationEnableControlAvailable`);
+      await primeKey(`${base}.userEnabled`);
+      await primeKey(`${base}.enabled`);
+      await primeKey(`${base}.online`);
       await primeKey(`${base}.userPhaseMode`);
       await primeKey(`${base}.phaseMode`);
       await primeKey(`${base}.phaseSwitchSupported`);
@@ -19975,7 +19981,7 @@ app.post('/api/display/station/:token/command', async (req, res) => {
     return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
   }
 });
-
+app.get('/api/locale', nwLocaleApiService.createLocaleHandler(this, sendNoStore));
 
 // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/config', (req, res) => {
 app.get('/config', async (req, res) => {
@@ -21539,19 +21545,20 @@ settingsConfig: {
           // - lp1.regEnabled
           // - chargingManagement.wallboxes.lp1.userMode
           // - chargingManagement.wallboxes.lp1.userEnabled
-          const mIdx = k.match(/^(?:evcs\.)?(\d+)\.(userMode|emsMode|regEnabled|phaseMode|userPhaseMode|storageAssist|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
+          // - chargingManagement.wallboxes.lp1.userStationEnabled
+          const mIdx = k.match(/^(?:evcs\.)?(\d+)\.(userMode|emsMode|regEnabled|stationEnabled|userStationEnabled|phaseMode|userPhaseMode|storageAssist|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
           if (mIdx) {
             const idx = Math.max(1, Math.round(Number(mIdx[1] || 0)));
             safe = `lp${idx}`;
             prop = String(mIdx[2] || '').toLowerCase();
           } else {
-            const mLp = k.match(/^lp(\d+)\.(userMode|emsMode|regEnabled|phaseMode|userPhaseMode|storageAssist|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
+            const mLp = k.match(/^lp(\d+)\.(userMode|emsMode|regEnabled|stationEnabled|userStationEnabled|phaseMode|userPhaseMode|storageAssist|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
             if (mLp) {
               const idx = Math.max(1, Math.round(Number(mLp[1] || 0)));
               safe = `lp${idx}`;
               prop = String(mLp[2] || '').toLowerCase();
             } else {
-              const m2 = k.match(/^chargingManagement\.(?:wallboxes\.)?([a-z0-9_]+)\.(userMode|userEnabled|regEnabled|phaseMode|userPhaseMode|storageAssist|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
+              const m2 = k.match(/^chargingManagement\.(?:wallboxes\.)?([a-z0-9_]+)\.(userMode|userEnabled|regEnabled|stationEnabled|userStationEnabled|phaseMode|userPhaseMode|storageAssist|storageAssistEnabled|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i);
               if (m2) {
                 safe = String(m2[1] || '').trim();
                 prop = String(m2[2] || '').toLowerCase();
@@ -21559,6 +21566,37 @@ settingsConfig: {
             }
           }
           if (!safe || !prop) return res.status(400).json({ ok: false, error: 'bad request' });
+
+          // Kundenseitige Freigabe der physischen Ladestation. Dieser State ist
+          // bewusst vom Connector-/Fahrzeugstatus (`activeId`) und von der
+          // EMS-Regelungsfreigabe (`userEnabled`) getrennt. PV-Warten mit 0 W
+          // darf ihn niemals automatisch auf false setzen.
+          if (prop === 'stationenabled' || prop === 'userstationenabled') {
+            const b = !!value;
+            const id = `chargingManagement.wallboxes.${safe}.userStationEnabled`;
+            try {
+              await this.setStateAsync(id, b, false);
+              const controlTs = Date.now();
+              try { this.updateValue(id, b, controlTs); } catch (_e) {}
+              this._nwRequestImmediateEmsTick(`api:${id}`);
+
+              // Eine ausdrückliche Kundensperre beendet einen eventuell aktiven
+              // Boost-Override. Der gewählte Grundmodus bleibt erhalten.
+              if (!b) {
+                try {
+                  await this.setStateAsync(`chargingManagement.wallboxes.${safe}.boostActive`, false, true);
+                  await this.setStateAsync(`chargingManagement.wallboxes.${safe}.boostSince`, 0, true);
+                  await this.setStateAsync(`chargingManagement.wallboxes.${safe}.boostUntil`, 0, true);
+                  await this.setStateAsync(`chargingManagement.wallboxes.${safe}.boostRemainingMin`, 0, true);
+                } catch (_e2) {
+                  // ignore
+                }
+              }
+              return res.json({ ok: true });
+            } catch (_e) {
+              return res.status(409).json({ ok: false, error: 'not_ready' });
+            }
+          }
 
           // Regelung (Automatik) an/aus
           if (prop === 'regenabled' || prop === 'userenabled') {
@@ -22117,7 +22155,10 @@ settingsConfig: {
 
 
 
-        // EVCS setter: write directly to mapped foreign datapoints (per wallbox)
+        // Legacy-EVCS-Setter. Im aktiven EMS-Lademanagement darf `active`
+        // niemals auf den gelesenen Connector-/Fahrzeugstatus (`activeId`)
+        // geschrieben werden. Alte Browserstände werden deshalb serverseitig
+        // auf die neue kundenseitige Ladestationsfreigabe migriert.
         if (scope === 'evcs') {
           const k = String(key || '');
           const m = k.match(/^(?:evcs\.)?(\d+)\.(active|mode)$/);
@@ -22126,6 +22167,23 @@ settingsConfig: {
           const prop = m[2];
           const list = Array.isArray(this.evcsList) ? this.evcsList : [];
           const wb = list.find(w => Number(w.index) === idx);
+
+          if (prop === 'active' && this.config && this.config.enableChargingManagement !== false) {
+            const safe = `lp${idx}`;
+            const id = `chargingManagement.wallboxes.${safe}.userStationEnabled`;
+            try {
+              const obj = await this.getObjectAsync(id);
+              if (!obj) return res.status(409).json({ ok: false, error: 'not_ready' });
+              const b = !!value;
+              await this.setStateAsync(id, b, false);
+              try { this.updateValue(id, b, Date.now()); } catch (_e) {}
+              this._nwRequestImmediateEmsTick(`api-legacy-migration:${id}`);
+              return res.json({ ok: true, migrated: true });
+            } catch (_e) {
+              return res.status(409).json({ ok: false, error: 'not_ready' });
+            }
+          }
+
           const id = prop === 'active' ? (wb && wb.activeId) : (wb && wb.modeId);
           if (!id) return res.status(400).json({ ok: false, error: 'unmapped' });
           const v = prop === 'active' ? !!value : Number(value);
@@ -24154,7 +24212,7 @@ return res.json(out);
         // Bedienzustände der Ladepunkte werden sofort im stateCache sichtbar und
         // lösen einen debouncten zentralen EMS-Tick aus. Das gilt auch für externe
         // ioBroker-Schreibzugriffe, nicht nur für die NexoWatt-Weboberfläche.
-        if (/^chargingManagement\.wallboxes\.[a-z0-9_]+\.(userMode|userEnabled|userPhaseMode|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i.test(key)) {
+        if (/^chargingManagement\.wallboxes\.[a-z0-9_]+\.(userMode|userEnabled|userStationEnabled|userPhaseMode|userStorageAssistEnabled|goalEnabled|goalTargetSocPct|goalFinishTs|goalBatteryKwh)$/i.test(key)) {
           this._nwRequestImmediateEmsTick(`state:${key}`);
         }
       }

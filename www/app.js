@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/app.ts
- * Quell-Hash: sha256:461442789f0f053aebfd0f16c8b901a2b5e262346f71f7f606f31dff613d342d
+ * Quell-Hash: sha256:2188ed73012c179dbac4832d8a167f4dba078a74600c8739da6d897e6ac12673
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -80,7 +80,7 @@
  * Wenn der Browser den MJS-Spiegel nicht laden kann, bleibt die alte JS-Formatierung
  * unverändert aktiv. Keine EMS-Werte und keine States werden dadurch geändert.
  */
-let nxLiveDashboardTsFormat = null;
+const nwUiLocaleTag = () => { const lang = String((window.NexoWattI18n && window.NexoWattI18n.localeTag && window.NexoWattI18n.localeTag()) || (window.__nwLocale && (window.__nwLocale.localeTag || window.__nwLocale.htmlLang || window.__nwLocale.language)) || document.documentElement.lang || 'de').toLowerCase(); return lang.startsWith('nl') ? 'nl-NL' : (lang.startsWith('en') ? 'en-GB' : 'de-DE'); }; let nxLiveDashboardTsFormat = null;
 let nxLiveDashboardTsFormatLoadState = 'pending';
 (function loadLiveDashboardTsFormat(){
   try {
@@ -1444,7 +1444,7 @@ function _fmtNumLocal(v, digits=1){
   const n = Number(v);
   const d = (digits === undefined || digits === null || isNaN(digits)) ? 1 : Number(digits);
   try {
-    return n.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+    return n.toLocaleString(nwUiLocaleTag(), { minimumFractionDigits: d, maximumFractionDigits: d });
   } catch (_e) {
     return n.toFixed(d).replace('.', ',');
   }
@@ -4918,7 +4918,7 @@ function _nwSettingsCount(value){
 function _nwSettingsTs(value){
   const num = Number(value);
   if (!Number.isFinite(num) || num <= 0) return '—';
-  try { return new Date(num).toLocaleString('de-DE'); } catch (_e) { return '—'; }
+  try { return new Date(num).toLocaleString(nwUiLocaleTag()); } catch (_e) { return '—'; }
 }
 /**
  * Code-Teil: _nwSettingsPower
@@ -5603,7 +5603,7 @@ function setupRfidLearningUi(){
       const t = (last != null && String(last).trim()) ? String(last).trim() : '--';
       lastText.textContent = t;
       if (t !== '--' && ts) {
-        try{ lastText.title = new Date(Number(ts)).toLocaleString('de-DE'); }catch(_e){}
+        try{ lastText.title = new Date(Number(ts)).toLocaleString(nwUiLocaleTag()); }catch(_e){}
       }
     }
     if (active) {
@@ -9019,20 +9019,20 @@ function _nwEnergyWalletNum(key, fallback = 0) {
 function _nwEnergyWalletMoney(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '0,00 €';
-  try { return n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; } catch (_e) { return n.toFixed(2).replace('.', ',') + ' €'; }
+  try { return n.toLocaleString(nwUiLocaleTag(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; } catch (_e) { return n.toFixed(2).replace('.', ',') + ' €'; }
 }
 
 
 function _nwEnergyWalletKwh(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '0,000 kWh';
-  try { return n.toLocaleString('de-DE', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' kWh'; } catch (_e) { return n.toFixed(3).replace('.', ',') + ' kWh'; }
+  try { return n.toLocaleString(nwUiLocaleTag(), { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' kWh'; } catch (_e) { return n.toFixed(3).replace('.', ',') + ' kWh'; }
 }
 
 function _nwEnergyWalletPricePerKwh(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '';
-  try { return n.toLocaleString('de-DE', { minimumFractionDigits: 3, maximumFractionDigits: 4 }) + ' €/kWh'; } catch (_e) { return n.toFixed(3).replace('.', ',') + ' €/kWh'; }
+  try { return n.toLocaleString(nwUiLocaleTag(), { minimumFractionDigits: 3, maximumFractionDigits: 4 }) + ' €/kWh'; } catch (_e) { return n.toFixed(3).replace('.', ',') + ' €/kWh'; }
 }
 
 function _nwEnergyWalletAgeLabel(seconds) {
@@ -9382,9 +9382,11 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
   bindGoalLock(goalKwh, 15000);
 
 
-  // Prefer per-wallbox datapoints (evcs.1.*) for single-EVCS modal, fallback to legacy settings.*
+  // Per-wallbox mode remains backward compatible. The customer station permission is
+  // deliberately separate from evcs.1.active: activeId is a connector/session status,
+  // not the durable customer enable/disable decision.
   let hasPerBoxMode = false;
-  let hasPerBoxActive = false;
+  let hasStationPermissionState = false;
 
   // EMS present? (chargingManagement states exist)
   let modalHasEms = false;
@@ -9692,8 +9694,8 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
       pendingActiveUntil = Date.now() + 2500;
       try { scheduleRender(); } catch(_e) {}
 
-      const scope = hasPerBoxActive ? 'evcs' : 'settings';
-      const key = hasPerBoxActive ? '1.active' : 'evcsActive';
+      const scope = modalHasEms ? 'ems' : 'settings';
+      const key = modalHasEms ? 'evcs.1.stationEnabled' : 'evcsActive';
       try{
         await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope, key, value: desired})});
       }catch(e){}
@@ -9889,10 +9891,13 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
     if (regRow) regRow.style.display = regAvail ? '' : 'none';
 
 
-    const evcsActive = d('evcs.1.active');
+    const stationPermission = d('chargingManagement.wallboxes.lp1.userStationEnabled');
     const settingsActive = s && s['settings.evcsActive'] ? s['settings.evcsActive'].value : null;
-    hasPerBoxActive = evcsActive != null;
-    const activeVal = (evcsActive != null) ? evcsActive : ((settingsActive != null) ? settingsActive : false);
+    hasStationPermissionState = stationPermission !== null && stationPermission !== undefined;
+    // EMS default is deliberately enabled. PV mode with 0 W means waiting, not disabled.
+    const activeVal = modalHasEms
+      ? (hasStationPermissionState ? nwAsBool(stationPermission, true) : true)
+      : ((settingsActive != null) ? nwAsBool(settingsActive, true) : true);
 
     // Mode source: EMS userMode (preferred) or legacy EVCS mode
     let modeStrFromState = 'boost';

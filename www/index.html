@@ -46,6 +46,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/icons/nexowatt-180.png">
     <link rel="apple-touch-icon" sizes="152x152" href="./assets/icons/nexowatt-152.png">
     <link rel="apple-touch-icon" sizes="120x120" href="./assets/icons/nexowatt-120.png">
+  <script src="/static/nw-i18n.js" defer></script>
 </head>
 <!-- NexoWatt Detail-Kommentar (DE) -->
 <!-- Hauptseite des Kunden-Dashboards. IDs und data-tab-content-Werte sind Verträge mit www/app.js; nicht umbenennen ohne JS-Anpassung. -->
@@ -535,7 +536,7 @@
       </div>
       <div class="nw-tile__bottom">
         <div>Ø <span id="priceAverage">--</span></div>
-        <div>Peak <span id="peakShort">--</span> • §14a <span id="para14aShort">--</span><span id="pvReserveWrap" style="display:none"> • PV‑Reserve <span id="pvReserveShort">⛔</span></span></div>
+        <div>Peak <span id="peakShort">--</span><span id="para14aShortWrap" data-nw-market="DE"> • §14a <span id="para14aShort">--</span></span><span id="pvReserveWrap" style="display:none"> • PV‑Reserve <span id="pvReserveShort">⛔</span></span></div>
       </div>
     </div>
 
@@ -765,7 +766,7 @@
 
     <hr style="border:0; border-top:1px solid rgba(255,255,255,0.08); margin:14px 0;"/>
 
-    <div class="row" id="ems14aRow">
+    <div class="row" id="ems14aRow" data-nw-market="DE">
       <small>Netzsteuerung (§14a)</small>
       <div class="row two" style="margin-top:8px;">
         <div><small>Status</small><b id="ems14aStatus">--</b></div>
