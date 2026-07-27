@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: cc8ffdb8e7e589230766000b826610fadeab0ae0298dfef477e5343c8472e31c
+ * Original-Hash: 3e0ae255ee323b3c4cd82812fca0e66b61ab3eaa7ae72a8e91734c10196df21a
  */
 
 /**
@@ -450,7 +450,7 @@ function makePersistentSungrowScenario() {
       source: 'charging-runtime-protect',
     },
   });
-  assert.strictEqual(protectedSurplus.dp.lastWrite('st.targetChargePowerW'), 400, 'Sungrow darf nur bis zur unteren 0-W-Bandkante aus realem Export laden');
+  assert.strictEqual(protectedSurplus.dp.lastWrite('st.targetChargePowerW'), 450, 'Sungrow muss realen Export direkt zur NVP-Zielmitte +50 W ausregeln');
 
   // Rest-Netzbezug trotz laufender Entladung: Ziel ist nicht nur der neue Import,
   // sondern aktuelle Batterie-Istentladung + aktuelle NVP-Abweichung.

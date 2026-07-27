@@ -11,7 +11,7 @@
  * - SoC 19 %
  * - alter MultiUse-Spiegel selfMinSocPct=20 %
  * - MultiUse deaktiviert
- * Erwartung: Standalone-Minimum 10 %, Sollwert +1.440 W bis zur oberen Bandkante (100 W).
+ * Erwartung: Standalone-Minimum 10 %, Sollwert +1.490 W direkt zur Zielmitte (50 W).
  */
 
 const assert = require('assert');
@@ -302,9 +302,9 @@ async function runStorageTick({ multiUseActive, soc = 19, gridW = 1540 }) {
   const inactiveTick = await runStorageTick({ multiUseActive: false });
   assert.strictEqual(inactiveTick.state('speicher.regelung.selfMinSocPct'), 10);
   assert.strictEqual(inactiveTick.state('speicher.regelung.selfSocPolicySource'), 'standalone-default-after-multiuse');
-  assert.strictEqual(inactiveTick.state('speicher.regelung.requestW'), 1440);
-  assert.strictEqual(inactiveTick.state('speicher.regelung.sollW'), 1440);
-  assert.strictEqual(inactiveTick.dp.lastNumberWrite('st.targetPowerW'), 1440);
+  assert.strictEqual(inactiveTick.state('speicher.regelung.requestW'), 1490);
+  assert.strictEqual(inactiveTick.state('speicher.regelung.sollW'), 1490);
+  assert.strictEqual(inactiveTick.dp.lastNumberWrite('st.targetPowerW'), 1490);
   assert.match(String(inactiveTick.state('speicher.regelung.requestGrund') || ''), /NVP-Balancing entladen/);
 
   const activeTick = await runStorageTick({ multiUseActive: true });
@@ -347,7 +347,7 @@ async function runStorageTick({ multiUseActive, soc = 19, gridW = 1540 }) {
     assert(!applyBlock.includes(forbidden), `MultiUse wird weiterhin nach storage.* gespiegelt: ${forbidden}`);
   }
 
-  console.log('[storage-multiuse-policy-isolation] OK: deaktiviertes MultiUse ist neutral; NVP-Ziel/Hysterese stammen nur aus der aktiven Speicher-Topologie und die SoC-Policy bleibt transparent.');
+  console.log('[storage-multiuse-policy-isolation] OK: deaktiviertes MultiUse ist neutral; NVP-Ziel/Messtoleranz stammen nur aus der aktiven Speicher-Topologie und die SoC-Policy bleibt transparent.');
 })().catch((error) => {
   console.error('[storage-multiuse-policy-isolation] ERROR:', error && error.stack ? error.stack : error);
   process.exit(1);

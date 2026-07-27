@@ -1,3 +1,15 @@
+## 0.8.144 - 2026-07-27
+
+- Zentralen NVP-Schnellregler für Einzelspeicher und Speicherfarm eingeführt: Jede frische externe NVP-Zählerprobe startet nach 75 ms Debounce einen vollständigen zentralen EMS-Tick; der normale Ein-Sekunden-Tick bleibt als Watchdog bestehen.
+- Eigenverbrauchsregelung verwendet den frischen signierten Roh-NVP als Hardware-Führungsgröße. Die bisherige Mehrsekunden-Glättung bleibt ausschließlich für Anzeige und Diagnose erhalten und verzögert den Speicher-Sollwert nicht mehr.
+- NVP-Hysterese fachlich in eine kleine Messtoleranz umgewandelt. Innerhalb der Toleranz wird der wirksame Sollwert gehalten; außerhalb regelt der Speicher unmittelbar zur konfigurierten Zielmitte statt nur bis zur nächsten Bandkante. Neuer Standard: Zielbezug 50 W, Messtoleranz ±20 W.
+- Die geschlossene NVP-Regelung umgeht die allgemeine Home-/Pro-Aufbaurampe. Der physikalisch berechnete Absolutsollwert `Speicher-Ist + (NVP-Ist - NVP-Ziel)` wird mit der nächsten frischen Probe geschrieben; Geräte-, Leistungs-, SoC-, Anti-Export-, Tarif-, §14a-, Authority- und Safety-Grenzen bleiben nachgelagert vollständig aktiv.
+- Asynchrones Speicherfeedback bleibt über getrennte Mess- und Kommandoanker abgesichert. Unveränderte NVP-/Speicherproben können denselben Fehler nicht erneut aufintegrieren; eine neue NVP-Änderung wird genau einmal nachgeführt.
+- Einzelspeicher und Speicherfarm verwenden denselben zentralen Sollwert. Die Farm verteilt nur den einen Gesamtsollwert auf ihre Speicher; MultiUse liefert ausschließlich SoC-/Reserve-/LSK-Policy und besitzt weiterhin keinen zweiten NVP-Regler.
+- AppCenter-Bezeichnungen auf Zielmitte/Messtoleranz und Anzeige-Glättung präzisiert; DE/NL/EN-Kataloge ergänzt. Bestehende bewusst gespeicherte Toleranzwerte bleiben erhalten, neue Konfigurationen verwenden 20 W.
+- Neue Regressionen `test:storage-nvp-fast-servo` und `test:storage-nvp-fast-controller` prüfen Zielmittenregelung, Rampen-Bypass, Rohwertführung, Einmalverarbeitung identischer Messproben, Farm-/Single-Parität und debouncte NVP-Ereignisticks.
+- Service-Worker-Cache auf `nexowatt-cache-v447` erhöht.
+
 ## 0.8.143 - 2026-07-27
 
 - Universelle EVCS-Statusnormalisierung eingeführt: OCPP-, IEC-61851-/Control-Pilot- und bekannte Herstellerzustände werden auf die einheitlichen Zustände `disconnected`, `connected`, `ready_to_charge`, `charging`, `paused_by_evse`, `paused_by_vehicle`, `finishing`, `faulted` und `offline` abgebildet.

@@ -3925,7 +3925,7 @@ class NexoWattVis extends utils.Adapter {
           st.standaloneSelfTargetGridImportW = clampNumber(st.selfTargetGridImportW, 0, 1000000, 50);
         }
         if (st.standaloneSelfImportThresholdW === undefined) {
-          st.standaloneSelfImportThresholdW = clampNumber(st.selfImportThresholdW, 0, 1000000, 50);
+          st.standaloneSelfImportThresholdW = clampNumber(st.selfImportThresholdW, 0, 1000000, 20);
         }
       }
 
@@ -6390,7 +6390,7 @@ class NexoWattVis extends utils.Adapter {
       standaloneDefaultMinSocPct: 10,
       standaloneDefaultMaxSocPct: 100,
       standaloneDefaultTargetGridImportW: 50,
-      standaloneDefaultImportThresholdW: 50,
+      standaloneDefaultImportThresholdW: 20,
     });
     const reserveFloor = storageOperatingPolicy.reserve.enabled === true
       ? Math.max(0, Math.min(100, Number(storageOperatingPolicy.reserve.minSocPct) || 0))
@@ -24232,8 +24232,16 @@ return res.json(out);
     try {
       if (this.emsEngine && this.emsEngine.dp && typeof this.emsEngine.dp.handleStateChange === 'function') {
         this.emsEngine.dp.handleStateChange(id, state);
+        // NVP-Schnellregler: Eine frische externe Netzpunktprobe löst nach einem
+        // kurzen Debounce unmittelbar den normalen zentralen EMS-Tick aus. Die
+        // Engine erkennt die autoritativen NVP-Quellen selbst und ignoriert ihre
+        // internen abgeleiteten States, sodass kein StateChange-Loop entstehen kann.
+        if (typeof this.emsEngine.handleExternalStateChange === 'function') {
+          this.emsEngine.handleExternalStateChange(id, state);
+        }
       }
     } catch (_e) {}
+
 
     // Feed NexoLogic engine (node/graph)
     try {

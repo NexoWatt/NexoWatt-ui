@@ -21,7 +21,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: 510bf32a444a355fafea67d7cbe3317330b53cc79ed9c50dd678e26c2c56d053
+ * Original-Hash: 894a6f13d68bb46e86917f35db7a7468b14c19116c8689cde075c77ea6e4ba67
  */
 
 /**
@@ -4281,7 +4281,7 @@ class NexoWattVis extends utils.Adapter {
           st.standaloneSelfTargetGridImportW = clampNumber(st.selfTargetGridImportW, 0, 1000000, 50);
         }
         if (st.standaloneSelfImportThresholdW === undefined) {
-          st.standaloneSelfImportThresholdW = clampNumber(st.selfImportThresholdW, 0, 1000000, 50);
+          st.standaloneSelfImportThresholdW = clampNumber(st.selfImportThresholdW, 0, 1000000, 20);
         }
       }
 
@@ -6746,7 +6746,7 @@ class NexoWattVis extends utils.Adapter {
       standaloneDefaultMinSocPct: 10,
       standaloneDefaultMaxSocPct: 100,
       standaloneDefaultTargetGridImportW: 50,
-      standaloneDefaultImportThresholdW: 50,
+      standaloneDefaultImportThresholdW: 20,
     });
     const reserveFloor = storageOperatingPolicy.reserve.enabled === true
       ? Math.max(0, Math.min(100, Number(storageOperatingPolicy.reserve.minSocPct) || 0))
@@ -24554,6 +24554,13 @@ return res.json(out);
     try {
       if (this.emsEngine && this.emsEngine.dp && typeof this.emsEngine.dp.handleStateChange === 'function') {
         this.emsEngine.dp.handleStateChange(id, state);
+        // NVP-Schnellregler: Eine frische externe Netzpunktprobe löst nach einem
+        // kurzen Debounce unmittelbar den normalen zentralen EMS-Tick aus. Die
+        // Engine erkennt die autoritativen NVP-Quellen selbst und ignoriert ihre
+        // internen abgeleiteten States, sodass kein StateChange-Loop entstehen kann.
+        if (typeof this.emsEngine.handleExternalStateChange === 'function') {
+          this.emsEngine.handleExternalStateChange(id, state);
+        }
       }
     } catch (_e) {}
 

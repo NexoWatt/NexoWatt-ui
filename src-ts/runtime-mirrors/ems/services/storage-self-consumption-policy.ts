@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 865f003b04a759fb014d508823eada4491755be8a141d74d4c0144f1724f2c0e
+ * Original-Hash: ad2553cc253af0de63015fba4c2f356ee59ba952050f8715a37d8a945483e54f
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/storage-self-consumption-policy.ts
- * Quell-Hash: sha256:56c6f1ec48fa1de9d983d08cb6b687fd3a7f15e638ba2a93cbcb6f176f5e34e9
+ * Quell-Hash: sha256:069b1886ac42e2e0902c7eefc5b7fd6383cd6c44570bd82d4151281500a3e64f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -175,12 +175,19 @@ function normalizeStorageTopology(value) {
     return 'single';
 }
 /**
- * Loest einen signierten NVP-Wert gegen genau ein Zielband auf.
+ * Loest einen signierten NVP-Wert gegen genau eine Zielmitte mit kleiner
+ * Messtoleranz auf.
  *
- * Beispiel: Zielmitte 0 W, Hysterese +/-50 W, NVP -65 W
- * -> aktive Bandkante -50 W, Regelfehler -15 W.
+ * Beispiel: Zielmitte +50 W, Messtoleranz +/-20 W, NVP +250 W
+ * -> ausserhalb der Toleranz, aktives Regelziel +50 W, Regelfehler +200 W.
  *
- * Diese Funktion ist die einzige fachliche Definition der NVP-Hysterese fuer
+ * Die Toleranz verhindert ausschliesslich ein Nachregeln auf Messrauschen. Sie
+ * bildet KEINE zweite Zielkante. Sobald der NVP ausserhalb der Toleranz liegt,
+ * regeln Einzelspeicher und Speicherfarm immer direkt zur Zielmitte. Dadurch
+ * bleibt kein kuenstlicher Restbezug bzw. Restexport an einer Hysteresegrenze
+ * stehen.
+ *
+ * Diese Funktion ist die einzige fachliche Definition der NVP-Messtoleranz fuer
  * Einzelspeicher, Speicherfarm, MultiUse-Diagnose, Herstellerprofile und den
  * nachgelagerten NVP-Koordinator. Dadurch koennen keine unterschiedlichen
  * Totbaender oder Zieldefinitionen zwischen den Apps entstehen.
@@ -205,17 +212,20 @@ function resolveNvpBandTarget(nvpValue, targetValue = 0, hysteresisValue = 0) {
             side: 'unknown',
         };
     }
+    const centerErrorW = nvpW - targetNvpW;
     let activeTargetNvpW = targetNvpW;
     let bandErrorW = 0;
     let side = 'inside';
     if (nvpW < lowerBandW) {
-        activeTargetNvpW = lowerBandW;
-        bandErrorW = nvpW - lowerBandW;
+        // Ausserhalb der Toleranz wird immer zur Zielmitte geregelt. Die untere
+        // Bandkante bleibt nur Diagnose-/Freigabeschwelle und ist kein Regelziel.
+        bandErrorW = centerErrorW;
         side = 'below';
     }
     else if (nvpW > upperBandW) {
-        activeTargetNvpW = upperBandW;
-        bandErrorW = nvpW - upperBandW;
+        // Ausserhalb der Toleranz wird immer zur Zielmitte geregelt. Die obere
+        // Bandkante bleibt nur Diagnose-/Freigabeschwelle und ist kein Regelziel.
+        bandErrorW = centerErrorW;
         side = 'above';
     }
     return {
@@ -225,10 +235,11 @@ function resolveNvpBandTarget(nvpValue, targetValue = 0, hysteresisValue = 0) {
         lowerBandW,
         upperBandW,
         activeTargetNvpW,
-        centerErrorW: nvpW - targetNvpW,
+        centerErrorW,
         bandErrorW,
         outsideBand: bandErrorW !== 0,
         side,
+        controlMode: 'center-outside-tolerance',
     };
 }
 /**
@@ -236,10 +247,10 @@ function resolveNvpBandTarget(nvpValue, targetValue = 0, hysteresisValue = 0) {
  * Speicher-Topologie.
  *
  * Fachlicher Vertrag:
- * - Die Einzel-Speicher-App besitzt ihre Zielmitte/Hysterese unter `storage.*`.
- * - Die Speicherfarm besitzt ihre Zielmitte/Hysterese unter `storageFarm.*`.
+ * - Die Einzel-Speicher-App besitzt ihre Zielmitte/Messtoleranz unter `storage.*`.
+ * - Die Speicherfarm besitzt ihre Zielmitte/Messtoleranz unter `storageFarm.*`.
  * - MultiUse liefert ausschliesslich SoC-/Reserve-/LSK-Zonen und darf niemals
- *   eine zweite NVP-Hysterese ueberlagern.
+ *   eine zweite NVP-Abstimmung ueberlagern.
  * - Bei einer bestehenden Farm ohne eigene Werte wird einmalig der bisherige
  *   Einzel-Speicher-Wert als migrationssicherer Fallback verwendet. Sobald die
  *   Farm-Werte gespeichert sind, sind sie autoritativ.
@@ -253,7 +264,7 @@ function resolveStorageNvpTuning(input = {}) {
     ], 50));
     const defaultImportThresholdW = Math.max(0, firstFinite([
         input.standaloneDefaultImportThresholdW,
-    ], 50));
+    ], 20));
     const multiUsePolicySourceMarker = String(storage.multiUsePolicySource || '').trim().toLowerCase();
     const previouslyMirroredByMultiUse = boolOrNull(storage.multiUsePolicyApplied) === true
         || multiUsePolicySourceMarker === 'installerconfig.storagemultiuse'
@@ -411,7 +422,7 @@ function resolveStorageSocPolicy(input = {}) {
     ], 50));
     const defaultImportThresholdW = Math.max(0, firstFinite([
         input.standaloneDefaultImportThresholdW,
-    ], 50));
+    ], 20));
     const defaults = {
         enabled: defaultEnabled,
         minSocPct: defaultMinSocPct,

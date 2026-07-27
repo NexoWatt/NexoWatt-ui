@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/core-limits.ts
- * Quell-Hash: sha256:1af9501b8239ab1974048fcd55980bd5e19fb09ec1955d0c1b193729631f7cc5
+ * Quell-Hash: sha256:83d500d3f17697beaffc4fc954900dfd2233915596736c614626c719ce73679a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2023,7 +2023,7 @@ class CoreLimitsModule extends BaseModule {
             standaloneDefaultMinSocPct: 10,
             standaloneDefaultMaxSocPct: 100,
             standaloneDefaultTargetGridImportW: 50,
-            standaloneDefaultImportThresholdW: 50,
+            standaloneDefaultImportThresholdW: 20,
         });
         const storageMaxSocPct = clamp(num(storageOperatingPolicy.self.maxSocPct, 100), 0, 100, 100);
         const storageEligible = !!(

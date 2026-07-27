@@ -3,7 +3,7 @@
     "language": "en",
     "locale": "en-GB",
     "name": "English",
-    "version": 3
+    "version": 4
   },
   "messages": {},
   "text": {
@@ -24,7 +24,14 @@
     "Status: Fahrzeug pausiert / kein Bedarf": "Status: vehicle paused / no demand",
     "Mehrere Werte mit Komma, Semikolon oder Zeilenumbruch trennen. *Text* erlaubt Teiltreffer.": "Separate multiple values with commas, semicolons or line breaks. *Text* allows substring matches.",
     "Priorität: reale Leistung → expliziter Ladebedarf → Fahrzeugkontakt → normalisierter Status. „Available“ allein reserviert keine Ladeleistung.": "Priority: actual power → explicit charge demand → vehicle connection → normalised status. “Available” alone does not reserve charging power.",
-    "Fahrzeug/Ladevorgang aktiv (lesen, optional) · Legacy, keine Reservierungsquelle": "Vehicle/charging session active (read-only, optional) · legacy, not a reservation source"
+    "Fahrzeug/Ladevorgang aktiv (lesen, optional) · Legacy, keine Reservierungsquelle": "Vehicle/charging session active (read-only, optional) · legacy, not a reservation source",
+    "Messtoleranz (±W)": "Measurement tolerance (±W)",
+    "Anzeige-Glättung (s)": "Display smoothing (s)",
+    "Legacy RAW-Guard (W)": "Legacy RAW guard (W)",
+    "NVP-Regelung Eigenverbrauch": "Grid-point self-consumption control",
+    "NVP-Zielmitte/Messtoleranz: wird aus der aktiven App Speicher oder Speicherfarm übernommen": "Grid-point target/tolerance: inherited from the active Storage or Storage Farm app",
+    "MultiUse besitzt keine eigene NVP-Regelung. Zielmitte und Messtoleranz werden immer direkt aus der aktiven App Speicher oder Speicherfarm übernommen.": "MultiUse has no separate grid-point controller. Target and measurement tolerance are always inherited directly from the active Storage or Storage Farm app.",
+    "Eigene Zielmitte und Messtoleranz der Farm. Außerhalb der Toleranz regelt der gemeinsame Farm-Schnellregler direkt zur Zielmitte. MultiUse besitzt keine zweite NVP-Regelung.": "Dedicated target and measurement tolerance for the storage farm. Outside the tolerance, the shared fast farm controller regulates directly to the target. MultiUse has no second grid-point controller."
   },
   "patterns": []
 }

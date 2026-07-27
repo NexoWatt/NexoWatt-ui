@@ -1076,7 +1076,7 @@ class SpeicherRegelungModule extends BaseModule {
         // weder fuer den Einzelspeicher noch fuer die Farm ein zweites Zielband
         // einbringen. Der Resolver wird bewusst bereits vor Herstellerprofilen
         // aufgebaut, damit auch Sungrow/FENECON und Feed-forward dieselbe
-        // Zielmitte/Hysterese verwenden wie der finale Hardwarewriter.
+        // Zielmitte/Messtoleranz verwenden wie der finale Hardwarewriter.
         const storageOperatingPolicy = resolveStorageOperatingPolicy({
             storageConfig: cfg,
             multiUseConfig: storageMultiUseCfgEarly,
@@ -1087,7 +1087,7 @@ class SpeicherRegelungModule extends BaseModule {
             standaloneDefaultMinSocPct: 10,
             standaloneDefaultMaxSocPct: 100,
             standaloneDefaultTargetGridImportW: 50,
-            standaloneDefaultImportThresholdW: 50,
+            standaloneDefaultImportThresholdW: 20,
         });
         const activeStorageNvpTargetW = Math.max(
             0,
@@ -1095,7 +1095,7 @@ class SpeicherRegelungModule extends BaseModule {
         );
         const activeStorageNvpHysteresisW = Math.max(
             0,
-            num(storageOperatingPolicy.self && storageOperatingPolicy.self.importThresholdW, 50),
+            num(storageOperatingPolicy.self && storageOperatingPolicy.self.importThresholdW, 20),
         );
 
         // SoC-Hysterese optional aus Konfig lesen (falls später im Admin ergänzt).
@@ -2426,16 +2426,16 @@ if (typeof soc === 'number') {
         const evPriorityBlockStorageCharge = false;
         const evPriorityStarvedW = 0;
 
-        // Zielmitte und Hysterese gehoeren ausschliesslich zur aktiven
+        // Zielmitte und Messtoleranz gehoeren ausschliesslich zur aktiven
         // Speicher-Topologie. MultiUse erweitert nur SoC-/Reserve-Zonen und darf
         // keine zweite NVP-Abstimmung ueberlagern.
         const selfTargetGridW = activeStorageNvpTargetW;
         const selfImportThresholdW = activeStorageNvpHysteresisW;
 
-        // NVP-Stabilisator: Fuehrungsgroesse fuer die Eigenverbrauchsregelung.
-        // Die RAW-Messung bleibt fuer harte Caps/Schutzlogik erhalten, aber der
-        // eigentliche Sollwert folgt im Normalbereich dem gefilterten NVP. Dadurch
-        // wird das sichtbare Springen zwischen Netzbezug und Einspeisung reduziert.
+        // NVP-Schnellregler: Die frische RAW-Messung ist die Fuehrungsgroesse der
+        // Eigenverbrauchsregelung. Eine langsamere Glättung bleibt ausschliesslich
+        // als Diagnose-/Anzeigehilfe erhalten und darf den Speicherwriter nicht
+        // mehr um mehrere Sekunden verzoegern.
         const selfNvpBaseW = (typeof gridRawW === 'number' && Number.isFinite(gridRawW))
             ? gridRawW
             : ((typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null);
@@ -2450,6 +2450,8 @@ if (typeof soc === 'number') {
         await this._setIfChanged('speicher.regelung.selfNvpFilteredW', Number.isFinite(Number(selfNvpStabilizer.filteredW)) ? Math.round(Number(selfNvpStabilizer.filteredW)) : null);
         await this._setIfChanged('speicher.regelung.selfNvpControlW', Number.isFinite(Number(selfNvpStabilizer.controlW)) ? Math.round(Number(selfNvpStabilizer.controlW)) : null);
         await this._setIfChanged('speicher.regelung.selfNvpControlMode', String(selfNvpStabilizer.mode || ''));
+        await this._setIfChanged('speicher.regelung.selfNvpFastServoActive', selfNvpStabilizer.fastServoActive === true);
+        await this._setIfChanged('speicher.regelung.selfNvpMeasurementToleranceW', Math.max(0, Math.round(selfImportThresholdW)));
 
         await this._setIfChanged('speicher.regelung.lskMinSocPct', lskMinSoc);
         await this._setIfChanged('speicher.regelung.lskMaxSocPct', lskMaxSoc);
@@ -3126,6 +3128,8 @@ if (typeof soc === 'number') {
 							batteryFeedbackKey: storageBalanceFeedback.key,
 							batterySampleTs: storageBalanceFeedback.sampleTs,
 							balanceControlKey: 'storage-nvp',
+							fastServoActive: true,
+							preferRawNvp: true,
 							lastTargetW: lastTariffTargetW,
 							lastTargetAllowed: this._lastSource === 'tarif',
 							maxDischargeCorrectionW: maxDelta,
@@ -3256,10 +3260,10 @@ if (targetW === 0 && selfDischargeEnabled) {
             ? acLoadW
             : Math.max(0, importRawW + currentDischargeW);
 
-        // Innerhalb des Zielbandes bleibt ein bereits wirksamer Befehl erhalten.
-        // Ausserhalb wird nur bis zur naechsten Bandkante korrigiert, nicht bis
-        // zur Zielmitte. So verwendet auch der Gateway-/FENECON-Pfad exakt die
-        // gleiche Hysterese wie Einzel-Speicher und Farm.
+        // Innerhalb der kleinen Messtoleranz bleibt ein bereits wirksamer Befehl
+        // erhalten. Ausserhalb wird direkt zur Zielmitte korrigiert. So verwendet
+        // auch der Gateway-/FENECON-Pfad exakt denselben Schnellregler wie
+        // Einzelspeicher und Farm.
         let nextSetW = feneconActiveTargetW === null
             ? (lastWasFenecon ? currentDischargeW : 0)
             : (currentDischargeW + feneconErrW);
@@ -3352,13 +3356,15 @@ if (targetW === 0 && selfDischargeEnabled) {
         batteryFeedbackKey: storageBalanceFeedback.key,
         batterySampleTs: storageBalanceFeedback.sampleTs,
         balanceControlKey: 'storage-nvp',
+        fastServoActive: true,
+        preferRawNvp: true,
         lastTargetW: lastBalanceW,
         lastTargetAllowed: lastWasAnyBalance,
-            // Eigenverbrauchsoptimierung: 0 W ist ein expliziter STOP-Befehl. Wenn der
-            // NVP im Zielband liegt, hat der zuletzt akzeptierte Lade-/Entladesollwert
-            // genau den gewuenschten Zustand hergestellt und muss deshalb weiter aktiv
-            // bleiben, statt durch eine neue 0-W-Vorgabe den Speicher abzuschalten.
-            holdLastNonZeroInDeadband: true,
+        // Eigenverbrauchsoptimierung: 0 W ist ein expliziter STOP-Befehl. Wenn der
+        // NVP in der Messtoleranz liegt, hat der zuletzt akzeptierte Lade-/Entladesollwert
+        // genau den gewuenschten Zustand hergestellt und muss deshalb weiter aktiv
+        // bleiben, statt durch eine neue 0-W-Vorgabe den Speicher abzuschalten.
+        holdLastNonZeroInDeadband: true,
         maxDischargeCorrectionW: maxDelta,
         maxChargeCorrectionW: pvMaxDeltaCfg > 0 ? pvMaxDeltaCfg : maxDelta,
         feedbackMaxAgeMs: balanceFeedbackHoldMs,
@@ -3610,6 +3616,8 @@ if (targetW === 0 && !selfDischargeEnabled && (source === 'idle' || reason === '
                     batteryFeedbackKey: storageBalanceFeedback.key,
                     batterySampleTs: storageBalanceFeedback.sampleTs,
                     balanceControlKey: 'storage-nvp',
+                    fastServoActive: true,
+                    preferRawNvp: true,
                     lastTargetW: lastBalanceWForCharge,
                     lastTargetAllowed: isStorageBalanceSource(this._lastSource),
                     // Auch im separaten PV-Ladepfad darf das Erreichen des NVP-Ziels
@@ -3890,9 +3898,9 @@ if (targetW === 0 && !selfDischargeEnabled && (source === 'idle' || reason === '
                     || source === 'sungrow-assist'
                 )
             );
-            // Die eigentliche NVP-Hysterese wurde bereits oberhalb angewendet.
+            // Die eigentliche NVP-Messtoleranz wurde bereits oberhalb angewendet.
             // Eine zweite 20-/100-W-Nullzone wuerde reale Kleinkorrekturen (z. B.
-            // 15 W bis zur Bandkante) verschlucken. Fuer NVP-Balancing bleibt nur
+            // kleine Korrekturen zur Zielmitte) verschlucken. Fuer NVP-Balancing bleibt nur
             // die physische 1-W-Aufloesung; andere Policies behalten ihr Deadband.
             const zeroBandW = isNvpBalancing
                 ? Math.max(psHystW, 1)
@@ -4274,6 +4282,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 batteryFeedbackKey: storageBalanceFeedback.key,
                 batterySampleTs: storageBalanceFeedback.sampleTs,
                 balanceControlKey: 'storage-nvp',
+                fastServoActive: true,
+                preferRawNvp: true,
                 lastTargetW: lastSungrowBalanceW,
                 lastTargetAllowed: isStorageBalanceSource(this._lastSource),
                 holdLastNonZeroInDeadband: true,
@@ -5489,15 +5499,19 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     /**
-     * NVP-Fuehrungswert, ohne die harten RAW-Schutzgrenzen zu verlieren.
-     * Pendeln zwischen kleinem Netzbezug und Einspeisung. Ursache sind schnelle
-     * Messwertspruenge am NVP plus Speicher-/Gateway-Latenzen. Die Regelung nutzt
-     * deshalb einen gleitend gefilterten NVP-Wert, reagiert aber bei deutlichem
-     * Import/Export weiterhin sofort auf den RAW-Wert.
+     * NVP-Fuehrungswert fuer den schnellen Eigenverbrauchsregler.
+     *
+     * Seit RC20 ist der frische RAW-NVP fuer den Hardware-Sollwert autoritativ.
+     * Die bisherige Mehrsekunden-Glättung wird weiter berechnet, aber nur noch fuer
+     * Anzeige und Diagnose verwendet. Stabilitaet entsteht durch eine kleine
+     * Messtoleranz um die Zielmitte, die asynchrone Batterie-Ankerlogik sowie die
+     * nachgelagerten Leistungs-/SoC-/Anti-Export-Grenzen - nicht durch einen
+     * verzoegerten NVP-Fuehrungswert.
      */
     _buildSelfNvpControlSignal(rawOrFilteredW, nowMs, cfg = {}, targetW = 50, deadbandW = 50) {
         const raw = Number(rawOrFilteredW);
         const now = Number(nowMs) || Date.now();
+        const fastServoActive = cfg.selfNvpFastServoEnabled !== false;
         const smoothingEnabled = cfg.selfNvpSmoothingEnabled !== false;
         const filterSec = clamp(num(cfg.selfNvpSmoothingSec, 8), 0, 120);
         const rawGuardW = Math.max(50, num(cfg.selfNvpRawGuardW, Math.max(100, Number(deadbandW) || 50)));
@@ -5507,7 +5521,16 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         if (!Number.isFinite(raw)) {
             this._selfNvpFilteredW = null;
             this._selfNvpLastTs = 0;
-            return { rawW: null, filteredW: null, controlW: null, mode: 'missing', smoothingEnabled: false, filterSec, rawGuardW };
+            return {
+                rawW: null,
+                filteredW: null,
+                controlW: null,
+                mode: 'missing',
+                smoothingEnabled: false,
+                fastServoActive,
+                filterSec,
+                rawGuardW,
+            };
         }
 
         if (!smoothingEnabled || filterSec <= 0 || !Number.isFinite(filtered) || !this._selfNvpLastTs) {
@@ -5523,21 +5546,35 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         this._selfNvpFilteredW = filtered;
         this._selfNvpLastTs = now;
 
-        // RAW-Guard: Der geglaettete Fuehrungswert darf kleine Messspruenge beruhigen,
-        // aber keinen echten Anschlussfehler verstecken. Wenn RAW deutlich ausserhalb
-        // des Zielbandes liegt, wird der schlechtere RAW-Wert als Regelfuehrung genutzt.
+        // Schnellregler: Jeder frische NVP-Wert wird unmittelbar zur Zielmitte
+        // verarbeitet. Der alte RAW-Guard bleibt nur fuer einen explizit deaktivierten
+        // Schnellregler als rueckwaertskompatibler Legacy-Pfad erhalten.
         const upperGuard = Number(targetW) + rawGuardW;
         const lowerGuard = Number(targetW) - rawGuardW;
-        let control = filtered;
-        if (raw > upperGuard) {
-            control = Math.max(filtered, raw);
-            mode = 'raw-import-guard';
-        } else if (raw < lowerGuard) {
-            control = Math.min(filtered, raw);
-            mode = 'raw-export-guard';
+        let control = raw;
+        if (fastServoActive) {
+            mode = 'raw-fast-servo';
+        } else {
+            control = filtered;
+            if (raw > upperGuard) {
+                control = Math.max(filtered, raw);
+                mode = 'raw-import-guard';
+            } else if (raw < lowerGuard) {
+                control = Math.min(filtered, raw);
+                mode = 'raw-export-guard';
+            }
         }
 
-        return { rawW: raw, filteredW: filtered, controlW: control, mode, smoothingEnabled, filterSec, rawGuardW };
+        return {
+            rawW: raw,
+            filteredW: filtered,
+            controlW: control,
+            mode,
+            smoothingEnabled,
+            fastServoActive,
+            filterSec,
+            rawGuardW,
+        };
     }
 
     /**
@@ -5987,7 +6024,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      * Physikalische Regelgleichung (NexoWatt-Vorzeichen):
      *   Batterie +W = Entladen, -W = Laden
      *   NVP      +W = Netzbezug, -W = Einspeisung
-     *   aktives Ziel = naechste Bandkante ausserhalb der Hysterese
+     *   aktives Ziel = Zielmitte ausserhalb der Messtoleranz
      *   Sollwert     = Batterie-Ist + (NVP-Ist - aktives Ziel)
      *
      * Damit wird die aktuell bereits wirksame Lade-/Entladeleistung nicht bei
@@ -5999,7 +6036,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      * Sicherheits-/Stabilitaetsregeln:
      * - Batterie-Ist und RAW-NVP werden nur gemeinsam genutzt, wenn beide frisch
      *   und zeitlich ausreichend nah beieinander sind.
-     * - Mehr Leistung wird mit der konfigurierten Delta-Grenze aufgebaut.
+     * - Im schnellen Eigenverbrauchs-Servo wird die physikalisch erforderliche
+     *   Korrektur mit jeder frischen NVP-Probe direkt ausgegeben. Die allgemeine
+     *   Home-/Pro-Rampe darf den geschlossenen NVP-Regelkreis nicht ausbremsen.
+     *   Explizite Geräte-, Leistungs-, SoC- und Safety-Grenzen bleiben nachgelagert.
      * - Leistung in Richtung 0 darf schneller zurueckgenommen werden, damit bei
      *   Wolken/Lastabwurf kein unnoetiger Netzbezug oder Export stehen bleibt.
      * - Ein Richtungswechsel wird ohne 0-W-Zwischenrunde direkt ausgegeben.
@@ -6037,6 +6077,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const balanceControlKey = String(ctx.balanceControlKey || '').trim();
         const maxDischargeCorrectionW = Math.max(0, finite(ctx.maxDischargeCorrectionW) ? Number(ctx.maxDischargeCorrectionW) : 500);
         const maxChargeCorrectionW = Math.max(0, finite(ctx.maxChargeCorrectionW) ? Number(ctx.maxChargeCorrectionW) : maxDischargeCorrectionW);
+        const fastServoActive = ctx.fastServoActive === true;
+        const preferRawNvp = ctx.preferRawNvp === true || fastServoActive;
         const lastTargetW = finite(ctx.lastTargetW) ? Number(ctx.lastTargetW) : 0;
         const lastTargetAllowed = ctx.lastTargetAllowed === true;
         const holdLastNonZeroInDeadband = ctx.holdLastNonZeroInDeadband === true;
@@ -6077,7 +6119,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         );
         const measurementsAligned = !feedbackRequireAligned || measurementSkewMs === null || measurementSkewMs <= feedbackMaxSkewMs;
         const feedbackCandidateUsed = !!(batteryFresh && nvpFreshForFeedback && measurementsAligned);
-        const nvpW = (feedbackCandidateUsed || feedForwardUsable) ? rawNvpW : fallbackNvpW;
+        const nvpW = (preferRawNvp && nvpFreshForFeedback)
+            ? rawNvpW
+            : ((feedbackCandidateUsed || feedForwardUsable) ? rawNvpW : fallbackNvpW);
         const effectiveNvpBand = resolveNvpBandTarget(nvpW, targetNvpW, deadbandW);
         const activeTargetNvpW = effectiveNvpBand.activeTargetNvpW;
         const nvpBandErrorW = effectiveNvpBand.bandErrorW;
@@ -6176,6 +6220,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 feedbackRejectedByFeedForward,
                 feedForwardPlausibilityW,
                 rampManaged: false,
+                fastServoActive,
+                preferRawNvp,
             };
         }
 
@@ -6222,11 +6268,19 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
          * letzten Sollwert addiert. Der letzte Sollwert dient nur als Rampenanker.
          */
         const applyFeedForwardTarget = (desiredW, modePrefix) => {
-            // Feed-forward wird urspruenglich auf die Zielmitte berechnet. Fuer
-            // eine echte Hysterese regeln wir nur bis zur naechsten Bandkante.
+            // Feed-forward wird bereits auf die Zielmitte berechnet. Die
+            // Messtoleranz ist nur eine Aktivierungsschwelle und verschiebt den
+            // Zielwert nicht mehr auf eine Bandkante.
             const centerDesired = Number(desiredW) || 0;
-            const desired = centerDesired + (targetNvpW - activeTargetNvpW);
+            const desired = centerDesired;
             const anchor = lastTargetAllowed && Number.isFinite(lastTargetW) ? lastTargetW : 0;
+            if (fastServoActive) {
+                return {
+                    targetW: desired,
+                    appliedCorrectionW: desired - anchor,
+                    mode: `${modePrefix}-fast-servo`,
+                };
+            }
             const crossesDirection = anchor !== 0
                 && desired !== 0
                 && Math.sign(anchor) !== Math.sign(desired);
@@ -6339,7 +6393,17 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 && !crossesDirection
                 && Math.abs(rawTargetW) < Math.abs(commandAnchorW);
 
-            if (crossesDirection) {
+            if (fastServoActive) {
+                // Schneller geschlossener NVP-Regelkreis: Die volle, aus frischer
+                // NVP-Probe und echter/geschaetzter Batterie-Istleistung berechnete
+                // Korrektur wird im selben Tick geschrieben. Die finalen Caps,
+                // Anti-Export-, SoC-, Tarif- und Safety-Gates greifen unveraendert
+                // danach. Derselbe Messwert wird durch den asynchronen Anker nicht
+                // mehrfach aufintegriert.
+                targetW = rawTargetW;
+                appliedCorrectionW = rawTargetW - commandAnchorW;
+                mode = `${mode}-fast-servo`;
+            } else if (crossesDirection) {
                 // Direkter Lade-/Entladewechsel: Die Speichersysteme stoppen intern
                 // beim Wechsel. Sicherheits-Caps, SoC-Grenzen und Hardware-Gates
                 // bleiben nachgelagert voll wirksam.
@@ -6462,6 +6526,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             // Deshalb darf die nachgelagerte Rampe niemals einen alten Sollwert wieder
             // in den aktuellen sicheren Balancing-Wert hineinziehen.
             rampManaged: true,
+            fastServoActive,
+            preferRawNvp,
         };
     }
 
@@ -6573,6 +6639,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             selfImportThresholdW: storage.selfImportThresholdW,
             selfNvpSmoothingEnabled: storage.selfNvpSmoothingEnabled,
             selfNvpSmoothingSec: storage.selfNvpSmoothingSec,
+            selfNvpFastServoEnabled: storage.selfNvpFastServoEnabled,
             selfNvpRawGuardW: storage.selfNvpRawGuardW,
             // Herstellerunabhaengige Istwert-Halte-/Prognoseparameter fuer das
             // geschlossene NVP-Balancing. `balanceFeedbackHoldSec` ist im
@@ -6795,9 +6862,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const thresholdW = Math.max(0, num(cfg.sungrowPvThresholdW, 300));
         const loadCoverReserveW = Math.max(0, num(cfg.sungrowLoadCoverReserveW, 300));
         // Sungrow besitzt keine zweite NVP-Abstimmung. Herstellerprofile
-        // duerfen die Schreibweise aendern, aber Zielmitte/Hysterese stammen
+        // duerfen die Schreibweise aendern, aber Zielmitte/Messtoleranz stammen
         // ausschliesslich aus der aktuell aktiven Speicher- oder Farm-App.
-        const dischargeThresholdW = Math.max(0, num(importThresholdW, 50));
+        const dischargeThresholdW = Math.max(0, num(importThresholdW, 20));
         const effectiveTargetGridImportW = Math.max(0, num(targetGridImportW, 50));
         const nvpW = (typeof gridRawW === 'number' && Number.isFinite(gridRawW))
             ? Number(gridRawW)
@@ -8683,14 +8750,16 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.selfSocPolicySource', 'Eigenverbrauch SoC-Policy Quelle', 'string', 'text', '');
         await mk('speicher.regelung.selfSocPolicyJson', 'Eigenverbrauch SoC-Policy Diagnose (JSON)', 'string', 'json', '');
         await mk('speicher.regelung.selfTargetGridImportW', 'Eigenverbrauch Ziel-Netzbezug (W)', 'number', 'value.power', 0);
-        await mk('speicher.regelung.selfImportThresholdW', 'Eigenverbrauch Hysterese (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.selfImportThresholdW', 'Eigenverbrauch NVP-Messtoleranz (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.selfNvpTuningTopology', 'NVP tuning topology', 'string', 'text', '');
         await mk('speicher.regelung.selfNvpTuningSource', 'NVP tuning source', 'string', 'text', '');
         await mk('speicher.regelung.selfNvpTuningJson', 'NVP tuning details (JSON)', 'string', 'json', '{}');
         await mk('speicher.regelung.selfNvpRawW', 'Eigenverbrauch NVP RAW (W)', 'number', 'value.power', null);
         await mk('speicher.regelung.selfNvpFilteredW', 'Eigenverbrauch NVP gefiltert (W)', 'number', 'value.power', null);
         await mk('speicher.regelung.selfNvpControlW', 'Eigenverbrauch NVP Fuehrungswert (W)', 'number', 'value.power', null);
-        await mk('speicher.regelung.selfNvpControlMode', 'Eigenverbrauch NVP Glättungsmodus', 'string', 'text', '');
+        await mk('speicher.regelung.selfNvpControlMode', 'Eigenverbrauch NVP Führungsmodus', 'string', 'text', '');
+        await mk('speicher.regelung.selfNvpFastServoActive', 'NVP-Schnellregler aktiv', 'boolean', 'indicator', true);
+        await mk('speicher.regelung.selfNvpMeasurementToleranceW', 'NVP-Messtoleranz (±W)', 'number', 'value.power', 20);
         await mk('speicher.regelung.balanceAktiv', 'Speicher NVP-Balancing aktiv', 'boolean', 'indicator', false);
         await mk('speicher.regelung.balancePolicy', 'Speicher NVP-Balancing Policy', 'string', 'text', '');
         await mk('speicher.regelung.balanceMesswertW', 'Speicher NVP-Balancing letzter echter Batterie-Messwert (W)', 'number', 'value.power', null);
@@ -8703,8 +8772,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.balanceNvpFehlerW', 'Speicher NVP-Balancing Differenz (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.balanceNvpBandUnterW', 'Speicher NVP-Balancing untere Bandkante (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.balanceNvpBandOberW', 'Speicher NVP-Balancing obere Bandkante (W)', 'number', 'value.power', 0);
-        await mk('speicher.regelung.balanceNvpAktivZielW', 'Speicher NVP-Balancing aktive Bandkante (W)', 'number', 'value.power', 0);
-        await mk('speicher.regelung.balanceNvpBandFehlerW', 'Speicher NVP-Balancing Fehler zur Bandkante (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.balanceNvpAktivZielW', 'Speicher NVP-Balancing aktives Regelziel (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.balanceNvpBandFehlerW', 'Speicher NVP-Balancing Fehler zur Zielmitte außerhalb Toleranz (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.balanceBasisQuelle', 'Speicher NVP-Balancing Basisquelle', 'string', 'text', '');
         await mk('speicher.regelung.balanceRohSollW', 'Speicher NVP-Balancing Roh-Sollwert (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.balanceKorrekturW', 'Speicher NVP-Balancing Roh-Korrektur (W)', 'number', 'value.power', 0);

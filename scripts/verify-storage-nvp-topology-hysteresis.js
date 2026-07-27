@@ -6,8 +6,8 @@
  * - exactly one NVP target/hysteresis owner per active storage topology;
  * - MultiUse consumes the active topology tuning and never overrides it;
  * - Pro rated power scales ramps, not command resolution;
- * - the controller corrects only to the nearest hysteresis edge;
- * - 15 W corrections survive generic, Sungrow split and storage-farm paths.
+ * - the measurement tolerance only suppresses noise; outside it the controller targets the center;
+ * - exact center corrections survive generic, Sungrow split and storage-farm paths.
  */
 
 const assert = require('assert');
@@ -228,12 +228,12 @@ async function runRuntime({ topology = 'single', vendorProfile = 'generic', mult
   const below = resolveNvpBandTarget(-65, 0, 50);
   assert.deepStrictEqual(
     { active: below.activeTargetNvpW, error: below.bandErrorW, side: below.side },
-    { active: -50, error: -15, side: 'below' },
+    { active: 0, error: -65, side: 'below' },
   );
   const above = resolveNvpBandTarget(65, 0, 50);
   assert.deepStrictEqual(
     { active: above.activeTargetNvpW, error: above.bandErrorW, side: above.side },
-    { active: 50, error: 15, side: 'above' },
+    { active: 0, error: 65, side: 'above' },
   );
   assert.strictEqual(resolveNvpBandTarget(30, 0, 50).bandErrorW, 0, 'inside band must not create a new correction');
 
@@ -246,10 +246,10 @@ async function runRuntime({ topology = 'single', vendorProfile = 'generic', mult
     topology: 'none',
   });
   assert.strictEqual(coordinatorBelow.nvpCenterErrorW, -65, 'coordinator must retain center error for diagnostics');
-  assert.strictEqual(coordinatorBelow.nvpErrorW, -15, 'coordinator control error must point to the nearest band edge');
+  assert.strictEqual(coordinatorBelow.nvpErrorW, -65, 'coordinator control error must point to the target center outside tolerance');
   assert.strictEqual(coordinatorBelow.nvpBandLowerW, -50);
   assert.strictEqual(coordinatorBelow.nvpBandUpperW, 50);
-  assert.strictEqual(coordinatorBelow.nvpActiveTargetW, -50);
+  assert.strictEqual(coordinatorBelow.nvpActiveTargetW, 0);
   assert.strictEqual(coordinatorBelow.withinBand, false);
   const coordinatorInside = buildNvpCoordinatorSnapshot({
     now: now(),
@@ -312,13 +312,13 @@ async function runRuntime({ topology = 'single', vendorProfile = 'generic', mult
   assert.strictEqual(pro62.defaultMaxDeltaWPerTick, 3100, 'rated power still scales dynamics');
 
   const generic = await runRuntime({ topology: 'single', vendorProfile: 'generic' });
-  assert.strictEqual(generic.dp.lastWrite('st.targetPowerW'), -15, 'generic signed writer must pass a 15-W charge correction');
+  assert.strictEqual(generic.dp.lastWrite('st.targetPowerW'), -65, 'generic signed writer must correct the full 65 W to the target center');
   assert.strictEqual(generic.state('speicher.regelung.stepW'), 1);
   assert.strictEqual(generic.state('speicher.regelung.selfNvpTuningTopology'), 'single');
-  assert.strictEqual(generic.state('speicher.regelung.balanceNvpBandFehlerW'), -15);
+  assert.strictEqual(generic.state('speicher.regelung.balanceNvpBandFehlerW'), -65);
 
   const sungrow = await runRuntime({ topology: 'single', vendorProfile: 'sungrow-hybrid' });
-  assert.strictEqual(sungrow.dp.lastWrite('st.targetChargePowerW'), 15, 'Sungrow split writer must pass a 15-W charge correction');
+  assert.strictEqual(sungrow.dp.lastWrite('st.targetChargePowerW'), 65, 'Sungrow split writer must correct the full 65 W to the target center');
   assert.strictEqual(sungrow.dp.lastWrite('st.targetDischargePowerW'), 0);
   assert.strictEqual(sungrow.dp.lastWrite('st.run'), true);
   assert.strictEqual(sungrow.state('speicher.regelung.selfNvpTuningSource'), 'storage.standaloneSelf');
@@ -329,7 +329,7 @@ async function runRuntime({ topology = 'single', vendorProfile = 'generic', mult
     multiUseActive: true,
     farmTuning: { targetW: 0, hysteresisW: 50 },
   });
-  assert.strictEqual(farmRuntime.adapter._farmWrites.at(-1), -15, 'farm dispatcher must receive the same 15-W total correction');
+  assert.strictEqual(farmRuntime.adapter._farmWrites.at(-1), -65, 'farm dispatcher must receive the same center-target correction');
   assert.strictEqual(farmRuntime.state('speicher.regelung.selfNvpTuningTopology'), 'farm');
   assert.strictEqual(farmRuntime.state('speicher.regelung.selfNvpTuningSource'), 'storageFarm');
 
@@ -343,9 +343,9 @@ async function runRuntime({ topology = 'single', vendorProfile = 'generic', mult
   assert(!html.includes('id="muSelfDeadbandW"'), 'MultiUse must not expose a second NVP hysteresis');
   assert(app.includes('patch.storageFarm.selfTargetGridImportW = _clampInt('));
   assert(app.includes('patch.storageFarm.selfImportThresholdW = _clampInt('));
-  assert(app.includes('NVP-Zielmitte/Hysterese: wird aus der aktiven App Speicher oder Speicherfarm übernommen'));
+  assert(app.includes('NVP-Zielmitte/Messtoleranz: wird aus der aktiven App Speicher oder Speicherfarm übernommen'));
 
-  console.log('[storage-nvp-topology-hysteresis] OK: 1-W resolution, nearest band edge, single/farm ownership and MultiUse inheritance are verified through real runtime writes.');
+  console.log('[storage-nvp-topology-hysteresis] OK: 1-W resolution, center targeting outside tolerance, single/farm ownership and MultiUse inheritance are verified through real runtime writes.');
 })().catch((err) => {
   console.error('[storage-nvp-topology-hysteresis] ERROR:', err && err.stack ? err.stack : err);
   process.exit(1);

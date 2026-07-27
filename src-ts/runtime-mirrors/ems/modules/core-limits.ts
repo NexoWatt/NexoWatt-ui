@@ -28,7 +28,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 08bcb4cdc8547018fe1132468934513aa812743d5ea43aacaf0adc3a419e5330
+ * Original-Hash: 191b35619b5c7705752b2291e265d2e82661a4bb96dc452f80e8590755838412
  */
 
 /**
@@ -179,7 +179,7 @@ function resolveCoreStorageOperatingPolicy(cfg: CoreLimitsUnknownRecord = {}, se
         standaloneDefaultMinSocPct: 10,
         standaloneDefaultMaxSocPct: 100,
         standaloneDefaultTargetGridImportW: 50,
-        standaloneDefaultImportThresholdW: 50,
+        standaloneDefaultImportThresholdW: 20,
     });
     return storageOperatingPolicy;
 }

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4cacf632ec21c7a0bb19917c0657263b28e705ea60326bfd93d76189d331549f
+ * Original-Hash: 86c10938de637cacdfeab55b6c3c3d1ce0ef2f454fe35a052f0a6b1dcc264883
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/multi-use.ts
- * Quell-Hash: sha256:a0909abb6fe1d3d571e43a3541daaf5a747abff91bd362e12d0fc13e6d46f78e
+ * Quell-Hash: sha256:4e2b5c76edf6a20c0d33d17e4e86f22c6db2380d059a00b70765e3d6862b6127
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -275,7 +275,7 @@ class MultiUseModule extends BaseModule {
       standaloneDefaultMinSocPct: 10,
       standaloneDefaultMaxSocPct: 100,
       standaloneDefaultTargetGridImportW: 50,
-      standaloneDefaultImportThresholdW: 50,
+      standaloneDefaultImportThresholdW: 20,
     });
     return {
       active,
@@ -294,7 +294,7 @@ class MultiUseModule extends BaseModule {
       // ausgewaehlten Speicher-Topologie. MultiUse besitzt selbst keine zweite
       // NVP-Regelung, unabhaengig davon, ob seine SoC-Zonen gerade aktiv sind.
       selfTargetGridImportW: num(policy.self.targetGridImportW, 50),
-      selfImportThresholdW: num(policy.self.importThresholdW, 50),
+      selfImportThresholdW: num(policy.self.importThresholdW, 20),
       policySource: String(policy.source || ''),
       nvpTuningSource: String(policy.nvpTuning && policy.nvpTuning.source || policy.self.nvpTuningSource || ''),
       nvpTuningTopology: String(policy.nvpTuning && policy.nvpTuning.topology || authority && authority.selectedTopology || ''),
@@ -490,7 +490,7 @@ class MultiUseModule extends BaseModule {
       ['selfMinSocPct', 'Self-consumption minimum SoC', 'number', 'value.battery', 0, '%'],
       ['selfMaxSocPct', 'Self-consumption maximum SoC', 'number', 'value.battery', 100, '%'],
       ['selfTargetGridImportW', 'Self-consumption target grid import', 'number', 'value.power', 50, 'W'],
-      ['selfImportThresholdW', 'Self-consumption NVP hysteresis', 'number', 'value.power', 50, 'W'],
+      ['selfImportThresholdW', 'Self-consumption NVP measurement tolerance', 'number', 'value.power', 20, 'W'],
       ['nvpTuningSource', 'NVP tuning source', 'string', 'text', '', undefined],
       ['nvpTuningTopology', 'NVP tuning topology', 'string', 'text', '', undefined],
       ['source', 'Policy source', 'string', 'text', ''],

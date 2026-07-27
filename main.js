@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:6ff2cae6b844702f6f933274985638aca60bc9ae2a59e6b9a12b6c4ba3916f23
+ * Quell-Hash: sha256:5fe174a306b647bf16128a9925bc8902a8ec19ce27ec1e9dec245196e6794138
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -3923,7 +3923,7 @@ class NexoWattVis extends utils.Adapter {
           st.standaloneSelfTargetGridImportW = clampNumber(st.selfTargetGridImportW, 0, 1000000, 50);
         }
         if (st.standaloneSelfImportThresholdW === undefined) {
-          st.standaloneSelfImportThresholdW = clampNumber(st.selfImportThresholdW, 0, 1000000, 50);
+          st.standaloneSelfImportThresholdW = clampNumber(st.selfImportThresholdW, 0, 1000000, 20);
         }
       }
 
@@ -6388,7 +6388,7 @@ class NexoWattVis extends utils.Adapter {
       standaloneDefaultMinSocPct: 10,
       standaloneDefaultMaxSocPct: 100,
       standaloneDefaultTargetGridImportW: 50,
-      standaloneDefaultImportThresholdW: 50,
+      standaloneDefaultImportThresholdW: 20,
     });
     const reserveFloor = storageOperatingPolicy.reserve.enabled === true
       ? Math.max(0, Math.min(100, Number(storageOperatingPolicy.reserve.minSocPct) || 0))
@@ -24230,8 +24230,16 @@ return res.json(out);
     try {
       if (this.emsEngine && this.emsEngine.dp && typeof this.emsEngine.dp.handleStateChange === 'function') {
         this.emsEngine.dp.handleStateChange(id, state);
+        // NVP-Schnellregler: Eine frische externe Netzpunktprobe löst nach einem
+        // kurzen Debounce unmittelbar den normalen zentralen EMS-Tick aus. Die
+        // Engine erkennt die autoritativen NVP-Quellen selbst und ignoriert ihre
+        // internen abgeleiteten States, sodass kein StateChange-Loop entstehen kann.
+        if (typeof this.emsEngine.handleExternalStateChange === 'function') {
+          this.emsEngine.handleExternalStateChange(id, state);
+        }
       }
     } catch (_e) {}
+
 
     // Feed NexoLogic engine (node/graph)
     try {

@@ -3,7 +3,7 @@
     "language": "nl",
     "locale": "nl-NL",
     "name": "Nederlands",
-    "version": 4
+    "version": 5
   },
   "messages": {
     "common.loading": "Laden…",
@@ -593,7 +593,14 @@
     "Status: Fahrzeug pausiert / kein Bedarf": "Status: voertuig gepauzeerd / geen laadvraag",
     "Mehrere Werte mit Komma, Semikolon oder Zeilenumbruch trennen. *Text* erlaubt Teiltreffer.": "Scheid meerdere waarden met komma, puntkomma of regeleinde. *Tekst* staat deelovereenkomsten toe.",
     "Priorität: reale Leistung → expliziter Ladebedarf → Fahrzeugkontakt → normalisierter Status. „Available“ allein reserviert keine Ladeleistung.": "Prioriteit: werkelijk vermogen → expliciete laadvraag → voertuigcontact → genormaliseerde status. Alleen „Available“ reserveert geen laadvermogen.",
-    "Fahrzeug/Ladevorgang aktiv (lesen, optional) · Legacy, keine Reservierungsquelle": "Voertuig/laadsessie actief (alleen lezen, optioneel) · legacy, geen reserveringsbron"
+    "Fahrzeug/Ladevorgang aktiv (lesen, optional) · Legacy, keine Reservierungsquelle": "Voertuig/laadsessie actief (alleen lezen, optioneel) · legacy, geen reserveringsbron",
+    "Messtoleranz (±W)": "Meettolerantie (±W)",
+    "Anzeige-Glättung (s)": "Weergavefiltering (s)",
+    "Legacy RAW-Guard (W)": "Legacy RAW-beveiliging (W)",
+    "NVP-Zielmitte/Messtoleranz: wird aus der aktiven App Speicher oder Speicherfarm übernommen": "NVP-doelwaarde/meettolerantie: wordt overgenomen van de actieve app Batterij of Batterijfarm",
+    "MultiUse besitzt keine eigene NVP-Regelung. Zielmitte und Messtoleranz werden immer direkt aus der aktiven App Speicher oder Speicherfarm übernommen.": "MultiUse heeft geen eigen NVP-regeling. Doelwaarde en meettolerantie worden altijd rechtstreeks overgenomen van de actieve app Batterij of Batterijfarm.",
+    "Eigene Zielmitte und Messtoleranz der Farm. Außerhalb der Toleranz regelt der gemeinsame Farm-Schnellregler direkt zur Zielmitte. MultiUse besitzt keine zweite NVP-Regelung.": "Eigen doelwaarde en meettolerantie van de batterijfarm. Buiten de tolerantie regelt de gezamenlijke snelle farmregelaar direct naar de doelwaarde. MultiUse heeft geen tweede NVP-regeling.",
+    "Die Messtoleranz unterdrückt ausschließlich Zählerrauschen. Außerhalb dieser Toleranz regelt der Schnellregler mit jeder frischen NVP-Probe direkt zur Zielmitte. Die Anzeige-Glättung und der Legacy RAW-Guard bleiben nur zur Diagnose erhalten und verzögern den Hardware-Sollwert nicht mehr. Istwert halten überbrückt langsame/asynchrone Batterie-Telemetrie herstellerübergreifend. Ein wirksamer Nicht-Null-Sollwert bleibt innerhalb der Toleranz erhalten; 0 W bleibt ausschließlich ein Stop-Befehl. Empfohlener Startwert: Zielmitte 50 W, Messtoleranz 20 W.": "De meettolerantie onderdrukt uitsluitend meetruis. Buiten deze tolerantie regelt de snelle regelaar bij iedere nieuwe NVP-meting direct naar de doelwaarde. De weergavefiltering en legacy RAW-beveiliging blijven alleen voor diagnose behouden en vertragen de hardware-instelling niet meer. Het vasthouden van de actuele waarde overbrugt trage/asynchrone batterijtelemetrie, onafhankelijk van de fabrikant. Een actieve niet-nul-instelling blijft binnen de tolerantie behouden; 0 W blijft uitsluitend een stopopdracht. Aanbevolen startwaarde: doelwaarde 50 W, meettolerantie 20 W."
   },
   "patterns": [
     {

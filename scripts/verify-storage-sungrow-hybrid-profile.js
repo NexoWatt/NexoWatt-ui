@@ -343,7 +343,7 @@ function makePersistentSungrowScenario() {
       source: 'charging-runtime-protect',
     },
   });
-  assert.strictEqual(protectedSurplus.dp.lastWrite('st.targetChargePowerW'), 400, 'Sungrow darf nur bis zur unteren 0-W-Bandkante aus realem Export laden');
+  assert.strictEqual(protectedSurplus.dp.lastWrite('st.targetChargePowerW'), 450, 'Sungrow muss realen Export direkt zur NVP-Zielmitte +50 W ausregeln');
 
   // Rest-Netzbezug trotz laufender Entladung: Ziel ist nicht nur der neue Import,
   // sondern aktuelle Batterie-Istentladung + aktuelle NVP-Abweichung.

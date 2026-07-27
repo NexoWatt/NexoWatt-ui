@@ -245,7 +245,7 @@ async function runLicenseProfileTick({ edition, ratedPowerW, gridW, targetGridIm
   assert.strictEqual(homeChargeTick.getState('speicher.regelung.licensePowerLimited'), true);
 
   const proDischargeTick = await runLicenseProfileTick({ edition: 'pro', ratedPowerW: 500000, gridW: 120000 });
-  assert.strictEqual(proDischargeTick.dp.lastWrite('st.targetPowerW'), 119900, 'Pro darf den physikalischen NVP-Headroom oberhalb 50 kW bis zur oberen Hysteresekante nutzen');
+  assert.strictEqual(proDischargeTick.dp.lastWrite('st.targetPowerW'), 119950, 'Pro darf den physikalischen NVP-Headroom oberhalb 50 kW direkt bis zur Zielmitte nutzen');
   assert.strictEqual(proDischargeTick.getState('speicher.regelung.licensePowerProfile'), 'pro');
   assert.strictEqual(proDischargeTick.getState('speicher.regelung.licensePowerLimited'), false);
 
@@ -258,8 +258,8 @@ async function runLicenseProfileTick({ edition, ratedPowerW, gridW, targetGridIm
   });
   assert.strictEqual(
     proPreciseChargeTick.dp.lastWrite('st.targetPowerW'),
-    -15,
-    '62-kW-Pro-Speicher muss eine 15-W-Korrektur ohne 62-W-Raster schreiben',
+    -65,
+    '62-kW-Pro-Speicher muss eine 65-W-Zielmittenkorrektur mit 1-W-Aufloesung statt 62-W-Raster schreiben',
   );
   assert.strictEqual(proPreciseChargeTick.getState('speicher.regelung.stepW'), 1);
 

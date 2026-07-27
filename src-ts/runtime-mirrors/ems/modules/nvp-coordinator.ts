@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2c756272f148712a0be4eb1f6d3f15f316a410c4f2261d5a03d5e86fa8ebe7f1
+ * Original-Hash: 23c10cfbd06250dde288bb6add50f8dedd37bc48069e41eaaab7175eab485268
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/nvp-coordinator.ts
- * Quell-Hash: sha256:e72a456847757d314b283da5f448dee5eddcec9b095d5c7cc83eaa04bf3bde8d
+ * Quell-Hash: sha256:0eb67fe408d97e3d8a021918785da5451f49eb9d9e266abb8dbd4a7e44fb7048
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -236,9 +236,10 @@ function buildNvpCoordinatorSnapshot(input = {}) {
     const nvpBand = resolveNvpBandTarget(rawNvpW, nvpTargetW, deadbandW);
     const projectedBand = resolveNvpBandTarget(projectedNvpW, nvpTargetW, deadbandW);
     const nvpCenterErrorW = rawNvpW === null ? null : Math.round(nvpBand.centerErrorW);
-    // `nvpErrorW` ist der tatsaechlich handlungsrelevante Fehler bis zur
-    // naechsten Hysteresegrenze. Der Fehler zur Zielmitte bleibt separat
-    // diagnostizierbar, darf aber keinen zweiten Regler bilden.
+    // `nvpErrorW` ist der tatsaechlich handlungsrelevante Fehler zur Zielmitte,
+    // sobald der NVP ausserhalb der kleinen Messtoleranz liegt. Innerhalb der
+    // Toleranz bleibt er 0 W. Die Bandgrenzen sind damit reine Aktivierungs- und
+    // Diagnosegrenzen, keine alternativen Regelziele.
     const nvpErrorW = rawNvpW === null ? null : Math.round(nvpBand.bandErrorW);
     const projectedCenterErrorW = projectedNvpW === null ? null : Math.round(projectedBand.centerErrorW);
     const projectedErrorW = projectedNvpW === null ? null : Math.round(projectedBand.bandErrorW);
@@ -433,16 +434,16 @@ class NvpCoordinatorModule extends BaseModule {
         await mk('ems.nvpCoordinator.nvpMeasurementAgeMs', 'NVP-Messwertalter (ms)', 'number', 'value.interval');
         await mk('ems.nvpCoordinator.nvpRawW', 'NVP RAW (+ Bezug / - Einspeisung)', 'number', 'value.power');
         await mk('ems.nvpCoordinator.nvpTargetW', 'NVP-Zielbezug', 'number', 'value.power');
-        await mk('ems.nvpCoordinator.deadbandW', 'NVP-Toleranzband', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.deadbandW', 'NVP-Messtoleranz', 'number', 'value.power');
         await mk('ems.nvpCoordinator.nvpTuningSource', 'NVP-Abstimmung Quelle', 'string', 'text');
         await mk('ems.nvpCoordinator.nvpTuningTopology', 'NVP-Abstimmung Speichertopologie', 'string', 'text');
-        await mk('ems.nvpCoordinator.nvpBandLowerW', 'NVP untere Hysteresegrenze', 'number', 'value.power');
-        await mk('ems.nvpCoordinator.nvpBandUpperW', 'NVP obere Hysteresegrenze', 'number', 'value.power');
-        await mk('ems.nvpCoordinator.nvpActiveTargetW', 'NVP aktive Hysteresegrenze', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.nvpBandLowerW', 'NVP untere Toleranzgrenze', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.nvpBandUpperW', 'NVP obere Toleranzgrenze', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.nvpActiveTargetW', 'NVP aktives Regelziel', 'number', 'value.power');
         await mk('ems.nvpCoordinator.nvpCenterErrorW', 'NVP-Abweichung zur Zielmitte', 'number', 'value.power');
-        await mk('ems.nvpCoordinator.nvpErrorW', 'NVP-Regelfehler zur Hysteresegrenze', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.nvpErrorW', 'NVP-Regelfehler zur Zielmitte außerhalb Toleranz', 'number', 'value.power');
         await mk('ems.nvpCoordinator.projectedCenterErrorW', 'Prognose-Abweichung zur Zielmitte', 'number', 'value.power');
-        await mk('ems.nvpCoordinator.projectedErrorW', 'Prognose-Regelfehler zur Hysteresegrenze', 'number', 'value.power');
+        await mk('ems.nvpCoordinator.projectedErrorW', 'Prognose-Regelfehler zur Zielmitte außerhalb Toleranz', 'number', 'value.power');
         await mk('ems.nvpCoordinator.storageTopology', 'Ausgewählte Speichertopologie', 'string', 'text');
         await mk('ems.nvpCoordinator.storageActualW', 'Speicher/Farm Istleistung', 'number', 'value.power');
         await mk('ems.nvpCoordinator.storageRequestedTargetW', 'Speicher/Farm angeforderte Sollleistung', 'number', 'value.power');
@@ -499,7 +500,7 @@ class NvpCoordinatorModule extends BaseModule {
             multiUseConfig: multiUse,
             multiUseActive: root.enableMultiUse === true && !!multiUse && multiUse.enabled === true,
             standaloneDefaultTargetGridImportW: 50,
-            standaloneDefaultImportThresholdW: 50,
+            standaloneDefaultImportThresholdW: 20,
         });
         const staleSec = finiteOrNull(storage.staleTimeoutSec) ?? 30;
         const responseGraceMs = clamp(Math.round((finiteOrNull(cfg.storageResponseGraceSec) ?? 10) * 1000), 0, 300000);
@@ -514,7 +515,7 @@ class NvpCoordinatorModule extends BaseModule {
             actualMaxAgeMs: clamp(Math.round((finiteOrNull(cfg.storageActualMaxAgeSec) ?? staleSec) * 1000), 1000, 600000),
             nvpMaxAgeMs: clamp(Math.round((finiteOrNull(cfg.nvpMaxAgeSec) ?? Math.max(staleSec, 10)) * 1000), 1000, 600000),
             targetW: Math.max(0, Math.round(finiteOrNull(operatingPolicy?.self?.targetGridImportW) ?? 50)),
-            deadbandW: clamp(Math.round(finiteOrNull(operatingPolicy?.self?.importThresholdW) ?? 50), 0, 1000000),
+            deadbandW: clamp(Math.round(finiteOrNull(operatingPolicy?.self?.importThresholdW) ?? 20), 0, 1000000),
             nvpTuningSource: cleanText(operatingPolicy?.nvpTuning?.source || operatingPolicy?.self?.nvpTuningSource || '', 120),
             nvpTuningTopology: cleanText(operatingPolicy?.nvpTuning?.topology || authority?.selectedTopology || '', 40),
             hardRawGuardW: Math.max(0, Math.round(finiteOrNull(cfg.hardRawExportW) ?? 0)),

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: a1a7cedfc55609dafcfd67b105a78065761687b4bf780978cc480fafd5f87eb7
+ * Original-Hash: 476f1a51ec8b257603b6d36d04e773f92b5af2b2fa60ac50d9517ae1c7b3c9a4
  */
 
 /**
@@ -330,7 +330,7 @@ async function runLicenseProfileTick({ edition, ratedPowerW, gridW, targetGridIm
   assert.strictEqual(homeChargeTick.getState('speicher.regelung.licensePowerLimited'), true);
 
   const proDischargeTick = await runLicenseProfileTick({ edition: 'pro', ratedPowerW: 500000, gridW: 120000 });
-  assert.strictEqual(proDischargeTick.dp.lastWrite('st.targetPowerW'), 119900, 'Pro darf den physikalischen NVP-Headroom oberhalb 50 kW bis zur oberen Hysteresekante nutzen');
+  assert.strictEqual(proDischargeTick.dp.lastWrite('st.targetPowerW'), 119950, 'Pro darf den physikalischen NVP-Headroom oberhalb 50 kW direkt bis zur Zielmitte nutzen');
   assert.strictEqual(proDischargeTick.getState('speicher.regelung.licensePowerProfile'), 'pro');
   assert.strictEqual(proDischargeTick.getState('speicher.regelung.licensePowerLimited'), false);
 
@@ -343,8 +343,8 @@ async function runLicenseProfileTick({ edition, ratedPowerW, gridW, targetGridIm
   });
   assert.strictEqual(
     proPreciseChargeTick.dp.lastWrite('st.targetPowerW'),
-    -15,
-    '62-kW-Pro-Speicher muss eine 15-W-Korrektur ohne 62-W-Raster schreiben',
+    -65,
+    '62-kW-Pro-Speicher muss eine 65-W-Zielmittenkorrektur mit 1-W-Aufloesung statt 62-W-Raster schreiben',
   );
   assert.strictEqual(proPreciseChargeTick.getState('speicher.regelung.stepW'), 1);
 

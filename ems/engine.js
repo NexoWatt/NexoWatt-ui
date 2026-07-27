@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:11744aff0c0be5f7d667064a065d0db4febb170de7ce5a75432564d00d29a1f9
+ * Quell-Hash: sha256:1dae72d778f8d9db46e8443a9cb866ed6daf99c09ab44fdcd0eec4f2fa6a983e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -104,6 +104,16 @@ class EmsEngine {
     this._immediateTickPending = false;
     this._immediateTickReason = '';
     this._immediateTickDebounceMs = 25;
+    // NVP-Schnellregler: Neue Zählerproben sollen nicht zusätzlich bis zum
+    // nächsten 1-s-Scheduler warten. 75 ms fassen getrennte Import-/Export-
+    // Updates derselben Zählerprobe zusammen, bleiben aber deutlich schneller
+    // als der reguläre Watchdog-Tick.
+    this._nvpFastTickDebounceMs = 75;
+    this._fastNvpTickCount = 0;
+    this._fastNvpTickLastRequestMs = 0;
+    this._nvpSourceIds = new Set();
+    this._lastTickStartMs = 0;
+    this._lastTickEndMs = 0;
 
     // Tick mutex (Phase 4.0): prevent overlapping async ticks.
     this._tickRunning = false;
@@ -214,11 +224,49 @@ class EmsEngine {
    * Freigabe-, Ziel- und Phasenänderungen. Harte EMS-Grenzen werden nicht
    * umgangen; es wird lediglich der normale zentrale Regelzyklus früher gestartet.
    */
-  requestImmediateTick(reason = 'external-control') {
+  requestImmediateTick(reason = 'external-control', delayMs = this._immediateTickDebounceMs) {
     if (!this.adapter || this.adapter._nwShuttingDown || !this.dp || !this.mm) return false;
     this._immediateTickPending = true;
     this._immediateTickReason = String(reason || 'external-control').slice(0, 160);
-    return this._scheduleImmediateTick(this._immediateTickDebounceMs);
+    return this._scheduleImmediateTick(delayMs);
+  }
+
+  /**
+   * Code-Teil: requestNvpTick
+   * Zweck: Startet nach einer frischen externen NVP-Zählerprobe einen debouncten
+   * vollständigen EMS-Regelzyklus. Der normale Modulmanager und alle Safety-/
+   * Authority-Gates bleiben unverändert; nur die zusätzliche Wartezeit bis zum
+   * periodischen Scheduler entfällt.
+   */
+  requestNvpTick(reason = 'nvp-sample') {
+    if (!this.adapter || this.adapter._nwShuttingDown || !this.dp || !this.mm) return false;
+    const cfg = this.adapter.config || {};
+    const storageRuntimeRelevant = cfg.enableStorageControl === true || cfg.enableStorageFarm === true;
+    if (!storageRuntimeRelevant) return false;
+
+    this._fastNvpTickCount += 1;
+    this._fastNvpTickLastRequestMs = Date.now();
+    try {
+      this.adapter.setStateAsync('ems.core.fastNvpTickCount', { val: Math.round(this._fastNvpTickCount), ack: true }).catch(() => {});
+      this.adapter.setStateAsync('ems.core.lastFastNvpTickRequest', { val: this._fastNvpTickLastRequestMs, ack: true }).catch(() => {});
+    } catch (_e) {}
+    return this.requestImmediateTick(String(reason || 'nvp-sample'), this._nvpFastTickDebounceMs);
+  }
+
+  /**
+   * Code-Teil: handleExternalStateChange
+   * Zweck: Erkennt eine neue Probe eines tatsächlich konfigurierten externen
+   * NVP-Datenpunkts. Interne NexoWatt-Normalisierungs- und Diagnose-States sind
+   * bewusst nicht in `_nvpSourceIds` enthalten und können daher keinen Tick-Loop
+   * auslösen.
+   */
+  handleExternalStateChange(id, state) {
+    if (!state || !this._nvpSourceIds || this._nvpSourceIds.size === 0) return false;
+    const objectId = String(id || '').trim();
+    if (!objectId || !this._nvpSourceIds.has(objectId)) return false;
+    const numericValue = Number(state.val);
+    if (!Number.isFinite(numericValue)) return false;
+    return this.requestNvpTick(`nvp:${objectId.slice(-96)}`);
   }
 
   /**
@@ -265,6 +313,32 @@ class EmsEngine {
         name: 'Tick skipped (re-entrancy) count',
         type: 'number',
         role: 'value',
+        read: true,
+        write: false,
+        def: 0,
+      },
+      native: {},
+    });
+
+    await a.setObjectNotExistsAsync('ems.core.fastNvpTickCount', {
+      type: 'state',
+      common: {
+        name: 'Fast NVP tick request count',
+        type: 'number',
+        role: 'value',
+        read: true,
+        write: false,
+        def: 0,
+      },
+      native: {},
+    });
+
+    await a.setObjectNotExistsAsync('ems.core.lastFastNvpTickRequest', {
+      type: 'state',
+      common: {
+        name: 'Last fast NVP tick request (ts)',
+        type: 'number',
+        role: 'value.time',
         read: true,
         write: false,
         def: 0,
@@ -932,6 +1006,12 @@ class EmsEngine {
     const gridSellId = (typeof dps.gridSellPower === 'string') ? dps.gridSellPower.trim() : '';
 
     const gridNetId = (typeof dps.gridPointPower === 'string') ? dps.gridPointPower.trim() : '';
+    const peakGridId = (adapter.config && adapter.config.peakShaving && typeof adapter.config.peakShaving.gridPointPowerId === 'string')
+      ? adapter.config.peakShaving.gridPointPowerId.trim()
+      : '';
+    this._nvpSourceIds = new Set([gridBuyId, gridSellId, gridNetId, peakGridId]
+      .map((value) => String(value || '').trim())
+      .filter((value) => value && value !== this._gridPowerId && value !== this._gridPowerRawId));
 
     // Optional robust freshness: connected + watchdog/heartbeat.
     // NOTE: These inputs are optional, but the engine must never crash if they are not configured.
@@ -1036,6 +1116,10 @@ class EmsEngine {
     // Start scheduler
     if (this._timer) this._clearInterval(this._timer);
     this._timer = this._setInterval(() => {
+      // Liegt bereits eine debouncte Bedien- oder NVP-Anforderung vor, übernimmt
+      // deren unmittelbarer Tick. So werden dieselben Messwerte nicht kurz
+      // hintereinander durch Intervall- und Schnellpfad doppelt verarbeitet.
+      if (this._immediateTickPending || this._immediateTickTimer) return;
       this.tick().catch(err => {
         try { adapter.log.warn(`[EMS] tick failed: ${err?.message || err}`); } catch (_e) {}
       });
@@ -1067,6 +1151,7 @@ class EmsEngine {
 
     this._tickRunning = true;
     const tickStart = Date.now();
+    this._lastTickStartMs = tickStart;
     try {
       try {
         await this.adapter.setStateAsync('ems.core.tickRunning', { val: true, ack: true });
@@ -1168,6 +1253,7 @@ class EmsEngine {
     } finally {
       this._tickRunning = false;
       const dur = Date.now() - tickStart;
+      this._lastTickEndMs = Date.now();
       try {
         await this.adapter.setStateAsync('ems.core.tickRunning', { val: false, ack: true });
         await this.adapter.setStateAsync('ems.core.lastTickDurationMs', { val: Math.round(dur), ack: true });
@@ -1208,6 +1294,7 @@ class EmsEngine {
     }
     this._immediateTickPending = false;
     this._immediateTickReason = '';
+    this._nvpSourceIds = new Set();
     // Module dürfen eigene Publish-/Pulse-Timer besitzen. Diese werden beim Adapter-
     // Unload explizit beendet, damit kein Modul nachträglich adapter.setTimeout aufruft.
     try {

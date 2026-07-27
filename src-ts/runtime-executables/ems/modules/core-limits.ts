@@ -2025,7 +2025,7 @@ class CoreLimitsModule extends BaseModule {
             standaloneDefaultMinSocPct: 10,
             standaloneDefaultMaxSocPct: 100,
             standaloneDefaultTargetGridImportW: 50,
-            standaloneDefaultImportThresholdW: 50,
+            standaloneDefaultImportThresholdW: 20,
         });
         const storageMaxSocPct = clamp(num(storageOperatingPolicy.self.maxSocPct, 100), 0, 100, 100);
         const storageEligible = !!(

@@ -8893,7 +8893,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       ? singleStorageCfg.standaloneSelfImportThresholdW
       : singleStorageCfg.selfImportThresholdW;
     sf.selfTargetGridImportW = _clampInt(sf.selfTargetGridImportW, 0, 1000000, _clampInt(singleTargetRaw, 0, 1000000, 50));
-    sf.selfImportThresholdW = _clampInt(sf.selfImportThresholdW, 0, 1000000, _clampInt(singleDeadbandRaw, 0, 1000000, 50));
+    sf.selfImportThresholdW = _clampInt(sf.selfImportThresholdW, 0, 1000000, _clampInt(singleDeadbandRaw, 0, 1000000, 20));
 
     sf.storages = Array.isArray(sf.storages) ? sf.storages : [];
     sf.groups = Array.isArray(sf.groups) ? sf.groups : [];
@@ -8990,7 +8990,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       els.storageFarmSelfImportThresholdW.value = numOrEmpty(sf.selfImportThresholdW);
       els.storageFarmSelfImportThresholdW.oninput = () => {
         const sf2 = _ensureStorageFarmCfg();
-        sf2.selfImportThresholdW = _clampInt(els.storageFarmSelfImportThresholdW.value, 0, 1000000, 50);
+        sf2.selfImportThresholdW = _clampInt(els.storageFarmSelfImportThresholdW.value, 0, 1000000, 20);
       };
       els.storageFarmSelfImportThresholdW.onchange = els.storageFarmSelfImportThresholdW.oninput;
     }
@@ -9595,7 +9595,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       `reserveEnabled = ${reserveOn ? 'true' : 'false'}  | reserveMinSocPct = ${reserveMin}  | reserveTargetSocPct = ${reserveTarget}`,
       `lskEnabled = ${peakOn ? 'true' : 'false'}  | lskMinSocPct = ${lskMin}  | lskMaxSocPct = ${lskMax}`,
       `selfDischargeEnabled = ${selfOn ? 'true' : 'false'}  | selfMinSocPct = ${selfMin}  | selfMaxSocPct = ${selfMax}`,
-      'NVP-Zielmitte/Hysterese: wird aus der aktiven App Speicher oder Speicherfarm übernommen',
+      'NVP-Zielmitte/Messtoleranz: wird aus der aktiven App Speicher oder Speicherfarm übernommen',
     ];
 
     els.muStorageSummary.innerHTML = '';
@@ -11127,8 +11127,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (els.storageSelfImportThresholdW) {
       const standaloneDeadbandW = stSelf.standaloneSelfImportThresholdW !== undefined
         ? stSelf.standaloneSelfImportThresholdW
-        : (!stSelfWasMultiUseMirrored ? stSelf.selfImportThresholdW : 50);
-      els.storageSelfImportThresholdW.value = Number.isFinite(Number(standaloneDeadbandW)) ? String(Math.round(Number(standaloneDeadbandW))) : '50';
+        : (!stSelfWasMultiUseMirrored ? stSelf.selfImportThresholdW : 20);
+      els.storageSelfImportThresholdW.value = Number.isFinite(Number(standaloneDeadbandW)) ? String(Math.round(Number(standaloneDeadbandW))) : '20';
     }
     if (els.storageSelfNvpSmoothingSec) els.storageSelfNvpSmoothingSec.value = Number.isFinite(Number(stSelf.selfNvpSmoothingSec)) ? String(Math.round(Number(stSelf.selfNvpSmoothingSec))) : '8';
     if (els.storageSelfNvpRawGuardW) els.storageSelfNvpRawGuardW.value = Number.isFinite(Number(stSelf.selfNvpRawGuardW)) ? String(Math.round(Number(stSelf.selfNvpRawGuardW))) : '100';
@@ -12620,7 +12620,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // KI‑Energieberater / KI‑Optimierung
     patch.aiAdvisor = collectAiAdvisorConfigFromUI(currentConfig.aiAdvisor || {});
 
-    // Speicherfarm: Zielmitte/Hysterese gehoeren ausschliesslich zur
+    // Speicherfarm: Zielmitte/Messtoleranz gehoeren ausschliesslich zur
     // Farm-App. MultiUse uebernimmt diese Werte nur als Policy und besitzt
     // keine eigene NVP-Abstimmung. Auch wenn der Farm-Reiter beim Speichern
     // nicht aktiv ist, werden die aktuell gepufferten Werte normalisiert.
@@ -12637,7 +12637,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     );
     patch.storageFarm.selfImportThresholdW = _clampInt(
       els.storageFarmSelfImportThresholdW ? els.storageFarmSelfImportThresholdW.value : patch.storageFarm.selfImportThresholdW,
-      0, 1000000, _clampInt(storageFarmSingleFallbackHysteresis, 0, 1000000, 50),
+      0, 1000000, _clampInt(storageFarmSingleFallbackHysteresis, 0, 1000000, 20),
     );
 
     // Storage
@@ -12676,29 +12676,29 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     patch.storage.e3dcAllowGridCharge = !!(els.storageE3dcAllowGridCharge && els.storageE3dcAllowGridCharge.checked);
     patch.storage.e3dcUsePowerLimits = !!(els.storageE3dcUsePowerLimits && els.storageE3dcUsePowerLimits.checked);
 
-    // Eigenverbrauchsoptimierung / NVP-Regelung:
-    // Die Speicherregelung nutzt diese Werte als Zielband und glaettet nur die
-    // Fuehrungsgroesse, nicht die harten Schutzgrenzen. Dadurch wird das
-    // Hin-und-Her zwischen Bezug/Einspeisung im Energiefluss ruhiger, ohne dass
-    // echter groesserer Netzbezug oder Export verschleppt wird.
+    // Eigenverbrauchsoptimierung / NVP-Schnellregelung:
+    // Die Messtoleranz dient nur gegen Zählerrauschen. Außerhalb davon wird mit
+    // jeder frischen NVP-Probe direkt zur Zielmitte geregelt. Die optionale
+    // Mehrsekunden-Glättung bleibt ausschließlich für Anzeige/Diagnose aktiv.
     patch.storage.selfTargetGridImportW = _clampInt(
       els.storageSelfTargetGridImportW ? els.storageSelfTargetGridImportW.value : patch.storage.standaloneSelfTargetGridImportW,
       0, 1000000, 50,
     );
     patch.storage.selfImportThresholdW = _clampInt(
       els.storageSelfImportThresholdW ? els.storageSelfImportThresholdW.value : patch.storage.standaloneSelfImportThresholdW,
-      0, 1000000, 50,
+      0, 1000000, 20,
     );
     // Die Speicher-Seite konfiguriert die Standalone-Eigenverbrauchsregelung.
     // MultiUse besitzt eigene Werte in installerConfig.storageMultiUse und darf
     // diese Felder beim Aktivieren/Deaktivieren nicht mehr ueberlagern.
     patch.storage.standaloneSelfTargetGridImportW = patch.storage.selfTargetGridImportW;
     patch.storage.standaloneSelfImportThresholdW = patch.storage.selfImportThresholdW;
-    patch.storage.selfNvpSmoothingEnabled = true;
     patch.storage.selfNvpSmoothingSec = _clampInt(
       els.storageSelfNvpSmoothingSec ? els.storageSelfNvpSmoothingSec.value : patch.storage.selfNvpSmoothingSec,
       0, 120, 8,
     );
+    patch.storage.selfNvpSmoothingEnabled = patch.storage.selfNvpSmoothingSec > 0;
+    patch.storage.selfNvpFastServoEnabled = true;
     patch.storage.selfNvpRawGuardW = _clampInt(
       els.storageSelfNvpRawGuardW ? els.storageSelfNvpRawGuardW.value : patch.storage.selfNvpRawGuardW,
       50, 1000000, 100,
@@ -15024,15 +15024,16 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       );
       currentConfig.storage.selfImportThresholdW = _clampInt(
         els.storageSelfImportThresholdW ? els.storageSelfImportThresholdW.value : currentConfig.storage.standaloneSelfImportThresholdW,
-        0, 1000000, 50,
+        0, 1000000, 20,
       );
       currentConfig.storage.standaloneSelfTargetGridImportW = currentConfig.storage.selfTargetGridImportW;
       currentConfig.storage.standaloneSelfImportThresholdW = currentConfig.storage.selfImportThresholdW;
-      currentConfig.storage.selfNvpSmoothingEnabled = true;
       currentConfig.storage.selfNvpSmoothingSec = _clampInt(
         els.storageSelfNvpSmoothingSec ? els.storageSelfNvpSmoothingSec.value : currentConfig.storage.selfNvpSmoothingSec,
         0, 120, 8,
       );
+      currentConfig.storage.selfNvpSmoothingEnabled = currentConfig.storage.selfNvpSmoothingSec > 0;
+      currentConfig.storage.selfNvpFastServoEnabled = true;
       currentConfig.storage.selfNvpRawGuardW = _clampInt(
         els.storageSelfNvpRawGuardW ? els.storageSelfNvpRawGuardW.value : currentConfig.storage.selfNvpRawGuardW,
         50, 1000000, 100,

@@ -282,7 +282,7 @@ async function runStorageTick({
     battPowerW: 0,
     lastSource: 'pv',
   });
-  assert.strictEqual(realSurplus.targetW, -400, `realer Export muss bis zur unteren Bandkante 0 W genau 400 W Ladung erlauben, got ${realSurplus.targetW}`);
+  assert.strictEqual(realSurplus.targetW, -450, `realer Export muss direkt zur NVP-Zielmitte +50 W genau 450 W Ladung erlauben, got ${realSurplus.targetW}`);
 
   const chargeStable = await runStorageTick({
     runtimePolicy: {
