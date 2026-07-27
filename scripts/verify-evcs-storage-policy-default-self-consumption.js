@@ -19,11 +19,17 @@ const path = require('path');
 const {
   ChargingManagementModule,
   resolveEvcsStoragePolicy,
+  resolveEvcsStoragePolicyActualLoad,
 } = require(path.join(__dirname, '..', 'ems', 'modules', 'charging-management.js'));
-const { SpeicherRegelungModule } = require(path.join(__dirname, '..', 'ems', 'modules', 'storage-control.js'));
+const {
+  SpeicherRegelungModule,
+  resolveEvcsProtectedStorageTarget,
+} = require(path.join(__dirname, '..', 'ems', 'modules', 'storage-control.js'));
 
 assert.strictEqual(typeof ChargingManagementModule, 'function', 'charging module export missing');
 assert.strictEqual(typeof resolveEvcsStoragePolicy, 'function', 'storage policy helper must be exported');
+assert.strictEqual(typeof resolveEvcsStoragePolicyActualLoad, 'function', 'actual EVCS vehicle-load helper must be exported');
+assert.strictEqual(typeof resolveEvcsProtectedStorageTarget, 'function', 'EVCS protected storage target helper must be exported');
 
 const normal = resolveEvcsStoragePolicy(false, false);
 assert.deepStrictEqual(normal, {
@@ -52,6 +58,82 @@ assert.deepStrictEqual(assist, {
   assistRequested: true,
   protectionRequested: false,
 }, 'explicit assist choice must allow storage use without protection');
+
+// RC21: Speicherschutz darf nur echte Fahrzeugladeleistung verwenden. Ein
+// ladebereiter ABL-eMH1-Status mit ca. 69 W Elektronik-/Standbyverbrauch ist
+// normale Gebaeudelast und darf weder Schutzbudget noch 0-W-Pulse erzeugen.
+const ablStandby = resolveEvcsStoragePolicyActualLoad({
+  actualPowerW: 69,
+  meterFresh: true,
+  online: true,
+  enabled: true,
+  vehicleDemandConfirmed: true,
+  vehicleStateNormalized: 'ready_to_charge',
+  activityThresholdW: 100,
+  storageProtectionRequested: true,
+});
+assert.strictEqual(ablStandby.actualVehicleLoadW, 0, 'ABL B2 standby below threshold must not count as vehicle charging load');
+assert.strictEqual(ablStandby.protectedLoadW, 0, 'ABL B2 standby must not create protected storage load');
+assert.strictEqual(ablStandby.protectedWallbox, false, 'ABL B2 standby must not count as actively charging protected wallbox');
+assert.strictEqual(ablStandby.reason, 'standby-below-activity-threshold', 'standby diagnostic reason missing');
+
+const realVehicleCharge = resolveEvcsStoragePolicyActualLoad({
+  actualPowerW: 4200,
+  meterFresh: true,
+  online: true,
+  enabled: true,
+  vehicleDemandConfirmed: true,
+  vehicleStateNormalized: 'charging',
+  activityThresholdW: 100,
+  storageProtectionRequested: true,
+});
+assert.strictEqual(realVehicleCharge.protectedLoadW, 4200, 'real confirmed vehicle charging load must be protected');
+assert.strictEqual(realVehicleCharge.protectedWallbox, true, 'real charging wallbox must count as protected wallbox');
+
+const staleVehicleCharge = resolveEvcsStoragePolicyActualLoad({
+  actualPowerW: 4200,
+  meterFresh: false,
+  online: true,
+  enabled: true,
+  vehicleDemandConfirmed: true,
+  vehicleStateNormalized: 'charging',
+  activityThresholdW: 100,
+  storageProtectionRequested: true,
+});
+assert.strictEqual(staleVehicleCharge.protectedLoadW, 0, 'stale EVCS meter must not reserve protected load');
+
+// Zwischen zwei langsameren Speicher-Telemetrieproben darf ein bestaetigter
+// Entlade-Kommandoanker als zeitlich begrenzte Berechnungsbasis dienen. Bei
+// 4,2 kW EVCS-Last, 4,2 kW NVP-Bezug und zuletzt bestaetigten 1,5 kW Entladung
+// bleiben rund 1,45 kW Hausentladung erlaubt; 0 W waere ein falscher Puls.
+const asyncDischargeNoPulse = resolveEvcsProtectedStorageTarget({
+  requestedTargetW: 1500,
+  lastTargetW: 1500,
+  protectedEvcsLoadW: 4200,
+  nvpW: 4200,
+  targetNvpW: 50,
+  storageActualW: null,
+  storageDischargeBasisW: 1500,
+  storageDischargeBasisSource: 'confirmed-command-anchor',
+  deadbandW: 20,
+});
+assert.strictEqual(asyncDischargeNoPulse.targetW, 1450, `async feedback gap must cap to 1450 W instead of pulsing to 0 W, got ${asyncDischargeNoPulse.targetW}`);
+assert.strictEqual(asyncDischargeNoPulse.explicitStop, false, 'async feedback gap with house load must not be an explicit storage stop');
+assert.strictEqual(asyncDischargeNoPulse.storageDischargeBasisSource, 'confirmed-command-anchor', 'command-anchor source diagnostic missing');
+
+const evcsOnlyStillStops = resolveEvcsProtectedStorageTarget({
+  requestedTargetW: 1500,
+  lastTargetW: 1500,
+  protectedEvcsLoadW: 4200,
+  nvpW: 2750,
+  targetNvpW: 50,
+  storageActualW: null,
+  storageDischargeBasisW: 1500,
+  storageDischargeBasisSource: 'confirmed-command-anchor',
+  deadbandW: 20,
+});
+assert.strictEqual(evcsOnlyStillStops.targetW, 0, 'EVCS-only demand must still stop storage discharge');
+assert.strictEqual(evcsOnlyStillStops.explicitStop, true, 'EVCS-only discharge stop must remain explicit');
 
 const nowMs = () => Date.now();
 const entry = (val, objectId) => ({ val, ts: nowMs(), objectId });
@@ -99,12 +181,13 @@ class FakeDp {
   }
 }
 
-function makeAdapter({ runtimePolicy, stateProtectedLoadW = null, storagePatch = {} } = {}) {
+function makeAdapter({ runtimePolicy, stateProtectedLoadW = null, stateProtectedAgeMs = 0, storagePatch = {} } = {}) {
   const states = new Map();
   if (stateProtectedLoadW !== null) {
-    states.set('chargingManagement.control.storageProtectedLoadW', { val: stateProtectedLoadW, ts: nowMs() });
-    states.set('chargingManagement.control.storageProtectedWallboxes', { val: stateProtectedLoadW > 0 ? 1 : 0, ts: nowMs() });
-    states.set('chargingManagement.control.storageAssistRequestedLoadW', { val: 0, ts: nowMs() });
+    const policyStateTs = nowMs() - Math.max(0, Number(stateProtectedAgeMs) || 0);
+    states.set('chargingManagement.control.storageProtectedLoadW', { val: stateProtectedLoadW, ts: policyStateTs });
+    states.set('chargingManagement.control.storageProtectedWallboxes', { val: stateProtectedLoadW > 0 ? 1 : 0, ts: policyStateTs });
+    states.set('chargingManagement.control.storageAssistRequestedLoadW', { val: 0, ts: policyStateTs });
   }
   return {
     config: {
@@ -151,6 +234,7 @@ function makeAdapter({ runtimePolicy, stateProtectedLoadW = null, storagePatch =
 async function runStorageTick({
   runtimePolicy,
   stateProtectedLoadW = null,
+  stateProtectedAgeMs = 0,
   lastTargetW = 0,
   lastSource = 'eigenverbrauch',
   gridW = 4200,
@@ -170,7 +254,7 @@ async function runStorageTick({
     entries['st.batteryPowerW'] = entry(battPowerW, 'battery.actualPower');
   }
   const dp = new FakeDp(entries);
-  const adapter = makeAdapter({ runtimePolicy, stateProtectedLoadW, storagePatch });
+  const adapter = makeAdapter({ runtimePolicy, stateProtectedLoadW, stateProtectedAgeMs, storagePatch });
   const module = new SpeicherRegelungModule(adapter, dp);
   module._lastTargetW = lastTargetW;
   module._lastSource = lastSource;
@@ -338,6 +422,13 @@ async function runStorageTick({
   assert(staleStateIgnored.targetW >= 4000, `same-cycle normal policy must override stale protected state, got ${staleStateIgnored.targetW} W`);
   assert.strictEqual(staleStateIgnored.source, 'charging-tick-reset', 'same-cycle runtime policy source must be used');
 
+  const expiredStateFallbackIgnored = await runStorageTick({
+    stateProtectedLoadW: 4100,
+    stateProtectedAgeMs: 6000,
+  });
+  assert(expiredStateFallbackIgnored.targetW >= 4000, `EVCS-Schutz-State aelter als 5 s muss ignoriert werden, got ${expiredStateFallbackIgnored.targetW} W`);
+  assert.strictEqual(expiredStateFallbackIgnored.protectedLoadW, 0, 'abgelaufener EVCS-Schutz-State darf keine Last mehr liefern');
+
   const stateFallbackProtect = await runStorageTick({ stateProtectedLoadW: 4100 });
   assert.strictEqual(stateFallbackProtect.targetW, null, 'state fallback without an active storage command must remain no-write');
   assert.strictEqual(stateFallbackProtect.source, 'state-fallback', 'fallback source diagnostic missing');
@@ -350,7 +441,7 @@ async function runStorageTick({
   });
   assert.strictEqual(stateFallbackActiveProtect.targetW, 0, 'state fallback must stop an actually active discharge for old runtimes');
 
-  console.log('[evcs-storage-policy-default-self-consumption] OK: normal/protect/assist plus asymmetrischer Hauslast-, Ueberschuss- und 0-W-Schutzstop sind durch den realen Speicher-Tick verifiziert.');
+  console.log('[evcs-storage-policy-default-self-consumption] OK: normal/protect/assist, ABL-Standbyfilter, asynchroner Entladeanker sowie Hauslast-, Ueberschuss- und echte 0-W-Schutzstopps sind verifiziert.');
 })().catch((err) => {
   console.error('[evcs-storage-policy-default-self-consumption] ERROR:', err && err.stack ? err.stack : err);
   process.exit(1);

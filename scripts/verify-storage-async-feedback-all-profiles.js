@@ -337,6 +337,56 @@ async function runNoFeedbackSafety() {
   assert(feedback && feedback.val === false, 'Ohne Batterie-Istwert muss der Feedback-Puffer inaktiv bleiben');
 }
 
+async function runEvcsProtectionAsyncNoPulse() {
+  const adapter = makeAdapter({ profile: 'generic', farm: false });
+  adapter.config.storage.selfImportThresholdW = 20;
+  adapter._emsCaps = {
+    evcsStoragePolicy: {
+      protectedLoadW: 4200,
+      protectedWallboxes: 1,
+      assistRequestedLoadW: 0,
+      source: 'test-real-vehicle-load',
+      ts: nowMs(),
+    },
+  };
+
+  // Batterie-Istleistung ist 20 s alt, liegt aber noch innerhalb des sicheren
+  // Async-Haltefensters. Der NVP kommt weiterhin sekundenaktuell. Genau in diesem
+  // Zwischenraum erzeugte der EVCS-Speicherschutz frueher 0-W-Pulse bzw. eine
+  // schrittweise Absenkung bis 0 W.
+  const sampleTs = nowMs() - 20000;
+  const dp = new MutableDp({
+    'grid.powerW': { val: 4200, objectId: 'grid.filtered', ts: nowMs() },
+    'grid.powerRawW': { val: 4200, objectId: 'grid.raw', ts: nowMs() },
+    'st.socPct': { val: 80, objectId: 'battery.soc', ts: nowMs() },
+    'st.batteryPowerW': { val: 1500, objectId: 'battery.actualPower', ts: sampleTs },
+    'st.targetPowerW': entry(0, 'battery.targetPowerW'),
+  });
+  const mod = new SpeicherRegelungModule(adapter, dp);
+
+  for (let i = 0; i < 8; i += 1) {
+    dp.entries['grid.powerW'].ts = nowMs();
+    dp.entries['grid.powerRawW'].ts = nowMs();
+    dp.entries['st.batteryPowerW'].ts = sampleTs;
+    await mod.tick();
+    const target = dp.lastWrite('st.targetPowerW');
+    assert.strictEqual(target, 1450, `EVCS-Schutz Async-Tick ${i + 1}: Hausentladung muss stabil 1450 W bleiben, erhalten ${target}`);
+    const diagState = adapter._states.get('speicher.regelung.evcsSpeicherSchutzJson');
+    const diag = diagState ? JSON.parse(String(diagState.val || '{}')) : {};
+    assert.strictEqual(diag.explicitStop, false, `EVCS-Schutz Async-Tick ${i + 1}: kein expliziter 0-W-Stopp zulaessig`);
+    assert.strictEqual(diag.storageDischargeBasisSource, 'async-feedback-anchor', `EVCS-Schutz Async-Tick ${i + 1}: Async-Messanker muss verwendet werden`);
+  }
+
+  // Reagiert der NVP auf die um 50 W reduzierte Speicherleistung, attribuiert der
+  // vorhandene Async-Regler diese Reaktion genau einmal. Der Zielwert bleibt
+  // weiterhin bei 1450 W und pendelt weder auf 1500 W zurueck noch Richtung 0 W.
+  dp.setValue('grid.powerW', 4250);
+  dp.setValue('grid.powerRawW', 4250);
+  dp.entries['st.batteryPowerW'].ts = sampleTs;
+  await mod.tick();
+  assert.strictEqual(dp.lastWrite('st.targetPowerW'), 1450, 'EVCS-Schutz: erwartete NVP-Reaktion muss den bestaetigten Hausentlade-Sollwert stabil halten');
+}
+
 async function runExactSungrowCustomerCase() {
   const adapter = makeAdapter({ profile: 'sungrow-hybrid', farm: false });
   const sampleTs = nowMs() - 2000;
@@ -409,9 +459,10 @@ async function runExactSungrowCustomerCase() {
   await runPersistentDischargeProfile({ name: 'Speicherfarm', profile: 'generic', targetMode: 'signed', farm: true });
   await runChargeSequence();
   await runExactSungrowCustomerCase();
+  await runEvcsProtectionAsyncNoPulse();
   await runNoFeedbackSafety();
 
-  console.log('[storage-async-feedback-all-profiles] OK: Async-Telemetrie nutzt Mess- und Kommando-Anker ohne Sollwertintegration; Sungrow, signed, split, E3/DC und Farm bleiben stabil.');
+  console.log('[storage-async-feedback-all-profiles] OK: Async-Telemetrie und EVCS-Speicherschutz nutzen stabile Mess-/Kommandoanker ohne 0-W-Pulse oder Sollwertintegration; Sungrow, signed, split, E3/DC und Farm bleiben stabil.');
 })().catch((err) => {
   console.error('[storage-async-feedback-all-profiles] ERROR:', err && err.stack ? err.stack : err);
   process.exit(1);

@@ -1,3 +1,15 @@
+## 0.8.145 - 2026-07-27
+
+- EVCS-Speicherschutz auf tatsächliche Fahrzeugladeleistung umgestellt: Nur eine frische, bestätigte Fahrzeuglast oberhalb der Aktivitätsschwelle wird als geschützte E-Mobilitätslast oder Speicher-Assist-Bedarf veröffentlicht. Wallbox-Elektronik und Standby bleiben normale Gebäudelast.
+- ABL-eMH1-Feldfall abgesichert: `B2 EV has the permission to charge` mit rund 69 W Bereitschaftsverbrauch erzeugt weder `storageProtectedLoadW` noch einen Speicher-Stopp. Eine normale Eigenverbrauchsentladung darf dadurch nicht mehr zwischen Entladen und 0 W pendeln.
+- EVCS-Schutzberechnung nach der herstellerunabhängigen Fahrzeugstatus-Normalisierung ausgeführt. `protect` und `assist` sind dabei exklusiv; dieselbe Fahrzeugleistung kann nicht gleichzeitig geschützt und als Speicherunterstützung angefordert werden.
+- Kurze Lücken der physischen Speicher-Istleistung gehärtet: Ein frischer gehaltener Messanker oder ein zeitlich begrenzter, durch Kommandodatenpunkt-Readback bestätigter Entladeanker darf die Hauslastberechnung fortführen. Dadurch entstehen zwischen langsameren Batterie-Telemetrieproben keine künstlichen 0-W-Pulse.
+- Echte Stoppbedingungen bleiben erhalten: Verursacht die geschützte EVCS-Ladung allein den Netzbedarf, wird die Speicherentladung weiterhin ausdrücklich mit 0 W beendet. Fehlen NVP sowie sämtliche frischen/gehaltenen/bestätigten Speicherbasen, bleibt der Pfad fail-safe.
+- Veraltete EVCS-Schutzwerte werden standardmäßig nach 5 Sekunden statt bis zu 60 Sekunden verworfen; der konfigurierbare Bereich ist auf 1 bis 15 Sekunden begrenzt.
+- Verdeckte Diagnose je Ladepunkt um tatsächliche Speicher-Policy-Fahrzeuglast und Begründung ergänzt, ohne die sichtbare AppCenter-Statusseite mit neuen Karten aufzublähen.
+- Neue Regression `test:evcs-storage-protection-no-standby-pulse` prüft ABL-Standby, reale 4,2-kW-Fahrzeuglast, Assist-/Protect-Exklusivität, veraltete Messwerte, Telemetrielücken, echten EVCS-Alleinlast-Stopp und den fail-safe-Fall ohne Speicherbasis.
+- TypeScript-Migrationskontrolle: keine zusätzliche `@ts-nocheck`-Datei (weiterhin 58); der offen ausgewiesene Zeilenrahmen steigt für Fahrzeuglastfilter, Entladeanker und Regressionen von 146.182 auf 146.337 Zeilen.
+
 ## 0.8.144 - 2026-07-27
 
 - Zentralen NVP-Schnellregler für Einzelspeicher und Speicherfarm eingeführt: Jede frische externe NVP-Zählerprobe startet nach 75 ms Debounce einen vollständigen zentralen EMS-Tick; der normale Ein-Sekunden-Tick bleibt als Watchdog bestehen.

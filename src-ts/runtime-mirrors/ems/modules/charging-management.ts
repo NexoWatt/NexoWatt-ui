@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 9a69bf9409aee111c78a3e5bfd8b2bfd4f73fa060c88694b5c08068713009758
+ * Original-Hash: cc302ac8b98c7cda5a55a63dcf7d813a8a81587a4b4ba9f206d5195e76adda58
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:8b510ad8554cd5ffb0881be7425b2adbd797b9942e836a1d1523b2e470b71f38
+ * Quell-Hash: sha256:034a78703aa450810873bf1d9ba76a73c2b0d8e46a0875c1929546e850d52bc0
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1556,6 +1556,64 @@ function resolveEvcsStoragePolicy(customerAllowed, userAssistEnabled) {
     const assist = allowed && userAssistEnabled === true;
     const protect = allowed && !assist;
     return { mode: assist ? 'assist' : (protect ? 'protect' : 'normal'), assistRequested: assist, protectionRequested: protect };
+}
+
+
+/**
+ * Trennt echte Fahrzeugladeleistung von Wallbox-Eigenverbrauch/Standby.
+ *
+ * Der Speicherschutz darf nur den tatsaechlich vom Fahrzeug aufgenommenen,
+ * frischen Leistungsanteil aus dem Hauslastausgleich entfernen. Eine ladebereite
+ * Wallbox mit z. B. 69 W Elektronikverbrauch bleibt normale Gebaeudelast und darf
+ * keinen 0-W-Impuls der Speicherregelung ausloesen.
+ */
+function resolveEvcsStoragePolicyActualLoad({
+    actualPowerW = 0,
+    meterFresh = false,
+    online = false,
+    enabled = false,
+    vehicleDemandConfirmed = false,
+    vehicleStateNormalized = 'unknown',
+    activityThresholdW = 100,
+    storageProtectionRequested = false,
+    storageAssistRequested = false,
+} = {}) {
+    const actualW = Math.max(0, Math.abs(Number(actualPowerW) || 0));
+    const thresholdW = Math.max(1, Number(activityThresholdW) || 100);
+    const state = String(vehicleStateNormalized || 'unknown');
+    const demandConfirmed = vehicleDemandConfirmed === true || state === 'charging';
+    const operational = online === true && enabled === true;
+    const measurementUsable = operational && meterFresh === true;
+    const assistRequested = storageAssistRequested === true;
+    const protectionRequested = storageProtectionRequested === true && !assistRequested;
+    const actualVehicleLoadW = measurementUsable && demandConfirmed && actualW >= thresholdW
+        ? actualW
+        : 0;
+
+    let reason = 'policy-normal';
+    if (protectionRequested || assistRequested) {
+        if (!operational) reason = 'wallbox-not-operational';
+        else if (!meterFresh) reason = 'meter-not-fresh';
+        else if (!demandConfirmed) reason = 'no-confirmed-vehicle-demand';
+        else if (actualW < thresholdW) reason = 'standby-below-activity-threshold';
+        else reason = assistRequested ? 'assist-actual-vehicle-load' : 'protect-actual-vehicle-load';
+    }
+
+    return {
+        actualPowerW: actualW,
+        thresholdW,
+        meterFresh: meterFresh === true,
+        online: online === true,
+        enabled: enabled === true,
+        demandConfirmed,
+        vehicleStateNormalized: state,
+        actualVehicleLoadW,
+        protectedLoadW: protectionRequested ? actualVehicleLoadW : 0,
+        assistRequestedLoadW: assistRequested ? actualVehicleLoadW : 0,
+        protectedWallbox: protectionRequested && actualVehicleLoadW > 0,
+        active: actualVehicleLoadW > 0,
+        reason,
+    };
 }
 
 /** Code-Teil: Klasse `ChargingManagementModule` – enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden. */
@@ -3922,6 +3980,9 @@ class ChargingManagementModule extends BaseModule {
         await mk('userStorageAssistEnabled', 'Speicher für Laden mitnutzen (User)', 'boolean', 'switch.enable', true, { def: false, states: { true: 'Mitnutzen', false: 'Nicht mitnutzen' } });
         await mk('storagePolicyMode', 'Speicher-Policy (normal|protect|assist)', 'string', 'text');
         await mk('storageProtectionRequested', 'Speicher-Schutz für Ladepunkt explizit aktiv', 'boolean', 'indicator');
+        await mk('storagePolicyActualLoadW', 'Tatsächliche EV-Fahrzeuglast für Speicher-Policy (W)', 'number', 'value.power');
+        await mk('storagePolicyActualLoadActive', 'Tatsächliche EV-Fahrzeuglast für Speicher-Policy aktiv', 'boolean', 'indicator');
+        await mk('storagePolicyActualLoadReason', 'Tatsächliche EV-Fahrzeuglast für Speicher-Policy Grund', 'string', 'text');
         await mk('effectiveStorageAssist', 'Speicher-Mitnutzung effektiv', 'boolean', 'indicator');
         await mk('storageAssistBlockedReason', 'Speicher-Mitnutzung Grund', 'string', 'text');
         await mk('batteryContributionW', 'Speicheranteil EVCS (W)', 'number', 'value.power');
@@ -5107,16 +5168,6 @@ class ChargingManagementModule extends BaseModule {
             const pWFreshActualForGridW = (online && enabled && !meterStale && typeof pW === 'number' && Number.isFinite(pW)) ? Math.max(0, Math.abs(pW)) : 0;
             const pWStaleIgnoredForGridW = (online && enabled && meterStale && typeof pW === 'number' && Number.isFinite(pW)) ? Math.max(0, Math.abs(pW)) : 0;
 
-            // Nur expliziter protect-Modus nimmt die frische Wallboxlast aus dem NVP-Regelkreis.
-            if (pWFreshActualForGridW > 0) {
-                if (storageAssistRequested) {
-                    storageAssistRequestedLoadW += pWFreshActualForGridW;
-                } else if (storageProtectionRequested) {
-                    storageProtectedLoadW += pWFreshActualForGridW;
-                    storageProtectedWallboxes += 1;
-                }
-            }
-
             if (typeof pWUsed === 'number' && Number.isFinite(pWUsed)) totalPowerW += pWUsed;
             totalFreshActualPowerW += pWFreshActualForGridW;
             totalStaleActualIgnoredForGridW += pWStaleIgnoredForGridW;
@@ -5303,6 +5354,30 @@ class ChargingManagementModule extends BaseModule {
             vehicleDemandSource = String(vehicleDemand.source || '');
             vehicleDemandReason = String(vehicleDemand.reason || '');
             const vehicleStateNormalized = String(vehicleDemand.state || 'unknown');
+
+            // Speicher-Schutz/Assist zaehlt nur frische, bestaetigte Fahrzeuglast.
+            // Wallbox-Eigenverbrauch unterhalb der Aktivitaetsschwelle (z. B. ABL
+            // eMH1 mit rund 69 W im B2-Wartezustand) bleibt normale Gebaeudelast.
+            const storagePolicyActualLoad = resolveEvcsStoragePolicyActualLoad({
+                actualPowerW: pWFreshActualForGridW,
+                meterFresh: !meterStale,
+                online,
+                enabled,
+                vehicleDemandConfirmed,
+                vehicleStateNormalized,
+                activityThresholdW,
+                storageProtectionRequested,
+                storageAssistRequested,
+            });
+            storageProtectedLoadW += storagePolicyActualLoad.protectedLoadW;
+            storageAssistRequestedLoadW += storagePolicyActualLoad.assistRequestedLoadW;
+            if (storagePolicyActualLoad.protectedWallbox) storageProtectedWallboxes += 1;
+            try {
+                await this._queueState(`${ch}.storagePolicyActualLoadW`, Math.round(storagePolicyActualLoad.actualVehicleLoadW), true);
+                await this._queueState(`${ch}.storagePolicyActualLoadActive`, storagePolicyActualLoad.active === true, true);
+                await this._queueState(`${ch}.storagePolicyActualLoadReason`, String(storagePolicyActualLoad.reason || ''), true);
+            } catch { /* diagnostics only */ }
+
             // Track plug transitions (used for SoC freshness gating)
             if (vehiclePlugged === true || vehiclePlugged === false) {
                 const prev = this._vehiclePluggedPrev.get(safe);
@@ -5624,6 +5699,8 @@ class ChargingManagementModule extends BaseModule {
                 userStorageAssistEnabled,
                 storageAssistRequested,
                 storageProtectionRequested,
+                storagePolicyActualLoadW: storagePolicyActualLoad.actualVehicleLoadW,
+                storagePolicyActualLoadReason: storagePolicyActualLoad.reason,
                 effectiveStorageAssist: false,
                 storageAssistBlockedReason: storageAssistCustomerAllowed ? (userStorageAssistEnabled ? 'pending' : 'user-disabled') : 'installer-locked',
                 batteryContributionW: 0,
@@ -9955,6 +10032,7 @@ module.exports = {
     computeEvcsPvBudgetReservationW,
     resolveChargingPvBudgetControl,
     resolveEvcsStoragePolicy,
+    resolveEvcsStoragePolicyActualLoad,
     normalizeEvcsOnlineFlag,
     normalizeEvcsStatusReachability,
     normalizeEvcsStatusToken,

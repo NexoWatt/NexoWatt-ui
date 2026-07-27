@@ -175,6 +175,9 @@ function resolveEvcsProtectedStorageTarget(input = {}) {
     const targetNvpW = finite(input.targetNvpW) ? Number(input.targetNvpW) : 0;
     const storageActualKnown = finite(input.storageActualW);
     const storageActualW = storageActualKnown ? Number(input.storageActualW) : 0;
+    const storageDischargeBasisKnown = finite(input.storageDischargeBasisW);
+    const storageDischargeBasisW = storageDischargeBasisKnown ? Number(input.storageDischargeBasisW) : 0;
+    const storageDischargeBasisSource = String(input.storageDischargeBasisSource || (storageActualKnown ? 'fresh-physical-feedback' : 'missing'));
     const deadbandW = Math.max(0, finite(input.deadbandW) ? Number(input.deadbandW) : 50);
     const activeThresholdW = deadbandW;
     const actualChargeActive = storageActualKnown && storageActualW < -activeThresholdW;
@@ -191,6 +194,9 @@ function resolveEvcsProtectedStorageTarget(input = {}) {
             targetNvpW,
             storageActualW: storageActualKnown ? storageActualW : null,
             storageActualKnown,
+            storageDischargeBasisW: storageDischargeBasisKnown ? storageDischargeBasisW : null,
+            storageDischargeBasisKnown,
+            storageDischargeBasisSource,
             totalDesiredW: null,
             houseDesiredW: null,
             chargeAllowanceW: null,
@@ -216,6 +222,9 @@ function resolveEvcsProtectedStorageTarget(input = {}) {
             targetNvpW,
             storageActualW: storageActualKnown ? storageActualW : null,
             storageActualKnown,
+            storageDischargeBasisW: storageDischargeBasisKnown ? storageDischargeBasisW : null,
+            storageDischargeBasisKnown,
+            storageDischargeBasisSource,
             totalDesiredW: null,
             houseDesiredW: null,
             chargeAllowanceW: 0,
@@ -233,13 +242,17 @@ function resolveEvcsProtectedStorageTarget(input = {}) {
     // D = NVP + Speicher-Ist. Daraus entstehen zwei getrennte Ziele:
     // - Gesamtziel: Laden nur bei echtem Gesamtueberschuss.
     // - Hausziel: Entladen nur fuer den Anteil ohne geschuetzte EVCS-Leistung.
-    // Ohne frischen beziehungsweise vom Async-Feedback-Anker bestaetigten
-    // Speicher-Istwert darf ein alter Sollwert die EVCS-Last nicht als Hausbedarf
-    // erscheinen lassen. Fuer die Ladefreigabe wird ein alter positiver Entladebefehl
-    // jedoch konservativ beruecksichtigt, damit dessen Export nicht faelschlich als
-    // PV-Ueberschuss interpretiert und unmittelbar in Netzladen umgedreht wird.
+    // Fuer die Ladefreigabe darf weiterhin nur ein frischer physischer Istwert
+    // beziehungsweise konservativ ein positiver letzter Befehl dienen. Fuer die
+    // Entladebegrenzung darf eine kurze asynchrone Telemetrieluecke dagegen nicht
+    // auf 0 W fallen: Dort wird der vom Aufrufer bestaetigte physische Messanker oder
+    // ein zeitlich begrenzter, per Readback akzeptierter Kommandoanker verwendet.
+    // Dadurch entstehen bei aktiver EVCS-Ladung keine Entladen -> 0 W -> Entladen-
+    // Pulse zwischen zwei Batterie-Telemetrieproben.
     const chargeBasisStorageW = storageActualKnown ? storageActualW : Math.max(0, lastTargetW);
-    const dischargeBasisStorageW = storageActualKnown ? storageActualW : 0;
+    const dischargeBasisStorageW = storageActualKnown
+        ? storageActualW
+        : (storageDischargeBasisKnown ? storageDischargeBasisW : 0);
     const totalDesiredW = chargeBasisStorageW + nvpW - targetNvpW;
     const houseDesiredW = dischargeBasisStorageW + nvpW - targetNvpW - protectedLoadW;
     const chargeAllowanceW = Math.max(0, -totalDesiredW);
@@ -333,6 +346,9 @@ function resolveEvcsProtectedStorageTarget(input = {}) {
         targetNvpW,
         storageActualW: storageActualKnown ? storageActualW : null,
         storageActualKnown,
+        storageDischargeBasisW: storageDischargeBasisKnown ? storageDischargeBasisW : null,
+        storageDischargeBasisKnown,
+        storageDischargeBasisSource,
         chargeBasisStorageW,
         dischargeBasisStorageW,
         totalDesiredW,
@@ -2024,7 +2040,11 @@ class SpeicherRegelungModule extends BaseModule {
         // - Laden bleibt nur aus einem realen Gesamtueberschuss am NVP erlaubt.
         // Die finale Schranke liegt nach allen Herstellerprofilen und wirkt deshalb
         // identisch fuer Sungrow, FENECON, E3/DC, Signed- und Split-Sollwerte.
-        const protectedEvcsMaxAgeMs = Math.max(staleMs * 3, 60000);
+        // Der Same-Cycle-Snapshot ist autoritativ. Der ioBroker-State bleibt nur
+        // ein sehr kurzer Kompatibilitaetsfallback fuer alte Modulreihenfolgen; ein
+        // alter EVCS-Schutzwert darf die Speicherregelung niemals bis zu 60 Sekunden
+        // weiter beeinflussen.
+        const protectedEvcsMaxAgeMs = Math.max(1000, Math.min(15000, num(cfg.evcsStoragePolicyMaxAgeMs, 5000)));
         const sharedCaps = (this.adapter && this.adapter._emsCaps && typeof this.adapter._emsCaps === 'object') ? this.adapter._emsCaps : null;
         const runtimeEvcsStoragePolicy = (sharedCaps && sharedCaps.evcsStoragePolicy && typeof sharedCaps.evcsStoragePolicy === 'object') ? sharedCaps.evcsStoragePolicy : null;
         const runtimePolicyTs = Number(runtimeEvcsStoragePolicy && runtimeEvcsStoragePolicy.ts);
@@ -4533,6 +4553,16 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 && Number.isFinite(Number(storageNvpBalanceDiag.actualBatteryW))
                 ? Number(storageNvpBalanceDiag.actualBatteryW)
                 : null;
+            // Fuer die Entladebegrenzung darf auch der vorhandene Async-Messanker
+            // genutzt werden. `actualBatteryW` wird dort aus dem letzten echten
+            // physischen Sample plus der einmalig attribuierten NVP-Reaktion
+            // gebildet und integriert denselben Fehler nicht erneut. Fuer eine
+            // Ladefreigabe bleibt dieser gehaltene Wert weiterhin unzulaessig.
+            const diagDischargeBasisW = storageNvpBalanceDiag
+                && storageNvpBalanceDiag.feedbackUsed === true
+                && Number.isFinite(Number(storageNvpBalanceDiag.actualBatteryW))
+                ? Number(storageNvpBalanceDiag.actualBatteryW)
+                : null;
             const protectionStorageActualW = diagActualW !== null
                 ? diagActualW
                 : (!feedbackHeldForProtection && balanceBatteryTrusted && Number.isFinite(Number(balanceBatteryPowerW))
@@ -4540,6 +4570,51 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     : (!feedbackHeldForProtection && battPowerTrusted && typeof battPowerW === 'number' && Number.isFinite(battPowerW)
                         ? Number(battPowerW)
                         : null));
+
+            // Fuer die Entladebegrenzung bleibt ein echter, vom Async-Feedback-
+            // Puffer gehaltener physischer Messanker zulaessig. Ist der letzte per
+            // DP-Readback bestaetigte Befehl neuer als diese Messprobe, darf er fuer
+            // ein begrenztes Reaktionsfenster als Kommandoanker dienen. Fuer die
+            // Ladefreigabe wird dieser Wert bewusst NICHT verwendet.
+            const feedbackCadenceMs = Number.isFinite(Number(feedbackSampleCadenceMs))
+                ? Math.max(250, Number(feedbackSampleCadenceMs))
+                : 0;
+            const protectionCommandGraceMs = Math.max(
+                10000,
+                Math.min(30000, feedbackCadenceMs > 0 ? Math.round((feedbackCadenceMs * 2.5) + 1000) : 10000),
+            );
+            const lastTargetWriteMs = Number(this._lastTargetWriteMs) || 0;
+            const commandAnchorAgeMs = lastTargetWriteMs > 0 ? Math.max(0, now - lastTargetWriteMs) : Number.POSITIVE_INFINITY;
+            const commandAnchorFresh = lastTargetWriteMs > 0
+                && commandAnchorAgeMs <= protectionCommandGraceMs
+                && Number.isFinite(lastActiveTargetW);
+            const feedbackSampleTsForProtection = Number(storageBalanceFeedback && storageBalanceFeedback.sampleTs) || 0;
+            const commandNewerThanFeedback = commandAnchorFresh
+                && lastTargetWriteMs > (feedbackSampleTsForProtection + 2);
+            const heldPhysicalBasisW = balanceBatteryTrusted && Number.isFinite(Number(balanceBatteryPowerW))
+                ? Number(balanceBatteryPowerW)
+                : null;
+            let protectionStorageDischargeBasisW = protectionStorageActualW;
+            let protectionStorageDischargeBasisSource = protectionStorageActualW !== null
+                ? 'fresh-physical-feedback'
+                : 'missing';
+            if (protectionStorageDischargeBasisW === null) {
+                if (diagDischargeBasisW !== null) {
+                    protectionStorageDischargeBasisW = diagDischargeBasisW;
+                    protectionStorageDischargeBasisSource = feedbackHeldForProtection
+                        ? 'async-feedback-anchor'
+                        : 'fresh-physical-feedback';
+                } else if (heldPhysicalBasisW !== null) {
+                    protectionStorageDischargeBasisW = heldPhysicalBasisW;
+                    protectionStorageDischargeBasisSource = 'held-physical-feedback';
+                } else if (commandNewerThanFeedback || commandAnchorFresh) {
+                    // Nur letzter Fallback, falls noch kein physischer Messanker
+                    // vorhanden ist. Der zentrale Anti-Export-/Feedback-Schutz
+                    // entscheidet danach weiterhin fail-safe ueber die Freigabe.
+                    protectionStorageDischargeBasisW = lastActiveTargetW;
+                    protectionStorageDischargeBasisSource = 'confirmed-command-anchor';
+                }
+            }
 
             const requestedBeforeProtectionW = Number(targetW) || 0;
             evcsProtectionDiag = resolveEvcsProtectedStorageTarget({
@@ -4549,6 +4624,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 nvpW: protectionNvpW,
                 targetNvpW: protectionTargetNvpW,
                 storageActualW: protectionStorageActualW,
+                storageDischargeBasisW: protectionStorageDischargeBasisW,
+                storageDischargeBasisSource: protectionStorageDischargeBasisSource,
                 // Der Schutz verwendet das NVP-Toleranzband, nicht die Leistungsrampe.
                 // maxDelta/stepW kann mehrere hundert Watt betragen und wuerde sonst
                 // kleine, aber reale PV-Ueberschuesse unnoetig unterdruecken.
