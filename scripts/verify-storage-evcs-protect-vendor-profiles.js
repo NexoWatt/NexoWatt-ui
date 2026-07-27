@@ -45,7 +45,9 @@ function resolve(patch = {}) {
 // Charging publiziert nur die explizit geschuetzte, frische EVCS-Leistung.
 assertContains(charging, 'chargingManagement.control.storageProtectedLoadW', 'EVCS protected-load state');
 assertContains(charging, 'publishEvStoragePolicyCaps', 'same-cycle EVCS storage policy');
-assertContains(charging, "const protect = allowed && !assist", 'explizite Protect/Assist-Trennung');
+assertContains(charging, "const modeAllowsStoragePolicy = normalizedMode === 'auto'", 'modegebundene EVCS-Speicherpolicy');
+assertContains(charging, "const protect = allowed && modeAllowsStoragePolicy && !assist", 'explizite Protect/Assist-Trennung');
+assertContains(charging, 'resolveEvcsStoragePolicy(storageAssistCustomerAllowed, userStorageAssistEnabled, userMode)', 'PV-Modus muss die Speicherpolicy zur Laufzeit neutralisieren');
 
 // Der alte symmetrische NVP-Offset ist entfernt. Er hatte bei Teildeckung der
 // Wallbox Netzladen des Speichers erzeugt.

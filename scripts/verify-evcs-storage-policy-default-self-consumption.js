@@ -15,6 +15,7 @@
  *   asynchron veröffentlichten Schutz-State überschrieben werden.
  */
 const assert = require('assert');
+const fs = require('fs');
 const path = require('path');
 const {
   ChargingManagementModule,
@@ -58,6 +59,40 @@ assert.deepStrictEqual(assist, {
   assistRequested: true,
   protectionRequested: false,
 }, 'explicit assist choice must allow storage use without protection');
+
+
+// RC22: Reine PV-Ueberschussladung ist bereits physikalisch auf PV begrenzt.
+// Speicherschutz und Speicher-Assist duerfen deshalb nur in Auto, Boost und
+// Min+PV eingreifen. Die gespeicherte Kundenwahl wird lediglich zur Laufzeit
+// neutralisiert und wirkt nach einem Moduswechsel wieder.
+const purePvProtectBypassed = resolveEvcsStoragePolicy(true, false, 'pv');
+assert.deepStrictEqual(purePvProtectBypassed, {
+  mode: 'normal',
+  assistRequested: false,
+  protectionRequested: false,
+}, 'pure PV mode must bypass storage protection');
+
+const purePvAssistBypassed = resolveEvcsStoragePolicy(true, true, 'pv');
+assert.deepStrictEqual(purePvAssistBypassed, {
+  mode: 'normal',
+  assistRequested: false,
+  protectionRequested: false,
+}, 'pure PV mode must bypass stationary-storage assist');
+
+const autoProtect = resolveEvcsStoragePolicy(true, false, 'auto');
+assert.strictEqual(autoProtect.protectionRequested, true, 'auto mode must keep storage protection active');
+const boostProtect = resolveEvcsStoragePolicy(true, false, 'boost');
+assert.strictEqual(boostProtect.protectionRequested, true, 'boost mode must keep storage protection active');
+const minPvProtect = resolveEvcsStoragePolicy(true, false, 'min+pv');
+assert.strictEqual(minPvProtect.protectionRequested, true, 'Min+PV mode must keep storage protection active');
+const minPvAssist = resolveEvcsStoragePolicy(true, true, 'minpv');
+assert.strictEqual(minPvAssist.assistRequested, true, 'Min+PV mode must keep storage assist active when selected');
+
+const chargingRuntimeSource = fs.readFileSync(path.join(__dirname, '..', 'src-ts', 'runtime-executables', 'ems', 'modules', 'charging-management.ts'), 'utf8');
+assert(
+  chargingRuntimeSource.includes('resolveEvcsStoragePolicy(storageAssistCustomerAllowed, userStorageAssistEnabled, userMode)'),
+  'runtime must scope EVCS storage policy by the selected wallbox mode',
+);
 
 // RC21: Speicherschutz darf nur echte Fahrzeugladeleistung verwenden. Ein
 // ladebereiter ABL-eMH1-Status mit ca. 69 W Elektronik-/Standbyverbrauch ist

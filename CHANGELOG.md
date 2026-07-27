@@ -1,3 +1,11 @@
+## 0.8.146 - 2026-07-27
+
+- EVCS-Speicherschutz und Speicher-Assist nach Betriebsart getrennt: Im reinen Modus `pv` bleibt die Speicherpolicy vollständig neutral; `storageProtectedLoadW` und `storageAssistRequestedLoadW` werden für diesen Ladepunkt nicht gebildet.
+- Die Speicherpolicy greift nur noch in den vom Kunden festgelegten Modi `auto`, `boost` und `minpv`. Die Kundenwahl bleibt gespeichert und wird nach einem Moduswechsel aus PV automatisch wieder wirksam.
+- Reine PV-Ladung bleibt ausschließlich am physikalischen PV-Budget gekoppelt. Batterieentladung wird bereits in der PV-Überschussberechnung abgezogen, sodass ein zusätzlicher Speicherschutz dort weder erforderlich noch zulässig ist.
+- Gemischte Multi-Ladepunktanlagen werden connectorbezogen ausgewertet: Ein PV-Ladepunkt bleibt speicherneutral, während Auto-, Boost- oder Min+PV-Ladepunkte weiterhin Schutz beziehungsweise bestätigte Speicherunterstützung nutzen können.
+- Regressionen für Protect und Assist in PV, Auto, Boost und Min+PV ergänzt; bestehende Standby-, 0-W-Puls-, PV-Budget- und Herstellerprofiltests bleiben bestanden.
+
 ## 0.8.145 - 2026-07-27
 
 - EVCS-Speicherschutz auf tatsächliche Fahrzeugladeleistung umgestellt: Nur eine frische, bestätigte Fahrzeuglast oberhalb der Aktivitätsschwelle wird als geschützte E-Mobilitätslast oder Speicher-Assist-Bedarf veröffentlicht. Wallbox-Elektronik und Standby bleiben normale Gebäudelast.

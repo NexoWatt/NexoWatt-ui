@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:034a78703aa450810873bf1d9ba76a73c2b0d8e46a0875c1929546e850d52bc0
+ * Quell-Hash: sha256:0cbb8102cd81825f2413271dbba59a0024ef4a5bb6a87874605084e5dfcc4e56
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1475,11 +1475,28 @@ function normalizeWallboxModeOverride(v) {
     return 'auto';
 }
 
-/** Trennt normal, expliziten Schutz und Assist; ohne Installer-Freigabe gilt immer normal. */
-function resolveEvcsStoragePolicy(customerAllowed, userAssistEnabled) {
+/**
+ * Trennt normal, expliziten Schutz und Assist.
+ *
+ * Fachlicher Vertrag:
+ * - Reine PV-Ueberschussladung (`pv`) darf weder Speicherschutz noch
+ *   Speicher-Assist aktivieren. Der PV-Regler verwendet ausschliesslich den
+ *   physikalisch verfuegbaren PV-Ueberschuss und rechnet eine Batterieentladung
+ *   bereits aus dem PV-Budget heraus. Eine zusaetzliche Speicherpolicy waere
+ *   dort redundant und kann den normalen Hauslastausgleich unnoetig begrenzen.
+ * - In `auto`, `boost` und `minpv` bleibt die Kundenwahl wirksam, weil diese
+ *   Betriebsarten Netzleistung enthalten koennen.
+ * - Die gespeicherte Kundenwahl bleibt erhalten und wird beim Wechsel aus `pv`
+ *   automatisch wieder wirksam; nur die Laufzeitpolicy wird neutralisiert.
+ */
+function resolveEvcsStoragePolicy(customerAllowed, userAssistEnabled, wallboxMode = 'auto') {
     const allowed = customerAllowed === true;
-    const assist = allowed && userAssistEnabled === true;
-    const protect = allowed && !assist;
+    const normalizedMode = normalizeWallboxModeOverride(wallboxMode);
+    const modeAllowsStoragePolicy = normalizedMode === 'auto'
+        || normalizedMode === 'boost'
+        || normalizedMode === 'minpv';
+    const assist = allowed && modeAllowsStoragePolicy && userAssistEnabled === true;
+    const protect = allowed && modeAllowsStoragePolicy && !assist;
     return { mode: assist ? 'assist' : (protect ? 'protect' : 'normal'), assistRequested: assist, protectionRequested: protect };
 }
 
@@ -4572,7 +4589,7 @@ class ChargingManagementModule extends BaseModule {
                 userStorageAssistEnabled = false;
             }
             // Keine Installer-Freigabe = normaler Eigenverbrauch; nur die sichtbare Kundenwahl aktiviert protect/assist.
-            const storagePolicy = resolveEvcsStoragePolicy(storageAssistCustomerAllowed, userStorageAssistEnabled);
+            const storagePolicy = resolveEvcsStoragePolicy(storageAssistCustomerAllowed, userStorageAssistEnabled, userMode);
             const storageAssistRequested = storagePolicy.assistRequested;
             const storageProtectionRequested = storagePolicy.protectionRequested;
             try {

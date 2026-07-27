@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: aaf230ecfbcdd86b929d00d40b0403cec5c65f9643c64dd55ec6595b8937ae3d
+ * Original-Hash: 3fe04df9d1cbff96d7bc0e5a16ea586b536d95974af0f98c1da6a44c9faec6e4
  */
 
 /**
@@ -108,7 +108,9 @@ function resolve(patch = {}) {
 // Charging publiziert nur die explizit geschuetzte, frische EVCS-Leistung.
 assertContains(charging, 'chargingManagement.control.storageProtectedLoadW', 'EVCS protected-load state');
 assertContains(charging, 'publishEvStoragePolicyCaps', 'same-cycle EVCS storage policy');
-assertContains(charging, "const protect = allowed && !assist", 'explizite Protect/Assist-Trennung');
+assertContains(charging, "const modeAllowsStoragePolicy = normalizedMode === 'auto'", 'modegebundene EVCS-Speicherpolicy');
+assertContains(charging, "const protect = allowed && modeAllowsStoragePolicy && !assist", 'explizite Protect/Assist-Trennung');
+assertContains(charging, 'resolveEvcsStoragePolicy(storageAssistCustomerAllowed, userStorageAssistEnabled, userMode)', 'PV-Modus muss die Speicherpolicy zur Laufzeit neutralisieren');
 
 // Der alte symmetrische NVP-Offset ist entfernt. Er hatte bei Teildeckung der
 // Wallbox Netzladen des Speichers erzeugt.
