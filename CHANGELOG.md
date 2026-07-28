@@ -1,3 +1,15 @@
+## 0.8.147 - 2026-07-28
+
+- FENECON-/OpenEMS-/FEMS-Hybridregelung neu strukturiert: Im empfohlenen nativen Modus übersetzt NexoWatt den zentral aufgelösten Batterie-Sollwert in einen Netzpunkt-Sollwert und schreibt ausschließlich `ctrlBalancing0/SetGridActivePower`. FEMS bleibt damit der schnelle lokale Regler für interne DC-PV, Speichergrenzen, BMS/PCS und NVP.
+- Exklusive Kommandofamilien abgesichert: Der native FEMS-NVP-Pfad und die direkte ESS-Leistung über `ess0/SetActivePowerEquals` können nicht parallel schreiben. `Automatisch` bevorzugt den nativen Pfad nur bei vollständig zugeordnetem NVP-Sollwert und `ess0/ActivePower`; sonst wird kontrolliert auf den direkten Signed-/Split-Pfad zurückgefallen.
+- Direkten Fallback gehärtet: `ess0/ActivePower` dient als eigenes Aktorfeedback; optionale 702-/704-Grenzen begrenzen den Sollwert vor dem Hardware-Write. Ein optionales `ActualSetActivePowerEquals` bleibt als separater Readback diagnostizierbar.
+- NVP-Koordinator für den nativen FEMS-Regler erweitert: Während der gemessenen FEMS-Reaktionszeit sieht die nachgelagerte PV-Regelung nur den vorweggenommenen Netzpunkt-Rest. Nach Timeout wird wieder der reale Rest-NVP verwendet; Batterie-Istwertverzögerungen werden nicht mehr fälschlich als fehlende FEMS-NVP-Reaktion bewertet.
+- AppCenter um die Regelarten `Automatisch`, `FEMS NVP-Regler` und `Direkte ESS-Leistung` sowie getrennte DPs für FEMS-NVP-Ziel, ESS-Aktor-Istleistung, 702/704 und optionalen Vorgabe-Readback ergänzt. Manuelle Objekt-IDs bleiben autoritativ.
+- FENECON-PV-Rollen präzisiert: `ProductionDcActualPower` ist für interne DC-/Hybrid-PV vorgesehen; ein Gesamt-PV-Wert wie `ProductionActivePower` darf nicht zusätzlich zu separat eingebundenen PV-Anlagen als interne DC-PV doppelt gezählt werden.
+- Regression `test:storage-fenecon-day-no-write` vollständig auf den Hybridregler umgestellt und um native Zielübersetzung, direkten Fallback, Limit-Clamp, NVP-Restkoordination und AppCenter-Verträge erweitert.
+- TypeScript-Migrationskontrolle: keine zusätzliche `@ts-nocheck`-Datei; der offen ausgewiesene Runtime-Rahmen wird für FENECON-Hybridsteuerung und Diagnose transparent aktualisiert.
+- Service-Worker-Cache auf `nexowatt-cache-v448` erhöht.
+
 ## 0.8.146 - 2026-07-27
 
 - EVCS-Speicherschutz und Speicher-Assist nach Betriebsart getrennt: Im reinen Modus `pv` bleibt die Speicherpolicy vollständig neutral; `storageProtectedLoadW` und `storageAssistRequestedLoadW` werden für diesen Ladepunkt nicht gebildet.

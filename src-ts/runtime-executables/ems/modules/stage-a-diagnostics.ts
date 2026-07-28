@@ -42,6 +42,7 @@ type StateInfo = {
 const ACTUATOR_FIELDS = new Set([
   'setCurrentAId', 'setPowerWId', 'enableWriteId', 'targetPowerObjectId',
   'targetChargePowerObjectId', 'targetDischargePowerObjectId', 'runObjectId',
+  'feneconGridSetpointObjectId',
   // Speicher-/Farm-Legacy-Aliase: Alte Installationen duerfen nach der TS-
   // Migration nicht aus der Owner-Matrix fallen, wenn nur der Alias belegt ist.
   'targetPowerId', 'targetChargePowerId', 'targetDischargePowerId',

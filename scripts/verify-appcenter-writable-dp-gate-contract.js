@@ -67,6 +67,7 @@ const config = {
     chargeEnableObjectId: 'vendor.independent.chargeAllowed',
     dischargeEnableObjectId: 'vendor.independent.dischargeAllowed',
     reserveSocObjectId: 'openems.0.edge.controller.reserveSoc',
+    feneconGridSetpointObjectId: 'openems.0.edge.controller.setGridActivePower',
   },
   storageFarm: {
     storages: [{
@@ -168,6 +169,7 @@ const expectedOwners = {
   'vendor.independent.chargeAllowed': 'storage.',
   'vendor.independent.dischargeAllowed': 'storage.',
   'openems.0.edge.controller.reserveSoc': 'storage.',
+  'openems.0.edge.controller.setGridActivePower': 'storage.',
   'farm.bridge.0.command.signed': 'storageFarm.',
   'farm.bridge.0.command.charge': 'storageFarm.',
   'farm.bridge.0.command.discharge': 'storageFarm.',
@@ -364,7 +366,7 @@ need(duplicate && duplicate.conflict === true, 'Echte aktive DP-Doppelbelegung w
   }
 
   const uiFields = [
-    'targetPowerObjectId', 'targetChargePowerObjectId', 'targetDischargePowerObjectId',
+    'targetPowerObjectId', 'targetChargePowerObjectId', 'targetDischargePowerObjectId', 'feneconGridSetpointObjectId',
     'maxChargeObjectId', 'maxDischargeObjectId', 'chargeEnableObjectId', 'dischargeEnableObjectId',
     'setCurrentAId', 'setPowerWId', 'enableWriteId', 'phaseSwitchId', 'lockWriteId',
     'switchWriteId', 'setpointWriteId', 'sgReadyAWriteId', 'sgReadyBWriteId',

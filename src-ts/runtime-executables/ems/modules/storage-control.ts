@@ -1230,6 +1230,7 @@ class SpeicherRegelungModule extends BaseModule {
             // wieder vollständig in den Normalmodus gehen.
             try {
                 if (this._isFeneconHybridControlConfigured(cfg) || this._feneconHybridWasExternal || this._feneconGridWasActive) {
+                    await this._releaseDirectStorageTargetForFenecon('storage-control-disabled', cfg);
                     await this._setFeneconHybridDiag({
                         active: false,
                         mode: 'disabled',
@@ -1296,16 +1297,26 @@ class SpeicherRegelungModule extends BaseModule {
         const hasLimitTarget = hasMaxChargeTarget || hasMaxDischargeTarget;
         const hasEnableTarget = hasChargeEnableTarget || hasDischargeEnableTarget;
         const storageVendorProfile = this._getStorageVendorProfile(cfg);
+        const feneconHybridConfigured = this._isFeneconHybridControlConfigured(cfg);
+        const feneconControlModeInfo = this._resolveFeneconHybridControlMode(
+            cfg,
+            hasFarmSetpoints ? 'farm' : (storageAuthorityEarly.selectedTopology || 'none'),
+        );
         const e3dcRscpProfileConfigured = this._isE3dcRscpControlConfigured(cfg);
         const e3dcRscpConfigured = !!(e3dcRscpProfileConfigured && !hasFarmSetpoints);
         const hasE3dcSetPowerTarget = e3dcRscpConfigured && this.dp
             ? !!(this.dp.getEntry('st.e3dcSetPowerMode') && this.dp.getEntry('st.e3dcSetPowerValueW'))
             : false;
+        const hasFeneconNativeTarget = !!(feneconControlModeInfo.activeSingle && feneconControlModeInfo.useNativeGridTarget);
+        const hasFeneconDirectTarget = !!(feneconControlModeInfo.activeSingle && feneconControlModeInfo.useDirectEss && (hasSignedTarget || hasSplitTarget));
         const supportedControlMode = controlMode === 'targetPower' || controlMode === 'limits' || controlMode === 'enableFlags';
         const hasTarget = controlMode === 'limits'
             ? hasLimitTarget
-            : (controlMode === 'enableFlags' ? hasEnableTarget : (hasSignedTarget || hasSplitTarget || hasE3dcSetPowerTarget));
-        const feneconHybridConfigured = this._isFeneconHybridControlConfigured(cfg);
+            : (controlMode === 'enableFlags'
+                ? hasEnableTarget
+                : (feneconHybridConfigured && !hasFarmSetpoints
+                    ? (hasFeneconNativeTarget || hasFeneconDirectTarget)
+                    : (hasSignedTarget || hasSplitTarget || hasE3dcSetPowerTarget)));
         const sungrowHybridConfigured = this._isSungrowHybridControlConfigured(cfg);
         // Herstellerprofile gelten ausschliesslich fuer den ausgewaehlten Einzelpfad.
         // In einer Farm bleiben die pro Speicher manuell zugeordneten DPs fuehrend;
@@ -1331,7 +1342,9 @@ class SpeicherRegelungModule extends BaseModule {
                 ? 'Leistungsgrenzen-Datenpunkt fehlt: Max Laden und/oder Max Entladen'
                 : (controlMode === 'enableFlags'
                     ? 'Freigabe-Datenpunkt fehlt: Laden erlaubt und/oder Entladen erlaubt'
-                    : 'Sollleistung-Datenpunkt fehlt: signed Ziel, getrennte Lade-/Entlade-Sollwerte oder E3/DC SET_POWER_MODE + SET_POWER_VALUE');
+                    : (feneconHybridConfigured
+                        ? `FENECON-Regelpfad unvollständig: ${String(feneconControlModeInfo.reason || 'Sollwert fehlt')}`
+                        : 'Sollleistung-Datenpunkt fehlt: signed Ziel, getrennte Lade-/Entlade-Sollwerte oder E3/DC SET_POWER_MODE + SET_POWER_VALUE'));
             await this._setIfChanged('speicher.regelung.requestW', 0);
             await this._setIfChanged('speicher.regelung.requestQuelle', 'aus');
             await this._setIfChanged('speicher.regelung.requestGrund', missingTargetReason);
@@ -1443,14 +1456,24 @@ class SpeicherRegelungModule extends BaseModule {
                 return null;
             }
         };
-        let battPowerObservedW = farmEnabled ? null : (this.dp ? this.dp.getNumber('st.batteryPowerW', null) : null);
-        let battPowerAge = farmEnabled ? null : (this.dp ? (this.dp.getEntry('st.batteryPowerW') ? this.dp.getAgeMs('st.batteryPowerW') : null) : null);
-        let battPowerSampleTs = farmEnabled ? null : measurementTsFor('st.batteryPowerW');
+        const feneconActuatorFeedbackKey = (!farmEnabled
+            && feneconHybridActive
+            && this.dp
+            && this.dp.getEntry
+            && this.dp.getEntry('st.feneconEssActivePowerW'))
+            ? 'st.feneconEssActivePowerW'
+            : 'st.batteryPowerW';
+        const useFeneconActuatorFeedback = feneconActuatorFeedbackKey === 'st.feneconEssActivePowerW';
+        let battPowerObservedW = farmEnabled ? null : (this.dp ? this.dp.getNumber(feneconActuatorFeedbackKey, null) : null);
+        let battPowerAge = farmEnabled ? null : (this.dp ? (this.dp.getEntry(feneconActuatorFeedbackKey) ? this.dp.getAgeMs(feneconActuatorFeedbackKey) : null) : null);
+        let battPowerSampleTs = farmEnabled ? null : measurementTsFor(feneconActuatorFeedbackKey);
         let battPowerSampleKey = '';
         let battPowerInvalidReason = '';
         let battPowerObjectId = '';
-        let battPowerFeedbackSource = farmEnabled ? 'storage-farm' : 'single-storage';
-        let battPowerMappingTrusted = !farmEnabled && !!(this.dp && this.dp.getEntry && this.dp.getEntry('st.batteryPowerW'));
+        let battPowerFeedbackSource = farmEnabled
+            ? 'storage-farm'
+            : (useFeneconActuatorFeedback ? 'fenecon-ess-active-power' : 'single-storage');
+        let battPowerMappingTrusted = !farmEnabled && !!(this.dp && this.dp.getEntry && this.dp.getEntry(feneconActuatorFeedbackKey));
         const battPowerAgeKnown = typeof battPowerAge === 'number' && Number.isFinite(battPowerAge);
         let battPowerW = battPowerMappingTrusted
             && typeof battPowerObservedW === 'number'
@@ -1461,16 +1484,17 @@ class SpeicherRegelungModule extends BaseModule {
         let battPowerTrusted = (typeof battPowerW === 'number' && Number.isFinite(battPowerW));
 
         if (!farmEnabled) try {
-            const eBatt = this.dp ? this.dp.getEntry('st.batteryPowerW') : null;
+            const eBatt = this.dp ? this.dp.getEntry(feneconActuatorFeedbackKey) : null;
             const eTarget = this.dp ? this.dp.getEntry('st.targetPowerW') : null;
             const eChargeTarget = this.dp ? this.dp.getEntry('st.targetChargePowerW') : null;
             const eDischargeTarget = this.dp ? this.dp.getEntry('st.targetDischargePowerW') : null;
+            const eFeneconGridTarget = this.dp ? this.dp.getEntry('st.feneconGridSetpointW') : null;
             const battObj = eBatt && eBatt.objectId ? String(eBatt.objectId) : '';
             battPowerObjectId = battObj;
             battPowerSampleKey = battObj && Number.isFinite(Number(battPowerSampleTs))
                 ? `signed:${battObj}@${Math.round(Number(battPowerSampleTs))}`
                 : '';
-            const targetObjs = [eTarget, eChargeTarget, eDischargeTarget]
+            const targetObjs = [eTarget, eChargeTarget, eDischargeTarget, eFeneconGridTarget]
                 .map(e => e && e.objectId ? String(e.objectId) : '')
                 .filter(Boolean);
 
@@ -1500,7 +1524,7 @@ class SpeicherRegelungModule extends BaseModule {
         // kein vertrauenswürdiger signed Istwert vorliegt, bilden wir daraus
         // dieselbe interne Konvention (+W Entladen, -W Laden). Nur exakt identisch
         // als Sollwert gemappte Objekte werden vom Helfer als Messfeedback abgewiesen.
-        if (!farmEnabled && !battPowerTrusted) {
+        if (!farmEnabled && !battPowerTrusted && !useFeneconActuatorFeedback) {
             try {
                 const splitFeedback = resolveSplitBatteryFeedback(this.dp, cfg, staleMs);
                 if (splitFeedback) {
@@ -4163,86 +4187,41 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         // erhalten.
         const policySourceBeforeVendor = String(source || '');
         if (feneconHybridActive) {
-            const ctx = feneconHybridCtx || {};
-            const mode = String(ctx.mode || '');
-
-            if (mode === 'fems-pass-through' || mode === 'fems-assist') {
-                // FENECON/OpenEMS/FEMS darf die fachliche Zielbildung beeinflussen, aber
-                // den manuell im AppCenter zugeordneten Batterie-Sollwert nicht mehr auf
-                // No-Write setzen. Der finale, bereits durch NVP-, SoC-, Budget- und
-                // Sicherheits-Gates begrenzte Sollwert wird in jedem EMS-Tick erneuert.
-                const srcNorm = String(source || '').toLowerCase();
-                const isCriticalExternalRequest = targetW !== 0 && (
-                    srcNorm === 'lastspitze' ||
-                    srcNorm === 'lastspitze_refill' ||
-                    srcNorm === 'reserve' ||
-                    srcNorm === 'tarif' ||
-                    srcNorm === 'evcs'
-                );
-                const isAssistRequest = !!(mode === 'fems-assist' && targetW > 0 && (srcNorm === 'eigenverbrauch' || srcNorm === 'tarif'));
-
-                if (isCriticalExternalRequest) {
-                    feneconWriteMode = 'write-critical-policy';
-                    reason = String(reason || 'externe Speicheranforderung') + ' · FENECON/OpenEMS: zentral gegatete Vorgabe wird zyklisch geschrieben';
-                } else if (isAssistRequest) {
-                    // Assist immer am aktuellen NVP-Bedarf begrenzen. Wir geben nicht die
-                    // Gebaeudelast an FENECON weiter, weil am Hybrid-AC-Ausgang PV und Batterie
-                    // zusammenliegen koennen. Fuehrungsgroesse bleibt nur der verbleibende
-                    // Netzbezug plus kleiner Puffer.
-                    const nvpNowW = (typeof ctx.nvpW === 'number' && Number.isFinite(ctx.nvpW)) ? Number(ctx.nvpW) : ((typeof gridRawW === 'number') ? Number(gridRawW) : Number(gridW || 0));
-                    const targetImportW = Math.max(0, num(cfg.feneconAssistTargetGridImportW, selfTargetGridW));
-                    const assistBufferW = Math.max(0, num(cfg.feneconAssistBufferW, 150));
-                    const assistCapW = Math.max(0, Math.max(0, nvpNowW) - targetImportW + assistBufferW);
-                    targetW = Math.min(Math.max(0, targetW), assistCapW);
-                    source = 'fenecon-assist';
-                    if (targetW > 0) {
-                        reason = `FENECON/OpenEMS Assist: Entladung ${Math.round(targetW)} W gegen dauerhaften Netzbezug (NVP ${Math.round(nvpNowW)} W)`;
-                        feneconWriteMode = 'write-assist-on-demand';
-                    } else {
-                        reason = 'FENECON/OpenEMS Assist: NVP-Cap 0 W – externer 0-W-Stop wird zyklisch bestätigt';
-                        feneconWriteMode = 'write-assist-zero';
-                    }
-                } else {
-                    feneconWriteMode = 'write-appcenter-gated';
-                    reason = String(reason || ctx.reason || 'FENECON/OpenEMS: zentraler Speicher-Sollwert') + ' · AppCenter-Ziel aktiv, sekündlicher Watchdog-Refresh';
-                }
-            } else if (mode === 'external-pv-charge-only') {
-                // Zusatz-PV bleibt als fachlicher Lade-Cap erhalten. Andere zentrale
-                // Policies werden nicht mehr durch einen Hersteller-No-Write verschluckt,
-                // sondern ebenfalls über den manuell zugeordneten Ziel-DP ausgegeben.
-                if (targetW < 0 && source === 'pv') {
-                    const extraCapW = Math.max(0, Number(ctx.additionalPvW) || 0);
-                    const absTarget = Math.abs(targetW);
-                    if (extraCapW > 0) targetW = -Math.min(absTarget, extraCapW);
-                    reason = String(reason || 'PV-Überschuss laden') + ' · Gateway Zusatz-PV (' + Math.round(extraCapW) + ' W)';
-                    source = 'fenecon-extra-pv';
-                    feneconWriteMode = 'write-extra-pv-charge';
-                } else {
-                    feneconWriteMode = 'write-appcenter-gated';
-                    reason = String(reason || ctx.reason || 'FENECON/OpenEMS: zentraler Speicher-Sollwert') + ' · AppCenter-Ziel aktiv, sekündlicher Watchdog-Refresh';
-                }
-            } else if (mode === 'external-control-low-pv') {
-                feneconWriteMode = 'write-low-pv';
-            } else {
-                feneconWriteMode = 'write-appcenter-gated';
-            }
-
+            const controlInfo = feneconControlModeInfo || this._resolveFeneconHybridControlMode(cfg, 'single');
+            const nativeMode = controlInfo.useNativeGridTarget === true;
+            feneconWriteMode = nativeMode ? 'fems-grid-target' : 'direct-ess';
+            // Die zentrale Zielbildung bleibt fuer beide FENECON-Varianten identisch.
+            // Im nativen Modus wird dieser Batterie-Sollwert spaeter in einen FEMS-
+            // NVP-Zielwert umgerechnet. Im direkten Modus wird er ueber 706/Signed/
+            // Split geschrieben. Keine Tages-/PV-Sonderlogik darf den Sollwert hier
+            // ein zweites Mal umdeuten oder einen parallelen Writer aktivieren.
+            const controlReason = nativeMode
+                ? 'FENECON Hybrid: zentral gegateter Batterie-Sollwert wird an den nativen FEMS-NVP-Regler uebergeben'
+                : 'FENECON Hybrid: zentral gegateter Batterie-Sollwert wird direkt an die ESS-Leistung uebergeben';
+            reason = String(reason || controlReason);
+            // Der native/direct Writer ist exklusiv, die bestehende Assist-Diagnose bleibt
+            // dennoch als Policy-Information erhalten. Beim direkten Fallback wird der
+            // historische Schreibmodus weiter gemeldet; im nativen Pfad bleibt die
+            // Kommandofamilie eindeutig `fems-grid-target`.
+            const feneconDiagWriteMode = nativeMode
+                ? 'fems-grid-target'
+                : String((feneconHybridCtx && feneconHybridCtx.writeMode) || 'direct-ess');
             await this._setFeneconHybridDiag({
                 active: true,
-                mode: mode || 'external-control-low-pv',
-                reason,
-                writeMode: feneconWriteMode || 'write-appcenter-gated',
+                mode: String(controlInfo.effectiveMode || feneconWriteMode),
+                reason: `${reason} · ${String(controlInfo.reason || controlReason)}`,
+                writeMode: feneconDiagWriteMode,
                 targetW,
-                pvW: ctx.pvW,
-                additionalPvW: ctx.additionalPvW,
-                thresholdW: ctx.thresholdW,
-                additionalThresholdW: ctx.additionalThresholdW,
+                pvW: feneconHybridCtx && feneconHybridCtx.pvW,
+                additionalPvW: feneconHybridCtx && feneconHybridCtx.additionalPvW,
+                thresholdW: feneconHybridCtx && feneconHybridCtx.thresholdW,
+                additionalThresholdW: feneconHybridCtx && feneconHybridCtx.additionalThresholdW,
                 nvpW: (typeof gridRawW === 'number' && Number.isFinite(gridRawW)) ? gridRawW : gridW,
-                forecastW: ctx.forecastW,
-                forecastSource: ctx.forecastSource,
-                dayOrPvActive: ctx.dayOrPvActive,
-                assistActive: ctx.assistActive,
-                assistImportThresholdW: ctx.assistImportThresholdW,
+                forecastW: feneconHybridCtx && feneconHybridCtx.forecastW,
+                forecastSource: feneconHybridCtx && feneconHybridCtx.forecastSource,
+                dayOrPvActive: feneconHybridCtx && feneconHybridCtx.dayOrPvActive,
+                assistActive: !!(feneconHybridCtx && feneconHybridCtx.assistActive),
+                assistImportThresholdW: feneconHybridCtx && feneconHybridCtx.assistImportThresholdW,
             });
         }
 
@@ -5455,7 +5434,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     assistImportThresholdW: (feneconHybridCtx && Number.isFinite(Number(feneconHybridCtx.assistImportThresholdW))) ? Math.round(Number(feneconHybridCtx.assistImportThresholdW)) : null,
                     reason: feneconHybridCtx && feneconHybridCtx.reason ? String(feneconHybridCtx.reason) : '',
                     watchdogSec: 1,
-                    setGridActivePowerUsed: false,
+                    setGridActivePowerUsed: !!(feneconControlModeInfo && feneconControlModeInfo.useNativeGridTarget),
                 } : {
                     hybridMode: false,
                     configured: false,
@@ -5557,7 +5536,18 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             this._pendingAsyncBalanceCommand = null;
             await this._setHoldNoWriteTargetDiag(targetW, reason, source, storageZeroWriteStatus || (sungrowNoWrite ? 'sungrow-hybrid:no-write' : 'storage:no-write'));
         } else {
-            await this._applyTargetW(targetW, reason, source, { evcsAssistReqW });
+            await this._applyTargetW(targetW, reason, source, {
+                evcsAssistReqW,
+                gridW: (typeof gridRawW === 'number' && Number.isFinite(gridRawW)) ? gridRawW : gridW,
+                batteryActualW: (typeof balanceBatteryPowerW === 'number' && Number.isFinite(balanceBatteryPowerW))
+                    ? balanceBatteryPowerW
+                    : battPowerW,
+                batteryMeasuredW: battPowerW,
+                batteryFeedbackFresh: battPowerTrusted === true,
+                batteryFeedbackSource: battPowerFeedbackSource,
+                nvpTargetW: selfTargetGridW,
+                staleMs,
+            });
             if (feneconHybridActive) this._feneconHybridWasExternal = true;
         }
 
@@ -6687,6 +6677,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             // Haken, bedeutet ab 0.6.255 aber: Hybrid-/Gateway-Priorität-Gateway-Priorität.
             feneconAcMode: storage.feneconAcMode,
             feneconGridControlEnabled: storage.feneconGridControlEnabled,
+            // FENECON-Hybrid-Regelart:
+            // - auto: nativer FEMS-NVP-Regler, wenn SetGridActivePower + ess0/ActivePower gemappt sind; sonst direkte ESS-Leistung
+            // - fems-grid-target: nativer FEMS-Regler ist verbindlich
+            // - direct-ess: direkter SetActivePowerEquals-/Split-/Signed-Pfad
+            feneconHybridControlMode: storage.feneconHybridControlMode,
             // FENECON/OpenEMS/FEMS Legacy-Feld: wird ab 0.8.124 nur noch fuer
             // Migration/Diagnose gelesen. Der technische No-Write-Pfad ist fest
             // deaktiviert; die externe Vorgabe bleibt an den AppCenter-DP gekoppelt.
@@ -6907,6 +6902,67 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         // Ab 0.6.255 bedeutet dieser alte Haken: Hybrid-/Gateway-Priorität-Sondermodus
         // (Gateway-Priorität am Tag, NexoWatt nur bei Zusatz-PV oder wenig/keiner PV).
         return !!(cfg && cfg.feneconAcMode === true);
+    }
+
+    _normalizeFeneconHybridControlMode(value) {
+        const raw = String(value || 'auto').trim().toLowerCase();
+        if (raw === 'fems-grid-target' || raw === 'native' || raw === 'fems' || raw === 'grid-target') return 'fems-grid-target';
+        if (raw === 'direct-ess' || raw === 'direct' || raw === 'set-active-power') return 'direct-ess';
+        return 'auto';
+    }
+
+    _resolveFeneconHybridControlMode(cfg = {}, selectedTopology = 'single') {
+        const configured = this._isFeneconHybridControlConfigured(cfg);
+        const requestedMode = this._normalizeFeneconHybridControlMode(cfg && cfg.feneconHybridControlMode);
+        const getEntry = (key) => (this.dp && typeof this.dp.getEntry === 'function') ? this.dp.getEntry(key) : null;
+        const nativeGridEntry = getEntry('st.feneconGridSetpointW');
+        const nativeActualEntry = getEntry('st.feneconEssActivePowerW');
+        const nativeConfigured = !!(nativeGridEntry && nativeActualEntry);
+        const directConfigured = !!(
+            getEntry('st.targetPowerW')
+            || getEntry('st.targetChargePowerW')
+            || getEntry('st.targetDischargePowerW')
+        );
+        const activeSingle = configured && String(selectedTopology || 'none') === 'single';
+
+        let effectiveMode = 'inactive';
+        let reason = configured ? 'FENECON-Profil ist nicht als Einzelwriter aktiv' : 'FENECON-Profil nicht aktiv';
+        if (activeSingle) {
+            if (requestedMode === 'fems-grid-target') {
+                effectiveMode = nativeConfigured ? 'fems-grid-target' : 'fems-grid-target-missing';
+                reason = nativeConfigured
+                    ? 'Nativer FEMS-NVP-Regler ist explizit ausgewählt'
+                    : 'Nativer FEMS-NVP-Regler benötigt SetGridActivePower und ess0/ActivePower';
+            } else if (requestedMode === 'direct-ess') {
+                effectiveMode = directConfigured ? 'direct-ess' : 'direct-ess-missing';
+                reason = directConfigured
+                    ? 'Direkte FENECON-ESS-Leistung ist explizit ausgewählt'
+                    : 'Direkte FENECON-ESS-Regelung benötigt einen Signed- oder Split-Sollwert';
+            } else if (nativeConfigured) {
+                effectiveMode = 'fems-grid-target';
+                reason = 'Automatik verwendet den nativen FEMS-NVP-Regler';
+            } else if (directConfigured) {
+                effectiveMode = 'direct-ess';
+                reason = 'Automatik verwendet den direkten ESS-Sollwert als Fallback';
+            } else {
+                effectiveMode = 'auto-missing';
+                reason = 'Weder nativer FEMS-NVP-Pfad noch direkter ESS-Sollwert ist vollständig gemappt';
+            }
+        }
+
+        return {
+            configured,
+            activeSingle,
+            requestedMode,
+            effectiveMode,
+            useNativeGridTarget: effectiveMode === 'fems-grid-target',
+            useDirectEss: effectiveMode === 'direct-ess',
+            nativeConfigured,
+            directConfigured,
+            nativeGridObjectId: nativeGridEntry && nativeGridEntry.objectId ? String(nativeGridEntry.objectId) : '',
+            nativeActualObjectId: nativeActualEntry && nativeActualEntry.objectId ? String(nativeActualEntry.objectId) : '',
+            reason,
+        };
     }
 
     _isSungrowHybridControlConfigured(cfg = {}) {
@@ -7136,7 +7192,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      * wird bei Richtungswechseln nicht kurz die alte Richtung mit neuem Wert gesendet.
      */
     async _writeE3dcRscpTargetW(targetW, reason, source, cfg = {}) {
-        const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
+        let w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
         const absW = Math.max(0, Math.abs(w));
         const allowGridCharge = cfg.e3dcAllowGridCharge === true;
         const gridCharge = !!(w < 0 && allowGridCharge && this._isE3dcGridChargeSource(source));
@@ -7516,13 +7572,16 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await this._setIfChanged('speicher.regelung.feneconHybridAssistAktiv', !!ctx.assistActive);
         await this._setIfChanged('speicher.regelung.feneconHybridAssistSchwelleW', n(ctx.assistImportThresholdW, 800));
 
-        // Legacy-Diagnosen aus 0.6.254 neutral halten, damit alte VIS/Debug-Ansichten nicht
-        // fälschlich eine SetGridActivePower-Nutzung anzeigen.
-        await this._setIfChanged('speicher.regelung.feneconGridAktiv', false);
-        await this._setIfChanged('speicher.regelung.feneconGridQuelle', 'deprecated');
-        await this._setIfChanged('speicher.regelung.feneconGridGrund', active ? 'ab 0.6.255 nicht genutzt – externe Vorgabe laeuft ueber den manuell zugeordneten Sollleistungs-DP mit Gate-/Watchdog-Refresh' : reason);
-        await this._setIfChanged('speicher.regelung.feneconGridSchreibOk', false);
-        await this._setIfChanged('speicher.regelung.feneconGridSchreibStatus', 'deprecated');
+        // Die detaillierten FEMS-NVP-Diagnosen werden vom tatsaechlichen Writer
+        // gesetzt. Hier wird nur bei deaktiviertem Profil neutralisiert, damit ein
+        // alter nativer Status nicht weiter als aktiv erscheint.
+        if (!active) {
+            await this._setIfChanged('speicher.regelung.feneconGridAktiv', false);
+            await this._setIfChanged('speicher.regelung.feneconGridQuelle', 'inactive');
+            await this._setIfChanged('speicher.regelung.feneconGridGrund', reason);
+            await this._setIfChanged('speicher.regelung.feneconGridSchreibOk', false);
+            await this._setIfChanged('speicher.regelung.feneconGridSchreibStatus', 'inactive');
+        }
     }
 
     /**
@@ -7579,7 +7638,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
     async _setNoWriteTargetDiag(targetW, reason, source, status) {
-        const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
+        let w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
         try {
             const e = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.targetPowerW') : null;
             await this._setIfChanged('speicher.regelung.targetObjId', e && e.objectId ? String(e.objectId) : '');
@@ -7613,41 +7672,210 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
      * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
      */
-    _getFeneconGridSetpointW(_cfg = {}) {
-        // Legacy ab 0.6.255: SetGridActivePower wird nicht mehr verwendet, weil dieser DP
-        // bei real getesteten Hybrid-/Gateway-Priorität-Anlagen nicht beschreibbar sein kann.
-        return 0;
-    }
-    /**
-     * Code-Teil: _releaseDirectStorageTargetForFenecon
-     * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
-     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
-    async _releaseDirectStorageTargetForFenecon(reason = '') {
-        // Legacy ab 0.6.255: keine aktive Freigabe per 0-W-Schreiben.
-        // Gateway fällt nach seinem Watchdog selbst in den Normalmodus zurück, solange NexoWatt nicht schreibt.
-        await this._setIfChanged('speicher.regelung.feneconGridReleaseStatus', reason ? ('no-write: ' + String(reason)) : 'no-write');
-        return null;
+    _getFeneconGridSetpointW(cfg = {}, input = {}) {
+        const batteryTargetW = Number(input.batteryTargetW);
+        const nvpW = Number(input.nvpW);
+        const essActualW = Number(input.essActualW);
+        if (!Number.isFinite(batteryTargetW) || !Number.isFinite(nvpW) || !Number.isFinite(essActualW)) return null;
+
+        // Bilanz am NVP (NexoWatt-Konvention):
+        //   NVP_neu = NVP_ist - (Batterie_soll - Batterie_ist)
+        // Damit der native FEMS-Regler dieselbe zentrale Batterie-Policy umsetzt,
+        // wird dessen Netzpunktziel auf den erwarteten NVP nach der Zielaenderung gesetzt.
+        let gridTargetW = nvpW + essActualW - batteryTargetW;
+        const minCfg = Number(cfg.feneconGridMinSetpointW);
+        const maxCfg = Number(cfg.feneconGridMaxSetpointW);
+        const minW = Number.isFinite(minCfg) ? minCfg : -1000000;
+        const maxW = Number.isFinite(maxCfg) ? maxCfg : 1000000;
+        const lower = Math.min(minW, maxW);
+        const upper = Math.max(minW, maxW);
+        gridTargetW = clamp(gridTargetW, lower, upper);
+        return Math.round(gridTargetW);
     }
 
-    /**
-     * Code-Teil: Methode `_applyFeneconGridSetpointW`
-     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
-     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    async _applyFeneconGridSetpointW(_targetW, reason, source, _opts = {}) {
-        // Legacy ab 0.6.255: niemals auf SetGridActivePower schreiben.
-        await this._setIfChanged('speicher.regelung.feneconGridAktiv', false);
-        await this._setIfChanged('speicher.regelung.feneconGridSollW', 0);
-        await this._setIfChanged('speicher.regelung.feneconGridQuelle', String(source || 'deprecated'));
-        await this._setIfChanged('speicher.regelung.feneconGridGrund', reason ? ('deprecated/no-write: ' + String(reason)) : 'deprecated/no-write');
-        await this._setIfChanged('speicher.regelung.feneconGridSchreibOk', false);
-        await this._setIfChanged('speicher.regelung.feneconGridSchreibStatus', 'deprecated-no-write');
-        await this._setIfChanged('speicher.regelung.feneconGridTargetObjId', '');
-        await this._setIfChanged('speicher.regelung.feneconGridLastWriteRaw', null);
-        return { ok: false, wrote: false, status: 'deprecated-no-write', objectId: '', valueW: 0 };
+    _getFeneconDirectLimitSnapshot(staleMs = 15000) {
+        const read = (key) => {
+            if (!this.dp || !this.dp.getEntry || !this.dp.getEntry(key)) return null;
+            const value = this.dp.getNumberFresh(key, staleMs, null);
+            return Number.isFinite(Number(value)) ? Number(value) : null;
+        };
+        const age = (key) => {
+            if (!this.dp || !this.dp.getEntry || !this.dp.getEntry(key)) return null;
+            const value = this.dp.getAgeMs(key);
+            return Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : null;
+        };
+        const minW = read('st.feneconMinActivePowerW');
+        const maxW = read('st.feneconMaxActivePowerW');
+        const actualSetW = read('st.feneconActualSetPowerW');
+        const essActualW = read('st.feneconEssActivePowerW');
+        const valid = minW !== null && maxW !== null && minW <= maxW;
+        return {
+            valid,
+            minW,
+            maxW,
+            minAgeMs: age('st.feneconMinActivePowerW'),
+            maxAgeMs: age('st.feneconMaxActivePowerW'),
+            actualSetW,
+            actualSetAgeMs: age('st.feneconActualSetPowerW'),
+            essActualW,
+            essActualAgeMs: age('st.feneconEssActivePowerW'),
+            reason: valid
+                ? 'FENECON 702/704 Leistungsfenster aktiv'
+                : ((minW !== null || maxW !== null) ? 'FENECON 702/704 unvollstaendig oder unplausibel' : 'FENECON 702/704 nicht gemappt'),
+        };
+    }
+
+    _clampFeneconDirectTargetW(targetW, cfg = {}) {
+        const staleMs = Math.max(1000, Math.round(num(cfg.staleTimeoutSec, 15) * 1000));
+        const limits = this._getFeneconDirectLimitSnapshot(staleMs);
+        const requestedW = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
+        const clampedW = limits.valid ? Math.round(clamp(requestedW, limits.minW, limits.maxW)) : requestedW;
+        return {
+            requestedW,
+            targetW: clampedW,
+            clamped: clampedW !== requestedW,
+            limits,
+        };
+    }
+
+    async _releaseDirectStorageTargetForFenecon(reason = '', cfgIn = null) {
+        // Ein nativer FEMS-NVP-Zielwert ist kein klassischer Batterie-Sollwert.
+        // Beim Deaktivieren oder beim Wechsel auf die direkte ESS-Kommandofamilie
+        // wird deshalb einmalig auf 0 W Netzpunkt-Ziel zurückgesetzt. Das entspricht
+        // dem normalen FEMS-Eigenverbrauchsziel und verhindert, dass ein zuvor für
+        // Tarif-/Peak-Shaving gesetzter Import-/Exportzielwert stehen bleibt.
+        const cfg = cfgIn && typeof cfgIn === 'object' ? cfgIn : this._getCfg();
+        const entry = this.dp && this.dp.getEntry ? this.dp.getEntry('st.feneconGridSetpointW') : null;
+        if (!entry || cfg.feneconGridResetOnDisable === false) {
+            const status = !entry ? 'native-grid-target-not-mapped' : 'native-grid-reset-disabled';
+            await this._setIfChanged('speicher.regelung.feneconGridReleaseStatus', status);
+            return { ok: true, wrote: false, status, readback: null };
+        }
+
+        let writeResult = false;
+        try {
+            writeResult = await this._writeStorageCommandNumber('st.feneconGridSetpointW', 0, { force: true });
+        } catch (_error) {
+            writeResult = false;
+        }
+        const readback = await this._verifyStorageCommandDatapoints(
+            [{ key: 'st.feneconGridSetpointW', entry, type: 'number', value: 0, role: 'fenecon-grid-release' }],
+            { attempts: 3, delayMs: 30 },
+        );
+        const ok = writeResult !== false && (!readback.supported || readback.ok);
+        const status = ok ? 'native-grid-reset-to-zero' : 'native-grid-reset-failed';
+        await this._setIfChanged('speicher.regelung.feneconGridReleaseStatus', `${status}${reason ? `:${String(reason)}` : ''}`);
+        return { ok, wrote: writeResult === true, status, readback };
+    }
+
+    async _applyFeneconGridSetpointW(targetW, reason, source, opts = {}) {
+        const cfg = opts && opts.cfg ? opts.cfg : this._getCfg();
+        const staleMs = Math.max(
+            1000,
+            Number.isFinite(Number(opts && opts.staleMs))
+                ? Math.round(Number(opts.staleMs))
+                : Math.round(num(cfg.staleTimeoutSec, 15) * 1000),
+        );
+        const now = Date.now();
+        const centralNvp = resolveCurrentNvpSnapshot(this.adapter && this.adapter._nvpFreshnessSnapshot, now, Math.max(staleMs, 10000));
+        let nvpW = Number.isFinite(Number(opts && opts.gridW)) ? Number(opts.gridW) : null;
+        if (!Number.isFinite(nvpW)) {
+            nvpW = centralNvp && centralNvp.current && centralNvp.usable ? Number(centralNvp.netW) : null;
+        }
+        if (!Number.isFinite(nvpW) && this.dp) {
+            nvpW = this.dp.getNumberFresh('grid.powerRawW', staleMs, null);
+            if (!Number.isFinite(nvpW)) nvpW = this.dp.getNumberFresh('grid.powerW', staleMs, null);
+        }
+
+        let essActualW = Number.isFinite(Number(opts && opts.batteryMeasuredW)) ? Number(opts.batteryMeasuredW) : null;
+        if (!Number.isFinite(essActualW)) {
+            essActualW = this.dp ? this.dp.getNumberFresh('st.feneconEssActivePowerW', staleMs, null) : null;
+        }
+        let essActualAgeMs = this.dp && this.dp.getEntry && this.dp.getEntry('st.feneconEssActivePowerW')
+            ? this.dp.getAgeMs('st.feneconEssActivePowerW')
+            : null;
+        let feedbackHeld = false;
+        if (!Number.isFinite(Number(essActualW)) && this.dp && this.dp.getEntry && this.dp.getEntry('st.feneconEssActivePowerW')) {
+            const observed = this.dp.getNumber('st.feneconEssActivePowerW', null);
+            const holdMs = Math.max(staleMs, Math.round(num(cfg.balanceFeedbackHoldSec, 45) * 1000));
+            if (Number.isFinite(Number(observed)) && Number.isFinite(Number(essActualAgeMs)) && Number(essActualAgeMs) <= holdMs) {
+                essActualW = Number(observed);
+                feedbackHeld = true;
+            }
+        }
+
+        const gridTargetW = this._getFeneconGridSetpointW(cfg, {
+            batteryTargetW: targetW,
+            nvpW,
+            essActualW,
+        });
+        const targetEntry = this.dp && this.dp.getEntry ? this.dp.getEntry('st.feneconGridSetpointW') : null;
+        const objectId = targetEntry && targetEntry.objectId ? String(targetEntry.objectId) : '';
+
+        if (!targetEntry || gridTargetW === null) {
+            const missing = !targetEntry
+                ? 'SetGridActivePower-DP fehlt'
+                : (!Number.isFinite(Number(nvpW)) ? 'frischer NVP fehlt' : 'FENECON ess0/ActivePower fehlt oder ist zu alt');
+            await this._setIfChanged('speicher.regelung.feneconGridAktiv', true);
+            await this._setIfChanged('speicher.regelung.feneconGridSollW', 0);
+            await this._setIfChanged('speicher.regelung.feneconGridQuelle', String(source || 'fenecon-fems'));
+            await this._setIfChanged('speicher.regelung.feneconGridGrund', `${missing}: ${String(reason || '')}`);
+            await this._setIfChanged('speicher.regelung.feneconGridSchreibOk', false);
+            await this._setIfChanged('speicher.regelung.feneconGridSchreibStatus', 'fems-grid-input-missing');
+            await this._setIfChanged('speicher.regelung.feneconGridTargetObjId', objectId);
+            await this._setIfChanged('speicher.regelung.feneconGridLastWriteRaw', null);
+            await this._setIfChanged('speicher.regelung.feneconGridReleaseStatus', missing);
+            await this._setIfChanged('speicher.regelung.feneconGridJson', JSON.stringify({
+                ts: now,
+                mode: 'fems-grid-target',
+                ok: false,
+                reason: missing,
+                batteryTargetW: Number(targetW) || 0,
+                nvpW: Number.isFinite(Number(nvpW)) ? Number(nvpW) : null,
+                essActualW: Number.isFinite(Number(essActualW)) ? Number(essActualW) : null,
+                essActualAgeMs: Number.isFinite(Number(essActualAgeMs)) ? Number(essActualAgeMs) : null,
+                feedbackHeld,
+                objectId,
+            }));
+            return { ok: false, wrote: false, status: 'fems-grid-input-missing', objectId, valueW: 0, gridTargetW: null, writeResult: false };
+        }
+
+        let writeResult = false;
+        try {
+            // Kein Force: identische Ziele werden durch den Registry-Deadband bis
+            // zum 900-ms-Watchdog-Refresh entprellt. `null` bedeutet dabei
+            // idempotent/noch frisch und ist kein Fehler.
+            writeResult = await this._writeStorageCommandNumber('st.feneconGridSetpointW', gridTargetW, { force: false });
+        } catch (_error) {
+            writeResult = false;
+        }
+        const ok = writeResult !== false;
+        const expectedRaw = this._storageCommandExpectedRaw(targetEntry, gridTargetW, 'number');
+        await this._setIfChanged('speicher.regelung.feneconGridAktiv', true);
+        await this._setIfChanged('speicher.regelung.feneconGridSollW', gridTargetW);
+        await this._setIfChanged('speicher.regelung.feneconGridQuelle', String(source || 'fenecon-fems'));
+        await this._setIfChanged('speicher.regelung.feneconGridGrund', String(reason || 'FENECON FEMS NVP-Regler'));
+        await this._setIfChanged('speicher.regelung.feneconGridSchreibOk', ok);
+        await this._setIfChanged('speicher.regelung.feneconGridSchreibStatus', ok ? (writeResult === null ? 'fems-grid-confirmed-unchanged' : 'fems-grid-written') : 'fems-grid-write-failed');
+        await this._setIfChanged('speicher.regelung.feneconGridTargetObjId', objectId);
+        await this._setIfChanged('speicher.regelung.feneconGridLastWriteRaw', expectedRaw ? expectedRaw.raw : gridTargetW);
+        await this._setIfChanged('speicher.regelung.feneconGridReleaseStatus', 'native-fems-active');
+        await this._setIfChanged('speicher.regelung.feneconGridJson', JSON.stringify({
+            ts: now,
+            mode: 'fems-grid-target',
+            ok,
+            status: ok ? (writeResult === null ? 'confirmed-unchanged' : 'written') : 'write-failed',
+            batteryTargetW: Math.round(Number(targetW) || 0),
+            gridTargetW,
+            nvpW: Number(nvpW),
+            essActualW: Number(essActualW),
+            essActualAgeMs: Number.isFinite(Number(essActualAgeMs)) ? Math.round(Number(essActualAgeMs)) : null,
+            feedbackHeld,
+            objectId,
+            source: String(source || ''),
+            reason: String(reason || ''),
+        }));
+        return { ok, wrote: writeResult === true, status: ok ? 'fems-grid-written' : 'fems-grid-write-failed', objectId, valueW: gridTargetW, gridTargetW, writeResult, nvpW, essActualW, feedbackHeld };
     }
 
     /**
@@ -7938,7 +8166,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const evcsAssistReqW = Number.isFinite(Number(options && options.evcsAssistReqW))
             ? Math.max(0, Math.round(Number(options.evcsAssistReqW)))
             : 0;
-        const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
+        let w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
         const cfg = this._getCfg();
         const storageAuthority = this._getStorageControlAuthority();
         const selectedTopology = String(storageAuthority.selectedTopology || 'none');
@@ -7959,6 +8187,75 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         // E3/DC RSCP-Profil: Der ioBroker.e3dc-rscp Adapter schreibt aktive
         // Speicherleistung ueber das gekoppelte Tupel SET_POWER_MODE + SET_POWER_VALUE.
         const storageVendorProfile = this._getStorageVendorProfile(cfg);
+        const feneconGridEntry = getEntry('st.feneconGridSetpointW');
+        const feneconEssActualEntry = getEntry('st.feneconEssActivePowerW');
+        const feneconControlInfo = this._resolveFeneconHybridControlMode(cfg, selectedTopology);
+        const feneconEssActualDiagW = this.dp && this.dp.getEntry && this.dp.getEntry('st.feneconEssActivePowerW')
+            ? this.dp.getNumber('st.feneconEssActivePowerW', null)
+            : null;
+        const feneconEssActualDiagAgeMs = this.dp && this.dp.getEntry && this.dp.getEntry('st.feneconEssActivePowerW')
+            ? this.dp.getAgeMs('st.feneconEssActivePowerW')
+            : null;
+        const feneconActualSetDiagW = this.dp && this.dp.getEntry && this.dp.getEntry('st.feneconActualSetPowerW')
+            ? this.dp.getNumber('st.feneconActualSetPowerW', null)
+            : null;
+        const feneconActualSetDiagAgeMs = this.dp && this.dp.getEntry && this.dp.getEntry('st.feneconActualSetPowerW')
+            ? this.dp.getAgeMs('st.feneconActualSetPowerW')
+            : null;
+        if (storageVendorProfile === 'fenecon-openems') {
+            await this._setIfChanged('speicher.regelung.feneconControlModeConfigured', feneconControlInfo.requestedMode);
+            await this._setIfChanged('speicher.regelung.feneconControlModeEffective', feneconControlInfo.effectiveMode);
+            await this._setIfChanged('speicher.regelung.feneconControlModeReason', feneconControlInfo.reason);
+            await this._setIfChanged('speicher.regelung.feneconEssActivePowerW', Number.isFinite(Number(feneconEssActualDiagW)) ? Math.round(Number(feneconEssActualDiagW)) : null);
+            await this._setIfChanged('speicher.regelung.feneconEssActivePowerAgeMs', Number.isFinite(Number(feneconEssActualDiagAgeMs)) ? Math.round(Number(feneconEssActualDiagAgeMs)) : null);
+            await this._setIfChanged('speicher.regelung.feneconActualSetPowerW', Number.isFinite(Number(feneconActualSetDiagW)) ? Math.round(Number(feneconActualSetDiagW)) : null);
+            await this._setIfChanged('speicher.regelung.feneconActualSetPowerAgeMs', Number.isFinite(Number(feneconActualSetDiagAgeMs)) ? Math.round(Number(feneconActualSetDiagAgeMs)) : null);
+        } else {
+            await this._setIfChanged('speicher.regelung.feneconControlModeConfigured', 'inactive');
+            await this._setIfChanged('speicher.regelung.feneconControlModeEffective', 'inactive');
+            await this._setIfChanged('speicher.regelung.feneconControlModeReason', 'FENECON-Profil nicht aktiv');
+            await this._setIfChanged('speicher.regelung.feneconEssActivePowerW', null);
+            await this._setIfChanged('speicher.regelung.feneconEssActivePowerAgeMs', null);
+            await this._setIfChanged('speicher.regelung.feneconActualSetPowerW', null);
+            await this._setIfChanged('speicher.regelung.feneconActualSetPowerAgeMs', null);
+        }
+        const feneconNativeTargetConfigured = selectedTopology === 'single'
+            && controlMode === 'targetPower'
+            && storageVendorProfile === 'fenecon-openems'
+            && feneconControlInfo.useNativeGridTarget === true
+            && !!(feneconGridEntry && feneconEssActualEntry);
+        let feneconDirectClamp = null;
+        if (selectedTopology === 'single'
+            && controlMode === 'targetPower'
+            && storageVendorProfile === 'fenecon-openems'
+            && feneconControlInfo.useDirectEss === true) {
+            feneconDirectClamp = this._clampFeneconDirectTargetW(w, cfg);
+            w = Number(feneconDirectClamp.targetW);
+            if (feneconDirectClamp.clamped) {
+                reason = `${String(reason || 'FENECON direkte ESS-Vorgabe')} · durch FEMS-Leistungsfenster auf ${Math.round(w)} W begrenzt`;
+            }
+            await this._setIfChanged('speicher.regelung.feneconDirectClampAktiv', feneconDirectClamp.clamped === true);
+            await this._setIfChanged('speicher.regelung.feneconDirectRequestedW', Math.round(feneconDirectClamp.requestedW));
+            await this._setIfChanged('speicher.regelung.feneconDirectTargetW', Math.round(w));
+            await this._setIfChanged('speicher.regelung.feneconDirectMinW', Number.isFinite(Number(feneconDirectClamp.limits.minW)) ? Math.round(Number(feneconDirectClamp.limits.minW)) : null);
+            await this._setIfChanged('speicher.regelung.feneconDirectMaxW', Number.isFinite(Number(feneconDirectClamp.limits.maxW)) ? Math.round(Number(feneconDirectClamp.limits.maxW)) : null);
+            await this._setIfChanged('speicher.regelung.feneconDirectClampStatus', feneconDirectClamp.clamped ? 'clamped-by-fems' : (feneconDirectClamp.limits.valid ? 'within-fems-limits' : 'limits-unavailable'));
+            await this._setIfChanged('speicher.regelung.feneconDirectClampW', Math.round(w));
+            await this._setIfChanged('speicher.regelung.feneconDirectClampJson', JSON.stringify({
+                ts: Date.now(),
+                mode: 'direct-ess',
+                ...feneconDirectClamp,
+            }));
+        } else {
+            await this._setIfChanged('speicher.regelung.feneconDirectClampAktiv', false);
+            await this._setIfChanged('speicher.regelung.feneconDirectRequestedW', null);
+            await this._setIfChanged('speicher.regelung.feneconDirectTargetW', null);
+            await this._setIfChanged('speicher.regelung.feneconDirectMinW', null);
+            await this._setIfChanged('speicher.regelung.feneconDirectMaxW', null);
+            await this._setIfChanged('speicher.regelung.feneconDirectClampStatus', 'inactive');
+            await this._setIfChanged('speicher.regelung.feneconDirectClampW', 0);
+            await this._setIfChanged('speicher.regelung.feneconDirectClampJson', '');
+        }
         const e3dcModeEntry = getEntry('st.e3dcSetPowerMode');
         const e3dcValueEntry = getEntry('st.e3dcSetPowerValueW');
         const e3dcTargetConfigured = selectedTopology === 'single'
@@ -8003,19 +8300,23 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             targetMode = chargeEnableEntry && dischargeEnableEntry
                 ? 'enable-flags-charge-discharge'
                 : (chargeEnableEntry ? 'enable-flags-charge-only' : (dischargeEnableEntry ? 'enable-flags-discharge-only' : 'enable-flags-none'));
+        } else if (feneconNativeTargetConfigured) {
+            commandFamily = 'fenecon-fems-grid';
+            directionSupported = true;
+            targetMode = 'fenecon-fems-grid-target';
         } else if (e3dcTargetConfigured) {
             commandFamily = 'e3dc-rscp';
             directionSupported = true;
             targetMode = 'e3dc-rscp-set-power';
-        } else if (hasCompleteSplitTarget) {
+        } else if (hasCompleteSplitTarget && (storageVendorProfile !== 'fenecon-openems' || feneconControlInfo.useDirectEss === true)) {
             commandFamily = 'split';
             directionSupported = true;
             targetMode = 'split-charge-discharge';
-        } else if (hasSignedTarget) {
+        } else if (hasSignedTarget && (storageVendorProfile !== 'fenecon-openems' || feneconControlInfo.useDirectEss === true)) {
             commandFamily = 'signed';
             directionSupported = true;
             targetMode = 'signed-targetPower';
-        } else if (hasAnyWritableSplit) {
+        } else if (hasAnyWritableSplit && (storageVendorProfile !== 'fenecon-openems' || feneconControlInfo.useDirectEss === true)) {
             commandFamily = 'split';
             directionSupported = w === 0 || (w < 0 ? canWriteChargeSplit : canWriteDischargeSplit);
             targetMode = canWriteChargeSplit
@@ -8037,7 +8338,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             ? objectIdOf(signedEntry)
             : (commandFamily === 'split'
                 ? (w < 0 ? objectIdOf(chargeEntry) : (w > 0 ? objectIdOf(dischargeEntry) : (objectIdOf(chargeEntry) || objectIdOf(dischargeEntry))))
-                : (commandFamily === 'e3dc-rscp' ? objectIdOf(e3dcValueEntry) : ''));
+                : (commandFamily === 'e3dc-rscp'
+                    ? objectIdOf(e3dcValueEntry)
+                    : (commandFamily === 'fenecon-fems-grid' ? objectIdOf(feneconGridEntry) : '')));
         await this._setIfChanged('speicher.regelung.targetMode', targetMode);
         await this._setIfChanged('speicher.regelung.commandFamily', commandFamily);
         await this._setIfChanged('speicher.regelung.targetObjId', selectedTargetObjId);
@@ -8051,6 +8354,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             chargeEnable: objectIdOf(chargeEnableEntry),
             dischargeEnable: objectIdOf(dischargeEnableEntry),
             reserveSoc: objectIdOf(reserveSocEntry),
+            feneconGridTarget: objectIdOf(feneconGridEntry),
+            feneconEssActual: objectIdOf(feneconEssActualEntry),
+            feneconRequestedMode: feneconControlInfo.requestedMode,
+            feneconEffectiveMode: feneconControlInfo.effectiveMode,
             signedIgnoredBecauseCompleteSplit: commandFamily === 'split' && !!signedEntry,
             splitIgnoredBecauseSignedSelected: commandFamily === 'signed' && hasAnySplitTarget,
             chargeSkippedBecauseSignedSameObject: !!chargeSameAsSigned,
@@ -8072,7 +8379,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             if (id && allowAlternativeAlias) selectedTargetObjectIds.add(id);
         };
         if (selectedTopology === 'single' && controlMode === 'targetPower') {
-            if (commandFamily === 'e3dc-rscp') {
+            if (commandFamily === 'fenecon-fems-grid') {
+                addActiveOutput('feneconGridTarget', feneconGridEntry, true);
+            } else if (commandFamily === 'e3dc-rscp') {
                 addActiveOutput('e3dcMode', e3dcModeEntry, true);
                 addActiveOutput('e3dcValue', e3dcValueEntry, true);
             } else if (commandFamily === 'signed') {
@@ -8088,7 +8397,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             addActiveOutput('chargeEnable', chargeEnableEntry);
             addActiveOutput('dischargeEnable', dischargeEnableEntry);
         }
-        if (selectedTopology === 'single' && runEntry) activeOutputEntries.push(['run', runEntry]);
+        if (selectedTopology === 'single' && runEntry && commandFamily !== 'fenecon-fems-grid') activeOutputEntries.push(['run', runEntry]);
         if (selectedTopology === 'single' && reserveSocEntry) activeOutputEntries.push(['reserveSoc', reserveSocEntry]);
 
         // Alle nicht ausgewaehlten Sollwertfamilien werden vor dem aktiven
@@ -8100,7 +8409,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             if (!id || selectedTargetObjectIds.has(id)) return;
             ignoredAlternativeTargetEntries.push({ key, entry, family });
         };
-        if (selectedTopology === 'single') {
+        if (selectedTopology === 'single' && commandFamily !== 'fenecon-fems-grid') {
             if (commandFamily !== 'signed') addIgnoredAlternative('st.targetPowerW', signedEntry, 'signed');
             if (commandFamily !== 'split') {
                 addIgnoredAlternative('st.targetChargePowerW', chargeEntry, 'split-charge');
@@ -8110,6 +8419,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 addIgnoredAlternative('st.e3dcSetPowerMode', e3dcModeEntry, 'e3dc-mode');
                 addIgnoredAlternative('st.e3dcSetPowerValueW', e3dcValueEntry, 'e3dc-value');
             }
+            // Der native FEMS-Zielwert ist kein klassischer 0-W-aus-Befehl:
+            // 0 W bedeutet dort NVP-Ziel 0 W und aktiviert den Regler weiter. Deshalb
+            // wird er beim Wechsel auf direkte ESS-Regelung nicht automatisch
+            // neutralisiert. Umgekehrt werden direkte ESS-Sollwerte im nativen Modus
+            // sicher auf 0 W gesetzt, damit nur eine Batterie-Kommandofamilie wirkt.
         }
 
         const outputsByObjectId = new Map();
@@ -8254,6 +8568,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             const mismatches = (Array.isArray(rows) ? rows : []).filter((row) => row && row.supported && !row.ok);
             if (mismatches.some((row) => String(row.role || '').startsWith('split-'))) return 'direction-handover-failed';
             if (mismatches.some((row) => String(row.role || '') === 'signed-target')) return 'signed-command-mismatch';
+            if (mismatches.some((row) => String(row.role || '') === 'fenecon-grid-target')) return 'fenecon-grid-command-mismatch';
             if (mismatches.some((row) => String(row.role || '').startsWith('e3dc-'))) return 'e3dc-command-mismatch';
             if (mismatches.some((row) => String(row.role || '') === 'run')) return 'run-command-mismatch';
             if (mismatches.some((row) => String(row.role || '') === 'reserve')) return 'reserve-command-mismatch';
@@ -8286,7 +8601,24 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             primaryDetail = { topology: selectedTopology, reason: commandFailureStatus };
         } else {
             const familyChanged = this._lastStorageCommandFamily !== commandFamily;
-            if (!outputConflicts.length) {
+            if (familyChanged && this._lastStorageCommandFamily === 'fenecon-fems-grid' && commandFamily !== 'fenecon-fems-grid') {
+                const nativeRelease = await this._releaseDirectStorageTargetForFenecon(`switch-to-${commandFamily}`, cfg);
+                if (nativeRelease && nativeRelease.ok === false) {
+                    alternativeRelease = {
+                        ok: false,
+                        status: 'fenecon-native-grid-release-failed',
+                        rows: [nativeRelease],
+                    };
+                }
+            } else if (familyChanged && commandFamily === 'fenecon-fems-grid') {
+                // Direkte 706-/Signed-/Split-Vorgaben werden im nativen Modus nicht
+                // aktiv auf 0 W beschrieben. 0 W wäre bei 706 weiterhin ein wirksamer
+                // externer Controllerbefehl und könnte den FEMS-NVP-Regler bis zum
+                // Watchdog-Ablauf blockieren. Der alte Pfad wird schlicht nicht mehr
+                // erneuert und läuft kontrolliert aus.
+                await this._setIfChanged('speicher.regelung.feneconGridReleaseStatus', 'native-fems-active-direct-watchdog-not-refreshed');
+            }
+            if (!outputConflicts.length && alternativeRelease.ok !== false) {
                 alternativeRelease = await this._ensureStorageAlternativeTargetsNeutral(
                     ignoredAlternativeTargetEntries,
                     { familyChanged },
@@ -8308,6 +8640,28 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     directionSupported,
                     alternativeRelease,
                 };
+            } else if (controlMode === 'targetPower' && commandFamily === 'fenecon-fems-grid') {
+                const feneconResult = await this._applyFeneconGridSetpointW(w, reason, source, { ...options, cfg });
+                primarySucceeded = !!(feneconResult && feneconResult.ok === true);
+                primaryWroteAny = true;
+                writeResult = primarySucceeded;
+                const gridValueW = feneconResult && Number.isFinite(Number(feneconResult.gridTargetW))
+                    ? Math.round(Number(feneconResult.gridTargetW))
+                    : 0;
+                addCommandExpectation('st.feneconGridSetpointW', feneconGridEntry, 'number', gridValueW, 'fenecon-grid-target');
+                writeResults.push(feneconResult ? feneconResult.writeResult : false);
+                await this._setIfChanged('speicher.regelung.lastWriteRaw', feneconResult ? feneconResult.valueW : null);
+                primaryDetail = feneconResult ? {
+                    profile: 'fenecon-openems',
+                    family: commandFamily,
+                    batteryTargetW: w,
+                    gridTargetW: feneconResult.gridTargetW,
+                    nvpW: feneconResult.nvpW,
+                    essActualW: feneconResult.essActualW,
+                    feedbackHeld: !!feneconResult.feedbackHeld,
+                    objectId: feneconResult.objectId,
+                    status: feneconResult.status,
+                } : null;
             } else if (controlMode === 'targetPower' && commandFamily === 'e3dc-rscp') {
                 const e3dcResult = await this._writeE3dcRscpTargetW(w, reason, source, cfg);
                 primarySucceeded = !!(e3dcResult && e3dcResult.ok === true);
@@ -8422,13 +8776,13 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             // Run/Enable folgt dem tatsaechlich erfolgreichen Hauptpfad. Ein
             // Fehler setzt den Controller sicher auf false; der Wert wird wie
             // alle Sollwert-DPs anschliessend per Readback bestaetigt.
-            if (runEntry && !conflictingOutputIds.has(objectIdOf(runEntry))) {
+            if (runEntry && commandFamily !== 'fenecon-fems-grid' && !conflictingOutputIds.has(objectIdOf(runEntry))) {
                 const runActive = primarySucceeded && writeResult !== false && w !== 0;
                 const runResult = await writeCommandBoolean('st.run', runActive, { role: 'run', primary: false, force: !runActive });
                 if (runResult === false) writeResult = false;
                 primaryDetail = { ...(primaryDetail || {}), run: runActive };
             } else if (runEntry) {
-                primaryDetail = { ...(primaryDetail || {}), run: null, runSkipped: 'mapping-conflict' };
+                primaryDetail = { ...(primaryDetail || {}), run: null, runSkipped: commandFamily === 'fenecon-fems-grid' ? 'native-fems-grid-target' : 'mapping-conflict' };
             }
 
             // Der Reserve-DP wird aus exakt derselben wirksamen SoC-Untergrenze
@@ -8462,7 +8816,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
                 // Ein Sollwert-Readbackfehler darf keine laufende externe
                 // Freigabe hinterlassen. Run wird best effort sofort geloest.
-                if (runEntry) {
+                if (runEntry && commandFamily !== 'fenecon-fems-grid') {
                     const safeRunResult = await this._writeStorageCommandBoolean('st.run', false, { force: true });
                     const safeRunReadback = await this._verifyStorageCommandDatapoints(
                         [{ key: 'st.run', entry: runEntry, type: 'boolean', value: false, role: 'run-safe-release' }],
@@ -8545,7 +8899,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         else if (outputConflicts.length) singleStatus = 'dp-zuordnung-konflikt';
         else if (!directionSupported) singleStatus = 'zielrichtung-nicht-gemappt';
         else if (writeResult === true) {
-            if (commandFamily === 'e3dc-rscp') singleStatus = 'e3dc-rscp-geschrieben';
+            if (commandFamily === 'fenecon-fems-grid') singleStatus = 'fenecon-fems-grid-geschrieben';
+            else if (commandFamily === 'e3dc-rscp') singleStatus = 'e3dc-rscp-geschrieben';
             else if (commandFamily === 'limits') singleStatus = 'leistungsgrenzen-geschrieben';
             else if (commandFamily === 'enable-flags') singleStatus = 'freigabe-flags-geschrieben';
             else if (commandFamily === 'split') singleStatus = 'split-geschrieben';
@@ -8558,6 +8913,30 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 ? 'kein-aktiver-speicher-ausgang'
                 : ((writeResult === null) ? 'unverändert' : singleStatus));
         await this._setIfChanged('speicher.regelung.schreibStatus', writeStatus);
+        if (storageVendorProfile === 'fenecon-openems') {
+            await this._setIfChanged('speicher.regelung.feneconHybridControllerJson', JSON.stringify({
+                ts: Date.now(),
+                topology: selectedTopology,
+                requestedMode: feneconControlInfo.requestedMode,
+                effectiveMode: feneconControlInfo.effectiveMode,
+                modeReason: feneconControlInfo.reason,
+                commandFamily,
+                batteryTargetW: Math.round(w),
+                gridTargetW: commandFamily === 'fenecon-fems-grid' && primaryDetail && Number.isFinite(Number(primaryDetail.gridTargetW))
+                    ? Math.round(Number(primaryDetail.gridTargetW))
+                    : null,
+                essActualW: Number.isFinite(Number(feneconEssActualDiagW)) ? Math.round(Number(feneconEssActualDiagW)) : null,
+                essActualAgeMs: Number.isFinite(Number(feneconEssActualDiagAgeMs)) ? Math.round(Number(feneconEssActualDiagAgeMs)) : null,
+                actualSetPowerW: Number.isFinite(Number(feneconActualSetDiagW)) ? Math.round(Number(feneconActualSetDiagW)) : null,
+                actualSetPowerAgeMs: Number.isFinite(Number(feneconActualSetDiagAgeMs)) ? Math.round(Number(feneconActualSetDiagAgeMs)) : null,
+                directClamp: feneconDirectClamp,
+                writeOk: writeResult === true,
+                writeStatus,
+                commandReadback,
+            }));
+        } else {
+            await this._setIfChanged('speicher.regelung.feneconHybridControllerJson', '');
+        }
 
         const writeSucceeded = writeResult === true;
         const effectiveWrittenTargetW = acceptedTargetW;
@@ -8761,15 +9140,33 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.chargeDemandCapW', 'Lade-Demand-Cap nach Headroom/PV (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.chargeDemandCapReason', 'Lade-Demand-Cap Grund', 'string', 'text', '');
 
-        await mk('speicher.regelung.feneconGridAktiv', 'Legacy Netzpunktführung aktiv (nicht genutzt)', 'boolean', 'indicator', false);
-        await mk('speicher.regelung.feneconGridSollW', 'Legacy Netzpunkt-Sollwert (nicht genutzt)', 'number', 'value.power', 0);
-        await mk('speicher.regelung.feneconGridQuelle', 'Legacy Netzpunktführung Quelle', 'string', 'text', '');
-        await mk('speicher.regelung.feneconGridGrund', 'Legacy Netzpunktführung Grund', 'string', 'text', '');
-        await mk('speicher.regelung.feneconGridSchreibOk', 'Legacy Netzpunkt-Sollwert Schreiben OK', 'boolean', 'indicator', false);
-        await mk('speicher.regelung.feneconGridSchreibStatus', 'Legacy Netzpunkt-Sollwert Schreibstatus', 'string', 'text', '');
-        await mk('speicher.regelung.feneconGridTargetObjId', 'Legacy Netzpunkt-Sollwert Datenpunkt (nicht genutzt)', 'string', 'text', '');
-        await mk('speicher.regelung.feneconGridLastWriteRaw', 'Legacy letzter Rohwert (nicht genutzt)', 'number', 'value');
-        await mk('speicher.regelung.feneconGridReleaseStatus', 'Legacy Freigabestatus', 'string', 'text', '');
+        await mk('speicher.regelung.feneconControlModeConfigured', 'FENECON konfigurierte Hybrid-Regelart', 'string', 'text', 'auto');
+        await mk('speicher.regelung.feneconControlModeEffective', 'FENECON wirksame Hybrid-Regelart', 'string', 'text', 'inactive');
+        await mk('speicher.regelung.feneconControlModeReason', 'FENECON Hybrid-Regelart Grund', 'string', 'text', '');
+        await mk('speicher.regelung.feneconEssActivePowerW', 'FENECON ESS Aktor-Istleistung (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.feneconEssActivePowerAgeMs', 'FENECON ESS Aktor-Istleistung Alter (ms)', 'number', 'value.interval', null);
+        await mk('speicher.regelung.feneconActualSetPowerW', 'FENECON wirksame direkte Leistungsvorgabe (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.feneconActualSetPowerAgeMs', 'FENECON direkte Vorgabe-Readback Alter (ms)', 'number', 'value.interval', null);
+        await mk('speicher.regelung.feneconDirectRequestedW', 'FENECON direkte ESS-Leistung angefordert (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.feneconDirectTargetW', 'FENECON direkte ESS-Leistung nach FEMS-Limits (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.feneconDirectMinW', 'FENECON aktuelle minimale ESS-Leistung (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.feneconDirectMaxW', 'FENECON aktuelle maximale ESS-Leistung (W)', 'number', 'value.power', null);
+        await mk('speicher.regelung.feneconDirectClampStatus', 'FENECON direkte ESS-Limitbewertung', 'string', 'text', 'inactive');
+        await mk('speicher.regelung.feneconHybridControllerJson', 'FENECON Hybrid-Regler Diagnose (JSON)', 'string', 'json', '');
+
+        await mk('speicher.regelung.feneconGridAktiv', 'FENECON nativer FEMS-NVP-Regler aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.feneconGridSollW', 'FENECON FEMS NVP-Sollwert', 'number', 'value.power', 0);
+        await mk('speicher.regelung.feneconGridQuelle', 'FENECON FEMS NVP-Quelle', 'string', 'text', '');
+        await mk('speicher.regelung.feneconGridGrund', 'FENECON FEMS NVP-Grund', 'string', 'text', '');
+        await mk('speicher.regelung.feneconGridSchreibOk', 'FENECON FEMS NVP-Schreiben OK', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.feneconGridSchreibStatus', 'FENECON FEMS NVP-Schreibstatus', 'string', 'text', '');
+        await mk('speicher.regelung.feneconGridTargetObjId', 'FENECON FEMS NVP-Ziel-Datenpunkt', 'string', 'text', '');
+        await mk('speicher.regelung.feneconGridLastWriteRaw', 'FENECON letzter NVP-Rohsollwert', 'number', 'value.power');
+        await mk('speicher.regelung.feneconGridReleaseStatus', 'FENECON Kommandofamilienstatus', 'string', 'text', '');
+        await mk('speicher.regelung.feneconGridJson', 'FENECON FEMS NVP-Diagnose JSON', 'string', 'json', '');
+        await mk('speicher.regelung.feneconDirectClampAktiv', 'FENECON direkte ESS-Vorgabe begrenzt', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.feneconDirectClampW', 'FENECON direkte ESS-Vorgabe nach Limit', 'number', 'value.power', 0);
+        await mk('speicher.regelung.feneconDirectClampJson', 'FENECON direkte ESS-Limitdiagnose JSON', 'string', 'json', '');
         await mk('speicher.regelung.feneconHybridAktiv', 'Hybrid-/Gateway-Priorität aktiv', 'boolean', 'indicator', false);
         await mk('speicher.regelung.feneconHybridModus', 'Hybrid-/Gateway-Priorität Modus', 'string', 'text', '');
         await mk('speicher.regelung.feneconHybridGrund', 'Hybrid-/Gateway-Priorität Grund', 'string', 'text', '');

@@ -143,6 +143,9 @@ function buildNvpCoordinatorSnapshot(input: CoordinatorInput = {}) {
   const storagePolicyBlocked = boolValue(input.storagePolicyBlocked, false);
   const storagePolicyBlockReason = cleanText(input.storagePolicyBlockReason || '', 320);
   const storagePolicySource = cleanText(input.storagePolicySource || '', 120);
+  const nativeFemsGridActive = boolValue(input.nativeFemsGridActive, false);
+  const nativeFemsGridTargetW = roundedOrNull(input.nativeFemsGridTargetW);
+  const nativeFemsGridWriteAccepted = boolValue(input.nativeFemsGridWriteAccepted, false);
 
   const noWriter = topology === 'none'
     || containsAny(writeStatusLower, ['deaktiviert', 'kein-aktiver-speicher-ausgang', 'kein aktiver speicher-ausgang']);
@@ -172,19 +175,33 @@ function buildNvpCoordinatorSnapshot(input: CoordinatorInput = {}) {
   const storageActualFresh = storageActualW !== null
     && storageActualTrusted
     && (storageActualAgeMs === null || storageActualAgeMs <= actualMaxAgeMs);
-  const storagePendingDeltaW = storageActualW !== null && storageTargetW !== null
+  const directStoragePendingDeltaW = storageActualW !== null && storageTargetW !== null
     ? Math.round(storageTargetW - storageActualW)
     : null;
+  const nativeFemsGridPendingDeltaW = rawNvpW !== null && nativeFemsGridTargetW !== null
+    ? Math.round(nativeFemsGridTargetW - rawNvpW)
+    : null;
+  const storagePendingDeltaW = nativeFemsGridActive
+    ? nativeFemsGridPendingDeltaW
+    : directStoragePendingDeltaW;
   const storageResponsePending = storagePendingDeltaW !== null
     && Math.abs(storagePendingDeltaW) > responseDeadbandW;
   const responseWithinGrace = !storageResponsePending || responseAgeMs <= responseGraceMs;
-  const storageCommandCredited = nvpUsable
-    && topology !== 'none'
-    && !storagePolicyBlocked
-    && storageActualFresh
-    && storageTargetW !== null
+  const nativeFemsGridCommandCredited = nvpUsable
+    && nativeFemsGridActive
+    && nativeFemsGridTargetW !== null
+    && nativeFemsGridWriteAccepted
     && storageWriteAccepted
     && responseWithinGrace;
+  const storageCommandCredited = nativeFemsGridActive
+    ? nativeFemsGridCommandCredited
+    : (nvpUsable
+      && topology !== 'none'
+      && !storagePolicyBlocked
+      && storageActualFresh
+      && storageTargetW !== null
+      && storageWriteAccepted
+      && responseWithinGrace);
   const acceptedFlexibleNetLoadDeltaW = Math.round(finiteOrNull(input.acceptedFlexibleNetLoadDeltaW) ?? 0);
   const acceptedFlexibleLoadDeltaW = Math.round(finiteOrNull(input.acceptedFlexibleLoadDeltaW) ?? 0);
   const acceptedFlexibleGenerationDeltaW = Math.round(finiteOrNull(input.acceptedFlexibleGenerationDeltaW) ?? 0);
@@ -194,7 +211,9 @@ function buildNvpCoordinatorSnapshot(input: CoordinatorInput = {}) {
 
   const projectedAfterStorageW = rawNvpW === null
     ? null
-    : Math.round(rawNvpW - (storageCommandCredited ? (storagePendingDeltaW || 0) : 0));
+    : (nativeFemsGridActive && storageCommandCredited && nativeFemsGridTargetW !== null
+      ? Math.round(nativeFemsGridTargetW)
+      : Math.round(rawNvpW - (storageCommandCredited ? (storagePendingDeltaW || 0) : 0)));
   const projectedNvpW = projectedAfterStorageW === null
     ? null
     : Math.round(projectedAfterStorageW + acceptedFlexibleNetLoadDeltaW);
@@ -238,6 +257,15 @@ function buildNvpCoordinatorSnapshot(input: CoordinatorInput = {}) {
   } else if (hold) {
     status = 'storage-hold';
     reason = storageWriteStatus || 'Speichervorgabe wird bewusst gehalten';
+  } else if (nativeFemsGridActive && nativeFemsGridWriteAccepted && storageResponsePending && responseWithinGrace) {
+    status = 'waiting-fenecon-grid-response';
+    reason = `FEMS regelt den NVP für maximal ${responseGraceMs} ms auf ${Math.round(nativeFemsGridTargetW || 0)} W`;
+  } else if (nativeFemsGridActive && nativeFemsGridWriteAccepted && storageResponsePending && !responseWithinGrace) {
+    status = 'fenecon-grid-response-timeout';
+    reason = 'FEMS erreicht den vorgegebenen NVP-Sollwert nicht innerhalb der Reaktionszeit; PV-Regelung verwendet den realen Rest-NVP';
+  } else if (nativeFemsGridActive && nativeFemsGridWriteAccepted && !storageResponsePending) {
+    status = 'fenecon-grid-target-reached';
+    reason = 'FEMS-NVP-Sollwert erreicht';
   } else if (storageCommandCredited && storageResponsePending) {
     status = 'waiting-storage-response';
     reason = `Speicherreaktion wird für maximal ${responseGraceMs} ms vorweggenommen`;
@@ -302,6 +330,10 @@ function buildNvpCoordinatorSnapshot(input: CoordinatorInput = {}) {
     storagePolicyBlocked,
     storagePolicyBlockReason,
     storagePolicySource,
+    nativeFemsGridActive,
+    nativeFemsGridTargetW,
+    nativeFemsGridWriteAccepted,
+    nativeFemsGridCommandCredited,
     storageNoWriter: noWriter,
     storageBlocked: blocked,
     storageHold: hold,
@@ -323,7 +355,7 @@ function buildNvpCoordinatorSnapshot(input: CoordinatorInput = {}) {
     pvControlNvpW,
     withinBand,
     projectedWithinBand,
-    stable: withinBand,
+    stable: withinBand || (nativeFemsGridActive && nativeFemsGridWriteAccepted && !storageResponsePending),
   };
 }
 
@@ -675,6 +707,11 @@ class NvpCoordinatorModule extends BaseModule {
       'speicher.regelung.commandAcceptedTs',
       'speicher.regelung.commandAcceptedTargetW',
       'speicher.regelung.commandAcceptedSource',
+      'speicher.regelung.commandFamily',
+      'speicher.regelung.feneconGridAktiv',
+      'speicher.regelung.feneconGridSollW',
+      'speicher.regelung.feneconGridSchreibOk',
+      'speicher.regelung.feneconGridSchreibStatus',
       'speicher.regelung.targetObjId',
       'speicher.regelung.lastWriteRaw',
       'speicher.regelung.lastWriteSplitJson',
@@ -707,7 +744,28 @@ class NvpCoordinatorModule extends BaseModule {
       ? acceptedTargetW
       : (acceptedForResponse ? requestedTargetW : 0);
     const actualSampleTs = roundedOrNull(states['speicher.regelung.batteryPowerFeedbackSampleTs']);
-    const response = this._responseState(now, topology, targetW, actualW, actualSampleTs, acceptedForResponse, cfg);
+    const commandFamily = cleanText(states['speicher.regelung.commandFamily'] || '', 80).toLowerCase();
+    const nativeFemsGridTargetW = roundedOrNull(states['speicher.regelung.feneconGridSollW']);
+    const nativeFemsGridActive = commandFamily === 'fenecon-fems-grid'
+      && boolValue(states['speicher.regelung.feneconGridAktiv'], false)
+      && nativeFemsGridTargetW !== null;
+    const nativeFemsGridWriteAccepted = nativeFemsGridActive
+      && boolValue(states['speicher.regelung.feneconGridSchreibOk'], false)
+      && acceptedForResponse;
+    const nvpSampleTs = Number.isFinite(Number(nvp.measurementAgeMs))
+      ? Math.max(0, now - Number(nvp.measurementAgeMs))
+      : null;
+    const response = nativeFemsGridActive
+      ? this._responseState(
+        now,
+        'fenecon-fems-grid',
+        nativeFemsGridTargetW,
+        nvp.usable === true ? roundedOrNull(nvp.netW) : null,
+        nvpSampleTs,
+        nativeFemsGridWriteAccepted,
+        cfg,
+      )
+      : this._responseState(now, topology, targetW, actualW, actualSampleTs, acceptedForResponse, cfg);
     const nvpTargetFromState = finiteOrNull(states['speicher.regelung.selfTargetGridImportW']);
     const deadbandFromState = finiteOrNull(states['speicher.regelung.selfImportThresholdW'])
       ?? finiteOrNull(states['speicher.regelung.selfDeadbandW']);
@@ -736,6 +794,9 @@ class NvpCoordinatorModule extends BaseModule {
       storagePolicyBlocked: boolValue(states['speicher.regelung.policyBlocked'], false),
       storagePolicyBlockReason: cleanText(states['speicher.regelung.policyBlockReason'] || '', 320),
       storagePolicySource: cleanText(states['speicher.regelung.policySource'] || '', 120),
+      nativeFemsGridActive,
+      nativeFemsGridTargetW,
+      nativeFemsGridWriteAccepted,
       storagePartiallyAccepted: boolValue(states['speicher.regelung.partiallyAccepted'], false),
       storageRequestSatisfied: boolValue(states['speicher.regelung.requestSatisfied'], false),
       storageFailedW: roundedOrNull(states['speicher.regelung.farmFailedW']),
@@ -767,6 +828,11 @@ class NvpCoordinatorModule extends BaseModule {
     snapshot.storageCommandAcceptedTs = roundedOrNull(states['speicher.regelung.commandAcceptedTs']);
     snapshot.storageCommandAcceptedTargetW = roundedOrNull(states['speicher.regelung.commandAcceptedTargetW']);
     snapshot.storageCommandAcceptedSource = cleanText(states['speicher.regelung.commandAcceptedSource'] || '', 120);
+    snapshot.storageCommandFamily = commandFamily;
+    snapshot.feneconGridActive = nativeFemsGridActive;
+    snapshot.feneconGridTargetW = nativeFemsGridTargetW;
+    snapshot.feneconGridWriteAccepted = nativeFemsGridWriteAccepted;
+    snapshot.feneconGridWriteStatus = cleanText(states['speicher.regelung.feneconGridSchreibStatus'] || '', 160);
     snapshot.storageTargetObjectId = cleanText(states['speicher.regelung.targetObjId'] || '', 260);
     snapshot.storageLastWriteRaw = roundedOrNull(states['speicher.regelung.lastWriteRaw']);
     snapshot.storageLastWriteSplitJson = cleanText(states['speicher.regelung.lastWriteSplitJson'] || '', 2000);

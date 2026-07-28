@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 577f75a990fb5e99549a024a123f17195d869f8502102fbaf5e763e5172b85bb
+ * Original-Hash: 02face9ea1bff608c14700da08a99c6e8e97a7496ecbb1037ab90e377cdf3825
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/stage-a-diagnostics.ts
- * Quell-Hash: sha256:4447ec4ef2ee32b74174cfbb00934cb05ccc1294408fdbe5bba4b2d6342e5072
+ * Quell-Hash: sha256:9e9b05eb10f07de9a439bf974744d95edff6c4679b61cc550ea0704eadc27770
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -51,6 +51,7 @@ const { BaseModule } = require('./base');
 const ACTUATOR_FIELDS = new Set([
     'setCurrentAId', 'setPowerWId', 'enableWriteId', 'targetPowerObjectId',
     'targetChargePowerObjectId', 'targetDischargePowerObjectId', 'runObjectId',
+    'feneconGridSetpointObjectId',
     // Speicher-/Farm-Legacy-Aliase: Alte Installationen duerfen nach der TS-
     // Migration nicht aus der Owner-Matrix fallen, wenn nur der Alias belegt ist.
     'targetPowerId', 'targetChargePowerId', 'targetDischargePowerId',

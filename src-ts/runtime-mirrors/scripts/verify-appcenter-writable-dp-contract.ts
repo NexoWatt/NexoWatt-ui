@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b39fcc6407ded900e0b3c535aaa16ae8a90d89cb8b1ad34c215ceb9bc5b00184
+ * Original-Hash: 3de856625d45a75be11482904cdb0dabe43886721dfc1e451e9c60981e508073
  */
 
 /**
@@ -86,6 +86,7 @@ function verifyOwnerInventory() {
     storageChargeEnable: free('storage/charge-enable'),
     storageDischargeEnable: free('storage/discharge-enable'),
     storageReserve: free('storage/reserve-soc'),
+    feneconGridTarget: free('storage/fenecon-grid-target'),
     storageLegacySigned: free('storage/legacy-power-setpoint'),
     storageLegacyCharge: free('storage/legacy-charge-setpoint'),
     storageLegacyDischarge: free('storage/legacy-discharge-setpoint'),
@@ -174,6 +175,7 @@ function verifyOwnerInventory() {
         chargeEnableObjectId: ids.storageChargeEnable,
         dischargeEnableObjectId: ids.storageDischargeEnable,
         reserveSocObjectId: ids.storageReserve,
+        feneconGridSetpointObjectId: ids.feneconGridTarget,
         e3dcSetPowerModeObjectId: ids.e3dcMode,
         e3dcSetPowerValueObjectId: ids.e3dcValue,
         e3dcPowerLimitsUsedObjectId: ids.e3dcLimitsUsed,

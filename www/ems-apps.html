@@ -892,22 +892,30 @@
             </div>
           </div>
           <div class="nw-config-field-row" id="storageFeneconOptionsRow">
-            <div class="nw-config-field-label">FENECON / OpenEMS</div>
+            <div class="nw-config-field-label">FENECON / OpenEMS / FEMS</div>
             <div class="nw-config-field-control nw-config-field-control--stack">
               <label class="nw-config-checklabel" for="storageFeneconAcMode">
                 <input id="storageFeneconAcMode" class="nw-config-checkbox" type="checkbox" />
-                <span>FENECON-/OpenEMS-/FEMS-Modus aktivieren</span>
+                <span>FENECON-/OpenEMS-/FEMS-Profil aktiv</span>
+              </label>
+              <label class="nw-config-help" style="display:flex; flex-direction:column; gap:5px; max-width:520px;">
+                Hybrid-Regelart
+                <select id="storageFeneconControlMode" class="nw-config-input">
+                  <option value="auto">Automatisch – FEMS NVP bevorzugen</option>
+                  <option value="fems-grid-target">FEMS NVP-Regler – empfohlen</option>
+                  <option value="direct-ess">Direkte ESS-Leistung – Fallback</option>
+                </select>
               </label>
               <label class="nw-config-checklabel" for="storageFeneconDayNoWrite">
                 <input id="storageFeneconDayNoWrite" class="nw-config-checkbox" type="checkbox" disabled />
-                <span>Legacy-No-Write deaktiviert – externe Vorgabe wird zyklisch erneuert</span>
+                <span>Legacy-No-Write deaktiviert – aktive Vorgaben werden zyklisch erneuert</span>
               </label>
               <label class="nw-config-checklabel" for="storageFeneconAssist">
                 <input id="storageFeneconAssist" class="nw-config-checkbox" type="checkbox" />
                 <span>NexoWatt-Assist bei dauerhaftem Netzbezug erlauben</span>
               </label>
               <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
-                Für FENECON/OpenEMS/FEMS wird der nach NVP-, SoC-, Budget-, MultiUse- und Sicherheitsregeln begrenzte Sollwert über den <b>manuell zugeordneten AppCenter-DP</b> zyklisch erneuert. Dadurch bleibt die externe Vorgabe aktiv und der Geräte-Watchdog läuft nicht aus. Der Assist greift weiterhin nur zeitverzögert und NVP-begrenzt ein. MultiUse, Tarif- und Peak-Shaving-Anforderungen bleiben priorisiert.
+                <b>FEMS NVP-Regler</b> übergibt den zentral aufgelösten Netzpunkt-Sollwert an <code>ctrlBalancing0/SetGridActivePower</code>. FEMS regelt interne DC-PV, Speicher und Gerätegrenzen selbst; dieser Pfad ist für Hybridsysteme empfohlen. <b>Direkte ESS-Leistung</b> verwendet <code>ess0/SetActivePowerEquals</code> als Fallback und sollte zusätzlich <code>ess0/ActivePower</code> sowie die aktuellen Minimal-/Maximalgrenzen enthalten. Im Modus <b>Automatisch</b> wird der native FEMS-Pfad nur verwendet, wenn dessen Sollwert- und Aktor-Istwert-DPs vollständig zugeordnet sind. Es schreibt immer genau eine Kommandofamilie.
               </div>
             </div>
           </div>

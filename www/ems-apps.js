@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:dfaaf9ad0b69c785fb2017c2eca4197504d64128b183dc5d9c2f541dcb69175c
+ * Quell-Hash: sha256:79010674bdc533b6f5fa0afd5c32dee79860ce067e80ccd9a21ce8b6b9e0132c
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -117,6 +117,7 @@
     storageVendorProfile: document.getElementById('storageVendorProfile'),
     storageFeneconOptionsRow: document.getElementById('storageFeneconOptionsRow'),
     storageFeneconAcMode: document.getElementById('storageFeneconAcMode'),
+    storageFeneconControlMode: document.getElementById('storageFeneconControlMode'),
     storageFeneconDayNoWrite: document.getElementById('storageFeneconDayNoWrite'),
     storageFeneconAssist: document.getElementById('storageFeneconAssist'),
     storageSungrowOptionsRow: document.getElementById('storageSungrowOptionsRow'),
@@ -859,11 +860,16 @@
   const STORAGE_DP_FIELDS = [
     { key: 'socObjectId', label: 'SoC (%)', requiredModes: ['targetPower','limits','enableFlags'] },
     { key: 'batteryPowerObjectId', label: 'Ist-Leistung (W) (optional)', requiredModes: [] },
-    { key: 'dcPvPowerObjectId', label: 'DC-/Hybrid-PV Erzeugung (W)', requiredModes: [], showForCoupling: ['dc'], hint: 'Nur bei DC-/Hybrid-Speichern: Erzeugungsleistung des Hybrid-/PV-Wechselrichters. Dieser Wert ist eine Messung, kein Batterie-Sollwert, und hilft bei Forecast-/0-Einspeise-/FENECON-Erkennung.' },
-    { key: 'targetPowerObjectId', label: 'Sollleistung signed (W)', requiredModes: ['targetPower'], hint: 'Allgemeiner bidirektionaler Sollwert. NexoWatt-Konvention: +W = Entladen, -W = Laden. Wird genutzt, wenn keine getrennten Ziel-DPs gesetzt sind oder als Fallback fuer eine fehlende Split-Richtung.' },
-    { key: 'targetChargePowerObjectId', label: 'Sollwert Laden (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional: positiver Lade-Sollwert. Kann zusammen mit Entladen oder einzeln gemappt werden; bei Split wird die Gegenrichtung auf 0 gesetzt.' },
-    { key: 'targetDischargePowerObjectId', label: 'Sollwert Entladen (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional: positiver Entlade-Sollwert. Kann zusammen mit Laden oder einzeln gemappt werden; bei Split wird die Gegenrichtung auf 0 gesetzt.' },
-    { key: 'runObjectId', label: 'Run / externe Speicherregelung (bool)', requiredModes: ['targetPower'], hint: 'Optional: wird auf true gesetzt, wenn NexoWatt einen Lade-/Entlade-Sollwert vorgibt, und auf false bei 0 W. Hilfreich für externe Speicher-Controller oder Alias-Bridge-Datenpunkte.' },
+    { key: 'dcPvPowerObjectId', label: 'DC-/Hybrid-PV Erzeugung (W)', requiredModes: [], showForCoupling: ['dc'], hint: 'Nur bei DC-/Hybrid-Speichern: interne DC-PV-Erzeugung des Hybridwechselrichters. Bei FENECON ist dafür typischerweise ProductionDcActualPower (z. B. 339) vorgesehen; ProductionActivePower (z. B. 327) ist die Gesamt-PV und kann bei separaten PV-Anlagen doppelt gezählt werden.' },
+    { key: 'feneconGridSetpointObjectId', label: 'FENECON FEMS NVP-Ziel (SetGridActivePower)', requiredModes: ['targetPower'], showForVendor: ['fenecon-openems'], showForFeneconModes: ['auto','fems-grid-target'], hint: 'Empfohlener Hybridpfad: ctrlBalancing0/SetGridActivePower. +W = gewünschter Netzbezug, -W = gewünschte Einspeisung. Die Adresse ist systemabhängig und muss aus der individuellen FEMS-Modbus-Tabelle übernommen werden.' },
+    { key: 'feneconEssActivePowerObjectId', label: 'FENECON ESS Aktor-Istleistung (ActivePower)', requiredModes: ['targetPower'], showForVendor: ['fenecon-openems'], hint: 'Regelungsfeedback des tatsächlich umgesetzten ESS-Befehls, typischerweise ess0/ActivePower (z. B. 604). +W = Entladen, -W = Laden. Nicht mit dem allgemeinen Anzeige-/History-DP verwechseln.' },
+    { key: 'feneconMinActivePowerObjectId', label: 'FENECON minimale Wirkleistung (optional)', requiredModes: [], showForVendor: ['fenecon-openems'], showForFeneconModes: ['auto','direct-ess'], hint: 'Optional für direkte ESS-Leistung: aktuelle untere Grenze von SetActivePowerEquals, typischerweise Register 702.' },
+    { key: 'feneconMaxActivePowerObjectId', label: 'FENECON maximale Wirkleistung (optional)', requiredModes: [], showForVendor: ['fenecon-openems'], showForFeneconModes: ['auto','direct-ess'], hint: 'Optional für direkte ESS-Leistung: aktuelle obere Grenze von SetActivePowerEquals, typischerweise Register 704.' },
+    { key: 'feneconActualSetPowerObjectId', label: 'FENECON Vorgabe-Readback (optional)', requiredModes: [], showForVendor: ['fenecon-openems'], showForFeneconModes: ['auto','direct-ess'], hint: 'Optionaler systemabhängiger Readback ActualSetActivePowerEquals für die direkte ESS-Vorgabe.' },
+    { key: 'targetPowerObjectId', label: 'Sollleistung signed (W)', requiredModes: ['targetPower'], hideForFeneconModes: ['fems-grid-target'], hint: 'Allgemeiner bidirektionaler Sollwert. NexoWatt-Konvention: +W = Entladen, -W = Laden. Wird genutzt, wenn keine getrennten Ziel-DPs gesetzt sind oder als Fallback fuer eine fehlende Split-Richtung.' },
+    { key: 'targetChargePowerObjectId', label: 'Sollwert Laden (W) getrennt', requiredModes: ['targetPower'], hideForFeneconModes: ['fems-grid-target'], hint: 'Optional: positiver Lade-Sollwert. Kann zusammen mit Entladen oder einzeln gemappt werden; bei Split wird die Gegenrichtung auf 0 gesetzt.' },
+    { key: 'targetDischargePowerObjectId', label: 'Sollwert Entladen (W) getrennt', requiredModes: ['targetPower'], hideForFeneconModes: ['fems-grid-target'], hint: 'Optional: positiver Entlade-Sollwert. Kann zusammen mit Laden oder einzeln gemappt werden; bei Split wird die Gegenrichtung auf 0 gesetzt.' },
+    { key: 'runObjectId', label: 'Run / externe Speicherregelung (bool)', requiredModes: ['targetPower'], hideForFeneconModes: ['fems-grid-target'], hint: 'Optional: wird auf true gesetzt, wenn NexoWatt einen Lade-/Entlade-Sollwert vorgibt, und auf false bei 0 W. Hilfreich für externe Speicher-Controller oder Alias-Bridge-Datenpunkte.' },
     { key: 'maxChargeObjectId', label: 'Max Ladeleistung (W)', requiredModes: ['limits'] },
     { key: 'maxDischargeObjectId', label: 'Max Entladeleistung (W)', requiredModes: ['limits'] },
     { key: 'chargeEnableObjectId', label: 'Laden erlaubt (bool)', requiredModes: ['enableFlags'] },
@@ -1647,8 +1653,8 @@ function _collectFlowPowerDpIsWFromUI() {
       }
 
       // Basic capability hints (heuristic by input-id)
-      const expectWrite = /setCurrentAId|setPowerWId|enableWriteId|lockWriteId|WriteId/i.test(inp.id);
-      const expectRead = /powerId|energyTotalId|statusId|activeId|vehicleConnectedId|chargeDemandId|heartbeatId|onlineId|rfidReadId|budgetPowerId|gridPowerId|pvSurplusPowerId|ReadId/i.test(inp.id);
+      const expectWrite = /setCurrentAId|setPowerWId|enableWriteId|lockWriteId|WriteId|feneconGridSetpointObjectId/i.test(inp.id);
+      const expectRead = /powerId|PowerObjectId|energyTotalId|statusId|activeId|vehicleConnectedId|chargeDemandId|heartbeatId|onlineId|rfidReadId|budgetPowerId|gridPowerId|pvSurplusPowerId|ReadId/i.test(inp.id);
 
       if (expectWrite && info.common && info.common.write === false) {
         _setBadge(inp.id, 'warn', 'read-only');
@@ -1670,6 +1676,35 @@ function _collectFlowPowerDpIsWFromUI() {
       }
 
       _setBadge(inp.id, 'ok', 'OK');
+    }
+
+    // FENECON-Hybrid: keine Einzel-Felder künstlich als Pflicht markieren,
+    // sondern die gewählte exklusive Kommandofamilie als Gruppe prüfen.
+    if (getStorageVendorProfile() === 'fenecon-openems' && getStorageMode() === 'targetPower') {
+      const dpCfg = currentConfig && currentConfig.storage && currentConfig.storage.datapoints ? currentConfig.storage.datapoints : {};
+      const fMode = getFeneconHybridControlMode();
+      const nativeComplete = !!(String(dpCfg.feneconGridSetpointObjectId || '').trim() && String(dpCfg.feneconEssActivePowerObjectId || '').trim());
+      const directComplete = !!(
+        String(dpCfg.targetPowerObjectId || '').trim()
+        || String(dpCfg.targetChargePowerObjectId || '').trim()
+        || String(dpCfg.targetDischargePowerObjectId || '').trim()
+      );
+      const mark = (key, kind, text) => {
+        const input = document.getElementById('st_' + key);
+        if (input) _setBadge(input.id, kind, text);
+      };
+      if (fMode === 'fems-grid-target' && !nativeComplete) {
+        if (!String(dpCfg.feneconGridSetpointObjectId || '').trim()) mark('feneconGridSetpointObjectId', 'error', 'für FEMS-Modus erforderlich');
+        if (!String(dpCfg.feneconEssActivePowerObjectId || '').trim()) mark('feneconEssActivePowerObjectId', 'error', '604/Aktorfeedback erforderlich');
+      } else if (fMode === 'direct-ess' && !directComplete) {
+        mark('targetPowerObjectId', 'error', 'Signed oder Split erforderlich');
+      } else if (fMode === 'auto' && !nativeComplete && !directComplete) {
+        mark('feneconGridSetpointObjectId', 'warn', 'FEMS-Pfad oder direkter Fallback fehlt');
+      }
+      const dcPvId = String(dpCfg.dcPvPowerObjectId || '').trim();
+      if (dcPvId && /(?:^|[._/])327(?:[._/]|$)|productionactivepower/i.test(dcPvId) && !/productiondcactualpower/i.test(dcPvId)) {
+        mark('dcPvPowerObjectId', 'warn', 'Gesamt-PV; für interne DC-PV 339 verwenden');
+      }
     }
 
     if (showStatusMessage) setStatus('Validierung: abgeschlossen.', 'ok');
@@ -8798,6 +8833,13 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     return normalizeStorageVendorProfile(v);
   }
 
+  function getFeneconHybridControlMode() {
+    const raw = els.storageFeneconControlMode
+      ? String(els.storageFeneconControlMode.value || 'auto').trim().toLowerCase()
+      : String(currentConfig && currentConfig.storage && currentConfig.storage.feneconHybridControlMode || 'auto').trim().toLowerCase();
+    return ['fems-grid-target', 'direct-ess'].includes(raw) ? raw : 'auto';
+  }
+
   /**
    * Code-Teil: updateStorageCouplingUi
    * Zweck: Blendet DC-/Hybrid-Hinweise und die passenden Speicher-DP-Felder ein.
@@ -8831,11 +8873,16 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const mode = getStorageMode();
     const coupling = getStorageCoupling();
     const vendorProfile = getStorageVendorProfile();
+    const feneconMode = getFeneconHybridControlMode();
     updateStorageCouplingUi();
     updateStorageVendorProfileUi();
     const fields = STORAGE_DP_FIELDS.filter(f => {
       if (Array.isArray(f.showForCoupling) && f.showForCoupling.length && !f.showForCoupling.includes(coupling)) return false;
       if (Array.isArray(f.showForVendor) && f.showForVendor.length && !f.showForVendor.includes(vendorProfile)) return false;
+      if (vendorProfile === 'fenecon-openems') {
+        if (Array.isArray(f.showForFeneconModes) && f.showForFeneconModes.length && !f.showForFeneconModes.includes(feneconMode)) return false;
+        if (Array.isArray(f.hideForFeneconModes) && f.hideForFeneconModes.includes(feneconMode)) return false;
+      }
       if (!f.requiredModes || !f.requiredModes.length) return true;
       return f.requiredModes.includes(mode);
     });
@@ -11151,6 +11198,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (els.storageFeneconAcMode) {
       els.storageFeneconAcMode.checked = feneconModeActive;
     }
+    if (els.storageFeneconControlMode) {
+      const rawMode = String(stF.feneconHybridControlMode || 'auto').trim().toLowerCase();
+      els.storageFeneconControlMode.value = ['fems-grid-target', 'direct-ess'].includes(rawMode) ? rawMode : 'auto';
+    }
     if (els.storageFeneconDayNoWrite) {
       // Legacy-No-Write ist ab 0.8.124 fest deaktiviert. Ein im AppCenter
       // zugeordneter FENECON/OpenEMS-Sollwert muss den Gate-/Executor-Pfad nutzen
@@ -12661,6 +12712,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // manuell zugeordnete Sollwert-DP wird nach allen Gates zyklisch erneuert.
     patch.storage.feneconDayNoWriteEnabled = false;
     patch.storage.feneconAssistEnabled = !!(els.storageFeneconAssist && els.storageFeneconAssist.checked);
+    patch.storage.feneconHybridControlMode = (els.storageFeneconControlMode && ['fems-grid-target', 'direct-ess'].includes(String(els.storageFeneconControlMode.value || '').trim().toLowerCase()))
+      ? String(els.storageFeneconControlMode.value).trim().toLowerCase()
+      : 'auto';
     // Sungrow Hybrid ESS nutzt ab 0.8.96 fest den gemeinsamen geschlossenen
     // NVP-Regelkreis. Die alten PV-Passthrough-/0-W-Schalter werden bewusst nicht
     // mehr gespeichert, weil zyklische 0-W-Freigaben den Speicher stoppen konnten.
@@ -12705,21 +12759,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       els.storageBalanceFeedbackHoldSec ? els.storageBalanceFeedbackHoldSec.value : patch.storage.balanceFeedbackHoldSec,
       1, 300, 45,
     );
-    // Der Haken bedeutet ab 0.6.255: Hybrid-/Gateway-Priorität.
-    // SetGridActivePower wird nicht mehr verwendet; ein eventuell vorhandener Legacy-DP wird entfernt.
-    try {
-      delete patch.storage.datapoints.feneconGridSetpointObjectId;
-      delete patch.storage.datapoints.feneconSetGridActivePowerObjectId;
-      delete patch.storage.datapoints.feneconGridSetpointScale;
-      delete patch.storage.datapoints.feneconGridSetpointInvert;
-    } catch (_e) {}
-    // Alte alte AC-Direktlogik nicht mehr über den Haken aktivieren.
-    // Für SpeicherFarm-Altanlagen bleibt ein bereits vorhandenes feneconAcMode intern erhalten,
-    // ansonsten wird es beim Speichern auf false gesetzt.
-    const storageFarmEnabledForLegacy = !!(patch.emsApps && patch.emsApps.apps && patch.emsApps.apps.storagefarm && patch.emsApps.apps.storagefarm.enabled);
-    patch.storage.feneconAcMode = storageFarmEnabledForLegacy
-      ? !!(currentConfig.storage && currentConfig.storage.feneconAcMode)
-      : false;
+    // Legacy-Kompatibilität: ältere Installationen erkennen das Profil noch über
+    // feneconAcMode. Die eigentliche Auswahl erfolgt ausschließlich über
+    // vendorProfile + feneconHybridControlMode; die manuell zugeordneten DPs bleiben erhalten.
+    patch.storage.feneconAcMode = patch.storage.vendorProfile === 'fenecon-openems';
 
     // Optional raw patch. Auch Raw-Patches laufen jetzt durch das Release Safety Gate,
     // damit ein Debug-/Installer-Payload nicht versehentlich produktive Kernlisten
@@ -15072,6 +15115,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       currentConfig.storage.e3dcRscpEnabled = profile === 'e3dc-rscp';
 
       if (els.storageFeneconAcMode) els.storageFeneconAcMode.checked = profile === 'fenecon-openems';
+      if (els.storageFeneconControlMode) {
+        const mode = String(els.storageFeneconControlMode.value || currentConfig.storage.feneconHybridControlMode || 'auto').trim().toLowerCase();
+        els.storageFeneconControlMode.value = ['fems-grid-target', 'direct-ess'].includes(mode) ? mode : 'auto';
+        currentConfig.storage.feneconHybridControlMode = els.storageFeneconControlMode.value;
+      }
       if (els.storageFeneconDayNoWrite) {
         els.storageFeneconDayNoWrite.checked = false;
         els.storageFeneconDayNoWrite.disabled = true;
@@ -15100,6 +15148,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         currentConfig.storage.e3dcUsePowerLimits = !!els.storageE3dcUsePowerLimits.checked;
       }
       updateStorageVendorProfileUi();
+      rebuildStorageTable();
       scheduleValidation(200);
     };
 
@@ -15107,7 +15156,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       els.storageVendorProfile.addEventListener('change', _updateStorageVendorProfile);
       els.storageVendorProfile.addEventListener('input', _updateStorageVendorProfile);
     }
-    [els.storageFeneconAcMode, els.storageFeneconDayNoWrite, els.storageFeneconAssist, els.storageE3dcRscpEnabled, els.storageE3dcZeroMode, els.storageE3dcAllowGridCharge, els.storageE3dcUsePowerLimits]
+    [els.storageFeneconAcMode, els.storageFeneconControlMode, els.storageFeneconDayNoWrite, els.storageFeneconAssist, els.storageE3dcRscpEnabled, els.storageE3dcZeroMode, els.storageE3dcAllowGridCharge, els.storageE3dcUsePowerLimits]
       .filter(Boolean)
       .forEach((el) => {
         el.addEventListener('change', _updateStorageVendorProfile);

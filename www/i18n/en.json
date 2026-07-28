@@ -3,7 +3,7 @@
     "language": "en",
     "locale": "en-GB",
     "name": "English",
-    "version": 4
+    "version": 5
   },
   "messages": {},
   "text": {
@@ -31,7 +31,19 @@
     "NVP-Regelung Eigenverbrauch": "Grid-point self-consumption control",
     "NVP-Zielmitte/Messtoleranz: wird aus der aktiven App Speicher oder Speicherfarm übernommen": "Grid-point target/tolerance: inherited from the active Storage or Storage Farm app",
     "MultiUse besitzt keine eigene NVP-Regelung. Zielmitte und Messtoleranz werden immer direkt aus der aktiven App Speicher oder Speicherfarm übernommen.": "MultiUse has no separate grid-point controller. Target and measurement tolerance are always inherited directly from the active Storage or Storage Farm app.",
-    "Eigene Zielmitte und Messtoleranz der Farm. Außerhalb der Toleranz regelt der gemeinsame Farm-Schnellregler direkt zur Zielmitte. MultiUse besitzt keine zweite NVP-Regelung.": "Dedicated target and measurement tolerance for the storage farm. Outside the tolerance, the shared fast farm controller regulates directly to the target. MultiUse has no second grid-point controller."
+    "Eigene Zielmitte und Messtoleranz der Farm. Außerhalb der Toleranz regelt der gemeinsame Farm-Schnellregler direkt zur Zielmitte. MultiUse besitzt keine zweite NVP-Regelung.": "Dedicated target and measurement tolerance for the storage farm. Outside the tolerance, the shared fast farm controller regulates directly to the target. MultiUse has no second grid-point controller.",
+    "FENECON / OpenEMS / FEMS": "FENECON / OpenEMS / FEMS",
+    "FENECON-/OpenEMS-/FEMS-Profil aktiv": "FENECON/OpenEMS/FEMS profile active",
+    "Hybrid-Regelart": "Hybrid control mode",
+    "Automatisch – FEMS NVP bevorzugen": "Automatic – prefer FEMS grid target",
+    "FEMS NVP-Regler – empfohlen": "FEMS grid-point controller – recommended",
+    "Direkte ESS-Leistung – Fallback": "Direct ESS power – fallback",
+    "Legacy-No-Write deaktiviert – aktive Vorgaben werden zyklisch erneuert": "Legacy no-write disabled – active commands are refreshed cyclically",
+    "FENECON FEMS NVP-Ziel (SetGridActivePower)": "FENECON FEMS grid-point target (SetGridActivePower)",
+    "FENECON ESS Aktor-Istleistung (ActivePower)": "FENECON ESS actuator actual power (ActivePower)",
+    "FENECON minimale Wirkleistung (optional)": "FENECON minimum active power (optional)",
+    "FENECON maximale Wirkleistung (optional)": "FENECON maximum active power (optional)",
+    "FENECON Vorgabe-Readback (optional)": "FENECON command readback (optional)"
   },
   "patterns": []
 }
