@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:01a2e6616f28e0e766a8a49ef30aec3b47c96d67c823aa90127866c513738668
+ * Quell-Hash: sha256:dbc15a8ae892fe58807bc9fd532cf3430ddf9d18f5c065d8a61164adce470113
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -828,6 +828,197 @@
     { key: 'pvForecastTodayJson', label: 'PV Forecast heute (JSON)', placeholder: 'Provider-State (optional)' },
     { key: 'pvForecastTomorrowJson', label: 'PV Forecast morgen (JSON)', placeholder: 'Provider-State (optional)' }
   ];
+
+
+  // ------------------------------
+  // Direkte dynamische Tarifprovider
+  // ------------------------------
+  let tariffProviderRegistryCache = null;
+  const _tpEl = (id) => document.getElementById(id);
+  const _tpStr = (id, fallback = '') => {
+    const el = _tpEl(id);
+    return el ? String(el.value || '').trim() : fallback;
+  };
+  const _tpBool = (id, fallback = false) => {
+    const el = _tpEl(id);
+    return el ? !!el.checked : fallback;
+  };
+  const _tpNum = (id, fallback = 0) => {
+    const n = Number(_tpStr(id, ''));
+    return Number.isFinite(n) ? n : fallback;
+  };
+  const _tpSet = (id, value) => {
+    const el = _tpEl(id);
+    if (!el) return;
+    if (el.type === 'checkbox') el.checked = !!value;
+    else el.value = (value === null || value === undefined) ? '' : String(value);
+  };
+  function _setTariffProviderStatus(text, kind = '') {
+    const el = _tpEl('tariffProviderStatus');
+    if (!el) return;
+    el.textContent = String(text || '');
+    el.style.color = kind === 'error' ? '#ff7a7a' : (kind === 'ok' ? '#69f0ae' : '');
+  }
+  async function loadTariffProviderRegistry(force = false) {
+    if (tariffProviderRegistryCache && !force) return tariffProviderRegistryCache;
+    const data = await fetchJson('/api/installer/tariff-provider/providers?t=' + Date.now(), { cache: 'no-store' });
+    tariffProviderRegistryCache = data;
+    return data;
+  }
+  function _tariffProviderInternalDpIds() {
+    return tariffProviderRegistryCache && tariffProviderRegistryCache.internalDatapoints
+      ? tariffProviderRegistryCache.internalDatapoints
+      : null;
+  }
+  function _coupleTariffProviderDatapointsSync() {
+    const ids = _tariffProviderInternalDpIds();
+    if (!ids) return false;
+    currentConfig = currentConfig && typeof currentConfig === 'object' ? currentConfig : {};
+    currentConfig.datapoints = currentConfig.datapoints && typeof currentConfig.datapoints === 'object' ? currentConfig.datapoints : {};
+    let changed = false;
+    for (const key of ['priceCurrent','priceAverage','priceTodayJson','priceTomorrowJson']) {
+      const val = String(ids[key] || '').trim();
+      if (!val) continue;
+      if (String(currentConfig.datapoints[key] || '').trim() !== val) {
+        currentConfig.datapoints[key] = val;
+        changed = true;
+      }
+      const input = document.getElementById('tar_' + key);
+      if (input && input.value !== val) input.value = val;
+    }
+    return changed;
+  }
+  async function coupleTariffProviderDatapoints(showStatus = true) {
+    try {
+      await loadTariffProviderRegistry();
+      const changed = _coupleTariffProviderDatapointsSync();
+      if (showStatus) _setTariffProviderStatus(changed ? 'Interne Preis-DPs gekoppelt. Bitte speichern.' : 'Interne Preis-DPs sind bereits gekoppelt.', 'ok');
+      return changed;
+    } catch (e) {
+      if (showStatus) _setTariffProviderStatus('DP-Kopplung fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error');
+      return false;
+    }
+  }
+  function collectTariffProviderConfig() {
+    const existing = currentConfig && currentConfig.tariffProvider && typeof currentConfig.tariffProvider === 'object' ? currentConfig.tariffProvider : {};
+    const country = _tpStr('tariffProviderCountry', String(existing.country || 'DE')).toUpperCase() === 'NL' ? 'NL' : 'DE';
+    return {
+      ...existing,
+      enabled: _tpStr('tariffProviderEnabled', existing.enabled ? 'true' : 'false') === 'true',
+      providerId: _tpStr('tariffProviderId', existing.providerId || 'manual-dp'),
+      sourceId: _tpStr('tariffProviderSourceId', existing.sourceId || 'entsoe'),
+      providerProfileId: _tpStr('tariffProviderProfileId', existing.providerProfileId || 'local-provider'),
+      activateTariffLogic: _tpBool('tariffProviderActivateLogic', true),
+      automaticMode: _tpBool('tariffProviderAutomaticMode', true),
+      autoCoupleDatapoints: _tpBool('tariffProviderAutoCouple', true),
+      country,
+      timeZone: _tpStr('tariffProviderTimeZone', country === 'NL' ? 'Europe/Amsterdam' : 'Europe/Berlin'),
+      resolutionMinutes: [15,30,60].includes(_tpNum('tariffProviderResolution', 15)) ? _tpNum('tariffProviderResolution', 15) : 15,
+      refreshMinutes: Math.max(5, Math.min(360, Math.round(_tpNum('tariffProviderRefresh', 15)))),
+      priceComponent: _tpStr('tariffProviderPriceComponent', 'total'),
+      homeId: _tpStr('tariffProviderHomeId', ''),
+      postalCode: _tpStr('tariffProviderPostalCode', ''),
+      tokenUrl: _tpStr('tariffProviderTokenUrl', ''),
+      pricesUrl: _tpStr('tariffProviderPricesUrl', ''),
+      credentials: {
+        ...(existing.credentials && typeof existing.credentials === 'object' ? existing.credentials : {}),
+        accessToken: _tpStr('tariffProviderAccessToken', ''),
+        securityToken: _tpStr('tariffProviderSecurityToken', ''),
+        clientId: _tpStr('tariffProviderClientId', ''),
+        clientSecret: _tpStr('tariffProviderClientSecret', ''),
+        tokenUrl: _tpStr('tariffProviderTokenUrl', ''),
+        bearerToken: _tpStr('tariffProviderBearerToken', ''),
+        apiKey: _tpStr('tariffProviderApiKey', ''),
+        username: _tpStr('tariffProviderUsername', ''),
+        password: _tpStr('tariffProviderPassword', ''),
+      },
+      formula: {
+        marketMultiplier: _tpNum('tariffProviderMarketMultiplier', 1),
+        supplierMarkupEurPerKwh: _tpNum('tariffProviderSupplierMarkup', 0),
+        gridVariableEurPerKwh: _tpNum('tariffProviderGridVariable', 0),
+        taxEurPerKwh: _tpNum('tariffProviderTax', 0),
+        otherVariableEurPerKwh: _tpNum('tariffProviderOtherVariable', 0),
+        vatPct: _tpNum('tariffProviderVatPct', 0),
+        priceIncludesVat: _tpStr('tariffProviderId', '') === 'tibber' || _tpStr('tariffProviderId', '') === 'energyzero',
+      },
+      feedInEurPerKwh: _tpNum('tariffProviderFeedIn', 0),
+      customRest: {
+        ...(existing.customRest && typeof existing.customRest === 'object' ? existing.customRest : {}),
+        url: _tpStr('tariffProviderRestUrl', ''),
+        method: _tpStr('tariffProviderRestMethod', 'GET'),
+        authMode: _tpStr('tariffProviderRestAuthMode', 'none'),
+        apiKeyHeader: _tpStr('tariffProviderApiKeyHeader', 'x-api-key'),
+        arrayPath: _tpStr('tariffProviderArrayPath', ''),
+        startPath: _tpStr('tariffProviderStartPath', 'startsAt'),
+        endPath: _tpStr('tariffProviderEndPath', 'endsAt'),
+        pricePath: _tpStr('tariffProviderPricePath', 'total'),
+        unit: _tpStr('tariffProviderUnit', 'EUR/kWh'),
+        headersJson: _tpStr('tariffProviderHeadersJson', ''),
+      },
+    };
+  }
+  function applyTariffProviderUI(config) {
+    const cfg = config && typeof config === 'object' ? config : {};
+    const credentials = cfg.credentials && typeof cfg.credentials === 'object' ? cfg.credentials : {};
+    const formula = cfg.formula && typeof cfg.formula === 'object' ? cfg.formula : {};
+    const custom = cfg.customRest && typeof cfg.customRest === 'object' ? cfg.customRest : {};
+    _tpSet('tariffProviderEnabled', cfg.enabled ? 'true' : 'false');
+    _tpSet('tariffProviderId', cfg.providerId || 'manual-dp');
+    _tpSet('tariffProviderSourceId', cfg.sourceId || (String(cfg.country || '').toUpperCase() === 'NL' ? 'energyzero' : 'entsoe'));
+    _tpSet('tariffProviderProfileId', cfg.providerProfileId || 'local-provider');
+    _tpSet('tariffProviderActivateLogic', cfg.activateTariffLogic !== false);
+    _tpSet('tariffProviderAutomaticMode', cfg.automaticMode !== false);
+    _tpSet('tariffProviderAutoCouple', cfg.autoCoupleDatapoints !== false);
+    _tpSet('tariffProviderCountry', String(cfg.country || 'DE').toUpperCase() === 'NL' ? 'NL' : 'DE');
+    _tpSet('tariffProviderTimeZone', cfg.timeZone || (String(cfg.country || '').toUpperCase() === 'NL' ? 'Europe/Amsterdam' : 'Europe/Berlin'));
+    _tpSet('tariffProviderResolution', cfg.resolutionMinutes || 15);
+    _tpSet('tariffProviderRefresh', cfg.refreshMinutes || 15);
+    _tpSet('tariffProviderPriceComponent', cfg.priceComponent || 'total');
+    _tpSet('tariffProviderAccessToken', credentials.accessToken || '');
+    _tpSet('tariffProviderSecurityToken', credentials.securityToken || '');
+    _tpSet('tariffProviderHomeId', cfg.homeId || '');
+    _tpSet('tariffProviderClientId', credentials.clientId || '');
+    _tpSet('tariffProviderClientSecret', credentials.clientSecret || '');
+    _tpSet('tariffProviderTokenUrl', credentials.tokenUrl || cfg.tokenUrl || '');
+    _tpSet('tariffProviderPricesUrl', cfg.pricesUrl || '');
+    _tpSet('tariffProviderPostalCode', cfg.postalCode || '');
+    _tpSet('tariffProviderMarketMultiplier', formula.marketMultiplier ?? 1);
+    _tpSet('tariffProviderSupplierMarkup', formula.supplierMarkupEurPerKwh ?? 0);
+    _tpSet('tariffProviderGridVariable', formula.gridVariableEurPerKwh ?? 0);
+    _tpSet('tariffProviderTax', formula.taxEurPerKwh ?? 0);
+    _tpSet('tariffProviderOtherVariable', formula.otherVariableEurPerKwh ?? 0);
+    _tpSet('tariffProviderVatPct', formula.vatPct ?? 0);
+    _tpSet('tariffProviderFeedIn', cfg.feedInEurPerKwh ?? 0);
+    _tpSet('tariffProviderRestUrl', custom.url || '');
+    _tpSet('tariffProviderRestMethod', custom.method || 'GET');
+    _tpSet('tariffProviderRestAuthMode', custom.authMode || 'none');
+    _tpSet('tariffProviderBearerToken', credentials.bearerToken || '');
+    _tpSet('tariffProviderApiKey', credentials.apiKey || '');
+    _tpSet('tariffProviderApiKeyHeader', custom.apiKeyHeader || 'x-api-key');
+    _tpSet('tariffProviderUsername', credentials.username || '');
+    _tpSet('tariffProviderPassword', credentials.password || '');
+    _tpSet('tariffProviderArrayPath', custom.arrayPath || '');
+    _tpSet('tariffProviderStartPath', custom.startPath || 'startsAt');
+    _tpSet('tariffProviderEndPath', custom.endPath || 'endsAt');
+    _tpSet('tariffProviderPricePath', custom.pricePath || 'total');
+    _tpSet('tariffProviderUnit', custom.unit || 'EUR/kWh');
+    _tpSet('tariffProviderHeadersJson', custom.headersJson || '');
+    loadTariffProviderRegistry().then(() => {
+      if (cfg.enabled && cfg.providerId !== 'manual-dp' && cfg.autoCoupleDatapoints !== false) _coupleTariffProviderDatapointsSync();
+    }).catch(() => {});
+  }
+  async function testTariffProviderConnection() {
+    try {
+      _setTariffProviderStatus('Verbindung wird geprüft…');
+      const cfg = collectTariffProviderConfig();
+      const data = await fetchJson('/api/installer/tariff-provider/test', { method: 'POST', body: JSON.stringify({ config: cfg }) });
+      const current = Number.isFinite(Number(data.currentPriceEurPerKwh)) ? ` · aktuell ${Number(data.currentPriceEurPerKwh).toFixed(4)} €/kWh` : '';
+      _setTariffProviderStatus(`OK · ${data.intervalCount || 0} Intervalle · heute ${data.todayCount || 0} · morgen ${data.tomorrowCount || 0}${current}`, 'ok');
+      if (cfg.enabled && cfg.providerId !== 'manual-dp' && cfg.autoCoupleDatapoints) await coupleTariffProviderDatapoints(false);
+    } catch (e) {
+      _setTariffProviderStatus('Fehler: ' + (e && e.message ? e.message : e), 'error');
+    }
+  }
 
   // Live / Kennzahlen (für die unteren Kacheln in der VIS)
   // Hinweis: Wenn diese DPs leer bleiben, kann der Adapter (falls History/Influx verfügbar) kWh-Werte automatisch aus Leistung integrieren.
@@ -11022,6 +11213,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // §14a (Netzsteuerung)
     try { buildPara14aUI(); } catch (_e) {}
 
+    // Direkte Tarifprovider + bestehende Tarif-DP-Zuordnung.
+    try { applyTariffProviderUI(currentConfig && currentConfig.tariffProvider); } catch (_e) {}
     // Tarife
     if (els.dpTariffs) {
       buildDpTable(
@@ -11399,9 +11592,32 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
    * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
+  function _nwDeviceClass(dev) {
+    return String(dev && dev.deviceClass || '').trim();
+  }
   function _isNwEvcsCategory(cat) {
     const c = _nwNormCat(cat);
-    return (c === 'EVCS' || c === 'CHARGER' || c === 'DC_CHARGER' || c === 'EVSE');
+    return (c === 'EVCS' || c === 'EVSE');
+  }
+  function _isNwEvcsDevice(dev) {
+    const dc = _nwDeviceClass(dev);
+    return dc ? dc === 'evCharger' : _isNwEvcsCategory(dev && dev.category);
+  }
+  function _isNwPvDevice(dev) {
+    const dc = _nwDeviceClass(dev);
+    return dc ? dc === 'pvInverter' : _isNwPvInverterCategory(dev && dev.category);
+  }
+  function _isNwHeatDevice(dev) {
+    const dc = _nwDeviceClass(dev);
+    return dc ? dc === 'heat' : _isNwHeatCategory(dev && dev.category);
+  }
+  function _isNwStorageDevice(dev) {
+    const dc = _nwDeviceClass(dev);
+    return ['storageSystem','battery','batteryInverter'].includes(dc);
+  }
+  function _isNwMeterDevice(dev) {
+    const dc = _nwDeviceClass(dev);
+    return dc ? dc === 'meter' : _isNwMeterCategory(dev && dev.category);
   }
   /**
    * Code-Teil: _isNwPvInverterCategory
@@ -11434,6 +11650,12 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (v) return v;
     const v2 = (a && a[key]) ? String(a[key]).trim() : '';
     return v2;
+  }
+
+  function _nwGetWritableAlias(dev, key) {
+    const meta = dev && dev.aliasMeta && typeof dev.aliasMeta === 'object' ? dev.aliasMeta[key] : null;
+    if (meta && meta.write === true) return String(meta.id || _nwGetAlias(dev, key) || '').trim();
+    return '';
   }
   /**
    * Code-Teil: _nwGetDpFallback
@@ -11479,7 +11701,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     // Metadata
     setIf('name', dev && dev.name ? dev.name : '');
-    if (onlyEmpty && out.enabled === undefined) out.enabled = true;
+    // Die Zuordnung aktiviert weder Ladepunkt noch App automatisch.
 
     const cat = _nwNormCat(dev && dev.category);
     if (cat === 'DC_CHARGER') setIf('chargerType', 'dc');
@@ -11518,19 +11740,19 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // erkannt werden, damit ein vorhandener Ladepunkt nicht als "nicht
     // steuerbar" im zentralen Budget erscheint.
     setIf('setCurrentAId',
-      _nwGetAlias(dev, 'ctrl.targetCurrentA')
-      || _nwGetAlias(dev, 'ctrl.currentLimitA')
-      || _nwGetAlias(dev, 'ctrl.setCurrentA')
+      _nwGetWritableAlias(dev, 'ctrl.targetCurrentA')
+      || _nwGetWritableAlias(dev, 'ctrl.currentLimitA')
+      || _nwGetWritableAlias(dev, 'ctrl.setCurrentA')
       || (dev && dev.dp && dev.dp.ctrlCurrentLimitA));
     setIf('setPowerWId',
-      _nwGetAlias(dev, 'ctrl.targetPowerW')
-      || _nwGetAlias(dev, 'ctrl.powerLimitW')
-      || _nwGetAlias(dev, 'ctrl.setPowerW')
+      _nwGetWritableAlias(dev, 'ctrl.targetPowerW')
+      || _nwGetWritableAlias(dev, 'ctrl.powerLimitW')
+      || _nwGetWritableAlias(dev, 'ctrl.setPowerW')
       || (dev && dev.dp && dev.dp.ctrlPowerLimitW));
     setIf('enableWriteId',
-      _nwGetAlias(dev, 'ctrl.run')
-      || _nwGetAlias(dev, 'ctrl.enable')
-      || _nwGetAlias(dev, 'ctrl.enabled')
+      _nwGetWritableAlias(dev, 'ctrl.run')
+      || _nwGetWritableAlias(dev, 'ctrl.enable')
+      || _nwGetWritableAlias(dev, 'ctrl.enabled')
       || (dev && dev.dp && dev.dp.ctrlRun));
 
     // Some devices expose "active" as status; we keep it optional
@@ -11627,14 +11849,14 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const cat = _nwNormCat(dev && dev.category);
     const hay = _nwDevHaystack(dev);
     let score = 0;
-    if (_isNwMeterCategory(cat)) score += 8;
+    if (_isNwMeterDevice(dev)) score += 12;
     if (_nwHasAlias(dev, 'r.powerImport')) score += 5;
     if (_nwHasAlias(dev, 'r.powerExport')) score += 5;
     if (_nwHasAlias(dev, 'r.power')) score += 2;
     if (/gridmeter|grid meter|grid\b|netz|nvp|verknuepf|verknüpf|mains/.test(hay)) score += 9;
     if (/pvmeter|pv meter|solar|wechselrichter|inverter|wr\b/.test(hay)) score -= 8;
     if (/loadmeter|lastmeter|verbrauch|consumption|house\s*load|gebäude|gebaeude|building/.test(hay)) score -= 6;
-    if (_isNwPvInverterCategory(cat) || _isNwStorageCategory(cat)) score -= 10;
+    if (_isNwPvDevice(dev) || _isNwStorageDevice(dev)) score -= 10;
     return score;
   }
   /**
@@ -11647,8 +11869,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const cat = _nwNormCat(dev && dev.category);
     const hay = _nwDevHaystack(dev);
     let score = 0;
-    if (_isNwPvInverterCategory(cat)) score += 10;
-    if (_isNwMeterCategory(cat)) score += 2;
+    if (_isNwPvDevice(dev)) score += 12;
+    if (_isNwMeterDevice(dev)) score += 2;
     if (_nwHasAlias(dev, 'r.power')) score += 3;
     if (/pvmeter|pv meter|pv\b|solar|wechselrichter|inverter|wr\b/.test(hay)) score += 8;
     if (/gridmeter|grid meter|grid\b|netz|nvp|verbrauch|consumption|loadmeter|lastmeter|ess|battery|akku|speicher/.test(hay)) score -= 7;
@@ -11664,7 +11886,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const cat = _nwNormCat(dev && dev.category);
     const hay = _nwDevHaystack(dev);
     let score = 0;
-    if (_isNwStorageCategory(cat)) score += 10;
+    if (_isNwStorageDevice(dev)) score += 12;
     if (_nwHasAlias(dev, 'r.soc')) score += 5;
     if (_nwHasAlias(dev, 'r.powerCharge')) score += 3;
     if (_nwHasAlias(dev, 'r.powerDischarge')) score += 3;
@@ -11871,13 +12093,65 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     }
 
     // EVCS und Gebäudeverbrauch bleiben bewusst auf Auto, damit Summen/Bilanz konsistent bleiben.
-    if (list.some((dev) => _isNwEvcsCategory(dev && dev.category))) {
+    if (list.some((dev) => _isNwEvcsDevice(dev))) {
       out.notes.push('EV: Auto-Summe aus Ladepunkten');
     }
     out.notes.push('Gebäude: Auto-Bilanz');
 
     return out;
   }
+  function _nwAutoMapStorageAppFromDevices(devices) {
+    const rows = (Array.isArray(devices) ? devices : []).filter(_isNwStorageDevice);
+    const result = { changed: false, mapped: false, ambiguous: rows.length > 1, notes: [] };
+    if (rows.length !== 1) {
+      if (rows.length > 1) result.notes.push(`Speicher-App: ${rows.length} Speicher erkannt – Topologie/Farm bitte bestätigen`);
+      return result;
+    }
+    const dev = rows[0];
+    currentConfig.storage = currentConfig.storage && typeof currentConfig.storage === 'object' ? currentConfig.storage : {};
+    currentConfig.storage.datapoints = currentConfig.storage.datapoints && typeof currentConfig.storage.datapoints === 'object' ? currentConfig.storage.datapoints : {};
+    const dps = currentConfig.storage.datapoints;
+    const setEmpty = (key, value) => {
+      const val = String(value || '').trim();
+      if (!val || String(dps[key] || '').trim()) return false;
+      dps[key] = val;
+      result.changed = true;
+      result.mapped = true;
+      return true;
+    };
+    setEmpty('socObjectId', _nwGetAlias(dev, 'r.soc'));
+    setEmpty('batteryPowerObjectId', _nwGetAlias(dev, 'r.power'));
+    setEmpty('dcPvPowerObjectId', _nwGetAlias(dev, 'r.pvPower'));
+    setEmpty('runObjectId', _nwGetWritableAlias(dev, 'ctrl.run'));
+    setEmpty('maxChargeObjectId', _nwGetWritableAlias(dev, 'ctrl.maxChargePowerW'));
+    setEmpty('maxDischargeObjectId', _nwGetWritableAlias(dev, 'ctrl.maxDischargePowerW'));
+    setEmpty('chargeEnableObjectId', _nwGetWritableAlias(dev, 'ctrl.chargeEnable'));
+    setEmpty('dischargeEnableObjectId', _nwGetWritableAlias(dev, 'ctrl.dischargeEnable'));
+
+    // Exactly one command family. Existing manual mappings remain authoritative.
+    const hasExistingCommand = ['targetPowerObjectId','targetChargePowerObjectId','targetDischargePowerObjectId','e3dcSetPowerModeObjectId','e3dcSetPowerValueObjectId']
+      .some((key) => String(dps[key] || '').trim());
+    if (!hasExistingCommand) {
+      const charge = _nwGetWritableAlias(dev, 'ctrl.chargePowerW');
+      const discharge = _nwGetWritableAlias(dev, 'ctrl.dischargePowerW');
+      const signed = _nwGetWritableAlias(dev, 'ctrl.powerSetpointW');
+      if (charge && discharge) {
+        dps.targetChargePowerObjectId = charge;
+        dps.targetDischargePowerObjectId = discharge;
+        result.changed = true;
+        result.mapped = true;
+        result.notes.push('Speicher-Kommandofamilie: getrennt Laden/Entladen');
+      } else if (signed) {
+        dps.targetPowerObjectId = signed;
+        result.changed = true;
+        result.mapped = true;
+        result.notes.push('Speicher-Kommandofamilie: signed Sollwert');
+      }
+    }
+    if (result.mapped) result.notes.unshift(`Speicher-App: ${String(dev.name || dev.devId || 'Speicher')}`);
+    return result;
+  }
+
   /**
    * Code-Teil: nwDevicesQuickSetup
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -11896,15 +12170,37 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         setStatus('Schnell‑Inbetriebnahme: Keine Geräte unter nexowatt-devices.* gefunden.', 'error');
         return;
       }
-      const evcsDevs = devices.filter(d => _isNwEvcsCategory(d && d.category));
-      const pvDevs = devices.filter(d => _isNwPvInverterCategory(d && d.category));
-      const heatDevs = devices.filter(d => _isNwHeatCategory(d && d.category));
+      const evcsDevs = devices.filter(d => _isNwEvcsDevice(d));
+      const pvDevs = devices.filter(d => _isNwPvDevice(d));
+      const heatDevs = devices.filter(d => _isNwHeatDevice(d));
+      const meterDevs = devices.filter(d => _isNwMeterDevice(d));
+      const storageDevs = devices.filter(d => _isNwStorageDevice(d));
+      const solarChargers = devices.filter(d => _nwDeviceClass(d) === 'solarCharger');
+      const preview = [
+        `Geräteinventar: ${devices.length}`,
+        `Ladepunkte: ${evcsDevs.length}`,
+        `PV-Wechselrichter: ${pvDevs.length}`,
+        `NVP-/Energiemesser: ${meterDevs.length}`,
+        `Speicher: ${storageDevs.length}`,
+        `Wärmegeräte: ${heatDevs.length}`,
+        solarChargers.length ? `Solar-/DC-Laderegler (nicht EVCS): ${solarChargers.length}` : '',
+        '',
+        'Es werden nur leere Felder ergänzt. Apps/Geräte werden nicht aktiviert und es werden keine Hardwarebefehle geschrieben.',
+        storageDevs.length > 1 ? 'Mehrere Speicher: keine automatische Einzel-Speicherwahl; Farm/Topologie bleibt manuell.' : '',
+        meterDevs.length > 1 ? 'Mehrere Zähler: NVP-Zähler wird nur bei eindeutiger Bewertung gesetzt.' : '',
+      ].filter(Boolean).join('\n');
+      if (typeof window.confirm === 'function' && !window.confirm(preview + '\n\nZuordnungsvorschlag übernehmen?')) {
+        setStatus('Schnell‑Inbetriebnahme abgebrochen – keine Konfiguration geändert.');
+        return;
+      }
 
       let changed = false;
 
       // --- 0) Energiefluss-Basis automatisch aus stabilen Alias-DPs füllen ---
       const flowAuto = _nwAutoMapEnergyFlowFromDevices(devices);
       if (flowAuto && flowAuto.changed) changed = true;
+      const storageAuto = _nwAutoMapStorageAppFromDevices(devices);
+      if (storageAuto && storageAuto.changed) changed = true;
 
       // --- 1) Ladepunkte (EVCS) ---
       let evcsMapped = 0;
@@ -11951,7 +12247,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         const addOrUpdate = (dev) => {
           const name = String((dev && dev.name) || '').trim() || String((dev && dev.devId) || '').trim() || 'WR';
           const feedInLimitWId = _nwGetAlias(dev, 'ctrl.feedInLimitW') || '';
-          const pvLimitWId = _nwGetAlias(dev, 'ctrl.powerLimitW') || '';
+          const pvLimitWId = _nwGetWritableAlias(dev, 'ctrl.powerLimitW') || '';
           const pvLimitPctId = _nwGetAlias(dev, 'ctrl.powerLimitPct') || _nwGetAlias(dev, 'ctrlPvLimitPct') || '';
           const pvPowerReadId = _nwGetAlias(dev, 'r.pvPower') || _nwGetAlias(dev, 'r.power') || _nwGetAlias(dev, 'r.activePower') || (dev && dev.dp && dev.dp.powerW ? String(dev.dp.powerW).trim() : '') || '';
 
@@ -12065,8 +12361,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
           fs.consumers[slot - 1].consumerType = consumerType;
 
           // Optional control aliases (will be filled automatically once your adapter provides them)
-          const ctrlRun = _nwGetAlias(dev, 'ctrl.run') || (dev && dev.dp && dev.dp.ctrlRun) || '';
-          const ctrlLimitW = _nwGetAlias(dev, 'ctrl.powerLimitW') || (dev && dev.dp && dev.dp.ctrlPowerLimitW) || '';
+          const ctrlRun = _nwGetWritableAlias(dev, 'ctrl.run') || (dev && dev.dp && dev.dp.ctrlRun) || '';
+          const ctrlLimitW = _nwGetWritableAlias(dev, 'ctrl.powerLimitW') || (dev && dev.dp && dev.dp.ctrlPowerLimitW) || '';
           if (ctrlRun) {
             fs.consumers[slot - 1].ctrl = fs.consumers[slot - 1].ctrl || {};
             if (!String(fs.consumers[slot - 1].ctrl.switchWriteId || '').trim()) fs.consumers[slot - 1].ctrl.switchWriteId = ctrlRun;
@@ -12139,6 +12435,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       // UI refresh (targeted)
       try { buildEvcsUI(); } catch (_e) {}
+      try { rebuildStorageTable(); } catch (_e) {}
       try { buildGridConstraintsUI(); } catch (_e) {}
       try { buildFlowSlotsUI('consumers', FLOW_CONSUMER_SLOT_COUNT); } catch (_e) {}
       try { buildThermalUI(); } catch (_e) {}
@@ -12152,6 +12449,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       if (pvDevs.length) msgParts.push(`Wechselrichter: ${pvDevs.length} (+${pvAdded}/${pvUpdated})`);
       if (heatDevs.length) msgParts.push(`Wärmegeräte: ${heatDevs.length} (Slots: ${heatSlotsMapped}, §14a: +${heatPara14aAdded}/${heatPara14aUpdated})`);
       if (flowAuto && Array.isArray(flowAuto.notes) && flowAuto.notes.length) msgParts.push('Energiefluss: ' + flowAuto.notes.join(', '));
+      if (storageAuto && Array.isArray(storageAuto.notes) && storageAuto.notes.length) msgParts.push(storageAuto.notes.join(', '));
 
       if (!changed) {
         setStatus('Schnell‑Inbetriebnahme: keine Änderungen (alles bereits belegt).', 'ok');
@@ -12557,6 +12855,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     }
 
     // Datapoints (inkl. Energiefluss-Monitor)
+    patch.tariffProvider = collectTariffProviderConfig();
+    if (patch.tariffProvider.enabled && patch.tariffProvider.providerId !== 'manual-dp' && patch.tariffProvider.autoCoupleDatapoints) {
+      _coupleTariffProviderDatapointsSync();
+    }
     patch.datapoints = Object.assign({}, currentConfig.datapoints || {});
 
     // Migrations-/Kompatibilitäts-Glättung:
@@ -15424,6 +15726,20 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
   }
 
   
+  const tariffProviderTestButton = document.getElementById('tariffProviderTest');
+  if (tariffProviderTestButton) tariffProviderTestButton.addEventListener('click', () => testTariffProviderConnection());
+  const tariffProviderCoupleButton = document.getElementById('tariffProviderCouple');
+  if (tariffProviderCoupleButton) tariffProviderCoupleButton.addEventListener('click', () => coupleTariffProviderDatapoints(true));
+  const tariffProviderSelect = document.getElementById('tariffProviderId');
+  if (tariffProviderSelect) tariffProviderSelect.addEventListener('change', () => {
+    const enabled = _tpStr('tariffProviderEnabled', 'false') === 'true';
+    if (enabled && tariffProviderSelect.value !== 'manual-dp' && _tpBool('tariffProviderAutoCouple', true)) coupleTariffProviderDatapoints(false);
+  });
+  const tariffProviderEnabledSelect = document.getElementById('tariffProviderEnabled');
+  if (tariffProviderEnabledSelect) tariffProviderEnabledSelect.addEventListener('change', () => {
+    if (tariffProviderEnabledSelect.value === 'true' && _tpStr('tariffProviderId', 'manual-dp') !== 'manual-dp' && _tpBool('tariffProviderAutoCouple', true)) coupleTariffProviderDatapoints(false);
+  });
+
   if (els.nwDevicesQuickSetup) {
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.nwDevicesQuickSetup. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.nwDevicesQuickSetup.addEventListener('click', () => {

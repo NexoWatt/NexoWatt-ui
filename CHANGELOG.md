@@ -1,3 +1,19 @@
+## 0.8.150 - 2026-08-01
+
+- **Automatische DP-Zuordnung** für Geräte aus `nexowatt-devices.*` auf Basis von `aliases.meta.manifest`, `aliases.v1`, `deviceClass`, Capabilities und ioBroker-Objektmetadaten.
+- Schnell-Inbetriebnahme zeigt vor der Übernahme eine Geräte-/Klassenübersicht, ergänzt standardmäßig ausschließlich leere Felder und aktiviert weder Apps noch Geräte. Manuelle Zuordnungen bleiben autoritativ.
+- Geräteklassen fachlich gehärtet: `evCharger` wird als EVCS behandelt; `CHARGER`/`DC_CHARGER` bleiben Solar-/DC-Laderegler und werden nicht als Fahrzeugladepunkte fehlklassifiziert.
+- Schreib-DPs werden nur übernommen, wenn `common.write=true`; bei Speichern wird genau eine Kommandofamilie (Split oder Signed) ausgewählt. Mehrdeutige NVP-Zähler- und Speicherfarm-Topologien bleiben bestätigungspflichtig.
+- Neue **Tarifprovider-Grundstruktur im AppCenter** mit direkter Anbindung für Tibber, EnergyZero und ENTSO-E sowie konfigurierbarem Ostrom-OAuth-, Custom-REST/JSON- und lokalem Stadtwerk-/Anbieterprofil.
+- Internes Preisformat vereinheitlicht auf EUR/kWh-Intervalle mit Qualität, Quelle, Import- und optionalem Einspeisepreis. 15-, 30- und 60-Minuten-Zeitreihen werden unterstützt.
+- Interne States für aktuellen Preis, Durchschnittspreis sowie Heute-/Morgen-JSON werden automatisch unter Zuordnung gekoppelt. Die bestehende Tariflogik bleibt alleiniger Resolver für Speicher, EVCS und Kostenoptimierung; kein externer Tarifadapter ist erforderlich.
+- Provider-Zugangsdaten werden im AppCenter maskiert und beim Speichern sicher erhalten. Verbindungs- und Normalisierungstest liefert nur nicht-sensitive Vorschauwerte.
+- Provider-Abrufe sind API-schonend gehärtet: deterministischer Zeitversatz verteilt Installationen, Fehler verwenden exponentielles Backoff, und Tibber-Preisreihen werden abhängig von vorhandenen Morgenpreisen mehrere Stunden zwischengespeichert statt im EMS-Takt neu abgefragt.
+- Freshness-Sicherung: veraltete Preisreihen und Preise werden operativ geleert, damit keine neue Netzlade-, Speicher- oder EVCS-Arbitrage mit alten Daten beginnt. NVP- und Safety-Regelungen laufen unabhängig weiter.
+- EnergyZero auf den offiziellen Public-v1-Endpunkt und dessen Viertelstunden-/Stunden-Enums umgestellt; ENTSO-E-Zeitfenster auf das geforderte UTC-Format gehärtet.
+- DE-/NL-Übersetzungen für die zentralen neuen Provider- und Schnellinbetriebnahme-Bedienelemente ergänzt; Service-Worker-Cache auf `nexowatt-cache-v450` erhöht.
+- Neue Regressionen für Geräteinventar/Autozuordnung, Provider-Normalisierung, Stale-Fail-Safe, AppCenter-Kopplung und geschützte Zugangsdaten.
+
 ## 0.8.149 - 2026-08-01
 
 - Sichtbarkeit der optionalen Seite **Energieherkunft & Ladebilanz** vollständig gehärtet: Topbar- und Burger-Menüpunkt erscheinen nur bei gültiger Home-/Pro-Lizenz sowie AppCenter `installed=true` und `enabled=true`.

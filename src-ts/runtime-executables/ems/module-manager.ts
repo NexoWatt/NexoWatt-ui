@@ -49,6 +49,7 @@ const { SpeicherRegelungModule } = require('./modules/storage-control');
 const { GridConstraintsModule } = require('./modules/grid-constraints');
 const { NvpCoordinatorModule } = require('./modules/nvp-coordinator');
 const { PeakShavingModule } = require('./modules/peak-shaving');
+const { TariffProviderModule } = require('./modules/tariff-provider');
 const { TarifVisModule } = require('./modules/tarif-vis');
 const { TariffStatusModule } = require('./modules/tariff-status');
 const { PvForecastModule } = require('./modules/pv-forecast');
@@ -343,6 +344,15 @@ class ModuleManager {
             key: 'para14a',
             instance: new Para14aModule(this.adapter, this.dp),
             enabledFn: () => this._licenseAllowsApp('para14a') && require('./services/country-profile-service').getConfiguredCountryProfile(this.adapter?.config || {}).supportsParagraph14a === true && !!(this.adapter?.config?.installerConfig?.para14a),
+        });
+
+        // Direkte Tarifprovider (Tibber/EnergyZero/ENTSO-E/Ostrom/Custom REST).
+        // Publiziert ausschließlich normalisierte Preis-DPs und läuft bewusst vor TarifVis,
+        // damit die bestehenden Speicher-/EVCS-/Tariflogiken ohne externen Adapter arbeiten.
+        this.modules.push({
+            key: 'tariffProvider',
+            instance: new TariffProviderModule(this.adapter, this.dp),
+            enabledFn: () => true,
         });
 
         // Tarif (VIS) – stellt Ladepark-Deckel bereit

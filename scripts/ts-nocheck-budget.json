@@ -1,8 +1,8 @@
 {
   "schema": "nexowatt.ts-nocheck-budget.v1",
-  "generatedForVersion": "0.8.149",
-  "uncheckedFileCount": 58,
-  "maxUncheckedLines": 146394,
+  "generatedForVersion": "0.8.150",
+  "uncheckedFileCount": 60,
+  "maxUncheckedLines": 147807,
   "files": [
     "src-ts/runtime-executables/ems/consumers/evcs.ts",
     "src-ts/runtime-executables/ems/consumers/generic-load.ts",
@@ -31,6 +31,7 @@
     "src-ts/runtime-executables/ems/modules/storage-control.ts",
     "src-ts/runtime-executables/ems/modules/storage-mapping.ts",
     "src-ts/runtime-executables/ems/modules/tarif-vis.ts",
+    "src-ts/runtime-executables/ems/modules/tariff-provider.ts",
     "src-ts/runtime-executables/ems/modules/thermal-control.ts",
     "src-ts/runtime-executables/ems/modules/threshold-control.ts",
     "src-ts/runtime-executables/ems/nexologic-engine.ts",
@@ -38,6 +39,7 @@
     "src-ts/runtime-executables/ems/services/country-profile-service.ts",
     "src-ts/runtime-executables/ems/services/feature-flags.ts",
     "src-ts/runtime-executables/ems/services/storage-farm-aggregation.ts",
+    "src-ts/runtime-executables/ems/services/tariff-provider-registry.ts",
     "src-ts/runtime-executables/main.ts",
     "src-ts/runtime-executables/www/admin-guard.ts",
     "src-ts/runtime-executables/www/app.ts",

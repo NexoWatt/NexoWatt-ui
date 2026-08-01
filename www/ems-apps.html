@@ -732,6 +732,99 @@
           <div class="nw-config-card__subtitle">Preis-Signale für dynamische Tarife / Ladefreigabe</div>
         </div>
         <div class="nw-config-card__body">
+          <div id="tariffProviderConfig" class="nw-config-list" style="margin-bottom:14px;">
+            <div class="nw-config-field-row">
+              <div class="nw-config-field-label">Direkter Tarifprovider</div>
+              <div class="nw-config-field-control" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;">
+                <select id="tariffProviderEnabled" class="nw-config-input"><option value="false">Aus – freie DP-Zuordnung</option><option value="true">An – Provider direkt in EOS</option></select>
+                <select id="tariffProviderId" class="nw-config-input">
+                  <option value="manual-dp">Bestehende Datenpunkte / manuell</option>
+                  <option value="tibber">Tibber API</option>
+                  <option value="energyzero">EnergyZero Marktpreise</option>
+                  <option value="entsoe">ENTSO-E Day-Ahead</option>
+                  <option value="ostrom">Ostrom API / Partnerzugang</option>
+                  <option value="custom-rest">Allgemeine REST/JSON-API</option>
+                  <option value="market-profile">Anbieterprofil / Stadtwerk</option>
+                </select>
+                <select id="tariffProviderProfileId" class="nw-config-input">
+                  <option value="local-provider">Lokaler Energieversorger / Stadtwerk</option>
+                  <option value="rabot">Rabot Energy</option><option value="enbw-dynamic">EnBW Strom dynamisch</option>
+                  <option value="lichtblick-dynamic">LichtBlick Dynamic</option><option value="elli-flex">Elli / VW Naturstrom Flex</option>
+                  <option value="zonneplan">Zonneplan</option><option value="nextenergy">NextEnergy</option>
+                  <option value="frankenergie">Frank Energie</option><option value="anwb">ANWB Energie</option>
+                </select>
+                <select id="tariffProviderSourceId" class="nw-config-input"><option value="entsoe">ENTSO-E</option><option value="energyzero">EnergyZero</option><option value="custom-rest">Custom REST</option></select>
+              </div>
+            </div>
+            <div class="nw-config-field-row">
+              <div class="nw-config-field-label">Kopplung an EMS-Logiken</div>
+              <div class="nw-config-field-control" style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+                <label><input id="tariffProviderActivateLogic" type="checkbox" checked> Dynamische Tariflogik aktivieren</label>
+                <label><input id="tariffProviderAutomaticMode" type="checkbox" checked> Automatikmodus verwenden</label>
+                <label><input id="tariffProviderAutoCouple" type="checkbox" checked> Preis-DPs automatisch koppeln</label>
+              </div>
+            </div>
+            <div class="nw-config-field-row">
+              <div class="nw-config-field-label">Markt / Zeitreihe</div>
+              <div class="nw-config-field-control" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">
+                <select id="tariffProviderCountry" class="nw-config-input"><option value="DE">Deutschland</option><option value="NL">Nederland</option></select>
+                <input id="tariffProviderTimeZone" class="nw-config-input" placeholder="Europe/Berlin">
+                <select id="tariffProviderResolution" class="nw-config-input"><option value="15">15 Minuten</option><option value="30">30 Minuten</option><option value="60">60 Minuten</option></select>
+                <input id="tariffProviderRefresh" class="nw-config-input" type="number" min="5" max="360" step="1" placeholder="Abruf alle 15 min">
+                <select id="tariffProviderPriceComponent" class="nw-config-input"><option value="total">Gesamtpreis</option><option value="allInPriceIncludingVat">All-in inkl. MwSt.</option><option value="basePriceIncludingVat">Basis inkl. MwSt.</option><option value="market">Börsenpreis</option></select>
+              </div>
+            </div>
+            <details id="tariffProviderCredentialsDetails">
+              <summary>Zugangsdaten / Provider-Endpunkte</summary>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:8px;">
+                <input id="tariffProviderAccessToken" class="nw-config-input" type="password" autocomplete="new-password" placeholder="Tibber Access Token">
+                <input id="tariffProviderSecurityToken" class="nw-config-input" type="password" autocomplete="new-password" placeholder="ENTSO-E Security Token">
+                <input id="tariffProviderHomeId" class="nw-config-input" placeholder="Tibber Home-ID (optional)">
+                <input id="tariffProviderClientId" class="nw-config-input" placeholder="OAuth Client-ID">
+                <input id="tariffProviderClientSecret" class="nw-config-input" type="password" autocomplete="new-password" placeholder="OAuth Client-Secret">
+                <input id="tariffProviderTokenUrl" class="nw-config-input" placeholder="OAuth Token URL">
+                <input id="tariffProviderPricesUrl" class="nw-config-input" placeholder="Preis-API URL">
+                <input id="tariffProviderPostalCode" class="nw-config-input" placeholder="Postleitzahl (optional)">
+              </div>
+            </details>
+            <details id="tariffProviderFormulaDetails">
+              <summary>Tarifformel / örtlicher Energieversorger</summary>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:8px;">
+                <input id="tariffProviderMarketMultiplier" class="nw-config-input" type="number" step="0.0001" placeholder="Marktfaktor (1)">
+                <input id="tariffProviderSupplierMarkup" class="nw-config-input" type="number" step="0.0001" placeholder="Lieferantenaufschlag €/kWh">
+                <input id="tariffProviderGridVariable" class="nw-config-input" type="number" step="0.0001" placeholder="Variables Netzentgelt €/kWh">
+                <input id="tariffProviderTax" class="nw-config-input" type="number" step="0.0001" placeholder="Steuern/Umlagen €/kWh">
+                <input id="tariffProviderOtherVariable" class="nw-config-input" type="number" step="0.0001" placeholder="Weitere variable Kosten €/kWh">
+                <input id="tariffProviderVatPct" class="nw-config-input" type="number" min="0" max="100" step="0.1" placeholder="MwSt. %">
+                <input id="tariffProviderFeedIn" class="nw-config-input" type="number" step="0.0001" placeholder="Einspeisevergütung €/kWh">
+              </div>
+            </details>
+            <details id="tariffProviderCustomRestDetails">
+              <summary>Allgemeine REST/JSON-Zuordnung</summary>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:8px;">
+                <input id="tariffProviderRestUrl" class="nw-config-input" placeholder="https://.../prices">
+                <select id="tariffProviderRestMethod" class="nw-config-input"><option value="GET">GET</option><option value="POST">POST</option></select>
+                <select id="tariffProviderRestAuthMode" class="nw-config-input"><option value="none">Keine Authentifizierung</option><option value="bearer">Bearer Token</option><option value="api-key">API-Key Header</option><option value="basic">Basic Auth</option></select>
+                <input id="tariffProviderBearerToken" class="nw-config-input" type="password" autocomplete="new-password" placeholder="Bearer Token">
+                <input id="tariffProviderApiKey" class="nw-config-input" type="password" autocomplete="new-password" placeholder="API-Key">
+                <input id="tariffProviderApiKeyHeader" class="nw-config-input" placeholder="Headername, z.B. x-api-key">
+                <input id="tariffProviderUsername" class="nw-config-input" placeholder="Benutzername">
+                <input id="tariffProviderPassword" class="nw-config-input" type="password" autocomplete="new-password" placeholder="Passwort">
+                <input id="tariffProviderArrayPath" class="nw-config-input" placeholder="JSON-Pfad Liste, z.B. data.items">
+                <input id="tariffProviderStartPath" class="nw-config-input" placeholder="Zeitbeginn-Pfad">
+                <input id="tariffProviderEndPath" class="nw-config-input" placeholder="Zeitende-Pfad">
+                <input id="tariffProviderPricePath" class="nw-config-input" placeholder="Preispfad">
+                <select id="tariffProviderUnit" class="nw-config-input"><option value="EUR/kWh">EUR/kWh</option><option value="ct/kWh">ct/kWh</option><option value="EUR/MWh">EUR/MWh</option></select>
+                <textarea id="tariffProviderHeadersJson" class="nw-config-input" rows="2" placeholder='Zusätzliche Header als JSON'></textarea>
+              </div>
+            </details>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+              <button id="tariffProviderTest" type="button" class="nw-config-btn nw-config-btn--ghost">Verbindung testen</button>
+              <button id="tariffProviderCouple" type="button" class="nw-config-btn nw-config-btn--ghost">Interne Preis-DPs koppeln</button>
+              <span id="tariffProviderStatus" class="nw-config-empty">Kein Test ausgeführt.</span>
+            </div>
+          </div>
+          <div class="nw-config-empty" style="margin-bottom:8px;">Die vier folgenden Zuordnungen werden bei direktem Provider automatisch auf die internen EOS-States gekoppelt. Dafür ist kein externer Tarifadapter erforderlich. Die bestehende Tarif-, Speicher- und EVCS-Logik bleibt der alleinige Regelungs-Resolver.</div>
           <div id="dpTariffs" class="nw-config-list"></div>
         </div>
       </div>

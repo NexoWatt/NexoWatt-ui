@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:e1d748ace429ba618de4d6b0c8da92b84619779e50310a124c2cb1becb9d3907
+ * Quell-Hash: sha256:13788ce2d6ecc09a5fa5278db99df16cffc44ab1ecb80a2c94c0d9f2db2bb7b5
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -47,6 +47,7 @@ const { SpeicherRegelungModule } = require('./modules/storage-control');
 const { GridConstraintsModule } = require('./modules/grid-constraints');
 const { NvpCoordinatorModule } = require('./modules/nvp-coordinator');
 const { PeakShavingModule } = require('./modules/peak-shaving');
+const { TariffProviderModule } = require('./modules/tariff-provider');
 const { TarifVisModule } = require('./modules/tarif-vis');
 const { TariffStatusModule } = require('./modules/tariff-status');
 const { PvForecastModule } = require('./modules/pv-forecast');
@@ -341,6 +342,15 @@ class ModuleManager {
             key: 'para14a',
             instance: new Para14aModule(this.adapter, this.dp),
             enabledFn: () => this._licenseAllowsApp('para14a') && require('./services/country-profile-service').getConfiguredCountryProfile(this.adapter?.config || {}).supportsParagraph14a === true && !!(this.adapter?.config?.installerConfig?.para14a),
+        });
+
+        // Direkte Tarifprovider (Tibber/EnergyZero/ENTSO-E/Ostrom/Custom REST).
+        // Publiziert ausschließlich normalisierte Preis-DPs und läuft bewusst vor TarifVis,
+        // damit die bestehenden Speicher-/EVCS-/Tariflogiken ohne externen Adapter arbeiten.
+        this.modules.push({
+            key: 'tariffProvider',
+            instance: new TariffProviderModule(this.adapter, this.dp),
+            enabledFn: () => true,
         });
 
         // Tarif (VIS) – stellt Ladepark-Deckel bereit

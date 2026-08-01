@@ -84,6 +84,7 @@ const crypto = require('crypto');
 const https = require('https');
 const pkg = require('./package.json');
 const { defaultEnergyOriginConfig, registerEnergyOriginApi } = require('./lib/energy-origin-api');
+const tariffProviderRegistry = require('./ems/services/tariff-provider-registry');
 
 /**
  * Code-Teil: nwMainRuntimeTsHelpers
@@ -3165,6 +3166,7 @@ class NexoWattVis extends utils.Adapter {
       'relay',
       'aiAdvisor',
       'energyWallet',
+      'tariffProvider',
       'energyLedger',
       'chargeKiosk',
       'meshMicrogrid',
@@ -3295,6 +3297,37 @@ class NexoWattVis extends utils.Adapter {
     ensurePlainObj('datapoints', {});
     ensurePlainObj('installerConfig', {});
     ensurePlainObj('countryProfile', { country: 'DE', languageMode: 'system' });
+    ensurePlainObj('tariffProvider', {
+      enabled: false,
+      providerId: 'manual-dp',
+      sourceId: 'manual-dp',
+      providerProfileId: 'local-provider',
+      activateTariffLogic: true,
+      automaticMode: true,
+      autoCoupleDatapoints: true,
+      country: 'DE',
+      timeZone: 'Europe/Berlin',
+      resolutionMinutes: 15,
+      refreshMinutes: 15,
+      maxStaleMinutes: 180,
+      timeoutMs: 15000,
+      priceComponent: 'total',
+      credentials: {},
+      formula: {
+        marketMultiplier: 1,
+        supplierMarkupEurPerKwh: 0,
+        gridVariableEurPerKwh: 0,
+        taxEurPerKwh: 0,
+        otherVariableEurPerKwh: 0,
+        vatPct: 0,
+        priceIncludesVat: true,
+      },
+      customRest: {
+        url: '', method: 'GET', authMode: 'none', headersJson: '', body: '',
+        arrayPath: '', startPath: 'startsAt', endPath: 'endsAt', pricePath: 'total',
+        currencyPath: 'currency', unit: 'EUR/kWh', apiKeyHeader: 'x-api-key',
+      },
+    });
     ensurePlainObj('energyWallet', {
       enabled: true,
       showOnLive: true,
@@ -3585,6 +3618,45 @@ class NexoWattVis extends utils.Adapter {
         if (farmBefore !== JSON.stringify(out.storageFarm.storages)) changed = true;
       }
     } catch (_eStorageDpMigration) {}
+
+    // Direkter Tarifprovider: die vorhandene Tariflogik bleibt alleiniger Resolver.
+    // Der Provider publiziert lediglich vier kanonische interne DPs; diese werden im
+    // AppCenter unter Zuordnung sichtbar gekoppelt, damit kein externer Tarifadapter nötig ist.
+    try {
+      const tp = this._nwIsPlainObject(out.tariffProvider) ? out.tariffProvider : {};
+      tp.providerId = String(tp.providerId || 'manual-dp').trim().toLowerCase();
+      tp.sourceId = String(tp.sourceId || tp.providerId || 'manual-dp').trim().toLowerCase();
+      tp.country = String(tp.country || out.countryProfile?.country || 'DE').trim().toUpperCase() === 'NL' ? 'NL' : 'DE';
+      tp.timeZone = String(tp.timeZone || (tp.country === 'NL' ? 'Europe/Amsterdam' : 'Europe/Berlin')).trim();
+      tp.resolutionMinutes = [15, 30, 60].includes(Number(tp.resolutionMinutes)) ? Number(tp.resolutionMinutes) : 15;
+      tp.refreshMinutes = Math.max(5, Math.min(360, Math.round(Number(tp.refreshMinutes) || 15)));
+      tp.maxStaleMinutes = Math.max(30, Math.min(4320, Math.round(Number(tp.maxStaleMinutes) || 180)));
+      tp.timeoutMs = Math.max(3000, Math.min(60000, Math.round(Number(tp.timeoutMs) || 15000)));
+      tp.enabled = tp.enabled === true;
+      tp.activateTariffLogic = tp.activateTariffLogic !== false;
+      tp.automaticMode = tp.automaticMode !== false;
+      tp.autoCoupleDatapoints = tp.autoCoupleDatapoints !== false;
+      tp.credentials = this._nwIsPlainObject(tp.credentials) ? tp.credentials : {};
+      tp.formula = this._nwIsPlainObject(tp.formula) ? tp.formula : {};
+      tp.customRest = this._nwIsPlainObject(tp.customRest) ? tp.customRest : {};
+      out.tariffProvider = tp;
+      if (tp.enabled && tp.providerId !== 'manual-dp' && tp.autoCoupleDatapoints) {
+        const ns = String(this.namespace || `nexowatt-ui.${this.instance || 0}`);
+        out.datapoints = this._nwIsPlainObject(out.datapoints) ? out.datapoints : {};
+        const expected = {
+          priceCurrent: `${ns}.tariffProvider.currentPriceEurPerKwh`,
+          priceAverage: `${ns}.tariffProvider.averagePriceEurPerKwh`,
+          priceTodayJson: `${ns}.tariffProvider.pricesTodayJson`,
+          priceTomorrowJson: `${ns}.tariffProvider.pricesTomorrowJson`,
+        };
+        for (const [key, value] of Object.entries(expected)) {
+          if (String(out.datapoints[key] || '').trim() !== value) {
+            out.datapoints[key] = value;
+            changed = true;
+          }
+        }
+      }
+    } catch (_eTariffProviderNormalize) {}
 
     // Normalize emsApps (canonical structure)
     try {
@@ -13646,6 +13718,35 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       }
     };
 
+    // Tarifprovider-Geheimnisse bleiben ausschließlich in installer.configJson.
+    // Das geschützte AppCenter erhält nur __KEEP__-Platzhalter; öffentliche /config-/SSE-
+    // Antworten werden zusätzlich durch die bestehende globale Redaction abgesichert.
+    const _nwTariffSecretKeys = new Set(['accessToken','securityToken','clientSecret','bearerToken','apiKey','password','refreshToken']);
+    const _nwMaskTariffProviderForUi = (cfg) => {
+      const clone = this._nwDeepClone(cfg || {}) || {};
+      const creds = clone && clone.tariffProvider && clone.tariffProvider.credentials;
+      if (creds && typeof creds === 'object') {
+        for (const key of Object.keys(creds)) {
+          if (_nwTariffSecretKeys.has(String(key)) && String(creds[key] || '').trim()) creds[key] = '__KEEP__';
+        }
+      }
+      return clone;
+    };
+    const _nwMergeTariffProviderSecrets = (incoming, existing) => {
+      const next = this._nwDeepClone(incoming || {}) || {};
+      const prev = existing && typeof existing === 'object' ? existing : {};
+      next.credentials = next.credentials && typeof next.credentials === 'object' ? next.credentials : {};
+      const prevCreds = prev.credentials && typeof prev.credentials === 'object' ? prev.credentials : {};
+      for (const key of _nwTariffSecretKeys) {
+        const raw = next.credentials[key];
+        if (raw === '__KEEP__' || raw === undefined || raw === null) {
+          if (prevCreds[key] !== undefined) next.credentials[key] = prevCreds[key];
+          else delete next.credentials[key];
+        }
+      }
+      return next;
+    };
+
     // Abschnitt: Installer/App-Center-APIs. Änderungen wirken direkt auf EMS-Module und DP-Mapping.
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/installer/config', requireInstaller, async (_req, res) => {
     app.get('/api/installer/config', requireInstaller, async (_req, res) => {
@@ -13663,7 +13764,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         // system.adapter.<instance>.native. Persisting to native triggers an ioBroker instance restart
         // and breaks the UI with "Failed to fetch" + SSE disconnects.
         const nativeObj = (this.config && typeof this.config === 'object') ? this.config : {};
-        const cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickPersistedInstallerConfig());
+        let cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickPersistedInstallerConfig());
+        cfgOut = _nwMaskTariffProviderForUi(cfgOut);
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
         cfgOut.locale = this._nwBuildLocaleInfo();
         cfgOut.countryProfile = Object.assign({}, cfgOut.countryProfile || {}, this._nwBuildCountryProfileInfo());
@@ -13696,7 +13798,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           'emsApps',
 
           // Scheduler + base mapping
-          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','chargeKiosk','meshMicrogrid','datapoints','vis','settings',
+          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','tariffProvider','chargeKiosk','meshMicrogrid','datapoints','vis','settings',
 
           // App/module configs
           'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','meshMicrogrid','chargingManagement',
@@ -13723,6 +13825,9 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         // Persist (state-based) + apply to runtime config.
         // We merge into the already persisted patch (loaded on startup) to keep full configuration.
         const basePatch = (this._nwInstallerConfigPatch && typeof this._nwInstallerConfigPatch === 'object') ? this._nwInstallerConfigPatch : {};
+        if (safePatch.tariffProvider && typeof safePatch.tariffProvider === 'object') {
+          safePatch.tariffProvider = _nwMergeTariffProviderSecrets(safePatch.tariffProvider, basePatch.tariffProvider);
+        }
         await _nwProtectStorageFarmPatchFromEmptySubmit(safePatch);
         const gateResult = await _nwApplyInstallerRegressionSafetyGate(safePatch, basePatch);
         const guardedPatch = gateResult && gateResult.patch ? gateResult.patch : safePatch;
@@ -13804,7 +13909,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         }
 
         try { await this._nwInitLicense(); } catch (e) { try { this.log.warn('License refresh after installer config save failed: ' + (e && e.message ? e.message : e)); } catch (_eLog) {} }
-        const cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickPersistedInstallerConfig());
+        let cfgOut = await _nwHydrateStorageFarmConfigFromRuntimeStates(_nwPickPersistedInstallerConfig());
+        cfgOut = _nwMaskTariffProviderForUi(cfgOut);
         cfgOut.license = this._nwBuildLicenseFeatureInfo();
         cfgOut.locale = this._nwBuildLocaleInfo();
         cfgOut.countryProfile = Object.assign({}, cfgOut.countryProfile || {}, this._nwBuildCountryProfileInfo());
@@ -13906,7 +14012,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           'emsApps',
 
           // Scheduler + base mapping
-          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','chargeKiosk','meshMicrogrid','datapoints','vis','settings',
+          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','tariffProvider','chargeKiosk','meshMicrogrid','datapoints','vis','settings',
 
           // App/module configs
           'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','meshMicrogrid','chargingManagement',
@@ -14603,181 +14709,236 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     // auto-fill App-Center mappings (EVCS / PV‑Regelung / Thermik / §14a).
     //
     // IMPORTANT: This endpoint only discovers; it never writes config.
+    // Dynamische Tarife: Provider-Katalog und Verbindungstest. Die APIs sind
+    // installergeschützt und geben niemals Token/Secrets zurück.
+    app.get('/api/installer/tariff-provider/providers', requireInstaller, async (_req, res) => {
+      try {
+        sendNoStore(res);
+        const registry = tariffProviderRegistry.publicRegistry();
+        const ns = String(this.namespace || `nexowatt-ui.${this.instance || 0}`);
+        const internalDatapoints = {};
+        for (const [key, suffix] of Object.entries(registry.internalDatapoints || {})) {
+          internalDatapoints[key] = `${ns}.${suffix}`;
+        }
+        res.json({ ok: true, ...registry, internalDatapoints });
+      } catch (e) {
+        res.status(500).json({ ok: false, error: 'provider_registry_failed', message: String(e && e.message || e) });
+      }
+    });
+
+    app.post('/api/installer/tariff-provider/test', requireInstaller, async (req, res) => {
+      try {
+        sendNoStore(res);
+        const body = req && req.body && typeof req.body === 'object' ? req.body : {};
+        const persisted = _nwPickPersistedInstallerConfig();
+        const incoming = body.config && typeof body.config === 'object' ? body.config : {};
+        const mergedProvider = _nwMergeTariffProviderSecrets(incoming, persisted && persisted.tariffProvider);
+        const normalized = this.nwNormalizeInstallerPatch({ tariffProvider: mergedProvider }, this.config || {});
+        const cfg = normalized && normalized.patch && normalized.patch.tariffProvider ? normalized.patch.tariffProvider : mergedProvider;
+        if (String(cfg.providerId || 'manual-dp') === 'manual-dp') {
+          return res.json({ ok: true, status: 'manual-datapoints', providerId: 'manual-dp', intervalCount: 0, note: 'Manuelle Datenpunkte benötigen keinen API-Test.' });
+        }
+        const result = await tariffProviderRegistry.fetchProvider(cfg);
+        const intervals = Array.isArray(result && result.intervals) ? result.intervals : [];
+        const now = Date.now();
+        const split = tariffProviderRegistry.splitTodayTomorrow(intervals, now, cfg.timeZone);
+        const values = tariffProviderRegistry.currentAndAverage(intervals, now);
+        res.json({
+          ok: true,
+          status: 'ok',
+          providerId: String(cfg.providerId || ''),
+          sourceId: String(cfg.sourceId || cfg.providerId || ''),
+          intervalCount: intervals.length,
+          todayCount: split.today.length,
+          tomorrowCount: split.tomorrow.length,
+          currentPriceEurPerKwh: Number.isFinite(values.current) ? values.current : null,
+          averagePriceEurPerKwh: Number.isFinite(values.average) ? values.average : null,
+          firstStartsAt: intervals[0] ? intervals[0].startsAt : '',
+          lastEndsAt: intervals.length ? intervals[intervals.length - 1].endsAt : '',
+          sample: intervals.slice(0, 4),
+        });
+      } catch (e) {
+        const message = String(e && e.message || e || 'provider_test_failed').replace(/Bearer\s+[A-Za-z0-9._~+\/-]+/gi, 'Bearer ***').slice(0, 500);
+        res.status(400).json({ ok: false, error: 'provider_test_failed', message });
+      }
+    });
+
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/nwdevices/discover', requireInstaller, async (_req, res) => {
     app.get('/api/nwdevices/discover', requireInstaller, async (_req, res) => {
       try {
         const now = Date.now();
+        const devChannels = await this.getForeignObjectsAsync('nexowatt-devices.*.devices.*', 'channel').catch(() => ({}));
+        const stateObjects = await this.getForeignObjectsAsync('nexowatt-devices.*.devices.*', 'state').catch(() => ({}));
+        const manifestStates = (typeof this.getForeignStatesAsync === 'function')
+          ? await this.getForeignStatesAsync('nexowatt-devices.*.devices.*.aliases.meta.manifest').catch(() => ({}))
+          : {};
 
-        let devChannels = {};
-        try {
-          devChannels = await this.getForeignObjectsAsync('nexowatt-devices.*.devices.*', 'channel');
-        } catch (_e) {
-          devChannels = {};
-        }
-
-        let states = {};
-        try {
-          states = await this.getForeignObjectsAsync('nexowatt-devices.*.devices.*', 'state');
-        } catch (_e) {
-          states = {};
-        }
-
-        // Group states by base device id (nexowatt-devices.X.devices.<devId>)
         const statesByDev = new Map();
-        for (const [id, obj] of Object.entries(states || {})) {
-          const sid = String(id || '');
-          if (!sid.startsWith('nexowatt-devices.')) continue;
-          const parts = sid.split('.');
-          if (parts.length < 5) continue;
-          if (parts[2] !== 'devices') continue;
-          const base = parts.slice(0, 4).join('.');
-          if (!statesByDev.has(base)) statesByDev.set(base, {});
-          statesByDev.get(base)[sid] = obj;
+        for (const [stateId, obj] of Object.entries(stateObjects || {})) {
+          const sid = String(stateId || '');
+          const match = sid.match(/^(nexowatt-devices\.\d+\.devices\.[^.]+)\./);
+          if (!match) continue;
+          if (!statesByDev.has(match[1])) statesByDev.set(match[1], {});
+          statesByDev.get(match[1])[sid] = obj;
         }
-        /**
-         * Code-Teil: normName
-         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-         */
-        const normName = (v) => {
-          try {
-            if (typeof v === 'string') return v.trim();
-            if (v && typeof v === 'object') {
-              // common.name can be translated object
-              const any = v.en || v.de || v.text || v.value;
-              if (typeof any === 'string') return any.trim();
-              const first = Object.values(v).find(x => typeof x === 'string');
-              if (typeof first === 'string') return first.trim();
-            }
-          } catch (_e) {}
+        const normName = (value) => {
+          if (typeof value === 'string') return value.trim();
+          if (value && typeof value === 'object') {
+            const first = value.de || value.en || value.nl || value.text || Object.values(value).find((x) => typeof x === 'string');
+            return typeof first === 'string' ? first.trim() : '';
+          }
           return '';
         };
-
-        const devices = [];
-        const counts = { total: 0, evcs: 0, pvInverter: 0, heat: 0 };
-        const instances = new Set();
-        /**
-         * Code-Teil: isEvcsCat
-         * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
-         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-         */
-        const isEvcsCat = (c) => {
-          const s = String(c || '').trim().toUpperCase();
-          return (s === 'EVCS' || s === 'CHARGER' || s === 'DC_CHARGER' || s === 'EVSE');
-        };
-        /**
-         * Code-Teil: isPvInvCat
-         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-         */
-        const isPvInvCat = (c) => String(c || '').trim().toUpperCase() === 'PV_INVERTER';
-        /**
-         * Code-Teil: isHeatCat
-         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-         */
-        const isHeatCat = (c) => String(c || '').trim().toUpperCase() === 'HEAT';
-
-        for (const [base, chObj] of Object.entries(devChannels || {})) {
-          const id = String(base || '');
-          if (!id.startsWith('nexowatt-devices.')) continue;
-          const parts = id.split('.');
-          if (parts.length !== 4) continue;
-          if (parts[2] !== 'devices') continue;
-
-          const devId = parts[3];
-          const instance = parts.slice(0, 2).join('.');
-          instances.add(instance);
-
-          const common = (chObj && chObj.common && typeof chObj.common === 'object') ? chObj.common : {};
-          const native = (chObj && chObj.native && typeof chObj.native === 'object') ? chObj.native : {};
-
-          const name = normName(common.name) || devId;
-          const category = String(native.category || '').trim();
-          const manufacturer = String(native.manufacturer || '').trim();
-          const templateId = String(native.templateId || native.template || '').trim();
-
-          const devStates = statesByDev.get(id) || {};
-
-          // Collect alias datapoints: "<base>.aliases.<aliasKey>" => { aliasKey: fullId }
-          const aliases = {};
-          for (const sid of Object.keys(devStates || {})) {
-            const k = String(sid || '');
-            const idx = k.indexOf('.aliases.');
-            if (idx < 0) continue;
-            const a = k.substring(idx + 9);
-            if (!a) continue;
-            aliases[a] = k;
+        const parseManifest = (baseId) => {
+          const stateId = `${baseId}.aliases.meta.manifest`;
+          const raw = manifestStates && manifestStates[stateId] ? manifestStates[stateId].val : null;
+          if (raw && typeof raw === 'object') return raw;
+          if (typeof raw === 'string' && raw.trim()) {
+            try { return JSON.parse(raw); } catch (_e) {}
           }
+          return null;
+        };
+        const fallbackDeviceClass = (category) => {
+          const c = String(category || '').trim().toUpperCase();
+          if (c === 'EVCS' || c === 'EVSE') return 'evCharger';
+          // Important: CHARGER/DC_CHARGER are solar/DC charger categories in the
+          // alias contract and must never be silently mapped as vehicle chargers.
+          if (c === 'CHARGER' || c === 'DC_CHARGER' || c === 'SOLAR_CHARGER') return 'solarCharger';
+          if (c === 'PV_INVERTER') return 'pvInverter';
+          if (c === 'METER' || c === 'GRID_METER' || c === 'POWER_METER') return 'meter';
+          if (c === 'STORAGE' || c === 'ESS' || c === 'STORAGE_SYSTEM') return 'storageSystem';
+          if (c === 'BATTERY') return 'battery';
+          if (c === 'BATTERY_INVERTER') return 'batteryInverter';
+          if (c === 'HEAT' || c === 'HEATPUMP' || c === 'HEATING_ROD') return 'heat';
+          if (c === 'IO') return 'io';
+          return 'generic';
+        };
+        const devices = [];
+        const counts = { total: 0, evcs: 0, pvInverter: 0, meter: 0, storage: 0, heat: 0, solarCharger: 0, generic: 0 };
+        const instances = new Set();
 
-          const basePrefix = id + '.';
-          /**
-           * Code-Teil: hasState
-           * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-           */
-          const hasState = (suffix) => {
-            const sid = basePrefix + suffix;
-            return (devStates && devStates[sid]) ? sid : '';
+        for (const [baseRaw, channelObj] of Object.entries(devChannels || {})) {
+          const baseId = String(baseRaw || '');
+          const match = baseId.match(/^(nexowatt-devices\.\d+)\.devices\.([^.]+)$/);
+          if (!match) continue;
+          const instance = match[1];
+          const devId = match[2];
+          instances.add(instance);
+          const common = channelObj && channelObj.common && typeof channelObj.common === 'object' ? channelObj.common : {};
+          const native = channelObj && channelObj.native && typeof channelObj.native === 'object' ? channelObj.native : {};
+          const devStates = statesByDev.get(baseId) || {};
+          const manifest = parseManifest(baseId) || {};
+          const category = String(native.category || manifest.category || '').trim();
+          const deviceClass = String(manifest.deviceClass || fallbackDeviceClass(category)).trim();
+          const capabilities = Array.isArray(manifest.capabilities) ? manifest.capabilities.map(String) : [];
+          const capabilitySet = new Set(capabilities);
+          const aliases = {};
+          const aliasMeta = {};
+          const legacyAliases = {};
+
+          for (const [stateId, obj] of Object.entries(devStates)) {
+            const prefixV1 = `${baseId}.aliases.v1.`;
+            const prefixLegacy = `${baseId}.aliases.`;
+            let aliasKey = '';
+            if (stateId.startsWith(prefixV1)) aliasKey = stateId.slice(prefixV1.length);
+            else if (stateId.startsWith(prefixLegacy) && !stateId.startsWith(`${baseId}.aliases.meta.`)) {
+              aliasKey = stateId.slice(prefixLegacy.length);
+              if (aliasKey.startsWith('v1.')) aliasKey = aliasKey.slice(3);
+              legacyAliases[aliasKey] = stateId;
+            }
+            if (!aliasKey) continue;
+            // aliases.v1 is authoritative. Legacy aliases only fill missing keys.
+            if (!aliases[aliasKey] || stateId.startsWith(prefixV1)) aliases[aliasKey] = stateId;
+            const c = obj && obj.common && typeof obj.common === 'object' ? obj.common : {};
+            aliasMeta[aliasKey] = {
+              id: stateId,
+              exists: true,
+              read: c.read !== false,
+              write: c.write === true,
+              type: String(c.type || ''),
+              role: String(c.role || ''),
+              unit: String(c.unit || ''),
+              name: normName(c.name),
+            };
+          }
+          for (const [key, id] of Object.entries(legacyAliases)) if (!aliases[key]) aliases[key] = id;
+          const readAlias = (...keys) => keys.map((key) => aliases[key]).find(Boolean) || '';
+          const writeAlias = (...keys) => {
+            for (const key of keys) {
+              const id = aliases[key];
+              const meta = aliasMeta[key];
+              if (id && meta && meta.write === true) return id;
+            }
+            return '';
           };
-
-          // Recommended IDs (prefer alias, fall back to canonical template datapoints if present)
           const dp = {
-            powerW: aliases['r.power'] || hasState('aCTIVE_POWER') || '',
-            energyTotalKWh: aliases['r.energyTotal'] || hasState('energyTotal') || '',
-            statusCode: aliases['r.statusCode'] || hasState('statusCode') || '',
-            connected: aliases['comm.connected'] || '',
-            ctrlRun: aliases['ctrl.run'] || aliases['ctrl.enable'] || aliases['ctrl.enabled'] || '',
-            ctrlCurrentLimitA: aliases['ctrl.targetCurrentA'] || aliases['ctrl.currentLimitA'] || aliases['ctrl.setCurrentA'] || '',
-            ctrlPowerLimitW: aliases['ctrl.targetPowerW'] || aliases['ctrl.powerLimitW'] || aliases['ctrl.setPowerW'] || '',
-            ctrlPvLimitPct: aliases['ctrl.powerLimitPct'] || '',
-            ctrlPvLimitEnable: aliases['ctrl.powerLimitEnable'] || '',
+            powerW: readAlias('r.power'),
+            energyTotalWh: readAlias('r.energyTotal'),
+            socPct: readAlias('r.soc'),
+            statusCode: readAlias('r.statusCode', 'r.evcsState', 'r.cpState', 'r.statusText'),
+            vehicleConnected: readAlias('r.vehicleConnected', 'r.plugged', 'r.evConnected', 'r.cpConnected'),
+            chargeDemand: readAlias('r.chargeDemand', 'r.vehicleDemand', 'r.readyToCharge', 'r.chargingRequested'),
+            connected: readAlias('comm.connected', 'r.online'),
+            heartbeat: readAlias('r.heartbeat', 'comm.heartbeat', 'r.lastSeenMs', 'comm.lastSeenMs'),
+            ctrlRun: writeAlias('ctrl.run', 'ctrl.enable', 'ctrl.enabled'),
+            ctrlCurrentLimitA: writeAlias('ctrl.currentLimitA', 'ctrl.targetCurrentA', 'ctrl.setCurrentA'),
+            ctrlPowerLimitW: writeAlias('ctrl.powerLimitW', 'ctrl.targetPowerW', 'ctrl.setPowerW'),
+            ctrlPvLimitPct: writeAlias('ctrl.powerLimitPct'),
+            ctrlPvLimitEnable: writeAlias('ctrl.powerLimitEnable'),
+            ctrlPowerSetpointW: writeAlias('ctrl.powerSetpointW'),
+            ctrlChargePowerW: writeAlias('ctrl.chargePowerW'),
+            ctrlDischargePowerW: writeAlias('ctrl.dischargePowerW'),
           };
+          const missingRequired = Array.isArray(manifest.missingRequired) ? manifest.missingRequired.map(String) : [];
+          const warnings = [];
+          if (Number(manifest.schemaVersion || 0) !== 1) warnings.push('alias-schema-not-v1');
+          if (missingRequired.length) warnings.push('missing-required-aliases');
+          const writableAliasCount = Object.values(aliasMeta).filter((row) => row && row.write === true).length;
 
           devices.push({
-            baseId: id,
-            devId,
-            instance,
-            name,
+            baseId, devId, instance,
+            name: normName(common.name) || String(manifest.name || '') || devId,
             category,
-            manufacturer,
-            templateId,
+            deviceClass,
+            manufacturer: String(manifest.manufacturer || native.manufacturer || '').trim(),
+            model: String(manifest.model || native.model || '').trim(),
+            templateId: String(manifest.templateId || native.templateId || native.template || '').trim(),
+            schemaVersion: Number(manifest.schemaVersion || 0),
+            contractId: String(manifest.contractId || ''),
+            capabilities,
+            missingRequired,
+            manifest,
             aliases,
+            aliasMeta,
             dp,
+            writableAliasCount,
+            warnings,
+            mappingReady: missingRequired.length === 0,
           });
-
           counts.total++;
-          if (isEvcsCat(category)) counts.evcs++;
-          else if (isPvInvCat(category)) counts.pvInverter++;
-          else if (isHeatCat(category)) counts.heat++;
+          if (deviceClass === 'evCharger') counts.evcs++;
+          else if (deviceClass === 'pvInverter') counts.pvInverter++;
+          else if (deviceClass === 'meter') counts.meter++;
+          else if (['storageSystem','battery','batteryInverter'].includes(deviceClass)) counts.storage++;
+          else if (deviceClass === 'heat') counts.heat++;
+          else if (deviceClass === 'solarCharger') counts.solarCharger++;
+          else counts.generic++;
         }
 
-        // Stable sort: category, then name, then id
-        devices.sort((a, b) => {
-          const ca = String(a.category || '');
-          const cb = String(b.category || '');
-          if (ca !== cb) return ca.localeCompare(cb);
-          const na = String(a.name || '');
-          const nb = String(b.name || '');
-          if (na !== nb) return na.localeCompare(nb);
-          return String(a.baseId || '').localeCompare(String(b.baseId || ''));
-        });
-
+        devices.sort((a, b) => String(a.deviceClass).localeCompare(String(b.deviceClass)) || String(a.name).localeCompare(String(b.name)) || String(a.baseId).localeCompare(String(b.baseId)));
         res.json({
           ok: true,
           ts: now,
-          instances: Array.from(instances.values()).sort(),
+          aliasContract: { contractId: 'nexowatt-device-alias-contract', schemaVersion: 1, namespace: 'aliases.v1' },
+          instances: Array.from(instances).sort(),
           counts,
           deviceCount: devices.length,
           devices,
+          scanOnly: true,
+          hardwareWrites: 0,
         });
       } catch (e) {
-        try { this.log.warn('NWDevices discover API error: ' + (e && e.message ? e.message : e)); } catch (_e2) {}
+        try { this.log.warn('NWDevices discover API error: ' + String(e && e.message || e)); } catch (_e) {}
         res.status(500).json({ ok: false, error: 'internal error' });
       }
     });
