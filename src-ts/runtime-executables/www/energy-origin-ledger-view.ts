@@ -22,6 +22,23 @@
   };
   function esc(v) { return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
   function setText(id, value) { const el = $(id); if (el) el.textContent = value; }
+  function redirectToLive() {
+    try { window.location.replace('/'); } catch (_e) { window.location.href = '/'; }
+  }
+  async function ensureFeatureAccess() {
+    try {
+      const res = await fetch(`/config?t=${Date.now()}`, { cache: 'no-store' });
+      const cfg = await res.json();
+      const allowed = !!(res.ok && cfg && cfg.featureVisibility && cfg.featureVisibility.hasEnergyLedger === true);
+      if (!allowed) { redirectToLive(); return false; }
+      if (document.body) document.body.classList.add('nw-feature-authorized');
+      return true;
+    } catch (_e) {
+      // Bei unbekanntem App-Zustand niemals die optionale Betreiberseite zeigen.
+      redirectToLive();
+      return false;
+    }
+  }
   function get(obj, path, fallback = 0) {
     let cur = obj;
     for (const key of path) cur = cur && typeof cur === 'object' ? cur[key] : undefined;
@@ -96,7 +113,13 @@
     try {
       const res = await fetch(`/api/ledger/energy-origin?period=${encodeURIComponent(activePeriod)}&t=${Date.now()}`, { cache: 'no-store' });
       const payload = await res.json();
-      if (!res.ok || !payload.ok) throw new Error((payload && payload.message) || 'Bilanz-API nicht verfügbar');
+      if (!res.ok || !payload.ok) {
+        if (payload && (payload.error === 'app_not_active' || payload.error === 'license_required')) {
+          redirectToLive();
+          return;
+        }
+        throw new Error((payload && payload.message) || 'Bilanz-API nicht verfügbar');
+      }
       render(payload);
     } catch (e) {
       setText('ledgerStatus', 'Fehler');
@@ -104,7 +127,8 @@
       if (body) body.innerHTML = `<tr><td colspan="13" class="error">${esc(e && e.message ? e.message : e)}</td></tr>`;
     }
   }
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
+    if (!(await ensureFeatureAccess())) return;
     const btn = $('refreshLedger'); if (btn) btn.addEventListener('click', load);
     document.querySelectorAll('[data-period]').forEach(button => button.addEventListener('click', () => {
       activePeriod = String(button.getAttribute('data-period') || 'recent');

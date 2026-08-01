@@ -203,7 +203,12 @@ function registerEnergyOriginApi(options) {
   };
 
   app.get(['/ledger/energy-origin', '/ledger/energy-origin/'], (_req, res) => {
-    res.sendFile(path.join(rootDir, 'www', 'energy-ledger.html'));
+    sendNoStore(res);
+    // Die Betreiberseite ist selbst ein optionales AppCenter-Feature. Ohne
+    // gültige Home-/Pro-Lizenz sowie installed+enabled darf weder Navigation
+    // noch Direkt-URL die Seite öffnen; stattdessen zurück zum LIVE-Cockpit.
+    if (!isLicensed() || !appIsEnabled()) return res.redirect(302, '/');
+    return res.sendFile(path.join(rootDir, 'www', 'energy-ledger.html'));
   });
   app.get(['/api/ledger/energy-origin', '/api/ledger/energy-origin.json'], (req, res) => {
     try {

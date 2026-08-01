@@ -1,3 +1,11 @@
+## 0.8.149 - 2026-08-01
+
+- Sichtbarkeit der optionalen Seite **Energieherkunft & Ladebilanz** vollständig gehärtet: Topbar- und Burger-Menüpunkt erscheinen nur bei gültiger Home-/Pro-Lizenz sowie AppCenter `installed=true` und `enabled=true`.
+- CSS-Prioritätsfehler behoben: spätere `display:flex !important`-Regeln für `.menu-item` konnten die allgemeine `.hidden`-Klasse überschreiben und den Menüpunkt trotz deaktivierter App anzeigen. Spezifische Hidden-Regeln stehen jetzt am Ende der Cockpit-Styles.
+- Direktzugriff auf `/ledger/energy-origin` serverseitig gesperrt. Ohne aktive App beziehungsweise Lizenz erfolgt eine Weiterleitung zum LIVE-Cockpit; die Seite wird nicht mehr mit einer bloßen Fehlermeldung geöffnet.
+- Zusätzliche Client-Sicherung eingeführt: Die Betreiberseite bleibt bis zur bestätigten `/config.featureVisibility.hasEnergyLedger`-Freigabe unsichtbar und leitet bei Deaktivierung oder `app_not_active` zurück auf LIVE.
+- Regression erweitert um Route-Gate, aktiv/inaktiv-Lizenzmatrix, CSS-Hidden-Priorität und Client-Feature-Gate; Service-Worker-Cache auf `nexowatt-cache-v449` erhöht.
+
 ## 0.8.148 - 2026-08-01
 
 - Release-Version für das integrierte Grundmodul „Energieherkunft & Ladebilanz“; funktional identisch zu 0.8.147 RC23.

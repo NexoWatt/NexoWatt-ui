@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: fa9034c254209b3e4471fa55001c559de0d6910d9bc738a434a328904f890ff1
+ * Original-Hash: 01f4940f105fe8bad7fbcc13e9f5399ce5af88cbbb658bd5a69376ceb6c130df
  */
 
 /**
@@ -152,6 +152,7 @@ const serviceText = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/
 const runtimeText = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/ems/services/energy-origin-ledger-runtime.ts'), 'utf8');
 const apiText = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/lib/energy-origin-api.ts'), 'utf8');
 const appCenterText = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/www/energy-origin-appcenter.ts'), 'utf8');
+const apiRuntime = require(path.join(root, 'lib/energy-origin-api.js'));
 assert.equal(/setForeignState|setForeignObject|sendToHost/.test(moduleText + serviceText + runtimeText + apiText + appCenterText), false);
 assert.ok(runtimeText.includes('energyLedger.origin.intervalsRecentJson'));
 assert.ok(runtimeText.includes('energyLedger.origin.configHistoryJson'));
@@ -168,6 +169,46 @@ assert.ok(mainText.includes('isEnabled: _nwEnergyOriginAppEnabled'));
 assert.ok(apiText.includes('/api/ledger/energy-origin.csv'));
 assert.ok(apiText.includes('/ledger/energy-origin'));
 assert.ok(apiText.includes('app_not_active'));
+assert.ok(apiText.includes("if (!isLicensed() || !appIsEnabled()) return res.redirect(302, '/');"));
+
+// Route-Level-Gate: Direkt-URL darf die optionale Betreiberseite nur bei
+// installierter+aktivierter App und gültiger Lizenz ausliefern.
+function capturePageRoute(licensed, enabled) {
+  const routes = [];
+  const fakeApp = { get(paths, handler) { routes.push({ paths, handler }); } };
+  apiRuntime.registerEnergyOriginApi({
+    app: fakeApp, rootDir: root, sendNoStore() {},
+    isLicensed: () => licensed, isEnabled: () => enabled,
+    readJson: (_id, fallback) => fallback, readState: (_id, fallback) => fallback,
+    csvEscape: value => String(value == null ? '' : value),
+  });
+  return routes.find(row => Array.isArray(row.paths) && row.paths.includes('/ledger/energy-origin'));
+}
+/**
+ * Code-Teil: runPageRoute
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function runPageRoute(licensed, enabled) {
+  const route = capturePageRoute(licensed, enabled);
+  assert.ok(route, 'energy-origin page route missing');
+  const out = { redirect: null, file: null, noStore: false };
+  const res = {
+    redirect(code, target) { out.redirect = [code, target]; return this; },
+    sendFile(file) { out.file = file; return this; },
+  };
+  route.handler({}, res);
+  return out;
+}
+assert.deepEqual(runPageRoute(true, false).redirect, [302, '/']);
+assert.deepEqual(runPageRoute(false, true).redirect, [302, '/']);
+assert.ok(String(runPageRoute(true, true).file || '').endsWith('www/energy-ledger.html'));
 assert.ok(apiText.includes('cp.energyKwh !== undefined ? cp.energyKwh : cp.totalKwh'));
 const cockpitText = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/www/cockpit-shell.ts'), 'utf8');
 const ledgerHtml = fs.readFileSync(path.join(root, 'www/energy-ledger.html'), 'utf8');
@@ -176,7 +217,14 @@ assert.ok(cockpitText.includes('tabEnergyLedger'));
 assert.ok(cockpitText.includes('menuEnergyLedgerLink'));
 assert.ok(cockpitText.includes('fv.hasEnergyLedger === true'));
 assert.ok(ledgerHtml.includes('nw-page-energy-ledger'));
+assert.ok(ledgerHtml.includes('nw-feature-gated'));
 assert.ok(ledgerHtml.includes('id="tabEnergyLedger"'));
 assert.ok(ledgerHtml.includes('/static/cockpit-shell.js'));
 assert.ok(indexHtml.includes('/static/cockpit-shell.js'));
+const ledgerViewText = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/www/energy-origin-ledger-view.ts'), 'utf8');
+const stylesText = fs.readFileSync(path.join(root, 'www/styles.css'), 'utf8');
+assert.ok(ledgerViewText.includes('cfg.featureVisibility.hasEnergyLedger === true'));
+assert.ok(ledgerViewText.includes("payload.error === 'app_not_active'"));
+assert.ok(stylesText.includes('.menu-item.hidden'));
+assert.ok(stylesText.includes('display:none !important'));
 console.log('[energy-origin-ledger] OK: Home/Pro, 15-min accounting, storage provenance, evidence candidates, hash chain, read-only contract and AppCenter-gated frontend page verified.');

@@ -11735,3 +11735,14 @@ body.nw-page-evcs .nw-evcs-page .nw-tile.nw-tile--state-on:focus-visible{
   box-shadow:0 0 0 1px rgba(0,230,118,.24), 0 0 18px rgba(0,230,118,.22), 0 10px 30px rgba(0,0,0,.40) !important;
   background:radial-gradient(circle at top left, rgba(0,230,118,.16), rgba(255,255,255,.045)) !important;
 }
+
+/* NexoWatt 0.8.149 – optionale AppCenter-Seiten wirklich verbergen.
+   Spätere Cockpit-Designregeln setzen Menüeinträge mit display:flex!important;
+   deshalb braucht die Hidden-Kombination dieselbe Priorität am Dateiende. */
+.topbar .menu-item.hidden,
+.menu .menu-item.hidden,
+.menu-item.hidden,
+.topbar .tabs .tab.hidden,
+.tabs .tab.hidden{
+  display:none !important;
+}

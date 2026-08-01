@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: d2c4a9aa0156aa32e0f299ddedd679411fe5e7708034b23ce77bdecb7dc34970
+ * Original-Hash: be7cc47bc31f2eb3cd25b916b287fbb98abd6b68b5bea067dbd62e97627e43a4
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/lib/energy-origin-api.ts
- * Quell-Hash: sha256:bba9ac27c54e5b7022560e1a983fab6796a4c3ae06c7de655af079ddf86e10eb
+ * Quell-Hash: sha256:3f9d0a7fdc65bde407bda7c5d59daa8ed3e8640b3b60f83450032b8e41807f0c
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -372,7 +372,12 @@ function registerEnergyOriginApi(options) {
   };
 
   app.get(['/ledger/energy-origin', '/ledger/energy-origin/'], (_req, res) => {
-    res.sendFile(path.join(rootDir, 'www', 'energy-ledger.html'));
+    sendNoStore(res);
+    // Die Betreiberseite ist selbst ein optionales AppCenter-Feature. Ohne
+    // gültige Home-/Pro-Lizenz sowie installed+enabled darf weder Navigation
+    // noch Direkt-URL die Seite öffnen; stattdessen zurück zum LIVE-Cockpit.
+    if (!isLicensed() || !appIsEnabled()) return res.redirect(302, '/');
+    return res.sendFile(path.join(rootDir, 'www', 'energy-ledger.html'));
   });
   app.get(['/api/ledger/energy-origin', '/api/ledger/energy-origin.json'], (req, res) => {
     try {

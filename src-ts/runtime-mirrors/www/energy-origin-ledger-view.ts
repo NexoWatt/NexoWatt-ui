@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 8a327302dd0fda918e4a5a2b43d52885dd5b84b9229043febf3c7b4a7f60ade1
+ * Original-Hash: a8e4d7950f9181da26cc9e82448516eb334d4442ab24fcdf5a55caa6eafe6f73
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/energy-origin-ledger-view.ts
- * Quell-Hash: sha256:4d7380cd549ab1a447b25fc3735ce41bff67df611ea90a361a0279631dc32338
+ * Quell-Hash: sha256:e05d984a13faefc0b862de34170dbadd81c3fb6f97068eedc9475d09cbe76be4
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -147,6 +147,45 @@
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
   function setText(id, value) { const el = $(id); if (el) el.textContent = value; }
+/**
+ * Code-Teil: redirectToLive
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+  function redirectToLive() {
+    try { window.location.replace('/'); } catch (_e) { window.location.href = '/'; }
+  }
+/**
+ * Code-Teil: ensureFeatureAccess
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+  async function ensureFeatureAccess() {
+    try {
+      const res = await fetch(`/config?t=${Date.now()}`, { cache: 'no-store' });
+      const cfg = await res.json();
+      const allowed = !!(res.ok && cfg && cfg.featureVisibility && cfg.featureVisibility.hasEnergyLedger === true);
+      if (!allowed) { redirectToLive(); return false; }
+      if (document.body) document.body.classList.add('nw-feature-authorized');
+      return true;
+    } catch (_e) {
+      // Bei unbekanntem App-Zustand niemals die optionale Betreiberseite zeigen.
+      redirectToLive();
+      return false;
+    }
+  }
 /**
  * Code-Teil: get
  *
@@ -331,7 +370,13 @@
     try {
       const res = await fetch(`/api/ledger/energy-origin?period=${encodeURIComponent(activePeriod)}&t=${Date.now()}`, { cache: 'no-store' });
       const payload = await res.json();
-      if (!res.ok || !payload.ok) throw new Error((payload && payload.message) || 'Bilanz-API nicht verfügbar');
+      if (!res.ok || !payload.ok) {
+        if (payload && (payload.error === 'app_not_active' || payload.error === 'license_required')) {
+          redirectToLive();
+          return;
+        }
+        throw new Error((payload && payload.message) || 'Bilanz-API nicht verfügbar');
+      }
       render(payload);
     } catch (e) {
       setText('ledgerStatus', 'Fehler');
@@ -339,7 +384,8 @@
       if (body) body.innerHTML = `<tr><td colspan="13" class="error">${esc(e && e.message ? e.message : e)}</td></tr>`;
     }
   }
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
+    if (!(await ensureFeatureAccess())) return;
     const btn = $('refreshLedger'); if (btn) btn.addEventListener('click', load);
     document.querySelectorAll('[data-period]').forEach(button => button.addEventListener('click', () => {
       activePeriod = String(button.getAttribute('data-period') || 'recent');
