@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 5e318e3281c32189704bc95c9c40d613ae1d650719bfa0e3dd6731f8ebc1ff2c
+ * Original-Hash: d97fbb05007572f938caf3516b3e75358660f2061c16625156fc16e971e7ccd8
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/sw.ts
- * Quell-Hash: sha256:6ada70e0467912e51e3b027a4bc08d74ac16017931c7ab96032c639060787f3e
+ * Quell-Hash: sha256:8a491b2e09d957369c72d0ea8c0dc34da155922bf195af0562e06b67c1e353c6
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -84,7 +84,7 @@ const OFFLINE_URLS = [
   'dc-station-display.js',
   'dc-station-display.css',
   'energy-ledger.html',
-  'energy-ledger.js',
+  'energy-origin-ledger-view.js',
   'mesh-microgrid.html',
   'mesh-microgrid.js',
   'admin-guard.js', 'nw-i18n.js', 'i18n/de.json', 'i18n/nl.json', 'i18n/en.json',

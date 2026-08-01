@@ -113,6 +113,7 @@
       <button type="button" class="nw-tab" data-tab="storagefarm" style="display:none;">Speicherfarm</button>
       <button type="button" class="nw-tab" data-tab="multiuse" style="display:none;">MultiUse</button>
       <button type="button" class="nw-tab" data-tab="meshmicrogrid" style="display:none;">Mesh/Microgrid</button>
+      <button type="button" class="nw-tab" data-tab="ledger" style="display:none;">Energieherkunft</button>
       <button type="button" class="nw-tab" data-tab="flow">Energiefluss</button>
       <button type="button" class="nw-tab" data-tab="thermal" style="display:none;">Thermik</button>
       <button type="button" class="nw-tab" data-tab="heatingrod" style="display:none;">Heizstab</button>
@@ -892,30 +893,22 @@
             </div>
           </div>
           <div class="nw-config-field-row" id="storageFeneconOptionsRow">
-            <div class="nw-config-field-label">FENECON / OpenEMS / FEMS</div>
+            <div class="nw-config-field-label">FENECON / OpenEMS</div>
             <div class="nw-config-field-control nw-config-field-control--stack">
               <label class="nw-config-checklabel" for="storageFeneconAcMode">
                 <input id="storageFeneconAcMode" class="nw-config-checkbox" type="checkbox" />
-                <span>FENECON-/OpenEMS-/FEMS-Profil aktiv</span>
-              </label>
-              <label class="nw-config-help" style="display:flex; flex-direction:column; gap:5px; max-width:520px;">
-                Hybrid-Regelart
-                <select id="storageFeneconControlMode" class="nw-config-input">
-                  <option value="auto">Automatisch – FEMS NVP bevorzugen</option>
-                  <option value="fems-grid-target">FEMS NVP-Regler – empfohlen</option>
-                  <option value="direct-ess">Direkte ESS-Leistung – Fallback</option>
-                </select>
+                <span>FENECON-/OpenEMS-/FEMS-Modus aktivieren</span>
               </label>
               <label class="nw-config-checklabel" for="storageFeneconDayNoWrite">
                 <input id="storageFeneconDayNoWrite" class="nw-config-checkbox" type="checkbox" disabled />
-                <span>Legacy-No-Write deaktiviert – aktive Vorgaben werden zyklisch erneuert</span>
+                <span>Legacy-No-Write deaktiviert – externe Vorgabe wird zyklisch erneuert</span>
               </label>
               <label class="nw-config-checklabel" for="storageFeneconAssist">
                 <input id="storageFeneconAssist" class="nw-config-checkbox" type="checkbox" />
                 <span>NexoWatt-Assist bei dauerhaftem Netzbezug erlauben</span>
               </label>
               <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
-                <b>FEMS NVP-Regler</b> übergibt den zentral aufgelösten Netzpunkt-Sollwert an <code>ctrlBalancing0/SetGridActivePower</code>. FEMS regelt interne DC-PV, Speicher und Gerätegrenzen selbst; dieser Pfad ist für Hybridsysteme empfohlen. <b>Direkte ESS-Leistung</b> verwendet <code>ess0/SetActivePowerEquals</code> als Fallback und sollte zusätzlich <code>ess0/ActivePower</code> sowie die aktuellen Minimal-/Maximalgrenzen enthalten. Im Modus <b>Automatisch</b> wird der native FEMS-Pfad nur verwendet, wenn dessen Sollwert- und Aktor-Istwert-DPs vollständig zugeordnet sind. Es schreibt immer genau eine Kommandofamilie.
+                Für FENECON/OpenEMS/FEMS wird der nach NVP-, SoC-, Budget-, MultiUse- und Sicherheitsregeln begrenzte Sollwert über den <b>manuell zugeordneten AppCenter-DP</b> zyklisch erneuert. Dadurch bleibt die externe Vorgabe aktiv und der Geräte-Watchdog läuft nicht aus. Der Assist greift weiterhin nur zeitverzögert und NVP-begrenzt ein. MultiUse, Tarif- und Peak-Shaving-Anforderungen bleiben priorisiert.
               </div>
             </div>
           </div>
@@ -1806,6 +1799,113 @@
     <section id="chargeKioskEvcsSlot" class="nw-config-section"></section>
   </div>
 
+  <div id="nw-tabpanel-ledger" data-tabpanel="ledger" style="display:none;">
+    <section class="nw-config-card" data-card="energyLedgerOrigin">
+      <div class="nw-config-card__header">
+        <div>
+          <div class="nw-config-card__title">Energieherkunft &amp; Ladebilanz</div>
+          <div class="nw-config-card__subtitle">Read-only 15-Minuten-Bilanz für Netz, PV, Speicherherkunft und eichrechtsrelevante Ladezähler. Die App schreibt niemals auf Speicher, Wechselrichter oder Ladepunkte.</div>
+        </div>
+        <a class="nw-btn nw-btn--small" href="/ledger/energy-origin" target="_blank" rel="noopener noreferrer">Betreiberansicht öffnen</a>
+      </div>
+
+      <div class="nw-config-grid">
+        <label class="nw-field nw-field--switch">
+          <span>15-Minuten-Bilanz aktiv</span>
+          <input id="ledgerOriginEnabled" type="checkbox" />
+        </label>
+        <label class="nw-field">
+          <span>Standort-ID</span>
+          <input id="ledgerSiteId" type="text" value="site_1" />
+        </label>
+        <label class="nw-field">
+          <span>Standortname</span>
+          <input id="ledgerSiteName" type="text" value="Standort 1" />
+        </label>
+        <label class="nw-field">
+          <span>Länderprofil für Nachweis</span>
+          <select id="ledgerCountry">
+            <option value="AUTO">Automatisch / beide prüfen</option>
+            <option value="DE">Deutschland – THG</option>
+            <option value="NL">Nederland – ERE</option>
+          </select>
+        </label>
+        <label class="nw-field">
+          <span>Bilanzierungsverfahren</span>
+          <select id="ledgerAllocationMethod">
+            <option value="proportional">Proportionale Herkunftszuordnung</option>
+            <option value="direct-load-first">Direkte Verbraucher zuerst</option>
+            <option value="conservative-evcs-last">Konservativ: EVCS zuletzt</option>
+          </select>
+        </label>
+        <label class="nw-field">
+          <span>Nachweismodus</span>
+          <select id="ledgerEvidenceMode">
+            <option value="operational">Betriebliche Herkunftsbilanz</option>
+            <option value="formal">Förmlicher Nachweiskandidat</option>
+          </select>
+        </label>
+        <label class="nw-field">
+          <span>Messwert maximal veraltet (s)</span>
+          <input id="ledgerStaleSeconds" type="number" min="30" max="86400" step="1" value="300" />
+        </label>
+      </div>
+      <div class="nw-help">Intervalllänge ist verbindlich 15 Minuten. Fehlende oder widersprüchliche Messwerte werden als nicht zuordenbar beziehungsweise nicht nachweisfähig markiert – niemals still geschätzt.</div>
+    </section>
+
+    <section class="nw-config-card">
+      <div class="nw-config-card__header"><div><div class="nw-config-card__title">Kumulierte Energiezähler</div><div class="nw-config-card__subtitle">Primäre Bilanzquelle sind fortlaufende Wh/kWh/MWh-Zähler. Momentanleistungen ersetzen diese Zähler nicht.</div></div></div>
+      <div class="nw-config-grid" id="ledgerMeterGrid">
+        <label class="nw-field"><span>Netzbezug – Energiezähler</span><input id="ledgerGridImportDp" class="nw-config-dp-input" data-dp-input="1" type="text" /><button class="nw-btn nw-btn--small" type="button" data-browse="ledgerGridImportDp">DP wählen</button></label>
+        <label class="nw-field"><span>Einheit Netzbezug</span><select id="ledgerGridImportUnit"><option>Wh</option><option selected>kWh</option><option>MWh</option></select></label>
+        <label class="nw-field"><span>Netzeinspeisung – Energiezähler</span><input id="ledgerGridExportDp" class="nw-config-dp-input" data-dp-input="1" type="text" /><button class="nw-btn nw-btn--small" type="button" data-browse="ledgerGridExportDp">DP wählen</button></label>
+        <label class="nw-field"><span>Einheit Einspeisung</span><select id="ledgerGridExportUnit"><option>Wh</option><option selected>kWh</option><option>MWh</option></select></label>
+        <label class="nw-field"><span>PV-Erzeugung – Energiezähler</span><input id="ledgerPvDp" class="nw-config-dp-input" data-dp-input="1" type="text" /><button class="nw-btn nw-btn--small" type="button" data-browse="ledgerPvDp">DP wählen</button></label>
+        <label class="nw-field"><span>Einheit PV</span><select id="ledgerPvUnit"><option>Wh</option><option selected>kWh</option><option>MWh</option></select></label>
+        <label class="nw-field"><span>Weitere erneuerbare Erzeugung</span><input id="ledgerOtherRenewableDp" class="nw-config-dp-input" data-dp-input="1" type="text" /><button class="nw-btn nw-btn--small" type="button" data-browse="ledgerOtherRenewableDp">DP wählen</button></label>
+        <label class="nw-field"><span>Einheit weitere EE</span><select id="ledgerOtherRenewableUnit"><option>Wh</option><option selected>kWh</option><option>MWh</option></select></label>
+        <label class="nw-field"><span>Gebäudeverbrauch – optional</span><input id="ledgerBuildingDp" class="nw-config-dp-input" data-dp-input="1" type="text" /><button class="nw-btn nw-btn--small" type="button" data-browse="ledgerBuildingDp">DP wählen</button></label>
+        <label class="nw-field"><span>Einheit Gebäude</span><select id="ledgerBuildingUnit"><option>Wh</option><option selected>kWh</option><option>MWh</option></select></label>
+        <label class="nw-field"><span>Speicherladung – Energiezähler</span><input id="ledgerStorageChargeDp" class="nw-config-dp-input" data-dp-input="1" type="text" /><button class="nw-btn nw-btn--small" type="button" data-browse="ledgerStorageChargeDp">DP wählen</button></label>
+        <label class="nw-field"><span>Einheit Speicherladung</span><select id="ledgerStorageChargeUnit"><option>Wh</option><option selected>kWh</option><option>MWh</option></select></label>
+        <label class="nw-field"><span>Speicherentladung – Energiezähler</span><input id="ledgerStorageDischargeDp" class="nw-config-dp-input" data-dp-input="1" type="text" /><button class="nw-btn nw-btn--small" type="button" data-browse="ledgerStorageDischargeDp">DP wählen</button></label>
+        <label class="nw-field"><span>Einheit Speicherentladung</span><select id="ledgerStorageDischargeUnit"><option>Wh</option><option selected>kWh</option><option>MWh</option></select></label>
+      </div>
+    </section>
+
+    <section class="nw-config-card">
+      <div class="nw-config-card__header"><div><div class="nw-config-card__title">Speicher-Herkunftskonto</div><div class="nw-config-card__subtitle">PV-, weitere EE-, Netz- und unbekannte Energie werden getrennt im Speicher fortgeschrieben.</div></div></div>
+      <div class="nw-config-grid">
+        <label class="nw-field"><span>Ladewirkungsgrad (%)</span><input id="ledgerStorageChargeEfficiency" type="number" min="50" max="100" step="0.1" value="95" /></label>
+        <label class="nw-field"><span>Entladewirkungsgrad (%)</span><input id="ledgerStorageDischargeEfficiency" type="number" min="50" max="100" step="0.1" value="95" /></label>
+        <label class="nw-field"><span>Initialer Speicherinhalt (kWh)</span><input id="ledgerStorageInitialKwh" type="number" min="0" step="0.001" value="0" /></label>
+        <label class="nw-field"><span>Initialer PV-Anteil (%)</span><input id="ledgerStorageInitialPvPct" type="number" min="0" max="100" step="0.1" value="0" /></label>
+        <label class="nw-field nw-field--switch"><span>Speicher wird ausschließlich erneuerbar geladen (Nachweiserklärung)</span><input id="ledgerStorageExclusiveRenewable" type="checkbox" /></label>
+      </div>
+    </section>
+
+    <section class="nw-config-card">
+      <div class="nw-config-card__header"><div><div class="nw-config-card__title">Ladepunkte und eichrechtsrelevante Zähler</div><div class="nw-config-card__subtitle">Home unterstützt bis zu drei Ladepunkte; Pro ist für größere Ladeinfrastruktur vorbereitet.</div></div><button id="ledgerAddChargePoint" class="nw-btn nw-btn--small" type="button">Ladepunkt hinzufügen</button></div>
+      <div id="ledgerChargePoints"></div>
+    </section>
+
+    <section class="nw-config-card">
+      <div class="nw-config-card__header"><div><div class="nw-config-card__title">Nachweiserklärungen Deutschland / Nederland</div><div class="nw-config-card__subtitle">Diese Angaben markieren nur einen technisch prüfbaren Nachweiskandidaten. Sie ersetzen keine behördliche Anerkennung.</div></div></div>
+      <div class="nw-config-grid">
+        <label class="nw-field nw-field--switch"><span>Gleicher Netzverknüpfungspunkt erklärt</span><input id="ledgerSameGridConnection" type="checkbox" /></label>
+        <label class="nw-field nw-field--switch"><span>Messkonzept / Eichrechtskonformität erklärt</span><input id="ledgerMeteringCompliance" type="checkbox" /></label>
+        <label class="nw-field nw-field--switch"><span>Öffentlich zugängliche Ladepunkte erklärt</span><input id="ledgerPublicCharging" type="checkbox" /></label>
+        <label class="nw-field nw-field--switch"><span>Gleiches WOZ-Objekt erklärt (NL)</span><input id="ledgerSameWoz" type="checkbox" /></label>
+        <label class="nw-field nw-field--switch"><span>Direktleitung erklärt (NL)</span><input id="ledgerDirectLine" type="checkbox" /></label>
+        <label class="nw-field nw-field--switch"><span>Keine Betriebssubvention erklärt (NL)</span><input id="ledgerNoSubsidy" type="checkbox" /></label>
+        <label class="nw-field nw-field--switch"><span>Integrierter MID-Zähler erklärt (NL)</span><input id="ledgerIntegratedMid" type="checkbox" /></label>
+        <label class="nw-field"><span>Betreibertyp (NL)</span><select id="ledgerOperatorType"><option value="business">Zakelijk / gewerblich</option><option value="private">Particulier / privat</option></select></label>
+        <label class="nw-field"><span>NL Netz-EE-Anteil (%)</span><input id="ledgerNlGridRenewableShare" type="number" min="0" max="100" step="0.1" value="50.5" /></label>
+      </div>
+      <div class="nw-help">Förmliche Nachweise werden nur aus vollständigen 15-Minuten-Intervallen und zugeordneten kumulierten Zählern gebildet. Unklare Mengen bleiben „nicht zugeordnet“.</div>
+    </section>
+  </div>
+
   <div id="nw-tabpanel-status" data-tabpanel="status" style="display:none;">
     <section class="nw-config-section">
       <div class="nw-config-section__head">
@@ -1946,6 +2046,7 @@
 
 <script src="/static/nw-shell.js"></script>
 <script src="/static/ems-apps-nvp-diagnostics.js"></script>
+<script src="/static/energy-origin-appcenter.js"></script>
 <script src="/static/ems-apps.js"></script>
 
 

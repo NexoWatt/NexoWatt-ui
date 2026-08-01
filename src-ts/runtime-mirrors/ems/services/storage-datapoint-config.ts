@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0f13179bd85c602bb819ded00e820b23a989bbae88345545f7df0308cc3543f3
+ * Original-Hash: beb0204902ac2a3680d992294d7afc172a821d717025ab760454a05ec850ad5c
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/storage-datapoint-config.ts
- * Quell-Hash: sha256:54856cfcfb022a3ecd2e5fe2929c1894b19f7f80182dd90da61640bc7c1465ca
+ * Quell-Hash: sha256:2e5aff6122411dfd22b00addb4050ac7879de3de0abe4217117b91484cfb3434
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -109,11 +109,6 @@ const FIELD_SPECS = [
     { canonical: 'batteryChargePowerObjectId', aliases: ['chargePowerId', 'chargePowerDp'], recoverFragment: true },
     { canonical: 'batteryDischargePowerObjectId', aliases: ['dischargePowerId', 'dischargePowerDp'], recoverFragment: true },
     { canonical: 'dcPvPowerObjectId', aliases: ['pvPowerId', 'pvPowerObjectId', 'pvPowerDp'], recoverFragment: true },
-    { canonical: 'feneconGridSetpointObjectId', aliases: ['feneconSetGridActivePowerObjectId', 'feneconGridSetpointId', 'setGridActivePowerObjectId'], recoverFragment: true },
-    { canonical: 'feneconEssActivePowerObjectId', aliases: ['feneconActivePowerObjectId', 'feneconEssActualPowerObjectId', 'feneconActivePowerId'], recoverFragment: true },
-    { canonical: 'feneconMinActivePowerObjectId', aliases: ['feneconMinimumPowerObjectId', 'feneconMinPowerObjectId'], recoverFragment: true },
-    { canonical: 'feneconMaxActivePowerObjectId', aliases: ['feneconMaximumPowerObjectId', 'feneconMaxPowerObjectId'], recoverFragment: true },
-    { canonical: 'feneconActualSetPowerObjectId', aliases: ['feneconActualSetActivePowerEqualsObjectId', 'feneconSetpointReadbackObjectId'], recoverFragment: true },
     { canonical: 'targetPowerObjectId', aliases: ['setSignedPowerId', 'targetPowerId', 'powerSetpointId', 'setpointId', 'setPowerId'], recoverFragment: true },
     { canonical: 'targetChargePowerObjectId', aliases: ['setChargePowerId', 'targetChargePowerId', 'chargeSetpointId'], recoverFragment: true },
     { canonical: 'targetDischargePowerObjectId', aliases: ['setDischargePowerId', 'targetDischargePowerId', 'dischargeSetpointId'], recoverFragment: true },

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b4be1b2ddf4aad5c819cdcc2f5e5a3ec0fc0191b9e9a11f760734240ede468c0
+ * Original-Hash: e3119c3643980811c63220b6bbdc5c018c46b900b97ba54373f358a4cf9b01a4
  */
 
 /**
@@ -126,9 +126,11 @@ need('src-ts/runtime-executables/ems/modules/energy-ledger.ts', 'entriesRecentJs
 need('src-ts/runtime-executables/ems/modules/energy-ledger.ts', 'todayCsvJson', 'CSV-Exportbasis');
 need('src-ts/runtime-executables/ems/modules/energy-ledger.ts', 'keine eichrechtsverbindliche Abrechnung', 'rechtlicher Hinweis');
 need('src-ts/runtime-executables/ems/module-manager.ts', 'EnergyLedgerModule', 'ModuleManager registriert EnergyLedgerModule');
-need('src-ts/runtime-executables/ems/module-manager.ts', "this._licenseAllowsApp('energyLedger')", 'EOS-Lizenzgate für Ledger');
-need('src-ts/runtime-executables/www/ems-apps.ts', "id: 'energyLedger'", 'App-Center führt Local kWh Ledger');
-need('src-ts/runtime-executables/www/ems-apps.ts', 'schaltet keine Hardware', 'Installer-Hinweis: read-only');
+need('src-ts/runtime-executables/ems/module-manager.ts', "this._licenseAllowsApp('energyLedger')", 'Home/Pro-Lizenzgate für Ledger');
+need('src-ts/runtime-executables/www/ems-apps.ts', "id: 'energyLedger'", 'App-Center führt Energieherkunft & Ladebilanz');
+need('src-ts/runtime-executables/www/ems-apps.ts', 'schreibt aber niemals auf Hardware', 'Installer-Hinweis: read-only');
+need('src-ts/runtime-executables/ems/services/feature-flags.ts', "'energyLedger',", 'Energy Ledger ist im Home-App-/Featureumfang enthalten');
+need('src-ts/runtime-executables/ems/services/energy-origin-accounting.ts', 'nexowatt.energy-origin-ledger.v1', '15-Minuten Herkunftsledger vorhanden');
 need('src-ts/runtime-executables/main.ts', "ensurePlainObj('energyLedger'", 'Default-Config energyLedger');
 requirePackageVersionAtLeast('0.8.27', 'Paketversion >= 0.8.27');
-console.log('[energy-ledger] OK: Local kWh Ledger Grundlage/Export-Erweiterung ist statisch abgesichert.');
+console.log('[energy-ledger] OK: Legacy-Ledger und Home/Pro-Energieherkunftsgrundlage sind statisch abgesichert.');

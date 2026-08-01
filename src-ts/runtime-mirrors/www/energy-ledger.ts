@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0515e76b0dec103a96933a306ae89f60c40e03561f29ece8727f9e4230694343
+ * Original-Hash: 6a88bdfd7be43e13458a626b675a0bbf790d8df7672b189df80847e5395329d5
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/energy-ledger.ts
- * Quell-Hash: sha256:3b5d6c066f475cf2d753bc2036bc9a7a6e4923694e43df4dc2e1242f432c66e9
+ * Quell-Hash: sha256:5e5646b9984ac14537c8042152af3be56b149c03982ef38fe6668bb05d09f4e5
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -47,211 +47,8 @@
  * 3. npm run test:runtime-executables prüfen.
  */
 /**
- * Executable TypeScript source: www/energy-ledger.js
- *
- * Zweck:
- * EOS-Betreiberansicht für das Local kWh Ledger. Die Seite liest ausschließlich
- * die bestehende `/api/ledger/local-kwh` API und rechnet keine eigenen Ledgerwerte.
- * Dadurch bleiben CSV, Anzeige und EMS-Statebaum auf einer gemeinsamen Wahrheit.
+ * Compatibility placeholder: the active read-only operator view lives in
+ * `www/energy-origin-ledger-view.ts`. Existing package paths remain present,
+ * but the HTML loads only the new origin-ledger view.
  */
-(function () {
-  'use strict';
-/**
- * Code-Teil: $
- *
- * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-  const $ = (id) => document.getElementById(id);
-/**
- * Code-Teil: fmtKwh
- *
- * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-  const fmtKwh = (v) => Number.isFinite(Number(v)) ? Number(v).toFixed(2) + ' kWh' : '--';
-/**
- * Code-Teil: fmtEur
- *
- * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-  const fmtEur = (v) => Number.isFinite(Number(v)) ? Number(v).toFixed(2) + ' €' : '--';
-/**
- * Code-Teil: fmtTs
- *
- * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-  const fmtTs = (v) => {
-    const n = Number(v);
-    if (!Number.isFinite(n) || n <= 0) return '--';
-    try { return new Date(n).toLocaleString(); } catch (_e) { return String(n); }
-  };
-/**
- * Code-Teil: esc
- *
- * Zweck:
- * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-  function esc(v) { return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
-/**
- * Code-Teil: setText
- *
- * Zweck:
- * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-  function setText(id, value) { const el = $(id); if (el) el.textContent = value; }
-/**
- * Code-Teil: period
- *
- * Zweck:
- * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-  function period(summary, key) { return summary && summary[key] && typeof summary[key] === 'object' ? summary[key] : {}; }
-/**
- * Code-Teil: renderSources
- *
- * Zweck:
- * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-  function renderSources(payload) {
-    const s = payload && payload.sourceSummary && Array.isArray(payload.sourceSummary.bySource) ? payload.sourceSummary.bySource : [];
-    setText('ledgerSources', s.length ? s.map(row => `${row.label || row.source}: ${fmtKwh(row.kwh)}`).join(' · ') : 'Noch keine Quellenzuordnung vorhanden.');
-  }
-/**
- * Code-Teil: renderWalletBridge
- *
- * Zweck:
- * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-  function renderWalletBridge(payload) {
-    const bridge = payload && payload.walletBridge ? payload.walletBridge : {};
-    const today = bridge.today || {};
-    const txt = bridge.status === 'ready' || Object.keys(today).length
-      ? `Bridge aktiv: ${fmtKwh(today.totalKwh || today.ledgerEvcsKwh || 0)} / ${fmtEur(today.valueEur || today.ledgerValueEur || 0)} als Referenz für Energy Wallet.`
-      : 'Bridge vorbereitet. Ledgerwerte werden nicht doppelt ins Energie-Wertkonto gezählt.';
-    setText('walletBridge', txt);
-  }
-/**
- * Code-Teil: renderEntries
- *
- * Zweck:
- * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-  function renderEntries(entries) {
-    const body = $('ledgerRows');
-    if (!body) return;
-    const list = Array.isArray(entries) ? entries : [];
-    if (!list.length) {
-      body.innerHTML = '<tr><td colspan="9" class="muted">Noch keine Ledger-Einträge.</td></tr>';
-      return;
-    }
-    body.innerHTML = list.slice(0, 120).map(e => `<tr>` +
-      `<td>${fmtTs(e.endTs || e.startTs)}</td>` +
-      `<td>${esc(e.stationName || e.stationId || '')}</td>` +
-      `<td>${esc(e.lp || '')}</td>` +
-      `<td>${esc(e.sessionId || '')}</td>` +
-      `<td>${esc(e.sourceLabel || (e.kwhSourceMix && e.kwhSourceMix.label) || '')}</td>` +
-      `<td>${fmtKwh(e.totalKwh || e.energyKwh || 0)}</td>` +
-      `<td>${fmtKwh(e.solarKwh || e.localKwh || 0)}</td>` +
-      `<td>${fmtKwh(e.gridKwh || 0)}</td>` +
-      `<td>${fmtEur(e.valueEur || 0)}</td>` +
-    `</tr>`).join('');
-  }
-/**
- * Code-Teil: load
- *
- * Zweck:
- * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-  async function load() {
-    setText('ledgerStatus', 'lade…');
-    try {
-      const res = await fetch('/api/ledger/local-kwh?period=all', { cache: 'no-store' });
-      const payload = await res.json();
-      if (!res.ok || !payload.ok) throw new Error((payload && payload.message) || 'Ledger API nicht verfügbar');
-      const summary = payload.summary || {};
-      const today = period(summary, 'today');
-      const month = period(summary, 'month');
-      const year = period(summary, 'year');
-      setText('ledgerStatus', `${payload.schema || 'Ledger'} · ${summary.recentCount || 0} Einträge`);
-      setText('todayKwh', fmtKwh(today.totalKwh || today.dcSessionKwh || 0));
-      setText('todayLocal', fmtKwh(today.localKwh || today.solarKwh || 0));
-      setText('todayGrid', fmtKwh(today.gridKwh || 0));
-      setText('todayValue', fmtEur(today.valueEur || 0));
-      setText('monthKwh', fmtKwh(month.totalKwh || month.dcSessionKwh || 0));
-      setText('monthValue', fmtEur(month.valueEur || 0));
-      setText('yearKwh', fmtKwh(year.totalKwh || year.dcSessionKwh || 0));
-      setText('yearValue', fmtEur(year.valueEur || 0));
-      renderSources(payload);
-      renderWalletBridge(payload);
-      renderEntries(payload.entries || []);
-    } catch (e) {
-      setText('ledgerStatus', 'Fehler');
-      const body = $('ledgerRows');
-      if (body) body.innerHTML = `<tr><td colspan="9" class="warn">${esc(e && e.message ? e.message : e)}</td></tr>`;
-    }
-  }
-  document.addEventListener('DOMContentLoaded', () => {
-    const btn = $('refreshLedger');
-    if (btn) btn.addEventListener('click', load);
-    load();
-    window.setInterval(load, 30000);
-  });
-})();
+'use strict';

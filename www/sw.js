@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/sw.ts
- * Quell-Hash: sha256:6ada70e0467912e51e3b027a4bc08d74ac16017931c7ab96032c639060787f3e
+ * Quell-Hash: sha256:8a491b2e09d957369c72d0ea8c0dc34da155922bf195af0562e06b67c1e353c6
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -53,7 +53,7 @@ const OFFLINE_URLS = [
   'dc-station-display.js',
   'dc-station-display.css',
   'energy-ledger.html',
-  'energy-ledger.js',
+  'energy-origin-ledger-view.js',
   'mesh-microgrid.html',
   'mesh-microgrid.js',
   'admin-guard.js', 'nw-i18n.js', 'i18n/de.json', 'i18n/nl.json', 'i18n/en.json',

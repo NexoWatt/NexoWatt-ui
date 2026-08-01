@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/feature-flags.ts
- * Quell-Hash: sha256:33d6066bad12644cfb791550f594cb7c9069a3dd5bc9852b4c2e35c40531b5bb
+ * Quell-Hash: sha256:fce0d056023c1123fb9308a19cd9e47cebf49d735d6ce215338d97dcf1294572
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -37,6 +37,7 @@ const HOME_APP_IDS = new Set([
   'tariff',
   'para14a',
   'energyWallet',
+  'energyLedger',
   'nlP1',
 ]);
 
@@ -92,6 +93,10 @@ const HOME_FEATURES = new Set([
   'energyWalletPro',
   'energyWalletDetails',
   'energyWalletRecommendations',
+  'energyLedger',
+  'energyLedgerBasic',
+  'energyOriginAccounting',
+  'energyOriginEvidenceExport',
   'nlP1',
   'nlP1Basic',
   'p1Dsmr',
@@ -108,7 +113,6 @@ const EOS_ONLY_FEATURES = new Set([
   'advancedChargingPark',
   'advancedDiagnostics',
   'energyWalletOperator',
-  'energyLedger',
   'billingExport',
   'chargeKiosk',
   'solarChargeMode',

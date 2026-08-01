@@ -9,7 +9,7 @@
  * keine Hardware-Sollwerte.
  *
  * Wichtig für die Produktstrategie:
- * - Home bleibt unverändert; das Ledger ist EOS-only.
+ * - Energieherkunft & Ladebilanz steht in Home und Pro zur Verfügung.
  * - Die Quelle ist herstellerneutral. DC-Station-Displays, OCPP, Modbus, MQTT,
  *   REST, Herstelleradapter und NexoWatt-Devices können später Daten liefern.
  * - In 0.8.26 nutzt die Grundlage zunächst die persistierten DC-Station-Display-
@@ -17,10 +17,10 @@
  * - Detaildaten werden kompakt als JSON-Listen/Summenstates gehalten. Es werden
  *   keine tausenden Einzel-States pro kWh erzeugt.
  *
- * Keine Abrechnung / Eichrecht:
- * Diese Ledger-Grundlage ist eine Betreiber-/Optimierungsbasis und keine
- * eichrechtsverbindliche Abrechnung. Spätere PDF-/CSV-/Billing-Module müssen
- * diese fachliche Grenze ebenfalls anzeigen.
+ * Nachweisgrenze:
+ * Das Modul erstellt eine prüfbare Mess- und Herkunftsbilanz sowie technische
+ * Nachweiskandidaten. Eichrechts- oder Behördenanerkennung entsteht nur durch
+ * das konkrete Messsystem, Messkonzept und das jeweils gültige Verfahren.
  *
  * 0.8.27:
  * - CSV-API, Betreiberansicht, Monats-/Jahres-Exportbasis und Energy-Wallet-Bridge
@@ -32,6 +32,7 @@
 'use strict';
 
 const { BaseModule } = require('./base');
+const { EnergyOriginLedgerRuntime } = require('../services/energy-origin-ledger-runtime');
 
 const LEDGER_VERSION = 'nexowatt.local-kwh-ledger.v2';
 const LEDGER_EXPORT_VERSION = 'nexowatt.local-kwh-ledger-export.v2';
@@ -336,6 +337,8 @@ class EnergyLedgerModule extends BaseModule {
     this._today = emptyPeriod();
     this._month = emptyPeriod();
     this._year = emptyPeriod();
+
+    this._originLedger = new EnergyOriginLedgerRuntime(adapter);
   }
 
   _cfg() {
@@ -357,27 +360,29 @@ class EnergyLedgerModule extends BaseModule {
   _isEnabled() {
     const cfg = this._cfg();
     if (cfg.enabled === false) return false;
-    // EOS-Grundlage: Wenn der Installateur das DC Station Display nutzt, soll das
-    // Ledger automatisch bereitstehen. Es bleibt trotzdem read-only und erzeugt
-    // keine neue Bedienlogik im Frontend.
+    // Legacy-Session-Ledger bleibt kompatibel. Das neue Herkunftsmodul wird
+    // separat über energyLedger.origin.enabled aktiviert.
     const ck = this.adapter && this.adapter.config && this.adapter.config.chargeKiosk;
     return cfg.enabled === true || !!(ck && ck.enabled === true);
   }
+
 
   async init() {
     await this._ensureStates();
     await this._primeFromStates();
     await this._publish('init', { newEntries: 0, candidateCount: 0 });
+    await this._originLedger.init();
   }
 
   async tick() {
     await this._ensurePeriodRollovers();
-    if (!this._isEnabled()) {
-      await this._publish('disabled', { newEntries: 0, candidateCount: 0, warning: 'Energy Ledger ist in der EOS-Konfiguration deaktiviert.' });
-      return;
+    if (this._isEnabled()) {
+      const scan = await this._scanChargeKioskSessions();
+      await this._publish('ok', scan);
+    } else {
+      await this._publish('disabled', { newEntries: 0, candidateCount: 0, warning: 'Legacy-Session-Ledger ist deaktiviert.' });
     }
-    const scan = await this._scanChargeKioskSessions();
-    await this._publish('ok', scan);
+    await this._originLedger.tick();
   }
 
   async _ensureStates() {
@@ -437,6 +442,7 @@ class EnergyLedgerModule extends BaseModule {
 
     await mk('energyLedger.diagnostics.warning', 'Diagnosehinweis', 'string', 'text', '', '');
     await mk('energyLedger.diagnostics.lastScanJson', 'Letzter Scan JSON', 'string', 'json', '', '{}');
+
   }
 
   async _ensurePeriodStates(prefix, label, mk) {

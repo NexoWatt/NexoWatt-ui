@@ -55,7 +55,7 @@ const OFFLINE_URLS = [
   'dc-station-display.js',
   'dc-station-display.css',
   'energy-ledger.html',
-  'energy-ledger.js',
+  'energy-origin-ledger-view.js',
   'mesh-microgrid.html',
   'mesh-microgrid.js',
   'admin-guard.js', 'nw-i18n.js', 'i18n/de.json', 'i18n/nl.json', 'i18n/en.json',

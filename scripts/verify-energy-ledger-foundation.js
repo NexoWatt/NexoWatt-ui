@@ -52,9 +52,11 @@ need('src-ts/runtime-executables/ems/modules/energy-ledger.ts', 'entriesRecentJs
 need('src-ts/runtime-executables/ems/modules/energy-ledger.ts', 'todayCsvJson', 'CSV-Exportbasis');
 need('src-ts/runtime-executables/ems/modules/energy-ledger.ts', 'keine eichrechtsverbindliche Abrechnung', 'rechtlicher Hinweis');
 need('src-ts/runtime-executables/ems/module-manager.ts', 'EnergyLedgerModule', 'ModuleManager registriert EnergyLedgerModule');
-need('src-ts/runtime-executables/ems/module-manager.ts', "this._licenseAllowsApp('energyLedger')", 'EOS-Lizenzgate für Ledger');
-need('src-ts/runtime-executables/www/ems-apps.ts', "id: 'energyLedger'", 'App-Center führt Local kWh Ledger');
-need('src-ts/runtime-executables/www/ems-apps.ts', 'schaltet keine Hardware', 'Installer-Hinweis: read-only');
+need('src-ts/runtime-executables/ems/module-manager.ts', "this._licenseAllowsApp('energyLedger')", 'Home/Pro-Lizenzgate für Ledger');
+need('src-ts/runtime-executables/www/ems-apps.ts', "id: 'energyLedger'", 'App-Center führt Energieherkunft & Ladebilanz');
+need('src-ts/runtime-executables/www/ems-apps.ts', 'schreibt aber niemals auf Hardware', 'Installer-Hinweis: read-only');
+need('src-ts/runtime-executables/ems/services/feature-flags.ts', "'energyLedger',", 'Energy Ledger ist im Home-App-/Featureumfang enthalten');
+need('src-ts/runtime-executables/ems/services/energy-origin-accounting.ts', 'nexowatt.energy-origin-ledger.v1', '15-Minuten Herkunftsledger vorhanden');
 need('src-ts/runtime-executables/main.ts', "ensurePlainObj('energyLedger'", 'Default-Config energyLedger');
 requirePackageVersionAtLeast('0.8.27', 'Paketversion >= 0.8.27');
-console.log('[energy-ledger] OK: Local kWh Ledger Grundlage/Export-Erweiterung ist statisch abgesichert.');
+console.log('[energy-ledger] OK: Legacy-Ledger und Home/Pro-Energieherkunftsgrundlage sind statisch abgesichert.');

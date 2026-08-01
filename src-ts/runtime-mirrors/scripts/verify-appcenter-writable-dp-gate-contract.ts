@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c2545413ea7ae4332a050783ed933531808da0210c35450617d9a3f0e26d4971
+ * Original-Hash: c6a82aa43a7ead207a9eec2c56d2e88998d7374381013042608ad13a0027034f
  */
 
 /**
@@ -141,7 +141,6 @@ const config = {
     chargeEnableObjectId: 'vendor.independent.chargeAllowed',
     dischargeEnableObjectId: 'vendor.independent.dischargeAllowed',
     reserveSocObjectId: 'openems.0.edge.controller.reserveSoc',
-    feneconGridSetpointObjectId: 'openems.0.edge.controller.setGridActivePower',
   },
   storageFarm: {
     storages: [{
@@ -243,7 +242,6 @@ const expectedOwners = {
   'vendor.independent.chargeAllowed': 'storage.',
   'vendor.independent.dischargeAllowed': 'storage.',
   'openems.0.edge.controller.reserveSoc': 'storage.',
-  'openems.0.edge.controller.setGridActivePower': 'storage.',
   'farm.bridge.0.command.signed': 'storageFarm.',
   'farm.bridge.0.command.charge': 'storageFarm.',
   'farm.bridge.0.command.discharge': 'storageFarm.',
@@ -440,7 +438,7 @@ need(duplicate && duplicate.conflict === true, 'Echte aktive DP-Doppelbelegung w
   }
 
   const uiFields = [
-    'targetPowerObjectId', 'targetChargePowerObjectId', 'targetDischargePowerObjectId', 'feneconGridSetpointObjectId',
+    'targetPowerObjectId', 'targetChargePowerObjectId', 'targetDischargePowerObjectId',
     'maxChargeObjectId', 'maxDischargeObjectId', 'chargeEnableObjectId', 'dischargeEnableObjectId',
     'setCurrentAId', 'setPowerWId', 'enableWriteId', 'phaseSwitchId', 'lockWriteId',
     'switchWriteId', 'setpointWriteId', 'sgReadyAWriteId', 'sgReadyBWriteId',

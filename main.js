@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:5fe174a306b647bf16128a9925bc8902a8ec19ce27ec1e9dec245196e6794138
+ * Quell-Hash: sha256:e2d60b9457ef688c390ff8495739e02fed87941d440714dcb583d053c47050eb
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -81,6 +81,7 @@ const bodyParser = express.json({ limit: '5mb' });
 const crypto = require('crypto');
 const https = require('https');
 const pkg = require('./package.json');
+const { defaultEnergyOriginConfig, registerEnergyOriginApi } = require('./lib/energy-origin-api');
 
 /**
  * Code-Teil: nwMainRuntimeTsHelpers
@@ -1963,8 +1964,8 @@ class NexoWattVis extends utils.Adapter {
         return nwFeatureFlagsService.buildFeatureMap(ed);
       }
     } catch (_eFeatureFlags) {}
-    const hemsFeatures = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations']);
-    const eosOnlyFeatures = ['peakShaving','storageFarm','multiUse','gridLimits','gridConstraints','generatorControl','bhkwControl','advancedChargingPark','advancedDiagnostics','energyWalletOperator','energyLedger','billingExport','chargeKiosk','solarChargeMode','solarChargeBilling','mesh','microgrid','meshMicrogrid','neighborSharing','multiSiteWallet','nlSaldering','nlEnergyHub','aiAutopilot'];
+    const hemsFeatures = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations','energyLedger','energyLedgerBasic','energyOriginAccounting','energyOriginEvidenceExport']);
+    const eosOnlyFeatures = ['peakShaving','storageFarm','multiUse','gridLimits','gridConstraints','generatorControl','bhkwControl','advancedChargingPark','advancedDiagnostics','energyWalletOperator','billingExport','chargeKiosk','solarChargeMode','solarChargeBilling','mesh','microgrid','meshMicrogrid','neighborSharing','multiSiteWallet','nlSaldering','nlEnergyHub','aiAutopilot'];
     const all = new Set([...hemsFeatures, ...eosOnlyFeatures]);
     const out = {};
     for (const f of all) out[f] = ed === 'eos' ? true : (ed === 'hems' ? hemsFeatures.has(f) : false);
@@ -3312,6 +3313,7 @@ class NexoWattVis extends utils.Adapter {
       source: 'chargeKiosk.lastSessionsByLpJson',
       recentEntryLimit: 200,
       processedSessionLimit: 2000,
+      origin: defaultEnergyOriginConfig(),
     });
     ensurePlainObj('chargeKiosk', {
       enabled: false,
@@ -19012,6 +19014,27 @@ app.get('/api/display/station/:token/operator.csv', async (req, res) => {
 const _nwEnergyLedgerIsLicensed = () => {
   try { return !!this._nwLicenseAllowsAppId('energyLedger'); } catch (_e) { return false; }
 };
+/**
+ * Energieherkunft-Kundenseite nur freigeben, wenn die App im AppCenter
+ * tatsächlich installiert und aktiviert ist. Die Lizenzprüfung bleibt getrennt,
+ * damit Home und Pro denselben read-only Bilanzkern verwenden können.
+ */
+const _nwEnergyOriginAppEnabled = () => {
+  try {
+    if (!_nwEnergyLedgerIsLicensed()) return false;
+    const cfg = (this && this.config && typeof this.config === 'object') ? this.config : {};
+    const emsApps = (cfg.emsApps && typeof cfg.emsApps === 'object') ? cfg.emsApps : {};
+    const apps = (emsApps.apps && typeof emsApps.apps === 'object') ? emsApps.apps : {};
+    const appCfg = (apps.energyLedger && typeof apps.energyLedger === 'object') ? apps.energyLedger : null;
+    if (!appCfg || appCfg.installed !== true || appCfg.enabled !== true) return false;
+    // AppCenter synchronisiert energyLedger.enabled. Ein explizites false bleibt
+    // als zusätzliche Laufzeitsperre autoritativ; fehlend ist migrationskompatibel.
+    const ledgerCfg = (cfg.energyLedger && typeof cfg.energyLedger === 'object') ? cfg.energyLedger : {};
+    return ledgerCfg.enabled !== false;
+  } catch (_e) {
+    return false;
+  }
+};
 const _nwEnergyLedgerJson = (id, fallback) => {
   try {
     const raw = _nwDisplayStateVal(id, '');
@@ -19110,7 +19133,7 @@ app.get(['/ledger/local-kwh', '/ledger/local-kwh/'], (_req, res) => {
 app.get('/api/ledger/local-kwh', (req, res) => {
   try {
     sendNoStore(res);
-    if (!_nwEnergyLedgerIsLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Local kWh Ledger ist nur in EOS verfügbar.' });
+    if (!_nwEnergyLedgerIsLicensed()) return res.status(403).json({ ok: false, error: 'license_required', message: 'Energieherkunft & Ladebilanz ist in Home und Pro verfügbar; eine gültige Lizenz ist erforderlich.' });
     return res.json(_nwEnergyLedgerBuildPayload(req.query && req.query.period));
   } catch (e) {
     return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
@@ -19120,7 +19143,7 @@ app.get('/api/ledger/local-kwh', (req, res) => {
 app.get('/api/ledger/local-kwh.csv', (req, res) => {
   try {
     sendNoStore(res);
-    if (!_nwEnergyLedgerIsLicensed()) return res.status(403).type('text/plain').send('EOS-Lizenz erforderlich.');
+    if (!_nwEnergyLedgerIsLicensed()) return res.status(403).type('text/plain').send('Gültige NexoWatt Home- oder Pro-Lizenz erforderlich.');
     const payload = _nwEnergyLedgerBuildPayload(req.query && req.query.period);
     const period = _nwEnergyLedgerPeriod(payload.period);
     const key = period === 'month' ? (payload.summary && payload.summary.month && payload.summary.month.key) : (period === 'year' ? (payload.summary && payload.summary.year && payload.summary.year.key) : (payload.summary && payload.summary.today && payload.summary.today.key));
@@ -19133,6 +19156,20 @@ app.get('/api/ledger/local-kwh.csv', (req, res) => {
   }
 });
 
+
+// -----------------------------------------------------------------------------
+// Energieherkunft & Ladebilanz – 15-Minuten-Journal (Home + Pro)
+// -----------------------------------------------------------------------------
+registerEnergyOriginApi({
+  app,
+  rootDir: __dirname,
+  sendNoStore,
+  isLicensed: _nwEnergyLedgerIsLicensed,
+  isEnabled: _nwEnergyOriginAppEnabled,
+  readJson: _nwEnergyLedgerJson,
+  readState: _nwDisplayStateVal,
+  csvEscape: _nwDisplayCsvEscape,
+});
 
 // -----------------------------------------------------------------------------
 // EOS Mesh/Microgrid Betreiberansicht / Snapshot-Export
@@ -20245,6 +20282,9 @@ app.get('/config', async (req, res) => {
       const storageFarmAvailableEffective = !!featureVisibilityEffective.hasStorageFarm;
       const smartHomeEnabledEffective = !!featureVisibilityEffective.hasSmartHome;
       const aiAdvisorEnabledEffective = !!featureVisibilityEffective.hasAiAdvisor;
+      // Energieherkunft ist keine Anlagen-Presence-Heuristik: Die Kundenseite wird
+      // ausschließlich durch AppCenter installed+enabled und Home/Pro-Lizenz geöffnet.
+      const energyLedgerEnabledEffective = _nwEnergyOriginAppEnabled();
       if (featureVisibilitySource === 'ts-mirror' && featureVisibilityTsPreview.mismatches && featureVisibilityTsPreview.mismatches.length && this._featureVisibilityEffectiveWarnHash !== featureVisibilityTsPreview.mismatches.join('|')) {
         this._featureVisibilityEffectiveWarnHash = featureVisibilityTsPreview.mismatches.join('|');
         try { this.log.warn(`[feature-visibility-effective] TypeScript visibility is authoritative; previous JS mismatch: ${featureVisibilityTsPreview.mismatches.join(', ')}`); } catch (_e) {}
@@ -20288,6 +20328,7 @@ app.get('/config', async (req, res) => {
           hasSmartHome: smartHomeEnabledEffective,
           hasWeather: !!featureVisibilityEffective.hasWeather,
           hasAiAdvisor: aiAdvisorEnabledEffective,
+          hasEnergyLedger: energyLedgerEnabledEffective,
         },
         storageFarmSummary: {
           active: storageFarmAvailableEffective,

@@ -108,7 +108,7 @@ mustContain(ts, "meshMicrogrid: { tab: 'meshmicrogrid'", 'Mesh/Microgrid Zielrei
 mustContain(ts, "charging: { tab: 'evcs'", 'Lademanagement Zielreiter Ladepunkte');
 mustContain(ts, "peak: { tab: 'peakconfig'", 'Peak-Shaving Zielreiter');
 mustContain(ts, "storagefarm: { tab: 'storagefarm'", 'Speicherfarm Zielreiter');
-mustContain(ts, "energyLedger: { url: '/ledger/local-kwh'", 'Ledger Betreiberansicht aus App-Katalog');
+mustContain(ts, "energyLedger: { tab: 'ledger'", 'Ledger Konfiguration aus App-Katalog');
 mustNotContain(ts, 'id="meshMicrogridEnabled"</span>', 'Apps-Reiter darf keine Mesh-Aktiv-Detailkonfiguration enthalten');
 
 

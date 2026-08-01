@@ -4,9 +4,9 @@
     "version": "0.8.147",
     "news": {
       "0.8.147": {
-        "de": "Version 0.8.147 RC23: FENECON-/OpenEMS-/FEMS-Hybridspeicher erhalten einen exklusiven nativen NVP-Regelpfad über ctrlBalancing0/SetGridActivePower. FEMS verarbeitet interne DC-PV, Speichergrenzen und Gerätereaktion selbst; NexoWatt übergibt den zentral gegateten Netzpunkt-Sollwert aus Eigenverbrauch, MultiUse, Tarif, Peak-Shaving und EVCS-Policy. Der direkte ess0/SetActivePowerEquals-Pfad bleibt als automatischer oder expliziter Fallback erhalten und nutzt ess0/ActivePower sowie optionale 702/704-Grenzen. AppCenter-Messrollen und Diagnosen wurden getrennt, damit Gesamt-PV, interne DC-PV, Anzeigeleistung und Aktorfeedback nicht mehr vermischt werden.",
-        "nl": "Versie 0.8.147 RC23: FENECON-/OpenEMS-/FEMS-hybride batterijen krijgen een exclusieve native netaansluitpuntregeling via ctrlBalancing0/SetGridActivePower. FEMS verwerkt interne DC-PV, batterijgrenzen en apparaatrespons zelf; NexoWatt draagt het centraal begrensde netdoel over vanuit eigen verbruik, MultiUse, tarief, peak shaving en EVCS-beleid. De directe ess0/SetActivePowerEquals-route blijft beschikbaar als automatische of expliciete fallback en gebruikt ess0/ActivePower plus optionele 702/704-grenzen. AppCenter-meetrollen en diagnose zijn gescheiden zodat totale PV, interne DC-PV, weergavevermogen en actuatorfeedback niet meer worden vermengd.",
-        "en": "Version 0.8.147 RC23: FENECON/OpenEMS/FEMS hybrid storage gains an exclusive native grid-point control path via ctrlBalancing0/SetGridActivePower. FEMS handles internal DC PV, storage limits and device response while NexoWatt supplies the centrally gated grid target derived from self-consumption, MultiUse, tariff, peak shaving and EVCS policy. Direct ess0/SetActivePowerEquals remains available as an automatic or explicit fallback using ess0/ActivePower and optional 702/704 limits. AppCenter measurement roles and diagnostics are separated so total PV, internal DC PV, display power and actuator feedback are no longer mixed."
+        "de": "Version 0.8.147 RC23: Das Grundmodul „Energieherkunft & Ladebilanz“ ist in den aktuellen Hauptstand übernommen. Die read-only 15-Minuten-Bilanz für Netz, PV, Speicherherkunft und ladepunktbezogene Energie steht in Home und Pro bereit. Im Kundenfrontend erscheint nach AppCenter-Installation und Aktivierung eine eigene Seite „BILANZ“ direkt hinter History; ohne aktive App bleiben Topbar- und Burger-Menüpunkt verborgen. Konfiguration bleibt im AppCenter, die Betreiberseite enthält Auswertung, Speicher-Herkunftskonto, Datenqualität sowie JSON-/CSV-Exporte. API und Exporte sind bei deaktivierter App gesperrt; die Bilanzierungs-App besitzt weiterhin keinerlei Hardware-Schreibpfad.",
+        "nl": "Versie 0.8.147 RC23: de basismodule „Energieherkomst & laadbalans“ is samengevoegd met de actuele hoofdversie. De alleen-lezen 15-minutenbalans voor net, PV, batterijherkomst en laadpuntgebonden energie is beschikbaar in Home en Pro. Na installatie en activering in het App-center verschijnt in de klantinterface een eigen pagina „BALANS“ direct na Historie; zonder actieve app blijven de tab en het hamburgermenu-item verborgen. Configuratie blijft in het App-center, terwijl de beheerderspagina analyse, batterijherkomst, datakwaliteit en JSON-/CSV-export toont. API en export zijn geblokkeerd wanneer de app uit staat; de balansapp bevat nog steeds geen enkel hardware-schrijfpad.",
+        "en": "Version 0.8.147 RC23: the “Energy origin & charging balance” foundation has been merged into the current main line. The read-only 15-minute accounting for grid, PV, storage provenance and charge-point energy is available in Home and Pro. Once installed and enabled in AppCenter, a dedicated “LEDGER” page appears in the customer frontend directly after History; when the app is inactive, both top navigation and burger-menu entry remain hidden. Configuration stays in AppCenter, while the operator page provides analysis, storage provenance inventory, data quality and JSON/CSV exports. API and exports are blocked while the app is disabled, and the accounting app still has no hardware write path."
       },
       "0.8.146": {
         "de": "Version 0.8.146 RC22: In der reinen PV-Überschussladung ist die EVCS-Speicherpolicy jetzt vollständig neutral. Weder „Speicher schützen“ noch „Speicher mitnutzen“ verändern im Modus PV den Speicher-Sollwert, weil das PV-Budget eine Batterieentladung bereits physikalisch herausrechnet. Die gespeicherte Kundenwahl bleibt erhalten und wird beim Wechsel zu Auto, Boost oder Min+PV automatisch wieder wirksam. Gemischte Ladepunkte werden je Connector bewertet; nur Auto-, Boost- und Min+PV-Ladepunkte können Schutz- oder Assistleistung veröffentlichen.",
@@ -304,7 +304,58 @@
       "enabled": false,
       "source": "chargeKiosk.lastSessionsByLpJson",
       "recentEntryLimit": 200,
-      "processedSessionLimit": 2000
+      "processedSessionLimit": 2000,
+      "origin": {
+        "enabled": false,
+        "siteId": "site_1",
+        "siteName": "Standort 1",
+        "country": "AUTO",
+        "intervalMinutes": 15,
+        "staleSeconds": 300,
+        "recentIntervalLimit": 672,
+        "allocationMethod": "proportional",
+        "evidenceMode": "operational",
+        "dataPoints": {
+          "gridImportEnergyKwh": "",
+          "gridExportEnergyKwh": "",
+          "pvGenerationEnergyKwh": "",
+          "otherRenewableEnergyKwh": "",
+          "buildingEnergyKwh": "",
+          "storageChargeEnergyKwh": "",
+          "storageDischargeEnergyKwh": ""
+        },
+        "units": {
+          "gridImportEnergyKwh": "kWh",
+          "gridExportEnergyKwh": "kWh",
+          "pvGenerationEnergyKwh": "kWh",
+          "otherRenewableEnergyKwh": "kWh",
+          "buildingEnergyKwh": "kWh",
+          "storageChargeEnergyKwh": "kWh",
+          "storageDischargeEnergyKwh": "kWh"
+        },
+        "storage": {
+          "enabled": true,
+          "chargeEfficiencyPct": 95,
+          "dischargeEfficiencyPct": 95,
+          "exclusiveRenewableChargingDeclared": false,
+          "initialInventoryKwh": 0,
+          "initialPvSharePct": 0,
+          "inventoryMethod": "pro-rata"
+        },
+        "evidence": {
+          "sameGridConnectionDeclared": false,
+          "meteringComplianceDeclared": false,
+          "publicChargingDeclared": false,
+          "sameWozObjectDeclared": false,
+          "directLineDeclared": false,
+          "noOperatingSubsidyDeclared": false,
+          "integratedMidMeterDeclared": false,
+          "operatorType": "business",
+          "nlGridRenewableSharePct": 50.5
+        },
+        "chargePoints": [],
+        "meters": []
+      }
     },
     "nlP1": {
       "enabled": false,

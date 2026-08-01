@@ -21,6 +21,7 @@ const HOME_APP_IDS = new Set([
   'tariff',
   'para14a',
   'energyWallet',
+  'energyLedger',
   'nlP1',
 ]);
 
@@ -76,6 +77,10 @@ const HOME_FEATURES = new Set([
   'energyWalletPro',
   'energyWalletDetails',
   'energyWalletRecommendations',
+  'energyLedger',
+  'energyLedgerBasic',
+  'energyOriginAccounting',
+  'energyOriginEvidenceExport',
   'nlP1',
   'nlP1Basic',
   'p1Dsmr',
@@ -92,7 +97,6 @@ const EOS_ONLY_FEATURES = new Set([
   'advancedChargingPark',
   'advancedDiagnostics',
   'energyWalletOperator',
-  'energyLedger',
   'billingExport',
   'chargeKiosk',
   'solarChargeMode',

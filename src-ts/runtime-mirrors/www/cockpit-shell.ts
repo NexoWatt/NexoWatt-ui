@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 7a8b72874cfe5f58b90c28190016e47d710a3c545a8bd2a7030353bf0534ab7e
+ * Original-Hash: 7874432e89d9395f26b8e12aa255c650d1231e2ae7cdc5534ae78e0b85d70a12
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/cockpit-shell.ts
- * Quell-Hash: sha256:885777f3ec4f1a0e4d6ad92ccc3c40685303eda72a1a6593c706c3f944020f95
+ * Quell-Hash: sha256:bfa80017972f855d5abecdedfe862dd3449e5fd524913dc8bf0545ed376982ba
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -95,6 +95,49 @@
       }
     } catch(_e) {}
   }
+
+  /**
+   * Stellt den optionalen Kunden-Menüpunkt „Bilanz“ bereit. Die Elemente werden
+   * in allen Cockpit-Seiten dynamisch an derselben Position nach History erzeugt
+   * und erst durch /config.featureVisibility.hasEnergyLedger sichtbar geschaltet.
+   */
+  function nwEnsureEnergyLedgerNavigation(topbar){
+    if(!topbar) return { tab:null, menu:null };
+    var tabs = topbar.querySelector('.tabs');
+    var tab = document.getElementById('tabEnergyLedger');
+    if(!tab && tabs){
+      tab = document.createElement('button');
+      tab.type = 'button';
+      tab.id = 'tabEnergyLedger';
+      tab.className = 'tab hidden';
+      tab.textContent = 'BILANZ';
+      tab.setAttribute('aria-label', 'Energieherkunft & Ladebilanz');
+      tab.setAttribute('title', 'Energieherkunft & Ladebilanz');
+      tab.addEventListener('click', function(){ window.location.href = '/ledger/energy-origin'; });
+      var historyTab = tabs.querySelector('#historyTabBtn') || Array.prototype.find.call(tabs.querySelectorAll('.tab'), function(el){
+        return String(el && el.textContent || '').trim().toLowerCase() === 'history';
+      });
+      if(historyTab && historyTab.nextSibling) tabs.insertBefore(tab, historyTab.nextSibling);
+      else tabs.appendChild(tab);
+    }
+    var dropdown = topbar.querySelector('.menu');
+    var menu = document.getElementById('menuEnergyLedgerLink');
+    if(!menu && dropdown){
+      menu = document.createElement('a');
+      menu.id = 'menuEnergyLedgerLink';
+      menu.className = 'menu-item hidden';
+      menu.href = '/ledger/energy-origin';
+      menu.textContent = 'Energieherkunft & Ladebilanz';
+      var historyLink = Array.prototype.find.call(dropdown.querySelectorAll('.menu-item'), function(el){
+        var href = String(el && el.getAttribute && el.getAttribute('href') || '').toLowerCase();
+        var text = String(el && el.textContent || '').trim().toLowerCase();
+        return href.includes('history') || text === 'history';
+      });
+      if(historyLink && historyLink.nextSibling) dropdown.insertBefore(menu, historyLink.nextSibling);
+      else dropdown.appendChild(menu);
+    }
+    return { tab:tab, menu:menu };
+  }
   try{
     nwNormalizeBrandHeader();
     document.documentElement.classList.add('nw-cockpit-html');
@@ -112,6 +155,7 @@
         var menu = topbar.querySelector('.menu');
         if(menu) topbar.insertBefore(gear, menu); else topbar.appendChild(gear);
       }
+      nwEnsureEnergyLedgerNavigation(topbar);
       var p = (location.pathname || '').toLowerCase();
       var q = (location.search || '').toLowerCase();
       var tabs = Array.prototype.slice.call(topbar.querySelectorAll('.tabs .tab'));
@@ -120,6 +164,7 @@
         var is = false;
         if((p === '/' || p.endsWith('/index.html') || p.endsWith('/')) && !q.includes('storagefarm')) is = text === 'live';
         if(p.includes('history') || p.includes('report')) is = text === 'history';
+        if(p.includes('/ledger/energy-origin') || p.includes('energy-ledger')) is = t.id === 'tabEnergyLedger' || text === 'bilanz' || text === 'balans';
         if(p.includes('smarthome')) is = text === 'smarthome';
         if(p.includes('evcs')) is = text === 'evcs';
         if(q.includes('storagefarm') || p.includes('storagefarm')) is = text === 'speicherfarm';
@@ -161,11 +206,12 @@
           var showEvcs = evAvail && evCount >= 2;
           var fv = (cfg.featureVisibility && typeof cfg.featureVisibility === 'object') ? cfg.featureVisibility : {};
           // Optionale Kunden-Unterseiten werden ausschließlich über /config.featureVisibility geöffnet.
-          // Konkret: featureVisibility.hasSmartHome und featureVisibility.hasStorageFarm.
-          // Dadurch können alte Legacy-Flags oder Runtime-States keine SmartHome-/Farm-Menüpunkte mehr sichtbar machen.
+          // Energieherkunft ist dabei nur sichtbar, wenn die App im AppCenter installed+enabled ist.
+          // Alte Legacy-Flags oder Runtime-States dürfen keine Kunden-Menüpunkte öffnen.
           var sh = fv.hasSmartHome === true;
           var sf = fv.hasStorageFarm === true;
-          [['tabEvcs', showEvcs], ['menuEvcsLink', showEvcs], ['tabSmartHome', sh], ['menuSmartHomeLink', sh], ['tabStorageFarm', sf], ['menuStorageFarmLink', sf]].forEach(function(pair){
+          var ledger = fv.hasEnergyLedger === true;
+          [['tabEvcs', showEvcs], ['menuEvcsLink', showEvcs], ['tabSmartHome', sh], ['menuSmartHomeLink', sh], ['tabStorageFarm', sf], ['menuStorageFarmLink', sf], ['tabEnergyLedger', ledger], ['menuEnergyLedgerLink', ledger]].forEach(function(pair){
             var el = document.getElementById(pair[0]);
             if (el) el.classList.toggle('hidden', !pair[1]);
           });

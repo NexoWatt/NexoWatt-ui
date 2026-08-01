@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 154ff10498f4cea293473f988c99a509a3f1527f35167f8581de4e6c3031f916
+ * Original-Hash: 5fb2ea42de94b208da2a1612eb29e0829021a4ca2dd5411715bdb7b067f5b023
  */
 
 /**
@@ -171,7 +171,7 @@ mustContain(ts, "meshMicrogrid: { tab: 'meshmicrogrid'", 'Mesh/Microgrid Zielrei
 mustContain(ts, "charging: { tab: 'evcs'", 'Lademanagement Zielreiter Ladepunkte');
 mustContain(ts, "peak: { tab: 'peakconfig'", 'Peak-Shaving Zielreiter');
 mustContain(ts, "storagefarm: { tab: 'storagefarm'", 'Speicherfarm Zielreiter');
-mustContain(ts, "energyLedger: { url: '/ledger/local-kwh'", 'Ledger Betreiberansicht aus App-Katalog');
+mustContain(ts, "energyLedger: { tab: 'ledger'", 'Ledger Konfiguration aus App-Katalog');
 mustNotContain(ts, 'id="meshMicrogridEnabled"</span>', 'Apps-Reiter darf keine Mesh-Aktiv-Detailkonfiguration enthalten');
 
 
