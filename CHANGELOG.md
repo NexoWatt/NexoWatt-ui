@@ -1,3 +1,8 @@
+## 0.8.148 - 2026-08-01
+
+- Release-Version für das integrierte Grundmodul „Energieherkunft & Ladebilanz“; funktional identisch zu 0.8.147 RC23.
+- Versionssprung erforderlich, weil 0.8.147 im npm-Registry bereits veröffentlicht und damit unveränderlich ist.
+
 ## 0.8.147 - 2026-08-01
 
 - Grundmodul **Energieherkunft & Ladebilanz** aus dem separaten Entwicklungszweig in den aktuellen RC22-Hauptstand übernommen; Home und Pro verwenden denselben read-only 15-Minuten-Bilanzkern.
