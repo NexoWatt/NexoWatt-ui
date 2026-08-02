@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:781e420a1abc8122fac6579c2dff869651fc25796dff5b24da13b65b87d40b37
+ * Quell-Hash: sha256:cd31a70c4f9aecc4eae114c9ab6af1c86d8a50cb67f98950486377c1c784239a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -135,7 +135,7 @@ const NwChannelDetector =
 
 // Embedded EMS engine (Charging Management from nexowatt-multiuse)
 const { EmsEngine } = require('./ems/engine');
-const { resolveNvpDisplay } = require('./ems/services/measurement-freshness');
+const { resolveNvpDisplay, resolveCurrentNvpSnapshot } = require('./ems/services/measurement-freshness');
 const { buildHttpActuatorShadowContext, withActuatorShadowContext, isActuatorAuthorityBlockedResult } = require('./ems/services/actuator-shadow-arbiter');
 const { resolveStorageOperatingPolicy } = require('./ems/services/storage-self-consumption-policy');
 const nwCountryProfileService = require('./ems/services/country-profile-service'); const nwLocaleApiService = require('./ems/services/locale-api-service');
@@ -149,6 +149,12 @@ const {
 const { physicalPvSourceKey: nwPhysicalPvSourceKey, dedupePvSourceRows: nwDedupePvSourceRows, applyPvCapacityPlausibility: nwApplyPvCapacityPlausibility } = require('./ems/services/pv-source-identity');
 const { resolveEvcsControlMapping } = require('./ems/evcs-control-mapping');
 const { normalizeStorageDatapointsConfig: nwNormalizeStorageDatapointsConfig } = require('./ems/services/storage-datapoint-config');
+const {
+  resolveControlMode: nwResolveFeneconControlMode,
+  calculateFemsGridTargetW: nwCalculateFemsGridTargetW,
+  validateFarmRows: nwValidateFeneconFarmRows,
+  isFeneconHybrid: nwIsFeneconHybrid,
+} = require('./ems/services/fenecon-hybrid-control');
 
 // NexoLogic (node/graph) runtime engine
 const { NexoLogicEngine } = require('./ems/nexologic-engine');
@@ -293,6 +299,9 @@ class NexoWattVis extends utils.Adapter {
     this._sfLastSetpoints = new Map(); // objectId -> last numeric value
     this._sfLastSetpointsTs = new Map(); // objectId -> last write timestamp (ms)
     this._sfDispatchState = new Map(); // storageKey -> last requested/observed dispatch snapshot
+    this._sfFeneconNativeActive = null;
+    this._sfFeneconDirectReleaseUntilMs = 0;
+    this._sfFeneconDirectReleaseKey = '';
 
     // Foreign datapoint unit caches (kW/kWh sources):
     // Used to automatically scale mapped power values into W without requiring
@@ -4901,11 +4910,23 @@ class NexoWattVis extends utils.Adapter {
 
     const couplingRaw = textFrom('coupling', 'storageCoupling').toLowerCase();
     const coupling = couplingRaw === 'dc' ? 'dc' : (couplingRaw === 'ac' ? 'ac' : '');
+    const vendorRaw = textFrom('vendorProfile', 'storageVendorProfile', 'profile', 'manufacturerProfile').toLowerCase();
+    const vendorProfile = ['fenecon', 'openems', 'fems', 'fenecon-openems'].includes(vendorRaw)
+      ? 'fenecon-openems'
+      : (['sungrow', 'sungrow-ess', 'sungrow-hybrid'].includes(vendorRaw)
+        ? 'sungrow-hybrid'
+        : (['e3dc', 'e3/dc', 'e3dc-rscp'].includes(vendorRaw) ? 'e3dc-rscp' : (vendorRaw || 'generic')));
+    const feneconControlModeRaw = textFrom('feneconControlMode', 'feneconHybridControlMode', 'controlModeMode').toLowerCase();
+    const feneconControlMode = ['fems-grid', 'fems', 'fems-nvp', 'native', 'grid-target'].includes(feneconControlModeRaw)
+      ? 'fems-grid'
+      : (['direct-ess', 'direct', 'ess', 'direct-power'].includes(feneconControlModeRaw) ? 'direct-ess' : 'auto');
     return {
       ...r,
       enabled: boolFrom(true, 'enabled', 'active'),
       name: textFrom('name', 'label', 'title') || `Speicher ${Math.max(1, Number(index) + 1)}`,
       coupling,
+      vendorProfile,
+      feneconControlMode,
       // Messwerte
       socId: textFrom('socId', 'socObjectId', 'socDp', 'storageSocId', 'storageSoc'),
       signedPowerId: textFrom('signedPowerId', 'batteryPowerObjectId', 'signedPowerDp', 'powerObjectId', 'powerId', 'batteryPower'),
@@ -4920,6 +4941,15 @@ class NexoWattVis extends utils.Adapter {
       setChargePowerId: textFrom('setChargePowerId', 'targetChargePowerObjectId', 'targetChargePowerId', 'setChargePowerDp', 'chargeSetpointId'),
       setDischargePowerId: textFrom('setDischargePowerId', 'targetDischargePowerObjectId', 'targetDischargePowerId', 'setDischargePowerDp', 'dischargeSetpointId'),
       invertSetSignedPowerSign: boolFrom(false, 'invertSetSignedPowerSign', 'targetPowerInvert', 'invertSetpointSign'),
+      // FENECON/OpenEMS-Hybrid: nativer FEMS-NVP-Master oder direkte ESS-Rückmeldungen.
+      feneconGridSetpointId: textFrom('feneconGridSetpointId', 'feneconGridSetpointObjectId', 'femsGridSetpointId', 'femsGridSetpointObjectId'),
+      feneconEssActualPowerId: textFrom('feneconEssActualPowerId', 'feneconEssActualPowerObjectId', 'feneconActivePowerId'),
+      feneconMinPowerId: textFrom('feneconMinPowerId', 'feneconMinPowerObjectId', 'feneconMinimumPowerId'),
+      feneconMaxPowerId: textFrom('feneconMaxPowerId', 'feneconMaxPowerObjectId', 'feneconMaximumPowerId'),
+      feneconActualSetpointId: textFrom('feneconActualSetpointId', 'feneconActualSetpointObjectId', 'feneconSetpointReadbackId'),
+      feneconPvDcId: textFrom('feneconPvDcId', 'feneconPvDcObjectId', 'feneconProductionDcId'),
+      feneconPvAcId: textFrom('feneconPvAcId', 'feneconPvAcObjectId', 'feneconProductionAcId'),
+      feneconPvTotalId: textFrom('feneconPvTotalId', 'feneconPvTotalObjectId', 'feneconProductionTotalId'),
       // Grenzen / optionale Signale
       maxChargeW: numberOrNull('maxChargeW', 'maxChargePowerW'),
       maxDischargeW: numberOrNull('maxDischargeW', 'maxDischargePowerW'),
@@ -4949,7 +4979,7 @@ class NexoWattVis extends utils.Adapter {
     if (!r || r.enabled === false) return false;
     return [
       'socId', 'chargePowerId', 'dischargePowerId', 'signedPowerId',
-      'setChargePowerId', 'setDischargePowerId', 'setSignedPowerId',
+      'setChargePowerId', 'setDischargePowerId', 'setSignedPowerId', 'feneconGridSetpointId',
       'availableId', 'faultId', 'chargeAllowedId', 'dischargeAllowedId',
     ].some((key) => String(r[key] || '').trim());
   }
@@ -4963,7 +4993,7 @@ class NexoWattVis extends utils.Adapter {
   _nwStorageFarmRowHasWritableDatapoint(row) {
     const r = this._nwNormalizeStorageFarmRow(row);
     if (!r || r.enabled === false) return false;
-    return ['setChargePowerId', 'setDischargePowerId', 'setSignedPowerId']
+    return ['setChargePowerId', 'setDischargePowerId', 'setSignedPowerId', 'feneconGridSetpointId']
       .some((key) => String(r[key] || '').trim());
   }
 
@@ -5648,6 +5678,7 @@ class NexoWattVis extends utils.Adapter {
       let socSourcesOnline = 0;
 
       const statusRows = [];
+      const farmWritableStorageCount = list.filter((row) => this._nwStorageFarmRowHasWritableDatapoint(row)).length;
 
       for (const row of list) {
         if (!row || typeof row !== 'object') continue;
@@ -5661,6 +5692,11 @@ class NexoWattVis extends utils.Adapter {
           setSignedPowerId: String(row.setSignedPowerId || '').trim(),
           setChargePowerId: String(row.setChargePowerId || '').trim(),
           setDischargePowerId: String(row.setDischargePowerId || '').trim(),
+          feneconGridSetpointId: String(row.feneconGridSetpointId || '').trim(),
+          feneconEssActualPowerId: String(row.feneconEssActualPowerId || '').trim(),
+          feneconControlMode: String(row.feneconControlMode || 'auto'),
+          vendorProfile: String(row.vendorProfile || 'generic'),
+          coupling: String(row.coupling || ''),
           signedPowerId: String(row.signedPowerId || '').trim(),
           chargePowerId: String(row.chargePowerId || '').trim(),
           dischargePowerId: String(row.dischargePowerId || '').trim(),
@@ -5685,7 +5721,8 @@ class NexoWattVis extends utils.Adapter {
         };
 
         const socId = String(row.socId || '').trim();
-        const signedId = String(row.signedPowerId || '').trim();
+        const feneconEssActualId = String(row.feneconEssActualPowerId || '').trim();
+        const signedId = String(feneconEssActualId || row.signedPowerId || '').trim();
         const invSigned = !!row.invertSignedPowerSign;
         const chgId = String(row.chargePowerId || '').trim();
         const dchgId = String(row.dischargePowerId || '').trim();
@@ -5694,16 +5731,27 @@ class NexoWattVis extends utils.Adapter {
         const setSignedPowerId = String(row.setSignedPowerId || '').trim();
         const setChargePowerId = String(row.setChargePowerId || '').trim();
         const setDischargePowerId = String(row.setDischargePowerId || '').trim();
-        const hasChargeSetpoint = !!(setSignedPowerId || setChargePowerId);
-        const hasDischargeSetpoint = !!(setSignedPowerId || setDischargePowerId);
-        const hasAnySetpoint = !!(setSignedPowerId || setChargePowerId || setDischargePowerId);
+        const feneconGridSetpointId = String(row.feneconGridSetpointId || '').trim();
+        const feneconMode = nwResolveFeneconControlMode({
+          vendorProfile: row.vendorProfile,
+          coupling: row.coupling,
+          feneconControlMode: row.feneconControlMode,
+          feneconGridSetpointId,
+        }, {
+          writableStorageCount: farmWritableStorageCount,
+          otherWritableStorageCount: Math.max(0, farmWritableStorageCount - 1),
+        });
+        const nativeFeneconSetpoint = feneconMode.mode === 'fems-grid' ? feneconGridSetpointId : '';
+        const hasChargeSetpoint = !!(nativeFeneconSetpoint || setSignedPowerId || setChargePowerId);
+        const hasDischargeSetpoint = !!(nativeFeneconSetpoint || setSignedPowerId || setDischargePowerId);
+        const hasAnySetpoint = !!(nativeFeneconSetpoint || setSignedPowerId || setChargePowerId || setDischargePowerId);
 
         // Feldschutz 0.8.79: Ist-Leistungs-DPs der Speicherfarm dürfen niemals
         // auf Steuer-/Sollwert-DPs zeigen. Sonst liest die Farm ihre eigene
         // dischargePowerW-/powerSetpointW-Vorgabe als echte Entladung zurück;
         // die NVP-Regelung sieht dann eine künstlich hohe Batterie-Istleistung
         // und kann bis zu absurden Sollwerten hochintegrieren.
-        const targetPowerIds = [setSignedPowerId, setChargePowerId, setDischargePowerId].filter(Boolean);
+        const targetPowerIds = [setSignedPowerId, setChargePowerId, setDischargePowerId, feneconGridSetpointId].filter(Boolean);
         // Hersteller-/Objektpfad-offen: Ein manuell zugeordneter Istwert wird nur
         // dann verworfen, wenn er exakt dasselbe ioBroker-Objekt wie ein zugeordneter
         // Sollwert verwendet. Namen wie `.ctrl.` oder `setpoint` sind kein Beweis und
@@ -5752,7 +5800,11 @@ class NexoWattVis extends utils.Adapter {
         const isAcCoupled = coupling === 'ac';
         const pvCoupling = isDcCoupled ? 'dc' : (isAcCoupled ? 'ac' : 'unknown');
 
-        let pvId = String(row.pvPowerId || '').trim();
+        const feneconHybridRow = nwIsFeneconHybrid({ vendorProfile: row.vendorProfile, coupling: row.coupling });
+        let pvId = String((feneconHybridRow && row.feneconPvDcId) ? row.feneconPvDcId : row.pvPowerId || '').trim();
+        status.feneconPvDcId = String(row.feneconPvDcId || '').trim();
+        status.feneconPvAcId = String(row.feneconPvAcId || '').trim();
+        status.feneconPvTotalId = String(row.feneconPvTotalId || '').trim();
 
         // ---------------------------------------------------------------------
         // Online/Offline logic
@@ -5783,6 +5835,14 @@ class NexoWattVis extends utils.Adapter {
         if (signedFeedbackUsable) addBases(signedId);
         if (chargeFeedbackUsable) addBases(chgId);
         if (dischargeFeedbackUsable) addBases(dchgId);
+        addBases(feneconGridSetpointId);
+        addBases(feneconEssActualId);
+        addBases(row.feneconMinPowerId);
+        addBases(row.feneconMaxPowerId);
+        addBases(row.feneconActualSetpointId);
+        addBases(row.feneconPvDcId);
+        addBases(row.feneconPvAcId);
+        addBases(row.feneconPvTotalId);
         addBases(pvId);
         addBases(availableId);
         addBases(faultId);
@@ -6409,6 +6469,7 @@ class NexoWattVis extends utils.Adapter {
    */
   _sfGetStorageDispatchKey(storage, index = 0) {
     const s = (storage && typeof storage === 'object') ? storage : {};
+    const feneconGrid = String(s.feneconGridSetpointId || '').trim();
     const setSigned = String(s.setSignedPowerId || '').trim();
     const setCharge = String(s.setChargePowerId || '').trim();
     const setDischarge = String(s.setDischargePowerId || '').trim();
@@ -6423,6 +6484,7 @@ class NexoWattVis extends utils.Adapter {
     // Setpoint-DPs sind die stabilste Hardware-Identitaet. Danach folgen die
     // Istleistungs- und SoC-Pfade. Der Array-Index ist nur der allerletzte Legacy-
     // Fallback und darf bei normal konfigurierten Farmen keine Zuordnung bestimmen.
+    if (feneconGrid) return `fenecon-grid:${feneconGrid}`;
     if (setSigned) return `set-signed:${setSigned}`;
     if (setCharge || setDischarge) return `set-split:${setCharge}|${setDischarge}`;
     if (signed) return `actual-signed:${signed}`;
@@ -6625,9 +6687,12 @@ class NexoWattVis extends utils.Adapter {
 
     const now = Date.now();
     const keepaliveEnabled = options.keepalive !== false;
-    // Farm-Kommandos muessen spaetestens nach 900 ms erneuert werden. Ein
-    // Aufrufer darf das Intervall nur weiter verkuerzen, niemals verlaengern.
-    const keepaliveMs = 900;
+    // Direkte Farm-Leistungsbefehle benötigen den schnellen 900-ms-Keepalive.
+    // Der native FEMS-NVP-Regler besitzt dagegen einen eigenen API-Watchdog und
+    // darf mit bis zu 30 s Abstand erneuert werden, damit der Modbus-DP nicht
+    // unnötig sekündlich beschrieben wird.
+    const allowLongKeepalive = options.allowLongKeepalive === true;
+    const keepaliveMs = allowLongKeepalive ? 30000 : 900;
     const requestedKeepaliveMs = Number(options.keepaliveMs);
     const effectiveKeepaliveMs = Number.isFinite(requestedKeepaliveMs)
       ? Math.max(250, Math.min(keepaliveMs, requestedKeepaliveMs))
@@ -6836,6 +6901,332 @@ class NexoWattVis extends utils.Adapter {
         _sfKey: dispatchKey || this._sfGetStorageDispatchKey(s, i),
       };
     });
+    // FENECON-Hybrid-Sonderfall: Ein nativer FEMS-NVP-Master steuert den
+    // gesamten Netzarbeitspunkt und darf deshalb nur der einzige beschreibbare
+    // Farm-Speicher sein. Alle gemischten Farmen bleiben auf direkter ESS-
+    // Leistungsverteilung; andere Hersteller werden durch diesen Pfad nicht
+    // berührt.
+    const feneconFarmValidation = nwValidateFeneconFarmRows(sf.storages);
+    if (!feneconFarmValidation.ok) {
+      const diag = {
+        ts: now,
+        source: src,
+        status: 'fenecon-farm-config-invalid',
+        reason: feneconFarmValidation.reason,
+        requestedW: w,
+        validation: feneconFarmValidation,
+      };
+      const json = JSON.stringify(diag);
+      await this.setStateAsync('storageFarm.lastDispatchJson', { val: json, ack: true });
+      try { this.updateValue('storageFarm.lastDispatchJson', json, now); } catch (_eUpd) {}
+      return {
+        applied: false,
+        commandEffective: false,
+        writeOk: false,
+        requestSatisfied: false,
+        partiallyAccepted: false,
+        status: diag.status,
+        reason: diag.reason,
+        direction,
+        targetW: w,
+        requestedW: w,
+        plannedDeliveredW: 0,
+        deliveredW: 0,
+        acceptedDeliveredW: 0,
+        failedW: w,
+        unservedW: w,
+        commandDpReadbackSupported: false,
+        commandDpReadbackOk: false,
+        commandDpReadbackStatus: diag.status,
+        commandDpReadbackRows: [],
+        results: [],
+      };
+    }
+
+    const writableStorageCount = sf.storages.filter((row) => this._nwStorageFarmRowHasWritableDatapoint(row)).length;
+    const nativeFeneconRows = storages.map((row) => ({
+      row,
+      resolution: nwResolveFeneconControlMode({
+        vendorProfile: row.vendorProfile,
+        coupling: row.coupling,
+        feneconControlMode: row.feneconControlMode,
+        feneconGridSetpointId: row.feneconGridSetpointId,
+      }, {
+        writableStorageCount,
+        otherWritableStorageCount: Math.max(0, writableStorageCount - 1),
+      }),
+    })).filter((item) => item.resolution.mode === 'fems-grid');
+
+    if (nativeFeneconRows.length === 1) {
+      const nativeItem = nativeFeneconRows[0];
+      const storage = nativeItem.row;
+      const gridTargetId = String(storage.feneconGridSetpointId || '').trim();
+      const essActualId = String(storage.feneconEssActualPowerId || storage.signedPowerId || '').trim();
+      const minPowerId = String(storage.feneconMinPowerId || '').trim();
+      const maxPowerId = String(storage.feneconMaxPowerId || '').trim();
+      const readNumber = async (objectId) => {
+        const id = String(objectId || '').trim();
+        if (!id) return null;
+        try {
+          const st = await this.getForeignStateAsync(id);
+          if (!st || st.val === undefined || st.val === null) return null;
+          let value = typeof st.val === 'number'
+            ? st.val
+            : Number(String(st.val).trim().replace(',', '.'));
+          if (!Number.isFinite(value)) return null;
+          try {
+            const obj = await this.getForeignObjectAsync(id);
+            const unit = String(obj && obj.common && obj.common.unit || '').trim().toLowerCase();
+            if (unit === 'kw') value *= 1000;
+            else if (unit === 'mw') value *= 1000000;
+          } catch (_eObj) {}
+          return value;
+        } catch (_eState) {
+          return null;
+        }
+      };
+      const readLocalNumber = async (...ids) => {
+        for (const id of ids) {
+          try {
+            const st = await this.getStateAsync(id);
+            const n = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
+            if (Number.isFinite(n)) return n;
+          } catch (_e) {}
+        }
+        return null;
+      };
+
+      const nvpW = await readLocalNumber('ems.gridPowerRawW', 'ems.gridPowerW', 'ems.nvpCoordinator.nvpRawW');
+      let essActualW = await readNumber(essActualId);
+      if (Number.isFinite(essActualW) && storage.invertSignedPowerSign === true) essActualW = -essActualW;
+      const minPowerW = await readNumber(minPowerId);
+      const maxPowerW = await readNumber(maxPowerId);
+      let effectiveBatteryTargetW = w;
+      if (Number.isFinite(minPowerW)) effectiveBatteryTargetW = Math.max(Number(minPowerW), effectiveBatteryTargetW);
+      if (Number.isFinite(maxPowerW)) effectiveBatteryTargetW = Math.min(Number(maxPowerW), effectiveBatteryTargetW);
+      effectiveBatteryTargetW = Math.round(effectiveBatteryTargetW);
+      const calculation = nwCalculateFemsGridTargetW({
+        nvpW,
+        essActualW,
+        batteryTargetW: effectiveBatteryTargetW,
+      });
+
+      const releaseRows = [];
+      const directIds = [storage.setSignedPowerId, storage.setChargePowerId, storage.setDischargePowerId]
+        .map((id) => String(id || '').trim())
+        .filter((id) => id && id !== gridTargetId);
+      for (const id of Array.from(new Set(directIds))) {
+        const release = await this._sfWriteIfChanged(id, 0, { keepalive: false });
+        releaseRows.push({ objectId: id, value: 0, result: release });
+      }
+      const releaseOk = releaseRows.every((item) => item.result && item.result.ok === true);
+      const handoverTimeoutSecRaw = Number(
+        (this.config && this.config.storageFarm && this.config.storageFarm.feneconApiTimeoutSec)
+        || (this.config && this.config.storage && this.config.storage.feneconApiTimeoutSec)
+        || 60,
+      );
+      const handoverTimeoutMs = Math.round(Math.max(5, Math.min(300, Number.isFinite(handoverTimeoutSecRaw) ? handoverTimeoutSecRaw : 60)) * 1000);
+      const directReleaseKey = `${storage._sfKey}|${gridTargetId}`;
+      if (releaseOk && directIds.length > 0 && this._sfFeneconDirectReleaseKey !== directReleaseKey) {
+        // Ein bereits auf 0 stehender direkter Sollwert kann den FEMS-API-
+        // Controller noch besitzen. Pro Wechsel wird daher einmal sicher der
+        // vollständige Watchdog abgewartet, auch wenn der DP schon neutral ist.
+        this._sfFeneconDirectReleaseKey = directReleaseKey;
+        this._sfFeneconDirectReleaseUntilMs = now + handoverTimeoutMs;
+      }
+      const directReleaseRemainingMs = Math.max(0, Number(this._sfFeneconDirectReleaseUntilMs || 0) - now);
+      if (calculation.ok && releaseOk && directReleaseRemainingMs > 0) {
+        const diag = {
+          ts: now,
+          source: src,
+          status: 'fenecon-handover-wait',
+          reason: 'direct-ess-watchdog-active',
+          requestedW: w,
+          remainingMs: directReleaseRemainingMs,
+          releaseRows,
+          validation: feneconFarmValidation,
+        };
+        const json = JSON.stringify(diag);
+        await this.setStateAsync('storageFarm.lastDispatchJson', { val: json, ack: true });
+        try { this.updateValue('storageFarm.lastDispatchJson', json, now); } catch (_eUpd) {}
+        return {
+          applied: false,
+          commandEffective: false,
+          // Kontrollierter Übergang, kein Hardwarefehler.
+          writeOk: true,
+          requestSatisfied: false,
+          partiallyAccepted: false,
+          status: diag.status,
+          reason: diag.reason,
+          direction,
+          targetW: w,
+          requestedW: w,
+          plannedDeliveredW: 0,
+          deliveredW: 0,
+          acceptedDeliveredW: 0,
+          failedW: 0,
+          unservedW: w,
+          commandDpReadbackSupported: false,
+          commandDpReadbackOk: true,
+          commandDpReadbackStatus: diag.status,
+          commandDpReadbackRows: [],
+          results: [],
+        };
+      }
+      if (directReleaseRemainingMs <= 0) this._sfFeneconDirectReleaseUntilMs = 0;
+      let writeResult = null;
+      if (calculation.ok && releaseOk) {
+        writeResult = await this._sfWriteIfChanged(gridTargetId, calculation.gridTargetW, {
+          keepalive: true,
+          keepaliveMs: Math.min(30000, Math.max(1000, Math.round(handoverTimeoutMs / 2))),
+          allowLongKeepalive: true,
+        });
+      }
+      const writeOk = !!(calculation.ok && releaseOk && writeResult && writeResult.ok === true);
+      const readbackSupported = !!(writeResult && writeResult.readbackSupported === true);
+      const readbackOk = readbackSupported ? writeResult.readbackOk === true : writeOk;
+      const commandStatus = !calculation.ok
+        ? String(calculation.reason || 'fenecon-calculation-failed')
+        : (!releaseOk ? 'fenecon-direct-release-failed' : (writeOk ? 'confirmed' : 'fenecon-grid-write-failed'));
+      const acceptedW = writeOk ? effectiveBatteryTargetW : 0;
+      const failedW = writeOk ? 0 : w;
+      const nativeResult = {
+        name: storage.name,
+        dispatchKey: storage._sfKey,
+        vendorProfile: storage.vendorProfile,
+        coupling: storage.coupling,
+        feneconControlMode: nativeItem.resolution.mode,
+        commandFamily: 'fenecon-fems-grid',
+        requestedW: w,
+        effectiveBatteryTargetW,
+        acceptedW,
+        nvpW: Number.isFinite(nvpW) ? Math.round(nvpW) : null,
+        essActualW: Number.isFinite(essActualW) ? Math.round(essActualW) : null,
+        gridTargetW: calculation.ok ? calculation.gridTargetW : null,
+        minPowerW: Number.isFinite(minPowerW) ? Math.round(minPowerW) : null,
+        maxPowerW: Number.isFinite(maxPowerW) ? Math.round(maxPowerW) : null,
+        calculation,
+        releaseRows,
+        write: writeResult,
+        ok: writeOk,
+      };
+      const diag = {
+        ts: now,
+        source: src,
+        reason: meta && meta.reason ? String(meta.reason) : '',
+        status: writeOk ? 'fenecon-fems-grid' : commandStatus,
+        direction,
+        requestedW: w,
+        plannedDeliveredW: effectiveBatteryTargetW,
+        acceptedDeliveredW: acceptedW,
+        failedW,
+        unservedW: writeOk ? (w - effectiveBatteryTargetW) : w,
+        validation: feneconFarmValidation,
+        results: [nativeResult],
+      };
+      const json = JSON.stringify(diag);
+      await this.setStateAsync('storageFarm.lastDispatchJson', { val: json, ack: true });
+      try { this.updateValue('storageFarm.lastDispatchJson', json, now); } catch (_eUpd) {}
+      if (writeOk) {
+        this._sfFeneconDirectReleaseUntilMs = 0;
+        const previousTs = this._sfFeneconNativeActive && Number.isFinite(Number(this._sfFeneconNativeActive.lastWriteTs))
+          ? Number(this._sfFeneconNativeActive.lastWriteTs)
+          : 0;
+        const cachedWriteTs = Number(this._sfLastSetpointsTs.get(gridTargetId)) || 0;
+        // Ein übersprungener idempotenter Tick darf den FEMS-Watchdog nicht
+        // künstlich verlängern. Maßgeblich bleibt der letzte reale Write.
+        const actualWriteTs = writeResult && writeResult.changed === true
+          ? now
+          : Math.max(previousTs, cachedWriteTs);
+        this._sfFeneconNativeActive = {
+          key: storage._sfKey,
+          lastWriteTs: actualWriteTs,
+          objectId: gridTargetId,
+          timeoutMs: handoverTimeoutMs,
+        };
+      }
+      return {
+        applied: writeOk,
+        commandEffective: writeOk,
+        writeOk,
+        failedCommandCount: writeOk ? 0 : 1,
+        commandDpReadbackSupported: readbackSupported,
+        commandDpReadbackOk: readbackOk,
+        commandDpReadbackStatus: commandStatus,
+        commandDpReadbackRows: writeResult && writeResult.readback ? [writeResult.readback] : [],
+        requestSatisfied: writeOk && effectiveBatteryTargetW === w,
+        partiallyAccepted: writeOk && effectiveBatteryTargetW !== w,
+        status: diag.status,
+        reason: diag.status,
+        direction,
+        targetW: w,
+        requestedW: w,
+        plannedDeliveredW: effectiveBatteryTargetW,
+        deliveredW: acceptedW,
+        acceptedDeliveredW: acceptedW,
+        failedW,
+        unservedW: writeOk ? (w - effectiveBatteryTargetW) : w,
+        authorityBlockedCount: writeResult && writeResult.blocked ? 1 : 0,
+        blockedByOwners: writeResult && writeResult.blockedByOwner ? [String(writeResult.blockedByOwner)] : [],
+        results: [nativeResult],
+      };
+    }
+
+    // Beim Wechsel vom nativen FEMS-NVP-Master zurück auf direkte ESS-Leistung
+    // darf die alte FEMS-Vorgabe nicht mit neuen Farm-Sollwerten überlappen.
+    // Der bekannte 60-s-Watchdog wird deshalb respektiert.
+    if (this._sfFeneconNativeActive && Number.isFinite(Number(this._sfFeneconNativeActive.lastWriteTs))) {
+      const handoverAgeMs = now - Number(this._sfFeneconNativeActive.lastWriteTs);
+      const configuredTimeoutSec = Number(
+        (this.config && this.config.storageFarm && this.config.storageFarm.feneconApiTimeoutSec)
+        || (this.config && this.config.storage && this.config.storage.feneconApiTimeoutSec)
+        || 60,
+      );
+      const handoverTimeoutMs = Number.isFinite(Number(this._sfFeneconNativeActive.timeoutMs))
+        ? Math.max(5000, Number(this._sfFeneconNativeActive.timeoutMs))
+        : Math.round(Math.max(5, Math.min(300, Number.isFinite(configuredTimeoutSec) ? configuredTimeoutSec : 60)) * 1000);
+      if (handoverAgeMs < handoverTimeoutMs) {
+        const remainingMs = handoverTimeoutMs - handoverAgeMs;
+        const diag = {
+          ts: now,
+          source: src,
+          status: 'fenecon-handover-wait',
+          reason: 'native-fems-watchdog-active',
+          requestedW: w,
+          remainingMs,
+        };
+        const json = JSON.stringify(diag);
+        await this.setStateAsync('storageFarm.lastDispatchJson', { val: json, ack: true });
+        try { this.updateValue('storageFarm.lastDispatchJson', json, now); } catch (_eUpd) {}
+        return {
+          applied: false,
+          commandEffective: false,
+          // Kontrollierte Watchdog-Übergabe, kein Hardwarefehler.
+          writeOk: true,
+          requestSatisfied: false,
+          partiallyAccepted: false,
+          status: diag.status,
+          reason: diag.reason,
+          direction,
+          targetW: w,
+          requestedW: w,
+          plannedDeliveredW: 0,
+          deliveredW: 0,
+          acceptedDeliveredW: 0,
+          failedW: 0,
+          unservedW: w,
+          commandDpReadbackSupported: false,
+          commandDpReadbackOk: true,
+          commandDpReadbackStatus: diag.status,
+          commandDpReadbackRows: [],
+          results: [],
+        };
+      }
+      this._sfFeneconNativeActive = null;
+      this._sfFeneconDirectReleaseUntilMs = 0;
+      this._sfFeneconDirectReleaseKey = '';
+    }
+
     /**
      * Code-Teil: getLimitW
      * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -10925,6 +11316,12 @@ async onReady() {
       res.sendFile(path.join(__dirname, 'www', 'index.html'));
     });
 
+    // Direkter /static-Zugriff darf geschützte HTML-Seiten nicht an der
+    // serverseitigen Rollenprüfung vorbeiführen. Statische Assets bleiben frei.
+    app.get('/static/ems-apps.html', (req, res) => {
+      const qs = req.originalUrl && req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+      res.redirect(302, '/ems-apps.html' + qs);
+    });
     // API-Kommentar: USE-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/static', express.static(path.join(__dirname, 'www')));
     app.use('/static', express.static(path.join(__dirname, 'www')));
 
@@ -11264,6 +11661,9 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
     const requireInstaller = requireCapability('appcenter.open');
     const requireCustomerSmartHome = requireCapability('smarthome.configureCustomer');
     const requireCustomerNexoLogic = requireCapability('nexologic.configureCustomer');
+    // Read-only DP discovery is part of customer SmartHome/NexoLogic setup.
+    // Arbitrary foreign-state writes remain installer-only.
+    const requireCustomerDpDiscovery = requireCapability(['appcenter.open', 'smarthome.configureCustomer', 'nexologic.configureCustomer']);
     const requireAdmin = requireCapability('license.manage');
 
     /**
@@ -12590,7 +12990,7 @@ const nwShcfgTdBuildSuggestion = async ({ control, rootId, objects, configuredId
 };
 
 // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/type-detect', requireInstaller, async (req, res) => {
-app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
+app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, res) => {
   try {
     if (!NwChannelDetector || typeof NwChannelDetector !== 'function') {
       return res.status(503).json({ ok: false, error: '@iobroker/type-detector ist aktuell nicht verfügbar.' });
@@ -12681,7 +13081,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
 // --- SmartHomeConfig API (VIS-Konfig & Editor) ---
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/config', (req, res) => {
-    app.get('/api/smarthome/config', (req, res) => {
+    app.get('/api/smarthome/config', requireCustomerSmartHome, (req, res) => {
       try {
         const cfg = this.getSmartHomeConfig ? this.getSmartHomeConfig() : (this.config && this.config.smartHomeConfig) || {};
         res.json({ ok: true, config: cfg });
@@ -12916,7 +13316,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
     
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/dpsearch', requireInstaller, async (req, res) => {
-    app.get('/api/smarthome/dpsearch', requireInstaller, async (req, res) => {
+    app.get('/api/smarthome/dpsearch', requireCustomerDpDiscovery, async (req, res) => {
       try {
         const qRaw = (req.query && req.query.q) || '';
         const q = (typeof qRaw === 'string' ? qRaw : String(qRaw || '')).trim();
@@ -13141,7 +13541,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     // --- SmartHomeConfig DP-Test (Installer): read/write a datapoint quickly ---
     // Read current foreign state
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/dpget', requireInstaller, async (req, res) => {
-    app.get('/api/smarthome/dpget', requireInstaller, async (req, res) => {
+    app.get('/api/smarthome/dpget', requireCustomerDpDiscovery, async (req, res) => {
       try {
         const idRaw = (req.query && req.query.id) || '';
         const id = (typeof idRaw === 'string' ? idRaw : String(idRaw || '')).trim();
@@ -13838,6 +14238,37 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           const norm = this.nwNormalizeInstallerPatch(mergedPatch, this.config || {});
           mergedPatch = (norm && norm.patch) ? norm.patch : mergedPatch;
         } catch (_e) {}
+
+        // FENECON-Hybrid-Vertrag serverseitig erzwingen. Der native FEMS-NVP-
+        // Regler ist nur für DC/Hybrid und als exklusiver Writer zulässig.
+        const singleStorage = mergedPatch.storage && typeof mergedPatch.storage === 'object' ? mergedPatch.storage : {};
+        const singleDp = singleStorage.datapoints && typeof singleStorage.datapoints === 'object' ? singleStorage.datapoints : {};
+        const singleFenecon = nwResolveFeneconControlMode({
+          vendorProfile: singleStorage.vendorProfile,
+          coupling: singleStorage.coupling,
+          feneconControlMode: singleStorage.feneconControlMode,
+          feneconGridSetpointObjectId: singleDp.feneconGridSetpointObjectId,
+        }, { writableStorageCount: 1, otherWritableStorageCount: 0 });
+        if (singleFenecon.mode === 'invalid') {
+          return res.status(400).json({
+            ok: false,
+            error: 'fenecon_single_config_invalid',
+            message: `FENECON-Konfiguration ungültig: ${singleFenecon.reason}`,
+            details: singleFenecon,
+          });
+        }
+        const farmRowsForValidation = mergedPatch.storageFarm && Array.isArray(mergedPatch.storageFarm.storages)
+          ? this._nwNormalizeStorageFarmRows(mergedPatch.storageFarm.storages)
+          : [];
+        const farmFenecon = nwValidateFeneconFarmRows(farmRowsForValidation);
+        if (!farmFenecon.ok) {
+          return res.status(400).json({
+            ok: false,
+            error: 'fenecon_farm_config_invalid',
+            message: `FENECON-Speicherfarm ungültig: ${farmFenecon.reason}`,
+            details: farmFenecon,
+          });
+        }
 
         // Persist patch to states (no ioBroker restart)
         await this.persistInstallerConfigToState(mergedPatch);
@@ -15641,7 +16072,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
     // --- Datenpunkt-Objekt-Browser (Tree) ---
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/object/tree', requireInstaller, async (req, res) => {
-    app.get('/api/object/tree', requireInstaller, async (req, res) => {
+    app.get(['/api/object/tree', '/api/smarthome/object/tree'], requireCustomerDpDiscovery, async (req, res) => {
       try {
         const prefixRaw = (req.query && req.query.prefix) || '';
         const prefix = (typeof prefixRaw === 'string' ? prefixRaw : String(prefixRaw || '')).trim();
@@ -15772,10 +16203,14 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/smarthome-config.html', '/smarthome-config'], (req, res) => {
     app.get(['/smarthome-config.html', '/smarthome-config'], async (req, res) => {
       try {
-        const access = await resolveAccess(req);
-        if (access && access.role !== 'none' && !hasCapability(access, 'smarthome.configureCustomer')) {
-          return res.status(403).send('Zugriff verweigert: SmartHome-Konfiguration ist für diese Rolle nicht freigegeben.');
-        }
+        const gate = await requirePageAccessOrRenderLock(
+          req,
+          res,
+          'smarthome.configureCustomer',
+          'SmartHome-Konfiguration',
+          'Kunde, Installer oder Admin',
+        );
+        if (!gate.ok) return;
         const file = require('path').join(__dirname, 'www', 'smarthome-config.html');
         res.sendFile(file);
       } catch (e) {

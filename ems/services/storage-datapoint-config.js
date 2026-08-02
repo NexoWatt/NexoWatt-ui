@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/storage-datapoint-config.ts
- * Quell-Hash: sha256:2e5aff6122411dfd22b00addb4050ac7879de3de0abe4217117b91484cfb3434
+ * Quell-Hash: sha256:696ec27d3eb35743b2f0d689712339d532af99112d0d618eecb881837cd313ea
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -54,6 +54,14 @@ const FIELD_SPECS = [
     { canonical: 'chargeEnableObjectId', aliases: ['chargeAllowedId', 'chargeEnableId'], recoverFragment: true },
     { canonical: 'dischargeEnableObjectId', aliases: ['dischargeAllowedId', 'dischargeEnableId'], recoverFragment: true },
     { canonical: 'reserveSocObjectId', aliases: ['reserveSocId'], recoverFragment: true },
+    { canonical: 'feneconGridSetpointObjectId', aliases: ['feneconGridSetpointId', 'femsGridSetpointObjectId', 'femsGridSetpointId'], recoverFragment: true },
+    { canonical: 'feneconEssActualPowerObjectId', aliases: ['feneconEssActualPowerId', 'femsEssActualPowerObjectId', 'femsEssActualPowerId'], recoverFragment: true },
+    { canonical: 'feneconMinPowerObjectId', aliases: ['feneconMinPowerId'], recoverFragment: true },
+    { canonical: 'feneconMaxPowerObjectId', aliases: ['feneconMaxPowerId'], recoverFragment: true },
+    { canonical: 'feneconActualSetpointObjectId', aliases: ['feneconActualSetpointId', 'feneconSetpointReadbackObjectId'], recoverFragment: true },
+    { canonical: 'feneconPvDcObjectId', aliases: ['feneconPvDcId'], recoverFragment: true },
+    { canonical: 'feneconPvAcObjectId', aliases: ['feneconPvAcId'], recoverFragment: true },
+    { canonical: 'feneconPvTotalObjectId', aliases: ['feneconPvTotalId'], recoverFragment: true },
     { canonical: 'e3dcSetPowerModeObjectId', aliases: ['e3dcSetPowerModeId'], recoverFragment: true },
     { canonical: 'e3dcSetPowerValueObjectId', aliases: ['e3dcSetPowerValueId'], recoverFragment: true },
     { canonical: 'e3dcPowerLimitsUsedObjectId', aliases: ['e3dcPowerLimitsUsedId'], recoverFragment: true },

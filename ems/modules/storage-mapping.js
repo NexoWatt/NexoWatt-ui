@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-mapping.ts
- * Quell-Hash: sha256:c5b917e50cf53a9ad37038659fb9b1a8307f4b7e2f37ea7a683e7463c5705a80
+ * Quell-Hash: sha256:2288b8aaa0b61eb4da33cd5ec1154227a31b346e069c63cff31522be5d4fa4de
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -101,6 +101,7 @@ class SpeicherMappingModule extends BaseModule {
             { id: `${base}.mapping.modus`, name: 'Speicher Steuerungsart', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.kopplung`, name: 'Speicher-Kopplung AC/DC', type: 'string', role: 'text', def: 'ac' },
             { id: `${base}.mapping.herstellerprofil`, name: 'Speicher-Herstellerprofil', type: 'string', role: 'text', def: 'generic' },
+            { id: `${base}.mapping.feneconRegelart`, name: 'FENECON Hybrid Regelart', type: 'string', role: 'text', def: 'auto' },
             { id: `${base}.mapping.ok`, name: 'Speicher-Zuordnung vollständig', type: 'boolean', role: 'indicator', def: false },
             { id: `${base}.mapping.fehlt`, name: 'Fehlende Datenpunkte (Liste)', type: 'string', role: 'text', def: '' },
 
@@ -119,7 +120,14 @@ class SpeicherMappingModule extends BaseModule {
             { id: `${base}.mapping.ladenErlaubtId`, name: 'Laden erlaubt Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.entladenErlaubtId`, name: 'Entladen erlaubt Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.reserveSocId`, name: 'Reserve-SoC Datenpunkt-ID', type: 'string', role: 'text', def: '' },
-            { id: `${base}.mapping.feneconGridSetpointId`, name: 'Legacy Netzpunkt-Sollwert Datenpunkt-ID (nicht genutzt)', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.feneconGridSetpointId`, name: 'FENECON FEMS NVP-Ziel Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.feneconEssActualPowerId`, name: 'FENECON ESS Aktor-Istleistung Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.feneconMinPowerId`, name: 'FENECON minimale ESS-Leistung Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.feneconMaxPowerId`, name: 'FENECON maximale ESS-Leistung Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.feneconActualSetpointId`, name: 'FENECON Vorgabe-Readback Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.feneconPvDcId`, name: 'FENECON interne DC-PV Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.feneconPvAcId`, name: 'FENECON externe AC-PV Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.feneconPvTotalId`, name: 'FENECON gesamte PV Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.e3dcSetPowerModeId`, name: 'E3/DC EMS.SET_POWER_MODE Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.e3dcSetPowerValueId`, name: 'E3/DC EMS.SET_POWER_VALUE Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.e3dcPowerLimitsUsedId`, name: 'E3/DC EMS.POWER_LIMITS_USED Datenpunkt-ID', type: 'string', role: 'text', def: '' },
@@ -235,13 +243,13 @@ class SpeicherMappingModule extends BaseModule {
         } catch {
             // Legacy-Fallback bleibt erhalten.
         }
-        return { controlMode, coupling, vendorProfile, dp, feneconGridControlEnabled, feneconAcMode, farmEnabled };
+        return { controlMode, coupling, vendorProfile, dp, feneconControlMode: String(storage.feneconControlMode || 'auto'), feneconGridControlEnabled, feneconAcMode, farmEnabled };
     }
 
     async _upsertFromConfig() {
         if (!this.dp) return;
 
-        const { controlMode, coupling, vendorProfile, dp, feneconGridControlEnabled, feneconAcMode, farmEnabled } = this._getCfg();
+        const { controlMode, coupling, vendorProfile, dp, feneconControlMode, feneconGridControlEnabled, feneconAcMode, farmEnabled } = this._getCfg();
 
         const socId = String(dp.socObjectId || '').trim();
         const socScale = Number.isFinite(Number(dp.socScale)) ? Number(dp.socScale) : 1;
@@ -289,9 +297,19 @@ class SpeicherMappingModule extends BaseModule {
         const chargeEnId = String(dp.chargeEnableObjectId || '').trim();
         const dischargeEnId = String(dp.dischargeEnableObjectId || '').trim();
         const reserveSocId = String(dp.reserveSocObjectId || '').trim();
-        // Hybrid-/Gateway-Priorität ab 0.6.255 nutzt keinen SetGridActivePower-DP mehr.
-        // Der alte Konfigurationswert bleibt nur als Legacy-Diagnose erhalten.
-        const feneconGridSetpointId = '';
+        // FENECON Hybrid/OpenEMS: Native FEMS-Netzpunktführung ist nur bei
+        // explizitem DC-/Hybrid-Profil zulässig. Die DPs bleiben getrennte Rollen:
+        // GridTarget = Steuerung des FEMS-Balancing-Controllers,
+        // ESS actual/min/max/readback = Aktorfeedback und Grenzen,
+        // PV DC/AC/Total = ausschließlich Anzeige/Plausibilisierung.
+        const feneconGridSetpointId = String(dp.feneconGridSetpointObjectId || '').trim();
+        const feneconEssActualPowerId = String(dp.feneconEssActualPowerObjectId || '').trim();
+        const feneconMinPowerId = String(dp.feneconMinPowerObjectId || '').trim();
+        const feneconMaxPowerId = String(dp.feneconMaxPowerObjectId || '').trim();
+        const feneconActualSetpointId = String(dp.feneconActualSetpointObjectId || '').trim();
+        const feneconPvDcId = String(dp.feneconPvDcObjectId || '').trim();
+        const feneconPvAcId = String(dp.feneconPvAcObjectId || '').trim();
+        const feneconPvTotalId = String(dp.feneconPvTotalObjectId || '').trim();
 
         // E3/DC RSCP / ioBroker.e3dc-rscp: Dieser Adapter steuert aktive
         // Batterie-Vorgaben nicht ueber einen signed Leistungs-DP, sondern ueber
@@ -308,6 +326,7 @@ class SpeicherMappingModule extends BaseModule {
         await this._setIfChanged('speicher.mapping.modus', String(controlMode || ''));
         await this._setIfChanged('speicher.mapping.kopplung', String(coupling || 'ac'));
         await this._setIfChanged('speicher.mapping.herstellerprofil', String(vendorProfile || 'generic'));
+        await this._setIfChanged('speicher.mapping.feneconRegelart', String(feneconControlMode || 'auto'));
         await this._setIfChanged('speicher.mapping.socId', socId);
         await this._setIfChanged('speicher.mapping.istLeistungId', istId);
         await this._setIfChanged('speicher.mapping.istLadeId', istChargeId);
@@ -324,6 +343,13 @@ class SpeicherMappingModule extends BaseModule {
         await this._setIfChanged('speicher.mapping.entladenErlaubtId', dischargeEnId);
         await this._setIfChanged('speicher.mapping.reserveSocId', reserveSocId);
         await this._setIfChanged('speicher.mapping.feneconGridSetpointId', feneconGridSetpointId);
+        await this._setIfChanged('speicher.mapping.feneconEssActualPowerId', feneconEssActualPowerId);
+        await this._setIfChanged('speicher.mapping.feneconMinPowerId', feneconMinPowerId);
+        await this._setIfChanged('speicher.mapping.feneconMaxPowerId', feneconMaxPowerId);
+        await this._setIfChanged('speicher.mapping.feneconActualSetpointId', feneconActualSetpointId);
+        await this._setIfChanged('speicher.mapping.feneconPvDcId', feneconPvDcId);
+        await this._setIfChanged('speicher.mapping.feneconPvAcId', feneconPvAcId);
+        await this._setIfChanged('speicher.mapping.feneconPvTotalId', feneconPvTotalId);
         await this._setIfChanged('speicher.mapping.e3dcSetPowerModeId', e3dcSetPowerModeId);
         await this._setIfChanged('speicher.mapping.e3dcSetPowerValueId', e3dcSetPowerValueId);
         await this._setIfChanged('speicher.mapping.e3dcPowerLimitsUsedId', e3dcPowerLimitsUsedId);
@@ -524,6 +550,48 @@ class SpeicherMappingModule extends BaseModule {
                 maxWriteIntervalMs: 900,
                 note: 'Schreiben; sekündlicher Watchdog-Refresh'
             });
+        }
+
+        if (feneconGridSetpointId) {
+            await this.dp.upsert({
+                key: 'st.feneconGridSetpointW',
+                name: 'FENECON FEMS NVP-Ziel',
+                objectId: feneconGridSetpointId,
+                dataType: 'number',
+                direction: 'out',
+                unit: 'W',
+                maxWriteIntervalMs: 30000,
+                note: 'Nur FENECON Hybrid/OpenEMS: ctrlBalancing0/SetGridActivePower; +W Bezug, -W Einspeisung'
+            });
+        }
+        if (feneconEssActualPowerId) {
+            await this.dp.upsert({
+                key: 'st.feneconEssActualPowerW',
+                name: 'FENECON ESS Aktor-Istleistung',
+                objectId: feneconEssActualPowerId,
+                dataType: 'number',
+                direction: 'in',
+                unit: 'W',
+                note: 'Typisch ess0/ActivePower (604); +W Entladen, -W Laden'
+            });
+        }
+        if (feneconMinPowerId) {
+            await this.dp.upsert({ key: 'st.feneconMinPowerW', name: 'FENECON minimale ESS-Leistung', objectId: feneconMinPowerId, dataType: 'number', direction: 'in', unit: 'W', note: 'Typisch 702' });
+        }
+        if (feneconMaxPowerId) {
+            await this.dp.upsert({ key: 'st.feneconMaxPowerW', name: 'FENECON maximale ESS-Leistung', objectId: feneconMaxPowerId, dataType: 'number', direction: 'in', unit: 'W', note: 'Typisch 704' });
+        }
+        if (feneconActualSetpointId) {
+            await this.dp.upsert({ key: 'st.feneconActualSetpointW', name: 'FENECON tatsächliche externe Vorgabe', objectId: feneconActualSetpointId, dataType: 'number', direction: 'in', unit: 'W', note: 'Optionales Readback von SetActivePowerEquals' });
+        }
+        if (feneconPvDcId) {
+            await this.dp.upsert({ key: 'st.feneconPvDcPowerW', name: 'FENECON interne DC-PV', objectId: feneconPvDcId, dataType: 'number', direction: 'in', unit: 'W', note: 'Typisch ProductionDcActualPower (339)' });
+        }
+        if (feneconPvAcId) {
+            await this.dp.upsert({ key: 'st.feneconPvAcPowerW', name: 'FENECON externe AC-PV', objectId: feneconPvAcId, dataType: 'number', direction: 'in', unit: 'W', note: 'Typisch ProductionAcActivePower (331)' });
+        }
+        if (feneconPvTotalId) {
+            await this.dp.upsert({ key: 'st.feneconPvTotalPowerW', name: 'FENECON gesamte PV-Erzeugung', objectId: feneconPvTotalId, dataType: 'number', direction: 'in', unit: 'W', note: 'Typisch ProductionActivePower (327); nur Anzeige/Plausibilisierung' });
         }
 
         if (e3dcSetPowerModeId) {

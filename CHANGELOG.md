@@ -1,3 +1,14 @@
+## 0.8.151 - 2026-08-02
+
+- FENECON/OpenEMS DC-/Hybridsysteme erhalten einen exklusiven nativen FEMS-NVP-Regelpfad über `ctrlBalancing0/SetGridActivePower`; FENECON AC und alle anderen Hersteller bleiben auf der bisherigen direkten Leistungsregelung.
+- Speicherfarm pro Zeile um Herstellerprofil, Kopplungsart und FENECON-Regelart (`Automatisch`, `FEMS-NVP-Regler`, `Direkte ESS-Leistung`) ergänzt; höchstens ein nativer FEMS-Master und keine parallelen direkten Farmwriter am selben NVP.
+- Sichere Watchdog-Übergabe zwischen direkter ESS-Leistung und nativer FEMS-Regelung: echte Write-Zeitstempel, kein paralleler Controller und kontrollierter Übergangsstatus statt falscher Schreibfehler.
+- FENECON-Messrollen für ESS-Aktorfeedback, Minimum/Maximum, Sollwert-Readback sowie interne DC-, externe AC- und Gesamt-PV getrennt.
+- AppCenter-Passwortsperre fail-closed gehärtet: Außenklick, Fokuswechsel, Escape und Ausfall der Auth-Status-API geben die Seite nicht frei.
+- Endkunden mit SmartHome-Konfigurationsrecht dürfen Datenpunkte suchen, auswählen und speichern; beliebige direkte Hardware-Schreibtests bleiben Installer-only.
+- Dynamische-Tarif-Konfiguration als vollbreite, automatisch wachsende responsive Kachel ohne Überlauf neu angeordnet.
+- Service-Worker-Cache auf `nexowatt-cache-v451` und zentrale UI-/Provider-Versionskennungen auf 0.8.151 aktualisiert.
+
 ## 0.8.150 - 2026-08-01
 
 - **Automatische DP-Zuordnung** für Geräte aus `nexowatt-devices.*` auf Basis von `aliases.meta.manifest`, `aliases.v1`, `deviceClass`, Capabilities und ioBroker-Objektmetadaten.

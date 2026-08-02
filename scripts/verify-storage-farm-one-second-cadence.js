@@ -14,7 +14,7 @@ const engineTs = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/ems
 const uiTs = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/www/ems-apps.ts'), 'utf8');
 const uiHtml = fs.readFileSync(path.join(root, 'www/ems-apps.html'), 'utf8');
 
-assert(mainTs.includes('const keepaliveMs = 900;'), 'Farm-Setpoint-Keepalive ist nicht watchdog-sicher auf 900 ms begrenzt');
+assert(mainTs.includes('const keepaliveMs = allowLongKeepalive ? 30000 : 900;'), 'Direkte Farm-Setpoints muessen bei 900 ms bleiben; nur der explizite native FEMS-Pfad darf bis 30 s Keepalive nutzen');
 assert(mainTs.includes('Math.min(1000, Number((this.config && this.config.storageFarm'), 'Farm-Dispatcher akzeptiert weiterhin Intervalle über 1 s');
 assert(engineTs.includes('clampNumber(cfgInterval, 250, 1000, 1000)'), 'Zentraler EMS-Tick ist nicht auf maximal 1 s begrenzt');
 assert(uiTs.includes('Math.max(250, Math.min(1000, Math.round(sched)))'), 'AppCenter speichert weiterhin Schedulerwerte über 1 s');
@@ -80,12 +80,42 @@ Module._load = function patchedLoad(request, parent, isMain) {
     assert.strictEqual(writes.length, 2);
     assert.deepStrictEqual(writes.map((row) => row.id), ['free.vendor.farm.target', 'free.vendor.farm.target']);
     assert.deepStrictEqual(writes.map((row) => row.val), [-803, -803]);
+
+    // Der native FEMS-NVP-Master besitzt einen eigenen API-Watchdog. Nur bei
+    // ausdruecklicher Freigabe darf sein unveraenderter Zielwert laenger als
+    // 900 ms gehalten werden; direkte Farm-Speicher bleiben davon unberuehrt.
+    const nativeId = 'free.vendor.fenecon.ctrlBalancing0.SetGridActivePower';
+    fakeNow += 100;
+    const nativeFirst = await adapter._sfWriteIfChanged(nativeId, 50, {
+      allowLongKeepalive: true,
+      keepaliveMs: 30000,
+    });
+    assert.strictEqual(nativeFirst.ok, true);
+    assert.strictEqual(nativeFirst.skipped, false);
+    const writesAfterNativeFirst = writes.length;
+
+    fakeNow += 900;
+    const nativeEarly = await adapter._sfWriteIfChanged(nativeId, 50, {
+      allowLongKeepalive: true,
+      keepaliveMs: 30000,
+    });
+    assert.strictEqual(nativeEarly.skipped, true, 'Nativer FEMS-Zielwert wurde unnoetig im 900-ms-Takt erneuert');
+    assert.strictEqual(writes.length, writesAfterNativeFirst);
+
+    fakeNow += 29100; // zusammen 30 s seit dem ersten nativen Write
+    const nativeKeepalive = await adapter._sfWriteIfChanged(nativeId, 50, {
+      allowLongKeepalive: true,
+      keepaliveMs: 30000,
+    });
+    assert.strictEqual(nativeKeepalive.ok, true);
+    assert.strictEqual(nativeKeepalive.skipped, false, 'Nativer FEMS-Zielwert wurde nach 30 s nicht erneuert');
+    assert.strictEqual(nativeKeepalive.keepalive, true);
   } finally {
     Date.now = originalDateNow;
     Module._load = originalLoad;
   }
 
-  console.log('[storage-farm-one-second-cadence] OK: Farm-Sollwerte werden spätestens nach 900 ms erneuert; EMS/AppCenter sind auf maximal 1 s begrenzt.');
+  console.log('[storage-farm-one-second-cadence] OK: Direkte Farm-Sollwerte bleiben bei 900 ms; nur der explizite native FEMS-NVP-Pfad nutzt den laengeren API-Watchdog. EMS/AppCenter bleiben auf maximal 1 s begrenzt.');
 })().catch((err) => {
   Date.now = originalDateNow;
   Module._load = originalLoad;

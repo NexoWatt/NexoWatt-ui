@@ -11746,3 +11746,143 @@ body.nw-page-evcs .nw-evcs-page .nw-tile.nw-tile--state-on:focus-visible{
 .tabs .tab.hidden{
   display:none !important;
 }
+
+/* RC27: Dynamic tariff provider gets a full responsive row.
+ * Dynamic forms must grow with their content and may never overflow neighbouring cards. */
+body.nw-page-ems-apps .nw-config-card--full,
+body.nw-page-ems-apps .nw-tariff-provider-card {
+  grid-column: 1 / -1 !important;
+  width: 100%;
+  min-width: 0;
+  height: auto !important;
+  min-height: 0;
+  align-self: start;
+  overflow: visible !important;
+}
+body.nw-page-ems-apps .nw-tariff-provider-card .nw-config-card__body,
+body.nw-page-ems-apps .nw-tariff-provider-layout,
+body.nw-page-ems-apps .nw-tariff-provider-layout .nw-config-field-row,
+body.nw-page-ems-apps .nw-tariff-provider-layout .nw-config-field-control {
+  min-width: 0;
+  max-width: 100%;
+}
+body.nw-page-ems-apps .nw-tariff-provider-layout details {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid rgba(95,144,190,.18);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: rgba(2,12,22,.35);
+}
+body.nw-page-ems-apps .nw-tariff-provider-layout input,
+body.nw-page-ems-apps .nw-tariff-provider-layout select,
+body.nw-page-ems-apps .nw-tariff-provider-layout textarea {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+@media (max-width: 760px) {
+  body.nw-page-ems-apps .nw-tariff-provider-layout .nw-config-field-row {
+    grid-template-columns: 1fr !important;
+  }
+  body.nw-page-ems-apps .nw-tariff-provider-layout .nw-config-field-label {
+    padding-bottom: 4px;
+  }
+}
+
+/* RC27: Tarifprovider als eigenständige, vollbreite und mitwachsende AppCenter-Karte. */
+body.nw-page-ems-apps #mappingGrid {
+  grid-auto-rows: max-content;
+  align-items: start;
+}
+body.nw-page-ems-apps #mappingGrid > .nw-tariff-provider-card {
+  grid-column: 1 / -1 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+body.nw-page-ems-apps .nw-tariff-provider-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+body.nw-page-ems-apps .nw-tariff-provider-layout > .nw-config-field-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  width: 100%;
+}
+body.nw-page-ems-apps .nw-tariff-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 10px;
+  margin-top: 8px;
+  width: 100%;
+  min-width: 0;
+}
+body.nw-page-ems-apps .nw-tariff-provider-grid--provider {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  margin-top: 0;
+}
+body.nw-page-ems-apps .nw-tariff-provider-grid--market {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  margin-top: 0;
+}
+body.nw-page-ems-apps .nw-tariff-provider-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  align-items: flex-start;
+  min-width: 0;
+}
+body.nw-page-ems-apps .nw-tariff-provider-checks label {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: min(100%, 220px);
+  line-height: 1.35;
+}
+body.nw-page-ems-apps .nw-tariff-provider-layout details {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+}
+body.nw-page-ems-apps .nw-tariff-provider-layout details > summary {
+  cursor: pointer;
+  font-weight: 750;
+  line-height: 1.35;
+}
+body.nw-page-ems-apps .nw-tariff-provider-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  min-width: 0;
+}
+body.nw-page-ems-apps .nw-tariff-provider-actions #tariffProviderStatus {
+  flex: 1 1 260px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1024px) {
+  body.nw-page-ems-apps .nw-tariff-provider-layout > .nw-config-field-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
+@media (max-width: 520px) {
+  body.nw-page-ems-apps .nw-tariff-provider-grid,
+  body.nw-page-ems-apps .nw-tariff-provider-grid--provider,
+  body.nw-page-ems-apps .nw-tariff-provider-grid--market {
+    grid-template-columns: 1fr;
+  }
+  body.nw-page-ems-apps .nw-tariff-provider-actions > * {
+    width: 100%;
+  }
+}

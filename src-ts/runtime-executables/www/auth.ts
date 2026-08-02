@@ -69,6 +69,7 @@
     isInstaller: false,
     isCustomer: false,
     _loaded: false,
+    statusError: false,
   };
 
   let overlayEl = null;
@@ -79,6 +80,78 @@
   let cancelEl = null;
   let mandatoryLock = false;
   let mandatoryReason = '';
+  const protectedPath = /(?:^|\/)(?:ems-apps|ems-apps\.html)$/.test(String(window.location && window.location.pathname || '').replace(/\/+$/, ''));
+  if (protectedPath) {
+    try { document.documentElement.classList.add('nw-auth-capability-pending'); } catch (_e) {}
+  }
+
+  const lockedBackground = new Map();
+
+  function isProtectedPage() {
+    return !!requiredPageCapability();
+  }
+
+  /**
+   * Pflicht-Login sperrt nicht nur optisch: Alle Seitenelemente hinter dem
+   * Passwortdialog werden inert und erhalten keine Pointer-/Tastaturereignisse.
+   * Ein Klick neben das Fenster kann das App-Center dadurch niemals freilegen.
+   */
+  function setBackgroundLocked(locked) {
+    try {
+      const body = document.body;
+      if (!body) return;
+      body.classList.toggle('nw-auth-page-locked', locked === true);
+      for (const child of Array.from(body.children || [])) {
+        if (!child || child === overlayEl || child.id === 'nwAuthOverlay') continue;
+        if (locked) {
+          if (!lockedBackground.has(child)) {
+            lockedBackground.set(child, {
+              inert: !!child.inert,
+              ariaHidden: child.getAttribute('aria-hidden'),
+              pointerEvents: child.style.pointerEvents || '',
+              userSelect: child.style.userSelect || '',
+            });
+          }
+          try { child.inert = true; } catch (_e1) {}
+          child.setAttribute('aria-hidden', 'true');
+          child.style.pointerEvents = 'none';
+          child.style.userSelect = 'none';
+        } else {
+          const prev = lockedBackground.get(child);
+          if (!prev) continue;
+          try { child.inert = !!prev.inert; } catch (_e2) {}
+          if (prev.ariaHidden === null || prev.ariaHidden === undefined) child.removeAttribute('aria-hidden');
+          else child.setAttribute('aria-hidden', prev.ariaHidden);
+          child.style.pointerEvents = prev.pointerEvents;
+          child.style.userSelect = prev.userSelect;
+          lockedBackground.delete(child);
+        }
+      }
+    } catch (_e) {}
+  }
+
+  function releaseMandatoryLock() {
+    mandatoryLock = false;
+    mandatoryReason = '';
+    setBackgroundLocked(false);
+  }
+
+  function requiredPageCapability() {
+    try { return String(document.body && document.body.getAttribute('data-nw-required-capability') || '').trim(); } catch (_e) { return ''; }
+  }
+
+  function protectedPageLocked() {
+    const cap = requiredPageCapability();
+    if (!cap) return false;
+    return !state._loaded || state.statusError === true || !(state.authed && hasCapability(state.capabilities, cap));
+  }
+
+  function setProtectedPagePending(active) {
+    try {
+      document.documentElement.classList.toggle('nw-auth-capability-pending', active === true);
+      document.documentElement.classList.toggle('nw-auth-capability-granted', active !== true);
+    } catch (_e) {}
+  }
 
   /**
    * Prüft eine NexoWatt-Capability im Frontend.
@@ -124,6 +197,10 @@
       .nw-auth-header{display:flex;align-items:center;gap:8px;margin-left:auto}
       .nw-auth-header .nw-auth-user{font-size:12px;opacity:.85;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
       .nw-auth-btn{white-space:nowrap}
+      body.nw-auth-page-locked{overflow:hidden!important}
+      body.nw-auth-page-locked .nw-auth-overlay{pointer-events:auto!important}
+      html.nw-auth-capability-pending body>*:not(#nwAuthOverlay){visibility:hidden!important;pointer-events:none!important;user-select:none!important}
+      html.nw-auth-capability-pending body #nwAuthOverlay{visibility:visible!important;pointer-events:auto!important}
     `;
     document.head.appendChild(st);
   }
@@ -143,8 +220,13 @@
 
     const dlg = document.createElement('div');
     dlg.className = 'nw-auth-dialog';
+    dlg.setAttribute('role', 'dialog');
+    dlg.setAttribute('aria-modal', 'true');
+    dlg.setAttribute('aria-labelledby', 'nwAuthTitle');
+    dlg.tabIndex = -1;
 
     const title = document.createElement('h2');
+    title.id = 'nwAuthTitle';
     title.textContent = 'Anmeldung erforderlich';
 
     const rowUser = document.createElement('div');
@@ -227,7 +309,25 @@
       setMsg('…');
       const ok = await login(u, p);
       if (ok) {
-        hideOverlay();
+        const cap = requiredPageCapability();
+        if (cap) {
+          if (state.authed && hasCapability(state.capabilities, cap)) {
+            const wasMandatory = mandatoryLock;
+            releaseMandatoryLock();
+            setProtectedPagePending(false);
+            hideOverlay();
+            if (wasMandatory || cap) {
+              try { window.location.reload(); } catch (_e) {}
+            }
+          } else {
+            mandatoryLock = true;
+            setProtectedPagePending(true);
+            setMsg('Anmeldung erfolgreich, aber die erforderliche Rolle fehlt.');
+          }
+        } else {
+          releaseMandatoryLock();
+          hideOverlay();
+        }
       }
     };
 
@@ -236,16 +336,16 @@
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an passEl. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     passEl.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') doLogin();
-      if (e.key === 'Escape') hideOverlay();
+      if (e.key === 'Escape' && !mandatoryLock && !protectedPageLocked()) hideOverlay();
     });
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an userEl. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     userEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') hideOverlay();
+      if (e.key === 'Escape' && !mandatoryLock && !protectedPageLocked()) hideOverlay();
     });
 
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an cancelEl. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     cancelEl.addEventListener('click', () => {
-      if (mandatoryLock) {
+      if (mandatoryLock || protectedPageLocked()) {
         setMsg(mandatoryReason || 'Anmeldung erforderlich. Ohne passende Rolle bleibt diese Seite gesperrt.');
         return;
       }
@@ -254,13 +354,65 @@
 
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an overlayEl. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     overlayEl.addEventListener('click', (e) => {
-      // click outside dialog closes
-      if (e.target === overlayEl && !mandatoryLock) hideOverlay();
+      if (e.target !== overlayEl) return;
+      if (mandatoryLock || protectedPageLocked()) {
+        e.preventDefault();
+        e.stopPropagation();
+        setMsg(mandatoryReason || 'Anmeldung erforderlich. Ohne Passwort bleibt diese Seite gesperrt.');
+        return;
+      }
+      hideOverlay();
     });
 
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !mandatoryLock) hideOverlay();
+      if (e.key === 'Tab' && (mandatoryLock || protectedPageLocked()) && overlayEl && overlayEl.classList.contains('show')) {
+        const focusable = Array.from(overlayEl.querySelectorAll('input,button,select,textarea,[tabindex]:not([tabindex="-1"])'))
+          .filter((el) => !el.disabled && el.offsetParent !== null);
+        if (focusable.length) {
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        } else {
+          e.preventDefault();
+          dlg.focus();
+        }
+        return;
+      }
+      if (e.key !== 'Escape') return;
+      if (mandatoryLock || protectedPageLocked()) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setMsg(mandatoryReason || 'Anmeldung erforderlich.');
+        return;
+      }
+      hideOverlay();
+    }, true);
+
+    document.addEventListener('focusin', (e) => {
+      if (!(mandatoryLock || protectedPageLocked()) || !overlayEl || !overlayEl.classList.contains('show')) return;
+      if (overlayEl.contains(e.target)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      try {
+        if (userEl && userEl.value && passEl) passEl.focus();
+        else if (userEl) userEl.focus();
+        else dlg.focus();
+      } catch (_e) {}
+    }, true);
+
+    ['pointerdown', 'mousedown', 'touchstart', 'click'].forEach((type) => {
+      document.addEventListener(type, (e) => {
+        if (!(mandatoryLock || protectedPageLocked()) || !overlayEl || overlayEl.contains(e.target)) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }, true);
     });
 
     return overlayEl;
@@ -282,10 +434,11 @@
    */
   function showOverlay(message, options) {
     ensureOverlay();
-    mandatoryLock = !!(options && options.mandatory);
+    mandatoryLock = !!(options && options.mandatory) || isProtectedPage();
     mandatoryReason = String((options && options.reason) || message || '');
     if (message) setMsg(message);
     if (cancelEl) cancelEl.style.display = mandatoryLock ? 'none' : '';
+    setBackgroundLocked(mandatoryLock);
     overlayEl.classList.add('show');
     try {
       // focus on password if user prefilled
@@ -301,11 +454,12 @@
    */
   function hideOverlay() {
     if (!overlayEl) return;
-    if (mandatoryLock) {
+    if (mandatoryLock || protectedPageLocked()) {
       setMsg(mandatoryReason || 'Anmeldung erforderlich.');
       return;
     }
     overlayEl.classList.remove('show');
+    setBackgroundLocked(false);
     setMsg('');
     try { if (passEl) passEl.value = ''; } catch (_e) {}
   }
@@ -356,10 +510,25 @@
       state.isInstaller = !!(j && j.isInstaller);
       state.isCustomer = !!(j && j.isCustomer);
       state._loaded = true;
+      state.statusError = false;
       updateHeader();
+      const cap = requiredPageCapability();
+      if (cap) {
+        const authorized = !!(state.authed && hasCapability(state.capabilities, cap));
+        if (!authorized) {
+          mandatoryLock = true;
+          mandatoryReason = state.authed ? 'Keine Berechtigung für diese Seite.' : 'Anmeldung erforderlich.';
+          setProtectedPagePending(true);
+          setBackgroundLocked(true);
+        } else if (!overlayEl || !overlayEl.classList.contains('show')) {
+          releaseMandatoryLock();
+          setProtectedPagePending(false);
+        }
+      }
       return state;
     } catch (_e) {
-      // If endpoint missing, disable auth UI.
+      // Geschützte Seiten arbeiten fail-closed: Ein nicht erreichbarer
+      // Auth-Status darf niemals als "Auth deaktiviert" interpretiert werden.
       state.enabled = false;
       state.protectWrites = false;
       state.authed = false;
@@ -370,7 +539,15 @@
       state.isInstaller = false;
       state.isCustomer = false;
       state._loaded = true;
+      state.statusError = true;
       updateHeader();
+      if (isProtectedPage()) {
+        mandatoryLock = true;
+        mandatoryReason = 'Berechtigungsprüfung nicht erreichbar. Die Seite bleibt aus Sicherheitsgründen gesperrt.';
+        setProtectedPagePending(true);
+        setBackgroundLocked(true);
+        showOverlay(mandatoryReason, { mandatory: true, reason: mandatoryReason });
+      }
       return state;
     }
   }
@@ -489,11 +666,12 @@
         // Refresh state and then prompt
         await refreshStatus();
         if (state.enabled && state.protectWrites) {
-          if (r.status === 401) {
-            showOverlay('Bitte anmelden, um Änderungen auszuführen.');
-          } else {
-            showOverlay('Keine Berechtigung. Bitte als Installateur/Administrator anmelden.');
-          }
+          const protectedPage = isProtectedPage();
+          const message = r.status === 401
+            ? 'Bitte anmelden, um diese geschützte Seite zu bedienen.'
+            : 'Keine Berechtigung. Bitte mit der erforderlichen EOS-Rolle anmelden.';
+          if (protectedPage) renderPageLock(message);
+          showOverlay(message, protectedPage ? { mandatory: true, reason: message } : {});
         }
       }
     } catch (_e) {
@@ -514,14 +692,25 @@
     const cap = String(capability || '');
     const pageName = String((options && options.pageName) || 'diese Seite');
     const requiredRole = String((options && options.requiredRole) || 'passende EOS-Rolle');
+    setProtectedPagePending(true);
     const info = await refreshStatus();
-    const ok = !!(info && info.authed && hasCapability(info.capabilities, cap));
-    if (ok) return true;
+    const authRequired = !!(info && info.enabled && info.protectWrites);
+    const statusHealthy = !(info && info.statusError === true);
+    const ok = statusHealthy && (!authRequired || !!(info && info.authed && hasCapability(info.capabilities, cap)));
+    if (ok) {
+      releaseMandatoryLock();
+      setProtectedPagePending(false);
+      if (overlayEl) overlayEl.classList.remove('show');
+      return true;
+    }
 
     const msg = info && info.authed
       ? 'Keine Berechtigung für ' + pageName + '. Erforderlich: ' + requiredRole + '.'
       : 'Bitte anmelden. Erforderlich für ' + pageName + ': ' + requiredRole + '.';
-    renderPageLock(msg);
+    mandatoryLock = true;
+    mandatoryReason = msg;
+    setProtectedPagePending(true);
+    setBackgroundLocked(true);
     showOverlay(msg, { mandatory: true, reason: msg });
     return false;
   }
@@ -537,6 +726,12 @@
 
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'DOMContentLoaded' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('DOMContentLoaded', () => {
+    if (isProtectedPage()) {
+      mandatoryLock = true;
+      mandatoryReason = 'Berechtigung wird geprüft …';
+      setProtectedPagePending(true);
+      setBackgroundLocked(true);
+    }
     refreshStatus().then(() => {
       try {
         const cap = document.body && document.body.getAttribute('data-nw-required-capability');

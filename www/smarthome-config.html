@@ -7,12 +7,13 @@
 <!DOCTYPE html>
 <!--
   NexoWatt Code-Kommentar (DE)
-  Zweck: SmartHome-Installer: Gebäude/Räume/Geräte/Funktionen und DP-Zuordnung.
+  Zweck: SmartHome-Konfiguration für Endkunden und Installer: Gebäude/Räume/Geräte/Funktionen und DP-Zuordnung.
   Zusammenhänge:
   - Logik in www/smarthome-config.js, APIs unter /api/smarthome/*.
   - Kundenansicht rendert die gespeicherte Struktur.
   Wartungshinweise:
-  - Nur Installerbereich; gespeicherte IDs nicht ohne Migration ändern.
+  - Endkunden dürfen ihre SmartHome-DPs zuordnen; Hardware-Testwrites bleiben Installer/Admin vorbehalten.
+  - Gespeicherte IDs nicht ohne Migration ändern.
 -->
 <html lang="de">
 <head>
@@ -26,11 +27,10 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="NexoWatt">
-  <script src="/static/admin-guard.js" data-nw-admin-page="smarthome-config"></script>
   <script src="/static/auth.js"></script>
   <script src="/static/nw-i18n.js" defer></script>
 </head>
-<body class="nw-cockpit-page nw-cockpit-skin nw-installer-page nw-page-smarthome-config">
+<body class="nw-cockpit-page nw-cockpit-skin nw-page-smarthome-config" data-nw-required-capability="smarthome.configureCustomer" data-nw-page-name="SmartHome-Konfiguration" data-nw-required-role="Kunde, Installer oder Admin">
 <!-- Abschnitt: Kopfbereich/Navigation. Wird durch CSS und teils durch JS-Menülogik gesteuert. -->
 <header class="topbar nw-cockpit-topbar">
   <script>

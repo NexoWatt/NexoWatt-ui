@@ -7333,6 +7333,7 @@ function nwCreateDpInput(labelText, value, onChange) {
   });
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   input.addEventListener('input', () => {
+    onChange(input.value.trim());
     nwMarkDirty(true);
   });
 
@@ -7421,7 +7422,8 @@ function nwCreateDpInput(labelText, value, onChange) {
   );
 
   let btnSet = null;
-  if (allowWrite) {
+  const canTestWrite = !!(window.NW_AUTH && typeof window.NW_AUTH.hasCapability === 'function' && window.NW_AUTH.hasCapability('smarthome.configure'));
+  if (allowWrite && canTestWrite) {
     btnSet = document.createElement('button');
     btnSet.type = 'button';
     btnSet.className = 'nw-config-dp-button';
