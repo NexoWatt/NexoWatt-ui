@@ -3,9 +3,13 @@
     "language": "en",
     "locale": "en-GB",
     "name": "English",
-    "version": 4
+    "version": 5
   },
-  "messages": {},
+  "messages": {
+    "Energiezähler (intern kWh)": "Energy meter (internal kWh)",
+    "Energie-DP liefert Wh → in kWh umrechnen": "Energy data point provides Wh → convert to kWh",
+    "Aktivieren, wenn der kumulierte Ladeenergie-DP Wh liefert. NexoWatt teilt den Wert durch 1000 und führt ihn intern in kWh.": "Enable this when the cumulative charging-energy data point provides Wh. NexoWatt divides the value by 1000 and processes it internally as kWh."
+  },
   "text": {
     "BILANZ": "LEDGER",
     "Fahrzeug/Ladevorgang aktiv (lesen, optional)": "Vehicle/charging session active (read-only, optional)",

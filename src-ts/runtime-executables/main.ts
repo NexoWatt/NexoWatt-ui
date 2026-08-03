@@ -85,6 +85,7 @@ const https = require('https');
 const pkg = require('./package.json');
 const { defaultEnergyOriginConfig, registerEnergyOriginApi } = require('./lib/energy-origin-api');
 const tariffProviderRegistry = require('./ems/services/tariff-provider-registry');
+const { normalizeEvcsEnergyTotalKwh } = require('./ems/services/evcs-unit-conversion');
 
 /**
  * Code-Teil: nwMainRuntimeTsHelpers
@@ -153,6 +154,7 @@ const { resolveEvcsControlMapping } = require('./ems/evcs-control-mapping');
 const { normalizeStorageDatapointsConfig: nwNormalizeStorageDatapointsConfig } = require('./ems/services/storage-datapoint-config');
 const {
   resolveControlMode: nwResolveFeneconControlMode,
+  resolveHybridAuthority: nwResolveFeneconHybridAuthority,
   calculateFemsGridTargetW: nwCalculateFemsGridTargetW,
   validateFarmRows: nwValidateFeneconFarmRows,
   isFeneconHybrid: nwIsFeneconHybrid,
@@ -304,6 +306,9 @@ class NexoWattVis extends utils.Adapter {
     this._sfFeneconNativeActive = null;
     this._sfFeneconDirectReleaseUntilMs = 0;
     this._sfFeneconDirectReleaseKey = '';
+    this._sfFeneconHybridAuthority = 'unknown';
+    this._sfFeneconHybridPvBelowSinceMs = 0;
+    this._sfFeneconHybridPassThroughSinceMs = 0;
 
     // Foreign datapoint unit caches (kW/kWh sources):
     // Used to automatically scale mapped power values into W without requiring
@@ -4952,6 +4957,10 @@ class NexoWattVis extends utils.Adapter {
       feneconPvDcId: textFrom('feneconPvDcId', 'feneconPvDcObjectId', 'feneconProductionDcId'),
       feneconPvAcId: textFrom('feneconPvAcId', 'feneconPvAcObjectId', 'feneconProductionAcId'),
       feneconPvTotalId: textFrom('feneconPvTotalId', 'feneconPvTotalObjectId', 'feneconProductionTotalId'),
+      feneconPvPassthroughThresholdW: numberOrNull('feneconPvPassthroughThresholdW', 'feneconPvOnThresholdW'),
+      feneconPvReleaseThresholdW: numberOrNull('feneconPvReleaseThresholdW', 'feneconPvOffThresholdW'),
+      feneconPvReleaseDelaySec: numberOrNull('feneconPvReleaseDelaySec', 'feneconPvOffDelaySec'),
+      feneconApiTimeoutSec: numberOrNull('feneconApiTimeoutSec', 'apiTimeoutSec'),
       // Grenzen / optionale Signale
       maxChargeW: numberOrNull('maxChargeW', 'maxChargePowerW'),
       maxDischargeW: numberOrNull('maxDischargeW', 'maxDischargePowerW'),
@@ -5734,14 +5743,19 @@ class NexoWattVis extends utils.Adapter {
         const setChargePowerId = String(row.setChargePowerId || '').trim();
         const setDischargePowerId = String(row.setDischargePowerId || '').trim();
         const feneconGridSetpointId = String(row.feneconGridSetpointId || '').trim();
+        const directTargetAvailable = !!(setSignedPowerId || setChargePowerId || setDischargePowerId);
         const feneconMode = nwResolveFeneconControlMode({
           vendorProfile: row.vendorProfile,
           coupling: row.coupling,
           feneconControlMode: row.feneconControlMode,
           feneconGridSetpointId,
+          setSignedPowerId,
+          setChargePowerId,
+          setDischargePowerId,
         }, {
           writableStorageCount: farmWritableStorageCount,
           otherWritableStorageCount: Math.max(0, farmWritableStorageCount - 1),
+          directTargetAvailable,
         });
         const nativeFeneconSetpoint = feneconMode.mode === 'fems-grid' ? feneconGridSetpointId : '';
         const hasChargeSetpoint = !!(nativeFeneconSetpoint || setSignedPowerId || setChargePowerId);
@@ -6946,18 +6960,171 @@ class NexoWattVis extends utils.Adapter {
     }
 
     const writableStorageCount = sf.storages.filter((row) => this._nwStorageFarmRowHasWritableDatapoint(row)).length;
-    const nativeFeneconRows = storages.map((row) => ({
+    const resolvedFeneconRows = storages.map((row) => ({
       row,
       resolution: nwResolveFeneconControlMode({
         vendorProfile: row.vendorProfile,
         coupling: row.coupling,
         feneconControlMode: row.feneconControlMode,
         feneconGridSetpointId: row.feneconGridSetpointId,
+        setSignedPowerId: row.setSignedPowerId,
+        setChargePowerId: row.setChargePowerId,
+        setDischargePowerId: row.setDischargePowerId,
       }, {
         writableStorageCount,
         otherWritableStorageCount: Math.max(0, writableStorageCount - 1),
+        directTargetAvailable: !!(String(row.setSignedPowerId || '').trim() || String(row.setChargePowerId || '').trim() || String(row.setDischargePowerId || '').trim()),
       }),
-    })).filter((item) => item.resolution.mode === 'fems-grid');
+    }));
+    const nativeFeneconRows = resolvedFeneconRows.filter((item) => item.resolution.mode === 'fems-grid');
+    const hybridAutoFeneconRows = resolvedFeneconRows.filter((item) => item.resolution.mode === 'hybrid-auto');
+
+    // Exklusiver Farmfall: Ein einzelner FENECON-Hybrid darf tagsueber seine
+    // interne FEMS-Regelung verwenden. NexoWatt schreibt dabei weder direkte
+    // ESS-Leistung noch einen FEMS-Netzzielwert. Erst nach dauerhaft fehlender
+    // PV faellt derselbe Speicher in die normale direkte Farmregelung zurueck.
+    if (hybridAutoFeneconRows.length === 1) {
+      const storage = hybridAutoFeneconRows[0].row;
+      const staleSecRaw = Number((this.config && this.config.storage && this.config.storage.staleTimeoutSec) || 15);
+      const staleMs = Math.max(1000, Math.min(300000, (Number.isFinite(staleSecRaw) ? staleSecRaw : 15) * 1000));
+      const readFreshPowerW = async (rawId, { ownState = false } = {}) => {
+        const objectId = String(rawId || '').trim();
+        if (!objectId) return null;
+        try {
+          const st = ownState
+            ? await this.getStateAsync(objectId)
+            : await this.getForeignStateAsync(objectId);
+          if (!st || st.val === undefined || st.val === null) {
+            return { valueW: null, objectId, ageMs: null, fresh: false, reason: 'missing' };
+          }
+          const ts = Number(st.ts);
+          const ageMs = Number.isFinite(ts) && ts > 0 ? Math.max(0, now - ts) : null;
+          let value = typeof st.val === 'number' ? st.val : Number(String(st.val).trim().replace(',', '.'));
+          if (!Number.isFinite(value)) {
+            return { valueW: null, objectId, ageMs, fresh: false, reason: 'invalid' };
+          }
+          if (!ownState) {
+            try {
+              const obj = await this.getForeignObjectAsync(objectId);
+              const unit = String(obj && obj.common && obj.common.unit || '').trim().toLowerCase();
+              if (unit === 'kw') value *= 1000;
+              else if (unit === 'mw') value *= 1000000;
+            } catch (_eObj) {}
+          }
+          const fresh = ageMs === null || ageMs <= staleMs;
+          return {
+            valueW: fresh ? Math.max(0, value) : null,
+            objectId,
+            ageMs,
+            fresh,
+            reason: fresh ? 'fresh' : 'stale',
+          };
+        } catch (_eState) {
+          return { valueW: null, objectId, ageMs: null, fresh: false, reason: 'read-error' };
+        }
+      };
+
+      // Rollenbasierte Prioritaet: Ein explizit zugeordneter FENECON-DC-PV-DP
+      // ist autoritativ – auch bei 0 W. Ist dieser Wert veraltet, bleibt FEMS
+      // fail-safe fuehrend; wir fallen nicht auf eine moeglicherweise doppelt
+      // gezaehlte Gesamt-PV zurueck. Nur wenn gar kein expliziter PV-DP gesetzt
+      // ist, darf die normalisierte Anlagen-PV als Fallback verwendet werden.
+      const explicitPvId = [
+        storage.feneconPvDcId,
+        storage.pvPowerId,
+        storage.feneconPvTotalId,
+      ].map((id) => String(id || '').trim()).find(Boolean) || '';
+      const pvSample = explicitPvId
+        ? await readFreshPowerW(explicitPvId)
+        : await readFreshPowerW('derived.core.pv.totalW', { ownState: true });
+      const authority = nwResolveFeneconHybridAuthority({
+        feneconPvPassthroughThresholdW: storage.feneconPvPassthroughThresholdW
+          ?? (this.config && this.config.storage && this.config.storage.feneconPvPassthroughThresholdW),
+        feneconPvReleaseThresholdW: storage.feneconPvReleaseThresholdW
+          ?? (this.config && this.config.storage && this.config.storage.feneconPvReleaseThresholdW),
+        feneconPvReleaseDelaySec: storage.feneconPvReleaseDelaySec
+          ?? (this.config && this.config.storage && this.config.storage.feneconPvReleaseDelaySec),
+      }, {
+        nowMs: now,
+        pvW: pvSample && pvSample.fresh === true ? pvSample.valueW : null,
+        pvFresh: !!(pvSample && pvSample.fresh === true),
+        previousAuthority: this._sfFeneconHybridAuthority,
+        pvBelowSinceMs: this._sfFeneconHybridPvBelowSinceMs,
+      });
+      this._sfFeneconHybridAuthority = String(authority.authority || 'fems');
+      this._sfFeneconHybridPvBelowSinceMs = Math.max(0, Number(authority.pvBelowSinceMs) || 0);
+      if (authority.noWrite === true) {
+        if (!this._sfFeneconHybridPassThroughSinceMs) this._sfFeneconHybridPassThroughSinceMs = now;
+        const apiTimeoutSecRaw = Number(
+          storage.feneconApiTimeoutSec
+          ?? (this.config && this.config.storageFarm && this.config.storageFarm.feneconApiTimeoutSec)
+          ?? (this.config && this.config.storage && this.config.storage.feneconApiTimeoutSec)
+          ?? 60,
+        );
+        const apiTimeoutMs = Math.round(Math.max(5, Math.min(300, Number.isFinite(apiTimeoutSecRaw) ? apiTimeoutSecRaw : 60)) * 1000);
+        const directIds = [storage.setSignedPowerId, storage.setChargePowerId, storage.setDischargePowerId]
+          .map((id) => String(id || '').trim())
+          .filter(Boolean);
+        const lastDirectWriteMs = directIds.reduce((maxTs, id) => Math.max(maxTs, Number(this._sfLastSetpointsTs.get(id)) || 0), 0);
+        const lastNativeWriteMs = this._sfFeneconNativeActive && Number.isFinite(Number(this._sfFeneconNativeActive.lastWriteTs))
+          ? Number(this._sfFeneconNativeActive.lastWriteTs)
+          : 0;
+        const lastExternalWriteMs = Math.max(lastDirectWriteMs, lastNativeWriteMs);
+        const handoverRemainingMs = lastExternalWriteMs > 0 ? Math.max(0, apiTimeoutMs - (now - lastExternalWriteMs)) : 0;
+        if (handoverRemainingMs <= 0) {
+          this._sfFeneconNativeActive = null;
+          this._sfFeneconDirectReleaseUntilMs = 0;
+          this._sfFeneconDirectReleaseKey = '';
+        }
+        const diag = {
+          ts: now,
+          source: src,
+          status: 'fenecon-day-no-write',
+          reason: String(authority.reason || 'FEMS regelt bei PV intern'),
+          requestedW: w,
+          acceptedDeliveredW: 0,
+          noWrite: true,
+          authority: 'fems',
+          pvW: pvSample && pvSample.fresh === true && Number.isFinite(Number(pvSample.valueW)) ? Math.round(Number(pvSample.valueW)) : null,
+          pvSource: pvSample ? pvSample.objectId : '',
+          pvAgeMs: pvSample && Number.isFinite(Number(pvSample.ageMs)) ? Math.round(Number(pvSample.ageMs)) : null,
+          pvFresh: !!(pvSample && pvSample.fresh === true),
+          pvReason: pvSample ? String(pvSample.reason || '') : 'unmapped',
+          handoverRemainingMs: Math.round(handoverRemainingMs),
+          validation: feneconFarmValidation,
+        };
+        const json = JSON.stringify(diag);
+        await this.setStateAsync('storageFarm.lastDispatchJson', { val: json, ack: true });
+        try { this.updateValue('storageFarm.lastDispatchJson', json, now); } catch (_eUpd) {}
+        return {
+          applied: false,
+          commandEffective: false,
+          writeOk: true,
+          requestSatisfied: true,
+          partiallyAccepted: false,
+          status: diag.status,
+          reason: diag.reason,
+          direction,
+          targetW: w,
+          requestedW: w,
+          plannedDeliveredW: 0,
+          deliveredW: 0,
+          acceptedDeliveredW: 0,
+          failedW: 0,
+          unservedW: w,
+          commandDpReadbackSupported: false,
+          commandDpReadbackOk: true,
+          commandDpReadbackStatus: 'not-required-fems-authority',
+          commandDpReadbackRows: [],
+          results: [],
+        };
+      }
+      this._sfFeneconHybridPassThroughSinceMs = 0;
+    } else {
+      this._sfFeneconHybridAuthority = 'unknown';
+      this._sfFeneconHybridPvBelowSinceMs = 0;
+      this._sfFeneconHybridPassThroughSinceMs = 0;
+    }
 
     if (nativeFeneconRows.length === 1) {
       const nativeItem = nativeFeneconRows[0];
@@ -7971,6 +8138,11 @@ class NexoWattVis extends utils.Adapter {
       const note = (row && typeof row.note === 'string' && row.note.trim()) ? row.note.trim() : '';
       const powerId = (row && typeof row.powerId === 'string' && row.powerId.trim()) ? row.powerId.trim() : '';
       const energyTotalId = (row && typeof row.energyTotalId === 'string' && row.energyTotalId.trim()) ? row.energyTotalId.trim() : '';
+      // Interner EVCS-Energievertrag: energyTotalKwh ist immer kWh. Einige
+      // Wallboxen bzw. der NexoWatt-Aliasvertrag liefern den kumulierten Zaehler
+      // jedoch in Wh. Der Installer kann diese eindeutige Umrechnung pro
+      // Ladepunkt aktivieren; manuelle kWh-Zuordnungen bleiben unveraendert.
+      const energyTotalInputIsWh = !!(row && row.energyTotalInputIsWh === true);
       const statusId = (row && typeof row.statusId === 'string' && row.statusId.trim()) ? row.statusId.trim() : '';
       const activeId = (row && typeof row.activeId === 'string' && row.activeId.trim()) ? row.activeId.trim() : '';
       const vehicleConnectedId = (row && typeof row.vehicleConnectedId === 'string' && row.vehicleConnectedId.trim()) ? row.vehicleConnectedId.trim() : '';
@@ -8049,7 +8221,7 @@ class NexoWattVis extends utils.Adapter {
       const storageAssistCustomerAllowed = globalStorageAssistCustomerAllowed
         || ((row && row.storageAssistCustomerAllowed !== undefined && row.storageAssistCustomerAllowed !== null) ? !!row.storageAssistCustomerAllowed : false);
       const storageAssistControlScope = globalStorageAssistCustomerAllowed ? 'global' : 'per-lp';
-      evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, statusId, activeId, vehicleConnectedId, chargeDemandId, heartbeatId, vehicleConnectedTrueValues, vehicleConnectedFalseValues, chargeDemandTrueValues, chargeDemandFalseValues, statusDemandValues, statusReadyValues, statusConnectedValues, statusDisconnectedValues, statusNoDemandValues, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec, storageAssistCustomerAllowed, storageAssistControlScope, controlMappingAutoResolved, controlMappingAutoResolvedCurrent, controlMappingAutoResolvedPower, controlMappingAutoResolvedEnable });
+      evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, energyTotalInputIsWh, statusId, activeId, vehicleConnectedId, chargeDemandId, heartbeatId, vehicleConnectedTrueValues, vehicleConnectedFalseValues, chargeDemandTrueValues, chargeDemandFalseValues, statusDemandValues, statusReadyValues, statusConnectedValues, statusDisconnectedValues, statusNoDemandValues, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec, storageAssistCustomerAllowed, storageAssistControlScope, controlMappingAutoResolved, controlMappingAutoResolvedCurrent, controlMappingAutoResolvedPower, controlMappingAutoResolvedEnable });
     }
     this.evcsList = evcsList;
     // Stationsgruppen (für DC-Stationen mit mehreren Ladepunkten)
@@ -8652,7 +8824,14 @@ class NexoWattVis extends utils.Adapter {
           const st = await this.getForeignStateAsync(id);
           if (st && st.val !== undefined && st.val !== null) {
             const key = this.evcsIdToKey && this.evcsIdToKey[id];
-            if (key) this.updateValue(key, st.val, st.ts || Date.now());
+            if (key) {
+              const normalized = this._nwScaleMappedValue(key, id, st.val);
+              this.updateValue(key, normalized, st.ts || Date.now());
+              // Eigene EVCS-Spiegelstates verwenden ebenfalls die normalisierte
+              // interne Einheit, damit Sessionlogger, History und Reports nicht
+              // zwischen Roh-Wh und kWh wechseln.
+              this.setStateAsync(key, normalized, true).catch(() => {});
+            }
           }
         } catch (e) {
           this.log.debug(`EVCS subscribe/read failed (${id}): ${e.message}`);
@@ -15051,6 +15230,10 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
           const hasAny = Object.values(ids).some(v => v && String(v).trim());
           if (!hasAny) continue;
 
+          const energyState = (st || []).find((entry) => entry && String(entry.id || '') === String(ids.energyTotalId || ''));
+          const energyUnit = String(energyState && energyState.common ? energyState.common.unit || '' : '').replace(/\s+/g, '').toLowerCase();
+          const energyTotalInputIsWh = energyUnit === 'wh';
+
           const stationKey = String(g.stationKey || '').trim();
           const connectorNo = Number(g.connectorNo) || 0;
 
@@ -15064,6 +15247,8 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
             base: String(g.base || ''),
             name,
             ids,
+            energyTotalInputIsWh,
+            energyUnit,
           });
         }
 
@@ -24378,6 +24563,17 @@ return res.json(out);
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   _nwScaleMappedValue(key, objectId, val) {
+    // EVCS-Energie wird intern immer in kWh gefuehrt. Die Umrechnung ist
+    // bewusst pro Ladepunkt konfigurierbar, weil Hersteller sowohl Wh- als auch
+    // kWh-Zaehler ausgeben. Leistung (W/kW) und Energie (Wh/kWh) werden nicht
+    // miteinander vermischt.
+    const evcsEnergyMatch = String(key || '').match(/^evcs\.(\d+)\.energyTotalKwh$/);
+    if (evcsEnergyMatch) {
+      const idx = Math.max(1, Math.round(Number(evcsEnergyMatch[1]) || 1));
+      const wb = Array.isArray(this.evcsList) ? this.evcsList.find((row) => Number(row && row.index) === idx) : null;
+      return normalizeEvcsEnergyTotalKwh(val, { inputIsWh: !!(wb && wb.energyTotalInputIsWh === true) });
+    }
+
     // Skalierung fuer gemappte Leistungswerte (Power).
     // Intern arbeitet das EMS in Watt (W). Die UI zeigt i.d.R. kW an (W/1000).
     // Manche Fremd-Adapter liefern bereits kW (z.B. 1 = 1 kW).
@@ -24888,8 +25084,10 @@ return res.json(out);
     } catch (_e2) {}
     try {
       const key = this.keyFromId(id);
+      let normalizedMappedValue = state.val;
       if (key) {
-        this.updateValue(key, this._nwScaleMappedValue(key, id, state.val), state.ts);
+        normalizedMappedValue = this._nwScaleMappedValue(key, id, state.val);
+        this.updateValue(key, normalizedMappedValue, state.ts);
 
         // Bedienzustände der Ladepunkte werden sofort im stateCache sichtbar und
         // lösen einen debouncten zentralen EMS-Tick aus. Das gilt auch für externe
@@ -24949,7 +25147,7 @@ return res.json(out);
         }
       } catch (_e) {}
 
-      if (key && key.startsWith('evcs.')) this.setStateAsync(key, state.val, true).catch(()=>{});
+      if (key && key.startsWith('evcs.')) this.setStateAsync(key, normalizedMappedValue, true).catch(()=>{});
       try { this.maybeCaptureRfidLearning(id, state.val, state.ts); } catch(_e) {}
 
       // RFID access control: whenever a wallbox RFID datapoint changes, apply policy

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b39fcc6407ded900e0b3c535aaa16ae8a90d89cb8b1ad34c215ceb9bc5b00184
+ * Original-Hash: d31703fa6ce92ad139609a54362a1c4f44e8ac626577eeeaf1e789e288dc79df
  */
 
 /**
@@ -413,8 +413,11 @@ function verifyGatePlumbing() {
   assert(mesh.includes('blocked-by-actuator-authority'), 'Mesh-Command-States propagieren Authority-Blockaden nicht');
   assert(mesh.includes("if (!anyAuthorityBlock && effectiveStatus !== 'error') this._lastCommandHash = hash;"), 'Blockierte Mesh-Commands werden fälschlich gecacht');
   assert(engine.includes('clampNumber(cfgInterval, 250, 1000, 1000)'), 'EMS-Tick kann weiterhin langsamer als 1 s konfiguriert werden');
-  assert(storage.includes('const dayNoWriteEnabled = false;'), 'FENECON-No-Write kann den AppCenter-Sollwert noch abkoppeln');
-  assert(storage.includes("write-fenecon-idle-keepalive"), 'Unveränderter FENECON-0-W-Sollwert besitzt keinen expliziten Keepalive-Pfad');
+  assert(storage.includes('resolveHybridAuthority: resolveFeneconHybridAuthority'), 'FENECON-Hybrid-Automatik besitzt keinen zentralen Reglerhoheitsvertrag');
+  assert(storage.includes('_handleFeneconHybridPassThrough'), 'FENECON-Hybrid kann die PV-Regelhoheit nicht explizit ohne Hardwarewrite an FEMS übergeben');
+  assert(storage.includes("'no-write-fems-authority'"), 'FENECON-Hybrid-No-Write ist nicht eindeutig auf die FEMS-Regelhoheit begrenzt');
+  assert(storage.includes('0 W bleibt ausschließlich einem echten Stop-Befehl vorbehalten'), 'FENECON-Pass-Through könnte diagnostische 0 W weiterhin als Hardwarestopp ausgeben');
+  assert(storage.includes("write-fenecon-idle-keepalive"), 'Ein echter unveränderter FENECON-0-W-Stopp besitzt nachts keinen expliziten Keepalive-Pfad');
 }
 
 (async () => {

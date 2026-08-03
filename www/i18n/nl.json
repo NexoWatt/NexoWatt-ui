@@ -3,7 +3,7 @@
     "language": "nl",
     "locale": "nl-NL",
     "name": "Nederlands",
-    "version": 7
+    "version": 8
   },
   "messages": {
     "common.loading": "Laden…",
@@ -18,7 +18,10 @@
     "common.off": "Uit",
     "common.yes": "Ja",
     "common.no": "Nee",
-    "market.paragraph14aUnsupported": "§14a is niet beschikbaar in het Nederlandse marktprofiel."
+    "market.paragraph14aUnsupported": "§14a is niet beschikbaar in het Nederlandse marktprofiel.",
+    "Energiezähler (intern kWh)": "Energiemeter (intern kWh)",
+    "Energie-DP liefert Wh → in kWh umrechnen": "Energie-datapunt levert Wh → omrekenen naar kWh",
+    "Aktivieren, wenn der kumulierte Ladeenergie-DP Wh liefert. NexoWatt teilt den Wert durch 1000 und führt ihn intern in kWh.": "Activeren wanneer het cumulatieve laadenergie-datapunt Wh levert. NexoWatt deelt de waarde door 1000 en verwerkt deze intern in kWh."
   },
   "text": {
     "Menu": "Menu",

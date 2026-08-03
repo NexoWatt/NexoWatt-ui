@@ -121,6 +121,11 @@
     storageFeneconControlMode: document.getElementById('storageFeneconControlMode'),
     storageFeneconAcMode: document.getElementById('storageFeneconAcMode'),
     storageFeneconDayNoWrite: document.getElementById('storageFeneconDayNoWrite'),
+    storageFeneconPvOnThresholdW: document.getElementById('storageFeneconPvOnThresholdW'),
+    storageFeneconPvOffThresholdW: document.getElementById('storageFeneconPvOffThresholdW'),
+    storageFeneconPvOffDelaySec: document.getElementById('storageFeneconPvOffDelaySec'),
+    storageFeneconApiTimeoutSec: document.getElementById('storageFeneconApiTimeoutSec'),
+    storageFeneconHybridAutoSettings: document.getElementById('storageFeneconHybridAutoSettings'),
     storageFeneconAssist: document.getElementById('storageFeneconAssist'),
     storageSungrowOptionsRow: document.getElementById('storageSungrowOptionsRow'),
     storageE3dcOptionsRow: document.getElementById('storageE3dcOptionsRow'),
@@ -1411,6 +1416,8 @@
         vendorProfile: 'generic', feneconControlMode: 'auto',
         feneconGridSetpointId: '', feneconEssActualPowerId: '', feneconMinPowerId: '', feneconMaxPowerId: '',
         feneconActualSetpointId: '', feneconPvDcId: '', feneconPvAcId: '', feneconPvTotalId: '',
+        feneconPvPassthroughThresholdW: 200, feneconPvReleaseThresholdW: 50,
+        feneconPvReleaseDelaySec: 120, feneconApiTimeoutSec: 10,
         setChargePowerId: '', setDischargePowerId: '', setSignedPowerId: '',
         capacityKWh: (row.capacityKWh !== undefined && row.capacityKWh !== null && row.capacityKWh !== '') ? Number(row.capacityKWh) : '',
         maxChargeW: (row.maxChargeW !== undefined && row.maxChargeW !== null && row.maxChargeW !== '') ? Number(row.maxChargeW) : '',
@@ -1483,6 +1490,10 @@
       feneconPvDcId: textFrom('feneconPvDcId', 'feneconPvDcObjectId', 'feneconProductionDcId'),
       feneconPvAcId: textFrom('feneconPvAcId', 'feneconPvAcObjectId', 'feneconProductionAcId'),
       feneconPvTotalId: textFrom('feneconPvTotalId', 'feneconPvTotalObjectId', 'feneconProductionTotalId'),
+      feneconPvPassthroughThresholdW: numberFrom('feneconPvPassthroughThresholdW', 'feneconPvOnThresholdW') || 200,
+      feneconPvReleaseThresholdW: numberFrom('feneconPvReleaseThresholdW', 'feneconPvOffThresholdW') || 50,
+      feneconPvReleaseDelaySec: numberFrom('feneconPvReleaseDelaySec', 'feneconPvOffDelaySec') || 120,
+      feneconApiTimeoutSec: numberFrom('feneconApiTimeoutSec') || 10,
       invertSignedPowerSign: boolFrom(false, 'invertSignedPowerSign', 'batteryPowerInvert', 'invertPowerSign'),
       invertChargeSign: boolFrom(false, 'invertChargeSign', 'batteryChargePowerInvert'),
       invertDischargeSign: boolFrom(false, 'invertDischargeSign', 'batteryDischargePowerInvert'),
@@ -9053,10 +9064,22 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const profile = getStorageVendorProfile();
     const isFenecon = profile === 'fenecon-openems';
     if (els.storageFeneconOptionsRow) els.storageFeneconOptionsRow.style.display = isFenecon ? '' : 'none';
+    let feneconMode = 'auto';
     if (els.storageFeneconControlMode) {
       els.storageFeneconControlMode.disabled = !isFenecon;
       const mode = String(els.storageFeneconControlMode.value || 'auto');
       if (!['auto', 'fems-grid', 'direct-ess'].includes(mode)) els.storageFeneconControlMode.value = 'auto';
+      feneconMode = String(els.storageFeneconControlMode.value || 'auto');
+    }
+    const feneconHybridAuto = isFenecon && getStorageCoupling() === 'dc' && feneconMode === 'auto';
+    if (els.storageFeneconHybridAutoSettings) els.storageFeneconHybridAutoSettings.style.display = feneconHybridAuto ? 'grid' : 'none';
+    if (els.storageFeneconDayNoWrite) {
+      els.storageFeneconDayNoWrite.checked = feneconHybridAuto;
+      els.storageFeneconDayNoWrite.disabled = true;
+    }
+    if (els.storageFeneconAssist) {
+      els.storageFeneconAssist.checked = false;
+      els.storageFeneconAssist.disabled = true;
     }
     if (els.storageFeneconAcMode) {
       els.storageFeneconAcMode.checked = isFenecon;
@@ -9533,7 +9556,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         const vendor = normalizeStorageVendorProfile(st.vendorProfile || 'generic');
         const feneconMode = String(st.feneconControlMode || 'auto');
         const profileLabel = vendor === 'fenecon-openems'
-          ? `FENECON Hybrid · ${feneconMode === 'fems-grid' ? 'FEMS-NVP-Master' : (feneconMode === 'direct-ess' ? 'Direkte ESS' : 'Automatik')}`
+          ? `FENECON Hybrid · ${feneconMode === 'fems-grid'
+            ? 'FEMS-NVP-Master (Experte)'
+            : (feneconMode === 'direct-ess' ? 'Direkte ESS' : 'PV→FEMS / Nacht→ESS')}`
           : 'Standard';
         btn.innerHTML = `
           <span class="nw-storagefarm-storage-pill__name">${htmlEscape(String(st.name || '').trim() || `Speicher ${i + 1}`)}</span>
@@ -9591,15 +9616,35 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       const farmVendorProfile = normalizeStorageVendorProfile(s.vendorProfile || 'generic');
       if (farmVendorProfile === 'fenecon-openems') {
         grid.appendChild(mkSelectField('FENECON-Regelart', `sf_${idx}_feneconControlMode`, s.feneconControlMode || 'auto', [
-          { value: 'auto', label: 'Automatisch' },
-          { value: 'fems-grid', label: 'FEMS-NVP-Regler – exklusiver Farm-Master' },
-          { value: 'direct-ess', label: 'Direkte ESS-Leistung – Farm-Teilnehmer' },
+          { value: 'auto', label: 'Automatisch: PV → FEMS, ohne PV → NexoWatt (empfohlen)' },
+          { value: 'direct-ess', label: 'Direkte ESS-Leistung – Farm-Teilnehmer / gemischte Farm' },
+          { value: 'fems-grid', label: 'FEMS-NVP-Ziel dauerhaft schreiben – Experte/Legacy' },
         ], (v) => {
           const sf2 = _ensureStorageFarmCfg();
           sf2.storages[i].feneconControlMode = ['fems-grid', 'direct-ess'].includes(String(v || '')) ? String(v) : 'auto';
           buildStorageFarmUI();
         }));
-        grid.appendChild(mkGridHelp('Der FEMS-NVP-Regler ist nur bei FENECON DC/Hybrid und genau einem beschreibbaren Speicher am NVP zulässig. In gemischten Farmen muss „Direkte ESS-Leistung“ verwendet werden. Alle anderen Hersteller bleiben unverändert.'));
+        grid.appendChild(mkGridHelp('Automatisch gilt nur für einen exklusiven FENECON DC/Hybrid-Speicher: Bei frischer PV schreibt NexoWatt nichts und FEMS regelt intern; erst nach dauerhaft fehlender PV übernimmt NexoWatt die direkte ESS-Regelung. In gemischten Farmen wird automatisch Direkte ESS-Leistung verwendet. Andere Hersteller bleiben unverändert.'));
+        if (String(s.feneconControlMode || 'auto') === 'auto') {
+          grid.appendChild(mkNumField('FEMS-Freigabe ab PV (W)', `sf_${idx}_feneconPvPassthroughThresholdW`, s.feneconPvPassthroughThresholdW ?? 200, (v) => {
+            const sf2 = _ensureStorageFarmCfg();
+            sf2.storages[i].feneconPvPassthroughThresholdW = Math.max(0, Number(v) || 0);
+          }, '200'));
+          grid.appendChild(mkNumField('Nachtprüfung unter PV (W)', `sf_${idx}_feneconPvReleaseThresholdW`, s.feneconPvReleaseThresholdW ?? 50, (v) => {
+            const sf2 = _ensureStorageFarmCfg();
+            const onW = Math.max(0, Number(sf2.storages[i].feneconPvPassthroughThresholdW) || 200);
+            sf2.storages[i].feneconPvReleaseThresholdW = Math.max(0, Math.min(onW, Number(v) || 0));
+          }, '50'));
+          grid.appendChild(mkNumField('PV-aus Bestätigung (s)', `sf_${idx}_feneconPvReleaseDelaySec`, s.feneconPvReleaseDelaySec ?? 120, (v) => {
+            const sf2 = _ensureStorageFarmCfg();
+            sf2.storages[i].feneconPvReleaseDelaySec = Math.max(0, Math.min(3600, Number(v) || 0));
+          }, '120'));
+          grid.appendChild(mkNumField('FEMS API-Watchdog (s)', `sf_${idx}_feneconApiTimeoutSec`, s.feneconApiTimeoutSec ?? 10, (v) => {
+            const sf2 = _ensureStorageFarmCfg();
+            sf2.storages[i].feneconApiTimeoutSec = Math.max(5, Math.min(300, Number(v) || 10));
+          }, '10'));
+          grid.appendChild(mkGridHelp('Die Umschaltung nutzt ausschließlich eine frische PV-Messung. Fehlende oder veraltete PV-Daten lassen FEMS fail-safe führend. Der API-Watchdog-Wert muss zum Timeout der FEMS-Schreib-App passen.'));
+        }
         grid.appendChild(mkDpField('FEMS NVP-Ziel schreiben (W)', `sf_${idx}_feneconGridSetpointId`, s.feneconGridSetpointId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconGridSetpointId = v; }, 'ctrlBalancing0/SetGridActivePower · systemspezifisch'));
         grid.appendChild(mkDpField('FENECON ESS-Aktor-Istleistung (W)', `sf_${idx}_feneconEssActualPowerId`, s.feneconEssActualPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconEssActualPowerId = v; }, 'ess0/ActivePower · typ. 604'));
         grid.appendChild(mkDpField('FENECON Mindestleistung (W)', `sf_${idx}_feneconMinPowerId`, s.feneconMinPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconMinPowerId = v; }, 'optional · typ. 702'));
@@ -9687,6 +9732,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
           feneconPvDcId: '',
           feneconPvAcId: '',
           feneconPvTotalId: '',
+          feneconPvPassthroughThresholdW: 200,
+          feneconPvReleaseThresholdW: 50,
+          feneconPvReleaseDelaySec: 120,
+          feneconApiTimeoutSec: 10,
           socId: '',
           signedPowerId: '',
           chargePowerId: '',
@@ -10618,7 +10667,14 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       dpWrap.style.gap = '10px';
 
       dpWrap.appendChild(mkRow('Leistung (W)', mkIo(`evcs_${i}_powerId`, rowCfg.powerId, v => _updateEvcsField(i, 'powerId', v))));
-      dpWrap.appendChild(mkRow('Energie (kWh)', mkIo(`evcs_${i}_energyTotalId`, rowCfg.energyTotalId, v => _updateEvcsField(i, 'energyTotalId', v))));
+      dpWrap.appendChild(mkRow('Energiezähler (intern kWh)', mkIo(`evcs_${i}_energyTotalId`, rowCfg.energyTotalId, v => _updateEvcsField(i, 'energyTotalId', v))));
+      const energyInputWh = document.createElement('input');
+      energyInputWh.type = 'checkbox';
+      energyInputWh.className = 'nw-config-checkbox';
+      energyInputWh.checked = !!(rowCfg && rowCfg.energyTotalInputIsWh === true);
+      energyInputWh.title = 'Aktivieren, wenn der kumulierte Ladeenergie-DP Wh liefert. NexoWatt teilt den Wert durch 1000 und führt ihn intern in kWh.';
+      energyInputWh.addEventListener('change', () => _updateEvcsField(i, 'energyTotalInputIsWh', !!energyInputWh.checked));
+      dpWrap.appendChild(mkRow('Energie-DP liefert Wh → in kWh umrechnen', energyInputWh));
       dpWrap.appendChild(mkRow('Status / CP-Zustand (lesen, optional)', mkIo(`evcs_${i}_statusId`, rowCfg.statusId, v => _updateEvcsField(i, 'statusId', v))));
       dpWrap.appendChild(mkRow('Fahrzeug verbunden (lesen, optional)', mkIo(`evcs_${i}_vehicleConnectedId`, rowCfg.vehicleConnectedId, v => _updateEvcsField(i, 'vehicleConnectedId', v))));
       dpWrap.appendChild(mkRow('Ladebedarf / Ladebereit (lesen, optional)', mkIo(`evcs_${i}_chargeDemandId`, rowCfg.chargeDemandId, v => _updateEvcsField(i, 'chargeDemandId', v))));
@@ -11453,17 +11509,21 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (els.storageFeneconAcMode) {
       els.storageFeneconAcMode.checked = feneconModeActive;
     }
+    const feneconHybridAuto = feneconModeActive
+      && String(stF.coupling || 'ac').trim().toLowerCase() === 'dc'
+      && String(stF.feneconControlMode || 'auto').trim().toLowerCase() === 'auto';
     if (els.storageFeneconDayNoWrite) {
-      // Legacy-No-Write ist ab 0.8.124 fest deaktiviert. Ein im AppCenter
-      // zugeordneter FENECON/OpenEMS-Sollwert muss den Gate-/Executor-Pfad nutzen
-      // und als Watchdog-Keepalive zyklisch erneuert werden.
-      els.storageFeneconDayNoWrite.checked = false;
+      els.storageFeneconDayNoWrite.checked = feneconHybridAuto;
       els.storageFeneconDayNoWrite.disabled = true;
     }
+    if (els.storageFeneconPvOnThresholdW) els.storageFeneconPvOnThresholdW.value = String(Math.max(0, Number(stF.feneconPvPassthroughThresholdW ?? 200) || 200));
+    if (els.storageFeneconPvOffThresholdW) els.storageFeneconPvOffThresholdW.value = String(Math.max(0, Number(stF.feneconPvReleaseThresholdW ?? 50) || 50));
+    if (els.storageFeneconPvOffDelaySec) els.storageFeneconPvOffDelaySec.value = String(Math.max(0, Number(stF.feneconPvReleaseDelaySec ?? 120) || 120));
+    if (els.storageFeneconApiTimeoutSec) els.storageFeneconApiTimeoutSec.value = String(Math.max(5, Number(stF.feneconApiTimeoutSec ?? 10) || 10));
+    if (els.storageFeneconHybridAutoSettings) els.storageFeneconHybridAutoSettings.style.display = feneconHybridAuto ? 'grid' : 'none';
     if (els.storageFeneconAssist) {
-      // Der Assist bleibt optional, ist aber bei FENECON-Anlagen hilfreich, wenn
-      // trotz interner Freigabe und ausreichend SoC dauerhaft Netzbezug stehen bleibt.
-      els.storageFeneconAssist.checked = feneconModeActive && (stF.feneconAssistEnabled !== false);
+      els.storageFeneconAssist.checked = false;
+      els.storageFeneconAssist.disabled = true;
     }
     if (els.storageE3dcRscpEnabled) {
       els.storageE3dcRscpEnabled.checked = e3dcModeActive;
@@ -11573,8 +11633,15 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     }
 
     // Mappings (fill)
+    const previousEnergyId = String(out.energyTotalId || '').trim();
     for (const k of ['powerId','energyTotalId','statusId','activeId','vehicleConnectedId','chargeDemandId','heartbeatId','onlineId','setCurrentAId','setPowerWId','enableWriteId']) {
       if (ids[k]) setField(k, ids[k]);
+    }
+    const energyMappingWasApplied = !!ids.energyTotalId && (
+      overwrite || (onlyEmpty && !previousEnergyId)
+    );
+    if (energyMappingWasApplied) {
+      out.energyTotalInputIsWh = c && c.energyTotalInputIsWh === true;
     }
 
     // Defaults
@@ -11764,6 +11831,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (meta && meta.write === true) return String(meta.id || _nwGetAlias(dev, key) || '').trim();
     return '';
   }
+  function _nwGetAliasUnit(dev, key) {
+    const meta = dev && dev.aliasMeta && typeof dev.aliasMeta === 'object' ? dev.aliasMeta[key] : null;
+    return String(meta && meta.unit ? meta.unit : '').replace(/\s+/g, '').toLowerCase();
+  }
   /**
    * Code-Teil: _nwGetDpFallback
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -11816,7 +11887,16 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     // Datapoints (prefer aliases)
     setIf('powerId', _nwGetAlias(dev, 'r.power'));
-    setIf('energyTotalId', _nwGetAlias(dev, 'r.energyTotal'));
+    const autoEnergyId = _nwGetAlias(dev, 'r.energyTotal');
+    const existingEnergyId = String(out.energyTotalId || '').trim();
+    const autoEnergyCanApply = !!autoEnergyId && (!onlyEmpty || !existingEnergyId);
+    if (autoEnergyCanApply) {
+      out.energyTotalId = autoEnergyId;
+      const unit = _nwGetAliasUnit(dev, 'r.energyTotal');
+      // Alias Contract v1 normiert r.energyTotal auf Wh. Legacy-/Fremdprofile
+      // koennen kWh liefern; deshalb wird der Haken aus den Objektmetadaten gesetzt.
+      out.energyTotalInputIsWh = unit === 'wh';
+    }
     setIf('statusId',
       _nwGetAlias(dev, 'r.statusCode')
       || _nwGetAlias(dev, 'r.evcsState')
@@ -13082,16 +13162,36 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     } else {
       delete patch.storage.ratedPowerW;
     }
-    patch.storage.feneconGridControlEnabled = patch.storage.vendorProfile === 'fenecon-openems';
+    patch.storage.feneconGridControlEnabled = patch.storage.vendorProfile === 'fenecon-openems' && patch.storage.coupling === 'dc';
     patch.storage.feneconControlMode = (els.storageFeneconControlMode && ['auto', 'fems-grid', 'direct-ess'].includes(String(els.storageFeneconControlMode.value || '').trim().toLowerCase()))
       ? String(els.storageFeneconControlMode.value).trim().toLowerCase()
       : 'auto';
     patch.storage.sungrowHybridEnabled = patch.storage.vendorProfile === 'sungrow-hybrid';
     patch.storage.e3dcRscpEnabled = patch.storage.vendorProfile === 'e3dc-rscp';
-    // FENECON/OpenEMS/FEMS: Legacy-No-Write bleibt bewusst deaktiviert. Der
-    // manuell zugeordnete Sollwert-DP wird nach allen Gates zyklisch erneuert.
-    patch.storage.feneconDayNoWriteEnabled = false;
-    patch.storage.feneconAssistEnabled = !!(els.storageFeneconAssist && els.storageFeneconAssist.checked);
+    // FENECON-Hybrid-Automatik: Bei frischer/unklarer PV wird bewusst keine
+    // externe Vorgabe geschrieben. Erst nach dauerhaft fehlender PV uebernimmt
+    // NexoWatt die direkte ESS-Regelung. Forecast/Uhrzeit schalten nicht um.
+    patch.storage.feneconDayNoWriteEnabled = patch.storage.vendorProfile === 'fenecon-openems'
+      && patch.storage.coupling === 'dc'
+      && patch.storage.feneconControlMode === 'auto';
+    patch.storage.feneconAssistEnabled = false;
+    patch.storage.feneconDayClockFallbackEnabled = false;
+    patch.storage.feneconPvPassthroughThresholdW = _clampInt(
+      els.storageFeneconPvOnThresholdW ? els.storageFeneconPvOnThresholdW.value : patch.storage.feneconPvPassthroughThresholdW,
+      0, 1000000, 200,
+    );
+    patch.storage.feneconPvReleaseThresholdW = _clampInt(
+      els.storageFeneconPvOffThresholdW ? els.storageFeneconPvOffThresholdW.value : patch.storage.feneconPvReleaseThresholdW,
+      0, patch.storage.feneconPvPassthroughThresholdW, 50,
+    );
+    patch.storage.feneconPvReleaseDelaySec = _clampInt(
+      els.storageFeneconPvOffDelaySec ? els.storageFeneconPvOffDelaySec.value : patch.storage.feneconPvReleaseDelaySec,
+      0, 3600, 120,
+    );
+    patch.storage.feneconApiTimeoutSec = _clampInt(
+      els.storageFeneconApiTimeoutSec ? els.storageFeneconApiTimeoutSec.value : patch.storage.feneconApiTimeoutSec,
+      5, 300, 10,
+    );
     // Sungrow Hybrid ESS nutzt ab 0.8.96 fest den gemeinsamen geschlossenen
     // NVP-Regelkreis. Die alten PV-Passthrough-/0-W-Schalter werden bewusst nicht
     // mehr gespeichert, weil zyklische 0-W-Freigaben den Speicher stoppen konnten.
@@ -13343,6 +13443,12 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         throw new Error('Für den FEMS-NVP-Regler muss der DP „FENECON FEMS-NVP-Ziel“ zugeordnet sein.');
       }
     }
+    if (mode === 'auto' && vendor === 'fenecon-openems' && coupling === 'dc') {
+      const hasDirectTarget = !!String(dp.targetPowerObjectId || dp.targetChargePowerObjectId || dp.targetDischargePowerObjectId || '').trim();
+      if (!hasDirectTarget) {
+        throw new Error('FENECON Hybrid „Automatisch“ benötigt für die Nachtregelung einen direkten ESS-Sollwert-DP (signed oder Laden/Entladen getrennt).');
+      }
+    }
 
     const sf = cfg.storageFarm && typeof cfg.storageFarm === 'object' ? cfg.storageFarm : {};
     const rows = Array.isArray(sf.storages) ? sf.storages.filter((row) => row && row.enabled !== false) : [];
@@ -13365,10 +13471,18 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       if (rowMode === 'fems-grid' && !hasNativeTarget) {
         throw new Error(`Speicherfarm „${row.name}“: FEMS-NVP-Ziel-DP fehlt.`);
       }
+      const hasDirectTarget = !!(
+        String(row.setSignedPowerId || '').trim()
+        || String(row.setChargePowerId || '').trim()
+        || String(row.setDischargePowerId || '').trim()
+      );
+      if (rowMode === 'auto' && rowVendor === 'fenecon-openems' && rowCoupling === 'dc' && !hasDirectTarget) {
+        throw new Error(`Speicherfarm „${row.name}“: Automatik benötigt für die Nachtregelung einen direkten ESS-Sollwert-DP.`);
+      }
       const resolvesNative = rowVendor === 'fenecon-openems'
         && rowCoupling === 'dc'
         && hasNativeTarget
-        && (rowMode === 'fems-grid' || (rowMode === 'auto' && writable.length === 1));
+        && rowMode === 'fems-grid';
       if (resolvesNative) nativeCount += 1;
     }
     if (nativeCount > 1) {
@@ -15533,7 +15647,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     /**
      * Code-Teil: _updateStorageVendorProfile
      * Zweck: Synchronisiert Herstellerprofil-Optionen direkt in currentConfig.
-     * Zusammenhang: FENECON/OpenEMS nutzt gegateten Watchdog-Refresh/Assist; Sungrow Hybrid nutzt
+     * Zusammenhang: FENECON/OpenEMS Hybrid uebergibt bei PV die Regelhoheit an FEMS und nutzt nachts direkte ESS-Leistung; Sungrow Hybrid nutzt
      * fest den gemeinsamen NVP-Regelkreis ohne alte PV-Deckungs-0-W-Sonderzweige.
      * TypeScript: DOM-Checkboxen spaeter als HTMLInputElement typisieren.
      */
@@ -15552,17 +15666,23 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       currentConfig.storage.e3dcRscpEnabled = profile === 'e3dc-rscp';
 
       if (els.storageFeneconAcMode) els.storageFeneconAcMode.checked = profile === 'fenecon-openems';
+      const hybridAuto = profile === 'fenecon-openems'
+        && getStorageCoupling() === 'dc'
+        && String(currentConfig.storage.feneconControlMode || 'auto') === 'auto';
       if (els.storageFeneconDayNoWrite) {
-        els.storageFeneconDayNoWrite.checked = false;
+        els.storageFeneconDayNoWrite.checked = hybridAuto;
         els.storageFeneconDayNoWrite.disabled = true;
-        currentConfig.storage.feneconDayNoWriteEnabled = false;
+        currentConfig.storage.feneconDayNoWriteEnabled = hybridAuto;
       }
       if (els.storageFeneconAssist) {
-        if (profile === 'fenecon-openems' && !els.storageFeneconAssist.checked && currentConfig.storage.feneconAssistEnabled === undefined) {
-          els.storageFeneconAssist.checked = true;
-        }
-        currentConfig.storage.feneconAssistEnabled = !!els.storageFeneconAssist.checked;
+        els.storageFeneconAssist.checked = false;
+        els.storageFeneconAssist.disabled = true;
+        currentConfig.storage.feneconAssistEnabled = false;
       }
+      if (els.storageFeneconPvOnThresholdW) currentConfig.storage.feneconPvPassthroughThresholdW = _clampInt(els.storageFeneconPvOnThresholdW.value, 0, 1000000, 200);
+      if (els.storageFeneconPvOffThresholdW) currentConfig.storage.feneconPvReleaseThresholdW = _clampInt(els.storageFeneconPvOffThresholdW.value, 0, currentConfig.storage.feneconPvPassthroughThresholdW || 200, 50);
+      if (els.storageFeneconPvOffDelaySec) currentConfig.storage.feneconPvReleaseDelaySec = _clampInt(els.storageFeneconPvOffDelaySec.value, 0, 3600, 120);
+      if (els.storageFeneconApiTimeoutSec) currentConfig.storage.feneconApiTimeoutSec = _clampInt(els.storageFeneconApiTimeoutSec.value, 5, 300, 10);
 
 
       if (els.storageE3dcRscpEnabled) {
@@ -15588,7 +15708,20 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       els.storageVendorProfile.addEventListener('change', _updateStorageVendorProfile);
       els.storageVendorProfile.addEventListener('input', _updateStorageVendorProfile);
     }
-    [els.storageFeneconControlMode, els.storageFeneconAcMode, els.storageFeneconDayNoWrite, els.storageFeneconAssist, els.storageE3dcRscpEnabled, els.storageE3dcZeroMode, els.storageE3dcAllowGridCharge, els.storageE3dcUsePowerLimits]
+    [
+      els.storageFeneconControlMode,
+      els.storageFeneconAcMode,
+      els.storageFeneconDayNoWrite,
+      els.storageFeneconPvOnThresholdW,
+      els.storageFeneconPvOffThresholdW,
+      els.storageFeneconPvOffDelaySec,
+      els.storageFeneconApiTimeoutSec,
+      els.storageFeneconAssist,
+      els.storageE3dcRscpEnabled,
+      els.storageE3dcZeroMode,
+      els.storageE3dcAllowGridCharge,
+      els.storageE3dcUsePowerLimits,
+    ]
       .filter(Boolean)
       .forEach((el) => {
         el.addEventListener('change', _updateStorageVendorProfile);

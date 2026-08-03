@@ -1,3 +1,22 @@
+## 0.8.153 - 2026-08-03
+
+- Ladepunkt-Zuordnung um die Option **„Energie-DP liefert Wh → in kWh umrechnen“** ergänzt. Kumulative Ladeenergie wird bei aktivierter Option vor LIVE-, Session-, History- und Report-Verarbeitung durch 1000 geteilt.
+- Bestehende manuelle kWh-Zuordnungen bleiben unverändert; die Option ist standardmäßig aus und verändert weder Momentanleistung noch Stromsollwerte.
+- Automatische NexoWatt-Devices-Zuordnung erkennt die kanonische Einheit von `aliases.v1.r.energyTotal` und aktiviert die Wh→kWh-Normalisierung automatisch, wenn das Alias-Manifest `Wh` meldet.
+- OCPP-/Objekterkennung wertet `common.unit` des ausgewählten Energiezählers aus und übernimmt die passende Einheitseinstellung in die Ladepunktkonfiguration.
+- Initialwerte und laufende Fremd-State-Updates werden vor der Spiegelung nach `evcs.<n>.energyTotalKwh` einheitlich normalisiert, damit Tagesenergie, Lade-Sessions, History und Exporte keine 1000-fach zu großen Werte erhalten.
+- DE-/NL-/EN-Texte ergänzt; Service-Worker-Cache auf `nexowatt-cache-v453` und zentrale UI-/Provider-Versionskennungen auf 0.8.153 aktualisiert.
+
+## 0.8.152 - 2026-08-03
+
+- FENECON/OpenEMS DC-/Hybridsysteme im Modus `Automatisch` geben bei frischer PV-Erzeugung die Reglerhoheit vollständig an die interne FEMS-Eigenverbrauchsoptimierung ab; NexoWatt schreibt in diesem Zustand weder `SetActivePowerEquals`/706 noch `SetGridActivePower`.
+- Fehlende oder veraltete PV-Messwerte führen fail-safe ebenfalls zu FEMS-Regelhoheit. NexoWatt übernimmt die direkte ESS-/NVP-Regelung erst, wenn eine frische PV-Messung dauerhaft unter der konfigurierten Abschaltschwelle liegt.
+- Hysteretische Umschaltung ergänzt: standardmäßig FEMS-Freigabe ab 200 W PV, Nachtübernahme unter 50 W erst nach 120 Sekunden; bestehende Reglerhoheit wird im Zwischenband gehalten.
+- No-Write wird im Speicherstatus als `null`/keine externe Vorgabe veröffentlicht und nicht als 0-W-Speicherstopp. Der letzte bestätigte Kommandoanker bleibt nur bis zum konfigurierten FEMS-API-Watchdog diagnostisch erhalten.
+- Speicherfarm gehärtet: Ein exklusiver einzelner FENECON-Hybrid kann Tag-FEMS/Nacht-NexoWatt verwenden; gemischte Farms bleiben auf direkter ESS-Leistung und erhalten keine parallele FEMS-Regelhoheit.
+- FENECON-AC-Systeme, Sungrow, E3/DC, generische Signed-/Split-Speicher und alle übrigen Herstellerpfade bleiben unverändert.
+- Service-Worker-Cache auf `nexowatt-cache-v452` und zentrale UI-/Provider-Versionskennungen auf 0.8.152 aktualisiert.
+
 ## 0.8.151 - 2026-08-02
 
 - FENECON/OpenEMS DC-/Hybridsysteme erhalten einen exklusiven nativen FEMS-NVP-Regelpfad über `ctrlBalancing0/SetGridActivePower`; FENECON AC und alle anderen Hersteller bleiben auf der bisherigen direkten Leistungsregelung.

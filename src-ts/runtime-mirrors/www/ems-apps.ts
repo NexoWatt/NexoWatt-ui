@@ -18,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 8a4eaa11affdab771e38de0c405afbcad1a40bfbbe5cd3591a13693a86f17b69
+ * Original-Hash: 909c0cc82706b54d24b1166f370beef76195306d0ed632fd4886d966ca7bedda
  */
 
 /**
@@ -421,8 +421,14 @@ interface EmsAppsWindow extends Window {
     storageDcPvHintRow: document.getElementById('storageDcPvHintRow'),
     storageVendorProfile: document.getElementById('storageVendorProfile'),
     storageFeneconOptionsRow: document.getElementById('storageFeneconOptionsRow'),
+    storageFeneconControlMode: document.getElementById('storageFeneconControlMode'),
     storageFeneconAcMode: document.getElementById('storageFeneconAcMode'),
     storageFeneconDayNoWrite: document.getElementById('storageFeneconDayNoWrite'),
+    storageFeneconPvOnThresholdW: document.getElementById('storageFeneconPvOnThresholdW'),
+    storageFeneconPvOffThresholdW: document.getElementById('storageFeneconPvOffThresholdW'),
+    storageFeneconPvOffDelaySec: document.getElementById('storageFeneconPvOffDelaySec'),
+    storageFeneconApiTimeoutSec: document.getElementById('storageFeneconApiTimeoutSec'),
+    storageFeneconHybridAutoSettings: document.getElementById('storageFeneconHybridAutoSettings'),
     storageFeneconAssist: document.getElementById('storageFeneconAssist'),
     storageSungrowOptionsRow: document.getElementById('storageSungrowOptionsRow'),
     storageE3dcOptionsRow: document.getElementById('storageE3dcOptionsRow'),
@@ -697,7 +703,7 @@ interface EmsAppsWindow extends Window {
     { id: 'grid', label: 'Netzlimits', desc: 'Netzrestriktionen (RLM/0‑Einspeisung/Import‑Limits)', mandatory: false, hems: false },
     { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung: PV, Wetter, Tarif, Speicher, Wallboxen und Lastspitzen als Vorschläge auf der LIVE‑Seite', mandatory: false, hems: true },
     { id: 'energyWallet', label: 'Energie-Wertkonto', desc: 'PV-Wert, Eigenverbrauchswert, Solar-Laden und Einspeisewert im Nutzerfrontend (Home + EOS)', mandatory: true, hems: true },
-    { id: 'energyLedger', label: 'Local kWh Ledger', desc: 'EOS: lokale kWh-Zuordnung als Grundlage für Betreiberwerte, Export, Nachbarschaft und Microgrid; read-only und schaltet keine Hardware', mandatory: false, hems: false },
+    { id: 'energyLedger', label: 'Energieherkunft & Ladebilanz', desc: 'Home/Pro: read-only 15-Minuten-Bilanz für Netz, PV, Speicherherkunft und Ladezähler; erzeugt prüfbare Journale, schreibt aber niemals auf Hardware', mandatory: false, hems: true },
     { id: 'meshMicrogrid', label: 'EOS Mesh/Microgrid', desc: 'EOS: separates Datenmodell für lokale Energie-Knoten, Cluster, Local First / Grid Last und spätere Nachbarschaftsversorgung', mandatory: false, hems: false },
     { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', mandatory: true, hems: true },
     { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls genutzt)', mandatory: false, hems: true },
@@ -1134,6 +1140,197 @@ interface EmsAppsWindow extends Window {
     { key: 'pvForecastTomorrowJson', label: 'PV Forecast morgen (JSON)', placeholder: 'Provider-State (optional)' }
   ];
 
+
+  // ------------------------------
+  // Direkte dynamische Tarifprovider
+  // ------------------------------
+  let tariffProviderRegistryCache = null;
+  const _tpEl = (id) => document.getElementById(id);
+  const _tpStr = (id, fallback = '') => {
+    const el = _tpEl(id);
+    return el ? String(el.value || '').trim() : fallback;
+  };
+  const _tpBool = (id, fallback = false) => {
+    const el = _tpEl(id);
+    return el ? !!el.checked : fallback;
+  };
+  const _tpNum = (id, fallback = 0) => {
+    const n = Number(_tpStr(id, ''));
+    return Number.isFinite(n) ? n : fallback;
+  };
+  const _tpSet = (id, value) => {
+    const el = _tpEl(id);
+    if (!el) return;
+    if (el.type === 'checkbox') el.checked = !!value;
+    else el.value = (value === null || value === undefined) ? '' : String(value);
+  };
+  function _setTariffProviderStatus(text, kind = '') {
+    const el = _tpEl('tariffProviderStatus');
+    if (!el) return;
+    el.textContent = String(text || '');
+    el.style.color = kind === 'error' ? '#ff7a7a' : (kind === 'ok' ? '#69f0ae' : '');
+  }
+  async function loadTariffProviderRegistry(force = false) {
+    if (tariffProviderRegistryCache && !force) return tariffProviderRegistryCache;
+    const data = await fetchJson('/api/installer/tariff-provider/providers?t=' + Date.now(), { cache: 'no-store' });
+    tariffProviderRegistryCache = data;
+    return data;
+  }
+  function _tariffProviderInternalDpIds() {
+    return tariffProviderRegistryCache && tariffProviderRegistryCache.internalDatapoints
+      ? tariffProviderRegistryCache.internalDatapoints
+      : null;
+  }
+  function _coupleTariffProviderDatapointsSync() {
+    const ids = _tariffProviderInternalDpIds();
+    if (!ids) return false;
+    currentConfig = currentConfig && typeof currentConfig === 'object' ? currentConfig : {};
+    currentConfig.datapoints = currentConfig.datapoints && typeof currentConfig.datapoints === 'object' ? currentConfig.datapoints : {};
+    let changed = false;
+    for (const key of ['priceCurrent','priceAverage','priceTodayJson','priceTomorrowJson']) {
+      const val = String(ids[key] || '').trim();
+      if (!val) continue;
+      if (String(currentConfig.datapoints[key] || '').trim() !== val) {
+        currentConfig.datapoints[key] = val;
+        changed = true;
+      }
+      const input = document.getElementById('tar_' + key);
+      if (input && input.value !== val) input.value = val;
+    }
+    return changed;
+  }
+  async function coupleTariffProviderDatapoints(showStatus = true) {
+    try {
+      await loadTariffProviderRegistry();
+      const changed = _coupleTariffProviderDatapointsSync();
+      if (showStatus) _setTariffProviderStatus(changed ? 'Interne Preis-DPs gekoppelt. Bitte speichern.' : 'Interne Preis-DPs sind bereits gekoppelt.', 'ok');
+      return changed;
+    } catch (e) {
+      if (showStatus) _setTariffProviderStatus('DP-Kopplung fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error');
+      return false;
+    }
+  }
+  function collectTariffProviderConfig() {
+    const existing = currentConfig && currentConfig.tariffProvider && typeof currentConfig.tariffProvider === 'object' ? currentConfig.tariffProvider : {};
+    const country = _tpStr('tariffProviderCountry', String(existing.country || 'DE')).toUpperCase() === 'NL' ? 'NL' : 'DE';
+    return {
+      ...existing,
+      enabled: _tpStr('tariffProviderEnabled', existing.enabled ? 'true' : 'false') === 'true',
+      providerId: _tpStr('tariffProviderId', existing.providerId || 'manual-dp'),
+      sourceId: _tpStr('tariffProviderSourceId', existing.sourceId || 'entsoe'),
+      providerProfileId: _tpStr('tariffProviderProfileId', existing.providerProfileId || 'local-provider'),
+      activateTariffLogic: _tpBool('tariffProviderActivateLogic', true),
+      automaticMode: _tpBool('tariffProviderAutomaticMode', true),
+      autoCoupleDatapoints: _tpBool('tariffProviderAutoCouple', true),
+      country,
+      timeZone: _tpStr('tariffProviderTimeZone', country === 'NL' ? 'Europe/Amsterdam' : 'Europe/Berlin'),
+      resolutionMinutes: [15,30,60].includes(_tpNum('tariffProviderResolution', 15)) ? _tpNum('tariffProviderResolution', 15) : 15,
+      refreshMinutes: Math.max(5, Math.min(360, Math.round(_tpNum('tariffProviderRefresh', 15)))),
+      priceComponent: _tpStr('tariffProviderPriceComponent', 'total'),
+      homeId: _tpStr('tariffProviderHomeId', ''),
+      postalCode: _tpStr('tariffProviderPostalCode', ''),
+      tokenUrl: _tpStr('tariffProviderTokenUrl', ''),
+      pricesUrl: _tpStr('tariffProviderPricesUrl', ''),
+      credentials: {
+        ...(existing.credentials && typeof existing.credentials === 'object' ? existing.credentials : {}),
+        accessToken: _tpStr('tariffProviderAccessToken', ''),
+        securityToken: _tpStr('tariffProviderSecurityToken', ''),
+        clientId: _tpStr('tariffProviderClientId', ''),
+        clientSecret: _tpStr('tariffProviderClientSecret', ''),
+        tokenUrl: _tpStr('tariffProviderTokenUrl', ''),
+        bearerToken: _tpStr('tariffProviderBearerToken', ''),
+        apiKey: _tpStr('tariffProviderApiKey', ''),
+        username: _tpStr('tariffProviderUsername', ''),
+        password: _tpStr('tariffProviderPassword', ''),
+      },
+      formula: {
+        marketMultiplier: _tpNum('tariffProviderMarketMultiplier', 1),
+        supplierMarkupEurPerKwh: _tpNum('tariffProviderSupplierMarkup', 0),
+        gridVariableEurPerKwh: _tpNum('tariffProviderGridVariable', 0),
+        taxEurPerKwh: _tpNum('tariffProviderTax', 0),
+        otherVariableEurPerKwh: _tpNum('tariffProviderOtherVariable', 0),
+        vatPct: _tpNum('tariffProviderVatPct', 0),
+        priceIncludesVat: _tpStr('tariffProviderId', '') === 'tibber' || _tpStr('tariffProviderId', '') === 'energyzero',
+      },
+      feedInEurPerKwh: _tpNum('tariffProviderFeedIn', 0),
+      customRest: {
+        ...(existing.customRest && typeof existing.customRest === 'object' ? existing.customRest : {}),
+        url: _tpStr('tariffProviderRestUrl', ''),
+        method: _tpStr('tariffProviderRestMethod', 'GET'),
+        authMode: _tpStr('tariffProviderRestAuthMode', 'none'),
+        apiKeyHeader: _tpStr('tariffProviderApiKeyHeader', 'x-api-key'),
+        arrayPath: _tpStr('tariffProviderArrayPath', ''),
+        startPath: _tpStr('tariffProviderStartPath', 'startsAt'),
+        endPath: _tpStr('tariffProviderEndPath', 'endsAt'),
+        pricePath: _tpStr('tariffProviderPricePath', 'total'),
+        unit: _tpStr('tariffProviderUnit', 'EUR/kWh'),
+        headersJson: _tpStr('tariffProviderHeadersJson', ''),
+      },
+    };
+  }
+  function applyTariffProviderUI(config) {
+    const cfg = config && typeof config === 'object' ? config : {};
+    const credentials = cfg.credentials && typeof cfg.credentials === 'object' ? cfg.credentials : {};
+    const formula = cfg.formula && typeof cfg.formula === 'object' ? cfg.formula : {};
+    const custom = cfg.customRest && typeof cfg.customRest === 'object' ? cfg.customRest : {};
+    _tpSet('tariffProviderEnabled', cfg.enabled ? 'true' : 'false');
+    _tpSet('tariffProviderId', cfg.providerId || 'manual-dp');
+    _tpSet('tariffProviderSourceId', cfg.sourceId || (String(cfg.country || '').toUpperCase() === 'NL' ? 'energyzero' : 'entsoe'));
+    _tpSet('tariffProviderProfileId', cfg.providerProfileId || 'local-provider');
+    _tpSet('tariffProviderActivateLogic', cfg.activateTariffLogic !== false);
+    _tpSet('tariffProviderAutomaticMode', cfg.automaticMode !== false);
+    _tpSet('tariffProviderAutoCouple', cfg.autoCoupleDatapoints !== false);
+    _tpSet('tariffProviderCountry', String(cfg.country || 'DE').toUpperCase() === 'NL' ? 'NL' : 'DE');
+    _tpSet('tariffProviderTimeZone', cfg.timeZone || (String(cfg.country || '').toUpperCase() === 'NL' ? 'Europe/Amsterdam' : 'Europe/Berlin'));
+    _tpSet('tariffProviderResolution', cfg.resolutionMinutes || 15);
+    _tpSet('tariffProviderRefresh', cfg.refreshMinutes || 15);
+    _tpSet('tariffProviderPriceComponent', cfg.priceComponent || 'total');
+    _tpSet('tariffProviderAccessToken', credentials.accessToken || '');
+    _tpSet('tariffProviderSecurityToken', credentials.securityToken || '');
+    _tpSet('tariffProviderHomeId', cfg.homeId || '');
+    _tpSet('tariffProviderClientId', credentials.clientId || '');
+    _tpSet('tariffProviderClientSecret', credentials.clientSecret || '');
+    _tpSet('tariffProviderTokenUrl', credentials.tokenUrl || cfg.tokenUrl || '');
+    _tpSet('tariffProviderPricesUrl', cfg.pricesUrl || '');
+    _tpSet('tariffProviderPostalCode', cfg.postalCode || '');
+    _tpSet('tariffProviderMarketMultiplier', formula.marketMultiplier ?? 1);
+    _tpSet('tariffProviderSupplierMarkup', formula.supplierMarkupEurPerKwh ?? 0);
+    _tpSet('tariffProviderGridVariable', formula.gridVariableEurPerKwh ?? 0);
+    _tpSet('tariffProviderTax', formula.taxEurPerKwh ?? 0);
+    _tpSet('tariffProviderOtherVariable', formula.otherVariableEurPerKwh ?? 0);
+    _tpSet('tariffProviderVatPct', formula.vatPct ?? 0);
+    _tpSet('tariffProviderFeedIn', cfg.feedInEurPerKwh ?? 0);
+    _tpSet('tariffProviderRestUrl', custom.url || '');
+    _tpSet('tariffProviderRestMethod', custom.method || 'GET');
+    _tpSet('tariffProviderRestAuthMode', custom.authMode || 'none');
+    _tpSet('tariffProviderBearerToken', credentials.bearerToken || '');
+    _tpSet('tariffProviderApiKey', credentials.apiKey || '');
+    _tpSet('tariffProviderApiKeyHeader', custom.apiKeyHeader || 'x-api-key');
+    _tpSet('tariffProviderUsername', credentials.username || '');
+    _tpSet('tariffProviderPassword', credentials.password || '');
+    _tpSet('tariffProviderArrayPath', custom.arrayPath || '');
+    _tpSet('tariffProviderStartPath', custom.startPath || 'startsAt');
+    _tpSet('tariffProviderEndPath', custom.endPath || 'endsAt');
+    _tpSet('tariffProviderPricePath', custom.pricePath || 'total');
+    _tpSet('tariffProviderUnit', custom.unit || 'EUR/kWh');
+    _tpSet('tariffProviderHeadersJson', custom.headersJson || '');
+    loadTariffProviderRegistry().then(() => {
+      if (cfg.enabled && cfg.providerId !== 'manual-dp' && cfg.autoCoupleDatapoints !== false) _coupleTariffProviderDatapointsSync();
+    }).catch(() => {});
+  }
+  async function testTariffProviderConnection() {
+    try {
+      _setTariffProviderStatus('Verbindung wird geprüft…');
+      const cfg = collectTariffProviderConfig();
+      const data = await fetchJson('/api/installer/tariff-provider/test', { method: 'POST', body: JSON.stringify({ config: cfg }) });
+      const current = Number.isFinite(Number(data.currentPriceEurPerKwh)) ? ` · aktuell ${Number(data.currentPriceEurPerKwh).toFixed(4)} €/kWh` : '';
+      _setTariffProviderStatus(`OK · ${data.intervalCount || 0} Intervalle · heute ${data.todayCount || 0} · morgen ${data.tomorrowCount || 0}${current}`, 'ok');
+      if (cfg.enabled && cfg.providerId !== 'manual-dp' && cfg.autoCoupleDatapoints) await coupleTariffProviderDatapoints(false);
+    } catch (e) {
+      _setTariffProviderStatus('Fehler: ' + (e && e.message ? e.message : e), 'error');
+    }
+  }
+
   // Live / Kennzahlen (für die unteren Kacheln in der VIS)
   // Hinweis: Wenn diese DPs leer bleiben, kann der Adapter (falls History/Influx verfügbar) kWh-Werte automatisch aus Leistung integrieren.
   const LIVE_DP_FIELDS = [
@@ -1165,6 +1362,14 @@ interface EmsAppsWindow extends Window {
     { key: 'socObjectId', label: 'SoC (%)', requiredModes: ['targetPower','limits','enableFlags'] },
     { key: 'batteryPowerObjectId', label: 'Ist-Leistung (W) (optional)', requiredModes: [] },
     { key: 'dcPvPowerObjectId', label: 'DC-/Hybrid-PV Erzeugung (W)', requiredModes: [], showForCoupling: ['dc'], hint: 'Nur bei DC-/Hybrid-Speichern: Erzeugungsleistung des Hybrid-/PV-Wechselrichters. Dieser Wert ist eine Messung, kein Batterie-Sollwert, und hilft bei Forecast-/0-Einspeise-/FENECON-Erkennung.' },
+    { key: 'feneconGridSetpointObjectId', label: 'FENECON FEMS-NVP-Ziel (W)', requiredModes: ['targetPower'], showForVendor: ['fenecon-openems'], hint: 'Nur für FENECON DC/Hybrid im Modus FEMS-NVP-Regler: ctrlBalancing0/SetGridActivePower. Positive Werte = gewünschter Netzbezug, negative Werte = gewünschte Einspeisung. Registeradresse ist systemspezifisch.' },
+    { key: 'feneconEssActualPowerObjectId', label: 'FENECON ESS-Aktor-Istleistung (W)', requiredModes: [], showForVendor: ['fenecon-openems'], hint: 'Für Hybridregelung empfohlen: ess0/ActivePower (typisch Register 604). Dieser Wert dient dem Regelkreis; die allgemeine Ist-Leistung kann separat für Anzeige/History genutzt werden.' },
+    { key: 'feneconMinPowerObjectId', label: 'FENECON momentane Mindestleistung (W)', requiredModes: [], showForVendor: ['fenecon-openems'], hint: 'Optional: momentane Untergrenze des ESS-Sollwerts (typisch 702).' },
+    { key: 'feneconMaxPowerObjectId', label: 'FENECON momentane Maximalleistung (W)', requiredModes: [], showForVendor: ['fenecon-openems'], hint: 'Optional: momentane Obergrenze des ESS-Sollwerts (typisch 704).' },
+    { key: 'feneconActualSetpointObjectId', label: 'FENECON Vorgabe-Readback (W)', requiredModes: [], showForVendor: ['fenecon-openems'], hint: 'Optionales Readback der tatsächlich aktiven externen Vorgabe.' },
+    { key: 'feneconPvDcObjectId', label: 'FENECON interne DC-PV (W)', requiredModes: [], showForVendor: ['fenecon-openems'], hint: 'Interne DC-PV des Hybridwechselrichters (typisch ProductionDcActualPower / 339). Nur Anzeige, Bilanzierung und Plausibilisierung; kein zusätzlicher Feed-forward im nativen FEMS-Regler.' },
+    { key: 'feneconPvAcObjectId', label: 'FENECON externe AC-PV (W)', requiredModes: [], showForVendor: ['fenecon-openems'], hint: 'Externe AC-PV-Erzeugung (typisch ProductionAcActivePower / 331).' },
+    { key: 'feneconPvTotalObjectId', label: 'FENECON gesamte PV-Erzeugung (W)', requiredModes: [], showForVendor: ['fenecon-openems'], hint: 'Gesamte Produktion (typisch ProductionActivePower / 327). Nicht zusätzlich zu Einzelquellen doppelt zählen.' },
     { key: 'targetPowerObjectId', label: 'Sollleistung signed (W)', requiredModes: ['targetPower'], hint: 'Allgemeiner bidirektionaler Sollwert. NexoWatt-Konvention: +W = Entladen, -W = Laden. Wird genutzt, wenn keine getrennten Ziel-DPs gesetzt sind oder als Fallback fuer eine fehlende Split-Richtung.' },
     { key: 'targetChargePowerObjectId', label: 'Sollwert Laden (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional: positiver Lade-Sollwert. Kann zusammen mit Entladen oder einzeln gemappt werden; bei Split wird die Gegenrichtung auf 0 gesetzt.' },
     { key: 'targetDischargePowerObjectId', label: 'Sollwert Entladen (W) getrennt', requiredModes: ['targetPower'], hint: 'Optional: positiver Entlade-Sollwert. Kann zusammen mit Laden oder einzeln gemappt werden; bei Split wird die Gegenrichtung auf 0 gesetzt.' },
@@ -1201,8 +1406,8 @@ interface EmsAppsWindow extends Window {
   const shadowJsonDetailsOpen = new Set();
 
 
-  const HEMS_APP_IDS = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet']);
-  const HOME_LICENSE_FEATURES = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations','nlP1','nlP1Basic','p1Dsmr']);
+  const HEMS_APP_IDS = new Set(['charging', 'storage', 'thermal', 'heatingrod', 'threshold', 'relay', 'aiAdvisor', 'tariff', 'para14a', 'energyWallet', 'energyLedger']);
+  const HOME_LICENSE_FEATURES = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations','energyLedger','energyLedgerBasic','energyOriginAccounting','energyOriginEvidenceExport','nlP1','nlP1Basic','p1Dsmr']);
   const APP_LICENSE_FEATURES = Object.freeze({
     charging: 'chargingManagement',
     peak: 'peakShaving',
@@ -1511,6 +1716,11 @@ interface EmsAppsWindow extends Window {
         // die Speicher direkt wieder anbinden kann, statt bei "Noch keine Speicher"
         // festzuhängen.
         socId: '', signedPowerId: '', chargePowerId: '', dischargePowerId: '', pvPowerId: '',
+        vendorProfile: 'generic', feneconControlMode: 'auto',
+        feneconGridSetpointId: '', feneconEssActualPowerId: '', feneconMinPowerId: '', feneconMaxPowerId: '',
+        feneconActualSetpointId: '', feneconPvDcId: '', feneconPvAcId: '', feneconPvTotalId: '',
+        feneconPvPassthroughThresholdW: 200, feneconPvReleaseThresholdW: 50,
+        feneconPvReleaseDelaySec: 120, feneconApiTimeoutSec: 10,
         setChargePowerId: '', setDischargePowerId: '', setSignedPowerId: '',
         capacityKWh: (row.capacityKWh !== undefined && row.capacityKWh !== null && row.capacityKWh !== '') ? Number(row.capacityKWh) : '',
         maxChargeW: (row.maxChargeW !== undefined && row.maxChargeW !== null && row.maxChargeW !== '') ? Number(row.maxChargeW) : '',
@@ -1558,15 +1768,35 @@ interface EmsAppsWindow extends Window {
       return fallback;
     };
     const couplingRaw = textFrom('coupling', 'storageCoupling').toLowerCase();
+    const vendorRaw = textFrom('vendorProfile', 'storageVendorProfile', 'profile', 'manufacturerProfile').toLowerCase();
+    const vendorProfile = normalizeStorageVendorProfile(vendorRaw || 'generic');
+    const feneconModeRaw = textFrom('feneconControlMode', 'feneconHybridControlMode', 'controlModeMode').toLowerCase();
+    const feneconControlMode = ['fems-grid', 'fems', 'fems-nvp', 'native', 'grid-target'].includes(feneconModeRaw)
+      ? 'fems-grid'
+      : (['direct-ess', 'direct', 'ess', 'direct-power'].includes(feneconModeRaw) ? 'direct-ess' : 'auto');
     return {
       enabled: boolFrom(true, 'enabled', 'active'),
       name: textFrom('name', 'label', 'title') || `Speicher ${index + 1}`,
       coupling: couplingRaw === 'dc' ? 'dc' : (couplingRaw === 'ac' ? 'ac' : ''),
+      vendorProfile,
+      feneconControlMode,
       socId: textFrom('socId', 'socObjectId', 'socDp', 'storageSocId', 'storageSoc'),
       signedPowerId: textFrom('signedPowerId', 'batteryPowerObjectId', 'signedPowerDp', 'powerObjectId', 'powerId', 'batteryPower'),
       chargePowerId: textFrom('chargePowerId', 'batteryChargePowerObjectId', 'chargePowerDp', 'chargeDp', 'storageChargePower'),
       dischargePowerId: textFrom('dischargePowerId', 'batteryDischargePowerObjectId', 'dischargePowerDp', 'dischargeDp', 'storageDischargePower'),
       pvPowerId: textFrom('pvPowerId', 'pvPowerObjectId', 'pvPowerDp', 'storagePvPowerId'),
+      feneconGridSetpointId: textFrom('feneconGridSetpointId', 'feneconGridSetpointObjectId', 'femsGridSetpointId', 'femsGridSetpointObjectId'),
+      feneconEssActualPowerId: textFrom('feneconEssActualPowerId', 'feneconEssActualPowerObjectId', 'feneconActivePowerId'),
+      feneconMinPowerId: textFrom('feneconMinPowerId', 'feneconMinPowerObjectId', 'feneconMinimumPowerId'),
+      feneconMaxPowerId: textFrom('feneconMaxPowerId', 'feneconMaxPowerObjectId', 'feneconMaximumPowerId'),
+      feneconActualSetpointId: textFrom('feneconActualSetpointId', 'feneconActualSetpointObjectId', 'feneconSetpointReadbackId'),
+      feneconPvDcId: textFrom('feneconPvDcId', 'feneconPvDcObjectId', 'feneconProductionDcId'),
+      feneconPvAcId: textFrom('feneconPvAcId', 'feneconPvAcObjectId', 'feneconProductionAcId'),
+      feneconPvTotalId: textFrom('feneconPvTotalId', 'feneconPvTotalObjectId', 'feneconProductionTotalId'),
+      feneconPvPassthroughThresholdW: numberFrom('feneconPvPassthroughThresholdW', 'feneconPvOnThresholdW') || 200,
+      feneconPvReleaseThresholdW: numberFrom('feneconPvReleaseThresholdW', 'feneconPvOffThresholdW') || 50,
+      feneconPvReleaseDelaySec: numberFrom('feneconPvReleaseDelaySec', 'feneconPvOffDelaySec') || 120,
+      feneconApiTimeoutSec: numberFrom('feneconApiTimeoutSec') || 10,
       invertSignedPowerSign: boolFrom(false, 'invertSignedPowerSign', 'batteryPowerInvert', 'invertPowerSign'),
       invertChargeSign: boolFrom(false, 'invertChargeSign', 'batteryChargePowerInvert'),
       invertDischargeSign: boolFrom(false, 'invertDischargeSign', 'batteryDischargePowerInvert'),
@@ -1953,7 +2183,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
       // Basic capability hints (heuristic by input-id)
       const expectWrite = /setCurrentAId|setPowerWId|enableWriteId|lockWriteId|WriteId/i.test(inp.id);
-      const expectRead = /powerId|energyTotalId|statusId|activeId|onlineId|rfidReadId|budgetPowerId|gridPowerId|pvSurplusPowerId|ReadId/i.test(inp.id);
+      const expectRead = /powerId|energyTotalId|statusId|activeId|vehicleConnectedId|chargeDemandId|heartbeatId|onlineId|rfidReadId|budgetPowerId|gridPowerId|pvSurplusPowerId|ReadId/i.test(inp.id);
 
       if (expectWrite && info.common && info.common.write === false) {
         _setBadge(inp.id, 'warn', 'read-only');
@@ -2964,7 +3194,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       para14a: { tab: 'para14a', label: '§14a konfigurieren' },
       multiuse: { tab: 'multiuse', label: 'MultiUse konfigurieren' },
       meshMicrogrid: { tab: 'meshmicrogrid', label: 'Mesh/Microgrid konfigurieren', operatorUrl: '/mesh/microgrid', operatorLabel: 'Betreiberansicht öffnen' },
-      energyLedger: { url: '/ledger/local-kwh', label: 'Betreiberansicht / Export öffnen' }
+      energyLedger: { tab: 'ledger', label: 'Energieherkunft konfigurieren', operatorUrl: '/ledger/energy-origin', operatorLabel: 'Betreiberansicht öffnen' }
     };
 
     function appendAppConfigNavigation(body, app, st) {
@@ -3236,6 +3466,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       // die EOS-App installiert ist. Nicht installierte Module sollen nicht
       // als leere Konfigurationsbereiche im App-Center auftauchen.
       { tab: 'meshmicrogrid', app: 'meshMicrogrid' },
+      { tab: 'ledger', app: 'energyLedger' },
     ];
 
     for (const t of tabMap) {
@@ -9092,6 +9323,18 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     return 'generic';
   }
 
+
+  function normalizeFeneconControlMode(v) {
+    const s = String(v || '').trim().toLowerCase();
+    if (['fems-grid', 'fems', 'fems-nvp', 'native', 'native-grid', 'grid-target'].includes(s)) return 'fems-grid';
+    if (['direct-ess', 'direct', 'ess', 'set-active-power', 'direct-power'].includes(s)) return 'direct-ess';
+    return 'auto';
+  }
+
+  function isFeneconHybridUi(profile, coupling) {
+    return normalizeStorageVendorProfile(profile) === 'fenecon-openems' && String(coupling || '').trim().toLowerCase() === 'dc';
+  }
+
   /**
    * Code-Teil: getStorageVendorProfile
    * Zweck: Liest das ausgewaehlte Herstellerprofil im Speicher-Reiter.
@@ -9122,7 +9365,29 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
    */
   function updateStorageVendorProfileUi() {
     const profile = getStorageVendorProfile();
-    if (els.storageFeneconOptionsRow) els.storageFeneconOptionsRow.style.display = (profile === 'fenecon-openems') ? '' : 'none';
+    const isFenecon = profile === 'fenecon-openems';
+    if (els.storageFeneconOptionsRow) els.storageFeneconOptionsRow.style.display = isFenecon ? '' : 'none';
+    let feneconMode = 'auto';
+    if (els.storageFeneconControlMode) {
+      els.storageFeneconControlMode.disabled = !isFenecon;
+      const mode = String(els.storageFeneconControlMode.value || 'auto');
+      if (!['auto', 'fems-grid', 'direct-ess'].includes(mode)) els.storageFeneconControlMode.value = 'auto';
+      feneconMode = String(els.storageFeneconControlMode.value || 'auto');
+    }
+    const feneconHybridAuto = isFenecon && getStorageCoupling() === 'dc' && feneconMode === 'auto';
+    if (els.storageFeneconHybridAutoSettings) els.storageFeneconHybridAutoSettings.style.display = feneconHybridAuto ? 'grid' : 'none';
+    if (els.storageFeneconDayNoWrite) {
+      els.storageFeneconDayNoWrite.checked = feneconHybridAuto;
+      els.storageFeneconDayNoWrite.disabled = true;
+    }
+    if (els.storageFeneconAssist) {
+      els.storageFeneconAssist.checked = false;
+      els.storageFeneconAssist.disabled = true;
+    }
+    if (els.storageFeneconAcMode) {
+      els.storageFeneconAcMode.checked = isFenecon;
+      els.storageFeneconAcMode.disabled = true;
+    }
     if (els.storageSungrowOptionsRow) els.storageSungrowOptionsRow.style.display = (profile === 'sungrow-hybrid') ? '' : 'none';
     if (els.storageE3dcOptionsRow) els.storageE3dcOptionsRow.style.display = (profile === 'e3dc-rscp') ? '' : 'none';
   }
@@ -9196,7 +9461,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       ? singleStorageCfg.standaloneSelfImportThresholdW
       : singleStorageCfg.selfImportThresholdW;
     sf.selfTargetGridImportW = _clampInt(sf.selfTargetGridImportW, 0, 1000000, _clampInt(singleTargetRaw, 0, 1000000, 50));
-    sf.selfImportThresholdW = _clampInt(sf.selfImportThresholdW, 0, 1000000, _clampInt(singleDeadbandRaw, 0, 1000000, 50));
+    sf.selfImportThresholdW = _clampInt(sf.selfImportThresholdW, 0, 1000000, _clampInt(singleDeadbandRaw, 0, 1000000, 20));
 
     sf.storages = Array.isArray(sf.storages) ? sf.storages : [];
     sf.groups = Array.isArray(sf.groups) ? sf.groups : [];
@@ -9590,11 +9855,18 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         const cpl = String(st.coupling || '').trim().toUpperCase() || 'AUTO';
         const grp = String(st.group || '').trim();
         const hasIst = !!(String(st.socId || '').trim() || String(st.signedPowerId || '').trim() || String(st.chargePowerId || '').trim() || String(st.dischargePowerId || '').trim());
-        const hasSet = !!(String(st.setSignedPowerId || '').trim() || String(st.setChargePowerId || '').trim() || String(st.setDischargePowerId || '').trim());
+        const hasSet = !!(String(st.feneconGridSetpointId || '').trim() || String(st.setSignedPowerId || '').trim() || String(st.setChargePowerId || '').trim() || String(st.setDischargePowerId || '').trim());
+        const vendor = normalizeStorageVendorProfile(st.vendorProfile || 'generic');
+        const feneconMode = String(st.feneconControlMode || 'auto');
+        const profileLabel = vendor === 'fenecon-openems'
+          ? `FENECON Hybrid · ${feneconMode === 'fems-grid'
+            ? 'FEMS-NVP-Master (Experte)'
+            : (feneconMode === 'direct-ess' ? 'Direkte ESS' : 'PV→FEMS / Nacht→ESS')}`
+          : 'Standard';
         btn.innerHTML = `
           <span class="nw-storagefarm-storage-pill__name">${htmlEscape(String(st.name || '').trim() || `Speicher ${i + 1}`)}</span>
           <span class="nw-storagefarm-storage-pill__meta">${st.enabled === false ? 'inaktiv' : 'aktiv'} · ${cpl}${sf.mode === 'groups' ? ` · ${htmlEscape(grp || 'ohne Gruppe')}` : ''}</span>
-          <span class="nw-storagefarm-storage-pill__meta">Ist: ${hasIst ? 'gesetzt' : 'fehlt'} · Soll: ${hasSet ? 'gesetzt' : 'fehlt'}</span>`;
+          <span class="nw-storagefarm-storage-pill__meta">${htmlEscape(profileLabel)} · Ist: ${hasIst ? 'gesetzt' : 'fehlt'} · Soll: ${hasSet ? 'gesetzt' : 'fehlt'}</span>`;
         btn.addEventListener('click', () => {
           _storageFarmSelectedIndex = i;
           buildStorageFarmUI();
@@ -9629,7 +9901,62 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         { value: '', label: 'Auto/Unbekannt' },
         { value: 'ac', label: 'AC' },
         { value: 'dc', label: 'DC' },
-      ], (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].coupling = String(v || '').trim().toLowerCase(); }));
+      ], (v) => {
+        const sf2 = _ensureStorageFarmCfg();
+        sf2.storages[i].coupling = String(v || '').trim().toLowerCase();
+        buildStorageFarmUI();
+      }));
+      grid.appendChild(mkSelectField('Regelprofil', `sf_${idx}_vendorProfile`, normalizeStorageVendorProfile(s.vendorProfile || 'generic'), [
+        { value: 'generic', label: 'Standard / herstellerunabhängig' },
+        { value: 'fenecon-openems', label: 'FENECON Hybrid / OpenEMS' },
+      ], (v) => {
+        const sf2 = _ensureStorageFarmCfg();
+        sf2.storages[i].vendorProfile = normalizeStorageVendorProfile(v);
+        if (sf2.storages[i].vendorProfile !== 'fenecon-openems') sf2.storages[i].feneconControlMode = 'auto';
+        buildStorageFarmUI();
+      }));
+
+      const farmVendorProfile = normalizeStorageVendorProfile(s.vendorProfile || 'generic');
+      if (farmVendorProfile === 'fenecon-openems') {
+        grid.appendChild(mkSelectField('FENECON-Regelart', `sf_${idx}_feneconControlMode`, s.feneconControlMode || 'auto', [
+          { value: 'auto', label: 'Automatisch: PV → FEMS, ohne PV → NexoWatt (empfohlen)' },
+          { value: 'direct-ess', label: 'Direkte ESS-Leistung – Farm-Teilnehmer / gemischte Farm' },
+          { value: 'fems-grid', label: 'FEMS-NVP-Ziel dauerhaft schreiben – Experte/Legacy' },
+        ], (v) => {
+          const sf2 = _ensureStorageFarmCfg();
+          sf2.storages[i].feneconControlMode = ['fems-grid', 'direct-ess'].includes(String(v || '')) ? String(v) : 'auto';
+          buildStorageFarmUI();
+        }));
+        grid.appendChild(mkGridHelp('Automatisch gilt nur für einen exklusiven FENECON DC/Hybrid-Speicher: Bei frischer PV schreibt NexoWatt nichts und FEMS regelt intern; erst nach dauerhaft fehlender PV übernimmt NexoWatt die direkte ESS-Regelung. In gemischten Farmen wird automatisch Direkte ESS-Leistung verwendet. Andere Hersteller bleiben unverändert.'));
+        if (String(s.feneconControlMode || 'auto') === 'auto') {
+          grid.appendChild(mkNumField('FEMS-Freigabe ab PV (W)', `sf_${idx}_feneconPvPassthroughThresholdW`, s.feneconPvPassthroughThresholdW ?? 200, (v) => {
+            const sf2 = _ensureStorageFarmCfg();
+            sf2.storages[i].feneconPvPassthroughThresholdW = Math.max(0, Number(v) || 0);
+          }, '200'));
+          grid.appendChild(mkNumField('Nachtprüfung unter PV (W)', `sf_${idx}_feneconPvReleaseThresholdW`, s.feneconPvReleaseThresholdW ?? 50, (v) => {
+            const sf2 = _ensureStorageFarmCfg();
+            const onW = Math.max(0, Number(sf2.storages[i].feneconPvPassthroughThresholdW) || 200);
+            sf2.storages[i].feneconPvReleaseThresholdW = Math.max(0, Math.min(onW, Number(v) || 0));
+          }, '50'));
+          grid.appendChild(mkNumField('PV-aus Bestätigung (s)', `sf_${idx}_feneconPvReleaseDelaySec`, s.feneconPvReleaseDelaySec ?? 120, (v) => {
+            const sf2 = _ensureStorageFarmCfg();
+            sf2.storages[i].feneconPvReleaseDelaySec = Math.max(0, Math.min(3600, Number(v) || 0));
+          }, '120'));
+          grid.appendChild(mkNumField('FEMS API-Watchdog (s)', `sf_${idx}_feneconApiTimeoutSec`, s.feneconApiTimeoutSec ?? 10, (v) => {
+            const sf2 = _ensureStorageFarmCfg();
+            sf2.storages[i].feneconApiTimeoutSec = Math.max(5, Math.min(300, Number(v) || 10));
+          }, '10'));
+          grid.appendChild(mkGridHelp('Die Umschaltung nutzt ausschließlich eine frische PV-Messung. Fehlende oder veraltete PV-Daten lassen FEMS fail-safe führend. Der API-Watchdog-Wert muss zum Timeout der FEMS-Schreib-App passen.'));
+        }
+        grid.appendChild(mkDpField('FEMS NVP-Ziel schreiben (W)', `sf_${idx}_feneconGridSetpointId`, s.feneconGridSetpointId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconGridSetpointId = v; }, 'ctrlBalancing0/SetGridActivePower · systemspezifisch'));
+        grid.appendChild(mkDpField('FENECON ESS-Aktor-Istleistung (W)', `sf_${idx}_feneconEssActualPowerId`, s.feneconEssActualPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconEssActualPowerId = v; }, 'ess0/ActivePower · typ. 604'));
+        grid.appendChild(mkDpField('FENECON Mindestleistung (W)', `sf_${idx}_feneconMinPowerId`, s.feneconMinPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconMinPowerId = v; }, 'optional · typ. 702'));
+        grid.appendChild(mkDpField('FENECON Maximalleistung (W)', `sf_${idx}_feneconMaxPowerId`, s.feneconMaxPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconMaxPowerId = v; }, 'optional · typ. 704'));
+        grid.appendChild(mkDpField('FENECON Vorgabe-Readback (W)', `sf_${idx}_feneconActualSetpointId`, s.feneconActualSetpointId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconActualSetpointId = v; }, 'optional'));
+        grid.appendChild(mkDpField('FENECON interne DC-PV (W)', `sf_${idx}_feneconPvDcId`, s.feneconPvDcId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconPvDcId = v; }, 'ProductionDcActualPower · typ. 339'));
+        grid.appendChild(mkDpField('FENECON externe AC-PV (W)', `sf_${idx}_feneconPvAcId`, s.feneconPvAcId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconPvAcId = v; }, 'ProductionAcActivePower · typ. 331'));
+        grid.appendChild(mkDpField('FENECON gesamte PV (W)', `sf_${idx}_feneconPvTotalId`, s.feneconPvTotalId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconPvTotalId = v; }, 'ProductionActivePower · typ. 327'));
+      }
 
       grid.appendChild(mkDpField('PV-/WR-Leistung (W)', `sf_${idx}_pvPowerId`, s.pvPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].pvPowerId = v; }, 'optional · DC wird addiert, AC dient als Anlagen-PV-Fallback'));
       grid.appendChild(mkGridHelp('PV-/WR-Leistung passend zur Kopplung zuordnen. Derselbe Wechselrichter-DP wird in der Farm nur einmal gezählt. Bei vorhandener Anlagen-PV werden AC-/unbekannte Farmwerte nicht doppelt addiert; DC-/Hybrid-PV wird nur ergänzt, wenn sie noch nicht enthalten ist.'));
@@ -9698,6 +10025,20 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
           enabled: true,
           name: `Speicher ${sf2.storages.length + 1}`,
           coupling: '',
+          vendorProfile: 'generic',
+          feneconControlMode: 'auto',
+          feneconGridSetpointId: '',
+          feneconEssActualPowerId: '',
+          feneconMinPowerId: '',
+          feneconMaxPowerId: '',
+          feneconActualSetpointId: '',
+          feneconPvDcId: '',
+          feneconPvAcId: '',
+          feneconPvTotalId: '',
+          feneconPvPassthroughThresholdW: 200,
+          feneconPvReleaseThresholdW: 50,
+          feneconPvReleaseDelaySec: 120,
+          feneconApiTimeoutSec: 10,
           socId: '',
           signedPowerId: '',
           chargePowerId: '',
@@ -10629,10 +10970,20 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       dpWrap.style.gap = '10px';
 
       dpWrap.appendChild(mkRow('Leistung (W)', mkIo(`evcs_${i}_powerId`, rowCfg.powerId, v => _updateEvcsField(i, 'powerId', v))));
-      dpWrap.appendChild(mkRow('Energie (kWh)', mkIo(`evcs_${i}_energyTotalId`, rowCfg.energyTotalId, v => _updateEvcsField(i, 'energyTotalId', v))));
-      dpWrap.appendChild(mkRow('Status (optional)', mkIo(`evcs_${i}_statusId`, rowCfg.statusId, v => _updateEvcsField(i, 'statusId', v))));
+      dpWrap.appendChild(mkRow('Energiezähler (intern kWh)', mkIo(`evcs_${i}_energyTotalId`, rowCfg.energyTotalId, v => _updateEvcsField(i, 'energyTotalId', v))));
+      const energyInputWh = document.createElement('input');
+      energyInputWh.type = 'checkbox';
+      energyInputWh.className = 'nw-config-checkbox';
+      energyInputWh.checked = !!(rowCfg && rowCfg.energyTotalInputIsWh === true);
+      energyInputWh.title = 'Aktivieren, wenn der kumulierte Ladeenergie-DP Wh liefert. NexoWatt teilt den Wert durch 1000 und führt ihn intern in kWh.';
+      energyInputWh.addEventListener('change', () => _updateEvcsField(i, 'energyTotalInputIsWh', !!energyInputWh.checked));
+      dpWrap.appendChild(mkRow('Energie-DP liefert Wh → in kWh umrechnen', energyInputWh));
+      dpWrap.appendChild(mkRow('Status / CP-Zustand (lesen, optional)', mkIo(`evcs_${i}_statusId`, rowCfg.statusId, v => _updateEvcsField(i, 'statusId', v))));
+      dpWrap.appendChild(mkRow('Fahrzeug verbunden (lesen, optional)', mkIo(`evcs_${i}_vehicleConnectedId`, rowCfg.vehicleConnectedId, v => _updateEvcsField(i, 'vehicleConnectedId', v))));
+      dpWrap.appendChild(mkRow('Ladebedarf / Ladebereit (lesen, optional)', mkIo(`evcs_${i}_chargeDemandId`, rowCfg.chargeDemandId, v => _updateEvcsField(i, 'chargeDemandId', v))));
+      dpWrap.appendChild(mkRow('Heartbeat / LastSeen (lesen, optional)', mkIo(`evcs_${i}_heartbeatId`, rowCfg.heartbeatId, v => _updateEvcsField(i, 'heartbeatId', v))));
       dpWrap.appendChild(mkRow('Fahrzeug‑SoC (%) (optional)', mkIo(`evcs_${i}_vehicleSocId`, rowCfg.vehicleSocId, v => _updateEvcsField(i, 'vehicleSocId', v))));
-      dpWrap.appendChild(mkRow('Fahrzeug/Ladevorgang aktiv (lesen, optional)', mkIo(`evcs_${i}_activeId`, rowCfg.activeId, v => _updateEvcsField(i, 'activeId', v))));
+      dpWrap.appendChild(mkRow('Fahrzeug/Ladevorgang aktiv (lesen, optional) · Legacy, keine Reservierungsquelle', mkIo(`evcs_${i}_activeId`, rowCfg.activeId, v => _updateEvcsField(i, 'activeId', v))));
 
       dpWrap.appendChild(mkRow('Sollstrom (A)', mkIo(`evcs_${i}_setCurrentAId`, rowCfg.setCurrentAId, v => _updateEvcsField(i, 'setCurrentAId', v))));
       dpWrap.appendChild(mkRow('Sollleistung (W)', mkIo(`evcs_${i}_setPowerWId`, rowCfg.setPowerWId, v => _updateEvcsField(i, 'setPowerWId', v))));
@@ -10646,6 +10997,47 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       dpDetails.appendChild(dpWrap);
       body.appendChild(dpDetails);
+
+      // Herstellerunabhängige Ladebedarfserkennung. Die Felder sind optional:
+      // bekannte OCPP-/IEC-/ABL-Zustände werden automatisch normalisiert, bei
+      // unbekannten Herstellern kann der Installer die Rohwerte frei zuordnen.
+      const demandDetails = document.createElement('details');
+      demandDetails.style.marginTop = '8px';
+      const demandSummary = document.createElement('summary');
+      demandSummary.textContent = 'Ladebedarf / Herstellerstatus (optional)';
+      demandSummary.style.cursor = 'pointer';
+      demandSummary.style.userSelect = 'none';
+      demandDetails.appendChild(demandSummary);
+      const demandWrap = document.createElement('div');
+      demandWrap.style.marginTop = '10px';
+      demandWrap.style.display = 'grid';
+      demandWrap.style.gap = '10px';
+
+      const mkSemanticInput = (field, placeholder) => {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'nw-config-input';
+        input.value = valueOrEmpty(rowCfg[field]);
+        input.placeholder = placeholder;
+        input.title = 'Mehrere Werte mit Komma, Semikolon oder Zeilenumbruch trennen. *Text* erlaubt Teiltreffer.';
+        input.addEventListener('input', () => _updateEvcsField(i, field, String(input.value || '')));
+        return input;
+      };
+
+      demandWrap.appendChild(mkRow('Fahrzeug verbunden: TRUE-Werte', mkSemanticInput('vehicleConnectedTrueValues', 'z.B. true, 1, connected')));
+      demandWrap.appendChild(mkRow('Fahrzeug verbunden: FALSE-Werte', mkSemanticInput('vehicleConnectedFalseValues', 'z.B. false, 0, disconnected')));
+      demandWrap.appendChild(mkRow('Ladebedarf: TRUE-Werte', mkSemanticInput('chargeDemandTrueValues', 'z.B. true, 1, demand')));
+      demandWrap.appendChild(mkRow('Ladebedarf: FALSE-Werte', mkSemanticInput('chargeDemandFalseValues', 'z.B. false, 0, no-demand')));
+      demandWrap.appendChild(mkRow('Status: Ladebereit / lädt', mkSemanticInput('statusDemandValues', 'z.B. B2, C2, ready-to-charge')));
+      demandWrap.appendChild(mkRow('Status: verbunden, kein Bedarf', mkSemanticInput('statusConnectedValues', 'z.B. B1, connected')));
+      demandWrap.appendChild(mkRow('Status: nicht verbunden', mkSemanticInput('statusDisconnectedValues', 'z.B. A1, available')));
+      demandWrap.appendChild(mkRow('Status: Fahrzeug pausiert / kein Bedarf', mkSemanticInput('statusNoDemandValues', 'z.B. SuspendedEV, full')));
+      const demandHint = document.createElement('div');
+      demandHint.className = 'nw-muted';
+      demandHint.textContent = 'Priorität: reale Leistung → expliziter Ladebedarf → Fahrzeugkontakt → normalisierter Status. „Available“ allein reserviert keine Ladeleistung.';
+      demandWrap.appendChild(demandHint);
+      demandDetails.appendChild(demandWrap);
+      body.appendChild(demandDetails);
 
       // Erweitert (optional, aber hilfreich für stabile Regelung)
       const details = document.createElement('details');
@@ -11175,6 +11567,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // die lizenzabhängige App-Struktur neu erzeugen, danach die gespeicherten Toggles setzen.
     try { buildAppsUI(); } catch (_eBuildApps) {}
     setAppsFromConfig(currentConfig);
+    try { if (window.NexoWattEnergyOriginAppCenter) window.NexoWattEnergyOriginAppCenter.apply(currentConfig, _licenseEdition()); } catch (_eLedgerUi) {}
 
     // Plant params
     els.gridConnectionPower.value = numOrEmpty(currentConfig.installerConfig && currentConfig.installerConfig.gridConnectionPower);
@@ -11281,6 +11674,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // §14a (Netzsteuerung)
     try { buildPara14aUI(); } catch (_e) {}
 
+    // Direkte Tarifprovider + bestehende Tarif-DP-Zuordnung.
+    try { applyTariffProviderUI(currentConfig && currentConfig.tariffProvider); } catch (_e) {}
     // Tarife
     if (els.dpTariffs) {
       buildDpTable(
@@ -11409,20 +11804,29 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     const feneconModeActive = vendorProfile === 'fenecon-openems';
     const e3dcModeActive = vendorProfile === 'e3dc-rscp';
+    if (els.storageFeneconControlMode) {
+      const rawFeneconMode = String(stF.feneconControlMode || 'auto').trim().toLowerCase();
+      els.storageFeneconControlMode.value = ['auto', 'fems-grid', 'direct-ess'].includes(rawFeneconMode) ? rawFeneconMode : 'auto';
+      els.storageFeneconControlMode.disabled = !feneconModeActive;
+    }
     if (els.storageFeneconAcMode) {
       els.storageFeneconAcMode.checked = feneconModeActive;
     }
+    const feneconHybridAuto = feneconModeActive
+      && String(stF.coupling || 'ac').trim().toLowerCase() === 'dc'
+      && String(stF.feneconControlMode || 'auto').trim().toLowerCase() === 'auto';
     if (els.storageFeneconDayNoWrite) {
-      // Legacy-No-Write ist ab 0.8.124 fest deaktiviert. Ein im AppCenter
-      // zugeordneter FENECON/OpenEMS-Sollwert muss den Gate-/Executor-Pfad nutzen
-      // und als Watchdog-Keepalive zyklisch erneuert werden.
-      els.storageFeneconDayNoWrite.checked = false;
+      els.storageFeneconDayNoWrite.checked = feneconHybridAuto;
       els.storageFeneconDayNoWrite.disabled = true;
     }
+    if (els.storageFeneconPvOnThresholdW) els.storageFeneconPvOnThresholdW.value = String(Math.max(0, Number(stF.feneconPvPassthroughThresholdW ?? 200) || 200));
+    if (els.storageFeneconPvOffThresholdW) els.storageFeneconPvOffThresholdW.value = String(Math.max(0, Number(stF.feneconPvReleaseThresholdW ?? 50) || 50));
+    if (els.storageFeneconPvOffDelaySec) els.storageFeneconPvOffDelaySec.value = String(Math.max(0, Number(stF.feneconPvReleaseDelaySec ?? 120) || 120));
+    if (els.storageFeneconApiTimeoutSec) els.storageFeneconApiTimeoutSec.value = String(Math.max(5, Number(stF.feneconApiTimeoutSec ?? 10) || 10));
+    if (els.storageFeneconHybridAutoSettings) els.storageFeneconHybridAutoSettings.style.display = feneconHybridAuto ? 'grid' : 'none';
     if (els.storageFeneconAssist) {
-      // Der Assist bleibt optional, ist aber bei FENECON-Anlagen hilfreich, wenn
-      // trotz interner Freigabe und ausreichend SoC dauerhaft Netzbezug stehen bleibt.
-      els.storageFeneconAssist.checked = feneconModeActive && (stF.feneconAssistEnabled !== false);
+      els.storageFeneconAssist.checked = false;
+      els.storageFeneconAssist.disabled = true;
     }
     if (els.storageE3dcRscpEnabled) {
       els.storageE3dcRscpEnabled.checked = e3dcModeActive;
@@ -11532,8 +11936,15 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     }
 
     // Mappings (fill)
-    for (const k of ['powerId','energyTotalId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId']) {
+    const previousEnergyId = String(out.energyTotalId || '').trim();
+    for (const k of ['powerId','energyTotalId','statusId','activeId','vehicleConnectedId','chargeDemandId','heartbeatId','onlineId','setCurrentAId','setPowerWId','enableWriteId']) {
       if (ids[k]) setField(k, ids[k]);
+    }
+    const energyMappingWasApplied = !!ids.energyTotalId && (
+      overwrite || (onlyEmpty && !previousEnergyId)
+    );
+    if (energyMappingWasApplied) {
+      out.energyTotalInputIsWh = c && c.energyTotalInputIsWh === true;
     }
 
     // Defaults
@@ -11658,9 +12069,32 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
    * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
+  function _nwDeviceClass(dev) {
+    return String(dev && dev.deviceClass || '').trim();
+  }
   function _isNwEvcsCategory(cat) {
     const c = _nwNormCat(cat);
-    return (c === 'EVCS' || c === 'CHARGER' || c === 'DC_CHARGER' || c === 'EVSE');
+    return (c === 'EVCS' || c === 'EVSE');
+  }
+  function _isNwEvcsDevice(dev) {
+    const dc = _nwDeviceClass(dev);
+    return dc ? dc === 'evCharger' : _isNwEvcsCategory(dev && dev.category);
+  }
+  function _isNwPvDevice(dev) {
+    const dc = _nwDeviceClass(dev);
+    return dc ? dc === 'pvInverter' : _isNwPvInverterCategory(dev && dev.category);
+  }
+  function _isNwHeatDevice(dev) {
+    const dc = _nwDeviceClass(dev);
+    return dc ? dc === 'heat' : _isNwHeatCategory(dev && dev.category);
+  }
+  function _isNwStorageDevice(dev) {
+    const dc = _nwDeviceClass(dev);
+    return ['storageSystem','battery','batteryInverter'].includes(dc);
+  }
+  function _isNwMeterDevice(dev) {
+    const dc = _nwDeviceClass(dev);
+    return dc ? dc === 'meter' : _isNwMeterCategory(dev && dev.category);
   }
   /**
    * Code-Teil: _isNwPvInverterCategory
@@ -11693,6 +12127,16 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (v) return v;
     const v2 = (a && a[key]) ? String(a[key]).trim() : '';
     return v2;
+  }
+
+  function _nwGetWritableAlias(dev, key) {
+    const meta = dev && dev.aliasMeta && typeof dev.aliasMeta === 'object' ? dev.aliasMeta[key] : null;
+    if (meta && meta.write === true) return String(meta.id || _nwGetAlias(dev, key) || '').trim();
+    return '';
+  }
+  function _nwGetAliasUnit(dev, key) {
+    const meta = dev && dev.aliasMeta && typeof dev.aliasMeta === 'object' ? dev.aliasMeta[key] : null;
+    return String(meta && meta.unit ? meta.unit : '').replace(/\s+/g, '').toLowerCase();
   }
   /**
    * Code-Teil: _nwGetDpFallback
@@ -11738,7 +12182,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     // Metadata
     setIf('name', dev && dev.name ? dev.name : '');
-    if (onlyEmpty && out.enabled === undefined) out.enabled = true;
+    // Die Zuordnung aktiviert weder Ladepunkt noch App automatisch.
 
     const cat = _nwNormCat(dev && dev.category);
     if (cat === 'DC_CHARGER') setIf('chargerType', 'dc');
@@ -11746,8 +12190,36 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     // Datapoints (prefer aliases)
     setIf('powerId', _nwGetAlias(dev, 'r.power'));
-    setIf('energyTotalId', _nwGetAlias(dev, 'r.energyTotal'));
-    setIf('statusId', _nwGetAlias(dev, 'r.statusCode'));
+    const autoEnergyId = _nwGetAlias(dev, 'r.energyTotal');
+    const existingEnergyId = String(out.energyTotalId || '').trim();
+    const autoEnergyCanApply = !!autoEnergyId && (!onlyEmpty || !existingEnergyId);
+    if (autoEnergyCanApply) {
+      out.energyTotalId = autoEnergyId;
+      const unit = _nwGetAliasUnit(dev, 'r.energyTotal');
+      // Alias Contract v1 normiert r.energyTotal auf Wh. Legacy-/Fremdprofile
+      // koennen kWh liefern; deshalb wird der Haken aus den Objektmetadaten gesetzt.
+      out.energyTotalInputIsWh = unit === 'wh';
+    }
+    setIf('statusId',
+      _nwGetAlias(dev, 'r.statusCode')
+      || _nwGetAlias(dev, 'r.evcsState')
+      || _nwGetAlias(dev, 'r.cpState')
+      || _nwGetAlias(dev, 'r.statusText')
+      || _nwGetAlias(dev, 'r.status'));
+    setIf('vehicleConnectedId',
+      _nwGetAlias(dev, 'r.vehicleConnected')
+      || _nwGetAlias(dev, 'r.plugged')
+      || _nwGetAlias(dev, 'r.evConnected')
+      || _nwGetAlias(dev, 'r.cpConnected'));
+    setIf('chargeDemandId',
+      _nwGetAlias(dev, 'r.chargeDemand')
+      || _nwGetAlias(dev, 'r.vehicleDemand')
+      || _nwGetAlias(dev, 'r.readyToCharge')
+      || _nwGetAlias(dev, 'r.chargingRequested'));
+    setIf('heartbeatId',
+      _nwGetAlias(dev, 'r.heartbeat')
+      || _nwGetAlias(dev, 'comm.heartbeat')
+      || _nwGetAlias(dev, 'comm.lastSeenMs'));
     setIf('onlineId', _nwGetAlias(dev, 'comm.connected'));
 
     // Control (optional)
@@ -11758,19 +12230,19 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // erkannt werden, damit ein vorhandener Ladepunkt nicht als "nicht
     // steuerbar" im zentralen Budget erscheint.
     setIf('setCurrentAId',
-      _nwGetAlias(dev, 'ctrl.targetCurrentA')
-      || _nwGetAlias(dev, 'ctrl.currentLimitA')
-      || _nwGetAlias(dev, 'ctrl.setCurrentA')
+      _nwGetWritableAlias(dev, 'ctrl.targetCurrentA')
+      || _nwGetWritableAlias(dev, 'ctrl.currentLimitA')
+      || _nwGetWritableAlias(dev, 'ctrl.setCurrentA')
       || (dev && dev.dp && dev.dp.ctrlCurrentLimitA));
     setIf('setPowerWId',
-      _nwGetAlias(dev, 'ctrl.targetPowerW')
-      || _nwGetAlias(dev, 'ctrl.powerLimitW')
-      || _nwGetAlias(dev, 'ctrl.setPowerW')
+      _nwGetWritableAlias(dev, 'ctrl.targetPowerW')
+      || _nwGetWritableAlias(dev, 'ctrl.powerLimitW')
+      || _nwGetWritableAlias(dev, 'ctrl.setPowerW')
       || (dev && dev.dp && dev.dp.ctrlPowerLimitW));
     setIf('enableWriteId',
-      _nwGetAlias(dev, 'ctrl.run')
-      || _nwGetAlias(dev, 'ctrl.enable')
-      || _nwGetAlias(dev, 'ctrl.enabled')
+      _nwGetWritableAlias(dev, 'ctrl.run')
+      || _nwGetWritableAlias(dev, 'ctrl.enable')
+      || _nwGetWritableAlias(dev, 'ctrl.enabled')
       || (dev && dev.dp && dev.dp.ctrlRun));
 
     // Some devices expose "active" as status; we keep it optional
@@ -11867,14 +12339,14 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const cat = _nwNormCat(dev && dev.category);
     const hay = _nwDevHaystack(dev);
     let score = 0;
-    if (_isNwMeterCategory(cat)) score += 8;
+    if (_isNwMeterDevice(dev)) score += 12;
     if (_nwHasAlias(dev, 'r.powerImport')) score += 5;
     if (_nwHasAlias(dev, 'r.powerExport')) score += 5;
     if (_nwHasAlias(dev, 'r.power')) score += 2;
     if (/gridmeter|grid meter|grid\b|netz|nvp|verknuepf|verknüpf|mains/.test(hay)) score += 9;
     if (/pvmeter|pv meter|solar|wechselrichter|inverter|wr\b/.test(hay)) score -= 8;
     if (/loadmeter|lastmeter|verbrauch|consumption|house\s*load|gebäude|gebaeude|building/.test(hay)) score -= 6;
-    if (_isNwPvInverterCategory(cat) || _isNwStorageCategory(cat)) score -= 10;
+    if (_isNwPvDevice(dev) || _isNwStorageDevice(dev)) score -= 10;
     return score;
   }
   /**
@@ -11887,8 +12359,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const cat = _nwNormCat(dev && dev.category);
     const hay = _nwDevHaystack(dev);
     let score = 0;
-    if (_isNwPvInverterCategory(cat)) score += 10;
-    if (_isNwMeterCategory(cat)) score += 2;
+    if (_isNwPvDevice(dev)) score += 12;
+    if (_isNwMeterDevice(dev)) score += 2;
     if (_nwHasAlias(dev, 'r.power')) score += 3;
     if (/pvmeter|pv meter|pv\b|solar|wechselrichter|inverter|wr\b/.test(hay)) score += 8;
     if (/gridmeter|grid meter|grid\b|netz|nvp|verbrauch|consumption|loadmeter|lastmeter|ess|battery|akku|speicher/.test(hay)) score -= 7;
@@ -11904,7 +12376,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     const cat = _nwNormCat(dev && dev.category);
     const hay = _nwDevHaystack(dev);
     let score = 0;
-    if (_isNwStorageCategory(cat)) score += 10;
+    if (_isNwStorageDevice(dev)) score += 12;
     if (_nwHasAlias(dev, 'r.soc')) score += 5;
     if (_nwHasAlias(dev, 'r.powerCharge')) score += 3;
     if (_nwHasAlias(dev, 'r.powerDischarge')) score += 3;
@@ -12111,13 +12583,65 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     }
 
     // EVCS und Gebäudeverbrauch bleiben bewusst auf Auto, damit Summen/Bilanz konsistent bleiben.
-    if (list.some((dev) => _isNwEvcsCategory(dev && dev.category))) {
+    if (list.some((dev) => _isNwEvcsDevice(dev))) {
       out.notes.push('EV: Auto-Summe aus Ladepunkten');
     }
     out.notes.push('Gebäude: Auto-Bilanz');
 
     return out;
   }
+  function _nwAutoMapStorageAppFromDevices(devices) {
+    const rows = (Array.isArray(devices) ? devices : []).filter(_isNwStorageDevice);
+    const result = { changed: false, mapped: false, ambiguous: rows.length > 1, notes: [] };
+    if (rows.length !== 1) {
+      if (rows.length > 1) result.notes.push(`Speicher-App: ${rows.length} Speicher erkannt – Topologie/Farm bitte bestätigen`);
+      return result;
+    }
+    const dev = rows[0];
+    currentConfig.storage = currentConfig.storage && typeof currentConfig.storage === 'object' ? currentConfig.storage : {};
+    currentConfig.storage.datapoints = currentConfig.storage.datapoints && typeof currentConfig.storage.datapoints === 'object' ? currentConfig.storage.datapoints : {};
+    const dps = currentConfig.storage.datapoints;
+    const setEmpty = (key, value) => {
+      const val = String(value || '').trim();
+      if (!val || String(dps[key] || '').trim()) return false;
+      dps[key] = val;
+      result.changed = true;
+      result.mapped = true;
+      return true;
+    };
+    setEmpty('socObjectId', _nwGetAlias(dev, 'r.soc'));
+    setEmpty('batteryPowerObjectId', _nwGetAlias(dev, 'r.power'));
+    setEmpty('dcPvPowerObjectId', _nwGetAlias(dev, 'r.pvPower'));
+    setEmpty('runObjectId', _nwGetWritableAlias(dev, 'ctrl.run'));
+    setEmpty('maxChargeObjectId', _nwGetWritableAlias(dev, 'ctrl.maxChargePowerW'));
+    setEmpty('maxDischargeObjectId', _nwGetWritableAlias(dev, 'ctrl.maxDischargePowerW'));
+    setEmpty('chargeEnableObjectId', _nwGetWritableAlias(dev, 'ctrl.chargeEnable'));
+    setEmpty('dischargeEnableObjectId', _nwGetWritableAlias(dev, 'ctrl.dischargeEnable'));
+
+    // Exactly one command family. Existing manual mappings remain authoritative.
+    const hasExistingCommand = ['targetPowerObjectId','targetChargePowerObjectId','targetDischargePowerObjectId','e3dcSetPowerModeObjectId','e3dcSetPowerValueObjectId']
+      .some((key) => String(dps[key] || '').trim());
+    if (!hasExistingCommand) {
+      const charge = _nwGetWritableAlias(dev, 'ctrl.chargePowerW');
+      const discharge = _nwGetWritableAlias(dev, 'ctrl.dischargePowerW');
+      const signed = _nwGetWritableAlias(dev, 'ctrl.powerSetpointW');
+      if (charge && discharge) {
+        dps.targetChargePowerObjectId = charge;
+        dps.targetDischargePowerObjectId = discharge;
+        result.changed = true;
+        result.mapped = true;
+        result.notes.push('Speicher-Kommandofamilie: getrennt Laden/Entladen');
+      } else if (signed) {
+        dps.targetPowerObjectId = signed;
+        result.changed = true;
+        result.mapped = true;
+        result.notes.push('Speicher-Kommandofamilie: signed Sollwert');
+      }
+    }
+    if (result.mapped) result.notes.unshift(`Speicher-App: ${String(dev.name || dev.devId || 'Speicher')}`);
+    return result;
+  }
+
   /**
    * Code-Teil: nwDevicesQuickSetup
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -12136,15 +12660,37 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         setStatus('Schnell‑Inbetriebnahme: Keine Geräte unter nexowatt-devices.* gefunden.', 'error');
         return;
       }
-      const evcsDevs = devices.filter(d => _isNwEvcsCategory(d && d.category));
-      const pvDevs = devices.filter(d => _isNwPvInverterCategory(d && d.category));
-      const heatDevs = devices.filter(d => _isNwHeatCategory(d && d.category));
+      const evcsDevs = devices.filter(d => _isNwEvcsDevice(d));
+      const pvDevs = devices.filter(d => _isNwPvDevice(d));
+      const heatDevs = devices.filter(d => _isNwHeatDevice(d));
+      const meterDevs = devices.filter(d => _isNwMeterDevice(d));
+      const storageDevs = devices.filter(d => _isNwStorageDevice(d));
+      const solarChargers = devices.filter(d => _nwDeviceClass(d) === 'solarCharger');
+      const preview = [
+        `Geräteinventar: ${devices.length}`,
+        `Ladepunkte: ${evcsDevs.length}`,
+        `PV-Wechselrichter: ${pvDevs.length}`,
+        `NVP-/Energiemesser: ${meterDevs.length}`,
+        `Speicher: ${storageDevs.length}`,
+        `Wärmegeräte: ${heatDevs.length}`,
+        solarChargers.length ? `Solar-/DC-Laderegler (nicht EVCS): ${solarChargers.length}` : '',
+        '',
+        'Es werden nur leere Felder ergänzt. Apps/Geräte werden nicht aktiviert und es werden keine Hardwarebefehle geschrieben.',
+        storageDevs.length > 1 ? 'Mehrere Speicher: keine automatische Einzel-Speicherwahl; Farm/Topologie bleibt manuell.' : '',
+        meterDevs.length > 1 ? 'Mehrere Zähler: NVP-Zähler wird nur bei eindeutiger Bewertung gesetzt.' : '',
+      ].filter(Boolean).join('\n');
+      if (typeof window.confirm === 'function' && !window.confirm(preview + '\n\nZuordnungsvorschlag übernehmen?')) {
+        setStatus('Schnell‑Inbetriebnahme abgebrochen – keine Konfiguration geändert.');
+        return;
+      }
 
       let changed = false;
 
       // --- 0) Energiefluss-Basis automatisch aus stabilen Alias-DPs füllen ---
       const flowAuto = _nwAutoMapEnergyFlowFromDevices(devices);
       if (flowAuto && flowAuto.changed) changed = true;
+      const storageAuto = _nwAutoMapStorageAppFromDevices(devices);
+      if (storageAuto && storageAuto.changed) changed = true;
 
       // --- 1) Ladepunkte (EVCS) ---
       let evcsMapped = 0;
@@ -12191,7 +12737,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         const addOrUpdate = (dev) => {
           const name = String((dev && dev.name) || '').trim() || String((dev && dev.devId) || '').trim() || 'WR';
           const feedInLimitWId = _nwGetAlias(dev, 'ctrl.feedInLimitW') || '';
-          const pvLimitWId = _nwGetAlias(dev, 'ctrl.powerLimitW') || '';
+          const pvLimitWId = _nwGetWritableAlias(dev, 'ctrl.powerLimitW') || '';
           const pvLimitPctId = _nwGetAlias(dev, 'ctrl.powerLimitPct') || _nwGetAlias(dev, 'ctrlPvLimitPct') || '';
           const pvPowerReadId = _nwGetAlias(dev, 'r.pvPower') || _nwGetAlias(dev, 'r.power') || _nwGetAlias(dev, 'r.activePower') || (dev && dev.dp && dev.dp.powerW ? String(dev.dp.powerW).trim() : '') || '';
 
@@ -12305,8 +12851,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
           fs.consumers[slot - 1].consumerType = consumerType;
 
           // Optional control aliases (will be filled automatically once your adapter provides them)
-          const ctrlRun = _nwGetAlias(dev, 'ctrl.run') || (dev && dev.dp && dev.dp.ctrlRun) || '';
-          const ctrlLimitW = _nwGetAlias(dev, 'ctrl.powerLimitW') || (dev && dev.dp && dev.dp.ctrlPowerLimitW) || '';
+          const ctrlRun = _nwGetWritableAlias(dev, 'ctrl.run') || (dev && dev.dp && dev.dp.ctrlRun) || '';
+          const ctrlLimitW = _nwGetWritableAlias(dev, 'ctrl.powerLimitW') || (dev && dev.dp && dev.dp.ctrlPowerLimitW) || '';
           if (ctrlRun) {
             fs.consumers[slot - 1].ctrl = fs.consumers[slot - 1].ctrl || {};
             if (!String(fs.consumers[slot - 1].ctrl.switchWriteId || '').trim()) fs.consumers[slot - 1].ctrl.switchWriteId = ctrlRun;
@@ -12379,6 +12925,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       // UI refresh (targeted)
       try { buildEvcsUI(); } catch (_e) {}
+      try { rebuildStorageTable(); } catch (_e) {}
       try { buildGridConstraintsUI(); } catch (_e) {}
       try { buildFlowSlotsUI('consumers', FLOW_CONSUMER_SLOT_COUNT); } catch (_e) {}
       try { buildThermalUI(); } catch (_e) {}
@@ -12392,6 +12939,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       if (pvDevs.length) msgParts.push(`Wechselrichter: ${pvDevs.length} (+${pvAdded}/${pvUpdated})`);
       if (heatDevs.length) msgParts.push(`Wärmegeräte: ${heatDevs.length} (Slots: ${heatSlotsMapped}, §14a: +${heatPara14aAdded}/${heatPara14aUpdated})`);
       if (flowAuto && Array.isArray(flowAuto.notes) && flowAuto.notes.length) msgParts.push('Energiefluss: ' + flowAuto.notes.join(', '));
+      if (storageAuto && Array.isArray(storageAuto.notes) && storageAuto.notes.length) msgParts.push(storageAuto.notes.join(', '));
 
       if (!changed) {
         setStatus('Schnell‑Inbetriebnahme: keine Änderungen (alles bereits belegt).', 'ok');
@@ -12478,6 +13026,19 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     restoreArrayIfDangerouslyEmpty('meshMicrogrid', 'nodes', 'meshMicrogridNodes');
     restoreArrayIfDangerouslyEmpty('meshMicrogrid', 'targetGroups', 'meshMicrogridTargetGroups');
     restoreArrayIfDangerouslyEmpty('meshMicrogrid', 'localBridgeMappings', 'meshMicrogridLocalBridgeMappings');
+    try {
+      const srcRows = currentConfig && currentConfig.energyLedger && currentConfig.energyLedger.origin && Array.isArray(currentConfig.energyLedger.origin.chargePoints)
+        ? currentConfig.energyLedger.origin.chargePoints
+        : [];
+      const dstOrigin = out && out.energyLedger && out.energyLedger.origin && typeof out.energyLedger.origin === 'object'
+        ? out.energyLedger.origin
+        : null;
+      if (srcRows.length > 0 && dstOrigin && Array.isArray(dstOrigin.chargePoints) && dstOrigin.chargePoints.length === 0 && dstOrigin.__explicitDeleteAll !== true) {
+        dstOrigin.chargePoints = srcRows.slice();
+        dstOrigin.__releaseSafetyGate = true;
+        dstOrigin.__releaseSafetyGateReason = 'energyLedger.origin.chargePoints restored from currentConfig because App-Center payload was empty';
+      }
+    } catch (_eLedgerSafety) {}
 
     // Strukturmarker für Release-/Regressionstests. Wird vom Backend ignoriert,
     // hilft aber, Save-Payloads im Feld eindeutig zu diagnostizieren.
@@ -12563,15 +13124,19 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       activeTariff: readNlP1Dp('activeTariff'),
     };
 
-    // EOS Local kWh Ledger (Installer only): Die Aktivierung folgt der EOS-App-Freigabe
-    // und bleibt eine read-only Grundlage. Das Nutzerfrontend bekommt keine technischen
-    // Ledger-Verknüpfungen; spätere Betreiber-/Exportseiten lesen nur fertige States.
+    // Energieherkunft & Ladebilanz (Home + Pro): read-only Mess- und
+    // Nachweisjournal. Die eigenständige UI-Brücke sammelt ausschließlich
+    // Fremd-DP-Lesebindungen und Deklarationen.
     patch.energyLedger = deepMerge({}, (currentConfig && currentConfig.energyLedger) ? currentConfig.energyLedger : {});
     const ledgerAppState = patch.emsApps && patch.emsApps.apps && patch.emsApps.apps.energyLedger ? patch.emsApps.apps.energyLedger : null;
     patch.energyLedger.enabled = !!(ledgerAppState && ledgerAppState.installed && ledgerAppState.enabled);
     patch.energyLedger.source = 'chargeKiosk.lastSessionsByLpJson';
     patch.energyLedger.recentEntryLimit = Number.isFinite(Number(patch.energyLedger.recentEntryLimit)) ? Number(patch.energyLedger.recentEntryLimit) : 200;
     patch.energyLedger.processedSessionLimit = Number.isFinite(Number(patch.energyLedger.processedSessionLimit)) ? Number(patch.energyLedger.processedSessionLimit) : 2000;
+    const ledgerOriginExisting = patch.energyLedger.origin && typeof patch.energyLedger.origin === 'object' ? patch.energyLedger.origin : {};
+    if (window.NexoWattEnergyOriginAppCenter) {
+      patch.energyLedger.origin = window.NexoWattEnergyOriginAppCenter.collect(ledgerOriginExisting, patch.energyLedger.enabled, _licenseEdition());
+    }
 
     // EOS Mesh/Microgrid (Installer only): eigenes separates App-Modul.
     // In 0.8.32 wird ausschließlich das Knoten-/Cluster-Datenmodell gespeichert;
@@ -12780,6 +13345,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     }
 
     // Datapoints (inkl. Energiefluss-Monitor)
+    patch.tariffProvider = collectTariffProviderConfig();
+    if (patch.tariffProvider.enabled && patch.tariffProvider.providerId !== 'manual-dp' && patch.tariffProvider.autoCoupleDatapoints) {
+      _coupleTariffProviderDatapointsSync();
+    }
     patch.datapoints = Object.assign({}, currentConfig.datapoints || {});
 
     // Migrations-/Kompatibilitäts-Glättung:
@@ -12896,13 +13465,36 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     } else {
       delete patch.storage.ratedPowerW;
     }
-    patch.storage.feneconGridControlEnabled = patch.storage.vendorProfile === 'fenecon-openems';
+    patch.storage.feneconGridControlEnabled = patch.storage.vendorProfile === 'fenecon-openems' && patch.storage.coupling === 'dc';
+    patch.storage.feneconControlMode = (els.storageFeneconControlMode && ['auto', 'fems-grid', 'direct-ess'].includes(String(els.storageFeneconControlMode.value || '').trim().toLowerCase()))
+      ? String(els.storageFeneconControlMode.value).trim().toLowerCase()
+      : 'auto';
     patch.storage.sungrowHybridEnabled = patch.storage.vendorProfile === 'sungrow-hybrid';
     patch.storage.e3dcRscpEnabled = patch.storage.vendorProfile === 'e3dc-rscp';
-    // FENECON/OpenEMS/FEMS: Legacy-No-Write bleibt bewusst deaktiviert. Der
-    // manuell zugeordnete Sollwert-DP wird nach allen Gates zyklisch erneuert.
-    patch.storage.feneconDayNoWriteEnabled = false;
-    patch.storage.feneconAssistEnabled = !!(els.storageFeneconAssist && els.storageFeneconAssist.checked);
+    // FENECON-Hybrid-Automatik: Bei frischer/unklarer PV wird bewusst keine
+    // externe Vorgabe geschrieben. Erst nach dauerhaft fehlender PV uebernimmt
+    // NexoWatt die direkte ESS-Regelung. Forecast/Uhrzeit schalten nicht um.
+    patch.storage.feneconDayNoWriteEnabled = patch.storage.vendorProfile === 'fenecon-openems'
+      && patch.storage.coupling === 'dc'
+      && patch.storage.feneconControlMode === 'auto';
+    patch.storage.feneconAssistEnabled = false;
+    patch.storage.feneconDayClockFallbackEnabled = false;
+    patch.storage.feneconPvPassthroughThresholdW = _clampInt(
+      els.storageFeneconPvOnThresholdW ? els.storageFeneconPvOnThresholdW.value : patch.storage.feneconPvPassthroughThresholdW,
+      0, 1000000, 200,
+    );
+    patch.storage.feneconPvReleaseThresholdW = _clampInt(
+      els.storageFeneconPvOffThresholdW ? els.storageFeneconPvOffThresholdW.value : patch.storage.feneconPvReleaseThresholdW,
+      0, patch.storage.feneconPvPassthroughThresholdW, 50,
+    );
+    patch.storage.feneconPvReleaseDelaySec = _clampInt(
+      els.storageFeneconPvOffDelaySec ? els.storageFeneconPvOffDelaySec.value : patch.storage.feneconPvReleaseDelaySec,
+      0, 3600, 120,
+    );
+    patch.storage.feneconApiTimeoutSec = _clampInt(
+      els.storageFeneconApiTimeoutSec ? els.storageFeneconApiTimeoutSec.value : patch.storage.feneconApiTimeoutSec,
+      5, 300, 10,
+    );
     // Sungrow Hybrid ESS nutzt ab 0.8.96 fest den gemeinsamen geschlossenen
     // NVP-Regelkreis. Die alten PV-Passthrough-/0-W-Schalter werden bewusst nicht
     // mehr gespeichert, weil zyklische 0-W-Freigaben den Speicher stoppen konnten.
@@ -12947,21 +13539,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       els.storageBalanceFeedbackHoldSec ? els.storageBalanceFeedbackHoldSec.value : patch.storage.balanceFeedbackHoldSec,
       1, 300, 45,
     );
-    // Der Haken bedeutet ab 0.6.255: Hybrid-/Gateway-Priorität.
-    // SetGridActivePower wird nicht mehr verwendet; ein eventuell vorhandener Legacy-DP wird entfernt.
-    try {
-      delete patch.storage.datapoints.feneconGridSetpointObjectId;
-      delete patch.storage.datapoints.feneconSetGridActivePowerObjectId;
-      delete patch.storage.datapoints.feneconGridSetpointScale;
-      delete patch.storage.datapoints.feneconGridSetpointInvert;
-    } catch (_e) {}
-    // Alte alte AC-Direktlogik nicht mehr über den Haken aktivieren.
-    // Für SpeicherFarm-Altanlagen bleibt ein bereits vorhandenes feneconAcMode intern erhalten,
-    // ansonsten wird es beim Speichern auf false gesetzt.
-    const storageFarmEnabledForLegacy = !!(patch.emsApps && patch.emsApps.apps && patch.emsApps.apps.storagefarm && patch.emsApps.apps.storagefarm.enabled);
-    patch.storage.feneconAcMode = storageFarmEnabledForLegacy
-      ? !!(currentConfig.storage && currentConfig.storage.feneconAcMode)
-      : false;
+    // FENECON-Hybrid ist ein exklusives Herstellerprofil. Der native FEMS-
+    // NVP-Regler ist nur bei DC/Hybrid aktiv; FENECON-AC und alle anderen
+    // Hersteller bleiben auf der bisherigen direkten Leistungsregelung.
+    patch.storage.feneconAcMode = patch.storage.vendorProfile === 'fenecon-openems' && patch.storage.coupling === 'dc';
+    patch.storage.feneconGridControlEnabled = patch.storage.feneconAcMode;
 
     // Optional raw patch. Auch Raw-Patches laufen jetzt durch das Release Safety Gate,
     // damit ein Debug-/Installer-Payload nicht versehentlich produktive Kernlisten
@@ -13148,6 +13730,73 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     return report;
   }
 
+  function validateFeneconStorageConfiguration(patch) {
+    const cfg = patch && typeof patch === 'object' ? patch : {};
+    const storage = cfg.storage && typeof cfg.storage === 'object' ? cfg.storage : {};
+    const dp = storage.datapoints && typeof storage.datapoints === 'object' ? storage.datapoints : {};
+    const vendor = normalizeStorageVendorProfile(storage.vendorProfile || 'generic');
+    const coupling = String(storage.coupling || '').trim().toLowerCase();
+    const mode = String(storage.feneconControlMode || 'auto').trim().toLowerCase();
+    const nativeTarget = String(dp.feneconGridSetpointObjectId || '').trim();
+    if (mode === 'fems-grid') {
+      if (vendor !== 'fenecon-openems' || coupling !== 'dc') {
+        throw new Error('FEMS-NVP-Regler ist nur bei FENECON/OpenEMS DC/Hybrid zulässig.');
+      }
+      if (!nativeTarget) {
+        throw new Error('Für den FEMS-NVP-Regler muss der DP „FENECON FEMS-NVP-Ziel“ zugeordnet sein.');
+      }
+    }
+    if (mode === 'auto' && vendor === 'fenecon-openems' && coupling === 'dc') {
+      const hasDirectTarget = !!String(dp.targetPowerObjectId || dp.targetChargePowerObjectId || dp.targetDischargePowerObjectId || '').trim();
+      if (!hasDirectTarget) {
+        throw new Error('FENECON Hybrid „Automatisch“ benötigt für die Nachtregelung einen direkten ESS-Sollwert-DP (signed oder Laden/Entladen getrennt).');
+      }
+    }
+
+    const sf = cfg.storageFarm && typeof cfg.storageFarm === 'object' ? cfg.storageFarm : {};
+    const rows = Array.isArray(sf.storages) ? sf.storages.filter((row) => row && row.enabled !== false) : [];
+    const writable = rows.filter((row) => !!(
+      String(row.feneconGridSetpointId || '').trim()
+      || String(row.setSignedPowerId || '').trim()
+      || String(row.setChargePowerId || '').trim()
+      || String(row.setDischargePowerId || '').trim()
+    ));
+    let nativeCount = 0;
+    for (const rawRow of writable) {
+      const row = _normalizeRecoveredStorageFarmRow(rawRow, 0);
+      const rowVendor = normalizeStorageVendorProfile(row.vendorProfile || 'generic');
+      const rowCoupling = String(row.coupling || '').trim().toLowerCase();
+      const rowMode = String(row.feneconControlMode || 'auto').trim().toLowerCase();
+      const hasNativeTarget = !!String(row.feneconGridSetpointId || '').trim();
+      if (rowMode === 'fems-grid' && (rowVendor !== 'fenecon-openems' || rowCoupling !== 'dc')) {
+        throw new Error(`Speicherfarm „${row.name}“: FEMS-NVP-Regler ist nur bei FENECON DC/Hybrid zulässig.`);
+      }
+      if (rowMode === 'fems-grid' && !hasNativeTarget) {
+        throw new Error(`Speicherfarm „${row.name}“: FEMS-NVP-Ziel-DP fehlt.`);
+      }
+      const hasDirectTarget = !!(
+        String(row.setSignedPowerId || '').trim()
+        || String(row.setChargePowerId || '').trim()
+        || String(row.setDischargePowerId || '').trim()
+      );
+      if (rowMode === 'auto' && rowVendor === 'fenecon-openems' && rowCoupling === 'dc' && !hasDirectTarget) {
+        throw new Error(`Speicherfarm „${row.name}“: Automatik benötigt für die Nachtregelung einen direkten ESS-Sollwert-DP.`);
+      }
+      const resolvesNative = rowVendor === 'fenecon-openems'
+        && rowCoupling === 'dc'
+        && hasNativeTarget
+        && rowMode === 'fems-grid';
+      if (resolvesNative) nativeCount += 1;
+    }
+    if (nativeCount > 1) {
+      throw new Error('Pro Netzverknüpfungspunkt darf nur ein nativer FEMS-NVP-Master konfiguriert sein.');
+    }
+    if (nativeCount === 1 && writable.length > 1) {
+      throw new Error('Ein FEMS-NVP-Master darf nicht zusammen mit weiteren beschreibbaren Farm-Speichern betrieben werden. Bitte in der gemischten Farm „Direkte ESS-Leistung“ wählen.');
+    }
+    return true;
+  }
+
   /**
    * Übernimmt vor jedem Save alle sichtbaren DP-Eingaben in `currentConfig`.
    * Das schützt auch vor Browser-Autofill oder programmgesteuerten Änderungen,
@@ -13170,6 +13819,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     setStatus('Speichere…');
     flushDpInputsToConfig();
     const patch = applyAppCenterRegressionSafetyGate(collectPatchFromUI());
+    validateFeneconStorageConfiguration(patch);
     const safetyReport = applyReleaseRegressionSafetyGate(patch);
     if (safetyReport && safetyReport.changed) {
       setStatus('Release-Schutz hat bestehende Konfigurationen vor leerem Speichern geschützt. Bitte prüfen und erneut speichern.', 'warn');
@@ -15300,7 +15950,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     /**
      * Code-Teil: _updateStorageVendorProfile
      * Zweck: Synchronisiert Herstellerprofil-Optionen direkt in currentConfig.
-     * Zusammenhang: FENECON/OpenEMS nutzt gegateten Watchdog-Refresh/Assist; Sungrow Hybrid nutzt
+     * Zusammenhang: FENECON/OpenEMS Hybrid uebergibt bei PV die Regelhoheit an FEMS und nutzt nachts direkte ESS-Leistung; Sungrow Hybrid nutzt
      * fest den gemeinsamen NVP-Regelkreis ohne alte PV-Deckungs-0-W-Sonderzweige.
      * TypeScript: DOM-Checkboxen spaeter als HTMLInputElement typisieren.
      */
@@ -15309,22 +15959,33 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       currentConfig.storage = currentConfig.storage || {};
       const profile = getStorageVendorProfile();
       currentConfig.storage.vendorProfile = profile;
-      currentConfig.storage.feneconGridControlEnabled = profile === 'fenecon-openems';
+      currentConfig.storage.feneconGridControlEnabled = profile === 'fenecon-openems' && getStorageCoupling() === 'dc';
+      currentConfig.storage.feneconAcMode = currentConfig.storage.feneconGridControlEnabled;
+      if (els.storageFeneconControlMode) {
+        const rawMode = String(els.storageFeneconControlMode.value || currentConfig.storage.feneconControlMode || 'auto').trim().toLowerCase();
+        currentConfig.storage.feneconControlMode = ['fems-grid', 'direct-ess'].includes(rawMode) ? rawMode : 'auto';
+      }
       currentConfig.storage.sungrowHybridEnabled = profile === 'sungrow-hybrid';
       currentConfig.storage.e3dcRscpEnabled = profile === 'e3dc-rscp';
 
       if (els.storageFeneconAcMode) els.storageFeneconAcMode.checked = profile === 'fenecon-openems';
+      const hybridAuto = profile === 'fenecon-openems'
+        && getStorageCoupling() === 'dc'
+        && String(currentConfig.storage.feneconControlMode || 'auto') === 'auto';
       if (els.storageFeneconDayNoWrite) {
-        els.storageFeneconDayNoWrite.checked = false;
+        els.storageFeneconDayNoWrite.checked = hybridAuto;
         els.storageFeneconDayNoWrite.disabled = true;
-        currentConfig.storage.feneconDayNoWriteEnabled = false;
+        currentConfig.storage.feneconDayNoWriteEnabled = hybridAuto;
       }
       if (els.storageFeneconAssist) {
-        if (profile === 'fenecon-openems' && !els.storageFeneconAssist.checked && currentConfig.storage.feneconAssistEnabled === undefined) {
-          els.storageFeneconAssist.checked = true;
-        }
-        currentConfig.storage.feneconAssistEnabled = !!els.storageFeneconAssist.checked;
+        els.storageFeneconAssist.checked = false;
+        els.storageFeneconAssist.disabled = true;
+        currentConfig.storage.feneconAssistEnabled = false;
       }
+      if (els.storageFeneconPvOnThresholdW) currentConfig.storage.feneconPvPassthroughThresholdW = _clampInt(els.storageFeneconPvOnThresholdW.value, 0, 1000000, 200);
+      if (els.storageFeneconPvOffThresholdW) currentConfig.storage.feneconPvReleaseThresholdW = _clampInt(els.storageFeneconPvOffThresholdW.value, 0, currentConfig.storage.feneconPvPassthroughThresholdW || 200, 50);
+      if (els.storageFeneconPvOffDelaySec) currentConfig.storage.feneconPvReleaseDelaySec = _clampInt(els.storageFeneconPvOffDelaySec.value, 0, 3600, 120);
+      if (els.storageFeneconApiTimeoutSec) currentConfig.storage.feneconApiTimeoutSec = _clampInt(els.storageFeneconApiTimeoutSec.value, 5, 300, 10);
 
 
       if (els.storageE3dcRscpEnabled) {
@@ -15342,6 +16003,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         currentConfig.storage.e3dcUsePowerLimits = !!els.storageE3dcUsePowerLimits.checked;
       }
       updateStorageVendorProfileUi();
+      rebuildStorageTable();
       scheduleValidation(200);
     };
 
@@ -15349,7 +16011,20 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       els.storageVendorProfile.addEventListener('change', _updateStorageVendorProfile);
       els.storageVendorProfile.addEventListener('input', _updateStorageVendorProfile);
     }
-    [els.storageFeneconAcMode, els.storageFeneconDayNoWrite, els.storageFeneconAssist, els.storageE3dcRscpEnabled, els.storageE3dcZeroMode, els.storageE3dcAllowGridCharge, els.storageE3dcUsePowerLimits]
+    [
+      els.storageFeneconControlMode,
+      els.storageFeneconAcMode,
+      els.storageFeneconDayNoWrite,
+      els.storageFeneconPvOnThresholdW,
+      els.storageFeneconPvOffThresholdW,
+      els.storageFeneconPvOffDelaySec,
+      els.storageFeneconApiTimeoutSec,
+      els.storageFeneconAssist,
+      els.storageE3dcRscpEnabled,
+      els.storageE3dcZeroMode,
+      els.storageE3dcAllowGridCharge,
+      els.storageE3dcUsePowerLimits,
+    ]
       .filter(Boolean)
       .forEach((el) => {
         el.addEventListener('change', _updateStorageVendorProfile);
@@ -15647,6 +16322,20 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
   }
 
   
+  const tariffProviderTestButton = document.getElementById('tariffProviderTest');
+  if (tariffProviderTestButton) tariffProviderTestButton.addEventListener('click', () => testTariffProviderConnection());
+  const tariffProviderCoupleButton = document.getElementById('tariffProviderCouple');
+  if (tariffProviderCoupleButton) tariffProviderCoupleButton.addEventListener('click', () => coupleTariffProviderDatapoints(true));
+  const tariffProviderSelect = document.getElementById('tariffProviderId');
+  if (tariffProviderSelect) tariffProviderSelect.addEventListener('change', () => {
+    const enabled = _tpStr('tariffProviderEnabled', 'false') === 'true';
+    if (enabled && tariffProviderSelect.value !== 'manual-dp' && _tpBool('tariffProviderAutoCouple', true)) coupleTariffProviderDatapoints(false);
+  });
+  const tariffProviderEnabledSelect = document.getElementById('tariffProviderEnabled');
+  if (tariffProviderEnabledSelect) tariffProviderEnabledSelect.addEventListener('change', () => {
+    if (tariffProviderEnabledSelect.value === 'true' && _tpStr('tariffProviderId', 'manual-dp') !== 'manual-dp' && _tpBool('tariffProviderAutoCouple', true)) coupleTariffProviderDatapoints(false);
+  });
+
   if (els.nwDevicesQuickSetup) {
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.nwDevicesQuickSetup. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.nwDevicesQuickSetup.addEventListener('click', () => {
@@ -15922,6 +16611,12 @@ if (els.ocppAutoDetect) {
     try { if (window.nwSyncToggleButtons) window.nwSyncToggleButtons(targetId); } catch (_e) {}
   }, true);
 
+
+  try {
+    if (window.NexoWattEnergyOriginAppCenter) {
+      window.NexoWattEnergyOriginAppCenter.setup({ getEdition: _licenseEdition, setStatus });
+    }
+  } catch (_eLedgerSetup) {}
 
   // Modal
   if (els.dpClose) els.dpClose.addEventListener('click', closeDpModal);

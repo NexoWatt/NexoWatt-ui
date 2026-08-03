@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 04aa4eafd59cac44fef736084d50975daaa0743471c87bb673e9ee8d3f7135bf
+ * Original-Hash: 7bfd3fc857e9504a930ec960f29dc1d542495b048ee07d54cf7b30037939578a
  */
 
 /**
@@ -38,9 +38,12 @@
  */
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const Module = require('node:module');
+const { EventEmitter } = require('node:events');
 const {
   isFeneconHybrid,
   resolveControlMode,
+  resolveHybridAuthority,
   calculateFemsGridTargetW,
   validateFarmRows,
 } = require('../ems/services/fenecon-hybrid-control');
@@ -338,21 +341,210 @@ async function testNativeClampAndAcceptedTarget() {
   assert.equal(adapter._states.get('speicher.regelung.partiallyAccepted').val, true);
 }
 
+
+/**
+ * Code-Teil: FarmAdapterStub
+ *
+ * Zweck:
+ * Automatisch markierter Klasse-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+class FarmAdapterStub extends EventEmitter {
+  constructor(options = {}) {
+    super();
+    this.name = options.name || 'nexowatt-ui';
+    this.namespace = `${this.name}.0`;
+    this.config = {};
+    this.stateCache = {};
+    this.internal = new Map();
+    this.foreign = new Map();
+    this.writes = [];
+    this.log = { debug() {}, info() {}, warn() {}, error() {}, silly() {} };
+  }
+  async setObjectNotExistsAsync() {}
+  async getStateAsync(id) { return this.internal.get(String(id)) || null; }
+  async setStateAsync(id, value, ack) {
+    const val = value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, 'val') ? value.val : value;
+    const rec = { val, ack: value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, 'ack') ? value.ack : !!ack, ts: Date.now(), lc: Date.now() };
+    this.internal.set(String(id), rec);
+    this.stateCache[String(id)] = { value: val, ts: rec.ts, lc: rec.lc, ack: rec.ack };
+  }
+  async getForeignStateAsync(id) { return this.foreign.get(String(id)) || null; }
+  async getForeignObjectAsync(id) {
+    const sid = String(id || '');
+    return { type: 'state', common: { unit: sid.includes('.soc') ? '%' : 'W', write: sid.includes('.set') }, native: {} };
+  }
+  async setForeignStateAsync(id, value) {
+    const objectId = String(id);
+    const val = value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, 'val') ? value.val : value;
+    this.writes.push({ id: objectId, val: Number(val) });
+    this.foreign.set(objectId, { val, ack: false, ts: Date.now(), lc: Date.now() });
+  }
+  setTimeout(fn, ms) { return setTimeout(fn, ms); }
+  setInterval(fn, ms) { return setInterval(fn, ms); }
+  clearTimeout(ref) { clearTimeout(ref); }
+  clearInterval(ref) { clearInterval(ref); }
+}
+
+/**
+ * Code-Teil: expressStub
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function expressStub() {
+  return { use() {}, get() {}, post() {}, put() {}, delete() {}, listen() { return null; } };
+}
+expressStub.json = () => (_req, _res, next) => { if (typeof next === 'function') next(); };
+expressStub.static = () => (_req, _res, next) => { if (typeof next === 'function') next(); };
+
+/**
+ * Code-Teil: testFarmHybridAutoDayNight
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+async function testFarmHybridAutoDayNight() {
+  const originalLoad = Module._load;
+  Module._load = function patchedLoad(request, parent, isMain) {
+    if (request === '@iobroker/adapter-core') return { Adapter: FarmAdapterStub };
+    if (request === 'express') return expressStub;
+    if (request === '@iobroker/type-detector') {
+      const error = new Error('optional dependency intentionally absent');
+      error.code = 'MODULE_NOT_FOUND';
+      throw error;
+    }
+    return originalLoad.call(this, request, parent, isMain);
+  };
+
+  try {
+    const factory = require(path.join(__dirname, '..', 'main.js'));
+    const adapter = factory({});
+    adapter.scheduleDerivedFlowUpdate = () => {};
+    adapter.updateValue = function updateValue(key, value, ts) {
+      this.stateCache[String(key)] = { value, ts: Number(ts) || Date.now(), lc: Number(ts) || Date.now(), ack: true };
+    };
+    const rows = [
+      {
+        enabled: true,
+        name: 'FENECON Hybrid',
+        vendorProfile: 'fenecon-openems',
+        coupling: 'dc',
+        feneconControlMode: 'auto',
+        feneconPvDcId: 'farm.fenecon.pv',
+        feneconPvPassthroughThresholdW: 200,
+        feneconPvReleaseThresholdW: 50,
+        feneconPvReleaseDelaySec: 0,
+        feneconApiTimeoutSec: 5,
+        socId: 'farm.fenecon.soc',
+        signedPowerId: 'farm.fenecon.actual',
+        setSignedPowerId: 'farm.fenecon.set',
+        maxChargeW: 10000,
+        maxDischargeW: 10000,
+      },
+      {
+        enabled: true,
+        name: 'Farm monitor only',
+        vendorProfile: 'generic',
+        coupling: 'ac',
+        socId: 'farm.monitor.soc',
+        signedPowerId: 'farm.monitor.actual',
+      },
+    ];
+    adapter.config = {
+      enableStorageControl: false,
+      enableStorageFarm: true,
+      emsApps: { apps: { storage: { installed: false, enabled: false }, storagefarm: { installed: true, enabled: true } } },
+      storage: { staleTimeoutSec: 15, selfMinSocPct: 10 },
+      storageFarm: { mode: 'pool', schedulerIntervalMs: 1000, storages: rows },
+    };
+    const ts = Date.now();
+/**
+ * Code-Teil: seed
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+    const seed = (id, val) => adapter.foreign.set(id, { val, ack: true, ts: Date.now(), lc: Date.now() });
+    seed('farm.fenecon.pv', 3000);
+    seed('farm.fenecon.soc', 70);
+    seed('farm.fenecon.actual', 0);
+    seed('farm.fenecon.set', 0);
+    seed('farm.monitor.soc', 50);
+    seed('farm.monitor.actual', 0);
+    adapter.internal.set('storageFarm.configJson', { val: JSON.stringify(rows), ack: true, ts, lc: ts });
+    adapter.stateCache['storageFarm.configJson'] = { value: JSON.stringify(rows), ack: true, ts, lc: ts };
+    adapter.stateCache['settings.deviceStaleTimeoutSec'] = { value: 300, ack: true, ts, lc: ts };
+
+    await adapter.ensureStorageFarmStates();
+    await adapter.updateStorageFarmDerived('fenecon-auto-day');
+    adapter.writes.length = 0;
+    const day = await adapter.applyStorageFarmTargetW(2500, { source: 'eigenverbrauch', reason: 'day test' });
+    assert.equal(day.status, 'fenecon-day-no-write', JSON.stringify(day));
+    assert.equal(day.writeOk, true);
+    assert.equal(day.commandEffective, false);
+    assert.equal(adapter.writes.some((row) => row.id === 'farm.fenecon.set'), false, 'Farm AUTO must not write the FENECON target while PV is present');
+
+    seed('farm.fenecon.pv', 0);
+    await adapter.updateStorageFarmDerived('fenecon-auto-night');
+    adapter.writes.length = 0;
+    const night = await adapter.applyStorageFarmTargetW(1800, { source: 'eigenverbrauch', reason: 'night test' });
+    assert.equal(night.writeOk, true, JSON.stringify(night));
+    assert.ok(adapter.writes.some((row) => row.id === 'farm.fenecon.set' && row.val === 1800), `Night AUTO must resume direct farm dispatch: ${JSON.stringify(adapter.writes)}`);
+  } finally {
+    Module._load = originalLoad;
+  }
+}
+
 (async () => {
   assert.equal(isFeneconHybrid({ vendorProfile: 'fenecon-openems', coupling: 'dc' }), true);
   assert.equal(isFeneconHybrid({ vendorProfile: 'fenecon-openems', coupling: 'ac' }), false);
   assert.equal(resolveControlMode({ vendorProfile: 'sungrow-hybrid', coupling: 'dc', feneconControlMode: 'auto', feneconGridSetpointId: 'x' }).mode, 'direct-ess');
   assert.equal(resolveControlMode({ vendorProfile: 'fenecon-openems', coupling: 'ac', feneconControlMode: 'auto', feneconGridSetpointId: 'x' }).mode, 'direct-ess');
-  assert.equal(resolveControlMode({ vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'auto', feneconGridSetpointId: 'x' }, { writableStorageCount: 1 }).mode, 'fems-grid');
-  assert.equal(resolveControlMode({ vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'auto', feneconGridSetpointId: 'x' }, { writableStorageCount: 2, otherWritableStorageCount: 1 }).mode, 'direct-ess');
+  assert.equal(resolveControlMode({ vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'auto', setSignedPowerId: 'direct' }, { writableStorageCount: 1, directTargetAvailable: true }).mode, 'hybrid-auto');
+  assert.equal(resolveControlMode({ vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'auto', setSignedPowerId: 'direct' }, { writableStorageCount: 2, otherWritableStorageCount: 1, directTargetAvailable: true }).mode, 'direct-ess');
+  assert.equal(resolveControlMode({ vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'auto' }, { writableStorageCount: 1 }).mode, 'invalid');
   assert.equal(resolveControlMode({ vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'fems-grid', feneconGridSetpointId: 'x' }, { writableStorageCount: 2, otherWritableStorageCount: 1 }).mode, 'invalid');
 
   const calc = calculateFemsGridTargetW({ nvpW: 2000, essActualW: -3000, batteryTargetW: -1050 });
   assert.deepEqual({ ok: calc.ok, gridTargetW: calc.gridTargetW }, { ok: true, gridTargetW: 50 });
 
-  const singleFarm = validateFarmRows([{ enabled: true, name: 'FENECON Hybrid', vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'auto', feneconGridSetpointId: 'fems.grid' }]);
+  const dayAuthority = resolveHybridAuthority({ feneconPvPassthroughThresholdW: 200, feneconPvReleaseThresholdW: 50, feneconPvReleaseDelaySec: 120 }, { nowMs: 100000, pvW: 4600, pvFresh: true, previousAuthority: 'unknown' });
+  assert.equal(dayAuthority.authority, 'fems');
+  assert.equal(dayAuthority.noWrite, true);
+  const unknownAuthority = resolveHybridAuthority({}, { nowMs: 100000, pvW: null, pvFresh: false, previousAuthority: 'nexowatt' });
+  assert.equal(unknownAuthority.authority, 'fems', 'unknown PV must fail safe to FEMS authority');
+  const releasePending = resolveHybridAuthority({ feneconPvReleaseThresholdW: 50, feneconPvReleaseDelaySec: 120 }, { nowMs: 200000, pvW: 0, pvFresh: true, previousAuthority: 'fems', pvBelowSinceMs: 150000 });
+  assert.equal(releasePending.authority, 'fems');
+  assert.equal(releasePending.noWrite, true);
+  const nightAuthority = resolveHybridAuthority({ feneconPvReleaseThresholdW: 50, feneconPvReleaseDelaySec: 120 }, { nowMs: 300000, pvW: 0, pvFresh: true, previousAuthority: 'fems', pvBelowSinceMs: 150000 });
+  assert.equal(nightAuthority.authority, 'nexowatt');
+  assert.equal(nightAuthority.noWrite, false);
+
+  const singleFarm = validateFarmRows([{ enabled: true, name: 'FENECON Hybrid', vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'auto', setSignedPowerId: 'fems.direct' }]);
   assert.equal(singleFarm.ok, true);
-  assert.equal(singleFarm.nativeMasterCount, 1);
+  assert.equal(singleFarm.nativeMasterCount, 0);
+  assert.equal(singleFarm.hybridAutoCount, 1);
+  assert.equal(singleFarm.resolved[0].mode, 'hybrid-auto');
 
   const mixedAuto = validateFarmRows([
     { enabled: true, name: 'FENECON Hybrid', vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'auto', feneconGridSetpointId: 'fems.grid', setSignedPowerId: 'fems.direct' },
@@ -372,14 +564,18 @@ async function testNativeClampAndAcceptedTarget() {
   await testSingleNative();
   await testAcRemainsDirect();
   await testNativeClampAndAcceptedTarget();
+  await testFarmHybridAutoDayNight();
 
   const mainTs = require('node:fs').readFileSync(path.join(__dirname, '..', 'src-ts/runtime-executables/main.ts'), 'utf8');
   assert.match(mainTs, /nwValidateFeneconFarmRows\(sf\.storages\)/);
+  assert.match(mainTs, /hybridAutoFeneconRows/);
+  assert.match(mainTs, /fenecon-day-no-write/);
+  assert.match(mainTs, /not-required-fems-authority/);
   assert.match(mainTs, /fenecon-handover-wait/);
   assert.match(mainTs, /native-fems-watchdog-active/);
   assert.match(mainTs, /commandFamily:\s*'fenecon-fems-grid'/);
 
-  console.log('[fenecon-hybrid-controller] OK: native FEMS control is DC/hybrid-only, exclusive, translated from final EOS policy, clamped correctly and safely handed over.');
+  console.log('[fenecon-hybrid-controller] OK: AUTO delegates FENECON Hybrid to FEMS during actual/unknown PV, resumes direct ESS at night, keeps mixed farms direct and preserves explicit legacy FEMS-NVP control.');
 })().catch((error) => {
   console.error(error && error.stack ? error.stack : error);
   process.exit(1);
