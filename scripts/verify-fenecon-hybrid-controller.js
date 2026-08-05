@@ -13,7 +13,7 @@ const { EventEmitter } = require('node:events');
 const {
   isFeneconHybrid,
   resolveControlMode,
-  resolveHybridAuthority,
+  validateSingleConfig,
   calculateFemsGridTargetW,
   validateFarmRows,
 } = require('../ems/services/fenecon-hybrid-control');
@@ -278,7 +278,7 @@ function expressStub() {
 expressStub.json = () => (_req, _res, next) => { if (typeof next === 'function') next(); };
 expressStub.static = () => (_req, _res, next) => { if (typeof next === 'function') next(); };
 
-async function testFarmHybridAutoDayNight() {
+async function testFarmContinuousAuto() {
   const originalLoad = Module._load;
   Module._load = function patchedLoad(request, parent, isMain) {
     if (request === '@iobroker/adapter-core') return { Adapter: FarmAdapterStub };
@@ -305,10 +305,7 @@ async function testFarmHybridAutoDayNight() {
         vendorProfile: 'fenecon-openems',
         coupling: 'dc',
         feneconControlMode: 'auto',
-        feneconPvDcId: 'farm.fenecon.pv',
-        feneconPvPassthroughThresholdW: 200,
-        feneconPvReleaseThresholdW: 50,
-        feneconPvReleaseDelaySec: 0,
+        feneconEssActualPowerId: 'farm.fenecon.actual',
         feneconApiTimeoutSec: 5,
         socId: 'farm.fenecon.soc',
         signedPowerId: 'farm.fenecon.actual',
@@ -345,20 +342,18 @@ async function testFarmHybridAutoDayNight() {
     adapter.stateCache['settings.deviceStaleTimeoutSec'] = { value: 300, ack: true, ts, lc: ts };
 
     await adapter.ensureStorageFarmStates();
-    await adapter.updateStorageFarmDerived('fenecon-auto-day');
+    await adapter.updateStorageFarmDerived('fenecon-auto-continuous');
     adapter.writes.length = 0;
-    const day = await adapter.applyStorageFarmTargetW(2500, { source: 'eigenverbrauch', reason: 'day test' });
-    assert.equal(day.status, 'fenecon-day-no-write', JSON.stringify(day));
-    assert.equal(day.writeOk, true);
-    assert.equal(day.commandEffective, false);
-    assert.equal(adapter.writes.some((row) => row.id === 'farm.fenecon.set'), false, 'Farm AUTO must not write the FENECON target while PV is present');
+    const first = await adapter.applyStorageFarmTargetW(2500, { source: 'eigenverbrauch', reason: 'continuous test with PV' });
+    assert.equal(first.writeOk, true, JSON.stringify(first));
+    assert.ok(adapter.writes.some((row) => row.id === 'farm.fenecon.set' && row.val === 2500), `Farm AUTO without a genuine FEMS grid target must continuously use direct ESS dispatch: ${JSON.stringify(adapter.writes)}`);
 
     seed('farm.fenecon.pv', 0);
-    await adapter.updateStorageFarmDerived('fenecon-auto-night');
+    await adapter.updateStorageFarmDerived('fenecon-auto-continuous-no-pv');
     adapter.writes.length = 0;
-    const night = await adapter.applyStorageFarmTargetW(1800, { source: 'eigenverbrauch', reason: 'night test' });
-    assert.equal(night.writeOk, true, JSON.stringify(night));
-    assert.ok(adapter.writes.some((row) => row.id === 'farm.fenecon.set' && row.val === 1800), `Night AUTO must resume direct farm dispatch: ${JSON.stringify(adapter.writes)}`);
+    const second = await adapter.applyStorageFarmTargetW(1800, { source: 'eigenverbrauch', reason: 'continuous test without PV' });
+    assert.equal(second.writeOk, true, JSON.stringify(second));
+    assert.ok(adapter.writes.some((row) => row.id === 'farm.fenecon.set' && row.val === 1800), `Direct farm dispatch must remain active independently of PV: ${JSON.stringify(adapter.writes)}`);
   } finally {
     Module._load = originalLoad;
   }
@@ -366,45 +361,143 @@ async function testFarmHybridAutoDayNight() {
 
 (async () => {
   assert.equal(isFeneconHybrid({ vendorProfile: 'fenecon-openems', coupling: 'dc' }), true);
+  assert.equal(isFeneconHybrid({ vendorProfile: 'fenecon-openems', coupling: 'hybrid' }), true);
   assert.equal(isFeneconHybrid({ vendorProfile: 'fenecon-openems', coupling: 'ac' }), false);
-  assert.equal(resolveControlMode({ vendorProfile: 'sungrow-hybrid', coupling: 'dc', feneconControlMode: 'auto', feneconGridSetpointId: 'x' }).mode, 'direct-ess');
-  assert.equal(resolveControlMode({ vendorProfile: 'fenecon-openems', coupling: 'ac', feneconControlMode: 'auto', feneconGridSetpointId: 'x' }).mode, 'direct-ess');
-  assert.equal(resolveControlMode({ vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'auto', setSignedPowerId: 'direct' }, { writableStorageCount: 1, directTargetAvailable: true }).mode, 'hybrid-auto');
-  assert.equal(resolveControlMode({ vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'auto', setSignedPowerId: 'direct' }, { writableStorageCount: 2, otherWritableStorageCount: 1, directTargetAvailable: true }).mode, 'direct-ess');
-  assert.equal(resolveControlMode({ vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'auto' }, { writableStorageCount: 1 }).mode, 'invalid');
-  assert.equal(resolveControlMode({ vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'fems-grid', feneconGridSetpointId: 'x' }, { writableStorageCount: 2, otherWritableStorageCount: 1 }).mode, 'invalid');
+
+  assert.equal(resolveControlMode({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'auto',
+    feneconGridSetpointId: 'fems.ctrlBalancing0.SetGridActivePower',
+    feneconEssActualPowerId: 'fems.ess0.ActivePower',
+    setSignedPowerId: 'fems.ess0.SetActivePowerEquals',
+  }, { writableStorageCount: 1 }).mode, 'fems-grid');
+
+  assert.equal(resolveControlMode({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'auto',
+    feneconEssActualPowerId: 'fems.ess0.ActivePower',
+    setSignedPowerId: 'fems.ess0.SetActivePowerEquals',
+  }, { writableStorageCount: 1 }).mode, 'direct-ess');
+
+  assert.equal(resolveControlMode({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'auto',
+    feneconGridSetpointId: 'fems.ctrlBalancing0.SetGridActivePower',
+    feneconEssActualPowerId: 'fems.ess0.ActivePower',
+    setSignedPowerId: 'fems.ess0.SetActivePowerEquals',
+  }, { writableStorageCount: 2, otherWritableStorageCount: 1 }).mode, 'direct-ess');
+
+  assert.equal(resolveControlMode({
+    vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'auto',
+  }, { writableStorageCount: 1 }).mode, 'invalid');
+  assert.equal(resolveControlMode({
+    vendorProfile: 'sungrow-hybrid', coupling: 'dc', feneconControlMode: 'auto', setSignedPowerId: 'x',
+  }).mode, 'direct-ess');
+  assert.equal(resolveControlMode({
+    vendorProfile: 'fenecon-openems', coupling: 'ac', feneconControlMode: 'auto', setSignedPowerId: 'x',
+  }).mode, 'direct-ess');
+
+  const directValid = validateSingleConfig({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'direct-ess',
+    feneconEssActualPowerId: 'nexowatt-devices.0.devices.ess1.aliases.v1.r.essActivePower',
+    setSignedPowerId: 'nexowatt-devices.0.devices.ess1.aliases.v1.ctrl.powerSetpointW',
+  });
+  assert.equal(directValid.ok, true, directValid.reason);
+
+  const badBalance = validateSingleConfig({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'direct-ess',
+    feneconEssActualPowerId: 'nexowatt-devices.0.devices.ess1.aliases.r.powerBalance',
+    setSignedPowerId: 'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+  });
+  assert.equal(badBalance.ok, false);
+  assert.equal(badBalance.reason, 'fenecon-power-balance-not-valid-as-ess-feedback');
+
+  const badSharedCommand = validateSingleConfig({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'auto',
+    feneconGridSetpointId: 'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+    feneconEssActualPowerId: 'nexowatt-devices.0.devices.ess1.aliases.v1.r.essActivePower',
+    setSignedPowerId: 'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+  });
+  assert.equal(badSharedCommand.ok, false);
+  assert.match(badSharedCommand.reason, /equals|direct-ess-setpoint/);
+
+  const badDirectAsGrid = validateSingleConfig({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'fems-grid',
+    feneconGridSetpointId: 'fems.ess0.SetActivePowerEquals.706',
+    feneconEssActualPowerId: 'fems.ess0.ActivePower.604',
+  });
+  assert.equal(badDirectAsGrid.ok, false);
+  assert.equal(badDirectAsGrid.reason, 'fenecon-grid-target-is-direct-ess-setpoint');
 
   const calc = calculateFemsGridTargetW({ nvpW: 2000, essActualW: -3000, batteryTargetW: -1050 });
   assert.deepEqual({ ok: calc.ok, gridTargetW: calc.gridTargetW }, { ok: true, gridTargetW: 50 });
 
-  const dayAuthority = resolveHybridAuthority({ feneconPvPassthroughThresholdW: 200, feneconPvReleaseThresholdW: 50, feneconPvReleaseDelaySec: 120 }, { nowMs: 100000, pvW: 4600, pvFresh: true, previousAuthority: 'unknown' });
-  assert.equal(dayAuthority.authority, 'fems');
-  assert.equal(dayAuthority.noWrite, true);
-  const unknownAuthority = resolveHybridAuthority({}, { nowMs: 100000, pvW: null, pvFresh: false, previousAuthority: 'nexowatt' });
-  assert.equal(unknownAuthority.authority, 'fems', 'unknown PV must fail safe to FEMS authority');
-  const releasePending = resolveHybridAuthority({ feneconPvReleaseThresholdW: 50, feneconPvReleaseDelaySec: 120 }, { nowMs: 200000, pvW: 0, pvFresh: true, previousAuthority: 'fems', pvBelowSinceMs: 150000 });
-  assert.equal(releasePending.authority, 'fems');
-  assert.equal(releasePending.noWrite, true);
-  const nightAuthority = resolveHybridAuthority({ feneconPvReleaseThresholdW: 50, feneconPvReleaseDelaySec: 120 }, { nowMs: 300000, pvW: 0, pvFresh: true, previousAuthority: 'fems', pvBelowSinceMs: 150000 });
-  assert.equal(nightAuthority.authority, 'nexowatt');
-  assert.equal(nightAuthority.noWrite, false);
+  const singleDirectFarm = validateFarmRows([{
+    enabled: true,
+    name: 'FENECON Hybrid',
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'auto',
+    feneconEssActualPowerId: 'fems.ess0.ActivePower',
+    setSignedPowerId: 'fems.ess0.SetActivePowerEquals',
+  }]);
+  assert.equal(singleDirectFarm.ok, true, singleDirectFarm.reason);
+  assert.equal(singleDirectFarm.nativeMasterCount, 0);
+  assert.equal(singleDirectFarm.resolved[0].mode, 'direct-ess');
 
-  const singleFarm = validateFarmRows([{ enabled: true, name: 'FENECON Hybrid', vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'auto', setSignedPowerId: 'fems.direct' }]);
-  assert.equal(singleFarm.ok, true);
-  assert.equal(singleFarm.nativeMasterCount, 0);
-  assert.equal(singleFarm.hybridAutoCount, 1);
-  assert.equal(singleFarm.resolved[0].mode, 'hybrid-auto');
+  const singleNativeFarm = validateFarmRows([{
+    enabled: true,
+    name: 'FENECON Hybrid Native',
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'auto',
+    feneconGridSetpointId: 'fems.ctrlBalancing0.SetGridActivePower',
+    feneconEssActualPowerId: 'fems.ess0.ActivePower',
+    setSignedPowerId: 'fems.ess0.SetActivePowerEquals',
+  }]);
+  assert.equal(singleNativeFarm.ok, true, singleNativeFarm.reason);
+  assert.equal(singleNativeFarm.nativeMasterCount, 1);
+  assert.equal(singleNativeFarm.resolved[0].mode, 'fems-grid');
 
   const mixedAuto = validateFarmRows([
-    { enabled: true, name: 'FENECON Hybrid', vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'auto', feneconGridSetpointId: 'fems.grid', setSignedPowerId: 'fems.direct' },
+    {
+      enabled: true,
+      name: 'FENECON Hybrid',
+      vendorProfile: 'fenecon-openems',
+      coupling: 'dc',
+      feneconControlMode: 'auto',
+      feneconGridSetpointId: 'fems.ctrlBalancing0.SetGridActivePower',
+      feneconEssActualPowerId: 'fems.ess0.ActivePower',
+      setSignedPowerId: 'fems.ess0.SetActivePowerEquals',
+    },
     { enabled: true, name: 'Other storage', vendorProfile: 'generic', coupling: 'ac', setSignedPowerId: 'other.direct' },
   ]);
-  assert.equal(mixedAuto.ok, true);
+  assert.equal(mixedAuto.ok, true, mixedAuto.reason);
   assert.equal(mixedAuto.nativeMasterCount, 0);
   assert.equal(mixedAuto.resolved.find((row) => row.name === 'FENECON Hybrid').mode, 'direct-ess');
 
   const invalidMixed = validateFarmRows([
-    { enabled: true, name: 'FENECON Hybrid', vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'fems-grid', feneconGridSetpointId: 'fems.grid', setSignedPowerId: 'fems.direct' },
+    {
+      enabled: true,
+      name: 'FENECON Hybrid',
+      vendorProfile: 'fenecon-openems',
+      coupling: 'dc',
+      feneconControlMode: 'fems-grid',
+      feneconGridSetpointId: 'fems.ctrlBalancing0.SetGridActivePower',
+      feneconEssActualPowerId: 'fems.ess0.ActivePower',
+      setSignedPowerId: 'fems.ess0.SetActivePowerEquals',
+    },
     { enabled: true, name: 'Other storage', vendorProfile: 'generic', coupling: 'ac', setSignedPowerId: 'other.direct' },
   ]);
   assert.equal(invalidMixed.ok, false);
@@ -413,18 +506,24 @@ async function testFarmHybridAutoDayNight() {
   await testSingleNative();
   await testAcRemainsDirect();
   await testNativeClampAndAcceptedTarget();
-  await testFarmHybridAutoDayNight();
+  await testFarmContinuousAuto();
 
-  const mainTs = require('node:fs').readFileSync(path.join(__dirname, '..', 'src-ts/runtime-executables/main.ts'), 'utf8');
+  const fs = require('node:fs');
+  const mainTs = fs.readFileSync(path.join(__dirname, '..', 'src-ts/runtime-executables/main.ts'), 'utf8');
+  const storageTs = fs.readFileSync(path.join(__dirname, '..', 'src-ts/runtime-executables/ems/modules/storage-control.ts'), 'utf8');
+  const appTs = fs.readFileSync(path.join(__dirname, '..', 'src-ts/runtime-executables/www/ems-apps.ts'), 'utf8');
   assert.match(mainTs, /nwValidateFeneconFarmRows\(sf\.storages\)/);
-  assert.match(mainTs, /hybridAutoFeneconRows/);
-  assert.match(mainTs, /fenecon-day-no-write/);
-  assert.match(mainTs, /not-required-fems-authority/);
-  assert.match(mainTs, /fenecon-handover-wait/);
-  assert.match(mainTs, /native-fems-watchdog-active/);
-  assert.match(mainTs, /commandFamily:\s*'fenecon-fems-grid'/);
+  assert.match(mainTs, /nwValidateFeneconSingleConfig/);
+  assert.doesNotMatch(mainTs, /hybridAutoFeneconRows/);
+  assert.doesNotMatch(mainTs, /fenecon-day-no-write/);
+  assert.doesNotMatch(storageTs, /_handleFeneconHybridPassThrough/);
+  assert.match(storageTs, /st\.feneconEssActualPowerW/);
+  assert.match(storageTs, /FENECON Hybrid: PV-Feed-forward deaktiviert/);
+  assert.match(appTs, /r\.essActivePower/);
+  assert.match(appTs, /ctrl\.gridSetpointW/);
+  assert.doesNotMatch(appTs, /ctrl\.powerSetpointW[^\n]+FEMS-NVP/i);
 
-  console.log('[fenecon-hybrid-controller] OK: AUTO delegates FENECON Hybrid to FEMS during actual/unknown PV, resumes direct ESS at night, keeps mixed farms direct and preserves explicit legacy FEMS-NVP control.');
+  console.log('[fenecon-hybrid-controller] OK: continuous native/direct FENECON control, strict command-role separation, real AC ESS feedback and mixed-farm safety verified.');
 })().catch((error) => {
   console.error(error && error.stack ? error.stack : error);
   process.exit(1);

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 38b369e58c557262fc31eae983260c9cafee4228bcdee50032a8768571e5afbe
+ * Original-Hash: 9dacac8def10b9323d94f4c6defb8cba9db755ab24d8636fc1f8711f4385b430
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/fenecon-hybrid-control.ts
- * Quell-Hash: sha256:8acfb3673e10b12836d0d2752ebbdaccb221d084c244a812a3af5a410f4ca9e1
+ * Quell-Hash: sha256:d1d1bdd230619c01fca9ffd949c90f363c0b5c3a745853fea07a2ffc659d68ef
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -96,6 +96,36 @@ function clamp(value, minValue, maxValue) {
     return out;
 }
 /**
+ * Code-Teil: normalizeObjectId
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function normalizeObjectId(value) {
+    return text(value).replace(/\s+/g, '').toLowerCase();
+}
+/**
+ * Code-Teil: sameObjectId
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function sameObjectId(a, b) {
+    const aa = normalizeObjectId(a);
+    const bb = normalizeObjectId(b);
+    return !!(aa && bb && aa === bb);
+}
+/**
  * Code-Teil: normalizeVendorProfile
  *
  * Zweck:
@@ -133,8 +163,10 @@ function normalizeControlMode(value) {
         return 'fems-grid';
     if (['direct-ess', 'direct', 'ess', 'set-active-power', 'direct-power'].includes(raw))
         return 'direct-ess';
+    // Migration: Die frühere PV-/Tag-Nacht-Automatik wird nicht mehr verwendet.
+    // Alte Werte werden auf die sichere kontinuierliche Automatik migriert.
     if (['hybrid-auto', 'pv-pass-through', 'day-fems-night-direct', 'fems-day-direct-night'].includes(raw))
-        return 'hybrid-auto';
+        return 'auto';
     return 'auto';
 }
 /**
@@ -151,7 +183,67 @@ function normalizeControlMode(value) {
 function isFeneconHybrid(config = {}) {
     const profile = normalizeVendorProfile(config.vendorProfile);
     const coupling = text(config.coupling).toLowerCase();
-    return profile === 'fenecon-openems' && coupling === 'dc';
+    return profile === 'fenecon-openems' && (coupling === 'dc' || coupling === 'hybrid');
+}
+/**
+ * Code-Teil: getNativeTargetId
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function getNativeTargetId(config = {}) {
+    return text(config.feneconGridSetpointObjectId
+        || config.feneconGridSetpointId
+        || config.femsGridSetpointObjectId
+        || config.femsGridSetpointId);
+}
+/**
+ * Code-Teil: getDirectTargetIds
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function getDirectTargetIds(config = {}) {
+    return [
+        config.setSignedPowerId,
+        config.setSignedPowerObjectId,
+        config.targetPowerObjectId,
+        config.targetPowerId,
+        config.setChargePowerId,
+        config.setChargePowerObjectId,
+        config.targetChargePowerObjectId,
+        config.setDischargePowerId,
+        config.setDischargePowerObjectId,
+        config.targetDischargePowerObjectId,
+    ].map(text).filter(Boolean);
+}
+/**
+ * Code-Teil: getEssActualPowerId
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function getEssActualPowerId(config = {}) {
+    return text(config.feneconEssActualPowerObjectId
+        || config.feneconEssActualPowerId
+        || config.essActualPowerObjectId
+        || config.essActualPowerId
+        || config.signedPowerId);
 }
 /**
  * Code-Teil: hasWritableNativeTarget
@@ -165,10 +257,7 @@ function isFeneconHybrid(config = {}) {
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function hasWritableNativeTarget(config = {}) {
-    return !!text(config.feneconGridSetpointObjectId
-        || config.feneconGridSetpointId
-        || config.femsGridSetpointObjectId
-        || config.femsGridSetpointId);
+    return !!getNativeTargetId(config);
 }
 /**
  * Code-Teil: hasWritableDirectTarget
@@ -184,138 +273,64 @@ function hasWritableNativeTarget(config = {}) {
 function hasWritableDirectTarget(config = {}, context = {}) {
     if (context.directTargetAvailable === true)
         return true;
-    return !!text(config.setSignedPowerId
-        || config.setSignedPowerObjectId
-        || config.targetPowerObjectId
-        || config.targetPowerId
-        || config.setChargePowerId
-        || config.setChargePowerObjectId
-        || config.setDischargePowerId
-        || config.setDischargePowerObjectId);
+    return getDirectTargetIds(config).length > 0;
 }
 /**
- * Zustandsautomat fuer die exklusive FENECON-Hybrid-Automatik.
+ * Code-Teil: isPowerBalanceObjectId
  *
- * Vertrag:
- * - Frische PV oberhalb der Einschaltschwelle: FEMS besitzt die Regelhoheit,
- *   NexoWatt schreibt weder SetActivePowerEquals noch SetGridActivePower.
- * - PV dauerhaft unterhalb der Ausschaltschwelle: NexoWatt uebernimmt die
- *   direkte ESS-Regelung.
- * - Unklare/veraltete PV-Messung: fail-safe FEMS-Regelung, kein externer Write.
- * - Die Hysterese verhindert Wolken-Flattern; der Wechsel zu FEMS ist sofort,
- *   der Wechsel zur Nachtregelung bewusst zeitverzoegert.
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function resolveHybridAuthority(config = {}, runtime = {}) {
-    const nowMs = Math.max(0, Math.round(finite(runtime.nowMs) ?? Date.now()));
-    const pvWRaw = finite(runtime.pvW);
-    const pvW = pvWRaw === null ? null : Math.max(0, Math.round(pvWRaw));
-    const pvFresh = runtime.pvFresh === true && pvW !== null;
-    const onThresholdW = Math.max(0, Math.round(finite(config.pvOnThresholdW)
-        ?? finite(config.feneconPvPassthroughThresholdW)
-        ?? 200));
-    const offThresholdW = Math.max(0, Math.min(onThresholdW, Math.round(finite(config.pvOffThresholdW)
-        ?? finite(config.feneconPvReleaseThresholdW)
-        ?? 50)));
-    const offDelaySec = Math.max(0, Math.min(3600, finite(config.pvOffDelaySec)
-        ?? finite(config.feneconPvReleaseDelaySec)
-        ?? 120));
-    const offDelayMs = Math.round(offDelaySec * 1000);
-    const previousRaw = text(runtime.previousAuthority).toLowerCase();
-    const previousAuthority = previousRaw === 'nexowatt' ? 'nexowatt' : (previousRaw === 'fems' ? 'fems' : 'unknown');
-    let pvBelowSinceMs = Math.max(0, Math.round(finite(runtime.pvBelowSinceMs) ?? 0));
-    if (!pvFresh) {
-        return {
-            authority: 'fems',
-            noWrite: true,
-            mode: 'fems-pv-unknown',
-            reason: 'PV-Messung fehlt oder ist veraltet – FEMS bleibt fail-safe fuehrend',
-            pvW,
-            pvFresh: false,
-            onThresholdW,
-            offThresholdW,
-            offDelayMs,
-            pvBelowSinceMs: 0,
-            pvBelowForMs: 0,
-        };
-    }
-    if (pvW >= onThresholdW) {
-        return {
-            authority: 'fems',
-            noWrite: true,
-            mode: 'fems-pv-active',
-            reason: `PV ${pvW} W >= ${onThresholdW} W – FEMS regelt Hybrid-PV, Haus und Speicher intern`,
-            pvW,
-            pvFresh: true,
-            onThresholdW,
-            offThresholdW,
-            offDelayMs,
-            pvBelowSinceMs: 0,
-            pvBelowForMs: 0,
-        };
-    }
-    if (previousAuthority === 'nexowatt') {
-        return {
-            authority: 'nexowatt',
-            noWrite: false,
-            mode: 'nexowatt-night-direct',
-            reason: pvW <= offThresholdW
-                ? `PV ${pvW} W <= ${offThresholdW} W – NexoWatt-Nachtregelung bleibt aktiv`
-                : `PV ${pvW} W im Hystereseband ${offThresholdW}..${onThresholdW} W – NexoWatt-Regelung bleibt aktiv`,
-            pvW,
-            pvFresh: true,
-            onThresholdW,
-            offThresholdW,
-            offDelayMs,
-            pvBelowSinceMs: pvW <= offThresholdW ? (pvBelowSinceMs || nowMs) : 0,
-            pvBelowForMs: pvW <= offThresholdW && pvBelowSinceMs ? Math.max(0, nowMs - pvBelowSinceMs) : 0,
-        };
-    }
-    if (pvW <= offThresholdW) {
-        if (!pvBelowSinceMs)
-            pvBelowSinceMs = nowMs;
-        const pvBelowForMs = Math.max(0, nowMs - pvBelowSinceMs);
-        if (pvBelowForMs >= offDelayMs) {
-            return {
-                authority: 'nexowatt',
-                noWrite: false,
-                mode: 'nexowatt-night-direct',
-                reason: `PV seit ${Math.round(pvBelowForMs / 1000)} s <= ${offThresholdW} W – NexoWatt uebernimmt direkte ESS-Regelung`,
-                pvW,
-                pvFresh: true,
-                onThresholdW,
-                offThresholdW,
-                offDelayMs,
-                pvBelowSinceMs,
-                pvBelowForMs,
-            };
-        }
-        return {
-            authority: 'fems',
-            noWrite: true,
-            mode: 'fems-pv-release-delay',
-            reason: `PV ${pvW} W <= ${offThresholdW} W – Nachtuebernahme wartet noch ${Math.ceil((offDelayMs - pvBelowForMs) / 1000)} s`,
-            pvW,
-            pvFresh: true,
-            onThresholdW,
-            offThresholdW,
-            offDelayMs,
-            pvBelowSinceMs,
-            pvBelowForMs,
-        };
-    }
-    return {
-        authority: 'fems',
-        noWrite: true,
-        mode: 'fems-pv-hysteresis',
-        reason: `PV ${pvW} W im Hystereseband ${offThresholdW}..${onThresholdW} W – FEMS bleibt fuehrend`,
-        pvW,
-        pvFresh: true,
-        onThresholdW,
-        offThresholdW,
-        offDelayMs,
-        pvBelowSinceMs: 0,
-        pvBelowForMs: 0,
-    };
+function isPowerBalanceObjectId(value) {
+    const id = normalizeObjectId(value);
+    if (!id)
+        return false;
+    return /(?:^|\.)aliases(?:\.v1)?\.r\.powerbalance(?:$|\.)/.test(id)
+        || /(?:^|[._/-])powerbalance(?:$|[._/-])/.test(id)
+        || /batterypowerbalance/.test(id);
+}
+/**
+ * Code-Teil: isLikelyDirectEssSetpointObjectId
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function isLikelyDirectEssSetpointObjectId(value) {
+    const id = normalizeObjectId(value);
+    if (!id)
+        return false;
+    return /(?:^|\.)aliases(?:\.v1)?\.ctrl\.powersetpointw(?:$|\.)/.test(id)
+        || /setactivepowerequals/.test(id)
+        || /(?:^|[._/-])706(?:$|[._/-])/.test(id);
+}
+/**
+ * Code-Teil: isLikelyFemsGridTargetObjectId
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function isLikelyFemsGridTargetObjectId(value) {
+    const id = normalizeObjectId(value);
+    if (!id)
+        return false;
+    return /(?:^|\.)aliases(?:\.v1)?\.ctrl\.(?:gridsetpointw|napsetpointw)(?:$|\.)/.test(id)
+        || /setgridactivepower/.test(id)
+        || /ctrlbalancing/.test(id);
 }
 /**
  * Code-Teil: resolveControlMode
@@ -331,7 +346,9 @@ function resolveHybridAuthority(config = {}, runtime = {}) {
 function resolveControlMode(config = {}, context = {}) {
     const requestedMode = normalizeControlMode(config.feneconControlMode || config.controlModeMode || config.feneconHybridControlMode);
     const hybrid = isFeneconHybrid(config);
-    const nativeTargetAvailable = hasWritableNativeTarget(config);
+    const nativeTargetId = getNativeTargetId(config);
+    const directTargetIds = getDirectTargetIds(config);
+    const nativeTargetAvailable = !!nativeTargetId;
     const directTargetAvailable = hasWritableDirectTarget(config, context);
     const writableStorageCountRaw = finite(context.writableStorageCount);
     const writableStorageCount = writableStorageCountRaw === null ? 1 : Math.max(0, Math.round(writableStorageCountRaw));
@@ -344,6 +361,8 @@ function resolveControlMode(config = {}, context = {}) {
         requestedMode,
         nativeTargetAvailable,
         directTargetAvailable,
+        nativeTargetId,
+        directTargetIds,
         writableStorageCount,
         otherWritableStorageCount,
     };
@@ -351,14 +370,11 @@ function resolveControlMode(config = {}, context = {}) {
         return {
             ...common,
             eligible: false,
-            mode: requestedMode === 'fems-grid' || requestedMode === 'hybrid-auto' ? 'invalid' : 'direct-ess',
-            reason: requestedMode === 'fems-grid' || requestedMode === 'hybrid-auto'
-                ? 'fenecon-hybrid-mode-requires-fenecon-dc-hybrid'
+            mode: requestedMode === 'fems-grid' ? 'invalid' : 'direct-ess',
+            reason: requestedMode === 'fems-grid'
+                ? 'fems-grid-requires-fenecon-dc-hybrid'
                 : 'not-fenecon-hybrid',
         };
-    }
-    if (requestedMode === 'direct-ess') {
-        return { ...common, eligible: true, mode: 'direct-ess', reason: 'explicit-direct-ess' };
     }
     if (requestedMode === 'fems-grid') {
         if (!nativeTargetAvailable) {
@@ -369,20 +385,100 @@ function resolveControlMode(config = {}, context = {}) {
         }
         return { ...common, eligible: true, mode: 'fems-grid', reason: 'explicit-fems-grid' };
     }
-    // Automatik ist der sichere Hybrid-Standard:
-    // tagsueber/bei PV keine externe Vorgabe, nachts direkte ESS-Regelung.
-    // In gemischten Farmen ist eine FEMS-Regelhoheit nicht exklusiv moeglich;
-    // dort bleibt FENECON wie bisher ein direkter Farm-Teilnehmer.
+    if (requestedMode === 'direct-ess') {
+        if (!directTargetAvailable) {
+            return { ...common, eligible: true, mode: 'invalid', reason: 'direct-ess-target-missing' };
+        }
+        return { ...common, eligible: true, mode: 'direct-ess', reason: 'explicit-direct-ess' };
+    }
+    // Automatik wird beim Speichern/Start deterministisch aufgelöst und danach
+    // nicht aufgrund von PV, Forecast oder Tageszeit gewechselt.
     if (otherWritableStorageCount > 0) {
         if (!directTargetAvailable) {
-            return { ...common, eligible: true, requestedMode: 'auto', mode: 'invalid', reason: 'auto-mixed-farm-direct-target-missing' };
+            return { ...common, eligible: true, mode: 'invalid', reason: 'auto-mixed-farm-direct-target-missing' };
         }
-        return { ...common, eligible: true, requestedMode: 'auto', mode: 'direct-ess', reason: 'auto-mixed-farm-direct-ess' };
+        return { ...common, eligible: true, mode: 'direct-ess', reason: 'auto-mixed-farm-direct-ess' };
     }
-    if (!directTargetAvailable) {
-        return { ...common, eligible: true, requestedMode: 'auto', mode: 'invalid', reason: 'hybrid-auto-direct-target-missing' };
+    if (nativeTargetAvailable) {
+        return { ...common, eligible: true, mode: 'fems-grid', reason: 'auto-dedicated-fems-grid-target' };
     }
-    return { ...common, eligible: true, requestedMode: 'auto', mode: 'hybrid-auto', reason: 'auto-pv-fems-night-direct' };
+    if (directTargetAvailable) {
+        return { ...common, eligible: true, mode: 'direct-ess', reason: 'auto-direct-ess-fallback' };
+    }
+    return { ...common, eligible: true, mode: 'invalid', reason: 'auto-no-writable-fenecon-target' };
+}
+/**
+ * Legacy-Kompatibilität für ältere Aufrufer. PV darf die Reglerhoheit nicht
+ * mehr umschalten; daher liefert der Helfer ausschließlich den kontinuierlich
+ * aufgelösten Kommandopfad und niemals einen PV-bedingten No-Write-Zustand.
+ */
+function resolveHybridAuthority(config = {}, runtime = {}) {
+    const resolution = resolveControlMode(config, runtime);
+    return {
+        authority: resolution.mode === 'invalid' ? 'blocked' : 'nexowatt',
+        noWrite: false,
+        mode: resolution.mode,
+        reason: resolution.mode === 'invalid'
+            ? resolution.reason
+            : `Kontinuierlicher FENECON-Regelpfad: ${resolution.reason}`,
+        pvW: finite(runtime.pvW),
+        pvFresh: runtime.pvFresh === true,
+        pvBelowSinceMs: 0,
+        pvBelowForMs: 0,
+    };
+}
+/**
+ * Code-Teil: validateSingleConfig
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function validateSingleConfig(config = {}, context = {}) {
+    const resolution = resolveControlMode(config, context);
+    if (!isFeneconHybrid(config)) {
+        return {
+            ok: resolution.mode !== 'invalid',
+            reason: resolution.mode === 'invalid' ? resolution.reason : 'not-fenecon-hybrid',
+            resolution,
+        };
+    }
+    const nativeTargetId = getNativeTargetId(config);
+    const directTargetIds = getDirectTargetIds(config);
+    const essActualPowerId = getEssActualPowerId(config);
+    if (resolution.mode === 'invalid') {
+        return { ok: false, reason: resolution.reason, resolution, nativeTargetId, directTargetIds, essActualPowerId };
+    }
+    if (!essActualPowerId) {
+        return { ok: false, reason: 'fenecon-ess-actual-power-missing', resolution, nativeTargetId, directTargetIds, essActualPowerId };
+    }
+    if (isPowerBalanceObjectId(essActualPowerId)) {
+        return { ok: false, reason: 'fenecon-power-balance-not-valid-as-ess-feedback', resolution, nativeTargetId, directTargetIds, essActualPowerId };
+    }
+    if (nativeTargetId && directTargetIds.some((id) => sameObjectId(nativeTargetId, id))) {
+        return { ok: false, reason: 'fenecon-grid-target-equals-direct-ess-target', resolution, nativeTargetId, directTargetIds, essActualPowerId };
+    }
+    if (nativeTargetId && isLikelyDirectEssSetpointObjectId(nativeTargetId) && !isLikelyFemsGridTargetObjectId(nativeTargetId)) {
+        return { ok: false, reason: 'fenecon-grid-target-is-direct-ess-setpoint', resolution, nativeTargetId, directTargetIds, essActualPowerId };
+    }
+    if (directTargetIds.some((id) => sameObjectId(essActualPowerId, id))) {
+        return { ok: false, reason: 'fenecon-ess-feedback-equals-command-target', resolution, nativeTargetId, directTargetIds, essActualPowerId };
+    }
+    if (nativeTargetId && sameObjectId(essActualPowerId, nativeTargetId)) {
+        return { ok: false, reason: 'fenecon-ess-feedback-equals-grid-target', resolution, nativeTargetId, directTargetIds, essActualPowerId };
+    }
+    return {
+        ok: true,
+        reason: 'ok',
+        resolution,
+        nativeTargetId,
+        directTargetIds,
+        essActualPowerId,
+    };
 }
 /**
  * Übersetzt den final durch alle EOS-Policies begrenzten Batterie-Sollwert in
@@ -437,40 +533,20 @@ function validateFarmRows(rowsIn) {
     const rows = Array.isArray(rowsIn)
         ? rowsIn.filter((row) => row && typeof row === 'object' && row.enabled !== false)
         : [];
-    const configuredRows = rows.filter((row) => !!(text(row.setSignedPowerId)
-        || text(row.setChargePowerId)
-        || text(row.setDischargePowerId)
-        || text(row.feneconGridSetpointId)
-        || text(row.feneconGridSetpointObjectId)));
+    const configuredRows = rows.filter((row) => !!(getDirectTargetIds(row).length
+        || getNativeTargetId(row)));
     const writableStorageCount = configuredRows.length;
     const resolved = configuredRows.map((row) => {
-        const directTargetAvailable = !!(text(row.setSignedPowerId)
-            || text(row.setChargePowerId)
-            || text(row.setDischargePowerId));
-        const result = resolveControlMode({
-            vendorProfile: row.vendorProfile,
-            coupling: row.coupling,
-            feneconControlMode: row.feneconControlMode,
-            feneconGridSetpointId: row.feneconGridSetpointId || row.feneconGridSetpointObjectId,
-            setSignedPowerId: row.setSignedPowerId,
-            setChargePowerId: row.setChargePowerId,
-            setDischargePowerId: row.setDischargePowerId,
-        }, {
+        const directTargetAvailable = getDirectTargetIds(row).length > 0;
+        const validation = validateSingleConfig(row, {
             writableStorageCount,
             otherWritableStorageCount: Math.max(0, writableStorageCount - 1),
             directTargetAvailable,
         });
-        let validationReason = '';
-        if ((result.mode === 'direct-ess' || result.mode === 'hybrid-auto') && isFeneconHybrid(row) && !directTargetAvailable) {
-            validationReason = writableStorageCount > 1
-                ? 'fenecon-direct-target-missing-in-mixed-farm'
-                : 'fenecon-direct-target-missing';
-        }
-        return { row, result, directTargetAvailable, validationReason };
+        return { row, validation, result: validation.resolution, directTargetAvailable };
     });
-    const nativeRows = resolved.filter((item) => item.result.mode === 'fems-grid');
-    const hybridAutoRows = resolved.filter((item) => item.result.mode === 'hybrid-auto');
-    const invalidRows = resolved.filter((item) => item.result.mode === 'invalid' || item.validationReason);
+    const nativeRows = resolved.filter((item) => item.result && item.result.mode === 'fems-grid');
+    const invalidRows = resolved.filter((item) => !item.validation.ok);
     let ok = invalidRows.length === 0 && nativeRows.length <= 1;
     let reason = 'ok';
     if (nativeRows.length > 1) {
@@ -478,7 +554,7 @@ function validateFarmRows(rowsIn) {
         reason = 'multiple-fems-grid-masters';
     }
     else if (invalidRows.length) {
-        reason = invalidRows[0].validationReason || invalidRows[0].result.reason;
+        reason = invalidRows[0].validation.reason;
     }
     else if (nativeRows.length === 1 && writableStorageCount > 1) {
         ok = false;
@@ -490,25 +566,33 @@ function validateFarmRows(rowsIn) {
         writableStorageCount,
         nativeMasterCount: nativeRows.length,
         nativeMasterName: nativeRows.length ? text(nativeRows[0].row.name) : '',
-        hybridAutoCount: hybridAutoRows.length,
-        hybridAutoName: hybridAutoRows.length ? text(hybridAutoRows[0].row.name) : '',
         resolved: resolved.map((item) => ({
             name: text(item.row.name),
-            mode: item.result.mode,
-            requestedMode: item.result.requestedMode,
-            reason: item.validationReason || item.result.reason,
+            mode: item.result ? item.result.mode : 'invalid',
+            requestedMode: item.result ? item.result.requestedMode : normalizeControlMode(item.row.feneconControlMode),
+            reason: item.validation.reason,
             directTargetAvailable: item.directTargetAvailable,
+            essActualPowerId: getEssActualPowerId(item.row),
         })),
     };
 }
 module.exports = {
     normalizeVendorProfile,
     normalizeControlMode,
+    normalizeObjectId,
+    sameObjectId,
     isFeneconHybrid,
+    getNativeTargetId,
+    getDirectTargetIds,
+    getEssActualPowerId,
     hasWritableNativeTarget,
     hasWritableDirectTarget,
+    isPowerBalanceObjectId,
+    isLikelyDirectEssSetpointObjectId,
+    isLikelyFemsGridTargetObjectId,
     resolveHybridAuthority,
     resolveControlMode,
+    validateSingleConfig,
     calculateFemsGridTargetW,
     validateFarmRows,
 };

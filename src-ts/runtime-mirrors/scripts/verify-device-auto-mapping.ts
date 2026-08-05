@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e2670d5c9669f3bad9327f3ef4b7cbba1feff53931f6cb4a2e5b49617a331d83
+ * Original-Hash: fed8aee2cdd715d530053c3b60b6ebdadcc5d402df8aea3502d2841af72d0d4a
  */
 
 /**
@@ -81,11 +81,25 @@ assert.ok(ui.includes('Es werden nur leere Felder ergänzt. Apps/Geräte werden 
 assert.ok(ui.includes('Zuordnungsvorschlag übernehmen?'));
 assert.ok(ui.includes("if (onlyEmpty)"));
 assert.ok(ui.includes("meta && meta.write === true"));
-assert.ok(ui.includes("['targetPowerObjectId','targetChargePowerObjectId','targetDischargePowerObjectId','e3dcSetPowerModeObjectId','e3dcSetPowerValueObjectId']"));
+assert.ok(ui.includes("'targetPowerObjectId','targetChargePowerObjectId','targetDischargePowerObjectId'"));
+assert.ok(ui.includes("'e3dcSetPowerModeObjectId','e3dcSetPowerValueObjectId','feneconGridSetpointObjectId'"));
 assert.ok(ui.includes('if (charge && discharge)'));
-assert.ok(ui.includes('else if (signed)'));
+assert.ok(ui.includes('else if (signed && !String(dps.targetPowerObjectId'));
 assert.ok(ui.includes('Mehrere Speicher: keine automatische Einzel-Speicherwahl'));
 assert.ok(ui.includes('Mehrere Zähler: NVP-Zähler wird nur bei eindeutiger Bewertung gesetzt.'));
+
+assert.ok(ui.includes("_nwGetAlias(dev, 'r.essActivePower')"), 'FENECON auto mapping must prefer the real AC ESS feedback alias');
+assert.ok(ui.includes("_nwGetWritableAlias(dev, 'ctrl.gridSetpointW')"), 'FENECON auto mapping must only use a genuine grid-target alias for native FEMS control');
+assert.ok(ui.includes("_nwGetWritableAlias(dev, 'ctrl.napSetpointW')"), 'FENECON NAP target alias fallback missing');
+assert.ok(ui.includes("_nwGetAlias(dev, 'r.pvPowerDc')"), 'FENECON internal DC-PV alias mapping missing');
+assert.ok(ui.includes("_nwGetAlias(dev, 'r.pvPowerAc')"), 'FENECON external AC-PV alias mapping missing');
+assert.ok(ui.includes("_nwGetAlias(dev, 'r.pvPowerTotal')"), 'FENECON total PV alias mapping missing');
+assert.ok(ui.includes('FENECON/OpenEMS Hybrid'), 'FENECON-specific auto-mapping path missing');
+const storageMapStart = ui.indexOf('function _nwAutoMapStorageAppFromDevices');
+const storageMapEnd = ui.indexOf('function _nwScoreGridMeter', storageMapStart);
+const storageMapFn = ui.slice(storageMapStart, storageMapEnd > storageMapStart ? storageMapEnd : storageMapStart + 18000);
+assert.equal(/r\.powerBalance/.test(storageMapFn), false, 'FENECON auto mapping must never use powerBalance as ESS actuator feedback');
+assert.equal(/ctrl\.powerSetpointW[^\r\n]{0,200}feneconGridSetpoint/i.test(storageMapFn), false, 'Direct ESS powerSetpointW must never be mapped as FEMS grid target');
 
 const evcsStart = ui.indexOf('function _applyNwDeviceToEvcsRow');
 const evcsEnd = ui.indexOf('function _nwScoreGridMeter', evcsStart);
