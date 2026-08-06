@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:b5c3b6ab769bd11a43760bd2f16cebc3629158fe44ad3e3767b8634b29ca7563
+ * Quell-Hash: sha256:c44f7e2c4b75ef8a1cbed5e64285cf1d27341a5d4d7e5bca0c9547d6d64ea72e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -136,6 +136,7 @@ const NwChannelDetector =
 
 // Embedded EMS engine (Charging Management from nexowatt-multiuse)
 const { EmsEngine } = require('./ems/engine');
+const { Para14aEebusDirectApi } = require('./ems/services/para14a-eebus-api');
 const { resolveNvpDisplay, resolveCurrentNvpSnapshot } = require('./ems/services/measurement-freshness');
 const { buildHttpActuatorShadowContext, withActuatorShadowContext, isActuatorAuthorityBlockedResult } = require('./ems/services/actuator-shadow-arbiter');
 const { resolveStorageOperatingPolicy } = require('./ems/services/storage-self-consumption-policy');
@@ -280,6 +281,11 @@ class NexoWattVis extends utils.Adapter {
     // EMS engine (Sprint 2)
     this.emsEngine = null;
 
+    // Direkte, zeitkritische EEBUS/CLS -> §14a Adapter-API. Die Instanz
+    // existiert bereits vor onReady, akzeptiert Regelbefehle aber erst nach
+    // erfolgreicher Initialisierung des zentralen EMS-Reglers.
+    this._para14aEebusApi = new Para14aEebusDirectApi(this);
+
     // NexoLogic engine (node/graph editor runtime)
     this.logicEngine = null;
 
@@ -377,6 +383,7 @@ class NexoWattVis extends utils.Adapter {
 
     this.on('ready', this.onReady.bind(this));
     this.on('stateChange', this.onStateChange.bind(this));
+    this.on('message', this.onMessage.bind(this));
     this.on('unload', this.onUnload.bind(this));
   }
   /** Code-Teil: _nwSetTimeout – bestehender Helfer; Aufrufer und State-/API-Verträge bei Änderungen mitprüfen. */
@@ -10563,6 +10570,11 @@ async onReady() {
 
       // EMS (Sprint 2): embedded Charging-Management engine
       try { await this.initEmsEngine(); } catch (e) { this.log.warn('EMS init failed: ' + (e && e.message ? e.message : e)); }
+
+      // Direkte EEBUS/CLS-Anbindung erst nach dem zentralen EMS initialisieren.
+      // Damit kann ein angenommener LPC-Befehl sofort einen vollständigen
+      // Regelzyklus auslösen und wird nicht nur in Diagnose-States abgelegt.
+      try { await this._para14aEebusApi.init(); } catch (e) { this.log.warn('§14a EEBUS direct API init failed: ' + (e && e.message ? e.message : e)); }
 
       // Prime + subscribe EMS runtime states for the UI (EVCS page mode buttons, boost status, etc.).
       // Without this, the UI might fall back to legacy or show default values after reload.
@@ -24915,17 +24927,51 @@ return res.json(out);
    * sie verkürzt ausschließlich die Reaktionszeit nach Modus-, Freigabe-,
    * Phasen- oder Zieländerungen im Lademanagement.
    */
-  _nwRequestImmediateEmsTick(reason = 'customer-control') {
+  _nwRequestImmediateEmsTick(reason = 'customer-control', delayMs) {
     try {
       if (this._nwShuttingDown) return false;
       const engine = this.emsEngine;
       if (engine && typeof engine.requestImmediateTick === 'function') {
+        if (Number.isFinite(Number(delayMs))) {
+          return engine.requestImmediateTick(String(reason || 'customer-control'), Math.max(0, Number(delayMs))) === true;
+        }
         return engine.requestImmediateTick(String(reason || 'customer-control')) === true;
       }
     } catch (_e) {
       // Der reguläre Scheduler bleibt der sichere Fallback.
     }
     return false;
+  }
+
+  /**
+   * Direkte EEBUS/CLS-Nachrichten werden ohne Datenpunkt-Zuordnung an den
+   * zentralen §14a-Regler übergeben. Unbekannte Adapter-Nachrichten bleiben
+   * unangetastet, damit spätere APIs parallel ergänzt werden können.
+   */
+  async onMessage(obj) {
+    try {
+      if (this._para14aEebusApi && await this._para14aEebusApi.handleMessage(obj)) return;
+    } catch (e) {
+      this.log.warn('§14a EEBUS direct API message failed: ' + (e && e.message ? e.message : e));
+      try {
+        if (obj && obj.callback) {
+          this.sendTo(obj.from, obj.command, { accepted: false, error: String(e && e.message ? e.message : e) }, obj.callback);
+        }
+      } catch (_replyError) {}
+    }
+  }
+
+  _nwGetPara14aEebusIngress() {
+    try {
+      return this._para14aEebusApi ? this._para14aEebusApi.getIngress() : null;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  async _nwFlushPara14aEebusImplementationFeedback(context) {
+    if (!this._para14aEebusApi) return false;
+    return this._para14aEebusApi.flushImplementationFeedback(context || {});
   }
 
   /**
@@ -31839,6 +31885,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
       try { this.stopNotificationMonitor(); } catch (_e1) {}
       try { this._nwStopLiveCoreRefresh(); } catch (_e2) {}
+      try { if (this._para14aEebusApi && typeof this._para14aEebusApi.stop === 'function') this._para14aEebusApi.stop(); } catch (_eApi) {}
       try { if (this.emsEngine && typeof this.emsEngine.stop === 'function') this.emsEngine.stop(); } catch (_e3) {}
       try { if (this.logicEngine && typeof this.logicEngine.stop === 'function') this.logicEngine.stop(); } catch (_e4) {}
       try {

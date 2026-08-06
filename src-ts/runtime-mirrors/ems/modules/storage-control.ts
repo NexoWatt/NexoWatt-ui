@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 907f67810d66fcd24089b40c7bfe47887a542109ead05aba21ba2a194ad45448
+ * Original-Hash: 511a20d7fd050b34df8dc41f0e3362cfbb869bb24eea6abd3f681b5879a0734f
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:fbc4918aabd318dd125ecfd66a66e02d46e09a971ce457cba682efcb6dfba4ed
+ * Quell-Hash: sha256:4047660651800bb1206cb545587b11003307d4f878da462145f223c69c44bca3
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1096,6 +1096,14 @@ class SpeicherRegelungModule extends BaseModule {
         // Policies. Sie duerfen niemals selbst einen Hardware-Schreibpfad erzeugen.
         // Genau eine im AppCenter aktive Topologie (`single` oder `farm`) fuehrt.
         const storageAuthorityEarly = this._getStorageControlAuthority();
+        const storageFarmCfgEarly = (this.adapter.config && this.adapter.config.storageFarm
+            && typeof this.adapter.config.storageFarm === 'object')
+            ? this.adapter.config.storageFarm
+            : {};
+        const gridChargeConfigured = storageAuthorityEarly.selectedTopology === 'farm'
+            ? storageFarmCfgEarly.allowGridCharge !== false
+            : cfg.allowGridCharge !== false;
+        await this._setIfChanged('speicher.regelung.netzLadenKonfiguriert', !!gridChargeConfigured);
         const cfgEnabled = !!storageAuthorityEarly.singleAppActive;
         let autoTarifEnabled = false;
         try {
@@ -2000,6 +2008,11 @@ class SpeicherRegelungModule extends BaseModule {
             dischargeAllowed = !!this._tariffDischargeAllowed;
         }
 
+        // Der allgemeine App-Center-Haken ist die harte Master-Freigabe. Tarif-
+        // Freigaben koennen Netzladen zusaetzlich sperren, aber niemals den bewusst
+        // entfernten Installateur-Haken wieder freigeben. PV-/Eigenverbrauchsladen
+        // und Entladung werden von diesem Gate nicht beruehrt.
+        gridChargeAllowed = !!gridChargeConfigured && !!gridChargeAllowed;
         await this._setIfChanged('speicher.regelung.netzLadenErlaubt', !!gridChargeAllowed);
         await this._setIfChanged('speicher.regelung.entladenErlaubt', !!dischargeAllowed);
 
@@ -5463,6 +5476,38 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             reason: storageLicensePowerLimited ? String(reason || '') : '',
         }));
 
+        // Defense-in-depth: Selbst wenn ein Herstellerprofil, ein Hold-Pfad oder
+        // eine spaetere Policy einen negativen Sollwert weitertraegt, darf eine
+        // als Netzladen klassifizierte Quelle den allgemeinen Installateur-Haken
+        // nicht umgehen. PV-/NVP-Laden bleibt absichtlich unangetastet.
+        const gridChargeBlockedByConfig = !gridChargeConfigured
+            && targetW < 0
+            && isCentralGridChargeSource(policySourceBeforeVendor || source, targetW);
+        if (gridChargeBlockedByConfig) {
+            targetW = 0;
+            reason = 'Netzladen deaktiviert (App-Center: „Netzladen erlauben“ ist aus)';
+            source = 'policy';
+            chargeDemandHardCapW = 0;
+            chargeDemandHardCapReason = reason;
+            storagePolicyBlocked = true;
+            storagePolicyBlockReason = reason;
+            storageZeroNoWrite = false;
+            sungrowNoWrite = false;
+            pvBudgetPostVendorNoWriteHold = false;
+            pvBudgetPostVendorNoWriteReason = '';
+            if (sungrowHybridActive) {
+                sungrowWriteMode = 'write-grid-charge-config-stop';
+                this._sungrowHybridLastMode = sungrowWriteMode;
+            }
+            storageNvpBalanceDiag = {
+                ...(storageNvpBalanceDiag || {}),
+                targetW: 0,
+                gridChargeConfigured: false,
+                gridChargeBlockedByConfig: true,
+                mode: 'grid-charge-config-stop',
+            };
+        }
+
         if (sungrowDiagPayload) {
             sungrowDiagPayload = {
                 ...sungrowDiagPayload,
@@ -5644,6 +5689,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 				} : null,
                 soc: (typeof soc === 'number' && Number.isFinite(soc)) ? soc : null,
                 permissions: {
+                    gridChargeConfigured: !!gridChargeConfigured,
                     gridChargeAllowed: (typeof gridChargeAllowed === 'boolean') ? gridChargeAllowed : null,
                     dischargeAllowed: (typeof dischargeAllowed === 'boolean') ? dischargeAllowed : null,
                 },
@@ -6979,6 +7025,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         return {
             controlMode: storage.controlMode,
             datapoints: effectiveDatapoints,
+            allowGridCharge: storage.allowGridCharge !== false,
             // Einzel-Speicher-Typ aus dem App-Center. AC bleibt der Standard.
             // DC/Hybrid nutzt zusaetzlich den optionalen PV-Erzeugungs-DP st.dcPvPowerW,
             // damit FENECON-/0-Einspeise-Erkennung nicht den Batterie-Sollwert mit PV verwechselt.
@@ -7540,7 +7587,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     async _writeE3dcRscpTargetW(targetW, reason, source, cfg = {}) {
         const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
         const absW = Math.max(0, Math.abs(w));
-        const allowGridCharge = cfg.e3dcAllowGridCharge === true;
+        const allowGridCharge = cfg.allowGridCharge !== false && cfg.e3dcAllowGridCharge === true;
         const gridCharge = !!(w < 0 && allowGridCharge && this._isE3dcGridChargeSource(source));
         const zeroModeRaw = String(cfg.e3dcZeroMode || 'normal').trim().toLowerCase();
         const zeroModeCode = zeroModeRaw === 'idle' ? 1 : 0;
@@ -9464,6 +9511,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
         await mk('speicher.regelung.netzLeistungW', 'Netzleistung (W)', 'number', 'value.power');
         await mk('speicher.regelung.netzAlterMs', 'Netzleistung Alter (ms)', 'number', 'value.interval');
+        await mk('speicher.regelung.netzLadenKonfiguriert', 'Netzladen im App-Center freigegeben', 'boolean', 'indicator', true);
         await mk('speicher.regelung.netzLadenErlaubt', 'Netzladen erlaubt', 'boolean', 'indicator', true);
         await mk('speicher.regelung.entladenErlaubt', 'Entladen erlaubt', 'boolean', 'indicator', true);
         await mk('speicher.regelung.tarifState', 'Tarif Zustand', 'string', 'text', '');

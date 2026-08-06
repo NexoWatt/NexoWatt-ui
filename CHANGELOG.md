@@ -1,3 +1,37 @@
+## 0.8.156 - 2026-08-05
+
+- Versionierte direkte Adapter-API zwischen `ioBroker.eebus` und dem zentralen NexoWatt-§14a-Regler ergänzt. CLS-/LPC-Befehle benötigen im Direktbetrieb keine manuelle Datenpunktzuordnung mehr.
+- Zeitkritischen Pfad auf Arbeitsspeicher und `sendTo` reduziert: Eingang wird vor Diagnose-I/O übernommen und löst einen vollständigen zentralen EMS-Tick mit 0 ms Zusatzverzögerung aus. Bereits laufende Regelzyklen werden nicht parallelisiert, sondern erhalten unmittelbar danach einen Folgetick.
+- Zweistufige interne Verarbeitung eingeführt: EOS bestätigt dem EEBUS-Gateway die Annahme unmittelbar nach erfolgreicher Vormerkung. Die positive korrelierte SPINE-ResultData wird gegenüber der CLS-Box jedoch erst nach abgeschlossenem §14a-/Core-Limits-/Verbraucher-Schreibzyklus gesendet; anschließend folgt der effektive LoadControl-Readback.
+- Ende-zu-Ende-Zeitmessung mit konfigurierbaren Feldtestzielen von 250 ms für API-Annahme, 1.000 ms vom CLS-Eingang bis zum abgeschlossenen zentralen Regel-/Schreibzyklus und 1.500 ms vom CLS-Eingang bis zur Umsetzungsrückmeldung ergänzt. Diese Werte sind technische NexoWatt-Zielwerte und keine pauschalen gesetzlichen Fristen.
+- Heartbeat-, Gültigkeits- und Failsafe-Übergänge bleiben autoritativ im EEBUS-Gateway. EOS erzeugt keine konkurrierenden Übergänge; ein Kommunikationsfehler darf die zulässige Leistung niemals erhöhen.
+- Positive CLS-Umsetzungsrückmeldung wird bei Fehlern in aktiven Geräte-/Schreibpfaden zurückgehalten. Teilmesswerte der Ladeinfrastruktur werden nicht fälschlich als gesamte SteuVE-Leistung ausgewiesen.
+- Regressionstest für Direkt-API, 0-ms-Schnelltick, Deduplizierung, Release, Degraded-Fail-Closed und Zeitmessung ergänzt; Service-Worker-Cache auf `nexowatt-cache-v456` und zentrale Versionskennungen auf 0.8.156 aktualisiert.
+
+## 0.8.155 - 2026-08-05
+
+- §14a-Controller für Feldanlagen gehärtet: Zugeordnete und beschreibbare Ladepunkte werden direkt aus der EVCS-Konfiguration übernommen; aktive Wärme-/Klimageräte und Heizstäbe werden über ihre Fachmodule und Energiefluss-Slots automatisch angebunden.
+- Einzel- und Farmspeicher erhalten den verständlichen Schalter **„Netzladen erlauben“**. Nur bei aktivierter Netzladung wird die ausgewählte, tatsächlich beschreibbare Speichertopologie automatisch als §14a-SteuVE berücksichtigt.
+- §14a begrenzt bei Speichern ausschließlich Tarif-, Reserve- und sonstige Netzladepfade. PV-/Eigenverbrauchsladen sowie die Entladung bleiben verfügbar; ein zusätzlicher E3/DC-Schalter bleibt eine Hersteller-Unterfreigabe.
+- Upgrade-Schutz ergänzt: alte, noch nicht als automatisch markierte Schnellsetup-Zeilen werden anhand ihrer Aktor-Datenpunkte erkannt und weder doppelt als SteuVE gezählt noch für konkurrierende Legacy-Writes verwendet.
+- §14a-Berechnung korrigiert: UI-Feld `maxPowerW` wird übernommen, die Basis kann nicht unter 4.200 W fallen, die 40-%-Sonderregel gilt nur für große Wärme-/Klimagruppen und unabhängige Speicher werden nur bei expliziter Konstrukt-ID zusammengefasst.
+- Externe EMS-Gesamtsollwerte werden nun auch oberhalb der berechneten Mindestleistung bis zur bekannten Anschlussleistung nach Priorität verteilt; unbekannte Anschlussleistungen erhalten kein ungesichertes Zusatzbudget.
+- Boost-, manuelle und externe Anforderungen von Thermik und Heizstab können den aktiven §14a-Deckel nicht mehr umgehen. Der ursprüngliche Benutzer-/Fremdwunsch bleibt während der Begrenzung erhalten und wird nach Freigabe wiederhergestellt.
+- Zusätzliche manuelle Verbraucher bleiben möglich, sind in der Oberfläche aber klar von automatisch angebundenen NexoWatt-Fachmodulen getrennt. Neue Diagnose-States zeigen automatische und manuelle Teilnehmer sowie die automatische Teilnehmerliste.
+- Die PV-Erzeugerregelung 60/30/0 bleibt als getrennte Erzeugungs-/Wechselrichterfunktion unverändert und wird nicht mit der §14a-Verbraucherbegrenzung vermischt.
+- DE-/NL-/EN-Texte ergänzt; Service-Worker-Cache auf `nexowatt-cache-v455` und zentrale UI-/Provider-Versionskennungen auf 0.8.155 aktualisiert.
+- Der separate NexoWatt-EEBUS-Adapter ist nicht Bestandteil dieses Pakets und wurde in RC31 weder geändert noch Ende-zu-Ende gegen IF_CLS_CTRL/LPC geprüft.
+
+## 0.8.154 - 2026-08-04
+
+- FENECON/OpenEMS-Hybridregelung grundlegend korrigiert: PV-Erzeugung, Forecast und Tageszeit schalten die Reglerhoheit nicht mehr um. Der beim Speichern beziehungsweise Start eindeutig aufgelöste Regelpfad arbeitet tagsüber und nachts kontinuierlich.
+- `Automatisch` verwendet nur dann den nativen FEMS-NVP-Regler, wenn ein echter separater `ctrlBalancing*/SetGridActivePower`-Datenpunkt vorhanden ist und der FENECON der einzige beschreibbare Speicher am NVP ist; andernfalls wird kontinuierlich die direkte ESS-Leistungsregelung verwendet.
+- Direkter FENECON-Pfad verwendet als Regelungsfeedback ausschließlich die echte AC-seitige ESS-Leistung (`ess*/ActivePower`, typischerweise Register 604). `powerBalance` sowie PV-/Hybrid-Summen sind als Aktorfeedback und zusätzlicher Feed-forward gesperrt.
+- FEMS-NVP-Ziel und direkter ESS-Sollwert dürfen niemals dieselbe Objekt-ID verwenden. `aliases.ctrl.powerSetpointW`/Register 706 wird nicht mehr als FEMS-NVP-Ziel akzeptiert oder automatisch zugeordnet.
+- FENECON-Konfigurationsvalidierung und Autozuordnung gehärtet: echte NVP-Ziel-Aliase (`ctrl.gridSetpointW`/`ctrl.napSetpointW`), echte ESS-Rückmeldung und exklusive Kommandofamilien werden geprüft; fehlerhafte Konfigurationen bleiben fail-safe ohne Hardwarewrite.
+- Speicherfarm übernimmt dieselben Regeln: gemischte Farms steuern FENECON ausschließlich als direkten ESS-Teilnehmer; ein nativer FEMS-NVP-Master ist nur exklusiv zulässig.
+- NexoWatt-Devices-Aliasvertrag um getrennte FENECON-Rollen für AC-ESS-Leistung, interne/externe/Gesamt-PV, momentane Leistungsgrenzen und Sollwert-Readback erweitert.
+- Service-Worker-Cache auf `nexowatt-cache-v454` und zentrale UI-/Provider-Versionskennungen auf 0.8.154 aktualisiert.
 
 ## 0.8.153 - 2026-08-03
 

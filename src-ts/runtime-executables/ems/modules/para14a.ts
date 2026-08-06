@@ -1370,6 +1370,36 @@ class Para14aModule extends BaseModule {
      */
     _readActiveSignal() {
         const cfg = this._getCfg();
+
+        // Die direkte EEBUS-/CLS-Schnittstelle hat Vorrang vor manuellen
+        // Datenpunkt-Mappings. Der EEBUS-Adapter überwacht Heartbeat,
+        // Gültigkeit und Failsafe und übergibt den bereits normalisierten
+        // LPC-Befehl im Arbeitsspeicher an EOS.
+        try {
+            const direct = typeof this.adapter?._nwGetPara14aEebusIngress === 'function'
+                ? this.adapter._nwGetPara14aEebusIngress()
+                : null;
+            if (direct && direct.available === true) {
+                const active = direct.active === true;
+                const ageMs = Number.isFinite(Number(direct.ageMs)) ? Math.max(0, Number(direct.ageMs)) : null;
+                return {
+                    active,
+                    fresh: direct.fresh === true,
+                    stale: direct.stale === true,
+                    source: `eebus-direct:${String(direct.sourceInstance || 'eebus')}/${String(direct.sourceDeviceId || 'cls')}`,
+                    reason: String(direct.status || direct.reason || (active ? 'direct-active' : 'direct-release')),
+                    ageMs,
+                    lastFreshActive: active,
+                    lastFreshTs: Number.isFinite(Number(direct.receivedAtMs)) ? Number(direct.receivedAtMs) : Date.now(),
+                    stalePolicy: String(direct.stalePolicy || 'gateway-supervised-hold-active'),
+                    direct: true,
+                    directIngress: direct,
+                };
+            }
+        } catch (_directError) {
+            // Das vorhandene manuelle DP-Fallback bleibt verfügbar.
+        }
+
         const maxAgeMs = Math.max(1000, Math.round(num(cfg.para14aSignalMaxAgeSec, 30) * 1000));
         const mapped = !!(this._activeDpKey && this.dp);
         const rawValue = mapped ? this.dp.getRaw(this._activeDpKey, null) : null;
@@ -1484,8 +1514,14 @@ class Para14aModule extends BaseModule {
         if (this._initialized !== true) return;
         const cfg = this._getCfg();
         const signal = this._readActiveSignal();
+        const directIngress = signal && signal.direct === true && signal.directIngress
+            ? signal.directIngress
+            : null;
         const modeRaw = String(cfg.para14aMode || cfg.para14aControlMode || 'direct').trim().toLowerCase();
-        const mode = (modeRaw === 'ems' || modeRaw === 'formula') ? 'ems' : 'direct';
+        // Ein LPC-Gesamtgrenzwert der CLS-Box ist immer eine EMS-Vorgabe. Die
+        // Verteilung auf Ladepunkte, Speicher-Netzladung und Thermik erfolgt
+        // anschließend durch den zentralen EOS-Budgetregler.
+        const mode = directIngress ? 'ems' : ((modeRaw === 'ems' || modeRaw === 'formula') ? 'ems' : 'direct');
         const minPerDeviceW = clamp(num(cfg.para14aMinPerDeviceW, 4200), 4200, 1e12);
         const signalMaxAgeMs = Math.max(1000, Math.round(num(cfg.para14aSignalMaxAgeSec, 30) * 1000));
         const setpointMaxAgeMs = Math.max(1000, Math.round(num(cfg.para14aSetpointMaxAgeSec, cfg.para14aSignalMaxAgeSec || 30) * 1000));
@@ -1525,9 +1561,17 @@ class Para14aModule extends BaseModule {
             enableId: load.enableId,
         }));
         const consumers = automaticConsumers.concat(manualConsumers);
-        const externalTotalSetpointW = signal.active && mode === 'ems' && this._emsSetpointDpKey && this.dp
+        const directTotalSetpointW = directIngress && signal.active
+            && Number.isFinite(Number(directIngress.limitW))
+            && Number(directIngress.limitW) > 0
+            ? Number(directIngress.limitW)
+            : null;
+        const mappedTotalSetpointW = signal.active && mode === 'ems' && !directIngress && this._emsSetpointDpKey && this.dp
             ? this.dp.getNumberFresh(this._emsSetpointDpKey, setpointMaxAgeMs, null)
             : null;
+        const externalTotalSetpointW = directTotalSetpointW !== null
+            ? directTotalSetpointW
+            : mappedTotalSetpointW;
         const constraint = buildPara14aConstraintSnapshot({
             active: signal.active,
             source: signal.source,
@@ -1553,6 +1597,14 @@ class Para14aModule extends BaseModule {
             automaticConsumerCount: automaticConsumers.length,
             manualConsumerCount: manualConsumers.length,
             automaticConsumers,
+            directApi: !!directIngress,
+            directCommandId: directIngress ? String(directIngress.commandId || '') : '',
+            directSequence: directIngress ? Number(directIngress.sequence) || 0 : 0,
+            directSourceInstance: directIngress ? String(directIngress.sourceInstance || '') : '',
+            directSourceDeviceId: directIngress ? String(directIngress.sourceDeviceId || '') : '',
+            directReceivedAtMs: directIngress ? Number(directIngress.receivedAtMs) || 0 : 0,
+            directAcceptedAtMs: directIngress ? Number(directIngress.acceptedAtMs) || 0 : 0,
+            directValidUntilMs: directIngress ? Number(directIngress.validUntilMs) || 0 : 0,
         };
 
         await this._setStateIfChanged('para14a.active', constraint.active);
@@ -1638,6 +1690,13 @@ class Para14aModule extends BaseModule {
             consumerWriteFailedCount: consumerAudit.writeFailedCount,
             failedConsumers: consumerAudit.failedConsumers,
         });
+        // Der direkte EEBUS-Rückkanal liest ausschließlich diesen Snapshot
+        // nach Abschluss des kompletten Modulmanager-Zyklus. Damit werden
+        // Übernahme und tatsächlicher zentraler Regelzyklus sauber getrennt.
+        if (this.adapter._para14a && typeof this.adapter._para14a === 'object') {
+            this.adapter._para14a.consumerAudit = consumerAudit;
+            this.adapter._para14a.auditSnapshot = auditSnapshot;
+        }
         await this._handleAuditLogging(auditSnapshot);
     }
 

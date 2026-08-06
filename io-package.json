@@ -1,8 +1,13 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.155",
+    "version": "0.8.156",
     "news": {
+      "0.8.156": {
+        "de": "Version 0.8.156 RC32: Direkte EEBUS-/CLS-Anbindung des zentralen §14a-Reglers ohne manuelle Datenpunktzuordnung. LPC-Grenzen werden im Arbeitsspeicher übernommen und lösen einen vollständigen EMS-Regel- und Schreibzyklus mit 0 ms Zusatzverzögerung aus. Die interne API-Annahme wird mit 250 ms überwacht; eine positive korrelierte SPINE-Rückmeldung erfolgt erst nach erfolgreichem Regel-/Schreibzyklus. Die Ende-zu-Ende-Zielwerte betragen 1.000 ms bis zur Umsetzung und 1.500 ms bis zur Rückmeldung. Fehler werden negativ quittiert und erzeugen keinen positiven LoadControl-Readback.",
+        "nl": "Versie 0.8.156 RC32: directe EEBUS-/CLS-koppeling van de centrale §14a-regelaar zonder handmatige datapunttoewijzing. LPC-limieten worden in het geheugen overgenomen en starten een volledige EMS-regel- en schrijfcyclus met 0 ms extra vertraging. De interne API-acceptatie wordt bewaakt met 250 ms; een positieve gecorreleerde SPINE-terugmelding volgt pas na een geslaagde regel-/schrijfcyclus. De end-to-end-doelen zijn 1.000 ms tot implementatie en 1.500 ms tot terugmelding. Fouten worden negatief bevestigd en leveren geen positieve LoadControl-readback op.",
+        "en": "Version 0.8.156 RC32: direct EEBUS/CLS integration of the central §14a controller without manual datapoint mapping. LPC limits are accepted in memory and trigger a full EMS control/write cycle with 0 ms added scheduling delay. Internal API acceptance is monitored against 250 ms; a positive correlated SPINE result is sent only after the control/write cycle succeeds. End-to-end targets are 1,000 ms to controller application and 1,500 ms to feedback. Failures receive a negative result and no positive LoadControl readback."
+      },
       "0.8.155": {
         "de": "Version 0.8.155 RC31: §14a-Härtung mit automatischer Anbindung zugeordneter Ladepunkte, aktiver Wärme-/Klimageräte, Heizstäbe und Speicher mit erlaubtem Netzladen. Speicher begrenzen unter §14a ausschließlich die Netzladung; PV-/Eigenverbrauchsladen und Entladung bleiben verfügbar. Mindestformeln, externe EMS-Sollwerte, Speichergruppierung sowie Boost-/Manuellpfade wurden abgesichert.",
         "nl": "Versie 0.8.155 RC31: §14a-versteviging met automatische koppeling van toegewezen laadpunten, actieve warmte-/klimaatapparaten, verwarmingselementen en opslagsystemen waarvoor netladen is toegestaan. Voor opslag beperkt §14a uitsluitend het laden vanuit het net; PV-/eigenverbruiksladen en ontladen blijven beschikbaar. Minimumformules, externe EMS-setpoints, opslaggroepering en boost-/handmatige paden zijn beveiligd.",
@@ -32,11 +37,6 @@
         "de": "Version 0.8.150 RC26: Sichere Ein-Klick-DP-Zuordnung für Geräte aus NexoWatt Devices über den stabilen aliases.v1-/Capability-Vertrag. Der Assistent ergänzt nur leere Felder, prüft Schreibbarkeit, trennt Geräteklassen und aktiviert weder Apps noch Hardware. Zusätzlich können dynamische Tarife direkt im AppCenter ohne externen Tarifadapter angebunden werden: Tibber, EnergyZero, ENTSO-E, konfigurierbarer Ostrom-OAuth-Zugang, allgemeine REST/JSON-API und lokale Anbieterprofile. Aktuell-, Durchschnitt-, Heute- und Morgen-Preis-DPs werden automatisch an die bestehende Tarif-, Speicher- und EVCS-Logik gekoppelt; veraltete Providerdaten starten keine neue Tarif-Arbitrage. Providerabrufe verwenden zusätzlich Cache, verteilten Zeitversatz und exponentielles Backoff, damit APIs auch bei vielen Anlagen stabil und fair genutzt werden.",
         "nl": "Versie 0.8.150 RC26: veilige éénklikstoewijzing van datapunten voor apparaten uit NexoWatt Devices via het stabiele aliases.v1-/capability-contract. De assistent vult alleen lege velden aan, controleert schrijfbaarheid, scheidt apparaatklassen en activeert geen apps of hardware. Daarnaast kunnen dynamische tarieven rechtstreeks in het App-center zonder externe tariefadapter worden gekoppeld: Tibber, EnergyZero, ENTSO-E, configureerbare Ostrom-OAuth-toegang, een algemene REST/JSON-API en profielen voor lokale leveranciers. Actuele prijs, gemiddelde prijs en de JSON-reeksen voor vandaag en morgen worden automatisch met de bestaande tarief-, batterij- en EVCS-logica verbonden; verouderde providergegevens starten geen nieuwe tariefarbitrage. Provideroproepen gebruiken bovendien caching, gespreide tijdsvertraging en exponentiële back-off, zodat API’s ook bij veel installaties stabiel en eerlijk worden gebruikt.",
         "en": "Version 0.8.150 RC26: safe one-click datapoint mapping for NexoWatt Devices based on the stable aliases.v1/capability contract. The wizard fills empty fields only, validates writeability, separates device classes and never enables apps or hardware. Dynamic tariffs can now be connected directly in AppCenter without an external tariff adapter: Tibber, EnergyZero, ENTSO-E, configurable Ostrom OAuth access, generic REST/JSON and local-provider profiles. Current, average, today and tomorrow price datapoints are coupled to the existing tariff, storage and EVCS logic, while stale provider data cannot start new tariff arbitrage. Provider polling also uses caching, distributed jitter and exponential backoff so APIs remain stable and fair across many installations."
-      },
-      "0.8.149": {
-        "de": "Version 0.8.149 RC25: Die optionale Seite „Energieherkunft & Ladebilanz“ ist jetzt vollständig an AppCenter installiert+aktiviert gekoppelt. Ein CSS-Prioritätsfehler, der den Burger-Menüpunkt trotz Hidden-Klasse sichtbar machte, ist behoben. Ohne gültige Home-/Pro-Lizenz oder aktive App werden Menü, Topbar und Direkt-URL gesperrt und auf LIVE zurückgeführt; API und Exporte bleiben ebenfalls blockiert.",
-        "nl": "Versie 0.8.149 RC25: de optionele pagina ‘Energieherkomst & laadbalans’ is nu volledig gekoppeld aan geïnstalleerd+actief in het App-center. Een CSS-prioriteitsfout waardoor het hamburgermenu-item ondanks de hidden-klasse zichtbaar bleef, is opgelost. Zonder geldige Home-/Pro-licentie of actieve app worden menu, topnavigatie en directe URL geblokkeerd en teruggestuurd naar LIVE; API en exports blijven eveneens geblokkeerd.",
-        "en": "Version 0.8.149 RC25: the optional ‘Energy origin & charging balance’ page is now fully gated by AppCenter installed+enabled state. A CSS priority bug that exposed the burger-menu item despite its hidden class has been fixed. Without a valid Home/Pro license or active app, menu, top navigation and direct URL are blocked and redirected to LIVE; APIs and exports remain blocked as well."
       }
     },
     "title": "NexoWatt UI",
@@ -117,7 +117,8 @@
       {
         "admin": ">=7.0.0"
       }
-    ]
+    ],
+    "messagebox": true
   },
   "native": {
     "port": 8188,
