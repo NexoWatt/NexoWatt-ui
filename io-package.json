@@ -37,11 +37,6 @@
         "de": "Version 0.8.149 RC25: Die optionale Seite „Energieherkunft & Ladebilanz“ ist jetzt vollständig an AppCenter installiert+aktiviert gekoppelt. Ein CSS-Prioritätsfehler, der den Burger-Menüpunkt trotz Hidden-Klasse sichtbar machte, ist behoben. Ohne gültige Home-/Pro-Lizenz oder aktive App werden Menü, Topbar und Direkt-URL gesperrt und auf LIVE zurückgeführt; API und Exporte bleiben ebenfalls blockiert.",
         "nl": "Versie 0.8.149 RC25: de optionele pagina ‘Energieherkomst & laadbalans’ is nu volledig gekoppeld aan geïnstalleerd+actief in het App-center. Een CSS-prioriteitsfout waardoor het hamburgermenu-item ondanks de hidden-klasse zichtbaar bleef, is opgelost. Zonder geldige Home-/Pro-licentie of actieve app worden menu, topnavigatie en directe URL geblokkeerd en teruggestuurd naar LIVE; API en exports blijven eveneens geblokkeerd.",
         "en": "Version 0.8.149 RC25: the optional ‘Energy origin & charging balance’ page is now fully gated by AppCenter installed+enabled state. A CSS priority bug that exposed the burger-menu item despite its hidden class has been fixed. Without a valid Home/Pro license or active app, menu, top navigation and direct URL are blocked and redirected to LIVE; APIs and exports remain blocked as well."
-      },
-      "0.8.148": {
-        "de": "Version 0.8.148 RC24: Veröffentlichung des integrierten Grundmoduls „Energieherkunft & Ladebilanz“ mit eigener BILANZ-Seite für Home und Pro. Funktional entspricht dieser Stand RC23; die Versionsnummer wurde erhöht, weil 0.8.147 im npm-Registry bereits belegt ist.",
-        "nl": "Versie 0.8.148 RC24: publicatie van de geïntegreerde basismodule „Energieherkomst & laadbalans“ met een eigen BALANS-pagina voor Home en Pro. Functioneel is deze versie gelijk aan RC23; het versienummer is verhoogd omdat 0.8.147 al in het npm-register bestaat.",
-        "en": "Version 0.8.148 RC24: release of the integrated “Energy origin & charging balance” foundation with a dedicated LEDGER page for Home and Pro. Functionally this build matches RC23; the version was incremented because 0.8.147 is already occupied in the npm registry."
       }
     },
     "title": "NexoWatt UI",

@@ -1,3 +1,11 @@
+## 0.8.155 - 2026-08-07
+
+- FENECON/OpenEMS-Direktregelung korrigiert: Der geschlossene NVP-Regelkreis verwendet jetzt vorrangig das Readback der tatsächlich aktiven externen Vorgabe (`SetActivePowerEquals`, typischerweise Register 706) statt der physisch gemessenen ESS-Aktorleistung.
+- Interne DC-PV-Beladung kann dadurch bei gleichzeitigem Netzbezug keinen falschen weiteren Ladebefehl mehr erzeugen. Bei 600 W Netzbezug und -50 W aktiver Vorgabe entsteht bei 50 W Zielnetzbezug ein positiver Entladesollwert von rund +500 W.
+- Fallbackfolge gehärtet: Vorgabe-Readback, direkter Signed-/Split-Sollwert, letzter bestätigter direkter Befehl und erst im Kaltstart ein sicherer 0-W-Anker.
+- Die echte ESS-Leistung bleibt unverändert für Anzeige, Diagnose, SoC-, Leistungs- und Sicherheitsgrenzen erhalten und wird nur aus der direkten NVP-Sollwertbasis herausgenommen.
+- Release-Metadaten vollständig auf 0.8.155 synchronisiert, `common.news` auf sieben Einträge begrenzt, Service-Worker-Cache auf `nexowatt-cache-v455` erhöht und npm-Publish-Dry-Run als verpflichtendes Artefakt-Gate dokumentiert.
+
 ## 0.8.154 - 2026-08-04
 
 - FENECON/OpenEMS-Hybridregelung grundlegend korrigiert: PV-Erzeugung, Forecast und Tageszeit schalten die Reglerhoheit nicht mehr um. Der beim Speichern beziehungsweise Start eindeutig aufgelöste Regelpfad arbeitet tagsüber und nachts kontinuierlich.

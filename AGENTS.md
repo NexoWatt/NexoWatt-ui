@@ -4,7 +4,7 @@
 `main.js` is the adapter entry point. EMS logic lives in `ems/`, with reusable control modules in `ems/modules/` and consumer integrations in `ems/consumers/`. Static UI pages and assets are in `www/`. ioBroker admin resources are split between legacy/static files in `admin/` and the React admin tab source in `src-admin-tab/`; the built output lands in `admin/react/`. Maintenance scripts such as version bumping and hook installation live in `scripts/`.
 
 ## Build, Test, and Development Commands
-Use Node.js locally; the package declares `>=16`, and contributions should stay Node 18 compatible.
+Use Node.js 22 or newer; the package declares `>=22`.
 
 - `npm install`: install root dependencies.
 - `npm run start` or `npm run dev`: run the adapter locally via `node main.js`.
@@ -25,3 +25,16 @@ Recent history uses Conventional Commit prefixes such as `feat:` and `chore:`. K
 
 ## Security & Configuration Tips
 Treat `io-package.json` and `admin/jsonConfig.json` as contract files for adapter configuration. Avoid committing secrets, customer-specific endpoints, or generated artifacts outside the expected build output in `admin/react/`.
+## Mandatory Release Artifact Gate
+No ZIP, TGZ, npm-ready folder, or release candidate may be handed over until the exact packaged artifact has passed all of the following checks:
+
+1. Keep the release version identical in `package.json`, the root package in `package-lock.json`, `io-package.json` (`common.version`), and `www/manifest.webmanifest`.
+2. Keep at most seven entries in `io-package.json` under `common.news`; move older history to `CHANGELOG.md`.
+3. Run `node scripts/verify-git-conflict-state.js`.
+4. Run the regression test for the changed feature.
+5. Run `node scripts/verify-publish.js`.
+6. Run `npm publish --dry-run --ignore-scripts=false` and require a zero exit status.
+7. Create ZIP files with `package.json` and `io-package.json` directly at the archive root, then extract that ZIP into a clean directory and repeat the publish dry-run from the extracted copy.
+
+A release artifact must not be described as npm-ready before all seven gates pass.
+

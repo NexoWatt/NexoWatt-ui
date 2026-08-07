@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 907f67810d66fcd24089b40c7bfe47887a542109ead05aba21ba2a194ad45448
+ * Original-Hash: f0f7b68f91b9868bab31a7e290a1cc1a82ba1583457e9155ad2c7ef1770ef3fa
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:fbc4918aabd318dd125ecfd66a66e02d46e09a971ce457cba682efcb6dfba4ed
+ * Quell-Hash: sha256:9b803d9385756ee7f288384d6d33f64b30900c910b88719011d0f0c71ed2416a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -5951,6 +5951,17 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      * - Ein Mapping-/Quellenwechsel verwirft den Puffer sofort.
      */
     _resolveFeneconDirectNvpFeedback(ctx = {}) {
+/**
+ * Code-Teil: finite
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
         const finite = (v) => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
         const now = finite(ctx.nowMs) ? Number(ctx.nowMs) : Date.now();
         const staleMs = Math.max(250, finite(ctx.staleMs) ? Number(ctx.staleMs) : 8000);
@@ -5958,6 +5969,17 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const holdAgeMs = Math.max(freshAgeMs, finite(ctx.holdAgeMs) ? Number(ctx.holdAgeMs) : Math.max(staleMs, 45000));
         if (!this.dp || typeof this.dp.getEntry !== 'function') return null;
 
+/**
+ * Code-Teil: makeFeedback
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
         const makeFeedback = ({ valueW, sampleTs, ageMs, objectId, source, sampleKey, allowHold = true }) => {
             if (!finite(valueW)) return null;
             const normalizedAgeMs = finite(ageMs)
@@ -5989,9 +6011,53 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             };
         };
 
+/**
+ * Code-Teil: getEntry
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
         const getEntry = (key) => this.dp && typeof this.dp.getEntry === 'function' ? this.dp.getEntry(key) : null;
+/**
+ * Code-Teil: getValue
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
         const getValue = (key, fallback = null) => this.dp && typeof this.dp.getNumber === 'function' ? this.dp.getNumber(key, fallback) : fallback;
+/**
+ * Code-Teil: getAgeMs
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
         const getAgeMs = (key) => this.dp && typeof this.dp.getAgeMs === 'function' && getEntry(key) ? this.dp.getAgeMs(key) : null;
+/**
+ * Code-Teil: getSampleTs
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
         const getSampleTs = (key) => {
             try {
                 if (this.dp && typeof this.dp.getMeasurementTimestampMs === 'function') {
