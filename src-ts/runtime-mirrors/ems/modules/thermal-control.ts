@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 9886ed7fc06201e3aa26de86aa465c04fe9b3260d20083b3238722333a3dc408
+ * Original-Hash: 6626fc7a72634a01066bc6848c67dd547267886a6b7225e35096c8b870b1a77c
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/thermal-control.ts
- * Quell-Hash: sha256:fa77b6355a4eec49a503ae95d83022596935134f2c3161008f5a62c34675062e
+ * Quell-Hash: sha256:3e3ede861d5027f7277e5d0f3419900c2f42a8fd1d05a21da5174718d8fa481e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -244,6 +244,14 @@ class ThermalControlModule extends BaseModule {
         this._stateCache = new Map();
         /** @type {Map<string, {on:boolean, lastOnMs:number, lastOffMs:number}>} */
         this._hyst = new Map();
+        /**
+         * Ursprüngliche manuelle/externe Aktoranforderungen, die während einer
+         * aktiven §14a-Begrenzung nur temporär geklemmt werden. Nach Freigabe
+         * wird exakt dieser Zustand wiederhergestellt; normale Auto-/Boost-
+         * Betriebsarten berechnen ihren Wunsch dagegen in jedem Tick neu.
+         * @type {Map<string, any>}
+         */
+        this._para14aHeldRequests = new Map();
         this._actuatorContract = new ActuatorCommandContract();
     }
 
@@ -737,7 +745,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
                 if (Number.isFinite(remainingPvW) && remainingPvW >= 0) {
                     const evcs = snap.consumers && snap.consumers.evcs ? snap.consumers.evcs : null;
                     const evcsUsedW = evcs && Number.isFinite(Number(evcs.reserveW)) ? Math.max(0, Number(evcs.reserveW)) : 0;
-                    const totalGrant = tariffImportPreferred && typeof rt.getTotalGrant === 'function'
+                    const totalGrant = typeof rt.getTotalGrant === 'function'
                         ? rt.getTotalGrant({ key: 'thermal', requestedW: Number.MAX_SAFE_INTEGER })
                         : null;
                     const pvGrant = !tariffImportPreferred && typeof rt.getPvGrant === 'function'
@@ -751,10 +759,17 @@ const mk = async (id, name, type, role, unit = undefined) => {
                     const availablePvGrantW = pvGrant && Number.isFinite(Number(pvGrant.grantW))
                         ? Math.max(0, Number(pvGrant.grantW))
                         : Math.max(0, remainingPvW);
+                    const para14aActive = !!(snap.gates && snap.gates.para14a && snap.gates.para14a.active === true);
+                    const para14aAvailableW = para14aActive
+                        ? (totalGrant && Number.isFinite(Number(totalGrant.grantW))
+                            ? Math.max(0, Number(totalGrant.grantW))
+                            : (Number.isFinite(remainingTotalW) && remainingTotalW >= 0 ? Math.max(0, remainingTotalW) : 0))
+                        : null;
                     return {
                         pvCapW: Math.max(0, Number.isFinite(pvTotalW) ? pvTotalW : availablePvGrantW),
                         evcsUsedW,
                         availableW: availableByTariffW !== null ? availableByTariffW : availablePvGrantW,
+                        para14aAvailableW,
                         source: availableByTariffW !== null ? 'ems.budget.tariffNegative' : 'ems.budget.central-grant',
                     };
                 }
@@ -769,6 +784,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
                 pvCapW: 0,
                 evcsUsedW: 0,
                 availableW: 0,
+                para14aAvailableW: this._isPara14aActive() ? 0 : null,
                 source: 'ems.budget.central-stale-or-invalid-blocked',
             };
         }
@@ -781,7 +797,17 @@ const mk = async (id, name, type, role, unit = undefined) => {
 
         if (typeof pvCapW === 'number' && Number.isFinite(pvCapW) && pvCapW > 0) {
             const u = (typeof usedW === 'number' && Number.isFinite(usedW)) ? Math.max(0, usedW) : 0;
-            return { pvCapW, evcsUsedW: u, availableW: Math.max(0, pvCapW - u), source: 'cm' };
+            const p14a = this.adapter && this.adapter._para14a;
+            const p14aCap = p14a && p14a.active === true && p14a.appCapsW
+                ? Number(p14a.appCapsW.thermal)
+                : null;
+            return {
+                pvCapW,
+                evcsUsedW: u,
+                availableW: Math.max(0, pvCapW - u),
+                para14aAvailableW: Number.isFinite(p14aCap) ? Math.max(0, p14aCap) : null,
+                source: 'cm',
+            };
         }
 
         // Fallback: net grid power (import + / export -)
@@ -790,7 +816,17 @@ const mk = async (id, name, type, role, unit = undefined) => {
         if (typeof gridW !== 'number') gridW = this.dp ? this.dp.getNumberFresh('ps.gridPowerW', staleMs, null) : null;
 
         const avail = Math.max(0, -Number(gridW || 0));
-        return { pvCapW: avail, evcsUsedW: 0, availableW: avail, source: 'grid' };
+        const p14a = this.adapter && this.adapter._para14a;
+        const p14aCap = p14a && p14a.active === true && p14a.appCapsW
+            ? Number(p14a.appCapsW.thermal)
+            : null;
+        return {
+            pvCapW: avail,
+            evcsUsedW: 0,
+            availableW: avail,
+            para14aAvailableW: Number.isFinite(p14aCap) ? Math.max(0, p14aCap) : null,
+            source: 'grid',
+        };
     }
 
     /**
@@ -952,6 +988,225 @@ const mk = async (id, name, type, role, unit = undefined) => {
         };
     }
 
+    _isPara14aActive() {
+        return !!(this.adapter && this.adapter._para14a && this.adapter._para14a.active === true);
+    }
+
+    _para14aOwner(d) {
+        return `para14a.thermal.${d.id}`;
+    }
+
+    _estimatedThermalPowerW(d, measuredW = null) {
+        if (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0) {
+            return Math.max(0, measuredW);
+        }
+        const configured = num(d && d.estimatedPowerW, num(d && d.maxPowerW, 1500));
+        return Math.max(0, configured > 0 ? configured : 1500);
+    }
+
+    _decodeSgReadyState(d, actual) {
+        let sg1 = actual && typeof actual.sg1 === 'boolean' ? actual.sg1 : null;
+        let sg2 = actual && typeof actual.sg2 === 'boolean' ? actual.sg2 : null;
+        if (sg1 !== null && d.sgReadyAInvert) sg1 = !sg1;
+        if (sg2 !== null && d.sgReadyBInvert) sg2 = !sg2;
+        if (sg1 === true && sg2 === true) return 'boost';
+        if (sg1 === true && sg2 !== true) return 'on';
+        if (sg1 !== true && sg2 === true) return 'block';
+        if (actual && actual.enable === true) return 'on';
+        return 'off';
+    }
+
+    _thermalConsumerForActType(d, actType) {
+        if (actType === 'setpoint') {
+            return { type: 'setpoint', key: d.id, name: d.name, setKey: d.setWKey, enableKey: d.enableKey };
+        }
+        if (actType === 'sgready') {
+            return {
+                type: 'sgready',
+                key: d.id,
+                name: d.name,
+                sg1Key: d.sg1Key,
+                sg2Key: d.sg2Key,
+                enableKey: d.enableKey,
+                invert1: !!d.sgReadyAInvert,
+                invert2: !!d.sgReadyBInvert,
+            };
+        }
+        return { type: 'load', key: d.id, name: d.name, setWKey: d.setWKey, enableKey: d.enableKey };
+    }
+
+    _thermalDisplayTarget(actType, target) {
+        if (actType === 'setpoint') {
+            const raw = target && target.setpoint;
+            return raw !== null && raw !== undefined && Number.isFinite(Number(raw)) ? Number(raw) : 0;
+        }
+        if (actType === 'sgready') {
+            const raw = String(target && target.state || 'off').trim().toLowerCase();
+            return raw === 'boost' ? 2 : (raw === 'on' ? 1 : 0);
+        }
+        return Math.max(0, num(target && target.targetW, 0));
+    }
+
+    _capturePara14aThermalRequest(d, actType, actual, measuredW) {
+        const key = String(d && d.id || '').trim();
+        const existing = key ? this._para14aHeldRequests.get(key) : null;
+        if (existing && existing.actType === actType) return existing;
+
+        const estimateW = this._estimatedThermalPowerW(d, measuredW);
+        let target;
+        let requestedLoadW = 0;
+
+        if (actType === 'setpoint') {
+            const hasEnable = !!String(d.enableKey || '').trim();
+            const rawSetpoint = actual && actual.setpoint;
+            const hasSetpoint = rawSetpoint !== null && rawSetpoint !== undefined && Number.isFinite(Number(rawSetpoint));
+            const currentSetpoint = hasSetpoint ? Number(rawSetpoint) : null;
+            const offSetpoint = (typeof d.autoOffSetpoint === 'number' && Number.isFinite(d.autoOffSetpoint))
+                ? d.autoOffSetpoint
+                : currentSetpoint;
+            const activeBySetpoint = currentSetpoint !== null
+                && (!(typeof d.autoOffSetpoint === 'number' && Number.isFinite(d.autoOffSetpoint)) || Math.abs(currentSetpoint - d.autoOffSetpoint) > 0.01);
+            const currentlyOn = hasEnable
+                ? actual && actual.enable === true
+                : ((typeof measuredW === 'number' && measuredW > 50) || activeBySetpoint);
+            requestedLoadW = currentlyOn ? estimateW : 0;
+            target = {
+                enable: currentlyOn,
+                setpoint: currentSetpoint !== null
+                    ? currentSetpoint
+                    : (currentlyOn
+                        ? ((typeof d.autoOnSetpoint === 'number' && Number.isFinite(d.autoOnSetpoint)) ? d.autoOnSetpoint : offSetpoint)
+                        : offSetpoint),
+            };
+        } else if (actType === 'sgready') {
+            const state = this._decodeSgReadyState(d, actual);
+            const currentlyOn = state === 'on' || state === 'boost';
+            requestedLoadW = currentlyOn ? estimateW : 0;
+            target = { state };
+        } else {
+            const rawTarget = actual && actual.targetW;
+            const hasTarget = rawTarget !== null && rawTarget !== undefined && Number.isFinite(Number(rawTarget));
+            const targetW = hasTarget
+                ? Math.max(0, Number(rawTarget))
+                : ((typeof measuredW === 'number' && measuredW > 50) ? estimateW : 0);
+            requestedLoadW = targetW;
+            target = { targetW };
+        }
+
+        const held = {
+            actType,
+            target,
+            requestedLoadW: Math.max(0, requestedLoadW),
+            capturedAt: Date.now(),
+        };
+        if (key) this._para14aHeldRequests.set(key, held);
+        return held;
+    }
+
+    async _restorePara14aHeldThermalRequest(d, actType, measuredW, label = 'manual') {
+        const key = String(d && d.id || '').trim();
+        const held = key ? this._para14aHeldRequests.get(key) : null;
+        if (!held || held.actType !== actType) return null;
+
+        const consumer = this._thermalConsumerForActType(d, actType);
+        const target = held.target && typeof held.target === 'object' ? { ...held.target } : {};
+        const reason = `§14a Thermik Freigabe ${label}`;
+        const res = await this._applyThermalCommand(d, actType, consumer, target, reason, {
+            owner: this._para14aOwner(d),
+            enforceAuthority: false,
+            releaseAuthority: true,
+            leaseMs: 0,
+            kind: 'para14a-thermal-release',
+            forceWrite: true,
+        });
+        this._recordAcceptedThermalEffect(d, res, measuredW, held.requestedLoadW, reason);
+
+        const restored = !!(res && (res.accepted === true || res.confirmed === true || res.applied === true));
+        if (restored && key) this._para14aHeldRequests.delete(key);
+        const measured = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
+            ? Math.max(0, measuredW)
+            : 0;
+        return {
+            res,
+            restored,
+            usedW: Math.max(measured, restored ? Math.max(0, held.requestedLoadW) : measured),
+            requestedLoadW: Math.max(0, held.requestedLoadW),
+            displayTarget: this._thermalDisplayTarget(actType, target),
+            status: `${restored ? 'para14a_restored' : 'para14a_restore_pending'}_${label}_${String(res && res.status || '')}`,
+        };
+    }
+
+    /**
+     * §14a-Sicherheitsguard fuer manuelle/extern gehaltene Thermik. Der
+     * Kundenwunsch bleibt in der UI erhalten, der reale Aktor wird waehrend
+     * einer aktiven Netzbetreiberbegrenzung jedoch mit hoeherer Autoritaet auf
+     * das verbleibende Thermik-Budget geklemmt.
+     */
+    async _enforcePara14aThermalGuard(d, actType, measuredW, allowedW, label = 'manual') {
+        const availableW = Math.max(0, num(allowedW, 0));
+        const actual = await this._readThermalReadback(d, actType);
+        const held = this._capturePara14aThermalRequest(d, actType, actual, measuredW);
+        const owner = this._para14aOwner(d);
+        const options = {
+            owner,
+            enforceAuthority: true,
+            leaseMs: 20000,
+            kind: 'para14a-thermal',
+            releaseAuthority: false,
+        };
+
+        let targetLoadW = 0;
+        const requestedLoadW = Math.max(0, num(held && held.requestedLoadW, 0));
+        let targetState = null;
+        const consumer = this._thermalConsumerForActType(d, actType);
+        const reason = `§14a Thermik ${label}`;
+
+        if (actType === 'setpoint') {
+            const requestedTarget = held && held.target && typeof held.target === 'object' ? held.target : {};
+            const requestedOn = requestedTarget.enable === true || requestedLoadW > 0;
+            const permit = requestedOn && requestedLoadW <= (availableW + 25);
+            const rawActualSetpoint = actual && actual.setpoint;
+            const actualSetpoint = rawActualSetpoint !== null && rawActualSetpoint !== undefined && Number.isFinite(Number(rawActualSetpoint))
+                ? Number(rawActualSetpoint)
+                : null;
+            const offSetpoint = (typeof d.autoOffSetpoint === 'number' && Number.isFinite(d.autoOffSetpoint))
+                ? d.autoOffSetpoint
+                : actualSetpoint;
+            targetLoadW = permit ? requestedLoadW : 0;
+            targetState = {
+                enable: permit,
+                setpoint: permit ? requestedTarget.setpoint : offSetpoint,
+            };
+        } else if (actType === 'sgready') {
+            const requestedState = String(held && held.target && held.target.state || 'off').trim().toLowerCase();
+            const requestedOn = requestedState === 'on' || requestedState === 'boost';
+            const permit = requestedOn && requestedLoadW <= (availableW + 25);
+            targetLoadW = permit ? requestedLoadW : 0;
+            targetState = { state: permit ? requestedState : 'off' };
+        } else {
+            const requestedTargetW = Math.max(0, num(held && held.target && held.target.targetW, requestedLoadW));
+            targetLoadW = Math.min(requestedTargetW, availableW);
+            targetState = { targetW: targetLoadW };
+        }
+
+        const limited = requestedLoadW > (targetLoadW + 1)
+            || (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > (availableW + 50));
+        const res = await this._applyThermalCommand(d, actType, consumer, targetState, reason, options);
+        this._recordAcceptedThermalEffect(d, res, measuredW, targetLoadW, reason);
+        const measured = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
+            ? Math.max(0, measuredW)
+            : 0;
+        const usedW = Math.max(measured, res && res.accepted ? Math.max(0, targetLoadW) : measured);
+        return {
+            res,
+            usedW,
+            targetLoadW,
+            displayTarget: this._thermalDisplayTarget(actType, targetState),
+            limited,
+            status: `${limited ? 'para14a_limited' : 'para14a_guard'}_${label}_${String(res && res.status || '')}`,
+        };
+    }
+
     _thermalReadbackMatches(d, actType, target, actual) {
         if (!actual || typeof actual !== 'object') return null;
 /**
@@ -1018,13 +1273,17 @@ const mk = async (id, name, type, role, unit = undefined) => {
 
     async _applyThermalCommand(d, actType, consumer, target, reason, options = {}) {
         const manual = options.manual === true;
-        const owner = this._deviceOwner(d, manual);
+        const owner = String(options.owner || '').trim() || this._deviceOwner(d, manual);
         const cfg = this._contractCfg(d, options.requireReadback === undefined ? null : options.requireReadback);
         const key = `thermal:${d.id}`;
         const now = Date.now();
+        const forceWrite = options.forceWrite === true;
+        if (forceWrite) this._actuatorContract.release(key);
         const actualBefore = await this._readThermalReadback(d, actType);
         const readbackBefore = this._thermalReadbackMatches(d, actType, target, actualBefore);
-        const confirmed = this._actuatorContract.confirmFromReadback(key, target, actualBefore, readbackBefore === true, now);
+        const confirmed = forceWrite
+            ? null
+            : this._actuatorContract.confirmFromReadback(key, target, actualBefore, readbackBefore === true, now);
         if (confirmed) {
             await this._publishThermalContract(d, owner, confirmed);
             return { applied: true, accepted: true, writeAccepted: false, confirmed: true, readbackOk: true, status: confirmed.status, contract: confirmed };
@@ -1035,14 +1294,14 @@ const mk = async (id, name, type, role, unit = undefined) => {
             await this._publishThermalContract(d, owner, current);
             return { applied: false, accepted: false, writeAccepted: false, confirmed: false, readbackOk: current.readbackOk, status: current.status, contract: current };
         }
-        const enforceAuthority = this._deviceHasExclusiveAuthority(d, owner);
+        const enforceAuthority = options.enforceAuthority === true || this._deviceHasExclusiveAuthority(d, owner);
         const writeRes = await withActuatorShadowContext(this.adapter, {
             owner,
             module: 'thermalControl',
             priority: priorityForOwner(owner),
             reason,
-            leaseMs: manual ? 5 * 60 * 1000 : 20000,
-            kind: manual ? 'manual-thermal' : 'thermal-control',
+            leaseMs: Number.isFinite(Number(options.leaseMs)) ? Math.max(0, Number(options.leaseMs)) : (manual ? 5 * 60 * 1000 : 20000),
+            kind: String(options.kind || (manual ? 'manual-thermal' : 'thermal-control')),
             enforceAuthority,
             releaseAuthority: options.releaseAuthority === true,
         }, () => applySetpoint({ dp: this.dp, adapter: this.adapter }, consumer, target));
@@ -1093,6 +1352,62 @@ const mk = async (id, name, type, role, unit = undefined) => {
 
         const pv = this._computePvAvailableW();
         let remainingW = Math.max(0, num(pv.availableW, 0));
+        const para14aActive = this._isPara14aActive();
+        let para14aRemainingW = para14aActive
+            ? Math.max(0, num(pv.para14aAvailableW, 0))
+            : Number.POSITIVE_INFINITY;
+/**
+ * Code-Teil: consumeControlledW
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const consumeControlledW = (rawW, countAgainstPara14a = true) => {
+            const usedW = Math.max(0, num(rawW, 0));
+            remainingW = Math.max(0, remainingW - usedW);
+            if (para14aActive && countAgainstPara14a) para14aRemainingW = Math.max(0, para14aRemainingW - usedW);
+            return usedW;
+        };
+/**
+ * Code-Teil: availableForAutomationW
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const availableForAutomationW = () => para14aActive
+            ? Math.max(0, Math.min(remainingW, para14aRemainingW))
+            : Math.max(0, remainingW);
+/**
+ * Code-Teil: para14aOptions
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+        const para14aOptions = (d, extra = {}) => para14aActive
+            ? {
+                owner: this._para14aOwner(d),
+                enforceAuthority: true,
+                leaseMs: 20000,
+                kind: 'para14a-thermal',
+                releaseAuthority: false,
+                ...extra,
+            }
+            : extra;
 
         let appliedTotalW = 0;
         let budgetUsedW = 0;
@@ -1175,15 +1490,55 @@ const mk = async (id, name, type, role, unit = undefined) => {
             await this._setStateIfChanged(`thermal.devices.${d.id}.boostUntil`, ov.boostUntil ? Math.round(ov.boostUntil) : 0);
             await this._setStateIfChanged(`thermal.devices.${d.id}.manualUntil`, ov.manualUntil ? Math.round(ov.manualUntil) : 0);
 
-            // Device disabled OR automation disabled by end-customer -> no writes (but still account measured load)
+            const heldManualContext = !effectiveEnabled
+                || (ov.manualActive && !ov.boostActive)
+                || effectiveMode === 'manual';
+            if (!heldManualContext) this._para14aHeldRequests.delete(String(d.id));
+
+            // A customer may pause normal automation, but an active §14a command
+            // must still remain authoritative for every configured controllable
+            // thermal device. Devices disabled in the installer configuration are
+            // intentionally not auto-linked and remain untouched.
             if (!effectiveEnabled) {
-                // subtract measured usage from remaining budget to avoid over-allocating PV to other consumers
-                if (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0) {
-                    const used = Math.max(0, measuredW);
-                    remainingW = Math.max(0, remainingW - used);
-                    budgetUsedW += Math.round(used);
+                const para14aControllable = d.enabled === true && this._deviceActuatorIds(d).length > 0;
+                if (para14aActive && para14aControllable) {
+                    const guard = await this._enforcePara14aThermalGuard(
+                        d,
+                        actType,
+                        measuredW,
+                        para14aRemainingW,
+                        userEnabled ? 'disabled' : 'regulation_off',
+                    );
+                    const used = consumeControlledW(guard.usedW);
+                    appliedTotalW += Math.max(0, Math.round(used));
+                    budgetUsedW += Math.max(0, Math.round(used));
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, guard.displayTarget);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!guard.res.applied);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.status`, guard.status);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.override`, 'para14a');
+                    continue;
                 }
 
+                const restore = await this._restorePara14aHeldThermalRequest(
+                    d,
+                    actType,
+                    measuredW,
+                    userEnabled ? 'disabled' : 'regulation_off',
+                );
+                if (restore) {
+                    const used = consumeControlledW(restore.usedW, false);
+                    budgetUsedW += Math.max(0, Math.round(used));
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, restore.displayTarget);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!(restore.res && restore.res.applied));
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.status`, restore.status);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.override`, restore.restored ? '' : 'para14a_release');
+                    continue;
+                }
+
+                const used = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
+                    ? consumeControlledW(measuredW, false)
+                    : 0;
+                budgetUsedW += Math.max(0, Math.round(used));
                 await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 0);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, false);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.status`, userEnabled ? 'disabled' : 'regulation_off');
@@ -1191,14 +1546,37 @@ const mk = async (id, name, type, role, unit = undefined) => {
                 continue;
             }
 
-            // Manual-hold (from quick control) – do not overwrite user commands
+            // Manual-hold normally preserves the customer command. §14a is the
+            // only allowed pre-emption and clamps the real actuator while the
+            // original manual request remains stored for later restoration.
             if (ov.manualActive && !ov.boostActive) {
-                // subtract measured usage from remaining budget to avoid over-allocating PV
-                if (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0) {
-                    const used = Math.max(0, measuredW);
-                    remainingW = Math.max(0, remainingW - used);
-                    budgetUsedW += Math.round(used);
+                if (para14aActive) {
+                    const guard = await this._enforcePara14aThermalGuard(d, actType, measuredW, para14aRemainingW, 'manual_hold');
+                    const used = consumeControlledW(guard.usedW);
+                    appliedTotalW += Math.max(0, Math.round(used));
+                    budgetUsedW += Math.max(0, Math.round(used));
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, guard.displayTarget);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!guard.res.applied);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.status`, guard.status);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.override`, 'manual_hold_para14a');
+                    continue;
                 }
+
+                const restore = await this._restorePara14aHeldThermalRequest(d, actType, measuredW, 'manual_hold');
+                if (restore) {
+                    const used = consumeControlledW(restore.usedW);
+                    budgetUsedW += Math.max(0, Math.round(used));
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, restore.displayTarget);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!(restore.res && restore.res.applied));
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.status`, restore.status);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.override`, restore.restored ? 'manual_hold' : 'para14a_release');
+                    continue;
+                }
+
+                const used = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
+                    ? consumeControlledW(measuredW)
+                    : 0;
+                budgetUsedW += Math.max(0, Math.round(used));
                 await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 0);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, false);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.status`, 'manual_hold');
@@ -1209,26 +1587,40 @@ const mk = async (id, name, type, role, unit = undefined) => {
             // Boost override (force on)
             if (ov.boostActive && d.boostEnabled) {
                 let usedW = 0;
+                const boostAvailableW = para14aActive ? para14aRemainingW : Number.POSITIVE_INFINITY;
+                const estimateW = this._estimatedThermalPowerW(d, measuredW);
 
                 if (actType === 'setpoint') {
                     const sp = (typeof d.boostSetpoint === 'number' && Number.isFinite(d.boostSetpoint))
                         ? d.boostSetpoint
                         : (typeof d.autoOnSetpoint === 'number' && Number.isFinite(d.autoOnSetpoint) ? d.autoOnSetpoint : null);
+                    const spOff = (typeof d.autoOffSetpoint === 'number' && Number.isFinite(d.autoOffSetpoint)) ? d.autoOffSetpoint : null;
+                    const permitted = !para14aActive || estimateW <= (boostAvailableW + 25);
 
                     const consumer = { type: 'setpoint', key: d.id, name: d.name, setKey: d.setWKey, enableKey: d.enableKey };
-                    const res = await this._applyThermalCommand(d, actType, consumer, { enable: true, setpoint: sp }, 'Thermik Boost Setpoint', { manual: true });
-                    const commandedLoadW = Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500)));
+                    const command = { enable: permitted, setpoint: permitted ? sp : spOff };
+                    const res = await this._applyThermalCommand(
+                        d,
+                        actType,
+                        consumer,
+                        command,
+                        permitted ? 'Thermik Boost Setpoint' : 'Thermik Boost durch §14a begrenzt',
+                        para14aActive ? para14aOptions(d) : { manual: true },
+                    );
+                    const commandedLoadW = permitted ? estimateW : 0;
                     this._recordAcceptedThermalEffect(d, res, measuredW, commandedLoadW, 'Thermik Boost Setpoint');
 
-                    await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, (sp !== null && sp !== undefined && Number.isFinite(Number(sp))) ? Number(sp) : 0);
+                    const displaySp = permitted ? sp : spOff;
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, (displaySp !== null && displaySp !== undefined && Number.isFinite(Number(displaySp))) ? Number(displaySp) : 0);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
-                    await this._setStateIfChanged(`thermal.devices.${d.id}.status`, `boost_${String(res.status || '')}`);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.status`, `${permitted ? 'boost' : 'para14a_limited_boost'}_${String(res.status || '')}`);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.override`, 'boost');
 
                     usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                         ? Math.max(0, measuredW)
-                        : (res.accepted ? Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500))) : 0);
+                        : (res.accepted ? commandedLoadW : 0);
                 } else if (actType === 'sgready') {
+                    const permitted = !para14aActive || estimateW <= (boostAvailableW + 25);
                     const consumer = {
                         type: 'sgready',
                         key: d.id,
@@ -1239,45 +1631,85 @@ const mk = async (id, name, type, role, unit = undefined) => {
                         invert1: !!d.sgReadyAInvert,
                         invert2: !!d.sgReadyBInvert,
                     };
-                    const res = await this._applyThermalCommand(d, actType, consumer, { state: 'boost' }, 'Thermik Boost SG-Ready', { manual: true });
-                    const commandedLoadW = Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500)));
+                    const res = await this._applyThermalCommand(
+                        d,
+                        actType,
+                        consumer,
+                        { state: permitted ? 'boost' : 'off' },
+                        permitted ? 'Thermik Boost SG-Ready' : 'Thermik Boost SG-Ready durch §14a begrenzt',
+                        para14aActive ? para14aOptions(d) : { manual: true },
+                    );
+                    const commandedLoadW = permitted ? estimateW : 0;
                     this._recordAcceptedThermalEffect(d, res, measuredW, commandedLoadW, 'Thermik Boost SG-Ready');
 
-                    await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 2);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, permitted ? 2 : 0);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
-                    await this._setStateIfChanged(`thermal.devices.${d.id}.status`, `boost_${String(res.status || '')}`);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.status`, `${permitted ? 'boost' : 'para14a_limited_boost'}_${String(res.status || '')}`);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.override`, 'boost');
 
                     usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                         ? Math.max(0, measuredW)
-                        : (res.accepted ? Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500))) : 0);
+                        : (res.accepted ? commandedLoadW : 0);
                 } else {
-                    const targetW = clamp(num(d.boostPowerW, d.maxPowerW), 0, num(d.maxPowerW, 0));
+                    const requestedW = clamp(num(d.boostPowerW, d.maxPowerW), 0, num(d.maxPowerW, 0));
+                    const targetW = para14aActive ? Math.min(requestedW, boostAvailableW) : requestedW;
                     const consumer = { type: 'load', key: d.id, name: d.name, setWKey: d.setWKey, enableKey: d.enableKey };
-                    const res = await this._applyThermalCommand(d, actType, consumer, { targetW }, 'Thermik Boost Leistung', { manual: true });
+                    const res = await this._applyThermalCommand(
+                        d,
+                        actType,
+                        consumer,
+                        { targetW },
+                        targetW + 1 < requestedW ? 'Thermik Boost Leistung durch §14a begrenzt' : 'Thermik Boost Leistung',
+                        para14aActive ? para14aOptions(d) : { manual: true },
+                    );
                     this._recordAcceptedThermalEffect(d, res, measuredW, targetW, 'Thermik Boost Leistung');
 
                     await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, Math.round(targetW));
                     await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
-                    await this._setStateIfChanged(`thermal.devices.${d.id}.status`, `boost_${String(res.status || '')}`);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.status`, `${targetW + 1 < requestedW ? 'para14a_limited_boost' : 'boost'}_${String(res.status || '')}`);
                     await this._setStateIfChanged(`thermal.devices.${d.id}.override`, 'boost');
 
-                    usedW = res.accepted ? Math.max(0, Math.round(targetW)) : 0;
+                    usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
+                        ? Math.max(0, measuredW)
+                        : (res.accepted ? Math.max(0, Math.round(targetW)) : 0);
                 }
 
+                usedW = consumeControlledW(usedW);
                 appliedTotalW += Math.max(0, Math.round(usedW));
                 budgetUsedW += Math.max(0, Math.round(usedW));
-                remainingW = Math.max(0, remainingW - usedW);
                 continue;
             }
 
-            // Manual mode -> no writes (but account measured load)
+            // Manual mode is preserved during normal operation; §14a may still
+            // reduce or stop the actuator with its dedicated safety owner.
             if (effectiveMode === 'manual') {
-                if (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0) {
-                    const used = Math.max(0, measuredW);
-                    remainingW = Math.max(0, remainingW - used);
-                    budgetUsedW += Math.round(used);
+                if (para14aActive) {
+                    const guard = await this._enforcePara14aThermalGuard(d, actType, measuredW, para14aRemainingW, 'manual');
+                    const used = consumeControlledW(guard.usedW);
+                    appliedTotalW += Math.max(0, Math.round(used));
+                    budgetUsedW += Math.max(0, Math.round(used));
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, guard.displayTarget);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!guard.res.applied);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.status`, guard.status);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.override`, 'para14a');
+                    continue;
                 }
+
+                const restore = await this._restorePara14aHeldThermalRequest(d, actType, measuredW, 'manual');
+                if (restore) {
+                    const used = consumeControlledW(restore.usedW);
+                    budgetUsedW += Math.max(0, Math.round(used));
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, restore.displayTarget);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!(restore.res && restore.res.applied));
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.status`, restore.status);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.override`, restore.restored ? '' : 'para14a_release');
+                    continue;
+                }
+
+                const used = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
+                    ? consumeControlledW(measuredW)
+                    : 0;
+                budgetUsedW += Math.max(0, Math.round(used));
                 await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 0);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, false);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.status`, 'manual');
@@ -1292,7 +1724,9 @@ const mk = async (id, name, type, role, unit = undefined) => {
                 if (actType === 'setpoint') {
                     const sp = (typeof d.autoOffSetpoint === 'number' && Number.isFinite(d.autoOffSetpoint)) ? d.autoOffSetpoint : null;
                     const consumer = { type: 'setpoint', key: d.id, name: d.name, setKey: d.setWKey, enableKey: d.enableKey };
-                    const res = await this._applyThermalCommand(d, actType, consumer, { enable: false, setpoint: sp }, 'Thermik aus Setpoint', { manual: userMode !== 'inherit', releaseAuthority: true });
+                    const res = await this._applyThermalCommand(d, actType, consumer, { enable: false, setpoint: sp }, 'Thermik aus Setpoint', para14aActive
+                        ? para14aOptions(d)
+                        : { manual: userMode !== 'inherit', releaseAuthority: true });
                     this._recordAcceptedThermalEffect(d, res, measuredW, 0, 'Thermik aus Setpoint');
 
                     await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, (sp !== null && sp !== undefined && Number.isFinite(Number(sp))) ? Number(sp) : 0);
@@ -1309,7 +1743,9 @@ const mk = async (id, name, type, role, unit = undefined) => {
                         invert1: !!d.sgReadyAInvert,
                         invert2: !!d.sgReadyBInvert,
                     };
-                    const res = await this._applyThermalCommand(d, actType, consumer, { state: 'off' }, 'Thermik aus SG-Ready', { manual: userMode !== 'inherit', releaseAuthority: true });
+                    const res = await this._applyThermalCommand(d, actType, consumer, { state: 'off' }, 'Thermik aus SG-Ready', para14aActive
+                        ? para14aOptions(d)
+                        : { manual: userMode !== 'inherit', releaseAuthority: true });
                     this._recordAcceptedThermalEffect(d, res, measuredW, 0, 'Thermik aus SG-Ready');
 
                     await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 0);
@@ -1317,7 +1753,9 @@ const mk = async (id, name, type, role, unit = undefined) => {
                     await this._setStateIfChanged(`thermal.devices.${d.id}.status`, `off_${String(res.status || '')}`);
                 } else {
                     const consumer = { type: 'load', key: d.id, name: d.name, setWKey: d.setWKey, enableKey: d.enableKey };
-                    const res = await this._applyThermalCommand(d, actType, consumer, { targetW: 0 }, 'Thermik aus Leistung', { manual: userMode !== 'inherit', releaseAuthority: true });
+                    const res = await this._applyThermalCommand(d, actType, consumer, { targetW: 0 }, 'Thermik aus Leistung', para14aActive
+                        ? para14aOptions(d)
+                        : { manual: userMode !== 'inherit', releaseAuthority: true });
                     this._recordAcceptedThermalEffect(d, res, measuredW, 0, 'Thermik aus Leistung');
 
                     await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 0);
@@ -1327,9 +1765,9 @@ const mk = async (id, name, type, role, unit = undefined) => {
 
                 // While ramping down, we still account measured usage.
                 if (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0) usedW = measuredW;
+                usedW = consumeControlledW(usedW);
                 appliedTotalW += Math.max(0, Math.round(usedW));
                 budgetUsedW += Math.max(0, Math.round(usedW));
-                remainingW = Math.max(0, remainingW - usedW);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.override`, '');
                 continue;
             }
@@ -1340,28 +1778,39 @@ const mk = async (id, name, type, role, unit = undefined) => {
             const startW = Math.max(0, num(d.startSurplusW, 0));
             const stopW = Math.max(0, num(d.stopSurplusW, 0));
 
-            const desiredOn = this._computeBandDesiredOn(d.id, remainingW, startW, stopW);
-            const on = this._hysteresisOnOff(d.id, desiredOn, d.minOnSec, d.minOffSec);
+            const autoAvailableW = availableForAutomationW();
+            const desiredOn = this._computeBandDesiredOn(d.id, autoAvailableW, startW, stopW);
+            const requestedOn = this._hysteresisOnOff(d.id, desiredOn, d.minOnSec, d.minOffSec);
+            const estimatedLoadW = this._estimatedThermalPowerW(d, measuredW);
+            const binaryOn = requestedOn && (!para14aActive || estimatedLoadW <= (autoAvailableW + 25));
+            const para14aBinaryLimited = para14aActive && requestedOn && !binaryOn;
 
             if (actType === 'setpoint') {
                 const spOn = (typeof d.autoOnSetpoint === 'number' && Number.isFinite(d.autoOnSetpoint)) ? d.autoOnSetpoint : null;
                 const spOff = (typeof d.autoOffSetpoint === 'number' && Number.isFinite(d.autoOffSetpoint)) ? d.autoOffSetpoint : null;
 
                 const consumer = { type: 'setpoint', key: d.id, name: d.name, setKey: d.setWKey, enableKey: d.enableKey };
-                const res = await this._applyThermalCommand(d, actType, consumer, { enable: !!on, setpoint: on ? spOn : spOff }, on ? 'Thermik PV-Auto ein' : 'Thermik PV-Auto aus', { releaseAuthority: !on });
-                const commandedLoadW = on ? Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500))) : 0;
-                this._recordAcceptedThermalEffect(d, res, measuredW, commandedLoadW, on ? 'Thermik PV-Auto ein' : 'Thermik PV-Auto aus');
+                const res = await this._applyThermalCommand(
+                    d,
+                    actType,
+                    consumer,
+                    { enable: !!binaryOn, setpoint: binaryOn ? spOn : spOff },
+                    para14aBinaryLimited ? 'Thermik PV-Auto durch §14a begrenzt' : (binaryOn ? 'Thermik PV-Auto ein' : 'Thermik PV-Auto aus'),
+                    para14aActive ? para14aOptions(d) : { releaseAuthority: !binaryOn },
+                );
+                const commandedLoadW = binaryOn ? estimatedLoadW : 0;
+                this._recordAcceptedThermalEffect(d, res, measuredW, commandedLoadW, binaryOn ? 'Thermik PV-Auto ein' : 'Thermik PV-Auto aus');
 
-                const targetSp = on ? spOn : spOff;
+                const targetSp = binaryOn ? spOn : spOff;
                 await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, (targetSp !== null && targetSp !== undefined && Number.isFinite(Number(targetSp))) ? Number(targetSp) : 0);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
-                await this._setStateIfChanged(`thermal.devices.${d.id}.status`, String(res.status || (on ? 'on' : 'off')));
+                await this._setStateIfChanged(`thermal.devices.${d.id}.status`, `${para14aBinaryLimited ? 'para14a_limited_' : ''}${String(res.status || (binaryOn ? 'on' : 'off'))}`);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.override`, '');
 
-                if (on) {
+                if (binaryOn) {
                     usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                         ? Math.max(0, measuredW)
-                        : (res.accepted ? Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500))) : 0);
+                        : (res.accepted ? commandedLoadW : 0);
                 } else {
                     usedW = 0;
                 }
@@ -1376,32 +1825,48 @@ const mk = async (id, name, type, role, unit = undefined) => {
                     invert1: !!d.sgReadyAInvert,
                     invert2: !!d.sgReadyBInvert,
                 };
-                const res = await this._applyThermalCommand(d, actType, consumer, { state: on ? 'on' : 'off' }, on ? 'Thermik PV-Auto SG-Ready ein' : 'Thermik PV-Auto SG-Ready aus', { releaseAuthority: !on });
-                const commandedLoadW = on ? Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500))) : 0;
-                this._recordAcceptedThermalEffect(d, res, measuredW, commandedLoadW, on ? 'Thermik PV-Auto SG-Ready ein' : 'Thermik PV-Auto SG-Ready aus');
+                const res = await this._applyThermalCommand(
+                    d,
+                    actType,
+                    consumer,
+                    { state: binaryOn ? 'on' : 'off' },
+                    para14aBinaryLimited ? 'Thermik PV-Auto SG-Ready durch §14a begrenzt' : (binaryOn ? 'Thermik PV-Auto SG-Ready ein' : 'Thermik PV-Auto SG-Ready aus'),
+                    para14aActive ? para14aOptions(d) : { releaseAuthority: !binaryOn },
+                );
+                const commandedLoadW = binaryOn ? estimatedLoadW : 0;
+                this._recordAcceptedThermalEffect(d, res, measuredW, commandedLoadW, binaryOn ? 'Thermik PV-Auto SG-Ready ein' : 'Thermik PV-Auto SG-Ready aus');
 
-                await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, on ? 1 : 0);
+                await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, binaryOn ? 1 : 0);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
-                await this._setStateIfChanged(`thermal.devices.${d.id}.status`, String(res.status || (on ? 'on' : 'off')));
+                await this._setStateIfChanged(`thermal.devices.${d.id}.status`, `${para14aBinaryLimited ? 'para14a_limited_' : ''}${String(res.status || (binaryOn ? 'on' : 'off'))}`);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.override`, '');
 
-                if (on) {
+                if (binaryOn) {
                     usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                         ? Math.max(0, measuredW)
-                        : (res.accepted ? Math.max(0, num(d.estimatedPowerW, (Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : 1500))) : 0);
+                        : (res.accepted ? commandedLoadW : 0);
                 } else {
                     usedW = 0;
                 }
             } else {
-                const desiredW = on ? Math.min(remainingW, Math.max(0, num(d.maxPowerW, 0))) : 0;
+                const requestedPowerW = requestedOn ? Math.max(0, num(d.maxPowerW, 0)) : 0;
+                const desiredW = requestedOn ? Math.min(autoAvailableW, requestedPowerW) : 0;
+                const para14aPowerLimited = para14aActive && requestedOn && desiredW + 1 < requestedPowerW;
 
                 const consumer = { type: 'load', key: d.id, name: d.name, setWKey: d.setWKey, enableKey: d.enableKey };
-                const res = await this._applyThermalCommand(d, actType, consumer, { targetW: desiredW }, desiredW > 0 ? 'Thermik PV-Auto Leistung' : 'Thermik PV-Auto aus', { releaseAuthority: desiredW <= 0 });
+                const res = await this._applyThermalCommand(
+                    d,
+                    actType,
+                    consumer,
+                    { targetW: desiredW },
+                    para14aPowerLimited ? 'Thermik PV-Auto Leistung durch §14a begrenzt' : (desiredW > 0 ? 'Thermik PV-Auto Leistung' : 'Thermik PV-Auto aus'),
+                    para14aActive ? para14aOptions(d) : { releaseAuthority: desiredW <= 0 },
+                );
                 this._recordAcceptedThermalEffect(d, res, measuredW, desiredW, desiredW > 0 ? 'Thermik PV-Auto Leistung' : 'Thermik PV-Auto aus');
 
                 await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, Math.round(desiredW));
                 await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, !!res.applied);
-                await this._setStateIfChanged(`thermal.devices.${d.id}.status`, String(res.status || ''));
+                await this._setStateIfChanged(`thermal.devices.${d.id}.status`, `${para14aPowerLimited ? 'para14a_limited_' : ''}${String(res.status || '')}`);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.override`, '');
 
                 usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
@@ -1409,9 +1874,9 @@ const mk = async (id, name, type, role, unit = undefined) => {
                     : (res.accepted ? Math.max(0, Math.round(desiredW)) : 0);
             }
 
+            usedW = consumeControlledW(usedW);
             appliedTotalW += Math.max(0, Math.round(usedW));
             budgetUsedW += Math.max(0, Math.round(usedW));
-            remainingW = Math.max(0, remainingW - usedW);
         }
 
         this.adapter._thermalBudgetUsedW = Math.round(budgetUsedW);

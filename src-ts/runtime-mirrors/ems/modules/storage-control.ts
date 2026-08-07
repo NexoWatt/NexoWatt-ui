@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: f0f7b68f91b9868bab31a7e290a1cc1a82ba1583457e9155ad2c7ef1770ef3fa
+ * Original-Hash: 62d16d3444ad8fb2d4567ee118049d3cffb575a130ff4f6b1539fc245d85a952
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:9b803d9385756ee7f288384d6d33f64b30900c910b88719011d0f0c71ed2416a
+ * Quell-Hash: sha256:2b0fc97c727e1d2c12ff36cba42f8fc9c59b735bf30921af310e2ec5f7b32013
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1096,6 +1096,14 @@ class SpeicherRegelungModule extends BaseModule {
         // Policies. Sie duerfen niemals selbst einen Hardware-Schreibpfad erzeugen.
         // Genau eine im AppCenter aktive Topologie (`single` oder `farm`) fuehrt.
         const storageAuthorityEarly = this._getStorageControlAuthority();
+        const storageFarmCfgEarly = (this.adapter.config && this.adapter.config.storageFarm
+            && typeof this.adapter.config.storageFarm === 'object')
+            ? this.adapter.config.storageFarm
+            : {};
+        const gridChargeConfigured = storageAuthorityEarly.selectedTopology === 'farm'
+            ? storageFarmCfgEarly.allowGridCharge !== false
+            : cfg.allowGridCharge !== false;
+        await this._setIfChanged('speicher.regelung.netzLadenKonfiguriert', !!gridChargeConfigured);
         const cfgEnabled = !!storageAuthorityEarly.singleAppActive;
         let autoTarifEnabled = false;
         try {
@@ -1639,10 +1647,12 @@ class SpeicherRegelungModule extends BaseModule {
             // ignore
         }
 
-        // FENECON DC/Hybrid: Für den geschlossenen Regelkreis ist ausschließlich
-        // die echte AC-seitige ESS-Aktorleistung (typisch ess0/ActivePower / 604)
-        // autoritativ. Der Hybrid-/Balance-Wert kann interne DC-PV enthalten und
-        // darf deshalb niemals als Reglerfeedback verwendet werden.
+        // FENECON DC/Hybrid: Die echte AC-seitige ESS-Aktorleistung
+        // (typisch ess0/ActivePower / 604) bleibt für Anzeige, Schutz, SoC- und
+        // Leistungsgrenzen autoritativ. Im direkten SetActivePowerEquals-/706-
+        // Regelpfad darf sie jedoch nicht als externe Stellgrößenbasis verwendet
+        // werden, weil sie interne DC-PV-Beladung enthalten kann. Der NVP-Servo
+        // verwendet dafür weiter unten das Readback der aktiven externen Vorgabe.
         if (!farmEnabled && feneconHybridEligible && this.dp && this.dp.getEntry('st.feneconEssActualPowerW')) {
             const feneconActualEntry = this.dp.getEntry('st.feneconEssActualPowerW');
             const actualObservedW = this.dp.getNumber('st.feneconEssActualPowerW', null);
@@ -1674,15 +1684,6 @@ class SpeicherRegelungModule extends BaseModule {
                 battPowerInvalidReason = 'FENECON: ESS-Aktorleistung fehlt/ungültig';
             }
         }
-
-        // Für den direkten FENECON-/OpenEMS-Regelpfad darf die physische ESS-
-        // Aktorleistung NICHT als NVP-Regelbasis verwendet werden, weil sie bei
-        // Hybridsystemen interne DC-PV-Beladung enthalten kann. Der geschlossene
-        // NVP-Regelkreis verwendet später deshalb bevorzugt das Readback der
-        // tatsächlich aktiven externen Vorgabe (z. B. Register 706), danach den
-        // bestätigten direkten Sollwert und erst im Kaltstart einen sicheren 0-W-
-        // Anker. Die physische ESS-Leistung bleibt hier weiterhin für Schutz- und
-        // Diagnosepfade erhalten.
 
         // AppCenter kann Lade- und Entlade-Istleistung getrennt zuordnen. Wenn
         // kein vertrauenswürdiger signed Istwert vorliegt, bilden wir daraus
@@ -2009,6 +2010,11 @@ class SpeicherRegelungModule extends BaseModule {
             dischargeAllowed = !!this._tariffDischargeAllowed;
         }
 
+        // Der allgemeine App-Center-Haken ist die harte Master-Freigabe. Tarif-
+        // Freigaben koennen Netzladen zusaetzlich sperren, aber niemals den bewusst
+        // entfernten Installateur-Haken wieder freigeben. PV-/Eigenverbrauchsladen
+        // und Entladung werden von diesem Gate nicht beruehrt.
+        gridChargeAllowed = !!gridChargeConfigured && !!gridChargeAllowed;
         await this._setIfChanged('speicher.regelung.netzLadenErlaubt', !!gridChargeAllowed);
         await this._setIfChanged('speicher.regelung.entladenErlaubt', !!dischargeAllowed);
 
@@ -2810,7 +2816,6 @@ if (typeof soc === 'number') {
         const nvpBalanceFeedback = (!farmEnabled && feneconDirectProfileActive)
             ? (this._resolveFeneconDirectNvpFeedback({
                 nowMs: now,
-                staleMs,
                 freshAgeMs: balanceFeedbackFreshMs,
                 holdAgeMs: balanceFeedbackHoldMs,
             }) || storageBalanceFeedback)
@@ -3613,10 +3618,10 @@ if (targetW === 0 && selfDischargeEnabled) {
     const lastWasPvBalance = (String(this._lastSource || '') === 'pv');
     const lastWasAnyBalance = lastWasSelf || lastWasPvBalance;
     const selfFeedForwardRaw = buildStorageFeedForward(desiredNvpW);
-    // FENECON Hybrid im direkten ESS-Modus wird ausschließlich aus NVP und der
-    // echten AC-seitigen ESS-Aktorleistung geregelt. PV-Leistungen sind dort nur
-    // Anzeige-/Bilanzwerte; ein zusätzlicher PV-/Last-Feed-forward würde die
-    // interne DC-PV-Wirkung erneut einrechnen und den Sollwert verfälschen.
+    // FENECON Hybrid im direkten ESS-Modus wird aus NVP und der aktuell
+    // wirksamen externen SetActivePowerEquals-Vorgabe geregelt. Die physische
+    // ESS-Leistung kann interne DC-PV-Beladung enthalten; ein zusätzlicher
+    // PV-/Last-Feed-forward würde diese Wirkung erneut einrechnen.
     const selfFeedForward = feneconDirectProfileActive
         ? {
             usable: false,
@@ -3626,7 +3631,7 @@ if (targetW === 0 && selfDischargeEnabled) {
             loadW: null,
             pvSource: '',
             loadSource: '',
-            reason: 'FENECON Hybrid: PV-Feed-forward deaktiviert; NVP + ESS ActivePower sind autoritativ',
+            reason: 'FENECON Hybrid: PV-Feed-forward deaktiviert; NVP + aktive externe Vorgabe sind autoritativ',
             measurementSkewMs: null,
         }
         : selfFeedForwardRaw;
@@ -5484,6 +5489,38 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             reason: storageLicensePowerLimited ? String(reason || '') : '',
         }));
 
+        // Defense-in-depth: Selbst wenn ein Herstellerprofil, ein Hold-Pfad oder
+        // eine spaetere Policy einen negativen Sollwert weitertraegt, darf eine
+        // als Netzladen klassifizierte Quelle den allgemeinen Installateur-Haken
+        // nicht umgehen. PV-/NVP-Laden bleibt absichtlich unangetastet.
+        const gridChargeBlockedByConfig = !gridChargeConfigured
+            && targetW < 0
+            && isCentralGridChargeSource(policySourceBeforeVendor || source, targetW);
+        if (gridChargeBlockedByConfig) {
+            targetW = 0;
+            reason = 'Netzladen deaktiviert (App-Center: „Netzladen erlauben“ ist aus)';
+            source = 'policy';
+            chargeDemandHardCapW = 0;
+            chargeDemandHardCapReason = reason;
+            storagePolicyBlocked = true;
+            storagePolicyBlockReason = reason;
+            storageZeroNoWrite = false;
+            sungrowNoWrite = false;
+            pvBudgetPostVendorNoWriteHold = false;
+            pvBudgetPostVendorNoWriteReason = '';
+            if (sungrowHybridActive) {
+                sungrowWriteMode = 'write-grid-charge-config-stop';
+                this._sungrowHybridLastMode = sungrowWriteMode;
+            }
+            storageNvpBalanceDiag = {
+                ...(storageNvpBalanceDiag || {}),
+                targetW: 0,
+                gridChargeConfigured: false,
+                gridChargeBlockedByConfig: true,
+                mode: 'grid-charge-config-stop',
+            };
+        }
+
         if (sungrowDiagPayload) {
             sungrowDiagPayload = {
                 ...sungrowDiagPayload,
@@ -5665,6 +5702,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 				} : null,
                 soc: (typeof soc === 'number' && Number.isFinite(soc)) ? soc : null,
                 permissions: {
+                    gridChargeConfigured: !!gridChargeConfigured,
                     gridChargeAllowed: (typeof gridChargeAllowed === 'boolean') ? gridChargeAllowed : null,
                     dischargeAllowed: (typeof dischargeAllowed === 'boolean') ? dischargeAllowed : null,
                 },
@@ -5962,15 +6000,14 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-        const finite = (v) => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
-        const now = finite(ctx.nowMs) ? Number(ctx.nowMs) : Date.now();
-        const staleMs = Math.max(250, finite(ctx.staleMs) ? Number(ctx.staleMs) : 8000);
-        const freshAgeMs = Math.max(250, finite(ctx.freshAgeMs) ? Number(ctx.freshAgeMs) : staleMs);
-        const holdAgeMs = Math.max(freshAgeMs, finite(ctx.holdAgeMs) ? Number(ctx.holdAgeMs) : Math.max(staleMs, 45000));
+        const finite = (value) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+        const nowMs = finite(ctx.nowMs) ? Number(ctx.nowMs) : Date.now();
+        const freshAgeMs = Math.max(250, finite(ctx.freshAgeMs) ? Number(ctx.freshAgeMs) : 8000);
+        const holdAgeMs = Math.max(freshAgeMs, finite(ctx.holdAgeMs) ? Number(ctx.holdAgeMs) : 45000);
         if (!this.dp || typeof this.dp.getEntry !== 'function') return null;
 
 /**
- * Code-Teil: makeFeedback
+ * Code-Teil: feedback
  *
  * Zweck:
  * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
@@ -5980,23 +6017,21 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-        const makeFeedback = ({ valueW, sampleTs, ageMs, objectId, source, sampleKey, allowHold = true }) => {
+        const feedback = (key, valueW, source, sampleTs = 0, ageMs = null, objectId = '') => {
             if (!finite(valueW)) return null;
-            const normalizedAgeMs = finite(ageMs)
-                ? Math.max(0, Number(ageMs))
-                : (finite(sampleTs) ? Math.max(0, now - Number(sampleTs)) : 0);
-            if (normalizedAgeMs > (allowHold ? holdAgeMs : staleMs)) return null;
-            const held = normalizedAgeMs > freshAgeMs;
+            const ts = finite(sampleTs) ? Math.max(0, Number(sampleTs)) : 0;
+            const age = finite(ageMs) ? Math.max(0, Number(ageMs)) : (ts > 0 ? Math.max(0, nowMs - ts) : 0);
+            if (age > holdAgeMs) return null;
             return {
                 usable: true,
                 feedbackW: Number(valueW),
                 measuredW: Number(valueW),
-                measuredAgeMs: normalizedAgeMs,
-                sampleAgeMs: normalizedAgeMs,
-                sampleTs: finite(sampleTs) ? Math.max(0, Number(sampleTs)) : 0,
-                sampleKey: String(sampleKey || ''),
-                source: String(source || 'fenecon-direct'),
-                held,
+                measuredAgeMs: age,
+                sampleAgeMs: age,
+                sampleTs: ts,
+                sampleKey: `${source}:${String(objectId || key)}@${Math.round(ts || nowMs)}`,
+                source,
+                held: age > freshAgeMs,
                 predicted: false,
                 predictionDeltaW: 0,
                 predictionSuppressed: true,
@@ -6004,15 +6039,15 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 holdAgeMs,
                 freshAgeMs,
                 maxPredictionDeltaW: 0,
-                objectId: String(objectId || ''),
-                key: `fenecon-direct|${String(source || 'fenecon-direct')}|${String(objectId || '')}`,
+                objectId: String(objectId || key),
+                key: `fenecon-direct|${source}|${String(objectId || key)}`,
                 sampleIntervalMs: null,
                 sampleCadenceMs: null,
             };
         };
 
 /**
- * Code-Teil: getEntry
+ * Code-Teil: read
  *
  * Zweck:
  * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
@@ -6022,138 +6057,83 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-        const getEntry = (key) => this.dp && typeof this.dp.getEntry === 'function' ? this.dp.getEntry(key) : null;
-/**
- * Code-Teil: getValue
- *
- * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-        const getValue = (key, fallback = null) => this.dp && typeof this.dp.getNumber === 'function' ? this.dp.getNumber(key, fallback) : fallback;
-/**
- * Code-Teil: getAgeMs
- *
- * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-        const getAgeMs = (key) => this.dp && typeof this.dp.getAgeMs === 'function' && getEntry(key) ? this.dp.getAgeMs(key) : null;
-/**
- * Code-Teil: getSampleTs
- *
- * Zweck:
- * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-        const getSampleTs = (key) => {
+        const read = (key, source) => {
+            const entry = this.dp.getEntry(key);
+            if (!entry) return null;
+            const valueW = typeof this.dp.getNumber === 'function' ? this.dp.getNumber(key, null) : null;
+            const ageMs = typeof this.dp.getAgeMs === 'function' ? this.dp.getAgeMs(key) : null;
+            let sampleTs = Number(entry && entry.ts) || 0;
             try {
-                if (this.dp && typeof this.dp.getMeasurementTimestampMs === 'function') {
-                    const ts = Number(this.dp.getMeasurementTimestampMs(key));
-                    if (Number.isFinite(ts) && ts > 0) return ts;
+                if (typeof this.dp.getMeasurementTimestampMs === 'function') {
+                    const measuredTs = Number(this.dp.getMeasurementTimestampMs(key));
+                    if (Number.isFinite(measuredTs) && measuredTs > 0) sampleTs = measuredTs;
                 }
             } catch {
-                // Fallback below.
+                // Entry timestamp remains the compatibility fallback.
             }
-            const entry = getEntry(key);
-            const ts = entry && Number(entry.ts);
-            return Number.isFinite(ts) && ts > 0 ? ts : 0;
+            return feedback(key, valueW, source, sampleTs, ageMs, entry.objectId || key);
         };
 
-        const actualSetpointEntry = getEntry('st.feneconActualSetpointW');
-        if (actualSetpointEntry) {
-            const sampleTs = getSampleTs('st.feneconActualSetpointW');
-            const fb = makeFeedback({
-                valueW: getValue('st.feneconActualSetpointW', null),
-                ageMs: getAgeMs('st.feneconActualSetpointW'),
-                sampleTs,
-                objectId: actualSetpointEntry && actualSetpointEntry.objectId ? String(actualSetpointEntry.objectId) : '',
-                sampleKey: actualSetpointEntry && actualSetpointEntry.objectId ? `fenecon-direct-readback:${String(actualSetpointEntry.objectId)}@${Math.round(sampleTs || 0)}` : '',
-                source: 'fenecon-direct-setpoint-readback',
-                allowHold: true,
-            });
-            if (fb) return fb;
-        }
+        // Register 706 / SetActivePowerEquals-Readback ist die beste Abbildung der
+        // aktuell von NexoWatt beeinflussbaren Leistung. Die physische ESS-Leistung
+        // kann bei DC-/Hybridsystemen gleichzeitig interne PV-Beladung enthalten.
+        const actualSetpoint = read('st.feneconActualSetpointW', 'fenecon-direct-setpoint-readback');
+        if (actualSetpoint) return actualSetpoint;
 
-        const signedEntry = getEntry('st.targetPowerW');
-        if (signedEntry) {
-            const sampleTs = getSampleTs('st.targetPowerW');
-            const fb = makeFeedback({
-                valueW: getValue('st.targetPowerW', null),
-                ageMs: getAgeMs('st.targetPowerW'),
-                sampleTs,
-                objectId: signedEntry && signedEntry.objectId ? String(signedEntry.objectId) : '',
-                sampleKey: signedEntry && signedEntry.objectId ? `fenecon-direct-signed:${String(signedEntry.objectId)}@${Math.round(sampleTs || 0)}` : '',
-                source: 'fenecon-direct-signed-readback',
-                allowHold: true,
-            });
-            if (fb) return fb;
-        }
+        const signedSetpoint = read('st.targetPowerW', 'fenecon-direct-signed-readback');
+        if (signedSetpoint) return signedSetpoint;
 
-        const chargeEntry = getEntry('st.targetChargePowerW');
-        const dischargeEntry = getEntry('st.targetDischargePowerW');
+        const chargeEntry = this.dp.getEntry('st.targetChargePowerW');
+        const dischargeEntry = this.dp.getEntry('st.targetDischargePowerW');
         if (chargeEntry || dischargeEntry) {
-            const chargeValue = chargeEntry ? Math.max(0, Number(getValue('st.targetChargePowerW', 0)) || 0) : 0;
-            const dischargeValue = dischargeEntry ? Math.max(0, Number(getValue('st.targetDischargePowerW', 0)) || 0) : 0;
-            const combinedW = dischargeValue - chargeValue;
-            const chargeTs = chargeEntry ? getSampleTs('st.targetChargePowerW') : 0;
-            const dischargeTs = dischargeEntry ? getSampleTs('st.targetDischargePowerW') : 0;
-            const sampleTs = Math.max(chargeTs || 0, dischargeTs || 0, 0);
-            const chargeAgeMs = chargeEntry ? getAgeMs('st.targetChargePowerW') : null;
-            const dischargeAgeMs = dischargeEntry ? getAgeMs('st.targetDischargePowerW') : null;
-            const knownAges = [chargeAgeMs, dischargeAgeMs].filter((v) => finite(v)).map((v) => Number(v));
-            const ageMs = knownAges.length ? Math.min(...knownAges) : null;
-            const objectId = [chargeEntry && chargeEntry.objectId ? String(chargeEntry.objectId) : '', dischargeEntry && dischargeEntry.objectId ? String(dischargeEntry.objectId) : '']
-                .filter(Boolean)
-                .join(' | ');
-            const fb = makeFeedback({
-                valueW: combinedW,
-                ageMs,
+            const chargeW = chargeEntry && typeof this.dp.getNumber === 'function'
+                ? Math.max(0, Number(this.dp.getNumber('st.targetChargePowerW', 0)) || 0)
+                : 0;
+            const dischargeW = dischargeEntry && typeof this.dp.getNumber === 'function'
+                ? Math.max(0, Number(this.dp.getNumber('st.targetDischargePowerW', 0)) || 0)
+                : 0;
+            const chargeAge = chargeEntry && typeof this.dp.getAgeMs === 'function' ? this.dp.getAgeMs('st.targetChargePowerW') : null;
+            const dischargeAge = dischargeEntry && typeof this.dp.getAgeMs === 'function' ? this.dp.getAgeMs('st.targetDischargePowerW') : null;
+            const ages = [chargeAge, dischargeAge].filter((value) => finite(value)).map(Number);
+            const ageMs = ages.length ? Math.min(...ages) : 0;
+            const sampleTs = Math.max(Number(chargeEntry && chargeEntry.ts) || 0, Number(dischargeEntry && dischargeEntry.ts) || 0);
+            const objectId = [chargeEntry && chargeEntry.objectId, dischargeEntry && dischargeEntry.objectId].filter(Boolean).join(' | ');
+            const splitSetpoint = feedback(
+                'st.targetChargePowerW|st.targetDischargePowerW',
+                dischargeW - chargeW,
+                'fenecon-direct-split-readback',
                 sampleTs,
+                ageMs,
                 objectId,
-                sampleKey: objectId ? `fenecon-direct-split:${objectId}@${Math.round(sampleTs || 0)}` : '',
-                source: 'fenecon-direct-split-readback',
-                allowHold: true,
-            });
-            if (fb) return fb;
+            );
+            if (splitSetpoint) return splitSetpoint;
         }
 
-        const lastAcceptedTargetW = Number.isFinite(Number(this._lastTargetW)) ? Number(this._lastTargetW) : null;
+        const lastAcceptedW = Number.isFinite(Number(this._lastTargetW)) ? Number(this._lastTargetW) : null;
         const lastAcceptedTs = Number.isFinite(Number(this._lastTargetWriteMs)) ? Math.max(0, Number(this._lastTargetWriteMs)) : 0;
-        if (lastAcceptedTargetW !== null && lastAcceptedTs > 0) {
-            const fb = makeFeedback({
-                valueW: lastAcceptedTargetW,
-                ageMs: Math.max(0, now - lastAcceptedTs),
-                sampleTs: lastAcceptedTs,
-                objectId: 'speicher.regelung.commandAcceptedTargetW',
-                sampleKey: `fenecon-direct-last-accepted@${Math.round(lastAcceptedTs)}`,
-                source: 'fenecon-direct-last-accepted',
-                allowHold: true,
-            });
-            if (fb) return fb;
+        if (lastAcceptedW !== null && lastAcceptedTs > 0) {
+            const accepted = feedback(
+                'speicher.regelung.commandAcceptedTargetW',
+                lastAcceptedW,
+                'fenecon-direct-last-accepted',
+                lastAcceptedTs,
+                Math.max(0, nowMs - lastAcceptedTs),
+                'speicher.regelung.commandAcceptedTargetW',
+            );
+            if (accepted) return accepted;
         }
 
-        return makeFeedback({
-            valueW: 0,
-            ageMs: 0,
-            sampleTs: now,
-            objectId: 'fenecon-direct-zero-anchor',
-            sampleKey: `fenecon-direct-zero-anchor@${Math.round(now)}`,
-            source: 'fenecon-direct-zero-anchor',
-            allowHold: true,
-        });
+        // Kaltstart ohne verwertbares Readback: Der erste NVP-Fehler wird von 0 W
+        // aus korrigiert. Das ist sicherer als interne DC-PV-Leistung als externen
+        // Stellwert zu interpretieren.
+        return feedback(
+            'fenecon-direct-zero-anchor',
+            0,
+            'fenecon-direct-zero-anchor',
+            nowMs,
+            0,
+            'fenecon-direct-zero-anchor',
+        );
     }
 
     _resolveBatteryBalanceFeedback(ctx = {}) {
@@ -7206,6 +7186,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         return {
             controlMode: storage.controlMode,
             datapoints: effectiveDatapoints,
+            allowGridCharge: storage.allowGridCharge !== false,
             // Einzel-Speicher-Typ aus dem App-Center. AC bleibt der Standard.
             // DC/Hybrid nutzt zusaetzlich den optionalen PV-Erzeugungs-DP st.dcPvPowerW,
             // damit FENECON-/0-Einspeise-Erkennung nicht den Batterie-Sollwert mit PV verwechselt.
@@ -7767,7 +7748,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     async _writeE3dcRscpTargetW(targetW, reason, source, cfg = {}) {
         const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
         const absW = Math.max(0, Math.abs(w));
-        const allowGridCharge = cfg.e3dcAllowGridCharge === true;
+        const allowGridCharge = cfg.allowGridCharge !== false && cfg.e3dcAllowGridCharge === true;
         const gridCharge = !!(w < 0 && allowGridCharge && this._isE3dcGridChargeSource(source));
         const zeroModeRaw = String(cfg.e3dcZeroMode || 'normal').trim().toLowerCase();
         const zeroModeCode = zeroModeRaw === 'idle' ? 1 : 0;
@@ -9691,6 +9672,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
         await mk('speicher.regelung.netzLeistungW', 'Netzleistung (W)', 'number', 'value.power');
         await mk('speicher.regelung.netzAlterMs', 'Netzleistung Alter (ms)', 'number', 'value.interval');
+        await mk('speicher.regelung.netzLadenKonfiguriert', 'Netzladen im App-Center freigegeben', 'boolean', 'indicator', true);
         await mk('speicher.regelung.netzLadenErlaubt', 'Netzladen erlaubt', 'boolean', 'indicator', true);
         await mk('speicher.regelung.entladenErlaubt', 'Entladen erlaubt', 'boolean', 'indicator', true);
         await mk('speicher.regelung.tarifState', 'Tarif Zustand', 'string', 'text', '');

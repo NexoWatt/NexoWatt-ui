@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: aba22015bc14aa08542c47a63a5cd14a40c5ebbab8479c7d7fe6077a07f96d10
+ * Original-Hash: 61b3bce0d5c229a26b80997afd21e1d221af2a9fee9573068dab9a2c80bf460a
  */
 
 /**
@@ -308,7 +308,7 @@ async function testAcRemainsDirect() {
 }
 
 /**
- * Code-Teil: testDirectFeedbackUsesSetpointReadback
+ * Code-Teil: testDirectSetpointReadbackDrivesNvpCorrection
  *
  * Zweck:
  * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
@@ -318,7 +318,7 @@ async function testAcRemainsDirect() {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-async function testDirectFeedbackUsesSetpointReadback() {
+async function testDirectSetpointReadbackDrivesNvpCorrection() {
   const foreign = new Map();
   const dp = new FakeDp({
     'st.targetPowerW': entry('fems.ess0.SetActivePowerEquals', -50),
@@ -331,9 +331,14 @@ async function testDirectFeedbackUsesSetpointReadback() {
     feneconControlMode: 'direct-ess',
   }, foreign);
   const mod = new SpeicherRegelungModule(adapter, dp);
-  const feedback = mod._resolveFeneconDirectNvpFeedback({ nowMs: now(), staleMs: 15000, freshAgeMs: 8000, holdAgeMs: 45000 });
-  assert.equal(feedback && feedback.usable, true, 'direct FENECON NVP feedback must be available');
-  assert.equal(feedback.feedbackW, -50, 'the direct setpoint readback must win over the physical ESS ActivePower');
+  const feedback = mod._resolveFeneconDirectNvpFeedback({
+    nowMs: now(),
+    freshAgeMs: 8000,
+    holdAgeMs: 45000,
+  });
+
+  assert.equal(feedback && feedback.usable, true, 'direct FENECON command feedback must be available');
+  assert.equal(feedback.feedbackW, -50, 'SetActivePowerEquals readback must win over physical ESS ActivePower');
   assert.equal(feedback.source, 'fenecon-direct-setpoint-readback');
 
   const balance = mod._buildActualAwareNvpBalance({
@@ -353,17 +358,22 @@ async function testDirectFeedbackUsesSetpointReadback() {
     batteryFeedbackHoldAgeMs: 45000,
     batteryFeedbackKey: feedback.key,
     batterySampleTs: feedback.sampleTs,
-    balanceControlKey: 'direct-fenecon-regression',
-    maxDischargeCorrectionW: 5000,
-    maxChargeCorrectionW: 5000,
+    balanceControlKey: 'fenecon-direct-nvp-regression',
+    fastServoActive: true,
+    preferRawNvp: true,
     lastTargetW: -50,
     lastTargetAllowed: true,
-    stepW: 1,
+    maxDischargeCorrectionW: 5000,
+    maxChargeCorrectionW: 5000,
     feedbackMaxAgeMs: 8000,
     nvpFeedbackMaxAgeMs: 8000,
+    feedbackRequireAligned: false,
+    stepW: 1,
   });
+
   assert.equal(balance.active, true);
-  assert.equal(balance.targetW, 500, '600 W import with -50 W active direct setpoint must result in a positive discharge command, not another charge command');
+  assert.equal(balance.targetW, 500, '600 W import with -50 W active command must produce +500 W discharge at a 50 W grid target');
+  assert.notEqual(balance.targetW, -550, 'physical hybrid charging power must not be reused as direct command feedback');
 }
 
 /**
@@ -716,7 +726,7 @@ async function testFarmContinuousAuto() {
   await testSingleNative();
   await testAcRemainsDirect();
   await testNativeClampAndAcceptedTarget();
-  await testDirectFeedbackUsesSetpointReadback();
+  await testDirectSetpointReadbackDrivesNvpCorrection();
   await testFarmContinuousAuto();
 
   const fs = require('node:fs');

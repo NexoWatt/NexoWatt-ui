@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:aee7cad338993f33f11b84b59ee468f766d2722893490b54312ffcbece732292
+ * Quell-Hash: sha256:5b7244abb242374a2c3c2aea37f5f1a5ae5858fb1cfbdc9061f9b8db805ee7b8
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -104,6 +104,7 @@
     storageTable: document.getElementById('storageTable'),
 
     storageControlMode: document.getElementById('storageControlMode'),
+    storageAllowGridCharge: document.getElementById('storageAllowGridCharge'),
     storageCapacityKWh: document.getElementById('storageCapacityKWh'),
     storageLicensePowerProfile: document.getElementById('storageLicensePowerProfile'),
     storageRatedPowerKW: document.getElementById('storageRatedPowerKW'),
@@ -134,6 +135,7 @@
 
     // Speicherfarm
     storageFarmMode: document.getElementById('storageFarmMode'),
+    storageFarmAllowGridCharge: document.getElementById('storageFarmAllowGridCharge'),
     storageFarmSchedulerIntervalMs: document.getElementById('storageFarmSchedulerIntervalMs'),
     storageFarmSelfTargetGridImportW: document.getElementById('storageFarmSelfTargetGridImportW'),
     storageFarmSelfImportThresholdW: document.getElementById('storageFarmSelfImportThresholdW'),
@@ -8658,7 +8660,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     ic.para14aMode = (modeRaw === 'direct') ? 'direct' : 'ems';
 
     const min = Number(ic.para14aMinPerDeviceW);
-    ic.para14aMinPerDeviceW = (Number.isFinite(min) && min >= 0) ? Math.round(min) : 4200;
+    ic.para14aMinPerDeviceW = Number.isFinite(min) ? Math.max(4200, Math.round(min)) : 4200;
     const signalMaxAgeSec = Number(ic.para14aSignalMaxAgeSec);
     ic.para14aSignalMaxAgeSec = (Number.isFinite(signalMaxAgeSec) && signalMaxAgeSec >= 1) ? Math.min(300, Math.round(signalMaxAgeSec)) : 30;
     const stalePolicy = String(ic.para14aStalePolicy || 'hold-active').trim().toLowerCase();
@@ -8678,16 +8680,21 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       const ctlRaw = String(it.controlType || it.control || '').trim().toLowerCase();
       const controlType = (ctlRaw === 'onoff' || ctlRaw === 'switch' || ctlRaw === 'enable') ? 'onOff' : 'limitW';
 
-      const maxW = Number(it.maxPowerW);
+      const maxW = Number(it.maxPowerW ?? it.installedPowerW);
       const prio = Number(it.priority);
 
       out.push({
+        key: String(it.key || '').trim(),
         enabled: (typeof it.enabled === 'boolean') ? !!it.enabled : true,
         name: String(it.name || '').trim(),
         type,
         controlType,
         maxPowerW: Number.isFinite(maxW) && maxW >= 0 ? Math.round(maxW) : 0,
+        installedPowerW: Number.isFinite(maxW) && maxW >= 0 ? Math.round(maxW) : 0,
         priority: Number.isFinite(prio) && prio >= 0 ? Math.round(prio) : 0,
+        groupId: String(it.groupId || it.para14aGroupId || it.storageConstructId || '').trim(),
+        source: String(it.source || (it.automatic === true ? 'automatic-migration' : 'manual')).trim(),
+        automatic: it.automatic === true,
         setPowerWId: String(it.setPowerWId || it.setpointWId || '').trim(),
         enableId: String(it.enableId || '').trim(),
       });
@@ -8745,18 +8752,21 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (!els.para14aConsumers) return;
     const ic = _ensurePara14aCfg();
     const list = Array.isArray(ic.para14aConsumers) ? ic.para14aConsumers : [];
+    const visibleRows = list
+      .map((consumer, configIndex) => ({ consumer, configIndex }))
+      .filter(({ consumer }) => consumer && consumer.automatic !== true);
     els.para14aConsumers.innerHTML = '';
 
-    if (!list.length) {
+    if (!visibleRows.length) {
       const empty = document.createElement('div');
       empty.className = 'nw-config-empty';
-      empty.textContent = 'Keine Verbraucher konfiguriert.';
+      empty.textContent = 'Keine zusätzlichen manuellen Verbraucher konfiguriert. Zugeordnete Ladepunkte, aktive Wärme-/Klimageräte, Heizstäbe und Speicher mit erlaubtem Netzladen werden automatisch eingebunden.';
       els.para14aConsumers.appendChild(empty);
       return;
     }
 
-    list.forEach((c, i) => {
-      const idx = i + 1;
+    visibleRows.forEach(({ consumer: c, configIndex }, visibleIndex) => {
+      const idx = visibleIndex + 1;
 
       const row = document.createElement('div');
       row.className = 'nw-config-item';
@@ -8792,7 +8802,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an en. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       en.addEventListener('change', () => {
         const ic2 = _ensurePara14aCfg();
-        if (ic2.para14aConsumers[i]) ic2.para14aConsumers[i].enabled = !!en.checked;
+        if (ic2.para14aConsumers[configIndex]) ic2.para14aConsumers[configIndex].enabled = !!en.checked;
       });
       const enLbl = document.createElement('label');
       enLbl.htmlFor = en.id;
@@ -8815,7 +8825,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an name. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       name.addEventListener('change', () => {
         const ic2 = _ensurePara14aCfg();
-        if (ic2.para14aConsumers[i]) ic2.para14aConsumers[i].name = String(name.value || '').trim();
+        if (ic2.para14aConsumers[configIndex]) ic2.para14aConsumers[configIndex].name = String(name.value || '').trim();
         // refresh labels
         rebuildPara14aConsumersUI();
       });
@@ -8835,7 +8845,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an typeSel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       typeSel.addEventListener('change', () => {
         const ic2 = _ensurePara14aCfg();
-        if (ic2.para14aConsumers[i]) ic2.para14aConsumers[i].type = String(typeSel.value || 'custom');
+        if (ic2.para14aConsumers[configIndex]) ic2.para14aConsumers[configIndex].type = String(typeSel.value || 'custom');
       });
       right.appendChild(typeSel);
 
@@ -8853,7 +8863,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an ctlSel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       ctlSel.addEventListener('change', () => {
         const ic2 = _ensurePara14aCfg();
-        if (ic2.para14aConsumers[i]) ic2.para14aConsumers[i].controlType = String(ctlSel.value || 'limitW');
+        if (ic2.para14aConsumers[configIndex]) ic2.para14aConsumers[configIndex].controlType = String(ctlSel.value || 'limitW');
       });
       right.appendChild(ctlSel);
 
@@ -8868,7 +8878,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       maxW.addEventListener('change', () => {
         const n = Number(maxW.value);
         const ic2 = _ensurePara14aCfg();
-        if (ic2.para14aConsumers[i]) ic2.para14aConsumers[i].maxPowerW = (Number.isFinite(n) && n >= 0) ? Math.round(n) : 0;
+        if (ic2.para14aConsumers[configIndex]) {
+          const normalized = (Number.isFinite(n) && n >= 0) ? Math.round(n) : 0;
+          ic2.para14aConsumers[configIndex].maxPowerW = normalized;
+          ic2.para14aConsumers[configIndex].installedPowerW = normalized;
+        }
       });
       right.appendChild(maxW);
 
@@ -8883,20 +8897,20 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       pr.addEventListener('change', () => {
         const n = Number(pr.value);
         const ic2 = _ensurePara14aCfg();
-        if (ic2.para14aConsumers[i]) ic2.para14aConsumers[i].priority = (Number.isFinite(n) && n >= 0) ? Math.round(n) : 0;
+        if (ic2.para14aConsumers[configIndex]) ic2.para14aConsumers[configIndex].priority = (Number.isFinite(n) && n >= 0) ? Math.round(n) : 0;
       });
       right.appendChild(pr);
 
       // DP fields
       const sp = _mkDpWrap(`p14a_cons_${idx}_sp`, c.setPowerWId, 'Setpoint W (Write)', (v) => {
         const ic2 = _ensurePara14aCfg();
-        if (ic2.para14aConsumers[i]) ic2.para14aConsumers[i].setPowerWId = v;
+        if (ic2.para14aConsumers[configIndex]) ic2.para14aConsumers[configIndex].setPowerWId = v;
       });
       sp.style.minWidth = '360px';
       right.appendChild(sp);
       const enDp = _mkDpWrap(`p14a_cons_${idx}_enDp`, c.enableId, 'Enable (Write)', (v) => {
         const ic2 = _ensurePara14aCfg();
-        if (ic2.para14aConsumers[i]) ic2.para14aConsumers[i].enableId = v;
+        if (ic2.para14aConsumers[configIndex]) ic2.para14aConsumers[configIndex].enableId = v;
       });
       enDp.style.minWidth = '360px';
       right.appendChild(enDp);
@@ -8909,7 +8923,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an rm. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       rm.addEventListener('click', () => {
         const ic2 = _ensurePara14aCfg();
-        ic2.para14aConsumers.splice(i, 1);
+        ic2.para14aConsumers.splice(configIndex, 1);
         rebuildPara14aConsumersUI();
       });
       right.appendChild(rm);
@@ -9140,6 +9154,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     const modeRaw = String(sf.mode || 'pool').trim().toLowerCase();
     sf.mode = (modeRaw === 'groups') ? 'groups' : 'pool';
+    // Bestandsanlagen behalten beim Update ihr bisheriges Verhalten. Erst wenn
+    // der Installateur den Haken aktiv entfernt, werden Tarif-/Reserve-/LSK-
+    // Netzladepfade gesperrt; PV-/Eigenverbrauchsladen bleibt davon unberührt.
+    sf.allowGridCharge = sf.allowGridCharge !== false;
 
     const sched = Number(sf.schedulerIntervalMs);
     sf.schedulerIntervalMs = Number.isFinite(sched) ? Math.max(250, Math.min(1000, Math.round(sched))) : 1000;
@@ -9203,6 +9221,15 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // Clear containers
     els.storageFarmStorages.innerHTML = '';
     if (els.storageFarmGroups) els.storageFarmGroups.innerHTML = '';
+
+    if (els.storageFarmAllowGridCharge) {
+      els.storageFarmAllowGridCharge.checked = sf.allowGridCharge !== false;
+      els.storageFarmAllowGridCharge.onchange = () => {
+        const sf2 = _ensureStorageFarmCfg();
+        sf2.allowGridCharge = els.storageFarmAllowGridCharge.checked === true;
+        scheduleValidation(200);
+      };
+    }
 
     if (!a.installed) {
       const msg = document.createElement('div');
@@ -11422,8 +11449,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     try { buildAiAdvisorUI(); } catch (_e) {}
 
     // Storage
+    currentConfig.storage = (currentConfig.storage && typeof currentConfig.storage === 'object') ? currentConfig.storage : {};
+    currentConfig.storage.allowGridCharge = currentConfig.storage.allowGridCharge !== false;
     const mode = (currentConfig.storage && typeof currentConfig.storage.controlMode === 'string') ? currentConfig.storage.controlMode : 'targetPower';
     els.storageControlMode.value = (['targetPower','limits','enableFlags'].includes(mode)) ? mode : 'targetPower';
+    if (els.storageAllowGridCharge) els.storageAllowGridCharge.checked = currentConfig.storage.allowGridCharge !== false;
     if (els.storageCouplingMode) {
       const couplingRaw = currentConfig.storage && typeof currentConfig.storage.coupling === 'string' ? currentConfig.storage.coupling.trim().toLowerCase() : 'ac';
       els.storageCouplingMode.value = couplingRaw === 'dc' ? 'dc' : 'ac';
@@ -12608,9 +12638,21 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
             tcfg.devices[slot - 1] = td;
           }
 
-          // §14a Verbraucher (nur anlegen/ergänzen; ohne Schreib-IDs bleibt es automatisch inaktiv)
+          // §14a-Migrationseintrag: Die Runtime bindet aktive Thermik-/Heizstab-
+          // Fachmodule seit 0.8.155 automatisch ein. Bestehende Schnellsetup-Zeilen
+          // bleiben als Migrationsmarker erhalten, werden aber weder in der UI als
+          // manuelle Zusatzlast gezeigt noch als zweite SteuVE gezählt.
           const setWId = ctrlLimitW;
           const enableId = ctrlRun;
+          const mappedCfg = consumerType === 'heatingRod'
+            ? (hcfg.devices[slot - 1] || {})
+            : (tcfg.devices[slot - 1] || {});
+          const mappedPowerW = Math.max(0, Math.round(Number(
+            mappedCfg.maxPowerW
+            ?? mappedCfg.estimatedPowerW
+            ?? mappedCfg.boostPowerW
+            ?? 0
+          ) || 0));
 
           const existing = findPara14aMatch(dev, setWId, enableId);
           if (existing) {
@@ -12622,6 +12664,10 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
             if (!String(existing.enableId || existing.enableWriteId || '').trim() && enableId) existing.enableId = enableId;
             if (!String(existing.key || '').trim() && String((dev && dev.devId) || '').trim()) existing.key = String(dev.devId).trim();
             if (existing.enabled === undefined) existing.enabled = !!(setWId || enableId);
+            existing.maxPowerW = mappedPowerW;
+            existing.installedPowerW = mappedPowerW;
+            existing.source = 'device-auto-mapping';
+            existing.automatic = true;
 
             if (JSON.stringify(existing) !== before) {
               heatPara14aUpdated++;
@@ -12634,9 +12680,12 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
               name: String((dev && dev.name) || '').trim(),
               type: c.type,
               controlType: setWId ? 'limitW' : 'onOff',
-              maxPowerW: 0,
-              installedPowerW: 0,
+              maxPowerW: mappedPowerW,
+              installedPowerW: mappedPowerW,
               priority: 100,
+              groupId: '',
+              source: 'device-auto-mapping',
+              automatic: true,
               setPowerWId: setWId,
               enableId
             });
@@ -12663,7 +12712,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       msgParts.push(`Geräte gefunden: ${devices.length}`);
       if (evcsDevs.length) msgParts.push(`Ladepunkte: ${evcsDevs.length} (zugeordnet: ${evcsMapped})`);
       if (pvDevs.length) msgParts.push(`Wechselrichter: ${pvDevs.length} (+${pvAdded}/${pvUpdated})`);
-      if (heatDevs.length) msgParts.push(`Wärmegeräte: ${heatDevs.length} (Slots: ${heatSlotsMapped}, §14a: +${heatPara14aAdded}/${heatPara14aUpdated})`);
+      if (heatDevs.length) msgParts.push(`Wärmegeräte: ${heatDevs.length} (Slots: ${heatSlotsMapped}, §14a automatisch: +${heatPara14aAdded}/${heatPara14aUpdated})`);
       if (flowAuto && Array.isArray(flowAuto.notes) && flowAuto.notes.length) msgParts.push('Energiefluss: ' + flowAuto.notes.join(', '));
       if (storageAuto && Array.isArray(storageAuto.notes) && storageAuto.notes.length) msgParts.push(storageAuto.notes.join(', '));
 
@@ -13160,6 +13209,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // keine eigene NVP-Abstimmung. Auch wenn der Farm-Reiter beim Speichern
     // nicht aktiv ist, werden die aktuell gepufferten Werte normalisiert.
     patch.storageFarm = deepMerge({}, currentConfig.storageFarm || {});
+    patch.storageFarm.allowGridCharge = !!(
+      els.storageFarmAllowGridCharge
+        ? els.storageFarmAllowGridCharge.checked
+        : patch.storageFarm.allowGridCharge !== false
+    );
     const storageFarmSingleFallbackTarget = (currentConfig.storage && currentConfig.storage.standaloneSelfTargetGridImportW !== undefined)
       ? currentConfig.storage.standaloneSelfTargetGridImportW
       : (currentConfig.storage && currentConfig.storage.selfTargetGridImportW);
@@ -13178,6 +13232,11 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     // Storage
     patch.storage = deepMerge({}, currentConfig.storage || {});
     patch.storage.controlMode = getStorageMode();
+    patch.storage.allowGridCharge = !!(
+      els.storageAllowGridCharge
+        ? els.storageAllowGridCharge.checked
+        : patch.storage.allowGridCharge !== false
+    );
     patch.storage.coupling = getStorageCoupling();
     patch.storage.vendorProfile = getStorageVendorProfile();
     patch.storage.datapoints = deepMerge({}, (currentConfig.storage && currentConfig.storage.datapoints) ? currentConfig.storage.datapoints : {});
@@ -15610,6 +15669,15 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     });
   }
 
+  if (els.storageAllowGridCharge) {
+    els.storageAllowGridCharge.addEventListener('change', () => {
+      currentConfig = currentConfig || {};
+      currentConfig.storage = currentConfig.storage || {};
+      currentConfig.storage.allowGridCharge = els.storageAllowGridCharge.checked === true;
+      scheduleValidation(200);
+    });
+  }
+
   if (els.storageCouplingMode) {
     /**
      * Code-Teil: _updateStorageCoupling
@@ -15990,7 +16058,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     els.para14aMinPerDeviceW.addEventListener('change', () => {
       const ic = _ensurePara14aCfg();
       const n = Number(els.para14aMinPerDeviceW.value);
-      ic.para14aMinPerDeviceW = (Number.isFinite(n) && n >= 0) ? Math.round(n) : 1000;
+      ic.para14aMinPerDeviceW = Number.isFinite(n) ? Math.max(4200, Math.round(n)) : 4200;
+      els.para14aMinPerDeviceW.value = String(ic.para14aMinPerDeviceW);
     });
   }
 
@@ -16041,12 +16110,17 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       const ic = _ensurePara14aCfg();
       ic.para14aConsumers = Array.isArray(ic.para14aConsumers) ? ic.para14aConsumers : [];
       ic.para14aConsumers.push({
+        key: '',
         enabled: true,
         name: '',
         type: 'custom',
         controlType: 'limitW',
         maxPowerW: 0,
+        installedPowerW: 0,
         priority: 0,
+        groupId: '',
+        source: 'manual',
+        automatic: false,
         setPowerWId: '',
         enableId: ''
       });

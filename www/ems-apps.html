@@ -929,6 +929,18 @@
             </div>
           </div>
           <div class="nw-config-field-row">
+            <div class="nw-config-field-label">Netzladen</div>
+            <div class="nw-config-field-control nw-config-field-control--stack">
+              <label class="nw-config-checklabel" for="storageAllowGridCharge">
+                <input id="storageAllowGridCharge" class="nw-config-checkbox" type="checkbox" />
+                <span>Netzladen erlauben</span>
+              </label>
+              <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
+                Aktiviert Tarif-, Reserve- und sonstige Netzladepfade. Bei einer aktiven §14a-Vorgabe wird ausschließlich diese Netzladung begrenzt. PV-/Eigenverbrauchsladen und die Entladung des Speichers bleiben davon unberührt. Ohne Haken lädt der Speicher nur aus eigener Erzeugung.
+              </div>
+            </div>
+          </div>
+          <div class="nw-config-field-row">
             <div class="nw-config-field-label">Kapazität (kWh)</div>
             <div class="nw-config-field-control nw-config-field-control--stack">
               <input id="storageCapacityKWh" class="nw-config-input" type="number" step="0.1" placeholder="z.B. 13.5" />
@@ -1048,7 +1060,7 @@
               </label>
               <label class="nw-config-checklabel" for="storageE3dcAllowGridCharge">
                 <input id="storageE3dcAllowGridCharge" class="nw-config-checkbox" type="checkbox" />
-                <span>Tarif-/Reserve-Netzladen als GRID_CHARGE erlauben</span>
+                <span>E3/DC-Unterfreigabe: Netzladen als GRID_CHARGE schreiben</span>
               </label>
               <label class="nw-config-checklabel" for="storageE3dcUsePowerLimits">
                 <input id="storageE3dcUsePowerLimits" class="nw-config-checkbox" type="checkbox" />
@@ -1062,7 +1074,7 @@
                 </select>
               </div>
               <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
-                Für den ioBroker.e3dc-rscp Adapter nutzt NexoWatt <b>EMS.SET_POWER_MODE</b> und <b>EMS.SET_POWER_VALUE</b>. Positiver NexoWatt-Sollwert wird als DISCHARGE geschrieben, negativer als CHARGE bzw. bei erlaubtem Tarif-/Reserve-Netzladen als GRID_CHARGE. Die E3/DC-spezifischen Datenpunkte werden unten nur bei diesem Herstellerprofil eingeblendet.
+                Für den ioBroker.e3dc-rscp Adapter nutzt NexoWatt <b>EMS.SET_POWER_MODE</b> und <b>EMS.SET_POWER_VALUE</b>. Positiver NexoWatt-Sollwert wird als DISCHARGE geschrieben, negativer als CHARGE bzw. bei erlaubtem Tarif-/Reserve-Netzladen als GRID_CHARGE. Diese E3/DC-Unterfreigabe wirkt nur zusammen mit dem allgemeinen Haken <b>Netzladen erlauben</b>. Die E3/DC-spezifischen Datenpunkte werden unten nur bei diesem Herstellerprofil eingeblendet.
               </div>
             </div>
           </div>
@@ -1100,6 +1112,19 @@
               </div>
               <div class="nw-config-item__right">
                 <select id="storageFarmMode" class="nw-config-select"></select>
+              </div>
+            </div>
+
+            <div class="nw-config-item">
+              <div class="nw-config-item__left">
+                <div class="nw-config-item__title">Netzladen erlauben</div>
+                <div class="nw-config-item__subtitle">Tarif-, Reserve- und sonstige Netzladeanforderungen der Farm freigeben. Bei aktiver §14a-Vorgabe wird nur der Netzladeanteil begrenzt; PV-Laden und Entladung bleiben verfügbar.</div>
+              </div>
+              <div class="nw-config-item__right">
+                <label class="nw-config-checklabel" for="storageFarmAllowGridCharge">
+                  <input id="storageFarmAllowGridCharge" class="nw-config-checkbox" type="checkbox" />
+                  <span>Netzladen erlauben</span>
+                </label>
               </div>
             </div>
 
@@ -1701,7 +1726,7 @@
 
 <div id="nw-tabpanel-para14a" data-tabpanel="para14a" data-nw-market="DE" style="display:none;">
     <h2>§14a Steuerung</h2>
-    <div class="nw-subtitle">Konfiguration für netzseitige Leistungsbegrenzung (steuerbare Verbrauchseinrichtungen). Diese Funktion ist Netzschutz und wird nicht durch Endkunden bedient.</div>
+    <div class="nw-subtitle">Konfiguration für netzseitige Leistungsbegrenzung (steuerbare Verbrauchseinrichtungen). Zugeordnete Ladepunkte, aktive Wärme-/Klimageräte, Heizstäbe sowie Speicher mit erlaubtem Netzladen werden automatisch verbunden. Diese Funktion ist Netzschutz und wird nicht durch Endkunden bedient.</div>
 
     <div class="nw-grid">
       <div class="nw-card">
@@ -1726,10 +1751,10 @@
           <div class="nw-config-item">
             <div class="nw-config-item__left">
               <div class="nw-config-item__title">Mindestleistung pro Verbraucher (W)</div>
-              <div class="nw-config-item__subtitle">Wird genutzt, um die Gesamt-Deckelung sauber auf mehrere Verbraucher aufzuteilen.</div>
+              <div class="nw-config-item__subtitle">Die §14a-Basis beträgt mindestens 4.200 W. Größere Wärme-/Klimagruppen werden nach der hinterlegten Sonderformel berechnet.</div>
             </div>
             <div class="nw-config-item__right">
-              <input id="para14aMinPerDeviceW" class="nw-config-input" type="number" min="0" step="1" placeholder="z.B. 1000"/>
+              <input id="para14aMinPerDeviceW" class="nw-config-input" type="number" min="4200" step="1" placeholder="4200"/>
             </div>
           </div>
 
@@ -1803,8 +1828,8 @@
       </div>
 
       <div class="nw-card">
-        <div class="nw-card__title">Steuerbare Verbraucher</div>
-        <div class="nw-card__subtitle">Zuordnung der steuerbaren Verbraucher für die zentrale §14a-Cap-Berechnung. Standardmäßig werden diese DPs hier nicht direkt beschrieben.</div>
+        <div class="nw-card__title">Zusätzliche / manuelle Verbraucher</div>
+        <div class="nw-card__subtitle">Nur für weitere Verbraucher, die keinem NexoWatt-Fachmodul zugeordnet sind. Ladepunkte, aktive Wärmepumpen/Klimageräte, Heizstäbe und Speicher mit erlaubtem Netzladen werden automatisch in die zentrale §14a-Cap-Berechnung aufgenommen.</div>
 
         <div id="para14aConsumers" class="nw-config-list"></div>
 
@@ -1813,7 +1838,7 @@
         </div>
 
         <div class="nw-help" style="margin-top:10px;">
-          Tipp: Für die Verbraucher-Steuerung kannst du entweder einen <b>Leistungs-Setpoint (W)</b> oder ein <b>Enable/Disable</b> anbinden. Falls beides gesetzt ist, wird Setpoint bevorzugt.
+          Tipp: Für einen zusätzlichen manuellen Verbraucher kannst du entweder einen <b>Leistungs-Setpoint (W)</b> oder ein <b>Enable/Disable</b> anbinden. Falls beides gesetzt ist, wird Setpoint bevorzugt. Automatisch angebundene Fachmodule werden ausschließlich über ihre eigene robuste Regelung beschrieben.
         </div>
       </div>
 
