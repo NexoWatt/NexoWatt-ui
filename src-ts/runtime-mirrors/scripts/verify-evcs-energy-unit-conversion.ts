@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0b5fdf00af9cc038a21162e70c43d8d8299767ae84852c8fec46460956cc1f8d
+ * Original-Hash: eef76282e45f40d0aea93bd3ff84672a91703745f15c2a3073fd29df460a5187
  */
 
 /**
@@ -62,8 +62,8 @@ const appCenterSource = fs.readFileSync(path.join(root, 'src-ts', 'runtime-execu
 for (const needle of [
   'energyTotalInputIsWh',
   'normalizeEvcsEnergyTotalKwh',
-  "await this.setStateAsync(binding.key, { val: mirrorValue, ack: true })",
-  "const normalized = this._nwScaleMappedValue(binding.key, configuredId, state.val)",
+  "this.setStateAsync(key, normalizedMappedValue, true)",
+  "const normalized = this._nwScaleMappedValue(key, id, st.val)",
 ]) {
   assert.ok(mainSource.includes(needle), `main runtime contract missing: ${needle}`);
 }

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/para14a.ts
- * Quell-Hash: sha256:1df6e5a84babaf697f340d04209dbc42b06e9d16ea8e3bb1934efe7688809a8d
+ * Quell-Hash: sha256:df295659092abaf1b7f323cb6f429ec40fd82190382798f55d58a6bfd3b84ce1
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -811,11 +811,6 @@ class Para14aModule extends BaseModule {
         for (let i = 0; i < rows.length; i++) {
             const r = rows[i] || {};
             if (r.enabled === false) continue;
-            // Seit 0.8.155 werden Ladepunkte, aktive Thermik-/Heizstab-Module und
-            // Speicher-Topologien automatisch aus ihren Fachkonfigurationen
-            // übernommen. Frühere Auto-Mapping-Zeilen bleiben zur Migration in der
-            // Konfiguration erhalten, dürfen aber nicht als zweite SteuVE zählen.
-            if (r.automatic === true) continue;
 
             const name = String(r.name || '').trim();
             const type = normalizeConsumerType(r.type);
@@ -835,15 +830,8 @@ class Para14aModule extends BaseModule {
             while (usedIds.has(id)) id = `${baseId}_${n++}`;
             usedIds.add(id);
 
-            const installedPowerW = clamp(num(
-                r.installedPowerW
-                ?? r.maxPowerW
-                ?? r.powerW
-                ?? r.ratedW
-                ?? 0,
-                0,
-            ), 0, 1e12);
-            const priority = clamp(num(r.priority ?? 100, 100), 1, 999);
+            const installedPowerW = clamp(num(r.installedPowerW || r.powerW || r.ratedW || 0, 0), 0, 1e12);
+            const priority = clamp(num(r.priority || 100, 100), 1, 999);
 
             loads.push({
                 id,
@@ -853,9 +841,6 @@ class Para14aModule extends BaseModule {
                 controlType: ctrl,
                 installedPowerW,
                 priority,
-                groupId: String(r.groupId || r.para14aGroupId || r.storageConstructId || '').trim(),
-                source: String(r.source || 'manual').trim() || 'manual',
-                automatic: false,
                 setWId,
                 enableId,
                 // internal dp keys (filled in init)
@@ -873,359 +858,6 @@ class Para14aModule extends BaseModule {
         });
 
         this._loads = loads;
-    }
-
-    _getStorageControlAuthorityForPara14a() {
-        try {
-            if (this.adapter && typeof this.adapter._nwGetStorageControlAuthority === 'function') {
-                const authority = this.adapter._nwGetStorageControlAuthority();
-                if (authority && typeof authority === 'object') return authority;
-            }
-        } catch (_e) {
-            // use deterministic fallback below
-        }
-
-        const root = (this.adapter && this.adapter.config && typeof this.adapter.config === 'object')
-            ? this.adapter.config
-            : {};
-        const apps = root.emsApps && root.emsApps.apps && typeof root.emsApps.apps === 'object'
-            ? root.emsApps.apps
-            : {};
-        const singleApp = apps.storage && typeof apps.storage === 'object' ? apps.storage : null;
-        const singleActive = singleApp
-            ? singleApp.installed === true && singleApp.enabled === true
-            : root.enableStorageControl === true;
-        const farmApp = apps.storagefarm && typeof apps.storagefarm === 'object' ? apps.storagefarm : null;
-        const farmEnabled = farmApp
-            ? farmApp.installed === true && farmApp.enabled === true
-            : root.enableStorageFarm === true;
-        const farmCfg = root.storageFarm && typeof root.storageFarm === 'object' ? root.storageFarm : {};
-        const farmRows = Array.isArray(farmCfg.storages) ? farmCfg.storages : [];
-        const writableRows = farmRows.filter((row) => row && row.enabled !== false && (
-            String(row.setSignedPowerId || row.targetPowerObjectId || row.targetPowerId || '').trim()
-            || String(row.setChargePowerId || row.targetChargePowerObjectId || row.targetChargePowerId || '').trim()
-            || String(row.setDischargePowerId || row.targetDischargePowerObjectId || row.targetDischargePowerId || '').trim()
-            || String(row.feneconGridSetpointId || '').trim()
-        ));
-        const farmDispatchActive = farmEnabled && writableRows.length > 0;
-        const selectedTopology = farmDispatchActive ? 'farm' : (singleActive ? 'single' : 'none');
-        return {
-            selectedTopology,
-            writerActive: selectedTopology !== 'none',
-            singleAppActive: singleActive,
-            farmDispatchActive,
-            farm: {
-                active: farmEnabled,
-                dispatchActive: farmDispatchActive,
-                rows: writableRows,
-            },
-        };
-    }
-
-    _singleStorageHasWritableActuatorForPara14a(root, storageCfg) {
-        const cfg = storageCfg && typeof storageCfg === 'object' ? storageCfg : {};
-        const datapoints = cfg.datapoints && typeof cfg.datapoints === 'object' ? cfg.datapoints : {};
-        const directTargets = [
-            datapoints.targetPowerObjectId,
-            datapoints.targetChargePowerObjectId,
-            datapoints.targetDischargePowerObjectId,
-            cfg.targetPowerObjectId,
-            cfg.targetChargePowerObjectId,
-            cfg.targetDischargePowerObjectId,
-            datapoints.feneconGridSetpointObjectId,
-            cfg.feneconGridSetpointObjectId,
-        ];
-        if (directTargets.some((value) => String(value || '').trim())) return true;
-
-        const limitTargets = [
-            datapoints.maxChargeObjectId,
-            datapoints.maxDischargeObjectId,
-            cfg.maxChargeObjectId,
-            cfg.maxDischargeObjectId,
-        ];
-        if (limitTargets.some((value) => String(value || '').trim())) return true;
-
-        const enableTargets = [
-            datapoints.chargeEnableObjectId,
-            datapoints.dischargeEnableObjectId,
-            cfg.chargeEnableObjectId,
-            cfg.dischargeEnableObjectId,
-        ];
-        if (enableTargets.some((value) => String(value || '').trim())) return true;
-
-        const vendorProfile = String(cfg.vendorProfile || cfg.manufacturerProfile || '').trim().toLowerCase();
-        const e3dcConfigured = cfg.e3dcRscpEnabled === true || vendorProfile === 'e3dc-rscp' || vendorProfile === 'e3dc';
-        if (e3dcConfigured) {
-            const e3dcTargets = [
-                datapoints.e3dcSetPowerModeObjectId,
-                datapoints.e3dcSetPowerValueObjectId,
-                cfg.e3dcSetPowerModeObjectId,
-                cfg.e3dcSetPowerValueObjectId,
-            ];
-            if (e3dcTargets.some((value) => String(value || '').trim())) return true;
-            // The E3/DC adapter mapping can also already be registered in the runtime DP registry.
-            try {
-                if (this.dp && this.dp.getEntry
-                    && this.dp.getEntry('st.e3dcSetPowerMode')
-                    && this.dp.getEntry('st.e3dcSetPowerValueW')) return true;
-            } catch (_e) {
-                // deterministic false fallback below
-            }
-        }
-
-        try {
-            if (this.dp && this.dp.getEntry) {
-                const runtimeKeys = [
-                    'st.targetPowerW',
-                    'st.targetChargePowerW',
-                    'st.targetDischargePowerW',
-                    'st.maxChargePowerW',
-                    'st.maxDischargePowerW',
-                    'st.chargeEnable',
-                    'st.dischargeEnable',
-                    'st.feneconGridSetpointW',
-                ];
-                if (runtimeKeys.some((key) => {
-                    const entry = this.dp.getEntry(key);
-                    return !!(entry && String(entry.objectId || '').trim());
-                })) return true;
-            }
-        } catch (_e) {
-            // deterministic false fallback below
-        }
-
-        void root;
-        return false;
-    }
-
-    _getAutomaticConsumers() {
-        const root = (this.adapter && this.adapter.config && typeof this.adapter.config === 'object')
-            ? this.adapter.config
-            : {};
-        const automatic = [];
-        const flowSlots = root.vis && root.vis.flowSlots && typeof root.vis.flowSlots === 'object'
-            ? root.vis.flowSlots
-            : {};
-        const flowConsumers = Array.isArray(flowSlots.consumers) ? flowSlots.consumers : [];
-        const isHeatingRodSlot = (slotCfg) => {
-            const raw = String(slotCfg && (slotCfg.consumerType || slotCfg.type || slotCfg.category) || '').trim().toLowerCase();
-            return ['heatingrod', 'heating_rod', 'heating-rod', 'heizstab', 'rod', 'immersion'].includes(raw);
-        };
-        const safeSlot = (value, fallback) => Math.max(1, Math.min(10, Math.round(num(value, fallback))));
-
-        if (root.enableThermalControl === true) {
-            const thermalCfg = root.thermal && typeof root.thermal === 'object' ? root.thermal : {};
-            const rows = Array.isArray(thermalCfg.devices) ? thermalCfg.devices : [];
-            rows.forEach((row, index) => {
-                if (!row || row.enabled !== true) return;
-                const slot = safeSlot(row.slot ?? row.consumerSlot, index + 1);
-                const slotCfg = flowConsumers[slot - 1] && typeof flowConsumers[slot - 1] === 'object'
-                    ? flowConsumers[slot - 1]
-                    : {};
-                if (isHeatingRodSlot(slotCfg)) return;
-                const ctrl = slotCfg.ctrl && typeof slotCfg.ctrl === 'object' ? slotCfg.ctrl : {};
-                const hasWritableActuator = !!(
-                    String(row.switchWriteId || ctrl.switchWriteId || '').trim()
-                    || String(row.setpointWriteId || ctrl.setpointWriteId || '').trim()
-                    || String(row.sgReadyAWriteId || row.sgReady1WriteId || ctrl.sgReadyAWriteId || ctrl.sgReady1WriteId || '').trim()
-                    || String(row.sgReadyBWriteId || row.sgReady2WriteId || ctrl.sgReadyBWriteId || ctrl.sgReady2WriteId || '').trim()
-                );
-                if (!hasWritableActuator) return;
-                const profile = String(row.profile || '').trim().toLowerCase();
-                const kind = String(row.kind || row.deviceType || row.type || '').trim().toLowerCase();
-                const type = profile === 'cooling'
-                    || ['hvac', 'klima', 'ac', 'aircondition', 'air_condition'].includes(kind)
-                    ? 'airCondition'
-                    : 'heatPump';
-                const installedPowerW = clamp(num(
-                    row.maxPowerW
-                    ?? row.estimatedPowerW
-                    ?? row.boostPowerW
-                    ?? 0,
-                    0,
-                ), 0, 1e12);
-                const actuatorIds = [
-                    row.switchWriteId,
-                    row.setpointWriteId,
-                    row.sgReadyAWriteId,
-                    row.sgReady1WriteId,
-                    row.sgReadyBWriteId,
-                    row.sgReady2WriteId,
-                    ctrl.switchWriteId,
-                    ctrl.setpointWriteId,
-                    ctrl.sgReadyAWriteId,
-                    ctrl.sgReady1WriteId,
-                    ctrl.sgReadyBWriteId,
-                    ctrl.sgReady2WriteId,
-                ].map((value) => String(value || '').trim()).filter(Boolean);
-                automatic.push({
-                    id: `auto-thermal-c${slot}`,
-                    type,
-                    controlType: 'limitW',
-                    installedPowerW,
-                    priority: clamp(num(row.priority ?? (100 + slot), 100 + slot), 1, 999),
-                    source: 'thermal-control',
-                    automatic: true,
-                    actuatorIds,
-                });
-            });
-        }
-
-        if (root.enableHeatingRodControl === true) {
-            const heatingCfg = root.heatingRod && typeof root.heatingRod === 'object' ? root.heatingRod : {};
-            const rows = Array.isArray(heatingCfg.devices) ? heatingCfg.devices : [];
-            rows.forEach((row, index) => {
-                if (!row || row.enabled !== true) return;
-                const slot = safeSlot(row.slot ?? row.consumerSlot, index + 1);
-                const slotCfg = flowConsumers[slot - 1] && typeof flowConsumers[slot - 1] === 'object'
-                    ? flowConsumers[slot - 1]
-                    : {};
-                if (!isHeatingRodSlot(slotCfg)) return;
-                const stages = Array.isArray(row.stages) ? row.stages : [];
-                const ctrl = slotCfg.ctrl && typeof slotCfg.ctrl === 'object' ? slotCfg.ctrl : {};
-                const hasStageWrite = stages.some((stage) => stage && String(stage.writeId || stage.dpWriteId || stage.writeDp || '').trim())
-                    || Object.keys(ctrl).some((key) => /^(?:heating)?stage\d+writeid$/i.test(key) && String(ctrl[key] || '').trim())
-                    || !!String(ctrl.switchWriteId || '').trim();
-                if (!hasStageWrite) return;
-                const stagePowerW = stages.reduce((sum, stage) => sum + Math.max(0, num(stage && stage.powerW, 0)), 0);
-                const installedPowerW = clamp(num(
-                    row.maxPowerW
-                    ?? (stagePowerW > 0 ? stagePowerW : null)
-                    ?? 0,
-                    0,
-                ), 0, 1e12);
-                const actuatorIds = [
-                    ...stages.flatMap((stage) => stage ? [stage.writeId, stage.dpWriteId, stage.writeDp] : []),
-                    ctrl.switchWriteId,
-                    ctrl.setpointWriteId,
-                    ...Object.keys(ctrl)
-                        .filter((key) => /^(?:heating)?stage\d+writeid$/i.test(key))
-                        .map((key) => ctrl[key]),
-                ].map((value) => String(value || '').trim()).filter(Boolean);
-                automatic.push({
-                    id: `auto-heating-rod-c${slot}`,
-                    type: 'heatingRod',
-                    controlType: 'limitW',
-                    installedPowerW,
-                    priority: clamp(num(row.priority ?? (200 + slot), 200 + slot), 1, 999),
-                    source: 'heating-rod-control',
-                    automatic: true,
-                    actuatorIds,
-                });
-            });
-        }
-
-        const storageAuthority = this._getStorageControlAuthorityForPara14a();
-        const selectedTopology = String(storageAuthority && storageAuthority.selectedTopology || 'none');
-        if (selectedTopology === 'single') {
-            const storageCfg = root.storage && typeof root.storage === 'object' ? root.storage : {};
-            const hasWritableStorageActuator = this._singleStorageHasWritableActuatorForPara14a(root, storageCfg);
-            if (storageCfg.allowGridCharge !== false && hasWritableStorageActuator) {
-                const datapoints = storageCfg.datapoints && typeof storageCfg.datapoints === 'object'
-                    ? storageCfg.datapoints
-                    : {};
-                const actuatorIds = [
-                    datapoints.targetPowerObjectId,
-                    datapoints.targetChargePowerObjectId,
-                    datapoints.targetDischargePowerObjectId,
-                    datapoints.maxChargeObjectId,
-                    datapoints.maxDischargeObjectId,
-                    datapoints.chargeEnableObjectId,
-                    datapoints.dischargeEnableObjectId,
-                    datapoints.feneconGridSetpointObjectId,
-                    datapoints.e3dcSetPowerModeObjectId,
-                    datapoints.e3dcSetPowerValueObjectId,
-                    storageCfg.targetPowerObjectId,
-                    storageCfg.targetChargePowerObjectId,
-                    storageCfg.targetDischargePowerObjectId,
-                    storageCfg.maxChargeObjectId,
-                    storageCfg.maxDischargeObjectId,
-                    storageCfg.chargeEnableObjectId,
-                    storageCfg.dischargeEnableObjectId,
-                    storageCfg.feneconGridSetpointObjectId,
-                    storageCfg.e3dcSetPowerModeObjectId,
-                    storageCfg.e3dcSetPowerValueObjectId,
-                ].map((value) => String(value || '').trim()).filter(Boolean);
-                automatic.push({
-                    id: 'auto-storage-single',
-                    type: 'storage',
-                    controlType: 'limitW',
-                    installedPowerW: clamp(num(
-                        storageCfg.maxChargeW
-                        ?? storageCfg.ratedPowerW
-                        ?? storageCfg.selfMaxChargeW
-                        ?? 0,
-                        0,
-                    ), 0, 1e12),
-                    priority: clamp(num(storageCfg.para14aPriority ?? 150, 150), 1, 999),
-                    groupId: String(storageCfg.para14aGroupId || storageCfg.storageConstructId || '').trim(),
-                    source: 'storage-control-single',
-                    automatic: true,
-                    actuatorIds,
-                });
-            }
-        } else if (selectedTopology === 'farm') {
-            const storageFarmCfg = root.storageFarm && typeof root.storageFarm === 'object' ? root.storageFarm : {};
-            if (storageFarmCfg.allowGridCharge !== false) {
-                const authorityRows = storageAuthority && storageAuthority.farm && Array.isArray(storageAuthority.farm.rows)
-                    ? storageAuthority.farm.rows
-                    : [];
-                const rows = authorityRows.length
-                    ? authorityRows
-                    : (Array.isArray(storageFarmCfg.storages) ? storageFarmCfg.storages : []);
-                rows.forEach((row, index) => {
-                    if (!row || row.enabled === false) return;
-                    const writable = !!(
-                        String(row.setSignedPowerId || row.targetPowerObjectId || row.targetPowerId || '').trim()
-                        || String(row.setChargePowerId || row.targetChargePowerObjectId || row.targetChargePowerId || '').trim()
-                        || String(row.setDischargePowerId || row.targetDischargePowerObjectId || row.targetDischargePowerId || '').trim()
-                        || String(row.feneconGridSetpointId || '').trim()
-                    );
-                    if (!writable) return;
-                    const actuatorIds = [
-                        row.setSignedPowerId,
-                        row.targetPowerObjectId,
-                        row.targetPowerId,
-                        row.setChargePowerId,
-                        row.targetChargePowerObjectId,
-                        row.targetChargePowerId,
-                        row.setDischargePowerId,
-                        row.targetDischargePowerObjectId,
-                        row.targetDischargePowerId,
-                        row.feneconGridSetpointId,
-                    ].map((value) => String(value || '').trim()).filter(Boolean);
-                    automatic.push({
-                        id: `auto-storage-farm-${safeIdPart(row.key || row.name || index + 1) || (index + 1)}`,
-                        type: 'storage',
-                        controlType: 'limitW',
-                        installedPowerW: clamp(num(
-                            row.maxChargeW
-                            ?? row.maxChargePowerW
-                            ?? row.maxPowerW
-                            ?? row.ratedPowerW
-                            ?? 0,
-                            0,
-                        ), 0, 1e12),
-                        priority: clamp(num(row.para14aPriority ?? row.priority ?? (150 + index), 150 + index), 1, 999),
-                        // Nur eine ausdrückliche §14a-/Speicherkonstrukt-ID fasst
-                        // mehrere physische Speicher zu einer SteuVE zusammen. Die
-                        // operative Farm-Gruppe ist dafür bewusst nicht ausreichend.
-                        groupId: String(row.para14aGroupId || row.storageConstructId || '').trim(),
-                        source: 'storage-control-farm',
-                        automatic: true,
-                        actuatorIds,
-                    });
-                });
-            }
-        }
-
-        automatic.sort((a, b) => {
-            const pa = num(a.priority, 100);
-            const pb = num(b.priority, 100);
-            if (pa !== pb) return pa - pb;
-            return String(a.id || '').localeCompare(String(b.id || ''));
-        });
-        return automatic;
     }
 
     /**
@@ -1291,9 +923,6 @@ class Para14aModule extends BaseModule {
         await mk('para14a.constraintOnly', '§14a als zentraler Constraint', 'boolean', 'indicator', false);
         await mk('para14a.legacyDirectWritesEnabled', 'Legacy-Direktwrites aktiv', 'boolean', 'indicator', false);
         await mk('para14a.unmanagedConsumerCount', 'Nicht zentral angebundene §14a-Verbraucher', 'number', 'value', false);
-        await mk('para14a.automaticConsumerCount', 'Automatisch angebundene §14a-Verbraucher', 'number', 'value', false);
-        await mk('para14a.manualConsumerCount', 'Zusätzliche manuelle §14a-Verbraucher', 'number', 'value', false);
-        await mk('para14a.automaticConsumersJson', 'Automatisch angebundene §14a-Verbraucher (JSON)', 'string', 'text', false);
         await mk('para14a.debug', 'Debug (JSON)', 'string', 'text', false);
         await this._initAuditLoggingStates(mk);
 
@@ -1368,36 +997,6 @@ class Para14aModule extends BaseModule {
      */
     _readActiveSignal() {
         const cfg = this._getCfg();
-
-        // Die direkte EEBUS-/CLS-Schnittstelle hat Vorrang vor manuellen
-        // Datenpunkt-Mappings. Der EEBUS-Adapter überwacht Heartbeat,
-        // Gültigkeit und Failsafe und übergibt den bereits normalisierten
-        // LPC-Befehl im Arbeitsspeicher an EOS.
-        try {
-            const direct = typeof this.adapter?._nwGetPara14aEebusIngress === 'function'
-                ? this.adapter._nwGetPara14aEebusIngress()
-                : null;
-            if (direct && direct.available === true) {
-                const active = direct.active === true;
-                const ageMs = Number.isFinite(Number(direct.ageMs)) ? Math.max(0, Number(direct.ageMs)) : null;
-                return {
-                    active,
-                    fresh: direct.fresh === true,
-                    stale: direct.stale === true,
-                    source: `eebus-direct:${String(direct.sourceInstance || 'eebus')}/${String(direct.sourceDeviceId || 'cls')}`,
-                    reason: String(direct.status || direct.reason || (active ? 'direct-active' : 'direct-release')),
-                    ageMs,
-                    lastFreshActive: active,
-                    lastFreshTs: Number.isFinite(Number(direct.receivedAtMs)) ? Number(direct.receivedAtMs) : Date.now(),
-                    stalePolicy: String(direct.stalePolicy || 'gateway-supervised-hold-active'),
-                    direct: true,
-                    directIngress: direct,
-                };
-            }
-        } catch (_directError) {
-            // Das vorhandene manuelle DP-Fallback bleibt verfügbar.
-        }
-
         const maxAgeMs = Math.max(1000, Math.round(num(cfg.para14aSignalMaxAgeSec, 30) * 1000));
         const mapped = !!(this._activeDpKey && this.dp);
         const rawValue = mapped ? this.dp.getRaw(this._activeDpKey, null) : null;
@@ -1512,15 +1111,9 @@ class Para14aModule extends BaseModule {
         if (this._initialized !== true) return;
         const cfg = this._getCfg();
         const signal = this._readActiveSignal();
-        const directIngress = signal && signal.direct === true && signal.directIngress
-            ? signal.directIngress
-            : null;
         const modeRaw = String(cfg.para14aMode || cfg.para14aControlMode || 'direct').trim().toLowerCase();
-        // Ein LPC-Gesamtgrenzwert der CLS-Box ist immer eine EMS-Vorgabe. Die
-        // Verteilung auf Ladepunkte, Speicher-Netzladung und Thermik erfolgt
-        // anschließend durch den zentralen EOS-Budgetregler.
-        const mode = directIngress ? 'ems' : ((modeRaw === 'ems' || modeRaw === 'formula') ? 'ems' : 'direct');
-        const minPerDeviceW = clamp(num(cfg.para14aMinPerDeviceW, 4200), 4200, 1e12);
+        const mode = (modeRaw === 'ems' || modeRaw === 'formula') ? 'ems' : 'direct';
+        const minPerDeviceW = clamp(num(cfg.para14aMinPerDeviceW, 4200), 0, 1e12);
         const signalMaxAgeMs = Math.max(1000, Math.round(num(cfg.para14aSignalMaxAgeSec, 30) * 1000));
         const setpointMaxAgeMs = Math.max(1000, Math.round(num(cfg.para14aSetpointMaxAgeSec, cfg.para14aSignalMaxAgeSec || 30) * 1000));
         const legacyDirectWritesEnabled = cfg.para14aLegacyDirectWritesEnabled === true;
@@ -1531,45 +1124,18 @@ class Para14aModule extends BaseModule {
             safe: safeIdPart(wb.key || wb.name || wb.index || ''),
             maxPowerW: Math.max(0, num(wb.maxPowerW || wb.maxPower || wb.ratedPowerW, 0)),
         }));
-        const automaticConsumers = this._getAutomaticConsumers();
-        const automaticActuatorIds = new Set(automaticConsumers
-            .flatMap((consumer) => Array.isArray(consumer.actuatorIds) ? consumer.actuatorIds : [])
-            .map((value) => String(value || '').trim())
-            .filter(Boolean));
-        // Upgrade-Schutz: Schnellsetup-Zeilen aus älteren Versionen hatten noch
-        // kein `automatic`-Merkmal. Sobald ihr Ziel-DP bereits von einem aktiv
-        // automatisch erkannten Fachmodul geführt wird, darf die Altzeile weder
-        // als zweite SteuVE zählen noch einen konkurrierenden Legacy-Write auslösen.
-        const activeManualLoads = this._loads.filter((load) => {
-            const targetIds = [load.setWId, load.enableId]
-                .map((value) => String(value || '').trim())
-                .filter(Boolean);
-            return !targetIds.some((id) => automaticActuatorIds.has(id));
-        });
-        const manualConsumers = activeManualLoads.map((load) => ({
+        const consumers = this._loads.map((load) => ({
             id: load.id,
             type: load.type,
             controlType: load.controlType,
             installedPowerW: load.installedPowerW,
             priority: load.priority,
-            groupId: load.groupId,
-            source: load.source,
-            automatic: false,
             setWId: load.setWId,
             enableId: load.enableId,
         }));
-        const consumers = automaticConsumers.concat(manualConsumers);
-        const directTotalSetpointW = directIngress && signal.active
-            && Number.isFinite(Number(directIngress.limitW))
-            && Number(directIngress.limitW) > 0
-            ? Number(directIngress.limitW)
-            : null;
-        const mappedTotalSetpointW = signal.active && mode === 'ems' && !directIngress && this._emsSetpointDpKey && this.dp
+        const externalTotalSetpointW = signal.active && mode === 'ems' && this._emsSetpointDpKey && this.dp
             ? this.dp.getNumberFresh(this._emsSetpointDpKey, setpointMaxAgeMs, null)
             : null;
-        const externalTotalSetpointW = directTotalSetpointW !== null
-            ? directTotalSetpointW
-            : mappedTotalSetpointW;
         const constraint = buildPara14aConstraintSnapshot({
             active: signal.active,
             source: signal.source,
@@ -1592,17 +1158,6 @@ class Para14aModule extends BaseModule {
             legacyDirectWritesEnabled,
             emsSetpointW: Number.isFinite(Number(externalTotalSetpointW)) ? Number(externalTotalSetpointW) : 0,
             totalBudgetW: constraint.totalCapW,
-            automaticConsumerCount: automaticConsumers.length,
-            manualConsumerCount: manualConsumers.length,
-            automaticConsumers,
-            directApi: !!directIngress,
-            directCommandId: directIngress ? String(directIngress.commandId || '') : '',
-            directSequence: directIngress ? Number(directIngress.sequence) || 0 : 0,
-            directSourceInstance: directIngress ? String(directIngress.sourceInstance || '') : '',
-            directSourceDeviceId: directIngress ? String(directIngress.sourceDeviceId || '') : '',
-            directReceivedAtMs: directIngress ? Number(directIngress.receivedAtMs) || 0 : 0,
-            directAcceptedAtMs: directIngress ? Number(directIngress.acceptedAtMs) || 0 : 0,
-            directValidUntilMs: directIngress ? Number(directIngress.validUntilMs) || 0 : 0,
         };
 
         await this._setStateIfChanged('para14a.active', constraint.active);
@@ -1627,12 +1182,9 @@ class Para14aModule extends BaseModule {
         await this._setStateIfChanged('para14a.constraintOnly', !legacyDirectWritesEnabled);
         await this._setStateIfChanged('para14a.legacyDirectWritesEnabled', legacyDirectWritesEnabled);
         await this._setStateIfChanged('para14a.unmanagedConsumerCount', constraint.unmanagedConsumerCount);
-        await this._setStateIfChanged('para14a.automaticConsumerCount', automaticConsumers.length);
-        await this._setStateIfChanged('para14a.manualConsumerCount', manualConsumers.length);
-        await this._setStateIfChanged('para14a.automaticConsumersJson', JSON.stringify(automaticConsumers));
 
         const consumerAudit = { appliedCount: 0, failedCount: 0, skippedCount: 0, writeFailedCount: 0, failedConsumers: [] };
-        for (const load of activeManualLoads) {
+        for (const load of this._loads) {
             const base = `para14a.consumers.${load.id}`;
             const targetW = constraint.targetCapsById[load.setWId] ?? constraint.targetCapsById[load.enableId] ?? 0;
             await this._setStateIfChanged(`${base}.type`, load.type);
@@ -1668,7 +1220,7 @@ class Para14aModule extends BaseModule {
             await this._setStateIfChanged(`${base}.status`, status);
         }
 
-        const debug = { constraint, signal, legacyDirectWritesEnabled, automaticConsumers, manualConsumers, consumerAudit };
+        const debug = { constraint, signal, legacyDirectWritesEnabled, consumerAudit };
         await this._setStateIfChanged('para14a.debug', JSON.stringify(debug));
         const auditSnapshot = this._buildAuditSnapshot({
             active: constraint.active,
@@ -1688,13 +1240,6 @@ class Para14aModule extends BaseModule {
             consumerWriteFailedCount: consumerAudit.writeFailedCount,
             failedConsumers: consumerAudit.failedConsumers,
         });
-        // Der direkte EEBUS-Rückkanal liest ausschließlich diesen Snapshot
-        // nach Abschluss des kompletten Modulmanager-Zyklus. Damit werden
-        // Übernahme und tatsächlicher zentraler Regelzyklus sauber getrennt.
-        if (this.adapter._para14a && typeof this.adapter._para14a === 'object') {
-            this.adapter._para14a.consumerAudit = consumerAudit;
-            this.adapter._para14a.auditSnapshot = auditSnapshot;
-        }
         await this._handleAuditLogging(auditSnapshot);
     }
 

@@ -32,8 +32,8 @@ const appCenterSource = fs.readFileSync(path.join(root, 'src-ts', 'runtime-execu
 for (const needle of [
   'energyTotalInputIsWh',
   'normalizeEvcsEnergyTotalKwh',
-  "await this.setStateAsync(binding.key, { val: mirrorValue, ack: true })",
-  "const normalized = this._nwScaleMappedValue(binding.key, configuredId, state.val)",
+  "this.setStateAsync(key, normalizedMappedValue, true)",
+  "const normalized = this._nwScaleMappedValue(key, id, st.val)",
 ]) {
   assert.ok(mainSource.includes(needle), `main runtime contract missing: ${needle}`);
 }

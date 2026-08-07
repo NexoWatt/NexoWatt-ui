@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 511a20d7fd050b34df8dc41f0e3362cfbb869bb24eea6abd3f681b5879a0734f
+ * Original-Hash: 907f67810d66fcd24089b40c7bfe47887a542109ead05aba21ba2a194ad45448
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:4047660651800bb1206cb545587b11003307d4f878da462145f223c69c44bca3
+ * Quell-Hash: sha256:fbc4918aabd318dd125ecfd66a66e02d46e09a971ce457cba682efcb6dfba4ed
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1096,14 +1096,6 @@ class SpeicherRegelungModule extends BaseModule {
         // Policies. Sie duerfen niemals selbst einen Hardware-Schreibpfad erzeugen.
         // Genau eine im AppCenter aktive Topologie (`single` oder `farm`) fuehrt.
         const storageAuthorityEarly = this._getStorageControlAuthority();
-        const storageFarmCfgEarly = (this.adapter.config && this.adapter.config.storageFarm
-            && typeof this.adapter.config.storageFarm === 'object')
-            ? this.adapter.config.storageFarm
-            : {};
-        const gridChargeConfigured = storageAuthorityEarly.selectedTopology === 'farm'
-            ? storageFarmCfgEarly.allowGridCharge !== false
-            : cfg.allowGridCharge !== false;
-        await this._setIfChanged('speicher.regelung.netzLadenKonfiguriert', !!gridChargeConfigured);
         const cfgEnabled = !!storageAuthorityEarly.singleAppActive;
         let autoTarifEnabled = false;
         try {
@@ -1683,6 +1675,15 @@ class SpeicherRegelungModule extends BaseModule {
             }
         }
 
+        // Für den direkten FENECON-/OpenEMS-Regelpfad darf die physische ESS-
+        // Aktorleistung NICHT als NVP-Regelbasis verwendet werden, weil sie bei
+        // Hybridsystemen interne DC-PV-Beladung enthalten kann. Der geschlossene
+        // NVP-Regelkreis verwendet später deshalb bevorzugt das Readback der
+        // tatsächlich aktiven externen Vorgabe (z. B. Register 706), danach den
+        // bestätigten direkten Sollwert und erst im Kaltstart einen sicheren 0-W-
+        // Anker. Die physische ESS-Leistung bleibt hier weiterhin für Schutz- und
+        // Diagnosepfade erhalten.
+
         // AppCenter kann Lade- und Entlade-Istleistung getrennt zuordnen. Wenn
         // kein vertrauenswürdiger signed Istwert vorliegt, bilden wir daraus
         // dieselbe interne Konvention (+W Entladen, -W Laden). Nur exakt identisch
@@ -2008,11 +2009,6 @@ class SpeicherRegelungModule extends BaseModule {
             dischargeAllowed = !!this._tariffDischargeAllowed;
         }
 
-        // Der allgemeine App-Center-Haken ist die harte Master-Freigabe. Tarif-
-        // Freigaben koennen Netzladen zusaetzlich sperren, aber niemals den bewusst
-        // entfernten Installateur-Haken wieder freigeben. PV-/Eigenverbrauchsladen
-        // und Entladung werden von diesem Gate nicht beruehrt.
-        gridChargeAllowed = !!gridChargeConfigured && !!gridChargeAllowed;
         await this._setIfChanged('speicher.regelung.netzLadenErlaubt', !!gridChargeAllowed);
         await this._setIfChanged('speicher.regelung.entladenErlaubt', !!dischargeAllowed);
 
@@ -2811,6 +2807,18 @@ if (typeof soc === 'number') {
         const balanceBatteryMeasuredW = storageBalanceFeedback.usable ? Number(storageBalanceFeedback.measuredW) : null;
         const balanceBatteryAgeMs = storageBalanceFeedback.usable ? Number(storageBalanceFeedback.sampleAgeMs) : null;
         const balanceBatteryTrusted = storageBalanceFeedback.usable === true;
+        const nvpBalanceFeedback = (!farmEnabled && feneconDirectProfileActive)
+            ? (this._resolveFeneconDirectNvpFeedback({
+                nowMs: now,
+                staleMs,
+                freshAgeMs: balanceFeedbackFreshMs,
+                holdAgeMs: balanceFeedbackHoldMs,
+            }) || storageBalanceFeedback)
+            : storageBalanceFeedback;
+        const nvpBalanceBatteryPowerW = nvpBalanceFeedback.usable ? Number(nvpBalanceFeedback.feedbackW) : null;
+        const nvpBalanceBatteryMeasuredW = nvpBalanceFeedback.usable ? Number(nvpBalanceFeedback.measuredW) : null;
+        const nvpBalanceBatteryAgeMs = nvpBalanceFeedback.usable ? Number(nvpBalanceFeedback.sampleAgeMs) : null;
+        const nvpBalanceBatteryTrusted = nvpBalanceFeedback.usable === true;
 
         await this._setIfChanged('speicher.regelung.batteryPowerBalanceTrusted', balanceBatteryTrusted);
         await this._setIfChanged('speicher.regelung.batteryPowerFeedbackMode', String(storageBalanceFeedback.source || ''));
@@ -3383,17 +3391,17 @@ if (typeof soc === 'number') {
 							nvpAgeMs: (typeof gridRawAge === 'number') ? gridRawAge : gridAge,
 							targetNvpW: targetImportW,
 							deadbandW,
-							batteryPowerW: balanceBatteryPowerW,
-							batteryMeasuredW: balanceBatteryMeasuredW,
-							batteryAgeMs: balanceBatteryAgeMs,
-							batteryPowerTrusted: balanceBatteryTrusted,
-							batteryFeedbackSource: storageBalanceFeedback.source,
-							batteryFeedbackHeld: storageBalanceFeedback.held,
-							batteryFeedbackPredicted: storageBalanceFeedback.predicted,
-							batteryFeedbackPredictionDeltaW: storageBalanceFeedback.predictionDeltaW,
+							batteryPowerW: nvpBalanceBatteryPowerW,
+							batteryMeasuredW: nvpBalanceBatteryMeasuredW,
+							batteryAgeMs: nvpBalanceBatteryAgeMs,
+							batteryPowerTrusted: nvpBalanceBatteryTrusted,
+							batteryFeedbackSource: nvpBalanceFeedback.source,
+							batteryFeedbackHeld: nvpBalanceFeedback.held,
+							batteryFeedbackPredicted: nvpBalanceFeedback.predicted,
+							batteryFeedbackPredictionDeltaW: nvpBalanceFeedback.predictionDeltaW,
 							batteryFeedbackHoldAgeMs: balanceFeedbackHoldMs,
-							batteryFeedbackKey: storageBalanceFeedback.key,
-							batterySampleTs: storageBalanceFeedback.sampleTs,
+							batteryFeedbackKey: nvpBalanceFeedback.key,
+							batterySampleTs: nvpBalanceFeedback.sampleTs,
 							balanceControlKey: 'storage-nvp',
 							fastServoActive: true,
 							preferRawNvp: true,
@@ -3628,17 +3636,17 @@ if (targetW === 0 && selfDischargeEnabled) {
         nvpAgeMs: (typeof gridRawAge === 'number') ? gridRawAge : gridAge,
         targetNvpW: desiredNvpW,
         deadbandW,
-        batteryPowerW: balanceBatteryPowerW,
-        batteryMeasuredW: balanceBatteryMeasuredW,
-        batteryAgeMs: balanceBatteryAgeMs,
-        batteryPowerTrusted: balanceBatteryTrusted,
-        batteryFeedbackSource: storageBalanceFeedback.source,
-        batteryFeedbackHeld: storageBalanceFeedback.held,
-        batteryFeedbackPredicted: storageBalanceFeedback.predicted,
-        batteryFeedbackPredictionDeltaW: storageBalanceFeedback.predictionDeltaW,
+        batteryPowerW: nvpBalanceBatteryPowerW,
+        batteryMeasuredW: nvpBalanceBatteryMeasuredW,
+        batteryAgeMs: nvpBalanceBatteryAgeMs,
+        batteryPowerTrusted: nvpBalanceBatteryTrusted,
+        batteryFeedbackSource: nvpBalanceFeedback.source,
+        batteryFeedbackHeld: nvpBalanceFeedback.held,
+        batteryFeedbackPredicted: nvpBalanceFeedback.predicted,
+        batteryFeedbackPredictionDeltaW: nvpBalanceFeedback.predictionDeltaW,
         batteryFeedbackHoldAgeMs: balanceFeedbackHoldMs,
-        batteryFeedbackKey: storageBalanceFeedback.key,
-        batterySampleTs: storageBalanceFeedback.sampleTs,
+        batteryFeedbackKey: nvpBalanceFeedback.key,
+        batterySampleTs: nvpBalanceFeedback.sampleTs,
         balanceControlKey: 'storage-nvp',
         fastServoActive: true,
         preferRawNvp: true,
@@ -3888,17 +3896,17 @@ if (targetW === 0 && !selfDischargeEnabled && (source === 'idle' || reason === '
                     // derselben Istleistung-plus-NVP-Differenz-Regelung wie beim Entladen.
                     targetNvpW: pvTargetNvpW,
                     deadbandW: selfImportThresholdW,
-                    batteryPowerW: balanceBatteryPowerW,
-                    batteryMeasuredW: balanceBatteryMeasuredW,
-                    batteryAgeMs: balanceBatteryAgeMs,
-                    batteryPowerTrusted: balanceBatteryTrusted,
-                    batteryFeedbackSource: storageBalanceFeedback.source,
-                    batteryFeedbackHeld: storageBalanceFeedback.held,
-                    batteryFeedbackPredicted: storageBalanceFeedback.predicted,
-                    batteryFeedbackPredictionDeltaW: storageBalanceFeedback.predictionDeltaW,
+                    batteryPowerW: nvpBalanceBatteryPowerW,
+                    batteryMeasuredW: nvpBalanceBatteryMeasuredW,
+                    batteryAgeMs: nvpBalanceBatteryAgeMs,
+                    batteryPowerTrusted: nvpBalanceBatteryTrusted,
+                    batteryFeedbackSource: nvpBalanceFeedback.source,
+                    batteryFeedbackHeld: nvpBalanceFeedback.held,
+                    batteryFeedbackPredicted: nvpBalanceFeedback.predicted,
+                    batteryFeedbackPredictionDeltaW: nvpBalanceFeedback.predictionDeltaW,
                     batteryFeedbackHoldAgeMs: balanceFeedbackHoldMs,
-                    batteryFeedbackKey: storageBalanceFeedback.key,
-                    batterySampleTs: storageBalanceFeedback.sampleTs,
+                    batteryFeedbackKey: nvpBalanceFeedback.key,
+                    batterySampleTs: nvpBalanceFeedback.sampleTs,
                     balanceControlKey: 'storage-nvp',
                     fastServoActive: true,
                     preferRawNvp: true,
@@ -4554,17 +4562,17 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 nvpAgeMs: (typeof gridRawAge === 'number') ? gridRawAge : gridAge,
                 targetNvpW: targetImportW,
                 deadbandW: nvpDeadbandW,
-                batteryPowerW: balanceBatteryPowerW,
-                batteryMeasuredW: balanceBatteryMeasuredW,
-                batteryAgeMs: balanceBatteryAgeMs,
-                batteryPowerTrusted: balanceBatteryTrusted,
-                batteryFeedbackSource: storageBalanceFeedback.source,
-                batteryFeedbackHeld: storageBalanceFeedback.held,
-                batteryFeedbackPredicted: storageBalanceFeedback.predicted,
-                batteryFeedbackPredictionDeltaW: storageBalanceFeedback.predictionDeltaW,
+                batteryPowerW: nvpBalanceBatteryPowerW,
+                batteryMeasuredW: nvpBalanceBatteryMeasuredW,
+                batteryAgeMs: nvpBalanceBatteryAgeMs,
+                batteryPowerTrusted: nvpBalanceBatteryTrusted,
+                batteryFeedbackSource: nvpBalanceFeedback.source,
+                batteryFeedbackHeld: nvpBalanceFeedback.held,
+                batteryFeedbackPredicted: nvpBalanceFeedback.predicted,
+                batteryFeedbackPredictionDeltaW: nvpBalanceFeedback.predictionDeltaW,
                 batteryFeedbackHoldAgeMs: balanceFeedbackHoldMs,
-                batteryFeedbackKey: storageBalanceFeedback.key,
-                batterySampleTs: storageBalanceFeedback.sampleTs,
+                batteryFeedbackKey: nvpBalanceFeedback.key,
+                batterySampleTs: nvpBalanceFeedback.sampleTs,
                 balanceControlKey: 'storage-nvp',
                 fastServoActive: true,
                 preferRawNvp: true,
@@ -5476,38 +5484,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             reason: storageLicensePowerLimited ? String(reason || '') : '',
         }));
 
-        // Defense-in-depth: Selbst wenn ein Herstellerprofil, ein Hold-Pfad oder
-        // eine spaetere Policy einen negativen Sollwert weitertraegt, darf eine
-        // als Netzladen klassifizierte Quelle den allgemeinen Installateur-Haken
-        // nicht umgehen. PV-/NVP-Laden bleibt absichtlich unangetastet.
-        const gridChargeBlockedByConfig = !gridChargeConfigured
-            && targetW < 0
-            && isCentralGridChargeSource(policySourceBeforeVendor || source, targetW);
-        if (gridChargeBlockedByConfig) {
-            targetW = 0;
-            reason = 'Netzladen deaktiviert (App-Center: „Netzladen erlauben“ ist aus)';
-            source = 'policy';
-            chargeDemandHardCapW = 0;
-            chargeDemandHardCapReason = reason;
-            storagePolicyBlocked = true;
-            storagePolicyBlockReason = reason;
-            storageZeroNoWrite = false;
-            sungrowNoWrite = false;
-            pvBudgetPostVendorNoWriteHold = false;
-            pvBudgetPostVendorNoWriteReason = '';
-            if (sungrowHybridActive) {
-                sungrowWriteMode = 'write-grid-charge-config-stop';
-                this._sungrowHybridLastMode = sungrowWriteMode;
-            }
-            storageNvpBalanceDiag = {
-                ...(storageNvpBalanceDiag || {}),
-                targetW: 0,
-                gridChargeConfigured: false,
-                gridChargeBlockedByConfig: true,
-                mode: 'grid-charge-config-stop',
-            };
-        }
-
         if (sungrowDiagPayload) {
             sungrowDiagPayload = {
                 ...sungrowDiagPayload,
@@ -5689,7 +5665,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 				} : null,
                 soc: (typeof soc === 'number' && Number.isFinite(soc)) ? soc : null,
                 permissions: {
-                    gridChargeConfigured: !!gridChargeConfigured,
                     gridChargeAllowed: (typeof gridChargeAllowed === 'boolean') ? gridChargeAllowed : null,
                     dischargeAllowed: (typeof dischargeAllowed === 'boolean') ? dischargeAllowed : null,
                 },
@@ -5975,6 +5950,146 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
      *   Batterie-Istleistung verwendet. Dann bleibt der sichere NVP-Fallback aktiv.
      * - Ein Mapping-/Quellenwechsel verwirft den Puffer sofort.
      */
+    _resolveFeneconDirectNvpFeedback(ctx = {}) {
+        const finite = (v) => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
+        const now = finite(ctx.nowMs) ? Number(ctx.nowMs) : Date.now();
+        const staleMs = Math.max(250, finite(ctx.staleMs) ? Number(ctx.staleMs) : 8000);
+        const freshAgeMs = Math.max(250, finite(ctx.freshAgeMs) ? Number(ctx.freshAgeMs) : staleMs);
+        const holdAgeMs = Math.max(freshAgeMs, finite(ctx.holdAgeMs) ? Number(ctx.holdAgeMs) : Math.max(staleMs, 45000));
+        if (!this.dp || typeof this.dp.getEntry !== 'function') return null;
+
+        const makeFeedback = ({ valueW, sampleTs, ageMs, objectId, source, sampleKey, allowHold = true }) => {
+            if (!finite(valueW)) return null;
+            const normalizedAgeMs = finite(ageMs)
+                ? Math.max(0, Number(ageMs))
+                : (finite(sampleTs) ? Math.max(0, now - Number(sampleTs)) : 0);
+            if (normalizedAgeMs > (allowHold ? holdAgeMs : staleMs)) return null;
+            const held = normalizedAgeMs > freshAgeMs;
+            return {
+                usable: true,
+                feedbackW: Number(valueW),
+                measuredW: Number(valueW),
+                measuredAgeMs: normalizedAgeMs,
+                sampleAgeMs: normalizedAgeMs,
+                sampleTs: finite(sampleTs) ? Math.max(0, Number(sampleTs)) : 0,
+                sampleKey: String(sampleKey || ''),
+                source: String(source || 'fenecon-direct'),
+                held,
+                predicted: false,
+                predictionDeltaW: 0,
+                predictionSuppressed: true,
+                sampleUpdated: false,
+                holdAgeMs,
+                freshAgeMs,
+                maxPredictionDeltaW: 0,
+                objectId: String(objectId || ''),
+                key: `fenecon-direct|${String(source || 'fenecon-direct')}|${String(objectId || '')}`,
+                sampleIntervalMs: null,
+                sampleCadenceMs: null,
+            };
+        };
+
+        const getEntry = (key) => this.dp && typeof this.dp.getEntry === 'function' ? this.dp.getEntry(key) : null;
+        const getValue = (key, fallback = null) => this.dp && typeof this.dp.getNumber === 'function' ? this.dp.getNumber(key, fallback) : fallback;
+        const getAgeMs = (key) => this.dp && typeof this.dp.getAgeMs === 'function' && getEntry(key) ? this.dp.getAgeMs(key) : null;
+        const getSampleTs = (key) => {
+            try {
+                if (this.dp && typeof this.dp.getMeasurementTimestampMs === 'function') {
+                    const ts = Number(this.dp.getMeasurementTimestampMs(key));
+                    if (Number.isFinite(ts) && ts > 0) return ts;
+                }
+            } catch {
+                // Fallback below.
+            }
+            const entry = getEntry(key);
+            const ts = entry && Number(entry.ts);
+            return Number.isFinite(ts) && ts > 0 ? ts : 0;
+        };
+
+        const actualSetpointEntry = getEntry('st.feneconActualSetpointW');
+        if (actualSetpointEntry) {
+            const sampleTs = getSampleTs('st.feneconActualSetpointW');
+            const fb = makeFeedback({
+                valueW: getValue('st.feneconActualSetpointW', null),
+                ageMs: getAgeMs('st.feneconActualSetpointW'),
+                sampleTs,
+                objectId: actualSetpointEntry && actualSetpointEntry.objectId ? String(actualSetpointEntry.objectId) : '',
+                sampleKey: actualSetpointEntry && actualSetpointEntry.objectId ? `fenecon-direct-readback:${String(actualSetpointEntry.objectId)}@${Math.round(sampleTs || 0)}` : '',
+                source: 'fenecon-direct-setpoint-readback',
+                allowHold: true,
+            });
+            if (fb) return fb;
+        }
+
+        const signedEntry = getEntry('st.targetPowerW');
+        if (signedEntry) {
+            const sampleTs = getSampleTs('st.targetPowerW');
+            const fb = makeFeedback({
+                valueW: getValue('st.targetPowerW', null),
+                ageMs: getAgeMs('st.targetPowerW'),
+                sampleTs,
+                objectId: signedEntry && signedEntry.objectId ? String(signedEntry.objectId) : '',
+                sampleKey: signedEntry && signedEntry.objectId ? `fenecon-direct-signed:${String(signedEntry.objectId)}@${Math.round(sampleTs || 0)}` : '',
+                source: 'fenecon-direct-signed-readback',
+                allowHold: true,
+            });
+            if (fb) return fb;
+        }
+
+        const chargeEntry = getEntry('st.targetChargePowerW');
+        const dischargeEntry = getEntry('st.targetDischargePowerW');
+        if (chargeEntry || dischargeEntry) {
+            const chargeValue = chargeEntry ? Math.max(0, Number(getValue('st.targetChargePowerW', 0)) || 0) : 0;
+            const dischargeValue = dischargeEntry ? Math.max(0, Number(getValue('st.targetDischargePowerW', 0)) || 0) : 0;
+            const combinedW = dischargeValue - chargeValue;
+            const chargeTs = chargeEntry ? getSampleTs('st.targetChargePowerW') : 0;
+            const dischargeTs = dischargeEntry ? getSampleTs('st.targetDischargePowerW') : 0;
+            const sampleTs = Math.max(chargeTs || 0, dischargeTs || 0, 0);
+            const chargeAgeMs = chargeEntry ? getAgeMs('st.targetChargePowerW') : null;
+            const dischargeAgeMs = dischargeEntry ? getAgeMs('st.targetDischargePowerW') : null;
+            const knownAges = [chargeAgeMs, dischargeAgeMs].filter((v) => finite(v)).map((v) => Number(v));
+            const ageMs = knownAges.length ? Math.min(...knownAges) : null;
+            const objectId = [chargeEntry && chargeEntry.objectId ? String(chargeEntry.objectId) : '', dischargeEntry && dischargeEntry.objectId ? String(dischargeEntry.objectId) : '']
+                .filter(Boolean)
+                .join(' | ');
+            const fb = makeFeedback({
+                valueW: combinedW,
+                ageMs,
+                sampleTs,
+                objectId,
+                sampleKey: objectId ? `fenecon-direct-split:${objectId}@${Math.round(sampleTs || 0)}` : '',
+                source: 'fenecon-direct-split-readback',
+                allowHold: true,
+            });
+            if (fb) return fb;
+        }
+
+        const lastAcceptedTargetW = Number.isFinite(Number(this._lastTargetW)) ? Number(this._lastTargetW) : null;
+        const lastAcceptedTs = Number.isFinite(Number(this._lastTargetWriteMs)) ? Math.max(0, Number(this._lastTargetWriteMs)) : 0;
+        if (lastAcceptedTargetW !== null && lastAcceptedTs > 0) {
+            const fb = makeFeedback({
+                valueW: lastAcceptedTargetW,
+                ageMs: Math.max(0, now - lastAcceptedTs),
+                sampleTs: lastAcceptedTs,
+                objectId: 'speicher.regelung.commandAcceptedTargetW',
+                sampleKey: `fenecon-direct-last-accepted@${Math.round(lastAcceptedTs)}`,
+                source: 'fenecon-direct-last-accepted',
+                allowHold: true,
+            });
+            if (fb) return fb;
+        }
+
+        return makeFeedback({
+            valueW: 0,
+            ageMs: 0,
+            sampleTs: now,
+            objectId: 'fenecon-direct-zero-anchor',
+            sampleKey: `fenecon-direct-zero-anchor@${Math.round(now)}`,
+            source: 'fenecon-direct-zero-anchor',
+            allowHold: true,
+        });
+    }
+
     _resolveBatteryBalanceFeedback(ctx = {}) {
 /**
  * Code-Teil: finite
@@ -7025,7 +7140,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         return {
             controlMode: storage.controlMode,
             datapoints: effectiveDatapoints,
-            allowGridCharge: storage.allowGridCharge !== false,
             // Einzel-Speicher-Typ aus dem App-Center. AC bleibt der Standard.
             // DC/Hybrid nutzt zusaetzlich den optionalen PV-Erzeugungs-DP st.dcPvPowerW,
             // damit FENECON-/0-Einspeise-Erkennung nicht den Batterie-Sollwert mit PV verwechselt.
@@ -7587,7 +7701,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     async _writeE3dcRscpTargetW(targetW, reason, source, cfg = {}) {
         const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
         const absW = Math.max(0, Math.abs(w));
-        const allowGridCharge = cfg.allowGridCharge !== false && cfg.e3dcAllowGridCharge === true;
+        const allowGridCharge = cfg.e3dcAllowGridCharge === true;
         const gridCharge = !!(w < 0 && allowGridCharge && this._isE3dcGridChargeSource(source));
         const zeroModeRaw = String(cfg.e3dcZeroMode || 'normal').trim().toLowerCase();
         const zeroModeCode = zeroModeRaw === 'idle' ? 1 : 0;
@@ -9511,7 +9625,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
         await mk('speicher.regelung.netzLeistungW', 'Netzleistung (W)', 'number', 'value.power');
         await mk('speicher.regelung.netzAlterMs', 'Netzleistung Alter (ms)', 'number', 'value.interval');
-        await mk('speicher.regelung.netzLadenKonfiguriert', 'Netzladen im App-Center freigegeben', 'boolean', 'indicator', true);
         await mk('speicher.regelung.netzLadenErlaubt', 'Netzladen erlaubt', 'boolean', 'indicator', true);
         await mk('speicher.regelung.entladenErlaubt', 'Entladen erlaubt', 'boolean', 'indicator', true);
         await mk('speicher.regelung.tarifState', 'Tarif Zustand', 'string', 'text', '');

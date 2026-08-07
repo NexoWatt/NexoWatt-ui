@@ -211,6 +211,54 @@ async function testAcRemainsDirect() {
   assert.equal(adapter._states.get('speicher.regelung.commandFamily').val, 'signed');
 }
 
+async function testDirectFeedbackUsesSetpointReadback() {
+  const foreign = new Map();
+  const dp = new FakeDp({
+    'st.targetPowerW': entry('fems.ess0.SetActivePowerEquals', -50),
+    'st.feneconActualSetpointW': entry('fems.ess0.SetActivePowerEqualsReadback', -50),
+    'st.feneconEssActualPowerW': entry('fems.ess0.ActivePower', -1100),
+  }, foreign);
+  const adapter = makeAdapter({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'direct-ess',
+  }, foreign);
+  const mod = new SpeicherRegelungModule(adapter, dp);
+  const feedback = mod._resolveFeneconDirectNvpFeedback({ nowMs: now(), staleMs: 15000, freshAgeMs: 8000, holdAgeMs: 45000 });
+  assert.equal(feedback && feedback.usable, true, 'direct FENECON NVP feedback must be available');
+  assert.equal(feedback.feedbackW, -50, 'the direct setpoint readback must win over the physical ESS ActivePower');
+  assert.equal(feedback.source, 'fenecon-direct-setpoint-readback');
+
+  const balance = mod._buildActualAwareNvpBalance({
+    rawNvpW: 600,
+    fallbackNvpW: 600,
+    nvpAgeMs: 0,
+    targetNvpW: 50,
+    deadbandW: 50,
+    batteryPowerW: feedback.feedbackW,
+    batteryMeasuredW: feedback.measuredW,
+    batteryAgeMs: feedback.sampleAgeMs,
+    batteryPowerTrusted: true,
+    batteryFeedbackSource: feedback.source,
+    batteryFeedbackHeld: feedback.held,
+    batteryFeedbackPredicted: false,
+    batteryFeedbackPredictionDeltaW: 0,
+    batteryFeedbackHoldAgeMs: 45000,
+    batteryFeedbackKey: feedback.key,
+    batterySampleTs: feedback.sampleTs,
+    balanceControlKey: 'direct-fenecon-regression',
+    maxDischargeCorrectionW: 5000,
+    maxChargeCorrectionW: 5000,
+    lastTargetW: -50,
+    lastTargetAllowed: true,
+    stepW: 1,
+    feedbackMaxAgeMs: 8000,
+    nvpFeedbackMaxAgeMs: 8000,
+  });
+  assert.equal(balance.active, true);
+  assert.equal(balance.targetW, 500, '600 W import with -50 W active direct setpoint must result in a positive discharge command, not another charge command');
+}
+
 async function testNativeClampAndAcceptedTarget() {
   const foreign = new Map();
   const dp = new FakeDp({
@@ -506,6 +554,7 @@ async function testFarmContinuousAuto() {
   await testSingleNative();
   await testAcRemainsDirect();
   await testNativeClampAndAcceptedTarget();
+  await testDirectFeedbackUsesSetpointReadback();
   await testFarmContinuousAuto();
 
   const fs = require('node:fs');
@@ -518,12 +567,14 @@ async function testFarmContinuousAuto() {
   assert.doesNotMatch(mainTs, /fenecon-day-no-write/);
   assert.doesNotMatch(storageTs, /_handleFeneconHybridPassThrough/);
   assert.match(storageTs, /st\.feneconEssActualPowerW/);
+  assert.match(storageTs, /st\.feneconActualSetpointW/);
+  assert.match(storageTs, /fenecon-direct-setpoint-readback/);
   assert.match(storageTs, /FENECON Hybrid: PV-Feed-forward deaktiviert/);
   assert.match(appTs, /r\.essActivePower/);
   assert.match(appTs, /ctrl\.gridSetpointW/);
   assert.doesNotMatch(appTs, /ctrl\.powerSetpointW[^\n]+FEMS-NVP/i);
 
-  console.log('[fenecon-hybrid-controller] OK: continuous native/direct FENECON control, strict command-role separation, real AC ESS feedback and mixed-farm safety verified.');
+  console.log('[fenecon-hybrid-controller] OK: continuous native/direct FENECON control, direct-setpoint NVP feedback, strict command-role separation, real AC ESS feedback and mixed-farm safety verified.');
 })().catch((error) => {
   console.error(error && error.stack ? error.stack : error);
   process.exit(1);

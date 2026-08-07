@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 5c1f0722cac4450a8c89a18483070cf7b0f2efe368e72544e922dfead5553ef4
+ * Original-Hash: c1d7b6685e53e62918a5fce999e6d05983c8d587f71d9578ac3e97be4a40d070
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:d747f7775db814e89a1f639de820eb02dd965ba061e1f288b9b7d6123634c4f9
+ * Quell-Hash: sha256:1dae72d778f8d9db46e8443a9cb866ed6daf99c09ab44fdcd0eec4f2fa6a983e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1296,22 +1296,6 @@ class EmsEngine {
       }
 
       await this.mm.tick();
-
-      // EEBUS/CLS-Implementierungsrückmeldung erst nach dem vollständigen
-      // zentralen EMS-Zyklus senden. Der API-Helfer prüft die Command-ID des
-      // tatsächlich von §14a verarbeiteten Snapshots und meldet daher niemals
-      // einen älteren oder nur angenommenen Befehl als umgesetzt zurück.
-      try {
-        if (typeof this.adapter._nwFlushPara14aEebusImplementationFeedback === 'function') {
-          await this.adapter._nwFlushPara14aEebusImplementationFeedback({
-            tickStartedAtMs: tickStart,
-            appliedAtMs: Date.now(),
-            moduleResults: Array.isArray(this.mm?.lastTickDiag?.results) ? this.mm.lastTickDiag.results : [],
-          });
-        }
-      } catch (feedbackError) {
-        try { this.adapter.log.warn(`[EMS] §14a EEBUS implementation feedback failed: ${feedbackError?.message || feedbackError}`); } catch (_eFeedback) {}
-      }
     } catch (err) {
       try {
         await this.adapter.setStateAsync('ems.core.lastTickError', { val: String(err?.message || err), ack: true });

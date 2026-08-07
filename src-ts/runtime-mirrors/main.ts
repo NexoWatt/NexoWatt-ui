@@ -21,7 +21,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: a227008d37052c19c95301d92607b26ab6894a9c5a6c38177a3fe633d734c83b
+ * Original-Hash: cf8e53a2d245f2f53d8b33c8b6f96f6836eda294bc2933a6962b449ab957df27
  */
 
 /**
@@ -720,15 +720,6 @@ class NexoWattVis extends utils.Adapter {
     this._nwLiveCoreRefreshRunning = false;
     this._nwLiveCoreRefreshPlan = [];
     this._nwLiveCoreRefreshIntervalMs = 3000;
-
-    // Robuster EVCS-Eingangspfad: Eine Quelle darf mehrere Ladepunkte versorgen
-    // (z. B. Stations-Online/Heartbeat), Alias-Ziele werden zusätzlich beobachtet
-    // und der lokale evcs.<n>.-Spiegel wird unabhängig vom stateChange-Ereignis
-    // durch den 3-s-Sicherheitsabruf repariert.
-    this._nwEvcsInputBindingsBySourceId = new Map();
-    this._nwEvcsInputBindingsByConfiguredId = new Map();
-    this._nwEvcsAliasRefreshPending = new Map();
-    this._nwEvcsMirrorStampByKey = new Map();
 
     // Notifications / Monitoring
     this._notifyTimer = null;
@@ -8614,16 +8605,18 @@ class NexoWattVis extends utils.Adapter {
       }
     }
 
-    // Robuste Multi-Bindings statt einer verlustbehafteten 1:1-Map aufbauen.
-    // Gemeinsame Stations-DPs aktualisieren dadurch alle zugehörigen Connectoren;
-    // Alias-Ziel-DPs werden zusätzlich für unmittelbare Refreshes registriert.
-    try {
-      await this._nwBuildEvcsInputBindings();
-    } catch (e) {
-      this.log.warn('EVCS input binding setup failed: ' + (e && e.message ? e.message : e));
-      this.evcsIdToKey = {};
-      this._nwEvcsInputBindingsBySourceId = new Map();
-      this._nwEvcsInputBindingsByConfiguredId = new Map();
+    // build lookup for mapped EVCS datapoints -> internal cache keys
+    this.evcsIdToKey = {};
+    for (const wb of this.evcsList) {
+      if (wb.powerId) this.evcsIdToKey[wb.powerId] = `evcs.${wb.index}.powerW`;
+      if (wb.energyTotalId) this.evcsIdToKey[wb.energyTotalId] = `evcs.${wb.index}.energyTotalKwh`;
+      if (wb.statusId) this.evcsIdToKey[wb.statusId] = `evcs.${wb.index}.status`;
+      if (wb.onlineId) this.evcsIdToKey[wb.onlineId] = `evcs.${wb.index}.online`;
+      if (wb.activeId) this.evcsIdToKey[wb.activeId] = `evcs.${wb.index}.active`;
+      if (wb.lockWriteId) this.evcsIdToKey[wb.lockWriteId] = `evcs.${wb.index}.lock`;
+      if (wb.rfidReadId) this.evcsIdToKey[wb.rfidReadId] = `evcs.${wb.index}.rfidLast`;
+      if (wb.vehicleSocId) this.evcsIdToKey[wb.vehicleSocId] = `evcs.${wb.index}.vehicleSoc`;
+      if (wb.modeId) this.evcsIdToKey[wb.modeId] = `evcs.${wb.index}.mode`;
     }
 
     // keep count available for the VIS immediately (without requiring foreign datapoints)
@@ -8635,238 +8628,6 @@ class NexoWattVis extends utils.Adapter {
       this.log.warn('syncSettingsConfigToStates: ' + e.message);
     }
   }
-
-  /**
-   * Liefert alle lesenden EVCS-Zuordnungen eines Ladepunkts. Die Liste ist die
-   * einzige Quelle für Subscription, Initial-Read, stateChange und 3-s-Fallback,
-   * damit kein neuer Messwertpfad versehentlich nur an einer Stelle ergänzt wird.
-   */
-  _nwEvcsInputSpecsForWallbox(wb) {
-    if (!wb || typeof wb !== 'object') return [];
-    const index = Math.max(1, Math.round(Number(wb.index) || 1));
-    return [
-      { configuredId: wb.powerId, key: `evcs.${index}.powerW` },
-      { configuredId: wb.energyTotalId, key: `evcs.${index}.energyTotalKwh` },
-      { configuredId: wb.statusId, key: `evcs.${index}.status` },
-      { configuredId: wb.onlineId, key: `evcs.${index}.online` },
-      { configuredId: wb.activeId, key: `evcs.${index}.active` },
-      { configuredId: wb.vehicleConnectedId, key: `evcs.${index}.vehicleConnected`, mirrorAsString: true },
-      { configuredId: wb.chargeDemandId, key: `evcs.${index}.chargeDemand`, mirrorAsString: true },
-      { configuredId: wb.heartbeatId, key: `evcs.${index}.heartbeat`, mirrorAsString: true },
-      { configuredId: wb.phaseFeedbackId, key: `evcs.${index}.phaseFeedback`, mirrorAsString: true },
-      { configuredId: wb.lockWriteId, key: `evcs.${index}.lock` },
-      { configuredId: wb.rfidReadId, key: `evcs.${index}.rfidLast` },
-      { configuredId: wb.vehicleSocId, key: `evcs.${index}.vehicleSoc` },
-      { configuredId: wb.modeId, key: `evcs.${index}.mode` },
-    ].map((entry) => ({
-      ...entry,
-      configuredId: (typeof entry.configuredId === 'string') ? entry.configuredId.trim() : '',
-    })).filter((entry) => !!entry.configuredId);
-  }
-
-  /**
-   * Liest die Read-Quelle eines ioBroker-Aliasobjekts. Unterstützt sowohl den
-   * üblichen Stringvertrag als auch read/write-getrennte Alias-ID-Objekte.
-   */
-  _nwExtractAliasReadId(obj) {
-    const alias = obj && obj.common ? obj.common.alias : null;
-    if (!alias) return '';
-    if (typeof alias === 'string') return alias.trim();
-    const raw = alias.id;
-    if (typeof raw === 'string') return raw.trim();
-    if (raw && typeof raw === 'object') {
-      for (const key of ['read', 'id', 'source']) {
-        if (typeof raw[key] === 'string' && raw[key].trim()) return raw[key].trim();
-      }
-    }
-    return '';
-  }
-
-  /**
-   * Erstellt Multi-Bindings für direkte DPs und deren Alias-Quellen. Anders als
-   * evcsIdToKey kann diese Struktur mehrere Ladepunkte pro Quell-ID abbilden.
-   */
-  async _nwBuildEvcsInputBindings() {
-    const bySource = new Map();
-    const byConfigured = new Map();
-    const legacyLookup = {};
-
-    const addBinding = (map, id, binding) => {
-      const sid = (typeof id === 'string') ? id.trim() : '';
-      if (!sid || !binding || !binding.key) return;
-      const list = map.get(sid) || [];
-      const duplicate = list.some((item) => item
-        && item.key === binding.key
-        && item.configuredId === binding.configuredId
-        && item.sourceId === binding.sourceId);
-      if (!duplicate) list.push(binding);
-      map.set(sid, list);
-    };
-
-    const list = Array.isArray(this.evcsList) ? this.evcsList : [];
-    for (const wb of list) {
-      for (const spec of this._nwEvcsInputSpecsForWallbox(wb)) {
-        const configuredId = spec.configuredId;
-        const baseBinding = {
-          configuredId,
-          sourceId: configuredId,
-          key: spec.key,
-          mirrorAsString: spec.mirrorAsString === true,
-          aliasSource: false,
-        };
-        addBinding(byConfigured, configuredId, baseBinding);
-        // Kompatibilitätslookup nur als erster Treffer; die produktive Verarbeitung
-        // läuft über die Multi-Map und verliert keine weiteren Connectoren.
-        if (!legacyLookup[configuredId]) legacyLookup[configuredId] = spec.key;
-
-        const sourceIds = [configuredId];
-        const visited = new Set(sourceIds);
-        let cursor = configuredId;
-        for (let depth = 0; depth < 5; depth++) {
-          let obj = null;
-          try { obj = await this.getForeignObjectAsync(cursor); } catch (_e) {}
-          const targetId = this._nwExtractAliasReadId(obj);
-          if (!targetId || visited.has(targetId)) break;
-          visited.add(targetId);
-          sourceIds.push(targetId);
-          cursor = targetId;
-        }
-
-        for (const sourceId of sourceIds) {
-          addBinding(bySource, sourceId, {
-            ...baseBinding,
-            sourceId,
-            aliasSource: sourceId !== configuredId,
-          });
-        }
-      }
-    }
-
-    this.evcsIdToKey = legacyLookup;
-    this._nwEvcsInputBindingsBySourceId = bySource;
-    this._nwEvcsInputBindingsByConfiguredId = byConfigured;
-    if (!this._nwEvcsAliasRefreshPending || typeof this._nwEvcsAliasRefreshPending.clear !== 'function') {
-      this._nwEvcsAliasRefreshPending = new Map();
-    } else {
-      this._nwEvcsAliasRefreshPending.clear();
-    }
-    if (!this._nwEvcsMirrorStampByKey || typeof this._nwEvcsMirrorStampByKey.clear !== 'function') {
-      this._nwEvcsMirrorStampByKey = new Map();
-    } else {
-      this._nwEvcsMirrorStampByKey.clear();
-    }
-    return { sources: bySource.size, configured: byConfigured.size };
-  }
-
-  _nwIsReadOnlyEvcsMirrorKey(key) {
-    return /^evcs\.\d+\.(powerW|energyTotalKwh|vehicleSoc|status|online|active|vehicleConnected|chargeDemand|heartbeat|phaseFeedback|lock|rfidLast)$/.test(String(key || ''));
-  }
-
-  _nwEvcsMirrorValue(binding, value) {
-    if (binding && binding.mirrorAsString === true) {
-      return value === null || value === undefined ? '' : String(value);
-    }
-    return value;
-  }
-
-  /**
-   * Aktualisiert Cache und lokalen EVCS-Spiegel atomar aus derselben Quellprobe.
-   * Der Quellzeitstempel bleibt im stateCache erhalten; eigene ack=true-Spiegel-
-   * Events dürfen ihn später nicht künstlich verjüngen.
-   */
-  async _nwPublishEvcsInputBinding(binding, state, sourceId, reason = 'event') {
-    if (!binding || !binding.key || !state || state.val === undefined) return false;
-    const configuredId = String(binding.configuredId || sourceId || '').trim();
-    const ts = (typeof state.ts === 'number' && Number.isFinite(state.ts))
-      ? state.ts
-      : ((typeof state.lc === 'number' && Number.isFinite(state.lc)) ? state.lc : Date.now());
-    const normalized = this._nwScaleMappedValue(binding.key, configuredId, state.val);
-    const prev = (this.stateCache && this.stateCache[binding.key]) ? this.stateCache[binding.key] : null;
-    const cacheChanged = !(prev && prev.ts === ts && Object.is(prev.value, normalized));
-    if (cacheChanged) this.updateValue(binding.key, normalized, ts);
-
-    const localId = this.namespace ? `${this.namespace}.${binding.key}` : '';
-    const shouldMirror = binding.key.startsWith('evcs.')
-      && localId
-      && String(sourceId || '') !== localId
-      && !this._nwShuttingDown;
-    if (!shouldMirror) return cacheChanged;
-
-    const mirrorValue = this._nwEvcsMirrorValue(binding, normalized);
-    let stampValue = '';
-    try { stampValue = (mirrorValue && typeof mirrorValue === 'object') ? JSON.stringify(mirrorValue) : String(mirrorValue); } catch (_e) { stampValue = String(mirrorValue); }
-    const stamp = `${ts}|${typeof mirrorValue}|${stampValue}`;
-    if (!this._nwEvcsMirrorStampByKey || typeof this._nwEvcsMirrorStampByKey.get !== 'function') {
-      this._nwEvcsMirrorStampByKey = new Map();
-    }
-    if (this._nwEvcsMirrorStampByKey.get(binding.key) === stamp) return cacheChanged;
-
-    try {
-      await this.setStateAsync(binding.key, { val: mirrorValue, ack: true });
-      this._nwEvcsMirrorStampByKey.set(binding.key, stamp);
-      return true;
-    } catch (e) {
-      this.log.debug(`EVCS mirror publish failed (${binding.key}, ${reason}): ${e && e.message ? e.message : e}`);
-      return cacheChanged;
-    }
-  }
-
-  async _nwReadAndApplyEvcsConfiguredId(configuredId, reason = 'read') {
-    const sid = (typeof configuredId === 'string') ? configuredId.trim() : '';
-    if (!sid) return 0;
-    const bindings = this._nwEvcsInputBindingsByConfiguredId && this._nwEvcsInputBindingsByConfiguredId.get(sid);
-    if (!Array.isArray(bindings) || !bindings.length) return 0;
-    let state = null;
-    try { state = await this.getForeignStateAsync(sid); } catch (_e) { return 0; }
-    if (!state || state.val === undefined) return 0;
-    let applied = 0;
-    for (const binding of bindings) {
-      if (await this._nwPublishEvcsInputBinding(binding, state, sid, reason)) applied += 1;
-    }
-    return applied;
-  }
-
-  _nwScheduleEvcsAliasRefresh(configuredId, reason = 'alias-event') {
-    const sid = (typeof configuredId === 'string') ? configuredId.trim() : '';
-    if (!sid || this._nwShuttingDown) return null;
-    if (!this._nwEvcsAliasRefreshPending || typeof this._nwEvcsAliasRefreshPending.has !== 'function') {
-      this._nwEvcsAliasRefreshPending = new Map();
-    }
-    if (this._nwEvcsAliasRefreshPending.has(sid)) return this._nwEvcsAliasRefreshPending.get(sid);
-    const pending = Promise.resolve()
-      .then(() => this._nwReadAndApplyEvcsConfiguredId(sid, reason))
-      .catch(() => 0)
-      .finally(() => {
-        try { this._nwEvcsAliasRefreshPending.delete(sid); } catch (_e) {}
-      });
-    this._nwEvcsAliasRefreshPending.set(sid, pending);
-    return pending;
-  }
-
-  /**
-   * Verarbeitet ein direktes stateChange-Ereignis für alle betroffenen
-   * Ladepunkte. Alias-Zielereignisse lesen den konfigurierten Alias sofort neu,
-   * damit read-Transformation und Einheit des Aliasvertrags erhalten bleiben.
-   */
-  _nwApplyEvcsInputSourceState(id, state, reason = 'event') {
-    const sid = (typeof id === 'string') ? id.trim() : '';
-    const bindings = sid && this._nwEvcsInputBindingsBySourceId
-      ? this._nwEvcsInputBindingsBySourceId.get(sid)
-      : null;
-    const handledKeys = new Set();
-    if (!Array.isArray(bindings) || !bindings.length || !state) return handledKeys;
-    for (const binding of bindings) {
-      if (!binding || !binding.key) continue;
-      handledKeys.add(binding.key);
-      if (binding.aliasSource) {
-        this._nwScheduleEvcsAliasRefresh(binding.configuredId, `${reason}:alias-target`);
-      } else {
-        this._nwPublishEvcsInputBinding(binding, state, sid, reason).catch(() => {});
-      }
-    }
-    return handledKeys;
-  }
-
   /**
    * Code-Teil: ensureEvcsStates
    * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
@@ -8908,13 +8669,6 @@ class NexoWattVis extends utils.Adapter {
         status:        { type: 'string', role: 'state', def: '', read: true, write: false },
         online:        { type: 'boolean', role: 'indicator.reachable', def: false, read: true, write: false },
         active:        { type: 'boolean', role: 'switch', def: false, read: true, write: false },
-        // Rohspiegel der optionalen Semantik-/Heartbeat-/Phasen-DPs. Die eigentliche
-        // Auswertung bleibt im Charging-Management am Original-DP; der Stringspiegel
-        // dient UI, Diagnose und History ohne verlustbehaftete Typkonvertierung.
-        vehicleConnected: { type: 'string', role: 'text', def: '', read: true, write: false },
-        chargeDemand:  { type: 'string', role: 'text', def: '', read: true, write: false },
-        heartbeat:     { type: 'string', role: 'text', def: '', read: true, write: false },
-        phaseFeedback: { type: 'string', role: 'text', def: '', read: true, write: false },
         // Modus ist bewusst writeable: die VIS kann je Ladepunkt den Betriebsmodus setzen (internes EMS).
         // 0=Auto, 1=Boost, 2=Min+PV, 3=PV
         mode:          { type: 'number', role: 'value', def: 0, read: true, write: true },
@@ -9413,30 +9167,27 @@ class NexoWattVis extends utils.Adapter {
    */
   async subscribeEvcsMappedStates() {
     if (!Array.isArray(this.evcsList)) return;
-    if (!this._nwEvcsInputBindingsBySourceId || !this._nwEvcsInputBindingsBySourceId.size) {
-      await this._nwBuildEvcsInputBindings();
-    }
 
-    // Direkte IDs und aufgelöste Alias-Ziele abonnieren. Wiederholte Aufrufe nach
-    // einer AppCenter-Konfigurationsänderung sind in ioBroker idempotent.
-    const sourceIds = Array.from(this._nwEvcsInputBindingsBySourceId.keys());
-    for (const id of sourceIds) {
-      try {
-        await this.subscribeForeignStatesAsync(id);
-      } catch (e) {
-        this.log.debug(`EVCS subscribe failed (${id}): ${e && e.message ? e.message : e}`);
-      }
-    }
-
-    // Initialwerte immer über die konfigurierte ID lesen. Bei Aliasobjekten bleiben
-    // dadurch read-Transformationen und die am Alias deklarierte Einheit wirksam.
-    const configuredIds = Array.from(this._nwEvcsInputBindingsByConfiguredId.keys());
-    for (const id of configuredIds) {
-      try {
-        await this._nwPrimeForeignPowerScale(id);
-        await this._nwReadAndApplyEvcsConfiguredId(id, 'subscribe-prime');
-      } catch (e) {
-        this.log.debug(`EVCS initial read failed (${id}): ${e && e.message ? e.message : e}`);
+    for (const wb of this.evcsList) {
+      const ids = [wb.powerId, wb.energyTotalId, wb.statusId, wb.onlineId, wb.activeId, wb.vehicleConnectedId, wb.chargeDemandId, wb.heartbeatId, wb.modeId, wb.lockWriteId, wb.rfidReadId, wb.vehicleSocId].filter(Boolean);
+      for (const id of ids) {
+        try {
+          await this.subscribeForeignStatesAsync(id);
+          const st = await this.getForeignStateAsync(id);
+          if (st && st.val !== undefined && st.val !== null) {
+            const key = this.evcsIdToKey && this.evcsIdToKey[id];
+            if (key) {
+              const normalized = this._nwScaleMappedValue(key, id, st.val);
+              this.updateValue(key, normalized, st.ts || Date.now());
+              // Eigene EVCS-Spiegelstates verwenden ebenfalls die normalisierte
+              // interne Einheit, damit Sessionlogger, History und Reports nicht
+              // zwischen Roh-Wh und kWh wechseln.
+              this.setStateAsync(key, normalized, true).catch(() => {});
+            }
+          }
+        } catch (e) {
+          this.log.debug(`EVCS subscribe/read failed (${id}): ${e.message}`);
+        }
       }
     }
   }
@@ -25268,25 +25019,12 @@ return res.json(out);
 
       let entry = byId.get(sid);
       if (!entry) {
-        entry = { id: sid, keys: new Set(), evcsBindings: new Map() };
+        entry = { id: sid, keys: new Set() };
         byId.set(sid, entry);
       }
 
       const k = (typeof key === 'string') ? key.trim() : '';
       if (k) entry.keys.add(k);
-    };
-
-    const addEvcsBinding = (binding) => {
-      if (!binding || !binding.configuredId || !binding.key) return;
-      const sid = String(binding.configuredId).trim();
-      if (!sid || this._nwIsOwnStateId(sid)) return;
-      let entry = byId.get(sid);
-      if (!entry) {
-        entry = { id: sid, keys: new Set(), evcsBindings: new Map() };
-        byId.set(sid, entry);
-      }
-      if (!entry.evcsBindings) entry.evcsBindings = new Map();
-      entry.evcsBindings.set(`${binding.configuredId}|${binding.key}`, binding);
     };
 
     try {
@@ -25340,23 +25078,19 @@ return res.json(out);
     } catch (_e) {}
 
     try {
-      const configured = this._nwEvcsInputBindingsByConfiguredId;
-      if (configured && typeof configured.values === 'function') {
-        for (const bindings of configured.values()) {
-          for (const binding of (Array.isArray(bindings) ? bindings : [])) addEvcsBinding(binding);
-        }
-      } else {
-        const list = Array.isArray(this.evcsList) ? this.evcsList : [];
-        for (const wb of list) {
-          for (const binding of this._nwEvcsInputSpecsForWallbox(wb)) addEvcsBinding({ ...binding, sourceId: binding.configuredId, aliasSource: false });
-        }
+      const list = Array.isArray(this.evcsList) ? this.evcsList : [];
+      for (const wb of list) {
+        if (!wb || typeof wb !== 'object') continue;
+        add(wb.powerId, this.evcsIdToKey && wb.powerId ? this.evcsIdToKey[wb.powerId] : '');
+        add(wb.statusId, this.evcsIdToKey && wb.statusId ? this.evcsIdToKey[wb.statusId] : '');
+        add(wb.onlineId, this.evcsIdToKey && wb.onlineId ? this.evcsIdToKey[wb.onlineId] : '');
+        add(wb.activeId, this.evcsIdToKey && wb.activeId ? this.evcsIdToKey[wb.activeId] : '');
       }
     } catch (_e) {}
 
     this._nwLiveCoreRefreshPlan = Array.from(byId.values()).map((entry) => ({
       id: entry.id,
       keys: Array.from(entry.keys),
-      evcsBindings: entry.evcsBindings ? Array.from(entry.evcsBindings.values()) : [],
     }));
 
     return this._nwLiveCoreRefreshPlan;
@@ -25413,19 +25147,9 @@ return res.json(out);
           } catch (_e) {}
         }
 
-        // EVCS zuerst verarbeiten, damit der Sicherheitsabruf nicht nur den
-        // Arbeitsspeicher, sondern auch die lokalen evcs.<n>.-Spiegel repariert.
-        const handledEvcsKeys = new Set();
-        const evcsBindings = Array.isArray(entry.evcsBindings) ? entry.evcsBindings : [];
-        for (const binding of evcsBindings) {
-          if (!binding || !binding.key) continue;
-          handledEvcsKeys.add(binding.key);
-          await this._nwPublishEvcsInputBinding(binding, st, entry.id, `poll:${reason}`);
-        }
-
         const keys = Array.isArray(entry.keys) ? entry.keys : [];
         for (const key of keys) {
-          if (!key || handledEvcsKeys.has(key)) continue;
+          if (!key) continue;
           const scaled = this._nwScaleMappedValue(key, entry.id, st.val);
           const prev = (this.stateCache && this.stateCache[key]) ? this.stateCache[key] : null;
           const sameScaled = !!(prev && prev.ts === ts && Object.is(prev.value, scaled));
@@ -25711,15 +25435,9 @@ return res.json(out);
       }
     } catch (_e2) {}
     try {
-      const evcsHandledKeys = this._nwApplyEvcsInputSourceState(id, state, 'state-change');
       const key = this.keyFromId(id);
-      const evcsMappedAlreadyHandled = !!(key && evcsHandledKeys && evcsHandledKeys.has(key));
-      const ownReadOnlyEvcsMirrorAck = !!(key
-        && state.ack === true
-        && this._nwIsOwnStateId(id)
-        && this._nwIsReadOnlyEvcsMirrorKey(key));
       let normalizedMappedValue = state.val;
-      if (key && !evcsMappedAlreadyHandled && !ownReadOnlyEvcsMirrorAck) {
+      if (key) {
         normalizedMappedValue = this._nwScaleMappedValue(key, id, state.val);
         this.updateValue(key, normalizedMappedValue, state.ts);
 
@@ -25781,15 +25499,7 @@ return res.json(out);
         }
       } catch (_e) {}
 
-      if (key && key.startsWith('evcs.')) {
-        const ownState = this._nwIsOwnStateId(id);
-        // Externe Quellen werden durch den robusten EVCS-Publisher gespiegelt.
-        // Eigene writeable EVCS-States werden nur bei ack=false quittiert; ack=true-
-        // Spiegelereignisse dürfen weder Schleifen noch künstlich frische Messwerte erzeugen.
-        if ((!ownState && !evcsMappedAlreadyHandled) || (ownState && state.ack === false && !ownReadOnlyEvcsMirrorAck)) {
-          this.setStateAsync(key, normalizedMappedValue, true).catch(()=>{});
-        }
-      }
+      if (key && key.startsWith('evcs.')) this.setStateAsync(key, normalizedMappedValue, true).catch(()=>{});
       try { this.maybeCaptureRfidLearning(id, state.val, state.ts); } catch(_e) {}
 
       // RFID access control: whenever a wallbox RFID datapoint changes, apply policy

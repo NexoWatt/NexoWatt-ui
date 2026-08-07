@@ -169,9 +169,8 @@ function verifyHeatingRodBudgetSeparation() {
 
   const heatingTs = read('src-ts/runtime-executables/ems/modules/heating-rod-control.ts');
   assert.ok(
-    heatingTs.includes('const usedW = consumeHeatingRodW(Math.max(observedW, res.accepted ? targetW : 0), d.enabled === true);')
-      && heatingTs.includes('budgetUsedW += Math.round(usedW);'),
-    'Akzeptierte Stufe muss im Budgetpfad reserviert werden, ohne den beobachteten Istwert zu faelschen',
+    heatingTs.includes('const usedW = Math.max(observedUsedW, res.accepted ? targetW : 0);'),
+    'Akzeptierte Stufe muss Budget reservieren, ohne den Istwert zu faelschen',
   );
   assert.ok(
     heatingTs.includes('actualW: Math.max(0, Math.round(Number.isFinite(Number(currentHeatingRodW)) ? Number(currentHeatingRodW) : 0))'),

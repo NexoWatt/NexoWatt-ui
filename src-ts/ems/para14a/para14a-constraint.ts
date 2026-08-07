@@ -49,9 +49,6 @@ export interface Para14aConsumerInput {
   controlType: Para14aControlType;
   installedPowerW?: number | null;
   priority?: number | null;
-  groupId?: string;
-  source?: string;
-  automatic?: boolean;
   setWId?: string;
   enableId?: string;
 }
@@ -176,48 +173,28 @@ export function getPara14aGzf(count: number): number {
 
 interface Unit {
   id: string;
-  kind: 'evcs' | 'heat' | 'airCondition' | 'heatingRod' | 'storage' | 'custom';
+  kind: 'evcs' | 'heat' | 'airCondition' | 'storage' | 'custom';
   installedW: number;
   capW: number;
-  priority: number;
-  rows: Para14aConsumerInput[];
   evcsSafe?: string;
+  consumer?: Para14aConsumerInput;
 }
 
 function splitGroupCap(capW: number, rows: Para14aConsumerInput[]): Record<string, number> {
   const out: Record<string, number> = {};
   if (!rows.length || capW <= 0) return out;
-  const normalized = rows.map((row, index) => ({
-    row,
-    index,
-    installedW: positive(row.installedPowerW),
-    allocationW: 0,
-  }));
-  const sumInstalled = normalized.reduce((sum, entry) => sum + entry.installedW, 0);
-
-  for (const entry of normalized) {
-    const proportional = sumInstalled > 0 && entry.installedW > 0
-      ? capW * entry.installedW / sumInstalled
-      : capW / normalized.length;
-    entry.allocationW = entry.installedW > 0 ? Math.min(proportional, entry.installedW) : proportional;
-  }
-
-  let remaining = Math.max(0, capW - normalized.reduce((sum, entry) => sum + entry.allocationW, 0));
-  for (const entry of normalized) {
-    if (remaining <= 0) break;
-    const headroom = entry.installedW > 0 ? Math.max(0, entry.installedW - entry.allocationW) : 0;
-    const add = Math.min(headroom, remaining);
-    entry.allocationW += add;
-    remaining -= add;
-  }
-
-  let roundedRemaining = Math.max(0, Math.round(capW));
-  normalized.forEach((entry, index) => {
-    const rounded = index === normalized.length - 1
-      ? roundedRemaining
-      : Math.min(roundedRemaining, Math.max(0, Math.round(entry.allocationW)));
-    out[entry.row.id] = rounded;
-    roundedRemaining = Math.max(0, roundedRemaining - rounded);
+  const sumInstalled = rows.reduce((sum, row) => sum + positive(row.installedPowerW), 0);
+  let remaining = capW;
+  rows.forEach((row, index) => {
+    const share = index === rows.length - 1
+      ? remaining
+      : (sumInstalled > 0 && positive(row.installedPowerW) > 0
+        ? capW * positive(row.installedPowerW) / sumInstalled
+        : capW / rows.length);
+    const capped = positive(row.installedPowerW) > 0 ? Math.min(share, positive(row.installedPowerW)) : share;
+    const rounded = Math.max(0, Math.round(capped));
+    out[row.id] = rounded;
+    remaining = Math.max(0, remaining - rounded);
   });
   return out;
 }
@@ -229,103 +206,39 @@ function sumCaps(values: Array<number | null | undefined>): number {
 export function buildPara14aConstraintSnapshot(input: Para14aConstraintInput): Para14aConstraintSnapshot {
   const active = input.active === true;
   const mode: Para14aMode = String(input.mode || '').toLowerCase() === 'ems' ? 'ems' : 'direct';
-  const baseW = Math.max(4200, positive(input.minPerDeviceW ?? 4200));
+  const baseW = positive(input.minPerDeviceW || 4200);
   const consumers = Array.isArray(input.consumers) ? input.consumers.filter(Boolean) : [];
   const evcs = Array.isArray(input.evcs) ? input.evcs.filter((row) => row && String(row.safe || '').trim()) : [];
-  const heatRows = consumers.filter((row) => row.type === 'heatPump');
-  const heatingRodRows = consumers.filter((row) => row.type === 'heatingRod');
+  const heatRows = consumers.filter((row) => row.type === 'heatPump' || row.type === 'heatingRod');
   const airRows = consumers.filter((row) => row.type === 'airCondition');
   const storageRows = consumers.filter((row) => row.type === 'storage');
   const customRows = consumers.filter((row) => row.type === 'custom');
   const pHeat = heatRows.reduce((sum, row) => sum + positive(row.installedPowerW), 0);
   const pAir = airRows.reduce((sum, row) => sum + positive(row.installedPowerW), 0);
+  const pStorage = storageRows.reduce((sum, row) => sum + positive(row.installedPowerW), 0);
 
   const units: Unit[] = [];
-  evcs.forEach((row, index) => units.push({
-    id: `evcs:${String(row.safe)}`,
-    kind: 'evcs',
-    installedW: positive(row.maxPowerW),
-    capW: 0,
-    priority: 100 + index,
-    rows: [],
-    evcsSafe: String(row.safe),
-  }));
-  if (heatRows.length) units.push({
-    id: 'heat',
-    kind: 'heat',
-    installedW: pHeat,
-    capW: 0,
-    priority: Math.min(...heatRows.map((row) => finite(row.priority, 100))),
-    rows: heatRows,
-  });
-  if (airRows.length) units.push({
-    id: 'air',
-    kind: 'airCondition',
-    installedW: pAir,
-    capW: 0,
-    priority: Math.min(...airRows.map((row) => finite(row.priority, 100))),
-    rows: airRows,
-  });
-
-  heatingRodRows.forEach((row, index) => units.push({
-    id: `heatingRod:${row.id || index}`,
-    kind: 'heatingRod',
-    installedW: positive(row.installedPowerW),
-    capW: 0,
-    priority: finite(row.priority, 100),
-    rows: [row],
-  }));
-
-  const storageGroups = new Map<string, Para14aConsumerInput[]>();
-  storageRows.forEach((row, index) => {
-    const explicitGroup = String(row.groupId || '').trim();
-    const groupKey = explicitGroup ? `group:${explicitGroup}` : `unit:${row.id || index}`;
-    const groupRows = storageGroups.get(groupKey) || [];
-    groupRows.push(row);
-    storageGroups.set(groupKey, groupRows);
-  });
-  for (const [groupKey, rows] of storageGroups.entries()) {
-    units.push({
-      id: `storage:${groupKey}`,
-      kind: 'storage',
-      installedW: rows.reduce((sum, row) => sum + positive(row.installedPowerW), 0),
-      capW: 0,
-      priority: Math.min(...rows.map((row) => finite(row.priority, 100))),
-      rows,
-    });
-  }
-
-  customRows.forEach((row, index) => units.push({
-    id: `custom:${row.id || index}`,
-    kind: 'custom',
-    installedW: positive(row.installedPowerW),
-    capW: 0,
-    priority: finite(row.priority, 100),
-    rows: [row],
-  }));
+  evcs.forEach((row, index) => units.push({ id: `evcs:${index}`, kind: 'evcs', installedW: positive(row.maxPowerW), capW: 0, evcsSafe: String(row.safe) }));
+  if (heatRows.length) units.push({ id: 'heat', kind: 'heat', installedW: pHeat, capW: 0 });
+  if (airRows.length) units.push({ id: 'air', kind: 'airCondition', installedW: pAir, capW: 0 });
+  if (storageRows.length) units.push({ id: 'storage', kind: 'storage', installedW: pStorage, capW: 0 });
+  customRows.forEach((row, index) => units.push({ id: `custom:${index}`, kind: 'custom', installedW: positive(row.installedPowerW), capW: 0, consumer: row }));
 
   const nSteuVE = units.length;
   const gzf = getPara14aGzf(Math.max(1, nSteuVE));
-  const isLargeThermalGroup = (unit: Unit): boolean => (
-    (unit.kind === 'heat' || unit.kind === 'airCondition') && unit.installedW > 11000
-  );
-  const bigThermalGroups = units
-    .filter(isLargeThermalGroup)
-    .sort((a, b) => (0.4 * b.installedW) - (0.4 * a.installedW));
-  const deterministicUnits = units.slice().sort((a, b) => {
-    if (a.priority !== b.priority) return a.priority - b.priority;
-    return a.id.localeCompare(b.id);
-  });
-  const primary: Unit | null = bigThermalGroups[0] || deterministicUnits[0] || null;
-  const primaryW = primary
-    ? (isLargeThermalGroup(primary) ? Math.max(baseW, 0.4 * primary.installedW) : baseW)
-    : 0;
-  const secondaryW = nSteuVE > 1 ? gzf * baseW : (nSteuVE === 1 ? baseW : 0);
+  const bigGroups = units.filter((unit) => unit.kind !== 'evcs' && unit.installedW > 11000);
+  let primary: Unit | null = bigGroups.sort((a, b) => (0.4 * b.installedW) - (0.4 * a.installedW))[0] || null;
+  if (!primary) primary = units.find((unit) => unit.kind === 'heat') || units.find((unit) => unit.kind === 'airCondition') || units.find((unit) => unit.kind === 'storage') || units.find((unit) => unit.kind === 'custom') || units[0] || null;
+
+  const primaryW = primary && primary.installedW > 11000 && primary.kind !== 'evcs'
+    ? Math.max(baseW, 0.4 * primary.installedW)
+    : baseW;
+  const secondaryW = nSteuVE > 1 ? gzf * baseW : baseW;
 
   if (active) {
     for (const unit of units) {
       let cap = mode === 'direct'
-        ? (isLargeThermalGroup(unit) ? Math.max(baseW, 0.4 * unit.installedW) : baseW)
+        ? (unit.installedW > 11000 && unit.kind !== 'evcs' ? Math.max(baseW, 0.4 * unit.installedW) : baseW)
         : (unit === primary ? primaryW : secondaryW);
       if (unit.installedW > 0) cap = Math.min(cap, unit.installedW);
       unit.capW = Math.max(0, cap);
@@ -335,36 +248,19 @@ export function buildPara14aConstraintSnapshot(input: Para14aConstraintInput): P
   const nominalPMinW = active ? units.reduce((sum, unit) => sum + unit.capW, 0) : 0;
   const explicitTotal = mode === 'ems' && finite(input.externalTotalSetpointW, 0) > 0 ? positive(input.externalTotalSetpointW) : null;
   const requestedTotalCapW = active ? (explicitTotal ?? nominalPMinW) : null;
-  if (active && requestedTotalCapW !== null && nominalPMinW > 0) {
-    if (requestedTotalCapW < nominalPMinW) {
-      const factor = requestedTotalCapW / nominalPMinW;
-      units.forEach((unit) => { unit.capW = Math.max(0, unit.capW * factor); });
-    } else if (requestedTotalCapW > nominalPMinW) {
-      let remaining = requestedTotalCapW - nominalPMinW;
-      for (const unit of deterministicUnits) {
-        if (remaining <= 0) break;
-        const headroom = unit.installedW > 0 ? Math.max(0, unit.installedW - unit.capW) : 0;
-        const add = Math.min(headroom, remaining);
-        unit.capW += add;
-        remaining -= add;
-      }
-    }
+  if (active && requestedTotalCapW !== null && nominalPMinW > requestedTotalCapW && nominalPMinW > 0) {
+    const factor = requestedTotalCapW / nominalPMinW;
+    units.forEach((unit) => { unit.capW = Math.max(0, unit.capW * factor); });
   }
 
   const evcsCapsBySafe: Record<string, number> = {};
   units.filter((unit) => unit.kind === 'evcs' && unit.evcsSafe).forEach((unit) => { evcsCapsBySafe[String(unit.evcsSafe)] = Math.round(unit.capW); });
   const heatUnit = units.find((unit) => unit.kind === 'heat');
   const airUnit = units.find((unit) => unit.kind === 'airCondition');
+  const storageUnit = units.find((unit) => unit.kind === 'storage');
   const heatSplit = splitGroupCap(positive(heatUnit?.capW), heatRows);
   const airSplit = splitGroupCap(positive(airUnit?.capW), airRows);
-  const storageSplit: Record<string, number> = {};
-  units.filter((unit) => unit.kind === 'storage').forEach((unit) => {
-    Object.assign(storageSplit, splitGroupCap(positive(unit.capW), unit.rows));
-  });
-  const heatingRodSplit: Record<string, number> = {};
-  units.filter((unit) => unit.kind === 'heatingRod').forEach((unit) => {
-    Object.assign(heatingRodSplit, splitGroupCap(positive(unit.capW), unit.rows));
-  });
+  const storageSplit = splitGroupCap(positive(storageUnit?.capW), storageRows);
   const targetCapsById: Record<string, number> = {};
   const targetControlById: Record<string, Para14aControlType> = {};
   const assignTarget = (row: Para14aConsumerInput, cap: number): void => {
@@ -376,19 +272,14 @@ export function buildPara14aConstraintSnapshot(input: Para14aConstraintInput): P
     }
   };
   heatRows.forEach((row) => assignTarget(row, heatSplit[row.id] || 0));
-  heatingRodRows.forEach((row) => assignTarget(row, heatingRodSplit[row.id] || 0));
   airRows.forEach((row) => assignTarget(row, airSplit[row.id] || 0));
   storageRows.forEach((row) => assignTarget(row, storageSplit[row.id] || 0));
-  customRows.forEach((row) => {
-    const unit = units.find((candidate) => candidate.id === `custom:${row.id}` || candidate.rows.includes(row));
-    assignTarget(row, positive(unit?.capW));
-  });
+  units.filter((unit) => unit.kind === 'custom' && unit.consumer).forEach((unit) => assignTarget(unit.consumer as Para14aConsumerInput, unit.capW));
 
-  const heatPumpCap = heatRows.reduce((sum, row) => sum + positive(heatSplit[row.id]), 0);
-  const heatingRodCap = heatingRodRows.reduce((sum, row) => sum + positive(heatingRodSplit[row.id]), 0);
+  const heatPumpCap = heatRows.filter((row) => row.type === 'heatPump').reduce((sum, row) => sum + positive(heatSplit[row.id]), 0);
+  const heatingRodCap = heatRows.filter((row) => row.type === 'heatingRod').reduce((sum, row) => sum + positive(heatSplit[row.id]), 0);
   const thermalCap = heatPumpCap + positive(airUnit?.capW);
   const customCap = units.filter((unit) => unit.kind === 'custom').reduce((sum, unit) => sum + positive(unit.capW), 0);
-  const storageCap = units.filter((unit) => unit.kind === 'storage').reduce((sum, unit) => sum + positive(unit.capW), 0);
   const effectiveTotal = active ? sumCaps(units.map((unit) => unit.capW)) : 0;
 
   return {
@@ -399,7 +290,7 @@ export function buildPara14aConstraintSnapshot(input: Para14aConstraintInput): P
     nSteuVE,
     gzf,
     pMinW: Math.round(nominalPMinW),
-    totalCapW: active && units.length ? Math.round(effectiveTotal) : null,
+    totalCapW: active && units.length ? Math.round(Math.min(requestedTotalCapW ?? effectiveTotal, effectiveTotal)) : null,
     primaryGroup: primary?.kind || '',
     primaryW: Math.round(primaryW),
     secondaryW: Math.round(secondaryW),
@@ -407,15 +298,15 @@ export function buildPara14aConstraintSnapshot(input: Para14aConstraintInput): P
     evcsTotalCapW: active && evcs.length ? Math.round(sumCaps(Object.values(evcsCapsBySafe))) : null,
     appCapsW: {
       evcs: active && evcs.length ? Math.round(sumCaps(Object.values(evcsCapsBySafe))) : null,
-      storage: active && storageRows.length ? Math.round(storageCap) : null,
-      thermal: active && (heatRows.length || airRows.length) ? Math.round(thermalCap) : null,
-      heatingRod: active && heatingRodRows.length ? Math.round(heatingRodCap) : null,
+      storage: active && storageRows.length ? Math.round(positive(storageUnit?.capW)) : null,
+      thermal: active && (heatRows.some((row) => row.type === 'heatPump') || airRows.length) ? Math.round(thermalCap) : null,
+      heatingRod: active && heatRows.some((row) => row.type === 'heatingRod') ? Math.round(heatingRodCap) : null,
       airCondition: active && airRows.length ? Math.round(positive(airUnit?.capW)) : null,
       custom: active && customRows.length ? Math.round(customCap) : null,
     },
     targetCapsById,
     targetControlById,
-    unmanagedConsumerCount: customRows.filter((row) => row.automatic !== true).length,
+    unmanagedConsumerCount: customRows.length,
   };
 }
 

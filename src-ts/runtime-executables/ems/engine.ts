@@ -1245,22 +1245,6 @@ class EmsEngine {
       }
 
       await this.mm.tick();
-
-      // EEBUS/CLS-Implementierungsrückmeldung erst nach dem vollständigen
-      // zentralen EMS-Zyklus senden. Der API-Helfer prüft die Command-ID des
-      // tatsächlich von §14a verarbeiteten Snapshots und meldet daher niemals
-      // einen älteren oder nur angenommenen Befehl als umgesetzt zurück.
-      try {
-        if (typeof this.adapter._nwFlushPara14aEebusImplementationFeedback === 'function') {
-          await this.adapter._nwFlushPara14aEebusImplementationFeedback({
-            tickStartedAtMs: tickStart,
-            appliedAtMs: Date.now(),
-            moduleResults: Array.isArray(this.mm?.lastTickDiag?.results) ? this.mm.lastTickDiag.results : [],
-          });
-        }
-      } catch (feedbackError) {
-        try { this.adapter.log.warn(`[EMS] §14a EEBUS implementation feedback failed: ${feedbackError?.message || feedbackError}`); } catch (_eFeedback) {}
-      }
     } catch (err) {
       try {
         await this.adapter.setStateAsync('ems.core.lastTickError', { val: String(err?.message || err), ack: true });
