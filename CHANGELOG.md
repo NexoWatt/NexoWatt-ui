@@ -1,4 +1,5 @@
 ## 0.8.156 - 2026-08-07
+- Windows-Publish-Härtung: `release:check-version-free` startet npm nicht mehr direkt über `npm.cmd`, sondern über `node npm-cli.js` mit sicheren Fallbacks; dadurch entfällt der `spawnSync npm.cmd EINVAL`-Abbruch.
 
 - Unveränderter FENECON-Regelfix aus RC31 unter einer neuen npm-Version veröffentlicht, weil `0.8.155` im öffentlichen npm-Registry bereits belegt ist und nicht überschrieben werden kann.
 - Direkte FENECON/OpenEMS-NVP-Regelung verwendet weiterhin vorrangig das aktive `SetActivePowerEquals`-/706-Readback, danach den bestätigten direkten Sollwert und erst im Kaltstart einen sicheren 0-W-Anker.

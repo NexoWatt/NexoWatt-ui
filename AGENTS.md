@@ -28,7 +28,7 @@ Treat `io-package.json` and `admin/jsonConfig.json` as contract files for adapte
 ## Mandatory Release Artifact Gate
 No ZIP, TGZ, npm-ready folder, or release candidate may be handed over until the exact packaged artifact has passed all of the following checks:
 
-1. Before finalizing the release, run `npm run release:check-version-free`. It queries the public npm registry and must report that the selected version is unused. If the version exists, bump again; a published SemVer must never be reused. The real publish must never set `NEXOWATT_SKIP_REGISTRY_VERSION_CHECK=1`.
+1. Before finalizing the release, run `npm run release:check-version-free`. It queries the public npm registry and must report that the selected version is unused. On Windows the guard must invoke `npm-cli.js` through `process.execPath` (or `cmd.exe` fallback) and must never directly call `spawnSync('npm.cmd', ..., { shell: false })`, which can fail with `EINVAL`. Run `npm run test:npm-version-free-runtime` before packaging. If the version exists, bump again; a published SemVer must never be reused. The real publish must never set `NEXOWATT_SKIP_REGISTRY_VERSION_CHECK=1`.
 2. Keep the release version identical in `package.json`, the root package in `package-lock.json`, `io-package.json` (`common.version`), and `www/manifest.webmanifest`.
 3. Keep at most seven entries in `io-package.json` under `common.news`; move older history to `CHANGELOG.md`.
 4. Run `node scripts/verify-git-conflict-state.js`.
