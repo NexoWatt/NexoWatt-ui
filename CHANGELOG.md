@@ -1,3 +1,10 @@
+## 0.8.156 - 2026-08-07
+
+- Unveränderter FENECON-Regelfix aus RC31 unter einer neuen npm-Version veröffentlicht, weil `0.8.155` im öffentlichen npm-Registry bereits belegt ist und nicht überschrieben werden kann.
+- Direkte FENECON/OpenEMS-NVP-Regelung verwendet weiterhin vorrangig das aktive `SetActivePowerEquals`-/706-Readback, danach den bestätigten direkten Sollwert und erst im Kaltstart einen sicheren 0-W-Anker.
+- Release-Metadaten vollständig auf `0.8.156` synchronisiert, `common.news` auf sieben Einträge begrenzt und Service-Worker-Cache auf `nexowatt-cache-v456` erhöht.
+- Release-Gate ergänzt: `npm publish` führt jetzt vor allen weiteren Prüfungen automatisch `release:check-version-free` aus und bricht fail-safe ab, wenn die geplante SemVer bereits im öffentlichen npm-Registry existiert oder die Verfügbarkeit nicht sicher geprüft werden kann.
+
 ## 0.8.155 - 2026-08-07
 
 - FENECON/OpenEMS-Direktregelung korrigiert: Der geschlossene NVP-Regelkreis verwendet jetzt vorrangig das Readback der tatsächlich aktiven externen Vorgabe (`SetActivePowerEquals`, typischerweise Register 706) statt der physisch gemessenen ESS-Aktorleistung.
