@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: eeaa22db8b3676067ebb8686277b757a7413073411d6612e461e1ff2b5a86341
+ * Original-Hash: 37d55c6a053cf1afb5ca41040ac9ce21996f9ebece3da02115dde30ea22033c0
  */
 
 /**
@@ -276,8 +276,9 @@ function verifyHeatingRodBudgetSeparation() {
 
   const heatingTs = read('src-ts/runtime-executables/ems/modules/heating-rod-control.ts');
   assert.ok(
-    heatingTs.includes('const usedW = Math.max(observedUsedW, res.accepted ? targetW : 0);'),
-    'Akzeptierte Stufe muss Budget reservieren, ohne den Istwert zu faelschen',
+    heatingTs.includes('const usedW = consumeHeatingRodW(Math.max(observedW, res.accepted ? targetW : 0), d.enabled === true);')
+      && heatingTs.includes('budgetUsedW += Math.round(usedW);'),
+    'Akzeptierte Stufe muss im Budgetpfad reserviert werden, ohne den beobachteten Istwert zu faelschen',
   );
   assert.ok(
     heatingTs.includes('actualW: Math.max(0, Math.round(Number.isFinite(Number(currentHeatingRodW)) ? Number(currentHeatingRodW) : 0))'),

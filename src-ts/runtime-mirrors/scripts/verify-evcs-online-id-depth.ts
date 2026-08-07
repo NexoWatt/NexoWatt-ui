@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: abe0178ea3feebbe0523abe966cb207430da20379fcb793e9d0ea00b02ef1ed2
+ * Original-Hash: 4e715c8db4f0b52ce73e8f1302425efae01bc61caced16cacaed8ef4c4741d0a
  */
 
 /**
@@ -75,12 +75,13 @@ const cm = 'ems/modules/charging-management.js';
 const cmTs = 'src-ts/runtime-executables/ems/modules/charging-management.ts';
 const evcsTs = 'src-ts/runtime-executables/www/evcs.ts';
 const pkgVersion = JSON.parse(read('package.json')).version;
-if (!/^\d+\.\d+\.\d+$/.test(String(pkgVersion || ''))) { console.error(`[$evcs-online-id-depth] invalid package version: ${pkgVersion}`); process.exit(1); }
+if (!/^\d+\.\d+\.\d+$/.test(String(pkgVersion || ''))) { console.error(`[evcs-online-id-depth] invalid package version: ${pkgVersion}`); process.exit(1); }
 for (const f of [main, mainTs]) {
-  must(f, 'if (wb.onlineId) this.evcsIdToKey[wb.onlineId] = `evcs.${wb.index}.online`;', `${f} maps onlineId to evcs online mirror`);
+  must(f, '{ configuredId: wb.onlineId, key: `evcs.${index}.online` }', `${f} registers onlineId in unified EVCS input registry`);
   must(f, "online:        { type: 'boolean', role: 'indicator.reachable'", `${f} creates evcs.<n>.online state`);
-  must(f, '[wb.powerId, wb.energyTotalId, wb.statusId, wb.onlineId, wb.activeId', `${f} subscribes onlineId`);
-  must(f, "add(wb.onlineId, this.evcsIdToKey && wb.onlineId ? this.evcsIdToKey[wb.onlineId] : '');", `${f} refresh-plan includes onlineId`);
+  must(f, 'const sourceIds = Array.from(this._nwEvcsInputBindingsBySourceId.keys());', `${f} subscribes onlineId and alias sources through registry`);
+  must(f, 'for (const binding of (Array.isArray(bindings) ? bindings : [])) addEvcsBinding(binding);', `${f} refresh-plan includes all online bindings`);
+  must(f, 'const list = map.get(sid) || [];', `${f} supports one station-online ID for multiple connectors`);
 }
 for (const f of [engine, engineTs]) {
   must(f, 'const onlineId = (wb.onlineId || \'\').trim();', `${f} keeps explicit onlineId`);
@@ -94,8 +95,9 @@ for (const f of [cm, cmTs]) {
   must(f, 'const onlineId = String(wb.onlineId || \'\').trim();', `${f} reads onlineId`);
   must(f, 'key: `cm.wb.${safe}.onlineRaw`', `${f} registers onlineRaw datapoint`);
   must(f, 'const onlineRaw = (onlineId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.onlineRaw`) : null;', `${f} reads onlineRaw`);
-  must(f, 'if (onlineId) {\n                online = normalizeEvcsOnlineFlag(onlineRaw, false);', `${f} onlineId is authoritative`);
-  must(f, '} else if (statusId) {\n                online = normalizeEvcsOnlineFlag(statusRaw, false);', `${f} statusId remains fallback`);
+  must(f, "const explicitOnlineFlag = onlineId ? normalizeEvcsOnlineFlag(onlineRaw, null) : null;", `${f} normalizes explicit onlineId independently`);
+  must(f, "if (onlineId) {\n                const explicitOnline = explicitOnlineFlag;", `${f} onlineId is authoritative`);
+  must(f, "} else if (statusFresh) {\n                online = normalizeEvcsStatusReachability(statusRaw, true);", `${f} fresh status remains reachability fallback`);
 }
 must(evcsTs, 'const online = (_evcsBoolOrNull(localOnline) !== null) ? localOnline : emsOnline;', 'VIS prefers explicit local online mirror');
 console.log('[evcs-online-id-depth] OK');

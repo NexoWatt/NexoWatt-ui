@@ -1,3 +1,15 @@
+## 0.8.157 - 2026-08-06
+
+- EVCS-Eingangspfad auf eine zentrale, verlustfreie Multi-Binding-Struktur umgestellt. Ein gemeinsam genutzter Stations-Datenpunkt wie Online, Heartbeat oder Status aktualisiert nun alle zugehörigen Ladepunkte statt nur den zuletzt konfigurierten Connector.
+- Sämtliche lesenden Ladepunkt-Zuordnungen werden einheitlich registriert: Leistung, Gesamtenergie, Status, Online, Aktiv, Fahrzeug verbunden, Ladebedarf, Heartbeat, Fahrzeug-SoC, Phasenrückmeldung, Lock, RFID und Modus.
+- Aliasobjekte werden bis zur Read-Quelle aufgelöst und zusätzlich abonniert. Ein Alias-Zielereignis liest sofort wieder die konfigurierte Alias-ID, damit Alias-Transformationen und deklarierte Einheiten erhalten bleiben.
+- Der vorhandene 3-Sekunden-Sicherheitsabruf aktualisiert nicht mehr nur den internen Cache, sondern repariert auch die lokalen `evcs.<n>.*`-Spiegelstates. Verpasste `stateChange`-Ereignisse führen dadurch nicht mehr zu dauerhaft stehenden NexoWatt-Werten.
+- Quellzeitstempel bleiben für Freshness- und Stale-Bewertungen erhalten. Eigene bestätigte Spiegel-State-Ereignisse dürfen Messwerte nicht künstlich verjüngen; identische Quellproben werden zugleich nicht unnötig erneut geschrieben.
+- Zusätzliche Rohspiegel für Fahrzeugverbindung, Ladebedarf, Heartbeat und Phasenrückmeldung ergänzt. Die fachliche Ladebedarfs-, Online-, Status- und Sicherheitsauswertung bleibt weiterhin direkt am Original-Datenpunkt im Charging-Management.
+- Die Änderung betrifft ausschließlich Subscription, Read-Fallback, Normalisierung und Spiegelung. Ladebudget, PV-Regelung, Sollwertschreiben, Speicherlogik, §14a und EEBUS-Direktanbindung bleiben unverändert.
+- Neue Regression prüft produktive Methoden dynamisch auf gemeinsame Stations-IDs, Alias-Readback, Mirror-Reparatur, Timestamp-Deduplizierung und Energieeinheiten. Service-Worker-Cache auf `nexowatt-cache-v457` und zentrale Versionskennungen auf 0.8.157 aktualisiert.
+- TypeScript-Migrationskontrolle: keine zusätzliche `@ts-nocheck`-Datei (weiterhin 60); der offen ausgewiesene Runtime-Zeilenrahmen steigt für die verlustfreie Multi-Binding-, Alias- und Spiegel-Reparaturlogik transparent von 150.686 auf 150.976 Zeilen.
+
 ## 0.8.156 - 2026-08-05
 
 - Versionierte direkte Adapter-API zwischen `ioBroker.eebus` und dem zentralen NexoWatt-§14a-Regler ergänzt. CLS-/LPC-Befehle benötigen im Direktbetrieb keine manuelle Datenpunktzuordnung mehr.

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/sw.ts
- * Quell-Hash: sha256:900bd75ea265ab8a0ed5b4f898226e015b95b4e4db698d3efb9fd44ce812d7b8
+ * Quell-Hash: sha256:61e5a342a7cdeb40de2de5612140d08b301857721067b1e801f79ecfcb6c6fcb
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -42,7 +42,7 @@
 
 // Increment cache name on releases so browser updates JS/HTML reliably.
 // NOTE: Keep this monotonic to force SW updates on hotfixes.
-const CACHE_NAME = 'nexowatt-cache-v456';
+const CACHE_NAME = 'nexowatt-cache-v457';
 
 const OFFLINE_URLS = [
   './',
