@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 61b3bce0d5c229a26b80997afd21e1d221af2a9fee9573068dab9a2c80bf460a
+ * Original-Hash: ba20edd9322c9c9f165d1eab4444aa1ebfb98eb7be278c605f3a81be9d89433e
  */
 
 /**
@@ -44,6 +44,7 @@ const {
   isFeneconHybrid,
   resolveControlMode,
   validateSingleConfig,
+  isLikelyFemsGridMeasurementObjectId,
   calculateFemsGridTargetW,
   validateFarmRows,
 } = require('../ems/services/fenecon-hybrid-control');
@@ -305,6 +306,51 @@ async function testAcRemainsDirect() {
   assert.equal(dp.writes.some((w) => w.key === 'st.targetPowerW' && w.value === 850), true);
   assert.equal(dp.writes.some((w) => w.key === 'st.feneconGridSetpointW'), false, 'FENECON AC must never use native FEMS NVP control');
   assert.equal(adapter._states.get('speicher.regelung.commandFamily').val, 'signed');
+}
+
+/**
+ * Code-Teil: testAutoIgnoresGridMeasurementAndWritesDirect
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+async function testAutoIgnoresGridMeasurementAndWritesDirect() {
+  const foreign = new Map();
+  const dp = new FakeDp({
+    'st.targetPowerW': entry('nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW', 0),
+    'st.feneconGridSetpointW': entry('nexowatt-devices.0.devices.ess1.aliases.r.gridPower', 0),
+    'st.feneconEssActualPowerW': entry('nexowatt-devices.0.devices.ess1.aliases.r.powerAc', 1200),
+  }, foreign);
+  const adapter = makeAdapter({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'auto',
+  }, foreign);
+  const mod = new SpeicherRegelungModule(adapter, dp);
+  mod._latestNvpRawW = 1200;
+  mod._latestNvpSampleTs = now();
+
+  await mod._applyTargetW(1150, 'field regression: no PV, direct discharge', 'eigenverbrauch');
+
+  assert.equal(
+    dp.writes.some((row) => row.key === 'st.targetPowerW' && row.value === 1150),
+    true,
+    'aliases.r.gridPower is a measurement and must not suppress the signed ESS command',
+  );
+  assert.equal(
+    dp.writes.some((row) => row.key === 'st.feneconGridSetpointW'),
+    false,
+    'the read-only grid measurement must never be used as the native FEMS target',
+  );
+  assert.equal(adapter._states.get('speicher.regelung.commandFamily').val, 'signed');
+  const splitDiag = JSON.parse(String(adapter._states.get('speicher.regelung.splitTargetObjIds').val || '{}'));
+  assert.equal(splitDiag.feneconControlMode, 'direct-ess');
+  assert.equal(splitDiag.feneconControlReason, 'auto-grid-measurement-ignored-direct-ess');
 }
 
 /**
@@ -593,6 +639,21 @@ async function testFarmContinuousAuto() {
     setSignedPowerId: 'fems.ess0.SetActivePowerEquals',
   }, { writableStorageCount: 1 }).mode, 'fems-grid');
 
+  assert.equal(
+    isLikelyFemsGridMeasurementObjectId('nexowatt-devices.0.devices.ess1.aliases.r.gridPower'),
+    true,
+  );
+  const measurementFallback = resolveControlMode({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'auto',
+    feneconGridSetpointId: 'nexowatt-devices.0.devices.ess1.aliases.r.gridPower',
+    feneconEssActualPowerId: 'nexowatt-devices.0.devices.ess1.aliases.r.powerAc',
+    setSignedPowerId: 'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+  }, { writableStorageCount: 1 });
+  assert.equal(measurementFallback.mode, 'direct-ess');
+  assert.equal(measurementFallback.reason, 'auto-grid-measurement-ignored-direct-ess');
+
   assert.equal(resolveControlMode({
     vendorProfile: 'fenecon-openems',
     coupling: 'dc',
@@ -660,6 +721,27 @@ async function testFarmContinuousAuto() {
   assert.equal(badDirectAsGrid.ok, false);
   assert.equal(badDirectAsGrid.reason, 'fenecon-grid-target-is-direct-ess-setpoint');
 
+  const measurementAutoValid = validateSingleConfig({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'auto',
+    feneconGridSetpointId: 'nexowatt-devices.0.devices.ess1.aliases.r.gridPower',
+    feneconEssActualPowerId: 'nexowatt-devices.0.devices.ess1.aliases.r.powerAc',
+    setSignedPowerId: 'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+  });
+  assert.equal(measurementAutoValid.ok, true, measurementAutoValid.reason);
+  assert.equal(measurementAutoValid.resolution.mode, 'direct-ess');
+
+  const measurementExplicitInvalid = validateSingleConfig({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'fems-grid',
+    feneconGridSetpointId: 'nexowatt-devices.0.devices.ess1.aliases.r.gridPower',
+    feneconEssActualPowerId: 'nexowatt-devices.0.devices.ess1.aliases.r.powerAc',
+  });
+  assert.equal(measurementExplicitInvalid.ok, false);
+  assert.equal(measurementExplicitInvalid.reason, 'fems-grid-target-is-measurement');
+
   const calc = calculateFemsGridTargetW({ nvpW: 2000, essActualW: -3000, batteryTargetW: -1050 });
   assert.deepEqual({ ok: calc.ok, gridTargetW: calc.gridTargetW }, { ok: true, gridTargetW: 50 });
 
@@ -725,6 +807,7 @@ async function testFarmContinuousAuto() {
 
   await testSingleNative();
   await testAcRemainsDirect();
+  await testAutoIgnoresGridMeasurementAndWritesDirect();
   await testNativeClampAndAcceptedTarget();
   await testDirectSetpointReadbackDrivesNvpCorrection();
   await testFarmContinuousAuto();
@@ -744,9 +827,11 @@ async function testFarmContinuousAuto() {
   assert.match(storageTs, /FENECON Hybrid: PV-Feed-forward deaktiviert/);
   assert.match(appTs, /r\.essActivePower/);
   assert.match(appTs, /ctrl\.gridSetpointW/);
+  assert.match(appTs, /isFeneconGridMeasurementId/);
+  assert.match(appTs, /aliases\.r\.gridPower/);
   assert.doesNotMatch(appTs, /ctrl\.powerSetpointW[^\n]+FEMS-NVP/i);
 
-  console.log('[fenecon-hybrid-controller] OK: continuous native/direct FENECON control, direct-setpoint NVP feedback, strict command-role separation, real AC ESS feedback and mixed-farm safety verified.');
+  console.log('[fenecon-hybrid-controller] OK: continuous native/direct FENECON control, grid-measurement fallback, direct-setpoint NVP feedback, strict command-role separation, real AC ESS feedback and mixed-farm safety verified.');
 })().catch((error) => {
   console.error(error && error.stack ? error.stack : error);
   process.exit(1);

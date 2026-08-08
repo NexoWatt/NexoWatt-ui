@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:5b7244abb242374a2c3c2aea37f5f1a5ae5858fb1cfbdc9061f9b8db805ee7b8
+ * Quell-Hash: sha256:4650fbd4911615267627b3efa10eb8e68e0c326fe65c5173b13ad7f68d6d141d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1059,7 +1059,7 @@
     { key: 'socObjectId', label: 'SoC (%)', requiredModes: ['targetPower','limits','enableFlags'] },
     { key: 'batteryPowerObjectId', label: 'Ist-Leistung (W) (optional)', requiredModes: [] },
     { key: 'dcPvPowerObjectId', label: 'DC-/Hybrid-PV Erzeugung (W)', requiredModes: [], showForCoupling: ['dc'], hint: 'Nur bei DC-/Hybrid-Speichern: Erzeugungsleistung des Hybrid-/PV-Wechselrichters. Dieser Wert ist eine Messung, kein Batterie-Sollwert, und hilft bei Forecast-/0-Einspeise-/FENECON-Erkennung.' },
-    { key: 'feneconGridSetpointObjectId', label: 'FENECON FEMS-NVP-Ziel (W)', requiredModes: ['targetPower'], showForVendor: ['fenecon-openems'], hint: 'Nur ein echter ctrlBalancing0/SetGridActivePower-DP. Niemals SetActivePowerEquals/706 oder aliases.ctrl.powerSetpointW verwenden. Positive Werte = gewünschter Netzbezug, negative Werte = gewünschte Einspeisung.' },
+    { key: 'feneconGridSetpointObjectId', label: 'FENECON FEMS-NVP-Ziel (W)', requiredModes: ['targetPower'], showForVendor: ['fenecon-openems'], hint: 'Nur ein echter ctrlBalancing0/SetGridActivePower-DP. Messwerte wie aliases.r.gridPower sowie SetActivePowerEquals/706 sind hier unzulässig und werden in Auto ignoriert; dann nutzt NexoWatt den direkten ESS-Sollwert. Positive Werte = gewünschter Netzbezug, negative Werte = gewünschte Einspeisung.' },
     { key: 'feneconEssActualPowerObjectId', label: 'FENECON ESS-Aktor-Istleistung (W)', requiredModes: [], showForVendor: ['fenecon-openems'], hint: 'Für Hybridregelung empfohlen: ess0/ActivePower (typisch Register 604). Dieser Wert dient dem Regelkreis; die allgemeine Ist-Leistung kann separat für Anzeige/History genutzt werden.' },
     { key: 'feneconMinPowerObjectId', label: 'FENECON momentane Mindestleistung (W)', requiredModes: [], showForVendor: ['fenecon-openems'], hint: 'Optional: momentane Untergrenze des ESS-Sollwerts (typisch 702).' },
     { key: 'feneconMaxPowerObjectId', label: 'FENECON momentane Maximalleistung (W)', requiredModes: [], showForVendor: ['fenecon-openems'], hint: 'Optional: momentane Obergrenze des ESS-Sollwerts (typisch 704).' },
@@ -9040,6 +9040,18 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     return 'auto';
   }
 
+  function isFeneconGridMeasurementId(value) {
+    const id = String(value || '').trim().replace(/\s+/g, '').toLowerCase();
+    if (!id) return false;
+    const isRealTarget = /(?:^|\.)aliases(?:\.v1)?\.ctrl\.(?:gridsetpointw|napsetpointw)(?:$|\.)/.test(id)
+      || /setgridactivepower/.test(id)
+      || /ctrlbalancing/.test(id);
+    if (isRealTarget) return false;
+    return /(?:^|\.)aliases(?:\.v1)?\.r\.(?:gridpower|gridactivepower|powergrid|nvppower|nappower)(?:$|\.)/.test(id)
+      || /(?:^|\.)r\.(?:gridpower|gridactivepower|powergrid|nvppower|nappower)(?:$|\.)/.test(id)
+      || /(?:^|[._/-])(?:gridpower|powergrid|nvppower|nappower)(?:$|[._/-])/.test(id);
+  }
+
   function isFeneconHybridUi(profile, coupling) {
     return normalizeStorageVendorProfile(profile) === 'fenecon-openems' && String(coupling || '').trim().toLowerCase() === 'dc';
   }
@@ -12335,6 +12347,12 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       setEmpty('feneconMinPowerObjectId', _nwGetAlias(dev, 'r.minPowerSetpointW'));
       setEmpty('feneconMaxPowerObjectId', _nwGetAlias(dev, 'r.maxPowerSetpointW'));
       setEmpty('feneconActualSetpointObjectId', _nwGetAlias(dev, 'r.powerSetpointReadbackW'));
+      const existingNativeGridTarget = String(dps.feneconGridSetpointObjectId || '').trim();
+      if (isFeneconGridMeasurementId(existingNativeGridTarget)) {
+        dps.feneconGridSetpointObjectId = '';
+        result.changed = true;
+        result.notes.push('FENECON: alter Netzleistungs-Messwert aus dem FEMS-NVP-Zielfeld entfernt; direkte ESS-Regelung bleibt aktiv');
+      }
       const nativeGridTarget = _nwGetWritableAlias(dev, 'ctrl.gridSetpointW')
         || _nwGetWritableAlias(dev, 'ctrl.napSetpointW');
       setEmpty('feneconGridSetpointObjectId', nativeGridTarget);
@@ -13547,6 +13565,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         || /ctrlbalancing/.test(id)
       );
     };
+    const isGridMeasurement = (value) => isFeneconGridMeasurementId(value);
     const validateOne = ({ name = 'Speicher', vendorProfile, coupling, mode, nativeTarget, essActual, directTargets = [], otherWritableStorageCount = 0 }) => {
       const vendor = normalizeStorageVendorProfile(vendorProfile || 'generic');
       const couplingNorm = String(coupling || '').trim().toLowerCase();
@@ -13559,6 +13578,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       }
 
       const nativeId = String(nativeTarget || '').trim();
+      const nativeIsMeasurement = isGridMeasurement(nativeId);
+      const effectiveNativeId = nativeIsMeasurement ? '' : nativeId;
       const actualId = String(essActual || '').trim();
       const directIds = directTargets.map((id) => String(id || '').trim()).filter(Boolean);
       if (!actualId) {
@@ -13567,18 +13588,21 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       if (isPowerBalance(actualId)) {
         throw new Error(`${name}: „powerBalance“ enthält Hybrid-/DC-PV-Wirkung und ist kein gültiger ESS-Regler-Istwert. Bitte ess0/ActivePower / 604 bzw. aliases.v1.r.essActivePower verwenden.`);
       }
-      if (nativeId && directIds.some((id) => sameId(nativeId, id))) {
+      if (nativeIsMeasurement && modeNorm === 'fems-grid') {
+        throw new Error(`${name}: Als FEMS-NVP-Ziel wurde ein Netzleistungs-Messwert (z. B. aliases.r.gridPower) gewählt. Erforderlich ist ein beschreibbarer ctrlBalancing0/SetGridActivePower-DP.`);
+      }
+      if (effectiveNativeId && directIds.some((id) => sameId(effectiveNativeId, id))) {
         throw new Error(`${name}: FEMS-NVP-Ziel und direkter ESS-Sollwert dürfen nicht auf denselben Datenpunkt zeigen.`);
       }
-      if (nativeId && isDirectEssSetpoint(nativeId) && !isGridTarget(nativeId)) {
+      if (effectiveNativeId && isDirectEssSetpoint(effectiveNativeId) && !isGridTarget(effectiveNativeId)) {
         throw new Error(`${name}: Als FEMS-NVP-Ziel wurde ein direkter Batterie-Sollwert (706 / powerSetpointW) gewählt. Erforderlich ist ctrlBalancing0/SetGridActivePower.`);
       }
-      if (directIds.some((id) => sameId(actualId, id)) || (nativeId && sameId(actualId, nativeId))) {
+      if (directIds.some((id) => sameId(actualId, id)) || (effectiveNativeId && sameId(actualId, effectiveNativeId))) {
         throw new Error(`${name}: ESS-Aktor-Istleistung darf nicht mit einem Schreib-/Sollwert-DP identisch sein.`);
       }
 
       if (modeNorm === 'fems-grid') {
-        if (!nativeId) throw new Error(`${name}: Für den FEMS-NVP-Regler muss ein echter ctrlBalancing0/SetGridActivePower-DP zugeordnet sein.`);
+        if (!effectiveNativeId) throw new Error(`${name}: Für den FEMS-NVP-Regler muss ein echter ctrlBalancing0/SetGridActivePower-DP zugeordnet sein.`);
         if (otherWritableStorageCount > 0) throw new Error(`${name}: Ein FEMS-NVP-Master muss der einzige beschreibbare Speicher am NVP sein.`);
         return { resolvedMode: 'fems-grid' };
       }
@@ -13592,13 +13616,16 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         if (!directIds.length) throw new Error(`${name}: In einer gemischten Farm benötigt FENECON einen direkten ESS-Sollwert.`);
         return { resolvedMode: 'direct-ess' };
       }
-      if (nativeId) return { resolvedMode: 'fems-grid' };
-      if (directIds.length) return { resolvedMode: 'direct-ess' };
+      if (effectiveNativeId) return { resolvedMode: 'fems-grid' };
+      if (directIds.length) return { resolvedMode: 'direct-ess', ignoredGridMeasurement: nativeIsMeasurement };
       throw new Error(`${name}: Weder echter FEMS-NVP-Ziel-DP noch direkter ESS-Sollwert ist zugeordnet.`);
     };
 
     const storage = cfg.storage && typeof cfg.storage === 'object' ? cfg.storage : {};
     const dp = storage.datapoints && typeof storage.datapoints === 'object' ? storage.datapoints : {};
+    if (isGridMeasurement(dp.feneconGridSetpointObjectId) && normalizeFeneconControlMode(storage.feneconControlMode) !== 'fems-grid') {
+      dp.feneconGridSetpointObjectId = '';
+    }
     validateOne({
       name: 'Einzel-Speicher',
       vendorProfile: storage.vendorProfile,
@@ -13612,6 +13639,13 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     const sf = cfg.storageFarm && typeof cfg.storageFarm === 'object' ? cfg.storageFarm : {};
     const rows = Array.isArray(sf.storages) ? sf.storages.filter((row) => row && row.enabled !== false) : [];
+    for (const row of rows) {
+      if (isGridMeasurement(row.feneconGridSetpointId || row.feneconGridSetpointObjectId)
+        && normalizeFeneconControlMode(row.feneconControlMode) !== 'fems-grid') {
+        row.feneconGridSetpointId = '';
+        if (Object.prototype.hasOwnProperty.call(row, 'feneconGridSetpointObjectId')) row.feneconGridSetpointObjectId = '';
+      }
+    }
     const writable = rows.filter((row) => !!(
       String(row.feneconGridSetpointId || '').trim()
       || String(row.setSignedPowerId || '').trim()

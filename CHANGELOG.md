@@ -1,3 +1,13 @@
+## 0.8.159 - 2026-08-07
+
+- FENECON/OpenEMS-Automatik gegen eine reale Fehlzuordnung gehärtet: Ein Netzleistungs-Messwert wie `aliases.r.gridPower` wird nicht mehr allein wegen eines belegten Feldes als nativer FEMS-NVP-Schreibpfad ausgewählt.
+- Ist gleichzeitig ein direkter ESS-Sollwert (`SetActivePowerEquals` / 706 beziehungsweise `aliases.ctrl.powerSetpointW`) vorhanden, fällt Auto deterministisch auf die direkte ESS-Regelung zurück. Die Regelung bleibt damit auch bei 0 W PV-Erzeugung aktiv.
+- Expliziter FEMS-NVP-Modus lehnt Netzleistungs-Messwerte mit verständlicher Fehlermeldung ab; nur ein echter beschreibbarer `ctrlBalancing*/SetGridActivePower`-DP ist dort zulässig.
+- AppCenter-Schnellzuordnung und Speichern bereinigen bekannte `r.gridPower`-Fehlzuordnungen automatisch, ohne den direkten Sollwert zu löschen.
+- Regression bildet die Feldkonfiguration exakt nach und bestätigt: signed ESS-Sollwert wird geschrieben, `r.gridPower` wird niemals beschrieben, Kommandofamilie bleibt `signed`.
+- FENECON-Sollwertfeedback aus 0.8.158, EVCS-RC33, §14a-/EEBUS-Direktanbindung und alle übrigen Regelpfade bleiben unverändert.
+- Service-Worker-Cache auf `nexowatt-cache-v459` und zentrale Versionskennungen auf 0.8.159 aktualisiert.
+
 ## 0.8.158 - 2026-08-07
 
 - FENECON/OpenEMS Direktregelung korrigiert: Im Modus `direct-ess` wird die geschlossene NVP-Regelung nicht mehr aus der physischen ESS-Aktorleistung aufgebaut, wenn diese interne DC-PV-Beladung enthalten kann.

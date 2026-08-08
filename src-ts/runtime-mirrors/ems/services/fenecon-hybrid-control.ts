@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 9dacac8def10b9323d94f4c6defb8cba9db755ab24d8636fc1f8711f4385b430
+ * Original-Hash: ae4d90c8b7f00c321ebeee4f50fe333f853cd6a39e445a7e03b80a7cc4e11a17
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/fenecon-hybrid-control.ts
- * Quell-Hash: sha256:d1d1bdd230619c01fca9ffd949c90f363c0b5c3a745853fea07a2ffc659d68ef
+ * Quell-Hash: sha256:6675275699395ae5bf9289437267ffc3b7ebaabb4745b84a61c3930dd275a5b0
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -333,6 +333,25 @@ function isLikelyFemsGridTargetObjectId(value) {
         || /ctrlbalancing/.test(id);
 }
 /**
+ * Code-Teil: isLikelyFemsGridMeasurementObjectId
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function isLikelyFemsGridMeasurementObjectId(value) {
+    const id = normalizeObjectId(value);
+    if (!id || isLikelyFemsGridTargetObjectId(id))
+        return false;
+    return /(?:^|\.)aliases(?:\.v1)?\.r\.(?:gridpower|gridactivepower|powergrid|nvppower|nappower)(?:$|\.)/.test(id)
+        || /(?:^|\.)r\.(?:gridpower|gridactivepower|powergrid|nvppower|nappower)(?:$|\.)/.test(id)
+        || /(?:^|[._/-])(?:gridpower|powergrid|nvppower|nappower)(?:$|[._/-])/.test(id);
+}
+/**
  * Code-Teil: resolveControlMode
  *
  * Zweck:
@@ -348,7 +367,9 @@ function resolveControlMode(config = {}, context = {}) {
     const hybrid = isFeneconHybrid(config);
     const nativeTargetId = getNativeTargetId(config);
     const directTargetIds = getDirectTargetIds(config);
-    const nativeTargetAvailable = !!nativeTargetId;
+    const nativeTargetIsMeasurement = isLikelyFemsGridMeasurementObjectId(nativeTargetId);
+    const nativeTargetWritable = context.nativeTargetWritable !== false;
+    const nativeTargetAvailable = !!nativeTargetId && !nativeTargetIsMeasurement && nativeTargetWritable;
     const directTargetAvailable = hasWritableDirectTarget(config, context);
     const writableStorageCountRaw = finite(context.writableStorageCount);
     const writableStorageCount = writableStorageCountRaw === null ? 1 : Math.max(0, Math.round(writableStorageCountRaw));
@@ -360,6 +381,8 @@ function resolveControlMode(config = {}, context = {}) {
         hybrid,
         requestedMode,
         nativeTargetAvailable,
+        nativeTargetIsMeasurement,
+        nativeTargetWritable,
         directTargetAvailable,
         nativeTargetId,
         directTargetIds,
@@ -377,6 +400,12 @@ function resolveControlMode(config = {}, context = {}) {
         };
     }
     if (requestedMode === 'fems-grid') {
+        if (nativeTargetIsMeasurement) {
+            return { ...common, eligible: true, mode: 'invalid', reason: 'fems-grid-target-is-measurement' };
+        }
+        if (!nativeTargetWritable) {
+            return { ...common, eligible: true, mode: 'invalid', reason: 'fems-grid-target-not-writable' };
+        }
         if (!nativeTargetAvailable) {
             return { ...common, eligible: true, mode: 'invalid', reason: 'fems-grid-target-missing' };
         }
@@ -399,11 +428,23 @@ function resolveControlMode(config = {}, context = {}) {
         }
         return { ...common, eligible: true, mode: 'direct-ess', reason: 'auto-mixed-farm-direct-ess' };
     }
+    if (nativeTargetIsMeasurement && directTargetAvailable) {
+        return { ...common, eligible: true, mode: 'direct-ess', reason: 'auto-grid-measurement-ignored-direct-ess' };
+    }
+    if (!nativeTargetWritable && nativeTargetId && directTargetAvailable) {
+        return { ...common, eligible: true, mode: 'direct-ess', reason: 'auto-readonly-grid-target-ignored-direct-ess' };
+    }
     if (nativeTargetAvailable) {
         return { ...common, eligible: true, mode: 'fems-grid', reason: 'auto-dedicated-fems-grid-target' };
     }
     if (directTargetAvailable) {
         return { ...common, eligible: true, mode: 'direct-ess', reason: 'auto-direct-ess-fallback' };
+    }
+    if (nativeTargetIsMeasurement) {
+        return { ...common, eligible: true, mode: 'invalid', reason: 'auto-grid-measurement-without-direct-target' };
+    }
+    if (!nativeTargetWritable && nativeTargetId) {
+        return { ...common, eligible: true, mode: 'invalid', reason: 'auto-readonly-grid-target-without-direct-target' };
     }
     return { ...common, eligible: true, mode: 'invalid', reason: 'auto-no-writable-fenecon-target' };
 }
@@ -590,6 +631,7 @@ module.exports = {
     isPowerBalanceObjectId,
     isLikelyDirectEssSetpointObjectId,
     isLikelyFemsGridTargetObjectId,
+    isLikelyFemsGridMeasurementObjectId,
     resolveHybridAuthority,
     resolveControlMode,
     validateSingleConfig,

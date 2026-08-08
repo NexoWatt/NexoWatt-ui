@@ -136,12 +136,22 @@ function isLikelyFemsGridTargetObjectId(value: unknown): boolean {
     || /ctrlbalancing/.test(id);
 }
 
+function isLikelyFemsGridMeasurementObjectId(value: unknown): boolean {
+  const id = normalizeObjectId(value);
+  if (!id || isLikelyFemsGridTargetObjectId(id)) return false;
+  return /(?:^|\.)aliases(?:\.v1)?\.r\.(?:gridpower|gridactivepower|powergrid|nvppower|nappower)(?:$|\.)/.test(id)
+    || /(?:^|\.)r\.(?:gridpower|gridactivepower|powergrid|nvppower|nappower)(?:$|\.)/.test(id)
+    || /(?:^|[._/-])(?:gridpower|powergrid|nvppower|nappower)(?:$|[._/-])/.test(id);
+}
+
 function resolveControlMode(config: AnyRecord = {}, context: AnyRecord = {}): AnyRecord {
   const requestedMode = normalizeControlMode(config.feneconControlMode || config.controlModeMode || config.feneconHybridControlMode);
   const hybrid = isFeneconHybrid(config);
   const nativeTargetId = getNativeTargetId(config);
   const directTargetIds = getDirectTargetIds(config);
-  const nativeTargetAvailable = !!nativeTargetId;
+  const nativeTargetIsMeasurement = isLikelyFemsGridMeasurementObjectId(nativeTargetId);
+  const nativeTargetWritable = context.nativeTargetWritable !== false;
+  const nativeTargetAvailable = !!nativeTargetId && !nativeTargetIsMeasurement && nativeTargetWritable;
   const directTargetAvailable = hasWritableDirectTarget(config, context);
   const writableStorageCountRaw = finite(context.writableStorageCount);
   const writableStorageCount = writableStorageCountRaw === null ? 1 : Math.max(0, Math.round(writableStorageCountRaw));
@@ -154,6 +164,8 @@ function resolveControlMode(config: AnyRecord = {}, context: AnyRecord = {}): An
     hybrid,
     requestedMode,
     nativeTargetAvailable,
+    nativeTargetIsMeasurement,
+    nativeTargetWritable,
     directTargetAvailable,
     nativeTargetId,
     directTargetIds,
@@ -173,6 +185,12 @@ function resolveControlMode(config: AnyRecord = {}, context: AnyRecord = {}): An
   }
 
   if (requestedMode === 'fems-grid') {
+    if (nativeTargetIsMeasurement) {
+      return { ...common, eligible: true, mode: 'invalid', reason: 'fems-grid-target-is-measurement' };
+    }
+    if (!nativeTargetWritable) {
+      return { ...common, eligible: true, mode: 'invalid', reason: 'fems-grid-target-not-writable' };
+    }
     if (!nativeTargetAvailable) {
       return { ...common, eligible: true, mode: 'invalid', reason: 'fems-grid-target-missing' };
     }
@@ -197,11 +215,23 @@ function resolveControlMode(config: AnyRecord = {}, context: AnyRecord = {}): An
     }
     return { ...common, eligible: true, mode: 'direct-ess', reason: 'auto-mixed-farm-direct-ess' };
   }
+  if (nativeTargetIsMeasurement && directTargetAvailable) {
+    return { ...common, eligible: true, mode: 'direct-ess', reason: 'auto-grid-measurement-ignored-direct-ess' };
+  }
+  if (!nativeTargetWritable && nativeTargetId && directTargetAvailable) {
+    return { ...common, eligible: true, mode: 'direct-ess', reason: 'auto-readonly-grid-target-ignored-direct-ess' };
+  }
   if (nativeTargetAvailable) {
     return { ...common, eligible: true, mode: 'fems-grid', reason: 'auto-dedicated-fems-grid-target' };
   }
   if (directTargetAvailable) {
     return { ...common, eligible: true, mode: 'direct-ess', reason: 'auto-direct-ess-fallback' };
+  }
+  if (nativeTargetIsMeasurement) {
+    return { ...common, eligible: true, mode: 'invalid', reason: 'auto-grid-measurement-without-direct-target' };
+  }
+  if (!nativeTargetWritable && nativeTargetId) {
+    return { ...common, eligible: true, mode: 'invalid', reason: 'auto-readonly-grid-target-without-direct-target' };
   }
   return { ...common, eligible: true, mode: 'invalid', reason: 'auto-no-writable-fenecon-target' };
 }
@@ -375,6 +405,7 @@ module.exports = {
   isPowerBalanceObjectId,
   isLikelyDirectEssSetpointObjectId,
   isLikelyFemsGridTargetObjectId,
+  isLikelyFemsGridMeasurementObjectId,
   resolveHybridAuthority,
   resolveControlMode,
   validateSingleConfig,
