@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:a0911f925530639c8edcfd4fe8d3e47663c76f62e364dd553c8ad25918316d32
+ * Quell-Hash: sha256:d35453f414ae0d56ce730a2bbea5c5929c40b617c9c456fb568aaf0516e36ac6
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -4912,8 +4912,17 @@ class NexoWattVis extends utils.Adapter {
       for (const key of keys) {
         for (const root of nested) {
           const value = root[key];
-          if (value === undefined || value === null || value === '') continue;
-          const n = Number(String(value).replace(',', '.'));
+          if (value === undefined || value === null) continue;
+          let raw = String(value).trim();
+          if (!raw) continue;
+          if (raw.includes(',') && raw.includes('.')) {
+            raw = raw.lastIndexOf(',') > raw.lastIndexOf('.')
+              ? raw.replace(/\./g, '').replace(/,/g, '.')
+              : raw.replace(/,/g, '');
+          } else if (raw.includes(',')) {
+            raw = raw.replace(/,/g, '.');
+          }
+          const n = Number(raw);
           if (Number.isFinite(n)) return n;
         }
       }
@@ -4976,6 +4985,7 @@ class NexoWattVis extends utils.Adapter {
       feneconPvTotalId: textFrom('feneconPvTotalId', 'feneconPvTotalObjectId', 'feneconProductionTotalId'),
       feneconPvPassthroughThresholdW: numberOrNull('feneconPvPassthroughThresholdW', 'feneconPvOnThresholdW'),
       feneconPvReleaseThresholdW: numberOrNull('feneconPvReleaseThresholdW', 'feneconPvOffThresholdW'),
+      feneconPvPassthroughDelaySec: numberOrNull('feneconPvPassthroughDelaySec', 'feneconPvOnDelaySec'),
       feneconPvReleaseDelaySec: numberOrNull('feneconPvReleaseDelaySec', 'feneconPvOffDelaySec'),
       feneconApiTimeoutSec: numberOrNull('feneconApiTimeoutSec', 'apiTimeoutSec'),
       // Grenzen / optionale Signale
@@ -7014,10 +7024,10 @@ class NexoWattVis extends utils.Adapter {
       }),
     }));
     const nativeFeneconRows = resolvedFeneconRows.filter((item) => item.resolution.mode === 'fems-grid');
-    // FENECON-Farmregler arbeiten kontinuierlich über den beim Speichern
-    // aufgelösten Pfad. PV, Forecast und Tageszeit lösen keinen No-Write- oder
-    // Reglerhoheitswechsel mehr aus. Ein echter FEMS-NVP-Master bleibt exklusiv;
-    // gemischte Farmen verwenden direkte ESS-Leistungsverteilung.
+    // Ein nativer FEMS-NVP-Master bleibt in einer Farm exklusiv. Gemischte
+    // Speicherfarmen verwenden deshalb immer die direkte EOS-Verteilung. Die
+    // PV-abhaengige FEMS-/EOS-Automatik ist ausschliesslich fuer den einzelnen,
+    // exklusiven FENECON-Hybrid in der Speicher-App vorgesehen.
 
     if (nativeFeneconRows.length === 1) {
       const nativeItem = nativeFeneconRows[0];
@@ -7026,16 +7036,32 @@ class NexoWattVis extends utils.Adapter {
       const essActualId = String(storage.feneconEssActualPowerId || storage.signedPowerId || '').trim();
       const minPowerId = String(storage.feneconMinPowerId || '').trim();
       const maxPowerId = String(storage.feneconMaxPowerId || '').trim();
+      const parseStrictNumber = (raw) => {
+        if (raw === null || raw === undefined) return null;
+        if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
+        if (typeof raw !== 'string') return null;
+        let textValue = raw.trim();
+        if (!textValue) return null;
+        if (textValue.includes(',') && textValue.includes('.')) {
+          if (textValue.lastIndexOf(',') > textValue.lastIndexOf('.')) {
+            textValue = textValue.replace(/\./g, '').replace(/,/g, '.');
+          } else {
+            textValue = textValue.replace(/,/g, '');
+          }
+        } else if (textValue.includes(',')) {
+          textValue = textValue.replace(/,/g, '.');
+        }
+        const parsed = Number(textValue);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
       const readNumber = async (objectId) => {
         const id = String(objectId || '').trim();
         if (!id) return null;
         try {
           const st = await this.getForeignStateAsync(id);
-          if (!st || st.val === undefined || st.val === null) return null;
-          let value = typeof st.val === 'number'
-            ? st.val
-            : Number(String(st.val).trim().replace(',', '.'));
-          if (!Number.isFinite(value)) return null;
+          if (!st) return null;
+          let value = parseStrictNumber(st.val);
+          if (value === null) return null;
           try {
             const obj = await this.getForeignObjectAsync(id);
             const unit = String(obj && obj.common && obj.common.unit || '').trim().toLowerCase();
@@ -7051,8 +7077,8 @@ class NexoWattVis extends utils.Adapter {
         for (const id of ids) {
           try {
             const st = await this.getStateAsync(id);
-            const n = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
-            if (Number.isFinite(n)) return n;
+            const n = st ? parseStrictNumber(st.val) : null;
+            if (n !== null) return n;
           } catch (_e) {}
         }
         return null;
@@ -7064,14 +7090,30 @@ class NexoWattVis extends utils.Adapter {
       const minPowerW = await readNumber(minPowerId);
       const maxPowerW = await readNumber(maxPowerId);
       let effectiveBatteryTargetW = w;
-      if (Number.isFinite(minPowerW)) effectiveBatteryTargetW = Math.max(Number(minPowerW), effectiveBatteryTargetW);
-      if (Number.isFinite(maxPowerW)) effectiveBatteryTargetW = Math.min(Number(maxPowerW), effectiveBatteryTargetW);
+      const powerLimitsInvalid = Number.isFinite(minPowerW)
+        && Number.isFinite(maxPowerW)
+        && Number(minPowerW) > Number(maxPowerW);
+      if (!powerLimitsInvalid) {
+        if (Number.isFinite(minPowerW)) effectiveBatteryTargetW = Math.max(Number(minPowerW), effectiveBatteryTargetW);
+        if (Number.isFinite(maxPowerW)) effectiveBatteryTargetW = Math.min(Number(maxPowerW), effectiveBatteryTargetW);
+      }
       effectiveBatteryTargetW = Math.round(effectiveBatteryTargetW);
-      const calculation = nwCalculateFemsGridTargetW({
-        nvpW,
-        essActualW,
-        batteryTargetW: effectiveBatteryTargetW,
-      });
+      const calculation = powerLimitsInvalid
+        ? {
+          ok: false,
+          reason: 'fenecon-power-limits-invalid',
+          nvpW: Number.isFinite(nvpW) ? Math.round(Number(nvpW)) : null,
+          essActualW: Number.isFinite(essActualW) ? Math.round(Number(essActualW)) : null,
+          batteryTargetW: effectiveBatteryTargetW,
+          gridTargetW: null,
+          minPowerW: Number(minPowerW),
+          maxPowerW: Number(maxPowerW),
+        }
+        : nwCalculateFemsGridTargetW({
+          nvpW,
+          essActualW,
+          batteryTargetW: effectiveBatteryTargetW,
+        });
 
       const releaseRows = [];
       const directIds = [storage.setSignedPowerId, storage.setChargePowerId, storage.setDischargePowerId]

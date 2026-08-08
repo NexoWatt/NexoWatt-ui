@@ -296,10 +296,11 @@ async function runScenario({ name, config, values, entries, stateCache, states, 
     assert.strictEqual(r.source, 'pv', `${r.name}: falsche Quelle ${r.source}`);
   }
 
-  // 6) MultiUse ist eine Policy-Schicht und darf die Regelung auch ohne Speicherregelungs-Haken aktivieren.
+  // 6) MultiUse ist eine reine Policy-Schicht. Sie beeinflusst die aktive
+  // Einzel-Topologie, erzeugt aber niemals selbst einen zweiten Hardwarewriter.
   {
     const cfg = baseConfig({
-      enableStorageControl: false,
+      enableStorageControl: true,
       enableMultiUse: true,
       installerConfig: { storageMultiUse: { enabled: true } },
       storage: { selfDischargeEnabled: true, selfMinSocPct: 30, lskEnabled: false, reserveEnabled: false },
@@ -317,6 +318,32 @@ async function runScenario({ name, config, values, entries, stateCache, states, 
     });
     assert(r.soll > 0 && r.soll < 2500, `${r.name}: MultiUse muss Entladung anfordern, erhalten ${r.soll} W`);
     assert.strictEqual(r.adapter.states['speicher.regelung.policyMode'].val, 'multiuse', `${r.name}: policyMode nicht multiuse`);
+  }
+
+  // 6b) Ohne aktive Einzel- oder Farm-Topologie bleibt MultiUse bewusst
+  // schreibfrei. Damit kann eine Policy-App niemals versehentlich einen
+  // Speicher-Sollwert erzeugen.
+  {
+    const cfg = baseConfig({
+      enableStorageControl: false,
+      enableStorageFarm: false,
+      enableMultiUse: true,
+      installerConfig: { storageMultiUse: { enabled: true } },
+    });
+    const r = await runScenario({
+      name: 'MultiUse ohne Topologie bleibt schreibfrei',
+      config: cfg,
+      entries: baseEntries({ battery: true }),
+      values: {
+        'grid.powerW': nowState(2000),
+        'grid.powerRawW': nowState(2000),
+        'st.socPct': nowState(80),
+        'st.batteryPowerW': nowState(0),
+      },
+    });
+    assert.strictEqual(r.soll, null, `${r.name}: ohne Writer-Topologie darf kein Sollwert entstehen`);
+    assert.strictEqual(r.adapter.states['speicher.regelung.aktiv'].val, false, `${r.name}: Writer darf nicht aktiv sein`);
+    assert.strictEqual(r.dp.writes.length, 0, `${r.name}: Hardware-DP wurde trotz fehlender Topologie beschrieben`);
   }
 
   // 7) Eine echte Speicherfarm startet die Basis-Eigenverbrauchsoptimierung selbst
@@ -345,7 +372,7 @@ async function runScenario({ name, config, values, entries, stateCache, states, 
     assert.strictEqual(r.adapter.states['speicher.regelung.aktivAutoSpeicherfarm'].val, true, `${r.name}: Auto-Farm-Diagnose fehlt`);
     assert.strictEqual(r.adapter.farmWrites.length, 1, `${r.name}: Farm-Verteilung wurde nicht genutzt`);
     assert(r.adapter.farmWrites[0].w >= 1800 && r.adapter.farmWrites[0].w <= 2200, `${r.name}: Farm-Sollwert unplausibel ${r.adapter.farmWrites[0].w} W`);
-    assert.strictEqual(r.adapter.states['speicher.regelung.schreibStatus'].val, 'farm', `${r.name}: Schreibstatus nicht farm`);
+    assert.match(String(r.adapter.states['speicher.regelung.schreibStatus'].val || ''), /farm/i, `${r.name}: Schreibstatus nicht farm`);
     assert.strictEqual(r.dp.writes.filter((row) => row.key === 'st.targetPowerW').length, 0, `${r.name}: Einzel-Speicherpfad darf parallel nicht schreiben`);
   }
 

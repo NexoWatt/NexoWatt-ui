@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 204c32bfed178fb5ad20e759379901257db9f2ab1144da01bbec3ca8c74d95f6
+ * Original-Hash: ee5073949f187b6487faf73feb427cd88fade38aa0e76dd8fc27bd4dbf4cab40
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/threshold-control.ts
- * Quell-Hash: sha256:78d8fdd6cc040c6153995c3a9cab9f9504b4f9acdd4933ee167b05d840965595
+ * Quell-Hash: sha256:08a78eb90fc3376e1037f192a67a9ae51da204abaa970b34266efe64199a1442
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -80,6 +80,9 @@ const { recordAcceptedActuatorTransition } = require('../services/accepted-power
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function num(v, fallback = null) {
+    if (v === null || v === undefined) return fallback;
+    if (typeof v === 'string' && !v.trim()) return fallback;
+    if (typeof v !== 'number' && typeof v !== 'string') return fallback;
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
 }

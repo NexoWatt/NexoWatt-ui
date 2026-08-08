@@ -22,6 +22,9 @@ const { BaseModule } = require('./base');
 const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
 const { recordAcceptedActuatorTransition } = require('../services/accepted-power-effects');
 function num(v, fallback = null) {
+    if (v === null || v === undefined) return fallback;
+    if (typeof v === 'string' && !v.trim()) return fallback;
+    if (typeof v !== 'number' && typeof v !== 'string') return fallback;
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
 }

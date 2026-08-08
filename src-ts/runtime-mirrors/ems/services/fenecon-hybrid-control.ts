@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0d94e699c8f93ef804fc36eca66177d3e1a4a922ccda9c9a720fe0dd7b2e7e40
+ * Original-Hash: 3f51fc598679a4eba7de7d68edf8103a577af2eeb10bc08cb43805287ea18d92
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/fenecon-hybrid-control.ts
- * Quell-Hash: sha256:720b37ed8e1967f1db28325e49750ff7cd141d9e3bf9782f2ed66a32aef06687
+ * Quell-Hash: sha256:ca413bed3fb53431a77aa471d1c21986922b5a9ff1587774ae64cb022651a184
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -73,6 +73,12 @@ function text(value) {
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function finite(value) {
+    if (value === null || value === undefined)
+        return null;
+    if (typeof value === 'string' && !value.trim())
+        return null;
+    if (typeof value !== 'number' && typeof value !== 'string')
+        return null;
     const n = Number(value);
     return Number.isFinite(n) ? n : null;
 }
@@ -163,8 +169,8 @@ function normalizeControlMode(value) {
         return 'fems-grid';
     if (['direct-ess', 'direct', 'ess', 'set-active-power', 'direct-power'].includes(raw))
         return 'direct-ess';
-    // Migration: Die frühere PV-/Tag-Nacht-Automatik wird nicht mehr verwendet.
-    // Alte Werte werden auf die sichere kontinuierliche Automatik migriert.
+    // Migration: fruehere Bezeichnungen werden auf die neue PV-abhaengige
+    // FEMS-/EOS-Automatik abgebildet.
     if (['hybrid-auto', 'pv-pass-through', 'day-fems-night-direct', 'fems-day-direct-night'].includes(raw))
         return 'auto';
     return 'auto';
@@ -437,8 +443,9 @@ function resolveControlMode(config = {}, context = {}) {
         }
         return { ...common, eligible: true, mode: 'direct-ess', reason: 'explicit-direct-ess' };
     }
-    // Automatik wird beim Speichern/Start deterministisch aufgelöst und danach
-    // nicht aufgrund von PV, Forecast oder Tageszeit gewechselt.
+    // Der technische EOS-Kommandopfad wird deterministisch aufgeloest. Ob EOS
+    // diesen Pfad im jeweiligen Zyklus benutzen darf, entscheidet anschliessend
+    // resolveHybridAuthority() anhand der frischen PV-Leistung.
     if (otherWritableStorageCount > 0) {
         if (!directTargetAvailable) {
             return { ...common, eligible: true, mode: 'invalid', reason: 'auto-mixed-farm-direct-target-missing' };
@@ -472,24 +479,126 @@ function resolveControlMode(config = {}, context = {}) {
     return { ...common, eligible: true, mode: 'invalid', reason: 'auto-no-writable-fenecon-target' };
 }
 /**
- * Legacy-Kompatibilität für ältere Aufrufer. PV darf die Reglerhoheit nicht
- * mehr umschalten; daher liefert der Helfer ausschließlich den kontinuierlich
- * aufgelösten Kommandopfad und niemals einen PV-bedingten No-Write-Zustand.
+ * Code-Teil: resolveHybridAuthority
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function resolveHybridAuthority(config = {}, runtime = {}) {
     const resolution = resolveControlMode(config, runtime);
-    return {
-        authority: resolution.mode === 'invalid' ? 'blocked' : 'nexowatt',
-        noWrite: false,
-        mode: resolution.mode,
-        reason: resolution.mode === 'invalid'
-            ? resolution.reason
-            : `Kontinuierlicher FENECON-Regelpfad: ${resolution.reason}`,
-        pvW: finite(runtime.pvW),
-        pvFresh: runtime.pvFresh === true,
-        pvBelowSinceMs: 0,
-        pvBelowForMs: 0,
+    const nowMs = Math.max(0, finite(runtime.nowMs) ?? Date.now());
+    const pvW = finite(runtime.pvW);
+    const pvFresh = runtime.pvFresh === true && pvW !== null;
+    const previousAuthorityRaw = text(runtime.previousAuthority).toLowerCase();
+    const previousAuthority = previousAuthorityRaw === 'nexowatt' || previousAuthorityRaw === 'eos'
+        ? 'nexowatt'
+        : 'fems';
+    const onThresholdRaw = finite(config.feneconPvOnThresholdW
+        ?? config.feneconPvPassthroughThresholdW
+        ?? config.feneconPvPassthroughW
+        ?? config.feneconPvThresholdW);
+    const offThresholdRaw = finite(config.feneconPvOffThresholdW
+        ?? config.feneconPvReleaseW
+        ?? config.feneconPvReleaseThresholdW);
+    const onThresholdW = Math.max(0, onThresholdRaw ?? 500);
+    const offThresholdW = Math.max(0, Math.min(onThresholdW, offThresholdRaw ?? 500));
+    const onDelayMs = Math.max(0, (finite(config.feneconPvPassthroughDelaySec) ?? 10) * 1000);
+    const offDelayMs = Math.max(0, (finite(config.feneconPvReleaseDelaySec) ?? 120) * 1000);
+    let pvAboveSinceMs = Math.max(0, finite(runtime.pvAboveSinceMs) ?? 0);
+    let pvBelowSinceMs = Math.max(0, finite(runtime.pvBelowSinceMs) ?? 0);
+/**
+ * Code-Teil: result
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+    const result = (authority, reason) => {
+        const pvAboveForMs = pvAboveSinceMs > 0 ? Math.max(0, nowMs - pvAboveSinceMs) : 0;
+        const pvBelowForMs = pvBelowSinceMs > 0 ? Math.max(0, nowMs - pvBelowSinceMs) : 0;
+        return {
+            authority,
+            noWrite: authority === 'fems',
+            mode: resolution.mode,
+            requestedMode: resolution.requestedMode,
+            reason,
+            pvW,
+            pvFresh,
+            onThresholdW,
+            offThresholdW,
+            onDelayMs,
+            offDelayMs,
+            pvAboveSinceMs,
+            pvAboveForMs,
+            pvBelowSinceMs,
+            pvBelowForMs,
+            transitionPending: authority === previousAuthority
+                && ((pvW !== null && pvW > onThresholdW && authority === 'nexowatt')
+                    || (pvW !== null && pvW < offThresholdW && authority === 'fems')),
+            resolution,
+        };
     };
+    if (resolution.mode === 'invalid') {
+        pvAboveSinceMs = 0;
+        pvBelowSinceMs = 0;
+        return result('blocked', resolution.reason);
+    }
+    // Explizite Expertenmodi bleiben kontinuierlich unter EOS-Hoheit. Ebenso
+    // bleibt eine gemischte Farm beim zentralen EOS-Dispatcher; nur ein exklusiver
+    // einzelner DC-/Hybrid-Speicher darf in die FEMS-Eigenregelung wechseln.
+    if (resolution.requestedMode !== 'auto' || !resolution.hybrid || resolution.otherWritableStorageCount > 0) {
+        pvAboveSinceMs = 0;
+        pvBelowSinceMs = 0;
+        return result('nexowatt', `Kontinuierlicher expliziter FENECON-Regelpfad: ${resolution.reason}`);
+    }
+    // Ein fehlender/veralteter PV-Wert darf niemals als 0 W interpretiert werden.
+    // Fail-safe besitzt dann FEMS die Reglerhoheit; die zentrale 0-W-Firewall kann
+    // einen echten Sperr-/Sicherheitsbefehl trotzdem separat freigeben.
+    if (!pvFresh) {
+        pvAboveSinceMs = 0;
+        pvBelowSinceMs = 0;
+        return result('fems', 'FENECON Automatik: PV-Messung fehlt oder ist veraltet – FEMS-Eigenregelung, kein EOS-Leistungsbefehl');
+    }
+    if (pvW > onThresholdW) {
+        pvBelowSinceMs = 0;
+        if (previousAuthority === 'fems') {
+            pvAboveSinceMs = 0;
+            return result('fems', `FENECON Automatik: PV ${Math.round(pvW)} W > ${Math.round(onThresholdW)} W – FEMS-Eigenregelung`);
+        }
+        if (!pvAboveSinceMs)
+            pvAboveSinceMs = nowMs;
+        const aboveForMs = Math.max(0, nowMs - pvAboveSinceMs);
+        if (aboveForMs >= onDelayMs) {
+            return result('fems', `FENECON Automatik: PV seit ${Math.round(aboveForMs / 1000)} s > ${Math.round(onThresholdW)} W – Uebergabe an FEMS`);
+        }
+        return result('nexowatt', `FENECON Automatik: PV-Uebergabe an FEMS wird entprellt (${Math.round(aboveForMs / 1000)}/${Math.round(onDelayMs / 1000)} s)`);
+    }
+    if (pvW < offThresholdW) {
+        pvAboveSinceMs = 0;
+        if (previousAuthority === 'nexowatt') {
+            pvBelowSinceMs = 0;
+            return result('nexowatt', `FENECON Automatik: PV ${Math.round(pvW)} W < ${Math.round(offThresholdW)} W – EOS-Regelung`);
+        }
+        if (!pvBelowSinceMs)
+            pvBelowSinceMs = nowMs;
+        const belowForMs = Math.max(0, nowMs - pvBelowSinceMs);
+        if (belowForMs >= offDelayMs) {
+            return result('nexowatt', `FENECON Automatik: PV seit ${Math.round(belowForMs / 1000)} s < ${Math.round(offThresholdW)} W – EOS uebernimmt`);
+        }
+        return result('fems', `FENECON Automatik: EOS-Uebernahme wird entprellt (${Math.round(belowForMs / 1000)}/${Math.round(offDelayMs / 1000)} s)`);
+    }
+    pvAboveSinceMs = 0;
+    pvBelowSinceMs = 0;
+    return result(previousAuthority, `FENECON Automatik: PV ${Math.round(pvW)} W im Umschaltband – Reglerhoheit bleibt bei ${previousAuthority === 'fems' ? 'FEMS' : 'EOS'}`);
 }
 /**
  * Code-Teil: validateSingleConfig
@@ -595,6 +704,19 @@ function calculateFemsGridTargetW(input = {}) {
     const rawGridTargetW = nvpW + essActualW - batteryTargetW;
     const minW = finite(input.minGridTargetW);
     const maxW = finite(input.maxGridTargetW);
+    if (minW !== null && maxW !== null && minW > maxW) {
+        return {
+            ok: false,
+            reason: 'grid-target-limits-invalid',
+            nvpW: Math.round(nvpW),
+            essActualW: Math.round(essActualW),
+            batteryTargetW: Math.round(batteryTargetW),
+            rawGridTargetW: Math.round(rawGridTargetW),
+            gridTargetW: null,
+            minGridTargetW: minW,
+            maxGridTargetW: maxW,
+        };
+    }
     const gridTargetW = Math.round(clamp(rawGridTargetW, minW, maxW));
     return {
         ok: true,

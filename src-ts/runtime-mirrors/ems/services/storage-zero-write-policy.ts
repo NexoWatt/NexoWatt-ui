@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: de2425705c7557d8487ef7519041a2110cf551840e35526e1c8296aea5682553
+ * Original-Hash: 11c46849e369bfc62f188596dc71dadb5a60c9697eb2e8a761a8f8d7a8b4fa76
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/storage-zero-write-policy.ts
- * Quell-Hash: sha256:d80f0a72247dff03123aba5cee1aa4dc7ca312bae25708b7acea30672dea5524
+ * Quell-Hash: sha256:3bd75c5439fdbce3fe1ff94216e4d0e4713e778811dd49fbd5b6b74d7e224f67
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -61,6 +61,12 @@ exports.decideStorageZeroWrite = decideStorageZeroWrite;
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function finite(value) {
+    if (value === null || value === undefined)
+        return null;
+    if (typeof value === 'string' && !value.trim())
+        return null;
+    if (typeof value !== 'number' && typeof value !== 'string')
+        return null;
     const n = Number(value);
     return Number.isFinite(n) ? n : null;
 }
@@ -203,6 +209,19 @@ function decideStorageZeroWrite(input = {}) {
             ? `${reason} · kurze Messluecke – letzten Sollwert halten`
             : 'Kurze Messluecke – letzten Sollwert halten', 'hold-measurement-grace');
     }
+    // Nach Ablauf der Messluecken-Grace darf ein formal vorhandener, aber als
+    // unbrauchbar markierter Wert (z. B. alter Cachewert) nicht mehr durch die
+    // Zielbandpruefung den alten Nicht-Null-Befehl halten.
+    if (input.measurementGap === true || input.measurementUsable === false) {
+        return {
+            action: 'write-stop',
+            outputW: 0,
+            holdW: 0,
+            explicitStop: true,
+            status: 'write-stop-measurement-timeout',
+            reason: reason || 'NVP-/Speichermessung nach Grace-Zeit nicht verwendbar',
+        };
+    }
     if (inTargetBand) {
         return holdDecision(input, lastTargetW, reason
             ? `${reason} · NVP im Zielband – letzten Sollwert halten`
@@ -249,18 +268,6 @@ function decideStorageZeroWrite(input = {}) {
             explicitStop: true,
             status: 'write-stop-budget-confirmed',
             reason: reason || 'Zentrales PV-Budget vollstaendig anderweitig reserviert',
-        };
-    }
-    // Nach Ablauf der Messluecken-Grace darf nicht unbegrenzt mit einem alten
-    // Befehl weitergefahren werden.
-    if (input.measurementGap === true || input.measurementUsable === false) {
-        return {
-            action: 'write-stop',
-            outputW: 0,
-            holdW: 0,
-            explicitStop: true,
-            status: 'write-stop-measurement-timeout',
-            reason: reason || 'NVP-/Speichermessung nach Grace-Zeit nicht verwendbar',
         };
     }
     if (nvpW !== null) {

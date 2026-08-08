@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 7dd79a0feee0328ac1b341c2df01d253c4dea8eb397fdaf709344492678647db
+ * Original-Hash: 4ef8dd436ae007c5a4bbd5859722e760ca52ab334a3ffce083442b4276696868
  */
 
 /**
@@ -89,7 +89,10 @@ function makeArbiterAdapter() {
   let allowWrite = false;
   const thresholdAdapter = {
     namespace: 'nexowatt-ui.0',
-    config: { enableThresholdControl: true, threshold: { rules: [{ idx: 1, enabled: true, inputId: 'meter.0.power', outputId: 'device.0.shared.relay', outputType: 'boolean', threshold: 100, compare: 'above', onValue: true, offValue: false }] } },
+    config: { enableThresholdControl: true, threshold: { rules: [
+      { idx: 1, enabled: true, inputId: 'meter.0.power', outputId: 'device.0.shared.relay', outputType: 'boolean', threshold: 100, compare: 'above', onValue: true, offValue: false },
+      { idx: 2, enabled: true, inputId: 'meter.0.power', outputId: 'device.0.incomplete.relay', outputType: 'boolean', threshold: null, compare: 'above', onValue: true, offValue: false },
+    ] } },
     log: { warn(){}, info(){}, debug(){}, error(){} },
     async setObjectNotExistsAsync(){},
     async getStateAsync(id){ return states.get(id) || null; },
@@ -97,12 +100,13 @@ function makeArbiterAdapter() {
   };
   const dp = {
     out: false,
+    writes: [],
     async upsert(){},
     getBoolean(key, fallback){ if (key === 'thr.user.r1.enabled') return true; if (key === 'thr.r1.out') return this.out; return fallback; },
     getNumber(key, fallback){ if (key === 'thr.user.r1.mode') return 1; return fallback; },
     getNumberFresh(key, _age, fallback){ if (key === 'thr.r1.in') return 200; return fallback; },
-    async writeBoolean(_key, value){ if (!allowWrite) return false; this.out = !!value; return true; },
-    async writeNumber(){ return false; },
+    async writeBoolean(key, value){ this.writes.push({ key, value: !!value }); if (!allowWrite) return false; this.out = !!value; return true; },
+    async writeNumber(key, value){ this.writes.push({ key, value: Number(value) }); return false; },
   };
   const mod = new ThresholdControlModule(thresholdAdapter, dp);
   thresholdAdapter._stageAActuatorOwnerById = {
@@ -117,6 +121,11 @@ function makeArbiterAdapter() {
     'Explizite manuelle Threshold-Lease muss verbindlich sein');
   await mod.init();
   await mod.tick();
+  assert.strictEqual(states.get('threshold.rules.r2.configured').val, false,
+    'Eine aktivierte Regel ohne gueltige Schwelle darf nicht als konfiguriert gelten');
+  assert.strictEqual(states.get('threshold.rules.r2.status').val, 'unconfigured');
+  assert.strictEqual(dp.writes.some((row) => row.key === 'thr.r2.out'), false,
+    'Eine unvollstaendige Schwellwertregel darf keinen Aktorwrite erzeugen');
   assert.strictEqual(states.get('threshold.rules.r1.active').val, false, 'Fehlgeschlagener Write wurde intern als aktiver Ausgang verbucht');
   assert.strictEqual(states.get('threshold.rules.r1.status').val, 'write_blocked_or_failed');
 
@@ -134,5 +143,5 @@ function makeArbiterAdapter() {
   assert(main.includes("kind: 'manual-relay'"), 'Manuelle Relais-API setzt keine befristete Arbiter-Lease');
   assert(main.includes("writeRelayValue(b, 'switch')") && main.includes("writeRelayValue(v, 'value')"),
     'Boolean- und Zahlen-Relaispfad laufen nicht beide durch den Arbiter');
-  console.log('[actuator-c3-threshold-relay] OK: Threshold-Owner, manuelle Preemption und Write-Fehlerpfad geprueft.');
+  console.log('[actuator-c3-threshold-relay] OK: Threshold-Owner, manuelle Preemption, unvollstaendige Regeln und Write-Fehlerpfad geprueft.');
 })().catch((err) => { console.error(err && err.stack ? err.stack : err); process.exit(1); });

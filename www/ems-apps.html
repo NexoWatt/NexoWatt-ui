@@ -1003,7 +1003,7 @@
               <label class="nw-config-help" style="display:flex; flex-direction:column; gap:4px; max-width:720px;">
                 FENECON-Hybrid-Regelart
                 <select id="storageFeneconControlMode" class="nw-config-input">
-                  <option value="auto">Automatisch: echter FEMS-NVP-DP → FEMS, sonst direkte ESS-Leistung</option>
+                  <option value="auto">Automatisch: PV-Reglerhoheit zwischen FEMS und EOS</option>
                   <option value="direct-ess">Direkte ESS-Leistung – 706 + ESS ActivePower 604</option>
                   <option value="fems-grid">Kontinuierlicher FEMS-NVP-Regler – exklusiver Speicher</option>
                 </select>
@@ -1019,19 +1019,23 @@
               <div id="storageFeneconHybridAutoSettings" style="display:none; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; width:100%;">
                 <label class="nw-config-help" style="display:flex; flex-direction:column; gap:4px;">
                   FEMS ab PV (W)
-                  <input id="storageFeneconPvOnThresholdW" class="nw-config-input" type="number" min="0" step="10" placeholder="200" />
+                  <input id="storageFeneconPvOnThresholdW" class="nw-config-input" type="number" min="0" step="10" placeholder="500" />
                 </label>
                 <label class="nw-config-help" style="display:flex; flex-direction:column; gap:4px;">
                   NexoWatt unter PV (W)
-                  <input id="storageFeneconPvOffThresholdW" class="nw-config-input" type="number" min="0" step="10" placeholder="50" />
+                  <input id="storageFeneconPvOffThresholdW" class="nw-config-input" type="number" min="0" step="10" placeholder="500" />
                 </label>
                 <label class="nw-config-help" style="display:flex; flex-direction:column; gap:4px;">
-                  Übernahmeverzögerung (s)
+                  Übergabe EOS → FEMS (s)
+                  <input id="storageFeneconPvOnDelaySec" class="nw-config-input" type="number" min="0" max="3600" step="1" placeholder="10" />
+                </label>
+                <label class="nw-config-help" style="display:flex; flex-direction:column; gap:4px;">
+                  Übernahme FEMS → EOS (s)
                   <input id="storageFeneconPvOffDelaySec" class="nw-config-input" type="number" min="0" max="3600" step="10" placeholder="120" />
                 </label>
                 <label class="nw-config-help" style="display:flex; flex-direction:column; gap:4px;">
                   FEMS API-Timeout (s)
-                  <input id="storageFeneconApiTimeoutSec" class="nw-config-input" type="number" min="5" max="300" step="1" placeholder="10" />
+                  <input id="storageFeneconApiTimeoutSec" class="nw-config-input" type="number" min="5" max="300" step="1" placeholder="60" />
                 </label>
               </div>
               <label class="nw-config-checklabel" for="storageFeneconAssist" style="display:none;">
@@ -1039,7 +1043,7 @@
                 <span>Legacy-Assist</span>
               </label>
               <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
-                <b>Automatisch</b> gilt nur bei <b>FENECON/OpenEMS + DC/Hybrid</b> und wird beim Speichern/Start kontinuierlich aufgelöst: Ein echter <code>ctrlBalancing0/SetGridActivePower</code>-DP aktiviert den exklusiven FEMS-NVP-Regler. Ohne diesen DP oder in einer gemischten Farm nutzt NexoWatt die direkte ESS-Regelung über <code>SetActivePowerEquals/706</code> mit echter AC-Aktor-Rückmeldung <code>ActivePower/604</code>. PV, Forecast und Tageszeit wechseln die Reglerhoheit nicht.
+                <b>Automatisch</b> gilt nur bei einem einzelnen <b>FENECON/OpenEMS-DC-/Hybridspeicher</b>: Bei frischer <b>PV &gt; 500 W</b> regelt FEMS den Eigenverbrauch selbst und EOS sendet keine zyklischen Leistungsvorgaben. Bei dauerhaft <b>PV &lt; 500 W</b> übernimmt EOS nach der eingestellten Verzögerung. Bei exakt 500 W beziehungsweise innerhalb eines optionalen Umschaltbandes bleibt die bisherige Reglerhoheit bestehen. Fehlt der PV-Wert oder ist er veraltet, bleibt die Anlage fail-safe in der FEMS-Eigenregelung. Ein echter Sicherheits-, §14a-, SoC- oder manueller <b>0-W-Stopp ist jederzeit möglich</b>. Ein nativer <code>ctrlBalancing*/SetGridActivePower</code>-DP wird nur als technischer EOS-Schreibpfad genutzt; andernfalls schreibt EOS direkt über <code>SetActivePowerEquals/706</code> mit <code>ActivePower/604</code> als Rückmeldung. Gemischte Speicherfarmen bleiben vollständig unter EOS-Koordination.
               </div>
             </div>
           </div>

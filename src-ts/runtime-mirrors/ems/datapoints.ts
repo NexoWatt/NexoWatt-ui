@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c07bf9a99575dab8af5368cb7ac223e8dda7b119fb7b58ee60ee1dd8c32f2fbc
+ * Original-Hash: 5ca17be8526ccf2e54124e20a41883ba64509594102a0a436fd12ec5e2c40b84
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/datapoints.ts
- * Quell-Hash: sha256:eea240718cd9febb168821b5976900f6306bd7bafc3a9d9b3f90c1947995a4c3
+ * Quell-Hash: sha256:3bbf7b38d3f42ed4f1d9b1d57c0c654371d7765b8ef90d27fbf7a9675165e835
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -932,26 +932,43 @@ class DatapointRegistry {
         const e = this.getEntry(key);
         if (!e) return fallback;
         const raw = this.getRaw(key);
+        // `Number(null)`, `Number('')` and `Number('   ')` are all 0 in
+        // JavaScript. For measurements and optional limits this would turn a
+        // missing datapoint value into a real 0-W/0-% signal and can therefore
+        // stop, release or clamp an actuator incorrectly. Only an actual finite
+        // number or a non-empty numeric string is accepted here.
+        if (raw === null || raw === undefined) return fallback;
         let n;
         if (typeof raw === 'number') {
             n = raw;
         } else if (typeof raw === 'string') {
             let s = raw.trim();
+            if (!s) return fallback;
             // Support German decimal comma and common thousands separators.
             // - '0,40' => 0.40
             // - '31,5' => 31.5
             // - '1.234,56' => 1234.56
             // - '1,234.56' => 1234.56
-            if (s.includes(',')) {
-                // German/European format: '.' are thousands separators, ',' is decimal separator
-                s = s.replace(/\./g, '').replace(/,/g, '.');
-            } else {
-                // English format: ',' may be thousands separator
-                s = s.replace(/,/g, '');
+            if (s.includes(',') && s.includes('.')) {
+                // Sind beide Trennzeichen vorhanden, bestimmt das zuletzt
+                // vorkommende Zeichen den Dezimaltrenner:
+                // - '1.234,56' => 1234.56
+                // - '1,234.56' => 1234.56
+                if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+                    s = s.replace(/\./g, '').replace(/,/g, '.');
+                } else {
+                    s = s.replace(/,/g, '');
+                }
+            } else if (s.includes(',')) {
+                // Ohne Punkt ist das Komma der uebliche Dezimaltrenner.
+                s = s.replace(/,/g, '.');
             }
             n = Number(s);
         } else {
-            n = Number(raw);
+            // Booleans, objects and arrays are not valid numeric measurements.
+            // Callers that intentionally need boolean-to-number conversion must
+            // use getBoolean() or perform the conversion explicitly.
+            return fallback;
         }
         if (!Number.isFinite(n)) return fallback;
 

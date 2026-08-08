@@ -334,7 +334,12 @@ function verifyGatePlumbing() {
   assert(storage.includes("this.dp.getEntry('st.feneconEssActualPowerW')"), 'FENECON-Hybrid verwendet keine eigene AC-ESS-Aktor-Rückmeldung');
   assert(!storage.includes('_handleFeneconHybridPassThrough'), 'Der veraltete PV-/Tag-No-Write-Pfad ist noch produktiv verdrahtet');
   assert(!main.includes('hybridAutoFeneconRows'), 'Die Speicherfarm enthält noch die veraltete PV-/Tag-Reglerhoheit');
-  assert(storage.includes("write-fenecon-idle-keepalive"), 'Ein echter unveränderter FENECON-0-W-Stopp besitzt keinen expliziten Keepalive-Pfad');
+  assert(storage.includes("storageZeroWriteStatus = 'write-fenecon-eos-idle-keepalive'"),
+    'FENECON unter EOS-Regelhoheit besitzt keinen expliziten 0-W-Leerlauf-Keepalive');
+  assert(storage.includes("'no-write-fems-idle'"),
+    'FENECON unter FEMS-Regelhoheit trennt Leerlauf nicht als echten No-Write vom EOS-Keepalive');
+  assert(storage.includes("'write-zero-override'"),
+    'Ein echter Sicherheits-/Sperr-0-W-Befehl kann die FEMS-No-Write-Phase nicht explizit übersteuern');
 }
 
 (async () => {

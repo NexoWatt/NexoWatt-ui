@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 133cf30c34109ffd142bf6c989734038c9d586d004a42008d16fa21a561a1ae6
+ * Original-Hash: 1b61eb9132b45e0b93756eaab794375a2634a2cf5017cbf266dcae8af652c59a
  */
 
 /**
@@ -43,6 +43,7 @@ const { EventEmitter } = require('node:events');
 const {
   isFeneconHybrid,
   resolveControlMode,
+  resolveHybridAuthority,
   validateSingleConfig,
   isLikelyFemsGridMeasurementObjectId,
   calculateFemsGridTargetW,
@@ -88,18 +89,23 @@ class FakeDp {
     }
   }
   getEntry(key) { return this.entries[key] || null; }
+  _strictNumber(value, fallback = null) {
+    if (value === null || value === undefined) return fallback;
+    if (typeof value === 'string' && !value.trim()) return fallback;
+    if (typeof value !== 'number' && typeof value !== 'string') return fallback;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  }
   getNumberFresh(key, staleMs, fallback = null) {
     const rec = this.entries[key];
     if (!rec) return fallback;
     const age = Math.max(0, now() - Number(rec.ts || now()));
     if (Number.isFinite(Number(staleMs)) && age > Number(staleMs)) return fallback;
-    const value = Number(rec.val);
-    return Number.isFinite(value) ? value : fallback;
+    return this._strictNumber(rec.val, fallback);
   }
   getNumber(key, fallback = null) {
     const rec = this.entries[key];
-    const value = Number(rec && rec.val);
-    return Number.isFinite(value) ? value : fallback;
+    return rec ? this._strictNumber(rec.val, fallback) : fallback;
   }
   getBoolean(key, fallback = false) {
     const rec = this.entries[key];
@@ -424,6 +430,117 @@ async function testDirectSetpointReadbackDrivesNvpCorrection() {
 }
 
 /**
+ * Code-Teil: testNativeMissingOptionalLimitsDoNotClampToZero
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+async function testNativeMissingOptionalLimitsDoNotClampToZero() {
+  const foreign = new Map();
+  const dp = new FakeDp({
+    'st.feneconGridSetpointW': entry('fems.ctrlBalancing0.SetGridActivePower', 0),
+    'st.feneconEssActualPowerW': entry('fems.ess0.ActivePower', -3000),
+  }, foreign);
+  const adapter = makeAdapter({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'fems-grid',
+  }, foreign);
+  const mod = new SpeicherRegelungModule(adapter, dp);
+  mod._latestNvpRawW = 2000;
+  mod._latestNvpSampleTs = now();
+
+  await mod._applyTargetW(-1050, 'missing optional FENECON limits', 'self');
+
+  const gridWrites = dp.writes.filter((row) => row.key === 'st.feneconGridSetpointW');
+  assert.equal(gridWrites.length, 1, 'missing optional FENECON limits must not suppress the native write');
+  assert.equal(gridWrites[0].value, 50, 'missing optional limits must preserve the -1050 W battery target (grid target +50 W)');
+  assert.equal(adapter._states.get('speicher.regelung.acceptedSollW').val, -1050);
+  const calculation = JSON.parse(String(adapter._states.get('speicher.regelung.feneconGridCalculationJson').val || '{}'));
+  assert.equal(calculation.minPowerW, null);
+  assert.equal(calculation.maxPowerW, null);
+  assert.equal(calculation.gridTargetW, 50);
+}
+
+/**
+ * Code-Teil: testNativeMissingRequiredMeasurementFailsClosed
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+async function testNativeMissingRequiredMeasurementFailsClosed() {
+  const foreign = new Map();
+  const dp = new FakeDp({
+    'st.feneconGridSetpointW': entry('fems.ctrlBalancing0.SetGridActivePower', 0),
+    'st.feneconEssActualPowerW': entry('fems.ess0.ActivePower', null),
+    // A generic value must not be used as a substitute for the explicit
+    // FENECON AC-side actuator feedback.
+    'st.batteryPowerW': entry('aliases.r.powerBalance', -3000),
+  }, foreign);
+  const adapter = makeAdapter({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'fems-grid',
+  }, foreign);
+  const mod = new SpeicherRegelungModule(adapter, dp);
+  mod._latestNvpRawW = 2000;
+  mod._latestNvpSampleTs = now();
+
+  await mod._applyTargetW(-1050, 'missing FENECON ESS actual feedback', 'self');
+
+  assert.equal(dp.writes.some((row) => row.key === 'st.feneconGridSetpointW'), false,
+    'native FEMS target must not be written without valid ESS actual feedback');
+  assert.equal(adapter._states.get('speicher.regelung.feneconGridSchreibStatus').val, 'ess-actual-missing');
+  assert.equal(adapter._states.get('speicher.regelung.schreibStatus').val, 'fenecon-native-input-missing');
+}
+
+/**
+ * Code-Teil: testNativeInvalidLimitsFailClosed
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+async function testNativeInvalidLimitsFailClosed() {
+  const foreign = new Map();
+  const dp = new FakeDp({
+    'st.feneconGridSetpointW': entry('fems.ctrlBalancing0.SetGridActivePower', 0),
+    'st.feneconEssActualPowerW': entry('fems.ess0.ActivePower', -3000),
+    'st.feneconMinPowerW': entry('fems.ess0.MinimumPower', 1000),
+    'st.feneconMaxPowerW': entry('fems.ess0.MaximumPower', -1000),
+  }, foreign);
+  const adapter = makeAdapter({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'fems-grid',
+  }, foreign);
+  const mod = new SpeicherRegelungModule(adapter, dp);
+  mod._latestNvpRawW = 2000;
+  mod._latestNvpSampleTs = now();
+
+  await mod._applyTargetW(-1050, 'invalid FENECON min/max limits', 'self');
+
+  assert.equal(dp.writes.some((row) => row.key === 'st.feneconGridSetpointW'), false,
+    'contradictory FENECON limits must fail closed without a hardware write');
+  assert.equal(adapter._states.get('speicher.regelung.feneconGridSchreibStatus').val, 'fenecon-power-limits-invalid');
+  assert.equal(adapter._states.get('speicher.regelung.schreibStatus').val, 'fenecon-native-input-missing');
+}
+
+/**
  * Code-Teil: testNativeClampAndAcceptedTarget
  *
  * Zweck:
@@ -636,6 +753,109 @@ async function testFarmContinuousAuto() {
     const second = await adapter.applyStorageFarmTargetW(1800, { source: 'eigenverbrauch', reason: 'continuous test without PV' });
     assert.equal(second.writeOk, true, JSON.stringify(second));
     assert.ok(adapter.writes.some((row) => row.id === 'farm.fenecon.set' && row.val === 1800), `Direct farm dispatch must remain active independently of PV: ${JSON.stringify(adapter.writes)}`);
+
+    // Exklusiver nativer FEMS-NVP-Master in der Farm: fehlende optionale
+    // Min-/Max-DPs duerfen den Batteriesollwert nicht auf 0 W klemmen.
+    const nativeAdapter = factory({});
+    nativeAdapter.scheduleDerivedFlowUpdate = () => {};
+    nativeAdapter.updateValue = adapter.updateValue;
+    const nativeRows = [{
+      enabled: true,
+      name: 'FENECON Native Farm',
+      vendorProfile: 'fenecon-openems',
+      coupling: 'dc',
+      feneconControlMode: 'fems-grid',
+      feneconGridSetpointId: 'farm.native.grid.set',
+      feneconEssActualPowerId: 'farm.native.ess.actual',
+      socId: 'farm.native.soc',
+      signedPowerId: 'farm.native.ess.actual',
+      maxChargeW: 10000,
+      maxDischargeW: 10000,
+    }, {
+      // Eine Farm ist erst ab zwei konfigurierten Speichern aktiv. Der zweite
+      // Eintrag ist bewusst nur lesend: So bleibt der native FEMS-Master der
+      // einzige Hardware-Schreiber und der One-Writer-Vertrag wird realistisch
+      // geprüft.
+      enabled: true,
+      name: 'Native Farm Monitor',
+      vendorProfile: 'generic',
+      coupling: 'ac',
+      socId: 'farm.native.monitor.soc',
+      signedPowerId: 'farm.native.monitor.actual',
+    }];
+    nativeAdapter.config = {
+      enableStorageControl: false,
+      enableStorageFarm: true,
+      emsApps: { apps: { storage: { installed: false, enabled: false }, storagefarm: { installed: true, enabled: true } } },
+      storage: { staleTimeoutSec: 15, selfMinSocPct: 10, feneconApiTimeoutSec: 60 },
+      storageFarm: { mode: 'pool', schedulerIntervalMs: 1000, feneconApiTimeoutSec: 60, storages: nativeRows },
+    };
+    const nativeTs = Date.now();
+/**
+ * Code-Teil: nativeSeed
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+    const nativeSeed = (id, val) => nativeAdapter.foreign.set(id, { val, ack: true, ts: Date.now(), lc: Date.now() });
+    nativeSeed('farm.native.soc', 70);
+    nativeSeed('farm.native.ess.actual', -3000);
+    nativeSeed('farm.native.grid.set', 0);
+    nativeSeed('farm.native.monitor.soc', 50);
+    nativeSeed('farm.native.monitor.actual', 0);
+    nativeAdapter.internal.set('ems.gridPowerRawW', { val: 2000, ack: true, ts: nativeTs, lc: nativeTs });
+    nativeAdapter.internal.set('storageFarm.configJson', { val: JSON.stringify(nativeRows), ack: true, ts: nativeTs, lc: nativeTs });
+    nativeAdapter.stateCache['storageFarm.configJson'] = { value: JSON.stringify(nativeRows), ack: true, ts: nativeTs, lc: nativeTs };
+    nativeAdapter.stateCache['settings.deviceStaleTimeoutSec'] = { value: 300, ack: true, ts: nativeTs, lc: nativeTs };
+    await nativeAdapter.ensureStorageFarmStates();
+    await nativeAdapter.updateStorageFarmDerived('fenecon-native-strict');
+    nativeAdapter.writes.length = 0;
+    const nativeResult = await nativeAdapter.applyStorageFarmTargetW(-1050, {
+      source: 'eigenverbrauch',
+      reason: 'native optional limits missing',
+    });
+    assert.equal(nativeResult.writeOk, true, JSON.stringify(nativeResult));
+    assert.ok(nativeAdapter.writes.some((row) => row.id === 'farm.native.grid.set' && row.val === 50),
+      `native farm target must remain +50 W when optional limits are missing: ${JSON.stringify(nativeAdapter.writes)}`);
+
+    // Leere Pflichtmesswerte sind kein physikalischer 0-W-Wert und duerfen
+    // keinen neuen FEMS-Netzzielbefehl erzeugen.
+    nativeAdapter.foreign.set('farm.native.ess.actual', { val: '   ', ack: true, ts: Date.now(), lc: Date.now() });
+    nativeAdapter.writes.length = 0;
+    const missingEss = await nativeAdapter.applyStorageFarmTargetW(-900, {
+      source: 'eigenverbrauch',
+      reason: 'native ESS feedback missing',
+    });
+    assert.equal(missingEss.writeOk, false, JSON.stringify(missingEss));
+    assert.equal(nativeAdapter.writes.some((row) => row.id === 'farm.native.grid.set'), false,
+      'empty native ESS feedback must fail closed without a grid-target write');
+    assert.match(String(missingEss.reason || missingEss.status || ''), /ess-actual-missing|calculation/i);
+
+    // Widerspruechliche optionale Leistungsgrenzen muessen ebenfalls fail-closed
+    // sein und duerfen nicht durch sequentielles Clampen einen Fantasiewert bauen.
+    nativeAdapter.foreign.set('farm.native.ess.actual', { val: -3000, ack: true, ts: Date.now(), lc: Date.now() });
+    nativeRows[0].feneconMinPowerId = 'farm.native.min';
+    nativeRows[0].feneconMaxPowerId = 'farm.native.max';
+    nativeSeed('farm.native.min', 1000);
+    nativeSeed('farm.native.max', -1000);
+    nativeAdapter.config.storageFarm.storages = nativeRows;
+    nativeAdapter.internal.set('storageFarm.configJson', { val: JSON.stringify(nativeRows), ack: true, ts: Date.now(), lc: Date.now() });
+    nativeAdapter.stateCache['storageFarm.configJson'] = { value: JSON.stringify(nativeRows), ack: true, ts: Date.now(), lc: Date.now() };
+    await nativeAdapter.updateStorageFarmDerived('fenecon-native-invalid-limits');
+    nativeAdapter.writes.length = 0;
+    const invalidLimits = await nativeAdapter.applyStorageFarmTargetW(-900, {
+      source: 'eigenverbrauch',
+      reason: 'native invalid power limits',
+    });
+    assert.equal(invalidLimits.writeOk, false, JSON.stringify(invalidLimits));
+    assert.equal(nativeAdapter.writes.some((row) => row.id === 'farm.native.grid.set'), false,
+      'contradictory native farm limits must not write a grid target');
+    assert.match(String(invalidLimits.reason || invalidLimits.status || ''), /power-limits-invalid|calculation/i);
   } finally {
     Module._load = originalLoad;
   }
@@ -837,6 +1057,56 @@ async function testFarmContinuousAuto() {
   const calc = calculateFemsGridTargetW({ nvpW: 2000, essActualW: -3000, batteryTargetW: -1050 });
   assert.deepEqual({ ok: calc.ok, gridTargetW: calc.gridTargetW }, { ok: true, gridTargetW: 50 });
 
+  for (const nvpW of [null, undefined, '', '   ']) {
+    const missing = calculateFemsGridTargetW({ nvpW, essActualW: -3000, batteryTargetW: -1050 });
+    assert.equal(missing.ok, false, JSON.stringify({ nvpW, missing }));
+    assert.equal(missing.reason, 'nvp-missing');
+  }
+  for (const essActualW of [null, undefined, '', '   ']) {
+    const missing = calculateFemsGridTargetW({ nvpW: 2000, essActualW, batteryTargetW: -1050 });
+    assert.equal(missing.ok, false, JSON.stringify({ essActualW, missing }));
+    assert.equal(missing.reason, 'ess-actual-missing');
+  }
+  for (const batteryTargetW of [null, undefined, '', '   ']) {
+    const missing = calculateFemsGridTargetW({ nvpW: 2000, essActualW: -3000, batteryTargetW });
+    assert.equal(missing.ok, false, JSON.stringify({ batteryTargetW, missing }));
+    assert.equal(missing.reason, 'battery-target-missing');
+  }
+  const noLimits = calculateFemsGridTargetW({
+    nvpW: 2000,
+    essActualW: -3000,
+    batteryTargetW: -1050,
+    minGridTargetW: null,
+    maxGridTargetW: '',
+  });
+  assert.equal(noLimits.ok, true);
+  assert.equal(noLimits.gridTargetW, 50, 'missing optional limits must not clamp the target to 0 W');
+  const invalidLimits = calculateFemsGridTargetW({
+    nvpW: 2000,
+    essActualW: -3000,
+    batteryTargetW: -1050,
+    minGridTargetW: 500,
+    maxGridTargetW: -500,
+  });
+  assert.equal(invalidLimits.ok, false);
+  assert.equal(invalidLimits.reason, 'grid-target-limits-invalid');
+
+  const autoHigh = resolveHybridAuthority({
+    vendorProfile: 'fenecon-openems', coupling: 'dc', feneconControlMode: 'auto',
+    feneconGridSetpointId: 'fems.ctrlBalancing0.SetGridActivePower',
+    feneconEssActualPowerId: 'fems.ess0.ActivePower',
+    setSignedPowerId: 'fems.ess0.SetActivePowerEquals',
+  }, {
+    writableStorageCount: 1,
+    otherWritableStorageCount: 0,
+    previousAuthority: 'fems',
+    pvW: 800,
+    pvFresh: true,
+    nowMs: 1000,
+  });
+  assert.equal(autoHigh.authority, 'fems');
+  assert.equal(autoHigh.noWrite, true);
+
   const singleDirectFarm = validateFarmRows([{
     enabled: true,
     name: 'FENECON Hybrid',
@@ -900,6 +1170,9 @@ async function testFarmContinuousAuto() {
   await testSingleNative();
   await testAcRemainsDirect();
   await testAutoIgnoresGridMeasurementAndWritesDirect();
+  await testNativeMissingOptionalLimitsDoNotClampToZero();
+  await testNativeMissingRequiredMeasurementFailsClosed();
+  await testNativeInvalidLimitsFailClosed();
   await testNativeClampAndAcceptedTarget();
   await testDirectSetpointReadbackDrivesNvpCorrection();
   await testFarmContinuousAuto();
@@ -917,7 +1190,10 @@ async function testFarmContinuousAuto() {
   assert.match(storageTs, /st\.feneconEssActualPowerW/);
   assert.match(storageTs, /st\.feneconActualSetpointW/);
   assert.match(storageTs, /fenecon-direct-setpoint-readback/);
-  assert.match(storageTs, /FENECON Hybrid: PV-Feed-forward deaktiviert/);
+  assert.match(storageTs, /handoverZeroRequired/);
+  assert.match(storageTs, /write-zero-override/);
+  assert.match(storageTs, /native FEMS-NVP-Regler benoetigt zwingend die explizit/);
+  assert.match(storageTs, /AC-seitige ESS-Aktorleistung/);
   assert.match(appTs, /r\.essActivePower/);
   assert.match(appTs, /ctrl\.gridSetpointW/);
   assert.match(appTs, /isFeneconGridMeasurementId/);
@@ -930,7 +1206,7 @@ async function testFarmContinuousAuto() {
   assert.match(storageConfigTs, /out\.targetPowerObjectId = nativeTargetId/);
   assert.doesNotMatch(appTs, /Als FEMS-NVP-Ziel wurde ein direkter Batterie-Sollwert/);
 
-  console.log('[fenecon-hybrid-controller] OK: continuous native/direct FENECON control, optional native target, legacy role migration, grid-measurement fallback, direct-setpoint NVP feedback, strict command-role separation, real AC ESS feedback and mixed-farm safety verified.');
+  console.log('[fenecon-hybrid-controller] OK: PV authority handover, strict required measurements, optional-limit handling, native/direct command separation, readback feedback and mixed-farm safety verified.');
 })().catch((error) => {
   console.error(error && error.stack ? error.stack : error);
   process.exit(1);

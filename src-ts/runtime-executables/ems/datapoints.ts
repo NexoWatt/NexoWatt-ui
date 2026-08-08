@@ -903,26 +903,43 @@ class DatapointRegistry {
         const e = this.getEntry(key);
         if (!e) return fallback;
         const raw = this.getRaw(key);
+        // `Number(null)`, `Number('')` and `Number('   ')` are all 0 in
+        // JavaScript. For measurements and optional limits this would turn a
+        // missing datapoint value into a real 0-W/0-% signal and can therefore
+        // stop, release or clamp an actuator incorrectly. Only an actual finite
+        // number or a non-empty numeric string is accepted here.
+        if (raw === null || raw === undefined) return fallback;
         let n;
         if (typeof raw === 'number') {
             n = raw;
         } else if (typeof raw === 'string') {
             let s = raw.trim();
+            if (!s) return fallback;
             // Support German decimal comma and common thousands separators.
             // - '0,40' => 0.40
             // - '31,5' => 31.5
             // - '1.234,56' => 1234.56
             // - '1,234.56' => 1234.56
-            if (s.includes(',')) {
-                // German/European format: '.' are thousands separators, ',' is decimal separator
-                s = s.replace(/\./g, '').replace(/,/g, '.');
-            } else {
-                // English format: ',' may be thousands separator
-                s = s.replace(/,/g, '');
+            if (s.includes(',') && s.includes('.')) {
+                // Sind beide Trennzeichen vorhanden, bestimmt das zuletzt
+                // vorkommende Zeichen den Dezimaltrenner:
+                // - '1.234,56' => 1234.56
+                // - '1,234.56' => 1234.56
+                if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+                    s = s.replace(/\./g, '').replace(/,/g, '.');
+                } else {
+                    s = s.replace(/,/g, '');
+                }
+            } else if (s.includes(',')) {
+                // Ohne Punkt ist das Komma der uebliche Dezimaltrenner.
+                s = s.replace(/,/g, '.');
             }
             n = Number(s);
         } else {
-            n = Number(raw);
+            // Booleans, objects and arrays are not valid numeric measurements.
+            // Callers that intentionally need boolean-to-number conversion must
+            // use getBoolean() or perform the conversion explicitly.
+            return fallback;
         }
         if (!Number.isFinite(n)) return fallback;
 

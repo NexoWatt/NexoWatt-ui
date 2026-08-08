@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4cea430e6a3abacde81b4d378acdc224aee1b21baa7e70f61107c18892eed8c1
+ * Original-Hash: 1c48e0ca153e5dbd9b61155aace17803d307dd4e6320e9da1ae7744a33bb080d
  */
 
 /**
@@ -419,7 +419,12 @@ function verifyGatePlumbing() {
   assert(storage.includes("this.dp.getEntry('st.feneconEssActualPowerW')"), 'FENECON-Hybrid verwendet keine eigene AC-ESS-Aktor-Rückmeldung');
   assert(!storage.includes('_handleFeneconHybridPassThrough'), 'Der veraltete PV-/Tag-No-Write-Pfad ist noch produktiv verdrahtet');
   assert(!main.includes('hybridAutoFeneconRows'), 'Die Speicherfarm enthält noch die veraltete PV-/Tag-Reglerhoheit');
-  assert(storage.includes("write-fenecon-idle-keepalive"), 'Ein echter unveränderter FENECON-0-W-Stopp besitzt keinen expliziten Keepalive-Pfad');
+  assert(storage.includes("storageZeroWriteStatus = 'write-fenecon-eos-idle-keepalive'"),
+    'FENECON unter EOS-Regelhoheit besitzt keinen expliziten 0-W-Leerlauf-Keepalive');
+  assert(storage.includes("'no-write-fems-idle'"),
+    'FENECON unter FEMS-Regelhoheit trennt Leerlauf nicht als echten No-Write vom EOS-Keepalive');
+  assert(storage.includes("'write-zero-override'"),
+    'Ein echter Sicherheits-/Sperr-0-W-Befehl kann die FEMS-No-Write-Phase nicht explizit übersteuern');
 }
 
 (async () => {

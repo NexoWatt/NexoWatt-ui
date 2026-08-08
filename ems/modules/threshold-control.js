@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/threshold-control.ts
- * Quell-Hash: sha256:78d8fdd6cc040c6153995c3a9cab9f9504b4f9acdd4933ee167b05d840965595
+ * Quell-Hash: sha256:08a78eb90fc3376e1037f192a67a9ae51da204abaa970b34266efe64199a1442
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -38,6 +38,9 @@ const { BaseModule } = require('./base');
 const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
 const { recordAcceptedActuatorTransition } = require('../services/accepted-power-effects');
 function num(v, fallback = null) {
+    if (v === null || v === undefined) return fallback;
+    if (typeof v === 'string' && !v.trim()) return fallback;
+    if (typeof v !== 'number' && typeof v !== 'string') return fallback;
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
 }

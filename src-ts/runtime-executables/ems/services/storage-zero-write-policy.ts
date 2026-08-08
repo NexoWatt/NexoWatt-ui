@@ -53,6 +53,9 @@ export type StorageZeroWriteDecision = {
 };
 
 function finite(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string' && !value.trim()) return null;
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
@@ -169,6 +172,20 @@ export function decideStorageZeroWrite(input: StorageZeroWriteInput = {}): Stora
       ? `${reason} · kurze Messluecke – letzten Sollwert halten`
       : 'Kurze Messluecke – letzten Sollwert halten', 'hold-measurement-grace');
   }
+
+  // Nach Ablauf der Messluecken-Grace darf ein formal vorhandener, aber als
+  // unbrauchbar markierter Wert (z. B. alter Cachewert) nicht mehr durch die
+  // Zielbandpruefung den alten Nicht-Null-Befehl halten.
+  if (input.measurementGap === true || input.measurementUsable === false) {
+    return {
+      action: 'write-stop',
+      outputW: 0,
+      holdW: 0,
+      explicitStop: true,
+      status: 'write-stop-measurement-timeout',
+      reason: reason || 'NVP-/Speichermessung nach Grace-Zeit nicht verwendbar',
+    };
+  }
   if (inTargetBand) {
     return holdDecision(input, lastTargetW, reason
       ? `${reason} · NVP im Zielband – letzten Sollwert halten`
@@ -218,19 +235,6 @@ export function decideStorageZeroWrite(input: StorageZeroWriteInput = {}): Stora
       explicitStop: true,
       status: 'write-stop-budget-confirmed',
       reason: reason || 'Zentrales PV-Budget vollstaendig anderweitig reserviert',
-    };
-  }
-
-  // Nach Ablauf der Messluecken-Grace darf nicht unbegrenzt mit einem alten
-  // Befehl weitergefahren werden.
-  if (input.measurementGap === true || input.measurementUsable === false) {
-    return {
-      action: 'write-stop',
-      outputW: 0,
-      holdW: 0,
-      explicitStop: true,
-      status: 'write-stop-measurement-timeout',
-      reason: reason || 'NVP-/Speichermessung nach Grace-Zeit nicht verwendbar',
     };
   }
 

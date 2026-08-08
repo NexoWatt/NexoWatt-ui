@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b9acdc4586d0e0fe5a87f1368e58bc5c392fb837c099416ef6fba01a80d7d580
+ * Original-Hash: 48372a1e2a7ff4e46be6f71b82c245cc094871e49b82b705e3d93560d63c0f6d
  */
 
 /**
@@ -32,187 +32,74 @@
 'use strict';
 
 /**
- * Fail-closed pre-publish guard for immutable npm package versions.
- *
- * A successful `npm publish --dry-run` validates package contents, but npm's
- * dry-run does not reliably prove that the selected name/version is unused in
- * the public registry. This guard queries the public registry explicitly.
- *
- * Windows note:
- * `.cmd` wrappers must not be started directly through spawnSync with
- * `shell: false`; some Node/npm combinations fail with EINVAL. While this
- * script is executed by npm, `process.env.npm_execpath` points to npm-cli.js.
- * We therefore invoke that JavaScript file through the current Node binary.
- * A cmd.exe fallback is retained for direct/manual script execution.
- *
- * Exit codes:
- *   0: version is not published (npm E404)
- *   1: version already exists or registry availability could not be verified
- *
- * Offline package checks may set NEXOWATT_SKIP_REGISTRY_VERSION_CHECK=1.
- * Never set that variable for a real `npm publish`.
+ * Prüft vor `npm publish`, ob die aktuelle Paketversion in der Ziel-Registry
+ * bereits existiert. Der Guard arbeitet bewusst fail-closed: Nur eine eindeutige
+ * HTTP-404-Antwort gilt als freie Version. Netzwerk-, TLS-, Auth- oder Registry-
+ * Fehler brechen den Publish ab, statt einen möglicherweise doppelten Release zu
+ * riskieren.
  */
-
-const { spawnSync } = require('node:child_process');
-const fs = require('node:fs');
-const path = require('node:path');
+const fs = require('fs');
+const http = require('http');
+const https = require('https');
+const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-const packageName = String(pkg.name || '').trim();
-const version = String(pkg.version || '').trim();
+const packageName = String(process.env.NEXOWATT_NPM_PACKAGE || pkg.name || '').trim();
+const version = String(process.env.NEXOWATT_NPM_VERSION || pkg.version || '').trim();
 const registry = String(process.env.NEXOWATT_NPM_REGISTRY || 'https://registry.npmjs.org').trim();
-const skip = String(process.env.NEXOWATT_SKIP_REGISTRY_VERSION_CHECK || '').trim() === '1';
+const timeoutMs = Math.max(3000, Math.min(60000, Number(process.env.NEXOWATT_NPM_TIMEOUT_MS || 15000) || 15000));
 
 if (!packageName || !version) {
-  console.error('[npm-version-free] ERROR: package name/version missing in package.json.');
+  console.error('[npm-version-free] ERROR: Paketname oder Version fehlt in package.json.');
   process.exit(1);
 }
 
-if (skip) {
-  console.warn(`[npm-version-free] SKIP: registry collision check disabled for ${packageName}@${version}.`);
-  console.warn('[npm-version-free] Do not use NEXOWATT_SKIP_REGISTRY_VERSION_CHECK=1 for a real publish.');
-  process.exit(0);
-}
-
-const spec = `${packageName}@${version}`;
-const npmArgs = ['view', spec, 'version', '--json', `--registry=${registry}`];
-
-/**
- * Code-Teil: quoteForCmd
- *
- * Zweck:
- * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-function quoteForCmd(value) {
-  const raw = String(value || '');
-  if (!raw) return '""';
-  if (!/[\s"&()<>^|]/.test(raw)) return raw;
-  return `"${raw.replace(/"/g, '\\"')}"`;
-}
-
-/**
- * Code-Teil: npmCandidates
- *
- * Zweck:
- * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-function npmCandidates() {
-  const candidates = [];
-  const npmExecPath = String(process.env.npm_execpath || '').trim();
-
-  // Authoritative path for `npm run ...` and `npm publish`: execute npm-cli.js
-  // with Node instead of spawning npm.cmd directly on Windows.
-  if (npmExecPath && fs.existsSync(npmExecPath) && /(?:npm-cli\.js|npm\.js)$/i.test(npmExecPath)) {
-    candidates.push({
-      label: `node ${npmExecPath}`,
-      command: process.execPath,
-      args: [npmExecPath, ...npmArgs],
-      shell: false,
-    });
-  }
-
-  if (process.platform === 'win32') {
-    const commandLine = ['npm', ...npmArgs].map(quoteForCmd).join(' ');
-    candidates.push({
-      label: 'cmd.exe /d /s /c npm view',
-      command: process.env.ComSpec || 'cmd.exe',
-      args: ['/d', '/s', '/c', commandLine],
-      shell: false,
-    });
-    candidates.push({
-      label: 'npm.cmd view via shell',
-      command: 'npm.cmd',
-      args: npmArgs,
-      shell: true,
-    });
-  } else {
-    candidates.push({
-      label: 'npm view',
-      command: 'npm',
-      args: npmArgs,
-      shell: false,
-    });
-  }
-
-  return candidates;
-}
-
-/**
- * Code-Teil: runNpmView
- *
- * Zweck:
- * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
- * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
- *
- * Zusammenhang:
- * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
- * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
- */
-function runNpmView() {
-  const spawnErrors = [];
-  for (const candidate of npmCandidates()) {
-    const result = spawnSync(candidate.command, candidate.args, {
-      cwd: root,
-      encoding: 'utf8',
-      windowsHide: true,
-      timeout: 30000,
-      shell: candidate.shell === true,
-      env: process.env,
-    });
-
-    if (result.error) {
-      spawnErrors.push(`${candidate.label}: ${result.error.message || result.error}`);
-      continue;
-    }
-
-    return { ...result, candidate: candidate.label, spawnErrors };
-  }
-
-  return {
-    status: null,
-    stdout: '',
-    stderr: '',
-    error: new Error(spawnErrors.join(' | ') || 'No npm command candidate could be started.'),
-    candidate: '',
-    spawnErrors,
-  };
-}
-
-const result = runNpmView();
-const stdout = String(result.stdout || '').trim();
-const stderr = String(result.stderr || '').trim();
-const combined = `${stdout}\n${stderr}`.trim();
-
-if (result.error) {
-  console.error(`[npm-version-free] ERROR: public registry could not be queried for ${spec}.`);
-  console.error(`[npm-version-free] ${result.error.message || result.error}`);
+let requestUrl;
+try {
+  const base = new URL(registry.endsWith('/') ? registry : `${registry}/`);
+  requestUrl = new URL(`${encodeURIComponent(packageName)}/${encodeURIComponent(version)}`, base);
+} catch (error) {
+  console.error(`[npm-version-free] ERROR: Ungültige Registry-URL: ${registry}`);
   process.exit(1);
 }
 
-if (result.status === 0) {
-  console.error(`[npm-version-free] ERROR: ${spec} already exists in ${registry}.`);
-  console.error('[npm-version-free] Increment the adapter version and synchronize all manifests before publishing.');
+if (!['http:', 'https:'].includes(requestUrl.protocol)) {
+  console.error(`[npm-version-free] ERROR: Nicht unterstütztes Registry-Protokoll: ${requestUrl.protocol}`);
   process.exit(1);
 }
+const transport = requestUrl.protocol === 'https:' ? https : http;
+const request = transport.get(requestUrl, {
+  headers: {
+    accept: 'application/json',
+    'user-agent': `NexoWatt-release-guard/${version}`,
+  },
+}, (response) => {
+  // Antwortkörper vollständig konsumieren, damit der Socket sauber geschlossen
+  // wird. Inhalt wird nicht benötigt; der HTTP-Status ist autoritativ.
+  response.resume();
 
-const isNotFound = /(?:\bE404\b|404\s+Not\s+Found|No\s+match\s+found|is\s+not\s+in\s+this\s+registry)/i.test(combined);
-if (isNotFound) {
-  console.log(`[npm-version-free] OK: ${spec} is not published in ${registry}.`);
-  process.exit(0);
-}
+  if (response.statusCode === 404) {
+    console.log(`[npm-version-free] OK: ${packageName}@${version} ist in ${requestUrl.origin} noch nicht veröffentlicht.`);
+    process.exit(0);
+  }
 
-console.error(`[npm-version-free] ERROR: availability of ${spec} could not be verified fail-safe.`);
-if (result.candidate) console.error(`[npm-version-free] npm invocation: ${result.candidate}`);
-if (combined) console.error(`[npm-version-free] npm response: ${combined}`);
-process.exit(1);
+  if (response.statusCode >= 200 && response.statusCode < 300) {
+    console.error(`[npm-version-free] ERROR: ${packageName}@${version} existiert bereits in ${requestUrl.origin}.`);
+    console.error('[npm-version-free] Adapterversion erhöhen und alle Versionskennungen synchronisieren.');
+    process.exit(1);
+  }
+
+  console.error(`[npm-version-free] ERROR: Registry-Prüfung nicht eindeutig (HTTP ${response.statusCode}). Publish wird sicherheitshalber blockiert.`);
+  process.exit(1);
+});
+
+request.setTimeout(timeoutMs, () => {
+  request.destroy(new Error(`Registry timeout after ${timeoutMs} ms`));
+});
+
+request.on('error', (error) => {
+  console.error(`[npm-version-free] ERROR: Registry nicht sicher prüfbar: ${error && error.message ? error.message : error}`);
+  console.error('[npm-version-free] Publish wird fail-closed blockiert; Registry/Netzwerk prüfen und erneut ausführen.');
+  process.exit(1);
+});
