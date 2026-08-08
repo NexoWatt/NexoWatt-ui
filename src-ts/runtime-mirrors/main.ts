@@ -21,7 +21,7 @@
  * 0.7.99: /api/state und /api/set TS-Shadow
  * - main.js führt jetzt nur diagnostische TS-Helfer für API-State/API-Set aus.
  * - Die produktive API-Antwort und Schreiblogik bleiben weiterhin JavaScript.
- * Original-Hash: a227008d37052c19c95301d92607b26ab6894a9c5a6c38177a3fe633d734c83b
+ * Original-Hash: 4e155b669df2e9e04ebd8e717ae28ec6c21e59976061acaf6d5de8a26c6c8d2b
  */
 
 /**
@@ -514,6 +514,9 @@ const {
   calculateFemsGridTargetW: nwCalculateFemsGridTargetW,
   validateFarmRows: nwValidateFeneconFarmRows,
   isFeneconHybrid: nwIsFeneconHybrid,
+  isLikelyDirectEssSetpointObjectId: nwIsLikelyDirectEssSetpointObjectId,
+  isLikelyFemsGridTargetObjectId: nwIsLikelyFemsGridTargetObjectId,
+  isLikelyFemsGridMeasurementObjectId: nwIsLikelyFemsGridMeasurementObjectId,
 } = require('./ems/services/fenecon-hybrid-control');
 
 // NexoLogic (node/graph) runtime engine
@@ -5292,7 +5295,7 @@ class NexoWattVis extends utils.Adapter {
     const feneconControlMode = ['fems-grid', 'fems', 'fems-nvp', 'native', 'grid-target'].includes(feneconControlModeRaw)
       ? 'fems-grid'
       : (['direct-ess', 'direct', 'ess', 'direct-power'].includes(feneconControlModeRaw) ? 'direct-ess' : 'auto');
-    return {
+    const normalized = {
       ...r,
       enabled: boolFrom(true, 'enabled', 'active'),
       name: textFrom('name', 'label', 'title') || `Speicher ${Math.max(1, Number(index) + 1)}`,
@@ -5336,6 +5339,24 @@ class NexoWattVis extends utils.Adapter {
       capacityKWh: numberOrNull('capacityKWh', 'capacityKwh', 'batteryCapacityKWh'),
       group: textFrom('group', 'groupName'),
     };
+
+    // FENECON-Rollenmigration: Ein direkter ESS-Sollwert (706 / powerSetpointW),
+    // der durch einen älteren Zwischenstand im nativen FEMS-Zielfeld gelandet ist,
+    // wird in Auto/Direkte-ESS in die signed Sollwertrolle verschoben. Ein reiner
+    // Netzleistungs-Messwert wird ebenfalls aus der Schreibrolle entfernt.
+    const nativeTargetId = String(normalized.feneconGridSetpointId || '').trim();
+    const nativeIsDirectEss = nwIsLikelyDirectEssSetpointObjectId(nativeTargetId)
+      && !nwIsLikelyFemsGridTargetObjectId(nativeTargetId);
+    const nativeIsMeasurement = nwIsLikelyFemsGridMeasurementObjectId(nativeTargetId);
+    if (normalized.feneconControlMode !== 'fems-grid' && (nativeIsDirectEss || nativeIsMeasurement)) {
+      if (nativeIsDirectEss
+        && !String(normalized.setSignedPowerId || normalized.setChargePowerId || normalized.setDischargePowerId || '').trim()) {
+        normalized.setSignedPowerId = nativeTargetId;
+      }
+      normalized.feneconGridSetpointId = '';
+    }
+
+    return normalized;
   }
 
   _nwNormalizeStorageFarmRows(rows) {

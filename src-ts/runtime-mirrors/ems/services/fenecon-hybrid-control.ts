@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: ae4d90c8b7f00c321ebeee4f50fe333f853cd6a39e445a7e03b80a7cc4e11a17
+ * Original-Hash: 0d94e699c8f93ef804fc36eca66177d3e1a4a922ccda9c9a720fe0dd7b2e7e40
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/fenecon-hybrid-control.ts
- * Quell-Hash: sha256:6675275699395ae5bf9289437267ffc3b7ebaabb4745b84a61c3930dd275a5b0
+ * Quell-Hash: sha256:720b37ed8e1967f1db28325e49750ff7cd141d9e3bf9782f2ed66a32aef06687
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -366,11 +366,22 @@ function resolveControlMode(config = {}, context = {}) {
     const requestedMode = normalizeControlMode(config.feneconControlMode || config.controlModeMode || config.feneconHybridControlMode);
     const hybrid = isFeneconHybrid(config);
     const nativeTargetId = getNativeTargetId(config);
-    const directTargetIds = getDirectTargetIds(config);
+    const configuredDirectTargetIds = getDirectTargetIds(config);
     const nativeTargetIsMeasurement = isLikelyFemsGridMeasurementObjectId(nativeTargetId);
+    const nativeTargetIsDirectEssSetpoint = isLikelyDirectEssSetpointObjectId(nativeTargetId)
+        && !isLikelyFemsGridTargetObjectId(nativeTargetId);
     const nativeTargetWritable = context.nativeTargetWritable !== false;
-    const nativeTargetAvailable = !!nativeTargetId && !nativeTargetIsMeasurement && nativeTargetWritable;
-    const directTargetAvailable = hasWritableDirectTarget(config, context);
+    const nativeTargetAvailable = !!nativeTargetId
+        && !nativeTargetIsMeasurement
+        && !nativeTargetIsDirectEssSetpoint
+        && nativeTargetWritable;
+    const migratedDirectTargetId = requestedMode !== 'fems-grid' && nativeTargetIsDirectEssSetpoint
+        ? nativeTargetId
+        : '';
+    const effectiveDirectTargetIds = configuredDirectTargetIds.length
+        ? configuredDirectTargetIds
+        : (migratedDirectTargetId ? [migratedDirectTargetId] : []);
+    const directTargetAvailable = hasWritableDirectTarget(config, context) || !!migratedDirectTargetId;
     const writableStorageCountRaw = finite(context.writableStorageCount);
     const writableStorageCount = writableStorageCountRaw === null ? 1 : Math.max(0, Math.round(writableStorageCountRaw));
     const otherWritableStorageCountRaw = finite(context.otherWritableStorageCount);
@@ -382,10 +393,13 @@ function resolveControlMode(config = {}, context = {}) {
         requestedMode,
         nativeTargetAvailable,
         nativeTargetIsMeasurement,
+        nativeTargetIsDirectEssSetpoint,
         nativeTargetWritable,
         directTargetAvailable,
         nativeTargetId,
-        directTargetIds,
+        directTargetIds: configuredDirectTargetIds,
+        effectiveDirectTargetIds,
+        migratedDirectTargetId,
         writableStorageCount,
         otherWritableStorageCount,
     };
@@ -400,6 +414,9 @@ function resolveControlMode(config = {}, context = {}) {
         };
     }
     if (requestedMode === 'fems-grid') {
+        if (nativeTargetIsDirectEssSetpoint) {
+            return { ...common, eligible: true, mode: 'invalid', reason: 'fenecon-grid-target-is-direct-ess-setpoint' };
+        }
         if (nativeTargetIsMeasurement) {
             return { ...common, eligible: true, mode: 'invalid', reason: 'fems-grid-target-is-measurement' };
         }
@@ -428,6 +445,9 @@ function resolveControlMode(config = {}, context = {}) {
         }
         return { ...common, eligible: true, mode: 'direct-ess', reason: 'auto-mixed-farm-direct-ess' };
     }
+    if (nativeTargetIsDirectEssSetpoint && directTargetAvailable) {
+        return { ...common, eligible: true, mode: 'direct-ess', reason: 'auto-direct-setpoint-migrated-to-direct-ess' };
+    }
     if (nativeTargetIsMeasurement && directTargetAvailable) {
         return { ...common, eligible: true, mode: 'direct-ess', reason: 'auto-grid-measurement-ignored-direct-ess' };
     }
@@ -439,6 +459,9 @@ function resolveControlMode(config = {}, context = {}) {
     }
     if (directTargetAvailable) {
         return { ...common, eligible: true, mode: 'direct-ess', reason: 'auto-direct-ess-fallback' };
+    }
+    if (nativeTargetIsDirectEssSetpoint) {
+        return { ...common, eligible: true, mode: 'invalid', reason: 'auto-direct-setpoint-migration-unavailable' };
     }
     if (nativeTargetIsMeasurement) {
         return { ...common, eligible: true, mode: 'invalid', reason: 'auto-grid-measurement-without-direct-target' };
@@ -488,11 +511,24 @@ function validateSingleConfig(config = {}, context = {}) {
             resolution,
         };
     }
-    const nativeTargetId = getNativeTargetId(config);
-    const directTargetIds = getDirectTargetIds(config);
+    const configuredNativeTargetId = getNativeTargetId(config);
+    const nativeTargetId = resolution.nativeTargetIsDirectEssSetpoint && resolution.requestedMode !== 'fems-grid'
+        ? ''
+        : configuredNativeTargetId;
+    const directTargetIds = Array.isArray(resolution.effectiveDirectTargetIds)
+        ? resolution.effectiveDirectTargetIds.map(text).filter(Boolean)
+        : getDirectTargetIds(config);
     const essActualPowerId = getEssActualPowerId(config);
     if (resolution.mode === 'invalid') {
-        return { ok: false, reason: resolution.reason, resolution, nativeTargetId, directTargetIds, essActualPowerId };
+        return {
+            ok: false,
+            reason: resolution.reason,
+            resolution,
+            nativeTargetId,
+            configuredNativeTargetId,
+            directTargetIds,
+            essActualPowerId,
+        };
     }
     if (!essActualPowerId) {
         return { ok: false, reason: 'fenecon-ess-actual-power-missing', resolution, nativeTargetId, directTargetIds, essActualPowerId };
@@ -503,8 +539,19 @@ function validateSingleConfig(config = {}, context = {}) {
     if (nativeTargetId && directTargetIds.some((id) => sameObjectId(nativeTargetId, id))) {
         return { ok: false, reason: 'fenecon-grid-target-equals-direct-ess-target', resolution, nativeTargetId, directTargetIds, essActualPowerId };
     }
-    if (nativeTargetId && isLikelyDirectEssSetpointObjectId(nativeTargetId) && !isLikelyFemsGridTargetObjectId(nativeTargetId)) {
-        return { ok: false, reason: 'fenecon-grid-target-is-direct-ess-setpoint', resolution, nativeTargetId, directTargetIds, essActualPowerId };
+    if (configuredNativeTargetId
+        && resolution.requestedMode === 'fems-grid'
+        && isLikelyDirectEssSetpointObjectId(configuredNativeTargetId)
+        && !isLikelyFemsGridTargetObjectId(configuredNativeTargetId)) {
+        return {
+            ok: false,
+            reason: 'fenecon-grid-target-is-direct-ess-setpoint',
+            resolution,
+            nativeTargetId,
+            configuredNativeTargetId,
+            directTargetIds,
+            essActualPowerId,
+        };
     }
     if (directTargetIds.some((id) => sameObjectId(essActualPowerId, id))) {
         return { ok: false, reason: 'fenecon-ess-feedback-equals-command-target', resolution, nativeTargetId, directTargetIds, essActualPowerId };
@@ -517,7 +564,9 @@ function validateSingleConfig(config = {}, context = {}) {
         reason: 'ok',
         resolution,
         nativeTargetId,
+        configuredNativeTargetId,
         directTargetIds,
+        migratedDirectTargetId: text(resolution.migratedDirectTargetId),
         essActualPowerId,
     };
 }
@@ -578,7 +627,12 @@ function validateFarmRows(rowsIn) {
         || getNativeTargetId(row)));
     const writableStorageCount = configuredRows.length;
     const resolved = configuredRows.map((row) => {
-        const directTargetAvailable = getDirectTargetIds(row).length > 0;
+        const nativeTargetId = getNativeTargetId(row);
+        const requestedMode = normalizeControlMode(row.feneconControlMode || row.controlModeMode || row.feneconHybridControlMode);
+        const legacyDirectInNativeField = requestedMode !== 'fems-grid'
+            && isLikelyDirectEssSetpointObjectId(nativeTargetId)
+            && !isLikelyFemsGridTargetObjectId(nativeTargetId);
+        const directTargetAvailable = getDirectTargetIds(row).length > 0 || legacyDirectInNativeField;
         const validation = validateSingleConfig(row, {
             writableStorageCount,
             otherWritableStorageCount: Math.max(0, writableStorageCount - 1),

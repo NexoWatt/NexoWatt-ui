@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/storage-datapoint-config.ts
- * Quell-Hash: sha256:696ec27d3eb35743b2f0d689712339d532af99112d0d618eecb881837cd313ea
+ * Quell-Hash: sha256:f371634f5a583ac94f3b68408c4fad4f7ef9af9117ec251bc25bda8d54fb5dc2
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -16,6 +16,7 @@
  * 3. npm run test:runtime-executables prüfen.
  */
 'use strict';
+const { normalizeControlMode: normalizeFeneconControlMode, isFeneconHybrid, isLikelyDirectEssSetpointObjectId, isLikelyFemsGridTargetObjectId, isLikelyFemsGridMeasurementObjectId, } = require('./fenecon-hybrid-control');
 function isRecord(value) {
     return !!value && typeof value === 'object' && !Array.isArray(value);
 }
@@ -91,6 +92,76 @@ function firstCandidate(roots, specs, fullOnly = false) {
     return '';
 }
 /**
+ * Migriert eine in älteren RC-Ständen vertauschte FENECON-Kommandorolle.
+ *
+ * Feldfehler aus der Praxis:
+ * `aliases.ctrl.powerSetpointW` / SetActivePowerEquals (706) wurde im Feld
+ * `feneconGridSetpointObjectId` gespeichert. Dieses Feld ist ausschließlich für
+ * einen echten `ctrlBalancing0/SetGridActivePower`-Aktor vorgesehen. In Auto oder
+ * Direkte-ESS wird der Wert deshalb als signed Batterie-Sollwert übernommen und
+ * das native FEMS-Zielfeld geleert. Ein reiner Netzleistungs-Messwert wird in
+ * denselben Betriebsarten nur entfernt. Im expliziten FEMS-NVP-Modus bleibt die
+ * Fehlzuordnung sichtbar, damit die Validierung sie weiterhin sicher blockiert.
+ */
+function migrateFeneconCommandRoles(storageIn, datapointsIn) {
+    const storage = isRecord(storageIn) ? storageIn : {};
+    const out = isRecord(datapointsIn) ? { ...datapointsIn } : {};
+    const mode = normalizeFeneconControlMode(storage.feneconControlMode);
+    const feneconHybrid = isFeneconHybrid({
+        vendorProfile: storage.vendorProfile,
+        coupling: storage.coupling,
+    });
+    if (!feneconHybrid || mode === 'fems-grid') {
+        return {
+            datapoints: out,
+            changed: false,
+            reason: !feneconHybrid ? 'not-fenecon-hybrid' : 'explicit-fems-grid',
+            movedDirectTargetId: '',
+            clearedNativeTargetId: '',
+        };
+    }
+    const nativeTargetId = text(out.feneconGridSetpointObjectId);
+    if (!nativeTargetId) {
+        return {
+            datapoints: out,
+            changed: false,
+            reason: 'native-target-empty',
+            movedDirectTargetId: '',
+            clearedNativeTargetId: '',
+        };
+    }
+    const nativeIsDirectEss = isLikelyDirectEssSetpointObjectId(nativeTargetId)
+        && !isLikelyFemsGridTargetObjectId(nativeTargetId);
+    const nativeIsMeasurement = isLikelyFemsGridMeasurementObjectId(nativeTargetId);
+    if (!nativeIsDirectEss && !nativeIsMeasurement) {
+        return {
+            datapoints: out,
+            changed: false,
+            reason: 'native-target-valid-or-unknown',
+            movedDirectTargetId: '',
+            clearedNativeTargetId: '',
+        };
+    }
+    let movedDirectTargetId = '';
+    const hasDirectTarget = !!(text(out.targetPowerObjectId)
+        || text(out.targetChargePowerObjectId)
+        || text(out.targetDischargePowerObjectId));
+    if (nativeIsDirectEss && !hasDirectTarget) {
+        out.targetPowerObjectId = nativeTargetId;
+        movedDirectTargetId = nativeTargetId;
+    }
+    out.feneconGridSetpointObjectId = '';
+    return {
+        datapoints: out,
+        changed: true,
+        reason: nativeIsDirectEss
+            ? (movedDirectTargetId ? 'direct-setpoint-moved-to-signed-target' : 'duplicate-direct-setpoint-removed-from-native-target')
+            : 'grid-measurement-removed-from-native-target',
+        movedDirectTargetId,
+        clearedNativeTargetId: nativeTargetId,
+    };
+}
+/**
  * Normalisiert ausschließlich lokale Speicherstrukturen. Der allgemeine
  * Energiefluss (`config.datapoints`) ist hier bewusst kein Fallback, weil sonst
  * Runtime-Werte wie `r` als manuelle Speicherzuordnung persistiert werden können.
@@ -133,7 +204,7 @@ function normalizeStorageDatapointsConfig(storageIn) {
         }
         out[spec.canonical] = firstCandidate([storage], aliases) || '';
     }
-    return out;
+    return migrateFeneconCommandRoles(storage, out).datapoints;
 }
 function explicitPowerScale(settings, key) {
     const perDp = isRecord(settings.flowPowerDpIsW) ? settings.flowPowerDpIsW : null;
@@ -230,6 +301,7 @@ function mergeStorageMeasurementFallback(storageIn, fallbackIn) {
 }
 module.exports = {
     normalizeStorageDatapointsConfig,
+    migrateFeneconCommandRoles,
     buildStorageMeasurementFallbackFromGlobal,
     mergeStorageMeasurementFallback,
     looksLikeCompleteObjectId,

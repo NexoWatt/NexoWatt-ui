@@ -1,3 +1,13 @@
+## 0.8.160 - 2026-08-08
+
+- FENECON-Konfigurationsblockade behoben: Das Feld **„FENECON FEMS-NVP-Ziel“** ist in `Automatisch` und `Direkte ESS-Leistung` optional und darf leer bleiben.
+- Eine aus den Zwischenständen 0.8.158/0.8.159 stammende Fehlzuordnung von `aliases.ctrl.powerSetpointW` beziehungsweise `SetActivePowerEquals`/706 im FEMS-NVP-Feld wird automatisch in **„Sollleistung signed“** verschoben; das falsche native Zielfeld wird geleert.
+- Derselbe Migrationsvertrag gilt beim AppCenter-Speichern, in der serverseitigen Installer-Normalisierung, im Einzel-Speicher-Runtime-Mapping und in Speicherfarm-Zeilen. Die Anlage wird dadurch auch vor einem erneuten manuellen Speichern wieder auf den direkten ESS-Schreibpfad gebracht.
+- Netzleistungs-Messwerte wie `aliases.r.gridPower` werden in Auto/Direkt weiterhin aus dem nativen Schreibfeld entfernt.
+- Nur der ausdrücklich gewählte Expertenmodus `FEMS-NVP-Ziel dauerhaft schreiben` bleibt streng: Er verlangt einen echten beschreibbaren `ctrlBalancing*/SetGridActivePower`-DP und blockiert 706/powerSetpointW als falsche Rolle.
+- Regressionen prüfen die exakte Feldkonfiguration aus dem Kundenbild, die automatische Einzel-/Farmmigration, Servervalidierung, direkte Sollwertausgabe und den bisherigen NVP-Feedbackfall mit +500 W Entladevorgabe.
+- FENECON-Regelbasis aus 0.8.158, EVCS-RC33, §14a-/EEBUS-Direktanbindung und alle übrigen Regelpfade bleiben unverändert. Service-Worker-Cache auf `nexowatt-cache-v460` und zentrale Versionskennungen auf 0.8.160 aktualisiert.
+
 ## 0.8.159 - 2026-08-07
 
 - FENECON/OpenEMS-Automatik gegen eine reale Fehlzuordnung gehärtet: Ein Netzleistungs-Messwert wie `aliases.r.gridPower` wird nicht mehr allein wegen eines belegten Feldes als nativer FEMS-NVP-Schreibpfad ausgewählt.

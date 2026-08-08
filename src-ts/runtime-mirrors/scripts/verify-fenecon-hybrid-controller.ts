@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: ba20edd9322c9c9f165d1eab4444aa1ebfb98eb7be278c605f3a81be9d89433e
+ * Original-Hash: 133cf30c34109ffd142bf6c989734038c9d586d004a42008d16fa21a561a1ae6
  */
 
 /**
@@ -32,7 +32,7 @@
 'use strict';
 
 /**
- * RC27 regression: FENECON/OpenEMS native FEMS-NVP control is strictly limited
+ * RC36 regression: FENECON/OpenEMS native FEMS-NVP control is strictly limited
  * to DC/hybrid systems, exclusive inside a farm and never overlaps with direct
  * ESS commands. Existing FENECON AC and all other vendors remain direct.
  */
@@ -49,6 +49,7 @@ const {
   validateFarmRows,
 } = require('../ems/services/fenecon-hybrid-control');
 const { SpeicherRegelungModule } = require('../ems/modules/storage-control');
+const { normalizeStorageDatapointsConfig } = require('../ems/services/storage-datapoint-config');
 
 /**
  * Code-Teil: now
@@ -549,6 +550,21 @@ async function testFarmContinuousAuto() {
   try {
     const factory = require(path.join(__dirname, '..', 'main.js'));
     const adapter = factory({});
+    const migratedFarmRole = adapter._nwNormalizeStorageFarmRow({
+      enabled: true,
+      name: 'FENECON Legacy Role',
+      vendorProfile: 'fenecon-openems',
+      coupling: 'dc',
+      feneconControlMode: 'auto',
+      feneconGridSetpointId: 'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+      feneconEssActualPowerId: 'nexowatt-devices.0.devices.ess1.aliases.r.powerAc',
+    }, 0);
+    assert.equal(migratedFarmRole.feneconGridSetpointId, '');
+    assert.equal(
+      migratedFarmRole.setSignedPowerId,
+      'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+      'farm row normalizer must migrate the misplaced direct setpoint before dispatch',
+    );
     adapter.scheduleDerivedFlowUpdate = () => {};
     adapter.updateValue = function updateValue(key, value, ts) {
       this.stateCache[String(key)] = { value, ts: Number(ts) || Date.now(), lc: Number(ts) || Date.now(), ack: true };
@@ -654,6 +670,68 @@ async function testFarmContinuousAuto() {
   assert.equal(measurementFallback.mode, 'direct-ess');
   assert.equal(measurementFallback.reason, 'auto-grid-measurement-ignored-direct-ess');
 
+  const misplacedDirectResolution = resolveControlMode({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'auto',
+    feneconGridSetpointId: 'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+    feneconEssActualPowerId: 'nexowatt-devices.0.devices.ess1.aliases.r.powerAc',
+  }, { writableStorageCount: 1 });
+  assert.equal(misplacedDirectResolution.mode, 'direct-ess');
+  assert.equal(misplacedDirectResolution.reason, 'auto-direct-setpoint-migrated-to-direct-ess');
+  assert.equal(
+    misplacedDirectResolution.migratedDirectTargetId,
+    'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+  );
+
+  const migratedSingleDatapoints = normalizeStorageDatapointsConfig({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'auto',
+    datapoints: {
+      feneconGridSetpointObjectId: 'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+      feneconEssActualPowerObjectId: 'nexowatt-devices.0.devices.ess1.aliases.r.powerAc',
+    },
+  });
+  assert.equal(migratedSingleDatapoints.feneconGridSetpointObjectId, '');
+  assert.equal(
+    migratedSingleDatapoints.targetPowerObjectId,
+    'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+    'Auto must move a misplaced 706/powerSetpointW value into the signed direct target',
+  );
+
+  // Exakter AppCenter-Feldfall: derselbe direkte 706-Sollwert steht bereits
+  // korrekt unter „Sollleistung signed“ und zusätzlich fälschlich im FEMS-Feld.
+  // Speichern muss das FEMS-Feld leeren, ohne den echten Sollwert zu verlieren.
+  const migratedDuplicateDirect = normalizeStorageDatapointsConfig({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'auto',
+    datapoints: {
+      feneconGridSetpointObjectId: 'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+      targetPowerObjectId: 'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+    },
+  });
+  assert.equal(migratedDuplicateDirect.feneconGridSetpointObjectId, '');
+  assert.equal(
+    migratedDuplicateDirect.targetPowerObjectId,
+    'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+  );
+
+  const explicitFemsKeepsInvalidRoleVisible = normalizeStorageDatapointsConfig({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'fems-grid',
+    datapoints: {
+      feneconGridSetpointObjectId: 'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+    },
+  });
+  assert.equal(
+    explicitFemsKeepsInvalidRoleVisible.feneconGridSetpointObjectId,
+    'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+    'explicit FEMS mode must stay fail-closed instead of silently changing the requested expert mode',
+  );
+
   assert.equal(resolveControlMode({
     vendorProfile: 'fenecon-openems',
     coupling: 'dc',
@@ -700,16 +778,30 @@ async function testFarmContinuousAuto() {
   assert.equal(badBalance.ok, false);
   assert.equal(badBalance.reason, 'fenecon-power-balance-not-valid-as-ess-feedback');
 
-  const badSharedCommand = validateSingleConfig({
+  const misplacedDirectAutoValid = validateSingleConfig({
     vendorProfile: 'fenecon-openems',
     coupling: 'dc',
     feneconControlMode: 'auto',
+    feneconGridSetpointId: 'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+    feneconEssActualPowerId: 'nexowatt-devices.0.devices.ess1.aliases.r.powerAc',
+  });
+  assert.equal(misplacedDirectAutoValid.ok, true, misplacedDirectAutoValid.reason);
+  assert.equal(misplacedDirectAutoValid.resolution.mode, 'direct-ess');
+  assert.equal(
+    misplacedDirectAutoValid.directTargetIds[0],
+    'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
+  );
+
+  const badSharedCommand = validateSingleConfig({
+    vendorProfile: 'fenecon-openems',
+    coupling: 'dc',
+    feneconControlMode: 'fems-grid',
     feneconGridSetpointId: 'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
     feneconEssActualPowerId: 'nexowatt-devices.0.devices.ess1.aliases.v1.r.essActivePower',
     setSignedPowerId: 'nexowatt-devices.0.devices.ess1.aliases.ctrl.powerSetpointW',
   });
   assert.equal(badSharedCommand.ok, false);
-  assert.match(badSharedCommand.reason, /equals|direct-ess-setpoint/);
+  assert.equal(badSharedCommand.reason, 'fenecon-grid-target-is-direct-ess-setpoint');
 
   const badDirectAsGrid = validateSingleConfig({
     vendorProfile: 'fenecon-openems',
@@ -816,6 +908,7 @@ async function testFarmContinuousAuto() {
   const mainTs = fs.readFileSync(path.join(__dirname, '..', 'src-ts/runtime-executables/main.ts'), 'utf8');
   const storageTs = fs.readFileSync(path.join(__dirname, '..', 'src-ts/runtime-executables/ems/modules/storage-control.ts'), 'utf8');
   const appTs = fs.readFileSync(path.join(__dirname, '..', 'src-ts/runtime-executables/www/ems-apps.ts'), 'utf8');
+  const storageConfigTs = fs.readFileSync(path.join(__dirname, '..', 'src-ts/runtime-executables/ems/services/storage-datapoint-config.ts'), 'utf8');
   assert.match(mainTs, /nwValidateFeneconFarmRows\(sf\.storages\)/);
   assert.match(mainTs, /nwValidateFeneconSingleConfig/);
   assert.doesNotMatch(mainTs, /hybridAutoFeneconRows/);
@@ -828,10 +921,16 @@ async function testFarmContinuousAuto() {
   assert.match(appTs, /r\.essActivePower/);
   assert.match(appTs, /ctrl\.gridSetpointW/);
   assert.match(appTs, /isFeneconGridMeasurementId/);
+  assert.match(appTs, /isFeneconDirectEssSetpointId/);
+  assert.match(appTs, /FEMS-NVP-Ziel \(W\) \(optional\)/);
+  assert.match(appTs, /dp\.targetPowerObjectId = singleNativeId/);
+  assert.match(appTs, /row\.setSignedPowerId = rowNativeId/);
   assert.match(appTs, /aliases\.r\.gridPower/);
-  assert.doesNotMatch(appTs, /ctrl\.powerSetpointW[^\n]+FEMS-NVP/i);
+  assert.match(storageConfigTs, /function migrateFeneconCommandRoles/);
+  assert.match(storageConfigTs, /out\.targetPowerObjectId = nativeTargetId/);
+  assert.doesNotMatch(appTs, /Als FEMS-NVP-Ziel wurde ein direkter Batterie-Sollwert/);
 
-  console.log('[fenecon-hybrid-controller] OK: continuous native/direct FENECON control, grid-measurement fallback, direct-setpoint NVP feedback, strict command-role separation, real AC ESS feedback and mixed-farm safety verified.');
+  console.log('[fenecon-hybrid-controller] OK: continuous native/direct FENECON control, optional native target, legacy role migration, grid-measurement fallback, direct-setpoint NVP feedback, strict command-role separation, real AC ESS feedback and mixed-farm safety verified.');
 })().catch((error) => {
   console.error(error && error.stack ? error.stack : error);
   process.exit(1);

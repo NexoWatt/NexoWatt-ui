@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:c093745acde94c265997b169cc7ba2a80345b5c190ae63a053f04f781ea10e8c
+ * Quell-Hash: sha256:550256f13f53206daf508ef7967750c05116967b769929202a807eb5208a16b9
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -157,6 +157,9 @@ const {
   calculateFemsGridTargetW: nwCalculateFemsGridTargetW,
   validateFarmRows: nwValidateFeneconFarmRows,
   isFeneconHybrid: nwIsFeneconHybrid,
+  isLikelyDirectEssSetpointObjectId: nwIsLikelyDirectEssSetpointObjectId,
+  isLikelyFemsGridTargetObjectId: nwIsLikelyFemsGridTargetObjectId,
+  isLikelyFemsGridMeasurementObjectId: nwIsLikelyFemsGridMeasurementObjectId,
 } = require('./ems/services/fenecon-hybrid-control');
 
 // NexoLogic (node/graph) runtime engine
@@ -4941,7 +4944,7 @@ class NexoWattVis extends utils.Adapter {
     const feneconControlMode = ['fems-grid', 'fems', 'fems-nvp', 'native', 'grid-target'].includes(feneconControlModeRaw)
       ? 'fems-grid'
       : (['direct-ess', 'direct', 'ess', 'direct-power'].includes(feneconControlModeRaw) ? 'direct-ess' : 'auto');
-    return {
+    const normalized = {
       ...r,
       enabled: boolFrom(true, 'enabled', 'active'),
       name: textFrom('name', 'label', 'title') || `Speicher ${Math.max(1, Number(index) + 1)}`,
@@ -4985,6 +4988,26 @@ class NexoWattVis extends utils.Adapter {
       capacityKWh: numberOrNull('capacityKWh', 'capacityKwh', 'batteryCapacityKWh'),
       group: textFrom('group', 'groupName'),
     };
+
+    // RC36-Migration: In einigen Zwischenständen wurde der direkte ESS-Sollwert
+    // (SetActivePowerEquals / 706 / aliases.ctrl.powerSetpointW) irrtümlich im
+    // FEMS-NVP-Zielfeld gespeichert. Auto und Direkte-ESS übernehmen diesen Wert
+    // als signed Sollwert und leeren die native Rolle. Ein Netzleistungs-Messwert
+    // wird ebenfalls aus der Schreibrolle entfernt. Explizites FEMS-NVP bleibt
+    // streng und verlangt weiterhin einen echten SetGridActivePower-Aktor.
+    const nativeTargetId = String(normalized.feneconGridSetpointId || '').trim();
+    const nativeIsDirectEss = nwIsLikelyDirectEssSetpointObjectId(nativeTargetId)
+      && !nwIsLikelyFemsGridTargetObjectId(nativeTargetId);
+    const nativeIsMeasurement = nwIsLikelyFemsGridMeasurementObjectId(nativeTargetId);
+    if (normalized.feneconControlMode !== 'fems-grid' && (nativeIsDirectEss || nativeIsMeasurement)) {
+      if (nativeIsDirectEss
+        && !String(normalized.setSignedPowerId || normalized.setChargePowerId || normalized.setDischargePowerId || '').trim()) {
+        normalized.setSignedPowerId = nativeTargetId;
+      }
+      normalized.feneconGridSetpointId = '';
+    }
+
+    return normalized;
   }
 
   _nwNormalizeStorageFarmRows(rows) {
