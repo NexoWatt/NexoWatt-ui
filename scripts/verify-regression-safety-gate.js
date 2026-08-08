@@ -36,6 +36,9 @@ for (const name of [
   'test:storage-farm-config-fallback',
   'test:app-center-structure-cleanup',
   'test:no-release-artifacts',
+  'test:safety-envelope-final-write',
+  'test:safety-active-load-stop',
+  'test:safety-module-deactivate',
 ]) {
   if (!scripts[name]) {
     console.error(`[regression-safety-gate] npm-Script fehlt: ${name}`);
@@ -52,4 +55,16 @@ must('www/ems-apps.js', 'applyAppCenterRegressionSafetyGate(collectPatchFromUI()
 must('scripts/verify-storagefarm-appcenter-restore.js', 'storageFarm.configJson', 'Speicherfarm Restore-Test configJson');
 must('scripts/verify-storagefarm-appcenter-hydration.js', 'storagesStatusJson', 'Speicherfarm Hydration-Test status fallback');
 mustNot('src-ts/runtime-executables/www/ems-apps.ts', 'appsList.appendChild(buildMeshMicrogridCard())', 'Mesh Detailkarte darf nicht in Apps gerendert werden');
+
+must('src-ts/runtime-executables/ems/services/safety-envelope.ts', 'evaluateFlexibleLoadRequest', 'Zentrale finale Leistungsfreigabe');
+must('src-ts/runtime-executables/ems/services/safety-envelope.ts', 'evaluateSafetyCommandPermission', 'Sicherheitsvertrag für nicht importsteigernde Stellbefehle');
+must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'liveSafetyEnvelope', 'EVCS Live-Recheck vor Hardware-Write');
+must('src-ts/runtime-executables/ems/modules/storage-control.ts', 'evaluateSafetyCommandPermission', 'Speicher Safety-Command-Vertrag');
+if (!String(scripts['publish:check'] || '').includes('test:safety-envelope-final-write')
+  || !String(scripts['publish:check'] || '').includes('test:safety-active-load-stop')
+  || !String(scripts['publish:check'] || '').includes('test:safety-module-deactivate')) {
+  console.error('[regression-safety-gate] P0-Safety-Tests fehlen im publish:check');
+  process.exit(1);
+}
+
 console.log('[regression-safety-gate] OK: App-Center Save-Gate und kritische Regressionstests sind vorhanden.');

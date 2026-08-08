@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:13788ce2d6ecc09a5fa5278db99df16cffc44ab1ecb80a2c94c0d9f2db2bb7b5
+ * Quell-Hash: sha256:631fce1c32c6512d3fe6556be12699455e0d4d32e3c94fb9cc6777d2dc6a0edf
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -72,6 +72,40 @@ const { StageADiagnosticsModule } = require('./modules/stage-a-diagnostics');
 const { withActuatorShadowContext, priorityForOwner } = require('./services/actuator-shadow-arbiter');
 const { beginAcceptedPowerEffectCycle } = require('./services/accepted-power-effects');
 const featureFlags = require('./services/feature-flags');
+const {
+    beginSafetyCycle,
+    markSafetyModuleStarted,
+    markSafetyModuleResult,
+    invalidateSafetyEnvelope,
+} = require('./services/safety-envelope');
+
+const SAFETY_CRITICAL_MODULES = new Set([
+    'gridConstraints',
+    'peakShaving',
+    'para14a',
+    'coreLimits',
+    'chargingManagement',
+    'speicherRegelung',
+    'multiUse',
+    'thermalControl',
+    'heatingRodControl',
+    'nexoLogicBudget',
+    'thresholdControl',
+]);
+
+// Diese Module besitzen reale flexible Last-/Speicher-Aktoren. Deaktivieren
+// bedeutet deshalb nicht nur "nicht mehr ticken", sondern einen bestaetigten
+// physischen 0-/AUS-Handover – auch beim Adapterstart mit bereits deaktivierter
+// App oder bei einem Lizenzwechsel.
+const SAFETY_ACTUATOR_MODULES = new Set([
+    'chargingManagement',
+    'speicherRegelung',
+    'multiUse',
+    'thermalControl',
+    'heatingRodControl',
+    'nexoLogicBudget',
+    'thresholdControl',
+]);
 
 const keyFromModule = (moduleRow) => String((moduleRow && moduleRow.key) || 'unknown');
 
@@ -267,27 +301,61 @@ class ModuleManager {
         }
     }
 
-    /** Beendet einen zur Laufzeit deaktivierten AppCenter-Pfad genau einmal. */
-    async _deactivateModule(moduleRow, cycleId = 'disabled') {
+    /**
+     * Beendet einen deaktivierten Hardwarepfad genau einmal und meldet den
+     * Erfolg an den Safety-Latch. Ein fehlender oder fehlgeschlagener Safe-Stop
+     * gilt bei Aktormodulen als kritischer Fehler und wird im naechsten Zyklus
+     * erneut versucht.
+     */
+    async _deactivateModule(moduleRow, cycleId = 'disabled', force = false) {
         const m = moduleRow || null;
-        if (!m || !m.instance || m.lastEnabled !== true) return;
+        if (!m || !m.instance) return true;
+        const key = keyFromModule(m);
+        const safetyActuator = SAFETY_ACTUATOR_MODULES.has(key);
+        const shouldRun = force === true || m.lastEnabled === true || (safetyActuator && m.deactivated !== true);
+        if (!shouldRun) return true;
         try {
+            if (safetyActuator && typeof m.instance.deactivate !== 'function') {
+                throw new Error('safety-deactivate-hook-missing');
+            }
+            let result = null;
             if (typeof m.instance.deactivate === 'function') {
-                await withActuatorShadowContext(this.adapter, {
-                    owner: keyFromModule(m),
-                    module: keyFromModule(m),
-                    priority: priorityForOwner(keyFromModule(m)),
-                    reason: 'module-disabled',
+                result = await withActuatorShadowContext(this.adapter, {
+                    owner: key,
+                    module: key,
+                    priority: priorityForOwner(key),
+                    reason: 'module-disabled-safe-stop',
                     cycleId,
                     leaseMs: 5000,
                 }, () => m.instance.deactivate());
             }
+            if (result === false || (result && typeof result === 'object' && result.ok === false)) {
+                throw new Error(String(result && result.error || 'safe-stop-not-confirmed'));
+            }
+            m.deactivated = true;
+            m.deactivateError = '';
+            // Bei einer spaeteren Reaktivierung werden Konfiguration und DP-Mappings
+            // neu eingelesen. Always-init-Module bleiben initialisiert.
+            if (m.alwaysInit !== true) m.initialized = false;
+            return true;
         } catch (e) {
-            this.adapter.log.warn(`Module '${keyFromModule(m)}' deactivate error: ${String((e && e.message) ? e.message : e)}`);
+            const error = String((e && e.message) ? e.message : e);
+            m.deactivated = false;
+            m.deactivateError = error;
+            this.adapter.log.warn(`Module '${key}' deactivate error: ${error}`);
+            if (safetyActuator) {
+                if (!this.adapter._nwSafetyCriticalFaults || typeof this.adapter._nwSafetyCriticalFaults !== 'object') this.adapter._nwSafetyCriticalFaults = {};
+                const fault = { generation: cycleId, key, error: `deactivate:${error}`, ts: Date.now() };
+                this.adapter._nwSafetyCriticalFault = fault;
+                this.adapter._nwSafetyCriticalFaults[key] = fault;
+                invalidateSafetyEnvelope(this.adapter, `critical-module-deactivate-failed:${key}:${error}`, {
+                    generation: cycleId,
+                    emergencyStop: true,
+                });
+                try { this.adapter?._nwRequestImmediateEmsTick?.(`safety:module-deactivate:${key}`, 100); } catch (_tickError) {}
+            }
+            return false;
         }
-        // Bei einer spaeteren Reaktivierung werden Konfiguration und DP-Mappings neu
-        // eingelesen. Always-init-Module bleiben dagegen initialisiert.
-        if (m.alwaysInit !== true) m.initialized = false;
     }
 
     /**
@@ -589,10 +657,16 @@ class ModuleManager {
             const enabled = !!(m && typeof m.enabledFn === 'function' ? m.enabledFn() : false);
             m.enabled = enabled;
             m.lastEnabled = enabled;
+            m.deactivated = false;
             m.alwaysInit = alwaysInit.has(m.key);
             const shouldInit = enabled || m.alwaysInit;
-            if (!shouldInit) continue;
-            await this._ensureModuleInitialized(m, 'module-init', 'init');
+            if (shouldInit) await this._ensureModuleInitialized(m, 'module-init', 'init');
+
+            // Cold-start-Failsafe: Ein vor dem Neustart aktiver Hardware-Sollwert
+            // darf nicht weiterlaufen, nur weil die App inzwischen deaktiviert ist.
+            if (!enabled && SAFETY_ACTUATOR_MODULES.has(String(m.key || ''))) {
+                await this._deactivateModule(m, 'init', true);
+            }
         }
     }
 
@@ -615,6 +689,18 @@ class ModuleManager {
         const now = Date.now();
         const t0 = now;
         this._tickCount = (this._tickCount || 0) + 1;
+        this.adapter._nwActiveEmsCycleId = this._tickCount;
+        // P0-Safety: Ein Fehler eines sicherheitsrelevanten Moduls bleibt über
+        // Zyklusgrenzen hinweg verriegelt. Erst ein vollständig erfolgreicher
+        // Tick desselben Moduls löscht den Fault; Core-Limits gibt positive
+        // Verbraucher danach bewusst erst im nächsten sauberen Zyklus frei.
+        if (!this.adapter._nwSafetyCriticalFaults || typeof this.adapter._nwSafetyCriticalFaults !== 'object' || Array.isArray(this.adapter._nwSafetyCriticalFaults)) {
+            this.adapter._nwSafetyCriticalFaults = {};
+        }
+        this.adapter._nwSafetyCriticalFault = null;
+        let criticalFaultCleared = false;
+        let criticalFaultRaised = false;
+        beginSafetyCycle(this.adapter, this._tickCount, now);
         beginAcceptedPowerEffectCycle(this.adapter, this._tickCount, now);
 
         /** @type {Array<{key: string, enabled: boolean, ok: boolean, ms: number, error?: string}>} */
@@ -627,38 +713,97 @@ class ModuleManager {
             const enabled = !!(m && typeof m.enabledFn === 'function' && m.enabledFn());
             const key = String((m && m.key) || 'unknown');
             if (!enabled) {
-                await this._deactivateModule(m, this._tickCount);
+                const deactivated = await this._deactivateModule(m, this._tickCount);
                 if (m) m.lastEnabled = false;
+                if (!deactivated) {
+                    const error = String(m && m.deactivateError || 'safe-stop-not-confirmed');
+                    criticalFaultRaised = SAFETY_CRITICAL_MODULES.has(key) || criticalFaultRaised;
+                    markSafetyModuleResult(this.adapter, key, false, error, this._tickCount, Date.now());
+                    results.push({ key, enabled: false, ok: false, ms: 0, error });
+                    continue;
+                }
+                markSafetyModuleResult(this.adapter, key, true, 'disabled-safe', this._tickCount, Date.now());
+                if (SAFETY_CRITICAL_MODULES.has(key) && this.adapter._nwSafetyCriticalFaults[key]) {
+                    delete this.adapter._nwSafetyCriticalFaults[key];
+                    criticalFaultCleared = true;
+                }
                 results.push({ key, enabled: false, ok: true, ms: 0 });
                 continue;
             }
             if (!m || !m.instance || typeof m.instance.tick !== 'function') {
-                results.push({ key, enabled: false, ok: true, ms: 0 });
+                const missingError = 'module-instance-or-tick-missing';
+                if (SAFETY_CRITICAL_MODULES.has(key)) {
+                    const fault = { generation: this._tickCount, key, error: missingError, ts: Date.now() };
+                    this.adapter._nwSafetyCriticalFault = fault;
+                    this.adapter._nwSafetyCriticalFaults[key] = fault;
+                    criticalFaultRaised = true;
+                    invalidateSafetyEnvelope(this.adapter, `critical-module-missing:${key}`, { generation: this._tickCount, emergencyStop: true });
+                    markSafetyModuleResult(this.adapter, key, false, missingError, this._tickCount, Date.now());
+                    results.push({ key, enabled: true, ok: false, ms: 0, error: missingError });
+                } else {
+                    results.push({ key, enabled: false, ok: true, ms: 0 });
+                }
                 continue;
             }
             const initialized = await this._ensureModuleInitialized(m, 'module-lazy-init', this._tickCount);
             m.lastEnabled = true;
+            m.deactivated = false;
             if (!initialized) {
-                results.push({ key, enabled: true, ok: false, ms: 0, error: String(m.initError || 'module-init-pending') });
+                const initError = String(m.initError || 'module-init-pending');
+                if (SAFETY_CRITICAL_MODULES.has(key)) {
+                    const fault = { generation: this._tickCount, key, error: initError, ts: Date.now() };
+                    this.adapter._nwSafetyCriticalFault = fault;
+                    this.adapter._nwSafetyCriticalFaults[key] = fault;
+                    criticalFaultRaised = true;
+                    invalidateSafetyEnvelope(this.adapter, `critical-module-init-failed:${key}`, { generation: this._tickCount, emergencyStop: true });
+                }
+                results.push({ key, enabled: true, ok: false, ms: 0, error: initError });
+                markSafetyModuleResult(this.adapter, key, false, initError, this._tickCount, Date.now());
                 continue;
             }
 
             const t1 = Date.now();
             let ok = true;
             let errMsg = '';
+            markSafetyModuleStarted(this.adapter, key, this._tickCount, t1);
             try {
                 await withActuatorShadowContext(this.adapter, { owner: key, module: key, priority: priorityForOwner(key), reason: 'module-tick', cycleId: this._tickCount, leaseMs: 15000 }, () => m.instance.tick());
             } catch (e) {
                 ok = false;
                 errMsg = String((e && e.message) ? e.message : e);
                 errors.push(`${key}: ${errMsg}`);
+                if (SAFETY_CRITICAL_MODULES.has(key)) {
+                    const fault = { generation: this._tickCount, key, error: errMsg, ts: Date.now() };
+                    this.adapter._nwSafetyCriticalFault = fault;
+                    this.adapter._nwSafetyCriticalFaults[key] = fault;
+                    criticalFaultRaised = true;
+                    invalidateSafetyEnvelope(this.adapter, `critical-module-tick-failed:${key}`, { generation: this._tickCount, emergencyStop: true });
+                }
                 this.adapter.log.warn(`Modul '${key}': Fehler im Regel-Tick: ${errMsg}`);
+            }
+            markSafetyModuleResult(this.adapter, key, ok, errMsg, this._tickCount, Date.now());
+            if (ok && SAFETY_CRITICAL_MODULES.has(key) && this.adapter._nwSafetyCriticalFaults[key]) {
+                delete this.adapter._nwSafetyCriticalFaults[key];
+                criticalFaultCleared = true;
             }
             const ms = Date.now() - t1;
             results.push({ key, enabled: true, ok, ms, ...(ok ? {} : { error: errMsg }) });
         }
 
         const totalMs = Date.now() - t0;
+
+        // Ein neuer Fehler löst schnellstmöglich den nächsten Safe-Zero-Zyklus
+        // aus. Nach Fehlerbehebung ist ebenfalls ein weiterer kompletter Zyklus
+        // erforderlich, weil Core-Limits den persistenten Fault zu Beginn dieses
+        // Durchlaufs noch korrekt als Sperre gesehen hat.
+        if (criticalFaultRaised || criticalFaultCleared) {
+            try {
+                this.adapter?._nwRequestImmediateEmsTick?.(
+                    criticalFaultRaised ? 'safety:critical-module-fault' : 'safety:critical-module-recovered',
+                    criticalFaultRaised ? 100 : 0,
+                );
+            } catch (_tickError) {}
+        }
 
         // Persist last results for UI/Installer APIs
         try {

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 3901e4248e5822272e0771fe3353340a4830f1e8c6f313124c560f0edbacf2f6
+ * Original-Hash: 4cb2a523aa13c9ac36d97e596d058ecedeefad515d04c48a409a28c842ac32a4
  */
 
 /**
@@ -255,8 +255,9 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   await sleep(10);
   assert.equal(adapter.finalFeedback.length, feedbackCountBeforeDuplicate + 1);
 
-  // Heartbeat/failsafe transitions are normalized by the EEBUS gateway. EOS holds
-  // exactly the explicit command and never creates a second independent transition.
+  // RC39: EOS besitzt zusätzlich zum Gateway einen lokalen Heartbeat-Failsafe.
+  // Ein abgelaufener Heartbeat wird sofort auf den expliziten failsafeLimitW
+  // begrenzt, damit ein Gateway-Ausfall keine unbegrenzte Freigabe hinterlässt.
   let staleReply;
   const stalePacket = packet('cmd-stale-metadata', {
     heartbeatAtMs: Date.now() - 70_000,
@@ -267,8 +268,9 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   assert.equal(staleReply.accepted, true);
   const staleIngress = api.getIngress();
   assert.equal(staleIngress.active, true);
-  assert.equal(staleIngress.limitW, 4200);
-  assert.equal(staleIngress.stalePolicy, 'gateway-authoritative-hold-until-explicit-transition');
+  assert.equal(staleIngress.limitW, 3000);
+  assert.equal(staleIngress.localFailsafeActive, true);
+  assert.match(String(staleIngress.stalePolicy || ''), /local.*(failsafe|fail-closed)|failsafe|fail-closed/i);
 
   // A failed downstream/write path must withhold the positive CLS readback.
   adapter._para14a = {

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: ee5073949f187b6487faf73feb427cd88fade38aa0e76dd8fc27bd4dbf4cab40
+ * Original-Hash: 855ea726c635b42dcaa09666468245a525ce0620484ccf0762bfe1429cd06274
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/threshold-control.ts
- * Quell-Hash: sha256:08a78eb90fc3376e1037f192a67a9ae51da204abaa970b34266efe64199a1442
+ * Quell-Hash: sha256:d5e1b3ff32be21a4c11c48395e363b8486643134c64076d874a9134e6f9886b6
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -68,6 +68,12 @@
 const { BaseModule } = require('./base');
 const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
 const { recordAcceptedActuatorTransition } = require('../services/accepted-power-effects');
+const {
+    liveSafetyEnvelope,
+    evaluateFlexibleLoadRequest,
+    commitFlexibleLoadDecision,
+    invalidateSafetyEnvelope,
+} = require('../services/safety-envelope');
 /**
  * Code-Teil: num
  *
@@ -294,6 +300,20 @@ class ThresholdControlModule extends BaseModule {
                 : clamp(r.offValue, -1e12, 1e12, 0);
 
             const maxAgeMs = Math.max(500, Math.round(clamp(r.maxAgeMs, 500, 10 * 60 * 1000, 5000)));
+            // Schwellwertregeln können beliebige Aktoren schalten. Für echte
+            // Verbraucher ist deshalb ein Leistungsmodell Pflicht. Nur explizit
+            // als nicht energierelevant markierte Ausgänge dürfen die zentrale
+            // Anschluss-/§14a-Firewall umgehen.
+            const safetyRelevant = r.safetyRelevant !== false;
+            const estimatedPowerW = Math.max(0, clamp(
+                r.estimatedPowerW ?? r.installedPowerW ?? r.maxPowerW,
+                0,
+                1e12,
+                0,
+            ));
+            const safetyApp = String(r.safetyApp || r.para14aApp || 'custom').trim() || 'custom';
+            const phaseCount = Math.max(1, Math.min(3, Math.round(clamp(r.phaseCount ?? r.phases, 1, 3, 3))));
+            const voltageV = clamp(r.voltageV, 200, 260, 230);
 
             const userCanToggle = (typeof r.userCanToggle === 'boolean') ? !!r.userCanToggle : true;
             const userCanSetThreshold = (typeof r.userCanSetThreshold === 'boolean') ? !!r.userCanSetThreshold : true;
@@ -316,6 +336,11 @@ class ThresholdControlModule extends BaseModule {
                 onValue,
                 offValue,
                 maxAgeMs,
+                safetyRelevant,
+                estimatedPowerW,
+                safetyApp,
+                phaseCount,
+                voltageV,
                 userCanToggle,
                 userCanSetThreshold,
                 userCanSetMinOnSec,
@@ -482,6 +507,9 @@ class ThresholdControlModule extends BaseModule {
             await mk(`threshold.rules.r${i}.lastWriteOk`, 'Letzter Write OK', 'boolean', 'indicator');
             await mk(`threshold.rules.r${i}.owner`, 'Aktor-Owner', 'string', 'text');
             await mk(`threshold.rules.r${i}.readbackOk`, 'Readback bestätigt', 'boolean', 'indicator');
+            await mk(`threshold.rules.r${i}.safetyRelevant`, 'Netz-/§14a-Sicherheitsrelevant', 'boolean', 'indicator');
+            await mk(`threshold.rules.r${i}.estimatedPowerW`, 'Leistungsmodell', 'number', 'value.power', 'W');
+            await mk(`threshold.rules.r${i}.safetyDecision`, 'Safety-Entscheidung', 'string', 'text');
         }
 
         // Register user states (read) in dpRegistry for deterministic reads
@@ -543,6 +571,91 @@ class ThresholdControlModule extends BaseModule {
         return activeOwners.length === 1 && activeOwners[0] === owner;
     }
 
+    /**
+     * Fail-closed Lifecycle-Stopp: Beim Abschalten der App werden alle
+     * konfigurierten Regel-Ausgaenge auf ihren expliziten AUS-Wert geschrieben.
+     * Das gilt auch fuer nicht energierelevante Smart-Home-Ausgaenge, damit eine
+     * deaktivierte Regel keinen zuvor gesetzten Zustand zuruecklaesst.
+     */
+    async deactivate() {
+        this._buildRulesFromConfig();
+        const failures = [];
+        let attempted = 0;
+        for (const r of this._rules || []) {
+            if (!r || !r.outputId) continue;
+            try {
+                attempted += 1;
+                const stopped = await this._forceRuleSafeOff(r, 'module-disabled-safe-stop');
+                if (!stopped.ok) failures.push(`${r.id}:${stopped.reason || 'safe-stop-not-confirmed'}`);
+            } catch (error) {
+                failures.push(`${r && r.id || 'unknown'}:${String(error && error.message || error)}`);
+            }
+        }
+        if (failures.length) throw new Error(`threshold-safe-stop-failed:${failures.join(',')}`);
+        return { ok: true, attempted, stopped: attempted };
+    }
+
+    /**
+     * Erzwingt den expliziten AUS-Wert mit Safety-Prioritaet. Diese Routine wird
+     * nicht nur beim Abschalten des gesamten Moduls verwendet, sondern auch,
+     * wenn eine einzelne Regel deaktiviert, unvollstaendig oder stale wird.
+     * Damit kann kein zuvor eingeschalteter Verbraucher unkontrolliert weiterlaufen.
+     */
+    async _forceRuleSafeOff(r, status = 'safe-stop') {
+        if (!r || !r.outputId) return { ok: true, attempted: false, reason: 'no-output' };
+        if (!this.dp || typeof this.dp.upsert !== 'function') return { ok: false, attempted: false, reason: 'dp-registry-missing' };
+
+        const outKey = `thr.${r.id}.out`;
+        await this.dp.upsert({
+            key: outKey,
+            objectId: r.outputId,
+            dataType: r.outType,
+            direction: 'out',
+        });
+        this._clearActuatorWriteCache(outKey);
+
+        const written = await withActuatorShadowContext(this.adapter, {
+            owner: `safety.threshold.${r.id}.hardware-stop`,
+            module: 'thresholdControl',
+            priority: priorityForOwner('safety.hardware-stop'),
+            reason: `${r.name}: fail-closed off`,
+            leaseMs: 30000,
+            kind: 'safety-stop',
+            enforceAuthority: true,
+        }, async () => (r.outType === 'boolean'
+            ? this.dp.writeBoolean(outKey, !!r.offValue, false)
+            : this.dp.writeNumber(outKey, Number(r.offValue), false)));
+
+        const actual = await this._readRuleOutput(r);
+        const readback = this._readbackMatches(r, false, actual);
+        const accepted = written === true || written === null;
+        const confirmed = readback === true || (accepted && r.requireReadback !== true);
+        if (!confirmed) {
+            return {
+                ok: false,
+                attempted: true,
+                reason: !accepted ? 'write-not-accepted' : 'readback-mismatch',
+            };
+        }
+
+        const now = Date.now();
+        this._hyst.set(r.id, {
+            active: false,
+            initialized: true,
+            lastOnMs: 0,
+            lastOffMs: now,
+            lastChangeMs: now,
+        });
+        await this._setStateIfChanged(`threshold.rules.r${r.idx}.effectiveEnabled`, false);
+        await this._setStateIfChanged(`threshold.rules.r${r.idx}.output`, r.offValue);
+        await this._setStateIfChanged(`threshold.rules.r${r.idx}.active`, false);
+        await this._setStateIfChanged(`threshold.rules.r${r.idx}.lastWriteOk`, accepted);
+        await this._setStateIfChanged(`threshold.rules.r${r.idx}.readbackOk`, readback === true);
+        await this._setStateIfChanged(`threshold.rules.r${r.idx}.lastChange`, now);
+        await this._setStateIfChanged(`threshold.rules.r${r.idx}.status`, status);
+        return { ok: true, attempted: true, reason: status };
+    }
+
     async _writeRuleOutput(r, want, isManual) {
         const owner = this._ruleOwner(r, isManual);
         const reason = `${r.name}: ${want ? 'on' : 'off'}`;
@@ -581,6 +694,7 @@ class ThresholdControlModule extends BaseModule {
     async tick() {
         const enabled = this._isEnabled();
         const now = Date.now();
+        let safetyFailure = '';
 
         // Update configured flags even if module disabled (UI diagnostics)
         for (let i = 1; i <= 10; i++) {
@@ -602,7 +716,16 @@ class ThresholdControlModule extends BaseModule {
             const configured = !!(r.inputId && r.outputId && r.threshold !== null && r.threshold !== undefined);
             if (!configured) {
                 await this._setStateIfChanged(`threshold.rules.r${idx}.effectiveEnabled`, false);
-                await this._setStateIfChanged(`threshold.rules.r${idx}.status`, 'unconfigured');
+                const stopped = await this._forceRuleSafeOff(r, 'unconfigured-safe-stop');
+                if (!stopped.ok) {
+                    safetyFailure = safetyFailure || `threshold-unconfigured-stop-failed:${r.id}:${stopped.reason}`;
+                    invalidateSafetyEnvelope(this.adapter, safetyFailure, {
+                        generation: this.adapter?._emsSafetyCycle?.generation,
+                        emergencyStop: true,
+                    });
+                } else if (!stopped.attempted) {
+                    await this._setStateIfChanged(`threshold.rules.r${idx}.status`, 'unconfigured');
+                }
                 continue;
             }
 
@@ -629,9 +752,17 @@ class ThresholdControlModule extends BaseModule {
             await this._setStateIfChanged(`threshold.rules.r${idx}.effectiveEnabled`, effEnabled);
 
             await this._setStateIfChanged(`threshold.rules.r${idx}.owner`, this._ruleOwner(r, isManual));
+            await this._setStateIfChanged(`threshold.rules.r${idx}.safetyRelevant`, r.safetyRelevant === true);
+            await this._setStateIfChanged(`threshold.rules.r${idx}.estimatedPowerW`, Math.round(Math.max(0, Number(r.estimatedPowerW) || 0)));
             if (!effEnabled) {
-                await this._setStateIfChanged(`threshold.rules.r${idx}.status`, 'inactive');
-                // Do not force outputs; we only stop regulating.
+                const stopped = await this._forceRuleSafeOff(r, 'inactive-safe-stop');
+                if (!stopped.ok) {
+                    safetyFailure = safetyFailure || `threshold-disabled-stop-failed:${r.id}:${stopped.reason}`;
+                    invalidateSafetyEnvelope(this.adapter, safetyFailure, {
+                        generation: this.adapter?._emsSafetyCycle?.generation,
+                        emergencyStop: true,
+                    });
+                }
                 continue;
             }
 
@@ -645,7 +776,14 @@ class ThresholdControlModule extends BaseModule {
 
             if (typeof input !== 'number') {
                 if (!isManual) {
-                    await this._setStateIfChanged(`threshold.rules.r${idx}.status`, 'stale');
+                    const stopped = await this._forceRuleSafeOff(r, 'stale-safe-stop');
+                    if (!stopped.ok) {
+                        safetyFailure = safetyFailure || `threshold-stale-stop-failed:${r.id}:${stopped.reason}`;
+                        invalidateSafetyEnvelope(this.adapter, safetyFailure, {
+                            generation: this.adapter?._emsSafetyCycle?.generation,
+                            emergencyStop: true,
+                        });
+                    }
                     continue;
                 }
                 // Manuell: keine Eingangsprüfung erforderlich
@@ -718,8 +856,63 @@ class ThresholdControlModule extends BaseModule {
                 }
             }
 
-            let wrote = false;
+            let safetyDecision = null;
+            let safetyStatusOverride = '';
             const effectiveBefore = onReadback === true ? true : (offReadback === true ? false : !!mem.active);
+            if (r.safetyRelevant === true) {
+                const runtimeSafetyRequired = !!(this.adapter && (
+                    this.adapter._nwSafetyEnvelopeRequired === true
+                    || this.adapter._emsSafetyCycle
+                    || this.adapter.emsEngine
+                ));
+                const estimatedPowerW = Math.max(0, Number(r.estimatedPowerW) || 0);
+                if (want && runtimeSafetyRequired && !(estimatedPowerW > 0)) {
+                    // Ohne Leistung kann weder Netzanschlussreserve noch §14a-Cap
+                    // belastbar bilanziert werden. Produktiv gilt daher fail-closed.
+                    want = false;
+                    safetyStatusOverride = 'safety_missing_power_model';
+                    safetyDecision = {
+                        requestedW: 0,
+                        allowedW: 0,
+                        forceZero: true,
+                        clamped: true,
+                        reason: 'threshold-estimated-power-missing',
+                        key: `threshold:${r.id}`,
+                        app: r.safetyApp || 'custom',
+                        envelopeGeneration: Number(this.adapter?._emsSafetyCycle?.generation) || 0,
+                    };
+                } else {
+                    if (runtimeSafetyRequired) {
+                        try { liveSafetyEnvelope(this.adapter, this.dp, { now: Date.now() }); } catch (error) {
+                            invalidateSafetyEnvelope(this.adapter, `threshold-live-safety-build-failed:${r.id}`, {
+                                generation: this.adapter?._emsSafetyCycle?.generation,
+                                emergencyStop: true,
+                            });
+                        }
+                    }
+                    safetyDecision = evaluateFlexibleLoadRequest(this.adapter, {
+                        key: `threshold:${r.id}`,
+                        app: r.safetyApp || 'custom',
+                        deviceKey: r.id,
+                        requestedW: want ? estimatedPowerW : 0,
+                        currentActualW: effectiveBefore ? estimatedPowerW : 0,
+                        currentActualFresh: onReadback === true || offReadback === true || mem.initialized === true,
+                        phaseCount: r.phaseCount,
+                        voltageV: r.voltageV,
+                        deviceCapW: estimatedPowerW > 0 ? estimatedPowerW : null,
+                        now: Date.now(),
+                    });
+                    if (want && (safetyDecision.forceZero === true || Number(safetyDecision.allowedW) + 0.5 < estimatedPowerW)) {
+                        // Relais-/Schwellwertausgänge sind nicht stufenlos. Reicht
+                        // die Freigabe nicht für die vollständige Last, bleibt AUS.
+                        want = false;
+                        safetyStatusOverride = String(safetyDecision.reason || 'safety_blocked');
+                    }
+                }
+            }
+            await this._setStateIfChanged(`threshold.rules.r${idx}.safetyDecision`, String(safetyDecision && safetyDecision.reason || (r.safetyRelevant ? 'not-evaluated' : 'not-safety-relevant')));
+
+            let wrote = false;
             const commandChanged = want !== effectiveBefore;
             try { wrote = await this._writeRuleOutput(r, want, isManual); } catch (_e) { wrote = false; }
             const readbackAfter = await this._readRuleOutput(r);
@@ -745,14 +938,22 @@ class ThresholdControlModule extends BaseModule {
             }
 
             if (confirmed) {
+                if (safetyDecision) commitFlexibleLoadDecision(this.adapter, safetyDecision, true);
                 if (want !== mem.active || !mem.initialized) {
                     mem.active = want; mem.initialized = true; mem.lastChangeMs = now;
                     if (want) mem.lastOnMs = now; else mem.lastOffMs = now;
                     await this._setStateIfChanged(`threshold.rules.r${idx}.lastChange`, now);
                 }
-                status = isManual ? (want ? 'manual_on' : 'manual_off') : (want ? 'active' : 'inactive');
+                status = safetyStatusOverride || (isManual ? (want ? 'manual_on' : 'manual_off') : (want ? 'active' : 'inactive'));
             } else if (!accepted) {
                 status = 'write_blocked_or_failed';
+                if (r.safetyRelevant === true && (effectiveBefore === true || (safetyDecision && Number(safetyDecision.requestedW) > 0))) {
+                    safetyFailure = safetyFailure || `threshold-safety-write-failed:${r.id}`;
+                    invalidateSafetyEnvelope(this.adapter, safetyFailure, {
+                        generation: this.adapter?._emsSafetyCycle?.generation,
+                        emergencyStop: true,
+                    });
+                }
             } else {
                 status = 'readback_pending';
             }
@@ -762,6 +963,10 @@ class ThresholdControlModule extends BaseModule {
 
             await this._setStateIfChanged(`threshold.rules.r${idx}.active`, mem.active);
             await this._setStateIfChanged(`threshold.rules.r${idx}.status`, status);
+        }
+        if (safetyFailure) {
+            try { this.adapter?._nwRequestImmediateEmsTick?.('safety:threshold-write', 100); } catch (_tickError) {}
+            throw new Error(safetyFailure);
         }
     }
 }

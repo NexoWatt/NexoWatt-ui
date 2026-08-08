@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/para14a-eebus-api.ts
- * Quell-Hash: sha256:168ed84a705f47374138fa37f153f0cbdc98340b4d4cfbd7bf130e8af1beef64
+ * Quell-Hash: sha256:0173e45e90fc5c81c7a9d83ed7313bc777c97b1f358ef09b2bf28f987fa60861
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -66,6 +66,11 @@ function positiveOrNull(value) {
   return number !== null && number > 0 ? number : null;
 }
 
+function nonNegativeOrNull(value) {
+  const number = finiteOrNull(value);
+  return number !== null && number >= 0 ? number : null;
+}
+
 function clampNumber(value, min, max, fallback) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -111,6 +116,7 @@ class Para14aEebusDirectApi {
     this.lastHelloAtMs = 0;
     this.bridgeHeartbeatSec = 30;
     this.helloWatchdog = null;
+    this.localFailsafeSignature = '';
   }
 
   async init() {
@@ -140,6 +146,7 @@ class Para14aEebusDirectApi {
     this.ingress = null;
     this.sourceInstance = '';
     this.lastHelloAtMs = 0;
+    this.localFailsafeSignature = '';
     this._background(this._writeDiagnostics({
       'para14a.api.connected': false,
       'para14a.api.pendingCount': 0,
@@ -161,10 +168,9 @@ class Para14aEebusDirectApi {
   }
 
   /**
-   * Liefert ausschließlich den zuletzt vom EEBUS-Gateway autorisierten Befehl.
-   * Ablauf, Heartbeat und Failsafe werden im Gateway überwacht. EOS löst einen
-   * abgelaufenen Befehl deshalb nicht selbstständig und potenziell widersprüchlich
-   * auf, sondern wartet auf den expliziten Release-/Failsafe-Übergang des Gateways.
+   * Liefert den letzten autorisierten Gateway-Befehl. Gültigkeits-, Paket- und
+   * Bridge-Heartbeat werden zusätzlich lokal überwacht. Bei Ablauf setzt EOS
+   * selbstständig den vereinbarten Failsafe, standardmäßig 0 W.
    */
   getIngress() {
     const current = this.ingress;
@@ -178,7 +184,60 @@ class Para14aEebusDirectApi {
     const heartbeatStale = heartbeatAtMs !== null
       && heartbeatTimeoutMs !== null
       && now - heartbeatAtMs > heartbeatTimeoutMs;
+    const helloStale = !this.sourceInstance
+      || this.lastHelloAtMs <= 0
+      || now - this.lastHelloAtMs > this._helloMaxAgeMs();
     const ageMs = Math.max(0, now - Number(current.receivedAtMs || now));
+
+    const localFailsafeActive = validityElapsed || heartbeatStale || helloStale;
+    if (localFailsafeActive) {
+      const failsafeLimitW = nonNegativeOrNull(current.failsafeLimitW) ?? 0;
+      const status = validityElapsed
+        ? 'local-failsafe-validity-elapsed'
+        : (heartbeatStale ? 'local-failsafe-command-heartbeat-stale' : 'local-failsafe-bridge-heartbeat-stale');
+      const signature = `${current.commandId}|${status}|${Math.round(failsafeLimitW)}`;
+      if (signature !== this.localFailsafeSignature) {
+        this.localFailsafeSignature = signature;
+        try { this.adapter?._nwRequestImmediateEmsTick?.(`eebus-local-failsafe:${status}`, 0); } catch (_tickError) {}
+        this._background(this._writeDiagnostics({
+          'para14a.api.connected': false,
+          'para14a.api.status': status,
+          'para14a.api.active': true,
+          'para14a.api.effectiveLimitW': Math.round(failsafeLimitW),
+          'para14a.api.lastError': `Local EOS failsafe active (${status}); effective limit ${Math.round(failsafeLimitW)} W.`,
+        }));
+      }
+      return {
+        available: true,
+        active: true,
+        limitW: failsafeLimitW,
+        commandId: current.commandId,
+        sequence: current.sequence,
+        sourceInstance: current.sourceInstance,
+        sourceDeviceId: current.sourceDeviceId,
+        sourceSki: current.sourceSki,
+        sourceProtocol: current.sourceProtocol,
+        operation: 'localFailsafe',
+        reason: status,
+        receivedAtMs: current.receivedAtMs,
+        acceptedAtMs: current.acceptedAtMs,
+        effectiveFromMs: now,
+        validUntilMs,
+        heartbeatAtMs,
+        heartbeatTimeoutMs,
+        failsafeLimitW,
+        failsafeDurationMs: finiteOrNull(current.failsafeDurationMs),
+        fresh: false,
+        stale: true,
+        ageMs,
+        stalePolicy: 'eos-local-fail-closed',
+        status,
+        localFailsafeActive: true,
+        forceZero: failsafeLimitW === 0,
+        emergencyStop: failsafeLimitW === 0,
+      };
+    }
+    this.localFailsafeSignature = '';
 
     return {
       available: true,
@@ -204,9 +263,10 @@ class Para14aEebusDirectApi {
       stale: validityElapsed || heartbeatStale,
       ageMs,
       stalePolicy: 'gateway-authoritative-hold-until-explicit-transition',
-      status: validityElapsed
-        ? 'validity-elapsed-awaiting-gateway-transition'
-        : (heartbeatStale ? 'heartbeat-metadata-stale-gateway-supervised' : 'direct-api'),
+      status: 'direct-api',
+      localFailsafeActive: false,
+      forceZero: current.active === true && finiteOrNull(current.limitW) === 0,
+      emergencyStop: false,
     };
   }
 
@@ -252,7 +312,7 @@ class Para14aEebusDirectApi {
       ? (
         active
         && effectiveTotalCapW !== null
-        && effectiveTotalCapW > 0
+        && effectiveTotalCapW >= 0
         && (requestedLimitW === null || effectiveTotalCapW <= requestedLimitW + capToleranceW)
       )
       : !active;
@@ -400,6 +460,7 @@ class Para14aEebusDirectApi {
       this.bridgeHeartbeatSec = clampNumber(message.bridgeHeartbeatSec, 5, 300, 30);
       this.sourceInstance = sender;
       this.lastHelloAtMs = Date.now();
+      this.localFailsafeSignature = '';
       this._armHelloWatchdog(sender, this.lastHelloAtMs);
     }
 
@@ -509,6 +570,7 @@ class Para14aEebusDirectApi {
     packet.acceptedAtMs = acceptedAtMs;
     const previousIngress = this.ingress;
     this.ingress = packet;
+    this.localFailsafeSignature = '';
 
     // Ein 0-ms-Schnelltick wird vorgemerkt, bevor die Annahme bestätigt wird.
     // Er läuft erst nach dem aktuellen JS-Callstack; pending/Ingress sind bis dahin
@@ -613,8 +675,8 @@ class Para14aEebusDirectApi {
       return { ok: false, reason: 'unsupported-control-operation' };
     }
     const active = operation === 'release' ? false : message.active === true;
-    const limitW = active ? positiveOrNull(message.limitW) : null;
-    if (active && limitW === null) return { ok: false, reason: 'active-command-requires-positive-limit-w' };
+    const limitW = active ? nonNegativeOrNull(message.limitW) : null;
+    if (active && limitW === null) return { ok: false, reason: 'active-command-requires-non-negative-limit-w' };
 
     const receivedAtMs = positiveOrNull(message.receivedAtMs) || Date.now();
     const validUntilMs = positiveOrNull(message.validUntilMs);
@@ -643,7 +705,7 @@ class Para14aEebusDirectApi {
       validUntilMs,
       heartbeatAtMs: positiveOrNull(message.heartbeatAtMs),
       heartbeatTimeoutMs: positiveOrNull(message.heartbeatTimeoutMs),
-      failsafeLimitW: positiveOrNull(message.failsafeLimitW),
+      failsafeLimitW: nonNegativeOrNull(message.failsafeLimitW),
       failsafeDurationMs: finiteOrNull(message.failsafeDurationMs),
       implementationTimeoutMs: clampNumber(
         message.implementationTimeoutMs,
@@ -711,10 +773,12 @@ class Para14aEebusDirectApi {
         this._armHelloWatchdog(sourceInstance, helloAtMs);
         return;
       }
+      this.localFailsafeSignature = `${this.ingress?.commandId || 'none'}|local-failsafe-bridge-heartbeat-stale|${Math.round(nonNegativeOrNull(this.ingress?.failsafeLimitW) ?? 0)}`;
+      try { this.adapter?._nwRequestImmediateEmsTick?.('eebus-local-failsafe:bridge-heartbeat-stale', 0); } catch (_tickError) {}
       this._background(this._writeDiagnostics({
         'para14a.api.connected': false,
-        'para14a.api.status': 'eebus-handshake-timeout-holding-last-command',
-        'para14a.api.lastError': 'The EEBUS direct-API heartbeat expired. EOS keeps the last accepted constraint until the gateway sends an explicit transition.',
+        'para14a.api.status': 'local-failsafe-bridge-heartbeat-stale',
+        'para14a.api.lastError': 'The EEBUS direct-API heartbeat expired. EOS activated the local fail-closed constraint.',
       }));
     }, maxAgeMs + 25);
   }

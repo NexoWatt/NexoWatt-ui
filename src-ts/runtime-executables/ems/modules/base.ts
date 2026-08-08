@@ -105,6 +105,36 @@ class BaseModule {
     async tick() {
         // no-op
     }
+
+    /**
+     * Entfernt den lokalen Write-Cache fuer einen Aktor. Safe-Zero/AUS-Befehle
+     * duerfen bei Modul-Deaktivierung oder Neustart nicht als vermeintlich
+     * idempotent unterdrueckt werden, weil die Hardware den letzten Wert trotz
+     * identischem Cachewert weiter ausfuehren kann.
+     */
+    _clearActuatorWriteCache(key) {
+        try {
+            const entry = this.dp && typeof this.dp.getEntry === 'function' ? this.dp.getEntry(key) : null;
+            const objectId = String(entry && entry.objectId || '').trim();
+            if (objectId && this.dp && this.dp.lastWriteByObjectId instanceof Map) {
+                this.dp.lastWriteByObjectId.delete(objectId);
+            }
+        } catch (_error) {
+            // Der anschliessende Write entscheidet fail-closed ueber den Erfolg.
+        }
+    }
+
+    async _forceWriteNumber(key, value) {
+        if (!this.dp || typeof this.dp.writeNumber !== 'function') return false;
+        this._clearActuatorWriteCache(key);
+        return this.dp.writeNumber(key, value, false);
+    }
+
+    async _forceWriteBoolean(key, value) {
+        if (!this.dp || typeof this.dp.writeBoolean !== 'function') return false;
+        this._clearActuatorWriteCache(key);
+        return this.dp.writeBoolean(key, value, false);
+    }
 }
 
 module.exports = { BaseModule };

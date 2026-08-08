@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 86c10938de637cacdfeab55b6c3c3d1ce0ef2f454fe35a052f0a6b1dcc264883
+ * Original-Hash: 63345b624460c89ef2c4912636dc18fd02e9d48fb5dbe3cbce7f01d605f147fc
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/multi-use.ts
- * Quell-Hash: sha256:4e2b5c76edf6a20c0d33d17e4e86f22c6db2380d059a00b70765e3d6862b6127
+ * Quell-Hash: sha256:471c7b5c080a55d99fc662b45a939bd9ce25f26a11d19dc4d776a4ebde7b9b5e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -65,6 +65,13 @@ const { withActuatorShadowContext, priorityForOwner } = require('../services/act
 const { ActuatorCommandContract } = require('../services/actuator-command-contract');
 const { recordAcceptedPowerTarget } = require('../services/accepted-power-effects');
 const { resolveStorageOperatingPolicy } = require('../services/storage-self-consumption-policy');
+const {
+  liveSafetyEnvelope,
+  evaluateFlexibleLoadRequest,
+  commitFlexibleLoadDecision,
+  safetyTargetFromPowerDecision,
+  invalidateSafetyEnvelope,
+} = require('../services/safety-envelope');
 
 /**
  * Code-Teil: num
@@ -362,6 +369,10 @@ class MultiUseModule extends BaseModule {
         faultLockSec: num(r.faultLockSec, 60),
         defaultTargetW: num(r.defaultTargetW, 0),
         defaultTargetA: num(r.defaultTargetA, 0),
+        safetyApp: String(r.safetyApp || r.para14aApp || (normalizeType(r.type) === 'evcs' ? 'evcs' : 'custom')).trim(),
+        maxPowerW: Math.max(0, num(r.maxPowerW ?? r.installedPowerW, 0)),
+        voltageV: clamp(r.voltageV, 200, 260),
+        phaseCount: Math.max(1, Math.min(3, Math.round(num(r.phaseCount ?? r.phases, 3)))),
       };
     }).filter(Boolean).sort((a, b) => num(a.priority, 100) - num(b.priority, 100) || String(a.key).localeCompare(String(b.key)));
   }
@@ -561,6 +572,64 @@ class MultiUseModule extends BaseModule {
     }
   }
 
+  /**
+   * Fail-closed Lifecycle-Stopp fuer den nur noch explizit aktivierbaren
+   * Legacy-Verbraucherpfad. Konfigurierte Aktoren werden auch ohne vorherigen
+   * Tick aus der Config gemappt und physisch auf 0/AUS geschrieben.
+   */
+  async deactivate() {
+    this._loadConsumersFromConfig();
+    const failures = [];
+    let attempted = 0;
+    for (const consumer of this._consumers || []) {
+      try {
+        const baseKey = `mu.${consumer.id}`;
+        if (this.dp && typeof this.dp.upsert === 'function') {
+          if (consumer.setWId && !consumer.setWKey) {
+            consumer.setWKey = `${baseKey}.setW`;
+            await this.dp.upsert({ key: consumer.setWKey, objectId: consumer.setWId, dataType: 'number', direction: 'out', unit: 'W' });
+          }
+          if (consumer.setAId && !consumer.setAKey) {
+            consumer.setAKey = `${baseKey}.setA`;
+            await this.dp.upsert({ key: consumer.setAKey, objectId: consumer.setAId, dataType: 'number', direction: 'out', unit: 'A' });
+          }
+          if (consumer.enableId && !consumer.enableKey) {
+            consumer.enableKey = `${baseKey}.enable`;
+            await this.dp.upsert({ key: consumer.enableKey, objectId: consumer.enableId, dataType: 'boolean', direction: 'out' });
+          }
+          if (consumer.actualWId && !consumer.actualWKey) {
+            consumer.actualWKey = `${baseKey}.actualW`;
+            await this.dp.upsert({ key: consumer.actualWKey, objectId: consumer.actualWId, dataType: 'number', direction: 'in', unit: 'W' });
+          }
+        }
+        if (!(consumer.setWKey || consumer.setAKey || consumer.enableKey)) continue;
+        attempted += 1;
+        const basis = this._basis(consumer);
+        const target = this._targetForConsumer(consumer, basis, 0, 0);
+        target.enable = false;
+        const result = await this._applyConsumerCommand(consumer, target, 'module-disabled-safe-stop', 30000);
+        if (!(result && result.accepted === true)) failures.push(`${consumer.id}:${String(result && result.status || 'write-not-accepted')}`);
+        this._actuatorContract.release(`multiUse:${consumer.id}`);
+        try {
+          const base = `multiUse.consumers.${consumer.id}`;
+          await this._setStateIfChanged(`${base}.targetW`, 0);
+          await this._setStateIfChanged(`${base}.targetA`, 0);
+          await this._setStateIfChanged(`${base}.status`, 'module-disabled-safe-stop');
+        } catch (_diagnosticError) {}
+      } catch (error) {
+        failures.push(`${consumer && consumer.id || 'unknown'}:${String(error && error.message || error)}`);
+      }
+    }
+    try {
+      await this._setStateIfChanged('multiUse.control.active', false);
+      await this._setStateIfChanged('multiUse.control.requestW', 0);
+      await this._setStateIfChanged('multiUse.control.budgetW', 0);
+      await this._setStateIfChanged('multiUse.control.status', attempted ? 'module-disabled-safe-stop' : 'module-disabled-no-actuators');
+    } catch (_diagnosticError) {}
+    if (failures.length) throw new Error(`multiuse-safe-stop-failed:${failures.join(',')}`);
+    return { ok: true, attempted, stopped: attempted };
+  }
+
   _consumerOwner(consumer) {
     return `multiUse.${consumer.id}`;
   }
@@ -624,33 +693,147 @@ class MultiUseModule extends BaseModule {
     const key = `multiUse:${consumer.id}`;
     const contractCfg = this._contractCfg(consumer);
     const now = Date.now();
-    const requestedW = Math.max(0, num(target?.targetW, 0));
+    const originalRequestedW = Math.max(0, num(target?.targetW, 0));
     const actualBefore = this._readActualW(consumer, staleMs);
-    const toleranceW = Math.max(50, requestedW * 0.03);
-    const readbackBefore = actualBefore === null ? null : Math.abs(actualBefore - requestedW) <= toleranceW;
-    const confirmed = this._actuatorContract.confirmFromReadback(key, target, actualBefore, readbackBefore === true, now);
-    if (confirmed) return { applied: true, accepted: true, writeAccepted: false, confirmed: true, readbackOk: true, status: confirmed.status, contract: confirmed, owner };
-    const decision = this._actuatorContract.prepare(key, target, now, contractCfg);
+    const phaseCount = Math.max(1, Math.min(3, Math.round(num(consumer.phaseCount, 3))));
+    const voltageV = clamp(consumer.voltageV, 200, 260);
+    const contractBefore = this._actuatorContract.result(key, now);
+    const previousTarget = contractBefore && contractBefore.requested && typeof contractBefore.requested === 'object'
+      ? contractBefore.requested
+      : {};
+    const previousRequestedW = Math.max(
+      0,
+      num(previousTarget.targetW, 0),
+      num(previousTarget.targetA, 0) * voltageV * phaseCount,
+    );
+    const existingSafetyW = Math.max(actualBefore === null ? 0 : actualBefore, previousRequestedW);
+    const safetyProbeW = Math.max(originalRequestedW, existingSafetyW);
+
+    // Auch der nur noch explizit aktivierbare Legacy-Verbraucherpfad darf die
+    // zentrale Sicherheitskette nicht umgehen. Der Envelope wird unmittelbar
+    // vor dem realen Write mit dem aktuellen NVP neu aufgebaut.
+    const runtimeSafetyRequired = !!(this.adapter && (
+      this.adapter._nwSafetyEnvelopeRequired === true
+      || this.adapter._emsSafetyCycle
+      || this.adapter.emsEngine
+    ));
+    if (runtimeSafetyRequired) {
+      try { liveSafetyEnvelope(this.adapter, this.dp, { now }); } catch (error) {
+        invalidateSafetyEnvelope(this.adapter, `multiuse-live-safety-build-failed:${consumer.id}`, {
+          generation: this.adapter?._emsSafetyCycle?.generation,
+          now,
+          emergencyStop: true,
+        });
+      }
+    }
+    const safetyDecision = evaluateFlexibleLoadRequest(this.adapter, {
+      key,
+      app: consumer.safetyApp || (normalizeType(consumer.type) === 'evcs' ? 'evcs' : 'custom'),
+      deviceKey: consumer.key || consumer.id,
+      requestedW: safetyProbeW,
+      currentActualW: actualBefore === null ? 0 : actualBefore,
+      currentActualFresh: actualBefore !== null,
+      phaseCount,
+      voltageV,
+      deviceCapW: consumer.maxPowerW > 0 ? consumer.maxPowerW : null,
+      now,
+    });
+    const safeTarget = safetyTargetFromPowerDecision(target, safetyDecision, { phaseCount, voltageV });
+    const safeRequestedW = originalRequestedW > 0
+      ? Math.max(0, Math.min(originalRequestedW, num(safetyDecision.allowedW, 0)))
+      : 0;
+    const safetyForcedStop = safeRequestedW <= 0
+      && safetyProbeW > 0
+      && (safetyDecision.forceZero === true || safetyDecision.blocked === true);
+    if (safeRequestedW <= 0) {
+      safeTarget.targetW = 0;
+      safeTarget.targetA = 0;
+      safeTarget.enable = false;
+      if (Object.prototype.hasOwnProperty.call(safeTarget, 'setpoint')) safeTarget.setpoint = 0;
+      if (Object.prototype.hasOwnProperty.call(safeTarget, 'state')) safeTarget.state = 'off';
+    } else if (Object.prototype.hasOwnProperty.call(safeTarget, 'setpoint')) {
+      safeTarget.setpoint = safeRequestedW;
+    }
+
+    safetyDecision.allowedW = safeRequestedW;
+    safetyDecision.blocked = safetyForcedStop || (originalRequestedW > 0 && safeRequestedW <= 0);
+    safetyDecision.clamped = originalRequestedW > 0 ? safeRequestedW + 0.5 < originalRequestedW : safetyForcedStop;
+    safetyDecision.forceZero = safetyForcedStop || (originalRequestedW > 0 && safeRequestedW <= 0);
+    safetyDecision.reservation = {
+      targetW: safeRequestedW,
+      deltaW: Math.max(0, safeRequestedW - (actualBefore === null ? 0 : actualBefore)),
+      phaseDeltaW: Math.max(0, safeRequestedW - (actualBefore === null ? 0 : actualBefore)),
+      app: safetyDecision.app,
+    };
+
+    const toleranceW = Math.max(50, safeRequestedW * 0.03);
+    const readbackBefore = actualBefore === null ? null : Math.abs(actualBefore - safeRequestedW) <= toleranceW;
+    if (safetyForcedStop) this._actuatorContract.release(key);
+    const confirmed = safetyForcedStop
+      ? null
+      : this._actuatorContract.confirmFromReadback(key, safeTarget, actualBefore, readbackBefore === true, now);
+    if (confirmed) {
+      commitFlexibleLoadDecision(this.adapter, safetyDecision, true);
+      return {
+        applied: true, accepted: true, writeAccepted: false, confirmed: true, readbackOk: true,
+        status: confirmed.status, contract: confirmed, owner, safetyDecision,
+        safetyClamped: safetyDecision.clamped === true,
+      };
+    }
+    const decision = this._actuatorContract.prepare(key, safeTarget, now, contractCfg);
     if (!decision.allowed) {
       const current = this._actuatorContract.result(key, now, decision.targetChanged);
-      return { applied: false, accepted: false, writeAccepted: false, confirmed: false, readbackOk: current.readbackOk, status: current.status, contract: current, owner };
+      return {
+        applied: false, accepted: false, writeAccepted: false, confirmed: false,
+        readbackOk: current.readbackOk, status: current.status, contract: current, owner,
+        safetyDecision, safetyClamped: safetyDecision.clamped === true,
+      };
     }
     const writeResult = await withActuatorShadowContext(this.adapter, {
       owner,
       module: 'multiUse',
       priority: priorityForOwner(owner),
-      reason,
+      reason: safetyDecision.clamped ? `${reason}; ${safetyDecision.reason}` : reason,
       leaseMs: 20000,
       kind: 'multiuse-consumer',
       enforceAuthority: this._consumerHasExclusiveAuthority(consumer, owner),
-      releaseAuthority: requestedW <= 0,
-    }, () => applySetpoint({ adapter: this.adapter, dp: this.dp }, consumer, target));
+      releaseAuthority: safeRequestedW <= 0,
+    }, () => applySetpoint({ adapter: this.adapter, dp: this.dp }, consumer, safeTarget));
     const accepted = writeResult?.applied === true;
     const actualAfter = this._readActualW(consumer, staleMs);
-    const readbackOk = actualAfter === null ? null : Math.abs(actualAfter - requestedW) <= toleranceW;
-    const contract = this._actuatorContract.complete(key, target, accepted, readbackOk, actualAfter, Date.now(), contractCfg);
-    return { ...writeResult, applied: contract.confirmed, accepted, writeAccepted: accepted, confirmed: contract.confirmed, readbackOk, status: contract.status, contract, owner };
+    const readbackOk = actualAfter === null ? null : Math.abs(actualAfter - safeRequestedW) <= toleranceW;
+    const contract = this._actuatorContract.complete(key, safeTarget, accepted, readbackOk, actualAfter, Date.now(), contractCfg);
+    if (accepted) commitFlexibleLoadDecision(this.adapter, safetyDecision, true);
+
+    // Kann ein angeforderter positiver Wert oder ein Safe-Zero nicht an die
+    // Hardware geschrieben werden, bleibt die gesamte Freigabe verriegelt und
+    // ein schneller Folgetick versucht erneut den sicheren Zustand herzustellen.
+    const safetyWriteRequired = originalRequestedW > 0 || safetyForcedStop || safetyDecision.forceZero === true;
+    if (safetyWriteRequired && !accepted) {
+      invalidateSafetyEnvelope(this.adapter, `multiuse-write-not-accepted:${consumer.id}`, {
+        generation: this.adapter?._emsSafetyCycle?.generation,
+        emergencyStop: true,
+      });
+      try { this.adapter?._nwRequestImmediateEmsTick?.(`safety:multiuse-write:${consumer.id}`, 100); } catch (_tickError) {}
+    }
+    return {
+      ...writeResult,
+      applied: contract.confirmed,
+      accepted,
+      writeAccepted: accepted,
+      confirmed: contract.confirmed,
+      readbackOk,
+      status: contract.status,
+      contract,
+      owner,
+      safetyDecision,
+      safetyClamped: safetyDecision.clamped === true,
+      requestedW: originalRequestedW,
+      appliedTargetW: safeRequestedW,
+      safetyForcedStop,
+    };
   }
+
 
   _budgetDemand(cfg, staleMs) {
     let source = 'CENTRAL';

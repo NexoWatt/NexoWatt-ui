@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/thermal-control.ts
- * Quell-Hash: sha256:3e3ede861d5027f7277e5d0f3419900c2f42a8fd1d05a21da5174718d8fa481e
+ * Quell-Hash: sha256:2402ac36aa4b962ae79f402ba421a57d489558fb93208e7810c5a8ca9448f0ad
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -47,6 +47,12 @@ const { applySetpoint } = require('../consumers');
 const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
 const { ActuatorCommandContract } = require('../services/actuator-command-contract');
 const { recordAcceptedPowerTarget } = require('../services/accepted-power-effects');
+const {
+    liveSafetyEnvelope,
+    evaluateFlexibleLoadRequest,
+    commitFlexibleLoadDecision,
+    invalidateSafetyEnvelope,
+} = require('../services/safety-envelope');
 function num(v, fallback = 0) {
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
@@ -611,6 +617,88 @@ const mk = async (id, name, type, role, unit = undefined) => {
     }
 
     /**
+     * Fail-closed Lifecycle-Stopp fuer AppCenter-AUS, Lizenzverlust und den
+     * Adapterstart mit deaktivierter Thermik. Die Ausgaenge werden auch ohne
+     * vorherigen Tick aus der Installer-Konfiguration aufgebaut und physisch
+     * auf AUS/0 beziehungsweise den konfigurierten Aus-Setpoint geschrieben.
+     */
+    async deactivate() {
+        if (!Array.isArray(this._devices) || !this._devices.length) this._buildDevicesFromConfig();
+        const failures = [];
+        let attempted = 0;
+
+        for (const d of this._devices || []) {
+            try {
+                if (this.dp && typeof this.dp.upsert === 'function') {
+                    if (d.switchWriteId && !d.enableKey) {
+                        d.enableKey = `th.${d.id}.en`;
+                        await this.dp.upsert({ key: d.enableKey, objectId: d.switchWriteId, dataType: 'boolean', direction: 'out' });
+                    }
+                    if (d.sgReadyAWriteId && !d.sg1Key) {
+                        d.sg1Key = `th.${d.id}.sg1`;
+                        await this.dp.upsert({ key: d.sg1Key, objectId: d.sgReadyAWriteId, dataType: 'boolean', direction: 'out' });
+                    }
+                    if (d.sgReadyBWriteId && !d.sg2Key) {
+                        d.sg2Key = `th.${d.id}.sg2`;
+                        await this.dp.upsert({ key: d.sg2Key, objectId: d.sgReadyBWriteId, dataType: 'boolean', direction: 'out' });
+                    }
+                    if (d.setpointWriteId && !d.setWKey) {
+                        d.setWKey = `th.${d.id}.set`;
+                        await this.dp.upsert({
+                            key: d.setWKey,
+                            objectId: d.setpointWriteId,
+                            dataType: 'number',
+                            direction: 'out',
+                            unit: d.type === 'setpoint' ? '°C' : 'W',
+                        });
+                    }
+                }
+                const actType = (d.type === 'sgready' || d.sg1Key || d.sg2Key) ? 'sgready' : String(d.type || 'power');
+                const hasActuator = !!(d.enableKey || d.setWKey || d.sg1Key || d.sg2Key);
+                if (!hasActuator) continue;
+                attempted += 1;
+                const consumer = this._thermalConsumerForActType(d, actType);
+                const target = actType === 'setpoint'
+                    ? { enable: false, setpoint: Number.isFinite(Number(d.autoOffSetpoint)) ? Number(d.autoOffSetpoint) : null }
+                    : (actType === 'sgready' ? { state: 'off' } : { targetW: 0, enable: false });
+                const result = await this._applyThermalCommand(
+                    d,
+                    actType,
+                    consumer,
+                    target,
+                    'module-disabled-safe-stop',
+                    {
+                        owner: `thermal.${d.id}`,
+                        enforceAuthority: false,
+                        releaseAuthority: true,
+                        leaseMs: 0,
+                        kind: 'thermal-module-disabled',
+                        forceWrite: true,
+                        requireReadback: false,
+                    },
+                );
+                if (!(result && result.accepted === true)) failures.push(`${d.id}:${String(result && result.status || 'write-not-accepted')}`);
+                this._actuatorContract.release(`thermal:${d.id}`);
+                this._para14aHeldRequests.delete(String(d.id));
+                try {
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 0);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, result && result.accepted === true);
+                    await this._setStateIfChanged(`thermal.devices.${d.id}.status`, 'module-disabled-safe-stop');
+                } catch (_diagnosticError) {}
+            } catch (error) {
+                failures.push(`${d && d.id || 'unknown'}:${String(error && error.message || error)}`);
+            }
+        }
+        try {
+            await this._setStateIfChanged('thermal.summary.appliedTotalW', 0);
+            await this._setStateIfChanged('thermal.summary.budgetUsedW', 0);
+            await this._setStateIfChanged('thermal.summary.status', attempted ? 'module-disabled-safe-stop' : 'module-disabled-no-actuators');
+        } catch (_diagnosticError) {}
+        if (failures.length) throw new Error(`thermal-safe-stop-failed:${failures.join(',')}`);
+        return { ok: true, attempted, stopped: attempted };
+    }
+
+    /**
      * Code-Teil: Methode `_computePvAvailableW`
      * Zweck: berechnet abgeleitete Werte; Änderungen können Energiefluss/History/Regelungen beeinflussen.
      * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
@@ -1147,18 +1235,125 @@ const mk = async (id, name, type, role, unit = undefined) => {
         const cfg = this._contractCfg(d, options.requireReadback === undefined ? null : options.requireReadback);
         const key = `thermal:${d.id}`;
         const now = Date.now();
-        const forceWrite = options.forceWrite === true;
-        if (forceWrite) this._actuatorContract.release(key);
+        let safeTarget = target && typeof target === 'object' ? { ...target } : {};
+        let safetyDecision = null;
+        let safetyForcedStop = false;
+        let measuredSafetyW = null;
+        try {
+            if (d.pWKey && typeof this.dp?.getNumberFresh === 'function') {
+                measuredSafetyW = this.dp.getNumberFresh(d.pWKey, 30000, null);
+                if (!Number.isFinite(Number(measuredSafetyW))) measuredSafetyW = null;
+            }
+        } catch (_measurementError) {
+            measuredSafetyW = null;
+        }
+        const estimatedLoadW = this._estimatedThermalPowerW(d, measuredSafetyW);
+        const targetLoadW = (candidate) => {
+            const value = candidate && typeof candidate === 'object' ? candidate : {};
+            const state = String(value.state || '').trim().toLowerCase();
+            if (actType === 'setpoint') return value.enable === true ? estimatedLoadW : 0;
+            if (actType === 'sgready') return state === 'on' || state === 'boost' ? estimatedLoadW : 0;
+            return Math.max(0, Number(value.targetW) || 0);
+        };
+        const requestedLoadW = targetLoadW(safeTarget);
+
+        // Die Safety-Firewall muss auch einen bereits aktiven Verbraucher
+        // abschalten können, wenn der neue Plan ohnehin 0/AUS verlangt. Sonst
+        // könnte ein ungültiger Envelope über den Readback-/No-change-Pfad einen
+        // alten Hardwarezustand weiterlaufen lassen.
         const actualBefore = await this._readThermalReadback(d, actType);
-        const readbackBefore = this._thermalReadbackMatches(d, actType, target, actualBefore);
+        const readbackActive = actType === 'sgready'
+            ? ['on', 'boost'].includes(this._decodeSgReadyState(d, actualBefore))
+            : (actType === 'setpoint'
+                ? actualBefore && actualBefore.enable === true
+                : !!(actualBefore && (actualBefore.enable === true || Number(actualBefore.targetW) > 0)));
+        const contractBefore = this._actuatorContract.result(key, now);
+        const priorRequestedLoadW = targetLoadW(contractBefore && contractBefore.requested);
+        const existingCommandW = readbackActive || priorRequestedLoadW > 0
+            ? Math.max(estimatedLoadW, priorRequestedLoadW)
+            : 0;
+        const existingLoadW = Math.max(
+            measuredSafetyW === null ? 0 : Math.max(0, Number(measuredSafetyW) || 0),
+            existingCommandW,
+        );
+        const safetyProbeW = Math.max(requestedLoadW, existingLoadW);
+
+        if (safetyProbeW > 0 && this.adapter && (this.adapter._nwSafetyEnvelopeRequired === true || this.adapter._emsSafetyCycle)) {
+            let envelope = null;
+            try {
+                envelope = liveSafetyEnvelope(this.adapter, this.dp, {
+                    now,
+                    generation: this.adapter?._emsSafetyCycle?.generation,
+                });
+            } catch (error) {
+                envelope = invalidateSafetyEnvelope(this.adapter, `thermal-live-safety-build-failed:${d.id}:${String(error && error.message || error)}`, {
+                    generation: this.adapter?._emsSafetyCycle?.generation,
+                    now,
+                    emergencyStop: true,
+                });
+            }
+            safetyDecision = evaluateFlexibleLoadRequest(this.adapter, {
+                key,
+                app: 'thermal',
+                deviceKey: d.id,
+                requestedW: safetyProbeW,
+                currentActualW: measuredSafetyW === null ? 0 : Math.max(0, Number(measuredSafetyW) || 0),
+                currentActualFresh: measuredSafetyW !== null,
+                phaseCount: Math.max(1, Math.min(3, Number(envelope && envelope.phase && envelope.phase.requiredCount) || 3)),
+                voltageV: Number(envelope && envelope.phase && envelope.phase.voltageV) || 230,
+                deviceCapW: Number.isFinite(Number(d.maxPowerW)) && Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : estimatedLoadW,
+                now,
+            });
+            const allowedW = Math.max(0, Math.floor(Number(safetyDecision.allowedW) || 0));
+            if (requestedLoadW > 0) {
+                if (actType === 'setpoint') {
+                    const permitted = allowedW + 1 >= requestedLoadW;
+                    if (!permitted) {
+                        safeTarget.enable = false;
+                        if (Number.isFinite(Number(d.autoOffSetpoint))) safeTarget.setpoint = Number(d.autoOffSetpoint);
+                    }
+                } else if (actType === 'sgready') {
+                    if (allowedW + 1 < requestedLoadW) safeTarget = { state: 'off' };
+                } else {
+                    safeTarget.targetW = Math.min(requestedLoadW, allowedW);
+                    if (Object.prototype.hasOwnProperty.call(safeTarget, 'enable')) safeTarget.enable = safeTarget.targetW > 0;
+                }
+            }
+            const effectiveTargetW = targetLoadW(safeTarget);
+            const safetyBlocked = safetyDecision.forceZero === true
+                || safetyDecision.blocked === true
+                || (requestedLoadW > 0 && effectiveTargetW <= 0);
+            safetyForcedStop = effectiveTargetW <= 0 && safetyProbeW > 0 && safetyBlocked;
+            safetyDecision = {
+                ...safetyDecision,
+                allowedW: effectiveTargetW,
+                blocked: safetyForcedStop,
+                clamped: requestedLoadW > 0 ? effectiveTargetW < requestedLoadW : safetyForcedStop,
+                forceZero: safetyForcedStop,
+                reservation: {
+                    targetW: effectiveTargetW,
+                    deltaW: Math.max(0, effectiveTargetW - Math.max(0, Number(measuredSafetyW) || 0)),
+                    phaseDeltaW: envelope && envelope.phase && envelope.phase.required === true
+                        ? Math.max(0, effectiveTargetW - Math.max(0, Number(measuredSafetyW) || 0))
+                        : 0,
+                    app: 'thermal',
+                },
+            };
+            if (safetyDecision.clamped) reason = `${String(reason || 'Thermik')} | ${String(safetyDecision.reason || 'Safety begrenzt')}`;
+        }
+
+        const forceWrite = options.forceWrite === true || safetyForcedStop;
+        if (forceWrite) this._actuatorContract.release(key);
+        const readbackBefore = this._thermalReadbackMatches(d, actType, safeTarget, actualBefore);
         const confirmed = forceWrite
             ? null
-            : this._actuatorContract.confirmFromReadback(key, target, actualBefore, readbackBefore === true, now);
+            : this._actuatorContract.confirmFromReadback(key, safeTarget, actualBefore, readbackBefore === true, now);
         if (confirmed) {
             await this._publishThermalContract(d, owner, confirmed);
-            return { applied: true, accepted: true, writeAccepted: false, confirmed: true, readbackOk: true, status: confirmed.status, contract: confirmed };
+            if (safetyDecision) commitFlexibleLoadDecision(this.adapter, safetyDecision, true);
+            return { applied: true, accepted: true, writeAccepted: false, confirmed: true, readbackOk: true, status: confirmed.status, contract: confirmed, safetyDecision };
         }
-        const decision = this._actuatorContract.prepare(key, target, now, cfg);
+        const decision = this._actuatorContract.prepare(key, safeTarget, now, cfg);
         if (!decision.allowed) {
             const current = this._actuatorContract.result(key, now, decision.targetChanged);
             await this._publishThermalContract(d, owner, current);
@@ -1173,13 +1368,22 @@ const mk = async (id, name, type, role, unit = undefined) => {
             leaseMs: Number.isFinite(Number(options.leaseMs)) ? Math.max(0, Number(options.leaseMs)) : (manual ? 5 * 60 * 1000 : 20000),
             kind: String(options.kind || (manual ? 'manual-thermal' : 'thermal-control')),
             enforceAuthority,
-            releaseAuthority: options.releaseAuthority === true,
-        }, () => applySetpoint({ dp: this.dp, adapter: this.adapter }, consumer, target));
+            releaseAuthority: options.releaseAuthority === true || safetyForcedStop,
+        }, () => applySetpoint({ dp: this.dp, adapter: this.adapter }, consumer, safeTarget));
         const accepted = !!(writeRes && writeRes.applied === true);
         const actualAfter = await this._readThermalReadback(d, actType);
-        const readbackOk = this._thermalReadbackMatches(d, actType, target, actualAfter);
-        const contract = this._actuatorContract.complete(key, target, accepted, readbackOk, actualAfter, Date.now(), cfg);
+        const readbackOk = this._thermalReadbackMatches(d, actType, safeTarget, actualAfter);
+        const contract = this._actuatorContract.complete(key, safeTarget, accepted, readbackOk, actualAfter, Date.now(), cfg);
         await this._publishThermalContract(d, owner, contract);
+        if (safetyDecision) commitFlexibleLoadDecision(this.adapter, safetyDecision, accepted || contract.confirmed === true);
+        if ((safetyDecision || safetyForcedStop) && !(accepted || contract.confirmed === true) && (requestedLoadW > 0 || safetyForcedStop)) {
+            invalidateSafetyEnvelope(this.adapter, `thermal-write-not-confirmed:${d.id}:${String(contract.status || writeRes && writeRes.status || 'unknown')}`, {
+                generation: this.adapter?._emsSafetyCycle?.generation,
+                now: Date.now(),
+                emergencyStop: true,
+            });
+            try { this.adapter?._nwRequestImmediateEmsTick?.(`safety:thermal-write:${d.id}`, 0); } catch (_tickError) {}
+        }
         return {
             ...writeRes,
             applied: contract.confirmed,
@@ -1189,6 +1393,8 @@ const mk = async (id, name, type, role, unit = undefined) => {
             readbackOk,
             status: contract.status,
             contract,
+            safetyDecision,
+            safetyForcedStop,
         };
     }
 

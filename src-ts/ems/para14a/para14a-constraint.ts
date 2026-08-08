@@ -62,6 +62,8 @@ export interface Para14aConstraintInput {
   mode?: Para14aMode | string;
   minPerDeviceW?: number;
   externalTotalSetpointW?: number | null;
+  forceZero?: boolean;
+  emergencyStop?: boolean;
   evcs?: Para14aEvcsInput[];
   consumers?: Para14aConsumerInput[];
 }
@@ -77,6 +79,8 @@ export interface Para14aAppCaps {
 
 export interface Para14aConstraintSnapshot {
   active: boolean;
+  forceZero: boolean;
+  emergencyStop: boolean;
   source: string;
   mode: Para14aMode;
   constraintOnly: true;
@@ -93,6 +97,13 @@ export interface Para14aConstraintSnapshot {
   targetCapsById: Record<string, number>;
   targetControlById: Record<string, Para14aControlType>;
   unmanagedConsumerCount: number;
+}
+
+function finiteOrNull(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 function finite(value: unknown, fallback = 0): number {
@@ -227,7 +238,9 @@ function sumCaps(values: Array<number | null | undefined>): number {
 }
 
 export function buildPara14aConstraintSnapshot(input: Para14aConstraintInput): Para14aConstraintSnapshot {
-  const active = input.active === true;
+  const forceZero = input.forceZero === true || input.emergencyStop === true;
+  const emergencyStop = input.emergencyStop === true;
+  const active = input.active === true || forceZero;
   const mode: Para14aMode = String(input.mode || '').toLowerCase() === 'ems' ? 'ems' : 'direct';
   const baseW = Math.max(4200, positive(input.minPerDeviceW ?? 4200));
   const consumers = Array.isArray(input.consumers) ? input.consumers.filter(Boolean) : [];
@@ -322,7 +335,7 @@ export function buildPara14aConstraintSnapshot(input: Para14aConstraintInput): P
     : 0;
   const secondaryW = nSteuVE > 1 ? gzf * baseW : (nSteuVE === 1 ? baseW : 0);
 
-  if (active) {
+  if (active && !forceZero) {
     for (const unit of units) {
       let cap = mode === 'direct'
         ? (isLargeThermalGroup(unit) ? Math.max(baseW, 0.4 * unit.installedW) : baseW)
@@ -332,9 +345,10 @@ export function buildPara14aConstraintSnapshot(input: Para14aConstraintInput): P
     }
   }
 
-  const nominalPMinW = active ? units.reduce((sum, unit) => sum + unit.capW, 0) : 0;
-  const explicitTotal = mode === 'ems' && finite(input.externalTotalSetpointW, 0) > 0 ? positive(input.externalTotalSetpointW) : null;
-  const requestedTotalCapW = active ? (explicitTotal ?? nominalPMinW) : null;
+  const nominalPMinW = active && !forceZero ? units.reduce((sum, unit) => sum + unit.capW, 0) : 0;
+  const explicitRaw = finiteOrNull(input.externalTotalSetpointW);
+  const explicitTotal = mode === 'ems' && explicitRaw !== null && explicitRaw >= 0 ? Math.max(0, explicitRaw) : null;
+  const requestedTotalCapW = active ? (forceZero ? 0 : (explicitTotal ?? nominalPMinW)) : null;
   if (active && requestedTotalCapW !== null && nominalPMinW > 0) {
     if (requestedTotalCapW < nominalPMinW) {
       const factor = requestedTotalCapW / nominalPMinW;
@@ -393,25 +407,27 @@ export function buildPara14aConstraintSnapshot(input: Para14aConstraintInput): P
 
   return {
     active,
+    forceZero,
+    emergencyStop,
     source: String(input.source || ''),
     mode,
     constraintOnly: true,
     nSteuVE,
     gzf,
     pMinW: Math.round(nominalPMinW),
-    totalCapW: active && units.length ? Math.round(effectiveTotal) : null,
+    totalCapW: active && (units.length || forceZero) ? Math.round(forceZero ? 0 : effectiveTotal) : null,
     primaryGroup: primary?.kind || '',
     primaryW: Math.round(primaryW),
     secondaryW: Math.round(secondaryW),
     evcsCapsBySafe,
-    evcsTotalCapW: active && evcs.length ? Math.round(sumCaps(Object.values(evcsCapsBySafe))) : null,
+    evcsTotalCapW: active && (evcs.length || forceZero) ? Math.round(forceZero ? 0 : sumCaps(Object.values(evcsCapsBySafe))) : null,
     appCapsW: {
-      evcs: active && evcs.length ? Math.round(sumCaps(Object.values(evcsCapsBySafe))) : null,
-      storage: active && storageRows.length ? Math.round(storageCap) : null,
-      thermal: active && (heatRows.length || airRows.length) ? Math.round(thermalCap) : null,
-      heatingRod: active && heatingRodRows.length ? Math.round(heatingRodCap) : null,
-      airCondition: active && airRows.length ? Math.round(positive(airUnit?.capW)) : null,
-      custom: active && customRows.length ? Math.round(customCap) : null,
+      evcs: active && (evcs.length || forceZero) ? Math.round(forceZero ? 0 : sumCaps(Object.values(evcsCapsBySafe))) : null,
+      storage: active && (storageRows.length || forceZero) ? Math.round(forceZero ? 0 : storageCap) : null,
+      thermal: active && (heatRows.length || airRows.length || forceZero) ? Math.round(forceZero ? 0 : thermalCap) : null,
+      heatingRod: active && (heatingRodRows.length || forceZero) ? Math.round(forceZero ? 0 : heatingRodCap) : null,
+      airCondition: active && (airRows.length || forceZero) ? Math.round(forceZero ? 0 : positive(airUnit?.capW)) : null,
+      custom: active && (customRows.length || forceZero) ? Math.round(forceZero ? 0 : customCap) : null,
     },
     targetCapsById,
     targetControlById,

@@ -66,6 +66,7 @@ type OutputIntent = {
   active: boolean;
   releasePending: boolean;
   updatedTs: number;
+  currentReservedW: number;
   meta: OutputMeta;
 };
 
@@ -491,6 +492,7 @@ export class NexoLogicOutputController {
       active: true,
       releasePending: false,
       updatedTs: Date.now(),
+      currentReservedW: Math.max(0, row.budgetReservedW),
       meta,
     };
     this.intents.set(row.key, intent);
@@ -500,7 +502,16 @@ export class NexoLogicOutputController {
   }
 
   getBudgetIntents(): OutputIntent[] {
-    return Array.from(this.intents.values()).filter((intent) => intent.active || intent.releasePending).map((intent) => ({ ...intent, meta: { ...intent.meta, params: { ...(intent.meta.params || {}) } } }));
+    return Array.from(this.intents.values())
+      .filter((intent) => intent.active || intent.releasePending)
+      .map((intent) => {
+        const runtime = this.runtimes.get(intent.key);
+        return {
+          ...intent,
+          currentReservedW: Math.max(0, Number(runtime?.budgetReservedW) || 0),
+          meta: { ...intent.meta, params: { ...(intent.meta.params || {}) } },
+        };
+      });
   }
 
   async applyBudgetGrant(keyRaw: unknown, grantRaw: unknown): Promise<NexoLogicWriteResult | null> {

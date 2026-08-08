@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:3f7ad034bbe23776ee243f1943b7b816653f3681583391be1c9ccf9ec0860ab9
+ * Quell-Hash: sha256:3a7b9be1dc30840178778639867f0e68ea135184c0d6d71d45f7020b63ebf9d3
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -6749,6 +6749,19 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         onValue: (r0.onValue !== undefined) ? r0.onValue : onDef,
         offValue: (r0.offValue !== undefined) ? r0.offValue : offDef,
         maxAgeMs: (Number.isFinite(Number(r0.maxAgeMs))) ? Math.max(500, Math.round(Number(r0.maxAgeMs))) : 5000,
+        // RC39: Ein Schwellwert-Aktor gilt standardmäßig als reale Last. Nur
+        // bewusst als nicht energierelevant markierte Automationen dürfen ohne
+        // Leistungsmodell arbeiten. Damit kann die finale Write-Firewall den
+        // Netzanschluss und §14a auch bei generischen Relais berücksichtigen.
+        safetyRelevant: (typeof r0.safetyRelevant === 'boolean') ? !!r0.safetyRelevant : true,
+        estimatedPowerW: (Number.isFinite(Number(r0.estimatedPowerW ?? r0.installedPowerW ?? r0.maxPowerW)))
+          ? Math.max(0, Math.round(Number(r0.estimatedPowerW ?? r0.installedPowerW ?? r0.maxPowerW)))
+          : 0,
+        safetyApp: String(r0.safetyApp || r0.para14aApp || 'custom').trim() || 'custom',
+        phaseCount: (Number.isFinite(Number(r0.phaseCount ?? r0.phases)))
+          ? Math.max(1, Math.min(3, Math.round(Number(r0.phaseCount ?? r0.phases))))
+          : 3,
+        voltageV: (Number.isFinite(Number(r0.voltageV))) ? Math.max(200, Math.min(260, Number(r0.voltageV))) : 230,
         userCanToggle: (typeof r0.userCanToggle === 'boolean') ? !!r0.userCanToggle : true,
         userCanSetThreshold: (typeof r0.userCanSetThreshold === 'boolean') ? !!r0.userCanSetThreshold : true,
         userCanSetMinOnSec: (typeof r0.userCanSetMinOnSec === 'boolean') ? !!r0.userCanSetMinOnSec : ((typeof r0.userCanSetThreshold === 'boolean') ? !!r0.userCanSetThreshold : true),
@@ -7191,6 +7204,23 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       grid.appendChild(mkNumField('Max. Alter Input', `thr_rule_${idx}_maxAgeMs`, r.maxAgeMs, (n) => updateRule(idx, { maxAgeMs: Math.max(500, Math.round(n)) }), '', 'ms'));
 
+      grid.appendChild(mkChk('Netzanschluss-/§14a-Schutz anwenden', `thr_rule_${idx}_safetyRelevant`, r.safetyRelevant !== false, (b) => { updateRule(idx, { safetyRelevant: !!b }); buildThresholdUI(); }));
+      if (r.safetyRelevant !== false) {
+        grid.appendChild(mkNumField('Leistungsaufnahme bei EIN', `thr_rule_${idx}_estimatedPowerW`, r.estimatedPowerW, (n) => updateRule(idx, { estimatedPowerW: Math.max(0, Math.round(n)) }), 'Pflichtwert für die sichere Gesamtleistungsbilanz. Bei 0 W bleibt die Regel produktiv AUS.', 'W'));
+        grid.appendChild(mkSelectField('§14a-/Safety-Gruppe', `thr_rule_${idx}_safetyApp`, r.safetyApp || 'custom', [
+          { v: 'custom', t: 'Sonstiger steuerbarer Verbraucher' },
+          { v: 'thermal', t: 'Wärmepumpe / Klima' },
+          { v: 'heatingRod', t: 'Heizstab' },
+          { v: 'evcs', t: 'Ladeinfrastruktur' },
+          { v: 'storage', t: 'Speicher-Netzladung' },
+        ], (v) => updateRule(idx, { safetyApp: v })));
+        grid.appendChild(mkSelectField('Phasen', `thr_rule_${idx}_phaseCount`, String(r.phaseCount || 3), [
+          { v: '1', t: '1-phasig' },
+          { v: '2', t: '2-phasig' },
+          { v: '3', t: '3-phasig' },
+        ], (v) => updateRule(idx, { phaseCount: Math.max(1, Math.min(3, Math.round(Number(v) || 3))) })));
+      }
+
       grid.appendChild(mkChk('Endkunde darf Regel ein/aus', `thr_rule_${idx}_userCanToggle`, r.userCanToggle !== false, (b) => updateRule(idx, { userCanToggle: !!b })));
       grid.appendChild(mkChk('Endkunde darf Schwellwert ändern', `thr_rule_${idx}_userCanSetThreshold`, r.userCanSetThreshold !== false, (b) => updateRule(idx, { userCanSetThreshold: !!b })));
       grid.appendChild(mkChk('Endkunde darf MinOn ändern', `thr_rule_${idx}_userCanSetMinOnSec`, r.userCanSetMinOnSec !== false, (b) => updateRule(idx, { userCanSetMinOnSec: !!b })));
@@ -7213,7 +7243,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
           return;
         }
         const t2 = _ensureThresholdCfg();
-        t2.rules.push({ idx: next, enabled: true, name: `Regel ${next}`, compare: 'above', threshold: 0, hysteresis: 0, minOnSec: 0, minOffSec: 0, outputType: 'boolean', onValue: true, offValue: false, maxAgeMs: 5000, userCanToggle: true, userCanSetThreshold: true, userCanSetMinOnSec: true, userCanSetMinOffSec: true, inputId: '', outputId: '' });
+        t2.rules.push({ idx: next, enabled: true, name: `Regel ${next}`, compare: 'above', threshold: 0, hysteresis: 0, minOnSec: 0, minOffSec: 0, outputType: 'boolean', onValue: true, offValue: false, maxAgeMs: 5000, safetyRelevant: true, estimatedPowerW: 0, safetyApp: 'custom', phaseCount: 3, voltageV: 230, userCanToggle: true, userCanSetThreshold: true, userCanSetMinOnSec: true, userCanSetMinOffSec: true, inputId: '', outputId: '' });
         buildThresholdUI();
         scheduleValidation(200);
       };

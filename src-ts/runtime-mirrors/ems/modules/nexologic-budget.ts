@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e49b2061fd60d3fde0ac01912dd0a722dc13c01cfb5d96e05fa8ba69c564b665
+ * Original-Hash: bc550a5fe2d7d87b54caafd4edf20fcf64938bc73d5fe7c3fe7e662a7ad3bcdc
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/nexologic-budget.ts
- * Quell-Hash: sha256:60c6943b0c164ec2e9c4e81ba04e87bcfb2f87abae9b78709c9b2781f732c5b3
+ * Quell-Hash: sha256:2a032f250acb615dd94a1efc2eb1a7bdc551258da9bd792c62dc9896f6a21deb
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -51,6 +51,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.NexoLogicBudgetModule = void 0;
 const { BaseModule } = require('./base');
 const { recordAcceptedActuatorTransition } = require('../services/accepted-power-effects');
+const { liveSafetyEnvelope, evaluateFlexibleLoadRequest, commitFlexibleLoadDecision, invalidateSafetyEnvelope, } = require('../services/safety-envelope');
 /**
  * Code-Teil: text
  *
@@ -106,6 +107,9 @@ class NexoLogicBudgetModule extends BaseModule {
             grantedW: ['number', 'value.power', 'NexoLogic zentral freigegebene Leistung', 'W'],
             reservedW: ['number', 'value.power', 'NexoLogic zentral reservierte Leistung', 'W'],
             blockedCount: ['number', 'value', 'NexoLogic budget-/arbiterblockierte Ausgaenge'],
+            safetyBlockedCount: ['number', 'value', 'NexoLogic durch Netz-/§14a-Safety blockierte Ausgaenge'],
+            safetyClampedCount: ['number', 'value', 'NexoLogic durch Netz-/§14a-Safety begrenzte Ausgaenge'],
+            safetyStatus: ['string', 'text', 'NexoLogic Safety-Status'],
             intentsJson: ['string', 'json', 'NexoLogic Budget-Intents JSON'],
         };
         for (const [name, spec] of Object.entries(states)) {
@@ -129,6 +133,47 @@ class NexoLogicBudgetModule extends BaseModule {
         }
         catch (_error) { }
     }
+    /**
+     * Fail-closed Lifecycle-Stopp fuer budgetierte NexoLogic-Ausgaenge. Der
+     * Output-Controller erhaelt fuer jeden bekannten Intent einen expliziten
+     * 0-W-Grant; ein nicht bestaetigter Release verriegelt den Modulmanager.
+     */
+    async deactivate() {
+        const engine = this.adapter?.logicEngine;
+        const intents = engine && typeof engine.getBudgetIntents === 'function' ? engine.getBudgetIntents() : [];
+        const rows = Array.isArray(intents) ? intents : [];
+        const failures = [];
+        let attempted = 0;
+        if (rows.length && (!engine || typeof engine.applyBudgetGrant !== 'function')) {
+            throw new Error('nexologic-safe-stop-failed:output-controller-missing');
+        }
+        for (const intent of rows) {
+            const key = text(intent?.key);
+            if (!key)
+                continue;
+            attempted += 1;
+            try {
+                const result = await engine.applyBudgetGrant(key, 0);
+                const reservedW = Math.max(0, num(result?.budgetReservedW, num(intent?.currentReservedW, 0)));
+                const stopped = reservedW <= 0.5 && !!(result && (result.accepted === true || result.confirmed === true || result.status === 'released' || result.status === 'off'));
+                if (!stopped)
+                    failures.push(`${key}:${text(result?.status || 'release-not-confirmed')}`);
+            }
+            catch (error) {
+                failures.push(`${key}:${text(error?.message || error)}`);
+            }
+        }
+        await Promise.all([
+            this.set('active', false),
+            this.set('status', attempted ? 'module-disabled-safe-stop' : 'module-disabled-no-intents'),
+            this.set('requestedW', 0),
+            this.set('grantedW', 0),
+            this.set('reservedW', 0),
+        ]);
+        if (failures.length)
+            throw new Error(`nexologic-safe-stop-failed:${failures.join(',')}`);
+        return { ok: true, attempted, stopped: attempted };
+    }
     async tick() {
         const engine = this.adapter?.logicEngine;
         const central = this.adapter?._emsBudget;
@@ -138,6 +183,10 @@ class NexoLogicBudgetModule extends BaseModule {
         let grantedW = 0;
         let reservedW = 0;
         let blockedCount = 0;
+        let safetyBlockedCount = 0;
+        let safetyClampedCount = 0;
+        let safetyFailure = '';
+        let safetyStatus = 'ready';
         const diagnostics = [];
         const centralReady = !!(central && typeof central.getPvGrant === 'function' && typeof central.getTotalGrant === 'function' && typeof central.reserve === 'function');
         for (const intent of rows) {
@@ -161,9 +210,53 @@ class NexoLogicBudgetModule extends BaseModule {
                 grantSource = text(grant?.source || grant?.reason || 'central-grant');
             }
             grantedW += grantW;
-            const result = engine && typeof engine.applyBudgetGrant === 'function' ? await engine.applyBudgetGrant(intent.key, releasePending ? 0 : grantW) : null;
+            // C3.4 / RC39: Das zentrale Budget ist eine Planungsfreigabe, aber noch
+            // kein Sicherheitsnachweis. Unmittelbar vor applyBudgetGrant wird daher
+            // der aktuelle NVP-/Phasen-/§14a-Envelope neu aufgebaut und der Grant ein
+            // zweites Mal fail-closed geklemmt.
+            const runtimeSafetyRequired = !!(this.adapter && (this.adapter._nwSafetyEnvelopeRequired === true
+                || this.adapter._emsSafetyCycle
+                || this.adapter.emsEngine));
+            if (runtimeSafetyRequired) {
+                try {
+                    liveSafetyEnvelope(this.adapter, this.dp, {
+                        now: Date.now(),
+                        generation: this.adapter?._emsSafetyCycle?.generation,
+                    });
+                }
+                catch (error) {
+                    invalidateSafetyEnvelope(this.adapter, `nexologic-live-safety-build-failed:${text(intent.key)}:${text(error?.message || error)}`, {
+                        generation: this.adapter?._emsSafetyCycle?.generation,
+                        emergencyStop: true,
+                    });
+                }
+            }
+            const params = intent?.meta?.params && typeof intent.meta.params === 'object' ? intent.meta.params : {};
+            const currentReservedW = Math.max(0, num(intent?.currentReservedW, 0));
+            const safetyDecision = evaluateFlexibleLoadRequest(this.adapter, {
+                key: `nexoLogic:${text(intent.key)}`,
+                app: text(params.safetyApp || params.para14aApp || 'custom') || 'custom',
+                deviceKey: text(intent.key),
+                requestedW: releasePending ? 0 : grantW,
+                currentActualW: currentReservedW,
+                currentActualFresh: true,
+                phaseCount: Math.max(1, Math.min(3, Math.round(num(params.phaseCount ?? params.phases, 3)))),
+                voltageV: Math.max(200, Math.min(260, num(params.voltageV, 230))),
+                deviceCapW: reqW > 0 ? reqW : null,
+                now: Date.now(),
+            });
+            const safetyGrantW = releasePending ? 0 : Math.max(0, Math.min(grantW, num(safetyDecision?.allowedW, 0)));
+            if (safetyDecision?.blocked === true || safetyDecision?.forceZero === true)
+                safetyBlockedCount += 1;
+            if (safetyGrantW + 0.5 < grantW)
+                safetyClampedCount += 1;
+            if (safetyDecision?.reason)
+                safetyStatus = text(safetyDecision.reason);
+            const result = engine && typeof engine.applyBudgetGrant === 'function'
+                ? await engine.applyBudgetGrant(intent.key, safetyGrantW)
+                : null;
             const usedW = Math.max(0, num(result?.budgetReservedW, 0));
-            if (result?.writeAccepted === true) {
+            if (result && (result.accepted === true || result.confirmed === true || result.pending === true)) {
                 recordAcceptedActuatorTransition(this.adapter, {
                     key: `nexoLogic:${text(intent.key)}`,
                     accepted: true,
@@ -172,8 +265,39 @@ class NexoLogicBudgetModule extends BaseModule {
                     reason: text(result?.status || grantSource),
                 });
             }
+            // Reserviert wird ausschließlich das vom Output-Controller bestätigte
+            // effektive Ziel. Das verhindert Doppelbelegung des verbleibenden
+            // Netz-/Phasen-/§14a-Headrooms im selben EMS-Zyklus.
+            if (safetyDecision && usedW > 0) {
+                const committedDecision = {
+                    ...safetyDecision,
+                    allowedW: usedW,
+                    forceZero: false,
+                    reservation: {
+                        targetW: usedW,
+                        deltaW: Math.max(0, usedW - currentReservedW),
+                        phaseDeltaW: Math.max(0, usedW - currentReservedW),
+                        app: safetyDecision.app,
+                    },
+                };
+                commitFlexibleLoadDecision(this.adapter, committedDecision, true);
+            }
+            const gateMustStop = intent?.budgetAction !== 'clamp' && safetyGrantW + 0.5 < reqW;
+            const safetyStopRequired = releasePending
+                || safetyDecision?.forceZero === true
+                || safetyGrantW <= 0
+                || gateMustStop;
+            const stopNotSettled = safetyStopRequired && usedW > 0 && !(result?.confirmed === true && result?.readbackFresh === true);
+            const writeRejected = safetyStopRequired && result && result.accepted !== true && result.confirmed !== true;
+            if (runtimeSafetyRequired && (stopNotSettled || writeRejected || (safetyStopRequired && !result))) {
+                safetyFailure = safetyFailure || `nexologic-safety-stop-not-confirmed:${text(intent.key)}`;
+                invalidateSafetyEnvelope(this.adapter, safetyFailure, {
+                    generation: this.adapter?._emsSafetyCycle?.generation,
+                    emergencyStop: true,
+                });
+            }
             reservedW += usedW;
-            if (result && (result.status === 'authority-blocked' || result.faultLocked || (grantW <= 0 && reqW > 0)))
+            if (result && (result.status === 'authority-blocked' || result.faultLocked || (safetyGrantW <= 0 && reqW > 0)))
                 blockedCount += 1;
             if (centralReady && usedW > 0) {
                 central.reserve({
@@ -196,6 +320,9 @@ class NexoLogicBudgetModule extends BaseModule {
                 budgetMode: intent.budgetMode,
                 requestedW: Math.round(reqW),
                 grantW: Math.round(grantW),
+                safetyGrantW: Math.round(safetyGrantW),
+                safetyReason: text(safetyDecision?.reason || ''),
+                safetyBlocked: safetyDecision?.blocked === true || safetyDecision?.forceZero === true,
                 reservedW: Math.round(usedW),
                 releasePending,
                 status: text(result?.status || grantSource),
@@ -208,8 +335,18 @@ class NexoLogicBudgetModule extends BaseModule {
             this.set('grantedW', Math.round(grantedW)),
             this.set('reservedW', Math.round(reservedW)),
             this.set('blockedCount', blockedCount),
+            this.set('safetyBlockedCount', safetyBlockedCount),
+            this.set('safetyClampedCount', safetyClampedCount),
+            this.set('safetyStatus', safetyFailure || safetyStatus),
             this.set('intentsJson', JSON.stringify(diagnostics.slice(0, 100))),
         ]);
+        if (safetyFailure) {
+            try {
+                this.adapter?._nwRequestImmediateEmsTick?.('safety:nexologic-write', 100);
+            }
+            catch (_tickError) { }
+            throw new Error(safetyFailure);
+        }
     }
 }
 exports.NexoLogicBudgetModule = NexoLogicBudgetModule;

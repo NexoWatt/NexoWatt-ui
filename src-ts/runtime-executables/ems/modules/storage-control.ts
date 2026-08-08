@@ -65,6 +65,13 @@ const {
     calculateFemsGridTargetW,
     isFeneconHybrid,
 } = require('../services/fenecon-hybrid-control');
+const {
+    liveSafetyEnvelope,
+    evaluateFlexibleLoadRequest,
+    evaluateSafetyCommandPermission,
+    commitFlexibleLoadDecision,
+    invalidateSafetyEnvelope,
+} = require('../services/safety-envelope');
 
 /**
  * Strikte Zahlkonvertierung fuer Messwerte und optionale Grenzwerte.
@@ -1024,6 +1031,41 @@ class SpeicherRegelungModule extends BaseModule {
     }
 
     /**
+     * Fail-closed Lifecycle-Stopp fuer Lizenz-/App-Uebergaenge. Der aktive
+     * Einzel- oder Farm-Schreibpfad erhaelt einen echten 0-W-Befehl; ein nicht
+     * bestaetigter Stopp wird an den Modulmanager als Fehler zurueckgegeben.
+     */
+    async deactivate() {
+        const outputKeys = [
+            'st.targetPowerW', 'st.targetChargePowerW', 'st.targetDischargePowerW',
+            'st.maxChargeW', 'st.maxDischargeW', 'st.chargeEnable',
+            'st.dischargeEnable', 'st.run', 'st.feneconGridSetpointW',
+            'st.e3dcMode', 'st.e3dcValue',
+        ];
+        const configuredSingleOutput = outputKeys.some((key) => this.dp && typeof this.dp.getEntry === 'function' && this.dp.getEntry(key));
+        const authority = this._getStorageControlAuthority();
+        const farmConfigured = String(authority && authority.selectedTopology || '') === 'farm'
+            && this.adapter && typeof this.adapter.applyStorageFarmTargetW === 'function';
+        if (!configuredSingleOutput && !farmConfigured) {
+            this._lastTargetW = 0;
+            return { ok: true, attempted: 0, stopped: 0 };
+        }
+        await this._applyTargetW(0, 'module-disabled-safe-stop', 'safety-lifecycle', {
+            force: true,
+            safetyLifecycle: true,
+        });
+        const state = await this.adapter.getStateAsync('speicher.regelung.schreibOk').catch(() => null);
+        const writeOk = state && state.val === true;
+        const acceptedTargetState = await this.adapter.getStateAsync('speicher.regelung.acceptedSollW').catch(() => null);
+        const acceptedTargetW = Number(acceptedTargetState && acceptedTargetState.val);
+        const stopped = Number.isFinite(acceptedTargetW) ? Math.abs(acceptedTargetW) < 0.5 : Math.abs(Number(this._lastTargetW) || 0) < 0.5;
+        if (!writeOk || !stopped) {
+            throw new Error(`storage-safe-stop-failed:writeOk=${writeOk}:acceptedW=${Number.isFinite(acceptedTargetW) ? acceptedTargetW : 'unknown'}`);
+        }
+        return { ok: true, attempted: 1, stopped: 1 };
+    }
+
+    /**
      */
     /**
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
@@ -1757,6 +1799,13 @@ class SpeicherRegelungModule extends BaseModule {
 
         await this._setIfChanged('speicher.regelung.batteryPowerTrusted', !!battPowerTrusted);
         await this._setIfChanged('speicher.regelung.batteryPowerIgnoredReason', String(battPowerInvalidReason || ''));
+
+        // Final-Writer-Sicherheitsbasis: positiv = Entladung, negativ = Ladung.
+        // Nur ein im aktuellen Regeltakt fachlich als vertrauenswürdig bewerteter
+        // Istwert darf als bereits vorhandene Speicherladung angerechnet werden.
+        this._safetyStorageActualPowerW = battPowerTrusted ? Number(battPowerW) : null;
+        this._safetyStorageActualFresh = battPowerTrusted === true;
+        this._safetyStorageActualTs = now;
 
         // FENECON Hybrid arbeitet kontinuierlich ueber genau eine beim
         // Speichern/Start aufgeloeste Kommandofamilie. PV, Forecast und Tageszeit
@@ -5803,6 +5852,83 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             });
         }
 
+        // RC39 P0: Ein herstellerspezifischer No-Write-Modus darf die finale
+        // Safety-Firewall niemals umgehen. Unter normaler, gueltiger FEMS-/
+        // Sungrow-Eigenregelung bleibt No-Write erhalten. Sobald der zentrale
+        // SafetyEnvelope jedoch gesperrt ist oder eine aktive §14a-Begrenzung
+        // vorliegt, uebernimmt EOS kontrolliert den Writer. Bei einer Sperre
+        // wird exakt 0 W geschrieben; bei einem positiven §14a-Cap wird der
+        // vorhandene Zielwert in _applyTargetW erneut live geklemmt.
+        if (
+            (feneconNoWrite || sungrowNoWrite || storageZeroNoWrite)
+            && this.adapter
+            && (this.adapter._nwSafetyEnvelopeRequired === true || this.adapter._emsSafetyCycle || this.adapter.emsEngine)
+        ) {
+            let finalNoWriteEnvelope = null;
+            try {
+                finalNoWriteEnvelope = liveSafetyEnvelope(this.adapter, this.dp, {
+                    now: Date.now(),
+                    generation: this.adapter?._emsSafetyCycle?.generation,
+                });
+            } catch (error) {
+                finalNoWriteEnvelope = invalidateSafetyEnvelope(this.adapter, `storage-no-write-safety-build-failed:${String(error && error.message || error)}`, {
+                    generation: this.adapter?._emsSafetyCycle?.generation,
+                    now: Date.now(),
+                    emergencyStop: true,
+                });
+            }
+            const safetyBlocked = !finalNoWriteEnvelope
+                || finalNoWriteEnvelope.valid !== true
+                || finalNoWriteEnvelope.forceZero === true
+                || finalNoWriteEnvelope.emergencyStop === true;
+            const para14aTakeover = !!(
+                finalNoWriteEnvelope
+                && finalNoWriteEnvelope.para14a
+                && finalNoWriteEnvelope.para14a.enabled === true
+                && finalNoWriteEnvelope.para14a.active === true
+            );
+            if (safetyBlocked || para14aTakeover) {
+                const takeoverReason = safetyBlocked
+                    ? String(finalNoWriteEnvelope && finalNoWriteEnvelope.invalidReason || 'storage-no-write-safety-stop')
+                    : '§14a aktiv: EOS uebernimmt die begrenzte Speicheransteuerung';
+                if (safetyBlocked) targetW = 0;
+                reason = `${String(reason || 'Speicherregelung')} | ${takeoverReason}`;
+                source = safetyBlocked ? 'safety' : (String(source || 'para14a') || 'para14a');
+                feneconNoWrite = false;
+                sungrowNoWrite = false;
+                storageZeroNoWrite = false;
+                if (feneconHybridActive) {
+                    feneconZeroOverride = safetyBlocked;
+                    feneconWriteMode = safetyBlocked
+                        ? 'write-safety-zero-override'
+                        : 'write-eos-para14a-override';
+                }
+                if (sungrowHybridActive) {
+                    sungrowWriteMode = safetyBlocked
+                        ? 'write-safety-zero-override'
+                        : 'write-eos-para14a-override';
+                }
+                storageZeroWriteStatus = safetyBlocked
+                    ? 'write-safety-zero-override'
+                    : 'write-eos-para14a-override';
+                storageZeroWriteReason = takeoverReason;
+                if (feneconHybridActive) {
+                    await this._setFeneconHybridDiag({
+                        ...(feneconHybridCtx || {}),
+                        active: true,
+                        mode: String((feneconHybridCtx && (feneconHybridCtx.technicalMode || feneconHybridCtx.mode)) || feneconControlResolution.mode || ''),
+                        reason,
+                        writeMode: feneconWriteMode,
+                        targetW,
+                        nvpW: strictFiniteNumber(gridRawW, strictFiniteNumber(gridW, null)),
+                        noWrite: false,
+                        authority: safetyBlocked ? 'eos-zero-override' : 'nexowatt',
+                        handoverZeroRequired: false,
+                    });
+                }
+            }
+        }
+
         if (feneconNoWrite || sungrowNoWrite || storageZeroNoWrite) {
             this._pendingAsyncBalanceCommand = null;
             const noWriteStatus = feneconNoWrite
@@ -8356,12 +8482,127 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             await this._setIfChanged('speicher.regelung.grund', String(reason || 'Speicher-Sollwert fehlt oder ist ungueltig'));
             return;
         }
-        const w = Math.round(parsedTargetW);
+        const requestedStorageTargetW = Math.round(parsedTargetW);
+        let w = requestedStorageTargetW;
         const cfg = this._getCfg();
         const storageAuthority = this._getStorageControlAuthority();
         const selectedTopology = String(storageAuthority.selectedTopology || 'none');
         const controlModeRaw = String(cfg.controlMode || 'targetPower');
         const controlMode = ['targetPower', 'limits', 'enableFlags'].includes(controlModeRaw) ? controlModeRaw : 'targetPower';
+
+        // RC39: Die Speicher-Hardware erhält unmittelbar vor der Ausgabe eine
+        // zweite, unabhängige Safety-Prüfung. Bei ungültiger Inbetriebnahme,
+        // stale NVP/Phasen oder §14a-Nullstopp wird jede Nicht-Null-Vorgabe
+        // kontrolliert auf 0 W geklemmt. Netzladen wird zusätzlich gegen den
+        // aktuell verbleibenden Anschluss-/§14a-Rahmen begrenzt.
+        let storageSafetyDecision = null;
+        let storageSafetyForcedStop = false;
+        let storageSafetyReason = '';
+        if (this.adapter && (this.adapter._nwSafetyEnvelopeRequired === true || this.adapter._emsSafetyCycle || this.adapter.emsEngine)) {
+            let envelope = null;
+            try {
+                envelope = liveSafetyEnvelope(this.adapter, this.dp, {
+                    now: Date.now(),
+                    generation: this.adapter?._emsSafetyCycle?.generation,
+                });
+            } catch (error) {
+                envelope = invalidateSafetyEnvelope(this.adapter, `storage-live-safety-build-failed:${String(error && error.message || error)}`, {
+                    generation: this.adapter?._emsSafetyCycle?.generation,
+                    now: Date.now(),
+                    emergencyStop: true,
+                });
+            }
+            const safetySampleAgeMs = Number.isFinite(Number(this._safetyStorageActualTs))
+                ? Math.max(0, Date.now() - Number(this._safetyStorageActualTs))
+                : null;
+            const safetyStaleMs = Math.max(1000, Number(envelope && envelope.grid && envelope.grid.staleMs) || 30000);
+            const actualSampleFresh = this._safetyStorageActualFresh === true
+                && safetySampleAgeMs !== null
+                && safetySampleAgeMs <= safetyStaleMs
+                && Number.isFinite(Number(this._safetyStorageActualPowerW));
+            const actualStoragePowerW = actualSampleFresh ? Number(this._safetyStorageActualPowerW) : null;
+            const actualChargeRaw = actualStoragePowerW === null ? null : Math.max(0, -actualStoragePowerW);
+            const previousSafetyTargetW = Number.isFinite(Number(this._lastTargetW)) ? Number(this._lastTargetW) : 0;
+            const envelopeBlocked = !envelope
+                || envelope.valid !== true
+                || envelope.forceZero === true
+                || envelope.emergencyStop === true;
+            const activeOrCommanded = Math.abs(w) > 0.5
+                || Math.abs(previousSafetyTargetW) > 0.5
+                || (actualStoragePowerW !== null && Math.abs(actualStoragePowerW) > 50);
+
+            if (envelopeBlocked) {
+                storageSafetyForcedStop = activeOrCommanded;
+                storageSafetyReason = String(envelope && envelope.invalidReason || 'storage-safety-envelope-invalid');
+                w = 0;
+            } else if (w < 0) {
+                const maxChargeCandidates = [
+                    cfg.maxChargePowerW,
+                    cfg.maxChargeW,
+                    cfg.maxPowerW,
+                    this.adapter?._emsCaps?.storageChargeLimitW,
+                ].map((value) => strictFiniteNumber(value, null)).filter((value) => value !== null && value > 0);
+                storageSafetyDecision = evaluateFlexibleLoadRequest(this.adapter, {
+                    key: `storage:${selectedTopology || 'single'}`,
+                    app: 'storage',
+                    deviceKey: selectedTopology || 'single',
+                    requestedW: Math.abs(w),
+                    currentActualW: actualChargeRaw === null ? 0 : Math.max(0, actualChargeRaw),
+                    currentActualFresh: actualSampleFresh,
+                    phaseCount: Math.max(1, Math.min(3, Number(envelope && envelope.phase && envelope.phase.requiredCount) || 3)),
+                    voltageV: Number(envelope && envelope.phase && envelope.phase.voltageV) || 230,
+                    deviceCapW: maxChargeCandidates.length ? Math.min(...maxChargeCandidates) : null,
+                    now: Date.now(),
+                });
+                const allowedChargeW = Math.max(0, Math.floor(Number(storageSafetyDecision.allowedW) || 0));
+                w = allowedChargeW > 0 ? -allowedChargeW : 0;
+                storageSafetyForcedStop = Math.abs(requestedStorageTargetW) > 0 && allowedChargeW <= 0;
+                storageSafetyReason = String(storageSafetyDecision.reason || 'storage-safety-approved');
+                if (allowedChargeW < Math.abs(requestedStorageTargetW)) {
+                    reason = `${String(reason || 'Speicherregelung')} | ${storageSafetyReason}`;
+                }
+                storageSafetyDecision = {
+                    ...storageSafetyDecision,
+                    allowedW: allowedChargeW,
+                    blocked: allowedChargeW <= 0 && requestedStorageTargetW < 0,
+                    clamped: allowedChargeW < Math.abs(requestedStorageTargetW),
+                    forceZero: allowedChargeW <= 0 && requestedStorageTargetW < 0,
+                    reservation: {
+                        targetW: allowedChargeW,
+                        deltaW: Math.max(0, allowedChargeW - Math.max(0, actualChargeRaw || 0)),
+                        phaseDeltaW: envelope && envelope.phase && envelope.phase.required === true
+                            ? Math.max(0, allowedChargeW - Math.max(0, actualChargeRaw || 0))
+                            : 0,
+                        app: 'storage',
+                    },
+                };
+            } else if (w > 0) {
+                const permission = evaluateSafetyCommandPermission(this.adapter, {
+                    key: `storage:${selectedTopology || 'single'}`,
+                    app: 'storage',
+                    requestedActive: true,
+                    now: Date.now(),
+                });
+                if (!permission.allowed) {
+                    storageSafetyForcedStop = true;
+                    storageSafetyReason = String(permission.reason || 'storage-discharge-safety-blocked');
+                    w = 0;
+                } else {
+                    storageSafetyReason = String(permission.reason || 'storage-discharge-safety-approved');
+                }
+            } else {
+                storageSafetyReason = 'safe-zero';
+            }
+            if (storageSafetyForcedStop) {
+                reason = `${String(reason || 'Speicherregelung')} | Safety-Stop: ${storageSafetyReason}`;
+                source = String(source || 'safety') || 'safety';
+            }
+        }
+
+
+        await this._setIfChanged('speicher.regelung.safetyRequestedW', requestedStorageTargetW);
+        await this._setIfChanged('speicher.regelung.safetyAllowedW', w);
+        await this._setIfChanged('speicher.regelung.safetyReason', String(storageSafetyReason || (w === 0 ? 'safe-zero' : 'safety-not-required')));
 
         const getEntry = (key) => (this.dp && this.dp.getEntry) ? this.dp.getEntry(key) : null;
         const signedEntry = getEntry('st.targetPowerW');
@@ -9233,6 +9474,31 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await this._setIfChanged('speicher.regelung.schreibStatus', writeStatus);
 
         const writeSucceeded = farmEnabledForWrite ? farmWriteOk : singleWriteOk;
+        if (storageSafetyDecision) {
+            const acceptedChargeW = commandEffective && writeSucceeded
+                ? Math.max(0, -Number(acceptedTargetW || 0))
+                : 0;
+            const baselineChargeW = Math.max(0, Number(storageSafetyDecision.currentActualW) || 0);
+            const acceptedDeltaW = Math.max(0, acceptedChargeW - baselineChargeW);
+            commitFlexibleLoadDecision(this.adapter, {
+                ...storageSafetyDecision,
+                allowedW: acceptedChargeW,
+                reservation: {
+                    targetW: acceptedChargeW,
+                    deltaW: acceptedDeltaW,
+                    phaseDeltaW: this.adapter?._emsSafetyEnvelope?.phase?.required === true ? acceptedDeltaW : 0,
+                    app: 'storage',
+                },
+            }, commandEffective && writeSucceeded);
+        }
+        if ((storageSafetyDecision || storageSafetyForcedStop) && writeSucceeded !== true && (requestedStorageTargetW !== 0 || storageSafetyForcedStop)) {
+            invalidateSafetyEnvelope(this.adapter, `storage-write-not-confirmed:${String(writeStatus || commandFailureStatus || 'unknown')}`, {
+                generation: this.adapter?._emsSafetyCycle?.generation,
+                now: Date.now(),
+                emergencyStop: true,
+            });
+            try { this.adapter?._nwRequestImmediateEmsTick?.('safety:storage-write', 0); } catch (_tickError) {}
+        }
         const effectiveWrittenTargetW = acceptedTargetW;
         const previousTargetW = Number.isFinite(Number(this._lastTargetW)) ? Number(this._lastTargetW) : null;
         const targetChanged = commandEffective && (previousTargetW === null || Math.abs(previousTargetW - effectiveWrittenTargetW) >= 0.5);
@@ -9379,6 +9645,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.sollW', 'Angeforderte Sollleistung Speicher (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.acceptedSollW', 'Von Hardware akzeptierte Speicher-Sollleistung (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.commandEffective', 'Mindestens ein wirksamer Speicherbefehl akzeptiert', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.safetyRequestedW', 'Sollwert vor finaler SafetyEnvelope-Prüfung', 'number', 'value.power', 0);
+        await mk('speicher.regelung.safetyAllowedW', 'Final durch SafetyEnvelope freigegebener Sollwert', 'number', 'value.power', 0);
+        await mk('speicher.regelung.safetyReason', 'Bindende finale Sicherheitsentscheidung', 'string', 'text', '');
         await mk('speicher.regelung.requestSatisfied', 'Speicheranforderung vollständig akzeptiert', 'boolean', 'indicator', false);
         await mk('speicher.regelung.partiallyAccepted', 'Speicheranforderung nur teilweise akzeptiert', 'boolean', 'indicator', false);
         await mk('speicher.regelung.evcsAssistRequestW', 'EVCS angeforderte stationäre Speicherunterstützung (W)', 'number', 'value.power', 0);

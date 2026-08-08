@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/core-limits.ts
- * Quell-Hash: sha256:83d500d3f17697beaffc4fc954900dfd2233915596736c614626c719ce73679a
+ * Quell-Hash: sha256:0e9676953c3aad91b0701b630da3c258d57eaed75b7bacf2ecd1ed313fcf57dc
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -61,6 +61,7 @@ const { BaseModule } = require('./base');
 const { normalizePvSurplusPriority, buildPvSurplusAllocation } = require('../services/pv-surplus-allocation');
 const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
 const { resolveStorageOperatingPolicy } = require('../services/storage-self-consumption-policy');
+const { liveSafetyEnvelope, invalidateSafetyEnvelope } = require('../services/safety-envelope');
 let resolvePara14aAppCap = () => null;
 try {
     ({ resolvePara14aAppCap } = require('../../lib/ts-mirrors/ems/para14a/para14a-constraint'));
@@ -1056,6 +1057,12 @@ class CoreLimitsModule extends BaseModule {
             native: {},
         });
 
+        await this.adapter.setObjectNotExistsAsync('ems.safety', {
+            type: 'channel',
+            common: { name: 'EMS Safety Envelope' },
+            native: {},
+        });
+
         await this.adapter.setObjectNotExistsAsync('ems.budget', {
             type: 'channel',
             common: { name: 'EMS Budget & Gates' },
@@ -1145,6 +1152,23 @@ class CoreLimitsModule extends BaseModule {
         await mk('ems.core.evcsHighLevelCapW', 'EVCS high level cap (W) (min of peak/tariff/14a)', 'number', 'value.power', 'W');
         await mk('ems.core.evcsHighLevelBinding', 'EVCS high level binding sources', 'string', 'text');
         await mk('ems.core.snapshot', 'Snapshot (JSON)', 'string', 'text');
+
+        // Fail-closed Safety Envelope
+        await mk('ems.safety.lastUpdate', 'Safety envelope last update', 'number', 'value.time');
+        await mk('ems.safety.generation', 'Safety envelope generation', 'number', 'value');
+        await mk('ems.safety.valid', 'Safety envelope valid', 'boolean', 'indicator');
+        await mk('ems.safety.commissioned', 'Safety commissioning complete', 'boolean', 'indicator');
+        await mk('ems.safety.forceZero', 'Safety force zero active', 'boolean', 'indicator');
+        await mk('ems.safety.emergencyStop', 'Safety emergency stop active', 'boolean', 'indicator');
+        await mk('ems.safety.reason', 'Safety status reason', 'string', 'text');
+        await mk('ems.safety.gridConnectionPowerW', 'Configured grid connection power', 'number', 'value.power', 'W');
+        await mk('ems.safety.gridImportLimitW', 'Effective grid import safety limit', 'number', 'value.power', 'W');
+        await mk('ems.safety.gridImportW', 'Current grid import', 'number', 'value.power', 'W');
+        await mk('ems.safety.gridHeadroomW', 'Current grid headroom', 'number', 'value.power', 'W');
+        await mk('ems.safety.phaseComplete', 'All required phase measurements available', 'boolean', 'indicator');
+        await mk('ems.safety.para14aReady', '§14a safety input ready', 'boolean', 'indicator');
+        await mk('ems.safety.evcsCapW', 'Final EVCS safety cap', 'number', 'value.power', 'W');
+        await mk('ems.safety.snapshot', 'Safety envelope snapshot', 'string', 'json');
 
         // Central gates. These are app-independent and intentionally live under ems.budget.
         await mk('ems.budget.lastUpdate', 'Budget last update (ts)', 'number', 'value.time');
@@ -2903,13 +2927,23 @@ class CoreLimitsModule extends BaseModule {
         const effectiveCorePara14a = (snapshot && snapshot.para14a && typeof snapshot.para14a === 'object') ? snapshot.para14a : {};
         const effectiveCoreEvcsHighLevel = (snapshot && snapshot.evcsHighLevel && typeof snapshot.evcsHighLevel === 'object') ? snapshot.evcsHighLevel : {};
 
+        let safetyEnvelope = null;
         try {
             this.adapter._emsCaps = snapshot;
             this.adapter._emsBudget = budgetRuntime;
             this.adapter._emsForecastGate = budgetSnapshot && budgetSnapshot.gates ? budgetSnapshot.gates.forecast : null;
             this.adapter._emsTariffGate = budgetSnapshot && budgetSnapshot.gates ? budgetSnapshot.gates.tariff : null;
-        } catch {
-            // ignore
+            safetyEnvelope = liveSafetyEnvelope(this.adapter, this.dp, {
+                now,
+                generation: this.adapter && this.adapter._emsSafetyCycle && this.adapter._emsSafetyCycle.generation,
+            });
+        } catch (error) {
+            safetyEnvelope = invalidateSafetyEnvelope(this.adapter, 'core-safety-envelope-build-failed', {
+                now,
+                generation: this.adapter && this.adapter._nwActiveEmsCycleId,
+                emergencyStop: true,
+            });
+            try { this.adapter.log.warn(`[SafetyEnvelope] Aufbau fehlgeschlagen: ${error && error.message ? error.message : error}`); } catch (_logError) {}
         }
 
         try {
@@ -2948,6 +2982,23 @@ class CoreLimitsModule extends BaseModule {
             await this.adapter.setStateAsync('ems.core.controlledHighLevelCapW', Math.round(Number(effectiveControlled.capW || 0)), true);
             await this.adapter.setStateAsync('ems.core.controlledHighLevelBinding', String(effectiveControlled.binding || ''), true);
             await this.adapter.setStateAsync('ems.core.snapshot', JSON.stringify(snapshot), true);
+
+            const safety = safetyEnvelope || this.adapter._emsSafetyEnvelope || {};
+            await this.adapter.setStateAsync('ems.safety.lastUpdate', Math.round(Number(safety.timestamp || safety.ts || now)), true);
+            await this.adapter.setStateAsync('ems.safety.generation', Math.max(0, Math.round(Number(safety.generation) || 0)), true);
+            await this.adapter.setStateAsync('ems.safety.valid', safety.valid === true, true);
+            await this.adapter.setStateAsync('ems.safety.commissioned', safety.commissioned === true, true);
+            await this.adapter.setStateAsync('ems.safety.forceZero', safety.forceZero === true, true);
+            await this.adapter.setStateAsync('ems.safety.emergencyStop', safety.emergencyStop === true, true);
+            await this.adapter.setStateAsync('ems.safety.reason', String(safety.invalidReason || safety.reason || ''), true);
+            await this.adapter.setStateAsync('ems.safety.gridConnectionPowerW', Math.round(Number(safety.grid && safety.grid.connectionPowerW || 0)), true);
+            await this.adapter.setStateAsync('ems.safety.gridImportLimitW', Math.round(Number(safety.grid && safety.grid.maxImportW || 0)), true);
+            await this.adapter.setStateAsync('ems.safety.gridImportW', Math.round(Math.max(0, Number(safety.grid && safety.grid.nvpW || 0))), true);
+            await this.adapter.setStateAsync('ems.safety.gridHeadroomW', Math.round(Number(safety.grid && safety.grid.availableHeadroomW || 0)), true);
+            await this.adapter.setStateAsync('ems.safety.phaseComplete', safety.phase ? safety.phase.valid === true : true, true);
+            await this.adapter.setStateAsync('ems.safety.para14aReady', safety.para14a && safety.para14a.ready === true, true);
+            await this.adapter.setStateAsync('ems.safety.evcsCapW', Math.round(Number(safety.caps && safety.caps.evcsW || 0)), true);
+            await this.adapter.setStateAsync('ems.safety.snapshot', JSON.stringify(safety), true);
 
             const b = budgetSnapshot;
             const typedBudgetPublished = await this._publishCoreRuntimeBudgetPlan(

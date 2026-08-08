@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/para14a.ts
- * Quell-Hash: sha256:1df6e5a84babaf697f340d04209dbc42b06e9d16ea8e3bb1934efe7688809a8d
+ * Quell-Hash: sha256:fdde4ba5fc2a2cee8c3583405d9404fb33df54638d589cea07dd74f924826783
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -54,6 +54,14 @@ const { resolvePara14aSignal, buildPara14aConstraintSnapshot } = require('../../
 function num(v, dflt = 0) {
     const n = Number(v);
     return Number.isFinite(n) ? n : dflt;
+}
+
+function finiteOrNull(v) {
+    if (v === null || v === undefined) return null;
+    if (typeof v === 'string' && !v.trim()) return null;
+    if (typeof v === 'boolean') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
 }
 /**
  * Code-Teil: clamp
@@ -1270,6 +1278,9 @@ class Para14aModule extends BaseModule {
         };
 
         await mk('para14a.active', '§14a aktiv (wirksam)', 'boolean', 'indicator', false);
+        await mk('para14a.forceZero', '§14a erzwingt 0 W', 'boolean', 'indicator', false);
+        await mk('para14a.emergencyStop', '§14a Sicherheitsstopp', 'boolean', 'indicator', false);
+        await mk('para14a.localFailsafeActive', 'Lokaler §14a-Failsafe aktiv', 'boolean', 'indicator', false);
         await mk('para14a.mode', '§14a Modus', 'string', 'text', false);
         await mk('para14a.controlSource', '§14a Quelle', 'string', 'text', false);
         await mk('para14a.minPerDeviceW', 'Mindestleistung je Verbraucher (W)', 'number', 'value.power', false, 'W');
@@ -1445,7 +1456,7 @@ class Para14aModule extends BaseModule {
 
         // In EMS mode, a Netzbetreiber/Steuerbox may provide an explicit total setpoint.
         // If present, we use it as the effective total budget. Otherwise we use the computed minimum.
-        const totalBudgetW = (mode === 'ems' && typeof externalTotalSetpointW === 'number' && Number.isFinite(externalTotalSetpointW) && externalTotalSetpointW > 0)
+        const totalBudgetW = (mode === 'ems' && typeof externalTotalSetpointW === 'number' && Number.isFinite(externalTotalSetpointW) && externalTotalSetpointW >= 0)
             ? Math.max(0, externalTotalSetpointW)
             : pMinW;
 
@@ -1466,6 +1477,9 @@ class Para14aModule extends BaseModule {
         this.adapter._para14a = {
             enabled: false,
             active: false,
+            forceZero: false,
+            emergencyStop: false,
+            localFailsafeActive: false,
             mode: '',
             source: 'module-disabled',
             totalCapW: null,
@@ -1482,6 +1496,9 @@ class Para14aModule extends BaseModule {
         this._signalMemory = { lastFreshActive: null, lastFreshTs: null };
         if (this._initialized === true) {
             await this._setStateIfChanged('para14a.active', false);
+            await this._setStateIfChanged('para14a.forceZero', false);
+            await this._setStateIfChanged('para14a.emergencyStop', false);
+            await this._setStateIfChanged('para14a.localFailsafeActive', false);
             await this._setStateIfChanged('para14a.signalFresh', false);
             await this._setStateIfChanged('para14a.signalAgeMs', null);
             await this._setStateIfChanged('para14a.signalStatus', 'module-disabled');
@@ -1559,19 +1576,36 @@ class Para14aModule extends BaseModule {
             enableId: load.enableId,
         }));
         const consumers = automaticConsumers.concat(manualConsumers);
+        const directLimitW = finiteOrNull(directIngress && directIngress.limitW);
         const directTotalSetpointW = directIngress && signal.active
-            && Number.isFinite(Number(directIngress.limitW))
-            && Number(directIngress.limitW) > 0
-            ? Number(directIngress.limitW)
+            && directLimitW !== null
+            && directLimitW >= 0
+            ? directLimitW
             : null;
-        const mappedTotalSetpointW = signal.active && mode === 'ems' && !directIngress && this._emsSetpointDpKey && this.dp
+        const mappedTotalSetpointRaw = signal.active && mode === 'ems' && !directIngress && this._emsSetpointDpKey && this.dp
             ? this.dp.getNumberFresh(this._emsSetpointDpKey, setpointMaxAgeMs, null)
             : null;
+        const mappedTotalSetpointW = finiteOrNull(mappedTotalSetpointRaw);
         const externalTotalSetpointW = directTotalSetpointW !== null
             ? directTotalSetpointW
             : mappedTotalSetpointW;
+        const localFailsafeActive = !!(directIngress && directIngress.localFailsafeActive === true);
+        const explicitZero = !!(signal.active && externalTotalSetpointW !== null && externalTotalSetpointW === 0);
+        const staleFailClosed = !!(cfg.para14a && signal.stale === true && !localFailsafeActive);
+        const forceZero = !!(
+            explicitZero
+            || staleFailClosed
+            || (directIngress && directIngress.forceZero === true)
+            || (directIngress && directIngress.emergencyStop === true)
+        );
+        const emergencyStop = !!(
+            staleFailClosed
+            || (directIngress && directIngress.emergencyStop === true)
+        );
         const constraint = buildPara14aConstraintSnapshot({
             active: signal.active,
+            forceZero,
+            emergencyStop,
             source: signal.source,
             mode,
             minPerDeviceW,
@@ -1590,6 +1624,10 @@ class Para14aModule extends BaseModule {
             stalePolicy: signal.stalePolicy,
             signalMaxAgeMs,
             legacyDirectWritesEnabled,
+            forceZero: constraint.forceZero === true,
+            emergencyStop: constraint.emergencyStop === true,
+            localFailsafeActive,
+            failsafeLimitW: directIngress ? finiteOrNull(directIngress.failsafeLimitW) : null,
             emsSetpointW: Number.isFinite(Number(externalTotalSetpointW)) ? Number(externalTotalSetpointW) : 0,
             totalBudgetW: constraint.totalCapW,
             automaticConsumerCount: automaticConsumers.length,
@@ -1606,6 +1644,9 @@ class Para14aModule extends BaseModule {
         };
 
         await this._setStateIfChanged('para14a.active', constraint.active);
+        await this._setStateIfChanged('para14a.forceZero', constraint.forceZero === true);
+        await this._setStateIfChanged('para14a.emergencyStop', constraint.emergencyStop === true);
+        await this._setStateIfChanged('para14a.localFailsafeActive', localFailsafeActive);
         await this._setStateIfChanged('para14a.mode', constraint.mode);
         await this._setStateIfChanged('para14a.controlSource', String(signal.source || ''));
         await this._setStateIfChanged('para14a.minPerDeviceW', Math.round(minPerDeviceW));
@@ -1644,18 +1685,26 @@ class Para14aModule extends BaseModule {
                 continue;
             }
 
-            let writeTarget = Number(targetW);
+            // Der Legacy-Pfad darf ausschließlich eine aktive §14a-Grenze
+            // verschärfen bzw. auf 0/AUS setzen. Eine positive Wiederfreigabe
+            // bei inaktivem Signal würde vor Core-Limits und ohne aktuellen
+            // Safety-Envelope erfolgen. Die Wiederaufnahme gehört deshalb
+            // zwingend dem zentralen Geräte-Writer des nächsten sicheren Zyklus.
             if (!constraint.active) {
-                writeTarget = load.controlType === 'limitW' && load.installedPowerW > 0 ? load.installedPowerW : Number.NaN;
+                consumerAudit.skippedCount += 1;
+                await this._setStateIfChanged(`${base}.applied`, false);
+                await this._setStateIfChanged(`${base}.status`, 'legacy-restore-owned-by-central-control');
+                continue;
             }
+            const writeTarget = Number(targetW);
             if (!Number.isFinite(writeTarget)) {
                 consumerAudit.skippedCount += 1;
                 await this._setStateIfChanged(`${base}.applied`, false);
-                await this._setStateIfChanged(`${base}.status`, 'legacy-restore-unknown');
+                await this._setStateIfChanged(`${base}.status`, 'legacy-limit-invalid');
                 continue;
             }
             const consumer = { type: 'load', key: load.id, name: load.name, setWKey: load.setWKey, enableKey: load.enableKey };
-            const effectiveTargetW = load.controlType === 'onOff' ? (constraint.active ? 0 : 1) : writeTarget;
+            const effectiveTargetW = load.controlType === 'onOff' ? 0 : Math.max(0, writeTarget);
             const result = await applySetpoint({ dp: this.dp, adapter: this.adapter }, consumer, { targetW: Math.round(effectiveTargetW) });
             const status = String(result.status || '');
             if (result.applied && status !== 'skipped') consumerAudit.appliedCount += 1;

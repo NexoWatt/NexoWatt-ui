@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 42685c9931c1770cca8129fd7618ccb44dfd972847ca70db481ac23e259a97a2
+ * Original-Hash: bf6a040160522139612786e6933ada0612edbcf00adbd40055047f13095cd124
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/nexologic-output-controller.ts
- * Quell-Hash: sha256:d6398cf8573ceab6b11356308f8d1729aa80aabb7d0c0123d9a8cfdce70f38f7
+ * Quell-Hash: sha256:4fb62aa37019674f01729c1d1d5ec6e4abb1465aa88f11283de7e44f80085e1e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -580,6 +580,7 @@ class NexoLogicOutputController {
             active: true,
             releasePending: false,
             updatedTs: Date.now(),
+            currentReservedW: Math.max(0, row.budgetReservedW),
             meta,
         };
         this.intents.set(row.key, intent);
@@ -588,7 +589,16 @@ class NexoLogicOutputController {
         return deferred;
     }
     getBudgetIntents() {
-        return Array.from(this.intents.values()).filter((intent) => intent.active || intent.releasePending).map((intent) => ({ ...intent, meta: { ...intent.meta, params: { ...(intent.meta.params || {}) } } }));
+        return Array.from(this.intents.values())
+            .filter((intent) => intent.active || intent.releasePending)
+            .map((intent) => {
+            const runtime = this.runtimes.get(intent.key);
+            return {
+                ...intent,
+                currentReservedW: Math.max(0, Number(runtime?.budgetReservedW) || 0),
+                meta: { ...intent.meta, params: { ...(intent.meta.params || {}) } },
+            };
+        });
     }
     async applyBudgetGrant(keyRaw, grantRaw) {
         const key = text(keyRaw);

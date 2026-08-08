@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/base.ts
- * Quell-Hash: sha256:6e73ee7e0983e21086668dd6572b8d9abcdc28ceba73c6dfabb1f6aa91064247
+ * Quell-Hash: sha256:ef5583f1ad730ce034e72216aa96fec1b4210ed8a2e569a9b9da2f2972cf113b
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -102,6 +102,36 @@ class BaseModule {
      */
     async tick() {
         // no-op
+    }
+
+    /**
+     * Entfernt den lokalen Write-Cache fuer einen Aktor. Safe-Zero/AUS-Befehle
+     * duerfen bei Modul-Deaktivierung oder Neustart nicht als vermeintlich
+     * idempotent unterdrueckt werden, weil die Hardware den letzten Wert trotz
+     * identischem Cachewert weiter ausfuehren kann.
+     */
+    _clearActuatorWriteCache(key) {
+        try {
+            const entry = this.dp && typeof this.dp.getEntry === 'function' ? this.dp.getEntry(key) : null;
+            const objectId = String(entry && entry.objectId || '').trim();
+            if (objectId && this.dp && this.dp.lastWriteByObjectId instanceof Map) {
+                this.dp.lastWriteByObjectId.delete(objectId);
+            }
+        } catch (_error) {
+            // Der anschliessende Write entscheidet fail-closed ueber den Erfolg.
+        }
+    }
+
+    async _forceWriteNumber(key, value) {
+        if (!this.dp || typeof this.dp.writeNumber !== 'function') return false;
+        this._clearActuatorWriteCache(key);
+        return this.dp.writeNumber(key, value, false);
+    }
+
+    async _forceWriteBoolean(key, value) {
+        if (!this.dp || typeof this.dp.writeBoolean !== 'function') return false;
+        this._clearActuatorWriteCache(key);
+        return this.dp.writeBoolean(key, value, false);
     }
 }
 

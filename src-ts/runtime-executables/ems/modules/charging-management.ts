@@ -50,6 +50,13 @@ const { applySetpoint } = require('../consumers');
 const { ReasonCodes } = require('../reasons');
 const { computeChargingMinimumServicePlan, resolveAcChargingLimits } = require('../charging-budget-helpers');
 const { recordAcceptedPowerTarget } = require('../services/accepted-power-effects');
+const {
+    evaluateFlexibleLoadRequest,
+    commitFlexibleLoadDecision,
+    safetyTargetFromPowerDecision,
+    invalidateSafetyEnvelope,
+    liveSafetyEnvelope,
+} = require('../services/safety-envelope');
 
 /** Code-Teil: chargingManagementTsRuntimeMirror – Dokumentiert diesen Regelungs- oder Diagnosebaustein. */
 let chargingManagementTsRuntimeMirror = null;
@@ -2875,6 +2882,8 @@ class ChargingManagementModule extends BaseModule {
             appliedCount: 0,
             skippedCount: 0,
             failedCount: 0,
+            safetyClampedCount: 0,
+            safetyBlockedCount: 0,
             entries: [],
             ts: Date.now(),
         };
@@ -2887,6 +2896,7 @@ class ChargingManagementModule extends BaseModule {
             if (item && typeof item === 'object' && item.safe) debugBySafe.set(String(item.safe), item);
         }
         const plannedEntries = Array.isArray(entries) ? entries : [];
+        const stationTargetsW = new Map();
         for (const entry of plannedEntries) {
             const safe = String(entry && entry.safe ? entry.safe : '').trim();
             if (!safe) continue;
@@ -2901,28 +2911,170 @@ class ChargingManagementModule extends BaseModule {
             const requestedTargetW = Number.isFinite(targetWNum) && targetWNum > 0 ? Math.round(targetWNum) : 0;
             const requestedTargetA = Number.isFinite(targetANum) && targetANum > 0 ? Number(targetANum) : 0;
             const positiveCommandBlocked = (requestedTargetW > 0 || requestedTargetA > 0) && w.controlAvailable !== true;
-            const targetW = positiveCommandBlocked ? 0 : requestedTargetW;
-            const targetA = positiveCommandBlocked ? 0 : requestedTargetA;
+            let targetW = positiveCommandBlocked ? 0 : requestedTargetW;
+            let targetA = positiveCommandBlocked ? 0 : requestedTargetA;
             const rawEntryBasis = String(entry.basis || entry.controlBasis || w.controlBasis || '').trim().toLowerCase();
             const plannedBasis = (rawEntryBasis === 'current' || rawEntryBasis === 'currenta' || rawEntryBasis === 'current_a' || rawEntryBasis === 'a' || rawEntryBasis === 'amp' || rawEntryBasis === 'amps')
                 ? 'currentA'
                 : ((rawEntryBasis === 'power' || rawEntryBasis === 'powerw' || rawEntryBasis === 'w' || rawEntryBasis === 'watt' || rawEntryBasis === 'watts') ? 'powerW' : (w.controlBasis || 'auto'));
             const plannedSetpointKey = String(entry.setpointKey || '').trim();
             const isPhaseSwitchEntry = String(entry.type || '').trim() === 'phaseSwitch' || rawEntryBasis === 'phase' || rawEntryBasis === 'phasemode';
-            const baseWriteRequired = !!(entry.writeRequired !== false && !entry.blocked);
+            const phaseCount = Math.max(1, Math.min(3, Math.round(Number(entry.targetPhaseCount || w.phases || 3) || 3)));
+            const voltageV = Math.max(200, Math.min(260, Number(this.adapter?.config?.chargingManagement?.nominalVoltageV || 230) || 230));
+            const requestedFlexibleW = Math.max(
+                requestedTargetW,
+                requestedTargetA > 0 ? Math.round(requestedTargetA * voltageV * phaseCount) : 0,
+            );
+            let liveEnvelope = null;
+            try {
+                if (this.adapter && (this.adapter._nwSafetyEnvelopeRequired === true || this.adapter._emsSafetyCycle)) {
+                    liveEnvelope = liveSafetyEnvelope(this.adapter, this.dp, {
+                        now: Date.now(),
+                        generation: this.adapter?._emsSafetyCycle?.generation,
+                    });
+                }
+            } catch (error) {
+                liveEnvelope = invalidateSafetyEnvelope(this.adapter, `evcs-live-safety-build-failed:${safe}:${String(error && error.message || error)}`, {
+                    generation: this.adapter?._emsSafetyCycle?.generation,
+                    now: Date.now(),
+                    emergencyStop: true,
+                });
+            }
+
+            const stationKey = String(entry.stationKey || w.stationKey || '').trim();
+            const stationCapCandidates = [entry.stationMaxPowerW, w.stationMaxPowerW]
+                .map((value) => Number(value))
+                .filter((value) => Number.isFinite(value) && value > 0);
+            const stationCapW = stationCapCandidates.length ? Math.min(...stationCapCandidates) : null;
+            const stationUsedW = stationKey ? Math.max(0, Number(stationTargetsW.get(stationKey)) || 0) : 0;
+            const stationRemainingW = stationCapW === null ? null : Math.max(0, stationCapW - stationUsedW);
+            const deviceCaps = [w.maxPW, stationRemainingW]
+                .map((value) => Number(value))
+                .filter((value) => Number.isFinite(value) && value >= 0);
+            const finalDeviceCapW = deviceCaps.length ? Math.min(...deviceCaps) : null;
+
+            const currentActualW = (!w.meterStale && Number.isFinite(Number(w.actualPowerW)))
+                ? Math.max(0, Math.abs(Number(w.actualPowerW)))
+                : 0;
+            const previousCommandForSafetyW = this._lastCmdTargetW && typeof this._lastCmdTargetW.get === 'function'
+                ? Math.max(0, Number(this._lastCmdTargetW.get(w.safe)) || 0)
+                : 0;
+            const safetyEnvelopeRequired = !!(this.adapter && (
+                this.adapter._nwSafetyEnvelopeRequired === true
+                || this.adapter._emsSafetyCycle
+                || this.adapter.emsEngine
+            ));
+            const safetyEnvelopeBlocked = !!(
+                safetyEnvelopeRequired
+                && (!liveEnvelope || liveEnvelope.valid !== true || liveEnvelope.forceZero === true || liveEnvelope.emergencyStop === true)
+            );
+            const safetyStopExisting = !!(
+                !isPhaseSwitchEntry
+                && safetyEnvelopeBlocked
+                && (requestedFlexibleW > 0 || currentActualW > 0.5 || previousCommandForSafetyW > 0.5)
+            );
+
+            let safetyDecision = null;
+            if (!isPhaseSwitchEntry) {
+                safetyDecision = evaluateFlexibleLoadRequest(this.adapter, {
+                    key: `evcs:${safe}`,
+                    app: 'evcs',
+                    deviceKey: safe,
+                    requestedW: positiveCommandBlocked ? 0 : requestedFlexibleW,
+                    currentActualW,
+                    currentActualFresh: !w.meterStale,
+                    phaseCount,
+                    voltageV,
+                    deviceCapW: finalDeviceCapW,
+                    now: Date.now(),
+                });
+                const safeTarget = safetyTargetFromPowerDecision(
+                    { targetW, targetA, basis: plannedBasis },
+                    safetyDecision,
+                    { phaseCount, voltageV },
+                );
+                targetW = Math.max(0, Math.floor(Number(safeTarget.targetW) || 0));
+                targetA = Math.max(0, Number(safeTarget.targetA) || 0);
+
+                // Die Gerätequantisierung darf den freigegebenen Safety-Cap niemals
+                // durch Aufrunden überschreiten. Deshalb wird am finalen Writer immer
+                // nach unten auf den konfigurierten Schritt gerundet.
+                if (plannedBasis === 'currentA') {
+                    const stepA = Number.isFinite(Number(w.stepA)) && Number(w.stepA) > 0 ? Number(w.stepA) : 0.1;
+                    const maxA = Number.isFinite(Number(w.maxA)) && Number(w.maxA) > 0 ? Number(w.maxA) : Number.POSITIVE_INFINITY;
+                    const minA = Number.isFinite(Number(w.minA)) && Number(w.minA) > 0 ? Number(w.minA) : 0;
+                    const allowedA = Math.min(maxA, targetW > 0 ? targetW / Math.max(1, voltageV * phaseCount) : 0);
+                    targetA = Math.max(0, Math.floor((allowedA + 1e-9) / stepA) * stepA);
+                    if (targetA > 0 && targetA + 1e-9 < minA) targetA = 0;
+                    targetW = targetA > 0 ? Math.min(targetW, Math.floor(targetA * voltageV * phaseCount)) : 0;
+                } else {
+                    const stepW = Number.isFinite(Number(w.stepW)) && Number(w.stepW) > 0 ? Number(w.stepW) : 1;
+                    const maxPW = Number.isFinite(Number(w.maxPW)) && Number(w.maxPW) > 0 ? Number(w.maxPW) : Number.POSITIVE_INFINITY;
+                    const minPW = Number.isFinite(Number(w.minPW)) && Number(w.minPW) > 0 ? Number(w.minPW) : 0;
+                    targetW = Math.max(0, Math.min(maxPW, Math.floor((targetW + 1e-9) / stepW) * stepW));
+                    if (targetW > 0 && targetW + 1e-9 < minPW) targetW = 0;
+                    targetA = targetW > 0 ? targetW / Math.max(1, voltageV * phaseCount) : 0;
+                }
+
+                if (safetyStopExisting) {
+                    targetW = 0;
+                    targetA = 0;
+                }
+                const quantizedDeltaW = Math.max(0, targetW - currentActualW);
+                safetyDecision = {
+                    ...safetyDecision,
+                    allowedW: targetW,
+                    blocked: targetW <= 0 && (requestedFlexibleW > 0 || safetyStopExisting),
+                    clamped: targetW < requestedFlexibleW || safetyStopExisting,
+                    forceZero: safetyStopExisting || (targetW <= 0 && requestedFlexibleW > 0),
+                    reason: safetyStopExisting
+                        ? String((liveEnvelope && liveEnvelope.invalidReason) || 'safety-stop-existing-load')
+                        : (targetW < requestedFlexibleW
+                            ? (targetW <= 0 ? String(safetyDecision.reason || 'safety-safe-stop') : `${String(safetyDecision.reason || 'safety-approved')}:quantized`)
+                            : String(safetyDecision.reason || 'safety-approved')),
+                    reservation: {
+                        targetW,
+                        deltaW: quantizedDeltaW,
+                        phaseDeltaW: liveEnvelope && liveEnvelope.phase && liveEnvelope.phase.required === true ? quantizedDeltaW : 0,
+                        app: 'evcs',
+                    },
+                };
+                if (safetyDecision.clamped) result.safetyClampedCount += 1;
+                if (safetyDecision.blocked) result.safetyBlockedCount += 1;
+            }
+            const safetyCommandBlocked = !!(
+                !isPhaseSwitchEntry
+                && safetyDecision
+                && requestedFlexibleW > 0
+                && safetyDecision.allowedW <= 0
+            );
+            // Ein veralteter positiver Plan muss auch dann aktiv auf 0 geschrieben
+            // werden, wenn der alte Plan selbst keinen Write mehr vorgesehen hatte.
+            const baseWriteRequired = !!(
+                (entry.writeRequired !== false && !entry.blocked)
+                || safetyStopExisting
+                || (safetyDecision && safetyDecision.clamped === true && requestedFlexibleW > 0)
+            );
             const safeStopAllowed = !!(w.online && (!w.userStationEnabled || !w.userEnabled || w.operationalBlocked || w.enabled || w.cfgEnabled));
+            const phaseSwitchSafetyReady = !isPhaseSwitchEntry || !liveEnvelope || (liveEnvelope.valid === true && liveEnvelope.forceZero !== true && liveEnvelope.emergencyStop !== true);
             const shouldWrite = !!(
                 baseWriteRequired
                 && w.online
+                && phaseSwitchSafetyReady
                 && (isPhaseSwitchEntry ? w.controlAvailable === true : (w.controlAvailable === true || (targetW <= 0 && targetA <= 0 && safeStopAllowed)))
             );
             let applied = false;
             let applyStatus = positiveCommandBlocked
                 ? (w.faultActive ? 'fault-safe-stop' : (w.unavailableActive ? 'unavailable-safe-stop' : 'blocked-safe-stop'))
-                : (shouldWrite ? 'planned' : (entry && entry.reason ? String(entry.reason) : 'skipped'));
+                : (safetyCommandBlocked
+                    ? String(safetyDecision.reason || 'safety-safe-stop')
+                    : (safetyDecision && safetyDecision.clamped
+                        ? String(safetyDecision.reason || 'safety-clamped')
+                        : (shouldWrite ? 'planned' : (entry && entry.reason ? String(entry.reason) : 'skipped'))));
             let applyWrites = null;
             if (isPhaseSwitchEntry) {
                 const phaseValue = entry ? entry.targetValue : undefined;
+                if (!phaseSwitchSafetyReady) applyStatus = String((liveEnvelope && liveEnvelope.invalidReason) || 'phase-switch-safety-blocked');
                 if (!shouldWrite) {
                     result.skippedCount += 1;
                 } else if (!this.dp || !plannedSetpointKey || !(this.dp.getEntry && this.dp.getEntry(plannedSetpointKey))) {
@@ -2998,7 +3150,10 @@ class ChargingManagementModule extends BaseModule {
                     // Kunden-/Sicherheitsfreigabe und niemals dem PV-Sollwert. 0 W im
                     // PV-Modus bedeutet dadurch "Warten bei aktiver Wallbox".
                     if (w.enableKey) {
-                        setpointTarget.enable = !!w.cfgEnabled && !!w.userStationEnabled && !w.operationalBlocked;
+                        const safetyForcedStop = !!(safetyStopExisting || (safetyDecision && safetyDecision.forceZero === true && requestedFlexibleW > 0));
+                        setpointTarget.enable = safetyForcedStop
+                            ? false
+                            : (!!w.cfgEnabled && !!w.userStationEnabled && !w.operationalBlocked);
                     }
                     const res = await applySetpoint(
                         { adapter: this.adapter, dp: this.dp },
@@ -3019,11 +3174,35 @@ class ChargingManagementModule extends BaseModule {
                     result.ok = false;
                 }
             }
+            if (!isPhaseSwitchEntry && safetyDecision) {
+                const acceptedWithoutWrite = !shouldWrite
+                    && !safetyStopExisting
+                    && entry.writeRequired === false
+                    && entry.blocked !== true
+                    && w.online
+                    && w.controlAvailable === true;
+                const safetyAccepted = applied || acceptedWithoutWrite;
+                commitFlexibleLoadDecision(this.adapter, safetyDecision, safetyAccepted);
+                if (safetyAccepted && stationKey) stationTargetsW.set(stationKey, stationUsedW + Math.max(0, targetW));
+                if ((!shouldWrite || !applied) && (requestedFlexibleW > 0 || safetyStopExisting)) {
+                    invalidateSafetyEnvelope(this.adapter, `evcs-write-not-confirmed:${safe}:${applyStatus}`, {
+                        generation: this.adapter?._emsSafetyCycle?.generation,
+                        now: Date.now(),
+                        emergencyStop: true,
+                    });
+                    try { this.adapter?._nwRequestImmediateEmsTick?.(`safety:evcs-write:${safe}`, 0); } catch (_tickError) {}
+                }
+            }
+            if (safetyStopExisting && !shouldWrite) {
+                result.failedCount += 1;
+                result.ok = false;
+                applyStatus = `safety-stop-unreachable:${String((liveEnvelope && liveEnvelope.invalidReason) || 'no-write-path')}`;
+            }
             try { await this._queueState(`${w.ch}.targetCurrentA`, targetA, true); } catch { /* ignore */ }
             try { await this._queueState(`${w.ch}.targetPowerW`, targetW, true); } catch { /* ignore */ }
             // Die Diagnose folgt dem finalen Write-Plan. So bleiben Grund, Rang und
             // Stationsrest identisch zu den tatsächlich geschriebenen Sollwerten.
-            try { await this._queueState(`${w.ch}.reason`, String(entry.reason || applyStatus || ''), true); } catch { /* ignore */ }
+            try { await this._queueState(`${w.ch}.reason`, String((safetyDecision && safetyDecision.clamped ? safetyDecision.reason : applyStatus) || entry.reason || ''), true); } catch { /* ignore */ }
             try { await this._queueState(`${w.ch}.allocationRank`, Math.max(0, Math.round(Number(entry.allocationRank || 0))), true); } catch { /* ignore */ }
             try { await this._queueState(`${w.ch}.stationRemainingW`, Math.max(0, Math.round(Number(entry.stationRemainingW || 0))), true); } catch { /* ignore */ }
             if (isPhaseSwitchEntry) {
@@ -3056,7 +3235,7 @@ class ChargingManagementModule extends BaseModule {
                     commandChanged,
                     kind: 'load',
                     source: 'chargingManagement',
-                    reason: String(entry.reason || applyStatus || ''),
+                    reason: String((safetyDecision && safetyDecision.clamped ? safetyDecision.reason : applyStatus) || entry.reason || ''),
                 });
             }
             try {
@@ -3079,7 +3258,11 @@ class ChargingManagementModule extends BaseModule {
                 dbg.executorSetpointKey = plannedSetpointKey || '';
                 dbg.targetW = targetW;
                 dbg.targetA = targetA;
-                dbg.reason = String(entry.reason || dbg.reason || '');
+                dbg.safetyRequestedW = safetyDecision ? safetyDecision.requestedW : null;
+                dbg.safetyAllowedW = safetyDecision ? safetyDecision.allowedW : null;
+                dbg.safetyBinding = safetyDecision ? String(safetyDecision.binding || '') : '';
+                dbg.safetyReason = safetyDecision ? String(safetyDecision.reason || '') : '';
+                dbg.reason = String((safetyDecision && safetyDecision.clamped ? safetyDecision.reason : applyStatus) || entry.reason || dbg.reason || '');
                 dbg.pvUsedW = Math.max(0, Math.round(Number(entry.pvUsedW || 0)));
                 dbg.stationAllocatedW = Math.max(0, Math.round(Number(entry.stationAllocatedW || 0)));
                 dbg.stationRemainingW = Math.max(0, Math.round(Number(entry.stationRemainingW || 0)));
@@ -3096,12 +3279,16 @@ class ChargingManagementModule extends BaseModule {
                 requestedTargetA,
                 targetW,
                 targetA,
+                safetyRequestedW: safetyDecision ? safetyDecision.requestedW : null,
+                safetyAllowedW: safetyDecision ? safetyDecision.allowedW : null,
+                safetyBinding: safetyDecision ? String(safetyDecision.binding || '') : '',
+                safetyReason: safetyDecision ? String(safetyDecision.reason || '') : '',
                 basis: isPhaseSwitchEntry ? 'phase' : plannedBasis,
                 setpointKey: plannedSetpointKey || '',
                 applied,
                 status: applyStatus,
                 source: executorSource || '',
-                reason: String(entry.reason || ''),
+                reason: String((safetyDecision && safetyDecision.clamped ? safetyDecision.reason : applyStatus) || entry.reason || ''),
                 allocationRank: Math.max(0, Math.round(Number(entry.allocationRank || 0))),
                 pvUsedW: Math.max(0, Math.round(Number(entry.pvUsedW || 0))),
                 stationKey: String(entry.stationKey || ''),
@@ -3499,6 +3686,80 @@ class ChargingManagementModule extends BaseModule {
         return false;
     }
 
+    /**
+     * Fail-closed Lifecycle: Beim AppCenter-AUS, Lizenzverlust oder Adapterstart
+     * mit deaktiviertem Lademanagement werden alle konfigurierten Ladepunkt-
+     * Stellwerte physisch auf 0/AUS geschrieben. Die direkte Konfiguration wird
+     * verwendet, damit der Stopp auch ohne vorherigen Regel-Tick funktioniert.
+     */
+    async deactivate() {
+        const cfg = this.adapter && this.adapter.config && this.adapter.config.chargingManagement
+            && typeof this.adapter.config.chargingManagement === 'object'
+            ? this.adapter.config.chargingManagement
+            : {};
+        const configured = Array.isArray(cfg.wallboxes) && cfg.wallboxes.length
+            ? cfg.wallboxes
+            : (this.adapter && Array.isArray(this.adapter.evcsList) ? this.adapter.evcsList : []);
+        let attempted = 0;
+        const failures = [];
+
+        for (const row of configured) {
+            const wb = row && typeof row === 'object' ? row : {};
+            const key = String(wb.key || wb.id || '').trim();
+            if (!key) continue;
+            const safe = toSafeIdPart(key);
+            const mappings = [
+                { key: `cm.wb.${safe}.setA`, objectId: String(wb.setCurrentAId || '').trim(), type: 'number', value: 0, unit: 'A' },
+                { key: `cm.wb.${safe}.setW`, objectId: String(wb.setPowerWId || '').trim(), type: 'number', value: 0, unit: 'W' },
+                { key: `cm.wb.${safe}.en`, objectId: String(wb.enableId || '').trim(), type: 'boolean', value: false, unit: '' },
+            ];
+            for (const mapping of mappings) {
+                if (!mapping.objectId) continue;
+                attempted += 1;
+                try {
+                    if (!this.dp || typeof this.dp.upsert !== 'function') throw new Error('dp-registry-missing');
+                    await this.dp.upsert({
+                        key: mapping.key,
+                        objectId: mapping.objectId,
+                        dataType: mapping.type,
+                        direction: 'out',
+                        unit: mapping.unit,
+                    });
+                    const result = mapping.type === 'boolean'
+                        ? await this._forceWriteBoolean(mapping.key, mapping.value)
+                        : await this._forceWriteNumber(mapping.key, mapping.value);
+                    if (result !== true) failures.push(`${safe}:${mapping.key}:write-not-accepted`);
+                } catch (error) {
+                    failures.push(`${safe}:${mapping.key}:${String(error && error.message || error)}`);
+                }
+            }
+            try {
+                this._lastCmdTargetW.set(safe, 0);
+                this._lastCmdTargetA.set(safe, 0);
+                const ch = `chargingManagement.wallboxes.${safe}`;
+                await this._queueState(`${ch}.targetPowerW`, 0, true);
+                await this._queueState(`${ch}.targetCurrentA`, 0, true);
+                await this._queueState(`${ch}.reason`, 'module-disabled-safe-stop', true);
+            } catch (_diagnosticError) {
+                // Diagnose darf den bereits ausgefuehrten Safe-Stop nicht entwerten.
+            }
+        }
+
+        try {
+            await this._queueState('chargingManagement.control.active', false, true);
+            await this._queueState('chargingManagement.control.usedW', 0, true);
+            await this._queueState('chargingManagement.control.reserveW', 0, true);
+            await this._queueState('chargingManagement.control.remainingW', 0, true);
+            await this._queueState('chargingManagement.control.status', attempted ? 'module-disabled-safe-stop' : 'module-disabled-no-actuators', true);
+            await this._flushPubQueue();
+        } catch (_diagnosticError) {}
+
+        if (failures.length) {
+            throw new Error(`charging-safe-stop-failed:${failures.join(',')}`);
+        }
+        return { ok: true, attempted, stopped: attempted };
+    }
+
     /** Code-Teil: Methode `init` – initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor. */
     /** Code-Teil: init – Initialisiert diesen Bereich und verbindet abhängige Startlogik. */
     async init() {
@@ -3538,32 +3799,30 @@ class ChargingManagementModule extends BaseModule {
             });
         };
 
-        // Runtime toggle (writable): Enable/disable the STALE_METER fail-safe without reprogramming.
-        // - false: never block charging due to stale metering (still publishes diagnostics)
-        // - true : apply stale policy (default: block if config is 'off')
-        // NOTE: This is intentionally a STATE (not adapter config) so installers can flip it
-        // instantly from scripts/UI without restarting the adapter.
+        // Sichtbarer Laufzeitstatus des STALE_METER-Failsafes. In produktiven
+        // Anlagen ist der Schutz ab RC39 verpflichtend fail-closed.
         await this.adapter.setObjectNotExistsAsync('chargingManagement.control.failsafeEnabled', {
             type: 'state',
             common: {
                 name: 'Failsafe enabled (STALE_METER)',
                 type: 'boolean',
-                role: 'switch.enable',
+                role: 'indicator',
                 read: true,
-                write: true,
-                def: false,
+                write: false,
+                def: true,
                 states: { true: 'Ein', false: 'Aus' },
             },
             native: {},
         });
-        // Initialize only once (do not overwrite existing user choice)
         try {
-            const st = await this.adapter.getStateAsync('chargingManagement.control.failsafeEnabled');
-            if (!st || typeof st.val !== 'boolean') {
-                await this.adapter.setStateAsync('chargingManagement.control.failsafeEnabled', { val: false, ack: true });
+            if (typeof this.adapter.extendObjectAsync === 'function') {
+                await this.adapter.extendObjectAsync('chargingManagement.control.failsafeEnabled', {
+                    common: { role: 'indicator', read: true, write: false, def: true },
+                });
             }
+            await this.adapter.setStateAsync('chargingManagement.control.failsafeEnabled', { val: true, ack: true });
         } catch {
-            // ignore
+            // Diagnose-State darf die Initialisierung nicht abbrechen.
         }
 
         await mk('chargingManagement.wallboxCount', 'Ladepunkt count', 'number', 'value');
@@ -4328,12 +4587,13 @@ class ChargingManagementModule extends BaseModule {
         const pauseWhenPeakShavingActive = cfg.pauseWhenPeakShavingActive !== false; // default true
         const pauseBehavior = String(cfg.pauseBehavior || 'followPeakBudget'); // rampDownToZero | followPeakBudget
 
-        // MU6.8: stale detection (failsafe)
-        // IMPORTANT:
-        // Many real-world grid meters/aliases update slowly or only on change.
-        // A too aggressive default triggers false "failsafe stale meter".
-        // The embedded engine sets 300s as its safe default; keep module fallback consistent.
-        const staleTimeoutSec = clamp(num(cfg.staleTimeoutSec, 300), 1, 3600);
+        // MU6.8 / RC39: Der harte Sicherheits-Timeout ist vom alten
+        // Diagnosewert getrennt. Ein Bestandswert von 300 s darf die
+        // Netzanschluss-Sicherheitskette nicht auf fünf Minuten aufweichen.
+        const staleTimeoutSec = clamp(num(
+            cfg.safetyMeterTimeoutSec,
+            Math.min(30, num(cfg.staleTimeoutSec, 30)),
+        ), 5, 120);
         const staleTimeoutMs = staleTimeoutSec * 1000;
 
         // Smart‑Ziel: Preis‑Signal (optional). Wird nur genutzt, wenn entsprechende Datapoints vorhanden sind.
@@ -7469,10 +7729,12 @@ if (components.length) {
             if (!staleMeter && gridMaxPhaseA > 0) {
                 const phaseKeys = ['ps.l1A', 'ps.l2A', 'ps.l3A'];
                 const configuredPhaseKeys = phaseKeys.filter(k => !!this.dp.getEntry(k));
-                if (configuredPhaseKeys.length === 0) {
+                // Bei dreiphasigem Anschluss sind alle drei Phasen Pflicht. Eine
+                // einzelne frische Phase darf die beiden fehlenden nicht freigeben.
+                if (configuredPhaseKeys.length !== phaseKeys.length) {
                     staleMeter = true;
                 } else {
-                    for (const k of configuredPhaseKeys) {
+                    for (const k of phaseKeys) {
                         if (this.dp.isStale(k, staleTimeoutMs)) {
                             staleMeter = true;
                             break;
@@ -7503,32 +7765,11 @@ if (components.length) {
         // (aliases / event-driven meters / stable values) false positives can occur.
         //
         // To keep the EMS operational while we refine the watchdog, we support a
-        // policy switch:
-        //   - 'off'   : never block charging (default – runs the logic even if stale)
-        //   - 'warn'  : do not block, but expose stale flags/diagnostics
-        //   - 'block' : enforce failsafe (set EVCS targets to 0) when stale
-        //
-        // NOTE: 'off' and 'warn' still publish the stale flags in the UI, but will
-        // not interrupt charging.
-        // Runtime override: allow installers to toggle failsafe on/off via datapoint.
-        // If enabled and config is still 'off', we default to 'block' (safety-first).
-        let failsafeEnabled = false;
-        try {
-            const stFs = await this._getStateCached('chargingManagement.control.failsafeEnabled');
-            if (stFs && typeof stFs.val === 'boolean') failsafeEnabled = !!stFs.val;
-            else if (stFs && (stFs.val === 1 || stFs.val === '1' || stFs.val === 'true')) failsafeEnabled = true;
-        } catch {
-            // ignore
-        }
-
-        let stalePolicyRaw = String(cfg.staleFailsafeMode || cfg.stalePolicy || 'off').trim().toLowerCase();
-        let stalePolicy = (stalePolicyRaw === 'block' || stalePolicyRaw === 'warn' || stalePolicyRaw === 'off') ? stalePolicyRaw : 'off';
-
-        if (!failsafeEnabled) {
-            stalePolicy = 'off';
-        } else if (stalePolicy === 'off') {
-            stalePolicy = 'block';
-        }
+        // RC39: produktiv ausschließlich fail-closed. Warn-/Off-Modi bleiben
+        // nicht mehr als Umgehung der Netzanschluss-Sicherheit wirksam.
+        const failsafeEnabled = true;
+        const stalePolicy = 'block';
+        try { await this._queueState('chargingManagement.control.failsafeEnabled', true, true); } catch { /* diagnostics only */ }
 
         // Important: only trigger FAILSAFE on *meter* staleness.
         // Budget signals can stay constant for long periods and may be written "on change",

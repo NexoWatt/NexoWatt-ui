@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4ef8dd436ae007c5a4bbd5859722e760ca52ab334a3ffce083442b4276696868
+ * Original-Hash: 488bb24e57c20e8edc80b5a402f1a88f02711c211e0afb648ac64e63cfa44b6a
  */
 
 /**
@@ -105,7 +105,16 @@ function makeArbiterAdapter() {
     getBoolean(key, fallback){ if (key === 'thr.user.r1.enabled') return true; if (key === 'thr.r1.out') return this.out; return fallback; },
     getNumber(key, fallback){ if (key === 'thr.user.r1.mode') return 1; return fallback; },
     getNumberFresh(key, _age, fallback){ if (key === 'thr.r1.in') return 200; return fallback; },
-    async writeBoolean(key, value){ this.writes.push({ key, value: !!value }); if (!allowWrite) return false; this.out = !!value; return true; },
+    async writeBoolean(key, value){
+      this.writes.push({ key, value: !!value });
+      // Eine unvollstaendige Regel mit bereits gemapptem Ausgang muss nach RC39
+      // fail-closed AUS schreiben duerfen. Der r1-Write bleibt fuer den
+      // eigentlichen Fehlerpfad dieses Tests weiterhin blockiert.
+      if (key === 'thr.r2.out' && value === false) return true;
+      if (!allowWrite) return false;
+      this.out = !!value;
+      return true;
+    },
     async writeNumber(key, value){ this.writes.push({ key, value: Number(value) }); return false; },
   };
   const mod = new ThresholdControlModule(thresholdAdapter, dp);
@@ -123,9 +132,9 @@ function makeArbiterAdapter() {
   await mod.tick();
   assert.strictEqual(states.get('threshold.rules.r2.configured').val, false,
     'Eine aktivierte Regel ohne gueltige Schwelle darf nicht als konfiguriert gelten');
-  assert.strictEqual(states.get('threshold.rules.r2.status').val, 'unconfigured');
-  assert.strictEqual(dp.writes.some((row) => row.key === 'thr.r2.out'), false,
-    'Eine unvollstaendige Schwellwertregel darf keinen Aktorwrite erzeugen');
+  assert.strictEqual(states.get('threshold.rules.r2.status').val, 'unconfigured-safe-stop');
+  assert.strictEqual(dp.writes.some((row) => row.key === 'thr.r2.out' && row.value === false), true,
+    'Eine unvollstaendige Schwellwertregel muss einen zuvor moeglicherweise aktiven Ausgang fail-closed ausschalten');
   assert.strictEqual(states.get('threshold.rules.r1.active').val, false, 'Fehlgeschlagener Write wurde intern als aktiver Ausgang verbucht');
   assert.strictEqual(states.get('threshold.rules.r1.status').val, 'write_blocked_or_failed');
 

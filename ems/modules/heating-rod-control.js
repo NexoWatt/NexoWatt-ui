@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/heating-rod-control.ts
- * Quell-Hash: sha256:2c39376d6c3c66c5279810ce1575f85a9ac3b0c808e0f999b40b3d51367b7f93
+ * Quell-Hash: sha256:fb12d0c9eb5d8e24c9831902f21a7bc0427ecda8fafa638059aa92afd8c271aa
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -61,6 +61,12 @@ const { BaseModule } = require('./base');
 const { withActuatorShadowContext, priorityForOwner } = require('../services/actuator-shadow-arbiter');
 const { ActuatorCommandContract } = require('../services/actuator-command-contract');
 const { recordAcceptedPowerTarget, recordAcceptedActuatorTransition } = require('../services/accepted-power-effects');
+const {
+    liveSafetyEnvelope,
+    evaluateFlexibleLoadRequest,
+    commitFlexibleLoadDecision,
+    invalidateSafetyEnvelope,
+} = require('../services/safety-envelope');
 
 
 /**
@@ -738,6 +744,64 @@ class HeatingRodControlModule extends BaseModule {
                 this._stageCtl.set(d.id, { targetStage: 0, lastIncreaseMs: 0, lastDecreaseMs: 0 });
             }
         }
+    }
+
+    /**
+     * Fail-closed Lifecycle-Stopp: Alle konfigurierten Heizstabstufen werden
+     * beim Deaktivieren und beim Start mit ausgeschalteter App physisch AUS
+     * geschrieben. Der Stopp nutzt die Installer-Konfiguration direkt und ist
+     * deshalb nicht von einem vorherigen Regel-Tick abhaengig.
+     */
+    async deactivate() {
+        if (!Array.isArray(this._devices) || !this._devices.length) this._buildDevicesFromConfig();
+        const failures = [];
+        let attempted = 0;
+        for (const d of this._devices || []) {
+            try {
+                if (this.dp && typeof this.dp.upsert === 'function') {
+                    for (const stage of d.stages || []) {
+                        if (stage.writeId && !stage.writeKey) {
+                            stage.writeKey = `hr.${d.id}.s${stage.index}.w`;
+                            await this.dp.upsert({ key: stage.writeKey, objectId: stage.writeId, dataType: 'boolean', direction: 'out' });
+                        }
+                        if (stage.readId && !stage.readKey) {
+                            stage.readKey = `hr.${d.id}.s${stage.index}.r`;
+                            await this.dp.upsert({ key: stage.readKey, objectId: stage.readId, dataType: 'boolean', direction: 'in' });
+                        }
+                    }
+                }
+                if (!d.wiredStages || !(d.stages || []).some((stage) => stage && stage.writeKey)) continue;
+                attempted += 1;
+                const feedback = this._readStageFeedback(d, null);
+                const result = await this._applyStageState(d, 0, feedback, {
+                    force: true,
+                    reason: 'module-disabled-safe-stop',
+                    releaseAuthority: true,
+                    enforceAuthority: false,
+                    leaseMs: 0,
+                    kind: 'heating-rod-module-disabled',
+                });
+                if (!(result && result.accepted === true)) failures.push(`${d.id}:${String(result && result.status || 'write-not-accepted')}`);
+                this._actuatorContract.release(`heatingRod:${d.id}`);
+                const ctl = this._stageCtl.get(d.id) || { targetStage: 0, lastIncreaseMs: 0, lastDecreaseMs: 0 };
+                ctl.targetStage = 0;
+                this._stageCtl.set(d.id, ctl);
+                try {
+                    await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, 0);
+                    await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, 0);
+                    await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, 'module-disabled-safe-stop');
+                } catch (_diagnosticError) {}
+            } catch (error) {
+                failures.push(`${d && d.id || 'unknown'}:${String(error && error.message || error)}`);
+            }
+        }
+        try {
+            await this._setStateIfChanged('heatingRod.summary.appliedTotalW', 0);
+            await this._setStateIfChanged('heatingRod.summary.budgetUsedW', 0);
+            await this._setStateIfChanged('heatingRod.summary.status', attempted ? 'module-disabled-safe-stop' : 'module-disabled-no-actuators');
+        } catch (_diagnosticError) {}
+        if (failures.length) throw new Error(`heating-rod-safe-stop-failed:${failures.join(',')}`);
+        return { ok: true, attempted, stopped: attempted };
     }
 
     /**
@@ -2719,21 +2783,99 @@ class HeatingRodControlModule extends BaseModule {
             return { applied: false, accepted: false, writeAccepted: false, writePartial: false, status: 'no_stage_write_dp' };
         }
 
-        const effectiveStage = Math.max(0, Math.min(Math.round(Number(targetStage) || 0), d.wiredStages));
+        const requestedStage = Math.max(0, Math.min(Math.round(Number(targetStage) || 0), d.wiredStages));
+        let effectiveStage = requestedStage;
         const manual = options && options.manual === true;
         const owner = String(options && options.owner || '').trim() || this._deviceOwner(d, manual);
-        const reason = String(options && options.reason || `Heizstab Stufe ${effectiveStage}`);
+        let reason = String(options && options.reason || `Heizstab Stufe ${effectiveStage}`);
         const requireReadback = d.requireReadback === true && !!(feedback && feedback.anyKnown);
         const contractCfg = this._contractCfg(d, requireReadback);
         const contractKey = `heatingRod:${d.id}`;
         const now = Date.now();
-        const forceAllWrites = !!(options && options.force);
+        let safetyDecision = null;
+        let safetyForcedStop = false;
+        const requestedPowerW = this._sumStagePower(d, requestedStage);
+        const contractBefore = this._actuatorContract.result(contractKey, now);
+        const trackedStage = Math.max(
+            0,
+            Math.min(
+                Math.round(Number(this._stageCtl.get(d.id)?.targetStage) || 0),
+                d.wiredStages,
+            ),
+        );
+        const contractStage = Math.max(
+            0,
+            Math.min(Math.round(Number(contractBefore && contractBefore.requested) || 0), d.wiredStages),
+        );
+        const currentStage = feedback && feedback.anyKnown
+            ? Math.max(0, Math.min(Math.round(Number(feedback.currentStage) || 0), d.wiredStages))
+            : Math.max(trackedStage, contractStage);
+        const currentActualW = this._sumStagePower(d, currentStage);
+        const safetyProbeW = Math.max(requestedPowerW, currentActualW);
+        if (safetyProbeW > 0 && this.adapter && (this.adapter._nwSafetyEnvelopeRequired === true || this.adapter._emsSafetyCycle)) {
+            let envelope = null;
+            try {
+                envelope = liveSafetyEnvelope(this.adapter, this.dp, {
+                    now,
+                    generation: this.adapter?._emsSafetyCycle?.generation,
+                });
+            } catch (error) {
+                envelope = invalidateSafetyEnvelope(this.adapter, `heating-rod-live-safety-build-failed:${d.id}:${String(error && error.message || error)}`, {
+                    generation: this.adapter?._emsSafetyCycle?.generation,
+                    now,
+                    emergencyStop: true,
+                });
+            }
+            safetyDecision = evaluateFlexibleLoadRequest(this.adapter, {
+                key: contractKey,
+                app: 'heatingRod',
+                deviceKey: d.id,
+                requestedW: safetyProbeW,
+                currentActualW: feedback && feedback.anyKnown ? currentActualW : 0,
+                currentActualFresh: !!(feedback && feedback.anyKnown),
+                phaseCount: Math.max(1, Math.min(3, Number(envelope && envelope.phase && envelope.phase.requiredCount) || 3)),
+                voltageV: Number(envelope && envelope.phase && envelope.phase.voltageV) || 230,
+                deviceCapW: Number.isFinite(Number(d.maxPowerW)) && Number(d.maxPowerW) > 0 ? Number(d.maxPowerW) : requestedPowerW,
+                now,
+            });
+            const allowedW = Math.max(0, Math.floor(Number(safetyDecision.allowedW) || 0));
+            effectiveStage = 0;
+            if (requestedStage > 0) {
+                for (let stage = 1; stage <= requestedStage; stage++) {
+                    if (this._sumStagePower(d, stage) <= allowedW + 1) effectiveStage = stage;
+                    else break;
+                }
+            }
+            const effectivePowerW = this._sumStagePower(d, effectiveStage);
+            const safetyBlocked = safetyDecision.forceZero === true
+                || safetyDecision.blocked === true
+                || (requestedStage > 0 && effectiveStage <= 0);
+            safetyForcedStop = effectiveStage <= 0 && safetyProbeW > 0 && safetyBlocked;
+            safetyDecision = {
+                ...safetyDecision,
+                allowedW: effectivePowerW,
+                blocked: safetyForcedStop,
+                clamped: requestedStage > 0 ? effectiveStage < requestedStage : safetyForcedStop,
+                forceZero: safetyForcedStop,
+                reservation: {
+                    targetW: effectivePowerW,
+                    deltaW: Math.max(0, effectivePowerW - currentActualW),
+                    phaseDeltaW: envelope && envelope.phase && envelope.phase.required === true
+                        ? Math.max(0, effectivePowerW - currentActualW)
+                        : 0,
+                    app: 'heatingRod',
+                },
+            };
+            if (safetyDecision.clamped) reason = `${reason} | ${String(safetyDecision.reason || 'Safety begrenzt')}`;
+        }
+        const forceAllWrites = !!(options && options.force) || safetyForcedStop;
         if (forceAllWrites) this._actuatorContract.release(contractKey);
         if (!forceAllWrites && feedback && feedback.anyKnown && Number(feedback.currentStage) === effectiveStage) {
             const confirmed = this._actuatorContract.confirmFromReadback(contractKey, effectiveStage, feedback.currentStage, true, now);
             if (confirmed) {
                 await this._publishHeatingContract(d, owner, confirmed);
-                return { applied: true, accepted: true, writeAccepted: false, writePartial: false, status: confirmed.status, targetStage: effectiveStage, readbackOk: true, contract: confirmed };
+                if (safetyDecision) commitFlexibleLoadDecision(this.adapter, safetyDecision, true);
+                return { applied: true, accepted: true, writeAccepted: false, writePartial: false, status: confirmed.status, targetStage: effectiveStage, readbackOk: true, contract: confirmed, safetyDecision };
             }
         }
         const decision = this._actuatorContract.prepare(contractKey, effectiveStage, now, contractCfg);
@@ -2756,9 +2898,9 @@ class HeatingRodControlModule extends BaseModule {
             enforceAuthority: options && options.enforceAuthority === true
                 ? true
                 : this._deviceHasExclusiveAuthority(d, owner),
-            releaseAuthority: options && options.releaseAuthority !== undefined
+            releaseAuthority: safetyForcedStop || (options && options.releaseAuthority !== undefined
                 ? options.releaseAuthority === true
-                : effectiveStage <= 0,
+                : effectiveStage <= 0),
         };
 
         // One KNX/relay object may be reused in more than one virtual stage. Writing every row in
@@ -2802,7 +2944,16 @@ class HeatingRodControlModule extends BaseModule {
         const readbackOk = feedbackAfter && feedbackAfter.anyKnown ? Number(feedbackAfter.currentStage) === effectiveStage : null;
         const contract = this._actuatorContract.complete(contractKey, effectiveStage, accepted, readbackOk, feedbackAfter && feedbackAfter.currentStage, Date.now(), contractCfg);
         await this._publishHeatingContract(d, owner, contract);
-        return { applied: contract.confirmed, accepted, writeAccepted: anyTrue, writePartial: anyTrue && anyFalse, status: contract.status || status, targetStage: effectiveStage, readbackOk, contract };
+        if (safetyDecision) commitFlexibleLoadDecision(this.adapter, safetyDecision, accepted || contract.confirmed === true);
+        if ((safetyDecision || safetyForcedStop) && !(accepted || contract.confirmed === true) && (requestedStage > 0 || safetyForcedStop)) {
+            invalidateSafetyEnvelope(this.adapter, `heating-rod-write-not-confirmed:${d.id}:${String(contract.status || status || 'unknown')}`, {
+                generation: this.adapter?._emsSafetyCycle?.generation,
+                now: Date.now(),
+                emergencyStop: true,
+            });
+            try { this.adapter?._nwRequestImmediateEmsTick?.(`safety:heating-rod-write:${d.id}`, 0); } catch (_tickError) {}
+        }
+        return { applied: contract.confirmed, accepted, writeAccepted: anyTrue, writePartial: anyTrue && anyFalse, status: contract.status || status, targetStage: effectiveStage, readbackOk, contract, safetyDecision, safetyForcedStop };
     }
 
     _recordAcceptedHeatingEffect(d, result, baselineW, targetW, reason) {

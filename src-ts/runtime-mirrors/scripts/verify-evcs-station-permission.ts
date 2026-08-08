@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: bb175012baa5205f8804a3cbc0d056b53b5d9bc3c52c48e1894b79a772e3dd2b
+ * Original-Hash: eae6638f68a5b275aa36dd8ce27684830ea14432442170054362284e722a1acb
  */
 
 /**
@@ -210,7 +210,8 @@ async function main() {
     contains(text, "await mk('stationEnabled'", `${label} effective state`);
     contains(text, 'const stationEnabled = cfgEnabled && userStationEnabled;', `${label} station permission`);
     contains(text, 'const enabled = stationEnabled && userEnabled;', `${label} effective control`);
-    contains(text, 'setpointTarget.enable = !!w.cfgEnabled && !!w.userStationEnabled && !w.operationalBlocked', `${label} hardware enable override`);
+    contains(text, 'setpointTarget.enable = safetyForcedStop', `${label} safety-aware hardware enable override`);
+    contains(text, ': (!!w.cfgEnabled && !!w.userStationEnabled && !w.operationalBlocked)', `${label} hardware enable permission`);
     contains(text, '!w.userStationEnabled || !w.userEnabled', `${label} safe stop`);
     contains(text, 'let online = cfgEnabled;', `${label} disable-write reachability`);
   }

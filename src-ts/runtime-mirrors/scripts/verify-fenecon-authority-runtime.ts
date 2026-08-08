@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2a91c8dd93a5b5fdda9362cab59786f67e74cc9d5d41ea041b714ed3c6ad0172
+ * Original-Hash: a034ab5da7b344923d5ce0092ad7328e126941d81764738d43ac1b3f746aeca9
  */
 
 /**
@@ -41,6 +41,7 @@
  */
 const assert = require('node:assert/strict');
 const { SpeicherRegelungModule } = require('../ems/modules/storage-control');
+const { beginSafetyCycle } = require('../ems/services/safety-envelope');
 
 /**
  * Code-Teil: now
@@ -227,7 +228,7 @@ function makeRuntime() {
       },
       storageFarm: { storages: [] },
       peakShaving: {},
-      installerConfig: {},
+      installerConfig: { gridConnectionPower: 10000 },
     },
     stateCache: {},
     log: { debug() {}, info() {}, warn() {}, error() {} },
@@ -348,7 +349,37 @@ function stateValue(states, id) {
     assert.equal(stateValue(states, 'speicher.regelung.zeroWriteFirewallExplicitStop'), true);
   }
 
-  console.log('[fenecon-authority-runtime] OK: real storage ticks verify FEMS no-write, delayed EOS takeover, one-shot 0-W handover and always-available safety zero override.');
+  // 5) RC39: Der zentrale SafetyEnvelope muss auch den FEMS-No-Write-Pfad
+  // uebersteuern. Ein stale/ungueltiger NVP erzwingt einen echten 0-W-Write,
+  // obwohl FEMS bei hoher PV normalerweise ohne EOS-Refresh regelt.
+  {
+    const { adapter, dp, module, states } = makeRuntime();
+    beginSafetyCycle(adapter, 1, now());
+    adapter._nvpFreshnessSnapshot = {
+      ts: now() - 60000,
+      sampleTs: now() - 60000,
+      valueTs: now() - 60000,
+      netW: null,
+      usable: false,
+      connected: false,
+      status: 'stale',
+      reason: 'test-stale-nvp',
+      source: 'test',
+    };
+    module._feneconHybridAuthority = 'fems';
+    module._feneconHybridWasExternal = false;
+    module._lastTargetW = 0;
+    module._lastSource = 'fenecon';
+    dp.setValue('st.targetPowerW', 1800);
+    await module.tick();
+    const targetWrites = dp.writes.filter((row) => row.key === 'st.targetPowerW');
+    assert.ok(targetWrites.length > 0, 'stale SafetyEnvelope must override FEMS no-write with a real stop write');
+    assert.equal(targetWrites.at(-1).value, 0, 'FEMS safety override must write exactly 0 W');
+    assert.equal(stateValue(states, 'speicher.regelung.feneconHybridSchreibmodus'), 'write-safety-zero-override');
+    assert.match(String(stateValue(states, 'speicher.regelung.safetyReason') || ''), /nvp|safety/i);
+  }
+
+  console.log('[fenecon-authority-runtime] OK: real storage ticks verify FEMS no-write, delayed EOS takeover, one-shot handover, explicit stops and RC39 SafetyEnvelope override.');
 })().catch((error) => {
   console.error(error && error.stack ? error.stack : error);
   process.exit(1);

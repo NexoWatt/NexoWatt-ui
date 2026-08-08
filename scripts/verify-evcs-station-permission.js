@@ -114,7 +114,8 @@ async function main() {
     contains(text, "await mk('stationEnabled'", `${label} effective state`);
     contains(text, 'const stationEnabled = cfgEnabled && userStationEnabled;', `${label} station permission`);
     contains(text, 'const enabled = stationEnabled && userEnabled;', `${label} effective control`);
-    contains(text, 'setpointTarget.enable = !!w.cfgEnabled && !!w.userStationEnabled && !w.operationalBlocked', `${label} hardware enable override`);
+    contains(text, 'setpointTarget.enable = safetyForcedStop', `${label} safety-aware hardware enable override`);
+    contains(text, ': (!!w.cfgEnabled && !!w.userStationEnabled && !w.operationalBlocked)', `${label} hardware enable permission`);
     contains(text, '!w.userStationEnabled || !w.userEnabled', `${label} safe stop`);
     contains(text, 'let online = cfgEnabled;', `${label} disable-write reachability`);
   }
