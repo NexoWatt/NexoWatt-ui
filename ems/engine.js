@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:d747f7775db814e89a1f639de820eb02dd965ba061e1f288b9b7d6123634c4f9
+ * Quell-Hash: sha256:5c2b025d8f4a6302b2392cd8e02f194f4d41dbdb120f797a489854b1fa76983b
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -589,7 +589,12 @@ class EmsEngine {
       let controlBasis = 'auto';
       if (controlPreference === 'currenta' || controlPreference === 'a' || controlPreference === 'current') controlBasis = 'currentA';
       else if (controlPreference === 'powerw' || controlPreference === 'w' || controlPreference === 'power') controlBasis = 'powerW';
-      else if (controlPreference === 'none' || controlPreference === 'off') controlBasis = 'none';
+      else if (controlPreference === 'none' || controlPreference === 'off') {
+        // `Aktiv (Regelung)` ist die einzige bewusste Deaktivierung. Alte
+        // controlPreference=none-Eintraege duerfen einen vorhandenen Sollwert-DP
+        // nicht unsichtbar machen und die Infrastruktur faelschlich auf 0 W setzen.
+        controlBasis = (setCurrentAId || setPowerWId) ? 'auto' : 'none';
+      }
 
       const minA = (Number.isFinite(Number(wb.minCurrentA)) ? Number(wb.minCurrentA) : 0);
       const maxA = (Number.isFinite(Number(wb.maxCurrentA)) ? Number(wb.maxCurrentA) : 0);

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:e826c679e408828e9563be21f7629a2b1647ac553fa72b7bdaf791558f07d3ae
+ * Quell-Hash: sha256:ca3697eca37a101c5a7fa2c4a64436cddca644a940083819fb47b72473d115b1
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -10785,12 +10785,15 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       // Steuerpräferenz
       const ctrlSel = document.createElement('select');
       ctrlSel.className = 'nw-config-input';
-      ctrlSel.innerHTML = '<option value="auto">auto</option><option value="currentA">currentA</option><option value="powerW">powerW</option><option value="none">none</option>';
+      ctrlSel.innerHTML = '<option value="auto">auto</option><option value="currentA">currentA</option><option value="powerW">powerW</option>';
       {
         const cp = String((rowCfg && rowCfg.controlPreference) ? rowCfg.controlPreference : 'auto').trim().toLowerCase();
+        // Alte `none`-/`off`-Konfigurationen werden auf den sichtbaren Standard
+        // migriert. Deaktiviert wird ein Ladepunkt ausschliesslich ueber
+        // „Aktiv (Regelung)“, damit Budgetstatus und Runtime nicht auseinanderlaufen.
+        if (cp === 'none' || cp === 'off') rowCfg.controlPreference = 'auto';
         ctrlSel.value = (cp === 'currenta' || cp === 'current') ? 'currentA'
           : (cp === 'powerw' || cp === 'power') ? 'powerW'
-          : (cp === 'none' || cp === 'off') ? 'none'
           : 'auto';
       }
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an ctrlSel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.

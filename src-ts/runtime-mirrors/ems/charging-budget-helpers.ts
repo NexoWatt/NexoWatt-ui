@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: eb68424955dbeb8c60793f8d4abcd31589fda3a11b045b53ad9e10757e49aad6
+ * Original-Hash: e76e30c4b57f2419b9c4f52676a62b6b559e3113984f7432cbd0635fb9d5b765
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/charging-budget-helpers.ts
- * Quell-Hash: sha256:061942f60fb4c5147077252e9895f8cbcea6646641dd900f0c293d2bb7c10353
+ * Quell-Hash: sha256:fbdfe1a0097c28cdc168cf2100395bc0225639efac27a8b8e27028ec72e99dea
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -65,6 +65,90 @@
 
 'use strict';
 
+/** Liefert nur endliche positive Zahlen; 0/leere Werte bedeuten „nicht gesetzt“. */
+function positiveNumber() {
+  const value = Number(arguments[0]);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/**
+ * Vereinheitlicht die AC-Grenzen eines Ladepunkts.
+ *
+ * Vertrag:
+ * - Ist nur Maximalstrom gesetzt, wird die Maximalleistung daraus abgeleitet.
+ * - Ist nur Maximalleistung gesetzt, wird der maximal erlaubte Strom daraus
+ *   abgeleitet. Das ist besonders wichtig für stromgeregelte Wallboxen.
+ * - Sind beide Werte gesetzt, gilt immer die strengere Grenze.
+ * - Erst wenn keiner der beiden Werte gesetzt ist, greifen die globalen
+ *   Standardwerte.
+ * - Mindeststrom und optionale Mindestleistung werden als technische Untergrenze
+ *   zusammengeführt; eine Maximalgrenze unter dieser Untergrenze führt später
+ *   korrekt zu 0 A/0 W statt zu einer physikalisch nicht fahrbaren Vorgabe.
+ *
+ * @param {{
+ *   phases?:number, voltageV?:number,
+ *   minA?:number, maxA?:number, minPowerW?:number, maxPowerW?:number,
+ *   defaultMinA?:number, defaultMaxA?:number,
+ *   controlBasis?:string, acMinPower3pW?:number
+ * }} [options]
+ * @returns {{
+ *   phases:number, voltageV:number, factorWPerA:number,
+ *   minA:number, maxA:number, minPowerW:number, maxPowerW:number,
+ *   explicitMinA:boolean, explicitMaxA:boolean,
+ *   explicitMinPower:boolean, explicitMaxPower:boolean,
+ *   maxLimitedBy:string
+ * }}
+ */
+function resolveAcChargingLimits() {
+  const input = arguments[0] && typeof arguments[0] === 'object' ? arguments[0] : {};
+  const phases = Number(input.phases) === 1 ? 1 : 3;
+  const voltageV = Function.prototype.apply.call(positiveNumber, null, [input.voltageV]) || 230;
+  const factorWPerA = Math.max(1, phases * voltageV);
+
+  const configuredMinA = Function.prototype.apply.call(positiveNumber, null, [input.minA]);
+  const configuredMaxA = Function.prototype.apply.call(positiveNumber, null, [input.maxA]);
+  const configuredMinPowerW = Function.prototype.apply.call(positiveNumber, null, [input.minPowerW]);
+  const configuredMaxPowerW = Function.prototype.apply.call(positiveNumber, null, [input.maxPowerW]);
+  const defaultMinA = Function.prototype.apply.call(positiveNumber, null, [input.defaultMinA]) || 6;
+  const defaultMaxA = Function.prototype.apply.call(positiveNumber, null, [input.defaultMaxA]) || 16;
+
+  let minA = configuredMinA || defaultMinA;
+  let minPowerW = minA * factorWPerA;
+  if (configuredMinPowerW !== null) minPowerW = Math.max(minPowerW, configuredMinPowerW);
+
+  const controlBasis = String(input.controlBasis || '').trim().toLowerCase();
+  const acMinPower3pW = Function.prototype.apply.call(positiveNumber, null, [input.acMinPower3pW]);
+  const powerControlled = controlBasis === 'powerw' || controlBasis === 'power' || controlBasis === 'w';
+  if (powerControlled && phases === 3 && acMinPower3pW !== null) {
+    minPowerW = Math.max(minPowerW, acMinPower3pW);
+  }
+  minA = Math.max(minA, minPowerW / factorWPerA);
+
+  const maxCandidates = [];
+  if (configuredMaxA !== null) maxCandidates.push({ source: 'configured-current', powerW: configuredMaxA * factorWPerA });
+  if (configuredMaxPowerW !== null) maxCandidates.push({ source: 'configured-power', powerW: configuredMaxPowerW });
+  if (!maxCandidates.length) maxCandidates.push({ source: 'default-current', powerW: defaultMaxA * factorWPerA });
+  maxCandidates.sort((a, b) => a.powerW - b.powerW);
+  const limiting = maxCandidates[0];
+  const maxPowerW = Math.max(0, Number(limiting.powerW) || 0);
+  const maxA = maxPowerW / factorWPerA;
+
+  return {
+    phases,
+    voltageV,
+    factorWPerA,
+    minA,
+    maxA,
+    minPowerW,
+    maxPowerW,
+    explicitMinA: configuredMinA !== null,
+    explicitMaxA: configuredMaxA !== null,
+    explicitMinPower: configuredMinPowerW !== null,
+    explicitMaxPower: configuredMaxPowerW !== null,
+    maxLimitedBy: limiting.source,
+  };
+}
+
 /**
  * Ermittelt die installierte Maximalleistung eines aktivierten und steuerbaren
  * Ladepunkts. Explizite Leistung, Strom-/Phasenangaben und der AppCenter-
@@ -79,26 +163,35 @@ function deriveChargingConnectorCapacityW() {
   const fallbackPerConnectorW = arguments.length > 1 ? Number(arguments[1]) : 11000;
   const wb = wallbox && typeof wallbox === 'object' ? wallbox : {};
   if (wb.enabled === false) return 0;
-  const controlBasis = String(wb.controlBasis || 'auto').trim().toLowerCase();
-  const controllable = controlBasis !== 'none' && !!(wb.setCurrentAId || wb.setPowerWId);
+  // Ein Ladepunkt ist technisch steuerbar, sobald ein beschreibbarer Strom-
+  // oder Leistungssollwert vorhanden ist. `controlBasis=none` war ein alter,
+  // versteckter Zweit-Schalter und wird nicht mehr als Deaktivierung verwendet;
+  // dafuer existiert ausschliesslich `enabled` / „Aktiv (Regelung)“.
+  const controllable = !!(wb.setCurrentAId || wb.setPowerWId);
   if (!controllable) return 0;
 
-  const explicitPowerW = Number(wb.maxPowerW);
-  if (Number.isFinite(explicitPowerW) && explicitPowerW > 0) {
-    return Math.max(0, Math.round(explicitPowerW));
-  }
-
-  const maxCurrentA = Number(wb.maxA);
-  const phases = Number(wb.phases) === 1 ? 1 : 3;
-  const voltageV = Number.isFinite(Number(wb.voltageV)) && Number(wb.voltageV) > 0
-    ? Number(wb.voltageV)
-    : 230;
-  if (Number.isFinite(maxCurrentA) && maxCurrentA > 0) {
-    return Math.max(0, Math.round(maxCurrentA * phases * voltageV));
-  }
-
+  const chargerType = String(wb.chargerType || wb.type || 'ac').trim().toLowerCase();
   const fallbackW = Number(fallbackPerConnectorW);
-  return Number.isFinite(fallbackW) && fallbackW > 0 ? Math.round(fallbackW) : 0;
+  const safeFallbackW = Number.isFinite(fallbackW) && fallbackW > 0 ? fallbackW : 0;
+  if (chargerType === 'dc') {
+    const explicitPowerW = Function.prototype.apply.call(positiveNumber, null, [wb.maxPowerW]);
+    return Math.max(0, Math.round(explicitPowerW !== null ? explicitPowerW : safeFallbackW));
+  }
+
+  const phases = Number(wb.phases) === 1 ? 1 : 3;
+  const voltageV = Function.prototype.apply.call(positiveNumber, null, [wb.voltageV]) || 230;
+  const factorWPerA = Math.max(1, phases * voltageV);
+  const fallbackMaxA = safeFallbackW > 0 ? safeFallbackW / factorWPerA : 16;
+  const limits = Function.prototype.apply.call(resolveAcChargingLimits, null, [{
+    phases,
+    voltageV,
+    maxA: wb.maxA !== undefined ? wb.maxA : wb.maxCurrentA,
+    maxPowerW: wb.maxPowerW,
+    defaultMaxA: fallbackMaxA,
+    defaultMinA: wb.minA !== undefined ? wb.minA : wb.minCurrentA,
+    controlBasis: wb.controlBasis || wb.controlPreference || 'auto',
+  }]);
+  return Math.max(0, Math.round(limits.maxPowerW));
 }
 
 /**
@@ -216,16 +309,25 @@ function computeChargingMinimumServicePlan() {
   for (const wallbox of list) {
     const w = wallbox && typeof wallbox === 'object' ? wallbox : {};
     const safe = String(w.safe || '').trim();
-    const mode = String(w.effectiveMode || w.userMode || 'normal').trim().toLowerCase();
-    const goalBlocked = !!w.goalEnabled && (w.goalStatus === 'waiting_soc' || w.goalStatus === 'soc_stale');
+    const modeRaw = String(w.effectiveMode || w.userMode || 'normal').trim().toLowerCase();
+    const mode = modeRaw === 'min+pv' || modeRaw === 'min_pv' ? 'minpv'
+      : (modeRaw === 'turbo' ? 'boost' : modeRaw);
+    const boost = mode === 'boost';
+    const goalStatus = String(w.goalStatus || '').trim().toLowerCase();
+    const goalBlocked = !boost && !!w.goalEnabled && (goalStatus === 'waiting_soc' || goalStatus === 'soc_stale');
     const demandConfirmed = w.vehicleDemandConfirmed === true
       || (w.vehicleDemandConfirmed === undefined && w.vehiclePlugged === true);
+    const commandDemandAllowed = demandConfirmed || boost;
+    const hasSetpoint = !!(w.setAKey || w.setWKey || w.setCurrentAId || w.setPowerWId);
+    const controlToken = String(w.controlBasis || 'auto').trim().toLowerCase();
+    const controllable = controlToken !== 'none' || hasSetpoint;
     const eligible = !!safe
       && w.enabled !== false
       && w.online !== false
-      && demandConfirmed
-      && String(w.controlBasis || 'none').trim().toLowerCase() !== 'none'
+      && commandDemandAllowed
+      && controllable
       && mode !== 'pv'
+      && mode !== 'off'
       && !goalBlocked;
     if (!eligible) {
       if (safe) minimumBySafe.set(safe, 0);
@@ -303,6 +405,7 @@ function computeChargingMinimumServicePlan() {
 }
 
 eval('module').exports = {
+  resolveAcChargingLimits,
   deriveChargingConnectorCapacityW,
   computeChargingInfrastructureCapacity,
   computeChargingMinimumServicePlan,

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 84f644072216960abfe2915e9ebb9a1e84086eb58c293df28295a899399ae3ae
+ * Original-Hash: 17b085a1421f4a0c08e8fdb6595385c0358ad5d03e5cbe0f211ff1f5985ce033
  */
 
 /**
@@ -97,6 +97,48 @@ if (decision.apply.wallboxes[0].targetPowerW !== 3200 || decision.apply.wallboxe
   console.error('[ts-charging-allocation-productive] Zielwerte oder currentA-Normalisierung fehlerhaft.');
   process.exit(1);
 }
+// Expliziter Boost darf auch ohne optionalen Fahrzeug-/Ladebedarfsnachweis
+// den lokal maximalen, bereits durch harte Caps begrenzten Sollwert vorladen.
+// Auto bleibt unter denselben Bedingungen fail-closed.
+const boostNoDemandInput = {
+  mode: 'boost', budgetMode: 'engine:static+gridImport', budgetW: 11040, usedW: 0, remainingW: 11040,
+  totalTargetPowerW: 11040, totalTargetCurrentA: 16,
+  wallboxes: [
+    {
+      safe: 'boost_no_demand', name: 'Boost no demand', enabled: true, online: true, vehiclePlugged: false,
+      vehicleDemandConfirmed: false, boostPrearmAllowed: true,
+      effectiveMode: 'boost', userMode: 'boost', controlBasis: 'currentA', chargerType: 'ac', phases: 3, voltageV: 230,
+      minPowerW: 4140, maxPowerW: 11040, minA: 6, maxA: 16, stepA: 1, setAKey: 'cm.wb.boost_no_demand.setA',
+      hasSetpoint: true, hasSetCurrent: true,
+    },
+  ],
+  allocations: [
+    { safe: 'boost_no_demand', targetW: 11040, targetA: 16, reason: 'allocated', effectiveMode: 'boost', boost: true },
+  ],
+};
+const boostNoDemand = allocation.buildChargingAllocationProductive(boostNoDemandInput);
+if (!boostNoDemand || !boostNoDemand.productive || !boostNoDemand.apply || boostNoDemand.apply.wallboxes[0].targetPowerW !== 11040 || boostNoDemand.apply.wallboxes[0].targetCurrentA !== 16) {
+  console.error('[ts-charging-allocation-productive] Boost wird ohne optionalen Fahrzeugnachweis noch auf 0 gesetzt oder nicht auf Maximalleistung freigegeben.', boostNoDemand && boostNoDemand.apply);
+  process.exit(1);
+}
+if (boostNoDemand.apply.wallboxes[0].connected !== false
+  || boostNoDemand.apply.wallboxes[0].demandConfirmed !== false
+  || boostNoDemand.apply.wallboxes[0].boostPrearmAllowed !== true) {
+  console.error('[ts-charging-allocation-productive] Physischer Anschluss, Ladebedarf und Boost-Vorruestung werden nicht sauber getrennt.', boostNoDemand.apply.wallboxes[0]);
+  process.exit(1);
+}
+const autoNoDemandInput = {
+  ...boostNoDemandInput,
+  mode: 'auto',
+  wallboxes: [{ ...boostNoDemandInput.wallboxes[0], safe: 'auto_no_demand', name: 'Auto no demand', effectiveMode: 'auto', userMode: 'auto', boostPrearmAllowed: false, setAKey: 'cm.wb.auto_no_demand.setA' }],
+  allocations: [{ safe: 'auto_no_demand', targetW: 0, targetA: 0, reason: 'no_vehicle', effectiveMode: 'auto', boost: false }],
+};
+const autoNoDemand = allocation.buildChargingAllocationProductive(autoNoDemandInput);
+if (!autoNoDemand || !autoNoDemand.productive || !autoNoDemand.apply || autoNoDemand.apply.wallboxes[0].targetPowerW !== 0 || autoNoDemand.apply.wallboxes[0].targetCurrentA !== 0) {
+  console.error('[ts-charging-allocation-productive] Auto bleibt ohne bestaetigten Ladebedarf nicht fail-closed.', autoNoDemand && autoNoDemand.apply);
+  process.exit(1);
+}
+
 if (!decision.safety || decision.safety.javascriptAllocationIsFallbackOnly !== true || decision.safety.setpointWritingUsesJavascriptExecutorOnly !== true || decision.safety.normalJavascriptDecisionTreeRemovedFromNormalPath !== true || decision.safety.directJavascriptSetpointLoopsRemoved !== true || decision.safety.executorFallbackOnlyForHardBlockers !== true) {
   console.error('[ts-charging-allocation-productive] Sicherheitsgrenzen für JS-Fallback/Executor/Normalpfad-Cleanup fehlen.');
   process.exit(1);

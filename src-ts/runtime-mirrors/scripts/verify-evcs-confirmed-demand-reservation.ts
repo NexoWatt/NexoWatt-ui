@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2fb27dea87e6d4eda3ce0c5519b424370da75aa3c4a62d773f1196f0290ec6ae
+ * Original-Hash: 26fbf0b5c608a6a997627ab986d8f12687a12314115b8ba89b059eb72bd7fd99
  */
 
 /**
@@ -52,6 +52,9 @@ const {
   resolveEvcsSemanticFlag,
   isPersistentEvcsVehicleState,
   computePendingPvStartIntentW,
+  isChargingCommandDemandAllowed,
+  shouldPauseChargingForGoalSoc,
+  applyChargingModeRamp,
 } = charging;
 const { computeChargingMinimumServicePlan } = budgetHelpers;
 
@@ -286,6 +289,44 @@ assert.strictEqual(plan.eligibleCount, 1);
 assert.strictEqual(plan.minimumBySafe.get('ghost'), 0);
 assert.strictEqual(plan.minimumBySafe.get('real'), 4140);
 
+// Boost ist die einzige explizite Vorruest-Ausnahme im Mindestserviceplan.
+// Der positive Sollwert muss im zentralen/stationsbezogenen Budget reserviert
+// werden, bevor ein Fahrzeug ihn physisch annimmt. Auto bleibt ohne Bedarf bei 0.
+const prearmPlan = computeChargingMinimumServicePlan({
+  totalBudgetW: 20000,
+  wallboxes: [
+    {
+      safe: 'boost_prearm', enabled: true, online: true, vehiclePlugged: false,
+      vehicleDemandConfirmed: false, controlBasis: 'currentA', effectiveMode: 'boost',
+      setAKey: 'test.boost.setA', minPW: 4140, maxPW: 11040,
+    },
+    {
+      safe: 'auto_no_demand', enabled: true, online: true, vehiclePlugged: false,
+      vehicleDemandConfirmed: false, controlBasis: 'currentA', effectiveMode: 'auto',
+      setAKey: 'test.auto.setA', minPW: 4140, maxPW: 11040,
+    },
+  ],
+});
+assert.strictEqual(prearmPlan.eligibleCount, 1);
+assert.strictEqual(prearmPlan.minimumBySafe.get('boost_prearm'), 4140);
+assert.strictEqual(prearmPlan.minimumBySafe.get('auto_no_demand'), 0);
+
+// Betriebsartenvertrag: Nur Boost darf einen positiven, bereits hart begrenzten
+// Sollwert ohne optionalen Fahrzeug-/Ladebedarfsnachweis vorladen. Alle
+// Automatikmodi bleiben fail-closed. Boost darf außerdem weder durch den
+// Zeit-Ziel-SoC-Wartezustand noch durch die weiche Hochlauframpe verzögert werden.
+assert.strictEqual(isChargingCommandDemandAllowed('boost', false), true);
+assert.strictEqual(isChargingCommandDemandAllowed('turbo', false), true);
+for (const mode of ['auto', 'normal', 'pv', 'minpv', 'off']) {
+  assert.strictEqual(isChargingCommandDemandAllowed(mode, false), false, `${mode} darf ohne Ladebedarf nicht vorladen`);
+}
+assert.strictEqual(isChargingCommandDemandAllowed('auto', true), true);
+assert.strictEqual(shouldPauseChargingForGoalSoc('boost', true, 'waiting_soc'), false);
+assert.strictEqual(shouldPauseChargingForGoalSoc('boost', true, 'soc_stale'), false);
+assert.strictEqual(shouldPauseChargingForGoalSoc('auto', true, 'waiting_soc'), true);
+assert.strictEqual(applyChargingModeRamp(0, 16, 2, 'boost'), 16, 'Boost muss die bereits hart begrenzte Maximalvorgabe sofort erreichen');
+assert.strictEqual(applyChargingModeRamp(0, 16, 2, 'auto'), 2, 'Auto muss die konfigurierte Hochlauframpe behalten');
+
 // Statische Produktivanker: Allocation, Reservierung und Write-Plan nutzen die
 // bestaetigte Bedarfsentscheidung statt `online !== false` oder alten Sollwerten.
 const source = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/ems/modules/charging-management.ts'), 'utf8');
@@ -303,6 +344,13 @@ for (const needle of [
   'w.vehicleDemandConfirmed === true',
   'const demandReserveThisW = activeChargingDemand ?',
   'vehicleDemandReason',
+  'isChargingCommandDemandAllowed(effMode, w.vehicleDemandConfirmed)',
+  'shouldPauseChargingForGoalSoc(effMode, w.goalEnabled, w.goalStatus)',
+  'applyChargingModeRamp(prevCmdA, cmdA, wbMaxDeltaA, effMode)',
+  'applyChargingModeRamp(prevCmdW, cmdW, wbMaxDeltaW, effMode)',
+  'vehiclePlugged: !!(w && w.vehiclePlugged === true)',
+  'vehicleDemandConfirmed: !!(w && w.vehicleDemandConfirmed === true)',
+  'boostPrearmAllowed: !!(w && isChargingCommandDemandAllowed(w.effectiveMode, false))',
 ]) {
   assert.ok(source.includes(needle), `Produktivanker fehlt: ${needle}`);
 }
@@ -310,7 +358,10 @@ assert.ok(source.includes('`evcs.N.active` ist die Kunden-/RFID-Freigabe'), 'Fre
 assert.ok(!source.includes("this._getStateCached(`evcs.${Math.round(evcsIndex)}.active`)"), 'evcs.N.active darf nicht als Fahrzeug-/Plug-Signal gelesen werden');
 
 const allocationSource = fs.readFileSync(path.join(root, 'src-ts/ems/charging-management/charging-allocation.ts'), 'utf8');
-assert.ok(allocationSource.includes('const connected = boolValue(wallbox.vehiclePlugged, false);'), 'TS-Allocator muss einen fehlenden Plug-Nachweis fail-closed behandeln');
+assert.ok(/const connected = boolValue\([\s\S]*?wallbox\.vehiclePlugged[\s\S]*?false[\s\S]*?\);/.test(allocationSource), 'TS-Allocator muss physischen Fahrzeuganschluss und Ladebedarf getrennt sowie fail-closed erfassen');
+assert.ok(/const demandConfirmed = boolValue\([\s\S]*?wallbox\.vehicleDemandConfirmed[\s\S]*?connected[\s\S]*?\);/.test(allocationSource), 'TS-Allocator muss den bestaetigten Ladebedarf getrennt und mit konservativem Legacy-Fallback erfassen');
+assert.ok(allocationSource.includes('modeAllowsPrearmedSetpoint(wb)'), 'TS-Allocator besitzt keine explizite Boost-Ausnahme fuer den optionalen Bedarfsnachweis');
+assert.ok(allocationSource.includes('commandDemandAllowed(wb)'), 'TS-Allocator trennt bestaetigten Ladebedarf und explizite Boost-Vorruestung nicht zentral');
 
 
 const mainSource = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/main.ts'), 'utf8');

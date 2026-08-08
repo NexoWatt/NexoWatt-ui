@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:0cbb8102cd81825f2413271dbba59a0024ef4a5bb6a87874605084e5dfcc4e56
+ * Quell-Hash: sha256:2efc1ee8933f6d8dc8feb1aacc966ee75224b843150399304764b94d24b0c4c9
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -46,7 +46,7 @@ const { BaseModule } = require('./base');
 const { resolveCurrentNvpSnapshot } = require('../services/measurement-freshness');
 const { applySetpoint } = require('../consumers');
 const { ReasonCodes } = require('../reasons');
-const { computeChargingMinimumServicePlan } = require('../charging-budget-helpers');
+const { computeChargingMinimumServicePlan, resolveAcChargingLimits } = require('../charging-budget-helpers');
 const { recordAcceptedPowerTarget } = require('../services/accepted-power-effects');
 
 /** Code-Teil: chargingManagementTsRuntimeMirror – Dokumentiert diesen Regelungs- oder Diagnosebaustein. */
@@ -1476,6 +1476,40 @@ function normalizeWallboxModeOverride(v) {
 }
 
 /**
+ * Ein expliziter Boost-Befehl darf die Wallbox vorladen/vorrüsten, auch wenn
+ * der Herstelleradapter noch keinen separaten Fahrzeug- oder Ladebedarf-DP
+ * bestätigt. Die Wallbox selbst bleibt dabei die elektrische Freigabeinstanz:
+ * Ohne angeschlossenes/freigegebenes Fahrzeug fließt trotz positivem Sollwert
+ * keine Fahrzeugleistung. Auto, PV und Min+PV bleiben dagegen fail-closed und
+ * benötigen weiterhin einen bestätigten Ladebedarf.
+ */
+function isChargingCommandDemandAllowed(effectiveMode, vehicleDemandConfirmed) {
+    return vehicleDemandConfirmed === true || normalizeWallboxModeOverride(effectiveMode) === 'boost';
+}
+
+/**
+ * Zeit-Ziel-SoC-Wartezustände dürfen nur den Auto-/PV-Plan pausieren. Boost ist
+ * eine unmittelbare Kundenanforderung und übersteuert diese Optimierungswartezeit;
+ * harte Netz-, Stations-, Phasen-, §14a- und Fehlergrenzen bleiben nachgelagert.
+ */
+function shouldPauseChargingForGoalSoc(effectiveMode, goalEnabled, goalStatus) {
+    if (normalizeWallboxModeOverride(effectiveMode) === 'boost') return false;
+    const status = String(goalStatus || '').trim().toLowerCase();
+    return goalEnabled === true && (status === 'waiting_soc' || status === 'soc_stale');
+}
+
+/**
+ * Boost fährt den bereits durch alle harten Caps begrenzten Sollwert unmittelbar
+ * an. Andere Modi behalten die konfigurierte Hochlauframpe. Ramp-down wird wie
+ * bisher niemals verzögert.
+ */
+function applyChargingModeRamp(prevValue, targetValue, maxDeltaUp, effectiveMode) {
+    if (normalizeWallboxModeOverride(effectiveMode) === 'boost') return Number(targetValue) || 0;
+    return rampUp(prevValue, targetValue, maxDeltaUp);
+}
+
+
+/**
  * Trennt normal, expliziten Schutz und Assist.
  *
  * Fachlicher Vertrag:
@@ -2196,9 +2230,12 @@ class ChargingManagementModule extends BaseModule {
             userStationEnabled: !!(w && w.userStationEnabled),
             stationEnabled: !!(w && w.stationEnabled),
             userEnabled: !!(w && w.userEnabled),
-            // Der produktive Allocation-Pfad bekommt ausschließlich bestaetigten
-            // Ladebedarf. Der physische Anschlusszustand bleibt separat fuer UI/SoC.
-            vehiclePlugged: !!(w && w.vehicleDemandConfirmed === true),
+            // Physischer Anschlusszustand und bestätigter Ladebedarf bleiben
+            // getrennt. Boost darf den Ladepunkt bewusst vorladen/vorrüsten,
+            // ohne die UI fälschlich als „Fahrzeug verbunden“ zu markieren.
+            vehiclePlugged: !!(w && w.vehiclePlugged === true),
+            vehicleDemandConfirmed: !!(w && w.vehicleDemandConfirmed === true),
+            boostPrearmAllowed: !!(w && isChargingCommandDemandAllowed(w.effectiveMode, false)),
             charging: !!(w && w.charging),
             effectiveMode: w && w.effectiveMode,
             userMode: w && w.userMode,
@@ -2369,11 +2406,20 @@ class ChargingManagementModule extends BaseModule {
             for (const plan of plans) {
                 if (!plan || !plan.safe) continue;
                 const w = bySafe.get(String(plan.safe)) || null;
-                const demandConfirmed = w ? w.vehicleDemandConfirmed === true : plan.connected === true;
-                const targetW = demandConfirmed
+                const demandConfirmed = w
+                    ? w.vehicleDemandConfirmed === true
+                    : (plan.demandConfirmed === true || plan.connected === true);
+                const boostPrearmAllowed = !!(
+                    (w && isChargingCommandDemandAllowed(w.effectiveMode, false))
+                    || plan.boostPrearmAllowed === true
+                    || plan.boost === true
+                    || normalizeWallboxModeOverride(plan.effectiveMode) === 'boost'
+                );
+                const commandDemandAllowed = demandConfirmed || boostPrearmAllowed;
+                const targetW = commandDemandAllowed
                     ? Math.max(0, Number.isFinite(Number(plan.targetPowerW)) ? Number(plan.targetPowerW) : 0)
                     : 0;
-                const targetA = demandConfirmed
+                const targetA = commandDemandAllowed
                     ? Math.max(0, Number.isFinite(Number(plan.targetCurrentA)) ? Number(plan.targetCurrentA) : 0)
                     : 0;
                 const actualW = demandConfirmed && !(w && w.meterStale)
@@ -2384,8 +2430,10 @@ class ChargingManagementModule extends BaseModule {
 
                 const enabled = w ? w.enabled !== false : plan.enabled !== false;
                 const online = w ? w.online === true : plan.online === true;
-                const connected = demandConfirmed;
-                const hasControl = w ? w.controlBasis !== 'none' : plan.hasSetpoint !== false;
+                const connected = commandDemandAllowed;
+                const hasControl = w
+                    ? !!(w.setAKey || w.setWKey || w.hasSetpoint || w.controlBasis !== 'none')
+                    : plan.hasSetpoint !== false;
                 const charging = !!(w && w.charging) || plan.charging === true;
                 const goalActive = !!(w && w.goalActive) || plan.goalActive === true;
                 const activeDemand = !!(
@@ -3893,6 +3941,7 @@ class ChargingManagementModule extends BaseModule {
         await mk('stationRemainingW', 'Station remaining (W)', 'number', 'value.power');
         await mk('allowBoost', 'Boost allowed', 'boolean', 'indicator');
         await mk('boostActive', 'Boost active', 'boolean', 'indicator');
+        await mk('boostPrearmed', 'Boost setpoint active without confirmed vehicle demand', 'boolean', 'indicator');
         await mk('boostSince', 'Boost since (ms)', 'number', 'value.time');
         await mk('boostUntil', 'Boost until (ms)', 'number', 'value.time');
         await mk('boostRemainingMin', 'Boost remaining (min)', 'number', 'value');
@@ -4602,11 +4651,15 @@ class ChargingManagementModule extends BaseModule {
                 await this._queueState(`${ch}.storageProtectionRequested`, storageProtectionRequested, true);
             } catch { /* diagnostics only */ }
 
-            let minA = clamp(num(wb.minA, defaultMinA), 0, 2000);
-            const maxA = clamp(num(wb.maxA, defaultMaxA), 0, 2000);
-
+            const configuredMinA = clamp(num(wb.minA, null), 0, 2000);
+            const configuredMaxA = clamp(num(wb.maxA, null), 0, 2000);
             const minPowerWCfg = clamp(num(wb.minPowerW, null), 0, 1e12);
             const maxPowerWCfg = clamp(num(wb.maxPowerW, null), 0, 1e12);
+            // Die wirksamen AC-Grenzen werden nach Auflösung des tatsächlichen
+            // Steuerpfads gemeinsam aus Strom- und Leistungsgrenzen abgeleitet.
+            // Bis dahin bleiben die globalen Stromwerte nur sichere Fallbacks.
+            let minA = clamp(num(configuredMinA, defaultMinA), 0, 2000);
+            let maxA = clamp(num(configuredMaxA, defaultMaxA), 0, 2000);
 
             // Track whether the installer/user explicitly configured local caps (useful for diagnostics/reasons)
             const userLimitSet = (
@@ -5003,29 +5056,30 @@ class ChargingManagementModule extends BaseModule {
 
                 if (maxPW < minPW) minPW = maxPW;
             } else {
-                // AC: if controlling by power, allow explicit min/max power, else derive from min/max current
-                const minFromA = Math.max(0, minA) * vFactor;
-                const maxFromA = Math.max(0, maxA) * vFactor;
-
-                if (controlBasis === 'powerW') {
-                    minPW = (typeof minPowerWCfg === 'number' && Number.isFinite(minPowerWCfg) && minPowerWCfg > 0) ? minPowerWCfg : minFromA;
-                    maxPW = (typeof maxPowerWCfg === 'number' && Number.isFinite(maxPowerWCfg) && maxPowerWCfg > 0) ? maxPowerWCfg : maxFromA;
-                } else {
-                    minPW = minFromA;
-                    maxPW = maxFromA;
-                }
-
-                if (maxPW < minPW) minPW = maxPW;
-
-                // For AC, enforce a practical 3-phase minimum only when we can command *power* directly.
-                // When controlling by current (A), the wallbox already has a physical minimum current (typically 6 A).
-                // Enforcing a power minimum here would lead to fractional currents (e.g. 6.1 A) which some chargers
-                // or adapters do not accept and can cause start/stop behaviour.
-                if (controlBasis === 'powerW' && effectiveRuntimePhaseCount === 3 && acMinPower3pW > 0) {
-                    minPW = Math.max(minPW, acMinPower3pW);
-                }
-
-                // Note: if maxPW < minPW after enforcement, this wallbox cannot be started.
+                // AC: Strom- und Leistungsangaben sind gleichwertige lokale
+                // Grenzwerte. Ist nur einer gesetzt, wird der andere daraus
+                // abgeleitet; sind beide gesetzt, gilt die strengere Obergrenze.
+                // Dadurch erreicht Boost zuverlässig den im AppCenter definierten
+                // Maximalwert, ohne eine zweite, unbemerkte Standardgrenze zu
+                // überschreiten. Eine Obergrenze unterhalb der technischen
+                // Mindestleistung bleibt absichtlich minPW > maxPW und führt später
+                // zu einem sauberen 0-A/0-W-Stopp.
+                const acLimits = resolveAcChargingLimits({
+                    phases: effectiveRuntimePhaseCount,
+                    voltageV,
+                    minA: configuredMinA,
+                    maxA: configuredMaxA,
+                    minPowerW: minPowerWCfg,
+                    maxPowerW: maxPowerWCfg,
+                    defaultMinA,
+                    defaultMaxA,
+                    controlBasis,
+                    acMinPower3pW,
+                });
+                minA = clamp(num(acLimits.minA, defaultMinA), 0, 2000);
+                maxA = clamp(num(acLimits.maxA, defaultMaxA), 0, 2000);
+                minPW = Math.max(0, num(acLimits.minPowerW, minA * vFactor));
+                maxPW = Math.max(0, num(acLimits.maxPowerW, maxA * vFactor));
             }
 
             const maxPWBefore14a = maxPW;
@@ -6138,6 +6192,7 @@ class ChargingManagementModule extends BaseModule {
                 await this._queueState(`${w.ch}.goalTariffOverrideReason`, String(goalTariffOverrideReason || ''), true);
                 await this._queueState(`${w.ch}.boostTimeoutMin`, Number.isFinite(effBoostTimeoutMin) ? effBoostTimeoutMin : 0, true);
                 await this._queueState(`${w.ch}.boostActive`, eff === 'boost', true);
+                await this._queueState(`${w.ch}.boostPrearmed`, eff === 'boost' && w.vehicleDemandConfirmed !== true, true);
                 await this._queueState(`${w.ch}.boostSince`, boostSince || 0, true);
                 await this._queueState(`${w.ch}.boostUntil`, boostUntil || 0, true);
                 await this._queueState(`${w.ch}.boostRemainingMin`, boostRemainingMin || 0, true);
@@ -8406,10 +8461,16 @@ if (components.length) {
             // oder Auto-Ladepunkt darf dann nur die echte Zusatzleistung nutzen.
             // Wird die Anschluss-/Stationsgrenze zu klein fuer alle Minima, greift
             // unveraendert die Prioritaets-/Round-Robin-Abschaltung ganzer Punkte.
-            const futureMinimumW = minimumServicePlan.preserveAll
+            // Boost besitzt bewusst Vorrang vor den Mindestreservierungen spaeterer
+            // Ladepunkte. Er erhaelt die maximal lokal konfigurierte Leistung innerhalb
+            // der harten Anschluss-, Stations-, Phasen- und §14a-Grenzen. Auto und
+            // Min+PV bewahren weiterhin die technische Mindestversorgung der restlichen
+            // bestaetigten Ladebedarfe.
+            const preserveFutureMinimum = minimumServicePlan.preserveAll && !isBoost;
+            const futureMinimumW = preserveFutureMinimum
                 ? Math.max(0, Number(minimumServicePlan.futureMinimumBySafe.get(w.safe)) || 0)
                 : 0;
-            const futureStationMinimumW = minimumServicePlan.preserveAll
+            const futureStationMinimumW = preserveFutureMinimum
                 ? Math.max(0, Number(minimumServicePlan.futureStationMinimumBySafe.get(w.safe)) || 0)
                 : 0;
             maximumFutureMinimumReservedW = Math.max(maximumFutureMinimumReservedW, futureMinimumW);
@@ -8584,16 +8645,18 @@ if (components.length) {
 
                         // Zeit‑Ziel Laden: Wenn nach dem Einstecken auf eine frische SoC‑Aktualisierung gewartet wird,
             // pausieren wir die Ladung temporär (verhindert Start mit stalen/falschen Zielwerten).
-            if (w.goalEnabled && (w.goalStatus === 'waiting_soc' || w.goalStatus === 'soc_stale')) {
+            if (shouldPauseChargingForGoalSoc(effMode, w.goalEnabled, w.goalStatus)) {
                 targetW = 0;
                 targetA = 0;
                 reason = ReasonCodes.NO_SETPOINT;
             }
 
-// Safety: if the vehicle is not plugged, always force 0W.
-            // Otherwise some chargers may start charging immediately on plug-in
-            // if a non-zero setpoint was written while unplugged.
-            if (w.vehicleDemandConfirmed !== true) {
+            // Auto, PV und Min+PV benoetigen einen bestaetigten Fahrzeug-/Ladebedarf,
+            // damit kein verwaister Sollwert Budget blockiert oder beim spaeteren
+            // Einstecken unerwartet startet. Boost ist die einzige bewusste Ausnahme:
+            // Der Kundenbefehl darf den maximal zulaessigen Sollwert vorladen; die
+            // physische Ladefreigabe bleibt Aufgabe der Wallbox/Fahrzeugkommunikation.
+            if (!isChargingCommandDemandAllowed(effMode, w.vehicleDemandConfirmed)) {
                 targetW = 0;
                 targetA = 0;
                 reason = ReasonCodes.NO_VEHICLE;
@@ -8807,7 +8870,7 @@ if (components.length) {
                         w.maxA,
                     );
                 } else {
-                    cmdA = rampUp(prevCmdA, cmdA, wbMaxDeltaA);
+                    cmdA = applyChargingModeRamp(prevCmdA, cmdA, wbMaxDeltaA, effMode);
                 }
 
                 if (cmdA > 0 && w.minA > 0 && cmdA < w.minA) cmdA = 0;
@@ -8822,7 +8885,7 @@ if (components.length) {
                         : Math.max(pvStartCommandW || w.minPW || 0, w.minPW || 0);
                     cmdW = clamp(minStartW, 0, w.maxPW);
                 } else {
-                    cmdW = rampUp(prevCmdW, cmdW, wbMaxDeltaW);
+                    cmdW = applyChargingModeRamp(prevCmdW, cmdW, wbMaxDeltaW, effMode);
                 }
 
                 if (cmdW > 0 && w.minPW > 0 && cmdW < w.minPW) cmdW = 0;
@@ -8992,11 +9055,12 @@ if (components.length) {
             const demandActualW = Math.max(0, actualNowW);
             const demandCommandW = Math.max(0, Number.isFinite(cmdW) ? cmdW : 0);
             const demandTargetW = Math.max(0, Number.isFinite(targetW) ? targetW : 0);
+            const commandDemandAllowed = isChargingCommandDemandAllowed(effMode, w.vehicleDemandConfirmed);
             const activeChargingDemand = !!(
                 w.enabled
                 && w.online
                 && w.controlBasis !== 'none'
-                && w.vehicleDemandConfirmed === true
+                && commandDemandAllowed
                 && (
                     w.charging === true
                     || demandActualW >= activityThresholdW
@@ -9219,6 +9283,7 @@ if (components.length) {
                 applyWrites,
                 reason,
                 boost: isBoost,
+                boostPrearmed: isBoost && w.vehicleDemandConfirmed !== true,
                 pvLimited: isPvOnly || isMinPv,
                 hasSetpoint: !!(w.setAKey || w.setWKey),
                 setAKey: w.setAKey || '',
@@ -9920,6 +9985,9 @@ module.exports = {
     resolveChargingPvBudgetControl,
     resolveEvcsStoragePolicy,
     resolveEvcsStoragePolicyActualLoad,
+    isChargingCommandDemandAllowed,
+    shouldPauseChargingForGoalSoc,
+    applyChargingModeRamp,
     normalizeEvcsOnlineFlag,
     normalizeEvcsStatusReachability,
     normalizeEvcsStatusToken,

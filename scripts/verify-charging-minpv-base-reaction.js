@@ -14,6 +14,7 @@ const root = path.resolve(__dirname, '..');
 const chargingRuntime = require(path.join(root, 'ems', 'modules', 'charging-management.js'));
 const coreLimitsRuntime = require(path.join(root, 'ems', 'modules', 'core-limits.js'));
 const chargingAllocation = require(path.join(root, 'lib', 'ts-mirrors', 'ems', 'charging-management', 'charging-allocation.js'));
+const chargingBudgetHelpers = require(path.join(root, 'ems', 'charging-budget-helpers.js'));
 const { EmsEngine } = require(path.join(root, 'ems', 'engine.js'));
 
 function fail(message, details) {
@@ -37,6 +38,8 @@ function allocationWallbox(safe, mode, targetPowerW, minPowerW = 4200) {
     enabled: true,
     online: true,
     vehiclePlugged: true,
+    vehicleDemandConfirmed: true,
+    boostPrearmAllowed: mode === 'boost',
     charging: false,
     actualPowerW: 0,
     effectiveMode: mode,
@@ -92,9 +95,46 @@ async function main() {
   const computeMinPvAllocationW = chargingRuntime.computeMinPvAllocationW;
   const computeGoalPowerCapW = chargingRuntime.computeGoalPowerCapW;
   const computePendingPvStartIntentW = chargingRuntime.computePendingPvStartIntentW;
+  const isChargingCommandDemandAllowed = chargingRuntime.isChargingCommandDemandAllowed;
+  const shouldPauseChargingForGoalSoc = chargingRuntime.shouldPauseChargingForGoalSoc;
+  const applyChargingModeRamp = chargingRuntime.applyChargingModeRamp;
+  const resolveAcChargingLimits = chargingBudgetHelpers.resolveAcChargingLimits;
   assert(typeof computeMinPvAllocationW === 'function', 'Min+PV-Allocator ist nicht exportiert.');
   assert(typeof computeGoalPowerCapW === 'function', 'Min+PV-Ziellade-Floor ist nicht exportiert.');
   assert(typeof computePendingPvStartIntentW === 'function', 'Pending-Intent-Helfer fehlt.');
+  assert(typeof isChargingCommandDemandAllowed === 'function', 'Modus-/Ladebedarfsvertrag fehlt.');
+  assert(typeof shouldPauseChargingForGoalSoc === 'function', 'Ziel-SoC-Modusvertrag fehlt.');
+  assert(typeof applyChargingModeRamp === 'function', 'Modusabhängige Rampe fehlt.');
+  assert(typeof resolveAcChargingLimits === 'function', 'Gemeinsame AC-Grenzauflösung fehlt.');
+
+  // Betriebsartenvertrag: Boost ist die einzige Vorruest-Ausnahme. Harte
+  // Verfuegbarkeits-/Budgetgrenzen bleiben trotzdem nachgelagert. Auto, PV und
+  // Min+PV duerfen ohne bestaetigten Ladebedarf niemals einen Sollwert bilden.
+  assert(isChargingCommandDemandAllowed('boost', false) === true, 'Boost darf ohne optionalen Ladebedarfs-DP nicht vorruesten.');
+  assert(isChargingCommandDemandAllowed('turbo', false) === true, 'Turbo-Alias wird nicht als Boost behandelt.');
+  for (const mode of ['auto', 'normal', 'pv', 'minpv', 'off']) {
+    assert(isChargingCommandDemandAllowed(mode, false) === false, `${mode} darf ohne Ladebedarf nicht vorruesten.`);
+  }
+  assert(isChargingCommandDemandAllowed('auto', true) === true, 'Auto mit bestaetigtem Ladebedarf wird blockiert.');
+  assert(shouldPauseChargingForGoalSoc('boost', true, 'waiting_soc') === false, 'Ziel-SoC-Warten stoppt Boost.');
+  assert(shouldPauseChargingForGoalSoc('boost', true, 'soc_stale') === false, 'Staler Ziel-SoC stoppt Boost.');
+  assert(shouldPauseChargingForGoalSoc('auto', true, 'waiting_soc') === true, 'Auto ignoriert den Ziel-SoC-Wartezustand.');
+  assert(applyChargingModeRamp(0, 16, 2, 'boost') === 16, 'Boost erreicht den bereits hart begrenzten Maximalwert nicht sofort.');
+  assert(applyChargingModeRamp(0, 16, 2, 'auto') === 2, 'Auto verliert seine weiche Hochlauframpe.');
+  assert(applyChargingModeRamp(16, 0, 2, 'auto') === 0, 'Ramp-down darf nicht verzoegert werden.');
+
+  // Maximalstrom und Maximalleistung sind gleichwertige AppCenter-Grenzen.
+  // Ist nur eine gesetzt, wird die andere daraus abgeleitet; bei beiden gewinnt
+  // die strengere Grenze.
+  const maxPowerOnly = resolveAcChargingLimits({ phases: 3, voltageV: 230, maxPowerW: 11000, defaultMaxA: 32, defaultMinA: 6, controlBasis: 'currentA' });
+  assert(Math.abs(maxPowerOnly.maxPowerW - 11000) < 0.001, 'Max Leistung wird nicht als harte lokale Grenze verwendet.', maxPowerOnly);
+  assert(Math.abs(maxPowerOnly.maxA - (11000 / 690)) < 0.001, 'Max Strom wird nicht aus der allein gesetzten Maximalleistung abgeleitet.', maxPowerOnly);
+  const maxCurrentOnly = resolveAcChargingLimits({ phases: 3, voltageV: 230, maxA: 16, defaultMaxA: 32, defaultMinA: 6, controlBasis: 'currentA' });
+  assert(Math.abs(maxCurrentOnly.maxPowerW - 11040) < 0.001, 'Maximalleistung wird nicht aus dem allein gesetzten Maximalstrom abgeleitet.', maxCurrentOnly);
+  const bothPowerTighter = resolveAcChargingLimits({ phases: 3, voltageV: 230, maxA: 32, maxPowerW: 11000, defaultMinA: 6, controlBasis: 'currentA' });
+  assert(Math.abs(bothPowerTighter.maxPowerW - 11000) < 0.001 && bothPowerTighter.maxLimitedBy === 'configured-power', 'Bei Strom und Leistung gewinnt nicht die strengere Leistungsgrenze.', bothPowerTighter);
+  const bothCurrentTighter = resolveAcChargingLimits({ phases: 3, voltageV: 230, maxA: 10, maxPowerW: 11000, defaultMinA: 6, controlBasis: 'currentA' });
+  assert(Math.abs(bothCurrentTighter.maxPowerW - 6900) < 0.001 && bothCurrentTighter.maxLimitedBy === 'configured-current', 'Bei Strom und Leistung gewinnt nicht die strengere Stromgrenze.', bothCurrentTighter);
 
   const noPv = computeMinPvAllocationW({
     minPowerW: 4200,
@@ -258,6 +298,20 @@ async function main() {
   });
   assert(purePlan.wallboxes[0].targetPowerW === 2000, 'Reine PV-Ladung ueberschreitet den priorisierten EVCS-Anteil.', purePlan.wallboxes[0]);
 
+  const pureNoPvPlan = buildFinalAllocation(allocationWallbox('pure_no_pv', 'pv', 8000, 1000), {
+    totalW: 11000,
+    purePvW: 0,
+    physicalPvW: 0,
+  });
+  assert(pureNoPvPlan.wallboxes[0].targetPowerW === 0, 'PV-only lädt trotz 0 W PV-Grant.', pureNoPvPlan.wallboxes[0]);
+
+  const offPlan = buildFinalAllocation(allocationWallbox('explicit_off', 'off', 11000, 1000), {
+    totalW: 11000,
+    purePvW: 11000,
+    physicalPvW: 11000,
+  });
+  assert(offPlan.wallboxes[0].targetPowerW === 0, 'Aus-Modus erzeugt trotz expliziter Abschaltung einen Sollwert.', offPlan.wallboxes[0]);
+
   const minPvPlan = buildFinalAllocation(allocationWallbox('minpv_priority_exempt', 'minpv', 8000, 4200), {
     totalW: 11000,
     purePvW: 2000,
@@ -279,6 +333,61 @@ async function main() {
     physicalPvW: 0,
   });
   assert(autoPlan.wallboxes[0].targetPowerW === 8000, 'Auto wird unzulaessig durch die PV-Prioritaet begrenzt.', autoPlan.wallboxes[0]);
+
+
+  // Boost darf als expliziter Kundenbefehl den maximal zulaessigen Sollwert
+  // vorladen, auch wenn ein optionaler Fahrzeugstatus noch keinen Bedarf meldet.
+  // Auto/PV/Min+PV bleiben dagegen fail-closed gegen Geisterladungen.
+  const boostPrearmedWb = allocationWallbox('boost_prearmed', 'boost', 11000, 1000);
+  boostPrearmedWb.vehiclePlugged = false;
+  boostPrearmedWb.vehicleDemandConfirmed = false;
+  boostPrearmedWb.boostPrearmAllowed = true;
+  const boostPrearmedPlan = buildFinalAllocation(boostPrearmedWb, {
+    totalW: 11000,
+    purePvW: 0,
+    physicalPvW: 0,
+  });
+  assert(boostPrearmedPlan.wallboxes[0].targetPowerW === 11000,
+    'Finaler TS-Guard setzt einen expliziten Boost ohne optionalen Fahrzeugnachweis auf 0.', boostPrearmedPlan.wallboxes[0]);
+
+  const boostHardCapPlan = buildFinalAllocation({ ...boostPrearmedWb, safe: 'boost_hard_cap', targetPowerW: 11000, targetCurrentA: 11000 / 690 }, {
+    totalW: 7000,
+    purePvW: 0,
+    physicalPvW: 0,
+  });
+  assert(boostHardCapPlan.wallboxes[0].targetPowerW === 7000,
+    'Boost überschreitet den harten Gesamt-/NVP-Grant oder wird unnötig auf 0 gesetzt.', boostHardCapPlan.wallboxes[0]);
+
+  const boostOfflineWb = { ...boostPrearmedWb, safe: 'boost_offline', online: false };
+  const boostOfflinePlan = buildFinalAllocation(boostOfflineWb, { totalW: 11000 });
+  assert(boostOfflinePlan.wallboxes[0].targetPowerW === 0,
+    'Boost darf eine offline Wallbox nicht mit positivem Sollwert behandeln.', boostOfflinePlan.wallboxes[0]);
+
+  const autoNoDemandWb = allocationWallbox('auto_no_demand', 'auto', 11000, 1000);
+  autoNoDemandWb.vehiclePlugged = false;
+  autoNoDemandWb.vehicleDemandConfirmed = false;
+  autoNoDemandWb.boostPrearmAllowed = false;
+  const autoNoDemandPlan = buildFinalAllocation(autoNoDemandWb, {
+    totalW: 11000,
+    purePvW: 0,
+    physicalPvW: 0,
+  });
+  assert(autoNoDemandPlan.wallboxes[0].targetPowerW === 0,
+    'Auto darf ohne bestaetigten Fahrzeugbedarf keinen positiven Sollwert vorladen.', autoNoDemandPlan.wallboxes[0]);
+
+  for (const mode of ['pv', 'minpv']) {
+    const noDemandWb = allocationWallbox(`${mode}_no_demand`, mode, mode === 'minpv' ? 4200 : 8000, mode === 'minpv' ? 4200 : 1000);
+    noDemandWb.vehiclePlugged = false;
+    noDemandWb.vehicleDemandConfirmed = false;
+    noDemandWb.boostPrearmAllowed = false;
+    const noDemandPlan = buildFinalAllocation(noDemandWb, {
+      totalW: 11000,
+      purePvW: 11000,
+      physicalPvW: 11000,
+    });
+    assert(noDemandPlan.wallboxes[0].targetPowerW === 0,
+      `${mode} darf ohne bestaetigten Fahrzeugbedarf keinen positiven Sollwert vorladen.`, noDemandPlan.wallboxes[0]);
+  }
 
   // Der Sofort-Tick muss mehrere UI-Writes zusammenfassen und darf nicht parallel
   // zu einem bereits laufenden EMS-Tick rechnen.
@@ -339,13 +448,19 @@ async function main() {
   assert(chargingSource.includes("chargingManagement.control.pvPriorityPurePvOnly"), 'Reine-PV-Prioritaetssemantik ist nicht diagnostizierbar.');
   assert(chargingSource.includes('pvPureAvailableW: pvCapW'), 'Reiner PV-Anteil wird nicht separat an den finalen Allocator uebergeben.');
   assert(chargingSource.includes('pvPhysicalAvailableW: pvPhysicalCapW'), 'Physikalischer Min+PV-PV-Rest fehlt im finalen Allocator.');
+  assert(chargingSource.includes('isChargingCommandDemandAllowed(effMode, w.vehicleDemandConfirmed)'), 'Boost wird im Runtime-Abschluss noch vom optionalen Fahrzeugbedarf auf 0 gesetzt.');
+  assert(chargingSource.includes('shouldPauseChargingForGoalSoc(effMode, w.goalEnabled, w.goalStatus)'), 'Zeit-Ziel-SoC-Warten kann Boost noch stoppen.');
+  assert(chargingSource.includes('minimumServicePlan.preserveAll && !isBoost'), 'Boost reserviert weiterhin Mindestleistung fuer spaetere Ladepunkte statt den maximalen Hard-Grant zu nutzen.');
+  assert(chargingSource.includes('applyChargingModeRamp(prevCmdA, cmdA, wbMaxDeltaA, effMode)'), 'Boost-Strom wird weiterhin durch die weiche Hochlauframpe verzoegert.');
+  assert(chargingSource.includes('applyChargingModeRamp(prevCmdW, cmdW, wbMaxDeltaW, effMode)'), 'Boost-Leistung wird weiterhin durch die weiche Hochlauframpe verzoegert.');
+  assert(chargingSource.includes('resolveAcChargingLimits({'), 'Strom- und Leistungsgrenzen werden in der Runtime nicht gemeinsam aufgelöst.');
   assert(coreLimitsSource.includes('applyEvcsAllocationCap === false'), 'Zentraler Budgetgrant kann Min+PV nicht vom reinen PV-Prioritaetscap trennen.');
   assert(engineSource.includes('requestImmediateTick(reason'), 'EMS-Engine besitzt keinen entprellten Sofort-Tick.');
   assert(mainSource.includes('_nwRequestImmediateEmsTick(`api:${id}`)'), 'API-Moduswechsel fordert keinen unmittelbaren EMS-Tick an.');
   assert(mainSource.includes('_nwRequestImmediateEmsTick(`state:${key}`)'), 'Externe ioBroker-Moduswrites fordern keinen unmittelbaren EMS-Tick an.');
   assert(appSource.includes('pendingMode = desired;') && appSource.includes('applyModeUi(desired);'), 'LIVE-Frontend zeigt den Moduswechsel nicht sofort lokal an.');
 
-  console.log('[charging-minpv-base-reaction] OK: Min+PV-Basis, reine PV-Prioritaet, zentrale Grants und schnelle Modusreaktion sind abgesichert.');
+  console.log('[charging-minpv-base-reaction] OK: Boost, Auto, Min+PV, PV und Aus sind inklusive Bedarfs-, Budget- und Rampenregeln abgesichert.');
 }
 
 main().catch((error) => fail(error && error.stack ? error.stack : String(error)));

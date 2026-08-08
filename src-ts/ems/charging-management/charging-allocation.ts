@@ -26,6 +26,8 @@ export interface ChargingAllocationWallboxInput {
   cfgEnabled?: unknown;
   userEnabled?: unknown;
   vehiclePlugged?: unknown;
+  vehicleDemandConfirmed?: unknown;
+  boostPrearmAllowed?: unknown;
   charging?: unknown;
   effectiveMode?: unknown;
   userMode?: unknown;
@@ -143,6 +145,8 @@ export interface ChargingAllocationWallboxPlan {
   enabled: boolean;
   online: boolean;
   connected: boolean;
+  demandConfirmed: boolean;
+  boostPrearmAllowed: boolean;
   charging: boolean;
   effectiveMode: string;
   userMode: string;
@@ -531,6 +535,20 @@ function normalizedChargingMode(wb: ChargingAllocationWallboxPlan): NativeChargi
   return 'auto';
 }
 
+/**
+ * Boost darf als expliziter Kundenbefehl einen positiven Sollwert vorladen,
+ * obwohl ein optionaler Fahrzeug-/Ladebedarfsnachweis noch fehlt. Die physische
+ * Ladefreigabe bleibt bei Wallbox und Fahrzeug; alle harten EMS-Grenzen werden
+ * weiterhin im finalen Allocation-Guard erzwungen.
+ */
+function modeAllowsPrearmedSetpoint(wb: ChargingAllocationWallboxPlan): boolean {
+  return normalizedChargingMode(wb) === 'boost' && wb.boostPrearmAllowed !== false;
+}
+
+function commandDemandAllowed(wb: ChargingAllocationWallboxPlan): boolean {
+  return wb.demandConfirmed || modeAllowsPrearmedSetpoint(wb);
+}
+
 function floorToPositiveStep(value: number, step: number): number {
   if (!(value > 0)) return 0;
   if (!(step > 0)) return value;
@@ -634,7 +652,8 @@ function effectiveNativeBudgetW(input: ChargingAllocationRuntimeInput, candidate
 
 function isChargingCandidate(wb: ChargingAllocationWallboxPlan): boolean {
   const mode = normalizedChargingMode(wb);
-  if (!wb.enabled || !wb.online || !wb.connected) return false;
+  if (!wb.enabled || !wb.online) return false;
+  if (!commandDemandAllowed(wb)) return false;
   if (!wb.hasSetpoint) return false;
   if (mode === 'off') return false;
   if (wb.phaseSwitchRequired || wb.phaseSwitchSafetyStopRequired) return false;
@@ -778,7 +797,7 @@ function applyFinalAllocationSafetyGuards(
 
     const canRun = wallbox.enabled
       && wallbox.online
-      && wallbox.connected
+      && commandDemandAllowed(wallbox)
       && wallbox.hasSetpoint
       && mode !== 'off'
       && !wallbox.phaseSwitchRequired
@@ -1194,7 +1213,7 @@ function applyTsNativeAllocationPlan(plannedRaw: ChargingAllocationWallboxPlan[]
     let blocked = false;
     if (!wb.online) { blocked = true; reason = 'offline'; }
     else if (!wb.enabled) { blocked = false; reason = 'control_disabled'; }
-    else if (!wb.connected) { blocked = false; reason = 'not_connected'; }
+    else if (!commandDemandAllowed(wb)) { blocked = false; reason = 'no_vehicle_demand'; }
     else if (!wb.hasSetpoint) { blocked = true; reason = 'missing-wallbox-setpoint'; }
     else if (wb.requestedPowerW <= 0 && reason === 'no-demand') { reason = wb.reason || 'no-demand'; }
 
@@ -1230,11 +1249,24 @@ function normalizeWallboxPlan(
   const name = str(wallbox.name ?? (allocation ? allocation.name : null), safe);
   const enabled = boolValue(wallbox.enabled, boolValue(allocation ? allocation.enabled : undefined, false));
   const online = boolValue(wallbox.online, boolValue(allocation ? allocation.online : undefined, false));
-  // A missing vehicle/plug signal is fail-closed. Merely being configured or
-  // online must never create a charging target or reserve central EMS budget.
-  const connected = boolValue(wallbox.vehiclePlugged, false);
   const charging = boolValue(wallbox.charging, boolValue(allocation ? allocation.charging : undefined, false));
   const effectiveMode = str(allocation ? allocation.effectiveMode : undefined, str(wallbox.effectiveMode, str(wallbox.userMode, str(input.mode, 'unknown'))));
+  // Physischer Anschluss und fachlich bestätigter Ladebedarf sind zwei getrennte
+  // Signale. Das verhindert, dass ein bewusst vorgerüsteter Boost in der UI als
+  // angeschlossenes Fahrzeug erscheint. Für ältere Aufrufer bleibt der echte
+  // Plug-Status ein konservativer Demand-Fallback.
+  const connected = boolValue(
+    wallbox.vehiclePlugged,
+    boolValue(allocation ? allocation.vehiclePlugged : undefined, false),
+  );
+  const demandConfirmed = boolValue(
+    wallbox.vehicleDemandConfirmed,
+    boolValue(allocation ? allocation.vehicleDemandConfirmed : undefined, connected),
+  );
+  const boostPrearmAllowed = boolValue(
+    wallbox.boostPrearmAllowed,
+    boolValue(allocation ? allocation.boostPrearmAllowed : undefined, effectiveMode.trim().toLowerCase() === 'boost'),
+  );
   const userMode = str(wallbox.userMode, str(allocation ? allocation.userMode : undefined, ''));
   const chargerType = str(wallbox.chargerType ?? (allocation ? allocation.chargerType : null), 'ac').toLowerCase();
   const controlBasisRaw = str(wallbox.controlBasis ?? (allocation ? allocation.controlBasis : null), 'power').toLowerCase();
@@ -1283,6 +1315,8 @@ function normalizeWallboxPlan(
     enabled,
     online,
     connected,
+    demandConfirmed,
+    boostPrearmAllowed,
     charging,
     effectiveMode,
     userMode,

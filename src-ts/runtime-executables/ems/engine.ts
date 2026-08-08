@@ -591,7 +591,12 @@ class EmsEngine {
       let controlBasis = 'auto';
       if (controlPreference === 'currenta' || controlPreference === 'a' || controlPreference === 'current') controlBasis = 'currentA';
       else if (controlPreference === 'powerw' || controlPreference === 'w' || controlPreference === 'power') controlBasis = 'powerW';
-      else if (controlPreference === 'none' || controlPreference === 'off') controlBasis = 'none';
+      else if (controlPreference === 'none' || controlPreference === 'off') {
+        // `Aktiv (Regelung)` ist die einzige bewusste Deaktivierung. Alte
+        // controlPreference=none-Eintraege duerfen einen vorhandenen Sollwert-DP
+        // nicht unsichtbar machen und die Infrastruktur faelschlich auf 0 W setzen.
+        controlBasis = (setCurrentAId || setPowerWId) ? 'auto' : 'none';
+      }
 
       const minA = (Number.isFinite(Number(wb.minCurrentA)) ? Number(wb.minCurrentA) : 0);
       const maxA = (Number.isFinite(Number(wb.maxCurrentA)) ? Number(wb.maxCurrentA) : 0);

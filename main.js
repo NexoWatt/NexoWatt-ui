@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:550256f13f53206daf508ef7967750c05116967b769929202a807eb5208a16b9
+ * Quell-Hash: sha256:a0911f925530639c8edcfd4fe8d3e47663c76f62e364dd553c8ad25918316d32
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -8068,7 +8068,11 @@ class NexoWattVis extends utils.Adapter {
       const chargerType = (row && typeof row.chargerType === 'string' && row.chargerType.trim()) ? row.chargerType.trim() : 'ac';
       const phases = (row && row.phases !== undefined && row.phases !== null && String(row.phases).trim() !== '' && Number.isFinite(Number(row.phases))) ? Math.max(1, Math.min(3, Math.round(Number(row.phases)))) : 3;
       const voltageV = (row && row.voltageV !== undefined && row.voltageV !== null && String(row.voltageV).trim() !== '' && Number.isFinite(Number(row.voltageV))) ? Math.round(Number(row.voltageV)) : 230;
-      const controlPreference = (row && typeof row.controlPreference === 'string' && row.controlPreference.trim()) ? row.controlPreference.trim() : 'auto';
+      const controlPreferenceRaw = (row && typeof row.controlPreference === 'string' && row.controlPreference.trim()) ? row.controlPreference.trim() : 'auto';
+      const controlPreferenceToken = controlPreferenceRaw.toLowerCase();
+      const controlPreference = ((controlPreferenceToken === 'none' || controlPreferenceToken === 'off') && (setCurrentAId || setPowerWId))
+        ? 'auto'
+        : controlPreferenceRaw;
       const minCurrentA = (row && row.minCurrentA !== undefined && row.minCurrentA !== null && String(row.minCurrentA).trim() !== '' && Number.isFinite(Number(row.minCurrentA))) ? Number(row.minCurrentA) : 0;
       const maxCurrentA = (row && row.maxCurrentA !== undefined && row.maxCurrentA !== null && String(row.maxCurrentA).trim() !== '' && Number.isFinite(Number(row.maxCurrentA))) ? Number(row.maxCurrentA) : 0;
       const maxPowerW = (row && row.maxPowerW !== undefined && row.maxPowerW !== null && String(row.maxPowerW).trim() !== '' && Number.isFinite(Number(row.maxPowerW))) ? Number(row.maxPowerW) : 0;

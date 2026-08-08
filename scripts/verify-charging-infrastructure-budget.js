@@ -21,6 +21,10 @@ const {
 const {
   computeChargingMinimumServicePlan,
 } = require(path.join(root, 'ems/modules/charging-management'));
+const {
+  resolveAcChargingLimits,
+  deriveChargingConnectorCapacityW,
+} = require(path.join(root, 'ems/charging-budget-helpers'));
 
 function connector(index, options = {}) {
   return {
@@ -80,12 +84,59 @@ function buildEngineConfig({ wallboxes, stationGroups = [], chargingManagement =
   assert.strictEqual(cfg.staticMaxChargingPowerW, 44000);
 }
 
+// Alte controlPreference=none/off-Einträge dürfen einen vorhandenen
+// Sollwert-DP nicht länger als versteckte Deaktivierung behandeln. Die sichtbare
+// Checkbox "Aktiv (Regelung)" bleibt der einzige Abschalter.
+{
+  const wallboxes = [connector(1, { controlPreference: 'none' })];
+  const cfg = buildEngineConfig({ wallboxes, ratedKw: 11 });
+  assert.strictEqual(cfg.infrastructureWallboxCount, 1);
+  assert.strictEqual(cfg.infrastructureCapacityW, 11040);
+  assert.notStrictEqual(cfg.wallboxes[0].controlBasis, 'none');
+}
+
+// AppCenter-Maximalstrom und -Maximalleistung sind gleichwertige lokale
+// Obergrenzen. Bei beiden Angaben gilt die strengere; bei nur einer Angabe wird
+// die jeweils andere Größe sauber abgeleitet.
+{
+  const powerOnly = resolveAcChargingLimits({ phases: 3, voltageV: 230, maxPowerW: 11000, defaultMaxA: 32, defaultMinA: 6, controlBasis: 'currentA' });
+  assert.strictEqual(Math.round(powerOnly.maxPowerW), 11000);
+  assert(Math.abs(powerOnly.maxA - (11000 / 690)) < 0.001);
+
+  const currentOnly = resolveAcChargingLimits({ phases: 3, voltageV: 230, maxA: 16, defaultMaxA: 32, defaultMinA: 6, controlBasis: 'currentA' });
+  assert.strictEqual(Math.round(currentOnly.maxPowerW), 11040);
+
+  const powerTighter = deriveChargingConnectorCapacityW({
+    enabled: true,
+    chargerType: 'ac',
+    controlBasis: 'currentA',
+    setCurrentAId: 'test.lp.setA',
+    phases: 3,
+    voltageV: 230,
+    maxA: 32,
+    maxPowerW: 11000,
+  }, 22000);
+  assert.strictEqual(powerTighter, 11000, 'Infrastruktur ignoriert die strengere Maximalleistung.');
+
+  const currentTighter = deriveChargingConnectorCapacityW({
+    enabled: true,
+    chargerType: 'ac',
+    controlBasis: 'currentA',
+    setCurrentAId: 'test.lp.setA',
+    phases: 3,
+    voltageV: 230,
+    maxA: 10,
+    maxPowerW: 11000,
+  }, 22000);
+  assert.strictEqual(currentTighter, 6900, 'Infrastruktur ignoriert den strengeren Maximalstrom.');
+}
+
 // Zwei 22-kW-Ports teilen sich eine 22-kW-Station; zwei weitere 11-kW-Ports
 // bleiben unabhängig. Roh = 66 kW, wirksam = 44 kW.
 {
   const wallboxes = [
-    connector(1, { maxPowerW: 22000, stationKey: 'station_a', setPowerWId: 'test.lp1.setW', setCurrentAId: false }),
-    connector(2, { maxPowerW: 22000, stationKey: 'station_a', setPowerWId: 'test.lp2.setW', setCurrentAId: false }),
+    connector(1, { maxCurrentA: 32, maxPowerW: 22000, stationKey: 'station_a', setPowerWId: 'test.lp1.setW', setCurrentAId: false }),
+    connector(2, { maxCurrentA: 32, maxPowerW: 22000, stationKey: 'station_a', setPowerWId: 'test.lp2.setW', setCurrentAId: false }),
     connector(3, { maxPowerW: 11000, setPowerWId: 'test.lp3.setW', setCurrentAId: false }),
     connector(4, { maxPowerW: 11000, setPowerWId: 'test.lp4.setW', setCurrentAId: false }),
   ];
@@ -131,8 +182,10 @@ function simulateMinimumFirst(wallboxes, budgetW, stationCaps = new Map()) {
   const stationRemaining = new Map(stationCaps);
   const targets = [];
   for (const wallbox of wallboxes) {
-    const futureW = plan.preserveAll ? (plan.futureMinimumBySafe.get(wallbox.safe) || 0) : 0;
-    const futureStationW = plan.preserveAll ? (plan.futureStationMinimumBySafe.get(wallbox.safe) || 0) : 0;
+    const isBoost = String(wallbox.effectiveMode || '').toLowerCase() === 'boost';
+    const preserveFutureMinimum = plan.preserveAll && !isBoost;
+    const futureW = preserveFutureMinimum ? (plan.futureMinimumBySafe.get(wallbox.safe) || 0) : 0;
+    const futureStationW = preserveFutureMinimum ? (plan.futureStationMinimumBySafe.get(wallbox.safe) || 0) : 0;
     const totalAvailW = Math.max(0, remainingW - futureW);
     const stationAvailRawW = wallbox.stationKey && stationRemaining.has(wallbox.stationKey)
       ? stationRemaining.get(wallbox.stationKey)
@@ -152,8 +205,9 @@ function simulateMinimumFirst(wallboxes, budgetW, stationCaps = new Map()) {
 }
 
 // Feldszenario: 40-kW-NVP, ca. 5,6-kW-Grundlast => rund 34,4 kW EVCS-Headroom.
-// Vier verbundene Ladepunkte müssen dann alle mindestens 6 A erhalten; Boost
-// darf Zusatzleistung bekommen, aber keinen späteren Min+PV-Punkt abschalten.
+// Vier verbundene Ladepunkte: Boost erhält zuerst seine volle lokale Leistung.
+// Reicht der verbleibende harte Grant danach noch für die anderen technischen
+// Minima, bleiben diese ebenfalls aktiv.
 {
   const wallboxes = [
     normalizedWallbox('lp1', 'boost'),
@@ -165,13 +219,16 @@ function simulateMinimumFirst(wallboxes, budgetW, stationCaps = new Map()) {
   assert.strictEqual(plan.preserveAll, true);
   assert.strictEqual(plan.totalMinimumW, 16560);
   assert.strictEqual(targets.reduce((sum, value) => sum + value, 0), 34400);
+  assert.strictEqual(targets[0], 11040, 'Boost erreicht trotz ausreichendem Hard-Grant nicht die konfigurierte Ladepunktleistung.');
   for (const targetW of targets) {
     assert(targetW >= 4140, `Ladepunkt wurde trotz ausreichendem NVP-Budget abgeschaltet: ${targets.join(', ')}`);
   }
 }
 
-// Stationslimits bleiben gleichzeitig verbindlich. Reicht die Station für beide
-// Minima, müssen beide Ports aktiv bleiben; Zusatzleistung bleibt unter dem Cap.
+// Stationslimits bleiben gleichzeitig verbindlich. Boost nutzt innerhalb der
+// gemeinsamen Station zuerst den maximal zulässigen Stationsgrant; ein weiterer
+// Port derselben Station bleibt dann bei 0, während ein unabhängiger Port sein
+// verbleibendes Gesamtbudget erhält.
 {
   const wallboxes = [
     normalizedWallbox('station_lp1', 'boost', 'station_a', 9000),
@@ -181,9 +238,27 @@ function simulateMinimumFirst(wallboxes, budgetW, stationCaps = new Map()) {
   const stationCaps = new Map([['station_a', 9000]]);
   const { plan, targets } = simulateMinimumFirst(wallboxes, 20000, stationCaps);
   assert.strictEqual(plan.preserveAll, true);
-  assert(targets.every((targetW) => targetW >= 4140), `Nicht alle technisch versorgbaren Ladepunkte laufen: ${targets.join(', ')}`);
+  assert.strictEqual(targets[0], 9000, `Boost nutzt das Stationslimit nicht vollständig: ${targets.join(', ')}`);
+  assert.strictEqual(targets[1], 0, `Niedriger priorisierter Port überschreitet das bereits von Boost belegte Stationslimit: ${targets.join(', ')}`);
+  assert(targets[2] >= 4140, `Unabhängiger Ladepunkt verliert trotz Restbudget seine Mindestversorgung: ${targets.join(', ')}`);
   assert(targets[0] + targets[1] <= 9000, 'Stationslimit wurde überschritten.');
   assert(targets.reduce((sum, value) => sum + value, 0) <= 20000, 'Gesamtbudget wurde überschritten.');
+}
+
+// Aus und reines PV-Laden dürfen keine Netz-/Mindestreservierung erhalten.
+{
+  const plan = computeChargingMinimumServicePlan({
+    totalBudgetW: 11000,
+    wallboxes: [
+      normalizedWallbox('off_lp', 'off'),
+      normalizedWallbox('pv_lp', 'pv'),
+      normalizedWallbox('auto_lp', 'auto'),
+    ],
+  });
+  assert.strictEqual(plan.eligibleCount, 1);
+  assert.strictEqual(plan.minimumBySafe.get('off_lp'), 0);
+  assert.strictEqual(plan.minimumBySafe.get('pv_lp'), 0);
+  assert.strictEqual(plan.minimumBySafe.get('auto_lp'), 4140);
 }
 
 // Ist das sichere Budget kleiner als die Summe aller Minima, darf keine
@@ -207,7 +282,10 @@ function simulateMinimumFirst(wallboxes, budgetW, stationCaps = new Map()) {
   assert(chargingSource.includes('const fairTotalAvailW = Number.isFinite(totalAvailW)'));
   assert(chargingSource.includes('totalAvailableW: fairTotalAvailW'));
   assert(chargingSource.includes('minimumServicePreserved'));
+  assert(chargingSource.includes('minimumServicePlan.preserveAll && !isBoost'), 'Boost bewahrt weiterhin spätere Mindestreservierungen und erreicht dadurch nicht seinen maximalen Hard-Grant.');
+  assert(chargingSource.includes('resolveAcChargingLimits({'), 'Produktive Runtime löst Maximalstrom und Maximalleistung nicht gemeinsam auf.');
   assert(engineSource.includes('computeChargingInfrastructureCapacity'));
+  assert(engineSource.includes("controlBasis = (setCurrentAId || setPowerWId) ? 'auto' : 'none'"), 'Legacy controlPreference=none wird trotz Sollwert-DP weiterhin als nicht steuerbar gezählt.');
   assert(engineSource.includes('staticMaxChargingPowerW: infrastructureCapacityW'));
 }
 

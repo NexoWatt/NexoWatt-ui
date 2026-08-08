@@ -1,3 +1,14 @@
+## 0.8.161 - 2026-08-08
+
+- Boost-Laden gegen den Feldfehler „nach etwa 10 Sekunden wieder 0 A“ gehärtet: Der explizite Kundenmodus darf den bereits durch alle harten Grenzen begrenzten Maximalwert auch ohne optionalen Fahrzeug-/Ladebedarf-Datenpunkt vorgeben.
+- Der finale TypeScript-Allocator und sein Abschluss-Guard verwenden denselben Vertrag. Auto, PV und Min+PV bleiben ohne bestätigten Ladebedarf sicher auf 0; nur Boost besitzt die bewusste Vorlade-Ausnahme.
+- Zeit-Ziel-Laden, SoC-Warten und Tarif-/PV-Optimierung können Boost nicht mehr nachträglich stoppen oder begrenzen. Netzanschluss, Stationslimit, Phasenlimit, §14a, Peak-Shaving, Offline/Fault und die lokale Ladepunktgrenze bleiben weiterhin verbindlich.
+- Boost umgeht die weiche Hochlauframpe und fährt den zulässigen Strom-/Leistungssollwert sofort an. Ramp-down und alle Safety-Stopps bleiben unverzögert.
+- In Mehrladepunktanlagen besitzt Boost Vorrang vor weichen Mindestreservierungen späterer Ladepunkte. Innerhalb einer gemeinsamen Station bleibt deren harte Gesamtgrenze strikt erhalten.
+- Alte `controlPreference=none/off`-Konfigurationen mit vorhandenem Sollstrom- oder Sollleistungs-DP werden in Runtime, Infrastruktur-Budget und AppCenter automatisch auf `auto` normalisiert. Die Checkbox „Aktiv (Regelung)“ ist der einzige bewusste Abschalter.
+- Regressionen prüfen Boost, Auto, Min+PV, PV und Aus, fehlenden Ladebedarfsnachweis, Ziel-SoC-Warten, Rampenverhalten, Gesamt-/Stationsbudget, Mehrladepunktpriorität sowie produktive TypeScript-Allocation und Write-Plan.
+- Service-Worker-Cache auf `nexowatt-cache-v461` und zentrale Versionskennungen auf 0.8.161 aktualisiert.
+
 ## 0.8.160 - 2026-08-08
 
 - FENECON-Konfigurationsblockade behoben: Das Feld **„FENECON FEMS-NVP-Ziel“** ist in `Automatisch` und `Direkte ESS-Leistung` optional und darf leer bleiben.

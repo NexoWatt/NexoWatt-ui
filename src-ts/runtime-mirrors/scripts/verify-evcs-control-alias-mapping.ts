@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 678733744284057c1f6e34a1ccda6e32c26a29b39f63cbba194c649815f83e97
+ * Original-Hash: 753fc2932d8b4ddc66e377e83be4cab457e39be534045ec35669de7b4051b984
  */
 
 /**
@@ -132,6 +132,15 @@ const {
   assert.strictEqual(String(missing.row.setCurrentAId || ''), '');
   assert.strictEqual(String(missing.row.setPowerWId || ''), '');
 
+  const legacyNone = await resolveEvcsControlMapping({
+    powerId: `${base}.aliases.r.power`,
+    setCurrentAId: `${base}.aliases.ctrl.targetCurrentA`,
+    controlPreference: 'none',
+  }, async (id) => existing.has(id));
+  assert.strictEqual(legacyNone.changed, true, 'Legacy-none-Migration wird nicht als Konfigurationsänderung gemeldet.');
+  assert.strictEqual(legacyNone.preferenceMigrated, true);
+  assert.strictEqual(legacyNone.row.controlPreference, 'auto', 'Vorhandener Sollwert-DP bleibt durch controlPreference=none versteckt deaktiviert.');
+
   const wallboxes = [1, 2, 3, 4].map((index) => ({
     enabled: true,
     controlBasis: 'currentA',
@@ -235,9 +244,23 @@ const {
   const mainRuntime = require('fs').readFileSync(path.join(root, 'main.js'), 'utf8');
   const appCenterRuntime = require('fs').readFileSync(path.join(root, 'www/ems-apps.js'), 'utf8');
   assert(mainRuntime.includes("require('./ems/evcs-control-mapping')"), 'Adapterstart bindet die feldkompatible Mapping-Auflösung nicht ein.');
-  assert(mainRuntime.includes("aliases['ctrl.targetCurrentA']"), 'Backend-Geräteerkennung kennt targetCurrentA nicht.');
-  assert(appCenterRuntime.includes("_nwGetAlias(dev, 'ctrl.targetCurrentA')"), 'AppCenter-Schnellerkennung kennt targetCurrentA nicht.');
-  assert(appCenterRuntime.includes("_nwGetAlias(dev, 'ctrl.targetPowerW')"), 'AppCenter-Schnellerkennung kennt targetPowerW nicht.');
+  assert(
+    mainRuntime.includes("writeAlias('ctrl.currentLimitA', 'ctrl.targetCurrentA', 'ctrl.setCurrentA')")
+      || mainRuntime.includes("aliases['ctrl.targetCurrentA']"),
+    'Backend-Geräteerkennung kennt targetCurrentA nicht.',
+  );
+  assert(
+    appCenterRuntime.includes("_nwGetWritableAlias(dev, 'ctrl.targetCurrentA')")
+      || appCenterRuntime.includes("_nwGetAlias(dev, 'ctrl.targetCurrentA')"),
+    'AppCenter-Schnellerkennung kennt targetCurrentA nicht.',
+  );
+  assert(
+    appCenterRuntime.includes("_nwGetWritableAlias(dev, 'ctrl.targetPowerW')")
+      || appCenterRuntime.includes("_nwGetAlias(dev, 'ctrl.targetPowerW')"),
+    'AppCenter-Schnellerkennung kennt targetPowerW nicht.',
+  );
+  assert(!appCenterRuntime.includes('<option value="none">none</option>'), 'AppCenter bietet den versteckten zweiten Ladepunkt-Abschalter weiterhin an.');
+  assert(mainRuntime.includes("controlPreferenceToken === 'none' || controlPreferenceToken === 'off'"), 'Backend migriert alte controlPreference=none/off-Konfigurationen nicht.');
 
   console.log('[evcs-control-alias-mapping] OK: Target-Aliase werden sicher aufgelöst und als echte EVCS-Schreibpfade verwendet.');
 })().catch((error) => {

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 6f44697d785408dbc5776225fe5a48129e5d23c5f987ccc07e764c522f433567
+ * Original-Hash: fdd4ed0ec905711311e90750bcaa74ece13fc00a77d0bf98b0177431fbc7b0a2
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/evcs-control-mapping.ts
- * Quell-Hash: sha256:c098a9adb23aa6db3bcec0fe9c5bc0276bc8e2f6b637365484cae121c5c4ccf7
+ * Quell-Hash: sha256:25bd882ba8b622b50198b83e9ebe4fd90db954f5c2ef0a9da8e59bf3ccb993a7
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -226,19 +226,30 @@ async function resolveEvcsControlMapping() {
     // Ist nur eine numerische Sollwertart vorhanden, wird die Auswahl explizit.
     // Bei zwei Sollwerten bleibt `auto`; AC bevorzugt dann weiterhin Strom.
     const preference = Function.prototype.apply.call(text, null, [out.controlPreference]).toLowerCase();
-    if (!preference || preference === 'auto') {
-        if (Function.prototype.apply.call(text, null, [out.setPowerWId])
-            && !Function.prototype.apply.call(text, null, [out.setCurrentAId])) out.controlPreference = 'powerW';
-        else if (Function.prototype.apply.call(text, null, [out.setCurrentAId])
-            && !Function.prototype.apply.call(text, null, [out.setPowerWId])) out.controlPreference = 'currentA';
+    const hasCurrentTarget = !!Function.prototype.apply.call(text, null, [out.setCurrentAId]);
+    const hasPowerTarget = !!Function.prototype.apply.call(text, null, [out.setPowerWId]);
+    let preferenceMigrated = false;
+    if (preference === 'none' || preference === 'off') {
+        // Alte Versionen boten `none` als zweiten, versteckten Abschalter an.
+        // Sobald ein echter Sollwert-DP vorhanden ist, wird dieser Altwert auf
+        // `auto` migriert. Die bewusste Deaktivierung erfolgt ausschließlich
+        // über `enabled` / „Aktiv (Regelung)“.
+        if (hasCurrentTarget || hasPowerTarget) {
+            out.controlPreference = 'auto';
+            preferenceMigrated = true;
+        }
+    } else if (!preference || preference === 'auto') {
+        if (hasPowerTarget && !hasCurrentTarget) out.controlPreference = 'powerW';
+        else if (hasCurrentTarget && !hasPowerTarget) out.controlPreference = 'currentA';
     }
 
     return {
         row: out,
-        changed: inferredCurrent || inferredPower || inferredEnable,
+        changed: inferredCurrent || inferredPower || inferredEnable || preferenceMigrated,
         inferredCurrent,
         inferredPower,
         inferredEnable,
+        preferenceMigrated,
         baseId: usedBaseId || baseIds[0] || '',
     };
 }
