@@ -18,7 +18,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0729637670b28a0d2358192ec940b57ae108bfdd82f526cd684981fba3d30627
+ * Original-Hash: 407648d67d4fe33c2aefe686951e80fb3a706a5f01a8ee32b72f3a8e87d30984
  */
 
 /**
@@ -1378,8 +1378,8 @@ interface EmsAppsWindow extends Window {
     { key: 'maxDischargeObjectId', label: 'Max Entladeleistung (W)', requiredModes: ['limits'] },
     { key: 'chargeEnableObjectId', label: 'Laden erlaubt (bool)', requiredModes: ['enableFlags'] },
     { key: 'dischargeEnableObjectId', label: 'Entladen erlaubt (bool)', requiredModes: ['enableFlags'] },
-    { key: 'e3dcSetPowerModeObjectId', label: 'E3/DC EMS.SET_POWER_MODE', requiredModes: ['targetPower'], showForVendor: ['e3dc-rscp'], hint: 'ioBroker.e3dc-rscp: Zahlenmodus 0=NORMAL, 1=IDLE, 2=DISCHARGE, 3=CHARGE, 4=GRID_CHARGE. Dieser DP ist zusammen mit SET_POWER_VALUE der bevorzugte E3/DC-Schreibpfad.' },
-    { key: 'e3dcSetPowerValueObjectId', label: 'E3/DC EMS.SET_POWER_VALUE (W)', requiredModes: ['targetPower'], showForVendor: ['e3dc-rscp'], hint: 'ioBroker.e3dc-rscp: positive Absolutleistung in Watt passend zum SET_POWER_MODE.' },
+    { key: 'e3dcSetPowerModeObjectId', label: 'E3/DC EMS.SET_POWER_MODE', requiredModes: ['targetPower'], showForVendor: ['e3dc-rscp'], hint: 'E3/DC-RSCP-Adapter: Zahlenmodus 0=NORMAL, 1=IDLE, 2=DISCHARGE, 3=CHARGE, 4=GRID_CHARGE. Dieser DP ist zusammen mit SET_POWER_VALUE der bevorzugte E3/DC-Schreibpfad.' },
+    { key: 'e3dcSetPowerValueObjectId', label: 'E3/DC EMS.SET_POWER_VALUE (W)', requiredModes: ['targetPower'], showForVendor: ['e3dc-rscp'], hint: 'E3/DC-RSCP-Adapter: positive Absolutleistung in Watt passend zum SET_POWER_MODE.' },
     { key: 'e3dcPowerLimitsUsedObjectId', label: 'E3/DC EMS.POWER_LIMITS_USED (optional)', requiredModes: [], showForVendor: ['e3dc-rscp'], hint: 'Optional: wird nur geschrieben, wenn „PowerLimits automatisch setzen“ aktiv ist.' },
     { key: 'e3dcMaxChargePowerObjectId', label: 'E3/DC EMS.MAX_CHARGE_POWER (optional)', requiredModes: [], showForVendor: ['e3dc-rscp'], hint: 'Optional: Ladeleistungsgrenze fuer E3/DC RSCP PowerLimits.' },
     { key: 'e3dcMaxDischargePowerObjectId', label: 'E3/DC EMS.MAX_DISCHARGE_POWER (optional)', requiredModes: [], showForVendor: ['e3dc-rscp'], hint: 'Optional: Entladeleistungsgrenze fuer E3/DC RSCP PowerLimits.' },
@@ -2501,7 +2501,7 @@ function collectAiAdvisorConfigFromUI(base) {
       <div class="nw-config-card__header">
         <div>
           <div class="nw-config-card__title">System &amp; Marktprofil</div>
-          <div class="nw-config-card__subtitle">Installer-Einstellung. Die UI-Sprache wird automatisch aus der ioBroker-Systemsprache übernommen.</div>
+          <div class="nw-config-card__subtitle">Installer-Einstellung. Die UI-Sprache wird automatisch aus der NexoWatt-EOS-Systemsprache übernommen.</div>
         </div>
       </div>
       <div class="nw-config-card__body">
@@ -2517,7 +2517,7 @@ function collectAiAdvisorConfigFromUI(base) {
           <label class="nw-config-field">
             <span class="nw-config-label">Sprache</span>
             <input class="nw-config-input" id="countryProfileLanguageDisplay" type="text" readonly />
-            <small>Quelle: ioBroker <code>system.config.common.language</code>. Keine Kundeneinstellung im Frontend.</small>
+            <small>Quelle: NexoWatt EOS Systemeinstellung. Keine Kundeneinstellung im Frontend.</small>
           </label>
         </div>
         <div class="nw-config-separator" style="margin:14px 0 10px;"></div>
@@ -2559,7 +2559,7 @@ function collectAiAdvisorConfigFromUI(base) {
     const app = currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps && currentConfig.emsApps.apps.nlP1 ? currentConfig.emsApps.apps.nlP1 : null;
     const enabled = cfg.enabled === true || !!(app && app.installed && app.enabled);
     const disabledNote = country === 'NL'
-      ? 'NL aktiv: P1/DSMR-Datenpunkte können aus einem vorhandenen ioBroker-Adapter oder aus NexoWatt-Devices gemappt werden.'
+      ? 'NL aktiv: P1/DSMR-Datenpunkte können aus einem vorhandenen Geräteadapter oder aus NexoWatt Devices gemappt werden.'
       : 'Länderprofil ist DE. P1/DSMR kann für Tests gemappt werden, läuft aber fachlich als NL-Modul.';
     card.innerHTML = `
       <div class="nw-config-card__header">
@@ -2710,7 +2710,7 @@ function collectAiAdvisorConfigFromUI(base) {
             <label class="nw-config-field"><span class="nw-config-label">Stations-ID</span><input class="nw-config-input" data-ck-field="id" value="${_chargeKioskHtmlEscape(id)}" placeholder="dc_station_01" /></label>
             <label class="nw-config-field"><span class="nw-config-label">Name am Display</span><input class="nw-config-input" data-ck-field="name" value="${_chargeKioskHtmlEscape(name)}" placeholder="DC Ladestation 01" /></label>
             <label class="nw-config-field"><span class="nw-config-label">Typ</span><select class="nw-config-input" data-ck-field="type"><option value="dc" ${type === 'dc' ? 'selected' : ''}>DC</option><option value="ac" ${type === 'ac' ? 'selected' : ''}>AC</option></select></label>
-            <label class="nw-config-field"><span class="nw-config-label">Steuerbrücke</span><select class="nw-config-input" data-ck-field="controlBridge"><option value="charging-management" ${controlBridge === 'charging-management' || controlBridge === 'ems-intent' ? 'selected' : ''}>Herstelleroffen über NexoWatt EMS</option><option value="generic" ${controlBridge === 'generic' ? 'selected' : ''}>Generischer JSON-Command-State</option><option value="readonly" ${controlBridge === 'readonly' ? 'selected' : ''}>Nur Anzeige</option></select><small>Kein OCPP-Zwang: OCPP, Modbus, MQTT, REST und Herstelleradapter laufen über LP-Mapping oder den optionalen Command-State.</small></label>
+            <label class="nw-config-field"><span class="nw-config-label">Steuerbrücke</span><select class="nw-config-input" data-ck-field="controlBridge"><option value="charging-management" ${controlBridge === 'charging-management' || controlBridge === 'ems-intent' ? 'selected' : ''}>Herstelleroffen über NexoWatt EOS</option><option value="generic" ${controlBridge === 'generic' ? 'selected' : ''}>Generischer JSON-Command-State</option><option value="readonly" ${controlBridge === 'readonly' ? 'selected' : ''}>Nur Anzeige</option></select><small>Kein OCPP-Zwang: OCPP, Modbus, MQTT, REST und Herstelleradapter laufen über LP-Mapping oder den optionalen Command-State.</small></label>
             <label class="nw-config-field"><span class="nw-config-label">Command-State optional</span><input class="nw-config-input" data-ck-field="commandStateId" value="${_chargeKioskHtmlEscape(commandStateId)}" placeholder="0_userdata.0.nexowatt.dc.command" /><small>Nur für generische Brücken. Platzhalter möglich: {stationId}, {lp}.</small></label>
             <label class="nw-config-field"><span class="nw-config-label">Protokoll-/Hersteller-Hinweis</span><input class="nw-config-input" data-ck-field="protocolHint" value="${_chargeKioskHtmlEscape(protocolHint)}" placeholder="OCPP / Modbus / MQTT / Herstelleradapter" /><small>Nur Hinweis/Diagnose. Die Display-Logik bleibt herstelleroffen.</small></label>
             <label class="nw-config-field"><span class="nw-config-label">Display-Token</span><input class="nw-config-input" data-ck-field="token" value="${_chargeKioskHtmlEscape(token)}" placeholder="ST-XXXX-XXXX" /></label>
@@ -15014,7 +15014,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     const hint = document.createElement('div');
     hint.className = 'nw-config-help nw-shadow-diagnostics-hint';
-    hint.textContent = 'Hinweis: Shadow-Abweichung bedeutet nicht automatisch Adapterfehler. Bei produktiv übernommenen Bereichen ist TypeScript die Entscheidungsquelle; JavaScript bleibt dort Executor/Fallback. Node/ioBroker führt technisch weiter JavaScript-Artefakte aus; fachliche Normalpfade werden über die TS-Freigaben abgebaut.';
+    hint.textContent = 'Hinweis: Eine Shadow-Abweichung bedeutet nicht automatisch einen Produktfehler. Bei produktiv übernommenen Bereichen ist TypeScript die Entscheidungsquelle; JavaScript bleibt dort Executor/Fallback. NexoWatt EOS führt technisch weiterhin generierte JavaScript-Artefakte aus; fachliche Normalpfade werden über die TS-Freigaben abgebaut.';
     els.shadowDiagnostics.appendChild(hint);
 
     const cards = [
@@ -15025,12 +15025,12 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       // Kompatibilitätsmarker für ältere Checks: TS‑Prep: EVCS Allocation / TS‑Shadow: EVCS Write‑Plan
       { title: 'TS‑Produktiv: EVCS Allocation', subtitle: 'Wallbox‑Zielverteilung produktiv über TS; JS bleibt Fallback/Executor', shadow: chargingAllocationProductive },
       { title: 'TS‑Normalquelle: EVCS Allocation', subtitle: 'TS ist Normalquelle; JS‑Vergleich nur Diagnose, JS nur harter Fallback/Executor', shadow: chargingAllocationNormalSource },
-      { title: 'TS‑Produktiv: EVCS Write‑Plan', subtitle: 'Setpoint‑Schreibplan produktiv; ioBroker‑Executor bleibt JS', shadow: chargingWritePlanProductive },
+      { title: 'TS‑Produktiv: EVCS Write‑Plan', subtitle: 'Setpoint‑Schreibplan produktiv; EOS‑Executor bleibt JavaScript', shadow: chargingWritePlanProductive },
       { title: 'TS‑Cleanup: EVCS JS Executor/Fallback', subtitle: 'Alter JS‑Entscheidungsbaum ist nur noch Executor/Fallback statt Normalquelle', shadow: chargingLegacyDecision },
       { title: 'TS‑Härtung: EVCS Safety‑Handover', subtitle: 'Stale‑Meter‑Stopps und Peak‑Rampdown laufen als TS‑0‑Setpoint‑Vertrag', shadow: chargingLegacyDecision },
       { title: 'TS‑Lockdown: EVCS Normalquelle', subtitle: 'JS‑Allocation ist aus dem Normalpfad entfernt; nur Executor und harte Fallbacks bleiben', shadow: chargingNormalSourceLockdown },
       { title: 'TS‑Finale: EVCS JS‑Abbau bereit', subtitle: 'TypeScript besitzt Control, Budget, Allocation und Write‑Plan; JS bleibt Runtime‑Grenze/Executor', shadow: chargingEvcsJsRemoval },
-      { title: 'TS‑Runtime: Adapter Handover', subtitle: 'Adapter ist auf TS‑Quelle vorbereitet; Node/ioBroker führt weiter generierte JS‑Artefakte aus', shadow: chargingAdapterRuntimeHandover },
+      { title: 'TS‑Runtime: Adapter Handover', subtitle: 'Adapter ist auf TS‑Quelle vorbereitet; NexoWatt EOS führt weiter generierte JavaScript‑Artefakte aus', shadow: chargingAdapterRuntimeHandover },
       { title: 'TS‑Produktiv: EVCS Budget‑Caps', subtitle: 'Grid‑/Phasen‑/§14a‑Caps mit JS‑Fallback', shadow: chargingBudgetPrep },
     ];
 

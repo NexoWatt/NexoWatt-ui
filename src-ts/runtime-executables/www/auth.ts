@@ -164,7 +164,7 @@
     return caps.includes('*') || caps.includes(String(cap || ''));
   }
 
-  /** Rücksprung in den EOS/ioBroker Admin-Tab des NexoWatt-Adapters. */
+  /** Rücksprung in den NexoWatt EOS Admin. */
   function adminUrl() {
     try {
       const proto = window.location.protocol || 'http:';

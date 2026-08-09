@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 9161a8035b59a31ce75ba1ea45b18ba8ea8e971613c1e0349807562814778316
+ * Original-Hash: 0777b0119d871511df6303ee7220c82c70792fb2fbd8cb35556b24052d26da5a
  */
 
 /**
@@ -47,7 +47,7 @@ const required = [
   '_shadowDecodeDisplayText',
   '_shadowEscape',
   '_openShadowJsonDialog',
-  'Shadow-Abweichung bedeutet nicht automatisch Adapterfehler',
+  'Eine Shadow-Abweichung bedeutet nicht automatisch einen Produktfehler',
   'JSON dauerhaft öffnen',
 ];
 const missing = required.filter((needle) => !js.includes(needle));

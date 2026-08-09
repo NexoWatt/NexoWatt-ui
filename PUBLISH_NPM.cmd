@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-echo NexoWatt UI 0.8.167 RC43 wird geprueft und auf npm veroeffentlicht ...
+echo NexoWatt EOS 0.8.168 RC44 wird geprueft und auf npm veroeffentlicht ...
 npm publish
 set EXITCODE=%ERRORLEVEL%
 echo.

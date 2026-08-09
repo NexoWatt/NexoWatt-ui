@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/smarthome.ts
- * Quell-Hash: sha256:01154401f8863947f1c13c84236c7f1add360013178aab921bf1f36ed084ddb5
+ * Quell-Hash: sha256:466f2998b1a37e53435fb0d6c885c4c05f6510fa00b78ce149241d78d835df39
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -10244,8 +10244,8 @@ function nwUpdatePageTitle() {
   // Best-effort browser-tab title update.
   try {
     document.title = subtitle
-      ? `${title} – ${subtitle} – SmartHome`
-      : `${title} – SmartHome`;
+      ? `NexoWatt EOS – ${title} – ${subtitle}`
+      : `NexoWatt EOS – ${title}`;
   } catch (_) {
     // ignore
   }

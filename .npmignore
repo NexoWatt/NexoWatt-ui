@@ -1,5 +1,5 @@
 # NexoWatt publish cleanup
-# Runtime-JS that Node/ioBroker needs stays in main.js, ems/** and www/**.
+# Erforderliche Produkt-Runtime bleibt in main.js, ems/** und www/**.
 # These folders are duplicate/staging artifacts and must not be shipped.
 .nwcore/
 build-ts/

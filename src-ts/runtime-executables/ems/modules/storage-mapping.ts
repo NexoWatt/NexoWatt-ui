@@ -616,7 +616,7 @@ class SpeicherMappingModule extends BaseModule {
                 unit: '',
                 min: 0,
                 max: 4,
-                note: 'ioBroker.e3dc-rscp; 0=NORMAL, 1=IDLE, 2=DISCHARGE, 3=CHARGE, 4=GRID_CHARGE'
+                note: 'E3/DC RSCP Connector; 0=NORMAL, 1=IDLE, 2=DISCHARGE, 3=CHARGE, 4=GRID_CHARGE'
             });
         }
 
@@ -629,7 +629,7 @@ class SpeicherMappingModule extends BaseModule {
                 direction: 'out',
                 unit: 'W',
                 min: 0,
-                note: 'ioBroker.e3dc-rscp; positive Absolutleistung passend zum SET_POWER_MODE'
+                note: 'E3/DC RSCP Connector; positive Absolutleistung passend zum SET_POWER_MODE'
             });
         }
 

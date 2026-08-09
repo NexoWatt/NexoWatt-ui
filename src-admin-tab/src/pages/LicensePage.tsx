@@ -221,7 +221,7 @@ export default function LicensePage() {
     } else if (!conn) {
       setStatus({
         ok: false,
-        text: 'Admin-Verbindung nicht verfügbar und Adapter-Webserver nicht erreichbar. Bitte Seite im ioBroker-Admin öffnen oder Adapter-Port prüfen.',
+        text: 'Admin-Verbindung nicht verfügbar und NexoWatt-EOS-Webserver nicht erreichbar. Bitte die Seite im NexoWatt EOS Admin öffnen oder den Adapter-Port prüfen.',
       });
     } else {
       setStatus({
@@ -331,13 +331,13 @@ export default function LicensePage() {
   return (
     <PageShell
       title="Lizenz"
-      subtitle="Hier wird der Lizenzschlüssel für diese ioBroker-Instanz hinterlegt. Der Schlüssel ist an die System-UUID gekoppelt. Hinweis: Der Lizenzschlüssel ist bewusst nur im Admin verfügbar."
+      subtitle="Hier wird der Lizenzschlüssel für diese NexoWatt-EOS-Instanz hinterlegt. Der Schlüssel ist an die System-UUID gekoppelt. Hinweis: Der Lizenzschlüssel ist bewusst nur im Admin verfügbar."
     >
       <section className="nw-grid nw-grid--two">
         <article className="nw-card">
           <h2>System-UUID</h2>
           <label className="nw-field-label" htmlFor="uuid">
-            ioBroker UUID
+            System-UUID
           </label>
           <div className="nw-inline-controls">
             <input id="uuid" className="nw-input" readOnly type="text" value={uuid} />

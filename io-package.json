@@ -1,8 +1,13 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.8.167",
+    "version": "0.8.168",
     "news": {
+      "0.8.168": {
+        "de": "Version 0.8.168 RC44 behebt die Verbindungserstellung im NexoLogic-Editor: Ein falscher Bibliothekszugriff verhinderte bisher jeden Leitungsabschluss. Ausgang und Eingang lassen sich nun per Klick, Ziehen oder Tastatur verbinden; kompatible Ziele werden hervorgehoben und der Vorgang ist in einem echten Chromium-Browsertest abgesichert. Der Editor nutzt auf Desktop-Rechnern die vollständige Seite mit separat scrollbarer Bausteinpalette und Eigenschaftenleiste. SmartHome-Konfiguration, NexoLogic, Datenpunktsuche und normale Bedienfunktionen sind Kundenzugänge; nur EMS/App-Center, Lizenz, Simulator und der beliebige Hardware-Schreibtest bleiben Installer/Admin-geschützt. Die Datenpunktauswahl öffnet beim Ändern wieder im aktuellen Objektordner. Kunden sichtbare Produktbezeichnungen wurden auf NexoWatt EOS vereinheitlicht; technische Plattform- und Paketkennungen bleiben intern erhalten. Energie-, Lade-, Speicher-, FENECON-, §14a- und SafetyEnvelope-Regelungen bleiben unverändert.",
+        "nl": "Versie 0.8.168 RC44 herstelt het maken van verbindingen in de NexoLogic-editor: een verkeerde bibliotheekverwijzing verhinderde eerder elke voltooide lijn. Uitgang en ingang kunnen nu via klik, slepen of toetsenbord worden verbonden; compatibele doelen worden gemarkeerd en het gedrag is met een echte Chromium-browsertest geborgd. Op desktop gebruikt de editor de volledige pagina met afzonderlijk scrollbare blokken- en eigenschappenpanelen. SmartHome-configuratie, NexoLogic, datapuntzoeken en normale bediening zijn klantfuncties; alleen EMS/App-Center, licentie, simulator en willekeurige hardware-schrijftests blijven voor installateur/admin beschermd. Bij het wijzigen opent de datapuntkiezer opnieuw in de huidige objectmap. Klantzichtbare productnamen zijn geharmoniseerd naar NexoWatt EOS; technische platform- en pakket-ID’s blijven intern behouden. Energie-, laad-, opslag-, FENECON-, §14a- en SafetyEnvelope-regelingen blijven ongewijzigd.",
+        "en": "Version 0.8.168 RC44 fixes connection creation in the NexoLogic editor: an incorrect library reference previously broke every wire completion. Outputs and inputs can now be connected by click, drag or keyboard, compatible targets are highlighted, and the interaction is covered by a real Chromium browser test. On desktop, the editor uses the full page with independently scrollable block and property panels. SmartHome configuration, NexoLogic, datapoint discovery and normal operation are customer workspaces; only EMS/App-Center, license, simulator and arbitrary hardware write testing remain installer/admin protected. When changing an assignment, the datapoint picker reopens in the current object folder. Customer-visible branding is standardized on NexoWatt EOS while technical platform and package identifiers remain internal. Energy, charging, storage, FENECON, §14a and SafetyEnvelope control remain unchanged."
+      },
       "0.8.167": {
         "de": "Version 0.8.167 RC43 stabilisiert NexoLogic und den vollständigen SmartHome-Kern. NexoLogic startet Graphen atomar, behandelt fehlende Werte nicht als 0, unterdrückt künstliche Startflanken, setzt Ausgänge beim Deaktivieren sicher zurück, prüft Zyklen und speichert transaktional mit Rollback. Zwei-Punkt-Regler, Mischermotor, persistente Zustände und serialisierte Ausgangsbefehle wurden gehärtet. SmartHome erhält einen gemeinsamen Geräte- und Szenenvertrag für Taster, Licht/RGB/RGBW/Tunable White, Beschattung, Klima, Player/TTS, Wertgeber, Kameras und Widgets. Unbekannte, veraltete, offline und fehlerhafte Werte werden getrennt dargestellt; Beschattungs- und Klimaschutz wirken fail-closed. Die DP-Auswahl öffnet beim Ändern wieder im aktuellen Objektordner. EMS-, Lade-, Speicher-, FENECON-, §14a- und SafetyEnvelope-Regelungen bleiben unverändert.",
         "nl": "Versie 0.8.167 RC43 stabiliseert NexoLogic en de volledige SmartHome-kern. NexoLogic start grafen atomair, behandelt ontbrekende waarden niet als 0, onderdrukt kunstmatige startflanken, zet uitgangen bij deactivering veilig terug, controleert cycli en slaat transactioneel op met rollback. Twee-puntsregeling, mengmotor, persistente toestanden en geserialiseerde uitgangscommando’s zijn gehard. SmartHome krijgt één apparaat- en scènecontract voor drukknoppen, licht/RGB/RGBW/Tunable White, zonwering, klimaat, player/TTS, waardestellers, camera’s en widgets. Onbekende, verouderde, offline en foutieve waarden worden afzonderlijk getoond; zonwering- en klimaatbeveiligingen werken fail-closed. De datapuntkeuze opent bij wijzigen opnieuw in de huidige objectmap. EMS-, laad-, opslag-, FENECON-, §14a- en SafetyEnvelope-regelingen blijven ongewijzigd.",
@@ -32,21 +37,16 @@
         "de": "Version 0.8.162 RC38 stabilisiert die Speicherregelung. Ein einzelner FENECON-DC-/Hybridspeicher arbeitet in Automatik bei frischer PV >500 W nach 10 s unter FEMS-Eigenregelung und bei PV <500 W nach 120 s unter EOS-Regelung; exakt 500 W hält die bisherige Reglerhoheit. Sicherheits-, §14a-, SoC- und manuelle 0-W-Stopps bleiben jederzeit möglich. Fehlende NVP-/ESS-Werte sowie leere optionale Min-/Max-Grenzen werden nicht mehr als 0 interpretiert; ungültige Grenzen und unvollständige Schwellwertregeln blockieren fail-closed. Gemischte Speicherfarmen bleiben One-Writer unter EOS. Neue Laufzeit- und Release-Regressionen sowie ein wiederhergestellter npm-Doppelversionsschutz sichern den Stand.",
         "nl": "Versie 0.8.162 RC38 stabiliseert de opslagregeling. Eén FENECON DC-/hybrideopslag werkt in Auto bij verse PV >500 W na 10 s onder de eigen FEMS-regeling en bij PV <500 W na 120 s onder EOS-regeling; exact 500 W behoudt de huidige regelautoriteit. Veiligheids-, §14a-, SoC- en handmatige 0-W-stops blijven altijd mogelijk. Ontbrekende NVP-/ESS-waarden en lege optionele minimum-/maximumgrenzen worden niet meer als 0 geïnterpreteerd; ongeldige grenzen en onvolledige drempelregels blokkeren fail-closed. Gemengde opslagfarms blijven One-Writer onder EOS. Nieuwe runtime- en release-regressies en een herstelde npm-beveiliging tegen dubbele versies beschermen deze stand.",
         "en": "Version 0.8.162 RC38 stabilizes storage control. In Auto, one FENECON DC/hybrid storage runs under FEMS self-control after 10 s of fresh PV >500 W and under EOS control after 120 s of PV <500 W; exactly 500 W keeps the current authority. Safety, §14a, SoC and manual 0-W stops remain available at all times. Missing NVP/ESS values and empty optional minimum/maximum limits are no longer interpreted as zero; invalid limits and incomplete threshold rules fail closed. Mixed storage farms remain single-writer under EOS. New runtime and release regressions plus a restored npm duplicate-version guard protect this release."
-      },
-      "0.8.161": {
-        "de": "Version 0.8.161 RC37: Die Ladebetriebsarten wurden vollständig gehärtet. Boost erhält sofort die maximal am Ladepunkt konfigurierte Strom- oder Leistungsfreigabe innerhalb der harten Netz-, Stations-, Phasen-, §14a-, Peak- und Gerätegrenzen. Ein optional fehlender Fahrzeug-/Ladebedarfs-Datenpunkt sowie Zeit-Ziel-SoC-Wartezustände setzen Boost nicht mehr auf 0 A. Auto, Min+PV und PV bleiben ohne bestätigten Ladebedarf fail-closed. Alte controlPreference=none-Einträge mit gültigem Sollwert-DP werden automatisch als steuerbar behandelt. Neue Regressionen prüfen Boost, Auto, Min+PV, PV, Aus, Mehrladepunkt-Priorität, Stationslimits und die produktive TypeScript-Allocation.",
-        "nl": "Versie 0.8.161 RC37: alle laadmodi zijn verstevigd. Boost krijgt onmiddellijk de maximaal geconfigureerde stroom- of vermogensvrijgave van het laadpunt binnen de harde net-, station-, fase-, §14a-, peak- en apparaatlimieten. Een optioneel ontbrekend voertuig-/laadbehoeftesignaal en SoC-wachtstatussen van doel-laden zetten Boost niet meer op 0 A. Auto, Min+PV en PV blijven zonder bevestigde laadbehoefte fail-closed. Oude controlPreference=none-configuraties met een geldig setpoint worden automatisch als bestuurbaar behandeld. Nieuwe regressies controleren Boost, Auto, Min+PV, PV, Uit, multi-port-prioriteit, stationlimieten en de productieve TypeScript-allocation.",
-        "en": "Version 0.8.161 RC37: all charging modes are hardened. Boost immediately receives the maximum current or power configured for the charge point within hard grid, station, phase, §14a, peak and device limits. A missing optional vehicle/charge-demand datapoint and target-charging SoC wait states no longer reset Boost to 0 A. Auto, Min+PV and PV remain fail-closed without confirmed demand. Legacy controlPreference=none entries with a valid setpoint are automatically treated as controllable. New regressions cover Boost, Auto, Min+PV, PV, Off, multi-port priority, station caps and the productive TypeScript allocation."
       }
     },
-    "title": "NexoWatt UI",
+    "title": "NexoWatt EOS",
     "titleLang": {
-      "en": "NexoWatt UI",
-      "de": "NexoWatt UI"
+      "en": "NexoWatt EOS",
+      "de": "NexoWatt EOS"
     },
     "desc": {
-      "en": "responsive dashboard with NexoWatt colors (green/black). All datapoints can be linked in adapter settings.",
-      "de": "responsives Dashboard in NexoWatt-Farben (grün/schwarz). Alle Datenpunkte sind in den Adaptereinstellungen verknüpfbar."
+      "en": "NexoWatt EOS – local energy, charging and building control platform.",
+      "de": "NexoWatt EOS – lokale Plattform für Energie, Laden und Gebäudesteuerung."
     },
     "authors": [
       "NexoWatt"
@@ -73,8 +73,8 @@
     "logo": "admin_logo_.ico",
     "adminTab": {
       "name": {
-        "de": "NexoWatt EMS",
-        "en": "NexoWatt EMS"
+        "de": "NexoWatt EOS",
+        "en": "NexoWatt EOS"
       },
       "fa-icon": "bolt",
       "order": 50
@@ -84,8 +84,8 @@
         "link": "/adapter/nexowatt-ui/tab.html",
         "name": "Energiefluss",
         "desc": {
-          "de": "Direkt zur NexoWatt UI (aktuelle ioBroker-IP + VIS-Port).",
-          "en": "Go to NexoWatt UI (current ioBroker IP + VIS port)."
+          "de": "Direkt zu NexoWatt EOS (aktuelle Anlagenadresse und Visualisierungsport).",
+          "en": "Open NexoWatt EOS using the current system address and visualization port."
         },
         "img": "admin.png",
         "color": "#00c853",
@@ -281,7 +281,7 @@
     "countryProfile": {
       "country": "DE",
       "languageMode": "system",
-      "note": "Sprache wird standardmäßig aus system.config.common.language von ioBroker übernommen."
+      "note": "Sprache wird standardmäßig aus der NexoWatt-EOS-Systemeinstellung übernommen."
     },
     "energyWallet": {
       "enabled": true,

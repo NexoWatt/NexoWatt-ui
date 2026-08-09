@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-mapping.ts
- * Quell-Hash: sha256:9f12e8593236ab333e1e2f1f3a5141f12d68a3ed7802b25516d888100b21791e
+ * Quell-Hash: sha256:f3c96ea39003bf556a6e4116f69ff8bba2253141ef3cfb57dcfe9d28179b19dc
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -632,7 +632,7 @@ class SpeicherMappingModule extends BaseModule {
                 unit: '',
                 min: 0,
                 max: 4,
-                note: 'ioBroker.e3dc-rscp; 0=NORMAL, 1=IDLE, 2=DISCHARGE, 3=CHARGE, 4=GRID_CHARGE'
+                note: 'E3/DC RSCP Connector; 0=NORMAL, 1=IDLE, 2=DISCHARGE, 3=CHARGE, 4=GRID_CHARGE'
             });
         }
 
@@ -645,7 +645,7 @@ class SpeicherMappingModule extends BaseModule {
                 direction: 'out',
                 unit: 'W',
                 min: 0,
-                note: 'ioBroker.e3dc-rscp; positive Absolutleistung passend zum SET_POWER_MODE'
+                note: 'E3/DC RSCP Connector; positive Absolutleistung passend zum SET_POWER_MODE'
             });
         }
 

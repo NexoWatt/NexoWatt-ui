@@ -1,6 +1,6 @@
 {
-  "name": "NexoWatt",
-  "short_name": "NexoWatt",
+  "name": "NexoWatt EOS",
+  "short_name": "NexoWatt EOS",
   "start_url": ".",
   "scope": "./",
   "display": "standalone",
@@ -44,6 +44,6 @@
       "purpose": "maskable"
     }
   ],
-  "version": "0.8.167",
-  "appVersion": "0.8.167"
+  "version": "0.8.168",
+  "appVersion": "0.8.168"
 }

@@ -12121,3 +12121,132 @@ body.nw-page-smarthome .nw-sh-mini-toggle--momentary::after{
 .nw-sh-gauge--unknown .nw-sh-gauge__knob{ opacity: .35; }
 .nw-sh-gauge--unknown .nw-sh-gauge__value{ color: rgba(148,163,184,.98); }
 .nw-sh-gauge--unknown .nw-sh-gauge__canvas{ filter: saturate(.45); }
+
+/* ============================================================
+   RC44 – NexoLogic Desktop-Arbeitsfläche und sichere Port-Bedienung
+   ============================================================ */
+body.nw-page-logic{
+  height:100vh;
+  overflow:hidden;
+}
+body.nw-page-logic .nw-logic-page{
+  width:100%;
+  max-width:none !important;
+  height:calc(100vh - var(--topbar-h, 68px));
+  min-height:0;
+  margin:0 !important;
+  padding:8px 10px 10px !important;
+  display:flex;
+  flex-direction:column;
+  gap:0;
+}
+body.nw-page-logic .nw-le-toolbar{
+  flex:0 0 auto;
+  margin:0 0 8px !important;
+  padding:10px 12px !important;
+  border-radius:14px !important;
+}
+body.nw-page-logic .nw-le{
+  flex:1 1 auto;
+  min-height:0;
+  width:100%;
+  margin-top:0 !important;
+  grid-template-columns:minmax(225px, 265px) minmax(720px, 1fr) minmax(270px, 330px) !important;
+  gap:10px !important;
+  overflow:hidden;
+}
+body.nw-page-logic .nw-le__palette,
+body.nw-page-logic .nw-le__inspector,
+body.nw-page-logic .nw-le__workspace{
+  min-height:0;
+  height:100%;
+}
+body.nw-page-logic .nw-le__palette,
+body.nw-page-logic .nw-le__inspector{
+  overflow:auto;
+  padding:10px;
+}
+body.nw-page-logic .nw-le__workspace{
+  overflow:hidden;
+}
+body.nw-page-logic .nw-le__board-wrap{
+  width:100%;
+  height:100% !important;
+  min-height:0 !important;
+  border-radius:14px !important;
+}
+body.nw-page-logic .nw-le__board{
+  min-width:100%;
+  min-height:100%;
+}
+
+/* Größere, klar erkennbare Verbindungs-Hitboxen. */
+.nw-le-port{
+  position:relative;
+  min-height:30px;
+  padding-top:3px;
+  padding-bottom:3px;
+  cursor:crosshair;
+  outline:none;
+}
+.nw-le-port::before{
+  content:"";
+  position:absolute;
+  inset:-4px -8px;
+  border-radius:10px;
+  pointer-events:none;
+  transition:background .12s ease, box-shadow .12s ease;
+}
+.nw-le-port__dot{
+  width:16px !important;
+  height:16px !important;
+  flex:0 0 16px;
+  transition:transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+}
+.nw-le-port:hover::before,
+.nw-le-port:focus-visible::before{
+  background:rgba(0,230,118,.10);
+  box-shadow:0 0 0 1px rgba(0,230,118,.24);
+}
+.nw-le-port:hover .nw-le-port__dot,
+.nw-le-port:focus-visible .nw-le-port__dot{
+  transform:scale(1.22);
+}
+.nw-le-port.is-connect-source::before{
+  background:rgba(0,230,118,.16);
+  box-shadow:0 0 0 2px rgba(0,230,118,.55);
+}
+.nw-le-port.is-connect-source .nw-le-port__dot{
+  transform:scale(1.32);
+  box-shadow:0 0 16px rgba(0,230,118,.95) !important;
+}
+.nw-le-port.is-connect-target::before{
+  background:rgba(0,230,118,.08);
+  box-shadow:0 0 0 1px rgba(0,230,118,.35);
+}
+.nw-le-port.is-connect-target .nw-le-port__dot{
+  animation:nw-le-port-ready 1.05s ease-in-out infinite;
+}
+.nw-le-port.is-connect-incompatible{
+  opacity:.38;
+  cursor:not-allowed;
+}
+@keyframes nw-le-port-ready{
+  0%,100%{ transform:scale(1); }
+  50%{ transform:scale(1.25); }
+}
+
+/* NexoLogic bleibt absichtlich eine Desktop-Anwendung. */
+@media (max-width:1199px){
+  body.nw-page-logic{
+    min-width:1180px;
+    overflow:auto;
+  }
+  body.nw-page-logic .nw-logic-page{
+    min-width:1180px;
+    height:calc(100vh - var(--topbar-h, 68px));
+  }
+  body.nw-page-logic .nw-le{
+    grid-template-columns:235px minmax(680px, 1fr) 285px !important;
+  }
+}

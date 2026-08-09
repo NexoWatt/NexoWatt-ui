@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:7661e779eab0976fbf658940031d7ad023c71e6a999bb1876b5bfbdf3fa75bde
+ * Quell-Hash: sha256:20e9b4033b4e821b99b3714c4a712dafe98c572ec05152ebf903a9a3b6344521
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -4494,7 +4494,7 @@ class NexoWattVis extends utils.Adapter {
       if (!ch) {
         await this.setForeignObjectAsync(base, {
           type: 'channel',
-          common: { name: 'NexoWatt UI – Backup' },
+          common: { name: 'NexoWatt EOS – Backup' },
           native: {},
         });
       }
@@ -4518,7 +4518,7 @@ class NexoWattVis extends utils.Adapter {
     };
 
     await ensureState(`${base}.backupJson`, {
-      name: 'NexoWatt UI – Installer Konfiguration (Backup JSON)',
+      name: 'NexoWatt EOS – Installer-Konfiguration (Backup JSON)',
       type: 'string',
       role: 'json',
       read: true,
@@ -4527,7 +4527,7 @@ class NexoWattVis extends utils.Adapter {
     });
 
     await ensureState(`${base}.backupTs`, {
-      name: 'NexoWatt UI – Backup Timestamp (ms)',
+      name: 'NexoWatt EOS – Backup Timestamp (ms)',
       type: 'number',
       role: 'value.time',
       read: true,
@@ -4536,7 +4536,7 @@ class NexoWattVis extends utils.Adapter {
     });
 
     await ensureState(`${base}.backupJsonPrev`, {
-      name: 'NexoWatt UI – Installer Konfiguration (Backup JSON – vorherige Version)',
+      name: 'NexoWatt EOS – Installer-Konfiguration (Backup JSON – vorherige Version)',
       type: 'string',
       role: 'json',
       read: true,
@@ -4545,7 +4545,7 @@ class NexoWattVis extends utils.Adapter {
     });
 
     await ensureState(`${base}.backupTsPrev`, {
-      name: 'NexoWatt UI – Backup Timestamp (ms) – vorherige Version',
+      name: 'NexoWatt EOS – Backup Timestamp (ms) – vorherige Version',
       type: 'number',
       role: 'value.time',
       read: true,
@@ -8311,7 +8311,7 @@ class NexoWattVis extends utils.Adapter {
     const evcsLimit = licenseMaxWallboxes > 0 ? Math.min(50, Math.max(0, Math.round(licenseMaxWallboxes))) : 50;
     const evcsCount = Math.max(0, Math.min(evcsLimit, Math.round(Number.isFinite(rawCount) ? rawCount : 0)));
     this.evcsCount = evcsCount;
-    this.log.info(`[NexoWatt UI] Ladepunkte konfiguriert: ${evcsCount}`);
+    this.log.info(`[NexoWatt EOS] Ladepunkte konfiguriert: ${evcsCount}`);
 
     // Feldkompatibilitaet fuer bestehende `nexowatt-devices`-Anlagen:
     // Der Geräteadapter hat die schreibbaren EVCS-Aliase im Laufe der Zeit von
@@ -8372,7 +8372,7 @@ class NexoWattVis extends utils.Adapter {
               controlMappingAutoResolvedPower ? 'Sollleistung' : '',
               controlMappingAutoResolvedEnable ? 'Freigabe' : '',
             ].filter(Boolean).join(', ');
-            this.log.info(`[NexoWatt UI] Ladepunkt ${i + 1}: Steuer-Datenpunkte automatisch aus der Geräte-Aliasstruktur ergänzt (${parts || 'Mapping'}).`);
+            this.log.info(`[NexoWatt EOS] Ladepunkt ${i + 1}: Steuer-Datenpunkte automatisch aus der Geräte-Aliasstruktur ergänzt (${parts || 'Mapping'}).`);
           } catch (_eLog) {}
         }
       } catch (_eResolveEvcsControl) {
@@ -10561,7 +10561,7 @@ async getSmartHomeDevicesWithState() {
           : (!qualityOk ? 'error' : (stale ? 'stale' : (parseOk ? 'online' : 'invalid')));
         const reason = !hasState || !present
           ? 'Kein gültiger State-Wert vorhanden'
-          : (!qualityOk ? `ioBroker-Qualität q=${q}` : (stale ? 'State ist veraltet' : (parseOk ? 'OK' : 'Wertformat ungültig')));
+          : (!qualityOk ? `Datenpunkt-Qualität q=${q}` : (stale ? 'State ist veraltet' : (parseOk ? 'OK' : 'Wertformat ungültig')));
         const row = { configured: true, id: dpId, valid, status, reason, q, ts, ageMs };
         copy.fieldQuality[field] = row;
         qualityRows.push(row);
@@ -11160,7 +11160,7 @@ async onReady() {
 
       // NexoLogic (node/graph) runtime engine
       try { await this.initLogicEngine(); } catch (e) { this.log.warn('NexoLogic init failed: ' + (e && e.message ? e.message : e)); }
-      this.log.info('NexoWatt UI adapter ready.');
+      this.log.info('NexoWatt EOS ist bereit.');
     } catch (e) {
       // info.connection describes the adapter web/API connectivity. If the HTTP server
       // is already listening, keep the connection online even when a non-critical
@@ -11910,7 +11910,7 @@ async onReady() {
           <head>
             <meta charset="utf-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <title>NexoWatt – Lizenz</title>
+            <title>NexoWatt EOS – Lizenz</title>
             <style>
               body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0b1020;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
               .card{width:min(720px,92vw);background:rgba(2,6,23,0.55);border:1px solid rgba(148,163,184,0.22);border-radius:16px;padding:20px 18px;box-shadow:0 20px 80px rgba(0,0,0,0.55)}
@@ -11926,7 +11926,7 @@ async onReady() {
               ${detailLine}
               ${uuidLine}
               <p>Diese VIS ist aktuell gesperrt, bis ein gültiger Lizenzschlüssel hinterlegt ist.</p>
-              <p>Bitte im <b>ioBroker Admin</b> unter <code>Adapter → NexoWatt EMS → Lizenz</code> einen gültigen Lizenzschlüssel eintragen.</p>
+              <p>Bitte im <b>NexoWatt EOS Admin</b> unter <code>NexoWatt EOS → Lizenz</code> einen gültigen Lizenzschlüssel eintragen.</p>
               <p>Danach den Adapter neu starten (oder kurz deaktivieren/aktivieren).</p>
             </div>
           </body>
@@ -12166,7 +12166,7 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
         `${LEGACY_COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`,
       ]);
     };
-    /** Passwort gegen den EOS/ioBroker-Benutzer prüfen. */
+    /** Passwort gegen den NexoWatt-EOS-Benutzer prüfen. */
     const checkPasswordAsync = (user, pass) => new Promise((resolve) => {
       try {
         this.checkPassword(String(user || '').trim(), String(pass || ''), (ok) => resolve(!!ok));
@@ -12187,7 +12187,7 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
         return false;
       }
     };
-    /** Alle bekannten EOS/ioBroker-Gruppen eines Benutzers einsammeln. */
+    /** Alle bekannten NexoWatt-EOS-Gruppen eines Benutzers einsammeln. */
     const getUserGroups = async (user) => {
       const groups = [];
       const allGroups = _nwUnique([...adminGroups, ...installerGroups, ...customerGroups]);
@@ -12196,7 +12196,7 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
       }
       return _nwUnique(groups);
     };
-    /** Rolle aus Benutzername und EOS/ioBroker-Gruppen bestimmen. Reihenfolge: Admin > Installer > Customer. */
+    /** Rolle aus Benutzername und NexoWatt-EOS-Gruppen bestimmen. Reihenfolge: Admin > Installer > Customer. */
     const computeRoleInfo = async (user) => {
       const u = String(user || '').trim();
       const groups = u ? await getUserGroups(u) : [];
@@ -12287,11 +12287,17 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
       return _res.status(403).json({ ok: false, error: 'customer_network_forbidden', message: 'Kundensteuerung ist nur aus dem Anlagen-LAN/VPN freigegeben.' });
     };
     const requireInstaller = requireCapability('appcenter.open');
-    const requireCustomerSmartHome = requireCapability('smarthome.configureCustomer');
-    const requireCustomerNexoLogic = requireCapability('nexologic.configureCustomer');
+    // SmartHome und NexoLogic gehören zum normalen Kunden-Arbeitsbereich.
+    // Sie verwenden deshalb dieselbe Vertrauensgrenze wie die LIVE-Bedienung:
+    // vorhandene Kunden-/Installer-/Admin-Session, freigegebenes Anlagen-LAN
+    // oder explizit konfigurierte offene Kundenbedienung. Eine Installer-
+    // Capability darf diese Seiten nicht erneut mit einem Admin-Passwort sperren.
+    const requireCustomerWorkspace = requireAuth;
+    const requireCustomerSmartHome = requireCustomerWorkspace;
+    const requireCustomerNexoLogic = requireCustomerWorkspace;
     // Read-only DP discovery is part of customer SmartHome/NexoLogic setup.
-    // Arbitrary foreign-state writes remain installer-only.
-    const requireCustomerDpDiscovery = requireCapability(['appcenter.open', 'smarthome.configureCustomer', 'nexologic.configureCustomer']);
+    // Arbitrary foreign-state test writes remain installer-only.
+    const requireCustomerDpDiscovery = requireCustomerWorkspace;
     const requireAdmin = requireCapability('license.manage');
 
     /**
@@ -12302,7 +12308,7 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
      */
     const renderRuntimeAccessPage = (title, capability, requiredRole) => `<!doctype html>
 <html lang="de"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>NexoWatt – Zugriff geschützt</title><link href="/static/styles.css" rel="stylesheet"/></head>
+<title>NexoWatt EOS – Zugriff geschützt</title><link href="/static/styles.css" rel="stylesheet"/></head>
 <body class="nw-cockpit-page nw-cockpit-skin" data-nw-required-capability="${String(capability || '')}" data-nw-page-name="${String(title || 'geschützte Seite')}" data-nw-required-role="${String(requiredRole || 'passende Rolle')}">
 <main><section class="nw-config-card" style="max-width:760px;margin:48px auto;padding:22px">
 <div class="nw-config-card__title">${String(title || 'Zugriff geschützt')}</div>
@@ -13850,7 +13856,7 @@ const nwShcfgTdBuildSuggestion = async ({ control, rootId, objects, configuredId
 app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, res) => {
   try {
     if (!NwChannelDetector || typeof NwChannelDetector !== 'function') {
-      return res.status(503).json({ ok: false, error: '@iobroker/type-detector ist aktuell nicht verfügbar.' });
+      return res.status(503).json({ ok: false, error: 'Die automatische Geräteerkennung ist aktuell nicht verfügbar.' });
     }
     if (typeof this.getForeignObjectsAsync !== 'function') {
       return res.status(500).json({ ok: false, error: 'Objektzugriff nicht verfügbar.' });
@@ -17100,16 +17106,8 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
 
 // --- SmartHomeConfig Page (VIS-Konfig-Ansicht) ---
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/smarthome-config.html', '/smarthome-config'], (req, res) => {
-    app.get(['/smarthome-config.html', '/smarthome-config'], async (req, res) => {
+    app.get(['/smarthome-config.html', '/smarthome-config'], async (_req, res) => {
       try {
-        const gate = await requirePageAccessOrRenderLock(
-          req,
-          res,
-          'smarthome.configureCustomer',
-          'SmartHome-Konfiguration',
-          'Kunde, Installer oder Admin',
-        );
-        if (!gate.ok) return;
         const file = require('path').join(__dirname, 'www', 'smarthome-config.html');
         res.sendFile(file);
       } catch (e) {
@@ -17120,7 +17118,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
 
 // --- Logic (NexoLogic) API ---
 // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/logic/blocks', async (_req, res) => {
-app.get('/api/logic/blocks', async (_req, res) => {
+app.get('/api/logic/blocks', requireCustomerNexoLogic, async (_req, res) => {
   try {
     const blocks = [];
 
@@ -17227,7 +17225,7 @@ app.get('/api/logic/blocks', async (_req, res) => {
 
 // --- NexoLogic (node/graph) editor config API ---
 // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/logic/editor', async (_req, res) => {
-app.get('/api/logic/editor', async (_req, res) => {
+app.get('/api/logic/editor', requireCustomerNexoLogic, async (_req, res) => {
   try {
     const cfg = (typeof this.getLogicEditorConfig === 'function')
       ? this.getLogicEditorConfig()
@@ -17279,12 +17277,8 @@ app.post('/api/logic/editor', requireCustomerNexoLogic, async (req, res) => {
 
 // --- Logic (NexoLogic) Page ---
 // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/logic.html','/logic'], (req, res) => {
-app.get(['/logic.html','/logic'], async (req, res) => {
+app.get(['/logic.html','/logic'], async (_req, res) => {
   try {
-    const access = await resolveAccess(req);
-    if (access && access.role !== 'none' && !hasCapability(access, 'nexologic.configureCustomer')) {
-      return res.status(403).send('Zugriff verweigert: NexoLogik ist für diese Rolle nicht freigegeben.');
-    }
     const file = require('path').join(__dirname, 'www', 'logic.html');
     res.sendFile(file);
   } catch (e) {
@@ -20233,7 +20227,7 @@ const _nwDisplayBuildCommandIntent = (station, lpKey, action, mode, userMode) =>
   source: 'dc-station-display',
   manufacturerOpen: true,
   protocolHint: String((station && station.protocolHint) || 'manufacturer-open'),
-  note: 'Adapter-agnostic command intent. A downstream ioBroker adapter may translate this to OCPP, Modbus, MQTT, REST, NexoWatt-Devices or a vendor API.',
+  note: 'Herstellerneutraler Steuerauftrag. Ein nachgelagerter Geräte-Connector kann ihn in OCPP, Modbus, MQTT, REST, NexoWatt Devices oder eine Hersteller-API übersetzen.',
 });
 
 const _nwDisplayWriteCommandState = async (station, lpKey, intent) => {
@@ -22977,7 +22971,7 @@ settingsConfig: {
         if (!to) return res.status(400).json({ ok: false, error: 'missing recipient' });
 
         const now = Date.now();
-        const subject = 'NexoWatt EMS: Test-Benachrichtigung';
+        const subject = 'NexoWatt EOS: Test-Benachrichtigung';
         const text = [
           `Zeit: ${new Date(now).toLocaleString()}`,
           `Adapter: ${this.namespace}`,
@@ -26539,7 +26533,7 @@ return res.json(out);
               id: `adapterDown:${c.inst}`,
               severity: 'critical',
               title: `Datenquelle offline: ${friendly}`,
-              message: `Es werden keine aktuellen Daten mehr von "${friendly}" empfangen. Bitte prüfen Sie die Verbindung bzw. starten Sie den ioBroker-Adapter neu. (Instanz: ${c.inst})
+              message: `Es werden keine aktuellen Daten mehr von "${friendly}" empfangen. Bitte prüfen Sie die Verbindung beziehungsweise starten Sie den betroffenen Geräte-Connector neu. (Instanz: ${c.inst})
 Technische Details: system.adapter.${c.inst}.alive=false`,
               persistMs: 60 * 1000,
               repeatMs: 6 * 60 * 60 * 1000,
@@ -26788,7 +26782,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       if (i) seg.push(`${i} Info`);
       if (ok) seg.push(`${ok} OK`);
       const tail = seg.length ? seg.join(', ') : 'Benachrichtigung';
-      return `NexoWatt EMS: ${tail}`;
+      return `NexoWatt EOS: ${tail}`;
     })();
 
     const text = parts.join('\n');

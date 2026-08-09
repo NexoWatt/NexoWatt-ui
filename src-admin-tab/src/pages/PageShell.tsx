@@ -29,7 +29,7 @@ export default function PageShell({
   backLabel = 'Zurück zum Installer',
 }) {
   useEffect(() => {
-    document.title = title ? `NexoWatt – ${title}` : 'NexoWatt Admin';
+    document.title = title ? `NexoWatt EOS – ${title}` : 'NexoWatt EOS Admin';
   }, [title]);
 
   const instance = getInstance();

@@ -19,18 +19,18 @@
 <head>
   <meta charset="utf-8"/>
   <meta content="width=device-width, initial-scale=1" name="viewport"/>
-  <title>NexoWatt SmartHome Konfiguration</title>
+  <title>NexoWatt EOS – SmartHome Konfiguration</title>
   <link href="/static/styles.css" rel="stylesheet"/>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/nexowatt-32.png">
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#0c0f12">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="NexoWatt">
+  <meta name="apple-mobile-web-app-title" content="NexoWatt EOS">
   <script src="/static/auth.js"></script>
   <script src="/static/nw-i18n.js" defer></script>
 </head>
-<body class="nw-cockpit-page nw-cockpit-skin nw-page-smarthome-config" data-nw-required-capability="smarthome.configureCustomer" data-nw-page-name="SmartHome-Konfiguration" data-nw-required-role="Kunde, Installer oder Admin">
+<body class="nw-cockpit-page nw-cockpit-skin nw-page-smarthome-config">
 <!-- Abschnitt: Kopfbereich/Navigation. Wird durch CSS und teils durch JS-Menülogik gesteuert. -->
 <header class="topbar nw-cockpit-topbar">
   <script>
@@ -51,7 +51,7 @@
     <button class="tab" id="historyTabBtn" type="button" onclick="window.location.href='history.html'">HISTORY</button>
     <button class="tab active" id="tabSmartHome" type="button" onclick="window.location.href='smarthome.html'">SMARTHOME</button>
     <button class="tab hidden" id="tabStorageFarm" type="button" onclick="window.location.href='storagefarm.html'">SPEICHERFARM</button>
-    <button class="tab" type="button" onclick="window.location.href='ems-apps.html?nwAdmin=1'">APP-CENTER</button>
+    <button class="tab" type="button" onclick="window.location.href='ems-apps.html'" title="Nur für Installer oder Admin">EMS 🔒</button>
   </nav>
   <div class="status-dot live" id="liveDot" title="Live Verbindung"></div>
   <a class="topbar-gear" href="settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
@@ -60,7 +60,7 @@
     <a class="menu-item" href="history.html">History</a>
     <a class="menu-item" href="smarthome.html" id="menuSmartHomeLink">SmartHome</a>
     <a class="menu-item hidden" href="storagefarm.html" id="menuStorageFarmLink">Speicherfarm</a>
-    <a class="menu-item" href="ems-apps.html?nwAdmin=1">App-Center</a>
+    <a class="menu-item" href="ems-apps.html">EMS / App-Center 🔒</a>
     <a class="menu-item" href="evcs.html" id="menuEvcsLink">EVCS</a>
     <a class="menu-item" href="settings.html">Einstellungen</a>
   </div>
@@ -73,7 +73,7 @@
       <div class="nw-page-hero__subtitle">Gebäude, Räume, Geräte und Auto-Erkennung im einheitlichen Cockpit-Stil.</div>
     </div>
     <div class="nw-page-hero__right">
-      <span class="nw-page-hero__pill">Installer</span>
+      <span class="nw-page-hero__pill">Kundenbereich</span>
     </div>
   </section>
 
@@ -96,7 +96,7 @@
           <button id="nw-config-import-btn" class="nw-config-btn nw-config-btn--ghost" type="button">Import</button>
           <input id="nw-config-import-file" type="file" accept="application/json,.json" style="display:none;"/>
           <a class="nw-config-btn nw-config-btn--ghost" href="/smarthome.html">SmartHome öffnen</a>
-	          <a class="nw-config-btn nw-config-btn--ghost" href="/logic.html?nwAdmin=1">Logik öffnen</a>
+	          <a class="nw-config-btn nw-config-btn--ghost" href="/logic.html">Logik öffnen</a>
 
         </div>
 <div id="nw-config-status" class="nw-config-status"></div>
@@ -123,7 +123,7 @@
         <button class="nw-shcfg-tile" id="nw-shcfg-tile-logic" type="button">
           <div class="nw-shcfg-tile__icon">🧠</div>
           <div class="nw-shcfg-tile__title">Logik‑Editor</div>
-          <div class="nw-shcfg-tile__desc">Öffnet den NexoWatt Logik‑Editor.</div>
+          <div class="nw-shcfg-tile__desc">Öffnet den NexoWatt-EOS-Logikeditor.</div>
         </button>
         <button class="nw-shcfg-tile" id="nw-shcfg-tile-timers" type="button">
           <div class="nw-shcfg-tile__icon">⏱️</div>
@@ -134,11 +134,6 @@
           <div class="nw-shcfg-tile__icon">🎬</div>
           <div class="nw-shcfg-tile__title">Szenen</div>
           <div class="nw-shcfg-tile__desc">Virtuelle Szenen mit Aktionsliste (Adapter‑ausgeführt).</div>
-        </button>
-        <button class="nw-shcfg-tile" id="nw-shcfg-tile-backup" type="button">
-          <div class="nw-shcfg-tile__icon">💾</div>
-          <div class="nw-shcfg-tile__title">Datensicherung</div>
-          <div class="nw-shcfg-tile__desc">Backup/Restore wie im App‑Center.</div>
         </button>
       </div>
       <div class="nw-shcfg-home__hint">
@@ -163,10 +158,10 @@
   <div class="nw-shcfg-container">
     <section class="nw-config-section">
       <div class="nw-config-section__head">
-        <h2 class="nw-config-section__title">Gerätevorschläge aus ioBroker</h2>
+        <h2 class="nw-config-section__title">Gerätevorschläge aus NexoWatt EOS</h2>
       </div>
       <div class="nw-config-hint">
-        Erkennt passende Geräte aus der ioBroker‑Objektstruktur und zeigt nur Vorschläge zur Übernahme an.
+        Erkennt passende Geräte aus der NexoWatt‑EOS-Datenpunktstruktur und zeigt nur Vorschläge zur Übernahme an.
         Es wird nichts automatisch überschrieben oder gespeichert.
       </div>
       <div id="nw-shcfg-detect-status" class="nw-config-status" style="margin-top:8px;"></div>

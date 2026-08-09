@@ -10246,8 +10246,8 @@ function nwUpdatePageTitle() {
   // Best-effort browser-tab title update.
   try {
     document.title = subtitle
-      ? `${title} – ${subtitle} – SmartHome`
-      : `${title} – SmartHome`;
+      ? `NexoWatt EOS – ${title} – ${subtitle}`
+      : `NexoWatt EOS – ${title}`;
   } catch (_) {
     // ignore
   }

@@ -1,6 +1,6 @@
-# NexoWatt UI
+# NexoWatt EOS
 
-NexoWatt UI is the responsive visualization and customer cockpit for the NexoWatt EMS ioBroker adapter.
+NexoWatt EOS is the local platform for energy, charging and building control, including the responsive customer cockpit and installer workspace.
 
 It provides live energy-flow visualization, historical analysis, SmartHome visualization, installer-controlled EMS applications, and selected customer controls for desktop, tablet, and smartphone use.
 
@@ -12,9 +12,9 @@ It provides live energy-flow visualization, historical analysis, SmartHome visua
 - **Installer App-Center** for datapoint mapping, EMS apps, heating rod control, storage farm setup, EVCS/charging management, tariff logic, and diagnostics.
 - **Responsive frontend** for desktop, tablet, and smartphone.
 
-## ioBroker compatibility
+## Technical platform compatibility
 
-This adapter is maintained for modern ioBroker installations and is prepared for Node.js 22+.
+NexoWatt EOS runs locally as an adapter on the ioBroker platform and is prepared for Node.js 22+. The platform identifier remains technical; all customer-visible product branding uses NexoWatt EOS.
 
 Recommended runtime baseline:
 
@@ -33,9 +33,9 @@ For repository submission, additionally run the official ioBroker Adapter Checke
 
 ## Configuration
 
-The basic HTTP port and IP binding are configured through the ioBroker Admin JSONConfig page.
+The basic HTTP port and IP binding are configured through the underlying platform administration.
 
-The EMS datapoint mapping and installer-specific configuration are handled inside the NexoWatt EMS App-Center.
+EMS datapoint mapping and installer-specific configuration are handled inside the protected NexoWatt EOS App-Center.
 
 ## License
 

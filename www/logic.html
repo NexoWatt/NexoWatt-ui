@@ -18,7 +18,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NexoLogic</title>
+  <title>NexoWatt EOS – NexoLogic</title>
   <link rel="stylesheet" href="/static/styles.css" />
   <script>
     // Ensure the app works also when served from sub-paths (reverse proxy)
@@ -33,12 +33,11 @@
       } catch(_e){}
     })();
   </script>
-  <script src="/static/admin-guard.js" data-nw-admin-page="logic"></script>
   <script src="/static/auth.js"></script>
   <script src="/static/nw-i18n.js" defer></script>
 </head>
 
-<body class="nw-cockpit-page nw-cockpit-skin nw-installer-page nw-page-logic">
+<body class="nw-cockpit-page nw-cockpit-skin nw-page-logic">
   <!-- Abschnitt: Kopfbereich/Navigation. Wird durch CSS und teils durch JS-Menülogik gesteuert. -->
 <header class="topbar">
   <div class="brand">
@@ -51,7 +50,7 @@
     <a class="tab" href="/history.html">HISTORY</a>
     <a class="tab hidden" id="tabSmartHome" href="/smarthome.html">SMARTHOME</a>
     <a class="tab hidden" id="tabStorageFarm" href="/storagefarm.html">SPEICHERFARM</a>
-    <a class="tab active" href="/logic.html?nwAdmin=1">NEXOLOGIC</a>
+    <a class="tab active" href="/logic.html">NEXOLOGIC</a>
   </nav>
   <a class="topbar-gear" href="/settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
   <div class="menu hidden" id="menuDropdown">
@@ -60,26 +59,15 @@
     <a class="menu-item hidden" id="menuStorageFarmLink" href="/storagefarm.html">Speicherfarm</a>
     <a class="menu-item hidden" id="menuSmartHomeLink" href="/smarthome.html">SmartHome</a>
     <a class="menu-item hidden" id="menuEvcsLink" href="/evcs.html">EVCS</a>
-    <a class="menu-item" href="/smarthome-config.html?nwAdmin=1">SmartHome Config</a>
-    <a class="menu-item" href="/logic.html?nwAdmin=1">NexoLogic</a>
+    <a class="menu-item" href="/smarthome-config.html">SmartHome Config</a>
+    <a class="menu-item" href="/logic.html">NexoLogic</a>
     <a class="menu-item" href="/settings.html">Einstellungen</a>
   </div>
 </header>
 
   <!-- Abschnitt: Hauptinhalt der Seite. DOM-IDs in diesem Bereich werden durch zugehörige JS-Dateien befüllt. -->
-<main class="container nw-page-shell nw-logic-page nw-subpage nw-subpage-logic" style="max-width: 96vw;">
-    <section class="nw-page-hero" aria-label="NexoLogic Übersicht">
-      <div>
-        <div class="nw-page-hero__eyebrow">NexoLogic</div>
-        <h2>Logik‑Editor</h2>
-        <p class="nw-page-hero__subtitle">Automationen, Bausteine und Verknüpfungen in der neuen responsiven Cockpit-Umgebung bearbeiten.</p>
-      </div>
-      <div class="nw-page-hero__actions">
-        <a class="btn sm" href="smarthome-config.html?nwAdmin=1">SmartHome‑Config</a>
-        <a class="btn sm" href="./">Live öffnen</a>
-      </div>
-    </section>
-    <div class="nw-card" style="padding: 16px;">
+<main class="container nw-page-shell nw-logic-page nw-subpage nw-subpage-logic">
+    <div class="nw-card nw-le-toolbar">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <div style="font-weight:700;">Logik‑Editor</div>
         <div class="muted" style="font-size:0.85rem;">Bausteine platzieren und über Ein-/Ausgänge verbinden.</div>
@@ -89,8 +77,6 @@
         <button id="nw-le-btn-save" class="nw-config-btn" type="button">Speichern</button>
         <button id="nw-le-btn-export" class="nw-config-btn nw-config-btn--ghost" type="button">Export</button>
         <button id="nw-le-btn-import" class="nw-config-btn nw-config-btn--ghost" type="button">Import</button>
-        <button id="nw-le-btn-backup" class="nw-config-btn nw-config-btn--ghost" type="button">Backup</button>
-        <input id="nw-le-backup-file" type="file" accept="application/json" style="display:none" />
         <button id="nw-le-btn-smarthomecfg" class="nw-config-btn nw-config-btn--ghost" type="button" title="Zur SmartHome‑Konfiguration wechseln">SmartHome‑Config</button>
         <span id="nw-le-status" class="muted" style="font-size:0.8rem;">—</span>
       </div>
@@ -126,7 +112,7 @@
         <div id="nw-le-palette"></div>
         <div class="muted" style="font-size:0.8rem;margin-top:10px;line-height:1.35;">
           Tipp: Klick erstellt einen Baustein im sichtbaren Bereich. Alternativ: Baustein per Drag &amp; Drop direkt an die gewünschte Position ziehen. <br/>
-          Verbindung: Ausgang (rechts) → Eingang (links) ziehen. Rechtsklick auf Leitung oder Eingang trennt die Verbindung.
+          Verbindung: Ausgang (rechts) anklicken oder ziehen und danach den passenden Eingang (links) auswählen. Rechtsklick auf Leitung oder Eingang trennt die Verbindung.
         </div>
       </aside>
 
@@ -179,7 +165,7 @@
         </div>
 
         <div class="nw-config-empty" style="margin-top:6px;">
-          Tipp: Du kannst durch die ioBroker-Ordner browsen oder gezielt nach Datenpunkt-ID bzw. Name suchen.
+          Tipp: Du kannst durch die NexoWatt-EOS-Datenpunktordner browsen oder gezielt nach Datenpunkt-ID beziehungsweise Name suchen.
         </div>
       </div>
     </div>
@@ -222,37 +208,6 @@
       </div>
     </div>
   </div>
-
-
-  <!-- Backup Modal (wie App‑Center) -->
-  <div id="nw-le-backup-modal" class="modal hidden" aria-hidden="true">
-    <div class="dialog">
-      <div class="dialog-header">
-        <div style="font-weight:700;">Datensicherung</div>
-        <button id="nw-le-backup-close" class="btn small" type="button">✕</button>
-      </div>
-      <div class="muted" style="font-size:0.85rem;margin-bottom:10px;">
-        Export/Import der gesamten NexoWatt‑Konfiguration (enthält u.a. SmartHome + Logikeditor).
-      </div>
-
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-        <button id="nw-le-backup-export" class="nw-config-btn" type="button">Backup exportieren</button>
-        <button id="nw-le-backup-import" class="nw-config-btn nw-config-btn--ghost" type="button">Backup importieren</button>
-        <select id="nw-le-backup-mode" class="nw-config-select" style="min-width: 210px;">
-          <option value="merge" selected>Merge (zusammenführen)</option>
-          <option value="replace">Replace (ersetzen)</option>
-        </select>
-        <button id="nw-le-backup-restore" class="nw-config-btn nw-config-btn--ghost" type="button">Restore aus 0_userdata</button>
-      </div>
-
-      <div id="nw-le-backup-status" class="muted" style="font-size:0.85rem;margin-top:10px;"></div>
-
-      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
-        <button id="nw-le-backup-ok" class="nw-config-btn nw-config-btn--ghost" type="button">Schließen</button>
-      </div>
-    </div>
-  </div>
-
 
   <script src="/static/logic.js"></script>
 

@@ -1,3 +1,16 @@
+## 0.8.168 - 2026-08-09
+
+- NexoLogic-Verbindungsfehler behoben: Der Porttyp-Lookup verwendete irrtümlich `nwLE.library`, obwohl die Editorbibliothek unter `nwLE.lib` gespeichert wird. Dadurch brach jeder Leitungsabschluss mit einer Browser-Ausnahme ab.
+- Verbindungsbedienung gehärtet: Ausgang und Eingang lassen sich per Klick, Drag/Drop oder Tastatur verbinden; Quelle, kompatible Ziele und unpassende Ports werden sichtbar markiert. Größere Hitboxen verbessern die Desktop-Bedienung.
+- Einen echten Chromium-End-to-End-Test ergänzt, der zwei reale Logikbausteine lädt, Ausgang und Eingang bedient, exakt einen Graph-Link erzeugt und die sichtbare SVG-Leitung ohne Browser-Ausnahme bestätigt.
+- NexoLogic als reine Desktop-Arbeitsfläche auf die vollständige Viewportbreite/-höhe erweitert. Bausteinpalette, Zeichenfläche und Eigenschaftenleiste besitzen getrennte Scrollbereiche und deutlich mehr Übersicht.
+- SmartHome-Konfiguration, NexoLogic, Logikuhren, Type-Detection und Datenpunktsuche dem Kundenarbeitsbereich zugeordnet. Die Seiten besitzen keine Installer-Capability-Sperre und keinen obligatorischen Installer-Passwortdialog mehr.
+- EMS/App-Center, Lizenz und Simulator bleiben serverseitig Installer/Admin-geschützt. Der beliebige Hardware-Schreibtest (`/api/smarthome/dpset`) bleibt aus Sicherheitsgründen ebenfalls im Expertenbereich.
+- Datenpunktauswahl in SmartHome, NexoLogic und AppCenter behält beim Ändern eines bestehenden Mappings den aktuellen Elternordner als Einstieg.
+- Kunden sichtbare Titel, PWA-Metadaten, Admin-Einstiege und Status-/Hilfetexte auf `NexoWatt EOS` vereinheitlicht. Technisch notwendige Paket-, Plattform- und State-IDs bleiben unverändert.
+- Sichtbare E3/DC-Mappingbeschreibungen und die Sprachquellenanzeige neutral auf NexoWatt EOS/Connector-Begriffe umgestellt.
+- Netzanschluss-, Phasen-, §14a-, EVCS-, Speicher-, Speicherfarm-, FENECON/FEMS-, SafetyEnvelope-, Heizstab- und FENECON-NVP-Shadow-Regelungen bleiben fachlich unverändert. Service-Worker-Cache auf `nexowatt-cache-v468` und zentrale Versionskennungen auf 0.8.168 aktualisiert.
+
 ## 0.8.167 - 2026-08-09
 
 - NexoLogic-Lifecycle gehärtet: atomare Initialisierung ohne Zwischenwrites, strikte Datenqualität statt `null → 0`, keine künstlichen Startflanken, sichere Deaktivierung/Reload/Unload-Ausgänge, persistente Blockzustände und generationstreu serialisierte Hardwarewrites.

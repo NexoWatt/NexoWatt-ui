@@ -1,7 +1,7 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.8.167",
-  "description": "Responsive NexoWatt EMS visualization adapter.",
+  "version": "0.8.168",
+  "description": "NexoWatt EOS – local energy, charging and building control platform.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
   "main": "main.js",
@@ -411,7 +411,13 @@
     "test:smarthome-ui-capabilities": "node scripts/verify-smarthome-ui-capabilities.js",
     "test:dp-picker-current-folder": "node scripts/verify-dp-picker-current-folder.js",
     "test:smarthome-config-transactional": "node scripts/verify-smarthome-config-transactional.js",
-    "test:smarthome-scene-guard": "node scripts/verify-smarthome-scene-guard.js"
+    "test:smarthome-scene-guard": "node scripts/verify-smarthome-scene-guard.js",
+    "test:nexologic-editor-connection-rc44": "node scripts/verify-nexologic-editor-connection-rc44.js",
+    "test:customer-workspace-access-rc44": "node scripts/verify-customer-workspace-access-rc44.js",
+    "test:nexowatt-eos-branding-rc44": "node scripts/verify-nexowatt-eos-branding-rc44.js",
+    "test:nexologic-desktop-layout-rc44": "node scripts/verify-nexologic-desktop-layout-rc44.js",
+    "test:nexologic-editor-browser-rc44": "node scripts/verify-nexologic-editor-browser-rc44.js",
+    "test:rc44-smarthome-stability": "npm run test:nexologic-editor-connection-rc44 && npm run test:nexologic-editor-browser-rc44 && npm run test:customer-workspace-access-rc44 && npm run test:nexowatt-eos-branding-rc44 && npm run test:nexologic-desktop-layout-rc44 && npm run test:smarthome-customer-dp-mapping && npm run test:nexologic-lifecycle-hardening && npm run test:smarthome-contract-runtime && npm run test:smarthome-ui-capabilities && npm run test:dp-picker-current-folder && npm run test:smarthome-config-transactional && npm run test:smarthome-scene-guard"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",
@@ -456,6 +462,7 @@
     "docs/RC41_HEATING_STABILITY_DE.md",
     "docs/RC42_FENECON_NVP_SHADOW_DE.md",
     "docs/RC43_SMARTHOME_NEXOLOGIC_STABILITY_DE.md",
+    "docs/RC44_NEXOLOGIC_CUSTOMER_WORKSPACE_DE.md",
     "ems/charging-budget-helpers.js",
     "ems/consumers/evcs.js",
     "ems/consumers/generic-load.js",

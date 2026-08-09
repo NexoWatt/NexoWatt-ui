@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/nw-shell.ts
- * Quell-Hash: sha256:73aa0cda8c081e2d2545850bc9090fe4ee9e7ef1fc9fd91f98ff418d059d3df1
+ * Quell-Hash: sha256:b51c2e95cfd1b7fadbf01dcaf8673385c95cc436f0203ba2d86a69aecc2fbe27
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -80,14 +80,14 @@
       var titles = Array.prototype.slice.call(document.querySelectorAll('.topbar h1, header.topbar h1'));
       titles.forEach(function (el) {
         var text = String(el && el.textContent || '').replace(/\s+/g, ' ').trim();
-        if (text === 'NexoWatt EMS') el.textContent = 'NexoWatt';
+        if (text === 'NexoWatt EMS' || text === 'NexoWatt') el.textContent = 'NexoWatt EOS';
       });
       var pwaTitles = Array.prototype.slice.call(document.querySelectorAll('meta[name="apple-mobile-web-app-title"]'));
       pwaTitles.forEach(function (el) {
-        if (el && el.getAttribute('content') === 'NexoWatt EMS') el.setAttribute('content', 'NexoWatt');
+        if (el && ['NexoWatt EMS','NexoWatt'].includes(el.getAttribute('content'))) el.setAttribute('content', 'NexoWatt EOS');
       });
-      if (typeof document.title === 'string' && /^NexoWatt EMS\b/.test(document.title)) {
-        document.title = document.title.replace(/^NexoWatt EMS\b/, 'NexoWatt');
+      if (typeof document.title === 'string' && /^NexoWatt(?: EMS)?\b/.test(document.title) && !/^NexoWatt EOS\b/.test(document.title)) {
+        document.title = document.title.replace(/^NexoWatt(?: EMS)?\b/, 'NexoWatt EOS');
       }
     } catch (_e) {}
   }

@@ -125,14 +125,14 @@ function nwNormalizeBrandHeader(){
     const topbarTitles = Array.prototype.slice.call(document.querySelectorAll('.topbar h1, header.topbar h1'));
     topbarTitles.forEach((el) => {
       const text = String(el && el.textContent || '').replace(/\s+/g, ' ').trim();
-      if (text === 'NexoWatt EMS') el.textContent = 'NexoWatt';
+      if (text === 'NexoWatt EMS' || text === 'NexoWatt') el.textContent = 'NexoWatt EOS';
     });
     const pwaTitles = Array.prototype.slice.call(document.querySelectorAll('meta[name="apple-mobile-web-app-title"]'));
     pwaTitles.forEach((el) => {
-      if (el && el.getAttribute('content') === 'NexoWatt EMS') el.setAttribute('content', 'NexoWatt');
+      if (el && ['NexoWatt EMS','NexoWatt'].includes(el.getAttribute('content'))) el.setAttribute('content', 'NexoWatt EOS');
     });
-    if (typeof document.title === 'string' && /^NexoWatt EMS\b/.test(document.title)) {
-      document.title = document.title.replace(/^NexoWatt EMS\b/, 'NexoWatt');
+    if (typeof document.title === 'string' && /^NexoWatt(?: EMS)?\b/.test(document.title) && !/^NexoWatt EOS\b/.test(document.title)) {
+      document.title = document.title.replace(/^NexoWatt(?: EMS)?\b/, 'NexoWatt EOS');
     }
   } catch(_e) {}
 }

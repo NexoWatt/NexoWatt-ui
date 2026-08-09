@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c3f91b6143732b188c94a77131e2e8e80ba988f347675383e4dc1757c4e8a513
+ * Original-Hash: 68a7c21ea4f2008e216f2b62ab565d4a288bdf94a4a48e342b419a9fc33e87cf
  */
 
 /**
@@ -31,7 +31,13 @@
 
 'use strict';
 
-/** Customers may discover/map SmartHome DPs, while arbitrary test writes remain installer-only. */
+/**
+ * RC44 access contract:
+ * - SmartHome and NexoLogic belong to the customer workspace and use the same
+ *   trust boundary as normal LIVE control (session, LAN/VPN or explicit open policy).
+ * - EMS/App-Center, license and simulator remain installer/admin protected.
+ * - The raw arbitrary datapoint write test remains installer-only.
+ */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -51,18 +57,28 @@ const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 const main = read('src-ts/runtime-executables/main.ts');
 const ui = read('src-ts/runtime-executables/www/smarthome-config.ts');
 const html = read('www/smarthome-config.html');
+const logicHtml = read('www/logic.html');
 
-assert.match(main, /customer:\s*\[[\s\S]*'smarthome\.configureCustomer'/);
-assert.match(main, /const requireCustomerSmartHome = requireCapability\('smarthome\.configureCustomer'\)/);
-assert.match(main, /const requireCustomerDpDiscovery = requireCapability\(\['appcenter\.open', 'smarthome\.configureCustomer', 'nexologic\.configureCustomer'\]\)/);
+assert.match(main, /const requireCustomerWorkspace = requireAuth;/);
+assert.match(main, /const requireCustomerSmartHome = requireCustomerWorkspace;/);
+assert.match(main, /const requireCustomerNexoLogic = requireCustomerWorkspace;/);
+assert.match(main, /const requireCustomerDpDiscovery = requireCustomerWorkspace;/);
 assert.match(main, /app\.get\(\['\/api\/object\/tree', '\/api\/smarthome\/object\/tree'\], requireCustomerDpDiscovery/);
-assert.match(main, /app\.get\(\['\/smarthome-config\.html', '\/smarthome-config'\][\s\S]*'smarthome\.configureCustomer'/);
+assert.match(main, /app\.get\('\/api\/logic\/blocks', requireCustomerNexoLogic/);
+assert.match(main, /app\.get\('\/api\/logic\/editor', requireCustomerNexoLogic/);
+assert.match(main, /app\.post\('\/api\/logic\/editor', requireCustomerNexoLogic/);
 assert.match(main, /app\.post\('\/api\/smarthome\/config', requireCustomerSmartHome/);
-assert.match(main, /app\.post\('\/api\/object\/validate', requireInstaller/);
-assert.match(html, /data-nw-required-capability="smarthome\.configureCustomer"/);
-assert.doesNotMatch(html, /admin-guard\.js/);
-assert.match(ui, /\/api\/object\/tree/);
-assert.doesNotMatch(ui, /\/api\/smarthome\/object\/tree/);
-assert.match(ui, /addEventListener\(['"]input['"]/);
+assert.match(main, /app\.post\('\/api\/smarthome\/dpset', requireInstaller/);
+assert.match(main, /requirePageAccessOrRenderLock\(req, res, 'appcenter\.open'/);
+assert.match(main, /requirePageAccessOrRenderLock\(req, res, 'simulation\.open'/);
+assert.match(main, /const requireAdmin = requireCapability\('license\.manage'\)/);
 
-console.log('[smarthome-customer-dp-mapping] OK: customer DP discovery and mapping are enabled; arbitrary hardware validation/write remains installer-only.');
+assert.doesNotMatch(html, /data-nw-required-capability=/);
+assert.doesNotMatch(html, /admin-guard\.js/);
+assert.doesNotMatch(logicHtml, /data-nw-required-capability=/);
+assert.doesNotMatch(logicHtml, /admin-guard\.js/);
+assert.match(ui, /\/api\/object\/tree/);
+assert.match(ui, /hasCapability\('smarthome\.configure'\)/, 'raw test writes must remain expert-only');
+assert.match(ui, /state\.treePrefix = nwDpParentPrefix\(state\.input\.value \|\| ''\)/, 'picker must reopen in the current datapoint folder');
+
+console.log('[smarthome-customer-dp-mapping] OK: SmartHome/NexoLogic are customer workspaces; EMS/license/simulator and raw write tests remain protected.');

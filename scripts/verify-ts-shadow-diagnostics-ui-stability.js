@@ -17,7 +17,7 @@ const required = [
   '_shadowDecodeDisplayText',
   '_shadowEscape',
   '_openShadowJsonDialog',
-  'Shadow-Abweichung bedeutet nicht automatisch Adapterfehler',
+  'Eine Shadow-Abweichung bedeutet nicht automatisch einen Produktfehler',
   'JSON dauerhaft öffnen',
 ];
 const missing = required.filter((needle) => !js.includes(needle));

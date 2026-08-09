@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 7b04a204887a087eed0ead5a5bdb637efff58d401cd4aaf9e447278f055a7e1f
+ * Original-Hash: 6533255373e4857dde608516c5bed59a8ad2dbc3a7e2778e65d6763b80aa6358
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/logic.ts
- * Quell-Hash: sha256:0e902abe918481b15ccb2585ca264de2a3aad99928b3cde828163a6abedbb6ba
+ * Quell-Hash: sha256:7013bdf2f3a14429f72c78f7484da071afaeae1e450997649b95911a937e92a2
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -63,12 +63,12 @@
  */
 /**
  * NexoWatt Code-Kommentar (DE)
- * Zweck: NexoLogic-Editor im Installerbereich: visuelle Logikblöcke, Verbindungen und Speicherung der Automationslogik.
+ * Zweck: NexoLogic-Editor für Endkunden, Installer und Admin: visuelle Logikblöcke, Verbindungen und Speicherung der Automationslogik.
  * Zusammenhänge:
  * - Spricht mit /api/logic/* in main.js.
  * - Runtime-Ausführung erfolgt über ems/nexologic-engine.js.
  * Wartungshinweise:
- * - Nur Installerbereich; keine Kundenbedienung ohne Berechtigung.
+ * - Endkunden dürfen SmartHome-Logiken erstellen und koppeln. EMS, Lizenz und Simulation bleiben separat geschützt.
  */
 
 /* NexoLogic – Node/Graph Logik-Editor (Basis) */
@@ -292,7 +292,7 @@ function nwBuildLogicLibrary() {
         ] },
         { key: 'fallbackValue', label: 'Ersatzwert', kind: 'text', placeholder: 'nur bei Ersatzwert' },
         { key: 'maxAgeMs', label: 'Max. Alter (ms)', kind: 'number', placeholder: '0 = nicht zeitlich prüfen' },
-        { key: 'acceptBadQuality', label: 'ioBroker-Qualitätsfehler akzeptieren', kind: 'select', options: [
+        { key: 'acceptBadQuality', label: 'Datenpunkt-Qualitätsfehler akzeptieren', kind: 'select', options: [
           { value: 'false', label: 'Nein (empfohlen)' },
           { value: 'true', label: 'Ja' },
         ] },
@@ -1421,6 +1421,7 @@ function nwMarkDirty() {
 function nwClearBoard() {
   const board = nwLE.el.board;
   if (!board) return;
+  if (nwLE.connecting) nwCancelConnect();
   [...board.querySelectorAll('.nw-le-node')].forEach(n => n.remove());
   // clear wires
   const svg = nwLE.el.wires;
@@ -1818,6 +1819,13 @@ function nwRenderNode(node) {
     d.dataset.nodeId = node.id;
     d.dataset.portKey = p.key;
     d.dataset.portDir = dir;
+    d.dataset.portType = nwSafeStr(p && p.dataType ? p.dataType : 'any');
+    d.tabIndex = 0;
+    d.setAttribute('role', 'button');
+    d.setAttribute('aria-label', `${dir === 'out' ? 'Ausgang' : 'Eingang'} ${nwSafeStr(p.label || p.key)} verbinden`);
+    d.title = dir === 'out'
+      ? 'Klicken oder ziehen, danach passenden Eingang auswählen.'
+      : 'Hier ablegen oder klicken, um die Verbindung abzuschließen.';
     d.innerHTML = `
       <span class="nw-le-port__dot"></span>
       <span class="nw-le-port__label">${p.label || p.key}</span>
@@ -1832,11 +1840,32 @@ function nwRenderNode(node) {
         e.stopPropagation();
         nwStartConnect(node.id, p.key);
       });
+      d.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        e.stopPropagation();
+        nwStartConnect(node.id, p.key);
+      });
     }
     if (dir === 'in') {
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'mouseup' an d. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       d.addEventListener('mouseup', (e) => {
         if (!nwLE.connecting) return;
+        e.preventDefault();
+        e.stopPropagation();
+        nwFinishConnect(node.id, p.key);
+      });
+      // Zusätzlich zur Drag-Verbindung funktioniert bewusst auch
+      // „Ausgang anklicken → Eingang anklicken“. Das ist auf Desktop-Rechnern
+      // präziser und verhindert Probleme durch kleine Port-Hitboxen.
+      d.addEventListener('click', (e) => {
+        if (!nwLE.connecting) return;
+        e.preventDefault();
+        e.stopPropagation();
+        nwFinishConnect(node.id, p.key);
+      });
+      d.addEventListener('keydown', (e) => {
+        if (!nwLE.connecting || (e.key !== 'Enter' && e.key !== ' ')) return;
         e.preventDefault();
         e.stopPropagation();
         nwFinishConnect(node.id, p.key);
@@ -2481,6 +2510,16 @@ function nwStartConnect(fromNodeId, fromPortKey) {
   const svg = nwLE.el.wires;
   if (!svg) return;
 
+  // Ein erneuter Klick auf denselben Ausgang beendet den Verbindungsmodus.
+  if (nwLE.connecting
+      && nwLE.connecting.fromNodeId === fromNodeId
+      && nwLE.connecting.fromPortKey === fromPortKey) {
+    nwCancelConnect();
+    nwSetStatus('Verbindung abgebrochen.', true);
+    return;
+  }
+  if (nwLE.connecting) nwCancelConnect();
+
   // preview path
   const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   p.setAttribute('fill', 'none');
@@ -2496,6 +2535,9 @@ function nwStartConnect(fromNodeId, fromPortKey) {
     previewPath: p,
     mouse: null,
   };
+  nwApplyConnectVisualState();
+  nwUpdateAllWirePaths();
+  nwSetStatus('Ausgang gewählt – passenden Eingang anklicken oder die Linie dorthin ziehen.', true);
 }
 /**
  * Code-Teil: nwFinishConnect
@@ -2506,10 +2548,67 @@ function nwStartConnect(fromNodeId, fromPortKey) {
 function nwLogicPortType(nodeId, portKey, direction) {
   const graph = nwLE.graph;
   const node = graph && Array.isArray(graph.nodes) ? graph.nodes.find((row) => row && row.id === nodeId) : null;
-  const def = node ? nwLE.library.byType[node.type] : null;
+  // RC43 verwendete hier irrtümlich `nwLE.library`, obwohl die Bibliothek
+  // im Editorzustand als `nwLE.lib` geführt wird. Dadurch brach jeder
+  // Verbindungsabschluss mit einem JavaScript-Fehler ab.
+  const byType = nwLE.lib && nwLE.lib.byType ? nwLE.lib.byType : null;
+  const def = node && byType ? byType[node.type] : null;
   const ports = def ? (direction === 'out' ? def.outputs : def.inputs) : [];
   const port = Array.isArray(ports) ? ports.find((row) => row && row.key === portKey) : null;
   return port && port.dataType ? String(port.dataType) : 'any';
+}
+
+/**
+ * Code-Teil: nwApplyConnectVisualState
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwApplyConnectVisualState() {
+  const board = nwLE.el.board;
+  if (!board) return;
+  const c = nwLE.connecting;
+  board.classList.toggle('is-connecting', !!c);
+  const fromType = c ? nwLogicPortType(c.fromNodeId, c.fromPortKey, 'out') : 'any';
+  for (const port of board.querySelectorAll('.nw-le-port')) {
+    port.classList.remove('is-connect-source', 'is-connect-target', 'is-connect-incompatible');
+    if (!c) continue;
+    const nodeId = String(port.dataset.nodeId || '');
+    const portKey = String(port.dataset.portKey || '');
+    const dir = String(port.dataset.portDir || '');
+    if (dir === 'out' && nodeId === c.fromNodeId && portKey === c.fromPortKey) {
+      port.classList.add('is-connect-source');
+      continue;
+    }
+    if (dir !== 'in') continue;
+    const toType = nwLogicPortType(nodeId, portKey, 'in');
+    const compatible = fromType === 'any' || toType === 'any' || fromType === toType;
+    port.classList.add(compatible ? 'is-connect-target' : 'is-connect-incompatible');
+  }
+}
+
+/**
+ * Code-Teil: nwClearConnectPreview
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwClearConnectPreview(connection) {
+  const c = connection || nwLE.connecting;
+  try { if (c && c.previewPath) c.previewPath.remove(); } catch (_e) {}
+  nwLE.connecting = null;
+  nwApplyConnectVisualState();
+  nwUpdateAllWirePaths();
 }
 
 /**
@@ -2560,21 +2659,22 @@ function nwFinishConnect(toNodeId, toPortKey) {
   const c = nwLE.connecting;
   if (!c) return;
   const g = nwLE.graph;
-  if (!g) return;
-
-  // remove preview
-  try { if (c.previewPath) c.previewPath.remove(); } catch (_e) {}
-  nwLE.connecting = null;
+  if (!g) {
+    nwClearConnectPreview(c);
+    return;
+  }
 
   const from = { node: c.fromNodeId, port: c.fromPortKey };
   const to = { node: toNodeId, port: toPortKey };
   const fromType = nwLogicPortType(from.node, from.port, 'out');
   const toType = nwLogicPortType(to.node, to.port, 'in');
   if (fromType !== 'any' && toType !== 'any' && fromType !== toType) {
+    nwClearConnectPreview(c);
     nwSetStatus(`Verbindung nicht möglich: ${fromType} passt nicht zu ${toType}.`, false);
     return;
   }
   if (nwWouldCreateLogicCycle(g, from.node, to.node)) {
+    nwClearConnectPreview(c);
     nwSetStatus('Logikschleifen sind im stabilen Betriebsmodus nicht zulässig.', false);
     return;
   }
@@ -2583,9 +2683,15 @@ function nwFinishConnect(toNodeId, toPortKey) {
   g.links = Array.isArray(g.links) ? g.links : [];
   g.links = g.links.filter(l => !(l && l.to && l.to.node === to.node && l.to.port === to.port));
 
-  g.links.push({ id: nwUuid('l'), from, to });
+  const duplicate = g.links.some((link) => link
+    && link.from && link.to
+    && link.from.node === from.node && link.from.port === from.port
+    && link.to.node === to.node && link.to.port === to.port);
+  if (!duplicate) g.links.push({ id: nwUuid('l'), from, to });
+  nwClearConnectPreview(c);
   nwRenderAllWires();
   nwMarkDirty();
+  nwSetStatus('Verbindung erstellt. Zum Übernehmen bitte speichern.', true);
 }
 /**
  * Code-Teil: nwCancelConnect
@@ -2596,14 +2702,12 @@ function nwFinishConnect(toNodeId, toPortKey) {
 function nwCancelConnect() {
   const c = nwLE.connecting;
   if (!c) return;
-  try { if (c.previewPath) c.previewPath.remove(); } catch (_e) {}
-  nwLE.connecting = null;
-  nwUpdateAllWirePaths();
+  nwClearConnectPreview(c);
 }
 
 
 // -----------------------------
-// DP Picker (Suche + ioBroker-Objektstruktur)
+// DP Picker (Suche + NexoWatt-EOS-Datenpunktstruktur)
 // -----------------------------
 /**
  * Code-Teil: nwOpenModal
@@ -3698,7 +3802,7 @@ async function nwInitLogicEditor() {
     } catch (_e) {
       // ignore
     }
-    try { window.location.href = 'smarthome-config.html?nwAdmin=1'; } catch (_e2) {}
+    try { window.location.href = 'smarthome-config.html'; } catch (_e2) {}
   });
 
   if (btnNew) btnNew.addEventListener('click', () => nwHandleNew());
@@ -3707,7 +3811,7 @@ async function nwInitLogicEditor() {
   if (btnImport) btnImport.addEventListener('click', () => nwOpenImport());
   if (btnBackup) btnBackup.addEventListener('click', () => nwOpenBackup());
   if (btnSmarthomeCfg) btnSmarthomeCfg.addEventListener('click', () => {
-    try { window.location.href = 'smarthome-config.html?nwAdmin=1'; } catch (_e) {}
+    try { window.location.href = 'smarthome-config.html'; } catch (_e) {}
   });
 
 

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: caffa274406e098cbbb115c490ef370c8bad7801e2093a79f9cd87f22ec09c37
+ * Original-Hash: e512dc59177b3e9d71e4b48abd50a8e205e5d3a200a553b1be9500564a929337
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/country-profile.ts
- * Quell-Hash: sha256:5bbce605d3ebb8f7e7cc9ffac73a52a07be77312035db340c488e45009e18021
+ * Quell-Hash: sha256:2d0ca75ff434f596c6eb2d1e3642e2922b72bcbd932041a6dafed82a51fa6d7a
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -96,7 +96,7 @@ class CountryProfileModule extends BaseModule {
     await a.setObjectNotExistsAsync('countryProfile', { type: 'channel', common: { name: 'Länderprofil / Markt' }, native: {} });
 
     const stateDefs = [
-      ['system.language', 'ioBroker Systemsprache', 'string', 'text', ''],
+      ['system.language', 'NexoWatt EOS Systemsprache', 'string', 'text', ''],
       ['system.languageSource', 'Quelle der Systemsprache', 'string', 'text', ''],
       ['countryProfile.country', 'Aktives Länderprofil', 'string', 'text', 'DE'],
       ['countryProfile.label', 'Länderprofil Bezeichnung', 'string', 'text', 'Deutschland'],

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 787fc5502d6f8e02a085990f43dfa5f2c9afbe350a18ed4a09704b73140fa7ca
+ * Original-Hash: 7aec4995159eb8a637b4bdceb80af3461c22e220248fec4c8cbdf67b6243f2d2
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/auth.ts
- * Quell-Hash: sha256:d5f520ee2ce61cc4428c27a14332b7f91b809642b045b61d13812f51f1099821
+ * Quell-Hash: sha256:69783e7f0c60c0aa2d23cc9b12ed4db75cfc079e5e9ffaeae1f3dc94d232f5ed
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -248,7 +248,7 @@
     return caps.includes('*') || caps.includes(String(cap || ''));
   }
 
-  /** Rücksprung in den EOS/ioBroker Admin-Tab des NexoWatt-Adapters. */
+  /** Rücksprung in den NexoWatt EOS Admin. */
   function adminUrl() {
     try {
       const proto = window.location.protocol || 'http:';

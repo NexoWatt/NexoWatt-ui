@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.167",
+  "version": "0.8.168",
   "files": [
     {
       "path": "admin/admin_logo_.ico",
@@ -15,18 +15,18 @@
     },
     {
       "path": "admin/appcenter.html",
-      "size": 2096,
-      "sha256": "793164b7685e34103b3b906fa5b48b1f1bcdbbf4e00f654a7df73597815b35a1"
+      "size": 2104,
+      "sha256": "ff0a0ded9ab24150284a1b613f5303b2ca49eed35b845c13549dc1f1ecc7d530"
     },
     {
       "path": "admin/jsonConfig.json",
-      "size": 8882,
-      "sha256": "5608b04a42ae4a2ba9a4a26847849fe2def58deb7c19f7989bb9766f68c45a87"
+      "size": 8886,
+      "sha256": "741a1cd7f913f08033c8352486c5a1e25a48253e4e091c8bc967cb13f22d08af"
     },
     {
       "path": "admin/license.html",
-      "size": 2056,
-      "sha256": "b3c66776b0a5b995bdfafde30a6a0ce4c8f09fbf63698e761e48a94b28dcb27f"
+      "size": 2064,
+      "sha256": "d839c1d5770dcb3bb5f74e829953fb414029cb30ef47d651a81dbe63974c7703"
     },
     {
       "path": "admin/react/assets/index-BVyQqQO2.css",
@@ -35,33 +35,33 @@
     },
     {
       "path": "admin/react/assets/index-CCQUiWc9.js",
-      "size": 180560,
-      "sha256": "125660daf34397e444cf97e60734294c026902957872860a1ac5dcc36c21137d"
+      "size": 180567,
+      "sha256": "b1ac7346c2eafc55040480b509814f2ca117e945dba12d0ef4220c1f36c8ba2e"
     },
     {
       "path": "admin/react/index.html",
-      "size": 3011,
-      "sha256": "3f509e9f164080bf0aae77487c7b2cb136919ca1ede3c120fa0d509dbf32b63f"
+      "size": 3015,
+      "sha256": "14956eafe62960f28ff8c4e9d43e6ea7c08861cb8919688bb61b24fd29213ee3"
     },
     {
       "path": "admin/simulation.html",
-      "size": 2091,
-      "sha256": "b19e246bb9b11e5556e1270c5e8260a1f2937500b9584c87e515b32c97042d4f"
+      "size": 2099,
+      "sha256": "b0d7ed51c5c1f50ab50b24dedcd3184b07c3e79c77ae6958857b67446ec99b69"
     },
     {
       "path": "admin/smarthomecfg.html",
-      "size": 2117,
-      "sha256": "844835754fe8df51a4e50905ad7a7ac9d7bcb09da4e9d811580f2f719b3ac6d7"
+      "size": 2125,
+      "sha256": "97a31abecba1c9f5523ec376ad6033c94b434e696d04405bcba62cce5ee03543"
     },
     {
       "path": "admin/smarthomevis.html",
-      "size": 2105,
-      "sha256": "08f76074e29cf79b0d05a96d175f0f4aecff3d475a24c308c1eb0167bf08addf"
+      "size": 2113,
+      "sha256": "ad6fe1413baf2e376fcf2b432e75dcf507d4573439bf0aaceab99a08ee95b0dd"
     },
     {
       "path": "admin/tab.html",
-      "size": 2062,
-      "sha256": "08eeefd49f3d7560edabe4ec681ef4c84170873c243b52f8240598d057c3cc28"
+      "size": 2070,
+      "sha256": "ab557de1d536220add7471be1ebc4f7d21db01b0b0a60ac301b634c30fb31d8c"
     },
     {
       "path": "docs/RC38_STABILITAET_DE.md",
@@ -97,6 +97,11 @@
       "path": "docs/RC43_SMARTHOME_NEXOLOGIC_STABILITY_DE.md",
       "size": 2646,
       "sha256": "a22c37946dce3064814c339b692f5698b622c66bae03653249897f20cafa0ad9"
+    },
+    {
+      "path": "docs/RC44_NEXOLOGIC_CUSTOMER_WORKSPACE_DE.md",
+      "size": 3158,
+      "sha256": "3d289cbedeab82eedbe3db2cfb131923684fa9230fd3584f44b3b2528f2c0c29"
     },
     {
       "path": "ems/charging-budget-helpers.js",
@@ -180,8 +185,8 @@
     },
     {
       "path": "ems/modules/country-profile.js",
-      "size": 5410,
-      "sha256": "caffa274406e098cbbb115c490ef370c8bad7801e2093a79f9cd87f22ec09c37"
+      "size": 5414,
+      "sha256": "e512dc59177b3e9d71e4b48abd50a8e205e5d3a200a553b1be9500564a929337"
     },
     {
       "path": "ems/modules/energy-ledger.js",
@@ -265,8 +270,8 @@
     },
     {
       "path": "ems/modules/storage-mapping.js",
-      "size": 40583,
-      "sha256": "e26fee75e62505a545e49900a0d3f2ac0114e207c82e0c4ef8d2e56c3e5a4715"
+      "size": 40587,
+      "sha256": "45f21d266acc575a211735e56c7aa65fd237d2a059684dea61c68aa2fb86ffbb"
     },
     {
       "path": "ems/modules/tarif-vis.js",
@@ -421,12 +426,12 @@
     {
       "path": "ems/services/tariff-provider-registry.js",
       "size": 28839,
-      "sha256": "2e754377bdf840dcf380c160e7dcd7908281e2701f89373731960778ed039a98"
+      "sha256": "f64f9479979ce1e76b1ac8e7a0a826f1949e58e2200d7f4fe180df71d9f4dc97"
     },
     {
       "path": "io-package.json",
-      "size": 28497,
-      "sha256": "5a2fceeb61266b3b66060da727c5d24ce57e092cd31a0134f0eadf8412cddcaf"
+      "size": 29346,
+      "sha256": "24f208e2768e251145ac76f267e592e8a1e66cb092c2aa27152f75f6649fc310"
     },
     {
       "path": "lib/energy-origin-api.js",
@@ -660,13 +665,13 @@
     },
     {
       "path": "main.js",
-      "size": 1662693,
-      "sha256": "2e0ad13adc33a1f0592a01ca7250256e5e390648ac7ced184afb4f8be0e519a0"
+      "size": 1662623,
+      "sha256": "9a9445365c77777fef1f26d29121c8537b0371bbf3668c0388bf26e867130df8"
     },
     {
       "path": "README.md",
-      "size": 1844,
-      "sha256": "e525e1a6a9b06dcae92a5a2e26a4f21c3482f4a620b77c31b6a5bd292aa82974"
+      "size": 2010,
+      "sha256": "8f8b9caac60a0ca354d0472e0d6074d24f3740beeeea450412d56c522f206cc0"
     },
     {
       "path": "www/admin-guard.js",
@@ -680,8 +685,8 @@
     },
     {
       "path": "www/app.js",
-      "size": 528637,
-      "sha256": "1cba76484c0d993d7be292c25a545144093a017190f68f830e7747694dd8b583"
+      "size": 528744,
+      "sha256": "f78221e7dd63b6f71a4859dca767b856d4d4df9ec0060da3a57a399f314063db"
     },
     {
       "path": "www/apple-touch-icon.png",
@@ -765,13 +770,13 @@
     },
     {
       "path": "www/auth.js",
-      "size": 30741,
-      "sha256": "787fc5502d6f8e02a085990f43dfa5f2c9afbe350a18ed4a09704b73140fa7ca"
+      "size": 30715,
+      "sha256": "7aec4995159eb8a637b4bdceb80af3461c22e220248fec4c8cbdf67b6243f2d2"
     },
     {
       "path": "www/cockpit-shell.js",
-      "size": 10592,
-      "sha256": "7874432e89d9395f26b8e12aa255c650d1231e2ae7cdc5534ae78e0b85d70a12"
+      "size": 10699,
+      "sha256": "113b05481c7d510d5f259bc14e2da527a092072187d486c052e490121dcbc7f6"
     },
     {
       "path": "www/dc-station-display.css",
@@ -780,8 +785,8 @@
     },
     {
       "path": "www/dc-station-display.html",
-      "size": 773,
-      "sha256": "f77ef113d61c857b0d2893faa8ac02ab48db00e1e938ddada7197f4d942daec6"
+      "size": 781,
+      "sha256": "68f735edc09488331a0bf83fb241c6029400b68847a35b681713b5274f2fa0ca"
     },
     {
       "path": "www/dc-station-display.js",
@@ -795,18 +800,18 @@
     },
     {
       "path": "www/ems-apps.html",
-      "size": 146995,
-      "sha256": "1f6464350b33deeea49b301fddd047ee65309db87f1733edc869c42dcea70509"
+      "size": 146985,
+      "sha256": "91df804250d85f122eb77c89c95f8e33676aebdea96e22af398037f19a03eb00"
     },
     {
       "path": "www/ems-apps.js",
-      "size": 942841,
-      "sha256": "0729637670b28a0d2358192ec940b57ae108bfdd82f526cd684981fba3d30627"
+      "size": 942856,
+      "sha256": "407648d67d4fe33c2aefe686951e80fb3a706a5f01a8ee32b72f3a8e87d30984"
     },
     {
       "path": "www/energy-ledger.html",
-      "size": 8835,
-      "sha256": "3651e696ad350ca7acc43171a67fc3df07256912180797349252eb18fd5a93bf"
+      "size": 8847,
+      "sha256": "d51afcc7418f1eba61245f9048e29432ab8d16fc53e8b3658aee2848123098a3"
     },
     {
       "path": "www/energy-ledger.js",
@@ -830,8 +835,8 @@
     },
     {
       "path": "www/evcs-report.html",
-      "size": 5458,
-      "sha256": "2989a9d4a1fcf868703851e6f8e750b444b59e0386cb94a7dda35da9fd017e5a"
+      "size": 5466,
+      "sha256": "7e9115417d9e3f333dadbc07861194b986de6d7b9c7c85d1678583ee305a546a"
     },
     {
       "path": "www/evcs-report.js",
@@ -840,8 +845,8 @@
     },
     {
       "path": "www/evcs.html",
-      "size": 5327,
-      "sha256": "f1fbd43f09a858de75f1773838a49e2b1a417d95c4f42d4711d9586050e1b004"
+      "size": 5335,
+      "sha256": "19318e7be6582d767e31bfa918d9e11f3bd37b79d198982f259b82b9c850a6ef"
     },
     {
       "path": "www/evcs.js",
@@ -850,8 +855,8 @@
     },
     {
       "path": "www/history.html",
-      "size": 17844,
-      "sha256": "accbe9d5591b6a7ceb012ca996e49111d30eddd50caad42cdc724d0729fd69c5"
+      "size": 17860,
+      "sha256": "e37ffb67ab903085fe1ddd750eab660a7b9429f1f9ab72615ca7a2e71aacdb7a"
     },
     {
       "path": "www/history.js",
@@ -870,8 +875,8 @@
     },
     {
       "path": "www/i18n/nl.json",
-      "size": 48378,
-      "sha256": "501081d61c16f9c1684cb455f9f6df652079516236f92e38b4c3bff87405ee34"
+      "size": 48664,
+      "sha256": "5b3ffa9ef65c381358dab5e7cfba12eb763c457626d1e30fbf2127add40eea28"
     },
     {
       "path": "www/icons/battery.png",
@@ -900,28 +905,28 @@
     },
     {
       "path": "www/index.html",
-      "size": 48825,
-      "sha256": "a2c78d648da1255a9bf766a400f69effd8fa26553ce3b01bc9e159fff6c20f39"
+      "size": 48838,
+      "sha256": "121ccdbcbf81d46cdc9fd24fe08fd2bb8684e2f869a9822114e0f2b2b9cad7d8"
     },
     {
       "path": "www/logic.html",
-      "size": 13509,
-      "sha256": "74ac6c1708080adee7a4828b5615316ecf230c3fec957855dc14e523769b43f2"
+      "size": 11139,
+      "sha256": "464ea35cbe677d3084430c23a4a3cb8ad0368c7118c34fa151172341c465aede"
     },
     {
       "path": "www/logic.js",
-      "size": 162300,
-      "sha256": "7b04a204887a087eed0ead5a5bdb637efff58d401cd4aaf9e447278f055a7e1f"
+      "size": 165925,
+      "sha256": "6533255373e4857dde608516c5bed59a8ad2dbc3a7e2778e65d6763b80aa6358"
     },
     {
       "path": "www/manifest.webmanifest",
-      "size": 1084,
-      "sha256": "ab3ffeb4adc0c64af5efbcfbe52a0f1ad94b321e0eb72465120b5287d35d3c7a"
+      "size": 1092,
+      "sha256": "bf107ecbaa253b069bc6782517a2c343d5126e54741ff9aa4eafe67e1dbacd08"
     },
     {
       "path": "www/mesh-microgrid.html",
-      "size": 12040,
-      "sha256": "d5dd575915a1f8229e63af0a32f29d2724b79094815fd60170ee9ad077c556a0"
+      "size": 12048,
+      "sha256": "5ac2825a93d712c8408890fea6ff36be81bfc65e654632d6c66b7dafbbf8d037"
     },
     {
       "path": "www/mesh-microgrid.js",
@@ -936,17 +941,17 @@
     {
       "path": "www/nw-i18n.js",
       "size": 20613,
-      "sha256": "cefc020735ef4fabc0b49e7e9a22614509979d204b2f90a3c455a36adc4390d7"
+      "sha256": "9d7834724aa0751ae20e06cfc49dabb2e9cc77a13b2f67bed42f81fd1ad39d20"
     },
     {
       "path": "www/nw-shell.js",
-      "size": 7475,
-      "sha256": "9da62295f7de7a8aae84c3d00565413c359960257c137ca99eab50ebbe905d05"
+      "size": 7582,
+      "sha256": "6afef487b2a2caf5d78aa34662e901d6580d1113dbed19918b63328a902eacc2"
     },
     {
       "path": "www/para14a-report.html",
-      "size": 5903,
-      "sha256": "e0d65d52a7603d7f36944409cd4dbf9cbee28e85f52217d21b4d301a290b8a90"
+      "size": 5911,
+      "sha256": "24bae54bd4baa0835e92ea366ee1bdc4e377049714cc1ea7fa375747eaa1da64"
     },
     {
       "path": "www/para14a-report.js",
@@ -965,8 +970,8 @@
     },
     {
       "path": "www/rfid-report.html",
-      "size": 6250,
-      "sha256": "67761af1e68ae2555ad203cec72d7221943f18889c801d60c10a9f5fa07339e5"
+      "size": 6258,
+      "sha256": "8826bee63ec973a898aba52b214cbadc822c57ddef8ce6d305b23c3d16b3f4cb"
     },
     {
       "path": "www/rfid-report.js",
@@ -975,13 +980,13 @@
     },
     {
       "path": "www/settings.html",
-      "size": 52808,
-      "sha256": "326462f41a36ea260c0274cc4c6e59cacfcdea061a0d8d81183a3c8a59336912"
+      "size": 52854,
+      "sha256": "c451307a962e14a1f94a439133316a6ec3398d71e30fea647a10618063723d91"
     },
     {
       "path": "www/simulation.html",
-      "size": 8522,
-      "sha256": "60f1eee3811137f934594ca55e72b12da6b5b69711ec5511bb9de1dbc6b82c17"
+      "size": 8526,
+      "sha256": "7739bacc5bc8dda6ae7f208273601369a2e2b6904aeca860c7dee65247455e2e"
     },
     {
       "path": "www/simulation.js",
@@ -990,23 +995,23 @@
     },
     {
       "path": "www/smarthome-config.html",
-      "size": 28681,
-      "sha256": "421d4c4767af15b95a83a63a8cf495f77a284ce21df9aef21d9a94c73542b8e2"
+      "size": 28272,
+      "sha256": "cc426bd820f53dec31e8ff65dbe2aa40e4ef9fbed0ff257f02d86d9d62e8fd77"
     },
     {
       "path": "www/smarthome-config.js",
-      "size": 515844,
-      "sha256": "5af03763606194c736d2465d9f5d843f29769135ec545d4285e527198e673d99"
+      "size": 515801,
+      "sha256": "2bebf6b0de03db58e8d037e7e5bc310ccea352a340bd7cc12c6874358efbd427"
     },
     {
       "path": "www/smarthome.html",
-      "size": 5074,
-      "sha256": "ce75a2a8958f567a5c70ff2c60038b90578af3b5f90ff2a841f8cfd7a31bf5b3"
+      "size": 5086,
+      "sha256": "3cc4aae1d39039cfdf2caae390a53b57c115bd2243f5d40fd169acb76d0b1168"
     },
     {
       "path": "www/smarthome.js",
-      "size": 547177,
-      "sha256": "16e24030f454d28919c69e887fe67f76634c93e572372cdf5f155b13c91fec4a"
+      "size": 547183,
+      "sha256": "2523bf8769efc263854d995f72fe288c4861ecda6c85eeb6817204dc3ddaf739"
     },
     {
       "path": "www/static/ts-mirrors/frontend/customer-feature-visibility.mjs",
@@ -1050,8 +1055,8 @@
     },
     {
       "path": "www/storagefarm.html",
-      "size": 5000,
-      "sha256": "ae0a9d02c16436b59712832e28adcb4df309b284dcddb784fa78fbd00f115bf2"
+      "size": 5012,
+      "sha256": "17c322fc4d47aea98b4a96e4e83874e3ebd6585650c71a93a7c3364f4d9327d8"
     },
     {
       "path": "www/storagefarm.js",
@@ -1060,18 +1065,18 @@
     },
     {
       "path": "www/styles.css",
-      "size": 304824,
-      "sha256": "0e544e4c3380ae602c495003ba58becf16334dfe544213a3c2e9d10ab9216006"
+      "size": 308047,
+      "sha256": "72955eadb8a53bf40694e853b4ad78fae354147bc5170cdbc9a250dfd7c49583"
     },
     {
       "path": "www/sw.js",
       "size": 4888,
-      "sha256": "d7fa3264e48d9ced3c23bfc5994bf937523c13deb296262755bf538eb10413d5"
+      "sha256": "eba114544d8f542e66eed8fc9ec1543148fb6628fba65da74894a839e6d2bb45"
     },
     {
       "path": "www/tariff-report.html",
-      "size": 5684,
-      "sha256": "87f86185b95dbefc31820f2b9a1c1590a8018131fa7a4787270644cf3e58161a"
+      "size": 5692,
+      "sha256": "fcc51e65f9fecc9e38e4ead0e0141a1457260858db853c8c0d5ec5a12494caae"
     },
     {
       "path": "www/tariff-report.js",
@@ -1085,8 +1090,8 @@
     },
     {
       "path": "www/year-report.html",
-      "size": 5101,
-      "sha256": "de45a096283d0ca091ee07fce440d4f4030af8c6e4801873aaf2911bc5c9e581"
+      "size": 5109,
+      "sha256": "f916a76e3f9e1725ce5b0c8b4c992b5ce8502cba1347a2da7c9ce22291046dbe"
     },
     {
       "path": "www/year-report.js",

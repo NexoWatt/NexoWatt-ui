@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/auth.ts
- * Quell-Hash: sha256:d5f520ee2ce61cc4428c27a14332b7f91b809642b045b61d13812f51f1099821
+ * Quell-Hash: sha256:69783e7f0c60c0aa2d23cc9b12ed4db75cfc079e5e9ffaeae1f3dc94d232f5ed
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -162,7 +162,7 @@
     return caps.includes('*') || caps.includes(String(cap || ''));
   }
 
-  /** Rücksprung in den EOS/ioBroker Admin-Tab des NexoWatt-Adapters. */
+  /** Rücksprung in den NexoWatt EOS Admin. */
   function adminUrl() {
     try {
       const proto = window.location.protocol || 'http:';

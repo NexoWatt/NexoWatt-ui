@@ -38,7 +38,7 @@ class CountryProfileModule extends BaseModule {
     await a.setObjectNotExistsAsync('countryProfile', { type: 'channel', common: { name: 'Länderprofil / Markt' }, native: {} });
 
     const stateDefs = [
-      ['system.language', 'ioBroker Systemsprache', 'string', 'text', ''],
+      ['system.language', 'NexoWatt EOS Systemsprache', 'string', 'text', ''],
       ['system.languageSource', 'Quelle der Systemsprache', 'string', 'text', ''],
       ['countryProfile.country', 'Aktives Länderprofil', 'string', 'text', 'DE'],
       ['countryProfile.label', 'Länderprofil Bezeichnung', 'string', 'text', 'Deutschland'],

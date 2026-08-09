@@ -1,5 +1,5 @@
-NexoWatt UI 0.8.167 RC43 – direkter npm-Publish
-=================================================
+NexoWatt EOS 0.8.168 RC44 – direkter npm-Publish
+==================================================
 
 1. Den Inhalt dieser ZIP in den Projektordner kopieren und vorhandene Dateien ersetzen.
 2. PowerShell im Projektordner öffnen.
@@ -9,11 +9,13 @@ NexoWatt UI 0.8.167 RC43 – direkter npm-Publish
 
 Kein npm ci, kein npm update und kein TypeScript-Abgleich erforderlich.
 Der Publish prüft ausschließlich:
-- ob Version 0.8.167 auf npm noch frei ist,
-- ob alle 218 freigegebenen Paketdateien exakt dem geprüften RC43-Artefakt entsprechen.
+- ob Version 0.8.168 auf npm noch frei ist,
+- ob alle 219 freigegebenen Paketdateien exakt dem geprüften RC44-Artefakt entsprechen.
 
 Alte node_modules-Ordner oder zusätzliche lokale Entwicklungsdateien werden nicht veröffentlicht,
 weil package.json eine exakte Dateiliste für das npm-Paket enthält.
 
-RC43 stabilisiert NexoLogic, SmartHome, Szenen, Datenqualität und die Datenpunktauswahl.
-Die dedizierten EMS-, Lade-, Speicher-, FENECON-, §14a- und SafetyEnvelope-Regelmodule bleiben unverändert.
+RC44 behebt die NexoLogic-Verbindungen, gibt SmartHome und NexoLogic für den Kunden frei,
+nutzt im Logikeditor die vollständige Desktopfläche und öffnet die Datenpunktauswahl beim
+bereits zugeordneten Objektordner. EMS/App-Center, Lizenz, Simulator und beliebige
+Hardware-Schreibtests bleiben geschützt.

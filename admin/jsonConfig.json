@@ -30,7 +30,7 @@
           "xs": 12,
           "sm": 12,
           "md": 6,
-          "help": "ioBroker-konforme IP-Adresse für den eingebauten Webserver. Legacy native.bind wird weiterhin als Fallback gelesen.",
+          "help": "NexoWatt-EOS-kompatible IP-Adresse für den eingebauten Webserver. Legacy native.bind wird weiterhin als Fallback gelesen.",
           "default": "0.0.0.0"
         }
       }
@@ -52,7 +52,7 @@
           "label": "Kunden-Schreibzugriffe erlauben",
           "attr": "accessControl.customerWritePolicy",
           "default": "all",
-          "help": "Alle Netze behält das bisherige Verhalten. LAN/VPN erlaubt Bedienung nur aus privaten/ lokalen Netzen. Anmeldung verlangt immer eine gültige NexoWatt-/ioBroker-Session.",
+          "help": "Alle Netze behält das bisherige Verhalten. LAN/VPN erlaubt Bedienung nur aus privaten/ lokalen Netzen. Anmeldung verlangt immer eine gültige NexoWatt-EOS-Session.",
           "options": [
             {
               "label": "Alle Netze (Legacy/Feldkompatibilität)",
@@ -224,7 +224,7 @@
       "items": {
         "__smarthomeInfo": {
           "type": "staticText",
-          "text": "SmartHome: Aktiviert die SmartHome-Ansicht in der VIS (Header-Reiter + Menülink).\nDie Konfiguration (Räume/Funktionen/Geräte + Datenpunkt-Zuordnung) erfolgt in der SmartHome-Config Seite.\n\nSmartHome Config öffnen:\n• Im Adapter-Reiter \"Tab\" auf \"SmartHome Config\" klicken.\n• Oder direkt aus dem Admin: /adapter/nexowatt-ui/smarthomecfg.html?instance=<INSTANZ>\n• Alternativ direkt per Port: http://<HOST>:<PORT>/smarthome-config.html\n\nSmartHome VIS öffnen:\n• Im Adapter-Reiter \"Tab\" auf \"SmartHome VIS\" klicken.\n• Oder direkt aus dem Admin: /adapter/nexowatt-ui/smarthomevis.html?instance=<INSTANZ>\n• Alternativ direkt per Port: http://<HOST>:<PORT>/smarthome.html\n\nHinweis: Änderungen an den Adapter-Einstellungen werden von ioBroker mit einem Adapter-Neustart übernommen.",
+          "text": "SmartHome: Aktiviert die SmartHome-Ansicht in der VIS (Header-Reiter + Menülink).\nDie Konfiguration (Räume/Funktionen/Geräte + Datenpunkt-Zuordnung) erfolgt in der SmartHome-Config Seite.\n\nSmartHome Config öffnen:\n• Im Adapter-Reiter \"Tab\" auf \"SmartHome Config\" klicken.\n• Oder direkt aus dem Admin: /adapter/nexowatt-ui/smarthomecfg.html?instance=<INSTANZ>\n• Alternativ direkt per Port: http://<HOST>:<PORT>/smarthome-config.html\n\nSmartHome VIS öffnen:\n• Im Adapter-Reiter \"Tab\" auf \"SmartHome VIS\" klicken.\n• Oder direkt aus dem Admin: /adapter/nexowatt-ui/smarthomevis.html?instance=<INSTANZ>\n• Alternativ direkt per Port: http://<HOST>:<PORT>/smarthome.html\n\nHinweis: Änderungen an den Adapter-Einstellungen werden von NexoWatt EOS mit einem Adapter-Neustart übernommen.",
           "xs": 12,
           "sm": 12,
           "md": 12

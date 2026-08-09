@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 16e24030f454d28919c69e887fe67f76634c93e572372cdf5f155b13c91fec4a
+ * Original-Hash: 2523bf8769efc263854d995f72fe288c4861ecda6c85eeb6817204dc3ddaf739
  */
 
 
@@ -9912,8 +9912,8 @@ function nwUpdatePageTitle() {
   // Best-effort browser-tab title update.
   try {
     document.title = subtitle
-      ? `${title} – ${subtitle} – SmartHome`
-      : `${title} – SmartHome`;
+      ? `NexoWatt EOS – ${title} – ${subtitle}`
+      : `NexoWatt EOS – ${title}`;
   } catch (_) {
     // ignore
   }

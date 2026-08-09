@@ -10,7 +10,7 @@ const path = require('path');
  *
  * Zweck:
  * Prüft den Branding-Schritt vollständig aus TypeScript: Die sichtbare
- * Topbar-Marke darf nur noch „NexoWatt“ heißen. Der fachliche Begriff EMS bleibt
+ * Topbar-Marke muss „NexoWatt EOS“ heißen. Der fachliche Begriff EMS bleibt
  * in Modulnamen/Statuskarten erlaubt, aber nicht mehr als Produktzusatz in der
  * oberen Marke.
  */
@@ -49,8 +49,8 @@ function runBrandHeaderCleanupTest(): void {
   assert(Boolean(io.common?.news?.[expectedVersion]), `io-package.json common.news braucht einen ${expectedVersion}-Eintrag.`);
   assert(Object.keys(io.common?.news ?? {}).length <= 7, 'io-package.json common.news darf maximal 7 Einträge haben.');
   assert(manifest.version === expectedVersion, `manifest.webmanifest muss Version ${expectedVersion} haben.`);
-  assert(manifest.name === 'NexoWatt', 'manifest.webmanifest name muss NexoWatt sein.');
-  assert(manifest.short_name === 'NexoWatt', 'manifest.webmanifest short_name muss NexoWatt sein.');
+  assert(manifest.name === 'NexoWatt EOS', 'manifest.webmanifest name muss NexoWatt EOS sein.');
+  assert(manifest.short_name === 'NexoWatt EOS', 'manifest.webmanifest short_name muss NexoWatt EOS sein.');
 
   const oldBrowserTitle = new RegExp('<title>NexoWatt EMS\\b');
   const oldPwaTitle = new RegExp('apple-mobile-web-app-title"\\s+content="NexoWatt EMS"');
@@ -62,7 +62,7 @@ function runBrandHeaderCleanupTest(): void {
     assert(!oldPwaTitle.test(html), `${rel} darf den PWA-Titel nicht mehr als „NexoWatt EMS“ setzen.`);
   }
 
-  assert(read('www/index.html').includes('<h1>NexoWatt</h1>'), 'LIVE-Topbar muss „NexoWatt“ anzeigen.');
+  assert(read('www/index.html').includes('<h1>NexoWatt EOS</h1>'), 'LIVE-Topbar muss „NexoWatt EOS“ anzeigen.');
   assert(read('src-ts/runtime-executables/www/app.ts').includes('function nwNormalizeBrandHeader'), 'app.ts muss den TS-Branding-Normalizer enthalten.');
   assert(read('src-ts/runtime-executables/www/nw-shell.ts').includes('function nwNormalizeBrandHeader'), 'nw-shell.ts muss den TS-Branding-Normalizer enthalten.');
   assert(read('src-ts/runtime-executables/www/cockpit-shell.ts').includes('function nwNormalizeBrandHeader'), 'cockpit-shell.ts muss den TS-Branding-Normalizer enthalten.');
@@ -80,4 +80,4 @@ function runBrandHeaderCleanupTest(): void {
 }
 
 runBrandHeaderCleanupTest();
-console.log('[ts-brand-header-cleanup] OK: Topbar zeigt NexoWatt ohne EMS-Zusatz, Version/Manifest/Cache sind konsistent.');
+console.log('[ts-brand-header-cleanup] OK: Topbar zeigt NexoWatt EOS, Version/Manifest/Cache sind konsistent.');

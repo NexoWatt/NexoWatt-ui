@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/smarthome-config.ts
- * Quell-Hash: sha256:ee5323d0b2bac514c417b755aa1c638fd8d735aed8cc30b19230bcbc310d8ca1
+ * Quell-Hash: sha256:efa402ea1f8595f7351161de215d0265b3229395613844ea30d738b4c7acd107
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1230,7 +1230,7 @@ function nwValidateConfig(cfg) {
       const v = String(dp || '').trim();
       if (!v) return;
       if (!nwLooksLikeDpId(v)) {
-        nwPushIssue(out, 'warn', 'Datenpunkt', label + ': sieht nicht wie eine ioBroker-ID aus („' + v + '“).', ent);
+        nwPushIssue(out, 'warn', 'Datenpunkt', label + ': sieht nicht wie eine Datenpunkt-ID aus („' + v + '“).', ent);
       }
     };
 
@@ -2894,13 +2894,13 @@ function nwRenderAll() {
  */
 function nwShcfgSetMode(mode, opts = {}) {
   nwEnsureShcfgUiState();
-  const allowed = ['home', 'builder', 'backup', 'timers', 'scenes', 'detect', 'classic'];
+  const allowed = ['home', 'builder', 'timers', 'scenes', 'detect', 'classic'];
   if (!allowed.includes(mode)) return;
 
   nwShcState.ui.mode = mode;
   // Persist only the modern modes. Classic is intentionally not persisted.
   try {
-    if (mode === 'home' || mode === 'builder' || mode === 'backup' || mode === 'timers' || mode === 'scenes' || mode === 'detect') {
+    if (mode === 'home' || mode === 'builder' || mode === 'timers' || mode === 'scenes' || mode === 'detect') {
       localStorage.setItem('nw-shcfg-ui-mode', mode);
     }
   } catch (_) {}
@@ -2974,7 +2974,7 @@ function nwInitShcfgShellUi() {
       nwRenderShcfgShell();
     }
   });
-  if (btnLogic) btnLogic.addEventListener('click', () => window.location.href = '/logic.html?nwAdmin=1');
+  if (btnLogic) btnLogic.addEventListener('click', () => window.location.href = '/logic.html');
   if (btnTimers) btnTimers.addEventListener('click', () => nwShcfgSetMode('timers'));
   if (btnScenes) btnScenes.addEventListener('click', () => nwShcfgSetMode('scenes'));
   if (btnBackup) btnBackup.addEventListener('click', () => nwShcfgSetMode('backup'));
@@ -3012,7 +3012,7 @@ function nwInitShcfgShellUi() {
   const timersReload = document.getElementById('nw-shcfg-timers-reload');
   const timersSave = document.getElementById('nw-shcfg-timers-save');
   if (timersBack) timersBack.addEventListener('click', () => nwShcfgSetMode('home'));
-  if (timersOpenLogic) timersOpenLogic.addEventListener('click', () => window.location.href = '/logic.html?nwAdmin=1');
+  if (timersOpenLogic) timersOpenLogic.addEventListener('click', () => window.location.href = '/logic.html');
   if (timersReload) timersReload.addEventListener('click', async () => {
     await nwLoadTimersModule(true);
     await nwLoadLogicClocksModule(true);
@@ -3035,7 +3035,7 @@ function nwInitShcfgShellUi() {
   const scenesAdd = document.getElementById('nw-shcfg-scenes-add');
   const scenesSave = document.getElementById('nw-shcfg-scenes-save');
   if (scenesBack) scenesBack.addEventListener('click', () => nwShcfgSetMode('home'));
-  if (scenesOpenLogic) scenesOpenLogic.addEventListener('click', () => window.location.href = '/logic.html?nwAdmin=1');
+  if (scenesOpenLogic) scenesOpenLogic.addEventListener('click', () => window.location.href = '/logic.html');
   if (scenesAdd) scenesAdd.addEventListener('click', () => {
     nwAddScene();
     nwRenderShcfgShell();
@@ -6445,7 +6445,7 @@ function nwRenderShcfgBuilderProps(container) {
     const ioTitle = document.createElement('div');
     ioTitle.className = 'nw-config-card__subtitle';
     ioTitle.style.marginTop = '10px';
-    ioTitle.textContent = 'Datenpunkte (ioBroker)';
+    ioTitle.textContent = 'Datenpunkte (NexoWatt EOS)';
     container.appendChild(ioTitle);
 
     dev.io = dev.io || {};
@@ -7596,7 +7596,7 @@ function nwCreateDpInput(labelText, value, onChange) {
   btnTest.type = 'button';
   btnTest.className = 'nw-config-dp-button';
   btnTest.textContent = 'Lesen';
-  btnTest.title = 'Datenpunkt lesen (Installer)';
+  btnTest.title = 'Datenpunkt lesen';
 
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnTest. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   btnTest.addEventListener('click', async () => {
@@ -7643,7 +7643,7 @@ function nwCreateDpInput(labelText, value, onChange) {
     btnSet.type = 'button';
     btnSet.className = 'nw-config-dp-button';
     btnSet.textContent = 'Schreiben';
-    btnSet.title = 'Datenpunkt schreiben (Installer)';
+    btnSet.title = 'Datenpunkt-Schreibtest (geschützter Expertenmodus)';
 
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnSet. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btnSet.addEventListener('click', async () => {
@@ -10251,7 +10251,7 @@ async function nwInitSmartHomeConfig() {
       const enabled = !!(cfg && cfg.smartHome && cfg.smartHome.enabled);
       if (!enabled) {
         hint.style.display = 'block';
-        hint.innerHTML = '⚠️ SmartHome ist deaktiviert – die VIS-Seite bleibt leer. Bitte im ioBroker Admin unter <strong>nexowatt-ui → SmartHome → „SmartHome aktivieren“</strong> einschalten.';
+        hint.innerHTML = '⚠️ SmartHome ist deaktiviert – die VIS-Seite bleibt leer. Bitte im NexoWatt EOS Admin unter <strong>NexoWatt EOS → SmartHome → „SmartHome aktivieren“</strong> einschalten.';
       } else {
         hint.style.display = 'none';
         hint.innerHTML = '';
