@@ -256,8 +256,19 @@ function nwBuildLogicLibrary() {
           { value: 'number', label: 'Zahl' },
           { value: 'string', label: 'Text' },
         ] },
+        { key: 'invalidPolicy', label: 'Bei ungültigem Wert', kind: 'select', options: [
+          { value: 'block', label: 'Graphzweig sperren (sicher)' },
+          { value: 'hold', label: 'Letzten gültigen Wert halten' },
+          { value: 'fallback', label: 'Ersatzwert verwenden' },
+        ] },
+        { key: 'fallbackValue', label: 'Ersatzwert', kind: 'text', placeholder: 'nur bei Ersatzwert' },
+        { key: 'maxAgeMs', label: 'Max. Alter (ms)', kind: 'number', placeholder: '0 = nicht zeitlich prüfen' },
+        { key: 'acceptBadQuality', label: 'ioBroker-Qualitätsfehler akzeptieren', kind: 'select', options: [
+          { value: 'false', label: 'Nein (empfohlen)' },
+          { value: 'true', label: 'Ja' },
+        ] },
       ],
-      defaults: { dpId: '', cast: 'auto' },
+      defaults: { dpId: '', cast: 'auto', invalidPolicy: 'block', fallbackValue: '', maxAgeMs: 0, acceptBadQuality: 'false' },
     },
     {
       type: 'const',
@@ -344,8 +355,11 @@ function nwBuildLogicLibrary() {
           { value: 'false', label: 'Aus' },
           { value: 'true', label: 'Ein' },
         ] },
+        { key: 'persistState', label: 'Zustand nach Neustart wiederherstellen', kind: 'select', options: [
+          { value: 'true', label: 'Ja' }, { value: 'false', label: 'Nein' },
+        ] },
       ],
-      defaults: { edge: 'rising', init: 'false' },
+      defaults: { edge: 'rising', init: 'false', persistState: 'true' },
     },
     {
       type: 'rs',
@@ -608,8 +622,11 @@ function nwBuildLogicLibrary() {
           { value: 'false', label: 'Aus' },
           { value: 'true', label: 'Ein' },
         ] },
+        { key: 'persistState', label: 'Reglerzustand nach Neustart wiederherstellen', kind: 'select', options: [
+          { value: 'true', label: 'Ja' }, { value: 'false', label: 'Nein' },
+        ] },
       ],
-      defaults: { mode: 'heat', band: 0.3, minOnMs: 0, minOffMs: 0, init: 'false' },
+      defaults: { mode: 'heat', band: 0.3, minOnMs: 0, minOffMs: 0, init: 'false', persistState: 'true' },
     },
     {
       type: 'rt_p',
@@ -994,8 +1011,11 @@ function nwBuildLogicLibrary() {
       params: [
         { key: 'initHours', label: 'Start (h)', kind: 'number', placeholder: '0' },
         { key: 'precision', label: 'Nachkommastellen', kind: 'number', placeholder: '2' },
+        { key: 'persistState', label: 'Zustand nach Neustart wiederherstellen', kind: 'select', options: [
+          { value: 'true', label: 'Ja' }, { value: 'false', label: 'Nein' },
+        ] },
       ],
-      defaults: { initHours: 0, precision: 2 },
+      defaults: { initHours: 0, precision: 2, persistState: 'true' },
     },
 
     // --- SmartHome
@@ -1064,6 +1084,11 @@ function nwBuildLogicLibrary() {
         { key: 'releaseOnIdle', label: 'Bei 0/false an Automatik zurückgeben', kind: 'select', options: [
           { value: 'true', label: 'Ja' }, { value: 'false', label: 'Nein' },
         ] },
+        { key: 'deactivateMode', label: 'Bei Deaktivieren/Löschen', kind: 'select', options: [
+          { value: 'safe', label: 'Sicheren Ruhewert schreiben' },
+          { value: 'hold', label: 'Letzten Wert halten' },
+        ] },
+        { key: 'stopValue', label: 'Sicherer Ruhewert', kind: 'text', placeholder: 'Standard: false bzw. 0' },
         { key: 'budgetMode', label: 'Zentrales EMS-Budget', kind: 'select', options: [
           { value: 'none', label: 'Kein Budget / normaler DP' },
           { value: 'pv', label: 'PV-Grant' },
@@ -1076,7 +1101,7 @@ function nwBuildLogicLibrary() {
         ] },
         { key: 'budgetPriority', label: 'Budget-Priorität', kind: 'number', placeholder: '900' },
       ],
-      defaults: { dpId: '', ack: 'false', minIntervalMs: 100, readbackId: '', requireReadback: 'false', readbackTolerance: 1, readbackMaxAgeMs: 15000, ackTimeoutMs: 5000, retryDelayMs: 3000, maxRetries: 3, faultLockMs: 60000, leaseMs: 60000, releaseOnIdle: 'true', budgetMode: 'none', budgetPowerW: 0, budgetAction: 'gate', budgetPriority: 900, autoRetry: 'true' },
+      defaults: { dpId: '', ack: 'false', minIntervalMs: 100, readbackId: '', requireReadback: 'false', readbackTolerance: 1, readbackMaxAgeMs: 15000, ackTimeoutMs: 5000, retryDelayMs: 3000, maxRetries: 3, faultLockMs: 60000, leaseMs: 60000, releaseOnIdle: 'true', deactivateMode: 'safe', stopValue: '', budgetMode: 'none', budgetPowerW: 0, budgetAction: 'gate', budgetPriority: 900, autoRetry: 'true' },
     },
   ];
 
@@ -1122,7 +1147,12 @@ async function nwSaveConfig(cfg) {
       body: JSON.stringify({ config: cfg }),
     });
     const json = await res.json();
-    if (!json || json.ok !== true) throw new Error(json && json.error ? json.error : 'API error');
+    if (!json || json.ok !== true) {
+      const details = json && Array.isArray(json.issues) && json.issues.length
+        ? ` ${json.issues.map((row) => row && row.message ? row.message : '').filter(Boolean).join(' | ')}`
+        : '';
+      throw new Error((json && json.error ? json.error : 'API error') + details);
+    }
     return json;
   } catch (e) {
     console.warn('logic editor: save failed', e);
@@ -2444,6 +2474,37 @@ function nwStartConnect(fromNodeId, fromPortKey) {
  * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
+function nwLogicPortType(nodeId, portKey, direction) {
+  const graph = nwLE.graph;
+  const node = graph && Array.isArray(graph.nodes) ? graph.nodes.find((row) => row && row.id === nodeId) : null;
+  const def = node ? nwLE.library.byType[node.type] : null;
+  const ports = def ? (direction === 'out' ? def.outputs : def.inputs) : [];
+  const port = Array.isArray(ports) ? ports.find((row) => row && row.key === portKey) : null;
+  return port && port.dataType ? String(port.dataType) : 'any';
+}
+
+function nwWouldCreateLogicCycle(graph, fromNodeId, toNodeId) {
+  if (!graph || fromNodeId === toNodeId) return true;
+  const adj = new Map();
+  for (const node of Array.isArray(graph.nodes) ? graph.nodes : []) if (node && node.id) adj.set(node.id, []);
+  for (const link of Array.isArray(graph.links) ? graph.links : []) {
+    const from = link && link.from ? String(link.from.node || '') : '';
+    const to = link && link.to ? String(link.to.node || '') : '';
+    if (adj.has(from) && adj.has(to)) adj.get(from).push(to);
+  }
+  if (adj.has(fromNodeId) && adj.has(toNodeId)) adj.get(fromNodeId).push(toNodeId);
+  const stack = [toNodeId];
+  const seen = new Set();
+  while (stack.length) {
+    const id = stack.pop();
+    if (id === fromNodeId) return true;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    for (const next of adj.get(id) || []) stack.push(next);
+  }
+  return false;
+}
+
 function nwFinishConnect(toNodeId, toPortKey) {
   const c = nwLE.connecting;
   if (!c) return;
@@ -2454,9 +2515,18 @@ function nwFinishConnect(toNodeId, toPortKey) {
   try { if (c.previewPath) c.previewPath.remove(); } catch (_e) {}
   nwLE.connecting = null;
 
-  // prevent self connect same port direction? allow but can cause loops.
   const from = { node: c.fromNodeId, port: c.fromPortKey };
   const to = { node: toNodeId, port: toPortKey };
+  const fromType = nwLogicPortType(from.node, from.port, 'out');
+  const toType = nwLogicPortType(to.node, to.port, 'in');
+  if (fromType !== 'any' && toType !== 'any' && fromType !== toType) {
+    nwSetStatus(`Verbindung nicht möglich: ${fromType} passt nicht zu ${toType}.`, false);
+    return;
+  }
+  if (nwWouldCreateLogicCycle(g, from.node, to.node)) {
+    nwSetStatus('Logikschleifen sind im stabilen Betriebsmodus nicht zulässig.', false);
+    return;
+  }
 
   // remove existing link to this input (one input = one source)
   g.links = Array.isArray(g.links) ? g.links : [];

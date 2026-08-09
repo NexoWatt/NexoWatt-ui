@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.8.166",
+  "version": "0.8.167",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -405,7 +405,13 @@
     "test:publish-check-runner": "node scripts/publish-check-runner.js --verify",
     "test:release:full": "node scripts/publish-check-runner.js",
     "test:heating-rod-shadow-power-model": "node scripts/verify-heating-rod-ts-shadow-power-model.js",
-    "test:heating-rod-shadow-calibration-parity": "node scripts/verify-heating-rod-shadow-calibration-parity.js"
+    "test:heating-rod-shadow-calibration-parity": "node scripts/verify-heating-rod-shadow-calibration-parity.js",
+    "test:nexologic-lifecycle-hardening": "node scripts/verify-nexologic-lifecycle-hardening.js",
+    "test:smarthome-contract-runtime": "node scripts/verify-smarthome-contract-runtime.js",
+    "test:smarthome-ui-capabilities": "node scripts/verify-smarthome-ui-capabilities.js",
+    "test:dp-picker-current-folder": "node scripts/verify-dp-picker-current-folder.js",
+    "test:smarthome-config-transactional": "node scripts/verify-smarthome-config-transactional.js",
+    "test:smarthome-scene-guard": "node scripts/verify-smarthome-scene-guard.js"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",
@@ -449,6 +455,7 @@
     "docs/RC40_TYPE_SAFETY_DE.md",
     "docs/RC41_HEATING_STABILITY_DE.md",
     "docs/RC42_FENECON_NVP_SHADOW_DE.md",
+    "docs/RC43_SMARTHOME_NEXOLOGIC_STABILITY_DE.md",
     "ems/charging-budget-helpers.js",
     "ems/consumers/evcs.js",
     "ems/consumers/generic-load.js",
@@ -516,6 +523,7 @@
     "ems/services/tariff-provider-registry.js",
     "io-package.json",
     "lib/energy-origin-api.js",
+    "lib/smarthome-contract.js",
     "lib/ts-mirrors/adapter/api-set.js",
     "lib/ts-mirrors/adapter/api-state.js",
     "lib/ts-mirrors/adapter/connection-state.js",

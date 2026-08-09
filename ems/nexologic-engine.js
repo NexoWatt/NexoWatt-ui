@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/nexologic-engine.ts
- * Quell-Hash: sha256:7ea6855db1ecc1859d8edfec88eb9253ee2a0a43cdd47fcba906d53aaf5e135a
+ * Quell-Hash: sha256:fd010ecec6015ab35dc433be1313c360730c7b71646a80ff4c8ec6b04cd0fc68
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -82,6 +82,7 @@ class NexoLogicEngine {
     this._dpToInputs = new Map(); // dpId -> array of { runner, nodeId }
     this._stopped = false;
     this.outputController = null;
+    this._validation = null;
   }
 
   /**
@@ -100,7 +101,7 @@ class NexoLogicEngine {
     this._stopped = true;
     try {
       for (const r of this.runners) {
-        try { if (r && typeof r.stop === 'function') r.stop(); } catch (_e) {}
+        try { if (r && typeof r.stop === 'function') await r.stop(); } catch (_e) {}
       }
     } catch (_e0) {}
 
@@ -114,7 +115,11 @@ class NexoLogicEngine {
     this._subscribed.clear();
     this._dpToInputs.clear();
     this.runners = [];
-    try { if (this.outputController && typeof this.outputController.stop === 'function') await this.outputController.stop(); } catch (_e3) {}
+    try {
+      if (this.outputController && typeof this.outputController.stop === 'function') {
+        await this.outputController.stop({ safe: true, reason: 'nexologic-engine-stop' });
+      }
+    } catch (_e3) {}
     if (this.adapter && this.adapter._nexoLogicOutputController === this.outputController) this.adapter._nexoLogicOutputController = null;
     this.outputController = null;
   }
@@ -132,13 +137,22 @@ class NexoLogicEngine {
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   async init(config) {
-    // Reload
+    const cfg = (config && typeof config === 'object') ? config : {};
+    const validation = validateNexoLogicConfig(cfg);
+    this._validation = validation;
+    if (!validation.ok) {
+      const err = new Error(`NexoLogic-Konfiguration ungültig: ${validation.errors.map((row) => row.message).join(' | ')}`);
+      err.code = 'NEXOLOGIC_CONFIG_INVALID';
+      err.issues = validation.errors;
+      throw err;
+    }
+
+    // Reload. Der bisherige Controller fährt bekannte Aktoren vor dem Austausch
+    // auf den konfigurierten Ruhewert. Erst danach startet die neue Generation.
     await this.stop();
     this._stopped = false;
 
-    const cfg = (config && typeof config === 'object') ? config : {};
     const graphs = Array.isArray(cfg.graphs) ? cfg.graphs : [];
-
     this.outputController = new NexoLogicOutputController(this.adapter);
     this.adapter._nexoLogicOutputController = this.outputController;
     this.runners = graphs
@@ -149,38 +163,40 @@ class NexoLogicEngine {
     // vor der ersten Graph-Auswertung vorhanden sind.
     for (const runner of this.runners) {
       for (const output of runner.getOutputDefinitions()) {
-        try { await this.outputController.registerOutput(output); } catch (_eOutput) {}
+        await this.outputController.registerOutput(output);
       }
+      await runner.restorePersistentState();
+      runner.beginInitialization();
     }
 
-    // Build dp subscriptions and prime initial values
+    // Zuerst alle Abonnements aufbauen. Danach werden sämtliche Eingangswerte
+    // gelesen, ohne bereits durch den Graphen zu propagieren. So entstehen beim
+    // Start keine Zwischenbefehle aus nur teilweise initialisierten Eingängen.
+    const primeJobs = [];
     for (const runner of this.runners) {
-      const dpInputs = runner.getDpInputs();
-      for (const it of dpInputs) {
+      for (const it of runner.getDpInputs()) {
         const dpId = String(it.dpId || '').trim();
         if (!dpId) continue;
-
         if (!this._dpToInputs.has(dpId)) this._dpToInputs.set(dpId, []);
         this._dpToInputs.get(dpId).push({ runner, nodeId: it.nodeId });
-
         if (!this._subscribed.has(dpId)) {
           this._subscribed.add(dpId);
-          try { await this.adapter.subscribeForeignStatesAsync(dpId); } catch (_e) {}
+          try { await this.adapter.subscribeForeignStatesAsync(dpId); } catch (_eSubscribe) {}
         }
-
-        // Prime initial value
-        try {
-          const st = await this.adapter.getForeignStateAsync(dpId);
-          if (st && st.val !== undefined) {
-            runner.setDpInputValue(it.nodeId, st.val);
-          }
-        } catch (_ePrime) {
-          // ignore
-        }
+        primeJobs.push((async () => {
+          let state = null;
+          try { state = await this.adapter.getForeignStateAsync(dpId); } catch (_ePrime) {}
+          runner.setDpInputState(it.nodeId, state, { initial: true, source: 'startup' });
+        })());
       }
+    }
+    await Promise.all(primeJobs);
 
-      // One initial evaluation pass so constants propagate + timer nodes arm themselves.
-      try { runner.evaluateAll(); } catch (_eEval) {}
+    // Ein atomarer, topologisch sortierter Startdurchlauf berechnet zuerst nur
+    // intern. Hardware-Seiteneffekte werden erst mit dem finalen Graphzustand
+    // freigegeben. Startwerte erzeugen standardmäßig keine Flanken oder Szenen.
+    for (const runner of this.runners) {
+      await runner.finishInitialization();
     }
   }
 
@@ -215,11 +231,9 @@ class NexoLogicEngine {
     const mappings = this._dpToInputs.get(dpId);
     if (!mappings || !mappings.length) return;
 
-    const val = state ? state.val : undefined;
-
     for (const m of mappings) {
       try {
-        m.runner.setDpInputValue(m.nodeId, val);
+        m.runner.setDpInputState(m.nodeId, state, { initial: false, source: 'stateChange' });
       } catch (_e) {
         // ignore
       }
@@ -263,6 +277,12 @@ class GraphRunner {
 
     this._nodeInternal = new Map(); // nodeId -> internal state
     this._dpInputNodes = []; // { nodeId, dpId }
+    this._incoming = new Map(); // nodeId:port -> { nodeId, port }
+    this._topologicalOrder = [];
+    this._initializing = false;
+    this._sideEffectsEnabled = true;
+    this._persistTimers = new Map();
+    this._persistedJson = new Map();
 
     this._build();
   }
@@ -279,7 +299,8 @@ class GraphRunner {
    * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
-  stop() {
+  async stop() {
+    await this.flushPersistentState();
     // Clear any running timers/intervals
     try {
       for (const st of this._nodeInternal.values()) {
@@ -298,6 +319,10 @@ class GraphRunner {
         }
       }
     } catch (_e4) {}
+    for (const handle of this._persistTimers.values()) {
+      try { clearTimeout(handle); } catch (_ePersistTimer) {}
+    }
+    this._persistTimers.clear();
   }
 
   /**
@@ -360,6 +385,129 @@ class GraphRunner {
       const key = `${fromNode}:${fromPort}`;
       if (!this.adj.has(key)) this.adj.set(key, []);
       this.adj.get(key).push({ nodeId: toNode, port: toPort });
+      this._incoming.set(`${toNode}:${toPort}`, { nodeId: fromNode, port: fromPort });
+    }
+    this._topologicalOrder = buildTopologicalOrder(this.nodes, this.links);
+  }
+
+  beginInitialization() {
+    this._initializing = true;
+    this._sideEffectsEnabled = false;
+  }
+
+  async finishInitialization() {
+    this._evaluateTopological(true);
+    this._initializing = false;
+    this._sideEffectsEnabled = true;
+
+    // Nur die endgültigen Hardware-Ausgänge noch einmal auswerten. Sämtliche
+    // Flankenbausteine wurden im Initialdurchlauf bereits ohne Ereignis geprimt.
+    for (const node of this.nodes.values()) {
+      if (!node || !node.enabled) continue;
+      if (node.type === 'dp_out' || node.type === 'scene_trigger') this._evalNode(node.id);
+    }
+  }
+
+  _evaluateTopological(initial) {
+    const order = this._topologicalOrder.length ? this._topologicalOrder : Array.from(this.nodes.keys());
+    for (const nodeId of order) {
+      const node = this.nodes.get(nodeId);
+      if (!node || !node.enabled) continue;
+      const def = NODE_TYPES[node.type] || NODE_TYPES_ALIASES[node.type];
+      if (!def) continue;
+      for (const port of def.inputs) {
+        const src = this._incoming.get(`${nodeId}:${port}`);
+        if (!src) continue;
+        const sourceNode = this.nodes.get(src.nodeId);
+        node.in[port] = sourceNode ? sourceNode.out[src.port] : undefined;
+      }
+      if (node.type !== 'dp_in') this._evalNode(nodeId, null, { noPropagate: true, initial: !!initial });
+    }
+  }
+
+  _stateId(nodeId) {
+    const graphPart = safeStatePart(this.id, 'graph');
+    const nodePart = safeStatePart(nodeId, 'node');
+    return `nexoLogic.runtime.${graphPart}.${nodePart}.stateJson`;
+  }
+
+  _persistentKeys(node) {
+    const keys = PERSISTENT_NODE_KEYS[node && node.type];
+    if (!keys || !keys.length) return [];
+    if (node.params && String(node.params.persistState).toLowerCase() === 'false') return [];
+    return keys;
+  }
+
+  _serializableState(nodeId, internal) {
+    const node = this.nodes.get(nodeId);
+    const keys = this._persistentKeys(node);
+    if (!keys.length) return null;
+    const out = { version: 1, graphId: this.id, nodeId, nodeType: node.type, savedAt: Date.now(), state: {} };
+    for (const key of keys) {
+      const value = internal ? internal[key] : undefined;
+      if (value === undefined || typeof value === 'function') continue;
+      if (value && typeof value === 'object') {
+        try { out.state[key] = JSON.parse(JSON.stringify(value)); } catch (_eClone) {}
+      } else {
+        out.state[key] = value;
+      }
+    }
+    return out;
+  }
+
+  async restorePersistentState() {
+    for (const node of this.nodes.values()) {
+      if (!this._persistentKeys(node).length) continue;
+      const id = this._stateId(node.id);
+      try {
+        const st = await this.adapter.getStateAsync(id);
+        if (!st || typeof st.val !== 'string' || !st.val.trim()) continue;
+        const parsed = JSON.parse(st.val);
+        if (!parsed || parsed.version !== 1 || parsed.nodeType !== node.type || !parsed.state || typeof parsed.state !== 'object') continue;
+        this._nodeInternal.set(node.id, { ...parsed.state });
+        this._persistedJson.set(node.id, JSON.stringify(parsed.state));
+      } catch (_eRestore) {}
+    }
+  }
+
+  _schedulePersistentState(nodeId, internal) {
+    const row = this._serializableState(nodeId, internal);
+    if (!row) return;
+    let stateJson = '';
+    try { stateJson = JSON.stringify(row.state); } catch (_eJson) { return; }
+    if (stateJson === this._persistedJson.get(nodeId)) return;
+    const old = this._persistTimers.get(nodeId);
+    if (old) { try { clearTimeout(old); } catch (_eTimer) {} }
+    const handle = setTimeout(() => {
+      this._persistTimers.delete(nodeId);
+      this._writePersistentState(nodeId, row).catch(() => {});
+    }, 250);
+    this._persistTimers.set(nodeId, handle);
+  }
+
+  async _writePersistentState(nodeId, row) {
+    const id = this._stateId(nodeId);
+    try {
+      if (typeof this.adapter.setObjectNotExistsAsync === 'function') {
+        await this.adapter.setObjectNotExistsAsync(id, {
+          type: 'state',
+          common: { name: `NexoLogic Zustand ${this.id}/${nodeId}`, type: 'string', role: 'json', read: true, write: false },
+          native: {},
+        });
+      }
+      const json = JSON.stringify(row);
+      await this.adapter.setStateAsync(id, { val: json, ack: true });
+      this._persistedJson.set(nodeId, JSON.stringify(row.state));
+    } catch (_ePersist) {}
+  }
+
+  async flushPersistentState() {
+    for (const [nodeId, handle] of this._persistTimers.entries()) {
+      try { clearTimeout(handle); } catch (_eTimer) {}
+      this._persistTimers.delete(nodeId);
+      const internal = this._nodeInternal.get(nodeId) || {};
+      const row = this._serializableState(nodeId, internal);
+      if (row) await this._writePersistentState(nodeId, row);
     }
   }
 
@@ -453,18 +601,53 @@ class GraphRunner {
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   setDpInputValue(nodeId, value) {
+    return this.setDpInputState(nodeId, { val: value, q: 0, ts: Date.now() }, { initial: false, source: 'compat' });
+  }
+
+  setDpInputState(nodeId, state, options) {
     const node = this.nodes.get(nodeId);
-    if (!node) return;
+    if (!node) return false;
+    const opts = options && typeof options === 'object' ? options : {};
+    const params = node.params || {};
+    const raw = state && Object.prototype.hasOwnProperty.call(state, 'val') ? state.val : undefined;
+    const q = state && Number.isFinite(Number(state.q)) ? Number(state.q) : 0;
+    const ts = state && Number.isFinite(Number(state.ts)) ? Number(state.ts) : (state && Number.isFinite(Number(state.lc)) ? Number(state.lc) : 0);
+    const maxAgeMs = Math.max(0, Math.min(7 * 24 * 60 * 60 * 1000, Math.round(toNum(params.maxAgeMs, 0))));
+    const ageMs = ts > 0 ? Math.max(0, Date.now() - ts) : null;
+    const qualityOk = q === 0 || String(params.acceptBadQuality).toLowerCase() === 'true';
+    const fresh = maxAgeMs <= 0 || (ageMs !== null && ageMs <= maxAgeMs);
+    const present = raw !== null && raw !== undefined && !(typeof raw === 'number' && !Number.isFinite(raw));
+    const valid = present && qualityOk && fresh;
+    node.inputQuality = {
+      valid,
+      present,
+      qualityOk,
+      fresh,
+      q,
+      ts,
+      ageMs,
+      source: String(opts.source || ''),
+      reason: !present ? 'missing' : (!qualityOk ? `quality-${q}` : (!fresh ? 'stale' : 'ok')),
+    };
 
-    // dp_in: value comes from subscription -> write directly to out.out
-    const cast = String(node.params && node.params.cast ? node.params.cast : 'auto').toLowerCase();
-    const v = castValue(value, cast);
+    if (!valid) {
+      const policy = String(params.invalidPolicy || 'block').trim().toLowerCase();
+      if (policy === 'hold') return false;
+      let next;
+      if (policy === 'fallback') next = castValue(params.fallbackValue, String(params.cast || 'auto'));
+      else next = undefined;
+      const prev = node.out.out;
+      node.out.out = next;
+      if (!opts.initial && !isEqual(prev, next)) this._propagateFrom(nodeId, 'out');
+      return false;
+    }
 
+    const cast = String(params.cast || 'auto').toLowerCase();
+    const v = castValue(raw, cast);
     const prev = node.out.out;
     node.out.out = v;
-    if (!isEqual(prev, v)) {
-      this._propagateFrom(nodeId, 'out');
-    }
+    if (!opts.initial && !isEqual(prev, v)) this._propagateFrom(nodeId, 'out');
+    return true;
   }
 
   /**
@@ -480,14 +663,7 @@ class GraphRunner {
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   evaluateAll() {
-    // Evaluate all nodes once so constants propagate + timer nodes arm themselves.
-    for (const [id, node] of this.nodes.entries()) {
-      if (!node.enabled) continue;
-      const def = NODE_TYPES[node.type] || NODE_TYPES_ALIASES[node.type];
-      if (!def) continue;
-      if (node.type === 'dp_in') continue; // values come from subscriptions
-      this._evalNode(id);
-    }
+    this._evaluateTopological(false);
   }
 
   /**
@@ -512,8 +688,9 @@ class GraphRunner {
     let guard = 0;
     while (q.length) {
       if (++guard > 8000) {
-        // guard against accidental loops
-        break;
+        const error = new Error(`NexoLogic Laufzeitschleife in Graph ${this.id}`);
+        error.code = 'NEXOLOGIC_RUNTIME_LOOP';
+        throw error;
       }
       const it = q.shift();
       const outKey = `${it.fromNodeId}:${it.fromPort}`;
@@ -555,14 +732,37 @@ class GraphRunner {
    * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
-  _evalNode(nodeId, queue /* optional */) {
+  _evalNode(nodeId, queue /* optional */, options /* optional */) {
     const node = this.nodes.get(nodeId);
     if (!node || !node.enabled) return;
 
     const def = NODE_TYPES[node.type] || NODE_TYPES_ALIASES[node.type];
     if (!def) return;
+    const opts = options && typeof options === 'object' ? options : {};
+
+    const hasInvalidConnectedInput = def.inputs.some((port) => {
+      const linked = this._incoming.has(`${nodeId}:${port}`);
+      return linked && node.in[port] === undefined;
+    });
+    if (hasInvalidConnectedInput) {
+      if (node.type === 'dp_out' && this.outputController && typeof this.outputController.safeStop === 'function') {
+        this.outputController.safeStop({
+          graphId: this.id,
+          graphName: String(this.graph && this.graph.name || this.id),
+          nodeId: node.id,
+          targetId: String(node.params && node.params.dpId || '').trim(),
+          ack: toBool(node.params && node.params.ack),
+          params: node.params || {},
+          reason: 'invalid-input-safe-off',
+          kind: 'nexologic-output',
+        }, 'invalid-input').catch(() => {});
+      }
+      for (const port of def.outputs) node.out[port] = undefined;
+      return;
+    }
 
     const internal = this._nodeInternal.get(nodeId) || {};
+    internal.__initializing = this._initializing || !!opts.initial;
     const res = def.compute({
       in: node.in,
       params: node.params,
@@ -582,7 +782,7 @@ class GraphRunner {
         const prev = node.out[p];
         const next = res.out[p];
         node.out[p] = next;
-        if (!isEqual(prev, next)) {
+        if (!isEqual(prev, next) && !opts.noPropagate) {
           if (queue) queue.push({ fromNodeId: nodeId, fromPort: p });
           else this._propagateFrom(nodeId, p);
         }
@@ -590,7 +790,10 @@ class GraphRunner {
     }
 
     // side-effects (DP write etc.)
-    if (res && typeof res.sideEffect === 'function') {
+    delete internal.__initializing;
+    this._schedulePersistentState(nodeId, internal);
+
+    if (this._sideEffectsEnabled && res && typeof res.sideEffect === 'function') {
       try { res.sideEffect(); } catch (_e) {}
     }
   }
@@ -613,7 +816,8 @@ class GraphRunner {
  * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
-const toBool = (v) => {
+const toBool = (v, def = false) => {
+  if (v === null || v === undefined) return def;
   if (v === true) return true;
   if (v === false) return false;
   if (v === 1 || v === '1') return true;
@@ -628,7 +832,7 @@ const toBool = (v) => {
     if (Number.isFinite(n)) return n !== 0;
   }
   if (typeof v === 'number') return v !== 0;
-  return !!v;
+  return def;
 };
 
 /**
@@ -638,6 +842,7 @@ const toBool = (v) => {
  * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
  */
 const toNum = (v, def = 0) => {
+  if (v === null || v === undefined) return def;
   if (typeof v === 'number' && Number.isFinite(v)) return v;
   if (typeof v === 'string') {
     const s = v.trim();
@@ -674,8 +879,8 @@ const isEqual = (a, b) => {
  */
 const castValue = (value, cast) => {
   const c = String(cast || 'auto').toLowerCase();
-  if (c === 'bool' || c === 'boolean') return toBool(value);
-  if (c === 'number' || c === 'num') return toNum(value, 0);
+  if (c === 'bool' || c === 'boolean') return (value === null || value === undefined) ? undefined : toBool(value);
+  if (c === 'number' || c === 'num') return (value === null || value === undefined || value === '') ? undefined : toNum(value, undefined);
   if (c === 'string' || c === 'text') return (value === undefined || value === null) ? '' : String(value);
 
   // auto:
@@ -828,8 +1033,9 @@ const scheduleNextMinuteTick = ({ internal, runner, nodeId }) => {
  * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
-const triggerShortPulse = ({ internal, key, widthMs, runner, nodeId }) => {
-  const w = Math.max(10, Math.min(2000, Math.round(toNum(widthMs, 60))));
+const triggerShortPulse = ({ internal, key, widthMs, runner, nodeId, maxWidthMs = 2000, afterPulseMs = 0 }) => {
+  const maxW = Math.max(10, Math.min(24 * 60 * 60 * 1000, Math.round(toNum(maxWidthMs, 2000))));
+  const w = Math.max(10, Math.min(maxW, Math.round(toNum(widthMs, 60))));
   // store pulses under internal.pulses map
   internal.pulses = (internal.pulses && typeof internal.pulses === 'object') ? internal.pulses : {};
   internal.pulses[key] = true;
@@ -842,7 +1048,15 @@ const triggerShortPulse = ({ internal, key, widthMs, runner, nodeId }) => {
   internal.pulseTimers[key] = setTimeout(() => {
     try {
       if (internal.pulses) internal.pulses[key] = false;
+      internal.pulseTimers[key] = null;
       runner._evalNode(nodeId);
+      if (afterPulseMs > 0) {
+        if (internal.t2) { try { clearTimeout(internal.t2); } catch (_e3) {} }
+        internal.t2 = setTimeout(() => {
+          internal.t2 = null;
+          try { runner._evalNode(nodeId); } catch (_e4) {}
+        }, Math.max(10, Math.round(afterPulseMs)));
+      }
     } catch (_e2) {}
   }, w);
 };
@@ -851,6 +1065,48 @@ const triggerShortPulse = ({ internal, key, widthMs, runner, nodeId }) => {
 // -----------------------------
 // Node type library (runtime)
 // -----------------------------
+
+const PERSISTENT_NODE_KEYS = {
+  toggle: ['state'],
+  rs: ['q'],
+  hyst: ['state'],
+  rt_2p: ['state', 'lastChangeTs'],
+  rt_pi: ['iTerm', 'lastTs'],
+  season: ['state'],
+  impulse_counter: ['count'],
+  counter: ['count'],
+  runtime_hours: ['totalMs'],
+};
+
+const safeStatePart = (value, fallback) => {
+  const out = String(value || '').trim().replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80);
+  return out || fallback;
+};
+
+const buildTopologicalOrder = (nodes, links) => {
+  const indegree = new Map();
+  const edges = new Map();
+  for (const id of nodes.keys()) { indegree.set(id, 0); edges.set(id, []); }
+  for (const link of Array.isArray(links) ? links : []) {
+    const from = String(link && link.from && link.from.node || '').trim();
+    const to = String(link && link.to && link.to.node || '').trim();
+    if (!nodes.has(from) || !nodes.has(to)) continue;
+    edges.get(from).push(to);
+    indegree.set(to, (indegree.get(to) || 0) + 1);
+  }
+  const queue = Array.from(indegree.entries()).filter(([, n]) => n === 0).map(([id]) => id);
+  const out = [];
+  while (queue.length) {
+    const id = queue.shift();
+    out.push(id);
+    for (const to of edges.get(id) || []) {
+      const next = (indegree.get(to) || 0) - 1;
+      indegree.set(to, next);
+      if (next === 0) queue.push(to);
+    }
+  }
+  return out.length === nodes.size ? out : Array.from(nodes.keys());
+};
 
 const NODE_TYPES = {
   // ----- IO
@@ -1009,8 +1265,12 @@ const NODE_TYPES = {
       const init = toBool(params.init);
       if (internal.state === undefined) internal.state = init;
 
-      const prev = toBool(internal.prev || false);
       const now = toBool(inp.trig);
+      if (internal.__initializing) {
+        internal.prev = now;
+        return { out: { out: toBool(internal.state) }, internal };
+      }
+      const prev = toBool(internal.prev || false);
 
       const rising = (!prev && now);
       const falling = (prev && !now);
@@ -1052,8 +1312,13 @@ const NODE_TYPES = {
     inputs: ['in'],
     outputs: ['rising','falling'],
     compute: ({ in: inp, internal, runner, nodeId }) => {
-      const prev = toBool(internal.prev || false);
       const now = toBool(inp.in);
+      if (internal.__initializing) {
+        internal.prev = now;
+        if (!internal.pulses) internal.pulses = {};
+        return { out: { rising: false, falling: false, out: false }, internal };
+      }
+      const prev = toBool(internal.prev || false);
 
       const rising = (!prev && now);
       const falling = (prev && !now);
@@ -1072,8 +1337,13 @@ const NODE_TYPES = {
     inputs: ['in'],
     outputs: ['out'],
     compute: ({ in: inp, internal, runner, nodeId }) => {
-      const prev = toBool(internal.prev || false);
       const now = toBool(inp.in);
+      if (internal.__initializing) {
+        internal.prev = now;
+        if (!internal.pulses) internal.pulses = {};
+        return { out: { rising: false, falling: false, out: false }, internal };
+      }
+      const prev = toBool(internal.prev || false);
       const rising = (!prev && now);
       if (!internal.pulses) internal.pulses = { out: false };
       if (rising) triggerShortPulse({ internal, key: 'out', widthMs: 80, runner, nodeId });
@@ -1086,8 +1356,13 @@ const NODE_TYPES = {
     inputs: ['in'],
     outputs: ['out'],
     compute: ({ in: inp, internal, runner, nodeId }) => {
-      const prev = toBool(internal.prev || false);
       const now = toBool(inp.in);
+      if (internal.__initializing) {
+        internal.prev = now;
+        if (!internal.pulses) internal.pulses = {};
+        return { out: { rising: false, falling: false, out: false }, internal };
+      }
+      const prev = toBool(internal.prev || false);
       const falling = (prev && !now);
       if (!internal.pulses) internal.pulses = { out: false };
       if (falling) triggerShortPulse({ internal, key: 'out', widthMs: 80, runner, nodeId });
@@ -1100,8 +1375,13 @@ const NODE_TYPES = {
     inputs: ['in'],
     outputs: ['out'],
     compute: ({ in: inp, internal, runner, nodeId }) => {
-      const prev = toBool(internal.prev || false);
       const now = toBool(inp.in);
+      if (internal.__initializing) {
+        internal.prev = now;
+        if (!internal.pulses) internal.pulses = {};
+        return { out: { rising: false, falling: false, out: false }, internal };
+      }
+      const prev = toBool(internal.prev || false);
       const any = (prev !== now);
       if (!internal.pulses) internal.pulses = { out: false };
       if (any) triggerShortPulse({ internal, key: 'out', widthMs: 80, runner, nodeId });
@@ -1277,7 +1557,7 @@ const NODE_TYPES = {
     // Raumtemperaturregler (2-Punkt) mit Hysterese
     inputs: ['enable', 'ist', 'soll'],
     outputs: ['out', 'delta'],
-    compute: ({ in: inp, params, internal }) => {
+    compute: ({ in: inp, params, internal, runner, nodeId }) => {
       const enabled = (inp.enable === undefined) ? true : toBool(inp.enable);
       const mode = String(params.mode || 'heat').toLowerCase(); // heat|cool
       const band = Math.max(0, Math.min(20, toNum(params.band, 0.3)));
@@ -1325,12 +1605,24 @@ const NODE_TYPES = {
       }
 
       if (want !== state) {
-        const allow = (want === true) ? (since >= minOffMs) : (since >= minOnMs);
+        const minimumMs = want === true ? minOffMs : minOnMs;
+        const allow = since >= minimumMs;
         if (allow) {
+          if (internal.t) { try { clearTimeout(internal.t); } catch (_eTimer) {} internal.t = null; }
           state = want;
           internal.state = state;
           internal.lastChangeTs = nowTs;
+        } else {
+          const remaining = Math.max(10, minimumMs - since + 5);
+          if (internal.t) { try { clearTimeout(internal.t); } catch (_eTimer) {} }
+          internal.t = setTimeout(() => {
+            internal.t = null;
+            try { runner._evalNode(nodeId); } catch (_eReeval) {}
+          }, remaining);
         }
+      } else if (internal.t) {
+        try { clearTimeout(internal.t); } catch (_eTimer) {}
+        internal.t = null;
       }
 
       return { out: { out: toBool(state), delta }, internal };
@@ -1736,9 +2028,15 @@ const NODE_TYPES = {
       const nowTs = Date.now();
       const since = Math.max(0, nowTs - (Number.isFinite(internal.lastActionTs) ? internal.lastActionTs : 0));
 
-      if (want && !(internal.pulses && internal.pulses[want]) && (since >= pauseMs)) {
-        triggerShortPulse({ internal, key: want, widthMs: pulseMs, runner, nodeId });
+      const pulseActive = !!(internal.pulses && (internal.pulses.open || internal.pulses.close));
+      if (want && !pulseActive && (since >= pauseMs)) {
+        triggerShortPulse({ internal, key: want, widthMs: pulseMs, maxWidthMs: 60_000, afterPulseMs: pauseMs, runner, nodeId });
         internal.lastActionTs = nowTs;
+      } else if (want && !pulseActive && since < pauseMs && !internal.t2) {
+        internal.t2 = setTimeout(() => {
+          internal.t2 = null;
+          try { runner._evalNode(nodeId); } catch (_ePause) {}
+        }, Math.max(10, pauseMs - since + 5));
       }
 
       let open = !!(internal.pulses && internal.pulses.open);
@@ -1850,10 +2148,18 @@ const NODE_TYPES = {
     compute: ({ in: inp, params, internal, runner, nodeId }) => {
       const delayMs = Math.max(0, Math.min(3600_000, Math.round(toNum((params.ms ?? params.pulseMs ?? params.delayMs), 1000))));
       const now = toBool(inp.in);
+      if (internal.out === undefined) internal.out = false;
+      if (internal.__initializing) {
+        internal.prev = now;
+        internal.out = false;
+        if (now) {
+          internal.t = setTimeout(() => { internal.out = true; try { runner._evalNode(nodeId); } catch (_eInit) {} }, delayMs);
+        }
+        return { out: { out: toBool(internal.out) }, internal };
+      }
       const prev = toBool(internal.prev || false);
 
       // init
-      if (internal.out === undefined) internal.out = false;
 
       if (now && !prev) {
         // start timer
@@ -1885,9 +2191,14 @@ const NODE_TYPES = {
     compute: ({ in: inp, params, internal, runner, nodeId }) => {
       const delayMs = Math.max(0, Math.min(3600_000, Math.round(toNum((params.ms ?? params.pulseMs ?? params.delayMs), 1000))));
       const now = toBool(inp.in);
+      if (internal.out === undefined) internal.out = false;
+      if (internal.__initializing) {
+        internal.prev = now;
+        internal.out = now;
+        return { out: { out: toBool(internal.out) }, internal };
+      }
       const prev = toBool(internal.prev || false);
 
-      if (internal.out === undefined) internal.out = false;
 
       if (!now && prev) {
         // start off-timer
@@ -1918,9 +2229,14 @@ const NODE_TYPES = {
       // Reuse delay_off logic
       const delayMs = Math.max(0, Math.min(3600_000, Math.round(toNum((params.ms ?? params.pulseMs ?? params.delayMs), 1000))));
       const now = toBool(inp.in);
+      if (internal.out === undefined) internal.out = false;
+      if (internal.__initializing) {
+        internal.prev = now;
+        internal.out = now;
+        return { out: { out: toBool(internal.out) }, internal };
+      }
       const prev = toBool(internal.prev || false);
 
-      if (internal.out === undefined) internal.out = false;
 
       if (!now && prev) {
         if (internal.t) { try { clearTimeout(internal.t); } catch (_e) {} }
@@ -1950,6 +2266,12 @@ const NODE_TYPES = {
       const edge = String(params.edge || 'rising').toLowerCase();
 
       const now = toBool(inp.trig);
+      if (internal.out === undefined) internal.out = false;
+      if (internal.__initializing) {
+        internal.prev = now;
+        internal.out = false;
+        return { out: { out: false }, internal };
+      }
       const prev = toBool(internal.prev || false);
 
       const rising = (!prev && now);
@@ -1985,6 +2307,12 @@ const NODE_TYPES = {
       const edge = String(params.edge || 'rising').toLowerCase();
 
       const now = toBool(inp.trig);
+      if (internal.out === undefined) internal.out = false;
+      if (internal.__initializing) {
+        internal.prev = now;
+        internal.out = false;
+        return { out: { out: false }, internal };
+      }
       const prev = toBool(internal.prev || false);
 
       const rising = (!prev && now);
@@ -2018,9 +2346,14 @@ const NODE_TYPES = {
     compute: ({ in: inp, params, internal, runner, nodeId }) => {
       const holdMs = Math.max(0, Math.min(24*3600_000, Math.round(toNum((params.ms ?? params.pulseMs ?? params.delayMs), 1000))));
       const now = toBool(inp.in);
+      if (internal.out === undefined) internal.out = false;
+      if (internal.__initializing) {
+        internal.prev = now;
+        internal.out = now;
+        return { out: { out: toBool(internal.out) }, internal };
+      }
       const prev = toBool(internal.prev || false);
 
-      if (internal.out === undefined) internal.out = false;
 
       if (!now && prev) {
         // start off-timer
@@ -2115,6 +2448,11 @@ const NODE_TYPES = {
       const trig = toBool(inp.trig);
       const reset = toBool(inp.reset);
 
+      if (internal.__initializing) {
+        internal.prevTrig = trig;
+        internal.prevReset = reset;
+        return { out: { out: toNum(internal.count, init) }, internal };
+      }
       const prevTrig = toBool(internal.prevTrig || false);
       const prevReset = toBool(internal.prevReset || false);
 
@@ -2152,6 +2490,12 @@ const NODE_TYPES = {
       const down = toBool(inp.down);
       const reset = toBool(inp.reset);
 
+      if (internal.__initializing) {
+        internal.prevUp = up;
+        internal.prevDown = down;
+        internal.prevReset = reset;
+        return { out: { out: toNum(internal.count, init) }, internal };
+      }
       const prevUp = toBool(internal.prevUp || false);
       const prevDown = toBool(internal.prevDown || false);
       const prevReset = toBool(internal.prevReset || false);
@@ -2192,6 +2536,15 @@ const NODE_TYPES = {
 
       if (internal.totalMs === undefined) internal.totalMs = initMs;
 
+      if (internal.__initializing) {
+        internal.prevRun = run;
+        internal.prevReset = reset;
+        internal.startTs = run ? Date.now() : null;
+        const hours = toNum(internal.totalMs, initMs) / 3600_000;
+        const f = Math.pow(10, prec);
+        if (run) scheduleNextMinuteTick({ internal, runner, nodeId });
+        return { out: { out: Math.round(hours * f) / f }, internal };
+      }
       const prevRun = toBool(internal.prevRun || false);
       const prevReset = toBool(internal.prevReset || false);
 
@@ -2244,6 +2597,10 @@ const NODE_TYPES = {
     outputs: ['out'],
     compute: ({ in: inp, params, internal, runner, nodeId }) => {
       const trig = toBool(inp.trig);
+      if (internal.__initializing) {
+        internal.prev = trig;
+        return { out: { out: trig }, internal };
+      }
       const prev = toBool(internal.prev || false);
       const edge = String(params.edge || 'rising').toLowerCase();
 
@@ -2319,4 +2676,88 @@ const NODE_TYPES_ALIASES = {
 };
 
 
-module.exports = { NexoLogicEngine };
+function validateNexoLogicConfig(config) {
+  const errors = [];
+  const warnings = [];
+  const cfg = config && typeof config === 'object' ? config : {};
+  const graphs = Array.isArray(cfg.graphs) ? cfg.graphs : [];
+  const graphIds = new Set();
+  const issue = (code, message, path, detail) => errors.push({ code, message, path: path || '', detail: detail || null });
+
+  for (let gi = 0; gi < graphs.length; gi++) {
+    const graph = graphs[gi];
+    if (!graph || typeof graph !== 'object') { issue('graph-invalid', `Graph ${gi + 1} ist ungültig.`, `graphs[${gi}]`); continue; }
+    const graphId = String(graph.id || '').trim();
+    if (!graphId) issue('graph-id-missing', `Graph ${gi + 1} benötigt eine ID.`, `graphs[${gi}].id`);
+    else if (graphIds.has(graphId)) issue('graph-id-duplicate', `Graph-ID ${graphId} ist doppelt.`, `graphs[${gi}].id`);
+    else graphIds.add(graphId);
+
+    const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+    const nodeMap = new Map();
+    for (let ni = 0; ni < nodes.length; ni++) {
+      const node = nodes[ni];
+      if (!node || typeof node !== 'object') { issue('node-invalid', `Ungültiger Baustein in Graph ${graphId || gi + 1}.`, `graphs[${gi}].nodes[${ni}]`); continue; }
+      const nodeId = String(node.id || '').trim();
+      const type = String(node.type || '').trim();
+      const def = NODE_TYPES[type] || NODE_TYPES_ALIASES[type];
+      if (!nodeId) issue('node-id-missing', `Baustein ${ni + 1} benötigt eine ID.`, `graphs[${gi}].nodes[${ni}].id`);
+      else if (nodeMap.has(nodeId)) issue('node-id-duplicate', `Baustein-ID ${nodeId} ist doppelt.`, `graphs[${gi}].nodes[${ni}].id`);
+      else nodeMap.set(nodeId, node);
+      if (!def) issue('node-type-unknown', `Unbekannter NexoLogic-Baustein: ${type || '(leer)'}.`, `graphs[${gi}].nodes[${ni}].type`);
+      const params = node.params && typeof node.params === 'object' ? node.params : {};
+      if (type === 'dp_in' && !String(params.dpId || '').trim()) issue('dp-in-missing', `DP-Eingang ${nodeId || ni + 1} hat keinen Datenpunkt.`, `graphs[${gi}].nodes[${ni}].params.dpId`);
+      if (type === 'dp_out' && !String(params.dpId || '').trim()) issue('dp-out-missing', `DP-Ausgang ${nodeId || ni + 1} hat keinen Datenpunkt.`, `graphs[${gi}].nodes[${ni}].params.dpId`);
+      if (type === 'scene_trigger' && !String(params.sceneId || params.dpId || '').trim()) issue('scene-target-missing', `Szenenbaustein ${nodeId || ni + 1} hat kein Ziel.`, `graphs[${gi}].nodes[${ni}].params.sceneId`);
+      if (type === 'clamp' && Number(params.min) > Number(params.max)) issue('range-invalid', `Min ist bei ${nodeId} größer als Max.`, `graphs[${gi}].nodes[${ni}].params`);
+    }
+
+    const links = Array.isArray(graph.links) ? graph.links : [];
+    const linkIds = new Set();
+    const incoming = new Set();
+    const adjacency = new Map(Array.from(nodeMap.keys()).map((id) => [id, []]));
+    for (let li = 0; li < links.length; li++) {
+      const link = links[li];
+      if (!link || typeof link !== 'object') { issue('link-invalid', `Ungültige Verbindung in Graph ${graphId || gi + 1}.`, `graphs[${gi}].links[${li}]`); continue; }
+      const linkId = String(link.id || '').trim();
+      if (linkId) {
+        if (linkIds.has(linkId)) issue('link-id-duplicate', `Verbindungs-ID ${linkId} ist doppelt.`, `graphs[${gi}].links[${li}].id`);
+        linkIds.add(linkId);
+      }
+      const fromNodeId = String(link.from && link.from.node || '').trim();
+      const fromPort = String(link.from && link.from.port || '').trim();
+      const toNodeId = String(link.to && link.to.node || '').trim();
+      const toPort = String(link.to && link.to.port || '').trim();
+      const fromNode = nodeMap.get(fromNodeId);
+      const toNode = nodeMap.get(toNodeId);
+      if (!fromNode || !toNode) { issue('link-node-missing', `Verbindung ${linkId || li + 1} verweist auf einen fehlenden Baustein.`, `graphs[${gi}].links[${li}]`); continue; }
+      const fromDef = NODE_TYPES[fromNode.type] || NODE_TYPES_ALIASES[fromNode.type];
+      const toDef = NODE_TYPES[toNode.type] || NODE_TYPES_ALIASES[toNode.type];
+      if (!fromDef || !fromDef.outputs.includes(fromPort)) issue('link-output-invalid', `Ausgang ${fromNodeId}.${fromPort} existiert nicht.`, `graphs[${gi}].links[${li}].from`);
+      if (!toDef || !toDef.inputs.includes(toPort)) issue('link-input-invalid', `Eingang ${toNodeId}.${toPort} existiert nicht.`, `graphs[${gi}].links[${li}].to`);
+      const incomingKey = `${toNodeId}:${toPort}`;
+      if (incoming.has(incomingKey)) issue('link-input-duplicate', `Eingang ${toNodeId}.${toPort} ist mehrfach verbunden.`, `graphs[${gi}].links[${li}].to`);
+      incoming.add(incomingKey);
+      if (adjacency.has(fromNodeId)) adjacency.get(fromNodeId).push(toNodeId);
+    }
+
+    const visiting = new Set();
+    const visited = new Set();
+    const stack = [];
+    const visit = (id) => {
+      if (visiting.has(id)) {
+        const at = stack.indexOf(id);
+        const cycle = (at >= 0 ? stack.slice(at) : stack.slice()).concat(id);
+        issue('graph-cycle', `Unzulässige Logikschleife: ${cycle.join(' → ')}. Rückkopplungen benötigen einen ausdrücklich dafür vorgesehenen Speicher-/Zeitbaustein.`, `graphs[${gi}].links`, cycle);
+        return;
+      }
+      if (visited.has(id)) return;
+      visiting.add(id); stack.push(id);
+      for (const next of adjacency.get(id) || []) visit(next);
+      stack.pop(); visiting.delete(id); visited.add(id);
+    };
+    for (const id of adjacency.keys()) visit(id);
+  }
+  return { ok: errors.length === 0, errors, warnings };
+}
+
+module.exports = { NexoLogicEngine, validateNexoLogicConfig };

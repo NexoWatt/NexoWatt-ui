@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:2c5fd89b682a30e8276eaab9134745ebc1fcdb1e61b3a4d675df74c095a18853
+ * Quell-Hash: sha256:44cb92e17c7bcf8b4abdb32ecd2bc1985cd926cb9a4f917f6f132188e1e323ba
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -15441,7 +15441,17 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
    */
   function openDpModal(targetInputId) {
     dpTargetInputId = targetInputId;
-    treePrefix = '';
+
+    // Beim Ändern einer bereits zugeordneten ID direkt wieder den aktuellen
+    // Objektordner öffnen. Das spart besonders bei tiefen Hersteller-/Geräte-
+    // Strukturen den wiederholten Weg ab der ioBroker-Wurzel.
+    const currentInput = targetInputId ? document.getElementById(targetInputId) : null;
+    const currentId = currentInput && typeof currentInput.value === 'string'
+      ? currentInput.value.trim()
+      : '';
+    const currentParts = currentId.split('.').map((part) => part.trim()).filter(Boolean);
+    treePrefix = currentParts.length > 1 ? currentParts.slice(0, -1).join('.') : '';
+
     if (els.dpSearch) els.dpSearch.value = '';
     if (els.dpResults) els.dpResults.innerHTML = '';
     if (els.dpTree) els.dpTree.innerHTML = '';

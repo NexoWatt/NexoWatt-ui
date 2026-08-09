@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/smarthome-config.ts
- * Quell-Hash: sha256:fe319cd8cec93c30cebdae18f241a7bb925d3e9edf0957e01b6b06da3051240c
+ * Quell-Hash: sha256:ee5323d0b2bac514c417b755aa1c638fd8d735aed8cc30b19230bcbc310d8ca1
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1348,6 +1348,15 @@ function nwValidateConfig(cfg) {
       const toggleId = (pl && typeof pl.toggleId === 'string') ? pl.toggleId.trim() : '';
       const stationWriteId = (pl && typeof pl.stationId === 'string') ? pl.stationId.trim() : '';
       const playlistWriteId = (pl && typeof pl.playlistId === 'string') ? pl.playlistId.trim() : '';
+      const muteReadId = (pl && typeof pl.muteReadId === 'string') ? pl.muteReadId.trim() : '';
+      const muteWriteId = (pl && typeof pl.muteWriteId === 'string') ? pl.muteWriteId.trim() : '';
+      const powerReadId = (pl && typeof pl.powerReadId === 'string') ? pl.powerReadId.trim() : '';
+      const powerWriteId = (pl && typeof pl.powerWriteId === 'string') ? pl.powerWriteId.trim() : '';
+      const seekReadId = (pl && typeof pl.seekReadId === 'string') ? pl.seekReadId.trim() : '';
+      const seekWriteId = (pl && typeof pl.seekWriteId === 'string') ? pl.seekWriteId.trim() : '';
+      const shuffleId = (pl && typeof pl.shuffleId === 'string') ? pl.shuffleId.trim() : '';
+      const repeatId = (pl && typeof pl.repeatId === 'string') ? pl.repeatId.trim() : '';
+      const ttsWriteId = (pl && typeof pl.ttsWriteId === 'string') ? pl.ttsWriteId.trim() : '';
 
       chkDp('Player Status (playingId)', playingId);
       chkDp('Titel (titleId)', titleId);
@@ -1364,13 +1373,34 @@ function nwValidateConfig(cfg) {
       chkDp('Toggle (toggleId)', toggleId);
       chkDp('Radiosender setzen (stationId)', stationWriteId);
       chkDp('Playlist wählen (playlistId)', playlistWriteId);
+      chkDp('Mute lesen (muteReadId)', muteReadId);
+      chkDp('Mute schreiben (muteWriteId)', muteWriteId);
+      chkDp('Power lesen (powerReadId)', powerReadId);
+      chkDp('Power schreiben (powerWriteId)', powerWriteId);
+      chkDp('Position lesen (seekReadId)', seekReadId);
+      chkDp('Position schreiben (seekWriteId)', seekWriteId);
+      chkDp('Shuffle (shuffleId)', shuffleId);
+      chkDp('Repeat (repeatId)', repeatId);
+      chkDp('Text-to-Speech (ttsWriteId)', ttsWriteId);
 
-      const hasAny = !!(playingId || titleId || volR || volW || playId || pauseId || stopId || nextId || prevId || toggleId || stationWriteId || playlistWriteId);
+      const hasAny = !!(playingId || titleId || artistId || sourceId || coverId || volR || volW || playId || pauseId || stopId || nextId || prevId || toggleId || stationWriteId || playlistWriteId
+        || muteReadId || muteWriteId || powerReadId || powerWriteId || seekReadId || seekWriteId || shuffleId || repeatId || ttsWriteId);
       if (!hasAny) {
         nwPushIssue(out, 'error', 'Gerät', 'Audio-Player ohne Datenpunkte (mind. 1 DP muss gesetzt sein).', ent);
       }
-      if (readOnly && !(playingId || titleId || volR)) {
+      if (readOnly && !(playingId || titleId || artistId || sourceId || coverId || volR || muteReadId || powerReadId || seekReadId || shuffleId || repeatId)) {
         nwPushIssue(out, 'warn', 'Gerät', 'Nur Anzeige (readOnly) aktiv, aber es ist kein Read-DP gesetzt (playingId/titleId/volumeReadId).', ent);
+      }
+      const seekMin = Number(pl.seekMin);
+      const seekMax = Number(pl.seekMax);
+      const seekStep = Number(pl.seekStep);
+      if (seekReadId || seekWriteId) {
+        if (!Number.isFinite(seekMin) || !Number.isFinite(seekMax) || seekMax <= seekMin) {
+          nwPushIssue(out, 'error', 'Gerät', 'Ungültiger Positionsbereich: Maximum muss größer als Minimum sein.', ent);
+        }
+        if (!Number.isFinite(seekStep) || seekStep <= 0) {
+          nwPushIssue(out, 'error', 'Gerät', 'Ungültige Positions-Schrittweite.', ent);
+        }
       }
 
       const stList = (d && Array.isArray(d.stations)) ? d.stations : [];
@@ -4719,11 +4749,13 @@ function nwRenderShcfgScenes() {
         const row = document.createElement('div');
         row.className = 'nw-shcfg-actionrow';
 
+        const currentKind = String(a.kind || 'switch');
+        const isNestedScene = currentKind === 'scene';
         const devSel = document.createElement('select');
         devSel.className = 'nw-config-select';
         const opt0 = document.createElement('option');
         opt0.value = '';
-        opt0.textContent = 'Gerät…';
+        opt0.textContent = isNestedScene ? 'Kein Gerät nötig' : 'Gerät…';
         devSel.appendChild(opt0);
         for (const d of devices) {
           const o = document.createElement('option');
@@ -4731,18 +4763,38 @@ function nwRenderShcfgScenes() {
           o.textContent = d.alias || d.id;
           devSel.appendChild(o);
         }
-        devSel.value = a.deviceId || '';
-        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an devSel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
+        devSel.value = isNestedScene ? '' : (a.deviceId || '');
+        devSel.disabled = isNestedScene;
+        devSel.title = isNestedScene ? 'Verschachtelte Szenen benötigen kein Zielgerät.' : 'Zielgerät der Aktion';
         devSel.addEventListener('change', () => { a.deviceId = devSel.value; markDirty(); });
 
         const kindSel = document.createElement('select');
         kindSel.className = 'nw-config-select';
         const kinds = [
-          { v: 'switch', t: 'Switch (Ein/Aus)' },
-          { v: 'level', t: 'Level (0-100)' },
-          { v: 'cover', t: 'Cover (up/down/stop/pos)' },
-          { v: 'rtrSetpoint', t: 'RTR Sollwert' },
-          { v: 'scene', t: 'Szene (nested)' },
+          { v: 'switch', t: 'Schalten (Ein/Aus)' },
+          { v: 'level', t: 'Helligkeit / Position' },
+          { v: 'color', t: 'RGB-Farbe (#RRGGBB)' },
+          { v: 'white', t: 'Weißkanal' },
+          { v: 'colorTemperature', t: 'Farbtemperatur (K)' },
+          { v: 'cover', t: 'Rollladen Auf/Ab/Stop/Position' },
+          { v: 'coverTilt', t: 'Lamellenposition' },
+          { v: 'rtrSetpoint', t: 'Klima Solltemperatur' },
+          { v: 'climatePower', t: 'Klima Ein/Aus' },
+          { v: 'climateMode', t: 'Klima Betriebsart' },
+          { v: 'climateFan', t: 'Klima Lüfterstufe' },
+          { v: 'climateSwing', t: 'Klima Swing' },
+          { v: 'player', t: 'Player Transport' },
+          { v: 'playerVolume', t: 'Player Lautstärke' },
+          { v: 'playerSeek', t: 'Player Position' },
+          { v: 'playerMute', t: 'Player Mute' },
+          { v: 'playerPower', t: 'Player Power' },
+          { v: 'playerShuffle', t: 'Player Shuffle' },
+          { v: 'playerRepeat', t: 'Player Repeat' },
+          { v: 'playerStation', t: 'Player Sender' },
+          { v: 'playerPlaylist', t: 'Player Playlist' },
+          { v: 'playerTts', t: 'Player Sprachausgabe' },
+          { v: 'value', t: 'Wertgeber schreiben' },
+          { v: 'scene', t: 'Weitere Szene ausführen' },
         ];
         for (const k of kinds) {
           const o = document.createElement('option');
@@ -4750,24 +4802,97 @@ function nwRenderShcfgScenes() {
           o.textContent = k.t;
           kindSel.appendChild(o);
         }
-        kindSel.value = a.kind || 'switch';
-        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an kindSel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-        kindSel.addEventListener('change', () => { a.kind = kindSel.value; markDirty(); });
+        kindSel.value = currentKind;
+        kindSel.addEventListener('change', () => {
+          a.kind = kindSel.value;
+          if (a.kind === 'scene') {
+            a.deviceId = '';
+            const first = scenes.find((candidate) => candidate && candidate.id !== sc.id);
+            a.value = first ? first.id : '';
+          } else if (a.kind === 'switch' || a.kind === 'climatePower' || a.kind === 'playerMute' || a.kind === 'playerPower') {
+            a.value = true;
+          } else if (a.kind === 'cover') a.value = 'up';
+          else if (a.kind === 'player') a.value = 'play';
+          else if (a.value === undefined || a.value === null) a.value = '';
+          markDirty();
+          nwRenderShcfgShell();
+        });
 
-        const valInp = document.createElement('input');
-        valInp.type = 'text';
-        valInp.className = 'nw-config-input';
-        valInp.placeholder = 'Wert (true/false, Zahl, up/down/stop, …)';
-        valInp.value = (a.value === undefined || a.value === null) ? '' : String(a.value);
-        // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an valInp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-        valInp.addEventListener('input', () => { a.value = valInp.value; markDirty(); });
+        let valueControl;
+        if (currentKind === 'scene') {
+          const sceneSel = document.createElement('select');
+          sceneSel.className = 'nw-config-select';
+          const empty = document.createElement('option');
+          empty.value = '';
+          empty.textContent = 'Zielszene…';
+          sceneSel.appendChild(empty);
+          for (const candidate of scenes) {
+            if (!candidate || candidate.id === sc.id) continue;
+            const option = document.createElement('option');
+            option.value = candidate.id;
+            option.textContent = candidate.alias || candidate.id;
+            sceneSel.appendChild(option);
+          }
+          sceneSel.value = (a.value === undefined || a.value === null) ? '' : String(a.value);
+          sceneSel.addEventListener('change', () => { a.value = sceneSel.value; markDirty(); });
+          valueControl = sceneSel;
+        } else if (['switch', 'climatePower', 'playerMute', 'playerPower'].includes(currentKind)) {
+          const boolSel = document.createElement('select');
+          boolSel.className = 'nw-config-select';
+          for (const [value, text] of [['true', 'Ein / Ja'], ['false', 'Aus / Nein']]) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = text;
+            boolSel.appendChild(option);
+          }
+          boolSel.value = String(a.value === false || String(a.value).toLowerCase() === 'false' ? 'false' : 'true');
+          boolSel.addEventListener('change', () => { a.value = boolSel.value === 'true'; markDirty(); });
+          valueControl = boolSel;
+        } else if (currentKind === 'cover') {
+          const coverSel = document.createElement('select');
+          coverSel.className = 'nw-config-select';
+          for (const [value, text] of [['up', 'Auf'], ['down', 'Ab'], ['stop', 'Stop'], ['0', 'Position 0 %'], ['100', 'Position 100 %']]) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = text;
+            coverSel.appendChild(option);
+          }
+          coverSel.value = String(a.value ?? 'up');
+          coverSel.addEventListener('change', () => {
+            const raw = coverSel.value;
+            a.value = /^\d+(?:\.\d+)?$/.test(raw) ? Number(raw) : raw;
+            markDirty();
+          });
+          valueControl = coverSel;
+        } else if (currentKind === 'player') {
+          const playerSel = document.createElement('select');
+          playerSel.className = 'nw-config-select';
+          for (const [value, text] of [['play', 'Play'], ['pause', 'Pause'], ['stop', 'Stop'], ['next', 'Nächster Titel'], ['prev', 'Vorheriger Titel']]) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = text;
+            playerSel.appendChild(option);
+          }
+          playerSel.value = String(a.value ?? 'play');
+          playerSel.addEventListener('change', () => { a.value = playerSel.value; markDirty(); });
+          valueControl = playerSel;
+        } else {
+          const input = document.createElement(currentKind === 'playerTts' ? 'textarea' : 'input');
+          if (input.tagName === 'INPUT') input.type = 'text';
+          input.className = 'nw-config-input';
+          input.placeholder = currentKind === 'color'
+            ? '#RRGGBB'
+            : (currentKind === 'rtrSetpoint' ? 'z. B. 21,5' : 'Wert');
+          input.value = (a.value === undefined || a.value === null) ? '' : String(a.value);
+          input.addEventListener('input', () => { a.value = input.value; markDirty(); });
+          valueControl = input;
+        }
 
         const delBtn = document.createElement('button');
         delBtn.type = 'button';
         delBtn.className = 'nw-config-btn nw-config-btn--ghost';
         delBtn.textContent = '✕';
         delBtn.title = 'Entfernen';
-        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an delBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         delBtn.addEventListener('click', () => {
           sc.actions.splice(idx, 1);
           markDirty();
@@ -4776,7 +4901,7 @@ function nwRenderShcfgScenes() {
 
         row.appendChild(devSel);
         row.appendChild(kindSel);
-        row.appendChild(valInp);
+        row.appendChild(valueControl);
         row.appendChild(delBtn);
         return row;
       };
@@ -4864,16 +4989,16 @@ function nwRenderShcfgScenes() {
 const NW_SHCFG_BUILDER_DEVICE_TEMPLATES = [
   // Licht
   { id: 'dimmer', type: 'dimmer', group: 'Licht', name: 'Dimmer', icon: '3d-bulb', meta: 'Helligkeit' },
-  { id: 'dimmer_rgb', type: 'color', group: 'Licht', name: 'Dimmer (RGB / RGBW)', icon: '3d-bulb', meta: 'Farbe + Helligkeit' },
-  { id: 'dimmer_tw', type: 'dimmer', group: 'Licht', name: 'Dimmer (Tunable White)', icon: '3d-bulb', meta: 'Weißton + Helligkeit' },
-  { id: 'hue_lights', type: 'color', group: 'Licht', name: 'Hue Leuchten', icon: '3d-bulb', meta: 'Farbe + Helligkeit' },
+  { id: 'dimmer_rgb', type: 'color', group: 'Licht', name: 'Dimmer (RGB / RGBW)', icon: '3d-bulb', meta: 'Farbe + Helligkeit', capabilities: { brightness: true, rgb: true, white: true, colorTemperature: true } },
+  { id: 'dimmer_tw', type: 'dimmer', group: 'Licht', name: 'Dimmer (Tunable White)', icon: '3d-bulb', meta: 'Weißton + Helligkeit', capabilities: { brightness: true, colorTemperature: true } },
+  { id: 'hue_lights', type: 'color', group: 'Licht', name: 'Hue Leuchten', icon: '3d-bulb', meta: 'Farbe + Helligkeit', capabilities: { brightness: true, rgb: true, white: true, colorTemperature: true } },
 
   // System
   { id: 'switch', type: 'switch', group: 'System', name: 'Schalter', icon: '3d-toggle', meta: 'Ein/Aus' },
-  { id: 'button_press_release', type: 'switch', group: 'System', name: 'Taster (Drücken/Loslassen)', icon: '3d-toggle', meta: 'Momentary' },
-  { id: 'button_toggle', type: 'switch', group: 'System', name: 'Taster (Ein/Aus)', icon: '3d-toggle', meta: 'Toggle' },
-  { id: 'url_call', type: 'scene', group: 'System', name: 'URL-Aufruf', icon: '3d-globe', meta: 'HTTP/URL Trigger' },
-  { id: 'iot_trigger', type: 'sensor', group: 'System', name: 'Auslöser für IoT', icon: 'bolt', meta: 'Trigger / Event' },
+  { id: 'button_press_release', type: 'switch', group: 'System', name: 'Taster (Drücken/Loslassen)', icon: '3d-toggle', meta: 'Momentary', behavior: { commandMode: 'momentary', pulseMs: 250 }, capabilities: { momentary: true } },
+  { id: 'button_toggle', type: 'switch', group: 'System', name: 'Taster (Ein/Aus)', icon: '3d-toggle', meta: 'Toggle', behavior: { commandMode: 'toggle' } },
+  { id: 'url_call', type: 'widget', group: 'System', name: 'URL-Aufruf', icon: '3d-globe', meta: 'URL öffnen', behavior: { readOnly: true }, capabilities: { openUrl: true } },
+  { id: 'iot_trigger', type: 'switch', group: 'System', name: 'Auslöser für IoT', icon: 'bolt', meta: 'Trigger / Event', behavior: { commandMode: 'momentary', pulseMs: 250 }, capabilities: { momentary: true } },
   { id: 'widget', type: 'widget', group: 'System', name: 'Widget', icon: '3d-grid', meta: 'Freies Element' },
 
   // Kamera
@@ -4882,7 +5007,7 @@ const NW_SHCFG_BUILDER_DEVICE_TEMPLATES = [
   // Audio
   { id: 'audio', type: 'player', group: 'Audio', name: 'Audiosteuerung', icon: '3d-speaker', meta: 'Play/Pause/Lautstärke' },
   { id: 'audio_sonos', type: 'player', group: 'Audio', name: 'Audiosteuerung (Sonos)', icon: '3d-speaker', meta: 'Sonos Player' },
-  { id: 'audio_tts', type: 'player', group: 'Audio', name: 'Audiosteuerung mit TTS', icon: '3d-speaker', meta: 'Text-to-Speech' },
+  { id: 'audio_tts', type: 'player', group: 'Audio', name: 'Audiosteuerung mit TTS', icon: '3d-speaker', meta: 'Text-to-Speech', capabilities: { tts: true } },
 
   // Beschattung
   { id: 'blind', type: 'blind', group: 'Beschattung', name: 'Rollladen / Jalousie', icon: '3d-blinds', meta: 'Hoch/Runter/Stop' },
@@ -4903,13 +5028,13 @@ const NW_SHCFG_BUILDER_DEVICE_TEMPLATES = [
   { id: 'status_signed', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige mit Vorzeichen', icon: '3d-sensor', meta: 'Signed' },
   { id: 'status_unsigned', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige ohne Vorzeichen', icon: '3d-sensor', meta: 'Unsigned' },
   { id: 'status_text', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige Text', icon: '3d-sensor', meta: 'Text' },
-  { id: 'value_32bit_signed', type: 'sensor', group: 'Status / Messwerte', name: '32-Bit Wertgeber mit Vorzeichen', icon: '3d-meter', meta: 'int32' },
-  { id: 'value_32bit_unsigned', type: 'sensor', group: 'Status / Messwerte', name: '32-Bit Wertgeber ohne Vorzeichen', icon: '3d-meter', meta: 'uint32' },
-  { id: 'value_8bit_unsigned', type: 'sensor', group: 'Status / Messwerte', name: '8-Bit Wertgeber 0…255', icon: '3d-meter', meta: 'uint8' },
-  { id: 'value_8bit_signed', type: 'sensor', group: 'Status / Messwerte', name: '8-Bit Wertgeber -128…127', icon: '3d-meter', meta: 'int8' },
-  { id: 'value_decimal', type: 'sensor', group: 'Status / Messwerte', name: 'Dezimalwertgeber', icon: '3d-meter', meta: 'float' },
-  { id: 'value_percent', type: 'sensor', group: 'Status / Messwerte', name: 'Prozentwertgeber', icon: '3d-meter', meta: '0…100' },
-  { id: 'value_temperature', type: 'sensor', group: 'Status / Messwerte', name: 'Temperaturwertgeber', icon: '3d-thermostat', meta: '°C' },
+  { id: 'value_32bit_signed', type: 'sensor', writableValue: true, group: 'Status / Messwerte', name: '32-Bit Wertgeber mit Vorzeichen', icon: '3d-meter', meta: 'int32' },
+  { id: 'value_32bit_unsigned', type: 'sensor', writableValue: true, group: 'Status / Messwerte', name: '32-Bit Wertgeber ohne Vorzeichen', icon: '3d-meter', meta: 'uint32' },
+  { id: 'value_8bit_unsigned', type: 'sensor', writableValue: true, group: 'Status / Messwerte', name: '8-Bit Wertgeber 0…255', icon: '3d-meter', meta: 'uint8' },
+  { id: 'value_8bit_signed', type: 'sensor', writableValue: true, group: 'Status / Messwerte', name: '8-Bit Wertgeber -128…127', icon: '3d-meter', meta: 'int8' },
+  { id: 'value_decimal', type: 'sensor', writableValue: true, group: 'Status / Messwerte', name: 'Dezimalwertgeber', icon: '3d-meter', meta: 'float' },
+  { id: 'value_percent', type: 'sensor', writableValue: true, group: 'Status / Messwerte', name: 'Prozentwertgeber', icon: '3d-meter', meta: '0…100' },
+  { id: 'value_temperature', type: 'sensor', writableValue: true, group: 'Status / Messwerte', name: 'Temperaturwertgeber', icon: '3d-thermostat', meta: '°C' },
 ];
 
 const NW_SHCFG_DND_MARKER = 'nw-shcfg:';
@@ -6326,121 +6451,212 @@ function nwRenderShcfgBuilderProps(container) {
     dev.io = dev.io || {};
     dev.behavior = dev.behavior || {};
 
-    if (dev.type === 'switch') {
-      dev.io.switch = dev.io.switch || { readId: null, writeId: null };
-      container.appendChild(nwCreateDpInput('Read DP', dev.io.switch.readId || '', (v) => {
-        dev.io.switch.readId = nwShcfgNullIfEmpty(v);
+    const ensureObject = (parent, key, defaults = {}) => {
+      if (!parent[key] || typeof parent[key] !== 'object' || Array.isArray(parent[key])) parent[key] = { ...defaults };
+      else Object.keys(defaults).forEach((name) => {
+        if (typeof parent[key][name] === 'undefined') parent[key][name] = defaults[name];
+      });
+      return parent[key];
+    };
+    const addDp = (label, owner, key) => {
+      container.appendChild(nwCreateDpInput(label, owner[key] || '', (value) => {
+        owner[key] = nwShcfgNullIfEmpty(value);
         nwMarkDirty(true);
       }));
-      container.appendChild(nwCreateDpInput('Write DP', dev.io.switch.writeId || '', (v) => {
-        dev.io.switch.writeId = nwShcfgNullIfEmpty(v);
+    };
+    const addNumber = (label, owner, key, fallback, min, max, step = 1) => {
+      const input = document.createElement('input');
+      input.className = 'nw-config-input';
+      input.type = 'number';
+      if (Number.isFinite(Number(min))) input.min = String(min);
+      if (Number.isFinite(Number(max))) input.max = String(max);
+      input.step = String(step);
+      const current = Number(owner[key]);
+      input.value = String(Number.isFinite(current) ? current : fallback);
+      input.addEventListener('change', () => {
+        let value = Number(input.value);
+        if (!Number.isFinite(value)) value = fallback;
+        if (Number.isFinite(Number(min))) value = Math.max(Number(min), value);
+        if (Number.isFinite(Number(max))) value = Math.min(Number(max), value);
+        owner[key] = value;
+        input.value = String(value);
         nwMarkDirty(true);
-      }));
-    } else if (dev.type === 'dimmer') {
-      dev.io.switch = dev.io.switch || { readId: null, writeId: null };
-      dev.io.dimmer = dev.io.dimmer || { levelId: null, min: 0, max: 100, step: 1 };
-      container.appendChild(nwCreateDpInput('Schalten (Read)', dev.io.switch.readId || '', (v) => { dev.io.switch.readId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Schalten (Write)', dev.io.switch.writeId || '', (v) => { dev.io.switch.writeId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Dimmer Level DP', dev.io.dimmer.levelId || '', (v) => { dev.io.dimmer.levelId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-    } else if (dev.type === 'color') {
-      dev.io.switch = dev.io.switch || { readId: null, writeId: null };
-      dev.io.dimmer = dev.io.dimmer || { levelId: null, min: 0, max: 100, step: 1 };
-      dev.io.color = dev.io.color || { rgbId: null, mode: 'hex', supportsWarmWhite: false, supportsColdWhite: false, wwId: null, cwId: null };
-      container.appendChild(nwCreateDpInput('Schalten (Read)', dev.io.switch.readId || '', (v) => { dev.io.switch.readId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Schalten (Write)', dev.io.switch.writeId || '', (v) => { dev.io.switch.writeId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Dimmer Level DP', dev.io.dimmer.levelId || '', (v) => { dev.io.dimmer.levelId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('RGB DP', dev.io.color.rgbId || '', (v) => { dev.io.color.rgbId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-    } else if (dev.type === 'blind') {
-      // Modernes Schema wie im Expertenmodus. Ältere io.blind-Werte werden einmalig übernommen,
-      // damit bestehende Konfigurationen nach dem Update weiterlaufen.
-      const legacyBlind = dev.io.blind || {};
-      dev.io.level = dev.io.level || { readId: null, writeId: null, min: 0, max: 100 };
-      dev.io.level.readId = dev.io.level.readId || legacyBlind.posId || null;
-      dev.io.level.writeId = dev.io.level.writeId || legacyBlind.posId || null;
-      dev.io.level.min = 0;
-      dev.io.level.max = 100;
-      dev.io.cover = dev.io.cover || { upId: null, downId: null, stopId: null };
-      dev.io.cover.upId = dev.io.cover.upId || legacyBlind.upId || null;
-      dev.io.cover.downId = dev.io.cover.downId || legacyBlind.downId || null;
-      dev.io.cover.stopId = dev.io.cover.stopId || legacyBlind.stopId || null;
+      });
+      container.appendChild(nwCreateFieldRow(label, input));
+    };
+    const addSelect = (label, owner, key, options, fallback) => {
+      container.appendChild(nwCreateFieldRow(label, nwShcfgCreateSelect(options, String(owner[key] ?? fallback ?? ''), (value) => {
+        owner[key] = value;
+        nwMarkDirty(true);
+      })));
+    };
+    const addText = (label, owner, key, placeholder = '') => {
+      container.appendChild(nwCreateFieldRow(label, nwShcfgCreateTextInput(owner[key] || '', (value) => {
+        owner[key] = value;
+        nwMarkDirty(true);
+      }, { placeholder })));
+    };
+    const addBehavior = () => {
+      dev.behavior = dev.behavior || {};
+      addNumber('Status gilt nach (s) als veraltet · 0 = aus', dev.behavior, 'staleAfterSec', 0, 0, 604800, 1);
+    };
 
-      container.appendChild(nwCreateDpInput('Position lesen / Status (readId)', dev.io.level.readId || '', (v) => { dev.io.level.readId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Position schreiben (writeId)', dev.io.level.writeId || '', (v) => { dev.io.level.writeId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Auf / Richtung 0 (upId)', dev.io.cover.upId || '', (v) => { dev.io.cover.upId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Ab / Richtung 1 (downId)', dev.io.cover.downId || '', (v) => { dev.io.cover.downId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Stop (stopId)', dev.io.cover.stopId || '', (v) => { dev.io.cover.stopId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+    if (dev.type === 'switch' || dev.type === 'scene') {
+      const sw = ensureObject(dev.io, 'switch', { readId: null, writeId: null });
+      addDp('Status lesen (readId)', sw, 'readId');
+      addDp(dev.type === 'scene' ? 'Szene auslösen (writeId)' : 'Schalten (writeId)', sw, 'writeId');
+      addSelect('Befehlsart', dev.behavior, 'commandMode', [
+        { value: 'toggle', label: 'Umschalten' },
+        { value: 'set', label: 'Explizit Ein/Aus' },
+        { value: 'momentary', label: 'Taster/Impuls' },
+      ], dev.type === 'scene' ? 'momentary' : 'toggle');
+      if (dev.behavior.commandMode === 'momentary' || dev.type === 'scene') {
+        addNumber('Impulsdauer (ms)', dev.behavior, 'pulseMs', 250, 50, 60000, 50);
+      }
+      addBehavior();
+    } else if (dev.type === 'dimmer' || dev.type === 'color') {
+      const sw = ensureObject(dev.io, 'switch', { readId: null, writeId: null });
+      const level = ensureObject(dev.io, 'level', { readId: null, writeId: null, min: 0, max: 100, step: 1 });
+      addDp('Schalten lesen (readId)', sw, 'readId');
+      addDp('Schalten schreiben (writeId)', sw, 'writeId');
+      addDp('Helligkeit lesen (readId)', level, 'readId');
+      addDp('Helligkeit schreiben (writeId)', level, 'writeId');
+      addNumber('Helligkeit Minimum', level, 'min', 0, -1000000, 1000000, 1);
+      addNumber('Helligkeit Maximum', level, 'max', 100, -1000000, 1000000, 1);
+      addNumber('Helligkeit Schritt', level, 'step', 1, 0.000001, 1000000, 0.1);
+
+      if (dev.type === 'color') {
+        const color = ensureObject(dev.io, 'color', { readId: null, writeId: null, format: 'hex' });
+        addDp('RGB/Farbe lesen (readId)', color, 'readId');
+        addDp('RGB/Farbe schreiben (writeId)', color, 'writeId');
+        addSelect('Farbformat', color, 'format', [
+          { value: 'hex', label: 'HEX (#RRGGBB)' },
+          { value: 'rgb', label: 'RGB (r,g,b)' },
+          { value: 'int', label: 'Integer 0…16777215' },
+        ], 'hex');
+        const white = ensureObject(dev.io, 'white', { readId: null, writeId: null, min: 0, max: 100, step: 1 });
+        addDp('Weißkanal lesen (readId, optional)', white, 'readId');
+        addDp('Weißkanal schreiben (writeId, optional)', white, 'writeId');
+      }
+
+      const ct = ensureObject(dev.io, 'colorTemperature', { readId: null, writeId: null, min: 2000, max: 6500, step: 100 });
+      addDp('Farbtemperatur lesen (K, optional)', ct, 'readId');
+      addDp('Farbtemperatur schreiben (K, optional)', ct, 'writeId');
+      addNumber('Farbtemperatur Minimum (K)', ct, 'min', 2000, 1000, 20000, 100);
+      addNumber('Farbtemperatur Maximum (K)', ct, 'max', 6500, 1000, 20000, 100);
+      addNumber('Farbtemperatur Schritt (K)', ct, 'step', 100, 1, 5000, 10);
+      addBehavior();
+    } else if (dev.type === 'blind') {
+      const level = ensureObject(dev.io, 'level', { readId: null, writeId: null, min: 0, max: 100, step: 1 });
+      level.min = 0;
+      level.max = 100;
+      const cover = ensureObject(dev.io, 'cover', {
+        positionId: null, upId: null, downId: null, stopId: null,
+        tiltReadId: null, tiltWriteId: null, movingId: null, directionId: null,
+        lockId: null, windAlarmId: null, rainAlarmId: null, frostAlarmId: null,
+      });
+      addDp('Position lesen (0…100)', level, 'readId');
+      addDp('Position schreiben (0…100)', level, 'writeId');
+      addDp('Auf / Richtung 0', cover, 'upId');
+      addDp('Ab / Richtung 1', cover, 'downId');
+      addDp('Stop', cover, 'stopId');
+      addDp('Lamellenwinkel lesen (optional)', cover, 'tiltReadId');
+      addDp('Lamellenwinkel schreiben (optional)', cover, 'tiltWriteId');
+      addDp('Fährt (optional)', cover, 'movingId');
+      addDp('Fahrtrichtung (optional)', cover, 'directionId');
+      addDp('Sperre (optional)', cover, 'lockId');
+      addDp('Windalarm (optional)', cover, 'windAlarmId');
+      addDp('Regenalarm (optional)', cover, 'rainAlarmId');
+      addDp('Frostalarm (optional)', cover, 'frostAlarmId');
+      addBehavior();
       const hint = document.createElement('div');
       hint.className = 'nw-config-help';
-      hint.textContent = 'Slider/Status läuft fest 0–100 %. Auf schreibt 0, Ab schreibt 1. Bei einem KNX-Richtungs-DP denselben DP bei Auf und Ab eintragen.';
-      container.appendChild(nwCreateFieldRow('Hinweis', hint));
+      hint.textContent = '0 % = oben/offen, 100 % = unten/geschlossen. Bei aktiver Sperre, Wind-, Regen- oder Frostalarm blockiert die Bedienung außer Stop.';
+      container.appendChild(nwCreateFieldRow('Sicherheit', hint));
     } else if (dev.type === 'rtr') {
-      dev.io.rtr = dev.io.rtr || { tempId: null, setId: null, modeId: null, humidityId: null };
-      container.appendChild(nwCreateDpInput('Temperatur (DP)', dev.io.rtr.tempId || '', (v) => { dev.io.rtr.tempId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Sollwert (DP)', dev.io.rtr.setId || '', (v) => { dev.io.rtr.setId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Modus (DP)', dev.io.rtr.modeId || '', (v) => { dev.io.rtr.modeId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Luftfeuchte (DP)', dev.io.rtr.humidityId || '', (v) => { dev.io.rtr.humidityId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-    } else if (dev.type === 'scene') {
-      dev.io.scene = dev.io.scene || { triggerId: null, name: '' };
-      container.appendChild(nwCreateDpInput('Trigger (DP)', dev.io.scene.triggerId || '', (v) => { dev.io.scene.triggerId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateFieldRow('Szenenname', nwShcfgCreateTextInput(dev.io.scene.name || '', (v) => { dev.io.scene.name = v; nwMarkDirty(true); }))); 
+      const climate = ensureObject(dev.io, 'climate', {
+        currentTempId: null, setpointId: null, modeId: null, humidityId: null,
+        powerId: null, fanSpeedId: null, swingId: null, demandId: null,
+        windowId: null, errorId: null, minSetpoint: 15, maxSetpoint: 30, step: 0.5,
+      });
+      addDp('Ist-Temperatur', climate, 'currentTempId');
+      addDp('Solltemperatur lesen/schreiben', climate, 'setpointId');
+      addDp('Modus lesen/schreiben', climate, 'modeId');
+      addDp('Luftfeuchtigkeit', climate, 'humidityId');
+      addDp('Ein/Aus lesen/schreiben', climate, 'powerId');
+      addDp('Lüfterstufe lesen/schreiben', climate, 'fanSpeedId');
+      addDp('Swing lesen/schreiben', climate, 'swingId');
+      addDp('Heiz-/Kühlanforderung', climate, 'demandId');
+      addDp('Fenster offen / Sperre', climate, 'windowId');
+      addDp('Fehlerstatus', climate, 'errorId');
+      addNumber('Minimaler Sollwert (°C)', climate, 'minSetpoint', 15, -50, 100, 0.5);
+      addNumber('Maximaler Sollwert (°C)', climate, 'maxSetpoint', 30, -50, 100, 0.5);
+      addNumber('Sollwert-Schritt (°C)', climate, 'step', 0.5, 0.1, 10, 0.1);
+      addBehavior();
     } else if (dev.type === 'sensor') {
-      dev.io.sensor = dev.io.sensor || { readId: null };
+      const sensor = ensureObject(dev.io, 'sensor', { readId: null, writeId: null, valueType: 'number', min: -1000000000, max: 1000000000, step: 1 });
       dev.ui = dev.ui || {};
       if (typeof dev.ui.unit !== 'string') dev.ui.unit = '';
-      if (typeof dev.ui.precision !== 'number') dev.ui.precision = 1;
-
-      container.appendChild(nwCreateDpInput('Wert (Read DP)', dev.io.sensor.readId || '', (v) => { dev.io.sensor.readId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-
-      const displayTitle = document.createElement('div');
-      displayTitle.className = 'nw-config-card__subtitle';
-      displayTitle.style.marginTop = '10px';
-      displayTitle.textContent = 'Anzeige / Funktionseinheit';
-      container.appendChild(displayTitle);
-
-      container.appendChild(
-        nwCreateFieldRow('Einheit', nwShcfgCreateSelect(NW_SHCFG_SENSOR_UNIT_OPTIONS, dev.ui.unit || '', (v) => {
-          dev.ui.unit = String(v || '');
-          nwMarkDirty(true);
-          nwRenderShcfgShell();
-        }))
-      );
-
-      container.appendChild(
-        nwCreateFieldRow('Nachkommastellen', nwShcfgCreateSelect(NW_SHCFG_SENSOR_PRECISION_OPTIONS, String(dev.ui.precision ?? 1), (v) => {
-          const n = Number(v);
-          dev.ui.precision = Number.isFinite(n) ? n : 1;
-          nwMarkDirty(true);
-          nwRenderShcfgShell();
-        }))
-      );
+      if (!Number.isFinite(Number(dev.ui.precision))) dev.ui.precision = 1;
+      addDp('Wert lesen (readId)', sensor, 'readId');
+      if ((dev.capabilities && dev.capabilities.writableValue) || !dev.behavior.readOnly || sensor.writeId) {
+        dev.behavior.readOnly = false;
+        addDp('Wert schreiben (writeId)', sensor, 'writeId');
+        addSelect('Werttyp', sensor, 'valueType', [
+          { value: 'number', label: 'Dezimalzahl' },
+          { value: 'integer', label: 'Ganzzahl' },
+          { value: 'boolean', label: 'Boolesch' },
+          { value: 'string', label: 'Text' },
+        ], 'number');
+        if (!['boolean', 'string'].includes(String(sensor.valueType))) {
+          addNumber('Minimum', sensor, 'min', -1000000000, -1000000000000, 1000000000000, 0.1);
+          addNumber('Maximum', sensor, 'max', 1000000000, -1000000000000, 1000000000000, 0.1);
+          addNumber('Schrittweite', sensor, 'step', 1, 0.000001, 1000000000000, 0.1);
+        }
+      }
+      addSelect('Einheit', dev.ui, 'unit', NW_SHCFG_SENSOR_UNIT_OPTIONS, '');
+      addSelect('Nachkommastellen', dev.ui, 'precision', NW_SHCFG_SENSOR_PRECISION_OPTIONS, '1');
+      addBehavior();
     } else if (dev.type === 'player') {
-      dev.io.player = dev.io.player || { titleId:null, artistId:null, albumId:null, playingId:null, volumeId:null, muteId:null, nextId:null, prevId:null, playId:null, pauseId:null };
-      container.appendChild(nwCreateDpInput('Titel (DP)', dev.io.player.titleId || '', (v) => { dev.io.player.titleId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Artist (DP)', dev.io.player.artistId || '', (v) => { dev.io.player.artistId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Playing (DP)', dev.io.player.playingId || '', (v) => { dev.io.player.playingId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Volume (DP)', dev.io.player.volumeId || '', (v) => { dev.io.player.volumeId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Mute (DP)', dev.io.player.muteId || '', (v) => { dev.io.player.muteId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Next (DP)', dev.io.player.nextId || '', (v) => { dev.io.player.nextId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Prev (DP)', dev.io.player.prevId || '', (v) => { dev.io.player.prevId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Play (DP)', dev.io.player.playId || '', (v) => { dev.io.player.playId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Pause (DP)', dev.io.player.pauseId || '', (v) => { dev.io.player.pauseId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      const player = ensureObject(dev.io, 'player', {
+        playingId: null, titleId: null, artistId: null, sourceId: null, coverId: null,
+        volumeReadId: null, volumeWriteId: null, volumeMin: 0, volumeMax: 100,
+        toggleId: null, playId: null, pauseId: null, stopId: null, nextId: null, prevId: null,
+        stationId: null, playlistId: null, muteReadId: null, muteWriteId: null,
+        powerReadId: null, powerWriteId: null, seekReadId: null, seekWriteId: null,
+        seekMin: 0, seekMax: 100, seekStep: 1,
+        shuffleId: null, repeatId: null, ttsWriteId: null,
+      });
+      [
+        ['Playing-Status', 'playingId'], ['Titel', 'titleId'], ['Interpret', 'artistId'], ['Quelle', 'sourceId'], ['Cover-URL', 'coverId'],
+        ['Lautstärke lesen', 'volumeReadId'], ['Lautstärke schreiben', 'volumeWriteId'],
+        ['Play/Pause umschalten', 'toggleId'], ['Play', 'playId'], ['Pause', 'pauseId'], ['Stop', 'stopId'],
+        ['Nächster Titel', 'nextId'], ['Vorheriger Titel', 'prevId'], ['Sender wählen', 'stationId'], ['Playlist wählen', 'playlistId'],
+        ['Mute lesen', 'muteReadId'], ['Mute schreiben', 'muteWriteId'], ['Power lesen', 'powerReadId'], ['Power schreiben', 'powerWriteId'],
+        ['Position lesen', 'seekReadId'], ['Position schreiben', 'seekWriteId'], ['Shuffle', 'shuffleId'], ['Repeat', 'repeatId'],
+        ['Text-to-Speech schreiben', 'ttsWriteId'],
+      ].forEach(([label, key]) => addDp(label, player, key));
+      addNumber('Lautstärke Minimum', player, 'volumeMin', 0, -1000000, 1000000, 1);
+      addNumber('Lautstärke Maximum', player, 'volumeMax', 100, -1000000, 1000000, 1);
+      addNumber('Position Minimum', player, 'seekMin', 0, -1000000, 1000000, 1);
+      addNumber('Position Maximum', player, 'seekMax', 100, -1000000, 1000000, 1);
+      addNumber('Position Schritt', player, 'seekStep', 1, 0.000001, 1000000, 0.1);
+      addBehavior();
     } else if (dev.type === 'camera') {
-      dev.io.camera = dev.io.camera || { url: '', refreshMs: 1000 };
-      container.appendChild(nwCreateFieldRow('URL', nwShcfgCreateTextInput(dev.io.camera.url || '', (v) => { dev.io.camera.url = v; nwMarkDirty(true); }))); 
-      const refresh = document.createElement('input');
-      refresh.className = 'nw-config-input';
-      refresh.type = 'number';
-      refresh.min = '250';
-      refresh.step = '250';
-      refresh.value = dev.io.camera.refreshMs || 1000;
-      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an refresh. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-      refresh.addEventListener('change', () => { dev.io.camera.refreshMs = Number(refresh.value) || 1000; nwMarkDirty(true); });
-      container.appendChild(nwCreateFieldRow('Refresh (ms)', refresh));
+      const camera = ensureObject(dev.io, 'camera', { snapshotUrl: '', liveUrl: '', refreshMs: 5000 });
+      addText('Snapshot URL', camera, 'snapshotUrl', 'https://…');
+      addText('Live URL', camera, 'liveUrl', 'https://…');
+      addNumber('Aktualisierung (ms)', camera, 'refreshMs', 5000, 250, 3600000, 250);
     } else if (dev.type === 'widget') {
-      dev.io.widget = dev.io.widget || { iframeUrl: '', openUrl: '', embed: false, height: 260, label: '' };
-      container.appendChild(nwCreateFieldRow('Label', nwShcfgCreateTextInput(dev.io.widget.label || '', (v) => { dev.io.widget.label = v; nwMarkDirty(true); }))); 
-      container.appendChild(nwCreateFieldRow('Iframe URL', nwShcfgCreateTextInput(dev.io.widget.iframeUrl || '', (v) => { dev.io.widget.iframeUrl = v; nwMarkDirty(true); }))); 
-      container.appendChild(nwCreateFieldRow('Open URL', nwShcfgCreateTextInput(dev.io.widget.openUrl || '', (v) => { dev.io.widget.openUrl = v; nwMarkDirty(true); }))); 
+      const widget = ensureObject(dev.io, 'widget', { kind: 'iframe', url: '', openUrl: '', embed: true, height: 260, label: '' });
+      addText('Bezeichnung', widget, 'label');
+      addSelect('Darstellung', widget, 'kind', [
+        { value: 'iframe', label: 'Eingebettetes Widget' },
+        { value: 'url', label: 'URL in neuem Fenster öffnen' },
+      ], 'iframe');
+      addText('Widget-/Iframe-URL', widget, 'url', 'https://…');
+      addText('URL öffnen', widget, 'openUrl', 'https://…');
+      addNumber('Höhe (px)', widget, 'height', 260, 120, 2000, 10);
     }
 
     // Apply changes without full rerender on every dp change; user can press save.
@@ -7059,10 +7275,12 @@ function nwAddDeviceFromTemplate(templateId, opts = {}) {
     return;
   }
 
-  // Lookup by template id (preferred). Fallback: allow passing a plain type.
-  const tpl = NW_SHCFG_BUILDER_DEVICE_TEMPLATES.find(x => x.id === tid) ||
-    NW_SHCFG_BUILDER_DEVICE_TEMPLATES.find(x => x.type === tid);
-  const t = (tpl && tpl.type) ? tpl.type : tid;
+  const tpl = NW_SHCFG_BUILDER_DEVICE_TEMPLATES.find((row) => row.id === tid)
+    || NW_SHCFG_BUILDER_DEVICE_TEMPLATES.find((row) => row.type === tid);
+  let type = (tpl && tpl.type) ? String(tpl.type) : tid;
+  if (!['switch', 'dimmer', 'color', 'blind', 'rtr', 'scene', 'sensor', 'player', 'camera', 'widget'].includes(type)) {
+    type = 'switch';
+  }
 
   const devices = Array.isArray(nwShcState.config.devices) ? nwShcState.config.devices : [];
   const rooms = Array.isArray(nwShcState.config.rooms) ? nwShcState.config.rooms : [];
@@ -7070,141 +7288,142 @@ function nwAddDeviceFromTemplate(templateId, opts = {}) {
 
   const explicitRoomId = (opts && typeof opts.roomId === 'string') ? opts.roomId : null;
   const hasFloorOpt = !!(opts && Object.prototype.hasOwnProperty.call(opts, 'floorId'));
-  const explicitFloorId = hasFloorOpt ? (opts ? opts.floorId : null) : null;
-
-  // Default behavior: add into the first room (fast setup).
-  // If a floorId is provided (and no explicit room), create a floor-level device instead.
-  const roomId = (explicitRoomId !== null)
+  const explicitFloorId = hasFloorOpt ? opts.floorId : null;
+  const roomId = explicitRoomId !== null
     ? nwShcfgNullIfEmpty(explicitRoomId)
-    : (hasFloorOpt ? null : (rooms.length ? (rooms[0] && rooms[0].id) : null));
-
-  const floorId = (!roomId) ? nwShcfgNullIfEmpty(explicitFloorId) : null;
-  const functionId = (opts && typeof opts.functionId === 'string') ? opts.functionId : (funcs.length ? (funcs[0] && funcs[0].id) : null);
+    : (hasFloorOpt ? null : (rooms.length ? rooms[0].id : null));
+  const floorId = !roomId ? nwShcfgNullIfEmpty(explicitFloorId) : null;
+  const functionId = (opts && typeof opts.functionId === 'string')
+    ? opts.functionId
+    : (funcs.length ? funcs[0].id : null);
 
   const baseIdMap = {
-    switch: 'schalter',
-    color: 'farblicht',
-    dimmer: 'dimmer',
-    blind: 'jalousie',
-    rtr: 'heizung',
-    player: 'player',
-    sensor: 'sensor',
-    scene: 'szene',
-    camera: 'kamera',
-    widget: 'widget',
+    switch: 'schalter', color: 'farblicht', dimmer: 'dimmer', blind: 'jalousie',
+    rtr: 'klima', player: 'player', sensor: 'wert', scene: 'szene', camera: 'kamera', widget: 'widget',
   };
   const aliasMap = {
-    switch: 'Neuer Schalter',
-    color: 'Neues Farb‑Licht',
-    dimmer: 'Neuer Dimmer',
-    blind: 'Neue Jalousie',
-    rtr: 'Neue Heizung',
-    player: 'Audio-Player',
-    sensor: 'Neuer Sensor',
-    scene: 'Neue Szene',
-    camera: 'Neue Kamera',
-    widget: 'Neues Widget',
+    switch: 'Neuer Schalter', color: 'Neues Farb-Licht', dimmer: 'Neuer Dimmer', blind: 'Neue Jalousie',
+    rtr: 'Neue Klimasteuerung', player: 'Audio-Player', sensor: 'Neuer Wert', scene: 'Neue Szene',
+    camera: 'Neue Kamera', widget: 'Neues Widget',
   };
   const iconMap = {
-    switch: '3d-toggle',
-    color: '3d-bulb',
-    dimmer: '3d-bulb',
-    blind: '3d-blinds',
-    rtr: '3d-thermostat',
-    player: '3d-speaker',
-    sensor: '3d-sensor',
-    scene: '3d-scene',
-    camera: '3d-camera',
-    widget: '3d-grid',
+    switch: '3d-toggle', color: '3d-bulb', dimmer: '3d-bulb', blind: '3d-blinds',
+    rtr: '3d-thermostat', player: '3d-speaker', sensor: '3d-sensor', scene: '3d-scene',
+    camera: '3d-camera', widget: '3d-grid',
   };
 
-  const id = nwEnsureUniqueDeviceId(devices, baseIdMap[t] || 'geraet');
-
+  const behavior = Object.assign({
+    favorite: false,
+    readOnly: false,
+    invert: false,
+    commandMode: type === 'scene' ? 'momentary' : 'toggle',
+    pulseMs: 250,
+    staleAfterSec: 0,
+  }, (tpl && tpl.behavior) || {});
+  const capabilities = Object.assign({}, (tpl && tpl.capabilities) || {});
   const dev = {
-    id,
-    alias: (tpl && tpl.name) ? tpl.name : (aliasMap[t] || 'Neues Gerät'),
-    type: t,
+    id: nwEnsureUniqueDeviceId(devices, baseIdMap[type] || 'geraet'),
+    alias: (tpl && tpl.name) ? tpl.name : (aliasMap[type] || 'Neues Gerät'),
+    type,
     roomId: roomId || null,
     ...(hasFloorOpt ? { floorId: floorId || null } : {}),
     functionId: functionId || null,
-    icon: (tpl && tpl.icon) ? tpl.icon : (iconMap[t] || ''),
+    icon: (tpl && tpl.icon) ? tpl.icon : (iconMap[type] || ''),
     templateId: (tpl && tpl.id) ? tpl.id : undefined,
-    size: (t === 'rtr' || t === 'camera' || t === 'widget') ? 'xl' : ((t === 'player') ? 'l' : 'm'),
-    behavior: { favorite: false, readOnly: false },
+    size: (type === 'rtr' || type === 'camera' || type === 'widget') ? 'xl' : (type === 'player' ? 'l' : 'm'),
+    behavior,
+    capabilities,
+    ui: {},
     io: {},
   };
 
-  // IO skeletons by type
-  if (t === 'switch') {
+  if (type === 'switch' || type === 'scene') {
     dev.io.switch = { readId: null, writeId: null };
-  } else if (t === 'scene') {
+  } else if (type === 'color') {
     dev.io.switch = { readId: null, writeId: null };
-  } else if (t === 'color') {
-    // Farb‑Licht: optionaler Schalter + Farb‑DP
-    dev.io.switch = { readId: null, writeId: null };
+    dev.io.level = { readId: null, writeId: null, min: 0, max: 100, step: 1 };
     dev.io.color = { readId: null, writeId: null, format: 'hex' };
-  } else if (t === 'dimmer') {
-    dev.io.level = { readId: null, writeId: null, min: 0, max: 100 };
-  } else if (t === 'blind') {
-    dev.io.level = { readId: null, writeId: null, min: 0, max: 100 };
-    dev.io.cover = { upId: null, downId: null, stopId: null };
-  } else if (t === 'rtr') {
+    if (capabilities.white) dev.io.white = { readId: null, writeId: null, min: 0, max: 100, step: 1 };
+    if (capabilities.colorTemperature) {
+      dev.io.colorTemperature = { readId: null, writeId: null, min: 2000, max: 6500, step: 100 };
+    }
+  } else if (type === 'dimmer') {
+    dev.io.switch = { readId: null, writeId: null };
+    dev.io.level = { readId: null, writeId: null, min: 0, max: 100, step: 1 };
+    if (capabilities.colorTemperature) {
+      dev.io.colorTemperature = { readId: null, writeId: null, min: 2000, max: 6500, step: 100 };
+    }
+  } else if (type === 'blind') {
+    dev.io.level = { readId: null, writeId: null, min: 0, max: 100, step: 1 };
+    dev.io.cover = {
+      positionId: null,
+      upId: null,
+      downId: null,
+      stopId: null,
+      tiltReadId: null,
+      tiltWriteId: null,
+      movingId: null,
+      directionId: null,
+      lockId: null,
+      windAlarmId: null,
+      rainAlarmId: null,
+      frostAlarmId: null,
+    };
+  } else if (type === 'rtr') {
     dev.io.climate = {
       currentTempId: null,
       setpointId: null,
       modeId: null,
       humidityId: null,
+      powerId: null,
+      fanSpeedId: null,
+      swingId: null,
+      demandId: null,
+      windowId: null,
+      errorId: null,
       minSetpoint: 15,
       maxSetpoint: 30,
+      step: 0.5,
     };
-  } else if (t === 'player') {
+  } else if (type === 'player') {
     dev.io.player = {
-      playingId: null,
-      titleId: null,
-      artistId: null,
-      sourceId: null,
-      coverId: null,
-      volumeReadId: null,
-      volumeWriteId: null,
-      volumeMin: 0,
-      volumeMax: 100,
-      toggleId: null,
-      playId: null,
-      pauseId: null,
-      stopId: null,
-      nextId: null,
-      prevId: null,
-      stationId: null,
-      playlistId: null,
+      playingId: null, titleId: null, artistId: null, sourceId: null, coverId: null,
+      volumeReadId: null, volumeWriteId: null, volumeMin: 0, volumeMax: 100,
+      toggleId: null, playId: null, pauseId: null, stopId: null, nextId: null, prevId: null,
+      stationId: null, playlistId: null,
+      muteReadId: null, muteWriteId: null,
+      powerReadId: null, powerWriteId: null,
+      seekReadId: null, seekWriteId: null, seekMin: 0, seekMax: 100, seekStep: 1,
+      shuffleId: null, repeatId: null,
+      ttsWriteId: null,
     };
     dev.stations = [];
     dev.playlists = [];
-  } else if (t === 'camera') {
-    dev.io.camera = {
-      snapshotUrl: '',
-      liveUrl: '',
-      refreshSec: 5,
-    };
+  } else if (type === 'camera') {
+    dev.io.camera = { snapshotUrl: '', liveUrl: '', refreshMs: 5000 };
     dev.behavior.readOnly = true;
-  } else if (t === 'widget') {
+  } else if (type === 'widget') {
     dev.io.widget = {
-      kind: 'iframe',
-      url: '',
-      openUrl: '',
-      embed: false,
-      height: 260,
-      label: '',
+      kind: tid === 'url_call' ? 'url' : 'iframe',
+      url: '', openUrl: '', embed: tid === 'url_call' ? false : true, height: 260, label: '',
     };
     dev.behavior.readOnly = true;
-  } else if (t === 'sensor') {
-    dev.io.sensor = { readId: null };
-    dev.ui = Object.assign({}, dev.ui || {}, nwShcfgDefaultSensorUiFromTemplate(tpl));
-    // Sensoren sind in der Regel reine Anzeige (optional anpassbar)
-    dev.behavior.readOnly = true;
-  } else {
-    // Fallback: switch
-    dev.type = 'switch';
-    dev.io.switch = { readId: null, writeId: null };
+  } else if (type === 'sensor') {
+    const writableSpecs = {
+      value_32bit_signed: { valueType: 'integer', min: -2147483648, max: 2147483647, step: 1 },
+      value_32bit_unsigned: { valueType: 'integer', min: 0, max: 4294967295, step: 1 },
+      value_8bit_unsigned: { valueType: 'integer', min: 0, max: 255, step: 1 },
+      value_8bit_signed: { valueType: 'integer', min: -128, max: 127, step: 1 },
+      value_decimal: { valueType: 'number', min: -1000000000, max: 1000000000, step: 0.1 },
+      value_percent: { valueType: 'number', min: 0, max: 100, step: 1 },
+      value_temperature: { valueType: 'number', min: -50, max: 100, step: 0.1 },
+    };
+    const spec = writableSpecs[tid] || { valueType: /text/i.test(String((tpl && tpl.meta) || '')) ? 'string' : 'number', min: -1000000000, max: 1000000000, step: 1 };
+    const writable = !!(tpl && tpl.writableValue);
+    dev.io.sensor = { readId: null, writeId: writable ? null : undefined, ...spec };
+    dev.ui = Object.assign({}, nwShcfgDefaultSensorUiFromTemplate(tpl));
+    dev.behavior.readOnly = !writable;
+    dev.capabilities.writableValue = writable;
   }
 
   devices.push(dev);
@@ -7213,12 +7432,10 @@ function nwAddDeviceFromTemplate(templateId, opts = {}) {
   nwMarkDirty(true);
   nwRenderAll();
 
-  // Reset template selector (UX)
   if (!opts || !opts.silent) {
     const sel = document.getElementById('nw-config-template-select');
     if (sel) sel.value = '';
   }
-
   return dev;
 }
 /**
@@ -7766,26 +7983,39 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
         d.io.switch = d.io.switch || { readId: null, writeId: null };
       } else if (t === 'color') {
         d.io.switch = d.io.switch || { readId: null, writeId: null };
+        d.io.level = d.io.level || { readId: null, writeId: null, min: 0, max: 100, step: 1 };
         d.io.color = d.io.color || { readId: null, writeId: null, format: 'hex' };
+        d.io.white = d.io.white || { readId: null, writeId: null, min: 0, max: 100, step: 1 };
+        d.io.colorTemperature = d.io.colorTemperature || { readId: null, writeId: null, min: 2000, max: 6500, step: 100 };
       } else if (t === 'dimmer') {
-        d.io.level = d.io.level || { readId: null, writeId: null, min: 0, max: 100 };
+        d.io.switch = d.io.switch || { readId: null, writeId: null };
+        d.io.level = d.io.level || { readId: null, writeId: null, min: 0, max: 100, step: 1 };
+        d.io.colorTemperature = d.io.colorTemperature || { readId: null, writeId: null, min: 2000, max: 6500, step: 100 };
       } else if (t === 'blind') {
-        d.io.level = d.io.level || { readId: null, writeId: null, min: 0, max: 100 };
+        d.io.level = d.io.level || { readId: null, writeId: null, min: 0, max: 100, step: 1 };
         d.io.level.min = 0;
         d.io.level.max = 100;
-        d.io.cover = d.io.cover || { upId: null, downId: null, stopId: null };
+        d.io.cover = d.io.cover || {
+          positionId: null, upId: null, downId: null, stopId: null,
+          tiltReadId: null, tiltWriteId: null, movingId: null, directionId: null,
+          lockId: null, windAlarmId: null, rainAlarmId: null, frostAlarmId: null,
+        };
       } else if (t === 'rtr') {
-        d.io.climate = d.io.climate || { currentTempId: null, setpointId: null, modeId: null, humidityId: null, minSetpoint: 15, maxSetpoint: 30 };
+        d.io.climate = d.io.climate || {
+          currentTempId: null, setpointId: null, modeId: null, humidityId: null,
+          powerId: null, fanSpeedId: null, swingId: null, demandId: null,
+          windowId: null, errorId: null, minSetpoint: 15, maxSetpoint: 30, step: 0.5,
+        };
       } else if (t === 'camera') {
-        d.io.camera = d.io.camera || { snapshotUrl: '', liveUrl: '', refreshSec: 5 };
+        d.io.camera = d.io.camera || { snapshotUrl: '', liveUrl: '', refreshMs: 5000 };
         d.behavior = d.behavior || {};
         d.behavior.readOnly = true;
       } else if (t === 'widget') {
-        d.io.widget = d.io.widget || { kind: 'iframe', url: '', openUrl: '', embed: false, height: 260, label: '' };
+        d.io.widget = d.io.widget || { kind: 'iframe', url: '', openUrl: '', embed: true, height: 260, label: '' };
         d.behavior = d.behavior || {};
         d.behavior.readOnly = true;
       } else if (t === 'sensor') {
-        d.io.sensor = d.io.sensor || { readId: null };
+        d.io.sensor = d.io.sensor || { readId: null, writeId: null, valueType: 'number', min: -1000000000, max: 1000000000, step: 1 };
         d.ui = d.ui || {};
         if (typeof d.ui.unit !== 'string') d.ui.unit = '';
         if (typeof d.ui.precision !== 'number') d.ui.precision = 1;
@@ -7793,23 +8023,12 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
         d.behavior.readOnly = true;
       } else if (t === 'player') {
         d.io.player = d.io.player || {
-          playingId: null,
-          titleId: null,
-          artistId: null,
-          sourceId: null,
-          coverId: null,
-          volumeReadId: null,
-          volumeWriteId: null,
-          volumeMin: 0,
-          volumeMax: 100,
-          toggleId: null,
-          playId: null,
-          pauseId: null,
-          stopId: null,
-          nextId: null,
-          prevId: null,
-          stationId: null,
-          playlistId: null,
+          playingId: null, titleId: null, artistId: null, sourceId: null, coverId: null,
+          volumeReadId: null, volumeWriteId: null, volumeMin: 0, volumeMax: 100,
+          toggleId: null, playId: null, pauseId: null, stopId: null, nextId: null, prevId: null,
+          stationId: null, playlistId: null,
+          muteReadId: null, muteWriteId: null, powerReadId: null, powerWriteId: null,
+          seekReadId: null, seekWriteId: null, seekMin: 0, seekMax: 100, seekStep: 1, shuffleId: null, repeatId: null, ttsWriteId: null,
         };
         d.stations = Array.isArray(d.stations) ? d.stations : [];
         d.playlists = Array.isArray(d.playlists) ? d.playlists : [];
@@ -8076,6 +8295,67 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
     behRow.appendChild(behCtl);
     body.appendChild(behRow);
 
+    // Einheitlicher Bedien- und Qualitätsvertrag für alle Kacheln.
+    dev.behavior = dev.behavior || {};
+    if (['switch', 'scene'].includes(String(dev.type || '').toLowerCase())) {
+      const commandMode = document.createElement('select');
+      commandMode.className = 'nw-config-select';
+      [
+        ['toggle', 'Umschalten'],
+        ['set', 'Explizit Ein/Aus'],
+        ['momentary', 'Taster/Impuls'],
+      ].forEach(([value, label]) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        commandMode.appendChild(option);
+      });
+      commandMode.value = ['toggle', 'set', 'momentary'].includes(String(dev.behavior.commandMode || ''))
+        ? String(dev.behavior.commandMode)
+        : (String(dev.type).toLowerCase() === 'scene' ? 'momentary' : 'toggle');
+      commandMode.addEventListener('change', () => {
+        nwShcState.config.devices[index].behavior = nwShcState.config.devices[index].behavior || {};
+        nwShcState.config.devices[index].behavior.commandMode = commandMode.value;
+        nwMarkDirty(true);
+        nwRenderAll();
+      });
+      body.appendChild(nwCreateFieldRow('Befehlsart', commandMode));
+
+      if (commandMode.value === 'momentary' || String(dev.type).toLowerCase() === 'scene') {
+        const pulse = document.createElement('input');
+        pulse.type = 'number';
+        pulse.className = 'nw-config-input';
+        pulse.min = '50';
+        pulse.max = '60000';
+        pulse.step = '50';
+        pulse.value = String(Number.isFinite(Number(dev.behavior.pulseMs)) ? Number(dev.behavior.pulseMs) : 250);
+        pulse.addEventListener('change', () => {
+          const value = Math.max(50, Math.min(60000, Number(pulse.value) || 250));
+          nwShcState.config.devices[index].behavior = nwShcState.config.devices[index].behavior || {};
+          nwShcState.config.devices[index].behavior.pulseMs = value;
+          pulse.value = String(value);
+          nwMarkDirty(true);
+        });
+        body.appendChild(nwCreateFieldRow('Impulsdauer (ms)', pulse));
+      }
+    }
+
+    const stale = document.createElement('input');
+    stale.type = 'number';
+    stale.className = 'nw-config-input';
+    stale.min = '0';
+    stale.max = '604800';
+    stale.step = '1';
+    stale.value = String(Number.isFinite(Number(dev.behavior.staleAfterSec)) ? Number(dev.behavior.staleAfterSec) : 0);
+    stale.addEventListener('change', () => {
+      const value = Math.max(0, Math.min(604800, Number(stale.value) || 0));
+      nwShcState.config.devices[index].behavior = nwShcState.config.devices[index].behavior || {};
+      nwShcState.config.devices[index].behavior.staleAfterSec = value;
+      stale.value = String(value);
+      nwMarkDirty(true);
+    });
+    body.appendChild(nwCreateFieldRow('Veraltet nach (s) · 0 = aus', stale));
+
     // IO-Konfigurationen
     const io = dev.io || {};
 
@@ -8193,6 +8473,22 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       body.appendChild(upRow);
       body.appendChild(downRow);
       body.appendChild(stopRow);
+      [
+        ['Lamellenwinkel lesen (tiltReadId)', 'tiltReadId'],
+        ['Lamellenwinkel schreiben (tiltWriteId)', 'tiltWriteId'],
+        ['Fährt (movingId)', 'movingId'],
+        ['Fahrtrichtung (directionId)', 'directionId'],
+        ['Sperre (lockId)', 'lockId'],
+        ['Windalarm (windAlarmId)', 'windAlarmId'],
+        ['Regenalarm (rainAlarmId)', 'rainAlarmId'],
+        ['Frostalarm (frostAlarmId)', 'frostAlarmId'],
+      ].forEach(([label, key]) => {
+        body.appendChild(nwCreateDpInput(label, c[key] || '', (val) => {
+          nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+          nwShcState.config.devices[index].io.cover = nwShcState.config.devices[index].io.cover || {};
+          nwShcState.config.devices[index].io.cover[key] = val || null;
+        }));
+      });
       if (String(dev.type || '').toLowerCase() === 'blind') {
         const hint = document.createElement('div');
         hint.className = 'nw-config-help';
@@ -8268,7 +8564,38 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       body.appendChild(spRow);
       body.appendChild(modeRow);
       body.appendChild(humRow);
+      [
+        ['Klima Ein/Aus (powerId)', 'powerId'],
+        ['Lüfterstufe (fanSpeedId)', 'fanSpeedId'],
+        ['Swing (swingId)', 'swingId'],
+        ['Heiz-/Kühlanforderung (demandId)', 'demandId'],
+        ['Fensterkontakt/Sperre (windowId)', 'windowId'],
+        ['Fehlerstatus (errorId)', 'errorId'],
+      ].forEach(([label, key]) => {
+        body.appendChild(nwCreateDpInput(label, cl[key] || '', (val) => {
+          nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+          nwShcState.config.devices[index].io.climate = nwShcState.config.devices[index].io.climate || {};
+          nwShcState.config.devices[index].io.climate[key] = val || null;
+        }));
+      });
       body.appendChild(minMaxRow);
+
+      const stepInput = document.createElement('input');
+      stepInput.type = 'number';
+      stepInput.className = 'nw-config-input';
+      stepInput.min = '0.1';
+      stepInput.max = '10';
+      stepInput.step = '0.1';
+      stepInput.value = String(Number.isFinite(Number(cl.step)) ? Number(cl.step) : 0.5);
+      stepInput.addEventListener('change', () => {
+        const value = Math.max(0.1, Math.min(10, Number(stepInput.value) || 0.5));
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.climate = nwShcState.config.devices[index].io.climate || {};
+        nwShcState.config.devices[index].io.climate.step = value;
+        stepInput.value = String(value);
+        nwMarkDirty(true);
+      });
+      body.appendChild(nwCreateFieldRow('Sollwert-Schritt (°C)', stepInput));
     }
 
     if (io.camera) {
@@ -8514,6 +8841,35 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       minMaxCtl.appendChild(maxInput);
 
       const minMaxRow = nwCreateFieldRow('Lautstärke min/max', minMaxCtl);
+
+      const seekRangeCtl = document.createElement('div');
+      seekRangeCtl.style.display = 'grid';
+      seekRangeCtl.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
+      seekRangeCtl.style.gap = '4px';
+      [
+        ['seekMin', 0, 'Min.'],
+        ['seekMax', 100, 'Max.'],
+        ['seekStep', 1, 'Schritt'],
+      ].forEach(([key, fallback, placeholder]) => {
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'nw-config-input';
+        input.placeholder = String(placeholder);
+        input.step = key === 'seekStep' ? '0.000001' : 'any';
+        input.value = String(Number.isFinite(Number(p[key])) ? Number(p[key]) : fallback);
+        input.addEventListener('change', () => {
+          let value = Number(input.value);
+          if (!Number.isFinite(value)) value = Number(fallback);
+          if (key === 'seekStep') value = Math.max(0.000001, value);
+          nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+          nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+          nwShcState.config.devices[index].io.player[key] = value;
+          input.value = String(value);
+          nwMarkDirty(true);
+        });
+        seekRangeCtl.appendChild(input);
+      });
+      const seekRangeRow = nwCreateFieldRow('Position min/max/Schritt', seekRangeCtl);
       const toggleRow = nwCreateDpInput('Toggle Play/Pause (toggleId)', p.toggleId || '', (val) => {
         nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
         nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
@@ -8554,6 +8910,22 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
         nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
         nwShcState.config.devices[index].io.player.playlistId = val || null;
       });
+
+      const advancedPlayerRows = [
+        ['Mute lesen (muteReadId)', 'muteReadId'],
+        ['Mute schreiben (muteWriteId)', 'muteWriteId'],
+        ['Power lesen (powerReadId)', 'powerReadId'],
+        ['Power schreiben (powerWriteId)', 'powerWriteId'],
+        ['Position lesen (seekReadId)', 'seekReadId'],
+        ['Position schreiben (seekWriteId)', 'seekWriteId'],
+        ['Shuffle (shuffleId)', 'shuffleId'],
+        ['Repeat (repeatId)', 'repeatId'],
+        ['Text-to-Speech (ttsWriteId)', 'ttsWriteId'],
+      ].map(([label, key]) => nwCreateDpInput(label, p[key] || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player[key] = val || null;
+      }));
 
       // Radiosender-Liste (optional)
       const stationsWrap = document.createElement('div');
@@ -8755,6 +9127,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       body.appendChild(volReadRow);
       body.appendChild(volWriteRow);
       body.appendChild(minMaxRow);
+      body.appendChild(seekRangeRow);
       body.appendChild(toggleRow);
       body.appendChild(playRow);
       body.appendChild(pauseRow);
@@ -8762,8 +9135,9 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       body.appendChild(nextRow);
       body.appendChild(prevRow);
       body.appendChild(stationRow);
-      body.appendChild(stationsRow);
       body.appendChild(playlistRow);
+      advancedPlayerRows.forEach((row) => body.appendChild(row));
+      body.appendChild(stationsRow);
       body.appendChild(playlistsRow);
     }
 
@@ -8775,6 +9149,61 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
         nwShcState.config.devices[index].io.sensor.readId = val || null;
       });
       body.appendChild(readRow);
+
+      const writableSensor = !!((dev.capabilities && dev.capabilities.writableValue) || (dev.behavior && !dev.behavior.readOnly) || se.writeId);
+      if (writableSensor) {
+        const writeRow = nwCreateDpInput('Wert schreiben (writeId)', se.writeId || '', (val) => {
+          nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+          nwShcState.config.devices[index].io.sensor = nwShcState.config.devices[index].io.sensor || {};
+          nwShcState.config.devices[index].io.sensor.writeId = val || null;
+          nwShcState.config.devices[index].behavior = nwShcState.config.devices[index].behavior || {};
+          nwShcState.config.devices[index].behavior.readOnly = false;
+        });
+        body.appendChild(writeRow);
+
+        const valueType = document.createElement('select');
+        valueType.className = 'nw-config-select';
+        [
+          ['number', 'Dezimalzahl'], ['integer', 'Ganzzahl'], ['boolean', 'Boolesch'], ['string', 'Text'],
+        ].forEach(([value, label]) => {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = label;
+          valueType.appendChild(option);
+        });
+        valueType.value = ['number', 'integer', 'boolean', 'string'].includes(String(se.valueType || '')) ? String(se.valueType) : 'number';
+        valueType.addEventListener('change', () => {
+          nwShcState.config.devices[index].io.sensor.valueType = valueType.value;
+          nwMarkDirty(true);
+          nwRenderAll();
+        });
+        body.appendChild(nwCreateFieldRow('Werttyp', valueType));
+
+        if (!['boolean', 'string'].includes(valueType.value)) {
+          const range = document.createElement('div');
+          range.style.display = 'grid';
+          range.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
+          range.style.gap = '6px';
+          [['min', -1000000000, 'Min'], ['max', 1000000000, 'Max'], ['step', 1, 'Schritt']].forEach(([key, fallback, placeholder]) => {
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'nw-config-input';
+            input.placeholder = placeholder;
+            input.step = key === 'step' ? '0.000001' : 'any';
+            input.value = String(Number.isFinite(Number(se[key])) ? Number(se[key]) : fallback);
+            input.addEventListener('change', () => {
+              let value = Number(input.value);
+              if (!Number.isFinite(value)) value = fallback;
+              if (key === 'step') value = Math.max(0.000001, value);
+              nwShcState.config.devices[index].io.sensor[key] = value;
+              input.value = String(value);
+              nwMarkDirty(true);
+            });
+            range.appendChild(input);
+          });
+          body.appendChild(nwCreateFieldRow('Bereich / Schritt', range));
+        }
+      }
 
       dev.ui = dev.ui || {};
       if (typeof dev.ui.unit !== 'string') dev.ui.unit = '';
@@ -8834,6 +9263,56 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       body.appendChild(readRow);
       body.appendChild(writeRow);
       body.appendChild(fmtRow);
+    }
+
+    if (io.white) {
+      const white = io.white;
+      body.appendChild(nwCreateDpInput('Weißkanal lesen (readId)', white.readId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.white = nwShcState.config.devices[index].io.white || {};
+        nwShcState.config.devices[index].io.white.readId = val || null;
+      }));
+      body.appendChild(nwCreateDpInput('Weißkanal schreiben (writeId)', white.writeId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.white = nwShcState.config.devices[index].io.white || {};
+        nwShcState.config.devices[index].io.white.writeId = val || null;
+      }));
+    }
+
+    if (io.colorTemperature) {
+      const temp = io.colorTemperature;
+      body.appendChild(nwCreateDpInput('Farbtemperatur lesen (readId)', temp.readId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.colorTemperature = nwShcState.config.devices[index].io.colorTemperature || {};
+        nwShcState.config.devices[index].io.colorTemperature.readId = val || null;
+      }));
+      body.appendChild(nwCreateDpInput('Farbtemperatur schreiben (writeId)', temp.writeId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.colorTemperature = nwShcState.config.devices[index].io.colorTemperature || {};
+        nwShcState.config.devices[index].io.colorTemperature.writeId = val || null;
+      }));
+      const range = document.createElement('div');
+      range.style.display = 'grid';
+      range.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
+      range.style.gap = '6px';
+      [['min', 2000, 'Min K'], ['max', 6500, 'Max K'], ['step', 100, 'Schritt K']].forEach(([key, fallback, placeholder]) => {
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'nw-config-input';
+        input.placeholder = placeholder;
+        input.value = String(Number.isFinite(Number(temp[key])) ? Number(temp[key]) : fallback);
+        input.addEventListener('change', () => {
+          let value = Number(input.value);
+          if (!Number.isFinite(value)) value = fallback;
+          if (key === 'step') value = Math.max(1, value);
+          else value = Math.max(1000, Math.min(20000, value));
+          nwShcState.config.devices[index].io.colorTemperature[key] = value;
+          input.value = String(value);
+          nwMarkDirty(true);
+        });
+        range.appendChild(input);
+      });
+      body.appendChild(nwCreateFieldRow('Farbtemperatur-Bereich', range));
     }
 
     card.appendChild(body);

@@ -15443,7 +15443,17 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
    */
   function openDpModal(targetInputId) {
     dpTargetInputId = targetInputId;
-    treePrefix = '';
+
+    // Beim Ändern einer bereits zugeordneten ID direkt wieder den aktuellen
+    // Objektordner öffnen. Das spart besonders bei tiefen Hersteller-/Geräte-
+    // Strukturen den wiederholten Weg ab der ioBroker-Wurzel.
+    const currentInput = targetInputId ? document.getElementById(targetInputId) : null;
+    const currentId = currentInput && typeof currentInput.value === 'string'
+      ? currentInput.value.trim()
+      : '';
+    const currentParts = currentId.split('.').map((part) => part.trim()).filter(Boolean);
+    treePrefix = currentParts.length > 1 ? currentParts.slice(0, -1).join('.') : '';
+
     if (els.dpSearch) els.dpSearch.value = '';
     if (els.dpResults) els.dpResults.innerHTML = '';
     if (els.dpTree) els.dpTree.innerHTML = '';

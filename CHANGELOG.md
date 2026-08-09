@@ -1,3 +1,16 @@
+## 0.8.167 - 2026-08-09
+
+- NexoLogic-Lifecycle gehärtet: atomare Initialisierung ohne Zwischenwrites, strikte Datenqualität statt `null → 0`, keine künstlichen Startflanken, sichere Deaktivierung/Reload/Unload-Ausgänge, persistente Blockzustände und generationstreu serialisierte Hardwarewrites.
+- Graphvalidierung prüft bekannte Bausteine, eindeutige IDs, Ports, Datentypen, Pflichtparameter und unzulässige kombinatorische Zyklen. Speichern aktiviert die neue Runtime zuerst testweise und fällt bei Fehlern transaktional auf den vorher funktionierenden Graph zurück.
+- Zeitbausteine stabilisiert: Der Zwei-Punkt-Regler wertet nach Mindest-Ein/-Aus-Zeit automatisch erneut aus; der Mischermotor verwendet die konfigurierte Puls-/Pausenzeit und plant Folgeschritte ohne notwendige Eingangswertänderung.
+- SmartHome auf einen kanonischen v3-Gerätevertrag erweitert: Momentary-/Toggle-Taster, Dimmer, RGB/RGBW/Tunable White, Beschattung mit Lamellen und Schutzsignalen, Klima, Player inklusive TTS, schreibbare Wertgeber, Kameras, Widgets und URL-Aktionen.
+- Unbekannte, veraltete, offline und fehlerhafte Zustände werden von realem AUS/0 getrennt dargestellt. Beschattungs- und Klimabefehle werden serverseitig fail-closed gegen Sperre, Wind/Regen/Frost, Fensterkontakt und Gerätestörung geprüft.
+- Szenen vollständig validiert und serialisiert: verschachtelte Szenen, Zyklus-/Tiefenschutz, Preflight aller Ziele, read-only-/Mapping-Prüfung, sichere Datentypumwandlung und klare Fehlerantwort statt stiller Teilaktivierung.
+- SmartHome-Konfigurationssave ist transaktional und besitzt Rollback auf die zuletzt funktionierende Runtime.
+- Datenpunktauswahl in SmartHome, NexoLogic und AppCenter öffnet beim Ändern eines bereits zugeordneten Datenpunkts wieder direkt im aktuellen Objektordner.
+- Fehlenden produktiven Paketpfad `lib/smarthome-contract.js` explizit in die npm-Dateiliste aufgenommen.
+- Netzanschluss-, Phasen-, §14a-, EVCS-, Speicher-, Speicherfarm-, FENECON/FEMS-, SafetyEnvelope-, Heizstab- und FENECON-NVP-Shadow-Regelungen bleiben fachlich unverändert. Service-Worker-Cache auf `nexowatt-cache-v467` und zentrale Versionskennungen auf 0.8.167 aktualisiert.
+
 ## 0.8.166 - 2026-08-09
 
 - Vollständig schreibfreien FENECON-NVP-Shadow ergänzt. Er läuft parallel zur unveränderten RC41-Regelung und darf weder FEMS-/ESS-Hardwaredatenpunkte beschreiben noch die bestehende FEMS-/EOS-Reglerhoheit verändern.

@@ -20,7 +20,7 @@
  * - Der Vertragsbereich unten wird bereits ohne @ts-nocheck geprüft; die große
  *   Browser-/Builder-Runtime bleibt noch geschützt, bis sie einzeln typisiert ist.
  *
- * Original-Hash: 7278612ad1e399c6d9ff2e788d08077332f2015c1c52c593366ceb54dd30bf60
+ * Original-Hash: 5af03763606194c736d2465d9f5d843f29769135ec545d4285e527198e673d99
  */
 
 

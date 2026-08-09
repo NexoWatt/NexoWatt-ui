@@ -11886,3 +11886,238 @@ body.nw-page-ems-apps .nw-tariff-provider-actions #tariffProviderStatus {
     width: 100%;
   }
 }
+
+/* --------------------------------------------------------------------------
+ * RC43 SmartHome stability: data quality, safe controls and full popovers
+ * -------------------------------------------------------------------------- */
+.nw-sh-tile--unknown,
+.nw-sh-tile--quality-unknown{
+  border-color: rgba(148,163,184,.34);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,0) 58%),
+    radial-gradient(120% 90% at 0 0, rgba(148,163,184,.10), transparent 55%),
+    rgba(17,24,39,.34);
+}
+.nw-sh-tile--stale,
+.nw-sh-tile--quality-stale{
+  border-color: rgba(245,158,11,.68);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,0) 58%),
+    radial-gradient(120% 90% at 0 0, rgba(245,158,11,.15), transparent 55%),
+    rgba(17,24,39,.34);
+}
+.nw-sh-tile--quality-offline,
+.nw-sh-tile--quality-error,
+.nw-sh-tile--quality-invalid{
+  border-color: rgba(239,68,68,.76);
+}
+.nw-sh-tile--quality-unknown .nw-sh-tile__state,
+.nw-sh-tile--quality-stale .nw-sh-tile__state,
+.nw-sh-tile--quality-offline .nw-sh-tile__state,
+.nw-sh-tile--quality-error .nw-sh-tile__state,
+.nw-sh-tile--quality-invalid .nw-sh-tile__state{
+  font-weight: 800;
+}
+.nw-sh-tile--quality-stale .nw-sh-tile__state{ color: rgba(253,230,138,.96); }
+.nw-sh-tile--quality-offline .nw-sh-tile__state,
+.nw-sh-tile--quality-error .nw-sh-tile__state,
+.nw-sh-tile--quality-invalid .nw-sh-tile__state{ color: rgba(254,202,202,.96); }
+
+.nw-sh-mini-toggle--momentary{
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+}
+.nw-sh-mini-toggle--momentary::after{
+  content: '↯';
+  inset: 0;
+  width: auto;
+  height: auto;
+  display: grid;
+  place-items: center;
+  transform: none;
+  background: transparent;
+  box-shadow: none;
+  color: rgba(226,232,240,.96);
+  font-size: 17px;
+  font-weight: 900;
+}
+body.nw-page-smarthome .nw-sh-mini-toggle--momentary{
+  width: 34px !important;
+  height: 34px !important;
+}
+body.nw-page-smarthome .nw-sh-mini-toggle--momentary::after{
+  width: auto !important;
+  height: auto !important;
+  transform: none !important;
+}
+
+.nw-sh-range-control{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0;
+}
+.nw-sh-range-control + .nw-sh-range-control{
+  border-top: 1px solid rgba(148,163,184,.12);
+}
+
+.nw-sh-protection{
+  padding: 10px 12px;
+  border-radius: 13px;
+  border: 1px solid rgba(148,163,184,.22);
+  background: rgba(2,6,23,.28);
+  font-size: .8rem;
+  line-height: 1.45;
+}
+.nw-sh-protection--blocked{
+  border-color: rgba(245,158,11,.56);
+  background: rgba(120,53,15,.20);
+  color: rgba(254,243,199,.98);
+}
+.nw-sh-protection--ok{
+  border-color: rgba(34,197,94,.42);
+  background: rgba(20,83,45,.16);
+  color: rgba(187,247,208,.96);
+}
+
+.nw-sh-climate-overview{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 8px;
+}
+.nw-sh-climate-overview__row{
+  min-width: 0;
+  padding: 10px 11px;
+  border-radius: 13px;
+  border: 1px solid rgba(148,163,184,.14);
+  background: rgba(2,6,23,.22);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.nw-sh-climate-overview__row span{
+  color: rgba(148,163,184,.96);
+  font-size: .72rem;
+}
+.nw-sh-climate-overview__row strong{
+  color: rgba(241,245,249,.98);
+  font-size: .9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nw-sh-climate-controls,
+.nw-sh-player__toggles{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.nw-sh-command-row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 9px 0;
+  border-top: 1px solid rgba(148,163,184,.10);
+}
+.nw-sh-command-row__actions{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 1 1 220px;
+}
+.nw-sh-command-row__input{
+  min-width: 150px;
+  flex: 1 1 160px;
+}
+
+.nw-sh-player__sub{
+  font-size: .86rem;
+  color: rgba(148,163,184,.95);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nw-sh-player__chips{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 9px;
+}
+.nw-sh-player__volhdr,
+.nw-sh-player__volhead{
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.nw-sh-player__vollabel,
+.nw-sh-player__vlabel{
+  font-weight: 650;
+  color: rgba(226,232,240,.96);
+}
+.nw-sh-player__volval,
+.nw-sh-player__vval{
+  font-size: .86rem;
+  color: rgba(148,163,184,.96);
+}
+.nw-sh-player__zoneshead,
+.nw-sh-player__zones-head,
+.nw-sh-player__libhead,
+.nw-sh-player__lib-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.nw-sh-player__zonestitle,
+.nw-sh-player__zones-title,
+.nw-sh-player__recenttitle,
+.nw-sh-player__recent-title{
+  font-weight: 650;
+  color: rgba(226,232,240,.96);
+}
+.nw-sh-player__zonesactions,
+.nw-sh-player__zones-actions,
+.nw-sh-player__libtabs,
+.nw-sh-player__lib-tabs,
+.nw-sh-player__libfilters,
+.nw-sh-player__lib-filters{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.nw-sh-player__zoneshint,
+.nw-sh-player__zones-hint{
+  margin-top: 8px;
+  font-size: .78rem;
+  color: rgba(148,163,184,.96);
+}
+.nw-sh-player__tts{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148,163,184,.12);
+}
+.nw-sh-player__tts-input{
+  width: 100%;
+  resize: vertical;
+  min-height: 78px;
+}
+
+@media (max-width: 620px){
+  .nw-sh-climate-overview{ grid-template-columns: 1fr; }
+  .nw-sh-command-row{ align-items: stretch; }
+  .nw-sh-command-row__actions{ justify-content: stretch; }
+  .nw-sh-command-row__actions .nw-sh-btn{ flex: 1 1 auto; }
+}
+
+/* RC43: Fehlende SmartHome-Werte dürfen nicht wie echte 0-Werte aussehen. */
+.nw-sh-gauge--unknown .nw-sh-gauge__active{ stroke: transparent !important; }
+.nw-sh-gauge--unknown .nw-sh-gauge__knob{ opacity: .35; }
+.nw-sh-gauge--unknown .nw-sh-gauge__value{ color: rgba(148,163,184,.98); }
+.nw-sh-gauge--unknown .nw-sh-gauge__canvas{ filter: saturate(.45); }

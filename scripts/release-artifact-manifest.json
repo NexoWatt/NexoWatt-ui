@@ -1,27 +1,17 @@
 {
   "schemaVersion": 1,
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.166",
+  "version": "0.8.167",
   "files": [
     {
-      "path": "LICENSE",
-      "size": 2602,
-      "sha256": "99e8f445f62925ea277a5c74e46ca4fa34bb49507b674874f61632813ed65b68"
-    },
-    {
-      "path": "README.md",
-      "size": 1844,
-      "sha256": "e525e1a6a9b06dcae92a5a2e26a4f21c3482f4a620b77c31b6a5bd292aa82974"
+      "path": "admin/admin_logo_.ico",
+      "size": 4286,
+      "sha256": "595311ae09d73f39eb1d97373d88d5543f1b7021074ea968cc6f5f32f32acc52"
     },
     {
       "path": "admin/admin.png",
       "size": 1466889,
       "sha256": "e1620f78bd502b3837db2b3e351d68ab88198f16e06052618d62d6e33d1ae402"
-    },
-    {
-      "path": "admin/admin_logo_.ico",
-      "size": 4286,
-      "sha256": "595311ae09d73f39eb1d97373d88d5543f1b7021074ea968cc6f5f32f32acc52"
     },
     {
       "path": "admin/appcenter.html",
@@ -102,6 +92,11 @@
       "path": "docs/RC42_FENECON_NVP_SHADOW_DE.md",
       "size": 5125,
       "sha256": "d1d2d9101ae6c621d0cc27a0727d77b3e49b6d8bc2350743df402c985c9bd6b6"
+    },
+    {
+      "path": "docs/RC43_SMARTHOME_NEXOLOGIC_STABILITY_DE.md",
+      "size": 2646,
+      "sha256": "a22c37946dce3064814c339b692f5698b622c66bae03653249897f20cafa0ad9"
     },
     {
       "path": "ems/charging-budget-helpers.js",
@@ -300,8 +295,8 @@
     },
     {
       "path": "ems/nexologic-engine.js",
-      "size": 91934,
-      "sha256": "11d2352abc630353ee83da48e92992087f405404fa685b9418338b966c5030bb"
+      "size": 112845,
+      "sha256": "46dc5fc1ef7ccb3431f70081fe5970f704b94e176843cea4abc593175363f610"
     },
     {
       "path": "ems/reasons.js",
@@ -370,8 +365,8 @@
     },
     {
       "path": "ems/services/nexologic-output-controller.js",
-      "size": 27892,
-      "sha256": "bf6a040160522139612786e6933ada0612edbcf00adbd40055047f13095cd124"
+      "size": 32038,
+      "sha256": "3dfa4309a20333453ee1cbc56b04f984bd03009304471c88b7d042049785e288"
     },
     {
       "path": "ems/services/para14a-eebus-api.js",
@@ -426,17 +421,22 @@
     {
       "path": "ems/services/tariff-provider-registry.js",
       "size": 28839,
-      "sha256": "6a7caa9a1cce01349e9fe2ef5b7cb36f24b5743481d9947034404276d9c1561e"
+      "sha256": "2e754377bdf840dcf380c160e7dcd7908281e2701f89373731960778ed039a98"
     },
     {
       "path": "io-package.json",
-      "size": 28024,
-      "sha256": "06b50998bb644493f01a9790e85b8df58fc74ed3d5a5ca99275631b6749f23ce"
+      "size": 28497,
+      "sha256": "5a2fceeb61266b3b66060da727c5d24ce57e092cd31a0134f0eadf8412cddcaf"
     },
     {
       "path": "lib/energy-origin-api.js",
       "size": 14433,
       "sha256": "928f4f3968d4dec63e61ce0ba82986ac5fde0d251c6ab21614727f3a9b7d09c8"
+    },
+    {
+      "path": "lib/smarthome-contract.js",
+      "size": 34402,
+      "sha256": "fc3c809fe1f209f9df4ae36e01dc72d27da3f675043740d8896b577bc7602fa6"
     },
     {
       "path": "lib/ts-mirrors/adapter/api-set.js",
@@ -654,9 +654,19 @@
       "sha256": "463661dd3c3e8a08c0abbb8526960562de4a961c14b28720f5f4a12c12b00299"
     },
     {
+      "path": "LICENSE",
+      "size": 2602,
+      "sha256": "99e8f445f62925ea277a5c74e46ca4fa34bb49507b674874f61632813ed65b68"
+    },
+    {
       "path": "main.js",
-      "size": 1618004,
-      "sha256": "1ac6cd6a91c1b52efa5ab766cc52461eb8d600e6f94d645a2469fca50ec6b687"
+      "size": 1662693,
+      "sha256": "2e0ad13adc33a1f0592a01ca7250256e5e390648ac7ced184afb4f8be0e519a0"
+    },
+    {
+      "path": "README.md",
+      "size": 1844,
+      "sha256": "e525e1a6a9b06dcae92a5a2e26a4f21c3482f4a620b77c31b6a5bd292aa82974"
     },
     {
       "path": "www/admin-guard.js",
@@ -790,8 +800,8 @@
     },
     {
       "path": "www/ems-apps.js",
-      "size": 942252,
-      "sha256": "4fffa257591c57ad86aee1c830813b4588aeea3401ffc46820f1742828e9595b"
+      "size": 942841,
+      "sha256": "0729637670b28a0d2358192ec940b57ae108bfdd82f526cd684981fba3d30627"
     },
     {
       "path": "www/energy-ledger.html",
@@ -900,13 +910,13 @@
     },
     {
       "path": "www/logic.js",
-      "size": 158422,
-      "sha256": "5058226e396c8b8da892d6e9a414a7a2348e297944c2aa9c4c874df8c156eb73"
+      "size": 162300,
+      "sha256": "7b04a204887a087eed0ead5a5bdb637efff58d401cd4aaf9e447278f055a7e1f"
     },
     {
       "path": "www/manifest.webmanifest",
       "size": 1084,
-      "sha256": "4ee8184b6e4875d52ea80eb3b062b70a6fbfdcc6e09937e942409994ddccf2a5"
+      "sha256": "ab3ffeb4adc0c64af5efbcfbe52a0f1ad94b321e0eb72465120b5287d35d3c7a"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -926,7 +936,7 @@
     {
       "path": "www/nw-i18n.js",
       "size": 20613,
-      "sha256": "6496ba6b613002510be03dac17a01849403460c8782a66806fe57ec43524939e"
+      "sha256": "cefc020735ef4fabc0b49e7e9a22614509979d204b2f90a3c455a36adc4390d7"
     },
     {
       "path": "www/nw-shell.js",
@@ -985,8 +995,8 @@
     },
     {
       "path": "www/smarthome-config.js",
-      "size": 489812,
-      "sha256": "7278612ad1e399c6d9ff2e788d08077332f2015c1c52c593366ceb54dd30bf60"
+      "size": 515844,
+      "sha256": "5af03763606194c736d2465d9f5d843f29769135ec545d4285e527198e673d99"
     },
     {
       "path": "www/smarthome.html",
@@ -995,8 +1005,8 @@
     },
     {
       "path": "www/smarthome.js",
-      "size": 513235,
-      "sha256": "105cd0767b7305a521c758d4a7faaf4e9bfe88a823ed2adf7bb91df11397687d"
+      "size": 547177,
+      "sha256": "16e24030f454d28919c69e887fe67f76634c93e572372cdf5f155b13c91fec4a"
     },
     {
       "path": "www/static/ts-mirrors/frontend/customer-feature-visibility.mjs",
@@ -1050,13 +1060,13 @@
     },
     {
       "path": "www/styles.css",
-      "size": 298925,
-      "sha256": "9d2656bf8b7b9f94dc3290c9eaf43878d5efd003acf3a95aec8b90fc07a22dd5"
+      "size": 304824,
+      "sha256": "0e544e4c3380ae602c495003ba58becf16334dfe544213a3c2e9d10ab9216006"
     },
     {
       "path": "www/sw.js",
       "size": 4888,
-      "sha256": "e1d7318fc2a75b2ddc1a37e66c76743037d3bbd368768a51fcb08376c35ebc33"
+      "sha256": "d7fa3264e48d9ced3c23bfc5994bf937523c13deb296262755bf538eb10413d5"
     },
     {
       "path": "www/tariff-report.html",

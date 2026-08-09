@@ -2603,6 +2603,45 @@ function nwGetAccentColor(dev, iconName) {
   return '#00e676';
 }
 /**
+ * Liefert den vom Backend ermittelten Qualitätszustand. Die UI darf fehlende,
+ * veraltete oder fehlerhafte Rückmeldungen niemals als echten AUS-/0-Wert
+ * darstellen.
+ */
+function nwGetQualityStatus(dev) {
+  const status = String(dev && dev.quality && dev.quality.status ? dev.quality.status : '').trim().toLowerCase();
+  if (['ready', 'online', 'unknown', 'stale', 'offline', 'error', 'invalid'].includes(status)) return status;
+  return 'unknown';
+}
+
+function nwGetQualityLabel(dev) {
+  const status = nwGetQualityStatus(dev);
+  if (status === 'offline') return 'Offline';
+  if (status === 'stale') return 'Veraltet';
+  if (status === 'error') return 'Fehler';
+  if (status === 'invalid') return 'Ungültiger Wert';
+  if (status === 'unknown') return 'Unbekannt';
+  return '';
+}
+
+function nwHasPrimaryState(dev) {
+  const st = dev && dev.state ? dev.state : {};
+  const type = String(dev && dev.type ? dev.type : '').toLowerCase();
+  if (['offline', 'stale', 'error', 'invalid'].includes(nwGetQualityStatus(dev))) return false;
+  if (type === 'switch' || type === 'scene') return typeof st.on === 'boolean' || typeof st.active === 'boolean';
+  if (type === 'dimmer' || type === 'color') return typeof st.on === 'boolean' || typeof st.level === 'number' || !!st.color;
+  if (type === 'blind') return typeof st.position === 'number' || typeof st.level === 'number' || typeof st.moving === 'boolean';
+  if (type === 'rtr') return typeof st.currentTemp === 'number' || typeof st.setpoint === 'number' || typeof st.mode !== 'undefined' || typeof st.power === 'boolean';
+  if (type === 'player') return typeof st.playing === 'boolean' || typeof st.power === 'boolean' || !!st.title || !!st.source;
+  if (type === 'sensor') return typeof st.value !== 'undefined' && st.value !== null;
+  return nwGetQualityStatus(dev) === 'ready';
+}
+
+function nwIsMomentaryDevice(dev) {
+  const mode = String(dev && dev.behavior && dev.behavior.commandMode ? dev.behavior.commandMode : '').toLowerCase();
+  return mode === 'momentary' || String(dev && dev.type ? dev.type : '').toLowerCase() === 'scene';
+}
+
+/**
  * Code-Teil: nwIsOn
  * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
  * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -2610,32 +2649,34 @@ function nwGetAccentColor(dev, iconName) {
  */
 function nwIsOn(dev) {
   const st = dev && dev.state ? dev.state : {};
-  const type = String(dev.type || '').toLowerCase();
+  const type = String(dev && dev.type ? dev.type : '').toLowerCase();
+  if (!nwHasPrimaryState(dev)) return false;
 
-  if (type === 'switch') return !!st.on;
+  if (type === 'switch') return typeof st.on === 'boolean' ? st.on : false;
   if (type === 'color') {
-    if (typeof st.on !== 'undefined') return !!st.on;
-    // some lights expose only a color value
-    return !!(st && st.color);
+    if (typeof st.on === 'boolean') return st.on;
+    if (typeof st.level === 'number') {
+      const min = dev.io && dev.io.level && typeof dev.io.level.min === 'number' ? dev.io.level.min : 0;
+      return st.level > min;
+    }
+    return !!st.color;
   }
-  if (type === 'scene') {
-    const active = (typeof st.active !== 'undefined') ? !!st.active : !!st.on;
-    return active;
-  }
+  if (type === 'scene') return typeof st.active === 'boolean' ? st.active : (typeof st.on === 'boolean' ? st.on : false);
   if (type === 'dimmer') {
-    const lvl = (typeof st.level === 'number') ? st.level : 0;
-    const min = (dev.io && dev.io.level && typeof dev.io.level.min === 'number') ? dev.io.level.min : 0;
-    return lvl > min;
+    if (typeof st.on === 'boolean') return st.on;
+    if (typeof st.level !== 'number') return false;
+    const min = dev.io && dev.io.level && typeof dev.io.level.min === 'number' ? dev.io.level.min : 0;
+    return st.level > min;
   }
   if (type === 'player') {
-    if (typeof st.playing !== 'undefined') return !!st.playing;
-    return !!st.on;
-  }
-  if (type === 'blind') {
-    // blinds have no true "on"; we keep them neutral
+    if (typeof st.playing === 'boolean') return st.playing;
+    if (typeof st.power === 'boolean') return st.power;
     return false;
   }
   if (type === 'rtr') {
+    if (typeof st.power === 'boolean') return st.power;
+    if (typeof st.demand === 'boolean') return st.demand;
+    if (typeof st.demand === 'number') return st.demand > 0;
     return true;
   }
   return false;
@@ -2662,29 +2703,43 @@ function nwSupportsTimer(dev) {
  */
 function nwGetStateText(dev) {
   const st = dev && dev.state ? dev.state : {};
-  const type = String(dev.type || '').toLowerCase();
+  const type = String(dev && dev.type ? dev.type : '').toLowerCase();
+  const qualityLabel = nwGetQualityLabel(dev);
+  const qualityStatus = nwGetQualityStatus(dev);
 
-  if (st && st.error) return 'Fehler';
+  if (['offline', 'stale', 'error', 'invalid'].includes(qualityStatus)) return qualityLabel;
+  if (qualityStatus === 'unknown' && !nwHasPrimaryState(dev)) return 'Unbekannt';
 
-  if (type === 'switch') return st.on ? 'Ein' : 'Aus';
+  if (type === 'switch') {
+    if (nwIsMomentaryDevice(dev) && typeof st.on !== 'boolean') return 'Bereit';
+    if (typeof st.on === 'boolean') return st.on ? 'Ein' : 'Aus';
+    return nwIsMomentaryDevice(dev) ? 'Bereit' : 'Keine Rückmeldung';
+  }
   if (type === 'color') {
-    if (typeof st.on !== 'undefined') return st.on ? 'Ein' : 'Aus';
+    if (typeof st.on === 'boolean') return st.on ? 'Ein' : 'Aus';
+    if (typeof st.level === 'number') return Math.round(st.level) + ' %';
     if (st && st.color) return String(st.color).toUpperCase();
-    return '—';
+    return 'Keine Rückmeldung';
   }
   if (type === 'scene') {
-    const active = (typeof st.active !== 'undefined') ? !!st.active : !!st.on;
-    return active ? 'Aktiv' : 'Bereit';
+    if (typeof st.active === 'boolean') return st.active ? 'Aktiv' : 'Bereit';
+    if (typeof st.on === 'boolean') return st.on ? 'Aktiv' : 'Bereit';
+    return 'Bereit';
   }
   if (type === 'dimmer') {
-    const lvl = (typeof st.level === 'number') ? st.level : 0;
-    const pct = Math.round(lvl);
+    if (typeof st.level !== 'number') return 'Keine Rückmeldung';
+    const pct = Math.round(st.level);
     return pct > 0 ? (pct + ' %') : 'Aus';
   }
   if (type === 'blind') {
-    const pos = (typeof st.position === 'number') ? st.position : (typeof st.level === 'number' ? st.level : null);
-    if (typeof pos === 'number') return Math.round(nwClampNumber(pos, 0, 100)) + ' %';
-    return '—';
+    if (st.locked) return 'Gesperrt';
+    if (st.windAlarm) return 'Windalarm';
+    if (st.rainAlarm) return 'Regenalarm';
+    if (st.frostAlarm) return 'Frostalarm';
+    const pos = typeof st.position === 'number' ? st.position : (typeof st.level === 'number' ? st.level : null);
+    const movement = st.moving ? (st.direction ? String(st.direction) : 'fährt') : '';
+    if (typeof pos === 'number') return Math.round(nwClampNumber(pos, 0, 100)) + ' %' + (movement ? ' · ' + movement : '');
+    return movement || 'Keine Rückmeldung';
   }
   if (type === 'player') {
     const title = String(st.title || '').trim();
@@ -2694,47 +2749,38 @@ function nwGetStateText(dev) {
     if (title && artist) line = title + ' – ' + artist;
     else if (title) line = title;
     else if (artist) line = artist;
-    else line = st.on ? 'Spielt' : 'Pausiert';
-    if (source) {
-      line = line ? (line + ' · ' + source) : source;
-    }
+    else if (typeof st.playing === 'boolean') line = st.playing ? 'Spielt' : 'Pausiert';
+    else if (typeof st.power === 'boolean') line = st.power ? 'Ein' : 'Aus';
+    else line = 'Keine Rückmeldung';
+    if (source) line = line ? (line + ' · ' + source) : source;
+    if (st.muted) line += ' · Stumm';
     return line;
   }
   if (type === 'rtr') {
-    const mode = (typeof st.mode !== 'undefined' && st.mode !== null && String(st.mode).trim() !== '')
-      ? String(st.mode).trim()
-      : '';
-
-    const ct = (typeof st.currentTemp === 'number')
-      ? st.currentTemp.toFixed(1).replace('.', ',') + '°C'
-      : '';
-    const sp = (typeof st.setpoint === 'number')
-      ? st.setpoint.toFixed(1).replace('.', ',') + '°C'
-      : '';
-
-    // Compact: "21,0°C → 22,0°C" (optional with mode prefix)
-    const tempLine = (ct && sp)
-      ? (ct + ' → ' + sp)
-      : (sp ? ('Soll ' + sp) : (ct ? ('Ist ' + ct) : ''));
-
-    const out = [mode, tempLine].filter(Boolean).join(' · ');
-    return out || 'Heizung';
+    if (st.climateError === true || (typeof st.climateError === 'string' && st.climateError.trim() && st.climateError !== '0')) return 'Störung';
+    if (st.windowOpen === true) return 'Fenster offen · gesperrt';
+    const mode = (typeof st.mode !== 'undefined' && st.mode !== null && String(st.mode).trim() !== '') ? String(st.mode).trim() : '';
+    const ct = typeof st.currentTemp === 'number' ? st.currentTemp.toFixed(1).replace('.', ',') + '°C' : '';
+    const sp = typeof st.setpoint === 'number' ? st.setpoint.toFixed(1).replace('.', ',') + '°C' : '';
+    const tempLine = ct && sp ? (ct + ' → ' + sp) : (sp ? ('Soll ' + sp) : (ct ? ('Ist ' + ct) : ''));
+    const fan = typeof st.fanSpeed !== 'undefined' && st.fanSpeed !== null && String(st.fanSpeed).trim() ? ('Lüfter ' + st.fanSpeed) : '';
+    const out = [mode, tempLine, fan].filter(Boolean).join(' · ');
+    return out || 'Keine Rückmeldung';
   }
   if (type === 'sensor') {
-    // sensor uses value field primarily
     if (typeof st.value !== 'undefined' && st.value !== null) {
       const ui = dev.ui || {};
       if (typeof st.value === 'number') {
-        const prec = (typeof ui.precision === 'number') ? ui.precision : 1;
+        const prec = typeof ui.precision === 'number' ? ui.precision : 1;
         const unit = nwNormalizeTemperatureUnit(dev, ui.unit || '');
         return st.value.toFixed(prec).replace('.', ',') + (unit ? ' ' + unit : '');
       }
+      if (typeof st.value === 'boolean') return st.value ? 'Ein' : 'Aus';
       return String(st.value);
     }
-    return '—';
+    return 'Keine Rückmeldung';
   }
-
-  return '';
+  return qualityStatus === 'ready' ? 'Bereit' : '';
 }
 /**
  * Code-Teil: nwGetTileHint
@@ -2845,7 +2891,39 @@ function nwGetTileSize(dev) {
 function nwHasWriteAccess(dev) {
   const beh = dev && dev.behavior ? dev.behavior : {};
   if (beh.readOnly) return false;
-  return true;
+  const type = String(dev && dev.type ? dev.type : '').toLowerCase();
+  const io = dev && dev.io ? dev.io : {};
+  if (type === 'switch' || type === 'scene') return !!(io.switch && io.switch.writeId);
+  if (type === 'dimmer') {
+    return !!((io.switch && io.switch.writeId)
+      || (io.level && io.level.writeId)
+      || (io.colorTemperature && io.colorTemperature.writeId));
+  }
+  if (type === 'color') {
+    return !!((io.switch && io.switch.writeId)
+      || (io.level && io.level.writeId)
+      || (io.color && io.color.writeId)
+      || (io.white && io.white.writeId)
+      || (io.colorTemperature && io.colorTemperature.writeId));
+  }
+  if (type === 'blind') {
+    const cover = io.cover || {};
+    return !!((io.level && io.level.writeId)
+      || cover.positionWriteId
+      || cover.upId || cover.downId || cover.stopId || cover.actionId || cover.tiltWriteId);
+  }
+  if (type === 'rtr') {
+    const climate = io.climate || {};
+    return !!(climate.setpointId || climate.powerId || climate.modeId || climate.fanSpeedId || climate.swingId);
+  }
+  if (type === 'player') {
+    const player = io.player || {};
+    return !!(player.toggleId || player.playId || player.pauseId || player.stopId || player.nextId || player.prevId
+      || player.volumeWriteId || player.stationId || player.playlistId || player.muteWriteId || player.powerWriteId
+      || player.seekWriteId || player.shuffleId || player.repeatId || player.ttsWriteId);
+  }
+  if (type === 'sensor') return !!(io.sensor && io.sensor.writeId);
+  return false;
 }
 /**
  * Code-Teil: nwCreateIconElement
@@ -2928,16 +3006,18 @@ async function nwFetchDevices() {
  * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
-async function nwToggleDevice(id) {
+async function nwToggleDevice(id, value) {
+  const body = { id };
+  if (typeof value === 'boolean') body.value = value;
   const res = await fetch('/api/smarthome/toggle', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) return null;
-  const data = await res.json();
+  const data = await res.json().catch(() => null);
   if (!data || !data.ok) return null;
-  return data.state || null;
+  return data.state || { ok: true };
 }
 /**
  * Code-Teil: nwSetLevel
@@ -2962,16 +3042,19 @@ async function nwSetLevel(id, level) {
  * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
-async function nwSetColor(id, color) {
+async function nwSetColor(id, colorOrPayload) {
+  const payload = (colorOrPayload && typeof colorOrPayload === 'object' && !Array.isArray(colorOrPayload))
+    ? { ...colorOrPayload }
+    : { color: colorOrPayload };
   const res = await fetch('/api/smarthome/color', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id, color }),
+    body: JSON.stringify({ id, ...payload }),
   });
   if (!res.ok) return null;
-  const data = await res.json();
+  const data = await res.json().catch(() => null);
   if (!data || !data.ok) return null;
-  return data.state || null;
+  return data.state || { ok: true };
 }
 /**
  * Code-Teil: nwCoverAction
@@ -2979,14 +3062,16 @@ async function nwSetColor(id, color) {
  * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
-async function nwCoverAction(id, action) {
+async function nwCoverAction(id, action, value) {
+  const body = { id, action };
+  if (typeof value !== 'undefined') body.value = value;
   const res = await fetch('/api/smarthome/cover', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id, action }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) return false;
-  const data = await res.json();
+  const data = await res.json().catch(() => null);
   return !!(data && data.ok);
 }
 /**
@@ -3046,6 +3131,31 @@ async function nwSetRtrSetpoint(id, setpoint) {
   const data = await res.json();
   if (!data || !data.ok) return null;
   return data.state || null;
+}
+
+
+async function nwClimateAction(id, action, value) {
+  const body = { id, action };
+  if (typeof value !== 'undefined') body.value = value;
+  const res = await fetch('/api/smarthome/climate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => null);
+  return data && data.ok ? (data.state || { ok: true }) : null;
+}
+
+async function nwSetSmartHomeValue(id, value) {
+  const res = await fetch('/api/smarthome/value', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, value }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => null);
+  return data && data.ok ? (data.state || { ok: true }) : null;
 }
 
 // --- Zeitschaltuhren (Endkunde) ---
@@ -3775,12 +3885,18 @@ function nwCreateTile(dev, opts) {
   const isSensorValueTile = (type === 'sensor') && hasBigValue;
   const showCenteredValue = isSensorValueTile || (isTemperatureTile && type === 'rtr');
   const size = nwGetTileSize(dev);
+  const qualityStatus = nwGetQualityStatus(dev);
+  const stateKnown = nwHasPrimaryState(dev);
   const isOn = nwIsOn(dev);
   const canWrite = nwHasWriteAccess(dev);
   const isFav = nwIsFavorite(dev);
+  const isMomentary = nwIsMomentaryDevice(dev);
+  const isWritableValue = type === 'sensor'
+    && canWrite
+    && !!(dev.io && dev.io.sensor && (dev.io.sensor.writeId || (dev.capabilities && dev.capabilities.writableValue)));
 
   // Device types that have an extra detail button in the header (⋯)
-  const hasDetails = (type === 'dimmer' || type === 'blind' || type === 'rtr' || type === 'player' || type === 'color');
+  const hasDetails = (type === 'dimmer' || type === 'blind' || type === 'rtr' || type === 'player' || type === 'color' || isWritableValue);
   const hasTimer = nwSupportsTimer(dev);
   const actionsCount = 1 + (hasTimer ? 1 : 0) + (hasDetails ? 1 : 0);
 
@@ -3801,10 +3917,12 @@ function nwCreateTile(dev, opts) {
     isTemperatureTile ? 'nw-sh-tile--temperature' : '',
     showCenteredValue ? 'nw-sh-tile--value-large' : '',
     'nw-sh-tile--size-' + size,
-    isOn ? 'nw-sh-tile--on' : 'nw-sh-tile--off',
+    stateKnown ? (isOn ? 'nw-sh-tile--on' : 'nw-sh-tile--off') : 'nw-sh-tile--unknown',
+    'nw-sh-tile--quality-' + qualityStatus,
     canWrite ? '' : 'nw-sh-tile--readonly',
     isFav ? 'nw-sh-tile--favorite' : '',
-    (dev.state && dev.state.error) ? 'nw-sh-tile--error' : '',
+    ['error', 'offline', 'invalid'].includes(qualityStatus) ? 'nw-sh-tile--error' : '',
+    qualityStatus === 'stale' ? 'nw-sh-tile--stale' : '',
     'nw-sh-tile--actions-' + actionsCount,
   ].filter(Boolean).join(' ');
 
@@ -4099,12 +4217,13 @@ function nwCreateTile(dev, opts) {
     const max = type === 'blind' ? 100 : (typeof lvlCfg.max === 'number' ? lvlCfg.max : 100);
     const st = dev.state || {};
     const raw = type === 'blind'
-      ? ((typeof st.position === 'number') ? st.position : (typeof st.level === 'number' ? st.level : 0))
-      : ((typeof st.level === 'number') ? st.level : (typeof st.position === 'number' ? st.position : 0));
-    const value = nwClampNumber(Number.isFinite(Number(raw)) ? Number(raw) : 0, min, max);
-    const pct = (max - min) > 0 ? Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100)) : 0;
+      ? ((typeof st.position === 'number') ? st.position : (typeof st.level === 'number' ? st.level : null))
+      : ((typeof st.level === 'number') ? st.level : (typeof st.position === 'number' ? st.position : null));
+    const hasDialValue = typeof raw === 'number' && Number.isFinite(raw) && stateKnown;
+    const value = hasDialValue ? nwClampNumber(raw, min, max) : min;
+    const pct = hasDialValue && (max - min) > 0 ? Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100)) : 0;
     const dial = document.createElement('div');
-    dial.className = 'nw-sh-tile-dial';
+    dial.className = 'nw-sh-tile-dial' + (hasDialValue ? '' : ' nw-sh-tile-dial--unknown');
     dial.style.setProperty('--nw-sh-arc-deg', Math.round(pct * 1.8) + 'deg');
     dial.title = 'Große Bedienung öffnen';
 
@@ -4112,7 +4231,7 @@ function nwCreateTile(dev, opts) {
     arc.className = 'nw-sh-tile-dial__arc';
     const valueEl = document.createElement('div');
     valueEl.className = 'nw-sh-tile-dial__value';
-    valueEl.textContent = Math.round(value) + '%';
+    valueEl.textContent = hasDialValue ? (Math.round(value) + '%') : '—';
     arc.appendChild(valueEl);
 
     const meta = document.createElement('div');
@@ -4211,17 +4330,22 @@ function nwCreateTile(dev, opts) {
   const addMiniToggle = () => {
     const t = document.createElement('button');
     t.type = 'button';
-    t.className = 'nw-sh-mini-toggle' + (isOn ? ' nw-sh-mini-toggle--on' : '');
-    t.setAttribute('aria-pressed', isOn ? 'true' : 'false');
-    t.title = isOn ? 'Ausschalten' : 'Einschalten';
-    t.disabled = !canWrite;
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an t. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
+    const commandAllowed = canWrite && (isMomentary || stateKnown);
+    t.className = 'nw-sh-mini-toggle'
+      + (isMomentary ? ' nw-sh-mini-toggle--momentary' : '')
+      + (stateKnown && isOn ? ' nw-sh-mini-toggle--on' : '');
+    t.setAttribute('aria-pressed', (!isMomentary && stateKnown && isOn) ? 'true' : 'false');
+    t.title = isMomentary
+      ? 'Impuls auslösen'
+      : (stateKnown ? (isOn ? 'Ausschalten' : 'Einschalten') : 'Keine gültige Rückmeldung – Umschalten gesperrt');
+    t.disabled = !commandAllowed;
     t.addEventListener('click', (ev) => ev.stopPropagation());
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an t. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     t.addEventListener('click', async () => {
-      if (!canWrite) return;
-      const st = await nwToggleDevice(dev.id);
-      if (!st) return;
+      if (!commandAllowed) return;
+      const result = isMomentary
+        ? await nwToggleDevice(dev.id)
+        : await nwToggleDevice(dev.id, !isOn);
+      if (!result) return;
       await nwReloadDevices({ force: true });
     });
     footer.appendChild(t);
@@ -4266,14 +4390,14 @@ function nwCreateTile(dev, opts) {
     const max = typeof lvlCfg.max === 'number' ? lvlCfg.max : 100;
     const step = typeof lvlCfg.step === 'number' ? lvlCfg.step : 5;
     const st = dev.state || {};
-    const current = (typeof st.level === 'number') ? st.level : 0;
+    const current = (typeof st.level === 'number') ? st.level : null;
 
-    addMiniBtn('−', 'Dimmen −', async () => {
+    if (typeof current === 'number') addMiniBtn('−', 'Dimmen −', async () => {
       const next = Math.max(min, Math.min(max, current - step));
       await nwSetLevel(dev.id, next);
       await nwReloadDevices({ force: true });
     });
-    addMiniBtn('+', 'Dimmen +', async () => {
+    if (typeof current === 'number') addMiniBtn('+', 'Dimmen +', async () => {
       const next = Math.max(min, Math.min(max, current + step));
       await nwSetLevel(dev.id, next);
       await nwReloadDevices({ force: true });
@@ -4294,6 +4418,16 @@ function nwCreateTile(dev, opts) {
 
   // Blind buttons (up/stop/down)
   if (type === 'blind') {
+    const cover = dev.io && dev.io.cover ? dev.io.cover : {};
+    const blindState = dev.state || {};
+    const safetyActive = blindState.locked === true || blindState.windAlarm === true || blindState.rainAlarm === true || blindState.frostAlarm === true;
+    const safetyUnknown = [
+      ['locked', cover.lockId],
+      ['windAlarm', cover.windAlarmId],
+      ['rainAlarm', cover.rainAlarmId],
+      ['frostAlarm', cover.frostAlarmId],
+    ].some(([field, dpId]) => !!dpId && typeof blindState[field] !== 'boolean');
+    const movementAllowed = canWrite && !safetyActive && !safetyUnknown;
     const controls = document.createElement('div');
     controls.className = 'nw-sh-controls';
 
@@ -4309,27 +4443,31 @@ function nwCreateTile(dev, opts) {
      * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    const mk = (label, action) => {
+    const mk = (label, action, mapped, allowed) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'nw-sh-btn';
       b.textContent = label;
+      b.disabled = !mapped || !allowed;
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       b.addEventListener('click', (ev) => ev.stopPropagation());
       // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       b.addEventListener('click', async () => {
-        if (!canWrite) return;
+        if (b.disabled) return;
         const ok = await nwCoverAction(dev.id, action);
         if (ok) await nwReloadDevices({ force: true });
       });
       return b;
     };
 
-    controls.appendChild(mk('▲', 'up'));
-    controls.appendChild(mk('■', 'stop'));
-    controls.appendChild(mk('▼', 'down'));
+    const upMapped = !!(cover.upId || cover.actionId);
+    const stopMapped = !!cover.stopId;
+    const downMapped = !!(cover.downId || cover.actionId);
+    if (upMapped) controls.appendChild(mk('▲', 'up', true, movementAllowed));
+    if (stopMapped) controls.appendChild(mk('■', 'stop', true, canWrite));
+    if (downMapped) controls.appendChild(mk('▼', 'down', true, movementAllowed));
 
-    tile.appendChild(controls);
+    if (controls.childNodes.length) tile.appendChild(controls);
   }
 
   // Long‑Press (Touch)
@@ -4403,7 +4541,7 @@ function nwCreateTile(dev, opts) {
       tile.__nwIgnoreNextClick = false;
       return;
     }
-    if (type === 'blind' || type === 'rtr' || type === 'dimmer' || type === 'color' || type === 'player') {
+    if (type === 'blind' || type === 'rtr' || type === 'dimmer' || type === 'color' || type === 'player' || isWritableValue) {
       nwOpenDevicePopover(dev, tile);
       return;
     }
@@ -4436,15 +4574,25 @@ function nwCreateTile(dev, opts) {
         nwOpenDevicePopover(dev, tile);
         return;
       }
-      const st = await nwToggleDevice(dev.id);
+      if (!stateKnown) {
+        nwOpenDevicePopover(dev, tile);
+        return;
+      }
+      const st = await nwToggleDevice(dev.id, !isOn);
       if (!st) return;
       await nwReloadDevices({ force: true });
       return;
     }
 
-    if (type !== 'switch' && type !== 'dimmer' && type !== 'scene' && type !== 'player') return;
-    const st = await nwToggleDevice(dev.id);
-    if (!st) return;
+    if (type !== 'switch' && type !== 'scene') return;
+    if (!isMomentary && !stateKnown) {
+      nwShowShToastForTile(dev);
+      return;
+    }
+    const result = isMomentary
+      ? await nwToggleDevice(dev.id)
+      : await nwToggleDevice(dev.id, !isOn);
+    if (!result) return;
     await nwReloadDevices({ force: true });
   });
 
@@ -5422,6 +5570,86 @@ function nwCreateLivePreviewSender(sendFn, intervalMs) {
   return { trigger };
 }
 /**
+ * Kleine, qualitätsbewusste Bereichssteuerung für SmartHome-Popover.
+ * Ein fehlender Istwert wird als „—“ dargestellt und niemals als 0 ausgegeben.
+ */
+function nwCreateSmartHomeRangeControl(options) {
+  const opts = options || {};
+  const wrap = document.createElement('div');
+  wrap.className = 'nw-sh-range-control';
+
+  const min = Number.isFinite(Number(opts.min)) ? Number(opts.min) : 0;
+  const max = Number.isFinite(Number(opts.max)) ? Number(opts.max) : 100;
+  const step = Number.isFinite(Number(opts.step)) && Number(opts.step) > 0 ? Number(opts.step) : 1;
+  const rawValue = Number(opts.value);
+  const hasValue = Number.isFinite(rawValue);
+  const initial = hasValue
+    ? nwClampNumber(rawValue, Math.min(min, max), Math.max(min, max))
+    : nwClampNumber(Number.isFinite(Number(opts.fallback)) ? Number(opts.fallback) : min, Math.min(min, max), Math.max(min, max));
+  const canWrite = !!opts.canWrite;
+  const unit = typeof opts.unit === 'string' ? opts.unit : '';
+  const decimals = Number.isFinite(Number(opts.decimals)) ? Math.max(0, Math.min(3, Number(opts.decimals))) : (step < 1 ? 1 : 0);
+  const format = typeof opts.formatter === 'function'
+    ? opts.formatter
+    : (value) => nwFormatNumberDE(value, decimals) + (unit ? (' ' + unit) : '');
+
+  const header = document.createElement('div');
+  header.className = 'nw-sh-popover__row';
+  const label = document.createElement('div');
+  label.className = 'nw-sh-popover__label';
+  label.textContent = String(opts.label || 'Wert');
+  const right = document.createElement('div');
+  right.className = 'nw-sh-popover__right';
+  const valueEl = document.createElement('div');
+  valueEl.className = 'nw-sh-popover__value';
+  valueEl.textContent = hasValue ? format(initial) : '—';
+  const status = nwCreateStatusBadge();
+  right.appendChild(valueEl);
+  right.appendChild(status);
+  header.appendChild(label);
+  header.appendChild(right);
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.className = 'nw-sh-slider nw-sh-slider--big';
+  slider.min = String(min);
+  slider.max = String(max);
+  slider.step = String(step);
+  slider.value = String(initial);
+  slider.disabled = !canWrite;
+  nwUpdateRangeFill(slider);
+
+  slider.addEventListener('click', (event) => event.stopPropagation());
+  slider.addEventListener('input', () => {
+    const value = Number(slider.value);
+    if (!Number.isFinite(value)) return;
+    valueEl.textContent = format(value);
+    nwUpdateRangeFill(slider);
+    if (typeof opts.onInput === 'function') opts.onInput(value);
+  });
+  slider.addEventListener('change', async () => {
+    if (!canWrite || typeof opts.onCommit !== 'function') return;
+    const value = Number(slider.value);
+    if (!Number.isFinite(value)) return;
+    nwSetStatusBadge(status, 'busy', 'Senden…');
+    let result = null;
+    try { result = await opts.onCommit(value); } catch (_error) { result = null; }
+    if (result === null || result === false) nwSetStatusBadge(status, 'err', 'Fehler');
+    else nwSetStatusBadge(status, 'ok', 'OK');
+  });
+
+  wrap.appendChild(header);
+  wrap.appendChild(slider);
+  if (opts.hint) {
+    const hint = document.createElement('div');
+    hint.className = 'nw-sh-popover__hint';
+    hint.textContent = String(opts.hint);
+    wrap.appendChild(hint);
+  }
+  return wrap;
+}
+
+/**
  * Code-Teil: nwBuildPopoverContent
  * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
  * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -5498,6 +5726,8 @@ function nwBuildPopoverContent(dev) {
     body.appendChild(nwCreateRtrPopover(dev, canWrite));
   } else if (type === 'player') {
     body.appendChild(nwCreatePlayerPopover(dev, canWrite));
+  } else if (type === 'sensor' && dev.io && dev.io.sensor && (dev.io.sensor.writeId || (dev.capabilities && dev.capabilities.writableValue))) {
+    body.appendChild(nwCreateValuePopover(dev, canWrite));
   } else {
     const hint = document.createElement('div');
     hint.className = 'nw-sh-popover__hint';
@@ -5525,7 +5755,8 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
   const max = (typeof lvlCfg.max === 'number') ? lvlCfg.max : 100;
 
   const st = dev.state || {};
-  const current = (typeof st.level === 'number') ? st.level : 0;
+  const hasCurrent = typeof st.level === 'number' && Number.isFinite(st.level);
+  const current = hasCurrent ? st.level : min;
 
   // Live-preview toggle (throttled writes while dragging)
   let livePreview = nwLoadBoolLS(NW_SH_LIVE_PREVIEW_LS_KEY, NW_SH_LIVE_PREVIEW_DEFAULT);
@@ -5542,7 +5773,7 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
 
   const v = document.createElement('div');
   v.className = 'nw-sh-popover__value';
-  v.textContent = Math.round(current) + ' %';
+  v.textContent = hasCurrent ? (Math.round(current) + ' %') : '—';
 
   const right = document.createElement('div');
   right.className = 'nw-sh-popover__right';
@@ -5671,6 +5902,7 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
 
   dial = nwCreateValueGauge({
     value: current,
+    hasValue: hasCurrent,
     min,
     max,
     step: 1,
@@ -5853,31 +6085,50 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
   wrap.appendChild(stepRow);
   wrap.appendChild(hint);
 
-  // Optional: Ein/Aus Button
-  const btnRow = document.createElement('div');
-  btnRow.className = 'nw-sh-popover__row';
+  const cctCfg = dev.io && dev.io.colorTemperature ? dev.io.colorTemperature : null;
+  if (cctCfg && (cctCfg.readId || cctCfg.writeId)) {
+    wrap.appendChild(nwCreateSmartHomeRangeControl({
+      label: 'Farbtemperatur',
+      min: typeof cctCfg.min === 'number' ? cctCfg.min : 2000,
+      max: typeof cctCfg.max === 'number' ? cctCfg.max : 6500,
+      step: typeof cctCfg.step === 'number' ? cctCfg.step : 100,
+      value: st.colorTemperature,
+      unit: 'K',
+      canWrite: canWrite && !!(cctCfg.writeId || cctCfg.readId),
+      onCommit: async (value) => {
+        const result = await nwSetColor(dev.id, { temperatureK: value });
+        if (result) await nwReloadDevices({ force: true });
+        return result;
+      },
+    }));
+  }
 
-  const toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.className = 'nw-sh-btn';
-  toggle.textContent = nwIsOn(dev) ? 'Ausschalten' : 'Einschalten';
-  toggle.disabled = !canWrite;
-  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an toggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-  toggle.addEventListener('click', (ev) => ev.stopPropagation());
-  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an toggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-  toggle.addEventListener('click', async () => {
-    if (!canWrite) return;
-    setBusy();
-    const res = await nwToggleDevice(dev.id);
-    if (res === null) setErr();
-    else setOk();
-    await nwReloadDevices({ force: true });
-    // close label text not auto-updated; ok
-  });
+  // Optional: Ein/Aus nur mit eindeutigem Schalt-Datenpunkt und gültiger Rückmeldung.
+  const swCfg = dev.io && dev.io.switch ? dev.io.switch : null;
+  if (swCfg && (swCfg.writeId || swCfg.readId)) {
+    const stateKnown = nwHasPrimaryState(dev) && typeof st.on === 'boolean';
+    const btnRow = document.createElement('div');
+    btnRow.className = 'nw-sh-popover__row';
 
-  btnRow.appendChild(document.createElement('div'));
-  btnRow.appendChild(toggle);
-  wrap.appendChild(btnRow);
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'nw-sh-btn';
+    toggle.textContent = stateKnown ? (nwIsOn(dev) ? 'Ausschalten' : 'Einschalten') : 'Schaltzustand unbekannt';
+    toggle.disabled = !canWrite || !stateKnown;
+    toggle.addEventListener('click', (ev) => ev.stopPropagation());
+    toggle.addEventListener('click', async () => {
+      if (!canWrite || !stateKnown) return;
+      setBusy();
+      const res = await nwToggleDevice(dev.id, !nwIsOn(dev));
+      if (res === null) setErr();
+      else setOk();
+      await nwReloadDevices({ force: true });
+    });
+
+    btnRow.appendChild(document.createElement('div'));
+    btnRow.appendChild(toggle);
+    wrap.appendChild(btnRow);
+  }
 
   return wrap;
 }
@@ -5917,6 +6168,7 @@ function nwCreateColorPopover(dev, canWrite) {
     return null;
   };
 
+  const hasCurrentColor = !!normHex(st.color);
   let current = normHex(st.color) || '#ffffff';
 
   /* --------------------------- HSV helpers (UI) --------------------------- */
@@ -6052,7 +6304,7 @@ function nwCreateColorPopover(dev, canWrite) {
 
   const v = document.createElement('div');
   v.className = 'nw-sh-popover__value';
-  v.textContent = current.toUpperCase();
+  v.textContent = hasCurrentColor ? current.toUpperCase() : '—';
 
   const right = document.createElement('div');
   right.className = 'nw-sh-popover__right';
@@ -6427,12 +6679,12 @@ function nwCreateColorPopover(dev, canWrite) {
    */
   function updateHint() {
     if (!hasWrite) {
-      hint.textContent = 'Nur Anzeige (keine Schreib‑DP / writeId konfiguriert).';
+      hint.textContent = 'RGB-Farbe nur Anzeige. Weitere Lichtkanäle können unten separat bedient werden.';
       return;
     }
     hint.textContent = livePreview
-      ? 'Live-Vorschau: AN (gedrosselt). Beim Loslassen wird die Farbe final übernommen.'
-      : 'Tipp: Farbe wählen – wird beim Loslassen übernommen.';
+      ? 'Live-Vorschau: AN (gedrosselt). Beim Loslassen wird die RGB-Farbe final übernommen.'
+      : 'Tipp: RGB-Farbe wählen – wird beim Loslassen übernommen.';
   }
   updateHint();
 
@@ -6441,25 +6693,78 @@ function nwCreateColorPopover(dev, canWrite) {
   wrap.appendChild(presets);
   wrap.appendChild(hint);
 
-  // Optional: Ein/Aus Button (falls Schalt-DP vorhanden)
+  const levelCfg = dev.io && dev.io.level ? dev.io.level : null;
+  if (levelCfg && (levelCfg.readId || levelCfg.writeId)) {
+    wrap.appendChild(nwCreateSmartHomeRangeControl({
+      label: 'Helligkeit',
+      min: typeof levelCfg.min === 'number' ? levelCfg.min : 0,
+      max: typeof levelCfg.max === 'number' ? levelCfg.max : 100,
+      step: typeof levelCfg.step === 'number' ? levelCfg.step : 1,
+      value: st.level,
+      unit: '%',
+      canWrite: canWrite && !!(levelCfg.writeId || levelCfg.readId),
+      onCommit: async (value) => {
+        const result = await nwSetColor(dev.id, { brightness: value });
+        if (result) await nwReloadDevices({ force: true });
+        return result;
+      },
+    }));
+  }
+
+  const whiteCfg = dev.io && dev.io.white ? dev.io.white : null;
+  if (whiteCfg && (whiteCfg.readId || whiteCfg.writeId)) {
+    wrap.appendChild(nwCreateSmartHomeRangeControl({
+      label: 'Weißkanal',
+      min: typeof whiteCfg.min === 'number' ? whiteCfg.min : 0,
+      max: typeof whiteCfg.max === 'number' ? whiteCfg.max : 100,
+      step: typeof whiteCfg.step === 'number' ? whiteCfg.step : 1,
+      value: st.white,
+      unit: '%',
+      canWrite: canWrite && !!(whiteCfg.writeId || whiteCfg.readId),
+      onCommit: async (value) => {
+        const result = await nwSetColor(dev.id, { white: value });
+        if (result) await nwReloadDevices({ force: true });
+        return result;
+      },
+    }));
+  }
+
+  const tempCfg = dev.io && dev.io.colorTemperature ? dev.io.colorTemperature : null;
+  if (tempCfg && (tempCfg.readId || tempCfg.writeId)) {
+    wrap.appendChild(nwCreateSmartHomeRangeControl({
+      label: 'Farbtemperatur',
+      min: typeof tempCfg.min === 'number' ? tempCfg.min : 2000,
+      max: typeof tempCfg.max === 'number' ? tempCfg.max : 6500,
+      step: typeof tempCfg.step === 'number' ? tempCfg.step : 100,
+      value: st.colorTemperature,
+      unit: 'K',
+      canWrite: canWrite && !!(tempCfg.writeId || tempCfg.readId),
+      onCommit: async (value) => {
+        const result = await nwSetColor(dev.id, { temperatureK: value });
+        if (result) await nwReloadDevices({ force: true });
+        return result;
+      },
+    }));
+  }
+
+  // Optional: Ein/Aus nur bei gültiger Rückmeldung; niemals aus „unbekannt“ toggeln.
   const sw = (dev.io && dev.io.switch) ? dev.io.switch : null;
   const hasSwitch = canWrite && !!(sw && (sw.writeId || sw.readId));
   if (hasSwitch) {
+    const stateKnown = nwHasPrimaryState(dev) && typeof st.on === 'boolean';
     const btnRow = document.createElement('div');
     btnRow.className = 'nw-sh-popover__row';
 
     const toggle = document.createElement('button');
     toggle.type = 'button';
     toggle.className = 'nw-sh-btn';
-    toggle.textContent = nwIsOn(dev) ? 'Ausschalten' : 'Einschalten';
-    toggle.disabled = !canWrite;
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an toggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
+    toggle.textContent = stateKnown ? (nwIsOn(dev) ? 'Ausschalten' : 'Einschalten') : 'Schaltzustand unbekannt';
+    toggle.disabled = !canWrite || !stateKnown;
     toggle.addEventListener('click', (ev) => ev.stopPropagation());
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an toggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     toggle.addEventListener('click', async () => {
-      if (!canWrite) return;
+      if (!canWrite || !stateKnown) return;
       setBusy();
-      const res = await nwToggleDevice(dev.id);
+      const res = await nwToggleDevice(dev.id, !nwIsOn(dev));
       if (res === null) setErr();
       else setOk();
       await nwReloadDevices({ force: true });
@@ -6482,6 +6787,7 @@ function nwCreateBlindPopover(dev, canWrite) {
   const wrap = document.createElement('div');
 
   const lvlCfg = (dev.io && dev.io.level) ? dev.io.level : {};
+  const coverCfg = (dev.io && dev.io.cover) ? dev.io.cover : {};
   const hasWrite = canWrite && !!(
     ((typeof lvlCfg.writeId === 'string') && (String(lvlCfg.writeId).trim() !== '')) ||
     ((typeof lvlCfg.readId === 'string') && (String(lvlCfg.readId).trim() !== ''))
@@ -6490,11 +6796,32 @@ function nwCreateBlindPopover(dev, canWrite) {
   const max = 100;
 
   const st = dev.state || {};
+  const fieldQuality = dev.fieldQuality || {};
+  const hasCurrent = (typeof st.position === 'number' && Number.isFinite(st.position)) || (typeof st.level === 'number' && Number.isFinite(st.level));
   const current = nwClampNumber((typeof st.position === 'number') ? st.position : (typeof st.level === 'number' ? st.level : 0), min, max);
+  const activeProtection = [];
+  if (st.locked === true) activeProtection.push('Sperre aktiv');
+  if (st.windAlarm === true) activeProtection.push('Windalarm');
+  if (st.rainAlarm === true) activeProtection.push('Regenalarm');
+  if (st.frostAlarm === true) activeProtection.push('Frostalarm');
+  const safetyFields = [
+    ['locked', coverCfg.lockId, 'Sperrstatus'],
+    ['windAlarm', coverCfg.windAlarmId, 'Windschutz'],
+    ['rainAlarm', coverCfg.rainAlarmId, 'Regenschutz'],
+    ['frostAlarm', coverCfg.frostAlarmId, 'Frostschutz'],
+  ];
+  const unavailableProtection = safetyFields
+    .filter((entry) => entry[1] && (!fieldQuality[entry[0]] || fieldQuality[entry[0]].valid !== true))
+    .map((entry) => entry[2]);
+  const movementBlocked = activeProtection.length > 0 || unavailableProtection.length > 0;
+  const blockReason = activeProtection.length
+    ? activeProtection.join(' · ')
+    : (unavailableProtection.length ? ('Schutzstatus nicht verfügbar: ' + unavailableProtection.join(', ')) : '');
+  const canMove = hasWrite && !movementBlocked;
 
   // Live-preview toggle (throttled writes while dragging)
   let livePreview = nwLoadBoolLS(NW_SH_LIVE_PREVIEW_LS_KEY, NW_SH_LIVE_PREVIEW_DEFAULT);
-  const liveSender = (hasWrite)
+  const liveSender = (canMove)
     ? nwCreateLivePreviewSender(async (val) => { await nwSetLevel(dev.id, val); }, NW_SH_LIVE_PREVIEW_THROTTLE_MS)
     : null;
 
@@ -6507,7 +6834,7 @@ function nwCreateBlindPopover(dev, canWrite) {
 
   const v = document.createElement('div');
   v.className = 'nw-sh-popover__value';
-  v.textContent = Math.round(current) + ' %';
+  v.textContent = hasCurrent ? (Math.round(current) + ' %') : '—';
 
   const right = document.createElement('div');
   right.className = 'nw-sh-popover__right';
@@ -6567,7 +6894,7 @@ function nwCreateBlindPopover(dev, canWrite) {
    */
   function setErr() { flashStatus('err', 'Fehler', 1600); }
 
-  if (hasWrite) {
+  if (canMove) {
     const liveBtn = document.createElement('button');
     liveBtn.type = 'button';
     liveBtn.className = 'nw-sh-chip nw-sh-chip--mini' + (livePreview ? ' nw-sh-chip--active' : '');
@@ -6595,7 +6922,7 @@ function nwCreateBlindPopover(dev, canWrite) {
   slider.max = String(max);
   slider.value = String(nwClampNumber(current, min, max));
   slider.className = 'nw-sh-slider nw-sh-slider--big';
-  slider.disabled = !hasWrite;
+  slider.disabled = !canMove;
 
   // Premium: colored progress track.
   nwUpdateRangeFill(slider);
@@ -6620,7 +6947,7 @@ function nwCreateBlindPopover(dev, canWrite) {
     nwUpdateRangeFill(slider);
     if (dial && typeof dial.nwSetValue === 'function') dial.nwSetValue(clamped);
 
-    if (!hasWrite) return clamped;
+    if (!canMove) { if (movementBlocked) setErr(); return null; }
 
     if (showStatus) setBusy();
     const res = await nwSetLevel(dev.id, clamped);
@@ -6634,13 +6961,14 @@ function nwCreateBlindPopover(dev, canWrite) {
 
   dial = nwCreateValueGauge({
     value: current,
+    hasValue: hasCurrent,
     min,
     max,
     step: 1,
     unit: '%',
     label: 'Position',
     sub2: '0 % auf · 100 % ab',
-    canWrite: hasWrite,
+    canWrite: canMove,
     formatter: (val) => Math.round(val) + '%',
     minmaxFormatter: (val) => Math.round(val) + '%',
     stops: [['0%', '#27b8ff'], ['55%', '#00e676'], ['100%', '#ffd31a']],
@@ -6648,7 +6976,7 @@ function nwCreateBlindPopover(dev, canWrite) {
       slider.value = String(val);
       v.textContent = Math.round(val) + ' %';
       nwUpdateRangeFill(slider);
-      if (hasWrite && livePreview && liveSender) liveSender.trigger(val, false);
+      if (canMove && livePreview && liveSender) liveSender.trigger(val, false);
     },
     onCommit: async (val) => { await commitPos(val); },
   });
@@ -6665,14 +6993,14 @@ function nwCreateBlindPopover(dev, canWrite) {
     if (dial && typeof dial.nwSetValue === 'function') dial.nwSetValue(raw);
 
     // Optional: live-preview (throttled) while dragging.
-    if (hasWrite && livePreview && liveSender) {
+    if (canMove && livePreview && liveSender) {
       liveSender.trigger(raw, false);
     }
   });
 
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an slider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   slider.addEventListener('change', async (ev) => {
-    if (!hasWrite) return;
+    if (!canMove) return;
     const raw = Number(ev.target.value);
     if (!Number.isFinite(raw)) return;
     await commitPos(raw);
@@ -6687,12 +7015,12 @@ function nwCreateBlindPopover(dev, canWrite) {
     b.type = 'button';
     b.className = 'nw-sh-chip nw-sh-chip--mini';
     b.textContent = pv + '%';
-    b.disabled = !hasWrite;
+    b.disabled = !canMove;
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     b.addEventListener('click', (ev) => ev.stopPropagation());
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     b.addEventListener('click', async () => {
-      if (!hasWrite) return;
+      if (!canMove) return;
       await commitPos(pv);
     });
     presets.appendChild(b);
@@ -6737,13 +7065,13 @@ function nwCreateBlindPopover(dev, canWrite) {
     c.className = 'nw-sh-chip nw-sh-chip--mini';
     c.textContent = String(s);
     c.title = 'Schrittweite ' + s;
-    c.disabled = !hasWrite;
+    c.disabled = !canMove;
     c.setAttribute('aria-pressed', 'false');
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an c. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     c.addEventListener('click', (ev) => ev.stopPropagation());
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an c. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     c.addEventListener('click', () => {
-      if (!hasWrite) return;
+      if (!canMove) return;
       step = s;
       nwSaveNumberLS(NW_SH_STEP_BLIND_LS_KEY, step);
       syncStepBtns();
@@ -6758,12 +7086,12 @@ function nwCreateBlindPopover(dev, canWrite) {
   minus.className = 'nw-sh-btn nw-sh-btn--mini';
   minus.textContent = '−';
   minus.title = 'Position verringern';
-  minus.disabled = !hasWrite;
+  minus.disabled = !canMove;
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an minus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   minus.addEventListener('click', (ev) => ev.stopPropagation());
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an minus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   minus.addEventListener('click', async () => {
-    if (!hasWrite) return;
+    if (!canMove) return;
     const cur = Number(slider.value);
     await commitPos(cur - step);
   });
@@ -6773,12 +7101,12 @@ function nwCreateBlindPopover(dev, canWrite) {
   plus.className = 'nw-sh-btn nw-sh-btn--mini';
   plus.textContent = '+';
   plus.title = 'Position erhöhen';
-  plus.disabled = !hasWrite;
+  plus.disabled = !canMove;
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an plus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   plus.addEventListener('click', (ev) => ev.stopPropagation());
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an plus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   plus.addEventListener('click', async () => {
-    if (!hasWrite) return;
+    if (!canMove) return;
     const cur = Number(slider.value);
     await commitPos(cur + step);
   });
@@ -6799,6 +7127,10 @@ function nwCreateBlindPopover(dev, canWrite) {
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   function updateHint() {
+    if (movementBlocked) {
+      hint.textContent = 'Bewegung gesperrt: ' + blockReason + '. Stop bleibt verfügbar.';
+      return;
+    }
     if (!canWrite) {
       hint.textContent = 'Nur Anzeige (keine Schreib‑DP konfiguriert).';
       return;
@@ -6813,6 +7145,36 @@ function nwCreateBlindPopover(dev, canWrite) {
   }
 
   updateHint();
+
+  if (movementBlocked) {
+    const protection = document.createElement('div');
+    protection.className = 'nw-sh-protection nw-sh-protection--blocked';
+    protection.textContent = '🛡 ' + blockReason;
+    wrap.appendChild(protection);
+  } else if (safetyFields.some((entry) => !!entry[1])) {
+    const protection = document.createElement('div');
+    protection.className = 'nw-sh-protection nw-sh-protection--ok';
+    protection.textContent = '🛡 Schutzkontakte frei';
+    wrap.appendChild(protection);
+  }
+
+  if (coverCfg.tiltReadId || coverCfg.tiltWriteId) {
+    wrap.appendChild(nwCreateSmartHomeRangeControl({
+      label: 'Lamellenwinkel',
+      min: 0,
+      max: 100,
+      step: 1,
+      value: st.tilt,
+      unit: '%',
+      canWrite: canWrite && !movementBlocked && !!(coverCfg.tiltWriteId || coverCfg.tiltReadId),
+      hint: movementBlocked ? ('Gesperrt: ' + blockReason) : '',
+      onCommit: async (value) => {
+        const result = await nwCoverAction(dev.id, 'tilt', value);
+        if (result) await nwReloadDevices({ force: true });
+        return result;
+      },
+    }));
+  }
 
   const controls = document.createElement('div');
   controls.className = 'nw-sh-controls';
@@ -6834,12 +7196,13 @@ function nwCreateBlindPopover(dev, canWrite) {
     b.type = 'button';
     b.className = 'nw-sh-btn';
     b.textContent = label;
-    b.disabled = !canWrite;
+    const actionAllowed = canWrite && (action === 'stop' || !movementBlocked);
+    b.disabled = !actionAllowed;
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     b.addEventListener('click', (ev) => ev.stopPropagation());
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     b.addEventListener('click', async () => {
-      if (!canWrite) return;
+      if (!actionAllowed) return;
       setBusy();
       const ok = await nwCoverAction(dev.id, action);
       if (!ok) setErr();
@@ -6883,42 +7246,198 @@ function nwGetRtrRange(dev) {
  */
 function nwCreateRtrPopover(dev, canWrite) {
   const wrap = document.createElement('div');
-
   const st = dev.state || {};
+  const climate = (dev.io && dev.io.climate) ? dev.io.climate : {};
   const range = nwGetRtrRange(dev);
+  const step = (typeof climate.step === 'number' && climate.step > 0) ? climate.step : 0.5;
 
-  let setpoint = (typeof st.setpoint === 'number') ? st.setpoint : null;
-  if (!Number.isFinite(setpoint)) {
-    setpoint = (typeof st.currentTemp === 'number') ? st.currentTemp : range.min;
-  }
-  setpoint = nwClampNumber(setpoint, range.min, range.max);
-  setpoint = nwRoundToStep(setpoint, 0.5);
+  const errorActive = st.climateError === true
+    || (typeof st.climateError === 'string' && !['', '0', 'false', 'off', 'ok', 'none'].includes(st.climateError.trim().toLowerCase()));
+  const windowOpen = st.windowOpen === true;
+  const controlBlocked = errorActive || windowOpen;
+  const blockReason = errorActive ? 'Gerät meldet einen Fehler' : (windowOpen ? 'Fensterkontakt ist geöffnet' : '');
 
-  const dial = nwCreateThermostatGauge({
-    value: setpoint,
-    min: range.min,
-    max: range.max,
-    step: 0.5,
-    canWrite: !!(canWrite && dev.io && dev.io.climate && dev.io.climate.setpointId),
-    subtitle: 'Solltemperatur',
-    sub2: (typeof st.currentTemp === 'number')
-      ? ('Ist ' + nwFormatNumberDE(st.currentTemp, 1) + '°C' + (typeof st.humidity === 'number' ? (' · RH ' + Math.round(st.humidity) + '%') : ''))
-      : (typeof st.humidity === 'number' ? ('RH ' + Math.round(st.humidity) + '%') : ''),
-    onCommit: async (val) => {
-      if (!canWrite) return;
-      await nwSetRtrSetpoint(dev.id, val);
-      await nwReloadDevices({ force: true });
-    },
+  const overview = document.createElement('div');
+  overview.className = 'nw-sh-climate-overview';
+  const overviewRows = [
+    ['Isttemperatur', typeof st.currentTemp === 'number' ? (nwFormatNumberDE(st.currentTemp, 1) + ' °C') : '—'],
+    ['Luftfeuchte', typeof st.humidity === 'number' ? (Math.round(st.humidity) + ' %') : '—'],
+    ['Modus', st.mode !== undefined && st.mode !== null && String(st.mode).trim() ? String(st.mode) : '—'],
+    ['Anforderung', st.demand !== undefined && st.demand !== null ? String(st.demand) : '—'],
+  ];
+  overviewRows.forEach(([label, value]) => {
+    const row = document.createElement('div');
+    row.className = 'nw-sh-climate-overview__row';
+    const l = document.createElement('span');
+    l.textContent = label;
+    const v = document.createElement('strong');
+    v.textContent = value;
+    row.appendChild(l);
+    row.appendChild(v);
+    overview.appendChild(row);
   });
+  wrap.appendChild(overview);
 
-  const hint = document.createElement('div');
-  hint.className = 'nw-sh-popover__hint';
-  hint.textContent = (canWrite && dev.io && dev.io.climate && dev.io.climate.setpointId)
-    ? 'Tipp: Regler ziehen oder +/− – Sollwert wird übernommen.'
-    : 'Nur Anzeige (keine Sollwert‑Schreib‑DP konfiguriert).';
+  if (controlBlocked) {
+    const protection = document.createElement('div');
+    protection.className = 'nw-sh-protection nw-sh-protection--blocked';
+    protection.textContent = '🛡 Bedienung eingeschränkt: ' + blockReason;
+    wrap.appendChild(protection);
+  }
 
-  wrap.appendChild(dial);
-  wrap.appendChild(hint);
+  if (climate.setpointId) {
+    wrap.appendChild(nwCreateSmartHomeRangeControl({
+      label: 'Solltemperatur',
+      min: range.min,
+      max: range.max,
+      step,
+      value: st.setpoint,
+      fallback: typeof st.currentTemp === 'number' ? st.currentTemp : ((range.min + range.max) / 2),
+      unit: '°C',
+      decimals: step < 1 ? 1 : 0,
+      canWrite: canWrite && !controlBlocked,
+      hint: controlBlocked ? blockReason : '',
+      onCommit: async (value) => {
+        const result = await nwSetRtrSetpoint(dev.id, value);
+        if (result) await nwReloadDevices({ force: true });
+        return result;
+      },
+    }));
+  }
+
+  const status = nwCreateStatusBadge();
+  const setStatus = (kind, text) => nwSetStatusBadge(status, kind, text);
+  const controls = document.createElement('div');
+  controls.className = 'nw-sh-climate-controls';
+
+  const sendAction = async (action, value) => {
+    setStatus('busy', 'Senden…');
+    const result = await nwClimateAction(dev.id, action, value);
+    if (!result) {
+      setStatus('err', 'Fehler');
+      return false;
+    }
+    setStatus('ok', 'OK');
+    await nwReloadDevices({ force: true });
+    return true;
+  };
+
+  if (climate.powerId) {
+    const row = document.createElement('div');
+    row.className = 'nw-sh-command-row';
+    const label = document.createElement('div');
+    label.className = 'nw-sh-popover__label';
+    label.textContent = 'Ein/Aus';
+    const buttons = document.createElement('div');
+    buttons.className = 'nw-sh-command-row__actions';
+    const off = document.createElement('button');
+    off.type = 'button';
+    off.className = 'nw-sh-btn';
+    off.textContent = 'Aus';
+    off.disabled = !canWrite;
+    off.addEventListener('click', async (event) => { event.stopPropagation(); if (canWrite) await sendAction('power', false); });
+    const on = document.createElement('button');
+    on.type = 'button';
+    on.className = 'nw-sh-btn';
+    on.textContent = 'Ein';
+    on.disabled = !canWrite || controlBlocked;
+    on.addEventListener('click', async (event) => { event.stopPropagation(); if (canWrite && !controlBlocked) await sendAction('power', true); });
+    buttons.appendChild(off);
+    buttons.appendChild(on);
+    row.appendChild(label);
+    row.appendChild(buttons);
+    controls.appendChild(row);
+  }
+
+  const appendRawCommand = (labelText, action, dpId, currentValue, disabledBySafety) => {
+    if (!dpId) return;
+    const row = document.createElement('div');
+    row.className = 'nw-sh-command-row';
+    const label = document.createElement('label');
+    label.className = 'nw-sh-popover__label';
+    label.textContent = labelText;
+    const input = document.createElement('input');
+    input.className = 'nw-input nw-sh-command-row__input';
+    input.type = 'text';
+    input.value = currentValue === undefined || currentValue === null ? '' : String(currentValue);
+    input.placeholder = 'Wert wie im Datenpunkt erwartet';
+    input.disabled = !canWrite || disabledBySafety;
+    const send = document.createElement('button');
+    send.type = 'button';
+    send.className = 'nw-sh-btn';
+    send.textContent = 'Übernehmen';
+    send.disabled = input.disabled;
+    send.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      if (send.disabled || !String(input.value).trim()) return;
+      await sendAction(action, input.value);
+    });
+    const actions = document.createElement('div');
+    actions.className = 'nw-sh-command-row__actions';
+    actions.appendChild(input);
+    actions.appendChild(send);
+    row.appendChild(label);
+    row.appendChild(actions);
+    controls.appendChild(row);
+  };
+
+  appendRawCommand('Betriebsmodus', 'mode', climate.modeId, st.mode, controlBlocked);
+  appendRawCommand('Lüfterstufe', 'fan', climate.fanSpeedId, st.fanSpeed, controlBlocked);
+
+  if (climate.swingId) {
+    const row = document.createElement('div');
+    row.className = 'nw-sh-command-row';
+    const label = document.createElement('div');
+    label.className = 'nw-sh-popover__label';
+    label.textContent = 'Swing';
+    const actions = document.createElement('div');
+    actions.className = 'nw-sh-command-row__actions';
+    if (typeof st.swing === 'boolean') {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'nw-sh-btn';
+      button.textContent = st.swing ? 'Ausschalten' : 'Einschalten';
+      button.disabled = !canWrite || controlBlocked;
+      button.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        if (!button.disabled) await sendAction('swing', !st.swing);
+      });
+      actions.appendChild(button);
+    } else {
+      const input = document.createElement('input');
+      input.className = 'nw-input nw-sh-command-row__input';
+      input.type = 'text';
+      input.value = st.swing === undefined || st.swing === null ? '' : String(st.swing);
+      input.placeholder = 'Swing-Wert';
+      input.disabled = !canWrite || controlBlocked;
+      const send = document.createElement('button');
+      send.type = 'button';
+      send.className = 'nw-sh-btn';
+      send.textContent = 'Übernehmen';
+      send.disabled = input.disabled;
+      send.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        if (!send.disabled && String(input.value).trim()) await sendAction('swing', input.value);
+      });
+      actions.appendChild(input);
+      actions.appendChild(send);
+    }
+    row.appendChild(label);
+    row.appendChild(actions);
+    controls.appendChild(row);
+  }
+
+  if (controls.childNodes.length) {
+    controls.appendChild(status);
+    wrap.appendChild(controls);
+  }
+
+  if (!climate.setpointId && !climate.powerId && !climate.modeId && !climate.fanSpeedId && !climate.swingId) {
+    const hint = document.createElement('div');
+    hint.className = 'nw-sh-popover__hint';
+    hint.textContent = 'Nur Anzeige – keine beschreibbare Klimafunktion zugeordnet.';
+    wrap.appendChild(hint);
+  }
 
   return wrap;
 }
@@ -6940,13 +7459,17 @@ function nwCreateValueGauge(opts) {
   const onCommit = (opts && typeof opts.onCommit === 'function') ? opts.onCommit : null;
   const formatter = (opts && typeof opts.formatter === 'function') ? opts.formatter : ((v) => Math.round(v) + (unit ? ' ' + unit : ''));
   const minmaxFormatter = (opts && typeof opts.minmaxFormatter === 'function') ? opts.minmaxFormatter : ((v) => Math.round(v) + (unit ? ' ' + unit : ''));
+  let valueKnown = !(opts && opts.hasValue === false);
 
   let value = Number(opts && opts.value);
-  if (!Number.isFinite(value)) value = Number.isFinite(min) ? min : 0;
+  if (!Number.isFinite(value)) {
+    value = Number.isFinite(min) ? min : 0;
+    valueKnown = false;
+  }
   value = nwRoundToStep(nwClampNumber(value, min, max), step);
 
   const wrap = document.createElement('div');
-  wrap.className = 'nw-sh-gauge nw-sh-gauge--level';
+  wrap.className = 'nw-sh-gauge nw-sh-gauge--level' + (valueKnown ? '' : ' nw-sh-gauge--unknown');
 
   const canvas = document.createElement('div');
   canvas.className = 'nw-sh-gauge__canvas';
@@ -7081,9 +7604,11 @@ function nwCreateValueGauge(opts) {
    * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
-  function setValue(v, silent) {
+  function setValue(v, silent, markKnown) {
     value = nwRoundToStep(nwClampNumber(v, min, max), step);
-    valEl.textContent = formatter(value);
+    if (markKnown !== false) valueKnown = true;
+    wrap.classList.toggle('nw-sh-gauge--unknown', !valueKnown);
+    valEl.textContent = valueKnown ? formatter(value) : '—';
     const f = (max > min) ? ((value - min) / (max - min)) : 0;
     const ang = Math.PI - f * Math.PI;
     const x = cx + r * Math.cos(ang);
@@ -7105,7 +7630,7 @@ function nwCreateValueGauge(opts) {
     await onCommit(value);
   }
 
-  setValue(value, true);
+  setValue(value, true, valueKnown);
 
   /**
    * Code-Teil: Arrow-Funktion `stop`
@@ -7282,7 +7807,7 @@ function nwCreateValueGauge(opts) {
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchstart' an hit. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   hit.addEventListener('touchstart', onTouchStart, { passive: false });
 
-  wrap.nwSetValue = (next) => setValue(next, true);
+  wrap.nwSetValue = (next, known = true) => setValue(next, true, known);
   return wrap;
 }
 /**
@@ -7715,6 +8240,96 @@ function nwCreateThermostatGauge(opts) {
   return wrap;
 }
 /**
+ * Schreibbarer generischer Wertgeber (Zahl, Integer, Boolean oder Text).
+ * Fehlende Rückmeldungen bleiben sichtbar unbekannt; ein Wert wird nur nach
+ * ausdrücklicher Benutzeraktion geschrieben.
+ */
+function nwCreateValuePopover(dev, canWrite) {
+  const wrap = document.createElement('div');
+  const sensor = dev && dev.io && dev.io.sensor ? dev.io.sensor : {};
+  const valueType = String(sensor.valueType || 'number').toLowerCase();
+  const hasWrite = canWrite && !!(sensor.writeId || sensor.readId);
+  const state = dev && dev.state ? dev.state : {};
+
+  const row = document.createElement('div');
+  row.className = 'nw-sh-popover__row';
+  const label = document.createElement('div');
+  label.className = 'nw-sh-popover__label';
+  label.textContent = 'Wert';
+  const status = nwCreateStatusBadge();
+  row.appendChild(label);
+  row.appendChild(status);
+  wrap.appendChild(row);
+
+  let input;
+  if (valueType === 'boolean') {
+    input = document.createElement('select');
+    input.className = 'nw-config-select';
+    [['true', 'Ein / true'], ['false', 'Aus / false']].forEach(([value, text]) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = text;
+      input.appendChild(option);
+    });
+    if (typeof state.value === 'boolean') input.value = state.value ? 'true' : 'false';
+  } else {
+    input = document.createElement('input');
+    input.className = 'nw-config-input';
+    input.type = valueType === 'string' ? 'text' : 'number';
+    if (valueType !== 'string') {
+      if (Number.isFinite(Number(sensor.min))) input.min = String(sensor.min);
+      if (Number.isFinite(Number(sensor.max))) input.max = String(sensor.max);
+      input.step = String(Number.isFinite(Number(sensor.step)) && Number(sensor.step) > 0 ? sensor.step : (valueType === 'integer' ? 1 : 0.1));
+    }
+    if (typeof state.value !== 'undefined' && state.value !== null) input.value = String(state.value);
+    else input.placeholder = 'Neuen Wert eingeben';
+  }
+  input.disabled = !hasWrite;
+  wrap.appendChild(input);
+
+  const actions = document.createElement('div');
+  actions.className = 'nw-sh-popover__actions';
+  const send = document.createElement('button');
+  send.type = 'button';
+  send.className = 'nw-sh-btn nw-sh-btn--primary';
+  send.textContent = 'Übernehmen';
+  send.disabled = !hasWrite;
+  send.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    if (!hasWrite) return;
+    let value;
+    if (valueType === 'boolean') value = input.value === 'true';
+    else if (valueType === 'string') value = String(input.value || '');
+    else {
+      value = Number(String(input.value || '').replace(',', '.'));
+      if (!Number.isFinite(value)) {
+        nwSetStatusBadge(status, 'err', 'Ungültiger Wert');
+        return;
+      }
+      if (valueType === 'integer') value = Math.round(value);
+    }
+    nwSetStatusBadge(status, 'busy', 'Senden…');
+    const result = await nwSetSmartHomeValue(dev.id, value);
+    if (!result) {
+      nwSetStatusBadge(status, 'err', 'Fehler');
+      return;
+    }
+    nwSetStatusBadge(status, 'ok', 'OK');
+    await nwReloadDevices({ force: true });
+  });
+  actions.appendChild(send);
+  wrap.appendChild(actions);
+
+  if (!hasWrite) {
+    const hint = document.createElement('div');
+    hint.className = 'nw-sh-popover__hint';
+    hint.textContent = 'Kein beschreibbarer Datenpunkt zugeordnet.';
+    wrap.appendChild(hint);
+  }
+  return wrap;
+}
+
+/**
  * Code-Teil: nwCreatePlayerPopover
  * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
  * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -7730,11 +8345,16 @@ function nwCreatePlayerPopover(dev, canWrite) {
   // Ensure current zone is always part of the multiroom selection
   nwSetSelectedAudioZones(nwGetSelectedAudioZones(dev.id), dev.id);
 
-  // Now playing
+  // Now playing / quality-aware metadata
+  const qualityStatus = nwGetQualityStatus(dev);
+  const qualityLabel = nwGetQualityLabel(dev);
+  const playingKnown = typeof st.playing === 'boolean';
+  const powerKnown = typeof st.power === 'boolean';
+
   const now = document.createElement('div');
   now.className = 'nw-sh-player__now';
 
-  const coverUrl = String(st.coverUrl || '').trim();
+  const coverUrl = String(st.coverUrl || st.cover || '').trim();
   if (coverUrl) {
     const img = document.createElement('img');
     img.className = 'nw-sh-player__cover';
@@ -7750,15 +8370,19 @@ function nwCreatePlayerPopover(dev, canWrite) {
   const line1 = document.createElement('div');
   line1.className = 'nw-sh-player__title';
   const title = String(st.title || '').trim();
-  line1.textContent = title || (st.on ? 'Wiedergabe läuft' : 'Wiedergabe pausiert');
+  if (title) line1.textContent = title;
+  else if (playingKnown) line1.textContent = st.playing ? 'Wiedergabe läuft' : 'Wiedergabe pausiert';
+  else if (powerKnown) line1.textContent = st.power ? 'Player eingeschaltet' : 'Player ausgeschaltet';
+  else line1.textContent = 'Playerstatus unbekannt';
 
   const line2 = document.createElement('div');
-  line2.className = 'nw-sh-player__sub';
+  line2.className = 'nw-sh-player__sub nw-sh-player__subtitle';
   const artist = String(st.artist || '').trim();
   const source = String(st.source || '').trim();
   const subParts = [];
   if (artist) subParts.push(artist);
   if (source) subParts.push(source);
+  if (qualityLabel && qualityStatus !== 'online') subParts.push(qualityLabel);
   line2.textContent = subParts.join(' · ');
 
   meta.appendChild(line1);
@@ -7773,13 +8397,13 @@ function nwCreatePlayerPopover(dev, canWrite) {
     zWrap.className = 'nw-sh-player__zones';
 
     const head = document.createElement('div');
-    head.className = 'nw-sh-player__zoneshead';
+    head.className = 'nw-sh-player__zoneshead nw-sh-player__zones-head';
     const zTitle = document.createElement('div');
-    zTitle.className = 'nw-sh-player__zonestitle';
+    zTitle.className = 'nw-sh-player__zonestitle nw-sh-player__zones-title';
     zTitle.textContent = 'Multiroom';
 
     const zActions = document.createElement('div');
-    zActions.className = 'nw-sh-player__zonesactions';
+    zActions.className = 'nw-sh-player__zonesactions nw-sh-player__zones-actions';
 
     const partyBtn = document.createElement('button');
     partyBtn.type = 'button';
@@ -7805,21 +8429,9 @@ function nwCreatePlayerPopover(dev, canWrite) {
     zWrap.appendChild(chips);
 
     const hint = document.createElement('div');
-    hint.className = 'nw-sh-player__zoneshint';
+    hint.className = 'nw-sh-player__zoneshint nw-sh-player__zones-hint';
     zWrap.appendChild(hint);
 
-    /**
-     * Code-Teil: Arrow-Funktion `renderZones`
-     * Zweck: rendert sichtbare UI-/Diagramm-Elemente aus bereits normalisierten Daten.
-     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
-     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-     */
-    /**
-     * Code-Teil: renderZones
-     * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
-     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-     */
     const renderZones = () => {
       const sel = nwGetSelectedAudioZones(dev.id);
       const selSet = new Set(sel);
@@ -7832,7 +8444,6 @@ function nwCreatePlayerPopover(dev, canWrite) {
         b.className = 'nw-sh-chip nw-sh-chip--mini' + (selSet.has(z.id) ? ' nw-sh-chip--active' : '');
         b.textContent = name;
         b.title = 'Zone hinzufügen/entfernen';
-        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         b.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -7846,27 +8457,19 @@ function nwCreatePlayerPopover(dev, canWrite) {
         chips.appendChild(b);
       });
 
-      // buttons state
       const allIds = zones.map((z) => z.id);
-      const isParty = sel.length && allIds.every((id) => selSet.has(id));
+      const isParty = sel.length > 0 && allIds.every((id) => selSet.has(id));
       partyBtn.classList.toggle('nw-sh-chip--active', isParty);
       soloBtn.classList.toggle('nw-sh-chip--active', sel.length === 1 && sel[0] === dev.id);
-
-      hint.textContent = sel.length > 1
-        ? `Steuert ${sel.length} Zonen gleichzeitig.`
-        : 'Nur diese Zone.';
+      hint.textContent = sel.length > 1 ? `Steuert ${sel.length} Zonen gleichzeitig.` : 'Nur diese Zone.';
     };
 
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an partyBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     partyBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const allIds = zones.map((z) => z.id);
-      nwSetSelectedAudioZones(allIds, dev.id);
+      nwSetSelectedAudioZones(zones.map((z) => z.id), dev.id);
       renderZones();
     });
-
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an soloBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     soloBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -7878,107 +8481,259 @@ function nwCreatePlayerPopover(dev, canWrite) {
     wrap.appendChild(zWrap);
   }
 
-  // Controls
+  const status = nwCreateStatusBadge();
+  const setStatus = (kind, text) => nwSetStatusBadge(status, kind, text);
+  const runPlayerAction = async (action, value, refreshDelay = 120) => {
+    setStatus('busy', 'Senden…');
+    const result = await nwPlayerActionMulti(dev.id, action, value);
+    if (!result) {
+      setStatus('err', 'Befehl nicht übernommen');
+      return false;
+    }
+    setStatus('ok', 'OK');
+    nwRefreshDevicesSoon(refreshDelay);
+    return true;
+  };
+
+  // Transport controls are only exposed when a corresponding datapoint exists.
+  // A blind Play/Pause toggle is never issued while the playback state is unknown.
   const controls = document.createElement('div');
   controls.className = 'nw-sh-player__controls';
 
-  /**
-   * Code-Teil: Arrow-Funktion `mkBtn`
-   * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
-   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
-   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
-   */
-  /**
-   * Code-Teil: mkBtn
-   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
-   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
-   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
-   */
-  const mkBtn = (label, text, onClick, extraClass) => {
+  const mkBtn = (label, text, action, enabled, extraClass) => {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'nw-sh-btn nw-sh-btn--mini nw-sh-player__btn' + (extraClass ? (' ' + extraClass) : '');
     b.textContent = text;
     b.title = label;
     b.setAttribute('aria-label', label);
-    if (!canWrite) b.disabled = true;
-    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-    b.addEventListener('click', async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (!canWrite) return;
-      await onClick();
+    b.disabled = !canWrite || !enabled;
+    b.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (b.disabled) return;
+      await action();
     });
     return b;
   };
-  const btnPrev = mkBtn('Zurück', '⏮', async () => {
-    await nwPlayerActionMulti(dev.id, 'prev');
-    nwRefreshDevicesSoon(100);
-  });
-  const btnPlay = mkBtn(st.on ? 'Pause' : 'Play', st.on ? '⏸' : '▶', async () => {
-    await nwPlayerActionMulti(dev.id, 'toggle');
-    nwRefreshDevicesSoon(100);
-  }, 'nw-sh-player__btn--primary');
-  const btnNext = mkBtn('Weiter', '⏭', async () => {
-    await nwPlayerActionMulti(dev.id, 'next');
-    nwRefreshDevicesSoon(100);
-  });
-  const btnStop = mkBtn('Stopp', '⏹', async () => {
-    await nwPlayerActionMulti(dev.id, 'stop');
-    nwRefreshDevicesSoon(120);
-  });
 
-  controls.appendChild(btnPrev);
-  controls.appendChild(btnPlay);
-  controls.appendChild(btnNext);
-  controls.appendChild(btnStop);
-  wrap.appendChild(controls);
+  if (io.prevId) controls.appendChild(mkBtn('Zurück', '⏮', async () => runPlayerAction('prev'), true));
 
-  // Volume
-  const volMin = Number.isFinite(Number(io.volumeMin)) ? Number(io.volumeMin) : 0;
-  const volMax = Number.isFinite(Number(io.volumeMax)) ? Number(io.volumeMax) : 100;
-  let vol = Number(st.volume);
-  if (!Number.isFinite(vol)) vol = volMin;
-  vol = nwClampNumber(vol, volMin, volMax);
+  if (playingKnown) {
+    if (st.playing && (io.pauseId || io.toggleId)) {
+      controls.appendChild(mkBtn('Pause', '⏸', async () => runPlayerAction(io.pauseId ? 'pause' : 'toggle'), true, 'nw-sh-player__btn--primary'));
+    } else if (!st.playing && (io.playId || io.toggleId)) {
+      controls.appendChild(mkBtn('Play', '▶', async () => runPlayerAction(io.playId ? 'play' : 'toggle'), true, 'nw-sh-player__btn--primary'));
+    }
+  } else {
+    if (io.playId) controls.appendChild(mkBtn('Play', '▶', async () => runPlayerAction('play'), true, 'nw-sh-player__btn--primary'));
+    if (io.pauseId) controls.appendChild(mkBtn('Pause', '⏸', async () => runPlayerAction('pause'), true));
+    if (!io.playId && !io.pauseId && io.toggleId) {
+      controls.appendChild(mkBtn('Status unbekannt – Toggle gesperrt', '▶/⏸', async () => false, false, 'nw-sh-player__btn--primary'));
+    }
+  }
 
-  const volWrap = document.createElement('div');
-  volWrap.className = 'nw-sh-player__vol';
+  if (io.nextId) controls.appendChild(mkBtn('Weiter', '⏭', async () => runPlayerAction('next'), true));
+  if (io.stopId) controls.appendChild(mkBtn('Stopp', '⏹', async () => runPlayerAction('stop'), true));
+  if (controls.childNodes.length) wrap.appendChild(controls);
 
-  const volHeader = document.createElement('div');
-  volHeader.className = 'nw-sh-player__volhdr';
-  const volLabel = document.createElement('div');
-  volLabel.className = 'nw-sh-player__vollabel';
-  volLabel.textContent = 'Lautstärke';
-  const volVal = document.createElement('div');
-  volVal.className = 'nw-sh-player__volval';
-  volVal.textContent = String(Math.round(((vol - volMin) / Math.max(1, (volMax - volMin))) * 100)) + ' %';
-  volHeader.appendChild(volLabel);
-  volHeader.appendChild(volVal);
-  volWrap.appendChild(volHeader);
+  const explicitToggles = document.createElement('div');
+  explicitToggles.className = 'nw-sh-player__toggles';
 
-  const slider = document.createElement('input');
-  slider.type = 'range';
-  slider.min = String(volMin);
-  slider.max = String(volMax);
-  slider.step = '1';
-  slider.value = String(vol);
-  slider.className = 'nw-sh-slider nw-sh-slider--big';
-  slider.disabled = !canWrite || !io.volumeWriteId;
-  // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an slider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-  slider.addEventListener('input', () => {
-    const v = Number(slider.value);
-    const pct = Math.round(((v - volMin) / Math.max(1, (volMax - volMin))) * 100);
-    volVal.textContent = String(pct) + ' %';
-  });
-  // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an slider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-  slider.addEventListener('change', async () => {
-    if (!canWrite || !io.volumeWriteId) return;
-    const v = Number(slider.value);
-    await nwPlayerActionMulti(dev.id, 'volume', v);
-    nwRefreshDevicesSoon(160);
-  });
-  volWrap.appendChild(slider);
-  wrap.appendChild(volWrap);
+  const appendBooleanCommand = (labelText, action, stateValue, readId, writeId, onText, offText) => {
+    if (!readId && !writeId) return;
+    const row = document.createElement('div');
+    row.className = 'nw-sh-command-row';
+    const label = document.createElement('div');
+    label.className = 'nw-sh-popover__label';
+    label.textContent = labelText + (typeof stateValue === 'boolean' ? `: ${stateValue ? onText : offText}` : ': —');
+    const actions = document.createElement('div');
+    actions.className = 'nw-sh-command-row__actions';
+    const off = document.createElement('button');
+    off.type = 'button';
+    off.className = 'nw-sh-btn';
+    off.textContent = offText;
+    off.disabled = !canWrite;
+    off.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!off.disabled) await runPlayerAction(action, false);
+    });
+    const on = document.createElement('button');
+    on.type = 'button';
+    on.className = 'nw-sh-btn';
+    on.textContent = onText;
+    on.disabled = !canWrite;
+    on.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!on.disabled) await runPlayerAction(action, true);
+    });
+    actions.appendChild(off);
+    actions.appendChild(on);
+    row.appendChild(label);
+    row.appendChild(actions);
+    explicitToggles.appendChild(row);
+  };
+
+  appendBooleanCommand('Power', 'power', st.power, io.powerReadId, io.powerWriteId, 'Ein', 'Aus');
+  appendBooleanCommand('Stummschaltung', 'mute', st.muted, io.muteReadId, io.muteWriteId, 'Stumm', 'Ton');
+  if (explicitToggles.childNodes.length) wrap.appendChild(explicitToggles);
+
+  // Volume: an unknown feedback value is shown as "—", never as a real 0 %.
+  if (io.volumeReadId || io.volumeWriteId) {
+    const volMin = Number.isFinite(Number(io.volumeMin)) ? Number(io.volumeMin) : 0;
+    const volMax = Number.isFinite(Number(io.volumeMax)) ? Number(io.volumeMax) : 100;
+    const volKnown = typeof st.volume === 'number' && Number.isFinite(st.volume);
+    const volFallback = volMin + ((volMax - volMin) / 2);
+    const vol = nwClampNumber(volKnown ? st.volume : volFallback, volMin, volMax);
+
+    const volWrap = document.createElement('div');
+    volWrap.className = 'nw-sh-player__vol';
+    const volHeader = document.createElement('div');
+    volHeader.className = 'nw-sh-player__volhdr nw-sh-player__volhead';
+    const volLabel = document.createElement('div');
+    volLabel.className = 'nw-sh-player__vollabel nw-sh-player__vlabel';
+    volLabel.textContent = 'Lautstärke';
+    const volVal = document.createElement('div');
+    volVal.className = 'nw-sh-player__volval nw-sh-player__vval';
+    volVal.textContent = volKnown
+      ? String(Math.round(((vol - volMin) / Math.max(1, (volMax - volMin))) * 100)) + ' %'
+      : '—';
+    volHeader.appendChild(volLabel);
+    volHeader.appendChild(volVal);
+    volWrap.appendChild(volHeader);
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = String(volMin);
+    slider.max = String(volMax);
+    slider.step = '1';
+    slider.value = String(vol);
+    slider.className = 'nw-sh-slider nw-sh-slider--big';
+    slider.disabled = !canWrite || !io.volumeWriteId;
+    slider.addEventListener('input', () => {
+      const value = Number(slider.value);
+      const pct = Math.round(((value - volMin) / Math.max(1, (volMax - volMin))) * 100);
+      volVal.textContent = String(pct) + ' %';
+    });
+    slider.addEventListener('change', async () => {
+      if (slider.disabled) return;
+      await runPlayerAction('volume', Number(slider.value), 160);
+    });
+    volWrap.appendChild(slider);
+    wrap.appendChild(volWrap);
+  }
+
+  if (io.seekReadId || io.seekWriteId) {
+    const seekMin = Number.isFinite(Number(io.seekMin)) ? Number(io.seekMin) : 0;
+    const seekMax = Number.isFinite(Number(io.seekMax)) ? Number(io.seekMax) : 100;
+    const seekStep = Number.isFinite(Number(io.seekStep)) && Number(io.seekStep) > 0 ? Number(io.seekStep) : 1;
+    wrap.appendChild(nwCreateSmartHomeRangeControl({
+      label: 'Wiedergabeposition',
+      min: seekMin,
+      max: seekMax,
+      step: seekStep,
+      value: st.seek,
+      fallback: seekMin,
+      unit: '',
+      decimals: seekStep < 1 ? 1 : 0,
+      canWrite: canWrite && !!io.seekWriteId,
+      onCommit: async (value) => runPlayerAction('seek', value, 160),
+    }));
+  }
+
+  const appendRawOrBooleanCommand = (labelText, action, stateValue, dpId) => {
+    if (!dpId) return;
+    const row = document.createElement('div');
+    row.className = 'nw-sh-command-row';
+    const label = document.createElement('div');
+    label.className = 'nw-sh-popover__label';
+    label.textContent = labelText;
+    const actions = document.createElement('div');
+    actions.className = 'nw-sh-command-row__actions';
+    if (typeof stateValue === 'boolean') {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'nw-sh-btn';
+      button.textContent = stateValue ? 'Ausschalten' : 'Einschalten';
+      button.disabled = !canWrite;
+      button.addEventListener('click', async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!button.disabled) await runPlayerAction(action, !stateValue);
+      });
+      actions.appendChild(button);
+    } else {
+      const input = document.createElement('input');
+      input.className = 'nw-input nw-sh-command-row__input';
+      input.type = 'text';
+      input.value = stateValue === undefined || stateValue === null ? '' : String(stateValue);
+      input.placeholder = 'Wert wie im Datenpunkt erwartet';
+      input.disabled = !canWrite;
+      const send = document.createElement('button');
+      send.type = 'button';
+      send.className = 'nw-sh-btn';
+      send.textContent = 'Übernehmen';
+      send.disabled = !canWrite;
+      send.addEventListener('click', async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!send.disabled && String(input.value).trim()) await runPlayerAction(action, input.value);
+      });
+      actions.appendChild(input);
+      actions.appendChild(send);
+    }
+    row.appendChild(label);
+    row.appendChild(actions);
+    wrap.appendChild(row);
+  };
+
+  appendRawOrBooleanCommand('Shuffle', 'shuffle', st.shuffle, io.shuffleId);
+  appendRawOrBooleanCommand('Repeat', 'repeat', st.repeat, io.repeatId);
+
+  if (io.ttsWriteId) {
+    const tts = document.createElement('div');
+    tts.className = 'nw-sh-player__tts';
+    const label = document.createElement('label');
+    label.className = 'nw-sh-popover__label';
+    label.textContent = 'Text-to-Speech';
+    const input = document.createElement('textarea');
+    input.className = 'nw-input nw-sh-player__tts-input';
+    input.rows = 3;
+    input.maxLength = 1000;
+    input.placeholder = 'Text eingeben…';
+    input.disabled = !canWrite;
+    const send = document.createElement('button');
+    send.type = 'button';
+    send.className = 'nw-sh-btn';
+    send.textContent = 'Sprechen';
+    send.disabled = !canWrite;
+    send.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const text = String(input.value || '').trim();
+      if (!text || send.disabled) return;
+      if (await runPlayerAction('tts', text, 200)) input.value = '';
+    });
+    tts.appendChild(label);
+    tts.appendChild(input);
+    tts.appendChild(send);
+    wrap.appendChild(tts);
+  }
+
+  const hasWritablePlayerFunction = !!(
+    io.toggleId || io.playId || io.pauseId || io.stopId || io.nextId || io.prevId
+    || io.volumeWriteId || io.stationId || io.playlistId || io.muteWriteId || io.powerWriteId
+    || io.seekWriteId || io.shuffleId || io.repeatId || io.ttsWriteId
+  );
+  if (!hasWritablePlayerFunction) {
+    const hint = document.createElement('div');
+    hint.className = 'nw-sh-popover__hint';
+    hint.textContent = 'Nur Anzeige – keine beschreibbare Playerfunktion zugeordnet.';
+    wrap.appendChild(hint);
+  }
+  wrap.appendChild(status);
 
   // Library: Radiosender / Playlists (mit Favoriten + Zuletzt)
   const stations = Array.isArray(dev.stations) ? dev.stations : [];

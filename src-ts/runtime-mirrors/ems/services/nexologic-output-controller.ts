@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: bf6a040160522139612786e6933ada0612edbcf00adbd40055047f13095cd124
+ * Original-Hash: 3dfa4309a20333453ee1cbc56b04f984bd03009304471c88b7d042049785e288
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/nexologic-output-controller.ts
- * Quell-Hash: sha256:4fb62aa37019674f01729c1d1d5ec6e4abb1465aa88f11283de7e44f80085e1e
+ * Quell-Hash: sha256:9f60531b60e985616eb084e8ff4466463d6318e21e3defc6f5304d4b056c508d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -306,6 +306,8 @@ class NexoLogicOutputController {
                 budgetReservedW: 0,
                 retryTimer: null,
                 stopped: false,
+                generation: 0,
+                writeChain: Promise.resolve(null),
             };
             this.runtimes.set(key, row);
         }
@@ -314,6 +316,60 @@ class NexoLogicOutputController {
             row.owner = this.ownerFor(meta);
         }
         return row;
+    }
+    stopValue(row) {
+        const params = row.meta.params || {};
+        if (Object.prototype.hasOwnProperty.call(params, 'stopValue')) {
+            const raw = params.stopValue;
+            const reference = row.lastRequestedValue !== undefined ? row.lastRequestedValue : row.lastEffectiveValue;
+            if (typeof reference === 'boolean')
+                return bool(raw, false);
+            if (typeof reference === 'number')
+                return num(raw, 0, -1000000000, 1000000000);
+            if (typeof reference === 'string')
+                return String(raw === undefined || raw === null ? '' : raw);
+            if (raw === true || raw === false || typeof raw === 'number')
+                return raw;
+            const textRaw = text(raw);
+            if (['true', 'false', 'on', 'off', 'ein', 'aus'].includes(textRaw.toLowerCase()))
+                return bool(textRaw, false);
+            const parsed = Number(textRaw.replace(',', '.'));
+            return Number.isFinite(parsed) ? parsed : textRaw;
+        }
+        const reference = row.lastRequestedValue !== undefined
+            ? row.lastRequestedValue
+            : (row.lastEffectiveValue !== undefined ? row.lastEffectiveValue : row.lastAcceptedValue);
+        return idleValueFor(reference);
+    }
+    enqueue(row, task) {
+        const next = row.writeChain
+            .catch(() => null)
+            .then(() => task());
+        row.writeChain = next.catch(() => null);
+        return next;
+    }
+    async safeStop(meta, reasonRaw = 'safe-stop') {
+        const row = this.runtime(meta);
+        const mode = text(meta.params?.deactivateMode).toLowerCase();
+        if (mode === 'hold' || meta.ack === true) {
+            const held = { ...this.baseResult(row, row.lastEffectiveValue), status: 'deactivated-hold', accepted: true, confirmed: true };
+            await this.publish(row, held);
+            return held;
+        }
+        const generation = ++row.generation;
+        const value = this.stopValue(row);
+        const safeMeta = {
+            ...meta,
+            params: {
+                ...(meta.params || {}),
+                releaseAuthority: true,
+                releaseOnIdle: true,
+                autoRetry: false,
+                maxRetries: 0,
+            },
+            reason: text(reasonRaw) || 'safe-stop',
+        };
+        return this.enqueue(row, () => this.executeWrite(safeMeta, value, text(reasonRaw) || 'safe-stop', generation));
     }
     async registerOutput(meta) {
         const row = this.runtime(meta);
@@ -465,7 +521,7 @@ class NexoLogicOutputController {
         catch (_error) { }
         row.retryTimer = null;
     }
-    scheduleRetry(row, value, delayMs, reason) {
+    scheduleRetry(row, value, delayMs, reason, generation) {
         this.clearRetry(row);
         if (this.stopped || row.stopped || bool(row.meta.params?.autoRetry, true) === false)
             return;
@@ -483,9 +539,9 @@ class NexoLogicOutputController {
  */
         const run = () => {
             row.retryTimer = null;
-            if (this.stopped || row.stopped || this.adapter?._nwShuttingDown)
+            if (this.stopped || row.stopped || this.adapter?._nwShuttingDown || row.generation !== generation)
                 return;
-            this.executeWrite(row.meta, value, `${reason}:retry`).catch(() => { });
+            this.enqueue(row, () => this.executeWrite(row.meta, value, `${reason}:retry`, generation)).catch(() => { });
         };
         try {
             row.retryTimer = typeof this.adapter?._nwSetTimeout === 'function'
@@ -527,18 +583,21 @@ class NexoLogicOutputController {
     async request(meta, value) {
         const row = this.runtime(meta);
         row.lastRequestedValue = value;
+        const generation = ++row.generation;
         const params = meta.params || {};
         const budgetMode = normalizeBudgetMode(params.budgetMode);
         const base = this.baseResult(row, value);
-        if (meta.ack === true || budgetMode === 'none')
-            return this.executeWrite(meta, value, meta.reason || 'nexologic-write');
+        if (meta.ack === true || budgetMode === 'none') {
+            return this.enqueue(row, () => this.executeWrite(meta, value, meta.reason || 'nexologic-write', generation));
+        }
         const fixedW = Math.max(0, num(params.budgetPowerW, 0, 0, 10000000));
         const requestedW = fixedW > 0 ? fixedW : (typeof value === 'number' ? Math.abs(value) : 0);
         const active = valueIsActive(value);
         if (!active) {
             const previousIntent = this.intents.get(row.key);
             row.budgetGrantW = 0;
-            const stopResult = await this.executeWrite({ ...meta, params: { ...params, releaseAuthority: bool(params.releaseOnIdle, true) } }, idleValueFor(value), 'nexologic-budget-idle');
+            const stopMeta = { ...meta, params: { ...params, releaseAuthority: bool(params.releaseOnIdle, true) } };
+            const stopResult = await this.enqueue(row, () => this.executeWrite(stopMeta, idleValueFor(value), 'nexologic-budget-idle', generation));
             const stopSettled = stopResult.confirmed || (stopResult.accepted && bool(params.requireReadback, false) !== true) || (stopResult.readbackFresh && !valueIsActive(stopResult.actual));
             if (stopSettled || !previousIntent) {
                 this.intents.delete(row.key);
@@ -609,6 +668,7 @@ class NexoLogicOutputController {
         if (!row)
             return null;
         const grantW = intent.active ? Math.max(0, Number(grantRaw) || 0) : 0;
+        const generation = ++row.generation;
         row.budgetGrantW = grantW;
         const previousReservedW = row.budgetReservedW;
         let effectiveValue = intent.active ? intent.requestedValue : idleValueFor(intent.requestedValue);
@@ -622,7 +682,8 @@ class NexoLogicOutputController {
             effectiveW = 0;
             effectiveValue = idleValueFor(intent.requestedValue);
         }
-        const result = await this.executeWrite(intent.meta, effectiveValue, effectiveW > 0 ? 'nexologic-central-grant' : (intent.active ? 'nexologic-central-budget-zero' : 'nexologic-release-pending'));
+        const grantReason = effectiveW > 0 ? 'nexologic-central-grant' : (intent.active ? 'nexologic-central-budget-zero' : 'nexologic-release-pending');
+        const result = await this.enqueue(row, () => this.executeWrite(intent.meta, effectiveValue, grantReason, generation));
         const fixedW = Math.max(0, num(intent.meta.params?.budgetPowerW, 0, 0, 10000000));
         const actualNumericW = typeof result.actual === 'number' && Number.isFinite(result.actual) ? Math.abs(result.actual) : 0;
         const actualEstimateW = fixedW > 0 ? fixedW : (actualNumericW > 0 ? actualNumericW : intent.requestedW);
@@ -640,8 +701,14 @@ class NexoLogicOutputController {
         await this.publish(row, result);
         return result;
     }
-    async executeWrite(meta, value, reasonRaw) {
+    async executeWrite(meta, value, reasonRaw, expectedGeneration) {
         const row = this.runtime(meta);
+        const generation = Number.isFinite(Number(expectedGeneration)) ? Number(expectedGeneration) : row.generation;
+        if (generation !== row.generation) {
+            const superseded = { ...this.baseResult(row, value), status: 'superseded', effectiveValue: row.lastEffectiveValue, deferred: true };
+            await this.publish(row, superseded);
+            return superseded;
+        }
         const params = meta.params || {};
         const base = this.baseResult(row, value);
         const cfg = this.contractCfg(params);
@@ -690,9 +757,14 @@ class NexoLogicOutputController {
                 actual: current.actual,
             };
             const retryDelay = current.faultLocked ? Math.max(250, current.faultUntil - now) : (current.pending ? cfg.ackTimeoutMs : cfg.retryDelayMs);
-            this.scheduleRetry(row, value, retryDelay, text(reasonRaw));
+            this.scheduleRetry(row, value, retryDelay, text(reasonRaw), generation);
             await this.publish(row, result);
             return result;
+        }
+        if (generation !== row.generation) {
+            const superseded = { ...base, status: 'superseded-before-write', deferred: true };
+            await this.publish(row, superseded);
+            return superseded;
         }
         const targetId = text(meta.targetId);
         const owner = row.owner;
@@ -727,7 +799,7 @@ class NexoLogicOutputController {
                 blockedByOwner: text(writeResult.blockedByOwner),
                 actual: actualBefore,
             };
-            this.scheduleRetry(row, value, Math.round(num(params.retryDelayMs, 3000, 250, 120000)), text(reasonRaw));
+            this.scheduleRetry(row, value, Math.round(num(params.retryDelayMs, 3000, 250, 120000)), text(reasonRaw), generation);
             await this.publish(row, result);
             return result;
         }
@@ -746,7 +818,7 @@ class NexoLogicOutputController {
         }
         else {
             const retryDelay = contract.faultLocked ? Math.max(250, contract.faultUntil - Date.now()) : (contract.pending ? cfg.ackTimeoutMs : cfg.retryDelayMs);
-            this.scheduleRetry(row, value, retryDelay, text(reasonRaw));
+            this.scheduleRetry(row, value, retryDelay, text(reasonRaw), generation);
         }
         const result = {
             ...base,
@@ -766,11 +838,27 @@ class NexoLogicOutputController {
         await this.publish(row, result);
         return result;
     }
-    async stop() {
+    async stop(options) {
+        const safe = options?.safe !== false;
+        const reason = text(options?.reason) || 'controller-stop';
+        if (safe) {
+            for (const row of this.runtimes.values()) {
+                this.clearRetry(row);
+                try {
+                    await this.safeStop(row.meta, reason);
+                }
+                catch (_error) { }
+            }
+        }
         this.stopped = true;
         for (const row of this.runtimes.values()) {
             row.stopped = true;
+            row.generation += 1;
             this.clearRetry(row);
+            try {
+                await row.writeChain.catch(() => null);
+            }
+            catch (_error) { }
             this.contract.release(row.key);
         }
         this.intents.clear();

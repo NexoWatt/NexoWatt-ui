@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "description": "Ordered fail-closed release checks. Executed without a shell command chain so Windows cmd.exe limits cannot truncate the gate.",
-  "expectedStepCount": 206,
+  "expectedStepCount": 212,
   "commands": [
     "node scripts/ensure-publish-dev-deps.js",
     "npm run typecheck",
@@ -208,6 +208,12 @@
     "npm run test:energy-flow-ts-productive",
     "npm run test:energy-flow-productive-active",
     "npm run test:energy-flow-productive-default",
-    "npm run test:energy-ledger-operator"
+    "npm run test:energy-ledger-operator",
+    "npm run test:nexologic-lifecycle-hardening",
+    "npm run test:smarthome-contract-runtime",
+    "npm run test:smarthome-ui-capabilities",
+    "npm run test:dp-picker-current-folder",
+    "npm run test:smarthome-config-transactional",
+    "npm run test:smarthome-scene-guard"
   ]
 }

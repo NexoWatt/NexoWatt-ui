@@ -84,6 +84,8 @@ type OutputRuntime = {
   budgetReservedW: number;
   retryTimer: any;
   stopped: boolean;
+  generation: number;
+  writeChain: Promise<NexoLogicWriteResult | null>;
 };
 
 export type NexoLogicWriteResult = {
@@ -234,6 +236,8 @@ export class NexoLogicOutputController {
         budgetReservedW: 0,
         retryTimer: null,
         stopped: false,
+        generation: 0,
+        writeChain: Promise.resolve(null),
       };
       this.runtimes.set(key, row);
     } else {
@@ -241,6 +245,58 @@ export class NexoLogicOutputController {
       row.owner = this.ownerFor(meta);
     }
     return row;
+  }
+
+  private stopValue(row: OutputRuntime): unknown {
+    const params = row.meta.params || {};
+    if (Object.prototype.hasOwnProperty.call(params, 'stopValue')) {
+      const raw = params.stopValue;
+      const reference = row.lastRequestedValue !== undefined ? row.lastRequestedValue : row.lastEffectiveValue;
+      if (typeof reference === 'boolean') return bool(raw, false);
+      if (typeof reference === 'number') return num(raw, 0, -1_000_000_000, 1_000_000_000);
+      if (typeof reference === 'string') return String(raw === undefined || raw === null ? '' : raw);
+      if (raw === true || raw === false || typeof raw === 'number') return raw;
+      const textRaw = text(raw);
+      if (['true', 'false', 'on', 'off', 'ein', 'aus'].includes(textRaw.toLowerCase())) return bool(textRaw, false);
+      const parsed = Number(textRaw.replace(',', '.'));
+      return Number.isFinite(parsed) ? parsed : textRaw;
+    }
+    const reference = row.lastRequestedValue !== undefined
+      ? row.lastRequestedValue
+      : (row.lastEffectiveValue !== undefined ? row.lastEffectiveValue : row.lastAcceptedValue);
+    return idleValueFor(reference);
+  }
+
+  private enqueue(row: OutputRuntime, task: () => Promise<NexoLogicWriteResult>): Promise<NexoLogicWriteResult> {
+    const next = row.writeChain
+      .catch(() => null)
+      .then(() => task());
+    row.writeChain = next.catch(() => null);
+    return next;
+  }
+
+  async safeStop(meta: OutputMeta, reasonRaw: unknown = 'safe-stop'): Promise<NexoLogicWriteResult> {
+    const row = this.runtime(meta);
+    const mode = text(meta.params?.deactivateMode).toLowerCase();
+    if (mode === 'hold' || meta.ack === true) {
+      const held = { ...this.baseResult(row, row.lastEffectiveValue), status: 'deactivated-hold', accepted: true, confirmed: true };
+      await this.publish(row, held);
+      return held;
+    }
+    const generation = ++row.generation;
+    const value = this.stopValue(row);
+    const safeMeta: OutputMeta = {
+      ...meta,
+      params: {
+        ...(meta.params || {}),
+        releaseAuthority: true,
+        releaseOnIdle: true,
+        autoRetry: false,
+        maxRetries: 0,
+      },
+      reason: text(reasonRaw) || 'safe-stop',
+    };
+    return this.enqueue(row, () => this.executeWrite(safeMeta, value, text(reasonRaw) || 'safe-stop', generation));
   }
 
   async registerOutput(meta: OutputMeta): Promise<void> {
@@ -390,14 +446,14 @@ export class NexoLogicOutputController {
     row.retryTimer = null;
   }
 
-  private scheduleRetry(row: OutputRuntime, value: unknown, delayMs: number, reason: string): void {
+  private scheduleRetry(row: OutputRuntime, value: unknown, delayMs: number, reason: string, generation: number): void {
     this.clearRetry(row);
     if (this.stopped || row.stopped || bool(row.meta.params?.autoRetry, true) === false) return;
     const delay = Math.max(250, Math.min(24 * 60 * 60 * 1000, Math.round(delayMs)));
     const run = () => {
       row.retryTimer = null;
-      if (this.stopped || row.stopped || this.adapter?._nwShuttingDown) return;
-      this.executeWrite(row.meta, value, `${reason}:retry`).catch(() => {});
+      if (this.stopped || row.stopped || this.adapter?._nwShuttingDown || row.generation !== generation) return;
+      this.enqueue(row, () => this.executeWrite(row.meta, value, `${reason}:retry`, generation)).catch(() => {});
     };
     try {
       row.retryTimer = typeof this.adapter?._nwSetTimeout === 'function'
@@ -440,10 +496,13 @@ export class NexoLogicOutputController {
   async request(meta: OutputMeta, value: unknown): Promise<NexoLogicWriteResult> {
     const row = this.runtime(meta);
     row.lastRequestedValue = value;
+    const generation = ++row.generation;
     const params = meta.params || {};
     const budgetMode = normalizeBudgetMode(params.budgetMode);
     const base = this.baseResult(row, value);
-    if (meta.ack === true || budgetMode === 'none') return this.executeWrite(meta, value, meta.reason || 'nexologic-write');
+    if (meta.ack === true || budgetMode === 'none') {
+      return this.enqueue(row, () => this.executeWrite(meta, value, meta.reason || 'nexologic-write', generation));
+    }
 
     const fixedW = Math.max(0, num(params.budgetPowerW, 0, 0, 10_000_000));
     const requestedW = fixedW > 0 ? fixedW : (typeof value === 'number' ? Math.abs(value) : 0);
@@ -451,7 +510,8 @@ export class NexoLogicOutputController {
     if (!active) {
       const previousIntent = this.intents.get(row.key);
       row.budgetGrantW = 0;
-      const stopResult = await this.executeWrite({ ...meta, params: { ...params, releaseAuthority: bool(params.releaseOnIdle, true) } }, idleValueFor(value), 'nexologic-budget-idle');
+      const stopMeta = { ...meta, params: { ...params, releaseAuthority: bool(params.releaseOnIdle, true) } };
+      const stopResult = await this.enqueue(row, () => this.executeWrite(stopMeta, idleValueFor(value), 'nexologic-budget-idle', generation));
       const stopSettled = stopResult.confirmed || (stopResult.accepted && bool(params.requireReadback, false) !== true) || (stopResult.readbackFresh && !valueIsActive(stopResult.actual));
       if (stopSettled || !previousIntent) {
         this.intents.delete(row.key);
@@ -521,6 +581,7 @@ export class NexoLogicOutputController {
     const row = this.runtimes.get(key);
     if (!row) return null;
     const grantW = intent.active ? Math.max(0, Number(grantRaw) || 0) : 0;
+    const generation = ++row.generation;
     row.budgetGrantW = grantW;
     const previousReservedW = row.budgetReservedW;
     let effectiveValue: unknown = intent.active ? intent.requestedValue : idleValueFor(intent.requestedValue);
@@ -533,7 +594,8 @@ export class NexoLogicOutputController {
       effectiveW = 0;
       effectiveValue = idleValueFor(intent.requestedValue);
     }
-    const result = await this.executeWrite(intent.meta, effectiveValue, effectiveW > 0 ? 'nexologic-central-grant' : (intent.active ? 'nexologic-central-budget-zero' : 'nexologic-release-pending'));
+    const grantReason = effectiveW > 0 ? 'nexologic-central-grant' : (intent.active ? 'nexologic-central-budget-zero' : 'nexologic-release-pending');
+    const result = await this.enqueue(row, () => this.executeWrite(intent.meta, effectiveValue, grantReason, generation));
     const fixedW = Math.max(0, num(intent.meta.params?.budgetPowerW, 0, 0, 10_000_000));
     const actualNumericW = typeof result.actual === 'number' && Number.isFinite(result.actual) ? Math.abs(result.actual) : 0;
     const actualEstimateW = fixedW > 0 ? fixedW : (actualNumericW > 0 ? actualNumericW : intent.requestedW);
@@ -551,8 +613,14 @@ export class NexoLogicOutputController {
     return result;
   }
 
-  async executeWrite(meta: OutputMeta, value: unknown, reasonRaw: unknown): Promise<NexoLogicWriteResult> {
+  async executeWrite(meta: OutputMeta, value: unknown, reasonRaw: unknown, expectedGeneration?: number): Promise<NexoLogicWriteResult> {
     const row = this.runtime(meta);
+    const generation = Number.isFinite(Number(expectedGeneration)) ? Number(expectedGeneration) : row.generation;
+    if (generation !== row.generation) {
+      const superseded = { ...this.baseResult(row, value), status: 'superseded', effectiveValue: row.lastEffectiveValue, deferred: true };
+      await this.publish(row, superseded);
+      return superseded;
+    }
     const params = meta.params || {};
     const base = this.baseResult(row, value);
     const cfg = this.contractCfg(params);
@@ -601,9 +669,15 @@ export class NexoLogicOutputController {
         actual: current.actual,
       };
       const retryDelay = current.faultLocked ? Math.max(250, current.faultUntil - now) : (current.pending ? cfg.ackTimeoutMs : cfg.retryDelayMs);
-      this.scheduleRetry(row, value, retryDelay, text(reasonRaw));
+      this.scheduleRetry(row, value, retryDelay, text(reasonRaw), generation);
       await this.publish(row, result);
       return result;
+    }
+
+    if (generation !== row.generation) {
+      const superseded = { ...base, status: 'superseded-before-write', deferred: true };
+      await this.publish(row, superseded);
+      return superseded;
     }
 
     const targetId = text(meta.targetId);
@@ -638,7 +712,7 @@ export class NexoLogicOutputController {
         blockedByOwner: text((writeResult as { blockedByOwner?: unknown }).blockedByOwner),
         actual: actualBefore,
       };
-      this.scheduleRetry(row, value, Math.round(num(params.retryDelayMs, 3000, 250, 120000)), text(reasonRaw));
+      this.scheduleRetry(row, value, Math.round(num(params.retryDelayMs, 3000, 250, 120000)), text(reasonRaw), generation);
       await this.publish(row, result);
       return result;
     }
@@ -656,7 +730,7 @@ export class NexoLogicOutputController {
       this.clearRetry(row);
     } else {
       const retryDelay = contract.faultLocked ? Math.max(250, contract.faultUntil - Date.now()) : (contract.pending ? cfg.ackTimeoutMs : cfg.retryDelayMs);
-      this.scheduleRetry(row, value, retryDelay, text(reasonRaw));
+      this.scheduleRetry(row, value, retryDelay, text(reasonRaw), generation);
     }
     const result: NexoLogicWriteResult = {
       ...base,
@@ -677,11 +751,21 @@ export class NexoLogicOutputController {
     return result;
   }
 
-  async stop(): Promise<void> {
+  async stop(options?: { safe?: boolean; reason?: string }): Promise<void> {
+    const safe = options?.safe !== false;
+    const reason = text(options?.reason) || 'controller-stop';
+    if (safe) {
+      for (const row of this.runtimes.values()) {
+        this.clearRetry(row);
+        try { await this.safeStop(row.meta, reason); } catch (_error) {}
+      }
+    }
     this.stopped = true;
     for (const row of this.runtimes.values()) {
       row.stopped = true;
+      row.generation += 1;
       this.clearRetry(row);
+      try { await row.writeChain.catch(() => null); } catch (_error) {}
       this.contract.release(row.key);
     }
     this.intents.clear();
