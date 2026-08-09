@@ -6,6 +6,8 @@
  */
 'use strict';
 
+declare const module: { exports: unknown };
+
 type EvcsEnergyNormalizationOptions = {
   inputIsWh?: boolean;
 };

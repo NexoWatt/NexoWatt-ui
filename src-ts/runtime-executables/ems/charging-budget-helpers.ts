@@ -81,7 +81,7 @@ function resolveAcChargingLimits() {
   if (configuredMaxPowerW !== null) maxCandidates.push({ source: 'configured-power', powerW: configuredMaxPowerW });
   if (!maxCandidates.length) maxCandidates.push({ source: 'default-current', powerW: defaultMaxA * factorWPerA });
   maxCandidates.sort((a, b) => a.powerW - b.powerW);
-  const limiting = maxCandidates[0];
+  const limiting = maxCandidates[0] || { source: 'default-current', powerW: defaultMaxA * factorWPerA };
   const maxPowerW = Math.max(0, Number(limiting.powerW) || 0);
   const maxA = maxPowerW / factorWPerA;
 

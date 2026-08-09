@@ -1,3 +1,4 @@
+// @runtime-transpile
 /**
  * Executable TypeScript source: ems/module-manager.js
  *
@@ -108,7 +109,37 @@ const SAFETY_ACTUATOR_MODULES = new Set([
     'thresholdControl',
 ]);
 
-const keyFromModule = (moduleRow) => String((moduleRow && moduleRow.key) || 'unknown');
+type DynamicRecord = Record<string, any>;
+
+type ModuleInstance = {
+    init?: () => unknown | Promise<unknown>;
+    deactivate?: () => unknown | Promise<unknown>;
+    tick?: () => unknown | Promise<unknown>;
+    [key: string]: any;
+};
+
+type ModuleRow = {
+    key: string;
+    instance: ModuleInstance;
+    enabledFn: () => boolean;
+    initialized?: boolean;
+    initRetryAfterMs?: number;
+    initError?: string;
+    lastEnabled?: boolean;
+    deactivated?: boolean;
+    deactivateError?: string;
+    alwaysInit?: boolean;
+    [key: string]: any;
+};
+
+type TickDiagnostic = {
+    ts: number;
+    totalMs: number;
+    results: Array<{ key: string; enabled: boolean; ok: boolean; ms: number; error?: string }>;
+    errors: string[];
+};
+
+const keyFromModule = (moduleRow: Partial<ModuleRow> | null | undefined): string => String((moduleRow && moduleRow.key) || 'unknown');
 
 /**
  * Code-Teil: Klasse `ModuleManager`
@@ -124,11 +155,20 @@ const keyFromModule = (moduleRow) => String((moduleRow && moduleRow.key) || 'unk
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 class ModuleManager {
+    adapter: DynamicRecord;
+    dp: DynamicRecord | null;
+    modules: ModuleRow[];
+    _lastDiagLogMs: number;
+    _lastDiagWriteMs: number;
+    _tickCount: number;
+    _moduleInitRetryMs: number;
+    lastTickDiag: TickDiagnostic | null;
+    _gridConstraintsModule?: ModuleInstance;
     /**
      * @param {any} adapter
      * @param {*} dpRegistry
      */
-    constructor(adapter, dpRegistry) {
+    constructor(adapter: DynamicRecord, dpRegistry: DynamicRecord | null | undefined) {
         this.adapter = adapter;
         this.dp = dpRegistry || null;
 
@@ -178,7 +218,7 @@ class ModuleManager {
         return 'none';
     }
 
-    _licenseAllowsApp(appId) {
+    _licenseAllowsApp(appId: unknown): boolean {
         const edition = this._licenseEdition();
         try {
             if (featureFlags && typeof featureFlags.allowsApp === 'function') {
@@ -226,7 +266,7 @@ class ModuleManager {
      * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    _diagLog(level, msg) {
+    _diagLog(level: string, msg: string): void {
         const lvl = (level === 'info' || level === 'debug') ? level : 'debug';
         const fn = (this.adapter && this.adapter.log && typeof this.adapter.log[lvl] === 'function')
             ? this.adapter.log[lvl]
@@ -250,7 +290,7 @@ class ModuleManager {
      * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    _limitJson(obj, maxLen) {
+    _limitJson(obj: unknown, maxLen: number): string {
         let s = '';
         try {
             s = JSON.stringify(obj);
@@ -267,7 +307,7 @@ class ModuleManager {
      * ohne diesen Guard wuerde das Modul States schreiben, deren Objekte nie angelegt
      * wurden. Fehlgeschlagene Initialisierungen werden begrenzt erneut versucht.
      */
-    async _ensureModuleInitialized(moduleRow, reason = 'module-init', cycleId = 'init') {
+    async _ensureModuleInitialized(moduleRow: ModuleRow, reason = 'module-init', cycleId: string | number = 'init'): Promise<boolean> {
         const m = moduleRow || null;
         if (!m || !m.instance) return false;
         if (m.initialized === true) return true;
@@ -287,12 +327,12 @@ class ModuleManager {
                 leaseMs: 15000,
             };
             if (reason && reason !== 'module-init') initContext.reason = String(reason);
-            await withActuatorShadowContext(this.adapter, initContext, () => m.instance.init());
+            await withActuatorShadowContext(this.adapter, initContext, () => m.instance.init!());
             m.initialized = true;
             m.initRetryAfterMs = 0;
             m.initError = '';
             return true;
-        } catch (e) {
+        } catch (e: any) {
             const err = String((e && e.message) ? e.message : e);
             m.initialized = false;
             m.initRetryAfterMs = now + Math.max(1000, Number(this._moduleInitRetryMs) || 30000);
@@ -308,7 +348,7 @@ class ModuleManager {
      * gilt bei Aktormodulen als kritischer Fehler und wird im naechsten Zyklus
      * erneut versucht.
      */
-    async _deactivateModule(moduleRow, cycleId = 'disabled', force = false) {
+    async _deactivateModule(moduleRow: ModuleRow, cycleId: string | number = 'disabled', force = false): Promise<boolean> {
         const m = moduleRow || null;
         if (!m || !m.instance) return true;
         const key = keyFromModule(m);
@@ -328,7 +368,7 @@ class ModuleManager {
                     reason: 'module-disabled-safe-stop',
                     cycleId,
                     leaseMs: 5000,
-                }, () => m.instance.deactivate());
+                }, () => m.instance.deactivate!());
             }
             if (result === false || (result && typeof result === 'object' && result.ok === false)) {
                 throw new Error(String(result && result.error || 'safe-stop-not-confirmed'));
@@ -339,7 +379,7 @@ class ModuleManager {
             // neu eingelesen. Always-init-Module bleiben initialisiert.
             if (m.alwaysInit !== true) m.initialized = false;
             return true;
-        } catch (e) {
+        } catch (e: any) {
             const error = String((e && e.message) ? e.message : e);
             m.deactivated = false;
             m.deactivateError = error;
@@ -768,8 +808,8 @@ class ModuleManager {
             let errMsg = '';
             markSafetyModuleStarted(this.adapter, key, this._tickCount, t1);
             try {
-                await withActuatorShadowContext(this.adapter, { owner: key, module: key, priority: priorityForOwner(key), reason: 'module-tick', cycleId: this._tickCount, leaseMs: 15000 }, () => m.instance.tick());
-            } catch (e) {
+                await withActuatorShadowContext(this.adapter, { owner: key, module: key, priority: priorityForOwner(key), reason: 'module-tick', cycleId: this._tickCount, leaseMs: 15000 }, () => m.instance.tick!());
+            } catch (e: any) {
                 ok = false;
                 errMsg = String((e && e.message) ? e.message : e);
                 errors.push(`${key}: ${errMsg}`);
@@ -856,7 +896,7 @@ class ModuleManager {
 
                 const errText = hasError ? errors.slice(0, 10).join(' | ') : '';
                 await this.adapter.setStateAsync('diagnostics.errors', errText, true);
-            } catch (e) {
+            } catch (e: any) {
                 this.adapter.log.debug(`Diagnostics state write failed: ${String((e && e.message) ? e.message : e)}`);
             }
         }

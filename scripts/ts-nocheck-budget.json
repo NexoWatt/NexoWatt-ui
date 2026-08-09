@@ -1,8 +1,8 @@
 {
   "schema": "nexowatt.ts-nocheck-budget.v1",
-  "generatedForVersion": "0.8.163",
-  "uncheckedFileCount": 60,
-  "maxUncheckedLines": 151569,
+  "generatedForVersion": "0.8.164",
+  "uncheckedFileCount": 58,
+  "maxUncheckedLines": 151349,
   "files": [
     "src-ts/runtime-executables/ems/consumers/evcs.ts",
     "src-ts/runtime-executables/ems/consumers/generic-load.ts",
@@ -11,7 +11,6 @@
     "src-ts/runtime-executables/ems/consumers/sg-ready.ts",
     "src-ts/runtime-executables/ems/datapoints.ts",
     "src-ts/runtime-executables/ems/engine.ts",
-    "src-ts/runtime-executables/ems/module-manager.ts",
     "src-ts/runtime-executables/ems/modules/ai-advisor.ts",
     "src-ts/runtime-executables/ems/modules/base.ts",
     "src-ts/runtime-executables/ems/modules/charge-kiosk.ts",
@@ -33,7 +32,6 @@
     "src-ts/runtime-executables/ems/modules/tarif-vis.ts",
     "src-ts/runtime-executables/ems/modules/tariff-provider.ts",
     "src-ts/runtime-executables/ems/modules/thermal-control.ts",
-    "src-ts/runtime-executables/ems/modules/threshold-control.ts",
     "src-ts/runtime-executables/ems/nexologic-engine.ts",
     "src-ts/runtime-executables/ems/reasons.ts",
     "src-ts/runtime-executables/ems/services/country-profile-service.ts",

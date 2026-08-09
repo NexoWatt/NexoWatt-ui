@@ -1,3 +1,13 @@
+## 0.8.164 - 2026-08-08
+
+- Vollständigen Projekt-Typecheck von zuvor 1.285 Diagnosen auf 0 Fehler reduziert. Nach der Compiler-/DevDependency-Vorprüfung ist `npm run typecheck` jetzt der erste technische Schritt des verbindlichen `publish:check` und blockiert neue Typbrüche vor allen Laufzeit-, Safety- und Packaging-Prüfungen.
+- Sicherheitskritische Runtime-Grenzen in `SafetyEnvelope`, §14a-/EEBUS-Direkt-API, FENECON-Reglerübergabe, Ladebudget, Modulmanager, Schwellwertsteuerung, NexoLogic-Budget, Energieherkunft, Datenpunktkonfiguration sowie Sprach-/Ledger-Frontend mit expliziten Typverträgen versehen.
+- CommonJS-, DOM-, Browser-, ioBroker- und Runtime-Brückentypen so ergänzt, dass die produktiven Quellen ohne einen separaten, weicheren Typecheck kompiliert werden. Der Releasepfad prüft dieselbe Quellbasis, aus der anschließend die JavaScript-Runtime erzeugt wird.
+- Einen realen Bestandsfehler in der Schwellwertsteuerung behoben: Die Standardwerte für `minOnSec` und `minOffSec` wurden durch einen überzähligen Funktionsparameter intern als `true` statt als `0` Sekunden angelegt. Die bestehende Laufzeitregression prüft nun beide Objekt-Defaults ausdrücklich.
+- `@ts-nocheck` aus Modulmanager und Schwellwertsteuerung entfernt; das No-Check-Budget sinkt von 60 auf 58 Runtime-Dateien und wird für 0.8.164 neu festgeschrieben. Neue ungeprüfte Dateien oder ein Wachstum des verbleibenden Altbestands bleiben im Release-Gate verboten.
+- `prepublishOnly` führt nach der weiterhin zuerst laufenden, fail-closed Registry-Versionsprüfung das vollständige `publish:check` aus. Ein npm-Publish kann damit weder den Gesamt-Typecheck noch die RC39-Sicherheits-, Lade-, Speicher-, §14a-, Runtime-Mirror- und Packaging-Regressionen umgehen.
+- Fachliche Regelalgorithmen und Grenzwerte aus RC39 bleiben unverändert. Service-Worker-Cache auf `nexowatt-cache-v464` und zentrale Versionskennungen auf 0.8.164 aktualisiert.
+
 ## 0.8.163 - 2026-08-08
 
 - Zentrale `SafetyEnvelope` als verbindlichen, fail-closed Sicherheitsvertrag für alle flexiblen Verbraucher eingeführt. Jeder produktive EMS-Zyklus beginnt gesperrt und wird erst nach vollständigem Inbetriebnahme- und Messwertnachweis freigegeben.

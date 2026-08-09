@@ -1,3 +1,4 @@
+// @runtime-transpile
 /**
  * Executable TypeScript source: lib/energy-origin-api.js
  *
@@ -63,7 +64,7 @@ function defaultEnergyOriginConfig() {
   };
 }
 
-function registerEnergyOriginApi(options) {
+function registerEnergyOriginApi(options: any) {
   const {
     app,
     rootDir,
@@ -79,44 +80,44 @@ function registerEnergyOriginApi(options) {
     try { return typeof isEnabled === 'function' ? isEnabled() === true : true; } catch (_e) { return false; }
   };
 
-  const period = (input) => {
+  const period = (input: any) => {
     const p = String(input || 'recent').trim().toLowerCase();
     return ['today', 'month', 'year', 'recent', 'all'].includes(p) ? p : 'recent';
   };
-  const localKey = (ts, kind) => {
+  const localKey = (ts: any, kind: any) => {
     const d = new Date(Number(ts) || Date.now());
     if (kind === 'year') return String(d.getFullYear());
     if (kind === 'month') return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
-  const filterIntervals = (rows, requestedPeriod) => {
+  const filterIntervals = (rows: any, requestedPeriod: any) => {
     const list = Array.isArray(rows) ? rows : [];
     const p = period(requestedPeriod);
     const now = Date.now();
     if (p === 'today') {
       const key = localKey(now, 'day');
-      return list.filter(row => localKey(row && row.startTs, 'day') === key);
+      return list.filter((row: any) => localKey(row && row.startTs, 'day') === key);
     }
     if (p === 'month') {
       const key = localKey(now, 'month');
-      return list.filter(row => localKey(row && row.startTs, 'month') === key);
+      return list.filter((row: any) => localKey(row && row.startTs, 'month') === key);
     }
     if (p === 'year') {
       const key = localKey(now, 'year');
-      return list.filter(row => localKey(row && row.startTs, 'year') === key);
+      return list.filter((row: any) => localKey(row && row.startTs, 'year') === key);
     }
     if (p === 'all') return list.slice();
     return list.slice(0, 672);
   };
-  const aggregate = (rows) => {
+  const aggregate = (rows: any) => {
     const list = Array.isArray(rows) ? rows : [];
-    const get = (row, keys, fallback = 0) => {
+    const get = (row: any, keys: any, fallback: any = 0) => {
       let cur = row;
       for (const key of keys) cur = cur && typeof cur === 'object' ? cur[key] : undefined;
       const n = Number(cur);
       return Number.isFinite(n) ? n : fallback;
     };
-    const sum = keys => Math.round(list.reduce((acc, row) => acc + get(row, keys, 0), 0) * 1e6) / 1e6;
+    const sum = (keys: any) => Math.round(list.reduce((acc: any, row: any) => acc + get(row, keys, 0), 0) * 1e6) / 1e6;
     const total = sum(['evcs', 'totalKwh']);
     const pvDirect = sum(['evcs', 'sourceBreakdown', 'pvDirectKwh']);
     const otherDirect = sum(['evcs', 'sourceBreakdown', 'otherRenewableDirectKwh']);
@@ -126,12 +127,12 @@ function registerEnergyOriginApi(options) {
     const storedGrid = sum(['evcs', 'sourceBreakdown', 'storedGridKwh']);
     const known = pvDirect + otherDirect + storedPv + storedOther + gridDirect + storedGrid;
     const unknown = Math.max(0, Math.round((total - known) * 1e6) / 1e6);
-    const de = Math.round(list.reduce((a, row) => a + get(row, ['evidence', 'de', 'eligibleRenewableKwh']), 0) * 1e6) / 1e6;
-    const nl = Math.round(list.reduce((a, row) => a + get(row, ['evidence', 'nl', 'eligibleRenewableKwh']), 0) * 1e6) / 1e6;
+    const de = Math.round(list.reduce((a: any, row: any) => a + get(row, ['evidence', 'de', 'eligibleRenewableKwh']), 0) * 1e6) / 1e6;
+    const nl = Math.round(list.reduce((a: any, row: any) => a + get(row, ['evidence', 'nl', 'eligibleRenewableKwh']), 0) * 1e6) / 1e6;
     return {
       schema: 'nexowatt.energy-origin-api-summary.v1',
       intervalCount: list.length,
-      completeIntervalCount: list.filter(row => row && row.quality && row.quality.status === 'complete').length,
+      completeIntervalCount: list.filter((row: any) => row && row.quality && row.quality.status === 'complete').length,
       evcsTotalKwh: total,
       pvDirectKwh: pvDirect,
       otherRenewableDirectKwh: otherDirect,
@@ -145,7 +146,7 @@ function registerEnergyOriginApi(options) {
       nlCandidateRenewableKwh: nl,
     };
   };
-  const buildPayload = (requestedPeriod) => {
+  const buildPayload = (requestedPeriod: any) => {
     const intervalsAll = readJson('energyLedger.origin.intervalsRecentJson', []);
     const p = period(requestedPeriod);
     const intervals = filterIntervals(intervalsAll, p);
@@ -174,7 +175,7 @@ function registerEnergyOriginApi(options) {
       },
     };
   };
-  const toCsv = (payload) => {
+  const toCsv = (payload: any) => {
     const rows = [];
     rows.push(['schema', 'nexowatt.energy-origin-ledger-export.v1'].map(csvEscape).join(';'));
     rows.push(['generatedAt', String(payload && payload.generatedAt || Date.now()), 'period', payload && payload.period || 'recent'].map(csvEscape).join(';'));
@@ -202,7 +203,7 @@ function registerEnergyOriginApi(options) {
     return '\ufeff' + rows.join('\r\n');
   };
 
-  app.get(['/ledger/energy-origin', '/ledger/energy-origin/'], (_req, res) => {
+  app.get(['/ledger/energy-origin', '/ledger/energy-origin/'], (_req: any, res: any) => {
     sendNoStore(res);
     // Die Betreiberseite ist selbst ein optionales AppCenter-Feature. Ohne
     // gültige Home-/Pro-Lizenz sowie installed+enabled darf weder Navigation
@@ -210,17 +211,18 @@ function registerEnergyOriginApi(options) {
     if (!isLicensed() || !appIsEnabled()) return res.redirect(302, '/');
     return res.sendFile(path.join(rootDir, 'www', 'energy-ledger.html'));
   });
-  app.get(['/api/ledger/energy-origin', '/api/ledger/energy-origin.json'], (req, res) => {
+  app.get(['/api/ledger/energy-origin', '/api/ledger/energy-origin.json'], (req: any, res: any) => {
     try {
       sendNoStore(res);
       if (!isLicensed()) return res.status(403).json({ ok: false, error: 'license_required', message: 'Gültige NexoWatt Home- oder Pro-Lizenz erforderlich.' });
       if (!appIsEnabled()) return res.status(409).json({ ok: false, error: 'app_not_active', message: 'Die App „Energieherkunft & Ladebilanz“ ist im AppCenter nicht installiert oder nicht aktiviert.' });
       return res.json(buildPayload(req.query && req.query.period));
-    } catch (e) {
-      return res.status(500).json({ ok: false, error: 'internal_error', message: String(e && e.message ? e.message : e) });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      return res.status(500).json({ ok: false, error: 'internal_error', message });
     }
   });
-  app.get('/api/ledger/energy-origin.csv', (req, res) => {
+  app.get('/api/ledger/energy-origin.csv', (req: any, res: any) => {
     try {
       sendNoStore(res);
       if (!isLicensed()) return res.status(403).type('text/plain').send('Gültige NexoWatt Home- oder Pro-Lizenz erforderlich.');
@@ -230,8 +232,9 @@ function registerEnergyOriginApi(options) {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="NexoWatt_Energieherkunft_${payload.period}_${key}.csv"`);
       return res.status(200).send(toCsv(payload));
-    } catch (e) {
-      return res.status(500).type('text/plain').send('Energieherkunft CSV Export Fehler: ' + String(e && e.message ? e.message : e));
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      return res.status(500).type('text/plain').send('Energieherkunft CSV Export Fehler: ' + message);
     }
   });
 

@@ -1,3 +1,4 @@
+// @runtime-transpile
 'use strict';
 
 /**
@@ -20,7 +21,104 @@ const DEFAULT_NVP_STALE_MS = 30000;
 const DEFAULT_ENVELOPE_MAX_AGE_MS = 5000;
 const DEFAULT_VOLTAGE_V = 230;
 
-function strictFiniteNumber(value, fallback = null) {
+
+type AnyRecord = Record<string, any>;
+
+type SafetyConfig = {
+    staleMs: number;
+    envelopeMaxAgeMs: number;
+    gridPhaseCount: number;
+    voltageV: number;
+    para14aEnabled: boolean;
+    diagnosticsOnly: boolean;
+};
+
+type SafetyCycle = {
+    generation: number;
+    startedAt: number;
+    moduleHealth: Record<string, AnyRecord>;
+    errors: string[];
+    safetyFaults: string[];
+};
+
+type InvalidateOptions = {
+    now?: number;
+    generation?: number | string;
+    latch?: boolean;
+    emergencyStop?: boolean;
+};
+
+type BuildSafetyEnvelopeOptions = {
+    adapter?: AnyRecord | null | undefined;
+    dp?: AnyRecord | null | undefined;
+    coreSnapshot?: AnyRecord | null | undefined;
+    budgetSnapshot?: AnyRecord | null | undefined;
+    now?: number;
+    generation?: number | string;
+};
+
+type PhaseSample = {
+    mapped: boolean;
+    fresh: boolean;
+    valueA: number | null;
+    ageMs: number | null;
+    connected: boolean | null;
+    reason: string;
+};
+
+type SafetyRuntime = {
+    generation: number;
+    targetsByKey: Record<string, number>;
+    deltasByKey: Record<string, number>;
+    phaseDeltasByKey: Record<string, number>;
+    appByKey: Record<string, string>;
+    decisions: AnyRecord[];
+};
+
+type FlexibleLoadRequest = {
+    now?: number;
+    requestedW?: unknown;
+    currentActualFresh?: boolean;
+    currentActualW?: unknown;
+    key?: unknown;
+    app?: unknown;
+    voltageV?: unknown;
+    phaseCount?: unknown;
+    deviceKey?: unknown;
+    deviceCapW?: unknown;
+    [key: string]: unknown;
+};
+
+type SafetyCommandRequest = {
+    now?: number;
+    requestedActive?: boolean;
+    key?: unknown;
+    app?: unknown;
+    [key: string]: unknown;
+};
+
+type SafetyDecision = AnyRecord & {
+    ok: boolean;
+    bypassed: boolean;
+    blocked: boolean;
+    forceZero: boolean;
+    key: string;
+    app: string;
+    reason: string;
+    envelopeGeneration: number;
+    evaluatedAt: number;
+    allowedW?: number;
+    reservation?: AnyRecord | null;
+};
+
+type TargetOptions = {
+    phaseCount?: unknown;
+    voltageV?: unknown;
+};
+
+function strictFiniteNumber(value: unknown, fallback: number): number;
+function strictFiniteNumber(value: unknown, fallback?: null): number | null;
+function strictFiniteNumber(value: unknown, fallback: number | null = null): number | null {
     if (value === null || value === undefined) return fallback;
     if (typeof value === 'string' && !value.trim()) return fallback;
     if (typeof value === 'boolean') return fallback;
@@ -28,24 +126,24 @@ function strictFiniteNumber(value, fallback = null) {
     return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function nonNegative(value, fallback = 0) {
+function nonNegative(value: unknown, fallback = 0): number {
     const parsed = strictFiniteNumber(value, null);
     return parsed === null ? fallback : Math.max(0, parsed);
 }
 
-function clamp(value, min, max, fallback) {
+function clamp(value: unknown, min: number, max: number, fallback: number): number {
     const parsed = strictFiniteNumber(value, null);
     if (parsed === null) return fallback;
     return Math.min(max, Math.max(min, parsed));
 }
 
-function boolValue(value, fallback = false) {
+function boolValue(value: unknown, fallback = false): boolean {
     if (value === true || value === 1 || value === '1' || value === 'true') return true;
     if (value === false || value === 0 || value === '0' || value === 'false') return false;
     return fallback;
 }
 
-function resolveSafetyConfig(adapter) {
+function resolveSafetyConfig(adapter: AnyRecord): SafetyConfig {
     const cfg = adapter && adapter.config && typeof adapter.config === 'object' ? adapter.config : {};
     const cm = cfg.chargingManagement && typeof cfg.chargingManagement === 'object' ? cfg.chargingManagement : {};
     const installer = cfg.installerConfig && typeof cfg.installerConfig === 'object' ? cfg.installerConfig : {};
@@ -81,7 +179,7 @@ function resolveSafetyConfig(adapter) {
     };
 }
 
-function emptyEnvelope(generation, now, reason = 'cycle-not-authorized') {
+function emptyEnvelope(generation: unknown, now: number, reason: unknown = 'cycle-not-authorized'): AnyRecord {
     return {
         schemaVersion: SCHEMA_VERSION,
         generation: Math.max(0, Math.round(Number(generation) || 0)),
@@ -129,8 +227,7 @@ function emptyEnvelope(generation, now, reason = 'cycle-not-authorized') {
     };
 }
 
-function ensureCycle(adapter, generation = 0, now = Date.now()) {
-    if (!adapter) return null;
+function ensureCycle(adapter: AnyRecord, generation: unknown = 0, now = Date.now()): SafetyCycle {
     const requestedGeneration = Math.max(0, Math.round(Number(generation) || 0));
     const current = adapter._emsSafetyCycle && typeof adapter._emsSafetyCycle === 'object'
         ? adapter._emsSafetyCycle
@@ -146,7 +243,7 @@ function ensureCycle(adapter, generation = 0, now = Date.now()) {
     return adapter._emsSafetyCycle;
 }
 
-function beginSafetyCycle(adapter, generation, now = Date.now()) {
+function beginSafetyCycle(adapter: AnyRecord | null | undefined, generation: unknown, now = Date.now()): AnyRecord | null {
     if (!adapter) return null;
     const cycle = ensureCycle(adapter, generation, now);
     adapter._nwSafetyEnvelopeRequired = true;
@@ -164,7 +261,7 @@ function beginSafetyCycle(adapter, generation, now = Date.now()) {
     return envelope;
 }
 
-function markSafetyModuleStarted(adapter, key, generation, now = Date.now()) {
+function markSafetyModuleStarted(adapter: AnyRecord | null | undefined, key: unknown, generation: unknown, now = Date.now()): void {
     if (!adapter) return;
     const cycle = ensureCycle(adapter, generation, now);
     cycle.moduleHealth[String(key || 'unknown')] = {
@@ -175,7 +272,7 @@ function markSafetyModuleStarted(adapter, key, generation, now = Date.now()) {
     };
 }
 
-function markSafetyModuleResult(adapter, key, ok, error = '', generation, now = Date.now()) {
+function markSafetyModuleResult(adapter: AnyRecord | null | undefined, key: unknown, ok: unknown, error: unknown = '', generation?: unknown, now = Date.now()): void {
     if (!adapter) return;
     const cycle = ensureCycle(adapter, generation ?? adapter?._emsSafetyCycle?.generation ?? 0, now);
     const moduleKey = String(key || 'unknown');
@@ -199,7 +296,7 @@ function markSafetyModuleResult(adapter, key, ok, error = '', generation, now = 
     }
 }
 
-function invalidateSafetyEnvelope(adapter, reason, options = {}) {
+function invalidateSafetyEnvelope(adapter: AnyRecord | null | undefined, reason: unknown, options: InvalidateOptions = {}): AnyRecord | null {
     if (!adapter) return null;
     const now = Number(options.now) || Date.now();
     const generation = Math.max(0, Math.round(Number(options.generation ?? adapter?._emsSafetyCycle?.generation ?? 0) || 0));
@@ -232,7 +329,7 @@ function invalidateSafetyEnvelope(adapter, reason, options = {}) {
     return envelope;
 }
 
-function phaseAgeMs(dp, key) {
+function phaseAgeMs(dp: AnyRecord | null | undefined, key: string): number | null {
     if (!dp) return null;
     try {
         const age = typeof dp.getMeasurementAgeMs === 'function'
@@ -245,7 +342,7 @@ function phaseAgeMs(dp, key) {
     }
 }
 
-function readPhase(dp, key, staleMs) {
+function readPhase(dp: AnyRecord | null | undefined, key: string, staleMs: number): PhaseSample {
     if (!dp || typeof dp.getEntry !== 'function' || !dp.getEntry(key)) {
         return { mapped: false, fresh: false, valueA: null, ageMs: null, connected: null, reason: 'not-mapped' };
     }
@@ -270,7 +367,7 @@ function readPhase(dp, key, staleMs) {
     };
 }
 
-function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = Date.now(), generation } = {}) {
+function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = Date.now(), generation }: BuildSafetyEnvelopeOptions = {}): AnyRecord | null {
     if (!adapter) return null;
     const safetyCfg = resolveSafetyConfig(adapter);
     const cycle = ensureCycle(adapter, generation ?? adapter?._emsSafetyCycle?.generation ?? 0, now);
@@ -279,7 +376,7 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
     const core = coreSnapshot && typeof coreSnapshot === 'object' ? coreSnapshot : {};
     const coreGrid = core.grid && typeof core.grid === 'object' ? core.grid : {};
     const p14aRuntime = adapter._para14a && typeof adapter._para14a === 'object' ? adapter._para14a : null;
-    const reasons = [];
+    const reasons: string[] = [];
     for (const fault of (Array.isArray(cycle.safetyFaults) ? cycle.safetyFaults : [])) {
         const text = String(fault || '').trim();
         if (text && !reasons.includes(text)) reasons.push(text);
@@ -329,9 +426,9 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
     const maxPhaseA = strictFiniteNumber(coreGrid.gridMaxPhaseA_cfg, null);
     const phaseRequired = maxPhaseA !== null && maxPhaseA > 0;
     const phaseKeys = ['ps.l1A', 'ps.l2A', 'ps.l3A'].slice(0, safetyCfg.gridPhaseCount);
-    const currentsA = {};
-    const headroomA = {};
-    let minHeadroomA = null;
+    const currentsA: Record<string, number | null> = {};
+    const headroomA: Record<string, number | null> = {};
+    let minHeadroomA: number | null = null;
     let phaseValid = true;
     if (phaseRequired) {
         for (const key of phaseKeys) {
@@ -349,7 +446,7 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
             if (!sample.fresh) phaseValid = false;
             if (sample.fresh) {
                 const value = headroomA[label];
-                minHeadroomA = minHeadroomA === null ? value : Math.min(minHeadroomA, value);
+                if (value !== null) minHeadroomA = minHeadroomA === null ? value : Math.min(minHeadroomA, value);
             }
         }
         if (!phaseValid || minHeadroomA === null) minHeadroomA = 0;
@@ -402,7 +499,7 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
         ? 'READY'
         : (commissioned ? 'BLOCKED_SAFETY_FAULT' : 'BLOCKED_NOT_COMMISSIONED');
     const appCapsW = paraActive ? paraAppCapsW : {};
-    const effectiveAppCap = (app) => {
+    const effectiveAppCap = (app: string): number => {
         const explicit = strictFiniteNumber(appCapsW[app], null);
         if (explicit !== null) return Math.max(0, explicit);
         return valid ? Math.max(0, availableHeadroomW) : 0;
@@ -499,7 +596,7 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
  * Baut die Sicherheitsfreigabe mit den aktuellsten Messwerten unmittelbar neu
  * auf. Final-Writer verwenden bewusst diese Funktion statt nur den Plan-Snapshot.
  */
-function liveSafetyEnvelope(adapter, dp, options = {}) {
+function liveSafetyEnvelope(adapter: AnyRecord, dp: AnyRecord | null | undefined, options: Omit<BuildSafetyEnvelopeOptions, 'adapter' | 'dp'> = {}): AnyRecord | null {
     return buildSafetyEnvelope({
         adapter,
         dp,
@@ -510,7 +607,7 @@ function liveSafetyEnvelope(adapter, dp, options = {}) {
     });
 }
 
-function normalizeApp(app) {
+function normalizeApp(app: unknown): string {
     const text = String(app || '').trim().toLowerCase();
     if (text.includes('evcs') || text.includes('charging') || text.includes('wallbox')) return 'evcs';
     if (text.includes('storage') || text.includes('speicher') || text.includes('battery')) return 'storage';
@@ -520,7 +617,7 @@ function normalizeApp(app) {
     return text || 'custom';
 }
 
-function sumOther(map, currentKey, appMap, appFilter) {
+function sumOther(map: Record<string, unknown> | null | undefined, currentKey: string, appMap?: Record<string, string> | null, appFilter?: string): number {
     let sum = 0;
     for (const [key, value] of Object.entries(map || {})) {
         if (key === currentKey) continue;
@@ -531,7 +628,7 @@ function sumOther(map, currentKey, appMap, appFilter) {
     return sum;
 }
 
-function getSafetyRuntime(adapter, generation) {
+function getSafetyRuntime(adapter: AnyRecord, generation: unknown): SafetyRuntime {
     let runtime = adapter && adapter._emsSafetyReservations && typeof adapter._emsSafetyReservations === 'object'
         ? adapter._emsSafetyReservations
         : null;
@@ -549,7 +646,7 @@ function getSafetyRuntime(adapter, generation) {
     return runtime;
 }
 
-function blockedDecision(request, envelope, reason, now, bypassed = false) {
+function blockedDecision(request: FlexibleLoadRequest, envelope: AnyRecord | null, reason: unknown, now: number, bypassed = false): SafetyDecision {
     const requestedW = Math.max(0, Math.round(nonNegative(request && request.requestedW, 0)));
     return {
         ok: bypassed,
@@ -570,7 +667,7 @@ function blockedDecision(request, envelope, reason, now, bypassed = false) {
     };
 }
 
-function evaluateFlexibleLoadRequest(adapter, request = {}) {
+function evaluateFlexibleLoadRequest(adapter: AnyRecord | null | undefined, request: FlexibleLoadRequest = {}): SafetyDecision {
     const now = Number(request.now) || Date.now();
     const requestedW = Math.max(0, Math.round(nonNegative(request.requestedW, 0)));
     const currentActualFresh = request.currentActualFresh !== false;
@@ -637,7 +734,7 @@ function evaluateFlexibleLoadRequest(adapter, request = {}) {
             return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, 'phase-final-write-invalid', now);
         }
         const voltageV = clamp(request.voltageV ?? phase.voltageV, 200, 260, DEFAULT_VOLTAGE_V);
-        const requestPhases = Math.max(1, Math.min(Number(phase.requiredCount) || 3, Math.round(strictFiniteNumber(request.phaseCount, phase.requiredCount || 3))));
+        const requestPhases = Math.max(1, Math.min(Number(phase.requiredCount) || 3, Math.round(strictFiniteNumber(request.phaseCount, Number(phase.requiredCount) || 3))));
         // Signed for the same reason as the grid headroom: an already
         // overloaded phase has to shed flexible load, not only block growth.
         const physicalPhaseIncrementW = (Number(phase.minHeadroomA) || 0) * voltageV * requestPhases;
@@ -732,7 +829,7 @@ function evaluateFlexibleLoadRequest(adapter, request = {}) {
  * Envelope, Messwertausfall oder §14a-Notstopp aber ebenfalls nicht ausgeführt
  * werden. 0 W bleibt immer zulässig.
  */
-function evaluateSafetyCommandPermission(adapter, request = {}) {
+function evaluateSafetyCommandPermission(adapter: AnyRecord | null | undefined, request: SafetyCommandRequest = {}): AnyRecord {
     const now = Number(request.now) || Date.now();
     const requestedActive = request.requestedActive === true;
     const key = String(request.key || '').trim() || `${normalizeApp(request.app)}:command`;
@@ -772,7 +869,7 @@ function evaluateSafetyCommandPermission(adapter, request = {}) {
             evaluatedAt: now,
         };
     }
-    const blocked = (reason) => ({
+    const blocked = (reason: unknown): AnyRecord => ({
         ok: false,
         bypassed: false,
         blocked: true,
@@ -817,7 +914,7 @@ function evaluateSafetyCommandPermission(adapter, request = {}) {
     };
 }
 
-function commitFlexibleLoadDecision(adapter, decision, applied = true) {
+function commitFlexibleLoadDecision(adapter: AnyRecord | null | undefined, decision: SafetyDecision | AnyRecord | null | undefined, applied = true): boolean {
     if (!adapter || !decision || decision.bypassed === true || applied !== true) return false;
     const generation = Number(decision.envelopeGeneration) || 0;
     const runtime = getSafetyRuntime(adapter, generation);
@@ -833,7 +930,7 @@ function commitFlexibleLoadDecision(adapter, decision, applied = true) {
     return true;
 }
 
-function safetyTargetFromPowerDecision(target, decision, options = {}) {
+function safetyTargetFromPowerDecision(target: AnyRecord | null | undefined, decision: SafetyDecision | AnyRecord | null | undefined, options: TargetOptions = {}): AnyRecord {
     const next = target && typeof target === 'object' ? { ...target } : {};
     const allowedW = Math.max(0, Math.round(nonNegative(decision && decision.allowedW, 0)));
     next.targetW = allowedW;

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e76e30c4b57f2419b9c4f52676a62b6b559e3113984f7432cbd0635fb9d5b765
+ * Original-Hash: c763ed4d358d0476fd0324ffb625bac8fd9d7b600c37925b106aa90ef4499aad
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/charging-budget-helpers.ts
- * Quell-Hash: sha256:fbdfe1a0097c28cdc168cf2100395bc0225639efac27a8b8e27028ec72e99dea
+ * Quell-Hash: sha256:e382d241a8048d43b48eb7588bd05598420e955bb57a579c4dc0bb62c4daaa1f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -129,7 +129,7 @@ function resolveAcChargingLimits() {
   if (configuredMaxPowerW !== null) maxCandidates.push({ source: 'configured-power', powerW: configuredMaxPowerW });
   if (!maxCandidates.length) maxCandidates.push({ source: 'default-current', powerW: defaultMaxA * factorWPerA });
   maxCandidates.sort((a, b) => a.powerW - b.powerW);
-  const limiting = maxCandidates[0];
+  const limiting = maxCandidates[0] || { source: 'default-current', powerW: defaultMaxA * factorWPerA };
   const maxPowerW = Math.max(0, Number(limiting.powerW) || 0);
   const maxA = maxPowerW / factorWPerA;
 

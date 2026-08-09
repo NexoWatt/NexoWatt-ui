@@ -533,7 +533,7 @@ function validateFarmRows(rowsIn: unknown): AnyRecord {
     ok = false;
     reason = 'multiple-fems-grid-masters';
   } else if (invalidRows.length) {
-    reason = invalidRows[0].validation.reason;
+    reason = invalidRows[0]?.validation.reason || 'invalid-storage-row';
   } else if (nativeRows.length === 1 && writableStorageCount > 1) {
     ok = false;
     reason = 'fems-grid-master-with-other-writable-storage';
@@ -543,7 +543,7 @@ function validateFarmRows(rowsIn: unknown): AnyRecord {
     reason,
     writableStorageCount,
     nativeMasterCount: nativeRows.length,
-    nativeMasterName: nativeRows.length ? text(nativeRows[0].row.name) : '',
+    nativeMasterName: text(nativeRows[0]?.row?.name),
     resolved: resolved.map((item) => ({
       name: text(item.row.name),
       mode: item.result ? item.result.mode : 'invalid',

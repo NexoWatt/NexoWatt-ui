@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/storage-datapoint-config.ts
- * Quell-Hash: sha256:f371634f5a583ac94f3b68408c4fad4f7ef9af9117ec251bc25bda8d54fb5dc2
+ * Quell-Hash: sha256:f5601cbd48cc92053a6803959554a903c0cfad57e8ff27228553fa608076b6dd
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:

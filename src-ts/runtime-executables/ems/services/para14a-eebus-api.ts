@@ -1,3 +1,4 @@
+// @runtime-transpile
 'use strict';
 
 /**
@@ -38,41 +39,91 @@ const RELEVANT_CONTROLLER_MODULES = Object.freeze([
   'nvpCoordinator',
 ]);
 
-function finiteOrNull(value) {
+
+type AnyRecord = Record<string, any>;
+
+type TimingTargets = {
+  acceptance: number;
+  controllerApply: number;
+  implementationFeedback: number;
+};
+
+type ControlPacket = AnyRecord & {
+  commandId: string;
+  sequence: number;
+  sourceInstance: string;
+  sourceDeviceId: string;
+  sourceSki: string;
+  sourceProtocol: string;
+  operation: string;
+  active: boolean;
+  limitW: number | null;
+  receivedAtMs: number;
+  implementationTimeoutMs: number;
+  acceptedAtMs?: number;
+};
+
+type PendingEntry = {
+  packet: ControlPacket;
+  acceptedAtMs: number;
+  acceptance: AnyRecord;
+  timeout: any;
+};
+
+type RecentAcceptance = {
+  response?: AnyRecord;
+  feedback?: AnyRecord;
+  expiresAtMs: number;
+};
+
+type ValidationResult =
+  | { ok: false; reason: string }
+  | { ok: true; packet: ControlPacket };
+
+type Readiness = {
+  ready: boolean;
+  para14aEnabled: boolean;
+  licenseAllowed: boolean;
+  countrySupported: boolean;
+  engineReady: boolean;
+  reason: string;
+};
+
+function finiteOrNull(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
 
-function positiveOrNull(value) {
+function positiveOrNull(value: unknown): number | null {
   const number = finiteOrNull(value);
   return number !== null && number > 0 ? number : null;
 }
 
-function nonNegativeOrNull(value) {
+function nonNegativeOrNull(value: unknown): number | null {
   const number = finiteOrNull(value);
   return number !== null && number >= 0 ? number : null;
 }
 
-function clampNumber(value, min, max, fallback) {
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.min(max, Math.max(min, parsed));
 }
 
-function boundedString(value, maxLength = 240) {
+function boundedString(value: unknown, maxLength = 240): string {
   return String(value == null ? '' : value).trim().slice(0, maxLength);
 }
 
-function normalizeInstance(value) {
+function normalizeInstance(value: unknown): string {
   return boundedString(value, 120).replace(/^system\.adapter\./, '').toLowerCase();
 }
 
-function isEebusInstance(value) {
+function isEebusInstance(value: unknown): boolean {
   return /^eebus\.\d+$/.test(normalizeInstance(value));
 }
 
-function jsonStringifySafe(value) {
+function jsonStringifySafe(value: unknown): string {
   try {
     return JSON.stringify(value);
   } catch (_error) {
@@ -81,7 +132,26 @@ function jsonStringifySafe(value) {
 }
 
 class Para14aEebusDirectApi {
-  constructor(adapter) {
+  adapter: AnyRecord;
+  initialized: boolean;
+  ingress: ControlPacket | null;
+  pending: Map<string, PendingEntry>;
+  recentAcceptances: Map<string, RecentAcceptance>;
+  duplicateCount: number;
+  commandCount: number;
+  rejectedCount: number;
+  implementedCount: number;
+  timeoutCount: number;
+  supersededCount: number;
+  sequence: number;
+  timingTargetsMs: TimingTargets;
+  sourceInstance: string;
+  lastHelloAtMs: number;
+  bridgeHeartbeatSec: number;
+  helloWatchdog: any;
+  localFailsafeSignature: string;
+
+  constructor(adapter: AnyRecord) {
     this.adapter = adapter;
     this.initialized = false;
     this.ingress = null;
@@ -102,7 +172,7 @@ class Para14aEebusDirectApi {
     this.localFailsafeSignature = '';
   }
 
-  async init() {
+  async init(): Promise<void> {
     if (this.initialized) return;
     this.initialized = true;
     await this._ensureObjects();
@@ -120,7 +190,7 @@ class Para14aEebusDirectApi {
     });
   }
 
-  stop() {
+  stop(): void {
     this.initialized = false;
     this._clearHelloWatchdog();
     for (const pending of this.pending.values()) this._clearPendingTimer(pending);
@@ -137,7 +207,7 @@ class Para14aEebusDirectApi {
     }));
   }
 
-  async handleMessage(obj) {
+  async handleMessage(obj: AnyRecord): Promise<boolean> {
     const command = boundedString(obj?.command, 160);
     if (command !== HELLO_COMMAND && command !== CONTROL_COMMAND) return false;
 
@@ -155,7 +225,7 @@ class Para14aEebusDirectApi {
    * Bridge-Heartbeat werden zusätzlich lokal überwacht. Bei Ablauf setzt EOS
    * selbstständig den vereinbarten Failsafe, standardmäßig 0 W.
    */
-  getIngress() {
+  getIngress(): AnyRecord | null {
     const current = this.ingress;
     if (!current) return null;
 
@@ -253,11 +323,11 @@ class Para14aEebusDirectApi {
     };
   }
 
-  async flushImplementationFeedback(context = {}) {
+  async flushImplementationFeedback(context: AnyRecord = {}): Promise<boolean> {
     if (!this.initialized || this.pending.size === 0) return false;
 
-    const snapshot = this.adapter?._para14a && typeof this.adapter._para14a === 'object'
-      ? this.adapter._para14a
+    const snapshot: AnyRecord | null = this.adapter?._para14a && typeof this.adapter._para14a === 'object'
+      ? this.adapter._para14a as AnyRecord
       : null;
     const snapshotCommandId = boundedString(snapshot?.directCommandId, 180);
     if (!snapshot || !snapshotCommandId) return false;
@@ -265,8 +335,8 @@ class Para14aEebusDirectApi {
     const pending = this.pending.get(snapshotCommandId);
     if (!pending) return false;
 
-    const moduleResults = Array.isArray(context.moduleResults) ? context.moduleResults : [];
-    const resultByKey = new Map(moduleResults.map((entry) => [String(entry?.key || ''), entry]));
+    const moduleResults: AnyRecord[] = Array.isArray(context.moduleResults) ? context.moduleResults : [];
+    const resultByKey = new Map<string, AnyRecord>(moduleResults.map((entry: AnyRecord) => [String(entry?.key || ''), entry]));
     const paraResult = resultByKey.get('para14a') || null;
     const coreResult = resultByKey.get('coreLimits') || null;
     const paraApplied = paraResult?.enabled === true && paraResult?.ok === true;
@@ -280,10 +350,10 @@ class Para14aEebusDirectApi {
 
     const enabledRelevantResults = RELEVANT_CONTROLLER_MODULES
       .map((key) => resultByKey.get(key))
-      .filter((entry) => entry?.enabled === true);
+      .filter((entry): entry is AnyRecord => !!entry && entry.enabled === true);
     const failedModules = enabledRelevantResults
       .filter((entry) => entry?.ok !== true)
-      .map((entry) => ({ key: String(entry.key || ''), error: boundedString(entry.error, 320) }));
+      .map((entry: AnyRecord) => ({ key: String(entry.key || ''), error: boundedString(entry.error, 320) }));
 
     const now = Date.now();
     const active = snapshot.active === true;
@@ -423,8 +493,8 @@ class Para14aEebusDirectApi {
     return true;
   }
 
-  _handleHello(obj) {
-    const message = obj?.message && typeof obj.message === 'object' ? obj.message : {};
+  _handleHello(obj: AnyRecord): void {
+    const message: AnyRecord = obj?.message && typeof obj.message === 'object' ? obj.message as AnyRecord : {};
     const sender = normalizeInstance(obj?.from);
     const declaredSource = normalizeInstance(message.sourceInstance);
     const sourceValid = isEebusInstance(sender) && declaredSource === sender;
@@ -432,8 +502,8 @@ class Para14aEebusDirectApi {
     const accepted = this.initialized && sourceValid && compatible;
 
     if (accepted) {
-      const timing = message.timingTargetsMs && typeof message.timingTargetsMs === 'object'
-        ? message.timingTargetsMs
+      const timing: AnyRecord = message.timingTargetsMs && typeof message.timingTargetsMs === 'object'
+        ? message.timingTargetsMs as AnyRecord
         : {};
       this.timingTargetsMs = {
         acceptance: clampNumber(timing.acceptance, 50, 5000, DEFAULT_TIMING_TARGETS_MS.acceptance),
@@ -485,8 +555,8 @@ class Para14aEebusDirectApi {
     }
   }
 
-  _handleControl(obj) {
-    const message = obj?.message && typeof obj.message === 'object' ? obj.message : {};
+  _handleControl(obj: AnyRecord): void {
+    const message: AnyRecord = obj?.message && typeof obj.message === 'object' ? obj.message as AnyRecord : {};
     const receivedByUiAtMs = Date.now();
     const validation = this._validatePacket(message, obj?.from);
     if (!validation.ok) {
@@ -540,8 +610,9 @@ class Para14aEebusDirectApi {
         error: '',
       };
       this._reply(obj, response);
-      if (!pendingDuplicate && recentDuplicate?.feedback) {
-        this._setTimer(() => this._sendImplementationFeedback(packet.sourceInstance, recentDuplicate.feedback), 0);
+      const recentFeedback = recentDuplicate?.feedback;
+      if (!pendingDuplicate && recentFeedback) {
+        this._setTimer(() => this._sendImplementationFeedback(packet.sourceInstance, recentFeedback), 0);
       }
       this._background(this._writeDiagnostics({
         'para14a.api.duplicateCount': this.duplicateCount,
@@ -591,7 +662,7 @@ class Para14aEebusDirectApi {
       reason: 'accepted-for-immediate-central-control',
       error: '',
     };
-    const pending = { packet, acceptedAtMs, acceptance: response, timeout: null };
+    const pending: PendingEntry = { packet, acceptedAtMs, acceptance: response, timeout: null };
     this.pending.set(packet.commandId, pending);
     this._rememberAcceptance(packet.commandId, response);
     this._armImplementationTimeout(pending);
@@ -617,7 +688,7 @@ class Para14aEebusDirectApi {
     }));
   }
 
-  _rejectionResponse(message, atMs, reason) {
+  _rejectionResponse(message: AnyRecord, atMs: number, reason: string): AnyRecord {
     const receivedAtMs = positiveOrNull(message?.receivedAtMs) || atMs;
     return {
       schema: CONTROL_COMMAND,
@@ -633,7 +704,7 @@ class Para14aEebusDirectApi {
     };
   }
 
-  _validatePacket(message, from) {
+  _validatePacket(message: AnyRecord, from: unknown): ValidationResult {
     const sender = normalizeInstance(from);
     const sourceInstance = normalizeInstance(message.sourceInstance);
     if (!this.initialized) return { ok: false, reason: 'direct-api-not-initialized' };
@@ -698,13 +769,13 @@ class Para14aEebusDirectApi {
       ),
       sourceMsgCounter: finiteOrNull(message.sourceMsgCounter),
       sourceLimitIds: Array.isArray(message.sourceLimitIds)
-        ? message.sourceLimitIds.slice(0, 16).map((value) => boundedString(value, 80))
+        ? message.sourceLimitIds.slice(0, 16).map((value: unknown) => boundedString(value, 80))
         : [],
     };
     return { ok: true, packet };
   }
 
-  _readiness() {
+  _readiness(): Readiness {
     const cfg = this.adapter?.config || {};
     const para14aEnabled = !!cfg?.installerConfig?.para14a;
     const licenseAllowed = typeof this.adapter?._nwLicenseAllowsAppId === 'function'
@@ -735,17 +806,17 @@ class Para14aEebusDirectApi {
     return { ready, para14aEnabled, licenseAllowed, countrySupported, engineReady, reason };
   }
 
-  _helloMaxAgeMs() {
+  _helloMaxAgeMs(): number {
     return Math.max(15_000, Math.round(this.bridgeHeartbeatSec * 3_000 + 1_000));
   }
 
-  _clearHelloWatchdog() {
+  _clearHelloWatchdog(): void {
     if (!this.helloWatchdog) return;
     this._clearTimer(this.helloWatchdog);
     this.helloWatchdog = null;
   }
 
-  _armHelloWatchdog(sourceInstance, helloAtMs) {
+  _armHelloWatchdog(sourceInstance: string, helloAtMs: number): void {
     this._clearHelloWatchdog();
     const maxAgeMs = this._helloMaxAgeMs();
     this.helloWatchdog = this._setTimer(() => {
@@ -766,7 +837,7 @@ class Para14aEebusDirectApi {
     }, maxAgeMs + 25);
   }
 
-  _supersedePending(nextCommandId) {
+  _supersedePending(nextCommandId: string): void {
     for (const [commandId, pending] of this.pending.entries()) {
       if (commandId === nextCommandId) continue;
       const now = Date.now();
@@ -785,26 +856,26 @@ class Para14aEebusDirectApi {
     }));
   }
 
-  _setTimer(fn, ms) {
+  _setTimer(fn: () => void, ms: number): any {
     if (typeof this.adapter?._nwSetTimeout === 'function') return this.adapter._nwSetTimeout(fn, ms);
     if (typeof this.adapter?.setTimeout === 'function') return this.adapter.setTimeout(fn, ms);
     return setTimeout(fn, ms);
   }
 
-  _clearTimer(timer) {
+  _clearTimer(timer: any): void {
     if (!timer) return;
     if (typeof this.adapter?._nwClearTimeout === 'function') this.adapter._nwClearTimeout(timer);
     else if (typeof this.adapter?.clearTimeout === 'function') this.adapter.clearTimeout(timer);
-    else clearTimeout(timer);
+    else clearTimeout(timer as ReturnType<typeof setTimeout>);
   }
 
-  _clearPendingTimer(pending) {
+  _clearPendingTimer(pending: PendingEntry): void {
     if (!pending?.timeout) return;
     this._clearTimer(pending.timeout);
     pending.timeout = null;
   }
 
-  _armImplementationTimeout(pending) {
+  _armImplementationTimeout(pending: PendingEntry): void {
     this._clearPendingTimer(pending);
     const remoteTimeoutMs = clampNumber(
       pending?.packet?.implementationTimeoutMs,
@@ -816,7 +887,7 @@ class Para14aEebusDirectApi {
     pending.timeout = this._setTimer(() => this._handleImplementationTimeout(pending), localTimeoutMs);
   }
 
-  _handleImplementationTimeout(pending) {
+  _handleImplementationTimeout(pending: PendingEntry): void {
     if (!pending || this.pending.get(pending.packet.commandId) !== pending) return;
     const now = Date.now();
     const feedback = this._terminalFeedback(
@@ -842,7 +913,7 @@ class Para14aEebusDirectApi {
     }));
   }
 
-  _terminalFeedback(pending, status, reason, atMs) {
+  _terminalFeedback(pending: PendingEntry, status: string, reason: string, atMs: number): AnyRecord {
     const acceptedAtMs = Number(pending.acceptedAtMs || pending.packet.acceptedAtMs || atMs);
     const receivedAtMs = Number(pending.packet.receivedAtMs || acceptedAtMs);
     const postAcceptanceControlLatencyMs = Math.max(0, atMs - acceptedAtMs);
@@ -886,7 +957,7 @@ class Para14aEebusDirectApi {
     };
   }
 
-  _sendImplementationFeedback(targetInstance, feedback) {
+  _sendImplementationFeedback(targetInstance: string, feedback: AnyRecord): boolean {
     try {
       this.adapter.sendTo(targetInstance, IMPLEMENTATION_COMMAND, feedback, () => {});
       return true;
@@ -895,7 +966,7 @@ class Para14aEebusDirectApi {
     }
   }
 
-  _completePending(pending, feedback) {
+  _completePending(pending: PendingEntry, feedback: AnyRecord): void {
     this._clearPendingTimer(pending);
     const sent = this._sendImplementationFeedback(pending.packet.sourceInstance, feedback);
     if (!sent) {
@@ -908,7 +979,7 @@ class Para14aEebusDirectApi {
     this._rememberFeedback(pending.packet.commandId, feedback);
   }
 
-  _rememberAcceptance(commandId, response) {
+  _rememberAcceptance(commandId: string, response: AnyRecord): void {
     const previous = this.recentAcceptances.get(commandId) || {};
     this.recentAcceptances.set(commandId, {
       ...previous,
@@ -918,7 +989,7 @@ class Para14aEebusDirectApi {
     this._pruneRecentAcceptances();
   }
 
-  _rememberFeedback(commandId, feedback) {
+  _rememberFeedback(commandId: string, feedback: AnyRecord): void {
     const previous = this.recentAcceptances.get(commandId) || {};
     this.recentAcceptances.set(commandId, {
       ...previous,
@@ -928,7 +999,7 @@ class Para14aEebusDirectApi {
     this._pruneRecentAcceptances();
   }
 
-  _pruneRecentAcceptances() {
+  _pruneRecentAcceptances(): void {
     const now = Date.now();
     for (const [commandId, entry] of this.recentAcceptances.entries()) {
       if (entry.expiresAtMs <= now) this.recentAcceptances.delete(commandId);
@@ -936,24 +1007,24 @@ class Para14aEebusDirectApi {
     while (this.recentAcceptances.size > MAX_RECENT_ACCEPTANCES) {
       const first = this.recentAcceptances.keys().next().value;
       if (!first) break;
-      this.recentAcceptances.delete(first);
+      if (first !== undefined) this.recentAcceptances.delete(first);
     }
   }
 
-  _reply(obj, payload) {
+  _reply(obj: AnyRecord, payload: AnyRecord): void {
     if (!obj?.callback) return;
     try {
       this.adapter.sendTo(obj.from, obj.command, payload, obj.callback);
     } catch (_error) {}
   }
 
-  _background(promise) {
+  _background(promise: unknown): void {
     void Promise.resolve(promise).catch((error) => {
       try { this.adapter?.log?.debug?.(`[§14a direct API] background diagnostic failed: ${String(error)}`); } catch (_e) {}
     });
   }
 
-  async _ensureObjects() {
+  async _ensureObjects(): Promise<void> {
     const objects = {
       'para14a.api': { type: 'channel', common: { name: '§14a EEBUS direct API' }, native: {} },
       'para14a.api.version': stateObject('API version', 'number', 'value', false, 1),
@@ -996,15 +1067,15 @@ class Para14aEebusDirectApi {
     }
   }
 
-  async _writeDiagnostics(values) {
+  async _writeDiagnostics(values: AnyRecord): Promise<void> {
     for (const [id, value] of Object.entries(values || {})) {
       try { await this.adapter.setStateAsync(id, { val: value, ack: true }); } catch (_error) {}
     }
   }
 }
 
-function stateObject(name, type, role, write, def, unit) {
-  const common = { name, type, role, read: true, write: write === true, def };
+function stateObject(name: string, type: string, role: string, write: boolean, def: unknown, unit?: string): AnyRecord {
+  const common: AnyRecord = { name, type, role, read: true, write: write === true, def };
   if (unit) common.unit = unit;
   return { type: 'state', common, native: {} };
 }

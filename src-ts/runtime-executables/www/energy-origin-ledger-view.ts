@@ -1,3 +1,4 @@
+// @runtime-transpile
 /**
  * Executable TypeScript source: www/energy-origin-ledger-view.js
  *
@@ -7,21 +8,21 @@
  */
 (function () {
   'use strict';
-  const $ = (id) => document.getElementById(id);
+  const $ = (id: any) => document.getElementById(id);
   let activePeriod = 'recent';
   const locale = () => {
     const lang = document.documentElement.lang || navigator.language || 'de';
     return String(lang).toLowerCase().startsWith('nl') ? 'nl-NL' : 'de-DE';
   };
-  const fmtKwh = (v, digits = 3) => Number.isFinite(Number(v)) ? `${Number(v).toLocaleString(locale(), { minimumFractionDigits: digits, maximumFractionDigits: digits })} kWh` : '--';
-  const fmtPct = (v) => Number.isFinite(Number(v)) ? `${Number(v).toLocaleString(locale(), { maximumFractionDigits: 1 })} %` : '--';
-  const fmtTs = (v) => {
+  const fmtKwh = (v: any, digits: any = 3) => Number.isFinite(Number(v)) ? `${Number(v).toLocaleString(locale(), { minimumFractionDigits: digits, maximumFractionDigits: digits })} kWh` : '--';
+  const fmtPct = (v: any) => Number.isFinite(Number(v)) ? `${Number(v).toLocaleString(locale(), { maximumFractionDigits: 1 })} %` : '--';
+  const fmtTs = (v: any) => {
     const n = Number(v);
     if (!Number.isFinite(n) || n <= 0) return '--';
     try { return new Date(n).toLocaleString(locale()); } catch (_e) { return String(n); }
   };
-  function esc(v) { return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
-  function setText(id, value) { const el = $(id); if (el) el.textContent = value; }
+  function esc(v: any) { return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function setText(id: any, value: any) { const el = $(id); if (el) el.textContent = value; }
   function redirectToLive() {
     try { window.location.replace('/'); } catch (_e) { window.location.href = '/'; }
   }
@@ -39,56 +40,56 @@
       return false;
     }
   }
-  function get(obj, path, fallback = 0) {
+  function get(obj: any, path: any, fallback: any = 0) {
     let cur = obj;
     for (const key of path) cur = cur && typeof cur === 'object' ? cur[key] : undefined;
     return cur === undefined || cur === null ? fallback : cur;
   }
-  function unknownFor(row) {
+  function unknownFor(row: any) {
     const total = Number(get(row, ['evcs','totalKwh'], 0));
     const s = get(row, ['evcs','sourceBreakdown'], {});
-    const known = ['pvDirectKwh','otherRenewableDirectKwh','storedPvKwh','storedOtherRenewableKwh','gridDirectKwh','storedGridKwh'].reduce((a,k) => a + Number(s[k] || 0), 0);
+    const known = ['pvDirectKwh','otherRenewableDirectKwh','storedPvKwh','storedOtherRenewableKwh','gridDirectKwh','storedGridKwh'].reduce((a: any,k: any) => a + Number(s[k] || 0), 0);
     return Math.max(0, total - known);
   }
-  function renderMeterStatus(payload) {
+  function renderMeterStatus(payload: any) {
     const rows = payload && payload.meterStatus && Array.isArray(payload.meterStatus.rows) ? payload.meterStatus.rows : [];
     if (!rows.length) { setText('meterStatus', 'Keine Zähler zugeordnet.'); return; }
-    const valid = rows.filter(r => r.valid && r.fresh).length;
+    const valid = rows.filter((r: any) => r.valid && r.fresh).length;
     const html = `<div class="kv"><span>Frisch/gültig</span><span>${valid} / ${rows.length}</span><span>Stale-Grenze</span><span>${esc(payload.meterStatus.staleSeconds || '--')} s</span></div>` +
-      rows.map(r => `<span class="tag ${r.valid && r.fresh ? 'ok' : 'warn'}" title="${esc(r.dpId)}">${esc(r.role)}: ${r.valid && r.fresh ? 'OK' : (r.valid ? 'veraltet' : 'ungültig')}</span>`).join('');
+      rows.map((r: any) => `<span class="tag ${r.valid && r.fresh ? 'ok' : 'warn'}" title="${esc(r.dpId)}">${esc(r.role)}: ${r.valid && r.fresh ? 'OK' : (r.valid ? 'veraltet' : 'ungültig')}</span>`).join('');
     const el = $('meterStatus'); if (el) el.innerHTML = html;
   }
-  function renderInventory(payload) {
+  function renderInventory(payload: any) {
     const i = payload && payload.storageInventory ? payload.storageInventory : {};
     const html = `<div class="kv"><span>Gesamt</span><span>${fmtKwh(i.totalKwh || 0)}</span><span>PV</span><span>${fmtKwh(i.pvKwh || 0)}</span><span>Weitere EE</span><span>${fmtKwh(i.otherRenewableKwh || 0)}</span><span>Netz</span><span>${fmtKwh(i.gridKwh || 0)}</span><span>Unbekannt</span><span>${fmtKwh(i.unknownKwh || 0)}</span></div>`;
     const el = $('storageInventory'); if (el) el.innerHTML = html;
   }
-  function renderLast(payload) {
+  function renderLast(payload: any) {
     const row = payload && payload.lastInterval ? payload.lastInterval : {};
     if (!row || !row.startTs) { setText('lastInterval', 'Noch kein Intervall abgeschlossen.'); return; }
     const html = `<div class="kv"><span>Zeitraum</span><span>${fmtTs(row.startTs)} – ${fmtTs(row.endTs)}</span><span>Qualität</span><span>${esc(get(row,['quality','status'],'--'))}</span><span>Bilanzabweichung</span><span>${fmtKwh(get(row,['balance','imbalanceKwh'],0))}</span><span>Config-Hash</span><span class="code">${esc(row.configHash || '')}</span><span>Journal-Hash</span><span class="code">${esc(row.hash || '')}</span></div>`;
     const el = $('lastInterval'); if (el) el.innerHTML = html;
   }
-  function renderEvidence(payload) {
+  function renderEvidence(payload: any) {
     const row = payload && payload.lastInterval ? payload.lastInterval : {};
     const de = get(row,['evidence','de'],{});
     const nl = get(row,['evidence','nl'],{});
-    const reason = (x) => Array.isArray(x.reasonCodes) && x.reasonCodes.length ? x.reasonCodes.join(', ') : 'keine offenen technischen Gründe';
+    const reason = (x: any) => Array.isArray(x.reasonCodes) && x.reasonCodes.length ? x.reasonCodes.join(', ') : 'keine offenen technischen Gründe';
     const html = `<div class="kv"><span>Deutschland</span><span class="${de.ready ? 'ok' : 'warn'}">${de.ready ? 'Nachweiskandidat bereit' : 'nicht bereit'} · ${fmtKwh(de.eligibleRenewableKwh || 0)}</span><span>DE Gründe</span><span>${esc(reason(de))}</span><span>Nederland</span><span class="${nl.ready ? 'ok' : 'warn'}">${nl.ready ? 'ERE-kandidaat gereed' : 'niet gereed'} · ${fmtKwh(nl.eligibleRenewableKwh || 0)}</span><span>NL Gründe</span><span>${esc(reason(nl))}</span></div>`;
     const el = $('evidenceStatus'); if (el) el.innerHTML = html;
   }
-  function renderRows(rows) {
+  function renderRows(rows: any) {
     const body = $('ledgerRows');
     if (!body) return;
     const list = Array.isArray(rows) ? rows : [];
     if (!list.length) { body.innerHTML = '<tr><td colspan="13" class="muted">Noch keine abgeschlossenen Intervalle.</td></tr>'; return; }
-    body.innerHTML = list.slice(0, 2000).map(row => {
+    body.innerHTML = list.slice(0, 2000).map((row: any) => {
       const s = get(row,['evcs','sourceBreakdown'],{});
       const quality = get(row,['quality','status'],'--');
       return `<tr><td>${fmtTs(row.startTs)}<br><span class="muted">bis ${fmtTs(row.endTs)}</span></td><td class="${quality === 'complete' ? 'ok' : 'warn'}">${esc(quality)}</td><td>${fmtKwh(get(row,['evcs','totalKwh'],0))}</td><td>${fmtKwh(s.pvDirectKwh || 0)}</td><td>${fmtKwh(s.otherRenewableDirectKwh || 0)}</td><td>${fmtKwh(s.storedPvKwh || 0)}</td><td>${fmtKwh(s.storedOtherRenewableKwh || 0)}</td><td>${fmtKwh(s.gridDirectKwh || 0)}</td><td>${fmtKwh(s.storedGridKwh || 0)}</td><td>${fmtKwh(unknownFor(row))}</td><td>${get(row,['evidence','de','ready'],false) ? '✓' : '–'}</td><td>${get(row,['evidence','nl','ready'],false) ? '✓' : '–'}</td><td class="code">${esc(String(row.hash || '').slice(0,16))}…</td></tr>`;
     }).join('');
   }
-  function render(payload) {
+  function render(payload: any) {
     const s = payload.summary || {};
     const renewable = Number(s.operationalRenewableKwh || 0);
     const total = Number(s.evcsTotalKwh || 0);
@@ -105,8 +106,8 @@
     const bar = $('renewableBar'); if (bar) bar.style.width = `${Math.max(0, Math.min(100, share))}%`;
     setText('legalNote', payload.legalNote || 'Nachweiskandidat; keine automatische behördliche Anerkennung oder Vergütungszusage.');
     renderMeterStatus(payload); renderInventory(payload); renderLast(payload); renderEvidence(payload); renderRows(payload.intervals);
-    const json = $('jsonExport'); if (json) json.href = `/api/ledger/energy-origin.json?period=${encodeURIComponent(activePeriod)}`;
-    const csv = $('csvExport'); if (csv) csv.href = `/api/ledger/energy-origin.csv?period=${encodeURIComponent(activePeriod)}`;
+    const json = $('jsonExport') as HTMLAnchorElement | null; if (json) json.href = `/api/ledger/energy-origin.json?period=${encodeURIComponent(activePeriod)}`;
+    const csv = $('csvExport') as HTMLAnchorElement | null; if (csv) csv.href = `/api/ledger/energy-origin.csv?period=${encodeURIComponent(activePeriod)}`;
   }
   async function load() {
     setText('ledgerStatus', 'lade…');
@@ -121,18 +122,19 @@
         throw new Error((payload && payload.message) || 'Bilanz-API nicht verfügbar');
       }
       render(payload);
-    } catch (e) {
+    } catch (e: unknown) {
       setText('ledgerStatus', 'Fehler');
       const body = $('ledgerRows');
-      if (body) body.innerHTML = `<tr><td colspan="13" class="error">${esc(e && e.message ? e.message : e)}</td></tr>`;
+      const message = e instanceof Error ? e.message : String(e);
+      if (body) body.innerHTML = `<tr><td colspan="13" class="error">${esc(message)}</td></tr>`;
     }
   }
   document.addEventListener('DOMContentLoaded', async () => {
     if (!(await ensureFeatureAccess())) return;
     const btn = $('refreshLedger'); if (btn) btn.addEventListener('click', load);
-    document.querySelectorAll('[data-period]').forEach(button => button.addEventListener('click', () => {
+    document.querySelectorAll('[data-period]').forEach((button: any) => button.addEventListener('click', () => {
       activePeriod = String(button.getAttribute('data-period') || 'recent');
-      document.querySelectorAll('[data-period]').forEach(b => b.classList.toggle('active', b === button));
+      document.querySelectorAll('[data-period]').forEach((b: any) => b.classList.toggle('active', b === button));
       load();
     }));
     load();

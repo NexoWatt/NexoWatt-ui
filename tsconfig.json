@@ -3,7 +3,11 @@
   "compilerOptions": {
     "noEmit": true,
     "module": "NodeNext",
-    "moduleResolution": "nodenext"
+    "moduleResolution": "nodenext",
+    "lib": [
+      "ES2022",
+      "DOM"
+    ]
   },
   "include": [
     "src-ts/types/**/*.d.ts",

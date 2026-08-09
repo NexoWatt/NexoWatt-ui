@@ -1,3 +1,4 @@
+// @runtime-transpile
 /**
  * Executable TypeScript source: ems/services/energy-origin-accounting.js
  *
@@ -18,6 +19,8 @@
 
 const crypto = require('node:crypto');
 
+type AnyRecord = Record<string, any>;
+
 const ORIGIN_LEDGER_VERSION = 'nexowatt.energy-origin-ledger.v1';
 const ORIGIN_INTERVAL_VERSION = 'nexowatt.energy-origin-interval.v1';
 const ORIGIN_CONFIG_VERSION = 'nexowatt.energy-origin-config.v1';
@@ -31,23 +34,23 @@ const PRO_MAX_SITES = 50;
 const PRO_MAX_CHARGE_POINTS = 500;
 const EPS_KWH = 0.000001;
 
-function finiteNumber(value, fallback = 0) {
+function finiteNumber(value: any, fallback: any = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
 
-function clamp(value, min, max) {
+function clamp(value: any, min: any, max: any) {
   const n = finiteNumber(value, min);
   return Math.max(min, Math.min(max, n));
 }
 
-function round(value, digits = 6) {
+function round(value: any, digits: any = 6) {
   const n = finiteNumber(value, 0);
   const p = 10 ** Math.max(0, Math.min(9, Math.round(finiteNumber(digits, 0))));
   return Math.round(n * p) / p;
 }
 
-function safeId(input, fallback = 'item') {
+function safeId(input: any, fallback: any = 'item') {
   const text = String(input == null ? '' : input).trim().toLowerCase();
   return (text || fallback)
     .replace(/[^a-z0-9_-]+/g, '_')
@@ -55,48 +58,48 @@ function safeId(input, fallback = 'item') {
     .slice(0, 80) || fallback;
 }
 
-function normalizeEdition(raw) {
+function normalizeEdition(raw: any) {
   const e = String(raw || '').trim().toLowerCase();
   if (e === 'eos' || e === 'pro') return 'pro';
   if (e === 'hems' || e === 'home') return 'home';
   return 'none';
 }
 
-function stableClone(value) {
+function stableClone(value: any): any {
   if (Array.isArray(value)) return value.map(stableClone);
   if (!value || typeof value !== 'object') return value;
-  const out = {};
+  const out: AnyRecord = {};
   for (const key of Object.keys(value).sort()) out[key] = stableClone(value[key]);
   return out;
 }
 
-function canonicalJson(value) {
+function canonicalJson(value: any) {
   return JSON.stringify(stableClone(value));
 }
 
-function sha256Hex(value) {
+function sha256Hex(value: any) {
   return crypto.createHash('sha256').update(String(value == null ? '' : value), 'utf8').digest('hex');
 }
 
-function hashObject(value) {
+function hashObject(value: any) {
   return sha256Hex(canonicalJson(value));
 }
 
-function intervalBounds(ts, intervalMinutes = DEFAULT_INTERVAL_MINUTES) {
+function intervalBounds(ts: any, intervalMinutes: any = DEFAULT_INTERVAL_MINUTES) {
   const minutes = Math.max(1, Math.min(60, Math.round(finiteNumber(intervalMinutes, DEFAULT_INTERVAL_MINUTES))));
   const widthMs = minutes * 60 * 1000;
   const startTs = Math.floor(Math.max(0, finiteNumber(ts, Date.now())) / widthMs) * widthMs;
   return { startTs, endTs: startTs + widthMs, widthMs, intervalMinutes: minutes };
 }
 
-function normalizeUnit(raw) {
+function normalizeUnit(raw: any) {
   const u = String(raw || 'kWh').trim().toLowerCase().replace(/\s+/g, '');
   if (u === 'wh') return 'Wh';
   if (u === 'mwh') return 'MWh';
   return 'kWh';
 }
 
-function toKwh(value, unit = 'kWh', factor = 1) {
+function toKwh(value: any, unit: any = 'kWh', factor: any = 1) {
   const n = finiteNumber(value, NaN);
   if (!Number.isFinite(n)) return NaN;
   const u = normalizeUnit(unit);
@@ -104,7 +107,7 @@ function toKwh(value, unit = 'kWh', factor = 1) {
   return n * scale * finiteNumber(factor, 1);
 }
 
-function normalizeMeter(row, fallbackRole, index = 0) {
+function normalizeMeter(row: any, fallbackRole: any, index: any = 0) {
   const r = row && typeof row === 'object' ? row : {};
   const role = String(r.role || fallbackRole || '').trim();
   const dpId = String(r.dpId || r.objectId || r.id || '').trim();
@@ -129,7 +132,7 @@ function normalizeMeter(row, fallbackRole, index = 0) {
   };
 }
 
-function defaultRoleMeters(origin) {
+function defaultRoleMeters(origin: any) {
   const dp = origin && origin.dataPoints && typeof origin.dataPoints === 'object' ? origin.dataPoints : {};
   const units = origin && origin.units && typeof origin.units === 'object' ? origin.units : {};
   const metadata = origin && origin.meterMetadata && typeof origin.meterMetadata === 'object' ? origin.meterMetadata : {};
@@ -142,15 +145,15 @@ function defaultRoleMeters(origin) {
     ['storage-charge-energy', 'storageChargeEnergyKwh'],
     ['storage-discharge-energy', 'storageDischargeEnergyKwh'],
   ];
-  return roleMap.map(([role, key], index) => normalizeMeter({
+  return roleMap.map(([role, key]: any, index: any) => normalizeMeter({
     role,
     dpId: dp[key],
     unit: units[key] || 'kWh',
     ...(metadata[key] || {}),
-  }, role, index)).filter(m => m.enabled);
+  }, role, index)).filter((m: any) => m.enabled);
 }
 
-function normalizeChargePoint(row, index = 0) {
+function normalizeChargePoint(row: any, index: any = 0) {
   const r = row && typeof row === 'object' ? row : {};
   const id = safeId(r.id || r.key || r.lp || `lp${index + 1}`, `lp${index + 1}`);
   return {
@@ -175,7 +178,7 @@ function normalizeChargePoint(row, index = 0) {
   };
 }
 
-function normalizeOriginConfig(rawConfig, editionRaw = 'none') {
+function normalizeOriginConfig(rawConfig: any, editionRaw: any = 'none') {
   const root = rawConfig && typeof rawConfig === 'object' ? rawConfig : {};
   const origin = root.origin && typeof root.origin === 'object' ? root.origin : root;
   const edition = normalizeEdition(editionRaw);
@@ -184,9 +187,9 @@ function normalizeOriginConfig(rawConfig, editionRaw = 'none') {
   const evidence = origin.evidence && typeof origin.evidence === 'object' ? origin.evidence : {};
   const storage = origin.storage && typeof origin.storage === 'object' ? origin.storage : {};
   const rawChargePoints = Array.isArray(origin.chargePoints) ? origin.chargePoints : [];
-  const chargePoints = rawChargePoints.map(normalizeChargePoint).filter(row => row.enabled).slice(0, maxChargePoints || 0);
+  const chargePoints = rawChargePoints.map(normalizeChargePoint).filter((row: any) => row.enabled).slice(0, maxChargePoints || 0);
   const roleMeters = defaultRoleMeters(origin);
-  const extraMeters = (Array.isArray(origin.meters) ? origin.meters : []).map(normalizeMeter).filter(m => m.enabled);
+  const extraMeters = (Array.isArray(origin.meters) ? origin.meters : []).map(normalizeMeter).filter((m: any) => m.enabled);
   const meterByKey = new Map();
   for (const meter of [...roleMeters, ...extraMeters]) meterByKey.set(`${meter.role}:${meter.chargePointId || ''}:${meter.dpId}`, meter);
   for (const cp of chargePoints) {
@@ -222,7 +225,7 @@ function normalizeOriginConfig(rawConfig, editionRaw = 'none') {
   const siteName = String(origin.siteName || 'Standort 1');
   const country = String(origin.country || evidence.country || 'auto').trim().toUpperCase();
   const operatorType = String(evidence.operatorType || 'business').trim().toLowerCase();
-  const config = {
+  const config: AnyRecord = {
     schema: ORIGIN_CONFIG_VERSION,
     enabled: origin.enabled === true,
     edition,
@@ -239,7 +242,7 @@ function normalizeOriginConfig(rawConfig, editionRaw = 'none') {
     meters: Array.from(meterByKey.values()),
     chargePoints,
     storage: {
-      enabled: storage.enabled !== false && (!!roleMeters.find(m => m.role === 'storage-charge-energy') || !!roleMeters.find(m => m.role === 'storage-discharge-energy')),
+      enabled: storage.enabled !== false && (!!roleMeters.find((m: any) => m.role === 'storage-charge-energy') || !!roleMeters.find((m: any) => m.role === 'storage-discharge-energy')),
       chargeEfficiencyPct: clamp(storage.chargeEfficiencyPct ?? 95, 50, 100),
       dischargeEfficiencyPct: clamp(storage.dischargeEfficiencyPct ?? 95, 50, 100),
       exclusiveRenewableChargingDeclared: storage.exclusiveRenewableChargingDeclared === true,
@@ -265,7 +268,7 @@ function normalizeOriginConfig(rawConfig, editionRaw = 'none') {
   return config;
 }
 
-function emptyStorageInventory(config = {}) {
+function emptyStorageInventory(config: any = {}) {
   const initial = Math.max(0, finiteNumber(config.initialInventoryKwh, 0));
   const pvShare = clamp(config.initialPvSharePct ?? 0, 0, 100) / 100;
   const pv = round(initial * pvShare, 6);
@@ -280,7 +283,7 @@ function emptyStorageInventory(config = {}) {
   };
 }
 
-function normalizeInventory(raw, config = {}) {
+function normalizeInventory(raw: any, config: any = {}) {
   const fallback = emptyStorageInventory(config);
   const r = raw && typeof raw === 'object' ? raw : fallback;
   const out = {
@@ -296,7 +299,7 @@ function normalizeInventory(raw, config = {}) {
   return out;
 }
 
-function meterSampleFromState(meter, state, now = Date.now()) {
+function meterSampleFromState(meter: any, state: any, now: any = Date.now()) {
   const st = state && typeof state === 'object' ? state : {};
   const raw = st.val;
   const valueKwh = toKwh(raw, meter.unit, meter.factor);
@@ -317,7 +320,7 @@ function meterSampleFromState(meter, state, now = Date.now()) {
   };
 }
 
-function interpolateCumulativeSample(previous, current, boundaryTs) {
+function interpolateCumulativeSample(previous: any, current: any, boundaryTs: any) {
   const p = previous && previous.valid ? previous : null;
   const c = current && current.valid ? current : null;
   if (!p && !c) return null;
@@ -331,7 +334,7 @@ function interpolateCumulativeSample(previous, current, boundaryTs) {
   return { ...p, valueKwh: p.valueKwh + delta * ratio, ts: boundaryTs, interpolated: true };
 }
 
-function deltaFromSamples(start, end) {
+function deltaFromSamples(start: any, end: any) {
   if (!start || !end || !start.valid || !end.valid) return { valid: false, deltaKwh: 0, reason: 'missing-sample' };
   const delta = finiteNumber(end.valueKwh, NaN) - finiteNumber(start.valueKwh, NaN);
   if (!Number.isFinite(delta)) return { valid: false, deltaKwh: 0, reason: 'invalid-number' };
@@ -339,17 +342,17 @@ function deltaFromSamples(start, end) {
   return { valid: true, deltaKwh: Math.max(0, round(delta, 6)), reason: delta < 0 ? 'rounding' : 'ok' };
 }
 
-function splitProportional(total, weights) {
+function splitProportional(total: any, weights: any) {
   const amount = Math.max(0, finiteNumber(total, 0));
   const rows = Array.isArray(weights) ? weights : [];
-  const sum = rows.reduce((acc, row) => acc + Math.max(0, finiteNumber(row.weight, 0)), 0);
-  const out = {};
+  const sum = rows.reduce((acc: any, row: any) => acc + Math.max(0, finiteNumber(row.weight, 0)), 0);
+  const out: AnyRecord = {};
   if (amount <= EPS_KWH || sum <= EPS_KWH) {
     for (const row of rows) out[row.id] = 0;
     return out;
   }
   let assigned = 0;
-  rows.forEach((row, index) => {
+  rows.forEach((row: any, index: any) => {
     const part = index === rows.length - 1 ? amount - assigned : amount * Math.max(0, finiteNumber(row.weight, 0)) / sum;
     out[row.id] = Math.max(0, round(part, 6));
     assigned += out[row.id];
@@ -357,7 +360,7 @@ function splitProportional(total, weights) {
   return out;
 }
 
-function withdrawStorage(inventoryRaw, dischargeKwh, efficiencyPct) {
+function withdrawStorage(inventoryRaw: any, dischargeKwh: any, efficiencyPct: any) {
   const inventory = normalizeInventory(inventoryRaw);
   const delivered = Math.max(0, finiteNumber(dischargeKwh, 0));
   const eff = clamp(efficiencyPct, 50, 100) / 100;
@@ -378,7 +381,7 @@ function withdrawStorage(inventoryRaw, dischargeKwh, efficiencyPct) {
     storedGridKwh: round((removed.gridKwh || 0) * deliveredScale, 6),
     storedUnknownKwh: round((removed.unknownKwh || 0) * deliveredScale, 6),
   };
-  const deliveredKnown = Object.values(sources).reduce((a, b) => a + finiteNumber(b, 0), 0);
+  const deliveredKnown = Object.values(sources).reduce((a: any, b: any) => a + finiteNumber(b, 0), 0);
   if (deliveredKnown < delivered - EPS_KWH) sources.storedUnknownKwh = round(sources.storedUnknownKwh + (delivered - deliveredKnown), 6);
   const next = {
     ...inventory,
@@ -391,12 +394,12 @@ function withdrawStorage(inventoryRaw, dischargeKwh, efficiencyPct) {
   return { inventory: next, deliveredSources: sources, requiredStoredKwh: round(requiredStored, 6), withdrawnStoredKwh: round(withdraw, 6) };
 }
 
-function addStorageCharge(inventoryRaw, chargeSources, chargeKwh, efficiencyPct) {
+function addStorageCharge(inventoryRaw: any, chargeSources: any, chargeKwh: any, efficiencyPct: any) {
   const inventory = normalizeInventory(inventoryRaw);
   const totalCharge = Math.max(0, finiteNumber(chargeKwh, 0));
   const eff = clamp(efficiencyPct, 50, 100) / 100;
   const storedTotal = totalCharge * eff;
-  const sourceTotal = Object.values(chargeSources || {}).reduce((a, b) => a + Math.max(0, finiteNumber(b, 0)), 0);
+  const sourceTotal = (Object.values(chargeSources || {}) as any[]).reduce((a: number, b: any) => a + Math.max(0, finiteNumber(b, 0)), 0);
   const ratio = sourceTotal > EPS_KWH ? storedTotal / sourceTotal : 0;
   const addedPv = Math.max(0, finiteNumber(chargeSources && chargeSources.pvKwh, 0)) * ratio;
   const addedOther = Math.max(0, finiteNumber(chargeSources && chargeSources.otherRenewableKwh, 0)) * ratio;
@@ -417,9 +420,9 @@ function addStorageCharge(inventoryRaw, chargeSources, chargeKwh, efficiencyPct)
   return { inventory: next, storedAddedKwh: round(storedTotal, 6), lossesKwh: round(totalCharge - storedTotal, 6) };
 }
 
-function roleDeltaMap(meters, startSamples, endSamples) {
-  const byRole = {};
-  const meterResults = [];
+function roleDeltaMap(meters: any, startSamples: any, endSamples: any) {
+  const byRole: AnyRecord = {};
+  const meterResults: AnyRecord[] = [];
   for (const meter of meters || []) {
     const start = startSamples && startSamples[meter.id];
     const end = endSamples && endSamples[meter.id];
@@ -447,11 +450,11 @@ function roleDeltaMap(meters, startSamples, endSamples) {
   return { byRole, meterResults };
 }
 
-function sumValid(rows) {
-  return round((Array.isArray(rows) ? rows : []).reduce((acc, row) => acc + (row && row.valid ? Math.max(0, finiteNumber(row.deltaKwh, 0)) : 0), 0), 6);
+function sumValid(rows: any) {
+  return round((Array.isArray(rows) ? rows : []).reduce((acc: any, row: any) => acc + (row && row.valid ? Math.max(0, finiteNumber(row.deltaKwh, 0)) : 0), 0), 6);
 }
 
-function sourcePoolForDirectLoads({ pvKwh, otherRenewableKwh, gridKwh, storageSources, directDemandKwh, storageChargeKwh, gridExportKwh, allocationMethod }) {
+function sourcePoolForDirectLoads({ pvKwh, otherRenewableKwh, gridKwh, storageSources, directDemandKwh, storageChargeKwh, gridExportKwh, allocationMethod }: any) {
   const directDemand = Math.max(0, finiteNumber(directDemandKwh, 0));
   const storageCharge = Math.max(0, finiteNumber(storageChargeKwh, 0));
   const pvAvailable = Math.max(0, finiteNumber(pvKwh, 0));
@@ -462,16 +465,16 @@ function sourcePoolForDirectLoads({ pvKwh, otherRenewableKwh, gridKwh, storageSo
   // bleibt als Bilanzabweichung sichtbar und wird nicht als EVCS-EE erfunden.
   const renewableAvailable = Math.max(0, renewableGeneration - Math.max(0, finiteNumber(gridExportKwh, 0)));
 
-  const storageRaw = {
+  const storageRaw: AnyRecord = {
     storedPvKwh: Math.max(0, finiteNumber(storageSources && storageSources.storedPvKwh, 0)),
     storedOtherRenewableKwh: Math.max(0, finiteNumber(storageSources && storageSources.storedOtherRenewableKwh, 0)),
     storedGridKwh: Math.max(0, finiteNumber(storageSources && storageSources.storedGridKwh, 0)),
     storedUnknownKwh: Math.max(0, finiteNumber(storageSources && storageSources.storedUnknownKwh, 0)),
   };
-  const storageDelivered = Object.values(storageRaw).reduce((a, b) => a + b, 0);
+  const storageDelivered = Object.values(storageRaw).reduce((a: any, b: any) => a + b, 0);
   const storageToDirect = Math.min(directDemand, storageDelivered);
   const storageScale = storageDelivered > EPS_KWH ? storageToDirect / storageDelivered : 0;
-  const storageDirect = Object.fromEntries(Object.entries(storageRaw).map(([key, value]) => [key, round(value * storageScale, 6)]));
+  const storageDirect: AnyRecord = Object.fromEntries(Object.entries(storageRaw).map(([key, value]: [string, any]) => [key, round(value * storageScale, 6)]));
   const remainingDirect = Math.max(0, directDemand - storageToDirect);
 
   let renewableToDirect = 0;
@@ -509,7 +512,7 @@ function sourcePoolForDirectLoads({ pvKwh, otherRenewableKwh, gridKwh, storageSo
   const storageGrid = Math.min(Math.max(0, storageCharge - renewableToStorage), gridRemaining);
   const storageUnknown = Math.max(0, storageCharge - renewableToStorage - storageGrid);
 
-  const direct = {
+  const direct: AnyRecord = {
     pvDirectKwh: round(directPv, 6),
     otherRenewableDirectKwh: round(directOther, 6),
     gridDirectKwh: round(directGrid, 6),
@@ -519,7 +522,7 @@ function sourcePoolForDirectLoads({ pvKwh, otherRenewableKwh, gridKwh, storageSo
   // Numerische Rundung darf die direkte Quellensumme nie über den gemessenen
   // direkten Bedarf drücken. Eine kleine Restdifferenz wird konservativ als
   // unbekannt ausgewiesen.
-  const directAssigned = Object.values(direct).reduce((a, b) => a + Math.max(0, finiteNumber(b, 0)), 0);
+  const directAssigned = (Object.values(direct) as any[]).reduce((a: number, b: any) => a + Math.max(0, finiteNumber(b, 0)), 0);
   if (directAssigned < directDemand - EPS_KWH) direct.unknownDirectKwh = round(direct.unknownDirectKwh + (directDemand - directAssigned), 6);
 
   return {
@@ -534,20 +537,20 @@ function sourcePoolForDirectLoads({ pvKwh, otherRenewableKwh, gridKwh, storageSo
   };
 }
 
-function allocateSourcesToLoads(sourcePool, loads, allocationMethod = 'proportional') {
-  const rows = Array.isArray(loads) ? loads.filter(row => finiteNumber(row.kwh, 0) > EPS_KWH) : [];
-  const result = {};
-  const remaining = {};
+function allocateSourcesToLoads(sourcePool: any, loads: any, allocationMethod: any = 'proportional') {
+  const rows = Array.isArray(loads) ? loads.filter((row: any) => finiteNumber(row.kwh, 0) > EPS_KWH) : [];
+  const result: AnyRecord = {};
+  const remaining: AnyRecord = {};
   for (const load of rows) {
     result[load.id] = {};
     remaining[load.id] = Math.max(0, finiteNumber(load.kwh, 0));
   }
-  const assignByWeights = (source, amount, selectedRows) => {
-    const eligible = selectedRows.filter(row => remaining[row.id] > EPS_KWH);
+  const assignByWeights = (source: string, amount: any, selectedRows: AnyRecord[]): number => {
+    const eligible = selectedRows.filter((row: any) => remaining[row.id] > EPS_KWH);
     let left = Math.max(0, finiteNumber(amount, 0));
-    while (left > EPS_KWH && eligible.some(row => remaining[row.id] > EPS_KWH)) {
-      const active = eligible.filter(row => remaining[row.id] > EPS_KWH);
-      const parts = splitProportional(left, active.map(row => ({ id: row.id, weight: remaining[row.id] })));
+    while (left > EPS_KWH && eligible.some((row: any) => remaining[row.id] > EPS_KWH)) {
+      const active = eligible.filter((row: any) => remaining[row.id] > EPS_KWH);
+      const parts = splitProportional(left, active.map((row: any) => ({ id: row.id, weight: remaining[row.id] })));
       let assignedRound = 0;
       for (const row of active) {
         const part = Math.min(remaining[row.id], Math.max(0, finiteNumber(parts[row.id], 0)));
@@ -561,8 +564,8 @@ function allocateSourcesToLoads(sourcePool, loads, allocationMethod = 'proportio
     }
     return left;
   };
-  const buildingRows = rows.filter(row => row.id === '__building__');
-  const evcsRows = rows.filter(row => row.id !== '__building__');
+  const buildingRows = rows.filter((row: any) => row.id === '__building__');
+  const evcsRows = rows.filter((row: any) => row.id !== '__building__');
   const renewableKeys = new Set(['pvDirectKwh', 'otherRenewableDirectKwh', 'storedPvKwh', 'storedOtherRenewableKwh']);
   const unknownKeys = new Set(['unknownDirectKwh', 'storedUnknownKwh']);
 
@@ -596,12 +599,12 @@ function allocateSourcesToLoads(sourcePool, loads, allocationMethod = 'proportio
   return result;
 }
 
-function evaluateEvidence(config, meterResults, evcsBreakdown, quality) {
+function evaluateEvidence(config: any, meterResults: any, evcsBreakdown: any, quality: any) {
   const evidence = config.evidence || {};
   const chargePoints = config.chargePoints || [];
-  const publicCps = chargePoints.filter(cp => cp.publiclyAccessible);
-  const allCpMetersValid = publicCps.length > 0 && publicCps.every(cp => {
-    const row = meterResults.find(m => m.role === 'evcs-delivery-energy' && m.chargePointId === cp.id);
+  const publicCps = chargePoints.filter((cp: any) => cp.publiclyAccessible);
+  const allCpMetersValid = publicCps.length > 0 && publicCps.every((cp: any) => {
+    const row = meterResults.find((m: any) => m.role === 'evcs-delivery-energy' && m.chargePointId === cp.id);
     return !!(row && row.valid && cp.meteringComplianceDeclared);
   });
   const common = {
@@ -679,10 +682,10 @@ function evaluateEvidence(config, meterResults, evcsBreakdown, quality) {
   };
 }
 
-function buildQuality(config, meterResults, balance) {
+function buildQuality(config: any, meterResults: any, balance: any) {
   const requiredRoles = ['grid-import-energy', 'grid-export-energy', 'pv-generation-energy', 'evcs-delivery-energy'];
-  const missingRoles = requiredRoles.filter(role => !(meterResults || []).some(row => row.role === role && row.valid));
-  const invalidMeters = (meterResults || []).filter(row => !row.valid).map(row => ({ meterId: row.meterId, role: row.role, reason: row.reason }));
+  const missingRoles = requiredRoles.filter((role: any) => !(meterResults || []).some((row: any) => row.role === role && row.valid));
+  const invalidMeters = (meterResults || []).filter((row: any) => !row.valid).map((row: any) => ({ meterId: row.meterId, role: row.role, reason: row.reason }));
   const imbalanceAbs = Math.abs(finiteNumber(balance.imbalanceKwh, 0));
   const total = Math.max(EPS_KWH, finiteNumber(balance.supplyKwh, 0), finiteNumber(balance.useKwh, 0));
   const imbalancePct = imbalanceAbs / total * 100;
@@ -700,7 +703,7 @@ function buildQuality(config, meterResults, balance) {
   };
 }
 
-function calculateOriginInterval({ config: rawConfig, startSamples, endSamples, storageInventory, previousHash = '', startTs, endTs, edition }) {
+function calculateOriginInterval({ config: rawConfig, startSamples, endSamples, storageInventory, previousHash = '', startTs, endTs, edition }: any) {
   const config = rawConfig && rawConfig.schema === ORIGIN_CONFIG_VERSION ? rawConfig : normalizeOriginConfig(rawConfig, edition);
   const { byRole, meterResults } = roleDeltaMap(config.meters, startSamples, endSamples);
   const gridImportKwh = sumValid(byRole['grid-import-energy']);
@@ -710,10 +713,10 @@ function calculateOriginInterval({ config: rawConfig, startSamples, endSamples, 
   const buildingMeasuredKwh = sumValid(byRole['building-load-energy']);
   const storageChargeKwh = sumValid(byRole['storage-charge-energy']);
   const storageDischargeKwh = sumValid(byRole['storage-discharge-energy']);
-  const chargePointConfigById = new Map((config.chargePoints || []).map(cp => [String(cp.id || ''), cp]));
-  const evcsRows = (byRole['evcs-delivery-energy'] || []).filter(row => row.valid).map(row => {
+  const chargePointConfigById = new Map<string, AnyRecord>((config.chargePoints || []).map((cp: any) => [String(cp.id || ''), cp]));
+  const evcsRows = (byRole['evcs-delivery-energy'] || []).filter((row: any) => row.valid).map((row: any) => {
     const chargePointId = row.chargePointId || row.meterId;
-    const cp = chargePointConfigById.get(String(chargePointId)) || {};
+    const cp: AnyRecord = chargePointConfigById.get(String(chargePointId)) || {};
     return {
       id: chargePointId,
       chargePointId,
@@ -731,7 +734,7 @@ function calculateOriginInterval({ config: rawConfig, startSamples, endSamples, 
       operatorId: String(cp.operatorId || ''),
     };
   });
-  const evcsTotalKwh = round(evcsRows.reduce((acc, row) => acc + row.kwh, 0), 6);
+  const evcsTotalKwh = round(evcsRows.reduce((acc: any, row: any) => acc + row.kwh, 0), 6);
   const storageWithdrawal = withdrawStorage(storageInventory, storageDischargeKwh, config.storage.dischargeEfficiencyPct);
   const storageSources = storageWithdrawal.deliveredSources;
   const supplyKwh = round(gridImportKwh + pvGenerationKwh + otherRenewableKwh + storageDischargeKwh, 6);
@@ -749,10 +752,10 @@ function calculateOriginInterval({ config: rawConfig, startSamples, endSamples, 
     gridExportKwh,
     allocationMethod: config.allocationMethod,
   });
-  const loadRows = [{ id: '__building__', kwh: buildingKwh }, ...evcsRows.map(row => ({ id: row.chargePointId, kwh: row.kwh }))];
+  const loadRows = [{ id: '__building__', kwh: buildingKwh }, ...evcsRows.map((row: any) => ({ id: row.chargePointId, kwh: row.kwh }))];
   const allocations = allocateSourcesToLoads(pools.direct, loadRows, config.allocationMethod);
-  const evcsBreakdown = {};
-  const chargePointBreakdown = [];
+  const evcsBreakdown: AnyRecord = {};
+  const chargePointBreakdown: AnyRecord[] = [];
   for (const row of evcsRows) {
     const sources = allocations[row.chargePointId] || { unknownDirectKwh: row.kwh };
     chargePointBreakdown.push({
@@ -787,7 +790,7 @@ function calculateOriginInterval({ config: rawConfig, startSamples, endSamples, 
   };
   const quality = buildQuality(config, meterResults, balance);
   const evidence = evaluateEvidence(config, meterResults, evcsBreakdown, quality);
-  const payload = {
+  const payload: AnyRecord = {
     schema: ORIGIN_INTERVAL_VERSION,
     ledgerVersion: ORIGIN_LEDGER_VERSION,
     siteId: config.siteId,
@@ -836,17 +839,17 @@ function calculateOriginInterval({ config: rawConfig, startSamples, endSamples, 
   return { interval: payload, storageInventory: chargeResult.inventory };
 }
 
-function aggregateIntervals(intervals) {
+function aggregateIntervals(intervals: any) {
   const rows = Array.isArray(intervals) ? intervals : [];
-  const sum = (selector) => round(rows.reduce((acc, row) => acc + finiteNumber(selector(row), 0), 0), 6);
-  const evcsTotalKwh = sum(row => row && row.evcs && row.evcs.totalKwh);
-  const localRenewableKwh = sum(row => row && row.evcs && row.evcs.sourceBreakdown && (
+  const sum = (selector: any) => round(rows.reduce((acc: any, row: any) => acc + finiteNumber(selector(row), 0), 0), 6);
+  const evcsTotalKwh = sum((row: any) => row && row.evcs && row.evcs.totalKwh);
+  const localRenewableKwh = sum((row: any) => row && row.evcs && row.evcs.sourceBreakdown && (
     finiteNumber(row.evcs.sourceBreakdown.pvDirectKwh, 0)
       + finiteNumber(row.evcs.sourceBreakdown.otherRenewableDirectKwh, 0)
       + finiteNumber(row.evcs.sourceBreakdown.storedPvKwh, 0)
       + finiteNumber(row.evcs.sourceBreakdown.storedOtherRenewableKwh, 0)
   ));
-  const gridKwh = sum(row => row && row.evcs && row.evcs.sourceBreakdown && (
+  const gridKwh = sum((row: any) => row && row.evcs && row.evcs.sourceBreakdown && (
     finiteNumber(row.evcs.sourceBreakdown.gridDirectKwh, 0)
       + finiteNumber(row.evcs.sourceBreakdown.storedGridKwh, 0)
   ));
@@ -854,14 +857,14 @@ function aggregateIntervals(intervals) {
   return {
     schema: 'nexowatt.energy-origin-summary.v1',
     intervalCount: rows.length,
-    validIntervalCount: rows.filter(row => row && row.quality && row.quality.status === 'complete').length,
+    validIntervalCount: rows.filter((row: any) => row && row.quality && row.quality.status === 'complete').length,
     evcsTotalKwh,
     localRenewableKwh,
     gridKwh,
     unknownKwh,
     renewableSharePct: evcsTotalKwh > EPS_KWH ? round(localRenewableKwh / evcsTotalKwh * 100, 2) : 0,
-    deCandidateRenewableKwh: sum(row => row && row.evidence && row.evidence.de && row.evidence.de.eligibleRenewableKwh),
-    nlCandidateRenewableKwh: sum(row => row && row.evidence && row.evidence.nl && row.evidence.nl.eligibleRenewableKwh),
+    deCandidateRenewableKwh: sum((row: any) => row && row.evidence && row.evidence.de && row.evidence.de.eligibleRenewableKwh),
+    nlCandidateRenewableKwh: sum((row: any) => row && row.evidence && row.evidence.nl && row.evidence.nl.eligibleRenewableKwh),
     hashHead: rows.length ? String(rows[0].hash || '') : '',
   };
 }

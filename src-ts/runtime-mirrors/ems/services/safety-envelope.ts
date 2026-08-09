@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 67d16cc952a06e5acc0102ffc8957d08c219e98c1659c5f89d8a1087ece9664c
+ * Original-Hash: 8a75f4131d2922a0890bb64db677a0168a12ad373fd12370f8afe50fa433b7c1
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/safety-envelope.ts
- * Quell-Hash: sha256:ce78f8ff07e0fe3df032d78aa6ec3340dbf6a50ed2c633a255c96bee6b2786ec
+ * Quell-Hash: sha256:6f9b3fdd9ba931c149883997da8d36967d4fce1f1e82e2c06818edc5cfb1393c
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -47,7 +47,6 @@
  * 3. npm run test:runtime-executables prüfen.
  */
 'use strict';
-
 /**
  * Zentrale, fail-closed Sicherheitsfreigabe fuer alle flexiblen Verbraucher.
  *
@@ -60,14 +59,11 @@
  *   Schreiben erneut. Ein alter Plan kann dadurch keine aktuelle Grenze umgehen.
  * - 0 W / AUS bleibt auch bei ungueltigem Envelope immer schreibbar.
  */
-
 const { resolveCurrentNvpSnapshot } = require('./measurement-freshness');
-
 const SCHEMA_VERSION = 1;
 const DEFAULT_NVP_STALE_MS = 30000;
 const DEFAULT_ENVELOPE_MAX_AGE_MS = 5000;
 const DEFAULT_VOLTAGE_V = 230;
-
 /**
  * Code-Teil: strictFiniteNumber
  *
@@ -80,13 +76,15 @@ const DEFAULT_VOLTAGE_V = 230;
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function strictFiniteNumber(value, fallback = null) {
-    if (value === null || value === undefined) return fallback;
-    if (typeof value === 'string' && !value.trim()) return fallback;
-    if (typeof value === 'boolean') return fallback;
+    if (value === null || value === undefined)
+        return fallback;
+    if (typeof value === 'string' && !value.trim())
+        return fallback;
+    if (typeof value === 'boolean')
+        return fallback;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
 }
-
 /**
  * Code-Teil: nonNegative
  *
@@ -102,7 +100,6 @@ function nonNegative(value, fallback = 0) {
     const parsed = strictFiniteNumber(value, null);
     return parsed === null ? fallback : Math.max(0, parsed);
 }
-
 /**
  * Code-Teil: clamp
  *
@@ -116,10 +113,10 @@ function nonNegative(value, fallback = 0) {
  */
 function clamp(value, min, max, fallback) {
     const parsed = strictFiniteNumber(value, null);
-    if (parsed === null) return fallback;
+    if (parsed === null)
+        return fallback;
     return Math.min(max, Math.max(min, parsed));
 }
-
 /**
  * Code-Teil: boolValue
  *
@@ -132,11 +129,12 @@ function clamp(value, min, max, fallback) {
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function boolValue(value, fallback = false) {
-    if (value === true || value === 1 || value === '1' || value === 'true') return true;
-    if (value === false || value === 0 || value === '0' || value === 'false') return false;
+    if (value === true || value === 1 || value === '1' || value === 'true')
+        return true;
+    if (value === false || value === 0 || value === '0' || value === 'false')
+        return false;
     return fallback;
 }
-
 /**
  * Code-Teil: resolveSafetyConfig
  *
@@ -157,23 +155,15 @@ function resolveSafetyConfig(adapter) {
     // Der bisherige EVCS-Diagnosewert `staleTimeoutSec` kann in Bestandsanlagen
     // 300 s betragen. Er darf die harte Anschluss-Sicherheitskette nicht auf fünf
     // Minuten aufweichen. Dafür gibt es einen eigenen, konservativen Timeout.
-    const staleTimeoutSec = clamp(
-        installer.safetyMeterTimeoutSec
+    const staleTimeoutSec = clamp(installer.safetyMeterTimeoutSec
         ?? cm.safetyMeterTimeoutSec
-        ?? safety.meterTimeoutSec,
-        5,
-        120,
-        30,
-    );
+        ?? safety.meterTimeoutSec, 5, 120, 30);
     const envelopeMaxAgeSec = clamp(cm.safetyEnvelopeMaxAgeSec, 1, 30, 5);
-    const gridPhaseCount = Math.max(1, Math.min(3, Math.round(strictFiniteNumber(
-        installer.gridPhaseCount
+    const gridPhaseCount = Math.max(1, Math.min(3, Math.round(strictFiniteNumber(installer.gridPhaseCount
         ?? installer.gridConnectionPhaseCount
         ?? installer.gridConnectionPhases
         ?? peak.phaseCount
-        ?? 3,
-        3,
-    ))));
+        ?? 3, 3))));
     return {
         staleMs: Math.round(staleTimeoutSec * 1000),
         envelopeMaxAgeMs: Math.round(envelopeMaxAgeSec * 1000),
@@ -183,7 +173,6 @@ function resolveSafetyConfig(adapter) {
         diagnosticsOnly: cm.safetyDiagnosticsOnly === true || cm.simulationMode === true,
     };
 }
-
 /**
  * Code-Teil: emptyEnvelope
  *
@@ -242,7 +231,6 @@ function emptyEnvelope(generation, now, reason = 'cycle-not-authorized') {
         moduleHealth: {},
     };
 }
-
 /**
  * Code-Teil: ensureCycle
  *
@@ -255,12 +243,12 @@ function emptyEnvelope(generation, now, reason = 'cycle-not-authorized') {
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function ensureCycle(adapter, generation = 0, now = Date.now()) {
-    if (!adapter) return null;
     const requestedGeneration = Math.max(0, Math.round(Number(generation) || 0));
     const current = adapter._emsSafetyCycle && typeof adapter._emsSafetyCycle === 'object'
         ? adapter._emsSafetyCycle
         : null;
-    if (current && Number(current.generation) === requestedGeneration) return current;
+    if (current && Number(current.generation) === requestedGeneration)
+        return current;
     adapter._emsSafetyCycle = {
         generation: requestedGeneration,
         startedAt: now,
@@ -270,7 +258,6 @@ function ensureCycle(adapter, generation = 0, now = Date.now()) {
     };
     return adapter._emsSafetyCycle;
 }
-
 /**
  * Code-Teil: beginSafetyCycle
  *
@@ -283,7 +270,8 @@ function ensureCycle(adapter, generation = 0, now = Date.now()) {
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function beginSafetyCycle(adapter, generation, now = Date.now()) {
-    if (!adapter) return null;
+    if (!adapter)
+        return null;
     const cycle = ensureCycle(adapter, generation, now);
     adapter._nwSafetyEnvelopeRequired = true;
     adapter._emsSafetyReservations = {
@@ -299,7 +287,6 @@ function beginSafetyCycle(adapter, generation, now = Date.now()) {
     adapter._nwSafetyEnvelope = envelope;
     return envelope;
 }
-
 /**
  * Code-Teil: markSafetyModuleStarted
  *
@@ -312,7 +299,8 @@ function beginSafetyCycle(adapter, generation, now = Date.now()) {
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function markSafetyModuleStarted(adapter, key, generation, now = Date.now()) {
-    if (!adapter) return;
+    if (!adapter)
+        return;
     const cycle = ensureCycle(adapter, generation, now);
     cycle.moduleHealth[String(key || 'unknown')] = {
         ok: null,
@@ -321,7 +309,6 @@ function markSafetyModuleStarted(adapter, key, generation, now = Date.now()) {
         error: '',
     };
 }
-
 /**
  * Code-Teil: markSafetyModuleResult
  *
@@ -334,7 +321,8 @@ function markSafetyModuleStarted(adapter, key, generation, now = Date.now()) {
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function markSafetyModuleResult(adapter, key, ok, error = '', generation, now = Date.now()) {
-    if (!adapter) return;
+    if (!adapter)
+        return;
     const cycle = ensureCycle(adapter, generation ?? adapter?._emsSafetyCycle?.generation ?? 0, now);
     const moduleKey = String(key || 'unknown');
     cycle.moduleHealth[moduleKey] = {
@@ -356,7 +344,6 @@ function markSafetyModuleResult(adapter, key, ok, error = '', generation, now = 
         }
     }
 }
-
 /**
  * Code-Teil: invalidateSafetyEnvelope
  *
@@ -369,7 +356,8 @@ function markSafetyModuleResult(adapter, key, ok, error = '', generation, now = 
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function invalidateSafetyEnvelope(adapter, reason, options = {}) {
-    if (!adapter) return null;
+    if (!adapter)
+        return null;
     const now = Number(options.now) || Date.now();
     const generation = Math.max(0, Math.round(Number(options.generation ?? adapter?._emsSafetyCycle?.generation ?? 0) || 0));
     const previous = adapter._emsSafetyEnvelope && typeof adapter._emsSafetyEnvelope === 'object'
@@ -378,11 +366,14 @@ function invalidateSafetyEnvelope(adapter, reason, options = {}) {
     const text = String(reason || 'safety-invalid');
     const cycle = ensureCycle(adapter, generation, now);
     if (options.latch !== false) {
-        if (!Array.isArray(cycle.safetyFaults)) cycle.safetyFaults = [];
-        if (!cycle.safetyFaults.includes(text)) cycle.safetyFaults.push(text);
+        if (!Array.isArray(cycle.safetyFaults))
+            cycle.safetyFaults = [];
+        if (!cycle.safetyFaults.includes(text))
+            cycle.safetyFaults.push(text);
     }
     const reasons = Array.isArray(previous.invalidReasons) ? previous.invalidReasons.slice() : [];
-    if (!reasons.includes(text)) reasons.push(text);
+    if (!reasons.includes(text))
+        reasons.push(text);
     const envelope = {
         ...previous,
         generation,
@@ -400,7 +391,6 @@ function invalidateSafetyEnvelope(adapter, reason, options = {}) {
     adapter._nwSafetyEnvelope = envelope;
     return envelope;
 }
-
 /**
  * Code-Teil: phaseAgeMs
  *
@@ -413,18 +403,19 @@ function invalidateSafetyEnvelope(adapter, reason, options = {}) {
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function phaseAgeMs(dp, key) {
-    if (!dp) return null;
+    if (!dp)
+        return null;
     try {
         const age = typeof dp.getMeasurementAgeMs === 'function'
             ? dp.getMeasurementAgeMs(key)
             : (typeof dp.getAgeMs === 'function' ? dp.getAgeMs(key) : null);
         const parsed = strictFiniteNumber(age, null);
         return parsed === null ? null : Math.max(0, parsed);
-    } catch (_e) {
+    }
+    catch (_e) {
         return null;
     }
 }
-
 /**
  * Code-Teil: readPhase
  *
@@ -441,13 +432,17 @@ function readPhase(dp, key, staleMs) {
         return { mapped: false, fresh: false, valueA: null, ageMs: null, connected: null, reason: 'not-mapped' };
     }
     let raw = null;
-    try { raw = typeof dp.getRaw === 'function' ? dp.getRaw(key, null) : null; } catch (_e) {}
+    try {
+        raw = typeof dp.getRaw === 'function' ? dp.getRaw(key, null) : null;
+    }
+    catch (_e) { }
     const valueA = strictFiniteNumber(raw, null);
     const ageMs = phaseAgeMs(dp, key);
     let connected = null;
     try {
         connected = typeof dp.getConnectionStatus === 'function' ? dp.getConnectionStatus(key) : null;
-    } catch (_e) {}
+    }
+    catch (_e) { }
     const fresh = valueA !== null && ageMs !== null && ageMs <= staleMs && connected !== false;
     return {
         mapped: true,
@@ -460,7 +455,6 @@ function readPhase(dp, key, staleMs) {
             : (valueA === null ? 'missing-value' : (ageMs === null ? 'missing-age' : (ageMs > staleMs ? 'stale' : 'fresh'))),
     };
 }
-
 /**
  * Code-Teil: buildSafetyEnvelope
  *
@@ -473,7 +467,8 @@ function readPhase(dp, key, staleMs) {
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = Date.now(), generation } = {}) {
-    if (!adapter) return null;
+    if (!adapter)
+        return null;
     const safetyCfg = resolveSafetyConfig(adapter);
     const cycle = ensureCycle(adapter, generation ?? adapter?._emsSafetyCycle?.generation ?? 0, now);
     const cfg = adapter.config && typeof adapter.config === 'object' ? adapter.config : {};
@@ -484,9 +479,9 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
     const reasons = [];
     for (const fault of (Array.isArray(cycle.safetyFaults) ? cycle.safetyFaults : [])) {
         const text = String(fault || '').trim();
-        if (text && !reasons.includes(text)) reasons.push(text);
+        if (text && !reasons.includes(text))
+            reasons.push(text);
     }
-
     const criticalFault = adapter._nwSafetyCriticalFault && typeof adapter._nwSafetyCriticalFault === 'object'
         ? adapter._nwSafetyCriticalFault
         : null;
@@ -501,12 +496,13 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
         ? adapter._nwSafetyCriticalFaults
         : {};
     for (const [key, fault] of Object.entries(persistentFaults)) {
-        if (!fault) continue;
+        if (!fault)
+            continue;
         reasons.push(`critical-module-fault-latched:${String(key || 'unknown')}`);
     }
-
     const connectionPowerW = strictFiniteNumber(installer.gridConnectionPower, null);
-    if (connectionPowerW === null || connectionPowerW <= 0) reasons.push('grid-connection-power-missing');
+    if (connectionPowerW === null || connectionPowerW <= 0)
+        reasons.push('grid-connection-power-missing');
     const safetyMarginW = nonNegative(coreGrid.gridSafetyMarginW, 0);
     const physicalLimitW = strictFiniteNumber(coreGrid.gridImportLimitW_physical, null);
     const effectiveLimitW = strictFiniteNumber(coreGrid.gridImportLimitW_effective, null);
@@ -518,16 +514,17 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
         : (physicalLimitW !== null && physicalLimitW > 0
             ? Math.min(physicalLimitW, derivedPhysicalW > 0 ? derivedPhysicalW : physicalLimitW)
             : derivedPhysicalW);
-    if (!(maxImportW > 0)) reasons.push('grid-import-limit-unavailable');
-
+    if (!(maxImportW > 0))
+        reasons.push('grid-import-limit-unavailable');
     const nvp = resolveCurrentNvpSnapshot(adapter._nvpFreshnessSnapshot, now, safetyCfg.staleMs);
-    if (!nvp.current) reasons.push('nvp-snapshot-stale');
-    if (!nvp.usable) reasons.push(`nvp-not-usable:${String(nvp.reason || nvp.status || 'unknown')}`);
+    if (!nvp.current)
+        reasons.push('nvp-snapshot-stale');
+    if (!nvp.usable)
+        reasons.push(`nvp-not-usable:${String(nvp.reason || nvp.status || 'unknown')}`);
     const nvpW = nvp.usable ? strictFiniteNumber(nvp.netW, null) : null;
     const availableHeadroomW = nvpW === null || !(maxImportW > 0)
         ? 0
         : Math.max(0, maxImportW - Math.max(0, nvpW));
-
     const maxPhaseA = strictFiniteNumber(coreGrid.gridMaxPhaseA_cfg, null);
     const phaseRequired = maxPhaseA !== null && maxPhaseA > 0;
     const phaseKeys = ['ps.l1A', 'ps.l2A', 'ps.l3A'].slice(0, safetyCfg.gridPhaseCount);
@@ -546,17 +543,21 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
             // increase. A clamped value of 0 A would otherwise preserve the
             // overload indefinitely.
             headroomA[label] = sample.valueA === null ? null : maxPhaseA - Math.abs(sample.valueA);
-            if (!sample.mapped) reasons.push(`phase-${label.toLowerCase()}-not-mapped`);
-            else if (!sample.fresh) reasons.push(`phase-${label.toLowerCase()}-${sample.reason}`);
-            if (!sample.fresh) phaseValid = false;
+            if (!sample.mapped)
+                reasons.push(`phase-${label.toLowerCase()}-not-mapped`);
+            else if (!sample.fresh)
+                reasons.push(`phase-${label.toLowerCase()}-${sample.reason}`);
+            if (!sample.fresh)
+                phaseValid = false;
             if (sample.fresh) {
                 const value = headroomA[label];
-                minHeadroomA = minHeadroomA === null ? value : Math.min(minHeadroomA, value);
+                if (value !== null)
+                    minHeadroomA = minHeadroomA === null ? value : Math.min(minHeadroomA, value);
             }
         }
-        if (!phaseValid || minHeadroomA === null) minHeadroomA = 0;
+        if (!phaseValid || minHeadroomA === null)
+            minHeadroomA = 0;
     }
-
     const paraEnabled = safetyCfg.para14aEnabled;
     const paraHealth = cycle.moduleHealth && cycle.moduleHealth.para14a;
     const paraFresh = paraEnabled ? !!(p14aRuntime && p14aRuntime.signalFresh === true && p14aRuntime.signalStale !== true) : true;
@@ -566,14 +567,15 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
         && strictFiniteNumber(p14aRuntime.totalCapW, null) !== null);
     const paraSafetyReady = !paraEnabled || paraFresh || paraLocalFailsafe;
     const paraActive = !!(paraEnabled && p14aRuntime && p14aRuntime.active === true);
-    const paraForceZero = !!(paraEnabled && (
-        !paraSafetyReady
+    const paraForceZero = !!(paraEnabled && (!paraSafetyReady
         || (p14aRuntime && (p14aRuntime.forceZero === true || p14aRuntime.emergencyStop === true))
-        || (paraActive && strictFiniteNumber(p14aRuntime && p14aRuntime.totalCapW, null) === 0)
-    ));
-    if (paraEnabled && (!paraHealth || paraHealth.ok !== true)) reasons.push('para14a-module-not-healthy');
-    if (paraEnabled && !p14aRuntime) reasons.push('para14a-runtime-missing');
-    if (paraEnabled && !paraSafetyReady) reasons.push(`para14a-signal-not-fresh:${String(p14aRuntime && p14aRuntime.signalStatus || 'missing')}`);
+        || (paraActive && strictFiniteNumber(p14aRuntime && p14aRuntime.totalCapW, null) === 0)));
+    if (paraEnabled && (!paraHealth || paraHealth.ok !== true))
+        reasons.push('para14a-module-not-healthy');
+    if (paraEnabled && !p14aRuntime)
+        reasons.push('para14a-runtime-missing');
+    if (paraEnabled && !paraSafetyReady)
+        reasons.push(`para14a-signal-not-fresh:${String(p14aRuntime && p14aRuntime.signalStatus || 'missing')}`);
     const paraTotalCapW = paraActive
         ? nonNegative(p14aRuntime && p14aRuntime.totalCapW, 0)
         : null;
@@ -583,20 +585,17 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
     const paraDeviceCapsW = paraActive && p14aRuntime && p14aRuntime.evcsCapsBySafe && typeof p14aRuntime.evcsCapsBySafe === 'object'
         ? { ...p14aRuntime.evcsCapsBySafe }
         : {};
-
     const criticalHealth = cycle.moduleHealth || {};
     for (const key of ['gridConstraints', 'peakShaving']) {
         const health = criticalHealth[key];
-        if (health && health.ok === false) reasons.push(`module-error:${key}`);
+        if (health && health.ok === false)
+            reasons.push(`module-error:${key}`);
     }
-
-    const commissionedReasons = reasons.filter((reason) => (
-        reason.startsWith('grid-connection')
+    const commissionedReasons = reasons.filter((reason) => (reason.startsWith('grid-connection')
         || reason.startsWith('grid-import')
         || reason.startsWith('phase-')
         || reason === 'para14a-module-not-healthy'
-        || reason === 'para14a-runtime-missing'
-    ));
+        || reason === 'para14a-runtime-missing'));
     const commissioned = commissionedReasons.length === 0;
     const forceZero = paraForceZero || reasons.length > 0;
     const valid = reasons.length === 0 && !paraForceZero;
@@ -617,7 +616,8 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
  */
     const effectiveAppCap = (app) => {
         const explicit = strictFiniteNumber(appCapsW[app], null);
-        if (explicit !== null) return Math.max(0, explicit);
+        if (explicit !== null)
+            return Math.max(0, explicit);
         return valid ? Math.max(0, availableHeadroomW) : 0;
     };
     const envelope = {
@@ -707,7 +707,6 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
     }
     return envelope;
 }
-
 /**
  * Baut die Sicherheitsfreigabe mit den aktuellsten Messwerten unmittelbar neu
  * auf. Final-Writer verwenden bewusst diese Funktion statt nur den Plan-Snapshot.
@@ -722,7 +721,6 @@ function liveSafetyEnvelope(adapter, dp, options = {}) {
         generation: options.generation ?? adapter?._emsSafetyCycle?.generation ?? 0,
     });
 }
-
 /**
  * Code-Teil: normalizeApp
  *
@@ -736,14 +734,18 @@ function liveSafetyEnvelope(adapter, dp, options = {}) {
  */
 function normalizeApp(app) {
     const text = String(app || '').trim().toLowerCase();
-    if (text.includes('evcs') || text.includes('charging') || text.includes('wallbox')) return 'evcs';
-    if (text.includes('storage') || text.includes('speicher') || text.includes('battery')) return 'storage';
-    if (text.includes('heatingrod') || text.includes('heizstab')) return 'heatingRod';
-    if (text.includes('thermal') || text.includes('heatpump') || text.includes('waerm') || text.includes('wärm') || text.includes('climate') || text.includes('aircondition') || text.includes('klima')) return 'thermal';
-    if (text.includes('custom') || text.includes('multiuse') || text.includes('nexologic') || text.includes('threshold') || text.includes('load') || text.includes('relay')) return 'custom';
+    if (text.includes('evcs') || text.includes('charging') || text.includes('wallbox'))
+        return 'evcs';
+    if (text.includes('storage') || text.includes('speicher') || text.includes('battery'))
+        return 'storage';
+    if (text.includes('heatingrod') || text.includes('heizstab'))
+        return 'heatingRod';
+    if (text.includes('thermal') || text.includes('heatpump') || text.includes('waerm') || text.includes('wärm') || text.includes('climate') || text.includes('aircondition') || text.includes('klima'))
+        return 'thermal';
+    if (text.includes('custom') || text.includes('multiuse') || text.includes('nexologic') || text.includes('threshold') || text.includes('load') || text.includes('relay'))
+        return 'custom';
     return text || 'custom';
 }
-
 /**
  * Code-Teil: sumOther
  *
@@ -758,14 +760,16 @@ function normalizeApp(app) {
 function sumOther(map, currentKey, appMap, appFilter) {
     let sum = 0;
     for (const [key, value] of Object.entries(map || {})) {
-        if (key === currentKey) continue;
-        if (appFilter && String(appMap && appMap[key] || '') !== appFilter) continue;
+        if (key === currentKey)
+            continue;
+        if (appFilter && String(appMap && appMap[key] || '') !== appFilter)
+            continue;
         const parsed = strictFiniteNumber(value, null);
-        if (parsed !== null) sum += Math.max(0, parsed);
+        if (parsed !== null)
+            sum += Math.max(0, parsed);
     }
     return sum;
 }
-
 /**
  * Code-Teil: getSafetyRuntime
  *
@@ -790,11 +794,11 @@ function getSafetyRuntime(adapter, generation) {
             appByKey: {},
             decisions: [],
         };
-        if (adapter) adapter._emsSafetyReservations = runtime;
+        if (adapter)
+            adapter._emsSafetyReservations = runtime;
     }
     return runtime;
 }
-
 /**
  * Code-Teil: blockedDecision
  *
@@ -826,7 +830,6 @@ function blockedDecision(request, envelope, reason, now, bypassed = false) {
         reservation: null,
     };
 }
-
 /**
  * Code-Teil: evaluateFlexibleLoadRequest
  *
@@ -847,12 +850,11 @@ function evaluateFlexibleLoadRequest(adapter, request = {}) {
         : 0;
     const key = String(request.key || '').trim() || `${normalizeApp(request.app)}:anonymous`;
     const app = normalizeApp(request.app);
-
     // Isolierte Modultests ohne Engine/ModuleManager bleiben kompatibel. In der
     // echten Adapter-Runtime setzt beginSafetyCycle dieses Flag vor jedem Tick.
     const required = !!(adapter && (adapter._nwSafetyEnvelopeRequired === true || adapter._emsSafetyCycle || adapter.emsEngine));
-    if (!required) return blockedDecision({ ...request, requestedW, currentActualW, key, app }, null, 'isolated-runtime-no-safety-cycle', now, true);
-
+    if (!required)
+        return blockedDecision({ ...request, requestedW, currentActualW, key, app }, null, 'isolated-runtime-no-safety-cycle', now, true);
     const envelope = adapter && adapter._emsSafetyEnvelope && typeof adapter._emsSafetyEnvelope === 'object'
         ? adapter._emsSafetyEnvelope
         : null;
@@ -870,22 +872,27 @@ function evaluateFlexibleLoadRequest(adapter, request = {}) {
             envelopeGeneration: generation,
         };
     }
-    if (!envelope) return blockedDecision({ ...request, requestedW, currentActualW, key, app }, null, 'safety-envelope-missing', now);
+    if (!envelope)
+        return blockedDecision({ ...request, requestedW, currentActualW, key, app }, null, 'safety-envelope-missing', now);
     const cycleGeneration = Number(adapter?._emsSafetyCycle?.generation) || 0;
-    if (Number(envelope.generation) !== cycleGeneration) return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, 'safety-envelope-generation-mismatch', now);
-    if (now > Number(envelope.expiresAt || 0)) return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, 'safety-envelope-expired', now);
-    if (envelope.forceZero === true || envelope.emergencyStop === true) return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, envelope.invalidReason || 'safety-force-zero', now);
-    if (envelope.valid !== true || envelope.commissioned !== true) return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, envelope.invalidReason || 'safety-envelope-invalid', now);
-
+    if (Number(envelope.generation) !== cycleGeneration)
+        return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, 'safety-envelope-generation-mismatch', now);
+    if (now > Number(envelope.expiresAt || 0))
+        return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, 'safety-envelope-expired', now);
+    if (envelope.forceZero === true || envelope.emergencyStop === true)
+        return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, envelope.invalidReason || 'safety-force-zero', now);
+    if (envelope.valid !== true || envelope.commissioned !== true)
+        return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, envelope.invalidReason || 'safety-envelope-invalid', now);
     // Der NVP wird am finalen Write-Punkt erneut gegen den kanonischen Snapshot
     // geprüft. Dadurch wird auch ein zwischen Planung und Write veralteter Plan
     // sicher auf 0 geklemmt.
     const staleMs = Math.max(1000, Number(envelope.grid && envelope.grid.staleMs) || DEFAULT_NVP_STALE_MS);
     const nvp = resolveCurrentNvpSnapshot(adapter && adapter._nvpFreshnessSnapshot, now, staleMs);
-    if (!nvp.usable) return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, `nvp-final-write-not-usable:${String(nvp.reason || nvp.status || 'unknown')}`, now);
+    if (!nvp.usable)
+        return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, `nvp-final-write-not-usable:${String(nvp.reason || nvp.status || 'unknown')}`, now);
     const maxImportW = strictFiniteNumber(envelope.grid && envelope.grid.maxImportW, null);
-    if (maxImportW === null || maxImportW <= 0) return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, 'grid-limit-final-write-missing', now);
-
+    if (maxImportW === null || maxImportW <= 0)
+        return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, 'grid-limit-final-write-missing', now);
     const runtime = getSafetyRuntime(adapter, envelope.generation);
     const gridImportW = Math.max(0, Number(nvp.netW) || 0);
     // Keep this value signed. A negative headroom means the connection is
@@ -895,7 +902,6 @@ function evaluateFlexibleLoadRequest(adapter, request = {}) {
     const gridIncrementHeadroomW = maxImportW - gridImportW;
     const otherDeltaW = sumOther(runtime.deltasByKey, key);
     const gridAllowedW = Math.max(0, currentActualW + gridIncrementHeadroomW - otherDeltaW);
-
     const candidates = [{ source: 'requested', value: requestedW }, { source: 'grid', value: gridAllowedW }];
     const phase = envelope.phase && typeof envelope.phase === 'object' ? envelope.phase : {};
     let phaseAllowedW = Number.POSITIVE_INFINITY;
@@ -905,7 +911,7 @@ function evaluateFlexibleLoadRequest(adapter, request = {}) {
             return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, 'phase-final-write-invalid', now);
         }
         const voltageV = clamp(request.voltageV ?? phase.voltageV, 200, 260, DEFAULT_VOLTAGE_V);
-        const requestPhases = Math.max(1, Math.min(Number(phase.requiredCount) || 3, Math.round(strictFiniteNumber(request.phaseCount, phase.requiredCount || 3))));
+        const requestPhases = Math.max(1, Math.min(Number(phase.requiredCount) || 3, Math.round(strictFiniteNumber(request.phaseCount, Number(phase.requiredCount) || 3))));
         // Signed for the same reason as the grid headroom: an already
         // overloaded phase has to shed flexible load, not only block growth.
         const physicalPhaseIncrementW = (Number(phase.minHeadroomA) || 0) * voltageV * requestPhases;
@@ -913,7 +919,6 @@ function evaluateFlexibleLoadRequest(adapter, request = {}) {
         phaseAllowedW = Math.max(0, currentActualW + physicalPhaseIncrementW - otherPhaseDeltaW);
         candidates.push({ source: 'phase', value: phaseAllowedW });
     }
-
     const para = envelope.para14a && typeof envelope.para14a === 'object' ? envelope.para14a : {};
     if (para.enabled === true && para.safetyReady !== true) {
         return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, 'para14a-final-write-signal-stale', now);
@@ -923,16 +928,17 @@ function evaluateFlexibleLoadRequest(adapter, request = {}) {
     }
     if (para.active === true) {
         const totalCapW = strictFiniteNumber(para.totalCapW, null);
-        if (totalCapW === null) return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, 'para14a-total-cap-missing', now);
+        if (totalCapW === null)
+            return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, 'para14a-total-cap-missing', now);
         const otherTargetsW = sumOther(runtime.targetsByKey, key);
         candidates.push({ source: 'para14a-total', value: Math.max(0, totalCapW - otherTargetsW) });
-
         const appCaps = para.appCapsW && typeof para.appCapsW === 'object' ? para.appCapsW : {};
         const appCapRaw = strictFiniteNumber(appCaps[app], null);
         // Bei aktiver §14a-Begrenzung muss jede bekannte flexible App einen
         // expliziten Cap besitzen. Ein fehlender Cap ist kein unbegrenzter Wert.
         if (['evcs', 'storage', 'thermal', 'heatingRod', 'custom'].includes(app)) {
-            if (appCapRaw === null) return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, `para14a-${app}-cap-missing`, now);
+            if (appCapRaw === null)
+                return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, `para14a-${app}-cap-missing`, now);
             const otherAppTargetsW = sumOther(runtime.targetsByKey, key, runtime.appByKey, app);
             candidates.push({ source: `para14a-${app}`, value: Math.max(0, appCapRaw - otherAppTargetsW) });
         }
@@ -940,18 +946,20 @@ function evaluateFlexibleLoadRequest(adapter, request = {}) {
             const deviceCaps = para.deviceCapsW && typeof para.deviceCapsW === 'object' ? para.deviceCapsW : {};
             const deviceKey = String(request.deviceKey || key.replace(/^evcs:/, '')).trim();
             const deviceCap = strictFiniteNumber(deviceCaps[deviceKey], null);
-            if (deviceCap === null) return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, `para14a-device-cap-missing:${deviceKey}`, now);
+            if (deviceCap === null)
+                return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, `para14a-device-cap-missing:${deviceKey}`, now);
             candidates.push({ source: 'para14a-device', value: Math.max(0, deviceCap) });
         }
     }
-
     const extraCapW = strictFiniteNumber(request.deviceCapW, null);
-    if (extraCapW !== null) candidates.push({ source: 'device', value: Math.max(0, extraCapW) });
+    if (extraCapW !== null)
+        candidates.push({ source: 'device', value: Math.max(0, extraCapW) });
     let allowedW = requestedW;
     let binding = 'requested';
     for (const candidate of candidates) {
         const value = strictFiniteNumber(candidate.value, null);
-        if (value === null) continue;
+        if (value === null)
+            continue;
         if (value < allowedW) {
             allowedW = value;
             binding = candidate.source;
@@ -959,7 +967,8 @@ function evaluateFlexibleLoadRequest(adapter, request = {}) {
     }
     allowedW = Math.max(0, Math.floor(allowedW));
     const deltaW = Math.max(0, allowedW - currentActualW);
-    if (phase.required === true) phaseDeltaW = deltaW;
+    if (phase.required === true)
+        phaseDeltaW = deltaW;
     const decision = {
         ok: true,
         bypassed: false,
@@ -988,11 +997,10 @@ function evaluateFlexibleLoadRequest(adapter, request = {}) {
         },
     };
     runtime.decisions.push({ ...decision, reservation: decision.reservation ? { ...decision.reservation } : null });
-    if (runtime.decisions.length > 200) runtime.decisions.splice(0, runtime.decisions.length - 200);
+    if (runtime.decisions.length > 200)
+        runtime.decisions.splice(0, runtime.decisions.length - 200);
     return decision;
 }
-
-
 /**
  * Prüft einen nicht verbrauchserhöhenden, aber weiterhin sicherheitsrelevanten
  * Stellbefehl (z. B. Speicherentladung). Der Befehl verbraucht keinen
@@ -1009,7 +1017,6 @@ function evaluateSafetyCommandPermission(adapter, request = {}) {
     const envelope = adapter && adapter._emsSafetyEnvelope && typeof adapter._emsSafetyEnvelope === 'object'
         ? adapter._emsSafetyEnvelope
         : null;
-
     if (!requestedActive) {
         return {
             ok: true,
@@ -1064,23 +1071,29 @@ function evaluateSafetyCommandPermission(adapter, request = {}) {
         envelopeGeneration: envelope ? Number(envelope.generation) || 0 : 0,
         evaluatedAt: now,
     });
-    if (!envelope) return blocked('safety-envelope-missing');
+    if (!envelope)
+        return blocked('safety-envelope-missing');
     const cycleGeneration = Number(adapter?._emsSafetyCycle?.generation) || 0;
-    if (Number(envelope.generation) !== cycleGeneration) return blocked('safety-envelope-generation-mismatch');
-    if (now > Number(envelope.expiresAt || 0)) return blocked('safety-envelope-expired');
-    if (envelope.forceZero === true || envelope.emergencyStop === true) return blocked(envelope.invalidReason || 'safety-force-zero');
-    if (envelope.valid !== true || envelope.commissioned !== true) return blocked(envelope.invalidReason || 'safety-envelope-invalid');
-
+    if (Number(envelope.generation) !== cycleGeneration)
+        return blocked('safety-envelope-generation-mismatch');
+    if (now > Number(envelope.expiresAt || 0))
+        return blocked('safety-envelope-expired');
+    if (envelope.forceZero === true || envelope.emergencyStop === true)
+        return blocked(envelope.invalidReason || 'safety-force-zero');
+    if (envelope.valid !== true || envelope.commissioned !== true)
+        return blocked(envelope.invalidReason || 'safety-envelope-invalid');
     const staleMs = Math.max(1000, Number(envelope.grid && envelope.grid.staleMs) || DEFAULT_NVP_STALE_MS);
     const nvp = resolveCurrentNvpSnapshot(adapter && adapter._nvpFreshnessSnapshot, now, staleMs);
-    if (!nvp.usable) return blocked(`nvp-final-write-not-usable:${String(nvp.reason || nvp.status || 'unknown')}`);
+    if (!nvp.usable)
+        return blocked(`nvp-final-write-not-usable:${String(nvp.reason || nvp.status || 'unknown')}`);
     const maxImportW = strictFiniteNumber(envelope.grid && envelope.grid.maxImportW, null);
-    if (maxImportW === null || maxImportW <= 0) return blocked('grid-limit-final-write-missing');
-
+    if (maxImportW === null || maxImportW <= 0)
+        return blocked('grid-limit-final-write-missing');
     const para = envelope.para14a && typeof envelope.para14a === 'object' ? envelope.para14a : {};
-    if (para.enabled === true && para.safetyReady !== true) return blocked('para14a-final-write-signal-stale');
-    if (para.forceZero === true) return blocked('para14a-final-write-force-zero');
-
+    if (para.enabled === true && para.safetyReady !== true)
+        return blocked('para14a-final-write-signal-stale');
+    if (para.forceZero === true)
+        return blocked('para14a-final-write-force-zero');
     return {
         ok: true,
         bypassed: false,
@@ -1095,7 +1108,6 @@ function evaluateSafetyCommandPermission(adapter, request = {}) {
         evaluatedAt: now,
     };
 }
-
 /**
  * Code-Teil: commitFlexibleLoadDecision
  *
@@ -1108,11 +1120,13 @@ function evaluateSafetyCommandPermission(adapter, request = {}) {
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function commitFlexibleLoadDecision(adapter, decision, applied = true) {
-    if (!adapter || !decision || decision.bypassed === true || applied !== true) return false;
+    if (!adapter || !decision || decision.bypassed === true || applied !== true)
+        return false;
     const generation = Number(decision.envelopeGeneration) || 0;
     const runtime = getSafetyRuntime(adapter, generation);
     const key = String(decision.key || '').trim();
-    if (!key) return false;
+    if (!key)
+        return false;
     const reservation = decision.reservation && typeof decision.reservation === 'object'
         ? decision.reservation
         : { targetW: decision.allowedW, deltaW: 0, phaseDeltaW: 0, app: decision.app };
@@ -1122,7 +1136,6 @@ function commitFlexibleLoadDecision(adapter, decision, applied = true) {
     runtime.appByKey[key] = normalizeApp(reservation.app || decision.app);
     return true;
 }
-
 /**
  * Code-Teil: safetyTargetFromPowerDecision
  *
@@ -1143,10 +1156,10 @@ function safetyTargetFromPowerDecision(target, decision, options = {}) {
     if (strictFiniteNumber(next.targetA, null) !== null || String(next.basis || '').toLowerCase().includes('current')) {
         next.targetA = allowedW > 0 ? Math.max(0, allowedW / (voltageV * phases)) : 0;
     }
-    if (allowedW <= 0 && Object.prototype.hasOwnProperty.call(next, 'enable')) next.enable = false;
+    if (allowedW <= 0 && Object.prototype.hasOwnProperty.call(next, 'enable'))
+        next.enable = false;
     return next;
 }
-
 module.exports = {
     SCHEMA_VERSION,
     DEFAULT_NVP_STALE_MS,

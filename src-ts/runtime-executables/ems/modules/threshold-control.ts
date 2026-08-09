@@ -1,3 +1,4 @@
+// @runtime-transpile
 /**
  * Executable TypeScript source: ems/modules/threshold-control.js
  *
@@ -26,21 +27,68 @@ const {
     commitFlexibleLoadDecision,
     invalidateSafetyEnvelope,
 } = require('../services/safety-envelope');
-function num(v, fallback = null) {
+
+
+type AnyRecord = Record<string, any>;
+type ThresholdOutputType = 'boolean' | 'number';
+type ThresholdRule = AnyRecord & {
+    idx: number;
+    id: string;
+    enabled: boolean;
+    name: string;
+    inputId: string;
+    compare: 'above' | 'below';
+    threshold: number | null;
+    hysteresis: number;
+    minOnSec: number;
+    minOffSec: number;
+    outType: ThresholdOutputType;
+    outputId: string;
+    onValue: boolean | number;
+    offValue: boolean | number;
+    maxAgeMs: number;
+    safetyRelevant: boolean;
+    estimatedPowerW: number;
+    safetyApp: string;
+    phaseCount: number;
+    voltageV: number;
+    userCanToggle: boolean;
+    userCanSetThreshold: boolean;
+    userCanSetMinOnSec: boolean;
+    userCanSetMinOffSec: boolean;
+    requireReadback: boolean;
+};
+type HysteresisMemory = {
+    active: boolean;
+    initialized?: boolean;
+    lastOnMs: number;
+    lastOffMs: number;
+    lastChangeMs: number;
+};
+type SafeStopResult = { ok: boolean; attempted: boolean; reason: string };
+
+function num(v: unknown, fallback: number): number;
+function num(v: unknown, fallback?: null): number | null;
+function num(v: unknown, fallback: number | null = null): number | null {
     if (v === null || v === undefined) return fallback;
     if (typeof v === 'string' && !v.trim()) return fallback;
     if (typeof v !== 'number' && typeof v !== 'string') return fallback;
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
 }
-function clamp(v, minV, maxV, fallback = null) {
-    const n = num(v, fallback);
+
+function clamp(v: unknown, minV: number, maxV: number, fallback: number): number;
+function clamp(v: unknown, minV: number, maxV: number, fallback?: null): number | null;
+function clamp(v: unknown, minV: number, maxV: number, fallback: number | null = null): number | null {
+    const parsed = num(v, null);
+    const n = parsed === null ? fallback : parsed;
     if (n === null) return fallback;
     if (Number.isFinite(minV) && n < minV) return minV;
     if (Number.isFinite(maxV) && n > maxV) return maxV;
     return n;
 }
-function safeIndex(i) {
+
+function safeIndex(i: unknown): number {
     const n = Math.round(Number(i) || 0);
     if (n < 1) return 1;
     if (n > 10) return 10;
@@ -71,13 +119,18 @@ function safeIndex(i) {
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 class ThresholdControlModule extends BaseModule {
+    declare adapter: AnyRecord;
+    declare dp: AnyRecord | null;
+    _rules: ThresholdRule[];
+    _hyst: Map<string, HysteresisMemory>;
+    _stateCache: Map<string, unknown>;
     /**
      * Code-Teil: constructor
      * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
      * Zusammenhang: Gehört zu EMS-Modul (Regelungs-, Diagnose- oder Beratungslogik innerhalb der EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
      * Wartung/TypeScript: Änderungen an Signatur oder Rückgabe können abhängige Aufrufer beeinflussen; Aufrufstellen mitprüfen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
      */
-    constructor(adapter, dpRegistry) {
+    constructor(adapter: AnyRecord, dpRegistry: AnyRecord | null | undefined) {
         super(adapter, dpRegistry);
 
         /** @type {Array<any>} */
@@ -100,7 +153,7 @@ class ThresholdControlModule extends BaseModule {
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    _isEnabled() {
+    _isEnabled(): boolean {
         return !!(this.adapter && this.adapter.config && this.adapter.config.enableThresholdControl);
     }
     /**
@@ -109,7 +162,7 @@ class ThresholdControlModule extends BaseModule {
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    _getCfg() {
+    _getCfg(): AnyRecord {
         const cfg = (this.adapter && this.adapter.config && this.adapter.config.threshold && typeof this.adapter.config.threshold === 'object')
             ? this.adapter.config.threshold
             : {};
@@ -128,7 +181,7 @@ class ThresholdControlModule extends BaseModule {
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    async _setStateIfChanged(id, val) {
+    async _setStateIfChanged(id: string, val: unknown): Promise<void> {
         const v = (typeof val === 'number' && !Number.isFinite(val)) ? null : val;
         const prev = this._stateCache.get(id);
         if (prev === v) return;
@@ -152,7 +205,7 @@ class ThresholdControlModule extends BaseModule {
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    _normalizeCompare(raw) {
+    _normalizeCompare(raw: unknown): 'above' | 'below' {
         const s = String(raw || '').trim().toLowerCase();
         if (s === 'below' || s === '<' || s === 'lt' || s === 'less' || s === 'kleiner') return 'below';
         return 'above';
@@ -163,7 +216,7 @@ class ThresholdControlModule extends BaseModule {
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    _normalizeOutType(raw) {
+    _normalizeOutType(raw: unknown): 'boolean' | 'number' {
         const s = String(raw || '').trim().toLowerCase();
         if (s === 'bool' || s === 'boolean' || s === 'switch') return 'boolean';
         return 'number';
@@ -181,12 +234,12 @@ class ThresholdControlModule extends BaseModule {
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    _buildRulesFromConfig() {
+    _buildRulesFromConfig(): void {
         const cfg = this._getCfg();
         const list = Array.isArray(cfg.rules) ? cfg.rules : [];
 
-        const out = [];
-        const used = new Set();
+        const out: ThresholdRule[] = [];
+        const used = new Set<number>();
 
         for (let i = 0; i < list.length; i++) {
             const r = list[i] || {};
@@ -284,8 +337,8 @@ class ThresholdControlModule extends BaseModule {
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    _getRule(idx) {
-        return this._rules.find(r => r && r.idx === idx) || null;
+    _getRule(idx: number): ThresholdRule | null {
+        return this._rules.find((r: ThresholdRule) => r && r.idx === idx) || null;
     }
 
     /**
@@ -294,7 +347,7 @@ class ThresholdControlModule extends BaseModule {
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    async init() {
+    async init(): Promise<void> {
         // Always create a stable channel tree.
         await this.adapter.setObjectNotExistsAsync('threshold', {
             type: 'channel',
@@ -320,7 +373,7 @@ class ThresholdControlModule extends BaseModule {
          * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
          * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
          */
-        const mk = async (id, name, type, role, unit = undefined, write = false, def = undefined) => {
+        const mk = async (id: string, name: string, type: string, role: string, unit: string | undefined = undefined, write = false, def: unknown = undefined): Promise<void> => {
             await this.adapter.setObjectNotExistsAsync(id, {
                 type: 'state',
                 common: {
@@ -348,7 +401,7 @@ class ThresholdControlModule extends BaseModule {
          * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
          * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
          */
-        const ensureDefault = async (id, val) => {
+        const ensureDefault = async (id: string, val: unknown): Promise<void> => {
             try {
                 const s = await this.adapter.getStateAsync(id);
                 if (!s || s.val === null || s.val === undefined) {
@@ -372,8 +425,8 @@ class ThresholdControlModule extends BaseModule {
 
             await mk(`threshold.user.r${i}.enabled`, 'Regel aktiv (User)', 'boolean', 'switch.enable', undefined, true, true);
             await mk(`threshold.user.r${i}.threshold`, 'Schwellwert (User)', 'number', 'level', undefined, true, 0);
-            await mk(`threshold.user.r${i}.minOnSec`, 'MinOn (User)', 'number', 'value', 's', true, true, 0);
-            await mk(`threshold.user.r${i}.minOffSec`, 'MinOff (User)', 'number', 'value', 's', true, true, 0);
+            await mk(`threshold.user.r${i}.minOnSec`, 'MinOn (User)', 'number', 'value', 's', true, 0);
+            await mk(`threshold.user.r${i}.minOffSec`, 'MinOff (User)', 'number', 'value', 's', true, 0);
 
             await this.adapter.setObjectNotExistsAsync(`threshold.user.r${i}.mode`, {
                 type: 'state',
@@ -476,16 +529,16 @@ class ThresholdControlModule extends BaseModule {
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    _ruleOwner(r, isManual) {
+    _ruleOwner(r: ThresholdRule, isManual: boolean): string {
         return isManual ? `manual.threshold.${r.id}` : `threshold.${r.id}`;
     }
 
-    _ruleHasExclusiveAuthority(r, owner) {
+    _ruleHasExclusiveAuthority(r: ThresholdRule, owner: string): boolean {
         if (String(owner || '').startsWith('manual.')) return true;
         const matrix = this.adapter && this.adapter._stageAActuatorOwnerById;
         const row = matrix && typeof matrix === 'object' ? matrix[r.outputId] : null;
         const activeOwners = Array.isArray(row && row.activeOwners)
-            ? row.activeOwners.map((value) => String(value || '').trim()).filter(Boolean)
+            ? row.activeOwners.map((value: unknown) => String(value || '').trim()).filter(Boolean)
             : [];
         return activeOwners.length === 1 && activeOwners[0] === owner;
     }
@@ -496,9 +549,9 @@ class ThresholdControlModule extends BaseModule {
      * Das gilt auch fuer nicht energierelevante Smart-Home-Ausgaenge, damit eine
      * deaktivierte Regel keinen zuvor gesetzten Zustand zuruecklaesst.
      */
-    async deactivate() {
+    async deactivate(): Promise<AnyRecord> {
         this._buildRulesFromConfig();
-        const failures = [];
+        const failures: string[] = [];
         let attempted = 0;
         for (const r of this._rules || []) {
             if (!r || !r.outputId) continue;
@@ -506,8 +559,8 @@ class ThresholdControlModule extends BaseModule {
                 attempted += 1;
                 const stopped = await this._forceRuleSafeOff(r, 'module-disabled-safe-stop');
                 if (!stopped.ok) failures.push(`${r.id}:${stopped.reason || 'safe-stop-not-confirmed'}`);
-            } catch (error) {
-                failures.push(`${r && r.id || 'unknown'}:${String(error && error.message || error)}`);
+            } catch (error: any) {
+                failures.push(`${r && r.id || 'unknown'}:${String(error instanceof Error ? error.message : error)}`);
             }
         }
         if (failures.length) throw new Error(`threshold-safe-stop-failed:${failures.join(',')}`);
@@ -520,12 +573,13 @@ class ThresholdControlModule extends BaseModule {
      * wenn eine einzelne Regel deaktiviert, unvollstaendig oder stale wird.
      * Damit kann kein zuvor eingeschalteter Verbraucher unkontrolliert weiterlaufen.
      */
-    async _forceRuleSafeOff(r, status = 'safe-stop') {
+    async _forceRuleSafeOff(r: ThresholdRule, status = 'safe-stop'): Promise<SafeStopResult> {
         if (!r || !r.outputId) return { ok: true, attempted: false, reason: 'no-output' };
-        if (!this.dp || typeof this.dp.upsert !== 'function') return { ok: false, attempted: false, reason: 'dp-registry-missing' };
+        const dp = this.dp;
+        if (!dp || typeof dp.upsert !== 'function') return { ok: false, attempted: false, reason: 'dp-registry-missing' };
 
         const outKey = `thr.${r.id}.out`;
-        await this.dp.upsert({
+        await dp.upsert({
             key: outKey,
             objectId: r.outputId,
             dataType: r.outType,
@@ -542,8 +596,8 @@ class ThresholdControlModule extends BaseModule {
             kind: 'safety-stop',
             enforceAuthority: true,
         }, async () => (r.outType === 'boolean'
-            ? this.dp.writeBoolean(outKey, !!r.offValue, false)
-            : this.dp.writeNumber(outKey, Number(r.offValue), false)));
+            ? dp.writeBoolean(outKey, !!r.offValue, false)
+            : dp.writeNumber(outKey, Number(r.offValue), false)));
 
         const actual = await this._readRuleOutput(r);
         const readback = this._readbackMatches(r, false, actual);
@@ -575,7 +629,7 @@ class ThresholdControlModule extends BaseModule {
         return { ok: true, attempted: true, reason: status };
     }
 
-    async _writeRuleOutput(r, want, isManual) {
+    async _writeRuleOutput(r: ThresholdRule, want: boolean, isManual: boolean): Promise<boolean | null> {
         const owner = this._ruleOwner(r, isManual);
         const reason = `${r.name}: ${want ? 'on' : 'off'}`;
         const enforceAuthority = this._ruleHasExclusiveAuthority(r, owner);
@@ -592,7 +646,7 @@ class ThresholdControlModule extends BaseModule {
         });
     }
 
-    async _readRuleOutput(r) {
+    async _readRuleOutput(r: ThresholdRule): Promise<unknown> {
         if (!r || !r.outputId || !this.adapter || typeof this.adapter.getForeignStateAsync !== 'function') return null;
         try {
             const state = await this.adapter.getForeignStateAsync(r.outputId);
@@ -602,7 +656,7 @@ class ThresholdControlModule extends BaseModule {
         }
     }
 
-    _readbackMatches(r, want, value) {
+    _readbackMatches(r: ThresholdRule, want: boolean, value: unknown): boolean | null {
         if (value === null || value === undefined) return null;
         const expected = want ? r.onValue : r.offValue;
         if (r.outType === 'boolean') return !!value === !!expected;
@@ -610,7 +664,7 @@ class ThresholdControlModule extends BaseModule {
         return Number.isFinite(a) && Number.isFinite(b) ? Math.abs(a - b) <= Math.max(0.01, Math.abs(b) * 0.001) : false;
     }
 
-    async tick() {
+    async tick(): Promise<void> {
         const enabled = this._isEnabled();
         const now = Date.now();
         let safetyFailure = '';
@@ -627,6 +681,15 @@ class ThresholdControlModule extends BaseModule {
         }
 
         if (!enabled) return;
+        const dp = this.dp;
+        if (!dp) {
+            const reason = 'threshold-dp-registry-missing';
+            invalidateSafetyEnvelope(this.adapter, reason, {
+                generation: this.adapter?._emsSafetyCycle?.generation,
+                emergencyStop: true,
+            });
+            throw new Error(reason);
+        }
 
         for (const r of this._rules) {
             const id = r.id;
@@ -751,8 +814,8 @@ class ThresholdControlModule extends BaseModule {
                 const canUserMinOn = (typeof r.userCanSetMinOnSec === 'boolean') ? !!r.userCanSetMinOnSec : !!r.userCanSetThreshold;
                 const canUserMinOff = (typeof r.userCanSetMinOffSec === 'boolean') ? !!r.userCanSetMinOffSec : !!r.userCanSetThreshold;
 
-                const userMinOnSec = canUserMinOn ? this.dp.getNumberFresh(`thr.user.r${idx}.minOnSec`, 7 * 24 * 3600 * 1000, null) : null;
-                const userMinOffSec = canUserMinOff ? this.dp.getNumberFresh(`thr.user.r${idx}.minOffSec`, 7 * 24 * 3600 * 1000, null) : null;
+                const userMinOnSec = (this.dp && canUserMinOn) ? dp.getNumberFresh(`thr.user.r${idx}.minOnSec`, 7 * 24 * 3600 * 1000, null) : null;
+                const userMinOffSec = (this.dp && canUserMinOff) ? dp.getNumberFresh(`thr.user.r${idx}.minOffSec`, 7 * 24 * 3600 * 1000, null) : null;
 
                 const effMinOnSec = (userMinOnSec !== null && userMinOnSec !== undefined && Number.isFinite(userMinOnSec)) ? userMinOnSec : Number(r.minOnSec || 0);
                 const effMinOffSec = (userMinOffSec !== null && userMinOffSec !== undefined && Number.isFinite(userMinOffSec)) ? userMinOffSec : Number(r.minOffSec || 0);
@@ -831,7 +894,7 @@ class ThresholdControlModule extends BaseModule {
             }
             await this._setStateIfChanged(`threshold.rules.r${idx}.safetyDecision`, String(safetyDecision && safetyDecision.reason || (r.safetyRelevant ? 'not-evaluated' : 'not-safety-relevant')));
 
-            let wrote = false;
+            let wrote: boolean | null = false;
             const commandChanged = want !== effectiveBefore;
             try { wrote = await this._writeRuleOutput(r, want, isManual); } catch (_e) { wrote = false; }
             const readbackAfter = await this._readRuleOutput(r);

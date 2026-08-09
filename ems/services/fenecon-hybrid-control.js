@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/fenecon-hybrid-control.ts
- * Quell-Hash: sha256:ca413bed3fb53431a77aa471d1c21986922b5a9ff1587774ae64cb022651a184
+ * Quell-Hash: sha256:fed2429f57c5ec37206b2d2bdb596bd8d02ca223fb5ecef7725d132e0805c291
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -498,7 +498,7 @@ function validateFarmRows(rowsIn) {
         reason = 'multiple-fems-grid-masters';
     }
     else if (invalidRows.length) {
-        reason = invalidRows[0].validation.reason;
+        reason = invalidRows[0]?.validation.reason || 'invalid-storage-row';
     }
     else if (nativeRows.length === 1 && writableStorageCount > 1) {
         ok = false;
@@ -509,7 +509,7 @@ function validateFarmRows(rowsIn) {
         reason,
         writableStorageCount,
         nativeMasterCount: nativeRows.length,
-        nativeMasterName: nativeRows.length ? text(nativeRows[0].row.name) : '',
+        nativeMasterName: text(nativeRows[0]?.row?.name),
         resolved: resolved.map((item) => ({
             name: text(item.row.name),
             mode: item.result ? item.result.mode : 'invalid',

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 488bb24e57c20e8edc80b5a402f1a88f02711c211e0afb648ac64e63cfa44b6a
+ * Original-Hash: 1ea9415d12ac2cb1449b32c9752467333a185c98555c3938cc3c6e92f339b1cd
  */
 
 /**
@@ -86,6 +86,7 @@ function makeArbiterAdapter() {
   assert(!isActuatorAuthorityBlockedResult(manual), 'Manuelle Relaisbedienung konnte Threshold nicht kontrolliert preempten');
 
   const states = new Map();
+  const objects = new Map();
   let allowWrite = false;
   const thresholdAdapter = {
     namespace: 'nexowatt-ui.0',
@@ -94,7 +95,7 @@ function makeArbiterAdapter() {
       { idx: 2, enabled: true, inputId: 'meter.0.power', outputId: 'device.0.incomplete.relay', outputType: 'boolean', threshold: null, compare: 'above', onValue: true, offValue: false },
     ] } },
     log: { warn(){}, info(){}, debug(){}, error(){} },
-    async setObjectNotExistsAsync(){},
+    async setObjectNotExistsAsync(id, obj){ if (!objects.has(id)) objects.set(id, obj); },
     async getStateAsync(id){ return states.get(id) || null; },
     async setStateAsync(id, val){ states.set(id, typeof val === 'object' && val && 'val' in val ? val : { val }); },
   };
@@ -129,6 +130,12 @@ function makeArbiterAdapter() {
   assert.strictEqual(mod._ruleHasExclusiveAuthority({ outputId: 'device.0.shared.relay' }, 'manual.threshold.r1'), true,
     'Explizite manuelle Threshold-Lease muss verbindlich sein');
   await mod.init();
+  assert.strictEqual(objects.get('threshold.user.r1.minOnSec')?.common?.def, 0,
+    'MinOn-Default muss numerisch 0 s sein und darf nicht durch ein verschobenes mk()-Argument zu true werden');
+  assert.strictEqual(objects.get('threshold.user.r1.minOffSec')?.common?.def, 0,
+    'MinOff-Default muss numerisch 0 s sein und darf nicht durch ein verschobenes mk()-Argument zu true werden');
+  assert.strictEqual(objects.get('threshold.user.r1.minOnSec')?.common?.type, 'number');
+  assert.strictEqual(objects.get('threshold.user.r1.minOffSec')?.common?.type, 'number');
   await mod.tick();
   assert.strictEqual(states.get('threshold.rules.r2.configured').val, false,
     'Eine aktivierte Regel ohne gueltige Schwelle darf nicht als konfiguriert gelten');

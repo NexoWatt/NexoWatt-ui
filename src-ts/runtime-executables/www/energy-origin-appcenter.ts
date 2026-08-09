@@ -1,3 +1,4 @@
+// @runtime-transpile
 /**
  * Executable TypeScript source: www/energy-origin-appcenter.js
  *
@@ -8,28 +9,28 @@
 (function () {
   'use strict';
 
-  const ids = {
+  const ids: Record<string, string> = {
     enabled: 'ledgerOriginEnabled', siteId: 'ledgerSiteId', siteName: 'ledgerSiteName', country: 'ledgerCountry', allocationMethod: 'ledgerAllocationMethod', evidenceMode: 'ledgerEvidenceMode', staleSeconds: 'ledgerStaleSeconds',
     gridImportDp: 'ledgerGridImportDp', gridImportUnit: 'ledgerGridImportUnit', gridExportDp: 'ledgerGridExportDp', gridExportUnit: 'ledgerGridExportUnit', pvDp: 'ledgerPvDp', pvUnit: 'ledgerPvUnit', otherRenewableDp: 'ledgerOtherRenewableDp', otherRenewableUnit: 'ledgerOtherRenewableUnit', buildingDp: 'ledgerBuildingDp', buildingUnit: 'ledgerBuildingUnit', storageChargeDp: 'ledgerStorageChargeDp', storageChargeUnit: 'ledgerStorageChargeUnit', storageDischargeDp: 'ledgerStorageDischargeDp', storageDischargeUnit: 'ledgerStorageDischargeUnit',
     storageChargeEfficiency: 'ledgerStorageChargeEfficiency', storageDischargeEfficiency: 'ledgerStorageDischargeEfficiency', storageInitialKwh: 'ledgerStorageInitialKwh', storageInitialPvPct: 'ledgerStorageInitialPvPct', storageExclusiveRenewable: 'ledgerStorageExclusiveRenewable',
     chargePoints: 'ledgerChargePoints', addChargePoint: 'ledgerAddChargePoint',
     sameGridConnection: 'ledgerSameGridConnection', meteringCompliance: 'ledgerMeteringCompliance', publicCharging: 'ledgerPublicCharging', sameWoz: 'ledgerSameWoz', directLine: 'ledgerDirectLine', noSubsidy: 'ledgerNoSubsidy', integratedMid: 'ledgerIntegratedMid', operatorType: 'ledgerOperatorType', nlGridRenewableShare: 'ledgerNlGridRenewableShare',
   };
-  const el = key => document.getElementById(ids[key] || key);
-  const htmlEscape = value => String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  const safeId = (value, fallback = 'lp') => String(value || fallback).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64) || fallback;
-  const maxChargePoints = edition => String(edition || '').toLowerCase() === 'hems' || String(edition || '').toLowerCase() === 'home' ? 3 : 500;
-  const setValue = (key, value) => { const node = el(key); if (node) node.value = value === undefined || value === null ? '' : String(value); };
-  const setChecked = (key, value) => { const node = el(key); if (node) node.checked = value === true; };
-  const readValue = (key, fallback = '') => { const node = el(key); return node ? String(node.value || '').trim() : String(fallback || ''); };
-  const readNumber = (key, fallback, min, max) => {
+  const el = (key: string): HTMLElement | null => document.getElementById(ids[key] || key);
+  const htmlEscape = (value: any) => String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  const safeId = (value: any, fallback: any = 'lp') => String(value || fallback).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64) || fallback;
+  const maxChargePoints = (edition: any) => String(edition || '').toLowerCase() === 'hems' || String(edition || '').toLowerCase() === 'home' ? 3 : 500;
+  const setValue = (key: string, value: any): void => { const node = el(key) as HTMLInputElement | HTMLSelectElement | null; if (node) node.value = value === undefined || value === null ? '' : String(value); };
+  const setChecked = (key: string, value: any): void => { const node = el(key) as HTMLInputElement | null; if (node) node.checked = value === true; };
+  const readValue = (key: string, fallback: any = ''): string => { const node = el(key) as HTMLInputElement | HTMLSelectElement | null; return node ? String(node.value || '').trim() : String(fallback || ''); };
+  const readNumber = (key: any, fallback: any, min: any, max: any) => {
     const n = Number(readValue(key));
     const value = Number.isFinite(n) ? n : Number(fallback);
     return Math.max(min, Math.min(max, value));
   };
-  const checked = key => !!(el(key) && el(key).checked);
+  const checked = (key: string): boolean => { const node = el(key) as HTMLInputElement | null; return node ? node.checked : false; };
 
-  function buildChargePoints(rows, edition) {
+  function buildChargePoints(rows: any, edition: any) {
     const container = el('chargePoints');
     if (!container) return;
     const list = Array.isArray(rows) ? rows.slice(0, maxChargePoints(edition)) : [];
@@ -40,7 +41,7 @@
       empty.textContent = 'Noch kein Ladepunktzähler zugeordnet. Für eine ladepunktbezogene Bilanz mindestens einen kumulierten Energiezähler hinzufügen.';
       container.appendChild(empty);
     }
-    list.forEach((cp, index) => {
+    list.forEach((cp: any, index: any) => {
       const id = safeId(cp && (cp.id || cp.key || cp.lp), `lp${index + 1}`);
       const row = document.createElement('div');
       row.className = 'nw-config-card nw-config-card--subtle';
@@ -70,12 +71,12 @@
     });
   }
 
-  function collectChargePoints(edition) {
+  function collectChargePoints(edition: any): any[] {
     const rows = Array.from(document.querySelectorAll('[data-ledger-cp-row]'));
-    return rows.slice(0, maxChargePoints(edition)).map((row, index) => {
-      const get = name => row.querySelector(`[data-ledger-cp-field="${name}"]`);
-      const value = name => { const node = get(name); return node ? String(node.value || '').trim() : ''; };
-      const isChecked = name => { const node = get(name); return !!(node && node.checked); };
+    return rows.slice(0, maxChargePoints(edition)).map((row: any, index: any) => {
+      const get = (name: any) => row.querySelector(`[data-ledger-cp-field="${name}"]`);
+      const value = (name: any) => { const node = get(name); return node ? String(node.value || '').trim() : ''; };
+      const isChecked = (name: any) => { const node = get(name); return !!(node && node.checked); };
       return {
         id: safeId(value('id'), `lp${index + 1}`),
         label: value('label') || `Ladepunkt ${index + 1}`,
@@ -91,10 +92,10 @@
         publiclyAccessible: isChecked('publiclyAccessible'),
         publicKey: value('publicKey'),
       };
-    }).filter(row => row.energyMeterKwhId || row.label || row.id);
+    }).filter((row: any) => row.energyMeterKwhId || row.label || row.id);
   }
 
-  function apply(config, edition) {
+  function apply(config: any, edition: any) {
     const ledger = config && config.energyLedger && typeof config.energyLedger === 'object' ? config.energyLedger : {};
     const origin = ledger.origin && typeof ledger.origin === 'object' ? ledger.origin : {};
     const dp = origin.dataPoints && typeof origin.dataPoints === 'object' ? origin.dataPoints : {};
@@ -119,7 +120,7 @@
     buildChargePoints(Array.isArray(origin.chargePoints) ? origin.chargePoints : [], edition);
   }
 
-  function collect(existingOrigin, appEnabled, edition) {
+  function collect(existingOrigin: any, appEnabled: any, edition: any) {
     const existing = existingOrigin && typeof existingOrigin === 'object' ? existingOrigin : {};
     const country = readValue('country', 'AUTO').toUpperCase();
     const allocation = readValue('allocationMethod', 'proportional');
@@ -153,7 +154,7 @@
     };
   }
 
-  function setup(options) {
+  function setup(options: any) {
     const getEdition = options && typeof options.getEdition === 'function' ? options.getEdition : () => 'none';
     const setStatus = options && typeof options.setStatus === 'function' ? options.setStatus : () => {};
     const add = el('addChargePoint');
@@ -161,7 +162,7 @@
       add.dataset.ledgerBound = '1';
       add.addEventListener('click', () => {
         const edition = getEdition();
-        const existing = collectChargePoints(edition);
+        const existing: any[] = collectChargePoints(edition);
         const max = maxChargePoints(edition);
         if (existing.length >= max) { setStatus(`Lizenzgrenze erreicht: ${max} Ladepunkte.`, 'warn'); return; }
         existing.push({ id: `lp${existing.length + 1}`, label: `Ladepunkt ${existing.length + 1}`, stationId: 'station_1', connectorNo: existing.length + 1, unit: 'kWh' });
@@ -170,5 +171,5 @@
     }
   }
 
-  window.NexoWattEnergyOriginAppCenter = { setup, apply, collect, collectChargePoints, buildChargePoints, maxChargePoints };
+  (window as any).NexoWattEnergyOriginAppCenter = { setup, apply, collect, collectChargePoints, buildChargePoints, maxChargePoints };
 })();

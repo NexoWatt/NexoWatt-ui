@@ -1,3 +1,4 @@
+// @runtime-transpile
 /**
  * Executable TypeScript source: ems/services/energy-origin-ledger-runtime.js
  *
@@ -21,8 +22,19 @@ const {
   intervalBounds,
 } = require('./energy-origin-accounting');
 
+type AnyRecord = Record<string, any>;
+
 class EnergyOriginLedgerRuntime {
-  constructor(adapter) {
+  adapter: AnyRecord;
+  _primed: boolean;
+  _configHash: string;
+  _currentInterval: AnyRecord | null;
+  _recentIntervals: AnyRecord[];
+  _previousHash: string;
+  _storageInventory: AnyRecord;
+  _configHistory: AnyRecord[];
+
+  constructor(adapter: AnyRecord) {
     this.adapter = adapter;
     this._primed = false;
     this._configHash = '';
@@ -33,12 +45,12 @@ class EnergyOriginLedgerRuntime {
     this._configHistory = [];
   }
 
-  _rawConfig() {
+  _rawConfig(): AnyRecord {
     const cfg = this.adapter && this.adapter.config && this.adapter.config.energyLedger;
     return cfg && typeof cfg === 'object' ? cfg : {};
   }
 
-  _edition() {
+  _edition(): string {
     try {
       if (this.adapter && typeof this.adapter._nwCurrentLicenseEdition === 'function') {
         return normalizeEdition(this.adapter._nwCurrentLicenseEdition());
@@ -50,26 +62,26 @@ class EnergyOriginLedgerRuntime {
     return normalizeEdition(info.edition || (this.adapter && this.adapter._nwLicenseOk ? 'eos' : 'none'));
   }
 
-  _config() {
+  _config(): AnyRecord {
     return normalizeOriginConfig(this._rawConfig(), this._edition());
   }
 
-  async init() {
+  async init(): Promise<void> {
     await this._ensureStates();
     await this._primeFromStates();
     await this._process('init');
   }
 
-  async tick() {
+  async tick(): Promise<void> {
     await this._process('tick');
   }
 
-  async _ensureStates() {
+  async _ensureStates(): Promise<void> {
     const a = this.adapter;
     if (!a || typeof a.setObjectNotExistsAsync !== 'function') return;
-    const channel = async (id, name) => a.setObjectNotExistsAsync(id, { type: 'channel', common: { name }, native: {} });
-    const mk = async (id, name, type, role, unit, def) => {
-      const common = { name, type, role, read: true, write: false };
+    const channel = async (id: string, name: string): Promise<unknown> => a.setObjectNotExistsAsync(id, { type: 'channel', common: { name }, native: {} });
+    const mk = async (id: string, name: string, type: string, role: string, unit: string, def: unknown): Promise<void> => {
+      const common: AnyRecord = { name, type, role, read: true, write: false };
       if (unit) common.unit = unit;
       if (def !== undefined) common.def = def;
       await a.setObjectNotExistsAsync(id, { type: 'state', common, native: {} });
@@ -106,18 +118,18 @@ class EnergyOriginLedgerRuntime {
     await mk('energyLedger.origin.diagnostics.lastTickJson', 'Letzte Bilanzprüfung JSON', 'string', 'json', '', '{}');
   }
 
-  async _readJsonState(id, fallback) {
+  async _readJsonState<T>(id: string, fallback: T): Promise<T> {
     try {
       const st = await this.adapter.getStateAsync(id);
       if (!st || st.val === undefined || st.val === null || st.val === '') return fallback;
-      const parsed = typeof st.val === 'string' ? JSON.parse(st.val) : st.val;
+      const parsed = (typeof st.val === 'string' ? JSON.parse(st.val) : st.val) as T | null | undefined;
       return parsed === undefined || parsed === null ? fallback : parsed;
     } catch (_e) {
       return fallback;
     }
   }
 
-  async _readStringState(id, fallback = '') {
+  async _readStringState(id: string, fallback = ''): Promise<string> {
     try {
       const st = await this.adapter.getStateAsync(id);
       return st && st.val !== undefined && st.val !== null ? String(st.val) : fallback;
@@ -126,7 +138,7 @@ class EnergyOriginLedgerRuntime {
     }
   }
 
-  async _primeFromStates() {
+  async _primeFromStates(): Promise<void> {
     if (this._primed) return;
     this._primed = true;
     this._currentInterval = await this._readJsonState('energyLedger.origin.currentIntervalJson', null);
@@ -142,7 +154,7 @@ class EnergyOriginLedgerRuntime {
     if (!Array.isArray(this._configHistory)) this._configHistory = [];
   }
 
-  async _readForeignStateSafe(dpId) {
+  async _readForeignStateSafe(dpId: unknown): Promise<AnyRecord | null> {
     const id = String(dpId || '').trim();
     if (!id) return null;
     try {
@@ -152,9 +164,9 @@ class EnergyOriginLedgerRuntime {
     return null;
   }
 
-  async _readSamples(config, now = Date.now()) {
-    const samples = {};
-    const statusRows = [];
+  async _readSamples(config: AnyRecord, now = Date.now()): Promise<{ samples: Record<string, AnyRecord>; statusRows: AnyRecord[] }> {
+    const samples: Record<string, AnyRecord> = {};
+    const statusRows: AnyRecord[] = [];
     for (const meter of config.meters || []) {
       const state = await this._readForeignStateSafe(meter.dpId);
       const sample = meterSampleFromState(meter, state, now);
@@ -180,7 +192,7 @@ class EnergyOriginLedgerRuntime {
     return { samples, statusRows };
   }
 
-  _intervalState(config, bounds, startSamples, lastSamples, now, extra = {}) {
+  _intervalState(config: AnyRecord, bounds: AnyRecord, startSamples: AnyRecord, lastSamples: AnyRecord, now: number, extra: AnyRecord = {}): AnyRecord {
     return {
       schema: 'nexowatt.energy-origin-current-interval.v1',
       siteId: config.siteId,
@@ -197,8 +209,8 @@ class EnergyOriginLedgerRuntime {
     };
   }
 
-  _boundarySamples(meters, previousSamples, currentSamples, boundaryTs) {
-    const out = {};
+  _boundarySamples(meters: AnyRecord[], previousSamples: AnyRecord, currentSamples: AnyRecord, boundaryTs: number): AnyRecord {
+    const out: AnyRecord = {};
     for (const meter of meters || []) {
       const prev = previousSamples && previousSamples[meter.id];
       const cur = currentSamples && currentSamples[meter.id];
@@ -208,7 +220,7 @@ class EnergyOriginLedgerRuntime {
     return out;
   }
 
-  _recordConfig(config, reason = 'configuration-changed') {
+  _recordConfig(config: AnyRecord, reason = 'configuration-changed'): void {
     const last = this._configHistory.length ? this._configHistory[0] : null;
     if (last && last.configHash === config.configHash) return;
     this._configHistory.unshift({
@@ -219,12 +231,12 @@ class EnergyOriginLedgerRuntime {
       siteId: config.siteId,
       edition: config.edition,
       intervalMinutes: config.intervalMinutes,
-      meterBindings: (config.meters || []).map(m => ({ meterId: m.id, role: m.role, dpId: m.dpId, chargePointId: m.chargePointId || '' })),
+      meterBindings: (config.meters || []).map((m: any) => ({ meterId: m.id, role: m.role, dpId: m.dpId, chargePointId: m.chargePointId || '' })),
     });
     this._configHistory = this._configHistory.slice(0, 200);
   }
 
-  async _finalizeInterval(config, current, boundarySamples) {
+  async _finalizeInterval(config: AnyRecord, current: AnyRecord, boundarySamples: AnyRecord): Promise<AnyRecord | null> {
     const startTs = Number(current && current.startTs) || 0;
     const endTs = Number(current && current.endTs) || 0;
     if (!startTs || !endTs || endTs <= startTs) return null;
@@ -247,14 +259,14 @@ class EnergyOriginLedgerRuntime {
     return interval;
   }
 
-  _evidenceReady(config, lastInterval) {
+  _evidenceReady(config: AnyRecord, lastInterval: AnyRecord | null | undefined): boolean {
     if (!lastInterval || !lastInterval.evidence) return false;
     if (config.country === 'DE') return lastInterval.evidence.de && lastInterval.evidence.de.ready === true;
     if (config.country === 'NL') return lastInterval.evidence.nl && lastInterval.evidence.nl.ready === true;
     return !!((lastInterval.evidence.de && lastInterval.evidence.de.ready) || (lastInterval.evidence.nl && lastInterval.evidence.nl.ready));
   }
 
-  async _publish(config, status, meterStatus, lastInterval, now, error = '') {
+  async _publish(config: AnyRecord, status: string, meterStatus: AnyRecord[], lastInterval: AnyRecord | null, now: number, error: unknown = ''): Promise<void> {
     const a = this.adapter;
     if (!a) return;
     const summary = aggregateIntervals(this._recentIntervals);
@@ -287,7 +299,7 @@ class EnergyOriginLedgerRuntime {
       hashHead: this._previousHash,
       error: String(error || ''),
     };
-    const state = (id, val) => a.setStateAsync(id, { val, ack: true });
+    const state = (id: string, val: unknown): Promise<unknown> => a.setStateAsync(id, { val, ack: true });
     await state('energyLedger.origin.enabled', config.enabled === true);
     await state('energyLedger.origin.status', status);
     await state('energyLedger.origin.version', ORIGIN_LEDGER_VERSION);
@@ -313,7 +325,7 @@ class EnergyOriginLedgerRuntime {
     await state('energyLedger.origin.diagnostics.lastTickJson', JSON.stringify(tickDiag));
   }
 
-  async _process(_trigger = 'tick') {
+  async _process(_trigger = 'tick'): Promise<void> {
     await this._primeFromStates();
     const now = Date.now();
     const config = this._config();
@@ -357,13 +369,13 @@ class EnergyOriginLedgerRuntime {
       } else {
         this._currentInterval = { ...current, lastSamples: samples, lastUpdatedAt: now, configChanged: false };
       }
-      const invalid = statusRows.filter(row => !row.valid || !row.fresh);
+      const invalid = statusRows.filter((row: any) => !row.valid || !row.fresh);
       const status = lastInterval
         ? (lastInterval.quality && lastInterval.quality.status === 'complete' ? 'ok' : `interval-${lastInterval.quality && lastInterval.quality.status || 'incomplete'}`)
         : (invalid.length ? 'collecting-with-meter-warnings' : 'collecting');
       await this._publish(config, status, statusRows, lastInterval, now);
-    } catch (e) {
-      const message = String(e && e.message ? e.message : e);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
       await this._publish(config, 'error', [], null, now, message);
       if (this.adapter && this.adapter.log && typeof this.adapter.log.warn === 'function') this.adapter.log.warn(`[energy-origin-ledger] ${message}`);
     }

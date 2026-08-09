@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: b2413c12669823456143fc5f67a51f05ba5e5416dd1827b818c268683ab9983f
+ * Original-Hash: 2f8c34d2e7bdefa330653ab7fe517a676b7ab78c36aa82abdbaf1385201225be
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/locale-api-service.ts
- * Quell-Hash: sha256:6401e58572114470a83eb342816bf340be7bae7195e877e5d4af8b588996888d
+ * Quell-Hash: sha256:168adb5c524ce3f56c7d15c2d1f48a4988efcafe06bf1c819e3e44ee827b2d56
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -50,10 +50,9 @@
  * Executable TypeScript source: ems/services/locale-api-service.js
  *
  * Kleiner API-Handler für die live übernommene ioBroker-/EOS-Systemsprache.
- * Die Datei bleibt JS-kompatibel und benötigt bewusst kein @ts-nocheck.
+ * Die Datei wird aus strikt typisiertem TypeScript in die produktive JS-Runtime transpiliert.
  */
 'use strict';
-
 /**
  * Code-Teil: createLocaleHandler
  *
@@ -66,24 +65,24 @@
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
 function createLocaleHandler(adapter, sendNoStore) {
-  return async function localeHandler(_req, res) {
-    try {
-      sendNoStore(res);
-      await adapter._nwRefreshSystemLanguage('api-locale');
-      return res.json({
-        ok: true,
-        locale: adapter._nwBuildLocaleInfo(),
-        countryProfile: adapter._nwBuildCountryProfileInfo(),
-        ts: Date.now(),
-      });
-    } catch (error) {
-      return res.status(500).json({
-        ok: false,
-        error: 'locale_unavailable',
-        message: String(error && error.message ? error.message : error),
-      });
-    }
-  };
+    return async function localeHandler(_req, res) {
+        try {
+            sendNoStore(res);
+            await adapter._nwRefreshSystemLanguage('api-locale');
+            return res.json({
+                ok: true,
+                locale: adapter._nwBuildLocaleInfo(),
+                countryProfile: adapter._nwBuildCountryProfileInfo(),
+                ts: Date.now(),
+            });
+        }
+        catch (error) {
+            return res.status(500).json({
+                ok: false,
+                error: 'locale_unavailable',
+                message: String(error instanceof Error ? error.message : error),
+            });
+        }
+    };
 }
-
 module.exports = { createLocaleHandler };

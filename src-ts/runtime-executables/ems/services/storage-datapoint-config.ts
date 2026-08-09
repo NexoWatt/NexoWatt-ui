@@ -15,6 +15,7 @@
  */
 
 declare const module: { exports: unknown };
+declare function require(id: string): any;
 
 const {
   normalizeControlMode: normalizeFeneconControlMode,

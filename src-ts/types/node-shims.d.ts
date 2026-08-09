@@ -50,3 +50,10 @@ declare const console: {
 declare const process: {
   exit(code?: number): never;
 };
+
+interface NexoWattCommonJsModule {
+  exports: unknown;
+}
+
+declare function require(id: string): any;
+declare const module: NexoWattCommonJsModule;

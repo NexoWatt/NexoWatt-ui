@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/nexologic-budget.ts
- * Quell-Hash: sha256:2a032f250acb615dd94a1efc2eb1a7bdc551258da9bd792c62dc9896f6a21deb
+ * Quell-Hash: sha256:34cb81b1fd6a8c0d605ccb0469dde1e1d6d49cb6f45d309d9b928500b8bb0cfa
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -96,7 +96,7 @@ class NexoLogicBudgetModule extends BaseModule {
                     failures.push(`${key}:${text(result?.status || 'release-not-confirmed')}`);
             }
             catch (error) {
-                failures.push(`${key}:${text(error?.message || error)}`);
+                failures.push(`${key}:${text(error instanceof Error ? error.message : error)}`);
             }
         }
         await Promise.all([
@@ -161,7 +161,7 @@ class NexoLogicBudgetModule extends BaseModule {
                     });
                 }
                 catch (error) {
-                    invalidateSafetyEnvelope(this.adapter, `nexologic-live-safety-build-failed:${text(intent.key)}:${text(error?.message || error)}`, {
+                    invalidateSafetyEnvelope(this.adapter, `nexologic-live-safety-build-failed:${text(intent.key)}:${text(error instanceof Error ? error.message : error)}`, {
                         generation: this.adapter?._emsSafetyCycle?.generation,
                         emergencyStop: true,
                     });

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 1f62122b27ea4120f5a0717c6cfb1b962be40c7ba2fab8fb69cf78d21a973980
+ * Original-Hash: a9701152ad8c03c33a89d71dd8169dd0200bc4c5d90cd034c7d26900e18d270d
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/evcs-unit-conversion.ts
- * Quell-Hash: sha256:34c722404568bd0137b46b52a756e281e0b4fc1b15abfe6fdbc360f94dd55617
+ * Quell-Hash: sha256:4443672365f8133b24ccf031f82ccabf18668d8b0aee9d12ec4a0b790a2e3a7e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:

@@ -75,20 +75,21 @@ function requirePackageScripts(pkg, scriptNames = defaultRequiredPackageScripts)
   return results.length ? results : [ok()];
 }
 
-/** Code-Teil: requirePublishCheckIndependentFromTypeScript – verhindert tsc in publish:check. */
-function requirePublishCheckIndependentFromTypeScript(pkg) {
+/** Code-Teil: requirePublishCheckStartsWithTypeSafety – erzwingt DevDependency-Preflight und Typecheck am Gate-Anfang. */
+function requirePublishCheckStartsWithTypeSafety(pkg) {
   const publishCheck = String(pkg && pkg.scripts && pkg.scripts['publish:check'] || '');
   const commands = publishCheck
     .split(/&&|\|\||;|\n/g)
     .map((command) => command.trim().replace(/\s+/g, ' '))
     .filter(Boolean);
-  const runsTypeScriptCompiler = commands.some((command) => {
-    if (/^(?:npx\s+)?tsc(?:\s|$)/.test(command)) return true;
-    if (/^(?:npm|pnpm)\s+exec\s+tsc(?:\s|$)/.test(command)) return true;
-    const npmRun = command.match(/^(?:npm|pnpm|yarn)\s+run\s+([^\s]+)/);
-    return Boolean(npmRun && npmRun[1].startsWith('typecheck'));
-  });
-  if (runsTypeScriptCompiler) return error('publish:check must stay independent from TypeScript. CI should run test:all.');
+  const dependencyCheck = 'node scripts/ensure-publish-dev-deps.js';
+  const typecheckCommand = 'npm run typecheck';
+  const dependencyIndex = commands.indexOf(dependencyCheck);
+  const typecheckIndex = commands.indexOf(typecheckCommand);
+  if (dependencyIndex !== 0) return error('publish:check must start with node scripts/ensure-publish-dev-deps.js.');
+  if (typecheckIndex !== 1) return error('publish:check must run npm run typecheck immediately after the DevDependency preflight.');
+  if (commands.filter((command) => command === dependencyCheck).length !== 1) return error('publish:check must contain the DevDependency preflight exactly once.');
+  if (commands.filter((command) => command === typecheckCommand).length !== 1) return error('publish:check must contain npm run typecheck exactly once.');
   return ok();
 }
 
@@ -145,7 +146,7 @@ function collectTsScaffoldRuleErrors(rootDir, pkg, tsconfig, buildConfig) {
   const results = [
     ...requireScaffoldFiles(rootDir),
     ...requirePackageScripts(pkg || {}),
-    requirePublishCheckIndependentFromTypeScript(pkg || {}),
+    requirePublishCheckStartsWithTypeSafety(pkg || {}),
     requireTsconfigIncludesSrcTs(tsconfig || {}),
     ...requireBuildConfigDeclarationsOnly(buildConfig || {}),
     requireMinimumSrcTsFiles(srcTsFiles),
@@ -168,7 +169,7 @@ module.exports = {
   fileExists,
   requireScaffoldFiles,
   requirePackageScripts,
-  requirePublishCheckIndependentFromTypeScript,
+  requirePublishCheckStartsWithTypeSafety,
   requireTsconfigIncludesSrcTs,
   requireBuildConfigDeclarationsOnly,
   collectSrcTsFiles,

@@ -99,7 +99,7 @@ export class NexoLogicBudgetModule extends BaseModule {
         const stopped = reservedW <= 0.5 && !!(result && (result.accepted === true || result.confirmed === true || result.status === 'released' || result.status === 'off'));
         if (!stopped) failures.push(`${key}:${text(result?.status || 'release-not-confirmed')}`);
       } catch (error) {
-        failures.push(`${key}:${text(error?.message || error)}`);
+        failures.push(`${key}:${text(error instanceof Error ? error.message : error)}`);
       }
     }
     await Promise.all([
@@ -167,7 +167,7 @@ export class NexoLogicBudgetModule extends BaseModule {
             generation: this.adapter?._emsSafetyCycle?.generation,
           });
         } catch (error) {
-          invalidateSafetyEnvelope(this.adapter, `nexologic-live-safety-build-failed:${text(intent.key)}:${text(error?.message || error)}`, {
+          invalidateSafetyEnvelope(this.adapter, `nexologic-live-safety-build-failed:${text(intent.key)}:${text(error instanceof Error ? error.message : error)}`, {
             generation: this.adapter?._emsSafetyCycle?.generation,
             emergencyStop: true,
           });

@@ -1,3 +1,4 @@
+// @runtime-transpile
 /**
  * Executable TypeScript source: www/nw-i18n.js
  *
@@ -8,13 +9,14 @@
  */
 'use strict';
 
-(function initNexoWattI18nRuntime(global) {
+(function initNexoWattI18nRuntime(global: any) {
+  type AnyRecord = Record<string, any>;
   if (!global || global.NexoWattI18n) return;
 
   const SUPPORTED_LANGUAGES = new Set(['de', 'nl', 'en']);
   const DEFAULT_LANGUAGE = 'de';
   const POLL_INTERVAL_MS = 3000;
-  const CATALOG_VERSION = '0.8.163';
+  const CATALOG_VERSION = '0.8.164';
   const TEXT_ATTRS = ['title', 'aria-label', 'placeholder'];
   const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'CODE', 'PRE', 'NOSCRIPT', 'SVG', 'PATH']);
 
@@ -22,40 +24,43 @@
   const renderedTextByNode = new WeakMap();
   const sourceAttrsByElement = new WeakMap();
   const renderedAttrsByElement = new WeakMap();
-  const subscribers = new Set();
+  type LocaleSubscriber = (detail: Record<string, any>) => void;
+  type CompiledPattern = { regex: RegExp; target: string };
+
+  const subscribers = new Set<LocaleSubscriber>();
 
   let currentLanguage = DEFAULT_LANGUAGE;
   let currentLocaleTag = 'de-DE';
   let currentCountry = 'DE';
-  let currentCountryProfile = {};
+  let currentCountryProfile: Record<string, any> = {};
   let currentLocaleSource = 'fallback';
-  let currentCatalog = { meta: {}, messages: {}, text: {}, patterns: [] };
-  let compiledPatterns = [];
-  let observer = null;
-  let pollTimer = null;
+  let currentCatalog: Record<string, any> = { meta: {}, messages: {}, text: {}, patterns: [] };
+  let compiledPatterns: CompiledPattern[] = [];
+  let observer: MutationObserver | null = null;
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
   let initialized = false;
   let refreshRunning = false;
   let marketApplyQueued = false;
-  let broadcastChannel = null;
+  let broadcastChannel: BroadcastChannel | null = null;
 
-  function normalizeLanguage(raw) {
+  function normalizeLanguage(raw: any) {
     const value = String(raw || '').trim().toLowerCase().replace('_', '-');
     const short = value.split('-')[0] || DEFAULT_LANGUAGE;
     return SUPPORTED_LANGUAGES.has(short) ? short : DEFAULT_LANGUAGE;
   }
 
-  function normalizeCountry(raw) {
+  function normalizeCountry(raw: any) {
     return String(raw || '').trim().toUpperCase() === 'NL' ? 'NL' : 'DE';
   }
 
-  function localeTagForLanguage(language) {
+  function localeTagForLanguage(language: any) {
     const lang = normalizeLanguage(language);
     if (lang === 'nl') return 'nl-NL';
     if (lang === 'en') return 'en-GB';
     return 'de-DE';
   }
 
-  async function fetchJson(url) {
+  async function fetchJson(url: any) {
     const response = await fetch(url, {
       cache: 'no-store',
       headers: { Accept: 'application/json' },
@@ -64,7 +69,7 @@
     return response.json();
   }
 
-  async function loadCatalog(language) {
+  async function loadCatalog(language: any) {
     const lang = normalizeLanguage(language);
     try {
       const data = await fetchJson(`/static/i18n/${encodeURIComponent(lang)}.json?v=${encodeURIComponent(CATALOG_VERSION)}`);
@@ -80,9 +85,9 @@
     }
   }
 
-  function compilePatterns(catalog) {
+  function compilePatterns(catalog: any) {
     const rows = Array.isArray(catalog && catalog.patterns) ? catalog.patterns : [];
-    compiledPatterns = rows.map((row) => {
+    compiledPatterns = rows.map((row: any) => {
       try {
         const source = String(row && row.source || '');
         if (!source) return null;
@@ -93,7 +98,7 @@
     }).filter(Boolean);
   }
 
-  function interpolate(value, params) {
+  function interpolate(value: any, params: any) {
     let text = String(value == null ? '' : value);
     const p = params && typeof params === 'object' ? params : {};
     for (const [key, val] of Object.entries(p)) {
@@ -102,20 +107,20 @@
     return text;
   }
 
-  function t(key, params, fallback) {
+  function t(key: any, params: any, fallback: any) {
     const messages = currentCatalog && currentCatalog.messages && typeof currentCatalog.messages === 'object'
-      ? currentCatalog.messages
-      : {};
+      ? currentCatalog.messages as Record<string, any>
+      : {} as Record<string, any>;
     const value = Object.prototype.hasOwnProperty.call(messages, key) ? messages[key] : (fallback !== undefined ? fallback : key);
     return interpolate(value, params);
   }
 
-  function translateTrimmedText(trimmed) {
+  function translateTrimmedText(trimmed: any) {
     if (!trimmed || currentLanguage === DEFAULT_LANGUAGE) return trimmed;
     const normalized = String(trimmed).replace(/\s+/g, ' ').trim();
     const map = currentCatalog && currentCatalog.text && typeof currentCatalog.text === 'object'
-      ? currentCatalog.text
-      : {};
+      ? currentCatalog.text as Record<string, any>
+      : {} as Record<string, any>;
     if (Object.prototype.hasOwnProperty.call(map, normalized)) return String(map[normalized]);
     for (const row of compiledPatterns) {
       if (row.regex.test(normalized)) return normalized.replace(row.regex, row.target);
@@ -123,7 +128,7 @@
     return trimmed;
   }
 
-  function translateRawText(raw) {
+  function translateRawText(raw: any) {
     const input = String(raw == null ? '' : raw);
     if (!input.trim() || currentLanguage === DEFAULT_LANGUAGE) return input;
     const leading = (input.match(/^\s*/) || [''])[0];
@@ -133,7 +138,7 @@
     return `${leading}${translated}${trailing}`;
   }
 
-  function shouldSkipNode(node) {
+  function shouldSkipNode(node: any) {
     const parent = node && node.parentElement;
     if (!parent) return false;
     if (SKIP_TAGS.has(parent.tagName)) return true;
@@ -141,7 +146,7 @@
     return false;
   }
 
-  function translateTextNode(node, captureSource) {
+  function translateTextNode(node: any, captureSource: any) {
     if (!node || node.nodeType !== Node.TEXT_NODE || shouldSkipNode(node)) return;
     const current = String(node.nodeValue == null ? '' : node.nodeValue);
     if (captureSource || !sourceTextByNode.has(node)) sourceTextByNode.set(node, current);
@@ -155,7 +160,7 @@
     }
   }
 
-  function getAttrStore(map, element) {
+  function getAttrStore(map: any, element: any) {
     let store = map.get(element);
     if (!store) {
       store = new Map();
@@ -164,7 +169,7 @@
     return store;
   }
 
-  function translateAttribute(element, attr, captureSource) {
+  function translateAttribute(element: any, attr: any, captureSource: any) {
     if (!element || !element.getAttribute || !element.hasAttribute(attr)) return;
     if (element.closest && element.closest('[data-nw-i18n-ignore="true"]')) return;
     const sourceStore = getAttrStore(sourceAttrsByElement, element);
@@ -177,7 +182,7 @@
     renderedStore.set(attr, desired);
   }
 
-  function applyDataI18n(element) {
+  function applyDataI18n(element: any) {
     if (!element || !element.getAttribute) return;
     const key = element.getAttribute('data-i18n');
     if (key) {
@@ -194,7 +199,7 @@
     }
   }
 
-  function applyTranslations(root, captureSource = false) {
+  function applyTranslations(root: any, captureSource: any = false) {
     const scope = root && root.nodeType ? root : document;
     if (scope.nodeType === Node.TEXT_NODE) {
       translateTextNode(scope, captureSource);
@@ -220,7 +225,7 @@
     queueMarketProfileApply();
   }
 
-  function setMarketHidden(element, hidden) {
+  function setMarketHidden(element: any, hidden: any) {
     if (!element || !element.classList) return;
     element.classList.toggle('nw-market-hidden', !!hidden);
     element.setAttribute('aria-hidden', hidden ? 'true' : 'false');
@@ -245,8 +250,8 @@
     }
 
     const isNl = currentCountry === 'NL';
-    document.querySelectorAll('[data-nw-market="DE"]').forEach((el) => setMarketHidden(el, isNl));
-    document.querySelectorAll('[data-nw-market="NL"]').forEach((el) => setMarketHidden(el, !isNl));
+    document.querySelectorAll('[data-nw-market="DE"]').forEach((el: any) => setMarketHidden(el, isNl));
+    document.querySelectorAll('[data-nw-market="NL"]').forEach((el: any) => setMarketHidden(el, !isNl));
 
     const deOnlySelectors = [
       '#ems14aRow',
@@ -256,7 +261,7 @@
       '[data-app="para14a"]',
     ];
     for (const selector of deOnlySelectors) {
-      document.querySelectorAll(selector).forEach((el) => setMarketHidden(el, isNl));
+      document.querySelectorAll(selector).forEach((el: any) => setMarketHidden(el, isNl));
     }
   }
 
@@ -266,7 +271,7 @@
     Promise.resolve().then(applyMarketProfile);
   }
 
-  function notifyLanguageChange(previousLanguage) {
+  function notifyLanguageChange(previousLanguage: any) {
     const detail = {
       language: currentLanguage,
       previousLanguage,
@@ -284,7 +289,7 @@
     } catch (_e) {}
   }
 
-  async function activateLocale(payload, force = false) {
+  async function activateLocale(payload: any, force: any = false) {
     const locale = payload && payload.locale && typeof payload.locale === 'object' ? payload.locale : (payload || {});
     const profile = payload && payload.countryProfile && typeof payload.countryProfile === 'object' ? payload.countryProfile : {};
     const nextLanguage = normalizeLanguage(locale.htmlLang || locale.language || profile.effectiveLanguage || DEFAULT_LANGUAGE);
@@ -325,7 +330,7 @@
     return changed;
   }
 
-  async function refreshLocale(force = false) {
+  async function refreshLocale(force: any = false) {
     if (refreshRunning) return false;
     refreshRunning = true;
     try {
@@ -347,7 +352,7 @@
 
   function startObserver() {
     if (observer || !document.documentElement) return;
-    observer = new MutationObserver((mutations) => {
+    observer = new MutationObserver((mutations: any) => {
       for (const mutation of mutations) {
         if (mutation.type === 'characterData') {
           const node = mutation.target;
@@ -386,25 +391,25 @@
     (document.head || document.documentElement).appendChild(style);
   }
 
-  function formatNumber(value, options) {
+  function formatNumber(value: any, options: any) {
     const n = Number(value);
     if (!Number.isFinite(n)) return String(value == null ? '—' : value);
     try { return new Intl.NumberFormat(currentLocaleTag, options || {}).format(n); } catch (_e) { return String(n); }
   }
 
-  function formatDate(value, options) {
+  function formatDate(value: any, options: any) {
     const date = value instanceof Date ? value : new Date(value);
     if (!Number.isFinite(date.getTime())) return '—';
     try { return new Intl.DateTimeFormat(currentLocaleTag, options || {}).format(date); } catch (_e) { return date.toISOString(); }
   }
 
-  function subscribe(fn) {
+  function subscribe(fn: LocaleSubscriber) {
     if (typeof fn !== 'function') return () => {};
     subscribers.add(fn);
     return () => subscribers.delete(fn);
   }
 
-  async function setLanguageForPreview(language) {
+  async function setLanguageForPreview(language: any) {
     const lang = normalizeLanguage(language);
     await activateLocale({ locale: { language: lang, htmlLang: lang, source: 'preview' }, countryProfile: currentCountryProfile }, true);
   }
@@ -418,7 +423,7 @@
     try {
       if ('BroadcastChannel' in global) {
         broadcastChannel = new BroadcastChannel('nexowatt-system-language');
-        broadcastChannel.addEventListener('message', (event) => {
+        broadcastChannel.addEventListener('message', (event: any) => {
           if (event && event.data && event.data.type === 'language') refreshLocale(false).catch(() => {});
         });
       }
