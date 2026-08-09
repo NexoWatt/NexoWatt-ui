@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 453a5875c2ebe35a9576984cb1c00581e1f0bdf2ac5b0f89337fdef8dca1e783
+ * Original-Hash: 366c2b1e21e8487ad60ecee903c9ea9c6bb96799a33383e2a67485de08436fc1
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-control.ts
- * Quell-Hash: sha256:e57456a4fe92eb68c1a57c9d22a127513283e38ef8f83ab5892670bdf1cfe113
+ * Quell-Hash: sha256:aa9c9822b2402354687e76be79605ae025a9084a0d443df955f4b57f277af74e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -94,6 +94,10 @@ const {
     calculateFemsGridTargetW,
     isFeneconHybrid,
 } = require('../services/fenecon-hybrid-control');
+const {
+    ensureFeneconNvpShadowStates,
+    updateFeneconNvpShadowRuntime,
+} = require('../services/fenecon-nvp-shadow-runtime');
 const {
     liveSafetyEnvelope,
     evaluateFlexibleLoadRequest,
@@ -1035,6 +1039,14 @@ class SpeicherRegelungModule extends BaseModule {
         this._feneconHybridPassThroughSinceMs = 0;
         this._feneconHybridHandoverZeroPending = false;
 
+        // RC42: Die vereinfachte NVP-/Gesamtverbrauchsregelung wird zunaechst
+        // ausschliesslich als read-only Shadowmodell gerechnet. Dieser Marker
+        // dient nur dazu, in inaktiven Profilen alte Diagnosen sauber zu loeschen.
+        this._feneconNvpShadowWasActive = false;
+        this._feneconNvpShadowLastRunMs = 0;
+        this._feneconNvpShadowLastSignature = '';
+        this._feneconNvpShadowLastDiag = null;
+
         // Legacy-Assist-Zustaende bleiben aus Migrationsgruenden vorhanden, werden
         // im neuen FENECON-Hybrid-Automatikmodus aber nicht mehr aktiviert.
         // NVP-Assist-Sollwert erforderlich ist. Unabhängig vom Assist-Modus bleibt
@@ -1382,12 +1394,15 @@ class SpeicherRegelungModule extends BaseModule {
             // Batterie-Sollleistungs-DP schreiben. Dadurch kann das Gateway nach seinem Watchdog
             // wieder vollständig in den Normalmodus gehen.
             try {
-                if (this._isFeneconProfileConfigured(cfg) || this._feneconHybridWasExternal || this._feneconGridWasActive) {
+                if (this._isFeneconProfileConfigured(cfg) || this._feneconHybridWasExternal || this._feneconGridWasActive || this._feneconNvpShadowWasActive) {
                     await this._setFeneconHybridDiag({
                         active: false,
                         mode: 'disabled',
                         reason: 'Speicherregelung deaktiviert – keine externe Gateway-Vorgabe',
                         writeMode: 'no-write',
+                    });
+                    await this._updateFeneconNvpShadow({
+                        forceInactiveReason: 'storage-control-disabled',
                     });
                     this._feneconHybridWasExternal = false;
                     this._feneconHybridLastMode = 'disabled';
@@ -1396,6 +1411,7 @@ class SpeicherRegelungModule extends BaseModule {
                     this._feneconHybridPvBelowSinceMs = 0;
                     this._feneconHybridPassThroughSinceMs = 0;
                     this._feneconHybridHandoverZeroPending = false;
+                    this._feneconNvpShadowWasActive = false;
                     this._feneconGridWasActive = false;
                     this._feneconGridReleasedDirectTarget = false;
                     this._feneconAssistActive = false;
@@ -2023,6 +2039,11 @@ class SpeicherRegelungModule extends BaseModule {
             await this._setIfChanged('speicher.regelung.totalBudgetStorageAvailableW', 0);
             await this._setIfChanged('speicher.regelung.totalBudgetStorageReservedW', 0);
             await this._setIfChanged('speicher.regelung.totalBudgetStorageCapped', false);
+            if (feneconHybridConfigured || this._feneconNvpShadowWasActive) {
+                await this._updateFeneconNvpShadow({
+                    forceInactiveReason: 'central-nvp-missing-or-stale',
+                });
+            }
             await this._setIfChanged('speicher.regelung.policyJson', JSON.stringify({ ts: now, disabled: true, reason: 'Netzleistung fehlt oder zu alt', feneconHybrid: !!feneconHybridConfigured, sungrowHybrid: !!sungrowHybridActive }));
             return;
         }
@@ -6024,6 +6045,28 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             }
         }
 
+        // RC42 Shadow-only: Auch waehrend echter FEMS-Reglerhoheit wird die
+        // vereinfachte NVP-Strategie parallel berechnet. Die Methode schreibt
+        // ausschliesslich Diagnose-States und kann den No-Write-Vertrag nicht
+        // aufheben oder einen Hardwarebefehl erzeugen.
+        if (feneconHybridActive && feneconNoWrite) {
+            await this._updateFeneconNvpShadow({
+                cfg,
+                storageAuthority: storageAuthorityEarly,
+                feneconHybridCtx,
+                targetW,
+                source,
+                reason,
+                currentAuthority: feneconZeroOverride
+                    ? 'eos-zero-override'
+                    : String((feneconHybridCtx && feneconHybridCtx.authority) || this._feneconHybridAuthority || ''),
+                commandFamily: feneconNoWrite
+                    ? 'no-write-fems-self'
+                    : (feneconWriteMode || 'pending-eos-write'),
+                nvpW: strictFiniteNumber(gridRawW, strictFiniteNumber(gridW, null)),
+            });
+        }
+
         if (feneconNoWrite || sungrowNoWrite || storageZeroNoWrite) {
             this._pendingAsyncBalanceCommand = null;
             const noWriteStatus = feneconNoWrite
@@ -7445,6 +7488,13 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             feneconAdditionalPvThresholdW: storage.feneconAdditionalPvThresholdW,
             feneconGridTargetW: storage.feneconGridTargetW,
             feneconGridExportBufferW: storage.feneconGridExportBufferW,
+            // RC42 nur Diagnose: Zielpuffer fuer das read-only NVP-Shadowmodell.
+            // Ohne expliziten Wert werden 80 W kleiner Netzbezug angenommen.
+            feneconNvpShadowZeroExportTargetW: storage.feneconNvpShadowZeroExportTargetW,
+            feneconNvpShadowIntervalSec: storage.feneconNvpShadowIntervalSec,
+            feneconNvpShadowPlausibilityToleranceW: storage.feneconNvpShadowPlausibilityToleranceW,
+            feneconNvpShadowNvpToleranceW: storage.feneconNvpShadowNvpToleranceW,
+            feneconNvpShadowMaxSkewMs: storage.feneconNvpShadowMaxSkewMs,
             feneconGridMinSetpointW: storage.feneconGridMinSetpointW,
             feneconGridMaxSetpointW: storage.feneconGridMaxSetpointW,
             feneconGridWriteIntervalSec: storage.feneconGridWriteIntervalSec,
@@ -8237,6 +8287,17 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             assistActive: false,
             assistImportThresholdW: null,
         };
+    }
+
+    /**
+     * RC42: Read-only Shadow fuer die kuenftig vereinfachte FENECON-NVP-
+     * Regelung. Der produktive Writer, die Reglerhoheit und alle RC41-
+     * Sicherheitsgrenzen bleiben unveraendert. Diese Methode liest nur bereits
+     * gemappte Messwerte und schreibt ausschliesslich interne Diagnose-States.
+     * Ein Fehler im Shadow darf den laufenden Speicher-Tick niemals abbrechen.
+     */
+    async _updateFeneconNvpShadow(ctx = {}) {
+        return updateFeneconNvpShadowRuntime(this, ctx);
     }
 
     /**
@@ -9113,6 +9174,26 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             splitPairConflict,
         }));
         await this._setIfChanged('speicher.regelung.runObjId', runEntry && runEntry.objectId ? String(runEntry.objectId) : '');
+
+        // RC42 Shadow-only: Der Vergleich verwendet den durch die finale
+        // SafetyEnvelope-Pruefung bereits geklemmten Batterie-Sollwert `w`.
+        // Dadurch wird exakt die produktiv erlaubte Policy verglichen, ohne den
+        // anschliessenden Writer, dessen Ziel oder dessen Reglerhoheit zu aendern.
+        if (selectedTopology === 'single' && isFeneconHybrid({
+            vendorProfile: storageVendorProfile,
+            coupling: cfg.coupling,
+        })) {
+            await this._updateFeneconNvpShadow({
+                cfg,
+                storageAuthority,
+                targetW: w,
+                requestedTargetW: requestedStorageTargetW,
+                source,
+                reason,
+                currentAuthority: String(this._feneconHybridAuthority || 'nexowatt'),
+                commandFamily,
+            });
+        }
 
         // Doppelte manuelle Zuordnungen fuer unterschiedliche Ausgangsfunktionen
         // koennen gegensaetzliche Rohwerte erzeugen. Solche echten Objektkonflikte
@@ -10142,6 +10223,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.feneconGridTargetObjId', 'FENECON FEMS-NVP-Zieldatenpunkt', 'string', 'text', '');
         await mk('speicher.regelung.feneconGridLastWriteRaw', 'FENECON letzter FEMS-NVP-Rohwert', 'number', 'value');
         await mk('speicher.regelung.feneconGridReleaseStatus', 'FENECON Übergabe-/Freigabestatus', 'string', 'text', '');
+
+        await ensureFeneconNvpShadowStates(mk);
         await mk('speicher.regelung.feneconHybridAktiv', 'Hybrid-/Gateway-Priorität aktiv', 'boolean', 'indicator', false);
         await mk('speicher.regelung.feneconHybridModus', 'Hybrid-/Gateway-Priorität Modus', 'string', 'text', '');
         await mk('speicher.regelung.feneconHybridGrund', 'Hybrid-/Gateway-Priorität Grund', 'string', 'text', '');

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:d35453f414ae0d56ce730a2bbea5c5929c40b617c9c456fb568aaf0516e36ac6
+ * Quell-Hash: sha256:4c26a8490551c02fc6f31c30c4312e87364b8dcf22288c05e62349a1ff582bdc
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -4977,6 +4977,8 @@ class NexoWattVis extends utils.Adapter {
       // FENECON/OpenEMS-Hybrid: nativer FEMS-NVP-Master oder direkte ESS-Rückmeldungen.
       feneconGridSetpointId: textFrom('feneconGridSetpointId', 'feneconGridSetpointObjectId', 'femsGridSetpointId', 'femsGridSetpointObjectId'),
       feneconEssActualPowerId: textFrom('feneconEssActualPowerId', 'feneconEssActualPowerObjectId', 'feneconActivePowerId'),
+      feneconNvpPowerId: textFrom('feneconNvpPowerId', 'feneconNvpPowerObjectId', 'feneconGridPowerId', 'feneconNapPowerId'),
+      feneconConsumptionTotalId: textFrom('feneconConsumptionTotalId', 'feneconConsumptionTotalObjectId', 'feneconLoadTotalId', 'feneconConsumptionPowerId', 'feneconLoadPowerId'),
       feneconMinPowerId: textFrom('feneconMinPowerId', 'feneconMinPowerObjectId', 'feneconMinimumPowerId'),
       feneconMaxPowerId: textFrom('feneconMaxPowerId', 'feneconMaxPowerObjectId', 'feneconMaximumPowerId'),
       feneconActualSetpointId: textFrom('feneconActualSetpointId', 'feneconActualSetpointObjectId', 'feneconSetpointReadbackId'),

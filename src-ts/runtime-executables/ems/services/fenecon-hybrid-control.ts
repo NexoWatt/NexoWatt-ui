@@ -502,6 +502,286 @@ function calculateFemsGridTargetW(input: AnyRecord = {}): AnyRecord {
   };
 }
 
+
+/**
+ * RC42 Shadow-Modell fuer eine kuenftig vereinfachte FENECON-NVP-Regelung.
+ *
+ * Dieser Helfer ist absichtlich rein und schreibfrei. Er berechnet parallel zur
+ * produktiven RC41-Regelung, welche FEMS-NVP-Vorgabe aus
+ *
+ *   NVP-Ist + ESS-Ist - finalem EOS-Batteriesollwert
+ *
+ * entstehen wuerde und welche Batterie-Leistung fuer einen kleinen positiven
+ * Netzbezug (0-Einspeisung mit Reserve) erforderlich waere. Direkter
+ * Gesamtverbrauch und PV-Erzeugung dienen nur als unabhaengige
+ * Plausibilitaetskontrolle und werden niemals ein zweites Mal in den Regelwert
+ * eingerechnet.
+ */
+function calculateFeneconNvpShadow(input: AnyRecord = {}): AnyRecord {
+  const enabled = input.enabled !== false;
+  const eligible = input.eligible === true;
+  const exclusiveSingleStorage = input.exclusiveSingleStorage === true;
+  const active = enabled && eligible && exclusiveSingleStorage;
+  const nativeTargetMapped = input.nativeTargetMapped === true;
+
+  const nvpW = finite(input.nvpW);
+  const essActualW = finite(input.essActualW);
+  const requestedBatteryTargetW = finite(
+    input.requestedBatteryTargetW
+    ?? input.eosBatteryTargetW
+    ?? input.batteryTargetW,
+  );
+  const nvpFresh = input.nvpFresh === true && nvpW !== null;
+  const essFresh = input.essFresh === true && essActualW !== null;
+
+  const minBatteryW = finite(input.minBatteryW ?? input.minBatteryTargetW);
+  const maxBatteryW = finite(input.maxBatteryW ?? input.maxBatteryTargetW);
+  const limitsValid = !(minBatteryW !== null && maxBatteryW !== null && minBatteryW > maxBatteryW);
+
+  const zeroExportTargetRaw = finite(input.zeroExportTargetW);
+  // Ein kleiner positiver Bezug verhindert Pendeln um exakt 0 W. Der Shadow-
+  // Bereich bleibt bewusst auf eine reine Null-Einspeise-Reserve begrenzt.
+  const zeroExportTargetW = Math.round(clamp(zeroExportTargetRaw ?? 80, 0, 1000));
+  const plausibilityToleranceRaw = finite(input.plausibilityToleranceW);
+  const source = text(input.source).toLowerCase();
+  const reasonText = text(input.reason);
+  const commandFamily = text(input.commandFamily);
+  const currentAuthority = text(input.currentAuthority);
+  const safetyNvpFresh = input.safetyNvpFresh !== false;
+  const referenceNvpW = finite(input.referenceNvpW ?? input.centralNvpW);
+  const referenceNvpFresh = input.referenceNvpFresh === true && referenceNvpW !== null;
+  const nvpReferenceAvailable = nvpFresh && referenceNvpFresh;
+  const nvpReferenceDeltaW = nvpReferenceAvailable && nvpW !== null && referenceNvpW !== null
+    ? Math.round(nvpW - referenceNvpW)
+    : null;
+  const nvpReferenceToleranceW = Math.round(Math.max(100, finite(input.nvpReferenceToleranceW) ?? 300));
+  const nvpReferencePlausible = nvpReferenceAvailable && nvpReferenceDeltaW !== null
+    ? Math.abs(nvpReferenceDeltaW) <= nvpReferenceToleranceW
+    : null;
+
+  let invalidReason = '';
+  if (!enabled) invalidReason = 'shadow-disabled';
+  else if (!eligible) invalidReason = 'not-fenecon-dc-hybrid';
+  else if (!exclusiveSingleStorage) invalidReason = 'exclusive-single-storage-required';
+  else if (!nvpFresh) invalidReason = 'nvp-missing-or-stale';
+  else if (!essFresh) invalidReason = 'ess-actual-missing-or-stale';
+  else if (requestedBatteryTargetW === null) invalidReason = 'battery-target-missing';
+  else if (!limitsValid) invalidReason = 'battery-limits-invalid';
+
+  const valid = !invalidReason;
+  const effectiveBatteryTargetW = valid && requestedBatteryTargetW !== null
+    ? Math.round(clamp(requestedBatteryTargetW, minBatteryW, maxBatteryW))
+    : null;
+
+  // NexoWatt-/FENECON-Vorzeichen:
+  //   NVP +W = Bezug, -W = Einspeisung
+  //   ESS +W = Entladen, -W = Laden
+  // Damit ist NVP + ESS-Ist die physikalische Restlast ohne Speicher.
+  const residualWithoutStorageW = valid && nvpW !== null && essActualW !== null
+    ? Math.round(nvpW + essActualW)
+    : null;
+
+  // Diese Uebersetzung zeigt, welcher FEMS-Netzsollwert die aktuell von EOS
+  // entschiedene Batterie-Policy abbilden wuerde. Sie veraendert diese Policy
+  // nicht und ist besonders fuer Tarif-, Reserve-, Safety- und manuelle
+  // Vorgaben wichtig.
+  const translatedGridTargetW = valid
+    && residualWithoutStorageW !== null
+    && effectiveBatteryTargetW !== null
+    ? Math.round(residualWithoutStorageW - effectiveBatteryTargetW)
+    : null;
+
+  // Fuer die reine 0-Einspeisung wird die notwendige Batterie-Leistung aus der
+  // Restlast und dem kleinen positiven Netzbezugsziel bestimmt. Der rohe Wert
+  // wird separat gehalten; der effektive Wert beruecksichtigt optionale aktuelle
+  // ESS-Leistungsgrenzen.
+  const zeroExportBatteryTargetRawW = valid && residualWithoutStorageW !== null
+    ? Math.round(residualWithoutStorageW - zeroExportTargetW)
+    : null;
+  const zeroExportBatteryTargetW = zeroExportBatteryTargetRawW === null
+    ? null
+    : Math.round(clamp(zeroExportBatteryTargetRawW, minBatteryW, maxBatteryW));
+  const predictedNvpAtZeroExportW = valid
+    && residualWithoutStorageW !== null
+    && zeroExportBatteryTargetW !== null
+    ? Math.round(residualWithoutStorageW - zeroExportBatteryTargetW)
+    : null;
+  const zeroExportWithinBatteryLimits = zeroExportBatteryTargetRawW === null
+    ? null
+    : zeroExportBatteryTargetW === zeroExportBatteryTargetRawW;
+  const zeroExportAchievable = predictedNvpAtZeroExportW === null
+    ? null
+    : Math.abs(predictedNvpAtZeroExportW - zeroExportTargetW) <= 1;
+  const batteryLimitShortfallW = zeroExportBatteryTargetRawW === null
+    || zeroExportBatteryTargetW === null
+    ? null
+    : Math.abs(Math.round(zeroExportBatteryTargetRawW - zeroExportBatteryTargetW));
+
+  // Wenn die Batterie die 0-Einspeisung nicht allein erreichen kann, zeigen die
+  // beiden Werte den verbleibenden Bedarf. Bei negativer Abweichung muss eine
+  // zusaetzliche Senke aktiviert oder PV abgeregelt werden; bei positiver
+  // Abweichung besteht noch Importreduktionspotenzial.
+  const additionalSinkOrCurtailmentW = predictedNvpAtZeroExportW === null
+    ? null
+    : Math.max(0, Math.round(zeroExportTargetW - predictedNvpAtZeroExportW));
+  const importReductionPotentialW = predictedNvpAtZeroExportW === null
+    ? null
+    : Math.max(0, Math.round(predictedNvpAtZeroExportW - zeroExportTargetW));
+
+  const batteryAdjustmentToZeroExportW = zeroExportBatteryTargetRawW === null
+    || effectiveBatteryTargetW === null
+    ? null
+    : Math.round(zeroExportBatteryTargetRawW - effectiveBatteryTargetW);
+  const currentPolicyDeltaToZeroExportW = translatedGridTargetW === null
+    ? null
+    : Math.round(translatedGridTargetW - zeroExportTargetW);
+
+  const loadW = finite(input.loadW ?? input.consumptionTotalW);
+  const pvW = finite(input.pvW ?? input.pvTotalW);
+  const feedForwardUsable = input.feedForwardUsable === true
+    || (input.feedForwardUsable === undefined && loadW !== null && pvW !== null);
+  const plausibilityAvailable = valid && feedForwardUsable && loadW !== null && pvW !== null;
+  const loadMinusPvW = plausibilityAvailable && loadW !== null && pvW !== null
+    ? Math.round(loadW - pvW)
+    : null;
+  const plausibilityDeltaW = plausibilityAvailable
+    && residualWithoutStorageW !== null
+    && loadMinusPvW !== null
+    ? Math.round(residualWithoutStorageW - loadMinusPvW)
+    : null;
+  const dynamicReferenceW = Math.max(
+    Math.abs(loadW ?? 0),
+    Math.abs(pvW ?? 0),
+    Math.abs(residualWithoutStorageW ?? 0),
+  );
+  const plausibilityToleranceW = Math.round(Math.max(
+    100,
+    plausibilityToleranceRaw ?? 500,
+    dynamicReferenceW * 0.05,
+  ));
+  const plausible = plausibilityAvailable && plausibilityDeltaW !== null
+    ? Math.abs(plausibilityDeltaW) <= plausibilityToleranceW
+    : null;
+
+  // Nur die normale Eigenverbrauchs-Policy wird im Shadow als kuenftige direkte
+  // NVP-Fuehrung auf den kleinen positiven Bezug betrachtet. Alle anderen
+  // Policies bleiben als Batterieentscheidung erhalten und werden lediglich in
+  // einen aequivalenten FEMS-Netzsollwert uebersetzt.
+  const normalSelfConsumptionSource = [
+    'eigenverbrauch',
+    'self-consumption',
+    'selfconsumption',
+    'fenecon',
+    'auto',
+  ].includes(source);
+  const proposalMode = normalSelfConsumptionSource
+    ? 'zero-export-nvp'
+    : 'preserve-eos-battery-policy';
+  const proposedGridTargetW = valid
+    ? (normalSelfConsumptionSource ? zeroExportTargetW : translatedGridTargetW)
+    : null;
+  const predictedBatteryWAtProposal = valid
+    && residualWithoutStorageW !== null
+    && proposedGridTargetW !== null
+    ? Math.round(residualWithoutStorageW - proposedGridTargetW)
+    : null;
+
+  // Fehlende Last-/PV-Plausibilisierung blockiert den Shadow nicht, weil NVP +
+  // ESS-Ist die minimale Regelbasis sind. Eine vorhandene, aber widerspruechliche
+  // Bilanz verhindert dagegen bewusst die spaetere Schreibbereitschaft.
+  const readyForFutureWrite = valid
+    && nativeTargetMapped
+    && safetyNvpFresh
+    && plausible !== false
+    && nvpReferencePlausible !== false
+    && (!normalSelfConsumptionSource || zeroExportAchievable === true);
+  const calculationReason = invalidReason || (
+    !nativeTargetMapped
+      ? 'calculated-read-only-native-target-missing'
+      : (!safetyNvpFresh
+        ? 'calculated-read-only-central-safety-nvp-missing'
+        : (nvpReferencePlausible === false
+          ? 'calculated-read-only-nvp-reference-mismatch'
+          : (plausible === false
+            ? 'calculated-read-only-plausibility-mismatch'
+            : (normalSelfConsumptionSource && zeroExportAchievable !== true
+              ? 'calculated-read-only-battery-limit'
+              : 'calculated-read-only'))))
+  );
+
+  return {
+    active,
+    mode: 'shadow-only',
+    readOnly: true,
+    writeAttempted: false,
+    writePermitted: false,
+    writesHardware: false,
+    ok: valid,
+    valid,
+    ready: readyForFutureWrite,
+    readyForFutureWrite,
+    reason: calculationReason,
+    proposalMode,
+    source,
+    sourceReason: reasonText,
+    commandFamily,
+    currentAuthority,
+    nativeTargetMapped,
+    exclusiveSingleStorage,
+    nvpFresh,
+    essFresh,
+    safetyNvpFresh,
+    referenceNvpFresh,
+    referenceNvpW: referenceNvpW === null ? null : Math.round(referenceNvpW),
+    nvpReferenceAvailable,
+    nvpReferenceDeltaW,
+    nvpReferenceToleranceW,
+    nvpReferencePlausible,
+    nvpW: nvpW === null ? null : Math.round(nvpW),
+    essActualW: essActualW === null ? null : Math.round(essActualW),
+    requestedBatteryTargetW: requestedBatteryTargetW === null ? null : Math.round(requestedBatteryTargetW),
+    eosBatteryTargetW: requestedBatteryTargetW === null ? null : Math.round(requestedBatteryTargetW),
+    effectiveBatteryTargetW,
+    minBatteryW,
+    maxBatteryW,
+    residualWithoutStorageW,
+    restLoadWithoutStorageW: residualWithoutStorageW,
+    translatedGridTargetW,
+    proposedFemsGridTargetW: proposedGridTargetW,
+    proposedGridTargetW,
+    predictedBatteryWAtProposal,
+    zeroExportTargetW,
+    zeroExportBatteryTargetRawW,
+    zeroExportBatteryTargetW,
+    predictedNvpAtZeroExportW,
+    zeroExportAchievable,
+    zeroExportWithinBatteryLimits,
+    batteryLimitShortfallW,
+    batteryAdjustmentToZeroExportW,
+    currentPolicyDeltaToZeroExportW,
+    additionalSinkOrCurtailmentW,
+    importReductionPotentialW,
+    plausibilityAvailable,
+    plausible,
+    plausibilityToleranceW,
+    plausibilityDeltaW,
+    balanceDeviationW: plausibilityDeltaW,
+    loadMinusPvW,
+    balanceFromConsumptionPvW: loadMinusPvW,
+    loadW: loadW === null ? null : Math.round(loadW),
+    consumptionTotalW: loadW === null ? null : Math.round(loadW),
+    pvW: pvW === null ? null : Math.round(pvW),
+    pvTotalW: pvW === null ? null : Math.round(pvW),
+    loadSource: text(input.loadSource),
+    pvSource: text(input.pvSource),
+    loadAgeMs: finite(input.loadAgeMs),
+    pvAgeMs: finite(input.pvAgeMs),
+    nvpAgeMs: finite(input.nvpAgeMs),
+    essAgeMs: finite(input.essAgeMs),
+    measurementSkewMs: finite(input.measurementSkewMs),
+  };
+}
+
 function validateFarmRows(rowsIn: unknown): AnyRecord {
   const rows = Array.isArray(rowsIn)
     ? rowsIn.filter((row) => row && typeof row === 'object' && row.enabled !== false) as AnyRecord[]
@@ -574,5 +854,6 @@ module.exports = {
   resolveControlMode,
   validateSingleConfig,
   calculateFemsGridTargetW,
+  calculateFeneconNvpShadow,
   validateFarmRows,
 };

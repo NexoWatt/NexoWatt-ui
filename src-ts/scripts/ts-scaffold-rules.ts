@@ -173,21 +173,30 @@ export function requirePackageScripts(pkg: PackageJsonScriptsShape, scriptNames:
  * Code-Teil: requirePublishCheckStartsWithTypeSafety
  *
  * Zweck:
- * Stellt sicher, dass der kurze, Windows-kompatible Publish-Runner verwendet
- * wird und dessen geordneter Plan zuerst die DevDependency-Vorprüfung sowie
- * unmittelbar danach den vollständigen TypeScript-Check ausführt.
+ * Stellt sicher, dass `npm publish` ausschließlich den unveränderlichen,
+ * dependency-freien Artefaktstand prüft und der vollständige Entwicklungscheck
+ * weiterhin separat über den kurzen, Windows-kompatiblen Runner verfügbar ist.
+ * Dessen geordneter Plan muss zuerst die DevDependency-Vorprüfung sowie
+ * unmittelbar danach den vollständigen TypeScript-Check ausführen.
  *
  * Zusammenhang:
  * Die frühere 9-kB-`&&`-Kette überschritt unter Windows die Grenze von cmd.exe.
- * Die Prüfungen liegen deshalb in `scripts/publish-check-plan.json` und werden
- * einzeln ohne Shell-Gesamtkette gestartet. Diese Regel schützt Reihenfolge und
- * Vollständigkeit des Type-Safety-Gates.
+ * Gleichzeitig darf der kundennahe Direkt-Publish weder `npm ci` noch lokale
+ * Compiler-/Entwicklungstests benötigen. Die vollständigen Prüfungen liegen
+ * deshalb in `scripts/publish-check-plan.json` und werden über
+ * `test:release:full` einzeln ausgeführt; `publish:check` bleibt read-only.
  */
 export function requirePublishCheckStartsWithTypeSafety(rootDir: string, pkg: PackageJsonScriptsShape): TsScaffoldRuleResult {
-  const publishCheck = String((pkg.scripts && pkg.scripts['publish:check']) || '').trim();
+  const scripts = pkg.scripts || {};
+  const publishCheck = String(scripts['publish:check'] || '').trim();
+  const fullCheck = String(scripts['test:release:full'] || '').trim();
+  const expectedArtifactCheck = 'node scripts/verify-release-artifact.js';
   const expectedRunner = 'node scripts/publish-check-runner.js';
-  if (publishCheck !== expectedRunner) {
-    return error(`publish:check must use the Windows-safe runner: ${expectedRunner}`);
+  if (publishCheck !== expectedArtifactCheck) {
+    return error(`publish:check must use the immutable read-only artifact verifier: ${expectedArtifactCheck}`);
+  }
+  if (fullCheck !== expectedRunner) {
+    return error(`test:release:full must use the Windows-safe runner: ${expectedRunner}`);
   }
 
   let commands: string[] = [];

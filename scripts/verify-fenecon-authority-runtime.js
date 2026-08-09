@@ -190,6 +190,13 @@ function stateValue(states, id) {
     assert.equal(stateValue(states, 'speicher.regelung.feneconHybridRegelhoheit'), 'fems');
     assert.equal(stateValue(states, 'speicher.regelung.feneconHybridNoWrite'), true);
     assert.match(String(stateValue(states, 'speicher.regelung.schreibStatus') || ''), /fenecon:no-write-fems/);
+    assert.equal(stateValue(states, 'speicher.regelung.feneconNvpShadowAktiv'), true,
+      'RC42 shadow must also run during real FEMS no-write authority');
+    assert.equal(stateValue(states, 'speicher.regelung.feneconNvpShadowReadOnly'), true);
+    assert.equal(stateValue(states, 'speicher.regelung.feneconNvpShadowSchreibversuch'), false);
+    const shadowJson = JSON.parse(String(stateValue(states, 'speicher.regelung.feneconNvpShadowJson') || '{}'));
+    assert.equal(shadowJson.writeAttempted, false);
+    assert.equal(shadowJson.productWriterChanged, false);
   }
 
   // 2) PV laenger als 120 s unter 500 W: EOS uebernimmt und schreibt den aus

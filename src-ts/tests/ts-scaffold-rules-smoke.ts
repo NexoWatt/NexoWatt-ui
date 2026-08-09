@@ -30,7 +30,8 @@ const validPackageScripts = {
     'test:contracts': 'node scripts/verify-ts-contracts.js',
     'test:ts-scaffold': 'node scripts/verify-ts-scaffold.js',
     'test:all': 'npm run publish:check && npm run test:types',
-    'publish:check': 'node scripts/publish-check-runner.js',
+    'publish:check': 'node scripts/verify-release-artifact.js',
+    'test:release:full': 'node scripts/publish-check-runner.js',
     'test:publish-check-runner': 'node scripts/publish-check-runner.js --verify',
   },
 };

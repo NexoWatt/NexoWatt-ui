@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: a034ab5da7b344923d5ce0092ad7328e126941d81764738d43ac1b3f746aeca9
+ * Original-Hash: 0b815ebfd42f68c30dae4081148f06d8a37cbf53d624fdced5498103c35dc006
  */
 
 /**
@@ -286,6 +286,13 @@ function stateValue(states, id) {
     assert.equal(stateValue(states, 'speicher.regelung.feneconHybridRegelhoheit'), 'fems');
     assert.equal(stateValue(states, 'speicher.regelung.feneconHybridNoWrite'), true);
     assert.match(String(stateValue(states, 'speicher.regelung.schreibStatus') || ''), /fenecon:no-write-fems/);
+    assert.equal(stateValue(states, 'speicher.regelung.feneconNvpShadowAktiv'), true,
+      'RC42 shadow must also run during real FEMS no-write authority');
+    assert.equal(stateValue(states, 'speicher.regelung.feneconNvpShadowReadOnly'), true);
+    assert.equal(stateValue(states, 'speicher.regelung.feneconNvpShadowSchreibversuch'), false);
+    const shadowJson = JSON.parse(String(stateValue(states, 'speicher.regelung.feneconNvpShadowJson') || '{}'));
+    assert.equal(shadowJson.writeAttempted, false);
+    assert.equal(shadowJson.productWriterChanged, false);
   }
 
   // 2) PV laenger als 120 s unter 500 W: EOS uebernimmt und schreibt den aus

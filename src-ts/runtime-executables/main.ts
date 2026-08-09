@@ -4979,6 +4979,8 @@ class NexoWattVis extends utils.Adapter {
       // FENECON/OpenEMS-Hybrid: nativer FEMS-NVP-Master oder direkte ESS-Rückmeldungen.
       feneconGridSetpointId: textFrom('feneconGridSetpointId', 'feneconGridSetpointObjectId', 'femsGridSetpointId', 'femsGridSetpointObjectId'),
       feneconEssActualPowerId: textFrom('feneconEssActualPowerId', 'feneconEssActualPowerObjectId', 'feneconActivePowerId'),
+      feneconNvpPowerId: textFrom('feneconNvpPowerId', 'feneconNvpPowerObjectId', 'feneconGridPowerId', 'feneconNapPowerId'),
+      feneconConsumptionTotalId: textFrom('feneconConsumptionTotalId', 'feneconConsumptionTotalObjectId', 'feneconLoadTotalId', 'feneconConsumptionPowerId', 'feneconLoadPowerId'),
       feneconMinPowerId: textFrom('feneconMinPowerId', 'feneconMinPowerObjectId', 'feneconMinimumPowerId'),
       feneconMaxPowerId: textFrom('feneconMaxPowerId', 'feneconMaxPowerObjectId', 'feneconMaximumPowerId'),
       feneconActualSetpointId: textFrom('feneconActualSetpointId', 'feneconActualSetpointObjectId', 'feneconSetpointReadbackId'),

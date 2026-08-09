@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.165",
+  "version": "0.8.166",
   "files": [
     {
       "path": "LICENSE",
@@ -97,6 +97,11 @@
       "path": "docs/RC41_HEATING_STABILITY_DE.md",
       "size": 2648,
       "sha256": "b84c7a5f87e485383c310729c15a02b997636e0c581ff3edbaf3e17261b8325a"
+    },
+    {
+      "path": "docs/RC42_FENECON_NVP_SHADOW_DE.md",
+      "size": 5125,
+      "sha256": "d1d2d9101ae6c621d0cc27a0727d77b3e49b6d8bc2350743df402c985c9bd6b6"
     },
     {
       "path": "ems/charging-budget-helpers.js",
@@ -260,13 +265,13 @@
     },
     {
       "path": "ems/modules/storage-control.js",
-      "size": 594695,
-      "sha256": "453a5875c2ebe35a9576984cb1c00581e1f0bdf2ac5b0f89337fdef8dca1e783"
+      "size": 598813,
+      "sha256": "366c2b1e21e8487ad60ecee903c9ea9c6bb96799a33383e2a67485de08436fc1"
     },
     {
       "path": "ems/modules/storage-mapping.js",
-      "size": 38941,
-      "sha256": "d4e9e83d8e34adc294eb0b3a42c5e3a3c1b8d5053a40f45f1de4f8c4bb4e457b"
+      "size": 40583,
+      "sha256": "e26fee75e62505a545e49900a0d3f2ac0114e207c82e0c4ef8d2e56c3e5a4715"
     },
     {
       "path": "ems/modules/tarif-vis.js",
@@ -345,8 +350,13 @@
     },
     {
       "path": "ems/services/fenecon-hybrid-control.js",
-      "size": 24309,
-      "sha256": "b3c1e53fd1ae496eee6e4816b7e14f8e5afa6438ade6dd005692f74fe6bb2b94"
+      "size": 36986,
+      "sha256": "d21d2ad84e9c6b5ee6b903675c0da8da07e2ceb0348b5ad5905e53385e8e91ca"
+    },
+    {
+      "path": "ems/services/fenecon-nvp-shadow-runtime.js",
+      "size": 26992,
+      "sha256": "a2c9a092e6b7d7a85a0999676fe839141436c345557dc4b6ef3ec2f54f7314fe"
     },
     {
       "path": "ems/services/locale-api-service.js",
@@ -390,8 +400,8 @@
     },
     {
       "path": "ems/services/storage-datapoint-config.js",
-      "size": 15276,
-      "sha256": "1b22d2b8139b2b312c5b43ee9f2c149989049696c0611a695bf052672e8ccd99"
+      "size": 15756,
+      "sha256": "bf5cf8df41fbfaa7065e52203268b714afe5eaba3828c2853f37f96e4e0d5f00"
     },
     {
       "path": "ems/services/storage-farm-aggregation.js",
@@ -416,12 +426,12 @@
     {
       "path": "ems/services/tariff-provider-registry.js",
       "size": 28839,
-      "sha256": "52b38a8b32459098cc851e9dfc82e1b9c37db718345f0262deb7a57b7382ede9"
+      "sha256": "6a7caa9a1cce01349e9fe2ef5b7cb36f24b5743481d9947034404276d9c1561e"
     },
     {
       "path": "io-package.json",
-      "size": 27626,
-      "sha256": "023542a9c23edfb6271d594ad208456a36807bcfc18b613af370f07f9e7422d0"
+      "size": 28024,
+      "sha256": "06b50998bb644493f01a9790e85b8df58fc74ed3d5a5ca99275631b6749f23ce"
     },
     {
       "path": "lib/energy-origin-api.js",
@@ -645,8 +655,8 @@
     },
     {
       "path": "main.js",
-      "size": 1617698,
-      "sha256": "0eedde45b8f7d100657e55bc276907a7cad5f75e13559b672d161a5787badc07"
+      "size": 1618004,
+      "sha256": "1ac6cd6a91c1b52efa5ab766cc52461eb8d600e6f94d645a2469fca50ec6b687"
     },
     {
       "path": "www/admin-guard.js",
@@ -780,8 +790,8 @@
     },
     {
       "path": "www/ems-apps.js",
-      "size": 940007,
-      "sha256": "c307d9139b61332bffcbf85e36a8d4bebafcd3bff3104e42f2156f1fd3431d77"
+      "size": 942252,
+      "sha256": "4fffa257591c57ad86aee1c830813b4588aeea3401ffc46820f1742828e9595b"
     },
     {
       "path": "www/energy-ledger.html",
@@ -896,7 +906,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1084,
-      "sha256": "d972e5f234005be40b917189add8a6785325b63eab1ad6b8e14e2892a9482816"
+      "sha256": "4ee8184b6e4875d52ea80eb3b062b70a6fbfdcc6e09937e942409994ddccf2a5"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -916,7 +926,7 @@
     {
       "path": "www/nw-i18n.js",
       "size": 20613,
-      "sha256": "24a2b3557dc30ba35e24f30492a7bde1852cfdd4101e10bd4b28946bb59adfbc"
+      "sha256": "6496ba6b613002510be03dac17a01849403460c8782a66806fe57ec43524939e"
     },
     {
       "path": "www/nw-shell.js",
@@ -1046,7 +1056,7 @@
     {
       "path": "www/sw.js",
       "size": 4888,
-      "sha256": "22a39960aaea16b8e245bfd4edbceea51aa57faeae5f0da10e03805b0684a369"
+      "sha256": "e1d7318fc2a75b2ddc1a37e66c76743037d3bbd368768a51fcb08376c35ebc33"
     },
     {
       "path": "www/tariff-report.html",

@@ -1064,6 +1064,8 @@
     { key: 'dcPvPowerObjectId', label: 'DC-/Hybrid-PV Erzeugung (W)', requiredModes: [], showForCoupling: ['dc'], hint: 'Nur bei DC-/Hybrid-Speichern: Erzeugungsleistung des Hybrid-/PV-Wechselrichters. Dieser Wert ist eine Messung, kein Batterie-Sollwert, und hilft bei Forecast-/0-Einspeise-/FENECON-Erkennung.' },
     { key: 'feneconGridSetpointObjectId', label: 'FENECON FEMS-NVP-Ziel (W) (optional)', requiredModes: ['targetPower'], showForVendor: ['fenecon-openems'], hint: 'Darf leer bleiben. Nur erforderlich, wenn ausdrücklich „FEMS-NVP-Ziel dauerhaft schreiben“ gewählt wird und ein echter beschreibbarer ctrlBalancing0/SetGridActivePower-DP vorhanden ist. Ohne diesen DP nutzt Automatisch den direkten ESS-Sollwert SetActivePowerEquals/706. Messwerte wie aliases.r.gridPower und aliases.ctrl.powerSetpointW gehören nicht in dieses Feld.' },
     { key: 'feneconEssActualPowerObjectId', label: 'FENECON ESS-Aktor-Istleistung (W)', requiredModes: [], showForVendor: ['fenecon-openems'], hint: 'Für Hybridregelung empfohlen: ess0/ActivePower (typisch Register 604). Dieser Wert dient dem Regelkreis; die allgemeine Ist-Leistung kann separat für Anzeige/History genutzt werden.' },
+    { key: 'feneconNvpPowerObjectId', label: 'FENECON NVP-Istleistung (W) – RC42 Shadow', requiredModes: [], showForVendor: ['fenecon-openems'], hint: 'Optionaler read-only Vergleichswert vom FENECON-Gateway, bevorzugt aliases.r.nvpPower; Fallback aliases.r.gridPower / aliases.r.napPower. Wird ausschließlich für die neue NVP-Shadowdiagnose verwendet und niemals als Sollwert, Writer oder Ersatz für die zentrale Safety-NVP-Messung.' },
+    { key: 'feneconConsumptionTotalObjectId', label: 'FENECON Gesamtverbrauch (W) – RC42 Shadow', requiredModes: [], showForVendor: ['fenecon-openems'], hint: 'Optionaler direkter Gesamt-/Hausverbrauch, bevorzugt aliases.r.consumptionTotal; Fallback aliases.r.loadTotal / aliases.r.consumptionPower / aliases.r.loadPower. Nur Bilanz-Plausibilisierung im read-only Shadowmodus; beeinflusst keine Regelung.' },
     { key: 'feneconMinPowerObjectId', label: 'FENECON momentane Mindestleistung (W)', requiredModes: [], showForVendor: ['fenecon-openems'], hint: 'Optional: momentane Untergrenze des ESS-Sollwerts (typisch 702).' },
     { key: 'feneconMaxPowerObjectId', label: 'FENECON momentane Maximalleistung (W)', requiredModes: [], showForVendor: ['fenecon-openems'], hint: 'Optional: momentane Obergrenze des ESS-Sollwerts (typisch 704).' },
     { key: 'feneconActualSetpointObjectId', label: 'FENECON Vorgabe-Readback (W)', requiredModes: [], showForVendor: ['fenecon-openems'], hint: 'Optionales Readback der tatsächlich aktiven externen Vorgabe.' },
@@ -1417,7 +1419,7 @@
         // festzuhängen.
         socId: '', signedPowerId: '', chargePowerId: '', dischargePowerId: '', pvPowerId: '',
         vendorProfile: 'generic', feneconControlMode: 'auto',
-        feneconGridSetpointId: '', feneconEssActualPowerId: '', feneconMinPowerId: '', feneconMaxPowerId: '',
+        feneconGridSetpointId: '', feneconEssActualPowerId: '', feneconNvpPowerId: '', feneconConsumptionTotalId: '', feneconMinPowerId: '', feneconMaxPowerId: '',
         feneconActualSetpointId: '', feneconPvDcId: '', feneconPvAcId: '', feneconPvTotalId: '',
         feneconPvPassthroughThresholdW: 500, feneconPvReleaseThresholdW: 500,
         feneconPvPassthroughDelaySec: 10, feneconPvReleaseDelaySec: 120, feneconApiTimeoutSec: 60,
@@ -1500,6 +1502,8 @@
       pvPowerId: textFrom('pvPowerId', 'pvPowerObjectId', 'pvPowerDp', 'storagePvPowerId'),
       feneconGridSetpointId: textFrom('feneconGridSetpointId', 'feneconGridSetpointObjectId', 'femsGridSetpointId', 'femsGridSetpointObjectId'),
       feneconEssActualPowerId: textFrom('feneconEssActualPowerId', 'feneconEssActualPowerObjectId', 'feneconActivePowerId'),
+      feneconNvpPowerId: textFrom('feneconNvpPowerId', 'feneconNvpPowerObjectId', 'feneconGridPowerId', 'feneconNapPowerId'),
+      feneconConsumptionTotalId: textFrom('feneconConsumptionTotalId', 'feneconConsumptionTotalObjectId', 'feneconLoadTotalId', 'feneconConsumptionPowerId', 'feneconLoadPowerId'),
       feneconMinPowerId: textFrom('feneconMinPowerId', 'feneconMinPowerObjectId', 'feneconMinimumPowerId'),
       feneconMaxPowerId: textFrom('feneconMaxPowerId', 'feneconMaxPowerObjectId', 'feneconMaximumPowerId'),
       feneconActualSetpointId: textFrom('feneconActualSetpointId', 'feneconActualSetpointObjectId', 'feneconSetpointReadbackId'),
@@ -9729,6 +9733,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         }, '60'));
         grid.appendChild(mkDpField('Echter FEMS NVP-Ziel-DP (W)', `sf_${idx}_feneconGridSetpointId`, s.feneconGridSetpointId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconGridSetpointId = v; }, 'Nur ctrlBalancing0/SetGridActivePower · niemals 706/powerSetpointW'));
         grid.appendChild(mkDpField('FENECON ESS-Aktor-Istleistung (W)', `sf_${idx}_feneconEssActualPowerId`, s.feneconEssActualPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconEssActualPowerId = v; }, 'ess0/ActivePower · typ. 604'));
+        grid.appendChild(mkDpField('FENECON NVP-Istleistung (W) – Shadow', `sf_${idx}_feneconNvpPowerId`, s.feneconNvpPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconNvpPowerId = v; }, 'read-only · nur Diagnose/Plausibilisierung'));
+        grid.appendChild(mkDpField('FENECON Gesamtverbrauch (W) – Shadow', `sf_${idx}_feneconConsumptionTotalId`, s.feneconConsumptionTotalId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconConsumptionTotalId = v; }, 'read-only · nur Bilanz-Plausibilisierung'));
         grid.appendChild(mkDpField('FENECON Mindestleistung (W)', `sf_${idx}_feneconMinPowerId`, s.feneconMinPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconMinPowerId = v; }, 'optional · typ. 702'));
         grid.appendChild(mkDpField('FENECON Maximalleistung (W)', `sf_${idx}_feneconMaxPowerId`, s.feneconMaxPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconMaxPowerId = v; }, 'optional · typ. 704'));
         grid.appendChild(mkDpField('FENECON Vorgabe-Readback (W)', `sf_${idx}_feneconActualSetpointId`, s.feneconActualSetpointId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].feneconActualSetpointId = v; }, 'optional'));
@@ -9808,6 +9814,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
           feneconControlMode: 'auto',
           feneconGridSetpointId: '',
           feneconEssActualPowerId: '',
+          feneconNvpPowerId: '',
+          feneconConsumptionTotalId: '',
           feneconMinPowerId: '',
           feneconMaxPowerId: '',
           feneconActualSetpointId: '',
@@ -12409,6 +12417,15 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         || _nwGetAlias(dev, 'r.power');
       setEmpty('batteryPowerObjectId', essActual);
       setEmpty('feneconEssActualPowerObjectId', essActual);
+      setEmpty('feneconNvpPowerObjectId',
+        _nwGetAlias(dev, 'r.nvpPower')
+        || _nwGetAlias(dev, 'r.gridPower')
+        || _nwGetAlias(dev, 'r.napPower'));
+      setEmpty('feneconConsumptionTotalObjectId',
+        _nwGetAlias(dev, 'r.consumptionTotal')
+        || _nwGetAlias(dev, 'r.loadTotal')
+        || _nwGetAlias(dev, 'r.consumptionPower')
+        || _nwGetAlias(dev, 'r.loadPower'));
       setEmpty('dcPvPowerObjectId', _nwGetAlias(dev, 'r.pvPowerDc'));
       setEmpty('feneconPvDcObjectId', _nwGetAlias(dev, 'r.pvPowerDc'));
       setEmpty('feneconPvAcObjectId', _nwGetAlias(dev, 'r.pvPowerAc'));

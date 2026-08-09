@@ -19,7 +19,8 @@ const { spawnSync } = require('child_process');
 const ROOT = path.resolve(__dirname, '..');
 const PLAN_FILE = path.join(ROOT, 'scripts', 'publish-check-plan.json');
 const PACKAGE_FILE = path.join(ROOT, 'package.json');
-const EXPECTED_PACKAGE_COMMAND = 'node scripts/publish-check-runner.js';
+const EXPECTED_PACKAGE_COMMAND = 'node scripts/verify-release-artifact.js';
+const EXPECTED_FULL_CHECK_COMMAND = 'node scripts/publish-check-runner.js';
 const ACTIVE_ENV = 'NEXOWATT_PUBLISH_CHECK_ACTIVE';
 
 const REQUIRED_COMMANDS = [
@@ -96,11 +97,15 @@ function loadAndValidatePlan() {
   const pkg = readJson(PACKAGE_FILE, 'package.json');
   const scripts = pkg && pkg.scripts && typeof pkg.scripts === 'object' ? pkg.scripts : {};
   const publishCommand = String(scripts['publish:check'] || '').trim();
+  const fullCheckCommand = String(scripts['test:release:full'] || '').trim();
   if (publishCommand !== EXPECTED_PACKAGE_COMMAND) {
     fail(`package.json scripts.publish:check muss exakt "${EXPECTED_PACKAGE_COMMAND}" sein.`);
   }
-  if (publishCommand.length > 256) {
-    fail(`scripts.publish:check ist mit ${publishCommand.length} Zeichen unerwartet lang.`);
+  if (fullCheckCommand !== EXPECTED_FULL_CHECK_COMMAND) {
+    fail(`package.json scripts.test:release:full muss exakt "${EXPECTED_FULL_CHECK_COMMAND}" sein.`);
+  }
+  if (publishCommand.length > 256 || fullCheckCommand.length > 256) {
+    fail('Publish-/Volltest-Aufruf ist unerwartet lang.');
   }
 
   const plan = readJson(PLAN_FILE, 'scripts/publish-check-plan.json');
@@ -256,7 +261,7 @@ function runPlan(validated) {
 function printVerification(validated) {
   console.log(
     `[publish-check-runner] OK: ${validated.expectedStepCount} geordnete Schritte validiert; ` +
-    `package.json-Aufruf ${EXPECTED_PACKAGE_COMMAND.length} Zeichen; ` +
+    `npm publish nutzt den read-only Artefaktcheck, Volltest-Aufruf ${EXPECTED_FULL_CHECK_COMMAND.length} Zeichen; ` +
     `längster Einzelbefehl ${validated.longestCommandLength} Zeichen; keine Shell-Gesamtkette.`
   );
 }
@@ -285,6 +290,7 @@ if (require.main === module) {
 
 module.exports = {
   EXPECTED_PACKAGE_COMMAND,
+  EXPECTED_FULL_CHECK_COMMAND,
   REQUIRED_COMMANDS,
   loadAndValidatePlan,
   parseCommand,

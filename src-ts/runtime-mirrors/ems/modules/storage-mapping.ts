@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: d4e9e83d8e34adc294eb0b3a42c5e3a3c1b8d5053a40f45f1de4f8c4bb4e457b
+ * Original-Hash: e26fee75e62505a545e49900a0d3f2ac0114e207c82e0c4ef8d2e56c3e5a4715
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/storage-mapping.ts
- * Quell-Hash: sha256:2288b8aaa0b61eb4da33cd5ec1154227a31b346e069c63cff31522be5d4fa4de
+ * Quell-Hash: sha256:9f12e8593236ab333e1e2f1f3a5141f12d68a3ed7802b25516d888100b21791e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -153,6 +153,8 @@ class SpeicherMappingModule extends BaseModule {
             { id: `${base}.mapping.reserveSocId`, name: 'Reserve-SoC Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.feneconGridSetpointId`, name: 'FENECON FEMS NVP-Ziel Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.feneconEssActualPowerId`, name: 'FENECON ESS Aktor-Istleistung Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.feneconNvpPowerId`, name: 'FENECON NVP-Istleistung Shadow Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.feneconConsumptionTotalId`, name: 'FENECON Gesamtverbrauch Shadow Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.feneconMinPowerId`, name: 'FENECON minimale ESS-Leistung Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.feneconMaxPowerId`, name: 'FENECON maximale ESS-Leistung Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.feneconActualSetpointId`, name: 'FENECON Vorgabe-Readback Datenpunkt-ID', type: 'string', role: 'text', def: '' },
@@ -368,6 +370,8 @@ class SpeicherMappingModule extends BaseModule {
         // PV DC/AC/Total = ausschließlich Anzeige/Plausibilisierung.
         const feneconGridSetpointId = String(dp.feneconGridSetpointObjectId || '').trim();
         const feneconEssActualPowerId = String(dp.feneconEssActualPowerObjectId || '').trim();
+        const feneconNvpPowerId = String(dp.feneconNvpPowerObjectId || '').trim();
+        const feneconConsumptionTotalId = String(dp.feneconConsumptionTotalObjectId || '').trim();
         const feneconMinPowerId = String(dp.feneconMinPowerObjectId || '').trim();
         const feneconMaxPowerId = String(dp.feneconMaxPowerObjectId || '').trim();
         const feneconActualSetpointId = String(dp.feneconActualSetpointObjectId || '').trim();
@@ -408,6 +412,8 @@ class SpeicherMappingModule extends BaseModule {
         await this._setIfChanged('speicher.mapping.reserveSocId', reserveSocId);
         await this._setIfChanged('speicher.mapping.feneconGridSetpointId', feneconGridSetpointId);
         await this._setIfChanged('speicher.mapping.feneconEssActualPowerId', feneconEssActualPowerId);
+        await this._setIfChanged('speicher.mapping.feneconNvpPowerId', feneconNvpPowerId);
+        await this._setIfChanged('speicher.mapping.feneconConsumptionTotalId', feneconConsumptionTotalId);
         await this._setIfChanged('speicher.mapping.feneconMinPowerId', feneconMinPowerId);
         await this._setIfChanged('speicher.mapping.feneconMaxPowerId', feneconMaxPowerId);
         await this._setIfChanged('speicher.mapping.feneconActualSetpointId', feneconActualSetpointId);
@@ -637,6 +643,28 @@ class SpeicherMappingModule extends BaseModule {
                 direction: 'in',
                 unit: 'W',
                 note: 'Typisch ess0/ActivePower (604); +W Entladen, -W Laden'
+            });
+        }
+        if (feneconNvpPowerId) {
+            await this.dp.upsert({
+                key: 'st.feneconNvpPowerW',
+                name: 'FENECON NVP-Istleistung (Shadow)',
+                objectId: feneconNvpPowerId,
+                dataType: 'number',
+                direction: 'in',
+                unit: 'W',
+                note: 'Nur RC42-Shadow/Plausibilisierung; +W Bezug, -W Einspeisung; niemals Schreibziel oder Safety-Ersatz'
+            });
+        }
+        if (feneconConsumptionTotalId) {
+            await this.dp.upsert({
+                key: 'st.feneconConsumptionTotalW',
+                name: 'FENECON Gesamtverbrauch (Shadow)',
+                objectId: feneconConsumptionTotalId,
+                dataType: 'number',
+                direction: 'in',
+                unit: 'W',
+                note: 'Nur RC42-Shadow/Plausibilisierung; direkter Gesamt-/Hausverbrauch ohne abgeleitete Regelkreis-Rueckkopplung'
             });
         }
         if (feneconMinPowerId) {

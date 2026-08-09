@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 1b22d2b8139b2b312c5b43ee9f2c149989049696c0611a695bf052672e8ccd99
+ * Original-Hash: bf5cf8df41fbfaa7065e52203268b714afe5eaba3828c2853f37f96e4e0d5f00
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/storage-datapoint-config.ts
- * Quell-Hash: sha256:f5601cbd48cc92053a6803959554a903c0cfad57e8ff27228553fa608076b6dd
+ * Quell-Hash: sha256:666c79ffee5adbbe06adebc6dea22b15e92b10b4c7b76afa0c9e3fd4fd9cf9bb
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -121,6 +121,8 @@ const FIELD_SPECS = [
     { canonical: 'reserveSocObjectId', aliases: ['reserveSocId'], recoverFragment: true },
     { canonical: 'feneconGridSetpointObjectId', aliases: ['feneconGridSetpointId', 'femsGridSetpointObjectId', 'femsGridSetpointId'], recoverFragment: true },
     { canonical: 'feneconEssActualPowerObjectId', aliases: ['feneconEssActualPowerId', 'femsEssActualPowerObjectId', 'femsEssActualPowerId'], recoverFragment: true },
+    { canonical: 'feneconNvpPowerObjectId', aliases: ['feneconNvpPowerId', 'feneconGridPowerObjectId', 'feneconGridPowerId', 'feneconNapPowerObjectId', 'feneconNapPowerId'], recoverFragment: true },
+    { canonical: 'feneconConsumptionTotalObjectId', aliases: ['feneconConsumptionTotalId', 'feneconLoadTotalObjectId', 'feneconLoadTotalId', 'feneconConsumptionPowerObjectId', 'feneconConsumptionPowerId', 'feneconLoadPowerObjectId', 'feneconLoadPowerId'], recoverFragment: true },
     { canonical: 'feneconMinPowerObjectId', aliases: ['feneconMinPowerId'], recoverFragment: true },
     { canonical: 'feneconMaxPowerObjectId', aliases: ['feneconMaxPowerId'], recoverFragment: true },
     { canonical: 'feneconActualSetpointObjectId', aliases: ['feneconActualSetpointId', 'feneconSetpointReadbackObjectId'], recoverFragment: true },

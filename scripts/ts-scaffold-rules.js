@@ -78,11 +78,15 @@ function requirePackageScripts(pkg, scriptNames = defaultRequiredPackageScripts)
   return results.length ? results : [ok()];
 }
 
-/** Code-Teil: requirePublishCheckStartsWithTypeSafety – prüft Windows-sicheren Runner und Type-Safety-Reihenfolge. */
+/** Code-Teil: requirePublishCheckStartsWithTypeSafety – prüft read-only Publish und separaten Windows-sicheren Volltest. */
 function requirePublishCheckStartsWithTypeSafety(rootDir, pkg) {
-  const publishCheck = String(pkg && pkg.scripts && pkg.scripts['publish:check'] || '').trim();
+  const scripts = pkg && pkg.scripts || {};
+  const publishCheck = String(scripts['publish:check'] || '').trim();
+  const fullCheck = String(scripts['test:release:full'] || '').trim();
+  const expectedArtifactCheck = 'node scripts/verify-release-artifact.js';
   const expectedRunner = 'node scripts/publish-check-runner.js';
-  if (publishCheck !== expectedRunner) return error(`publish:check must use the Windows-safe runner: ${expectedRunner}`);
+  if (publishCheck !== expectedArtifactCheck) return error(`publish:check must use the immutable read-only artifact verifier: ${expectedArtifactCheck}`);
+  if (fullCheck !== expectedRunner) return error(`test:release:full must use the Windows-safe runner: ${expectedRunner}`);
 
   let commands = [];
   try {
