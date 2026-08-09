@@ -15,7 +15,6 @@
  * 2. npm run sync:ts-runtime-executables ausführen.
  * 3. npm run test:runtime-executables prüfen.
  */
-"use strict";
 /**
  * Executable TypeScript source: www/energy-origin-ledger-view.js
  *

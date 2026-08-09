@@ -19,7 +19,7 @@
     "admin:build": "npm --prefix src-admin-tab run build",
     "build": "npm run admin:build",
     "publish:check": "node scripts/publish-check-runner.js",
-    "prepublishOnly": "npm run release:check-version-free && npm run sync:ts-runtime-executables && npm run sync:ts-runtime-mirrors && npm run publish:check",
+    "prepublishOnly": "npm run release:check-version-free && npm run publish:check",
     "release:check-version-free": "node scripts/verify-npm-version-free.js",
     "test": "npm run test:all",
     "test:package": "node scripts/verify-publish.js && npm pack --dry-run",
@@ -433,12 +433,17 @@
     "lib/**/*",
     "docs/RC38_STABILITAET_DE.md",
     "docs/RC39_SAFETY_ENVELOPE_DE.md",
-    "docs/RC40_TYPE_SAFETY_DE.md"
+    "docs/RC40_TYPE_SAFETY_DE.md",
+    "docs/RC40_NPM_PUBLISH_STABILITAET_DE.md"
   ],
   "devDependencies": {
     "@iobroker/adapter-dev": "^1.5.0",
     "@iobroker/testing": "^5.2.2",
     "@types/node": "^22.19.21",
-    "typescript": "6.0.3"
+    "typescript": "5.8.3"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   }
 }

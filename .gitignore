@@ -16,3 +16,15 @@ npm-debug.log*
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Local credentials and private keys (never commit)
+.env
+.env.*
+!.env.example
+.npmrc
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+service-account*.json

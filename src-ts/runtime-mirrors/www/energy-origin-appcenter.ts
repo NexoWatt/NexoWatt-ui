@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 88d32494256b0abb7522b55c8e4095a31e2cff2876d7484cf0449490d522a931
+ * Original-Hash: 00c8d1510f96a72b9dfe2cb88983e17403bb6a6c67c75019d2538297374a5bf9
  */
 
 /**
@@ -46,7 +46,6 @@
  * 2. npm run sync:ts-runtime-executables ausführen.
  * 3. npm run test:runtime-executables prüfen.
  */
-"use strict";
 /**
  * Executable TypeScript source: www/energy-origin-appcenter.js
  *
