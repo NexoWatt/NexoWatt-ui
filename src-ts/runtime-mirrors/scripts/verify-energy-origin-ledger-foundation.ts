@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 01f4940f105fe8bad7fbcc13e9f5399ce5af88cbbb658bd5a69376ceb6c130df
+ * Original-Hash: a533c40b1b5aa6cd9515ff9cb31dbe662e1e55d9164b2f53531e848860b0aefb
  */
 
 /**
@@ -206,9 +206,24 @@ function runPageRoute(licensed, enabled) {
   route.handler({}, res);
   return out;
 }
+/**
+ * Code-Teil: isEnergyLedgerPage
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function isEnergyLedgerPage(file) {
+  return String(file || '').replace(/\\/g, '/').endsWith('/www/energy-ledger.html');
+}
 assert.deepEqual(runPageRoute(true, false).redirect, [302, '/']);
 assert.deepEqual(runPageRoute(false, true).redirect, [302, '/']);
-assert.ok(String(runPageRoute(true, true).file || '').endsWith('www/energy-ledger.html'));
+assert.ok(isEnergyLedgerPage(runPageRoute(true, true).file));
+assert.ok(isEnergyLedgerPage('C:\\NexoWatt-ui\\www\\energy-ledger.html'), 'Windows-Pfade müssen im Release-Test akzeptiert werden.');
 assert.ok(apiText.includes('cp.energyKwh !== undefined ? cp.energyKwh : cp.totalKwh'));
 const cockpitText = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/www/cockpit-shell.ts'), 'utf8');
 const ledgerHtml = fs.readFileSync(path.join(root, 'www/energy-ledger.html'), 'utf8');

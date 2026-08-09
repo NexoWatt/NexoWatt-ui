@@ -30,7 +30,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: f22f3e2aadc5879ff12543a5f4af06a726a56833adcf3825d1da3ffa4ae0c372
+ * Original-Hash: 0ea877fcbf75148ad53ed91dcfdeadb41d962ade53ecc64e25ef92e0d7c55dd1
  */
 
 /**
@@ -250,10 +250,16 @@ function compareHeatingRodShadowField(field: string, jsValue: unknown, tsValue: 
     const js = Number(jsValue);
     const ts = Number(tsValue);
     if (Number.isFinite(js) || Number.isFinite(ts)) {
-        const ok = Number.isFinite(js) && Number.isFinite(ts) && Math.abs(js - ts) <= toleranceW;
+        const tolerance = field === 'targetPowerW' ? Math.max(0, Number(toleranceW) || 0) : 0;
+        const ok = Number.isFinite(js) && Number.isFinite(ts) && Math.abs(js - ts) <= tolerance;
         return ok ? null : { field, js: Number.isFinite(js) ? Math.round(js) : null, ts: Number.isFinite(ts) ? Math.round(ts) : null };
     }
     return jsValue === tsValue ? null : { field, js: jsValue, ts: tsValue };
+}
+
+function isHeatingRodShadowBlockingMismatch(mismatch: HeatingRodShadowCompareResult): boolean {
+    const field = String(mismatch && mismatch.field || '');
+    return field === 'targetStage' || field === 'exception';
 }
 /**
  * Code-Teil: num
@@ -2284,6 +2290,19 @@ class HeatingRodControlModule extends BaseModule {
         const scale = this._stagePowerScale(d, observedStage, measuredW);
         return this._capDevicePower(d, Math.round(configuredW * scale));
     }
+
+    _buildHeatingRodTsStageModel(d, observedStage = 0, measuredW = null) {
+        const stageDefs = (Array.isArray(d && d.stages) ? d.stages : [])
+            .filter(st => st && Number.isFinite(Number(st.powerW)) && Number(st.powerW) > 0);
+        if (!stageDefs.length) return [];
+        const scale = this._stagePowerScale(d, observedStage, measuredW);
+        return stageDefs.map((st, idx) => {
+            const stageNo = Math.max(1, Math.round(Number(st.index || st.stage || (idx + 1)) || (idx + 1)));
+            const configuredW = this._sumStagePower(d, stageNo);
+            const modeledW = this._capDevicePower(d, Math.round(configuredW * scale));
+            return { stage: stageNo, powerW: Math.max(0, modeledW) };
+        });
+    }
     /**
      * Code-Teil: _stageThresholdModel
      * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -3038,27 +3057,66 @@ class HeatingRodControlModule extends BaseModule {
     _runHeatingRodTsShadowComparison(entries) {
         const mirror = requireHeatingRodTsMirror();
         const evaluate = mirror && typeof mirror.evaluateHeatingRodDecision === 'function' ? mirror.evaluateHeatingRodDecision : null;
-        if (!evaluate) return { available: false, ok: false, source: 'missing-ts-mirror', entries: [], mismatches: [] };
+        if (!evaluate) {
+            return {
+                available: false,
+                ok: false,
+                exactMatch: false,
+                source: 'missing-ts-mirror',
+                entries: [],
+                mismatches: [],
+                diagnosticMismatches: [],
+                blockingMismatchCount: 0,
+                diagnosticMismatchCount: 0,
+                skippedCount: 0,
+            };
+        }
         const out = [];
         const allMismatches = [];
+        let skippedCount = 0;
         for (const entry of Array.isArray(entries) ? entries : []) {
             try {
                 const d = entry.device || {};
-                const stages = (Array.isArray(d.stages) ? d.stages : [])
-                    .filter(st => st && Number.isFinite(Number(st.powerW)) && Number(st.powerW) > 0)
-                    .map((st, idx) => {
-                        const stageNo = Number(st.index || st.stage || (idx + 1));
-                        const cumulativeW = (typeof this._sumStagePower === 'function')
-                            ? this._sumStagePower(d, stageNo)
-                            : Math.max(0, Math.round(Number(st.powerW) || 0));
-                        return { stage: stageNo, powerW: Math.max(0, Math.round(Number(cumulativeW) || 0)) };
+                const effectiveMode = normalizeMode(entry.effectiveMode || d.mode || 'pvAuto');
+                const zeroExportActive = entry.zeroExportActive === true;
+                const jsStatus = String(entry.jsStatus || '').trim().toLowerCase();
+                const explicitSkipReason = String(entry.skipReason || '').trim();
+                const separateSafetyOrOwnershipPath = /manual|external|para14a_limited|storage_protect|pv_only_protect|zero_export/.test(jsStatus);
+                // Der typisierte Entscheidungsspiegel bildet ausschließlich den normalen
+                // PV-/Budget-Autopfad ab. Manuelle Stufen, AUS und die 0-W-/Forecast-
+                // Strategie besitzen eigene Schreib- und Sicherheitsverträge. Ein Vergleich
+                // dieser fachlich unterschiedlichen Pfade wäre kein echter Fehlernachweis.
+                if (explicitSkipReason || zeroExportActive || effectiveMode !== 'pvAuto' || separateSafetyOrOwnershipPath || d.enabled === false) {
+                    skippedCount += 1;
+                    out.push({
+                        deviceId: d.id || entry.deviceId || 'unknown',
+                        ok: true,
+                        exactMatch: true,
+                        skipped: true,
+                        skipReason: explicitSkipReason
+                            || (zeroExportActive
+                                ? 'zero-export-forecast-js-strategy'
+                                : (effectiveMode !== 'pvAuto'
+                                    ? `mode-${effectiveMode}`
+                                    : (d.enabled === false ? 'device-disabled' : `separate-path-${jsStatus || 'unknown'}`))),
+                        mismatches: [],
+                        diagnosticMismatches: [],
+                        js: { targetStage: entry.jsTargetStage, targetW: entry.jsTargetW, status: entry.jsStatus || '' },
+                        ts: null,
                     });
+                    continue;
+                }
+                const stages = this._buildHeatingRodTsStageModel(
+                    d,
+                    Math.max(0, Math.round(Number(entry.observedStage) || 0)),
+                    Number.isFinite(Number(entry.measuredW)) ? Number(entry.measuredW) : null,
+                );
                 const input = {
                     ts: Date.now(),
                     device: {
                         id: d.id || entry.deviceId || 'unknown',
                         enabled: !!d.enabled,
-                        mode: String(d.mode || 'pvAuto'),
+                        mode: effectiveMode,
                         allowGridImport: !!(entry.allowGridImport),
                         allowStorageDischarge: !(entry.storageProtectActive),
                         storageReserveSocPct: Number.isFinite(Number(entry.storageReserveSocPct)) ? Number(entry.storageReserveSocPct) : 0,
@@ -3070,31 +3128,56 @@ class HeatingRodControlModule extends BaseModule {
                     storageSocPct: Number.isFinite(Number(entry.storageSocPct)) ? Number(entry.storageSocPct) : null,
                 };
                 const ts = evaluate(input);
-                const mismatches = [
+                const diagnosticMismatches = [
                     compareHeatingRodShadowField('targetStage', entry.jsTargetStage, ts && ts.targetStage),
                     compareHeatingRodShadowField('targetPowerW', entry.jsTargetW, ts && ts.targetPowerW),
                 ].filter(Boolean);
-                if (mismatches.length) {
-                    for (const m of mismatches) allMismatches.push({ deviceId: input.device.id, ...m });
+                const blockingMismatches = diagnosticMismatches.filter(isHeatingRodShadowBlockingMismatch);
+                if (diagnosticMismatches.length) {
+                    for (const m of diagnosticMismatches) allMismatches.push({ deviceId: input.device.id, ...m });
                 }
                 out.push({
                     deviceId: input.device.id,
-                    ok: mismatches.length === 0,
-                    mismatches,
+                    ok: blockingMismatches.length === 0,
+                    exactMatch: diagnosticMismatches.length === 0,
+                    mismatches: blockingMismatches,
+                    diagnosticMismatches,
                     js: { targetStage: entry.jsTargetStage, targetW: entry.jsTargetW, status: entry.jsStatus || '' },
                     ts: { targetStage: ts ? ts.targetStage : null, targetW: ts ? ts.targetPowerW : null, reason: ts ? ts.reason : '' },
                 });
             } catch (e) {
-                allMismatches.push({ deviceId: entry && entry.deviceId || 'unknown', field: 'exception', js: null, ts: e && e.message ? e.message : String(e) });
+                const mismatch = { deviceId: entry && entry.deviceId || 'unknown', field: 'exception', js: null, ts: e && e.message ? e.message : String(e) };
+                allMismatches.push(mismatch);
+                out.push({
+                    deviceId: mismatch.deviceId,
+                    ok: false,
+                    exactMatch: false,
+                    mismatches: [mismatch],
+                    diagnosticMismatches: [mismatch],
+                    js: null,
+                    ts: null,
+                });
             }
         }
-        const result = { available: true, source: 'ts-mirror-shadow', ok: allMismatches.length === 0, entries: out, mismatches: allMismatches };
-        if (!result.ok) {
+        const blockingMismatches = allMismatches.filter(isHeatingRodShadowBlockingMismatch);
+        const result = {
+            available: true,
+            source: 'ts-mirror-shadow',
+            ok: blockingMismatches.length === 0,
+            exactMatch: allMismatches.length === 0,
+            entries: out,
+            mismatches: blockingMismatches,
+            diagnosticMismatches: allMismatches,
+            blockingMismatchCount: blockingMismatches.length,
+            diagnosticMismatchCount: allMismatches.length,
+            skippedCount,
+        };
+        if (blockingMismatches.length) {
             const now = Date.now();
             if (!this._heatingRodTsShadowLastWarnMs || now - this._heatingRodTsShadowLastWarnMs > 60000) {
                 this._heatingRodTsShadowLastWarnMs = now;
                 try {
-                    this.adapter.log && this.adapter.log.warn && this.adapter.log.warn(`[heating-rod-ts-shadow] JS/TS decision mismatch: ${allMismatches.map(m => `${m.deviceId}.${m.field}`).join(', ')}`);
+                    this.adapter.log && this.adapter.log.warn && this.adapter.log.warn(`[heating-rod-ts-shadow] JS/TS switching mismatch: ${blockingMismatches.map(m => `${m.deviceId}.${m.field}`).join(', ')}`);
                 } catch (_eLog) {}
             }
         }
@@ -3381,6 +3464,33 @@ class HeatingRodControlModule extends BaseModule {
      * oder PV-Schutz die JS-Referenz auf 0 W zwingt und TS trotzdem einschalten will,
      * bleibt das ein harter Fallback-Grund.
      */
+
+
+    _isHeatingRodHardFallbackReason(reason) {
+        const r = String(reason || '').toLowerCase();
+        if (!r) return false;
+        return /missing-ts-mirror|ts-runtime-error|runtime-error|exception|ts-js-stage-mismatch|stage-mismatch|switching-mismatch|storage-protect|pv-protect|safety|protect-blocks|hard-block/i.test(r);
+    }
+
+    _getHeatingRodTsFallbackPolicy(normalPathReady) {
+        const ready = !!normalPathReady;
+        return {
+            source: 'heating-rod-ts-fallback-policy-v1',
+            mode: ready ? 'hard-blockers-only' : 'normal-safety-fallback',
+            jsFallbackMode: ready ? 'hard-blockers-only' : 'normal-safety-fallback',
+            legacyJsPathRole: ready ? 'emergency-fallback-only' : 'safety-reference',
+            jsReferenceMode: ready ? 'diagnostic-only' : 'blocking-reference',
+            jsReferenceDecisionMode: ready ? 'diagnostic-only' : 'blocking-until-normal-ready',
+            jsReferenceDecisionUsed: !ready,
+            legacyJsReferenceMode: ready ? 'diagnostic-cleanup-only' : 'blocking-reference',
+            legacyJsReferencePathStage: ready ? 'diagnostic-cleanup' : 'blocking-reference',
+            legacyJsReferenceUsedForDecision: !ready,
+            legacyJsReferenceCleanupReady: ready,
+            hardSafetyFallbackOnly: ready,
+            oldJsDecisionReduced: ready,
+        };
+    }
+
     _isHeatingRodTsHardSafetyBlock(entry, tsStage) {
         const stage = Math.max(0, Math.round(Number(tsStage) || 0));
         const jsStage = Math.max(0, Math.round(Number(entry && entry.jsTargetStage) || 0));
@@ -3416,29 +3526,58 @@ class HeatingRodControlModule extends BaseModule {
     _evaluateHeatingRodTsProductiveDecision(entry) {
         const mirror = requireHeatingRodTsMirror();
         const evaluate = mirror && typeof mirror.evaluateHeatingRodDecision === 'function' ? mirror.evaluateHeatingRodDecision : null;
-        const fallback = (reason, extra = {}) => ({
-            source: 'js-runtime',
-            active: false,
-            fallback: true,
-            fallbackReason: reason,
-            targetStage: Math.max(0, Math.round(Number(entry && entry.jsTargetStage) || 0)),
-            targetW: Math.max(0, Math.round(Number(entry && entry.jsTargetW) || 0)),
-            ts: null,
-            reason: '',
-            mismatches: [],
-            input: null,
-            normalPathReady: false,
-            jsReferenceReduced: false,
-            jsReferenceMismatch: false,
-            hardSafetyBlock: false,
-            ...extra,
-        });
+        const fallback = (reason: string, extra: any = {}) => {
+            const normalPathReady = !!(extra && extra.normalPathReady) || this._isHeatingRodTsNormalPathReady();
+            const hardFallback = !!(extra && extra.hardSafetyBlock) || this._isHeatingRodHardFallbackReason(reason);
+            const policy = this._getHeatingRodTsFallbackPolicy(normalPathReady);
+            return {
+                source: 'js-runtime',
+                active: false,
+                fallback: true,
+                fallbackReason: reason,
+                targetStage: Math.max(0, Math.round(Number(entry && entry.jsTargetStage) || 0)),
+                targetW: Math.max(0, Math.round(Number(entry && entry.jsTargetW) || 0)),
+                ts: null,
+                reason: '',
+                mismatches: [],
+                referenceMismatches: [],
+                blockingReferenceMismatches: [],
+                diagnosticReferenceMismatches: [],
+                input: null,
+                normalPathReady,
+                normalPathTakenOver: false,
+                jsReferenceReduced: false,
+                jsReferenceMismatch: false,
+                jsReferenceMode: policy.jsReferenceMode,
+                jsReferenceDecisionMode: policy.jsReferenceDecisionMode,
+                jsReferenceBlocking: !normalPathReady,
+                legacyJsReferencePathStage: normalPathReady ? 'diagnostic-cleanup' : 'blocking-reference',
+                legacyJsReferenceUsedForDecision: !normalPathReady,
+                legacyJsReferenceCleanupReady: !!normalPathReady,
+                legacyJsPathReduced: !!normalPathReady,
+                legacyJsPathRole: policy.legacyJsPathRole,
+                jsFallbackMode: policy.jsFallbackMode,
+                emergencyFallback: hardFallback,
+                hardFallbackOnly: normalPathReady && hardFallback,
+                hardSafetyBlock: hardFallback,
+                ...extra,
+            };
+        };
+        // Der TS-Spiegel modelliert den normalen PV-/Budgetpfad. Die 0-W-/Forecast-
+        // Strategie arbeitet bewusst mit Probe-Stufen und Live-Netzpunktwächter und
+        // bleibt deshalb hier JS-autoritativer Pfad, damit TS den Probe-Zielwert nicht
+        // mit einem klassischen Überschussziel überschreibt.
+        if (entry && entry.zeroExportActive) {
+            return fallback('zero-export-forecast-js-strategy', { zeroExportActive: true });
+        }
         if (!evaluate) return fallback('missing-ts-mirror');
         try {
             const d = entry && entry.device || {};
-            const stages = (Array.isArray(d.stages) ? d.stages : [])
-                .filter(st => st && Number.isFinite(Number(st.powerW)) && Number(st.powerW) > 0)
-                .map((st, idx) => ({ stage: Number(st.index || st.stage || (idx + 1)), powerW: Math.max(0, Math.round(Number(st.powerW) || 0)) }));
+            const stages = this._buildHeatingRodTsStageModel(
+                d,
+                Math.max(0, Math.round(Number(entry && entry.observedStage) || 0)),
+                Number.isFinite(Number(entry && entry.measuredW)) ? Number(entry.measuredW) : null,
+            );
             const input = {
                 ts: Date.now(),
                 device: {
@@ -3458,28 +3597,61 @@ class HeatingRodControlModule extends BaseModule {
             const ts = evaluate(input);
             const tsStage = Math.max(0, Math.round(Number(ts && ts.targetStage) || 0));
             const tsPowerW = Math.max(0, Math.round(Number(ts && ts.targetPowerW) || 0));
-            const mismatches = [
+            const referenceMismatches = [
                 compareHeatingRodShadowField('targetStage', entry.jsTargetStage, ts && ts.targetStage),
                 compareHeatingRodShadowField('targetPowerW', entry.jsTargetW, ts && ts.targetPowerW),
             ].filter(Boolean);
+            const blockingReferenceMismatches = referenceMismatches.filter(isHeatingRodShadowBlockingMismatch);
+            const diagnosticReferenceMismatches = referenceMismatches.filter(mismatch => !isHeatingRodShadowBlockingMismatch(mismatch));
             const normalPathReady = !!(entry && entry.normalPathReady) || this._isHeatingRodTsNormalPathReady();
+            const mismatches = blockingReferenceMismatches;
+            const policy = this._getHeatingRodTsFallbackPolicy(normalPathReady);
             const hardSafetyBlock = this._isHeatingRodTsHardSafetyBlock(entry, tsStage);
             if (hardSafetyBlock) {
                 return fallback(hardSafetyBlock, {
                     input,
                     ts: { targetStage: tsStage, targetW: tsPowerW, reason: ts && ts.reason },
                     mismatches,
+                    referenceMismatches,
+                    blockingReferenceMismatches,
+                    diagnosticReferenceMismatches,
                     normalPathReady,
+                    normalPathTakenOver: false,
                     hardSafetyBlock: true,
+                    emergencyFallback: true,
+                    hardFallbackOnly: normalPathReady,
+                    legacyJsPathRole: policy.legacyJsPathRole,
+                    jsReferenceMode: policy.jsReferenceMode,
+                    jsReferenceDecisionMode: policy.jsReferenceDecisionMode,
+                    jsReferenceBlocking: !normalPathReady,
+                    legacyJsReferencePathStage: normalPathReady ? 'diagnostic-cleanup' : 'blocking-reference',
+                    legacyJsReferenceUsedForDecision: !normalPathReady,
+                    legacyJsReferenceCleanupReady: !!normalPathReady,
                     jsReferenceReduced: false,
                 });
             }
-            if (mismatches.length && !normalPathReady) {
-                return fallback('ts-js-mismatch', {
+            if (blockingReferenceMismatches.length) {
+                return fallback('ts-js-stage-mismatch', {
                     input,
                     ts: { targetStage: tsStage, targetW: tsPowerW, reason: ts && ts.reason },
                     mismatches,
+                    referenceMismatches,
+                    blockingReferenceMismatches,
+                    diagnosticReferenceMismatches,
                     normalPathReady,
+                    jsReferenceMismatch: !!(referenceMismatches.length),
+                    jsReferenceMode: 'blocking-reference',
+                    jsReferenceDecisionMode: 'blocking-stage-mismatch',
+                    jsReferenceBlocking: true,
+                    legacyJsReferencePathStage: 'blocking-reference',
+                    legacyJsReferenceUsedForDecision: true,
+                    legacyJsReferenceCleanupReady: false,
+                    legacyJsPathReduced: false,
+                    jsReferenceReduced: false,
+                    normalPathTakenOver: false,
+                    emergencyFallback: true,
+                    hardFallbackOnly: normalPathReady,
+                    hardSafetyBlock: false,
                 });
             }
             return {
@@ -3493,9 +3665,24 @@ class HeatingRodControlModule extends BaseModule {
                 input,
                 ts,
                 mismatches,
+                referenceMismatches,
+                blockingReferenceMismatches,
+                diagnosticReferenceMismatches,
                 normalPathReady,
-                jsReferenceMismatch: !!(mismatches.length),
-                jsReferenceReduced: !!(normalPathReady && mismatches.length),
+                normalPathTakenOver: !!normalPathReady,
+                jsReferenceMismatch: !!(referenceMismatches.length),
+                jsReferenceMode: policy.jsReferenceMode,
+                jsReferenceDecisionMode: policy.jsReferenceDecisionMode,
+                jsReferenceBlocking: false,
+                legacyJsReferencePathStage: normalPathReady ? 'diagnostic-cleanup' : 'blocking-reference',
+                legacyJsReferenceUsedForDecision: !normalPathReady,
+                legacyJsReferenceCleanupReady: !!normalPathReady,
+                legacyJsPathReduced: !!normalPathReady,
+                legacyJsPathRole: policy.legacyJsPathRole,
+                jsFallbackMode: policy.jsFallbackMode,
+                jsReferenceReduced: !!(normalPathReady && referenceMismatches.length),
+                hardFallbackOnly: false,
+                emergencyFallback: false,
                 hardSafetyBlock: false,
             };
         } catch (e) {

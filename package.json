@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.8.164",
+  "version": "0.8.165",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -400,7 +400,9 @@
     "test:para14a-eebus-direct-api": "node scripts/verify-para14a-eebus-direct-api.js",
     "test:evcs-input-refresh-hardening": "node scripts/verify-evcs-input-refresh-hardening.js",
     "test:publish-check-runner": "node scripts/publish-check-runner.js --verify",
-    "test:release:full": "node scripts/publish-check-runner.js"
+    "test:release:full": "node scripts/publish-check-runner.js",
+    "test:heating-rod-shadow-power-model": "node scripts/verify-heating-rod-ts-shadow-power-model.js",
+    "test:heating-rod-shadow-calibration-parity": "node scripts/verify-heating-rod-shadow-calibration-parity.js"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",
@@ -442,6 +444,7 @@
     "docs/RC39_SAFETY_ENVELOPE_DE.md",
     "docs/RC40_NPM_PUBLISH_STABILITAET_DE.md",
     "docs/RC40_TYPE_SAFETY_DE.md",
+    "docs/RC41_HEATING_STABILITY_DE.md",
     "ems/charging-budget-helpers.js",
     "ems/consumers/evcs.js",
     "ems/consumers/generic-load.js",

@@ -1,3 +1,13 @@
+## 0.8.165 - 2026-08-09
+
+- Heizstab-TS-Entscheidungsmodell mit der produktiven Runtime vereinheitlicht: Der TypeScript-Pfad erhält jetzt pro Zielstufe dieselbe kumulierte Leistung und denselben aus realer Messleistung angelernten `stagePowerScale` wie die bestehende Heizstabregelung. Mehrere gleich große Einzelstufen können dadurch nicht mehr als fälschlich gleich große Gesamtstufen bewertet werden.
+- Die im Feld sichtbare Warnung `[heating-rod-ts-shadow] ... c2.targetPowerW` bereinigt: Eine reine Leistungsmodell-Abweichung bei identischer Zielstufe bleibt in der Diagnose sichtbar, erzeugt aber kein zyklisches Warn-Log und blockiert keine korrekte Schaltentscheidung.
+- Echte Zielstufenabweichungen bleiben auch nach Übernahme des TS-Normalpfads fail-closed. In diesem Fall gewinnt die bewährte JavaScript-Sicherheitsreferenz; die TS-Zielstufe wird nicht an die Hardware weitergegeben.
+- Shadow-Vergleiche auf den tatsächlich erreichten produktiven PV-Auto-Pfad begrenzt. Manuelle/extern übernommene Stufen, deaktivierte Geräte, §14a-Begrenzungen, Schutzabschaltungen und 0-Einspeise-/Forecast-Sonderpfade werden nicht mehr mit einem fachlich unpassenden Standardmodell verglichen.
+- Neue Verhaltensregressionen prüfen kalibrierte 1/2/3-Stufenmodelle, reine Wattdiagnose ohne Warnspam, Zielstufen-Fallback im Normalpfad und das Überspringen separater Sicherheits-/Ownership-Pfade.
+- Den Energieherkunft-/Ledger-Routentest plattformneutral gemacht. Windows-Pfade mit Backslashes und Linux-Pfade werden identisch geprüft; dadurch scheitert der interne Entwicklungstest nicht mehr allein am Betriebssystem.
+- Netzanschluss-, Phasen-, §14a-, Lade-, Speicher-, FENECON- und SafetyEnvelope-Grenzwerte aus 0.8.164 bleiben unverändert. Service-Worker-Cache auf `nexowatt-cache-v465` und zentrale Versionskennungen auf 0.8.165 aktualisiert.
+
 ## 0.8.164 - 2026-08-09
 
 - Publish-Stabilisierung für Windows: Der Releasepfad verändert keine Runtime- oder Spiegeldateien mehr während `npm publish`. `npm ci` installiert den exakt gepinnten und für RC40 verwendeten TypeScript-Compiler 5.8.3; der Publish-Check prüft diese Version fail-closed. Compilerabweichungen, fehlende DevDependencies oder nicht synchronisierte Runtime-Artefakte brechen mit einer eindeutigen Meldung ab, statt den Quellstand automatisch umzuschreiben.

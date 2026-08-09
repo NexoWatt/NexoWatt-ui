@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "description": "Ordered fail-closed release checks. Executed without a shell command chain so Windows cmd.exe limits cannot truncate the gate.",
-  "expectedStepCount": 202,
+  "expectedStepCount": 204,
   "commands": [
     "node scripts/ensure-publish-dev-deps.js",
     "npm run typecheck",
@@ -152,6 +152,8 @@
     "node scripts/verify-ts-heating-rod-normal-takeover.js",
     "node scripts/verify-ts-heating-rod-js-fallback-hard-only.js",
     "node scripts/verify-ts-heating-rod-hard-fallback-only.js",
+    "npm run test:heating-rod-shadow-calibration-parity",
+    "npm run test:heating-rod-shadow-power-model",
     "node scripts/verify-ts-heating-rod-emergency-fallback.js",
     "node scripts/verify-ts-heating-rod-legacy-cleanup.js",
     "node scripts/verify-ts-heating-rod-legacy-removal-plan.js",

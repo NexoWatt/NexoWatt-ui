@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: bc543da9fea63f2147714f596b08c97f69687d148f6b163c7e6217684e6c5275
+ * Original-Hash: 847daf59c8da2e542cde1fccdd55a4b98b02581f524c1d9ae8d04fb55c913e08
  */
 
 /**
@@ -68,6 +68,6 @@ const fail=(m)=>{console.error('[heating-rod-hard-fallback-only] ERROR: '+m);pro
  */
 const must=(t,m,l)=>{if(!t.includes(m))fail(`${l} fehlt: ${m}`)};
 const runtime=read('ems/modules/heating-rod-control.js'), mirror=read('src-ts/runtime-mirrors/ems/modules/heating-rod-control.ts'), main=read('main.js'), ui=read('www/ems-apps.js');
-for(const [m,l] of [['heatingRod.summary.tsFallbackPolicyJson','Fallback-Policy-State'],["mode: heatingRodTsNormalSource && heatingRodTsNormalSource.ready ? 'hard-blockers-only'",'Hard-Blockers-Only-Modus'],['legacyJsReferenceMode','JS-Referenz nur Diagnose'],['mismatches = normalPathReady ? [] : referenceMismatches','blockierende Mismatches getrennt'],['referenceMismatches','Referenzmismatches getrennt'],['jsReferenceDecisionUsed','JS-Entscheidung Policy']]) must(runtime,m,'runtime: '+l);
+for(const [m,l] of [['heatingRod.summary.tsFallbackPolicyJson','Fallback-Policy-State'],["mode: heatingRodTsNormalSource && heatingRodTsNormalSource.ready ? 'hard-blockers-only'",'Hard-Blockers-Only-Modus'],['legacyJsReferenceMode','JS-Referenz nur Diagnose'],['blockingReferenceMismatches','blockierende Zielstufenmismatches getrennt'],['diagnosticReferenceMismatches','reine Wattdiagnose getrennt'],["fallback('ts-js-stage-mismatch'",'Schaltkonflikt-Fallback'],['referenceMismatches','Referenzmismatches getrennt'],['jsReferenceDecisionUsed','JS-Entscheidung Policy']]) must(runtime,m,'runtime: '+l);
 must(main,'heatingRodTsFallbackPolicyJson','main.js liest Fallback-Policy'); must(ui,'JS-Fallback-Modus','UI Fallbackmodus'); must(ui,'JS-Referenz','UI JS-Referenz'); must(mirror,'Heating-Rod Runtime-Migrationshinweis (DE)','Mirror Migrationskommentar'); must(mirror,'jsFallbackLimitedToHardBlockers','Mirror Notfallback-Marker');
 console.log('[heating-rod-hard-fallback-only] OK: Heizstab-JS-Pfad ist auf Notfallback vorbereitet.');

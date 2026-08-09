@@ -1,4 +1,4 @@
-NexoWatt UI 0.8.164 – direkter npm-Publish
+NexoWatt UI 0.8.165 – direkter npm-Publish
 ===========================================
 
 1. Den Inhalt dieser ZIP in den Projektordner kopieren und vorhandene Dateien ersetzen.
@@ -9,8 +9,8 @@ NexoWatt UI 0.8.164 – direkter npm-Publish
 
 Kein npm ci, kein npm update und kein TypeScript-Abgleich erforderlich.
 Der Publish prüft ausschließlich:
-- ob Version 0.8.164 auf npm noch frei ist,
-- ob alle 213 freigegebenen Paketdateien exakt dem geprüften RC40-Artefakt entsprechen.
+- ob Version 0.8.165 auf npm noch frei ist,
+- ob alle 214 freigegebenen Paketdateien exakt dem geprüften RC41-Artefakt entsprechen.
 
 Alte node_modules-Ordner oder zusätzliche lokale Entwicklungsdateien werden nicht veröffentlicht,
 weil package.json eine exakte Dateiliste für das npm-Paket enthält.

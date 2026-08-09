@@ -143,9 +143,13 @@ function runPageRoute(licensed, enabled) {
   route.handler({}, res);
   return out;
 }
+function isEnergyLedgerPage(file) {
+  return String(file || '').replace(/\\/g, '/').endsWith('/www/energy-ledger.html');
+}
 assert.deepEqual(runPageRoute(true, false).redirect, [302, '/']);
 assert.deepEqual(runPageRoute(false, true).redirect, [302, '/']);
-assert.ok(String(runPageRoute(true, true).file || '').endsWith('www/energy-ledger.html'));
+assert.ok(isEnergyLedgerPage(runPageRoute(true, true).file));
+assert.ok(isEnergyLedgerPage('C:\\NexoWatt-ui\\www\\energy-ledger.html'), 'Windows-Pfade müssen im Release-Test akzeptiert werden.');
 assert.ok(apiText.includes('cp.energyKwh !== undefined ? cp.energyKwh : cp.totalKwh'));
 const cockpitText = fs.readFileSync(path.join(root, 'src-ts/runtime-executables/www/cockpit-shell.ts'), 'utf8');
 const ledgerHtml = fs.readFileSync(path.join(root, 'www/energy-ledger.html'), 'utf8');

@@ -6,8 +6,8 @@
  *
  * Zweck:
  * Prüft den 0.7.108-Schritt: Heizstab-Entscheidungen dürfen produktiv aus dem
- * TypeScript-Spiegel übernommen werden, aber nur bei JS/TS-Gleichstand und mit
- * JS-Sicherheitsfallback.
+ * TypeScript-Spiegel übernommen werden, mit identischer Zielstufe und mit
+ * JS-Sicherheitsfallback. Reine Wattmodell-Abweichungen bleiben Diagnose.
  */
 const fs = require('fs');
 const path = require('path');
@@ -20,7 +20,7 @@ const main = read('main.js');
 must(runtime, '_evaluateHeatingRodTsProductiveDecision', 'produktiver Heizstab-TS-Entscheidungshelfer');
 must(runtime, "'ts-heating-rod'", 'TS-Heizstab-Quelle');
 must(runtime, "'ts-heating-rod-normal'", 'TS-Heizstab-Normalquelle');
-must(runtime, "fallback('ts-js-mismatch'", 'JS-Fallback bei Mismatch');
+must(runtime, "fallback('ts-js-stage-mismatch'", 'JS-Fallback bei Zielstufenmismatch');
 must(runtime, 'heatingRod.summary.source', 'Heizstab-Quellen-State');
 must(runtime, 'heatingRod.summary.tsProductiveJson', 'Heizstab-Produktivdiagnose-State');
 must(runtime, 'heatingRodTsProductiveEntries', 'Produktive Einträge pro Gerät');

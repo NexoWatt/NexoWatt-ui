@@ -1,7 +1,7 @@
 {
-  "schema": 1,
+  "schemaVersion": 1,
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.164",
+  "version": "0.8.165",
   "files": [
     {
       "path": "LICENSE",
@@ -92,6 +92,11 @@
       "path": "docs/RC40_TYPE_SAFETY_DE.md",
       "size": 2832,
       "sha256": "aeb055f6b683a0ac6797f9921e5994ffbcd1f3dd62395abd31778815533de9fc"
+    },
+    {
+      "path": "docs/RC41_HEATING_STABILITY_DE.md",
+      "size": 2648,
+      "sha256": "b84c7a5f87e485383c310729c15a02b997636e0c581ff3edbaf3e17261b8325a"
     },
     {
       "path": "ems/charging-budget-helpers.js",
@@ -200,8 +205,8 @@
     },
     {
       "path": "ems/modules/heating-rod-control.js",
-      "size": 329642,
-      "sha256": "f22f3e2aadc5879ff12543a5f4af06a726a56833adcf3825d1da3ffa4ae0c372"
+      "size": 338111,
+      "sha256": "0ea877fcbf75148ad53ed91dcfdeadb41d962ade53ecc64e25ef92e0d7c55dd1"
     },
     {
       "path": "ems/modules/mesh-microgrid.js",
@@ -411,12 +416,12 @@
     {
       "path": "ems/services/tariff-provider-registry.js",
       "size": 28839,
-      "sha256": "c2dd374a0abed03894983106944d8592aed9b9fc646866fb2155396955f286f2"
+      "sha256": "52b38a8b32459098cc851e9dfc82e1b9c37db718345f0262deb7a57b7382ede9"
     },
     {
       "path": "io-package.json",
-      "size": 26813,
-      "sha256": "4b1bb42bf97119f43428df1b36782189d66890941319e022e7473fe88954d19b"
+      "size": 27626,
+      "sha256": "023542a9c23edfb6271d594ad208456a36807bcfc18b613af370f07f9e7422d0"
     },
     {
       "path": "lib/energy-origin-api.js",
@@ -891,7 +896,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1084,
-      "sha256": "6ee7c676c66e9e8fed13144cf45cb2add90cf77b46708be67d855a8e719e38e0"
+      "sha256": "d972e5f234005be40b917189add8a6785325b63eab1ad6b8e14e2892a9482816"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -911,7 +916,7 @@
     {
       "path": "www/nw-i18n.js",
       "size": 20613,
-      "sha256": "06015597348d03589b6a7d11176113720e4d040f9b40379d271dbf2afb1f7c94"
+      "sha256": "24a2b3557dc30ba35e24f30492a7bde1852cfdd4101e10bd4b28946bb59adfbc"
     },
     {
       "path": "www/nw-shell.js",
@@ -1041,7 +1046,7 @@
     {
       "path": "www/sw.js",
       "size": 4888,
-      "sha256": "5f6a69fca3a60caf14dc7a3abfb5baa7c1589f741faffd4f1a5bf705cf839497"
+      "sha256": "22a39960aaea16b8e245bfd4edbceea51aa57faeae5f0da10e03805b0684a369"
     },
     {
       "path": "www/tariff-report.html",
