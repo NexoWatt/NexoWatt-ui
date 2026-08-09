@@ -37,6 +37,8 @@ const defaultRequiredTsScaffoldFiles = [
   'src-ts/contracts/testing.ts',
   'src-ts/scripts/publish-check-rules.ts',
   'src-ts/scripts/ts-scaffold-rules.ts',
+  'scripts/publish-check-runner.js',
+  'scripts/publish-check-plan.json',
   'src-ts/tests/contracts-smoke.ts',
   'src-ts/tests/publish-check-rules-smoke.ts',
   'src-ts/tests/ts-scaffold-rules-smoke.ts',
@@ -49,6 +51,7 @@ const defaultRequiredPackageScripts = [
   'test:contracts',
   'test:ts-scaffold',
   'test:all',
+  'test:publish-check-runner',
 ];
 
 /** Code-Teil: ok – erzeugt ein erfolgreiches Regelergebnis. */
@@ -75,21 +78,33 @@ function requirePackageScripts(pkg, scriptNames = defaultRequiredPackageScripts)
   return results.length ? results : [ok()];
 }
 
-/** Code-Teil: requirePublishCheckStartsWithTypeSafety – erzwingt DevDependency-Preflight und Typecheck am Gate-Anfang. */
-function requirePublishCheckStartsWithTypeSafety(pkg) {
-  const publishCheck = String(pkg && pkg.scripts && pkg.scripts['publish:check'] || '');
-  const commands = publishCheck
-    .split(/&&|\|\||;|\n/g)
-    .map((command) => command.trim().replace(/\s+/g, ' '))
-    .filter(Boolean);
+/** Code-Teil: requirePublishCheckStartsWithTypeSafety – prüft Windows-sicheren Runner und Type-Safety-Reihenfolge. */
+function requirePublishCheckStartsWithTypeSafety(rootDir, pkg) {
+  const publishCheck = String(pkg && pkg.scripts && pkg.scripts['publish:check'] || '').trim();
+  const expectedRunner = 'node scripts/publish-check-runner.js';
+  if (publishCheck !== expectedRunner) return error(`publish:check must use the Windows-safe runner: ${expectedRunner}`);
+
+  let commands = [];
+  try {
+    const planPath = path.join(rootDir, 'scripts', 'publish-check-plan.json');
+    const plan = JSON.parse(fs.readFileSync(planPath, 'utf8'));
+    if (plan.schemaVersion !== 1 || !Array.isArray(plan.commands)) {
+      return error('scripts/publish-check-plan.json must use schemaVersion=1 and contain a commands array.');
+    }
+    commands = plan.commands.map((command) => String(command || '').trim().replace(/\s+/g, ' '));
+    if (plan.expectedStepCount !== commands.length) {
+      return error('publish-check-plan expectedStepCount must match the commands array length.');
+    }
+  } catch (err) {
+    return error(`publish-check plan could not be read: ${err && err.message ? err.message : String(err)}`);
+  }
+
   const dependencyCheck = 'node scripts/ensure-publish-dev-deps.js';
   const typecheckCommand = 'npm run typecheck';
-  const dependencyIndex = commands.indexOf(dependencyCheck);
-  const typecheckIndex = commands.indexOf(typecheckCommand);
-  if (dependencyIndex !== 0) return error('publish:check must start with node scripts/ensure-publish-dev-deps.js.');
-  if (typecheckIndex !== 1) return error('publish:check must run npm run typecheck immediately after the DevDependency preflight.');
-  if (commands.filter((command) => command === dependencyCheck).length !== 1) return error('publish:check must contain the DevDependency preflight exactly once.');
-  if (commands.filter((command) => command === typecheckCommand).length !== 1) return error('publish:check must contain npm run typecheck exactly once.');
+  if (commands[0] !== dependencyCheck) return error('publish-check plan must start with node scripts/ensure-publish-dev-deps.js.');
+  if (commands[1] !== typecheckCommand) return error('publish-check plan must run npm run typecheck immediately after the DevDependency preflight.');
+  if (commands.filter((command) => command === dependencyCheck).length !== 1) return error('publish-check plan must contain the DevDependency preflight exactly once.');
+  if (commands.filter((command) => command === typecheckCommand).length !== 1) return error('publish-check plan must contain npm run typecheck exactly once.');
   return ok();
 }
 
@@ -146,7 +161,7 @@ function collectTsScaffoldRuleErrors(rootDir, pkg, tsconfig, buildConfig) {
   const results = [
     ...requireScaffoldFiles(rootDir),
     ...requirePackageScripts(pkg || {}),
-    requirePublishCheckStartsWithTypeSafety(pkg || {}),
+    requirePublishCheckStartsWithTypeSafety(rootDir, pkg || {}),
     requireTsconfigIncludesSrcTs(tsconfig || {}),
     ...requireBuildConfigDeclarationsOnly(buildConfig || {}),
     requireMinimumSrcTsFiles(srcTsFiles),

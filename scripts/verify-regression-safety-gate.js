@@ -30,6 +30,10 @@ if (!pkg.version || !ioPkg.common || pkg.version !== ioPkg.common.version) {
   process.exit(1);
 }
 const scripts = pkg.scripts || {};
+const publishPlan = JSON.parse(read('scripts/publish-check-plan.json'));
+const publishCommands = Array.isArray(publishPlan.commands)
+  ? publishPlan.commands.map((command) => String(command || '').trim().replace(/\s+/g, ' '))
+  : [];
 for (const name of [
   'test:storagefarm-appcenter-restore',
   'test:storagefarm-appcenter-hydration',
@@ -60,10 +64,10 @@ must('src-ts/runtime-executables/ems/services/safety-envelope.ts', 'evaluateFlex
 must('src-ts/runtime-executables/ems/services/safety-envelope.ts', 'evaluateSafetyCommandPermission', 'Sicherheitsvertrag für nicht importsteigernde Stellbefehle');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'liveSafetyEnvelope', 'EVCS Live-Recheck vor Hardware-Write');
 must('src-ts/runtime-executables/ems/modules/storage-control.ts', 'evaluateSafetyCommandPermission', 'Speicher Safety-Command-Vertrag');
-if (!String(scripts['publish:check'] || '').includes('test:safety-envelope-final-write')
-  || !String(scripts['publish:check'] || '').includes('test:safety-active-load-stop')
-  || !String(scripts['publish:check'] || '').includes('test:safety-module-deactivate')) {
-  console.error('[regression-safety-gate] P0-Safety-Tests fehlen im publish:check');
+if (!publishCommands.includes('npm run test:safety-envelope-final-write')
+  || !publishCommands.includes('npm run test:safety-active-load-stop')
+  || !publishCommands.includes('npm run test:safety-module-deactivate')) {
+  console.error('[regression-safety-gate] P0-Safety-Tests fehlen im publish-check-plan');
   process.exit(1);
 }
 

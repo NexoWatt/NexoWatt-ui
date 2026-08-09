@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+src-admin-tab/node_modules/
+
+# Generated TypeScript build output
+build-ts/
+build-types/
+build/
+
+# Package artifacts and logs
+*.tgz
+*.zip
+npm-debug.log*
+
+# Local editor / OS files
+.vscode/
+.DS_Store
+Thumbs.db

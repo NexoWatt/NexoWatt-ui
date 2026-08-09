@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: d6c76471db4274a376781ae477d3153ad2f4c0295e4dcfae6afca8afb7f25c5c
+ * Original-Hash: f57414b6c1ac79ce310479e8ceead91bd91a21c44f384896f66a068326209dc7
  */
 
 /**
@@ -46,6 +46,7 @@
  * 2. npm run sync:ts-runtime-executables ausführen.
  * 3. npm run test:runtime-executables prüfen.
  */
+"use strict";
 /**
  * Executable TypeScript source: www/energy-origin-ledger-view.js
  *

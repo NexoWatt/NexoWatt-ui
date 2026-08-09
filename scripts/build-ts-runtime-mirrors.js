@@ -43,6 +43,8 @@ const EXCLUDE_FILES = new Set([
   // Diese Datei wird bereits bewusst aus src-ts/scripts gebaut und gespiegelt.
   'scripts/publish-check-rules.js',
   'scripts/ts-scaffold-rules.js',
+  // Eigener, selbstvalidierender Release-Runner; kein produktiver Adapter-Runtimepfad.
+  'scripts/publish-check-runner.js',
 ]);
 
 /**

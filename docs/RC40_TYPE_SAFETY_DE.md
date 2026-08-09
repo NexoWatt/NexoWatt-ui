@@ -8,6 +8,8 @@ RC40 verändert bewusst keine fachlichen EMS-Grenzwerte oder Prioritäten. Der S
 
 Der vollständige Projekt-Typecheck muss ohne Diagnose enden. `npm run publish:check` startet deshalb mit der Compiler-/DevDependency-Vorprüfung und unmittelbar danach mit `npm run typecheck` und führt danach die vorhandenen Laufzeit-, Safety-, Lade-, Speicher-, §14a-, Runtime-Mirror-, UI- und Packaging-Regressionen aus. `prepublishOnly` behält die Prüfung auf eine freie npm-Version als ersten Schritt und ruft anschließend dasselbe vollständige Gate auf.
 
+Unter Windows wird dieses Gate nicht mehr als eine einzige lange `cmd.exe`-Kette ausgeführt. `scripts/publish-check-runner.js` liest die unverändert geordnete Liste aus `scripts/publish-check-plan.json`, validiert alle 202 Schritte und startet jeden Prozess einzeln ohne Shell-Gesamtkette. Damit bleiben sämtliche Prüfungen verpflichtend, während die Windows-Grenze für Befehlszeilen nicht mehr erreicht wird.
+
 ## Typisierte sicherheitskritische Grenzen
 
 Explizit gehärtet wurden insbesondere:

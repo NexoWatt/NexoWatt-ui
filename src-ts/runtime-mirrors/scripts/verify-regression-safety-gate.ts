@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 640382da59536afbc81269bb1455a0720d0e4d1b49d15a15003f48379d74be7d
+ * Original-Hash: 1ec5d9fa7621506f5c7eead292e0bd1e3ed771b8625aa7a6c02961ac4245f02e
  */
 
 /**
@@ -93,6 +93,10 @@ if (!pkg.version || !ioPkg.common || pkg.version !== ioPkg.common.version) {
   process.exit(1);
 }
 const scripts = pkg.scripts || {};
+const publishPlan = JSON.parse(read('scripts/publish-check-plan.json'));
+const publishCommands = Array.isArray(publishPlan.commands)
+  ? publishPlan.commands.map((command) => String(command || '').trim().replace(/\s+/g, ' '))
+  : [];
 for (const name of [
   'test:storagefarm-appcenter-restore',
   'test:storagefarm-appcenter-hydration',
@@ -123,10 +127,10 @@ must('src-ts/runtime-executables/ems/services/safety-envelope.ts', 'evaluateFlex
 must('src-ts/runtime-executables/ems/services/safety-envelope.ts', 'evaluateSafetyCommandPermission', 'Sicherheitsvertrag für nicht importsteigernde Stellbefehle');
 must('src-ts/runtime-executables/ems/modules/charging-management.ts', 'liveSafetyEnvelope', 'EVCS Live-Recheck vor Hardware-Write');
 must('src-ts/runtime-executables/ems/modules/storage-control.ts', 'evaluateSafetyCommandPermission', 'Speicher Safety-Command-Vertrag');
-if (!String(scripts['publish:check'] || '').includes('test:safety-envelope-final-write')
-  || !String(scripts['publish:check'] || '').includes('test:safety-active-load-stop')
-  || !String(scripts['publish:check'] || '').includes('test:safety-module-deactivate')) {
-  console.error('[regression-safety-gate] P0-Safety-Tests fehlen im publish:check');
+if (!publishCommands.includes('npm run test:safety-envelope-final-write')
+  || !publishCommands.includes('npm run test:safety-active-load-stop')
+  || !publishCommands.includes('npm run test:safety-module-deactivate')) {
+  console.error('[regression-safety-gate] P0-Safety-Tests fehlen im publish-check-plan');
   process.exit(1);
 }
 

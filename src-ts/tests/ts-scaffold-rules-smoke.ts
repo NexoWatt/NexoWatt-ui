@@ -30,7 +30,8 @@ const validPackageScripts = {
     'test:contracts': 'node scripts/verify-ts-contracts.js',
     'test:ts-scaffold': 'node scripts/verify-ts-scaffold.js',
     'test:all': 'npm run publish:check && npm run test:types',
-    'publish:check': 'node scripts/ensure-publish-dev-deps.js && npm run typecheck && node scripts/verify-publish.js',
+    'publish:check': 'node scripts/publish-check-runner.js',
+    'test:publish-check-runner': 'node scripts/publish-check-runner.js --verify',
   },
 };
 
@@ -52,7 +53,7 @@ const validBuildConfig = {
  * Zweck: Sichert, dass die Funktionen mit kleinen Testobjekten typechecken.
  */
 requirePackageScripts(validPackageScripts);
-requirePublishCheckStartsWithTypeSafety(validPackageScripts);
+requirePublishCheckStartsWithTypeSafety('.', validPackageScripts);
 requireTsconfigIncludesSrcTs(validTsconfig);
 requireBuildConfigDeclarationsOnly(validBuildConfig);
 requireMinimumSrcTsFiles(['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts', 'f.ts', 'g.ts', 'h.ts']);

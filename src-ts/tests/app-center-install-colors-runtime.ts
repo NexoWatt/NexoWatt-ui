@@ -42,6 +42,10 @@ function runAppCenterInstallColorTest(): void {
     version?: string;
     packages?: Record<string, { version?: string; devDependencies?: Record<string, string>; resolved?: string }>;
   }>('package-lock.json');
+  const publishPlan = readJson<{ commands?: unknown }>('scripts/publish-check-plan.json');
+  const publishCommands: string[] = Array.isArray(publishPlan.commands)
+    ? publishPlan.commands.map((command) => String(command || '').trim().replace(/\s+/g, ' '))
+    : [];
 
   const expectedVersion = String(pkg.version || '');
   assert(pkg.version === expectedVersion, `package.json muss Version ${expectedVersion} haben.`);
@@ -70,7 +74,7 @@ function runAppCenterInstallColorTest(): void {
   assert(!css.includes('.nw-toggle[data-toggle-kind="enabled"] button[data-value="false"].active'), 'Aktiv-Aus darf nicht versehentlich als roter Installiert-Nein-Status definiert sein.');
 
   assert(Boolean(pkg.scripts?.['test:app-center-install-colors']?.includes('tsconfig.app-center-install-colors.json')), 'package.json braucht das App-Center-Farbgate.');
-  assert(Boolean(pkg.scripts?.['publish:check']?.includes('npm run test:app-center-install-colors')), 'publish:check muss das App-Center-Farbgate enthalten.');
+  assert(publishCommands.includes('npm run test:app-center-install-colors'), 'publish-check-plan muss das App-Center-Farbgate enthalten.');
 }
 
 runAppCenterInstallColorTest();

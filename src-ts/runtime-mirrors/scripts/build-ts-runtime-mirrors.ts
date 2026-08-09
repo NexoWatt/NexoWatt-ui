@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: e4fa55946f9eb51bb0c1a97e8a971d1798eaf20575370be62a94663fcb1f93c5
+ * Original-Hash: 113fe904bbbf61a52eb158046e57c1cd0e633ccc920109ed8a13024e679ad767
  */
 
 /**
@@ -73,6 +73,8 @@ const EXCLUDE_FILES = new Set([
   // Diese Datei wird bereits bewusst aus src-ts/scripts gebaut und gespiegelt.
   'scripts/publish-check-rules.js',
   'scripts/ts-scaffold-rules.js',
+  // Eigener, selbstvalidierender Release-Runner; kein produktiver Adapter-Runtimepfad.
+  'scripts/publish-check-runner.js',
 ]);
 
 /**
