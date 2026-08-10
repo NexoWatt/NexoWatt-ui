@@ -531,7 +531,7 @@ export async function readSystemUuid(conn = null, instance = getInstance()) {
  * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
-async function fetchJsonWithTimeout(url, ms = RUNTIME_FETCH_TIMEOUT_MS) {
+async function fetchJsonWithTimeout(url, ms = RUNTIME_FETCH_TIMEOUT_MS, options = {}) {
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
   let timer = null;
   try {
@@ -539,11 +539,18 @@ async function fetchJsonWithTimeout(url, ms = RUNTIME_FETCH_TIMEOUT_MS) {
     const response = await fetch(url, {
       method: 'GET',
       cache: 'no-store',
-      credentials: 'omit',
+      credentials: options.credentials || 'omit',
+      headers: options.headers || undefined,
       signal: controller ? controller.signal : undefined,
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok || json?.ok === false) {
+      const error = new Error(json?.message || `HTTP ${response.status}`);
+      error.status = response.status;
+      error.payload = json;
+      throw error;
+    }
+    return json;
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -554,7 +561,7 @@ async function fetchJsonWithTimeout(url, ms = RUNTIME_FETCH_TIMEOUT_MS) {
  * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
-async function postJsonWithTimeout(url, payload, ms = RUNTIME_FETCH_TIMEOUT_MS) {
+async function postJsonWithTimeout(url, payload, ms = RUNTIME_FETCH_TIMEOUT_MS, options = {}) {
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
   let timer = null;
   try {
@@ -562,19 +569,97 @@ async function postJsonWithTimeout(url, payload, ms = RUNTIME_FETCH_TIMEOUT_MS) 
     const response = await fetch(url, {
       method: 'POST',
       cache: 'no-store',
-      credentials: 'omit',
-      headers: { 'Content-Type': 'application/json' },
+      credentials: options.credentials || 'omit',
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
       body: JSON.stringify(payload || {}),
       signal: controller ? controller.signal : undefined,
     });
     const json = await response.json().catch(() => ({}));
     if (!response.ok || json?.ok === false) {
-      throw new Error(json?.message || `HTTP ${response.status}`);
+      const error = new Error(json?.message || `HTTP ${response.status}`);
+      error.status = response.status;
+      error.payload = json;
+      throw error;
     }
     return json;
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+/**
+ * Liefert die möglichen Runtime-Ports in stabiler Reihenfolge. Der Standardport
+ * wird zuerst probiert, damit die EOS-Anmeldung nicht von einer langsamen
+ * Admin-Socket-Verbindung abhängt.
+ */
+async function getRuntimePorts(instance = getInstance(), conn = null) {
+  const ports = [DEFAULT_PORT];
+  try {
+    const configuredPort = await withTimeout(readAdapterPort(instance, conn), 1200, 'Adapter-Port lesen');
+    if (configuredPort) ports.push(configuredPort);
+  } catch {
+    // Der Standardport bleibt als fail-closed Versuch erhalten.
+  }
+  return ports.filter((port, index, rows) => port && rows.indexOf(port) === index);
+}
+
+/** Prüft die strikt rollenpflichtige EOS-Session für geschützte Admin-Seiten. */
+export async function readRuntimeAuthStatus(instance = getInstance(), conn = null) {
+  let lastError = null;
+  for (const port of await getRuntimePorts(instance, conn)) {
+    try {
+      return await fetchJsonWithTimeout(
+        `${buildRuntimeBaseUrl(port)}/api/strict-auth/status?instance=${encodeURIComponent(instance)}&t=${Date.now()}`,
+        3500,
+        { credentials: 'include' }
+      );
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError) throw lastError;
+  throw new Error('EOS-Authentifizierung nicht erreichbar.');
+}
+
+/** Meldet einen Installer/Admin über den strikt rollenpflichtigen EOS-Endpunkt an. */
+export async function loginRuntimeAuth(instance = getInstance(), user = '', password = '', conn = null) {
+  let lastError = null;
+  for (const port of await getRuntimePorts(instance, conn)) {
+    try {
+      return await postJsonWithTimeout(
+        `${buildRuntimeBaseUrl(port)}/api/strict-auth/login?instance=${encodeURIComponent(instance)}&t=${Date.now()}`,
+        { user: String(user || '').trim(), password: String(password || '') },
+        6000,
+        { credentials: 'include' }
+      );
+    } catch (error) {
+      lastError = error;
+      if (Number(error && error.status) === 401 || Number(error && error.status) === 403 || Number(error && error.status) === 429) throw error;
+    }
+  }
+  if (lastError) throw lastError;
+  throw new Error('EOS-Anmeldung nicht erreichbar.');
+}
+
+/** Beendet die Adapter-eigene EOS-Session auf allen erreichbaren Runtime-Ports. */
+export async function logoutRuntimeAuth(instance = getInstance(), conn = null) {
+  let succeeded = false;
+  let lastError = null;
+  for (const port of await getRuntimePorts(instance, conn)) {
+    try {
+      await postJsonWithTimeout(
+        `${buildRuntimeBaseUrl(port)}/api/strict-auth/logout?instance=${encodeURIComponent(instance)}&t=${Date.now()}`,
+        {},
+        3500,
+        { credentials: 'include' }
+      );
+      succeeded = true;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (!succeeded && lastError) throw lastError;
+  return { ok: true };
 }
 
 /**
@@ -603,7 +688,7 @@ export async function readRuntimeLicenseInfo(instance = getInstance(), conn = nu
     const p = Number(port) || 0;
     if (!p || tried.has(p)) return null;
     tried.add(p);
-    const info = await fetchJsonWithTimeout(`${buildRuntimeBaseUrl(p)}/api/license/info?instance=${encodeURIComponent(instance)}&t=${Date.now()}`);
+    const info = await fetchJsonWithTimeout(`${buildRuntimeBaseUrl(p)}/api/license/info?instance=${encodeURIComponent(instance)}&t=${Date.now()}`, RUNTIME_FETCH_TIMEOUT_MS, { credentials: 'include' });
     return (info && typeof info === 'object') ? info : null;
   };
 
@@ -653,7 +738,8 @@ export async function saveRuntimeLicenseKey(instance = getInstance(), licenseKey
       const info = await postJsonWithTimeout(
         `${buildRuntimeBaseUrl(port)}/api/license/save?instance=${encodeURIComponent(instance)}&t=${Date.now()}`,
         { licenseKey: String(licenseKey || '').trim() },
-        5000
+        5000,
+        { credentials: 'include' }
       );
       if (info && typeof info === 'object') return info;
     } catch (error) {

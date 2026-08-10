@@ -24,7 +24,6 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import PageShell from './PageShell';
 import {
   buildRuntimeBaseUrl,
@@ -36,7 +35,6 @@ import {
 const DEFAULT_PORT = 8188;
 
 export default function InstallerPage() {
-  const navigate = useNavigate();
   const instance = getInstance();
   const [port, setPort] = useState(DEFAULT_PORT);
   const [hint, setHint] = useState('Port wird geladen…');
@@ -87,7 +85,7 @@ export default function InstallerPage() {
     },
     {
       label: 'Lizenz',
-      onClick: () => navigate('/license'),
+      onClick: () => openExternal(`${baseUrl}/license.html?${adminBackQuery}`),
     },
     {
       label: 'SmartHome VIS',

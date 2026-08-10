@@ -308,3 +308,55 @@ code,
     width: 100%;
   }
 }
+
+/* RC45: Geschützte Admin-Routen zeigen keinerlei sensible Inhalte vor der EOS-Anmeldung. */
+.nw-access-gate {
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.nw-access-gate__form {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.nw-access-gate__form .nw-actions-row {
+  margin-top: 8px;
+}
+
+.nw-protected-route {
+  min-height: 100vh;
+}
+
+.nw-protected-route__session {
+  position: fixed;
+  z-index: 20;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(620px, calc(100vw - 36px));
+  padding: 9px 10px 9px 14px;
+  border: 1px solid var(--nw-border-strong);
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.94);
+  box-shadow: var(--nw-shadow);
+  color: var(--nw-muted);
+  font-size: 0.82rem;
+}
+
+.nw-protected-route__session .nw-button {
+  min-height: 34px;
+  padding: 6px 11px;
+}
+
+@media (max-width: 640px) {
+  .nw-protected-route__session {
+    position: static;
+    margin: 12px;
+    border-radius: 14px;
+    justify-content: space-between;
+  }
+}

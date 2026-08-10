@@ -43,6 +43,11 @@ const TARGETS = {
     path: '/simulation.html',
     needsAdminBackQuery: true,
   },
+  license: {
+    title: 'Lizenz',
+    path: '/license.html',
+    needsAdminBackQuery: true,
+  },
   'smarthome-config': {
     title: 'SmartHome Config',
     path: '/smarthome-config.html',

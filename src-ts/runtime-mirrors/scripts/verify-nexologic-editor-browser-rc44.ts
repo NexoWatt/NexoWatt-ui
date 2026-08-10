@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: c919e69a55f3eb3b953c64f8940fbb9c3e3242c47d98c448d67a4ec59492778f
+ * Original-Hash: f8a8f63da3613b92f8e84553418715e99798285e3a482730673463dda26076cf
  */
 
 /**
@@ -294,7 +294,18 @@ class CdpClient {
   } finally {
     if (cdp) cdp.close();
     try { browser.kill('SIGKILL'); } catch (_) {}
-    fs.rmSync(profile, { recursive: true, force: true });
+    await new Promise((resolve) => {
+      if (browser.exitCode !== null || browser.signalCode) return resolve();
+      const timer = setTimeout(resolve, 800);
+      browser.once('exit', () => { clearTimeout(timer); resolve(); });
+    });
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try { fs.rmSync(profile, { recursive: true, force: true }); break; }
+      catch (error) {
+        if (attempt === 4) console.warn('[nexologic-editor-browser-rc44] Temp-Profil konnte nicht vollständig entfernt werden:', error.message);
+        else await new Promise((resolve) => setTimeout(resolve, 120));
+      }
+    }
   }
 })().catch((error) => {
   console.error('[nexologic-editor-browser-rc44] ERROR:', error && error.stack ? error.stack : error);

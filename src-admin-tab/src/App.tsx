@@ -20,15 +20,31 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import InstallerPage from './pages/InstallerPage';
 import LicensePage from './pages/LicensePage';
 import RedirectPage from './pages/RedirectPage';
+import ProtectedRuntimeRoute from './pages/ProtectedRuntimeRoute';
 
 export default function App() {
   return (
     <Routes>
-      <Route element={<InstallerPage />} path="/" />
-      <Route element={<InstallerPage />} path="/installer" />
-      <Route element={<LicensePage />} path="/license" />
-      <Route element={<RedirectPage targetKey="appcenter" />} path="/redirect/appcenter" />
-      <Route element={<RedirectPage targetKey="simulation" />} path="/redirect/simulation" />
+      <Route
+        element={<ProtectedRuntimeRoute capability="appcenter.open" title="Installer"><InstallerPage /></ProtectedRuntimeRoute>}
+        path="/"
+      />
+      <Route
+        element={<ProtectedRuntimeRoute capability="appcenter.open" title="Installer"><InstallerPage /></ProtectedRuntimeRoute>}
+        path="/installer"
+      />
+      <Route
+        element={<ProtectedRuntimeRoute capability="license.manage" requiredRole="Admin oder Installer" title="Lizenz"><LicensePage /></ProtectedRuntimeRoute>}
+        path="/license"
+      />
+      <Route
+        element={<ProtectedRuntimeRoute capability="appcenter.open" title="EMS App-Center"><RedirectPage targetKey="appcenter" /></ProtectedRuntimeRoute>}
+        path="/redirect/appcenter"
+      />
+      <Route
+        element={<ProtectedRuntimeRoute capability="simulation.open" title="Simulation"><RedirectPage targetKey="simulation" /></ProtectedRuntimeRoute>}
+        path="/redirect/simulation"
+      />
       <Route element={<RedirectPage targetKey="smarthome-config" />} path="/redirect/smarthome-config" />
       <Route element={<RedirectPage targetKey="smarthome-vis" />} path="/redirect/smarthome-vis" />
       <Route element={<Navigate replace to="/installer" />} path="*" />

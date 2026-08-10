@@ -21,6 +21,36 @@
     <title>NexoWatt EOS Admin</title>
     <script>
       (function () {
+        // Frühere Builds konnten den vollständigen Lizenzschlüssel im Browser
+        // zwischenspeichern. Diese Altwerte werden vor jedem React-Start entfernt.
+        try {
+          for (var storageIndex = 0; storageIndex < 2; storageIndex += 1) {
+            var storage = storageIndex === 0 ? window.localStorage : window.sessionStorage;
+            for (var i = storage.length - 1; i >= 0; i -= 1) {
+              var key = storage.key(i) || '';
+              if (/^nexowatt-ui\.licenseKey\./.test(key)) storage.removeItem(key);
+            }
+          }
+        } catch (_e) {}
+
+        // Ein direkter Admin-Deep-Link darf das React-Bundle nicht erst rendern
+        // und dadurch Lizenzinhalte kurz sichtbar machen. Die Runtime-Seite
+        // erzwingt die Rollenprüfung server- und clientseitig.
+        function redirectProtectedLicenseRoute() {
+          var hash = String(window.location.hash || '');
+          if (!/^#\/license(?:[/?]|$)/.test(hash)) return false;
+          try { document.documentElement.style.visibility = 'hidden'; } catch (_e) {}
+          var query = window.location.search || '';
+          window.location.replace('../license.html' + query);
+          return true;
+        }
+
+        window.addEventListener('hashchange', redirectProtectedLicenseRoute, true);
+        redirectProtectedLicenseRoute();
+      })();
+    </script>
+    <script>
+      (function () {
         if (window.io || window.socket || (window.parent && window.parent.socket) || (window.top && window.top.socket)) {
           return;
         }
@@ -76,7 +106,7 @@
         };
       })();
     </script>
-    <script type="module" crossorigin src="./assets/index-CCQUiWc9.js"></script>
+    <script type="module" crossorigin src="./assets/index-CCQUiWc9.js?v=0.8.169"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-BVyQqQO2.css">
   </head>
   <body>

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/auth.ts
- * Quell-Hash: sha256:69783e7f0c60c0aa2d23cc9b12ed4db75cfc079e5e9ffaeae1f3dc94d232f5ed
+ * Quell-Hash: sha256:e340dda3ae74754c014e12ec81d42120db57d8cd48f0f8f8b354321b6445129d
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -52,9 +52,15 @@
   const ORIG_FETCH = window.fetch ? window.fetch.bind(window) : null;
   if (!ORIG_FETCH) return;
 
-  const AUTH_STATUS_URL = '/api/auth/status';
-  const AUTH_LOGIN_URL  = '/api/auth/login';
-  const AUTH_LOGOUT_URL = '/api/auth/logout';
+  const currentPath = String(window.location && window.location.pathname || '').replace(/\/+$/, '');
+  // EMS/App-Center, Simulation und Lizenz bleiben unabhängig von der allgemeinen
+  // Kunden-Auth-Konfiguration immer rollenpflichtig. Diese Seiten verwenden daher
+  // die strikten Session-Endpunkte, die niemals in einen "Auth deaktiviert = Admin"-
+  // Bypass fallen. SmartHome und NexoLogic bleiben davon unberührt.
+  const STRICT_AUTH_PAGE = /(?:^|\/)(?:ems-apps(?:\.html)?|simulation(?:\.html)?|license(?:\.html)?)$/.test(currentPath);
+  const AUTH_STATUS_URL = STRICT_AUTH_PAGE ? '/api/strict-auth/status' : '/api/auth/status';
+  const AUTH_LOGIN_URL  = STRICT_AUTH_PAGE ? '/api/strict-auth/login' : '/api/auth/login';
+  const AUTH_LOGOUT_URL = STRICT_AUTH_PAGE ? '/api/strict-auth/logout' : '/api/auth/logout';
 
   let state = {
     enabled: false,
@@ -78,7 +84,7 @@
   let cancelEl = null;
   let mandatoryLock = false;
   let mandatoryReason = '';
-  const protectedPath = /(?:^|\/)(?:ems-apps|ems-apps\.html)$/.test(String(window.location && window.location.pathname || '').replace(/\/+$/, ''));
+  const protectedPath = STRICT_AUTH_PAGE;
   if (protectedPath) {
     try { document.documentElement.classList.add('nw-auth-capability-pending'); } catch (_e) {}
   }
@@ -596,6 +602,7 @@
       await ORIG_FETCH(AUTH_LOGOUT_URL, { method: 'POST', credentials: 'same-origin' });
     } catch (_e) {}
     await refreshStatus();
+    try { window.dispatchEvent(new CustomEvent('nw-auth-logout', { detail: Object.assign({}, state) })); } catch (_e) {}
   }
   /**
    * Code-Teil: updateHeader
@@ -659,7 +666,9 @@
 
     try {
       const url = (typeof input === 'string') ? input : (input && input.url ? input.url : '');
-      const isAuthEndpoint = url.indexOf('/api/auth/') === 0;
+      const isAuthEndpoint = url.indexOf('/api/auth/') === 0
+        || url.indexOf('/api/strict-auth/') === 0
+        || url.indexOf('/api/installer/') === 0;
       if (!isAuthEndpoint && (r.status === 401 || r.status === 403)) {
         // Refresh state and then prompt
         await refreshStatus();
@@ -692,9 +701,14 @@
     const requiredRole = String((options && options.requiredRole) || 'passende EOS-Rolle');
     setProtectedPagePending(true);
     const info = await refreshStatus();
-    const authRequired = !!(info && info.enabled && info.protectWrites);
+    // Rollen-geschützte Seiten (EMS, Lizenz, Simulator) bleiben auch dann
+    // anmeldepflichtig, wenn der allgemeine Kunden-Schreibschutz deaktiviert
+    // wurde. `protectWrites` darf nur die normale Kundenbedienung beeinflussen.
     const statusHealthy = !(info && info.statusError === true);
-    const ok = statusHealthy && (!authRequired || !!(info && info.authed && hasCapability(info.capabilities, cap)));
+    // Eine explizite Capability-Prüfung ist immer rollenpflichtig. Selbst ein
+    // unerwarteter Status mit `enabled=false` darf EMS, Lizenz oder Simulator
+    // nicht freigeben.
+    const ok = statusHealthy && !!(info && info.authed && hasCapability(info.capabilities, cap));
     if (ok) {
       releaseMandatoryLock();
       setProtectedPagePending(false);

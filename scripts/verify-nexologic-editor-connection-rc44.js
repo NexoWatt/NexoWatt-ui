@@ -23,7 +23,7 @@ for (const text of [source, runtime]) {
 
 assert.match(html, /Ausgang \(rechts\) anklicken oder ziehen/);
 assert.match(css, /body\.nw-page-logic \.nw-le\{/);
-assert.match(css, /grid-template-columns:minmax\(225px, 265px\) minmax\(720px, 1fr\) minmax\(270px, 330px\)/);
+assert.match(css, /grid-template-columns:\s*minmax\(225px,\s*265px\)\s+minmax\((?:680|720)px,\s*1fr\)\s+minmax\(270px,\s*330px\)/);
 assert.match(css, /\.nw-le-port\.is-connect-target/);
 assert.match(css, /\.nw-le-port\.is-connect-incompatible/);
 

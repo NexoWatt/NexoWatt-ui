@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/logic.ts
- * Quell-Hash: sha256:7013bdf2f3a14429f72c78f7484da071afaeae1e450997649b95911a937e92a2
+ * Quell-Hash: sha256:5f7abc9bd6f9f78dbb4486e44e570a197d77f10e69aea6e7eebbdceb02d48c89
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -65,6 +65,42 @@ const nwLE = {
   // SmartHome scenes for scene-trigger block
   sceneOptions: [],
 };
+
+
+/**
+ * Hält die Desktop-Arbeitsfläche exakt innerhalb des sichtbaren Browser-Viewports.
+ * Die frühere feste 68-px-Annahme konnte je nach Headerhöhe dazu führen, dass die
+ * unteren Scrollleisten hinter der Fensterkante lagen. Die echte Topbarhöhe wird
+ * deshalb als CSS-Variable veröffentlicht und bei Resize/Zoom nachgeführt.
+ */
+function nwSyncLogicViewportMetrics() {
+  try {
+    const topbar = document.querySelector('header.topbar');
+    const topbarHeight = topbar ? Math.ceil(topbar.getBoundingClientRect().height) : 68;
+    document.documentElement.style.setProperty('--nw-logic-topbar-h', `${Math.max(0, topbarHeight)}px`);
+  } catch (_e) {
+    // CSS-Fallback bleibt aktiv.
+  }
+}
+
+function nwInstallLogicViewportSizing() {
+  nwSyncLogicViewportMetrics();
+  try {
+    const topbar = document.querySelector('header.topbar');
+    if (topbar && typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(() => {
+        nwSyncLogicViewportMetrics();
+        try { nwUpdateAllWirePaths(); } catch (_e) {}
+      });
+      observer.observe(topbar);
+      nwLE.viewportObserver = observer;
+    }
+  } catch (_e) {}
+  window.addEventListener('resize', nwSyncLogicViewportMetrics, { passive: true });
+  try {
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', nwSyncLogicViewportMetrics, { passive: true });
+  } catch (_e) {}
+}
 
 /**
  * Code-Teil: Arrow-Funktion `nwClamp`
@@ -3645,6 +3681,8 @@ function nwHandleNew() {
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 async function nwInitLogicEditor() {
+  nwInstallLogicViewportSizing();
+
   // Elements
   nwLE.el.boardWrap = document.getElementById('nw-le-board-wrap');
   nwLE.el.boardScale = document.getElementById('nw-le-board-scale');
@@ -3849,7 +3887,10 @@ async function nwInitLogicEditor() {
 
   // Update wires on resize
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'resize' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-  window.addEventListener('resize', () => nwUpdateAllWirePaths());
+  window.addEventListener('resize', () => {
+    nwSyncLogicViewportMetrics();
+    nwUpdateAllWirePaths();
+  });
 }
 
 

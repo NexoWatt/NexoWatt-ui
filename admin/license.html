@@ -1,65 +1,65 @@
 <!--
-  Datei: admin/license.html
-  Rolle: Code-Datei
-  Zweck: Allgemeiner Projektcode; genaue Verantwortung ergibt sich aus Pfad und Funktionsnamen.
-  Wartung: HTML-IDs/Klassen sind Vertragsstellen für www/*.js und CSS. Nicht ohne Suche nach Referenzen ändern.
+  Rollen-sicherer Weiterleiter zur Runtime-Lizenzseite.
+  Diese Admin-Datei enthält und lädt selbst keinerlei Lizenzdaten.
 -->
 <!DOCTYPE html>
-<!--
-  NexoWatt Code-Kommentar (DE)
-  Zweck: Statische Admin-/Redirect-Seite für ioBroker Admin oder Installer-Start.
-  Zusammenhänge:
-  - Verlinkt auf Kunden-/Installerseiten oder React-Admin-Tab.
-  - Wird durch ioBroker Admin bzw. Adapter-Webserver ausgeliefert.
-  Wartungshinweise:
-  - Keine Kundenfunktionen ohne Berechtigung freigeben.
--->
 <html lang="de">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NexoWatt EOS – Lizenz</title>
   <style>
-    html, body { height: 100%; }
-    body {
-      margin: 0;
-      display: grid;
-      place-items: center;
-      background: #0b1220;
-      color: rgba(255,255,255,0.92);
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif;
-    }
-    .box {
-      max-width: 640px;
-      padding: 24px;
-      text-align: center;
-      border: 1px solid rgba(148,163,184,0.22);
-      border-radius: 18px;
-      background: rgba(2,6,23,0.55);
-      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
-    }
-    a { color: #22c55e; }
+    html,body{height:100%;margin:0;background:#020814;color:#edf6ff;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    body{display:grid;place-items:center}.box{width:min(620px,calc(100% - 32px));padding:24px;border:1px solid rgba(95,144,190,.28);border-radius:18px;background:rgba(5,20,36,.88);box-shadow:0 22px 70px rgba(0,0,0,.4)}
+    .muted{color:#9fb1c4;line-height:1.55}.status{margin-top:14px;padding:12px 14px;border:1px solid rgba(0,230,118,.28);border-radius:12px;background:rgba(0,230,118,.08)}
   </style>
-  <script>
-    (function () {
-      var search = window.location.search || '';
-      var target = 'react/index.html' + search + '#/license';
-      window.__nwReactAdminTarget = target;
-      window.location.replace(target);
-    })();
-  </script>
 </head>
 <body>
-  <div class="box">
-    <h1>NexoWatt EOS – Lizenz</h1>
-    <p>Seite wird geladen. Falls die Weiterleitung blockiert wird, öffne bitte <a id="manualLink" href="react/index.html#/license">diese Seite</a>.</p>
-  </div>
+  <main class="box">
+    <h1>Lizenzverwaltung wird geschützt geöffnet</h1>
+    <p class="muted">Die Lizenzdaten werden ausschließlich auf der NexoWatt-EOS-Runtime nach erfolgreicher Anmeldung als Installer oder Admin geladen.</p>
+    <div id="status" class="status">Runtime-Port wird ermittelt …</div>
+  </main>
   <script>
     (function () {
-      var link = document.getElementById('manualLink');
-      if (link && window.__nwReactAdminTarget) {
-        link.href = window.__nwReactAdminTarget;
+      'use strict';
+      var qs = new URLSearchParams(window.location.search || '');
+      var instance = Number(qs.get('instance'));
+      if (!Number.isInteger(instance) || instance < 0) instance = 0;
+      var status = document.getElementById('status');
+      var fallbackPort = Number(qs.get('runtimePort')) || 8188;
+      var adminPort = window.location.port || '8081';
+
+      function redirect(port) {
+        var safePort = Number(port) || fallbackPort;
+        var target = (window.location.protocol || 'http:') + '//' + (window.location.hostname || 'localhost') + ':' + safePort +
+          '/license.html?nwAdmin=1&instance=' + encodeURIComponent(String(instance)) + '&adminPort=' + encodeURIComponent(adminPort);
+        window.location.replace(target);
       }
+
+      function readPortFromObject(obj) {
+        var p = Number(obj && obj.native && obj.native.port);
+        return Number.isFinite(p) && p > 0 && p <= 65535 ? p : 0;
+      }
+
+      try {
+        var servConn = window.servConn || (window.parent && window.parent.servConn) || (window.top && window.top.servConn);
+        if (servConn && typeof servConn.getObject === 'function') {
+          var done = false;
+          var timer = window.setTimeout(function () { if (!done) { done = true; redirect(fallbackPort); } }, 1800);
+          servConn.getObject('system.adapter.nexowatt-ui.' + instance, function (arg1, arg2) {
+            if (done) return;
+            done = true;
+            window.clearTimeout(timer);
+            var obj = arg2 !== undefined ? arg2 : arg1;
+            redirect(readPortFromObject(obj) || fallbackPort);
+          });
+          return;
+        }
+      } catch (_e) {}
+
+      if (status) status.textContent = 'Öffne geschützte Lizenzseite …';
+      redirect(fallbackPort);
     })();
   </script>
 </body>

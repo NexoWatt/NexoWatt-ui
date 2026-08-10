@@ -231,7 +231,18 @@ class CdpClient {
   } finally {
     if (cdp) cdp.close();
     try { browser.kill('SIGKILL'); } catch (_) {}
-    fs.rmSync(profile, { recursive: true, force: true });
+    await new Promise((resolve) => {
+      if (browser.exitCode !== null || browser.signalCode) return resolve();
+      const timer = setTimeout(resolve, 800);
+      browser.once('exit', () => { clearTimeout(timer); resolve(); });
+    });
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try { fs.rmSync(profile, { recursive: true, force: true }); break; }
+      catch (error) {
+        if (attempt === 4) console.warn('[nexologic-editor-browser-rc44] Temp-Profil konnte nicht vollständig entfernt werden:', error.message);
+        else await new Promise((resolve) => setTimeout(resolve, 120));
+      }
+    }
   }
 })().catch((error) => {
   console.error('[nexologic-editor-browser-rc44] ERROR:', error && error.stack ? error.stack : error);

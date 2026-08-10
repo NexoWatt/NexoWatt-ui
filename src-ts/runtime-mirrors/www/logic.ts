@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 6533255373e4857dde608516c5bed59a8ad2dbc3a7e2778e65d6763b80aa6358
+ * Original-Hash: 182d91d525cf9f98f487e0c98179c817f8bf50258b5032228916d2cfb1fe1a99
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/logic.ts
- * Quell-Hash: sha256:7013bdf2f3a14429f72c78f7484da071afaeae1e450997649b95911a937e92a2
+ * Quell-Hash: sha256:5f7abc9bd6f9f78dbb4486e44e570a197d77f10e69aea6e7eebbdceb02d48c89
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -96,6 +96,53 @@ const nwLE = {
   // SmartHome scenes for scene-trigger block
   sceneOptions: [],
 };
+
+
+/**
+ * Hält die Desktop-Arbeitsfläche exakt innerhalb des sichtbaren Browser-Viewports.
+ * Die frühere feste 68-px-Annahme konnte je nach Headerhöhe dazu führen, dass die
+ * unteren Scrollleisten hinter der Fensterkante lagen. Die echte Topbarhöhe wird
+ * deshalb als CSS-Variable veröffentlicht und bei Resize/Zoom nachgeführt.
+ */
+function nwSyncLogicViewportMetrics() {
+  try {
+    const topbar = document.querySelector('header.topbar');
+    const topbarHeight = topbar ? Math.ceil(topbar.getBoundingClientRect().height) : 68;
+    document.documentElement.style.setProperty('--nw-logic-topbar-h', `${Math.max(0, topbarHeight)}px`);
+  } catch (_e) {
+    // CSS-Fallback bleibt aktiv.
+  }
+}
+
+/**
+ * Code-Teil: nwInstallLogicViewportSizing
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwInstallLogicViewportSizing() {
+  nwSyncLogicViewportMetrics();
+  try {
+    const topbar = document.querySelector('header.topbar');
+    if (topbar && typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(() => {
+        nwSyncLogicViewportMetrics();
+        try { nwUpdateAllWirePaths(); } catch (_e) {}
+      });
+      observer.observe(topbar);
+      nwLE.viewportObserver = observer;
+    }
+  } catch (_e) {}
+  window.addEventListener('resize', nwSyncLogicViewportMetrics, { passive: true });
+  try {
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', nwSyncLogicViewportMetrics, { passive: true });
+  } catch (_e) {}
+}
 
 /**
  * Code-Teil: Arrow-Funktion `nwClamp`
@@ -3720,6 +3767,8 @@ function nwHandleNew() {
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 async function nwInitLogicEditor() {
+  nwInstallLogicViewportSizing();
+
   // Elements
   nwLE.el.boardWrap = document.getElementById('nw-le-board-wrap');
   nwLE.el.boardScale = document.getElementById('nw-le-board-scale');
@@ -3924,7 +3973,10 @@ async function nwInitLogicEditor() {
 
   // Update wires on resize
   // Ereignis-Kommentar: Bindet das UI-Ereignis 'resize' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
-  window.addEventListener('resize', () => nwUpdateAllWirePaths());
+  window.addEventListener('resize', () => {
+    nwSyncLogicViewportMetrics();
+    nwUpdateAllWirePaths();
+  });
 }
 
 

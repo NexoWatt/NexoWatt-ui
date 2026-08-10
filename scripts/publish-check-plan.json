@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "description": "Ordered fail-closed release checks. Executed without a shell command chain so Windows cmd.exe limits cannot truncate the gate.",
-  "expectedStepCount": 217,
+  "expectedStepCount": 221,
   "commands": [
     "node scripts/ensure-publish-dev-deps.js",
     "npm run typecheck",
@@ -219,6 +219,10 @@
     "npm run test:nexologic-editor-browser-rc44",
     "npm run test:customer-workspace-access-rc44",
     "npm run test:nexowatt-eos-branding-rc44",
-    "npm run test:nexologic-desktop-layout-rc44"
+    "npm run test:nexologic-desktop-layout-rc44",
+    "npm run test:nexologic-scrollbars-rc45",
+    "npm run test:protected-license-rc45",
+    "npm run test:license-browser-lock-rc45",
+    "npm run test:privileged-customer-role-split-rc45"
   ]
 }

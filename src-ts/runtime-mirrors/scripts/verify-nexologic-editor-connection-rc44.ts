@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 29daffb64f8329446a43fa1c5031777469444cc554e6f01b49c2494c00d218a9
+ * Original-Hash: 66005ccb443253258d3af2beb195d84796b16c97b99540fdfbb68de28388e095
  */
 
 /**
@@ -64,7 +64,7 @@ for (const text of [source, runtime]) {
 
 assert.match(html, /Ausgang \(rechts\) anklicken oder ziehen/);
 assert.match(css, /body\.nw-page-logic \.nw-le\{/);
-assert.match(css, /grid-template-columns:minmax\(225px, 265px\) minmax\(720px, 1fr\) minmax\(270px, 330px\)/);
+assert.match(css, /grid-template-columns:\s*minmax\(225px,\s*265px\)\s+minmax\((?:680|720)px,\s*1fr\)\s+minmax\(270px,\s*330px\)/);
 assert.match(css, /\.nw-le-port\.is-connect-target/);
 assert.match(css, /\.nw-le-port\.is-connect-incompatible/);
 

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:20e9b4033b4e821b99b3714c4a712dafe98c572ec05152ebf903a9a3b6344521
+ * Quell-Hash: sha256:e9f4f50fc36df3b162f884e6052c8415bd1fa0f8b359dfb9f19a8656c20113ad
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -11683,18 +11683,36 @@ async onReady() {
     };
     this._nwSanitizePublicConfig = nwSanitizePublicConfig;
 
-    // Public license information endpoint for the Admin license page.
-    // Must be registered before the license gate so the UUID can be copied
-    // even when the adapter/VIS itself is still locked.
+    // Strikt geschützte Lizenzschnittstelle für Installer/Admin.
+    // Sie wird technisch vor dem allgemeinen Lizenz-Gate registriert, prüft aber
+    // jeden Aufruf selbst über `resolveStrictAccess` und `license.manage`.
     /**
      * Code-Teil: sendLicenseCors
      * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
      * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
-    const sendLicenseCors = (res) => {
+    const sendLicenseCors = (req, res) => {
       try {
-        res.setHeader('Access-Control-Allow-Origin', '*');
+        // Admin-React läuft üblicherweise auf Port 8081, die EOS-Runtime auf 8188.
+        // Damit die HttpOnly-EOS-Session auch portübergreifend geprüft werden kann,
+        // wird ausschließlich ein Origin mit demselben Hostnamen freigegeben.
+        const origin = String(req && req.headers && req.headers.origin || '').trim();
+        if (origin) {
+          let allowed = false;
+          try {
+            const originUrl = new URL(origin);
+            const requestHost = String((req && req.hostname) || (req && req.headers && req.headers.host) || '').replace(/^\[/, '').replace(/\].*$/, '').split(':')[0].toLowerCase();
+            allowed = !!requestHost && originUrl.hostname.toLowerCase() === requestHost;
+          } catch (_originError) {
+            allowed = false;
+          }
+          if (allowed) {
+            res.setHeader('Access-Control-Allow-Origin', origin);
+            res.setHeader('Access-Control-Allow-Credentials', 'true');
+            res.setHeader('Vary', 'Origin');
+          }
+        }
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
         res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -11709,33 +11727,37 @@ async onReady() {
         res.setHeader('Expires', '0');
       } catch (_e) {}
     };
-    app.options('/api/license/info', (_req, res) => {
-      sendLicenseCors(res);
+    app.options('/api/license/info', (req, res) => {
+      sendLicenseCors(req, res);
       res.status(204).end();
     });
     // Abschnitt: Lizenz-API. Maskierte Platzhalter dürfen hier nie als echter Lizenzschlüssel gespeichert oder geprüft werden.
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/license/info', async (_req, res) => {
     app.get('/api/license/info', async (req, res) => {
-      sendLicenseCors(res);
+      sendLicenseCors(req, res);
+      // Rollenprüfung bewusst vor UUID-, Lizenz- und Feature-Aufbereitung:
+      // ein nicht angemeldeter Aufruf darf weder sensible Daten noch unnötige
+      // Lizenz-Nebenwirkungen auslösen.
+      const access = await resolveStrictAccess(req);
+      if (!access || !hasCapability(access, 'license.manage')) {
+        return res.status(access && access.role !== 'none' ? 403 : 401).json({
+          ok: false,
+          error: access && access.role !== 'none' ? 'forbidden' : 'unauthorized',
+          message: 'Lizenzverwaltung ist ausschließlich für EOS-Installer oder Administratoren freigegeben.',
+        });
+      }
       if (!this._nwSystemUuid) {
         try { this._nwSystemUuid = await this._nwGetSystemUuid(); } catch (_e) {}
       }
-      // 0.8.7: Lizenzstatus vor jeder öffentlichen Lizenzabfrage frisch aus dem gespeicherten Key aufbauen.
+      // Lizenzstatus vor jeder streng geschützten Lizenzabfrage frisch aus dem gespeicherten Key aufbauen.
       // Dadurch sehen Admin-Seite, App-Center und Backend denselben EOS/HEMS-Status, auch direkt nach dem Speichern.
       try { await this._nwRefreshLicenseFromConfiguredKey(false); } catch (e) { try { this.log.warn('License refresh before /api/license/info failed: ' + (e && e.message ? e.message : e)); } catch (_eLog) {} }
       const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
       const featureInfo = this._nwBuildLicenseFeatureInfo();
       const keyInfo = await this._nwGetConfiguredLicenseKey();
       const currentLicenseKey = keyInfo.key;
-      const access = (authEnabled && protectWrites) ? await resolveAccess(req) : { isAdmin: true, role: 'admin', capabilities: ['*'] };
-      const canSeeFullLicenseKey = !!(access && hasCapability(access, 'license.manage'));
-      if (authEnabled && protectWrites && !canSeeFullLicenseKey) {
-        return res.status(access && access.role !== 'none' ? 403 : 401).json({
-          ok: false,
-          error: access && access.role !== 'none' ? 'forbidden' : 'unauthorized',
-          message: 'Lizenzverwaltung ist nur für Pro/Admin-Benutzer freigegeben.',
-        });
-      }
+      // Die strikte Capability wurde bereits vor jeder Datenaufbereitung geprüft.
+      const canSeeFullLicenseKey = true;
       const maskedLicenseKey = currentLicenseKey
         ? `${currentLicenseKey.slice(0, 8)}…${currentLicenseKey.slice(-6)}`
         : '';
@@ -11758,31 +11780,31 @@ async onReady() {
         daysRemaining: Number(info.daysRemaining || 0),
         licenseKeyConfigured: !!currentLicenseKey,
         licenseKeyMasked: maskedLicenseKey,
-        // Needed by the Admin-only license page so a saved full license remains visible
+        // Needed by the Installer/Admin-only license page so a saved full license remains visible
         // after leaving/re-opening the adapter page. The endpoint is intentionally
         // before the license gate because activation must also work while locked.
         licenseKey: canSeeFullLicenseKey ? currentLicenseKey : '',
       });
     });
 
-    app.options('/api/license/save', (_req, res) => {
-      sendLicenseCors(res);
+    app.options('/api/license/save', (req, res) => {
+      sendLicenseCors(req, res);
       res.status(204).end();
     });
     // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/license/save', express.json({ limit: '64kb' }), async (req, res) => {
     app.post('/api/license/save', express.json({ limit: '64kb' }), async (req, res) => {
-      sendLicenseCors(res);
+      sendLicenseCors(req, res);
       try {
-        // Lizenzschlüssel sind Admin-only. Installer dürfen den Lizenzstatus sehen,
-        // aber niemals Schlüssel speichern oder ändern. Die Prüfung greift auch dann,
+        // Lizenzschlüssel sind ausschließlich für EOS-Installer oder Administratoren freigegeben.
+        // Kunden und nicht angemeldete Aufrufe dürfen weder lesen noch ändern. Die Prüfung greift auch dann,
         // wenn die Lizenz-API vor dem normalen Lizenz-Gate registriert ist.
-        if (authEnabled && protectWrites) {
-          const access = await resolveAccess(req);
+        {
+          const access = await resolveStrictAccess(req);
           if (!access || !hasCapability(access, 'license.manage')) {
             return res.status(access && access.role !== 'none' ? 403 : 401).json({
               ok: false,
               error: access && access.role !== 'none' ? 'forbidden' : 'unauthorized',
-              message: 'Lizenzverwaltung ist nur für Pro/Admin-Benutzer freigegeben.',
+              message: 'Lizenzverwaltung ist ausschließlich für EOS-Installer oder Administratoren freigegeben.',
             });
           }
         }
@@ -11950,6 +11972,14 @@ async onReady() {
       const qs = req.originalUrl && req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
       res.redirect(302, '/ems-apps.html' + qs);
     });
+    app.get('/static/simulation.html', (req, res) => {
+      const qs = req.originalUrl && req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+      res.redirect(302, '/simulation.html' + qs);
+    });
+    app.get('/static/license.html', (req, res) => {
+      const qs = req.originalUrl && req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+      res.redirect(302, '/license.html' + qs);
+    });
     // API-Kommentar: USE-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/static', express.static(path.join(__dirname, 'www')));
     app.use('/static', express.static(path.join(__dirname, 'www')));
 
@@ -12003,7 +12033,7 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
     //
     // Unterstützte Standardgruppen:
     //   system.group.administrator -> admin    (Vollzugriff inkl. Lizenz)
-    //   system.group.installer     -> installer (Setup ohne Lizenzverwaltung)
+    //   system.group.installer     -> installer (Setup inkl. Lizenzverwaltung)
     //   system.group.user          -> customer  (Endkunde: SmartHome/NexoLogik/Kundensettings)
     // Zusätzlich bleiben eos*/nexowatt* Alias-Gruppen möglich.
     const authCfg = (this.config && this.config.auth) || {};
@@ -12085,7 +12115,7 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
     const ROLE_CAPABILITIES = {
       admin: ['*'],
       installer: [
-        'frontend.open', 'appcenter.open', 'simulation.open', 'mapping.edit',
+        'frontend.open', 'appcenter.open', 'simulation.open', 'license.manage', 'mapping.edit',
         'chargepoints.configure', 'mesh.configure', 'exportGuard.configure',
         'smarthome.configure', 'nexologic.configure', 'diagnostics.open',
         'energyWallet.customerSettings', 'smarthome.configureCustomer', 'nexologic.configureCustomer',
@@ -12123,6 +12153,20 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
      * Zusammenhang: Basis für EOS-Rollenauflösung, API-Gates und Frontend-Sichtbarkeit. Bei Änderungen unbedingt App-Center,
      * Lizenz, SmartHome-Config und NexoLogik mitprüfen.
      */
+    /** Liest ausschließlich eine tatsächlich angelegte EOS-Sitzung aus dem Cookie. */
+    const getStoredSession = (req) => {
+      pruneSessions();
+      const cookies = parseCookies(req);
+      const token = cookies[COOKIE_NAME] || cookies[LEGACY_COOKIE_NAME] || '';
+      if (!token) return null;
+      const sess = this._authSessions.get(token);
+      if (!sess) return null;
+      if (!sess.exp || sess.exp <= Date.now()) {
+        this._authSessions.delete(token);
+        return null;
+      }
+      return sess;
+    };
     const getSession = (req) => {
       if (!authEnabled) {
         return {
@@ -12138,17 +12182,7 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
           _bypass: true,
         };
       }
-      pruneSessions();
-      const cookies = parseCookies(req);
-      const token = cookies[COOKIE_NAME] || cookies[LEGACY_COOKIE_NAME] || '';
-      if (!token) return null;
-      const sess = this._authSessions.get(token);
-      if (!sess) return null;
-      if (!sess.exp || sess.exp <= Date.now()) {
-        this._authSessions.delete(token);
-        return null;
-      }
-      return sess;
+      return getStoredSession(req);
     };
     /** Session-Cookie für Adapter-eigene Anmeldung setzen. */
     const setSessionCookie = (res, token, ttlMs, req) => {
@@ -12228,42 +12262,61 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
       if (Array.isArray(cap)) return cap.some(c => caps.includes(c));
       return caps.includes(String(cap || ''));
     };
-    /** Request in eine Access-Info auflösen. Trusted Header sind nur mit Secret aktivierbar. */
-    const resolveAccess = async (req) => {
-      const sess = getSession(req);
-      if (sess) return sess;
+    /** Trusted-Header-Zugriff nur bei konfiguriertem Secret auflösen. */
+    const resolveTrustedHeaderAccess = async (req) => {
       const trustedHeaderEnabled = acCfg.trustedHeaderEnabled === true;
       const trustedSecret = String(acCfg.trustedHeaderSecret || '').trim();
       const givenSecret = String((req && req.headers && (req.headers['x-eos-access-secret'] || req.headers['x-nexowatt-access-secret'])) || '').trim();
-      if (trustedHeaderEnabled && trustedSecret && givenSecret && givenSecret === trustedSecret) {
-        const hdrUser = String((req.headers['x-eos-user'] || req.headers['x-nexowatt-user'] || '')).trim();
-        const hdrGroups = _nwList(req.headers['x-eos-groups'] || req.headers['x-nexowatt-groups'] || '');
-        const hdrRole = String((req.headers['x-eos-role'] || req.headers['x-nexowatt-role'] || '')).trim().toLowerCase();
-        const base = await computeRoleInfo(hdrUser);
-        if (hdrGroups.length) {
-          base.groups = _nwUnique([...base.groups, ...hdrGroups]);
-          if (hdrGroups.some(g => adminGroups.includes(g))) base.role = 'admin';
-          else if (hdrGroups.some(g => installerGroups.includes(g)) && base.role !== 'admin') base.role = 'installer';
-          else if (hdrGroups.some(g => customerGroups.includes(g)) && base.role === 'none') base.role = 'customer';
-        }
-        if (['admin', 'installer', 'customer'].includes(hdrRole)) base.role = hdrRole;
-        base.capabilities = base.role === 'admin' ? ['*'] : ((ROLE_CAPABILITIES[base.role] || []).slice());
-        base.roles = base.role === 'none' ? [] : [base.role];
-        base.isAdmin = base.role === 'admin';
-        base.isInstaller = base.role === 'admin' || base.role === 'installer';
-        base.isCustomer = base.role === 'customer';
-        base.trustedHeader = true;
-        return base;
+      if (!(trustedHeaderEnabled && trustedSecret && givenSecret && givenSecret === trustedSecret)) return null;
+      const hdrUser = String((req.headers['x-eos-user'] || req.headers['x-nexowatt-user'] || '')).trim();
+      const hdrGroups = _nwList(req.headers['x-eos-groups'] || req.headers['x-nexowatt-groups'] || '');
+      const hdrRole = String((req.headers['x-eos-role'] || req.headers['x-nexowatt-role'] || '')).trim().toLowerCase();
+      const base = await computeRoleInfo(hdrUser);
+      if (hdrGroups.length) {
+        base.groups = _nwUnique([...base.groups, ...hdrGroups]);
+        if (hdrGroups.some(g => adminGroups.includes(g))) base.role = 'admin';
+        else if (hdrGroups.some(g => installerGroups.includes(g)) && base.role !== 'admin') base.role = 'installer';
+        else if (hdrGroups.some(g => customerGroups.includes(g)) && base.role === 'none') base.role = 'customer';
       }
+      if (['admin', 'installer', 'customer'].includes(hdrRole)) base.role = hdrRole;
+      base.capabilities = base.role === 'admin' ? ['*'] : ((ROLE_CAPABILITIES[base.role] || []).slice());
+      base.roles = base.role === 'none' ? [] : [base.role];
+      base.isAdmin = base.role === 'admin';
+      base.isInstaller = base.role === 'admin' || base.role === 'installer';
+      base.isCustomer = base.role === 'customer';
+      base.trustedHeader = true;
+      return base;
+    };
+    /** Request in eine Access-Info für die normale Kunden-/Frontend-Policy auflösen. */
+    const resolveAccess = async (req) => {
+      const sess = getSession(req);
+      if (sess) return sess;
+      const trusted = await resolveTrustedHeaderAccess(req);
+      if (trusted) return trusted;
+      return { user: null, role: 'none', roles: [], groups: [], capabilities: [], isAdmin: false, isInstaller: false, isCustomer: false };
+    };
+    /**
+     * Strikte Rollenauflösung ohne Auth-deaktiviert-Bypass.
+     * EMS, Lizenz und Simulator dürfen niemals durch den Kunden-Auth-Schalter
+     * öffentlich werden. Nur eine echte Session oder ein sicherer Trusted Header
+     * kann diese Bereiche freigeben.
+     */
+    const resolveStrictAccess = async (req) => {
+      const sess = getStoredSession(req);
+      if (sess) return sess;
+      const trusted = await resolveTrustedHeaderAccess(req);
+      if (trusted) return trusted;
       return { user: null, role: 'none', roles: [], groups: [], capabilities: [], isAdmin: false, isInstaller: false, isCustomer: false };
     };
     const sendForbidden = (res, message = 'Diese Funktion ist für diese Rolle nicht freigegeben.') => {
       res.status(403).json({ ok: false, error: 'forbidden', message });
     };
     const requireCapability = (cap) => async (req, res, next) => {
-      if (!authEnabled || !protectWrites) return next();
-      const access = await resolveAccess(req);
-      if (!access || access.role === 'none') return res.status(401).json({ ok: false, error: 'unauthorized', message: 'Anmeldung erforderlich.' });
+      // Installer-/Admin-Funktionen sind ausnahmslos rollenpflichtig. Der
+      // allgemeine Kunden-Auth-Schalter steuert nur SmartHome/LIVE/NexoLogic und
+      // darf EMS, Lizenz, Simulator oder beliebige Roh-Schreibtests nie öffnen.
+      const access = await resolveStrictAccess(req);
+      if (!access || access.role === 'none') return res.status(401).json({ ok: false, error: 'unauthorized', message: 'Installer-/Admin-Anmeldung erforderlich.' });
       if (!hasCapability(access, cap)) return sendForbidden(res);
       req.nwSession = access;
       next();
@@ -12324,8 +12377,8 @@ document.addEventListener('DOMContentLoaded', function(){
 
     /** Rollenprüfung direkt vor Auslieferung sensibler HTML-Seiten. */
     const requirePageAccessOrRenderLock = async (req, res, cap, title, requiredRole) => {
-      if (!authEnabled || !protectWrites) return { ok: true, access: { role: 'admin', capabilities: ['*'] } };
-      const access = await resolveAccess(req);
+      sendNoStore(res);
+      const access = await resolveStrictAccess(req);
       if (!access || access.role === 'none') {
         res.status(401).send(renderRuntimeAccessPage(title, cap, requiredRole));
         return { ok: false, access };
@@ -12337,9 +12390,19 @@ document.addEventListener('DOMContentLoaded', function(){
       return { ok: true, access };
     };
 
-    // Auth status (used by UI)
+    // Auth status (used by UI). Admin-React darf die EOS-Session über
+    // denselben Hostnamen und einen abweichenden Port prüfen/anlegen.
+    app.options([
+      '/api/auth/status', '/api/session/me', '/api/auth/login', '/api/auth/logout',
+      '/api/installer/login', '/api/installer/logout',
+      '/api/strict-auth/status', '/api/strict-auth/login', '/api/strict-auth/logout',
+    ], (req, res) => {
+      sendLicenseCors(req, res);
+      res.status(204).end();
+    });
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/auth/status', (req, res) => {
     app.get('/api/auth/status', async (req, res) => {
+      sendLicenseCors(req, res);
       const s = await resolveAccess(req);
       res.json({
         ok: true,
@@ -12357,6 +12420,7 @@ document.addEventListener('DOMContentLoaded', function(){
       });
     });
     app.get('/api/session/me', async (req, res) => {
+      sendLicenseCors(req, res);
       const s = await resolveAccess(req);
       res.json({
         ok: true,
@@ -12372,8 +12436,33 @@ document.addEventListener('DOMContentLoaded', function(){
         isCustomer: !!(s && s.isCustomer),
       });
     });
-    /** Login per EOS/ioBroker Benutzername und Passwort. */
+    /**
+     * Strikter Sessionstatus für EMS, Lizenz und Simulator. Dieser Endpunkt ist
+     * immer aktiv und kennt keinen Auth-deaktiviert-Bypass.
+     */
+    app.get('/api/strict-auth/status', async (req, res) => {
+      sendLicenseCors(req, res);
+      const s = await resolveStrictAccess(req);
+      res.json({
+        ok: true,
+        enabled: true,
+        strict: true,
+        authed: !!(s && s.role && s.role !== 'none'),
+        user: (s && s.user) ? String(s.user) : null,
+        role: s ? s.role : 'none',
+        roles: s ? s.roles || [] : [],
+        groups: s ? s.groups || [] : [],
+        capabilities: s ? s.capabilities || [] : [],
+        isAdmin: !!(s && s.isAdmin),
+        isInstaller: !!(s && s.isInstaller),
+        isCustomer: !!(s && s.isCustomer),
+        protectWrites: true,
+      });
+    });
+
+    /** Login per NexoWatt-EOS-Benutzername und Passwort. */
     const doAuthLogin = async (req, res) => {
+      sendLicenseCors(req, res);
       try {
         if (!authEnabled) return res.json({ ok: true, enabled: false, authed: true, user: null, role: 'admin', isAdmin: true, isInstaller: true });
 
@@ -12407,13 +12496,59 @@ document.addEventListener('DOMContentLoaded', function(){
       }
     };
 
+    /**
+     * Striktes Login für Installer-/Admin-Seiten. Kundenkonten dürfen eine
+     * Session für SmartHome besitzen, erhalten hier aber keine geschützte Rolle.
+     */
+    const doStrictAuthLogin = async (req, res) => {
+      sendLicenseCors(req, res);
+      try {
+        const user = String((req.body && (req.body.user || req.body.username)) || '').trim();
+        const password = String((req.body && req.body.password) || '');
+        const rate = nwLoginRateStatus(req);
+        if (rate.blocked) {
+          res.setHeader('Retry-After', String(rate.retryAfterSec));
+          return res.status(429).json({ ok: false, error: 'login_rate_limited', retryAfterSec: rate.retryAfterSec });
+        }
+        if (!user || !password) return res.status(400).json({ ok: false, error: 'missing_credentials' });
+        const ok = await checkPasswordAsync(user, password);
+        if (!ok) {
+          const failed = nwLoginRecordFailure(rate.key);
+          const locked = Number(failed.lockUntil || 0) > Date.now();
+          if (locked) res.setHeader('Retry-After', String(Math.max(1, Math.ceil((Number(failed.lockUntil) - Date.now()) / 1000))));
+          return res.status(locked ? 429 : 401).json({ ok: false, error: locked ? 'login_rate_limited' : 'unauthorized' });
+        }
+        const info = await computeRoleInfo(user);
+        if (!info || !info.isInstaller) {
+          nwLoginRecordFailure(rate.key);
+          return res.status(403).json({ ok: false, error: 'forbidden', message: 'Nur Installer oder Admin sind für diesen Bereich freigegeben.' });
+        }
+        nwLoginRecordSuccess(rate.key);
+        const token = createToken();
+        const session = Object.assign({}, info, { exp: Date.now() + sessionTtlMs, strict: true });
+        this._authSessions.set(token, session);
+        setSessionCookie(res, token, sessionTtlMs, req);
+        return res.json({
+          ok: true, enabled: true, strict: true, authed: true, user,
+          role: info.role, roles: info.roles, groups: info.groups,
+          capabilities: info.capabilities, isAdmin: info.isAdmin,
+          isInstaller: info.isInstaller, isCustomer: info.isCustomer,
+        });
+      } catch (e) {
+        this.log.warn('strict auth login error: ' + (e && e.message ? e.message : e));
+        return res.status(500).json({ ok: false, error: 'internal_error' });
+      }
+    };
+
     // Login via user/password
     // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/auth/login', doAuthLogin);
     app.post('/api/auth/login', doAuthLogin);
+    app.post('/api/strict-auth/login', doStrictAuthLogin);
 
     // Logout
     // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/auth/logout', (req, res) => {
     app.post('/api/auth/logout', (req, res) => {
+      sendLicenseCors(req, res);
       try {
         const cookies = parseCookies(req);
         const token = cookies[COOKIE_NAME] || cookies[LEGACY_COOKIE_NAME] || '';
@@ -12425,11 +12560,23 @@ document.addEventListener('DOMContentLoaded', function(){
       res.json({ ok: true });
     });
 
+    app.post('/api/strict-auth/logout', (req, res) => {
+      sendLicenseCors(req, res);
+      try {
+        const cookies = parseCookies(req);
+        const token = cookies[COOKIE_NAME] || cookies[LEGACY_COOKIE_NAME] || '';
+        if (token) this._authSessions.delete(token);
+      } catch (_e) {}
+      clearSessionCookie(res);
+      res.json({ ok: true });
+    });
+
     // Backwards compatible endpoints (older UI)
     // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/installer/login', doAuthLogin);
     app.post('/api/installer/login', doAuthLogin);
     // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/installer/logout', (req, res) => {
     app.post('/api/installer/logout', (req, res) => {
+      sendLicenseCors(req, res);
       try {
         const cookies = parseCookies(req);
         const token = cookies[COOKIE_NAME] || cookies[LEGACY_COOKIE_NAME] || '';
@@ -17101,6 +17248,20 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
       } catch (e) {
         this.log.warn('Simulation page error: ' + e.message);
         res.status(500).send('Simulation page error');
+      }
+    });
+
+// --- Lizenzverwaltung (Installer/Admin-only) ---
+    app.get(['/license.html', '/license'], async (req, res) => {
+      try {
+        const gate = await requirePageAccessOrRenderLock(req, res, 'license.manage', 'Lizenzverwaltung', 'Admin oder Installer');
+        if (!gate.ok) return;
+        const file = require('path').join(__dirname, 'www', 'license.html');
+        sendNoStore(res);
+        res.sendFile(file);
+      } catch (e) {
+        this.log.warn('License page error: ' + e.message);
+        res.status(500).send('License page error');
       }
     });
 

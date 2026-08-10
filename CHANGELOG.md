@@ -1,3 +1,14 @@
+## 0.8.169 - 2026-08-09
+
+- NexoLogic-Desktoplayout korrigiert: Die vollständige Drei-Spalten-Arbeitsfläche bleibt erhalten, während Seite, Zeichenfläche, Bausteinpalette und Eigenschaftenleiste wieder sichtbare und unabhängig bedienbare Scrollleisten besitzen. Auch bei niedriger Fensterhöhe wird die untere Canvas-Kante nicht mehr abgeschnitten.
+- Echten Chromium-Regressionstest ergänzt, der Seiten- und Canvas-Scrollreserve, horizontales/vertikales Verschieben sowie die vollständige Erreichbarkeit der Arbeitsfläche bei schmalerem Desktop prüft.
+- Lizenzbereich strikt abgesichert: Direkte Runtime-URL, `/static`-Pfad, Admin-Deep-Link sowie Lese- und Schreib-API verlangen eine echte EOS-Sitzung mit `license.manage`. Ein deaktivierter allgemeiner Kunden-Schreibschutz kann Lizenz, EMS oder Simulator nicht mehr freigeben.
+- Strikte Auth-Endpunkte für EMS, Lizenz und Simulator ergänzt. Diese Bereiche besitzen keinen Auth-deaktiviert-Admin-Bypass; nur Installer/Admin-Session oder ausdrücklich gesicherter Trusted-Header werden akzeptiert.
+- Lizenzdaten werden erst nach erfolgreicher Rollenprüfung geladen, der Schlüssel bleibt standardmäßig verdeckt und wird weder in HTML noch Browser-Speicher hinterlegt. Alte Browser-Cache-Schlüssel werden beim Öffnen entfernt; Logout und Seitenwechsel löschen UUID und Schlüssel sofort aus der Ansicht.
+- Der bestehende React-Admin-Deep-Link zur Lizenz wird vor dem Start des älteren Bundles auf die geschützte Runtime-Seite umgeleitet. Dadurch können weder direkter Hash-Aufruf noch Browser-Cache die alte ungeschützte Lizenzansicht öffnen.
+- Rollenaufteilung bestätigt: SmartHome, Gerätezuordnung und NexoLogic bleiben für den Endkunden nutzbar; EMS/App-Center, Lizenz, Simulator und beliebige Roh-Datenpunkt-Schreibtests bleiben Installer/Admin vorbehalten.
+- Netzanschluss-, Phasen-, §14a-, EVCS-, Speicher-, Speicherfarm-, FENECON/FEMS-, SafetyEnvelope-, Heizstab-, Thermik- und FENECON-NVP-Shadow-Regelungen bleiben fachlich unverändert. Service-Worker-Cache auf `nexowatt-cache-v469` und zentrale Versionskennungen auf 0.8.169 aktualisiert.
+
 ## 0.8.168 - 2026-08-09
 
 - NexoLogic-Verbindungsfehler behoben: Der Porttyp-Lookup verwendete irrtümlich `nwLE.library`, obwohl die Editorbibliothek unter `nwLE.lib` gespeichert wird. Dadurch brach jeder Leitungsabschluss mit einer Browser-Ausnahme ab.
