@@ -2947,7 +2947,8 @@ class ChargingManagementModule extends BaseModule {
             const stationUsedW = stationKey ? Math.max(0, Number(stationTargetsW.get(stationKey)) || 0) : 0;
             const stationRemainingW = stationCapW === null ? null : Math.max(0, stationCapW - stationUsedW);
             const deviceCaps = [w.maxPW, stationRemainingW]
-                .map((value) => Number(value))
+                .filter((value) => value !== null && value !== undefined && !(typeof value === 'string' && value.trim() === ''))
+            .map((value) => Number(value))
                 .filter((value) => Number.isFinite(value) && value >= 0);
             const finalDeviceCapW = deviceCaps.length ? Math.min(...deviceCaps) : null;
 

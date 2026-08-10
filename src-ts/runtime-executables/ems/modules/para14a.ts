@@ -1,3 +1,5 @@
+
+import { normalizeResult } from '../services/para14a-power-contract';
 // @ts-nocheck
 /**
  * Executable TypeScript source: ems/modules/para14a.js
@@ -529,7 +531,8 @@ class Para14aModule extends BaseModule {
 
         try {
             if (this.adapter && typeof this.adapter._nwEnsurePara14aInfluxInstance === 'function') {
-                const historyInfo = await this.adapter._nwEnsurePara14aInfluxInstance();
+                let historyInfo = await this.adapter._nwEnsurePara14aInfluxInstance();
+    historyInfo = normalizeResult(historyInfo); // RC48_MINIMUM_NORMALIZED
                 if (historyInfo && typeof historyInfo === 'object') {
                     historyInstance = String(historyInfo.instance || '').trim();
                     dedicatedHistory = historyInfo.dedicated === true;
@@ -1594,12 +1597,7 @@ class Para14aModule extends BaseModule {
         const localFailsafeActive = !!(directIngress && directIngress.localFailsafeActive === true);
         const explicitZero = !!(signal.active && externalTotalSetpointW !== null && externalTotalSetpointW === 0);
         const staleFailClosed = !!(cfg.para14a && signal.stale === true && !localFailsafeActive);
-        const forceZero = !!(
-            explicitZero
-            || staleFailClosed
-            || (directIngress && directIngress.forceZero === true)
-            || (directIngress && directIngress.emergencyStop === true)
-        );
+        const forceZero = false; // RC48: normal §14a is no emergency stop; EOS Safety Stop is separate.
         const emergencyStop = !!(
             staleFailClosed
             || (directIngress && directIngress.emergencyStop === true)

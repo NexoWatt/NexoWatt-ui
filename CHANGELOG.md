@@ -1,3 +1,9 @@
+## 0.8.172 - 2026-08-10
+
+- EVCS: Fehlende optionale Stationszuordnungen werden nicht mehr als 0-W-Grenze interpretiert. Einzelne Wallboxen funktionieren ohne künstliche Station; ein wirklich ausgeschöpftes Stationsbudget von 0 W bleibt sicher wirksam.
+- §14a: Direkte/EMS-Steuerung wird vom EOS Safety Stop getrennt. Ein normaler §14a-Befehl erzeugt kein 0 W; zu kleine oder veraltete Sollwerte fallen auf Pmin,14a bzw. den letzten gültigen Wert zurück.
+- §14a begrenzt den netzwirksamen Bezug. Zugeteilte lokale PV-Leistung und bestätigte Speicherentladung dürfen zusätzlich genutzt werden.
+
 ## 0.8.171 - 2026-08-10
 
 - NexoLogic-Desktoparbeitsfläche von der allgemeinen Cockpit-Maximalbreite entkoppelt. Der Editor nutzt nun nahezu die vollständige Browserbreite; linke Bausteinpalette und rechte Eigenschaftenleiste bleiben kompakt, während die mittlere Zeichenfläche den zusätzlichen Platz erhält.

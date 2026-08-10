@@ -1,3 +1,5 @@
+
+import { normalizeResult } from '../../runtime-executables/ems/services/para14a-power-contract';
 /**
  * Datei: src-ts/ems/para14a/para14a-constraint.ts
  *
@@ -138,7 +140,7 @@ function normalizePolicy(value: unknown): Para14aStalePolicy {
   return 'hold-active';
 }
 
-export function resolvePara14aSignal(input: Para14aSignalInput): Para14aSignalResolution {
+function resolvePara14aSignalInternal(input: Para14aSignalInput): Para14aSignalResolution {
   const now = finite(input.nowMs, Date.now());
   const policy = normalizePolicy(input.stalePolicy);
   const lastFreshActive = typeof input.lastFreshActive === 'boolean' ? input.lastFreshActive : null;
@@ -452,3 +454,6 @@ export function resolvePara14aAppCap(appCaps: Para14aAppCaps | Record<string, un
   }
   return null;
 }
+
+// RC48_CONSTRAINT_WRAPPER
+export function resolvePara14aSignal(...args: Parameters<typeof resolvePara14aSignalInternal>): ReturnType<typeof resolvePara14aSignalInternal> { return normalizeResult(resolvePara14aSignalInternal(...args)) as ReturnType<typeof resolvePara14aSignalInternal>; }

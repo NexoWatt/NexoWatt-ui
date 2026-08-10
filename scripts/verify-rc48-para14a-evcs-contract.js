@@ -1,0 +1,10 @@
+"use strict";
+const assert=require("assert"),fs=require("fs"),path=require("path");
+const c=require("../ems/services/para14a-power-contract");
+assert.strictEqual(c.optionalStationCap(11040,null),11040); assert.strictEqual(c.optionalStationCap(11040,undefined),11040); assert.strictEqual(c.optionalStationCap(11040,""),11040); assert.strictEqual(c.optionalStationCap(11040,0),0);
+assert.strictEqual(c.legalSetpoint({minimumW:10500,requestedW:0}).effectiveW,10500); assert.strictEqual(c.legalSetpoint({minimumW:10500,requestedW:9000}).effectiveW,10500); assert.strictEqual(c.legalSetpoint({minimumW:10500,requestedW:13000}).effectiveW,13000); assert.strictEqual(c.legalSetpoint({minimumW:10500,stale:true,lastValidW:12000}).effectiveW,12000); assert.strictEqual(c.legalSetpoint({minimumW:10500,stale:true}).effectiveW,10500);
+const local=c.localGrant({pvGrantW:5000,pvAllocatedW:5000,storageAssistAcceptedW:2000}); assert.strictEqual(local,7000); assert.strictEqual(c.totalAllowance({requestedTotalW:17500,netImportCapW:10500,localEnergyGrantW:7000}).allowedTotalW,17500); assert.strictEqual(c.totalAllowance({requestedTotalW:18000,netImportCapW:10500,localEnergyGrantW:5000}).allowedTotalW,15500);
+const normalized=c.normalizeResult({active:true,pMin14aW:10500,externalSetpointW:0,totalCapW:0}); assert.strictEqual(normalized.externalSetpointW,10500); assert.strictEqual(normalized.totalCapW,10500);
+const cm=fs.readFileSync(path.join(__dirname,"..","ems","modules","charging-management.js"),"utf8"); assert(cm.includes("value !== null")&&cm.includes("stationRemainingW")); assert(!/\[\s*w\.maxPW\s*,\s*stationRemainingW\s*\]\s*\.map\([^)]*Number/.test(cm));
+const pa=fs.readFileSync(path.join(__dirname,"..","ems","modules","para14a.js"),"utf8"); assert(pa.includes("normal §14a is no emergency stop"));
+console.log("[rc48] OK: EVCS optional station and §14a minimum/net-import contract");

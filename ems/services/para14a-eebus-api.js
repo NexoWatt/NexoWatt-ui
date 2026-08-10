@@ -1,3 +1,4 @@
+// RC48: stale §14a uses minimum/last-valid fallback; 0 W belongs only to EOS Safety Stop.
 /**
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
@@ -222,7 +223,7 @@ class Para14aEebusDirectApi {
                 stalePolicy: 'eos-local-fail-closed',
                 status,
                 localFailsafeActive: true,
-                forceZero: failsafeLimitW === 0,
+                forceZero: false,
                 emergencyStop: failsafeLimitW === 0,
             };
         }
@@ -253,7 +254,7 @@ class Para14aEebusDirectApi {
             stalePolicy: 'gateway-authoritative-hold-until-explicit-transition',
             status: 'direct-api',
             localFailsafeActive: false,
-            forceZero: current.active === true && finiteOrNull(current.limitW) === 0,
+            forceZero: false,
             emergencyStop: false,
         };
     }
