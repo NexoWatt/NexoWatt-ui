@@ -1,3 +1,11 @@
+## 0.8.170 - 2026-08-10
+
+- NexoLogic um einen vollständig schreibfreien Browser-Testmodus erweitert. Alle 41 aktuellen Bausteintypen können mit Testwerten, virtueller Zeit, Live-Werten an Bausteinen und Leitungen sowie einem chronologischen Trace geprüft werden, ohne API-POSTs oder Hardware-Schreibbefehle auszulösen.
+- Neue Bausteine werden automatisch in geordnete Spuren einsortiert: Eingänge links, Logik/Funktionen mittig und Ausgänge rechts. Freie Positionen werden überlappungsfrei gesucht; eine Auto-Anordnung bereinigt auch bestehende Graphen anhand ihrer Verbindungen.
+- Rückgängig/Wiederholen, lokale Entwurfssicherung und Wiederherstellung nach Browserabbruch ergänzt. Manuell per Drag-and-drop gesetzte Positionen bleiben möglich.
+- Reale Chromium-Prüfung deckt Spurplatzierung, vollständige 41-Baustein-Simulation, Live-Werte, Trace, Schreibfreiheit, Undo/Redo, lokalen Entwurf sowie bestehende Verbindungserstellung und Scrollbereiche ab.
+- Die produktive NexoLogic-Engine sowie EMS-, Lade-, Speicher-, FENECON-, §14a- und Safety-Regelungen bleiben fachlich unverändert.
+
 ## 0.8.169 - 2026-08-09
 
 - NexoLogic-Desktoplayout korrigiert: Die vollständige Drei-Spalten-Arbeitsfläche bleibt erhalten, während Seite, Zeichenfläche, Bausteinpalette und Eigenschaftenleiste wieder sichtbare und unabhängig bedienbare Scrollleisten besitzen. Auch bei niedriger Fensterhöhe wird die untere Canvas-Kante nicht mehr abgeschnitten.

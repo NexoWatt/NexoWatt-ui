@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 182d91d525cf9f98f487e0c98179c817f8bf50258b5032228916d2cfb1fe1a99
+ * Original-Hash: b3bb10a26b6221af6b8439667facedc206e0342b89248609bc080ebcd3d934e1
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/logic.ts
- * Quell-Hash: sha256:5f7abc9bd6f9f78dbb4486e44e570a197d77f10e69aea6e7eebbdceb02d48c89
+ * Quell-Hash: sha256:c2a0cf05154b61446823377027233daa71201b70b16b5ad18abf56e8b7e4eef9
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -92,6 +92,36 @@ const nwLE = {
   lastPaletteDropAt: 0,
   dirty: false,
   lastSaveOk: true,
+
+  // Undo/Redo, lokaler Entwurf und schreibfreie Browser-Simulation.
+  history: {
+    undo: [],
+    redo: [],
+    lastSerialized: '',
+    suppress: false,
+    timer: null,
+    maxEntries: 60,
+  },
+  draft: {
+    timer: null,
+    lastSavedAt: 0,
+    restored: false,
+  },
+  simulation: {
+    active: false,
+    running: false,
+    timer: null,
+    nowMs: Date.now(),
+    lastEvalMs: null,
+    initialized: false,
+    inputs: {},
+    inputTypes: {},
+    nodeState: {},
+    outputs: {},
+    traces: [],
+    maxTrace: 240,
+    inputSignature: '',
+  },
 
   // SmartHome scenes for scene-trigger block
   sceneOptions: [],
@@ -190,6 +220,26 @@ const nwUuid = (pref) => {
 const nwSafeStr = (v) => (v === undefined || v === null) ? '' : String(v);
 
 /**
+ * Code-Teil: nwEscapeHtml
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwEscapeHtml(value) {
+  return nwSafeStr(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
  * Code-Teil: nwBool
  * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
  * Zusammenhang: Gehört zu Web-Frontend (statische Kunden-/Installer-Seite im Adapter-Webserver) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
@@ -238,8 +288,1641 @@ const nwJsonClone = (o) => {
   try { return JSON.parse(JSON.stringify(o)); } catch (_e) { return null; }
 };
 
+// -----------------------------
+// Editor-Historie und lokaler Entwurf
+// -----------------------------
+function nwSerializeEditorConfig(cfg) {
+  try { return JSON.stringify(cfg || {}); } catch (_e) { return ''; }
+}
+
+/**
+ * Code-Teil: nwUpdateHistoryButtons
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwUpdateHistoryButtons() {
+  const h = nwLE.history || {};
+  if (nwLE.el.undoBtn) nwLE.el.undoBtn.disabled = !Array.isArray(h.undo) || h.undo.length <= 1;
+  if (nwLE.el.redoBtn) nwLE.el.redoBtn.disabled = !Array.isArray(h.redo) || h.redo.length === 0;
+}
+
+/**
+ * Code-Teil: nwHistorySnapshot
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwHistorySnapshot(label) {
+  const cfg = nwJsonClone(nwLE.cfg || nwDefaultGraph()) || nwDefaultGraph();
+  return {
+    label: String(label || 'Änderung'),
+    at: Date.now(),
+    graphId: nwLE.graphId || (nwLE.graph && nwLE.graph.id) || 'main',
+    cfg,
+    serialized: nwSerializeEditorConfig(cfg),
+  };
+}
+
+/**
+ * Code-Teil: nwHistoryReset
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwHistoryReset(label = 'Geladen') {
+  const snapshot = nwHistorySnapshot(label);
+  nwLE.history.undo = [snapshot];
+  nwLE.history.redo = [];
+  nwLE.history.lastSerialized = snapshot.serialized;
+  if (nwLE.history.timer) {
+    clearTimeout(nwLE.history.timer);
+    nwLE.history.timer = null;
+  }
+  nwUpdateHistoryButtons();
+}
+
+/**
+ * Code-Teil: nwHistoryCommit
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwHistoryCommit(label = 'Änderung') {
+  if (nwLE.history.suppress) return;
+  if (nwLE.history.timer) {
+    clearTimeout(nwLE.history.timer);
+    nwLE.history.timer = null;
+  }
+  const snapshot = nwHistorySnapshot(label);
+  if (!snapshot.serialized || snapshot.serialized === nwLE.history.lastSerialized) {
+    nwUpdateHistoryButtons();
+    return;
+  }
+  nwLE.history.undo = Array.isArray(nwLE.history.undo) ? nwLE.history.undo : [];
+  nwLE.history.undo.push(snapshot);
+  const max = Math.max(10, Number(nwLE.history.maxEntries) || 60);
+  if (nwLE.history.undo.length > max) nwLE.history.undo.splice(0, nwLE.history.undo.length - max);
+  nwLE.history.redo = [];
+  nwLE.history.lastSerialized = snapshot.serialized;
+  nwUpdateHistoryButtons();
+}
+
+/**
+ * Code-Teil: nwHistoryScheduleCommit
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwHistoryScheduleCommit(label = 'Änderung') {
+  if (nwLE.history.suppress) return;
+  if (nwLE.history.timer) clearTimeout(nwLE.history.timer);
+  nwLE.history.timer = setTimeout(() => nwHistoryCommit(label), 180);
+}
+
+/**
+ * Code-Teil: nwHistoryApply
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwHistoryApply(snapshot, statusText) {
+  if (!snapshot || !snapshot.cfg) return;
+  nwLE.history.suppress = true;
+  try {
+    nwLE.cfg = nwEnsureConfigDefaults(nwJsonClone(snapshot.cfg) || nwDefaultGraph());
+    nwLE.selectedNodeId = null;
+    nwRenderGraphSelector();
+    nwSelectGraph(snapshot.graphId || 'main', { skipRender: true });
+    nwRenderGraph();
+    nwRenderInspector();
+    nwLE.history.lastSerialized = nwSerializeEditorConfig(nwLE.cfg);
+    nwLE.dirty = true;
+    nwSetStatus(statusText || 'Änderung wiederhergestellt.', false);
+    nwScheduleLocalDraft();
+    if (nwLE.simulation.active) nwSimReset(false);
+  } finally {
+    nwLE.history.suppress = false;
+  }
+  nwUpdateHistoryButtons();
+}
+
+/**
+ * Code-Teil: nwUndo
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwUndo() {
+  nwHistoryCommit('Änderung');
+  if (!Array.isArray(nwLE.history.undo) || nwLE.history.undo.length <= 1) return;
+  const current = nwLE.history.undo.pop();
+  nwLE.history.redo = Array.isArray(nwLE.history.redo) ? nwLE.history.redo : [];
+  nwLE.history.redo.push(current);
+  nwHistoryApply(nwLE.history.undo[nwLE.history.undo.length - 1], 'Rückgängig ausgeführt.');
+}
+
+/**
+ * Code-Teil: nwRedo
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwRedo() {
+  if (!Array.isArray(nwLE.history.redo) || !nwLE.history.redo.length) return;
+  const snapshot = nwLE.history.redo.pop();
+  nwLE.history.undo = Array.isArray(nwLE.history.undo) ? nwLE.history.undo : [];
+  nwLE.history.undo.push(snapshot);
+  nwHistoryApply(snapshot, 'Wiederholen ausgeführt.');
+}
+
+/**
+ * Code-Teil: nwDraftStorageKey
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwDraftStorageKey() {
+  return 'nexowatt-eos.nexologic.local-draft.v1';
+}
+
+/**
+ * Code-Teil: nwUpdateDraftStatus
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwUpdateDraftStatus(text) {
+  if (nwLE.el.draftStatus) nwLE.el.draftStatus.textContent = String(text || '');
+}
+
+/**
+ * Code-Teil: nwWriteLocalDraftNow
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwWriteLocalDraftNow() {
+  if (nwLE.history.suppress) return;
+  if (nwLE.draft.timer) {
+    clearTimeout(nwLE.draft.timer);
+    nwLE.draft.timer = null;
+  }
+  try {
+    const payload = {
+      schemaVersion: 1,
+      savedAt: Date.now(),
+      graphId: nwLE.graphId || 'main',
+      cfg: nwJsonClone(nwLE.cfg || nwDefaultGraph()),
+    };
+    localStorage.setItem(nwDraftStorageKey(), JSON.stringify(payload));
+    nwLE.draft.lastSavedAt = payload.savedAt;
+    nwUpdateDraftStatus('Entwurf lokal gesichert');
+  } catch (_e) {
+    nwUpdateDraftStatus('Lokaler Entwurf nicht verfügbar');
+  }
+}
+
+/**
+ * Code-Teil: nwScheduleLocalDraft
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwScheduleLocalDraft() {
+  if (nwLE.history.suppress) return;
+  if (nwLE.draft.timer) clearTimeout(nwLE.draft.timer);
+  nwLE.draft.timer = setTimeout(() => nwWriteLocalDraftNow(), 550);
+}
+
+/**
+ * Code-Teil: nwClearLocalDraft
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwClearLocalDraft() {
+  if (nwLE.draft.timer) {
+    clearTimeout(nwLE.draft.timer);
+    nwLE.draft.timer = null;
+  }
+  try { localStorage.removeItem(nwDraftStorageKey()); } catch (_e) {}
+  nwUpdateDraftStatus('');
+}
+
+/**
+ * Code-Teil: nwMaybeRestoreLocalDraft
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwMaybeRestoreLocalDraft(serverCfg) {
+  try {
+    const raw = localStorage.getItem(nwDraftStorageKey());
+    if (!raw) return serverCfg;
+    const draft = JSON.parse(raw);
+    if (!draft || draft.schemaVersion !== 1 || !draft.cfg || typeof draft.cfg !== 'object') return serverCfg;
+    const draftSerialized = nwSerializeEditorConfig(draft.cfg);
+    const serverSerialized = nwSerializeEditorConfig(serverCfg);
+    if (!draftSerialized || draftSerialized === serverSerialized) {
+      localStorage.removeItem(nwDraftStorageKey());
+      return serverCfg;
+    }
+    const serverUpdatedAt = Number(serverCfg && serverCfg.updatedAt) || 0;
+    const draftSavedAt = Number(draft.savedAt) || 0;
+    if (serverUpdatedAt > 0 && draftSavedAt <= serverUpdatedAt) return serverCfg;
+    if (draftSavedAt > 0 && (Date.now() - draftSavedAt) > 14 * 24 * 3600_000) return serverCfg;
+    const restore = confirm('Es gibt einen neueren lokal gesicherten NexoLogic-Entwurf. Soll er wiederhergestellt werden?');
+    if (!restore) return serverCfg;
+    nwLE.graphId = draft.graphId || nwLE.graphId || 'main';
+    nwLE.draft.restored = true;
+    nwUpdateDraftStatus('Lokalen Entwurf wiederhergestellt');
+    return nwEnsureConfigDefaults(draft.cfg);
+  } catch (_e) {
+    return serverCfg;
+  }
+}
+
 const NW_LE_NODE_W = 240;
 const NW_LE_NODE_DROP_OFFSET_Y = 24;
+const NW_LE_NODE_H_ESTIMATE = 150;
+const NW_LE_NODE_GAP_X = 110;
+const NW_LE_NODE_GAP_Y = 24;
+
+// -----------------------------
+// Geordnete Spuren und automatische Anordnung
+// -----------------------------
+function nwNodeLane(type) {
+  const def = nwLE.lib && nwLE.lib.byType ? nwLE.lib.byType[type] : null;
+  if (type === 'scene_trigger' || type === 'dp_out') return 'output';
+  if (def && def.category === 'Eingänge') return 'input';
+  if (def && def.category === 'Ausgänge') return 'output';
+  return 'logic';
+}
+
+/**
+ * Code-Teil: nwEstimatedNodeHeight
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwEstimatedNodeHeight(type) {
+  const def = nwLE.lib && nwLE.lib.byType ? nwLE.lib.byType[type] : null;
+  if (!def) return NW_LE_NODE_H_ESTIMATE;
+  const inputCount = Array.isArray(def.inputs) ? def.inputs.length : 0;
+  const outputCount = Array.isArray(def.outputs) ? def.outputs.length : 0;
+  const portRows = Math.max(1, inputCount, outputCount);
+  // Reserve enthält auch die im Testmodus eingeblendeten Live-Wert-Badges.
+  // Dadurch bleibt die Auto-Anordnung beim Öffnen der Simulation überlappungsfrei.
+  const liveRows = Math.max(1, Math.ceil(Math.max(1, outputCount) / 2));
+  return Math.max(NW_LE_NODE_H_ESTIMATE, 65 + portRows * 36 + liveRows * 28 + 20);
+}
+
+/**
+ * Code-Teil: nwLaneBounds
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwLaneBounds(g = nwLE.graph) {
+  const w = Math.max(2400, Number(g && g.board && g.board.w) || 2400);
+  const input = { left: 60, right: 360 };
+  const output = { left: Math.max(1660, w - 360), right: w - 60 };
+  const logic = { left: input.right + 90, right: output.left - 90 };
+  return { w, input, logic, output };
+}
+
+/**
+ * Code-Teil: nwUpdateLaneGuides
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwUpdateLaneGuides() {
+  const g = nwLE.graph;
+  const board = nwLE.el.board;
+  if (!g || !board) return;
+  const bounds = nwLaneBounds(g);
+  const rows = [
+    ['input', bounds.input, 'EINGÄNGE'],
+    ['logic', bounds.logic, 'LOGIK / FUNKTION'],
+    ['output', bounds.output, 'AUSGÄNGE'],
+  ];
+  for (const [lane, range, label] of rows) {
+    const el = board.querySelector(`.nw-le__lane[data-lane="${lane}"]`);
+    if (!el) continue;
+    el.style.left = `${Math.round(range.left)}px`;
+    el.style.width = `${Math.max(120, Math.round(range.right - range.left))}px`;
+    el.setAttribute('aria-label', label);
+  }
+}
+
+/**
+ * Code-Teil: nwNodeRectsOverlap
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwNodeRectsOverlap(a, b) {
+  return !(a.x + a.w + NW_LE_NODE_GAP_X <= b.x || b.x + b.w + NW_LE_NODE_GAP_X <= a.x || a.y + a.h + NW_LE_NODE_GAP_Y <= b.y || b.y + b.h + NW_LE_NODE_GAP_Y <= a.y);
+}
+
+/**
+ * Code-Teil: nwFindFreeLanePosition
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwFindFreeLanePosition(type, g = nwLE.graph) {
+  if (!g) return { x: 80, y: 80 };
+  nwEnsureGraphDefaults(g);
+  const lane = nwNodeLane(type);
+  const bounds = nwLaneBounds(g);
+  const existing = (g.nodes || []).map((node) => ({
+    x: Number(node.x) || 0,
+    y: Number(node.y) || 0,
+    w: NW_LE_NODE_W,
+    h: nwEstimatedNodeHeight(node.type),
+  }));
+
+  let columns = [];
+  if (lane === 'input') columns = [bounds.input.left + 20];
+  else if (lane === 'output') columns = [bounds.output.left + 20];
+  else {
+    const usable = Math.max(NW_LE_NODE_W, bounds.logic.right - bounds.logic.left - NW_LE_NODE_W);
+    const colCount = Math.max(1, Math.min(4, Math.floor(usable / (NW_LE_NODE_W + NW_LE_NODE_GAP_X)) + 1));
+    const spacing = colCount > 1 ? usable / (colCount - 1) : 0;
+    columns = Array.from({ length: colCount }, (_v, idx) => bounds.logic.left + idx * spacing);
+  }
+
+  for (let row = 0; row < 120; row += 1) {
+    for (let col = 0; col < columns.length; col += 1) {
+      const candidate = {
+        x: Math.round(columns[col]),
+        y: 72 + row * (NW_LE_NODE_H_ESTIMATE + 34),
+        w: NW_LE_NODE_W,
+        h: nwEstimatedNodeHeight(type),
+      };
+      if (!existing.some((rect) => nwNodeRectsOverlap(candidate, rect))) {
+        const neededH = candidate.y + candidate.h + 120;
+        if (neededH > Number(g.board.h || 0)) g.board.h = Math.max(1400, neededH);
+        return nwClampNodePosition(candidate.x, candidate.y, g);
+      }
+    }
+  }
+  g.board.h = Math.max(1400, Number(g.board.h || 1400) + 500);
+  return nwClampNodePosition(columns[0] || 80, Number(g.board.h) - 420, g);
+}
+
+/**
+ * Code-Teil: nwScrollNodeIntoView
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwScrollNodeIntoView(node) {
+  const wrap = nwLE.el.boardWrap;
+  if (!wrap || !node) return;
+  const z = nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5);
+  const left = Math.max(0, Number(node.x) * z - Math.max(30, (wrap.clientWidth - NW_LE_NODE_W * z) / 2));
+  const top = Math.max(0, Number(node.y) * z - Math.max(30, (wrap.clientHeight - nwEstimatedNodeHeight(node.type) * z) / 2));
+  try { wrap.scrollTo({ left, top, behavior: 'smooth' }); }
+  catch (_e) { wrap.scrollLeft = left; wrap.scrollTop = top; }
+}
+
+/**
+ * Code-Teil: nwAutoLayoutGraph
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwAutoLayoutGraph() {
+  const g = nwLE.graph;
+  if (!g) return;
+  nwEnsureGraphDefaults(g);
+  const nodes = Array.isArray(g.nodes) ? g.nodes.filter(Boolean) : [];
+  if (!nodes.length) {
+    nwSetStatus('Keine Bausteine zum Anordnen.', false);
+    return;
+  }
+
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const parents = new Map(nodes.map((node) => [node.id, []]));
+  const children = new Map(nodes.map((node) => [node.id, []]));
+  for (const link of (g.links || [])) {
+    const from = link && link.from && nodeMap.get(link.from.node);
+    const to = link && link.to && nodeMap.get(link.to.node);
+    if (!from || !to) continue;
+    parents.get(to.id).push(from.id);
+    children.get(from.id).push(to.id);
+  }
+
+  const depth = new Map();
+  for (const node of nodes) {
+    const lane = nwNodeLane(node.type);
+    if (lane === 'input') depth.set(node.id, 0);
+    else depth.set(node.id, 1);
+  }
+  for (let pass = 0; pass < nodes.length + 2; pass += 1) {
+    let changed = false;
+    for (const node of nodes) {
+      if (nwNodeLane(node.type) !== 'logic') continue;
+      const p = parents.get(node.id) || [];
+      if (!p.length) continue;
+      const next = Math.max(1, ...p.map((id) => (depth.get(id) || 0) + 1));
+      if (next !== depth.get(node.id)) { depth.set(node.id, next); changed = true; }
+    }
+    if (!changed) break;
+  }
+
+  const isolated = nodes.filter((node) => nwNodeLane(node.type) === 'logic' && !(parents.get(node.id) || []).length && !(children.get(node.id) || []).length);
+  isolated.sort((a, b) => (Number(a.y) || 0) - (Number(b.y) || 0));
+  isolated.forEach((node, idx) => depth.set(node.id, 1 + (idx % 3)));
+
+  const logicNodes = nodes.filter((node) => nwNodeLane(node.type) === 'logic');
+  const maxLogicDepth = Math.max(1, ...logicNodes.map((node) => depth.get(node.id) || 1));
+  const boardW = Math.max(2400, 1160 + maxLogicDepth * 360);
+  const groups = new Map();
+/**
+ * Code-Teil: keyFor
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+  const keyFor = (node) => {
+    const lane = nwNodeLane(node.type);
+    if (lane === 'input') return 'input';
+    if (lane === 'output') return 'output';
+    return `logic-${Math.max(1, depth.get(node.id) || 1)}`;
+  };
+  for (const node of nodes) {
+    const key = keyFor(node);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(node);
+  }
+  for (const list of groups.values()) {
+    list.sort((a, b) => ((Number(a.y) || 0) - (Number(b.y) || 0)) || String(a.label || a.id).localeCompare(String(b.label || b.id)));
+  }
+
+  const inputX = 80;
+  const outputX = boardW - NW_LE_NODE_W - 80;
+  const logicLeft = 500;
+  const logicRight = outputX - 380;
+/**
+ * Code-Teil: xForDepth
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+  const xForDepth = (d) => maxLogicDepth <= 1
+    ? Math.round((logicLeft + logicRight) / 2)
+    : Math.round(logicLeft + ((d - 1) / (maxLogicDepth - 1)) * Math.max(0, logicRight - logicLeft));
+
+  let maxBottom = 1400;
+  for (const [key, list] of groups.entries()) {
+    let x = inputX;
+    if (key === 'output') x = outputX;
+    else if (key.startsWith('logic-')) x = xForDepth(Number(key.slice(6)) || 1);
+    let y = 78;
+    list.forEach((node) => {
+      node.x = x;
+      node.y = y;
+      y += nwEstimatedNodeHeight(node.type) + 42;
+    });
+    maxBottom = Math.max(maxBottom, y + 80);
+  }
+
+  g.board = g.board || {};
+  g.board.w = boardW;
+  g.board.h = Math.max(1400, maxBottom);
+  nwRenderGraph();
+  if (nwLE.selectedNodeId) nwSelectNode(nwLE.selectedNodeId);
+  nwMarkDirty('Auto-Anordnung');
+  nwSetStatus('Bausteine automatisch nach Eingängen, Logik und Ausgängen angeordnet.', true);
+}
+
+// -----------------------------
+// Schreibfreie NexoLogic-Browser-Simulation
+// -----------------------------
+function nwSimBool(value, def = false) {
+  if (value === undefined || value === null || value === '') return def;
+  return nwBool(value, def);
+}
+
+/**
+ * Code-Teil: nwSimNum
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwSimNum(value, def = 0) {
+  if (value === undefined || value === null || value === '') return def;
+  return nwNum(value, def);
+}
+
+/**
+ * Code-Teil: nwSimValueKey
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwSimValueKey(value) {
+  try { return JSON.stringify(value); } catch (_e) { return String(value); }
+}
+
+/**
+ * Code-Teil: nwSimFormatValue
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwSimFormatValue(value) {
+  if (value === undefined) return '—';
+  if (value === null) return 'null';
+  if (typeof value === 'boolean') return value ? 'EIN' : 'AUS';
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return 'ungültig';
+    return String(Math.round(value * 1000) / 1000);
+  }
+  if (typeof value === 'object') {
+    try { return JSON.stringify(value); } catch (_e) { return '[Objekt]'; }
+  }
+  return String(value);
+}
+
+/**
+ * Code-Teil: nwSimTrace
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwSimTrace(node, message, level = 'info') {
+  const sim = nwLE.simulation;
+  const row = {
+    at: sim.nowMs,
+    nodeId: node && node.id ? node.id : '',
+    nodeLabel: node ? String(node.label || (nwLE.lib.byType[node.type] && nwLE.lib.byType[node.type].name) || node.id || '') : '',
+    level,
+    message: String(message || ''),
+  };
+  sim.traces.push(row);
+  if (sim.traces.length > sim.maxTrace) sim.traces.splice(0, sim.traces.length - sim.maxTrace);
+}
+
+/**
+ * Code-Teil: nwSimDefaultInput
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwSimDefaultInput(node) {
+  const params = node && node.params ? node.params : {};
+  const cast = String(params.cast || 'auto').toLowerCase();
+  const fallback = params.fallbackValue;
+  if (cast === 'bool' || cast === 'boolean') return fallback === '' || fallback === undefined ? false : nwSimBool(fallback, false);
+  if (cast === 'string' || cast === 'text') return fallback === undefined || fallback === null ? '' : String(fallback);
+  const n = nwSimNum(fallback, NaN);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Code-Teil: nwSimDefaultInputType
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwSimDefaultInputType(node) {
+  const cast = String(node && node.params && node.params.cast || 'auto').toLowerCase();
+  if (cast === 'bool' || cast === 'boolean') return 'bool';
+  if (cast === 'string' || cast === 'text') return 'string';
+  if (cast === 'number') return 'number';
+  const fallback = node && node.params ? node.params.fallbackValue : undefined;
+  if (typeof fallback === 'boolean') return 'bool';
+  if (typeof fallback === 'string' && fallback.trim() && !Number.isFinite(Number(fallback.replace(',', '.')))) return 'string';
+  return 'number';
+}
+
+/**
+ * Code-Teil: nwSimEnsureInputs
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwSimEnsureInputs() {
+  const g = nwLE.graph;
+  if (!g) return;
+  for (const node of (g.nodes || [])) {
+    if (!node || node.type !== 'dp_in') continue;
+    if (!Object.prototype.hasOwnProperty.call(nwLE.simulation.inputs, node.id)) nwLE.simulation.inputs[node.id] = nwSimDefaultInput(node);
+    if (!nwLE.simulation.inputTypes[node.id]) nwLE.simulation.inputTypes[node.id] = nwSimDefaultInputType(node);
+  }
+}
+
+/**
+ * Code-Teil: nwSimStopTimer
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwSimStopTimer() {
+  if (nwLE.simulation.timer) {
+    clearInterval(nwLE.simulation.timer);
+    nwLE.simulation.timer = null;
+  }
+  nwLE.simulation.running = false;
+}
+
+/**
+ * Code-Teil: nwSimSetRunning
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwSimSetRunning(running) {
+  const sim = nwLE.simulation;
+  nwSimStopTimer();
+  sim.running = !!running;
+  if (sim.running) {
+    sim.timer = setInterval(() => {
+      if (!sim.active) return nwSimStopTimer();
+      sim.nowMs += 250;
+      nwSimEvaluate('Lauf');
+    }, 250);
+  }
+  nwRenderSimulationPanel();
+}
+
+/**
+ * Code-Teil: nwSimParseTimeToMin
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwSimParseTimeToMin(value) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || '').trim());
+  if (!match) return null;
+  const h = Number(match[1]);
+  const m = Number(match[2]);
+  if (!Number.isInteger(h) || !Number.isInteger(m) || h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return h * 60 + m;
+}
+
+/**
+ * Code-Teil: nwSimParseDays
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwSimParseDays(value) {
+  const map = { mo: 1, di: 2, mi: 3, do: 4, fr: 5, sa: 6, so: 7 };
+  const out = new Set();
+  String(value || '').split(/[,;\s]+/).filter(Boolean).forEach((part) => {
+    const key = part.trim().toLowerCase();
+    if (map[key]) out.add(map[key]);
+    else {
+      const n = Number(key);
+      if (n >= 1 && n <= 7) out.add(n);
+    }
+  });
+  return out;
+}
+
+/**
+ * Code-Teil: nwSimEdgeFired
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwSimEdgeFired(state, input, edge, initializing) {
+  const now = nwSimBool(input, false);
+  const prev = nwSimBool(state.prev, false);
+  state.prev = now;
+  if (initializing) return false;
+  if (edge === 'falling') return prev && !now;
+  if (edge === 'both') return prev !== now;
+  return !prev && now;
+}
+
+/**
+ * Code-Teil: nwSimComputeNode
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwSimComputeNode(node, inp, state, ctx) {
+  const params = node.params || {};
+  const type = String(node.type || '');
+  const now = ctx.nowMs;
+  const dtMs = Math.max(0, ctx.dtMs || 0);
+  const initializing = !!ctx.initializing;
+/**
+ * Code-Teil: enabledDefault
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+  const enabledDefault = (value) => value === undefined ? true : nwSimBool(value, true);
+  const out = {};
+
+  if (node.enabled === false) return out;
+
+  switch (type) {
+    case 'dp_in':
+      out.out = nwLE.simulation.inputs[node.id];
+      break;
+    case 'const': {
+      const vt = String(params.valueType || 'number').toLowerCase();
+      if (vt === 'bool' || vt === 'boolean') out.out = nwSimBool(params.value, false);
+      else if (vt === 'string' || vt === 'text') out.out = params.value === undefined || params.value === null ? '' : String(params.value);
+      else out.out = nwSimNum(params.value, 0);
+      break;
+    }
+    case 'not': out.out = !nwSimBool(inp.in, false); break;
+    case 'and': out.out = nwSimBool(inp.a, false) && nwSimBool(inp.b, false); break;
+    case 'or': out.out = nwSimBool(inp.a, false) || nwSimBool(inp.b, false); break;
+    case 'xor': out.out = nwSimBool(inp.a, false) !== nwSimBool(inp.b, false); break;
+    case 'toggle': {
+      if (state.value === undefined) state.value = nwSimBool(params.init, false);
+      if (nwSimEdgeFired(state, inp.trig, String(params.edge || 'rising').toLowerCase(), initializing)) state.value = !state.value;
+      out.out = !!state.value;
+      break;
+    }
+    case 'rs': {
+      if (state.q === undefined) state.q = nwSimBool(params.init, false);
+      const r = nwSimBool(inp.r, false);
+      const s = nwSimBool(inp.s, false);
+      if (r && s) state.q = String(params.priority || 'r').toLowerCase() === 's';
+      else if (r) state.q = false;
+      else if (s) state.q = true;
+      out.q = !!state.q;
+      break;
+    }
+    case 'edge': {
+      const current = nwSimBool(inp.in, false);
+      const prev = nwSimBool(state.prev, false);
+      if (!initializing) {
+        if (!prev && current) state.risingUntil = now + 100;
+        if (prev && !current) state.fallingUntil = now + 100;
+      }
+      state.prev = current;
+      out.rising = Number(state.risingUntil || 0) > now;
+      out.falling = Number(state.fallingUntil || 0) > now;
+      break;
+    }
+    case 'edge_rising':
+    case 'edge_falling':
+    case 'edge_both': {
+      const edge = type === 'edge_falling' ? 'falling' : type === 'edge_both' ? 'both' : 'rising';
+      if (nwSimEdgeFired(state, inp.in, edge, initializing)) state.until = now + 100;
+      out.out = Number(state.until || 0) > now;
+      break;
+    }
+    case 'cmp': {
+      const mode = String(params.mode || 'auto').toLowerCase();
+      let a = inp.a;
+      let b = inp.b;
+      if (mode === 'number') { a = nwSimNum(a, 0); b = nwSimNum(b, 0); }
+      else if (mode === 'bool') { a = nwSimBool(a, false); b = nwSimBool(b, false); }
+      else if (mode === 'string' || mode === 'text') { a = a == null ? '' : String(a); b = b == null ? '' : String(b); }
+      else {
+        const an = nwSimNum(a, NaN); const bn = nwSimNum(b, NaN);
+        if (Number.isFinite(an) && Number.isFinite(bn)) { a = an; b = bn; }
+        else { a = a == null ? '' : String(a); b = b == null ? '' : String(b); }
+      }
+      const op = String(params.op || '==');
+      if (op === '!=') out.out = a !== b;
+      else if (op === '>') out.out = a > b;
+      else if (op === '>=') out.out = a >= b;
+      else if (op === '<') out.out = a < b;
+      else if (op === '<=') out.out = a <= b;
+      else out.out = a === b;
+      break;
+    }
+    case 'hyst': {
+      if (state.value === undefined) state.value = nwSimBool(params.init, false);
+      const v = nwSimNum(inp.in, 0);
+      if (v >= nwSimNum(params.on, 60)) state.value = true;
+      if (v <= nwSimNum(params.off, 55)) state.value = false;
+      out.out = !!state.value;
+      break;
+    }
+    case 'add': out.out = nwSimNum(inp.a, 0) + nwSimNum(inp.b, 0); break;
+    case 'sub': out.out = nwSimNum(inp.a, 0) - nwSimNum(inp.b, 0); break;
+    case 'mul': out.out = nwSimNum(inp.a, 0) * nwSimNum(inp.b, 0); break;
+    case 'div': {
+      const b = nwSimNum(inp.b, 0);
+      out.out = Math.abs(b) < 1e-12 ? nwSimNum(params.div0, 0) : nwSimNum(inp.a, 0) / b;
+      break;
+    }
+    case 'minmax': {
+      const a = nwSimNum(inp.a, 0); const b = nwSimNum(inp.b, 0);
+      out.min = Math.min(a, b); out.max = Math.max(a, b); break;
+    }
+    case 'clamp': out.out = nwClamp(nwSimNum(inp.in, 0), Math.min(nwSimNum(params.min, 0), nwSimNum(params.max, 100)), Math.max(nwSimNum(params.min, 0), nwSimNum(params.max, 100))); break;
+    case 'scale': {
+      let inMin = nwSimNum(params.inMin, 0); let inMax = nwSimNum(params.inMax, 100);
+      let outMin = nwSimNum(params.outMin, 0); let outMax = nwSimNum(params.outMax, 100);
+      const preset = String(params.preset || 'custom');
+      if (preset === '255_to_100') { inMin = 0; inMax = 255; outMin = 0; outMax = 100; }
+      if (preset === '100_to_255') { inMin = 0; inMax = 100; outMin = 0; outMax = 255; }
+      if (preset === '10v_to_100') { inMin = 0; inMax = 10; outMin = 0; outMax = 100; }
+      if (preset === '100_to_10v') { inMin = 0; inMax = 100; outMin = 0; outMax = 10; }
+      const x = nwSimNum(inp.in, 0);
+      const ratio = inMax === inMin ? 0 : (x - inMin) / (inMax - inMin);
+      let y = outMin + ratio * (outMax - outMin);
+      if (nwSimBool(params.clamp, true)) y = nwClamp(y, Math.min(outMin, outMax), Math.max(outMin, outMax));
+      const precision = nwClamp(Math.round(nwSimNum(params.precision, 2)), 0, 6);
+      out.out = Math.round(y * (10 ** precision)) / (10 ** precision);
+      break;
+    }
+    case 'rt_2p': {
+      const enabled = enabledDefault(inp.enable);
+      const ist = nwSimNum(inp.ist, NaN); const soll = nwSimNum(inp.soll, NaN);
+      const delta = Number.isFinite(ist) && Number.isFinite(soll) ? soll - ist : 0;
+      if (state.value === undefined) { state.value = nwSimBool(params.init, false); state.lastChange = now; }
+      if (!enabled || !Number.isFinite(ist) || !Number.isFinite(soll)) state.value = false;
+      else {
+        const mode = String(params.mode || 'heat').toLowerCase();
+        const band = Math.max(0, nwSimNum(params.band, .3));
+        let want = !!state.value;
+        if (!state.value) want = mode === 'cool' ? ist >= soll + band : ist <= soll - band;
+        else want = mode === 'cool' ? !(ist <= soll - band) : !(ist >= soll + band);
+        if (want !== state.value) {
+          const minMs = want ? Math.max(0, nwSimNum(params.minOffMs, 0)) : Math.max(0, nwSimNum(params.minOnMs, 0));
+          if (now - Number(state.lastChange || 0) >= minMs) { state.value = want; state.lastChange = now; }
+        }
+      }
+      out.out = !!state.value; out.delta = delta; break;
+    }
+    case 'rt_p': {
+      const enabled = enabledDefault(inp.enable);
+      const ist = nwSimNum(inp.ist, NaN); const soll = nwSimNum(inp.soll, NaN);
+      const delta = Number.isFinite(ist) && Number.isFinite(soll) ? soll - ist : 0;
+      const lo = Math.min(nwSimNum(params.outMin, 0), nwSimNum(params.outMax, 100));
+      const hi = Math.max(nwSimNum(params.outMin, 0), nwSimNum(params.outMax, 100));
+      let err = delta;
+      if (Math.abs(err) < Math.max(0, nwSimNum(params.deadband, .2))) err = 0;
+      if (String(params.mode || 'heat').toLowerCase() === 'cool') err = -err;
+      const precision = nwClamp(Math.round(nwSimNum(params.precision, 1)), 0, 4);
+      const y = !enabled || !Number.isFinite(ist) || !Number.isFinite(soll) ? lo : nwClamp(err * Math.max(0, nwSimNum(params.kp, 30)), lo, hi);
+      out.out = Math.round(y * (10 ** precision)) / (10 ** precision); out.delta = delta; break;
+    }
+    case 'rt_pi': {
+      const enabled = enabledDefault(inp.enable);
+      const reset = nwSimBool(inp.reset, false);
+      const ist = nwSimNum(inp.ist, NaN); const soll = nwSimNum(inp.soll, NaN);
+      const delta = Number.isFinite(ist) && Number.isFinite(soll) ? soll - ist : 0;
+      const lo = Math.min(nwSimNum(params.outMin, 0), nwSimNum(params.outMax, 100));
+      const hi = Math.max(nwSimNum(params.outMin, 0), nwSimNum(params.outMax, 100));
+      if (!Number.isFinite(state.iTerm)) state.iTerm = 0;
+      if (reset) state.iTerm = 0;
+      if (!enabled || !Number.isFinite(ist) || !Number.isFinite(soll)) {
+        if (nwSimBool(params.resetOnDisable, true)) state.iTerm = 0;
+        out.out = lo; out.delta = delta; out.p = 0; out.i = state.iTerm; break;
+      }
+      let err = delta;
+      if (Math.abs(err) < Math.max(0, nwSimNum(params.deadband, .2))) err = 0;
+      if (String(params.mode || 'heat').toLowerCase() === 'cool') err = -err;
+      const kp = Math.max(0, nwSimNum(params.kp, 30));
+      const ti = Math.max(1, nwSimNum(params.ti, 600));
+      const p = err * kp;
+      const prevI = state.iTerm;
+      let nextI = prevI + (kp / ti) * err * Math.min(3600, dtMs / 1000);
+      nextI = nwClamp(nextI, -10000, 10000);
+      let raw = p + nextI;
+      let y = nwClamp(raw, lo, hi);
+      if (nwSimBool(params.antiWindup, true) && raw !== y && ((raw > hi && err > 0) || (raw < lo && err < 0))) { nextI = prevI; raw = p + nextI; y = nwClamp(raw, lo, hi); }
+      state.iTerm = nextI;
+      const precision = nwClamp(Math.round(nwSimNum(params.precision, 1)), 0, 4);
+      const f = 10 ** precision;
+      out.out = Math.round(y * f) / f; out.delta = Math.round(delta * f) / f; out.p = Math.round(p * f) / f; out.i = Math.round(nextI * f) / f; break;
+    }
+    case 'pwm': {
+      const enabled = enabledDefault(inp.enable);
+      const period = nwClamp(Math.round(nwSimNum(params.periodMs, 600000)), 1000, 86400000);
+      const duty = nwClamp(nwSimNum(inp.in, 0), 0, 100);
+      if (!Number.isFinite(state.cycleStart) || state.period !== period || state.duty !== duty) state.cycleStart = now;
+      state.period = period; state.duty = duty;
+      out.out = enabled && duty > 0 && (duty >= 100 || ((now - state.cycleStart) % period) < period * duty / 100);
+      break;
+    }
+    case 'season_switch': {
+      if (state.summer === undefined) state.summer = String(params.init || 'winter').toLowerCase() === 'summer';
+      if (enabledDefault(inp.enable)) {
+        if (String(params.mode || 'auto').toLowerCase() === 'manual') state.summer = nwSimBool(inp.summerIn, false);
+        else {
+          const t = nwSimNum(inp.tOut, NaN);
+          if (Number.isFinite(t) && t >= nwSimNum(params.summerOn, 18)) state.summer = true;
+          if (Number.isFinite(t) && t <= nwSimNum(params.winterOn, 15)) state.summer = false;
+        }
+      }
+      out.out = state.summer ? inp.summerVal : inp.winterVal; out.summer = !!state.summer; out.winter = !state.summer; break;
+    }
+    case 'window_lock': {
+      const enabled = enabledDefault(inp.enable);
+      const windowOpen = nwSimBool(params.invertWindow, false) ? !nwSimBool(inp.window, false) : nwSimBool(inp.window, false);
+      if (state.blocked === undefined) state.blocked = false;
+      if (!enabled) { state.blocked = false; state.pendingAt = null; }
+      else if (windowOpen) {
+        state.releaseAt = null;
+        const delay = Math.max(0, nwSimNum(params.openDelayMs, 0));
+        if (!state.blocked && !Number.isFinite(state.pendingAt)) state.pendingAt = now + delay;
+        if (!state.blocked && now >= Number(state.pendingAt || 0)) state.blocked = true;
+      } else {
+        state.pendingAt = null;
+        const delay = Math.max(0, nwSimNum(params.closeDelayMs, 0));
+        if (state.blocked && !Number.isFinite(state.releaseAt)) state.releaseAt = now + delay;
+        if (state.blocked && now >= Number(state.releaseAt || 0)) state.blocked = false;
+        if (!state.blocked) state.releaseAt = null;
+      }
+      out.blocked = !!state.blocked; out.out = state.blocked ? nwSimBool(params.blockOut, false) : nwSimBool(inp.in, false); break;
+    }
+    case 'heating_curve': {
+      const enabled = enabledDefault(inp.enable);
+      const tOut = nwSimNum(inp.tOut, NaN);
+      const room = nwSimNum(inp.room, NaN);
+      const minFlow = Math.min(nwSimNum(params.minFlow, 20), nwSimNum(params.maxFlow, 60));
+      const maxFlow = Math.max(nwSimNum(params.minFlow, 20), nwSimNum(params.maxFlow, 60));
+      let shift = nwSimNum(params.shift, 0);
+      if (Number.isFinite(room) && nwSimNum(params.roomGain, 0) !== 0) shift += (room - nwSimNum(params.roomRef, 20)) * nwSimNum(params.roomGain, 0);
+      let y = minFlow;
+      if (enabled && Number.isFinite(tOut)) {
+        if (String(params.model || '2point').toLowerCase() === 'slope') y = nwSimNum(params.level, 20) + nwSimNum(params.slope, 1.2) * (nwSimNum(params.roomRef, 20) - tOut);
+        else {
+          const ow = nwSimNum(params.tOutWarm, 20), fw = nwSimNum(params.tFlowWarm, 25), oc = nwSimNum(params.tOutCold, -10), fc = nwSimNum(params.tFlowCold, 50);
+          if (ow === oc) y = fw;
+          else if (tOut >= ow) y = fw;
+          else if (tOut <= oc) y = fc;
+          else y = fw + ((tOut - ow) / (oc - ow)) * (fc - fw);
+        }
+        y += shift;
+      }
+      y = nwClamp(y, minFlow, maxFlow);
+      const precision = nwClamp(Math.round(nwSimNum(params.precision, 1)), 0, 3); const f = 10 ** precision;
+      out.out = Math.round(y * f) / f; out.active = enabled && Number.isFinite(tOut); break;
+    }
+    case 'mixer_2p': {
+      const enabled = enabledDefault(inp.enable);
+      const ist = nwSimNum(inp.ist, NaN); const soll = nwSimNum(inp.soll, NaN);
+      const delta = Number.isFinite(ist) && Number.isFinite(soll) ? soll - ist : 0;
+      const band = Math.max(0, nwSimNum(params.band, .5));
+      const pulse = nwClamp(Math.round(nwSimNum(params.pulseMs, 1500)), 50, 60000);
+      const pause = nwClamp(Math.round(nwSimNum(params.pauseMs, 3000)), 0, 60000);
+      let action = null;
+      if (enabled && Number.isFinite(ist) && Number.isFinite(soll)) action = delta > band ? 'open' : delta < -band ? 'close' : null;
+      if (Number(state.pulseUntil || 0) <= now) state.action = null;
+      if (action && !state.action && now >= Number(state.pauseUntil || 0)) { state.action = action; state.pulseUntil = now + pulse; state.pauseUntil = state.pulseUntil + pause; }
+      let open = state.action === 'open' && now < Number(state.pulseUntil || 0);
+      let close = state.action === 'close' && now < Number(state.pulseUntil || 0);
+      if (nwSimBool(params.invert, false)) [open, close] = [close, open];
+      out.open = open; out.close = close; out.delta = delta; break;
+    }
+    case 'delay_on': {
+      const input = nwSimBool(inp.in, false); const ms = Math.max(0, nwSimNum(params.ms, 1000));
+      if (!input) state.since = null;
+      else if (!Number.isFinite(state.since)) state.since = now;
+      out.out = input && now - Number(state.since || now) >= ms; break;
+    }
+    case 'delay_off':
+    case 'after_run': {
+      const input = nwSimBool(inp.in, false); const ms = Math.max(0, nwSimNum(params.ms, 1000));
+      if (state.value === undefined || initializing) {
+        state.value = input;
+        state.prev = input;
+        state.offAt = null;
+      } else {
+        const prev = nwSimBool(state.prev, false);
+        if (input) {
+          state.value = true;
+          state.offAt = null;
+        } else if (prev && !input) {
+          state.offAt = now + ms;
+        }
+        if (!input && Number.isFinite(state.offAt) && now >= state.offAt) {
+          state.value = false;
+          state.offAt = null;
+        }
+        state.prev = input;
+      }
+      out.out = !!state.value;
+      break;
+    }
+    case 'pulse':
+    case 'staircase': {
+      const edge = String(params.edge || 'rising').toLowerCase();
+      if (nwSimEdgeFired(state, inp.trig, edge, initializing)) state.until = now + Math.max(10, nwSimNum(params.ms, type === 'staircase' ? 60000 : 1000));
+      out.out = now < Number(state.until || 0); break;
+    }
+    case 'pulse_extend': {
+      const input = nwSimBool(inp.in, false); const ms = Math.max(0, nwSimNum(params.ms, 1000));
+      const prev = nwSimBool(state.prev, false); state.prev = input;
+      if (input) { state.until = null; out.out = true; }
+      else { if (prev && !input) state.until = now + ms; out.out = now < Number(state.until || 0); }
+      break;
+    }
+    case 'schedule': {
+      const enabled = enabledDefault(inp.enable); const holiday = nwSimBool(inp.holiday, false);
+      const days = nwSimParseDays(params.days || 'Mo,Di,Mi,Do,Fr,Sa,So');
+      const from = nwSimParseTimeToMin(params.from || '00:00'); const to = nwSimParseTimeToMin(params.to || '23:59');
+      let active = false;
+      if (enabled && days.size && from !== null && to !== null) {
+        const d = new Date(now); let day = d.getDay() || 7; const holidayMode = String(params.holidayMode || 'asSunday').toLowerCase();
+        if (holiday && holidayMode === 'off') active = false;
+        else {
+          if (holiday && (holidayMode === 'assunday' || holidayMode === 'as_sunday')) day = 7;
+          const minute = d.getHours() * 60 + d.getMinutes();
+          if (from <= to) active = days.has(day) && minute >= from && minute < to;
+          else { const prevDay = day === 1 ? 7 : day - 1; active = (minute >= from && days.has(day)) || (minute < to && days.has(prevDay)); }
+        }
+      }
+      out.out = active; break;
+    }
+    case 'impulse_counter': {
+      if (!Number.isFinite(state.count)) state.count = nwSimNum(params.init, 0);
+      const trig = nwSimBool(inp.trig, false), reset = nwSimBool(inp.reset, false);
+      if (!initializing && !nwSimBool(state.prevReset, false) && reset) state.count = nwSimNum(params.init, 0);
+      if (!initializing && !nwSimBool(state.prevTrig, false) && trig) state.count += nwSimNum(params.step, 1);
+      state.prevTrig = trig; state.prevReset = reset;
+      if (nwSimBool(params.clamp, false)) state.count = nwClamp(state.count, nwSimNum(params.min, -1e9), nwSimNum(params.max, 1e9));
+      out.out = state.count; break;
+    }
+    case 'counter': {
+      if (!Number.isFinite(state.count)) state.count = nwSimNum(params.init, 0);
+      const up = nwSimBool(inp.up, false), down = nwSimBool(inp.down, false), reset = nwSimBool(inp.reset, false);
+      if (!initializing && !nwSimBool(state.prevReset, false) && reset) state.count = nwSimNum(params.init, 0);
+      if (!initializing && !nwSimBool(state.prevUp, false) && up) state.count += nwSimNum(params.step, 1);
+      if (!initializing && !nwSimBool(state.prevDown, false) && down) state.count -= nwSimNum(params.step, 1);
+      state.prevUp = up; state.prevDown = down; state.prevReset = reset;
+      if (nwSimBool(params.clamp, false)) state.count = nwClamp(state.count, nwSimNum(params.min, -1e9), nwSimNum(params.max, 1e9));
+      out.out = state.count; break;
+    }
+    case 'runtime_hours': {
+      if (!Number.isFinite(state.totalMs)) state.totalMs = nwSimNum(params.initHours, 0) * 3600000;
+      const run = nwSimBool(inp.run, false), reset = nwSimBool(inp.reset, false);
+      if (!initializing && !nwSimBool(state.prevReset, false) && reset) state.totalMs = nwSimNum(params.initHours, 0) * 3600000;
+      if (run) state.totalMs += dtMs;
+      state.prevReset = reset; state.prevRun = run;
+      const precision = nwClamp(Math.round(nwSimNum(params.precision, 2)), 0, 4); const f = 10 ** precision;
+      out.out = Math.round((state.totalMs / 3600000) * f) / f; break;
+    }
+    case 'scene_trigger': {
+      const edge = String(params.edge || 'rising').toLowerCase();
+      const trigger = nwSimBool(inp.trig, false);
+      const fire = nwSimEdgeFired(state, trigger, edge, initializing);
+      if (fire) nwSimTrace(node, `Würde Szene ${params.sceneId || params.dpId || 'ohne Ziel'} auslösen (nur Testmodus).`, 'action');
+      out.out = trigger;
+      break;
+    }
+    case 'dp_out': {
+      const value = inp.in;
+      const key = nwSimValueKey(value);
+      if (!initializing && key !== state.lastValueKey) nwSimTrace(node, `Würde ${params.dpId || 'nicht zugeordneten Datenpunkt'} = ${nwSimFormatValue(value)} schreiben (nur Testmodus).`, 'action');
+      state.lastValueKey = key;
+      break;
+    }
+    default:
+      nwSimTrace(node, `Bausteintyp ${type} wird im Testmodus noch nicht ausgewertet.`, 'warn');
+      break;
+  }
+  return out;
+}
+
+/**
+ * Code-Teil: nwSimTopologicalOrder
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwSimTopologicalOrder(g) {
+  const nodes = (g && Array.isArray(g.nodes)) ? g.nodes.filter(Boolean) : [];
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const indegree = new Map(nodes.map((node) => [node.id, 0]));
+  const next = new Map(nodes.map((node) => [node.id, []]));
+  for (const link of (g.links || [])) {
+    if (!link || !link.from || !link.to || !nodeMap.has(link.from.node) || !nodeMap.has(link.to.node)) continue;
+    indegree.set(link.to.node, (indegree.get(link.to.node) || 0) + 1);
+    next.get(link.from.node).push(link.to.node);
+  }
+  const queue = nodes.filter((node) => (indegree.get(node.id) || 0) === 0).sort((a, b) => (Number(a.x) || 0) - (Number(b.x) || 0) || (Number(a.y) || 0) - (Number(b.y) || 0));
+  const order = [];
+  while (queue.length) {
+    const node = queue.shift(); order.push(node);
+    for (const id of next.get(node.id) || []) {
+      indegree.set(id, (indegree.get(id) || 0) - 1);
+      if ((indegree.get(id) || 0) === 0) queue.push(nodeMap.get(id));
+    }
+    queue.sort((a, b) => (Number(a.x) || 0) - (Number(b.x) || 0) || (Number(a.y) || 0) - (Number(b.y) || 0));
+  }
+  const remaining = nodes.filter((node) => !order.some((row) => row.id === node.id));
+  return { order: order.concat(remaining), cycle: remaining.length > 0 };
+}
+
+/**
+ * Code-Teil: nwSimEvaluate
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwSimEvaluate(reason = 'Schritt') {
+  const sim = nwLE.simulation;
+  const g = nwLE.graph;
+  if (!sim.active || !g) return;
+  nwSimEnsureInputs();
+  const previous = sim.outputs || {};
+  const nextOutputs = {};
+  const { order, cycle } = nwSimTopologicalOrder(g);
+  const links = Array.isArray(g.links) ? g.links : [];
+  const initializing = !sim.initialized;
+  const dtMs = sim.lastEvalMs === null ? 0 : Math.max(0, sim.nowMs - sim.lastEvalMs);
+
+  if (cycle && !sim.cycleWarned) {
+    nwSimTrace(null, 'Der Graph enthält eine Rückkopplung. Die Simulation wertet die verbleibenden Bausteine in ihrer sichtbaren Reihenfolge aus.', 'warn');
+    sim.cycleWarned = true;
+  }
+
+  for (const node of order) {
+    const def = nwLE.lib.byType[node.type];
+    if (!def) continue;
+    const inp = {};
+    for (const port of (def.inputs || [])) {
+      const link = links.find((row) => row && row.to && row.to.node === node.id && row.to.port === port.key);
+      inp[port.key] = link && nextOutputs[link.from.node] && Object.prototype.hasOwnProperty.call(nextOutputs[link.from.node], link.from.port)
+        ? nextOutputs[link.from.node][link.from.port]
+        : link && previous[link.from.node] && Object.prototype.hasOwnProperty.call(previous[link.from.node], link.from.port)
+          ? previous[link.from.node][link.from.port]
+          : undefined;
+    }
+    const state = sim.nodeState[node.id] || {};
+    const result = nwSimComputeNode(node, inp, state, { nowMs: sim.nowMs, dtMs, initializing, reason });
+    sim.nodeState[node.id] = state;
+    nextOutputs[node.id] = result || {};
+
+    if (!initializing) {
+      const before = previous[node.id] || {};
+      const keys = new Set([...Object.keys(before), ...Object.keys(result || {})]);
+      const changes = [];
+      for (const key of keys) {
+        if (nwSimValueKey(before[key]) !== nwSimValueKey(result && result[key])) changes.push(`${key}: ${nwSimFormatValue(result && result[key])}`);
+      }
+      if (changes.length && node.type !== 'dp_out' && node.type !== 'scene_trigger') nwSimTrace(node, changes.join(' · '), 'value');
+    }
+  }
+
+  sim.outputs = nextOutputs;
+  sim.initialized = true;
+  sim.lastEvalMs = sim.nowMs;
+  nwUpdateSimulationVisuals();
+  nwRenderSimulationPanel();
+}
+
+/**
+ * Code-Teil: nwSimAdvance
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwSimAdvance(ms, reason) {
+  if (!nwLE.simulation.active) nwOpenSimulation();
+  nwLE.simulation.nowMs += Math.max(0, Number(ms) || 0);
+  nwSimEvaluate(reason || `+${ms} ms`);
+}
+
+/**
+ * Code-Teil: nwSimReset
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwSimReset(render = true) {
+  nwSimStopTimer();
+  const sim = nwLE.simulation;
+  sim.nowMs = Date.now();
+  sim.lastEvalMs = null;
+  sim.initialized = false;
+  sim.nodeState = {};
+  sim.outputs = {};
+  sim.traces = [];
+  sim.cycleWarned = false;
+  sim.inputSignature = '';
+  nwSimEnsureInputs();
+  nwSimTrace(null, 'Testmodus zurückgesetzt. Es werden keine Hardware-Datenpunkte beschrieben.', 'info');
+  nwSimEvaluate('Initialisierung');
+  if (render) nwRenderSimulationPanel(true);
+}
+
+/**
+ * Code-Teil: nwOpenSimulation
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwOpenSimulation() {
+  const sim = nwLE.simulation;
+  sim.active = true;
+  if (nwLE.el.simPanel) {
+    nwLE.el.simPanel.classList.remove('hidden');
+    nwLE.el.simPanel.setAttribute('aria-hidden', 'false');
+  }
+  if (nwLE.el.simBtn) nwLE.el.simBtn.classList.add('is-active');
+  document.body.classList.add('nw-le-simulation-open');
+  if (!sim.initialized) nwSimReset(false);
+  nwRenderSimulationPanel(true);
+  nwUpdateSimulationVisuals();
+}
+
+/**
+ * Code-Teil: nwCloseSimulation
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwCloseSimulation() {
+  nwSimStopTimer();
+  nwLE.simulation.active = false;
+  if (nwLE.el.simPanel) {
+    nwLE.el.simPanel.classList.add('hidden');
+    nwLE.el.simPanel.setAttribute('aria-hidden', 'true');
+  }
+  if (nwLE.el.simBtn) nwLE.el.simBtn.classList.remove('is-active');
+  document.body.classList.remove('nw-le-simulation-open');
+  nwUpdateSimulationVisuals();
+}
+
+/**
+ * Code-Teil: nwRenderSimulationInputs
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwRenderSimulationInputs(force = false) {
+  const host = nwLE.el.simInputs;
+  const g = nwLE.graph;
+  if (!host || !g) return;
+  const nodes = (g.nodes || []).filter((node) => node && node.type === 'dp_in');
+  const signature = nodes.map((node) => `${node.id}:${node.label}:${node.params && node.params.cast}`).join('|');
+  if (!force && signature === nwLE.simulation.inputSignature) return;
+  nwLE.simulation.inputSignature = signature;
+  host.innerHTML = '';
+  if (!nodes.length) {
+    host.innerHTML = '<div class="nw-le-sim__empty">Noch kein DP-Eingang vorhanden. Füge links einen DP-Eingang hinzu.</div>';
+    return;
+  }
+  nwSimEnsureInputs();
+  for (const node of nodes) {
+    const row = document.createElement('div');
+    row.className = 'nw-le-sim__input-row';
+    const type = nwLE.simulation.inputTypes[node.id] || nwSimDefaultInputType(node);
+    const value = nwLE.simulation.inputs[node.id];
+    row.innerHTML = `
+      <div class="nw-le-sim__input-name"><strong>${nwEscapeHtml(node.label || 'DP Eingang')}</strong><span>${nwEscapeHtml(node.params && node.params.dpId || 'nicht zugeordnet')}</span></div>
+      <select class="nw-config-input nw-le-sim__type" data-sim-type="${nwEscapeHtml(node.id)}" ${String(node.params && node.params.cast || 'auto').toLowerCase() !== 'auto' ? 'disabled' : ''}>
+        <option value="bool" ${type === 'bool' ? 'selected' : ''}>Bool</option>
+        <option value="number" ${type === 'number' ? 'selected' : ''}>Zahl</option>
+        <option value="string" ${type === 'string' ? 'selected' : ''}>Text</option>
+      </select>
+      <div class="nw-le-sim__input-control" data-sim-control="${nwEscapeHtml(node.id)}"></div>
+    `;
+    host.appendChild(row);
+    const typeSelect = row.querySelector('[data-sim-type]');
+    const control = row.querySelector('[data-sim-control]');
+/**
+ * Code-Teil: renderControl
+ *
+ * Zweck:
+ * Automatisch markierter Arrow-Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+    const renderControl = () => {
+      const activeType = nwLE.simulation.inputTypes[node.id] || 'number';
+      control.innerHTML = '';
+      if (activeType === 'bool') {
+        const label = document.createElement('label'); label.className = 'nw-le-sim__bool';
+        const input = document.createElement('input'); input.type = 'checkbox'; input.checked = nwSimBool(nwLE.simulation.inputs[node.id], false);
+        const span = document.createElement('span'); span.textContent = input.checked ? 'EIN' : 'AUS';
+        input.addEventListener('change', () => { nwLE.simulation.inputs[node.id] = input.checked; span.textContent = input.checked ? 'EIN' : 'AUS'; nwSimEvaluate('Eingang geändert'); });
+        label.append(input, span); control.appendChild(label);
+      } else {
+        const input = document.createElement('input'); input.className = 'nw-config-input'; input.type = activeType === 'number' ? 'number' : 'text'; input.value = nwLE.simulation.inputs[node.id] === undefined ? '' : String(nwLE.simulation.inputs[node.id]);
+        input.addEventListener('input', () => { nwLE.simulation.inputs[node.id] = activeType === 'number' ? nwSimNum(input.value, 0) : input.value; nwSimEvaluate('Eingang geändert'); });
+        control.appendChild(input);
+      }
+    };
+    if (typeSelect) typeSelect.addEventListener('change', () => {
+      nwLE.simulation.inputTypes[node.id] = typeSelect.value;
+      nwLE.simulation.inputs[node.id] = typeSelect.value === 'bool' ? false : typeSelect.value === 'string' ? '' : 0;
+      renderControl();
+      nwSimEvaluate('Eingangstyp geändert');
+    });
+    renderControl();
+  }
+}
+
+/**
+ * Code-Teil: nwRenderSimulationTrace
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwRenderSimulationTrace() {
+  const host = nwLE.el.simTrace;
+  if (!host) return;
+  host.innerHTML = '';
+  const rows = nwLE.simulation.traces.slice(-120).reverse();
+  if (!rows.length) {
+    host.innerHTML = '<div class="nw-le-sim__empty">Noch keine Trace-Einträge.</div>';
+    return;
+  }
+  for (const row of rows) {
+    const el = document.createElement('div');
+    el.className = `nw-le-sim__trace-row is-${row.level || 'info'}`;
+    const time = new Date(row.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    el.innerHTML = `<span class="nw-le-sim__trace-time">${time}</span><span class="nw-le-sim__trace-node">${nwEscapeHtml(row.nodeLabel || 'System')}</span><span class="nw-le-sim__trace-message">${nwEscapeHtml(row.message)}</span>`;
+    host.appendChild(el);
+  }
+}
+
+/**
+ * Code-Teil: nwRenderSimulationPanel
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwRenderSimulationPanel(forceInputs = false) {
+  const sim = nwLE.simulation;
+  if (nwLE.el.simClock) nwLE.el.simClock.textContent = new Date(sim.nowMs).toLocaleString();
+  if (nwLE.el.simRun) nwLE.el.simRun.textContent = sim.running ? 'Pause' : 'Start';
+  if (nwLE.el.simStatus) nwLE.el.simStatus.textContent = sim.running ? 'läuft' : sim.active ? 'bereit' : 'aus';
+  nwRenderSimulationInputs(forceInputs);
+  nwRenderSimulationTrace();
+}
+
+/**
+ * Code-Teil: nwUpdateSimulationVisuals
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function nwUpdateSimulationVisuals() {
+  const board = nwLE.el.board;
+  const sim = nwLE.simulation;
+  if (!board) return;
+  board.classList.toggle('is-simulation-active', !!sim.active);
+  for (const nodeEl of board.querySelectorAll('.nw-le-node')) {
+    const nodeId = nodeEl.dataset.nodeId;
+    const node = nwFindNode(nodeId);
+    const def = node && nwLE.lib.byType[node.type];
+    const values = sim.outputs[nodeId] || {};
+    const host = nodeEl.querySelector('.nw-le-node__sim-values');
+    nodeEl.classList.toggle('is-simulating', !!sim.active);
+    if (!host) continue;
+    if (!sim.active || !def) { host.innerHTML = ''; continue; }
+    const badges = [];
+    for (const port of (def.outputs || [])) badges.push(`<span class="nw-le-node__sim-value" data-kind="${typeof values[port.key]}"><b>${nwEscapeHtml(port.label || port.key)}</b> ${nwEscapeHtml(nwSimFormatValue(values[port.key]))}</span>`);
+    if (node.type === 'dp_out') badges.push(`<span class="nw-le-node__sim-value is-action"><b>Test</b> ${nwEscapeHtml(nwSimFormatValue((() => { const link=(nwLE.graph.links||[]).find(l=>l.to&&l.to.node===node.id&&l.to.port==='in'); return link&&sim.outputs[link.from.node] ? sim.outputs[link.from.node][link.from.port] : undefined; })()))}</span>`);
+    host.innerHTML = badges.join('');
+  }
+  nwUpdateAllWirePaths();
+}
+
 /**
  * Code-Teil: nwGetBoardPointFromClient
  * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -1356,6 +3039,7 @@ function nwSelectGraph(id, opts = {}) {
   if (!opts || opts.skipRender !== true) {
     nwRenderGraph();
   }
+  if (nwLE.simulation.active && !nwLE.history.suppress) nwSimReset(false);
 }
 /**
  * Code-Teil: nwAddGraph
@@ -1450,9 +3134,15 @@ function nwDeleteGraph() {
  * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
  * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
-function nwMarkDirty() {
+function nwMarkDirty(label = 'Änderung') {
   nwLE.dirty = true;
   nwSetStatus('Ungespeichert…', false);
+  nwHistoryScheduleCommit(label);
+  nwScheduleLocalDraft();
+  if (nwLE.simulation.active) {
+    nwLE.simulation.inputSignature = '';
+    nwSimEvaluate('Graph geändert');
+  }
 }
 
 
@@ -1509,6 +3199,7 @@ function nwEnsureBoardSize() {
     svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
   }
 
+  nwUpdateLaneGuides();
   nwUpdateZoomLabel();
 }
 /**
@@ -1760,6 +3451,8 @@ function nwRenderGraph() {
 
   // wires
   nwRenderAllWires();
+  nwUpdateLaneGuides();
+  if (nwLE.simulation.active) nwUpdateSimulationVisuals();
 }
 /**
  * Code-Teil: nwRenderNode
@@ -1776,7 +3469,8 @@ function nwRenderNode(node) {
   if (!def) return;
 
   const el = document.createElement('div');
-  el.className = 'nw-le-node';
+  const lane = nwNodeLane(node.type);
+  el.className = `nw-le-node nw-le-node--lane-${lane}`;
   el.dataset.nodeId = node.id;
   el.style.left = `${Math.round(Number(node.x) || 40)}px`;
   el.style.top = `${Math.round(Number(node.y) || 40)}px`;
@@ -1800,6 +3494,7 @@ function nwRenderNode(node) {
       <div class="nw-le-node__ports nw-le-node__ports--in"></div>
       <div class="nw-le-node__ports nw-le-node__ports--out"></div>
     </div>
+    <div class="nw-le-node__sim-values" aria-live="polite"></div>
   `;
 
   // select
@@ -1932,6 +3627,7 @@ function nwRenderNode(node) {
   (def.outputs || []).forEach(p => outWrap && outWrap.appendChild(mkPort('out', p)));
 
   board.appendChild(el);
+  if (nwLE.simulation.active) nwUpdateSimulationVisuals();
 }
 /**
  * Code-Teil: nwRenderAllWires
@@ -1954,6 +3650,12 @@ function nwRenderAllWires() {
     path.setAttribute('class', 'nw-le-wire');
     path.dataset.linkId = l.id;
     svg.appendChild(path);
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('class', 'nw-le-wire-value');
+    label.dataset.linkId = l.id;
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('dominant-baseline', 'central');
+    svg.appendChild(label);
   }
   nwUpdateAllWirePaths();
 }
@@ -2024,6 +3726,19 @@ function nwUpdateAllWirePaths() {
       continue;
     }
     p.setAttribute('d', mkPath(a, b));
+    const label = svg.querySelector(`text.nw-le-wire-value[data-link-id="${CSS.escape(l.id)}"]`);
+    const value = nwLE.simulation.active && nwLE.simulation.outputs[l.from && l.from.node]
+      ? nwLE.simulation.outputs[l.from.node][l.from && l.from.port]
+      : undefined;
+    p.classList.toggle('is-sim-true', nwLE.simulation.active && value === true);
+    p.classList.toggle('is-sim-false', nwLE.simulation.active && value === false);
+    p.classList.toggle('is-sim-number', nwLE.simulation.active && typeof value === 'number');
+    if (label) {
+      label.setAttribute('x', String((a.x + b.x) / 2));
+      label.setAttribute('y', String((a.y + b.y) / 2 - 10));
+      label.textContent = nwLE.simulation.active ? nwSimFormatValue(value) : '';
+      label.classList.toggle('is-visible', !!nwLE.simulation.active);
+    }
   }
 
   // preview wire
@@ -2391,16 +4106,12 @@ function nwAddNode(type, opts = {}) {
   if (!g) return;
 
   const wrap = nwLE.el.boardWrap;
-  const scrollL = wrap ? wrap.scrollLeft : 0;
-  const scrollT = wrap ? wrap.scrollTop : 0;
-  const z = nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5);
 
-  let pos = {
-    x: (scrollL + 140) / z,
-    y: (scrollT + 100) / z,
-  };
+  let autoPlaced = true;
+  let pos = nwFindFreeLanePosition(type, g);
 
   if (Number.isFinite(Number(opts && opts.x)) && Number.isFinite(Number(opts && opts.y))) {
+    autoPlaced = false;
     pos = nwClampNodePosition(Number(opts.x), Number(opts.y), g);
   }
 
@@ -2418,7 +4129,8 @@ function nwAddNode(type, opts = {}) {
   nwRenderNode(node);
   nwUpdateAllWirePaths();
   nwSelectNode(node.id);
-  nwMarkDirty();
+  nwMarkDirty(`Baustein ${def.name} hinzugefügt`);
+  if (autoPlaced && wrap) requestAnimationFrame(() => nwScrollNodeIntoView(node));
 }
 /**
  * Code-Teil: nwDeleteNode
@@ -3650,9 +5362,22 @@ function nwInstallGlobalHandlers() {
         nwDeleteNode(nwLE.selectedNodeId);
       }
     }
+    const target = e.target;
+    const isTyping = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
+    if (!isTyping && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) nwRedo(); else nwUndo();
+    } else if (!isTyping && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+      e.preventDefault();
+      nwRedo();
+    }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
       e.preventDefault();
       nwHandleSave();
+    }
+    if (!isTyping && e.key === 'F9') {
+      e.preventDefault();
+      if (nwLE.simulation.active) nwCloseSimulation(); else nwOpenSimulation();
     }
   });
 
@@ -3734,6 +5459,8 @@ async function nwHandleSave() {
     nwRenderInspector();
 
     nwLE.dirty = false;
+    nwClearLocalDraft();
+    nwHistoryReset('Gespeichert');
     nwSetStatus(`Gespeichert (v${nwLE.cfg.version || '?'}) ✅`, true);
   } else {
     nwSetStatus(`Speichern fehlgeschlagen: ${nwSafeStr(res && res.error)}`, false);
@@ -3777,6 +5504,23 @@ async function nwInitLogicEditor() {
   nwLE.el.palette = document.getElementById('nw-le-palette');
   nwLE.el.inspector = document.getElementById('nw-le-inspector');
   nwLE.el.status = document.getElementById('nw-le-status');
+  nwLE.el.draftStatus = document.getElementById('nw-le-draft-status');
+  nwLE.el.undoBtn = document.getElementById('nw-le-btn-undo');
+  nwLE.el.redoBtn = document.getElementById('nw-le-btn-redo');
+  nwLE.el.layoutBtn = document.getElementById('nw-le-btn-layout');
+  nwLE.el.simBtn = document.getElementById('nw-le-btn-sim');
+  nwLE.el.simPanel = document.getElementById('nw-le-sim-panel');
+  nwLE.el.simClose = document.getElementById('nw-le-sim-close');
+  nwLE.el.simRun = document.getElementById('nw-le-sim-run');
+  nwLE.el.simStep = document.getElementById('nw-le-sim-step');
+  nwLE.el.simPlus1s = document.getElementById('nw-le-sim-plus-1s');
+  nwLE.el.simPlus1m = document.getElementById('nw-le-sim-plus-1m');
+  nwLE.el.simReset = document.getElementById('nw-le-sim-reset');
+  nwLE.el.simClearTrace = document.getElementById('nw-le-sim-clear-trace');
+  nwLE.el.simClock = document.getElementById('nw-le-sim-clock');
+  nwLE.el.simStatus = document.getElementById('nw-le-sim-status');
+  nwLE.el.simInputs = document.getElementById('nw-le-sim-inputs');
+  nwLE.el.simTrace = document.getElementById('nw-le-sim-trace');
 
   // Graph / Seiten
   nwLE.el.graphSelect = document.getElementById('nw-le-graph-select');
@@ -3835,6 +5579,18 @@ async function nwInitLogicEditor() {
   const btnImport = document.getElementById('nw-le-btn-import');
   const btnBackup = document.getElementById('nw-le-btn-backup');
   const btnSmarthomeCfg = document.getElementById('nw-le-btn-smarthomecfg');
+
+  if (nwLE.el.undoBtn) nwLE.el.undoBtn.addEventListener('click', () => nwUndo());
+  if (nwLE.el.redoBtn) nwLE.el.redoBtn.addEventListener('click', () => nwRedo());
+  if (nwLE.el.layoutBtn) nwLE.el.layoutBtn.addEventListener('click', () => nwAutoLayoutGraph());
+  if (nwLE.el.simBtn) nwLE.el.simBtn.addEventListener('click', () => nwLE.simulation.active ? nwCloseSimulation() : nwOpenSimulation());
+  if (nwLE.el.simClose) nwLE.el.simClose.addEventListener('click', () => nwCloseSimulation());
+  if (nwLE.el.simRun) nwLE.el.simRun.addEventListener('click', () => nwSimSetRunning(!nwLE.simulation.running));
+  if (nwLE.el.simStep) nwLE.el.simStep.addEventListener('click', () => nwSimAdvance(100, 'Einzelschritt'));
+  if (nwLE.el.simPlus1s) nwLE.el.simPlus1s.addEventListener('click', () => nwSimAdvance(1000, '+1 Sekunde'));
+  if (nwLE.el.simPlus1m) nwLE.el.simPlus1m.addEventListener('click', () => nwSimAdvance(60000, '+1 Minute'));
+  if (nwLE.el.simReset) nwLE.el.simReset.addEventListener('click', () => nwSimReset());
+  if (nwLE.el.simClearTrace) nwLE.el.simClearTrace.addEventListener('click', () => { nwLE.simulation.traces = []; nwRenderSimulationTrace(); });
 
   if (btnOverview) btnOverview.addEventListener('click', () => {
     // Prefer going back to the last same-origin page (e.g. SmartHome-Config).
@@ -3950,7 +5706,8 @@ async function nwInitLogicEditor() {
   // load config
   nwSetStatus('Lade…');
   const cfg = await nwFetchConfig();
-  nwLE.cfg = nwEnsureConfigDefaults(cfg || nwDefaultGraph());
+  const serverCfg = nwEnsureConfigDefaults(cfg || nwDefaultGraph());
+  nwLE.cfg = nwEnsureConfigDefaults(nwMaybeRestoreLocalDraft(serverCfg));
 
   // restore zoom / page selection
   try {
@@ -3965,8 +5722,9 @@ async function nwInitLogicEditor() {
 
   nwRenderGraph();
   nwRenderInspector();
-  nwLE.dirty = false;
-  nwSetStatus(`Bereit (v${nwLE.cfg.version || 1})`, true);
+  nwLE.dirty = !!nwLE.draft.restored;
+  nwHistoryReset(nwLE.draft.restored ? 'Entwurf wiederhergestellt' : 'Geladen');
+  nwSetStatus(nwLE.draft.restored ? `Lokaler Entwurf bereit (Basis v${nwLE.cfg.version || 1})` : `Bereit (v${nwLE.cfg.version || 1})`, true);
 
   // global handlers
   nwInstallGlobalHandlers();
@@ -3981,6 +5739,11 @@ async function nwInitLogicEditor() {
 
 
 // Ereignis-Kommentar: Bindet das UI-Ereignis 'DOMContentLoaded' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
+window.addEventListener('beforeunload', () => {
+  nwSimStopTimer();
+  if (nwLE.dirty) nwWriteLocalDraftNow();
+});
+
 document.addEventListener('DOMContentLoaded', () => {
   nwInitLogicEditor();
 });

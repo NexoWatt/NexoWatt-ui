@@ -75,10 +75,15 @@
         <div style="flex:1;"></div>
         <button id="nw-le-btn-new" class="nw-config-btn nw-config-btn--ghost" type="button">Neu</button>
         <button id="nw-le-btn-save" class="nw-config-btn" type="button">Speichern</button>
+        <button id="nw-le-btn-undo" class="nw-config-btn nw-config-btn--ghost" type="button" title="Rückgängig (Strg+Z)" disabled>↶</button>
+        <button id="nw-le-btn-redo" class="nw-config-btn nw-config-btn--ghost" type="button" title="Wiederholen (Strg+Y)" disabled>↷</button>
+        <button id="nw-le-btn-layout" class="nw-config-btn nw-config-btn--ghost" type="button" title="Eingänge links, Logik mittig und Ausgänge rechts anordnen">Auto-Anordnung</button>
+        <button id="nw-le-btn-sim" class="nw-config-btn nw-config-btn--ghost" type="button" title="Schreibfreien NexoLogic-Testmodus öffnen (F9)">Simulation</button>
         <button id="nw-le-btn-export" class="nw-config-btn nw-config-btn--ghost" type="button">Export</button>
         <button id="nw-le-btn-import" class="nw-config-btn nw-config-btn--ghost" type="button">Import</button>
         <button id="nw-le-btn-smarthomecfg" class="nw-config-btn nw-config-btn--ghost" type="button" title="Zur SmartHome‑Konfiguration wechseln">SmartHome‑Config</button>
         <span id="nw-le-status" class="muted" style="font-size:0.8rem;">—</span>
+        <span id="nw-le-draft-status" class="nw-le-draft-status" aria-live="polite"></span>
       </div>
 
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;">
@@ -120,11 +125,45 @@
         <div id="nw-le-board-wrap" class="nw-le__board-wrap">
           <div id="nw-le-board-scale" class="nw-le__board-scale">
             <div id="nw-le-board" class="nw-le__board">
+              <div class="nw-le__lanes" aria-hidden="true">
+                <div class="nw-le__lane nw-le__lane--input" data-lane="input"><span>EINGÄNGE</span></div>
+                <div class="nw-le__lane nw-le__lane--logic" data-lane="logic"><span>LOGIK / FUNKTION</span></div>
+                <div class="nw-le__lane nw-le__lane--output" data-lane="output"><span>AUSGÄNGE</span></div>
+              </div>
               <svg id="nw-le-wires" class="nw-le__wires"></svg>
               <!-- Nodes are injected by JS -->
             </div>
           </div>
         </div>
+
+        <section id="nw-le-sim-panel" class="nw-le-sim hidden" aria-hidden="true" aria-label="NexoLogic Simulation">
+          <div class="nw-le-sim__header">
+            <div>
+              <div class="nw-le-sim__title">NexoLogic-Testmodus</div>
+              <div class="nw-le-sim__notice">Reine Browser-Simulation: keine Hardware-Schreibzugriffe. Eine bereits gespeicherte aktive Logik läuft separat weiter.</div>
+            </div>
+            <div class="nw-le-sim__controls">
+              <span id="nw-le-sim-status" class="nw-le-sim__status">bereit</span>
+              <button id="nw-le-sim-run" class="nw-config-btn" type="button">Start</button>
+              <button id="nw-le-sim-step" class="nw-config-btn nw-config-btn--ghost" type="button">Schritt</button>
+              <button id="nw-le-sim-plus-1s" class="nw-config-btn nw-config-btn--ghost" type="button">+1 s</button>
+              <button id="nw-le-sim-plus-1m" class="nw-config-btn nw-config-btn--ghost" type="button">+1 min</button>
+              <button id="nw-le-sim-reset" class="nw-config-btn nw-config-btn--ghost" type="button">Reset</button>
+              <button id="nw-le-sim-close" class="nw-config-btn nw-config-btn--ghost" type="button" aria-label="Simulation schließen">✕</button>
+            </div>
+          </div>
+          <div class="nw-le-sim__meta">Simulationszeit: <strong id="nw-le-sim-clock">—</strong></div>
+          <div class="nw-le-sim__grid">
+            <div class="nw-le-sim__section">
+              <div class="nw-le-sim__section-head">Test-Eingänge</div>
+              <div id="nw-le-sim-inputs" class="nw-le-sim__inputs"></div>
+            </div>
+            <div class="nw-le-sim__section">
+              <div class="nw-le-sim__section-head"><span>Trace / Auswertung</span><button id="nw-le-sim-clear-trace" class="nw-config-btn nw-config-btn--ghost" type="button">Leeren</button></div>
+              <div id="nw-le-sim-trace" class="nw-le-sim__trace"></div>
+            </div>
+          </div>
+        </section>
       </section>
 
       <aside class="nw-le__inspector" aria-label="Eigenschaften">

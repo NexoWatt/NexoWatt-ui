@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 5f19c2834607f295add97a133171651a4d9ad314392db89f6d1fbee838e9cf57
+ * Original-Hash: b622e0c94fdffe9e37c8ca3c376f84e0d7fa29a13723f707986c7cb6d1357afa
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/sw.ts
- * Quell-Hash: sha256:b1020b3847ab289b7d8d5dcf1b4a8bbfdefb358ce3fa22b298ff50a3fb5a24c1
+ * Quell-Hash: sha256:e6ea9f80105b6633fa2956866da8e6a51a0e3713046208f0853479ea02ca461f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -73,7 +73,7 @@
 
 // Increment cache name on releases so browser updates JS/HTML reliably.
 // NOTE: Keep this monotonic to force SW updates on hotfixes.
-const CACHE_NAME = 'nexowatt-cache-v469';
+const CACHE_NAME = 'nexowatt-cache-v470';
 
 const OFFLINE_URLS = [
   './',
