@@ -12586,3 +12586,291 @@ body.nw-page-license .nw-license-page{
   .nw-le-sim__grid{grid-template-columns:1fr 1fr}
   .nw-le-sim__input-row{grid-template-columns:minmax(120px,1fr) 76px minmax(100px,1fr)}
 }
+
+/* =====================================================================
+   RC47 – Full-Bleed NexoLogic workspace and SmartHome control-card polish
+   UI-only hardening: no EMS, writer, datapoint or authorization behavior.
+   ===================================================================== */
+
+/* NexoLogic is a desktop engineering surface. It must use the real viewport
+   instead of inheriting the generic 1,580 px content cap. The selector is
+   intentionally specific because several historical cockpit layers still set
+   a generic max-width with !important. */
+html body.nw-page-logic > main.container.nw-page-shell.nw-logic-page.nw-subpage{
+  width:calc(100vw - 12px) !important;
+  max-width:none !important;
+  min-width:1180px !important;
+  margin:0 6px !important;
+  padding:7px 6px 20px !important;
+  box-sizing:border-box !important;
+}
+body.nw-page-logic .nw-le-toolbar{
+  width:100% !important;
+  max-width:none !important;
+  box-sizing:border-box !important;
+}
+body.nw-page-logic .nw-le{
+  width:100% !important;
+  max-width:none !important;
+  grid-template-columns:236px minmax(0,1fr) 304px !important;
+  gap:8px !important;
+  box-sizing:border-box !important;
+}
+body.nw-page-logic .nw-le__workspace,
+body.nw-page-logic .nw-le__board-wrap{
+  min-width:0 !important;
+  max-width:none !important;
+}
+@media (min-width:1900px){
+  body.nw-page-logic .nw-le{
+    grid-template-columns:248px minmax(0,1fr) 322px !important;
+  }
+}
+@media (max-width:1399px){
+  body.nw-page-logic .nw-le{
+    grid-template-columns:224px minmax(0,1fr) 282px !important;
+  }
+}
+
+/* SmartHome also benefits from the available desktop width. This creates more
+   room for real control cards without changing the mobile/tablet contract. */
+@media (min-width:1000px){
+  html body.nw-page-smarthome > main.content.nw-page-shell.nw-smarthome-page.nw-subpage{
+    width:calc(100vw - 20px) !important;
+    max-width:none !important;
+    margin:10px !important;
+    padding:12px !important;
+    box-sizing:border-box !important;
+  }
+}
+
+/* Unified premium control-card system for all SmartHome device types. */
+body.nw-page-smarthome .nw-sh-grid{
+  grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr)) !important;
+  grid-auto-rows:minmax(178px,auto) !important;
+  gap:14px !important;
+}
+body.nw-page-smarthome .nw-sh-tile{
+  min-height:178px !important;
+  padding:14px !important;
+  gap:10px !important;
+  border-radius:22px !important;
+  border-color:color-mix(in srgb,var(--sh-accent) 24%,rgba(104,150,193,.30)) !important;
+  background:
+    linear-gradient(155deg,color-mix(in srgb,var(--sh-accent) 8%,rgba(7,25,42,.94)),rgba(2,12,22,.92) 62%),
+    rgba(4,16,29,.94) !important;
+  box-shadow:
+    inset 4px 0 0 color-mix(in srgb,var(--sh-accent) 72%,transparent),
+    inset 0 1px 0 rgba(255,255,255,.055),
+    0 16px 38px rgba(0,0,0,.30) !important;
+  isolation:isolate;
+}
+body.nw-page-smarthome .nw-sh-tile::before{
+  background:
+    radial-gradient(110% 88% at 0% 0%,color-mix(in srgb,var(--sh-accent) 13%,transparent),transparent 58%),
+    linear-gradient(180deg,rgba(255,255,255,.035),transparent 52%),
+    radial-gradient(90% 70% at 100% 100%,rgba(0,0,0,.24),transparent 58%) !important;
+}
+body.nw-page-smarthome .nw-sh-tile:hover{
+  transform:translateY(-2px) !important;
+  border-color:color-mix(in srgb,var(--sh-accent) 58%,rgba(104,150,193,.36)) !important;
+  box-shadow:
+    inset 4px 0 0 color-mix(in srgb,var(--sh-accent) 90%,transparent),
+    inset 0 1px 0 rgba(255,255,255,.075),
+    0 20px 46px rgba(0,0,0,.38),
+    0 0 24px color-mix(in srgb,var(--sh-accent) 13%,transparent) !important;
+}
+body.nw-page-smarthome .nw-sh-tile:focus-visible{
+  outline:none !important;
+  border-color:var(--sh-accent) !important;
+  box-shadow:
+    inset 4px 0 0 var(--sh-accent),
+    0 0 0 3px color-mix(in srgb,var(--sh-accent) 24%,transparent),
+    0 18px 44px rgba(0,0,0,.36) !important;
+}
+body.nw-page-smarthome .nw-sh-tile--on{
+  border-color:color-mix(in srgb,var(--sh-accent) 66%,rgba(104,150,193,.26)) !important;
+  background:
+    radial-gradient(120% 100% at 0% 0%,color-mix(in srgb,var(--sh-accent) 21%,transparent),transparent 58%),
+    linear-gradient(155deg,rgba(7,27,43,.97),rgba(2,12,22,.93) 64%) !important;
+  box-shadow:
+    inset 4px 0 0 var(--sh-accent),
+    inset 0 1px 0 rgba(255,255,255,.065),
+    0 16px 42px rgba(0,0,0,.34),
+    0 0 22px color-mix(in srgb,var(--sh-accent) 12%,transparent) !important;
+}
+body.nw-page-smarthome .nw-sh-tile--readonly{
+  opacity:.96 !important;
+}
+body.nw-page-smarthome .nw-sh-tile--type-dimmer,
+body.nw-page-smarthome .nw-sh-tile--type-color,
+body.nw-page-smarthome .nw-sh-tile--type-blind,
+body.nw-page-smarthome .nw-sh-tile--type-rtr,
+body.nw-page-smarthome .nw-sh-tile--type-player{
+  min-height:190px !important;
+}
+body.nw-page-smarthome .nw-sh-tile--media{
+  min-height:232px !important;
+}
+body.nw-page-smarthome .nw-sh-tile__header{
+  min-height:48px !important;
+  align-items:center !important;
+  gap:11px !important;
+}
+body.nw-page-smarthome .nw-sh-icon{
+  width:44px !important;
+  height:44px !important;
+  flex:0 0 44px !important;
+  border-radius:15px !important;
+  border:1px solid color-mix(in srgb,var(--sh-accent) 30%,rgba(148,163,184,.22)) !important;
+  background:
+    radial-gradient(circle at 30% 20%,rgba(255,255,255,.10),transparent 46%),
+    color-mix(in srgb,var(--sh-accent) 10%,rgba(2,12,22,.76)) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 8px 18px rgba(0,0,0,.24) !important;
+}
+body.nw-page-smarthome .nw-sh-icon__svg,
+body.nw-page-smarthome .nw-sh-icon__svg svg{
+  width:25px !important;
+  height:25px !important;
+}
+body.nw-page-smarthome .nw-sh-tile__name{
+  font-size:clamp(.98rem,.86vw,1.12rem) !important;
+  line-height:1.12 !important;
+  letter-spacing:-.01em !important;
+}
+body.nw-page-smarthome .nw-sh-tile__state{
+  display:inline-flex !important;
+  align-items:center !important;
+  width:fit-content !important;
+  max-width:100% !important;
+  min-height:22px !important;
+  margin-top:5px !important;
+  padding:3px 8px !important;
+  border:1px solid rgba(148,163,184,.15) !important;
+  border-radius:999px !important;
+  background:rgba(2,12,22,.42) !important;
+  color:rgba(203,213,225,.92) !important;
+  font-size:.72rem !important;
+  line-height:1.15 !important;
+  -webkit-line-clamp:1 !important;
+  white-space:nowrap !important;
+}
+body.nw-page-smarthome .nw-sh-tile__state--empty{
+  visibility:hidden !important;
+}
+body.nw-page-smarthome .nw-sh-tile--on .nw-sh-tile__state{
+  border-color:color-mix(in srgb,var(--sh-accent) 32%,rgba(148,163,184,.16)) !important;
+  background:color-mix(in srgb,var(--sh-accent) 9%,rgba(2,12,22,.54)) !important;
+  color:rgba(236,253,245,.96) !important;
+}
+body.nw-page-smarthome .nw-sh-tile--quality-stale .nw-sh-tile__state,
+body.nw-page-smarthome .nw-sh-tile--quality-offline .nw-sh-tile__state,
+body.nw-page-smarthome .nw-sh-tile--quality-error .nw-sh-tile__state,
+body.nw-page-smarthome .nw-sh-tile--quality-invalid .nw-sh-tile__state,
+body.nw-page-smarthome .nw-sh-tile--quality-unknown .nw-sh-tile__state{
+  visibility:visible !important;
+}
+body.nw-page-smarthome .nw-sh-tile__actions{
+  top:11px !important;
+  right:11px !important;
+  gap:6px !important;
+}
+body.nw-page-smarthome .nw-sh-favbtn,
+body.nw-page-smarthome .nw-sh-timerbtn,
+body.nw-page-smarthome .nw-sh-detailbtn{
+  width:32px !important;
+  height:32px !important;
+  min-height:32px !important;
+  border-radius:11px !important;
+  background:rgba(2,12,22,.66) !important;
+  border-color:rgba(148,163,184,.20) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035) !important;
+}
+body.nw-page-smarthome .nw-sh-tile__footer,
+body.nw-page-smarthome .nw-sh-controls{
+  width:100% !important;
+  min-height:48px !important;
+  margin-top:auto !important;
+  padding:7px 8px !important;
+  gap:8px !important;
+  border:1px solid rgba(104,150,193,.15) !important;
+  border-radius:15px !important;
+  background:linear-gradient(180deg,rgba(3,17,30,.58),rgba(2,10,20,.45)) !important;
+  box-sizing:border-box !important;
+}
+body.nw-page-smarthome .nw-sh-tile__footer{
+  justify-content:flex-end !important;
+}
+body.nw-page-smarthome .nw-sh-controls{
+  justify-content:center !important;
+}
+body.nw-page-smarthome .nw-sh-mini-btn,
+body.nw-page-smarthome .nw-sh-controls .nw-sh-btn{
+  width:38px !important;
+  height:38px !important;
+  min-height:38px !important;
+  border-radius:12px !important;
+  font-size:.95rem !important;
+}
+body.nw-page-smarthome .nw-sh-mini-toggle{
+  width:58px !important;
+  height:32px !important;
+  border:1px solid rgba(148,163,184,.22) !important;
+  background:rgba(2,12,22,.76) !important;
+}
+body.nw-page-smarthome .nw-sh-mini-toggle::after{
+  width:26px !important;
+  height:26px !important;
+  top:2px !important;
+  left:2px !important;
+}
+body.nw-page-smarthome .nw-sh-mini-toggle--on{
+  border-color:color-mix(in srgb,var(--sh-accent) 56%,rgba(148,163,184,.20)) !important;
+  background:color-mix(in srgb,var(--sh-accent) 22%,rgba(2,12,22,.74)) !important;
+}
+body.nw-page-smarthome .nw-sh-mini-toggle--on::after{
+  transform:translateX(26px) !important;
+}
+body.nw-page-smarthome .nw-sh-tile-dial{
+  margin:auto 0 0 !important;
+  padding:10px 11px 9px !important;
+  border-radius:16px !important;
+  border-color:color-mix(in srgb,var(--sh-accent) 22%,rgba(104,150,193,.16)) !important;
+  background:
+    radial-gradient(100% 120% at 0% 0%,color-mix(in srgb,var(--sh-accent) 9%,transparent),transparent 62%),
+    rgba(2,12,22,.38) !important;
+}
+body.nw-page-smarthome .nw-sh-tile--temperature .nw-sh-tile__big,
+body.nw-page-smarthome .nw-sh-tile--value-large .nw-sh-tile__big{
+  border:1px solid color-mix(in srgb,var(--sh-accent) 20%,rgba(104,150,193,.14)) !important;
+  border-radius:17px !important;
+  background:rgba(2,12,22,.36) !important;
+  padding:12px !important;
+}
+body.nw-page-smarthome .nw-sh-tile--quality-stale{
+  box-shadow:inset 4px 0 0 rgba(245,158,11,.88),0 16px 38px rgba(0,0,0,.30) !important;
+}
+body.nw-page-smarthome .nw-sh-tile--quality-offline,
+body.nw-page-smarthome .nw-sh-tile--quality-error,
+body.nw-page-smarthome .nw-sh-tile--quality-invalid{
+  box-shadow:inset 4px 0 0 rgba(239,68,68,.92),0 16px 38px rgba(0,0,0,.30) !important;
+}
+
+@media (max-width:999px){
+  body.nw-page-smarthome .nw-sh-grid{
+    grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr)) !important;
+  }
+}
+@media (max-width:680px){
+  body.nw-page-smarthome .nw-sh-tile{
+    min-height:164px !important;
+    padding:12px !important;
+  }
+  body.nw-page-smarthome .nw-sh-tile--type-dimmer,
+  body.nw-page-smarthome .nw-sh-tile--type-color,
+  body.nw-page-smarthome .nw-sh-tile--type-blind,
+  body.nw-page-smarthome .nw-sh-tile--type-rtr,
+  body.nw-page-smarthome .nw-sh-tile--type-player{
+    min-height:176px !important;
+  }
+}

@@ -1,4 +1,4 @@
-NexoWatt EOS 0.8.170 RC46 – direkter npm-Publish
+NexoWatt EOS 0.8.171 RC47 – direkter npm-Publish
 ==================================================
 
 1. Den Inhalt dieser ZIP vollständig in den Projektordner kopieren.
@@ -9,8 +9,8 @@ NexoWatt EOS 0.8.170 RC46 – direkter npm-Publish
    npm publish
 
 Der Publish-Vorgang prüft read-only:
-- ob Version 0.8.170 auf npm noch frei ist,
-- ob sämtliche freigegebenen Produktdateien exakt dem geprüften RC46-Artefakt entsprechen.
+- ob Version 0.8.171 auf npm noch frei ist,
+- ob sämtliche freigegebenen Produktdateien exakt dem geprüften RC47-Artefakt entsprechen.
 
 Nicht erforderlich:
 - npm ci

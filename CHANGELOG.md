@@ -1,3 +1,11 @@
+## 0.8.171 - 2026-08-10
+
+- NexoLogic-Desktoparbeitsfläche von der allgemeinen Cockpit-Maximalbreite entkoppelt. Der Editor nutzt nun nahezu die vollständige Browserbreite; linke Bausteinpalette und rechte Eigenschaftenleiste bleiben kompakt, während die mittlere Zeichenfläche den zusätzlichen Platz erhält.
+- Vorhandene Seiten-, Canvas-, Palette- und Eigenschaften-Scrollbereiche sowie Verbindungserstellung, Auto-Anordnung, Simulation, Undo/Redo und lokale Entwurfssicherung bleiben unverändert bedienbar.
+- SmartHome-Kacheln aller zehn Basistypen optisch vereinheitlicht: klare Iconflächen, Status-Pills, Bedienfelder, aktive Zustände, Fokusdarstellung sowie deutlichere Stale-/Offline-/Fehlerkennzeichnung.
+- SmartHome-Desktopseite nutzt die verfügbare Breite besser; Tablet- und Mobilumbrüche bleiben bestehen. Ein echter Chromium-Test prüft alle zehn Kacheltypen auf Größe, Überlappungsfreiheit, Vollbreite und Browserfehler.
+- Produktive EMS-, Lade-, Speicher-, FENECON-, §14a-, Safety-, Authentifizierungs-, NexoLogic- und SmartHome-Steuerlogiken bleiben fachlich und außerhalb der Versionskennungen byte-identisch.
+
 ## 0.8.170 - 2026-08-10
 
 - NexoLogic um einen vollständig schreibfreien Browser-Testmodus erweitert. Alle 41 aktuellen Bausteintypen können mit Testwerten, virtueller Zeit, Live-Werten an Bausteinen und Leitungen sowie einem chronologischen Trace geprüft werden, ohne API-POSTs oder Hardware-Schreibbefehle auszulösen.
