@@ -1,8 +1,11 @@
-## 0.8.172 - 2026-08-10
+## 0.8.173 - 2026-08-10
 
-- EVCS: Fehlende optionale Stationszuordnungen werden nicht mehr als 0-W-Grenze interpretiert. Einzelne Wallboxen funktionieren ohne künstliche Station; ein wirklich ausgeschöpftes Stationsbudget von 0 W bleibt sicher wirksam.
-- §14a: Direkte/EMS-Steuerung wird vom EOS Safety Stop getrennt. Ein normaler §14a-Befehl erzeugt kein 0 W; zu kleine oder veraltete Sollwerte fallen auf Pmin,14a bzw. den letzten gültigen Wert zurück.
-- §14a begrenzt den netzwirksamen Bezug. Zugeteilte lokale PV-Leistung und bestätigte Speicherentladung dürfen zusätzlich genutzt werden.
+- Neu auf dem bekannten startfähigen Stand 0.8.171 aufgebaut; die fehlerhafte 0.8.172 ist keine Codebasis dieser Version.
+- EVCS: Eine fehlende optionale Stationszuordnung oder Stationsgrenze wird nicht mehr als 0-W-Gerätegrenze interpretiert. Einzelne Wallboxen laden in Boost und Min+PV ohne künstliche Station; ein wirklich ausgeschöpftes gemeinsames Stationsbudget bleibt ein harter Stopp.
+- §14a: Pmin,14a wird bei Direkt- und EMS-Steuerung nicht unterschritten. Ein normaler externer 0-W-Wert wird auf die berechnete Mindestleistung geklemmt und nicht als EOS-Not-Aus interpretiert.
+- §14a/PV: Die §14a-Grenze betrifft den netzwirksamen Bezug. Das zentral physikalisch validierte lokale PV-Budget darf zusätzlich verwendet werden; Gesamt-, App- und Gerätebudgets verhindern eine Mehrfachvergabe.
+- EEBUS-Fallback: Bei abgelaufener Gültigkeit oder Heartbeatverlust bleibt der letzte gültige Vertrag beziehungsweise Pmin,14a aktiv; ein Kommunikationsausfall erzeugt keinen normalen 0-W-§14a-Befehl.
+- Release-Härtung: Jede ausgelieferte JS-Datei, jeder statische relative require()-Pfad und die main.js-/EMS-/§14a-Startkette werden geprüft. Dieser Test hätte den MODULE_NOT_FOUND-Fehler der verworfenen 0.8.172 vor einer Veröffentlichung blockiert.
 
 ## 0.8.171 - 2026-08-10
 

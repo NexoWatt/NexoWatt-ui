@@ -459,7 +459,11 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
         && p14aRuntime
         && p14aRuntime.localFailsafeActive === true
         && strictFiniteNumber(p14aRuntime.totalCapW, null) !== null);
-    const paraSafetyReady = !paraEnabled || paraFresh || paraLocalFailsafe;
+    const paraFallbackSafe = !!(paraEnabled
+        && p14aRuntime
+        && p14aRuntime.fallbackSafe === true
+        && (p14aRuntime.active !== true || (strictFiniteNumber(p14aRuntime.totalCapW, null) ?? 0) > 0));
+    const paraSafetyReady = !paraEnabled || paraFresh || paraLocalFailsafe || paraFallbackSafe;
     const paraActive = !!(paraEnabled && p14aRuntime && p14aRuntime.active === true);
     const paraForceZero = !!(paraEnabled && (
         !paraSafetyReady
@@ -478,6 +482,13 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
     const paraDeviceCapsW = paraActive && p14aRuntime && p14aRuntime.evcsCapsBySafe && typeof p14aRuntime.evcsCapsBySafe === 'object'
         ? { ...p14aRuntime.evcsCapsBySafe }
         : {};
+    const budgetGates = budgetSnapshot && budgetSnapshot.gates && typeof budgetSnapshot.gates === 'object'
+        ? budgetSnapshot.gates
+        : {};
+    const pvGate = budgetGates.pv && typeof budgetGates.pv === 'object' ? budgetGates.pv : {};
+    // §14a begrenzt nur den netzwirksamen Bezug der SteuVE. Das zentrale,
+    // physikalisch validierte PV-Budget darf zusätzlich genutzt werden.
+    const paraLocalPvGrantW = Math.max(0, strictFiniteNumber(pvGate.effectiveW, 0));
 
     const criticalHealth = cycle.moduleHealth || {};
     for (const key of ['gridConstraints', 'peakShaving']) {
@@ -553,9 +564,12 @@ function buildSafetyEnvelope({ adapter, dp, coreSnapshot, budgetSnapshot, now = 
             signalFresh: paraFresh,
             safetyReady: paraSafetyReady,
             localFailsafeActive: paraLocalFailsafe,
+            fallbackSafe: paraFallbackSafe,
             signalStatus: String(p14aRuntime && p14aRuntime.signalStatus || (paraEnabled ? 'missing' : 'disabled')),
             forceZero: paraForceZero,
             totalCapW: paraTotalCapW,
+            localPvGrantW: Math.round(paraLocalPvGrantW),
+            totalAllowanceW: paraTotalCapW === null ? null : Math.round(Math.max(0, paraTotalCapW) + paraLocalPvGrantW),
             appCapsW: paraAppCapsW,
             deviceCapsW: paraDeviceCapsW,
             validUntilMs: strictFiniteNumber(p14aRuntime && p14aRuntime.directValidUntilMs, null),
@@ -753,24 +767,26 @@ function evaluateFlexibleLoadRequest(adapter: AnyRecord | null | undefined, requ
     if (para.active === true) {
         const totalCapW = strictFiniteNumber(para.totalCapW, null);
         if (totalCapW === null) return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, 'para14a-total-cap-missing', now);
+        const localPvGrantW = Math.max(0, strictFiniteNumber(para.localPvGrantW, 0));
         const otherTargetsW = sumOther(runtime.targetsByKey, key);
-        candidates.push({ source: 'para14a-total', value: Math.max(0, totalCapW - otherTargetsW) });
+        candidates.push({ source: 'para14a-total', value: Math.max(0, totalCapW + localPvGrantW - otherTargetsW) });
 
         const appCaps = para.appCapsW && typeof para.appCapsW === 'object' ? para.appCapsW : {};
         const appCapRaw = strictFiniteNumber(appCaps[app], null);
         // Bei aktiver §14a-Begrenzung muss jede bekannte flexible App einen
-        // expliziten Cap besitzen. Ein fehlender Cap ist kein unbegrenzter Wert.
+        // expliziten Netzbezugs-Cap besitzen. Lokale PV-Leistung wird zusätzlich
+        // freigegeben; das Gesamt-Cap verhindert eine doppelte Nutzung über Apps.
         if (['evcs', 'storage', 'thermal', 'heatingRod', 'custom'].includes(app)) {
             if (appCapRaw === null) return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, `para14a-${app}-cap-missing`, now);
             const otherAppTargetsW = sumOther(runtime.targetsByKey, key, runtime.appByKey, app);
-            candidates.push({ source: `para14a-${app}`, value: Math.max(0, appCapRaw - otherAppTargetsW) });
+            candidates.push({ source: `para14a-${app}`, value: Math.max(0, appCapRaw + localPvGrantW - otherAppTargetsW) });
         }
         if (app === 'evcs') {
             const deviceCaps = para.deviceCapsW && typeof para.deviceCapsW === 'object' ? para.deviceCapsW : {};
             const deviceKey = String(request.deviceKey || key.replace(/^evcs:/, '')).trim();
             const deviceCap = strictFiniteNumber(deviceCaps[deviceKey], null);
             if (deviceCap === null) return blockedDecision({ ...request, requestedW, currentActualW, key, app }, envelope, `para14a-device-cap-missing:${deviceKey}`, now);
-            candidates.push({ source: 'para14a-device', value: Math.max(0, deviceCap) });
+            candidates.push({ source: 'para14a-device', value: Math.max(0, deviceCap + localPvGrantW) });
         }
     }
 

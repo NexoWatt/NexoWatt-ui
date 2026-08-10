@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/core-limits.ts
- * Quell-Hash: sha256:0e9676953c3aad91b0701b630da3c258d57eaed75b7bacf2ecd1ed313fcf57dc
+ * Quell-Hash: sha256:b2811f6215a831ac331ccc6afb8025071ae640e952c64c56136f6802911d1e0e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -241,8 +241,13 @@ function legacyComputeCentralBudgetGrant(runtime = {}, request = {}) {
     const para14aCapW = para14aGate && para14aGate.active === true
         ? resolvePara14aAppCap(para14aGate.appCapsW, key, request && request.app)
         : null;
+    const para14aLocalPvGrantW = para14aGate && para14aGate.active === true && Number.isFinite(Number(para14aGate.localPvGrantW))
+        ? Math.max(0, Number(para14aGate.localPvGrantW))
+        : 0;
     if (para14aCapW !== null && para14aCapW !== undefined && Number.isFinite(Number(para14aCapW))) {
-        requestCapW = Math.min(requestCapW, Math.max(0, Number(para14aCapW)));
+        // §14a begrenzt den netzwirksamen App-Anteil. Das zentrale lokale
+        // PV-Budget darf auch bei Auto/Boost/Min+PV zusätzlich genutzt werden.
+        requestCapW = Math.min(requestCapW, Math.max(0, Number(para14aCapW)) + para14aLocalPvGrantW);
     }
 
     const availableW = pvOnly
@@ -262,6 +267,7 @@ function legacyComputeCentralBudgetGrant(runtime = {}, request = {}) {
             : null,
         allocationCapApplied: !!(pvOnly && key === 'evcs' && applyEvcsAllocationCap),
         para14aCapW: para14aCapW !== null && para14aCapW !== undefined && Number.isFinite(Number(para14aCapW)) ? roundW(Math.max(0, Number(para14aCapW))) : null,
+        para14aLocalPvGrantW: roundW(para14aLocalPvGrantW),
         para14aCapApplied: para14aCapW !== null && para14aCapW !== undefined && Number.isFinite(Number(para14aCapW)),
         pvOnly,
         key,
@@ -2092,15 +2098,26 @@ class CoreLimitsModule extends BaseModule {
         const gridHeadroomW = gridMeasurementUsable
             ? (gridLimitW > 0 ? Math.min(gridLimitW, gridHeadroomRawW) : Number.POSITIVE_INFINITY)
             : 0;
-        const highLevelCapW = coreSnapshot && coreSnapshot.controlledHighLevel && isFiniteNumber(coreSnapshot.controlledHighLevel.capW)
-            ? Math.max(0, Number(coreSnapshot.controlledHighLevel.capW))
+        const peakHighLevelCapW = coreSnapshot && coreSnapshot.peak && isFiniteNumber(coreSnapshot.peak.budgetW)
+            ? Math.max(0, Number(coreSnapshot.peak.budgetW))
             : Number.POSITIVE_INFINITY;
+        const para14aNetCapW = coreSnapshot && coreSnapshot.para14a && coreSnapshot.para14a.active === true && isFiniteNumber(coreSnapshot.para14a.totalCapW)
+            ? Math.max(0, Number(coreSnapshot.para14a.totalCapW))
+            : Number.POSITIVE_INFINITY;
+        const para14aTotalAllowanceW = Number.isFinite(para14aNetCapW)
+            ? para14aNetCapW + pvBudgetEffectiveW
+            : Number.POSITIVE_INFINITY;
+        const highLevelCapW = Math.min(peakHighLevelCapW, para14aTotalAllowanceW);
+        const highLevelBindingParts = [];
+        if (Number.isFinite(peakHighLevelCapW) && Math.abs(highLevelCapW - peakHighLevelCapW) <= 1) highLevelBindingParts.push('peak');
+        if (Number.isFinite(para14aTotalAllowanceW) && Math.abs(highLevelCapW - para14aTotalAllowanceW) <= 1) highLevelBindingParts.push('14a+local-pv');
+        const highLevelBinding = highLevelBindingParts.join('+') || 'highLevel';
         const totalBudgetW = gridMeasurementUsable ? Math.max(0, Math.min(gridHeadroomW, highLevelCapW)) : 0;
 
         const bindings = [];
         if (!gridMeasurementUsable) bindings.push(`nvp_${gridMeasurementStatus || 'stale'}`);
         if (gridMeasurementUsable && gridLimitW > 0 && Math.abs(totalBudgetW - gridHeadroomW) <= 1) bindings.push('grid');
-        if (gridMeasurementUsable && Number.isFinite(highLevelCapW) && Math.abs(totalBudgetW - highLevelCapW) <= 1) bindings.push(coreSnapshot.controlledHighLevel.binding || 'highLevel');
+        if (gridMeasurementUsable && Number.isFinite(highLevelCapW) && Math.abs(totalBudgetW - highLevelCapW) <= 1) bindings.push(highLevelBinding);
         if (!bindings.length) bindings.push('unlimited');
 
         // Gate D: PV forecast is an advisory gate. It is published centrally so apps
@@ -2195,8 +2212,12 @@ class CoreLimitsModule extends BaseModule {
                 forecast: forecastGate,
                 tariff: tariffGate,
                 para14a: coreSnapshot && coreSnapshot.para14a && typeof coreSnapshot.para14a === 'object'
-                    ? { ...coreSnapshot.para14a }
-                    : { active: false, appCapsW: {} },
+                    ? {
+                        ...coreSnapshot.para14a,
+                        localPvGrantW: roundW(pvBudgetEffectiveW),
+                        totalAllowanceW: Number.isFinite(para14aNetCapW) ? roundW(para14aTotalAllowanceW) : null,
+                    }
+                    : { active: false, appCapsW: {}, localPvGrantW: 0, totalAllowanceW: null },
                 total: {
                     effectiveW: Number.isFinite(totalBudgetW) ? roundW(totalBudgetW) : null,
                     binding: bindings.join('+'),
@@ -2230,9 +2251,7 @@ class CoreLimitsModule extends BaseModule {
                     : null,
                 importLimitW: gridLimitW,
                 highLevelCapW,
-                highLevelBinding: coreSnapshot && coreSnapshot.controlledHighLevel
-                    ? coreSnapshot.controlledHighLevel.binding
-                    : '',
+                highLevelBinding,
             },
             pv: {
                 measuredW: pvPowerW,

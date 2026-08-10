@@ -106,6 +106,31 @@ function makeAdapter(installerConfig, rootConfig = {}, options = {}) {
   assert.strictEqual(minClamp.pMinW, 4200, 'Mindestleistung darf nicht unter 4,2 kW fallen');
   assert.strictEqual(minClamp.totalCapW, 4200);
 
+  const externalZeroClamped = buildPara14aConstraintSnapshot({
+    active: true,
+    mode: 'ems',
+    minPerDeviceW: 4200,
+    externalTotalSetpointW: 0,
+    evcs: [
+      { safe: 'lp1', maxPowerW: 11000 },
+      { safe: 'lp2', maxPowerW: 11000 },
+      { safe: 'lp3', maxPowerW: 11000 },
+    ],
+  });
+  assert.strictEqual(externalZeroClamped.pMinW, 10500, 'Drei SteuVE muessen Pmin,14a mit GZF 0,75 bilden');
+  assert.strictEqual(externalZeroClamped.totalCapW, 10500, 'Externer 0-W-Wert darf Pmin,14a nicht unterschreiten');
+  assert.strictEqual(externalZeroClamped.forceZero, false, 'Normaler §14a-0-W-Wert ist kein EOS-Safety-Stop');
+
+  const internalSafetyStop = buildPara14aConstraintSnapshot({
+    active: true,
+    mode: 'ems',
+    forceZero: true,
+    minPerDeviceW: 4200,
+    evcs: [{ safe: 'lp1', maxPowerW: 11000 }],
+  });
+  assert.strictEqual(internalSafetyStop.totalCapW, 0, 'Separater EOS-Safety-Stop muss weiterhin 0 W erzwingen koennen');
+  assert.strictEqual(internalSafetyStop.forceZero, true);
+
   const externalHeadroom = buildPara14aConstraintSnapshot({
     active: true,
     mode: 'ems',
@@ -174,6 +199,23 @@ function makeAdapter(installerConfig, rootConfig = {}, options = {}) {
   assert.strictEqual(storageGrant.para14aCapApplied, true);
   const heatingGrant = computeCentralBudgetGrant(runtime, { key: 'heatingRod', app: 'heatingRod', requestedW: 9000, pvOnly: true });
   assert.strictEqual(heatingGrant.grantW, snapshot.appCapsW.heatingRod);
+  const runtimeWithLocalPv = {
+    remainingTotalW: 9200,
+    remainingPvW: 5000,
+    gates: {
+      para14a: {
+        active: true,
+        appCapsW: { evcs: 4200 },
+        localPvGrantW: 5000,
+      },
+      pvAllocation: { evcsCapW: 5000, mode: 'evcs', evcsSharePct: 100 },
+    },
+  };
+  const boostWithPv = computeCentralBudgetGrant(runtimeWithLocalPv, { key: 'evcs', app: 'evcs', requestedW: 11000, pvOnly: false });
+  assert.strictEqual(boostWithPv.grantW, 9200, '§14a-Netzanteil plus lokaler PV-Anteil muss fuer Boost/Auto nutzbar sein');
+  const purePvGrant = computeCentralBudgetGrant(runtimeWithLocalPv, { key: 'evcs', app: 'evcs', requestedW: 9000, pvOnly: true });
+  assert.strictEqual(purePvGrant.grantW, 5000, 'Reines PV-Laden darf vom §14a-Netzcap nicht auf 4,2 kW geklemmt werden');
+
   const unrelatedGrant = computeCentralBudgetGrant(runtime, { key: 'generator', app: 'generator', requestedW: 9000, pvOnly: false });
   assert.strictEqual(unrelatedGrant.grantW, 9000);
   assert.strictEqual(unrelatedGrant.para14aCapApplied, false);

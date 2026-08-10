@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/tariff-provider-registry.ts
- * Quell-Hash: sha256:d2d9c7f286b9814e09ce8a5a1917eeb9423325f171bd720ae35afaa0426b3e12
+ * Quell-Hash: sha256:548745d770d4b8e2148ac4ae2595f656d91840f40d2fd49f55785d921bd70a99
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -23,7 +23,7 @@
  */
 'use strict';
 
-const DEFAULT_USER_AGENT = 'NexoWatt-EOS/0.8.172 (+https://www.nexowatt.com)';
+const DEFAULT_USER_AGENT = 'NexoWatt-EOS/0.8.173 (+https://www.nexowatt.com)';
 
 const BIDDING_ZONES = Object.freeze({
     DE: '10Y1001A1001A82H', // DE-LU

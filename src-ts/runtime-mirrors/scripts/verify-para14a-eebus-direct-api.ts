@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4cb2a523aa13c9ac36d97e596d058ecedeefad515d04c48a409a28c842ac32a4
+ * Original-Hash: fd1719e7402294c0ff57972b0c88cb93809867d9d8112d6c7db544295515cb3e
  */
 
 /**
@@ -255,9 +255,9 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   await sleep(10);
   assert.equal(adapter.finalFeedback.length, feedbackCountBeforeDuplicate + 1);
 
-  // RC39: EOS besitzt zusätzlich zum Gateway einen lokalen Heartbeat-Failsafe.
-  // Ein abgelaufener Heartbeat wird sofort auf den expliziten failsafeLimitW
-  // begrenzt, damit ein Gateway-Ausfall keine unbegrenzte Freigabe hinterlässt.
+  // RC49: Ein abgelaufener Heartbeat bleibt ein aktiver §14a-Vertrag,
+  // wird aber niemals als 0-W-Not-Aus interpretiert. Ein zu kleiner lokaler
+  // Fallbackwert wird im zentralen Constraint auf Pmin,14a geklemmt.
   let staleReply;
   const stalePacket = packet('cmd-stale-metadata', {
     heartbeatAtMs: Date.now() - 70_000,
@@ -270,13 +270,16 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   assert.equal(staleIngress.active, true);
   assert.equal(staleIngress.limitW, 3000);
   assert.equal(staleIngress.localFailsafeActive, true);
-  assert.match(String(staleIngress.stalePolicy || ''), /local.*(failsafe|fail-closed)|failsafe|fail-closed/i);
+  assert.equal(staleIngress.forceZero, false);
+  assert.equal(staleIngress.emergencyStop, false);
+  assert.match(String(staleIngress.stalePolicy || ''), /pmin|last-valid/i);
 
   // A failed downstream/write path must withhold the positive CLS readback.
   adapter._para14a = {
     directCommandId: 'cmd-stale-metadata',
     active: true,
     totalCapW: 4200,
+    pMinW: 4200,
     consumerAudit: { appliedCount: 0, failedCount: 1, skippedCount: 0, writeFailedCount: 1 },
     auditSnapshot: {},
   };
@@ -291,6 +294,44 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   });
   assert.equal(adapter.finalFeedback.at(-1).message.status, 'degraded');
   assert.equal(adapter.finalFeedback.at(-1).message.controllerApplied, false);
+
+  // Ein normaler aktiver 0-W-Befehl bleibt §14a und ist kein EOS-Not-Aus.
+  // Die zentrale Constraint-Berechnung meldet anschließend mindestens Pmin,14a.
+  let zeroReply;
+  const zeroPacket = packet('cmd-zero-clamped', {
+    limitW: 0,
+    failsafeLimitW: 0,
+    sourceMsgCounter: 11,
+  });
+  await api.handleMessage(message(CONTROL_COMMAND, zeroPacket, (response) => { zeroReply = response; }));
+  assert.equal(zeroReply.accepted, true);
+  const zeroIngress = api.getIngress();
+  assert.equal(zeroIngress.active, true);
+  assert.equal(zeroIngress.limitW, 0);
+  assert.equal(zeroIngress.forceZero, false);
+  assert.equal(zeroIngress.emergencyStop, false);
+  adapter._para14a = {
+    directCommandId: 'cmd-zero-clamped',
+    active: true,
+    pMinW: 4200,
+    totalCapW: 4200,
+    consumerAudit: { appliedCount: 0, failedCount: 0, skippedCount: 0, writeFailedCount: 0 },
+    auditSnapshot: {},
+  };
+  await api.flushImplementationFeedback({
+    tickStartedAtMs: Date.now() - 5,
+    appliedAtMs: Date.now(),
+    moduleResults: [
+      { key: 'para14a', enabled: true, ok: true, ms: 1 },
+      { key: 'coreLimits', enabled: true, ok: true, ms: 1 },
+      { key: 'nvpCoordinator', enabled: true, ok: true, ms: 1 },
+    ],
+  });
+  const zeroFeedback = adapter.finalFeedback.at(-1).message;
+  assert.equal(zeroFeedback.status, 'applied');
+  assert.equal(zeroFeedback.requestedLimitW, 0);
+  assert.equal(zeroFeedback.effectiveRequestedLimitW, 4200);
+  assert.equal(zeroFeedback.effectiveTotalCapW, 4200);
 
   // Release is confirmed after the complete central cycle reports inactive.
   let releaseReply;

@@ -1,5 +1,3 @@
-
-import { normalizeResult } from '../../runtime-executables/ems/services/para14a-power-contract';
 /**
  * Datei: src-ts/ems/para14a/para14a-constraint.ts
  *
@@ -140,7 +138,7 @@ function normalizePolicy(value: unknown): Para14aStalePolicy {
   return 'hold-active';
 }
 
-function resolvePara14aSignalInternal(input: Para14aSignalInput): Para14aSignalResolution {
+export function resolvePara14aSignal(input: Para14aSignalInput): Para14aSignalResolution {
   const now = finite(input.nowMs, Date.now());
   const policy = normalizePolicy(input.stalePolicy);
   const lastFreshActive = typeof input.lastFreshActive === 'boolean' ? input.lastFreshActive : null;
@@ -350,20 +348,23 @@ export function buildPara14aConstraintSnapshot(input: Para14aConstraintInput): P
   const nominalPMinW = active && !forceZero ? units.reduce((sum, unit) => sum + unit.capW, 0) : 0;
   const explicitRaw = finiteOrNull(input.externalTotalSetpointW);
   const explicitTotal = mode === 'ems' && explicitRaw !== null && explicitRaw >= 0 ? Math.max(0, explicitRaw) : null;
-  const requestedTotalCapW = active ? (forceZero ? 0 : (explicitTotal ?? nominalPMinW)) : null;
-  if (active && requestedTotalCapW !== null && nominalPMinW > 0) {
-    if (requestedTotalCapW < nominalPMinW) {
-      const factor = requestedTotalCapW / nominalPMinW;
-      units.forEach((unit) => { unit.capW = Math.max(0, unit.capW * factor); });
-    } else if (requestedTotalCapW > nominalPMinW) {
-      let remaining = requestedTotalCapW - nominalPMinW;
-      for (const unit of deterministicUnits) {
-        if (remaining <= 0) break;
-        const headroom = unit.installedW > 0 ? Math.max(0, unit.installedW - unit.capW) : 0;
-        const add = Math.min(headroom, remaining);
-        unit.capW += add;
-        remaining -= add;
-      }
+
+  // Eine normale §14a-Steuerungsmaßnahme darf die berechnete Mindestleistung
+  // Pmin,14a nicht unterschreiten. Auch ein extern übermittelter Wert von 0 W
+  // ist deshalb kein Abschaltbefehl, sondern wird auf Pmin,14a geklemmt. Nur ein
+  // separat bestätigter EOS-Sicherheitsstopp (`forceZero`/`emergencyStop`) darf
+  // weiterhin einen echten 0-W-Vertrag erzeugen.
+  const requestedTotalCapW = active
+    ? (forceZero ? 0 : Math.max(nominalPMinW, explicitTotal ?? nominalPMinW))
+    : null;
+  if (active && requestedTotalCapW !== null && nominalPMinW > 0 && requestedTotalCapW > nominalPMinW) {
+    let remaining = requestedTotalCapW - nominalPMinW;
+    for (const unit of deterministicUnits) {
+      if (remaining <= 0) break;
+      const headroom = unit.installedW > 0 ? Math.max(0, unit.installedW - unit.capW) : 0;
+      const add = Math.min(headroom, remaining);
+      unit.capW += add;
+      remaining -= add;
     }
   }
 
@@ -454,6 +455,3 @@ export function resolvePara14aAppCap(appCaps: Para14aAppCaps | Record<string, un
   }
   return null;
 }
-
-// RC48_CONSTRAINT_WRAPPER
-export function resolvePara14aSignal(...args: Parameters<typeof resolvePara14aSignalInternal>): ReturnType<typeof resolvePara14aSignalInternal> { return normalizeResult(resolvePara14aSignalInternal(...args)) as ReturnType<typeof resolvePara14aSignalInternal>; }

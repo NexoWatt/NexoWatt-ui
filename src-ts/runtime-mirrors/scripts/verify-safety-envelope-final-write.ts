@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 928b1126cb09e35cb6f1999ead9988fd821a84eb5a0fda6c34507360b14bbefe
+ * Original-Hash: dc1d8d02179a9061437a04270c5ce18aa161f7de4e38b5c76e4083450cbf74a7
  */
 
 /**
@@ -36,7 +36,7 @@
  *
  * Prüft nicht nur die Planungsberechnung, sondern die letzte Freigabe direkt
  * vor dem Hardware-Write. Ein fehlender Anschlusswert, stale NVP-/Phasenwerte,
- * §14a-0 W, ein alter Regelplan oder ein gelatchter Writer-Fehler dürfen keinen
+ * ein separater EOS-Safety-Stop, ein alter Regelplan oder ein gelatchter Writer-Fehler dürfen keinen
  * positiven Stellwert durchlassen.
  */
 
@@ -202,11 +202,12 @@ function coreSnapshot(adapter, overrides = {}) {
  * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
  * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
  */
-function release(adapter, dp, overrides = {}) {
+function release(adapter, dp, overrides = {}, budgetSnapshot = null) {
   return buildSafetyEnvelope({
     adapter,
     dp,
     coreSnapshot: coreSnapshot(adapter, overrides),
+    budgetSnapshot,
     now: Date.now(),
     generation: adapter._emsSafetyCycle.generation,
   });
@@ -261,7 +262,7 @@ function release(adapter, dp, overrides = {}) {
     assert.strictEqual(decision.gridIncrementHeadroomW, -2000);
   }
 
-  // 4) §14a-Cap und expliziter 0-W-/Emergency-Stop sind harte Grenzen.
+  // 4) §14a-Netzcap und ein separat bestätigter EOS-Safety-Stop bleiben getrennte harte Verträge.
   {
     const para = {
       enabled: true,
@@ -298,6 +299,65 @@ function release(adapter, dp, overrides = {}) {
     });
     assert.strictEqual(zero.allowedW, 0);
     assert.strictEqual(zero.forceZero, true);
+  }
+
+  // 4b) Lokale PV-Leistung ist zusätzlich zum §14a-Netzbezugsbudget nutzbar.
+  {
+    const para = {
+      enabled: true,
+      active: true,
+      totalCapW: 4200,
+      appCapsW: { evcs: 4200, storage: 4200, thermal: 4200, heatingRod: 4200, custom: 4200 },
+      evcsCapsBySafe: { lp1: 4200, lp2: 4200 },
+      signalFresh: true,
+      signalStale: false,
+      signalStatus: 'fresh',
+      forceZero: false,
+      emergencyStop: false,
+    };
+    const adapter = makeAdapter({ gridConnectionPower: 30000, nvpW: 0, para14a: true, paraRuntime: para });
+    const budgetSnapshot = { gates: { pv: { effectiveW: 5000 } } };
+    const envelope = release(adapter, makeDp(), {}, budgetSnapshot);
+    assert.strictEqual(envelope.valid, true);
+    assert.strictEqual(envelope.para14a.localPvGrantW, 5000);
+    assert.strictEqual(envelope.para14a.totalAllowanceW, 9200);
+
+    const first = evaluateFlexibleLoadRequest(adapter, {
+      key: 'evcs:lp1', app: 'evcs', deviceKey: 'lp1', requestedW: 6000, currentActualW: 0,
+    });
+    assert.strictEqual(first.allowedW, 6000);
+    commitFlexibleLoadDecision(adapter, first, true);
+    const second = evaluateFlexibleLoadRequest(adapter, {
+      key: 'evcs:lp2', app: 'evcs', deviceKey: 'lp2', requestedW: 6000, currentActualW: 0,
+    });
+    assert.strictEqual(second.allowedW, 3200, '§14a-Netzanteil plus PV darf insgesamt nur einmal verteilt werden');
+    assert.strictEqual(first.allowedW + second.allowedW, 9200);
+  }
+
+  // 4c) Ein bekannter stale Last-Valid-/Pmin-Fallback ist kein §14a-Not-Aus.
+  {
+    const para = {
+      enabled: true,
+      active: true,
+      totalCapW: 4200,
+      appCapsW: { evcs: 4200, storage: 4200, thermal: 4200, heatingRod: 4200, custom: 4200 },
+      evcsCapsBySafe: { lp1: 4200 },
+      signalFresh: false,
+      signalStale: true,
+      signalStatus: 'local-failsafe-command-heartbeat-stale',
+      fallbackSafe: true,
+      forceZero: false,
+      emergencyStop: false,
+    };
+    const adapter = makeAdapter({ gridConnectionPower: 20000, nvpW: 0, para14a: true, paraRuntime: para });
+    const envelope = release(adapter, makeDp());
+    assert.strictEqual(envelope.valid, true);
+    assert.strictEqual(envelope.para14a.safetyReady, true);
+    assert.strictEqual(envelope.para14a.fallbackSafe, true);
+    const decision = evaluateFlexibleLoadRequest(adapter, {
+      key: 'evcs:lp1', app: 'evcs', deviceKey: 'lp1', requestedW: 11000, currentActualW: 0,
+    });
+    assert.strictEqual(decision.allowedW, 4200);
   }
 
   // 5) Aktives Phasenlimit erfordert L1/L2/L3 vollständig und frisch.
@@ -409,8 +469,8 @@ function release(adapter, dp, overrides = {}) {
     assert.strictEqual(blocked.forceZero, true);
   }
 
-  // 10) Typisierte §14a-Verteilung akzeptiert 0 W als ausdrücklichen Stop und
-  // verteilt für alle vorhandenen App-Gruppen exakt 0 W.
+  // 10) Ein separat bestätigter EOS-Safety-Stop darf unabhängig vom normalen
+  // §14a-Mindestleistungsvertrag weiterhin alle betroffenen Apps auf 0 W setzen.
   {
     const snapshot = buildPara14aConstraintSnapshot({
       active: true,

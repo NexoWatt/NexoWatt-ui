@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/para14a.ts
- * Quell-Hash: sha256:fdde4ba5fc2a2cee8c3583405d9404fb33df54638d589cea07dd74f924826783
+ * Quell-Hash: sha256:8bf69c1295face11c4e24ec4ddba718e2d00d51949e86249d332b1de7855a537
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -42,8 +42,6 @@
 
 'use strict';
 
-
-const { normalizeResult } = require('../services/para14a-power-contract');
 const { BaseModule } = require('./base');
 const { applySetpoint } = require('../consumers');
 const { resolvePara14aSignal, buildPara14aConstraintSnapshot } = require('../../lib/ts-mirrors/ems/para14a/para14a-constraint');
@@ -529,8 +527,7 @@ class Para14aModule extends BaseModule {
 
         try {
             if (this.adapter && typeof this.adapter._nwEnsurePara14aInfluxInstance === 'function') {
-                let historyInfo = await this.adapter._nwEnsurePara14aInfluxInstance();
-    historyInfo = normalizeResult(historyInfo); // RC48_MINIMUM_NORMALIZED
+                const historyInfo = await this.adapter._nwEnsurePara14aInfluxInstance();
                 if (historyInfo && typeof historyInfo === 'object') {
                     historyInstance = String(historyInfo.instance || '').trim();
                     dedicatedHistory = historyInfo.dedicated === true;
@@ -1460,7 +1457,7 @@ class Para14aModule extends BaseModule {
         // In EMS mode, a Netzbetreiber/Steuerbox may provide an explicit total setpoint.
         // If present, we use it as the effective total budget. Otherwise we use the computed minimum.
         const totalBudgetW = (mode === 'ems' && typeof externalTotalSetpointW === 'number' && Number.isFinite(externalTotalSetpointW) && externalTotalSetpointW >= 0)
-            ? Math.max(0, externalTotalSetpointW)
+            ? Math.max(pMinW, externalTotalSetpointW)
             : pMinW;
 
         return { nSteuVE: n, gzf, pMinW, primaryW, secondaryW, totalBudgetW };
@@ -1593,13 +1590,15 @@ class Para14aModule extends BaseModule {
             ? directTotalSetpointW
             : mappedTotalSetpointW;
         const localFailsafeActive = !!(directIngress && directIngress.localFailsafeActive === true);
-        const explicitZero = !!(signal.active && externalTotalSetpointW !== null && externalTotalSetpointW === 0);
-        const staleFailClosed = !!(cfg.para14a && signal.stale === true && !localFailsafeActive);
-        const forceZero = false; // RC48: normal §14a is no emergency stop; EOS Safety Stop is separate.
-        const emergencyStop = !!(
-            staleFailClosed
-            || (directIngress && directIngress.emergencyStop === true)
-        );
+
+        // §14a ist ein Mindestleistungs-/Netzbezugsvertrag und kein Not-Aus.
+        // Ein externer Wert von 0 W sowie ein veraltetes Kommunikationssignal
+        // werden durch die Constraint-Berechnung auf Pmin,14a bzw. den letzten
+        // gültigen Vertrag zurückgeführt. Ein echter 0-W-Stopp gehört ausschließlich
+        // zum separaten EOS-Safety-Envelope und darf nicht als §14a protokolliert
+        // oder verteilt werden.
+        const forceZero = false;
+        const emergencyStop = false;
         const constraint = buildPara14aConstraintSnapshot({
             active: signal.active,
             forceZero,
@@ -1612,6 +1611,17 @@ class Para14aModule extends BaseModule {
             consumers,
         });
 
+        const staleFallbackKnown = signal.stale === true && (
+            localFailsafeActive
+            || signal.stalePolicy === 'force-active'
+            || signal.lastFreshActive === true
+            || signal.lastFreshActive === false
+        );
+        const fallbackSafe = !!(staleFallbackKnown && (
+            constraint.active !== true
+            || (typeof constraint.totalCapW === 'number' && Number.isFinite(constraint.totalCapW) && constraint.totalCapW > 0)
+        ));
+
         this.adapter._para14a = {
             enabled: !!cfg.para14a,
             ...constraint,
@@ -1620,6 +1630,8 @@ class Para14aModule extends BaseModule {
             signalAgeMs: signal.ageMs,
             signalStatus: signal.reason,
             stalePolicy: signal.stalePolicy,
+            lastFreshActive: typeof signal.lastFreshActive === 'boolean' ? signal.lastFreshActive : null,
+            fallbackSafe,
             signalMaxAgeMs,
             legacyDirectWritesEnabled,
             forceZero: constraint.forceZero === true,

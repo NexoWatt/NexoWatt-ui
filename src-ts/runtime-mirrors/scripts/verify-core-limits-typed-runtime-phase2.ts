@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 9469fed81f2300cf8763c0d140f3244f51e88a2d50ed36f648cd90e79c941bff
+ * Original-Hash: 2e806154f648b31789eb33f0b0041081299db8976841e24214cbf43d9aa8c06f
  */
 
 /**
@@ -117,7 +117,7 @@ const evcs = mirror.applyCoreRuntimeReservation(state, {
   mode: 'pv',
 }, 1000);
 assert.strictEqual(evcs.source, 'ts-core-runtime-reservation-v2');
-assert.strictEqual(evcs.entry.grantW, 6000, '§14a-App-Cap muss im Phase-2-Grant wirken');
+assert.strictEqual(evcs.entry.grantW, 10000, 'Lokale PV-Leistung darf zusätzlich zum §14a-Netzanteil freigegeben werden');
 assert.strictEqual(evcs.nextRemainingTotalW, 6000);
 assert.strictEqual(evcs.nextRemainingPvW, 6500);
 assert.strictEqual(evcs.entry.sequence, 1);
@@ -133,7 +133,7 @@ const storage = mirror.applyCoreRuntimeReservation(state, {
   priority: 150,
   mode: 'charge',
 }, 1001);
-assert.strictEqual(storage.entry.grantW, 4000);
+assert.strictEqual(storage.entry.grantW, 6000, 'Der verbleibende lokale PV-Anteil darf zusätzlich zum Speicher-Netzcap freigegeben werden');
 assert.strictEqual(storage.nextRemainingTotalW, 2000);
 assert.strictEqual(storage.nextRemainingPvW, 2500);
 assert.strictEqual(storage.entry.sequence, 2);
@@ -208,7 +208,7 @@ assert.strictEqual(runtimeBudget.phase2.active, true);
 const runtimeEntry = runtimeBudget.reserve({
   key: 'evcs', requestedW: 10000, reserveW: 6000, pvReserveW: 6000, actualW: 5500, pvOnly: true, priority: 100,
 });
-assert.strictEqual(runtimeEntry.grantW, 6000);
+assert.strictEqual(runtimeEntry.grantW, 10000);
 assert.ok(['ts-core-runtime-reservation-v2', 'ts-core-runtime-phase3-reservation'].includes(runtimeBudget.tsReservationLast.source));
 assert.strictEqual(runtimeBudget.tsReservationLast.fallback, false);
 assert.strictEqual(runtimeBudget.remainingTotalW, 6000);

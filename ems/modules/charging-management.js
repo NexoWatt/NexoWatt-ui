@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:b51f2795297111d7c4277cc42ed5ce6dc09d4ea15a268916cc783f5e4ee98764
+ * Quell-Hash: sha256:ad9f45dcb3c2196ba200bf3105ead0384101fccf1f21496e85b8d5b1e75b873b
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2946,9 +2946,14 @@ class ChargingManagementModule extends BaseModule {
             const stationCapW = stationCapCandidates.length ? Math.min(...stationCapCandidates) : null;
             const stationUsedW = stationKey ? Math.max(0, Number(stationTargetsW.get(stationKey)) || 0) : 0;
             const stationRemainingW = stationCapW === null ? null : Math.max(0, stationCapW - stationUsedW);
+            // Eine optionale Stationsgrenze darf nur dann begrenzen, wenn sie
+            // tatsächlich vorhanden ist. `Number(null) === 0` hatte zuvor einzelne
+            // Wallboxen ohne Stationszuordnung fälschlich als 0-W-Gerätegrenze
+            // behandelt. Eine echte berechnete Restleistung von 0 W bleibt dagegen
+            // weiterhin ein harter Stationsstopp.
             const deviceCaps = [w.maxPW, stationRemainingW]
                 .filter((value) => value !== null && value !== undefined && !(typeof value === 'string' && value.trim() === ''))
-            .map((value) => Number(value))
+                .map((value) => Number(value))
                 .filter((value) => Number.isFinite(value) && value >= 0);
             const finalDeviceCapW = deviceCaps.length ? Math.min(...deviceCaps) : null;
 
@@ -5362,8 +5367,11 @@ class ChargingManagementModule extends BaseModule {
                         para14aCapped = true;
                     }
 
-                    maxPW = Math.min(maxPW, capW);
-                    if (maxPW < minPW) minPW = maxPW;
+                    // §14a begrenzt den netzwirksamen Bezug, nicht die physische
+                    // Gesamtleistung des Ladepunkts. Der lokale PV-Anteil wird später
+                    // zentral zusätzlich freigegeben. Deshalb bleibt `maxPW` hier die
+                    // echte Wallbox-/Installationsgrenze; die §14a-Grenze wird in
+                    // Budget und finaler Safety-Write-Firewall angewendet.
                 }
             }
 
@@ -7287,12 +7295,22 @@ if (components.length) {
         // If active, cap the EVCS budget in addition to other safety caps.
         // ---------------------------------------------------------------------
         let para14aBinding = false;
-        if (para14aActive && typeof para14aTotalCapW === 'number' && Number.isFinite(para14aTotalCapW) && para14aTotalCapW > 0) {
+        // §14a begrenzt ausschließlich den netzwirksamen Anteil. Das zentral
+        // ermittelte physikalische PV-Budget darf zusätzlich genutzt werden.
+        // `pvPhysicalCapW` beschreibt dabei das gesamte verfügbare lokale
+        // PV-Potential für flexible Verbraucher, nicht nur einen Einzelgrant.
+        const para14aLocalPvAllowanceW = (typeof pvPhysicalCapW === 'number' && Number.isFinite(pvPhysicalCapW))
+            ? Math.max(0, Number(pvPhysicalCapW))
+            : 0;
+        const para14aEvcsAllowanceW = (para14aActive && typeof para14aTotalCapW === 'number' && Number.isFinite(para14aTotalCapW) && para14aTotalCapW > 0)
+            ? Math.max(0, Number(para14aTotalCapW)) + para14aLocalPvAllowanceW
+            : null;
+        if (para14aEvcsAllowanceW !== null) {
             const before = budgetW;
             if (!Number.isFinite(budgetW)) {
-                budgetW = para14aTotalCapW;
+                budgetW = para14aEvcsAllowanceW;
             } else {
-                budgetW = Math.min(budgetW, para14aTotalCapW);
+                budgetW = Math.min(budgetW, para14aEvcsAllowanceW);
             }
             para14aBinding = (before !== budgetW);
 
@@ -7324,7 +7342,9 @@ if (components.length) {
             // For TS parity this flag means 'cap is active/available'; the returned apply.phaseCapBinding still means 'actually binding'.
             phaseCapBinding: (gridMaxPhaseA > 0 && typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)),
             para14aActive: !!para14aActive,
-            para14aTotalCapW: (typeof para14aTotalCapW === 'number' && Number.isFinite(para14aTotalCapW)) ? para14aTotalCapW : null,
+            // Der TS-Cap-Helfer erhält die bereits rechtssicher zusammengesetzte
+            // Gesamtfreigabe aus §14a-Netzanteil plus lokalem PV-Anteil.
+            para14aTotalCapW: (typeof para14aEvcsAllowanceW === 'number' && Number.isFinite(para14aEvcsAllowanceW)) ? para14aEvcsAllowanceW : null,
             para14aMode: para14aMode || '',
         }, {
             budgetAfterW: Number.isFinite(budgetW) ? Math.round(budgetW) : null,
@@ -7412,6 +7432,8 @@ if (components.length) {
             budgetDebug.para14aActive = !!para14aActive;
             budgetDebug.para14aMode = para14aMode || '';
             budgetDebug.para14aCapEvcsW = (typeof para14aTotalCapW === 'number' && Number.isFinite(para14aTotalCapW)) ? para14aTotalCapW : null;
+            budgetDebug.para14aLocalPvAllowanceW = Math.round(para14aLocalPvAllowanceW);
+            budgetDebug.para14aTotalAllowanceW = (typeof para14aEvcsAllowanceW === 'number' && Number.isFinite(para14aEvcsAllowanceW)) ? Math.round(para14aEvcsAllowanceW) : null;
             budgetDebug.para14aBinding = !!para14aBinding;
             budgetDebug.budgetBeforeSafetyCapsW = Number.isFinite(budgetBeforeGridCaps) ? budgetBeforeGridCaps : null;
             budgetDebug.budgetAfterSafetyCapsW = Number.isFinite(budgetW) ? budgetW : null;

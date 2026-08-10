@@ -124,6 +124,7 @@ export interface CoreRuntimeGrantResult {
   allocationEvcsCapW: number | null;
   allocationCapApplied: boolean;
   para14aCapW: number | null;
+  para14aLocalPvGrantW: number;
   para14aCapApplied: boolean;
   pvOnly: boolean;
   key: string;
@@ -748,8 +749,13 @@ export function computeCoreCentralBudgetGrant(
   const para14aCapRaw = para14a && para14a.active === true
     ? resolvePara14aAppCap(para14a.appCapsW, key, request.app)
     : null;
+  const para14aLocalPvGrantW = para14a && para14a.active === true
+    ? positive(para14a.localPvGrantW)
+    : 0;
   const para14aCapApplied = para14aCapRaw !== null && Number.isFinite(para14aCapRaw);
-  if (para14aCapApplied) requestCapW = Math.min(requestCapW, Math.max(0, para14aCapRaw));
+  if (para14aCapApplied) {
+    requestCapW = Math.min(requestCapW, Math.max(0, para14aCapRaw) + para14aLocalPvGrantW);
+  }
 
   const availableW = pvOnly
     ? Math.min(remainingTotalW, remainingPvW, requestCapW)
@@ -766,6 +772,7 @@ export function computeCoreCentralBudgetGrant(
     allocationEvcsCapW: allocationEvcsCapRaw === null ? null : round(Math.max(0, allocationEvcsCapRaw)),
     allocationCapApplied,
     para14aCapW: para14aCapApplied ? round(Math.max(0, para14aCapRaw)) : null,
+    para14aLocalPvGrantW: round(para14aLocalPvGrantW),
     para14aCapApplied,
     pvOnly,
     key,
@@ -934,8 +941,16 @@ export function buildCoreRuntimeBudgetSnapshot(rawInput: CoreRuntimeSnapshotInpu
       forecast: input.forecast && typeof input.forecast === 'object' ? { ...input.forecast } : {},
       tariff: input.tariff && typeof input.tariff === 'object' ? { ...input.tariff } : {},
       para14a: input.para14a && typeof input.para14a === 'object'
-        ? { ...input.para14a }
-        : { active: false, appCapsW: {} },
+        ? {
+            ...input.para14a,
+            localPvGrantW: round(pvBudgetEffectiveW),
+            totalAllowanceW: (() => {
+              const active = input.para14a?.active === true;
+              const netCap = finiteOrNull(input.para14a?.totalCapW);
+              return active && netCap !== null ? round(Math.max(0, netCap) + pvBudgetEffectiveW) : null;
+            })(),
+          }
+        : { active: false, appCapsW: {}, localPvGrantW: 0, totalAllowanceW: null },
       total: {
         effectiveW: Number.isFinite(totalBudgetW) ? round(totalBudgetW) : null,
         binding: bindings.join('+'),

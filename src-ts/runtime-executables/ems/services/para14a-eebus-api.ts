@@ -1,4 +1,3 @@
-// RC48: stale §14a uses minimum/last-valid fallback; 0 W belongs only to EOS Safety Stop.
 // @runtime-transpile
 'use strict';
 
@@ -223,8 +222,10 @@ class Para14aEebusDirectApi {
 
   /**
    * Liefert den letzten autorisierten Gateway-Befehl. Gültigkeits-, Paket- und
-   * Bridge-Heartbeat werden zusätzlich lokal überwacht. Bei Ablauf setzt EOS
-   * selbstständig den vereinbarten Failsafe, standardmäßig 0 W.
+   * Bridge-Heartbeat werden zusätzlich lokal überwacht. Bei Ablauf bleibt der
+   * letzte gültige Vertrag wirksam; fehlt ein nutzbarer Grenzwert, berechnet das
+   * zentrale §14a-Modul Pmin,14a. Ein normaler Kommunikations-Fallback ist kein
+   * EOS-Not-Aus und erzeugt deshalb niemals selbstständig 0 W.
    */
   getIngress(): AnyRecord | null {
     const current = this.ingress;
@@ -245,11 +246,14 @@ class Para14aEebusDirectApi {
 
     const localFailsafeActive = validityElapsed || heartbeatStale || helloStale;
     if (localFailsafeActive) {
-      const failsafeLimitW = nonNegativeOrNull(current.failsafeLimitW) ?? 0;
+      const configuredFailsafeLimitW = nonNegativeOrNull(current.failsafeLimitW);
+      const lastValidLimitW = current.active === true ? nonNegativeOrNull(current.limitW) : null;
+      const failsafeLimitW = configuredFailsafeLimitW ?? lastValidLimitW;
       const status = validityElapsed
         ? 'local-failsafe-validity-elapsed'
         : (heartbeatStale ? 'local-failsafe-command-heartbeat-stale' : 'local-failsafe-bridge-heartbeat-stale');
-      const signature = `${current.commandId}|${status}|${Math.round(failsafeLimitW)}`;
+      const limitSignature = failsafeLimitW === null ? 'pmin' : String(Math.round(failsafeLimitW));
+      const signature = `${current.commandId}|${status}|${limitSignature}`;
       if (signature !== this.localFailsafeSignature) {
         this.localFailsafeSignature = signature;
         try { this.adapter?._nwRequestImmediateEmsTick?.(`eebus-local-failsafe:${status}`, 0); } catch (_tickError) {}
@@ -257,8 +261,10 @@ class Para14aEebusDirectApi {
           'para14a.api.connected': false,
           'para14a.api.status': status,
           'para14a.api.active': true,
-          'para14a.api.effectiveLimitW': Math.round(failsafeLimitW),
-          'para14a.api.lastError': `Local EOS failsafe active (${status}); effective limit ${Math.round(failsafeLimitW)} W.`,
+          'para14a.api.effectiveLimitW': failsafeLimitW === null ? 0 : Math.round(failsafeLimitW),
+          'para14a.api.lastError': failsafeLimitW === null
+            ? `Local §14a fallback active (${status}); central Pmin,14a is used.`
+            : `Local §14a fallback active (${status}); retained limit ${Math.round(failsafeLimitW)} W.`,
         }));
       }
       return {
@@ -284,11 +290,11 @@ class Para14aEebusDirectApi {
         fresh: false,
         stale: true,
         ageMs,
-        stalePolicy: 'eos-local-fail-closed',
+        stalePolicy: 'eos-local-pmin-or-last-valid',
         status,
         localFailsafeActive: true,
         forceZero: false,
-        emergencyStop: failsafeLimitW === 0,
+        emergencyStop: false,
       };
     }
     this.localFailsafeSignature = '';
@@ -319,6 +325,8 @@ class Para14aEebusDirectApi {
       stalePolicy: 'gateway-authoritative-hold-until-explicit-transition',
       status: 'direct-api',
       localFailsafeActive: false,
+      // Ein normaler §14a-Wert von 0 W wird im zentralen Constraint auf
+      // Pmin,14a geklemmt. Er ist ausdrücklich kein EOS-Sicherheitsstopp.
       forceZero: false,
       emergencyStop: false,
     };
@@ -361,13 +369,17 @@ class Para14aEebusDirectApi {
     const effectiveTotalCapW = finiteOrNull(snapshot.totalCapW ?? snapshot.totalBudgetW);
     const requestedLimitW = finiteOrNull(pending.packet.limitW);
     const expectedActive = pending.packet.active === true;
-    const capToleranceW = requestedLimitW === null ? 100 : Math.max(100, Math.abs(requestedLimitW) * 0.02);
+    const minimumW = Math.max(0, finiteOrNull(snapshot.pMinW) ?? 0);
+    const expectedLimitW = expectedActive && requestedLimitW !== null
+      ? Math.max(minimumW, requestedLimitW)
+      : requestedLimitW;
+    const capToleranceW = expectedLimitW === null ? 100 : Math.max(100, Math.abs(expectedLimitW) * 0.02);
     const stateMatches = expectedActive
       ? (
         active
         && effectiveTotalCapW !== null
-        && effectiveTotalCapW >= 0
-        && (requestedLimitW === null || effectiveTotalCapW <= requestedLimitW + capToleranceW)
+        && effectiveTotalCapW >= Math.max(0, minimumW - capToleranceW)
+        && (expectedLimitW === null || effectiveTotalCapW <= expectedLimitW + capToleranceW)
       )
       : !active;
 
@@ -424,6 +436,8 @@ class Para14aEebusDirectApi {
       reason,
       active,
       requestedLimitW,
+      effectiveRequestedLimitW: expectedLimitW,
+      minimumW,
       effectiveTotalCapW,
       controllerApplied,
       controllerCycleComplete: true,
