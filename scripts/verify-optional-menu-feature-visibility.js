@@ -32,8 +32,8 @@ for (const rel of [
   'src-ts/runtime-executables/www/storagefarm.ts',
   'src-ts/runtime-executables/www/year-report.ts',
 ]) {
-  mustContainAny(rel, ['featureVisibility.hasSmartHome', "'hasSmartHome'", 'nwSmartHomeFeatureFromConfig'], `SmartHome featureVisibility in ${rel}`);
-  mustContainAny(rel, ['featureVisibility.hasStorageFarm', "'hasStorageFarm'", 'nwStorageFarmFeatureFromConfig'], `Speicherfarm featureVisibility in ${rel}`);
+  mustContainAny(rel, ['featureVisibility.hasSmartHome', 'fv.hasSmartHome', "'hasSmartHome'", 'nwSmartHomeFeatureFromConfig'], `SmartHome featureVisibility in ${rel}`);
+  mustContainAny(rel, ['featureVisibility.hasStorageFarm', 'fv.hasStorageFarm', "'hasStorageFarm'", 'nwStorageFarmFeatureFromConfig'], `Speicherfarm featureVisibility in ${rel}`);
 }
 
 for (const rel of [

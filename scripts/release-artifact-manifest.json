@@ -1,7 +1,7 @@
 {
   "schema": "nexowatt.release-artifact.v1",
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.176",
+  "version": "0.8.177",
   "files": [
     {
       "path": "LICENSE",
@@ -51,7 +51,7 @@
     {
       "path": "admin/react/index.html",
       "size": 4431,
-      "sha256": "80c2d33b06214043c7887cd33f698da1a80fe4c92f9189252887184f3f1a710e"
+      "sha256": "950e1df150ee031ef7238f544b86aaa9526006313756b7cf243040addbbd08e8"
     },
     {
       "path": "admin/simulation.html",
@@ -147,6 +147,11 @@
       "path": "docs/RC52_CHARGING_DIAGNOSTICS_LOG_DE.md",
       "size": 3879,
       "sha256": "704b10dd4f01abe04dbb61caabd9e4aece582faea39c09f1509da1662753400e"
+    },
+    {
+      "path": "docs/RC53_OPERATING_STRATEGIES_FOUNDATION_DE.md",
+      "size": 5019,
+      "sha256": "a7300ec6c443dd1b3cdcd5f8e2d9d5207cea42b5eebc52e4b49943c4a0b8d3c2"
     },
     {
       "path": "ems/charging-budget-helpers.js",
@@ -455,8 +460,8 @@
     },
     {
       "path": "ems/services/feature-flags.js",
-      "size": 9953,
-      "sha256": "fcf28263f926eceede35a975bb2d9a5243bc3a169549aa077b753f718625639b"
+      "size": 10024,
+      "sha256": "c3bf49ab75bc51097d736bbcf715b14db1f2f56208c28071faf2fa551eefe887"
     },
     {
       "path": "ems/services/fenecon-hybrid-control.js",
@@ -551,12 +556,12 @@
     {
       "path": "ems/services/tariff-provider-registry.js",
       "size": 28839,
-      "sha256": "f17b26720140899950698359ad61310284ba356106c885323e8f69221e2d5fa4"
+      "sha256": "81cd5dd03af011fe36d72c925dd429d7771de9f3df2a56c1b134319e9048bd24"
     },
     {
       "path": "io-package.json",
-      "size": 22120,
-      "sha256": "85369d029027af02cbff46f5868b1071176a91497b22cd950f8cf5ae6d8e84a1"
+      "size": 24022,
+      "sha256": "61ea5a6aec7291c6ddb4ef8e660173c553c52c8f5794ae6aea51e950a874b348"
     },
     {
       "path": "lib/charging-diagnostics-api.js",
@@ -790,8 +795,8 @@
     },
     {
       "path": "main.js",
-      "size": 1677189,
-      "sha256": "aeb58b17ad943b4fa6164f2acf3908b019e582613c96e364eeb1a53737458565"
+      "size": 1687158,
+      "sha256": "9b935073352b5552d3d8b7fa67c05d8ececbd0f953b640afa9aa805f5f953430"
     },
     {
       "path": "www/admin-guard.js",
@@ -925,13 +930,13 @@
     },
     {
       "path": "www/ems-apps.html",
-      "size": 150730,
-      "sha256": "7048e8da2403f469784d9399b542495fd743d1bddc623c89a3e5ed85c1955acf"
+      "size": 151240,
+      "sha256": "191f564682ec9745f071fb07e4be629ba8cb7012a612dd81e0d9de8d5e7fed12"
     },
     {
       "path": "www/ems-apps.js",
-      "size": 945703,
-      "sha256": "42d3e16434d03d2c9f9e09055e9f19a51a18a2ce02a0388944beac99740d9727"
+      "size": 948852,
+      "sha256": "b4dd9b7f4557c5bacb1ad0d9b96f42894322c4bd9b40a37340d858310413c0c9"
     },
     {
       "path": "www/energy-ledger.html",
@@ -1056,7 +1061,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1092,
-      "sha256": "2b24be444cdd852dbf16d5d451e53acaeb9ece775f687106362beac85ae45575"
+      "sha256": "1d19b2440126b631a4cf1f94cc669b4dff0388cec4e1188530dd91c0e9f9cfce"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -1072,6 +1077,11 @@
       "path": "www/netoperator-appcenter.js",
       "size": 14726,
       "sha256": "1c37d43ce711df512274a05a5d2a8819dc096600041db7c4f64bdbabcddabd86"
+    },
+    {
+      "path": "www/operating-strategies-appcenter.js",
+      "size": 55298,
+      "sha256": "5ec892a2f9ca36cd9a1428253f53b00532f5ecbd4842965a0095395188f6ef20"
     },
     {
       "path": "www/netoperator.html",
@@ -1091,7 +1101,7 @@
     {
       "path": "www/nw-i18n.js",
       "size": 20613,
-      "sha256": "3471278f2dd5730e1e0e26c649f244dd3dc8ad2c72c2119b959b00979922f7d4"
+      "sha256": "24207378d9a230ec2632988292d403f53b32a653c1e05b2086b3d9795e22e919"
     },
     {
       "path": "www/nw-shell.js",
@@ -1221,7 +1231,7 @@
     {
       "path": "www/sw.js",
       "size": 4888,
-      "sha256": "1e31dbcd1e88b64c50589c5c81514f12c25ad3e4b1e678324f4906afd073bf0d"
+      "sha256": "77e83fb09121082e677ca37e6bf43cefb40edec031caf7a9324566c07949b3a8"
     },
     {
       "path": "www/tariff-report.html",

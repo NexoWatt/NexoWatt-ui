@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: fcf28263f926eceede35a975bb2d9a5243bc3a169549aa077b753f718625639b
+ * Original-Hash: c3bf49ab75bc51097d736bbcf715b14db1f2f56208c28071faf2fa551eefe887
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/feature-flags.ts
- * Quell-Hash: sha256:3ec03aa8d4312d6bf8ae9e95b2cc1e45a48c9b30e22b771931433299a2f603b1
+ * Quell-Hash: sha256:e12de3cd57cbbdbbe0f04c7c456b4e7adca745e9411649abd4fe00c0fa1caf99
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -96,6 +96,7 @@ const APP_FEATURE_MAP = Object.freeze({
   microgrid: 'microgrid',
   meshMicrogrid: 'meshMicrogrid',
   netOperator: 'netOperatorInterface',
+  operatingStrategies: 'operatingStrategies',
   nlP1: 'nlP1',
   nlSaldering: 'nlSaldering',
   nlEnergyHub: 'nlEnergyHub',
@@ -153,6 +154,7 @@ const EOS_ONLY_FEATURES = new Set([
   'microgrid',
   'meshMicrogrid',
   'netOperatorInterface',
+  'operatingStrategies',
   'neighborSharing',
   'multiSiteWallet',
   'nlSaldering',

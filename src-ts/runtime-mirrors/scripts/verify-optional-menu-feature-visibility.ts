@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 9ee467ded53d52b9da1dc6bb250939438e13077778123194a445558dcd3cab3a
+ * Original-Hash: 041e6f4bc821754a04fb1a76744fbd25d580662b1d2cc790a7a0058c23f12f57
  */
 
 /**
@@ -117,8 +117,8 @@ for (const rel of [
   'src-ts/runtime-executables/www/storagefarm.ts',
   'src-ts/runtime-executables/www/year-report.ts',
 ]) {
-  mustContainAny(rel, ['featureVisibility.hasSmartHome', "'hasSmartHome'", 'nwSmartHomeFeatureFromConfig'], `SmartHome featureVisibility in ${rel}`);
-  mustContainAny(rel, ['featureVisibility.hasStorageFarm', "'hasStorageFarm'", 'nwStorageFarmFeatureFromConfig'], `Speicherfarm featureVisibility in ${rel}`);
+  mustContainAny(rel, ['featureVisibility.hasSmartHome', 'fv.hasSmartHome', "'hasSmartHome'", 'nwSmartHomeFeatureFromConfig'], `SmartHome featureVisibility in ${rel}`);
+  mustContainAny(rel, ['featureVisibility.hasStorageFarm', 'fv.hasStorageFarm', "'hasStorageFarm'", 'nwStorageFarmFeatureFromConfig'], `Speicherfarm featureVisibility in ${rel}`);
 }
 
 for (const rel of [

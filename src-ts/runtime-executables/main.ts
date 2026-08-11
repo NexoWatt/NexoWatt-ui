@@ -2310,7 +2310,7 @@ class NexoWattVis extends utils.Adapter {
       }
     } catch (_eFeatureFlags) {}
     const hemsFeatures = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations','energyLedger','energyLedgerBasic','energyOriginAccounting','energyOriginEvidenceExport']);
-    const eosOnlyFeatures = ['peakShaving','storageFarm','multiUse','gridLimits','gridConstraints','generatorControl','bhkwControl','advancedChargingPark','advancedDiagnostics','energyWalletOperator','billingExport','chargeKiosk','solarChargeMode','solarChargeBilling','mesh','microgrid','meshMicrogrid','netOperatorInterface','neighborSharing','multiSiteWallet','nlSaldering','nlEnergyHub','aiAutopilot'];
+    const eosOnlyFeatures = ['peakShaving','storageFarm','multiUse','gridLimits','gridConstraints','generatorControl','bhkwControl','advancedChargingPark','advancedDiagnostics','energyWalletOperator','billingExport','chargeKiosk','solarChargeMode','solarChargeBilling','mesh','microgrid','meshMicrogrid','netOperatorInterface','operatingStrategies','neighborSharing','multiSiteWallet','nlSaldering','nlEnergyHub','aiAutopilot'];
     const all = new Set([...hemsFeatures, ...eosOnlyFeatures]);
     const out = {};
     for (const f of all) out[f] = ed === 'eos' ? true : (ed === 'hems' ? hemsFeatures.has(f) : false);
@@ -2347,6 +2347,7 @@ class NexoWattVis extends utils.Adapter {
       microgrid: 'microgrid',
       meshMicrogrid: 'meshMicrogrid',
       netOperator: 'netOperatorInterface',
+      operatingStrategies: 'operatingStrategies',
       nlSaldering: 'nlSaldering',
       nlEnergyHub: 'nlEnergyHub',
       aiAutopilot: 'aiAutopilot'
@@ -3514,6 +3515,7 @@ class NexoWattVis extends utils.Adapter {
       'chargeKiosk',
       'meshMicrogrid',
       'netOperatorInterface',
+      'operatingStrategies',
       'smartHome',
       'smartHomeConfig',
 
@@ -3588,6 +3590,183 @@ class NexoWattVis extends utils.Adapter {
     } catch (_e) {}
 
     return score;
+  }
+
+
+  /**
+   * Normalisiert die AppCenter-Grundlage der EOS-Betriebsstrategien.
+   *
+   * RC53 ist absichtlich read-only: Selbst manipulierte Installer-Payloads
+   * dürfen keine Steuerübernahme oder Hardware-Ausführung aktivieren. Die
+   * gespeicherten Stell-DP-Zuordnungen sind ausschließlich Vorbereitung für
+   * einen späteren, zentral arbitrierten Single-Writer-Pfad.
+   */
+  nwNormalizeOperatingStrategies(configIn, appEnabled = false) {
+    const source = this._nwIsPlainObject(configIn) ? this._nwDeepClone(configIn) : {};
+    const asString = (value, fallback = '') => {
+      const normalized = String(value == null ? '' : value).trim();
+      return normalized || fallback;
+    };
+    const clampNumber = (value, fallback, min, max) => {
+      const parsed = Number(value);
+      const safe = Number.isFinite(parsed) ? parsed : fallback;
+      return Math.max(min, Math.min(max, safe));
+    };
+    const clampInt = (value, fallback, min, max) => Math.round(clampNumber(value, fallback, min, max));
+    const normalizeId = (value, fallback) => {
+      const normalized = asString(value).replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+      return normalized || fallback;
+    };
+    const defaultNightReserve = (targetSocPct) => ({
+      enabled: true,
+      targetSocPct,
+      absoluteMinSocPct: 10,
+      startMode: 'sunset',
+      startTime: '18:00',
+      endMode: 'sunrise',
+      endTime: '07:00',
+    });
+    const defaultProfiles = () => ([
+      { id: 'winter', name: 'Winterbetrieb', enabled: true, season: 'winter', nightReserve: defaultNightReserve(40) },
+      { id: 'summer', name: 'Sommerbetrieb', enabled: true, season: 'summer', nightReserve: defaultNightReserve(60) },
+    ]);
+    const controlContract = {
+      chargingScope: 'auto-only',
+      explicitAutoSourceOptInRequired: true,
+      existingChargingModesUntouched: true,
+      singleWriterRequired: true,
+      fallbackAutoSource: 'standard-auto',
+    };
+    const mappingKeys = [
+      'powerReadId', 'energyReadId', 'stateReadId', 'socReadId',
+      'temperatureReadId', 'alarmReadId', 'onlineReadId',
+      'switchWriteId', 'switchReadId', 'setpointWriteId', 'setpointReadId',
+    ];
+    const normalizeMappings = (input) => {
+      const raw = this._nwIsPlainObject(input) ? input : {};
+      const out = {};
+      for (const key of mappingKeys) out[key] = asString(raw[key]);
+      return out;
+    };
+    const normalizeCustomResource = (input, index) => {
+      const raw = this._nwIsPlainObject(input) ? input : {};
+      const resourceTypes = ['consumer', 'thermal', 'chargingPoint', 'storage', 'producer', 'virtualGroup'];
+      const controlTypes = ['monitor', 'switch', 'setpoint', 'stepped', 'thermal', 'energyTarget'];
+      const failSafePolicies = ['observe-only', 'release', 'safe-on', 'safe-off', 'block-optimization'];
+      const resourceTypeRaw = asString(raw.resourceType);
+      const controlTypeRaw = asString(raw.controlType);
+      const failSafeRaw = asString(raw.failSafePolicy);
+      const resourceType = resourceTypes.includes(resourceTypeRaw) ? resourceTypeRaw : 'consumer';
+      const controlType = controlTypes.includes(controlTypeRaw) ? controlTypeRaw : 'monitor';
+      return {
+        id: normalizeId(raw.id, `custom-${index + 1}`),
+        name: asString(raw.name, `Benutzerdefinierte Ressource ${index + 1}`),
+        enabled: raw.enabled !== false,
+        resourceType,
+        controlType,
+        powerUnit: asString(raw.powerUnit) === 'kW' ? 'kW' : 'W',
+        staleTimeoutSec: clampInt(raw.staleTimeoutSec, 60, 1, 86400),
+        failSafePolicy: failSafePolicies.includes(failSafeRaw) ? failSafeRaw : 'observe-only',
+        autoOnly: resourceType === 'chargingPoint' ? true : raw.autoOnly === true,
+        observeOnly: true,
+        writeEnabled: false,
+        mappings: normalizeMappings(raw.mappings),
+      };
+    };
+    const normalizeProfile = (input, index) => {
+      const raw = this._nwIsPlainObject(input) ? input : {};
+      const reserve = this._nwIsPlainObject(raw.nightReserve) ? raw.nightReserve : {};
+      const seasons = ['winter', 'summer', 'custom'];
+      const startModes = ['sunset', 'sunrise', 'fixed'];
+      const targetSocPct = clampNumber(reserve.targetSocPct, index === 0 ? 40 : 60, 0, 100);
+      const absoluteMinSocPct = Math.min(targetSocPct, clampNumber(reserve.absoluteMinSocPct, 10, 0, 100));
+      const startModeRaw = asString(reserve.startMode);
+      const endModeRaw = asString(reserve.endMode);
+      const startTimeRaw = asString(reserve.startTime);
+      const endTimeRaw = asString(reserve.endTime);
+      const seasonRaw = asString(raw.season);
+      return {
+        id: normalizeId(raw.id, `profile-${index + 1}`),
+        name: asString(raw.name, `Betriebsprofil ${index + 1}`),
+        enabled: raw.enabled !== false,
+        season: seasons.includes(seasonRaw) ? seasonRaw : 'custom',
+        nightReserve: {
+          enabled: reserve.enabled !== false,
+          targetSocPct,
+          absoluteMinSocPct,
+          startMode: startModes.includes(startModeRaw) ? startModeRaw : 'sunset',
+          startTime: /^\d{2}:\d{2}$/.test(startTimeRaw) ? startTimeRaw : '18:00',
+          endMode: startModes.includes(endModeRaw) ? endModeRaw : 'sunrise',
+          endTime: /^\d{2}:\d{2}$/.test(endTimeRaw) ? endTimeRaw : '07:00',
+        },
+      };
+    };
+    const normalizeLink = (input) => {
+      const raw = this._nwIsPlainObject(input) ? input : {};
+      const sourceId = asString(raw.sourceId);
+      if (!sourceId) return null;
+      return {
+        sourceId,
+        enabled: raw.enabled === true,
+        priority: clampInt(raw.priority, 50, 1, 100),
+        autoOnly: sourceId.startsWith('evcs:') ? true : raw.autoOnly === true,
+        observeOnly: true,
+        writeEnabled: false,
+      };
+    };
+
+    const makeIdsUnique = (items, prefix) => {
+      const used = new Set();
+      return items.map((entry, index) => {
+        const baseId = normalizeId(entry && entry.id, `${prefix}-${index + 1}`);
+        let id = baseId;
+        let suffix = 2;
+        while (used.has(id)) {
+          id = `${baseId}-${suffix}`;
+          suffix += 1;
+        }
+        used.add(id);
+        return { ...entry, id };
+      });
+    };
+
+    const profilesRaw = Array.isArray(source.profiles) ? source.profiles : [];
+    const profiles = makeIdsUnique(profilesRaw.map(normalizeProfile), 'profile');
+    const normalizedProfiles = profiles.length ? profiles : defaultProfiles();
+    const profileIds = new Set(normalizedProfiles.map((profile) => profile.id));
+    const links = [];
+    const linkIds = new Set();
+    for (const entry of (Array.isArray(source.resourceLinks) ? source.resourceLinks : [])) {
+      const normalized = normalizeLink(entry);
+      if (!normalized || linkIds.has(normalized.sourceId)) continue;
+      linkIds.add(normalized.sourceId);
+      links.push(normalized);
+    }
+
+    const requestedActive = asString(source.activeProfileId, 'winter');
+    const activeProfileId = profileIds.has(requestedActive) ? requestedActive : normalizedProfiles[0].id;
+    const metadata = this._nwIsPlainObject(source.metadata) ? source.metadata : {};
+    return {
+      schemaVersion: 1,
+      enabled: appEnabled === true,
+      mode: 'observe',
+      controlTakeoverEnabled: false,
+      writeExecutionEnabled: false,
+      autoImportExisting: source.autoImportExisting !== false,
+      activeProfileId,
+      controlContract,
+      resourceLinks: links,
+      customResources: makeIdsUnique((Array.isArray(source.customResources) ? source.customResources : []).map(normalizeCustomResource), 'custom'),
+      profiles: normalizedProfiles,
+      // Regeldefinitionen bleiben bis zur späteren Strategy-Engine-Ausbaustufe
+      // fail-closed deaktiviert und werden aus Payloads nicht übernommen.
+      rules: [],
+      metadata: {
+        ...this._nwDeepClone(metadata),
+        foundationVersion: '0.8.177',
+        lastEditedAt: asString(metadata.lastEditedAt),
+      },
+    };
   }
 
 
@@ -3733,6 +3912,7 @@ class NexoWattVis extends utils.Adapter {
       failSafePolicy: 'project-specific',
       transport: { type: 'modbus-tcp', host: '', port: 502, unitId: 1, timeoutMs: 2000, pollIntervalMs: 1000 },
     });
+    ensurePlainObj('operatingStrategies', this.nwNormalizeOperatingStrategies({}, false));
     ensurePlainObj('vis', {});
     ensurePlainObj('tsMigration', {
       energyFlowMode: 'ts',
@@ -4036,6 +4216,20 @@ class NexoWattVis extends utils.Adapter {
       }
     }
 
+    // Betriebsstrategien-Grundlage: App-Zustand und Lizenz bestimmen ausschließlich,
+    // ob die Konfiguration als aktiv markiert wird. Steuerübernahme/Writebacks bleiben
+    // in RC53 auch bei manipulierten Payloads immer gesperrt.
+    try {
+      const appState = out.emsApps && out.emsApps.apps ? out.emsApps.apps.operatingStrategies : null;
+      const appActive = this._nwLicenseAllowsAppId('operatingStrategies') && !!(appState && appState.installed && appState.enabled);
+      const before = JSON.stringify(out.operatingStrategies || {});
+      out.operatingStrategies = this.nwNormalizeOperatingStrategies(out.operatingStrategies, appActive);
+      if (before !== JSON.stringify(out.operatingStrategies || {})) changed = true;
+    } catch (_eOperatingStrategiesNormalize) {
+      out.operatingStrategies = this.nwNormalizeOperatingStrategies({}, false);
+      changed = true;
+    }
+
     // App‑Center only: do not depend on legacy admin mappings for EVCS active/mode
     try {
       if (this._nwIsPlainObject(out.settings)) {
@@ -4136,6 +4330,7 @@ class NexoWattVis extends utils.Adapter {
       { id: 'chargeKiosk', enableFlag: 'enableChargeKiosk' },
       { id: 'meshMicrogrid', enableFlag: 'enableMeshMicrogrid' },
       { id: 'netOperator', enableFlag: 'enableNetOperatorInterface', noLegacyDefault: true },
+      { id: 'operatingStrategies', enableFlag: null, noLegacyDefault: true },
 
       // Shared helper module (always present for UI/runtime convenience)
       { id: 'tariff',      enableFlag: null, mandatory: true, defaultInstalled: true },
@@ -14697,6 +14892,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
       { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls aktiviert)', enableFlag: null, mandatory: false },
       { id: 'multiuse', label: 'MultiUse', desc: 'Weitere interne Logik-Bausteine', enableFlag: 'enableMultiUse', mandatory: false },
       { id: 'netOperator', label: 'Netzbetreiber-Schnittstelle', desc: 'Kanonische read-only Schnittstelle hinter einem zertifizierten EZA-/Parkregler', enableFlag: 'enableNetOperatorInterface', mandatory: false },
+      { id: 'operatingStrategies', label: 'Betriebsstrategien', desc: 'EOS: modulare Ressourcen, DP-Zuordnung, Saisonprofile und Nachtenergie-Reserve', enableFlag: null, mandatory: false },
     ];
     /**
      * Code-Teil: _nwNormalizeEmsApps
@@ -14807,6 +15003,12 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
      */
     const _nwPickInstallerConfig = (nativeObj) => {
       const n = nativeObj && typeof nativeObj === 'object' ? nativeObj : {};
+      const normalizedApps = _nwNormalizeEmsApps(n);
+      const operatingStrategiesApp = normalizedApps.apps && normalizedApps.apps.operatingStrategies
+        ? normalizedApps.apps.operatingStrategies
+        : null;
+      const operatingStrategiesActive = this._nwLicenseAllowsAppId('operatingStrategies')
+        && !!(operatingStrategiesApp && operatingStrategiesApp.installed && operatingStrategiesApp.enabled);
       return {
         version: (typeof n.version === 'string' ? n.version : undefined),
         port: (typeof n.port === 'number' ? n.port : undefined),
@@ -14831,7 +15033,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         enableMultiUse: (typeof n.enableMultiUse === 'boolean') ? n.enableMultiUse : undefined,
 
         // Phase 2: App-Center state (install/enable)
-        emsApps: _nwNormalizeEmsApps(n),
+        emsApps: normalizedApps,
         license: this._nwBuildLicenseFeatureInfo(),
 
         // KI‑Energieberater
@@ -14840,6 +15042,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         chargeKiosk: (n.chargeKiosk && typeof n.chargeKiosk === 'object') ? n.chargeKiosk : { enabled: false, displayBasePath: '/display/station/', stations: [] },
         meshMicrogrid: (n.meshMicrogrid && typeof n.meshMicrogrid === 'object') ? n.meshMicrogrid : { enabled: false, mode: 'diagnostic', clusterId: 'cluster_01', clusterName: 'Lokaler Energieverbund', gridLimitW: 0, nodes: [] },
         netOperatorInterface: (n.netOperatorInterface && typeof n.netOperatorInterface === 'object') ? n.netOperatorInterface : { enabled: false, mode: 'diagnostic', profileSource: 'builtin', driverId: 'generic-modbus-tcp-template', customProfileJson: '', commissioned: false, installerApproved: false, writebackEnabled: false, signalMaxAgeSec: 5, auditLimit: 500, failSafePolicy: 'project-specific', transport: { type: 'modbus-tcp', host: '', port: 502, unitId: 1, timeoutMs: 2000, pollIntervalMs: 1000 } },
+        operatingStrategies: this.nwNormalizeOperatingStrategies(n.operatingStrategies, operatingStrategiesActive),
 
         // Scheduler
         schedulerIntervalMs: (typeof n.schedulerIntervalMs === 'number') ? n.schedulerIntervalMs : undefined,
@@ -15245,10 +15448,10 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
           'emsApps',
 
           // Scheduler + base mapping
-          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','tariffProvider','chargeKiosk','meshMicrogrid','netOperatorInterface','datapoints','vis','settings',
+          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','tariffProvider','chargeKiosk','meshMicrogrid','netOperatorInterface','operatingStrategies','datapoints','vis','settings',
 
           // App/module configs
-          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','meshMicrogrid','netOperatorInterface','chargingManagement',
+          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','meshMicrogrid','netOperatorInterface','operatingStrategies','chargingManagement',
 
           // VIS configuration that is required to configure chargepoints/stations in the installer page
           'settingsConfig',
@@ -15502,10 +15705,10 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
           'emsApps',
 
           // Scheduler + base mapping
-          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','tariffProvider','chargeKiosk','meshMicrogrid','netOperatorInterface','datapoints','vis','settings',
+          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','tariffProvider','chargeKiosk','meshMicrogrid','netOperatorInterface','operatingStrategies','datapoints','vis','settings',
 
           // App/module configs
-          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','meshMicrogrid','netOperatorInterface','chargingManagement',
+          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','meshMicrogrid','netOperatorInterface','operatingStrategies','chargingManagement',
 
           // VIS configuration that is required to configure chargepoints/stations in the installer page
           'settingsConfig',

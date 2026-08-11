@@ -1,3 +1,12 @@
+## 0.8.177 - 2026-08-11
+
+- Neue installierbare und aktivierbare EOS-Pro-App „Betriebsstrategien“ im AppCenter ergänzt. Nach Installation steht ein eigener Reiter für Ressourcen, Datenpunktzuordnungen und Saisonprofile zur Verfügung.
+- Vorhandene Einzel-/Farm-Speicher, Ladepunkte, Energiefluss-Verbraucher, Thermik-Geräte und Heizstäbe werden aus ihren bestehenden EOS-Zuordnungen übernommen; es wird kein zweiter konkurrierender Geräteschreiber angelegt.
+- Benutzerdefinierte Ressourcen können hinzugefügt, gelöscht und mit Lese-, vorbereiteten Stell- sowie Rückmeldedatenpunkten verknüpft werden. Schreibpfade werden ausschließlich gespeichert und bleiben technisch gesperrt.
+- Winter-/Sommerprofile mit 40 % beziehungsweise 60 % SoC-Ziel zum Nachtbeginn und separat einstellbarer absoluter Speicheruntergrenze vorbereitet. Die Nachtenergie darf während der Nacht den allgemeinen Verbrauch decken; RC53 führt die Reserve noch nicht aus.
+- Verbindlicher Ladepunktvertrag hinterlegt: Eine spätere Teilnahme ist ausschließlich über „Auto → Betriebsstrategie“ und explizite Freigabe möglich. Manuell, Boost, PV-Überschuss, Min+PV, Zeit-Ziel, Stationsverteilung und das bestehende Lademanagement bleiben unverändert zuständig.
+- Frontend und Backend erzwingen fail-closed den Beobachtungsmodus, deaktivierte Steuerübernahme, deaktivierte Hardwareausführung, gesperrte Ressourcen-Schreibpfade, leere Regeldefinitionen und Standard-Auto als vorgesehenen Rückfall. Produktive Lade-, Speicher-, Heizstab-, Thermik-, §14a-, Netzanschluss- und Safety-Regelungen wurden nicht angebunden oder verändert.
+
 ## 0.8.176 - 2026-08-11
 
 - AppCenter/Ladepunkte um eine read-only Live-Diagnose für das Lademanagement erweitert. Global werden aktiver Limiter, Sicherungsstufe, Budget, EVCS-Istleistung, NexoWatt-Gesamtsoll, Reserve, Restbudget, Netz-/Phasen-/§14a-Gates und Stage-A-Status angezeigt.
