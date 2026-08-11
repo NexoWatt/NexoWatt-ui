@@ -1,9 +1,9 @@
 // @runtime-transpile
 /**
- * NexoWatt EOS Betriebsstrategien – AppCenter-Grundlage.
+ * NexoWatt EOS Betriebsstrategien – AppCenter, Ressourcen und Regelbaukasten.
  *
  * Diese Browserkomponente verwaltet ausschließlich die Konfiguration für das
- * spätere Ressourcen-/Strategiemodell. RC53 arbeitet strikt im Beobachtungsmodus:
+ * modulare Ressourcen-/Strategiemodell. RC54 ergänzt Regelbaukasten und Trockenlauf, bleibt aber strikt im Beobachtungsmodus:
  * Es werden keine Hardware-Sollwerte geschrieben und keine bestehenden Lade-,
  * Speicher- oder Verbraucherregler übernommen.
  */
@@ -13,6 +13,7 @@
   type AnyRecord = Record<string, any>;
 
   const FOUNDATION_VERSION = '0.8.177';
+  const RULE_BUILDER_VERSION = '0.8.178';
   const APP_ID = 'operatingStrategies';
   const ROOT_ID = 'nwOperatingStrategiesRoot';
 
@@ -72,9 +73,12 @@
     return 'none';
   };
 
+  const ruleBuilder = (): AnyRecord => record((window as any).NexoWattOperatingStrategiesRuleBuilder);
+
   function defaultNightReserve(targetSocPct: number): AnyRecord {
     return {
       enabled: true,
+      storageResourceId: '',
       targetSocPct,
       absoluteMinSocPct: 10,
       startMode: 'sunset',
@@ -114,8 +118,9 @@
   }
 
   function defaultConfig(): AnyRecord {
+    const builder = ruleBuilder();
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       enabled: false,
       mode: 'observe',
       controlTakeoverEnabled: false,
@@ -127,8 +132,10 @@
       customResources: [],
       profiles: defaultProfiles(),
       rules: [],
+      simulation: typeof builder.defaultSimulation === 'function' ? builder.defaultSimulation('winter') : { activeProfileId: 'winter', resourceStates: {} },
       metadata: {
         foundationVersion: FOUNDATION_VERSION,
+        ruleBuilderVersion: RULE_BUILDER_VERSION,
         lastEditedAt: '',
       },
     };
@@ -148,6 +155,9 @@
       'switchReadId',
       'setpointWriteId',
       'setpointReadId',
+      'capacityReadId',
+      'forecastEnergyReadId',
+      'surplusPowerReadId',
     ];
     const out: AnyRecord = {};
     keys.forEach((key) => { out[key] = text(source[key]); });
@@ -156,7 +166,7 @@
 
   function normalizeCustomResource(input: any, index: number): AnyRecord {
     const source = record(input);
-    const resourceTypes = ['consumer', 'thermal', 'chargingPoint', 'storage', 'producer', 'virtualGroup'];
+    const resourceTypes = ['consumer', 'thermal', 'chargingPoint', 'storage', 'producer', 'sensor', 'virtualGroup'];
     const controlTypes = ['monitor', 'switch', 'setpoint', 'stepped', 'thermal', 'energyTarget'];
     const failSafePolicies = ['observe-only', 'release', 'safe-on', 'safe-off', 'block-optimization'];
     const powerUnits = ['W', 'kW'];
@@ -173,6 +183,11 @@
       powerUnit,
       staleTimeoutSec: integer(source.staleTimeoutSec, 60, 1, 86400),
       failSafePolicy,
+      usableCapacityKWh: number(source.usableCapacityKWh, 0, 0, 1000000),
+      minPowerW: number(source.minPowerW, 0, 0, 1000000000),
+      maxPowerW: number(source.maxPowerW, 0, 0, 1000000000),
+      efficiencyPct: number(source.efficiencyPct, 92, 1, 100),
+      resourceSubtype: text(source.resourceSubtype),
       autoOnly: resourceType === 'chargingPoint' ? true : bool(source.autoOnly, false),
       observeOnly: true,
       writeEnabled: false,
@@ -196,12 +211,13 @@
       season: seasons.includes(text(source.season)) ? text(source.season) : 'custom',
       nightReserve: {
         enabled: reserve.enabled !== false,
+        storageResourceId: text(reserve.storageResourceId),
         targetSocPct,
         absoluteMinSocPct,
         startMode,
-        startTime: /^\d{2}:\d{2}$/.test(text(reserve.startTime)) ? text(reserve.startTime) : '18:00',
+        startTime: /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(text(reserve.startTime)) ? text(reserve.startTime) : '18:00',
         endMode,
-        endTime: /^\d{2}:\d{2}$/.test(text(reserve.endTime)) ? text(reserve.endTime) : '07:00',
+        endTime: /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(text(reserve.endTime)) ? text(reserve.endTime) : '07:00',
       },
     };
   }
@@ -210,11 +226,14 @@
     const source = record(input);
     const sourceId = text(source.sourceId);
     if (!sourceId) return null;
+    const roles = ['auto', 'cooling', 'heatPump', 'heatingRod', 'flexConsumer', 'storage', 'chargingPoint'];
+    const roleOverride = roles.includes(text(source.roleOverride)) ? text(source.roleOverride) : 'auto';
     return {
       sourceId,
       enabled: source.enabled === true,
       priority: integer(source.priority, 50, 1, 100),
-      autoOnly: sourceId.startsWith('evcs:') ? true : bool(source.autoOnly, false),
+      roleOverride,
+      autoOnly: sourceId.startsWith('evcs:') || roleOverride === 'chargingPoint' ? true : bool(source.autoOnly, false),
       observeOnly: true,
       writeEnabled: false,
     };
@@ -235,26 +254,36 @@
       linkIds.add(entry.sourceId);
       dedupedLinks.push(entry);
     });
+    const activeProfileId = profileIds.has(requestedActive) ? requestedActive : (normalizedProfiles[0]?.id || 'winter');
+    const builder = ruleBuilder();
+    const normalizedRules = typeof builder.normalizeRules === 'function'
+      ? builder.normalizeRules(source.rules, Array.from(profileIds))
+      : [];
+    const simulation = typeof builder.normalizeSimulation === 'function'
+      ? builder.normalizeSimulation(source.simulation, activeProfileId)
+      : { activeProfileId, resourceStates: {} };
     return {
       ...base,
       ...clone(source),
-      schemaVersion: 1,
+      schemaVersion: 2,
       enabled: source.enabled === true,
       mode: 'observe',
       controlTakeoverEnabled: false,
       writeExecutionEnabled: false,
       autoImportExisting: source.autoImportExisting !== false,
-      activeProfileId: profileIds.has(requestedActive) ? requestedActive : (normalizedProfiles[0]?.id || 'winter'),
+      activeProfileId,
       controlContract: defaultControlContract(),
       resourceLinks: dedupedLinks,
       customResources: withUniqueIds(list(source.customResources).map(normalizeCustomResource), 'custom'),
       profiles: normalizedProfiles,
-      // Regelbausteine werden erst in einer späteren Ausbaustufe freigegeben.
-      // RC53 speichert deshalb auch bei manipulierten Payloads keine ausführbare Regeldefinition.
-      rules: [],
+      // RC54 speichert Regelbausteine ausschließlich für Planung und Trockenlauf.
+      // Jeder Baustein bleibt fail-closed auf simulationOnly=true / executionEnabled=false.
+      rules: normalizedRules,
+      simulation,
       metadata: {
         ...record(source.metadata),
         foundationVersion: FOUNDATION_VERSION,
+        ruleBuilderVersion: RULE_BUILDER_VERSION,
         lastEditedAt: text(record(source.metadata).lastEditedAt),
       },
     };
@@ -295,6 +324,10 @@
         sourceId: `storagefarm:${index + 1}`,
         name: text(storage.name, `Speicher ${index + 1}`),
         resourceType: 'storage',
+        resourceSubtype: 'battery',
+        controlType: writes ? 'setpoint' : 'monitor',
+        usableCapacityKWh: number(storage.usableCapacityKWh ?? storage.capacityKWh, 0, 0, 1000000),
+        efficiencyPct: number(storage.efficiencyPct, 92, 1, 100),
         sourceLabel: `EOS Speicherfarm · Speicher ${index + 1}`,
         sourceTab: 'storagefarm',
         reads,
@@ -331,6 +364,10 @@
       sourceId: 'storage:primary',
       name: text(storage.name, 'Speicher'),
       resourceType: 'storage',
+      resourceSubtype: 'battery',
+      controlType: writes ? 'setpoint' : 'monitor',
+      usableCapacityKWh: number(storage.usableCapacityKWh ?? storage.capacityKWh, 0, 0, 1000000),
+      efficiencyPct: number(storage.efficiencyPct, 92, 1, 100),
       sourceLabel: 'EOS Speicherregelung',
       sourceTab: 'storageconfig',
       reads,
@@ -357,6 +394,10 @@
         sourceId: `evcs:lp${index + 1}`,
         name: text(row.name, `Ladepunkt ${index + 1}`),
         resourceType: 'chargingPoint',
+        resourceSubtype: 'ev',
+        controlType: writes ? 'energyTarget' : 'monitor',
+        usableCapacityKWh: number(row.vehicleCapacityKWh ?? row.batteryCapacityKWh, 0, 0, 1000000),
+        efficiencyPct: number(row.chargingEfficiencyPct, 92, 1, 100),
         sourceLabel: summary || 'EOS Ladepunkt',
         sourceTab: 'evcs',
         currentMode: text(row.userMode || row.mode, 'Auto/Benutzerauswahl'),
@@ -390,11 +431,18 @@
       const name = text(slot.name);
       if (!name && !reads && !writes) return null;
       const consumerType = text(slot.consumerType, 'generic');
-      const resourceType = consumerType === 'heatPump' ? 'thermal' : (consumerType === 'heatingRod' ? 'thermal' : 'consumer');
+      const inferredCooling = consumerType === 'cooling'
+        || /(?:kühl|kuehl|cool|cold|refriger)/i.test(`${name} ${consumerType}`);
+      const resourceType = ['heatPump', 'heatingRod', 'cooling'].includes(consumerType) || inferredCooling ? 'thermal' : 'consumer';
+      const resourceSubtype = consumerType === 'heatingRod'
+        ? 'heatingRod'
+        : (consumerType === 'heatPump' ? 'heatPump' : (inferredCooling ? 'cooling' : consumerType));
       return {
         sourceId: `flow-consumer:${index + 1}`,
         name: name || `Energiefluss-Verbraucher ${index + 1}`,
         resourceType,
+        resourceSubtype,
+        controlType: writes ? (consumerType === 'heatingRod' ? 'stepped' : 'switch') : 'monitor',
         sourceLabel: `Energiefluss · Slot ${index + 1}`,
         sourceTab: 'flow',
         reads,
@@ -417,6 +465,8 @@
         sourceId: `${key}:${index + 1}`,
         name,
         resourceType,
+        resourceSubtype: key === 'heatingRod' ? 'heatingRod' : (key === 'thermal' ? 'thermal' : key),
+        controlType: key === 'heatingRod' ? 'stepped' : 'thermal',
         sourceLabel: `${label} · Geräteprofil ${index + 1}`,
         sourceTab: tab,
         reads: dpCount,
@@ -447,12 +497,54 @@
     });
   }
 
+  function applyRoleOverride(resourceInput: AnyRecord, roleOverride: string): AnyRecord {
+    const resource: AnyRecord = { ...clone(resourceInput), roleOverride };
+    if (roleOverride === 'cooling') return { ...resource, resourceType: 'thermal', resourceSubtype: 'cooling', controlType: resource.controlType === 'monitor' ? 'thermal' : resource.controlType };
+    if (roleOverride === 'heatPump') return { ...resource, resourceType: 'thermal', resourceSubtype: 'heatPump', controlType: resource.controlType === 'monitor' ? 'thermal' : resource.controlType };
+    if (roleOverride === 'heatingRod') return { ...resource, resourceType: 'thermal', resourceSubtype: 'heatingRod', controlType: resource.controlType === 'monitor' ? 'stepped' : resource.controlType };
+    if (roleOverride === 'flexConsumer') return { ...resource, resourceType: 'consumer', resourceSubtype: 'flexible' };
+    if (roleOverride === 'storage') return { ...resource, resourceType: 'storage', resourceSubtype: 'battery' };
+    if (roleOverride === 'chargingPoint') return { ...resource, resourceType: 'chargingPoint', resourceSubtype: 'ev', controlType: resource.controlType === 'monitor' ? 'energyTarget' : resource.controlType };
+    return resource;
+  }
+
+  function strategyResourceCatalog(): AnyRecord[] {
+    const linkMap = new Map(list(workingConfig.resourceLinks).map((entry) => [text(entry.sourceId), entry]));
+    const existing = deriveExistingResources(fullConfig).map((entry) => {
+      const link = record(linkMap.get(text(entry.sourceId)));
+      return {
+        ...applyRoleOverride(entry, text(link.roleOverride, 'auto')),
+        strategyEnabled: link.enabled === true,
+      };
+    });
+    const custom = list(workingConfig.customResources).map((entry, index) => ({
+      sourceId: `custom:${text(entry.id, String(index + 1))}`,
+      name: text(entry.name, `Benutzerdefinierte Ressource ${index + 1}`),
+      resourceType: text(entry.resourceType, 'consumer'),
+      resourceSubtype: text(entry.resourceSubtype),
+      controlType: text(entry.controlType, 'monitor'),
+      usableCapacityKWh: number(entry.usableCapacityKWh, 0, 0, 1000000),
+      minPowerW: number(entry.minPowerW, 0, 0, 1000000000),
+      maxPowerW: number(entry.maxPowerW, 0, 0, 1000000000),
+      efficiencyPct: number(entry.efficiencyPct, 92, 1, 100),
+      reads: Object.values(record(entry.mappings)).filter((value) => text(value)).length,
+      writes: ['switchWriteId', 'setpointWriteId'].filter((key) => text(record(entry.mappings)[key])).length,
+      sourceLabel: 'Benutzerdefinierte Zuordnung',
+      sourceTab: '',
+      strategyEnabled: entry.enabled !== false,
+    }));
+    const builder = ruleBuilder();
+    const combined = [...existing, ...custom];
+    return typeof builder.normalizeCatalog === 'function' ? builder.normalizeCatalog(combined) : combined;
+  }
+
   function linkBySourceId(sourceId: string): AnyRecord {
     const existing = list(workingConfig.resourceLinks).find((entry) => text(entry.sourceId) === sourceId);
     return existing || {
       sourceId,
       enabled: false,
       priority: 50,
+      roleOverride: 'auto',
       autoOnly: sourceId.startsWith('evcs:'),
       observeOnly: true,
       writeEnabled: false,
@@ -466,6 +558,7 @@
       chargingPoint: 'Ladepunkt',
       storage: 'Speicher',
       producer: 'Erzeuger',
+      sensor: 'Sensor / externe Messgröße',
       virtualGroup: 'Virtuelle Gruppe',
     };
     return labels[type] || 'Ressource';
@@ -507,6 +600,7 @@
           <div class="nw-os-resource__select">
             <label class="nw-field nw-field--switch"><span>Für Strategie vormerken</span><input type="checkbox" data-os-link-enabled="${esc(resource.sourceId)}" ${link.enabled ? 'checked' : ''}></label>
             <label class="nw-field"><span>Priorität</span><input type="number" min="1" max="100" value="${esc(link.priority)}" data-os-link-priority="${esc(resource.sourceId)}"></label>
+            <label class="nw-field"><span>Strategierolle</span><select data-os-link-role="${esc(resource.sourceId)}"><option value="auto"${link.roleOverride === 'auto' ? ' selected' : ''}>Automatisch aus EOS</option><option value="cooling"${link.roleOverride === 'cooling' ? ' selected' : ''}>Kühl-/Gefrieranlage</option><option value="heatPump"${link.roleOverride === 'heatPump' ? ' selected' : ''}>Wärmepumpe / thermisch</option><option value="heatingRod"${link.roleOverride === 'heatingRod' ? ' selected' : ''}>Heizstab / stufig</option><option value="flexConsumer"${link.roleOverride === 'flexConsumer' ? ' selected' : ''}>Flexibler Verbraucher</option><option value="storage"${link.roleOverride === 'storage' ? ' selected' : ''}>Speicher</option><option value="chargingPoint"${link.roleOverride === 'chargingPoint' ? ' selected' : ''}>Ladepunkt</option></select></label>
           </div>
           <div class="nw-os-resource__body">
             <div class="nw-os-resource__title">${esc(resource.name)}</div>
@@ -554,6 +648,7 @@
             <option value="chargingPoint"${resource.resourceType === 'chargingPoint' ? ' selected' : ''}>Ladepunkt</option>
             <option value="storage"${resource.resourceType === 'storage' ? ' selected' : ''}>Speicher</option>
             <option value="producer"${resource.resourceType === 'producer' ? ' selected' : ''}>Erzeuger</option>
+            <option value="sensor"${resource.resourceType === 'sensor' ? ' selected' : ''}>Sensor / externe Messgröße</option>
             <option value="virtualGroup"${resource.resourceType === 'virtualGroup' ? ' selected' : ''}>Virtuelle Gruppe</option>
           </select></label>
           <label class="nw-field"><span>Fähigkeitsprofil</span><select data-os-custom-index="${index}" data-os-custom-field="controlType">
@@ -574,6 +669,13 @@
             <option value="block-optimization"${resource.failSafePolicy === 'block-optimization' ? ' selected' : ''}>Später Optimierung sperren</option>
           </select></label>
         </div>
+        <div class="nw-os-section-label">Planungsdaten für Ziel- und Simulationsregeln</div>
+        <div class="nw-config-grid">
+          <label class="nw-field"><span>Nutzbare Kapazität</span><input type="number" step="0.1" min="0" value="${esc(resource.usableCapacityKWh)}" data-os-custom-index="${index}" data-os-custom-field="usableCapacityKWh"><small>kWh</small></label>
+          <label class="nw-field"><span>Minimale Leistung</span><input type="number" step="1" min="0" value="${esc(resource.minPowerW)}" data-os-custom-index="${index}" data-os-custom-field="minPowerW"><small>W</small></label>
+          <label class="nw-field"><span>Maximale Leistung</span><input type="number" step="1" min="0" value="${esc(resource.maxPowerW)}" data-os-custom-index="${index}" data-os-custom-field="maxPowerW"><small>W</small></label>
+          <label class="nw-field"><span>Wirkungsgrad</span><input type="number" step="0.1" min="1" max="100" value="${esc(resource.efficiencyPct)}" data-os-custom-index="${index}" data-os-custom-field="efficiencyPct"><small>%</small></label>
+        </div>
         <div class="nw-os-section-label">Lesedatenpunkte</div>
         <div class="nw-config-grid">
           ${dpInput(resource, index, 'powerReadId', 'Aktuelle Leistung')}
@@ -583,9 +685,12 @@
           ${dpInput(resource, index, 'temperatureReadId', 'Temperatur')}
           ${dpInput(resource, index, 'alarmReadId', 'Alarm / Störung')}
           ${dpInput(resource, index, 'onlineReadId', 'Online / Kommunikation')}
+          ${dpInput(resource, index, 'capacityReadId', 'Nutzbare Kapazität')}
+          ${dpInput(resource, index, 'forecastEnergyReadId', 'Energie-/PV-Prognose')}
+          ${dpInput(resource, index, 'surplusPowerReadId', 'Verfügbarer Überschuss')}
         </div>
         <div class="nw-os-section-label">Vorbereitete Stell- und Rückmeldepunkte</div>
-        <div class="nw-os-lock-note">Diese Zuordnungen werden gespeichert, aber RC53 führt daraus ausdrücklich keine Schreibbefehle aus.</div>
+        <div class="nw-os-lock-note">Diese Zuordnungen werden gespeichert, aber RC54 führt daraus ausdrücklich keine Schreibbefehle aus.</div>
         <div class="nw-config-grid">
           ${dpInput(resource, index, 'switchWriteId', 'Ein/Aus oder Freigabe', true)}
           ${dpInput(resource, index, 'switchReadId', 'Rückmeldung Ein/Aus')}
@@ -595,9 +700,11 @@
       </div>`).join('');
   }
 
-  function profilesHtml(profiles: AnyRecord[]): string {
+  function profilesHtml(profiles: AnyRecord[], resources: AnyRecord[]): string {
+    const storages = resources.filter((entry) => entry.resourceType === 'storage');
     return profiles.map((profile, index) => {
       const reserve = record(profile.nightReserve);
+      const storageOptions = storages.map((storage) => `<option value="${esc(storage.sourceId)}"${reserve.storageResourceId === storage.sourceId ? ' selected' : ''}>${esc(storage.name)}</option>`).join('');
       return `
         <div class="nw-os-profile" data-os-profile-index="${index}">
           <div class="nw-os-custom__header">
@@ -612,6 +719,7 @@
             <label class="nw-field"><span>Name</span><input type="text" value="${esc(profile.name)}" data-os-profile-index="${index}" data-os-profile-field="name"></label>
             <label class="nw-field"><span>Profilart</span><select data-os-profile-index="${index}" data-os-profile-field="season"><option value="winter"${profile.season === 'winter' ? ' selected' : ''}>Winter</option><option value="summer"${profile.season === 'summer' ? ' selected' : ''}>Sommer</option><option value="custom"${profile.season === 'custom' ? ' selected' : ''}>Benutzerdefiniert</option></select></label>
             <label class="nw-field nw-field--switch"><span>Nachtenergie-Reserve verwenden</span><input type="checkbox" data-os-profile-index="${index}" data-os-profile-reserve-field="enabled" ${reserve.enabled !== false ? 'checked' : ''}></label>
+            <label class="nw-field"><span>Zugeordneter Speicher</span><select data-os-profile-index="${index}" data-os-profile-reserve-field="storageResourceId"><option value="">Automatisch / noch zuordnen</option>${storageOptions}</select><small>Nur ausdrücklich vorgemerkte Speicher werden später steuerbar.</small></label>
             <label class="nw-field"><span>SoC-Ziel zum Nachtbeginn</span><input type="number" min="0" max="100" step="1" value="${esc(reserve.targetSocPct)}" data-os-profile-index="${index}" data-os-profile-reserve-field="targetSocPct"><small>%</small></label>
             <label class="nw-field"><span>Absolute Speicheruntergrenze</span><input type="number" min="0" max="100" step="1" value="${esc(reserve.absoluteMinSocPct)}" data-os-profile-index="${index}" data-os-profile-reserve-field="absoluteMinSocPct"><small>%</small></label>
             <label class="nw-field"><span>Nachtbeginn</span><select data-os-profile-index="${index}" data-os-profile-reserve-field="startMode"><option value="sunset"${reserve.startMode === 'sunset' ? ' selected' : ''}>Sonnenuntergang</option><option value="fixed"${reserve.startMode === 'fixed' ? ' selected' : ''}>Feste Uhrzeit</option><option value="sunrise"${reserve.startMode === 'sunrise' ? ' selected' : ''}>Sonnenaufgang</option></select></label>
@@ -667,13 +775,14 @@
     const eos = edition() === 'eos';
     const activeProfileOptions = list(cfg.profiles).map((profile) => `<option value="${esc(profile.id)}"${profile.id === cfg.activeProfileId ? ' selected' : ''}>${esc(profile.name)}</option>`).join('');
     const linkedCount = list(cfg.resourceLinks).filter((entry) => entry.enabled === true).length;
+    const catalog = strategyResourceCatalog();
     return `${styleHtml()}
       <div id="${ROOT_ID}">
         <div class="nw-os-hero">
-          <div class="nw-os-hero__title">Betriebsstrategien · sichere Grundlagenversion</div>
-          <div class="nw-os-hero__text">Diese Ausbaustufe legt Ressourcen, Datenpunkt-Zuordnungen und Saisonprofile an. Sie beobachtet und speichert ausschließlich Konfiguration. Bestehende Lade-, Speicher-, Heizstab- und Thermikregler bleiben unverändert zuständig.</div>
+          <div class="nw-os-hero__title">Betriebsstrategien · Regelbaukasten und sicherer Trockenlauf</div>
+          <div class="nw-os-hero__text">RC54 ergänzt modulare Muss-/Soll-/Kann-Regeln, Prioritätskaskade und einen manuellen Trockenlauf. Die App speichert und simuliert ausschließlich; bestehende Lade-, Speicher-, Heizstab- und Thermikregler bleiben unverändert zuständig.</div>
           <div class="nw-os-badges">
-            ${badge('Beobachtungsmodus', 'safe')}
+            ${badge('Beobachtungs- und Simulationsmodus', 'safe')}
             ${badge('0 Hardware-Schreibbefehle', 'lock')}
             ${badge('Ladepunkte später nur in Auto', 'lock')}
             ${badge('Single-Writer-Vertrag vorbereitet', 'safe')}
@@ -682,7 +791,7 @@
 
         <div class="nw-os-section">
           <div class="nw-os-section__header">
-            <div><div class="nw-os-section__title">App- und Sicherheitsstatus</div><div class="nw-os-section__subtitle">Installiert/Aktiv wird im AppCenter festgelegt. Die Steuerübernahme ist in RC53 technisch fest auf „aus“ verriegelt.</div></div>
+            <div><div class="nw-os-section__title">App- und Sicherheitsstatus</div><div class="nw-os-section__subtitle">Installiert/Aktiv wird im AppCenter festgelegt. Steuerübernahme und Hardware-Ausführung bleiben in RC54 technisch fest auf „aus“ verriegelt.</div></div>
           </div>
           <div class="nw-config-grid">
             <label class="nw-field"><span>Edition</span><input type="text" value="${eos ? 'EOS Pro' : 'Nicht freigeschaltet'}" disabled></label>
@@ -727,12 +836,16 @@
             <div><div class="nw-os-section__title">Saison- und Nachtreserveprofile</div><div class="nw-os-section__subtitle">Der Ziel-SoC wird bis zum Nachtbeginn geschützt. Während der Nacht darf diese Energie den allgemeinen Nachtverbrauch decken; nur die absolute Untergrenze bleibt gesperrt.</div></div>
             <button id="osAddProfile" type="button" class="nw-btn nw-btn--primary">Profil hinzufügen</button>
           </div>
-          <div id="osProfiles">${profilesHtml(list(cfg.profiles))}</div>
+          <div id="osProfiles">${profilesHtml(list(cfg.profiles), catalog)}</div>
         </div>
 
+        ${typeof ruleBuilder().render === 'function'
+          ? ruleBuilder().render(cfg, catalog)
+          : '<div class="nw-os-section"><div class="nw-os-section__title">Regelbaukasten nicht geladen</div><div class="nw-os-section__subtitle">Die Ressourcen- und Profilgrundlage bleibt verfügbar; Steuerung bleibt gesperrt.</div></div>'}
+
         <div class="nw-os-section">
-          <div class="nw-os-section__title">Nächste Ausbaustufe</div>
-          <div class="nw-os-section__subtitle">Auf dieser sicheren Grundlage folgen Regelbausteine, Muss-/Soll-/Kann-Ziele, Temperatur-/Abschaltdauerbedingungen, Simulation und erst danach die kontrollierte Übergabe an den zentralen Stellwertverteiler.</div>
+          <div class="nw-os-section__title">Nächste sichere Kopplungsstufe</div>
+          <div class="nw-os-section__subtitle">Erst nach Feldtest und separater Freigabe werden simulierte Zielanforderungen über Auto → Betriebsstrategie an den zentralen Stellwertverteiler übergeben. Bestehende Auto-, Boost-, PV-, Min+PV-, Zeit-Ziel-, Speicher- und Safety-Regler werden nicht ersetzt.</div>
         </div>
       </div>`;
   }
@@ -744,11 +857,15 @@
       if (!sourceId) return;
       const priorityInput = Array.from(document.querySelectorAll<HTMLInputElement>('[data-os-link-priority]'))
         .find((entry) => text(entry.getAttribute('data-os-link-priority')) === sourceId);
+      const roleInput = Array.from(document.querySelectorAll<HTMLSelectElement>('[data-os-link-role]'))
+        .find((entry) => text(entry.getAttribute('data-os-link-role')) === sourceId);
+      const roleOverride = text(roleInput?.value, 'auto');
       out.push({
         sourceId,
         enabled: checkbox.checked,
         priority: integer(priorityInput?.value, 50, 1, 100),
-        autoOnly: sourceId.startsWith('evcs:'),
+        roleOverride,
+        autoOnly: sourceId.startsWith('evcs:') || roleOverride === 'chargingPoint',
         observeOnly: true,
         writeEnabled: false,
       });
@@ -810,6 +927,8 @@
     syncLinksFromDom();
     syncCustomFromDom();
     syncProfilesFromDom();
+    const builder = ruleBuilder();
+    if (typeof builder.syncFromDom === 'function') workingConfig = builder.syncFromDom(workingConfig, strategyResourceCatalog());
     workingConfig = normalizeConfig(workingConfig);
   }
 
@@ -888,10 +1007,20 @@
       if (target) target.click();
     }));
 
-    document.querySelectorAll<HTMLElement>('[data-os-link-enabled],[data-os-link-priority],[data-os-custom-field],[data-os-custom-map-key],[data-os-profile-field],[data-os-profile-reserve-field]')
+    document.querySelectorAll<HTMLElement>('[data-os-link-enabled],[data-os-link-priority],[data-os-link-role],[data-os-custom-field],[data-os-custom-map-key],[data-os-profile-field],[data-os-profile-reserve-field]')
       .forEach((node) => node.addEventListener('change', () => {
         syncFromDom();
       }));
+
+    const builder = ruleBuilder();
+    if (typeof builder.bindEvents === 'function') builder.bindEvents({
+      getConfig: () => workingConfig,
+      updateConfig: (next: AnyRecord) => { workingConfig = normalizeConfig(next); },
+      getResources: () => strategyResourceCatalog(),
+      syncAll: () => syncFromDom(),
+      rerender,
+      setStatus,
+    });
   }
 
   async function render(mount: HTMLElement | null, config: AnyRecord = {}, enabled = false): Promise<void> {
@@ -900,6 +1029,8 @@
     fullConfig = record(config);
     appEnabled = enabled === true;
     workingConfig = normalizeConfig(fullConfig.operatingStrategies);
+    const builder = ruleBuilder();
+    if (typeof builder.resetSimulationResult === 'function') builder.resetSimulationResult();
     rerender();
   }
 
@@ -924,21 +1055,37 @@
     out.controlTakeoverEnabled = false;
     out.writeExecutionEnabled = false;
     out.controlContract = defaultControlContract();
-    out.resourceLinks = list(out.resourceLinks).map((entry) => ({
-      ...normalizeLink(entry),
-      observeOnly: true,
-      writeEnabled: false,
-      autoOnly: text(entry.sourceId).startsWith('evcs:') ? true : bool(entry.autoOnly, false),
-    }));
-    out.customResources = list(out.customResources).map((entry, index) => ({
-      ...normalizeCustomResource(entry, index),
-      observeOnly: true,
-      writeEnabled: false,
-      autoOnly: text(entry.resourceType) === 'chargingPoint' ? true : bool(entry.autoOnly, false),
-    }));
+    const builder = ruleBuilder();
+    out.rules = typeof builder.normalizeRules === 'function'
+      ? builder.normalizeRules(out.rules, list(out.profiles).map((profile) => text(profile.id)))
+      : [];
+    out.rules = list(out.rules).map((entry) => ({ ...entry, simulationOnly: true, executionEnabled: false }));
+    out.simulation = typeof builder.normalizeSimulation === 'function'
+      ? builder.normalizeSimulation(out.simulation, out.activeProfileId)
+      : { activeProfileId: out.activeProfileId, resourceStates: {} };
+    out.resourceLinks = list(out.resourceLinks).map((entry) => {
+      const normalized = normalizeLink(entry);
+      if (!normalized) return null;
+      return {
+        ...normalized,
+        observeOnly: true,
+        writeEnabled: false,
+        autoOnly: normalized.autoOnly === true,
+      };
+    }).filter(Boolean);
+    out.customResources = list(out.customResources).map((entry, index) => {
+      const normalized = normalizeCustomResource(entry, index);
+      return {
+        ...normalized,
+        observeOnly: true,
+        writeEnabled: false,
+        autoOnly: normalized.autoOnly === true,
+      };
+    });
     out.metadata = {
       ...record(out.metadata),
       foundationVersion: FOUNDATION_VERSION,
+      ruleBuilderVersion: RULE_BUILDER_VERSION,
       lastEditedAt: new Date().toISOString(),
     };
     workingConfig = out;
@@ -956,6 +1103,11 @@
     apply,
     collect,
     deriveExistingResources,
+    strategyResourceCatalog,
     normalizeConfig,
+    simulate: (config: AnyRecord, resources?: AnyRecord[]) => {
+      const builder = ruleBuilder();
+      return typeof builder.simulate === 'function' ? builder.simulate(config, resources || strategyResourceCatalog(), config.simulation) : null;
+    },
   };
 })();

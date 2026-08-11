@@ -232,6 +232,6 @@
     "npm run test:rc51-ocpp-telemetry",
     "npm run test:package-runtime-start-smoke",
     "npm run test:rc52-charging-diagnostics-log",
-    "npm run test:rc53-operating-strategies-foundation"
+    "npm run test:rc54-operating-strategies-rule-builder"
   ]
 }

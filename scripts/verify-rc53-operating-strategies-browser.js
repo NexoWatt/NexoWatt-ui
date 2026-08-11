@@ -228,7 +228,7 @@ window.fetch=async function(url, options){
       return state && state.root && state.resources >= 6 && state.profiles === 2 ? state : null;
     }, 25000, 'gerenderte Betriebsstrategien-App');
 
-    assert.match(loaded.text, /sichere Grundlagenversion/i);
+    assert.match(loaded.text, /Regelbaukasten und sicherer Trockenlauf/i);
     assert.match(loaded.text, /0 Hardware-Schreibbefehle/);
     assert.match(loaded.text, /Nur Auto → Betriebsstrategie/);
     assert.match(loaded.text, /Manuell, Boost, PV-Überschuss, Min\+PV und Zeit-Ziel/);

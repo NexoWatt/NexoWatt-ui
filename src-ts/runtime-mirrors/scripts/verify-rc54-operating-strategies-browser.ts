@@ -1,11 +1,11 @@
 // @ts-nocheck
 /**
- * TypeScript-Parallelspiegel: scripts/verify-rc53-operating-strategies-browser.js
+ * TypeScript-Parallelspiegel: scripts/verify-rc54-operating-strategies-browser.js
  *
  * Zweck:
  * Diese Datei ist die TypeScript-Vorbereitung der bestehenden JavaScript-Runtime-Datei.
  * Sie wird noch nicht produktiv ausgeführt. Die produktive Quelle bleibt vorerst:
- * scripts/verify-rc53-operating-strategies-browser.js
+ * scripts/verify-rc54-operating-strategies-browser.js
  *
  * Zusammenhang:
  * Der Spiegel hilft uns, die JS-Datei später schrittweise zu typisieren, zu testen und
@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 2713e382c92d8232a3d8a449c7f81dd72f9e6375186c7bd4824e0a060066566a
+ * Original-Hash: 899fd80236046e239350ed53633022ccf99a3c8157f4a8ec00b91fc11472308d
  */
 
 /**
@@ -45,7 +45,7 @@ const CHROMIUM = [
   '/usr/bin/chromium-browser',
   '/usr/bin/google-chrome',
 ].find((candidate) => candidate && fs.existsSync(candidate));
-assert.ok(CHROMIUM, 'Chromium/Chrome für den RC53-AppCenter-Test wurde nicht gefunden.');
+assert.ok(CHROMIUM, 'Chromium/Chrome für den RC54-AppCenter-Test wurde nicht gefunden.');
 
 /**
  * Code-Teil: waitFor
@@ -154,7 +154,21 @@ function appConfig() {
         tariff: { installed: true, enabled: true },
       },
     },
-    operatingStrategies: {},
+    operatingStrategies: {
+      schemaVersion: 2,
+      activeProfileId: 'winter',
+      resourceLinks: [
+        { sourceId: 'storagefarm:1', enabled: true, priority: 90, roleOverride: 'storage' },
+        { sourceId: 'evcs:lp1', enabled: true, priority: 100, roleOverride: 'chargingPoint' },
+        { sourceId: 'flow-consumer:1', enabled: true, priority: 90, roleOverride: 'cooling' },
+        { sourceId: 'heatingRod:1', enabled: true, priority: 40, roleOverride: 'heatingRod' },
+      ],
+      profiles: [
+        { id: 'winter', name: 'Winterbetrieb', enabled: true, season: 'winter', nightReserve: { enabled: true, storageResourceId: 'storagefarm:1', targetSocPct: 40, absoluteMinSocPct: 10, startMode: 'sunset', startTime: '18:00', endMode: 'sunrise', endTime: '07:00' } },
+        { id: 'summer', name: 'Sommerbetrieb', enabled: true, season: 'summer', nightReserve: { enabled: true, storageResourceId: 'storagefarm:1', targetSocPct: 60, absoluteMinSocPct: 10, startMode: 'sunset', startTime: '18:00', endMode: 'sunrise', endTime: '07:00' } },
+      ],
+      rules: [],
+    },
     storageFarm: {
       storages: [{
         name: 'Farm Speicher 1',
@@ -222,6 +236,7 @@ function appConfig() {
 function inlineAppCenterHtml() {
   let html = fs.readFileSync(path.join(WWW, 'ems-apps.html'), 'utf8');
   const css = fs.readFileSync(path.join(WWW, 'styles.css'), 'utf8');
+  const builderJs = fs.readFileSync(path.join(WWW, 'operating-strategies-rule-builder.js'), 'utf8');
   const appJs = fs.readFileSync(path.join(WWW, 'operating-strategies-appcenter.js'), 'utf8');
   const emsJs = fs.readFileSync(path.join(WWW, 'ems-apps.js'), 'utf8');
   const config = appConfig();
@@ -229,17 +244,17 @@ function inlineAppCenterHtml() {
 window.NW_AUTH={requireCapability:async()=>true};
 window.confirm=()=>true;
 window.alert=()=>{};
-window.__rc53HardwareWrites=0;
-window.__rc53InstallerPosts=0;
-window.__rc53LastPatch=null;
+window.__rc54HardwareWrites=0;
+window.__rc54InstallerPosts=0;
+window.__rc54LastPatch=null;
 const __config=${JSON.stringify(config)};
 window.fetch=async function(url, options){
   const p=String(url||'');
   const method=String(options&&options.method||'GET').toUpperCase();
-  if(/\\/api\\/(?:state|object)\\/set|setForeignState|write/i.test(p)){window.__rc53HardwareWrites++;}
+  if(/\\/api\\/(?:state|object)\\/set|setForeignState|write/i.test(p)){window.__rc54HardwareWrites++;}
   if(p.includes('/api/installer/config') && method==='POST'){
-    window.__rc53InstallerPosts++;
-    try{window.__rc53LastPatch=JSON.parse(String(options&&options.body||'{}')).patch||null;}catch(_e){}
+    window.__rc54InstallerPosts++;
+    try{window.__rc54LastPatch=JSON.parse(String(options&&options.body||'{}')).patch||null;}catch(_e){}
     return {ok:true,status:200,json:async()=>({ok:true,config:JSON.parse(JSON.stringify(__config)),license:__config.license})};
   }
   if(p.includes('/api/installer/config')) return {ok:true,status:200,json:async()=>({ok:true,config:JSON.parse(JSON.stringify(__config)),license:__config.license})};
@@ -253,12 +268,12 @@ window.fetch=async function(url, options){
 </script>`;
   html = html.replace(/<link[^>]+href="\/static\/styles\.css"[^>]*>/i, `<style>${css}</style>`);
   html = html.replace(/\s*<script[^>]+src="\/static\/[^"]+"[^>]*><\/script>/gi, '');
-  html = html.replace(/<\/body>/i, `${mock}<script>${appJs}</script><script>${emsJs}</script></body>`);
+  html = html.replace(/<\/body>/i, `${mock}<script>${builderJs}</script><script>${appJs}</script><script>${emsJs}</script></body>`);
   return html;
 }
 
 (async () => {
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'nw-rc53-strategies-'));
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'nw-rc54-strategies-'));
   const browserLog = [];
   const browser = spawn(CHROMIUM, [
     '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
@@ -297,15 +312,18 @@ window.fetch=async function(url, options){
         root:!!document.getElementById('nwOperatingStrategiesRoot'),
         resources:document.querySelectorAll('#osExistingResources .nw-os-resource').length,
         profiles:document.querySelectorAll('#osProfiles .nw-os-profile').length,
+        builder:!!window.NexoWattOperatingStrategiesRuleBuilder,
         text:document.getElementById('nw-tabpanel-strategies')?.innerText||''
       }))()`);
-      return state && state.root && state.resources >= 6 && state.profiles === 2 ? state : null;
-    }, 25000, 'gerenderte Betriebsstrategien-App');
+      return state && state.root && state.builder && state.resources >= 6 && state.profiles === 2 ? state : null;
+    }, 25000, 'gerenderte RC54-Betriebsstrategien-App');
 
     assert.match(loaded.text, /Regelbaukasten und sicherer Trockenlauf/i);
     assert.match(loaded.text, /0 Hardware-Schreibbefehle/);
-    assert.match(loaded.text, /Nur Auto → Betriebsstrategie/);
+    assert.match(loaded.text, /Ladepunkte später nur in Auto/);
     assert.match(loaded.text, /Manuell, Boost, PV-Überschuss, Min\+PV und Zeit-Ziel/);
+    assert.match(loaded.text, /Regelbausteine und Prioritätskaskade/);
+    assert.match(loaded.text, /Trockenlauf \/ Simulation/);
     assert.match(loaded.text, /Farm Speicher 1/);
     assert.doesNotMatch(loaded.text, /Einzelspeicher \(darf nicht doppelt erscheinen\)/);
     assert.match(loaded.text, /Auto Ladepunkt/);
@@ -316,66 +334,105 @@ window.fetch=async function(url, options){
 
     const reserveValues = await cdp.eval(`[...document.querySelectorAll('[data-os-profile-reserve-field="targetSocPct"]')].map(el=>Number(el.value))`);
     assert.deepEqual(reserveValues, [40, 60], `Winter-/Sommerreserve falsch: ${JSON.stringify(reserveValues)}`);
+    const reserveStorage = await cdp.eval(`document.querySelector('[data-os-profile-reserve-field="storageResourceId"]')?.value`);
+    assert.equal(reserveStorage, 'storagefarm:1');
+
+    const roleValues = await cdp.eval(`(() => ({
+      storage:document.querySelector('[data-os-link-role="storagefarm:1"]')?.value,
+      charging:document.querySelector('[data-os-link-role="evcs:lp1"]')?.value,
+      cooling:document.querySelector('[data-os-link-role="flow-consumer:1"]')?.value,
+      rod:document.querySelector('[data-os-link-role="heatingRod:1"]')?.value
+    }))()`);
+    assert.deepEqual(roleValues, { storage: 'storage', charging: 'chargingPoint', cooling: 'cooling', rod: 'heatingRod' });
+
+    await cdp.eval(`document.getElementById('osAddCustomerExample').click(); true`);
+    await waitFor(async () => (await cdp.eval(`document.querySelectorAll('#osRules .nw-os-rule').length`)) === 5, 8000, 'fünf Kundenbeispiel-Regeln');
+
+    const rulesUi = await cdp.eval(`(() => ({
+      cards:document.querySelectorAll('#osRules .nw-os-rule').length,
+      conditions:document.querySelectorAll('#osRules .nw-os-condition').length,
+      daily:document.querySelectorAll('[data-os-rule-schedule-field="mode"] option[value="dailyTime"]:checked').length,
+      cascade:document.querySelectorAll('.nw-os-cascade__row').length,
+      text:document.getElementById('osRules')?.innerText||''
+    }))()`);
+    assert.equal(rulesUi.cards, 5);
+    assert.ok(rulesUi.conditions >= 8, `Bedingungen fehlen: ${JSON.stringify(rulesUi)}`);
+    assert.ok(rulesUi.daily >= 1, 'Kühlhausregel besitzt keinen täglichen 19-Uhr-Zeitplan');
+    assert.equal(rulesUi.cascade, 5);
+    assert.match(rulesUi.text, /Fahrzeug: 70 % bis 12:00 Uhr/);
+    assert.match(rulesUi.text, /Kühlhaus: sichere Nachtpause/);
+    assert.match(rulesUi.text, /MUSS/);
+    assert.match(rulesUi.text, /SOLL/);
+    assert.match(rulesUi.text, /KANN/);
+
+    await cdp.eval(`document.getElementById('osLoadDemoScenario').click(); true`);
+    await waitFor(async () => (await cdp.eval(`document.querySelector('[data-os-simulation-field="nowLocal"]')?.value?.includes('T19:00')`)) === true, 5000, 'geladene Simulationswerte');
+    await cdp.eval(`document.getElementById('osRunSimulation').click(); true`);
+
+    const simulationUi = await waitFor(async () => {
+      const state = await cdp.eval(`(() => ({
+        decisions:document.querySelectorAll('#osSimulationResult .nw-os-decision').length,
+        selected:document.querySelectorAll('#osSimulationResult .nw-os-rule-badge--ready').length,
+        text:document.getElementById('osSimulationResult')?.innerText||'',
+        writes:window.__rc54HardwareWrites,
+        result:window.NexoWattOperatingStrategiesRuleBuilder.getLastSimulationResult()
+      }))()`);
+      return state && state.decisions >= 6 ? state : null;
+    }, 8000, 'sichtbares Simulationsergebnis');
+
+    assert.equal(simulationUi.writes, 0, 'Trockenlauf darf keinen Hardware-Schreibpfad aufrufen');
+    assert.match(simulationUi.text, /Hardware-Schreibvorgänge: 0/);
+    assert.match(simulationUi.text, /Nachtenergie-Reserve/);
+    assert.match(simulationUi.text, /Fahrzeug: 70 % bis 12:00 Uhr/);
+    assert.match(simulationUi.text, /Kühlhaus: sichere Nachtpause/);
+    assert.equal(simulationUi.result.hardwareWrites, 0);
+    assert.equal(simulationUi.result.simulationOnly, true);
+    assert.ok(simulationUi.result.selectedRequests.length >= 2);
+    assert.ok(simulationUi.result.decisions.some((row) => row.ruleType === 'nightReserve'));
+    assert.ok(simulationUi.result.decisions.some((row) => row.name.includes('Kühlhaus') && row.status === 'request'));
+
+    const collected = await cdp.eval(`(() => {
+      const out=window.NexoWattOperatingStrategiesAppCenter.collect({},true,'eos');
+      return {
+        schemaVersion:out.schemaVersion,
+        enabled:out.enabled,
+        mode:out.mode,
+        takeover:out.controlTakeoverEnabled,
+        writes:out.writeExecutionEnabled,
+        rules:out.rules,
+        simulation:out.simulation,
+        links:out.resourceLinks,
+        contract:out.controlContract,
+        hardwareWrites:window.__rc54HardwareWrites
+      };
+    })()`);
+    assert.equal(collected.schemaVersion, 2);
+    assert.equal(collected.enabled, true);
+    assert.equal(collected.mode, 'observe');
+    assert.equal(collected.takeover, false);
+    assert.equal(collected.writes, false);
+    assert.equal(collected.contract.chargingScope, 'auto-only');
+    assert.equal(collected.contract.existingChargingModesUntouched, true);
+    assert.equal(collected.rules.length, 5);
+    assert.ok(collected.rules.every((row) => row.simulationOnly === true && row.executionEnabled === false));
+    assert.ok(collected.links.every((row) => row.observeOnly === true && row.writeEnabled === false));
+    assert.equal(collected.hardwareWrites, 0);
 
     const layout = await cdp.eval(`(() => {
       const root=document.getElementById('nwOperatingStrategiesRoot');
       const rr=root.getBoundingClientRect();
-      const cards=[...root.querySelectorAll('.nw-os-resource')].map(el=>{const r=el.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width};});
-      return {root:{left:rr.left,right:rr.right,width:rr.width,scrollWidth:root.scrollWidth,clientWidth:root.clientWidth},cards,pageScroll:document.documentElement.scrollWidth,viewport:innerWidth};
+      return {root:{width:rr.width,scrollWidth:root.scrollWidth,clientWidth:root.clientWidth},pageScroll:document.documentElement.scrollWidth,viewport:innerWidth};
     })()`);
     assert.ok(layout.root.width > 1100, `App nutzt Desktopbreite nicht: ${JSON.stringify(layout)}`);
     assert.ok(layout.root.scrollWidth <= layout.root.clientWidth + 4, `Betriebsstrategien-App hat horizontalen Overflow: ${JSON.stringify(layout)}`);
     assert.ok(layout.pageScroll <= layout.viewport + 4, `Seite hat horizontalen Overflow: ${JSON.stringify(layout)}`);
 
-    await cdp.eval(`document.getElementById('osAddCustomResource').click(); true`);
-    await waitFor(async () => (await cdp.eval(`document.querySelectorAll('#osCustomResources .nw-os-custom').length`)) === 1, 5000, 'neue benutzerdefinierte Ressource');
-
-    const result = await cdp.eval(`(() => {
-      const card=document.querySelector('#osCustomResources .nw-os-custom');
-      const type=card.querySelector('[data-os-custom-field="resourceType"]');
-      type.value='chargingPoint'; type.dispatchEvent(new Event('change',{bubbles:true}));
-      const name=card.querySelector('[data-os-custom-field="name"]');
-      name.value='Manuell zugeordneter Ladepunkt'; name.dispatchEvent(new Event('change',{bubbles:true}));
-      const read=card.querySelector('[data-os-custom-map-key="powerReadId"]');
-      read.value='custom.ev.power'; read.dispatchEvent(new Event('change',{bubbles:true}));
-      const write=card.querySelector('[data-os-custom-map-key="setpointWriteId"]');
-      write.value='custom.ev.setPower'; write.dispatchEvent(new Event('change',{bubbles:true}));
-      const evLink=document.querySelector('[data-os-link-enabled="evcs:lp1"]');
-      evLink.checked=true; evLink.dispatchEvent(new Event('change',{bubbles:true}));
-      const priority=document.querySelector('[data-os-link-priority="evcs:lp1"]');
-      priority.value='77'; priority.dispatchEvent(new Event('change',{bubbles:true}));
-      const out=window.NexoWattOperatingStrategiesAppCenter.collect({},true,'eos');
-      return {
-        enabled:out.enabled, mode:out.mode, takeover:out.controlTakeoverEnabled, writes:out.writeExecutionEnabled,
-        contract:out.controlContract, rules:out.rules, custom:out.customResources[0],
-        link:out.resourceLinks.find(row=>row.sourceId==='evcs:lp1'), hardwareWrites:window.__rc53HardwareWrites
-      };
-    })()`);
-    assert.equal(result.enabled, true);
-    assert.equal(result.mode, 'observe');
-    assert.equal(result.takeover, false);
-    assert.equal(result.writes, false);
-    assert.equal(result.contract.chargingScope, 'auto-only');
-    assert.equal(result.contract.existingChargingModesUntouched, true);
-    assert.deepEqual(result.rules, []);
-    assert.equal(result.custom.name, 'Manuell zugeordneter Ladepunkt');
-    assert.equal(result.custom.mappings.powerReadId, 'custom.ev.power');
-    assert.equal(result.custom.mappings.setpointWriteId, 'custom.ev.setPower');
-    assert.equal(result.custom.autoOnly, true);
-    assert.equal(result.custom.observeOnly, true);
-    assert.equal(result.custom.writeEnabled, false);
-    assert.equal(result.link.enabled, true);
-    assert.equal(result.link.priority, 77);
-    assert.equal(result.link.autoOnly, true);
-    assert.equal(result.link.writeEnabled, false);
-    assert.equal(result.hardwareWrites, 0, 'UI/Collect darf keinen Hardware-Schreibpfad aufrufen');
-
     const exceptions = cdp.events.filter((row) => row.method === 'Runtime.exceptionThrown');
-    assert.equal(exceptions.length, 0, `Browser-Ausnahmen im RC53-AppCenter-Test: ${JSON.stringify(exceptions)}`);
-    console.log('[rc53-operating-strategies-browser] OK: AppCenter-Reiter, vorhandene Ressourcen, DP-Zuordnung, 40/60-%-Nachtreserve und fail-closed Auto-/Single-Writer-Vertrag ohne Hardwarezugriff gerendert.');
+    assert.equal(exceptions.length, 0, `Browser-Ausnahmen im RC54-AppCenter-Test: ${JSON.stringify(exceptions)}`);
+    console.log('[rc54-operating-strategies-browser] OK: Regelbaukasten, Strategierollen, Kundenkaskade, Nachtreserve und schreibfreier Trockenlauf in Chromium geprüft.');
   } catch (error) {
     const tail = browserLog.join('').split(/\r?\n/).slice(-35).join('\n');
-    if (tail) console.error('[rc53-operating-strategies-browser] Chromium-Log:\n' + tail);
+    if (tail) console.error('[rc54-operating-strategies-browser] Chromium-Log:\n' + tail);
     throw error;
   } finally {
     if (cdp) cdp.close();

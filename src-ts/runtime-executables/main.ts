@@ -3594,15 +3594,17 @@ class NexoWattVis extends utils.Adapter {
 
 
   /**
-   * Normalisiert die AppCenter-Grundlage der EOS-Betriebsstrategien.
+   * Normalisiert die AppCenter-Konfiguration der EOS-Betriebsstrategien.
    *
-   * RC53 ist absichtlich read-only: Selbst manipulierte Installer-Payloads
-   * dürfen keine Steuerübernahme oder Hardware-Ausführung aktivieren. Die
-   * gespeicherten Stell-DP-Zuordnungen sind ausschließlich Vorbereitung für
-   * einen späteren, zentral arbitrierten Single-Writer-Pfad.
+   * RC54 persistiert modulare MUSS-/SOLL-/KANN-Regelbausteine und die
+   * Simulationswerte. Die Normalisierung bleibt konsequent fail-closed:
+   * Jede Regel wird auf simulationOnly=true / executionEnabled=false gesetzt,
+   * Steuerübernahme und Hardware-Schreibpfade sind unabhängig vom Payload aus.
    */
   nwNormalizeOperatingStrategies(configIn, appEnabled = false) {
     const source = this._nwIsPlainObject(configIn) ? this._nwDeepClone(configIn) : {};
+    const asRecord = (value) => this._nwIsPlainObject(value) ? value : {};
+    const asArray = (value) => Array.isArray(value) ? value : [];
     const asString = (value, fallback = '') => {
       const normalized = String(value == null ? '' : value).trim();
       return normalized || fallback;
@@ -3612,13 +3614,35 @@ class NexoWattVis extends utils.Adapter {
       const safe = Number.isFinite(parsed) ? parsed : fallback;
       return Math.max(min, Math.min(max, safe));
     };
+    const nullableNumber = (value, min, max) => {
+      if (value === '' || value === null || value === undefined) return null;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? Math.max(min, Math.min(max, parsed)) : null;
+    };
     const clampInt = (value, fallback, min, max) => Math.round(clampNumber(value, fallback, min, max));
     const normalizeId = (value, fallback) => {
       const normalized = asString(value).replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
       return normalized || fallback;
     };
+    const validTime = (value, fallback) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(asString(value)) ? asString(value) : fallback;
+    const makeIdsUnique = (items, prefix) => {
+      const used = new Set();
+      return items.map((entry, index) => {
+        const baseId = normalizeId(entry && entry.id, `${prefix}-${index + 1}`);
+        let id = baseId;
+        let suffix = 2;
+        while (used.has(id)) {
+          id = `${baseId}-${suffix}`;
+          suffix += 1;
+        }
+        used.add(id);
+        return { ...entry, id };
+      });
+    };
+
     const defaultNightReserve = (targetSocPct) => ({
       enabled: true,
+      storageResourceId: '',
       targetSocPct,
       absoluteMinSocPct: 10,
       startMode: 'sunset',
@@ -3641,16 +3665,17 @@ class NexoWattVis extends utils.Adapter {
       'powerReadId', 'energyReadId', 'stateReadId', 'socReadId',
       'temperatureReadId', 'alarmReadId', 'onlineReadId',
       'switchWriteId', 'switchReadId', 'setpointWriteId', 'setpointReadId',
+      'capacityReadId', 'forecastEnergyReadId', 'surplusPowerReadId',
     ];
     const normalizeMappings = (input) => {
-      const raw = this._nwIsPlainObject(input) ? input : {};
+      const raw = asRecord(input);
       const out = {};
       for (const key of mappingKeys) out[key] = asString(raw[key]);
       return out;
     };
     const normalizeCustomResource = (input, index) => {
-      const raw = this._nwIsPlainObject(input) ? input : {};
-      const resourceTypes = ['consumer', 'thermal', 'chargingPoint', 'storage', 'producer', 'virtualGroup'];
+      const raw = asRecord(input);
+      const resourceTypes = ['consumer', 'thermal', 'chargingPoint', 'storage', 'producer', 'sensor', 'virtualGroup'];
       const controlTypes = ['monitor', 'switch', 'setpoint', 'stepped', 'thermal', 'energyTarget'];
       const failSafePolicies = ['observe-only', 'release', 'safe-on', 'safe-off', 'block-optimization'];
       const resourceTypeRaw = asString(raw.resourceType);
@@ -3663,10 +3688,15 @@ class NexoWattVis extends utils.Adapter {
         name: asString(raw.name, `Benutzerdefinierte Ressource ${index + 1}`),
         enabled: raw.enabled !== false,
         resourceType,
+        resourceSubtype: asString(raw.resourceSubtype),
         controlType,
         powerUnit: asString(raw.powerUnit) === 'kW' ? 'kW' : 'W',
         staleTimeoutSec: clampInt(raw.staleTimeoutSec, 60, 1, 86400),
         failSafePolicy: failSafePolicies.includes(failSafeRaw) ? failSafeRaw : 'observe-only',
+        usableCapacityKWh: clampNumber(raw.usableCapacityKWh, 0, 0, 1000000),
+        minPowerW: clampNumber(raw.minPowerW, 0, 0, 1000000000),
+        maxPowerW: clampNumber(raw.maxPowerW, 0, 0, 1000000000),
+        efficiencyPct: clampNumber(raw.efficiencyPct, 92, 1, 100),
         autoOnly: resourceType === 'chargingPoint' ? true : raw.autoOnly === true,
         observeOnly: true,
         writeEnabled: false,
@@ -3674,17 +3704,15 @@ class NexoWattVis extends utils.Adapter {
       };
     };
     const normalizeProfile = (input, index) => {
-      const raw = this._nwIsPlainObject(input) ? input : {};
-      const reserve = this._nwIsPlainObject(raw.nightReserve) ? raw.nightReserve : {};
+      const raw = asRecord(input);
+      const reserve = asRecord(raw.nightReserve);
       const seasons = ['winter', 'summer', 'custom'];
-      const startModes = ['sunset', 'sunrise', 'fixed'];
+      const reserveModes = ['sunset', 'sunrise', 'fixed'];
       const targetSocPct = clampNumber(reserve.targetSocPct, index === 0 ? 40 : 60, 0, 100);
       const absoluteMinSocPct = Math.min(targetSocPct, clampNumber(reserve.absoluteMinSocPct, 10, 0, 100));
+      const seasonRaw = asString(raw.season);
       const startModeRaw = asString(reserve.startMode);
       const endModeRaw = asString(reserve.endMode);
-      const startTimeRaw = asString(reserve.startTime);
-      const endTimeRaw = asString(reserve.endTime);
-      const seasonRaw = asString(raw.season);
       return {
         id: normalizeId(raw.id, `profile-${index + 1}`),
         name: asString(raw.name, `Betriebsprofil ${index + 1}`),
@@ -3692,62 +3720,187 @@ class NexoWattVis extends utils.Adapter {
         season: seasons.includes(seasonRaw) ? seasonRaw : 'custom',
         nightReserve: {
           enabled: reserve.enabled !== false,
+          storageResourceId: asString(reserve.storageResourceId),
           targetSocPct,
           absoluteMinSocPct,
-          startMode: startModes.includes(startModeRaw) ? startModeRaw : 'sunset',
-          startTime: /^\d{2}:\d{2}$/.test(startTimeRaw) ? startTimeRaw : '18:00',
-          endMode: startModes.includes(endModeRaw) ? endModeRaw : 'sunrise',
-          endTime: /^\d{2}:\d{2}$/.test(endTimeRaw) ? endTimeRaw : '07:00',
+          startMode: reserveModes.includes(startModeRaw) ? startModeRaw : 'sunset',
+          startTime: validTime(reserve.startTime, '18:00'),
+          endMode: reserveModes.includes(endModeRaw) ? endModeRaw : 'sunrise',
+          endTime: validTime(reserve.endTime, '07:00'),
         },
       };
     };
     const normalizeLink = (input) => {
-      const raw = this._nwIsPlainObject(input) ? input : {};
+      const raw = asRecord(input);
       const sourceId = asString(raw.sourceId);
       if (!sourceId) return null;
+      const roles = ['auto', 'cooling', 'heatPump', 'heatingRod', 'flexConsumer', 'storage', 'chargingPoint'];
+      const roleOverride = roles.includes(asString(raw.roleOverride)) ? asString(raw.roleOverride) : 'auto';
       return {
         sourceId,
         enabled: raw.enabled === true,
         priority: clampInt(raw.priority, 50, 1, 100),
-        autoOnly: sourceId.startsWith('evcs:') ? true : raw.autoOnly === true,
+        roleOverride,
+        autoOnly: sourceId.startsWith('evcs:') || roleOverride === 'chargingPoint' ? true : raw.autoOnly === true,
         observeOnly: true,
         writeEnabled: false,
       };
     };
 
-    const makeIdsUnique = (items, prefix) => {
-      const used = new Set();
-      return items.map((entry, index) => {
-        const baseId = normalizeId(entry && entry.id, `${prefix}-${index + 1}`);
-        let id = baseId;
-        let suffix = 2;
-        while (used.has(id)) {
-          id = `${baseId}-${suffix}`;
-          suffix += 1;
-        }
-        used.add(id);
-        return { ...entry, id };
-      });
+    const weekdays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+    const normalizeSchedule = (input, ruleType) => {
+      const raw = asRecord(input);
+      const defaultMode = ruleType === 'thermalPause' ? 'dailyTime' : 'continuous';
+      const modes = ['continuous', 'dailyTime', 'timeWindow'];
+      const requestedWeekdays = asArray(raw.weekdays)
+        .map((entry) => asString(entry))
+        .filter((entry) => weekdays.includes(entry));
+      return {
+        mode: modes.includes(asString(raw.mode)) ? asString(raw.mode) : defaultMode,
+        atTime: validTime(raw.atTime, ruleType === 'thermalPause' ? '19:00' : '00:00'),
+        windowMinutes: clampInt(raw.windowMinutes, ruleType === 'thermalPause' ? 30 : 15, 1, 1440),
+        startTime: validTime(raw.startTime, '19:00'),
+        endTime: validTime(raw.endTime, '07:00'),
+        weekdays: requestedWeekdays.length ? Array.from(new Set(requestedWeekdays)) : weekdays.slice(),
+      };
+    };
+    const systemMetrics = ['outsideTemperatureC', 'pvForecastKWh', 'pvSurplusW', 'gridPowerW', 'electricityPriceCtKWh', 'weekend', 'cheapTariff'];
+    const resourceMetrics = ['socPct', 'temperatureC', 'powerW', 'energyKWh', 'online', 'alarm', 'active', 'fresh', 'offDurationMin', 'runDurationMin', 'state'];
+    const booleanMetrics = new Set(['weekend', 'cheapTariff', 'online', 'alarm', 'active', 'fresh']);
+    const stringMetrics = new Set(['state']);
+    const operators = ['lt', 'lte', 'gt', 'gte', 'eq', 'neq'];
+    const normalizeCondition = (input, index) => {
+      const raw = asRecord(input);
+      const sourceRef = asString(raw.sourceRef, 'system');
+      const allowedMetrics = sourceRef === 'system' ? systemMetrics : resourceMetrics;
+      const metricRaw = asString(raw.metric);
+      const metric = allowedMetrics.includes(metricRaw) ? metricRaw : allowedMetrics[0];
+      const operatorRaw = asString(raw.operator);
+      const operator = operators.includes(operatorRaw) ? operatorRaw : 'eq';
+      let value;
+      if (booleanMetrics.has(metric)) value = raw.value === true || String(raw.value).toLowerCase() === 'true';
+      else if (stringMetrics.has(metric)) value = asString(raw.value);
+      else value = clampNumber(raw.value, 0, -1000000000, 1000000000);
+      return {
+        id: normalizeId(raw.id, `condition-${index + 1}`),
+        enabled: raw.enabled !== false,
+        sourceRef,
+        metric,
+        operator: booleanMetrics.has(metric) || stringMetrics.has(metric) ? (operator === 'neq' ? 'neq' : 'eq') : operator,
+        value,
+      };
+    };
+    const normalizeRule = (input, index, profileIds) => {
+      const raw = asRecord(input);
+      const ruleTypes = ['thermalPause', 'targetSoc', 'targetEnergy', 'switchState', 'targetPower'];
+      const requirements = ['must', 'should', 'can'];
+      const sourcePolicies = ['pv-only', 'pv-preferred', 'cheap-grid', 'grid-allowed'];
+      const ruleTypeRaw = asString(raw.ruleType);
+      const ruleType = ruleTypes.includes(ruleTypeRaw) ? ruleTypeRaw : 'targetSoc';
+      const requirementRaw = asString(raw.requirement);
+      const requirement = requirements.includes(requirementRaw) ? requirementRaw : 'should';
+      const targetRaw = asRecord(raw.target);
+      const safetyRaw = asRecord(raw.safety);
+      const profileScopeRaw = asString(raw.profileScope, 'active');
+      const referencedProfile = profileScopeRaw.replace(/^profile:/, '');
+      const profileScope = ['active', 'all'].includes(profileScopeRaw) || profileIds.has(referencedProfile) ? profileScopeRaw : 'active';
+      const defaultTargetValue = ruleType === 'targetSoc' ? 70 : (ruleType === 'targetEnergy' ? 10 : (ruleType === 'targetPower' ? 2000 : 0));
+      const targetMax = ruleType === 'targetSoc' ? 100 : 1000000000;
+      const targetStateRaw = asString(targetRaw.state);
+      const targetState = ['on', 'off', 'pause', 'release'].includes(targetStateRaw) ? targetStateRaw : (ruleType === 'thermalPause' ? 'pause' : 'on');
+      return {
+        id: normalizeId(raw.id, `rule-${index + 1}`),
+        templateKey: asString(raw.templateKey),
+        name: asString(raw.name, `Regel ${index + 1}`),
+        enabled: raw.enabled !== false,
+        requirement,
+        priority: clampInt(raw.priority, 50, 1, 100),
+        profileScope,
+        targetResourceId: asString(raw.targetResourceId),
+        ruleType,
+        schedule: normalizeSchedule(raw.schedule, ruleType),
+        target: {
+          value: clampNumber(targetRaw.value, defaultTargetValue, 0, targetMax),
+          unit: ruleType === 'targetSoc' ? '%' : (ruleType === 'targetEnergy' ? 'kWh' : (ruleType === 'targetPower' ? 'W' : 'state')),
+          state: targetState,
+          dueTime: validTime(targetRaw.dueTime, '12:00'),
+          dueDay: asString(targetRaw.dueDay) === 'today' ? 'today' : 'next-day',
+          energySourcePolicy: sourcePolicies.includes(asString(targetRaw.energySourcePolicy)) ? asString(targetRaw.energySourcePolicy) : 'pv-preferred',
+        },
+        safety: {
+          maxOffDurationMin: clampInt(safetyRaw.maxOffDurationMin, 480, 1, 10080),
+          minRunDurationMin: clampInt(safetyRaw.minRunDurationMin, 5, 0, 1440),
+          minStopDurationMin: clampInt(safetyRaw.minStopDurationMin, 5, 0, 1440),
+          maxTemperatureC: clampNumber(safetyRaw.maxTemperatureC, 7, -100, 200),
+          minTemperatureC: clampNumber(safetyRaw.minTemperatureC, -50, -100, 200),
+          hysteresisC: clampNumber(safetyRaw.hysteresisC, 1, 0, 50),
+          requireFresh: safetyRaw.requireFresh !== false,
+          requireOnline: safetyRaw.requireOnline !== false,
+          blockOnAlarm: safetyRaw.blockOnAlarm !== false,
+        },
+        conditions: makeIdsUnique(asArray(raw.conditions).slice(0, 20).map(normalizeCondition), 'condition'),
+        simulationOnly: true,
+        executionEnabled: false,
+      };
+    };
+    const normalizeResourceState = (input) => {
+      const raw = asRecord(input);
+      return {
+        socPct: nullableNumber(raw.socPct, 0, 100),
+        temperatureC: nullableNumber(raw.temperatureC, -100, 200),
+        powerW: nullableNumber(raw.powerW, -1000000000, 1000000000),
+        energyKWh: nullableNumber(raw.energyKWh, -1000000, 1000000),
+        capacityKWh: nullableNumber(raw.capacityKWh, 0, 1000000),
+        online: raw.online !== false,
+        alarm: raw.alarm === true,
+        active: raw.active === true,
+        fresh: raw.fresh !== false,
+        offDurationMin: clampNumber(raw.offDurationMin, 0, 0, 1000000),
+        runDurationMin: clampNumber(raw.runDurationMin, 0, 0, 1000000),
+        state: asString(raw.state, 'idle'),
+      };
+    };
+    const normalizeSimulation = (input, activeProfileId, allowedProfileIds) => {
+      const raw = asRecord(input);
+      const resourceStates = {};
+      for (const key of Object.keys(asRecord(raw.resourceStates)).slice(0, 250)) {
+        const id = asString(key);
+        if (id) resourceStates[id] = normalizeResourceState(asRecord(raw.resourceStates)[key]);
+      }
+      const nowLocalRaw = asString(raw.nowLocal);
+      const requestedProfileId = asString(raw.activeProfileId, activeProfileId);
+      return {
+        activeProfileId: allowedProfileIds && allowedProfileIds.has(requestedProfileId) ? requestedProfileId : activeProfileId,
+        nowLocal: /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d$/.test(nowLocalRaw) ? nowLocalRaw : '',
+        outsideTemperatureC: clampNumber(raw.outsideTemperatureC, 5, -100, 100),
+        pvForecastKWh: clampNumber(raw.pvForecastKWh, 20, 0, 1000000),
+        pvSurplusW: clampNumber(raw.pvSurplusW, 0, -1000000000, 1000000000),
+        gridPowerW: clampNumber(raw.gridPowerW, 0, -1000000000, 1000000000),
+        electricityPriceCtKWh: clampNumber(raw.electricityPriceCtKWh, 30, -10000, 10000),
+        weekend: raw.weekend === true,
+        cheapTariff: raw.cheapTariff === true,
+        resourceStates,
+      };
     };
 
-    const profilesRaw = Array.isArray(source.profiles) ? source.profiles : [];
+    const profilesRaw = asArray(source.profiles).slice(0, 50);
     const profiles = makeIdsUnique(profilesRaw.map(normalizeProfile), 'profile');
     const normalizedProfiles = profiles.length ? profiles : defaultProfiles();
     const profileIds = new Set(normalizedProfiles.map((profile) => profile.id));
     const links = [];
     const linkIds = new Set();
-    for (const entry of (Array.isArray(source.resourceLinks) ? source.resourceLinks : [])) {
+    for (const entry of asArray(source.resourceLinks).slice(0, 500)) {
       const normalized = normalizeLink(entry);
       if (!normalized || linkIds.has(normalized.sourceId)) continue;
       linkIds.add(normalized.sourceId);
       links.push(normalized);
     }
-
     const requestedActive = asString(source.activeProfileId, 'winter');
     const activeProfileId = profileIds.has(requestedActive) ? requestedActive : normalizedProfiles[0].id;
-    const metadata = this._nwIsPlainObject(source.metadata) ? source.metadata : {};
+    const rules = makeIdsUnique(asArray(source.rules).slice(0, 200).map((entry, index) => normalizeRule(entry, index, profileIds)), 'rule');
+    const metadata = asRecord(source.metadata);
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       enabled: appEnabled === true,
       mode: 'observe',
       controlTakeoverEnabled: false,
@@ -3756,14 +3909,14 @@ class NexoWattVis extends utils.Adapter {
       activeProfileId,
       controlContract,
       resourceLinks: links,
-      customResources: makeIdsUnique((Array.isArray(source.customResources) ? source.customResources : []).map(normalizeCustomResource), 'custom'),
+      customResources: makeIdsUnique(asArray(source.customResources).slice(0, 500).map(normalizeCustomResource), 'custom'),
       profiles: normalizedProfiles,
-      // Regeldefinitionen bleiben bis zur späteren Strategy-Engine-Ausbaustufe
-      // fail-closed deaktiviert und werden aus Payloads nicht übernommen.
-      rules: [],
+      rules,
+      simulation: normalizeSimulation(source.simulation, activeProfileId, profileIds),
       metadata: {
         ...this._nwDeepClone(metadata),
         foundationVersion: '0.8.177',
+        ruleBuilderVersion: '0.8.178',
         lastEditedAt: asString(metadata.lastEditedAt),
       },
     };
@@ -4216,9 +4369,9 @@ class NexoWattVis extends utils.Adapter {
       }
     }
 
-    // Betriebsstrategien-Grundlage: App-Zustand und Lizenz bestimmen ausschließlich,
-    // ob die Konfiguration als aktiv markiert wird. Steuerübernahme/Writebacks bleiben
-    // in RC53 auch bei manipulierten Payloads immer gesperrt.
+    // Betriebsstrategien: App-Zustand und Lizenz bestimmen ausschließlich, ob die
+    // Konfiguration als aktiv markiert wird. Regelbausteine und Trockenlaufwerte werden
+    // in RC54 gespeichert; Steuerübernahme/Writebacks bleiben bei manipulierten Payloads gesperrt.
     try {
       const appState = out.emsApps && out.emsApps.apps ? out.emsApps.apps.operatingStrategies : null;
       const appActive = this._nwLicenseAllowsAppId('operatingStrategies') && !!(appState && appState.installed && appState.enabled);

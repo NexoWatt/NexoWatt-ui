@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:50d695a590a0c5fdf3a3ea3f6395c420e32e127e056b932e89e39ffebd761800
+ * Quell-Hash: sha256:5b05c891e99d0256ce56c4ece3e99ba4372a458735ce352d2cc3b0fe94886a9f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -406,7 +406,7 @@
     { id: 'energyLedger', label: 'Energieherkunft & Ladebilanz', desc: 'Home/Pro: read-only 15-Minuten-Bilanz für Netz, PV, Speicherherkunft und Ladezähler; erzeugt prüfbare Journale, schreibt aber niemals auf Hardware', mandatory: false, hems: true },
     { id: 'meshMicrogrid', label: 'EOS Mesh/Microgrid', desc: 'EOS: separates Datenmodell für lokale Energie-Knoten, Cluster, Local First / Grid Last und spätere Nachbarschaftsversorgung', mandatory: false, hems: false },
     { id: 'netOperator', label: 'Netzbetreiber-Schnittstelle', desc: 'EOS: kanonische read-only Schnittstelle hinter einem zertifizierten EZA-/Parkregler; Herstellerregister werden ausschließlich im Treiberprofil gepflegt', mandatory: false, hems: false },
-    { id: 'operatingStrategies', label: 'Betriebsstrategien', desc: 'EOS: modulare Ressourcen, DP-Zuordnung, Saisonprofile und Nachtenergie-Reserve; RC53 arbeitet ausschließlich im Beobachtungsmodus', mandatory: false, hems: false },
+    { id: 'operatingStrategies', label: 'Betriebsstrategien', desc: 'EOS: modulare Ressourcen, DP-Zuordnung, MUSS-/SOLL-/KANN-Regeln, Prioritätskaskade und Trockenlauf; RC54 bleibt ohne Hardware-Schreibpfad', mandatory: false, hems: false },
     { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', mandatory: true, hems: true },
     { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls genutzt)', mandatory: false, hems: true },
     { id: 'multiuse', label: 'MultiUse', desc: 'Speicher-Policy mit SoC-Zonen für Reserve, Lastspitzenkappung und Eigenverbrauch; Storage-Control bleibt einziger Batterieschreiber', mandatory: false, hems: false }
@@ -13088,9 +13088,9 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       : deepMerge({}, (currentConfig && currentConfig.netOperatorInterface) ? currentConfig.netOperatorInterface : {});
     patch.enableNetOperatorInterface = netOperatorEnabled && _licenseEdition() === 'eos';
 
-    // EOS Betriebsstrategien: In RC53 werden ausschließlich Ressourcen-, DP- und
-    // Profildefinitionen gespeichert. Steuerübernahme und Hardware-Writebacks
-    // bleiben unabhängig von UI-Eingaben technisch gesperrt.
+    // EOS Betriebsstrategien: In RC54 werden Ressourcen-, DP-, Profil-, Regel- und
+    // Simulationsdaten gespeichert. Steuerübernahme und Hardware-Writebacks bleiben
+    // unabhängig von UI-Eingaben technisch gesperrt.
     const operatingStrategiesAppState = patch.emsApps && patch.emsApps.apps && patch.emsApps.apps.operatingStrategies ? patch.emsApps.apps.operatingStrategies : null;
     const operatingStrategiesEnabled = !!(operatingStrategiesAppState && operatingStrategiesAppState.installed && operatingStrategiesAppState.enabled);
     patch.operatingStrategies = window.NexoWattOperatingStrategiesAppCenter

@@ -48,7 +48,8 @@ assert.match(canonicalUi, /writeExecutionEnabled:\s*false/);
 assert.match(canonicalUi, /chargingScope:\s*'auto-only'/);
 assert.match(canonicalUi, /existingChargingModesUntouched:\s*true/);
 assert.match(canonicalUi, /fallbackAutoSource:\s*'standard-auto'/);
-assert.match(canonicalUi, /rules:\s*\[\]/);
+assert.match(canonicalUi, /simulationOnly:\s*true/);
+assert.match(canonicalUi, /executionEnabled:\s*false/);
 
 // 3. Browsernormalisierung real ausführen.
 const context = vm.createContext({
@@ -149,7 +150,8 @@ assert.match(mainTs, /nwNormalizeOperatingStrategies\(configIn, appEnabled = fal
 assert.match(mainTs, /mode:\s*'observe'/);
 assert.match(mainTs, /controlTakeoverEnabled:\s*false/);
 assert.match(mainTs, /writeExecutionEnabled:\s*false/);
-assert.match(mainTs, /rules:\s*\[\]/);
+assert.match(mainTs, /simulationOnly:\s*true/);
+assert.match(mainTs, /executionEnabled:\s*false/);
 assert.match(mainTs, /'operatingStrategies'/);
 assert.match(mainTs, /operatingStrategies:\s*this\.nwNormalizeOperatingStrategies\(n\.operatingStrategies, operatingStrategiesActive\)/);
 assert.match(mainTs, /operatingStrategiesApp\.installed && operatingStrategiesApp\.enabled/);

@@ -1,3 +1,13 @@
+## 0.8.178 - 2026-08-11
+
+- Die EOS-Pro-App „Betriebsstrategien“ um einen modularen Regelbaukasten mit MUSS-/SOLL-/KANN-Klassen, Prioritäten, Profilbezug, Zeitplänen, Prüffenstern und Wochentagen erweitert.
+- Frei kombinierbare Bedingungen für System-, Wetter-, Tarif- und Ressourcenwerte ergänzt. Fehlende Zielgeräte oder Messwerte werden sichtbar blockiert und nicht mit stillen Ersatzzuordnungen weiterverarbeitet.
+- Thermische Sicherheitsparameter für maximale Abschaltdauer, Mindestlauf-/Stillstandszeit, Temperaturgrenzen, Hysterese, Aktualität, Online-Status und Alarm ergänzt. Sicherheitsentscheidungen werden im Trockenlauf vor normalen Zielen priorisiert.
+- SoC-, Energie-, Schalt- und Leistungsziele einschließlich Zielzeit, verbleibender Energie, Wirkungsgrad sowie minimaler/maximaler Geräteleistung vorbereitet. Die Nachtenergie-Reserve wird als eigenes SOLL-Ziel bis zum Nachtbeginn simuliert.
+- Editierbare Kundenkaskade für Fahrzeug 70 % bis 12:00 Uhr, Kühlhaus-Nachtpause, Speicher 80 %, optionale Fahrzeugladung bis 100 % und Heizstab-Überschussnutzung ergänzt.
+- Vollständig schreibfreien Trockenlauf mit manuellen Testwerten, Konfliktauflösung pro Ressource, ausgewählter Anforderung, zurückgestellten Regeln und nachvollziehbaren Entscheidungsgründen ergänzt.
+- Vorhandene EOS-Ressourcen nehmen weiterhin nur nach ausdrücklicher Freigabe teil. Backend und Frontend erzwingen `simulationOnly`, `hardwareWrites = 0`, deaktivierte Steuerübernahme und deaktivierte Hardwareausführung; produktive Lade-, Speicher-, Heizstab-, Thermik-, §14a-, Parkregler- und Safety-Pfade bleiben unangetastet.
+
 ## 0.8.177 - 2026-08-11
 
 - Neue installierbare und aktivierbare EOS-Pro-App „Betriebsstrategien“ im AppCenter ergänzt. Nach Installation steht ein eigener Reiter für Ressourcen, Datenpunktzuordnungen und Saisonprofile zur Verfügung.

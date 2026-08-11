@@ -1,4 +1,4 @@
-NexoWatt EOS 0.8.177 RC53 – direkter npm-Publish
+NexoWatt EOS 0.8.178 RC54 – direkter npm-Publish
 
 1. Inhalt dieser ZIP in den Projektordner kopieren.
 2. Vorhandene Dateien ersetzen.
@@ -8,8 +8,9 @@ NexoWatt EOS 0.8.177 RC53 – direkter npm-Publish
    npm publish
 
 Der Publish-Guard prüft read-only:
-- ob Version 0.8.177 auf npm noch frei ist,
+- ob Version 0.8.178 auf npm noch frei ist,
 - ob alle freigegebenen Produktdateien dem geprüften Artefaktmanifest entsprechen,
-- ob die Betriebsstrategien-Grundlage unverändert im gesperrten Beobachtungsmodus ausgeliefert wird.
+- ob der modulare Betriebsstrategien-Regelbaukasten samt Trockenlauf vollständig enthalten ist,
+- ob die Strategie weiterhin fail-closed im Beobachtungs-/Simulationsmodus bleibt und keine Hardwarewerte schreibt.
 
 Es werden keine Runtime-Dateien gebaut oder verändert.
