@@ -84,6 +84,7 @@ const crypto = require('crypto');
 const https = require('https');
 const pkg = require('./package.json');
 const { defaultEnergyOriginConfig, registerEnergyOriginApi } = require('./lib/energy-origin-api');
+const { registerChargingDiagnosticsAuditApi } = require('./lib/charging-diagnostics-api');
 const tariffProviderRegistry = require('./ems/services/tariff-provider-registry');
 const { normalizeEvcsEnergyTotalKwh } = require('./ems/services/evcs-unit-conversion');
 
@@ -16569,6 +16570,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
 
     // --- Charging diagnostics (Phase 3.3) ---
     // Provides a compact per-ladepunkt overview (mapping + freshness + runtime decisions).
+    registerChargingDiagnosticsAuditApi(app, this, requireInstaller);
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/ems/charging/diagnostics', requireInstaller, async (req, res) => {
     app.get('/api/ems/charging/diagnostics', requireInstaller, async (req, res) => {
       try {

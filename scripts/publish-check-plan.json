@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "description": "Ordered fail-closed release checks. Executed without a shell command chain so Windows cmd.exe limits cannot truncate the gate.",
-  "expectedStepCount": 228,
+  "expectedStepCount": 229,
   "commands": [
     "node scripts/ensure-publish-dev-deps.js",
     "npm run typecheck",
@@ -230,6 +230,7 @@
     "npm run test:rc49-para14a-evcs-start",
     "npm run test:rc50-netoperator-interface",
     "npm run test:rc51-ocpp-telemetry",
-    "npm run test:package-runtime-start-smoke"
+    "npm run test:package-runtime-start-smoke",
+    "npm run test:rc52-charging-diagnostics-log"
   ]
 }

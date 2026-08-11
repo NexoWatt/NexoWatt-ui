@@ -12874,3 +12874,226 @@ body.nw-page-smarthome .nw-sh-tile--quality-invalid{
     min-height:176px !important;
   }
 }
+
+/* RC52 – AppCenter Lademanagement Live-Diagnose / Ereignislog */
+body.nw-page-ems-apps .nw-charging-audit{
+  overflow:hidden;
+}
+body.nw-page-ems-apps .nw-charging-audit__head{
+  align-items:flex-start;
+  gap:16px;
+  flex-wrap:wrap;
+}
+body.nw-page-ems-apps .nw-charging-audit__actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:flex-end;
+}
+body.nw-page-ems-apps .nw-charging-audit__filters{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:14px 0;
+  padding:12px 14px;
+  border:1px solid rgba(104,150,193,.18);
+  border-radius:14px;
+  background:rgba(2,12,22,.34);
+}
+body.nw-page-ems-apps .nw-charging-audit__filter-label{
+  font-size:.8rem;
+  opacity:.82;
+}
+body.nw-page-ems-apps .nw-charging-audit__filter{
+  min-width:180px;
+  width:auto;
+}
+body.nw-page-ems-apps .nw-charging-audit__summary{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+  gap:10px;
+  margin-bottom:18px;
+}
+body.nw-page-ems-apps .nw-charging-audit__metric{
+  min-width:0;
+  padding:12px 13px;
+  border:1px solid rgba(104,150,193,.18);
+  border-radius:14px;
+  background:linear-gradient(180deg,rgba(8,25,42,.68),rgba(3,14,25,.50));
+}
+body.nw-page-ems-apps .nw-charging-audit__metric-label{
+  color:rgba(226,232,240,.70);
+  font-size:.72rem;
+  line-height:1.3;
+}
+body.nw-page-ems-apps .nw-charging-audit__metric-value{
+  margin-top:5px;
+  color:#f8fafc;
+  font-size:1.03rem;
+  font-weight:750;
+  overflow-wrap:anywhere;
+}
+body.nw-page-ems-apps .nw-charging-audit__metric--ok{
+  border-color:rgba(34,197,94,.34);
+}
+body.nw-page-ems-apps .nw-charging-audit__metric--warn{
+  border-color:rgba(245,158,11,.45);
+  background:linear-gradient(180deg,rgba(56,36,7,.42),rgba(22,17,8,.40));
+}
+body.nw-page-ems-apps .nw-charging-audit__metric--error{
+  border-color:rgba(239,68,68,.50);
+  background:linear-gradient(180deg,rgba(65,17,21,.45),rgba(24,9,12,.42));
+}
+body.nw-page-ems-apps .nw-charging-audit__subhead{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:12px;
+  margin:16px 0 9px;
+}
+body.nw-page-ems-apps .nw-charging-audit__subhead h3{
+  margin:0;
+  font-size:.95rem;
+}
+body.nw-page-ems-apps .nw-charging-audit__subhead span{
+  color:rgba(226,232,240,.62);
+  font-size:.72rem;
+  text-align:right;
+}
+body.nw-page-ems-apps .nw-charging-audit__wallboxes{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(310px,1fr));
+  gap:12px;
+}
+body.nw-page-ems-apps .nw-charging-audit__wallbox{
+  min-width:0;
+  padding:13px;
+  border:1px solid rgba(104,150,193,.18);
+  border-radius:15px;
+  background:linear-gradient(180deg,rgba(7,24,40,.68),rgba(2,13,23,.52));
+}
+body.nw-page-ems-apps .nw-charging-audit__wallbox--warn{
+  border-color:rgba(245,158,11,.45);
+}
+body.nw-page-ems-apps .nw-charging-audit__wallbox--error{
+  border-color:rgba(239,68,68,.52);
+}
+body.nw-page-ems-apps .nw-charging-audit__wallbox-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:10px;
+}
+body.nw-page-ems-apps .nw-charging-audit__wallbox-name{
+  font-weight:750;
+  overflow-wrap:anywhere;
+}
+body.nw-page-ems-apps .nw-charging-audit__pill{
+  display:inline-flex;
+  align-items:center;
+  min-height:25px;
+  padding:3px 8px;
+  border:1px solid rgba(104,150,193,.22);
+  border-radius:999px;
+  color:rgba(226,232,240,.82);
+  background:rgba(2,12,22,.55);
+  font-size:.68rem;
+  font-weight:700;
+  white-space:nowrap;
+}
+body.nw-page-ems-apps .nw-charging-audit__pill--ok{
+  border-color:rgba(34,197,94,.36);
+  color:#86efac;
+}
+body.nw-page-ems-apps .nw-charging-audit__pill--warn{
+  border-color:rgba(245,158,11,.46);
+  color:#fde68a;
+}
+body.nw-page-ems-apps .nw-charging-audit__pill--error{
+  border-color:rgba(239,68,68,.52);
+  color:#fca5a5;
+}
+body.nw-page-ems-apps .nw-charging-audit__numbers{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:7px;
+}
+body.nw-page-ems-apps .nw-charging-audit__number{
+  min-width:0;
+  padding:8px;
+  border-radius:10px;
+  background:rgba(2,12,22,.48);
+}
+body.nw-page-ems-apps .nw-charging-audit__number span{
+  display:block;
+  color:rgba(226,232,240,.58);
+  font-size:.64rem;
+}
+body.nw-page-ems-apps .nw-charging-audit__number strong{
+  display:block;
+  margin-top:3px;
+  font-size:.84rem;
+  overflow-wrap:anywhere;
+}
+body.nw-page-ems-apps .nw-charging-audit__reason{
+  margin-top:9px;
+  color:rgba(226,232,240,.72);
+  font-size:.72rem;
+  line-height:1.4;
+  overflow-wrap:anywhere;
+}
+body.nw-page-ems-apps .nw-charging-audit__table-wrap{
+  width:100%;
+  max-height:430px;
+  overflow:auto;
+  border:1px solid rgba(104,150,193,.18);
+  border-radius:14px;
+  background:rgba(2,12,22,.36);
+}
+body.nw-page-ems-apps .nw-charging-audit__table{
+  width:100%;
+  min-width:1180px;
+  border-collapse:separate;
+  border-spacing:0;
+  font-size:.72rem;
+}
+body.nw-page-ems-apps .nw-charging-audit__table th,
+body.nw-page-ems-apps .nw-charging-audit__table td{
+  padding:9px 10px;
+  border-bottom:1px solid rgba(104,150,193,.12);
+  text-align:left;
+  vertical-align:top;
+}
+body.nw-page-ems-apps .nw-charging-audit__table th{
+  position:sticky;
+  top:0;
+  z-index:2;
+  color:rgba(226,232,240,.80);
+  background:#0a1623;
+  font-size:.66rem;
+  letter-spacing:.02em;
+  text-transform:uppercase;
+}
+body.nw-page-ems-apps .nw-charging-audit__event--warn td:first-child{
+  box-shadow:inset 3px 0 0 rgba(245,158,11,.85);
+}
+body.nw-page-ems-apps .nw-charging-audit__event--error td:first-child{
+  box-shadow:inset 3px 0 0 rgba(239,68,68,.90);
+}
+body.nw-page-ems-apps .nw-charging-audit__muted{
+  color:rgba(226,232,240,.55);
+}
+body.nw-page-ems-apps .nw-charging-audit__empty{
+  padding:18px;
+  border:1px dashed rgba(104,150,193,.25);
+  border-radius:13px;
+  color:rgba(226,232,240,.62);
+  text-align:center;
+}
+@media(max-width:900px){
+  body.nw-page-ems-apps .nw-charging-audit__numbers{grid-template-columns:repeat(2,minmax(0,1fr));}
+  body.nw-page-ems-apps .nw-charging-audit__subhead{align-items:flex-start;flex-direction:column;}
+  body.nw-page-ems-apps .nw-charging-audit__subhead span{text-align:left;}
+}

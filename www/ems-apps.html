@@ -1952,6 +1952,64 @@
       </div>
     </section>
 
+    <section class="nw-config-section nw-charging-audit" aria-labelledby="chargingAuditTitle">
+      <div class="nw-config-section__head nw-charging-audit__head">
+        <div>
+          <h2 id="chargingAuditTitle" class="nw-config-section__title">Lademanagement – Live-Diagnose &amp; Ereignislog</h2>
+          <div class="nw-config-section__subtitle" style="margin:0;opacity:.85;line-height:1.45;">
+            Zeigt pro Ladepunkt Istleistung, angeforderten Wert, finalen NexoWatt-Sollwert, Reservierung, PV-Anteil, aktive Begrenzung, Sicherungsstufe und Hardware-Write-Status. Das Log ist read-only und beeinflusst keine Regelung.
+          </div>
+        </div>
+        <div class="nw-config-row__actions nw-charging-audit__actions">
+          <button id="refreshChargingAudit" type="button" class="nw-config-btn nw-config-btn--ghost">Aktualisieren</button>
+          <button id="exportChargingAuditJson" type="button" class="nw-config-btn nw-config-btn--ghost">JSON exportieren</button>
+          <button id="exportChargingAuditCsv" type="button" class="nw-config-btn nw-config-btn--ghost">CSV exportieren</button>
+          <button id="clearChargingAudit" type="button" class="nw-config-btn nw-config-btn--ghost">Log leeren</button>
+        </div>
+      </div>
+
+      <div class="nw-charging-audit__filters">
+        <label class="nw-config-checklabel"><input id="chargingAuditAutoRefresh" type="checkbox" checked/> Automatisch aktualisieren</label>
+        <label class="nw-config-checklabel"><input id="chargingAuditOnlyProblems" type="checkbox"/> Nur Probleme / Begrenzungen</label>
+        <label class="nw-charging-audit__filter-label" for="chargingAuditFilter">Ladepunkt</label>
+        <select id="chargingAuditFilter" class="nw-config-input nw-charging-audit__filter">
+          <option value="">Alle Ladepunkte</option>
+        </select>
+        <span id="chargingAuditStatus" class="nw-config-badge nw-config-badge--idle">Noch keine Daten</span>
+      </div>
+
+      <div id="chargingAuditSummary" class="nw-charging-audit__summary" aria-live="polite"></div>
+
+      <div class="nw-charging-audit__subhead">
+        <h3>Aktuelle Verteilung je Ladepunkt</h3>
+        <span>„Anforderung“ = vor finaler Begrenzung; „NexoWatt Soll“ = tatsächlich freigegebener Hardware-Sollwert.</span>
+      </div>
+      <div id="chargingAuditWallboxes" class="nw-charging-audit__wallboxes"></div>
+
+      <div class="nw-charging-audit__subhead">
+        <h3>Ereignislog</h3>
+        <span>Nur Zustands-/Sollwertänderungen sowie periodische aktive Snapshots; maximal 240 Einträge.</span>
+      </div>
+      <div class="nw-charging-audit__table-wrap">
+        <table class="nw-charging-audit__table">
+          <thead>
+            <tr>
+              <th>Zeit</th>
+              <th>Ladepunkt</th>
+              <th>Modus</th>
+              <th>Ist</th>
+              <th>Anforderung</th>
+              <th>NexoWatt Soll</th>
+              <th>Reserve / PV</th>
+              <th>Begrenzung / Grund</th>
+              <th>Write-Status</th>
+            </tr>
+          </thead>
+          <tbody id="chargingAuditEvents"></tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- 0.8.33: Stationsseiten/Display-Token gehören zur Ladepunktverwaltung.
          Die TypeScript-Logik rendert hier die bestehende DC-Station-Display-Karte,
          ohne eine zweite Konfigurationslogik aufzubauen. -->
@@ -2208,6 +2266,7 @@
 <script src="/static/energy-origin-appcenter.js"></script>
 <script src="/static/netoperator-appcenter.js"></script>
 <script src="/static/ems-apps.js"></script>
+<script src="/static/charging-diagnostics-appcenter.js"></script>
 
 
 

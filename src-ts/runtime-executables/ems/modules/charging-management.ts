@@ -1,45 +1,6 @@
 // @ts-nocheck
 /**
- * Executable TypeScript source: ems/modules/charging-management.js
- *
- * Zweck:
- * Diese Datei ist ab 0.7.131 die kanonische TypeScript-Quelle der produktiven
- * Adapter-/Frontend-Runtime-Datei `ems/modules/charging-management.js`.
- *
- * Build-Regel:
- * `npm run sync:ts-runtime-executables` erzeugt daraus die auslieferbare
- * JavaScript-Datei. Änderungen an der Runtime sollen hier vorgenommen werden;
- * die JS-Datei ist nur noch Build-Artefakt für Node.js/ioBroker bzw. den Browser.
- *
- * Sicherheit:
- * Der Inhalt basiert auf der bisher produktiven JavaScript-Runtime und bleibt
- * vorübergehend mit `@ts-nocheck` ausführbar. Fachliche TS-Helfer wie EVCS,
- * Energiefluss, Core-Limits und Heizstab bleiben die bereits typisierten Quellen.
- */
-
-/**
- * NexoWatt Detail-Kommentar (DE)
- * Zweck dieser Ergänzung:
- * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
- * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
- * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
- */
-
-/**
- * Datei: ems/modules/charging-management.js
- * Rolle im Projekt: Lademanagement.
- * Zweck: Regelt EVCS-/Wallbox-Ziele, Ladeleistung, PV-/Tarif-/Peak-Logik und Ladeprofile.
- * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
- * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
- */
-/**
- * NexoWatt Code-Kommentar (DE)
- * Zweck: Lademanagement für EVCS/Wallboxen: Modi, PV-Laden, Mindestladen, Boost, Zielplanung und Leistungsgrenzen.
- * Zusammenhänge:
- * - Hängt an EVCS-DPs und zentralen EMS-Budgets.
- * - Kundenansicht ist www/evcs.js, Konfiguration im App-Center.
- * Wartungshinweise:
- * - Bei Anlagen ohne EVCS müssen Module/UI keine Wallbox anzeigen.
+ * Canonical TypeScript source for the productive NexoWatt EOS EVCS charging-management runtime.
  */
 
 'use strict';
@@ -50,6 +11,7 @@ const { applySetpoint } = require('../consumers');
 const { ReasonCodes } = require('../reasons');
 const { computeChargingMinimumServicePlan, resolveAcChargingLimits } = require('../charging-budget-helpers');
 const { recordAcceptedPowerTarget } = require('../services/accepted-power-effects');
+const { ChargingManagementAuditStore, finiteChargingAuditNumber, deriveChargingAuditLimiter, deriveChargingAuditGlobalLimiter, buildChargingAuditSnapshot, chargingAuditEventSignature, buildChargingAuditEvents } = require('../services/charging-management-audit');
 const {
     evaluateFlexibleLoadRequest,
     commitFlexibleLoadDecision,
@@ -1949,8 +1911,14 @@ class ChargingManagementModule extends BaseModule {
         this._chargingPhaseSettleUntilMs = new Map();
         this._chargingPhaseAssumedBySafe = new Map();
         this._chargingPhaseSelectionTsLast = null;
+        this._chargingAudit = new ChargingManagementAuditStore(this.adapter, (id, value, ack) => this._queueState(id, value, ack), () => this._flushPubQueue());
     }
 
+
+    async _restoreChargingAuditState() { return this._chargingAudit.restore(); }
+    _getChargingAuditPayload(limit = 200) { return this._chargingAudit.getPayload(limit); }
+    async _clearChargingAudit() { return this._chargingAudit.clear(); }
+    async _recordChargingAudit(input = {}) { return this._chargingAudit.record({ ...input, safetyEnvelope: this.adapter && this.adapter._emsSafetyEnvelope }); }
 
     /** Code-Teil: _publishChargingControlTsShadow – Dokumentiert diesen Regelungs- oder Diagnosebaustein. */
     async _publishChargingControlTsShadow(input) {
@@ -3633,6 +3601,8 @@ class ChargingManagementModule extends BaseModule {
 
         // Debug payloads are large and not user-critical → slow down.
         if (s.startsWith('chargingManagement.debug.')) return { minIntervalMs: 5000 };
+        if (s === 'chargingManagement.audit.snapshotJson') return { minIntervalMs: 2000 };
+        if (s === 'chargingManagement.audit.recentEventsJson') return { minIntervalMs: 1000 };
 
         // Always-changing counters → update slower to avoid DB spam.
         if (s.endsWith('.idleMs') || s.endsWith('.meterAgeMs') || s.endsWith('.statusAgeMs')) return { minIntervalMs: 5000 };
@@ -4252,6 +4222,7 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.debug.sortedOrder', 'Sorted order (safe keys)', 'string', 'text');
         await mk('chargingManagement.debug.allocations', 'Allocations (JSON)', 'string', 'text');
         await mk('chargingManagement.debug.tsRuntimePrepJson', 'Charging Management TS runtime preparation/shadow (JSON)', 'string', 'json');
+        await this._chargingAudit.initialize();
     }
 
     /** Code-Teil: Methode `_ensureWallboxChannel` – stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben. */
@@ -8502,6 +8473,12 @@ if (components.length) {
             } catch {
                 await this._queueState('chargingManagement.debug.allocations', '[]', true);
             }
+            await this._recordChargingAudit({
+                ts: now, context: 'stale-meter-safety-fallback', mode, budgetMode: effectiveBudgetMode, status: 'failsafe_stale_meter', controlActive: true, pausedByPeakShaving, safetyStop: true, safetyReason: 'stale-meter-safety-stop',
+                budgetW: 0, actualPowerW: totalFreshActualPowerW, reservedPowerW: 0, targetPowerW: totalTargetPowerW, remainingPowerW: 0,
+                gridImportW, gridImportLimitW, gridImportLimitEffW, gridCapEvcsW, gridCapBinding: false, phaseCapEvcsW, phaseCapBinding: false, para14aActive, para14aCapEvcsW: para14aTotalCapW, para14aBinding,
+                storageAssistActive: false, storageAssistRequestedW: 0, storageAssistAcceptedW: 0, wallboxes: wbList, allocations: debugAlloc,
+            });
 
             // Cleanup session tracking for removed wallboxes (avoid memory leaks)
             for (const [safeKey, lastSeenTs] of this._chargingLastSeenMs.entries()) {
@@ -8584,6 +8561,12 @@ if (components.length) {
             await this._queueState('chargingManagement.summary.totalTargetPowerW', 0, true);
             await this._queueState('chargingManagement.summary.totalTargetCurrentA', 0, true);
             await this._queueState('chargingManagement.summary.lastUpdate', Date.now(), true);
+            await this._recordChargingAudit({
+                ts: now, context: 'mode-off', mode, budgetMode: effectiveBudgetMode, status: 'off', controlActive: false, pausedByPeakShaving, safetyStop: false,
+                budgetW: Number.isFinite(budgetW) ? budgetW : 0, actualPowerW: totalFreshActualPowerW, reservedPowerW: 0, targetPowerW: 0, remainingPowerW: Number.isFinite(budgetW) ? budgetW : 0,
+                gridImportW, gridImportLimitW, gridImportLimitEffW, gridCapEvcsW, gridCapBinding, phaseCapEvcsW, phaseCapBinding, para14aActive, para14aCapEvcsW: para14aTotalCapW, para14aBinding,
+                storageAssistActive: false, storageAssistRequestedW: 0, storageAssistAcceptedW: 0, wallboxes: wbList, allocations: [],
+            });
             return;
         }
 
@@ -8814,6 +8797,12 @@ if (components.length) {
                 await this._queueState('chargingManagement.summary.totalTargetPowerW', 0, true);
                 await this._queueState('chargingManagement.summary.totalTargetCurrentA', 0, true);
                 await this._queueState('chargingManagement.summary.lastUpdate', Date.now(), true);
+                await this._recordChargingAudit({
+                    ts: now, context: 'peak-shaving-safety-fallback', mode, budgetMode: effectiveBudgetMode, status: 'paused_by_peak_shaving_ramp_down', controlActive: true, pausedByPeakShaving: true, safetyStop: true, safetyReason: 'peak-shaving-safety-stop',
+                    budgetW: 0, actualPowerW: totalFreshActualPowerW, reservedPowerW: 0, targetPowerW: 0, remainingPowerW: 0,
+                    gridImportW, gridImportLimitW, gridImportLimitEffW, gridCapEvcsW, gridCapBinding, phaseCapEvcsW, phaseCapBinding, para14aActive, para14aCapEvcsW: para14aTotalCapW, para14aBinding,
+                    storageAssistActive: false, storageAssistRequestedW: 0, storageAssistAcceptedW: 0, wallboxes: wbList, allocations: debugAlloc,
+                });
                 return;
             }
         }
@@ -9917,6 +9906,7 @@ if (components.length) {
                 userMode: w.userMode,
                 charging: !!w.charging,
                 chargingSinceMs: w.chargingSinceMs || 0,
+                actualPowerW: Math.max(0, Math.round(finiteChargingAuditNumber(w.actualPowerW, 0))), actualPowerRawW: Math.max(0, Math.round(finiteChargingAuditNumber(w.actualPowerRawW, finiteChargingAuditNumber(w.actualPowerW, 0)))), meterStale: w.meterStale === true, telemetryProfile: String(w.telemetryProfile || ''),
                 online: !!w.online,
                 userStationEnabled: !!w.userStationEnabled,
                 stationEnabled: !!w.stationEnabled,
@@ -10022,6 +10012,7 @@ if (components.length) {
                 userMode: w.userMode || '',
                 charging: !!w.charging,
                 chargingSinceMs: w.chargingSinceMs || 0,
+                actualPowerW: Math.max(0, Math.round(finiteChargingAuditNumber(w.actualPowerW, 0))), actualPowerRawW: Math.max(0, Math.round(finiteChargingAuditNumber(w.actualPowerRawW, finiteChargingAuditNumber(w.actualPowerW, 0)))), meterStale: w.meterStale === true, telemetryProfile: String(w.telemetryProfile || ''),
                 online: !!w.online,
                 userStationEnabled: !!w.userStationEnabled,
                 stationEnabled: !!w.stationEnabled,
@@ -10650,6 +10641,12 @@ if (components.length) {
         await this._queueState('chargingManagement.summary.totalTargetPowerW', totalTargetPowerW, true);
         await this._queueState('chargingManagement.summary.totalTargetCurrentA', totalTargetCurrentA, true);
         await this._queueState('chargingManagement.summary.lastUpdate', Date.now(), true);
+        await this._recordChargingAudit({
+            ts: now, context: 'normal-allocation-write-plan', mode, budgetMode: effectiveBudgetMode, status: finalStatus, controlActive, pausedByPeakShaving, safetyStop: false, safetyReason: '',
+            budgetW, actualPowerW: totalFreshActualPowerW, reservedPowerW: evcsControlReserveW, targetPowerW: totalTargetPowerW, remainingPowerW: evcsControlRemainingW,
+            gridImportW, gridImportLimitW, gridImportLimitEffW, gridCapEvcsW, gridCapBinding, phaseCapEvcsW, phaseCapBinding, para14aActive, para14aCapEvcsW: para14aTotalCapW, para14aBinding,
+            storageAssistActive, storageAssistRequestedW: storageAssistW, storageAssistAcceptedW, wallboxes: wbList, allocations: debugAlloc,
+        });
     }
 }
 
@@ -10691,4 +10688,5 @@ module.exports = {
     isOcppEventStatusPersistentState,
     strictFiniteEvcsNumber,
     resolveAcceptedStorageAssistBudget,
+    finiteChargingAuditNumber, deriveChargingAuditLimiter, deriveChargingAuditGlobalLimiter, buildChargingAuditSnapshot, chargingAuditEventSignature, buildChargingAuditEvents,
 };

@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.8.175",
+  "version": "0.8.176",
   "description": "NexoWatt EOS – local energy, charging and building control platform.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -429,7 +429,8 @@
     "test:rc49-para14a-evcs-start": "node scripts/verify-rc49-para14a-evcs-start-stability.js",
     "test:rc50-netoperator-interface": "node scripts/verify-rc50-netoperator-interface-foundation.js",
     "test:rc51-ocpp-telemetry": "node scripts/verify-rc51-ocpp-telemetry-normalization.js",
-    "test:package-runtime-start-smoke": "node scripts/verify-package-runtime-start-smoke.js"
+    "test:package-runtime-start-smoke": "node scripts/verify-package-runtime-start-smoke.js",
+    "test:rc52-charging-diagnostics-log": "node scripts/verify-rc52-charging-diagnostics-log.js && node scripts/verify-rc52-charging-diagnostics-browser.js"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",
@@ -481,6 +482,7 @@
     "docs/RC49_PARA14A_EVCS_START_STABILITY_DE.md",
     "docs/RC50_NETOPERATOR_INTERFACE_FOUNDATION_DE.md",
     "docs/RC51_OCPP_TELEMETRIE_NORMALISIERUNG_DE.md",
+    "docs/RC52_CHARGING_DIAGNOSTICS_LOG_DE.md",
     "ems/charging-budget-helpers.js",
     "ems/consumers/evcs.js",
     "ems/consumers/generic-load.js",
@@ -537,6 +539,7 @@
     "ems/services/accepted-power-effects.js",
     "ems/services/actuator-command-contract.js",
     "ems/services/actuator-shadow-arbiter.js",
+    "ems/services/charging-management-audit.js",
     "ems/services/country-profile-service.js",
     "ems/services/energy-origin-accounting.js",
     "ems/services/energy-origin-ledger-runtime.js",
@@ -562,6 +565,7 @@
     "ems/services/storage-zero-write-policy.js",
     "ems/services/tariff-provider-registry.js",
     "io-package.json",
+    "lib/charging-diagnostics-api.js",
     "lib/energy-origin-api.js",
     "lib/smarthome-contract.js",
     "lib/ts-mirrors/adapter/api-set.js",
@@ -628,6 +632,7 @@
     "www/assets/icons/nexowatt-64.png",
     "www/assets/noise.png",
     "www/auth.js",
+    "www/charging-diagnostics-appcenter.js",
     "www/cockpit-shell.js",
     "www/dc-station-display.css",
     "www/dc-station-display.html",

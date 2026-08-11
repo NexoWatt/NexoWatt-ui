@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 5bc3076396c0a39fced31f45c30ad17e641c613f82b488587ead15f8cc6c416d
+ * Original-Hash: f17b26720140899950698359ad61310284ba356106c885323e8f69221e2d5fa4
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/services/tariff-provider-registry.ts
- * Quell-Hash: sha256:5533008e5b4b19465d254b3a8d2fa418acf030e5ac1820077125f005334c0639
+ * Quell-Hash: sha256:ae41832fc83f11694d545d9b12506c2651403d9b2f6c4da6b6206363fbf31d9e
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -54,7 +54,7 @@
  */
 'use strict';
 
-const DEFAULT_USER_AGENT = 'NexoWatt-EOS/0.8.175 (+https://www.nexowatt.com)';
+const DEFAULT_USER_AGENT = 'NexoWatt-EOS/0.8.176 (+https://www.nexowatt.com)';
 
 const BIDDING_ZONES = Object.freeze({
     DE: '10Y1001A1001A82H', // DE-LU

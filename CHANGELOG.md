@@ -1,3 +1,11 @@
+## 0.8.176 - 2026-08-11
+
+- AppCenter/Ladepunkte um eine read-only Live-Diagnose für das Lademanagement erweitert. Global werden aktiver Limiter, Sicherungsstufe, Budget, EVCS-Istleistung, NexoWatt-Gesamtsoll, Reserve, Restbudget, Netz-/Phasen-/§14a-Gates und Stage-A-Status angezeigt.
+- Pro Ladepunkt sind Istleistung, ursprüngliche Leistungsanforderung, finaler NexoWatt-Sollwert in W/A, reservierte Leistung, PV-/Speicheranteil, Stationsrest, Entscheidungsgrund, Safety-Bindung, Sollwert-Datenpunkt und Hardware-Write-Status nachvollziehbar.
+- Bedeutungsbasierter Ringpuffer mit maximal 240 Ereignissen ergänzt. Kleine Messwertschwankungen erzeugen keine Logflut; bei aktiver Regelung wird höchstens einmal pro Minute ein Heartbeat-Snapshot protokolliert.
+- Filter nach Ladepunkt und Problemstatus sowie JSON-/CSV-Export ergänzt. Das Löschen des Ereignislogs ist Installer/Admin-geschützt und verändert weder Live-Snapshot noch Sollwerte, Reservierungen oder Hardwareausgänge.
+- Diagnosevertrag, API und UI sind ausschließlich lesend in Bezug auf die Anlagensteuerung. Bestehende Lade-, OCPP-, §14a-, Netzanschluss-, Speicher-, FENECON- und Safety-Entscheidungen bleiben fachlich unverändert.
+
 ## 0.8.175 - 2026-08-11
 
 - OCPP-Telemetrieprofil für den verwendeten OCPP-Adapter automatisch anhand von `ocpp.<Instanz>.<ChargePoint>.<Connector>.*` erkannt. Connectorstatus, Transaktionszustand, Stationsverbindung und Adapter-Lebenszeichen werden ohne zusätzliche manuelle Zuordnung abgeleitet.

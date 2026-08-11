@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:db59a84e630c4253a02c37a0d4b445d3fdf172a8d1df101d98d0fbdbedceb9bc
+ * Quell-Hash: sha256:ae8bedeeab52492b110c6b51bf2de1e46b09264011c0c768beed7351dd767f05
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -82,6 +82,7 @@ const crypto = require('crypto');
 const https = require('https');
 const pkg = require('./package.json');
 const { defaultEnergyOriginConfig, registerEnergyOriginApi } = require('./lib/energy-origin-api');
+const { registerChargingDiagnosticsAuditApi } = require('./lib/charging-diagnostics-api');
 const tariffProviderRegistry = require('./ems/services/tariff-provider-registry');
 const { normalizeEvcsEnergyTotalKwh } = require('./ems/services/evcs-unit-conversion');
 
@@ -16567,6 +16568,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
 
     // --- Charging diagnostics (Phase 3.3) ---
     // Provides a compact per-ladepunkt overview (mapping + freshness + runtime decisions).
+    registerChargingDiagnosticsAuditApi(app, this, requireInstaller);
     // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/ems/charging/diagnostics', requireInstaller, async (req, res) => {
     app.get('/api/ems/charging/diagnostics', requireInstaller, async (req, res) => {
       try {
