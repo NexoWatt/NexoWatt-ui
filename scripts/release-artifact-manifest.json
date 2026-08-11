@@ -1,17 +1,27 @@
 {
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.173",
+  "version": "0.8.174",
   "algorithm": "sha256",
   "files": [
     {
-      "path": "admin/admin_logo_.ico",
-      "size": 4286,
-      "sha256": "595311ae09d73f39eb1d97373d88d5543f1b7021074ea968cc6f5f32f32acc52"
+      "path": "LICENSE",
+      "size": 2602,
+      "sha256": "99e8f445f62925ea277a5c74e46ca4fa34bb49507b674874f61632813ed65b68"
+    },
+    {
+      "path": "README.md",
+      "size": 2428,
+      "sha256": "5506b7ab564fc77fcd4336774fd29edc6fb52baf172a8590a2695366af12f1f5"
     },
     {
       "path": "admin/admin.png",
       "size": 1466889,
       "sha256": "e1620f78bd502b3837db2b3e351d68ab88198f16e06052618d62d6e33d1ae402"
+    },
+    {
+      "path": "admin/admin_logo_.ico",
+      "size": 4286,
+      "sha256": "595311ae09d73f39eb1d97373d88d5543f1b7021074ea968cc6f5f32f32acc52"
     },
     {
       "path": "admin/appcenter.html",
@@ -41,7 +51,7 @@
     {
       "path": "admin/react/index.html",
       "size": 4431,
-      "sha256": "2707e28cb9a4ed5f4ae15f980983a2e9799c93521401ae2219eca9ea3985091d"
+      "sha256": "1a53c6aa1ab4ac1e88c999ecfca0a5647e6ece8223d25c35d80917dc327088a2"
     },
     {
       "path": "admin/simulation.html",
@@ -124,6 +134,11 @@
       "sha256": "1f431156b4669de29c2dd1617860a8f172558b00b07485bc4784870b92a746c8"
     },
     {
+      "path": "docs/RC50_NETOPERATOR_INTERFACE_FOUNDATION_DE.md",
+      "size": 6037,
+      "sha256": "2e706f065f38aa1c5eb952ce53c54b24da46e8a4364b6fa5824f8d1d1c0c9c1c"
+    },
+    {
       "path": "ems/charging-budget-helpers.js",
       "size": 16219,
       "sha256": "c763ed4d358d0476fd0324ffb625bac8fd9d7b600c37925b106aa90ef4499aad"
@@ -170,8 +185,8 @@
     },
     {
       "path": "ems/module-manager.js",
-      "size": 45420,
-      "sha256": "8951ab7821e3a4c666a7bcaea5a1729fe43c897e687541c7034de71350b4cbf4"
+      "size": 46242,
+      "sha256": "e0634fb1440d7be86e18b154cacd8989da5b9f9fcacd13f3c55bd1918b47666f"
     },
     {
       "path": "ems/modules/ai-advisor.js",
@@ -242,6 +257,11 @@
       "path": "ems/modules/multi-use.js",
       "size": 52817,
       "sha256": "63345b624460c89ef2c4912636dc18fd02e9d48fb5dbe3cbce7f01d605f147fc"
+    },
+    {
+      "path": "ems/modules/netoperator-interface.js",
+      "size": 30391,
+      "sha256": "b438ff01937b4b7a86a0926053d71455e1d64715b251e3de4f536f006f6482d6"
     },
     {
       "path": "ems/modules/nexologic-budget.js",
@@ -319,6 +339,61 @@
       "sha256": "a8c09f6bdc1776e4dde743e44d6a67b57ab7ddb13fc2871bd2ab824ca9a4f338"
     },
     {
+      "path": "ems/netoperator/README.md",
+      "size": 2616,
+      "sha256": "c5abf6c7099d8644c5ce9e64431e245d7f4fca7ce6c9f10d72642b16e294cc50"
+    },
+    {
+      "path": "ems/netoperator/acceptance-tests.json",
+      "size": 2410,
+      "sha256": "4c22fb2b9657978fbdda7f2cfa4f9b1701f3291e03c00bc2459222e5b5c21014"
+    },
+    {
+      "path": "ems/netoperator/driver.schema.json",
+      "size": 3488,
+      "sha256": "4dd8708bf37d3d3a62fd7d5e1dd4f053d0f8dd7a94a7b38c8946e139bda783f4"
+    },
+    {
+      "path": "ems/netoperator/drivers/bachmann-sppc.json",
+      "size": 5697,
+      "sha256": "89c35bda23ccce8b0acd30ef1dbf0cf3ca4427248b46746ec2af7146870cbc3b"
+    },
+    {
+      "path": "ems/netoperator/drivers/beckhoff-tf8360.json",
+      "size": 5689,
+      "sha256": "42dad4d56815ff7ca4d002307f2591fc2519fb37f9a1d620e9da2c3a6021eb84"
+    },
+    {
+      "path": "ems/netoperator/drivers/energielenker-eza.json",
+      "size": 5672,
+      "sha256": "f626708f831ceae23861bca2d9d9b0b218ffc1e1aff8fbc51af5fbd7853bd07f"
+    },
+    {
+      "path": "ems/netoperator/drivers/generic-modbus-tcp-template.json",
+      "size": 5683,
+      "sha256": "f0b991b944a15840538e3844ba756614163a8850acbb8f5baf08d992b85fc2fc"
+    },
+    {
+      "path": "ems/netoperator/drivers/meteocontrol-bluelog-xc.json",
+      "size": 5694,
+      "sha256": "37d9d224a970c83fdb8c25ecd50f104d62f561462b3302ded0f92e12acb1d457"
+    },
+    {
+      "path": "ems/netoperator/drivers/phoenix-pcu-41xx.json",
+      "size": 5694,
+      "sha256": "1e3b20009e4b9a6bed83d366d7b77807a430da69f099eb9813fe97461f9d7729"
+    },
+    {
+      "path": "ems/netoperator/drivers/siemens-sicam-a8000.json",
+      "size": 5690,
+      "sha256": "539557bb8fc0b4ca38b7d4b9a1e0f033d99c269ba11b18e43e5079ae01b223ed"
+    },
+    {
+      "path": "ems/netoperator/drivers/wago-power-plant-control.json",
+      "size": 5664,
+      "sha256": "c5285daa0b59a5a82929373289ff4a447d1bfa144d754bea628dbec92f6cf7c6"
+    },
+    {
       "path": "ems/nexologic-engine.js",
       "size": 112845,
       "sha256": "46dc5fc1ef7ccb3431f70081fe5970f704b94e176843cea4abc593175363f610"
@@ -365,8 +440,8 @@
     },
     {
       "path": "ems/services/feature-flags.js",
-      "size": 9888,
-      "sha256": "961fe94f5620c50618901cf78c0616d00fa7686e083e56c0ca92389d812d48cb"
+      "size": 9953,
+      "sha256": "fcf28263f926eceede35a975bb2d9a5243bc3a169549aa077b753f718625639b"
     },
     {
       "path": "ems/services/fenecon-hybrid-control.js",
@@ -387,6 +462,21 @@
       "path": "ems/services/measurement-freshness.js",
       "size": 18099,
       "sha256": "cfe242eca7456eca5fd7c68e206c0dda12fa44e57c9127690809a44a423cd64f"
+    },
+    {
+      "path": "ems/services/netoperator-canonical-model.js",
+      "size": 12847,
+      "sha256": "4292532d6bac53928a24e9a56cf4d42f28f7dea073b712677800c927e088d455"
+    },
+    {
+      "path": "ems/services/netoperator-driver-registry.js",
+      "size": 15310,
+      "sha256": "c41646d0a2fec761aa3e5082d9ee7d096f1144c4c143b83eb31725cb775a883d"
+    },
+    {
+      "path": "ems/services/netoperator-modbus-tcp.js",
+      "size": 17797,
+      "sha256": "c2e44843a0a0504c462fb9f308c0c064a5c0d0539619572a2530de2a7237a841"
     },
     {
       "path": "ems/services/nexologic-output-controller.js",
@@ -446,12 +536,12 @@
     {
       "path": "ems/services/tariff-provider-registry.js",
       "size": 28839,
-      "sha256": "8fd0c60df015f123ad91def8be075100d6906db24cf71d6887ab34d165c5e7d0"
+      "sha256": "7daa46155f893a29acb4e2fae9dc4774a3011a9764b732be25d8ed60fae8c507"
     },
     {
       "path": "io-package.json",
-      "size": 24747,
-      "sha256": "d297a314d846399b477330a17a222612e4443bead9e0eab80f36a74660e80296"
+      "size": 24688,
+      "sha256": "474f1c6bce8780d99c618b819f60f56c73f05733a5ce17794575af3f4caa172f"
     },
     {
       "path": "lib/energy-origin-api.js",
@@ -679,19 +769,9 @@
       "sha256": "463661dd3c3e8a08c0abbb8526960562de4a961c14b28720f5f4a12c12b00299"
     },
     {
-      "path": "LICENSE",
-      "size": 2602,
-      "sha256": "99e8f445f62925ea277a5c74e46ca4fa34bb49507b674874f61632813ed65b68"
-    },
-    {
       "path": "main.js",
-      "size": 1670300,
-      "sha256": "7c3aa86124c7bb9604a830c5d45d319e34d0112ee466877306b33d83d71102a5"
-    },
-    {
-      "path": "README.md",
-      "size": 2010,
-      "sha256": "8f8b9caac60a0ca354d0472e0d6074d24f3740beeeea450412d56c522f206cc0"
+      "size": 1677028,
+      "sha256": "4305df710b7769617215bca8bc6ec281d29c8a3f7956320e6f361fe87ddbf968"
     },
     {
       "path": "www/admin-guard.js",
@@ -820,13 +900,13 @@
     },
     {
       "path": "www/ems-apps.html",
-      "size": 146985,
-      "sha256": "91df804250d85f122eb77c89c95f8e33676aebdea96e22af398037f19a03eb00"
+      "size": 147486,
+      "sha256": "ceec3dfd245067c97eebb673bcf03f108e8e53645dff37a100526bb9c7205fbd"
     },
     {
       "path": "www/ems-apps.js",
-      "size": 942856,
-      "sha256": "407648d67d4fe33c2aefe686951e80fb3a706a5f01a8ee32b72f3a8e87d30984"
+      "size": 945703,
+      "sha256": "42d3e16434d03d2c9f9e09055e9f19a51a18a2ce02a0388944beac99740d9727"
     },
     {
       "path": "www/energy-ledger.html",
@@ -951,7 +1031,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1092,
-      "sha256": "4707a7d93a705014c7fe8c9282ba49cfb3fa1fbfd888d73770fdbc918a458ba3"
+      "sha256": "d7515d6064aebf074dbcf8d5d15e6b157fb739a0bd25e2de2a6235cbbd8703ba"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -964,6 +1044,21 @@
       "sha256": "840b66dd3e5d90832f0ce974e8f89d8c6931a1467da42544fbdf6151584f151e"
     },
     {
+      "path": "www/netoperator-appcenter.js",
+      "size": 14726,
+      "sha256": "1c37d43ce711df512274a05a5d2a8819dc096600041db7c4f64bdbabcddabd86"
+    },
+    {
+      "path": "www/netoperator.html",
+      "size": 4992,
+      "sha256": "e963c7999fd9c8dc1c7250a362b254eead60ac49d827c283208326be5d2fef97"
+    },
+    {
+      "path": "www/netoperator.js",
+      "size": 6571,
+      "sha256": "edab7a361e2d72e68e20debc34357bb5855bdc84d11dc7b4a8465f0cd1dab52a"
+    },
+    {
       "path": "www/nexowatt-logo.png",
       "size": 1466889,
       "sha256": "e1620f78bd502b3837db2b3e351d68ab88198f16e06052618d62d6e33d1ae402"
@@ -971,7 +1066,7 @@
     {
       "path": "www/nw-i18n.js",
       "size": 20613,
-      "sha256": "eccfaa865d9ab3c6e7fe79e10cf8a5ba86a1683a48374afb7a7abb1f98a76242"
+      "sha256": "94ce9c7b31ca59f3ecd6bb75b751fefb4f2ba60a8bc60f5f5aad728cdc184731"
     },
     {
       "path": "www/nw-shell.js",
@@ -1101,7 +1196,7 @@
     {
       "path": "www/sw.js",
       "size": 4888,
-      "sha256": "852bd3a61560106a7a526065cf5dc4a294d440b12d659b24682dbbc274799d06"
+      "sha256": "1d753eaf7160e1d99bd2c3eb3a72f1991ce4973c20b68d5e5d1cd737bdc16772"
     },
     {
       "path": "www/tariff-report.html",

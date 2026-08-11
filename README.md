@@ -46,3 +46,8 @@ Copyright (c) 2025 NexoWatt. All rights reserved.
 Use, copying, modification, distribution, hosting, or sublicensing is not permitted without explicit written permission from NexoWatt.
 
 See [LICENSE](LICENSE) for details.
+
+## Netzbetreiber-Schnittstelle
+
+NexoWatt EOS enthält eine vorbereitete, standardmäßig deaktivierte und read-only Schnittstellen-App für zertifizierte EZA-/Parkregler. Herstellerspezifische Register werden ausschließlich über versionierte Treiberprofile ergänzt; der EOS-Core arbeitet mit einem kanonischen Datenmodell. Die operative Übergabe an Assets bleibt bis zur Hersteller- und Projektabnahme gesperrt.
+

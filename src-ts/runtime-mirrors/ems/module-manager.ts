@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 8951ab7821e3a4c666a7bcaea5a1729fe43c897e687541c7034de71350b4cbf4
+ * Original-Hash: e0634fb1440d7be86e18b154cacd8989da5b9f9fcacd13f3c55bd1918b47666f
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/module-manager.ts
- * Quell-Hash: sha256:f7273f862a802cc6f207d5d03bd56427a3e60251efd5883d4ba4775c667c3368
+ * Quell-Hash: sha256:2e5356fbba1b1666abce1bba9f2ff452aa8df4d6c1b0dde7771b1206f1439097
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -89,6 +89,7 @@
 'use strict';
 const { SpeicherMappingModule } = require('./modules/storage-mapping');
 const { SpeicherRegelungModule } = require('./modules/storage-control');
+const { NetOperatorInterfaceModule } = require('./modules/netoperator-interface');
 const { GridConstraintsModule } = require('./modules/grid-constraints');
 const { NvpCoordinatorModule } = require('./modules/nvp-coordinator');
 const { PeakShavingModule } = require('./modules/peak-shaving');
@@ -436,6 +437,15 @@ class ModuleManager {
             instance: new SpeicherMappingModule(this.adapter, this.dp),
             enabledFn: () => true,
         });
+        // Netzbetreiber-Schnittstelle hinter dem zertifizierten EZA-/Parkregler.
+        // RC50 ist absichtlich read-only: kanonisches Datenmodell, Treiberdiagnose
+        // und Audit werden vorbereitet; die Operation-Engine-/Asset-Übergabe bleibt gesperrt.
+        this.modules.push({
+            key: 'netOperatorInterface',
+            instance: new NetOperatorInterfaceModule(this.adapter, this.dp),
+            enabledFn: () => this._licenseAllowsApp('netOperator') && !!(this.adapter && this.adapter.config && (this.adapter.config.enableNetOperatorInterface === true ||
+                (this.adapter.config.netOperatorInterface && this.adapter.config.netOperatorInterface.enabled === true))),
+        });
         // Grid constraints (RLM / Nulleinspeisung). Im zentralen EMS wird die
         // dynamische PV-/WR-Regelung bewusst in zwei Phasen geteilt: Planung
         // vor den Aktoren, Rest-Einspeisung nach dem Speicher/Farm-Sollwert.
@@ -655,7 +665,7 @@ class ModuleManager {
         // Init modules
         // Hinweis: Einige Module stellen UI-States bereit (z. B. EVCS), die auch dann
         // vorhanden sein sollen, wenn die Logik aktuell deaktiviert ist.
-        const alwaysInit = new Set(['chargingManagement', 'nvpCoordinator', 'aiAdvisor', 'energyWallet', 'stageADiagnostics']);
+        const alwaysInit = new Set(['chargingManagement', 'netOperatorInterface', 'nvpCoordinator', 'aiAdvisor', 'energyWallet', 'stageADiagnostics']);
         for (const m of this.modules) {
             const enabled = !!(m && typeof m.enabledFn === 'function' ? m.enabledFn() : false);
             m.enabled = enabled;

@@ -1,3 +1,11 @@
+## 0.8.174 - 2026-08-10
+
+- Neue EOS-App `netoperator-interface` als sichere, standardmäßig deaktivierte und read-only Grundlage für zertifizierte EZA-/Parkregler vorbereitet. Der zertifizierte Regler bleibt am Netzanschlusspunkt maßgeblich; die Übergabe an Operation Engine und Asset-Writer ist noch gesperrt.
+- Kanonisches Datenmodell für Trip, Freigabe/Sperre, P-/Q-/cos-phi-Vorgaben, NAP-Istwerte, Controllerstatus, Kommunikation, Fehler, Zeitstempel, Quelle und optionale EOS-Quittierungen eingeführt.
+- Versioniertes Treiberprofil-SDK mit Datentyp, Skalierung, Endianness, Quality-/Validity-Signalen, Zeitstempel, Watchdog und Mapping-Version ergänzt. Acht Herstellerprofile sind bewusst leere Mapping-Vorlagen ohne erfundene Registeradressen.
+- Modbus TCP und EOS-Datenpunkt-Mapping als read-only Transporte umgesetzt; Modbus RTU, OPC UA, IEC 60870-5-104 und IEC 61850 bleiben ausdrücklich reservierte, noch nicht implementierte Treiberslots.
+- Betreiberansicht, Installer-Konfiguration, Rohwertdiagnose, Latenz-/Frischeanzeige und Ereignisprotokoll ergänzt. T01 bis T12 sind als einheitliche Treiber-Abnahmesuite hinterlegt.
+
 ## 0.8.173 - 2026-08-10
 
 - Neu auf dem bekannten startfähigen Stand 0.8.171 aufgebaut; die fehlerhafte 0.8.172 ist keine Codebasis dieser Version.

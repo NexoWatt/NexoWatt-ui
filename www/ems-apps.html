@@ -113,6 +113,7 @@
       <button type="button" class="nw-tab" data-tab="storagefarm" style="display:none;">Speicherfarm</button>
       <button type="button" class="nw-tab" data-tab="multiuse" style="display:none;">MultiUse</button>
       <button type="button" class="nw-tab" data-tab="meshmicrogrid" style="display:none;">Mesh/Microgrid</button>
+      <button type="button" class="nw-tab" data-tab="netoperator" style="display:none;">Netzbetreiber</button>
       <button type="button" class="nw-tab" data-tab="ledger" style="display:none;">Energieherkunft</button>
       <button type="button" class="nw-tab" data-tab="flow">Energiefluss</button>
       <button type="button" class="nw-tab" data-tab="thermal" style="display:none;">Thermik</button>
@@ -1333,6 +1334,16 @@
   </div>
 
 
+
+  <div id="nw-tabpanel-netoperator" data-tabpanel="netoperator" style="display:none;">
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">Netzbetreiber-Schnittstelle</h2>
+      </div>
+      <div id="netOperatorConfigSlot"></div>
+    </section>
+  </div>
+
 <div id="nw-tabpanel-flow" data-tabpanel="flow" style="display:none;">
 
     <section class="nw-config-section">
@@ -2195,6 +2206,7 @@
 <script src="/static/nw-shell.js"></script>
 <script src="/static/ems-apps-nvp-diagnostics.js"></script>
 <script src="/static/energy-origin-appcenter.js"></script>
+<script src="/static/netoperator-appcenter.js"></script>
 <script src="/static/ems-apps.js"></script>
 
 

@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:5ee4fe07eafd25715a5ce3d83d242fcf8b807ce131546efe2e0476ffac0832fd
+ * Quell-Hash: sha256:0767a6418eda7beeac5e0aa172091e0dd21f999f52356ad020393417faf3d9a5
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -71,6 +71,7 @@
     nlP1Mount: document.getElementById('nlP1MappingSlot'),
     chargeKioskMount: document.getElementById('chargeKioskEvcsSlot'),
     meshMicrogridMount: document.getElementById('meshMicrogridConfigSlot'),
+    netOperatorMount: document.getElementById('netOperatorConfigSlot'),
     appsEmpty: document.getElementById('appsEmpty'),
     nwDevicesQuickSetup: document.getElementById('nwDevicesQuickSetup'),
 
@@ -403,6 +404,7 @@
     { id: 'energyWallet', label: 'Energie-Wertkonto', desc: 'PV-Wert, Eigenverbrauchswert, Solar-Laden und Einspeisewert im Nutzerfrontend (Home + EOS)', mandatory: true, hems: true },
     { id: 'energyLedger', label: 'Energieherkunft & Ladebilanz', desc: 'Home/Pro: read-only 15-Minuten-Bilanz für Netz, PV, Speicherherkunft und Ladezähler; erzeugt prüfbare Journale, schreibt aber niemals auf Hardware', mandatory: false, hems: true },
     { id: 'meshMicrogrid', label: 'EOS Mesh/Microgrid', desc: 'EOS: separates Datenmodell für lokale Energie-Knoten, Cluster, Local First / Grid Last und spätere Nachbarschaftsversorgung', mandatory: false, hems: false },
+    { id: 'netOperator', label: 'Netzbetreiber-Schnittstelle', desc: 'EOS: kanonische read-only Schnittstelle hinter einem zertifizierten EZA-/Parkregler; Herstellerregister werden ausschließlich im Treiberprofil gepflegt', mandatory: false, hems: false },
     { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', mandatory: true, hems: true },
     { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls genutzt)', mandatory: false, hems: true },
     { id: 'multiuse', label: 'MultiUse', desc: 'Speicher-Policy mit SoC-Zonen für Reserve, Lastspitzenkappung und Eigenverbrauch; Storage-Control bleibt einziger Batterieschreiber', mandatory: false, hems: false }
@@ -1131,6 +1133,7 @@
     mesh: 'mesh',
     microgrid: 'microgrid',
     meshMicrogrid: 'meshMicrogrid',
+    netOperator: 'netOperatorInterface',
     nlSaldering: 'nlSaldering',
     nlEnergyHub: 'nlEnergyHub',
     aiAutopilot: 'aiAutopilot'
@@ -2763,11 +2766,30 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
         : null;
       return !!(app && app.installed);
     })();
+    const isNetOperatorInstalled = (() => {
+      const cb = document.getElementById('app_netOperator_installed');
+      if (cb) return !!cb.checked;
+      const app = currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps && currentConfig.emsApps.apps.netOperator
+        ? currentConfig.emsApps.apps.netOperator
+        : null;
+      return !!(app && app.installed);
+    })();
 
     mount(els.systemProfileMount, buildSystemProfileCard());
     mount(els.nlP1Mount, buildNlP1Card());
     mount(els.chargeKioskMount, buildChargeKioskCard());
     mount(els.meshMicrogridMount, isMeshInstalled ? buildMeshMicrogridCard() : null);
+    if (els.netOperatorMount) {
+      els.netOperatorMount.innerHTML = '';
+      if (isNetOperatorInstalled && window.NexoWattNetOperatorAppCenter) {
+        const app = currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps ? currentConfig.emsApps.apps.netOperator : null;
+        window.NexoWattNetOperatorAppCenter.render(
+          els.netOperatorMount,
+          currentConfig && currentConfig.netOperatorInterface ? currentConfig.netOperatorInterface : {},
+          !!(app && app.installed && app.enabled),
+        ).catch(() => undefined);
+      }
+    }
   }
 
   /**
@@ -2910,6 +2932,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       para14a: { tab: 'para14a', label: '§14a konfigurieren' },
       multiuse: { tab: 'multiuse', label: 'MultiUse konfigurieren' },
       meshMicrogrid: { tab: 'meshmicrogrid', label: 'Mesh/Microgrid konfigurieren', operatorUrl: '/mesh/microgrid', operatorLabel: 'Betreiberansicht öffnen' },
+      netOperator: { tab: 'netoperator', label: 'Netzbetreiber-Schnittstelle konfigurieren', operatorUrl: '/netoperator', operatorLabel: 'Betreiberansicht öffnen' },
       energyLedger: { tab: 'ledger', label: 'Energieherkunft konfigurieren', operatorUrl: '/ledger/energy-origin', operatorLabel: 'Betreiberansicht öffnen' }
     };
 
@@ -3182,6 +3205,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       // die EOS-App installiert ist. Nicht installierte Module sollen nicht
       // als leere Konfigurationsbereiche im App-Center auftauchen.
       { tab: 'meshmicrogrid', app: 'meshMicrogrid' },
+      { tab: 'netoperator', app: 'netOperator' },
       { tab: 'ledger', app: 'energyLedger' },
     ];
 
@@ -11357,6 +11381,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     try { buildAppsUI(); } catch (_eBuildApps) {}
     setAppsFromConfig(currentConfig);
     try { if (window.NexoWattEnergyOriginAppCenter) window.NexoWattEnergyOriginAppCenter.apply(currentConfig, _licenseEdition()); } catch (_eLedgerUi) {}
+    try { if (window.NexoWattNetOperatorAppCenter) window.NexoWattNetOperatorAppCenter.apply(currentConfig, _licenseEdition()); } catch (_eNetOperatorUi) {}
 
     // Plant params
     els.gridConnectionPower.value = numOrEmpty(currentConfig.installerConfig && currentConfig.installerConfig.gridConnectionPower);
@@ -13024,6 +13049,19 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
     if (window.NexoWattEnergyOriginAppCenter) {
       patch.energyLedger.origin = window.NexoWattEnergyOriginAppCenter.collect(ledgerOriginExisting, patch.energyLedger.enabled, _licenseEdition());
     }
+
+    // EOS Netzbetreiber-Schnittstelle: read-only Treiber-/Transportgrundlage.
+    // Die aktive Operation-Engine-Übergabe und Hardware-Writebacks bleiben in RC50 gesperrt.
+    const netOperatorAppState = patch.emsApps && patch.emsApps.apps && patch.emsApps.apps.netOperator ? patch.emsApps.apps.netOperator : null;
+    const netOperatorEnabled = !!(netOperatorAppState && netOperatorAppState.installed && netOperatorAppState.enabled);
+    patch.netOperatorInterface = window.NexoWattNetOperatorAppCenter
+      ? window.NexoWattNetOperatorAppCenter.collect(
+          currentConfig && currentConfig.netOperatorInterface ? currentConfig.netOperatorInterface : {},
+          netOperatorEnabled,
+          _licenseEdition(),
+        )
+      : deepMerge({}, (currentConfig && currentConfig.netOperatorInterface) ? currentConfig.netOperatorInterface : {});
+    patch.enableNetOperatorInterface = netOperatorEnabled && _licenseEdition() === 'eos';
 
     // EOS Mesh/Microgrid (Installer only): eigenes separates App-Modul.
     // In 0.8.32 wird ausschließlich das Knoten-/Cluster-Datenmodell gespeichert;
@@ -16621,6 +16659,12 @@ if (els.ocppAutoDetect) {
       window.NexoWattEnergyOriginAppCenter.setup({ getEdition: _licenseEdition, setStatus });
     }
   } catch (_eLedgerSetup) {}
+
+  try {
+    if (window.NexoWattNetOperatorAppCenter) {
+      window.NexoWattNetOperatorAppCenter.setup({ getEdition: _licenseEdition, setStatus });
+    }
+  } catch (_eNetOperatorSetup) {}
 
   // Modal
   if (els.dpClose) els.dpClose.addEventListener('click', closeDpModal);

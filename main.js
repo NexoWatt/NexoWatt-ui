@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:e9f4f50fc36df3b162f884e6052c8415bd1fa0f8b359dfb9f19a8656c20113ad
+ * Quell-Hash: sha256:db59a84e630c4253a02c37a0d4b445d3fdf172a8d1df101d98d0fbdbedceb9bc
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -2307,7 +2307,7 @@ class NexoWattVis extends utils.Adapter {
       }
     } catch (_eFeatureFlags) {}
     const hemsFeatures = new Set(['dashboard','history','aiAdvisor','smartHome','dynamicTariffs','tariff','chargingManagement','storageControl','thermalControl','heatingRodControl','relayControl','para14a','thresholdControl','energyFlow','pvForecast','countryProfile','systemLanguage','energyWallet','energyWalletBasic','energyWalletPro','energyWalletDetails','energyWalletRecommendations','energyLedger','energyLedgerBasic','energyOriginAccounting','energyOriginEvidenceExport']);
-    const eosOnlyFeatures = ['peakShaving','storageFarm','multiUse','gridLimits','gridConstraints','generatorControl','bhkwControl','advancedChargingPark','advancedDiagnostics','energyWalletOperator','billingExport','chargeKiosk','solarChargeMode','solarChargeBilling','mesh','microgrid','meshMicrogrid','neighborSharing','multiSiteWallet','nlSaldering','nlEnergyHub','aiAutopilot'];
+    const eosOnlyFeatures = ['peakShaving','storageFarm','multiUse','gridLimits','gridConstraints','generatorControl','bhkwControl','advancedChargingPark','advancedDiagnostics','energyWalletOperator','billingExport','chargeKiosk','solarChargeMode','solarChargeBilling','mesh','microgrid','meshMicrogrid','netOperatorInterface','neighborSharing','multiSiteWallet','nlSaldering','nlEnergyHub','aiAutopilot'];
     const all = new Set([...hemsFeatures, ...eosOnlyFeatures]);
     const out = {};
     for (const f of all) out[f] = ed === 'eos' ? true : (ed === 'hems' ? hemsFeatures.has(f) : false);
@@ -2343,6 +2343,7 @@ class NexoWattVis extends utils.Adapter {
       mesh: 'mesh',
       microgrid: 'microgrid',
       meshMicrogrid: 'meshMicrogrid',
+      netOperator: 'netOperatorInterface',
       nlSaldering: 'nlSaldering',
       nlEnergyHub: 'nlEnergyHub',
       aiAutopilot: 'aiAutopilot'
@@ -3509,6 +3510,7 @@ class NexoWattVis extends utils.Adapter {
       'energyLedger',
       'chargeKiosk',
       'meshMicrogrid',
+      'netOperatorInterface',
       'smartHome',
       'smartHomeConfig',
 
@@ -3713,6 +3715,20 @@ class NexoWattVis extends utils.Adapter {
         timeoutMs: 2500,
       },
       nodes: [],
+    });
+    ensurePlainObj('netOperatorInterface', {
+      enabled: false,
+      mode: 'diagnostic',
+      profileSource: 'builtin',
+      driverId: 'generic-modbus-tcp-template',
+      customProfileJson: '',
+      commissioned: false,
+      installerApproved: false,
+      writebackEnabled: false,
+      signalMaxAgeSec: 5,
+      auditLimit: 500,
+      failSafePolicy: 'project-specific',
+      transport: { type: 'modbus-tcp', host: '', port: 502, unitId: 1, timeoutMs: 2000, pollIntervalMs: 1000 },
     });
     ensurePlainObj('vis', {});
     ensurePlainObj('tsMigration', {
@@ -4116,6 +4132,7 @@ class NexoWattVis extends utils.Adapter {
       { id: 'energyWallet', enableFlag: 'enableEnergyWallet', mandatory: true, defaultInstalled: true },
       { id: 'chargeKiosk', enableFlag: 'enableChargeKiosk' },
       { id: 'meshMicrogrid', enableFlag: 'enableMeshMicrogrid' },
+      { id: 'netOperator', enableFlag: 'enableNetOperatorInterface', noLegacyDefault: true },
 
       // Shared helper module (always present for UI/runtime convenience)
       { id: 'tariff',      enableFlag: null, mandatory: true, defaultInstalled: true },
@@ -4231,6 +4248,7 @@ class NexoWattVis extends utils.Adapter {
       { id: 'energyWallet', enableFlag: 'enableEnergyWallet' },
       { id: 'chargeKiosk', enableFlag: 'enableChargeKiosk' },
       { id: 'meshMicrogrid', enableFlag: 'enableMeshMicrogrid' },
+      { id: 'netOperator', enableFlag: 'enableNetOperatorInterface' },
       { id: 'multiuse',    enableFlag: 'enableMultiUse' },
     ];
 
@@ -14675,6 +14693,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
       { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', enableFlag: null, mandatory: true },
       { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls aktiviert)', enableFlag: null, mandatory: false },
       { id: 'multiuse', label: 'MultiUse', desc: 'Weitere interne Logik-Bausteine', enableFlag: 'enableMultiUse', mandatory: false },
+      { id: 'netOperator', label: 'Netzbetreiber-Schnittstelle', desc: 'Kanonische read-only Schnittstelle hinter einem zertifizierten EZA-/Parkregler', enableFlag: 'enableNetOperatorInterface', mandatory: false },
     ];
     /**
      * Code-Teil: _nwNormalizeEmsApps
@@ -14805,6 +14824,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         enableEnergyWallet: (typeof n.enableEnergyWallet === 'boolean') ? n.enableEnergyWallet : undefined,
         enableChargeKiosk: (typeof n.enableChargeKiosk === 'boolean') ? n.enableChargeKiosk : undefined,
         enableMeshMicrogrid: (typeof n.enableMeshMicrogrid === 'boolean') ? n.enableMeshMicrogrid : undefined,
+        enableNetOperatorInterface: (typeof n.enableNetOperatorInterface === 'boolean') ? n.enableNetOperatorInterface : undefined,
         enableMultiUse: (typeof n.enableMultiUse === 'boolean') ? n.enableMultiUse : undefined,
 
         // Phase 2: App-Center state (install/enable)
@@ -14816,6 +14836,7 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         energyWallet: (n.energyWallet && typeof n.energyWallet === 'object') ? n.energyWallet : {},
         chargeKiosk: (n.chargeKiosk && typeof n.chargeKiosk === 'object') ? n.chargeKiosk : { enabled: false, displayBasePath: '/display/station/', stations: [] },
         meshMicrogrid: (n.meshMicrogrid && typeof n.meshMicrogrid === 'object') ? n.meshMicrogrid : { enabled: false, mode: 'diagnostic', clusterId: 'cluster_01', clusterName: 'Lokaler Energieverbund', gridLimitW: 0, nodes: [] },
+        netOperatorInterface: (n.netOperatorInterface && typeof n.netOperatorInterface === 'object') ? n.netOperatorInterface : { enabled: false, mode: 'diagnostic', profileSource: 'builtin', driverId: 'generic-modbus-tcp-template', customProfileJson: '', commissioned: false, installerApproved: false, writebackEnabled: false, signalMaxAgeSec: 5, auditLimit: 500, failSafePolicy: 'project-specific', transport: { type: 'modbus-tcp', host: '', port: 502, unitId: 1, timeoutMs: 2000, pollIntervalMs: 1000 } },
 
         // Scheduler
         schedulerIntervalMs: (typeof n.schedulerIntervalMs === 'number') ? n.schedulerIntervalMs : undefined,
@@ -15215,16 +15236,16 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
 
         const allowedRoot = new Set([
           // Legacy enable flags (kept for backwards compatibility)
-          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableChargeKiosk','enableMeshMicrogrid','enableMultiUse',
+          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableChargeKiosk','enableMeshMicrogrid','enableNetOperatorInterface','enableMultiUse',
 
           // Phase 2: App Center state
           'emsApps',
 
           // Scheduler + base mapping
-          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','tariffProvider','chargeKiosk','meshMicrogrid','datapoints','vis','settings',
+          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','tariffProvider','chargeKiosk','meshMicrogrid','netOperatorInterface','datapoints','vis','settings',
 
           // App/module configs
-          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','meshMicrogrid','chargingManagement',
+          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','meshMicrogrid','netOperatorInterface','chargingManagement',
 
           // VIS configuration that is required to configure chargepoints/stations in the installer page
           'settingsConfig',
@@ -15472,16 +15493,16 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
 
         const allowedRoot = new Set([
           // Legacy enable flags (kept for backwards compatibility)
-          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableChargeKiosk','enableMeshMicrogrid','enableMultiUse',
+          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableEnergyWallet','enableChargeKiosk','enableMeshMicrogrid','enableNetOperatorInterface','enableMultiUse',
 
           // Phase 2: App Center state
           'emsApps',
 
           // Scheduler + base mapping
-          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','tariffProvider','chargeKiosk','meshMicrogrid','datapoints','vis','settings',
+          'schedulerIntervalMs','installerConfig','countryProfile','energyWallet','tariffProvider','chargeKiosk','meshMicrogrid','netOperatorInterface','datapoints','vis','settings',
 
           // App/module configs
-          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','meshMicrogrid','chargingManagement',
+          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','energyWallet','chargeKiosk','meshMicrogrid','netOperatorInterface','chargingManagement',
 
           // VIS configuration that is required to configure chargepoints/stations in the installer page
           'settingsConfig',
@@ -20827,6 +20848,90 @@ registerEnergyOriginApi({
   readJson: _nwEnergyLedgerJson,
   readState: _nwDisplayStateVal,
   csvEscape: _nwDisplayCsvEscape,
+});
+
+// -----------------------------------------------------------------------------
+// EOS Netzbetreiber-Schnittstelle – read-only Grundlagen-App
+// -----------------------------------------------------------------------------
+// Der zertifizierte EZA-/Parkregler bleibt die netzseitig maßgebliche Instanz.
+// RC50 liefert kanonisches Datenmodell, Treiberprüfung, Diagnose und Audit. Eine
+// Übergabe bindender Vorgaben an Asset-Writer ist ausdrücklich noch gesperrt.
+const _nwNetOperatorLicensed = () => {
+  try { return !!this._nwLicenseAllowsAppId('netOperator'); } catch (_e) { return false; }
+};
+const _nwNetOperatorEnabled = () => {
+  const cfg = this && this.config && this.config.netOperatorInterface && typeof this.config.netOperatorInterface === 'object'
+    ? this.config.netOperatorInterface
+    : {};
+  return _nwNetOperatorLicensed() && (this.config.enableNetOperatorInterface === true || cfg.enabled === true);
+};
+
+app.get(['/netoperator', '/netoperator/'], requireCustomerWorkspace, (req, res) => {
+  if (!_nwNetOperatorLicensed()) return res.status(403).send(renderRuntimeAccessPage('Netzbetreiber-Schnittstelle', 'appcenter.open', 'Installer/Admin'));
+  return res.sendFile(path.join(__dirname, 'www', 'netoperator.html'));
+});
+
+app.get('/api/netoperator/status', requireCustomerWorkspace, (_req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwNetOperatorLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'Die Netzbetreiber-Schnittstelle ist nur in EOS Pro verfügbar.' });
+    const module = this._netOperatorInterface;
+    if (module && typeof module.getPublicStatus === 'function') return res.json(module.getPublicStatus());
+    return res.json({
+      ok: true,
+      schema: 'nexowatt.netoperator-status-api.v1',
+      generatedAt: Date.now(),
+      enabled: _nwNetOperatorEnabled(),
+      mode: this.config && this.config.netOperatorInterface ? this.config.netOperatorInterface.mode || 'diagnostic' : 'off',
+      readOnly: true,
+      hardwareWrite: false,
+      operationEngineIntegration: 'prepared-not-active',
+      snapshot: null,
+      audit: [],
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'internal_error', message: String(error && error.message ? error.message : error) });
+  }
+});
+
+app.get('/api/netoperator/drivers', requireInstaller, (_req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwNetOperatorLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'EOS Pro erforderlich.' });
+    const { NetOperatorDriverRegistry } = require('./ems/services/netoperator-driver-registry');
+    const registry = new NetOperatorDriverRegistry();
+    registry.load();
+    return res.json({ ok: true, schema: 'nexowatt.netoperator-driver-list.v1', generatedAt: Date.now(), drivers: registry.list(), diagnostics: registry.getDiagnostics(), readOnly: true });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'internal_error', message: String(error && error.message ? error.message : error) });
+  }
+});
+
+app.get('/api/netoperator/raw', requireInstaller, (_req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwNetOperatorLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'EOS Pro erforderlich.' });
+    const module = this._netOperatorInterface;
+    if (!module || typeof module.getRawDiagnostics !== 'function') return res.status(503).json({ ok: false, error: 'module_not_initialized', message: 'Netzbetreiber-Modul ist noch nicht initialisiert.' });
+    return res.json(module.getRawDiagnostics());
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'internal_error', message: String(error && error.message ? error.message : error) });
+  }
+});
+
+app.post('/api/netoperator/test', requireInstaller, async (req, res) => {
+  try {
+    sendNoStore(res);
+    if (!_nwNetOperatorLicensed()) return res.status(403).json({ ok: false, error: 'eos_required', message: 'EOS Pro erforderlich.' });
+    const module = this._netOperatorInterface;
+    if (!module || typeof module.testConnection !== 'function') return res.status(503).json({ ok: false, error: 'module_not_initialized', message: 'Netzbetreiber-Modul ist noch nicht initialisiert.' });
+    const supplied = req && req.body && req.body.config && typeof req.body.config === 'object' ? req.body.config : undefined;
+    const safeConfig = supplied ? { ...supplied, writebackEnabled: false, mode: supplied.mode === 'off' ? 'diagnostic' : supplied.mode } : undefined;
+    const result = await module.testConnection(safeConfig);
+    return res.status(result && result.ok ? 200 : 422).json({ ...result, readOnly: true, hardwareWrite: false, operationEngineIntegration: 'prepared-not-active' });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'internal_error', message: String(error && error.message ? error.message : error), readOnly: true, hardwareWrite: false });
+  }
 });
 
 // -----------------------------------------------------------------------------

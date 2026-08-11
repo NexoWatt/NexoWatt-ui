@@ -1,25 +1,14 @@
-NexoWatt EOS 0.8.173 RC49 – direkter npm-Publish
-==================================================
+NexoWatt EOS 0.8.174 RC50 – direkter npm-Publish
 
-1. Den Inhalt dieser ZIP vollständig in den Projektordner kopieren.
+1. Diese NPM-READY-ZIP vollständig in den Projektordner kopieren.
 2. Vorhandene Dateien ersetzen.
 3. PowerShell im Projektordner öffnen.
-4. Ausschließlich ausführen:
+4. Nur ausführen:
 
    npm publish
 
-Der Publish-Vorgang prüft read-only:
-- ob Version 0.8.173 auf npm noch frei ist,
-- ob sämtliche freigegebenen Produktdateien exakt dem geprüften RC49-Artefakt entsprechen.
+Der Publish-Guard prüft read-only:
+- ob Version 0.8.174 auf npm noch frei ist,
+- ob alle freigegebenen Produktdateien dem SHA-256-Manifest entsprechen.
 
-Nicht erforderlich:
-- npm ci
-- npm install
-- npm update
-- npx tsc
-- Build- oder Sync-Befehle
-
-NexoLogic-Testmodus:
-- läuft ausschließlich im Browser,
-- schreibt keine Hardwaredatenpunkte,
-- verändert keine aktive Serverlogik.
+Die Netzbetreiber-Schnittstellen-App ist standardmäßig deaktiviert und bleibt in RC50 read-only.

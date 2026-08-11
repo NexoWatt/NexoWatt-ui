@@ -1,14 +1,12 @@
 @echo off
 setlocal
-cd /d "%~dp0"
-echo NexoWatt EOS 0.8.173 RC49 wird geprueft und auf npm veroeffentlicht ...
-call npm publish
+echo NexoWatt EOS 0.8.174 RC50 wird geprueft und auf npm veroeffentlicht ...
+npm publish
 if errorlevel 1 (
   echo.
-  echo FEHLER: Der Publish-Vorgang wurde abgebrochen.
-  pause
+  echo VERÖFFENTLICHUNG FEHLGESCHLAGEN.
   exit /b 1
 )
 echo.
-echo NexoWatt EOS 0.8.173 wurde erfolgreich veroeffentlicht.
-pause
+echo NexoWatt EOS 0.8.174 wurde erfolgreich veroeffentlicht.
+endlocal

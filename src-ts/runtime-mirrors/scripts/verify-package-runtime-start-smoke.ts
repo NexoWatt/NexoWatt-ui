@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: dccf2ab10cef4eea81d0a7f479cdf9cb8268ef3de86d632cfa5573d295a8c880
+ * Original-Hash: 2d9ef4517bdb6e2caf146f1e53212d1462852964991099a60e4c76e648cb4d80
  */
 
 /**
@@ -171,6 +171,10 @@ for (const rel of [
   'lib/ts-mirrors/ems/para14a/para14a-constraint.js',
   'ems/services/para14a-eebus-api.js',
   'ems/services/safety-envelope.js',
+  'ems/services/netoperator-canonical-model.js',
+  'ems/services/netoperator-driver-registry.js',
+  'ems/services/netoperator-modbus-tcp.js',
+  'ems/modules/netoperator-interface.js',
   'ems/modules/para14a.js',
   'ems/modules/charging-management.js',
   'ems/modules/core-limits.js',
