@@ -1,3 +1,11 @@
+## 0.8.175 - 2026-08-11
+
+- OCPP-Telemetrieprofil für den verwendeten OCPP-Adapter automatisch anhand von `ocpp.<Instanz>.<ChargePoint>.<Connector>.*` erkannt. Connectorstatus, Transaktionszustand, Stationsverbindung und Adapter-Lebenszeichen werden ohne zusätzliche manuelle Zuordnung abgeleitet.
+- Rohleistung und für das EMS wirksame Istleistung getrennt. Ein alter positiver `MeterValues`-Wert bleibt als Diagnose sichtbar, wird bei `StopTransaction`, `Finishing`, `Available`, `Faulted`, `Unavailable` oder Verbindungsverlust aber sofort als 0 W wirksam.
+- Unveränderte OCPP-Leistungswerte bleiben während einer bestätigten aktiven Transaktion ereignisbasiert gültig. Der letzte EOS-Sollwert wird im OCPP-Pfad niemals als gemessene Istleistung verwendet.
+- Ladeerkennung, PV-/Stationsreservierung, Speicher-Schutzlast und Bilanzierung verwenden die normalisierte Effektivleistung. Zyklisch abgefragte Modbus-/HTTP-/MQTT-/UDP-Ladepunkte behalten ihr bisheriges Verhalten.
+- OCPP-Adapter-Liveness wird zusätzlich über `system.adapter.ocpp.<Instanz>.alive` überwacht; ein stehen gebliebenes `connected=true` kann bei gestopptem Adapter keine alte Leistung fortschreiben.
+
 ## 0.8.174 - 2026-08-10
 
 - Neue EOS-App `netoperator-interface` als sichere, standardmäßig deaktivierte und read-only Grundlage für zertifizierte EZA-/Parkregler vorbereitet. Der zertifizierte Regler bleibt am Netzanschlusspunkt maßgeblich; die Übergabe an Operation Engine und Asset-Writer ist noch gesperrt.

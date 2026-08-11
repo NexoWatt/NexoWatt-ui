@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.8.174",
+  "version": "0.8.175",
   "description": "NexoWatt EOS – local energy, charging and building control platform.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -428,6 +428,7 @@
     "test:ui-fullwidth-smarthome-rc47": "node scripts/verify-ui-fullwidth-smarthome-rc47.js",
     "test:rc49-para14a-evcs-start": "node scripts/verify-rc49-para14a-evcs-start-stability.js",
     "test:rc50-netoperator-interface": "node scripts/verify-rc50-netoperator-interface-foundation.js",
+    "test:rc51-ocpp-telemetry": "node scripts/verify-rc51-ocpp-telemetry-normalization.js",
     "test:package-runtime-start-smoke": "node scripts/verify-package-runtime-start-smoke.js"
   },
   "dependencies": {
@@ -479,6 +480,7 @@
     "docs/RC47_UI_WORKSPACE_SMARTHOME_POLISH_DE.md",
     "docs/RC49_PARA14A_EVCS_START_STABILITY_DE.md",
     "docs/RC50_NETOPERATOR_INTERFACE_FOUNDATION_DE.md",
+    "docs/RC51_OCPP_TELEMETRIE_NORMALISIERUNG_DE.md",
     "ems/charging-budget-helpers.js",
     "ems/consumers/evcs.js",
     "ems/consumers/generic-load.js",

@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 4263b760c5be1803cd2eb86e1562accc9a2845db3511d57b0c3fef9bec4d0f10
+ * Original-Hash: e8fd1f6811d0a3b329dd54465b663d447986e8c8cea420175f0d6298db77708e
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:ad9f45dcb3c2196ba200bf3105ead0384101fccf1f21496e85b8d5b1e75b873b
+ * Quell-Hash: sha256:9b0bc4a8600ed5a6ee6f63e6e74dd1cc590f2d704157b9c3db3856a455d683b0
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1468,7 +1468,7 @@ function inferOcppConnectorNoFromObjectId(objectId) {
     const id = String(objectId || '').trim();
     if (!id) return null;
     const parts = id.split('.');
-    // Standard: ocpp.<instance>.<station>.<connector>....
+    // Standard des OCPP-Adapters: ocpp.<Instanz>.<Ladestation>.<Connector>....
     if (parts.length >= 4 && parts[0].toLowerCase() === 'ocpp' && /^\d+$/.test(parts[1]) && /^\d+$/.test(parts[3])) {
         return Number(parts[3]);
     }
@@ -1480,6 +1480,272 @@ function inferOcppConnectorNoFromObjectId(objectId) {
         }
     }
     return null;
+}
+
+/** Fehlende/leer gelassene Telemetriewerte dürfen niemals als echte 0 interpretiert werden. */
+function strictFiniteEvcsNumber(value) {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'string' && value.trim() === '') return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Erkennt den eingesetzten OCPP-Adapter ausschließlich über seinen
+ * Objektbaum. `common.type=number` reicht dafür nicht aus, weil auch Modbus-,
+ * HTTP- und MQTT-Leistungswerte Zahlen sind.
+ */
+function inferIoBrokerOcppConnectorContext(...objectIds) {
+    const candidates = objectIds.flat ? objectIds.flat(Infinity) : objectIds;
+    for (const candidate of candidates) {
+        const objectId = String(candidate || '').trim();
+        if (!objectId) continue;
+        const parts = objectId.split('.');
+        if (
+            parts.length >= 5
+            && String(parts[0] || '').toLowerCase() === 'ocpp'
+            && /^\d+$/.test(String(parts[1] || ''))
+            && /^\d+$/.test(String(parts[3] || ''))
+        ) {
+            const deviceRoot = parts.slice(0, 3).join('.');
+            const connectorRoot = parts.slice(0, 4).join('.');
+            return {
+                detected: true,
+                profile: 'ocpp-1.6-event-driven',
+                sourceObjectId: objectId,
+                adapterInstance: parts.slice(0, 2).join('.'),
+                deviceRoot,
+                connectorRoot,
+                connectorNo: Number(parts[3]),
+                statusId: `${connectorRoot}.status`,
+                transactionActiveId: Number(parts[3]) > 0 ? `${connectorRoot}.transactionActive` : '',
+                connectedId: `${deviceRoot}.connected`,
+                adapterAliveId: `system.adapter.${parts[0]}.${parts[1]}.alive`,
+            };
+        }
+    }
+    return {
+        detected: false,
+        profile: 'generic',
+        sourceObjectId: '',
+        adapterInstance: '',
+        deviceRoot: '',
+        connectorRoot: '',
+        connectorNo: null,
+        statusId: '',
+        transactionActiveId: '',
+        connectedId: '',
+        adapterAliveId: '',
+    };
+}
+
+/** Explizite Installerwahl gewinnt; sonst wird der Datenpunkt-Ursprung verwendet. */
+function resolveEvcsTelemetryProfile(configuredProfile, ocppContext) {
+    const token = normalizeEvcsStatusToken(configuredProfile);
+    if (['iobrokerocpp', 'iobrokerocpp16', 'ocpp', 'ocpp16'].includes(token)) return 'ocpp-1.6-event-driven';
+    if (['generic', 'polling', 'modbus', 'http', 'mqtt', 'udp'].includes(token)) return 'generic';
+    return ocppContext && ocppContext.detected ? 'ocpp-1.6-event-driven' : 'generic';
+}
+
+/** OCPP-Zustände, bei denen physikalisch aktuell keine Fahrzeugleistung fließen darf. */
+function isOcppAuthoritativeZeroState(state) {
+    return new Set([
+        'disconnected', 'connected', 'ready_to_charge',
+        'paused_by_evse', 'paused_by_vehicle', 'finishing', 'reserved',
+        'faulted', 'unavailable', 'offline',
+    ]).has(String(state || '').trim().toLowerCase());
+}
+
+/** OCPP-Zustände, die während einer aktiven Transaktion eventbasiert bestehen bleiben dürfen. */
+function isOcppSessionPersistentState(state) {
+    return new Set([
+        'charging', 'ready_to_charge', 'connected',
+        'paused_by_evse', 'paused_by_vehicle', 'finishing',
+    ]).has(String(state || '').trim().toLowerCase());
+}
+
+/**
+ * Der OCPP-Adapter schreibt Connector-Stati ereignisbasiert. Solange
+ * Adapter und Ladestation verbunden sind, bleibt deshalb auch ein unveränderter
+ * Zustand fachlich gültig. Sicherheitszustände werden dabei bewusst gehalten,
+ * statt nach Ablauf eines generischen Timers wieder freigegeben zu werden.
+ */
+function isOcppEventStatusPersistentState(state) {
+    return new Set([
+        'disconnected', 'connected', 'ready_to_charge', 'charging',
+        'paused_by_evse', 'paused_by_vehicle', 'finishing', 'reserved',
+        'faulted', 'unavailable', 'offline',
+    ]).has(String(state || '').trim().toLowerCase());
+}
+
+/**
+ * Trennt OCPP-Rohwert, effektive Istleistung und Sollwert/Reservierung.
+ *
+ * Der OCPP-Adapter schreibt bei StopTransaction zuverlässig
+ * `transactionActive=false`, setzt aber einen zuvor empfangenen MeterValues-
+ * Leistungswert nicht automatisch auf 0. Deshalb darf der letzte OCPP-Rohwert
+ * bei Finishing/Available/Transaktionsende nicht als aktuelle Leistung gelten.
+ */
+
+/**
+ * OCPP `transactionActive=false` bedeutet zunächst nur, dass aktuell keine
+ * Transaktion läuft. Ein frischer `Preparing`-/`SuspendedEVSE`-Status darf
+ * trotzdem Ladebedarf melden, damit Min+PV/Auto die Transaktion überhaupt
+ * starten können. Terminale oder widersprüchliche Zustände bleiben dagegen
+ * sicher ohne Ladebedarf.
+ */
+function reconcileOcppTransactionDemand({
+    telemetryProfile = 'generic',
+    transactionKnown = false,
+    transactionActive = null,
+    vehicleDemand = null,
+} = {}) {
+    const demand = vehicleDemand && typeof vehicleDemand === 'object'
+        ? vehicleDemand
+        : { plugged: false, demandConfirmed: false, state: 'unknown', source: 'missing', reason: 'missing' };
+    if (
+        String(telemetryProfile || '').trim().toLowerCase() !== 'ocpp-1.6-event-driven'
+        || transactionKnown !== true
+        || transactionActive === true
+    ) {
+        return demand;
+    }
+
+    const state = String(demand.state || 'unknown').trim().toLowerCase();
+    if (['ready_to_charge', 'paused_by_evse'].includes(state)) {
+        return {
+            ...demand,
+            source: String(demand.source || 'ocpp-status'),
+            reason: `${String(demand.reason || state)}:transaction-not-started`,
+        };
+    }
+
+    return {
+        ...demand,
+        demandConfirmed: false,
+        source: 'ocpp-transaction-state',
+        reason: 'ocpp-transaction-inactive',
+        state: state === 'charging' ? 'finishing' : state,
+    };
+}
+
+/**
+ * Code-Teil: resolveEvcsEffectivePower
+ *
+ * Zweck:
+ * Automatisch markierter Funktion-Abschnitt aus der ursprünglichen JavaScript-Datei.
+ * Dieser Kommentar dient als Orientierung für die schrittweise TypeScript-Migration.
+ *
+ * Zusammenhang:
+ * Die produktive Logik liegt aktuell noch in der JS-Datei. Dieser TS-Spiegel zeigt,
+ * welcher konkrete Code-Abschnitt später typisiert, getestet und übernommen werden muss.
+ */
+function resolveEvcsEffectivePower({
+    telemetryProfile = 'generic',
+    rawPowerW = null,
+    rawMeterStale = false,
+    online = false,
+    enabled = false,
+    normalizedState = 'unknown',
+    statusAuthoritative = false,
+    transactionActive = null,
+    transactionKnown = false,
+    lastCommandW = null,
+} = {}) {
+    const profile = String(telemetryProfile || 'generic').trim().toLowerCase();
+    const raw = strictFiniteEvcsNumber(rawPowerW);
+    const command = strictFiniteEvcsNumber(lastCommandW);
+    const state = String(normalizedState || 'unknown').trim().toLowerCase();
+    const isOcpp = profile === 'ocpp-1.6-event-driven';
+    const base = {
+        profile,
+        eventDriven: isOcpp,
+        rawPowerW: raw === null ? 0 : raw,
+        effectivePowerW: 0,
+        powerSource: 'missing',
+        effectiveMeterStale: true,
+        authoritativeZero: false,
+        sessionEnded: false,
+        transactionKnown: transactionKnown === true,
+        transactionActive: transactionKnown === true ? transactionActive === true : null,
+    };
+
+    if (!enabled) {
+        return { ...base, powerSource: 'disabled-zero', effectiveMeterStale: false, authoritativeZero: true, sessionEnded: true };
+    }
+    if (!online) {
+        return { ...base, powerSource: 'offline-zero', effectiveMeterStale: false, authoritativeZero: true, sessionEnded: true };
+    }
+
+    // Der bisherige generische Vertrag bleibt für zyklisch abgefragte Geräte
+    // unverändert: bei stale Telemetrie dient der letzte Sollwert weiterhin nur
+    // dort als konservativer Regel-/Reservierungsfallback.
+    if (!isOcpp) {
+        if (raw !== null && !rawMeterStale) {
+            return { ...base, effectivePowerW: raw, powerSource: 'measured', effectiveMeterStale: false };
+        }
+        if (rawMeterStale && command !== null) {
+            return { ...base, effectivePowerW: command, powerSource: 'generic-command-fallback', effectiveMeterStale: true };
+        }
+        return { ...base, effectivePowerW: raw === null ? 0 : raw, powerSource: raw === null ? 'missing' : 'stale-meter', effectiveMeterStale: true };
+    }
+
+    // StopTransaction ist im OCPP-Adapter die stärkste Session-Wahrheit.
+    if (transactionKnown === true && transactionActive !== true) {
+        return {
+            ...base,
+            effectivePowerW: 0,
+            powerSource: 'ocpp-transaction-ended-zero',
+            effectiveMeterStale: false,
+            authoritativeZero: true,
+            sessionEnded: true,
+        };
+    }
+
+    // Ein frischer bzw. durch die aktive Transaktion gehaltener Connectorstatus
+    // ist autoritativ. MeterValues dürfen dabei als Rohdiagnose positiv stehen bleiben.
+    if (statusAuthoritative && isOcppAuthoritativeZeroState(state)) {
+        const sessionEnded = ['disconnected', 'finishing', 'faulted', 'unavailable', 'offline'].includes(state);
+        return {
+            ...base,
+            effectivePowerW: 0,
+            powerSource: `ocpp-status-${state}-zero`,
+            effectiveMeterStale: false,
+            authoritativeZero: true,
+            sessionEnded,
+        };
+    }
+
+    if (raw !== null && !rawMeterStale) {
+        return { ...base, effectivePowerW: raw, powerSource: 'ocpp-meter', effectiveMeterStale: false };
+    }
+
+    // OCPP-MeterValues sind push-/ereignisbasiert. Solange Transaktion und
+    // Connectorstatus den Ladebetrieb bestätigen, bleibt ein unveränderter
+    // Rohwert als Istwert verwendbar. Der letzte EMS-Sollwert wird dafür nie benutzt.
+    if (
+        raw !== null
+        && (
+            (transactionKnown === true && transactionActive === true)
+            || (statusAuthoritative && state === 'charging')
+        )
+    ) {
+        return {
+            ...base,
+            effectivePowerW: raw,
+            powerSource: 'ocpp-meter-event-held',
+            effectiveMeterStale: false,
+        };
+    }
+
+    return {
+        ...base,
+        effectivePowerW: 0,
+        powerSource: transactionKnown === true && transactionActive === true
+            ? 'ocpp-active-without-power'
+            : 'ocpp-power-unknown',
+        effectiveMeterStale: true,
+    };
 }
 
 /**
@@ -4331,7 +4597,8 @@ class ChargingManagementModule extends BaseModule {
         await mk('maxPowerW', 'Max power (W)', 'number', 'value.power');
         await mk('para14aCapW', '§14a cap (W)', 'number', 'value.power');
         await mk('para14aCapped', '§14a cap aktiv', 'boolean', 'indicator');
-        await mk('actualPowerW', 'Actual power (W)', 'number', 'value.power');
+        await mk('actualPowerRawW', 'Rohleistung des Quelladapters (W)', 'number', 'value.power');
+        await mk('actualPowerW', 'Effektive aktuelle Ladeleistung (W)', 'number', 'value.power');
         await mk('actualCurrentA', 'Actual current (A)', 'number', 'value.current');
         await mk('charging', 'Charging', 'boolean', 'indicator');
         await mk('chargingSince', 'Charging since (ms)', 'number', 'value.time');
@@ -4350,8 +4617,23 @@ class ChargingManagementModule extends BaseModule {
         await mk('mappingOk', 'Mapping OK', 'boolean', 'indicator');
         await mk('hasSetpoint', 'Has setpoint', 'boolean', 'indicator');
         await mk('mappingIssues', 'Mapping issues (json)', 'string', 'text');
+        await mk('telemetryProfile', 'Erkanntes EVCS-Telemetrieprofil', 'string', 'text');
+        await mk('telemetryAutoDetected', 'Telemetrieprofil automatisch erkannt', 'boolean', 'indicator');
+        await mk('ocppConnectorRoot', 'Erkannter OCPP-Connectorpfad', 'string', 'text');
+        await mk('powerRawW', 'Rohleistung des Quelladapters (W)', 'number', 'value.power');
+        await mk('powerEffectiveW', 'Für EMS verwendete Effektivleistung (W)', 'number', 'value.power');
+        await mk('powerSource', 'Quelle der Effektivleistung', 'string', 'text');
+        await mk('powerAuthoritativeZero', 'Status/Transaktion bestätigt 0 W', 'boolean', 'indicator');
         await mk('meterAgeMs', 'Meter age (ms)', 'number', 'value');
-        await mk('meterStale', 'Meter stale', 'boolean', 'indicator');
+        await mk('meterRawStale', 'Roh-Leistungswert veraltet', 'boolean', 'indicator');
+        await mk('meterStale', 'Effektive Leistung veraltet/unsicher', 'boolean', 'indicator');
+        await mk('transactionActive', 'OCPP-Transaktion aktiv', 'boolean', 'indicator');
+        await mk('transactionActiveKnown', 'OCPP-Transaktionszustand bekannt', 'boolean', 'indicator');
+        await mk('transactionActiveAgeMs', 'OCPP-Transaktionszustand Alter (ms)', 'number', 'value.time');
+        await mk('transactionActiveSourceId', 'OCPP-Transaktions-Datenpunkt', 'string', 'text');
+        await mk('ocppAdapterAlive', 'OCPP-Adapter aktiv', 'boolean', 'indicator.connected');
+        await mk('ocppAdapterAliveKnown', 'OCPP-Adapterstatus bekannt', 'boolean', 'indicator');
+        await mk('ocppAdapterAliveSourceId', 'OCPP-Adapter-Lebenszeichen-Datenpunkt', 'string', 'text');
         await mk('statusAgeMs', 'Status age (ms)', 'number', 'value');
         await mk('statusStale', 'Status stale', 'boolean', 'indicator');
         await mk('statusRaw', 'Raw status from assigned AppCenter datapoint', 'string', 'text');
@@ -4828,8 +5110,28 @@ class ChargingManagementModule extends BaseModule {
         const statusConnectorUsage = new Map();
         for (let configIndex = 0; configIndex < wallboxes.length; configIndex++) {
             const configWallbox = wallboxes[configIndex] || {};
-            const statusObjectId = String(configWallbox.statusId || '').trim();
-            const configuredConnectorNo = clamp(num(configWallbox.connectorNo, 0), 0, 9999);
+            const configOcppContext = inferIoBrokerOcppConnectorContext(
+                configWallbox.actualPowerWId,
+                configWallbox.statusId,
+                configWallbox.transactionActiveId,
+                configWallbox.onlineId,
+                configWallbox.enableId,
+                configWallbox.actualCurrentAId,
+                configWallbox.setPowerWId,
+                configWallbox.setCurrentAId,
+            );
+            const configTelemetryProfile = resolveEvcsTelemetryProfile(configWallbox.telemetryProfile, configOcppContext);
+            const statusObjectId = String(
+                configWallbox.statusId
+                || (configTelemetryProfile === 'ocpp-1.6-event-driven' ? configOcppContext.statusId : '')
+                || '',
+            ).trim();
+            const configuredConnectorNoRaw = clamp(num(configWallbox.connectorNo, 0), 0, 9999);
+            const configuredConnectorNo = configuredConnectorNoRaw > 0
+                ? configuredConnectorNoRaw
+                : (configTelemetryProfile === 'ocpp-1.6-event-driven' && Number.isFinite(configOcppContext.connectorNo)
+                    ? Number(configOcppContext.connectorNo)
+                    : 0);
             if (!statusObjectId || configuredConnectorNo <= 0) continue;
             if (!statusConnectorUsage.has(statusObjectId)) statusConnectorUsage.set(statusObjectId, new Set());
             statusConnectorUsage.get(statusObjectId).add(`${String(configWallbox.stationKey || '').trim()}|${configuredConnectorNo}|${String(configWallbox.key || configIndex)}`);
@@ -4926,7 +5228,26 @@ class ChargingManagementModule extends BaseModule {
 
             // Ladepunkt-Metadaten (Stationsgruppe / Connector)
             const stationKey = String(wb.stationKey || '').trim();
-            const connectorNo = clamp(num(wb.connectorNo, 0), 0, 9999);
+            const ocppContext = inferIoBrokerOcppConnectorContext(
+                wb.actualPowerWId,
+                wb.statusId,
+                wb.transactionActiveId,
+                wb.onlineId,
+                wb.enableId,
+                wb.actualCurrentAId,
+                wb.vehicleConnectedId,
+                wb.chargeDemandId,
+                wb.setPowerWId,
+                wb.setCurrentAId,
+            );
+            const telemetryProfile = resolveEvcsTelemetryProfile(wb.telemetryProfile, ocppContext);
+            const telemetryAutoDetected = !String(wb.telemetryProfile || '').trim() && ocppContext.detected === true;
+            const configuredConnectorNo = clamp(num(wb.connectorNo, 0), 0, 9999);
+            const connectorNo = configuredConnectorNo > 0
+                ? configuredConnectorNo
+                : (telemetryProfile === 'ocpp-1.6-event-driven' && Number.isFinite(ocppContext.connectorNo)
+                    ? Number(ocppContext.connectorNo)
+                    : 0);
             const allowBoost = wb.allowBoost !== false;
 
             // Optional per-wallbox boost timeout override (minutes). 0/empty = use global default by chargerType
@@ -5037,8 +5358,18 @@ class ChargingManagementModule extends BaseModule {
             const setCurrentAId = String(wb.setCurrentAId || '').trim();
             const setPowerWId = String(wb.setPowerWId || '').trim();
             const enableId = String(wb.enableId || '').trim();
-            const onlineId = String(wb.onlineId || '').trim();
-            const statusId = String(wb.statusId || '').trim();
+            const configuredOnlineId = String(wb.onlineId || '').trim();
+            const configuredStatusId = String(wb.statusId || '').trim();
+            const configuredTransactionActiveId = String(wb.transactionActiveId || '').trim();
+            const onlineId = configuredOnlineId
+                || (telemetryProfile === 'ocpp-1.6-event-driven' ? String(ocppContext.connectedId || '').trim() : '');
+            const statusId = configuredStatusId
+                || (telemetryProfile === 'ocpp-1.6-event-driven' ? String(ocppContext.statusId || '').trim() : '');
+            const transactionActiveId = configuredTransactionActiveId
+                || (telemetryProfile === 'ocpp-1.6-event-driven' ? String(ocppContext.transactionActiveId || '').trim() : '');
+            const ocppAdapterAliveId = telemetryProfile === 'ocpp-1.6-event-driven'
+                ? String(ocppContext.adapterAliveId || '').trim()
+                : '';
             const vehicleConnectedId = String(wb.vehicleConnectedId || '').trim();
             const chargeDemandId = String(wb.chargeDemandId || '').trim();
             const heartbeatId = String(wb.heartbeatId || '').trim();
@@ -5059,6 +5390,8 @@ class ChargingManagementModule extends BaseModule {
                 if (enableId) await this.dp.upsert({ key: `cm.wb.${safe}.en`, objectId: enableId, dataType: 'boolean', direction: 'out' });
                 if (onlineId) await this.dp.upsert({ key: `cm.wb.${safe}.onlineRaw`, objectId: onlineId, dataType: 'mixed', direction: 'in' });
                 if (statusId) await this.dp.upsert({ key: `cm.wb.${safe}.st`, objectId: statusId, dataType: 'mixed', direction: 'in' });
+                if (transactionActiveId) await this.dp.upsert({ key: `cm.wb.${safe}.transactionActiveRaw`, objectId: transactionActiveId, dataType: 'mixed', direction: 'in' });
+                if (ocppAdapterAliveId) await this.dp.upsert({ key: `cm.wb.${safe}.ocppAdapterAliveRaw`, objectId: ocppAdapterAliveId, dataType: 'mixed', direction: 'in' });
                 if (vehicleConnectedId) await this.dp.upsert({ key: `cm.wb.${safe}.vehicleConnectedRaw`, objectId: vehicleConnectedId, dataType: 'mixed', direction: 'in' });
                 if (chargeDemandId) await this.dp.upsert({ key: `cm.wb.${safe}.chargeDemandRaw`, objectId: chargeDemandId, dataType: 'mixed', direction: 'in' });
                 if (heartbeatId) await this.dp.upsert({ key: `cm.wb.${safe}.heartbeatRaw`, objectId: heartbeatId, dataType: 'mixed', direction: 'in' });
@@ -5075,6 +5408,8 @@ class ChargingManagementModule extends BaseModule {
             const iA = (actualCurrentAId && this.dp) ? this.dp.getNumber(`cm.wb.${safe}.iA`, null) : null;
             const onlineRaw = (onlineId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.onlineRaw`) : null;
             const statusRaw = (statusId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.st`) : null;
+            const transactionActiveRaw = (transactionActiveId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.transactionActiveRaw`) : null;
+            const ocppAdapterAliveRaw = (ocppAdapterAliveId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.ocppAdapterAliveRaw`) : null;
             const vehicleConnectedRaw = (vehicleConnectedId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.vehicleConnectedRaw`) : null;
             const chargeDemandRaw = (chargeDemandId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.chargeDemandRaw`) : null;
             const heartbeatRaw = (heartbeatId && this.dp) ? this.dp.getRaw(`cm.wb.${safe}.heartbeatRaw`) : null;
@@ -5113,6 +5448,7 @@ class ChargingManagementModule extends BaseModule {
             if (!hasSetpoint) mappingIssues.push('no_setpoint');
             if (!actualPowerWId) mappingIssues.push('no_power_meter');
             if (!statusId && !vehicleConnectedId && !chargeDemandId) mappingIssues.push('no_vehicle_state_mapping');
+            if (telemetryProfile === 'ocpp-1.6-event-driven' && !transactionActiveId) mappingIssues.push('ocpp_no_transaction_state');
 
             let meterAgeMs = 0;
             let meterStale = false;
@@ -5127,6 +5463,18 @@ class ChargingManagementModule extends BaseModule {
                 const age = this.dp.getAgeMs(`cm.wb.${safe}.onlineRaw`);
                 onlineAgeMs = Number.isFinite(age) && age >= 0 ? Math.round(age) : null;
             }
+            let transactionActiveAgeMs = null;
+            if (transactionActiveId && this.dp && typeof this.dp.getAgeMs === 'function') {
+                const age = this.dp.getAgeMs(`cm.wb.${safe}.transactionActiveRaw`);
+                transactionActiveAgeMs = Number.isFinite(age) && age >= 0 ? Math.round(age) : null;
+            }
+            const transactionActiveBool = transactionActiveId ? toBool(transactionActiveRaw) : null;
+            const transactionActiveKnown = transactionActiveBool === true || transactionActiveBool === false;
+            const transactionActive = transactionActiveKnown ? transactionActiveBool === true : null;
+            const ocppAdapterAliveBool = ocppAdapterAliveId ? toBool(ocppAdapterAliveRaw) : null;
+            const ocppAdapterAliveKnown = ocppAdapterAliveBool === true || ocppAdapterAliveBool === false;
+            const ocppAdapterAlive = ocppAdapterAliveKnown ? ocppAdapterAliveBool === true : null;
+
             let heartbeatAgeMs = null;
             if (heartbeatId && this.dp && typeof this.dp.getAgeMs === 'function') {
                 const age = this.dp.getAgeMs(`cm.wb.${safe}.heartbeatRaw`);
@@ -5136,22 +5484,34 @@ class ChargingManagementModule extends BaseModule {
             const heartbeatFresh = heartbeatId
                 ? (heartbeatAgeMs !== null && heartbeatAgeMs <= wbHeartbeatStaleTimeoutMs)
                 : false;
+            // `ocpp.<i>.<station>.connected` wird vom OCPP-Adapter bei
+            // Verbindung auf true und beim internen 90-s-Timeout auf false gesetzt.
+            // Der Wert selbst ist deshalb autoritativ, auch wenn sein Zeitstempel
+            // während einer stabilen WebSocket-Verbindung nicht zyklisch erneuert wird.
             const onlineSignalFresh = onlineId
-                ? (explicitOnlineFlag === true && onlineAgeMs !== null && onlineAgeMs <= wbHeartbeatStaleTimeoutMs)
+                ? (explicitOnlineFlag === true && (
+                    telemetryProfile === 'ocpp-1.6-event-driven'
+                    || (onlineAgeMs !== null && onlineAgeMs <= wbHeartbeatStaleTimeoutMs)
+                ))
                 : false;
             // Eventbasierte Hersteller-/CP-Zustände werden oft nur bei einer Änderung
-            // geschrieben. Ein frischer Heartbeat, Online-DP oder Leistungsmesswert
-            // bestätigt deshalb die Gerätekommunikation. Ob ein alter Rohstatus damit
-            // weiter gültig bleibt, entscheidet unten zusätzlich die sichere Liste
-            // persistenter Fahrzeugzustände; Faulted/Offline/Charging werden niemals
-            // allein durch diese Liveness-Bestätigung wiederbelebt.
+            // geschrieben. Ein frischer Heartbeat, Online-DP, OCPP-Transaktionszustand
+            // oder Leistungsmesswert bestätigt deshalb die Gerätekommunikation.
             const freshPowerMeterLiveness = !!(
                 actualPowerWId
                 && !meterStale
                 && typeof pW === 'number'
                 && Number.isFinite(pW)
             );
-            const vehicleLivenessFresh = heartbeatFresh || onlineSignalFresh || freshPowerMeterLiveness;
+            const ocppRuntimeAlive = telemetryProfile !== 'ocpp-1.6-event-driven'
+                || ocppAdapterAliveKnown !== true
+                || ocppAdapterAlive === true;
+            const vehicleLivenessFresh = ocppRuntimeAlive && (
+                heartbeatFresh
+                || onlineSignalFresh
+                || freshPowerMeterLiveness
+                || (telemetryProfile === 'ocpp-1.6-event-driven' && transactionActiveKnown)
+            );
 
 /**
  * Code-Teil: semanticAge
@@ -5250,17 +5610,32 @@ class ChargingManagementModule extends BaseModule {
                 && !statusSharedAcrossConnectors
                 && statusStale
                 && vehicleLivenessFresh
-                && isPersistentEvcsVehicleState(semanticPreview.state)
+                && (
+                    isPersistentEvcsVehicleState(semanticPreview.state)
+                    || (
+                        telemetryProfile === 'ocpp-1.6-event-driven'
+                        && isOcppEventStatusPersistentState(semanticPreview.state)
+                    )
+                )
             );
             const statusFresh = statusTimestampFresh || statusHeldByLiveness;
             const statusIgnoredReason = statusIgnoredReasonBase
                 || (!statusFresh && statusId && statusRawText ? 'status-stale' : '');
             const statusFreshReason = statusFresh
-                ? (statusTimestampFresh ? 'status-timestamp-fresh' : 'status-held-by-fresh-device-liveness')
+                ? (
+                    statusTimestampFresh
+                        ? 'status-timestamp-fresh'
+                        : (telemetryProfile === 'ocpp-1.6-event-driven'
+                            ? 'status-held-by-ocpp-event-liveness'
+                            : 'status-held-by-fresh-device-liveness')
+                )
                 : (statusIgnoredReason || 'status-missing');
             // Safety classification only trusts the timestamp/persistent OCPP-ready
             // policy. A stale fault/charging state is never revived by heartbeat.
-            const classifiedStatus = classifyEvcsConnectorStatus(statusRawText, statusTimestampFresh || statusAgePolicy.persistentReady);
+            const safetyStatusFresh = telemetryProfile === 'ocpp-1.6-event-driven'
+                ? statusFresh
+                : (statusTimestampFresh || statusAgePolicy.persistentReady);
+            const classifiedStatus = classifyEvcsConnectorStatus(statusRawText, safetyStatusFresh);
             const faultActive = !!classifiedStatus.faultActive;
             const unavailableActive = !!classifiedStatus.unavailableActive;
             const operationalBlocked = !!classifiedStatus.operationalBlocked;
@@ -5303,23 +5678,56 @@ class ChargingManagementModule extends BaseModule {
                 online = true;
                 onlineSource = 'fresh-power-meter';
             }
+            if (telemetryProfile === 'ocpp-1.6-event-driven' && ocppAdapterAliveKnown && ocppAdapterAlive !== true) {
+                online = false;
+                onlineSource = 'ocpp-adapter-not-alive';
+            }
 
             const controlAvailable = !!(enabled && online && !operationalBlocked);
+            const previousCommandW = this._lastCmdTargetW.get(safe);
+            const effectivePower = resolveEvcsEffectivePower({
+                telemetryProfile,
+                rawPowerW: pW,
+                rawMeterStale: meterStale,
+                online,
+                enabled,
+                normalizedState: statusFresh ? semanticPreview.state : 'unknown',
+                statusAuthoritative: statusFresh,
+                transactionActive,
+                transactionKnown: transactionActiveKnown,
+                lastCommandW: previousCommandW,
+            });
+            const pWRawNum = strictFiniteEvcsNumber(pW);
+            const pWNum = Number(effectivePower.effectivePowerW) || 0;
+            const pWUsed = pWNum;
+            const effectiveMeterStale = effectivePower.effectiveMeterStale === true;
             // Ein optionaler, veralteter oder absichtlich ignorierter Status-DP ist
-            // Diagnose, aber kein Messwert-Failsafe. Nur ein veralteter Pflicht-
-            // Leistungswert darf den allgemeinen STALE_METER-Pfad auslösen.
-            const staleAny = !!meterStale;
-
-            // Der Rohstatus bleibt Diagnose. Nur ein frischer, connectorrichtig
-            // zugeordneter Fault darf als aktuelle Störung blockieren.
+            // Diagnose, aber kein Messwert-Failsafe. Für OCPP kann ein Status oder
+            // StopTransaction einen effektiven 0-W-Wert autoritativ bestätigen.
+            const staleAny = !!effectiveMeterStale;
 
             // Publish diagnostics (UI)
             try {
                 await this._queueState(`${ch}.mappingOk`, hasSetpoint, true);
                 await this._queueState(`${ch}.hasSetpoint`, hasSetpoint, true);
                 await this._queueState(`${ch}.mappingIssues`, JSON.stringify(mappingIssues), true);
+                await this._queueState(`${ch}.telemetryProfile`, telemetryProfile, true);
+                await this._queueState(`${ch}.telemetryAutoDetected`, telemetryAutoDetected, true);
+                await this._queueState(`${ch}.ocppConnectorRoot`, telemetryProfile === 'ocpp-1.6-event-driven' ? String(ocppContext.connectorRoot || '') : '', true);
+                await this._queueState(`${ch}.powerRawW`, pWRawNum === null ? 0 : pWRawNum, true);
+                await this._queueState(`${ch}.powerEffectiveW`, pWNum, true);
+                await this._queueState(`${ch}.powerSource`, String(effectivePower.powerSource || ''), true);
+                await this._queueState(`${ch}.powerAuthoritativeZero`, effectivePower.authoritativeZero === true, true);
                 await this._queueState(`${ch}.meterAgeMs`, meterAgeMs, true);
-                await this._queueState(`${ch}.meterStale`, !!meterStale, true);
+                await this._queueState(`${ch}.meterRawStale`, !!meterStale, true);
+                await this._queueState(`${ch}.meterStale`, !!effectiveMeterStale, true);
+                await this._queueState(`${ch}.transactionActive`, transactionActiveKnown ? transactionActive === true : false, true);
+                await this._queueState(`${ch}.transactionActiveKnown`, transactionActiveKnown, true);
+                await this._queueState(`${ch}.transactionActiveAgeMs`, transactionActiveAgeMs === null ? 0 : transactionActiveAgeMs, true);
+                await this._queueState(`${ch}.transactionActiveSourceId`, transactionActiveId, true);
+                await this._queueState(`${ch}.ocppAdapterAlive`, ocppAdapterAliveKnown ? ocppAdapterAlive === true : false, true);
+                await this._queueState(`${ch}.ocppAdapterAliveKnown`, ocppAdapterAliveKnown, true);
+                await this._queueState(`${ch}.ocppAdapterAliveSourceId`, ocppAdapterAliveId, true);
                 await this._queueState(`${ch}.statusAgeMs`, statusAgeMs, true);
                 await this._queueState(`${ch}.statusStale`, !!statusStale, true);
                 await this._queueState(`${ch}.statusRaw`, statusRawText, true);
@@ -5348,14 +5756,8 @@ class ChargingManagementModule extends BaseModule {
                 // ignore
             }
 
-            // Charging detection (used for arrival-based stepwise allocation)
-            // If the wallbox meter is stale (event-driven update), fall back to the last commanded target.
-            const pWNum = (typeof pW === 'number' && Number.isFinite(pW)) ? pW : 0;
-            let pWUsed = (online && enabled) ? pWNum : 0;
-            if (online && enabled && meterStale) {
-                const prevCmdW = this._lastCmdTargetW.get(safe);
-                pWUsed = (typeof prevCmdW === 'number' && Number.isFinite(prevCmdW)) ? prevCmdW : 0;
-            }
+            // Charging detection uses only the normalized effective power. OCPP
+            // MeterValues may remain positive as a raw value after StopTransaction.
             const pWAbs = Math.abs(pWUsed);
             const isChargingRaw = online && enabled && pWAbs >= activityThresholdW;
             
@@ -5369,8 +5771,8 @@ class ChargingManagementModule extends BaseModule {
             const prevLastActive = this._chargingLastActiveMs.get(safe);
             if (typeof prevLastActive === 'number' && Number.isFinite(prevLastActive) && prevLastActive > 0) lastActive = prevLastActive;
             
-            if (!enabled) {
-                // Disabled by config: clear immediately
+            if (!enabled || effectivePower.sessionEnded === true) {
+                // Disabled or OCPP transaction/terminal status ended: clear immediately.
                 chargingSince = 0;
                 lastActive = 0;
                 this._chargingSinceMs.delete(safe);
@@ -5400,7 +5802,12 @@ class ChargingManagementModule extends BaseModule {
             
             // NOTE: JS '&&' returns the last evaluated operand, which can be a number (e.g. 0)
             // -> enforce proper boolean types for ioBroker states (common.type = boolean).
-            const inGrace = !!(chargingSince && lastActive && (now - lastActive) <= stopGraceMs);
+            const inGrace = !!(
+                effectivePower.authoritativeZero !== true
+                && chargingSince
+                && lastActive
+                && (now - lastActive) <= stopGraceMs
+            );
             const isCharging = !!(online && enabled && (isChargingRaw || inGrace));
             const chargingSinceForState = isCharging ? chargingSince : 0;
             try {
@@ -5505,8 +5912,12 @@ class ChargingManagementModule extends BaseModule {
                 }
             }
 
-            const pWFreshActualForGridW = (online && enabled && !meterStale && typeof pW === 'number' && Number.isFinite(pW)) ? Math.max(0, Math.abs(pW)) : 0;
-            const pWStaleIgnoredForGridW = (online && enabled && meterStale && typeof pW === 'number' && Number.isFinite(pW)) ? Math.max(0, Math.abs(pW)) : 0;
+            const pWFreshActualForGridW = (online && enabled && !effectiveMeterStale)
+                ? Math.max(0, Math.abs(pWNum))
+                : 0;
+            const pWStaleIgnoredForGridW = (online && enabled && effectiveMeterStale && pWRawNum !== null)
+                ? Math.max(0, Math.abs(pWRawNum))
+                : 0;
 
             if (typeof pWUsed === 'number' && Number.isFinite(pWUsed)) totalPowerW += pWUsed;
             totalFreshActualPowerW += pWFreshActualForGridW;
@@ -5535,7 +5946,8 @@ class ChargingManagementModule extends BaseModule {
             await this._queueState(`${ch}.maxPowerW`, maxPW, true);
             await this._queueState(`${ch}.para14aCapW`, para14aCapW || 0, true);
             await this._queueState(`${ch}.para14aCapped`, !!para14aCapped, true);
-            await this._queueState(`${ch}.actualPowerW`, typeof pW === 'number' ? pW : 0, true);
+            await this._queueState(`${ch}.actualPowerRawW`, pWRawNum === null ? 0 : pWRawNum, true);
+            await this._queueState(`${ch}.actualPowerW`, pWNum, true);
             await this._queueState(`${ch}.actualCurrentA`, typeof iA === 'number' ? iA : 0, true);
 
             await this._queueState(`${ch}.charging`, isCharging, true);
@@ -5674,8 +6086,8 @@ class ChargingManagementModule extends BaseModule {
                     wb.chargeDemandFalseValues || '',
                 )
                 : { known: false, value: null, source: chargeDemandId ? 'stale-semantic-dp' : 'missing', token: '' };
-            const vehicleDemand = resolveUniversalEvcsVehicleDemand({
-                actualPowerW: (!meterStale && online && enabled) ? Math.abs(pWNum) : 0,
+            let vehicleDemand = resolveUniversalEvcsVehicleDemand({
+                actualPowerW: (!effectiveMeterStale && online && enabled) ? Math.abs(pWNum) : 0,
                 activityThresholdW,
                 status: statusForPlug,
                 statusFresh: statusForPlugFresh,
@@ -5689,6 +6101,12 @@ class ChargingManagementModule extends BaseModule {
                 statusDisconnectedValues: wb.statusDisconnectedValues || '',
                 statusNoDemandValues: wb.statusNoDemandValues || '',
             });
+            vehicleDemand = reconcileOcppTransactionDemand({
+                telemetryProfile,
+                transactionKnown: transactionActiveKnown,
+                transactionActive,
+                vehicleDemand,
+            });
             vehiclePlugged = vehicleDemand.plugged;
             vehicleDemandConfirmed = vehicleDemand.demandConfirmed === true;
             vehicleDemandSource = String(vehicleDemand.source || '');
@@ -5700,7 +6118,7 @@ class ChargingManagementModule extends BaseModule {
             // eMH1 mit rund 69 W im B2-Wartezustand) bleibt normale Gebaeudelast.
             const storagePolicyActualLoad = resolveEvcsStoragePolicyActualLoad({
                 actualPowerW: pWFreshActualForGridW,
-                meterFresh: !meterStale,
+                meterFresh: !effectiveMeterStale,
                 online,
                 enabled,
                 vehicleDemandConfirmed,
@@ -5953,8 +6371,22 @@ class ChargingManagementModule extends BaseModule {
                 controlAvailable,
                 onlineSource,
                 staleAny,
-                meterStale,
+                meterStale: effectiveMeterStale,
+                meterRawStale: meterStale,
                 meterAgeMs,
+                telemetryProfile,
+                telemetryAutoDetected,
+                ocppConnectorRoot: telemetryProfile === 'ocpp-1.6-event-driven' ? String(ocppContext.connectorRoot || '') : '',
+                transactionActiveId,
+                transactionActiveKnown,
+                transactionActive,
+                transactionActiveAgeMs,
+                ocppAdapterAliveId,
+                ocppAdapterAliveKnown,
+                ocppAdapterAlive,
+                powerSource: String(effectivePower.powerSource || ''),
+                powerAuthoritativeZero: effectivePower.authoritativeZero === true,
+                rawActualPowerW: pWRawNum === null ? 0 : pWRawNum,
                 statusStale,
                 statusAgeMs,
                 statusRaw: statusRawText,
@@ -10389,5 +10821,13 @@ module.exports = {
     resolveEvcsStatusAgePolicy,
     classifyEvcsConnectorStatus,
     inferOcppConnectorNoFromObjectId,
+    inferIoBrokerOcppConnectorContext,
+    resolveEvcsTelemetryProfile,
+    resolveEvcsEffectivePower,
+    reconcileOcppTransactionDemand,
+    isOcppAuthoritativeZeroState,
+    isOcppSessionPersistentState,
+    isOcppEventStatusPersistentState,
+    strictFiniteEvcsNumber,
     resolveAcceptedStorageAssistBudget,
 };

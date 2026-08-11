@@ -147,7 +147,9 @@ assert(chargingSource.includes("await mk('unavailableActive'"), 'Unavailable-Dia
 assert(chargingSource.includes("await mk('operationalBlocked'"), 'Operational-Block-State fehlt');
 assert(chargingSource.includes('const statusTimestampFresh = !!(statusId && !statusStale && !statusConnectorMismatch && !statusSharedAcrossConnectors'), 'Nur zeitlich frischer connectorrichtiger Status darf direkt wirken');
 assert(chargingSource.includes('const statusHeldByLiveness = !!('), 'Eventbasierte Bereitschaft muss bei frischem Geräte-Heartbeat gehalten werden können');
-assert(chargingSource.includes('&& isPersistentEvcsVehicleState(semanticPreview.state)'), 'Nur persistente, nicht sicherheitskritische Fahrzeugzustände dürfen durch Heartbeat gehalten werden');
+assert(chargingSource.includes('isPersistentEvcsVehicleState(semanticPreview.state)'), 'Generische EVCS dürfen nur sichere persistente Zustände durch Liveness halten');
+assert(chargingSource.includes('isOcppEventStatusPersistentState(semanticPreview.state)'), 'Der ereignisbasierte OCPP-Pfad braucht einen eigenen ereignisbasierten Statusvertrag');
+assert(chargingSource.includes("const safetyStatusFresh = telemetryProfile === 'ocpp-1.6-event-driven'"), 'OCPP-Sicherheitsstatus muss während bestätigter Adapter-Liveness wirksam bleiben');
 assert(chargingSource.includes('const statusFresh = statusTimestampFresh || statusHeldByLiveness;'), 'Finale Statusfreigabe muss Timestamp oder sichere Liveness verwenden');
 assert(chargingSource.includes('const statusAgePolicy = resolveEvcsStatusAgePolicy(statusRawText, statusAgeRawMs, wbStatusStaleTimeoutMs);'), 'Zentrale Altersregel fuer EVCS-Status fehlt');
 assert(chargingSource.includes('const statusStale = !!(statusId && statusAgePolicy.stale);'), 'Persistentes Available darf nicht pauschal stale werden');

@@ -1,4 +1,4 @@
-NexoWatt EOS 0.8.174 RC50 – direkter npm-Publish
+NexoWatt EOS 0.8.175 RC51 – direkter npm-Publish
 
 1. Diese NPM-READY-ZIP vollständig in den Projektordner kopieren.
 2. Vorhandene Dateien ersetzen.
@@ -8,7 +8,7 @@ NexoWatt EOS 0.8.174 RC50 – direkter npm-Publish
    npm publish
 
 Der Publish-Guard prüft read-only:
-- ob Version 0.8.174 auf npm noch frei ist,
+- ob Version 0.8.175 auf npm noch frei ist,
 - ob alle freigegebenen Produktdateien dem SHA-256-Manifest entsprechen.
 
-Die Netzbetreiber-Schnittstellen-App ist standardmäßig deaktiviert und bleibt in RC50 read-only.
+Das OCPP-Telemetrieprofil wird automatisch erkannt; der Publish-Guard bleibt vollständig read-only.
