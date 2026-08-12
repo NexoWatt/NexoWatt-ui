@@ -1,7 +1,7 @@
 {
   "schema": "nexowatt.release-artifact.v1",
   "package": "iobroker.nexowatt-ui",
-  "version": "0.8.178",
+  "version": "0.8.179",
   "files": [
     {
       "path": "LICENSE",
@@ -51,7 +51,7 @@
     {
       "path": "admin/react/index.html",
       "size": 4431,
-      "sha256": "71f75e3b73520ba585a908853ca99183f03e06f62ed4a21069e7b4a72b8bed1b"
+      "sha256": "3e34e6c4ec9d9b93bc5f5033ecbb84df43161731b61ee37823d71b42f9d1758a"
     },
     {
       "path": "admin/simulation.html",
@@ -561,12 +561,12 @@
     {
       "path": "ems/services/tariff-provider-registry.js",
       "size": 28839,
-      "sha256": "003f6fe5cceb051165e9b9485634395a58d544a85f2040f2ab241826f06c0800"
+      "sha256": "be10a7caf26130b24b42b70f5c56e11369e19b264dcd2b23e90c69ef4432ebe8"
     },
     {
       "path": "io-package.json",
-      "size": 23671,
-      "sha256": "6560fd5e02efa56d18b8f1fa9f76347723f39895a827fbfc8151d0ca5dfd092d"
+      "size": 23726,
+      "sha256": "52b3b105f5171789f768d04cd3e798dcaddcca906a206fa979cc681cb4235ee9"
     },
     {
       "path": "lib/charging-diagnostics-api.js",
@@ -1000,18 +1000,18 @@
     },
     {
       "path": "www/i18n/de.json",
-      "size": 577,
-      "sha256": "9624ab7a706b5f7c9d5228d6b2c6e84628afdf81a40119ea2bb7c50f5f04d389"
+      "size": 1308,
+      "sha256": "cce44ed23888d020c2bae3a0d12cfb4726a5bf6a027622d6254c90c19fb048c5"
     },
     {
       "path": "www/i18n/en.json",
-      "size": 7269,
-      "sha256": "8f6b12378a6460e404053bf2e93085fc001ea898abf16746dbc2d0fcfacf9342"
+      "size": 7998,
+      "sha256": "419764becd6d2ae9ad25b5ae4de6ed5c692097719e05f7650c34b7f3c02cad3a"
     },
     {
       "path": "www/i18n/nl.json",
-      "size": 48664,
-      "sha256": "5b3ffa9ef65c381358dab5e7cfba12eb763c457626d1e30fbf2127add40eea28"
+      "size": 49405,
+      "sha256": "c54c81ba97d518bc3ed558712e0dfcf3e5262ee4d65b5fd6d185b52ff40ca0e2"
     },
     {
       "path": "www/icons/battery.png",
@@ -1066,7 +1066,7 @@
     {
       "path": "www/manifest.webmanifest",
       "size": 1092,
-      "sha256": "057aa45940001a851c68edd6a5c0bb004a1fb07d1fb79c19581a2d944f3f90cf"
+      "sha256": "e2bb59e68434db987446e3f3f6b78aad30ee8af03673f5b973604daa99aa7ea8"
     },
     {
       "path": "www/mesh-microgrid.html",
@@ -1111,7 +1111,7 @@
     {
       "path": "www/nw-i18n.js",
       "size": 20613,
-      "sha256": "cd47bce820fee8d93dc5ad69962cb34181030954eb116470959dd4894d6769cf"
+      "sha256": "c4ecf32c0d901c0e37e724f015a8576393c27ff6251eeec8568f60b4b07f669f"
     },
     {
       "path": "www/nw-shell.js",

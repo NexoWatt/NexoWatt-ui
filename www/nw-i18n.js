@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/nw-i18n.ts
- * Quell-Hash: sha256:d2fa47cb5d47104a60c33303da4a9d94ea0165f9e6e8fff7bc48852683df6d78
+ * Quell-Hash: sha256:a26ab8c7470f59bed0e21f132133b6c56eb8a863a59bd73ccccb00ee87978331
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -30,7 +30,7 @@
     const SUPPORTED_LANGUAGES = new Set(['de', 'nl', 'en']);
     const DEFAULT_LANGUAGE = 'de';
     const POLL_INTERVAL_MS = 3000;
-    const CATALOG_VERSION = '0.8.178';
+    const CATALOG_VERSION = '0.8.179';
     const TEXT_ATTRS = ['title', 'aria-label', 'placeholder'];
     const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'CODE', 'PRE', 'NOSCRIPT', 'SVG', 'PATH']);
     const sourceTextByNode = new WeakMap();
