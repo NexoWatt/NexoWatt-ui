@@ -17,7 +17,7 @@
  * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
  * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
  *
- * Original-Hash: 0e3da85486b23daabfb9598d588098a8679ff8785f08cbd521ce0b65ce9bc2b2
+ * Original-Hash: 1b799b4e80f7a6db81a382cb6abb7b4bb016a1d3bdb1b3a68558c3452bab8fa5
  */
 
 /**
@@ -33,7 +33,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:5c2b025d8f4a6302b2392cd8e02f194f4d41dbdb120f797a489854b1fa76983b
+ * Quell-Hash: sha256:6a9576d8f30a7fa138535499a428ab5157170372b4cb6eae8d42e2589445af0f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -616,6 +616,9 @@ class EmsEngine {
       const vehicleConnectedId = (wb.vehicleConnectedId || '').trim();
       const chargeDemandId = (wb.chargeDemandId || '').trim();
       const heartbeatId = (wb.heartbeatId || '').trim();
+      const dataFreshId = (wb.dataFreshId || '').trim();
+      const transactionActiveId = (wb.activeId || wb.transactionActiveId || '').trim();
+      const telemetryProfile = String(wb.telemetryProfile || '').trim();
       const vehicleConnectedTrueValues = String(wb.vehicleConnectedTrueValues || '').trim();
       const vehicleConnectedFalseValues = String(wb.vehicleConnectedFalseValues || '').trim();
       const chargeDemandTrueValues = String(wb.chargeDemandTrueValues || '').trim();
@@ -729,6 +732,9 @@ class EmsEngine {
         ...(vehicleConnectedId ? { vehicleConnectedId } : {}),
         ...(chargeDemandId ? { chargeDemandId } : {}),
         ...(heartbeatId ? { heartbeatId } : {}),
+        ...(dataFreshId ? { dataFreshId } : {}),
+        ...(transactionActiveId ? { transactionActiveId } : {}),
+        ...(telemetryProfile ? { telemetryProfile } : {}),
         ...(vehicleConnectedTrueValues ? { vehicleConnectedTrueValues } : {}),
         ...(vehicleConnectedFalseValues ? { vehicleConnectedFalseValues } : {}),
         ...(chargeDemandTrueValues ? { chargeDemandTrueValues } : {}),

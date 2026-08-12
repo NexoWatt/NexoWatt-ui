@@ -21,14 +21,14 @@ const native = inferIoBrokerOcppConnectorContext(
 );
 assert.strictEqual(native.detected, true);
 assert.strictEqual(native.profile, OCPP);
-assert.strictEqual(native.adapterKind, 'nexowatt-ocpp-native');
+assert.strictEqual(native.adapterKind, 'nexowatt-ocpp-native-compact');
 assert.strictEqual(native.nativeDeviceRoot, 'ocpp21.0.CP_01');
-assert.strictEqual(native.connectorRoot, 'ocpp21.0.CP_01.evse.1.connector.1');
-assert.strictEqual(native.statusId, 'ocpp21.0.CP_01.evse.1.connector.1.status');
+assert.strictEqual(native.connectorRoot, 'ocpp21.0.CP_01');
+assert.strictEqual(native.statusId, 'ocpp21.0.CP_01.info.status');
 assert.strictEqual(native.transactionActiveId, 'ocpp21.0.CP_01.transactions.transactionActive');
 assert.strictEqual(native.socketConnectedId, 'ocpp21.0.CP_01.info.socketConnected');
 assert.strictEqual(native.dataFreshId, 'ocpp21.0.CP_01.health.dataFresh');
-assert.strictEqual(native.actualPowerId, 'ocpp21.0.CP_01.meterValues.Power_Active_Import');
+assert.strictEqual(native.actualPowerId, 'ocpp21.0.CP_01.measurements.powerW');
 assert.strictEqual(native.setPowerId, 'ocpp21.0.CP_01.control.chargeLimit');
 
 // Stable public alias contract.
@@ -36,10 +36,10 @@ const alias = inferIoBrokerOcppConnectorContext(
   'alias.0.nexowatt.ocpp.0.CP_01.powerW',
 );
 assert.strictEqual(alias.detected, true);
-assert.strictEqual(alias.adapterKind, 'nexowatt-ocpp-alias');
+assert.strictEqual(alias.adapterKind, 'nexowatt-ocpp-public-alias-compact');
 assert.strictEqual(alias.nativeDeviceRoot, 'ocpp21.0.CP_01');
 assert.strictEqual(alias.deviceRoot, 'alias.0.nexowatt.ocpp.0.CP_01');
-assert.strictEqual(alias.statusId, 'alias.0.nexowatt.ocpp.0.CP_01.connector1Status');
+assert.strictEqual(alias.statusId, 'alias.0.nexowatt.ocpp.0.CP_01.status');
 assert.strictEqual(alias.socketConnectedId, 'alias.0.nexowatt.ocpp.0.CP_01.socketConnected');
 assert.strictEqual(alias.dataFreshId, 'alias.0.nexowatt.ocpp.0.CP_01.dataFresh');
 assert.strictEqual(alias.actualPowerId, 'alias.0.nexowatt.ocpp.0.CP_01.powerW');
@@ -49,7 +49,7 @@ const compat = inferIoBrokerOcppConnectorContext(
   'alias.0.ocpp21.0.CP_01.powerW',
 );
 assert.strictEqual(compat.detected, true);
-assert.strictEqual(compat.adapterKind, 'ocpp21-compat-alias');
+assert.strictEqual(compat.adapterKind, 'nexowatt-ocpp-technical-alias-compact');
 assert.strictEqual(compat.nativeDeviceRoot, 'ocpp21.0.CP_01');
 
 // Physical WebSocket connectivity must replace only volatile OCPP activity or

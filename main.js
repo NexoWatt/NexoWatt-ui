@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/main.ts
- * Quell-Hash: sha256:c57c652feb8797026f063d137dd8ec41178495992978fdd9067bfacfc2f2dcaf
+ * Quell-Hash: sha256:ea7ed1c517e36bddcf0e8a8026228c64f2e98469f02735ec1046e49bad1205ca
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -3980,7 +3980,7 @@ class NexoWattVis extends utils.Adapter {
         ...this._nwDeepClone(metadata),
         foundationVersion: '0.8.177',
         ruleBuilderVersion: '0.8.178',
-        liveControlVersion: '0.8.181',
+        liveControlVersion: '0.8.182',
         lastEditedAt: asString(metadata.lastEditedAt),
       },
     };
@@ -8850,6 +8850,7 @@ class NexoWattVis extends utils.Adapter {
       const onlineId = (row && typeof row.onlineId === 'string' && row.onlineId.trim()) ? row.onlineId.trim() : '';
       const dataFreshId = (row && typeof row.dataFreshId === 'string' && row.dataFreshId.trim()) ? row.dataFreshId.trim() : '';
       const enableWriteId = (row && typeof row.enableWriteId === 'string' && row.enableWriteId.trim()) ? row.enableWriteId.trim() : '';
+      const telemetryProfile = (row && typeof row.telemetryProfile === 'string' && row.telemetryProfile.trim()) ? row.telemetryProfile.trim() : '';
       // Meta / conversion (optional)
       const chargerType = (row && typeof row.chargerType === 'string' && row.chargerType.trim()) ? row.chargerType.trim() : 'ac';
       const phases = (row && row.phases !== undefined && row.phases !== null && String(row.phases).trim() !== '' && Number.isFinite(Number(row.phases))) ? Math.max(1, Math.min(3, Math.round(Number(row.phases)))) : 3;
@@ -8904,7 +8905,7 @@ class NexoWattVis extends utils.Adapter {
       const storageAssistCustomerAllowed = globalStorageAssistCustomerAllowed
         || ((row && row.storageAssistCustomerAllowed !== undefined && row.storageAssistCustomerAllowed !== null) ? !!row.storageAssistCustomerAllowed : false);
       const storageAssistControlScope = globalStorageAssistCustomerAllowed ? 'global' : 'per-lp';
-      evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, energyTotalInputIsWh, statusId, activeId, vehicleConnectedId, chargeDemandId, heartbeatId, vehicleConnectedTrueValues, vehicleConnectedFalseValues, chargeDemandTrueValues, chargeDemandFalseValues, statusDemandValues, statusReadyValues, statusConnectedValues, statusDisconnectedValues, statusNoDemandValues, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, dataFreshId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec, storageAssistCustomerAllowed, storageAssistControlScope, controlMappingAutoResolved, controlMappingAutoResolvedCurrent, controlMappingAutoResolvedPower, controlMappingAutoResolvedEnable });
+      evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, energyTotalInputIsWh, statusId, activeId, vehicleConnectedId, chargeDemandId, heartbeatId, vehicleConnectedTrueValues, vehicleConnectedFalseValues, chargeDemandTrueValues, chargeDemandFalseValues, statusDemandValues, statusReadyValues, statusConnectedValues, statusDisconnectedValues, statusNoDemandValues, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, dataFreshId, enableWriteId, telemetryProfile, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin, vehicleSocId, phaseMode, phaseSwitchId, phaseFeedbackId, phaseSwitchValue1p, phaseSwitchValue3p, stopBeforePhaseSwitch, phaseSwitchUpThresholdW, phaseSwitchDownThresholdW, phaseSwitchUpStableSec, phaseSwitchDownStableSec, phaseSwitchCooldownSec, phaseSwitchSettleSec, storageAssistCustomerAllowed, storageAssistControlScope, controlMappingAutoResolved, controlMappingAutoResolvedCurrent, controlMappingAutoResolvedPower, controlMappingAutoResolvedEnable });
     }
     this.evcsList = evcsList;
     // Stationsgruppen (für DC-Stationen mit mehreren Ladepunkten)
@@ -16252,6 +16253,108 @@ app.get('/api/smarthome/type-detect', requireCustomerDpDiscovery, async (req, re
         const maxConnectors = (q.max !== undefined && q.max !== null && Number.isFinite(Number(q.max)))
           ? Math.max(1, Math.min(50, Math.round(Number(q.max))))
           : 50;
+
+        // NexoWatt OCPP 0.4 exposes a deliberately compact station-level tree
+        // plus a stable public alias contract. Prefer that contract before the
+        // generic legacy scanner so old meterValues/evse paths cannot be selected
+        // after an adapter update.
+        const compactObjects = {};
+        const compactPatterns = [
+          'alias.0.nexowatt.ocpp.*',
+          'ocpp21.*',
+          'alias.0.ocpp21.*',
+        ];
+        for (const pattern of compactPatterns) {
+          try {
+            const found = await this.getForeignObjectsAsync(pattern, 'state');
+            Object.assign(compactObjects, found || {});
+          } catch (_compactScanError) {
+            // A missing optional alias subtree must not block the native scan.
+          }
+        }
+
+        const compactGroups = new Map();
+        const ensureCompactGroup = (instance, station) => {
+          const key = `${instance}|${station}`;
+          if (!compactGroups.has(key)) compactGroups.set(key, { instance: String(instance), station: String(station), publicRoot: '', nativeRoot: '', technicalRoot: '' });
+          return compactGroups.get(key);
+        };
+        for (const id of Object.keys(compactObjects)) {
+          let m = String(id).match(/^alias\.0\.nexowatt\.ocpp\.(\d+)\.([^.]+)\./);
+          if (m) {
+            ensureCompactGroup(m[1], m[2]).publicRoot = `alias.0.nexowatt.ocpp.${m[1]}.${m[2]}`;
+            continue;
+          }
+          m = String(id).match(/^ocpp21\.(\d+)\.([^.]+)\./);
+          if (m) {
+            ensureCompactGroup(m[1], m[2]).nativeRoot = `ocpp21.${m[1]}.${m[2]}`;
+            continue;
+          }
+          m = String(id).match(/^alias\.0\.ocpp21\.(\d+)\.([^.]+)\./);
+          if (m) ensureCompactGroup(m[1], m[2]).technicalRoot = `alias.0.ocpp21.${m[1]}.${m[2]}`;
+        }
+
+        const compactHas = (id) => !!(id && compactObjects[id]);
+        const compactPick = (...ids) => ids.flat().map(id => String(id || '').trim()).find(compactHas) || '';
+        const compactConnectors = [];
+        for (const group of compactGroups.values()) {
+          const publicRoot = group.publicRoot;
+          const nativeRoot = group.nativeRoot || `ocpp21.${group.instance}.${group.station}`;
+          const technicalRoot = group.technicalRoot;
+          const preferredRoot = publicRoot || (compactHas(`${nativeRoot}.measurements.powerW`) ? nativeRoot : technicalRoot);
+          if (!preferredRoot) continue;
+
+          const aliasId = (name) => publicRoot ? `${publicRoot}.${name}` : '';
+          const techId = (name) => technicalRoot ? `${technicalRoot}.${name}` : '';
+          const nativeId = (suffix) => `${nativeRoot}.${suffix}`;
+          const powerId = compactPick(aliasId('powerW'), nativeId('measurements.powerW'), techId('powerW'));
+          const energyKWhId = compactPick(aliasId('energyKWh'), nativeId('measurements.energyKWh'), techId('energyKWh'));
+          const energyWhId = compactPick(aliasId('energyWh'), nativeId('measurements.energyWh'), techId('energyWh'));
+          const energyTotalId = energyKWhId || energyWhId;
+          const ids = {
+            powerId,
+            energyTotalId,
+            statusId: compactPick(aliasId('status'), nativeId('info.status'), techId('status')),
+            activeId: compactPick(aliasId('txActive'), nativeId('transactions.transactionActive'), techId('txActive')),
+            vehicleConnectedId: '',
+            chargeDemandId: '',
+            heartbeatId: compactPick(nativeId('health.lastSeenMs')),
+            onlineId: compactPick(aliasId('socketConnected'), nativeId('info.socketConnected'), techId('socketConnected')),
+            dataFreshId: compactPick(aliasId('dataFresh'), nativeId('health.dataFresh'), techId('dataFresh')),
+            setCurrentAId: '',
+            setPowerWId: compactPick(aliasId('chargeLimit'), nativeId('control.chargeLimit'), techId('chargeLimit')),
+            enableWriteId: compactPick(aliasId('availability'), nativeId('control.availability'), techId('availability')),
+            vehicleSocId: compactPick(aliasId('soc'), nativeId('measurements.socPercent'), nativeId('vehicle.socPercent'), techId('soc')),
+            rfidReadId: compactPick(aliasId('rfid'), nativeId('info.rfid'), techId('rfid')),
+            currentId: compactPick(aliasId('currentTotalA'), nativeId('measurements.currentA'), techId('currentTotalA')),
+          };
+          if (!Object.values(ids).some(value => String(value || '').trim())) continue;
+          compactConnectors.push({
+            stationKey: group.station,
+            connectorNo: 1,
+            base: preferredRoot,
+            name: group.station,
+            ids,
+            energyTotalInputIsWh: !!energyWhId && !energyKWhId,
+            energyUnit: energyKWhId ? 'kWh' : (energyWhId ? 'Wh' : ''),
+            telemetryProfile: 'nexowattocpp',
+            controlPreference: 'powerW',
+            contractVersion: 'nexowatt-ocpp-0.4-compact',
+            adapterKind: publicRoot ? 'nexowatt-ocpp-public-alias-compact' : (preferredRoot === nativeRoot ? 'nexowatt-ocpp-native-compact' : 'nexowatt-ocpp-technical-alias-compact'),
+          });
+        }
+        compactConnectors.sort((a, b) => String(a.stationKey).localeCompare(String(b.stationKey)));
+        if (compactConnectors.length > 0) {
+          return res.json({
+            ok: true,
+            ts: now,
+            usedFallback: false,
+            discoveryContract: 'nexowatt-ocpp-0.4-compact',
+            totalStates: Object.keys(compactObjects).length,
+            connectorCount: compactConnectors.length,
+            connectors: compactConnectors.slice(0, maxConnectors),
+          });
+        }
 
         let objects = {};
         let usedFallback = false;

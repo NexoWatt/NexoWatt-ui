@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/engine.ts
- * Quell-Hash: sha256:5c2b025d8f4a6302b2392cd8e02f194f4d41dbdb120f797a489854b1fa76983b
+ * Quell-Hash: sha256:6a9576d8f30a7fa138535499a428ab5157170372b4cb6eae8d42e2589445af0f
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -563,6 +563,9 @@ class EmsEngine {
       const vehicleConnectedId = (wb.vehicleConnectedId || '').trim();
       const chargeDemandId = (wb.chargeDemandId || '').trim();
       const heartbeatId = (wb.heartbeatId || '').trim();
+      const dataFreshId = (wb.dataFreshId || '').trim();
+      const transactionActiveId = (wb.activeId || wb.transactionActiveId || '').trim();
+      const telemetryProfile = String(wb.telemetryProfile || '').trim();
       const vehicleConnectedTrueValues = String(wb.vehicleConnectedTrueValues || '').trim();
       const vehicleConnectedFalseValues = String(wb.vehicleConnectedFalseValues || '').trim();
       const chargeDemandTrueValues = String(wb.chargeDemandTrueValues || '').trim();
@@ -676,6 +679,9 @@ class EmsEngine {
         ...(vehicleConnectedId ? { vehicleConnectedId } : {}),
         ...(chargeDemandId ? { chargeDemandId } : {}),
         ...(heartbeatId ? { heartbeatId } : {}),
+        ...(dataFreshId ? { dataFreshId } : {}),
+        ...(transactionActiveId ? { transactionActiveId } : {}),
+        ...(telemetryProfile ? { telemetryProfile } : {}),
         ...(vehicleConnectedTrueValues ? { vehicleConnectedTrueValues } : {}),
         ...(vehicleConnectedFalseValues ? { vehicleConnectedFalseValues } : {}),
         ...(chargeDemandTrueValues ? { chargeDemandTrueValues } : {}),

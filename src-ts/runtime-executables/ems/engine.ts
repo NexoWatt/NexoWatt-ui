@@ -565,6 +565,9 @@ class EmsEngine {
       const vehicleConnectedId = (wb.vehicleConnectedId || '').trim();
       const chargeDemandId = (wb.chargeDemandId || '').trim();
       const heartbeatId = (wb.heartbeatId || '').trim();
+      const dataFreshId = (wb.dataFreshId || '').trim();
+      const transactionActiveId = (wb.activeId || wb.transactionActiveId || '').trim();
+      const telemetryProfile = String(wb.telemetryProfile || '').trim();
       const vehicleConnectedTrueValues = String(wb.vehicleConnectedTrueValues || '').trim();
       const vehicleConnectedFalseValues = String(wb.vehicleConnectedFalseValues || '').trim();
       const chargeDemandTrueValues = String(wb.chargeDemandTrueValues || '').trim();
@@ -678,6 +681,9 @@ class EmsEngine {
         ...(vehicleConnectedId ? { vehicleConnectedId } : {}),
         ...(chargeDemandId ? { chargeDemandId } : {}),
         ...(heartbeatId ? { heartbeatId } : {}),
+        ...(dataFreshId ? { dataFreshId } : {}),
+        ...(transactionActiveId ? { transactionActiveId } : {}),
+        ...(telemetryProfile ? { telemetryProfile } : {}),
         ...(vehicleConnectedTrueValues ? { vehicleConnectedTrueValues } : {}),
         ...(vehicleConnectedFalseValues ? { vehicleConnectedFalseValues } : {}),
         ...(chargeDemandTrueValues ? { chargeDemandTrueValues } : {}),

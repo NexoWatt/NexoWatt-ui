@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:c61ed4bb63d3a0ea06e7db9d7726073543ce8914f99d8c58c0c34910cf1bdac7
+ * Quell-Hash: sha256:9e7971762a0f9428f3b190ccc8ff9acb90f5555b8589daf3bdf6caec4bf10d58
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -11730,6 +11730,39 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
    * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
    * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
+  function _ocppStationIdentityFromDp(id) {
+    const value = String(id || '').trim();
+    let m = value.match(/^ocpp21\.(\d+)\.([^.]+)(?:\.|$)/i);
+    if (m) return `${m[1]}|${m[2]}`;
+    m = value.match(/^alias\.0\.nexowatt\.ocpp\.(\d+)\.([^.]+)(?:\.|$)/i);
+    if (m) return `${m[1]}|${m[2]}`;
+    m = value.match(/^alias\.0\.ocpp21\.(\d+)\.([^.]+)(?:\.|$)/i);
+    if (m) return `${m[1]}|${m[2]}`;
+    return '';
+  }
+
+  function _isKnownLegacyNexoWattOcppMapping(field, currentId, replacementId) {
+    const current = String(currentId || '').trim();
+    const replacement = String(replacementId || '').trim();
+    if (!current || !replacement) return false;
+    const currentStation = _ocppStationIdentityFromDp(current);
+    const replacementStation = _ocppStationIdentityFromDp(replacement);
+    if (!currentStation || currentStation !== replacementStation) return false;
+    const lower = current.toLowerCase();
+    const legacyByField = {
+      powerId: ['.metervalues.power_active_import'],
+      energyTotalId: ['.metervalues.energy_active_import_register', '.metervalues.energy_active_import_register_kwh'],
+      statusId: ['.connector1status'],
+      vehicleSocId: ['.metervalues.soc'],
+    };
+    if (field === 'statusId' && (/\.evse\.\d+\.connector\.\d+\.status$/i.test(current) || /\.connectors\.\d+_\d+\.status$/i.test(current))) return true;
+    if (field === 'onlineId' && (
+      lower.endsWith('.info.connection') || lower.endsWith('.health.online') || lower.endsWith('.connected')
+      || lower.endsWith('.datafresh') || lower.endsWith('.powerfresh') || lower.endsWith('.activityfresh')
+    )) return !lower.endsWith('.socketconnected');
+    return (legacyByField[field] || []).some(suffix => lower.endsWith(suffix));
+  }
+
   function _applyOcppConnectorToRow(row, c, opts) {
     const r = (row && typeof row === 'object') ? row : {};
     const ids = (c && c.ids && typeof c.ids === 'object') ? c.ids : {};
@@ -11756,7 +11789,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       if (overwrite) {
         out[k] = val;
       } else if (onlyEmpty) {
-        if (!cur.trim()) out[k] = val;
+        if (!cur.trim() || _isKnownLegacyNexoWattOcppMapping(k, cur, val)) out[k] = val;
       }
     };
 
@@ -11780,7 +11813,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     // Mappings (fill)
     const previousEnergyId = String(out.energyTotalId || '').trim();
-    for (const k of ['powerId','energyTotalId','statusId','activeId','vehicleConnectedId','chargeDemandId','heartbeatId','onlineId','dataFreshId','setCurrentAId','setPowerWId','enableWriteId']) {
+    for (const k of ['powerId','energyTotalId','statusId','activeId','vehicleConnectedId','chargeDemandId','heartbeatId','onlineId','dataFreshId','setCurrentAId','setPowerWId','enableWriteId','vehicleSocId','rfidReadId']) {
       if (ids[k]) setField(k, ids[k]);
     }
     const energyMappingWasApplied = !!ids.energyTotalId && (
@@ -11790,10 +11823,24 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       out.energyTotalInputIsWh = c && c.energyTotalInputIsWh === true;
     }
 
+    // Compact NexoWatt OCPP contract metadata.
+    if (c && c.telemetryProfile && (overwrite || onlyEmpty)) {
+      if (overwrite || !String(out.telemetryProfile || '').trim() || String(out.telemetryProfile || '').trim().toLowerCase().includes('ocpp')) {
+        out.telemetryProfile = String(c.telemetryProfile);
+      }
+    }
+    if (c && c.controlPreference && (overwrite || onlyEmpty)) {
+      if (overwrite || !String(out.controlPreference || '').trim() || String(out.controlPreference || '').trim().toLowerCase() === 'auto') {
+        out.controlPreference = String(c.controlPreference);
+      }
+    }
+    if (c && c.contractVersion) out.ocppDatapointContract = String(c.contractVersion);
+
     // Defaults
     if (overwrite || onlyEmpty) {
       if (out.enabled === undefined) out.enabled = true;
       if (!out.chargerType) out.chargerType = 'ac';
+      if (!Number.isFinite(Number(out.minCurrentA)) || Number(out.minCurrentA) <= 0) out.minCurrentA = 6;
     }
 
     return out;
@@ -11888,7 +11935,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
       buildEvcsUI();
       scheduleValidation(300);
-      setStatus('OCPP: Datenpunkte wurden (nur leere Felder) automatisch zugeordnet. Bitte speichern.', 'ok');
+      setStatus('OCPP: Leere Felder und bekannte OCPP-0.3-Pfade wurden auf den kompakten 0.4-Vertrag zugeordnet. Bitte speichern.', 'ok');
     } catch (e) {
       setStatus('OCPP: Zuordnung fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error');
     }

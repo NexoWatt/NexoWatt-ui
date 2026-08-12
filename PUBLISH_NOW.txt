@@ -1,4 +1,4 @@
-NexoWatt EOS 0.8.181 RC57 – direkter npm-Publish
+NexoWatt EOS 0.8.182 RC58 – direkter npm-Publish
 
 1. ZIP vollständig in einen frischen Projektordner entpacken.
 2. In PowerShell in diesen Ordner wechseln.
@@ -6,9 +6,9 @@ NexoWatt EOS 0.8.181 RC57 – direkter npm-Publish
 4. Veröffentlichen: npm publish
 
 Der vorhandene prepublishOnly-Guard prüft automatisch:
-- ob Version 0.8.181 auf npm noch frei ist,
+- ob Version 0.8.182 auf npm noch frei ist,
 - ob alle Versionsdateien synchron sind,
 - ob das Release-Artefaktmanifest exakt passt,
 - ob alle freigegebenen Produktdateien unverändert enthalten sind.
 
-RC57 stabilisiert OCPP-Ladepunkte durch die Trennung von socketConnected und Daten-Freshness sowie OCPP-spezifische Start-/Einschwingzeiten.
+RC58 ergänzt die vollständige OCPP-0.4-Datenpunktzuordnung und sichere Migration älterer OCPP-Pfade; RC57-Verbindungsstabilität bleibt erhalten.

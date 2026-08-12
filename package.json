@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.8.181",
+  "version": "0.8.182",
   "description": "NexoWatt EOS – local energy, charging and building control platform.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -27,7 +27,7 @@
     "ioBroker:check": "node scripts/verify-publish.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:types": "npm run check:tsconfig-modern && npm run check:ts-source-syntax && npm run check:ts-source-integrity && npm run check:ts-canonical && npm run verify:ts-scaffold && npm run test:ts-script-mirrors && npm run test:ts-frontend-mirrors && npm run test:ts-backend-mirrors && npm run test:ts-adapter-mirrors && npm run test:frontend-mirror-runtime && npm run test:api-state-feature && npm run test:api-state-feature-runtime && npm run test:backend-api-state && npm run test:energy-flow-utils && npm run test:energy-flow-resolver && npm run test:energy-flow-mirrors && npm run test:energy-flow-regression && npm run test:energy-flow-regression-runtime && npm run test:ems-budget-heating-rod && npm run test:ems-budget-heating-rod-runtime && npm run test:ems-mirrors && npm run test:core-limits-reservations && npm run test:adapter-state-api && npm run test:adapter-state-api-runtime && npm run test:adapter-mirrors && npm run test:backend-api-state && npm run test:backend-api-state-runtime && npm run test:feature-visibility-resolver && npm run test:feature-visibility-resolver-runtime && npm run test:feature-visibility-shadow && npm run test:feature-visibility-shadow-runtime && npm run test:frontend-display && npm run test:feature-visibility-resolver && npm run test:feature-visibility-resolver-runtime && npm run test:feature-visibility-shadow && npm run test:feature-visibility-shadow-runtime && npm run test:frontend-display-runtime && npm run test:customer-feature-visibility && npm run test:customer-feature-visibility-runtime && npm run test:main-helpers && npm run typecheck && npm run typecheck:runtime-mirrors && npm run test:runtime-mirrors && npm run test:core-limits-runtime-typing && npm run test:heating-rod-runtime-typing && npm run test:shadow-bridges && npm run test:contracts && npm run test:feature-visibility-effective-runtime && npm run test:ai-advisor-runtime-typing && npm run test:history-runtime-typing && npm run test:smarthome-runtime-typing && npm run test:smarthome-config-runtime-typing && npm run test:ems-apps-runtime-typing && npm run test:app-runtime-typing && npm run test:main-runtime-typing && npm run test:adapter-helpers-mirrors && npm run test:main-runtime-helpers && npm run test:api-state-set-shadow && npm run test:live-dashboard-format-productive && npm run test:heating-rod-legacy-removal-candidate",
-    "test:all": "npm run publish:check && npm run test:types && npm run check:ts-source-syntax && npm run test:ems-shadow-runtime && npm run test:ai-advisor-runtime-typing && npm run test:history-runtime-typing && npm run test:smarthome-runtime-typing && npm run test:smarthome-config-runtime-typing && npm run test:ems-apps-runtime-typing && npm run test:app-runtime-typing && npm run test:main-runtime-typing && npm run test:rc57-ocpp-stability",
+    "test:all": "npm run publish:check && npm run test:types && npm run check:ts-source-syntax && npm run test:ems-shadow-runtime && npm run test:ai-advisor-runtime-typing && npm run test:history-runtime-typing && npm run test:smarthome-runtime-typing && npm run test:smarthome-config-runtime-typing && npm run test:ems-apps-runtime-typing && npm run test:app-runtime-typing && npm run test:main-runtime-typing && npm run test:rc57-ocpp-stability && npm run test:rc58-ocpp-compact-mapping",
     "release:check": "npm run test:all && npm run build:ts && npm pack --dry-run",
     "ci:check": "npm run test:all && npm run build:ts && npm pack --dry-run",
     "typecheck:contracts": "tsc -p tsconfig.contracts.json --noEmit",
@@ -437,7 +437,8 @@
     "test:rc55:fail-closed": "node scripts/test-rc55-fail-closed.cjs",
     "test:rc56:operating-strategies-fieldtest": "node scripts/test-rc56-operating-strategies-fieldtest.cjs",
     "test:rc56:operating-strategies-browser": "node scripts/verify-rc56-operating-strategies-browser.js",
-    "test:rc57-ocpp-stability": "node scripts/verify-rc57-ocpp-stability.js"
+    "test:rc57-ocpp-stability": "node scripts/verify-rc57-ocpp-stability.js",
+    "test:rc58-ocpp-compact-mapping": "node scripts/verify-rc58-ocpp-compact-mapping.js"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",
@@ -492,6 +493,7 @@
     "docs/RC54_OPERATING_STRATEGIES_RULE_BUILDER_SIMULATION_DE.md",
     "docs/RC56_OPERATING_STRATEGIES_FIELDTEST_DE.md",
     "docs/RC57_OCPP_LADESTABILITAET_DE.md",
+    "docs/RC58_OCPP_0_4_COMPACT_MAPPING_DE.md",
     "ems/charging-budget-helpers.js",
     "ems/consumers/evcs.js",
     "ems/consumers/generic-load.js",

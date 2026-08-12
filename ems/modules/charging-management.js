@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/ems/modules/charging-management.ts
- * Quell-Hash: sha256:08cff11c0f883e635c19fc617347e02dc49cbd3eeab4aac7e0ff1d83193498e4
+ * Quell-Hash: sha256:4a074ebe06bf125c86a486bccffc33185223661a531e8547865d48a1d5a5e618
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1381,6 +1381,15 @@ function inferOcppConnectorNoFromObjectId(objectId) {
     if (parts.length >= 4 && parts[0].toLowerCase() === 'ocpp' && /^\d+$/.test(parts[1]) && /^\d+$/.test(parts[3])) {
         return Number(parts[3]);
     }
+    // NexoWatt OCPP 0.4 compact optional connector details:
+    // ...connectors.<evse>_<connector>....
+    for (let i = 0; i < parts.length - 1; i++) {
+        const token = String(parts[i] || '').toLowerCase();
+        if (token === 'connectors') {
+            const compact = String(parts[i + 1] || '').match(/^(\d+)_(\d+)$/);
+            if (compact) return Number(compact[2]);
+        }
+    }
     // Native/alternative Adapterstrukturen: ...connector.<n>... / ...port.<n>...
     for (let i = 0; i < parts.length - 1; i++) {
         const token = String(parts[i] || '').toLowerCase();
@@ -1418,38 +1427,72 @@ function inferIoBrokerOcppConnectorContext(...objectIds) {
         const lower = parts.map(part => String(part || '').toLowerCase());
         let evseNo = 1;
         let connectorNo = inferOcppConnectorNoFromObjectId(objectId) || 1;
+        let connectorDetails = false;
         for (let i = 0; i < lower.length - 1; i++) {
             if (lower[i] === 'evse' && /^\d+$/.test(String(parts[i + 1] || ''))) evseNo = Math.max(0, Number(parts[i + 1]) || 1);
             if (lower[i] === 'connector' && /^\d+$/.test(String(parts[i + 1] || ''))) connectorNo = Math.max(0, Number(parts[i + 1]) || 1);
+            if (lower[i] === 'connectors') {
+                const compact = String(parts[i + 1] || '').match(/^(\d+)_(\d+)$/);
+                if (compact) {
+                    evseNo = Math.max(0, Number(compact[1]) || 1);
+                    connectorNo = Math.max(0, Number(compact[2]) || 1);
+                    connectorDetails = true;
+                }
+            }
         }
-        const nativeConnectorRoot = `${nativeDeviceRoot}.evse.${evseNo}.connector.${connectorNo}`;
+        const nativeCompactConnectorRoot = `${nativeDeviceRoot}.connectors.${evseNo}_${connectorNo}`;
+        const nativeLegacyConnectorRoot = `${nativeDeviceRoot}.evse.${evseNo}.connector.${connectorNo}`;
+        const nativeConnectorRoot = connectorDetails ? nativeCompactConnectorRoot : nativeDeviceRoot;
         const deviceRoot = aliasRoot || nativeDeviceRoot;
-        const aliasConnectorStatusId = aliasRoot && connectorNo > 0 ? `${aliasRoot}.connector${connectorNo}Status` : '';
-        const aliasSupportsConnector = connectorNo === 1;
+        const aliasConnectorStatusId = aliasRoot && connectorDetails && connectorNo > 0 ? `${aliasRoot}.connector${connectorNo}Status` : '';
+        const statusId = aliasRoot
+            ? (aliasConnectorStatusId || `${aliasRoot}.status`)
+            : (connectorDetails ? `${nativeCompactConnectorRoot}.status` : `${nativeDeviceRoot}.info.status`);
         return {
             detected: true,
             profile: 'ocpp-1.6-event-driven',
             layout,
             adapterKind: layout,
+            contractVersion: 'nexowatt-ocpp-0.4-compact',
             sourceObjectId: objectId,
             adapterInstance: `ocpp21.${instance}`,
             deviceRoot,
             nativeDeviceRoot,
             connectorRoot: aliasRoot ? deviceRoot : nativeConnectorRoot,
             nativeConnectorRoot,
+            nativeCompactConnectorRoot,
+            nativeLegacyConnectorRoot,
+            connectorDetails,
             evseNo,
             connectorNo,
-            // Der aktuelle stabile Aliasvertrag bildet Connector 1 vollständig ab.
-            // Weitere Connectoren verwenden den nativen connectorbezogenen Status.
-            statusId: aliasSupportsConnector && aliasConnectorStatusId ? aliasConnectorStatusId : `${nativeConnectorRoot}.status`,
+            statusId,
+            chargingStateId: aliasRoot ? `${aliasRoot}.chargingState` : `${nativeDeviceRoot}.transactions.chargingState`,
             transactionActiveId: aliasRoot ? `${aliasRoot}.txActive` : `${nativeDeviceRoot}.transactions.transactionActive`,
             connectedId: aliasRoot ? `${aliasRoot}.connected` : `${nativeDeviceRoot}.info.connection`,
             socketConnectedId: aliasRoot ? `${aliasRoot}.socketConnected` : `${nativeDeviceRoot}.info.socketConnected`,
+            activityFreshId: aliasRoot ? `${aliasRoot}.activityFresh` : `${nativeDeviceRoot}.health.activityFresh`,
             dataFreshId: aliasRoot ? `${aliasRoot}.dataFresh` : `${nativeDeviceRoot}.health.dataFresh`,
-            heartbeatId: aliasRoot ? `${aliasRoot}.lastSeenMs` : `${nativeDeviceRoot}.health.lastSeenMs`,
-            actualPowerId: aliasRoot ? `${aliasRoot}.powerW` : `${nativeDeviceRoot}.meterValues.Power_Active_Import`,
-            actualCurrentId: aliasRoot ? `${aliasRoot}.currentTotalA` : `${nativeDeviceRoot}.meterValues.Current_Import`,
+            powerFreshId: aliasRoot ? `${aliasRoot}.powerFresh` : `${nativeDeviceRoot}.health.powerFresh`,
+            heartbeatAliveId: aliasRoot ? `${aliasRoot}.heartbeatAlive` : `${nativeDeviceRoot}.health.heartbeatAlive`,
+            // lastSeenMs is intentionally native because the public compact alias
+            // exposes health booleans but no timestamp. Native and public alias
+            // belong to the same station and may safely be mixed.
+            heartbeatId: `${nativeDeviceRoot}.health.lastSeenMs`,
+            actualPowerId: aliasRoot ? `${aliasRoot}.powerW` : `${nativeDeviceRoot}.measurements.powerW`,
+            actualCurrentId: aliasRoot ? `${aliasRoot}.currentTotalA` : `${nativeDeviceRoot}.measurements.currentA`,
+            energyTotalId: aliasRoot ? `${aliasRoot}.energyKWh` : `${nativeDeviceRoot}.measurements.energyKWh`,
+            energyTotalWhId: aliasRoot ? `${aliasRoot}.energyWh` : `${nativeDeviceRoot}.measurements.energyWh`,
+            energyTotalInputIsWh: false,
+            vehicleSocId: aliasRoot ? `${aliasRoot}.soc` : `${nativeDeviceRoot}.measurements.socPercent`,
+            vehicleNeedsSocId: `${nativeDeviceRoot}.vehicle.socPercent`,
+            rfidId: aliasRoot ? `${aliasRoot}.rfid` : `${nativeDeviceRoot}.info.rfid`,
             setPowerId: aliasRoot ? `${aliasRoot}.chargeLimit` : `${nativeDeviceRoot}.control.chargeLimit`,
+            availabilityId: aliasRoot ? `${aliasRoot}.availability` : `${nativeDeviceRoot}.control.availability`,
+            numberPhasesId: aliasRoot ? `${aliasRoot}.numberPhases` : `${nativeDeviceRoot}.control.numberOfPhases`,
+            lastCommandId: `${nativeDeviceRoot}.control.lastCommand`,
+            lastCommandAtId: `${nativeDeviceRoot}.control.lastCommandAt`,
+            lastCommandSuccessId: `${nativeDeviceRoot}.control.lastSuccess`,
+            lastCommandErrorId: `${nativeDeviceRoot}.control.lastError`,
             adapterAliveId: `system.adapter.ocpp21.${instance}.alive`,
         };
     };
@@ -1460,9 +1503,9 @@ function inferIoBrokerOcppConnectorContext(...objectIds) {
         const parts = objectId.split('.');
         const lower = parts.map(part => String(part || '').toLowerCase());
 
-        // NexoWatt OCPP native: ocpp21.<Instanz>.<Station>....
+        // NexoWatt OCPP native compact tree: ocpp21.<Instanz>.<Station>....
         if (parts.length >= 3 && lower[0] === 'ocpp21' && /^\d+$/.test(String(parts[1] || '')) && parts[2]) {
-            return buildNexoWattContext({ objectId, instance: parts[1], station: parts[2], layout: 'nexowatt-ocpp-native' });
+            return buildNexoWattContext({ objectId, instance: parts[1], station: parts[2], layout: 'nexowatt-ocpp-native-compact' });
         }
 
         // Stabiler öffentlicher Alias: alias.0.nexowatt.ocpp.<Instanz>.<Station>....
@@ -1479,12 +1522,12 @@ function inferIoBrokerOcppConnectorContext(...objectIds) {
                 objectId,
                 instance: parts[4],
                 station: parts[5],
-                layout: 'nexowatt-ocpp-alias',
+                layout: 'nexowatt-ocpp-public-alias-compact',
                 aliasRoot: parts.slice(0, 6).join('.'),
             });
         }
 
-        // Technischer Kompatibilitätsalias: alias.0.ocpp21.<Instanz>.<Station>....
+        // Optionaler technischer Kompatibilitätsalias: alias.0.ocpp21.<Instanz>.<Station>....
         if (
             parts.length >= 5
             && lower[0] === 'alias'
@@ -1497,7 +1540,7 @@ function inferIoBrokerOcppConnectorContext(...objectIds) {
                 objectId,
                 instance: parts[3],
                 station: parts[4],
-                layout: 'ocpp21-compat-alias',
+                layout: 'nexowatt-ocpp-technical-alias-compact',
                 aliasRoot: parts.slice(0, 5).join('.'),
             });
         }
@@ -1516,23 +1559,43 @@ function inferIoBrokerOcppConnectorContext(...objectIds) {
                 profile: 'ocpp-1.6-event-driven',
                 layout: 'legacy-iobroker-ocpp',
                 adapterKind: 'legacy-iobroker-ocpp',
+                contractVersion: 'legacy-iobroker-ocpp',
                 sourceObjectId: objectId,
                 adapterInstance: parts.slice(0, 2).join('.'),
                 deviceRoot,
                 nativeDeviceRoot: deviceRoot,
                 connectorRoot,
                 nativeConnectorRoot: connectorRoot,
+                nativeCompactConnectorRoot: '',
+                nativeLegacyConnectorRoot: connectorRoot,
+                connectorDetails: true,
                 evseNo: 1,
                 connectorNo: Number(parts[3]),
                 statusId: `${connectorRoot}.status`,
+                chargingStateId: '',
                 transactionActiveId: Number(parts[3]) > 0 ? `${connectorRoot}.transactionActive` : '',
                 connectedId: `${deviceRoot}.connected`,
                 socketConnectedId: `${deviceRoot}.connected`,
+                activityFreshId: '',
                 dataFreshId: '',
+                powerFreshId: '',
+                heartbeatAliveId: '',
                 heartbeatId: '',
                 actualPowerId: '',
                 actualCurrentId: '',
+                energyTotalId: '',
+                energyTotalWhId: '',
+                energyTotalInputIsWh: false,
+                vehicleSocId: '',
+                vehicleNeedsSocId: '',
+                rfidId: '',
                 setPowerId: '',
+                availabilityId: '',
+                numberPhasesId: '',
+                lastCommandId: '',
+                lastCommandAtId: '',
+                lastCommandSuccessId: '',
+                lastCommandErrorId: '',
                 adapterAliveId: `system.adapter.${parts[0]}.${parts[1]}.alive`,
             };
         }
@@ -1543,23 +1606,43 @@ function inferIoBrokerOcppConnectorContext(...objectIds) {
         profile: 'generic',
         layout: '',
         adapterKind: '',
+        contractVersion: '',
         sourceObjectId: '',
         adapterInstance: '',
         deviceRoot: '',
         nativeDeviceRoot: '',
         connectorRoot: '',
         nativeConnectorRoot: '',
+        nativeCompactConnectorRoot: '',
+        nativeLegacyConnectorRoot: '',
+        connectorDetails: false,
         evseNo: null,
         connectorNo: null,
         statusId: '',
+        chargingStateId: '',
         transactionActiveId: '',
         connectedId: '',
         socketConnectedId: '',
+        activityFreshId: '',
         dataFreshId: '',
+        powerFreshId: '',
+        heartbeatAliveId: '',
         heartbeatId: '',
         actualPowerId: '',
         actualCurrentId: '',
+        energyTotalId: '',
+        energyTotalWhId: '',
+        energyTotalInputIsWh: false,
+        vehicleSocId: '',
+        vehicleNeedsSocId: '',
+        rfidId: '',
         setPowerId: '',
+        availabilityId: '',
+        numberPhasesId: '',
+        lastCommandId: '',
+        lastCommandAtId: '',
+        lastCommandSuccessId: '',
+        lastCommandErrorId: '',
         adapterAliveId: '',
     };
 }
@@ -1622,6 +1705,60 @@ function resolveOcppOnlineObjectId(configuredOnlineId, ocppContext) {
     if (!ocppContext || ocppContext.detected !== true || !socketId) return configured;
     if (!configured || isOcppVolatileOnlineObjectId(configured, ocppContext)) return socketId;
     return configured;
+}
+
+
+/**
+ * Erkennt ausschließlich bekannte OCPP-Datenpunktverträge derselben Station.
+ * Dadurch können 0.3-Pfade nach dem kompakten 0.4-Update sicher migriert werden,
+ * ohne kundenspezifische MQTT-/Modbus-Zuordnungen anzutasten.
+ */
+function isKnownOcppSemanticObjectId(objectId, ocppContext, semantic) {
+    const id = String(objectId || '').trim();
+    if (!id || !ocppContext || ocppContext.detected !== true || !belongsToOcppConnectorContext(id, ocppContext)) return false;
+    const lower = id.toLowerCase();
+    const suffixes = {
+        power: ['.metervalues.power_active_import', '.measurements.powerw', '.powerw'],
+        current: ['.metervalues.current_import', '.measurements.currenta', '.currenttotala'],
+        energy: ['.metervalues.energy_active_import_register', '.metervalues.energy_active_import_register_kwh', '.measurements.energywh', '.measurements.energykwh', '.energywh', '.energykwh'],
+        status: ['.info.status', '.status', '.connector1status'],
+        transactionActive: ['.transactions.transactionactive', '.transactionactive', '.txactive'],
+        dataFresh: ['.health.datafresh', '.datafresh'],
+        heartbeat: ['.health.lastseenms', '.lastseenms', '.health.lastheartbeatms', '.info.lastheartbeat', '.heartbeat'],
+        setPower: ['.control.chargelimit', '.chargelimit'],
+        enable: ['.control.availability', '.availability'],
+        vehicleSoc: ['.metervalues.soc', '.measurements.socpercent', '.vehicle.socpercent', '.soc'],
+        rfid: ['.info.rfid', '.rfid'],
+    };
+    if (semantic === 'online') return lower.endsWith('.socketconnected') || isOcppVolatileOnlineObjectId(id, ocppContext);
+    if (semantic === 'status' && (/\.evse\.\d+\.connector\.\d+\.status$/i.test(id) || /\.connectors\.\d+_\d+\.status$/i.test(id))) return true;
+    return (suffixes[semantic] || []).some(suffix => lower.endsWith(suffix));
+}
+
+/** Liefert den kanonischen OCPP-0.4-Datenpunkt für dieselbe Station. */
+function resolveOcppCanonicalObjectId(configuredObjectId, ocppContext, semantic) {
+    const configured = String(configuredObjectId || '').trim();
+    if (!ocppContext || ocppContext.detected !== true) return configured;
+    const targets = {
+        power: ocppContext.actualPowerId,
+        current: ocppContext.actualCurrentId,
+        energy: ocppContext.energyTotalId || ocppContext.energyTotalWhId,
+        status: ocppContext.statusId,
+        transactionActive: ocppContext.transactionActiveId,
+        online: ocppContext.socketConnectedId,
+        dataFresh: ocppContext.dataFreshId,
+        heartbeat: ocppContext.heartbeatId,
+        setPower: ocppContext.setPowerId,
+        enable: ocppContext.availabilityId,
+        vehicleSoc: ocppContext.vehicleSocId,
+        rfid: ocppContext.rfidId,
+    };
+    const target = String(targets[semantic] || '').trim();
+    if (!target) return configured;
+    if (!configured) return target;
+    if (configured === target) return configured;
+    if (!isKnownOcppSemanticObjectId(configured, ocppContext, semantic)) return configured;
+    return target;
 }
 
 /** Explizite Installerwahl gewinnt; sonst wird der Datenpunkt-Ursprung verwendet. */
@@ -4782,6 +4919,9 @@ class ChargingManagementModule extends BaseModule {
         await mk('telemetryAutoDetected', 'Telemetrieprofil automatisch erkannt', 'boolean', 'indicator');
         await mk('ocppConnectorRoot', 'Erkannter OCPP-Connectorpfad', 'string', 'text');
         await mk('ocppAdapterKind', 'Erkannte OCPP-Adapterstruktur', 'string', 'text');
+        await mk('ocppDatapointContract', 'Erkannter OCPP-Datenpunktvertrag', 'string', 'text');
+        await mk('ocppDatapointMappingMigrated', 'OCPP-0.3-Zuordnung auf kompakten 0.4-Vertrag migriert', 'boolean', 'indicator');
+        await mk('ocppDatapointMappingMigrations', 'OCPP-Datenpunktmigrationen (json)', 'string', 'json');
         await mk('onlineSourceId', 'Verwendeter Online-/Verbindungs-Datenpunkt', 'string', 'text');
         await mk('onlineIdWasDataFresh', 'Fehlzuordnung dataFresh als Online automatisch getrennt', 'boolean', 'indicator');
         await mk('onlineSourceMigrated', 'Volatilen OCPP-Online-Datenpunkt automatisch auf WebSocket-Verbindung migriert', 'boolean', 'indicator');
@@ -5293,10 +5433,11 @@ class ChargingManagementModule extends BaseModule {
                 configWallbox.setCurrentAId,
             );
             const configTelemetryProfile = resolveEvcsTelemetryProfile(configWallbox.telemetryProfile, configOcppContext);
+            const configuredStatusObjectId = String(configWallbox.statusId || '').trim();
             const statusObjectId = String(
-                configWallbox.statusId
-                || (configTelemetryProfile === 'ocpp-1.6-event-driven' ? configOcppContext.statusId : '')
-                || '',
+                configTelemetryProfile === 'ocpp-1.6-event-driven'
+                    ? resolveOcppCanonicalObjectId(configuredStatusObjectId, configOcppContext, 'status')
+                    : configuredStatusObjectId,
             ).trim();
             const configuredConnectorNoRaw = clamp(num(configWallbox.connectorNo, 0), 0, 9999);
             const configuredConnectorNo = configuredConnectorNoRaw > 0
@@ -5538,27 +5679,36 @@ class ChargingManagementModule extends BaseModule {
             // aus jedem bereits zugeordneten Stationspfad sicher ergänzt. Dabei
             // bleibt `socketConnected` die Transportwahrheit; `dataFresh` ist nur
             // die getrennte Messwertqualitaet und darf niemals "offline" bedeuten.
-            const actualPowerWId = String(
-                wb.actualPowerWId
-                || (telemetryProfile === 'ocpp-1.6-event-driven' ? ocppContext.actualPowerId : '')
-                || '',
-            ).trim();
-            const actualCurrentAId = String(
-                wb.actualCurrentAId
-                || (telemetryProfile === 'ocpp-1.6-event-driven' ? ocppContext.actualCurrentId : '')
-                || '',
-            ).trim();
-            const setCurrentAId = String(wb.setCurrentAId || '').trim();
-            const setPowerWId = String(
-                wb.setPowerWId
-                || (telemetryProfile === 'ocpp-1.6-event-driven' ? ocppContext.setPowerId : '')
-                || '',
-            ).trim();
-            const enableId = String(wb.enableId || '').trim();
+            const configuredActualPowerWId = String(wb.actualPowerWId || '').trim();
+            const configuredActualCurrentAId = String(wb.actualCurrentAId || '').trim();
+            const configuredSetPowerWId = String(wb.setPowerWId || '').trim();
+            const configuredEnableId = String(wb.enableId || '').trim();
             const configuredOnlineId = String(wb.onlineId || '').trim();
             const configuredDataFreshId = String(wb.dataFreshId || '').trim();
             const configuredStatusId = String(wb.statusId || '').trim();
             const configuredTransactionActiveId = String(wb.transactionActiveId || '').trim();
+            const configuredHeartbeatId = String(wb.heartbeatId || '').trim();
+            const actualPowerWId = String(
+                telemetryProfile === 'ocpp-1.6-event-driven'
+                    ? resolveOcppCanonicalObjectId(configuredActualPowerWId, ocppContext, 'power')
+                    : configuredActualPowerWId,
+            ).trim();
+            const actualCurrentAId = String(
+                telemetryProfile === 'ocpp-1.6-event-driven'
+                    ? resolveOcppCanonicalObjectId(configuredActualCurrentAId, ocppContext, 'current')
+                    : configuredActualCurrentAId,
+            ).trim();
+            const setCurrentAId = String(wb.setCurrentAId || '').trim();
+            const setPowerWId = String(
+                telemetryProfile === 'ocpp-1.6-event-driven'
+                    ? resolveOcppCanonicalObjectId(configuredSetPowerWId, ocppContext, 'setPower')
+                    : configuredSetPowerWId,
+            ).trim();
+            const enableId = String(
+                telemetryProfile === 'ocpp-1.6-event-driven' && configuredEnableId
+                    ? resolveOcppCanonicalObjectId(configuredEnableId, ocppContext, 'enable')
+                    : configuredEnableId,
+            ).trim();
             const onlineIdWasDataFresh = telemetryProfile === 'ocpp-1.6-event-driven'
                 && isOcppDataFreshObjectId(configuredOnlineId, ocppContext);
             const onlineIdWasVolatileOcpp = telemetryProfile === 'ocpp-1.6-event-driven'
@@ -5569,23 +5719,43 @@ class ChargingManagementModule extends BaseModule {
                 ? resolveOcppOnlineObjectId(configuredOnlineId, ocppContext)
                 : configuredOnlineId;
             const onlineSourceMigrated = onlineIdWasVolatileOcpp && onlineId !== configuredOnlineId;
-            const dataFreshId = configuredDataFreshId
-                || (onlineIdWasDataFresh ? configuredOnlineId : '')
-                || (telemetryProfile === 'ocpp-1.6-event-driven' ? String(ocppContext.dataFreshId || '').trim() : '');
-            const statusId = configuredStatusId
-                || (telemetryProfile === 'ocpp-1.6-event-driven' ? String(ocppContext.statusId || '').trim() : '');
-            const transactionActiveId = configuredTransactionActiveId
-                || (telemetryProfile === 'ocpp-1.6-event-driven' ? String(ocppContext.transactionActiveId || '').trim() : '');
+            const dataFreshSeedId = configuredDataFreshId || (onlineIdWasDataFresh ? configuredOnlineId : '');
+            const dataFreshId = telemetryProfile === 'ocpp-1.6-event-driven'
+                ? resolveOcppCanonicalObjectId(dataFreshSeedId, ocppContext, 'dataFresh')
+                : dataFreshSeedId;
+            const statusId = telemetryProfile === 'ocpp-1.6-event-driven'
+                ? resolveOcppCanonicalObjectId(configuredStatusId, ocppContext, 'status')
+                : configuredStatusId;
+            const transactionActiveId = telemetryProfile === 'ocpp-1.6-event-driven'
+                ? resolveOcppCanonicalObjectId(configuredTransactionActiveId, ocppContext, 'transactionActive')
+                : configuredTransactionActiveId;
             const ocppAdapterAliveId = telemetryProfile === 'ocpp-1.6-event-driven'
                 ? String(ocppContext.adapterAliveId || '').trim()
                 : '';
             const vehicleConnectedId = String(wb.vehicleConnectedId || '').trim();
             const chargeDemandId = String(wb.chargeDemandId || '').trim();
             const heartbeatId = String(
-                wb.heartbeatId
-                || (telemetryProfile === 'ocpp-1.6-event-driven' ? ocppContext.heartbeatId : '')
-                || '',
+                telemetryProfile === 'ocpp-1.6-event-driven'
+                    ? resolveOcppCanonicalObjectId(configuredHeartbeatId, ocppContext, 'heartbeat')
+                    : configuredHeartbeatId,
             ).trim();
+            const ocppDatapointMigrations = [];
+            const noteOcppMigration = (semantic, before, after) => {
+                const source = String(before || '').trim();
+                const target = String(after || '').trim();
+                if (telemetryProfile === 'ocpp-1.6-event-driven' && source && target && source !== target) {
+                    ocppDatapointMigrations.push({ semantic, from: source, to: target });
+                }
+            };
+            noteOcppMigration('power', configuredActualPowerWId, actualPowerWId);
+            noteOcppMigration('current', configuredActualCurrentAId, actualCurrentAId);
+            noteOcppMigration('setPower', configuredSetPowerWId, setPowerWId);
+            noteOcppMigration('availability', configuredEnableId, enableId);
+            noteOcppMigration('status', configuredStatusId, statusId);
+            noteOcppMigration('transactionActive', configuredTransactionActiveId, transactionActiveId);
+            noteOcppMigration('dataFresh', dataFreshSeedId, dataFreshId);
+            noteOcppMigration('heartbeat', configuredHeartbeatId, heartbeatId);
+            const ocppDatapointMappingMigrated = ocppDatapointMigrations.length > 0;
 
             // phase measurement IDs (optional)
             const l1Id = String(wb.phaseL1AId || '').trim();
@@ -5657,6 +5827,7 @@ class ChargingManagementModule extends BaseModule {
             if (telemetryProfile === 'ocpp-1.6-event-driven' && !transactionActiveId) mappingIssues.push('ocpp_no_transaction_state');
             if (onlineIdWasDataFresh) mappingIssues.push('ocpp_online_datafresh_migrated');
             else if (onlineSourceMigrated) mappingIssues.push('ocpp_online_source_migrated');
+            if (ocppDatapointMappingMigrated) mappingIssues.push('ocpp_0_4_compact_mapping_migrated');
 
             let meterAgeMs = 0;
             let meterStale = false;
@@ -5915,6 +6086,9 @@ class ChargingManagementModule extends BaseModule {
                 await this._queueState(`${ch}.telemetryAutoDetected`, telemetryAutoDetected, true);
                 await this._queueState(`${ch}.ocppConnectorRoot`, telemetryProfile === 'ocpp-1.6-event-driven' ? String(ocppContext.connectorRoot || '') : '', true);
                 await this._queueState(`${ch}.ocppAdapterKind`, telemetryProfile === 'ocpp-1.6-event-driven' ? String(ocppContext.adapterKind || 'legacy-ocpp') : '', true);
+                await this._queueState(`${ch}.ocppDatapointContract`, telemetryProfile === 'ocpp-1.6-event-driven' ? String(ocppContext.contractVersion || '') : '', true);
+                await this._queueState(`${ch}.ocppDatapointMappingMigrated`, ocppDatapointMappingMigrated, true);
+                await this._queueState(`${ch}.ocppDatapointMappingMigrations`, JSON.stringify(ocppDatapointMigrations), true);
                 await this._queueState(`${ch}.onlineSourceId`, onlineId, true);
                 await this._queueState(`${ch}.onlineIdWasDataFresh`, onlineIdWasDataFresh, true);
                 await this._queueState(`${ch}.onlineSourceMigrated`, onlineSourceMigrated, true);
@@ -6583,6 +6757,9 @@ class ChargingManagementModule extends BaseModule {
                 onlineId,
                 onlineIdWasDataFresh,
                 onlineSourceMigrated,
+                ocppDatapointContract: telemetryProfile === 'ocpp-1.6-event-driven' ? String(ocppContext.contractVersion || '') : '',
+                ocppDatapointMappingMigrated,
+                ocppDatapointMappingMigrations,
                 dataFreshId,
                 dataFreshKnown,
                 dataFresh,
@@ -11150,6 +11327,8 @@ module.exports = {
     isOcppDataFreshObjectId,
     isOcppVolatileOnlineObjectId,
     resolveOcppOnlineObjectId,
+    isKnownOcppSemanticObjectId,
+    resolveOcppCanonicalObjectId,
     resolveEvcsTelemetryProfile,
     resolveEvcsEffectivePower,
     reconcileOcppTransactionDemand,

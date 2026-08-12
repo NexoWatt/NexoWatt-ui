@@ -1,3 +1,13 @@
+## 0.8.182 - 2026-08-12
+
+- Kompakten Datenpunktvertrag des NexoWatt-OCPP-Adapters 0.4 nativ in Erkennung und Lademanagement aufgenommen. Bevorzugt werden die stabilen öffentlichen Aliase unter `alias.0.nexowatt.ocpp.*`, anschließend der kompakte native Baum `ocpp21.*`; technische Aliase und der ältere `ocpp.*`-Adapter bleiben kompatible Rückfälle.
+- Leistung, Strom, Gesamtenergie, Stationsstatus, Transaktionszustand, physische WebSocket-Verbindung, Datenaktualität, letzte Aktivität, Fahrzeug-SoC, RFID, Leistungsvorgabe und optionale Stationsfreigabe auf die neuen `measurements`, `info`, `health`, `transactions` und `control`-Pfade abgebildet.
+- Bekannte OCPP-0.3-Zuordnungen wie `meterValues.Power_Active_Import`, `meterValues.SoC`, `evse.*.connector.*.status` und `connector1Status` werden ausschließlich innerhalb derselben eindeutig erkannten Station auf den kompakten Vertrag migriert. Fremde MQTT-/Modbus-Zuordnungen und andere Stationen werden nicht verändert.
+- AppCenter-Zuordnung um Fahrzeug-SoC und RFID erweitert. Beim Nachpflegen bestehender Ladepunkte werden leere Felder sowie eindeutig veraltete OCPP-0.3-Pfade ersetzt; bestehende individuelle Zuordnungen bleiben erhalten.
+- `dataFreshId`, Transaktionszustand und explizites OCPP-Telemetrieprofil werden nun vollständig vom Installer-Backend bis zum Lademanagement weitergegeben. Neue Diagnosewerte dokumentieren Datenpunktvertrag und Laufzeitmigrationen.
+- RC57-Verbindungsstabilität, 75-s-Startantwortzeit, 60-s-Einschwingphase, Boost, Min+PV, PV-Überschuss, Stationsverteilung, §14a, Netz-/Phasengrenzen und Single-Writer bleiben unverändert wirksam.
+- Regressionstest für den OCPP-0.4-Native-/Aliasvertrag, sichere 0.3→0.4-Migration, kompakte Connector-ID, Backend-Erkennung, Frontend-Zuordnung und Runtime-Weitergabe ergänzt.
+
 ## 0.8.181 - 2026-08-12
 
 - OCPP-Verbindungsbewertung stabilisiert: Für NexoWatt OCPP (`ocpp21.*` sowie stabile Alias-Pfade) verwendet das Lademanagement den physischen WebSocket-Zustand `socketConnected` als Online-Wahrheit. Aktivitäts-, Heartbeat- und Messwert-Freshness bleiben getrennte Diagnose- beziehungsweise Datenqualitätswerte und können einen weiterhin verbundenen Ladepunkt nicht mehr im 25-Sekunden-Takt fälschlich offline melden.
