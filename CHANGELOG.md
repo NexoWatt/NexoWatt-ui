@@ -1,3 +1,14 @@
+## 0.8.181 - 2026-08-12
+
+- OCPP-Verbindungsbewertung stabilisiert: Für NexoWatt OCPP (`ocpp21.*` sowie stabile Alias-Pfade) verwendet das Lademanagement den physischen WebSocket-Zustand `socketConnected` als Online-Wahrheit. Aktivitäts-, Heartbeat- und Messwert-Freshness bleiben getrennte Diagnose- beziehungsweise Datenqualitätswerte und können einen weiterhin verbundenen Ladepunkt nicht mehr im 25-Sekunden-Takt fälschlich offline melden.
+- Bereits zugeordnete volatile OCPP-Onlinepfade wie `info.connection`, `health.online`, `connected` oder irrtümlich als Online verwendetes `dataFresh` werden nur innerhalb derselben eindeutig erkannten Ladestation sicher auf `socketConnected` migriert. Fremde MQTT-/Modbus- oder andere Stationspfade werden nicht umgeschrieben.
+- Native NexoWatt-OCPP-, öffentliche NexoWatt-Alias- und technische Kompatibilitätsstrukturen werden automatisch erkannt. Fehlende Begleitzuordnungen für Leistung, Strom, Status, Transaktion, Datenaktualität, Heartbeat und Leistungsvorgabe werden aus dem erkannten Stationsvertrag ergänzt.
+- OCPP-Datenaktualität ist separat über `dataFreshId` abbildbar und beeinflusst ausschließlich die Verwendbarkeit der Istleistung, nicht die physische Erreichbarkeit. Neue Diagnosewerte zeigen verwendeten Onlinepfad, automatische Migration, OCPP-Struktur, Datenaktualität und Alter.
+- OCPP-spezifische Startlatenz ergänzt: PV-/Min+PV-Startantwortzeit mindestens 75 Sekunden und Einschwingphase mindestens 60 Sekunden. Der globale EOS-Regelzyklus bleibt bei 1 Sekunde, Boost bleibt direkt und alle §14a-, Parkregler-, Netz-, Stations-, Phasen- und Safety-Grenzen bleiben unverändert übergeordnet.
+- OCPP-Ereignisreihenfolge gehärtet: Ein frischer Charging-Status mit real positiver Leistung bleibt trotz kurz verzögertem `transactionActive=false` wirksam; Preparing/SuspendedEVSE wird als nicht terminaler Startzustand behandelt, während Finishing, Faulted, Unavailable, Offline und tatsächliches Transaktionsende weiterhin autoritativ 0 W ergeben.
+- Den bewährten 45-Sekunden-Sollwert-Keepalive unverändert beibehalten. Es wurde keine künstliche Istleistung, keine Sollwert-zu-Istwert-Brücke und kein zweiter Hardware-Writer eingeführt.
+- Regressionstests für OCPP-Native/Alias-Erkennung, stationsgebundene Online-Migration, Ereignisreihenfolge, 75-/60-Sekunden-Zeitfenster, 45-Sekunden-Keepalive sowie bestehende Boost-, Min+PV-, PV-, Stations-, §14a- und Single-Writer-Pfade ergänzt.
+
 ## 0.8.180 - 2026-08-12
 
 - Die App „Betriebsstrategien“ zeigt nur noch native EOS-Ressourcen an, deren zugehörige App und Fachregelung aktiv sind, deren einzelnes Gerät ausdrücklich aktiviert ist und für die eine sinnvolle Mess- oder Stellzuordnung existiert. Leere Thermik-, Heizstab-, Ladepunkt- und Energiefluss-Platzhalter werden ausgeblendet.

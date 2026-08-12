@@ -69,9 +69,10 @@ assert.strictEqual(strictFiniteEvcsNumber('invalid'), null);
   assert.strictEqual(stale.powerSource, 'generic-command-fallback');
 }
 
-// Offizieller OCPP-Adapter: StopTransaction setzt transactionActive=false,
-// während ein alter MeterValue positiv stehen bleiben kann. Für EOS muss dann
-// unmittelbar die wirksame Istleistung 0 W gelten.
+// StopTransaction setzt transactionActive=false, während ein alter MeterValue
+// positiv stehen bleiben kann. Ein terminaler Connectorstatus bestätigt dann
+// unmittelbar 0 W. Ein frischer Charging-Status mit positivem Messwert darf
+// dagegen wegen möglicher OCPP-Ereignisreihenfolge kurz vor der Transaktion liegen.
 {
   const ended = resolveEvcsEffectivePower({
     telemetryProfile: OCPP,
@@ -79,7 +80,7 @@ assert.strictEqual(strictFiniteEvcsNumber('invalid'), null);
     rawMeterStale: true,
     online: true,
     enabled: true,
-    normalizedState: 'charging',
+    normalizedState: 'finishing',
     statusAuthoritative: true,
     transactionActive: false,
     transactionKnown: true,
@@ -90,6 +91,23 @@ assert.strictEqual(strictFiniteEvcsNumber('invalid'), null);
   assert.strictEqual(ended.powerSource, 'ocpp-transaction-ended-zero');
   assert.strictEqual(ended.authoritativeZero, true);
   assert.strictEqual(ended.sessionEnded, true);
+
+  const eventOrderHeld = resolveEvcsEffectivePower({
+    telemetryProfile: OCPP,
+    rawPowerW: 4380,
+    rawMeterStale: true,
+    online: true,
+    enabled: true,
+    normalizedState: 'charging',
+    statusAuthoritative: true,
+    transactionActive: false,
+    transactionKnown: true,
+    lastCommandW: 11000,
+  });
+  assert.strictEqual(eventOrderHeld.effectivePowerW, 4380);
+  assert.strictEqual(eventOrderHeld.powerSource, 'ocpp-meter-charging-status-held');
+  assert.strictEqual(eventOrderHeld.authoritativeZero, false);
+  assert.strictEqual(eventOrderHeld.sessionEnded, false);
 }
 
 // Terminale bzw. leistungslose Connectorzustände setzen unabhängig vom alten

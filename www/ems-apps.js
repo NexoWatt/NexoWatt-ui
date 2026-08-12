@@ -2,7 +2,7 @@
  * AUTO-GENERATED RUNTIME FILE - NICHT MANUELL BEARBEITEN.
  *
  * Quelle: src-ts/runtime-executables/www/ems-apps.ts
- * Quell-Hash: sha256:3ec78c91d6f7707f60540acbde5533734aa5cf4d9944e35dcedfafd06edaec54
+ * Quell-Hash: sha256:c61ed4bb63d3a0ea06e7db9d7726073543ce8914f99d8c58c0c34910cf1bdac7
  * Erzeugung: npm run sync:ts-runtime-executables
  *
  * Zweck:
@@ -1905,7 +1905,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
       // Basic capability hints (heuristic by input-id)
       const expectWrite = /setCurrentAId|setPowerWId|enableWriteId|lockWriteId|WriteId/i.test(inp.id);
-      const expectRead = /powerId|energyTotalId|statusId|activeId|vehicleConnectedId|chargeDemandId|heartbeatId|onlineId|rfidReadId|budgetPowerId|gridPowerId|pvSurplusPowerId|ReadId/i.test(inp.id);
+      const expectRead = /powerId|energyTotalId|statusId|activeId|vehicleConnectedId|chargeDemandId|heartbeatId|onlineId|dataFreshId|rfidReadId|budgetPowerId|gridPowerId|pvSurplusPowerId|ReadId/i.test(inp.id);
 
       if (expectWrite && info.common && info.common.write === false) {
         _setBadge(inp.id, 'warn', 'read-only');
@@ -10822,7 +10822,8 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
       dpWrap.appendChild(mkRow('Sollstrom (A)', mkIo(`evcs_${i}_setCurrentAId`, rowCfg.setCurrentAId, v => _updateEvcsField(i, 'setCurrentAId', v))));
       dpWrap.appendChild(mkRow('Sollleistung (W)', mkIo(`evcs_${i}_setPowerWId`, rowCfg.setPowerWId, v => _updateEvcsField(i, 'setPowerWId', v))));
       dpWrap.appendChild(mkRow('Enable (write)', mkIo(`evcs_${i}_enableWriteId`, rowCfg.enableWriteId, v => _updateEvcsField(i, 'enableWriteId', v))));
-      dpWrap.appendChild(mkRow('Online (read)', mkIo(`evcs_${i}_onlineId`, rowCfg.onlineId, v => _updateEvcsField(i, 'onlineId', v))));
+      dpWrap.appendChild(mkRow('Online / verbunden (read)', mkIo(`evcs_${i}_onlineId`, rowCfg.onlineId, v => _updateEvcsField(i, 'onlineId', v))));
+      dpWrap.appendChild(mkRow('Messwerte aktuell / OCPP dataFresh (read, optional)', mkIo(`evcs_${i}_dataFreshId`, rowCfg.dataFreshId, v => _updateEvcsField(i, 'dataFreshId', v))));
       dpWrap.appendChild(mkRow('AC Phasenumschaltung (write)', mkIo(`evcs_${i}_phaseSwitchId`, rowCfg.phaseSwitchId, v => _updateEvcsField(i, 'phaseSwitchId', v))));
       dpWrap.appendChild(mkRow('AC Phasenrückmeldung (read, optional)', mkIo(`evcs_${i}_phaseFeedbackId`, rowCfg.phaseFeedbackId, v => _updateEvcsField(i, 'phaseFeedbackId', v))));
 
@@ -11779,7 +11780,7 @@ http://mesh-peer.local:8188" ${isEos ? '' : 'disabled'}>${_meshHtmlEscape(Array.
 
     // Mappings (fill)
     const previousEnergyId = String(out.energyTotalId || '').trim();
-    for (const k of ['powerId','energyTotalId','statusId','activeId','vehicleConnectedId','chargeDemandId','heartbeatId','onlineId','setCurrentAId','setPowerWId','enableWriteId']) {
+    for (const k of ['powerId','energyTotalId','statusId','activeId','vehicleConnectedId','chargeDemandId','heartbeatId','onlineId','dataFreshId','setCurrentAId','setPowerWId','enableWriteId']) {
       if (ids[k]) setField(k, ids[k]);
     }
     const energyMappingWasApplied = !!ids.energyTotalId && (
